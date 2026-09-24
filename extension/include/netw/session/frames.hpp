@@ -275,6 +275,16 @@ struct ControlApply {
     );
 };
 
+struct RouteLease {
+    uint64_t base = 0;
+    uint64_t count = 0;
+
+    static constexpr auto wire = netw::wire::describe(
+        netw::wire::field<&RouteLease::base>("base", netw::wire::varuint(5)),
+        netw::wire::field<&RouteLease::count>("count", netw::wire::varuint(2))
+    );
+};
+
 struct DenyKey {
     godot::StringName key;
 

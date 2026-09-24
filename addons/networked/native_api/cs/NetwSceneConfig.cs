@@ -23,11 +23,12 @@ namespace Networked;
 ///     Netw.configure_multiplayer_scene(self).labeled(&amp;"Level1").isolated()
 /// </code>
 /// <para>
-/// Declare from <c>Object._init</c>, because the declaration is consumed once
-/// at <see cref="NetwEntity.Arm"/> and has to ride the SPAWN packet. Declaring
-/// writes <see cref="NetwEntity.DeclaresScene"/>, so the root owns an admission
-/// boundary every descendant entity inherits; nothing else about the entity
-/// changes.
+/// Declare from <c>Object._init</c>, because the declaration is read once, when
+/// the entity reaches <see cref="NetwEntity.StageEnum.Armed"/>, and travels in
+/// the spawn packet. Declaring makes
+/// <see cref="NetwEntity.IsMultiplayerScene"/> <c>true</c>, and every entity
+/// below the root belongs to it through <see cref="NetwEntity.Scene"/>. Nothing
+/// else about the entity changes.
 /// </para>
 /// </remarks>
 public sealed class NetwSceneConfig : NetwRefCounted

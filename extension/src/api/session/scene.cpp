@@ -28,6 +28,7 @@
 #include "netw/colors.hpp"
 #include "netw/comp_table.hpp"
 #include "netw/entity/stage.hpp"
+#include "netw/lifecycle/rule.hpp"
 #include "netw/log.hpp"
 #include "netw/prediction_core.hpp"
 #include "netw/profile.hpp"
@@ -1640,16 +1641,19 @@ Ref<NetwPromise> NetwMultiplayer::scene_move_entity(
     NETW_ZONE_NC("NetwMultiplayer scene_move_entity", colors::SCENE);
     Ref<NetwPromise> promise;
     promise.instantiate();
-    if (!is_session_authority()) {
-        NETW_ERROR(
-            sys::SCENE,
-            "scene_move: only the session authority moves an entity between "
-            "scenes"
-        );
-        promise->reject(
-            ERR_UNAUTHORIZED,
-            "scene_move: only the session authority moves an entity"
-        );
+    lifecycle::Facts facts;
+    facts.kind = lifecycle::Kind::REPARENT;
+    facts.peer_is_session = is_session_authority();
+    facts.minting_halted = structure_halted;
+    const lifecycle::Ruling ruling = lifecycle::rule(facts);
+    if (!ruling.admitted()) {
+        const String text = structure_halted
+            ? String("scene_move: session authority is moving, so no entity "
+                     "changes scene until it lands")
+            : String("scene_move: only the session authority moves an entity "
+                     "between scenes");
+        NETW_ERROR(sys::SCENE, "%s", text);
+        promise->reject(ruling.code, text);
         return promise;
     }
     const Ref<NetwEntity> mover = entity_get_view(p_entity);
@@ -1704,20 +1708,27 @@ Ref<NetwPromise> NetwMultiplayer::entity_reparent(
     Node *p_parent
 ) {
     NETW_ZONE_NC("NetwMultiplayer entity_reparent", colors::SCENE);
-    NETW_ERR_COND_V(
-        !is_host(),
-        NetwPromise::rejected(
-            ERR_UNAUTHORIZED,
-            String("a guarded reparent is server authority's")
-        ),
-        sys::SCENE,
-        "an entity was reparented off server authority"
-    );
     Ref<NetwPromise> promise;
     promise.instantiate();
     const Ref<NetwEntity> mover = entity_get_view(p_entity);
     Node *body = wrapper_owner(p_entity);
-    if (body == nullptr || p_parent == nullptr) {
+    lifecycle::Facts facts
+        = lifecycle_local_facts(mover.ptr(), lifecycle::Kind::REPARENT);
+    if (!facts.peer_is_session) {
+        facts.destination = lifecycle_destination(body, p_parent);
+    }
+    String refusal;
+    const lifecycle::Ruling ruling = lifecycle_judge_verb(
+        facts,
+        String("Netw.reparent"),
+        body,
+        refusal
+    );
+    if (!ruling.admitted()) {
+        promise->reject(ruling.code, refusal);
+        return promise;
+    }
+    if (mover.is_null() || body == nullptr || p_parent == nullptr) {
         NETW_WARN(
             sys::SCENE,
             "reparent: entity %d or its new parent is unreachable",
@@ -1744,13 +1755,18 @@ Ref<NetwPromise> NetwMultiplayer::entity_reparent(
         int(p_entity.get_id()),
         String(p_parent->get_name())
     );
+    const bool awaits_session = !facts.peer_is_session;
+    if (awaits_session) {
+        lifecycle_promises[liveness_route_of(mover.ptr())] = promise;
+    }
     scene_carry_begin(
         mover,
         body,
         scene_containing(body),
         scene_containing(p_parent),
         p_parent,
-        promise
+        promise,
+        awaits_session
     );
     return promise;
 }
@@ -1761,7 +1777,8 @@ void NetwMultiplayer::scene_carry_begin(
     Node *p_source,
     Node *p_target,
     Node *p_parent,
-    const Ref<NetwPromise> &p_promise
+    const Ref<NetwPromise> &p_promise,
+    bool p_awaits_session
 ) {
     NETW_ZONE_NC("NetwMultiplayer scene_carry_begin", colors::SCENE);
     Node *body = p_body;
@@ -1780,6 +1797,7 @@ void NetwMultiplayer::scene_carry_begin(
     carry.target = gd::instance_id(p_target);
     carry.parent = gd::instance_id(p_parent);
     carry.promise = p_promise;
+    carry.awaits_session = p_awaits_session;
     carry.guard = guard_hold(body);
     const int64_t id = ++scene_carry_next;
     scene_carries.insert(id, carry);
@@ -1913,7 +1931,7 @@ void NetwMultiplayer::scene_carry_finish(int64_t p_id) {
         carry.entity,
         Object::cast_to<Node>(gd::object_of(carry.source)),
         Object::cast_to<Node>(gd::object_of(carry.target)),
-        carry.promise
+        carry.awaits_session ? Ref<NetwPromise>() : carry.promise
     );
 }
 

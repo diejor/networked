@@ -103,6 +103,7 @@ inline FlowPair stand_flow_pair(
     pair.route = server->liveness_allocate_route(authored.ptr());
     REQUIRE_MESSAGE(pair.route > 0, "the session minted no route");
     server->liveness_bind_route(pair.route, authored.ptr());
+    authored->arm(godot::Ref<netw::NetwMultiplayer>(server));
     for (int index = 0; index < pair.mirrors.size(); ++index) {
         if (!binds_mirror(p_binding, index)) {
             continue;
@@ -118,10 +119,10 @@ inline FlowPair stand_flow_pair(
 }
 
 inline void steer(const FlowPair &p_pair, int p_controller) {
-    netw::NetwEntity::of(p_pair.authored)->set_controller(p_controller);
+    netw::NetwEntity::of(p_pair.authored)->record_controller(p_controller);
     for (int index = 0; index < p_pair.mirrors.size(); ++index) {
         netw::NetwEntity::of(p_pair.mirrors[index])
-            ->set_controller(p_controller);
+            ->record_controller(p_controller);
     }
 }
 

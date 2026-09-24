@@ -29,6 +29,10 @@ public:
 
     godot::Node *take_producer(int64_t route);
 
+    bool produced(int64_t route) const {
+        return producers.has(route);
+    }
+
     int produced_count(godot::Object *spawner) const;
 
     void clear();

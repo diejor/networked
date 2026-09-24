@@ -619,7 +619,7 @@ FrameEvidence run_frame_scenario(const FrameScenario &p_scenario) {
         return seen;
     }
     if (p_scenario.writer == THE_PEER_WRITES) {
-        netw::NetwEntity::of(mover)->grant_control(rig.peer_id(0));
+        netw::NetwEntity::of(mover)->set_controller(rig.peer_id(0));
         rig.step_ticks(4);
     }
 
@@ -737,7 +737,9 @@ LateEvidence run_late_join() {
         = rig.server()->liveness_route_anchor(route);
     REQUIRE(rig.server()->verb_head_write(stale, route));
     REQUIRE(rig.server()->anchor_encode(stale, world.arena(-1)));
+    uint64_t stale_author = uint64_t(rig.peer_id(-1));
     REQUIRE(stale.varuint(stale_revision, 5));
+    REQUIRE(stale.varuint(stale_author, 5));
     REQUIRE(stale.align_verify());
     netw::NetwMultiplayer::entity_move(mover, world.arena(-1));
     rig.pump(6);
@@ -829,7 +831,9 @@ LateParkedEvidence run_late_parked() {
     seen.reparent_revision = int64_t(newer_revision);
     REQUIRE(rig.server()->verb_head_write(newer, route));
     REQUIRE(rig.server()->anchor_encode(newer, world.arena(-1)));
+    uint64_t newer_author = uint64_t(rig.peer_id(-1));
     REQUIRE(newer.varuint(newer_revision, 5));
+    REQUIRE(newer.varuint(newer_author, 5));
     REQUIRE(newer.align_verify());
 
     const int late = rig.add_client();

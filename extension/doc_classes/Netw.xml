@@ -13,7 +13,7 @@
 			<return type="NetwAction" />
 			<param index="0" name="authority" type="Callable" />
 			<description>
-				A [NetwAction] for a one-off action such as firing or placing something, bound to [param authority] the server runs to judge it.
+				A [NetwAction] for an action such as firing or placing something, bound to [param authority] the server runs to judge it.
 				Repeated calls return the same [NetwAction].
 				[codeblock]
 				@onready var place_bomb := Netw.action(_place_bomb)
@@ -26,6 +26,7 @@
 				    ctx.bind(bomb)
 				    bombs.add_child(bomb)
 				[/codeblock]
+				Use an action to judge before anyone sees it. [member NetwEntity.lifecycle] lets a client spawn, move and despawn without server approval.
 			</description>
 		</method>
 		<method name="change_scene_to_file" qualifiers="static">
@@ -34,9 +35,9 @@
 			<param index="1" name="path" type="String" />
 			<param index="2" name="scope" type="int" enum="Netw.SceneChange" default="0" />
 			<description>
-				Opens [param path] and makes players watch it. No node moves, spawn the arrivals from [signal NetwSessionHandle.scene_changed].
-				[param scope] says who watches and what retires. [constant SCENE_CHANGE_SESSION] takes every peer and retires every other scene, [constant SCENE_CHANGE_PLAYER] takes one peer and retires nothing, and [constant SCENE_CHANGE_SCENE] takes whoever is in the scene [param node] sits in and retires that scene.
-				A server call always succeeds. A client call is a request that [method configure_scene_requests] decides, so a session declaring no handler rejects it.
+				Opens [param path] and makes players watch it. No node moves, spawn nodes from [signal NetwSessionHandle.scene_changed].
+				[param scope] says who watches and what retires.
+				A server call always succeeds. A client call is a request that [method configure_scene_requests] decides, so a session declaring no [method configure_scene_requests] rejects it.
 				[codeblock]
 				var err: Error = await Netw.change_scene_to_file(
 				        self, "res://match.tscn").wait()
@@ -67,11 +68,25 @@
 				[/codeblock]
 			</description>
 		</method>
+		<method name="claim_authority" qualifiers="static">
+			<return type="NetwPromise" />
+			<param index="0" name="node" type="Node" />
+			<param index="1" name="hold" type="int" enum="NetwEntity.Hold" default="2" />
+			<description>
+				Asks the server to make this peer the [member NetwEntity.controller] of the entity [param node] belongs to, which is [method NetwEntity.claim_authority] reached from any node of it.
+				[codeblock]
+				Netw.claim_authority(self, NetwEntity.HOLD_YIELDABLE).then(pick_up)
+				[/codeblock]
+				A [param node] under no entity answers a promise rejected with [constant @GlobalScope.ERR_DOES_NOT_EXIST].
+				[param hold] defaults to [constant NetwEntity.HOLD_EXCLUSIVE].
+				[b]Player request.[/b]
+			</description>
+		</method>
 		<method name="clock" qualifiers="static">
 			<return type="NetwClockHandle" />
 			<param index="0" name="node" type="Node" />
 			<description>
-				A [member Node.multiplayer] has one clock, ticks are synchronized across every peer.
+				Returns the clock for the [member Node.multiplayer] of [param node].
 				[codeblock]
 				@onready var clock := Netw.clock(self)
 
@@ -88,7 +103,6 @@
 			<description>
 				Gates if a [NetwPlayer] is created, arguments come from [method prepare_join]. 
 				Return [constant @GlobalScope.OK] to admit.
-				Use [method Netw.auth_callback] instead, as you would normally do with [SceneMultiplayer] to gate peers from entering the [MultiplayerAPI] such as firing [signal MultiplayerAPI.peer_entered]
 				[codeblock]
 				func _init() -&gt; void:
 				    Netw.configure_admission(admit)
@@ -99,6 +113,7 @@
 				        return ERR_UNAUTHORIZED
 				    return OK
 				[/codeblock]
+				Use [member NetwMultiplayer.auth_callback] instead, as you would normally do with [SceneMultiplayer] to gate peers from entering the [MultiplayerAPI] such as to gate the firing of [signal MultiplayerAPI.peer_connected].
 				[b]Server Only.[/b]
 			</description>
 		</method>
@@ -123,19 +138,25 @@
 			<param index="1" name="name" type="StringName" />
 			<param index="2" name="preset" type="NetwDatabaseConfig" default="null" />
 			<description>
-				Declares a [NetwDatabase] named [param name] on [param node]'s session, and returns the [NetwDatabaseConfig] to fill in.
+				Declares a [NetwDatabase] named [param name] on [member Node.multiplayer] of [param node].
 				[codeblock]
 				func _ready() -&gt; void:
 				    Netw.configure_database(self, &amp;"saves").backend(preload("res://save_backend.tres"))
 				[/codeblock]
-				[method database] reaches the declared database. [param preset] copies an exported [NetwDatabaseConfig] in rather than filling in the returned one.
+				[method database] reaches the declared database. [param preset] copies an [annotation GDScript.export] [NetwDatabaseConfig]. If using [param preset], the recommended place to declare it is from [method Node._enter_tree].
+				[codeblock]
+				@export var database_config: NetwDatabaseConfig
+
+				func _enter_tree() -&gt; void:
+				    Netw.configure_database(self, &amp;"saves", database_config)
+				[/codeblock]
 			</description>
 		</method>
 		<method name="configure_despawn" qualifiers="static">
 			<return type="NetwDespawnConfig" />
 			<param index="0" name="node" type="Node" />
 			<description>
-				Declares what the other peers do with [param node] when [method despawn] removes it, and returns the [NetwDespawnConfig] to fill in.
+				Declares what the other peers do with [param node] when [method despawn] removes it.
 				[codeblock]
 				func _init() -&gt; void:
 				    Netw.configure_despawn(self).linger(0.5)
@@ -146,22 +167,20 @@
 			<return type="NetwEntity" />
 			<param index="0" name="node" type="Node" />
 			<description>
-				The [NetwEntity] that represents [param node] in the [member Node.multiplayer] session, and returns it to configure.
+				Returns the [NetwEntity] that represents [param node] in the [member Node.multiplayer] session.
 				[codeblock]
 				func _init() -&gt; void:
 				    var entity := Netw.configure_entity(self)
 				    # the node now behaves like `Node.set_multiplayer_authority(peer_id)`
 				    entity.initial_controller = NetwEntity.INITIAL_REPRESENTED_PEER
 				[/codeblock]
-				[member NetwEntity.controller] is the peer that steers the entity, and [NetwEntity] shows how a peer takes control and hands it on.
-				The entity's body is declared on [member NetwEntity.simulation], its prediction on [member NetwEntity.prediction] and its drawing on [member NetwEntity.interpolation].
 			</description>
 		</method>
 		<method name="configure_interest" qualifiers="static">
 			<return type="NetwInterestHandle" />
 			<param index="0" name="node" type="Node" />
 			<description>
-				Declares which [NetwInterestLayer] layer [param node] belongs to, and returns the [NetwInterestHandle] that is also [member NetwEntity.interest].
+				Declares which [NetwInterestLayer] layer [param node] belongs to, and returns the [NetwInterestHandle] that is also [member NetwEntity.interest] of that [param node].
 				[codeblock]
 				func _init() -&gt; void:
 				    Netw.configure_interest(self) \
@@ -187,7 +206,8 @@
 				func spawn_at(who: NetwPlayer, point: StringName, team: int) -&gt; void:
 				    arena.add_child(Netw.spawn_player(who, _spawn_avatar, team))
 				[/codeblock]
-				[param handler] takes the [NetwPlayer] first and the values passed to [method prepare_join]. [member NetwPlayer.username] takes the second argument of [method prepare_join] and the rest are the extra arguments.
+				[param handler] takes the [NetwPlayer] first, the rest of parameters are the areguments passed to [method prepare_join] before the [MultiplayerAPI] connected. 
+				[b]Note:[/b] the username passed to [method prepare_join] crosses as [member NetwPlayer.username].
 				[b]Server Only.[/b]
 			</description>
 		</method>
@@ -196,7 +216,7 @@
 			<param index="0" name="node" type="Node" />
 			<param index="1" name="preset" type="NetwLagCompensationConfig" default="null" />
 			<description>
-				Tunes how far back the session records what every node held.
+				Tunes how far back the [NetwMultiplayer] records what every node held.
 				[codeblock]
 				func _init() -&gt; void:
 				    Netw.configure_lagcomp(self).input_gate_deadline(16)
@@ -213,17 +233,16 @@
 				func _init() -&gt; void:
 				    Netw.configure_multiplayer_scene(self).labeled(&amp;"Arena")
 				[/codeblock]
-				Use [method NetwSceneHandle.watch] to show the scene to a specific peer.
 			</description>
 		</method>
 		<method name="configure_persistence" qualifiers="static">
 			<return type="NetwPersistenceConfig" />
 			<param index="0" name="node" type="Node" />
 			<description>
-				Declares which row of which [NetwDatabase] [param node] loads and saves.
+				Declares which row of which [NetwDatabase] [param node] loads and saves from.
 				[codeblock]
 				func _ready() -&gt; void:
-				    Netw.configure_property(self, &amp;"gold", false) \
+				    Netw.configure_property(self, &amp;"gold") \
 				            .persisted(game.save_schema.column_ref(0))
 				    Netw.configure_persistence(self) \
 				            .database(&amp;"saves") \
@@ -413,7 +432,8 @@
 				[/codeblock]
 				[param opts] configures what happens to the node on every peer, see [NetwDespawnOpts] for the options.
 				It returns [constant @GlobalScope.ERR_DOES_NOT_EXIST] for a node that is not a spawned one and [constant @GlobalScope.ERR_UNAVAILABLE] for a node in no [MultiplayerAPI].
-				[b]Server Only.[/b]
+				The session authority may always call it, and the [member NetwEntity.controller] may for a node whose [member NetwEntity.lifecycle] is [constant NetwEntity.LIFECYCLE_CONTROLLER].
+				The node leaves the controller's peer at once, and the server serves it back if it refuses.
 			</description>
 		</method>
 		<method name="emit_entity_signal" qualifiers="vararg static">
@@ -461,6 +481,16 @@
 				A node that is in no tree returns [code]null[/code].
 			</description>
 		</method>
+		<method name="release_authority" qualifiers="static">
+			<return type="NetwPromise" />
+			<param index="0" name="node" type="Node" />
+			<param index="1" name="successor" type="int" default="0" />
+			<description>
+				Hands control of the entity [param node] belongs to on to [param successor], or to the server when it is [code]0[/code], with this peer's final state. It is [method NetwEntity.release_authority] reached from any node of it.
+				A [param node] under no entity answers a promise rejected with [constant @GlobalScope.ERR_DOES_NOT_EXIST].
+				[b]Player request.[/b]
+			</description>
+		</method>
 		<method name="reload_current_scene" qualifiers="static">
 			<return type="NetwPromise" />
 			<param index="0" name="node" type="Node" />
@@ -481,7 +511,8 @@
 				What it adds over [method Node.reparent] is a window that masks the mover off the physics server across the parent swap, basically a workaround for this [url=https://github.com/godotengine/godot/issues/14578]issue[/url].
 				[method Node.reparent] stays fully supported and is the right verb for anything that doesn't depend on area signals.
 				A [param node] that is no entity answers [constant @GlobalScope.ERR_DOES_NOT_EXIST] and one in no session answers [constant @GlobalScope.ERR_UNAVAILABLE].
-				[b]Server Only.[/b]
+				The session authority may always call it, and the [member NetwEntity.controller] may for a node whose [member NetwEntity.lifecycle] is [constant NetwEntity.LIFECYCLE_CONTROLLER].
+				The controller's move lands on its own peer at once, and a refusal from the server rejects the promise and moves the node back. At most eight such moves of one entity wait on the server at a time, and the ninth is moved back and rejected with [constant @GlobalScope.ERR_UNAVAILABLE].
 			</description>
 		</method>
 		<method name="replicate" qualifiers="static">
@@ -497,7 +528,7 @@
 				body.position = spawn_point
 				scene.add_child(body)
 				[/codeblock]
-				[b]Server Only.[/b]
+				The session authority may always call it, and a client may with no [param owner] when [param node] declares [member NetwEntity.lifecycle] as [constant NetwEntity.LIFECYCLE_CONTROLLER], becoming its [member NetwEntity.controller].
 			</description>
 		</method>
 		<method name="request" qualifiers="vararg static">
@@ -657,8 +688,9 @@
 				[codeblock]
 				muzzle.add_child(Netw.spawn(_spawn_bullet, dir, 2))
 				[/codeblock]
-				Register [param fn] with [method configure_spawn] first, the caller must be the server, and the node returned must be parented before the next tick.
-				[b]Server Only.[/b]
+				Register [param fn] with [method configure_spawn] first, and parent the node returned before the next tick.
+				The session authority may always call it, and a client may when the node [param fn] builds declares [member NetwEntity.lifecycle] as [constant NetwEntity.LIFECYCLE_CONTROLLER], becoming its [member NetwEntity.controller].
+				The node shows on that client at once, and is removed if the server refuses it.
 			</description>
 		</method>
 		<method name="spawn_player" qualifiers="vararg static">

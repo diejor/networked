@@ -993,6 +993,47 @@ Ref<NetwPromise> Netw::reparent(Node *p_node, Node *p_new_parent) {
     return api->entity_reparent(entity->get_rid_handle(), p_new_parent);
 }
 
+namespace {
+
+Ref<NetwEntity> entity_for_verb(Node *p_node, const char *p_verb) {
+    const Ref<NetwEntity> entity = NetwEntity::of(p_node);
+    if (entity.is_null()) {
+        NETW_ERROR(
+            sys::ENTITY,
+            "Netw.%s: '%s' is no entity",
+            p_verb,
+            p_node != nullptr ? String(p_node->get_name()) : String("<null>")
+        );
+    }
+    return entity;
+}
+
+Ref<NetwPromise> rejected_for_no_entity(const char *p_verb) {
+    return NetwPromise::rejected(
+        ERR_DOES_NOT_EXIST,
+        vformat("Netw.%s: the node is no entity", p_verb)
+    );
+}
+
+} // namespace
+
+Ref<NetwPromise> Netw::claim_authority(Node *p_node, NetwEntity::Hold p_hold) {
+    const Ref<NetwEntity> entity = entity_for_verb(p_node, "claim_authority");
+    if (entity.is_null()) {
+        return rejected_for_no_entity("claim_authority");
+    }
+    return entity->claim_authority(p_hold);
+}
+
+Ref<NetwPromise> Netw::release_authority(Node *p_node, int64_t p_successor) {
+    const Ref<NetwEntity> entity
+        = entity_for_verb(p_node, "release_authority");
+    if (entity.is_null()) {
+        return rejected_for_no_entity("release_authority");
+    }
+    return entity->release_authority(p_successor);
+}
+
 Ref<NetwAction> Netw::action(const Callable &p_authority) {
     Node *host = Object::cast_to<Node>(p_authority.get_object());
     if (host == nullptr) {
@@ -1383,6 +1424,18 @@ void Netw::_bind_methods() {
         "Netw",
         D_METHOD("reparent", "node", "new_parent"),
         &Netw::reparent
+    );
+    ClassDB::bind_static_method(
+        "Netw",
+        D_METHOD("claim_authority", "node", "hold"),
+        &Netw::claim_authority,
+        DEFVAL(entity::Control::HOLD_EXCLUSIVE)
+    );
+    ClassDB::bind_static_method(
+        "Netw",
+        D_METHOD("release_authority", "node", "successor"),
+        &Netw::release_authority,
+        DEFVAL(0)
     );
 
     ClassDB::bind_static_method(

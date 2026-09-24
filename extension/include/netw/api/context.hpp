@@ -212,6 +212,14 @@ public:
         godot::Node *p_node,
         godot::Node *p_new_parent
     );
+    static godot::Ref<NetwPromise> claim_authority(
+        godot::Node *p_node,
+        NetwEntity::Hold p_hold
+    );
+    static godot::Ref<NetwPromise> release_authority(
+        godot::Node *p_node,
+        int64_t p_successor
+    );
 
     static godot::Ref<NetwAction> action(const godot::Callable &p_authority);
     static godot::Ref<DictionaryRecord> sample(

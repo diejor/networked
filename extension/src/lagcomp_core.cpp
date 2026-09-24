@@ -1,5 +1,6 @@
 #include "netw/lagcomp_core.hpp"
 
+#include "netw/api/entity.hpp"
 #include "netw/colors.hpp"
 #include "netw/log.hpp"
 #include "netw/profile.hpp"
@@ -65,7 +66,10 @@ int64_t NetwLagCompCore::timeline_register(
     Row *row = mutable_row_of(slot);
     row->entity = p_entity;
     slot_by_entity.insert(key, slot);
-    p_entity->set(StringName("timeline"), row->history);
+    NetwEntity *entity = Object::cast_to<NetwEntity>(p_entity.ptr());
+    if (entity != nullptr) {
+        entity->set_timeline(row->history);
+    }
     NETW_TRACE(
         MODULE,
         "timeline_register seated entity %d at slot %d, %d registered",

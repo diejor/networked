@@ -56,6 +56,8 @@ const Declared TRANSCRIBED[] = {
     {"SYNC_ROW_WINDOW", 41},
     {"SESSION_SCENE_VIEWERS", 42},
     {"ROW_CONTROL", 43},
+    {"ROUTE_LEASE", 44},
+    {"LIFECYCLE_DECISION", 45},
 };
 
 constexpr int TRANSCRIBED_COUNT

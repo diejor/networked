@@ -119,7 +119,7 @@
 			The mode this entity runs in on this peer. [signal mode_changed] reports each change.
 		</member>
 		<member name="release_on_rest" type="float" setter="set_release_on_rest" getter="get_release_on_rest" default="0.0">
-			The seconds the bodies must sleep before this peer releases the entity with [method NetwEntity.release_control]. It acts only while this peer is the confirmed controller with [constant NetwEntity.HOLD_YIELDABLE] and no body is frozen, so [constant NetwEntity.HOLD_EXCLUSIVE] never releases itself. A body that wakes before the session decides claims the entity again. [code]0[/code] turns it off.
+			The seconds the bodies must sleep before this peer releases the entity with [method NetwEntity.release_authority]. It acts only while this peer is the confirmed controller with [constant NetwEntity.HOLD_YIELDABLE] and no body is frozen, so [constant NetwEntity.HOLD_EXCLUSIVE] never releases itself. A body that wakes before the session decides claims the entity again. [code]0[/code] turns it off.
 			It needs [constant NetwEntity.TRANSFER_IMMEDIATE] on an entity with no [method NetwPropertyConfig.state] row and no prediction, and does nothing otherwise.
 		</member>
 		<member name="replicas" type="int" setter="set_replicas" getter="get_replicas" enum="NetwSimulationHandle.Replicas" default="0">

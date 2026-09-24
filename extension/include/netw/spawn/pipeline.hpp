@@ -65,6 +65,33 @@ bool decode_spawn_frame(
     SpawnFrame &r_frame
 );
 
+struct SpawnBuild {
+    enum Outcome : uint8_t {
+        BUILT,
+        DROPPED,
+        WAITS,
+    };
+    enum Wait : uint8_t {
+        WAIT_NONE,
+        WAIT_ROUTE,
+        WAIT_ADOPT,
+        WAIT_SCENE,
+    };
+
+    SpawnFrame frame;
+    godot::Node *node = nullptr;
+    godot::Node *parent = nullptr;
+    godot::Node *host = nullptr;
+    godot::Ref<NetwEntity> entity;
+    godot::MultiplayerSpawner *spawner = nullptr;
+    godot::Array args;
+    bool strict = false;
+    bool names_a_freed_node = false;
+    bool adopted = false;
+    Wait wait = WAIT_NONE;
+    int64_t wait_route = 0;
+};
+
 class Pipeline {
 private:
     godot::ObjectID core_id;
@@ -89,6 +116,7 @@ private:
     godot::HashMap<godot::StringName, godot::Callable> constructors;
     godot::HashMap<godot::StringName, godot::Array> constructor_schemas;
     godot::HashMap<int64_t, godot::Ref<NetwPlayer>> armed_owners;
+    godot::HashMap<int64_t, int64_t> first_recipients;
 
     int64_t drops_spawn_bad_sender = 0;
     int64_t drops_spawn_duplicate = 0;
@@ -103,6 +131,8 @@ private:
     int64_t spawn_park_expired = 0;
     int64_t spawn_park_refused = 0;
     int64_t spawn_nested_published = 0;
+    int64_t lifecycle_ops_admitted = 0;
+    int64_t lifecycle_ops_refused = 0;
 
 #ifdef NETW_TESTS
     godot::TypedArray<godot::Dictionary> armed_spawn_state;
@@ -152,6 +182,7 @@ private:
     void on_armed_tree_entered(int64_t p_route);
     void schedule_armed_flush(int64_t p_route);
     void flush_armed_spawn(int64_t p_route);
+    void send_authored_spawn(int64_t p_route);
     bool armed_owner_survives(int64_t p_route);
     void discard_armed_spawn(int64_t p_route);
     static bool roots_published_entity(godot::Node *p_node);
@@ -163,13 +194,17 @@ private:
     void publish_nested(godot::Node *p_node);
     void reconcile_nested(int64_t p_owner_route);
     void reconcile_nested_child(int64_t p_route);
-    void settle_move(int64_t p_route);
+    void settle_move(int64_t p_route, int64_t p_author = 0);
     void settle_death(int64_t p_route);
     void settle_absence(int64_t p_route);
     bool holds_received_route(int64_t p_route) const;
     bool holds_spawned_route(int64_t p_route) const;
     void despawn_tracked_route(int64_t p_route);
-    void send_reparent(Record *p_record, godot::Node *p_node);
+    void send_reparent(
+        Record *p_record,
+        godot::Node *p_node,
+        int64_t p_author = 0
+    );
 
     godot::Callable constructor_of(const godot::StringName &p_id) const;
     godot::Variant fn_registry_schema(
@@ -190,11 +225,15 @@ private:
     );
     godot::Variant resolve_spawn_args(
         const godot::LocalVector<call_args::Slot> &p_slots,
-        const godot::PackedByteArray &p_payload,
-        int64_t p_route,
-        int64_t p_sender
+        SpawnBuild &r_built
     );
+    SpawnBuild::Outcome unresolved_args(SpawnBuild &r_built);
 
+    bool spawn_admitted(
+        godot::Node *p_node,
+        const godot::Ref<NetwPlayer> &p_owner,
+        const char *p_verb
+    );
     godot::Node *run_construct_stage(const godot::Callable &p_constructor);
     godot::Node *build_adopt(
         godot::Object *p_parent,
@@ -221,10 +260,41 @@ private:
         int64_t p_channel,
         const godot::PackedByteArray &p_payload
     );
+    godot::Error admission(
+        int64_t p_sender,
+        int64_t p_channel,
+        const godot::PackedByteArray &p_payload
+    );
     void try_apply_spawn(
         const godot::PackedByteArray &p_payload,
         int64_t p_sender
     );
+    SpawnBuild::Outcome build_spawn(
+        const godot::PackedByteArray &p_payload,
+        SpawnBuild &r_built
+    );
+    void park_built(
+        const godot::PackedByteArray &p_payload,
+        int64_t p_sender,
+        const SpawnBuild &p_built
+    );
+    void place_received(const SpawnBuild &p_built);
+    void admit_controller_spawn(
+        const godot::PackedByteArray &p_payload,
+        int64_t p_sender
+    );
+    godot::Error rule_controller_spawn(
+        const SpawnBuild &p_built,
+        int64_t p_sender
+    );
+    void refuse_controller_spawn(
+        int64_t p_route,
+        int64_t p_sender,
+        godot::Error p_code,
+        bool p_holds_route,
+        const godot::String &p_reason = godot::String()
+    );
+    void issue_controller_spawn(SpawnBuild &r_built, int64_t p_sender);
     void apply_parked(
         int64_t p_route,
         const godot::PackedByteArray &p_payload,
@@ -288,6 +358,10 @@ public:
     }
     bool books_node(godot::Node *p_node) const {
         return spawn_book.books_node(p_node);
+    }
+    bool spawner_produced(int64_t p_route) {
+        return spawner_compat != nullptr
+            && spawner_compat->get_roster().produced(p_route);
     }
     Park &get_park() {
         return park;
@@ -363,6 +437,11 @@ public:
     );
 
     godot::PackedByteArray encode_spawn_frame(
+        int64_t p_route,
+        godot::Node *p_node
+    );
+    godot::PackedByteArray encode_record_frame(
+        Record *p_record,
         int64_t p_route,
         godot::Node *p_node
     );

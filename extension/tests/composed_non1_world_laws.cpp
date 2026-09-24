@@ -830,7 +830,7 @@ TEST_CASE(
     REQUIRE(at_nine != nullptr);
     NetwEntity::of(at_host)->set_transfer(NetwEntity::TRANSFER_REQUESTABLE);
 
-    NetwEntity::of(at_nine)->request_control();
+    NetwEntity::of(at_nine)->claim_authority();
     cw.settle(12);
 
     NETW_CHECK_EQ(NetwEntity::of(at_host)->get_controller(), int64_t(MEMBER));

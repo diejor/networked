@@ -4,7 +4,7 @@
 		A [NetwDatabaseBackend] that keeps records in files under one directory.
 	</brief_description>
 	<description>
-		Records outlive the process, so this is the backend a shipped single player or listen server game saves into.
+		Records outlive the process, use it as the backend a singleplayer or listen server game saves into.
 		[codeblock]
 		var backend := FileSystemDatabase.new()
 		backend.root = "user://saves"
@@ -12,18 +12,6 @@
 		[/codeblock]
 		Each slot is a directory under [member root], and each record is one file inside it. A record is replaced by writing a new file beside it and renaming over the target.
 		A file this library did not write is reported as present and refused as unrecognized. It is never read as an empty save and it is never overwritten by the read that found it.
-		[b]Record errors[/b]
-		The connection [method _open] answers reports these. A scan never fails on its own, and a record file it cannot open fails the page as unrecognized.
-		[codeblock lang=text]
-		_read            the read reply's error
-		┠╴OK                  the file was read, or there is no file
-		┖╴ERR_FILE_CANT_OPEN  the record file exists and could not be opened
-		_write_batch     one Error per operation
-		┠╴OK                  the file was replaced or removed, or there was none to remove
-		┠╴ERR_CANT_CREATE     the directory for the record could not be created
-		┠╴ERR_FILE_CANT_WRITE the new file could not be opened for writing
-		┖╴FAILED              renaming over the record, or removing it, failed
-		[/codeblock]
 	</description>
 	<tutorials>
 	</tutorials>

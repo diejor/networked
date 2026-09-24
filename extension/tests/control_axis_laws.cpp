@@ -3,6 +3,7 @@
 #if defined(NETW_TIER_HOSTED)
 
 #include "godot/node.hpp"
+#include "netw/api/context.hpp"
 #include "netw/api/entity.hpp"
 #include "netw/api/entity_options.hpp"
 #include "netw/api/event_plane.hpp"
@@ -115,7 +116,7 @@ TEST_CASE(
     REQUIRE_MESSAGE(asking.is_valid(), "the spawn never reached the asker");
     const int64_t asker = rig.peer_id(1);
 
-    asking->request_control();
+    asking->claim_authority();
     rig.pump(10);
 
     NETW_CHECK_EQ(host->get_controller(), asker);
@@ -147,7 +148,7 @@ TEST_CASE(
         callable_mp_static(&deny_every_request)
     );
 
-    entity_at(rig, route, 1)->request_control();
+    entity_at(rig, route, 1)->claim_authority();
     rig.pump(10);
 
     NETW_CHECK_EQ(host->get_controller(), represented);
@@ -162,7 +163,7 @@ TEST_CASE(
     );
     host->set_transfer(NetwEntity::TRANSFER_FIXED);
 
-    entity_at(rig, route, 1)->request_control();
+    entity_at(rig, route, 1)->claim_authority();
     rig.pump(10);
 
     NETW_CHECK_EQ(host->get_controller(), represented);
@@ -191,7 +192,7 @@ TEST_CASE(
     const int64_t represented = rig.peer_id(0);
 
     rig.server()->event_ring(route);
-    entity_at(rig, route, 1)->request_control();
+    entity_at(rig, route, 1)->claim_authority();
     rig.pump(10);
 
     const Array after_grant = rig.server()->event_ring(route);
@@ -216,7 +217,7 @@ TEST_CASE(
     );
     NETW_CHECK_EQ(int64_t(change_detail.get(StringName("to"), -1)), asker);
 
-    host->grant_control(asker);
+    host->set_controller(asker);
     rig.pump(10);
     rig.server()->event_ring(route);
 
@@ -224,7 +225,7 @@ TEST_CASE(
         StringName("control_requested"),
         callable_mp_static(&deny_every_request)
     );
-    entity_at(rig, route, 0)->request_control();
+    entity_at(rig, route, 0)->claim_authority();
     rig.pump(10);
 
     const Array after_denial = rig.server()->event_ring(route);
@@ -263,7 +264,7 @@ TEST_CASE(
     REQUIRE(host.is_valid());
     const int64_t controller = rig.peer_id(1);
 
-    host->grant_control(controller);
+    host->set_controller(controller);
     rig.pump(8);
     NETW_CHECK_EQ(host->get_controller(), controller);
 
@@ -293,7 +294,7 @@ TEST_CASE(
     doomed->set_on_controller_disconnect(NetwEntity::DISCONNECT_DESPAWN);
 
     const int64_t steerer = rig.peer_id(1);
-    doomed->grant_control(steerer);
+    doomed->set_controller(steerer);
     rig.pump(8);
     NETW_CHECK_EQ(doomed->get_controller(), steerer);
     NETW_CHECK_EQ(doomed->get_stage(), int64_t(netw::entity::Stage::LIVE));
@@ -372,7 +373,7 @@ TEST_CASE(
     rig.server()->event_arm(true);
     const int route = seat_free(rig, arena, "Held");
 
-    const Ref<NetwPromise> first = entity_at(rig, route, 0)->request_control();
+    const Ref<NetwPromise> first = entity_at(rig, route, 0)->claim_authority();
     rig.pump(10);
     CHECK(first->get_is_completed());
     NETW_CHECK_EQ(entity_at(rig, route, 1)->get_controller(), rig.peer_id(0));
@@ -380,7 +381,7 @@ TEST_CASE(
 
     rig.server()->event_ring(route);
     const Ref<NetwPromise> refused
-        = entity_at(rig, route, 1)->request_control();
+        = entity_at(rig, route, 1)->claim_authority();
     CHECK(refused->get_is_failed());
     NETW_CHECK_EQ(int(refused->get_code()), int(ERR_UNAUTHORIZED));
     CHECK_FALSE(entity_at(rig, route, 1)->get_is_control_pending());
@@ -405,7 +406,7 @@ TEST_CASE(
     teach_every_session(rig);
     const int route = seat_free(rig, arena, "Touched");
 
-    entity_at(rig, route, 0)->request_control(Control::HOLD_YIELDABLE);
+    entity_at(rig, route, 0)->claim_authority(Control::HOLD_YIELDABLE);
     rig.pump(10);
     NETW_CHECK_EQ(entity_at(rig, route, -1)->get_controller(), rig.peer_id(0));
     NETW_CHECK_EQ(hold_at(rig, route, 1), int(Control::HOLD_YIELDABLE));
@@ -414,12 +415,12 @@ TEST_CASE(
     );
 
     const Ref<NetwPromise> nudged
-        = entity_at(rig, route, 1)->request_control(Control::HOLD_YIELDABLE);
+        = entity_at(rig, route, 1)->claim_authority(Control::HOLD_YIELDABLE);
     CHECK(nudged->get_is_failed());
     NETW_CHECK_EQ(int(nudged->get_code()), int(ERR_UNAUTHORIZED));
 
     const Ref<NetwPromise> grabbed
-        = entity_at(rig, route, 1)->request_control(Control::HOLD_EXCLUSIVE);
+        = entity_at(rig, route, 1)->claim_authority(Control::HOLD_EXCLUSIVE);
     rig.pump(10);
     CHECK(grabbed->get_is_completed());
     for (int client = -1; client < 2; ++client) {
@@ -450,7 +451,7 @@ TEST_CASE(
     const int route = seat_free(rig, arena, "Regripped");
     const Ref<NetwEntity> host = entity_at(rig, route, -1);
 
-    entity_at(rig, route, 0)->request_control(Control::HOLD_YIELDABLE);
+    entity_at(rig, route, 0)->claim_authority(Control::HOLD_YIELDABLE);
     rig.pump(10);
     NETW_REQUIRE_EQ(host->get_controller(), int64_t(rig.peer_id(0)));
     const int64_t tenure = int64_t(host->get_control_tenure());
@@ -466,7 +467,7 @@ TEST_CASE(
         callable_mp_static(&deny_every_request)
     );
     const Ref<NetwPromise> tightened
-        = entity_at(rig, route, 0)->request_control(Control::HOLD_EXCLUSIVE);
+        = entity_at(rig, route, 0)->claim_authority(Control::HOLD_EXCLUSIVE);
     rig.pump(10);
 
     CHECK(tightened->get_is_completed());
@@ -486,8 +487,8 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Entity] CA9 grant_control moves an entity a peer holds "
-    "exclusively, and the session's own decision holds nothing"
+    "[Networked][Entity] CA9 a controller write moves an entity a peer "
+    "holds exclusively, and the session's own decision holds nothing"
 ) {
     LoopbackRig rig(2);
     rig.mount();
@@ -495,14 +496,14 @@ TEST_CASE(
     teach_every_session(rig);
     const int route = seat_free(rig, arena, "Seized");
 
-    entity_at(rig, route, 0)->request_control(Control::HOLD_EXCLUSIVE);
+    entity_at(rig, route, 0)->claim_authority(Control::HOLD_EXCLUSIVE);
     rig.pump(10);
     NETW_REQUIRE_EQ(
         entity_at(rig, route, -1)->get_controller(),
         int64_t(rig.peer_id(0))
     );
 
-    entity_at(rig, route, -1)->grant_control(rig.peer_id(1));
+    entity_at(rig, route, -1)->set_controller(rig.peer_id(1));
     rig.pump(10);
     for (int client = -1; client < 2; ++client) {
         NETW_CHECK_EQ(
@@ -511,6 +512,73 @@ TEST_CASE(
         );
         NETW_CHECK_EQ(hold_at(rig, route, client), int(Control::HOLD_NONE));
     }
+}
+
+TEST_CASE(
+    "[Networked][Entity] CA9b a controller write off the session authority "
+    "is refused and moves nothing, and a write of 0 takes control back"
+) {
+    LoopbackRig rig(2);
+    rig.mount();
+    Node *arena = rig.mirror_child("Arena");
+    teach_every_session(rig);
+    const int route = seat_free(rig, arena, "Contested");
+
+    entity_at(rig, route, -1)->set_controller(rig.peer_id(0));
+    rig.pump(10);
+
+    ERR_PRINT_OFF;
+    entity_at(rig, route, 1)->set_controller(rig.peer_id(1));
+    ERR_PRINT_ON;
+    rig.pump(10);
+    for (int client = -1; client < 2; ++client) {
+        NETW_CHECK_EQ(
+            entity_at(rig, route, client)->get_controller(),
+            rig.peer_id(0)
+        );
+    }
+
+    entity_at(rig, route, -1)->set_controller(0);
+    rig.pump(10);
+    for (int client = -1; client < 2; ++client) {
+        NETW_CHECK_EQ(entity_at(rig, route, client)->get_controller(), 0);
+    }
+}
+
+TEST_CASE(
+    "[Networked][Entity] CA9c Netw.claim_authority and "
+    "Netw.release_authority act on the entity a node belongs to, and a node "
+    "under no entity is rejected"
+) {
+    LoopbackRig rig(1);
+    rig.mount();
+    Node *arena = rig.mirror_child("Arena");
+    teach_every_session(rig);
+    const int route = seat_free(rig, arena, "Relayed");
+    Node *held = rig.route_node(route, 0);
+    REQUIRE(held != nullptr);
+
+    const Ref<NetwPromise> claimed
+        = netw::Netw::claim_authority(held, Control::HOLD_EXCLUSIVE);
+    rig.pump(10);
+    CHECK(claimed->get_is_settled());
+    NETW_CHECK_EQ(
+        entity_at(rig, route, -1)->get_controller(),
+        int64_t(rig.peer_id(0))
+    );
+
+    const Ref<NetwPromise> released = netw::Netw::release_authority(held, 0);
+    rig.pump(10);
+    CHECK(released->get_is_settled());
+    NETW_CHECK_EQ(entity_at(rig, route, -1)->get_controller(), 0);
+
+    Node *loose = memnew(Node);
+    ERR_PRINT_OFF;
+    const Ref<NetwPromise> refused
+        = netw::Netw::claim_authority(loose, Control::HOLD_EXCLUSIVE);
+    ERR_PRINT_ON;
+    CHECK(refused->get_is_settled());
+    memdelete(loose);
 }
 
 TEST_CASE(
@@ -523,9 +591,9 @@ TEST_CASE(
     teach_every_session(rig);
     const int route = seat_free(rig, arena, "Seeded");
 
-    entity_at(rig, route, 0)->request_control(Control::HOLD_YIELDABLE);
+    entity_at(rig, route, 0)->claim_authority(Control::HOLD_YIELDABLE);
     rig.pump(10);
-    entity_at(rig, route, 0)->request_control(Control::HOLD_EXCLUSIVE);
+    entity_at(rig, route, 0)->claim_authority(Control::HOLD_EXCLUSIVE);
     rig.pump(10);
     const Ref<NetwEntity> host = entity_at(rig, route, -1);
     NETW_REQUIRE_EQ(int64_t(host->get_control_revision()), int64_t(2));
@@ -557,9 +625,9 @@ TEST_CASE(
     teach_every_session(rig);
     const int route = seat_free(rig, arena, "Deferred");
 
-    entity_at(rig, route, 0)->request_control(Control::HOLD_YIELDABLE);
+    entity_at(rig, route, 0)->claim_authority(Control::HOLD_YIELDABLE);
     rig.pump(10);
-    entity_at(rig, route, 0)->request_control(Control::HOLD_EXCLUSIVE);
+    entity_at(rig, route, 0)->claim_authority(Control::HOLD_EXCLUSIVE);
     rig.pump(10);
 
     const int late = rig.add_client();
@@ -614,7 +682,7 @@ TEST_CASE(
     const int route = seat_free(rig, arena, "Matched");
 
     rig.hold(0);
-    const Ref<NetwPromise> asked = entity_at(rig, route, 0)->request_control();
+    const Ref<NetwPromise> asked = entity_at(rig, route, 0)->claim_authority();
     rig.pump(10);
     REQUIRE_FALSE(asked->get_is_settled());
 
@@ -649,7 +717,7 @@ TEST_CASE(
     issuer->connect(StringName("control_changed"), log.callable("changed"));
 
     rig.hold(0);
-    const Ref<NetwPromise> asked = issuer->request_control();
+    const Ref<NetwPromise> asked = issuer->claim_authority();
     rig.pump(6);
     NETW_REQUIRE_EQ(
         entity_at(rig, route, -1)->get_controller(),
@@ -703,7 +771,7 @@ TEST_CASE(
     );
 
     for (int at = 0; at < COUNT; ++at) {
-        entity_at(rig, routes[at], 0)->request_control();
+        entity_at(rig, routes[at], 0)->claim_authority();
     }
     for (int step = 0; step < 30; ++step) {
         rig.advance(20.0);
@@ -735,9 +803,9 @@ TEST_CASE(
     const Ref<NetwEntity> issuer = entity_at(rig, route, 0);
 
     for (uint32_t at = 0; at < Control::MAX_PENDING; ++at) {
-        CHECK_FALSE(issuer->request_control()->get_is_settled());
+        CHECK_FALSE(issuer->claim_authority()->get_is_settled());
     }
-    const Ref<NetwPromise> ninth = issuer->request_control();
+    const Ref<NetwPromise> ninth = issuer->claim_authority();
     CHECK(ninth->get_is_failed());
     NETW_CHECK_EQ(int(ninth->get_code()), int(ERR_UNAVAILABLE));
 
@@ -763,13 +831,13 @@ TEST_CASE(
     adopted->set_owner(issuer->get_owner());
     issuer->invalidate_synchronizers_cache();
 
-    const Ref<NetwPromise> refused = issuer->request_control();
+    const Ref<NetwPromise> refused = issuer->claim_authority();
     CHECK(refused->get_is_failed());
     NETW_CHECK_EQ(int(refused->get_code()), int(ERR_UNAVAILABLE));
     CHECK_FALSE(issuer->get_is_control_pending());
 
     issuer->set_transfer(NetwEntity::TRANSFER_REQUESTABLE);
-    const Ref<NetwPromise> asked = issuer->request_control();
+    const Ref<NetwPromise> asked = issuer->claim_authority();
     rig.pump(10);
     CHECK(asked->get_is_completed());
 }
@@ -786,7 +854,7 @@ TEST_CASE(
 
     rig.hold(0);
     const Ref<NetwPromise> asked
-        = entity_at(rig, route, 0)->request_control();
+        = entity_at(rig, route, 0)->claim_authority();
     REQUIRE_FALSE(asked->get_is_settled());
 
     Node *copy = rig.route_node(route, 0);

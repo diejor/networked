@@ -16,20 +16,36 @@ uint64_t request_counter = 0;
 constexpr int64_t REPAIR_FLOOR_MS = 250;
 constexpr int64_t REPAIR_CEILING_MS = 1000;
 
-bool tenure_before(const StreamTenure &p_lane, uint64_t p_bar) {
-    return p_lane.bound && p_lane.tenure < p_bar;
+bool tenure_before(const StreamTenure &p_lane, const StreamTenure &p_bar) {
+    return p_lane.bound && p_lane.tenure < p_bar.tenure;
 }
 
-bool tenure_other_than(const StreamTenure &p_lane, uint64_t p_bar) {
-    return p_lane.bound && p_lane.tenure != p_bar;
+bool tenure_other_than(const StreamTenure &p_lane, const StreamTenure &p_bar) {
+    return p_lane.bound && p_lane.tenure != p_bar.tenure;
 }
 
-bool anchor_before(const StreamTenure &p_lane, uint64_t p_bar) {
-    return p_lane.anchor < p_bar;
+bool anchor_other_than(const StreamTenure &p_lane, const StreamTenure &p_bar) {
+    return p_lane.anchor != p_bar.anchor
+        || p_lane.anchor_author != p_bar.anchor_author;
 }
 
-bool anchor_other_than(const StreamTenure &p_lane, uint64_t p_bar) {
-    return p_lane.anchor != p_bar;
+bool anchor_superseded(const StreamTenure &p_lane, const StreamTenure &p_bar) {
+    return p_lane.anchor < p_bar.anchor
+        || (p_lane.anchor == p_bar.anchor
+            && p_lane.anchor_author != p_bar.anchor_author);
+}
+
+StreamTenure tenure_bar(uint64_t p_tenure) {
+    StreamTenure bar;
+    bar.tenure = p_tenure;
+    return bar;
+}
+
+StreamTenure anchor_bar(uint64_t p_anchor, uint64_t p_author) {
+    StreamTenure bar;
+    bar.anchor = p_anchor;
+    bar.anchor_author = p_author;
+    return bar;
 }
 
 } // namespace
@@ -158,6 +174,7 @@ void StreamReaderBook::park(const ParkedOpen &p_open) {
     if (held != nullptr && held->request == p_open.request) {
         held->tenure = p_open.tenure;
         held->anchor = p_open.anchor;
+        held->anchor_author = p_open.anchor_author;
         return;
     }
     live.parks[address] = p_open;
@@ -218,20 +235,25 @@ uint32_t StreamReaderBook::close_tenures_before(
     int64_t p_route,
     uint64_t p_tenure
 ) {
-    return close_where(p_route, &tenure_before, p_tenure);
+    return close_where(p_route, &tenure_before, tenure_bar(p_tenure));
 }
 
 uint32_t StreamReaderBook::close_anchors_before(
     int64_t p_route,
-    uint64_t p_anchor
+    uint64_t p_anchor,
+    uint64_t p_author
 ) {
-    return close_where(p_route, &anchor_before, p_anchor);
+    return close_where(
+        p_route,
+        &anchor_superseded,
+        anchor_bar(p_anchor, p_author)
+    );
 }
 
 uint32_t StreamReaderBook::close_where(
     int64_t p_route,
     TenureDooms p_dooms,
-    uint64_t p_bar
+    const StreamTenure &p_bar
 ) {
     uint32_t closed = 0;
     for (KeyValue<int, Connection> &each : connections) {
@@ -448,20 +470,25 @@ LocalVector<ClosedLane> StreamWriterBook::close_tenures_other_than(
     int64_t p_route,
     uint64_t p_tenure
 ) {
-    return close_where(p_route, &tenure_other_than, p_tenure);
+    return close_where(p_route, &tenure_other_than, tenure_bar(p_tenure));
 }
 
 LocalVector<ClosedLane> StreamWriterBook::close_anchors_other_than(
     int64_t p_route,
-    uint64_t p_anchor
+    uint64_t p_anchor,
+    uint64_t p_author
 ) {
-    return close_where(p_route, &anchor_other_than, p_anchor);
+    return close_where(
+        p_route,
+        &anchor_other_than,
+        anchor_bar(p_anchor, p_author)
+    );
 }
 
 LocalVector<ClosedLane> StreamWriterBook::close_where(
     int64_t p_route,
     TenureDooms p_dooms,
-    uint64_t p_bar
+    const StreamTenure &p_bar
 ) {
     LocalVector<ClosedLane> out;
     for (KeyValue<int, Connection> &each : connections) {

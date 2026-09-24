@@ -247,7 +247,7 @@ NetwPredictSlotEngine::Declaration NetwPredictSlotEngine::declaration_of(
     }
     decided.state = p_entity->get_state_binding();
     decided.input = p_entity->get_input_binding();
-    decided.authority = p_entity->get_is_authority();
+    decided.authority = p_entity->get_is_session_authority();
     decided.controlled_locally = p_entity->get_is_controlled_locally()
         || (decided.authority && p_entity->get_controller() == 0);
     return decided;

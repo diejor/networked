@@ -61,6 +61,7 @@
 #include "netw/interest/relay.hpp"
 #include "netw/join_roster.hpp"
 #include "netw/lagcomp_core.hpp"
+#include "netw/lifecycle/rule.hpp"
 #include "netw/liveness_core.hpp"
 #include "netw/api/database_config.hpp"
 #include "netw/persist/binding.hpp"
@@ -767,6 +768,17 @@ private:
     uint8_t session_join_channel = 0;
     uint8_t session_accept_channel = 0;
     uint8_t session_roster_channel = 0;
+    uint8_t route_lease_channel = 0;
+    uint8_t lifecycle_decision_channel = 0;
+    godot::HashMap<int64_t, godot::Ref<NetwPromise>> lifecycle_promises;
+    struct DetachedAhead {
+        int64_t route = 0;
+        godot::NodePath from_owner;
+        uint64_t session_revision = 0;
+        uint64_t session_author = 0;
+    };
+    godot::HashMap<int64_t, godot::LocalVector<DetachedAhead>>
+        lifecycle_detached_ahead;
     uint8_t scene_request_channel = 0;
     uint8_t scene_result_channel = 0;
     uint8_t scene_released_channel = 0;
@@ -831,6 +843,13 @@ private:
         bool terminal = false;
         bool hidden = false;
         bool received = false;
+        bool applied = false;
+        bool minted = false;
+        uint64_t base = 0;
+        uint64_t base_author = 0;
+        int64_t author = 0;
+        godot::ObjectID parent_id;
+        godot::Ref<NetwPromise> promise;
         godot::LocalVector<DepartedResidency> residencies;
     };
     godot::HashMap<uint64_t, EntityDeparture> entity_departures;
@@ -844,6 +863,7 @@ private:
     void rpc_resolve_parked(int64_t p_id, const godot::Callable &p_callback);
 
     godot::HashMap<int64_t, NetwEntityRecord *> wrapper_records;
+    bool structure_halted = false;
 
     godot::HashMap<int64_t, godot::ObjectID> wrapper_owners;
     godot::HashMap<uint64_t, int64_t> handle_by_wrapper;
@@ -868,6 +888,7 @@ private:
         godot::Ref<NetwPromise> promise;
         godot::RID guard;
         bool moved = false;
+        bool awaits_session = false;
     };
     godot::HashMap<int64_t, SceneCarry> scene_carries;
     int64_t scene_carry_next = 0;
@@ -879,6 +900,8 @@ private:
         godot::RID guard;
         int64_t route = 0;
         uint64_t anchor = 0;
+        uint64_t anchor_author = 0;
+        int64_t author = 0;
         bool moved = false;
     };
     godot::HashMap<int64_t, SpawnCarry> spawn_carries;
@@ -1557,7 +1580,12 @@ public:
     );
     void row_control_flush(ReplicationSend *p_send, int64_t p_channel);
     void row_streams_follow_tenure(int64_t p_route, uint64_t p_tenure);
-    void row_streams_follow_anchor(int64_t p_route, uint64_t p_anchor);
+    void row_streams_follow_anchor(
+        int64_t p_route,
+        uint64_t p_anchor,
+        uint64_t p_author
+    );
+    void row_streams_reopen(int64_t p_route);
     static ReplicationSend *row_send_of(ReplicationCore *p_plane);
     void row_streams_reseat_parks(
         ReplicationCore *p_plane,
@@ -1592,26 +1620,104 @@ public:
         godot::Node *p_node,
         const godot::PackedByteArray &p_payload,
         const godot::PackedInt32Array &p_connected,
-        int64_t p_channel
+        int64_t p_channel,
+        int64_t p_first = 0
     );
     bool spawn_applying_remote_frame() const;
     void spawn_place_node(godot::Node *p_parent, godot::Node *p_node);
+    void spawn_unplace_node(godot::Node *p_node);
+    void spawn_replace_keeping_pose(godot::Node *p_node, godot::Node *p_parent);
     bool spawn_reparent_node(
         godot::Node *p_node,
         godot::Node *p_parent,
         const godot::Callable &p_adopt,
         int64_t p_route = 0,
-        uint64_t p_anchor = 0
+        uint64_t p_anchor = 0,
+        uint64_t p_anchor_author = 0,
+        int64_t p_author = 0
     );
-    uint64_t spawn_carry_pending_anchor(int64_t p_route) const;
+    struct AnchorRevision {
+        uint64_t revision = 0;
+        uint64_t author = 0;
+    };
+    AnchorRevision anchor_installed(int64_t p_route) const;
+    AnchorRevision anchor_standing(int64_t p_route) const;
+    godot::Node *spawn_carry_pending_parent(int64_t p_route) const;
     void spawn_carry_land_out_of(godot::Node *p_leaving);
     bool spawn_send_reparent(
         spawn::Book *p_book,
         spawn::Record *p_record,
         godot::Node *p_node,
         const godot::PackedInt32Array &p_connected,
-        int64_t p_channel
+        int64_t p_channel,
+        int64_t p_skip = 0
     );
+    lifecycle::Facts lifecycle_frame_facts(
+        int64_t p_sender,
+        lifecycle::Kind p_kind,
+        const godot::PackedByteArray &p_payload
+    );
+    void lifecycle_refuse_op(
+        int64_t p_sender,
+        lifecycle::Kind p_kind,
+        const godot::PackedByteArray &p_payload,
+        godot::Error p_code
+    );
+    bool lifecycle_admit_move(
+        int64_t p_sender,
+        const godot::PackedByteArray &p_payload
+    );
+    bool lifecycle_admit_despawn(
+        int64_t p_sender,
+        const godot::PackedByteArray &p_payload
+    );
+    bool lifecycle_filter_denies(
+        lifecycle::Kind p_kind,
+        int64_t p_requester,
+        NetwEntity *p_entity,
+        godot::Node *p_destination,
+        godot::String &r_reason
+    );
+    void lifecycle_notify_refused(
+        NetwEntity *p_entity,
+        lifecycle::Kind p_kind,
+        const godot::String &p_reason
+    );
+    void lifecycle_withdraw_author(int64_t p_route, int64_t p_author);
+    void lifecycle_reserve(int64_t p_route, int64_t p_author);
+    void lifecycle_send_despawn(NetwEntity *p_entity);
+    void lifecycle_detach_ahead(NetwEntity *p_dying);
+    void lifecycle_restore_detached(int64_t p_route);
+    bool lifecycle_note_detached_anchor(
+        int64_t p_route,
+        uint64_t p_revision,
+        uint64_t p_author
+    );
+    void lifecycle_send_to_session(
+        int64_t p_route,
+        int64_t p_channel,
+        const godot::PackedByteArray &p_payload
+    );
+    void lifecycle_send_to(
+        int64_t p_peer,
+        int64_t p_route,
+        int64_t p_channel,
+        const godot::PackedByteArray &p_payload
+    );
+    void lifecycle_seed_controller(NetwEntity *p_entity, int64_t p_controller);
+    void lifecycle_decide(
+        int64_t p_route,
+        int64_t p_author,
+        lifecycle::Kind p_kind,
+        uint64_t p_base,
+        godot::Error p_code,
+        const godot::String &p_reason = godot::String()
+    );
+    void lifecycle_receive_decision(
+        const godot::PackedByteArray &p_payload,
+        int64_t p_sender
+    );
+    void entity_settle_captured(NetwEntity *p_entity);
     bool interest_has_committed_intent(const godot::Ref<NetwEntity> &p_entity);
     godot::PackedInt64Array interest_committed_row(
         const godot::Ref<NetwEntity> &p_entity
@@ -2411,6 +2517,25 @@ public:
         const godot::RID &p_entity,
         godot::Node *p_parent
     );
+    lifecycle::Facts lifecycle_local_facts(
+        NetwEntity *p_entity,
+        lifecycle::Kind p_kind
+    );
+    lifecycle::Facts lifecycle_sender_facts(
+        NetwEntity *p_entity,
+        lifecycle::Kind p_kind,
+        int64_t p_sender
+    );
+    lifecycle::Destination lifecycle_destination(
+        godot::Node *p_mover,
+        godot::Node *p_parent
+    ) const;
+    lifecycle::Ruling lifecycle_judge_verb(
+        const lifecycle::Facts &p_facts,
+        const godot::String &p_verb,
+        godot::Node *p_root,
+        godot::String &r_text
+    );
     void send_standalone_ack(int64_t p_peer, int64_t p_ack);
     void flush_standalone_acks();
     void liveness_when_live(
@@ -2682,6 +2807,11 @@ public:
     bool is_online() const;
     bool is_host() const;
     bool is_session_authority() const;
+    void structure_halt_enter();
+    void structure_halt_leave();
+    bool is_structure_halted() const;
+    int64_t structure_ops_outstanding() const;
+    int64_t route_floor() const;
     bool has_server_role() const;
     int64_t session_authority_peer() const;
     void session_set_authority_peer(int64_t p_peer);
@@ -2819,6 +2949,8 @@ public:
     void session_set_root(const godot::Callable &p_reader);
     ActionGateBook action_gates;
     bool applying_remote_frame = false;
+    int64_t admitting_author = 0;
+    int64_t admitting_route = 0;
     struct SyncFlushCounters {
         int64_t rows = 0;
         int64_t whole_rows = 0;
@@ -4027,26 +4159,20 @@ public:
         godot::Node *p_exclude,
         int64_t p_route
     );
-    godot::Node *entity_instantiate_from(
-        godot::Node *p_template,
-        const godot::Callable &p_configure
-    );
-
-    static godot::Node *entity_instantiate_copy(
-        godot::Node *p_template,
-        const godot::Callable &p_configure
-    );
+    godot::Node *entity_instantiate_from(godot::Node *p_template);
 
     godot::Node *entity_spawn_under(
         godot::Node *p_owner,
         godot::Node *p_parent,
-        const godot::StringName &p_id
+        const godot::StringName &p_id,
+        const godot::Callable &p_configure
     );
 
     static godot::Node *entity_spawn_copy_under(
         godot::Node *p_owner,
         godot::Node *p_parent,
-        const godot::StringName &p_id
+        const godot::StringName &p_id,
+        const godot::Callable &p_configure
     );
 
     void entity_linger(
@@ -4193,7 +4319,8 @@ public:
         godot::Node *p_source,
         godot::Node *p_target,
         godot::Node *p_parent,
-        const godot::Ref<NetwPromise> &p_promise
+        const godot::Ref<NetwPromise> &p_promise,
+        bool p_awaits_session = false
     );
     void scene_carry_open(int64_t p_id);
     void scene_set_carry_move(const godot::Callable &p_carry);
@@ -4219,12 +4346,15 @@ public:
         godot::Node *p_parent,
         const godot::Callable &p_adopt,
         int64_t p_route,
-        uint64_t p_anchor
+        uint64_t p_anchor,
+        uint64_t p_anchor_author,
+        int64_t p_author
     );
     void spawn_carry_open(int64_t p_id);
     bool spawn_carry_reachable(int64_t p_id);
     void spawn_carry_advance(int64_t p_id);
     void spawn_carry_abandon(int64_t p_id);
+    void spawn_carry_lose(int64_t p_id);
     void spawn_carry_sweep();
     void spawn_carry_finish(int64_t p_id);
     void scene_forget(godot::Object *p_container);
@@ -4336,6 +4466,17 @@ public:
     void liveness_forget_wrapper(const godot::RID &p_entity);
 
     int64_t liveness_reserve_route();
+    int64_t liveness_lease_remaining() const;
+
+    static constexpr int ROUTE_LEASE_BLOCK = 16;
+    static constexpr int ROUTE_LEASE_REFILL_AT = 8;
+
+    void liveness_grant_lease(int64_t p_peer);
+    godot::Error liveness_spend_lease(int64_t p_peer, int64_t p_route);
+    void liveness_receive_lease(
+        const godot::PackedByteArray &p_payload,
+        int64_t p_sender
+    );
 
     int64_t liveness_allocate_route(godot::Object *p_wrapper);
 
@@ -4352,7 +4493,11 @@ public:
     int64_t liveness_route_epoch(int64_t p_route) const;
     uint64_t liveness_route_anchor(int64_t p_route) const;
     uint64_t entity_advance_anchor(int64_t p_route);
-    void entity_install_anchor(int64_t p_route, uint64_t p_anchor);
+    void entity_install_anchor(
+        int64_t p_route,
+        uint64_t p_anchor,
+        uint64_t p_author
+    );
     bool liveness_epoch_admits(int64_t p_route, int64_t p_epoch) const;
     bool liveness_adopt_epoch(int64_t p_route, int64_t p_epoch);
     int64_t liveness_route_wire_life(int64_t p_route) const;
@@ -4526,6 +4671,27 @@ private:
         const godot::RID &p_keep
     );
     void entity_commit_move(const EntityDeparture &p_row);
+    void entity_settle_foreign_move(const EntityDeparture &p_row);
+    bool lifecycle_authors_move(NetwEntity *p_entity);
+    void lifecycle_send_move(const EntityDeparture &p_row);
+    void lifecycle_refuse_move_here(
+        const EntityDeparture &p_row,
+        godot::Error p_code,
+        const godot::String &p_text
+    );
+    void lifecycle_undo(
+        NetwEntity *p_entity,
+        godot::Node *p_parent,
+        const AnchorRevision &p_revision
+    );
+    void lifecycle_undo_ungranted_move(
+        const EntityDeparture &p_row,
+        lifecycle::Facts p_facts
+    );
+    lifecycle::Facts lifecycle_entity_facts(
+        NetwEntity *p_entity,
+        lifecycle::Kind p_kind
+    );
     void entity_commit_death(const EntityDeparture &p_row);
     void entity_commit_hide(const EntityDeparture &p_row);
     void entity_release_body(

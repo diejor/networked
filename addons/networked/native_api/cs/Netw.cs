@@ -436,10 +436,10 @@ public sealed class Netw : NetwRefCounted
     /// <summary>
     /// Gates if a <see cref="NetwPlayer"/> is created, arguments come from
     /// <see cref="Netw.PrepareJoin"/>. Return <c>@GlobalScope.OK</c> to admit.
-    /// Use <c>Netw.auth_callback</c> instead, as you would normally do with
-    /// <see cref="SceneMultiplayer"/> to gate peers from entering the
-    /// <see cref="MultiplayerApi"/> such as firing
-    /// <c>MultiplayerAPI.peer_entered</c>
+    /// Use <see cref="NetwMultiplayer.AuthCallback"/> instead, as you would
+    /// normally do with <see cref="SceneMultiplayer"/> to gate peers from
+    /// entering the <see cref="MultiplayerApi"/> such as firing
+    /// <c>MultiplayerAPI.peer_connected</c>.
     /// <code>
     /// func _init() -&gt; void:
     ///     Netw.configure_admission(admit)
@@ -1382,7 +1382,11 @@ public sealed class Netw : NetwRefCounted
     /// scene.add_child(body)
     /// </code>
     /// <para>
-    /// <b>Server Only.</b>
+    /// The session authority may always call it, and a client may with no
+    /// <paramref name="owner"/> when <paramref name="node"/> declares
+    /// <see cref="NetwEntity.Lifecycle"/> as
+    /// <see cref="NetwEntity.LifecycleEnum.Controller"/>, becoming its
+    /// <see cref="NetwEntity.Controller"/>.
     /// </para>
     /// </summary>
     public static NetwEntity Replicate(Node node, NetwPlayer owner = null)
@@ -1411,8 +1415,12 @@ public sealed class Netw : NetwRefCounted
     /// </code>
     /// <para>
     /// Register <paramref name="fn"/> with <see cref="Netw.ConfigureSpawn"/>
-    /// first, the caller must be the server, and the node returned must be
-    /// parented before the next tick. <b>Server Only.</b>
+    /// first, and parent the node returned before the next tick. The session
+    /// authority may always call it, and a client may when the node
+    /// <paramref name="fn"/> builds declares <see cref="NetwEntity.Lifecycle"/>
+    /// as <see cref="NetwEntity.LifecycleEnum.Controller"/>, becoming its
+    /// <see cref="NetwEntity.Controller"/>. The node shows on that client at
+    /// once, and is removed if the server refuses it.
     /// </para>
     /// </summary>
     public static Node Spawn(Callable fn, params Variant[] rest)
@@ -1501,7 +1509,11 @@ public sealed class Netw : NetwRefCounted
     /// peer, see <see cref="NetwDespawnOpts"/> for the options. It returns
     /// <c>@GlobalScope.ERR_DOES_NOT_EXIST</c> for a node that is not a spawned
     /// one and <c>@GlobalScope.ERR_UNAVAILABLE</c> for a node in no
-    /// <see cref="MultiplayerApi"/>. <b>Server Only.</b>
+    /// <see cref="MultiplayerApi"/>. The session authority may always call it,
+    /// and the <see cref="NetwEntity.Controller"/> may for a node whose
+    /// <see cref="NetwEntity.Lifecycle"/> is
+    /// <see cref="NetwEntity.LifecycleEnum.Controller"/>. The node leaves the
+    /// controller's peer at once, and the server serves it back if it refuses.
     /// </para>
     /// </summary>
     public static Error Despawn(Node node, NetwDespawnOpts opts = null)
@@ -1537,7 +1549,14 @@ public sealed class Netw : NetwRefCounted
     /// supported and is the right verb for anything that doesn't depend on area
     /// signals. A <paramref name="node"/> that is no entity answers
     /// <c>@GlobalScope.ERR_DOES_NOT_EXIST</c> and one in no session answers
-    /// <c>@GlobalScope.ERR_UNAVAILABLE</c>. <b>Server Only.</b>
+    /// <c>@GlobalScope.ERR_UNAVAILABLE</c>. The session authority may always
+    /// call it, and the <see cref="NetwEntity.Controller"/> may for a node
+    /// whose <see cref="NetwEntity.Lifecycle"/> is
+    /// <see cref="NetwEntity.LifecycleEnum.Controller"/>. The controller's move
+    /// lands on its own peer at once, and a refusal from the server rejects the
+    /// promise and moves the node back. At most eight such moves of one entity
+    /// wait on the server at a time, and the ninth is moved back and rejected
+    /// with <c>@GlobalScope.ERR_UNAVAILABLE</c>.
     /// </para>
     /// </summary>
     public static NetwPromise Reparent(Node node, Node newParent)
@@ -1547,6 +1566,62 @@ public sealed class Netw : NetwRefCounted
         IntPtr answered = default;
         NetwThunks.Ptrcall2_IntPtr_IntPtr_IntPtr(
             _bindReparent,
+            IntPtr.Zero,
+            in slot0,
+            in slot1,
+            ref answered);
+        return NetwPromise.Adopt(answered);
+    }
+
+    private static readonly IntPtr _bindClaimAuthority =
+        NetwApi.MethodBind("Netw", "claim_authority", 1659447253UL);
+
+    /// <summary>
+    /// Asks the server to make this peer the
+    /// <see cref="NetwEntity.Controller"/> of the entity
+    /// <paramref name="node"/> belongs to, which is
+    /// <see cref="NetwEntity.ClaimAuthority"/> reached from any node of it.
+    /// <code>
+    /// Netw.claim_authority(self, NetwEntity.HOLD_YIELDABLE).then(pick_up)
+    /// </code>
+    /// <para>
+    /// A <paramref name="node"/> under no entity answers a promise rejected
+    /// with <c>@GlobalScope.ERR_DOES_NOT_EXIST</c>. <b>Player request.</b>
+    /// </para>
+    /// </summary>
+    public static NetwPromise ClaimAuthority(Node node, NetwEntity.HoldEnum hold =
+        (NetwEntity.HoldEnum)2)
+    {
+        IntPtr slot0 = node?.NativeInstance ?? IntPtr.Zero;
+        long slot1 = (long)hold;
+        IntPtr answered = default;
+        NetwThunks.Ptrcall2_IntPtr_Long_IntPtr(
+            _bindClaimAuthority,
+            IntPtr.Zero,
+            in slot0,
+            in slot1,
+            ref answered);
+        return NetwPromise.Adopt(answered);
+    }
+
+    private static readonly IntPtr _bindReleaseAuthority =
+        NetwApi.MethodBind("Netw", "release_authority", 4095760114UL);
+
+    /// <summary>
+    /// Hands control of the entity <paramref name="node"/> belongs to on to
+    /// <paramref name="successor"/>, or to the server when it is <c>0</c>, with
+    /// this peer's final state. It is <see cref="NetwEntity.ReleaseAuthority"/>
+    /// reached from any node of it. A <paramref name="node"/> under no entity
+    /// answers a promise rejected with <c>@GlobalScope.ERR_DOES_NOT_EXIST</c>.
+    /// <b>Player request.</b>
+    /// </summary>
+    public static NetwPromise ReleaseAuthority(Node node, long successor = 0)
+    {
+        IntPtr slot0 = node?.NativeInstance ?? IntPtr.Zero;
+        long slot1 = successor;
+        IntPtr answered = default;
+        NetwThunks.Ptrcall2_IntPtr_Long_IntPtr(
+            _bindReleaseAuthority,
             IntPtr.Zero,
             in slot0,
             in slot1,
@@ -1572,6 +1647,11 @@ public sealed class Netw : NetwRefCounted
     ///     ctx.bind(bomb)
     ///     bombs.add_child(bomb)
     /// </code>
+    /// <para>
+    /// An action is for what the server must judge before anyone sees it.
+    /// <see cref="NetwEntity.Lifecycle"/> lets a player spawn, move and despawn
+    /// its own entities at once.
+    /// </para>
     /// </summary>
     public static NetwAction Action(Callable authority)
     {

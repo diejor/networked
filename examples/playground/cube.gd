@@ -40,7 +40,7 @@ func _notification(what: int) -> void:
 
 
 func grab(by: Node3D) -> bool:
-	entity.request_control(NetwEntity.HOLD_EXCLUSIVE).catch_error(lost)
+	entity.claim_authority(NetwEntity.HOLD_EXCLUSIVE).catch_error(lost)
 	if not entity.is_controlled_locally:
 		return false
 	hand = by
@@ -55,7 +55,7 @@ func throw(velocity: Vector3) -> void:
 	hand = null
 	held_by = 0
 	linear_velocity = velocity
-	entity.request_control(NetwEntity.HOLD_YIELDABLE).catch_error(lost)
+	entity.claim_authority(NetwEntity.HOLD_YIELDABLE).catch_error(lost)
 
 
 func lost(_code: Error, _detail: String) -> void:

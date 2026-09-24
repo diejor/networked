@@ -61,7 +61,8 @@ public:
     bool encode_header(
         wire::WriteStream &p_stream,
         godot::Object *p_entity,
-        uint64_t p_anchor
+        uint64_t p_anchor,
+        uint64_t p_anchor_author = 0
     ) const;
 
     static bool decode_header(

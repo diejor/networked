@@ -339,8 +339,8 @@ TEST_CASE(
     const int64_t dropped = stand.stats(1).dropped;
 
     const Ref<NetwEntity> host = NetwEntity::of(stand.copy(-1));
-    host->grant_control(stand.rig.peer_id(1));
-    host->grant_control(stand.rig.peer_id(0));
+    host->set_controller(stand.rig.peer_id(1));
+    host->set_controller(stand.rig.peer_id(0));
     stand.rig.pump(4);
     REQUIRE(
         NetwEntity::of(stand.copy(1))->get_control_tenure()

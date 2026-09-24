@@ -320,6 +320,7 @@ CONTROL_OPEN = {
         {"name": "epoch", "kind": "varuint", "max_bytes": 3},
         {"name": "tenure", "kind": "varuint", "max_bytes": 5},
         {"name": "anchor", "kind": "varuint", "max_bytes": 5},
+        {"name": "anchor_author", "kind": "varuint", "max_bytes": 5},
         {"name": "schema", "kind": "bits", "width": 32},
     ],
     "bytes": bytes(
@@ -333,6 +334,7 @@ CONTROL_OPEN = {
             0x05,
             0x03,
             0x04,
+            0x06,
             0xEF,
             0xBE,
             0xAD,
@@ -348,6 +350,7 @@ CONTROL_OPEN = {
         "epoch": 5,
         "tenure": 3,
         "anchor": 4,
+        "anchor_author": 6,
         "schema": 0xDEADBEEF,
     },
 }
@@ -483,9 +486,16 @@ AGAINST_SPEC = [
     },
     {
         "record": "SceneRequest",
-        "bytes": bytes([0x09, 0x0C, 0x00]) + b"res://a.tscn" + bytes([0x02]),
-        "values": {"request_id": 9, "path": "res://a.tscn", "scope": 1},
-        "why": "WIRE.md 16, request 9 asks for a scene at scope 1",
+        "bytes": bytes([0x09, 0x0C, 0x00]) + b"res://a.tscn" + bytes([0x02, 0x0E, 0x02]),
+        "values": {
+            "request_id": 9,
+            "path": "res://a.tscn",
+            "scope": 1,
+            "source_route": 7,
+            "source_epoch": 1,
+        },
+        "why": "WIRE.md 16, request 9 asks for a scene at scope 1 from scene 7 "
+        "at epoch 1",
     },
     {
         "record": "SceneResult",
@@ -508,13 +518,13 @@ AGAINST_SPEC = [
     {
         "record": "SceneViewerRow",
         "bytes": bytes([0x09]),
-        "values": {"membership": 9},
+        "values": {"player_id": 9},
         "why": "WIRE.md 16, one viewer named by the membership the accept issued",
     },
     {
         "record": "AcceptFrame",
         "bytes": bytes([0x0E, 0x03, 0x00]) + b"ana" + bytes([0x01]),
-        "values": {"peer_id": 7, "username": "ana", "membership": 1},
+        "values": {"peer_id": 7, "username": "ana", "player_id": 1},
         "why": "WIRE.md 16, peer 7 accepted as membership 1, carrying no "
         "join argument because the accept reaches every peer",
     },
@@ -586,10 +596,16 @@ AGAINST_SPEC = [
         "why": "WIRE.md 13, a ten bit length, its alignment pad, then the utf8",
     },
     {
+        "record": "RouteLease",
+        "bytes": bytes([0x11, 0x10]),
+        "values": {"base": 17, "count": 16},
+        "why": "WIRE.md 16, the sixteen routes from 17 a joiner mints from",
+    },
+    {
         "record": "RowControlOpen",
         "bytes": CONTROL_OPEN["bytes"],
         "values": CONTROL_OPEN["values"],
-        "why": "WIRE.md 10, an OPEN at epoch 5, tenure 3 and anchor 4",
+        "why": "WIRE.md 10, an OPEN at epoch 5, tenure 3, anchor 4 by peer 6",
     },
     {
         "record": "RowControlReady",

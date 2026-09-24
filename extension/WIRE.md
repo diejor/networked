@@ -123,9 +123,9 @@ id   name                    kind    rel fresh del agg direction  payload
 11   CLOCK_PING              session U   -     now -   cli -> srv planned
 12   CLOCK_PONG              session U   -     now -   srv -> cli planned
 13   LAGCOMP_DENY            session R   -     fit -   srv -> cli planned
-14   SPAWN                   session R   -     fit -   srv -> cli planned
-15   DESPAWN                 session R   -     fit -   srv -> cli planned
-16   REPARENT                session R   -     fit -   srv -> cli planned
+14   SPAWN                   session R   -     fit -   either     planned
+15   DESPAWN                 session R   -     fit -   either     planned
+16   REPARENT                session R   -     fit -   either     planned
 17   TABLE                   keyed   UA  fresh fit yes srv -> cli delta
 18   HIDE                    session R   -     fit -   srv -> cli planned
 19   SYNC                    keyed   UA  fresh fit yes either     delta
@@ -153,6 +153,8 @@ id   name                    kind    rel fresh del agg direction  payload
 41   SYNC_ROW_WINDOW         keyed   U   fresh fit yes either     planned
 42   SESSION_SCENE_VIEWERS   session R   -     fit -   srv -> cli planned
 43   ROW_CONTROL             session R   -     fit -   either     planned
+44   ROUTE_LEASE             session R   -     fit -   srv -> cli planned
+45   LIFECYCLE_DECISION      session R   -     fit -   srv -> own planned
 100+ user channels           routed  -   -     -   -   either     raw
 ```
 
@@ -173,12 +175,15 @@ admission, so a build disagreeing about any cell cannot pair.
 A channel also carries a `payload_revision`, folded into identity when
 non-zero. SYNC_ROW, SYNC_ROW_DELTA and SYNC_ROW_WINDOW declare 1 for the v11
 row contract, SESSION_ACCEPT and SESSION_ROSTER declare 1 for the membership
-row of section 16, SPAWN declares 3 for the decision and the anchor revision
-the header of section 11 carries and the origin its ADOPT body carries,
-REPARENT declares 1 for its anchor
-revision, CONTROL_REQUEST and CONTROL_APPLY declare 1 for the layouts of
-section 14, ROW_CONTROL declares 2 for the tenure and the anchor revision its
-OPEN of section 10 carries, and every other revision is 0.
+row of section 16, SPAWN declares 4 for the decision, the anchor revision and
+its author the header of section 11 carries and the origin its ADOPT body
+carries, DESPAWN declares 1 for the base a controller's DESPAWN carries,
+REPARENT declares 2 for its anchor revision and its author,
+CONTROL_REQUEST and CONTROL_APPLY declare 1 for the layouts of section 14,
+ROW_CONTROL declares 3 for the tenure, the anchor revision and its author its
+OPEN of section 10 carries, LIFECYCLE_DECISION declares 2 for the author of
+the revision it names and the denial string a refusal carries, and every
+other revision is 0.
 
 Ids 0, 1 and 7 were claimed by formats older than v8 and stay reserved, so an
 ancient frame is refused instead of decoding as a modern channel.
@@ -358,7 +363,7 @@ One complete record per frame, tagged by its first byte.
 [tag bits 8]
 0 OPEN    [request varuint 10][route varuint 5][ordinal bits 8]
           [family bits 8][epoch varuint 3][tenure varuint 5]
-          [anchor varuint 5][schema bits 32]
+          [anchor varuint 5][anchor_author varuint 5][schema bits 32]
 1 READY   [request varuint 10][token varuint 10]
 2 ACCEPT  [count int_range 1..32]
           then count entries of [token varuint 10][revision varuint 10]
@@ -387,16 +392,19 @@ decision that moves the tenure closes every lane of an older tenure for that
 route, and the writer that lost authorship closes its lanes and sends CLOSE.
 A state lane writes the tenure it has and the receiver ignores it.
 
-`anchor` is the anchor revision of section 11 the writer held when it opened
-the lane, and it binds every lane of the entity, whatever its record, to the
-parent the rows are written under. The receiver seats an OPEN only when its
-installed anchor revision is equal. An OPEN for a newer revision parks until
-the REPARENT naming it is installed, bounded by the same repair interval, and
-an OPEN for an older revision is counted and dropped. Installing a revision
-closes every lane of an older one for that route, and the writer that moves
-the entity or installs a move closes its lanes and opens fresh ones under the
-new revision. A move therefore costs one CLOSE, OPEN and READY per lane per
-receiver and no bytes on any row.
+`anchor` and `anchor_author` are the anchor revision of section 11 and the
+peer that minted it, as the writer held them when it opened the lane, and they
+bind every lane of the entity, whatever its record, to the parent the rows are
+written under. The receiver seats an OPEN only when its installed revision and
+author are both equal. An OPEN for a newer revision parks until the REPARENT
+naming it is installed, bounded by the same repair interval. An OPEN for an
+older revision, or for the installed revision under another author, is counted
+and dropped, and the writer asks again with its next row. Installing a revision
+closes every lane of an older one for that route and every lane of the same
+number under another author, and the writer that moves the entity or installs
+a move closes its lanes and opens fresh ones under the new revision. A move
+therefore costs one CLOSE, OPEN and READY per lane per receiver and no bytes
+on any row.
 
 A tag above 4, a family above 2, a count outside 1..32, an entry that ends
 early and any residue refuse the record. A malformed record installs no stream
@@ -429,8 +437,9 @@ authority revives the route. A receiver refuses any epoch below the highest
 one the wire has named for that route, and fences against the life the wire
 declared rather than one it counted for itself.
 
-DESPAWN and HIDE end there. REPARENT continues with one anchor and the anchor
-revision the move minted.
+A server's DESPAWN and every HIDE end there. REPARENT continues with one
+anchor, the anchor revision the move minted and the peer that minted it. A
+controller's DESPAWN continues with its base, laid out as below.
 
 ```text
 anchor
@@ -438,6 +447,7 @@ anchor
   1   [route varuint 5][subpath string]
   0   [path string]
 [anchor_revision varuint 5]       REPARENT only
+[anchor_author varuint 5]         REPARENT only
 ```
 
 An entity-relative anchor survives its target being re-parented. A
@@ -453,6 +463,72 @@ dropped, and the SPAWN that later reaches it carries the newest parent and
 revision. The receiver installs the revision when its carry places the node,
 which is what section 10's lane fence reads.
 
+`anchor_author` is the peer id that minted the revision, and a revision is the
+pair. The spawn's own revision 1 names author 0. A server move names the
+server, and a controller move the server admits names that controller, on the
+REPARENT the server relays and on every lane the controller opens. Newer is
+still ordered by the number alone, so a REPARENT naming the installed number
+under another author is not newer and moves nothing. Two peers can mint the
+same number in one round trip, the server for its own move and a controller for
+a move the server has not read yet. The pair keeps them apart, and because the
+server's installed revision only ever rises, a lane opened under another
+author's pair at the number the server installed never seats there.
+
+A REPARENT also travels from the controller of an entity that declares
+`LIFECYCLE_CONTROLLER` to the server, and to the server alone. The layout is
+the same, and the revision and author it carries are the base, the pair the
+controller held before it moved. The controller has already moved and
+installed base + 1 under its own id. The server applies the move only when its
+own pair, counting a carry in flight, is still the base, then sends
+REPARENT(base + 1, controller) to every other holder and never back to the
+controller. A move built on a stale base is refused, and so is every later
+move the controller built on it, because each one names the pair before it.
+
+```text
+DESPAWN from a controller
+[route varuint 5][epoch varuint 3]
+[anchor_revision varuint 5]       the base, the pair the controller held
+[anchor_author varuint 5]
+[align_verify]
+```
+
+A controller's DESPAWN also goes to the server alone, after the controller has
+freed its own copy and moved each `PARENT_DESPAWN_DETACH` descendant under the
+entity's parent where it stood. The server applies it only when its own pair
+is still the base. It frees its copy, which detaches the same descendants as a
+server move each, and sends DESPAWN to every other holder of the entity and of
+each descendant that dies with it, never to the controller. A refused DESPAWN
+is undone by the server sending the controller a SPAWN for the entity and
+every descendant it freed, as it serves a late joiner.
+
+```text
+LIFECYCLE_DECISION
+[route varuint 5][epoch varuint 3]
+[kind bits 2]                     SPAWN DESPAWN REPARENT
+[accepted bool1]
+[base varuint 5]                  the base of the op decided
+[anchor_revision varuint 5]       the server's revision after deciding
+[anchor_author varuint 5]         the peer that minted that revision
+[reason varuint 2]                refused only, an Error code
+[anchored bool1]                  refused only
+[anchor]                          refused only, iff anchored
+[denial string]                   refused only, the game's reason, or empty
+[align_verify]
+```
+
+The server answers each controller op with one decision, sent to that
+controller alone. An accepted decision settles every op at or below the
+revision it names. A refusal drops every op the controller holds for the
+entity from that base on, moves the entity back under the anchor where the
+server holds it while keeping its world pose, installs the server's revision
+and author, and closes every lane the controller wrote for the entity, so the
+next row opens under the server's pair. A refusal whose base names no op the
+controller still holds changes nothing. A refused DESPAWN also moves each
+descendant the controller detached ahead of it back under its old parent in
+the entity the server serves again, keeping its world pose. The denial string
+is the reason the server's `lifecycle_requested` handler passed to `deny`, and
+it reaches the controller's `lifecycle_refused` and the rejected promise.
+
 ```text
 SPAWN
 [entity_id string]
@@ -461,6 +537,7 @@ SPAWN
 [control_revision varuint 5]
 [control_tenure varuint 5]
 [anchor_revision varuint 5]
+[anchor_author varuint 5]
 [spawn_tick varuint 5]            tick + 1, so 0 is no tick
 [requester svarint 5]
 [comp_table_hash bits 32]
@@ -495,8 +572,9 @@ they carry.
 `control_revision`, `control_tenure` and `control_hold` are the live decision
 at the moment the frame is encoded, so a peer that joins late starts on the
 decision every holder already has. A CONTROL_APPLY at or below that revision
-is discarded when it reaches the joiner. `anchor_revision` is read the same
-way, so the joiner installs the revision its parent anchor was written under.
+is discarded when it reaches the joiner. `anchor_revision` and
+`anchor_author` are read the same way, so the joiner installs the revision its
+parent anchor was written under and seats the lanes its author opened.
 
 `parent_is_spawn_target` replaces the parent anchor with one bit when the
 parent is the spawner's own `spawn_path` target, which the receiver resolves
@@ -517,6 +595,22 @@ descriptor rows of section 19.
 
 A SPAWN is refused whole and counts `drops_spawn_truncated`. Nothing is
 applied from a frame that did not decode to exhaustion.
+
+A SPAWN also travels from a client to the server, and to the server alone, for
+an entity that declares `LIFECYCLE_CONTROLLER`. The layout is the same. The
+route comes from the lease of section 16, `controller` names the client, and
+the recipe is SCENE, FN_REGISTRY or FN. The client holds its copy as one the
+server sent it. The server admits the frame only for a route that client still
+holds in its lease, and spends it. It builds its own copy from the recipe and
+arguments, applies the spawn state and rules on that copy before it enters the
+tree. A frame the server cannot apply at once is refused, never parked. That
+covers an argument or a parent naming a route the server does not hold live,
+and a recipe it cannot resolve. A refused SPAWN sends the client
+LIFECYCLE_DECISION and DESPAWN, and its route is never used again. An admitted
+one becomes the server's own spawn, seeded to the client at control revision 1,
+tenure 1 and hold NONE, and the client is its first holder. Every other peer
+receives a SPAWN encoded from the server's copy, so its values are the newest
+the server holds, and never the client's frame.
 
 ---
 
@@ -646,7 +740,7 @@ SESSION_JOIN
 [align_verify]
 
 SESSION_ACCEPT   one accepted membership
-[peer_id svarint 5][username string][membership varuint 5]
+[peer_id svarint 5][username string][player_id varuint 5]
 
 SESSION_ROSTER   the memberships already accepted, sent to a late joiner
 [count varuint 2][SESSION_ACCEPT body] x count
@@ -659,14 +753,25 @@ Only the server that decoded `[args]` sees those values. The accept is
 broadcast and the roster is handed to a late joiner, so the accept names the
 membership and nothing else the request carried.
 
-`membership` is the incarnation the server issued for this acceptance, rising
-once per acceptance within a session. It is what names a participant, because
-a transport peer id is reused and a scene row naming an old membership cannot
-be applied to the new player. Nothing persists it and nothing outside the
-session reads it.
+`player_id` names the membership, the incarnation the server issued for this
+acceptance, rising once per acceptance within a session. It is what names a
+participant, because a transport peer id is reused and a scene row naming an
+old membership cannot be applied to the new player. Nothing persists it and
+nothing outside the session reads it.
 
 The roster is one frame, because a partial roster would leave the late joiner
 holding a world it believes complete.
+
+```text
+ROUTE_LEASE   a block of routes this peer mints from
+[base varuint 5][count varuint 2]
+```
+
+The server advances its one route counter by `count` and hands the block
+`[base, base + count)` to one peer, beside that peer's accept. A peer holding
+a lease mints its routes from it in order and from nothing else, so every
+route in the session stays distinct. A block arriving while the last one still
+holds routes queues behind it. A lease of a peer that leaves is abandoned.
 
 ```text
 SESSION_PAUSE          [reason string]
@@ -682,15 +787,17 @@ string cap.
 
 ```text
 SESSION_SCENE_REQUEST   [request_id varuint 5][path string][scope svarint 2]
+                        [source_route svarint 4][source_epoch svarint 2]
 SESSION_SCENE_RESULT    [request_id varuint 5][code svarint 5]
 SESSION_SCENE_RELEASED  [route varuint 5]
 SESSION_SCENE_VIEWERS   the whole viewer roster of one scene
 [route varuint 5][epoch varuint 5][generation varuint 5][revision varuint 5]
-[count varuint 2][membership varuint 5] x count
+[count varuint 2][player_id varuint 5] x count
 ```
 
 `request_id` pairs a result with the request that opened it. `code` is an
-engine `Error` and is signed.
+engine `Error` and is signed. `source_route` is the scene the requester asks
+from and `source_epoch` its liveness epoch, both 0 when it asks from none.
 
 `SESSION_SCENE_VIEWERS` is a complete roster and never a change, so a receiver
 replaces that scene's roster with exactly what the frame carried. A peer may
@@ -1031,10 +1138,10 @@ READY for request 300 and token 7.
 ```
 
 OPEN for request 1, route 300, ordinal 2, family 0, epoch 5, tenure 3,
-anchor revision 4 and schema hash `0xDEADBEEF`.
+anchor revision 4, anchor author 6 and schema hash `0xDEADBEEF`.
 
 ```text
-00 01 AC 02 02 00 05 03 04 EF BE AD DE
+00 01 AC 02 02 00 05 03 04 06 EF BE AD DE
 ```
 
 An ACCEPT of two entries, the head then the pairs.

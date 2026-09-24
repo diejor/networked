@@ -3145,10 +3145,10 @@ TEST_CASE(
     Ref<netw::NetwEntity> wrapper;
     wrapper.instantiate();
 
-    wrapper->grant_control(4);
+    wrapper->set_controller(4);
     NETW_CHECK_EQ(wrapper->get_controller(), int64_t(4));
 
-    const Ref<netw::NetwPromise> asked = wrapper->request_control();
+    const Ref<netw::NetwPromise> asked = wrapper->claim_authority();
     REQUIRE(asked.is_valid());
     CHECK(asked->get_is_failed());
     NETW_CHECK_EQ(int(asked->get_code()), int(ERR_UNAVAILABLE));

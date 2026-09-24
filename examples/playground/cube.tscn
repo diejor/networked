@@ -1,6 +1,10 @@
-[gd_scene load_steps=4 format=3]
+[gd_scene format=3 uid="uid://bwm2twrgy4h0r"]
 
-[ext_resource type="Script" path="res://examples/playground/cube.gd" id="1_cube"]
+[ext_resource type="Script" uid="uid://dnh3p1oo5ib2n" path="res://examples/playground/cube.gd" id="1_cube"]
+
+[sub_resource type="PhysicsMaterial" id="PhysicsMaterial_yrhba"]
+friction = 0.6
+bounce = 0.3
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_cube"]
 size = Vector3(0.5, 0.5, 0.5)
@@ -8,11 +12,12 @@ size = Vector3(0.5, 0.5, 0.5)
 [sub_resource type="BoxMesh" id="BoxMesh_cube"]
 size = Vector3(0.5, 0.5, 0.5)
 
-[node name="Cube" type="RigidBody3D"]
+[node name="Cube" type="RigidBody3D" unique_id=396864158]
+physics_material_override = SubResource("PhysicsMaterial_yrhba")
 script = ExtResource("1_cube")
 
-[node name="Shape" type="CollisionShape3D" parent="."]
+[node name="Shape" type="CollisionShape3D" parent="." unique_id=625113105]
 shape = SubResource("BoxShape3D_cube")
 
-[node name="Visual" type="MeshInstance3D" parent="."]
+[node name="Visual" type="MeshInstance3D" parent="." unique_id=1572512005]
 mesh = SubResource("BoxMesh_cube")

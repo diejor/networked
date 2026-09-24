@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwLifecycleRequest" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		A controller's spawn, despawn or move of an entity, waiting for the server's verdict.
+	</brief_description>
+	<description>
+		[NetwLifecycleRequest] is emitted, on the server only, by [signal NetwEntity.lifecycle_requested] with one [NetwLifecycleRequest] per change the [member NetwEntity.controller] of a [constant NetwEntity.LIFECYCLE_CONTROLLER] entity makes. The server may call [method deny] before the change reaches any other peer.
+		[codeblock]
+		func _on_lifecycle_requested(peer_id: int, request: NetwLifecycleRequest) -&gt; void:
+		    if request.kind == NetwLifecycleRequest.KIND_DESPAWN and not may_remove(peer_id):
+		        request.deny("only the builder removes it")
+		[/codeblock]
+		The denial latches. A later [method deny] or a write of [code]false[/code] to [member denied] changes nothing, so listener order does not matter. The peer that made the change hears of it in [signal NetwEntity.lifecycle_refused], with the [member reason] the first [method deny] gave.
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="deny">
+			<return type="void" />
+			<param index="0" name="reason" type="String" default="&quot;&quot;" />
+			<description>
+				Refuses this change and records [param reason] for the peer that made it. Only the first call counts.
+			</description>
+		</method>
+	</methods>
+	<members>
+		<member name="denied" type="bool" setter="set_denied" getter="get_denied" default="false">
+			Whether the change is refused. Writing [code]false[/code] over a [method deny] call has no effect.
+		</member>
+		<member name="destination" type="Node" setter="" getter="get_destination">
+			The parent the entity is placed under, or [code]null[/code] for [constant KIND_DESPAWN]. On a spawn it is the handler's way into the world, because [member entity] has not entered the tree.
+		</member>
+		<member name="entity" type="NetwEntity" setter="" getter="get_entity">
+			The entity the change is about. On a spawn it is the server's copy, holding the values the controller sent.
+		</member>
+		<member name="kind" type="int" setter="" getter="get_kind" enum="NetwLifecycleRequest.Kind" default="0">
+			Which change the controller made.
+		</member>
+		<member name="reason" type="String" setter="" getter="get_reason" default="&quot;&quot;">
+			What the server passed to [method deny], empty until then.
+		</member>
+		<member name="requester" type="int" setter="" getter="get_requester" default="0">
+			The peer id of the controller that made the change.
+		</member>
+	</members>
+	<constants>
+		<constant name="KIND_SPAWN" value="0" enum="Kind">
+			The controller spawned the entity with [method Netw.spawn], [method Netw.replicate] or [method NetwEntity.spawn_under].
+		</constant>
+		<constant name="KIND_DESPAWN" value="1" enum="Kind">
+			The controller despawned the entity with [method Netw.despawn] or [method NetwEntity.despawn].
+		</constant>
+		<constant name="KIND_REPARENT" value="2" enum="Kind">
+			The controller moved the entity with [method Netw.reparent] or [method Node.reparent].
+		</constant>
+	</constants>
+</class>

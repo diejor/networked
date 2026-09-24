@@ -865,7 +865,7 @@ TEST_CASE(
 
     const Ref<netw::NetwEntity> entity = netw::NetwEntity::of(node);
     REQUIRE(entity.is_valid());
-    entity->grant_control(granted);
+    entity->set_controller(granted);
     rig.pump(8);
 
     NETW_CHECK_EQ(node->get_multiplayer_authority(), granted);

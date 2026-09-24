@@ -44,14 +44,19 @@ struct StreamTenure {
     uint64_t tenure = 0;
     bool bound = false;
     uint64_t anchor = 0;
+    uint64_t anchor_author = 0;
 
     bool operator==(const StreamTenure &p_other) const {
         return tenure == p_other.tenure && bound == p_other.bound
-            && anchor == p_other.anchor;
+            && anchor == p_other.anchor
+            && anchor_author == p_other.anchor_author;
     }
 };
 
-typedef bool (*TenureDooms)(const StreamTenure &p_lane, uint64_t p_bar);
+typedef bool (*TenureDooms)(
+    const StreamTenure &p_lane,
+    const StreamTenure &p_bar
+);
 
 struct ParkedOpen {
     int peer = 0;
@@ -61,6 +66,7 @@ struct ParkedOpen {
     uint32_t schema = 0;
     uint64_t tenure = 0;
     uint64_t anchor = 0;
+    uint64_t anchor_author = 0;
     int64_t parked_at_ms = 0;
 };
 
@@ -95,7 +101,11 @@ class StreamReaderBook {
 
     Connection &connection(int p_peer);
     Lane *lane_at(int p_peer, uint64_t p_token);
-    uint32_t close_where(int64_t p_route, TenureDooms p_dooms, uint64_t p_bar);
+    uint32_t close_where(
+        int64_t p_route,
+        TenureDooms p_dooms,
+        const StreamTenure &p_bar
+    );
 
 public:
     uint64_t incarnation_of(int p_peer);
@@ -128,7 +138,11 @@ public:
 
     uint32_t close_tenures_before(int64_t p_route, uint64_t p_tenure);
 
-    uint32_t close_anchors_before(int64_t p_route, uint64_t p_anchor);
+    uint32_t close_anchors_before(
+        int64_t p_route,
+        uint64_t p_anchor,
+        uint64_t p_author
+    );
 
     SnapshotReceiver *receiver(int p_peer, uint64_t p_token);
 
@@ -194,7 +208,7 @@ class StreamWriterBook {
     godot::LocalVector<ClosedLane> close_where(
         int64_t p_route,
         TenureDooms p_dooms,
-        uint64_t p_bar
+        const StreamTenure &p_bar
     );
 
 public:
@@ -219,7 +233,8 @@ public:
 
     godot::LocalVector<ClosedLane> close_anchors_other_than(
         int64_t p_route,
-        uint64_t p_anchor
+        uint64_t p_anchor,
+        uint64_t p_author
     );
 
     ReadyVerdict ready(int p_peer, uint64_t p_request, uint64_t p_token);

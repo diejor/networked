@@ -369,7 +369,7 @@ class CostScenario final : public netw_test::FrameScenario {
         }
         if (p_step == BURST_AT) {
             close_phase(QUIET);
-            entity_at(-1, PUSHER)->grant_control(stand->peer_id(A));
+            entity_at(-1, PUSHER)->set_controller(stand->peer_id(A));
         }
         if (p_step == PUSH_AT) {
             sphere_at(A, PUSHER)->set_linear_velocity(PUSH);
@@ -390,11 +390,11 @@ class CostScenario final : public netw_test::FrameScenario {
             const int asker = turn % 2 == 0 ? A : B;
             if (beat == 0) {
                 entity_at(asker, CONTESTED)
-                    ->request_control(Hold::HOLD_EXCLUSIVE);
+                    ->claim_authority(Hold::HOLD_EXCLUSIVE);
                 seen.last_requester = stand->peer_id(asker);
             } else if (beat == 1) {
                 entity_at(asker, CONTESTED)
-                    ->request_control(Hold::HOLD_YIELDABLE);
+                    ->claim_authority(Hold::HOLD_YIELDABLE);
             }
         }
         const Queues now = queues_now();

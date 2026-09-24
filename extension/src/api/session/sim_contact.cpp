@@ -90,7 +90,7 @@ void NetwMultiplayer::sim_rest_pass(
             rest = sim::Rest();
         } else if (!asleep && !p_entity->is_claim_pending()) {
             rest = sim::Rest();
-            p_entity->request_control(entity::Control::HOLD_YIELDABLE);
+            p_entity->claim_authority(entity::Control::HOLD_YIELDABLE);
         }
         return;
     }
@@ -107,7 +107,7 @@ void NetwMultiplayer::sim_rest_pass(
     }
     rest.asleep_since = -1;
     rest.releasing = true;
-    p_entity->release_control(0);
+    p_entity->release_authority(0);
 }
 
 void NetwMultiplayer::sim_contact_pass(int64_t p_tick) {

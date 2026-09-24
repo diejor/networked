@@ -69,6 +69,11 @@ public:
         PARENT_DESPAWN_DETACH = int(entity::Control::ParentDespawnRule::DETACH),
     };
 
+    enum Lifecycle {
+        LIFECYCLE_SESSION = int(entity::Control::Lifecycle::SESSION),
+        LIFECYCLE_CONTROLLER = int(entity::Control::Lifecycle::CONTROLLER),
+    };
+
     enum Stage {
         STAGE_UNBOUND = int(entity::Stage::UNBOUND),
         STAGE_TEMPLATE = int(entity::Stage::TEMPLATE),
@@ -87,8 +92,14 @@ private:
         godot::Ref<NetwPromise> promise;
     };
 
+    struct StructureOp {
+        uint64_t base = 0;
+        godot::Ref<NetwPromise> promise;
+    };
+
     NetwEntityRecord *record = nullptr;
     godot::LocalVector<ControlClaim> control_claims;
+    godot::LocalVector<StructureOp> structure_ops;
     godot::ObjectID owner_id;
     godot::ObjectID session_id;
     godot::ObjectID timeline_id;
@@ -96,6 +107,7 @@ private:
     bool synchronizers_dirty = true;
     bool ready_once_fired = false;
     bool owner_exiting_tree = false;
+    bool raw_move_warned = false;
     int64_t action_spawn_tick = -1;
     int64_t action_requester = 0;
 
@@ -104,7 +116,6 @@ private:
     int64_t local_peer() const;
     bool ensure_server_action(const godot::StringName &p_action);
     ReplicationCore *get_replication_plane() const;
-    void set_controller_internal(int64_t p_value);
     void announce_control(int64_t p_was, int64_t p_peer);
     int64_t resolve_initial_controller() const;
     void project_control(godot::Object *p_announcer);
@@ -184,27 +195,11 @@ public:
     NetwEntity();
     ~NetwEntity();
 
-    static godot::StringName meta_key();
-    static godot::StringName template_meta();
-
     static NetwMultiplayer *session_core_for(godot::Node *p_node);
-    static godot::Ref<NetwMultiplayer> session_plane_for(godot::Node *p_node);
 
     static godot::Ref<NetwEntity> of(godot::Node *p_node);
     static godot::Ref<NetwEntity> ensure(godot::Node *p_root);
     static godot::Ref<NetwEntity> resolve(godot::Node *p_node);
-    static godot::Ref<NetwEntity> from_rid(
-        const godot::RID &p_entity,
-        const godot::Ref<NetwMultiplayer> &p_api
-    );
-    static godot::Ref<NetwEntity> by_route(
-        int64_t p_route,
-        const godot::Ref<NetwMultiplayer> &p_api
-    );
-    static godot::Node *instantiate_from(
-        godot::Node *p_template,
-        const godot::Callable &p_configure
-    );
 
     void attach_to(godot::Node *p_root);
 
@@ -238,16 +233,39 @@ public:
     void set_on_controller_disconnect(DisconnectRule p_value);
     ParentDespawnRule get_on_parent_despawn() const;
     void set_on_parent_despawn(ParentDespawnRule p_value);
+    Lifecycle get_lifecycle() const;
+    void set_lifecycle(Lifecycle p_value);
+    bool note_raw_move_warning() {
+        const bool first = !raw_move_warned;
+        raw_move_warned = true;
+        return first;
+    }
+    void structure_op_issue(
+        uint64_t p_base,
+        const godot::Ref<NetwPromise> &p_promise
+    );
+    void structure_ops_accept(uint64_t p_revision);
+    bool structure_ops_refuse(
+        uint64_t p_base,
+        godot::Error p_code,
+        const godot::String &p_detail
+    );
+    bool has_structure_ops() const {
+        return !structure_ops.is_empty();
+    }
+    uint32_t structure_ops_outstanding() const {
+        return structure_ops.size();
+    }
     bool get_declares_scene() const;
     void set_declares_scene(bool p_value);
     godot::StringName get_scene_label() const;
     void set_scene_label(const godot::StringName &p_value);
     int64_t get_scene_isolation() const;
-    auto scene_isolation_of_session() const;
     void set_scene_isolation(int64_t p_value);
 
     int64_t get_controller() const;
     void set_controller(int64_t p_value);
+    void record_controller(int64_t p_value);
     ControlKind get_control_kind() const;
     bool get_is_controlled_locally() const;
     godot::Ref<NetwPlayer> get_controller_player() const;
@@ -264,18 +282,16 @@ public:
         action_requester = p_peer;
     }
 
-    godot::Ref<NetwPromise> request_control(
+    godot::Ref<NetwPromise> claim_authority(
         Hold p_hold = entity::Control::HOLD_EXCLUSIVE
     );
     godot::Ref<NetwPromise> claim_by_contact(
         const godot::Ref<NetwEntity> &p_source
     );
-    godot::Ref<NetwPromise> release_control(int64_t p_successor = 0);
+    godot::Ref<NetwPromise> release_authority(int64_t p_successor = 0);
     bool is_controller_here() const;
     bool is_claim_pending() const;
     bool is_claim_running_ahead() const;
-    void grant_control(int64_t p_peer_id);
-    void revoke_control();
     void follow_session(const godot::NodePath &p_path);
     void apply_control();
     Hold get_hold() const;
@@ -286,16 +302,15 @@ public:
     bool expire_control(int64_t p_tick, int64_t p_deadline);
     void abandon_claims();
 
-    bool get_is_authority() const;
+    bool get_is_session_authority() const;
     godot::Ref<NetwPlayer> get_player() const;
     Ownership get_ownership() const;
     bool get_is_player() const;
 
     bool get_is_template() const;
+    void set_is_template(bool p_value);
     Stage get_stage() const;
     godot::Ref<NetwDespawnOpts> get_active_despawn_opts() const;
-
-    void mark_template();
 
     void note_stage(int64_t p_from);
 
@@ -303,7 +318,8 @@ public:
 
     godot::Node *spawn_under(
         godot::Node *p_parent,
-        const godot::StringName &p_id
+        const godot::StringName &p_id,
+        const godot::Callable &p_configure = godot::Callable()
     );
     void despawn(const godot::Ref<NetwDespawnOpts> &p_opts);
 
@@ -375,4 +391,5 @@ VARIANT_ENUM_CAST(netw::NetwEntity::InitialController);
 VARIANT_ENUM_CAST(netw::NetwEntity::Transfer);
 VARIANT_ENUM_CAST(netw::NetwEntity::DisconnectRule);
 VARIANT_ENUM_CAST(netw::NetwEntity::ParentDespawnRule);
+VARIANT_ENUM_CAST(netw::NetwEntity::Lifecycle);
 VARIANT_ENUM_CAST(netw::NetwEntity::Stage);

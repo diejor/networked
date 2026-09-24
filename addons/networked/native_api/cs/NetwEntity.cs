@@ -19,12 +19,13 @@ namespace Networked;
 /// <see cref="NetwEntity.Interpolation"/>, and follows the lifecycle through
 /// <see cref="NetwEntity.Spawning"/>, <see cref="NetwEntity.Spawned"/>,
 /// <see cref="NetwEntity.Despawning"/> and <see cref="NetwEntity.Hidden"/>.
-/// Identity is sealed once, at <see cref="NetwEntity.Arm"/>, and never changes
-/// after. Everything that configures the entity runs before that moment and
-/// everything that reads it runs after. <see cref="NetwEntity.Controller"/>
-/// resolves at the same moment, so authority is settled before the node enters
-/// the tree and <see cref="Node.IsMultiplayerAuthority"/> is already correct in
-/// every <c>Node._enter_tree</c> and <c>Node._ready</c>, on every peer.
+/// Identity is sealed once, when the entity reaches
+/// <see cref="NetwEntity.StageEnum.Armed"/>, and never changes after.
+/// Everything that configures the entity runs before that moment and everything
+/// that reads it runs after. <see cref="NetwEntity.Controller"/> resolves at
+/// the same moment, so authority is settled before the node enters the tree and
+/// <see cref="Node.IsMultiplayerAuthority"/> is already correct in every
+/// <c>Node._enter_tree</c> and <c>Node._ready</c>, on every peer.
 /// <see cref="NetwEntity.PeerId"/> classifies the entity. A non-zero value is a
 /// player and names the peer it represents. <c>0</c> is a server-owned entity
 /// such as an NPC or world object. See <see cref="NetwEntity.IsPlayer"/> and
@@ -82,8 +83,10 @@ namespace Networked;
 /// entities with <see cref="Netw.Spawn"/> and <see cref="Netw.SpawnPlayer"/>,
 /// moves one with <see cref="Node.Reparent"/> or <see cref="Netw.Reparent"/>,
 /// and ends one with <see cref="NetwEntity.Despawn"/>. A client asks the server
-/// through <see cref="NetwEntity.RequestControl"/> and reads whether it steers
-/// the entity from <see cref="NetwEntity.IsControlledLocally"/>.
+/// through <see cref="NetwEntity.ClaimAuthority"/> and reads whether it steers
+/// the entity from <see cref="NetwEntity.IsControlledLocally"/>. An entity that
+/// declares <see cref="NetwEntity.Lifecycle"/> lets its
+/// <see cref="NetwEntity.Controller"/> use the same verbs.
 /// <code>
 /// var entity := NetwEntity.of(hit_node)
 /// if entity and entity.is_player:
@@ -125,24 +128,24 @@ namespace Networked;
 /// entity keeps its own <see cref="NetwEntity.Controller"/>. A
 /// <c>Node.set_multiplayer_authority</c> call on a node inside the entity is
 /// replaced at the next change of <see cref="NetwEntity.Controller"/>, and the
-/// first one warns with the node's path. <b>Taking control</b> The server moves
-/// control with <see cref="NetwEntity.GrantControl"/> and
-/// <see cref="NetwEntity.RevokeControl"/>. A peer asks with
-/// <see cref="NetwEntity.RequestControl"/> and gives control back with
-/// <see cref="NetwEntity.ReleaseControl"/>. Both return a
-/// <see cref="NetwPromise"/> that resolves with this entity once the decision
-/// reaches this peer.
+/// first one warns with the node's path. <b>Taking control</b> The session
+/// authority moves control by writing <see cref="NetwEntity.Controller"/>, and
+/// nothing refuses it. A peer asks with <see cref="NetwEntity.ClaimAuthority"/>
+/// and gives control on with <see cref="NetwEntity.ReleaseAuthority"/>. Both
+/// return a <see cref="NetwPromise"/> that resolves with this entity once the
+/// decision reaches this peer. <see cref="Netw.ClaimAuthority"/> and
+/// <see cref="Netw.ReleaseAuthority"/> do the same from any node of the entity.
 /// <code>
 /// private void Grab()
 /// {
-///     entity.RequestControl(NetwEntity.HoldEnum.Exclusive)
+///     entity.ClaimAuthority(NetwEntity.HoldEnum.Exclusive)
 ///         .Then(Callable.From((NetwEntity held) =&gt; AttachToHand()))
 ///         .CatchError(Callable.From((Error code, string detail) =&gt; Drop()));
 /// }
 ///
 /// private void Throw()
 /// {
-///     entity.ReleaseControl();
+///     entity.ReleaseAuthority();
 /// }
 /// </code>
 /// </para>
@@ -160,7 +163,7 @@ namespace Networked;
 /// authority waits for the grant. A refusal or a timeout writes back the newest
 /// values the <see cref="NetwEntity.Controller"/> sent.
 /// <code>
-/// request_control()     is_control_pending and is_controlled_locally true
+/// claim_authority()     is_control_pending and is_controlled_locally true
 ///   granted             controller is this peer, its values are sent
 ///   refused, timed out  the controller's values written back
 /// </code>
@@ -178,15 +181,37 @@ namespace Networked;
 /// </code>
 /// </para>
 /// <para>
-/// <see cref="NetwEntity.GrantControl"/> and
-/// <see cref="NetwEntity.RevokeControl"/> move the entity whatever it holds,
-/// and leave it at <see cref="NetwEntity.HoldEnum.None"/>. <b>Control by
-/// contact</b> A body can take control of the free bodies it touches and hand
-/// them back once they rest. <see cref="NetwSimulationHandle.ClaimOnContact"/>
-/// and <see cref="NetwSimulationHandle.ReleaseOnRest"/> declare it on
-/// <see cref="NetwEntity.Simulation"/>. <b>Owning identity before the tree</b>
-/// A spawned <see cref="Node"/> must own its identity before it enters the
-/// tree. A replicated spawn carries it in the SPAWN frame and stamps it during
+/// A write to <see cref="NetwEntity.Controller"/> moves the entity whatever it
+/// holds, and leaves it at <see cref="NetwEntity.HoldEnum.None"/>. <b>Control
+/// by contact</b> A body can take control of the free bodies it touches and
+/// hand them back once they rest.
+/// <see cref="NetwSimulationHandle.ClaimOnContact"/> and
+/// <see cref="NetwSimulationHandle.ReleaseOnRest"/> declare it on
+/// <see cref="NetwEntity.Simulation"/>. <b>Letting the controller drive the
+/// lifecycle</b> An entity whose <see cref="NetwEntity.Lifecycle"/> is
+/// <see cref="NetwEntity.LifecycleEnum.Controller"/> may be spawned, moved and
+/// despawned by the peer in <see cref="NetwEntity.Controller"/>, with
+/// <see cref="Netw.Spawn"/>, <see cref="Netw.Reparent"/> and
+/// <see cref="NetwEntity.Despawn"/>. A client that spawns one becomes its
+/// <see cref="NetwEntity.Controller"/>. The change appears on that peer at
+/// once, and the server admits it before any other peer sees it.
+/// <code>
+/// func _init() -&gt; void:
+///     Netw.configure_entity(self).lifecycle = NetwEntity.LIFECYCLE_CONTROLLER
+/// </code>
+/// <code>
+/// the controller acts    the change shows on its own screen at once
+///   server admits        every other peer takes the change
+///   server refuses       undone on the controller, which hears lifecycle_refused
+/// </code>
+/// </para>
+/// <para>
+/// The server refuses a change it denies in
+/// <see cref="NetwEntity.LifecycleRequested"/> through a
+/// <see cref="NetwLifecycleRequest"/>, and a change made on an entity the
+/// server has moved since. <b>Owning identity before the tree</b> A spawned
+/// <see cref="Node"/> must own its identity before it enters the tree. A
+/// replicated spawn carries it in the SPAWN frame and stamps it during
 /// reconstruction, and <see cref="Netw.SpawnPlayer"/> stamps a player's body
 /// from the <see cref="NetwPlayer.UserName"/> it was spawned for. A node the
 /// game authors into a scene declares its own, and one that declares none is
@@ -278,7 +303,7 @@ public sealed class NetwEntity : NetwRefCounted
     {
         /// <summary>
         /// Control never changes through
-        /// <see cref="NetwEntity.RequestControl"/>. Use it for fixed player
+        /// <see cref="NetwEntity.ClaimAuthority"/>. Use it for fixed player
         /// entities and server props.
         /// </summary>
         Fixed = 0,
@@ -312,9 +337,9 @@ public sealed class NetwEntity : NetwRefCounted
         /// </summary>
         Yieldable = 1,
         /// <summary>
-        /// Every other peer's request is refused. Only
-        /// <see cref="NetwEntity.GrantControl"/> and
-        /// <see cref="NetwEntity.RevokeControl"/> move the entity.
+        /// Every other peer's claim is refused. Only a write to
+        /// <see cref="NetwEntity.Controller"/> on the session authority moves
+        /// the entity.
         /// </summary>
         Exclusive = 2,
     }
@@ -345,6 +370,38 @@ public sealed class NetwEntity : NetwRefCounted
         /// below this one move with it.
         /// </summary>
         Detach = 1,
+    }
+
+    public enum LifecycleEnum : long
+    {
+        /// <summary>
+        /// Only the session authority spawns, moves and despawns the entity.
+        /// Every other peer is refused with
+        /// <c>@GlobalScope.ERR_UNAUTHORIZED</c>.
+        /// </summary>
+        Session = 0,
+        /// <summary>
+        /// The entity declares that its confirmed
+        /// <see cref="NetwEntity.Controller"/> drives its lifecycle beside the
+        /// session authority, and so does a peer whose
+        /// <see cref="NetwEntity.ClaimAuthority"/> on a
+        /// <see cref="NetwEntity.TransferEnum.Immediate"/> entity is waiting.
+        /// Every other peer is refused with
+        /// <c>@GlobalScope.ERR_UNAUTHORIZED</c>, except that any peer may spawn
+        /// one and becomes its <see cref="NetwEntity.Controller"/>. A predicted
+        /// entity, a player's body and an entity replicated through a
+        /// <see cref="MultiplayerSynchronizer"/> or a
+        /// <see cref="MultiplayerSpawner"/> refuse every peer but the session
+        /// authority with <c>@GlobalScope.ERR_UNAVAILABLE</c>. The controller
+        /// moves the entity with <see cref="Netw.Reparent"/> or
+        /// <see cref="Node.Reparent"/>, and the move lands on its own screen at
+        /// once. The session authority then applies it for every other peer, or
+        /// refuses it, and a refused move is undone on the controller, which
+        /// ends where the session holds the entity with its world pose kept. A
+        /// move the session makes while a controller's move is on its way
+        /// refuses the controller's move.
+        /// </summary>
+        Controller = 1,
     }
 
     public enum StageEnum : long
@@ -513,9 +570,10 @@ public sealed class NetwEntity : NetwRefCounted
 
     /// <summary>
     /// Emitted once when <see cref="NetwEntity.Controller"/> changes. On a
-    /// transfer through <see cref="NetwEntity.GrantControl"/>,
-    /// <see cref="NetwEntity.RevokeControl"/> or a received control frame, it
-    /// fires after the node authority has moved.
+    /// transfer through a write to <see cref="NetwEntity.Controller"/>, a
+    /// granted <see cref="NetwEntity.ClaimAuthority"/>, a
+    /// <see cref="NetwEntity.ReleaseAuthority"/> or a received control frame,
+    /// it fires after the node authority has moved.
     /// </summary>
     public event Action<long, long> ControlChanged
     {
@@ -525,7 +583,7 @@ public sealed class NetwEntity : NetwRefCounted
 
     /// <summary>
     /// Emitted on the server when a peer asks for control through
-    /// <see cref="NetwEntity.RequestControl"/>. Gameplay code may inspect
+    /// <see cref="NetwEntity.ClaimAuthority"/>. Gameplay code may inspect
     /// <c>request</c> and call <see cref="NetwControlRequest.Deny"/> before the
     /// default grant path runs. The denial is a latch, so listener order does
     /// not matter. It is not emitted when the current
@@ -537,6 +595,53 @@ public sealed class NetwEntity : NetwRefCounted
     {
         add => Connect("control_requested", Callable.From(value));
         remove => Disconnect("control_requested", Callable.From(value));
+    }
+
+    /// <summary>
+    /// Emitted on the server when the <see cref="NetwEntity.Controller"/> of a
+    /// <see cref="NetwEntity.LifecycleEnum.Controller"/> entity spawns,
+    /// despawns or moves it, before any other peer sees the change. Calling
+    /// <see cref="NetwLifecycleRequest.Deny"/> on <c>request</c> refuses it,
+    /// and the change is undone on <c>peer_id</c>.
+    /// <code>
+    /// public Crate()
+    /// {
+    ///     Netw.ConfigureEntity(this).LifecycleRequested += Judge;
+    /// }
+    ///
+    /// private void Judge(long peerId, Variant request)
+    /// {
+    ///     var asked = request.As&lt;NetwLifecycleRequest&gt;();
+    ///     if (asked.Destination is Backpack backpack &amp;&amp; backpack.IsFull())
+    ///         asked.Deny("backpack full");
+    /// }
+    /// </code>
+    /// <para>
+    /// On a spawn it is emitted on the server's copy, which holds the values
+    /// <c>peer_id</c> sent and has not entered the tree yet, so
+    /// <see cref="NetwLifecycleRequest.Destination"/> is the handler's way into
+    /// the world. A change the server makes itself emits nothing.
+    /// </para>
+    /// </summary>
+    public event Action<long, Variant> LifecycleRequested
+    {
+        add => Connect("lifecycle_requested", Callable.From(value));
+        remove => Disconnect("lifecycle_requested", Callable.From(value));
+    }
+
+    /// <summary>
+    /// Emitted on the peer whose spawn, despawn or move of this entity the
+    /// server refused, before the change is undone there.
+    /// <see cref="NetwLifecycleRequest.Reason"/> is what the server passed to
+    /// <see cref="NetwLifecycleRequest.Deny"/>, and it is empty when something
+    /// else refused the change, such as a move the server made first. A refused
+    /// spawn emits it on the copy about to be removed, and a refused despawn
+    /// emits it on the entity the server serves back.
+    /// </summary>
+    public event Action<Variant> LifecycleRefused
+    {
+        add => Connect("lifecycle_refused", Callable.From(value));
+        remove => Disconnect("lifecycle_refused", Callable.From(value));
     }
 
     /// <summary>
@@ -587,9 +692,6 @@ public sealed class NetwEntity : NetwRefCounted
     private static readonly IntPtr _bindGetOwner =
         NetwApi.MethodBind("NetwEntity", "get_owner", 3160264692UL);
 
-    private static readonly IntPtr _bindSetOwner =
-        NetwApi.MethodBind("NetwEntity", "set_owner", 1078189570UL);
-
     /// <summary>
     /// The root <see cref="Node"/> that holds this entity, or <c>null</c> once
     /// the tree has freed it.
@@ -603,16 +705,6 @@ public sealed class NetwEntity : NetwRefCounted
             Node result = (Node)VariantUtils.ConvertToGodotObject(answered);
             answered.Dispose();
             return result;
-        }
-        set
-        {
-            IntPtr slot0 = value?.NativeInstance ?? IntPtr.Zero;
-            long discarded = default;
-            NetwThunks.Ptrcall1_IntPtr_Long(
-                _bindSetOwner,
-                Checked,
-                in slot0,
-                ref discarded);
         }
     }
 
@@ -688,9 +780,6 @@ public sealed class NetwEntity : NetwRefCounted
     private static readonly IntPtr _bindGetRoute =
         NetwApi.MethodBind("NetwEntity", "get_route", 3905245786UL);
 
-    private static readonly IntPtr _bindSetRoute =
-        NetwApi.MethodBind("NetwEntity", "set_route", 1286410249UL);
-
     /// <summary>
     /// The compact wire route naming this entity, or <c>0</c> when unroutable.
     /// Decoded from the SPAWN header. Every frame envelope carries this value
@@ -706,16 +795,6 @@ public sealed class NetwEntity : NetwRefCounted
             long answered = default;
             NetwThunks.Ptrcall0_Long(_bindGetRoute, Checked, ref answered);
             return answered;
-        }
-        set
-        {
-            long slot0 = value;
-            long discarded = default;
-            NetwThunks.Ptrcall1_Long_Long(
-                _bindSetRoute,
-                Checked,
-                in slot0,
-                ref discarded);
         }
     }
 
@@ -758,12 +837,12 @@ public sealed class NetwEntity : NetwRefCounted
     /// <c>null</c> when it has none, which is an offline rig or an orphan
     /// before activation. Mirrors <see cref="Node.Multiplayer"/> on the entity
     /// root once live, but handed over by the creator rather than
-    /// re-discovered: stamped once at <see cref="NetwEntity.Arm"/> when the
-    /// spawn pipeline holds the api, or at first tree entry for an entity a
-    /// game authored into a scene. Immutable afterward, since an entity changes
-    /// sessions only by despawn and respawn. Every session-derived member
-    /// resolves through this one handle, so "no session" is the single
-    /// condition <c>multiplayer == null</c>.
+    /// re-discovered: stamped once, when the entity reaches
+    /// <see cref="NetwEntity.StageEnum.Armed"/> on a spawn path, or at first
+    /// tree entry for an entity a game authored into a scene. Immutable
+    /// afterward, since an entity changes sessions only by despawn and respawn.
+    /// Every session-derived member resolves through this one handle, so "no
+    /// session" is the single condition <c>multiplayer == null</c>.
     /// </summary>
     public MultiplayerApi Multiplayer
     {
@@ -791,10 +870,11 @@ public sealed class NetwEntity : NetwRefCounted
     /// The spawn-time control rule, as an
     /// <see cref="NetwEntity.InitialControllerEnum"/>. An archetype config
     /// field, written while the record is
-    /// <see cref="NetwEntity.StageEnum.Unbound"/> and consumed once at
-    /// <see cref="NetwEntity.Arm"/>. The serialization-safe home is the entity
-    /// root's own <c>_init</c>, which re-runs on every instantiate so a packed
-    /// scene carries the rule without a marker node or metadata.
+    /// <see cref="NetwEntity.StageEnum.Unbound"/> and read once, when the
+    /// entity reaches <see cref="NetwEntity.StageEnum.Armed"/>. The
+    /// serialization-safe home is the entity root's own <c>_init</c>, which
+    /// re-runs on every instantiate so a packed scene carries the rule without
+    /// a marker node or metadata.
     /// <code>
     /// func _init() -&gt; void:
     ///     var entity := Netw.configure_entity(self)
@@ -837,7 +917,7 @@ public sealed class NetwEntity : NetwRefCounted
     /// <see cref="NetwEntity.InitialController"/> and read while the record is
     /// <see cref="NetwEntity.StageEnum.Unbound"/>.
     /// <see cref="NetwEntity.TransferEnum.Requestable"/> lets peers call
-    /// <see cref="NetwEntity.RequestControl"/>, and the server emits
+    /// <see cref="NetwEntity.ClaimAuthority"/>, and the server emits
     /// <see cref="NetwEntity.ControlRequested"/> before granting.
     /// </summary>
     public NetwEntity.TransferEnum Transfer
@@ -944,91 +1024,83 @@ public sealed class NetwEntity : NetwRefCounted
         }
     }
 
-    private static readonly IntPtr _bindGetDeclaresScene =
-        NetwApi.MethodBind("NetwEntity", "get_declares_scene", 36873697UL);
+    private static readonly IntPtr _bindGetLifecycle =
+        NetwApi.MethodBind("NetwEntity", "get_lifecycle", 1882811555UL);
+
+    private static readonly IntPtr _bindSetLifecycle =
+        NetwApi.MethodBind("NetwEntity", "set_lifecycle", 3204602022UL);
 
     /// <summary>
-    /// <c>true</c> when this entity is a scene: it owns an admission boundary
-    /// every descendant entity inherits through the interest engine's parent
-    /// clamp. An archetype config field written while the record is
-    /// <see cref="NetwEntity.StageEnum.Unbound"/> and consumed once at
-    /// <see cref="NetwEntity.Arm"/>, because the fact has to ride the SPAWN
-    /// packet. A server that declared after the packet flushed would leave
-    /// every client holding an ordinary entity. Nothing else about the entity
-    /// changes: a scene spawns, replicates and despawns through the ordinary
-    /// pipeline, which is why it can carry replicated properties like any
-    /// other.
+    /// Who may spawn, move and despawn this entity, as a
+    /// <see cref="NetwEntity.LifecycleEnum"/>. Set it in <c>_init</c> beside
+    /// <see cref="NetwEntity.Transfer"/>, so every peer that builds the entity
+    /// reads the same declaration. A verb the declaration does not allow on
+    /// this peer is refused before anything moves or is sent. The refusal
+    /// pushes an error naming this member and the root, and the verb answers
+    /// its own failure value. <see cref="Netw.Spawn"/>,
+    /// <see cref="Netw.Replicate"/> and <see cref="NetwEntity.SpawnUnder"/>
+    /// answer <c>null</c>, <see cref="Netw.Despawn"/> answers the refusal's
+    /// code, and <see cref="Netw.Reparent"/> answers a rejected
+    /// <see cref="NetwPromise"/>. A <see cref="Node.Reparent"/> cannot be
+    /// refused, so it warns once per entity and the move stays on this peer.
+    /// Every peer, the server included, refuses these verbs with
+    /// <c>@GlobalScope.ERR_BUSY</c> during a prediction replay, whatever this
+    /// member declares, so a predicted step spawns on a fresh tick only. The
+    /// refusal raises no error, so a step that calls them needs no guard.
+    /// <code>
+    /// func _init() -&gt; void:
+    ///     var entity := Netw.configure_entity(self)
+    ///     entity.lifecycle = NetwEntity.LIFECYCLE_CONTROLLER
+    /// </code>
+    /// </summary>
+    public NetwEntity.LifecycleEnum Lifecycle
+    {
+        get
+        {
+            long answered = default;
+            NetwThunks.Ptrcall0_Long(_bindGetLifecycle, Checked, ref answered);
+            return (NetwEntity.LifecycleEnum)answered;
+        }
+        set
+        {
+            long slot0 = (long)value;
+            long discarded = default;
+            NetwThunks.Ptrcall1_Long_Long(
+                _bindSetLifecycle,
+                Checked,
+                in slot0,
+                ref discarded);
+        }
+    }
+
+    private static readonly IntPtr _bindGetIsMultiplayerScene =
+        NetwApi.MethodBind(
+            "NetwEntity",
+            "get_is_multiplayer_scene",
+            36873697UL);
+
+    /// <summary>
+    /// <c>true</c> when this entity is a multiplayer scene, the one
+    /// <see cref="NetwEntity.Scene"/> resolves to for itself and every entity
+    /// below it. A scene spawns, replicates and despawns like any other entity.
+    /// It is declared with <see cref="Netw.ConfigureMultiplayerScene"/> while
+    /// the record is <see cref="NetwEntity.StageEnum.Unbound"/>, because the
+    /// declaration travels in the spawn packet.
     /// <code>
     /// func _init() -&gt; void:
     ///     Netw.configure_multiplayer_scene(self).labeled(&amp;"Arena")
     /// </code>
-    /// <para>
-    /// The flat door is <see cref="NetwMultiplayer.SceneDeclare"/>. Read it
-    /// through <see cref="NetwMultiplayer.SceneIsDeclared"/>.
-    /// </para>
     /// </summary>
-    public bool DeclaresScene
+    public bool IsMultiplayerScene
     {
         get
         {
             byte answered = default;
             NetwThunks.Ptrcall0_Byte(
-                _bindGetDeclaresScene,
+                _bindGetIsMultiplayerScene,
                 Checked,
                 ref answered);
             return answered != 0;
-        }
-    }
-
-    private static readonly IntPtr _bindGetSceneLabel =
-        NetwApi.MethodBind("NetwEntity", "get_scene_label", 2002593661UL);
-
-    /// <summary>
-    /// The non-unique stem naming this scene's archetype, empty when
-    /// <see cref="NetwEntity.DeclaresScene"/> is <c>false</c>. Identity is the
-    /// <see cref="NetwEntity.Rid"/>, never this string. Two live instances of
-    /// one arena share a stem and own separate admission boundaries, so
-    /// <see cref="NetwMultiplayer.SceneFind"/> returns "an instance of this
-    /// stem" rather than "the arena". The stem is declared once per script
-    /// through <see cref="Netw.ConfigureMultiplayerScene"/> and read back
-    /// through the script whenever no instance wrote its own, so it is correct
-    /// on an orphan, on a spawned instance and on a client that decoded it off
-    /// the SPAWN packet alike.
-    /// </summary>
-    public StringName SceneLabel
-    {
-        get
-        {
-            godot_variant answered = default;
-            NetwThunks.Call0(_bindGetSceneLabel, Checked, ref answered);
-            StringName result = VariantUtils.ConvertToStringName(answered);
-            answered.Dispose();
-            return result;
-        }
-    }
-
-    private static readonly IntPtr _bindGetSceneIsolation =
-        NetwApi.MethodBind("NetwEntity", "get_scene_isolation", 835196835UL);
-
-    /// <summary>
-    /// Whether this scene hosts its own world, as a
-    /// <see cref="NetwMultiplayer.SceneIsolation"/>. Write-once while the
-    /// record is <see cref="NetwEntity.StageEnum.Unbound"/>, the same
-    /// discipline as <see cref="NetwEntity.InitialController"/>, because it
-    /// selects the container the spawn recipe builds on every peer. A later
-    /// write is rejected rather than producing two peers that disagree about
-    /// the container.
-    /// </summary>
-    public NetwMultiplayer.SceneIsolation SceneIsolation
-    {
-        get
-        {
-            long answered = default;
-            NetwThunks.Ptrcall0_Long(
-                _bindGetSceneIsolation,
-                Checked,
-                ref answered);
-            return (NetwMultiplayer.SceneIsolation)answered;
         }
     }
 
@@ -1039,15 +1111,21 @@ public sealed class NetwEntity : NetwRefCounted
         NetwApi.MethodBind("NetwEntity", "set_controller", 1286410249UL);
 
     /// <summary>
-    /// The peer that currently steers this entity, <c>0</c> for the server.
-    /// Resolved once at <see cref="NetwEntity.Arm"/> from an explicit pre-arm
-    /// write or the <see cref="NetwEntity.InitialController"/> rule. Writing
-    /// this property only records the value: node authority follows the
-    /// controller at <see cref="NetwEntity.Arm"/> and through the
-    /// server-authored transfer path (<see cref="NetwEntity.GrantControl"/>,
-    /// <see cref="NetwEntity.RevokeControl"/>, or a received control frame),
-    /// never from a bare write, so a field write and a broadcast can never
-    /// disagree. Rows of a <see cref="NetwPropertySet.RecordEnum.Input"/> or
+    /// The peer that currently steers this entity, <c>0</c> for the server. A
+    /// write before the entity reaches <see cref="NetwEntity.StageEnum.Armed"/>
+    /// sets the controller it starts with, in place of the
+    /// <see cref="NetwEntity.InitialController"/> rule. A write after that
+    /// moves control. On the session authority it reaches every peer that holds
+    /// the entity, moves node authority, ignores <see cref="NetwEntity.Hold"/>
+    /// and leaves it at <see cref="NetwEntity.HoldEnum.None"/>. Nothing refuses
+    /// it. Any other peer's write is refused with an error, and that peer asks
+    /// with <see cref="NetwEntity.ClaimAuthority"/> instead.
+    /// <code>
+    /// entity.controller = peer_id   # hand it to a peer
+    /// entity.controller = 0         # take it back to the server
+    /// </code>
+    /// <para>
+    /// Rows of a <see cref="NetwPropertySet.RecordEnum.Input"/> or
     /// <see cref="NetwPropertySet.RecordEnum.Broadcast"/> record belong to the
     /// controller that wrote them. Once a change of controller reaches a peer,
     /// that peer drops every row the previous controller still has in flight,
@@ -1057,6 +1135,7 @@ public sealed class NetwEntity : NetwRefCounted
     /// if entity.control_kind == NetwEntity.CONTROL_PEER_CONTROLLED:
     ///     show_controller(entity.controller_player)
     /// </code>
+    /// </para>
     /// </summary>
     public long Controller
     {
@@ -1106,7 +1185,7 @@ public sealed class NetwEntity : NetwRefCounted
 
     /// <summary>
     /// <c>true</c> when the local peer controls this entity, or has a
-    /// <see cref="NetwEntity.RequestControl"/> waiting on a
+    /// <see cref="NetwEntity.ClaimAuthority"/> waiting on a
     /// <see cref="NetwEntity.TransferEnum.Immediate"/> entity.
     /// </summary>
     public bool IsControlledLocally
@@ -1206,7 +1285,7 @@ public sealed class NetwEntity : NetwRefCounted
         NetwApi.MethodBind("NetwEntity", "get_is_control_pending", 36873697UL);
 
     /// <summary>
-    /// <c>true</c> while a <see cref="NetwEntity.RequestControl"/> from this
+    /// <c>true</c> while a <see cref="NetwEntity.ClaimAuthority"/> from this
     /// peer is waiting for its decision.
     /// </summary>
     public bool IsControlPending
@@ -1222,25 +1301,31 @@ public sealed class NetwEntity : NetwRefCounted
         }
     }
 
-    private static readonly IntPtr _bindGetIsAuthority =
-        NetwApi.MethodBind("NetwEntity", "get_is_authority", 36873697UL);
+    private static readonly IntPtr _bindGetIsSessionAuthority =
+        NetwApi.MethodBind(
+            "NetwEntity",
+            "get_is_session_authority",
+            36873697UL);
 
     /// <summary>
-    /// Whether this peer may author state for this entity and run its
-    /// server-only verbs. True on the server, and true offline, since a
-    /// session-less entity has no remote authority to defer to. Three questions
-    /// about one entity read differently.
-    /// <see cref="NetwEntity.IsControlledLocally"/> asks whether the local peer
-    /// steers it, <see cref="NetwMultiplayer.IsHost"/> asks whether the session
-    /// opened in a hosting role, and this one asks who may write its state.
+    /// Whether this peer is the session authority, which writes this entity's
+    /// state, decides every <see cref="NetwEntity.ClaimAuthority"/> and moves
+    /// <see cref="NetwEntity.Controller"/>. True on the server, and true
+    /// offline, since an entity with no session has no other peer to defer to.
+    /// It answers a different question from
+    /// <see cref="NetwEntity.Controller"/>. The controller steers the entity
+    /// and is its nodes' multiplayer authority, and the session authority
+    /// decides who that is. <see cref="NetwEntity.IsControlledLocally"/> asks
+    /// whether this peer steers it, and <see cref="NetwMultiplayer.IsHost"/>
+    /// asks whether the session opened in a hosting role.
     /// </summary>
-    public bool IsAuthority
+    public bool IsSessionAuthority
     {
         get
         {
             byte answered = default;
             NetwThunks.Ptrcall0_Byte(
-                _bindGetIsAuthority,
+                _bindGetIsSessionAuthority,
                 Checked,
                 ref answered);
             return answered != 0;
@@ -1303,10 +1388,27 @@ public sealed class NetwEntity : NetwRefCounted
     private static readonly IntPtr _bindGetIsTemplate =
         NetwApi.MethodBind("NetwEntity", "get_is_template", 36873697UL);
 
+    private static readonly IntPtr _bindSetIsTemplate =
+        NetwApi.MethodBind("NetwEntity", "set_is_template", 2586408642UL);
+
     /// <summary>
-    /// <c>true</c> when this record is a declared editor factory scene, which
-    /// is a one-line read of <see cref="NetwEntity.Stage"/>. Templates are
-    /// deactivated on tree entry and skip the spawning lifecycle.
+    /// <c>true</c> when this entity is a template, a copy kept only to spawn
+    /// others from with <see cref="NetwEntity.SpawnUnder"/>. A template is
+    /// deactivated and hidden, and never spawns itself. A root placed inside
+    /// another scene in the editor that carries no
+    /// <see cref="NetwEntity.EntityId"/> is a template already. One assembled
+    /// in code is marked before it enters the tree, on every peer, and from
+    /// outside, because each copy runs the template's own <c>_init</c> too.
+    /// <code>
+    /// var spawner := preload("res://mob.tscn").instantiate()
+    /// NetwEntity.ensure(spawner).is_template = true
+    /// add_child(spawner)
+    /// </code>
+    /// <para>
+    /// The mark is permanent. Writing <c>false</c> to a template is refused,
+    /// and so is writing <c>true</c> once the entity has reached
+    /// <see cref="NetwEntity.StageEnum.Armed"/>.
+    /// </para>
     /// </summary>
     public bool IsTemplate
     {
@@ -1315,6 +1417,16 @@ public sealed class NetwEntity : NetwRefCounted
             byte answered = default;
             NetwThunks.Ptrcall0_Byte(_bindGetIsTemplate, Checked, ref answered);
             return answered != 0;
+        }
+        set
+        {
+            byte slot0 = value ? (byte)1 : (byte)0;
+            long discarded = default;
+            NetwThunks.Ptrcall1_Byte_Long(
+                _bindSetIsTemplate,
+                Checked,
+                in slot0,
+                ref discarded);
         }
     }
 
@@ -1359,104 +1471,6 @@ public sealed class NetwEntity : NetwRefCounted
                 Checked,
                 ref answered);
             return NetwDespawnOpts.Adopt(answered);
-        }
-    }
-
-    private static readonly IntPtr _bindGetCompsPoisoned =
-        NetwApi.MethodBind("NetwEntity", "get_comps_poisoned", 36873697UL);
-
-    /// <summary>
-    /// Whether this entity's component ids are being honoured. The digest of
-    /// the registered structure rides the spawn packet, and a client that
-    /// computes a different one has a different structure, so the ids cannot be
-    /// trusted to mean the same node on both sides. A poisoned entity is not a
-    /// broken one: every routed frame falls back to string paths and names,
-    /// which both peers resolve for themselves, so the cost is bytes rather
-    /// than correctness. <see cref="NetwEntity.CompOf"/> returns <c>255</c> for
-    /// everything but the root while this holds.
-    /// </summary>
-    public bool CompsPoisoned
-    {
-        get
-        {
-            byte answered = default;
-            NetwThunks.Ptrcall0_Byte(
-                _bindGetCompsPoisoned,
-                Checked,
-                ref answered);
-            return answered != 0;
-        }
-    }
-
-    private static readonly IntPtr _bindGetStateBinding =
-        NetwApi.MethodBind("NetwEntity", "get_state_binding", 2351227813UL);
-
-    /// <summary>
-    /// The entity's derived state property-set binding, the registry set handle
-    /// a script declares with <see cref="NetwPropertyConfig.State"/>. Resolves
-    /// through the session, so it is <c>null</c> before the owner is in a
-    /// <see cref="MultiplayerTree"/> branch or when the owner marks no state
-    /// set. This is the set handle a prediction engine gathers and reconciles
-    /// through.
-    /// </summary>
-    public NetwPropertySetBinding StateBinding
-    {
-        get
-        {
-            IntPtr answered = default;
-            NetwThunks.Ptrcall0_IntPtr(
-                _bindGetStateBinding,
-                Checked,
-                ref answered);
-            return NetwPropertySetBinding.Adopt(answered);
-        }
-    }
-
-    private static readonly IntPtr _bindGetInputBinding =
-        NetwApi.MethodBind("NetwEntity", "get_input_binding", 2351227813UL);
-
-    /// <summary>
-    /// The entity's derived input property-set binding, the registry set handle
-    /// a script declares with <see cref="NetwPropertyConfig.Input"/>. Resolves
-    /// through the session, <c>null</c> before the owner is in a
-    /// <see cref="MultiplayerTree"/> branch or when the owner marks no input
-    /// set. The set handle a windowed input stream sends and records through.
-    /// </summary>
-    public NetwPropertySetBinding InputBinding
-    {
-        get
-        {
-            IntPtr answered = default;
-            NetwThunks.Ptrcall0_IntPtr(
-                _bindGetInputBinding,
-                Checked,
-                ref answered);
-            return NetwPropertySetBinding.Adopt(answered);
-        }
-    }
-
-    private static readonly IntPtr _bindGetBroadcastBinding =
-        NetwApi.MethodBind("NetwEntity", "get_broadcast_binding", 2351227813UL);
-
-    /// <summary>
-    /// The entity's derived broadcast property-set binding, the registry set
-    /// handle a script declares with
-    /// <see cref="NetwPropertyConfig.Broadcast"/>. Resolves through the
-    /// session, so it is <c>null</c> before the owner is in a
-    /// <see cref="MultiplayerTree"/> branch or when the owner marks no
-    /// broadcast set. This is the set handle a trusted display stream fans out
-    /// through, recording into no timeline.
-    /// </summary>
-    public NetwPropertySetBinding BroadcastBinding
-    {
-        get
-        {
-            IntPtr answered = default;
-            NetwThunks.Ptrcall0_IntPtr(
-                _bindGetBroadcastBinding,
-                Checked,
-                ref answered);
-            return NetwPropertySetBinding.Adopt(answered);
         }
     }
 
@@ -1597,9 +1611,6 @@ public sealed class NetwEntity : NetwRefCounted
     private static readonly IntPtr _bindGetTimeline =
         NetwApi.MethodBind("NetwEntity", "get_timeline", 2956180358UL);
 
-    private static readonly IntPtr _bindSetTimeline =
-        NetwApi.MethodBind("NetwEntity", "set_timeline", 2558432482UL);
-
     /// <summary>
     /// The entity's per-entity tick-keyed <see cref="NetwTimeline"/> of state
     /// and input snapshots, published by <see cref="NetwMultiplayer"/>, or
@@ -1618,72 +1629,6 @@ public sealed class NetwEntity : NetwRefCounted
             NetwThunks.Ptrcall0_IntPtr(_bindGetTimeline, Checked, ref answered);
             return NetwTimeline.Adopt(answered);
         }
-        set
-        {
-            IntPtr slot0 = value?.Native ?? IntPtr.Zero;
-            long discarded = default;
-            NetwThunks.Ptrcall1_IntPtr_Long(
-                _bindSetTimeline,
-                Checked,
-                in slot0,
-                ref discarded);
-        }
-    }
-
-    private static readonly IntPtr _bindMetaKey =
-        NetwApi.MethodBind("NetwEntity", "meta_key", 2737447660UL);
-
-    /// <summary>
-    /// The metadata key an entity root carries its record in. One spelling,
-    /// shared by the record that writes it and every walk that reads it.
-    /// </summary>
-    public static StringName MetaKey()
-    {
-        godot_variant answered = default;
-        NetwThunks.Call0(_bindMetaKey, IntPtr.Zero, ref answered);
-        StringName result = VariantUtils.ConvertToStringName(answered);
-        answered.Dispose();
-        return result;
-    }
-
-    private static readonly IntPtr _bindSessionPlaneFor =
-        NetwApi.MethodBind("NetwEntity", "session_plane_for", 850293890UL);
-
-    /// <summary>
-    /// The <see cref="NetwMultiplayer"/> governing <paramref name="node"/>'s
-    /// branch, or <c>null</c> when the branch has none. Resolves from the
-    /// node's own <see cref="Node.Multiplayer"/> first and falls back to
-    /// <see cref="NetwMultiplayer.Of"/>, so it returns for an orphan a session
-    /// has provisioned but the tree does not hold yet.
-    /// </summary>
-    public static NetwMultiplayer SessionPlaneFor(Node node)
-    {
-        IntPtr slot0 = node?.NativeInstance ?? IntPtr.Zero;
-        IntPtr answered = default;
-        NetwThunks.Ptrcall1_IntPtr_IntPtr(
-            _bindSessionPlaneFor,
-            IntPtr.Zero,
-            in slot0,
-            ref answered);
-        return NetwMultiplayer.Adopt(answered);
-    }
-
-    private static readonly IntPtr _bindTemplateMeta =
-        NetwApi.MethodBind("NetwEntity", "template_meta", 2737447660UL);
-
-    /// <summary>
-    /// The metadata key marking an editor-placed spawn-point template child
-    /// whose identity is intentionally unbound, which is the declared-template
-    /// channel for a scene assembled without editor ownership on the child
-    /// root.
-    /// </summary>
-    public static StringName TemplateMeta()
-    {
-        godot_variant answered = default;
-        NetwThunks.Call0(_bindTemplateMeta, IntPtr.Zero, ref answered);
-        StringName result = VariantUtils.ConvertToStringName(answered);
-        answered.Dispose();
-        return result;
     }
 
     private static readonly IntPtr _bindOf =
@@ -1725,88 +1670,8 @@ public sealed class NetwEntity : NetwRefCounted
         return NetwEntity.Adopt(answered);
     }
 
-    private static readonly IntPtr _bindFromRid =
-        NetwApi.MethodBind("NetwEntity", "from_rid", 1134353352UL);
-
-    /// <summary>
-    /// The entity <paramref name="entity"/> names in <paramref name="api"/>, or
-    /// <c>null</c>.
-    /// </summary>
-    public static NetwEntity FromRid(Rid entity, NetwMultiplayer api)
-    {
-        Rid slot0 = entity;
-        IntPtr slot1 = api?.Native ?? IntPtr.Zero;
-        IntPtr answered = default;
-        NetwThunks.Ptrcall2_Rid_IntPtr_IntPtr(
-            _bindFromRid,
-            IntPtr.Zero,
-            in slot0,
-            in slot1,
-            ref answered);
-        return NetwEntity.Adopt(answered);
-    }
-
-    private static readonly IntPtr _bindByRoute =
-        NetwApi.MethodBind("NetwEntity", "by_route", 2824174368UL);
-
-    /// <summary>
-    /// The entity bound to <paramref name="route"/> in <paramref name="api"/>,
-    /// or <c>null</c>.
-    /// </summary>
-    public static NetwEntity ByRoute(long route, NetwMultiplayer api)
-    {
-        long slot0 = route;
-        IntPtr slot1 = api?.Native ?? IntPtr.Zero;
-        IntPtr answered = default;
-        NetwThunks.Ptrcall2_Long_IntPtr_IntPtr(
-            _bindByRoute,
-            IntPtr.Zero,
-            in slot0,
-            in slot1,
-            ref answered);
-        return NetwEntity.Adopt(answered);
-    }
-
-    private static readonly IntPtr _bindInstantiateFrom =
-        NetwApi.MethodBind("NetwEntity", "instantiate_from", 1961433713UL);
-
-    /// <summary>
-    /// An unparented copy of <paramref name="template"/>'s scene.
-    /// <paramref name="configure"/> fires before the copy enters the tree,
-    /// receiving the copy's <see cref="NetwEntity"/> so a caller can set
-    /// <see cref="NetwEntity.EntityId"/>, <see cref="NetwEntity.PeerId"/> or
-    /// the owner's node name. A template no session holds carries no marked
-    /// spawn state, because the marks are resolved through a session or not at
-    /// all.
-    /// <code>
-    /// var npc := NetwEntity.instantiate_from(template, func(e):
-    ///     e.entity_id = &amp;"goblin_42"
-    /// )
-    /// parent.add_child(npc)
-    /// </code>
-    /// </summary>
-    public static Node InstantiateFrom(
-        Node template,
-        Callable configure = default)
-    {
-        godot_variant slot0 = VariantUtils.CreateFromGodotObject(template);
-        godot_variant slot1 = VariantUtils.CreateFromCallable(configure);
-        godot_variant answered = default;
-        NetwThunks.Call2(
-            _bindInstantiateFrom,
-            IntPtr.Zero,
-            in slot0,
-            in slot1,
-            ref answered);
-        slot0.Dispose();
-        slot1.Dispose();
-        Node result = (Node)VariantUtils.ConvertToGodotObject(answered);
-        answered.Dispose();
-        return result;
-    }
-
-    private static readonly IntPtr _bindRequestControl =
-        NetwApi.MethodBind("NetwEntity", "request_control", 2273159157UL);
+    private static readonly IntPtr _bindClaimAuthority =
+        NetwApi.MethodBind("NetwEntity", "claim_authority", 2273159157UL);
 
     /// <summary>
     /// Asks the server to make this peer the
@@ -1818,9 +1683,9 @@ public sealed class NetwEntity : NetwRefCounted
     /// <see cref="NetwEntity.ControlRequested"/> filter refuses, with
     /// <c>@GlobalScope.ERR_UNAVAILABLE</c> when the entity does not offer the
     /// transfer, and with <c>@GlobalScope.ERR_TIMEOUT</c> when no decision
-    /// arrives within one second of session ticks. A request the current
-    /// decision already refuses fails before anything is sent. A grant that
-    /// arrives after the timeout is handed straight back to the server. Under
+    /// arrives within one second of session ticks. A claim the current decision
+    /// already refuses fails before anything is sent. A grant that arrives
+    /// after the timeout is handed straight back to the server. Under
     /// <see cref="NetwEntity.TransferEnum.Immediate"/> the local peer uses the
     /// entity before this returns. <see cref="NetwEntity.IsControlledLocally"/>
     /// is <c>true</c>, a simulated entity is in
@@ -1830,10 +1695,10 @@ public sealed class NetwEntity : NetwRefCounted
     /// not written. Nothing is published and node authority does not move until
     /// the grant. A refusal or a timeout writes the newest kept rows back
     /// through their setters and returns the simulation to its earlier mode,
-    /// with no <see cref="NetwEntity.ControlChanged"/>. A second request made
+    /// with no <see cref="NetwEntity.ControlChanged"/>. A second claim made
     /// while one is waiting is sent after it and settles on its own.
     /// <code>
-    /// entity.request_control(NetwEntity.HOLD_YIELDABLE) \
+    /// entity.claim_authority(NetwEntity.HOLD_YIELDABLE) \
     ///     .then(func(_held: NetwEntity) -&gt; void: pick_up()) \
     ///     .catch_error(func(_code: Error, _detail: String) -&gt; void: shrug())
     /// </code>
@@ -1841,21 +1706,21 @@ public sealed class NetwEntity : NetwRefCounted
     /// <b>Player request.</b>
     /// </para>
     /// </summary>
-    public NetwPromise RequestControl(NetwEntity.HoldEnum hold =
+    public NetwPromise ClaimAuthority(NetwEntity.HoldEnum hold =
         (NetwEntity.HoldEnum)2)
     {
         long slot0 = (long)hold;
         IntPtr answered = default;
         NetwThunks.Ptrcall1_Long_IntPtr(
-            _bindRequestControl,
+            _bindClaimAuthority,
             Checked,
             in slot0,
             ref answered);
         return NetwPromise.Adopt(answered);
     }
 
-    private static readonly IntPtr _bindReleaseControl =
-        NetwApi.MethodBind("NetwEntity", "release_control", 339970911UL);
+    private static readonly IntPtr _bindReleaseAuthority =
+        NetwApi.MethodBind("NetwEntity", "release_authority", 339970911UL);
 
     /// <summary>
     /// Hands control of this entity to the peer <paramref name="successor"/>,
@@ -1868,61 +1733,28 @@ public sealed class NetwEntity : NetwRefCounted
     /// over, and every peer holding the entity writes it as the first sample
     /// under the new <see cref="NetwEntity.Controller"/>. A simulated entity
     /// takes it by its <see cref="NetwSimulationHandle.Restore"/> policy. A
-    /// peer whose own <see cref="NetwEntity.RequestControl"/> is still waiting
+    /// peer whose own <see cref="NetwEntity.ClaimAuthority"/> is still waiting
     /// keeps its own state. A final state larger than 1024 bytes is not sent.
     /// The release still happens, <paramref name="successor"/> starts from its
     /// own copy, and a warning names the entity. It fails with
     /// <c>@GlobalScope.ERR_UNAUTHORIZED</c> when this peer neither controls the
-    /// entity nor has a <see cref="NetwEntity.RequestControl"/> waiting, and
+    /// entity nor has a <see cref="NetwEntity.ClaimAuthority"/> waiting, and
     /// with <c>@GlobalScope.ERR_UNAVAILABLE</c> when
     /// <paramref name="successor"/> holds no copy of it. A release made while
-    /// this peer's own <see cref="NetwEntity.RequestControl"/> is waiting is
-    /// sent after it, and resolves with nothing to do when that request is
+    /// this peer's own <see cref="NetwEntity.ClaimAuthority"/> is waiting is
+    /// sent after it, and resolves with nothing to do when that claim is
     /// refused. <b>Player request.</b>
     /// </summary>
-    public NetwPromise ReleaseControl(long successor = 0)
+    public NetwPromise ReleaseAuthority(long successor = 0)
     {
         long slot0 = successor;
         IntPtr answered = default;
         NetwThunks.Ptrcall1_Long_IntPtr(
-            _bindReleaseControl,
+            _bindReleaseAuthority,
             Checked,
             in slot0,
             ref answered);
         return NetwPromise.Adopt(answered);
-    }
-
-    private static readonly IntPtr _bindGrantControl =
-        NetwApi.MethodBind("NetwEntity", "grant_control", 1286410249UL);
-
-    /// <summary>
-    /// Gives control of the entity to <paramref name="peerId"/> whatever its
-    /// <see cref="NetwEntity.Hold"/>, and leaves it at
-    /// <see cref="NetwEntity.HoldEnum.None"/>. <b>Server Only.</b>
-    /// </summary>
-    public void GrantControl(long peerId)
-    {
-        long slot0 = peerId;
-        long discarded = default;
-        NetwThunks.Ptrcall1_Long_Long(
-            _bindGrantControl,
-            Checked,
-            in slot0,
-            ref discarded);
-    }
-
-    private static readonly IntPtr _bindRevokeControl =
-        NetwApi.MethodBind("NetwEntity", "revoke_control", 3218959716UL);
-
-    /// <summary>
-    /// Takes control back to the server whatever the entity's
-    /// <see cref="NetwEntity.Hold"/>, and leaves it at
-    /// <see cref="NetwEntity.HoldEnum.None"/>. <b>Server Only.</b>
-    /// </summary>
-    public void RevokeControl()
-    {
-        long discarded = default;
-        NetwThunks.Ptrcall0_Long(_bindRevokeControl, Checked, ref discarded);
     }
 
     private static readonly IntPtr _bindFollowSession =
@@ -1945,75 +1777,51 @@ public sealed class NetwEntity : NetwRefCounted
         answered.Dispose();
     }
 
-    private static readonly IntPtr _bindMarkTemplate =
-        NetwApi.MethodBind("NetwEntity", "mark_template", 3218959716UL);
-
-    /// <summary>
-    /// Declares this record a <see cref="NetwEntity.StageEnum.Template"/>, an
-    /// editor-placed factory scene that stays deactivated and never spawns.
-    /// Idempotent. Every peer marks its own copy, since the editor scene exists
-    /// identically on all of them.
-    /// </summary>
-    public void MarkTemplate()
-    {
-        long discarded = default;
-        NetwThunks.Ptrcall0_Long(_bindMarkTemplate, Checked, ref discarded);
-    }
-
-    private static readonly IntPtr _bindArm =
-        NetwApi.MethodBind("NetwEntity", "arm", 4203668392UL);
-
-    /// <summary>
-    /// Seals the record and applies node authority, then marks it
-    /// <see cref="NetwEntity.StageEnum.Armed"/>. The single choke point every
-    /// spawn path funnels through, called on the orphan before
-    /// <see cref="Node.AddChild"/> on the pipeline paths so authority is
-    /// recursive and correct in every child <c>Node._enter_tree</c> and
-    /// <c>Node._ready</c>, on every peer. An entity a game authors into a scene
-    /// arms at its owner's first tree entry instead.
-    /// </summary>
-    public void Arm(NetwMultiplayer api = null)
-    {
-        IntPtr slot0 = api?.Native ?? IntPtr.Zero;
-        long discarded = default;
-        NetwThunks.Ptrcall1_IntPtr_Long(
-            _bindArm,
-            Checked,
-            in slot0,
-            ref discarded);
-    }
-
     private static readonly IntPtr _bindSpawnUnder =
-        NetwApi.MethodBind("NetwEntity", "spawn_under", 1013608830UL);
+        NetwApi.MethodBind("NetwEntity", "spawn_under", 3254341263UL);
 
     /// <summary>
     /// Spawns a copy of <see cref="NetwEntity.Owner"/>'s scene under
     /// <paramref name="parent"/>, which defaults to the owner's own parent.
     /// <paramref name="id"/> sets the copy's <see cref="NetwEntity.EntityId"/>.
+    /// <paramref name="configure"/> receives the copy's
+    /// <see cref="NetwEntity"/> after <paramref name="id"/> is stamped and
+    /// before the copy is sent or enters the tree, so what it writes wins and
+    /// reaches every peer with the spawn.
     /// <code>
     /// var mob := entity.spawn_under($World/Mobs, &amp;"skeleton_1")
     /// var wild := entity.spawn_under()   # same parent as template
+    /// var boss := entity.spawn_under($World/Mobs, &amp;"boss", func(e: NetwEntity) -&gt; void:
+    ///     e.owner.hp = 500
+    /// )
     /// </code>
     /// <para>
-    /// For richer pre-tree configuration use
-    /// <see cref="NetwEntity.InstantiateFrom"/> directly, so the copy is wired
-    /// before tree entry. <b>Server Only.</b>
+    /// The session authority may always call it, and a client may when the copy
+    /// declares <see cref="NetwEntity.Lifecycle"/> as
+    /// <see cref="NetwEntity.LifecycleEnum.Controller"/>, becoming the copy's
+    /// <see cref="NetwEntity.Controller"/>.
     /// </para>
     /// </summary>
-    public Node SpawnUnder(Node parent = null, StringName id = null)
+    public Node SpawnUnder(
+        Node parent = null,
+        StringName id = null,
+        Callable configure = default)
     {
         id ??= new StringName("");
         godot_variant slot0 = VariantUtils.CreateFromGodotObject(parent);
         godot_variant slot1 = VariantUtils.CreateFromStringName(id);
+        godot_variant slot2 = VariantUtils.CreateFromCallable(configure);
         godot_variant answered = default;
-        NetwThunks.Call2(
+        NetwThunks.Call3(
             _bindSpawnUnder,
             Checked,
             in slot0,
             in slot1,
+            in slot2,
             ref answered);
         slot0.Dispose();
         slot1.Dispose();
+        slot2.Dispose();
         Node result = (Node)VariantUtils.ConvertToGodotObject(answered);
         answered.Dispose();
         return result;
@@ -2038,7 +1846,11 @@ public sealed class NetwEntity : NetwRefCounted
     /// entity.despawn(opts)
     /// </code>
     /// <para>
-    /// <b>Server Only.</b>
+    /// The session authority may always call it, and the
+    /// <see cref="NetwEntity.Controller"/> may for an entity whose
+    /// <see cref="NetwEntity.Lifecycle"/> is
+    /// <see cref="NetwEntity.LifecycleEnum.Controller"/>. The entity leaves the
+    /// controller's peer at once, and the server serves it back if it refuses.
     /// </para>
     /// </summary>
     public void Despawn(NetwDespawnOpts opts = null)
@@ -2050,98 +1862,6 @@ public sealed class NetwEntity : NetwRefCounted
             Checked,
             in slot0,
             ref discarded);
-    }
-
-    private static readonly IntPtr _bindRegisterComponent =
-        NetwApi.MethodBind("NetwEntity", "register_component", 1078189570UL);
-
-    /// <summary>
-    /// Registers <paramref name="component"/> as an addressable sub-node of
-    /// this entity, so an entity RPC or a masked sync frame addresses it by a
-    /// 1-byte id instead of a <see cref="NodePath"/>. The ids are sealed when
-    /// the entity hydrates and their digest rides the spawn packet, so a
-    /// registration after that arrives too late to be agreed on and warns.
-    /// Register inside <c>Object._init</c>. <see cref="NetwEntity.CompOf"/>
-    /// reads an id back, <see cref="NetwEntity.CompNodeOf"/> reads the node,
-    /// and <see cref="NetwEntity.CompsPoisoned"/> says whether the ids are
-    /// being honoured at all.
-    /// </summary>
-    public void RegisterComponent(Node component)
-    {
-        IntPtr slot0 = component?.NativeInstance ?? IntPtr.Zero;
-        long discarded = default;
-        NetwThunks.Ptrcall1_IntPtr_Long(
-            _bindRegisterComponent,
-            Checked,
-            in slot0,
-            ref discarded);
-    }
-
-    private static readonly IntPtr _bindCompNodeOf =
-        NetwApi.MethodBind("NetwEntity", "comp_node_of", 539202265UL);
-
-    /// <summary>
-    /// The node <paramref name="comp"/> addresses inside this entity, which is
-    /// <see cref="NetwEntity.CompOf"/> read backwards: <c>0</c> is the entity
-    /// root, and <c>1</c> to <c>254</c> is whatever the table registered under
-    /// that id. Returns <c>null</c> for an id this entity's table does not
-    /// carry, which is every id while <see cref="NetwEntity.CompsPoisoned"/>
-    /// holds. It never returns the root as a consolation, because an address
-    /// that resolved to the wrong node is worse than one that resolved to none.
-    /// </summary>
-    public Node CompNodeOf(long comp)
-    {
-        godot_variant slot0 = VariantUtils.CreateFromInt((long)comp);
-        godot_variant answered = default;
-        NetwThunks.Call1(_bindCompNodeOf, Checked, in slot0, ref answered);
-        slot0.Dispose();
-        Node result = (Node)VariantUtils.ConvertToGodotObject(answered);
-        answered.Dispose();
-        return result;
-    }
-
-    private static readonly IntPtr _bindCompOf =
-        NetwApi.MethodBind("NetwEntity", "comp_of", 3810805390UL);
-
-    /// <summary>
-    /// The component id that addresses <paramref name="node"/> inside this
-    /// entity: <c>0</c> for the entity root itself, <c>1</c> to <c>254</c> for
-    /// a node the component table registered, and <c>255</c> for one it did
-    /// not, which is addressed by a path relative to the root instead. A
-    /// poisoned table returns <c>255</c> for everything but the root, because
-    /// an id the two peers disagree on is worse than a path they both resolve.
-    /// </summary>
-    public long CompOf(Node node)
-    {
-        IntPtr slot0 = node?.NativeInstance ?? IntPtr.Zero;
-        long answered = default;
-        NetwThunks.Ptrcall1_IntPtr_Long(
-            _bindCompOf,
-            Checked,
-            in slot0,
-            ref answered);
-        return answered;
-    }
-
-    private static readonly IntPtr _bindCompPathOf =
-        NetwApi.MethodBind("NetwEntity", "comp_path_of", 2174079723UL);
-
-    /// <summary>
-    /// The path relative to this entity's root that addresses
-    /// <paramref name="node"/> when <see cref="NetwEntity.CompOf"/> returns
-    /// <c>255</c>, and an empty string otherwise. A frame carries one or the
-    /// other, never both, because an id the table holds is always the shorter
-    /// and safer address.
-    /// </summary>
-    public string CompPathOf(Node node)
-    {
-        godot_variant slot0 = VariantUtils.CreateFromGodotObject(node);
-        godot_variant answered = default;
-        NetwThunks.Call1(_bindCompPathOf, Checked, in slot0, ref answered);
-        slot0.Dispose();
-        string result = VariantUtils.ConvertToString(answered);
-        answered.Dispose();
-        return result;
     }
 
     private static readonly IntPtr _bindParentEntity =

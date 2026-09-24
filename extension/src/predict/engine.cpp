@@ -438,6 +438,26 @@ int NetwPredictionEngine::pass_depth() const {
     return depth;
 }
 
+bool NetwPredictionEngine::is_replaying() const {
+    return replay_steps > 0;
+}
+
+void NetwPredictionEngine::call_step(
+    const Callable &p_step,
+    double p_delta,
+    int64_t p_tick,
+    bool p_fresh
+) {
+    Array arguments;
+    arguments.push_back(p_delta);
+    arguments.push_back(p_tick);
+    arguments.push_back(p_fresh);
+    const int stale = p_fresh ? 0 : 1;
+    replay_steps += stale;
+    p_step.callv(arguments);
+    replay_steps -= stale;
+}
+
 int64_t NetwPredictionEngine::mutations_refused_count() const {
     return mutations_refused;
 }
@@ -2091,11 +2111,7 @@ Dictionary NetwPredictionEngine::run_step(
     depth += 1;
     if (step.is_valid()) {
         NETW_ZONE_NC("predict game simulate step", colors::PREDICTION);
-        Array arguments;
-        arguments.push_back(p_delta);
-        arguments.push_back(p_tick);
-        arguments.push_back(p_fresh);
-        step.callv(arguments);
+        call_step(step, p_delta, p_tick, p_fresh);
     }
     depth -= 1;
     row = mutable_row_of(p_slot);
@@ -4268,7 +4284,7 @@ void NetwPredictionEngine::run_replay_step(
     }
     const Callable step = handle->get_simulate();
     if (step.is_valid()) {
-        step.call(p_delta, p_tick, p_fresh);
+        call_step(step, p_delta, p_tick, p_fresh);
     }
 }
 
@@ -5193,11 +5209,7 @@ void NetwPredictionEngine::run_input(
     NetwPredictionHandle *handle
         = Object::cast_to<NetwPredictionHandle>(handle_of(p_slot));
     if (handle != nullptr && handle->get_simulate().is_valid()) {
-        Array stepped;
-        stepped.push_back(p_delta);
-        stepped.push_back(p_tick);
-        stepped.push_back(p_fresh);
-        handle->get_simulate().callv(stepped);
+        call_step(handle->get_simulate(), p_delta, p_tick, p_fresh);
     }
 }
 

@@ -3083,7 +3083,7 @@
 			<description>
 				The stock verdict on one inbound spawn, despawn or reparent frame, and what an override of [method _spawn_admit_frame] narrows rather than replaces.
 				Only the server spawns, so [param sender] is judged before anything else and any other peer returns [constant @GlobalScope.ERR_UNAUTHORIZED] whatever channel it named. A channel this does not admit, or an empty [param payload], returns [constant @GlobalScope.ERR_INVALID_DATA].
-				[param route] is unresolved by construction, because the frame that creates a route arrives before that route exists. It travels so an override can read it.
+				[param route] is the route the frame names, read from its head before the verdict. A spawn frame names a route this peer does not hold yet, and a frame too short to name one passes [code]0[/code].
 				[codeblock lang=text]
 				Error
 				┠╴OK                  the frame is admitted
@@ -4361,7 +4361,7 @@
 			The row was seen in a listing rather than named by a caller. A row can carry this and [constant ENDPOINT_FLAG_CALLER] at once.
 		</constant>
 		<constant name="SCENE_PARAM_LABEL" value="0" enum="SceneParam">
-			[StringName] naming what kind of scene this is. Two live copies of one arena share the name, because a scene is identified by its [RID]. See [member NetwEntity.scene_label]. Every [enum SceneParam] is read and written through [method scene_get_param] and [method scene_set_param].
+			[StringName] naming what kind of scene this is. Two live copies of one arena share the name, because a scene is identified by its [RID]. See [member NetwSceneHandle.label]. Every [enum SceneParam] is read and written through [method scene_get_param] and [method scene_set_param].
 		</constant>
 		<constant name="SCENE_PARAM_ISOLATION" value="1" enum="SceneParam">
 			The scene's [enum SceneIsolation]. Write-once before the entity arms, because it chooses the container every peer builds.

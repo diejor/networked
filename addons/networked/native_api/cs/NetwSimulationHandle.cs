@@ -446,7 +446,7 @@ public sealed class NetwSimulationHandle : NetwRefCounted
 
     /// <summary>
     /// The seconds the bodies must sleep before this peer releases the entity
-    /// with <see cref="NetwEntity.ReleaseControl"/>. It acts only while this
+    /// with <see cref="NetwEntity.ReleaseAuthority"/>. It acts only while this
     /// peer is the confirmed controller with
     /// <see cref="NetwEntity.HoldEnum.Yieldable"/> and no body is frozen, so
     /// <see cref="NetwEntity.HoldEnum.Exclusive"/> never releases itself. A

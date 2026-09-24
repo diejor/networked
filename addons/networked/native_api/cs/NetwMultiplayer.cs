@@ -887,7 +887,7 @@ public sealed class NetwMultiplayer : NetwRefCounted
         /// <summary>
         /// <see cref="StringName"/> naming what kind of scene this is. Two live
         /// copies of one arena share the name, because a scene is identified by
-        /// its <see cref="Rid"/>. See <see cref="NetwEntity.SceneLabel"/>.
+        /// its <see cref="Rid"/>. See <see cref="NetwSceneHandle.Label"/>.
         /// Every <see cref="NetwMultiplayer.SceneParam"/> is read and written
         /// through <see cref="NetwMultiplayer.SceneGetParam"/> and
         /// <see cref="NetwMultiplayer.SceneSetParam"/>.
@@ -13204,8 +13204,9 @@ public sealed class NetwMultiplayer : NetwRefCounted
     /// <c>@GlobalScope.ERR_UNAUTHORIZED</c> whatever channel it named. A
     /// channel this does not admit, or an empty <paramref name="payload"/>,
     /// returns <c>@GlobalScope.ERR_INVALID_DATA</c>. <paramref name="route"/>
-    /// is unresolved by construction, because the frame that creates a route
-    /// arrives before that route exists. It travels so an override can read it.
+    /// is the route the frame names, read from its head before the verdict. A
+    /// spawn frame names a route this peer does not hold yet, and a frame too
+    /// short to name one passes <c>0</c>.
     /// <code>
     /// Error
     /// ┠╴OK                  the frame is admitted

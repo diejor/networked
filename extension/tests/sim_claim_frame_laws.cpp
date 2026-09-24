@@ -213,7 +213,7 @@ class ClaimScenario final : public netw_test::FrameScenario {
     void claim(int p_client, const Vector3 &p_impulse) {
         Claimant &seen = claim_evidence().claimants[p_client];
         const int64_t modes_before = int64_t(ball_at(p_client)->get("modes"));
-        promises[p_client] = entity_at(p_client)->request_control();
+        promises[p_client] = entity_at(p_client)->claim_authority();
         seen.ran_ahead = entity_at(p_client)->get_is_controlled_locally();
         seen.claimed_mode = mode_at(p_client);
         seen.announced_before_return

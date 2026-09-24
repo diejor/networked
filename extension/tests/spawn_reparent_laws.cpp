@@ -161,11 +161,13 @@ PackedByteArray reparent_frame(
     bool entity_relative = true;
     uint64_t anchor = uint64_t(p_anchor);
     uint64_t revision = p_revision;
+    uint64_t author = uint64_t(COORDINATOR);
     String subpath(".");
     REQUIRE(writer.bool1(entity_relative));
     REQUIRE(writer.varuint(anchor, 5));
     REQUIRE(netw::wire::string_field(writer, subpath));
     REQUIRE(writer.varuint(revision, 5));
+    REQUIRE(writer.varuint(author, 5));
     return writer.to_bytes();
 }
 

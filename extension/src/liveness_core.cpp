@@ -58,8 +58,130 @@ bool NetwLivenessCore::entity_is_valid(const RID &entity) const {
 }
 
 int NetwLivenessCore::reserve_route() {
-    route_counter += 1;
-    return route_counter;
+    if (!leased) {
+        route_counter += 1;
+        return route_counter;
+    }
+    while (!lease.is_empty()) {
+        LeaseBlock &block = lease[0];
+        if (block.next < block.end) {
+            const int32_t route = block.next;
+            block.next += 1;
+            minted_high = MAX(minted_high, route);
+            return route;
+        }
+        lease.remove_at(0);
+    }
+    return 0;
+}
+
+int NetwLivenessCore::reserve_block(int count) {
+    if (count <= 0) {
+        return 0;
+    }
+    const int32_t base = route_counter + 1;
+    route_counter += count;
+    return base;
+}
+
+void NetwLivenessCore::install_lease(int base, int count) {
+    leased = true;
+    if (base <= 0 || count <= 0) {
+        return;
+    }
+    LeaseBlock block;
+    block.next = base;
+    block.end = base + count;
+    lease.push_back(block);
+}
+
+bool NetwLivenessCore::is_leased() const {
+    return leased;
+}
+
+int NetwLivenessCore::route_floor() const {
+    int floor = MAX(route_counter, minted_high);
+    for (const KeyValue<int32_t, RID> &held : by_route) {
+        floor = MAX(floor, int(held.key));
+    }
+    for (const LeaseBlock &block : lease) {
+        floor = MAX(floor, int(block.end) - 1);
+    }
+    for (const LeaseBlock &block : grants) {
+        floor = MAX(floor, int(block.end) - 1);
+    }
+    return floor;
+}
+
+int NetwLivenessCore::lease_remaining() const {
+    int remaining = 0;
+    for (const LeaseBlock &block : lease) {
+        remaining += block.end - block.next;
+    }
+    return remaining;
+}
+
+int NetwLivenessCore::grant_lease(int peer, int count) {
+    const int base = reserve_block(count);
+    if (base == 0) {
+        return 0;
+    }
+    LeaseBlock block;
+    block.peer = peer;
+    block.next = base;
+    block.end = base + count;
+    grants.push_back(block);
+    return base;
+}
+
+int64_t NetwLivenessCore::lease_block_holding(int peer, int route) const {
+    for (uint32_t at = 0; at < grants.size(); at++) {
+        const LeaseBlock &block = grants[at];
+        if (block.peer == peer && route >= block.next && route < block.end) {
+            return int64_t(at);
+        }
+    }
+    return -1;
+}
+
+bool NetwLivenessCore::lease_holds(int peer, int route) const {
+    return lease_block_holding(peer, route) >= 0;
+}
+
+bool NetwLivenessCore::spend_lease(int peer, int route) {
+    const int64_t found = lease_block_holding(peer, route);
+    if (found < 0) {
+        return false;
+    }
+    grants[uint32_t(found)].next = route + 1;
+    for (int64_t at = int64_t(grants.size()) - 1; at >= 0; at--) {
+        const LeaseBlock &block = grants[uint32_t(at)];
+        if (block.peer != peer) {
+            continue;
+        }
+        if (at < found || block.next >= block.end) {
+            grants.remove_at(uint32_t(at));
+        }
+    }
+    return true;
+}
+
+int NetwLivenessCore::granted_remaining(int peer) const {
+    int remaining = 0;
+    for (const LeaseBlock &block : grants) {
+        if (block.peer == peer) {
+            remaining += block.end - block.next;
+        }
+    }
+    return remaining;
+}
+
+void NetwLivenessCore::abandon_lease(int peer) {
+    for (int64_t at = int64_t(grants.size()) - 1; at >= 0; at--) {
+        if (grants[uint32_t(at)].peer == peer) {
+            grants.remove_at(uint32_t(at));
+        }
+    }
 }
 
 bool NetwLivenessCore::bind_route(const RID &entity, int route) {
@@ -78,6 +200,7 @@ bool NetwLivenessCore::bind_route(const RID &entity, int route) {
     if (record->state == STATE_DEAD) {
         record->epoch += 1;
         record->anchor = 1;
+        record->anchor_author = 0;
     }
 
     record->route = route;
@@ -120,12 +243,22 @@ uint64_t NetwLivenessCore::route_anchor(int route) const {
     return record != nullptr ? record->anchor : 0;
 }
 
-bool NetwLivenessCore::set_route_anchor(int route, uint64_t anchor) {
+uint64_t NetwLivenessCore::route_anchor_author(int route) const {
+    const Record *record = record_of(rid_from_route(route));
+    return record != nullptr ? record->anchor_author : 0;
+}
+
+bool NetwLivenessCore::set_route_anchor(
+    int route,
+    uint64_t anchor,
+    uint64_t author
+) {
     Record *record = record_of(rid_from_route(route));
     if (record == nullptr || anchor == 0) {
         return false;
     }
     record->anchor = anchor;
+    record->anchor_author = author;
     return true;
 }
 
@@ -333,7 +466,11 @@ void NetwLivenessCore::clear() {
     records.clear();
     by_route.clear();
     pending.clear();
+    lease.clear();
+    grants.clear();
+    leased = false;
     route_counter = 0;
+    minted_high = 0;
     frame_counter = 0;
 }
 

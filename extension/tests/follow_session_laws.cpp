@@ -117,12 +117,12 @@ struct SplitStand {
     }
 
     void grant(int p_client) {
-        entity(-1)->grant_control(rig.peer_id(p_client));
+        entity(-1)->set_controller(rig.peer_id(p_client));
         rig.pump(10);
     }
 
     void revoke() {
-        entity(-1)->revoke_control();
+        entity(-1)->set_controller(0);
         rig.pump(10);
     }
 

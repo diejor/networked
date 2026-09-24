@@ -52,11 +52,13 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Control][Hosted] KW4 the control, spawn, reparent and row "
-    "control channels declare the payload revision their layouts are on, so "
-    "a build that still speaks the controller-only apply, an OPEN without a "
-    "tenure, a move without an anchor revision or an ADOPT without its origin "
-    "answers a different wire identity and is refused at the join gate"
+    "[Networked][Control][Hosted] KW4 the control, spawn, reparent, row "
+    "control and lifecycle decision channels declare the payload revision "
+    "their layouts are on, so a build that still speaks the controller-only "
+    "apply, an OPEN without a tenure, a move without an anchor revision, an "
+    "anchor revision without its author, an ADOPT without its origin or a "
+    "refusal without its denial answers a different wire identity and is "
+    "refused at the join gate"
 ) {
     const netw::wire::WireRegistry table
         = netw::wire::WireRegistry::create_default();
@@ -67,9 +69,10 @@ TEST_CASE(
     const Revised revised[] = {
         {"CONTROL_REQUEST", 1},
         {"CONTROL_APPLY", 1},
-        {"SPAWN", 3},
-        {"REPARENT", 1},
-        {"ROW_CONTROL", 2},
+        {"SPAWN", 4},
+        {"REPARENT", 2},
+        {"ROW_CONTROL", 3},
+        {"LIFECYCLE_DECISION", 2},
     };
     for (const Revised &row : revised) {
         const netw::wire::ChannelDecl *decl

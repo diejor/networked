@@ -164,9 +164,16 @@ class NetwPredictionEngine {
     int64_t quantum_reported = -1;
     int64_t next_slot = 1;
     int depth = 0;
+    int replay_steps = 0;
     int64_t mutations_refused = 0;
 
     bool roster_open(const char *p_verb);
+    void call_step(
+        const godot::Callable &p_step,
+        double p_delta,
+        int64_t p_tick,
+        bool p_fresh
+    );
 
     NetwMultiplayer *core() const;
 
@@ -576,6 +583,7 @@ public:
     );
 
     int pass_depth() const;
+    bool is_replaying() const;
     int64_t mutations_refused_count() const;
 
     godot::Dictionary canonicalize_state(

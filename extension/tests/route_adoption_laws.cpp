@@ -126,7 +126,7 @@ TEST_CASE(
     REQUIRE(wrapper.is_valid());
     NETW_CHECK_EQ(int(api->liveness_bind_route(route, wrapper.ptr())), 1);
 
-    CHECK(NetwEntity::by_route(route, api) == wrapper);
+    CHECK(api->wrapper_for_route(route) == wrapper);
 
     const PackedInt32Array live = api->liveness_get_routes();
     REQUIRE(live.size() == 1);

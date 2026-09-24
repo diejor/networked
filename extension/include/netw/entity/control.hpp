@@ -65,6 +65,11 @@ public:
         DETACH = 1,
     };
 
+    enum class Lifecycle : int {
+        SESSION = 0,
+        CONTROLLER = 1,
+    };
+
     enum class WritePolicy : int {
         AUTHORITY = 0,
         CONTROLLER = 1,
@@ -84,6 +89,7 @@ public:
     int64_t transfer = int(Transfer::FIXED);
     int64_t on_disconnect = int(DisconnectRule::REVERT_TO_SERVER);
     int64_t on_parent_despawn = int(ParentDespawnRule::CASCADE);
+    int64_t lifecycle = int(Lifecycle::SESSION);
     uint64_t revision = 0;
     uint64_t tenure = 0;
     int64_t hold = HOLD_NONE;
@@ -182,6 +188,15 @@ public:
     }
     void set_on_parent_despawn(int64_t p_rule) {
         on_parent_despawn = p_rule;
+    }
+    int64_t get_lifecycle() const {
+        return lifecycle;
+    }
+    void set_lifecycle(int64_t p_lifecycle) {
+        lifecycle = p_lifecycle;
+    }
+    bool lifecycle_follows_controller() const {
+        return lifecycle == int(Lifecycle::CONTROLLER);
     }
 };
 

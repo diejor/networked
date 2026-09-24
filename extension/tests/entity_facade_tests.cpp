@@ -86,4 +86,29 @@ TEST_CASE(
     memdelete(parent);
 }
 
+TEST_CASE(
+    "[Networked][Entity][Hosted] F5 is_template is written once, from an "
+    "unbound record, and a template cannot be cleared back"
+) {
+    Node *root = memnew(Node);
+    const Ref<NetwEntity> entity = NetwEntity::ensure(root);
+    REQUIRE(entity.is_valid());
+    CHECK_FALSE(entity->get_is_template());
+
+    entity->set_is_template(false);
+    NETW_CHECK_EQ(int64_t(entity->get_stage()), NetwEntity::STAGE_UNBOUND);
+
+    entity->set_is_template(true);
+    CHECK(entity->get_is_template());
+    entity->set_is_template(true);
+    CHECK(entity->get_is_template());
+
+    ERR_PRINT_OFF;
+    entity->set_is_template(false);
+    ERR_PRINT_ON;
+    CHECK(entity->get_is_template());
+
+    memdelete(root);
+}
+
 } // namespace TestNetwEntityFacade

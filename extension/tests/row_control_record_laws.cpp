@@ -33,6 +33,7 @@ ControlRecord open_of(uint64_t p_request) {
     record.epoch = 5;
     record.tenure = 3;
     record.anchor = 4;
+    record.anchor_author = 6;
     record.schema = 0xDEADBEEF;
     return record;
 }
@@ -65,6 +66,7 @@ TEST_CASE(
                      0x05,
                      0x03,
                      0x04,
+                     0x06,
                      0xEF,
                      0xBE,
                      0xAD,
@@ -123,6 +125,7 @@ TEST_CASE(
     NETW_CHECK_EQ(read.epoch, 5);
     NETW_CHECK_EQ(read.tenure, 3);
     NETW_CHECK_EQ(read.anchor, 4);
+    NETW_CHECK_EQ(read.anchor_author, 6);
     NETW_CHECK_EQ(int64_t(read.schema), int64_t(0xDEADBEEF));
 
     ControlRecord reset;

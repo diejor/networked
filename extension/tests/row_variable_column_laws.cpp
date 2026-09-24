@@ -126,7 +126,7 @@ TEST_CASE(
     board.rig.step_ticks(6);
     CHECK(board.every_peer_holds("ink", stroke(3)));
 
-    NetwEntity::of(board.node(-1))->grant_control(board.rig.peer_id(1));
+    NetwEntity::of(board.node(-1))->set_controller(board.rig.peer_id(1));
     board.rig.step_ticks(4);
     PackedInt32Array breaks;
     breaks.push_back(0);
@@ -167,7 +167,7 @@ TEST_CASE(
     board.rig.step_ticks(3);
     CHECK(board.every_peer_holds("ink", stroke(3)));
 
-    NetwEntity::of(board.node(-1))->grant_control(board.rig.peer_id(1));
+    NetwEntity::of(board.node(-1))->set_controller(board.rig.peer_id(1));
     board.rig.step_ticks(4);
     draw_stroke(board.node(1), 3, 5);
     board.rig.step_ticks(6);
@@ -207,7 +207,7 @@ TEST_CASE(
     board.rig.conditions(-1, slow, board.rig.peer_id(0));
 
     const Ref<NetwEntity> claimant = NetwEntity::of(board.node(0));
-    const Ref<NetwPromise> claim = claimant->request_control();
+    const Ref<NetwPromise> claim = claimant->claim_authority();
     claim->catch_error(callable_mp_static(&quiet));
     REQUIRE(claimant->get_is_controlled_locally());
     draw_stroke(board.node(0), 3, 7);

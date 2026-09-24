@@ -383,7 +383,7 @@ public:
             }
         } else if (frame == 8) {
             for (int car = 0; car < CARS; ++car) {
-                entity_at(car, -1)->grant_control(stand->peer_id(1));
+                entity_at(car, -1)->set_controller(stand->peer_id(1));
             }
             stand->pump(6);
             for (int car = 0; car < CARS; ++car) {

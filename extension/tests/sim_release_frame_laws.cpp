@@ -197,7 +197,7 @@ class ReleaseScenario : public netw_test::FrameScenario {
             }
         }
         const int64_t holder = stand->peer_id(HOLDER);
-        entity_at(-1)->grant_control(holder);
+        entity_at(-1)->set_controller(holder);
         stand->pump(4);
         const Ref<netw::LocalLinkConditions> flight
             = netw::LocalLinkConditions::create(43);
@@ -231,12 +231,12 @@ class ReleaseScenario : public netw_test::FrameScenario {
         seen.holder_x_at_release = held->get_position().x;
         seen.host_x_at_release = sphere_at(-1)->get_position().x;
         seen.host_velocity_at_release = sphere_at(-1)->get_linear_velocity();
-        release = entity_at(HOLDER)->release_control();
+        release = entity_at(HOLDER)->release_authority();
     }
 
     void wake() {
         evidence().woke = true;
-        claim = entity_at(HOLDER)->request_control();
+        claim = entity_at(HOLDER)->claim_authority();
         sphere_at(HOLDER)->set_linear_velocity(WAKE);
     }
 

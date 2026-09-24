@@ -87,7 +87,7 @@ TEST_CASE(
 
     const Ref<NetwEntity> wrapper = session->entity_get_view(entity);
     REQUIRE(wrapper.is_valid());
-    wrapper->set_controller(5);
+    wrapper->record_controller(5);
 
     CHECK(session->sync_policy_admits(
         NetwMultiplayer::WRITE_POLICY_AUTHORITY,

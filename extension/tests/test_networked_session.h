@@ -443,7 +443,7 @@ TEST_CASE(
         NETW_CHECK_EQ(entity->get_peer_id(), 0);
         NETW_CHECK_EQ(entity->get_entity_id() == godot::StringName(), true);
         NETW_CHECK_EQ(entity->get_is_player(), false);
-        NETW_CHECK_EQ(entity->get_is_authority(), true);
+        NETW_CHECK_EQ(entity->get_is_session_authority(), true);
         NETW_CHECK_EQ(copy->get_parent(), fixture_parent);
 
         fixture_parent->remove_child(copy);

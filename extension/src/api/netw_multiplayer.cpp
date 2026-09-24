@@ -185,6 +185,8 @@ NetwMultiplayer::NetwMultiplayer() {
     session_join_channel = declared_channel("SESSION_JOIN");
     session_accept_channel = declared_channel("SESSION_ACCEPT");
     session_roster_channel = declared_channel("SESSION_ROSTER");
+    route_lease_channel = declared_channel("ROUTE_LEASE");
+    lifecycle_decision_channel = declared_channel("LIFECYCLE_DECISION");
 
     interest_flush = callable_mp(this, &NetwMultiplayer::interest_flush_sink);
 
@@ -215,6 +217,14 @@ NetwMultiplayer::NetwMultiplayer() {
     channel_book.register_protocol(
         session_roster_channel,
         callable_mp(this, &NetwMultiplayer::session_receive_roster)
+    );
+    channel_book.register_protocol(
+        route_lease_channel,
+        callable_mp(this, &NetwMultiplayer::liveness_receive_lease)
+    );
+    channel_book.register_protocol(
+        lifecycle_decision_channel,
+        callable_mp(this, &NetwMultiplayer::lifecycle_receive_decision)
     );
     const uint8_t control[] = {
         control_channels.pause,
@@ -1500,6 +1510,7 @@ void NetwMultiplayer::session_relay_peer_disconnected(int64_t p_peer) {
 void NetwMultiplayer::session_clear_disconnected_peer(int64_t p_peer) {
     auth_forget_link(p_peer);
     forget_peer_seqs(p_peer);
+    liveness_core->abandon_lease(int(p_peer));
     ReplicationCore *plane = (get_replication_plane());
     if (plane != nullptr) {
         plane->clear_peer(p_peer);
@@ -1703,6 +1714,7 @@ void NetwMultiplayer::session_receive_join(
             String(),
             false
         );
+        liveness_grant_lease(p_sender);
     }
     session_run_join_handler(accepting, decoded);
 }
@@ -3562,6 +3574,35 @@ bool NetwMultiplayer::is_host() const {
 
 bool NetwMultiplayer::is_session_authority() const {
     return session_core.holds_server_authority();
+}
+
+void NetwMultiplayer::structure_halt_enter() {
+    structure_halted = true;
+}
+
+void NetwMultiplayer::structure_halt_leave() {
+    structure_halted = false;
+}
+
+bool NetwMultiplayer::is_structure_halted() const {
+    return structure_halted;
+}
+
+int64_t NetwMultiplayer::structure_ops_outstanding() const {
+    int64_t outstanding = 0;
+    for (const KeyValue<int64_t, ObjectID> &held : wrapper_owners) {
+        const Ref<NetwEntity> entity
+            = NetwEntity::of(Object::cast_to<Node>(gd::object_of(held.value)));
+        if (entity.is_valid()) {
+            outstanding += int64_t(entity->structure_ops_outstanding());
+        }
+    }
+    return outstanding;
+}
+
+int64_t NetwMultiplayer::route_floor() const {
+    const Ref<NetwLivenessCore> liveness = get_liveness_core();
+    return liveness.is_valid() ? int64_t(liveness->route_floor()) : 0;
 }
 
 bool NetwMultiplayer::has_server_role() const {

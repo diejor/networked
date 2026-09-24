@@ -143,10 +143,10 @@ TEST_CASE(
     int stale = 0;
     bool second_applied = false;
     bool b_applied = false;
-    host->grant_control(b);
+    host->set_controller(b);
     for (int step = 0; step < 40; ++step) {
         if (step == 4) {
-            host->grant_control(a);
+            host->set_controller(a);
         }
         author_a();
         if (b_authors) {
@@ -197,7 +197,7 @@ TEST_CASE(
     const bool old_owner_applied = aim_x(pair.authored) == 20.0;
     REQUIRE(old_owner_applied);
 
-    host->grant_control(b);
+    host->set_controller(b);
     for (int step = 0; step < 6; ++step) {
         rig.step_ticks(1);
     }
@@ -241,7 +241,7 @@ TEST_CASE(
     const uint64_t unknown_before
         = readers_of(rig.server()).unknown_token_count();
 
-    NetwEntity::of(pair.authored)->grant_control(b);
+    NetwEntity::of(pair.authored)->set_controller(b);
     for (int step = 0; step < 4; ++step) {
         rig.step_ticks(1);
     }
@@ -295,7 +295,7 @@ TEST_CASE(
     layer->add_viewer(a);
     layer->add_viewer(c);
     server->interest_flush_now();
-    host->grant_control(a);
+    host->set_controller(a);
     rig.step_ticks(4);
 
     auto author_at_a = [&](int p_ticks) {
@@ -329,9 +329,9 @@ TEST_CASE(
         int64_t(watcher->entity_get_state(watcher->entity_from_route(route))),
         int64_t(NetwMultiplayer::ENTITY_STATE_ABSENT)
     );
-    host->revoke_control();
+    host->set_controller(0);
     rig.step_ticks(2);
-    host->grant_control(a);
+    host->set_controller(a);
     author_at_a(4);
 
     layer->add_viewer(c);
@@ -373,8 +373,8 @@ struct Regrant {
         lane = broadcast_lane(rig.client(0), pair.mirror(0));
         rig.conditions(1, latency_of(p_delay_to_b, 31), 1);
         rig.conditions(-1, latency_of(2, 32), a);
-        host->grant_control(b);
-        host->grant_control(a);
+        host->set_controller(b);
+        host->set_controller(a);
         for (int step = 0; step < 3 && request == 0; ++step) {
             author_if_steering(rig, pair, 0, 0.0);
             rig.step_ticks(1);
@@ -394,7 +394,10 @@ struct Regrant {
         open.family = lane.family;
         open.epoch = uint64_t(rig.client(1)->liveness_route_epoch(lane.route));
         open.tenure = host->get_control_tenure();
-        open.anchor = rig.client(1)->liveness_route_anchor(lane.route);
+        const netw::NetwMultiplayer::AnchorRevision installed
+            = rig.client(1)->anchor_installed(lane.route);
+        open.anchor = installed.revision;
+        open.anchor_author = installed.author;
         rig.client(1)->row_control_receive(
             netw::wire::write_control_record(open),
             a

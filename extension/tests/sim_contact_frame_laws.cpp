@@ -76,7 +76,10 @@ enum class Kind {
     FENCE,
     PUSH,
     DOUBLE,
+    AUTHORED,
 };
+
+constexpr const char *AUTHORED_ID = "sim_contact_authored";
 
 constexpr int CLIENTS = 2;
 constexpr int A = 0;
@@ -127,6 +130,16 @@ Node *build_cube(const Variant &p_name) {
     return made;
 }
 
+Node *build_authored(const Variant &p_name) {
+    Node *made = build_cube(p_name);
+    if (made != nullptr) {
+        NetwEntity::ensure(made)->set_lifecycle(
+            NetwEntity::LIFECYCLE_CONTROLLER
+        );
+    }
+    return made;
+}
+
 struct Subject {
     int claimed_frame = -1;
     int granted_frame = -1;
@@ -166,7 +179,7 @@ struct ContactEvidence {
 };
 
 ContactEvidence &evidence_of(Kind p_kind) {
-    static ContactEvidence evidence[7];
+    static ContactEvidence evidence[8];
     return evidence[int(p_kind)];
 }
 
@@ -236,6 +249,7 @@ class ContactScenario : public netw_test::FrameScenario {
             case Kind::FENCE:
             case Kind::PUSH:
             case Kind::DOUBLE:
+            case Kind::AUTHORED:
                 return 2;
             case Kind::REST:
                 return CUBES;
@@ -249,6 +263,7 @@ class ContactScenario : public netw_test::FrameScenario {
         switch (kind) {
             case Kind::CHAIN:
             case Kind::REFUSED:
+            case Kind::AUTHORED:
                 return Vector3(0.95 * p_index, 0.0, 0.0);
             case Kind::FENCE:
             case Kind::PUSH:
@@ -263,18 +278,27 @@ class ContactScenario : public netw_test::FrameScenario {
         NetwMultiplayer *server = stand->session(-1);
         Node *arena = stand->arena();
         stand->arm(TICKRATE);
+        if (kind == Kind::AUTHORED) {
+            stand->session(A)->session_submit_join(StringName("a"), Array());
+            stand->pump(8);
+        }
         for (int index = 0; index < cube_count(); ++index) {
+            const bool authored = kind == Kind::AUTHORED && index == 0;
+            NetwMultiplayer *spawner = authored ? stand->session(A) : server;
             Array args;
             args.push_back(String(CUBE_ID) + String::num_int64(index));
-            const RID made
-                = server->spawn_registered(StringName(CUBE_ID), args, nullptr);
-            Node *built = server->entity_get_node(made);
+            const RID made = spawner->spawn_registered(
+                StringName(authored ? AUTHORED_ID : CUBE_ID),
+                args,
+                nullptr
+            );
+            Node *built = spawner->entity_get_node(made);
             if (built == nullptr) {
                 return false;
             }
-            arena->add_child(built);
+            (authored ? stand->arena_of(A) : arena)->add_child(built);
             stand->pump(4);
-            routes[index] = int(server->entity_get_route(made));
+            routes[index] = int(spawner->entity_get_route(made));
         }
         stand->pump(8);
         for (int index = 0; index < cube_count(); ++index) {
@@ -287,6 +311,7 @@ class ContactScenario : public netw_test::FrameScenario {
                     = entity_at(client, index)->get_simulation();
                 handle->set_claim_on_contact(
                     kind == Kind::CHAIN || kind == Kind::REFUSED
+                    || kind == Kind::AUTHORED
                 );
                 if (kind == Kind::REST || kind == Kind::WAKE) {
                     handle->set_release_on_rest(REST_SECONDS);
@@ -297,7 +322,8 @@ class ContactScenario : public netw_test::FrameScenario {
                     sphere->set_max_contacts_reported(4);
                 }
             }
-            sphere_at(-1, index)->set_position(start_of(index));
+            const int writer = kind == Kind::AUTHORED && index == 0 ? A : -1;
+            sphere_at(writer, index)->set_position(start_of(index));
         }
         return true;
     }
@@ -313,6 +339,10 @@ class ContactScenario : public netw_test::FrameScenario {
             return false;
         }
         stand->teach(StringName(CUBE_ID), callable_mp_static(&build_cube));
+        stand->teach(
+            StringName(AUTHORED_ID),
+            callable_mp_static(&build_authored)
+        );
         stand->mount();
         if (!spawn()) {
             return false;
@@ -322,7 +352,9 @@ class ContactScenario : public netw_test::FrameScenario {
         evidence().rival = stand->peer_id(B);
         switch (kind) {
             case Kind::CHAIN:
-                entity_at(-1, 0)->grant_control(holder);
+                entity_at(-1, 0)->set_controller(holder);
+                break;
+            case Kind::AUTHORED:
                 break;
             case Kind::REFUSED:
                 delay(-1, A, 51);
@@ -334,12 +366,12 @@ class ContactScenario : public netw_test::FrameScenario {
                 break;
             case Kind::FENCE:
             case Kind::PUSH:
-                entity_at(-1, 1)->grant_control(holder);
+                entity_at(-1, 1)->set_controller(holder);
                 sphere_at(-1, 0)->set_linear_velocity(DRIFT);
                 delay(A, -1, 54);
                 break;
             case Kind::DOUBLE:
-                entity_at(-1, 1)->grant_control(holder);
+                entity_at(-1, 1)->set_controller(holder);
                 sphere_at(-1, 0)->set_linear_velocity(DRIFT);
                 delay(A, -1, 55, DOUBLE_FLIGHT_TICKS);
                 break;
@@ -362,13 +394,14 @@ class ContactScenario : public netw_test::FrameScenario {
     void begin() {
         switch (kind) {
             case Kind::CHAIN:
+            case Kind::AUTHORED:
                 for (int index = 0; index < cube_count(); ++index) {
                     collide(A, index);
                 }
                 break;
             case Kind::REFUSED:
-                grab_b = entity_at(B, 0)->request_control();
-                grab_a = entity_at(A, 0)->request_control();
+                grab_b = entity_at(B, 0)->claim_authority();
+                grab_a = entity_at(A, 0)->claim_authority();
                 collide(A, 0);
                 collide(A, 1);
                 break;
@@ -378,7 +411,7 @@ class ContactScenario : public netw_test::FrameScenario {
                     const Hold hold = kind == Kind::WAKE
                         ? Hold::HOLD_YIELDABLE
                         : REST_HOLDS[index];
-                    entity_at(A, index)->request_control(hold);
+                    entity_at(A, index)->claim_authority(hold);
                     RigidBody3D *sphere = sphere_at(A, index);
                     if (kind == Kind::REST && REST_FROZEN[index]) {
                         sphere->set_freeze_mode(
@@ -418,7 +451,7 @@ class ContactScenario : public netw_test::FrameScenario {
                 && local->get_controller() == seen.holder) {
                 subject.granted_frame = p_step;
                 if (kind == Kind::REST && index == REGRAB) {
-                    local->request_control(Hold::HOLD_EXCLUSIVE);
+                    local->claim_authority(Hold::HOLD_EXCLUSIVE);
                 }
             }
             const netw::sim::Row *row = row_at(A, index);
@@ -622,6 +655,28 @@ public:
 
 NETW_FRAME_SCENARIO(PushScenario, contact_push_scenario);
 NETW_FRAME_SCENARIO(DoubleScenario, contact_double_scenario);
+
+class AuthoredScenario final : public ContactScenario {
+public:
+    AuthoredScenario() : ContactScenario(Kind::AUTHORED) {
+    }
+};
+
+NETW_FRAME_SCENARIO(AuthoredScenario, contact_authored_scenario);
+
+TEST_CASE(
+    "[Networked][Sim][Frame] contact, a body a client spawned with "
+    "claim_on_contact claims the free body it touches"
+) {
+    const ContactEvidence &evidence = evidence_of(Kind::AUTHORED);
+    REQUIRE(evidence.driven);
+    REQUIRE(evidence.seated);
+    NETW_CHECK_EQ(evidence.subjects[0].server_controller, evidence.holder);
+    const Subject &touched = evidence.subjects[1];
+    NETW_CHECK_GE(touched.claimed_frame, 0);
+    NETW_CHECK_EQ(touched.server_controller, evidence.holder);
+    NETW_CHECK_EQ(touched.server_hold, int64_t(Hold::HOLD_YIELDABLE));
+}
 
 TEST_CASE(
     "[Networked][Sim][Frame] a chain of free bodies touching a body this "

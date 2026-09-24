@@ -70,10 +70,7 @@ func make_test_entity(
 ) -> Node:
 	var root := Node.new()
 	root.name = entity_name
-	var entity := NetwEntity.new()
-	entity.peer_id = peer_id
-	root.set_meta(NetwEntity.meta_key(), entity)
-	entity.owner = root
+	NetwEntity.ensure(root).peer_id = peer_id
 	parent.add_child(root)
 	auto_free(root)
 	if with_sync:

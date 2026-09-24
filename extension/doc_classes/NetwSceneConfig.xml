@@ -12,7 +12,7 @@
 		func _init() -&gt; void:
 		    Netw.configure_multiplayer_scene(self).labeled(&amp;"Level1").isolated()
 		[/codeblock]
-		Declare from [method Object._init], because the declaration is consumed once at [method NetwEntity.arm] and has to ride the SPAWN packet. Declaring writes [member NetwEntity.declares_scene], so the root owns an admission boundary every descendant entity inherits; nothing else about the entity changes.
+		Declare from [method Object._init], because the declaration is read once, when the entity reaches [constant NetwEntity.STAGE_ARMED], and travels in the spawn packet. Declaring makes [member NetwEntity.is_multiplayer_scene] [code]true[/code], and every entity below the root belongs to it through [member NetwEntity.scene]. Nothing else about the entity changes.
 	</description>
 	<tutorials>
 	</tutorials>

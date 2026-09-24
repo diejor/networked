@@ -146,6 +146,10 @@ public:
         return host;
     }
 
+    godot::Node *arena_of(int p_client) const {
+        return mounts[p_client + 1]->get_node_or_null(godot::NodePath("Arena"));
+    }
+
     void arm(int p_tickrate, int p_display_offset = 2) {
         tickrate = p_tickrate;
         for (const godot::Ref<netw::NetwMultiplayer> &api : apis) {

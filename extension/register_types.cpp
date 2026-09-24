@@ -28,6 +28,7 @@
 #include "netw/api/interpolate.hpp"
 #include "netw/api/join_config.hpp"
 #include "netw/api/lag_compensation_config.hpp"
+#include "netw/api/lifecycle_request.hpp"
 #include "netw/api/member_config.hpp"
 #include "netw/api/netw_multiplayer.hpp"
 #include "netw/api/nodes/lobby_directory.hpp"
@@ -224,6 +225,7 @@ void initialize_networked_module(ModuleInitializationLevel level) {
     GDREGISTER_CLASS(netw::NetwSchemaColumn);
     GDREGISTER_CLASS(netw::NetwSchema);
     GDREGISTER_CLASS(netw::NetwControlRequest);
+    GDREGISTER_CLASS(netw::NetwLifecycleRequest);
 
     GDREGISTER_CLASS(netw::LocalLinkConditions);
     GDREGISTER_CLASS(netw::LocalMultiplayerPeer);

@@ -174,7 +174,7 @@ struct Stand {
     }
 
     void author_with(int p_client, int64_t p_strokes) {
-        entity(-1)->grant_control(rig.peer_id(p_client));
+        entity(-1)->set_controller(rig.peer_id(p_client));
         rig.step_ticks(4);
         draw(p_client, p_strokes);
         rig.step_ticks(6);
@@ -199,7 +199,7 @@ TEST_CASE(
     NETW_REQUIRE_EQ(stand.strokes(1), 3);
 
     stand.draw(0, 8);
-    const Ref<NetwPromise> release = stand.entity(0)->release_control(c);
+    const Ref<NetwPromise> release = stand.entity(0)->release_authority(c);
     CHECK_FALSE(release->get_is_settled());
     stand.rig.step_ticks(8);
 
@@ -229,7 +229,7 @@ TEST_CASE(
     stand.author_with(0, 3);
 
     const Ref<NetwPromise> release
-        = quietly(stand.entity(0)->release_control(999));
+        = quietly(stand.entity(0)->release_authority(999));
     CHECK(release->get_is_failed());
     NETW_CHECK_EQ(int(release->get_code()), int(ERR_UNAVAILABLE));
     stand.rig.step_ticks(6);
@@ -242,7 +242,7 @@ TEST_CASE(
     "budget is not sent, and the release still hands the entity on"
 ) {
     Stand stand(NOTED_BOARD_SOURCE, BOARD_ID, 3);
-    stand.entity(-1)->grant_control(stand.rig.peer_id(0));
+    stand.entity(-1)->set_controller(stand.rig.peer_id(0));
     stand.rig.step_ticks(4);
     NETW_REQUIRE_EQ(stand.strokes(-1), 3);
 
@@ -253,7 +253,7 @@ TEST_CASE(
     const PackedByteArray image
         = stand.entity(0)->final_image_under_test(0);
     CHECK(image.is_empty());
-    const Ref<NetwPromise> release = stand.entity(0)->release_control();
+    const Ref<NetwPromise> release = stand.entity(0)->release_authority();
     stand.rig.step_ticks(8);
 
     CHECK(release->get_is_completed());

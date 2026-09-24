@@ -1,16 +1,13 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <class name="MemoryDatabase" inherits="NetwDatabaseBackend" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
 	<brief_description>
-		A [NetwDatabaseBackend] that keeps records in this process and nowhere else.
+		A [NetwDatabaseBackend] that keeps records in memory.
 	</brief_description>
 	<description>
-		Records live for as long as the process does. Reach for it in a test, in a prototype, or wherever a save that outlives the run would get in the way.
+		Records live for as long as the process does. Used in tests, prototype, or wherever a save that outlives the run would get in the way.
 		[codeblock]
 		Netw.configure_database(self, &amp;"saves").backend(MemoryDatabase.new())
 		[/codeblock]
-		It implements the whole backend contract, slots and scan cursors included, so a game written against it runs unchanged on a durable backend.
-		Two backends sharing a [member store] share their records, which is how a reopen can be exercised without leaving the process. This is a shared store and not durability.
-		The connection [method _open] answers reports [constant @GlobalScope.OK] for every read, scan and operation.
 	</description>
 	<tutorials>
 	</tutorials>

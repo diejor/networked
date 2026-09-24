@@ -141,7 +141,7 @@ TEST_CASE(
     const Ref<NetwEntity> host = entity_at(rig, route, -1);
     REQUIRE(host.is_valid());
     const int64_t controller = rig.peer_id(1);
-    host->grant_control(controller);
+    host->set_controller(controller);
     rig.pump(8);
     NETW_CHECK_EQ(host->get_controller(), controller);
 

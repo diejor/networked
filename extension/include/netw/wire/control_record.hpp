@@ -37,6 +37,7 @@ struct ControlOpen {
     uint64_t epoch = 0;
     uint64_t tenure = 0;
     uint64_t anchor = 0;
+    uint64_t anchor_author = 0;
     uint64_t schema = 0;
 
     static constexpr auto wire = describe(
@@ -48,6 +49,7 @@ struct ControlOpen {
         field<&ControlOpen::epoch>("epoch", varuint(3)),
         field<&ControlOpen::tenure>("tenure", varuint(5)),
         field<&ControlOpen::anchor>("anchor", varuint(5)),
+        field<&ControlOpen::anchor_author>("anchor_author", varuint(5)),
         field<&ControlOpen::schema>("schema", bits(32))
     );
 };
@@ -119,6 +121,7 @@ struct ControlRecord {
     uint64_t epoch = 0;
     uint64_t tenure = 0;
     uint64_t anchor = 0;
+    uint64_t anchor_author = 0;
     uint32_t schema = 0;
     godot::LocalVector<ControlAcceptEntry> receipts;
 };

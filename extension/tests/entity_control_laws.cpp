@@ -101,7 +101,7 @@ TEST_CASE(
         int(netw::entity::Control::InitialController::REPRESENTED_PEER)
     );
 
-    armed.entity->grant_control(42);
+    armed.entity->set_controller(42);
 
     NETW_CHECK_EQ(armed.entity->get_controller(), 42);
     NETW_CHECK_EQ(armed.authority(), 42);
@@ -110,7 +110,7 @@ TEST_CASE(
         int64_t(NetwEntity::CONTROL_PEER_CONTROLLED)
     );
 
-    armed.entity->revoke_control();
+    armed.entity->set_controller(0);
 
     NETW_CHECK_EQ(armed.entity->get_controller(), 0);
     NETW_CHECK_EQ(armed.authority(), 1);
@@ -190,13 +190,13 @@ TEST_CASE(
         Callable(memnew(AuthorityAtAnnouncement(&seen, armed.owner)))
     );
 
-    armed.entity->grant_control(42);
+    armed.entity->set_controller(42);
 
     NETW_REQUIRE_EQ(int(seen.authority_seen.size()), 1);
     NETW_CHECK_EQ(seen.peer_named[0], 42);
     NETW_CHECK_EQ(seen.authority_seen[0], 42);
 
-    armed.entity->revoke_control();
+    armed.entity->set_controller(0);
 
     NETW_REQUIRE_EQ(int(seen.authority_seen.size()), 2);
     NETW_CHECK_EQ(seen.peer_named[1], 0);
@@ -214,7 +214,7 @@ Ref<NetwMultiplayer> a_coordinated_session(int64_t p_coordinator) {
 TEST_CASE(
     "[Networked][Entity][Hosted] EC5 existence authority asks is_host, not "
     "the literal peer 1, so a session with coordinator 7 answers its own "
-    "entity's is_authority true and falls a server-controlled node's "
+    "entity's is_session_authority true and falls a server-controlled node's "
     "authority to peer 7 rather than 1"
 ) {
     Ref<NetwMultiplayer> session = a_coordinated_session(7);
@@ -228,7 +228,7 @@ TEST_CASE(
     entity->set_initial_controller(NetwEntity::INITIAL_SERVER);
     entity->arm(session);
 
-    CHECK(entity->get_is_authority());
+    CHECK(entity->get_is_session_authority());
     NETW_CHECK_EQ(entity->get_controller(), 0);
     NETW_CHECK_EQ(owner->get_multiplayer_authority(), 7);
 

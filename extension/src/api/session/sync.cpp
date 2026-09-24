@@ -60,23 +60,34 @@ enum class OpenSeat : uint8_t {
     REFUSE,
 };
 
+wire::StreamTenure anchor_tenure(
+    const NetwMultiplayer::AnchorRevision &p_revision
+) {
+    wire::StreamTenure tenure;
+    tenure.anchor = p_revision.revision;
+    tenure.anchor_author = p_revision.author;
+    return tenure;
+}
+
 OpenSeat open_seat(
     NetwSyncModel *p_model,
     const Ref<NetwEntity> &p_entity,
     int64_t p_sender,
     const wire::StreamLane &p_lane,
     uint64_t p_tenure,
-    uint64_t p_anchor,
-    uint64_t p_installed_anchor,
+    const wire::StreamTenure &p_asked,
+    const wire::StreamTenure &p_installed,
     int64_t p_coordinator,
     wire::StreamTenure &r_tenure
 ) {
     r_tenure = wire::StreamTenure();
-    r_tenure.anchor = p_installed_anchor;
-    if (p_anchor > p_installed_anchor) {
+    r_tenure.anchor = p_installed.anchor;
+    r_tenure.anchor_author = p_installed.anchor_author;
+    if (p_asked.anchor > p_installed.anchor) {
         return OpenSeat::PARK;
     }
-    if (p_anchor < p_installed_anchor) {
+    if (p_asked.anchor < p_installed.anchor
+        || p_asked.anchor_author != p_installed.anchor_author) {
         return OpenSeat::REFUSE;
     }
     const repl::SetRow *row = p_model != nullptr
@@ -145,9 +156,12 @@ void seat_or_park(
     NetwSyncModel *p_model,
     const Ref<NetwEntity> &p_entity,
     const wire::ParkedOpen &p_open,
-    uint64_t p_installed_anchor,
+    const wire::StreamTenure &p_installed,
     int64_t p_coordinator
 ) {
+    wire::StreamTenure asked;
+    asked.anchor = p_open.anchor;
+    asked.anchor_author = p_open.anchor_author;
     wire::StreamTenure tenure;
     switch (open_seat(
         p_model,
@@ -155,8 +169,8 @@ void seat_or_park(
         int64_t(p_open.peer),
         p_open.lane,
         p_open.tenure,
-        p_open.anchor,
-        p_installed_anchor,
+        asked,
+        p_installed,
         p_coordinator,
         tenure
     )) {
@@ -823,7 +837,9 @@ LocalVector<repl::RowOffer> NetwMultiplayer::sync_pump_offers(
         wire::StreamTenure tenure;
         tenure.bound = repl::record_follows_tenure(row->record);
         tenure.tenure = tenure.bound ? entity->get_control_tenure() : 0;
-        tenure.anchor = liveness_route_anchor(route);
+        const AnchorRevision installed = anchor_installed(route);
+        tenure.anchor = installed.revision;
+        tenure.anchor_author = installed.author;
         for (uint32_t made = first; made < offers.size(); ++made) {
             offers[made].tenure = tenure;
         }
@@ -950,13 +966,14 @@ void NetwMultiplayer::row_control_receive(
             asked.schema = record.schema;
             asked.tenure = record.tenure;
             asked.anchor = record.anchor;
+            asked.anchor_author = record.anchor_author;
             asked.parked_at_ms = session_elapsed_ms();
             seat_or_park(
                 send,
                 plane->get_sync_model(),
                 wrapper_for_route(record.route),
                 asked,
-                liveness_route_anchor(record.route),
+                anchor_tenure(anchor_installed(record.route)),
                 session_authority_peer()
             );
             return;
@@ -1047,16 +1064,25 @@ void NetwMultiplayer::row_streams_follow_tenure(
 
 void NetwMultiplayer::row_streams_follow_anchor(
     int64_t p_route,
-    uint64_t p_anchor
+    uint64_t p_anchor,
+    uint64_t p_author
 ) {
     ReplicationCore *plane = get_replication_plane();
     ReplicationSend *send = row_send_of(plane);
     if (send == nullptr || p_route <= 0) {
         return;
     }
-    send->close_anchors(p_route, p_anchor);
-    send->reader_book().close_anchors_before(p_route, p_anchor);
+    send->close_anchors(p_route, p_anchor, p_author);
+    send->reader_book().close_anchors_before(p_route, p_anchor, p_author);
     row_streams_reseat_parks(plane, send, p_route);
+}
+
+void NetwMultiplayer::row_streams_reopen(int64_t p_route) {
+    ReplicationSend *send = row_send_of(get_replication_plane());
+    if (send == nullptr || p_route <= 0) {
+        return;
+    }
+    send->close_anchors(p_route, 0, 0);
 }
 
 void NetwMultiplayer::row_streams_reseat_parks(
@@ -1067,7 +1093,8 @@ void NetwMultiplayer::row_streams_reseat_parks(
     const LocalVector<wire::ParkedOpen> parked
         = p_send->reader_book().take_parks(p_route);
     const Ref<NetwEntity> entity = wrapper_for_route(p_route);
-    const uint64_t installed = liveness_route_anchor(p_route);
+    const wire::StreamTenure installed
+        = anchor_tenure(anchor_installed(p_route));
     for (uint32_t at = 0; at < parked.size(); ++at) {
         seat_or_park(
             p_send,

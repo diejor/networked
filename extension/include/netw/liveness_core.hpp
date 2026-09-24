@@ -27,6 +27,7 @@ private:
         int32_t epoch = 0;
         int32_t wire_epoch = -1;
         uint64_t anchor = 1;
+        uint64_t anchor_author = 0;
     };
 
     struct Pending {
@@ -38,8 +39,18 @@ private:
 
     godot::HashMap<godot::RID, Record> records;
     godot::HashMap<int32_t, godot::RID> by_route;
+    struct LeaseBlock {
+        int32_t peer = 0;
+        int32_t next = 0;
+        int32_t end = 0;
+    };
+
     godot::HashMap<int32_t, godot::LocalVector<Pending>> pending;
+    godot::LocalVector<LeaseBlock> lease;
+    godot::LocalVector<LeaseBlock> grants;
+    bool leased = false;
     int32_t route_counter = 0;
+    int32_t minted_high = 0;
     int32_t frame_counter = 0;
 
     Record *record_of(const godot::RID &entity) const;
@@ -56,6 +67,19 @@ public:
     bool entity_is_valid(const godot::RID &entity) const;
 
     int reserve_route();
+    int reserve_block(int count);
+    int route_floor() const;
+
+    void install_lease(int base, int count);
+    bool is_leased() const;
+    int lease_remaining() const;
+
+    int grant_lease(int peer, int count);
+    int64_t lease_block_holding(int peer, int route) const;
+    bool lease_holds(int peer, int route) const;
+    bool spend_lease(int peer, int route);
+    int granted_remaining(int peer) const;
+    void abandon_lease(int peer);
 
     bool bind_route(const godot::RID &entity, int route);
     int route_of(const godot::RID &entity) const;
@@ -68,7 +92,8 @@ public:
     bool adopt_epoch(int route, int epoch);
 
     uint64_t route_anchor(int route) const;
-    bool set_route_anchor(int route, uint64_t anchor);
+    uint64_t route_anchor_author(int route) const;
+    bool set_route_anchor(int route, uint64_t anchor, uint64_t author);
 
     State state_of(const godot::RID &entity) const;
     State route_state(int route) const;

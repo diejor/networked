@@ -13,3 +13,5 @@ mouse_filter = 2
 
 [node name="Whiteboard" type="Node2D" parent="."]
 script = ExtResource("2_board")
+
+[node name="Strokes" type="Node2D" parent="Whiteboard"]

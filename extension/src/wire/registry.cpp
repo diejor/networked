@@ -259,9 +259,9 @@ WireRegistry WireRegistry::create_default() {
         Reliability::RELIABLE,
         Freshness::NONE,
         Delivery::FITTED,
-        Direction::SERVER_TO_CLIENT,
+        Direction::EITHER,
         PayloadContract::PLANNED,
-        3
+        4
     );
     reg_c(
         15,
@@ -270,8 +270,9 @@ WireRegistry WireRegistry::create_default() {
         Reliability::RELIABLE,
         Freshness::NONE,
         Delivery::FITTED,
-        Direction::SERVER_TO_CLIENT,
-        PayloadContract::PLANNED
+        Direction::EITHER,
+        PayloadContract::PLANNED,
+        1
     );
     reg_c(
         16,
@@ -280,9 +281,9 @@ WireRegistry WireRegistry::create_default() {
         Reliability::RELIABLE,
         Freshness::NONE,
         Delivery::FITTED,
-        Direction::SERVER_TO_CLIENT,
+        Direction::EITHER,
         PayloadContract::PLANNED,
-        1
+        2
     );
     reg_c(
         17,
@@ -568,6 +569,29 @@ WireRegistry WireRegistry::create_default() {
         Freshness::NONE,
         Delivery::FITTED,
         Direction::EITHER,
+        PayloadContract::PLANNED,
+        3
+    );
+
+    reg_c(
+        44,
+        "ROUTE_LEASE",
+        ChannelKind::SESSION,
+        Reliability::RELIABLE,
+        Freshness::NONE,
+        Delivery::FITTED,
+        Direction::SERVER_TO_CLIENT,
+        PayloadContract::PLANNED
+    );
+
+    reg_c(
+        45,
+        "LIFECYCLE_DECISION",
+        ChannelKind::SESSION,
+        Reliability::RELIABLE,
+        Freshness::NONE,
+        Delivery::FITTED,
+        Direction::SERVER_TO_OWNER,
         PayloadContract::PLANNED,
         2
     );
