@@ -377,6 +377,499 @@ TEST_CASE(
     }
 }
 
+const char *FRAME_PROBE_SCRIPT = R"(extends BODY
+
+var counter := 0
+var seats := []
+var synced_value: int:
+	get:
+		return frame_tag() * 1000 + counter
+	set(value):
+		seats.append(Vector2i(value, frame_tag()))
+
+
+func _init() -> void:
+	Netw.configure_property(self, &"synced_value").RECORD()
+
+
+func frame_tag() -> int:
+	var parent := get_parent()
+	if parent == null:
+		return 0
+	return 2 if parent.name == &"Vehicle" else 1
+)";
+
+constexpr int64_t NEW_FRAME = 2;
+
+Ref<PackedScene> frame_probe_scene(const char *p_record, const char *p_body) {
+    const CharString source = String(FRAME_PROBE_SCRIPT)
+                                  .replace("RECORD", p_record)
+                                  .replace("BODY", p_body)
+                                  .utf8();
+    Node *root = netw_test::scripted_root(source.get_data(), "FrameProbe");
+    const Ref<PackedScene> packed = netw_test::pack_stock_scene(
+        root,
+        netw_test::mint_scene_path("FrameProbe")
+    );
+    memdelete(root);
+    return packed;
+}
+
+enum Writer {
+    THE_SESSION_WRITES,
+    THE_PEER_WRITES,
+};
+
+struct FrameScenario {
+    String label;
+    Writer writer = THE_SESSION_WRITES;
+    bool reader_guards_the_carry = false;
+};
+
+struct FrameEvidence {
+    bool materialized = false;
+    bool reader_moved = false;
+    int64_t seated = 0;
+    int64_t seated_in_the_new_frame = 0;
+    int64_t seated_in_another_frame = 0;
+    Vector2i first_misplaced;
+    uint64_t token_before = 0;
+    uint64_t token_after = 0;
+    int64_t writer_anchor = 0;
+    int64_t reader_anchor = 0;
+};
+
+uint64_t lane_token(
+    netw::NetwMultiplayer *p_reader,
+    int p_writer,
+    int64_t p_route
+) {
+    netw::ReplicationCore *plane = p_reader->get_replication_plane();
+    if (plane == nullptr || p_route <= 0) {
+        return 0;
+    }
+    const netw::wire::StreamReaderBook &readers
+        = plane->get_sync_pipeline()->row_send_under_test()->reader_book();
+    for (int ordinal = 0; ordinal < 256; ++ordinal) {
+        for (uint8_t family = 0; family <= netw::wire::STREAM_FAMILY_CEILING;
+             ++family) {
+            netw::wire::StreamLane lane;
+            lane.route = p_route;
+            lane.ordinal = uint8_t(ordinal);
+            lane.family = netw::wire::StreamFamily(family);
+            const uint64_t token = readers.token_at(p_writer, lane);
+            if (token != 0) {
+                return token;
+            }
+        }
+    }
+    return 0;
+}
+
+FrameEvidence run_frame_scenario(const FrameScenario &p_scenario);
+
+class FrameRun {
+    FrameScenario declared;
+    FrameEvidence seen;
+
+public:
+    explicit FrameRun(const FrameScenario &p_scenario) :
+            declared(p_scenario), seen(run_frame_scenario(p_scenario)) {}
+
+    const FrameScenario &scenario() const {
+        return declared;
+    }
+
+    const FrameEvidence &evidence() const {
+        return seen;
+    }
+};
+
+typedef LawRowFor<FrameRun> FrameLaw;
+
+LawVerdict law_seats_in_its_own_frame(const FrameRun &p_run) {
+    const FrameEvidence &seen = p_run.evidence();
+    if (!seen.materialized) {
+        return law_broken("the peer never held the mover");
+    }
+    if (seen.seated_in_another_frame != 0) {
+        return law_broken(
+            "%d of %d rows were seated in another frame, the first written "
+            "in frame %d and seated in frame %d",
+            int(seen.seated_in_another_frame),
+            int(seen.seated),
+            seen.first_misplaced.x,
+            seen.first_misplaced.y
+        );
+    }
+    return law_held();
+}
+
+const FrameLaw L_SEATS_IN_ITS_OWN_FRAME = {
+    "seats-in-its-own-frame",
+    "a row written under one parent is never seated while the reader holds "
+    "the entity under another",
+    &law_seats_in_its_own_frame,
+};
+
+LawVerdict law_reaches_the_new_frame(const FrameRun &p_run) {
+    const FrameEvidence &seen = p_run.evidence();
+    if (seen.seated_in_the_new_frame == 0) {
+        return law_broken(
+            "none of %d rows seated after the move was written in the new "
+            "frame",
+            int(seen.seated)
+        );
+    }
+    return law_held();
+}
+
+const FrameLaw L_REACHES_THE_NEW_FRAME = {
+    "reaches-the-new-frame",
+    "rows written under the new parent reach the reader once it holds the "
+    "entity there",
+    &law_reaches_the_new_frame,
+};
+
+LawVerdict law_reopens_the_lane(const FrameRun &p_run) {
+    const FrameEvidence &seen = p_run.evidence();
+    if (seen.writer_anchor < 2 || seen.reader_anchor != seen.writer_anchor) {
+        return law_broken(
+            "the writer holds anchor revision %d and the reader %d",
+            int(seen.writer_anchor),
+            int(seen.reader_anchor)
+        );
+    }
+    if (seen.token_before == 0 || seen.token_after == 0
+        || seen.token_after == seen.token_before) {
+        return law_broken(
+            "the reader held the lane on token %d before the move and %d "
+            "after",
+            int(seen.token_before),
+            int(seen.token_after)
+        );
+    }
+    return law_held();
+}
+
+const FrameLaw L_REOPENS_THE_LANE = {
+    "reopens-the-lane",
+    "the move keeps the route and reopens the lane under the anchor revision "
+    "both sides installed",
+    &law_reopens_the_lane,
+};
+
+const FrameLaw FRAME_LAWS[] = {
+    L_SEATS_IN_ITS_OWN_FRAME,
+    L_REACHES_THE_NEW_FRAME,
+    L_REOPENS_THE_LANE,
+};
+
+LawVerdict law_holds_the_window(const FrameRun &p_run) {
+    if (p_run.evidence().reader_moved) {
+        return law_broken(
+            "the reader's carry landed, so no row crossed its guard window"
+        );
+    }
+    return law_held();
+}
+
+const FrameLaw L_HOLDS_THE_WINDOW = {
+    "holds-the-window",
+    "a body the reader carries under its reparent guard stays under the old "
+    "parent while no physics frame passes",
+    &law_holds_the_window,
+};
+
+const FrameLaw GUARDED_LAWS[] = {
+    L_HOLDS_THE_WINDOW,
+    L_SEATS_IN_ITS_OWN_FRAME,
+};
+
+FrameEvidence run_frame_scenario(const FrameScenario &p_scenario) {
+    FrameEvidence seen;
+    LoopbackRig rig(1);
+    rig.mount();
+    netw_test::flow_clocks(rig, TICKRATE);
+
+    const Ref<PackedScene> scene = frame_probe_scene(
+        p_scenario.writer == THE_PEER_WRITES ? "broadcast" : "state",
+        p_scenario.reader_guards_the_carry ? "CharacterBody2D" : "Node2D"
+    );
+    PackedStringArray scenes;
+    scenes.push_back(scene->get_path());
+    StockWorld world = netw_test::mount_stock_world(rig, scenes);
+
+    Node *vehicle = scene->instantiate();
+    vehicle->set_name("Vehicle");
+    world.arena(-1)->add_child(vehicle, true);
+    const String named = p_scenario.writer == THE_PEER_WRITES
+        ? String("PeerMover")
+        : String("Mover");
+    Node *mover = scene->instantiate();
+    mover->set_name(named);
+    world.arena(-1)->add_child(mover, true);
+
+    const bool vehicle_arrived
+        = netw_test::pump_until_child(rig, world.arena(0), "Vehicle")
+        != nullptr;
+    Node *mirror = netw_test::pump_until_child(rig, world.arena(0), named);
+    seen.materialized = vehicle_arrived && mirror != nullptr;
+    if (!seen.materialized) {
+        return seen;
+    }
+    if (p_scenario.writer == THE_PEER_WRITES) {
+        netw::NetwEntity::of(mover)->grant_control(rig.peer_id(0));
+        rig.step_ticks(4);
+    }
+
+    const bool peer_writes = p_scenario.writer == THE_PEER_WRITES;
+    Node *writer = peer_writes ? mirror : mover;
+    Node *reader = peer_writes ? mover : mirror;
+    netw::NetwMultiplayer *reading = peer_writes ? rig.server() : rig.client(0);
+    netw::NetwMultiplayer *writing = peer_writes ? rig.client(0) : rig.server();
+    const int writer_peer = peer_writes ? rig.peer_id(0) : rig.peer_id(-1);
+    const int64_t route = route_of(mover);
+    int64_t counter = 0;
+    for (int step = 0; step < 8; ++step) {
+        writer->set(StringName("counter"), ++counter);
+        rig.step_ticks(1);
+    }
+    seen.token_before = lane_token(reading, writer_peer, route);
+    reader->set(StringName("seats"), Array());
+    netw::NetwMultiplayer::entity_move(mover, vehicle);
+    for (int step = 0; step < 24; ++step) {
+        writer->set(StringName("counter"), ++counter);
+        rig.step_ticks(1);
+    }
+    seen.token_after = lane_token(reading, writer_peer, route);
+    seen.reader_moved = reader->get_parent() != nullptr
+        && String(reader->get_parent()->get_name()) == "Vehicle";
+    seen.writer_anchor = int64_t(writing->liveness_route_anchor(route));
+    seen.reader_anchor = int64_t(reading->liveness_route_anchor(route));
+
+    const Array seats = reader->get(StringName("seats"));
+    for (int at = 0; at < seats.size(); ++at) {
+        const Vector2i seat = seats[at];
+        const int64_t written = int64_t(seat.x) / 1000;
+        const int64_t held = int64_t(seat.y);
+        seen.seated += 1;
+        if (written == NEW_FRAME && held == NEW_FRAME) {
+            seen.seated_in_the_new_frame += 1;
+        }
+        if (written != held && held != 0) {
+            if (seen.seated_in_another_frame == 0) {
+                seen.first_misplaced = Vector2i(int(written), int(held));
+            }
+            seen.seated_in_another_frame += 1;
+        }
+    }
+    return seen;
+}
+
+TEST_CASE(
+    "[Networked][Spawn][Sync][SceneTree] HC2 a row is seated only in the "
+    "frame it was written in, whichever side writes it, when the move and "
+    "the rows written around it cross on the link"
+) {
+    FrameScenario session_writes;
+    session_writes.label = "the-session-writes";
+    FrameScenario peer_writes;
+    peer_writes.label = "the-peer-writes";
+    peer_writes.writer = THE_PEER_WRITES;
+    const FrameScenario CORPUS[] = {session_writes, peer_writes};
+    for (const FrameScenario &scenario : CORPUS) {
+        const FrameRun run(scenario);
+        for (const FrameLaw &law : FRAME_LAWS) {
+            NETW_CELL(law, scenario);
+            NETW_LAW_HOLDS(law, run);
+        }
+    }
+}
+
+TEST_CASE(
+    "[Networked][Spawn][Sync][SceneTree] HC2 a row written under the new "
+    "parent waits while the reader still carries the body under its guard, "
+    "so the move reaches it before any row does"
+) {
+    FrameScenario guarded;
+    guarded.label = "the-reader-guards-the-carry";
+    guarded.reader_guards_the_carry = true;
+    const FrameRun run(guarded);
+    for (const FrameLaw &law : GUARDED_LAWS) {
+        NETW_CELL(law, guarded);
+        NETW_LAW_HOLDS(law, run);
+    }
+}
+
+struct LateEvidence {
+    int64_t server_anchor = 0;
+    int64_t late_anchor = 0;
+    String parent_on_arrival;
+    String parent_after_stale_move;
+    bool present_before_spawn = false;
+};
+
+LateEvidence run_late_join() {
+    LateEvidence seen;
+    LoopbackRig rig(1);
+    rig.mount();
+    netw_test::flow_clocks(rig, TICKRATE);
+
+    const Ref<PackedScene> scene = probe_scene();
+    PackedStringArray scenes;
+    scenes.push_back(scene->get_path());
+    StockWorld world = netw_test::mount_stock_world(rig, scenes);
+
+    Node *vehicle = scene->instantiate();
+    vehicle->set_name("Vehicle");
+    world.arena(-1)->add_child(vehicle, true);
+    Node *mover = scene->instantiate();
+    mover->set_name("Mover");
+    world.arena(-1)->add_child(mover, true);
+    REQUIRE(netw_test::pump_until_child(rig, world.arena(0), "Mover") != nullptr);
+
+    netw::NetwMultiplayer::entity_move(mover, vehicle);
+    rig.pump(6);
+    netw::wire::WriteStream stale;
+    const int64_t route = route_of(mover);
+    uint64_t stale_revision
+        = rig.server()->liveness_route_anchor(route);
+    REQUIRE(rig.server()->verb_head_write(stale, route));
+    REQUIRE(rig.server()->anchor_encode(stale, world.arena(-1)));
+    REQUIRE(stale.varuint(stale_revision, 5));
+    REQUIRE(stale.align_verify());
+    netw::NetwMultiplayer::entity_move(mover, world.arena(-1));
+    rig.pump(6);
+    netw::NetwMultiplayer::entity_move(mover, vehicle);
+    rig.pump(6);
+    seen.server_anchor = int64_t(rig.server()->liveness_route_anchor(route));
+
+    const int late = rig.add_client();
+    rig.hold(late);
+    rig.mount_late(late);
+    netw_test::seat_stock_branch(rig.branch(late), world);
+    rig.client(late)->spawn_handle_reparent_frame(
+        stale.to_bytes(),
+        rig.peer_id(-1)
+    );
+    seen.present_before_spawn = rig.route_node(int(route), late) != nullptr;
+    rig.release(late);
+    Node *arrived = nullptr;
+    for (int round = 0; round < 60 && arrived == nullptr; ++round) {
+        rig.pump();
+        arrived = rig.route_node(int(route), late);
+    }
+    REQUIRE_MESSAGE(arrived != nullptr, "the late peer never spawned the mover");
+    seen.late_anchor = int64_t(rig.client(late)->liveness_route_anchor(route));
+    seen.parent_on_arrival = String(arrived->get_parent()->get_name());
+
+    rig.client(late)->spawn_handle_reparent_frame(
+        stale.to_bytes(),
+        rig.peer_id(-1)
+    );
+    rig.pump(4);
+    seen.parent_after_stale_move = String(arrived->get_parent()->get_name());
+    return seen;
+}
+
+TEST_CASE(
+    "[Networked][Spawn][SceneTree] a peer that joins after the moves spawns "
+    "the entity at the newest anchor and revision, and a REPARENT that "
+    "reaches it before or after that SPAWN moves nothing"
+) {
+    const LateEvidence seen = run_late_join();
+    CHECK_FALSE(seen.present_before_spawn);
+    NETW_CHECK_EQ(seen.server_anchor, int64_t(4));
+    NETW_CHECK_EQ(seen.late_anchor, seen.server_anchor);
+    NETW_CHECK_EQ(int(seen.parent_on_arrival == "Vehicle"), 1);
+    NETW_CHECK_EQ(int(seen.parent_after_stale_move == "Vehicle"), 1);
+}
+
+struct LateParkedEvidence {
+    int64_t spawn_revision = 0;
+    int64_t reparent_revision = 0;
+    int64_t late_anchor = 0;
+    String parent_on_arrival;
+    bool present_while_parked = false;
+    int64_t stale_drops = 0;
+};
+
+LateParkedEvidence run_late_parked() {
+    LateParkedEvidence seen;
+    LoopbackRig rig(1);
+    rig.mount();
+    netw_test::flow_clocks(rig, TICKRATE);
+
+    const Ref<PackedScene> scene = probe_scene();
+    PackedStringArray scenes;
+    scenes.push_back(scene->get_path());
+    StockWorld world = netw_test::mount_stock_world(rig, scenes);
+
+    Node *vehicle = scene->instantiate();
+    vehicle->set_name("Vehicle");
+    world.arena(-1)->add_child(vehicle, true);
+    Node *mover = scene->instantiate();
+    mover->set_name("Mover");
+    world.arena(-1)->add_child(mover, true);
+    REQUIRE(netw_test::pump_until_child(rig, world.arena(0), "Mover") != nullptr);
+
+    netw::NetwMultiplayer::entity_move(mover, vehicle);
+    rig.pump(6);
+    const int64_t route = route_of(mover);
+    seen.spawn_revision = int64_t(rig.server()->liveness_route_anchor(route));
+    const PackedByteArray parked_spawn = rig.spawn_frame_of(int(route));
+    const PackedByteArray vehicle_spawn
+        = rig.spawn_frame_of(int(route_of(vehicle)));
+
+    netw::NetwMultiplayer::entity_move(mover, world.arena(-1));
+    rig.pump(6);
+    netw::wire::WriteStream newer;
+    uint64_t newer_revision = rig.server()->liveness_route_anchor(route);
+    seen.reparent_revision = int64_t(newer_revision);
+    REQUIRE(rig.server()->verb_head_write(newer, route));
+    REQUIRE(rig.server()->anchor_encode(newer, world.arena(-1)));
+    REQUIRE(newer.varuint(newer_revision, 5));
+    REQUIRE(newer.align_verify());
+
+    const int late = rig.add_client();
+    rig.hold(late);
+    rig.mount_late(late);
+    netw_test::seat_stock_branch(rig.branch(late), world);
+    rig.deliver_spawn(late, parked_spawn);
+    rig.client(late)->spawn_handle_reparent_frame(
+        newer.to_bytes(),
+        rig.peer_id(-1)
+    );
+    seen.present_while_parked = rig.route_node(int(route), late) != nullptr;
+    rig.deliver_spawn(late, vehicle_spawn);
+    Node *arrived = nullptr;
+    for (int round = 0; round < 30 && arrived == nullptr; ++round) {
+        rig.pump();
+        arrived = rig.route_node(int(route), late);
+    }
+    REQUIRE_MESSAGE(arrived != nullptr, "the parked SPAWN never placed");
+    rig.pump(4);
+    seen.late_anchor = int64_t(rig.client(late)->liveness_route_anchor(route));
+    seen.parent_on_arrival = String(arrived->get_parent()->get_name());
+    seen.stale_drops = counter_of(rig, late, "drops_reparent_stale");
+    return seen;
+}
+
+TEST_CASE(
+    "[Networked][Spawn][SceneTree] a REPARENT that reaches a peer while its "
+    "SPAWN waits on an absent parent is kept, and the entity lands at that "
+    "REPARENT's anchor and revision once the parent arrives"
+) {
+    const LateParkedEvidence seen = run_late_parked();
+    CHECK_FALSE(seen.present_while_parked);
+    NETW_CHECK_EQ(seen.spawn_revision, int64_t(2));
+    NETW_CHECK_EQ(seen.reparent_revision, int64_t(3));
+    NETW_CHECK_EQ(seen.late_anchor, seen.reparent_revision);
+    NETW_CHECK_EQ(int(seen.parent_on_arrival == "Arena"), 1);
+    NETW_CHECK_EQ(seen.stale_drops, int64_t(0));
+}
+
 } // namespace TestSpawnReparentStreamLaws
 
 #endif

@@ -63,6 +63,12 @@ public:
         DISCONNECT_DESPAWN = int(entity::Control::DisconnectRule::DESPAWN),
     };
 
+    enum ParentDespawnRule {
+        PARENT_DESPAWN_CASCADE
+        = int(entity::Control::ParentDespawnRule::CASCADE),
+        PARENT_DESPAWN_DETACH = int(entity::Control::ParentDespawnRule::DETACH),
+    };
+
     enum Stage {
         STAGE_UNBOUND = int(entity::Stage::UNBOUND),
         STAGE_TEMPLATE = int(entity::Stage::TEMPLATE),
@@ -230,6 +236,8 @@ public:
     void set_transfer(Transfer p_value);
     DisconnectRule get_on_controller_disconnect() const;
     void set_on_controller_disconnect(DisconnectRule p_value);
+    ParentDespawnRule get_on_parent_despawn() const;
+    void set_on_parent_despawn(ParentDespawnRule p_value);
     bool get_declares_scene() const;
     void set_declares_scene(bool p_value);
     godot::StringName get_scene_label() const;
@@ -366,4 +374,5 @@ VARIANT_ENUM_CAST(netw::NetwEntity::Hold);
 VARIANT_ENUM_CAST(netw::NetwEntity::InitialController);
 VARIANT_ENUM_CAST(netw::NetwEntity::Transfer);
 VARIANT_ENUM_CAST(netw::NetwEntity::DisconnectRule);
+VARIANT_ENUM_CAST(netw::NetwEntity::ParentDespawnRule);
 VARIANT_ENUM_CAST(netw::NetwEntity::Stage);

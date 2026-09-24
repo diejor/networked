@@ -45,6 +45,10 @@ public:
     godot::PackedInt64Array ancestry_order() const;
 
     godot::PackedInt64Array despawn_order(int64_t route) const;
+    godot::PackedInt64Array detach_roots(
+        int64_t route,
+        const godot::PackedInt64Array &detaching
+    ) const;
 
     bool parent_admits(int64_t route, int64_t peer) const;
 

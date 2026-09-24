@@ -84,6 +84,17 @@ Error SpawnerCompat::consume(Node *p_node, Object *p_spawner) {
     if (bool(booked_reader.call(p_node))) {
         return OK;
     }
+    NetwMultiplayer *plane = core();
+    if (plane != nullptr && !plane->is_session_authority()) {
+        NETW_ERROR(
+            sys::SPAWN,
+            "'%s' was added under a MultiplayerSpawner this peer holds "
+            "authority over, but only the session authority spawns. Spawn it "
+            "on the session with Netw.spawn",
+            p_node->get_name()
+        );
+        return ERR_UNAUTHORIZED;
+    }
 
     const int64_t nid = int64_t(gd::instance_id(p_node));
     int scene_index = -1;

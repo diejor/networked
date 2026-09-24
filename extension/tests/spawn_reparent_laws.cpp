@@ -148,20 +148,24 @@ TEST_CASE(
 }
 
 constexpr int64_t COORDINATOR = 7;
+constexpr uint64_t FIRST_MOVE = 2;
 
 PackedByteArray reparent_frame(
     NetwMultiplayer *p_core,
     int64_t p_route,
-    int64_t p_anchor
+    int64_t p_anchor,
+    uint64_t p_revision = FIRST_MOVE
 ) {
     netw::wire::WriteStream writer;
     REQUIRE(p_core->verb_head_write(writer, p_route));
     bool entity_relative = true;
     uint64_t anchor = uint64_t(p_anchor);
+    uint64_t revision = p_revision;
     String subpath(".");
     REQUIRE(writer.bool1(entity_relative));
     REQUIRE(writer.varuint(anchor, 5));
     REQUIRE(netw::wire::string_field(writer, subpath));
+    REQUIRE(writer.varuint(revision, 5));
     return writer.to_bytes();
 }
 
@@ -250,6 +254,51 @@ TEST_CASE(
 
     NETW_CHECK_EQ(world.mover->get_parent(), world.origin);
     NETW_CHECK_EQ(world.destination->get_child_count(), 0);
+}
+
+TEST_CASE(
+    "[Networked][Spawn][Hosted][SceneTree] SP6 two moves delivered newest "
+    "first land at the newest anchor, because a REPARENT whose revision is "
+    "not newer than the one installed moves nothing"
+) {
+    DeferredMove world;
+    world.release_anchor();
+    Node *elsewhere = named("elsewhere");
+    world.root->add_child(elsewhere);
+    const int64_t elsewhere_route = world.core->liveness_reserve_route() + 4;
+    REQUIRE(world.core->liveness_bind_route(
+        elsewhere_route,
+        NetwEntity::ensure(elsewhere).ptr()
+    ));
+
+    const PackedByteArray newest = reparent_frame(
+        world.core.ptr(),
+        world.route,
+        elsewhere_route,
+        FIRST_MOVE + 1
+    );
+    const PackedByteArray older = reparent_frame(
+        world.core.ptr(),
+        world.route,
+        world.anchor,
+        FIRST_MOVE
+    );
+
+    world.core->spawn_handle_reparent_frame(newest, COORDINATOR);
+    world.core->spawn_handle_reparent_frame(older, COORDINATOR);
+
+    NETW_CHECK_EQ(world.mover->get_parent(), elsewhere);
+    NETW_CHECK_EQ(world.destination->get_child_count(), 0);
+    NETW_CHECK_EQ(
+        int64_t(world.core->liveness_route_anchor(world.route)),
+        int64_t(FIRST_MOVE + 1)
+    );
+    NETW_CHECK_EQ(
+        int64_t(world.core->spawn_plane()->counters()[StringName(
+            "drops_reparent_stale"
+        )]),
+        int64_t(1)
+    );
 }
 
 } // namespace TestNetwSpawnReparent

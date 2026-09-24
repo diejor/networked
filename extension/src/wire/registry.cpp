@@ -261,7 +261,7 @@ WireRegistry WireRegistry::create_default() {
         Delivery::FITTED,
         Direction::SERVER_TO_CLIENT,
         PayloadContract::PLANNED,
-        1
+        3
     );
     reg_c(
         15,
@@ -281,7 +281,8 @@ WireRegistry WireRegistry::create_default() {
         Freshness::NONE,
         Delivery::FITTED,
         Direction::SERVER_TO_CLIENT,
-        PayloadContract::PLANNED
+        PayloadContract::PLANNED,
+        1
     );
     reg_c(
         17,
@@ -568,7 +569,7 @@ WireRegistry WireRegistry::create_default() {
         Delivery::FITTED,
         Direction::EITHER,
         PayloadContract::PLANNED,
-        1
+        2
     );
 
     auto batches = [&](const char *name) {

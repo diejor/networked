@@ -38,6 +38,16 @@ const char *KEY_FLUSH = "spawn-carrier-flush";
 const double CLOCKLESS_TICKRATE = 30.0;
 constexpr int BLOB_CAP = 4095;
 
+bool reparent_is_newer(
+    const NetwMultiplayer *p_plane,
+    int64_t p_route,
+    uint64_t p_revision
+) {
+    const uint64_t installed = p_plane->liveness_route_anchor(p_route);
+    const uint64_t pending = p_plane->spawn_carry_pending_anchor(p_route);
+    return p_revision > (pending > installed ? pending : installed);
+}
+
 } // namespace
 
 NetwMultiplayer *Pipeline::core() const {
@@ -112,7 +122,7 @@ void Pipeline::set_repl_seams(
 
 bool Pipeline::is_server_authority() const {
     NetwMultiplayer *plane = core();
-    return plane != nullptr ? plane->is_host() : true;
+    return plane != nullptr ? plane->is_session_authority() : true;
 }
 
 bool Pipeline::has_peer() const {
@@ -582,6 +592,7 @@ Ref<NetwEntity> Pipeline::adopt_in_place(Node *p_root) {
     }
     Record record;
     record.set_recipe(Book::RECIPE_ADOPT);
+    record.bind_origin(NetwMultiplayer::scene_outer_of(p_root)->get_parent());
     const Ref<NetwEntity> entity
         = arm_authoritative_spawn(&record, p_root, Ref<NetwPlayer>());
     if (entity.is_valid()) {
@@ -711,6 +722,7 @@ void Pipeline::publish_nested(Node *p_node) {
     }
     Record record;
     record.set_recipe(Book::RECIPE_ADOPT);
+    record.bind_origin(NetwMultiplayer::scene_outer_of(p_node)->get_parent());
     if (arm_authoritative_spawn(&record, p_node, Ref<NetwPlayer>())
             .is_null()) {
         return;
@@ -797,6 +809,10 @@ void Pipeline::settle_death(int64_t p_route) {
 
 bool Pipeline::holds_received_route(int64_t p_route) const {
     return spawn_book.is_recv(p_route);
+}
+
+bool Pipeline::holds_spawned_route(int64_t p_route) const {
+    return spawn_book.has_spawned(p_route);
 }
 
 void Pipeline::settle_absence(int64_t p_route) {
@@ -1046,7 +1062,11 @@ PackedByteArray Pipeline::encode_spawn_frame(int64_t p_route, Node *p_node) {
     wire::WriteStream stream;
     const Ref<NetwEntity> entity = NetwEntity::of(p_node);
     if (!plane->verb_head_write(stream, p_route)
-        || !p_record->encode_header(stream, entity.ptr())) {
+        || !p_record->encode_header(
+            stream,
+            entity.ptr(),
+            plane->liveness_route_anchor(p_route)
+        )) {
         NETW_ERROR(
             sys::SPAWN,
             "route %d carries a header no frame can hold",
@@ -1085,6 +1105,14 @@ PackedByteArray Pipeline::encode_spawn_frame(int64_t p_route, Node *p_node) {
     }
 
     if (recipe == Book::RECIPE_ADOPT) {
+        Node *origin = p_record->origin();
+        wire::WriteStream addressable;
+        bool moved = origin != nullptr && origin != parent
+            && plane->anchor_encode(addressable, origin);
+        if (!stream.bool1(moved)
+            || (moved && !plane->anchor_encode(stream, origin))) {
+            return PackedByteArray();
+        }
     } else if (recipe == Book::RECIPE_SCENE) {
         if (!put_scene_recipe(stream, p_record->get_scene_path())) {
             return PackedByteArray();
@@ -1349,7 +1377,13 @@ bool decode_spawn_frame(
         return false;
     }
 
-    if (frame.recipe == Book::RECIPE_SCENE) {
+    if (frame.recipe == Book::RECIPE_ADOPT) {
+        if (!stream.bool1(frame.moved_from_origin)
+            || (frame.moved_from_origin
+                && !p_plane->anchor_decode(stream, frame.origin_anchor))) {
+            return false;
+        }
+    } else if (frame.recipe == Book::RECIPE_SCENE) {
         if (!Pipeline::get_scene_recipe(stream, frame.scene_path)) {
             return false;
         }
@@ -1516,6 +1550,8 @@ void Pipeline::try_apply_spawn(
     const Dictionary &header = frame.header;
     const int64_t recipe = frame.recipe;
     const Dictionary &parent_anchor = frame.parent_anchor;
+    const uint64_t anchor_revision
+        = uint64_t(int64_t(header.get(StringName("anchor_revision"), 0)));
 
     if (!plane->liveness_epoch_admits(route, frame.epoch)) {
         drops_spawn_stale_life += 1;
@@ -1547,7 +1583,16 @@ void Pipeline::try_apply_spawn(
     bool adopted = false;
 
     if (recipe == Book::RECIPE_ADOPT) {
-        Node *adopt_parent = plane->anchor_resolve(parent_anchor);
+        const Dictionary &found_under = frame.moved_from_origin
+            ? frame.origin_anchor
+            : parent_anchor;
+        const int64_t origin_route = int64_t(found_under[StringName("route")]);
+        if (origin_route > 0
+            && Park::anchor_parks(plane->liveness_route_state(origin_route))) {
+            park_spawn(p_payload, origin_route, route, p_sender);
+            return;
+        }
+        Node *adopt_parent = plane->anchor_resolve(found_under);
         node = run_construct_stage(
             callable_mp(plane, &NetwMultiplayer::spawn_build_adopt)
                 .bind(adopt_parent, node_name)
@@ -1823,8 +1868,20 @@ void Pipeline::try_apply_spawn(
         spawn_book.enroll_recv(route, node);
         plane->liveness_bind_route(route, entity.ptr());
         plane->liveness_adopt_epoch(route, frame.epoch);
+        if (frame.moved_from_origin) {
+            plane->spawn_reparent_node(
+                node,
+                parent,
+                callable_mp(plane, &NetwMultiplayer::scene_adopt_entity),
+                route,
+                anchor_revision
+            );
+        } else {
+            plane->entity_install_anchor(route, anchor_revision);
+        }
         plane->sync_pipeline_recapture_entity(entity);
         plane->predict_reconcile_declaration(entity);
+        apply_kept_reparent(route);
         return;
     }
 
@@ -1842,8 +1899,18 @@ void Pipeline::try_apply_spawn(
         spawner_compat->note_recv(route, recv_spawner);
     }
     plane->spawn_place_node(parent, node);
+    plane->entity_install_anchor(route, anchor_revision);
     if (recv_spawner != nullptr && spawner_compat != nullptr) {
         spawner_compat->emit_spawned(recv_spawner, node);
+    }
+    apply_kept_reparent(route);
+}
+
+void Pipeline::apply_kept_reparent(int64_t p_route) {
+    int64_t sender = 0;
+    const PackedByteArray kept = park.take_reparent(p_route, sender);
+    if (!kept.is_empty()) {
+        handle_reparent_frame(kept, sender);
     }
 }
 
@@ -1978,8 +2045,10 @@ void Pipeline::handle_reparent_frame(
     int64_t route = 0;
     int64_t epoch = 0;
     Dictionary anchor;
+    uint64_t revision = 0;
     if (!NetwMultiplayer::verb_head_read(reader, route, epoch)
-        || !plane->anchor_decode(reader, anchor) || !reader.align_verify()
+        || !plane->anchor_decode(reader, anchor)
+        || !reader.varuint(revision, 5) || !reader.align_verify()
         || reader.bits_remaining() != 0) {
         frame_read(false, route);
         return;
@@ -1992,7 +2061,15 @@ void Pipeline::handle_reparent_frame(
 
     const Ref<NetwEntity> entity = plane->wrapper_for_route(route);
     if (entity.is_null() || entity->get_owner() == nullptr) {
-        drops_spawn_unresolved += 1;
+        if (!park.has(route)) {
+            drops_spawn_unresolved += 1;
+        } else if (!park.keep_reparent(route, p_payload, revision, p_sender)) {
+            drops_reparent_stale += 1;
+        }
+        return;
+    }
+    if (!reparent_is_newer(plane, route, revision)) {
+        drops_reparent_stale += 1;
         return;
     }
     const int64_t anchor_route = int64_t(anchor[StringName("route")]);
@@ -2023,7 +2100,9 @@ void Pipeline::handle_reparent_frame(
     plane->spawn_reparent_node(
         entity->get_owner(),
         parent,
-        callable_mp(plane, &NetwMultiplayer::scene_adopt_entity)
+        callable_mp(plane, &NetwMultiplayer::scene_adopt_entity),
+        route,
+        revision
     );
 }
 
@@ -2042,6 +2121,9 @@ void Pipeline::free_despawned(int64_t p_route) {
 void Pipeline::free_route_node(int64_t p_route, Node *p_node) {
     if (p_node == nullptr) {
         return;
+    }
+    if (NetwMultiplayer *plane = core()) {
+        plane->spawn_carry_land_out_of(p_node);
     }
     Node *parent = p_node->get_parent();
     if (parent != nullptr) {
@@ -2328,6 +2410,7 @@ Dictionary Pipeline::counters() const {
     out[StringName("drops_spawn_unresolved")] = drops_spawn_unresolved;
     out[StringName("drops_spawn_truncated")] = drops_spawn_truncated;
     out[StringName("drops_spawn_stale_life")] = drops_spawn_stale_life;
+    out[StringName("drops_reparent_stale")] = drops_reparent_stale;
     out[StringName("drops_despawn_unknown")] = drops_despawn_unknown;
     out[StringName("drops_hide_unknown")] = drops_hide_unknown;
     out[StringName("spawn_deferrals")] = spawn_deferrals;

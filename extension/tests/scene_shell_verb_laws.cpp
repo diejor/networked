@@ -244,4 +244,30 @@ TEST_CASE(
     memdelete(root);
 }
 
+TEST_CASE(
+    "[Networked][Scene][Hosted] SV5 a client asking to move an entity between "
+    "scenes is refused before anything reaches the carry, because only the "
+    "session authority moves an entity"
+) {
+    Ref<NetwMultiplayer> core;
+    core.instantiate();
+    core->session_set_authority_peer(7);
+    core->session_peer_assigned(true, false, 1);
+    REQUIRE_FALSE(core->is_session_authority());
+    const CallLog seen;
+    core->scene_set_carry_move(seen.callable("carry"));
+    Node *root = memnew(Node);
+    const Placed arena = place(core, root, true);
+    const Placed pawn = place(core, root, false);
+
+    const Ref<NetwPromise> refused
+        = core->scene_move_entity(pawn.handle, arena.handle);
+    REQUIRE(refused.is_valid());
+    CHECK(refused->get_is_failed());
+    NETW_CHECK_EQ(refused->get_code(), int(ERR_UNAUTHORIZED));
+    NETW_CHECK_EQ(seen.count("carry"), 0);
+
+    memdelete(root);
+}
+
 } // namespace TestNetwSceneShellVerbLaws

@@ -173,10 +173,12 @@ admission, so a build disagreeing about any cell cannot pair.
 A channel also carries a `payload_revision`, folded into identity when
 non-zero. SYNC_ROW, SYNC_ROW_DELTA and SYNC_ROW_WINDOW declare 1 for the v11
 row contract, SESSION_ACCEPT and SESSION_ROSTER declare 1 for the membership
-row of section 16, SPAWN declares 1 for the decision the header of section 11
-carries, CONTROL_REQUEST and CONTROL_APPLY declare 1 for the layouts of
-section 14, ROW_CONTROL declares 1 for the tenure its OPEN of section 10
-carries, and every other revision is 0.
+row of section 16, SPAWN declares 3 for the decision and the anchor revision
+the header of section 11 carries and the origin its ADOPT body carries,
+REPARENT declares 1 for its anchor
+revision, CONTROL_REQUEST and CONTROL_APPLY declare 1 for the layouts of
+section 14, ROW_CONTROL declares 2 for the tenure and the anchor revision its
+OPEN of section 10 carries, and every other revision is 0.
 
 Ids 0, 1 and 7 were claimed by formats older than v8 and stay reserved, so an
 ancient frame is refused instead of decoding as a modern channel.
@@ -355,7 +357,8 @@ One complete record per frame, tagged by its first byte.
 ```text
 [tag bits 8]
 0 OPEN    [request varuint 10][route varuint 5][ordinal bits 8]
-          [family bits 8][epoch varuint 3][tenure varuint 5][schema bits 32]
+          [family bits 8][epoch varuint 3][tenure varuint 5]
+          [anchor varuint 5][schema bits 32]
 1 READY   [request varuint 10][token varuint 10]
 2 ACCEPT  [count int_range 1..32]
           then count entries of [token varuint 10][revision varuint 10]
@@ -383,6 +386,17 @@ again. An OPEN for an older tenure is counted and dropped. Installing a
 decision that moves the tenure closes every lane of an older tenure for that
 route, and the writer that lost authorship closes its lanes and sends CLOSE.
 A state lane writes the tenure it has and the receiver ignores it.
+
+`anchor` is the anchor revision of section 11 the writer held when it opened
+the lane, and it binds every lane of the entity, whatever its record, to the
+parent the rows are written under. The receiver seats an OPEN only when its
+installed anchor revision is equal. An OPEN for a newer revision parks until
+the REPARENT naming it is installed, bounded by the same repair interval, and
+an OPEN for an older revision is counted and dropped. Installing a revision
+closes every lane of an older one for that route, and the writer that moves
+the entity or installs a move closes its lanes and opens fresh ones under the
+new revision. A move therefore costs one CLOSE, OPEN and READY per lane per
+receiver and no bytes on any row.
 
 A tag above 4, a family above 2, a count outside 1..32, an entry that ends
 early and any residue refuse the record. A malformed record installs no stream
@@ -415,17 +429,29 @@ authority revives the route. A receiver refuses any epoch below the highest
 one the wire has named for that route, and fences against the life the wire
 declared rather than one it counted for itself.
 
-DESPAWN and HIDE end there. REPARENT continues with one anchor.
+DESPAWN and HIDE end there. REPARENT continues with one anchor and the anchor
+revision the move minted.
 
 ```text
 anchor
 [entity_relative bool1]
   1   [route varuint 5][subpath string]
   0   [path string]
+[anchor_revision varuint 5]       REPARENT only
 ```
 
 An entity-relative anchor survives its target being re-parented. A
 root-relative anchor is the fallback for a node no entity owns.
+
+The anchor revision counts the moves of one life of the route. It starts at 1
+when the route is spawned and the authority adds 1 each time the entity leaves
+its parent, before any row sampled under the new parent is offered. A receiver
+ignores a REPARENT whose revision is not newer than both the one it installed
+and the one a carry already in flight will install, so moves delivered out of
+order land at the newest. A REPARENT for a route the receiver does not hold is
+dropped, and the SPAWN that later reaches it carries the newest parent and
+revision. The receiver installs the revision when its carry places the node,
+which is what section 10's lane fence reads.
 
 ```text
 SPAWN
@@ -434,6 +460,7 @@ SPAWN
 [controller svarint 5]
 [control_revision varuint 5]
 [control_tenure varuint 5]
+[anchor_revision varuint 5]
 [spawn_tick varuint 5]            tick + 1, so 0 is no tick
 [requester svarint 5]
 [comp_table_hash bits 32]
@@ -444,7 +471,7 @@ SPAWN
 [parent_is_spawn_target bool1]    set only on SPAWNER
 [parent anchor]                   iff parent_is_spawn_target = 0
 recipe body
-  ADOPT        nothing
+  ADOPT        [moved bool1][origin anchor iff moved]
   SCENE        [by_uid bool1]
                [uid bits 64 iff by_uid][scene string iff not by_uid]
   SPAWNER      [spawner anchor]
@@ -468,12 +495,20 @@ they carry.
 `control_revision`, `control_tenure` and `control_hold` are the live decision
 at the moment the frame is encoded, so a peer that joins late starts on the
 decision every holder already has. A CONTROL_APPLY at or below that revision
-is discarded when it reaches the joiner.
+is discarded when it reaches the joiner. `anchor_revision` is read the same
+way, so the joiner installs the revision its parent anchor was written under.
 
 `parent_is_spawn_target` replaces the parent anchor with one bit when the
 parent is the spawner's own `spawn_path` target, which the receiver resolves
 from the spawner anchor the recipe body already carries. The bit is legal only
 on SPAWNER.
+
+An ADOPT names a node every peer already holds, so the receiver finds it by
+name under a parent. The parent is the scene-authored one the node was
+published under, which the origin anchor carries when the node has since moved
+and the parent anchor carries otherwise. When `moved` is set the receiver
+finds the node under its origin and then carries it to the parent anchor as a
+move, installing `anchor_revision` when the carry places it.
 
 `[token]`, `[values]`, `[custom]`, `[args]`, `[value]`, `[consumed]` and
 `[derived]` are opaque runs. The verb delimits them and never reads inside, so
@@ -995,11 +1030,11 @@ READY for request 300 and token 7.
 01 AC 02 07
 ```
 
-OPEN for request 1, route 300, ordinal 2, family 0, epoch 5, tenure 3 and
-schema hash `0xDEADBEEF`.
+OPEN for request 1, route 300, ordinal 2, family 0, epoch 5, tenure 3,
+anchor revision 4 and schema hash `0xDEADBEEF`.
 
 ```text
-00 01 AC 02 02 00 05 03 EF BE AD DE
+00 01 AC 02 02 00 05 03 04 EF BE AD DE
 ```
 
 An ACCEPT of two entries, the head then the pairs.

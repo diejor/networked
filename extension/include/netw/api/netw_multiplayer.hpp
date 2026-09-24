@@ -877,6 +877,8 @@ private:
         godot::ObjectID parent;
         godot::Callable adopt;
         godot::RID guard;
+        int64_t route = 0;
+        uint64_t anchor = 0;
         bool moved = false;
     };
     godot::HashMap<int64_t, SpawnCarry> spawn_carries;
@@ -1516,6 +1518,7 @@ public:
         int64_t p_channel,
         const godot::Callable &p_undeclare
     );
+    void spawn_detach_before_despawn(NetwEntity *p_dying);
     godot::Ref<NetwEntity> spawn_arm_identity(
         spawn::Record *p_record,
         godot::Node *p_node,
@@ -1554,6 +1557,13 @@ public:
     );
     void row_control_flush(ReplicationSend *p_send, int64_t p_channel);
     void row_streams_follow_tenure(int64_t p_route, uint64_t p_tenure);
+    void row_streams_follow_anchor(int64_t p_route, uint64_t p_anchor);
+    static ReplicationSend *row_send_of(ReplicationCore *p_plane);
+    void row_streams_reseat_parks(
+        ReplicationCore *p_plane,
+        ReplicationSend *p_send,
+        int64_t p_route
+    );
     void sync_note_columns(const repl::RowOffer &p_offer, uint64_t p_mask);
     godot::Dictionary sync_flush_stats() const;
     godot::Dictionary sync_explain(
@@ -1589,8 +1599,12 @@ public:
     bool spawn_reparent_node(
         godot::Node *p_node,
         godot::Node *p_parent,
-        const godot::Callable &p_adopt
+        const godot::Callable &p_adopt,
+        int64_t p_route = 0,
+        uint64_t p_anchor = 0
     );
+    uint64_t spawn_carry_pending_anchor(int64_t p_route) const;
+    void spawn_carry_land_out_of(godot::Node *p_leaving);
     bool spawn_send_reparent(
         spawn::Book *p_book,
         spawn::Record *p_record,
@@ -2667,6 +2681,7 @@ public:
     Role session_get_role() const;
     bool is_online() const;
     bool is_host() const;
+    bool is_session_authority() const;
     bool has_server_role() const;
     int64_t session_authority_peer() const;
     void session_set_authority_peer(int64_t p_peer);
@@ -4202,7 +4217,9 @@ public:
     void spawn_carry_begin(
         godot::Node *p_node,
         godot::Node *p_parent,
-        const godot::Callable &p_adopt
+        const godot::Callable &p_adopt,
+        int64_t p_route,
+        uint64_t p_anchor
     );
     void spawn_carry_open(int64_t p_id);
     bool spawn_carry_reachable(int64_t p_id);
@@ -4333,6 +4350,9 @@ public:
     int64_t liveness_state_of(NetwEntity *p_wrapper) const;
     EntityState liveness_route_state(int64_t p_route) const;
     int64_t liveness_route_epoch(int64_t p_route) const;
+    uint64_t liveness_route_anchor(int64_t p_route) const;
+    uint64_t entity_advance_anchor(int64_t p_route);
+    void entity_install_anchor(int64_t p_route, uint64_t p_anchor);
     bool liveness_epoch_admits(int64_t p_route, int64_t p_epoch) const;
     bool liveness_adopt_epoch(int64_t p_route, int64_t p_epoch);
     int64_t liveness_route_wire_life(int64_t p_route) const;

@@ -11,10 +11,12 @@ namespace TestNetwRecord {
 using namespace godot;
 using netw::spawn::Record;
 
+constexpr uint64_t SPAWNED_ANCHOR = 1;
+
 Dictionary round_trip_header(const Record &p_record, Object *p_entity) {
     netw::wire::WriteStream writer;
     Dictionary header;
-    if (!p_record.encode_header(writer, p_entity)) {
+    if (!p_record.encode_header(writer, p_entity, SPAWNED_ANCHOR)) {
         return header;
     }
     netw::wire::ReadStream reader(writer.to_bytes());
@@ -24,7 +26,7 @@ Dictionary round_trip_header(const Record &p_record, Object *p_entity) {
 
 int64_t header_size(const Record &p_record, Object *p_entity) {
     netw::wire::WriteStream writer;
-    if (!p_record.encode_header(writer, p_entity)) {
+    if (!p_record.encode_header(writer, p_entity, SPAWNED_ANCHOR)) {
         return -1;
     }
     return int64_t(writer.to_bytes().size());

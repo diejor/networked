@@ -394,6 +394,7 @@ struct Regrant {
         open.family = lane.family;
         open.epoch = uint64_t(rig.client(1)->liveness_route_epoch(lane.route));
         open.tenure = host->get_control_tenure();
+        open.anchor = rig.client(1)->liveness_route_anchor(lane.route);
         rig.client(1)->row_control_receive(
             netw::wire::write_control_record(open),
             a

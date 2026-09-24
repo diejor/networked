@@ -16,6 +16,22 @@ uint64_t request_counter = 0;
 constexpr int64_t REPAIR_FLOOR_MS = 250;
 constexpr int64_t REPAIR_CEILING_MS = 1000;
 
+bool tenure_before(const StreamTenure &p_lane, uint64_t p_bar) {
+    return p_lane.bound && p_lane.tenure < p_bar;
+}
+
+bool tenure_other_than(const StreamTenure &p_lane, uint64_t p_bar) {
+    return p_lane.bound && p_lane.tenure != p_bar;
+}
+
+bool anchor_before(const StreamTenure &p_lane, uint64_t p_bar) {
+    return p_lane.anchor < p_bar;
+}
+
+bool anchor_other_than(const StreamTenure &p_lane, uint64_t p_bar) {
+    return p_lane.anchor != p_bar;
+}
+
 } // namespace
 
 uint64_t next_stream_token() {
@@ -141,6 +157,7 @@ void StreamReaderBook::park(const ParkedOpen &p_open) {
     }
     if (held != nullptr && held->request == p_open.request) {
         held->tenure = p_open.tenure;
+        held->anchor = p_open.anchor;
         return;
     }
     live.parks[address] = p_open;
@@ -201,13 +218,27 @@ uint32_t StreamReaderBook::close_tenures_before(
     int64_t p_route,
     uint64_t p_tenure
 ) {
+    return close_where(p_route, &tenure_before, p_tenure);
+}
+
+uint32_t StreamReaderBook::close_anchors_before(
+    int64_t p_route,
+    uint64_t p_anchor
+) {
+    return close_where(p_route, &anchor_before, p_anchor);
+}
+
+uint32_t StreamReaderBook::close_where(
+    int64_t p_route,
+    TenureDooms p_dooms,
+    uint64_t p_bar
+) {
     uint32_t closed = 0;
     for (KeyValue<int, Connection> &each : connections) {
         LocalVector<uint64_t> doomed;
         for (const KeyValue<uint64_t, Lane> &lane : each.value.lanes) {
             if (StreamLane::route_of(lane.key) == p_route
-                && lane.value.tenure.bound
-                && lane.value.tenure.tenure < p_tenure) {
+                && p_dooms(lane.value.tenure, p_bar)) {
                 doomed.push_back(lane.key);
             }
         }
@@ -382,9 +413,7 @@ uint64_t StreamWriterBook::open(
     const uint64_t address = p_lane.address();
     Lane *held = live.lanes.getptr(address);
     if (held != nullptr && !held->token_was_reset && held->epoch == p_epoch
-        && held->schema == p_schema
-        && held->tenure.tenure == p_tenure.tenure
-        && held->tenure.bound == p_tenure.bound) {
+        && held->schema == p_schema && held->tenure == p_tenure) {
         return held->request;
     }
     const uint64_t request = next_open_request();
@@ -412,22 +441,34 @@ bool StreamWriterBook::holds_tenure(
     const StreamTenure &p_tenure
 ) {
     const Lane *held = lane_at(p_peer, p_lane);
-    return held == nullptr
-        || (held->tenure.tenure == p_tenure.tenure
-            && held->tenure.bound == p_tenure.bound);
+    return held == nullptr || held->tenure == p_tenure;
 }
 
 LocalVector<ClosedLane> StreamWriterBook::close_tenures_other_than(
     int64_t p_route,
     uint64_t p_tenure
 ) {
+    return close_where(p_route, &tenure_other_than, p_tenure);
+}
+
+LocalVector<ClosedLane> StreamWriterBook::close_anchors_other_than(
+    int64_t p_route,
+    uint64_t p_anchor
+) {
+    return close_where(p_route, &anchor_other_than, p_anchor);
+}
+
+LocalVector<ClosedLane> StreamWriterBook::close_where(
+    int64_t p_route,
+    TenureDooms p_dooms,
+    uint64_t p_bar
+) {
     LocalVector<ClosedLane> out;
     for (KeyValue<int, Connection> &each : connections) {
         LocalVector<uint64_t> doomed;
         for (const KeyValue<uint64_t, Lane> &lane : each.value.lanes) {
             if (StreamLane::route_of(lane.key) == p_route
-                && lane.value.tenure.bound
-                && lane.value.tenure.tenure != p_tenure) {
+                && p_dooms(lane.value.tenure, p_bar)) {
                 doomed.push_back(lane.key);
             }
         }

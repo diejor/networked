@@ -19,10 +19,10 @@
 		body.reparent(other)       an ordinary Godot move, taken here and
 		                           replicated. it answers nothing
 		Netw.reparent(body, other) the same move carrying a NetwPromise, which
-		                           resolves only once the body stands under
-		                           its new parent on every peer that has it
+		                           resolves once the session authority holds
+		                           the body under its new parent
 		[/codeblock]
-		Only [method Netw.reparent] can be awaited, so a game that has to know the move landed everywhere takes that one, and it holds the law with the carry window included.
+		Only [method Netw.reparent] can be awaited, so a game that has to know the session took the move takes that one, and it holds the law with the carry window included.
 		A view resolves its session through the branch its scene node sits in, so a scene whose container is not in the tree returns [member is_declared] [code]false[/code] and every other member empty.
 		[NetwMultiplayer] keeps the same surface keyed by [RID] for callers that already hold one, and [member entity] is the bridge to it: [method NetwMultiplayer.scene_get_bodies], [method NetwMultiplayer.scene_watch] and [method NetwMultiplayer.scene_observe] are the flat spellings of [member bodies], [method watch] and the signals here.
 	</description>

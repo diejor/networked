@@ -38,6 +38,7 @@ godot::Dictionary verb_spec_records();
 class Record {
 private:
     godot::ObjectID node_id;
+    godot::ObjectID origin_id;
     godot::ObjectID fn_host_id;
     godot::ObjectID spawner_id;
     godot::LocalVector<int32_t> recipient_peers;
@@ -59,7 +60,8 @@ private:
 public:
     bool encode_header(
         wire::WriteStream &p_stream,
-        godot::Object *p_entity
+        godot::Object *p_entity,
+        uint64_t p_anchor
     ) const;
 
     static bool decode_header(
@@ -94,6 +96,9 @@ public:
 
     godot::Node *node() const;
     void bind_node(godot::Node *p_node);
+
+    godot::Node *origin() const;
+    void bind_origin(godot::Node *p_parent);
 
     godot::Node *fn_host() const;
     void bind_fn_host(godot::Node *p_host);

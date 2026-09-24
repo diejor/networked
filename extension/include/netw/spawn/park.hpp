@@ -23,7 +23,14 @@ private:
         int64_t sender = 0;
     };
 
+    struct Reparent {
+        godot::PackedByteArray payload;
+        uint64_t revision = 0;
+        int64_t sender = 0;
+    };
+
     godot::HashMap<int64_t, Row> rows;
+    godot::HashMap<int64_t, Reparent> reparents;
 
 public:
     bool park(
@@ -43,6 +50,15 @@ public:
     int64_t sender_of(int64_t route) const;
 
     bool cancel(int64_t route);
+
+    bool keep_reparent(
+        int64_t route,
+        const godot::PackedByteArray &payload,
+        uint64_t revision,
+        int64_t sender
+    );
+
+    godot::PackedByteArray take_reparent(int64_t route, int64_t &r_sender);
 
     godot::PackedInt64Array waiting_on(Wait wait) const;
 

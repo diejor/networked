@@ -1380,7 +1380,7 @@ session::SceneViewersHead NetwMultiplayer::scene_viewers_head(
 
 void NetwMultiplayer::scene_publish_viewers(const RID &p_scene) {
     const int64_t route = scene_route_of(p_scene);
-    if (!is_server() || route <= 0) {
+    if (!is_session_authority() || route <= 0) {
         return;
     }
     uint64_t *held = scene_viewers_revision.getptr(route);
@@ -1426,7 +1426,7 @@ void NetwMultiplayer::scene_publish_viewers(const RID &p_scene) {
 
 void NetwMultiplayer::scene_send_viewers(const RID &p_scene, int64_t p_target) {
     const int64_t route = scene_route_of(p_scene);
-    if (!is_server() || route <= 0
+    if (!is_session_authority() || route <= 0
         || p_target == int64_t(get_unique_id())) {
         return;
     }
@@ -1521,7 +1521,7 @@ void NetwMultiplayer::scene_receive_viewers_frame(
     const PackedByteArray &p_payload,
     int p_sender
 ) {
-    if (p_sender != MultiplayerPeer::TARGET_PEER_SERVER || is_server()) {
+    if (p_sender != session_authority_peer() || is_session_authority()) {
         return;
     }
     session::SceneViewersHead head;
@@ -1640,6 +1640,18 @@ Ref<NetwPromise> NetwMultiplayer::scene_move_entity(
     NETW_ZONE_NC("NetwMultiplayer scene_move_entity", colors::SCENE);
     Ref<NetwPromise> promise;
     promise.instantiate();
+    if (!is_session_authority()) {
+        NETW_ERROR(
+            sys::SCENE,
+            "scene_move: only the session authority moves an entity between "
+            "scenes"
+        );
+        promise->reject(
+            ERR_UNAUTHORIZED,
+            "scene_move: only the session authority moves an entity"
+        );
+        return promise;
+    }
     const Ref<NetwEntity> mover = entity_get_view(p_entity);
     Node *body = wrapper_owner(p_entity);
     Node *target = wrapper_owner(p_destination);

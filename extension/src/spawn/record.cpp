@@ -22,7 +22,8 @@ template <class T> T *resolve(const ObjectID &p_id) {
 
 bool Record::encode_header(
     wire::WriteStream &p_stream,
-    Object *p_entity
+    Object *p_entity,
+    uint64_t p_anchor
 ) const {
     NetwEntity *entity = Object::cast_to<NetwEntity>(p_entity);
     String id = String(entity_id);
@@ -46,10 +47,12 @@ bool Record::encode_header(
     String scene_label
         = declares_scene ? String(entity->get_scene_label()) : String();
     String name = node_name;
+    uint64_t anchor = p_anchor;
 
     if (!wire::string_field(p_stream, id) || !p_stream.varuint(peer, 5)
         || !p_stream.svarint(control, 5) || !p_stream.varuint(revision, 5)
-        || !p_stream.varuint(tenure, 5) || !p_stream.varuint(spawn_tick, 5)
+        || !p_stream.varuint(tenure, 5) || !p_stream.varuint(anchor, 5)
+        || !p_stream.varuint(spawn_tick, 5)
         || !p_stream.svarint(requester, 5) || !p_stream.bits(comp_hash, 32)
         || !p_stream.bits(hold, 2) || !p_stream.bool1(declares_scene)) {
         return false;
@@ -193,6 +196,7 @@ bool Record::decode_header(wire::ReadStream &p_stream, Dictionary &r_header) {
     int64_t control = 0;
     uint64_t revision = 0;
     uint64_t tenure = 0;
+    uint64_t anchor = 0;
     uint64_t hold = 0;
     uint64_t spawn_tick = 0;
     int64_t requester = 0;
@@ -203,7 +207,8 @@ bool Record::decode_header(wire::ReadStream &p_stream, Dictionary &r_header) {
 
     if (!wire::string_field(p_stream, id) || !p_stream.varuint(peer, 5)
         || !p_stream.svarint(control, 5) || !p_stream.varuint(revision, 5)
-        || !p_stream.varuint(tenure, 5) || !p_stream.varuint(spawn_tick, 5)
+        || !p_stream.varuint(tenure, 5) || !p_stream.varuint(anchor, 5)
+        || !p_stream.varuint(spawn_tick, 5)
         || !p_stream.svarint(requester, 5) || !p_stream.bits(comp_hash, 32)
         || !p_stream.bits(hold, 2) || !p_stream.bool1(declares_scene)) {
         return false;
@@ -220,6 +225,7 @@ bool Record::decode_header(wire::ReadStream &p_stream, Dictionary &r_header) {
     r_header[StringName("controller")] = control;
     r_header[StringName("control_revision")] = int64_t(revision);
     r_header[StringName("control_tenure")] = int64_t(tenure);
+    r_header[StringName("anchor_revision")] = int64_t(anchor);
     r_header[StringName("control_hold")] = int64_t(hold);
     r_header[StringName("action_spawn_tick")] = int64_t(spawn_tick) - 1;
     r_header[StringName("action_requester")] = requester;
@@ -236,6 +242,14 @@ Node *Record::node() const {
 
 void Record::bind_node(Node *p_node) {
     node_id = gd::instance_id(p_node);
+}
+
+Node *Record::origin() const {
+    return resolve<Node>(origin_id);
+}
+
+void Record::bind_origin(Node *p_parent) {
+    origin_id = gd::instance_id(p_parent);
 }
 
 Node *Record::fn_host() const {

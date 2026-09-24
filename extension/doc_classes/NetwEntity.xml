@@ -170,6 +170,7 @@
 			<param index="0" name="opts" type="NetwDespawnOpts" default="null" />
 			<description>
 				Frees [member owner] after emitting [signal despawning] and flushing persisted state through [member persistence].
+				Every entity below [member owner] despawns with it, except one whose [member on_parent_despawn] is [constant PARENT_DESPAWN_DETACH], which is moved out first.
 				[codeblock]
 				entity.despawn()
 
@@ -420,6 +421,14 @@
 		<member name="on_controller_disconnect" type="int" setter="set_on_controller_disconnect" getter="get_on_controller_disconnect" enum="NetwEntity.DisconnectRule" default="0">
 			The lifetime rule for an entity whose controller disconnects, as a [enum DisconnectRule]. It applies only when the disconnected peer controls the entity without being represented by it: player representation still despawns through [member peer_id].
 		</member>
+		<member name="on_parent_despawn" type="int" setter="set_on_parent_despawn" getter="get_on_parent_despawn" enum="NetwEntity.ParentDespawnRule" default="0">
+			What happens to this entity when an entity above it is ended with [method despawn], as a [enum ParentDespawnRule]. Set it in [code]_init[/code] beside [member transfer]. A parent freed without [method despawn] takes every descendant with it, whatever this rule says.
+			[codeblock]
+			func _init() -&gt; void:
+			    var entity := Netw.configure_entity(self)
+			    entity.on_parent_despawn = NetwEntity.PARENT_DESPAWN_DETACH
+			[/codeblock]
+		</member>
 		<member name="owner" type="Node" setter="set_owner" getter="get_owner">
 			The root [Node] that holds this entity, or [code]null[/code] once the tree has freed it.
 		</member>
@@ -615,6 +624,12 @@
 		</constant>
 		<constant name="DISCONNECT_DESPAWN" value="1" enum="DisconnectRule">
 			The entity despawns when its controller disconnects.
+		</constant>
+		<constant name="PARENT_DESPAWN_CASCADE" value="0" enum="ParentDespawnRule">
+			The entity despawns with the entity above it.
+		</constant>
+		<constant name="PARENT_DESPAWN_DETACH" value="1" enum="ParentDespawnRule">
+			Before the entity above it despawns, the server moves this entity under that entity's own parent where it stands, and every peer moves it there too. A held item drops where its holder stood. The entities below this one move with it.
 		</constant>
 		<constant name="STAGE_UNBOUND" value="0" enum="Stage">
 			Identity unbound and inert toward the wire: no route, no registration, and never process-disabled behind its back. A bare programmatic node lives here.

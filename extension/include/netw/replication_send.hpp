@@ -118,6 +118,10 @@ public:
         impl.close_tenures(p_route, p_tenure);
     }
 
+    void close_anchors(int64_t p_route, uint64_t p_anchor) {
+        impl.close_anchors(p_route, p_anchor);
+    }
+
     godot::LocalVector<wire::ParkedOpen> expire_parks(int64_t p_now_ms) {
         return impl.expire_parks(p_now_ms);
     }

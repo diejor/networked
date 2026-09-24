@@ -27,6 +27,7 @@ struct PhantomEvidence {
     int settled_enters = 0;
     int enters_after_move = 0;
     bool arrived = false;
+    bool left_area = false;
 };
 
 PhantomEvidence &phantom_evidence() {
@@ -77,6 +78,7 @@ class PhantomScenario final : public netw_test::FrameScenario {
     netw_test::CallLog *enters = nullptr;
     Ref<NetwMultiplayer> core;
     int settled = 0;
+    bool replicated = false;
 
     void open() {
         core.instantiate();
@@ -104,6 +106,8 @@ class PhantomScenario final : public netw_test::FrameScenario {
             = int(enters->count(StringName("entered"))) - settled;
         Node *landed = body->get_parent();
         evidence.arrived = landed == destination;
+        evidence.left_area
+            = double(body->get_global_position().x) > AREA_EXTENT * 2.0;
 
         netw::gd::scene_root()->remove_child(stage);
         memdelete(stage);
@@ -138,6 +142,10 @@ public:
             return true;
         }
         if (step <= SETTLE_FRAMES + CARRY_FRAMES) {
+            if (!replicated && body->get_parent() == destination) {
+                body->set_position(Vector2());
+                replicated = true;
+            }
             ++step;
             return true;
         }
@@ -167,6 +175,7 @@ TEST_CASE(
     const PhantomEvidence &evidence = phantom_evidence();
     REQUIRE(evidence.driven);
     CHECK(evidence.arrived);
+    CHECK(evidence.left_area);
     NETW_CHECK_EQ(evidence.enters_after_move, 0);
 }
 

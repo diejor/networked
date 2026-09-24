@@ -52,25 +52,35 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Control][Hosted] KW4 the control, spawn and row control "
-    "channels declare the payload revision their layouts are on, so a build "
-    "that still speaks the controller-only apply or an OPEN without a tenure "
+    "[Networked][Control][Hosted] KW4 the control, spawn, reparent and row "
+    "control channels declare the payload revision their layouts are on, so "
+    "a build that still speaks the controller-only apply, an OPEN without a "
+    "tenure, a move without an anchor revision or an ADOPT without its origin "
     "answers a different wire identity and is refused at the join gate"
 ) {
     const netw::wire::WireRegistry table
         = netw::wire::WireRegistry::create_default();
-    const char *revised[]
-        = {"CONTROL_REQUEST", "CONTROL_APPLY", "SPAWN", "ROW_CONTROL"};
-    for (const char *name : revised) {
+    struct Revised {
+        const char *name;
+        int revision;
+    };
+    const Revised revised[] = {
+        {"CONTROL_REQUEST", 1},
+        {"CONTROL_APPLY", 1},
+        {"SPAWN", 3},
+        {"REPARENT", 1},
+        {"ROW_CONTROL", 2},
+    };
+    for (const Revised &row : revised) {
         const netw::wire::ChannelDecl *decl
-            = table.find_channel_by_name(StringName(name));
+            = table.find_channel_by_name(StringName(row.name));
         REQUIRE(decl != nullptr);
-        NETW_CHECK_EQ(int(decl->payload_revision), 1);
+        NETW_CHECK_EQ(int(decl->payload_revision), row.revision);
 
         netw::wire::WireRegistry older
             = netw::wire::WireRegistry::create_default();
         netw::wire::ChannelDecl unrevised = *decl;
-        unrevised.payload_revision = 0;
+        unrevised.payload_revision = uint16_t(row.revision - 1);
         REQUIRE(older.register_channel(unrevised));
         const bool refused_at_join
             = older.identity_hash() != table.identity_hash();

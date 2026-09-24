@@ -474,7 +474,7 @@
 			<param index="0" name="node" type="Node" />
 			<param index="1" name="new_parent" type="Node" />
 			<description>
-				Moves [param node] under [param new_parent] the way [method Node.reparent] does, and answers a [NetwPromise] that resolves once the node stands there on every peer that holds it.
+				Moves [param node] under [param new_parent] the way [method Node.reparent] does, and answers a [NetwPromise] that resolves once the session authority holds the node under its new parent. Every other peer that holds the node takes the move after that.
 				[codeblock]
 				await Netw.reparent(body, level2.get_node(^"Players")).wait()
 				[/codeblock]

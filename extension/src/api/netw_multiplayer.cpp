@@ -565,7 +565,7 @@ bool NetwMultiplayer::membership_destination_foreign(Node *p_owner) const {
 }
 
 void NetwMultiplayer::membership_place_body(const Ref<NetwEntity> &p_entity) {
-    if (!is_server() || p_entity.is_null()) {
+    if (!is_session_authority() || p_entity.is_null()) {
         return;
     }
     const int64_t peer = p_entity->get_peer_id();
@@ -711,7 +711,7 @@ void NetwMultiplayer::membership_note_divergence(
 }
 
 void NetwMultiplayer::membership_audit() {
-    if (!is_server() || membership_audit_held > 0
+    if (!is_session_authority() || membership_audit_held > 0
         || !entity_departures.is_empty()) {
         return;
     }
@@ -818,7 +818,7 @@ Error NetwMultiplayer::player_kick(
     const String &p_reason
 ) {
     NETW_ERR_COND_V(
-        !is_server(),
+        !is_session_authority(),
         ERR_UNAUTHORIZED,
         sys::SESSION,
         "session.kick: only server authority removes a player."
@@ -2485,7 +2485,7 @@ void NetwMultiplayer::session_request_leave(const String &p_reason) {
 
 void NetwMultiplayer::peer_kick(int64_t p_peer_id, const String &p_reason) {
     NETW_ERR_COND(
-        !session_core.is_server_role(),
+        !is_session_authority(),
         sys::SESSION,
         "a kick is issued by server authority"
     );
@@ -3557,6 +3557,10 @@ bool NetwMultiplayer::is_online() const {
 }
 
 bool NetwMultiplayer::is_host() const {
+    return is_session_authority();
+}
+
+bool NetwMultiplayer::is_session_authority() const {
     return session_core.holds_server_authority();
 }
 

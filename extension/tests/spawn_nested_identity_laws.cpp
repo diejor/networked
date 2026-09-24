@@ -346,6 +346,144 @@ TEST_CASE(
     CHECK(pose_travelled);
 }
 
+struct ForeignParent {
+    const char *label;
+    bool placed_by_the_level;
+};
+
+const ForeignParent FOREIGN_PARENTS[] = {
+    {"nested-in-a-spawned-root", false},
+    {"placed-by-the-level", true},
+};
+
+struct ForeignEvidence {
+    bool built = false;
+    int64_t host_anchor = 0;
+    int64_t seat_anchor = 0;
+    bool seated = false;
+    bool under_the_foreign_body = false;
+    bool left_its_origin = false;
+    bool spin_follows = false;
+    bool early_seat_agrees = false;
+};
+
+void place_level(LoopbackRig &p_rig, int p_client) {
+    Node *branch = p_rig.branch(p_client);
+    Node *origin = build_nested_arena(Variant());
+    origin->set_name("ArenaA");
+    branch->add_child(origin);
+    Node *foreign = build_plain_arena(Variant());
+    foreign->set_name("ArenaB");
+    branch->add_child(foreign);
+}
+
+int64_t adopt_placed(LoopbackRig &p_rig, const char *p_name) {
+    const Ref<NetwEntity> adopted = p_rig.server()->replication_adopt_in_place(
+        descend(p_rig.branch(-1), p_name)
+    );
+    return adopted.is_valid() ? adopted->get_route() : int64_t(0);
+}
+
+ForeignEvidence run_foreign_parent(const ForeignParent &p_case) {
+    ForeignEvidence seen;
+    LoopbackRig rig(1);
+    rig.mount();
+    int64_t origin_route = 0;
+    int64_t foreign_route = 0;
+    if (p_case.placed_by_the_level) {
+        place_level(rig, -1);
+        place_level(rig, 0);
+        rig.pump(4);
+        origin_route = adopt_placed(rig, "ArenaA");
+        foreign_route = adopt_placed(rig, "ArenaB");
+    } else {
+        origin_route = spawn_arena(rig);
+        foreign_route = spawn_arena(
+            rig,
+            nullptr,
+            callable_mp_static(&build_plain_arena),
+            StringName("plain_arena")
+        );
+    }
+    rig.pump(8);
+    Node *origin = rig.route_node(int(origin_route));
+    Node *foreign = rig.route_node(int(foreign_route));
+    const Nest host = read_nest(origin);
+    seen.built = origin != nullptr && foreign != nullptr && host.ball > 0;
+    if (!seen.built) {
+        return seen;
+    }
+
+    netw::NetwMultiplayer::entity_move(
+        descend(origin, BALL),
+        descend(foreign, "Body")
+    );
+    rig.pump(8);
+    seen.host_anchor = int64_t(rig.server()->liveness_route_anchor(host.ball));
+    Node *early_ball = rig.route_node(int(host.ball), 0);
+    Node *early_foreign = rig.route_node(int(foreign_route), 0);
+    seen.early_seat_agrees = early_ball != nullptr && early_foreign != nullptr
+        && early_ball->get_parent() == descend(early_foreign, "Body");
+
+    const int late = rig.add_client();
+    rig.mount_late(late);
+    if (p_case.placed_by_the_level) {
+        place_level(rig, late);
+    }
+    rig.register_constructor(
+        rig.client(late),
+        StringName("nested_arena"),
+        callable_mp_static(&build_nested_arena),
+        one_type()
+    );
+    rig.register_constructor(
+        rig.client(late),
+        StringName("plain_arena"),
+        callable_mp_static(&build_plain_arena),
+        one_type()
+    );
+    const PackedInt64Array replay
+        = rig.spawn_plane()->get_spawn_book()->ancestry_order();
+    for (int at = 0; at < replay.size(); ++at) {
+        rig.deliver_spawn(late, rig.spawn_frame_of(int(replay[at])));
+    }
+    rig.pump(8);
+
+    Node *seat_ball = rig.route_node(int(host.ball), late);
+    Node *seat_origin = rig.route_node(int(origin_route), late);
+    Node *seat_foreign = rig.route_node(int(foreign_route), late);
+    seen.seated = seat_ball != nullptr;
+    seen.under_the_foreign_body = seen.seated && seat_foreign != nullptr
+        && seat_ball->get_parent() == descend(seat_foreign, "Body");
+    seen.left_its_origin
+        = seat_origin != nullptr && descend(seat_origin, BALL) == nullptr;
+    seen.spin_follows = seen.seated
+        && rig.route_node(int(host.spin), late) == descend(seat_ball, SPIN);
+    seen.seat_anchor
+        = int64_t(rig.client(late)->liveness_route_anchor(host.ball));
+    return seen;
+}
+
+TEST_CASE(
+    "[Networked][Spawn] CN8 a peer that joins while a scene-placed entity "
+    "stands under another entity's child finds it where the scene put it and "
+    "moves it there, under the revision the move was made at"
+) {
+    for (const ForeignParent &placement : FOREIGN_PARENTS) {
+        NETW_FORMAT_TEXT(netw_cell_text, placement.label);
+        CAPTURE(netw_cell_text);
+        const ForeignEvidence seen = run_foreign_parent(placement);
+        REQUIRE(seen.built);
+        CHECK(seen.early_seat_agrees);
+        NETW_CHECK_EQ(seen.host_anchor, int64_t(2));
+        CHECK(seen.seated);
+        CHECK(seen.under_the_foreign_body);
+        CHECK(seen.left_its_origin);
+        CHECK(seen.spin_follows);
+        NETW_CHECK_EQ(seen.seat_anchor, seen.host_anchor);
+    }
+}
+
 } // namespace TestSpawnNestedIdentityLaws
 
 #endif

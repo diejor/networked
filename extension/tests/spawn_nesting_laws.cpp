@@ -3,6 +3,7 @@
 #if defined(NETW_TIER_HOSTED)
 
 #include "godot/node.hpp"
+#include "godot/spatial_node.hpp"
 #include "netw/api/entity.hpp"
 #include "netw/api/netw_multiplayer.hpp"
 #include "netw/liveness_core.hpp"
@@ -389,6 +390,218 @@ TEST_CASE(
     Node *outer = netw::NetwMultiplayer::scene_outer_of(authored);
     outer->get_parent()->remove_child(outer);
     memdelete(outer);
+}
+
+Node3D *build_spatial(const String &p_name, const Vector3 &p_at) {
+    Node3D *made = memnew(Node3D);
+    made->set_name(p_name);
+    made->set_position(p_at);
+    made->set_rotation(Vector3(0.0, real_t(Math_PI * 0.5), 0.0));
+    return made;
+}
+
+Node *build_detaching(const Variant &p_name) {
+    Node3D *made = build_spatial(String(p_name), Vector3(1.0, 2.0, 0.0));
+    NetwEntity::ensure(made)->set_on_parent_despawn(
+        NetwEntity::PARENT_DESPAWN_DETACH
+    );
+    return made;
+}
+
+Node *build_cascading(const Variant &p_name) {
+    return build_spatial(String(p_name), Vector3(0.0, 1.0, 3.0));
+}
+
+Array named(const char *p_name) {
+    Array out;
+    out.push_back(String(p_name));
+    return out;
+}
+
+struct Holding {
+    int avatar = 0;
+    int cube = 0;
+    int sticker = 0;
+    int satchel = 0;
+    int coin = 0;
+};
+
+Holding spawn_holding(LoopbackRig &p_rig, Node *p_arena) {
+    Holding out;
+    out.avatar = p_rig.spawn_registered(
+        StringName("cascading"),
+        callable_mp_static(&build_cascading),
+        named("Avatar"),
+        one_type(),
+        p_arena
+    );
+    out.cube = p_rig.spawn_registered(
+        StringName("detaching"),
+        callable_mp_static(&build_detaching),
+        named("Cube"),
+        one_type(),
+        p_rig.route_node(out.avatar)
+    );
+    out.sticker = p_rig.spawn_registered(
+        StringName("detaching"),
+        callable_mp_static(&build_detaching),
+        named("Sticker"),
+        one_type(),
+        p_rig.route_node(out.cube)
+    );
+    out.satchel = p_rig.spawn_registered(
+        StringName("cascading"),
+        callable_mp_static(&build_cascading),
+        named("Satchel"),
+        one_type(),
+        p_rig.route_node(out.avatar)
+    );
+    out.coin = p_rig.spawn_registered(
+        StringName("detaching"),
+        callable_mp_static(&build_detaching),
+        named("Coin"),
+        one_type(),
+        p_rig.route_node(out.satchel)
+    );
+    return out;
+}
+
+Transform3D world_of(LoopbackRig &p_rig, int p_route, int p_side) {
+    Node3D *spatial
+        = Object::cast_to<Node3D>(p_rig.route_node(p_route, p_side));
+    return spatial != nullptr ? spatial->get_global_transform() : Transform3D();
+}
+
+int64_t state_on(LoopbackRig &p_rig, int p_side, int p_route) {
+    netw::NetwMultiplayer *api
+        = p_side < 0 ? p_rig.server() : p_rig.client(p_side);
+    return int64_t(api->entity_get_state(api->entity_from_route(p_route)));
+}
+
+bool stands_at(const Transform3D &p_seen, const Transform3D &p_before) {
+    return p_seen.origin.distance_to(p_before.origin) < 1e-4
+        && p_seen.basis.is_equal_approx(p_before.basis);
+}
+
+TEST_CASE(
+    "[Networked][Spawn] SN10 a parent despawn moves each detaching descendant "
+    "under the parent's own parent where it stood and takes the rest with it, "
+    "on every peer"
+) {
+    LoopbackRig rig(1);
+    rig.mount();
+    Node *arena = rig.mirror_child("Arena");
+    const Holding held = spawn_holding(rig, arena);
+    Node *client_arena = rig.branch(0)->get_node_or_null(NodePath("Arena"));
+    REQUIRE(client_arena != nullptr);
+
+    const int moved[2] = { held.cube, held.coin };
+    Transform3D before[2][2];
+    for (int side = -1; side <= 0; ++side) {
+        for (int at = 0; at < 2; ++at) {
+            before[side + 1][at] = world_of(rig, moved[at], side);
+        }
+    }
+    const Dictionary counted = Dictionary(rig.spawn_plane(0)->counters());
+
+    NetwEntity::of(rig.route_node(held.avatar))->despawn(
+        Ref<netw::NetwDespawnOpts>()
+    );
+    Node *host_avatar = rig.route_node(held.avatar);
+    host_avatar->get_parent()->remove_child(host_avatar);
+    rig.pump(8);
+
+    Node *arenas[2] = { arena, client_arena };
+    for (int side = -1; side <= 0; ++side) {
+        NETW_FORMAT_TEXT(netw_side_text, side < 0 ? "session" : "client");
+        CAPTURE(netw_side_text);
+        for (int at = 0; at < 2; ++at) {
+            Node *survivor = rig.route_node(moved[at], side);
+            const bool detached = survivor != nullptr
+                && survivor->get_parent() == arenas[side + 1];
+            CHECK(detached);
+            CHECK(stands_at(
+                world_of(rig, moved[at], side),
+                before[side + 1][at]
+            ));
+            NETW_CHECK_EQ(
+                state_on(rig, side, moved[at]),
+                int64_t(netw::NetwLivenessCore::STATE_LIVE)
+            );
+        }
+        Node *sticker = rig.route_node(held.sticker, side);
+        const bool stays_on_the_cube = sticker != nullptr
+            && sticker->get_parent() == rig.route_node(held.cube, side);
+        CHECK(stays_on_the_cube);
+        NETW_CHECK_EQ(
+            state_on(rig, side, held.avatar),
+            int64_t(netw::NetwLivenessCore::STATE_DEAD)
+        );
+        NETW_CHECK_EQ(
+            state_on(rig, side, held.satchel),
+            int64_t(netw::NetwLivenessCore::STATE_DEAD)
+        );
+    }
+
+    NETW_CHECK_EQ(
+        int64_t(rig.client(0)->liveness_route_anchor(held.cube)),
+        int64_t(rig.server()->liveness_route_anchor(held.cube))
+    );
+    NETW_CHECK_EQ(int64_t(rig.server()->liveness_route_anchor(held.cube)), 2);
+    const Dictionary after = Dictionary(rig.spawn_plane(0)->counters());
+    for (const char *drop :
+         { "drops_spawn_unresolved", "drops_despawn_unknown" }) {
+        NETW_CHECK_EQ(
+            int64_t(after[StringName(drop)]),
+            int64_t(counted[StringName(drop)])
+        );
+    }
+    memdelete(host_avatar);
+}
+
+Node *seat_pocket(Node *p_under) {
+    Node *pocket = memnew(Node);
+    pocket->set_name("Pocket");
+    p_under->add_child(pocket);
+    return pocket;
+}
+
+TEST_CASE(
+    "[Networked][Spawn] SN11 a child whose parent route the book does not "
+    "hold reaches no peer, through the sweep, a move or a late join"
+) {
+    LoopbackRig rig(1);
+    rig.mount();
+    const Nested pair = spawn_pair(rig, rig.mirror_child("Arena"));
+    Node *pocket = seat_pocket(rig.route_node(pair.parent_route));
+    Node *client_pocket = seat_pocket(rig.route_node(pair.parent_route, 0));
+    rig.pump(2);
+
+    netw::spawn::Book *book = rig.spawn_plane()->get_spawn_book();
+    book->drop_spawned(pair.parent_route);
+    netw::NetwMultiplayer::entity_move(
+        rig.route_node(pair.child_route),
+        pocket
+    );
+    rig.pump(6);
+
+    Node *held = rig.route_node(pair.child_route, 0);
+    const bool moved_on_the_client
+        = held != nullptr && held->get_parent() == client_pocket;
+    CHECK_FALSE(moved_on_the_client);
+
+    const int late = rig.add_client();
+    rig.mount_late(late);
+    rig.mirror_late(late, "Arena");
+    rig.pump(12);
+
+    const netw::spawn::Record *child = book->spawned_of(pair.child_route);
+    const bool replayed
+        = child != nullptr && child->has_recipient(rig.peer_id(late));
+    CHECK_FALSE(replayed);
+    const Dictionary joined = Dictionary(rig.spawn_plane(late)->counters());
+    NETW_CHECK_EQ(int64_t(joined[StringName("spawn_deferrals")]), 0);
+    NETW_CHECK_EQ(int64_t(joined[StringName("spawn_parked_cancelled")]), 0);
 }
 
 } // namespace TestSpawnNestingLaws

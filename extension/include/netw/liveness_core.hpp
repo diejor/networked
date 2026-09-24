@@ -26,6 +26,7 @@ private:
         State state = STATE_UNKNOWN;
         int32_t epoch = 0;
         int32_t wire_epoch = -1;
+        uint64_t anchor = 1;
     };
 
     struct Pending {
@@ -65,6 +66,9 @@ public:
     int route_wire_epoch(int route) const;
     bool epoch_admits(int route, int epoch) const;
     bool adopt_epoch(int route, int epoch);
+
+    uint64_t route_anchor(int route) const;
+    bool set_route_anchor(int route, uint64_t anchor);
 
     State state_of(const godot::RID &entity) const;
     State route_state(int route) const;

@@ -424,7 +424,7 @@ void NetwMultiplayer::interest_report_edge(
 }
 
 bool NetwMultiplayer::interest_can_send_to(int64_t p_peer_id) {
-    if (p_peer_id == 0 || p_peer_id == MultiplayerPeer::TARGET_PEER_SERVER) {
+    if (p_peer_id == 0 || p_peer_id == session_authority_peer()) {
         return false;
     }
     if (!has_multiplayer_peer()) {
@@ -438,7 +438,7 @@ bool NetwMultiplayer::interest_can_send_to(int64_t p_peer_id) {
         != MultiplayerPeer::CONNECTION_CONNECTED) {
         return false;
     }
-    if (is_server()) {
+    if (is_session_authority()) {
         return NETW_API_VIRTUAL(get_peer_ids)().has(int32_t(p_peer_id));
     }
     return false;

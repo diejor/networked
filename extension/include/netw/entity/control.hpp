@@ -60,6 +60,11 @@ public:
         DESPAWN = 1,
     };
 
+    enum class ParentDespawnRule : int {
+        CASCADE = 0,
+        DETACH = 1,
+    };
+
     enum class WritePolicy : int {
         AUTHORITY = 0,
         CONTROLLER = 1,
@@ -78,6 +83,7 @@ public:
     int64_t initial = int(InitialController::SERVER);
     int64_t transfer = int(Transfer::FIXED);
     int64_t on_disconnect = int(DisconnectRule::REVERT_TO_SERVER);
+    int64_t on_parent_despawn = int(ParentDespawnRule::CASCADE);
     uint64_t revision = 0;
     uint64_t tenure = 0;
     int64_t hold = HOLD_NONE;
@@ -170,6 +176,12 @@ public:
     }
     void set_on_disconnect(int64_t p_rule) {
         on_disconnect = p_rule;
+    }
+    int64_t get_on_parent_despawn() const {
+        return on_parent_despawn;
+    }
+    void set_on_parent_despawn(int64_t p_rule) {
+        on_parent_despawn = p_rule;
     }
 };
 

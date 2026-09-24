@@ -43,13 +43,13 @@ namespace Networked;
 /// body.reparent(other)       an ordinary Godot move, taken here and
 ///                            replicated. it answers nothing
 /// Netw.reparent(body, other) the same move carrying a NetwPromise, which
-///                            resolves only once the body stands under
-///                            its new parent on every peer that has it
+///                            resolves once the session authority holds
+///                            the body under its new parent
 /// </code>
 /// </para>
 /// <para>
 /// Only <see cref="Netw.Reparent"/> can be awaited, so a game that has to know
-/// the move landed everywhere takes that one, and it holds the law with the
+/// the session took the move takes that one, and it holds the law with the
 /// carry window included. A view resolves its session through the branch its
 /// scene node sits in, so a scene whose container is not in the tree returns
 /// <see cref="NetwSceneHandle.IsDeclared"/> <c>false</c> and every other member
@@ -107,7 +107,7 @@ public sealed class NetwSceneHandle : NetwRefCounted
     /// not arrival. A body standing here and a
     /// <see cref="NetwSceneHandle.Watch"/> both raise it and it cannot say
     /// which, so a game that spawns players uses
-    /// <c>NetwSessionHandle.scene_changed</c> instead.
+    /// <see cref="NetwSessionHandle.SceneChanged"/> instead.
     /// </summary>
     public event Action<Variant> ViewerEntered
     {

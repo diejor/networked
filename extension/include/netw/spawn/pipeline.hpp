@@ -43,6 +43,8 @@ struct SpawnFrame {
     int64_t recipe = 0;
     bool parent_is_spawn_target = false;
     godot::Dictionary parent_anchor;
+    bool moved_from_origin = false;
+    godot::Dictionary origin_anchor;
     godot::String scene_path;
     godot::Dictionary spawner_anchor;
     int64_t scene_index = 0;
@@ -93,6 +95,7 @@ private:
     int64_t drops_spawn_unresolved = 0;
     int64_t drops_spawn_truncated = 0;
     int64_t drops_spawn_stale_life = 0;
+    int64_t drops_reparent_stale = 0;
     int64_t drops_despawn_unknown = 0;
     int64_t drops_hide_unknown = 0;
     int64_t spawn_deferrals = 0;
@@ -164,6 +167,7 @@ private:
     void settle_death(int64_t p_route);
     void settle_absence(int64_t p_route);
     bool holds_received_route(int64_t p_route) const;
+    bool holds_spawned_route(int64_t p_route) const;
     void despawn_tracked_route(int64_t p_route);
     void send_reparent(Record *p_record, godot::Node *p_node);
 
@@ -226,6 +230,7 @@ private:
         const godot::PackedByteArray &p_payload,
         int64_t p_sender
     );
+    void apply_kept_reparent(int64_t p_route);
     void free_despawned(int64_t p_route);
     void free_route_node(int64_t p_route, godot::Node *p_node);
 

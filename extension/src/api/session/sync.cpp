@@ -66,10 +66,19 @@ OpenSeat open_seat(
     int64_t p_sender,
     const wire::StreamLane &p_lane,
     uint64_t p_tenure,
+    uint64_t p_anchor,
+    uint64_t p_installed_anchor,
     int64_t p_coordinator,
     wire::StreamTenure &r_tenure
 ) {
     r_tenure = wire::StreamTenure();
+    r_tenure.anchor = p_installed_anchor;
+    if (p_anchor > p_installed_anchor) {
+        return OpenSeat::PARK;
+    }
+    if (p_anchor < p_installed_anchor) {
+        return OpenSeat::REFUSE;
+    }
     const repl::SetRow *row = p_model != nullptr
         ? p_model->row(p_lane.route, int64_t(p_lane.ordinal))
         : nullptr;
@@ -136,6 +145,7 @@ void seat_or_park(
     NetwSyncModel *p_model,
     const Ref<NetwEntity> &p_entity,
     const wire::ParkedOpen &p_open,
+    uint64_t p_installed_anchor,
     int64_t p_coordinator
 ) {
     wire::StreamTenure tenure;
@@ -145,6 +155,8 @@ void seat_or_park(
         int64_t(p_open.peer),
         p_open.lane,
         p_open.tenure,
+        p_open.anchor,
+        p_installed_anchor,
         p_coordinator,
         tenure
     )) {
@@ -811,6 +823,7 @@ LocalVector<repl::RowOffer> NetwMultiplayer::sync_pump_offers(
         wire::StreamTenure tenure;
         tenure.bound = repl::record_follows_tenure(row->record);
         tenure.tenure = tenure.bound ? entity->get_control_tenure() : 0;
+        tenure.anchor = liveness_route_anchor(route);
         for (uint32_t made = first; made < offers.size(); ++made) {
             offers[made].tenure = tenure;
         }
@@ -936,12 +949,14 @@ void NetwMultiplayer::row_control_receive(
             asked.epoch = record.epoch;
             asked.schema = record.schema;
             asked.tenure = record.tenure;
+            asked.anchor = record.anchor;
             asked.parked_at_ms = session_elapsed_ms();
             seat_or_park(
                 send,
                 plane->get_sync_model(),
                 wrapper_for_route(record.route),
                 asked,
+                liveness_route_anchor(record.route),
                 session_authority_peer()
             );
             return;
@@ -1010,29 +1025,56 @@ void NetwMultiplayer::row_control_flush(
     }
 }
 
+ReplicationSend *NetwMultiplayer::row_send_of(ReplicationCore *p_plane) {
+    SyncPipeline *pipeline
+        = p_plane != nullptr ? p_plane->get_sync_pipeline() : nullptr;
+    return pipeline != nullptr ? pipeline->row_send() : nullptr;
+}
+
 void NetwMultiplayer::row_streams_follow_tenure(
     int64_t p_route,
     uint64_t p_tenure
 ) {
     ReplicationCore *plane = get_replication_plane();
-    SyncPipeline *pipeline
-        = plane != nullptr ? plane->get_sync_pipeline() : nullptr;
-    ReplicationSend *send
-        = pipeline != nullptr ? pipeline->row_send() : nullptr;
+    ReplicationSend *send = row_send_of(plane);
     if (send == nullptr || p_route <= 0) {
         return;
     }
     send->close_tenures(p_route, p_tenure);
     send->reader_book().close_tenures_before(p_route, p_tenure);
+    row_streams_reseat_parks(plane, send, p_route);
+}
+
+void NetwMultiplayer::row_streams_follow_anchor(
+    int64_t p_route,
+    uint64_t p_anchor
+) {
+    ReplicationCore *plane = get_replication_plane();
+    ReplicationSend *send = row_send_of(plane);
+    if (send == nullptr || p_route <= 0) {
+        return;
+    }
+    send->close_anchors(p_route, p_anchor);
+    send->reader_book().close_anchors_before(p_route, p_anchor);
+    row_streams_reseat_parks(plane, send, p_route);
+}
+
+void NetwMultiplayer::row_streams_reseat_parks(
+    ReplicationCore *p_plane,
+    ReplicationSend *p_send,
+    int64_t p_route
+) {
     const LocalVector<wire::ParkedOpen> parked
-        = send->reader_book().take_parks(p_route);
+        = p_send->reader_book().take_parks(p_route);
     const Ref<NetwEntity> entity = wrapper_for_route(p_route);
+    const uint64_t installed = liveness_route_anchor(p_route);
     for (uint32_t at = 0; at < parked.size(); ++at) {
         seat_or_park(
-            send,
-            plane->get_sync_model(),
+            p_send,
+            p_plane->get_sync_model(),
             entity,
             parked[at],
+            installed,
             session_authority_peer()
         );
     }

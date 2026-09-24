@@ -241,15 +241,15 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Spawn][Hosted] a rootless record and one whose parent the "
-    "book does not hold are both unclamped"
+    "[Networked][Spawn][Hosted] a rootless record is unclamped and one whose "
+    "parent the book does not hold is admitted nowhere"
 ) {
     Book book;
     book.issue(at(1));
     book.issue(at(2, 99));
 
     CHECK(book.parent_admits(1, 7));
-    CHECK(book.parent_admits(2, 7));
+    CHECK_FALSE(book.parent_admits(2, 7));
     CHECK(book.parent_admits(77, 7));
 }
 

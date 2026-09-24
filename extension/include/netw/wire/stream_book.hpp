@@ -43,7 +43,15 @@ enum class ReadyVerdict : uint8_t {
 struct StreamTenure {
     uint64_t tenure = 0;
     bool bound = false;
+    uint64_t anchor = 0;
+
+    bool operator==(const StreamTenure &p_other) const {
+        return tenure == p_other.tenure && bound == p_other.bound
+            && anchor == p_other.anchor;
+    }
 };
+
+typedef bool (*TenureDooms)(const StreamTenure &p_lane, uint64_t p_bar);
 
 struct ParkedOpen {
     int peer = 0;
@@ -52,6 +60,7 @@ struct ParkedOpen {
     uint64_t epoch = 0;
     uint32_t schema = 0;
     uint64_t tenure = 0;
+    uint64_t anchor = 0;
     int64_t parked_at_ms = 0;
 };
 
@@ -86,6 +95,7 @@ class StreamReaderBook {
 
     Connection &connection(int p_peer);
     Lane *lane_at(int p_peer, uint64_t p_token);
+    uint32_t close_where(int64_t p_route, TenureDooms p_dooms, uint64_t p_bar);
 
 public:
     uint64_t incarnation_of(int p_peer);
@@ -117,6 +127,8 @@ public:
     godot::LocalVector<int> parked_peers() const;
 
     uint32_t close_tenures_before(int64_t p_route, uint64_t p_tenure);
+
+    uint32_t close_anchors_before(int64_t p_route, uint64_t p_anchor);
 
     SnapshotReceiver *receiver(int p_peer, uint64_t p_token);
 
@@ -179,6 +191,11 @@ class StreamWriterBook {
 
     Lane *lane_at(int p_peer, const StreamLane &p_lane);
     Lane *lane_by_token(int p_peer, uint64_t p_token);
+    godot::LocalVector<ClosedLane> close_where(
+        int64_t p_route,
+        TenureDooms p_dooms,
+        uint64_t p_bar
+    );
 
 public:
     uint64_t open(
@@ -198,6 +215,11 @@ public:
     godot::LocalVector<ClosedLane> close_tenures_other_than(
         int64_t p_route,
         uint64_t p_tenure
+    );
+
+    godot::LocalVector<ClosedLane> close_anchors_other_than(
+        int64_t p_route,
+        uint64_t p_anchor
     );
 
     ReadyVerdict ready(int p_peer, uint64_t p_request, uint64_t p_token);

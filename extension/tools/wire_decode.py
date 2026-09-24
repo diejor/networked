@@ -319,10 +319,25 @@ CONTROL_OPEN = {
         {"name": "family", "kind": "bits", "width": 8},
         {"name": "epoch", "kind": "varuint", "max_bytes": 3},
         {"name": "tenure", "kind": "varuint", "max_bytes": 5},
+        {"name": "anchor", "kind": "varuint", "max_bytes": 5},
         {"name": "schema", "kind": "bits", "width": 32},
     ],
     "bytes": bytes(
-        [0x00, 0x01, 0xAC, 0x02, 0x02, 0x00, 0x05, 0x03, 0xEF, 0xBE, 0xAD, 0xDE]
+        [
+            0x00,
+            0x01,
+            0xAC,
+            0x02,
+            0x02,
+            0x00,
+            0x05,
+            0x03,
+            0x04,
+            0xEF,
+            0xBE,
+            0xAD,
+            0xDE,
+        ]
     ),
     "values": {
         "tag": 0,
@@ -332,6 +347,7 @@ CONTROL_OPEN = {
         "family": 0,
         "epoch": 5,
         "tenure": 3,
+        "anchor": 4,
         "schema": 0xDEADBEEF,
     },
 }
@@ -573,7 +589,7 @@ AGAINST_SPEC = [
         "record": "RowControlOpen",
         "bytes": CONTROL_OPEN["bytes"],
         "values": CONTROL_OPEN["values"],
-        "why": "WIRE.md 10, an OPEN at epoch 5 and tenure 3",
+        "why": "WIRE.md 10, an OPEN at epoch 5, tenure 3 and anchor 4",
     },
     {
         "record": "RowControlReady",

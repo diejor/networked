@@ -50,7 +50,40 @@ int64_t Park::sender_of(int64_t route) const {
 }
 
 bool Park::cancel(int64_t route) {
+    reparents.erase(route);
     return rows.erase(route);
+}
+
+bool Park::keep_reparent(
+    int64_t route,
+    const PackedByteArray &payload,
+    uint64_t revision,
+    int64_t sender
+) {
+    if (!rows.has(route)) {
+        return false;
+    }
+    const HashMap<int64_t, Reparent>::Iterator kept = reparents.find(route);
+    if (kept && kept->value.revision >= revision) {
+        return false;
+    }
+    Reparent row;
+    row.payload = payload;
+    row.revision = revision;
+    row.sender = sender;
+    reparents.insert(route, row);
+    return true;
+}
+
+PackedByteArray Park::take_reparent(int64_t route, int64_t &r_sender) {
+    const HashMap<int64_t, Reparent>::Iterator found = reparents.find(route);
+    if (!found) {
+        return PackedByteArray();
+    }
+    const PackedByteArray payload = found->value.payload;
+    r_sender = found->value.sender;
+    reparents.remove(found);
+    return payload;
 }
 
 PackedInt64Array Park::waiting_on(Wait wait) const {
@@ -77,6 +110,7 @@ int Park::size() const {
 
 void Park::clear() {
     rows.clear();
+    reparents.clear();
 }
 
 bool Park::anchor_parks(int64_t state) {

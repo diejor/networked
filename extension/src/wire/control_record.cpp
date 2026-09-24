@@ -30,6 +30,7 @@ PackedByteArray write_open(const ControlRecord &p_record) {
     staged.family = uint64_t(p_record.family);
     staged.epoch = p_record.epoch;
     staged.tenure = p_record.tenure;
+    staged.anchor = p_record.anchor;
     staged.schema = uint64_t(p_record.schema);
     WriteStream stream;
     if (!ControlOpen::wire.run(stream, staged)) {
@@ -66,6 +67,7 @@ bool read_open(ReadStream &p_stream, ControlRecord &r_record) {
     r_record.family = StreamFamily(uint8_t(staged.family));
     r_record.epoch = staged.epoch;
     r_record.tenure = staged.tenure;
+    r_record.anchor = staged.anchor;
     r_record.schema = uint32_t(staged.schema);
     return true;
 }
@@ -192,6 +194,7 @@ bool read_control_record(
     r_record.family = staged.family;
     r_record.epoch = staged.epoch;
     r_record.tenure = staged.tenure;
+    r_record.anchor = staged.anchor;
     r_record.schema = staged.schema;
     r_record.receipts = staged.receipts;
     return true;

@@ -58,6 +58,7 @@ wire::SnapshotSender *SessionSend::stream_ready(
     asking.family = p_family;
     asking.epoch = epoch;
     asking.tenure = p_offer.tenure.tenure;
+    asking.anchor = p_offer.tenure.anchor;
     asking.schema = schema;
     control.queue(p_peer, asking);
     return nullptr;
@@ -72,10 +73,16 @@ void SessionSend::queue_close(int p_peer, uint64_t p_token) {
 }
 
 void SessionSend::close_tenures(int64_t p_route, uint64_t p_tenure) {
-    const LocalVector<wire::ClosedLane> closed
-        = writers.close_tenures_other_than(p_route, p_tenure);
-    for (uint32_t at = 0; at < closed.size(); ++at) {
-        queue_close(closed[at].peer, closed[at].token);
+    queue_closes(writers.close_tenures_other_than(p_route, p_tenure));
+}
+
+void SessionSend::close_anchors(int64_t p_route, uint64_t p_anchor) {
+    queue_closes(writers.close_anchors_other_than(p_route, p_anchor));
+}
+
+void SessionSend::queue_closes(const LocalVector<wire::ClosedLane> &p_closed) {
+    for (uint32_t at = 0; at < p_closed.size(); ++at) {
+        queue_close(p_closed[at].peer, p_closed[at].token);
     }
 }
 

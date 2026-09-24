@@ -80,6 +80,39 @@ TEST_CASE(
     CHECK(netw::NetwEntity::of(made).is_valid());
 }
 
+TEST_CASE(
+    "[Networked][Spawn][SceneTree] SV6 a client spawning through a spawner "
+    "it holds authority over is refused before a route is minted, because "
+    "only the session authority spawns"
+) {
+    LoopbackRig rig(1);
+    rig.mount();
+    netw_test::flow_clocks(rig, TICKRATE);
+
+    netw::NetwMultiplayer *client = rig.shell_at(0);
+    REQUIRE_FALSE(client->is_session_authority());
+    client->emit_signal(StringName("session_entered"));
+
+    Node *arena = memnew(Node);
+    arena->set_name("ClientArena");
+    rig.branch(0)->add_child(arena);
+
+    MultiplayerSpawner *spawner = scripted_spawner(arena);
+    spawner->set_multiplayer_authority(rig.peer_id(0));
+    rig.branch(0)->add_child(spawner);
+    rig.step_ticks(2);
+
+    const int before = client->get_liveness_core()->reserve_route();
+    Node *made = spawner->spawn("refused");
+    rig.step_ticks(4);
+    const int after = client->get_liveness_core()->reserve_route();
+
+    NETW_CHECK_EQ(after, before + 1);
+    if (made != nullptr) {
+        CHECK(netw::NetwEntity::of(made).is_null());
+    }
+}
+
 } // namespace TestSpawnerWrapReadyLaws
 
 #endif

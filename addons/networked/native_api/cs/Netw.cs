@@ -733,13 +733,16 @@ public sealed class Netw : NetwRefCounted
     /// the <see cref="Node.Multiplayer"/> session, and returns it to configure.
     /// <code>
     /// func _init() -&gt; void:
-    /// 	var entity := Netw.configure_entity(self)
-    /// 	# the node now behaves like `Node.set_multiplayer_authority(peer_id)`
-    /// 	entity.initial_controller = NetwEntity.INITIAL_REPRESENTED_PEER
+    ///     var entity := Netw.configure_entity(self)
+    ///     # the node now behaves like `Node.set_multiplayer_authority(peer_id)`
+    ///     entity.initial_controller = NetwEntity.INITIAL_REPRESENTED_PEER
     /// </code>
     /// <para>
-    /// The entity's body is declared on <see cref="NetwEntity.Simulation"/>,
-    /// its prediction on <see cref="NetwEntity.Prediction"/> and its drawing on
+    /// <see cref="NetwEntity.Controller"/> is the peer that steers the entity,
+    /// and <see cref="NetwEntity"/> shows how a peer takes control and hands it
+    /// on. The entity's body is declared on
+    /// <see cref="NetwEntity.Simulation"/>, its prediction on
+    /// <see cref="NetwEntity.Prediction"/> and its drawing on
     /// <see cref="NetwEntity.Interpolation"/>.
     /// </para>
     /// </summary>
@@ -1521,8 +1524,9 @@ public sealed class Netw : NetwRefCounted
     /// <summary>
     /// Moves <paramref name="node"/> under <paramref name="newParent"/> the way
     /// <see cref="Node.Reparent"/> does, and answers a
-    /// <see cref="NetwPromise"/> that resolves once the node stands there on
-    /// every peer that holds it.
+    /// <see cref="NetwPromise"/> that resolves once the session authority holds
+    /// the node under its new parent. Every other peer that holds the node
+    /// takes the move after that.
     /// <code>
     /// await Netw.reparent(body, level2.get_node(^"Players")).wait()
     /// </code>

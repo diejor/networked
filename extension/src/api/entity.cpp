@@ -244,6 +244,14 @@ void NetwEntity::set_on_controller_disconnect(DisconnectRule p_value) {
     control()->set_on_disconnect(int64_t(p_value));
 }
 
+NetwEntity::ParentDespawnRule NetwEntity::get_on_parent_despawn() const {
+    return ParentDespawnRule(control()->get_on_parent_despawn());
+}
+
+void NetwEntity::set_on_parent_despawn(ParentDespawnRule p_value) {
+    control()->set_on_parent_despawn(int64_t(p_value));
+}
+
 bool NetwEntity::get_declares_scene() const {
     return record->get_declares_scene();
 }
@@ -1197,7 +1205,7 @@ bool NetwEntity::get_is_authority() const {
     if (api == nullptr) {
         return true;
     }
-    return api->is_host();
+    return api->is_session_authority();
 }
 
 Ref<NetwPlayer> NetwEntity::get_player() const {
@@ -1481,6 +1489,7 @@ void NetwEntity::despawn(const Ref<NetwDespawnOpts> &p_opts) {
     }
     NetwMultiplayer *api = session_core();
     if (api != nullptr) {
+        api->spawn_detach_before_despawn(this);
         api->persist_depart(
             api->get_bindings()->find(owner),
             opts->get_flush_save()
@@ -1904,6 +1913,27 @@ void NetwEntity::_bind_methods() {
         ),
         "set_on_controller_disconnect",
         "get_on_controller_disconnect"
+    );
+
+    ClassDB::bind_method(
+        D_METHOD("get_on_parent_despawn"),
+        &NetwEntity::get_on_parent_despawn
+    );
+    ClassDB::bind_method(
+        D_METHOD("set_on_parent_despawn", "value"),
+        &NetwEntity::set_on_parent_despawn
+    );
+    ADD_PROPERTY(
+        PropertyInfo(
+            Variant::INT,
+            "on_parent_despawn",
+            PROPERTY_HINT_ENUM,
+            "Cascade,Detach",
+            PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_CLASS_IS_ENUM,
+            "NetwEntity.ParentDespawnRule"
+        ),
+        "set_on_parent_despawn",
+        "get_on_parent_despawn"
     );
 
     ClassDB::bind_method(
@@ -2510,6 +2540,18 @@ void NetwEntity::_bind_methods() {
         "DisconnectRule",
         "DISCONNECT_DESPAWN",
         int(entity::Control::DisconnectRule::DESPAWN)
+    );
+    ClassDB::bind_integer_constant(
+        get_class_static(),
+        "ParentDespawnRule",
+        "PARENT_DESPAWN_CASCADE",
+        int(entity::Control::ParentDespawnRule::CASCADE)
+    );
+    ClassDB::bind_integer_constant(
+        get_class_static(),
+        "ParentDespawnRule",
+        "PARENT_DESPAWN_DETACH",
+        int(entity::Control::ParentDespawnRule::DETACH)
     );
     ClassDB::bind_integer_constant(
         get_class_static(),

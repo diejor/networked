@@ -77,6 +77,7 @@ bool NetwLivenessCore::bind_route(const RID &entity, int route) {
     }
     if (record->state == STATE_DEAD) {
         record->epoch += 1;
+        record->anchor = 1;
     }
 
     record->route = route;
@@ -111,6 +112,20 @@ bool NetwLivenessCore::adopt_epoch(int route, int epoch) {
         return false;
     }
     record->wire_epoch = epoch;
+    return true;
+}
+
+uint64_t NetwLivenessCore::route_anchor(int route) const {
+    const Record *record = record_of(rid_from_route(route));
+    return record != nullptr ? record->anchor : 0;
+}
+
+bool NetwLivenessCore::set_route_anchor(int route, uint64_t anchor) {
+    Record *record = record_of(rid_from_route(route));
+    if (record == nullptr || anchor == 0) {
+        return false;
+    }
+    record->anchor = anchor;
     return true;
 }
 

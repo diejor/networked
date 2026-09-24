@@ -332,6 +332,21 @@ public sealed class NetwEntity : NetwRefCounted
         Despawn = 1,
     }
 
+    public enum ParentDespawnRule : long
+    {
+        /// <summary>
+        /// The entity despawns with the entity above it.
+        /// </summary>
+        Cascade = 0,
+        /// <summary>
+        /// Before the entity above it despawns, the server moves this entity
+        /// under that entity's own parent where it stands, and every peer moves
+        /// it there too. A held item drops where its holder stood. The entities
+        /// below this one move with it.
+        /// </summary>
+        Detach = 1,
+    }
+
     public enum StageEnum : long
     {
         /// <summary>
@@ -881,6 +896,48 @@ public sealed class NetwEntity : NetwRefCounted
             long discarded = default;
             NetwThunks.Ptrcall1_Long_Long(
                 _bindSetOnControllerDisconnect,
+                Checked,
+                in slot0,
+                ref discarded);
+        }
+    }
+
+    private static readonly IntPtr _bindGetOnParentDespawn =
+        NetwApi.MethodBind("NetwEntity", "get_on_parent_despawn", 326135847UL);
+
+    private static readonly IntPtr _bindSetOnParentDespawn =
+        NetwApi.MethodBind("NetwEntity", "set_on_parent_despawn", 2694955054UL);
+
+    /// <summary>
+    /// What happens to this entity when an entity above it is ended with
+    /// <see cref="NetwEntity.Despawn"/>, as a
+    /// <see cref="NetwEntity.ParentDespawnRule"/>. Set it in <c>_init</c>
+    /// beside <see cref="NetwEntity.Transfer"/>. A parent freed without
+    /// <see cref="NetwEntity.Despawn"/> takes every descendant with it,
+    /// whatever this rule says.
+    /// <code>
+    /// func _init() -&gt; void:
+    ///     var entity := Netw.configure_entity(self)
+    ///     entity.on_parent_despawn = NetwEntity.PARENT_DESPAWN_DETACH
+    /// </code>
+    /// </summary>
+    public NetwEntity.ParentDespawnRule OnParentDespawn
+    {
+        get
+        {
+            long answered = default;
+            NetwThunks.Ptrcall0_Long(
+                _bindGetOnParentDespawn,
+                Checked,
+                ref answered);
+            return (NetwEntity.ParentDespawnRule)answered;
+        }
+        set
+        {
+            long slot0 = (long)value;
+            long discarded = default;
+            NetwThunks.Ptrcall1_Long_Long(
+                _bindSetOnParentDespawn,
                 Checked,
                 in slot0,
                 ref discarded);
@@ -1968,7 +2025,11 @@ public sealed class NetwEntity : NetwRefCounted
     /// <summary>
     /// Frees <see cref="NetwEntity.Owner"/> after emitting
     /// <see cref="NetwEntity.Despawning"/> and flushing persisted state through
-    /// <see cref="NetwEntity.Persistence"/>.
+    /// <see cref="NetwEntity.Persistence"/>. Every entity below
+    /// <see cref="NetwEntity.Owner"/> despawns with it, except one whose
+    /// <see cref="NetwEntity.OnParentDespawn"/> is
+    /// <see cref="NetwEntity.ParentDespawnRule.Detach"/>, which is moved out
+    /// first.
     /// <code>
     /// entity.despawn()
     ///

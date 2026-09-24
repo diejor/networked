@@ -155,6 +155,8 @@ class SessionSend {
 
     void queue_close(int p_peer, uint64_t p_token);
 
+    void queue_closes(const godot::LocalVector<wire::ClosedLane> &p_closed);
+
     godot::LocalVector<int> known_peers() const;
 
     float owed_by(const RowSend &p_send, float p_priority) const;
@@ -255,6 +257,8 @@ public:
     void close_route(int64_t p_route);
 
     void close_tenures(int64_t p_route, uint64_t p_tenure);
+
+    void close_anchors(int64_t p_route, uint64_t p_anchor);
 
     godot::LocalVector<wire::ParkedOpen> expire_parks(int64_t p_now_ms);
 

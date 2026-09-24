@@ -46,6 +46,34 @@ const char *SIG_ENTITY_HIDDEN = "entity_hidden";
 const char *SIG_ENTITY_LINGERING = "entity_lingering";
 const char *SIG_ENTITY_LIVE = "entity_live";
 
+Variant world_pose_of(Node *p_node) {
+    if (p_node == nullptr || !p_node->is_inside_tree()) {
+        return Variant();
+    }
+    if (Node3D *spatial = Object::cast_to<Node3D>(p_node)) {
+        return spatial->get_global_transform();
+    }
+    if (Node2D *flat = Object::cast_to<Node2D>(p_node)) {
+        return flat->get_global_transform();
+    }
+    return Variant();
+}
+
+void world_pose_restore(Node *p_node, const Variant &p_pose) {
+    if (p_node == nullptr || !p_node->is_inside_tree()) {
+        return;
+    }
+    if (p_pose.get_type() == Variant::TRANSFORM3D) {
+        if (Node3D *spatial = Object::cast_to<Node3D>(p_node)) {
+            spatial->set_global_transform(Transform3D(p_pose));
+        }
+    } else if (p_pose.get_type() == Variant::TRANSFORM2D) {
+        if (Node2D *flat = Object::cast_to<Node2D>(p_node)) {
+            flat->set_global_transform(Transform2D(p_pose));
+        }
+    }
+}
+
 } // namespace
 
 void NetwMultiplayer::wrapper_adopt(
@@ -1125,6 +1153,29 @@ int64_t NetwMultiplayer::liveness_route_epoch(int64_t p_route) const {
     return int64_t(liveness_core->route_epoch(int(p_route)));
 }
 
+uint64_t NetwMultiplayer::liveness_route_anchor(int64_t p_route) const {
+    return liveness_core->route_anchor(int(p_route));
+}
+
+uint64_t NetwMultiplayer::entity_advance_anchor(int64_t p_route) {
+    const uint64_t held = liveness_route_anchor(p_route);
+    if (held == 0) {
+        return 0;
+    }
+    entity_install_anchor(p_route, held + 1);
+    return held + 1;
+}
+
+void NetwMultiplayer::entity_install_anchor(
+    int64_t p_route,
+    uint64_t p_anchor
+) {
+    if (!liveness_core->set_route_anchor(int(p_route), p_anchor)) {
+        return;
+    }
+    row_streams_follow_anchor(p_route, p_anchor);
+}
+
 int64_t NetwMultiplayer::liveness_route_wire_life(int64_t p_route) const {
     return int64_t(liveness_core->route_wire_epoch(int(p_route)));
 }
@@ -1259,8 +1310,11 @@ void NetwMultiplayer::entity_capture_exit(Object *p_wrapper) {
             && liveness_route_state(row.route) == ENTITY_STATE_ABSENT);
     if (row.route > 0) {
         if (ReplicationCore *plane = get_replication_plane()) {
-            row.received
-                = plane->get_spawn_pipeline()->holds_received_route(row.route);
+            spawn::Pipeline *spawns = plane->get_spawn_pipeline();
+            row.received = spawns->holds_received_route(row.route);
+            if (!row.terminal && spawns->holds_spawned_route(row.route)) {
+                entity_advance_anchor(row.route);
+            }
         }
     }
     entity_capture_residency(row, entity);
@@ -2091,22 +2145,62 @@ void NetwMultiplayer::spawn_place_node(Node *p_parent, Node *p_node) {
 bool NetwMultiplayer::spawn_reparent_node(
     Node *p_node,
     Node *p_parent,
-    const Callable &p_adopt
+    const Callable &p_adopt,
+    int64_t p_route,
+    uint64_t p_anchor
 ) {
     if (p_node == nullptr || p_parent == nullptr) {
         return false;
     }
     if (p_node->get_parent() == p_parent) {
+        if (p_route > 0 && p_anchor > 0) {
+            entity_install_anchor(p_route, p_anchor);
+        }
         return false;
     }
-    spawn_carry_begin(p_node, p_parent, p_adopt);
+    spawn_carry_begin(p_node, p_parent, p_adopt, p_route, p_anchor);
     return true;
+}
+
+uint64_t NetwMultiplayer::spawn_carry_pending_anchor(int64_t p_route) const {
+    uint64_t pending = 0;
+    for (const KeyValue<int64_t, SpawnCarry> &flying : spawn_carries) {
+        if (flying.value.route == p_route && !flying.value.moved
+            && flying.value.anchor > pending) {
+            pending = flying.value.anchor;
+        }
+    }
+    return pending;
+}
+
+void NetwMultiplayer::spawn_carry_land_out_of(Node *p_leaving) {
+    if (p_leaving == nullptr) {
+        return;
+    }
+    LocalVector<int64_t> leaving;
+    for (const KeyValue<int64_t, SpawnCarry> &flying : spawn_carries) {
+        Node *node = Object::cast_to<Node>(gd::object_of(flying.value.node));
+        Node *parent
+            = Object::cast_to<Node>(gd::object_of(flying.value.parent));
+        if (flying.value.moved || node == nullptr || parent == nullptr) {
+            continue;
+        }
+        if (p_leaving->is_ancestor_of(node) && parent != p_leaving
+            && !p_leaving->is_ancestor_of(parent)) {
+            leaving.push_back(flying.key);
+        }
+    }
+    for (const int64_t id : leaving) {
+        spawn_carry_advance(id);
+    }
 }
 
 void NetwMultiplayer::spawn_carry_begin(
     Node *p_node,
     Node *p_parent,
-    const Callable &p_adopt
+    const Callable &p_adopt,
+    int64_t p_route,
+    uint64_t p_anchor
 ) {
     NETW_ZONE_NC("NetwMultiplayer spawn_carry_begin", colors::SCENE);
     const ObjectID node = gd::instance_id(p_node);
@@ -2114,6 +2208,8 @@ void NetwMultiplayer::spawn_carry_begin(
         if (flying.value.node == node && !flying.value.moved) {
             flying.value.parent = gd::instance_id(p_parent);
             flying.value.adopt = p_adopt;
+            flying.value.route = p_route;
+            flying.value.anchor = p_anchor;
             return;
         }
     }
@@ -2121,6 +2217,8 @@ void NetwMultiplayer::spawn_carry_begin(
     carry.node = node;
     carry.parent = gd::instance_id(p_parent);
     carry.adopt = p_adopt;
+    carry.route = p_route;
+    carry.anchor = p_anchor;
     carry.guard = guard_hold(p_node);
     const int64_t id = ++spawn_carry_next;
     spawn_carries.insert(id, carry);
@@ -2162,11 +2260,18 @@ void NetwMultiplayer::spawn_carry_advance(int64_t p_id) {
     Node *parent = Object::cast_to<Node>(gd::object_of(carry->parent));
     const Callable adopt = carry->adopt;
     const RID guard = carry->guard;
+    const int64_t route = carry->route;
+    const uint64_t anchor = carry->anchor;
+    const Variant pose = world_pose_of(node);
     Node *held = node->get_parent();
     if (held != nullptr) {
         held->remove_child(node);
     }
     spawn_place_node(parent, node);
+    world_pose_restore(node, pose);
+    if (route > 0 && anchor > 0) {
+        entity_install_anchor(route, anchor);
+    }
     reparent_guards.resume_processing(guard);
     if (adopt.is_valid()) {
         adopt.call(entity_of(node));
@@ -2212,9 +2317,10 @@ bool NetwMultiplayer::spawn_send_reparent(
         return false;
     }
     wire::WriteStream stream;
+    uint64_t revision = liveness_route_anchor(p_record->get_route());
     if (!verb_head_write(stream, p_record->get_route())
         || !anchor_encode(stream, p_node->get_parent())
-        || !stream.align_verify()) {
+        || !stream.varuint(revision, 5) || !stream.align_verify()) {
         NETW_WARN(
             sys::SPAWN,
             "reparented '%s' outside the session root, peers keep the old "
@@ -2291,6 +2397,33 @@ bool NetwMultiplayer::spawn_despawn_route(
         }
     }
     return true;
+}
+
+void NetwMultiplayer::spawn_detach_before_despawn(NetwEntity *p_dying) {
+    Node *owner = p_dying != nullptr ? p_dying->get_owner() : nullptr;
+    Node *above = owner != nullptr ? owner->get_parent() : nullptr;
+    ReplicationCore *plane = get_replication_plane();
+    if (above == nullptr || !owner->is_inside_tree() || plane == nullptr) {
+        return;
+    }
+    spawn::Book *book = plane->get_spawn_pipeline()->get_spawn_book();
+    const int64_t route = liveness_route_of(p_dying);
+    const PackedInt64Array doomed = book->despawn_order(route);
+    PackedInt64Array detaching;
+    for (int at = 0; at < doomed.size(); ++at) {
+        const spawn::Record *record = book->spawned_of(doomed[at]);
+        const Ref<NetwEntity> entity
+            = NetwEntity::of(record != nullptr ? record->node() : nullptr);
+        if (entity.is_valid()
+            && entity->get_on_parent_despawn()
+                == NetwEntity::PARENT_DESPAWN_DETACH) {
+            detaching.push_back(doomed[at]);
+        }
+    }
+    const PackedInt64Array roots = book->detach_roots(route, detaching);
+    for (int at = 0; at < roots.size(); ++at) {
+        entity_move(book->spawned_of(roots[at])->node(), above);
+    }
 }
 
 void NetwMultiplayer::spawn_reanchor(

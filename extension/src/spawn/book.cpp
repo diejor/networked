@@ -123,6 +123,38 @@ PackedInt64Array Book::despawn_order(int64_t route) const {
     return out;
 }
 
+PackedInt64Array Book::detach_roots(
+    int64_t route,
+    const PackedInt64Array &detaching
+) const {
+    PackedInt64Array out;
+    for (int at = 0; at < detaching.size(); ++at) {
+        const int64_t candidate = detaching[at];
+        if (candidate == route) {
+            continue;
+        }
+        HashMap<int64_t, Record>::ConstIterator held = spawned.find(candidate);
+        bool shadowed = false;
+        int guard = 0;
+        while (held != spawned.end() && guard <= int(spawned.size())) {
+            const int64_t above = held->value.get_parent_route();
+            if (above == route || above <= 0) {
+                break;
+            }
+            if (detaching.has(above)) {
+                shadowed = true;
+                break;
+            }
+            held = spawned.find(above);
+            guard += 1;
+        }
+        if (!shadowed) {
+            out.push_back(candidate);
+        }
+    }
+    return out;
+}
+
 bool Book::parent_admits(int64_t route, int64_t peer) const {
     HashMap<int64_t, Record>::ConstIterator held = spawned.find(route);
     if (held == spawned.end()) {
@@ -133,10 +165,7 @@ bool Book::parent_admits(int64_t route, int64_t peer) const {
         return true;
     }
     HashMap<int64_t, Record>::ConstIterator above = spawned.find(parent);
-    if (above == spawned.end()) {
-        return true;
-    }
-    return above->value.has_recipient(peer);
+    return above != spawned.end() && above->value.has_recipient(peer);
 }
 
 bool Book::spawn_is_duplicate(int64_t route, int64_t state) const {
