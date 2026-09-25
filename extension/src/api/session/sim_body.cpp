@@ -22,6 +22,11 @@ const StringName &control_changed_name() {
     return name;
 }
 
+const StringName &network_tick_name() {
+    static const StringName name("_network_tick");
+    return name;
+}
+
 } // namespace
 
 sim::Facts NetwMultiplayer::sim_body_facts(
@@ -81,6 +86,7 @@ void NetwMultiplayer::sim_settle_body(const Ref<NetwEntity> &p_entity) {
             row.declaration.bodies,
             display_config_for(p_entity).visual_root
         );
+        row.owner_ticks = owner->has_method(network_tick_name());
         row.control_hook
             = callable_mp(this, &NetwMultiplayer::sim_on_body_control)
                   .bind(entity);

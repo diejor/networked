@@ -246,6 +246,11 @@ void ClockEngine::emit_tick() {
     announce(SIG_CLOCK_ON_TICK, step, tick);
     announce(SIG_CLOCK_AFTER_TICK, step, tick);
     tick += 1;
+    ticks_run += 1;
+}
+
+int64_t ClockEngine::get_ticks_run() const {
+    return ticks_run;
 }
 
 void ClockEngine::force_step(int count) {

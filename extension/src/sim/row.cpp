@@ -158,11 +158,13 @@ void Rows::bodied(LocalVector<RID> &r_out) const {
     }
 }
 
-void Rows::unpredicted(LocalVector<RID> &r_out) const {
+void Rows::stepping(LocalVector<RID> &r_out) const {
     r_out.clear();
     for (const KeyValue<uint64_t, Row> &held : rows) {
-        if (!held.value.facts.predicted) {
-            r_out.push_back(held.value.entity);
+        const Row &row = held.value;
+        const bool steps = row.declaration.step.is_valid() || row.owner_ticks;
+        if (!row.facts.predicted && (steps || !row.bodies.recorded)) {
+            r_out.push_back(row.entity);
         }
     }
 }

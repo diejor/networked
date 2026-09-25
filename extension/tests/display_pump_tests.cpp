@@ -9,6 +9,7 @@
 #include "netw/display/decl.hpp"
 #include "netw/display/history.hpp"
 #include "netw/display/pump.hpp"
+#include "netw/display/roles.hpp"
 #include "netw/display/runtime.hpp"
 #include "netw/display/timing.hpp"
 
@@ -466,6 +467,39 @@ TEST_CASE(
     runtime->snap_named("nothing_declares_this", Vector2(9.0, 9.0));
     NETW_CHECK_EQ(log.count("shown"), 1);
 
+    memdelete(owner);
+}
+
+TEST_CASE(
+    "[Networked][Display][Hosted] PK16 a runtime leaving DISABLED shows the "
+    "live body, because nothing it wrote before being disabled is current"
+) {
+    Node2D *owner = memnew(Node2D);
+    Node2D *body = memnew(Node2D);
+    body->set_position(Vector2(10.0, 0.0));
+
+    netw_test::CallLog log;
+    RuntimeRig runtime(owner, netw::display::PUMP_DISABLED);
+    Decl chase;
+    chase.display_role = netw::display::ROLE_PREDICTED;
+    runtime->set_config(chase);
+    Channel *channel = attach_channel(runtime, log.callable("shown"));
+    channel->set_source_obj(body);
+
+    netw::display::resolve_role(runtime, Hooks());
+    netw::display::pump_runtime(
+        runtime,
+        make_timing(0, 1.0 / 60.0),
+        discarded_stats(),
+        Hooks()
+    );
+
+    NETW_CHECK_EQ(runtime->get_pump_mode(), int(netw::display::PUMP_CHASE));
+    REQUIRE(log.count("shown") > 0);
+    const Vector2 shown = log.args("shown", log.count("shown") - 1)[0];
+    CHECK(shown.is_equal_approx(Vector2(10.0, 0.0)));
+
+    memdelete(body);
     memdelete(owner);
 }
 

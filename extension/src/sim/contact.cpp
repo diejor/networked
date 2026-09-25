@@ -118,6 +118,12 @@ void note_touch(Contact &r_contact, uint64_t p_other) {
     }
 }
 
+void keep_touching(Contact &r_contact) {
+    for (const uint64_t other : r_contact.touching) {
+        note_touch(r_contact, other);
+    }
+}
+
 void settle_onsets(Contact &r_contact, int64_t p_tick) {
     for (const uint64_t other : r_contact.touched_now) {
         if (r_contact.touching.find(other) < 0 && r_contact.fence_met) {

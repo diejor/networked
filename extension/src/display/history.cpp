@@ -64,6 +64,7 @@ History::History() {
 
 void History::record(int64_t tick, const Variant &value, bool authoring_tick) {
     NETW_ZONE_SYS(profile::SUBSYSTEM_INTERPOLATION);
+    source_rested = false;
     const int domain = authoring_tick ? 1 : 0;
     if (tick_domain == -1) {
         tick_domain = domain;
@@ -99,6 +100,7 @@ void History::clear() {
     buffer->clear();
     tick_domain = -1;
     has_recorded = false;
+    source_rested = false;
     sleeping = false;
 }
 

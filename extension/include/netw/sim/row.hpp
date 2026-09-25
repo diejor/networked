@@ -39,6 +39,9 @@ struct Row {
     Declaration declaration;
     Facts facts;
     Mode mode = Mode::NONE;
+    Mode announced = Mode::NONE;
+    bool has_announced = false;
+    bool owner_ticks = false;
     Bodies bodies;
     Installs installs;
     Contact contact;
@@ -86,7 +89,7 @@ public:
     godot::LocalVector<godot::RID> follow_session_authority(bool p_here);
     godot::LocalVector<godot::RID> holding() const;
     void bodied(godot::LocalVector<godot::RID> &r_out) const;
-    void unpredicted(godot::LocalVector<godot::RID> &r_out) const;
+    void stepping(godot::LocalVector<godot::RID> &r_out) const;
 };
 
 } // namespace netw::sim

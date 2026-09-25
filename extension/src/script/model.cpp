@@ -346,6 +346,12 @@ void sweep_dead_overlays() {
     }
 }
 
+#if defined(NETW_TESTS)
+int64_t node_overlay_count() {
+    return int64_t(overlay_book().size());
+}
+#endif
+
 Array get_method_interpolators(
     const Ref<Script> &p_script,
     const StringName &p_method

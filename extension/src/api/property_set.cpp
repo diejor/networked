@@ -205,37 +205,74 @@ void NetwPropertySet::seal() {
     sealed = true;
 }
 
+namespace {
+
+struct PropertyTypeLists {
+    Array declared;
+    Array live;
+    bool live_fetched = false;
+};
+
+int64_t declared_variant_type(
+    const Array &p_declared,
+    const StringName &p_property
+) {
+    for (int at = 0; at < p_declared.size(); at++) {
+        const Dictionary entry = p_declared[at];
+        const int64_t usage = entry.get("usage", 0);
+        if (!(usage & PROPERTY_USAGE_SCRIPT_VARIABLE)) {
+            continue;
+        }
+        if (StringName(entry.get("name", StringName())) == p_property) {
+            return entry.get("type", int64_t(Variant::NIL));
+        }
+    }
+    return Variant::NIL;
+}
+
+int64_t live_variant_type(const Array &p_live, const StringName &p_property) {
+    for (int at = 0; at < p_live.size(); at++) {
+        const Dictionary entry = p_live[at];
+        if (StringName(entry.get("name", StringName())) == p_property) {
+            return entry.get("type", int64_t(Variant::NIL));
+        }
+    }
+    return Variant::NIL;
+}
+
+PropertyTypeLists lists_for(const Ref<Script> &p_script) {
+    PropertyTypeLists lists;
+    if (p_script.is_valid()) {
+        lists.declared = gd::script_property_list(p_script);
+    }
+    return lists;
+}
+
+int64_t column_type_in(
+    PropertyTypeLists &p_lists,
+    Node *p_node,
+    const StringName &p_property
+) {
+    int64_t variant_type = declared_variant_type(p_lists.declared, p_property);
+    if (variant_type == Variant::NIL && p_node != nullptr) {
+        if (!p_lists.live_fetched) {
+            p_lists.live = gd::property_list(p_node);
+            p_lists.live_fetched = true;
+        }
+        variant_type = live_variant_type(p_lists.live, p_property);
+    }
+    return SchemaCore::type_from_variant(int(variant_type));
+}
+
+} // namespace
+
 int64_t NetwPropertySet::column_type_for(
     const Ref<Script> &p_script,
     Node *p_node,
     const StringName &p_property
 ) {
-    int64_t variant_type = Variant::NIL;
-    if (p_script.is_valid()) {
-        const Array declared = gd::script_property_list(p_script);
-        for (int at = 0; at < declared.size(); at++) {
-            const Dictionary entry = declared[at];
-            const int64_t usage = entry.get("usage", 0);
-            if (!(usage & PROPERTY_USAGE_SCRIPT_VARIABLE)) {
-                continue;
-            }
-            if (StringName(entry.get("name", StringName())) == p_property) {
-                variant_type = entry.get("type", int64_t(Variant::NIL));
-                break;
-            }
-        }
-    }
-    if (variant_type == Variant::NIL && p_node != nullptr) {
-        const Array live = gd::property_list(p_node);
-        for (int at = 0; at < live.size(); at++) {
-            const Dictionary entry = live[at];
-            if (StringName(entry.get("name", StringName())) == p_property) {
-                variant_type = entry.get("type", int64_t(Variant::NIL));
-                break;
-            }
-        }
-    }
-    return SchemaCore::type_from_variant(int(variant_type));
+    PropertyTypeLists lists = lists_for(p_script);
+    return column_type_in(lists, p_node, p_property);
 }
 
 void NetwPropertySet::stamp_column_types(
@@ -246,13 +283,14 @@ void NetwPropertySet::stamp_column_types(
     if (p_set.is_null()) {
         return;
     }
+    PropertyTypeLists lists = lists_for(p_script);
     for (int at = 0; at < p_set->columns.size(); at++) {
         const Ref<NetwPropertySetColumn> column = p_set->columns[at];
         if (column.is_null()) {
             continue;
         }
         column->shape.type
-            = int(column_type_for(p_script, p_node, column->get_key()));
+            = int(column_type_in(lists, p_node, column->get_key()));
         SchemaColumn *declared = p_set->schema.at(int(column->schema_column));
         if (declared != nullptr) {
             declared->type = column->shape.type;

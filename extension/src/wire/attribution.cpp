@@ -244,11 +244,26 @@ Dictionary AttributionBook::snapshot() const {
     return out;
 }
 
+void AttributionBook::retire_route(int64_t p_route) {
+    retiring_routes.push_back(p_route);
+}
+
+void AttributionBook::settle_retired_routes() {
+    for (const int64_t route : routes_past_one_flush) {
+        route_out.erase(route);
+        route_in.erase(route);
+    }
+    routes_past_one_flush = retiring_routes;
+    retiring_routes.clear();
+}
+
 void AttributionBook::clear() {
     bytes_out.clear();
     bytes_in.clear();
     route_out.clear();
     route_in.clear();
+    retiring_routes.clear();
+    routes_past_one_flush.clear();
     column_bits.clear();
     frames_by_peer_channel_in.clear();
     refusals.clear();

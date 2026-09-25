@@ -1411,7 +1411,10 @@ void NetwMultiplayer::session_run_join_handler(
     args.push_back(joining);
     args.append_array(p_args);
     bool called = false;
-    gd::call_checked(plan.handler, args, called);
+    {
+        NETW_ZONE_NC("session run join handler", colors::SESSION);
+        gd::call_checked(plan.handler, args, called);
+    }
     if (!called) {
         NETW_ERROR(
             sys::SESSION,

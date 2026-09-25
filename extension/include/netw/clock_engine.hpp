@@ -64,6 +64,7 @@ private:
 
     int64_t physics_frames = 0;
     int64_t polls = 0;
+    int64_t ticks_run = 0;
     uint64_t cadence_started_usec = 0;
 
     Stats stats;
@@ -121,6 +122,7 @@ public:
 
     void set_tick(int value);
     int get_tick() const;
+    int64_t get_ticks_run() const;
     void set_synchronized(bool value);
     bool get_synchronized() const;
 

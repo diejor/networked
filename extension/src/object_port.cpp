@@ -310,6 +310,27 @@ Variant port_get(Object *p_owner, const StringName &p_key) {
     return p_owner->get(p_key);
 }
 
+bool port_rests(Object *p_owner, const StringName &p_key) {
+    if (p_owner == nullptr || !names_body_state(p_key)) {
+        return false;
+    }
+    if (RigidBody3D *solid = Object::cast_to<RigidBody3D>(p_owner)) {
+        return solid->is_inside_tree() && !solid->is_freeze_enabled()
+            && bool(PhysicsServer3D::get_singleton()->body_get_state(
+                solid->get_rid(),
+                PhysicsServer3D::BODY_STATE_SLEEPING
+            ));
+    }
+    if (RigidBody2D *flat = Object::cast_to<RigidBody2D>(p_owner)) {
+        return flat->is_inside_tree() && !flat->is_freeze_enabled()
+            && bool(PhysicsServer2D::get_singleton()->body_get_state(
+                flat->get_rid(),
+                PhysicsServer2D::BODY_STATE_SLEEPING
+            ));
+    }
+    return false;
+}
+
 void port_set(
     Object *p_owner,
     const StringName &p_key,

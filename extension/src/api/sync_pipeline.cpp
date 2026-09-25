@@ -1,5 +1,7 @@
 #include "netw/api/sync_pipeline.hpp"
 
+#include <cstdlib>
+
 #include "godot/class_db.hpp"
 #include "godot/utility.hpp"
 #include "netw/api/event_plane.hpp"
@@ -217,14 +219,15 @@ void SyncPipeline::register_derived(Node *p_node) {
     if (p_node == nullptr) {
         return;
     }
+    NETW_ZONE_NC("SyncPipeline register derived", colors::WIRE);
+    NETW_ZONE_VALUE(bindings.size());
     const Ref<Script> script = p_node->get_script();
     if (script.is_null()) {
         return;
     }
-    for (uint32_t at = 0; at < bindings.size(); ++at) {
-        if (bindings[at]->node() == p_node) {
-            return;
-        }
+    const LocalVector<IndexedBinding> *registered = node_bindings(p_node);
+    if (registered != nullptr && !registered->is_empty()) {
+        return;
     }
     Object *shell = api();
     const Ref<NetwPropertySet> state = property_set_builder::from_script(
@@ -282,13 +285,19 @@ Error SyncPipeline::register_property_set(
     if (p_node == nullptr || p_set.is_null() || !p_set->get_sealed()) {
         return ERR_INVALID_DATA;
     }
+    NETW_ZONE_NC("SyncPipeline register property set", colors::WIRE);
+    NETW_ZONE_VALUE(bindings.size());
     note_schema_seal(p_set);
-    for (uint32_t at = 0; at < bindings.size(); ++at) {
-        const Ref<NetwPropertySetBinding> held = bindings[at];
-        if (held->node() != p_node
-            || held->set->get_record() != p_set->get_record()) {
-            continue;
+    Ref<NetwPropertySetBinding> held;
+    if (const LocalVector<IndexedBinding> *same = node_bindings(p_node)) {
+        for (uint32_t at = 0; at < same->size(); ++at) {
+            if ((*same)[at].binding->set->get_record() == p_set->get_record()) {
+                held = (*same)[at].binding;
+                break;
+            }
         }
+    }
+    if (held.is_valid()) {
         if (held->set == p_set) {
             bind_declaration(held);
             return OK;
@@ -297,14 +306,14 @@ Error SyncPipeline::register_property_set(
         const Ref<NetwPropertySetBinding> replacement
             = NetwPropertySetBinding::create(p_set, p_node);
         capture_declaration_key(replacement);
-        bindings[at] = replacement;
+        replace_binding(binding_position(held), replacement);
         bind_declaration(replacement);
         return OK;
     }
     const Ref<NetwPropertySetBinding> created
         = NetwPropertySetBinding::create(p_set, p_node);
     capture_declaration_key(created);
-    bindings.push_back(created);
+    append_binding(created);
     bind_declaration(created);
     if (p_set->get_record() == NetwPropertySet::RECORD_STATE) {
         register_state_timeline(p_node);
@@ -369,7 +378,8 @@ void SyncPipeline::report_missing_prediction_component(
     }
     const Ref<NetwEntity> entity = NetwEntity::of(node);
     if (entity.is_valid()) {
-        const Ref<NetwPredictionHandle> prediction = entity->get_prediction();
+        const Ref<NetwPredictionHandle> prediction
+            = entity->prediction_if_minted();
         if (prediction.is_valid() && prediction->is_registered()) {
             return;
         }
@@ -411,6 +421,8 @@ void SyncPipeline::register_state_timeline(Node *p_node) {
 }
 
 bool SyncPipeline::holds_state_binding(const Ref<NetwEntity> &p_entity) const {
+    NETW_ZONE_NC("SyncPipeline holds state binding", colors::WIRE);
+    NETW_ZONE_VALUE(bindings.size());
     for (uint32_t at = 0; at < bindings.size(); ++at) {
         const Ref<NetwPropertySetBinding> held = bindings[at];
         if (held->set->get_record() != NetwPropertySet::RECORD_STATE) {
@@ -457,10 +469,13 @@ Ref<NetwPropertySetBinding> SyncPipeline::derived_binding(
     Node *p_node,
     int64_t p_record
 ) {
-    for (uint32_t at = 0; at < bindings.size(); ++at) {
-        if (bindings[at]->node() == p_node
-            && bindings[at]->set->get_record() == p_record) {
-            return bindings[at];
+    const LocalVector<IndexedBinding> *same = node_bindings(p_node);
+    if (same == nullptr) {
+        return Ref<NetwPropertySetBinding>();
+    }
+    for (uint32_t at = 0; at < same->size(); ++at) {
+        if ((*same)[at].binding->set->get_record() == p_record) {
+            return (*same)[at].binding;
         }
     }
     return Ref<NetwPropertySetBinding>();
@@ -476,7 +491,7 @@ void SyncPipeline::unregister_derived(Node *p_node) {
         drop_declaration(held);
         dropped_state = dropped_state
             || held->set->get_record() == NetwPropertySet::RECORD_STATE;
-        bindings.remove_at(at - 1);
+        remove_binding(at - 1);
     }
     const Ref<NetwEntity> entity = NetwEntity::of(p_node);
     if (!dropped_state || entity.is_null()) {
@@ -489,9 +504,140 @@ void SyncPipeline::prune_derived() {
     for (uint32_t at = bindings.size(); at > 0; --at) {
         if (bindings[at - 1]->node() == nullptr) {
             drop_declaration(bindings[at - 1]);
-            bindings.remove_at(at - 1);
+            remove_binding(at - 1);
         }
     }
+}
+
+void SyncPipeline::append_binding(
+    const Ref<NetwPropertySetBinding> &p_binding
+) {
+    Node *node = p_binding->node();
+    const Ref<NetwEntity> entity = NetwEntity::of(node);
+    const uint64_t entity_key
+        = entity.is_valid() ? uint64_t(entity->get_instance_id()) : 0;
+    const uint64_t node_key
+        = node != nullptr ? uint64_t(node->get_instance_id()) : 0;
+    bindings.push_back(p_binding);
+    binding_entities.push_back(entity_key);
+    binding_nodes.push_back(node_key);
+    IndexedBinding entry;
+    entry.sequence = binding_sequence++;
+    entry.binding = p_binding;
+    if (!bindings_by_entity.has(entity_key)) {
+        bindings_by_entity.insert(entity_key, LocalVector<IndexedBinding>());
+    }
+    bindings_by_entity[entity_key].push_back(entry);
+    if (!bindings_by_node.has(node_key)) {
+        bindings_by_node.insert(node_key, LocalVector<IndexedBinding>());
+    }
+    bindings_by_node[node_key].push_back(entry);
+}
+
+void SyncPipeline::replace_binding(
+    uint32_t p_at,
+    const Ref<NetwPropertySetBinding> &p_binding
+) {
+    const Ref<NetwPropertySetBinding> previous = bindings[p_at];
+    bindings[p_at] = p_binding;
+    const auto swap_in = [&](LocalVector<IndexedBinding> *p_held) {
+        if (p_held == nullptr) {
+            return;
+        }
+        for (uint32_t at = 0; at < p_held->size(); ++at) {
+            if ((*p_held)[at].binding == previous) {
+                (*p_held)[at].binding = p_binding;
+                return;
+            }
+        }
+    };
+    swap_in(bindings_by_entity.getptr(binding_entities[p_at]));
+    swap_in(bindings_by_node.getptr(binding_nodes[p_at]));
+}
+
+void SyncPipeline::remove_binding(uint32_t p_at) {
+    const Ref<NetwPropertySetBinding> previous = bindings[p_at];
+    const uint64_t entity_key = binding_entities[p_at];
+    const uint64_t node_key = binding_nodes[p_at];
+    bindings.remove_at(p_at);
+    binding_entities.remove_at(p_at);
+    binding_nodes.remove_at(p_at);
+    const auto take_out = [&](
+                              HashMap<uint64_t, LocalVector<IndexedBinding>>
+                                  &p_index,
+                              uint64_t p_key
+                          ) {
+        LocalVector<IndexedBinding> *held = p_index.getptr(p_key);
+        if (held == nullptr) {
+            return;
+        }
+        for (uint32_t at = 0; at < held->size(); ++at) {
+            if ((*held)[at].binding == previous) {
+                held->remove_at(at);
+                break;
+            }
+        }
+        if (held->is_empty()) {
+            p_index.erase(p_key);
+        }
+    };
+    take_out(bindings_by_entity, entity_key);
+    take_out(bindings_by_node, node_key);
+}
+
+void SyncPipeline::clear_bindings() {
+    bindings.clear();
+    binding_entities.clear();
+    bindings_by_entity.clear();
+    binding_nodes.clear();
+    bindings_by_node.clear();
+}
+
+const LocalVector<SyncPipeline::IndexedBinding> *SyncPipeline::node_bindings(
+    const Node *p_node
+) const {
+    if (p_node == nullptr) {
+        return nullptr;
+    }
+    return bindings_by_node.getptr(uint64_t(p_node->get_instance_id()));
+}
+
+uint32_t SyncPipeline::binding_position(
+    const Ref<NetwPropertySetBinding> &p_binding
+) const {
+    for (uint32_t at = 0; at < bindings.size(); ++at) {
+        if (bindings[at] == p_binding) {
+            return at;
+        }
+    }
+    return bindings.size();
+}
+
+LocalVector<Ref<NetwPropertySetBinding>> SyncPipeline::bindings_of_entity(
+    const Ref<NetwEntity> &p_entity
+) const {
+    static const LocalVector<IndexedBinding> none;
+    const LocalVector<IndexedBinding> *own
+        = bindings_by_entity.getptr(uint64_t(p_entity->get_instance_id()));
+    const LocalVector<IndexedBinding> *loose = bindings_by_entity.getptr(0);
+    const LocalVector<IndexedBinding> &left = own != nullptr ? *own : none;
+    const LocalVector<IndexedBinding> &right
+        = loose != nullptr && loose != own ? *loose : none;
+    LocalVector<Ref<NetwPropertySetBinding>> out;
+    out.reserve(left.size() + right.size());
+    uint32_t at_left = 0;
+    uint32_t at_right = 0;
+    while (at_left < left.size() || at_right < right.size()) {
+        const bool take_left = at_right >= right.size()
+            || (at_left < left.size()
+                && left[at_left].sequence < right[at_right].sequence);
+        if (take_left) {
+            out.push_back(left[at_left++].binding);
+        } else {
+            out.push_back(right[at_right++].binding);
+        }
+    }
+    return out;
 }
 
 TypedArray<NetwPropertySetBinding> SyncPipeline::derived_group(
@@ -594,33 +740,80 @@ void SyncPipeline::recapture_entity(const Ref<NetwEntity> &p_entity) {
     if (p_entity.is_null()) {
         return;
     }
-    for (uint32_t at = 0; at < bindings.size(); ++at) {
-        Node *node = bindings[at]->node();
-        if (node == nullptr) {
-            continue;
-        }
-        const Ref<NetwEntity> found = NetwEntity::of(node);
-        if (found.is_valid()
-            && found->get_rid_handle() == p_entity->get_rid_handle()) {
-            capture_declaration_key(bindings[at]);
+    NETW_ZONE_NC("SyncPipeline recapture entity", colors::WIRE);
+    const LocalVector<Ref<NetwPropertySetBinding>> candidates
+        = entity_bindings_checked(p_entity);
+    NETW_ZONE_VALUE(candidates.size());
+    for (uint32_t at = 0; at < candidates.size(); ++at) {
+        capture_declaration_key(candidates[at]);
+    }
+}
+
+bool SyncPipeline::binding_belongs_to(
+    const Ref<NetwPropertySetBinding> &p_binding,
+    const Ref<NetwEntity> &p_entity
+) const {
+    Node *node = p_binding->node();
+    if (node == nullptr) {
+        return false;
+    }
+    const Ref<NetwEntity> found = NetwEntity::of(node);
+    return found.is_valid()
+        && found->get_rid_handle() == p_entity->get_rid_handle();
+}
+
+LocalVector<Ref<NetwPropertySetBinding>> SyncPipeline::entity_bindings_checked(
+    const Ref<NetwEntity> &p_entity
+) const {
+    LocalVector<Ref<NetwPropertySetBinding>> matched;
+    const LocalVector<Ref<NetwPropertySetBinding>> candidates
+        = bindings_of_entity(p_entity);
+    for (uint32_t at = 0; at < candidates.size(); ++at) {
+        if (binding_belongs_to(candidates[at], p_entity)) {
+            matched.push_back(candidates[at]);
         }
     }
+    static const bool verify
+        = std::getenv("NETW_VERIFY_BINDING_INDEX") != nullptr;
+    if (!verify) {
+        return matched;
+    }
+    LocalVector<Ref<NetwPropertySetBinding>> scanned;
+    for (uint32_t at = 0; at < bindings.size(); ++at) {
+        if (binding_belongs_to(bindings[at], p_entity)) {
+            scanned.push_back(bindings[at]);
+        }
+    }
+    bool same = scanned.size() == matched.size();
+    for (uint32_t at = 0; same && at < scanned.size(); ++at) {
+        same = scanned[at] == matched[at];
+    }
+    if (!same) {
+        NETW_ERROR(
+            sys::WIRE,
+            "binding index disagrees with the full scan for entity '%s': "
+            "index %d, scan %d",
+            String(p_entity->get_entity_id()),
+            int(matched.size()),
+            int(scanned.size())
+        );
+        return scanned;
+    }
+    return matched;
 }
 
 void SyncPipeline::on_entity_live(
     int64_t p_route,
     const Ref<NetwEntity> &p_entity
 ) {
-    for (uint32_t at = 0; at < bindings.size(); ++at) {
-        Node *node = bindings[at]->node();
-        if (node == nullptr) {
-            continue;
-        }
-        const Ref<NetwEntity> found = NetwEntity::of(node);
-        if (found.is_valid() && p_entity.is_valid()
-            && found->get_rid_handle() == p_entity->get_rid_handle()) {
-            bindings[at]->route = p_route;
-            bind_declaration(bindings[at]);
+    NETW_ZONE_NC("SyncPipeline on entity live", colors::WIRE);
+    if (p_entity.is_valid()) {
+        const LocalVector<Ref<NetwPropertySetBinding>> matched
+            = entity_bindings_checked(p_entity);
+        NETW_ZONE_VALUE(matched.size());
+        for (uint32_t at = 0; at < matched.size(); ++at) {
+            matched[at]->route = p_route;
+            bind_declaration(matched[at]);
         }
     }
     settle_entity_column(p_route, true);
@@ -752,15 +945,13 @@ void SyncPipeline::note_peer_ack(
         return;
     }
     NetwMultiplayer *plane = core();
-    const ClockEngine *clock
-        = plane != nullptr ? &plane->clock_engine() : nullptr;
     row_sender.acknowledge(
         p_peer_id,
         p_acked_seq,
         p_history,
-        clock != nullptr ? clock->rtt_avg() * 1000.0 : 0.0,
-        clock != nullptr ? clock->rtt_jitter() * 1000.0 : 0.0,
-        clock != nullptr ? int64_t(clock->get_tick()) : 0
+        plane != nullptr ? plane->link_round_trip_ms(p_peer_id) : 0.0,
+        plane != nullptr ? plane->link_jitter_ms(p_peer_id) : 0.0,
+        plane != nullptr ? int64_t(plane->clock_engine().get_tick()) : 0
     );
 }
 
@@ -1386,7 +1577,7 @@ void SyncPipeline::note_derived_schema(
 }
 
 void SyncPipeline::clear_session() {
-    bindings.clear();
+    clear_bindings();
     progress.clear();
     row_sender = ReplicationSend();
     row_sender_armed = false;

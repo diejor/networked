@@ -596,6 +596,17 @@ WireRegistry WireRegistry::create_default() {
         2
     );
 
+    reg_c(
+        46,
+        "CLAIM_IMAGE",
+        ChannelKind::ROUTED,
+        Reliability::UNRELIABLE,
+        Freshness::FRESHEST_WINS,
+        Delivery::FITTED,
+        Direction::EITHER,
+        PayloadContract::PLANNED
+    );
+
     auto batches = [&](const char *name) {
         const ChannelDecl *decl
             = reg.find_channel_by_name(godot::StringName(name));
@@ -617,6 +628,7 @@ WireRegistry WireRegistry::create_default() {
     batches("SYNC_ROW");
     batches("SYNC_ROW_DELTA");
     batches("SYNC_ROW_WINDOW");
+    batches("CLAIM_IMAGE");
 
     return reg;
 }

@@ -39,6 +39,8 @@ class AttributionBook {
     godot::HashMap<uint64_t, int64_t> frames_by_peer_channel_in;
     godot::HashMap<uint64_t, int64_t> refusals;
     godot::HashMap<uint64_t, godot::Vector<Attribution>> staged;
+    godot::LocalVector<int64_t> retiring_routes;
+    godot::LocalVector<int64_t> routes_past_one_flush;
 
     int64_t attributed_out = 0;
     int64_t attributed_in = 0;
@@ -71,6 +73,11 @@ public:
     );
     void discard(int64_t p_peer, bool p_reliable, bool p_carrier);
     void discard_peer(int64_t p_peer);
+    void retire_route(int64_t p_route);
+    void settle_retired_routes();
+    int64_t attributed_route_count() const {
+        return int64_t(route_out.size() + route_in.size());
+    }
 
     void note_framing_out(int64_t p_bytes);
     void note_datagram(bool p_inbound, int64_t p_bytes);

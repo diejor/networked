@@ -20,6 +20,7 @@ private:
     int value_type = 0;
     godot::Variant last_recorded;
     bool has_recorded = false;
+    bool source_rested = false;
 
     bool projected = false;
     double project_age = 0.0;
@@ -46,9 +47,9 @@ private:
         const godot::Variant &to,
         double distance
     ) const;
+public:
     bool is_close(const godot::Variant &from, const godot::Variant &to) const;
 
-public:
     enum Pass {
         PASS_SKIP_SLEEPING,
         PASS_SKIP_EMPTY,
@@ -82,6 +83,13 @@ public:
     }
     bool is_sleeping() const {
         return sleeping;
+    }
+
+    void set_source_rested(bool value) {
+        source_rested = value;
+    }
+    bool holds_rested_source() const {
+        return source_rested && has_recorded;
     }
 
     bool has_projected() const {

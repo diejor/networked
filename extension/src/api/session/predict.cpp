@@ -1381,7 +1381,7 @@ void NetwMultiplayer::predict_reconcile_declaration(
     if (p_entity.is_null()) {
         return;
     }
-    const Ref<NetwPredictionHandle> handle = p_entity->get_prediction();
+    const Ref<NetwPredictionHandle> handle = p_entity->prediction_if_minted();
     if (handle.is_null()
         || handle->get_archetype() == NetwPredict::ARCHETYPE_NONE
         || predict_lacks_state_rows(p_entity)) {
@@ -1393,7 +1393,7 @@ void NetwMultiplayer::predict_reconcile_declaration(
 bool NetwMultiplayer::predict_lacks_state_rows(
     const Ref<NetwEntity> &p_entity
 ) const {
-    const Ref<NetwPredictionHandle> handle = p_entity->get_prediction();
+    const Ref<NetwPredictionHandle> handle = p_entity->prediction_if_minted();
     return handle.is_valid()
         && handle->get_archetype() != NetwPredict::ARCHETYPE_NONE
         && p_entity->get_state_binding().is_null();

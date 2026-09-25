@@ -48,6 +48,8 @@ bool rested(
 
 void note_touch(Contact &r_contact, uint64_t p_other);
 
+void keep_touching(Contact &r_contact);
+
 void settle_onsets(Contact &r_contact, int64_t p_tick);
 
 bool fenced(Contact &r_contact, int64_t p_tick);

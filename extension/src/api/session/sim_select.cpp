@@ -7,7 +7,9 @@
 #include "godot/spatial_node.hpp"
 #include "netw/api/entity.hpp"
 #include "netw/api/simulation_handle.hpp"
+#include "netw/colors.hpp"
 #include "netw/log.hpp"
+#include "netw/profile.hpp"
 #include "netw/sim/row.hpp"
 #include "netw/sim/select.hpp"
 #include "netw/subsystems.hpp"
@@ -456,31 +458,49 @@ void NetwMultiplayer::sim_declare(const Ref<NetwEntity> &p_entity) {
         return;
     }
     const RID entity = p_entity->get_rid_handle();
-    const Ref<NetwSimulationHandle> handle = p_entity->get_simulation();
-    if (!entity.is_valid() || handle.is_null()
-        || entity_get_view(entity).is_null()) {
+    if (!entity.is_valid() || entity_get_view(entity).is_null()) {
         return;
     }
     sim::Row *standing = sim_rows.find(entity);
+    const Ref<NetwSimulationHandle> handle = standing != nullptr
+        ? p_entity->get_simulation()
+        : p_entity->simulation_if_minted();
+    if (handle.is_null()) {
+        return;
+    }
     if (standing == nullptr && !handle->is_declared()) {
         return;
     }
-    sim_seed(standing != nullptr ? *standing : sim_rows.ensure(entity));
+    {
+        NETW_ZONE_NC("sim seed", colors::PREDICTION);
+        sim_seed(standing != nullptr ? *standing : sim_rows.ensure(entity));
+    }
     LocalVector<RID> members;
     members.push_back(entity);
     sim_refresh_members(members);
 }
 
 void NetwMultiplayer::sim_announce(const RID &p_entity) {
-    const sim::Row *row = sim_rows.row_of(p_entity);
+    sim::Row *row = sim_rows.find(p_entity);
+    if (row == nullptr || (row->has_announced && row->announced == row->mode)) {
+        return;
+    }
     const Ref<NetwEntity> entity = entity_get_view(p_entity);
-    if (row == nullptr || entity.is_null()) {
+    if (entity.is_null()) {
         return;
     }
     const Ref<NetwSimulationHandle> handle = entity->get_simulation();
-    if (handle.is_valid()) {
-        handle->announce(NetwSimulationHandle::Mode(int(row->mode)));
+    row = sim_rows.find(p_entity);
+    if (handle.is_null() || row == nullptr) {
+        return;
     }
+    const sim::Mode mode = row->mode;
+    row->announced = mode;
+    row->has_announced = true;
+#if defined(NETW_TESTS)
+    idle_work.announced += 1;
+#endif
+    handle->announce(NetwSimulationHandle::Mode(int(mode)));
 }
 
 void NetwMultiplayer::sim_refresh_members(const LocalVector<RID> &p_members) {
@@ -502,9 +522,19 @@ void NetwMultiplayer::sim_refresh_members(const LocalVector<RID> &p_members) {
         if (entity.is_null()) {
             continue;
         }
-        sim_rows.resolve(member, sim_body_facts(entity));
-        sim_settle_body(entity);
-        display_mark_role_dirty(member);
+        {
+            NETW_ZONE_NC("sim resolve body facts", colors::PREDICTION);
+            sim_rows.resolve(member, sim_body_facts(entity));
+        }
+        {
+            NETW_ZONE_NC("sim settle body", colors::PREDICTION);
+            sim_settle_body(entity);
+        }
+        {
+            NETW_ZONE_NC("sim mark role dirty", colors::PREDICTION);
+            display_mark_role_dirty(member);
+        }
+        NETW_ZONE_NC("sim announce", colors::PREDICTION);
         sim_announce(member);
     }
 }

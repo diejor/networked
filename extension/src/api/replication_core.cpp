@@ -46,6 +46,7 @@ void ReplicationCore::resolve_channel_ids() {
     ids.reply = id_of(registry, "REPLY");
     ids.control_request = id_of(registry, "CONTROL_REQUEST");
     ids.control_apply = id_of(registry, "CONTROL_APPLY");
+    ids.claim_image = id_of(registry, "CLAIM_IMAGE");
     const wire::ChannelDecl *requests
         = registry.find_channel(uint8_t(ids.control_request));
     ids.control_requests_ordered = requests != nullptr
@@ -349,6 +350,107 @@ void ReplicationCore::watch_control(const Ref<NetwEntity> &p_entity) {
     const ObjectID held = gd::instance_id(p_entity.ptr());
     if (control_waiting.find(held) < 0) {
         control_waiting.push_back(held);
+    }
+}
+
+void ReplicationCore::watch_claim_image(const Ref<NetwEntity> &p_entity) {
+    const ObjectID held = gd::instance_id(p_entity.ptr());
+    if (claim_imaging.find(held) < 0) {
+        claim_imaging.push_back(held);
+    }
+}
+
+bool ReplicationCore::lanes_stream_to(
+    const Ref<NetwEntity> &p_entity,
+    int64_t p_peer_id
+) {
+    NetwMultiplayer *plane = core();
+    ReplicationSend *send = NetwMultiplayer::row_send_of(this);
+    if (plane == nullptr || send == nullptr) {
+        return true;
+    }
+    const int64_t live = plane->liveness_route_of(p_entity.ptr());
+    const TypedArray<NetwPropertySetBinding> group
+        = derived_group(live > 0 ? live : p_entity->get_route());
+    for (int at = 0; at < group.size(); ++at) {
+        const Ref<NetwPropertySetBinding> binding = group[at];
+        if (binding.is_null() || binding->get_set().is_null()
+            || binding->get_set()->get_record()
+                != NetwPropertySet::RECORD_BROADCAST) {
+            continue;
+        }
+        const repl::SetRow *row = sync_model.row_for(
+            binding->get_route(),
+            int64_t(NetwSyncModel::KIND_DERIVED),
+            binding->get_order_key(),
+            NetwPropertySet::RECORD_BROADCAST
+        );
+        if (row == nullptr) {
+            continue;
+        }
+        bool streams = false;
+        for (uint8_t family = 0; family <= wire::STREAM_FAMILY_CEILING;
+             ++family) {
+            wire::StreamLane lane;
+            lane.route = binding->get_route();
+            lane.ordinal = uint8_t(row->ordinal);
+            lane.family = wire::StreamFamily(family);
+            streams = streams
+                || send->writer_book().token_of(int(p_peer_id), lane) != 0;
+        }
+        if (!streams) {
+            return false;
+        }
+    }
+    return true;
+}
+
+void ReplicationCore::send_claim_images(int64_t p_tick) {
+    NetwMultiplayer *plane = core();
+    if (plane == nullptr || claim_imaging.is_empty()) {
+        return;
+    }
+    LocalVector<ObjectID> held;
+    held.reserve(claim_imaging.size());
+    for (uint32_t at = 0; at < claim_imaging.size(); ++at) {
+        held.push_back(claim_imaging[at]);
+    }
+    claim_imaging.clear();
+    for (uint32_t at = 0; at < held.size(); ++at) {
+        NetwEntity *entity
+            = Object::cast_to<NetwEntity>(gd::object_of(held[at]));
+        if (entity == nullptr || !entity->sends_claim_image(p_tick)) {
+            continue;
+        }
+        const Ref<NetwEntity> view(entity);
+        const bool ahead = entity->is_claim_running_ahead();
+        const PackedInt32Array holders = plane->rpc_get_recipients(view);
+        PackedInt32Array owed;
+        for (int which = 0; which < holders.size(); ++which) {
+            if (ahead || !lanes_stream_to(view, holders[which])) {
+                owed.push_back(holders[which]);
+            }
+        }
+        if (owed.is_empty()) {
+            continue;
+        }
+        watch_claim_image(view);
+        const PackedByteArray payload = entity->claim_image(p_tick);
+        if (payload.is_empty()) {
+            continue;
+        }
+        for (int which = 0; which < owed.size(); ++which) {
+            send_to(
+                owed[which],
+                entity->get_route(),
+                ids.claim_image,
+                payload,
+                false,
+                0,
+                String(),
+                true
+            );
+        }
     }
 }
 
@@ -755,6 +857,11 @@ void ReplicationCore::dispatch_frame(
             && session::frame_read(p_payload, applied)) {
             entity->_handle_control_apply(applied);
         }
+    } else if (p_channel == ids.claim_image) {
+        session::ClaimImage image;
+        if (entity.is_valid() && session::frame_read(p_payload, image)) {
+            entity->_handle_claim_image(p_sender, image);
+        }
     } else if (p_channel == ids.property_sync) {
         sync_pipeline.handle_property_sync(
             entity,
@@ -947,6 +1054,7 @@ Node *ReplicationCore::resolve_comp_node(
 void ReplicationCore::on_clock_tick(int64_t p_tick) {
     expire_control(p_tick);
     sync_pipeline.pump(p_tick);
+    send_claim_images(p_tick);
     sync_compat.pump();
     spawn_pipeline.retry_adopt_parked();
     pump_tables(p_tick);

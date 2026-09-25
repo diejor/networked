@@ -1,77 +1,41 @@
-[gd_scene load_steps=5 format=3]
+[gd_scene format=3]
 
-[ext_resource type="Script" path="res://examples/playground/playground.gd" id="1_root"]
-[ext_resource type="PackedScene" path="res://examples/playground/cube.tscn" id="2_cube"]
+[ext_resource type="Script" uid="uid://c3hcv4qijg6re" path="res://examples/playground/playground.gd" id="1_root"]
+[ext_resource type="PhysicsMaterial" path="res://examples/playground/surface.tres" id="2_surface"]
+
+[sub_resource type="Environment" id="Environment_world"]
+background_mode = 1
+background_color = Color(1, 1, 1, 1)
+ambient_light_source = 2
+ambient_light_color = Color(0.4, 0.4, 0.4, 1)
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_floor"]
-size = Vector3(40, 1, 40)
+size = Vector3(128, 1, 128)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_floor"]
 
 [sub_resource type="BoxMesh" id="BoxMesh_floor"]
-size = Vector3(40, 1, 40)
+material = SubResource("StandardMaterial3D_floor")
+size = Vector3(128, 1, 128)
 
 [node name="Playground" type="Node3D"]
 script = ExtResource("1_root")
 
+[node name="Environment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_world")
+
 [node name="Sun" type="DirectionalLight3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 0.5, 0.87, 0, -0.87, 0.5, 0, 8, 0)
+transform = Transform3D(0.8944, -0.3904, 0.2182, 0, 0.488, 0.8729, -0.4472, -0.7807, 0.4364, 8, 8, 8)
+shadow_enabled = true
 
 [node name="Floor" type="StaticBody3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.5, 0)
+physics_material_override = ExtResource("2_surface")
 
 [node name="Shape" type="CollisionShape3D" parent="Floor"]
 shape = SubResource("BoxShape3D_floor")
 
 [node name="Visual" type="MeshInstance3D" parent="Floor"]
 mesh = SubResource("BoxMesh_floor")
-
-[node name="Cubes" type="Node3D" parent="."]
-
-[node name="Cube1" parent="Cubes" instance=ExtResource("2_cube")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.25, 0.25, 2.25)
-
-[node name="Cube2" parent="Cubes" instance=ExtResource("2_cube")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.75, 0.25, 2.25)
-
-[node name="Cube3" parent="Cubes" instance=ExtResource("2_cube")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.75, 0.25, 2.25)
-
-[node name="Cube4" parent="Cubes" instance=ExtResource("2_cube")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.25, 0.25, 2.25)
-
-[node name="Cube5" parent="Cubes" instance=ExtResource("2_cube")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.25, 0.25, 0.75)
-
-[node name="Cube6" parent="Cubes" instance=ExtResource("2_cube")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.75, 0.25, 0.75)
-
-[node name="Cube7" parent="Cubes" instance=ExtResource("2_cube")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.75, 0.25, 0.75)
-
-[node name="Cube8" parent="Cubes" instance=ExtResource("2_cube")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.25, 0.25, 0.75)
-
-[node name="Cube9" parent="Cubes" instance=ExtResource("2_cube")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.25, 0.25, -0.75)
-
-[node name="Cube10" parent="Cubes" instance=ExtResource("2_cube")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.75, 0.25, -0.75)
-
-[node name="Cube11" parent="Cubes" instance=ExtResource("2_cube")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.75, 0.25, -0.75)
-
-[node name="Cube12" parent="Cubes" instance=ExtResource("2_cube")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.25, 0.25, -0.75)
-
-[node name="Cube13" parent="Cubes" instance=ExtResource("2_cube")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.25, 0.25, -2.25)
-
-[node name="Cube14" parent="Cubes" instance=ExtResource("2_cube")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.75, 0.25, -2.25)
-
-[node name="Cube15" parent="Cubes" instance=ExtResource("2_cube")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.75, 0.25, -2.25)
-
-[node name="Cube16" parent="Cubes" instance=ExtResource("2_cube")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.25, 0.25, -2.25)
 
 [node name="Players" type="Node3D" parent="."]

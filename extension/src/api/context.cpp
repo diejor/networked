@@ -17,6 +17,8 @@
 #include "netw/scene_decl.hpp"
 #include "netw/script/model.hpp"
 #include "netw/session_decl.hpp"
+#include "netw/colors.hpp"
+#include "netw/profile.hpp"
 
 using namespace godot;
 
@@ -149,14 +151,8 @@ NetwMultiplayer *rpc_interface(const Callable &p_callable) {
 }
 
 bool node_declares(Node *p_node, const StringName &p_property) {
-    const Array declared = gd::property_list(p_node);
-    for (int at = 0; at < declared.size(); ++at) {
-        const Dictionary row = declared[at];
-        if (StringName(row.get("name", StringName())) == p_property) {
-            return true;
-        }
-    }
-    return false;
+    NETW_ZONE_NC("Netw node declares", colors::SESSION);
+    return gd::has_property(p_node, p_property);
 }
 
 void mark_signal_fired(const Variant &p_node, const String &p_meta_key) {
@@ -200,6 +196,7 @@ void setup_defer_latches(Node *p_node) {
 }
 
 void register_as_component(const Variant &p_node) {
+    NETW_ZONE_NC("Netw register as component", colors::SESSION);
     Node *node = node_behind(p_node);
     if (node == nullptr) {
         return;
@@ -559,6 +556,7 @@ Ref<NetwPropertyConfig> Netw::configure_property(
     const StringName &p_property,
     bool p_warn_late
 ) {
+    NETW_ZONE_NC("Netw configure property", colors::SESSION);
     if (p_node == nullptr) {
         NETW_ERROR(sys::SESSION, "Netw.configure_property: a node is required");
         return Ref<NetwPropertyConfig>();
@@ -691,6 +689,7 @@ Ref<NetwMemberConfig> Netw::configure_spawn(const Callable &p_callable) {
 }
 
 Ref<NetwEntity> Netw::configure_entity(Node *p_node) {
+    NETW_ZONE_NC("Netw configure entity", colors::SESSION);
     const Ref<NetwEntity> entity = NetwEntity::resolve(p_node);
     if (entity.is_null() && p_node != nullptr && p_node->is_inside_tree()) {
         NETW_ERROR(

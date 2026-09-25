@@ -858,4 +858,32 @@ TEST_CASE(
     CHECK(it_says_ungathered);
 }
 
+TEST_CASE(
+    "[Networked][Repl][Hosted] control spends what the rows left of a peer's "
+    "budget, and never less than its reservation"
+) {
+    const WireRegistry reg = registry();
+    const int64_t reserved = 256;
+    LocalVector<RowOffer> offers;
+    offers.push_back(offer(1, 10, peers(PEER)));
+    offers.push_back(offer(2, 20, peers(PEER)));
+
+    SessionSend roomy;
+    const int64_t budget = 1 << 14;
+    const SessionResult light = drive_send(roomy, reg, offers, budget, 1);
+    int64_t rows_bits = 0;
+    for (uint32_t at = 0; at < light.sends.size(); ++at) {
+        rows_bits += light.sends[at].bits;
+    }
+    NETW_CHECK_EQ(
+        roomy.control_budget_bytes(PEER, reserved),
+        (budget - rows_bits) / 8
+    );
+    NETW_CHECK_EQ(roomy.control_budget_bytes(OTHER, reserved), budget / 8);
+
+    SessionSend full;
+    drive_send(full, reg, offers, one_frame_bits(offers), 1);
+    NETW_CHECK_EQ(full.control_budget_bytes(PEER, reserved), reserved);
+}
+
 } // namespace TestNetwReplSessionSend

@@ -16,6 +16,8 @@
 #include "netw/lifecycle/rule.hpp"
 #include "netw/log.hpp"
 #include "netw/repl/set_model.hpp"
+#include "netw/colors.hpp"
+#include "netw/profile.hpp"
 #include "netw/sync_authoring.hpp"
 #include "netw/synchronizers.hpp"
 #include "netw/wire/stream.hpp"
@@ -785,6 +787,25 @@ TypedArray<NetwPropertySetBinding> NetwEntity::image_bindings() {
 }
 
 PackedByteArray NetwEntity::final_image(int64_t p_tick) {
+    int64_t measured = 0;
+    const PackedByteArray bytes = state_image(p_tick, measured);
+    if (!bytes.is_empty() || measured <= session::CONTROL_FINAL_STATE_CAP) {
+        return bytes;
+    }
+    NETW_WARN(
+        sys::ENTITY,
+        "the final state of '%s' is %d bytes, past the %d byte control "
+        "budget, so its release carries none and the successor starts from "
+        "its own copy",
+        String(get_entity_id()),
+        measured,
+        session::CONTROL_FINAL_STATE_CAP
+    );
+    return PackedByteArray();
+}
+
+PackedByteArray NetwEntity::state_image(int64_t p_tick, int64_t &r_size) {
+    r_size = 0;
     const TypedArray<NetwPropertySetBinding> bindings = image_bindings();
     if (bindings.is_empty()) {
         return PackedByteArray();
@@ -810,33 +831,28 @@ PackedByteArray NetwEntity::final_image(int64_t p_tick) {
     }
     stream.align_verify();
     const PackedByteArray bytes = stream.to_bytes();
-    const int64_t measured = MAX(size, int64_t(bytes.size()));
-    if (stream.ok() && measured <= session::CONTROL_FINAL_STATE_CAP) {
+    r_size = MAX(size, int64_t(bytes.size()));
+    if (stream.ok() && r_size <= session::CONTROL_FINAL_STATE_CAP) {
         return bytes;
     }
-    NETW_WARN(
-        sys::ENTITY,
-        "the final state of '%s' is %d bytes, past the %d byte control "
-        "budget, so its release carries none and the successor starts from "
-        "its own copy",
-        String(get_entity_id()),
-        measured,
-        session::CONTROL_FINAL_STATE_CAP
-    );
     return PackedByteArray();
 }
 
-void NetwEntity::install_final_image(const PackedByteArray &p_final_state) {
+int64_t NetwEntity::install_final_image(
+    const PackedByteArray &p_final_state,
+    int64_t p_after_tick
+) {
     if (p_final_state.is_empty()) {
-        return;
+        return -2;
     }
     const TypedArray<NetwPropertySetBinding> bindings = image_bindings();
     wire::ReadStream reader(p_final_state);
     uint64_t stamped = 0;
     uint64_t count = 0;
     if (!reader.varuint(stamped) || !reader.varuint(count)
-        || count != uint64_t(bindings.size())) {
-        return;
+        || count != uint64_t(bindings.size())
+        || int64_t(stamped) - 1 <= p_after_tick) {
+        return -2;
     }
     LocalVector<Array> keys;
     LocalVector<Array> values;
@@ -847,7 +863,7 @@ void NetwEntity::install_final_image(const PackedByteArray &p_final_state) {
         Array run_values;
         if (!reader.bytes_capped(run, session::CONTROL_FINAL_STATE_CAP)
             || !binding->read_image(run, run_keys, run_values)) {
-            return;
+            return -2;
         }
         keys.push_back(run_keys);
         values.push_back(run_values);
@@ -856,6 +872,99 @@ void NetwEntity::install_final_image(const PackedByteArray &p_final_state) {
         const Ref<NetwPropertySetBinding> binding = bindings[at];
         binding->install_image(keys[at], values[at], int64_t(stamped) - 1);
     }
+    return int64_t(stamped) - 1;
+}
+
+void NetwEntity::start_claim_images() {
+    NetwMultiplayer *core = session_core();
+    ReplicationCore *plane = get_replication_plane();
+    if (core == nullptr || plane == nullptr
+        || get_transfer() != TRANSFER_IMMEDIATE) {
+        return;
+    }
+    const int64_t now = core->clock_engine().get_tick();
+    claim_image_until = now + 2 * core->clock_engine().get_tickrate();
+    plane->watch_claim_image(Ref<NetwEntity>(this));
+}
+
+bool NetwEntity::sends_claim_image(int64_t p_tick) const {
+    if (get_owner() == nullptr || p_tick > claim_image_until) {
+        return false;
+    }
+    return is_claim_running_ahead() || is_controller_here();
+}
+
+PackedByteArray NetwEntity::claim_image(int64_t p_tick) {
+    int64_t measured = 0;
+    session::ClaimImage frame;
+    frame.observed_revision = control()->revision;
+    frame.state = state_image(p_tick, measured);
+    return frame.state.is_empty() ? PackedByteArray()
+                                  : session::frame_write(frame);
+}
+
+bool NetwEntity::claim_image_admits(
+    int64_t p_sender,
+    uint64_t p_observed
+) const {
+    return p_sender != 0 && p_sender == get_controller()
+        && p_sender != local_peer() && p_observed + 1 >= control()->tenure;
+}
+
+void NetwEntity::install_claim_image(const PackedByteArray &p_state) {
+    const int64_t installed = install_final_image(p_state, claim_image_tick);
+    if (installed > claim_image_tick) {
+        claim_image_tick = installed;
+    }
+}
+
+void NetwEntity::install_held_claim_image(bool p_tenure_changed) {
+    if (p_tenure_changed) {
+        claim_image_tick = -1;
+    }
+    if (get_controller() == local_peer()) {
+        held_claim_image = HeldClaimImage();
+        if (p_tenure_changed) {
+            start_claim_images();
+        }
+        return;
+    }
+    if (held_claim_image.state.is_empty()) {
+        return;
+    }
+    const HeldClaimImage held = held_claim_image;
+    held_claim_image = HeldClaimImage();
+    NetwMultiplayer *core = session_core();
+    const int64_t now = core != nullptr ? core->clock_engine().get_tick() : -1;
+    const int64_t window
+        = core != nullptr ? core->clock_engine().get_tickrate() : 0;
+    if (now - held.received_tick > window
+        || !claim_image_admits(held.sender, held.observed_revision)) {
+        return;
+    }
+    install_claim_image(held.state);
+}
+
+void NetwEntity::_handle_claim_image(
+    int64_t p_sender,
+    const session::ClaimImage &p_image
+) {
+    if (p_image.state.is_empty() || p_sender == local_peer()) {
+        return;
+    }
+    if (claim_image_admits(p_sender, p_image.observed_revision)) {
+        install_claim_image(p_image.state);
+        return;
+    }
+    if (get_controller() == p_sender) {
+        return;
+    }
+    NetwMultiplayer *core = session_core();
+    held_claim_image.sender = p_sender;
+    held_claim_image.observed_revision = p_image.observed_revision;
+    held_claim_image.received_tick
+        = core != nullptr ? core->clock_engine().get_tick() : -1;
+    held_claim_image.state = p_image.state;
 }
 
 TypedArray<NetwPropertySetBinding> NetwEntity::authored_bindings() {
@@ -895,6 +1004,9 @@ void NetwEntity::follow_claim(bool p_was_ahead) {
     NetwMultiplayer *core = session_core();
     if (core != nullptr) {
         core->sim_follow_claim(Ref<NetwEntity>(this));
+    }
+    if (ahead) {
+        start_claim_images();
     }
 }
 
@@ -1193,6 +1305,7 @@ void NetwEntity::decide_control(
         core->row_streams_follow_tenure(get_route(), control()->tenure);
     }
     install_final_image(p_final_state);
+    install_held_claim_image(tenure_changed);
     ReplicationCore *plane = get_replication_plane();
     if (plane == nullptr) {
         return;
@@ -1224,6 +1337,7 @@ void NetwEntity::_handle_control_apply(const session::ControlApply &p_applied) {
             core->row_streams_follow_tenure(get_route(), control()->tenure);
         }
         install_final_image(p_applied.final_state);
+        install_held_claim_image(p_applied.tenure_changed);
     }
     if (p_applied.op != 0) {
         settle_control(
@@ -1363,6 +1477,7 @@ void NetwEntity::_go_live_if_armed() {
 }
 
 void NetwEntity::_handle_tree_entered() {
+    NETW_ZONE_NC("NetwEntity tree entered", colors::LIVENESS);
     owner_exiting_tree = false;
     Node *owner = get_owner();
     if (session_core() == nullptr) {
@@ -1394,7 +1509,12 @@ void NetwEntity::hydrate_components() {
     }
     NetwCompTable &table = record->get_comp_table();
     table.assign(paths);
-    table.set_table_hash(comp_structure_hash(table.sorted_paths()));
+    int64_t structure = 0;
+    {
+        NETW_ZONE_NC("NetwEntity comp structure hash", colors::LIVENESS);
+        structure = comp_structure_hash(table.sorted_paths());
+    }
+    table.set_table_hash(structure);
     if (table.reconcile(get_is_session_authority())) {
         NETW_WARN(
             sys::ENTITY,
@@ -1461,10 +1581,14 @@ void NetwEntity::_on_owner_ready() {
         return;
     }
     ready_once_fired = true;
+    NETW_ZONE_NC("NetwEntity owner ready", colors::LIVENESS);
     if (get_controller() != 0) {
         apply_control();
     }
-    hydrate_components();
+    {
+        NETW_ZONE_NC("NetwEntity hydrate components", colors::LIVENESS);
+        hydrate_components();
+    }
     NetwMultiplayer *core = session_core();
     if (core != nullptr && core->predict_lacks_state_rows(this)) {
         Node *owner = get_owner();
@@ -1476,13 +1600,20 @@ void NetwEntity::_on_owner_ready() {
                              : String(get_entity_id()).utf8().get_data()
         );
     }
-    if (core != nullptr && !core->persist_enroll(get_owner())) {
-        core->predict_reconcile_declaration(this);
+    {
+        NETW_ZONE_NC("NetwEntity persist and predict", colors::LIVENESS);
+        if (core != nullptr && !core->persist_enroll(get_owner())) {
+            core->predict_reconcile_declaration(this);
+        }
     }
     if (core != nullptr) {
+        NETW_ZONE_NC("NetwEntity sim declare", colors::LIVENESS);
         core->sim_declare(this);
     }
-    emit_signal(SIG_SPAWNED);
+    {
+        NETW_ZONE_NC("NetwEntity emit spawned", colors::LIVENESS);
+        emit_signal(SIG_SPAWNED);
+    }
 }
 
 void NetwEntity::_handle_tree_exiting() {
@@ -1734,6 +1865,14 @@ Ref<NetwSimulationHandle> NetwEntity::get_simulation() const {
         NetwEntityRecord::PART_SIMULATION,
         const_cast<NetwEntity *>(this)
     );
+}
+
+Ref<NetwPredictionHandle> NetwEntity::prediction_if_minted() const {
+    return record->minted_part(NetwEntityRecord::PART_PREDICTION);
+}
+
+Ref<NetwSimulationHandle> NetwEntity::simulation_if_minted() const {
+    return record->minted_part(NetwEntityRecord::PART_SIMULATION);
 }
 
 Ref<NetwPersistenceHandle> NetwEntity::get_persistence() const {

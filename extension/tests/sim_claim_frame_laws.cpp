@@ -116,6 +116,7 @@ struct ClaimEvidence {
     int64_t winner = 0;
     int64_t server_controller = -1;
     Vector3 server_velocity;
+    bool loser_state_taken = false;
 };
 
 ClaimEvidence &claim_evidence() {
@@ -222,6 +223,15 @@ class ClaimScenario final : public netw_test::FrameScenario {
         seen.claimed_position = sphere_at(p_client)->get_position();
     }
 
+    void watch_loser() {
+        for (int peer = -1; peer < 1; ++peer) {
+            const Vector3 velocity = sphere_at(peer)->get_linear_velocity();
+            if (velocity.is_equal_approx(GRAB_B)) {
+                claim_evidence().loser_state_taken = true;
+            }
+        }
+    }
+
     void read_pending() {
         for (int client = 0; client < CLIENTS; ++client) {
             Claimant &seen = claim_evidence().claimants[client];
@@ -284,6 +294,7 @@ public:
             stand->step_ticks(1);
         } else if (settle_until < 0) {
             stand->step_ticks(1);
+            watch_loser();
             if (frame == WARM_FRAMES + PENDING_READ_FRAMES) {
                 read_pending();
             }
@@ -295,6 +306,7 @@ public:
             }
         } else if (frame < settle_until) {
             stand->step_ticks(1);
+            watch_loser();
         } else {
             read_final();
             close();
@@ -359,15 +371,25 @@ TEST_CASE(
 
 TEST_CASE(
     "[Networked][Sim][Frame] X09 the loser installs the sample it retained, "
-    "runs as an active copy again, and sees only the winner's decision"
+    "which is already the winner's pending state, runs as an active copy "
+    "again, and sees only the winner's decision"
 ) {
     const ClaimEvidence &evidence = claim_evidence();
     REQUIRE(evidence.driven);
     const Claimant &loser = evidence.claimants[1];
-    CHECK(loser.settled_velocity.is_equal_approx(DRIFT));
+    CHECK(loser.settled_velocity.is_equal_approx(GRAB_A));
     NETW_CHECK_EQ(int(loser.settled_mode), int(Mode::ACTIVE));
     CHECK_FALSE(loser.controlled_after);
     NETW_CHECK_EQ(loser.changes, 1);
+}
+
+TEST_CASE(
+    "[Networked][Sim][Frame] X09 the state a refused claimant sent while "
+    "pending is never installed by the session or by the winner"
+) {
+    const ClaimEvidence &evidence = claim_evidence();
+    REQUIRE(evidence.driven);
+    CHECK_FALSE(evidence.loser_state_taken);
 }
 
 } // namespace TestNetwSimClaimFrameLaws

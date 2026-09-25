@@ -1936,14 +1936,14 @@
 				[codeblock lang=text]
 				Dictionary
 				┠╴loss          float   lost share of the last 32 acked datagrams
-				┠╴rtt           float   seconds, the session clock's averaged round trip
-				┠╴jitter        float   seconds, the session clock's own deviation
+				┠╴rtt           float   seconds, smoothed send-to-ack round trip
+				┠╴jitter        float   seconds, that round trip's mean deviation
 				┠╴reorders      int     datagrams that arrived behind a fresher one
 				┠╴duplicates    int     datagrams that arrived twice
 				┠╴mode          String  "good" or "bad", the send governor's own reading
 				┖╴budget_bits   int     what one datagram to this peer may spend
 				[/codeblock]
-				[code]loss[/code], [code]mode[/code] and [code]budget_bits[/code] are measured for [param peer] alone. [code]rtt[/code] and [code]jitter[/code] come from the session clock, which counts one round trip for the session, so every peer of one session reads the same two numbers.
+				Every field is measured for [param peer] alone. [code]rtt[/code] is timed from each datagram sent to that peer until an ack naming it arrives, so a host reads each client's own link. Until the first ack arrives, [code]rtt[/code] and [code]jitter[/code] read the session clock's figures.
 				[code]mode[/code] turns [code]bad[/code] when loss or round trip crosses the governor's thresholds, and [code]budget_bits[/code] halves with it down to a floor, so a link that is failing degrades instead of collapsing. It returns to [code]good[/code] only after a clean interval, and that interval doubles each time the link relapses, so a flapping link is not chased.
 				This is a tooling-cadence read. Read it beside [method sync_explain], which returns what one row did rather than what the link did.
 			</description>

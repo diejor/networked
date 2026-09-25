@@ -20,6 +20,8 @@ struct ObjectPort {
 
 godot::Variant port_get(godot::Object *p_owner, const godot::StringName &p_key);
 
+bool port_rests(godot::Object *p_owner, const godot::StringName &p_key);
+
 void port_set(
     godot::Object *p_owner,
     const godot::StringName &p_key,

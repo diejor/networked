@@ -23,5 +23,5 @@ func enter(player: NetwPlayer) -> void:
 	var root: Node = Netw.scene(playground).root
 	var players: Node = root.get_node(^"Players")
 	players.add_child(
-		Netw.spawn_player(player, root.spawn_avatar, players.get_child_count())
+		Netw.spawn_player(player, root.spawn_player, players.get_child_count())
 	)

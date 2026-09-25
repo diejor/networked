@@ -97,6 +97,9 @@ godot::Callable get_node_property_carry(
 );
 void clear_node_overlay(godot::Node *p_node);
 void sweep_dead_overlays();
+#if defined(NETW_TESTS)
+int64_t node_overlay_count();
+#endif
 
 godot::Array get_method_interpolators(
     const godot::Ref<godot::Script> &p_script,

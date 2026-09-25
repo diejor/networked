@@ -3,7 +3,9 @@
 #include "netw/api/netw_multiplayer.hpp"
 #include "netw/api/property_config.hpp"
 #include "netw/api/schema_core.hpp"
+#include "netw/colors.hpp"
 #include "netw/log.hpp"
+#include "netw/profile.hpp"
 #include "netw/script/model.hpp"
 #include "netw/subsystems.hpp"
 #include "netw/wire/registry.hpp"
@@ -272,34 +274,57 @@ Ref<NetwPropertySet> from_script(
     Object *p_api,
     Node *p_node
 ) {
-    const Ref<NetwPropertySet> set = from_property_configs(
-        netw::script::model::get_property_configs(p_script),
-        p_record
-    );
+    NETW_ZONE_NC("PropertySet from script", colors::WIRE);
+    NetwMultiplayer *core = nullptr;
+    if (p_api != nullptr) {
+        core = godot::Object::cast_to<NetwMultiplayer>(p_api);
+        if (core == nullptr) {
+            const Variant held = p_api->get(StringName("_native_core"));
+            core = godot::Object::cast_to<NetwMultiplayer>(
+                static_cast<Object *>(held)
+            );
+        }
+    }
+    if (core != nullptr) {
+        const RID adopted = core->adopted_property_set(
+            p_script,
+            NetwMultiplayer::RecordKind(p_record)
+        );
+        if (adopted.is_valid()) {
+            return core->property_set_record(adopted);
+        }
+    }
+    Ref<NetwPropertySet> set;
+    {
+        NETW_ZONE_NC("PropertySet build columns", colors::WIRE);
+        set = from_property_configs(
+            netw::script::model::get_property_configs(p_script),
+            p_record
+        );
+    }
     if (set.is_null()) {
         return set;
     }
-    NetwPropertySet::stamp_column_types(set, p_script, p_node);
-    set->seal();
-    if (p_api == nullptr) {
-        return set;
+    {
+        NETW_ZONE_NC("PropertySet stamp column types", colors::WIRE);
+        NetwPropertySet::stamp_column_types(set, p_script, p_node);
     }
-    NetwMultiplayer *core = godot::Object::cast_to<NetwMultiplayer>(p_api);
-    if (core == nullptr) {
-        const Variant held = p_api->get(StringName("_native_core"));
-        core = godot::Object::cast_to<NetwMultiplayer>(
-            static_cast<Object *>(held)
-        );
+    {
+        NETW_ZONE_NC("PropertySet seal", colors::WIRE);
+        set->seal();
     }
     if (core == nullptr) {
         return set;
     }
-    return core->property_set_record(core->adopt_property_set(
-        p_script,
-        NetwMultiplayer::RecordKind(p_record),
-        set,
-        p_node
-    ));
+    {
+        NETW_ZONE_NC("PropertySet adopt", colors::WIRE);
+        return core->property_set_record(core->adopt_property_set(
+            p_script,
+            NetwMultiplayer::RecordKind(p_record),
+            set,
+            p_node
+        ));
+    }
 }
 
 } // namespace property_set_builder

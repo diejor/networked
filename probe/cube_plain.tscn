@@ -1,0 +1,21 @@
+[gd_scene format=3 uid="uid://bwm2twrgy4h0r"]
+
+[ext_resource type="PhysicsMaterial" path="res://examples/playground/surface.tres" id="2_surface"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_cube"]
+size = Vector3(0.25, 0.25, 0.25)
+
+[sub_resource type="BoxMesh" id="BoxMesh_cube"]
+size = Vector3(0.25, 0.25, 0.25)
+
+[node name="Cube" type="RigidBody3D"]
+collision_layer = 3
+mass = 0.1
+physics_material_override = ExtResource("2_surface")
+gravity_scale = 1.837
+
+[node name="Shape" type="CollisionShape3D" parent="."]
+shape = SubResource("BoxShape3D_cube")
+
+[node name="Visual" type="MeshInstance3D" parent="."]
+mesh = SubResource("BoxMesh_cube")

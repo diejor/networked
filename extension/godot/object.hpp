@@ -14,9 +14,12 @@ using ::ObjectID;
 using ::PropertyInfo;
 } // namespace godot
 #elif defined(NETW_GDEXTENSION)
+#include <godot_cpp/classes/class_db_singleton.hpp>
 #include <godot_cpp/classes/object.hpp>
 #include <godot_cpp/core/object.hpp>
 #include <godot_cpp/core/object_id.hpp>
+#include <godot_cpp/templates/hash_map.hpp>
+#include <godot_cpp/templates/hash_set.hpp>
 #else
 #error "Define NETW_MODULE or NETW_GDEXTENSION."
 #endif
@@ -134,6 +137,24 @@ inline bool has_property(
     object->get(name, &valid);
     return valid;
 #else
+    static godot::HashMap<godot::StringName, godot::HashSet<godot::StringName>>
+        class_properties;
+    const godot::StringName native = object->get_class();
+    godot::HashSet<godot::StringName> *known = class_properties.getptr(native);
+    if (known == nullptr) {
+        godot::HashSet<godot::StringName> names;
+        const godot::TypedArray<godot::Dictionary> declared
+            = godot::ClassDBSingleton::get_singleton()
+                  ->class_get_property_list(native, false);
+        for (int at = 0; at < declared.size(); ++at) {
+            const godot::Dictionary info = declared[at];
+            names.insert(godot::StringName(info["name"]));
+        }
+        known = &class_properties.insert(native, names)->value;
+    }
+    if (known->has(name)) {
+        return true;
+    }
     const godot::Array infos = property_list(object);
     for (int at = 0; at < infos.size(); ++at) {
         const godot::Dictionary info = infos[at];

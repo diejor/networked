@@ -54,6 +54,11 @@ const char *SIG_TABLE_RECEIVED = "table_received";
 
 constexpr double SHUTDOWN_NOTIFY_DELAY = 0.5;
 
+const StringName &display_write_seam() {
+    static const StringName name("_display_write");
+    return name;
+}
+
 enum class OpenSeat : uint8_t {
     SEAT,
     PARK,
@@ -1025,7 +1030,10 @@ void NetwMultiplayer::row_control_flush(
         const LocalVector<wire::ControlRecord> records = scheduler.flush(
             ready[at],
             now,
-            wire::CONTROL_TICK_RESERVATION_BYTES
+            p_send->control_budget_bytes(
+                ready[at],
+                wire::CONTROL_TICK_RESERVATION_BYTES
+            )
         );
         for (uint32_t which = 0; which < records.size(); ++which) {
             send_to(
@@ -1129,8 +1137,12 @@ void NetwMultiplayer::sync_note_columns(
 Dictionary NetwMultiplayer::peer_link_stats(int64_t p_peer) const {
     Dictionary out;
     const ClockEngine &clock = clock_engine();
-    out[StringName("rtt")] = clock.rtt_avg();
-    out[StringName("jitter")] = clock.rtt_jitter();
+    const double measured_ms = link_round_trip_ms(p_peer);
+    out[StringName("rtt")]
+        = measured_ms > 0.0 ? measured_ms / 1000.0 : clock.rtt_avg();
+    out[StringName("jitter")] = measured_ms > 0.0
+        ? link_jitter_ms(p_peer) / 1000.0
+        : clock.rtt_jitter();
     out[StringName("reorders")] = seq_book.reorder_count(p_peer);
     out[StringName("duplicates")] = seq_book.duplicate_count(p_peer);
     out[StringName("loss")] = 0.0;
@@ -1205,19 +1217,25 @@ Error NetwMultiplayer::display_lane(
     const StringName &p_track,
     const Variant &p_value
 ) {
-    ReplicationCore *plane = (get_replication_plane());
-    Object *seam = plane != nullptr
-        ? plane->gate_seam(StringName("_display_write"))
+    ReplicationCore *replication = get_replication_plane();
+    Object *seam = replication != nullptr
+        ? replication->gate_seam(display_write_seam())
         : nullptr;
     const Error verdict = seam != nullptr
-        ? Error(int(seam->call("_display_write", p_entity, p_track, p_value)))
+        ? Error(int(
+              seam->call(display_write_seam(), p_entity, p_track, p_value)
+          ))
         : display_write(p_entity, p_track, p_value);
 
+    const int64_t route = liveness_core->route_of(p_entity);
+    if (!event_wants(EventPlane::DISPLAY_WRITE, route)) {
+        return verdict;
+    }
     Dictionary detail;
     detail[StringName("track")] = p_track;
     report_event(
         EventPlane::DISPLAY_WRITE,
-        liveness_core->route_of(p_entity),
+        route,
         detail,
         0,
         StringName(),
@@ -1299,7 +1317,10 @@ Error NetwMultiplayer::run_apply_set(
 
 void NetwMultiplayer::display_resolve_role(display::Runtime *p_runtime) {
     if (p_runtime != nullptr) {
-        sim_settle_body(p_runtime->entity());
+        {
+            NETW_ZONE_NC("display settle body", colors::INTERP);
+            sim_settle_body(p_runtime->entity());
+        }
         display::resolve_role(p_runtime, display_hooks);
     }
 }
@@ -1310,6 +1331,7 @@ bool NetwMultiplayer::display_wants_runtime(Node *p_owner) const {
 
 void NetwMultiplayer::display_rebuild_runtime(display::Runtime *p_runtime) {
     if (p_runtime != nullptr) {
+        NETW_ZONE_NC("display seat bodies", colors::INTERP);
         display_seat_bodies(p_runtime);
     }
     display::rebuild_runtime(p_runtime, display_hooks);
@@ -1354,7 +1376,7 @@ static Ref<NetwPredictionHandle> prediction_of(
     if (p_entity.is_null()) {
         return Ref<NetwPredictionHandle>();
     }
-    return p_entity->get_prediction();
+    return p_entity->prediction_if_minted();
 }
 
 int NetwMultiplayer::display_default_role(
@@ -1398,9 +1420,13 @@ double NetwMultiplayer::display_default_chase_clamp(const RID &p_entity) {
     if (p_runtime == nullptr) {
         return INFINITY;
     }
-    const Ref<NetwPredictionHandle> handle = prediction_of(p_runtime->entity());
-    if (handle.is_null()) {
+    const Ref<NetwEntity> entity = p_runtime->entity();
+    if (entity.is_null()) {
         return INFINITY;
+    }
+    const Ref<NetwPredictionHandle> handle = entity->prediction_if_minted();
+    if (handle.is_null()) {
+        return NetwPredictionHandle::DEFAULT_TELEPORT_THRESHOLD;
     }
     return MAX(handle->get_teleport_threshold(), 0.0);
 }
@@ -2187,7 +2213,10 @@ Error NetwMultiplayer::display_write(
     const Variant &p_value
 ) {
     Error answered = OK;
-    if (GDVIRTUAL_CALL(_display_write, p_entity, p_track, p_value, answered)) {
+    const bool overridden = overrides_seam(display_write_seam());
+    if (overridden
+        && GDVIRTUAL_CALL(_display_write, p_entity, p_track, p_value, answered)
+    ) {
         return answered;
     }
     return display_write_default(p_entity, p_track, p_value);
@@ -2578,6 +2607,21 @@ RID NetwMultiplayer::script_schema(const Ref<Script> &p_script, Node *p_node) {
     return schema;
 }
 
+RID NetwMultiplayer::adopted_property_set(
+    const Ref<Script> &p_script,
+    RecordKind p_record_kind
+) const {
+    const uint64_t key = p_script.is_valid()
+        ? uint64_t(p_script->get_instance_id())
+        : uint64_t(0);
+    const HashMap<int, RID> *cached = property_set_by_script.getptr(key);
+    if (cached == nullptr) {
+        return RID();
+    }
+    const RID *found = cached->getptr(p_record_kind);
+    return found != nullptr ? *found : RID();
+}
+
 RID NetwMultiplayer::adopt_property_set(
     const Ref<Script> &p_script,
     RecordKind p_record_kind,
@@ -2587,15 +2631,9 @@ RID NetwMultiplayer::adopt_property_set(
     if (p_source.is_null()) {
         return RID();
     }
-    const uint64_t key = p_script.is_valid()
-        ? uint64_t(p_script->get_instance_id())
-        : uint64_t(0);
-    HashMap<int, RID> *cached = property_set_by_script.getptr(key);
-    if (cached != nullptr) {
-        const RID *found = cached->getptr(p_record_kind);
-        if (found != nullptr) {
-            return *found;
-        }
+    const RID adopted = adopted_property_set(p_script, p_record_kind);
+    if (adopted.is_valid()) {
+        return adopted;
     }
     const RID schema = script_schema(p_script, p_node);
     const RID set = property_set_create(schema, p_record_kind);
@@ -2674,6 +2712,9 @@ RID NetwMultiplayer::adopt_property_set(
         );
     }
     property_set_seal(set);
+    const uint64_t key = p_script.is_valid()
+        ? uint64_t(p_script->get_instance_id())
+        : uint64_t(0);
     property_set_by_script[key][p_record_kind] = set;
     return set;
 }

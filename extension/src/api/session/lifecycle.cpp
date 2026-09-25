@@ -74,7 +74,8 @@ lifecycle::Facts NetwMultiplayer::lifecycle_entity_facts(
     }
     facts.declared
         = p_entity->get_lifecycle() == NetwEntity::LIFECYCLE_CONTROLLER;
-    const Ref<NetwPredictionHandle> prediction = p_entity->get_prediction();
+    const Ref<NetwPredictionHandle> prediction
+        = p_entity->prediction_if_minted();
     facts.predicted = prediction.is_valid()
         && prediction->get_archetype() != NetwPredict::ARCHETYPE_NONE;
     const int64_t route = liveness_route_of(p_entity);

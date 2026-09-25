@@ -1892,6 +1892,7 @@ PackedInt64Array NetwMultiplayer::carrier_flush() {
     for (const int32_t peer : carrier.peers(true)) {
         carrier_dispose(peer, true, carrier.take(peer, true));
     }
+    attribution.settle_retired_routes();
     return staged;
 }
 
@@ -1965,7 +1966,18 @@ int64_t NetwMultiplayer::session_elapsed_ms() const {
 }
 
 int64_t NetwMultiplayer::next_send_seq(int64_t p_peer) {
-    return seq_book.next_send_seq(p_peer);
+    return seq_book.next_send_seq(
+        p_peer,
+        Time::get_singleton()->get_ticks_usec()
+    );
+}
+
+double NetwMultiplayer::link_round_trip_ms(int64_t p_peer) const {
+    return seq_book.round_trip_ms(p_peer);
+}
+
+double NetwMultiplayer::link_jitter_ms(int64_t p_peer) const {
+    return seq_book.round_trip_jitter_ms(p_peer);
 }
 
 bool NetwMultiplayer::has_inbound_seq(int64_t p_peer) const {
@@ -1993,8 +2005,12 @@ bool NetwMultiplayer::note_peer_ack(
     int64_t p_ack,
     uint32_t p_history
 ) {
-    const bool advanced
-        = seq_book.note_peer_ack(p_peer, uint16_t(p_ack), p_history);
+    const bool advanced = seq_book.note_peer_ack(
+        p_peer,
+        uint16_t(p_ack),
+        p_history,
+        Time::get_singleton()->get_ticks_usec()
+    );
     if (advanced && plane.wants(EventPlane::ACK_ADVANCED, 0)) {
         EventPlane::Emission fact(
             EventPlane::ACK_ADVANCED,

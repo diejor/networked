@@ -212,4 +212,32 @@ TEST_CASE(
     NETW_CHECK_EQ(int64_t(book.inbound_delivery_history(3)), int64_t(0));
 }
 
+TEST_CASE(
+    "[Networked][Carrier][Hosted] F10 each peer's round trip is the time "
+    "from a datagram's send to the ack naming it, measured per peer"
+) {
+    DatagramSeqBook book;
+    const uint16_t to_near = book.next_send_seq(2, 1000000);
+    const uint16_t to_far = book.next_send_seq(3, 1000000);
+
+    book.note_peer_ack(2, to_near, 0, 1040000);
+    book.note_peer_ack(3, to_far, 0, 1340000);
+
+    NETW_CHECK_EQ(int64_t(book.round_trip_ms(2)), int64_t(40));
+    NETW_CHECK_EQ(int64_t(book.round_trip_ms(3)), int64_t(340));
+    NETW_CHECK_EQ(int64_t(book.round_trip_ms(4)), int64_t(0));
+}
+
+TEST_CASE(
+    "[Networked][Carrier][Hosted] F11 a repeated ack adds no round trip "
+    "sample, because the second copy is not a second send"
+) {
+    DatagramSeqBook book;
+    const uint16_t seq = book.next_send_seq(2, 0);
+    book.note_peer_ack(2, seq, 0, 100000);
+    book.note_peer_ack(2, seq, 0, 900000);
+
+    NETW_CHECK_EQ(int64_t(book.round_trip_ms(2)), int64_t(100));
+}
+
 } // namespace TestNetwCarrierFrame

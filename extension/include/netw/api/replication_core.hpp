@@ -37,6 +37,7 @@ private:
         int64_t reply = 0;
         int64_t control_request = 0;
         int64_t control_apply = 0;
+        int64_t claim_image = 0;
         bool control_requests_ordered = true;
         int64_t property_sync = 0;
         int64_t signal = 0;
@@ -64,6 +65,7 @@ private:
 
     NetwChannelBook *channels = nullptr;
     godot::LocalVector<godot::ObjectID> control_waiting;
+    godot::LocalVector<godot::ObjectID> claim_imaging;
     NetwSyncModel sync_model;
     SyncPipeline sync_pipeline;
     spawn::Pipeline spawn_pipeline;
@@ -182,6 +184,12 @@ public:
         const session::ControlRequest &p_request
     );
     void watch_control(const godot::Ref<NetwEntity> &p_entity);
+    void watch_claim_image(const godot::Ref<NetwEntity> &p_entity);
+    void send_claim_images(int64_t p_tick);
+    bool lanes_stream_to(
+        const godot::Ref<NetwEntity> &p_entity,
+        int64_t p_peer_id
+    );
 
     void send_to(
         int64_t p_peer_id,

@@ -203,6 +203,10 @@ public:
     static godot::StringName template_meta();
 
     godot::Variant part(int64_t p_part, godot::Object *p_wrapper);
+    godot::Variant minted_part(int64_t p_part) const {
+        return p_part >= 0 && p_part < PART_MAX ? parts[p_part]
+                                                : godot::Variant();
+    }
 
     interest::Facet &get_interest_facet() {
         return interest_facet;

@@ -117,6 +117,19 @@ def checkout_dependency(name, url, destination, ref):
         Exit(1)
 
 
+def apply_patch(destination, patch):
+    """Apply a patch to a pinned checkout's working tree, once."""
+    git_apply = ["git", "-C", str(destination), "apply"]
+    applied = subprocess.run(
+        git_apply + ["--reverse", "--check", str(patch)],
+        capture_output=True,
+    )
+    if applied.returncode == 0:
+        return
+    print("Patching {} with {}...".format(destination.name, patch.name))
+    subprocess.run(git_apply + [str(patch)], check=True)
+
+
 pins = read_pins()
 godot_cpp = ROOT / "thirdparty" / "godot-cpp"
 tracy = ROOT / "thirdparty" / "tracy"
@@ -125,6 +138,13 @@ checkout_dependency(
     "https://github.com/godotengine/godot-cpp.git",
     godot_cpp,
     pins["GODOT_CPP_REF"],
+)
+# TODO: delete this patch once GODOT_CPP_REF contains godot-cpp 6cceaf6,
+# which swaps in every generated move assignment. Before it, Dictionary's
+# move assignment copies over the old value without releasing it.
+apply_patch(
+    godot_cpp,
+    ROOT / "patches" / "godot-cpp-dictionary-move-assign.patch",
 )
 checkout_dependency(
     "Tracy",

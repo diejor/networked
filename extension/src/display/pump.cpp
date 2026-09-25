@@ -344,6 +344,13 @@ void pump_history(
     }
 }
 
+static bool chase_holds_rest(Channel *p_state) {
+    const Variant &rest = p_state->get_chase_rest();
+    const Offset &offset = p_state->render_offset();
+    return rest.get_type() != Variant::NIL && !offset.is_held() && !offset.armed
+        && p_state->get_last_written() == rest;
+}
+
 void pump_chase(Runtime *p_runtime, const Timing &p_timing) {
     NETW_ZONE_NC("Display pump chase", colors::INTERP);
     const double weight = 1.0
@@ -363,9 +370,15 @@ void pump_chase(Runtime *p_runtime, const Timing &p_timing) {
         if (source_obj == nullptr) {
             continue;
         }
+        const StringName prop = state->get_source_prop();
+        const bool rests = port_rests(source_obj, prop);
+        Offset &offset = state->render_offset();
+        if (rests && chase_holds_rest(state)) {
+            continue;
+        }
         const Ref<NetwInterpolate> spec = state->get_spec();
-        Variant value = port_get(source_obj, state->get_source_prop());
-        value = state->render_offset().apply(
+        Variant value = port_get(source_obj, prop);
+        value = offset.apply(
             value,
             decay,
             p_runtime->get_display_offset_limit(),
@@ -373,11 +386,15 @@ void pump_chase(Runtime *p_runtime, const Timing &p_timing) {
             spec.is_valid() ? int64_t(spec->get_mode())
                             : int64_t(NetwInterpolate::MODE_LERP)
         );
-        const Variant result = state->display_history().smooth_toward(
-            state->get_last_written(),
-            value,
-            weight
-        );
+        History &history = state->display_history();
+        Variant result
+            = history.smooth_toward(state->get_last_written(), value, weight);
+        const bool settles = rests && !offset.is_held() && !offset.armed
+            && history.is_close(result, value);
+        if (settles) {
+            result = value;
+        }
+        state->set_chase_rest(settles ? result : Variant());
         if (trace) {
             NETW_TRACE(
                 sys::INTERPOLATION,

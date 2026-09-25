@@ -68,6 +68,27 @@ TEST_CASE(
 }
 
 TEST_CASE(
+    "[Networked][Session][Hosted] L5 a clocked wait counts the ticks this "
+    "peer ran, so the jump of a first sync does not expire it"
+) {
+    Ref<NetwMultiplayer> session;
+    session.instantiate();
+    session->session_set_role(NetwMultiplayer::ROLE_CLIENT);
+    session->clock_engine().set_configured(true);
+    const int tickrate = session->clock_engine().get_tickrate();
+
+    session->liveness_when_live(7, Callable(), 0, Callable());
+    session->clock_ingest_pong(0.05, 840, 0.0, false);
+    REQUIRE(session->clock_engine().get_tick() > tickrate);
+    session->liveness_poll_now();
+    NETW_CHECK_EQ(session->liveness_pending_live_count(), 1);
+
+    session->clock_engine().force_step(tickrate);
+    session->liveness_poll_now();
+    NETW_CHECK_EQ(session->liveness_pending_live_count(), 0);
+}
+
+TEST_CASE(
     "[Networked][Session][Hosted] L2 flushing standalone acks with no peer "
     "installed sends nothing rather than reaching through a null inner"
 ) {

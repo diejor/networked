@@ -3,6 +3,7 @@
 #include <cstdint>
 
 #include "godot/callable.hpp"
+#include "godot/hash_map.hpp"
 #include "godot/local_vector.hpp"
 #include "godot/node.hpp"
 #include "godot/object.hpp"
@@ -34,7 +35,42 @@ private:
     SyncProgress progress;
 
     godot::LocalVector<godot::Ref<NetwPropertySetBinding>> bindings;
+    struct IndexedBinding {
+        uint64_t sequence = 0;
+        godot::Ref<NetwPropertySetBinding> binding;
+    };
+    godot::LocalVector<uint64_t> binding_entities;
+    godot::HashMap<uint64_t, godot::LocalVector<IndexedBinding>>
+        bindings_by_entity;
+    godot::LocalVector<uint64_t> binding_nodes;
+    godot::HashMap<uint64_t, godot::LocalVector<IndexedBinding>>
+        bindings_by_node;
+    uint64_t binding_sequence = 0;
+
+    const godot::LocalVector<IndexedBinding> *node_bindings(
+        const godot::Node *p_node
+    ) const;
+    uint32_t binding_position(
+        const godot::Ref<NetwPropertySetBinding> &p_binding
+    ) const;
     godot::LocalVector<godot::RID> state_binding_dropped;
+
+    void append_binding(const godot::Ref<NetwPropertySetBinding> &p_binding);
+    void replace_binding(
+        uint32_t p_at,
+        const godot::Ref<NetwPropertySetBinding> &p_binding
+    );
+    void remove_binding(uint32_t p_at);
+    void clear_bindings();
+    godot::LocalVector<godot::Ref<NetwPropertySetBinding>> bindings_of_entity(
+        const godot::Ref<NetwEntity> &p_entity
+    ) const;
+    bool binding_belongs_to(
+        const godot::Ref<NetwPropertySetBinding> &p_binding,
+        const godot::Ref<NetwEntity> &p_entity
+    ) const;
+    godot::LocalVector<godot::Ref<NetwPropertySetBinding>>
+    entity_bindings_checked(const godot::Ref<NetwEntity> &p_entity) const;
     godot::HashMap<int64_t, int64_t> contract_hashes;
 
     godot::Callable encode_stage_seam;

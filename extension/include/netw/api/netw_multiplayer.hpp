@@ -2078,6 +2078,22 @@ public:
     godot::TypedArray<godot::Object> predict_engine_entities() const;
     sim::Row &sim_row(const godot::RID &p_entity);
     const sim::Row *sim_row_of(const godot::RID &p_entity) const;
+#if defined(NETW_TESTS)
+    struct IdleWork {
+        int64_t runs = 0;
+        int64_t walked = 0;
+        int64_t announced = 0;
+        int64_t sampled = 0;
+    };
+    IdleWork idle_work;
+    struct BookSizes {
+        int64_t wrapper_owners = 0;
+        int64_t handle_by_wrapper = 0;
+        int64_t attributed_routes = 0;
+        int64_t node_overlays = 0;
+    };
+    BookSizes book_sizes() const;
+#endif
     sim::Mode sim_resolve(const godot::RID &p_entity, const sim::Facts &p_facts);
     void sim_follow_session_authority();
     sim::Facts sim_body_facts(const godot::Ref<NetwEntity> &p_entity) const;
@@ -2790,6 +2806,10 @@ public:
         const godot::Ref<NetwPropertySet> &p_source,
         godot::Node *p_node
     );
+    godot::RID adopted_property_set(
+        const godot::Ref<godot::Script> &p_script,
+        RecordKind p_record_kind
+    ) const;
     godot::RID script_schema(
         const godot::Ref<godot::Script> &p_script,
         godot::Node *p_node
@@ -3189,6 +3209,8 @@ public:
 
     static bool seq_is_fresher(int64_t a, int64_t b);
     int64_t next_send_seq(int64_t p_peer);
+    double link_round_trip_ms(int64_t p_peer) const;
+    double link_jitter_ms(int64_t p_peer) const;
     bool has_inbound_seq(int64_t p_peer) const;
     int64_t inbound_seq(int64_t p_peer) const;
     uint32_t inbound_delivery_history(int64_t p_peer) const;
@@ -4389,6 +4411,7 @@ public:
     godot::TypedArray<godot::Object> wrapper_live() const;
 
     void wrapper_sweep_retired();
+    void wrapper_unindex_owner(int64_t p_id, const NetwEntity *p_wrapper);
     void wrapper_clear();
 
     bool liveness_bind(

@@ -34,6 +34,19 @@ Node3D *spatial_frame(Node *p_node) {
     return spatial != nullptr && spatial->is_inside_tree() ? spatial : nullptr;
 }
 
+Transform3D unmounted_frame(Node *p_target, Node *p_host_parent) {
+    Transform3D frame;
+    for (Node *at = p_target->get_parent();
+         at != nullptr && at != p_host_parent;
+         at = at->get_parent()) {
+        Node3D *spatial = Object::cast_to<Node3D>(at);
+        if (spatial != nullptr) {
+            frame = spatial->get_transform() * frame;
+        }
+    }
+    return frame;
+}
+
 bool names_position(const StringName &p_prop) {
     return p_prop == channel_position() || p_prop == channel_global_position();
 }
@@ -135,7 +148,9 @@ int64_t Port::write_global(Object *p_target, const Variant &p_value) {
         Node3D *node_3d = Object::cast_to<Node3D>(p_target);
         if (node_3d != nullptr && p_value.get_type() == Variant::VECTOR3) {
             if (spatial_frame(node_3d) == nullptr) {
-                node_3d->set_position(host_position_3d(p_value));
+                node_3d->set_position(unmounted_frame(node_3d, host_parent())
+                                          .affine_inverse()
+                                          .xform(host_position_3d(p_value)));
                 return WRITE_LOCAL;
             }
             node_3d->set_global_position(host_position_3d(p_value));
@@ -150,7 +165,13 @@ int64_t Port::write_global(Object *p_target, const Variant &p_value) {
         Node3D *node_3d = Object::cast_to<Node3D>(p_target);
         if (node_3d != nullptr && p_value.get_type() == Variant::VECTOR3) {
             if (spatial_frame(node_3d) == nullptr) {
-                node_3d->set_rotation(host_rotation_3d(p_value));
+                const Basis frame = unmounted_frame(node_3d, host_parent())
+                                        .basis.orthonormalized();
+                node_3d->set_rotation(
+                    (frame.inverse()
+                     * Basis::from_euler(host_rotation_3d(p_value)))
+                        .get_euler()
+                );
                 return WRITE_LOCAL;
             }
             node_3d->set_global_rotation(host_rotation_3d(p_value));

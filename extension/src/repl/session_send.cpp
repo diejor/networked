@@ -652,6 +652,8 @@ SessionResult SessionSend::run(
     NETW_ZONE_NC("Session send", colors::WIRE);
     NETW_ZONE_VALUE(p_offers.size());
     SessionResult out;
+    row_budget_bits = p_max_bits;
+    row_spent_bits.clear();
 
     LocalVector<wire::FitCandidate> candidates;
     LocalVector<RowSend> staged
@@ -678,6 +680,7 @@ SessionResult SessionSend::run(
 
     for (uint32_t slot = 0; slot < peers.size(); ++slot) {
         const int peer = peers[slot];
+        row_spent_bits[peer] = reliable_bits[slot];
         LocalVector<wire::FitCandidate> mine;
         for (uint32_t at = 0; at < candidates.size(); ++at) {
             if (candidates[at].peer == peer) {
@@ -695,6 +698,7 @@ SessionResult SessionSend::run(
         const PassResult fitted
             = pass.run(p_registry, peer, mine, volatile_bits);
         out.sent_bits += fitted.sent_bits;
+        row_spent_bits[peer] += fitted.sent_bits;
         out.deferred += fitted.deferred.size();
         for (uint32_t at = 0; at < fitted.sent.size(); ++at) {
             const int64_t which = fitted.sent[at].send_id;
@@ -733,6 +737,17 @@ SessionResult SessionSend::run(
         }
     }
     return out;
+}
+
+int64_t SessionSend::control_budget_bytes(
+    int p_peer,
+    int64_t p_reserved_bytes
+) const {
+    const int64_t *spent = row_spent_bits.getptr(p_peer);
+    const int64_t spare_bytes = (link.budget_bits(p_peer, row_budget_bits)
+                                 - (spent != nullptr ? *spent : 0))
+        / 8;
+    return spare_bytes > p_reserved_bytes ? spare_bytes : p_reserved_bytes;
 }
 
 bool SessionSend::describe(const RowSend &p_send, CarrierRow &r_row) {

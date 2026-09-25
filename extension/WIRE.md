@@ -155,6 +155,7 @@ id   name                    kind    rel fresh del agg direction  payload
 43   ROW_CONTROL             session R   -     fit -   either     planned
 44   ROUTE_LEASE             session R   -     fit -   srv -> cli planned
 45   LIFECYCLE_DECISION      session R   -     fit -   srv -> own planned
+46   CLAIM_IMAGE             routed  U   fresh fit yes either     planned
 100+ user channels           routed  -   -     -   -   either     raw
 ```
 
@@ -697,6 +698,33 @@ per record
   [row bytes_capped 1024]         the call argument encoding of every column,
                                   in column order, under its quantizer
 ```
+
+A claim image carries a claimant's state across the round trip its claim and
+its first lane cost.
+
+```text
+CLAIM_IMAGE, channel 46
+[observed_revision varuint 5]     the decision the sender held when it sent
+[state bytes_capped 1024]         a final_state, as above
+[align_verify]
+```
+
+A peer running a `TRANSFER_IMMEDIATE` claim ahead of its decision sends one
+every tick to every peer holding a copy. Once the grant makes it the
+controller, it keeps sending to each peer whose broadcast lanes hold no token
+yet, and stops for good twice the tickrate in ticks after the claim or the
+decision that started it. A peer that becomes the controller by a decision it
+did not run ahead of, such as the session's own claim or a release naming it,
+sends the same way from that decision.
+
+A receiver installs an image when its sender is the entity's controller and
+`observed_revision` is at least the tenure minus one, and skips one stamped at
+or before the newest image it installed under that tenure. An image from any
+other peer is held, newest only, and the decision that makes that peer the
+controller installs it when it passes the same test and arrived within the
+tickrate in ticks. A refused claim therefore leaves no state on any peer, and
+an image from an earlier control of the same peer is refused, because another
+decision moved the revision past it.
 
 ---
 

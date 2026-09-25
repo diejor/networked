@@ -15,9 +15,13 @@ void Channel::copy_shape_from(const Channel &p_other) {
     target_prop = p_other.target_prop;
     self_feedback = p_other.self_feedback;
     authoring_ticks = authoring_ticks || p_other.authoring_ticks;
+    chase_rest = Variant();
 }
 
 void Channel::write(const Variant &p_value) {
+#if defined(NETW_TESTS)
+    written += 1;
+#endif
     if (door.is_valid()) {
         const Variant verdict = door.call(entity, target_prop, p_value);
         if (int64_t(verdict) != ERR_DOES_NOT_EXIST) {
@@ -62,6 +66,7 @@ void Channel::snap(const Variant &p_value) {
     history.clear();
     offset.clear();
     last_written = p_value;
+    chase_rest = Variant();
 }
 
 void Channel::set_source_obj(Object *p_object) {

@@ -76,21 +76,32 @@ void NetwMultiplayer::display_on_entity_live(
     int64_t p_route,
     Object *p_entity
 ) {
+    NETW_ZONE_NC("display on entity live", colors::INTERP);
     const Ref<NetwEntity> entity
         = Ref<NetwEntity>(Object::cast_to<NetwEntity>(p_entity));
     if (entity.is_null()) {
         return;
     }
-    const display::Decl config = display_config_for(entity);
-    const bool declared_role = config.display_role != netw::display::ROLE_AUTO;
-    if (!declared_role && !display_wants_runtime(entity->get_owner())) {
+    bool wanted = false;
+    {
+        NETW_ZONE_NC("display config and wants", colors::INTERP);
+        const display::Decl config = display_config_for(entity);
+        wanted = config.display_role != netw::display::ROLE_AUTO
+            || display_wants_runtime(entity->get_owner());
+    }
+    if (!wanted) {
         return;
     }
-    display::Runtime *runtime = display_runtime_for(p_route, entity);
+    display::Runtime *runtime = nullptr;
+    {
+        NETW_ZONE_NC("display runtime for", colors::INTERP);
+        runtime = display_runtime_for(p_route, entity);
+    }
     if (runtime == nullptr) {
         return;
     }
     if (Array(runtime->get_entity_hooks()).is_empty()) {
+        NETW_ZONE_NC("display connect hooks", colors::INTERP);
         Array hooks;
         const Callable on_control
             = callable_mp(this, &NetwMultiplayer::display_on_control_changed)
@@ -99,12 +110,21 @@ void NetwMultiplayer::display_on_entity_live(
         hooks.append(on_control);
         runtime->set_entity_hooks(hooks);
     }
-    display_rebuild_runtime(runtime);
-    display_resolve_role(runtime);
-    runtime->reset(
-        clock_engine().get_display_offset(),
-        clock_engine().recommended_display_offset()
-    );
+    {
+        NETW_ZONE_NC("display rebuild runtime", colors::INTERP);
+        display_rebuild_runtime(runtime);
+    }
+    {
+        NETW_ZONE_NC("display resolve role", colors::INTERP);
+        display_resolve_role(runtime);
+    }
+    {
+        NETW_ZONE_NC("display reset runtime", colors::INTERP);
+        runtime->reset(
+            clock_engine().get_display_offset(),
+            clock_engine().recommended_display_offset()
+        );
+    }
 }
 
 void NetwMultiplayer::display_release_hooks(display::Runtime *p_runtime) {
@@ -313,12 +333,17 @@ void NetwMultiplayer::display_on_clock_tick(double p_delta, int64_t p_tick) {
             if (from == nullptr) {
                 continue;
             }
-            state->display_history()
-                .record(
-                    p_tick,
-                    port_get(from, state->get_source_prop()),
-                    false
-                );
+            const StringName prop = state->get_source_prop();
+            display::History &history = state->display_history();
+            const bool rests = port_rests(from, prop);
+            if (rests && history.holds_rested_source()) {
+                continue;
+            }
+#if defined(NETW_TESTS)
+            idle_work.sampled += 1;
+#endif
+            history.record(p_tick, port_get(from, prop), false);
+            history.set_source_rested(rests);
         }
     }
 }

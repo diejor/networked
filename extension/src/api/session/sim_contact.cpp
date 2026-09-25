@@ -7,6 +7,7 @@
 #include "netw/api/entity.hpp"
 #include "netw/log.hpp"
 #include "netw/sim/contact.hpp"
+#include "netw/sim/install.hpp"
 #include "netw/sim/row.hpp"
 #include "netw/subsystems.hpp"
 
@@ -55,6 +56,12 @@ void NetwMultiplayer::sim_note_contacts(sim::Row &r_row) {
     const bool fences = r_row.mode == sim::Mode::ACTIVE;
     const bool leads = sim::leads(r_row.mode);
     if (!fences && !leads) {
+        return;
+    }
+    if (sim::asleep(r_row.bodies)) {
+        if (fences) {
+            sim::keep_touching(r_row.contact);
+        }
         return;
     }
     LocalVector<ObjectID> colliders;
@@ -146,6 +153,9 @@ void NetwMultiplayer::sim_contact_pass(int64_t p_tick) {
         sim::Row *row = sim_rows.find(source);
         const Ref<NetwEntity> view = entity_get_view(source);
         if (row == nullptr || view.is_null()) {
+            continue;
+        }
+        if (sim::asleep(row->bodies)) {
             continue;
         }
         sim::touching(row->bodies, colliders);

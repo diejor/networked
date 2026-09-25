@@ -2,15 +2,13 @@ class_name PlayCube
 extends RigidBody3D
 
 const LIMIT := 64.0
-
-var held_by := 0:
-	set(value):
-		held_by = value
-		pin(value != 0)
-var hold_offset := Transform3D.IDENTITY
-var hand: Node3D
+const TINT_RATE := 10.0
 
 var entity: NetwEntity
+var tint := Color()
+var painted: StandardMaterial3D
+
+@onready var visual: MeshInstance3D = $Visual
 
 
 func _init() -> void:
@@ -19,9 +17,7 @@ func _init() -> void:
 	entity.simulation.replicas = NetwSimulationHandle.REPLICAS_ACTIVE
 	entity.simulation.claim_on_contact = true
 	entity.simulation.release_on_rest = 1.0
-	entity.simulation.mode_changed.connect(on_mode_changed)
 	entity.interpolation.visual_root = ^"Visual"
-	Netw.configure_property(self, &"held_by").broadcast()
 	Netw.configure_property(self, &"position").broadcast().heartbeat(60) \
 			.quantize(NetwQuantizeScalar.new().bits(20).limits(-LIMIT, LIMIT)) \
 			.interpolate(NetwInterpolate.new().lerp())
@@ -39,45 +35,43 @@ func _notification(what: int) -> void:
 		entity.entity_id = StringName(name)
 
 
-func grab(by: Node3D) -> bool:
-	entity.claim_authority(NetwEntity.HOLD_EXCLUSIVE).catch_error(lost)
-	if not entity.is_controlled_locally:
-		return false
-	hand = by
-	hold_offset = hand.global_transform.affine_inverse() * global_transform
-	held_by = multiplayer.get_unique_id()
-	return true
+func _ready() -> void:
+	set_process(false)
 
 
-func throw(velocity: Vector3) -> void:
-	if hand == null:
+func _process(delta: float) -> void:
+	painted.albedo_color = painted.albedo_color.lerp(
+		tint,
+		1.0 - exp(-TINT_RATE * delta),
+	)
+	if painted.albedo_color.is_equal_approx(tint):
+		painted.albedo_color = tint
+		set_process(false)
+
+
+func paint(color: Color) -> void:
+	tint = color
+	if painted == null:
+		var shown := (visual.material_override as StandardMaterial3D).albedo_color
+		if shown.is_equal_approx(color):
+			return
+		painted = StandardMaterial3D.new()
+		painted.albedo_color = shown
+		visual.material_override = painted
+	set_process(true)
+
+
+func claim(hold: NetwEntity.Hold) -> void:
+	if entity.is_control_pending or entity.hold >= hold and (
+		entity.is_controlled_locally or entity.controller != 0
+	):
 		return
-	hand = null
-	held_by = 0
-	linear_velocity = velocity
-	entity.claim_authority(NetwEntity.HOLD_YIELDABLE).catch_error(lost)
+	entity.claim_authority(hold).catch_error(refused)
 
 
-func lost(_code: Error, _detail: String) -> void:
-	hand = null
+func let_go() -> void:
+	entity.claim_authority(NetwEntity.HOLD_YIELDABLE).catch_error(refused)
 
 
-func on_mode_changed(
-	_previous: NetwSimulationHandle.Mode, mode: NetwSimulationHandle.Mode
-) -> void:
-	if mode == NetwSimulationHandle.MODE_AUTHORITY and hand == null:
-		held_by = 0
-
-
-func _network_tick(_delta: float, _tick: int, _is_fresh: bool) -> void:
-	if hand != null:
-		global_transform = hand.global_transform * hold_offset
-
-
-func pin(frozen: bool) -> void:
-	if freeze == frozen:
-		return
-	freeze_mode = RigidBody3D.FREEZE_MODE_KINEMATIC
-	freeze = frozen
-	if frozen and is_inside_tree():
-		global_transform = global_transform
+func refused(_code: Error, _detail: String) -> void:
+	pass

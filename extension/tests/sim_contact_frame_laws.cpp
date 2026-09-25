@@ -77,6 +77,7 @@ enum class Kind {
     PUSH,
     DOUBLE,
     AUTHORED,
+    SETTLED,
 };
 
 constexpr const char *AUTHORED_ID = "sim_contact_authored";
@@ -97,6 +98,8 @@ constexpr int DOUBLE_FLIGHT_TICKS = 12;
 constexpr int DOUBLE_BACK_FRAMES = 2;
 constexpr int DOUBLE_AGAIN_FRAMES = 5;
 constexpr int DOUBLE_READ_FRAMES = DOUBLE_FLIGHT_TICKS * 3;
+constexpr int SETTLED_SLEEP_FRAMES = 10;
+constexpr int SETTLED_AWAKE_FRAMES = 6;
 constexpr int SETTLE_FRAMES = 80;
 const Vector3 DRIFT(0.0, 0.0, 1.0);
 const Vector3 WAKE_VELOCITY(0.0, 0.0, 2.0);
@@ -175,11 +178,14 @@ struct ContactEvidence {
     int64_t installed_in_contact = -1;
     int64_t fenced_in_contact = -1;
     bool touching_at_read = false;
+    int settled_frame = -1;
+    bool slept = false;
+    bool touching_asleep = false;
     Subject subjects[CUBES];
 };
 
 ContactEvidence &evidence_of(Kind p_kind) {
-    static ContactEvidence evidence[8];
+    static ContactEvidence evidence[9];
     return evidence[int(p_kind)];
 }
 
@@ -250,6 +256,7 @@ class ContactScenario : public netw_test::FrameScenario {
             case Kind::PUSH:
             case Kind::DOUBLE:
             case Kind::AUTHORED:
+            case Kind::SETTLED:
                 return 2;
             case Kind::REST:
                 return CUBES;
@@ -268,6 +275,7 @@ class ContactScenario : public netw_test::FrameScenario {
             case Kind::FENCE:
             case Kind::PUSH:
             case Kind::DOUBLE:
+            case Kind::SETTLED:
                 return Vector3(0.0, 0.0, -5.0 * p_index);
             default:
                 return Vector3(3.0 * p_index, 0.0, 0.0);
@@ -317,7 +325,7 @@ class ContactScenario : public netw_test::FrameScenario {
                     handle->set_release_on_rest(REST_SECONDS);
                 }
                 if (kind == Kind::FENCE || kind == Kind::PUSH
-                    || kind == Kind::DOUBLE) {
+                    || kind == Kind::DOUBLE || kind == Kind::SETTLED) {
                     sphere->set_contact_monitor(true);
                     sphere->set_max_contacts_reported(4);
                 }
@@ -375,6 +383,9 @@ class ContactScenario : public netw_test::FrameScenario {
                 sphere_at(-1, 0)->set_linear_velocity(DRIFT);
                 delay(A, -1, 55, DOUBLE_FLIGHT_TICKS);
                 break;
+            case Kind::SETTLED:
+                entity_at(-1, 1)->set_controller(holder);
+                break;
         }
         stand->pump(4);
         evidence().seated = true;
@@ -422,6 +433,15 @@ class ContactScenario : public netw_test::FrameScenario {
                     sphere->set_can_sleep(true);
                 }
                 break;
+            case Kind::SETTLED: {
+                collide(A, 0);
+                collide(A, 1);
+                const Vector3 at = sphere_at(A, 0)->get_position();
+                sphere_at(A, 1)->set_position(at - Vector3(0.98, 0.0, 0.0));
+                sphere_at(A, 0)->set_can_sleep(true);
+                sphere_at(A, 1)->set_can_sleep(true);
+                break;
+            }
             case Kind::FENCE:
             case Kind::PUSH:
             case Kind::DOUBLE: {
@@ -557,9 +577,46 @@ class ContactScenario : public netw_test::FrameScenario {
         }
     }
 
+    void settle(int p_step) {
+        ContactEvidence &seen = evidence();
+        const netw::sim::Row *row = row_at(A, 0);
+        if (row == nullptr) {
+            return;
+        }
+        const bool now = !row->contact.touching.is_empty();
+        if (now && !seen.was_touching) {
+            seen.onsets += 1;
+        }
+        seen.was_touching = now;
+        if (seen.settled_frame < 0) {
+            if (!now) {
+                return;
+            }
+            seen.settled_frame = p_step;
+        }
+        const int since = p_step - seen.settled_frame;
+        if (since < SETTLED_SLEEP_FRAMES) {
+            sphere_at(A, 0)->set_sleeping(true);
+            sphere_at(A, 1)->set_sleeping(true);
+            return;
+        }
+        if (since == SETTLED_SLEEP_FRAMES) {
+            seen.slept = sphere_at(A, 0)->is_sleeping()
+                && sphere_at(A, 1)->is_sleeping();
+            seen.touching_asleep = now;
+            sphere_at(A, 0)->set_sleeping(false);
+        }
+        if (since == SETTLED_SLEEP_FRAMES + SETTLED_AWAKE_FRAMES) {
+            seen.touching_at_read = now;
+        }
+    }
+
     void drive(int p_step) {
         if (p_step == 0) {
             begin();
+        }
+        if (kind == Kind::SETTLED && p_step >= 0) {
+            settle(p_step);
         }
         if (p_step >= 0) {
             observe(p_step);
@@ -663,6 +720,29 @@ public:
 };
 
 NETW_FRAME_SCENARIO(AuthoredScenario, contact_authored_scenario);
+
+class SettledScenario final : public ContactScenario {
+public:
+    SettledScenario() : ContactScenario(Kind::SETTLED) {
+    }
+};
+
+NETW_FRAME_SCENARIO(SettledScenario, contact_settled_scenario);
+
+TEST_CASE(
+    "[Networked][Sim][Frame] an active copy resting against a body this "
+    "peer runs keeps the touch while both sleep, so waking is not a new "
+    "contact"
+) {
+    const ContactEvidence &evidence = evidence_of(Kind::SETTLED);
+    REQUIRE(evidence.driven);
+    REQUIRE(evidence.seated);
+    REQUIRE(evidence.settled_frame >= 0);
+    REQUIRE(evidence.slept);
+    REQUIRE(evidence.touching_at_read);
+    CHECK(evidence.touching_asleep);
+    NETW_CHECK_EQ(evidence.onsets, 1);
+}
 
 TEST_CASE(
     "[Networked][Sim][Frame] contact, a body a client spawned with "

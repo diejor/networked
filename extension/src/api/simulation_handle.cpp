@@ -78,7 +78,8 @@ void NetwSimulationHandle::restate() {
     }
     const Ref<NetwEntity> bound = entity();
     if (bound.is_valid()) {
-        const Ref<NetwPredictionHandle> prediction = bound->get_prediction();
+        const Ref<NetwPredictionHandle> prediction
+            = bound->prediction_if_minted();
         if (prediction.is_valid()) {
             prediction->restate_declaration();
         }
@@ -192,7 +193,8 @@ void NetwSimulationHandle::adopt_step(const Callable &p_value) {
     declared.step = p_value;
     const Ref<NetwEntity> bound = entity();
     if (bound.is_valid()) {
-        const Ref<NetwPredictionHandle> prediction = bound->get_prediction();
+        const Ref<NetwPredictionHandle> prediction
+            = bound->prediction_if_minted();
         if (prediction.is_valid()) {
             prediction->step_changed();
         }

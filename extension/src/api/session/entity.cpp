@@ -359,13 +359,20 @@ void NetwMultiplayer::entity_enter_tree(
     if (owner == nullptr || p_wrapper == nullptr || p_record == nullptr) {
         return;
     }
-    rename_reserved_to_identity(owner, p_record->get_entity_id());
+    {
+        NETW_ZONE_NC("entity enter identity", colors::LIVENESS);
+        rename_reserved_to_identity(owner, p_record->get_entity_id());
+    }
     const bool is_reparent
         = p_record->get_stage() == int64_t(entity::Stage::LIVE);
-    p_record->hydrate_identity(owner);
+    {
+        NETW_ZONE_NC("entity enter hydrate identity", colors::LIVENESS);
+        p_record->hydrate_identity(owner);
+    }
 
     if (!is_reparent
         && p_record->get_stage() == int64_t(entity::Stage::UNBOUND)) {
+        NETW_ZONE_NC("entity enter classify and arm", colors::LIVENESS);
         if (!p_record->classify_activation(owner)) {
             if (p_session != nullptr) {
                 p_session->entity_note_stage(
@@ -386,8 +393,12 @@ void NetwMultiplayer::entity_enter_tree(
         p_record->set_route(p_session->liveness_allocate_route(p_wrapper));
     }
     if (p_record->get_route() > 0 && p_session != nullptr) {
-        p_session->liveness_bind_route(p_record->get_route(), p_wrapper);
+        {
+            NETW_ZONE_NC("entity enter bind route", colors::LIVENESS);
+            p_session->liveness_bind_route(p_record->get_route(), p_wrapper);
+        }
         if (p_is_authority) {
+            NETW_ZONE_NC("entity enter nested candidate", colors::LIVENESS);
             p_session->spawn_note_nested_candidate(p_record->get_route());
         }
     }
@@ -399,17 +410,27 @@ void NetwMultiplayer::entity_enter_tree(
         }
     }
 
-    const Callable ready(p_wrapper, StringName("_on_owner_ready"));
-    if (!owner->is_connected(StringName("ready"), ready)) {
-        owner->connect(StringName("ready"), ready);
+    {
+        NETW_ZONE_NC("entity enter connect ready", colors::LIVENESS);
+        const Callable ready(p_wrapper, StringName("_on_owner_ready"));
+        if (!owner->is_connected(StringName("ready"), ready)) {
+            owner->connect(StringName("ready"), ready);
+        }
     }
 
     if (!is_reparent) {
         const int64_t from = p_record->get_stage();
-        p_record->transition(int64_t(entity::Stage::LIVE), owner);
+        {
+            NETW_ZONE_NC("entity enter transition live", colors::LIVENESS);
+            p_record->transition(int64_t(entity::Stage::LIVE), owner);
+        }
         NETW_TRACE(sys::ENTITY, "'%s' is live", owner->get_name());
         if (p_session != nullptr) {
-            p_session->entity_note_stage(p_record, from);
+            {
+                NETW_ZONE_NC("entity enter note stage", colors::LIVENESS);
+                p_session->entity_note_stage(p_record, from);
+            }
+            NETW_ZONE_NC("entity enter spawning event", colors::LIVENESS);
             p_session->event_emit(
                 EventPlane::SPAWNING,
                 p_record->get_route(),
@@ -420,7 +441,10 @@ void NetwMultiplayer::entity_enter_tree(
                 Dictionary()
             );
         }
-        p_wrapper->emit_signal(StringName("spawning"));
+        {
+            NETW_ZONE_NC("entity enter spawning signal", colors::LIVENESS);
+            p_wrapper->emit_signal(StringName("spawning"));
+        }
         if (p_record->get_declares_scene() && p_session != nullptr) {
             p_session->scene_root_online(owner);
         }
@@ -547,6 +571,7 @@ Ref<NetwPropertySetBinding> NetwMultiplayer::entity_derived_binding(
     if (p_route <= 0) {
         return Ref<NetwPropertySetBinding>();
     }
+    NETW_ZONE_NC("entity derived group fallback", colors::WIRE);
     const Array group = entity_derived_group(p_route);
     for (int at = 0; at < group.size(); at++) {
         const Ref<NetwPropertySetBinding> candidate = group[at];
@@ -873,14 +898,57 @@ TypedArray<Object> NetwMultiplayer::wrapper_live() const {
 }
 
 void NetwMultiplayer::wrapper_sweep_retired() {
+    if (retired_wrappers.is_empty()) {
+        return;
+    }
+    for (const KeyValue<int64_t, Ref<NetwEntity>> &retired :
+         retired_wrappers) {
+        if (!wrapper_records.has(retired.key)) {
+            wrapper_unindex_owner(retired.key, retired.value.ptr());
+        }
+    }
     retired_wrappers.clear();
+}
+
+void NetwMultiplayer::wrapper_unindex_owner(
+    int64_t p_id,
+    const NetwEntity *p_wrapper
+) {
+    const ObjectID *owner = wrapper_owners.getptr(p_id);
+    if (owner != nullptr) {
+        script::model::clear_node_overlay(
+            Object::cast_to<Node>(gd::instance_from_id(*owner))
+        );
+        wrapper_owners.erase(p_id);
+    }
+    if (p_wrapper == nullptr) {
+        return;
+    }
+    const uint64_t wrapper_id = uint64_t(gd::instance_id(p_wrapper));
+    const int64_t *indexed = handle_by_wrapper.getptr(wrapper_id);
+    if (indexed != nullptr && *indexed == p_id) {
+        handle_by_wrapper.erase(wrapper_id);
+    }
 }
 
 void NetwMultiplayer::wrapper_clear() {
     live_wrappers.clear();
     retired_wrappers.clear();
     wrapper_records.clear();
+    wrapper_owners.clear();
+    handle_by_wrapper.clear();
 }
+
+#if defined(NETW_TESTS)
+NetwMultiplayer::BookSizes NetwMultiplayer::book_sizes() const {
+    BookSizes sizes;
+    sizes.wrapper_owners = int64_t(wrapper_owners.size());
+    sizes.handle_by_wrapper = int64_t(handle_by_wrapper.size());
+    sizes.attributed_routes = attribution.attributed_route_count();
+    sizes.node_overlays = script::model::node_overlay_count();
+    return sizes;
+}
+#endif
 
 bool NetwMultiplayer::liveness_bind(
     const RID &p_entity,
@@ -954,9 +1022,16 @@ Error NetwMultiplayer::liveness_adopt_route(
 }
 
 void NetwMultiplayer::liveness_publish_live(int64_t p_route) {
-    const Ref<NetwEntity> wrapper = wrapper_for_route(p_route);
-    NetwEntityRecord *const record = record_of_wrapper(wrapper.ptr());
+    NETW_ZONE_NC("liveness publish live", colors::LIVENESS);
+    Ref<NetwEntity> wrapper;
+    NetwEntityRecord *record = nullptr;
+    {
+        NETW_ZONE_NC("liveness resolve wrapper", colors::LIVENESS);
+        wrapper = wrapper_for_route(p_route);
+        record = record_of_wrapper(wrapper.ptr());
+    }
     if (record != nullptr) {
+        NETW_ZONE_NC("liveness emit spawned event", colors::LIVENESS);
         event_emit(
             EventPlane::SPAWNED,
             p_route,
@@ -967,7 +1042,10 @@ void NetwMultiplayer::liveness_publish_live(int64_t p_route) {
             Dictionary()
         );
     }
-    emit_signal(SIG_ENTITY_LIVE, p_route, wrapper);
+    {
+        NETW_ZONE_NC("liveness emit entity live", colors::LIVENESS);
+        emit_signal(SIG_ENTITY_LIVE, p_route, wrapper);
+    }
 }
 
 bool NetwMultiplayer::liveness_linger(const RID &p_entity) {
@@ -993,7 +1071,13 @@ void NetwMultiplayer::liveness_unindex_wrapper(const RID &p_entity) {
 }
 
 void NetwMultiplayer::liveness_forget_wrapper(const RID &p_entity) {
-    wrapper_records.erase(p_entity.get_id());
+    const int64_t id = p_entity.get_id();
+    wrapper_records.erase(id);
+    if (live_wrappers.has(id)) {
+        return;
+    }
+    const Ref<NetwEntity> *retired = retired_wrappers.getptr(id);
+    wrapper_unindex_owner(id, retired != nullptr ? retired->ptr() : nullptr);
 }
 
 void NetwMultiplayer::liveness_release(int64_t p_route) {
@@ -1007,6 +1091,7 @@ void NetwMultiplayer::liveness_announce_dead(int64_t p_route) {
     const RID entity = liveness_core->rid_from_route(int(p_route));
     replication_clear_route(p_route);
     display_retire_route(p_route);
+    attribution.retire_route(p_route);
     event_emit(
         EventPlane::DESPAWNED,
         p_route,
@@ -1330,7 +1415,7 @@ void NetwMultiplayer::liveness_poll(int64_t p_clock_tick) {
 void NetwMultiplayer::liveness_poll_now() {
     NETW_ZONE_NC("session liveness poll now", colors::LIVENESS);
     liveness_poll(
-        clock_engine().get_configured() ? clock_engine().get_tick() : 0
+        clock_engine().get_configured() ? clock_engine().get_ticks_run() : 0
     );
 }
 
@@ -2980,7 +3065,8 @@ void NetwMultiplayer::liveness_when_live(
     if (timeout == 0) {
         timeout = clocked ? clock.get_tickrate() : CLOCKLESS_TICKRATE;
     }
-    const int64_t origin = clocked ? clock.get_tick() : liveness_core->frame();
+    const int64_t origin
+        = clocked ? clock.get_ticks_run() : liveness_core->frame();
     liveness_schedule_when_live(
         p_route,
         p_callback,

@@ -332,7 +332,7 @@ void NetwMultiplayer::interest_receive_awareness(
         }
         const bool clocked = clock_engine().get_configured();
         const int64_t origin
-            = clocked ? clock_engine().get_tick() : liveness_core->frame();
+            = clocked ? clock_engine().get_ticks_run() : liveness_core->frame();
         const int64_t timeout = clocked ? clock_engine().get_tickrate()
                                         : CLOCKLESS_AWARENESS_TICKRATE;
         liveness_schedule_when_live(

@@ -362,4 +362,42 @@ TEST_CASE(
     release_spatial_hosts(hosts);
 }
 
+TEST_CASE(
+    "[Networked][Display][Hosted] D17 an unmounted visual under a placed body "
+    "takes the body's own position as no offset"
+) {
+    Node3D *body = memnew(Node3D);
+    Node3D *visual = memnew(Node3D);
+    body->add_child(visual);
+    body->set_position(Vector3(3.0, 6.0, 3.0));
+
+    Port port = make_port(visual, body, "position", "position", true);
+    NETW_CHECK_EQ(
+        port.write(Vector3(3.0, 6.0, 3.0)),
+        int64_t(Port::WRITE_LOCAL)
+    );
+    CHECK(visual->get_position().is_equal_approx(Vector3()));
+
+    memdelete(body);
+}
+
+TEST_CASE(
+    "[Networked][Display][Hosted] D18 an unmounted visual under a turned body "
+    "takes the body's own rotation as no turn"
+) {
+    Node3D *body = memnew(Node3D);
+    Node3D *visual = memnew(Node3D);
+    body->add_child(visual);
+    body->set_rotation(Vector3(0.0, HALF_TURN * 0.5, 0.0));
+
+    Port port = make_port(visual, body, "rotation", "rotation", true);
+    NETW_CHECK_EQ(
+        port.write(Vector3(0.0, HALF_TURN * 0.5, 0.0)),
+        int64_t(Port::WRITE_LOCAL)
+    );
+    CHECK(visual->get_rotation().is_equal_approx(Vector3()));
+
+    memdelete(body);
+}
+
 } // namespace TestNetwPort

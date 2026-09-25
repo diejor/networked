@@ -30,6 +30,7 @@ private:
     bool authoring_ticks = false;
     bool self_feedback = false;
     godot::Variant last_written;
+    godot::Variant chase_rest;
 
 public:
     void copy_shape_from(const Channel &p_other);
@@ -141,6 +142,17 @@ public:
     godot::Variant get_last_written() const {
         return last_written;
     }
+
+    void set_chase_rest(const godot::Variant &p_value) {
+        chase_rest = p_value;
+    }
+    const godot::Variant &get_chase_rest() const {
+        return chase_rest;
+    }
+
+#if defined(NETW_TESTS)
+    int64_t written = 0;
+#endif
 };
 
 } // namespace netw::display

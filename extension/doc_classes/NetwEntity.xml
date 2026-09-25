@@ -88,7 +88,7 @@
 		[/codeblocks]
 		[member transfer] decides whether a peer may ask. [constant TRANSFER_FIXED] refuses every request. [constant TRANSFER_REQUESTABLE] changes nothing until the decision arrives. [constant TRANSFER_IMMEDIATE] lets the asking peer run the entity before the decision.
 		[b]Running ahead of the decision[/b]
-		While a request under [constant TRANSFER_IMMEDIATE] waits, [member is_control_pending] and [member is_controlled_locally] are both [code]true[/code] and the peer writes the entity as if it held it. Nothing it writes is sent, and node authority waits for the grant. A refusal or a timeout writes back the newest values the [member controller] sent.
+		While a request under [constant TRANSFER_IMMEDIATE] waits, [member is_control_pending] and [member is_controlled_locally] are both [code]true[/code] and the peer writes the entity as if it held it. What it writes reaches every other peer each tick, and each one installs it only once the grant names this peer, so a refused claim leaves nothing behind. Node authority waits for the grant. A refusal or a timeout writes back the newest values the [member controller] sent.
 		[codeblock lang=text]
 		claim_authority()     is_control_pending and is_controlled_locally true
 		  granted             controller is this peer, its values are sent
@@ -144,7 +144,7 @@
 			<description>
 				Asks the server to make this peer the [member controller] with [param hold]. The returned [NetwPromise] resolves with this entity once the decision has arrived here.
 				It fails with [constant @GlobalScope.ERR_UNAUTHORIZED] when another peer's [member hold] or the [signal control_requested] filter refuses, with [constant @GlobalScope.ERR_UNAVAILABLE] when the entity does not offer the transfer, and with [constant @GlobalScope.ERR_TIMEOUT] when no decision arrives within one second of session ticks. A claim the current decision already refuses fails before anything is sent. A grant that arrives after the timeout is handed straight back to the server.
-				Under [constant TRANSFER_IMMEDIATE] the local peer uses the entity before this returns. [member is_controlled_locally] is [code]true[/code], a simulated entity is in [constant NetwSimulationHandle.MODE_AUTHORITY] with [signal NetwSimulationHandle.mode_changed] already emitted, and rows from the current [member controller] are kept aside and not written. Nothing is published and node authority does not move until the grant. A refusal or a timeout writes the newest kept rows back through their setters and returns the simulation to its earlier mode, with no [signal control_changed]. A second claim made while one is waiting is sent after it and settles on its own.
+				Under [constant TRANSFER_IMMEDIATE] the local peer uses the entity before this returns. [member is_controlled_locally] is [code]true[/code], a simulated entity is in [constant NetwSimulationHandle.MODE_AUTHORITY] with [signal NetwSimulationHandle.mode_changed] already emitted, and rows from the current [member controller] are kept aside and not written. Its broadcast values are sent every tick and installed nowhere until the grant, and node authority does not move until then. A refusal or a timeout writes the newest kept rows back through their setters and returns the simulation to its earlier mode, with no [signal control_changed]. A second claim made while one is waiting is sent after it and settles on its own.
 				[codeblock]
 				entity.claim_authority(NetwEntity.HOLD_YIELDABLE) \
 				    .then(func(_held: NetwEntity) -&gt; void: pick_up()) \

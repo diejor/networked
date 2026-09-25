@@ -75,6 +75,13 @@ public:
     int64_t link_budget_bits(int64_t p_peer, int64_t p_full_bits) const {
         return impl.link_budget_bits(int(p_peer), p_full_bits);
     }
+
+    int64_t control_budget_bytes(
+        int64_t p_peer,
+        int64_t p_reserved_bytes
+    ) const {
+        return impl.control_budget_bytes(int(p_peer), p_reserved_bytes);
+    }
     void retain(const godot::PackedInt32Array &p_recipients);
     void retain_row(
         int64_t p_route,

@@ -275,6 +275,22 @@ struct ControlApply {
     );
 };
 
+struct ClaimImage {
+    uint64_t observed_revision = 0;
+    godot::PackedByteArray state;
+
+    static constexpr auto wire = netw::wire::describe(
+        netw::wire::field<&ClaimImage::observed_revision>(
+            "observed_revision",
+            netw::wire::varuint(5)
+        ),
+        netw::wire::field<&ClaimImage::state>(
+            "state",
+            netw::wire::bytes_capped(CONTROL_FINAL_STATE_CAP)
+        )
+    );
+};
+
 struct RouteLease {
     uint64_t base = 0;
     uint64_t count = 0;

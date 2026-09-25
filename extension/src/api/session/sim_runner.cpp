@@ -28,7 +28,11 @@ void NetwMultiplayer::sim_run(
     int64_t p_tick
 ) {
     sim_select_unpredicted(p_tick, p_phase == sim::Schedule::TICK);
-    sim_rows.unpredicted(sim_stepping);
+    sim_rows.stepping(sim_stepping);
+#if defined(NETW_TESTS)
+    idle_work.runs += 1;
+    idle_work.walked += sim_stepping.size();
+#endif
     for (const RID &entity : sim_stepping) {
         sim_step(entity, p_phase, p_delta, p_tick);
     }

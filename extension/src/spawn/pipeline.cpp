@@ -494,7 +494,11 @@ Node *Pipeline::spawn(
         );
     }
 
-    const Variant built = p_fn.callv(p_args);
+    Variant built;
+    {
+        NETW_ZONE_NC("Spawn call constructor", colors::LIVENESS);
+        built = p_fn.callv(p_args);
+    }
     Node *node = Object::cast_to<Node>(gd::live_object(built));
     if (node == nullptr || node->is_inside_tree()) {
         NETW_ERR_V(
@@ -513,7 +517,12 @@ Node *Pipeline::spawn(
             "Netw.spawn: the spawn function returned an already replicated node"
         );
     }
-    if (!spawn_admitted(node, p_owner, "Netw.spawn")) {
+    bool admitted = false;
+    {
+        NETW_ZONE_NC("Spawn admit", colors::LIVENESS);
+        admitted = spawn_admitted(node, p_owner, "Netw.spawn");
+    }
+    if (!admitted) {
         memdelete(node);
         return nullptr;
     }
@@ -523,8 +532,14 @@ Node *Pipeline::spawn(
     record.bind_fn_host(host);
     record.set_fn_method(method);
     record.set_fn_args(p_args);
-    arm_authoritative_spawn(&record, node, p_owner);
-    NetwMultiplayer::scene_wrap_world(node);
+    {
+        NETW_ZONE_NC("Spawn arm authoritative", colors::LIVENESS);
+        arm_authoritative_spawn(&record, node, p_owner);
+    }
+    {
+        NETW_ZONE_NC("Spawn wrap world", colors::SCENE);
+        NetwMultiplayer::scene_wrap_world(node);
+    }
     return node;
 }
 
@@ -2957,6 +2972,7 @@ void NetwMultiplayer::spawn_retry_scene_parked_spawns(
     int64_t p_route,
     const Ref<NetwEntity> &p_entity
 ) {
+    NETW_ZONE_NC("Spawn retry scene parked spawns", colors::LIVENESS);
     if (spawn::Pipeline *pipeline = spawn_plane()) {
         pipeline->retry_scene_parked_spawns(p_route, p_entity);
     }
@@ -2975,6 +2991,7 @@ void NetwMultiplayer::spawn_apply_action_gate(
     int64_t p_route,
     const Ref<NetwEntity> &p_entity
 ) {
+    NETW_ZONE_NC("Spawn apply action gate", colors::LIVENESS);
     if (spawn::Pipeline *pipeline = spawn_plane()) {
         pipeline->apply_action_gate(p_route, p_entity);
     }

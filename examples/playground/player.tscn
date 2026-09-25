@@ -1,0 +1,39 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://examples/playground/player.gd" id="1_player"]
+[ext_resource type="PhysicsMaterial" path="res://examples/playground/surface.tres" id="2_surface"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_player"]
+
+[sub_resource type="BoxMesh" id="BoxMesh_player"]
+
+[sub_resource type="SphereShape3D" id="SphereShape3D_nearby"]
+radius = 1.5
+
+[node name="Player" type="RigidBody3D"]
+physics_material_override = ExtResource("2_surface")
+gravity_scale = 1.837
+can_sleep = false
+linear_damp_mode = 1
+linear_damp = 2.553
+angular_damp_mode = 1
+angular_damp = 0.6
+script = ExtResource("1_player")
+
+[node name="Shape" type="CollisionShape3D" parent="."]
+shape = SubResource("BoxShape3D_player")
+
+[node name="Visual" type="MeshInstance3D" parent="."]
+mesh = SubResource("BoxMesh_player")
+
+[node name="Nearby" type="Area3D" parent="."]
+collision_layer = 0
+collision_mask = 2
+monitorable = false
+
+[node name="Shape" type="CollisionShape3D" parent="Nearby"]
+shape = SubResource("SphereShape3D_nearby")
+
+[node name="Camera" type="Camera3D" parent="."]
+physics_interpolation_mode = 2
+top_level = true

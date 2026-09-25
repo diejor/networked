@@ -232,7 +232,6 @@
 #include "sim_body_laws.cpp"
 #include "sim_resolve_laws.cpp"
 #include "sim_select_laws.cpp"
-#include "snapshot_book_tests.cpp"
 #include "spawn_anchor_laws.cpp"
 #include "spawn_arg_schema_laws.cpp"
 #include "spawn_arm_laws.cpp"

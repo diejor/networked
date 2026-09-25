@@ -103,6 +103,8 @@ class SessionSend {
     wire::ControlScheduler control;
     godot::HashMap<int, godot::HashMap<uint64_t, float>> owed;
     godot::HashMap<int, godot::HashMap<uint64_t, RowExplain>> verdicts;
+    godot::HashMap<int, int64_t> row_spent_bits;
+    int64_t row_budget_bits = 0;
     godot::Callable stage;
 
     static uint64_t address_of(const RowSend &p_send);
@@ -233,6 +235,8 @@ public:
     int64_t link_budget_bits(int p_peer, int64_t p_full_bits) const {
         return link.budget_bits(p_peer, p_full_bits);
     }
+
+    int64_t control_budget_bytes(int p_peer, int64_t p_reserved_bytes) const;
 
     wire::StreamReaderBook &reader_book() {
         return readers;

@@ -131,7 +131,11 @@ RID NetwMultiplayer::scene_report_entity_edge(
     bool p_present,
     bool p_is_player
 ) {
-    const RID scene = scene_of(p_subject);
+    RID scene;
+    {
+        NETW_ZONE_NC("scene edge scene of", colors::SCENE);
+        scene = scene_of(p_subject);
+    }
     if (!scene.is_valid() || scene == p_subject) {
         return RID();
     }
@@ -148,8 +152,9 @@ RID NetwMultiplayer::scene_report_entity_edge(
         if (view.is_valid()) {
             view->announce_body(entity_get_view(p_subject), p_present);
         }
+        NETW_ZONE_NC("scene edge display invalidate", colors::SCENE);
+        scene_player_display_invalidate();
     }
-    scene_player_display_invalidate();
     return scene;
 }
 
@@ -2232,6 +2237,7 @@ void NetwMultiplayer::scene_on_entity_live(
     int64_t,
     const Ref<NetwEntity> &p_entity
 ) {
+    NETW_ZONE_NC("scene on entity live", colors::SCENE);
     scene_watch_entity(p_entity);
 }
 
@@ -2243,23 +2249,31 @@ void NetwMultiplayer::scene_watch_entity(const Ref<NetwEntity> &p_entity) {
     if (node == nullptr) {
         return;
     }
-    const RID subject = entity_of(node);
+    RID subject;
+    {
+        NETW_ZONE_NC("scene watch entity of", colors::SCENE);
+        subject = entity_of(node);
+    }
     if (!subject.is_valid()) {
         return;
     }
-    const Callable entered
-        = callable_mp(this, &NetwMultiplayer::scene_report_live_entity_edge)
-              .bind(p_entity, subject, true);
-    const Callable exited
-        = callable_mp(this, &NetwMultiplayer::scene_report_live_entity_edge)
-              .bind(p_entity, subject, false);
-    if (!node->is_connected("tree_entered", entered)) {
-        node->connect("tree_entered", entered);
-    }
-    if (!node->is_connected("tree_exiting", exited)) {
-        node->connect("tree_exiting", exited);
+    {
+        NETW_ZONE_NC("scene watch connect edges", colors::SCENE);
+        const Callable entered
+            = callable_mp(this, &NetwMultiplayer::scene_report_live_entity_edge)
+                  .bind(p_entity, subject, true);
+        const Callable exited
+            = callable_mp(this, &NetwMultiplayer::scene_report_live_entity_edge)
+                  .bind(p_entity, subject, false);
+        if (!node->is_connected("tree_entered", entered)) {
+            node->connect("tree_entered", entered);
+        }
+        if (!node->is_connected("tree_exiting", exited)) {
+            node->connect("tree_exiting", exited);
+        }
     }
     if (node->is_inside_tree()) {
+        NETW_ZONE_NC("scene watch report edge", colors::SCENE);
         scene_report_live_entity_edge(p_entity, subject, true);
     }
     if (p_entity->get_peer_id() == 0) {

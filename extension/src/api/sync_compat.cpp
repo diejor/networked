@@ -6,8 +6,10 @@
 #include "netw/api/event_plane.hpp"
 #include "netw/api/netw_multiplayer.hpp"
 #include "netw/api/replication_core.hpp"
+#include "netw/colors.hpp"
 #include "netw/liveness_core.hpp"
 #include "netw/log.hpp"
+#include "netw/profile.hpp"
 #include "netw/script/model.hpp"
 #include "netw/spawn/record.hpp"
 #include "netw/subsystems.hpp"
@@ -115,6 +117,7 @@ void NetwMultiplayer::sync_compat_entity_live(
     int64_t p_route,
     const Ref<NetwEntity> &p_entity
 ) {
+    NETW_ZONE_NC("SyncCompat on entity live", colors::WIRE);
     if (SyncCompat *adapter = sync_adapter()) {
         adapter->on_entity_live(p_route, p_entity);
     }

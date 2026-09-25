@@ -8,8 +8,21 @@
 namespace netw {
 
 class DatagramSeqBook {
+public:
+    static constexpr int SENT_WINDOW = 256;
+
 private:
+    struct RoundTrip {
+        uint16_t seqs[SENT_WINDOW] = {};
+        uint64_t sent_usec[SENT_WINDOW] = {};
+        bool stamped[SENT_WINDOW] = {};
+        double smoothed_ms = 0.0;
+        double jitter_ms = 0.0;
+        bool measured = false;
+    };
+
     godot::HashMap<int64_t, uint16_t> send_seqs;
+    godot::HashMap<int64_t, RoundTrip> round_trips;
     godot::HashMap<int64_t, uint16_t> inbound_freshest;
     godot::HashMap<int64_t, uint32_t> inbound_history;
     godot::HashMap<int64_t, uint16_t> peer_acks;
@@ -22,7 +35,7 @@ public:
     static bool is_fresher(uint16_t a, uint16_t b);
     static int64_t distance(uint16_t newer, uint16_t older);
 
-    uint16_t next_send_seq(int64_t peer);
+    uint16_t next_send_seq(int64_t peer, uint64_t now_usec);
 
     bool has_inbound(int64_t peer) const;
     uint16_t inbound_seq(int64_t peer) const;
@@ -31,9 +44,16 @@ public:
     int64_t reorder_count(int64_t peer) const;
     int64_t duplicate_count(int64_t peer) const;
 
-    bool note_peer_ack(int64_t peer, uint16_t ack, uint32_t history);
+    bool note_peer_ack(
+        int64_t peer,
+        uint16_t ack,
+        uint32_t history,
+        uint64_t now_usec
+    );
     int64_t peer_ack(int64_t peer) const;
     uint32_t peer_ack_history(int64_t peer) const;
+    double round_trip_ms(int64_t peer) const;
+    double round_trip_jitter_ms(int64_t peer) const;
 
     void note_echoed(int64_t peer, uint16_t seq);
     godot::PackedInt64Array peers_owed_echo() const;

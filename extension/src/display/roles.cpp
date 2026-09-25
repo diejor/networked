@@ -4,7 +4,9 @@
 #include "netw/display/channel.hpp"
 #include "netw/display/history.hpp"
 #include "netw/display/role_facts.hpp"
+#include "netw/colors.hpp"
 #include "netw/log.hpp"
+#include "netw/profile.hpp"
 #include "netw/subsystems.hpp"
 
 using namespace godot;
@@ -56,7 +58,11 @@ int role_verdict(Runtime *p_runtime, const Hooks &p_hooks) {
 } // namespace
 
 void resolve_role(Runtime *p_runtime, const Hooks &p_hooks) {
-    const int role = role_verdict(p_runtime, p_hooks);
+    int role = 0;
+    {
+        NETW_ZONE_NC("display role verdict", colors::INTERP);
+        role = role_verdict(p_runtime, p_hooks);
+    }
     const Decl &config = p_runtime->get_config();
     const int pump = config.pump_for(role);
     p_runtime->set_role(role);
@@ -82,7 +88,17 @@ void resolve_role(Runtime *p_runtime, const Hooks &p_hooks) {
     }
 
     p_runtime->set_pump_mode(pump);
-    retarget_drawn_node(p_runtime);
+    {
+        NETW_ZONE_NC("display retarget drawn node", colors::INTERP);
+        retarget_drawn_node(p_runtime);
+    }
+    if (previous == netw::display::PUMP_DISABLED) {
+        for (int at = 0; at < int(states.size()); ++at) {
+            Channel *state = states[at];
+            state->set_last_written(state->current_source_value());
+            state->write(state->get_last_written());
+        }
+    }
     if (netw::display::pump_is_predicted(pump)) {
         warn_self_feedback(p_runtime);
     }

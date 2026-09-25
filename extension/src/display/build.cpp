@@ -9,7 +9,9 @@
 #include "netw/display/roles.hpp"
 #include "netw/display/spec_row.hpp"
 #include "netw/display/tracks.hpp"
+#include "netw/colors.hpp"
 #include "netw/log.hpp"
+#include "netw/profile.hpp"
 #include "netw/subsystems.hpp"
 
 using namespace godot;
@@ -259,10 +261,17 @@ void rebuild_runtime(Runtime *p_runtime, const Hooks &p_hooks) {
     p_runtime->display_tracks().clear();
     p_runtime->display_playhead().set_display_tick(-1);
 
-    build_states(p_runtime, p_hooks.specs_of(owner), p_hooks);
-    p_hooks.compute_sync_intervals(p_runtime->entity_rid());
+    {
+        NETW_ZONE_NC("display build states", colors::INTERP);
+        build_states(p_runtime, p_hooks.specs_of(owner), p_hooks);
+    }
+    {
+        NETW_ZONE_NC("display sync intervals", colors::INTERP);
+        p_hooks.compute_sync_intervals(p_runtime->entity_rid());
+    }
 
     p_runtime->set_pump_mode(netw::display::PUMP_UNRESOLVED);
+    NETW_ZONE_NC("display hooks resolve", colors::INTERP);
     p_hooks.resolve(p_runtime->entity_rid());
 }
 

@@ -97,7 +97,17 @@ private:
         godot::Ref<NetwPromise> promise;
     };
 
+    struct HeldClaimImage {
+        int64_t sender = 0;
+        uint64_t observed_revision = 0;
+        int64_t received_tick = -1;
+        godot::PackedByteArray state;
+    };
+
     NetwEntityRecord *record = nullptr;
+    HeldClaimImage held_claim_image;
+    int64_t claim_image_tick = -1;
+    int64_t claim_image_until = -1;
     godot::LocalVector<ControlClaim> control_claims;
     godot::LocalVector<StructureOp> structure_ops;
     godot::ObjectID owner_id;
@@ -145,8 +155,16 @@ private:
     );
     bool holds_copy(int64_t p_peer);
     godot::TypedArray<NetwPropertySetBinding> image_bindings();
+    godot::PackedByteArray state_image(int64_t p_tick, int64_t &r_size);
     godot::PackedByteArray final_image(int64_t p_tick);
-    void install_final_image(const godot::PackedByteArray &p_final_state);
+    int64_t install_final_image(
+        const godot::PackedByteArray &p_final_state,
+        int64_t p_after_tick = -2
+    );
+    void start_claim_images();
+    bool claim_image_admits(int64_t p_sender, uint64_t p_observed) const;
+    void install_claim_image(const godot::PackedByteArray &p_state);
+    void install_held_claim_image(bool p_tenure_changed);
     void refuse_control(
         int64_t p_requester,
         uint64_t p_op,
@@ -348,6 +366,8 @@ public:
     godot::Ref<NetwSceneHandle> get_scene() const;
     godot::Ref<NetwPredictionHandle> get_prediction() const;
     godot::Ref<NetwSimulationHandle> get_simulation() const;
+    godot::Ref<NetwPredictionHandle> prediction_if_minted() const;
+    godot::Ref<NetwSimulationHandle> simulation_if_minted() const;
     godot::Ref<NetwPersistenceHandle> get_persistence() const;
     godot::Ref<NetwDisplayHandle> get_interpolation() const;
     godot::Ref<NetwTimeline> get_timeline() const;
@@ -370,6 +390,12 @@ public:
         const session::ControlRequest &p_request
     );
     void _handle_control_apply(const session::ControlApply &p_applied);
+    void _handle_claim_image(
+        int64_t p_sender,
+        const session::ClaimImage &p_image
+    );
+    bool sends_claim_image(int64_t p_tick) const;
+    godot::PackedByteArray claim_image(int64_t p_tick);
     void _go_live_if_armed();
     void _remote_despawn(
         const godot::StringName &p_reason,

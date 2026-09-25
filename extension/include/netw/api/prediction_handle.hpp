@@ -21,6 +21,10 @@ class NetwPredictSlotEngine;
 class NetwPredictionHandle : public godot::RefCounted {
     GDCLASS(NetwPredictionHandle, godot::RefCounted)
 
+public:
+    static constexpr double DEFAULT_TELEPORT_THRESHOLD = 2.0;
+
+private:
     int input_source_value = NetwPredict::INPUT_SOURCE_NONE;
     int sim_mode_value = NetwPredict::SIM_MODE_DISPLAY;
     int recovery_policy_value = NetwPredict::RECOVERY_POLICY_AUTO;
@@ -30,7 +34,7 @@ class NetwPredictionHandle : public godot::RefCounted {
     int64_t epoch_value = -1;
     godot::Callable witness_sampler;
     godot::Callable corridor_sweep;
-    double teleport_value = 2.0;
+    double teleport_value = DEFAULT_TELEPORT_THRESHOLD;
     int cooldown_value = 6;
     bool sleeping_value = false;
     int missing_policy_value = NetwPredict::MISSING_INPUT_STALL;
