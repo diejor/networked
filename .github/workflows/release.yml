@@ -6,6 +6,11 @@ on:
       - "v*"
   workflow_dispatch:
     inputs:
+      version:
+        description: Version to tag and publish, such as 0.2. Empty builds a candidate without publishing it.
+        type: string
+        required: false
+        default: ""
       profile:
         description: Profile to build the candidate from.
         type: string
@@ -21,7 +26,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: release-${{ github.ref_name }}
+  group: release-${{ inputs.version && format('v{0}', inputs.version) || github.ref_name }}
   cancel-in-progress: false
 
 jobs:
@@ -44,6 +49,7 @@ jobs:
     timeout-minutes: 15
     outputs:
       publishable: ${{ steps.gate.outputs.publishable }}
+      tag: ${{ steps.gate.outputs.tag }}
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -59,15 +65,23 @@ jobs:
         shell: bash
         env:
           PROFILE: ${{ inputs.profile || 'release' }}
-          TAG: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || '' }}
+          VERSION: ${{ inputs.version || '' }}
         run: |
           set -eu
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            tag="$GITHUB_REF_NAME"
+          elif [ -n "$VERSION" ]; then
+            tag="v${VERSION#v}"
+          else
+            tag=""
+          fi
           python3 ci/release.py \
             --profile "$PROFILE" \
-            --tag "$TAG" \
+            --tag "$tag" \
             --sha "$GITHUB_SHA" \
             --record dist/inventory.json
-          if [ -n "$TAG" ]; then
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          if [ -n "$tag" ]; then
             echo "publishable=true" >> "$GITHUB_OUTPUT"
           else
             echo "publishable=false" >> "$GITHUB_OUTPUT"
@@ -103,6 +117,8 @@ jobs:
     timeout-minutes: 20
     permissions:
       contents: write
+    env:
+      TAG: ${{ needs.inventory.outputs.tag }}
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -118,9 +134,47 @@ jobs:
         run: |
           set -eu
           python3 ci/release.py \
-            --tag "$GITHUB_REF_NAME" \
+            --tag "$TAG" \
             --sha "$GITHUB_SHA" \
             --publish
+
+      - name: Tag The Commit
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const tag = process.env.TAG;
+            const ref = `tags/${tag}`;
+            try {
+              const found = await github.rest.git.getRef({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                ref,
+              });
+              let commit = found.data.object.sha;
+              if (found.data.object.type === 'tag') {
+                commit = (await github.rest.git.getTag({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  tag_sha: commit,
+                })).data.object.sha;
+              }
+              if (commit !== context.sha) {
+                throw new Error(
+                  `${tag} already points at ${commit.slice(0, 12)}, not ${context.sha.slice(0, 12)}`);
+              }
+              core.info(`${tag} already points at this commit`);
+            } catch (error) {
+              if (error.status !== 404) {
+                throw error;
+              }
+              await github.rest.git.createRef({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                ref: `refs/${ref}`,
+                sha: context.sha,
+              });
+              core.info(`created ${tag} at ${context.sha.slice(0, 12)}`);
+            }
 
       - name: Stage A Draft And Upload Every Asset
         uses: actions/github-script@v7
@@ -128,7 +182,7 @@ jobs:
           script: |
             const fs = require('fs');
             const path = require('path');
-            const tag = context.ref.replace('refs/tags/', '');
+            const tag = process.env.TAG;
             const files = fs.readdirSync('dist')
               .filter(name => name !== 'inventory.json')
               .map(name => path.join('dist', name));
