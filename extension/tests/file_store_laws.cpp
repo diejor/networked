@@ -31,6 +31,12 @@ using netw::persist::FileStore;
 using netw::persist::Kind;
 namespace schema_model = netw::schema_model;
 
+String scratch_root(const String &p_name) {
+    const String root = String("user://netw_file_store_laws/") + p_name;
+    DirAccess::make_dir_recursive_absolute(netw::gd::globalized(root));
+    return root;
+}
+
 struct World {
     String root;
     Ref<NetwMultiplayer> session;
@@ -40,7 +46,7 @@ struct World {
     Ref<FileConnection> connection;
 
     explicit World(const char *p_name) {
-        root = String("user://netw_file_store_laws/") + String(p_name);
+        root = scratch_root(p_name);
         session.instantiate();
         plane = session->get_databases();
         database = plane->create("saves");
@@ -63,10 +69,9 @@ struct World {
 };
 
 void scrub(const char *p_name) {
-    FileStore(String("user://netw_file_store_laws/") + String(p_name))
-        .erase_slot("slot1");
-    FileStore(String("user://netw_file_store_laws/") + String(p_name))
-        .erase_slot("slot2");
+    const String root = scratch_root(p_name);
+    FileStore(root).erase_slot("slot1");
+    FileStore(root).erase_slot("slot2");
 }
 
 Dictionary row(int64_t p_gold) {
@@ -403,7 +408,7 @@ struct Door {
 
     explicit Door(const char *p_name) {
         schema_model::clear();
-        root = String("user://netw_file_store_laws/") + String(p_name);
+        root = scratch_root(p_name);
         session.instantiate();
         schema = NetwSchema::create("players");
         schema->replicated(false);

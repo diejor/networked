@@ -1386,7 +1386,7 @@ def thunk_registry(thunks: Thunks) -> str:
 
 def dump_api(godot: str, destination: Path, timeout: float) -> Path:
     """Write the API dump from a project that has the addon installed."""
-    run([godot, "--headless", "--path", str(ROOT), "--quit"], timeout=timeout)
+    run([godot, "--headless", "--path", str(ROOT), "--import"], timeout=timeout, check=False)
     run(
         [godot, "--headless", "--path", str(ROOT), "--dump-extension-api"],
         cwd=ROOT,
