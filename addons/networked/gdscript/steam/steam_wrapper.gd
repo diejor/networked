@@ -1,8 +1,7 @@
-## Internal wrapper for the Steam singleton to provide a clean API.
+## Calls the GodotSteam singleton, [code]Engine.get_singleton("Steam")[/code].
 ##
-## All methods are thin proxies over [code]Engine.get_singleton("Steam")[/code].
-## Use [method is_available] to check whether the GodotSteam GDExtension is
-## present before invoking other methods.
+## Check [method is_available] before calling other methods, since GodotSteam
+## may not be installed.
 class_name SteamWrapper
 
 ## Mirrors [code]Steam.LobbyType[/code] from the GodotSteam API.

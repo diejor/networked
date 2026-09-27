@@ -1,18 +1,8 @@
 extends MultiplayerPeerExtension
 
-## [MultiplayerPeerExtension] driven by [NakamaRelayBridge].
+## A [MultiplayerPeer] that sends packets through a Nakama match.
 ##
-## The bridge owns peer registration and packet delivery. This peer exposes
-## those events through Godot's multiplayer peer API.
-## [codeblock]
-## NakamaRelayBridge
-## ├── register_peer()
-## ├── unregister_peer()
-## └── deliver_packet()
-##
-## MultiplayerAPI
-## └── _get_packet_script()
-## [/codeblock]
+## [NakamaRelayBridge] creates it, adds peers and delivers received packets.
 class_name NakamaRelayPeer
 
 const MAX_PACKET_SIZE := 1 << 24

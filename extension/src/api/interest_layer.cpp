@@ -167,11 +167,11 @@ void NetwInterestLayer::refresh_perception(const Ref<NetwEntity> &p_entity) {
     owner->interest_refresh_perception(p_entity, layers);
 }
 
-int NetwInterestLayer::get_policy() const {
-    return engine->layer_policy(layer_id);
+NetwMultiplayer::LayerPolicy NetwInterestLayer::get_policy() const {
+    return NetwMultiplayer::LayerPolicy(engine->layer_policy(layer_id));
 }
 
-bool NetwInterestLayer::set_policy(int p_policy) {
+bool NetwInterestLayer::set_policy(NetwMultiplayer::LayerPolicy p_policy) {
     if (!engine->layer_set_policy(layer_id, p_policy)) {
         return false;
     }
@@ -179,19 +179,27 @@ bool NetwInterestLayer::set_policy(int p_policy) {
     return true;
 }
 
-int NetwInterestLayer::get_default_leave_policy() const {
-    return engine->layer_leave_policy(layer_id);
+NetwMultiplayer::LeavePolicy NetwInterestLayer::
+    get_default_leave_policy() const {
+    return NetwMultiplayer::LeavePolicy(engine->layer_leave_policy(layer_id));
 }
 
-void NetwInterestLayer::set_default_leave_policy(int p_policy) {
+void NetwInterestLayer::set_default_leave_policy(
+    NetwMultiplayer::LeavePolicy p_policy
+) {
     engine->layer_set_leave_policy(layer_id, p_policy);
 }
 
-int NetwInterestLayer::get_default_perception_policy() const {
-    return engine->layer_perception_policy(layer_id);
+NetwMultiplayer::PerceptionPolicy NetwInterestLayer::
+    get_default_perception_policy() const {
+    return NetwMultiplayer::PerceptionPolicy(
+        engine->layer_perception_policy(layer_id)
+    );
 }
 
-void NetwInterestLayer::set_default_perception_policy(int p_policy) {
+void NetwInterestLayer::set_default_perception_policy(
+    NetwMultiplayer::PerceptionPolicy p_policy
+) {
     if (!engine->layer_set_perception_policy(layer_id, p_policy)) {
         return;
     }
@@ -239,10 +247,9 @@ bool NetwInterestLayer::add_viewer(int64_t p_peer_id) {
         && owner->interest_peer_bit(p_peer_id) < 0) {
         NETW_WARN(
             sys::INTEREST,
-            "layer '%s' admits peer %d, which this session has never seen. "
-            "A peer id is minted by the transport at connect, so admit from "
-            "the peer_connected handler or from a peer this session lists, "
-            "never from a loop index or a game-side player id.",
+            "layer '%s' adds viewer %d, which is not a connected peer. Use a "
+            "peer id from multiplayer.peer_connected or "
+            "multiplayer.get_peers().",
             String(layer_id).utf8().get_data(),
             int(p_peer_id)
         );

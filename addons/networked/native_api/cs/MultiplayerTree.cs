@@ -6,25 +6,24 @@ using Godot.NativeInterop;
 namespace Networked;
 
 /// <summary>
-/// The node one <see cref="Node.Multiplayer"/> branch is rooted at.
+/// A node that gives its children their own <see cref="NetwMultiplayer"/>.
 /// </summary>
 /// <remarks>
-/// A tree owns one <see cref="MultiplayerApi"/> and installs it on its own
-/// branch of the <see cref="SceneTree"/>, so every descendant returns
-/// <see cref="Node.Multiplayer"/> with that session and two trees in one
-/// <see cref="SceneTree"/> are two independent sessions.
+/// Every child's <see cref="Node.Multiplayer"/> is this tree's
+/// <see cref="MultiplayerTree.Api"/>, as with <c>SceneTree.set_multiplayer</c>.
+/// Two trees in one <see cref="SceneTree"/> are two separate sessions, such as
+/// a server and a client in one process.
 /// <code>
 /// tree.peer_class = &amp;"ENetMultiplayerPeer"
 /// tree.transport_settings = { port = 21253 }
 ///
-/// # A peer the game already holds.
+/// # assign a peer as usual
 /// var peer := ENetMultiplayerPeer.new()
 /// peer.create_client("127.0.0.1", 21253)
 /// tree.api.session_prepare_join(&amp;"PlayerOne", [])
 /// tree.api.multiplayer_peer = peer
 ///
-/// # Or one the provider knows how to build, prepared and assigned inside
-/// # the window the offer arrives in.
+/// # or let the transport create it
 /// Netw.connection(tree).create_peer(
 ///     tree.peer_class,
 ///     NetwMultiplayer.TRANSPORT_MODE_CLIENT,
@@ -60,7 +59,7 @@ public sealed class MultiplayerTree : NetwObject
         NetwApi.MethodBind("MultiplayerTree", "set_peer_class", 3304788590UL);
 
     /// <summary>
-    /// The class of peer this tree brings itself up with, such as
+    /// The <see cref="MultiplayerPeer"/> class to use, such as
     /// <c>&amp;"ENetMultiplayerPeer"</c>.
     /// </summary>
     public StringName PeerClass
@@ -100,8 +99,8 @@ public sealed class MultiplayerTree : NetwObject
             4155329257UL);
 
     /// <summary>
-    /// The settings <see cref="MultiplayerTree.PeerClass"/>'s transport is
-    /// created with, such as <c>{ port = 21253 }</c> for an ENet server.
+    /// The settings for creating a <see cref="MultiplayerTree.PeerClass"/>
+    /// peer, such as <c>{ port = 21253 }</c> for ENet.
     /// </summary>
     public Godot.Collections.Dictionary TransportSettings
     {
@@ -141,7 +140,7 @@ public sealed class MultiplayerTree : NetwObject
             1089193088UL);
 
     /// <summary>
-    /// Latency and loss to simulate on this tree's peer.
+    /// Simulated latency and packet loss for testing.
     /// </summary>
     public NetwLinkConditions LinkConditions
     {
@@ -179,9 +178,9 @@ public sealed class MultiplayerTree : NetwObject
             2586408642UL);
 
     /// <summary>
-    /// On a headless build, hosts from <see cref="MultiplayerTree.PeerClass"/>
-    /// and <see cref="MultiplayerTree.TransportSettings"/> without waiting to
-    /// be asked.
+    /// When running headless, hosts at startup with
+    /// <see cref="MultiplayerTree.PeerClass"/> and
+    /// <see cref="MultiplayerTree.TransportSettings"/>.
     /// </summary>
     public bool AutoHostHeadless
     {
@@ -213,7 +212,7 @@ public sealed class MultiplayerTree : NetwObject
         NetwApi.MethodBind("MultiplayerTree", "set_desired_role", 3233627807UL);
 
     /// <summary>
-    /// The <see cref="NetwMultiplayer.RoleEnum"/> this tree intends to play.
+    /// The role this tree takes when it hosts.
     /// </summary>
     public NetwMultiplayer.RoleEnum DesiredRole
     {
@@ -245,9 +244,9 @@ public sealed class MultiplayerTree : NetwObject
         NetwApi.MethodBind("MultiplayerTree", "set_app_id", 3304788590UL);
 
     /// <summary>
-    /// A game-build tag that gates admission, baked into every build. A joining
-    /// peer whose tag differs is rejected during the auth handshake before it
-    /// reaches the <see cref="MultiplayerApi"/>.
+    /// The game and build. Peers with a different
+    /// <see cref="MultiplayerTree.AppId"/> cannot connect. See
+    /// <see cref="NetwSessionConfig.AppId"/>.
     /// </summary>
     public StringName AppId
     {
@@ -276,7 +275,7 @@ public sealed class MultiplayerTree : NetwObject
         NetwApi.MethodBind("MultiplayerTree", "set_debug_join", 2720545769UL);
 
     /// <summary>
-    /// An auto-connect applied on play, in debug builds only.
+    /// Connects automatically when the game runs, in debug builds only.
     /// </summary>
     public DebugJoinConfig DebugJoin
     {
@@ -308,8 +307,8 @@ public sealed class MultiplayerTree : NetwObject
         NetwApi.MethodBind("MultiplayerTree", "set_api_script", 3657522847UL);
 
     /// <summary>
-    /// An optional <see cref="NetwMultiplayer"/> implementation script, passed
-    /// to <see cref="NetwMultiplayer.Make"/>.
+    /// An optional script extending <see cref="NetwMultiplayer"/>, used for
+    /// <see cref="MultiplayerTree.Api"/>.
     /// </summary>
     public Script ApiScript
     {
@@ -337,8 +336,7 @@ public sealed class MultiplayerTree : NetwObject
         NetwApi.MethodBind("MultiplayerTree", "get_api", 208707294UL);
 
     /// <summary>
-    /// The <see cref="NetwMultiplayer"/> this tree owns and installs on its
-    /// branch.
+    /// The <see cref="NetwMultiplayer"/> of this tree's children.
     /// </summary>
     public NetwMultiplayer Api
     {
@@ -357,9 +355,8 @@ public sealed class MultiplayerTree : NetwObject
             2727226692UL);
 
     /// <summary>
-    /// Duplicates this tree as a
-    /// <see cref="NetwMultiplayer.RoleEnum.DedicatedServer"/> sibling named
-    /// <c>Server</c> and adds it beside this one.
+    /// Duplicates this tree as a sibling named <c>Server</c>, with the role
+    /// <see cref="NetwMultiplayer.RoleEnum.DedicatedServer"/>.
     /// <code>
     /// var server := tree.raise_embedded_server()
     /// var peer := ENetMultiplayerPeer.new()

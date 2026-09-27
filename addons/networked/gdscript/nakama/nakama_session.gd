@@ -1,28 +1,13 @@
-## Session-global Nakama authentication shared by every Nakama consumer.
+## The Nakama account of a session, shared by [NakamaLobbyDirectory] and
+## [NakamaDatabase].
 ##
-## One session has one authenticated Nakama account. Consumers resolve it
-## through [method of], so relay matches and storage calls use the same user.
-## [codeblock]
-## the session's branch root
-## ├── NakamaSessionService
-## │   ├── client
-## │   └── session
-## ├── NakamaLobbyDirectory
-## │   └── create_socket()
-## └── NakamaDatabase
-##     └── session user storage
-## [/codeblock]
+## Get it with [method of], so matches and storage use the same user.
 class_name NakamaSessionService
 extends NetwService
 
-## Returns the [NakamaSessionService] of the session enclosing [param node],
-## creating it on first access.
-##
-## A registered service wins, else a node already sitting under
-## [member NetwSessionHandle.root] is adopted and registered, else a fresh one
-## is created there. Returns [code]null[/code] in the editor, for a node that
-## reaches no session, and for a session with no branch root to parent one
-## under.
+## Returns the [NakamaSessionService] of the session [param node] is in,
+## creating it under [member NetwSessionHandle.root] if needed. Returns
+## [code]null[/code] in the editor or outside a session.
 static func of(node: Node) -> NakamaSessionService:
 	var session: NetwSessionHandle = Netw.session(node)
 	if session == null or Engine.is_editor_hint():

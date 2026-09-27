@@ -138,9 +138,8 @@ public sealed class NetwWriteBatch : NetwRefCounted
         NetwApi.MethodBind("NetwWriteBatch", "submit", 1931563502UL);
 
     /// <summary>
-    /// Sends this batch and settles with a
-    /// <see cref="Godot.Collections.Dictionary"/>. A batch can be submitted
-    /// once.
+    /// Sends this batch. A batch can be submitted once. The promise gives a
+    /// <see cref="Godot.Collections.Dictionary"/>.
     /// <code>
     /// Dictionary
     /// ┠╴error      Error             @GlobalScope.Error. Check it before reading errors
@@ -164,8 +163,8 @@ public sealed class NetwWriteBatch : NetwRefCounted
     /// <code>
     /// Error
     /// ┠╴ERR_UNCONFIGURED  the database is not open
-    /// ┠╴ERR_BUSY          the database already holds 4096 unsettled operations
-    /// ┖╴ERR_UNAVAILABLE   the database closed before the batch settled
+    /// ┠╴ERR_BUSY          the database already holds 4096 pending operations
+    /// ┖╴ERR_UNAVAILABLE   the database closed before the batch finished
     /// </code>
     /// </para>
     /// </summary>

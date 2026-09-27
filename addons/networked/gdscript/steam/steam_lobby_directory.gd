@@ -1,20 +1,9 @@
-## The [LobbyDirectory] over Steam's P2P matchmaking.
+## A [LobbyDirectory] that hosts, joins and lists Steam lobbies.
 ##
-## Owns the [SteamWrapper], runs Steam callbacks, and publishes the peer class
-## [code]SteamMultiplayerPeer[/code], so a session that holds this node hosts
-## and joins Steam lobbies through the connect plane with nothing else
-## registered. A lobby's address is its Steam lobby id.
-## [br][br]
-## Steam allows one instance per process. A second one unregisters itself and
-## is freed, so its peer has no Steam directory. [member browser_filter_uid]
-## tags hosted lobbies so browsers only return lobbies created by the same game.
-## [codeblock]
-## MultiplayerTree
-## └── SteamLobbyDirectory
-##     ├── _list_lobbies() -> publish_lobbies(ids, names, infos)
-##     ├── _host_lobby(settings) -> deliver(SteamMultiplayerPeer)
-##     └── _join_lobby(id) -> deliver(SteamMultiplayerPeer)
-## [/codeblock]
+## Add it under a [MultiplayerTree] to use Steam lobbies with
+## [code]SteamMultiplayerPeer[/code]. A lobby's address is its Steam lobby id.
+##
+## Steam allows one instance per process, so a second one frees itself.
 class_name SteamLobbyDirectory
 extends LobbyDirectory
 
@@ -25,28 +14,26 @@ const SPACEWAR_APP_ID := 480
 
 static var _instance: WeakRef = weakref(null)
 
-## Maximum number of simultaneous lobby members.
+## The player limit, when the host sets none.
 @export_range(1, 250, 1, "or_greater", "suffix:players") \
 		var max_clients: int = 8
 
-## Tag stored under the [code]uid[/code] lobby key. Browser filters on this so
-## different games don't pollute each other's lobby lists.
+## Only lobbies with the same tag are listed, so games do not see each other's
+## lobbies.
 @export var browser_filter_uid: String = "networked"
 
-## If [code]true[/code], disables Nagle's algorithm on the produced peer.
+## Disables Nagle's algorithm on the peer.
 @export var disable_nagle: bool = true
 
-## If [code]true[/code], allows Steam to relay traffic when direct P2P fails.
+## Lets Steam relay traffic when a direct connection fails.
 @export var allow_p2p_relay: bool = true
 
-## If [code]true[/code], uses Spacewar when
-## [code]steam/initialization/app_id[/code] is missing, empty, or
-## [code]0[/code]. This runtime fallback does not save project settings.
+## Uses the Spacewar test app when [code]steam/initialization/app_id[/code]
+## is not set. The project settings are not changed.
 @export var allow_spacewar_fallback: bool = false
 
-## When [code]true[/code], lobbies owned by the local Steam account are
-## hidden and rejected. Steam does not support testing two local peers
-## through one account reliably.
+## Hides lobbies hosted by your own Steam account, since one account cannot
+## reliably join itself.
 @export var reject_own_lobbies: bool = true
 
 var _wrapper: SteamWrapper
@@ -68,19 +55,13 @@ signal _lobby_created_internal(peer: MultiplayerPeer)
 signal _lobby_joined_internal(peer: MultiplayerPeer)
 
 
-# Steam is dormant in a relay-only embed (a Discord iframe forbids the native
-# client) and wherever the Steam client is not running, which is what keeps it
-# dormant under a headless runner too. The heavier init lives in
-# [method _service_entered] so this stays a cheap both-ends gate.
 func _should_register() -> bool:
 	if NetwService.is_transport_restricted():
 		return false
 	return SteamWrapper.is_running()
 
 
-# Steam allows one instance and one initialization per process. The service is
-# already registered when this runs, so a duplicate or a failed init unregisters
-# itself synchronously (no yield, so no observer ever sees the intermediate row).
+# Steam allows one initialization per process.
 func _service_entered(_api: NetwMultiplayer) -> void:
 	var existing: SteamLobbyDirectory = _instance.get_ref()
 	if existing and existing != self:
@@ -177,8 +158,6 @@ func is_ready() -> bool:
 	return _init_ok
 
 
-## Steam backs every lobby tier: browse, friends-only visibility, overlay
-## invites, and persona resolution.
 func _capabilities() -> LobbyDirectory.Capability:
 	return (
 			LobbyDirectory.CAPABILITY_BROWSE
@@ -188,7 +167,6 @@ func _capabilities() -> LobbyDirectory.Capability:
 	)
 
 
-# Maps a directory visibility tier onto the Steam lobby type.
 func _map_visibility(v: NetwServerInfo.Visibility) -> SteamWrapper.LobbyType:
 	match v:
 		NetwServerInfo.VISIBILITY_FRIENDS_ONLY:
@@ -199,7 +177,6 @@ func _map_visibility(v: NetwServerInfo.Visibility) -> SteamWrapper.LobbyType:
 			return SteamWrapper.LobbyType.PUBLIC
 
 
-# Reads the visibility tier advertised on a lobby's data, defaulting to PUBLIC.
 func _parse_visibility(raw: String) -> NetwServerInfo.Visibility:
 	if raw.is_empty():
 		return NetwServerInfo.VISIBILITY_PUBLIC
@@ -216,7 +193,6 @@ func get_persona_name() -> String:
 	return _wrapper.get_persona_name() if _init_ok else ""
 
 
-## Resolves [param peer_id] to a Steam persona name when possible.
 func _member_name(peer_id: int) -> String:
 	if not _init_ok or _peer == null:
 		return LobbyDirectory.member_name_default(peer_id)
@@ -227,7 +203,6 @@ func _member_name(peer_id: int) -> String:
 	return persona if not persona.is_empty() else LobbyDirectory.member_name_default(peer_id)
 
 
-## Returns the local Steam persona name.
 func _local_member_name() -> String:
 	var persona := get_persona_name()
 	if not persona.is_empty():
@@ -235,29 +210,22 @@ func _local_member_name() -> String:
 	return LobbyDirectory.local_member_name_default()
 
 
-## Browsers name this provider "Steam".
 func _display_name() -> String:
 	return "Steam"
 
 
-## Steam has no web export, so nothing here works on one.
 func _is_available() -> bool:
 	return not OS.has_feature("web")
 
 
-## A Steam address is a lobby id.
 func _address_label() -> String:
 	return "Lobby ID"
 
 
-## Points a player at the browser rather than at a field they cannot fill.
 func _address_help() -> String:
 	return "Steam lobby IDs are discovered through the server browser."
 
 
-## Requests Steam lobby rows for [member browser_filter_uid].
-##
-## Results arrive through [method LobbyDirectory.publish_lobbies].
 func _list_lobbies() -> void:
 	if not _guard_ready("_list_lobbies"):
 		publish_lobbies(
@@ -279,7 +247,6 @@ func _list_lobbies() -> void:
 	_wrapper.request_lobby_list()
 
 
-## Leaves the active Steam lobby and clears the current peer.
 func _leave_lobby() -> void:
 	_joining = false
 	_pending_join_lobby_id = 0
@@ -290,21 +257,14 @@ func _leave_lobby() -> void:
 	_peer = null
 
 
-## Steam lobbies join through [code]SteamMultiplayerPeer[/code] by lobby id.
 func _peer_class() -> StringName:
 	return &"SteamMultiplayerPeer"
 
 
-## Returns the lobby id others join this host by, or empty outside a lobby.
 func _join_address() -> String:
 	return str(_lobby_id) if _lobby_id != 0 else ""
 
 
-## Creates a Steam lobby and delivers its connected host peer.
-##
-## The advert key [code]visibility[/code] maps to a Steam lobby type, and
-## [code]max_players[/code] falls back to [member max_clients] when it is
-## absent or [code]0[/code].
 func _host_lobby(settings: Dictionary) -> void:
 	if not _guard_ready("_host_lobby"):
 		fail(ERR_UNAVAILABLE, "Steam is unavailable.")
@@ -335,12 +295,6 @@ func _host_lobby(settings: Dictionary) -> void:
 	deliver(_peer)
 
 
-## Joins the Steam lobby [param address] names and delivers its connected
-## peer.
-##
-## Reports a failure when Steam is unavailable, the id is unreadable, the
-## local account owns the lobby, the P2P session collapses, or the join times
-## out.
 func _join_lobby(address: String) -> void:
 	if not _guard_ready("_join_lobby"):
 		fail(ERR_UNAVAILABLE, "Steam is unavailable.")
@@ -413,7 +367,6 @@ func _guard_ready(op: String) -> bool:
 	return true
 
 
-# Checks the GodotSteam app id setting before Steam initialization.
 func _has_steam_app_id() -> bool:
 	if not ProjectSettings.has_setting(STEAM_APP_ID_SETTING):
 		return false
@@ -422,14 +375,12 @@ func _has_steam_app_id() -> bool:
 	return not app_id.is_empty() and app_id != "0"
 
 
-# Applies the opt-in Spacewar app id fallback without saving it.
 func _apply_spacewar_fallback() -> void:
 	ProjectSettings.set_setting(STEAM_APP_ID_SETTING, SPACEWAR_APP_ID)
 	var reason := _steam_app_id_fallback_message()
 	push_warning("SteamLobbyDirectory: %s" % reason)
 
 
-# Returns the actionable Steam app id setup hint.
 func _steam_app_id_required_message() -> String:
 	return (
 			"Project setting `%s` must not be empty or 0. Set it to " +
@@ -438,7 +389,6 @@ func _steam_app_id_required_message() -> String:
 	) % STEAM_APP_ID_SETTING
 
 
-# Returns the opt-in Spacewar fallback warning.
 func _steam_app_id_fallback_message() -> String:
 	return (
 			"Project setting `%s` is empty or 0. Using 480 (Spacewar) " +
@@ -501,7 +451,7 @@ func _on_lobby_joined(
 		_lobby_joined_internal.emit(null)
 		return
 
-	# Host's own joinLobby callback fires too - skip if already hosting.
+	# Steam also calls this on the host for its own lobby.
 	if _peer != null and _lobby_id == lobby_id:
 		_pending_join_lobby_id = 0
 		return
@@ -586,8 +536,6 @@ func _build_peer() -> MultiplayerPeer:
 	return peer
 
 
-# The hosting tree's build tag, advertised so browsers can flag a lobby they
-# would be rejected from before they try to join.
 func _local_app_id() -> String:
 	var session: NetwSessionHandle = Netw.session(self)
 	return String(session.config.app_id) if session else ""

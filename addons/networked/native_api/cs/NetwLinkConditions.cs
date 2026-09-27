@@ -6,18 +6,12 @@ using Godot.NativeInterop;
 namespace Networked;
 
 /// <summary>
-/// Author-time latency and loss simulation for a session's own outbound peer.
+/// Simulated latency and packet loss for testing a real connection.
 /// </summary>
 /// <remarks>
-/// Delays are authored in milliseconds and loss as a percent, the units a game
-/// designer tunes in, and <see cref="NetwLinkConditions.WrapPeer"/> is what
-/// converts them: <see cref="NetwLinkConditions.OneWayDelayMin"/> and
-/// <see cref="NetwLinkConditions.OneWayDelayMax"/> scale down to seconds and
-/// <see cref="NetwLinkConditions.LagPacketLossPercent"/> scales down to a
-/// ratio, which are the units <c>LaggyMultiplayerPeer</c> takes. Install one
-/// through <see cref="NetwSessionConfig.LinkConditions"/>, authored beside the
-/// transport it tunes, and <see cref="NetwMultiplayer"/> wraps the built peer
-/// with it at bring-up.
+/// Set it as <see cref="NetwSessionConfig.LinkConditions"/>. The peer is
+/// wrapped in a <c>LaggyMultiplayerPeer</c>, an optional extension that must be
+/// installed.
 /// <code>
 /// var conditions := NetwLinkConditions.new()
 /// conditions.simulate_lag = true
@@ -26,26 +20,11 @@ namespace Networked;
 /// config.link_conditions = conditions
 /// </code>
 /// <para>
-/// <see cref="NetwLinkConditions.WrapPeer"/> returns the peer it was given
-/// unchanged, with a warning, when <see cref="NetwLinkConditions.SimulateLag"/>
-/// is on but the build carries no <c>LaggyMultiplayerPeer</c> extension. A
-/// missing simulator is a reason to run without it, never a reason the session
-/// fails to come up. This is a development tool.
-/// <see cref="NetwLinkConditions.WrapPeer"/> returns the original peer in
-/// release exports, regardless of <see cref="NetwLinkConditions.SimulateLag"/>.
-/// Compare the returned peer with the input to determine whether simulation is
-/// active. A debug build and the editor shape their link, and a release export
-/// does not. <c>NETW_SHAPING</c> in the environment, or
-/// <c>--netw-shaping=on|off</c> on the command line, overrides that in both
-/// directions, for the playtest shipped on a debug template and for the release
-/// build a tester needs to impair. The environment wins over the flag, and a
-/// value that is neither an on word (<c>on</c>, <c>1</c>, <c>true</c>,
-/// <c>yes</c>) nor an off word (<c>off</c>, <c>0</c>, <c>false</c>, <c>no</c>)
-/// is no override at all, so a typo cannot quietly impair a shipped build. The
-/// impairment applies to this session's own peer, so it shapes every link that
-/// peer carries at once. A server wrapped this way is slow to every client
-/// rather than to one, and per-remote-peer impairment exists only on the
-/// loopback, through <see cref="LocalLoopbackSession.SetLinkConditions"/>.
+/// It only works in debug builds and the editor. Set the environment variable
+/// <c>NETW_SHAPING</c> or the command line argument <c>--netw-shaping</c> to
+/// <c>on</c> or <c>off</c> to change that. The environment variable wins. It
+/// slows every connection of this peer. To slow one peer only, use
+/// <see cref="LocalLoopbackSession.SetLinkConditions"/>.
 /// </para>
 /// </remarks>
 public sealed class NetwLinkConditions : NetwRefCounted
@@ -77,9 +56,7 @@ public sealed class NetwLinkConditions : NetwRefCounted
             2586408642UL);
 
     /// <summary>
-    /// Whether <see cref="NetwLinkConditions.WrapPeer"/> wraps the peer at all.
-    /// <c>false</c> returns the base peer untouched, so a spec left on a config
-    /// with this off costs nothing.
+    /// Turns the simulation on.
     /// </summary>
     public bool SimulateLag
     {
@@ -117,8 +94,7 @@ public sealed class NetwLinkConditions : NetwRefCounted
             373806689UL);
 
     /// <summary>
-    /// The lower bound of the simulated one-way delay, in milliseconds.
-    /// <see cref="NetwLinkConditions.WrapPeer"/> floors it at zero.
+    /// The smallest one-way delay, in milliseconds.
     /// </summary>
     public double OneWayDelayMin
     {
@@ -156,9 +132,7 @@ public sealed class NetwLinkConditions : NetwRefCounted
             373806689UL);
 
     /// <summary>
-    /// The upper bound of the simulated one-way delay, in milliseconds.
-    /// <see cref="NetwLinkConditions.WrapPeer"/> floors it at
-    /// <see cref="NetwLinkConditions.OneWayDelayMin"/>.
+    /// The largest one-way delay, in milliseconds.
     /// </summary>
     public double OneWayDelayMax
     {
@@ -196,9 +170,7 @@ public sealed class NetwLinkConditions : NetwRefCounted
             373806689UL);
 
     /// <summary>
-    /// Percent chance a packet is dropped, clamped to <c>0..100</c> by
-    /// <see cref="NetwLinkConditions.WrapPeer"/>. Authored as a percent and
-    /// converted to a ratio for the wrapper.
+    /// Percent chance that a packet is lost, from <c>0</c> to <c>100</c>.
     /// </summary>
     public double LagPacketLossPercent
     {
@@ -228,15 +200,9 @@ public sealed class NetwLinkConditions : NetwRefCounted
 
     /// <summary>
     /// Returns <paramref name="base"/> wrapped in a <c>LaggyMultiplayerPeer</c>
-    /// carrying this spec's delays and loss, converted to the wrapper's units.
-    /// Returns <paramref name="base"/> itself when
-    /// <see cref="NetwLinkConditions.SimulateLag"/> is <c>false</c>, when
-    /// <paramref name="base"/> is <c>null</c>, when this build does not shape
-    /// its link, or when the wrapper class is unavailable or publishes no
-    /// <c>create</c>. <b>Note:</b> Impairment also needs the optional
-    /// <c>LaggyMultiplayerPeer</c> extension present in the build. A build that
-    /// shapes its link but carries no simulator still returns
-    /// <paramref name="base"/>.
+    /// with these settings. Returns <paramref name="base"/> unchanged when
+    /// <see cref="NetwLinkConditions.SimulateLag"/> is off, in a release build,
+    /// or when <c>LaggyMultiplayerPeer</c> is not installed.
     /// </summary>
     public MultiplayerPeer WrapPeer(MultiplayerPeer @base)
     {

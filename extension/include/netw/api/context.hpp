@@ -38,24 +38,13 @@
 
 namespace netw {
 
-class Netw : public godot::RefCounted {
+class Netw : public godot::RefCounted, public enums::Netw {
     GDCLASS(Netw, godot::RefCounted)
 
 protected:
     static void _bind_methods();
 
 public:
-    enum SceneChange {
-        SCENE_CHANGE_SESSION = NetwSceneCore::SCOPE_SESSION,
-        SCENE_CHANGE_PLAYER = NetwSceneCore::SCOPE_PLAYER,
-        SCENE_CHANGE_SCENE = NetwSceneCore::SCOPE_SCENE,
-    };
-
-    enum SceneIsolation {
-        SCENE_ISOLATION_NONE = NetwSceneCore::ISOLATION_NONE,
-        SCENE_ISOLATION_OWN_WORLD = NetwSceneCore::ISOLATION_OWN_WORLD,
-    };
-
     static godot::Dictionary native_api();
 
     static godot::Ref<NetwMultiplayer> of(godot::Node *p_node);
@@ -253,6 +242,3 @@ public:
 };
 
 } // namespace netw
-
-VARIANT_ENUM_CAST(netw::Netw::SceneChange);
-VARIANT_ENUM_CAST(netw::Netw::SceneIsolation);

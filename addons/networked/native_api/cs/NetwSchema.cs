@@ -57,6 +57,9 @@ public sealed class NetwSchema : NetwRefCounted
     private static readonly IntPtr _bindGetStorageVersion =
         NetwApi.MethodBind("NetwSchema", "get_storage_version", 3905245786UL);
 
+    /// <summary>
+    /// The version set by <see cref="NetwSchema.StorageVersion"/>.
+    /// </summary>
     public int StoredVersion
     {
         get

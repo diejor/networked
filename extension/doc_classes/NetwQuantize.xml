@@ -1,17 +1,14 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <class name="NetwQuantize" inherits="Resource" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
 	<brief_description>
-		The base a game extends to give one value type its own bit packer, and the type every quantizer slot is declared as.
+		Compresses a value into fewer bits, losing some precision.
 	</brief_description>
 	<description>
-		A quantizer turns a value into a fixed number of bits and back, trading precision for size. One is assigned per property through [method NetwMemberConfig.quantize], and the same resource may be shared by as many properties as want it. One quantizer handles [Vector2], [float] and [int] without nesting, because it is told the type.
-		A quantizer turns a value into codes and never touches a stream itself. [method _stride] says how many codes one value spends, [method _bit_width] says how wide each of them is, [method _encode] returns one code per element, and [method _decode] rebuilds the value from all of them. The session writes those codes into its own packed row through [NetwBitStream], so a quantizer allocates nothing and a script override runs once per element rather than once per write.
-		Each behaviour has two spellings. A subclass overrides [method _encode], [method _decode], [method _stride], [method _supports_type], [method _bit_width] and [method _max_error]. Every caller uses [method encode], [method decode], [method stride], [method supports_type], [method bit_width] and [method max_error] instead, because an override point reaches a GDScript override only and would find nothing on a quantizer written in C++. One written in C++ overrides the plain method, so no script is entered for it at all.
+		Assign one to a property with [method NetwMemberConfig.quantize]. One quantizer can be shared by many properties. Both peers must use the same settings.
 		[codeblock]
-		# Assigned on a synchronizer's codec/&lt;prop&gt; slot, or in code:
 		Netw.configure_property(self, &amp;"position").quantize(NetwQuantizeScalar.new())
 		[/codeblock]
-		Widths come from this resource on both peers, never the wire, so the decoder reconstructs the exact layout the encoder wrote. This base is abstract: a subclass ([NetwQuantizeScalar], [NetwQuantizeAngle], [NetwQuantizeQuaternion], [NetwQuantizeTransform2D], [NetwQuantizeTransform3D]) supplies the actual layout, and a game supplies its own by overriding the six virtuals.
+		Use [NetwQuantizeScalar], [NetwQuantizeAngle], [NetwQuantizeQuaternion], [NetwQuantizeTransform2D] or [NetwQuantizeTransform3D], or extend this class. A value is split into [method _stride] integers of [method _bit_width] bits each. [method _encode] returns one of them and [method _decode] rebuilds the value from all of them. Override the methods that start with an underscore, and call the ones without.
 		[codeblock]
 		extends NetwQuantize
 
@@ -38,7 +35,7 @@
 			<return type="int" />
 			<param index="0" name="type" type="int" enum="Variant.Type" />
 			<description>
-				Returns the width of ONE code for a value of [param type], not the total. The total is [method total_bits], which is this times [method _stride]. Reached through [method bit_width].
+				Return how many bits each integer of a [param type] value uses.
 			</description>
 		</method>
 		<method name="_decode" qualifiers="virtual const">
@@ -46,7 +43,7 @@
 			<param index="0" name="codes" type="PackedInt64Array" />
 			<param index="1" name="type" type="int" enum="Variant.Type" />
 			<description>
-				Returns the value of [param type] that [param codes] stands for, inverting [method _encode]. [param codes] holds exactly [method _stride] entries, in element order. Reached through [method decode].
+				Return the [param type] value rebuilt from [param codes], the [method _stride] integers from [method _encode].
 			</description>
 		</method>
 		<method name="_encode" qualifiers="virtual const">
@@ -54,36 +51,35 @@
 			<param index="0" name="value" type="Variant" />
 			<param index="1" name="element" type="int" />
 			<description>
-				Returns the code for element [param element] of [param value], which must fit in [method _bit_width] bits. A row that meets a wider code rejects the whole row rather than truncating it. Reached through [method encode].
+				Return integer number [param element] of [param value]. It must fit in [method _bit_width] bits, or the whole update is dropped.
 			</description>
 		</method>
 		<method name="_max_error" qualifiers="virtual const">
 			<return type="float" />
 			<param index="0" name="type" type="int" enum="Variant.Type" />
 			<description>
-				Returns the worst-case round-trip error for a value of [param type]. Reached through [method max_error].
-				For a [Vector2] this is the error magnitude with both axes at their bound, so it compares directly against a reconciliation deadzone ([member NetwPredictionHandle.divergence_epsilon]). A correction threshold below this value triggers on quantization noise alone.
+				Return the largest error compression can add to a [param type] value. Keep [member NetwPredictionHandle.divergence_epsilon] above it, or compression alone causes corrections.
 			</description>
 		</method>
 		<method name="_stride" qualifiers="virtual const">
 			<return type="int" />
 			<param index="0" name="type" type="int" enum="Variant.Type" />
 			<description>
-				Returns how many codes one value of [param type] spends. A scalar spends one, a [Vector2] two. A layout whose parts do not share one width packs them into a single code instead, the way [NetwQuantizeQuaternion] does. Reached through [method stride].
+				Return how many integers a [param type] value is split into, such as [code]1[/code] for a [float] and [code]2[/code] for a [Vector2].
 			</description>
 		</method>
 		<method name="_supports_type" qualifiers="virtual const">
 			<return type="bool" />
 			<param index="0" name="type" type="int" enum="Variant.Type" />
 			<description>
-				Returns whether this quantizer can encode a value of [param type]. Reached through [method supports_type].
+				Return [code]true[/code] when this quantizer can compress a [param type] value.
 			</description>
 		</method>
 		<method name="bit_width" qualifiers="const">
 			<return type="int" />
 			<param index="0" name="type" type="int" enum="Variant.Type" />
 			<description>
-				Returns the width of ONE code for a value of [param type]. [method total_bits] is what a whole value costs.
+				Calls [method _bit_width]. [method total_bits] is the size of the whole value.
 			</description>
 		</method>
 		<method name="decode" qualifiers="const">
@@ -91,7 +87,7 @@
 			<param index="0" name="codes" type="PackedInt64Array" />
 			<param index="1" name="type" type="int" enum="Variant.Type" />
 			<description>
-				Returns the value of [param type] that [param codes] stands for, inverting [method encode].
+				Calls [method _decode].
 			</description>
 		</method>
 		<method name="encode" qualifiers="const">
@@ -99,44 +95,42 @@
 			<param index="0" name="value" type="Variant" />
 			<param index="1" name="element" type="int" />
 			<description>
-				Returns the code for element [param element] of [param value].
+				Calls [method _encode].
 			</description>
 		</method>
 		<method name="is_same_layout" qualifiers="const">
 			<return type="bool" />
 			<param index="0" name="other" type="NetwQuantize" />
 			<description>
-				Returns whether [param other] encodes the identical bit layout: the same quantizer class and script with the same stored parameters.
-				Two layout-equal quantizers read each other's bits, so a configuration re-declared per instance with fresh but identical quantizers is the same schema, not a conflict. [method NetwMemberConfig.quantize] warns only when a re-declaration fails this check.
+				Returns [code]true[/code] when [param other] has the same class, script and settings, so each can read what the other writes.
 			</description>
 		</method>
 		<method name="max_error" qualifiers="const">
 			<return type="float" />
 			<param index="0" name="type" type="int" enum="Variant.Type" />
 			<description>
-				Returns the worst-case round-trip error for a value of [param type].
+				Calls [method _max_error].
 			</description>
 		</method>
 		<method name="stride" qualifiers="const">
 			<return type="int" />
 			<param index="0" name="type" type="int" enum="Variant.Type" />
 			<description>
-				Returns how many codes one value of [param type] spends.
+				Calls [method _stride].
 			</description>
 		</method>
 		<method name="supports_type" qualifiers="const">
 			<return type="bool" />
 			<param index="0" name="type" type="int" enum="Variant.Type" />
 			<description>
-				Returns whether this quantizer can encode a value of [param type].
-				Callers that quantize opportunistically (entity RPC arguments) ask this before handing a value to [method encode], so the set of encodable types stays owned by each quantizer instead of duplicated at the call site.
+				Calls [method _supports_type].
 			</description>
 		</method>
 		<method name="total_bits" qualifiers="const">
 			<return type="int" />
 			<param index="0" name="type" type="int" enum="Variant.Type" />
 			<description>
-				Returns what a whole value of [param type] costs, which is [method bit_width] times [method stride].
+				Returns the bits of a whole [param type] value, [method bit_width] times [method stride].
 			</description>
 		</method>
 	</methods>

@@ -1,10 +1,8 @@
-## Tests the dynamic base URI overrides for Nakama client and socket.
 class_name TestNakamaProxyOverride
 extends NetwTestSuite
 
 const _FACADE_PATH := "res://addons/com.heroiclabs.nakama/Nakama.gd"
 
-# Held for the suite so the Callable it backs (proxy_base_resolver) stays valid.
 var _rendezvous: NakamaDiscordRendezvous
 
 
@@ -13,8 +11,6 @@ func before(
 		do_skip = not NakamaWrapper.is_addon_present(),
 		skip_reason = "Nakama addon is not installed.",
 ) -> void:
-	# The override is injected through NakamaDiscordRendezvous.bind. Wire it up
-	# for the suite and clear it after so it never leaks into other suites.
 	_rendezvous = NakamaDiscordRendezvous.new()
 	_rendezvous.bind(null)
 
@@ -27,8 +23,6 @@ func test_proxy_override_when_active() -> void:
 	var mt: MultiplayerTree = auto_free(MultiplayerTree.new())
 
 	var activity: DiscordActivityService = auto_free(DiscordActivityService.new())
-	# A registered service carrying a client_id is an embedded session, so the
-	# resolver rewrites the socket through the iframe proxy.
 	activity.client_id = "123456789"
 
 	mt.add_child(activity)
@@ -49,7 +43,6 @@ func test_proxy_override_when_active() -> void:
 		"http",
 	)
 
-	# Verify socket override during create_socket()
 	var socket: RefCounted = service.create_socket()
 	auto_free(socket)
 
@@ -60,7 +53,6 @@ func test_proxy_override_when_active() -> void:
 func test_proxy_override_via_host_name() -> void:
 	var mt: MultiplayerTree = auto_free(MultiplayerTree.new())
 
-	# No DiscordActivityService registered, but host ends with .discordsays.com
 	var service: NakamaSessionService = auto_free(NakamaSessionService.new())
 	service.host = "987654321.discordsays.com"
 	mt.add_child(service)
@@ -77,7 +69,6 @@ func test_proxy_override_via_host_name() -> void:
 		"http",
 	)
 
-	# Verify socket override during create_socket()
 	var socket: RefCounted = service.create_socket()
 	auto_free(socket)
 
@@ -88,8 +79,6 @@ func test_proxy_override_via_host_name() -> void:
 func test_no_override_without_client_id() -> void:
 	var mt: MultiplayerTree = auto_free(MultiplayerTree.new())
 
-	# A registered service with no client_id is not an embedded session (a headless
-	# or test context), so the direct connection is left untouched.
 	var activity: DiscordActivityService = auto_free(DiscordActivityService.new())
 	mt.add_child(activity)
 	mt.api.service_register(activity, DiscordActivityService)
@@ -109,7 +98,6 @@ func test_no_override_without_client_id() -> void:
 		"http",
 	)
 
-	# Verify socket base URI remains untouched
 	var socket: RefCounted = service.create_socket()
 	auto_free(socket)
 
@@ -135,7 +123,6 @@ func test_no_override_when_no_activity_service() -> void:
 		"http",
 	)
 
-	# Verify base URIs remain untouched
 	var socket: RefCounted = service.create_socket()
 	auto_free(socket)
 

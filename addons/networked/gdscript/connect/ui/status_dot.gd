@@ -1,16 +1,12 @@
-## A color-coded circular status dot indicating server health and probing.
+## A colored dot showing whether a server can be reached.
 class_name StatusDot
 extends Panel
 
 var _pulse_tween: Tween
 
 
-## Binds this status dot to one probe answer for a [ConnectBrowser] row.
-##
-## [param result] is a [code]{ error, info }[/code] pair built from the
-## [code]status[/code] and [code]info[/code] keys of the snapshot
-## [method NetwConnectHandle.endpoint] answers, and an empty [Dictionary] is a row
-## nobody has probed yet, which shows as pending rather than as a failure.
+## Shows the probe [param result], a [Dictionary] with [code]error[/code] and
+## [code]info[/code]. An empty [param result] shows as checking.
 func bind_result(result: Dictionary) -> void:
 	if result.is_empty():
 		tooltip_text = "Checking"
@@ -43,10 +39,7 @@ func bind_result(result: Dictionary) -> void:
 			_update_status_style(Color(0.91, 0.3, 0.24))
 
 
-## Marks this dot as a transport that cannot run on the current platform.
-##
-## Availability is distinct from a probe result, so this never routes through
-## [method bind_result].
+## Shows that the transport does not work on this platform.
 func bind_unavailable() -> void:
 	_stop_pulse_tween()
 	tooltip_text = "Not available on this platform"

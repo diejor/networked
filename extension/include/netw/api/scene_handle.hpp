@@ -9,6 +9,7 @@
 #include "godot/rid.hpp"
 #include "godot/templates.hpp"
 #include "godot/variant.hpp"
+#include "netw/api/enums.hpp"
 #include "netw/api/promise.hpp"
 
 namespace netw {
@@ -37,8 +38,14 @@ public:
     godot::TypedArray<NetwEntity> get_local_bodies() const;
 
     godot::TypedArray<NetwEntity> get_entities() const;
-    void observe(int64_t p_event, const godot::Callable &p_callback);
-    void unobserve(int64_t p_event, const godot::Callable &p_callback);
+    void observe(
+        enums::NetwMultiplayer::SceneEvent p_event,
+        const godot::Callable &p_callback
+    );
+    void unobserve(
+        enums::NetwMultiplayer::SceneEvent p_event,
+        const godot::Callable &p_callback
+    );
     godot::Error watch(const godot::Ref<NetwPlayer> &p_player);
     godot::Error unwatch(const godot::Ref<NetwPlayer> &p_player);
     bool is_watching(const godot::Ref<NetwPlayer> &p_player) const;

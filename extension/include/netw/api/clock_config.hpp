@@ -4,6 +4,7 @@
 
 #include "godot/resource.hpp"
 #include "netw/api/config_draft.hpp"
+#include "netw/api/enums.hpp"
 
 namespace netw {
 
@@ -70,13 +71,13 @@ public:
         return values.use_physics_interpolation;
     }
 
-    void set_sync_mode(int64_t p_value) {
+    void set_sync_mode(enums::NetwMultiplayer::SyncMode p_value) {
         if (guard.takes_enum("sync_mode", p_value, 2)) {
             values.sync_mode = p_value;
         }
     }
-    int64_t get_sync_mode() const {
-        return values.sync_mode;
+    enums::NetwMultiplayer::SyncMode get_sync_mode() const {
+        return enums::NetwMultiplayer::SyncMode(values.sync_mode);
     }
 
     void set_panic_snap_threshold(int64_t p_value) {
@@ -151,19 +152,24 @@ public:
         return values.enable_drift_logging;
     }
 
-    void set_tickrate_mismatch_action(int64_t p_value) {
+    void set_tickrate_mismatch_action(
+        enums::NetwMultiplayer::MismatchAction p_value
+    ) {
         if (guard.takes_enum("tickrate_mismatch_action", p_value, 3)) {
             values.tickrate_mismatch_action = p_value;
         }
     }
-    int64_t get_tickrate_mismatch_action() const {
-        return values.tickrate_mismatch_action;
+    enums::NetwMultiplayer::MismatchAction
+    get_tickrate_mismatch_action() const {
+        return enums::NetwMultiplayer::MismatchAction(
+            values.tickrate_mismatch_action
+        );
     }
 
     godot::Ref<NetwClockConfig> ticks_per_second(int64_t p_value);
     godot::Ref<NetwClockConfig> display_offset_ticks(int64_t p_value);
     godot::Ref<NetwClockConfig> physics_interpolation(bool p_value);
-    godot::Ref<NetwClockConfig> sync(int64_t p_value);
+    godot::Ref<NetwClockConfig> sync(enums::NetwMultiplayer::SyncMode p_value);
 
     void seal(const godot::String &p_scope) {
         guard.seal(p_scope);

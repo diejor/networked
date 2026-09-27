@@ -6,15 +6,13 @@ using Godot.NativeInterop;
 namespace Networked;
 
 /// <summary>
-/// One member column of a <see cref="NetwPropertySet"/>, positioned in wire
-/// order inside <see cref="NetwPropertySet.Columns"/>.
+/// One property of a <see cref="NetwPropertySet"/>.
 /// </summary>
 /// <remarks>
-/// What the column holds is read from
-/// <see cref="NetwPropertySetColumn.SchemaColumn"/>, the schema's own
-/// declaration, so a set never carries a second copy of a key or a quantizer
-/// that could disagree with the table and the database. Everything else here
-/// says how the column travels and what a correction does with it.
+/// The name, type and quantizer come from the <see cref="NetwSchema"/> column
+/// at <see cref="NetwPropertySetColumn.SchemaColumn"/>. The rest says how the
+/// property is sent and corrected. Most members are set by
+/// <see cref="NetwPropertyConfig"/>.
 /// </remarks>
 public sealed class NetwPropertySetColumn : NetwRefCounted
 {
@@ -35,18 +33,16 @@ public sealed class NetwPropertySetColumn : NetwRefCounted
     public enum Delta : long
     {
         /// <summary>
-        /// The core derives <see cref="NetwPropertySetColumn.DeltaMode"/> from
-        /// the declaration.
+        /// Chosen from the declaration. See
+        /// <see cref="NetwPropertySetColumn.DeltaMode"/>.
         /// </summary>
         Auto = 0,
         /// <summary>
-        /// Every element writes its whole code, which is what a peer holding no
-        /// baseline can read.
+        /// Always send the full value.
         /// </summary>
         Full = 1,
         /// <summary>
-        /// Every element writes a two-bit selector and either its whole code or
-        /// a signed step in the smallest bucket that holds it.
+        /// Send the change from the last confirmed value when it is smaller.
         /// </summary>
         Ladder = 2,
     }
@@ -55,8 +51,7 @@ public sealed class NetwPropertySetColumn : NetwRefCounted
         NetwApi.MethodBind("NetwPropertySetColumn", "get_key", 2002593661UL);
 
     /// <summary>
-    /// Payload name, stable across peers because both read it off the same
-    /// declaration.
+    /// The property name.
     /// </summary>
     public StringName Key
     {
@@ -71,19 +66,18 @@ public sealed class NetwPropertySetColumn : NetwRefCounted
     }
 
     private static readonly IntPtr _bindGetType =
-        NetwApi.MethodBind("NetwPropertySetColumn", "get_type", 3905245786UL);
+        NetwApi.MethodBind("NetwPropertySetColumn", "get_type", 3451896908UL);
 
     /// <summary>
-    /// The declared <see cref="NetwMultiplayer"/> column type fixed into the
-    /// schema.
+    /// The column type in the schema.
     /// </summary>
-    public long Type
+    public NetwMultiplayer.ColumnType Type
     {
         get
         {
             long answered = default;
             NetwThunks.Ptrcall0_Long(_bindGetType, Checked, ref answered);
-            return answered;
+            return (NetwMultiplayer.ColumnType)answered;
         }
     }
 
@@ -100,10 +94,7 @@ public sealed class NetwPropertySetColumn : NetwRefCounted
             1402227273UL);
 
     /// <summary>
-    /// Bit-packer for this column, or <c>null</c> for a self-describing raw
-    /// <see cref="Variant"/> on the wire. Part of the schema's shape, so two
-    /// peers that packed it differently disagree on
-    /// <see cref="NetwPropertySet.WireHash"/>.
+    /// How the value is compressed, or <c>null</c> to send it as is.
     /// </summary>
     public NetwQuantize Quantizer
     {
@@ -141,8 +132,7 @@ public sealed class NetwPropertySetColumn : NetwRefCounted
             1286410249UL);
 
     /// <summary>
-    /// The address this column has in the schema its set was declared from, the
-    /// one address it has anywhere.
+    /// The index of this property in its <see cref="NetwSchema"/>.
     /// </summary>
     public long SchemaColumn
     {
@@ -171,45 +161,33 @@ public sealed class NetwPropertySetColumn : NetwRefCounted
         NetwApi.MethodBind(
             "NetwPropertySetColumn",
             "get_delta_mode",
-            3905245786UL);
+            3483589778UL);
 
     private static readonly IntPtr _bindSetDeltaMode =
         NetwApi.MethodBind(
             "NetwPropertySetColumn",
             "set_delta_mode",
-            1286410249UL);
+            2219833149UL);
 
     /// <summary>
-    /// Whether the column spends a per-element selector to write a signed step
-    /// from the baseline its frame names, or writes its whole code every time.
-    /// <see cref="NetwPropertySetColumn.Delta.Auto"/> derives the result from
-    /// the declaration, and the derivation is the measured one. A ladder pays
-    /// 39 to 71 percent on a value a solver integrates and costs 12.5 percent
-    /// on one a player authors or one that wraps, so it is taken only for a
-    /// quantized column wider than eight bits on a set whose
-    /// <see cref="NetwPropertySet.Record"/> is
-    /// <see cref="NetwPropertySet.RecordEnum.State"/>, and never for a
-    /// <see cref="NetwQuantizeAngle"/>. Override it where the declaration
-    /// cannot see what the value does. An integrated column on a set that is
-    /// not state is one such case, and an authored one whose declaration looks
-    /// integrated is the other. A column narrower than five bits is
-    /// <see cref="NetwPropertySetColumn.Delta.Full"/> whatever this says,
-    /// because no bucket is narrower than the code it would replace. The result
-    /// is absent from <see cref="NetwPropertySet.WireHash"/>. Both ends derive
-    /// it from the same declaration and neither writes it on the wire, so a
-    /// build that overrides it here overrides it on every peer.
+    /// Whether the value is sent as a change from the last value the peer
+    /// confirmed, or in full. <see cref="NetwPropertySetColumn.Delta.Auto"/>
+    /// sends changes only for a quantized value wider than eight bits in a
+    /// <see cref="NetwPropertySet.RecordEnum.State"/> set, and never for a
+    /// <see cref="NetwQuantizeAngle"/>. Values narrower than five bits are
+    /// always sent in full.
     /// </summary>
-    public long DeltaMode
+    public NetwPropertySetColumn.Delta DeltaMode
     {
         get
         {
             long answered = default;
             NetwThunks.Ptrcall0_Long(_bindGetDeltaMode, Checked, ref answered);
-            return answered;
+            return (NetwPropertySetColumn.Delta)answered;
         }
         set
         {
-            long slot0 = value;
+            long slot0 = (long)value;
             long discarded = default;
             NetwThunks.Ptrcall1_Long_Long(
                 _bindSetDeltaMode,
@@ -226,8 +204,8 @@ public sealed class NetwPropertySetColumn : NetwRefCounted
         NetwApi.MethodBind("NetwPropertySetColumn", "set_watch", 2586408642UL);
 
     /// <summary>
-    /// When <c>true</c> the column replicates reliably on change, otherwise it
-    /// is volatile and freshest-wins.
+    /// <c>true</c> sends the value reliably when it changes. <c>false</c> sends
+    /// it unreliably.
     /// </summary>
     public bool Watch
     {
@@ -256,7 +234,7 @@ public sealed class NetwPropertySetColumn : NetwRefCounted
         NetwApi.MethodBind("NetwPropertySetColumn", "set_lane", 1286410249UL);
 
     /// <summary>
-    /// The delivery lane, the axis form of
+    /// A <see cref="NetwPropertySet.Lane"/>. The same as
     /// <see cref="NetwPropertySetColumn.Watch"/>.
     /// </summary>
     public long Lane
@@ -292,8 +270,8 @@ public sealed class NetwPropertySetColumn : NetwRefCounted
             1286410249UL);
 
     /// <summary>
-    /// What the column's value does in the simulation, which decides whether a
-    /// reconciliation compares it, restores it, or leaves it to display.
+    /// A <see cref="NetwPropertySet.PropertyClass"/>, which decides whether a
+    /// difference causes a correction.
     /// </summary>
     public long PropertyClass
     {
@@ -331,8 +309,7 @@ public sealed class NetwPropertySetColumn : NetwRefCounted
             373806689UL);
 
     /// <summary>
-    /// How firmly a restored value is pulled toward the authoritative one
-    /// instead of being written to it, or <c>0.0</c> to write it outright.
+    /// Set by <see cref="NetwPropertyConfig.Converge"/>.
     /// </summary>
     public double ConvergeStiffness
     {
@@ -370,9 +347,7 @@ public sealed class NetwPropertySetColumn : NetwRefCounted
             3304788590UL);
 
     /// <summary>
-    /// The sibling column a recovery advances this value along, from the
-    /// transition it acknowledged to the present, or empty when the
-    /// acknowledged value is written as it stands.
+    /// Set by <see cref="NetwPropertyConfig.CarryAlong"/>.
     /// </summary>
     public StringName CarryChannel
     {
@@ -411,8 +386,7 @@ public sealed class NetwPropertySetColumn : NetwRefCounted
             2586408642UL);
 
     /// <summary>
-    /// When <c>true</c> the column is restored only by a teleport-tier
-    /// recovery, never by an ordinary one.
+    /// Set by <see cref="NetwPropertyConfig.TeleportOnly"/>.
     /// </summary>
     public bool ExplicitTeleportOnly
     {
@@ -450,8 +424,7 @@ public sealed class NetwPropertySetColumn : NetwRefCounted
             2586408642UL);
 
     /// <summary>
-    /// When <c>true</c> the column never triggers a correction on its own,
-    /// while a correction another column triggers still restores it.
+    /// Set by <see cref="NetwPropertyConfig.ReconcileOnly"/>.
     /// </summary>
     public bool ExplicitReconcileOnly
     {
@@ -489,8 +462,8 @@ public sealed class NetwPropertySetColumn : NetwRefCounted
             373806689UL);
 
     /// <summary>
-    /// The column's own divergence threshold, or a negative value to inherit
-    /// the entity's default.
+    /// Set by <see cref="NetwPropertyConfig.Epsilon"/>. Negative uses the
+    /// entity's default.
     /// </summary>
     public double EpsilonOverride
     {
@@ -528,8 +501,8 @@ public sealed class NetwPropertySetColumn : NetwRefCounted
             373806689UL);
 
     /// <summary>
-    /// The column's own teleport-tier distance, or a negative value to inherit
-    /// the entity's default.
+    /// Set by <see cref="NetwPropertyConfig.TeleportAt"/>. Negative uses the
+    /// entity's default.
     /// </summary>
     public double TeleportAtOverride
     {
@@ -555,19 +528,16 @@ public sealed class NetwPropertySetColumn : NetwRefCounted
     }
 
     private static readonly IntPtr _bindCreate =
-        NetwApi.MethodBind("NetwPropertySetColumn", "create", 2844880421UL);
+        NetwApi.MethodBind("NetwPropertySetColumn", "create", 1641571820UL);
 
     /// <summary>
-    /// Builds a member whose shape is a fresh single-column declaration. A set
-    /// compiled from a declaration passes its column through
-    /// <see cref="NetwPropertySetColumn.SchemaColumn"/> instead, so this form
-    /// is for a set assembled by hand with no schema of its own.
+    /// Creates a column for a set built by hand, with no
+    /// <see cref="NetwSchema"/>.
     /// </summary>
-    public static NetwPropertySetColumn Create(
-        StringName key,
-        NetwQuantize quantizer = null,
-        bool watch = false,
-        long type = 15)
+    public static NetwPropertySetColumn Create(StringName key, NetwQuantize quantizer =
+        null, bool watch =
+            false, NetwMultiplayer.ColumnType type =
+                (NetwMultiplayer.ColumnType)15)
     {
         godot_variant slot0 = VariantUtils.CreateFromStringName(key);
         godot_variant slot1 =

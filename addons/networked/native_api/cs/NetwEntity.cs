@@ -599,15 +599,10 @@ public sealed class NetwEntity : NetwRefCounted
         NetwApi.MethodBind("NetwEntity", "get_rid", 2944877500UL);
 
     /// <summary>
-    /// The <see cref="Rid"/> naming this entity, valid until this record is
-    /// freed. A respawn on the same <see cref="NetwEntity.Route"/> keeps it and
-    /// raises <see cref="NetwMultiplayer.EntityGetEpoch"/>. To check that the
-    /// session knows the entity, compare
-    /// <see cref="NetwMultiplayer.EntityGetState"/> against
-    /// <see cref="NetwMultiplayer.EntityState.Unknown"/>.
+    /// The <see cref="Rid"/> that <see cref="NetwMultiplayer"/> methods take
+    /// for this entity.
     /// <code>
-    /// if api.entity_get_state(entity.rid) != NetwMultiplayer.ENTITY_STATE_UNKNOWN:
-    ///     var state := api.entity_get_state(entity.rid)
+    /// var state := Netw.of(self).entity_get_state(entity.rid)
     /// </code>
     /// </summary>
     public Rid Rid
@@ -624,9 +619,8 @@ public sealed class NetwEntity : NetwRefCounted
         NetwApi.MethodBind("NetwEntity", "get_multiplayer", 406750475UL);
 
     /// <summary>
-    /// The <see cref="NetwMultiplayer"/> this entity belongs to, the same as
-    /// the root's <see cref="Node.Multiplayer"/>. <c>null</c> offline or before
-    /// the entity spawns, and it does not change afterwards.
+    /// The root's <see cref="Node.Multiplayer"/>, or <c>null</c> before the
+    /// entity spawns.
     /// </summary>
     public MultiplayerApi Multiplayer
     {
@@ -1126,9 +1120,8 @@ public sealed class NetwEntity : NetwRefCounted
     /// <c>true</c> when this entity is a hidden, inactive copy kept only to
     /// spawn others from with <see cref="NetwEntity.SpawnUnder"/>. A root
     /// placed inside another scene in the editor with no
-    /// <see cref="NetwEntity.EntityId"/> is already a template. One built in
-    /// code is marked before it enters the tree, from outside, because every
-    /// copy runs its <c>_init</c> too.
+    /// <see cref="NetwEntity.EntityId"/> is already a template. To make one in
+    /// code, set this before it enters the tree, from outside its own script.
     /// <code>
     /// var spawner := preload("res://mob.tscn").instantiate()
     /// NetwEntity.ensure(spawner).is_template = true

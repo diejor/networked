@@ -10,9 +10,8 @@ namespace Networked;
 /// memory.
 /// </summary>
 /// <remarks>
-/// Opens no socket. It implements the same peer IDs, connection status, and
-/// packet queues as <see cref="ENetMultiplayerPeer"/>, allowing tests to run a
-/// session without a network.
+/// Works like <see cref="ENetMultiplayerPeer"/> without a network, for tests.
+/// Peers connect to the server only, not to each other.
 /// <code>
 /// var server := LocalMultiplayerPeer.new()
 /// var client := LocalMultiplayerPeer.new()
@@ -21,9 +20,6 @@ namespace Networked;
 /// server.force_connect_peer(42, client)
 /// client.force_connect_peer(1, server)
 /// </code>
-/// <para>
-/// The links form a star and not a mesh.
-/// </para>
 /// </remarks>
 public sealed class LocalMultiplayerPeer : NetwRefCounted
 {
@@ -54,8 +50,8 @@ public sealed class LocalMultiplayerPeer : NetwRefCounted
             2863946532UL);
 
     /// <summary>
-    /// The <see cref="LocalLoopbackSession"/> that conditions this peer's
-    /// inbound traffic. It is held weakly, so it never keeps a session alive.
+    /// The <see cref="LocalLoopbackSession"/> that simulates latency and loss
+    /// for this peer.
     /// </summary>
     public LocalLoopbackSession LoopbackSession
     {
@@ -87,8 +83,7 @@ public sealed class LocalMultiplayerPeer : NetwRefCounted
             415307706UL);
 
     /// <summary>
-    /// Initializes this peer as the server under <paramref name="uniqueId"/>,
-    /// which a rig leaves at <c>1</c>.
+    /// Makes this peer the server, with the id <paramref name="uniqueId"/>.
     /// </summary>
     public Error CreateServer(int uniqueId = 1)
     {
@@ -109,9 +104,9 @@ public sealed class LocalMultiplayerPeer : NetwRefCounted
             844576869UL);
 
     /// <summary>
-    /// Initializes this peer as a client with <paramref name="clientId"/>. The
-    /// peer reports <see cref="MultiplayerPeer.ConnectionStatus.Connecting"/>
-    /// until its first <see cref="MultiplayerPeer.Poll"/>.
+    /// Makes this peer a client with the id <paramref name="clientId"/>. It is
+    /// <see cref="MultiplayerPeer.ConnectionStatus.Connecting"/> until its
+    /// first <see cref="MultiplayerPeer.Poll"/>.
     /// </summary>
     public Error CreateClient(int clientId)
     {
@@ -132,10 +127,10 @@ public sealed class LocalMultiplayerPeer : NetwRefCounted
             3878599086UL);
 
     /// <summary>
-    /// Records <paramref name="peer"/> as reachable under
-    /// <paramref name="peerId"/>. On the server side this also queues the
-    /// <see cref="MultiplayerPeer.PeerConnected"/> that the next
-    /// <see cref="MultiplayerPeer.Poll"/> emits.
+    /// Connects this peer to <paramref name="peer"/>, known as
+    /// <paramref name="peerId"/>. On the server, the next
+    /// <see cref="MultiplayerPeer.Poll"/> emits
+    /// <see cref="MultiplayerPeer.PeerConnected"/>.
     /// </summary>
     public void ForceConnectPeer(int peerId, LocalMultiplayerPeer peer)
     {
@@ -157,8 +152,8 @@ public sealed class LocalMultiplayerPeer : NetwRefCounted
             1116898809UL);
 
     /// <summary>
-    /// Returns whether <paramref name="peerId"/> is currently reachable from
-    /// this peer.
+    /// Returns <c>true</c> when this peer is connected to
+    /// <paramref name="peerId"/>.
     /// </summary>
     public bool IsLinkedTo(int peerId)
     {
@@ -179,7 +174,7 @@ public sealed class LocalMultiplayerPeer : NetwRefCounted
             1930428628UL);
 
     /// <summary>
-    /// Returns every reachable peer id, in the order they were linked.
+    /// Returns the ids of every connected peer, in the order they connected.
     /// </summary>
     public int[] LinkedPeerIds()
     {

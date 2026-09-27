@@ -31,7 +31,6 @@ func explode() -> void:
 				p.position,
 			)
 			query.hit_from_inside = true
-			# intersect_ray returns an empty Dictionary on a miss.
 			var result := world_state.intersect_ray(query)
 			if result.get(&"collider") is not TileMap:
 				# Exploded can only be called by the authority,

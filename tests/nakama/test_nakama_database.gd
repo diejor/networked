@@ -1,9 +1,3 @@
-## Laws for [NakamaDatabase] and its connection, driven against a fake service.
-##
-## The fake answers the same shapes [NakamaWrapper] does and can be made to
-## suspend, to reject, and to leave an outcome unknown, which is what makes the
-## acknowledgement, the error mapping and the uncertain flag observable without
-## a server. [TestNakamaDatabaseLive] runs the same verbs against real Nakama.
 class_name TestNakamaDatabase
 extends NetwTestSuite
 

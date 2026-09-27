@@ -6,26 +6,18 @@ using Godot.NativeInterop;
 namespace Networked;
 
 /// <summary>
-/// Opt-in base for a <see cref="Node"/> that registers itself as a session
-/// service on the <see cref="NetwMultiplayer"/> of its branch.
+/// A <see cref="Node"/> that registers itself as a service of its
+/// <see cref="Node.Multiplayer"/> while it is in the tree.
 /// </summary>
 /// <remarks>
-/// Registration is bound to tree membership. The service enters the registry
-/// when the node enters the tree and leaves when it exits, skipping the editor,
-/// so it is discoverable through <see cref="NetwMultiplayer.ServiceGet"/>
-/// exactly while it is mounted under a live tree. The lifecycle is sealed: a
-/// subclass overrides <c>_service_entered</c> and <c>_service_exiting</c>
-/// rather than the tree notifications, so no forgotten <c>super</c> call can
-/// silently drop registration. The lifecycle resolves the session through the
-/// branch <see cref="NetwMultiplayer"/>, not through a
-/// <see cref="MultiplayerTree"/>, so a service configures under a root install
-/// with no owning tree exactly as it does under a scoped tree.
+/// Get it with <see cref="Netw.Service"/>. Override <c>_service_entered</c> and
+/// <c>_service_exiting</c> for setup and cleanup.
 /// <code>
 /// class_name MatchClock
 /// extends NetwService
 ///
 /// func _service_type() -&gt; Script:
-///     return MatchClock           # register under a family base, optional
+///     return MatchClock
 ///
 /// func _service_entered(api: NetwMultiplayer) -&gt; void:
 ///     api.session_entered.connect(_on_session_entered)
@@ -34,15 +26,9 @@ namespace Networked;
 ///     api.session_entered.disconnect(_on_session_entered)
 /// </code>
 /// <para>
-/// A node that already extends a non-<see cref="Node"/> base cannot adopt this
-/// one under GDScript single inheritance. It calls
+/// A node that extends another class can call
 /// <see cref="NetwService.Register"/> and <see cref="NetwService.Unregister"/>
-/// directly instead. A subclass written in C++ rather than GDScript overrides
-/// the <c>service_entered</c> and <c>service_exiting</c> C++ virtuals instead,
-/// and skips <c>_service_type</c> entirely: a class with no script attached has
-/// no <see cref="Script"/> to return with, and
-/// <see cref="NetwMultiplayer.ServiceRegister"/> keys it by its own class name.
-/// <see cref="LobbyDirectory"/> is the shipped example.
+/// instead.
 /// </para>
 /// </remarks>
 public class NetwService : NetwObject
@@ -68,11 +54,10 @@ public class NetwService : NetwObject
             1611583062UL);
 
     /// <summary>
-    /// Installs the <paramref name="probe"/> an embedding addon calls when the
-    /// runtime environment allows only a WebSocket or HTTP relay, such as a
-    /// Discord iframe that forbids WebRTC and native SDKs. The probe returns a
-    /// [bool] and <see cref="NetwService.IsTransportRestricted"/> is what reads
-    /// it. Nothing installs one in a normal build, so nothing pays for it.
+    /// Sets a <see cref="Callable"/> that returns <c>true</c> when only
+    /// WebSocket or HTTP connections are allowed, such as inside a Discord
+    /// activity. Services can check
+    /// <see cref="NetwService.IsTransportRestricted"/> to stay inactive there.
     /// </summary>
     public static void SetTransportRestrictedProbe(Callable probe)
     {
@@ -94,8 +79,8 @@ public class NetwService : NetwObject
             2136241257UL);
 
     /// <summary>
-    /// Returns the probe <see cref="NetwService.SetTransportRestrictedProbe"/>
-    /// installed, or an invalid <see cref="Callable"/> when none is.
+    /// Returns the <see cref="Callable"/> from
+    /// <see cref="NetwService.SetTransportRestrictedProbe"/>.
     /// </summary>
     public static Callable GetTransportRestrictedProbe()
     {
@@ -116,10 +101,9 @@ public class NetwService : NetwObject
             2240911060UL);
 
     /// <summary>
-    /// Returns <c>true</c> when the probe installed through
-    /// <see cref="NetwService.SetTransportRestrictedProbe"/> reports that the
-    /// environment forbids peer-to-peer and native transports. Returns
-    /// <c>false</c> when no probe is installed, which is the normal case.
+    /// Returns what the <see cref="Callable"/> from
+    /// <see cref="NetwService.SetTransportRestrictedProbe"/> returns, or
+    /// <c>false</c> when none is set.
     /// </summary>
     public static bool IsTransportRestricted()
     {
@@ -135,16 +119,11 @@ public class NetwService : NetwObject
         NetwApi.MethodBind("NetwService", "register", 386500125UL);
 
     /// <summary>
-    /// Registers <paramref name="service"/> as a session service on the
-    /// <see cref="NetwMultiplayer"/> of its branch, reached through
-    /// <see cref="Node.Multiplayer"/>. When <paramref name="type"/> is
-    /// <c>null</c>, the script class of <paramref name="service"/> is the
-    /// registration key. This is the entry point for a node that cannot extend
-    /// <see cref="NetwService"/>, and it seals nothing: such a caller owns the
-    /// matching <see cref="NetwService.Unregister"/>. A branch whose API is a
-    /// plain <see cref="SceneMultiplayer"/> is a silent no-op, so the node
-    /// still works as an ordinary <see cref="Node"/> and features degrade
-    /// rather than error.
+    /// Registers <paramref name="service"/> with its
+    /// <see cref="Node.Multiplayer"/>, as <paramref name="type"/> or its own
+    /// script. Call <see cref="NetwService.Unregister"/> when it leaves the
+    /// tree. Does nothing when <see cref="Node.Multiplayer"/> is not a
+    /// <see cref="NetwMultiplayer"/>.
     /// <code>
     /// func _enter_tree() -&gt; void:
     ///     NetwService.register(self)
@@ -167,9 +146,8 @@ public class NetwService : NetwObject
         NetwApi.MethodBind("NetwService", "unregister", 386500125UL);
 
     /// <summary>
-    /// Unregisters <paramref name="service"/> from the
-    /// <see cref="NetwMultiplayer"/> of its branch, under the same
-    /// <paramref name="type"/> key <see cref="NetwService.Register"/> used.
+    /// Reverses <see cref="NetwService.Register"/>, with the same
+    /// <paramref name="type"/>.
     /// <code>
     /// func _exit_tree() -&gt; void:
     ///     NetwService.unregister(self)

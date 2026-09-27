@@ -167,7 +167,11 @@ TEST_CASE(
 
     SUBCASE("and its verbs refuse through the promise rather than crashing") {
         CHECK(door->leave().is_valid());
-        CHECK(door->request_scene(String("res://nowhere.tscn"), 0).is_valid());
+        CHECK(door->request_scene(
+                      String("res://nowhere.tscn"),
+                      NetwMultiplayer::SCENE_CHANGE_SESSION
+        )
+                  .is_valid());
     }
 }
 

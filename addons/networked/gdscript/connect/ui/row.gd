@@ -1,5 +1,4 @@
-## One row in the [ConnectBrowser]. Renders a browse endpoint read through a
-## [NetwConnectHandle] and its latest snapshot [Dictionary].
+## One server in the [ConnectBrowser] list.
 class_name ConnectBrowserRow
 extends PanelContainer
 

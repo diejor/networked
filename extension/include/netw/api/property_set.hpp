@@ -8,6 +8,7 @@
 #include "godot/script.hpp"
 #include "godot/templates.hpp"
 #include "godot/variant.hpp"
+#include "netw/api/enums.hpp"
 #include "netw/api/member_config.hpp"
 #include "netw/api/quantize.hpp"
 #include "netw/table/schema_record.hpp"
@@ -32,7 +33,7 @@ public:
 
     int64_t schema_column = -1;
     SchemaColumn shape;
-    int64_t delta_mode = DELTA_AUTO;
+    Delta delta_mode = DELTA_AUTO;
     bool watch = false;
     int64_t lane = 0;
     int64_t property_class = 0;
@@ -47,11 +48,11 @@ public:
         const godot::StringName &p_key,
         const godot::Ref<NetwQuantize> &p_quantizer,
         bool p_watch,
-        int64_t p_type
+        enums::NetwMultiplayer::ColumnType p_type
     );
 
     godot::StringName get_key() const;
-    int64_t get_type() const;
+    enums::NetwMultiplayer::ColumnType get_type() const;
     godot::Ref<NetwQuantize> get_quantizer() const;
     void set_quantizer(const godot::Ref<NetwQuantize> &p_quantizer);
 
@@ -61,10 +62,10 @@ public:
     void set_schema_column(int64_t p_value) {
         schema_column = p_value;
     }
-    int64_t get_delta_mode() const {
+    Delta get_delta_mode() const {
         return delta_mode;
     }
-    void set_delta_mode(int64_t p_value) {
+    void set_delta_mode(Delta p_value) {
         delta_mode = p_value;
     }
     bool get_watch() const {
@@ -141,7 +142,7 @@ public:
         STAMPED = 1,
     };
 
-    enum Trigger {
+    enum Trigger : int64_t {
         TRIGGER_TICK = 0,
         TRIGGER_ON_CHANGE = 1,
         TRIGGER_ON_DEMAND = 2,
@@ -212,7 +213,7 @@ public:
         const godot::Ref<NetwPropertySetColumn> &p_column
     ) const;
 
-    static int64_t column_type_for(
+    static enums::NetwMultiplayer::ColumnType column_type_for(
         const godot::Ref<godot::Script> &p_script,
         godot::Node *p_node,
         const godot::StringName &p_property

@@ -143,7 +143,10 @@ Variant NetwSceneHandle::translate_edge(
     return p_target.callv(args);
 }
 
-void NetwSceneHandle::observe(int64_t p_event, const Callable &p_callback) {
+void NetwSceneHandle::observe(
+    NetwMultiplayer::SceneEvent p_event,
+    const Callable &p_callback
+) {
     NetwMultiplayer *session = core();
     if (session == nullptr || !p_callback.is_valid()) {
         return;
@@ -154,27 +157,23 @@ void NetwSceneHandle::observe(int64_t p_event, const Callable &p_callback) {
         }
     }
     const Callable mounted = callable_mp(this, &NetwSceneHandle::translate_edge)
-                                 .bind(p_event, p_callback);
-    relays.push_back(Relay{p_event, p_callback, mounted});
-    session->scene_observe(
-        get_entity(),
-        NetwMultiplayer::SceneEvent(p_event),
-        mounted
-    );
+                                 .bind(int64_t(p_event), p_callback);
+    relays.push_back(Relay{int64_t(p_event), p_callback, mounted});
+    session->scene_observe(get_entity(), p_event, mounted);
 }
 
-void NetwSceneHandle::unobserve(int64_t p_event, const Callable &p_callback) {
+void NetwSceneHandle::unobserve(
+    NetwMultiplayer::SceneEvent p_event,
+    const Callable &p_callback
+) {
     for (uint32_t at = 0; at < relays.size(); ++at) {
-        if (relays[at].event != p_event || relays[at].target != p_callback) {
+        if (relays[at].event != int64_t(p_event)
+            || relays[at].target != p_callback) {
             continue;
         }
         NetwMultiplayer *session = core();
         if (session != nullptr) {
-            session->scene_unobserve(
-                get_entity(),
-                NetwMultiplayer::SceneEvent(p_event),
-                relays[at].mounted
-            );
+            session->scene_unobserve(get_entity(), p_event, relays[at].mounted);
         }
         relays.remove_at(at);
         return;

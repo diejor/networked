@@ -35,7 +35,7 @@ Ref<NetwPropertySet> a_set() {
         StringName("hp"),
         Ref<netw::NetwQuantize>(),
         false,
-        SchemaCore::I32
+        NetwMultiplayer::ColumnType(SchemaCore::I32)
     );
     column->lane = NetwPropertySet::VOLATILE;
     set->bind_column(column);

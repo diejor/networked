@@ -5,6 +5,7 @@
 #include "godot/ref_counted.hpp"
 #include "godot/script.hpp"
 #include "godot/variant.hpp"
+#include "netw/api/enums.hpp"
 #include "netw/scene_decl.hpp"
 
 namespace netw {
@@ -31,8 +32,8 @@ public:
     godot::StringName get_label() const {
         return held().label;
     }
-    int get_isolation() const {
-        return held().isolation;
+    enums::Netw::SceneIsolation get_isolation() const {
+        return enums::Netw::SceneIsolation(held().isolation);
     }
 
     godot::Ref<NetwSceneConfig> labeled(const godot::StringName &p_stem);

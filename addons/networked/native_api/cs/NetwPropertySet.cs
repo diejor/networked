@@ -6,25 +6,17 @@ using Godot.NativeInterop;
 namespace Networked;
 
 /// <summary>
-/// One row-major binding of a schema, the ordered subset of its columns a
-/// script replicates under one <see cref="NetwPropertySet.RecordEnum"/> kind.
+/// The properties of a script that are synchronized together, in the order they
+/// are sent.
 /// </summary>
 /// <remarks>
-/// The set owns no shape. A column's key, type, stride, and quantizer belong to
-/// the schema, which is also what the column-major table and
-/// <see cref="NetwDatabase"/> read, so the three consumers cannot drift. What
-/// the set owns is the binding: which columns are members, in what wire order,
-/// on which lane, and under which delivery knobs. Membership is explicit
-/// because a script's schema holds every configured property, including the
-/// ones that only persist. A column that joins no set rides no lane, which is
-/// what keeps a persisted-only value off the wire by construction rather than
-/// by a negation mark. The order is the wire order, so
-/// <see cref="NetwPropertySet.Keys"/> and
-/// <see cref="NetwPropertySet.Quantizers"/> are parallel arrays a positional
-/// codec walks in lockstep, and a receiver decodes by position with no
-/// per-column tag on the wire. A set is compiled from the
-/// <see cref="NetwPropertyConfig"/> rows a script declares through
-/// <see cref="Netw.ConfigureProperty"/>, never assembled by hand.
+/// A set is built from the <see cref="Netw.ConfigureProperty"/> calls of a
+/// script. The type and quantizer of each property come from its
+/// <see cref="NetwSchema"/>. The set decides which properties are sent, in what
+/// order, and how. Properties are sent in the order of
+/// <see cref="NetwPropertySet.Keys"/>, with no names on the wire. Both peers
+/// must build the same set, which <see cref="NetwPropertySet.WireHash"/>
+/// checks.
 /// </remarks>
 public sealed class NetwPropertySet : NetwRefCounted
 {
@@ -45,15 +37,15 @@ public sealed class NetwPropertySet : NetwRefCounted
     public enum CadenceEnum : long
     {
         /// <summary>
-        /// Rides the per-tick sender pump.
+        /// Sent every tick.
         /// </summary>
         Tick = 0,
         /// <summary>
-        /// Leaves only on an explicit request.
+        /// Sent only by <see cref="Netw.SyncProperty"/>.
         /// </summary>
         OnDemand = 1,
         /// <summary>
-        /// Rides the same pump but only when a field changed.
+        /// Sent on a tick where a value changed.
         /// </summary>
         OnChange = 2,
     }
@@ -61,12 +53,11 @@ public sealed class NetwPropertySet : NetwRefCounted
     public enum ProfileEnum : long
     {
         /// <summary>
-        /// The bare positional payload.
+        /// Only the values.
         /// </summary>
         Plain = 0,
         /// <summary>
-        /// Prepends the authoring-tick framing the interpolation and prediction
-        /// clocks read.
+        /// The values and the tick they belong to.
         /// </summary>
         Stamped = 1,
     }
@@ -74,15 +65,15 @@ public sealed class NetwPropertySet : NetwRefCounted
     public enum TriggerEnum : long
     {
         /// <summary>
-        /// Sends every eligible pass.
+        /// Sent every tick.
         /// </summary>
         Tick = 0,
         /// <summary>
-        /// Sends only when a field changed.
+        /// Sent when a value changed.
         /// </summary>
         OnChange = 1,
         /// <summary>
-        /// Sends only on an explicit request.
+        /// Sent only by <see cref="Netw.SyncProperty"/>.
         /// </summary>
         OnDemand = 2,
     }
@@ -90,17 +81,15 @@ public sealed class NetwPropertySet : NetwRefCounted
     public enum StampEnum : long
     {
         /// <summary>
-        /// The bare payload.
+        /// Only the values.
         /// </summary>
         None = 0,
         /// <summary>
-        /// Frames the authoring tick the interpolation and prediction clocks
-        /// read.
+        /// The values and their tick.
         /// </summary>
         Tick = 1,
         /// <summary>
-        /// Additionally carries the reconciliation ack, the state stream's
-        /// framing.
+        /// The values, their tick, and the last input the server used.
         /// </summary>
         TickAck = 2,
     }
@@ -108,20 +97,23 @@ public sealed class NetwPropertySet : NetwRefCounted
     public enum RecordEnum : long
     {
         /// <summary>
-        /// A field synced on demand, in no per-tick set.
+        /// Sent only by <see cref="Netw.SyncProperty"/>.
         /// </summary>
         None = 0,
         /// <summary>
-        /// The server's own truth, kept in a <see cref="NetwEntity"/> timeline
-        /// for rewind.
+        /// The server owns the values and every peer receives them. Kept for
+        /// rewinding. See <see cref="NetwPropertyConfig.State"/>.
         /// </summary>
         State = 1,
         /// <summary>
-        /// A claim the server verifies, kept in a timeline for rewind.
+        /// The controlling client owns the values and only the server receives
+        /// them. Kept for rewinding. See
+        /// <see cref="NetwPropertyConfig.Input"/>.
         /// </summary>
         Input = 2,
         /// <summary>
-        /// Trusted display, which keeps nothing.
+        /// The controlling peer owns the values and every peer receives them.
+        /// Not kept. See <see cref="NetwPropertyConfig.Broadcast"/>.
         /// </summary>
         Broadcast = 3,
     }
@@ -129,11 +121,11 @@ public sealed class NetwPropertySet : NetwRefCounted
     public enum Lane : long
     {
         /// <summary>
-        /// Rides the sync frame freshest-wins.
+        /// Sent unreliably. Only the newest value counts.
         /// </summary>
         Volatile = 0,
         /// <summary>
-        /// Rides the reliable delta lane only when it changes.
+        /// Sent reliably, only when it changes.
         /// </summary>
         Retained = 1,
     }
@@ -141,17 +133,15 @@ public sealed class NetwPropertySet : NetwRefCounted
     public enum PropertyClass : long
     {
         /// <summary>
-        /// An antecedent of the recurrence, so it is compared and restored.
+        /// Affects the next step, so it is compared and corrected.
         /// </summary>
         Causal = 0,
         /// <summary>
-        /// Recomputed by the body from causal ones, so restoring it writes a
-        /// value the next step overwrites.
+        /// Computed from other properties each step, so it is not compared.
         /// </summary>
         Derived = 1,
         /// <summary>
-        /// Reaches display only, so comparing it would correct a simulation
-        /// over a value no simulation reads.
+        /// Only affects display, so it is not compared.
         /// </summary>
         Cosmetic = 2,
     }
@@ -159,11 +149,11 @@ public sealed class NetwPropertySet : NetwRefCounted
     public enum AudienceEnum : long
     {
         /// <summary>
-        /// Reaches every admitted recipient.
+        /// Sent to every peer that sees the entity.
         /// </summary>
         Public = 0,
         /// <summary>
-        /// Narrows the set to the server, the input stream's reach.
+        /// Sent to the server only.
         /// </summary>
         ServerOnly = 1,
     }
@@ -175,7 +165,7 @@ public sealed class NetwPropertySet : NetwRefCounted
         NetwApi.MethodBind("NetwPropertySet", "set_cadence", 1286410249UL);
 
     /// <summary>
-    /// When the set's values leave this peer.
+    /// When the set is sent, as a <see cref="NetwPropertySet.CadenceEnum"/>.
     /// </summary>
     public long Cadence
     {
@@ -204,7 +194,8 @@ public sealed class NetwPropertySet : NetwRefCounted
         NetwApi.MethodBind("NetwPropertySet", "set_profile", 1286410249UL);
 
     /// <summary>
-    /// How the payload bytes are framed.
+    /// Whether the tick is sent with the values, as a
+    /// <see cref="NetwPropertySet.ProfileEnum"/>.
     /// </summary>
     public long Profile
     {
@@ -233,8 +224,7 @@ public sealed class NetwPropertySet : NetwRefCounted
         NetwApi.MethodBind("NetwPropertySet", "set_trigger", 1286410249UL);
 
     /// <summary>
-    /// The send condition for the set, the axis form of
-    /// <see cref="NetwPropertySet.Cadence"/>.
+    /// When the set is sent, as a <see cref="NetwPropertySet.TriggerEnum"/>.
     /// </summary>
     public long Trigger
     {
@@ -263,8 +253,8 @@ public sealed class NetwPropertySet : NetwRefCounted
         NetwApi.MethodBind("NetwPropertySet", "set_stamp", 1286410249UL);
 
     /// <summary>
-    /// The tick framing on the payload, the axis form of
-    /// <see cref="NetwPropertySet.Profile"/>.
+    /// What is sent with the values, as a
+    /// <see cref="NetwPropertySet.StampEnum"/>.
     /// </summary>
     public long Stamp
     {
@@ -293,7 +283,8 @@ public sealed class NetwPropertySet : NetwRefCounted
         NetwApi.MethodBind("NetwPropertySet", "set_record", 1286410249UL);
 
     /// <summary>
-    /// The timeline a received set captures into, always explicit.
+    /// The kind of values in the set, as a
+    /// <see cref="NetwPropertySet.RecordEnum"/>.
     /// </summary>
     public long Record
     {
@@ -322,8 +313,8 @@ public sealed class NetwPropertySet : NetwRefCounted
         NetwApi.MethodBind("NetwPropertySet", "set_window", 1286410249UL);
 
     /// <summary>
-    /// Redundant volatile sample count, <c>0</c> for none. Only a volatile-lane
-    /// set with a windowed input stream sets this.
+    /// How many past ticks each send repeats. See
+    /// <see cref="NetwPropertyConfig.Windowed"/>.
     /// </summary>
     public long Window
     {
@@ -352,7 +343,8 @@ public sealed class NetwPropertySet : NetwRefCounted
         NetwApi.MethodBind("NetwPropertySet", "set_audience", 1286410249UL);
 
     /// <summary>
-    /// Which peers the set reaches.
+    /// Which peers receive the set, as an
+    /// <see cref="NetwPropertySet.AudienceEnum"/>.
     /// </summary>
     public long Audience
     {
@@ -381,10 +373,9 @@ public sealed class NetwPropertySet : NetwRefCounted
         NetwApi.MethodBind("NetwPropertySet", "set_masked", 2586408642UL);
 
     /// <summary>
-    /// Whether the volatile lane rides the masked per-recipient diff instead of
-    /// a shared broadcast row. Illegal combined with
-    /// <see cref="NetwPropertySet.Window"/>, since a redundant sample already
-    /// defeats masking.
+    /// Whether each peer receives only what changed for it. See
+    /// <see cref="NetwPropertyConfig.Masked"/>. Cannot be combined with
+    /// <see cref="NetwPropertySet.Window"/>.
     /// </summary>
     public bool Masked
     {
@@ -413,8 +404,7 @@ public sealed class NetwPropertySet : NetwRefCounted
         NetwApi.MethodBind("NetwPropertySet", "set_policy", 1414759222UL);
 
     /// <summary>
-    /// Who may author the stream, as a <see cref="NetwMemberConfig.Policy"/>
-    /// ordinal, checked on the receiver against the target's script.
+    /// Which peer may send the set.
     /// </summary>
     public NetwMemberConfig.Policy Policy
     {
@@ -443,9 +433,7 @@ public sealed class NetwPropertySet : NetwRefCounted
         NetwApi.MethodBind("NetwPropertySet", "set_channel", 1286410249UL);
 
     /// <summary>
-    /// The wire channel id the set rides, unset until a factory derives it from
-    /// the declaration. The ids are the built-in channel table's, written down
-    /// in <c>extension/WIRE.md</c> section 3.
+    /// The channel the set is sent on, or <c>-1</c> until it is assigned.
     /// </summary>
     public long Channel
     {
@@ -474,10 +462,8 @@ public sealed class NetwPropertySet : NetwRefCounted
         NetwApi.MethodBind("NetwPropertySet", "set_reliable", 2586408642UL);
 
     /// <summary>
-    /// Whether a <see cref="NetwPropertySet.CadenceEnum.OnDemand"/> send
-    /// transmits reliably. A <see cref="NetwPropertySet.CadenceEnum.Tick"/>
-    /// set's reliability is chosen per send by its sender, so this default
-    /// governs only the on-demand door.
+    /// Whether an <see cref="NetwPropertySet.CadenceEnum.OnDemand"/> send is
+    /// reliable.
     /// </summary>
     public bool Reliable
     {
@@ -506,12 +492,9 @@ public sealed class NetwPropertySet : NetwRefCounted
         NetwApi.MethodBind("NetwPropertySet", "set_sealed", 2586408642UL);
 
     /// <summary>
-    /// <c>true</c> after the compiler fixes the wire hash and freezes mutation.
-    /// Writing <c>true</c> here is not <see cref="NetwPropertySet.Seal"/> and
-    /// not <see cref="NetwPropertySet.CompileAgainst"/>. It sets the flag
-    /// alone, leaving the column types exactly as they stood, so a set typed by
-    /// neither call is frozen with untyped columns that can put no row on a
-    /// wire. Reach for <see cref="NetwPropertySet.CompileAgainst"/>.
+    /// <c>true</c> after <see cref="NetwPropertySet.Seal"/>. Setting it by hand
+    /// does not read the property types, so use
+    /// <see cref="NetwPropertySet.CompileAgainst"/>.
     /// </summary>
     public bool Sealed
     {
@@ -540,7 +523,7 @@ public sealed class NetwPropertySet : NetwRefCounted
         NetwApi.MethodBind("NetwPropertySet", "set_columns", 381264803UL);
 
     /// <summary>
-    /// Ordered member columns, the wire order both peers walk positionally.
+    /// The properties, in the order they are sent.
     /// </summary>
     public Godot.Collections.Array Columns
     {
@@ -570,8 +553,8 @@ public sealed class NetwPropertySet : NetwRefCounted
         NetwApi.MethodBind("NetwPropertySet", "set_rid_handle", 2722037293UL);
 
     /// <summary>
-    /// The flat property set handle, or an invalid RID for a compatibility-only
-    /// set.
+    /// The <see cref="Rid"/> <see cref="NetwMultiplayer"/> methods take for
+    /// this set.
     /// </summary>
     public Rid Rid
     {
@@ -597,12 +580,8 @@ public sealed class NetwPropertySet : NetwRefCounted
         NetwApi.MethodBind("NetwPropertySet", "compile_against", 1078189570UL);
 
     /// <summary>
-    /// Types every member column against <paramref name="node"/> and seals the
-    /// set. A column's declared type is what a lane plans its row against, and
-    /// half the properties a game replicates are engine properties of the
-    /// node's native class that a <see cref="Script"/>'s own list cannot see,
-    /// so the node is the only place the shape can be read from. An already
-    /// sealed set is left alone, because its shape is what its peers agreed on.
+    /// Reads the type of every property from <paramref name="node"/>, then
+    /// calls <see cref="NetwPropertySet.Seal"/>. Does nothing on a sealed set.
     /// </summary>
     public void CompileAgainst(Node node)
     {
@@ -619,9 +598,7 @@ public sealed class NetwPropertySet : NetwRefCounted
         NetwApi.MethodBind("NetwPropertySet", "bind", 3980741759UL);
 
     /// <summary>
-    /// Appends <paramref name="column"/> to the schema and to the membership,
-    /// returning it. The column takes the next schema address, so binding is
-    /// what fixes wire order.
+    /// Adds <paramref name="column"/> to the end of the set and returns it.
     /// </summary>
     public NetwPropertySetColumn Bind(NetwPropertySetColumn column)
     {
@@ -639,11 +616,8 @@ public sealed class NetwPropertySet : NetwRefCounted
         NetwApi.MethodBind("NetwPropertySet", "reproject_lanes", 3218959716UL);
 
     /// <summary>
-    /// Drops the cached per-lane schema projections so the next send splits the
-    /// columns as they stand now. The two projections are subsequences of the
-    /// declaration selected by <see cref="NetwPropertySetColumn.Lane"/>, so
-    /// anything that moves a column between lanes has to call this or the two
-    /// lanes keep sending each other's columns.
+    /// Call it after changing <see cref="NetwPropertySetColumn.Lane"/> on a
+    /// column, so the next send uses the new lane.
     /// </summary>
     public void ReprojectLanes()
     {
@@ -655,9 +629,8 @@ public sealed class NetwPropertySet : NetwRefCounted
         NetwApi.MethodBind("NetwPropertySet", "member", 3560463947UL);
 
     /// <summary>
-    /// Returns the member column at <paramref name="schemaColumn"/>, or
-    /// <c>null</c> when the schema declares that column but this set does not
-    /// bind it.
+    /// Returns the column at <paramref name="schemaColumn"/> in the schema, or
+    /// <c>null</c> when this set does not include it.
     /// </summary>
     public NetwPropertySetColumn Member(long schemaColumn)
     {
@@ -675,7 +648,7 @@ public sealed class NetwPropertySet : NetwRefCounted
         NetwApi.MethodBind("NetwPropertySet", "keys", 3995934104UL);
 
     /// <summary>
-    /// Returns the member keys in wire order.
+    /// Returns the property names, in the order they are sent.
     /// </summary>
     public Godot.Collections.Array Keys()
     {
@@ -690,9 +663,9 @@ public sealed class NetwPropertySet : NetwRefCounted
         NetwApi.MethodBind("NetwPropertySet", "quantizers", 3995934104UL);
 
     /// <summary>
-    /// Returns the per-column quantizers in wire order, parallel to
-    /// <see cref="NetwPropertySet.Keys"/>, <c>null</c> where a column is
-    /// self-describing.
+    /// Returns the quantizer of each property, in the same order as
+    /// <see cref="NetwPropertySet.Keys"/>, or <c>null</c> for a property sent
+    /// as is.
     /// </summary>
     public Godot.Collections.Array Quantizers()
     {
@@ -707,17 +680,8 @@ public sealed class NetwPropertySet : NetwRefCounted
         NetwApi.MethodBind("NetwPropertySet", "wire_hash", 3905245786UL);
 
     /// <summary>
-    /// Returns the 32-bit fingerprint of this binding. Each member's shape is
-    /// folded with its membership position and its lane. The shape half is what
-    /// the schema fixed, so a peer that declared a different key, type, stride,
-    /// or quantizer disagrees here. The binding half is membership, order, and
-    /// lane, so a peer that bound a different subset, in a different order, or
-    /// moved a column between lanes disagrees too. The two lanes ride separate
-    /// channels, which is why a lane change is a wire change rather than a
-    /// local one. The schema's own name is deliberately absent. A schema is
-    /// named by the script that declared it, and a script with no resource path
-    /// has no name two peers can agree on, so folding one would poison a
-    /// binding over a purely local fact.
+    /// Returns a 32-bit hash of the properties, their order, types, quantizers
+    /// and lanes. Peers with different hashes cannot read each other's packets.
     /// </summary>
     public long WireHash()
     {
@@ -730,17 +694,10 @@ public sealed class NetwPropertySet : NetwRefCounted
         NetwApi.MethodBind("NetwPropertySet", "seal", 3218959716UL);
 
     /// <summary>
-    /// Freezes the wire fingerprint over the column types the set already
-    /// carries. Sealing is what fixes membership order, and membership order is
-    /// wire order. It stamps no types of its own. A set whose columns were
-    /// never typed against a node seals with every one of them
-    /// <see cref="NetwMultiplayer.ColumnType.Variant"/>, and a variant column
-    /// has no wire width, so the lane cannot be planned and not one row of that
-    /// set ever leaves this peer. Nothing reports this, because an unplannable
-    /// set is silently carrying no rows rather than failing.
-    /// <see cref="NetwPropertySet.CompileAgainst"/> is the call that types the
-    /// columns and then seals, and it is what a caller wants unless
-    /// <see cref="NetwPropertySet.StampColumnTypes"/> already ran.
+    /// Locks the set and computes <see cref="NetwPropertySet.WireHash"/>. It
+    /// does not read property types, so an untyped set seals with every column
+    /// as <see cref="NetwMultiplayer.ColumnType.Variant"/> and sends nothing.
+    /// Use <see cref="NetwPropertySet.CompileAgainst"/>.
     /// </summary>
     public void Seal()
     {
@@ -749,18 +706,15 @@ public sealed class NetwPropertySet : NetwRefCounted
     }
 
     private static readonly IntPtr _bindColumnTypeFor =
-        NetwApi.MethodBind("NetwPropertySet", "column_type_for", 1226326759UL);
+        NetwApi.MethodBind("NetwPropertySet", "column_type_for", 2297073372UL);
 
     /// <summary>
-    /// Returns the <see cref="NetwMultiplayer"/> column type
-    /// <paramref name="property"/> compiles to on <paramref name="script"/>,
-    /// reflected through <paramref name="node"/> when the script's own property
-    /// list does not carry it. Half the properties a game replicates are engine
-    /// properties of the node's native class, which a <see cref="Script"/>
-    /// cannot see, so a lookup without a node types those
-    /// <see cref="NetwMultiplayer.ColumnType.Variant"/>.
+    /// Returns the column type of <paramref name="property"/> on
+    /// <paramref name="script"/>. Built-in properties such as <c>position</c>
+    /// are read from <paramref name="node"/>, and are
+    /// <see cref="NetwMultiplayer.ColumnType.Variant"/> without one.
     /// </summary>
-    public static long ColumnTypeFor(
+    public static NetwMultiplayer.ColumnType ColumnTypeFor(
         Script script,
         Node node,
         StringName property)
@@ -779,7 +733,8 @@ public sealed class NetwPropertySet : NetwRefCounted
         slot0.Dispose();
         slot1.Dispose();
         slot2.Dispose();
-        long result = VariantUtils.ConvertToInt64(answered);
+        NetwMultiplayer.ColumnType result =
+            (NetwMultiplayer.ColumnType)VariantUtils.ConvertToInt64(answered);
         answered.Dispose();
         return result;
     }
@@ -791,11 +746,9 @@ public sealed class NetwPropertySet : NetwRefCounted
             393097236UL);
 
     /// <summary>
-    /// Types every member column of <paramref name="set"/> from
-    /// <paramref name="node"/>, falling back to <paramref name="script"/>'s own
-    /// property list. A node rather than the script, because position,
-    /// velocity, and rotation are engine properties of the native class and a
-    /// script's own property list does not carry them.
+    /// Reads the type of every property in <paramref name="set"/> from
+    /// <paramref name="node"/>, or from <paramref name="script"/> when
+    /// <paramref name="node"/> does not have it.
     /// </summary>
     public static void StampColumnTypes(
         NetwPropertySet set,

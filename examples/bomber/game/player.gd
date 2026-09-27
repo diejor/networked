@@ -117,7 +117,6 @@ func _network_tick(delta: float, tick: int, is_fresh: bool) -> void:
 	velocity /= factor
 
 
-# Validates and spawns a bomb on the server.
 func _place_bomb(action_context: NetwActionContext, pos: Vector2) -> void:
 	if not multiplayer or not multiplayer.is_server():
 		return

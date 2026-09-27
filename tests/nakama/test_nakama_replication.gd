@@ -7,8 +7,6 @@ const _TIMEOUT := 10.0
 var _trees: Array = []
 
 
-# Skips on an unreachable server or a scene this harness cannot drive. See
-# NakamaTestSupport.skip_reason for what makes a scene undrivable.
 @warning_ignore("unused_parameter")
 func before(
 		do_skip = NakamaTestSupport.skip_reason(MAIN) != "",

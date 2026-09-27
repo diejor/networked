@@ -7,9 +7,8 @@ const ID_EDIT := 2
 const ID_REMOVE := 3
 
 
-## Pops up the menu at the specified [param screen_position], enabling Edit
-## and Remove only when [param is_editable], which the [ConnectBrowser]
-## answers for a row it bookmarked itself.
+## Shows the menu at [param screen_position]. Edit and Remove are enabled
+## only when [param is_editable].
 func show_for_target(is_editable: bool, screen_position: Vector2) -> void:
 	if item_count >= 4:
 		set_item_disabled(2, not is_editable)

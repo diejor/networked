@@ -146,8 +146,8 @@ Ref<NetwInterestHandle> NetwInterestHandle::of(Node *p_node) {
 
 Ref<NetwInterestHandle> NetwInterestHandle::join(
     const StringName &p_layer_id,
-    int64_t p_leave_policy,
-    int64_t p_perception_policy
+    NetwMultiplayer::LeavePolicy p_leave_policy,
+    NetwMultiplayer::PerceptionPolicy p_perception_policy
 ) {
     NetwMultiplayer *session = attached_core();
     const Ref<NetwEntity> bound = entity();
@@ -157,19 +157,11 @@ Ref<NetwInterestHandle> NetwInterestHandle::join(
     } else if (held != nullptr) {
         held->join(p_layer_id);
     }
-    if (p_leave_policy >= 0) {
-        on_leave_policy(
-            p_layer_id,
-            static_cast<NetwMultiplayer::LeavePolicy>(p_leave_policy),
-            Callable()
-        );
+    if (int64_t(p_leave_policy) >= 0) {
+        on_leave_policy(p_layer_id, p_leave_policy, Callable());
     }
-    if (p_perception_policy >= 0) {
-        on_perception_policy(
-            p_layer_id,
-            static_cast<NetwMultiplayer::PerceptionPolicy>(p_perception_policy),
-            Callable()
-        );
+    if (int64_t(p_perception_policy) >= 0) {
+        on_perception_policy(p_layer_id, p_perception_policy, Callable());
     }
     return Ref<NetwInterestHandle>(this);
 }

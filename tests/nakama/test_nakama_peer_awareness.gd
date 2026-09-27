@@ -95,8 +95,6 @@ func test_disconnect_propagates_to_remaining_peers() -> void:
 	)
 
 
-# Creates a relay peer for [param room], prepares [param username], and
-# assigns it, returning the settled [enum @GlobalScope.Error].
 func _join(client: MultiplayerTree, room: String, username: String) -> Error:
 	return await NakamaTestSupport.join_client(client, room, username)
 

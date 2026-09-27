@@ -60,20 +60,20 @@ public sealed class NetwSceneConfig : NetwRefCounted
     }
 
     private static readonly IntPtr _bindGetIsolation =
-        NetwApi.MethodBind("NetwSceneConfig", "get_isolation", 3905245786UL);
+        NetwApi.MethodBind("NetwSceneConfig", "get_isolation", 2054601501UL);
 
     /// <summary>
     /// <see cref="Netw.SceneIsolation.OwnWorld"/> after
     /// <see cref="NetwSceneConfig.Isolated"/>,
     /// <see cref="Netw.SceneIsolation.None"/> otherwise.
     /// </summary>
-    public int Isolation
+    public Netw.SceneIsolation Isolation
     {
         get
         {
-            int answered = default;
-            NetwThunks.Ptrcall0_Int(_bindGetIsolation, Checked, ref answered);
-            return answered;
+            long answered = default;
+            NetwThunks.Ptrcall0_Long(_bindGetIsolation, Checked, ref answered);
+            return (Netw.SceneIsolation)answered;
         }
     }
 

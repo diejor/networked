@@ -67,8 +67,9 @@ public sealed class NetwPredictionHandle : NetwRefCounted
     }
 
     /// <summary>
-    /// Emitted when a misprediction is large enough to act on. <c>report</c> is
-    /// a copy of the episode.
+    /// Emitted when a misprediction is large enough to act on. The corrections
+    /// that follow, until the peers agree again, are reported together as one
+    /// episode.
     /// <code>
     /// Dictionary
     /// ┠╴id            int
@@ -118,8 +119,9 @@ public sealed class NetwPredictionHandle : NetwRefCounted
     }
 
     /// <summary>
-    /// Emitted when the peers have agreed again for long enough to close an
-    /// episode. <c>report</c> has the shape described in
+    /// Emitted when the peers have agreed again for long enough, ending the
+    /// episode <see cref="NetwPredictionHandle.EpisodeOpened"/> started.
+    /// <c>report</c> has the shape described in
     /// <see cref="NetwPredictionHandle.EpisodeOpened"/>.
     /// </summary>
     public event Action<Godot.Collections.Dictionary> EpisodeClosed

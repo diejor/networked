@@ -1,27 +1,3 @@
-## Verifies a root-default host and a subpath-tree client coexist, connect, and
-## admit inside one process.
-##
-## The shipping install anchors one [NetwMultiplayer] at the [SceneTree] default
-## (the library names itself the default interface), while the harness and the
-## tiling rig scope each session to a [MultiplayerTree] subtree. Running both at
-## once is the in-process shipping-host mode a conformance suite drives: a
-## root-default session hosts, a subpath session joins it, both polled by the
-## same [SceneTree].
-## [codeblock]
-## coexist   root-default mount + subpath mount are both live sessions at once,
-##           each resolving its own branch. Godot's
-##           one-custom-MultiplayerAPI-under-another rule does not bite.
-##
-## host      the tree-less root session comes online as a listen host through
-##           an ordinary peer assignment, no owning MultiplayerTree required.
-##
-## admit     the subpath client's join frame is admitted into the host roster,
-##           the replication substrate crossing the embedding boundary.
-## [/codeblock]
-##
-## The two mounts talk over the in-process [LocalLoopbackSession] bus, the same
-## transport the harness uses. The root override is captured and restored per
-## case so it never leaks, the same discipline [TestRootOverrideInstall] uses.
 class_name TestMixedTopologySpike
 extends NetwTestSuite
 
@@ -48,9 +24,6 @@ func after_test() -> void:
 	await super.after_test()
 
 
-# Brings the root-default host online over the loopback bus by assigning the
-# bus's server peer, with no owning tree. Returns once the session reports
-# online.
 func _install_and_host() -> bool:
 	_host_api = NetwMultiplayer.make()
 	get_tree().set_multiplayer(_host_api)
@@ -62,7 +35,6 @@ func _install_and_host() -> bool:
 	return await _pump_until(func() -> bool: return _host_api.is_online)
 
 
-# Mounts a subpath-tree client and returns its owned session api.
 func _mount_client() -> NetwMultiplayer:
 	_client_tree = MultiplayerTree.new()
 	_client_tree.name = "SpikeClient"
@@ -73,8 +45,6 @@ func _mount_client() -> NetwMultiplayer:
 	return _client_tree.api
 
 
-# Joins the client over the loopback bus by preparing its player and assigning
-# a client peer from the same bus.
 func _join_client() -> void:
 	var api := _client_tree.api
 	api.session_prepare_join(&"client", [])
@@ -83,9 +53,6 @@ func _join_client() -> void:
 			.create_client_peer()
 
 
-# Pumps both mounts for up to [param timeout_ms], returning as soon as
-# [param cond] holds. The root host is driven through its own session's connect
-# plane, the subpath client through its own [MultiplayerTree] _process.
 func _pump_until(cond: Callable, timeout_ms: int = 3000) -> bool:
 	var deadline := Time.get_ticks_msec() + timeout_ms
 	while Time.get_ticks_msec() < deadline:
@@ -104,8 +71,6 @@ func test_root_and_subpath_mounts_coexist_as_live_sessions() -> void:
 	get_tree().set_multiplayer(_host_api)
 	var client_api := _mount_client()
 
-	# The root override owns the tree default; the client owns its subtree;
-	# both are live sessions and neither displaces the other.
 	assert_that(get_tree().get_multiplayer()).is_same(_host_api)
 	assert_that(get_tree().get_multiplayer(_client_tree.get_path())).is_same(
 		client_api,
@@ -115,7 +80,6 @@ func test_root_and_subpath_mounts_coexist_as_live_sessions() -> void:
 	assert_that(NetwMultiplayer.session_get_all()).contains(
 		[_host_api, client_api],
 	)
-	# A node under the client subtree resolves to the client, not the root host.
 	assert_that(NetwMultiplayer.of(_client_tree)).is_same(client_api)
 
 
@@ -135,9 +99,6 @@ func test_subpath_client_is_admitted_across_the_mount_boundary() -> void:
 	var client_api := _mount_client()
 	_join_client()
 
-	# The join frame is an RPC round trip across the two mounts: the client
-	# submits, the root host admits, and the roster echoes back. Admission on
-	# both sides is the substrate crossing the embedding boundary.
 	var admitted := await _pump_until(
 		func() -> bool: return client_api.local_player != null
 	)

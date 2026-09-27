@@ -1,12 +1,7 @@
-## Admission handler that admits a join only under the username Nakama
-## attests for the joining peer.
+## Accepts a join only when its username is the peer's Nakama username.
 ##
-## The host trusts the Nakama server's presence list, which maps each peer to
-## their authenticated Nakama user id. That is what makes the username
-## spoof-proof even though the listen-server host is itself an untrusted
-## browser in the relay topology. Mount it inside the session's branch, where
-## it declares itself.
-##
+## The username is checked against the Nakama server, so a player cannot use
+## someone else's name. Add it under the [MultiplayerTree].
 ## [codeblock]
 ## var gate := NakamaAuth.new()
 ## tree.add_child(gate)
@@ -24,12 +19,12 @@ func _ready() -> void:
 	Netw.configure_admission(admit)
 
 
-## Binds the [MultiplayerTree] whose relay presence attests a join.
+## Sets the [MultiplayerTree] whose Nakama match is checked.
 func bind_tree(tree: MultiplayerTree) -> void:
 	_tree = tree
 
 
-## Admits [param peer_id] only under the username Nakama attests for it.
+## Accepts [param peer_id] only with its own Nakama username.
 ##
 ## [br][br][b]Server Only.[/b]
 func admit(peer_id: int, username: StringName, _args: Array = []) -> Error:

@@ -6,11 +6,13 @@ using Godot.NativeInterop;
 namespace Networked;
 
 /// <summary>
-/// An in-process session that links <see cref="LocalMultiplayerPeer"/>
-/// instances and simulates the link between them.
+/// Connects <see cref="LocalMultiplayerPeer"/> peers inside one process, with
+/// optional simulated latency and loss.
 /// </summary>
 /// <remarks>
-/// Session time advances only when something advances it.
+/// Useful for tests. Time only moves when
+/// <see cref="LocalLoopbackSession.Poll"/> or
+/// <see cref="LocalLoopbackSession.AdvanceTime"/> is called.
 /// <code>
 /// var session := LocalLoopbackSession.new()
 /// var server := session.get_server_peer()
@@ -49,8 +51,7 @@ public sealed class LocalLoopbackSession : NetwRefCounted
             3304788590UL);
 
     /// <summary>
-    /// An application tag carried alongside the session, so a client can tell
-    /// whose server it reached.
+    /// The <see cref="NetwSessionConfig.AppId"/> of the server.
     /// </summary>
     public StringName ServerAppId
     {
@@ -83,9 +84,9 @@ public sealed class LocalLoopbackSession : NetwRefCounted
             3656913427UL);
 
     /// <summary>
-    /// Returns the process-wide session, creating one on first access. Use
-    /// <see cref="LocalLoopbackSession.HasSharedSession"/> to ask whether one
-    /// exists without creating it.
+    /// Returns the shared session, creating it if needed.
+    /// <see cref="LocalLoopbackSession.HasSharedSession"/> checks without
+    /// creating it.
     /// </summary>
     public static LocalLoopbackSession GetSharedSession()
     {
@@ -104,8 +105,7 @@ public sealed class LocalLoopbackSession : NetwRefCounted
             2863946532UL);
 
     /// <summary>
-    /// Installs <paramref name="session"/> as the process-wide one, or clears
-    /// it when <paramref name="session"/> is <c>null</c>.
+    /// Sets the shared session. <c>null</c> clears it.
     /// </summary>
     public static void SetSharedSession(LocalLoopbackSession session)
     {
@@ -125,7 +125,7 @@ public sealed class LocalLoopbackSession : NetwRefCounted
             2240911060UL);
 
     /// <summary>
-    /// Returns whether a process-wide session exists.
+    /// Returns <c>true</c> when a shared session exists.
     /// </summary>
     public static bool HasSharedSession()
     {
@@ -144,8 +144,7 @@ public sealed class LocalLoopbackSession : NetwRefCounted
             36873697UL);
 
     /// <summary>
-    /// Returns whether this session's server peer exists and is not
-    /// disconnected.
+    /// Returns <c>true</c> when the server peer exists and is connected.
     /// </summary>
     public bool HasLiveServer()
     {
@@ -228,8 +227,7 @@ public sealed class LocalLoopbackSession : NetwRefCounted
             3995934104UL);
 
     /// <summary>
-    /// Returns every client peer this session handed out, including ones that
-    /// have since closed.
+    /// Returns every client peer created, including closed ones.
     /// </summary>
     public Godot.Collections.Array GetClientPeers()
     {
@@ -244,7 +242,7 @@ public sealed class LocalLoopbackSession : NetwRefCounted
         NetwApi.MethodBind("LocalLoopbackSession", "poll", 3218959716UL);
 
     /// <summary>
-    /// Advances session time by one physics period and delivers whatever came
+    /// Moves time forward by one physics tick and delivers the packets that are
     /// due.
     /// </summary>
     public void Poll()
@@ -260,9 +258,8 @@ public sealed class LocalLoopbackSession : NetwRefCounted
             3218959716UL);
 
     /// <summary>
-    /// Advances session time by however many physics frames have actually
-    /// passed. A latency in milliseconds therefore stays that latency however
-    /// many idle frames the engine ran between physics steps.
+    /// Moves time forward by the physics frames that passed since the last
+    /// call.
     /// </summary>
     public void PollFrameScoped()
     {
@@ -274,9 +271,8 @@ public sealed class LocalLoopbackSession : NetwRefCounted
         NetwApi.MethodBind("LocalLoopbackSession", "advance_time", 373806689UL);
 
     /// <summary>
-    /// Advances session time by <paramref name="ms"/> and delivers whatever
-    /// came due, for steppers that drive time themselves rather than off
-    /// physics frames.
+    /// Moves time forward by <paramref name="ms"/> milliseconds and delivers
+    /// the packets that are due.
     /// </summary>
     public void AdvanceTime(double ms)
     {
@@ -318,8 +314,8 @@ public sealed class LocalLoopbackSession : NetwRefCounted
             2743542113UL);
 
     /// <summary>
-    /// Delivers what <see cref="LocalLoopbackSession.HoldInboundPackets"/>
-    /// held, ahead of anything that arrived after it.
+    /// Delivers the packets
+    /// <see cref="LocalLoopbackSession.HoldInboundPackets"/> held, in order.
     /// </summary>
     public void ReleaseInboundPackets(LocalMultiplayerPeer peer)
     {
@@ -339,12 +335,9 @@ public sealed class LocalLoopbackSession : NetwRefCounted
             2254483817UL);
 
     /// <summary>
-    /// Installs <paramref name="conditions"/> on packets arriving at
-    /// <paramref name="peer"/>. A <paramref name="senderId"/> of <c>0</c>
-    /// conditions every sender. Packets already queued on
-    /// <paramref name="peer"/> are pulled back into flight, so conditioning a
-    /// live link leaves no hole behind it. <paramref name="conditions"/> is
-    /// cloned, so editing it afterwards changes nothing.
+    /// Applies <paramref name="conditions"/> to packets arriving at
+    /// <paramref name="peer"/> from <paramref name="senderId"/>, or from
+    /// everyone when <c>0</c>. <paramref name="conditions"/> is copied.
     /// </summary>
     public void SetLinkConditions(
         LocalMultiplayerPeer peer,
@@ -371,8 +364,8 @@ public sealed class LocalLoopbackSession : NetwRefCounted
             1260369464UL);
 
     /// <summary>
-    /// Removes the conditions installed for <paramref name="senderId"/> and
-    /// flushes whatever they were holding.
+    /// Removes the link conditions for <paramref name="senderId"/> and delivers
+    /// the packets they delayed.
     /// </summary>
     public void ClearLinkConditions(LocalMultiplayerPeer peer, int senderId = 0)
     {
@@ -394,7 +387,7 @@ public sealed class LocalLoopbackSession : NetwRefCounted
             3218959716UL);
 
     /// <summary>
-    /// Removes every installed condition and flushes every delayed packet.
+    /// Removes every link condition and delivers every delayed packet.
     /// </summary>
     public void ClearAllLinkConditions()
     {
@@ -438,8 +431,7 @@ public sealed class LocalLoopbackSession : NetwRefCounted
             1286410249UL);
 
     /// <summary>
-    /// Drops whatever <paramref name="senderId"/> still has in flight, on every
-    /// receiver.
+    /// Drops every packet from <paramref name="senderId"/> not delivered yet.
     /// </summary>
     public void PurgePacketsFrom(int senderId)
     {
@@ -480,8 +472,9 @@ public sealed class LocalLoopbackSession : NetwRefCounted
             3785678931UL);
 
     /// <summary>
-    /// Returns whether <paramref name="peer"/> is holding everything, per
-    /// <see cref="LocalLoopbackSession.HoldInboundPackets"/>.
+    /// Returns <c>true</c> while
+    /// <see cref="LocalLoopbackSession.HoldInboundPackets"/> holds packets for
+    /// <paramref name="peer"/>.
     /// </summary>
     public bool IsHoldingInbound(LocalMultiplayerPeer peer)
     {

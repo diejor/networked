@@ -125,7 +125,7 @@ Ref<NetwSessionConfig> MultiplayerTree::build_session_config() const {
     Ref<NetwSessionConfig> config;
     config.instantiate();
     config->set_app_id(app_id);
-    config->set_desired_role(int64_t(desired_role));
+    config->set_desired_role(desired_role);
     config->set_link_conditions(link_conditions);
     return config;
 }
@@ -335,7 +335,7 @@ void MultiplayerTree::bring_up_here(
     }
     const RID ticket = connection->create_peer(
         peer_class,
-        int64_t(p_mode),
+        p_mode,
         p_address,
         transport_settings,
         callable_mp(this, &MultiplayerTree::on_peer_created)

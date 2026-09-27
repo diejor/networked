@@ -6,17 +6,14 @@ using Godot.NativeInterop;
 namespace Networked;
 
 /// <summary>
-/// The pending results of a one-to-many broadcast request, one entry per
-/// responding peer.
+/// The results of a request sent to many peers, one per peer.
 /// </summary>
 /// <remarks>
-/// <see cref="Netw.RequestAll"/> returns one of these after fanning a request
-/// out to every live peer. The awaited set is snapshotted at send time, so a
-/// peer that joins mid-flight is not waited on, and a peer that disconnects is
-/// dropped from the set so the group can still complete.
-/// <see cref="NetwGroupPromise.Then"/> fires once with the full <c>peer_id
-/// -&gt; value</c> map when the last response lands, while
-/// <see cref="NetwGroupPromise.CompletedSingle"/> reports each response as it
+/// <see cref="Netw.RequestAll"/> returns one. It waits for the peers connected
+/// when the request was sent. A peer that disconnects is no longer waited for.
+/// <see cref="NetwGroupPromise.Then"/> runs once with every result, as a
+/// <c>peer_id -&gt; value</c> <see cref="Godot.Collections.Dictionary"/>.
+/// <see cref="NetwGroupPromise.CompletedSingle"/> reports each result as it
 /// arrives.
 /// <code>
 /// Netw.request_all(player.ready_check) \
@@ -25,16 +22,10 @@ namespace Networked;
 ///     )
 /// </code>
 /// <para>
-/// On timeout the group settles through
-/// <see cref="NetwGroupPromise.CatchError"/> with
-/// <c>@GlobalScope.ERR_TIMEOUT</c>, and whatever responses arrived first remain
-/// readable on <see cref="NetwGroupPromise.Results"/>. It settles exactly once,
-/// whichever way it goes, and chaining after it settled fires the callback
-/// immediately, so there is no race between sending and subscribing. It shares
-/// the settle vocabulary of <see cref="NetwPromise"/>, which is the one-to-one
-/// form. The two are siblings rather than a base and a subclass: a group's
-/// answer is a map and a promise's is a value, and nothing reads them through
-/// one type.
+/// On timeout, <see cref="NetwGroupPromise.CatchError"/> runs with
+/// <c>@GlobalScope.ERR_TIMEOUT</c>, and the results that did arrive stay in
+/// <see cref="NetwGroupPromise.Results"/>. It works like
+/// <see cref="NetwPromise"/> otherwise.
 /// </para>
 /// </remarks>
 public sealed class NetwGroupPromise : NetwRefCounted
@@ -54,7 +45,7 @@ public sealed class NetwGroupPromise : NetwRefCounted
     }
 
     /// <summary>
-    /// Emitted once every awaited peer has resolved.
+    /// Emitted when every peer answered.
     /// </summary>
     public event Action<Godot.Collections.Dictionary> Completed
     {
@@ -63,7 +54,7 @@ public sealed class NetwGroupPromise : NetwRefCounted
     }
 
     /// <summary>
-    /// Emitted as each awaited peer resolves, before the group itself settles.
+    /// Emitted when one peer answers.
     /// </summary>
     public event Action<long, Variant> CompletedSingle
     {
@@ -72,17 +63,16 @@ public sealed class NetwGroupPromise : NetwRefCounted
     }
 
     /// <summary>
-    /// Emitted when the group is rejected by a timeout or a failure.
+    /// Emitted when the group fails or times out.
     /// </summary>
-    public event Action<long, string> Failed
+    public event Action<Error, string> Failed
     {
         add => Connect("failed", Callable.From(value));
         remove => Disconnect("failed", Callable.From(value));
     }
 
     /// <summary>
-    /// Emitted once the group settled, whichever way it went, after
-    /// <see cref="NetwGroupPromise.Completed"/> or
+    /// Emitted once after <see cref="NetwGroupPromise.Completed"/> or
     /// <see cref="NetwGroupPromise.Failed"/>.
     /// </summary>
     public event Action Settled
@@ -92,13 +82,9 @@ public sealed class NetwGroupPromise : NetwRefCounted
     }
 
     /// <summary>
-    /// Carries <see cref="NetwGroupPromise.Answer"/>. A pending batch emits
-    /// this once when it settles. <see cref="NetwGroupPromise.Wait"/> emits it
-    /// later for each call made after settlement. <b>Note:</b> connect to
-    /// <see cref="NetwGroupPromise.Settled"/> instead. Because a settled batch
-    /// emits this per call, a subscriber attached by hand can see it more than
-    /// once. <see cref="NetwGroupPromise.Wait"/> is its only intended producer
-    /// and consumer.
+    /// Used by <see cref="NetwGroupPromise.Wait"/>. Connect to
+    /// <see cref="NetwGroupPromise.Settled"/> instead, since this can be
+    /// emitted more than once.
     /// </summary>
     public event Action<Variant> Ready
     {
@@ -110,7 +96,7 @@ public sealed class NetwGroupPromise : NetwRefCounted
         NetwApi.MethodBind("NetwGroupPromise", "get_is_completed", 36873697UL);
 
     /// <summary>
-    /// Whether every awaited peer resolved.
+    /// <c>true</c> when every peer answered.
     /// </summary>
     public bool IsCompleted
     {
@@ -129,7 +115,7 @@ public sealed class NetwGroupPromise : NetwRefCounted
         NetwApi.MethodBind("NetwGroupPromise", "get_is_failed", 36873697UL);
 
     /// <summary>
-    /// Whether the request failed or timed out.
+    /// <c>true</c> when the group failed.
     /// </summary>
     public bool IsFailed
     {
@@ -145,7 +131,7 @@ public sealed class NetwGroupPromise : NetwRefCounted
         NetwApi.MethodBind("NetwGroupPromise", "get_is_settled", 36873697UL);
 
     /// <summary>
-    /// Whether the group settled, whichever way it went.
+    /// <c>true</c> when the group completed or failed.
     /// </summary>
     public bool IsSettled
     {
@@ -161,8 +147,7 @@ public sealed class NetwGroupPromise : NetwRefCounted
         NetwApi.MethodBind("NetwGroupPromise", "get_results", 3102165223UL);
 
     /// <summary>
-    /// The <c>peer_id -&gt; result</c> map of every answer received so far,
-    /// readable before the group settles and after it fails.
+    /// The results received so far, as <c>peer_id -&gt; value</c>.
     /// </summary>
     public Godot.Collections.Dictionary Results
     {
@@ -184,7 +169,7 @@ public sealed class NetwGroupPromise : NetwRefCounted
             1930428628UL);
 
     /// <summary>
-    /// The peers still owed an answer, in the order the group was created with.
+    /// The peers that have not answered yet.
     /// </summary>
     public int[] ExpectedPeers
     {
@@ -203,7 +188,7 @@ public sealed class NetwGroupPromise : NetwRefCounted
         NetwApi.MethodBind("NetwGroupPromise", "get_code", 3185525595UL);
 
     /// <summary>
-    /// The settle code when <see cref="NetwGroupPromise.IsFailed"/>, otherwise
+    /// The error when <see cref="NetwGroupPromise.IsFailed"/>, otherwise
     /// <c>@GlobalScope.OK</c>.
     /// </summary>
     public Error Code
@@ -220,9 +205,8 @@ public sealed class NetwGroupPromise : NetwRefCounted
         NetwApi.MethodBind("NetwGroupPromise", "get_detail", 201670096UL);
 
     /// <summary>
-    /// The human-readable reason behind <see cref="NetwGroupPromise.Code"/>,
-    /// empty when the code says it all. Diagnostics only, never a branch
-    /// condition.
+    /// A readable reason for <see cref="NetwGroupPromise.Code"/>, or empty. For
+    /// display only.
     /// </summary>
     public string Detail
     {
@@ -240,11 +224,9 @@ public sealed class NetwGroupPromise : NetwRefCounted
         NetwApi.MethodBind("NetwGroupPromise", "create", 839391177UL);
 
     /// <summary>
-    /// A group awaiting exactly <paramref name="peers"/>. An empty set is
-    /// already satisfied and is deliberately NOT settled here, because nothing
-    /// has subscribed yet: whoever hands the group to a caller settles it at
-    /// their session's next settle, which is the first moment the caller can
-    /// have chained onto it.
+    /// Creates a group waiting for <paramref name="peers"/>. An empty group
+    /// does not complete by itself, so call
+    /// <see cref="NetwGroupPromise.ResolveAll"/> once callbacks are attached.
     /// </summary>
     public static NetwGroupPromise Create(int[] peers)
     {
@@ -264,24 +246,12 @@ public sealed class NetwGroupPromise : NetwRefCounted
         NetwApi.MethodBind("NetwGroupPromise", "wait", 4046169648UL);
 
     /// <summary>
-    /// Returns a <see cref="Signal"/> on the
-    /// <see cref="NetwGroupPromise.Ready"/> channel that is safe to
-    /// <c>await</c> whether or not the batch has already settled, carrying
-    /// <see cref="NetwGroupPromise.Answer"/>. This is the idiom. Awaiting
-    /// <see cref="NetwGroupPromise.Completed"/> directly is a race the caller
-    /// cannot win: a batch whose peers all resolved before the wait has already
-    /// emitted it, and the caller waits forever. An already-settled batch
-    /// defers its emission here, so the <c>await</c> subscribes before the
-    /// answer is delivered.
+    /// Returns a signal to <c>await</c>, which gives
+    /// <see cref="NetwGroupPromise.Answer"/>. It works even when the group
+    /// already settled.
     /// <code>
     /// await destination.move_players(peers).wait()
     /// </code>
-    /// <para>
-    /// This never re-emits <see cref="NetwGroupPromise.Completed"/>,
-    /// <see cref="NetwGroupPromise.Failed"/> or
-    /// <see cref="NetwGroupPromise.Settled"/>, so an earlier subscriber is
-    /// notified exactly once no matter how late anyone waits.
-    /// </para>
     /// </summary>
     public Signal Wait()
     {
@@ -296,9 +266,8 @@ public sealed class NetwGroupPromise : NetwRefCounted
         NetwApi.MethodBind("NetwGroupPromise", "answer", 1214101251UL);
 
     /// <summary>
-    /// Returns <see cref="NetwGroupPromise.Results"/> after success or
-    /// <see cref="NetwGroupPromise.Code"/> after failure.
-    /// <see cref="NetwGroupPromise.Ready"/> carries the same value.
+    /// Returns <see cref="NetwGroupPromise.Results"/> on success, or
+    /// <see cref="NetwGroupPromise.Code"/> on failure.
     /// </summary>
     public Variant Answer()
     {
@@ -313,9 +282,8 @@ public sealed class NetwGroupPromise : NetwRefCounted
         NetwApi.MethodBind("NetwGroupPromise", "then", 3578470499UL);
 
     /// <summary>
-    /// Chains <paramref name="cb"/> to run when every awaited peer has
-    /// answered, receiving the <see cref="NetwGroupPromise.Results"/> map. A
-    /// group that already completed runs it immediately.
+    /// Calls <paramref name="cb"/> with <see cref="NetwGroupPromise.Results"/>
+    /// when every peer answered. Returns the group.
     /// </summary>
     public NetwGroupPromise Then(Callable cb)
     {
@@ -335,10 +303,8 @@ public sealed class NetwGroupPromise : NetwRefCounted
         NetwApi.MethodBind("NetwGroupPromise", "catch_error", 3578470499UL);
 
     /// <summary>
-    /// Chains <paramref name="cb"/> to run when the group fails or times out,
-    /// receiving <see cref="NetwGroupPromise.Code"/> and
-    /// <see cref="NetwGroupPromise.Detail"/>. A group that already failed runs
-    /// it immediately.
+    /// Calls <paramref name="cb"/> as <c>cb(code, detail)</c> when the group
+    /// fails. Returns the group.
     /// </summary>
     public NetwGroupPromise CatchError(Callable cb)
     {
@@ -358,10 +324,9 @@ public sealed class NetwGroupPromise : NetwRefCounted
         NetwApi.MethodBind("NetwGroupPromise", "resolve_peer", 2152698145UL);
 
     /// <summary>
-    /// Records <paramref name="peerId"/>'s answer and emits
-    /// <see cref="NetwGroupPromise.CompletedSingle"/>. Settles the group when
-    /// it was the last one awaited. A result from a peer outside the awaited
-    /// set is ignored.
+    /// Records the result of <paramref name="peerId"/> and emits
+    /// <see cref="NetwGroupPromise.CompletedSingle"/>. Completes the group if
+    /// it was the last one. Ignored for a peer the group is not waiting for.
     /// </summary>
     public void ResolvePeer(long peerId, Variant val)
     {
@@ -383,9 +348,8 @@ public sealed class NetwGroupPromise : NetwRefCounted
         NetwApi.MethodBind("NetwGroupPromise", "remove_peer", 1286410249UL);
 
     /// <summary>
-    /// Drops <paramref name="peerId"/> from the awaited set without recording
-    /// an answer for it, which is what a disconnect during the flight does.
-    /// Settles the group when it was the last one awaited.
+    /// Stops waiting for <paramref name="peerId"/>, as when it disconnects.
+    /// Completes the group if it was the last one.
     /// </summary>
     public void RemovePeer(long peerId)
     {
@@ -402,11 +366,10 @@ public sealed class NetwGroupPromise : NetwRefCounted
         NetwApi.MethodBind("NetwGroupPromise", "resolve_all", 3218959716UL);
 
     /// <summary>
-    /// Settles the group as completed with whatever
-    /// <see cref="NetwGroupPromise.Results"/> holds. Emits
-    /// <see cref="NetwGroupPromise.Completed"/> then
-    /// <see cref="NetwGroupPromise.Settled"/> and runs every chained
-    /// <see cref="NetwGroupPromise.Then"/>.
+    /// Completes the group with the current
+    /// <see cref="NetwGroupPromise.Results"/>, and emits
+    /// <see cref="NetwGroupPromise.Completed"/>, then
+    /// <see cref="NetwGroupPromise.Settled"/>.
     /// </summary>
     public void ResolveAll()
     {
@@ -418,10 +381,9 @@ public sealed class NetwGroupPromise : NetwRefCounted
         NetwApi.MethodBind("NetwGroupPromise", "reject", 399475586UL);
 
     /// <summary>
-    /// Settles the group as failed. Emits <see cref="NetwGroupPromise.Failed"/>
-    /// then <see cref="NetwGroupPromise.Settled"/> and runs every chained
-    /// <see cref="NetwGroupPromise.CatchError"/>. A group that already settled
-    /// is unchanged.
+    /// Fails the group and emits <see cref="NetwGroupPromise.Failed"/>, then
+    /// <see cref="NetwGroupPromise.Settled"/>. Does nothing when already
+    /// settled.
     /// </summary>
     public void Reject(Error errCode, string errDetail = "")
     {

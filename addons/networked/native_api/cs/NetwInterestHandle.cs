@@ -6,21 +6,15 @@ using Godot.NativeInterop;
 namespace Networked;
 
 /// <summary>
-/// Which layers one entity is in, who may therefore see it, and what it is told
-/// when that changes.
+/// The <see cref="NetwInterestLayer"/> layers an entity is in, and callbacks
+/// for when peers start or stop seeing it.
 /// </summary>
 /// <remarks>
-/// Membership declarations survive tree exits and reapply when the entity
-/// enters a session, so a layer declared in <c>Object._init</c> is the same
-/// layer the server admits later. The server owns the real
-/// <see cref="NetwInterestLayer"/> membership. Clients keep the same labels and
-/// callback surface for local visibility and observer-awareness events.
-/// Declaring interest and reading it back are ONE type:
-/// <see cref="Netw.ConfigureInterest"/> returns this handle and so does
-/// <see cref="NetwEntity.Interest"/>, so a helper takes either and a chain in
-/// <c>Object._init</c> is the same object a later frame mutates. Every verb
-/// returns the handle, so one chained expression declares an entity's layers
-/// and the callbacks that ride them.
+/// Get it from <see cref="Netw.ConfigureInterest"/> or
+/// <see cref="NetwEntity.Interest"/>. Every method returns the handle, so calls
+/// can be chained. It is safe to call in <c>Object._init</c>, before the node
+/// is in a session. The server applies the layers, and clients keep them for
+/// their own callbacks.
 /// <code>
 /// func _init() -&gt; void:
 ///     Netw.configure_interest(self) \
@@ -28,15 +22,9 @@ namespace Networked;
 ///             .join(&amp;"sight") \
 ///             .on_enter(_on_interest_enter)
 ///
-/// # and the same handle, later:
+/// # later
 /// Netw.configure_entity(self).interest.join(&amp;"team:blue")
 /// </code>
-/// <para>
-/// The handle holds no interest state of its own. Every declaration lives on
-/// the entity's own row, which is why a chain declared before the entity
-/// attaches to a session is the state the session adopts rather than a copy it
-/// has to replay.
-/// </para>
 /// </remarks>
 public sealed class NetwInterestHandle : NetwRefCounted
 {
@@ -58,10 +46,8 @@ public sealed class NetwInterestHandle : NetwRefCounted
         NetwApi.MethodBind("NetwInterestHandle", "of", 3837747350UL);
 
     /// <summary>
-    /// Ensures the entity rooted at <paramref name="node"/> and returns its
-    /// <see cref="NetwEntity.Interest"/>. <see cref="Netw.ConfigureInterest"/>
-    /// is the front door and this is what it returns. A <paramref name="node"/>
-    /// that roots no entity is reported and returned <c>null</c>.
+    /// Same as <see cref="Netw.ConfigureInterest"/>. Returns <c>null</c> and
+    /// pushes an error when <paramref name="node"/> is not an entity root.
     /// </summary>
     public static NetwInterestHandle Of(Node node)
     {
@@ -76,26 +62,20 @@ public sealed class NetwInterestHandle : NetwRefCounted
     }
 
     private static readonly IntPtr _bindJoin =
-        NetwApi.MethodBind("NetwInterestHandle", "join", 2273516925UL);
+        NetwApi.MethodBind("NetwInterestHandle", "join", 269056755UL);
 
     /// <summary>
-    /// Adds the entity to <paramref name="layerId"/> and returns this handle.
-    /// Idempotent. <paramref name="leavePolicy"/> is one of
-    /// <see cref="NetwMultiplayer.LeavePolicy"/> and
-    /// <paramref name="perceptionPolicy"/> one of
-    /// <see cref="NetwMultiplayer.PerceptionPolicy"/>, each declared in passing
-    /// for the layer being joined. <c>-1</c> declares neither and leaves
-    /// whatever <see cref="NetwInterestHandle.OnLeavePolicy"/> and
-    /// <see cref="NetwInterestHandle.OnPerceptionPolicy"/> already set, which
-    /// are also the door for the <c>CUSTOM</c> rows because those need a
-    /// callback. The declaration is safe in <c>Object._init</c> on every peer.
-    /// Only the server changes the live <see cref="NetwInterestLayer"/> entity
-    /// set.
+    /// Adds the entity to the layer <paramref name="layerId"/>.
+    /// <paramref name="leavePolicy"/> and <paramref name="perceptionPolicy"/>
+    /// set what happens when a peer stops seeing it through this layer.
+    /// <c>-1</c> keeps the current setting. Use
+    /// <see cref="NetwInterestHandle.OnLeavePolicy"/> and
+    /// <see cref="NetwInterestHandle.OnPerceptionPolicy"/> for the custom
+    /// policies.
     /// </summary>
-    public NetwInterestHandle Join(
-        StringName layerId,
-        long leavePolicy = -1,
-        long perceptionPolicy = -1)
+    public NetwInterestHandle Join(StringName layerId, NetwMultiplayer.LeavePolicy leavePolicy =
+        (NetwMultiplayer.LeavePolicy)(-1), NetwMultiplayer.PerceptionPolicy perceptionPolicy =
+            (NetwMultiplayer.PerceptionPolicy)(-1))
     {
         godot_variant slot0 = VariantUtils.CreateFromStringName(layerId);
         godot_variant slot1 = VariantUtils.CreateFromInt((long)leavePolicy);
@@ -124,8 +104,7 @@ public sealed class NetwInterestHandle : NetwRefCounted
         NetwApi.MethodBind("NetwInterestHandle", "leave", 1494260464UL);
 
     /// <summary>
-    /// Removes the entity from <paramref name="layerId"/> and returns this
-    /// handle. Idempotent.
+    /// Removes the entity from the layer <paramref name="layerId"/>.
     /// </summary>
     public NetwInterestHandle Leave(StringName layerId)
     {
@@ -145,7 +124,7 @@ public sealed class NetwInterestHandle : NetwRefCounted
         NetwApi.MethodBind("NetwInterestHandle", "layer_ids", 3995934104UL);
 
     /// <summary>
-    /// Returns a copy of the locally known layer labels.
+    /// Returns a copy of the layer names the entity joined.
     /// </summary>
     public Godot.Collections.Array LayerIds()
     {
@@ -160,15 +139,9 @@ public sealed class NetwInterestHandle : NetwRefCounted
         NetwApi.MethodBind("NetwInterestHandle", "on_enter", 4064419394UL);
 
     /// <summary>
-    /// Calls <paramref name="callback"/> with <c>(layer_id, peer_id)</c>
-    /// whenever this entity becomes visible through <paramref name="layerId"/>,
-    /// and returns this handle. An empty <paramref name="layerId"/> registers
-    /// <paramref name="callback"/> against every layer
-    /// <see cref="NetwInterestHandle.LayerIds"/> currently returns, which is
-    /// what lets one chain declare a set of layers and then give them all one
-    /// callback. It reads what the entity has joined, not what this expression
-    /// joined, so a callback declared after a later
-    /// <see cref="NetwInterestHandle.Join"/> does not reach back to it.
+    /// Calls <paramref name="callback"/> as <c>callback(layer_id, peer_id)</c>
+    /// when a peer starts seeing the entity through <paramref name="layerId"/>.
+    /// An empty <paramref name="layerId"/> means every layer joined so far.
     /// </summary>
     public NetwInterestHandle OnEnter(
         Callable callback,
@@ -198,12 +171,9 @@ public sealed class NetwInterestHandle : NetwRefCounted
         NetwApi.MethodBind("NetwInterestHandle", "on_leave", 4064419394UL);
 
     /// <summary>
-    /// Calls <paramref name="callback"/> with <c>(layer_id, peer_id)</c>
-    /// whenever this entity stops being visible through
-    /// <paramref name="layerId"/>, and returns this handle. An empty
-    /// <paramref name="layerId"/> registers against every layer
-    /// <see cref="NetwInterestHandle.LayerIds"/> currently returns, as
-    /// <see cref="NetwInterestHandle.OnEnter"/> does.
+    /// Calls <paramref name="callback"/> as <c>callback(layer_id, peer_id)</c>
+    /// when a peer stops seeing the entity through <paramref name="layerId"/>.
+    /// An empty <paramref name="layerId"/> means every layer joined so far.
     /// </summary>
     public NetwInterestHandle OnLeave(
         Callable callback,
@@ -236,11 +206,11 @@ public sealed class NetwInterestHandle : NetwRefCounted
             1070841610UL);
 
     /// <summary>
-    /// Overrides the wire behavior for <paramref name="layerId"/> with one of
-    /// <see cref="NetwMultiplayer.LeavePolicy"/>, and returns this handle.
+    /// Sets what happens to a peer's copy when it stops seeing the entity
+    /// through <paramref name="layerId"/>.
     /// <see cref="NetwMultiplayer.LeavePolicy.Custom"/> requires
-    /// <paramref name="customCallback"/>, called with <c>(peer_id,
-    /// layer_id)</c> on the server. Other policies reject a callback.
+    /// <paramref name="customCallback"/>, called on the server as
+    /// <c>custom_callback(peer_id, layer_id)</c>.
     /// </summary>
     public NetwInterestHandle OnLeavePolicy(
         StringName layerId,
@@ -276,12 +246,11 @@ public sealed class NetwInterestHandle : NetwRefCounted
             3637265304UL);
 
     /// <summary>
-    /// Overrides local presentation behavior for <paramref name="layerId"/>
-    /// with one of <see cref="NetwMultiplayer.PerceptionPolicy"/>, and returns
-    /// this handle. <see cref="NetwMultiplayer.PerceptionPolicy.Custom"/>
-    /// requires <paramref name="customCallback"/>. The callback receives
-    /// <c>(visible, peer_id, layer_id)</c> on both local player edges. Other
-    /// policies reject a callback.
+    /// Sets whether this peer keeps showing the entity when it stops seeing it
+    /// through <paramref name="layerId"/>.
+    /// <see cref="NetwMultiplayer.PerceptionPolicy.Custom"/> requires
+    /// <paramref name="customCallback"/>, called as <c>custom_callback(visible,
+    /// peer_id, layer_id)</c>.
     /// </summary>
     public NetwInterestHandle OnPerceptionPolicy(
         StringName layerId,
@@ -314,8 +283,7 @@ public sealed class NetwInterestHandle : NetwRefCounted
         NetwApi.MethodBind("NetwInterestHandle", "entity", 1711071689UL);
 
     /// <summary>
-    /// The <see cref="NetwEntity"/> this handle was bound to, or <c>null</c>
-    /// once that entity is gone.
+    /// Returns the <see cref="NetwEntity"/>, or <c>null</c> once it is gone.
     /// </summary>
     public NetwEntity Entity()
     {

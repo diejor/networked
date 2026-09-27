@@ -22,7 +22,7 @@
 		<method name="_close" qualifiers="virtual">
 			<return type="NetwPromise" />
 			<description>
-				Releases this slot. It is called after every pending operation has settled. [method NetwDatabase.close] does not wait for this promise.
+				Releases this slot. It is called after every pending operation has finished. [method NetwDatabase.close] does not wait for this promise.
 			</description>
 		</method>
 		<method name="_read" qualifiers="virtual">

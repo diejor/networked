@@ -35,7 +35,7 @@
 		An entity is simulated once it sets or calls anything here, declares [member NetwPredictionHandle.archetype], or has a [RigidBody2D] or [RigidBody3D] root drawn by [member NetwEntity.interpolation]. Other entities stay [constant MODE_NONE].
 
 		[b]Modes[/b]
-		The peer that authors the entity runs it as [constant MODE_AUTHORITY], and a client predicting it runs it as [constant MODE_PREDICT]. Every other copy is a frozen [constant MODE_PROXY], unless [member replicas] or a selection makes it [constant MODE_ACTIVE].
+		The peer with authority over the entity runs it as [constant MODE_AUTHORITY], and a client predicting it runs it as [constant MODE_PREDICT]. Every other copy is a frozen [constant MODE_PROXY], unless [member replicas] or a selection makes it [constant MODE_ACTIVE].
 
 		[b]Selection[/b]
 		While this entity runs here as [constant MODE_AUTHORITY] or [constant MODE_PREDICT], it can pick other entities to run here as [constant MODE_ACTIVE]. [method simulate] names one. [method simulate_nearest], [method simulate_within] and [method simulate_all] set a policy, and each call replaces the last.
@@ -66,7 +66,7 @@
 			<return type="void" />
 			<param index="0" name="layer" type="StringName" default="&amp;&quot;&quot;" />
 			<description>
-				Selects every entity this peer holds in [param layer]. An empty [param layer] reads this entity's own [NetwInterestLayer] membership.
+				Selects every entity this peer holds in [param layer]. An empty [param layer] uses the [NetwInterestLayer] layers this entity is in.
 			</description>
 		</method>
 		<method name="simulate_nearest">
@@ -74,7 +74,7 @@
 			<param index="0" name="count" type="int" />
 			<param index="1" name="layer" type="StringName" default="&amp;&quot;&quot;" />
 			<description>
-				Selects the [param count] entities nearest this one among those this peer holds in [param layer]. An empty [param layer] reads this entity's own [NetwInterestLayer] membership.
+				Selects the [param count] entities nearest this one among those this peer holds in [param layer]. An empty [param layer] uses the [NetwInterestLayer] layers this entity is in.
 			</description>
 		</method>
 		<method name="simulate_none">
@@ -112,10 +112,10 @@
 			It needs [constant NetwEntity.TRANSFER_IMMEDIATE] on an entity with no [method NetwPropertyConfig.state] property and no prediction, and does nothing otherwise.
 		</member>
 		<member name="replicas" type="int" setter="set_replicas" getter="get_replicas" enum="NetwSimulationHandle.Replicas" default="0">
-			How the copies this peer does not author run. It can change at any time.
+			How the copies this peer has no authority over run. It can change at any time.
 		</member>
 		<member name="restore" type="int" setter="set_restore" getter="get_restore" enum="NetwSimulationHandle.Restore" default="2">
-			How a sample from the author lands on a [constant MODE_ACTIVE] copy. Under [constant NetwMultiplayer.LIVE_MODE_CHASE] the body snaps to it and the drawn position glides, up to [member NetwPredictionHandle.teleport_threshold].
+			How a sample from the authority lands on a [constant MODE_ACTIVE] copy. Under [constant NetwMultiplayer.LIVE_MODE_CHASE] the body snaps to it and the drawn position glides, up to [member NetwPredictionHandle.teleport_threshold].
 		</member>
 		<member name="schedule" type="int" setter="set_schedule" getter="get_schedule" enum="NetwSimulationHandle.Schedule" default="3">
 			When [member step] runs and when the physics server moves the bodies.
@@ -142,7 +142,7 @@
 			Not simulated. The entity follows plain replication.
 		</constant>
 		<constant name="MODE_AUTHORITY" value="1" enum="Mode">
-			This peer authors the entity. The step runs and the samples go out from here.
+			This peer has authority over the entity. The step runs and the samples go out from here.
 		</constant>
 		<constant name="MODE_PREDICT" value="2" enum="Mode">
 			This peer controls a predicted entity and runs it ahead of the server. See [NetwPredictionHandle].
@@ -166,19 +166,19 @@
 			[constant SCHEDULE_FRAME] when the entity has a physics body, and [constant SCHEDULE_TICK] otherwise.
 		</constant>
 		<constant name="REPLICAS_PROXY" value="0" enum="Replicas">
-			Copies this peer does not author are [constant MODE_PROXY], unless a selection makes them active.
+			Copies this peer has no authority over are [constant MODE_PROXY], unless a selection makes them active.
 		</constant>
 		<constant name="REPLICAS_ACTIVE" value="1" enum="Replicas">
-			Copies this peer does not author are [constant MODE_ACTIVE].
+			Copies this peer has no authority over are [constant MODE_ACTIVE].
 		</constant>
 		<constant name="RESTORE_EXACT" value="0" enum="Restore">
-			A sample lands when it arrives, as it was authored.
+			A sample lands when it arrives, as it was sent.
 		</constant>
 		<constant name="RESTORE_EXTRAPOLATED" value="1" enum="Restore">
 			A sample lands when it arrives, carried forward by its age along the property its interpolation projects by, for at most [member max_restore_ticks].
 		</constant>
 		<constant name="RESTORE_BUFFERED" value="2" enum="Restore">
-			A sample is held until the clock's display tick reaches it, then lands as it was authored.
+			A sample is held until the clock's display tick reaches it, then lands as it was sent.
 		</constant>
 	</constants>
 </class>

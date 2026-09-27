@@ -4,7 +4,7 @@
 		The tick every peer in the session counts, reached by [method Netw.clock].
 	</brief_description>
 	<description>
-		A tick is a numbered step of the simulation. Every peer counts the same ticks, and a client keeps its count aligned with the server's by measuring the round trip and correcting for it. [member tick] is the number every [NetwRecord] and every lag-compensation query is stamped against.
+		A tick is a numbered step of the simulation. Every peer counts the same ticks, and a client keeps its count in step with the server's. [member tick] is the number every [NetwRecord] and lag compensation uses.
 		[codeblock]
 		var c := Netw.clock(self)
 		c.before_tick.connect(sample_input)
@@ -13,53 +13,15 @@
 		[/codeblock]
 
 		[b]How a tick is produced[/b]
-		The clock does not use a timer. It banks the time each physics frame delivers and spends it one tick at a time, so a slow frame produces two ticks and a fast one produces none.
-		[codeblock lang=text]
-		ticktime = 1 / tickrate
+		Each physics frame adds its delta to an accumulator, and every [code]1 / tickrate[/code] seconds in it runs one tick. A slow frame can run two ticks and a fast one none. At a [member tickrate] of 30 with 60 physics ticks per second, a tick runs every second frame, and [member physics_factor] is [code]2.0[/code].
+		At most [constant NetwMultiplayer.CLOCK_PARAM_MAX_TICKS_PER_FRAME] ticks run in one frame. [member behind_count] counts how often that limit was hit.
 
-		# each physics frame, given that frame's delta in seconds
-		    accumulator += delta
-		    while accumulator >= ticktime
-		        accumulator -= ticktime
-		        announce a tick, tick += 1
-		[/codeblock]
-		At a tickrate of 30 under 60 Hz physics the loop announces a tick every second frame. [member physics_factor] is that ratio, 2.0 here, and [member tick_phase] is how far into the current tick the accumulator sits.
-		The loop announces at most [constant NetwMultiplayer.CLOCK_PARAM_MAX_TICKS_PER_FRAME] ticks in one frame. A peer that keeps hitting the ceiling cannot catch up, and [member behind_count] is how often that happened.
+		[b]How a client follows the server[/b]
+		The client pings the server every [member ping_interval] seconds. The server answers with its tick, and the client aims ahead of it by half the round trip plus [constant NetwMultiplayer.CLOCK_PARAM_LEAD_TICKS]. The first answer sets the tick directly. After that, [member sync_mode] decides.
+		[constant NetwMultiplayer.SYNC_MODE_SNAP] sets the tick directly every time, which can move it backwards. [constant NetwMultiplayer.SYNC_MODE_STRETCH], the default, runs the clock slightly faster or slower each frame by [constant NetwMultiplayer.CLOCK_PARAM_STRETCH_NUDGE_FACTOR] of the difference, so the tick never jumps. A difference larger than [constant NetwMultiplayer.CLOCK_PARAM_PANIC_SNAP_THRESHOLD] ticks is snapped.
 
-		[b]How a client agrees with the server[/b]
-		The client pings the server every [member ping_interval] seconds and the server answers with its own tick and phase. The answer is already stale by the time it lands, so the client aims ahead of it by the time the trip took.
-		[codeblock lang=text]
-		rtt        the round trip this ping and its pong measured, in seconds
-		rtt_avg    the mean of the last jitter_window samples
-		jitter     the mean distance of those samples from rtt_avg
-		one_way    rtt_avg / 2
-
-		target = server_tick + server_phase + one_way / ticktime + lead_ticks
-		[/codeblock]
-
-		[code]target[/code] is a fractional tick, not a whole one. Keeping the server's phase is what stops the target jumping a full tick each time a pong lands on the other side of a tick boundary.
-		The first pong sets the clock to the target outright, because there is nothing to drift from yet. Every pong after that is handled by [member sync_mode].
-
-		[b]Snap and stretch[/b]
-		[constant NetwMultiplayer.SYNC_MODE_SNAP] writes the target straight into the tick and the accumulator. It is correct immediately and it can move the tick backwards, which any code holding a tick number will see.
-		[constant NetwMultiplayer.SYNC_MODE_STRETCH] is the default. It keeps the target as an estimate that advances on its own, then closes a fixed fraction of the remaining gap each frame.
-		[codeblock lang=text]
-		each physics frame
-		    estimate += delta * tickrate
-		    current   = tick + accumulator / ticktime
-		    gap       = estimate - current
-		    accumulator += gap * ticktime * stretch_nudge_factor
-		[/codeblock]
-
-		[constant NetwMultiplayer.CLOCK_PARAM_STRETCH_NUDGE_FACTOR] is that fraction. At 0.05 the clock closes a twentieth of the gap per frame, so it runs slightly fast or slightly slow until the gap is spent and the tick never jumps. Above [constant NetwMultiplayer.CLOCK_PARAM_PANIC_SNAP_THRESHOLD] ticks of gap it snaps instead, because a gap that large is a desync and not drift.
-
-		[b]Reading remote state[/b]
-		A remote peer's state is always at least one-way latency old, so the newest tick has nothing in it yet for anyone but this peer. [member display_offset] is how many ticks back the view reads, and the useful value is the one that covers the trip plus the spread in it.
-		[codeblock lang=text]
-		recommended_display_offset = ceil((one_way + jitter * jitter_multiplier) * tickrate)
-		[/codeblock]
-
-		Nothing applies that number on its own. [member recommended_display_offset] is the measurement and [member display_offset] is what the clock uses, and [method NetwMultiplayer.clock_auto_configure_offset] is what samples the first for a while and writes the largest reading into the second.
+		[b]Showing remote state[/b]
+		State from other peers arrives late, so remote entities are shown [member display_offset] ticks in the past. [member recommended_display_offset] is the offset the current connection needs, the one-way latency plus the jitter times [constant NetwMultiplayer.CLOCK_PARAM_JITTER_MULTIPLIER], in ticks. It is not applied automatically. [method NetwMultiplayer.clock_auto_configure_offset] applies it.
 	</description>
 	<tutorials>
 	</tutorials>
@@ -68,50 +30,49 @@
 			<return type="float" />
 			<param index="0" name="monitor" type="int" enum="NetwMultiplayer.ClockMonitor" />
 			<description>
-				One link or cadence measurement as a [float]. The vocabulary is [enum NetwMultiplayer.ClockMonitor], and every member of it is a uniform scalar so a debug overlay can sample the whole family in a loop.
+				Returns one clock diagnostic value.
 				[codeblock]
 				var rtt := Netw.clock(self).monitor(NetwMultiplayer.CLOCK_MONITOR_RTT_AVG)
 				[/codeblock]
-				The numbers that shape the simulation are properties. [member physics_factor], [member tick_factor], [member tick_phase] and [member recommended_display_offset] are each read directly.
 			</description>
 		</method>
 	</methods>
 	<members>
 		<member name="behind_count" type="int" setter="" getter="get_behind_count" default="0">
-			How many frames wanted a tick the per-frame ceiling refused. Sustained growth means this peer cannot sustain its own tickrate, which no setting repairs. [method NetwMultiplayer.clock_get_simulation_behind_count].
+			How many frames could not run every tick they needed. If it keeps growing, this machine is too slow for [member tickrate].
 		</member>
 		<member name="display_offset" type="int" setter="set_display_offset" getter="get_display_offset" default="0">
-			How many ticks behind [member tick] the view of remote state reads, so that what it reads has already arrived. [member recommended_display_offset] is what the measured link suggests for it.
+			How many ticks in the past remote entities are shown. See [member recommended_display_offset].
 		</member>
 		<member name="is_configured" type="bool" setter="" getter="get_is_configured" default="false">
-			Whether a [NetwClockConfig] has settled on this session, which is what [method Netw.configure_clock] declares. A component that steps on the tick reads this before it trusts [member tick].
+			[code]true[/code] once the settings from [method Netw.configure_clock] are applied. [member tick] does not move before that.
 		</member>
 		<member name="is_synchronized" type="bool" setter="" getter="get_is_synchronized" default="false">
-			Whether this peer's tick agrees with the server. Always [code]true[/code] on the server, and [code]false[/code] on a client until the first pong lands. [method NetwMultiplayer.clock_is_synchronized].
+			[code]true[/code] once the tick follows the server. Always [code]true[/code] on the server.
 		</member>
 		<member name="physics_factor" type="float" setter="" getter="get_physics_factor" default="1.0">
-			Physics frames per tick, unrounded. A per-frame quantity such as a velocity is scaled by this to cover one tick's worth of ground. [method NetwMultiplayer.clock_get_physics_factor].
+			Physics frames per tick. Multiply a per-frame value by it to get a per-tick value.
 		</member>
 		<member name="ping_interval" type="float" setter="set_ping_interval" getter="get_ping_interval" default="0.0">
-			How many seconds pass between the pings a client measures the link with. Shorter samples the link more often and costs more packets.
+			Seconds between pings. Shorter follows the connection more closely and sends more packets.
 		</member>
 		<member name="recommended_display_offset" type="int" setter="" getter="get_recommended_display_offset" default="0">
-			The display offset the measured link suggests, in ticks. Nothing applies it. [method NetwMultiplayer.clock_get_recommended_display_offset].
+			The [member display_offset] the current connection needs, in ticks. Not applied automatically.
 		</member>
 		<member name="sync_mode" type="int" setter="set_sync_mode" getter="get_sync_mode" enum="NetwMultiplayer.SyncMode" default="1">
-			How a calibration is taken, either [constant NetwMultiplayer.SYNC_MODE_SNAP] at once or [constant NetwMultiplayer.SYNC_MODE_STRETCH] spread over frames.
+			How the tick is corrected toward the server's.
 		</member>
 		<member name="tick" type="int" setter="" getter="get_tick" default="0">
-			The current network tick, the number every [NetwRecord] and every lag-compensation query is stamped against. [method NetwMultiplayer.clock_get_tick].
+			The current tick.
 		</member>
 		<member name="tick_factor" type="float" setter="" getter="get_tick_factor" default="0.0">
-			How far the simulation has advanced past the last tick, in ticks, counting the part of the current frame already drawn. This is what a renderer interpolates with. [method NetwMultiplayer.clock_get_tick_factor].
+			How far time has moved past the last tick, as a fraction of a tick. Use it to interpolate.
 		</member>
 		<member name="tick_phase" type="float" setter="" getter="get_tick_phase" default="0.0">
-			Where the accumulator sits inside the current tick, from zero to one. [method NetwMultiplayer.clock_get_tick_phase].
+			How far into the current tick the clock is, from [code]0.0[/code] to [code]1.0[/code].
 		</member>
 		<member name="tickrate" type="int" setter="" getter="get_tickrate" default="0">
-			Ticks per second, which [method Netw.configure_clock] declares and nothing changes afterwards. Every peer in a session counts at this rate.
+			Ticks per second, set by [method Netw.configure_clock]. The same on every peer.
 		</member>
 	</members>
 	<signals>
@@ -119,14 +80,14 @@
 			<param index="0" name="delta" type="float" />
 			<param index="1" name="tick" type="int" />
 			<description>
-				Emitted before the simulation steps [param tick], carrying that step's [param delta]. This is where input for the tick is sampled, because what is written here is what the tick then simulates. Relayed from [signal NetwMultiplayer.clock_before_tick].
+				Emitted before [param tick] runs. Read input here.
 			</description>
 		</signal>
 		<signal name="on_tick">
 			<param index="0" name="delta" type="float" />
 			<param index="1" name="tick" type="int" />
 			<description>
-				Emitted as the simulation steps [param tick], carrying that step's [param delta]. Relayed from [signal NetwMultiplayer.clock_on_tick].
+				Emitted when [param tick] runs. Run game logic here.
 			</description>
 		</signal>
 	</signals>

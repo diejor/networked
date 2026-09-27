@@ -1,6 +1,4 @@
 extends Node
-## Test fixture: the base half of a two-script chain whose declaration order
-## and text order disagree, so an id minted from the wrong one is visible.
 
 signal zulu_event(count: int)
 signal alpha_event(flag: bool, label: String)

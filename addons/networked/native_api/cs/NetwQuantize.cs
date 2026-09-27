@@ -6,42 +6,23 @@ using Godot.NativeInterop;
 namespace Networked;
 
 /// <summary>
-/// The base a game extends to give one value type its own bit packer, and the
-/// type every quantizer slot is declared as.
+/// Compresses a value into fewer bits, losing some precision.
 /// </summary>
 /// <remarks>
-/// A quantizer turns a value into a fixed number of bits and back, trading
-/// precision for size. One is assigned per property through
-/// <see cref="NetwMemberConfig.Quantize"/>, and the same resource may be shared
-/// by as many properties as want it. One quantizer handles
-/// <see cref="Vector2"/>, [float] and [int] without nesting, because it is told
-/// the type. A quantizer turns a value into codes and never touches a stream
-/// itself. <c>_stride</c> says how many codes one value spends,
-/// <c>_bit_width</c> says how wide each of them is, <c>_encode</c> returns one
-/// code per element, and <c>_decode</c> rebuilds the value from all of them.
-/// The session writes those codes into its own packed row through
-/// <see cref="NetwBitStream"/>, so a quantizer allocates nothing and a script
-/// override runs once per element rather than once per write. Each behaviour
-/// has two spellings. A subclass overrides <c>_encode</c>, <c>_decode</c>,
-/// <c>_stride</c>, <c>_supports_type</c>, <c>_bit_width</c> and
-/// <c>_max_error</c>. Every caller uses <see cref="NetwQuantize.Encode"/>,
-/// <see cref="NetwQuantize.Decode"/>, <see cref="NetwQuantize.Stride"/>,
-/// <see cref="NetwQuantize.SupportsType"/>, <see cref="NetwQuantize.BitWidth"/>
-/// and <see cref="NetwQuantize.MaxError"/> instead, because an override point
-/// reaches a GDScript override only and would find nothing on a quantizer
-/// written in C++. One written in C++ overrides the plain method, so no script
-/// is entered for it at all.
+/// Assign one to a property with <see cref="NetwMemberConfig.Quantize"/>. One
+/// quantizer can be shared by many properties. Both peers must use the same
+/// settings.
 /// <code>
-/// # Assigned on a synchronizer's codec/&lt;prop&gt; slot, or in code:
 /// Netw.configure_property(self, &amp;"position").quantize(NetwQuantizeScalar.new())
 /// </code>
 /// <para>
-/// Widths come from this resource on both peers, never the wire, so the decoder
-/// reconstructs the exact layout the encoder wrote. This base is abstract: a
-/// subclass (<see cref="NetwQuantizeScalar"/>, <see cref="NetwQuantizeAngle"/>,
-/// <see cref="NetwQuantizeQuaternion"/>, <see cref="NetwQuantizeTransform2D"/>,
-/// <see cref="NetwQuantizeTransform3D"/>) supplies the actual layout, and a
-/// game supplies its own by overriding the six virtuals.
+/// Use <see cref="NetwQuantizeScalar"/>, <see cref="NetwQuantizeAngle"/>,
+/// <see cref="NetwQuantizeQuaternion"/>, <see cref="NetwQuantizeTransform2D"/>
+/// or <see cref="NetwQuantizeTransform3D"/>, or extend this class. A value is
+/// split into <c>_stride</c> integers of <c>_bit_width</c> bits each.
+/// <c>_encode</c> returns one of them and <c>_decode</c> rebuilds the value
+/// from all of them. Override the methods that start with an underscore, and
+/// call the ones without.
 /// <code>
 /// extends NetwQuantize
 ///
@@ -82,11 +63,7 @@ public class NetwQuantize : NetwRefCounted
         NetwApi.MethodBind("NetwQuantize", "supports_type", 261496279UL);
 
     /// <summary>
-    /// Returns whether this quantizer can encode a value of
-    /// <paramref name="type"/>. Callers that quantize opportunistically (entity
-    /// RPC arguments) ask this before handing a value to
-    /// <see cref="NetwQuantize.Encode"/>, so the set of encodable types stays
-    /// owned by each quantizer instead of duplicated at the call site.
+    /// Calls <c>_supports_type</c>.
     /// </summary>
     public bool SupportsType(Variant.Type type)
     {
@@ -104,8 +81,8 @@ public class NetwQuantize : NetwRefCounted
         NetwApi.MethodBind("NetwQuantize", "bit_width", 3574617630UL);
 
     /// <summary>
-    /// Returns the width of ONE code for a value of <paramref name="type"/>.
-    /// <see cref="NetwQuantize.TotalBits"/> is what a whole value costs.
+    /// Calls <c>_bit_width</c>. <see cref="NetwQuantize.TotalBits"/> is the
+    /// size of the whole value.
     /// </summary>
     public int BitWidth(Variant.Type type)
     {
@@ -123,7 +100,7 @@ public class NetwQuantize : NetwRefCounted
         NetwApi.MethodBind("NetwQuantize", "stride", 3574617630UL);
 
     /// <summary>
-    /// Returns how many codes one value of <paramref name="type"/> spends.
+    /// Calls <c>_stride</c>.
     /// </summary>
     public int Stride(Variant.Type type)
     {
@@ -141,8 +118,7 @@ public class NetwQuantize : NetwRefCounted
         NetwApi.MethodBind("NetwQuantize", "encode", 1863745521UL);
 
     /// <summary>
-    /// Returns the code for element <paramref name="element"/> of
-    /// <paramref name="value"/>.
+    /// Calls <c>_encode</c>.
     /// </summary>
     public long Encode(Variant value, int element)
     {
@@ -166,9 +142,7 @@ public class NetwQuantize : NetwRefCounted
         NetwApi.MethodBind("NetwQuantize", "decode", 114611561UL);
 
     /// <summary>
-    /// Returns the value of <paramref name="type"/> that
-    /// <paramref name="codes"/> stands for, inverting
-    /// <see cref="NetwQuantize.Encode"/>.
+    /// Calls <c>_decode</c>.
     /// </summary>
     public Variant Decode(long[] codes, Variant.Type type)
     {
@@ -192,7 +166,7 @@ public class NetwQuantize : NetwRefCounted
         NetwApi.MethodBind("NetwQuantize", "total_bits", 3574617630UL);
 
     /// <summary>
-    /// Returns what a whole value of <paramref name="type"/> costs, which is
+    /// Returns the bits of a whole <paramref name="type"/> value,
     /// <see cref="NetwQuantize.BitWidth"/> times
     /// <see cref="NetwQuantize.Stride"/>.
     /// </summary>
@@ -212,8 +186,7 @@ public class NetwQuantize : NetwRefCounted
         NetwApi.MethodBind("NetwQuantize", "max_error", 2635815579UL);
 
     /// <summary>
-    /// Returns the worst-case round-trip error for a value of
-    /// <paramref name="type"/>.
+    /// Calls <c>_max_error</c>.
     /// </summary>
     public double MaxError(Variant.Type type)
     {
@@ -231,13 +204,8 @@ public class NetwQuantize : NetwRefCounted
         NetwApi.MethodBind("NetwQuantize", "is_same_layout", 152329991UL);
 
     /// <summary>
-    /// Returns whether <paramref name="other"/> encodes the identical bit
-    /// layout: the same quantizer class and script with the same stored
-    /// parameters. Two layout-equal quantizers read each other's bits, so a
-    /// configuration re-declared per instance with fresh but identical
-    /// quantizers is the same schema, not a conflict.
-    /// <see cref="NetwMemberConfig.Quantize"/> warns only when a re-declaration
-    /// fails this check.
+    /// Returns <c>true</c> when <paramref name="other"/> has the same class,
+    /// script and settings, so each can read what the other writes.
     /// </summary>
     public bool IsSameLayout(NetwQuantize other)
     {

@@ -6,16 +6,13 @@ using Godot.NativeInterop;
 namespace Networked;
 
 /// <summary>
-/// A payload is described once and written, read and measured by the same code.
+/// Writes and reads data bit by bit, with the same code.
 /// </summary>
 /// <remarks>
-/// Write descriptions that run once in all three
-/// <see cref="NetwBitStream.Mode"/> values. <see cref="NetwBitStream.Writer"/>
-/// spends bits, <see cref="NetwBitStream.Reader"/> takes them back, and
-/// <see cref="NetwBitStream.Measurer"/> counts what they would cost without
-/// storing anything. Write the description as one function over a
-/// <see cref="NetwBitStream"/> and call it three times rather than writing an
-/// encoder and a decoder that must be kept in step.
+/// Write one function that takes a <see cref="NetwBitStream"/>. Call it with a
+/// <see cref="NetwBitStream.Writer"/> to write, a
+/// <see cref="NetwBitStream.Reader"/> to read, or a
+/// <see cref="NetwBitStream.Measurer"/> to count the bits without writing.
 /// <code>
 /// func describe(s: NetwBitStream, row: Dictionary) -&gt; Dictionary:
 ///     row.hp = s.bits(row.get("hp", 0), 12)
@@ -33,13 +30,10 @@ namespace Networked;
 ///     push_error("rejected")
 /// </code>
 /// <para>
-/// Every verb after the failure is a no-op returning the value it was given. A
-/// decoder checks <see cref="NetwBitStream.Ok"/> once at the end rather than
-/// after each call. After decoding a complete payload,
-/// <see cref="NetwBitStream.BitsRemaining"/> must return <c>0</c>. Reject
-/// payloads with unread bits. <see cref="NetwBitStream.AlignVerify"/> pads to
-/// the next byte on a write and, on a read, rejects padding that is not zero. A
-/// payload always has tp end with <see cref="NetwBitStream.AlignVerify"/>.
+/// After a read fails, every call does nothing, so check
+/// <see cref="NetwBitStream.Ok"/> once at the end. Reject the data when
+/// <see cref="NetwBitStream.BitsRemaining"/> is not <c>0</c>. End every payload
+/// with <see cref="NetwBitStream.AlignVerify"/>.
 /// </para>
 /// </remarks>
 public sealed class NetwBitStream : NetwRefCounted
@@ -61,20 +55,17 @@ public sealed class NetwBitStream : NetwRefCounted
     public enum Mode : long
     {
         /// <summary>
-        /// The stream spends the value it is given and
-        /// <see cref="NetwBitStream.ToBytes"/> returns the result.
+        /// Writes the given values. Read the result with
+        /// <see cref="NetwBitStream.ToBytes"/>.
         /// </summary>
         Write = 0,
         /// <summary>
-        /// The stream takes values back out of the bytes
-        /// <see cref="NetwBitStream.Reader"/> was given, ignoring the value it
-        /// is passed and returning it unchanged once the stream is poisoned.
+        /// Returns values read from the bytes, ignoring the given values.
         /// </summary>
         Read = 1,
         /// <summary>
-        /// The stream stores nothing and only counts, so
-        /// <see cref="NetwBitStream.BitLength"/> returns what the same
-        /// description would cost to write.
+        /// Only counts bits. Read the count with
+        /// <see cref="NetwBitStream.BitLength"/>.
         /// </summary>
         Measure = 2,
     }
@@ -83,8 +74,8 @@ public sealed class NetwBitStream : NetwRefCounted
         NetwApi.MethodBind("NetwBitStream", "writer", 1748976972UL);
 
     /// <summary>
-    /// A stream in <see cref="NetwBitStream.Mode.Write"/>, empty, ready to
-    /// spend bits.
+    /// Returns an empty stream that writes, in
+    /// <see cref="NetwBitStream.Mode.Write"/>.
     /// </summary>
     public static NetwBitStream Writer()
     {
@@ -97,8 +88,8 @@ public sealed class NetwBitStream : NetwRefCounted
         NetwApi.MethodBind("NetwBitStream", "reader", 1439854989UL);
 
     /// <summary>
-    /// A stream in <see cref="NetwBitStream.Mode.Read"/> over
-    /// <paramref name="bytes"/>.
+    /// Returns a stream that reads <paramref name="bytes"/>, in
+    /// <see cref="NetwBitStream.Mode.Read"/>.
     /// </summary>
     public static NetwBitStream Reader(byte[] bytes)
     {
@@ -118,9 +109,8 @@ public sealed class NetwBitStream : NetwRefCounted
         NetwApi.MethodBind("NetwBitStream", "measurer", 1748976972UL);
 
     /// <summary>
-    /// A stream in <see cref="NetwBitStream.Mode.Measure"/> that stores nothing
-    /// and counts what a description would cost. This is how a payload is
-    /// priced before it is built.
+    /// Returns a stream that only counts bits, in
+    /// <see cref="NetwBitStream.Mode.Measure"/>.
     /// </summary>
     public static NetwBitStream Measurer()
     {
@@ -133,7 +123,7 @@ public sealed class NetwBitStream : NetwRefCounted
         NetwApi.MethodBind("NetwBitStream", "get_mode", 559934698UL);
 
     /// <summary>
-    /// Which of the three modes this stream was made in. It never changes.
+    /// Returns whether the stream writes, reads or counts.
     /// </summary>
     public NetwBitStream.Mode GetMode()
     {
@@ -146,9 +136,9 @@ public sealed class NetwBitStream : NetwRefCounted
         NetwApi.MethodBind("NetwBitStream", "bits", 50157827UL);
 
     /// <summary>
-    /// Spends <paramref name="count"/> raw bits of <paramref name="value"/>, at
-    /// most 64, and returns what was spent. Reading returns the decoded bits; a
-    /// <paramref name="count"/> outside <c>1</c> to <c>64</c> is rejected.
+    /// Writes the lowest <paramref name="count"/> bits of
+    /// <paramref name="value"/>, from <c>1</c> to <c>64</c>. When reading,
+    /// returns the value read.
     /// </summary>
     public long Bits(long value, int count)
     {
@@ -168,11 +158,9 @@ public sealed class NetwBitStream : NetwRefCounted
         NetwApi.MethodBind("NetwBitStream", "int_range", 4124862902UL);
 
     /// <summary>
-    /// Spends exactly the bits the span <paramref name="low"/> to
-    /// <paramref name="high"/> needs. A <paramref name="value"/> outside the
-    /// span is rejected by the writer and a decoded value outside it is
-    /// rejected by the reader, so an enum on the wire cannot arrive as a case
-    /// the game has no branch for.
+    /// Writes or reads an integer from <paramref name="low"/> to
+    /// <paramref name="high"/>, using only the bits that range needs. Fails for
+    /// a value outside the range.
     /// </summary>
     public long IntRange(long value, long low, long high)
     {
@@ -194,9 +182,8 @@ public sealed class NetwBitStream : NetwRefCounted
         NetwApi.MethodBind("NetwBitStream", "varuint", 2625980282UL);
 
     /// <summary>
-    /// Spends an unsigned value as seven bit groups with a continuation bit, at
-    /// most <paramref name="maxBytes"/> of them. Canonical and bounded: see the
-    /// class description for what each end rejects.
+    /// Writes or reads an unsigned integer in as few bytes as it needs, at most
+    /// <paramref name="maxBytes"/>. Small numbers take one byte.
     /// </summary>
     public long Varuint(long value, int maxBytes = 10)
     {
@@ -216,9 +203,8 @@ public sealed class NetwBitStream : NetwRefCounted
         NetwApi.MethodBind("NetwBitStream", "svarint", 2625980282UL);
 
     /// <summary>
-    /// Spends a signed value as a zigzagged
-    /// <see cref="NetwBitStream.Varuint"/>, so a small negative number costs
-    /// one group rather than ten.
+    /// Like <see cref="NetwBitStream.Varuint"/>, for signed integers. Small
+    /// negative numbers stay small.
     /// </summary>
     public long Svarint(long value, int maxBytes = 10)
     {
@@ -238,7 +224,7 @@ public sealed class NetwBitStream : NetwRefCounted
         NetwApi.MethodBind("NetwBitStream", "bool1", 2703660260UL);
 
     /// <summary>
-    /// Spends one bit.
+    /// Writes or reads one bit.
     /// </summary>
     public bool Bool1(bool value)
     {
@@ -256,10 +242,8 @@ public sealed class NetwBitStream : NetwRefCounted
         NetwApi.MethodBind("NetwBitStream", "bytes_capped", 919159767UL);
 
     /// <summary>
-    /// Spends a length wide enough for <paramref name="cap"/>, then the bytes.
-    /// A contiguous sequence of bytes longer than <paramref name="cap"/> is
-    /// rejected by the writer, and a declared length above
-    /// <paramref name="cap"/> is rejected by the reader.
+    /// Writes or reads a length, then the bytes. Fails when there are more than
+    /// <paramref name="cap"/> bytes.
     /// </summary>
     public byte[] BytesCapped(byte[] value, int cap)
     {
@@ -284,8 +268,7 @@ public sealed class NetwBitStream : NetwRefCounted
         NetwApi.MethodBind("NetwBitStream", "string", 1703090593UL);
 
     /// <summary>
-    /// Spends the utf8 of <paramref name="value"/> as a
-    /// <see cref="NetwBitStream.BytesCapped"/> run of at most 1023 bytes.
+    /// Writes or reads a string of at most 1023 UTF-8 bytes.
     /// </summary>
     public string String(string value)
     {
@@ -302,9 +285,8 @@ public sealed class NetwBitStream : NetwRefCounted
         NetwApi.MethodBind("NetwBitStream", "align_verify", 2240911060UL);
 
     /// <summary>
-    /// Pads to the next byte boundary when writing, and when reading rejects
-    /// padding whose bits are not zero. Returns <c>false</c> on rejection,
-    /// which poisons the stream.
+    /// Pads with zeros to the next full byte. When reading, fails if the
+    /// padding is not zero. Returns <c>false</c> on failure.
     /// </summary>
     public bool AlignVerify()
     {
@@ -317,9 +299,7 @@ public sealed class NetwBitStream : NetwRefCounted
         NetwApi.MethodBind("NetwBitStream", "ok", 2240911060UL);
 
     /// <summary>
-    /// Whether the stream is still healthy. A read that ran past the end, a
-    /// rejected bound, or padding that was not zero clears this and it never
-    /// comes back.
+    /// Returns <c>false</c> once any call failed.
     /// </summary>
     public bool Ok()
     {
@@ -332,8 +312,7 @@ public sealed class NetwBitStream : NetwRefCounted
         NetwApi.MethodBind("NetwBitStream", "bit_length", 2455072627UL);
 
     /// <summary>
-    /// Bits spent so far: written, read, or described, according to
-    /// <see cref="NetwBitStream.GetMode"/>.
+    /// The number of bits written, read or counted so far.
     /// </summary>
     public long BitLength()
     {
@@ -346,8 +325,7 @@ public sealed class NetwBitStream : NetwRefCounted
         NetwApi.MethodBind("NetwBitStream", "bits_remaining", 2455072627UL);
 
     /// <summary>
-    /// Bits the reader has not consumed, and <c>0</c> in any other
-    /// <see cref="NetwBitStream.Mode"/>. A whole payload ends at <c>0</c>.
+    /// The number of bits not read yet. Always <c>0</c> when not reading.
     /// </summary>
     public long BitsRemaining()
     {
@@ -360,8 +338,7 @@ public sealed class NetwBitStream : NetwRefCounted
         NetwApi.MethodBind("NetwBitStream", "to_bytes", 2362200018UL);
 
     /// <summary>
-    /// What the writer has spent, padded to a whole byte. Empty in any other
-    /// <see cref="NetwBitStream.Mode"/>.
+    /// Returns the written bytes. Empty when not writing.
     /// </summary>
     public byte[] ToBytes()
     {

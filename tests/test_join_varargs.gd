@@ -1,6 +1,3 @@
-## Law: the arguments after the username in [method Netw.prepare_join] reach
-## the [method Netw.configure_join] handler one for one, and an Array among
-## them stays one argument.
 class_name TestNetwJoinVarargs
 extends NetwTestSuite
 

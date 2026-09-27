@@ -118,7 +118,7 @@ Ref<NetwPropertySet> from_property_config(
             p_property,
             quantizer,
             false,
-            int64_t(SchemaCore::VARIANT)
+            NetwMultiplayer::ColumnType(SchemaCore::VARIANT)
         )
     );
     return set;
@@ -175,7 +175,7 @@ Ref<NetwPropertySet> from_property_configs(
             property,
             quantizer,
             config->get_lane() == NetwPropertySet::RETAINED,
-            int64_t(SchemaCore::VARIANT)
+            NetwMultiplayer::ColumnType(SchemaCore::VARIANT)
         );
         column->property_class = config->get_property_class();
         column->converge_stiffness = config->get_converge_stiffness();

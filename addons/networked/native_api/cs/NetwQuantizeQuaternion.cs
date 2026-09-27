@@ -6,21 +6,14 @@ using Godot.NativeInterop;
 namespace Networked;
 
 /// <summary>
-/// <see cref="NetwQuantize"/> that compresses a unit <see cref="Quaternion"/>
-/// with smallest-three encoding.
+/// <see cref="NetwQuantize"/> for a normalized <see cref="Quaternion"/>.
 /// </summary>
 /// <remarks>
-/// The largest component is omitted and reconstructed from unit length. The
-/// other three components are quantized across <c>-1 / sqrt(2) &lt;= component
-/// &lt;= 1 / sqrt(2)</c>. This stores any rotation in <c>2 + bit_count * 3</c>
-/// bits.
+/// Sends three of the four components, and rebuilds the largest one. Any
+/// rotation takes <c>2 + bit_count * 3</c> bits.
 /// <code>
 /// var q := NetwQuantizeQuaternion.new().bits(10)
 /// </code>
-/// <para>
-/// The sign of the omitted component is normalized away before packing, so two
-/// quaternions naming the same rotation encode to the same bits.
-/// </para>
 /// </remarks>
 public sealed class NetwQuantizeQuaternion : NetwQuantize
 {
@@ -52,7 +45,7 @@ public sealed class NetwQuantizeQuaternion : NetwQuantize
             1286410249UL);
 
     /// <summary>
-    /// Bits per stored quaternion component, clamped to 1..20.
+    /// Bits per component, from <c>1</c> to <c>20</c>.
     /// </summary>
     public int BitCount
     {
@@ -78,8 +71,8 @@ public sealed class NetwQuantizeQuaternion : NetwQuantize
         NetwApi.MethodBind("NetwQuantizeQuaternion", "bits", 3332158182UL);
 
     /// <summary>
-    /// Builder that sets <see cref="NetwQuantizeQuaternion.BitCount"/> and
-    /// returns this quantizer.
+    /// Sets <see cref="NetwQuantizeQuaternion.BitCount"/> and returns this
+    /// quantizer.
     /// </summary>
     public NetwQuantizeQuaternion Bits(int bits)
     {

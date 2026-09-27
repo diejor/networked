@@ -1,17 +1,13 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <class name="NetwPredictFold" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
 	<brief_description>
-		Which input one prediction frame drives, and under what label.
+		Which input a predicted entity simulates this frame, returned by [method NetwMultiplayer._predict_drive].
 	</brief_description>
 	<description>
-		[method NetwMultiplayer._predict_drive] returns one of these, and a game overriding that seam creates its own through [method of].
-		Every driven frame is labeled, including one that had no new input, so a frame with nothing newer than the last driven repeats the input it already had rather than inventing one. That is why [method label] is never absent and [method fresh] is what separates the two cases.
+		Create one with [method of] in an override of [method NetwMultiplayer._predict_drive]. A frame with no new input repeats the last one.
 		[codeblock]
-		var fold := NetwPredictFold.of(tick, true, NetwPredict.DriveKind.FRESH)
+		var fold := NetwPredictFold.of(tick, true, NetwPredict.DRIVE_KIND_FRESH)
 		[/codeblock]
-		- [method label] the tick the transition is filed under
-		- [method fresh] true when a newer input drove it
-		- [method kind] a [enum NetwPredict.DriveKind] value
 	</description>
 	<tutorials>
 	</tutorials>
@@ -19,19 +15,19 @@
 		<method name="fresh" qualifiers="const">
 			<return type="bool" />
 			<description>
-				Whether a newer input drove this frame. A frame that is not fresh repeats the input it already had, and the tape gains no entry the input does not justify.
+				[code]true[/code] when this frame uses a new input, [code]false[/code] when it repeats the last one.
 			</description>
 		</method>
 		<method name="kind" qualifiers="const">
 			<return type="int" enum="NetwPredict.DriveKind" />
 			<description>
-				How the frame was driven, as a [enum NetwPredict.DriveKind].
+				Which input was used.
 			</description>
 		</method>
 		<method name="label" qualifiers="const">
 			<return type="int" />
 			<description>
-				The tick the transition is filed under, which is the input's own tick whenever one has arrived and the pass timing when none has.
+				The tick of the input, or the current tick when there is no input.
 			</description>
 		</method>
 		<method name="of" qualifiers="static">
@@ -40,7 +36,7 @@
 			<param index="1" name="fresh" type="bool" />
 			<param index="2" name="kind" type="int" enum="NetwPredict.DriveKind" />
 			<description>
-				Creates one drive choice. [param kind] is a [enum NetwPredict.DriveKind] and naming no member of it is rejected, because a fold the tape cannot classify would file an entry under a kind no reader can act on.
+				Creates a [NetwPredictFold]. [param kind] must be a valid [enum NetwPredict.DriveKind].
 			</description>
 		</method>
 	</methods>

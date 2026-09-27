@@ -35,7 +35,7 @@
 			<return type="NetwPropertyConfig" />
 			<param index="0" name="server_only" type="bool" default="true" />
 			<description>
-				Sends the set to the server only, or to every peer when [param server_only] is [code]false[/code]. Sets [member NetwPropertySet.audience]. [method input] already sends to the server only.
+				Sends properties of this kind to the server only, or to every peer when [param server_only] is [code]false[/code]. Sets [member NetwPropertySet.audience]. [method input] already sends to the server only.
 			</description>
 		</method>
 		<method name="broadcast">
@@ -133,7 +133,7 @@
 			<return type="NetwPropertyConfig" />
 			<param index="0" name="interval" type="float" default="0.0" />
 			<description>
-				Sends the set every tick even when nothing changed, at most once per [param interval] seconds.
+				Sends properties of this kind every tick even when nothing changed, at most once per [param interval] seconds.
 				[codeblock]
 				# position changes every tick anyway
 				Netw.configure_property(self, &amp;"position").state().every_tick()
@@ -144,7 +144,7 @@
 			<return type="NetwPropertyConfig" />
 			<param index="0" name="ticks" type="int" />
 			<description>
-				Re-sends the set every [param ticks] ticks even when nothing changed, so a peer that missed a change catches up. An [method input] set ignores it.
+				Re-sends properties of this kind every [param ticks] ticks even when nothing changed, so a peer that missed a change catches up. [method input] properties ignore it.
 				[codeblock]
 				# a lost "stunned" change heals within a second at 60 ticks
 				Netw.configure_property(self, &amp;"stunned").state().heartbeat(60)
@@ -181,7 +181,7 @@
 		<method name="on_change">
 			<return type="NetwPropertyConfig" />
 			<description>
-				Sends the set only when a property changed. This is the default.
+				Sends properties of this kind only when one changed. This is the default.
 			</description>
 		</method>
 		<method name="on_spawn">
@@ -350,7 +350,7 @@
 	</members>
 	<constants>
 		<constant name="UNSET" value="-1">
-			The value of a set-wide setting nothing has written yet.
+			A setting no call has written yet.
 		</constant>
 	</constants>
 </class>

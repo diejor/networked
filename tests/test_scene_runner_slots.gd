@@ -61,8 +61,6 @@ func test_scene_runner_routes_action_to_one_slot() -> void:
 	assert_that(Input.is_action_pressed(ACTION)).is_false()
 
 
-# These tests reach into base class private state. They pin the
-# GdUnitSceneRunnerImpl contract that NetwSceneRunner wraps.
 func test_scene_runner_routes_key_to_one_slot() -> void:
 	var a := _make_slot_scene("A", false)
 	var runner := NetwSceneRunner.new(a.scene, a.slot, &"valeria")

@@ -6,16 +6,13 @@ using Godot.NativeInterop;
 namespace Networked;
 
 /// <summary>
-/// The pending result of a one-to-one network request, resolved once with the
-/// responder's return value.
+/// The result of a network request, available once it arrives.
 /// </summary>
 /// <remarks>
-/// It settles exactly once: <see cref="NetwPromise.Then"/> fires with the value
-/// the remote handler returned, or <see cref="NetwPromise.CatchError"/> fires
-/// with an <c>@GlobalScope.Error</c> code if the request times out or the
-/// target peer disconnects. Chaining before it settles is safe, and chaining
-/// after a settled promise fires the callback immediately, so there is no race
-/// between sending and subscribing.
+/// A promise settles once. <see cref="NetwPromise.Then"/> runs with the
+/// returned value, or <see cref="NetwPromise.CatchError"/> runs with an
+/// <c>@GlobalScope.Error</c>. Chaining after it settled runs the callback
+/// immediately.
 /// <code>
 /// Netw.request(server.buy_item, item_id) \
 ///     .then(func(receipt: Dictionary) -&gt; void: show_receipt(receipt)) \
@@ -24,15 +21,20 @@ namespace Networked;
 ///     )
 /// </code>
 /// <para>
-/// The settle vocabulary is closed. <c>@GlobalScope.ERR_TIMEOUT</c> means the
-/// deadline passed with no reply, <c>@GlobalScope.ERR_UNAVAILABLE</c> means the
-/// responder went away before it could answer, and
-/// <c>@GlobalScope.ERR_UNAUTHORIZED</c> means the responder rejected. The
-/// <see cref="NetwPromise.Detail"/> string carries the human-readable reason
-/// and is never the thing code branches on. A returned <see cref="Node"/>
-/// arrives resolved to the live local instance, deferred until it spawns if the
-/// reply beats its spawn packet. See <see cref="NetwGroupPromise"/> for the
-/// one-to-many form.
+/// Or <c>await</c> it with <see cref="NetwPromise.Wait"/>.
+/// <code>
+/// var receipt = await Netw.request(server.buy_item, item_id).wait()
+/// </code>
+/// <code>
+/// Error
+/// ┠╴ERR_TIMEOUT       no reply in time
+/// ┠╴ERR_UNAVAILABLE   the other peer disconnected
+/// ┖╴ERR_UNAUTHORIZED  the other peer refused
+/// </code>
+/// </para>
+/// <para>
+/// A returned <see cref="Node"/> arrives as this peer's own copy. See
+/// <see cref="NetwGroupPromise"/> for requests to many peers.
 /// </para>
 /// </remarks>
 public sealed class NetwPromise : NetwRefCounted
@@ -52,8 +54,7 @@ public sealed class NetwPromise : NetwRefCounted
     }
 
     /// <summary>
-    /// Emitted when the promise resolves, carrying
-    /// <see cref="NetwPromise.Result"/>.
+    /// Emitted when the promise completes.
     /// </summary>
     public event Action<Variant> Completed
     {
@@ -62,27 +63,17 @@ public sealed class NetwPromise : NetwRefCounted
     }
 
     /// <summary>
-    /// Emitted when the promise is rejected, carrying the settle <c>code</c>
-    /// and its human-readable <c>detail</c>.
+    /// Emitted when the promise fails.
     /// </summary>
-    public event Action<long, string> Failed
+    public event Action<Error, string> Failed
     {
         add => Connect("failed", Callable.From(value));
         remove => Disconnect("failed", Callable.From(value));
     }
 
     /// <summary>
-    /// Emitted once when the promise settles, whichever way it went. Connect
-    /// here when the outcome matters less than the operation being over, and
-    /// read <see cref="NetwPromise.Code"/> afterwards. Do not <c>await</c>
-    /// this: a signal that already fired never fires again, so a promise that
-    /// settled first leaves the caller waiting forever.
-    /// <see cref="NetwPromise.Wait"/> exists for that and has no such window.
-    /// <code>
-    /// var err: Error = await promise.wait()
-    /// if err != OK:
-    ///     show_error(promise.detail)
-    /// </code>
+    /// Emitted once when the promise completes or fails. Do not <c>await</c>
+    /// it, since it may already have fired. Use <see cref="NetwPromise.Wait"/>.
     /// </summary>
     public event Action Settled
     {
@@ -91,13 +82,9 @@ public sealed class NetwPromise : NetwRefCounted
     }
 
     /// <summary>
-    /// Carries <see cref="NetwPromise.Answer"/>. A pending promise emits this
-    /// once when it settles. <see cref="NetwPromise.Wait"/> emits it later for
-    /// each call made after settlement. <b>Note:</b> connect to
-    /// <see cref="NetwPromise.Settled"/> instead. Because a settled promise
-    /// emits this per call, a subscriber attached by hand can see it more than
-    /// once. <see cref="NetwPromise.Wait"/> is its only intended producer and
-    /// consumer.
+    /// Used by <see cref="NetwPromise.Wait"/>. Connect to
+    /// <see cref="NetwPromise.Settled"/> instead, since this can be emitted
+    /// more than once.
     /// </summary>
     public event Action<Variant> Ready
     {
@@ -109,7 +96,7 @@ public sealed class NetwPromise : NetwRefCounted
         NetwApi.MethodBind("NetwPromise", "get_is_completed", 36873697UL);
 
     /// <summary>
-    /// Whether the promise resolved successfully.
+    /// <c>true</c> when the promise completed.
     /// </summary>
     public bool IsCompleted
     {
@@ -128,7 +115,7 @@ public sealed class NetwPromise : NetwRefCounted
         NetwApi.MethodBind("NetwPromise", "get_is_failed", 36873697UL);
 
     /// <summary>
-    /// Whether the promise was rejected or timed out.
+    /// <c>true</c> when the promise failed.
     /// </summary>
     public bool IsFailed
     {
@@ -144,10 +131,7 @@ public sealed class NetwPromise : NetwRefCounted
         NetwApi.MethodBind("NetwPromise", "get_is_settled", 36873697UL);
 
     /// <summary>
-    /// Whether the promise has settled, whichever way it went.
-    /// <see cref="NetwPromise.IsCompleted"/> alone means "succeeded", so code
-    /// that only needs to know the operation is over asks this instead of
-    /// testing both flags.
+    /// <c>true</c> when the promise completed or failed.
     /// </summary>
     public bool IsSettled
     {
@@ -163,8 +147,7 @@ public sealed class NetwPromise : NetwRefCounted
         NetwApi.MethodBind("NetwPromise", "get_result", 1214101251UL);
 
     /// <summary>
-    /// The resolved value when <see cref="NetwPromise.IsCompleted"/> is
-    /// <c>true</c>.
+    /// The value, when <see cref="NetwPromise.IsCompleted"/>.
     /// </summary>
     public Variant Result
     {
@@ -182,8 +165,8 @@ public sealed class NetwPromise : NetwRefCounted
         NetwApi.MethodBind("NetwPromise", "get_code", 3185525595UL);
 
     /// <summary>
-    /// The settle code when <see cref="NetwPromise.IsFailed"/> is <c>true</c>,
-    /// and <c>@GlobalScope.OK</c> otherwise.
+    /// The error when <see cref="NetwPromise.IsFailed"/>, otherwise
+    /// <c>@GlobalScope.OK</c>.
     /// </summary>
     public Error Code
     {
@@ -199,8 +182,8 @@ public sealed class NetwPromise : NetwRefCounted
         NetwApi.MethodBind("NetwPromise", "get_detail", 201670096UL);
 
     /// <summary>
-    /// The human-readable reason behind <see cref="NetwPromise.Code"/>, empty
-    /// when the code says it all. Diagnostics only, never a branch condition.
+    /// A readable reason for <see cref="NetwPromise.Code"/>, or empty. For
+    /// display only.
     /// </summary>
     public string Detail
     {
@@ -217,6 +200,9 @@ public sealed class NetwPromise : NetwRefCounted
     private static readonly IntPtr _bindResolved =
         NetwApi.MethodBind("NetwPromise", "resolved", 64789120UL);
 
+    /// <summary>
+    /// Returns a promise that already completed with <paramref name="value"/>.
+    /// </summary>
     public static NetwPromise Resolved(Variant value)
     {
         godot_variant slot0 = value.CopyNativeVariant();
@@ -234,6 +220,9 @@ public sealed class NetwPromise : NetwRefCounted
     private static readonly IntPtr _bindRejected =
         NetwApi.MethodBind("NetwPromise", "rejected", 596550914UL);
 
+    /// <summary>
+    /// Returns a promise that already failed with <paramref name="code"/>.
+    /// </summary>
     public static NetwPromise Rejected(Error code, string detail = "")
     {
         godot_variant slot0 = VariantUtils.CreateFromInt((long)code);
@@ -259,10 +248,8 @@ public sealed class NetwPromise : NetwRefCounted
         NetwApi.MethodBind("NetwPromise", "then", 4104835065UL);
 
     /// <summary>
-    /// Chains <paramref name="cb"/> to run when the promise resolves. It
-    /// receives <see cref="NetwPromise.Result"/>. A promise that already
-    /// completed runs it immediately, and either way this returns the promise
-    /// so calls chain.
+    /// Calls <paramref name="cb"/> with <see cref="NetwPromise.Result"/> when
+    /// the promise completes. Returns the promise.
     /// </summary>
     public NetwPromise Then(Callable cb)
     {
@@ -282,10 +269,8 @@ public sealed class NetwPromise : NetwRefCounted
         NetwApi.MethodBind("NetwPromise", "catch_error", 4104835065UL);
 
     /// <summary>
-    /// Chains <paramref name="cb"/> to run if the promise is rejected or timed
-    /// out. It receives <see cref="NetwPromise.Code"/> and
-    /// <see cref="NetwPromise.Detail"/>. A promise that already failed runs it
-    /// immediately, and either way this returns the promise so calls chain.
+    /// Calls <paramref name="cb"/> as <c>cb(code, detail)</c> when the promise
+    /// fails. Returns the promise.
     /// </summary>
     public NetwPromise CatchError(Callable cb)
     {
@@ -305,20 +290,10 @@ public sealed class NetwPromise : NetwRefCounted
         NetwApi.MethodBind("NetwPromise", "when_settled", 4104835065UL);
 
     /// <summary>
-    /// Chains a zero-argument <paramref name="cb"/> to run the moment
-    /// <see cref="NetwPromise.IsSettled"/> becomes true, whichever way it went.
-    /// An already-settled promise runs it immediately, and either way this
-    /// returns the promise so calls chain. This is what a caller with no
-    /// coroutine uses in place of <c>await promise.settled</c>. Awaiting is a
-    /// race the caller cannot win, because a promise that settled before the
-    /// <c>await</c> has already emitted <see cref="NetwPromise.Settled"/> and
-    /// the caller waits forever; subscribing here has no such window. It is
-    /// also the only chain that survives both outcomes, since
-    /// <see cref="NetwPromise.Then"/> never fires on a rejection and
-    /// <see cref="NetwPromise.CatchError"/> never fires on a success.
+    /// Calls <paramref name="cb"/> with no arguments when the promise settles,
+    /// whether it completed or failed. Returns the promise.
     /// <code>
-    /// func answer_when_settled(operation: NetwPromise) -&gt; void:
-    ///     operation.when_settled(func() -&gt; void: reply(operation.code))
+    /// operation.when_settled(func() -&gt; void: reply(operation.code))
     /// </code>
     /// </summary>
     public NetwPromise WhenSettled(Callable cb)
@@ -339,24 +314,12 @@ public sealed class NetwPromise : NetwRefCounted
         NetwApi.MethodBind("NetwPromise", "wait", 4046169648UL);
 
     /// <summary>
-    /// Returns a <see cref="Signal"/> on the <see cref="NetwPromise.Ready"/>
-    /// channel that is safe to <c>await</c> whether or not the promise has
-    /// already settled, carrying <see cref="NetwPromise.Answer"/>. This is the
-    /// idiom. Awaiting <see cref="NetwPromise.Settled"/> directly is a race the
-    /// caller cannot win: a promise that settled first has already emitted it
-    /// and the caller waits forever, which is why call sites grew a
-    /// hand-written <see cref="NetwPromise.IsSettled"/> guard. An
-    /// already-settled promise defers its emission here, so the <c>await</c>
-    /// subscribes before the answer is delivered.
+    /// Returns a signal to <c>await</c>, which gives
+    /// <see cref="NetwPromise.Answer"/>. It works even when the promise already
+    /// settled, which awaiting <see cref="NetwPromise.Settled"/> does not.
     /// <code>
     /// var err: Error = await engine.flush(keys).wait()
     /// </code>
-    /// <para>
-    /// This never re-emits <see cref="NetwPromise.Completed"/>,
-    /// <see cref="NetwPromise.Failed"/> or <see cref="NetwPromise.Settled"/>,
-    /// so an earlier subscriber is notified exactly once no matter how late
-    /// anyone waits.
-    /// </para>
     /// </summary>
     public Signal Wait()
     {
@@ -371,10 +334,8 @@ public sealed class NetwPromise : NetwRefCounted
         NetwApi.MethodBind("NetwPromise", "answer", 1214101251UL);
 
     /// <summary>
-    /// Returns <see cref="NetwPromise.Result"/> after success or
-    /// <see cref="NetwPromise.Code"/> after failure.
-    /// <see cref="NetwPromise.Ready"/> carries the same value. Check
-    /// <see cref="NetwPromise.IsSettled"/> before reading an unsettled promise.
+    /// Returns <see cref="NetwPromise.Result"/> on success, or
+    /// <see cref="NetwPromise.Code"/> on failure.
     /// </summary>
     public Variant Answer()
     {
@@ -389,11 +350,9 @@ public sealed class NetwPromise : NetwRefCounted
         NetwApi.MethodBind("NetwPromise", "resolve", 1114965689UL);
 
     /// <summary>
-    /// Settles the promise as completed with <paramref name="val"/>. Emits
-    /// <see cref="NetwPromise.Completed"/> then
-    /// <see cref="NetwPromise.Settled"/> and runs every chained
-    /// <see cref="NetwPromise.Then"/>. A promise that already settled is
-    /// unchanged.
+    /// Completes the promise with <paramref name="val"/> and emits
+    /// <see cref="NetwPromise.Completed"/>, then
+    /// <see cref="NetwPromise.Settled"/>. Does nothing when already settled.
     /// </summary>
     public void Resolve(Variant val)
     {
@@ -408,14 +367,10 @@ public sealed class NetwPromise : NetwRefCounted
         NetwApi.MethodBind("NetwPromise", "reject", 399475586UL);
 
     /// <summary>
-    /// Settles the promise as failed with <paramref name="errCode"/> and an
-    /// optional human-readable <paramref name="errDetail"/>. Emits
-    /// <see cref="NetwPromise.Failed"/> then <see cref="NetwPromise.Settled"/>
-    /// and runs every chained <see cref="NetwPromise.CatchError"/>. A promise
-    /// that already settled is unchanged, because a settled promise is an
-    /// answer and a second answer would be a different one. Rejecting with
-    /// nothing listening warns, since a network failure nobody handles is the
-    /// one a game finds out about from its players.
+    /// Fails the promise with <paramref name="errCode"/> and emits
+    /// <see cref="NetwPromise.Failed"/>, then
+    /// <see cref="NetwPromise.Settled"/>. Does nothing when already settled.
+    /// Pushes a warning when nothing handles the failure.
     /// </summary>
     public void Reject(Error errCode, string errDetail = "")
     {

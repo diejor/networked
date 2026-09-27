@@ -37,11 +37,9 @@ bool LobbyDirectory::supports(Capability p_capability) {
 }
 
 LobbyDirectory::Capability LobbyDirectory::capabilities() {
-    int64_t answered = 0;
-    if (GDVIRTUAL_CALL(_capabilities, answered)) {
-        return Capability(answered);
-    }
-    return Capability(0);
+    Capability answered = Capability(0);
+    GDVIRTUAL_CALL(_capabilities, answered);
+    return answered;
 }
 
 StringName LobbyDirectory::peer_class() {

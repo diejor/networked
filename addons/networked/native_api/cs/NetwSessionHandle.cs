@@ -116,7 +116,7 @@ public sealed class NetwSessionHandle : NetwRefCounted
     /// server gave. <see cref="NetwSessionHandle.LocalPlayer"/> stays
     /// <c>null</c>.
     /// </summary>
-    public event Action<long, string> JoinFailed
+    public event Action<Error, string> JoinFailed
     {
         add => Connect("join_failed", Callable.From(value));
         remove => Disconnect("join_failed", Callable.From(value));
@@ -241,18 +241,18 @@ public sealed class NetwSessionHandle : NetwRefCounted
     }
 
     private static readonly IntPtr _bindGetRole =
-        NetwApi.MethodBind("NetwSessionHandle", "get_role", 3905245786UL);
+        NetwApi.MethodBind("NetwSessionHandle", "get_role", 2901618068UL);
 
     /// <summary>
     /// What this peer is in the session.
     /// </summary>
-    public long Role
+    public NetwMultiplayer.RoleEnum Role
     {
         get
         {
             long answered = default;
             NetwThunks.Ptrcall0_Long(_bindGetRole, Checked, ref answered);
-            return answered;
+            return (NetwMultiplayer.RoleEnum)answered;
         }
     }
 
@@ -394,8 +394,9 @@ public sealed class NetwSessionHandle : NetwRefCounted
         NetwApi.MethodBind("NetwSessionHandle", "bucket_of", 1944677757UL);
 
     /// <summary>
-    /// The bucket of <paramref name="type"/> that <paramref name="peer"/>
-    /// carries, <c>null</c> when it carries none.
+    /// The per-peer game data of <paramref name="type"/> stored for
+    /// <paramref name="peer"/>, created on first use. See
+    /// <see cref="NetwMultiplayer.PeerGetBucket"/>.
     /// </summary>
     public Variant BucketOf(long peer, Variant type)
     {
@@ -501,14 +502,15 @@ public sealed class NetwSessionHandle : NetwRefCounted
     }
 
     private static readonly IntPtr _bindRequestScene =
-        NetwApi.MethodBind("NetwSessionHandle", "request_scene", 455975893UL);
+        NetwApi.MethodBind("NetwSessionHandle", "request_scene", 4150322833UL);
 
     /// <summary>
     /// Asks the server for the scene at <paramref name="path"/> over
     /// <paramref name="scope"/>. The promise resolves when the scene is live,
     /// or is rejected when the server declines. <b>Player request.</b>
     /// </summary>
-    public NetwPromise RequestScene(string path, long scope = 0)
+    public NetwPromise RequestScene(string path, NetwMultiplayer.SceneChange scope =
+        (NetwMultiplayer.SceneChange)0)
     {
         godot_variant slot0 = VariantUtils.CreateFromString(path);
         godot_variant slot1 = VariantUtils.CreateFromInt((long)scope);

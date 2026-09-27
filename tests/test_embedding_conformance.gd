@@ -1,15 +1,3 @@
-## Embedding-conformance suite skeleton — the SAME scenarios under BOTH providers.
-##
-## Each scenario is written once against [NetwEmbeddingWorld] and run twice, once
-## for [NetwScopedWorld] (subpath [MultiplayerTree], the harness topology) and
-## once for [NetwRootWorld] (root-installed session, the shipping topology). A
-## paired-method-per-scenario shape keeps failures naming the provider that broke
-## and lets the two run serialized (the root case mutates the [SceneTree] default,
-## so it is captured and restored per case).
-##
-## Grow the matrix here, one scenario at a time. Scene declare, activate and
-## change, config surviving a scene swap, sync reaching every admitted peer,
-## despawn, teardown.
 class_name TestEmbeddingConformance
 extends NetwTestSuite
 
@@ -46,8 +34,6 @@ func _root() -> NetwRootWorld:
 
 #region Scenarios (provider-agnostic — never name a MultiplayerTree or install verb)
 
-# The host comes online through the session's own host verb and identifies as the
-# server at peer 1, in any embedding.
 func _scenario_host_comes_online(world: NetwEmbeddingWorld) -> void:
 	var host := await world.host()
 	assert_bool(host.is_online).override_failure_message(
@@ -61,8 +47,6 @@ func _scenario_host_comes_online(world: NetwEmbeddingWorld) -> void:
 	).is_equal(1)
 
 
-# A joining client is admitted to its own session and appears in the host roster,
-# the replication substrate crossing the embedding boundary.
 func _scenario_client_is_admitted(world: NetwEmbeddingWorld) -> void:
 	var host := await world.host()
 	var client := await world.add_client("p1")
@@ -80,12 +64,6 @@ func _scenario_client_is_admitted(world: NetwEmbeddingWorld) -> void:
 	).is_true()
 
 
-# The roster crosses both ways between two clients: the host sees both, and each
-# client's roster (its own accept plus the other's relayed accept/backfill)
-# includes the other client. Asserted client-to-client so it does not depend on
-# whether the host carries a local player — a host-role config difference
-# (dedicated vs listen), not an embedding difference, deliberately not asserted
-# here.
 func _scenario_roster_crosses_both_ways(world: NetwEmbeddingWorld) -> void:
 	var host := await world.host()
 	var c1 := await world.add_client("p1")
@@ -113,10 +91,6 @@ func _scenario_roster_crosses_both_ways(world: NetwEmbeddingWorld) -> void:
 	).is_true()
 
 
-# A host-spawned replicated entity reaches every admitted peer's liveness, the
-# replication substrate crossing the embedding boundary. This is the cell where a
-# "remote content private to the host" regression (the residual the design names)
-# gets a failing test under whichever provider breaks.
 func _scenario_spawn_reaches_every_peer(world: NetwEmbeddingWorld) -> void:
 	var _host := await world.host()
 	var c1 := await world.add_client("p1")
@@ -143,10 +117,6 @@ func _scenario_spawn_reaches_every_peer(world: NetwEmbeddingWorld) -> void:
 	).is_true()
 
 
-# A scene declared through the provider's own native path comes online on the
-# host once it is up, in any embedding. This is the bootstrap-ordering cell the
-# phase machine owns: the declaration lands before the session settles, and the
-# settle step brings the initial scene online the same way under both providers.
 func _scenario_declared_scene_comes_online(world: NetwEmbeddingWorld) -> void:
 	world.declare_initial_scene(_LEVEL)
 	var host := await world.host()
@@ -160,11 +130,6 @@ func _scenario_declared_scene_comes_online(world: NetwEmbeddingWorld) -> void:
 	).is_true()
 
 
-# A NetwService node mounted under the host configures the session, in any
-# embedding. The service resolves its session through the branch NetwMultiplayer,
-# so a root install with no owning tree must run the same _service_entered
-# lifecycle a scoped tree does. Before that lifecycle resolved the api, a
-# root-installed clock never configured and this cell went red under root only.
 func _scenario_service_configures_on_mount(world: NetwEmbeddingWorld) -> void:
 	var host := await world.host()
 	world.mount_clock()

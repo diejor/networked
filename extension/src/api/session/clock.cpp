@@ -31,7 +31,7 @@ Ref<NetwClockConfig> NetwMultiplayer::clock_get_config() const {
     effective->set_use_physics_interpolation(
         clock.get_use_physics_interpolation()
     );
-    effective->set_sync_mode(int64_t(clock.get_sync_mode()));
+    effective->set_sync_mode(SyncMode(clock.get_sync_mode()));
     effective->set_panic_snap_threshold(clock.get_panic_snap_threshold());
     effective->set_stretch_nudge_factor(clock.get_stretch_nudge_factor());
     effective->set_ping_interval(clock.get_ping_interval());

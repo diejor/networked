@@ -1,40 +1,32 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <class name="NetwPlayer" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
 	<brief_description>
-		Live handle for one accepted session player.
+		A player whose join was accepted.
 	</brief_description>
 	<description>
-		One accepted membership, and the object is the membership. The session mints exactly one player per acceptance and answers that same object every time, so [code]==[/code] returns "the same player" and a [Dictionary] keys on it directly.
-		A membership is not a transport peer. [member peer_id] is where this player is reachable right now and is reused by whoever connects next, so a player whose membership ended reports [member is_active] false and keeps the [member username] it joined under rather than reading whatever peer now holds that id.
-		A membership is not a body either. [member bodies] is the set of bodies the session currently holds for it, which is empty for a spectator and holds more than one for a player the game gave several.
+		The session creates one [NetwPlayer] when it accepts a join, and always returns the same object for it, so it can be compared with [code]==[/code] and used as a [Dictionary] key. A connected peer that has not joined has none.
 		[codeblock]
-		var player := api.peer_get_player(peer_id)
+		var player := Netw.of(self).peer_get_player(peer_id)
 		greet(player.username)
 		for body: NetwEntity in player.bodies:
 		    follow(body.owner)
 		[/codeblock]
-		Created by the session at the moment it accepts a join. A peer that has connected and not joined has no membership, so [method NetwMultiplayer.peer_get_player] answers [code]null[/code] for it.
+		A player is not a peer. After the player leaves, [member is_active] is [code]false[/code], even if a new player connects with the same [member peer_id].
 	</description>
 	<tutorials>
 	</tutorials>
 	<members>
+		<member name="bodies" type="NetwEntity[]" setter="" getter="get_bodies" default="[]">
+			The entities spawned for this player with [method Netw.spawn_player], in no particular order. Empty for a spectator.
+		</member>
 		<member name="is_active" type="bool" setter="" getter="get_is_active" default="false">
-			Whether this membership is still the one the session holds.
-			A handle a game kept across a disconnect answers [code]false[/code] here even when another player has since connected onto the same [member peer_id], which is what a game checks before acting on a player it stored.
+			[code]false[/code] once the player has left. Check it before using a player you stored.
 		</member>
 		<member name="peer_id" type="int" setter="" getter="get_peer_id" default="0">
-			The transport peer this membership is currently reachable on. A routing detail rather than identity, because a reconnect reuses the id.
-		</member>
-		<member name="bodies" type="NetwEntity[]" setter="" getter="get_bodies">
-			Every body the session currently holds for this membership, in no promised order.
-			Answered live from the session rather than stored, so a body is gone from the read that follows the [method Netw.despawn] call rather than from the frame its node is freed. A player nothing has spawned for answers an empty array, which is the honest reading for a spectator and for a player whose join handler has not placed it yet.
-			Several bodies at once is ordinary, so a game that means one body reads the array and says which one it means.
-			A body belongs to the membership [method Netw.spawn_player] armed it for, so one left standing after its player disconnected stays out of the array the next player on that [member peer_id] reads.
+			The peer this player is connected as. Another player may reuse it after this one leaves.
 		</member>
 		<member name="username" type="StringName" setter="" getter="get_username" default="&amp;&quot;&quot;">
-			The username this membership was accepted under, and the conventional save key a game reads back.
-			Stamped at acceptance and never re-read, so it survives the membership ending and never reports a later player's name.
-			A session admits every name a join claims, so two players may hold one username. Each is still its own membership, and each body stamps the name as its [member NetwEntity.entity_id], so a game keying persistence or prediction on the name reads and writes one row for the pair. A game that wants one player per name says so in the handler it installs with [method Netw.configure_admission].
+			The username from [method Netw.prepare_join]. It is kept after the player leaves. Two players may join with the same name, unless [method Netw.configure_admission] refuses it.
 		</member>
 	</members>
 </class>

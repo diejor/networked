@@ -1,8 +1,6 @@
-## Modal form for hosting multiplayer sessions.
+## A form to host a game.
 ##
-## Renders one field per key of the [code]host_settings[/code] entry of
-## [method NetwConnectHandle.transport] for the picked backend, so it
-## authors no per-transport controls of its own.
+## Shows the host settings of the chosen transport.
 class_name HostPopup
 extends PopupPanel
 
@@ -38,8 +36,7 @@ func _ready() -> void:
 	_backend_picker.item_selected.connect(_on_backend_changed)
 
 
-## Opens the host form for [param handle], offering only the backends it
-## reports as available and hostable on this build.
+## Opens the form, listing the transports that can host on this build.
 func open_host(
 		handle: NetwConnectHandle,
 		default_username: String,

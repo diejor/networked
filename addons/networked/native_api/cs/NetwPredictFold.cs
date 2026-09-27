@@ -6,25 +6,16 @@ using Godot.NativeInterop;
 namespace Networked;
 
 /// <summary>
-/// Which input one prediction frame drives, and under what label.
+/// Which input a predicted entity simulates this frame, returned by
+/// <c>NetwMultiplayer._predict_drive</c>.
 /// </summary>
 /// <remarks>
-/// <c>NetwMultiplayer._predict_drive</c> returns one of these, and a game
-/// overriding that seam creates its own through
-/// <see cref="NetwPredictFold.Of"/>. Every driven frame is labeled, including
-/// one that had no new input, so a frame with nothing newer than the last
-/// driven repeats the input it already had rather than inventing one. That is
-/// why <see cref="NetwPredictFold.Label"/> is never absent and
-/// <see cref="NetwPredictFold.Fresh"/> is what separates the two cases.
+/// Create one with <see cref="NetwPredictFold.Of"/> in an override of
+/// <c>NetwMultiplayer._predict_drive</c>. A frame with no new input repeats the
+/// last one.
 /// <code>
-/// var fold := NetwPredictFold.of(tick, true, NetwPredict.DriveKind.FRESH)
+/// var fold := NetwPredictFold.of(tick, true, NetwPredict.DRIVE_KIND_FRESH)
 /// </code>
-/// <para>
-/// - <see cref="NetwPredictFold.Label"/> the tick the transition is filed under
-/// - <see cref="NetwPredictFold.Fresh"/> true when a newer input drove it
-/// - <see cref="NetwPredictFold.Kind"/> a <see cref="NetwPredict.DriveKind"/>
-/// value
-/// </para>
 /// </remarks>
 public sealed class NetwPredictFold : NetwRefCounted
 {
@@ -46,10 +37,8 @@ public sealed class NetwPredictFold : NetwRefCounted
         NetwApi.MethodBind("NetwPredictFold", "of", 513276283UL);
 
     /// <summary>
-    /// Creates one drive choice. <paramref name="kind"/> is a
-    /// <see cref="NetwPredict.DriveKind"/> and naming no member of it is
-    /// rejected, because a fold the tape cannot classify would file an entry
-    /// under a kind no reader can act on.
+    /// Creates a <see cref="NetwPredictFold"/>. <paramref name="kind"/> must be
+    /// a valid <see cref="NetwPredict.DriveKind"/>.
     /// </summary>
     public static NetwPredictFold Of(
         long label,
@@ -74,8 +63,7 @@ public sealed class NetwPredictFold : NetwRefCounted
         NetwApi.MethodBind("NetwPredictFold", "label", 3905245786UL);
 
     /// <summary>
-    /// The tick the transition is filed under, which is the input's own tick
-    /// whenever one has arrived and the pass timing when none has.
+    /// The tick of the input, or the current tick when there is no input.
     /// </summary>
     public long Label()
     {
@@ -88,9 +76,8 @@ public sealed class NetwPredictFold : NetwRefCounted
         NetwApi.MethodBind("NetwPredictFold", "fresh", 36873697UL);
 
     /// <summary>
-    /// Whether a newer input drove this frame. A frame that is not fresh
-    /// repeats the input it already had, and the tape gains no entry the input
-    /// does not justify.
+    /// <c>true</c> when this frame uses a new input, <c>false</c> when it
+    /// repeats the last one.
     /// </summary>
     public bool Fresh()
     {
@@ -103,7 +90,7 @@ public sealed class NetwPredictFold : NetwRefCounted
         NetwApi.MethodBind("NetwPredictFold", "kind", 1848337997UL);
 
     /// <summary>
-    /// How the frame was driven, as a <see cref="NetwPredict.DriveKind"/>.
+    /// Which input was used.
     /// </summary>
     public NetwPredict.DriveKind Kind()
     {

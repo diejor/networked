@@ -6,28 +6,22 @@ using Godot.NativeInterop;
 namespace Networked;
 
 /// <summary>
-/// How one replicated value is smoothed on its way to the property that shows
-/// it.
+/// How a received value is smoothed before it is shown.
 /// </summary>
 /// <remarks>
-/// <see cref="NetwInterpolate"/> names how one decoded value enters the
-/// interpolation history. <see cref="NetwInterpolate.Target"/> names the
-/// property that receives the smoothed output.
-/// <see cref="NetwInterpolate.Mode"/>, <see cref="NetwInterpolate.Smoothing"/>,
-/// and <see cref="NetwInterpolate.SnapDistance"/> are read by the session's
-/// display pump as each sample is recorded.
+/// Received values are interpolated into the property
+/// <see cref="NetwInterpolate.Target"/>.
 /// <code>
 /// Netw.configure_property(self, &amp;"position").interpolate(
 ///     NetwInterpolate.new().lerp().smooth(0.05).to(&amp;"position")
 /// )
 /// </code>
 /// <para>
-/// The same resource shape is used by <see cref="Netw.ConfigureProperty"/>,
-/// <see cref="Netw.ConfigureRpc"/>, and <see cref="Netw.ConfigureSignal"/>.
-/// When <see cref="NetwDisplayHandle.VisualRoot"/> is set the visual keeps
-/// inheriting the body transform and spatial values are written in global
-/// space, so a smoothed channel is not dragged by body writes. Add a second
-/// <see cref="NetwInterpolate"/> to also smooth <c>rotation</c>.
+/// It works the same with <see cref="Netw.ConfigureProperty"/>,
+/// <see cref="Netw.ConfigureRpc"/> and <see cref="Netw.ConfigureSignal"/>. When
+/// <see cref="NetwDisplayHandle.VisualRoot"/> is set, values are written in
+/// global space. Add a second <see cref="NetwInterpolate"/> to also smooth
+/// <c>rotation</c>.
 /// </para>
 /// </remarks>
 public sealed class NetwInterpolate : NetwRefCounted
@@ -53,15 +47,15 @@ public sealed class NetwInterpolate : NetwRefCounted
         /// </summary>
         None = 0,
         /// <summary>
-        /// Linear interpolation through <c>@GlobalScope.lerp</c>.
+        /// Linear, with <c>@GlobalScope.lerp</c>.
         /// </summary>
         Lerp = 1,
         /// <summary>
-        /// Angular interpolation through <c>@GlobalScope.lerp_angle</c>.
+        /// Angles, with <c>@GlobalScope.lerp_angle</c>.
         /// </summary>
         Angle = 2,
         /// <summary>
-        /// Spherical interpolation for <see cref="Quaternion"/> rotations.
+        /// Spherical, for <see cref="Quaternion"/> rotations.
         /// </summary>
         Slerp = 3,
     }
@@ -69,15 +63,12 @@ public sealed class NetwInterpolate : NetwRefCounted
     public enum Tail : long
     {
         /// <summary>
-        /// Extrapolates past the newest sample by its derivative, capped by
-        /// <see cref="NetwMultiplayer.DisplayParam.MaxForecastTicks"/>. The
-        /// derivative is <see cref="NetwInterpolate.ProjectChannel"/> when set,
-        /// otherwise the finite difference of the last two samples.
+        /// Guess ahead from the velocity, up to
+        /// <see cref="NetwMultiplayer.DisplayParam.MaxForecastTicks"/>.
         /// </summary>
         Auto = 0,
         /// <summary>
-        /// Holds the newest sample and never projects, for discrete or flag
-        /// values.
+        /// Keep the newest value and never guess ahead.
         /// </summary>
         Hold = 1,
     }
@@ -89,7 +80,7 @@ public sealed class NetwInterpolate : NetwRefCounted
         NetwApi.MethodBind("NetwInterpolate", "set_mode", 3655329560UL);
 
     /// <summary>
-    /// Interpolation algorithm used for this value.
+    /// How the value is interpolated.
     /// </summary>
     public NetwInterpolate.ModeEnum Mode
     {
@@ -118,8 +109,7 @@ public sealed class NetwInterpolate : NetwRefCounted
         NetwApi.MethodBind("NetwInterpolate", "set_smoothing", 373806689UL);
 
     /// <summary>
-    /// Exponential smoothing time in seconds layered onto bracketed
-    /// interpolation.
+    /// Extra smoothing time, in seconds.
     /// </summary>
     public double Smoothing
     {
@@ -154,7 +144,8 @@ public sealed class NetwInterpolate : NetwRefCounted
         NetwApi.MethodBind("NetwInterpolate", "set_snap_distance", 373806689UL);
 
     /// <summary>
-    /// Distance that snaps instead of interpolating. <c>0.0</c> disables it.
+    /// A change larger than this jumps instead of interpolating. <c>0.0</c>
+    /// never jumps.
     /// </summary>
     public double SnapDistance
     {
@@ -186,9 +177,9 @@ public sealed class NetwInterpolate : NetwRefCounted
         NetwApi.MethodBind("NetwInterpolate", "set_target", 3304788590UL);
 
     /// <summary>
-    /// Property receiving the smoothed output. Empty means the source property
-    /// name for <see cref="Netw.ConfigureProperty"/>. RPC and signal arguments
-    /// should set an explicit <see cref="NetwInterpolate.Target"/>.
+    /// The property that receives the smoothed value. When empty,
+    /// <see cref="Netw.ConfigureProperty"/> uses its own property. Always set
+    /// it for RPC and signal arguments.
     /// </summary>
     public StringName Target
     {
@@ -223,10 +214,8 @@ public sealed class NetwInterpolate : NetwRefCounted
             3115676464UL);
 
     /// <summary>
-    /// Tail policy under a forecasting playhead.
-    /// <see cref="NetwInterpolate.Tail.Auto"/> projects,
-    /// <see cref="NetwInterpolate.Tail.Hold"/> never does. Ignored while the
-    /// entity buffers.
+    /// Whether the value is guessed ahead with
+    /// <see cref="NetwMultiplayer.TimelineMode.Forecast"/>.
     /// </summary>
     public NetwInterpolate.Tail ForecastTail
     {
@@ -264,11 +253,9 @@ public sealed class NetwInterpolate : NetwRefCounted
             3304788590UL);
 
     /// <summary>
-    /// Sibling channel whose sampled value is this channel's derivative. Empty
-    /// falls back to the finite difference of the last two samples. Set it
-    /// through <see cref="NetwInterpolate.ProjectBy"/> to a channel that
-    /// replicates velocity at the same authoring tick, so a torn pair never
-    /// manufactures a phantom trajectory.
+    /// Another synchronized property holding this value's velocity, used to
+    /// guess ahead. When empty, the velocity is computed from the last two
+    /// values.
     /// </summary>
     public StringName ProjectChannel
     {
@@ -298,13 +285,9 @@ public sealed class NetwInterpolate : NetwRefCounted
         NetwApi.MethodBind("NetwInterpolate", "smoothing_weight", 3919130443UL);
 
     /// <summary>
-    /// How far one frame of <paramref name="frameDelta"/> seconds moves the
-    /// display toward its sampled target, given
-    /// <see cref="NetwInterpolate.Smoothing"/>. Frame-rate independent by
-    /// construction: two frames of half the delta compose to the same weight as
-    /// one whole frame, so a display filtered here looks the same at any frame
-    /// rate. A channel with no <see cref="NetwInterpolate.Smoothing"/> takes
-    /// the whole step.
+    /// How far one frame of <paramref name="frameDelta"/> seconds moves toward
+    /// the target, given <see cref="NetwInterpolate.Smoothing"/>. The result
+    /// looks the same at any frame rate.
     /// </summary>
     public double SmoothingWeight(double frameDelta)
     {
@@ -322,7 +305,8 @@ public sealed class NetwInterpolate : NetwRefCounted
         NetwApi.MethodBind("NetwInterpolate", "none", 823733258UL);
 
     /// <summary>
-    /// Selects <see cref="NetwInterpolate.ModeEnum.None"/>.
+    /// Sets <see cref="NetwInterpolate.Mode"/> to
+    /// <see cref="NetwInterpolate.ModeEnum.None"/>.
     /// </summary>
     public NetwInterpolate None()
     {
@@ -335,7 +319,8 @@ public sealed class NetwInterpolate : NetwRefCounted
         NetwApi.MethodBind("NetwInterpolate", "lerp", 823733258UL);
 
     /// <summary>
-    /// Selects <see cref="NetwInterpolate.ModeEnum.Lerp"/>.
+    /// Sets <see cref="NetwInterpolate.Mode"/> to
+    /// <see cref="NetwInterpolate.ModeEnum.Lerp"/>.
     /// </summary>
     public NetwInterpolate Lerp()
     {
@@ -348,7 +333,8 @@ public sealed class NetwInterpolate : NetwRefCounted
         NetwApi.MethodBind("NetwInterpolate", "angle", 823733258UL);
 
     /// <summary>
-    /// Selects <see cref="NetwInterpolate.ModeEnum.Angle"/>.
+    /// Sets <see cref="NetwInterpolate.Mode"/> to
+    /// <see cref="NetwInterpolate.ModeEnum.Angle"/>.
     /// </summary>
     public NetwInterpolate Angle()
     {
@@ -361,7 +347,8 @@ public sealed class NetwInterpolate : NetwRefCounted
         NetwApi.MethodBind("NetwInterpolate", "slerp", 823733258UL);
 
     /// <summary>
-    /// Selects <see cref="NetwInterpolate.ModeEnum.Slerp"/>.
+    /// Sets <see cref="NetwInterpolate.Mode"/> to
+    /// <see cref="NetwInterpolate.ModeEnum.Slerp"/>.
     /// </summary>
     public NetwInterpolate Slerp()
     {
@@ -374,8 +361,7 @@ public sealed class NetwInterpolate : NetwRefCounted
         NetwApi.MethodBind("NetwInterpolate", "smooth", 3586449482UL);
 
     /// <summary>
-    /// Sets <see cref="NetwInterpolate.Smoothing"/> to
-    /// <paramref name="seconds"/>.
+    /// Sets <see cref="NetwInterpolate.Smoothing"/>.
     /// </summary>
     public NetwInterpolate Smooth(double seconds)
     {
@@ -393,8 +379,7 @@ public sealed class NetwInterpolate : NetwRefCounted
         NetwApi.MethodBind("NetwInterpolate", "snap_at", 3586449482UL);
 
     /// <summary>
-    /// Sets <see cref="NetwInterpolate.SnapDistance"/> to
-    /// <paramref name="distance"/>.
+    /// Sets <see cref="NetwInterpolate.SnapDistance"/>.
     /// </summary>
     public NetwInterpolate SnapAt(double distance)
     {
@@ -412,8 +397,7 @@ public sealed class NetwInterpolate : NetwRefCounted
         NetwApi.MethodBind("NetwInterpolate", "to", 3655515413UL);
 
     /// <summary>
-    /// Sets <see cref="NetwInterpolate.Target"/> to
-    /// <paramref name="property"/>.
+    /// Sets <see cref="NetwInterpolate.Target"/>.
     /// </summary>
     public NetwInterpolate To(StringName property)
     {
@@ -433,10 +417,8 @@ public sealed class NetwInterpolate : NetwRefCounted
         NetwApi.MethodBind("NetwInterpolate", "project_by", 3655515413UL);
 
     /// <summary>
-    /// Projects the forecast tail using sibling <paramref name="channel"/> as
-    /// the derivative. The named channel should replicate this value's velocity
-    /// at the same authoring tick. Leaving it unset projects by finite
-    /// difference instead.
+    /// Sets <see cref="NetwInterpolate.ProjectChannel"/>, the velocity used to
+    /// guess ahead.
     /// </summary>
     public NetwInterpolate ProjectBy(StringName channel)
     {
@@ -456,9 +438,9 @@ public sealed class NetwInterpolate : NetwRefCounted
         NetwApi.MethodBind("NetwInterpolate", "hold", 823733258UL);
 
     /// <summary>
-    /// Selects <see cref="NetwInterpolate.Tail.Hold"/> so the channel never
-    /// projects past its newest sample, for discrete or flag values that must
-    /// not extrapolate.
+    /// Sets <see cref="NetwInterpolate.ForecastTail"/> to
+    /// <see cref="NetwInterpolate.Tail.Hold"/>, for values that must not be
+    /// guessed ahead, such as flags.
     /// </summary>
     public NetwInterpolate Hold()
     {
@@ -471,10 +453,7 @@ public sealed class NetwInterpolate : NetwRefCounted
         NetwApi.MethodBind("NetwInterpolate", "is_same_spec", 1684697283UL);
 
     /// <summary>
-    /// Returns <c>true</c> when <paramref name="other"/> declares the same
-    /// smoothing behavior. Compared by value, so a freshly built spec equal to
-    /// a stored one is recognized as the same declaration and re-applying it is
-    /// idempotent.
+    /// Returns <c>true</c> when <paramref name="other"/> has the same settings.
     /// </summary>
     public bool IsSameSpec(NetwInterpolate other)
     {

@@ -1,16 +1,5 @@
 class_name BomberAI
 extends RefCounted
-## Test-only AI driver for the bomber example game.
-##
-## Reads the world scene tree each tick, runs a pluggable [BomberAI.Goal]
-## strategy, and presses or releases actions on a [NetwSceneRunner].
-## A universal flee override dodges active bombs regardless of goal.
-## [br][br]
-## [codeblock]
-## var ai := BomberAI.create(runner, &"valeria")
-## ai.goal = BomberAI.Goal.score()
-## ai.tick()
-## [/codeblock]
 
 const TILE_SIZE := 48
 const BLAST_RANGE := 3
@@ -18,13 +7,10 @@ const ALIGN_RADIUS := 10.0
 
 enum State { IDLE, PURSUING, FLEEING, STUNNED }
 
-## Current high-level state for test assertions.
 var state: State = State.IDLE
 
-## The active goal. Assign to change behavior mid-test.
 var goal: Goal = Goal.idle()
 
-## Whether the flee override is active (default true).
 var flee_enabled: bool = true
 
 var _runner: NetwSceneRunner
@@ -33,15 +19,11 @@ var _waypoint_cell: Variant = null
 var _prev_dir := Vector2i.ZERO
 var _prev_bomb := false
 
-# Walls are static for a match, so the wall grid is built once per tilemap and
-# reused instead of re-walking every used cell each tick.
 var _walls_tilemap_id: int = 0
 var _walls_cache: Dictionary = { }
 var _grid_bounds_cache := Rect2i()
 
 
-## Creates an AI that will drive [param runner]'s player named
-## [param player_name].
 static func create(
 		runner: NetwSceneRunner,
 		player_name: StringName,
@@ -52,7 +34,6 @@ static func create(
 	return ai
 
 
-## Call once per tick batch to update the AI's decisions.
 func tick() -> void:
 	var snap := _scan_world()
 	if snap == null:
@@ -69,7 +50,6 @@ func tick() -> void:
 	var bomb := false
 	var force_waypoint := false
 
-	# Flee override.
 	var flee_target: Variant = null
 	if flee_enabled:
 		flee_target = _flee_target(snap)
@@ -95,8 +75,6 @@ func tick() -> void:
 		force_waypoint,
 	)
 	_apply_actions(direction, bomb)
-
-# -- Perception ---------------------------------------------------------------
 
 
 class WorldSnapshot:
@@ -128,9 +106,6 @@ func _scan_world() -> WorldSnapshot:
 
 	var level: Node = world.root
 
-	# Walls from TileMapLayer. Cached by tilemap instance: the wall set never
-	# changes during a match, so it is built once and shared (read-only) across
-	# snapshots instead of re-walked every tick.
 	var tilemap := level.get_node_or_null("Layer0") as TileMapLayer
 	if tilemap:
 		var tid := tilemap.get_instance_id()
@@ -144,20 +119,17 @@ func _scan_world() -> WorldSnapshot:
 		snap.wall_set = _walls_cache
 		snap.grid_bounds = _grid_bounds_cache
 
-	# Rocks.
 	var rocks := level.get_node_or_null("Rocks")
 	if rocks:
 		for rock: Node in rocks.get_children():
 			if is_instance_valid(rock) and rock is Node2D:
 				snap.rock_cells.append(_to_cell(rock.position))
 
-	# Bombs.
 	var bombs := level.get_node_or_null("Bombs")
 	if bombs:
 		for child: Node in bombs.get_children():
 			snap.bomb_cells.append(_to_cell((child as Node2D).position))
 
-	# Other players.
 	var players := level.get_node_or_null("Players")
 	if players:
 		for p: Node in players.get_children():
@@ -194,8 +166,6 @@ func _extract_player_name(node: Node) -> StringName:
 	assert(entity, "Node must have a valid NetwEntity record")
 	return entity.entity_id
 
-# -- Strategy -----------------------------------------------------------------
-
 
 func _flee_target(snap: WorldSnapshot) -> Variant:
 	if snap.bomb_cells.is_empty():
@@ -205,7 +175,6 @@ func _flee_target(snap: WorldSnapshot) -> Variant:
 	if not dominated.has(snap.my_cell):
 		return null
 
-	# BFS to the nearest safe cell.
 	return _bfs_to_safe(snap, dominated)
 
 
@@ -268,9 +237,7 @@ func _step_toward(snap: WorldSnapshot, target: Vector2i) -> Vector2i:
 					absi(snap.my_cell.x - target.x) + absi(snap.my_cell.y - target.y) <= 1):
 		return Vector2i.ZERO
 
-	# BFS from my_cell to target, return first step direction.
 	var visited := { }
-	# Each entry: [cell, first_direction]
 	var queue: Array[Array] = [[snap.my_cell, Vector2i.ZERO]]
 	visited[snap.my_cell] = true
 
@@ -375,17 +342,13 @@ func _get_steering_direction(
 	var my_cell := snap.my_cell
 
 	if next_cell.x != my_cell.x:
-		# Moving horizontally. Center vertically first.
 		if abs(offset.y) > ALIGN_RADIUS:
 			return Vector2i(0, _sign(offset.y))
-		# Once centered vertically, move horizontally.
 		if abs(offset.x) > ALIGN_RADIUS:
 			return Vector2i(_sign(offset.x), 0)
 	elif next_cell.y != my_cell.y:
-		# Moving vertically. Center horizontally first.
 		if abs(offset.x) > ALIGN_RADIUS:
 			return Vector2i(_sign(offset.x), 0)
-		# Once centered horizontally, move vertically.
 		if abs(offset.y) > ALIGN_RADIUS:
 			return Vector2i(0, _sign(offset.y))
 	else:
@@ -405,14 +368,11 @@ func _sign(val: float) -> int:
 		return 1
 	return 0
 
-# -- Actuation ----------------------------------------------------------------
-
 
 func _apply_actions(direction: Vector2i, bomb: bool) -> void:
 	if not is_instance_valid(_runner):
 		return
 
-	# Release previous directions.
 	if _prev_dir.x < 0 and direction.x >= 0:
 		_runner.simulate_action_release("move_left")
 	if _prev_dir.x > 0 and direction.x <= 0:
@@ -422,7 +382,6 @@ func _apply_actions(direction: Vector2i, bomb: bool) -> void:
 	if _prev_dir.y > 0 and direction.y <= 0:
 		_runner.simulate_action_release("move_down")
 
-	# Press desired directions.
 	if direction.x < 0 and _prev_dir.x >= 0:
 		_runner.simulate_action_press("move_left")
 	if direction.x > 0 and _prev_dir.x <= 0:
@@ -432,7 +391,6 @@ func _apply_actions(direction: Vector2i, bomb: bool) -> void:
 	if direction.y > 0 and _prev_dir.y <= 0:
 		_runner.simulate_action_press("move_down")
 
-	# Bomb.
 	if bomb and not _prev_bomb:
 		_runner.simulate_action_press("set_bomb")
 	elif not bomb and _prev_bomb:
@@ -441,69 +399,53 @@ func _apply_actions(direction: Vector2i, bomb: bool) -> void:
 	_prev_dir = direction
 	_prev_bomb = bomb
 
-# -- Goals --------------------------------------------------------------------
-
 
 class Goal:
 	extends RefCounted
 
-	## Returns the grid cell the AI should move toward, or null.
 	func _target_cell(_snap: WorldSnapshot) -> Variant:
 		return null
 
 
-	## Returns true if the AI should place a bomb now.
 	func _wants_bomb(_snap: WorldSnapshot) -> bool:
 		return false
 
-	# Factories.
 
-
-	## Do nothing.
 	static func idle() -> Goal:
 		return Goal.new()
 
 
-	## Move toward and bomb the nearest rock.
 	static func score() -> Goal:
 		return ScoreGoal.new()
 
 
-	## Chase a specific player and bomb when adjacent.
 	static func hunt(target_name: StringName) -> Goal:
 		var g := HuntGoal.new()
 		g._target = target_name
 		return g
 
 
-	## Follow a player without bombing.
 	static func follow(target_name: StringName) -> Goal:
 		var g := FollowGoal.new()
 		g._target = target_name
 		return g
 
 
-	## Wander to random cells, occasionally bombing.
 	static func wander(rng: RandomNumberGenerator = null) -> Goal:
 		var g := WanderGoal.new()
 		g._rng = rng if rng else _seeded_rng()
 		return g
 
 
-	## Cycle through random goals.
 	static func random(rng: RandomNumberGenerator = null) -> Goal:
 		var g := RandomGoal.new()
 		g._rng = rng if rng else _seeded_rng()
 		return g
 
-	# Deterministic default RNG. Each goal gets a distinct seed by creation
-	# order so tests stay reproducible without callers passing a seed. Reset the
-	# counter per test through [method reset_seeds] so the seed a goal receives
-	# does not depend on goals built by earlier tests in the same process.
+
 	static var _seed_counter := 0
 
 
-	## Resets the default RNG seed counter. Call from test setup.
 	static func reset_seeds() -> void:
 		_seed_counter = 0
 
@@ -515,7 +457,6 @@ class Goal:
 		return rng
 
 
-	## Stay put, but flee when threatened.
 	static func flee_only() -> Goal:
 		return Goal.new()
 
@@ -660,7 +601,6 @@ class RandomGoal:
 			Goal.score(),
 			Goal.wander(_rng),
 		]
-		# Add hunt goals for any visible players.
 		for pname: StringName in snap.player_cells:
 			options.append(Goal.hunt(pname))
 		_current = options[_rng.randi_range(0, options.size() - 1)]

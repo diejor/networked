@@ -1,11 +1,10 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <class name="NetwQuantizeTransform2D" inherits="NetwQuantize" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
 	<brief_description>
-		[NetwQuantize] that composes [Transform2D] from origin, rotation, and optional scale quantizers.
+		[NetwQuantize] for a [Transform2D], with one quantizer for each part.
 	</brief_description>
 	<description>
-		[member origin_quantizer] writes [member Transform2D.origin]. [member rotation_quantizer] writes [method Transform2D.get_rotation]. [member scale_quantizer] writes [method Transform2D.get_scale] when present. Skew is not encoded.
-		An unset origin or rotation encodes through a stock quantizer, so a fresh instance encodes without any configuration. A transform whose parts were never declared would otherwise write nothing and decode to identity. The stock is not the member's value: both read [code]null[/code] until something assigns them.
+		Compresses the origin, rotation and, when [member scale_quantizer] is set, scale. Skew is lost. An unset origin or rotation quantizer uses a default one.
 		[codeblock]
 		var q := NetwQuantizeTransform2D.new()
 		q.origin_quantizer = NetwQuantizeScalar.new()
@@ -16,13 +15,13 @@
 	</tutorials>
 	<members>
 		<member name="origin_quantizer" type="NetwQuantize" setter="set_origin_quantizer" getter="get_origin_quantizer">
-			Quantizer for [member Transform2D.origin]. Unset, the origin encodes through a stock [NetwQuantizeScalar] spanning [code]-2048[/code] to [code]2048[/code] in steps of [code]0.5[/code].
+			Quantizer for [member Transform2D.origin]. When [code]null[/code], a [NetwQuantizeScalar] from [code]-2048[/code] to [code]2048[/code] with a step of [code]0.5[/code] is used.
 		</member>
 		<member name="rotation_quantizer" type="NetwQuantize" setter="set_rotation_quantizer" getter="get_rotation_quantizer">
-			Quantizer for [method Transform2D.get_rotation]. Unset, the rotation encodes through a stock [NetwQuantizeAngle].
+			Quantizer for [method Transform2D.get_rotation]. When [code]null[/code], a default [NetwQuantizeAngle] is used.
 		</member>
 		<member name="scale_quantizer" type="NetwQuantize" setter="set_scale_quantizer" getter="get_scale_quantizer">
-			Optional quantizer for [method Transform2D.get_scale]. Left unset, scale is not encoded and decodes as one.
+			Quantizer for [method Transform2D.get_scale]. When [code]null[/code], the scale is not sent and is [code]1[/code].
 		</member>
 	</members>
 </class>

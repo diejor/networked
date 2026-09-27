@@ -31,16 +31,15 @@ public sealed class Netw : NetwRefCounted
     public enum SceneChange : long
     {
         /// <summary>
-        /// All peers watch the destination multiplayer scene.
+        /// Every player moves to the new scene.
         /// </summary>
         Session = 0,
         /// <summary>
-        /// The local peer watches the destination multiplayer scene.
+        /// Only the requesting player moves.
         /// </summary>
         Player = 1,
         /// <summary>
-        /// All peers from the same scene the requester node is in watch the
-        /// destination multiplayer scene.
+        /// Every player in the requester's scene moves.
         /// </summary>
         Scene = 2,
     }
@@ -53,9 +52,8 @@ public sealed class Netw : NetwRefCounted
         /// </summary>
         None = 0,
         /// <summary>
-        /// The multiplayer scene simulates in a world of its own using a
-        /// <see cref="SubViewport"/>, so geometry overlapping another scene's
-        /// cannot interact with it.
+        /// The multiplayer scene has its own world in a
+        /// <see cref="SubViewport"/>, so it never collides with another scene.
         /// </summary>
         OwnWorld = 1,
     }
@@ -64,8 +62,8 @@ public sealed class Netw : NetwRefCounted
         NetwApi.MethodBind("Netw", "of", 850293890UL);
 
     /// <summary>
-    /// The <see cref="NetwMultiplayer"/> running the
-    /// <see cref="Node.Multiplayer"/> is in.
+    /// Returns the <see cref="Node.Multiplayer"/> of <paramref name="node"/> as
+    /// a <see cref="NetwMultiplayer"/>.
     /// <code>
     /// var api := Netw.of(self)
     /// api.entity_despawn(route)
@@ -105,9 +103,8 @@ public sealed class Netw : NetwRefCounted
     ///         Netw.of(self).multiplayer_peer = peer
     /// </code>
     /// <para>
-    /// This connection model is optional, you can also assign a
-    /// <see cref="MultiplayerPeer"/> to <c>Node.multiplayer_peer</c> directly,
-    /// like you would normally do with <see cref="SceneMultiplayer"/>.
+    /// This is optional. Assigning a <see cref="MultiplayerPeer"/> to
+    /// <see cref="MultiplayerApi.MultiplayerPeer"/> works as usual.
     /// </para>
     /// </summary>
     public static NetwConnectHandle Connection(Node node)
@@ -181,15 +178,12 @@ public sealed class Netw : NetwRefCounted
         NetwApi.MethodBind("Netw", "service", 158477627UL);
 
     /// <summary>
-    /// Services are objects tied to <see cref="Node.Multiplayer"/> lifecycle,
-    /// similar to singletons but per <see cref="MultiplayerApi"/>.
+    /// Returns the service registered as <paramref name="type"/>, or
+    /// <c>null</c>. A service is like an autoload, but one per
+    /// <see cref="MultiplayerApi"/>.
     /// <code>
     /// var gamestate := Netw.service(self, MyGamestate) as MyGamestate
     /// </code>
-    /// <para>
-    /// A session holding nothing under <paramref name="type"/> returns
-    /// <c>null</c>.
-    /// </para>
     /// </summary>
     public static Variant Service(Node node, GodotObject type)
     {
@@ -213,16 +207,15 @@ public sealed class Netw : NetwRefCounted
         NetwApi.MethodBind("Netw", "service_register", 3274971611UL);
 
     /// <summary>
-    /// Registers <paramref name="service"/> with the
-    /// <see cref="Node.Multiplayer"/>, so <see cref="Netw.Service"/> finds it.
+    /// Registers <paramref name="service"/> so <see cref="Netw.Service"/>
+    /// returns it.
     /// <code>
     /// Netw.service_register(self, MyGamestate.new())
     /// </code>
     /// <para>
     /// <paramref name="type"/> defaults to the class of
-    /// <paramref name="service"/>, so a session may hold one instance of each
-    /// class. A session holding a service under <paramref name="type"/> already
-    /// replaces it with the new one.
+    /// <paramref name="service"/>. Registering another service with the same
+    /// <paramref name="type"/> replaces it.
     /// </para>
     /// </summary>
     public static void ServiceRegister(
@@ -247,9 +240,7 @@ public sealed class Netw : NetwRefCounted
         NetwApi.MethodBind("Netw", "service_unregister", 3274971611UL);
 
     /// <summary>
-    /// Unregisters <paramref name="service"/> from the
-    /// <see cref="Node.Multiplayer"/>, so <see cref="Netw.Service"/> no longer
-    /// finds it.
+    /// Reverses <see cref="Netw.ServiceRegister"/>.
     /// </summary>
     public static void ServiceUnregister(
         Node node,
@@ -273,21 +264,27 @@ public sealed class Netw : NetwRefCounted
         NetwApi.MethodBind("Netw", "prepare_join", 966125735UL);
 
     /// <summary>
-    /// Asks the session for a place in the game as <paramref name="userName"/>.
-    /// Every argument after the username reaches the
-    /// <see cref="Netw.ConfigureJoin"/> handler after its
-    /// <see cref="NetwPlayer"/>.
+    /// Joins the game as <paramref name="userName"/>. The arguments after
+    /// <paramref name="userName"/> are passed to the
+    /// <see cref="Netw.ConfigureJoin"/> handler.
     /// <code>
     /// Netw.prepare_join(self, &amp;"Dev", &amp;"red")
     /// multiplayer.multiplayer_peer = peer
     /// </code>
     /// <para>
-    /// Call it before or after the <see cref="MultiplayerApi.MultiplayerPeer"/>
-    /// is assigned. The <see cref="NetwPromise"/> reports local preparation,
-    /// <c>@GlobalScope.ERR_UNAVAILABLE</c> for a failure to submit, and
-    /// <c>@GlobalScope.ERR_ALREADY_IN_USE</c> for a duplicate request. An empty
-    /// <paramref name="userName"/> is rejected with
-    /// <c>@GlobalScope.ERR_INVALID_PARAMETER</c>. <b>Player request.</b>
+    /// Call it before or after assigning
+    /// <see cref="MultiplayerApi.MultiplayerPeer"/>. The join can still be
+    /// refused later, which emits <see cref="NetwConnectHandle.JoinFailed"/>.
+    /// <code>
+    /// Error
+    /// ┠╴OK                     the join will be sent
+    /// ┠╴ERR_UNAVAILABLE        the join could not be sent
+    /// ┠╴ERR_ALREADY_IN_USE     a join was already requested
+    /// ┖╴ERR_INVALID_PARAMETER  username is empty
+    /// </code>
+    /// </para>
+    /// <para>
+    /// <b>Player request.</b>
     /// </para>
     /// </summary>
     public static NetwPromise PrepareJoin(
@@ -329,10 +326,8 @@ public sealed class Netw : NetwRefCounted
         NetwApi.MethodBind("Netw", "scene", 2326313168UL);
 
     /// <summary>
-    /// The <see cref="NetwSceneHandle"/> for a multiplayer scene, a node with a
-    /// <see cref="NetwInterestLayer"/> and a <see cref="NetwSceneConfig"/>.
-    /// When <paramref name="named"/> is not given, the closest
-    /// <see cref="NetwSceneHandle"/> ancestor is returned.
+    /// Returns the multiplayer scene <paramref name="node"/> is in, or the one
+    /// called <paramref name="named"/>.
     /// <code>
     /// var here := Netw.scene(self)              # the scene I am in
     /// var arena := Netw.scene(spawned)         # the one I just spawned
@@ -405,12 +400,10 @@ public sealed class Netw : NetwRefCounted
     ///     arena.add_child(Netw.spawn_player(who, _spawn_avatar, team))
     /// </code>
     /// <para>
-    /// <paramref name="handler"/> takes the <see cref="NetwPlayer"/> first, the
-    /// rest of parameters are the arguments passed to
-    /// <see cref="Netw.PrepareJoin"/> before the <see cref="MultiplayerApi"/>
-    /// connected. <b>Note:</b> the username passed to
-    /// <see cref="Netw.PrepareJoin"/> arrives as
-    /// <see cref="NetwPlayer.UserName"/>. <b>Server Only.</b>
+    /// <paramref name="handler"/> receives the <see cref="NetwPlayer"/>, then
+    /// the arguments the client passed to <see cref="Netw.PrepareJoin"/> after
+    /// its username. The username is <see cref="NetwPlayer.UserName"/>.
+    /// <b>Server Only.</b>
     /// </para>
     /// </summary>
     public static NetwJoinConfig ConfigureJoin(Callable handler)
@@ -435,23 +428,24 @@ public sealed class Netw : NetwRefCounted
         NetwApi.MethodBind("Netw", "configure_admission", 2275419960UL);
 
     /// <summary>
-    /// Gates if a <see cref="NetwPlayer"/> is created, arguments come from
-    /// <see cref="Netw.PrepareJoin"/>. Return <c>@GlobalScope.OK</c> to admit.
+    /// Decides whether a joining peer gets a <see cref="NetwPlayer"/>.
+    /// <paramref name="handler"/> receives the peer id and the arguments of
+    /// <see cref="Netw.PrepareJoin"/>. Return <c>@GlobalScope.OK</c> to accept.
     /// <code>
     /// func _init() -&gt; void:
     ///     Netw.configure_admission(admit)
     ///
-    /// # Here `Netw.prepare_join` was called with `username` as the second argument with no extra arguments.
+    /// # the client called Netw.prepare_join(self, username)
     /// func admit(peer_id: int, username: StringName) -&gt; Error:
     ///     if nakama.username_for_peer(peer_id) != username:
     ///         return ERR_UNAUTHORIZED
     ///     return OK
     /// </code>
     /// <para>
-    /// Use <see cref="NetwMultiplayer.AuthCallback"/> instead, as you would
-    /// normally do with <see cref="SceneMultiplayer"/> to gate peers from
-    /// entering the <see cref="MultiplayerApi"/> such as to gate the firing of
-    /// <c>MultiplayerAPI.peer_connected</c>. <b>Server Only.</b>
+    /// To stop a peer from connecting at all, before
+    /// <c>MultiplayerAPI.peer_connected</c>, use
+    /// <see cref="NetwMultiplayer.AuthCallback"/> as you would with
+    /// <see cref="SceneMultiplayer"/>. <b>Server Only.</b>
     /// </para>
     /// </summary>
     public static Error ConfigureAdmission(Callable handler)
@@ -473,17 +467,16 @@ public sealed class Netw : NetwRefCounted
         NetwApi.MethodBind("Netw", "configure_session", 3986669177UL);
 
     /// <summary>
-    /// Configures the <c>Node.multiplayer</c> session with extra settings that
-    /// <see cref="SceneMultiplayer"/> does not cover.
+    /// Configures the <see cref="Node.Multiplayer"/> session with settings
+    /// <see cref="SceneMultiplayer"/> does not have.
     /// <code>
     /// func _init() -&gt; void:
     ///     Netw.configure_session(self) \
-    ///             .app_id(&amp;"bomber-v2") \
-    ///             .desired_role(NetwMultiplayer.ROLE_LISTEN_SERVER)
+    ///             .app(&amp;"bomber-v2") \
+    ///             .role(NetwMultiplayer.ROLE_LISTEN_SERVER)
     /// </code>
     /// <para>
-    /// For more information on the available settings, see
-    /// <see cref="NetwSessionConfig"/>.
+    /// See <see cref="NetwSessionConfig"/> for the settings.
     /// </para>
     /// </summary>
     public static NetwSessionConfig ConfigureSession(
@@ -511,13 +504,13 @@ public sealed class Netw : NetwRefCounted
     /// <code>
     /// func _init() -&gt; void:
     ///     Netw.configure_clock(self) \
-    ///             .tickrate(60) \
-    ///             .display_offset(2)
+    ///             .ticks_per_second(60) \
+    ///             .display_offset_ticks(2)
     /// </code>
     /// <para>
-    /// <paramref name="preset"/> can be used to [annotation GDScript.export] a
-    /// <see cref="NetwClockConfig"/> from the inspector and declare it from
-    /// <c>Node._enter_tree</c> instead of <c>Object._init</c>.
+    /// Pass an [annotation @GDScript.@export] <see cref="NetwClockConfig"/> as
+    /// <paramref name="preset"/> to set it from the inspector, and call this
+    /// from <c>Node._enter_tree</c>.
     /// </para>
     /// </summary>
     public static NetwClockConfig ConfigureClock(
@@ -547,10 +540,7 @@ public sealed class Netw : NetwRefCounted
     ///     Netw.configure_lagcomp(self).input_gate_deadline(16)
     /// </code>
     /// <para>
-    /// Similarly to <see cref="Netw.ConfigureClock"/>,
-    /// <paramref name="preset"/> can be used to [annotation GDScript.export] a
-    /// <see cref="NetwLagCompensationConfig"/> from the inspector and declare
-    /// it from <c>Node._enter_tree</c> instead of <c>Object._init</c>.
+    /// <paramref name="preset"/> works as in <see cref="Netw.ConfigureClock"/>.
     /// </para>
     /// </summary>
     public static NetwLagCompensationConfig ConfigureLagcomp(
@@ -583,8 +573,7 @@ public sealed class Netw : NetwRefCounted
     ///     Netw.sync_property(self, &amp;"fuel")
     /// </code>
     /// <para>
-    /// <see cref="NetwPropertyConfig"/> documents every configuration and talks
-    /// more about the replication model.
+    /// See <see cref="NetwPropertyConfig"/> for the options.
     /// </para>
     /// </summary>
     public static NetwPropertyConfig ConfigureProperty(
@@ -660,11 +649,8 @@ public sealed class Netw : NetwRefCounted
     ///     Netw.configure_signal(self.exploded)   # only the server may emit it
     /// </code>
     /// <para>
-    /// A signal registered here defaults to
-    /// <see cref="NetwMemberConfig.CallLocal"/>, so emitting it fires the local
-    /// listeners as well. <see cref="Netw.ConfigureRpc"/> and
-    /// <see cref="Netw.ConfigureProperty"/> default the other way, to
-    /// <see cref="NetwMemberConfig.CallRemote"/>.
+    /// Emitting it also fires the local listeners, as with
+    /// <see cref="NetwMemberConfig.CallLocal"/>.
     /// </para>
     /// </summary>
     public static NetwMemberConfig ConfigureSignal(Signal sig)
@@ -705,7 +691,7 @@ public sealed class Netw : NetwRefCounted
     /// var bullet := Netw.spawn(_spawn_bullet, dir, tier) # server only
     /// muzzle.add_child(bullet)
     ///
-    /// # Clients -&gt; build the same node with the same arguments and mount it in the same place
+    /// # clients build the same node with the same arguments, in the same place
     /// </code>
     /// </summary>
     public static NetwMemberConfig ConfigureSpawn(Callable callable)
@@ -790,9 +776,8 @@ public sealed class Netw : NetwRefCounted
     ///             .record_id(account_name)
     /// </code>
     /// <para>
-    /// Read <see cref="NetwPersistenceConfig"/> for what an entity declares,
-    /// <see cref="NetwPersistenceHandle"/> for reaching the row, and
-    /// <see cref="NetwDatabase"/> for the database architecture.
+    /// See <see cref="NetwPersistenceConfig"/>,
+    /// <see cref="NetwPersistenceHandle"/> and <see cref="NetwDatabase"/>.
     /// </para>
     /// </summary>
     public static NetwPersistenceConfig ConfigurePersistence(Node node)
@@ -853,7 +838,7 @@ public sealed class Netw : NetwRefCounted
     /// @onready var mobs := Netw.table(self, &amp;"Mob")
     /// </code>
     /// <para>
-    /// Schemas are used for creating <see cref="NetwTableHandle"/> instances.
+    /// Read and write the table with <see cref="Netw.Table"/>.
     /// </para>
     /// </summary>
     public static NetwSchema ConfigureSchema(StringName name)
@@ -906,8 +891,8 @@ public sealed class Netw : NetwRefCounted
         NetwApi.MethodBind("Netw", "rpc_id", 3088989228UL);
 
     /// <summary>
-    /// Calls <paramref name="callable"/> on <paramref name="peerId"/> alone, or
-    /// on every connected peer when <paramref name="peerId"/> is <c>0</c>.
+    /// Calls <paramref name="callable"/> on <paramref name="peerId"/>, or on
+    /// every peer when <c>0</c>.
     /// </summary>
     public static void RpcId(
         long peerId,
@@ -970,13 +955,12 @@ public sealed class Netw : NetwRefCounted
 
     /// <summary>
     /// Calls <paramref name="callable"/> on the server and returns a
-    /// <see cref="NetwPromise"/> carrying what it returned.
+    /// <see cref="NetwPromise"/> with its return value.
     /// <code>
     /// var sold: bool = await Netw.request(shop.buy, &amp;"shield").wait()
     /// </code>
     /// <para>
-    /// Register the method with <see cref="Netw.ConfigureRpc"/> first, the same
-    /// as <see cref="Netw.Rpc"/>.
+    /// The method must be an RPC, as for <see cref="Netw.Rpc"/>.
     /// </para>
     /// </summary>
     public static NetwPromise Request(Callable callable, params Variant[] rest)
@@ -1012,10 +996,9 @@ public sealed class Netw : NetwRefCounted
         NetwApi.MethodBind("Netw", "request_id", 1728372685UL);
 
     /// <summary>
-    /// Calls <paramref name="callable"/> on <paramref name="peerId"/> alone and
-    /// returns a <see cref="NetwPromise"/> carrying what it returned. A
-    /// <paramref name="peerId"/> of <c>0</c> is rejected, since asking everyone
-    /// is <see cref="Netw.RequestAll"/>.
+    /// Calls <paramref name="callable"/> on <paramref name="peerId"/> and
+    /// returns a <see cref="NetwPromise"/> with its return value. Use
+    /// <see cref="Netw.RequestAll"/> to call every peer.
     /// </summary>
     public static NetwPromise RequestId(
         long peerId,
@@ -1057,9 +1040,7 @@ public sealed class Netw : NetwRefCounted
 
     /// <summary>
     /// Calls <paramref name="callable"/> on every peer that can see the node,
-    /// and returns a <see cref="NetwGroupPromise"/> gathering what they each
-    /// returned. Which peers are waited for is decided when the call goes out,
-    /// so a peer arriving afterwards is not one of them.
+    /// and returns a <see cref="NetwGroupPromise"/> with each return value.
     /// </summary>
     public static NetwGroupPromise RequestAll(
         Callable callable,
@@ -1134,15 +1115,15 @@ public sealed class Netw : NetwRefCounted
         NetwApi.MethodBind("Netw", "sync_property", 1494684691UL);
 
     /// <summary>
-    /// Sends what <paramref name="property"/> is holding right now to the other
-    /// peers, for a property that changes on events rather than every tick.
+    /// Sends the current value of <paramref name="property"/> to the other
+    /// peers. Use it for a property that changes rarely.
     /// <code>
     /// func refuel() -&gt; void:
     ///     fuel = 100.0
     ///     Netw.sync_property(self, &amp;"fuel")
     /// </code>
     /// <para>
-    /// <see cref="Netw.ConfigureProperty"/> must be declared first.
+    /// Call <see cref="Netw.ConfigureProperty"/> first.
     /// </para>
     /// </summary>
     public static void SyncProperty(Node node, StringName property)
@@ -1175,12 +1156,10 @@ public sealed class Netw : NetwRefCounted
     ///
     /// # ...
     ///
-    /// # `exploded` emits on every peer and also locally
     /// Netw.emit_entity_signal(self.exploded, position)
     /// </code>
     /// <para>
-    /// A registered signal fires locally as well, so calling <c>sig.emit()</c>
-    /// beside this would fire the local listeners twice.
+    /// Do not also call <c>sig.emit()</c>, or local listeners fire twice.
     /// </para>
     /// </summary>
     public static void EmitEntitySignal(Signal sig, params Variant[] rest)
@@ -1236,18 +1215,14 @@ public sealed class Netw : NetwRefCounted
         NetwApi.MethodBind("Netw", "table", 482665393UL);
 
     /// <summary>
-    /// The <see cref="NetwTableHandle"/> for the replicated table declared
-    /// under <paramref name="name"/>.
+    /// Returns the table of the schema <paramref name="name"/> from
+    /// <see cref="Netw.ConfigureSchema"/>.
     /// <code>
     /// @onready var mobs := Netw.table(self, &amp;"Mob")
     ///
     /// func _ready() -&gt; void:
     ///     mobs.received.connect(_on_mobs)
     /// </code>
-    /// <para>
-    /// <see cref="Netw.ConfigureSchema"/> is where <paramref name="name"/> is
-    /// declared.
-    /// </para>
     /// </summary>
     public static NetwTableHandle Table(Node node, StringName name)
     {
@@ -1281,10 +1256,9 @@ public sealed class Netw : NetwRefCounted
     ///     Netw.configure_database(self, &amp;"saves").backend(preload("res://save_backend.tres"))
     /// </code>
     /// <para>
-    /// <see cref="Netw.Database"/> reaches the declared database.
-    /// <paramref name="preset"/> copies an [annotation GDScript.export]
-    /// <see cref="NetwDatabaseConfig"/>. If using <paramref name="preset"/>,
-    /// the recommended place to declare it is from <c>Node._enter_tree</c>.
+    /// Get it later with <see cref="Netw.Database"/>. Pass an [annotation
+    /// @GDScript.@export] <see cref="NetwDatabaseConfig"/> as
+    /// <paramref name="preset"/> to set it from the inspector.
     /// <code>
     /// @export var database_config: NetwDatabaseConfig
     ///
@@ -1326,16 +1300,11 @@ public sealed class Netw : NetwRefCounted
         NetwApi.MethodBind("Netw", "database", 927809139UL);
 
     /// <summary>
-    /// The <see cref="NetwDatabase"/> declared under <paramref name="name"/> in
-    /// <paramref name="node"/>'s session. Returns the same cached handle on
-    /// every call.
+    /// Returns the <see cref="NetwDatabase"/> declared as
+    /// <paramref name="name"/> with <see cref="Netw.ConfigureDatabase"/>.
     /// <code>
     /// var db: NetwDatabase = Netw.database(self, &amp;"saves")
     /// </code>
-    /// <para>
-    /// <see cref="Netw.ConfigureDatabase"/> declares <paramref name="name"/>
-    /// first.
-    /// </para>
     /// </summary>
     public static NetwDatabase Database(Node node, StringName name)
     {
@@ -1362,14 +1331,11 @@ public sealed class Netw : NetwRefCounted
         NetwApi.MethodBind("Netw", "replicate", 707187235UL);
 
     /// <summary>
-    /// Sends a node the game built itself to every peer, which rebuild it from
-    /// its <see cref="Node.SceneFilePath"/>, and returns its
-    /// <see cref="NetwEntity"/>. <paramref name="node"/> has no parent yet.
-    /// <see cref="NetwEntity.Route"/>, <see cref="NetwEntity.EntityId"/>,
-    /// <see cref="NetwEntity.PeerId"/> and <see cref="NetwEntity.Controller"/>
-    /// are all filled in by the time this returns, and the other peers are not
-    /// told anything until the node enters the tree. That gap is where the
-    /// node's first values are written.
+    /// Spawns <paramref name="node"/> on every peer from its
+    /// <see cref="Node.SceneFilePath"/>, and returns its
+    /// <see cref="NetwEntity"/>. Call it before adding <paramref name="node"/>
+    /// to the tree. Peers receive it when it enters the tree, so set its
+    /// starting values in between.
     /// <code>
     /// var body := PlayerScene.instantiate()
     /// var entity := Netw.replicate(body, player)
@@ -1377,11 +1343,10 @@ public sealed class Netw : NetwRefCounted
     /// scene.add_child(body)
     /// </code>
     /// <para>
-    /// The server can always call it. A client can too, without
-    /// <paramref name="owner"/>, when <paramref name="node"/> sets
-    /// <see cref="NetwEntity.Lifecycle"/> to
-    /// <see cref="NetwEntity.LifecycleEnum.Controller"/>, and becomes its
-    /// <see cref="NetwEntity.Controller"/>.
+    /// A client can call it without <paramref name="owner"/> when
+    /// <paramref name="node"/> sets <see cref="NetwEntity.Lifecycle"/> to
+    /// <see cref="NetwEntity.LifecycleEnum.Controller"/>. That client becomes
+    /// its <see cref="NetwEntity.Controller"/>.
     /// </para>
     /// </summary>
     public static NetwEntity Replicate(Node node, NetwPlayer owner = null)
@@ -1402,20 +1367,18 @@ public sealed class Netw : NetwRefCounted
         NetwApi.MethodBind("Netw", "spawn", 3345110683UL);
 
     /// <summary>
-    /// Builds the same node on every peer by running <paramref name="fn"/> with
-    /// the arguments given after it, and returns this peer's copy for the
-    /// caller to parent.
+    /// Calls <paramref name="fn"/> with the arguments after it on every peer,
+    /// and returns the node it created here. Add it to the tree yourself.
     /// <code>
     /// muzzle.add_child(Netw.spawn(_spawn_bullet, dir, 2))
     /// </code>
     /// <para>
     /// Register <paramref name="fn"/> with <see cref="Netw.ConfigureSpawn"/>
-    /// first, and parent the node returned before the next tick. The server can
-    /// always call it. A client can too when the node sets
-    /// <see cref="NetwEntity.Lifecycle"/> to
-    /// <see cref="NetwEntity.LifecycleEnum.Controller"/>, and becomes its
-    /// <see cref="NetwEntity.Controller"/>. The node shows on that client at
-    /// once and is removed if the server refuses it.
+    /// first, and add the node to the tree before the next tick. A client can
+    /// call it when the node sets <see cref="NetwEntity.Lifecycle"/> to
+    /// <see cref="NetwEntity.LifecycleEnum.Controller"/>. That client becomes
+    /// its <see cref="NetwEntity.Controller"/>, sees it at once, and loses it
+    /// if the server refuses.
     /// </para>
     /// </summary>
     public static Node Spawn(Callable fn, params Variant[] rest)
@@ -1443,17 +1406,17 @@ public sealed class Netw : NetwRefCounted
         NetwApi.MethodBind("Netw", "spawn_player", 1228628813UL);
 
     /// <summary>
-    /// Builds the node <paramref name="player"/> drives, the same way
-    /// <see cref="Netw.Spawn"/> builds any other.
+    /// Like <see cref="Netw.Spawn"/>, for the node <paramref name="player"/>
+    /// controls.
     /// <code>
     /// players.add_child(
     ///     Netw.spawn_player(player, _spawn_avatar, character_class)
     /// )
     /// </code>
     /// <para>
-    /// The node becomes tied to <paramref name="player"/> lifecycle. With
-    /// <see cref="NetwPersistenceConfig.LoadOnSpawn"/>, other peers see the
-    /// node once its saved row is loaded. <b>Server Only.</b>
+    /// The node is despawned when <paramref name="player"/> leaves. With
+    /// <see cref="NetwPersistenceConfig.LoadOnSpawn"/>, other peers receive it
+    /// once its save is loaded. <b>Server Only.</b>
     /// </para>
     /// </summary>
     public static Node SpawnPlayer(
@@ -1500,15 +1463,13 @@ public sealed class Netw : NetwRefCounted
     /// Netw.despawn(bullet)
     /// </code>
     /// <para>
-    /// <paramref name="opts"/> configures what happens to the node on every
-    /// peer, see <see cref="NetwDespawnOpts"/> for the options. It returns
-    /// <c>@GlobalScope.ERR_DOES_NOT_EXIST</c> for a node that is not a spawned
-    /// one and <c>@GlobalScope.ERR_UNAVAILABLE</c> for a node in no
-    /// <see cref="MultiplayerApi"/>. The server can always call it. The
-    /// <see cref="NetwEntity.Controller"/> can too when
+    /// See <see cref="NetwDespawnOpts"/> for <paramref name="opts"/>. Returns
+    /// <c>@GlobalScope.ERR_DOES_NOT_EXIST</c> for a node that was not spawned,
+    /// and <c>@GlobalScope.ERR_UNAVAILABLE</c> outside a session. A client can
+    /// call it when it is the <see cref="NetwEntity.Controller"/> and
     /// <see cref="NetwEntity.Lifecycle"/> is
-    /// <see cref="NetwEntity.LifecycleEnum.Controller"/>, and the node is
-    /// removed on its peer at once and comes back if the server refuses.
+    /// <see cref="NetwEntity.LifecycleEnum.Controller"/>. The node is removed
+    /// on that client at once, and comes back if the server refuses.
     /// </para>
     /// </summary>
     public static Error Despawn(Node node, NetwDespawnOpts opts = null)
@@ -1529,26 +1490,23 @@ public sealed class Netw : NetwRefCounted
         NetwApi.MethodBind("Netw", "reparent", 941587451UL);
 
     /// <summary>
-    /// Moves <paramref name="node"/> under <paramref name="newParent"/> the way
-    /// <see cref="Node.Reparent"/> does, and answers a
-    /// <see cref="NetwPromise"/> that resolves once the node is under its new
-    /// parent on the server. The other peers move it after that.
+    /// Moves <paramref name="node"/> under <paramref name="newParent"/> like
+    /// <see cref="Node.Reparent"/>. The promise resolves once the server has
+    /// moved it. Other peers move it after.
     /// <code>
     /// await Netw.reparent(body, level2.get_node(^"Players")).wait()
     /// </code>
     /// <para>
-    /// What it adds over <see cref="Node.Reparent"/> is a window that masks the
-    /// mover off the physics server across the parent swap, basically a
-    /// workaround for this issue. <see cref="Node.Reparent"/> stays fully
-    /// supported and is the right verb for anything that doesn't depend on area
-    /// signals. A <paramref name="node"/> that is no entity answers
-    /// <c>@GlobalScope.ERR_DOES_NOT_EXIST</c> and one in no session answers
-    /// <c>@GlobalScope.ERR_UNAVAILABLE</c>. The server can always call it. The
-    /// <see cref="NetwEntity.Controller"/> can too when
-    /// <see cref="NetwEntity.Lifecycle"/> is
-    /// <see cref="NetwEntity.LifecycleEnum.Controller"/>, and the node moves on
-    /// its peer at once. If the server refuses, the promise is rejected and the
-    /// node moves back.
+    /// Unlike <see cref="Node.Reparent"/>, it does not fire
+    /// <see cref="Area3D"/> and <see cref="Area2D"/> enter and exit signals
+    /// during the move, which works around this issue. Otherwise
+    /// <see cref="Node.Reparent"/> works fine. The promise fails with
+    /// <c>@GlobalScope.ERR_DOES_NOT_EXIST</c> when <paramref name="node"/> has
+    /// no entity, and <c>@GlobalScope.ERR_UNAVAILABLE</c> outside a session. A
+    /// client can call it when it is the <see cref="NetwEntity.Controller"/>
+    /// and <see cref="NetwEntity.Lifecycle"/> is
+    /// <see cref="NetwEntity.LifecycleEnum.Controller"/>. The node moves on
+    /// that client at once, and moves back if the server refuses.
     /// </para>
     /// </summary>
     public static NetwPromise Reparent(Node node, Node newParent)
@@ -1577,10 +1535,8 @@ public sealed class Netw : NetwRefCounted
     /// Netw.claim_authority(self, NetwEntity.HOLD_YIELDABLE).then(pick_up)
     /// </code>
     /// <para>
-    /// A <paramref name="node"/> under no entity answers a promise rejected
-    /// with <c>@GlobalScope.ERR_DOES_NOT_EXIST</c>. <paramref name="hold"/>
-    /// defaults to <see cref="NetwEntity.HoldEnum.Exclusive"/>. <b>Player
-    /// request.</b>
+    /// The promise fails with <c>@GlobalScope.ERR_DOES_NOT_EXIST</c> when
+    /// <paramref name="node"/> has no entity. <b>Player request.</b>
     /// </para>
     /// </summary>
     public static NetwPromise ClaimAuthority(Node node, NetwEntity.HoldEnum hold =
@@ -1602,12 +1558,11 @@ public sealed class Netw : NetwRefCounted
         NetwApi.MethodBind("Netw", "release_authority", 4095760114UL);
 
     /// <summary>
-    /// Hands control of the entity <paramref name="node"/> belongs to on to
-    /// <paramref name="successor"/>, or to the server when it is <c>0</c>, with
-    /// this peer's final state. Same as
-    /// <see cref="NetwEntity.ReleaseAuthority"/>. A <paramref name="node"/>
-    /// under no entity answers a promise rejected with
-    /// <c>@GlobalScope.ERR_DOES_NOT_EXIST</c>. <b>Player request.</b>
+    /// Gives control of the entity <paramref name="node"/> belongs to to
+    /// <paramref name="successor"/>, or to the server when <c>0</c>. Same as
+    /// <see cref="NetwEntity.ReleaseAuthority"/>. The promise fails with
+    /// <c>@GlobalScope.ERR_DOES_NOT_EXIST</c> when <paramref name="node"/> has
+    /// no entity. <b>Player request.</b>
     /// </summary>
     public static NetwPromise ReleaseAuthority(Node node, long successor = 0)
     {
@@ -1665,8 +1620,8 @@ public sealed class Netw : NetwRefCounted
         NetwApi.MethodBind("Netw", "sample", 4262892489UL);
 
     /// <summary>
-    /// What <paramref name="entity"/> held at <paramref name="tick"/>, read
-    /// back as a copy that the game may keep.
+    /// Returns a copy of the state of <paramref name="entity"/> at
+    /// <paramref name="tick"/>. It is empty when nothing was recorded.
     /// <code>
     /// func _place_bomb(ctx: NetwActionContext, pos: Vector2) -&gt; void:
     ///     var past := Netw.sample(entity, ctx.view_tick)
@@ -1674,12 +1629,6 @@ public sealed class Netw : NetwRefCounted
     ///         ctx.deny()
     ///         return
     /// </code>
-    /// <para>
-    /// Nothing recorded at <paramref name="tick"/> returns an empty record
-    /// rather than <c>null</c>, so a caller asks
-    /// <see cref="NetwRecord.HasValue"/> rather than checking for a missing
-    /// object. Writing to what comes back changes nothing that was recorded.
-    /// </para>
     /// </summary>
     public static DictionaryRecord Sample(NetwEntity entity, long tick)
     {
@@ -1699,9 +1648,9 @@ public sealed class Netw : NetwRefCounted
         NetwApi.MethodBind("Netw", "rewind", 827478004UL);
 
     /// <summary>
-    /// Puts every entity in <paramref name="entities"/> back where it was at
-    /// <paramref name="tick"/>, runs <paramref name="body"/> against that older
-    /// world, then returns them all to where they are now.
+    /// Moves every entity in <paramref name="entities"/> back to where it was
+    /// at <paramref name="tick"/>, calls <paramref name="body"/>, then moves
+    /// them back. Use it to check a hit where the shooter saw the target.
     /// <code>
     /// func _fire(ctx: NetwActionContext) -&gt; void:
     ///     Netw.rewind(Netw.scene(self).entities, ctx.view_tick, _trace_shot)
@@ -1733,12 +1682,12 @@ public sealed class Netw : NetwRefCounted
         NetwApi.MethodBind("Netw", "change_scene_to_file", 1402832089UL);
 
     /// <summary>
-    /// Opens <paramref name="path"/> and makes players watch it. No node moves,
-    /// spawn nodes from <see cref="NetwSessionHandle.SceneChanged"/>.
-    /// <paramref name="scope"/> says who watches and what retires. A server
-    /// call always succeeds. A client call is a request that
-    /// <see cref="Netw.ConfigureSceneRequests"/> decides, so a session
-    /// declaring no <see cref="Netw.ConfigureSceneRequests"/> rejects it.
+    /// Opens <paramref name="path"/> and moves players to it. No node moves
+    /// with them, so spawn their nodes from
+    /// <see cref="NetwSessionHandle.SceneChanged"/>. <paramref name="scope"/>
+    /// says who moves. On a client this is a request that
+    /// <see cref="Netw.ConfigureSceneRequests"/> decides, and it is rejected
+    /// when there is none.
     /// <code>
     /// var err: Error = await Netw.change_scene_to_file(
     ///         self, "res://match.tscn").wait()
@@ -1800,8 +1749,8 @@ public sealed class Netw : NetwRefCounted
         NetwApi.MethodBind("Netw", "reload_current_scene", 1539982598UL);
 
     /// <summary>
-    /// Opens the scene this peer presents again, the way
-    /// <see cref="SceneTree.ReloadCurrentScene"/> does.
+    /// Reloads the scene this peer displays, like
+    /// <see cref="SceneTree.ReloadCurrentScene"/>.
     /// </summary>
     public static NetwPromise ReloadCurrentScene(Node node, Netw.SceneChange scope =
         (Netw.SceneChange)0)
@@ -1822,8 +1771,8 @@ public sealed class Netw : NetwRefCounted
         NetwApi.MethodBind("Netw", "configure_multiplayer_scene", 3354192785UL);
 
     /// <summary>
-    /// Makes <paramref name="node"/> adopt a <see cref="NetwInterestLayer"/>,
-    /// children are automatically isolated from other multiplayer scenes.
+    /// Makes <paramref name="node"/> a multiplayer scene. Players only see its
+    /// children while they are in it.
     /// <code>
     /// func _init() -&gt; void:
     ///     Netw.configure_multiplayer_scene(self).labeled(&amp;"Arena")
@@ -1845,8 +1794,9 @@ public sealed class Netw : NetwRefCounted
         NetwApi.MethodBind("Netw", "configure_scene_requests", 2275419960UL);
 
     /// <summary>
-    /// Allows clients to request a scene change, and returns
-    /// <c>@GlobalScope.OK</c> if the declaration was accepted.
+    /// Lets clients request a scene change. <paramref name="handler"/> runs on
+    /// the server for every request and returns <c>@GlobalScope.OK</c> to allow
+    /// it.
     /// <code>
     /// func _init() -&gt; void:
     ///     Netw.configure_scene_requests(authorize_scene_request)
@@ -1860,10 +1810,6 @@ public sealed class Netw : NetwRefCounted
     ///         return ERR_UNAUTHORIZED
     ///     return OK if unlocked(player, destination) else ERR_UNAUTHORIZED
     /// </code>
-    /// <para>
-    /// <paramref name="handler"/> is called on the server for every client
-    /// request.
-    /// </para>
     /// </summary>
     public static Error ConfigureSceneRequests(Callable handler)
     {

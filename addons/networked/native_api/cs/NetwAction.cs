@@ -9,8 +9,9 @@ namespace Networked;
 /// A predicted discrete action bound to one authority method.
 /// </summary>
 /// <remarks>
-/// Pairs a local <see cref="NetwAction.Predict"/> effect with a reliable server
-/// request.
+/// Shows the result of an action right away on the client that asked for it,
+/// then keeps or removes it once the server answers. Create one with
+/// <see cref="Netw.Action"/>.
 /// <code>
 /// @onready var place_bomb := Netw.action(_place_bomb)
 ///
@@ -46,36 +47,25 @@ public sealed class NetwAction : NetwRefCounted
     public enum TimingModeEnum : long
     {
         /// <summary>
-        /// Execute on the server when <see cref="NetwActionContext.ViewTick"/>
-        /// arrives.
+        /// Runs on the server when its tick reaches
+        /// <see cref="NetwActionContext.ViewTick"/>.
         /// </summary>
         TickAligned = 0,
         /// <summary>
-        /// Execute after server history records
-        /// <see cref="NetwActionContext.ViewTick"/>. This mode is
-        /// owner-anchored. It guarantees only that the action owner's recorded
-        /// state is ready at the view tick, and gates no other entity, so
-        /// cross-entity validation must use
-        /// <see cref="NetwMultiplayer.LagcompSample"/> or
-        /// <see cref="NetwMultiplayer.LagcompRewind"/> for those targets.
-        /// Determinism is a precondition, not a toggle. The placement agrees
-        /// with the client only when consuming the same input yields the same
-        /// state, and resolution is deferred until that state exists, so remote
-        /// peers see the result later. Use
-        /// <see cref="NetwAction.TimingModeEnum.Immediate"/> when the action
-        /// must not wait. Under loss, the consume policy may fill a missing
-        /// input slot: this mode guarantees a recorded state exists, not that
-        /// it came from the real input.
+        /// Runs on the server once it has recorded the requesting entity's
+        /// state at <see cref="NetwActionContext.ViewTick"/>, so the action
+        /// sees the same state the client saw. Other peers see the result
+        /// later. Read other entities with <see cref="Netw.Sample"/>.
         /// </summary>
         TickAlignedStateReady = 1,
         /// <summary>
-        /// Execute as soon as the request reaches the server.
+        /// Runs as soon as the request reaches the server.
         /// </summary>
         Immediate = 2,
     }
 
     /// <summary>
-    /// Emitted when the authoritative result adopts the optimistic effect.
+    /// Emitted when the server accepted the action.
     /// </summary>
     public event Action Confirmed
     {
@@ -84,7 +74,7 @@ public sealed class NetwAction : NetwRefCounted
     }
 
     /// <summary>
-    /// Emitted when the server denies the optimistic effect or it times out.
+    /// Emitted when the server denied the action or did not answer in time.
     /// </summary>
     public event Action Denied
     {
@@ -99,9 +89,9 @@ public sealed class NetwAction : NetwRefCounted
         NetwApi.MethodBind("NetwAction", "set_predict", 1611583062UL);
 
     /// <summary>
-    /// Creates the local optimistic effect and returns the ghost
-    /// <see cref="Node"/> that <see cref="NetwAction.Confirm"/> and
-    /// <see cref="NetwAction.Revert"/> later receive.
+    /// Shows the action locally and returns a <see cref="Node"/>, usually a
+    /// placeholder, that <see cref="NetwAction.Confirm"/> or
+    /// <see cref="NetwAction.Revert"/> later receives.
     /// </summary>
     public Callable Predict
     {
@@ -130,9 +120,9 @@ public sealed class NetwAction : NetwRefCounted
         NetwApi.MethodBind("NetwAction", "set_revert", 1611583062UL);
 
     /// <summary>
-    /// Reverts the optimistic effect, taking the ghost <see cref="Node"/>
-    /// <see cref="NetwAction.Predict"/> returned. Unset, the ghost is freed
-    /// with <see cref="Node.QueueFree"/>.
+    /// Called with the <see cref="Node"/> <see cref="NetwAction.Predict"/>
+    /// returned when the server denied the action or did not answer in time.
+    /// Unset, that node is freed with <see cref="Node.QueueFree"/>.
     /// </summary>
     public Callable Revert
     {
@@ -161,8 +151,8 @@ public sealed class NetwAction : NetwRefCounted
         NetwApi.MethodBind("NetwAction", "set_confirm", 1611583062UL);
 
     /// <summary>
-    /// Confirms the optimistic effect, taking the ghost <see cref="Node"/>
-    /// <see cref="NetwAction.Predict"/> returned. Unset, the ghost is freed
+    /// Called with the <see cref="Node"/> <see cref="NetwAction.Predict"/>
+    /// returned when the server accepted the action. Unset, that node is freed
     /// with <see cref="Node.QueueFree"/>.
     /// </summary>
     public Callable Confirm
@@ -192,8 +182,8 @@ public sealed class NetwAction : NetwRefCounted
         NetwApi.MethodBind("NetwAction", "set_timeout_ticks", 1286410249UL);
 
     /// <summary>
-    /// Ticks before an unresolved request reverts. <c>0</c> derives a
-    /// conservative default from the lag-compensation engine.
+    /// How many ticks to wait for the server before reverting. <c>0</c> waits
+    /// 120 ticks.
     /// </summary>
     public long TimeoutTicks
     {
@@ -225,10 +215,7 @@ public sealed class NetwAction : NetwRefCounted
         NetwApi.MethodBind("NetwAction", "set_timing_mode", 4181664630UL);
 
     /// <summary>
-    /// The server execution policy. Defaults to
-    /// <see cref="NetwAction.TimingModeEnum.Immediate"/>, which is arrival-time
-    /// execution with no readiness assumptions, so stricter modes are opted
-    /// into per action.
+    /// When the server runs the action.
     /// </summary>
     public NetwAction.TimingModeEnum TimingMode
     {
@@ -264,8 +251,9 @@ public sealed class NetwAction : NetwRefCounted
     /// func _place_bomb(ctx: NetwActionContext, pos: Vector2, fuse: float) -&gt; void:
     /// </code>
     /// <para>
-    /// The local controller gets an immediate <see cref="NetwAction.Predict"/>
-    /// effect. Non-owning peers do nothing. <b>Player request.</b>
+    /// On the peer controlling the entity, <see cref="NetwAction.Predict"/>
+    /// runs immediately. On any other peer the call does nothing. <b>Player
+    /// request.</b>
     /// </para>
     /// </summary>
     public void Request(long viewTick, params Variant[] rest)

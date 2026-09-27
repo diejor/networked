@@ -282,7 +282,9 @@ public sealed class NetwDisplayHandle : NetwRefCounted
             373806689UL);
 
     /// <summary>
-    /// Per frame fraction used to track the measured lag floor.
+    /// How quickly, as a fraction per frame,
+    /// <see cref="NetwDisplayHandle.DisplayLag"/> shrinks back toward the
+    /// smallest delay needed once snapshots arrive on time.
     /// </summary>
     public double LagAdaptRate
     {
@@ -359,7 +361,9 @@ public sealed class NetwDisplayHandle : NetwRefCounted
             373806689UL);
 
     /// <summary>
-    /// Per frame fraction used to low pass the lag floor.
+    /// How quickly, as a fraction per frame, the smallest delay
+    /// <see cref="NetwDisplayHandle.EnableSmartDilation"/> measures follows a
+    /// new measurement. Lower is smoother.
     /// </summary>
     public double FloorSmoothing
     {

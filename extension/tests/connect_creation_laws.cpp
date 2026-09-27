@@ -220,7 +220,8 @@ struct Bench {
     }
 
     RID ask(
-        int p_mode = NetwMultiplayer::TRANSPORT_MODE_CLIENT,
+        NetwMultiplayer::TransportMode p_mode
+        = NetwMultiplayer::TRANSPORT_MODE_CLIENT,
         const String &p_address = String("somewhere"),
         const Dictionary &p_settings = Dictionary()
     ) {

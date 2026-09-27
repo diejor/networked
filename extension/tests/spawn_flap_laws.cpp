@@ -89,7 +89,9 @@ Flapped a_hidden_body(
 
     made.layer = p_rig.server()->interest_layer(StringName(p_layer));
     REQUIRE(made.layer.is_valid());
-    made.layer->set_default_leave_policy(p_leave_policy);
+    made.layer->set_default_leave_policy(
+        netw::NetwMultiplayer::LeavePolicy(p_leave_policy)
+    );
     made.layer->add_entity(made.entity);
     p_rig.flush_interest();
     p_rig.pump(10);
@@ -433,7 +435,7 @@ TEST_CASE(
     const Ref<NetwInterestLayer> layer
         = rig.server()->interest_layer(StringName("elsewhere"));
     REQUIRE(layer.is_valid());
-    layer->set_default_leave_policy(Decl::LEAVE_HIDE);
+    layer->set_default_leave_policy(netw::NetwMultiplayer::LEAVE_POLICY_HIDE);
     layer->add_entity(driven);
     layer->add_viewer(rig.peer_id(0));
     rig.flush_interest();

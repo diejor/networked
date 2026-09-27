@@ -58,7 +58,7 @@ public sealed class NetwDatabase : NetwRefCounted
     ///     status.text = detail
     /// </code>
     /// </summary>
-    public event Action<long, string> Failed
+    public event Action<Error, string> Failed
     {
         add => Connect("failed", Callable.From(value));
         remove => Disconnect("failed", Callable.From(value));
@@ -120,9 +120,9 @@ public sealed class NetwDatabase : NetwRefCounted
         NetwApi.MethodBind("NetwDatabase", "open", 2495519093UL);
 
     /// <summary>
-    /// Opens <paramref name="slot"/> and settles with an
-    /// <c>@GlobalScope.Error</c>. To switch slots,
-    /// <see cref="NetwDatabase.Close"/> the open one first.
+    /// Opens <paramref name="slot"/>. To switch slots,
+    /// <see cref="NetwDatabase.Close"/> the open one first. The promise gives
+    /// an <c>@GlobalScope.Error</c>.
     /// <code>
     /// Error
     /// ┠╴OK                slot is open, or was open already
@@ -153,8 +153,8 @@ public sealed class NetwDatabase : NetwRefCounted
         NetwApi.MethodBind("NetwDatabase", "close", 1931563502UL);
 
     /// <summary>
-    /// Stops accepting new operations, waits for the pending ones to settle,
-    /// and settles with a <c>@GlobalScope.Error</c>.
+    /// Stops accepting new operations and waits for the pending ones to finish.
+    /// The promise gives an <c>@GlobalScope.Error</c>.
     /// <code>
     /// Error
     /// ┠╴OK               the database is closed
@@ -172,11 +172,11 @@ public sealed class NetwDatabase : NetwRefCounted
         NetwApi.MethodBind("NetwDatabase", "flush", 1931563502UL);
 
     /// <summary>
-    /// Settles with an <c>@GlobalScope.Error</c> once every operation started
-    /// before this call has settled.
+    /// Waits for every operation started before this call to finish. The
+    /// promise gives an <c>@GlobalScope.Error</c>.
     /// <code>
     /// Error
-    /// ┠╴OK               every earlier operation settled, whatever each one settled with
+    /// ┠╴OK               every earlier operation finished, whatever its result
     /// ┖╴ERR_UNAVAILABLE  the session ended first, or this handle outlived it
     /// </code>
     /// </summary>
@@ -191,9 +191,9 @@ public sealed class NetwDatabase : NetwRefCounted
         NetwApi.MethodBind("NetwDatabase", "read", 794457893UL);
 
     /// <summary>
-    /// Reads the record at <paramref name="id"/> and settles with a
+    /// Reads the record at <paramref name="id"/>. The promise gives a
     /// <see cref="Godot.Collections.Dictionary"/>. A record that was never
-    /// saved settles with <c>found</c> <c>false</c> and <c>error</c>
+    /// saved gives <c>found</c> <c>false</c> and <c>error</c>
     /// <c>@GlobalScope.OK</c>.
     /// <code>
     /// Dictionary
@@ -202,7 +202,7 @@ public sealed class NetwDatabase : NetwRefCounted
     /// ┠╴found    bool        whether a record was stored under id. False on any failure
     /// ┠╴id       StringName  the record id the read asked for
     /// ┖╴values   Dictionary  the stored row, keyed by column name, complete against the
-    ///                     	schema that read it. Empty unless found is true
+    ///                        schema that read it. Empty unless found is true
     /// </code>
     /// <code>
     /// var read: Dictionary = await db.read(PlayerSave.schema, account_id).wait()
@@ -235,9 +235,10 @@ public sealed class NetwDatabase : NetwRefCounted
         NetwApi.MethodBind("NetwDatabase", "write", 659202569UL);
 
     /// <summary>
-    /// Replaces the whole record at <paramref name="id"/> and settles with an
-    /// <c>@GlobalScope.Error</c>. <paramref name="values"/> must hold every
-    /// column <paramref name="schema"/> declares and nothing else.
+    /// Replaces the whole record at <paramref name="id"/>.
+    /// <paramref name="values"/> must hold every column
+    /// <paramref name="schema"/> declares and nothing else. The promise gives
+    /// an <c>@GlobalScope.Error</c>.
     /// <code>
     /// Error
     /// ┠╴OK                  the backend acknowledged the write
@@ -290,15 +291,16 @@ public sealed class NetwDatabase : NetwRefCounted
 
     /// <summary>
     /// Replaces the columns <paramref name="values"/> names in the existing
-    /// record at <paramref name="id"/>, keeps the rest, and settles with an
-    /// <c>@GlobalScope.Error</c>. <paramref name="values"/> may hold any subset
-    /// of the columns in <paramref name="schema"/>.
+    /// record at <paramref name="id"/> and keeps the rest.
+    /// <paramref name="values"/> may hold any subset of the columns in
+    /// <paramref name="schema"/>. The promise gives an
+    /// <c>@GlobalScope.Error</c>.
     /// <code>
     /// Error
     /// ┠╴OK                  the backend acknowledged the merged record, or values is empty
     /// ┠╴ERR_UNCONFIGURED    the database is not open, or the schema declares no
     /// │                     migration from the stored record's storage version
-    /// ┠╴ERR_BUSY            the database already holds 4096 unsettled operations
+    /// ┠╴ERR_BUSY            the database already holds 4096 pending operations
     /// ┠╴ERR_DOES_NOT_EXIST  the schema is not sealed, or no record is stored at id
     /// ┠╴ERR_INVALID_PARAMETER
     /// │                     id is empty
@@ -308,7 +310,7 @@ public sealed class NetwDatabase : NetwRefCounted
     /// │                     the stored record is not in this library's format, or
     /// │                     carries a newer storage version than the schema
     /// ┠╴ERR_UNAVAILABLE     the backend or connection cannot perform the patch, or the
-    /// │                     database closed before it settled
+    /// │                     database closed before it finished
     /// ┖╴backend-defined     the backend could not read or write the record
     /// </code>
     /// </summary>
@@ -345,19 +347,19 @@ public sealed class NetwDatabase : NetwRefCounted
         NetwApi.MethodBind("NetwDatabase", "erase", 794457893UL);
 
     /// <summary>
-    /// Removes the record at <paramref name="id"/> and settles with a
+    /// Removes the record at <paramref name="id"/>. The promise gives an
     /// <c>@GlobalScope.Error</c>.
     /// <code>
     /// Error
     /// ┠╴OK                  the backend acknowledged the erase
     /// ┠╴ERR_UNCONFIGURED    the database is not open
-    /// ┠╴ERR_BUSY            the database already holds 4096 unsettled operations
+    /// ┠╴ERR_BUSY            the database already holds 4096 pending operations
     /// ┠╴ERR_DOES_NOT_EXIST  the schema is not sealed
     /// ┠╴ERR_INVALID_PARAMETER
     /// │                     id is empty
     /// ┠╴ERR_INVALID_DATA    the connection answered no outcome for the erase
     /// ┠╴ERR_UNAVAILABLE     the backend or connection cannot perform the erase, or the
-    /// │                     database closed before it settled
+    /// │                     database closed before it finished
     /// ┖╴backend-defined     the backend rejected or could not complete the erase
     /// </code>
     /// </summary>
@@ -384,7 +386,7 @@ public sealed class NetwDatabase : NetwRefCounted
 
     /// <summary>
     /// Reads one page of up to <paramref name="limit"/> records matching
-    /// <paramref name="filter"/>, and settles with a
+    /// <paramref name="filter"/>. The promise gives a
     /// <see cref="Godot.Collections.Dictionary"/>. Pass the returned
     /// <c>cursor</c> back as <paramref name="cursor"/> to read the next page.
     /// The scan is done when <c>cursor</c> is empty.
@@ -410,10 +412,10 @@ public sealed class NetwDatabase : NetwRefCounted
     /// <code>
     /// Error
     /// ┠╴ERR_UNCONFIGURED       the database is not open
-    /// ┠╴ERR_BUSY               the database already holds 4096 unsettled operations
+    /// ┠╴ERR_BUSY               the database already holds 4096 pending operations
     /// ┠╴ERR_DOES_NOT_EXIST     the schema is not sealed
     /// ┠╴ERR_INVALID_PARAMETER  limit is below 1
-    /// ┖╴ERR_UNAVAILABLE        the database closed before the page settled
+    /// ┖╴ERR_UNAVAILABLE        the database closed before the page was read
     /// </code>
     /// <code>
     /// var cursor := ""
@@ -423,7 +425,7 @@ public sealed class NetwDatabase : NetwRefCounted
     ///         show_load_error(page.error)
     ///         return
     ///     for read in page.records:
-    ///         roster.append(read.values)
+    ///         saves.append(read.values)
     ///     if page.cursor.is_empty():
     ///         break
     ///     cursor = page.cursor
@@ -468,18 +470,17 @@ public sealed class NetwDatabase : NetwRefCounted
         NetwApi.MethodBind("NetwDatabase", "list_slots", 1931563502UL);
 
     /// <summary>
-    /// Lists every slot the <see cref="NetwDatabaseBackend"/> holds, and
-    /// settles with a <see cref="Godot.Collections.Dictionary"/>. Works before
-    /// <see cref="NetwDatabase.Open"/>.
+    /// Lists every slot the <see cref="NetwDatabaseBackend"/> holds. Works
+    /// before <see cref="NetwDatabase.Open"/>. The promise gives a
+    /// <see cref="Godot.Collections.Dictionary"/>.
     /// <code>
     /// Dictionary
-    /// ┠╴error    Error         		@GlobalScope.Error. Check it before reading slots
-    /// │ ┠╴OK                   		listing succeeded
-    /// │ ┠╴ERR_UNAVAILABLE      		the backend does not implement slot listing
-    /// │ ┖╴backend-defined      		the backend could not read its storage
-    /// ┠╴detail   String        		empty when error is OK, otherwise a human-readable
-    /// │                            		explanation from the backend
-    /// ┖╴slots    PackedStringArray  	every slot the backend holds when error is OK
+    /// ┠╴error    Error              check it before reading slots
+    /// │ ┠╴OK                      listing succeeded
+    /// │ ┠╴ERR_UNAVAILABLE         the backend does not implement slot listing
+    /// │ ┖╴backend-defined         the backend could not read its storage
+    /// ┠╴detail   String             what went wrong, for a person to read. Empty when error is OK
+    /// ┖╴slots    PackedStringArray  every slot the backend holds when error is OK
     /// </code>
     /// </summary>
     public NetwPromise ListSlots()
@@ -493,8 +494,8 @@ public sealed class NetwDatabase : NetwRefCounted
         NetwApi.MethodBind("NetwDatabase", "delete_slot", 2495519093UL);
 
     /// <summary>
-    /// Removes <paramref name="slot"/> and everything stored in it, then
-    /// settles with a <c>@GlobalScope.Error</c>. The slot must not be open.
+    /// Removes <paramref name="slot"/> and everything stored in it. The slot
+    /// must not be open. The promise gives an <c>@GlobalScope.Error</c>.
     /// <code>
     /// Error
     /// ┠╴OK                the backend removed the slot

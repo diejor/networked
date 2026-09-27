@@ -6,16 +6,12 @@ using Godot.NativeInterop;
 namespace Networked;
 
 /// <summary>
-/// A raw byte channel multiplexed over the session carrier, addressed by a
-/// channel <see cref="NetwChannel.Id"/>.
+/// Sends raw bytes between peers on a numbered channel.
 /// </summary>
 /// <remarks>
-/// Channels are used to send and receive custom data between peers in a
-/// networked game. Use this for session-scoped traffic that has no entity to
-/// associate with, such as a voice stream, a chat line, or a compressed world
-/// grid. Ids run <c>100</c> to <c>254</c>. Give each channel a distinct
-/// <see cref="NetwChannel.Id"/> and call <see cref="NetwChannel.Register"/>
-/// once per peer.
+/// Use it for data that belongs to no node, such as voice, chat or a compressed
+/// map. Channels are numbered from <c>100</c> to <c>254</c>. Call
+/// <see cref="NetwChannel.Register"/> once on every peer.
 /// <code>
 /// # both peers, once:
 /// var chat := Netw.channel(self, 120)
@@ -50,7 +46,7 @@ public sealed class NetwChannel : NetwRefCounted
         NetwApi.MethodBind("NetwChannel", "set_id", 1286410249UL);
 
     /// <summary>
-    /// The channel identifier. Must be between 100 and 254.
+    /// The channel number, from <c>100</c> to <c>254</c>.
     /// </summary>
     public long Id
     {
@@ -76,8 +72,7 @@ public sealed class NetwChannel : NetwRefCounted
         NetwApi.MethodBind("NetwChannel", "of", 3231424134UL);
 
     /// <summary>
-    /// Opens channel <paramref name="id"/> over the session governing
-    /// <paramref name="node"/>.
+    /// Same as <see cref="Netw.Channel"/>.
     /// </summary>
     public static NetwChannel Of(Node node, long id)
     {
@@ -97,10 +92,9 @@ public sealed class NetwChannel : NetwRefCounted
         NetwApi.MethodBind("NetwChannel", "send", 1109825560UL);
 
     /// <summary>
-    /// Sends the custom channel payload to the specified
-    /// <paramref name="peerId"/>. With <paramref name="batched"/> as
-    /// <c>true</c>, the payload queues into the peer aggregation buffers the
-    /// session flushes at the end of its frame.
+    /// Sends <paramref name="payload"/> to <paramref name="peerId"/>. With
+    /// <paramref name="batched"/>, it is sent at the end of the frame together
+    /// with other data, in fewer packets.
     /// </summary>
     public void Send(
         long peerId,
@@ -132,7 +126,7 @@ public sealed class NetwChannel : NetwRefCounted
         NetwApi.MethodBind("NetwChannel", "broadcast", 1205358431UL);
 
     /// <summary>
-    /// Broadcasts the custom channel payload to all other connected peers.
+    /// Sends <paramref name="payload"/> to every other peer.
     /// </summary>
     public void Broadcast(
         byte[] payload,
@@ -160,9 +154,8 @@ public sealed class NetwChannel : NetwRefCounted
         NetwApi.MethodBind("NetwChannel", "register", 1611583062UL);
 
     /// <summary>
-    /// Registers a <paramref name="handler"/> to receive payloads for this
-    /// custom channel. The <paramref name="handler"/> is called as
-    /// <c>handler(sender: int, payload: PackedByteArray)</c>.
+    /// Calls <paramref name="handler"/> as <c>handler(sender, payload)</c> for
+    /// every payload received on this channel.
     /// </summary>
     public void Register(Callable handler)
     {

@@ -52,10 +52,10 @@
 			Lets the display delay of a remote entity grow when snapshots arrive late.
 		</member>
 		<member name="floor_smoothing" type="float" setter="set_floor_smoothing" getter="get_floor_smoothing" default="0.0">
-			Per frame fraction used to low pass the lag floor.
+			How quickly, as a fraction per frame, the smallest delay [member enable_smart_dilation] measures follows a new measurement. Lower is smoother.
 		</member>
 		<member name="lag_adapt_rate" type="float" setter="set_lag_adapt_rate" getter="get_lag_adapt_rate" default="0.0">
-			Per frame fraction used to track the measured lag floor.
+			How quickly, as a fraction per frame, [member display_lag] shrinks back toward the smallest delay needed once snapshots arrive on time.
 		</member>
 		<member name="live_mode" type="int" setter="set_live_mode" getter="get_live_mode" enum="NetwMultiplayer.LiveMode" default="0">
 			How an entity this peer simulates is drawn under [constant NetwMultiplayer.DISPLAY_ROLE_PREDICTED], in [constant NetwSimulationHandle.MODE_PREDICT] or [constant NetwSimulationHandle.MODE_ACTIVE].

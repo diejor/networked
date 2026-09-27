@@ -6,20 +6,14 @@ using Godot.NativeInterop;
 namespace Networked;
 
 /// <summary>
-/// Tiles several <see cref="ParticipantWindow"/> nodes into the enclosing
-/// viewport, one per local participant.
+/// Shows several <see cref="ParticipantWindow"/> nodes side by side, one per
+/// local player.
 /// </summary>
 /// <remarks>
-/// Several participants running in one process each hold their own
-/// <see cref="ParticipantWindow"/>, and this node is what puts all of them on
-/// one screen. Registered slots partition the enclosing viewport into the
-/// squarest grid that holds them, re-tiled whenever a slot is added, removed,
-/// or the enclosing viewport resizes. Mouse and keyboard follow native window
-/// focus, which the engine already routes, so this node does not touch them.
-/// Joypads have no focus, so they are routed by device id:
-/// <see cref="ParticipantViewport.AssignDevice"/> binds one device to one slot
-/// and every joypad event from that device is delivered there and marked
-/// handled.
+/// Splits the screen into a grid with one cell per added window, and updates it
+/// when windows are added, removed or resized. Mouse and keyboard follow window
+/// focus as usual. Joypads are sent to the window chosen with
+/// <see cref="ParticipantViewport.AssignDevice"/>.
 /// <code>
 /// var tiler := ParticipantViewport.new()
 /// add_child(tiler)
@@ -28,13 +22,7 @@ namespace Networked;
 ///     tiler.assign_device(seat.device_id, seat.window)
 /// </code>
 /// <para>
-/// A slot must be registered before it can take a device, because a binding to
-/// an unplaced window would swallow that player's input into something nothing
-/// is drawing. Removing a slot drops its device bindings with it, so a device
-/// whose window left routes nowhere rather than somewhere invisible.
-/// Registration is not parenthood: this node tiles the windows it is given and
-/// never reparents or frees them, so a slot may live anywhere in the tree and
-/// outlive the tiling.
+/// Windows are not reparented or freed by this node.
 /// </para>
 /// </remarks>
 public sealed class ParticipantViewport : NetwObject
@@ -66,10 +54,8 @@ public sealed class ParticipantViewport : NetwObject
             2586408642UL);
 
     /// <summary>
-    /// Whether the enclosing viewport draws child <see cref="Window"/> nodes
-    /// inside itself rather than as real OS windows. On by default, because a
-    /// tiling of native windows is a tiling the window manager gets a vote on.
-    /// Turn it off to give each participant a real window to move around.
+    /// Same as <c>Viewport.gui_embed_subwindows</c> on the enclosing viewport.
+    /// Turn it off to give each player a separate OS window.
     /// </summary>
     public bool EmbedsSubwindows
     {
@@ -98,10 +84,8 @@ public sealed class ParticipantViewport : NetwObject
         NetwApi.MethodBind("ParticipantViewport", "add_slot", 1717079631UL);
 
     /// <summary>
-    /// Registers <paramref name="slot"/> for tiling, makes it visible and
-    /// re-tiles every slot. Returns <paramref name="slot"/> so a caller can
-    /// build and place in one expression, or <c>null</c> when handed nothing.
-    /// Registering a slot twice is inert.
+    /// Adds <paramref name="slot"/> to the grid, shows it, and returns it.
+    /// Adding it twice has no effect.
     /// </summary>
     public ParticipantWindow AddSlot(ParticipantWindow slot)
     {
@@ -119,9 +103,8 @@ public sealed class ParticipantViewport : NetwObject
         NetwApi.MethodBind("ParticipantViewport", "remove_slot", 4204825082UL);
 
     /// <summary>
-    /// Unregisters <paramref name="slot"/>, hides it, drops every device bound
-    /// to it and re-tiles the rest. Does not free it. Removing a slot that was
-    /// never registered is inert.
+    /// Removes <paramref name="slot"/> from the grid, hides it, and unassigns
+    /// its devices. Does not free it.
     /// </summary>
     public void RemoveSlot(ParticipantWindow slot)
     {
@@ -138,9 +121,7 @@ public sealed class ParticipantViewport : NetwObject
         NetwApi.MethodBind("ParticipantViewport", "has_slot", 378953610UL);
 
     /// <summary>
-    /// Whether <paramref name="slot"/> is registered for tiling here.
-    /// <c>false</c> for <c>null</c> and for a window this node has never been
-    /// given.
+    /// Returns <c>true</c> when <paramref name="slot"/> was added.
     /// </summary>
     public bool HasSlot(ParticipantWindow slot)
     {
@@ -158,9 +139,7 @@ public sealed class ParticipantViewport : NetwObject
         NetwApi.MethodBind("ParticipantViewport", "get_slots", 3995934104UL);
 
     /// <summary>
-    /// The registered slots, in tiling order, skipping any that have been
-    /// freed. Position in this array is position in the grid: index zero is the
-    /// top left cell and the row fills left to right.
+    /// Returns the slots in grid order, from the top left, row by row.
     /// </summary>
     public Godot.Collections.Array GetSlots()
     {
@@ -178,11 +157,9 @@ public sealed class ParticipantViewport : NetwObject
             2087760008UL);
 
     /// <summary>
-    /// Routes every joypad event carrying <paramref name="deviceId"/> into
-    /// <paramref name="slot"/>. Rejected, with an error, when
-    /// <paramref name="slot"/> is not registered here, because a binding this
-    /// node cannot tile would drop that player's input where nobody can see it.
-    /// One device binds to one slot; binding it again replaces the first.
+    /// Sends every joypad event from <paramref name="deviceId"/> to
+    /// <paramref name="slot"/>. <paramref name="slot"/> must be added first.
+    /// Assigning the device again replaces the previous slot.
     /// </summary>
     public void AssignDevice(long deviceId, ParticipantWindow slot)
     {
@@ -201,8 +178,8 @@ public sealed class ParticipantViewport : NetwObject
         NetwApi.MethodBind("ParticipantViewport", "device_slot", 4104520107UL);
 
     /// <summary>
-    /// The slot <paramref name="deviceId"/> is routed to, or <c>null</c> when
-    /// the device is unbound or its slot has since been removed or freed.
+    /// Returns the slot <paramref name="deviceId"/> is assigned to, or
+    /// <c>null</c>.
     /// </summary>
     public ParticipantWindow DeviceSlot(long deviceId)
     {

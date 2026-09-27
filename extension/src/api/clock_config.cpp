@@ -295,7 +295,9 @@ Ref<NetwClockConfig> NetwClockConfig::physics_interpolation(bool p_value) {
     return Ref<NetwClockConfig>(this);
 }
 
-Ref<NetwClockConfig> NetwClockConfig::sync(int64_t p_value) {
+Ref<NetwClockConfig> NetwClockConfig::sync(
+    enums::NetwMultiplayer::SyncMode p_value
+) {
     set_sync_mode(p_value);
     return Ref<NetwClockConfig>(this);
 }

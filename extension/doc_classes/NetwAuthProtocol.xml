@@ -1,24 +1,11 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <class name="NetwAuthProtocol" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
 	<brief_description>
-		Wire-format codec for the packets Networked exchanges during [SceneMultiplayer]'s authentication phase.
+		Reads and writes the packets Networked sends during [SceneMultiplayer] authentication.
 	</brief_description>
 	<description>
-		Every packet is framed with a four-byte magic prefix naming its purpose, so a session can tell a joining player from a server browser before it reads a single byte of body. A packet matching neither magic is [constant KIND_UNKNOWN] and the receiver fails.
-		[codeblock lang=text]
-		auth packet
-		 ┠╴ "NHEL"   a player opening a session
-		 ┃   ┠╴ version(1)    the framing this packet was written against
-		 ┃   ┠╴ app_tag(8)    the game build folded with the wire identity,
-		 ┃   ┃                so a mismatched build is rejected before the
-		 ┃   ┃                provider payload is read
-		 ┃   ┠╴ flags(1)      reserved
-		 ┃   ┖╴ provider payload, which is all a flow ever sees
-		 ┖╴ "NPRB"   a browser asking what this server is
-		     ┠╴ version(1)
-		     ┖╴ status-or-flags(1), then the reply payload
-		[/codeblock]
-		A probe peer receives a response and disconnects without completing authentication, so it never enters the [MultiplayerAPI]
+		A packet starts with four bytes that say what it is. A joining player sends [code]"NHEL"[/code], then a version byte, an 8-byte build tag, a flags byte, and the game's own authentication data. A server browser sends [code]"NPRB"[/code], then a version byte and a flags or status byte, and the reply follows.
+		A server browser gets its reply and is disconnected, so it never appears in the [MultiplayerAPI].
 	</description>
 	<tutorials>
 	</tutorials>
@@ -27,7 +14,7 @@
 			<return type="int" enum="NetwAuthProtocol.Kind" />
 			<param index="0" name="data" type="PackedByteArray" />
 			<description>
-				Which [enum Kind] [param data]'s magic prefix names. A packet shorter than a header, or carrying neither magic, is [constant KIND_UNKNOWN].
+				Returns what kind of packet [param data] is.
 			</description>
 		</method>
 		<method name="decode_client_hello" qualifiers="static">
@@ -35,29 +22,28 @@
 			<param index="0" name="data" type="PackedByteArray" />
 			<param index="1" name="local_app_tag" type="int" default="0" />
 			<description>
-				Reads a hello packet, rejecting it when its build tag differs from [param local_app_tag].
+				Reads a join packet. It is rejected when its build tag differs from [param local_app_tag].
 				[codeblock lang=text]
 				Dictionary
-				┠╴ok                bool             false on a rejection
+				┠╴ok                bool             false when rejected
 				┠╴reason            String           "framing", "version" or "app", empty when ok
-				┠╴version           int              the framing version the packet carried
-				┠╴app_tag           int              the 64-bit build tag the packet carried
+				┠╴version           int              the version in the packet
+				┠╴app_tag           int              the build tag in the packet
 				┖╴flags             int              reserved
 				[/codeblock]
-				A rejection still reports the [code]version[/code] and [code]app_tag[/code] it read.
 			</description>
 		</method>
 		<method name="decode_probe_reply" qualifiers="static">
 			<return type="Dictionary" />
 			<param index="0" name="data" type="PackedByteArray" />
 			<description>
-				Reads a probe reply. A packet with the wrong magic, a short header, or a foreign version returns [code]ok[/code] false and an empty payload. The status it carries is one value of [enum ProbeStatus].
+				Reads a server browser reply.
 				[codeblock lang=text]
 				Dictionary
-				┠╴ok       bool             false on a rejection
-				┠╴version  int              the framing version the packet carried
-				┠╴status   int              what the server said about returning
-				┖╴payload  PackedByteArray  the provider's own reply, empty on a rejection
+				┠╴ok       bool             false when the packet is invalid
+				┠╴version  int              the version in the packet
+				┠╴status   int              a ProbeStatus value
+				┖╴payload  PackedByteArray  the reply, empty when invalid
 				[/codeblock]
 			</description>
 		</method>
@@ -65,11 +51,11 @@
 			<return type="Dictionary" />
 			<param index="0" name="data" type="PackedByteArray" />
 			<description>
-				Reads a probe request. A packet with the wrong magic, a short header, or a foreign version returns [code]ok[/code] false.
+				Reads a server browser request.
 				[codeblock lang=text]
 				Dictionary
-				┠╴ok       bool  false on a rejection
-				┠╴version  int   the framing version the packet carried
+				┠╴ok       bool  false when the packet is invalid
+				┠╴version  int   the version in the packet
 				┖╴flags    int   reserved
 				[/codeblock]
 			</description>
@@ -79,7 +65,7 @@
 			<param index="0" name="app_tag" type="int" default="0" />
 			<param index="1" name="flags" type="int" default="0" />
 			<description>
-				Writes a hello header stamped with [param app_tag], the 64-bit build tag folded from [member MultiplayerTree.app_id] and the wire identity by [method NetwMultiplayer.auth_set_app_tag].
+				Writes a join packet header with the build tag [param app_tag]. See [method NetwMultiplayer.auth_set_app_tag].
 			</description>
 		</method>
 		<method name="encode_probe_reply" qualifiers="static">
@@ -87,56 +73,56 @@
 			<param index="0" name="status" type="int" enum="NetwAuthProtocol.ProbeStatus" />
 			<param index="1" name="payload" type="PackedByteArray" default="PackedByteArray()" />
 			<description>
-				Wraps [param payload] in a probe-reply header stamped with [param status], one of [enum ProbeStatus].
+				Writes a server browser reply with [param status] and [param payload].
 			</description>
 		</method>
 		<method name="encode_probe_request" qualifiers="static">
 			<return type="PackedByteArray" />
 			<param index="0" name="flags" type="int" default="0" />
 			<description>
-				Builds a probe request. [param flags] is reserved.
+				Writes a server browser request. [param flags] is reserved.
 			</description>
 		</method>
 		<method name="magic_hello" qualifiers="static">
 			<return type="PackedByteArray" />
 			<description>
-				The four bytes a hello packet opens with, [code]"NHEL"[/code].
+				The first four bytes of a join packet, [code]"NHEL"[/code].
 			</description>
 		</method>
 		<method name="magic_probe" qualifiers="static">
 			<return type="PackedByteArray" />
 			<description>
-				The four bytes a probe packet opens with, [code]"NPRB"[/code].
+				The first four bytes of a server browser packet, [code]"NPRB"[/code].
 			</description>
 		</method>
 		<method name="protocol_version" qualifiers="static">
 			<return type="int" />
 			<description>
-				The framing version this build writes and is the only one it accepts.
+				The packet version this build writes. It accepts no other.
 			</description>
 		</method>
 	</methods>
 	<constants>
 		<constant name="KIND_UNKNOWN" value="0" enum="Kind">
-			The packet carries neither magic, or is shorter than a header. The receiver fails closed on it.
+			Not a Networked packet.
 		</constant>
 		<constant name="KIND_HELLO" value="1" enum="Kind">
-			A player opening a session.
+			A player joining.
 		</constant>
 		<constant name="KIND_PROBE" value="2" enum="Kind">
-			A browser probe. The server responds and disconnects the peer without joining it.
+			A server browser asking about the server.
 		</constant>
 		<constant name="PROBE_OK" value="0" enum="ProbeStatus">
-			The reply carries server metadata.
+			The reply carries the server info.
 		</constant>
 		<constant name="PROBE_BUSY" value="1" enum="ProbeStatus">
-			The server is online but temporarily cannot respond to this probe.
+			The server is busy.
 		</constant>
 		<constant name="PROBE_UNSUPPORTED" value="2" enum="ProbeStatus">
-			The server does not return probes at all.
+			The server does not answer server browsers.
 		</constant>
 		<constant name="PROBE_ERROR" value="3" enum="ProbeStatus">
-			The server tried to return and could not.
+			The server failed to answer.
 		</constant>
 	</constants>
 </class>

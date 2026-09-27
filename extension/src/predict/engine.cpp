@@ -8945,10 +8945,9 @@ void NetwPredictionEngine::report_authority_model(int64_t p_slot) {
         )) {
         NETW_WARN(
             sys::PREDICTION,
-            "Prediction: %s declares input() fields whose types the command "
-            "lane cannot plan a row from. A self-describing column has no "
-            "fixed width, so nothing will cross. Type the properties, or "
-            "quantize them.",
+            "Prediction: %s has input() properties without a type, so its "
+            "input is not sent. Give the properties a type, or quantize "
+            "them.",
             String(seated->get_entity_id()).utf8().get_data()
         );
     }

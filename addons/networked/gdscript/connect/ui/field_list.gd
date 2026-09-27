@@ -1,7 +1,5 @@
-## One rendered list of labelled fields, and the values read back out of it.
-##
-## A form hands it a container and either a settings [Dictionary] or a join
-## schema [Array], and reads the rows back as whichever shape it needs.
+## A list of labelled form fields, built from a settings [Dictionary] or a
+## join schema [Array].
 class_name ConnectFieldList
 extends RefCounted
 
@@ -12,9 +10,8 @@ var _controls: Array[Control] = []
 var _types: Array[int] = []
 
 
-## Draws one row per authorable entry of [param defaults] into [param
-## container], replacing whatever it held. An entry whose default no control
-## can carry is skipped, so an installation seam never becomes a field.
+## Replaces the contents of [param container] with one field per entry of
+## [param defaults]. Entries that cannot be edited in a field are skipped.
 func render_settings(container: Container, defaults: Dictionary) -> void:
 	_clear(container)
 	for key: Variant in defaults.keys():
@@ -30,8 +27,8 @@ func render_settings(container: Container, defaults: Dictionary) -> void:
 		_types.append(typeof(default_value))
 
 
-## Draws one row per entry of [param schema] into [param container], in the
-## order the schema lists them, seeded with the empty value of each type.
+## Replaces the contents of [param container] with one empty field per entry
+## of [param schema], in order.
 func render_schema(container: Container, schema: Array) -> void:
 	_clear(container)
 	for entry: Dictionary in schema:
@@ -44,13 +41,12 @@ func render_schema(container: Container, schema: Array) -> void:
 		_types.append(value_type)
 
 
-## Whether anything was drawn, which is what decides if a settings section is
-## worth showing at all.
+## Returns [code]true[/code] when there are no fields.
 func is_empty() -> bool:
 	return _controls.is_empty()
 
 
-## The rows read back as a [Dictionary] keyed the way they were rendered.
+## Returns the field values, keyed by name.
 func as_dictionary() -> Dictionary:
 	var values: Dictionary = { }
 	for at in _controls.size():
@@ -61,7 +57,7 @@ func as_dictionary() -> Dictionary:
 	return values
 
 
-## The rows read back positionally, which is the shape a join schema takes.
+## Returns the field values in order, as join arguments.
 func as_array() -> Array:
 	var values: Array = []
 	for at in _controls.size():

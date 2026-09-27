@@ -6,22 +6,14 @@ using Godot.NativeInterop;
 namespace Networked;
 
 /// <summary>
-/// A transport a game subclasses so its own <see cref="MultiplayerPeer"/> works
-/// with the connect plane.
+/// Extend it so <see cref="NetwConnectHandle"/> can create, list and check
+/// servers for your own <see cref="MultiplayerPeer"/> class.
 /// </summary>
 /// <remarks>
-/// A transport is everything the session knows about one
-/// <see cref="MultiplayerPeer"/> class. It builds a peer, lists what that class
-/// can reach, probes an address, and adopts a peer a game built itself. A
-/// session makes one instance the first time it needs one, and a class
-/// registered through <see cref="NetwMultiplayer.TransportRegister"/> or
-/// <see cref="NetwConnectHandle.RegisterTransport"/> returns what it is called
-/// before any instance exists. A transport is keyed by
-/// <see cref="NetwTransport.PeerClass"/> and never by a URL scheme, and
-/// <see cref="NetwTransport.RecognizesPeer"/> is what decides whether a peer a
-/// game built and assigned itself belongs to this transport. A transport that
-/// has to exchange its own connection details before a peer can be built, as
-/// WebRTC does, subclasses <see cref="NetwWebRTCSignaler"/> for that half.
+/// A transport creates peers of one <see cref="MultiplayerPeer"/> class, lists
+/// servers, and checks a server without joining it. Register it with
+/// <see cref="NetwConnectHandle.RegisterTransport"/>. For WebRTC, see
+/// <see cref="NetwWebRTCSignaler"/>.
 /// <code>
 /// class_name RelayTransport
 /// extends NetwTransport
@@ -44,38 +36,22 @@ namespace Networked;
 ///     _room = peer.room
 ///     deliver(ticket, peer)
 ///
-/// func _cancel_peer_creation(ticket: RID) -&gt; void:
-///     if ticket == _building:
-///         _building = RID()
-///
 /// func _join_address() -&gt; String:
 ///     return _room
 ///
+/// # somewhere in the game
 /// func _ready() -&gt; void:
 ///     Netw.connection(self).register_transport(RelayTransport)
 /// </code>
 /// <para>
-/// <c>_make_peer</c> and <c>_probe</c> return <c>void</c> and report through
-/// <see cref="NetwTransport.Deliver"/>,
-/// <see cref="NetwTransport.DeliverProbe"/> and
-/// <see cref="NetwTransport.Fail"/>, called once from any frame. A
-/// <c>GDVIRTUAL</c> with a typed return coerces a suspended coroutine to an
-/// empty value and reports success, so a seam that returned its result directly
-/// would return nothing the instant it first awaited; a <c>void</c> seam
-/// discards that empty return harmlessly and the coroutine keeps running on
-/// whatever signals it awaits. A seam that reports neither is caught by the
-/// deadline <see cref="NetwTransport.TimeoutHint"/> declares, unless that hint
-/// is negative. Every report carries the <see cref="Rid"/> ticket the seam was
-/// handed, and an implementation that awaits captures that ticket in a local
-/// before the first <c>await</c> rather than reading it from a field. A report
-/// under a retired ticket is discarded, which is what keeps a slow provider
-/// returning an abandoned request from publishing its peer under a newer one's
-/// identity. A transport belongs to the session that registered it, and a peer
-/// class is unique within one: a second registration of the same script returns
-/// the standing one, and a different script for a class the session already
-/// registers is rejected. <see cref="NetwMultiplayer.TransportRegister"/>
-/// carries that law, and <see cref="NetwMultiplayer.TransportUnregister"/> is
-/// how a registration is replaced or withdrawn.
+/// <c>_make_peer</c> and <c>_probe</c> may <c>await</c>. They report the result
+/// by calling <see cref="NetwTransport.Deliver"/>,
+/// <see cref="NetwTransport.DeliverProbe"/> or <see cref="NetwTransport.Fail"/>
+/// once, with the <c>ticket</c> they received. Keep <c>ticket</c> in a local
+/// variable, not a member, since another request may start while one awaits.
+/// With no report, the request fails after <c>_timeout_hint</c> seconds.
+/// Methods starting with an underscore are overridden. Each has a public method
+/// that calls it, and a <c>_default</c> method with the default behavior.
 /// </para>
 /// </remarks>
 public sealed class NetwTransport : NetwRefCounted
@@ -98,8 +74,7 @@ public sealed class NetwTransport : NetwRefCounted
         NetwApi.MethodBind("NetwTransport", "get_session", 208707294UL);
 
     /// <summary>
-    /// The session this instance was made for. Read-only, and <c>null</c> on a
-    /// prototype.
+    /// The session this transport belongs to.
     /// </summary>
     public NetwMultiplayer Session
     {
@@ -115,10 +90,8 @@ public sealed class NetwTransport : NetwRefCounted
         NetwApi.MethodBind("NetwTransport", "peer_class", 2737447660UL);
 
     /// <summary>
-    /// Returns <c>_peer_class</c>, or
-    /// <see cref="NetwTransport.PeerClassDefault"/> when nothing overrode it.
-    /// <see cref="NetwConnectHandle.Transports"/> lists every class currently
-    /// returned this way, in registration order.
+    /// Calls <c>_peer_class</c>, or
+    /// <see cref="NetwTransport.PeerClassDefault"/>.
     /// </summary>
     public StringName PeerClass()
     {
@@ -133,8 +106,7 @@ public sealed class NetwTransport : NetwRefCounted
         NetwApi.MethodBind("NetwTransport", "peer_class_default", 2737447660UL);
 
     /// <summary>
-    /// An empty <see cref="StringName"/>, which the transport book never
-    /// matches to a live peer.
+    /// Returns an empty <see cref="StringName"/>.
     /// </summary>
     public StringName PeerClassDefault()
     {
@@ -149,9 +121,8 @@ public sealed class NetwTransport : NetwRefCounted
         NetwApi.MethodBind("NetwTransport", "recognizes_peer", 3984432719UL);
 
     /// <summary>
-    /// Returns <c>_recognizes_peer</c> for <paramref name="peer"/>, or
-    /// <see cref="NetwTransport.RecognizesPeerDefault"/> when nothing overrode
-    /// it.
+    /// Calls <c>_recognizes_peer</c>, or
+    /// <see cref="NetwTransport.RecognizesPeerDefault"/>.
     /// </summary>
     public bool RecognizesPeer(MultiplayerPeer peer)
     {
@@ -172,9 +143,8 @@ public sealed class NetwTransport : NetwRefCounted
             3984432719UL);
 
     /// <summary>
-    /// <c>true</c> when <see cref="NetwTransport.PeerClassOf"/> applied to
-    /// <paramref name="peer"/> returns the same <see cref="StringName"/> as
-    /// <see cref="NetwTransport.PeerClass"/>.
+    /// Returns <c>true</c> when <see cref="NetwTransport.PeerClassOf"/> of
+    /// <paramref name="peer"/> is <see cref="NetwTransport.PeerClass"/>.
     /// </summary>
     public bool RecognizesPeerDefault(MultiplayerPeer peer)
     {
@@ -192,8 +162,8 @@ public sealed class NetwTransport : NetwRefCounted
         NetwApi.MethodBind("NetwTransport", "display_name", 2841200299UL);
 
     /// <summary>
-    /// Returns <c>_display_name</c>, or
-    /// <see cref="NetwTransport.DisplayNameDefault"/> when nothing overrode it.
+    /// Calls <c>_display_name</c>, or
+    /// <see cref="NetwTransport.DisplayNameDefault"/>.
     /// </summary>
     public string DisplayName()
     {
@@ -211,7 +181,7 @@ public sealed class NetwTransport : NetwRefCounted
             2841200299UL);
 
     /// <summary>
-    /// <c>"Generic"</c>.
+    /// Returns <c>"Generic"</c>.
     /// </summary>
     public string DisplayNameDefault()
     {
@@ -226,8 +196,8 @@ public sealed class NetwTransport : NetwRefCounted
         NetwApi.MethodBind("NetwTransport", "is_available", 2240911060UL);
 
     /// <summary>
-    /// Returns <c>_is_available</c>, or
-    /// <see cref="NetwTransport.IsAvailableDefault"/> when nothing overrode it.
+    /// Calls <c>_is_available</c>, or
+    /// <see cref="NetwTransport.IsAvailableDefault"/>.
     /// </summary>
     public bool IsAvailable()
     {
@@ -243,7 +213,7 @@ public sealed class NetwTransport : NetwRefCounted
             2240911060UL);
 
     /// <summary>
-    /// <c>true</c>.
+    /// Returns <c>true</c>.
     /// </summary>
     public bool IsAvailableDefault()
     {
@@ -259,8 +229,8 @@ public sealed class NetwTransport : NetwRefCounted
         NetwApi.MethodBind("NetwTransport", "can_host_here", 2240911060UL);
 
     /// <summary>
-    /// Returns <c>_can_host_here</c>, or
-    /// <see cref="NetwTransport.CanHostHereDefault"/> when nothing overrode it.
+    /// Calls <c>_can_host_here</c>, or
+    /// <see cref="NetwTransport.CanHostHereDefault"/>.
     /// </summary>
     public bool CanHostHere()
     {
@@ -276,7 +246,7 @@ public sealed class NetwTransport : NetwRefCounted
             2240911060UL);
 
     /// <summary>
-    /// <c>true</c>.
+    /// Returns <c>true</c>.
     /// </summary>
     public bool CanHostHereDefault()
     {
@@ -292,8 +262,7 @@ public sealed class NetwTransport : NetwRefCounted
         NetwApi.MethodBind("NetwTransport", "can_probe", 2240911060UL);
 
     /// <summary>
-    /// Returns <c>_can_probe</c>, or
-    /// <see cref="NetwTransport.CanProbeDefault"/> when nothing overrode it.
+    /// Calls <c>_can_probe</c>, or <see cref="NetwTransport.CanProbeDefault"/>.
     /// </summary>
     public bool CanProbe()
     {
@@ -306,7 +275,7 @@ public sealed class NetwTransport : NetwRefCounted
         NetwApi.MethodBind("NetwTransport", "can_probe_default", 2240911060UL);
 
     /// <summary>
-    /// <c>false</c>: a transport probes nothing unless it says otherwise.
+    /// Returns <c>false</c>.
     /// </summary>
     public bool CanProbeDefault()
     {
@@ -319,9 +288,8 @@ public sealed class NetwTransport : NetwRefCounted
         NetwApi.MethodBind("NetwTransport", "address_label", 2841200299UL);
 
     /// <summary>
-    /// Returns <c>_address_label</c>, or
-    /// <see cref="NetwTransport.AddressLabelDefault"/> when nothing overrode
-    /// it.
+    /// Calls <c>_address_label</c>, or
+    /// <see cref="NetwTransport.AddressLabelDefault"/>.
     /// </summary>
     public string AddressLabel()
     {
@@ -339,7 +307,7 @@ public sealed class NetwTransport : NetwRefCounted
             2841200299UL);
 
     /// <summary>
-    /// <c>"Address"</c>.
+    /// Returns <c>"Address"</c>.
     /// </summary>
     public string AddressLabelDefault()
     {
@@ -357,9 +325,8 @@ public sealed class NetwTransport : NetwRefCounted
             2841200299UL);
 
     /// <summary>
-    /// Returns <c>_address_placeholder</c>, or
-    /// <see cref="NetwTransport.AddressPlaceholderDefault"/> when nothing
-    /// overrode it.
+    /// Calls <c>_address_placeholder</c>, or
+    /// <see cref="NetwTransport.AddressPlaceholderDefault"/>.
     /// </summary>
     public string AddressPlaceholder()
     {
@@ -377,7 +344,7 @@ public sealed class NetwTransport : NetwRefCounted
             2841200299UL);
 
     /// <summary>
-    /// An empty string.
+    /// Returns an empty string.
     /// </summary>
     public string AddressPlaceholderDefault()
     {
@@ -392,8 +359,8 @@ public sealed class NetwTransport : NetwRefCounted
         NetwApi.MethodBind("NetwTransport", "address_help", 2841200299UL);
 
     /// <summary>
-    /// Returns <c>_address_help</c>, or
-    /// <see cref="NetwTransport.AddressHelpDefault"/> when nothing overrode it.
+    /// Calls <c>_address_help</c>, or
+    /// <see cref="NetwTransport.AddressHelpDefault"/>.
     /// </summary>
     public string AddressHelp()
     {
@@ -411,7 +378,7 @@ public sealed class NetwTransport : NetwRefCounted
             2841200299UL);
 
     /// <summary>
-    /// An empty string.
+    /// Returns an empty string.
     /// </summary>
     public string AddressHelpDefault()
     {
@@ -429,9 +396,8 @@ public sealed class NetwTransport : NetwRefCounted
             2240911060UL);
 
     /// <summary>
-    /// Returns <c>_accepts_empty_address</c>, or
-    /// <see cref="NetwTransport.AcceptsEmptyAddressDefault"/> when nothing
-    /// overrode it.
+    /// Calls <c>_accepts_empty_address</c>, or
+    /// <see cref="NetwTransport.AcceptsEmptyAddressDefault"/>.
     /// </summary>
     public bool AcceptsEmptyAddress()
     {
@@ -450,7 +416,7 @@ public sealed class NetwTransport : NetwRefCounted
             2240911060UL);
 
     /// <summary>
-    /// <c>false</c>: an address is required.
+    /// Returns <c>false</c>.
     /// </summary>
     public bool AcceptsEmptyAddressDefault()
     {
@@ -466,9 +432,8 @@ public sealed class NetwTransport : NetwRefCounted
         NetwApi.MethodBind("NetwTransport", "host_settings", 2382534195UL);
 
     /// <summary>
-    /// Returns <c>_host_settings</c>, or
-    /// <see cref="NetwTransport.HostSettingsDefault"/> when nothing overrode
-    /// it.
+    /// Calls <c>_host_settings</c>, or
+    /// <see cref="NetwTransport.HostSettingsDefault"/>.
     /// </summary>
     public Godot.Collections.Dictionary HostSettings()
     {
@@ -487,8 +452,7 @@ public sealed class NetwTransport : NetwRefCounted
             2382534195UL);
 
     /// <summary>
-    /// An empty <see cref="Godot.Collections.Dictionary"/>: a host form offers
-    /// no fields until a transport names some.
+    /// Returns an empty <see cref="Godot.Collections.Dictionary"/>.
     /// </summary>
     public Godot.Collections.Dictionary HostSettingsDefault()
     {
@@ -504,9 +468,8 @@ public sealed class NetwTransport : NetwRefCounted
         NetwApi.MethodBind("NetwTransport", "client_settings", 2382534195UL);
 
     /// <summary>
-    /// Returns <c>_client_settings</c>, or
-    /// <see cref="NetwTransport.ClientSettingsDefault"/> when nothing overrode
-    /// it.
+    /// Calls <c>_client_settings</c>, or
+    /// <see cref="NetwTransport.ClientSettingsDefault"/>.
     /// </summary>
     public Godot.Collections.Dictionary ClientSettings()
     {
@@ -525,8 +488,7 @@ public sealed class NetwTransport : NetwRefCounted
             2382534195UL);
 
     /// <summary>
-    /// An empty <see cref="Godot.Collections.Dictionary"/>: a join form offers
-    /// no fields until a transport names some.
+    /// Returns an empty <see cref="Godot.Collections.Dictionary"/>.
     /// </summary>
     public Godot.Collections.Dictionary ClientSettingsDefault()
     {
@@ -542,9 +504,8 @@ public sealed class NetwTransport : NetwRefCounted
         NetwApi.MethodBind("NetwTransport", "make_probe_peer", 3101019611UL);
 
     /// <summary>
-    /// Returns <c>_make_probe_peer</c> for <paramref name="address"/>, or
-    /// <see cref="NetwTransport.MakeProbePeerDefault"/> when nothing overrode
-    /// it.
+    /// Calls <c>_make_probe_peer</c>, or
+    /// <see cref="NetwTransport.MakeProbePeerDefault"/>.
     /// </summary>
     public MultiplayerPeer MakeProbePeer(string address)
     {
@@ -565,9 +526,7 @@ public sealed class NetwTransport : NetwRefCounted
             3101019611UL);
 
     /// <summary>
-    /// <c>null</c>, ignoring <paramref name="address"/>.
-    /// <see cref="NetwTransport.ProbeDefault"/> reads this as a transport that
-    /// does not probe at all.
+    /// Returns <c>null</c>.
     /// </summary>
     public MultiplayerPeer MakeProbePeerDefault(string address)
     {
@@ -589,8 +548,8 @@ public sealed class NetwTransport : NetwRefCounted
         NetwApi.MethodBind("NetwTransport", "join_address", 2841200299UL);
 
     /// <summary>
-    /// Returns <c>_join_address</c>, or
-    /// <see cref="NetwTransport.JoinAddressDefault"/> when nothing overrode it.
+    /// Calls <c>_join_address</c>, or
+    /// <see cref="NetwTransport.JoinAddressDefault"/>.
     /// </summary>
     public string JoinAddress()
     {
@@ -608,7 +567,7 @@ public sealed class NetwTransport : NetwRefCounted
             2841200299UL);
 
     /// <summary>
-    /// An empty <see cref="string"/>.
+    /// Returns an empty <see cref="string"/>.
     /// </summary>
     public string JoinAddressDefault()
     {
@@ -623,8 +582,8 @@ public sealed class NetwTransport : NetwRefCounted
         NetwApi.MethodBind("NetwTransport", "diagnostics", 3554694381UL);
 
     /// <summary>
-    /// Returns <c>_diagnostics</c> for <paramref name="peerId"/>, or
-    /// <see cref="NetwTransport.DiagnosticsDefault"/> when nothing overrode it.
+    /// Calls <c>_diagnostics</c>, or
+    /// <see cref="NetwTransport.DiagnosticsDefault"/>.
     /// </summary>
     public Godot.Collections.Dictionary Diagnostics(long peerId)
     {
@@ -645,8 +604,7 @@ public sealed class NetwTransport : NetwRefCounted
             3554694381UL);
 
     /// <summary>
-    /// An empty <see cref="Godot.Collections.Dictionary"/>, ignoring
-    /// <paramref name="peerId"/>.
+    /// Returns an empty <see cref="Godot.Collections.Dictionary"/>.
     /// </summary>
     public Godot.Collections.Dictionary DiagnosticsDefault(long peerId)
     {
@@ -668,8 +626,8 @@ public sealed class NetwTransport : NetwRefCounted
         NetwApi.MethodBind("NetwTransport", "timeout_hint", 191475506UL);
 
     /// <summary>
-    /// Returns <c>_timeout_hint</c>, or
-    /// <see cref="NetwTransport.TimeoutHintDefault"/> when nothing overrode it.
+    /// Calls <c>_timeout_hint</c>, or
+    /// <see cref="NetwTransport.TimeoutHintDefault"/>.
     /// </summary>
     public double TimeoutHint()
     {
@@ -685,7 +643,7 @@ public sealed class NetwTransport : NetwRefCounted
             191475506UL);
 
     /// <summary>
-    /// <c>5.0</c> seconds.
+    /// Returns <c>5.0</c>.
     /// </summary>
     public double TimeoutHintDefault()
     {
@@ -701,11 +659,8 @@ public sealed class NetwTransport : NetwRefCounted
         NetwApi.MethodBind("NetwTransport", "report", 3791181477UL);
 
     /// <summary>
-    /// Forwards <paramref name="step"/>, <paramref name="message"/> and
-    /// <paramref name="ratio"/> to the progress <see cref="Callable"/>
-    /// <paramref name="ticket"/> was created with. Does nothing once
-    /// <paramref name="ticket"/> has settled, so a slow provider cannot report
-    /// progress behind a result the caller already has.
+    /// Reports progress on <paramref name="ticket"/> to the <c>progress</c>
+    /// callback of <see cref="NetwMultiplayer.TransportCreatePeer"/>.
     /// </summary>
     public void Report(
         Rid ticket,
@@ -737,13 +692,10 @@ public sealed class NetwTransport : NetwRefCounted
         NetwApi.MethodBind("NetwTransport", "probe_default", 2726140452UL);
 
     /// <summary>
-    /// The stock probe: opens <see cref="NetwTransport.MakeProbePeer"/> against
-    /// <paramref name="address"/>, speaks the built-in probe protocol over it,
-    /// and reports the <see cref="NetwServerInfo"/> it returns. Fails with
+    /// Connects with <see cref="NetwTransport.MakeProbePeer"/>, asks the server
+    /// for its <see cref="NetwServerInfo"/>, and reports it. Fails with
     /// <c>@GlobalScope.ERR_UNAVAILABLE</c> when
-    /// <see cref="NetwTransport.MakeProbePeer"/> returns <c>null</c>. This is
-    /// <c>_probe</c>'s only route back to stock behaviour, since a GDScript
-    /// subclass cannot <c>super()</c> into a <c>GDVIRTUAL</c>.
+    /// <see cref="NetwTransport.MakeProbePeer"/> returns <c>null</c>.
     /// </summary>
     public void ProbeDefault(Rid ticket, string address)
     {
@@ -765,10 +717,8 @@ public sealed class NetwTransport : NetwRefCounted
         NetwApi.MethodBind("NetwTransport", "deliver", 2165931032UL);
 
     /// <summary>
-    /// Reports <paramref name="peer"/> as what <c>_make_peer</c> built for
-    /// <paramref name="ticket"/>. Call it once, from any frame. A second call,
-    /// or a call under a ticket this instance is no longer building, does
-    /// nothing.
+    /// Reports <paramref name="peer"/> as the result of
+    /// <paramref name="ticket"/>. Only the first call for a ticket counts.
     /// </summary>
     public void Deliver(Rid ticket, MultiplayerPeer peer)
     {
@@ -787,13 +737,9 @@ public sealed class NetwTransport : NetwRefCounted
         NetwApi.MethodBind("NetwTransport", "publish_targets", 138736100UL);
 
     /// <summary>
-    /// Publishes what <c>_browse</c> found: one row per entry of
-    /// <paramref name="addresses"/>, titled by the matching entry of
-    /// <paramref name="names"/> and described by the matching
-    /// <see cref="NetwServerInfo"/> of <paramref name="infos"/> where one is
-    /// known. The three arrays are read in step, and a short
-    /// <paramref name="names"/> or <paramref name="infos"/> simply leaves those
-    /// rows untitled or unobserved.
+    /// Reports the servers <c>_browse</c> found, one per address.
+    /// <paramref name="names"/> and <paramref name="infos"/> are matched to
+    /// <paramref name="addresses"/> by index, and can be shorter.
     /// <code>
     /// func _browse() -&gt; void:
     ///     var lobbies := await _sdk.search()
@@ -804,7 +750,7 @@ public sealed class NetwTransport : NetwRefCounted
     ///         addresses.append(lobby.id)
     ///         names.append(lobby.name)
     ///         infos.append(_info_of(lobby))
-    ///     publish_targets(_peer_class(), addresses, names, infos)
+    ///     publish_targets(addresses, names, infos)
     /// </code>
     /// </summary>
     public void PublishTargets(
@@ -836,8 +782,8 @@ public sealed class NetwTransport : NetwRefCounted
         NetwApi.MethodBind("NetwTransport", "can_browse", 2240911060UL);
 
     /// <summary>
-    /// Returns <c>_can_browse</c>, or
-    /// <see cref="NetwTransport.CanBrowseDefault"/> when nothing overrode it.
+    /// Calls <c>_can_browse</c>, or
+    /// <see cref="NetwTransport.CanBrowseDefault"/>.
     /// </summary>
     public bool CanBrowse()
     {
@@ -850,7 +796,7 @@ public sealed class NetwTransport : NetwRefCounted
         NetwApi.MethodBind("NetwTransport", "can_browse_default", 2240911060UL);
 
     /// <summary>
-    /// <c>false</c>: a transport lists nothing unless it says otherwise.
+    /// Returns <c>false</c>.
     /// </summary>
     public bool CanBrowseDefault()
     {
@@ -863,8 +809,8 @@ public sealed class NetwTransport : NetwRefCounted
         NetwApi.MethodBind("NetwTransport", "deliver_probe", 2430915922UL);
 
     /// <summary>
-    /// Reports <paramref name="info"/> as what <c>_probe</c> found at the
-    /// address <paramref name="ticket"/> named. Call it once, from any frame.
+    /// Reports <paramref name="info"/> as the result of the <c>_probe</c>
+    /// request <paramref name="ticket"/>.
     /// </summary>
     public void DeliverProbe(Rid ticket, NetwServerInfo info)
     {
@@ -883,11 +829,8 @@ public sealed class NetwTransport : NetwRefCounted
         NetwApi.MethodBind("NetwTransport", "fail", 3683577957UL);
 
     /// <summary>
-    /// Reports that <paramref name="ticket"/> cannot finish, with
-    /// <paramref name="error"/> as the reason and <paramref name="message"/> as
-    /// the sentence behind it. Call it once, from any frame, in place of
-    /// <see cref="NetwTransport.Deliver"/> or
-    /// <see cref="NetwTransport.DeliverProbe"/>.
+    /// Reports that <paramref name="ticket"/> failed with
+    /// <paramref name="error"/> and a readable <paramref name="message"/>.
     /// </summary>
     public void Fail(Rid ticket, Error error, string message = "")
     {
@@ -912,10 +855,8 @@ public sealed class NetwTransport : NetwRefCounted
         NetwApi.MethodBind("NetwTransport", "peer_class_of", 548878716UL);
 
     /// <summary>
-    /// The class <paramref name="peer"/> would elevate under: its native class
-    /// name, or a scripted peer's own <c>class_name</c>.
-    /// <see cref="NetwTransport.RecognizesPeerDefault"/> compares this against
-    /// <see cref="NetwTransport.PeerClass"/>.
+    /// Returns the class name of <paramref name="peer"/>, or its script's
+    /// <c>class_name</c>.
     /// </summary>
     public static StringName PeerClassOf(MultiplayerPeer peer)
     {

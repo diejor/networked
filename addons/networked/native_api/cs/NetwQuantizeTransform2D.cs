@@ -6,20 +6,13 @@ using Godot.NativeInterop;
 namespace Networked;
 
 /// <summary>
-/// <see cref="NetwQuantize"/> that composes <see cref="Transform2D"/> from
-/// origin, rotation, and optional scale quantizers.
+/// <see cref="NetwQuantize"/> for a <see cref="Transform2D"/>, with one
+/// quantizer for each part.
 /// </summary>
 /// <remarks>
-/// <see cref="NetwQuantizeTransform2D.OriginQuantizer"/> writes
-/// <see cref="Transform2D.Origin"/>.
-/// <see cref="NetwQuantizeTransform2D.RotationQuantizer"/> writes
-/// <see cref="Transform2D.Rotation"/>.
-/// <see cref="NetwQuantizeTransform2D.ScaleQuantizer"/> writes
-/// <see cref="Transform2D.Scale"/> when present. Skew is not encoded. An unset
-/// origin or rotation encodes through a stock quantizer, so a fresh instance
-/// encodes without any configuration. A transform whose parts were never
-/// declared would otherwise write nothing and decode to identity. The stock is
-/// not the member's value: both read <c>null</c> until something assigns them.
+/// Compresses the origin, rotation and, when
+/// <see cref="NetwQuantizeTransform2D.ScaleQuantizer"/> is set, scale. Skew is
+/// lost. An unset origin or rotation quantizer uses a default one.
 /// <code>
 /// var q := NetwQuantizeTransform2D.new()
 /// q.origin_quantizer = NetwQuantizeScalar.new()
@@ -56,9 +49,9 @@ public sealed class NetwQuantizeTransform2D : NetwQuantize
             1402227273UL);
 
     /// <summary>
-    /// Quantizer for <see cref="Transform2D.Origin"/>. Unset, the origin
-    /// encodes through a stock <see cref="NetwQuantizeScalar"/> spanning
-    /// <c>-2048</c> to <c>2048</c> in steps of <c>0.5</c>.
+    /// Quantizer for <see cref="Transform2D.Origin"/>. When <c>null</c>, a
+    /// <see cref="NetwQuantizeScalar"/> from <c>-2048</c> to <c>2048</c> with a
+    /// step of <c>0.5</c> is used.
     /// </summary>
     public NetwQuantize OriginQuantizer
     {
@@ -96,8 +89,8 @@ public sealed class NetwQuantizeTransform2D : NetwQuantize
             1402227273UL);
 
     /// <summary>
-    /// Quantizer for <see cref="Transform2D.Rotation"/>. Unset, the rotation
-    /// encodes through a stock <see cref="NetwQuantizeAngle"/>.
+    /// Quantizer for <see cref="Transform2D.Rotation"/>. When <c>null</c>, a
+    /// default <see cref="NetwQuantizeAngle"/> is used.
     /// </summary>
     public NetwQuantize RotationQuantizer
     {
@@ -135,8 +128,8 @@ public sealed class NetwQuantizeTransform2D : NetwQuantize
             1402227273UL);
 
     /// <summary>
-    /// Optional quantizer for <see cref="Transform2D.Scale"/>. Left unset,
-    /// scale is not encoded and decodes as one.
+    /// Quantizer for <see cref="Transform2D.Scale"/>. When <c>null</c>, the
+    /// scale is not sent and is <c>1</c>.
     /// </summary>
     public NetwQuantize ScaleQuantizer
     {

@@ -1,19 +1,13 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <class name="NetwPredictRecovery" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
 	<brief_description>
-		The single write that corrects one settled divergence, staged whole.
+		How a misprediction is corrected, returned by [method NetwMultiplayer._predict_recover].
 	</brief_description>
 	<description>
-		[method NetwMultiplayer._predict_recover] returns one of these, and a game overriding that seam creates its own through [method of].
-		The whole recovery is decided here and applied by the shell in one write, so a correction has no tail: nothing is left outstanding to ease in over later frames, and the state recorded after a recovery is exactly what was staged. Deciding it and performing it are separate for that reason, and a record is what carries the decision between them.
-		[method restore] and [method write] are keyed by property name, which is the altitude the seam speaks: the engine's own plan is keyed by field slot.
+		Create one with [method of] in an override of [method NetwMultiplayer._predict_recover]. The correction is applied at once.
 		[codeblock]
 		var staged := NetwPredictRecovery.of(restore, restore, false, false)
 		[/codeblock]
-		- [method restore] the payload to apply, by property name
-		- [method write] what the display is told moved
-		- [method teleport] the body kept nothing worth blending from
-		- [method skip] this recovery declines to write at all
 	</description>
 	<tutorials>
 	</tutorials>
@@ -25,32 +19,31 @@
 			<param index="2" name="teleport" type="bool" />
 			<param index="3" name="skip" type="bool" />
 			<description>
-				Creates one staged recovery.
+				Creates a correction. See each getter for the parameters.
 			</description>
 		</method>
 		<method name="restore" qualifiers="const">
 			<return type="Dictionary" />
 			<description>
-				The payload to apply to the body, keyed by property name. A recovery that withheld fields has already dropped them here, so a caller writes what it is handed rather than filtering again.
+				The values to set, keyed by property name.
 			</description>
 		</method>
 		<method name="skip" qualifiers="const">
 			<return type="bool" />
 			<description>
-				Whether this recovery declines to write at all. A replay reaches the present under its own power and an observing policy was only ever going to report, so both decline while still having decided.
+				[code]true[/code] to change nothing.
 			</description>
 		</method>
 		<method name="teleport" qualifiers="const">
 			<return type="bool" />
 			<description>
-				Whether the body kept nothing worth blending from. The tier is measured per property against its own threshold, because the errors have different units and one number cannot be right for all of them.
+				[code]true[/code] to jump to the values instead of smoothing.
 			</description>
 		</method>
 		<method name="write" qualifiers="const">
 			<return type="Dictionary" />
 			<description>
-				What the display is told moved. It is empty for a recovery that restores without a visible correction, which is what a replay does.
-				Separate from [method restore] because the two serve different readers rather than because they hold different values: the restore is applied to the simulated state, and this is the copy something drains onto the bound node. Wherever both carry a field they carry the same value, and a driver with nothing to drain reads the restored state and leaves this undrained rather than being handed a second truth.
+				The values the display should show changing, keyed by property name. Usually the same as [method restore], or empty for no visible correction.
 			</description>
 		</method>
 	</methods>

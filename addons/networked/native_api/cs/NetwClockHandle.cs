@@ -11,10 +11,9 @@ namespace Networked;
 /// </summary>
 /// <remarks>
 /// A tick is a numbered step of the simulation. Every peer counts the same
-/// ticks, and a client keeps its count aligned with the server's by measuring
-/// the round trip and correcting for it. <see cref="NetwClockHandle.Tick"/> is
-/// the number every <see cref="NetwRecord"/> and every lag-compensation query
-/// is stamped against.
+/// ticks, and a client keeps its count in step with the server's.
+/// <see cref="NetwClockHandle.Tick"/> is the number every
+/// <see cref="NetwRecord"/> and lag compensation uses.
 /// <code>
 /// var c := Netw.clock(self)
 /// c.before_tick.connect(sample_input)
@@ -22,88 +21,39 @@ namespace Networked;
 /// label.text = "tick %d" % c.tick
 /// </code>
 /// <para>
-/// <b>How a tick is produced</b> The clock does not use a timer. It banks the
-/// time each physics frame delivers and spends it one tick at a time, so a slow
-/// frame produces two ticks and a fast one produces none.
-/// <code>
-/// ticktime = 1 / tickrate
-///
-/// # each physics frame, given that frame's delta in seconds
-///     accumulator += delta
-///     while accumulator &gt;= ticktime
-///         accumulator -= ticktime
-///         announce a tick, tick += 1
-/// </code>
+/// <b>How a tick is produced</b> Each physics frame adds its delta to an
+/// accumulator, and every <c>1 / tickrate</c> seconds in it runs one tick. A
+/// slow frame can run two ticks and a fast one none. At a
+/// <see cref="NetwClockHandle.Tickrate"/> of 30 with 60 physics ticks per
+/// second, a tick runs every second frame, and
+/// <see cref="NetwClockHandle.PhysicsFactor"/> is <c>2.0</c>. At most
+/// <see cref="NetwMultiplayer.ClockParam.MaxTicksPerFrame"/> ticks run in one
+/// frame. <see cref="NetwClockHandle.BehindCount"/> counts how often that limit
+/// was hit.
 /// </para>
 /// <para>
-/// At a tickrate of 30 under 60 Hz physics the loop announces a tick every
-/// second frame. <see cref="NetwClockHandle.PhysicsFactor"/> is that ratio, 2.0
-/// here, and <see cref="NetwClockHandle.TickPhase"/> is how far into the
-/// current tick the accumulator sits. The loop announces at most
-/// <see cref="NetwMultiplayer.ClockParam.MaxTicksPerFrame"/> ticks in one
-/// frame. A peer that keeps hitting the ceiling cannot catch up, and
-/// <see cref="NetwClockHandle.BehindCount"/> is how often that happened.
+/// <b>How a client follows the server</b> The client pings the server every
+/// <see cref="NetwClockHandle.PingInterval"/> seconds. The server answers with
+/// its tick, and the client aims ahead of it by half the round trip plus
+/// <see cref="NetwMultiplayer.ClockParam.LeadTicks"/>. The first answer sets
+/// the tick directly. After that, <see cref="NetwClockHandle.SyncMode"/>
+/// decides. <see cref="NetwMultiplayer.SyncMode.Snap"/> sets the tick directly
+/// every time, which can move it backwards.
+/// <see cref="NetwMultiplayer.SyncMode.Stretch"/>, the default, runs the clock
+/// slightly faster or slower each frame by
+/// <see cref="NetwMultiplayer.ClockParam.StretchNudgeFactor"/> of the
+/// difference, so the tick never jumps. A difference larger than
+/// <see cref="NetwMultiplayer.ClockParam.PanicSnapThreshold"/> ticks is
+/// snapped.
 /// </para>
 /// <para>
-/// <b>How a client agrees with the server</b> The client pings the server every
-/// <see cref="NetwClockHandle.PingInterval"/> seconds and the server answers
-/// with its own tick and phase. The answer is already stale by the time it
-/// lands, so the client aims ahead of it by the time the trip took.
-/// <code>
-/// rtt        the round trip this ping and its pong measured, in seconds
-/// rtt_avg    the mean of the last jitter_window samples
-/// jitter     the mean distance of those samples from rtt_avg
-/// one_way    rtt_avg / 2
-///
-/// target = server_tick + server_phase + one_way / ticktime + lead_ticks
-/// </code>
-/// </para>
-/// <para>
-/// <c>target</c> is a fractional tick, not a whole one. Keeping the server's
-/// phase is what stops the target jumping a full tick each time a pong lands on
-/// the other side of a tick boundary. The first pong sets the clock to the
-/// target outright, because there is nothing to drift from yet. Every pong
-/// after that is handled by <see cref="NetwClockHandle.SyncMode"/>.
-/// </para>
-/// <para>
-/// <b>Snap and stretch</b> <see cref="NetwMultiplayer.SyncMode.Snap"/> writes
-/// the target straight into the tick and the accumulator. It is correct
-/// immediately and it can move the tick backwards, which any code holding a
-/// tick number will see. <see cref="NetwMultiplayer.SyncMode.Stretch"/> is the
-/// default. It keeps the target as an estimate that advances on its own, then
-/// closes a fixed fraction of the remaining gap each frame.
-/// <code>
-/// each physics frame
-///     estimate += delta * tickrate
-///     current   = tick + accumulator / ticktime
-///     gap       = estimate - current
-///     accumulator += gap * ticktime * stretch_nudge_factor
-/// </code>
-/// </para>
-/// <para>
-/// <see cref="NetwMultiplayer.ClockParam.StretchNudgeFactor"/> is that
-/// fraction. At 0.05 the clock closes a twentieth of the gap per frame, so it
-/// runs slightly fast or slightly slow until the gap is spent and the tick
-/// never jumps. Above
-/// <see cref="NetwMultiplayer.ClockParam.PanicSnapThreshold"/> ticks of gap it
-/// snaps instead, because a gap that large is a desync and not drift.
-/// </para>
-/// <para>
-/// <b>Reading remote state</b> A remote peer's state is always at least one-way
-/// latency old, so the newest tick has nothing in it yet for anyone but this
-/// peer. <see cref="NetwClockHandle.DisplayOffset"/> is how many ticks back the
-/// view reads, and the useful value is the one that covers the trip plus the
-/// spread in it.
-/// <code>
-/// recommended_display_offset = ceil((one_way + jitter * jitter_multiplier) * tickrate)
-/// </code>
-/// </para>
-/// <para>
-/// Nothing applies that number on its own.
-/// <see cref="NetwClockHandle.RecommendedDisplayOffset"/> is the measurement
-/// and <see cref="NetwClockHandle.DisplayOffset"/> is what the clock uses, and
-/// <see cref="NetwMultiplayer.ClockAutoConfigureOffset"/> is what samples the
-/// first for a while and writes the largest reading into the second.
+/// <b>Showing remote state</b> State from other peers arrives late, so remote
+/// entities are shown <see cref="NetwClockHandle.DisplayOffset"/> ticks in the
+/// past. <see cref="NetwClockHandle.RecommendedDisplayOffset"/> is the offset
+/// the current connection needs, the one-way latency plus the jitter times
+/// <see cref="NetwMultiplayer.ClockParam.JitterMultiplier"/>, in ticks. It is
+/// not applied automatically.
+/// <see cref="NetwMultiplayer.ClockAutoConfigureOffset"/> applies it.
 /// </para>
 /// </remarks>
 public sealed class NetwClockHandle : NetwRefCounted
@@ -123,10 +73,7 @@ public sealed class NetwClockHandle : NetwRefCounted
     }
 
     /// <summary>
-    /// Emitted before the simulation steps <c>tick</c>, carrying that step's
-    /// <c>delta</c>. This is where input for the tick is sampled, because what
-    /// is written here is what the tick then simulates. Relayed from
-    /// <see cref="NetwMultiplayer.ClockBeforeTick"/>.
+    /// Emitted before <c>tick</c> runs. Read input here.
     /// </summary>
     public event Action<double, long> BeforeTick
     {
@@ -135,8 +82,7 @@ public sealed class NetwClockHandle : NetwRefCounted
     }
 
     /// <summary>
-    /// Emitted as the simulation steps <c>tick</c>, carrying that step's
-    /// <c>delta</c>. Relayed from <see cref="NetwMultiplayer.ClockOnTick"/>.
+    /// Emitted when <c>tick</c> runs. Run game logic here.
     /// </summary>
     public event Action<double, long> OnTick
     {
@@ -148,9 +94,7 @@ public sealed class NetwClockHandle : NetwRefCounted
         NetwApi.MethodBind("NetwClockHandle", "get_tick", 3905245786UL);
 
     /// <summary>
-    /// The current network tick, the number every <see cref="NetwRecord"/> and
-    /// every lag-compensation query is stamped against.
-    /// <see cref="NetwMultiplayer.ClockGetTick"/>.
+    /// The current tick.
     /// </summary>
     public long Tick
     {
@@ -169,9 +113,8 @@ public sealed class NetwClockHandle : NetwRefCounted
             36873697UL);
 
     /// <summary>
-    /// Whether this peer's tick agrees with the server. Always <c>true</c> on
-    /// the server, and <c>false</c> on a client until the first pong lands.
-    /// <see cref="NetwMultiplayer.ClockIsSynchronized"/>.
+    /// <c>true</c> once the tick follows the server. Always <c>true</c> on the
+    /// server.
     /// </summary>
     public bool IsSynchronized
     {
@@ -190,10 +133,8 @@ public sealed class NetwClockHandle : NetwRefCounted
         NetwApi.MethodBind("NetwClockHandle", "get_is_configured", 36873697UL);
 
     /// <summary>
-    /// Whether a <see cref="NetwClockConfig"/> has settled on this session,
-    /// which is what <see cref="Netw.ConfigureClock"/> declares. A component
-    /// that steps on the tick reads this before it trusts
-    /// <see cref="NetwClockHandle.Tick"/>.
+    /// <c>true</c> once the settings from <see cref="Netw.ConfigureClock"/> are
+    /// applied. <see cref="NetwClockHandle.Tick"/> does not move before that.
     /// </summary>
     public bool IsConfigured
     {
@@ -212,9 +153,9 @@ public sealed class NetwClockHandle : NetwRefCounted
         NetwApi.MethodBind("NetwClockHandle", "get_behind_count", 3905245786UL);
 
     /// <summary>
-    /// How many frames wanted a tick the per-frame ceiling refused. Sustained
-    /// growth means this peer cannot sustain its own tickrate, which no setting
-    /// repairs. <see cref="NetwMultiplayer.ClockGetSimulationBehindCount"/>.
+    /// How many frames could not run every tick they needed. If it keeps
+    /// growing, this machine is too slow for
+    /// <see cref="NetwClockHandle.Tickrate"/>.
     /// </summary>
     public long BehindCount
     {
@@ -233,8 +174,8 @@ public sealed class NetwClockHandle : NetwRefCounted
         NetwApi.MethodBind("NetwClockHandle", "get_tickrate", 3905245786UL);
 
     /// <summary>
-    /// Ticks per second, which <see cref="Netw.ConfigureClock"/> declares and
-    /// nothing changes afterwards. Every peer in a session counts at this rate.
+    /// Ticks per second, set by <see cref="Netw.ConfigureClock"/>. The same on
+    /// every peer.
     /// </summary>
     public long Tickrate
     {
@@ -253,9 +194,8 @@ public sealed class NetwClockHandle : NetwRefCounted
             1740695150UL);
 
     /// <summary>
-    /// Physics frames per tick, unrounded. A per-frame quantity such as a
-    /// velocity is scaled by this to cover one tick's worth of ground.
-    /// <see cref="NetwMultiplayer.ClockGetPhysicsFactor"/>.
+    /// Physics frames per tick. Multiply a per-frame value by it to get a
+    /// per-tick value.
     /// </summary>
     public double PhysicsFactor
     {
@@ -274,10 +214,8 @@ public sealed class NetwClockHandle : NetwRefCounted
         NetwApi.MethodBind("NetwClockHandle", "get_tick_factor", 1740695150UL);
 
     /// <summary>
-    /// How far the simulation has advanced past the last tick, in ticks,
-    /// counting the part of the current frame already drawn. This is what a
-    /// renderer interpolates with.
-    /// <see cref="NetwMultiplayer.ClockGetTickFactor"/>.
+    /// How far time has moved past the last tick, as a fraction of a tick. Use
+    /// it to interpolate.
     /// </summary>
     public double TickFactor
     {
@@ -296,8 +234,8 @@ public sealed class NetwClockHandle : NetwRefCounted
         NetwApi.MethodBind("NetwClockHandle", "get_tick_phase", 1740695150UL);
 
     /// <summary>
-    /// Where the accumulator sits inside the current tick, from zero to one.
-    /// <see cref="NetwMultiplayer.ClockGetTickPhase"/>.
+    /// How far into the current tick the clock is, from <c>0.0</c> to
+    /// <c>1.0</c>.
     /// </summary>
     public double TickPhase
     {
@@ -319,8 +257,8 @@ public sealed class NetwClockHandle : NetwRefCounted
             3905245786UL);
 
     /// <summary>
-    /// The display offset the measured link suggests, in ticks. Nothing applies
-    /// it. <see cref="NetwMultiplayer.ClockGetRecommendedDisplayOffset"/>.
+    /// The <see cref="NetwClockHandle.DisplayOffset"/> the current connection
+    /// needs, in ticks. Not applied automatically.
     /// </summary>
     public long RecommendedDisplayOffset
     {
@@ -348,10 +286,8 @@ public sealed class NetwClockHandle : NetwRefCounted
             1286410249UL);
 
     /// <summary>
-    /// How many ticks behind <see cref="NetwClockHandle.Tick"/> the view of
-    /// remote state reads, so that what it reads has already arrived.
-    /// <see cref="NetwClockHandle.RecommendedDisplayOffset"/> is what the
-    /// measured link suggests for it.
+    /// How many ticks in the past remote entities are shown. See
+    /// <see cref="NetwClockHandle.RecommendedDisplayOffset"/>.
     /// </summary>
     public long DisplayOffset
     {
@@ -377,27 +313,25 @@ public sealed class NetwClockHandle : NetwRefCounted
     }
 
     private static readonly IntPtr _bindGetSyncMode =
-        NetwApi.MethodBind("NetwClockHandle", "get_sync_mode", 3905245786UL);
+        NetwApi.MethodBind("NetwClockHandle", "get_sync_mode", 1957647188UL);
 
     private static readonly IntPtr _bindSetSyncMode =
-        NetwApi.MethodBind("NetwClockHandle", "set_sync_mode", 1286410249UL);
+        NetwApi.MethodBind("NetwClockHandle", "set_sync_mode", 2414319464UL);
 
     /// <summary>
-    /// How a calibration is taken, either
-    /// <see cref="NetwMultiplayer.SyncMode.Snap"/> at once or
-    /// <see cref="NetwMultiplayer.SyncMode.Stretch"/> spread over frames.
+    /// How the tick is corrected toward the server's.
     /// </summary>
-    public long SyncMode
+    public NetwMultiplayer.SyncMode SyncMode
     {
         get
         {
             long answered = default;
             NetwThunks.Ptrcall0_Long(_bindGetSyncMode, Checked, ref answered);
-            return answered;
+            return (NetwMultiplayer.SyncMode)answered;
         }
         set
         {
-            long slot0 = value;
+            long slot0 = (long)value;
             long discarded = default;
             NetwThunks.Ptrcall1_Long_Long(
                 _bindSetSyncMode,
@@ -417,8 +351,8 @@ public sealed class NetwClockHandle : NetwRefCounted
         NetwApi.MethodBind("NetwClockHandle", "set_ping_interval", 373806689UL);
 
     /// <summary>
-    /// How many seconds pass between the pings a client measures the link with.
-    /// Shorter samples the link more often and costs more packets.
+    /// Seconds between pings. Shorter follows the connection more closely and
+    /// sends more packets.
     /// </summary>
     public double PingInterval
     {
@@ -444,27 +378,17 @@ public sealed class NetwClockHandle : NetwRefCounted
     }
 
     private static readonly IntPtr _bindMonitor =
-        NetwApi.MethodBind("NetwClockHandle", "monitor", 2339986948UL);
+        NetwApi.MethodBind("NetwClockHandle", "monitor", 1000684075UL);
 
     /// <summary>
-    /// One link or cadence measurement as a [float]. The vocabulary is
-    /// <see cref="NetwMultiplayer.ClockMonitor"/>, and every member of it is a
-    /// uniform scalar so a debug overlay can sample the whole family in a loop.
+    /// Returns one clock diagnostic value.
     /// <code>
     /// var rtt := Netw.clock(self).monitor(NetwMultiplayer.CLOCK_MONITOR_RTT_AVG)
     /// </code>
-    /// <para>
-    /// The numbers that shape the simulation are properties.
-    /// <see cref="NetwClockHandle.PhysicsFactor"/>,
-    /// <see cref="NetwClockHandle.TickFactor"/>,
-    /// <see cref="NetwClockHandle.TickPhase"/> and
-    /// <see cref="NetwClockHandle.RecommendedDisplayOffset"/> are each read
-    /// directly.
-    /// </para>
     /// </summary>
-    public double Monitor(long monitor)
+    public double Monitor(NetwMultiplayer.ClockMonitor monitor)
     {
-        long slot0 = monitor;
+        long slot0 = (long)monitor;
         double answered = default;
         NetwThunks.Ptrcall1_Long_Double(
             _bindMonitor,

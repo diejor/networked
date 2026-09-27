@@ -1,16 +1,18 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <class name="DebugJoinConfig" inherits="Resource" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
 	<brief_description>
-		Used by [MultiplayerTree] in debug builds to auto connect a peer with a given name and join intent.
+		Joins automatically in debug builds, set as [member MultiplayerTree.debug_join].
 	</brief_description>
+	<description>
+	</description>
 	<tutorials>
 	</tutorials>
 	<members>
 		<member name="join_args" type="Array" setter="set_join_args" getter="get_join_args" default="[]">
-			The typed join args the tree submits alongside [member username].
+			The arguments passed to [method Netw.prepare_join] after [member username].
 		</member>
 		<member name="username" type="StringName" setter="set_username" getter="get_username" default="&amp;&quot;DebugPlayer&quot;">
-			Display name for the auto connected player, submitted alongside [member join_args]. Changes by process-id to avoid collisions when multiple debug builds run on the same machine.
+			The username to join with. The process id is added so several instances on one machine get different names.
 		</member>
 	</members>
 </class>

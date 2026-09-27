@@ -1,13 +1,3 @@
-## Live browse and storage behavior tests for [NakamaLobbyDirectory] and
-## [NakamaWrapper], driven against a Docker Nakama server.
-##
-## The shape tests only pin that the storage and match-list calls exist. These
-## exercise the round-trip: hosting publishes a card, browsing reads it back
-## through [method NakamaWrapper.read_lobby_cards] merged with
-## [method NakamaWrapper.list_matches], leaving deletes the card, and a PRIVATE
-## host stays unlisted yet joinable by match id. A unique
-## [member NakamaLobbyDirectory.browser_filter_uid] isolates each run on the
-## shared storage collection.
 class_name TestNakamaLobbyBrowse
 extends NetwTestSuite
 
@@ -63,7 +53,6 @@ func test_public_lobby_round_trips_then_clears_on_leave() -> void:
 		assert_str(String(info.metadata.get("host", ""))) \
 				.is_equal(host_dir._local_member_name())
 
-	# Leaving deletes the card, and the now-dead match drops from list_matches.
 	var host_tree := host_dir.get_parent() as MultiplayerTree
 	_trees.erase(host_tree)
 	await NakamaTestSupport.stop_tree(host_tree)
@@ -90,30 +79,24 @@ func test_private_lobby_is_unlisted_but_joinable() -> void:
 			.override_failure_message("PRIVATE lobby leaked into browse.") \
 			.is_equal(-1)
 
-	# Unlisted, but still reachable when the match id is shared directly.
 	var join_peer := await _join(browse_dir, match_id)
 	assert_object(join_peer) \
 			.override_failure_message("PRIVATE lobby not joinable by match id.") \
 			.is_not_null()
 
 
-# Drives [method LobbyDirectory.host_lobby] and returns the peer it
-# delivered, or [code]null[/code] when it reported a failure.
 func _host(dir: LobbyDirectory, settings: Dictionary) -> MultiplayerPeer:
 	@warning_ignore("missing_await")
 	dir._host_lobby(settings)
 	return await _reported(dir)
 
 
-# Drives [method LobbyDirectory.join_lobby] and returns the peer it
-# delivered, or [code]null[/code] when it reported a failure.
 func _join(dir: LobbyDirectory, address: String) -> MultiplayerPeer:
 	@warning_ignore("missing_await")
 	dir._join_lobby(address)
 	return await _reported(dir)
 
 
-# Awaits whichever of the two report signals a request answers with.
 func _reported(dir: LobbyDirectory) -> MultiplayerPeer:
 	var answer: Array = [null]
 	var settled := [false]
@@ -132,8 +115,6 @@ func _reported(dir: LobbyDirectory) -> MultiplayerPeer:
 	return answer[0] as MultiplayerPeer
 
 
-# Builds a Nakama-wired tree, tags its directory for this run, and returns the
-# directory once its service is live.
 func _make_dir(username: String) -> NakamaLobbyDirectory:
 	var tree := NakamaTestSupport.make_client_tree(self, username)
 	_trees.append(tree)
@@ -143,8 +124,6 @@ func _make_dir(username: String) -> NakamaLobbyDirectory:
 	return dir
 
 
-# Triggers one browse and returns the three arrays it published, keyed
-# addresses / names / infos.
 func _browse(dir: NakamaLobbyDirectory) -> Dictionary:
 	var captured := {
 		"addresses": PackedStringArray(),
@@ -170,7 +149,6 @@ func _browse(dir: NakamaLobbyDirectory) -> Dictionary:
 	return captured
 
 
-# Returns the published row named [param lobby_name], or [code]-1[/code].
 func _row_of(listing: Dictionary, lobby_name: String) -> int:
 	var names: PackedStringArray = listing.names
 	for at in names.size():

@@ -881,12 +881,34 @@ void NetwMultiplayer::_bind_methods() {
     ));
     ADD_SIGNAL(MethodInfo(
         SIG_SESSION_STATE_CHANGED,
-        PropertyInfo(Variant::INT, "old_state"),
-        PropertyInfo(Variant::INT, "new_state")
+        PropertyInfo(
+            Variant::INT,
+            "old_state",
+            PROPERTY_HINT_NONE,
+            "",
+            PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_CLASS_IS_ENUM,
+            "NetwMultiplayer.SessionState"
+        ),
+        PropertyInfo(
+            Variant::INT,
+            "new_state",
+            PROPERTY_HINT_NONE,
+            "",
+            PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_CLASS_IS_ENUM,
+            "NetwMultiplayer.SessionState"
+        )
     ));
-    ADD_SIGNAL(
-        MethodInfo("embed_phase_changed", PropertyInfo(Variant::INT, "phase"))
-    );
+    ADD_SIGNAL(MethodInfo(
+        "embed_phase_changed",
+        PropertyInfo(
+            Variant::INT,
+            "phase",
+            PROPERTY_HINT_NONE,
+            "",
+            PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_CLASS_IS_ENUM,
+            "NetwMultiplayer.EmbedPhase"
+        )
+    ));
     ADD_SIGNAL(MethodInfo(
         "session_join_submitted",
         PropertyInfo(Variant::STRING_NAME, "username"),
@@ -895,7 +917,14 @@ void NetwMultiplayer::_bind_methods() {
     ADD_SIGNAL(MethodInfo(SIG_SESSION_ENTERED));
     ADD_SIGNAL(MethodInfo(
         SIG_SESSION_JOIN_FAILED,
-        PropertyInfo(Variant::INT, "error"),
+        PropertyInfo(
+            Variant::INT,
+            "error",
+            PROPERTY_HINT_NONE,
+            "",
+            PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_CLASS_IS_ENUM,
+            "Error"
+        ),
         PropertyInfo(Variant::STRING, "reason")
     ));
     ADD_SIGNAL(MethodInfo(SIG_SESSION_ENDED));
@@ -920,7 +949,14 @@ void NetwMultiplayer::_bind_methods() {
     ADD_SIGNAL(MethodInfo(
         SIG_DATABASE_FAILED,
         PropertyInfo(Variant::RID, "database"),
-        PropertyInfo(Variant::INT, "error"),
+        PropertyInfo(
+            Variant::INT,
+            "error",
+            PROPERTY_HINT_NONE,
+            "",
+            PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_CLASS_IS_ENUM,
+            "Error"
+        ),
         PropertyInfo(Variant::STRING, "detail")
     ));
     ADD_SIGNAL(MethodInfo(

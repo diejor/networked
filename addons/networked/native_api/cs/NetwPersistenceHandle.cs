@@ -137,7 +137,7 @@ public sealed class NetwPersistenceHandle : NetwRefCounted
     /// ┠╴ERR_UNCONFIGURED       the entity binds no persistence, the database is not open,
     /// │                        or the schema declares no migration from the stored row
     /// ┠╴ERR_UNAUTHORIZED       this peer is not the server
-    /// ┠╴ERR_BUSY             a bound property changed since the last load or save, a
+    /// ┠╴ERR_BUSY               a bound property changed since the last load or save, a
     /// │                        write is in flight, a property changed while the row was
     /// │                        read, or the database is full
     /// ┠╴ERR_DOES_NOT_EXIST     a bound node was freed while the row was applied
@@ -176,7 +176,7 @@ public sealed class NetwPersistenceHandle : NetwRefCounted
     /// ┠╴ERR_INVALID_DATA    the bound values do not match the schema, or the connection
     /// │                     answered no outcome for the row
     /// ┠╴ERR_UNAVAILABLE     the bound nodes are gone, or this peer stopped being the
-    /// │                     server or the database closed before the write settled.
+    /// │                     server or the database closed before the write finished.
     /// │                     The write may still have reached storage
     /// ┖╴backend-defined     the backend refused or could not complete the write
     /// </code>

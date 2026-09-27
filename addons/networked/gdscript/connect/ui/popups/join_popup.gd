@@ -1,8 +1,7 @@
-## Modal form for clients to configure join options.
+## A form to join a server.
 ##
-## Renders one field per entry of [method NetwConnectHandle.join_schema] and
-## one per key of the picked endpoint's [code]client_settings[/code], seeded
-## with whatever that bookmark was saved with.
+## Shows the fields of [method NetwConnectHandle.join_schema] and the client
+## settings of the server's transport.
 class_name JoinPopup
 extends PopupPanel
 
@@ -33,10 +32,8 @@ func _ready() -> void:
 	_cancel_button.pressed.connect(hide)
 
 
-## Opens the join popup for the endpoint on [param peer_class], rendering one
-## field per entry of [param handle]'s [method
-## NetwConnectHandle.join_schema] and one per client setting that transport
-## names, seeded from [param authored].
+## Opens the form for the server on [param peer_class], filled with its saved
+## [param authored] settings.
 func open_join(
 		handle: NetwConnectHandle,
 		default_username: String,

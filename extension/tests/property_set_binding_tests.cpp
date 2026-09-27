@@ -25,6 +25,7 @@ using netw::NetwPropertySetBinding;
 using netw::NetwPropertySetColumn;
 using netw::ReplicationSend;
 using netw::SchemaCore;
+using netw::enums::NetwMultiplayer;
 
 const int64_t SYNC_ROW = 39;
 const int64_t SYNC_ROW_DELTA = 40;
@@ -44,7 +45,7 @@ Ref<NetwPropertySet> make_set(const Vector<ColumnDecl> &p_decls) {
             p_decls[at].key,
             Ref<netw::NetwQuantize>(),
             false,
-            p_decls[at].type
+            NetwMultiplayer::ColumnType(p_decls[at].type)
         );
         column->lane = p_decls[at].lane;
         set->bind_column(column);

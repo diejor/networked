@@ -1,43 +1,18 @@
-## A drop-in server browser UI containing a server list, Add / Host /
-## Refresh, and a join flow, ready to use.
+## A ready-made server browser, with a server list, Add, Host, Refresh and
+## Join.
 ##
-## Drop this scene anywhere under a session and players can browse saved
-## servers, watch live status, host a new game, or join one with no glue
-## code. It is a client of one object, [NetwConnectHandle], reached as
-## [method Netw.connection]. Everything this browser draws (the list, the
-## Host and Join forms, progress and outcomes) comes from that handle.
+## Add this scene under a [MultiplayerTree] and players can browse, host and
+## join servers with no extra code. It uses [method Netw.connection] of its
+## ancestors, or the [NetwConnectHandle] passed to [method bind].
 ## [codeblock]
 ## browser.bind(Netw.connection(other_node))
 ## [/codeblock]
-## The browser finds its handle in two steps, first wins: an explicit
-## [method bind], then [method Netw.connection] over its own ancestry. Drop
-## it under a session for zero config.
-## [br][br]
-## Pressing Host or Join runs one setup the browser composes itself, out of
-## three ordinary steps: [method NetwConnectHandle.create_peer] asks the
-## provider for a peer, [method Netw.prepare_join] arranges the player the
-## form collected, and the peer is assigned. The assignment happens inside
-## the creation callback, which is the only window the seam
-## offers, and progress comes from that one operation rather than from
-## anything session-wide. Success is [signal NetwMultiplayer.session_entered],
-## which is the event the player was actually waiting for.
-## [codeblock]
-## create_peer ──> completed(peer, error, detail)
-##                     ┠╴ error  ──> banner, and the offer is declined
-##                     ┖╴ ok     ──> prepare_join, then assign
-##                                       ──> session_entered
-## [/codeblock]
-## Cancelling withdraws only what this browser owns: the ticket it minted, and
-## the peer it assigned while that peer is still the installed one. Once the
-## session is entered the setup is over, so closing or freeing the browser
-## cannot end a match, and neither can a peer the game assigned meanwhile be
-## cleared by a browser the player merely dismissed.
-## [br][br]
-## Bookmarks are the browser's own, not the session's. What it saved to
-## [member server_list_path] it offers back to the session on ready, and only
-## those rows can be edited or removed here. Every other row the session
-## holds is drawn live and left alone, so two browsers over one session keep
-## two separate files.
+## Host and Join create a peer with [method NetwConnectHandle.create_peer],
+## call [method Netw.prepare_join] with the form's values, and assign the
+## peer. Closing the browser after that does not disconnect.
+##
+## Saved servers are stored in [member server_list_path]. Only those can be
+## edited or removed here.
 class_name ConnectBrowser
 extends Control
 
@@ -76,29 +51,26 @@ const _ROW_MENU_JOIN := Menu.ID_JOIN
 const _ROW_MENU_EDIT := Menu.ID_EDIT
 const _ROW_MENU_REMOVE := Menu.ID_REMOVE
 
-## Default server name used when none is provided.
+## The server name used when the player enters none.
 const PLACEHOLDER_SERVER_NAME := "My Server"
 
-## Bookmark file used when [member server_list_path] is empty.
+## The saved server file used when [member server_list_path] is empty.
 const DEFAULT_SERVER_LIST_PATH := "user://netw_servers.cfg"
 
-## When [code]true[/code], hides this browser once the session comes
-## online and shows it again once the session ends.
+## Hides the browser while connected.
 @export var hide_when_session_active: bool = true
 
-## [ConfigFile] path this browser reads its own bookmarks from and writes
-## them back to.
+## The [ConfigFile] path where saved servers are stored.
 @export var server_list_path: String = ""
 
-## Game-authored defaults for forms and discovery, consumed when binding.
+## Default form values for each transport.
 @export var transport_defaults: Array[ConnectTransportConfig] = []
 
-## When [code]true[/code] on a web export, mirrors the hosted room code into
-## the page URL's fragment and joins the room a fragment already names.
+## On the web, puts the hosted room code in the page URL after [code]#[/code],
+## and joins the room such a URL names.
 @export var use_url_fragment: bool = true
 
-## Latency and loss to impair every connection this browser starts with, for
-## testing a build against a link the developer's own machine does not have.
+## Simulated latency and packet loss for connections made from this browser.
 @export var debug_link: NetwLinkConditions
 
 var _add_popup: AddPopup
@@ -871,10 +843,7 @@ func _write_url_fragment(room: String) -> void:
 		history.replaceState(null, "", url.href)
 
 
-## The room code the page URL names, empty when it names none.
-##
-## A link a host shared carries the code as its fragment, so a player opening
-## it arrives with the room already chosen and the join form filled in.
+## The room code after [code]#[/code] in the page URL, or empty.
 func url_room() -> String:
 	if not use_url_fragment or not OS.has_feature("web"):
 		return ""
@@ -1045,8 +1014,8 @@ func _on_details_join_pressed() -> void:
 	_open_join_for_selected()
 
 
-## Human-readable label for a [param peer_class], such as
-## [code]&"ENetMultiplayerPeer"[/code] -> "ENet". "-" when empty.
+## A short name for [param peer_class], such as [code]"ENet"[/code] for
+## [code]&"ENetMultiplayerPeer"[/code], or [code]"-"[/code] when empty.
 static func format_peer_class_label(peer_class: StringName) -> String:
 	var text := String(peer_class)
 	if text.is_empty():
@@ -1054,8 +1023,8 @@ static func format_peer_class_label(peer_class: StringName) -> String:
 	return text.trim_suffix("MultiplayerPeer")
 
 
-## Displayable address for an [param endpoint] snapshot. Either its
-## explicit address or "-" when it relies on a transport's own local default.
+## The address of [param endpoint] to display, or [code]"-"[/code] when it
+## has none.
 static func format_address(endpoint: Dictionary) -> String:
 	if endpoint.is_empty():
 		return "-"
@@ -1063,11 +1032,8 @@ static func format_address(endpoint: Dictionary) -> String:
 	return address if not address.is_empty() else "-"
 
 
-## Builds a [Control] typed by [param value]'s [Variant] type, seeded with
-## [param value]. [param field_name] selects a dedicated editor when a setting
-## has more structure than its type describes. Shared by the Host settings
-## form and any generic Join form drawn from
-## [method NetwConnectHandle.join_schema].
+## Creates a form field for the type of [param value], filled with it. Some
+## [param field_name] values get a special editor.
 static func make_value_control(
 		value: Variant,
 		field_name: StringName = &"",
@@ -1109,7 +1075,7 @@ static func make_value_control(
 			return edit
 
 
-## Reads back [param control]'s value, cast to [param value_type].
+## Returns the value of [param control] as [param value_type].
 static func value_from_control(control: Control, value_type: int) -> Variant:
 	match value_type:
 		TYPE_BOOL:
@@ -1144,8 +1110,7 @@ static func value_from_control(control: Control, value_type: int) -> Variant:
 			return (control as LineEdit).text
 
 
-## Whether a settings entry seeded with [param value] can be drawn as a field
-## and read back from it.
+## Returns [code]true[/code] when [param value] can be edited in a form field.
 static func can_author_value(value: Variant) -> bool:
 	match typeof(value):
 		TYPE_NIL, TYPE_OBJECT, TYPE_CALLABLE, TYPE_SIGNAL, TYPE_RID:
@@ -1154,9 +1119,8 @@ static func can_author_value(value: Variant) -> bool:
 			return true
 
 
-## The empty value of [param value_type], used to seed a [method
-## make_value_control] call when no default is known, as
-## [method NetwConnectHandle.join_schema] entries never carry one.
+## The empty value of [param value_type], such as [code]0[/code] or
+## [code]""[/code].
 static func zero_value(value_type: int) -> Variant:
 	match value_type:
 		TYPE_BOOL:

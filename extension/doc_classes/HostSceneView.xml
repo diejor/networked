@@ -1,14 +1,13 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <class name="HostSceneView" inherits="ParticipantView" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
 	<brief_description>
-		Draws a listen-server host's scene.
+		Displays the scene of the host's own player.
 	</brief_description>
 	<description>
-		Only a scene declaring [constant NetwMultiplayer.SCENE_ISOLATION_OWN_WORLD] is hosted in an offscreen [SubViewport], so this view exists only for one.
-		On scene changes [signal NetwEntity.view_activated] fires.
+		A host creates one by itself when its player's scene uses [constant NetwMultiplayer.SCENE_ISOLATION_OWN_WORLD], since that scene is in a [SubViewport]. [signal NetwEntity.view_activated] is emitted when the displayed scene changes.
 		[codeblock]
 		func _ready() -&gt; void:
-		    var entity := Netw.entity(self)
+		    var entity := NetwEntity.of(self)
 		    entity.view_activated.connect(_on_view_activated)
 
 		func _on_view_activated() -&gt; void:
@@ -19,7 +18,7 @@
 	</tutorials>
 	<members>
 		<member name="suppressed" type="bool" setter="set_suppressed" getter="get_suppressed" default="false">
-			Whether this view stands down. A suppressed view hides itself, drops its target and stops forwarding input.
+			When [code]true[/code], the view hides, stops displaying and stops passing input.
 		</member>
 	</members>
 </class>

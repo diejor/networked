@@ -26,7 +26,6 @@ using namespace netw_test;
 using netw::NetwEntity;
 using netw::NetwInterestLayer;
 using netw::NetwMultiplayer;
-using netw::interest::Decl;
 
 constexpr const char *MOVING_BODY = netw_test::gdsrc::STATE_AND_INPUT;
 
@@ -286,7 +285,7 @@ struct Watching {
         );
         gate = rig.server()->interest_layer(StringName(GATE_LAYER));
         REQUIRE(gate.is_valid());
-        gate->set_default_leave_policy(Decl::LEAVE_HIDE);
+        gate->set_default_leave_policy(NetwMultiplayer::LEAVE_POLICY_HIDE);
         gate->add_entity(NetwEntity::of(rig.route_node(route)));
         watcher = rig.peer_id(0);
         show();

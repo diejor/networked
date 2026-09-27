@@ -24,13 +24,13 @@ namespace Networked;
 /// <see cref="NetwTableHandle.Received"/> once and keep the handle in a field.
 /// </para>
 /// <para>
-/// A route is a session-stable row identity, a row index would be unstable
-/// because tables can add and remove rows.
+/// Each row is identified by a route. Row indices change when rows are added or
+/// removed, and routes do not.
 /// </para>
 /// <para>
-/// <b>Writing</b> Every column the schema declares crosses the wire in waves.
-/// <see cref="NetwTableHandle.Commit"/> stamps the wave with the session's
-/// tick.
+/// <b>Writing</b> Write the routes and every column, then call
+/// <see cref="NetwTableHandle.Commit"/> to apply them with the current tick and
+/// send them.
 /// <code>
 /// func _on_tick() -&gt; void:
 ///     mobs.write_routes(routes)
@@ -55,7 +55,7 @@ namespace Networked;
 /// </para>
 /// <para>
 /// <see cref="NetwTableHandle.ReadBirths"/> and
-/// <see cref="NetwTableHandle.ReadDeaths"/> name the routes the latest wave
+/// <see cref="NetwTableHandle.ReadDeaths"/> name the routes the latest commit
 /// added and removed, which is useful to keep one node per row. <b>Saving</b>
 /// <see cref="NetwTableHandle.Save"/> stores the committed rows in a
 /// <see cref="NetwDatabase"/> under a key, and
@@ -158,8 +158,7 @@ public sealed class NetwTableHandle : NetwRefCounted
         NetwApi.MethodBind("NetwTableHandle", "get_tick", 3905245786UL);
 
     /// <summary>
-    /// The tick carried by the latest committed wave, or <c>-1</c> before the
-    /// first commit.
+    /// The tick of the latest commit, or <c>-1</c> before the first commit.
     /// </summary>
     public long Tick
     {
@@ -285,14 +284,15 @@ public sealed class NetwTableHandle : NetwRefCounted
         NetwApi.MethodBind("NetwTableHandle", "commit", 166280745UL);
 
     /// <summary>
-    /// Applies the staged routes and columns, stamped with the session's tick.
+    /// Applies the written routes and columns with the current tick, and sends
+    /// them from the server.
     /// <code>
     /// Error
-    /// ┠╴OK                  the wave was applied
+    /// ┠╴OK                  the rows were applied
     /// ┠╴ERR_DOES_NOT_EXIST  the session this handle names is gone
-    /// ┖╴ERR_INVALID_DATA    the schema is open, a route was never written, a column was
-    ///                      not written this wave, or a column's element count disagrees
-    ///                      with the row ID count times its declared stride
+    /// ┖╴ERR_INVALID_DATA    the schema is open, the routes or a column were not written
+    ///                       since the last commit, or a column's size
+    ///                       is not the row count times its stride
     /// </code>
     /// </summary>
     public Error Commit()
@@ -340,7 +340,7 @@ public sealed class NetwTableHandle : NetwRefCounted
         NetwApi.MethodBind("NetwTableHandle", "read_births", 235988956UL);
 
     /// <summary>
-    /// The routes added by the latest admitted wave. See
+    /// The routes added by the latest update. See
     /// <see cref="NetwTableHandle.ReadRoutes"/> for the order of elements.
     /// </summary>
     public long[] ReadBirths()
@@ -357,7 +357,7 @@ public sealed class NetwTableHandle : NetwRefCounted
         NetwApi.MethodBind("NetwTableHandle", "read_deaths", 235988956UL);
 
     /// <summary>
-    /// The routes removed by the latest admitted wave.
+    /// The routes removed by the latest update.
     /// </summary>
     public long[] ReadDeaths()
     {
@@ -412,7 +412,7 @@ public sealed class NetwTableHandle : NetwRefCounted
 
     /// <summary>
     /// Stores the committed rows under <paramref name="key"/> in
-    /// <paramref name="database"/>, and settles with an
+    /// <paramref name="database"/>. The promise gives an
     /// <c>@GlobalScope.Error</c>. <paramref name="ids"/> names each row in the
     /// order of <see cref="NetwTableHandle.ReadRoutes"/>. Values are saved at
     /// full precision, ignoring the column's quantizer.
@@ -426,9 +426,9 @@ public sealed class NetwTableHandle : NetwRefCounted
     /// ┠╴ERR_DOES_NOT_EXIST     the table and the database belong to different sessions,
     /// │                        or the table's schema is not sealed
     /// ┠╴ERR_UNCONFIGURED       the database is not open
-    /// ┠╴ERR_BUSY               the database already holds 4096 unsettled operations
+    /// ┠╴ERR_BUSY               the database already holds 4096 pending operations
     /// ┠╴ERR_UNAVAILABLE        the connection implements no _write_batch, or the
-    /// │                        database closed before the snapshot settled
+    /// │                        database closed before the write finished
     /// ┖╴backend-defined        the backend refused or could not complete the write
     /// </code>
     /// <para>
@@ -466,7 +466,7 @@ public sealed class NetwTableHandle : NetwRefCounted
 
     /// <summary>
     /// Replaces every row of the table with the rows saved under
-    /// <paramref name="key"/> in <paramref name="database"/>, and settles with
+    /// <paramref name="key"/> in <paramref name="database"/>. The promise gives
     /// a <see cref="Godot.Collections.Dictionary"/>. Each loaded row gets a new
     /// route. On any error the table is left unchanged.
     /// <code>

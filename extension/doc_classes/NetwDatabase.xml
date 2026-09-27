@@ -32,7 +32,7 @@
 		<method name="close">
 			<return type="NetwPromise" />
 			<description>
-				Stops accepting new operations, waits for the pending ones to settle, and settles with a [enum @GlobalScope.Error].
+				Stops accepting new operations and waits for the pending ones to finish. The promise gives an [enum @GlobalScope.Error].
 				[codeblock lang=text]
 				Error
 				┠╴OK               the database is closed
@@ -44,7 +44,7 @@
 			<return type="NetwPromise" />
 			<param index="0" name="slot" type="StringName" />
 			<description>
-				Removes [param slot] and everything stored in it, then settles with a [enum @GlobalScope.Error]. The slot must not be open.
+				Removes [param slot] and everything stored in it. The slot must not be open. The promise gives an [enum @GlobalScope.Error].
 				[codeblock lang=text]
 				Error
 				┠╴OK                the backend removed the slot
@@ -62,18 +62,18 @@
 			<param index="0" name="schema" type="NetwSchema" />
 			<param index="1" name="id" type="StringName" />
 			<description>
-				Removes the record at [param id] and settles with a [enum @GlobalScope.Error].
+				Removes the record at [param id]. The promise gives an [enum @GlobalScope.Error].
 				[codeblock lang=text]
 				Error
 				┠╴OK                  the backend acknowledged the erase
 				┠╴ERR_UNCONFIGURED    the database is not open
-				┠╴ERR_BUSY            the database already holds 4096 unsettled operations
+				┠╴ERR_BUSY            the database already holds 4096 pending operations
 				┠╴ERR_DOES_NOT_EXIST  the schema is not sealed
 				┠╴ERR_INVALID_PARAMETER
 				│                     id is empty
 				┠╴ERR_INVALID_DATA    the connection answered no outcome for the erase
 				┠╴ERR_UNAVAILABLE     the backend or connection cannot perform the erase, or the
-				│                     database closed before it settled
+				│                     database closed before it finished
 				┖╴backend-defined     the backend rejected or could not complete the erase
 				[/codeblock]
 			</description>
@@ -81,10 +81,10 @@
 		<method name="flush">
 			<return type="NetwPromise" />
 			<description>
-				Settles with an [enum @GlobalScope.Error] once every operation started before this call has settled.
+				Waits for every operation started before this call to finish. The promise gives an [enum @GlobalScope.Error].
 				[codeblock lang=text]
 				Error
-				┠╴OK               every earlier operation settled, whatever each one settled with
+				┠╴OK               every earlier operation finished, whatever its result
 				┖╴ERR_UNAVAILABLE  the session ended first, or this handle outlived it
 				[/codeblock]
 			</description>
@@ -92,16 +92,15 @@
 		<method name="list_slots">
 			<return type="NetwPromise" />
 			<description>
-				Lists every slot the [NetwDatabaseBackend] holds, and settles with a [Dictionary]. Works before [method open].
+				Lists every slot the [NetwDatabaseBackend] holds. Works before [method open]. The promise gives a [Dictionary].
 				[codeblock lang=text]
 				Dictionary
-				┠╴error    Error         		@GlobalScope.Error. Check it before reading slots
-				│ ┠╴OK                   		listing succeeded
-				│ ┠╴ERR_UNAVAILABLE      		the backend does not implement slot listing
-				│ ┖╴backend-defined      		the backend could not read its storage
-				┠╴detail   String        		empty when error is OK, otherwise a human-readable
-				│                            		explanation from the backend
-				┖╴slots    PackedStringArray  	every slot the backend holds when error is OK
+				┠╴error    Error              check it before reading slots
+				│ ┠╴OK                      listing succeeded
+				│ ┠╴ERR_UNAVAILABLE         the backend does not implement slot listing
+				│ ┖╴backend-defined         the backend could not read its storage
+				┠╴detail   String             what went wrong, for a person to read. Empty when error is OK
+				┖╴slots    PackedStringArray  every slot the backend holds when error is OK
 				[/codeblock]
 			</description>
 		</method>
@@ -109,8 +108,7 @@
 			<return type="NetwPromise" />
 			<param index="0" name="slot" type="StringName" />
 			<description>
-				Opens [param slot] and settles with an [enum @GlobalScope.Error].
-				To switch slots, [method close] the open one first.
+				Opens [param slot]. To switch slots, [method close] the open one first. The promise gives an [enum @GlobalScope.Error].
 				[codeblock lang=text]
 				Error
 				┠╴OK                slot is open, or was open already
@@ -130,13 +128,13 @@
 			<param index="1" name="id" type="StringName" />
 			<param index="2" name="values" type="Dictionary" />
 			<description>
-				Replaces the columns [param values] names in the existing record at [param id], keeps the rest, and settles with an [enum @GlobalScope.Error]. [param values] may hold any subset of the columns in [param schema].
+				Replaces the columns [param values] names in the existing record at [param id] and keeps the rest. [param values] may hold any subset of the columns in [param schema]. The promise gives an [enum @GlobalScope.Error].
 				[codeblock lang=text]
 				Error
 				┠╴OK                  the backend acknowledged the merged record, or values is empty
 				┠╴ERR_UNCONFIGURED    the database is not open, or the schema declares no
 				│                     migration from the stored record's storage version
-				┠╴ERR_BUSY            the database already holds 4096 unsettled operations
+				┠╴ERR_BUSY            the database already holds 4096 pending operations
 				┠╴ERR_DOES_NOT_EXIST  the schema is not sealed, or no record is stored at id
 				┠╴ERR_INVALID_PARAMETER
 				│                     id is empty
@@ -146,7 +144,7 @@
 				│                     the stored record is not in this library's format, or
 				│                     carries a newer storage version than the schema
 				┠╴ERR_UNAVAILABLE     the backend or connection cannot perform the patch, or the
-				│                     database closed before it settled
+				│                     database closed before it finished
 				┖╴backend-defined     the backend could not read or write the record
 				[/codeblock]
 			</description>
@@ -156,7 +154,7 @@
 			<param index="0" name="schema" type="NetwSchema" />
 			<param index="1" name="id" type="StringName" />
 			<description>
-				Reads the record at [param id] and settles with a [Dictionary]. A record that was never saved settles with [code]found[/code] [code]false[/code] and [code]error[/code] [constant @GlobalScope.OK].
+				Reads the record at [param id]. The promise gives a [Dictionary]. A record that was never saved gives [code]found[/code] [code]false[/code] and [code]error[/code] [constant @GlobalScope.OK].
 				[codeblock lang=text]
 				Dictionary
 				┠╴error    Error       @GlobalScope.Error. Check it before reading anything else
@@ -164,7 +162,7 @@
 				┠╴found    bool        whether a record was stored under id. False on any failure
 				┠╴id       StringName  the record id the read asked for
 				┖╴values   Dictionary  the stored row, keyed by column name, complete against the
-				                    	schema that read it. Empty unless found is true
+				                       schema that read it. Empty unless found is true
 				[/codeblock]
 				[codeblock]
 				var read: Dictionary = await db.read(PlayerSave.schema, account_id).wait()
@@ -183,7 +181,7 @@
 			<param index="2" name="cursor" type="String" default="&quot;&quot;" />
 			<param index="3" name="limit" type="int" default="100" />
 			<description>
-				Reads one page of up to [param limit] records matching [param filter], and settles with a [Dictionary]. Pass the returned [code]cursor[/code] back as [param cursor] to read the next page. The scan is done when [code]cursor[/code] is empty.
+				Reads one page of up to [param limit] records matching [param filter]. The promise gives a [Dictionary]. Pass the returned [code]cursor[/code] back as [param cursor] to read the next page. The scan is done when [code]cursor[/code] is empty.
 				[codeblock lang=text]
 				Dictionary
 				┠╴error    Error             @GlobalScope.Error. Check it before reading records
@@ -204,10 +202,10 @@
 				[codeblock lang=text]
 				Error
 				┠╴ERR_UNCONFIGURED       the database is not open
-				┠╴ERR_BUSY               the database already holds 4096 unsettled operations
+				┠╴ERR_BUSY               the database already holds 4096 pending operations
 				┠╴ERR_DOES_NOT_EXIST     the schema is not sealed
 				┠╴ERR_INVALID_PARAMETER  limit is below 1
-				┖╴ERR_UNAVAILABLE        the database closed before the page settled
+				┖╴ERR_UNAVAILABLE        the database closed before the page was read
 				[/codeblock]
 				[codeblock]
 				var cursor := ""
@@ -217,7 +215,7 @@
 				        show_load_error(page.error)
 				        return
 				    for read in page.records:
-				        roster.append(read.values)
+				        saves.append(read.values)
 				    if page.cursor.is_empty():
 				        break
 				    cursor = page.cursor
@@ -230,7 +228,7 @@
 			<param index="1" name="id" type="StringName" />
 			<param index="2" name="values" type="Dictionary" />
 			<description>
-				Replaces the whole record at [param id] and settles with an [enum @GlobalScope.Error]. [param values] must hold every column [param schema] declares and nothing else.
+				Replaces the whole record at [param id]. [param values] must hold every column [param schema] declares and nothing else. The promise gives an [enum @GlobalScope.Error].
 				[codeblock lang=text]
 				Error
 				┠╴OK                  the backend acknowledged the write
@@ -261,7 +259,7 @@
 		<member name="slot" type="StringName" setter="" getter="get_slot">
 			The open slot, or empty when this database is not open.
 		</member>
-		<member name="state" type="int" setter="" getter="get_state">
+		<member name="state" type="int" setter="" getter="get_state" enum="NetwMultiplayer.DatabaseState">
 			The state of the connection to the [NetwDatabaseBackend].
 		</member>
 	</members>

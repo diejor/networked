@@ -1,5 +1,5 @@
 # Bomber Example
 
 This example is a modified version of Godot's
-[`multiplayer_bomber`][godot-bomber] demo. It keeps the familiar bomber game
-loop, but replaces the original networking with the `networked` addon.
+[`multiplayer_bomber`](https://github.com/godotengine/godot-demo-projects/tree/master/networking/multiplayer_bomber)
+demo, with its networking replaced by the `networked` addon.

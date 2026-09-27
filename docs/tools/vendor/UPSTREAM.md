@@ -1,25 +1,14 @@
 # Vendored upstream files
 
-This directory contains pristine copies of files from the Godot engine
-repository. They are **never** edited in place. Modifications live in
-`../patches/` and are applied by `../build_make_rst.py`.
+`make_rst.py` here is an unmodified copy of Godot's
+[`doc/tools/make_rst.py`](https://raw.githubusercontent.com/godotengine/godot/refs/heads/4.6/doc/tools/make_rst.py)
+from the `4.6` branch, taken on 2026-05-15. Changes go in `../patches/`.
 
-## Source
-
-- **File:** `make_rst.py`
-- **Origin:** <https://raw.githubusercontent.com/godotengine/godot/refs/heads/4.6/doc/tools/make_rst.py>
-- **Branch:** `4.6`
-- **Pinned at:** branch tip on 2026-05-15
-
-## Refreshing the vendor copy
+To update it, download the new copy and rebuild. If a patch no longer
+applies, fix it as described in `../patches/README.md`.
 
 ```sh
 curl -sSL https://raw.githubusercontent.com/godotengine/godot/refs/heads/4.6/doc/tools/make_rst.py \
-  -o tools/vendor/make_rst.py
-
-python tools/build_make_rst.py            # re-apply patches; fix rejects if any
+  -o docs/tools/vendor/make_rst.py
+python3 docs/tools/build_make_rst.py
 ```
-
-If the upstream file moved on and patches no longer apply cleanly, edit the
-patch in `../patches/` (or rerun `tools/regen_patches.py` if you prefer to
-edit the working `tools/make_rst.py` and regenerate).

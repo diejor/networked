@@ -527,7 +527,7 @@ Ref<NetwPropertySetColumn> pose_column() {
         StringName("position"),
         Ref<netw::NetwQuantize>(),
         false,
-        int64_t(netw::SchemaCore::VARIANT)
+        NetwMultiplayer::ColumnType(netw::SchemaCore::VARIANT)
     );
 }
 
@@ -606,7 +606,7 @@ Ref<NetwPropertySet> pose_and_momentum() {
             StringName("position"),
             Ref<netw::NetwQuantize>(),
             false,
-            int64_t(netw::SchemaCore::VARIANT)
+            NetwMultiplayer::ColumnType(netw::SchemaCore::VARIANT)
         )
     );
     set->bind_column(
@@ -614,7 +614,7 @@ Ref<NetwPropertySet> pose_and_momentum() {
             StringName("velocity"),
             Ref<netw::NetwQuantize>(),
             false,
-            int64_t(netw::SchemaCore::VARIANT)
+            NetwMultiplayer::ColumnType(netw::SchemaCore::VARIANT)
         )
     );
     return set;
@@ -1626,7 +1626,7 @@ Ref<NetwPropertySet> recovering_state() {
                 StringName(name),
                 Ref<netw::NetwQuantize>(),
                 false,
-                int64_t(netw::SchemaCore::VARIANT)
+                NetwMultiplayer::ColumnType(netw::SchemaCore::VARIANT)
             )
         );
     }

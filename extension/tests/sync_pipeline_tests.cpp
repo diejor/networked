@@ -23,7 +23,7 @@ Ref<NetwPropertySet> one_column(const StringName &p_key, int64_t p_record) {
         p_key,
         Ref<netw::NetwQuantize>(),
         false,
-        int64_t(Variant::NIL)
+        NetwMultiplayer::ColumnType(Variant::NIL)
     );
     TypedArray<NetwPropertySetColumn> columns;
     columns.push_back(column);
@@ -201,7 +201,7 @@ TEST_CASE(
         StringName("nowhere"),
         Ref<netw::NetwQuantize>(),
         false,
-        int64_t(Variant::NIL)
+        NetwMultiplayer::ColumnType(Variant::NIL)
     );
     TypedArray<NetwPropertySetColumn> columns = set->get_columns();
     columns.push_back(ghost);

@@ -1,4 +1,3 @@
-## Pure logic tests for the Discord Activity layer.
 class_name TestDiscordActivity
 extends NetwTestSuite
 
@@ -128,8 +127,6 @@ func _bound_nakama_auth(
 	var wrapper := _FakeNakamaWrapper.new()
 	auto_free(tree)
 	auto_free(dir)
-	# Mounted, because a door reached through Netw.* resolves a session by
-	# SceneTree path and an unmounted tree installs its api on none.
 	add_child(tree)
 	tree.add_child(dir)
 	Netw.service_register(tree, dir)

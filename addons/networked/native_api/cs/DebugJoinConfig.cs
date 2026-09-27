@@ -6,8 +6,8 @@ using Godot.NativeInterop;
 namespace Networked;
 
 /// <summary>
-/// Used by <see cref="MultiplayerTree"/> in debug builds to auto connect a peer
-/// with a given name and join intent.
+/// Joins automatically in debug builds, set as
+/// <see cref="MultiplayerTree.DebugJoin"/>.
 /// </summary>
 public sealed class DebugJoinConfig : NetwRefCounted
 {
@@ -32,9 +32,8 @@ public sealed class DebugJoinConfig : NetwRefCounted
         NetwApi.MethodBind("DebugJoinConfig", "set_username", 3304788590UL);
 
     /// <summary>
-    /// Display name for the auto connected player, submitted alongside
-    /// <see cref="DebugJoinConfig.JoinArgs"/>. Changes by process-id to avoid
-    /// collisions when multiple debug builds run on the same machine.
+    /// The username to join with. The process id is added so several instances
+    /// on one machine get different names.
     /// </summary>
     public StringName UserName
     {
@@ -63,7 +62,7 @@ public sealed class DebugJoinConfig : NetwRefCounted
         NetwApi.MethodBind("DebugJoinConfig", "set_join_args", 381264803UL);
 
     /// <summary>
-    /// The typed join args the tree submits alongside
+    /// The arguments passed to <see cref="Netw.PrepareJoin"/> after
     /// <see cref="DebugJoinConfig.UserName"/>.
     /// </summary>
     public Godot.Collections.Array JoinArgs

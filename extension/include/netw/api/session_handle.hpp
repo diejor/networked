@@ -7,6 +7,7 @@
 #include "godot/ref_counted.hpp"
 #include "godot/templates.hpp"
 #include "godot/variant.hpp"
+#include "netw/api/enums.hpp"
 #include "netw/api/promise.hpp"
 
 namespace netw {
@@ -58,7 +59,7 @@ public:
         const godot::Variant &p_type
     ) const;
 
-    int64_t get_role() const;
+    enums::NetwMultiplayer::Role get_role() const;
     bool get_is_online() const;
     bool get_is_local_client() const;
     godot::Node *get_root() const;
@@ -76,7 +77,7 @@ public:
     );
     godot::Ref<NetwPromise> request_scene(
         const godot::String &p_path,
-        int64_t p_scope
+        enums::NetwMultiplayer::SceneChange p_scope
     );
 };
 

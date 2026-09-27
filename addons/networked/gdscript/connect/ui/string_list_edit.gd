@@ -10,16 +10,15 @@ func _ready() -> void:
 	move_child(add_button, get_child_count() - 1)
 
 
-## The hint an empty row shows. A form sets it before the control is mounted,
-## so it is remembered and applied to rows added later.
+## Sets the placeholder text of every row, including rows added later.
 func set_placeholder(text: String) -> void:
 	_placeholder = text
 	for row in _rows:
 		_edit_of(row).placeholder_text = text
 
 
-## Replaces every row with one per entry of [param entries], which may be a
-## [PackedStringArray] or an [Array].
+## Replaces the rows with [param entries], a [PackedStringArray] or an
+## [Array].
 func set_value(entries: Variant) -> void:
 	for row in _rows:
 		row.queue_free()
@@ -29,7 +28,7 @@ func set_value(entries: Variant) -> void:
 			add_entry(str(entry))
 
 
-## The rows as a [PackedStringArray], dropping any left blank.
+## Returns the rows that are not empty.
 func get_value() -> PackedStringArray:
 	var entries := PackedStringArray()
 	for row in _rows:
@@ -61,9 +60,6 @@ func add_entry(text: String = "") -> void:
 		move_child(row, _add_button().get_index())
 
 
-# The button is a child of the instantiated scene before the control mounts,
-# so it is reached by name rather than held in an @onready field that a
-# set_value call arriving first would read as null.
 func _add_button() -> Button:
 	return $AddEntryButton as Button
 

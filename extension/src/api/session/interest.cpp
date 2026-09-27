@@ -1403,13 +1403,15 @@ void NetwMultiplayer::interest_layer_set_param(
     }
     switch (p_param) {
         case LAYER_PARAM_POLICY:
-            record->set_policy(int(p_value));
+            record->set_policy(LayerPolicy(int(p_value)));
             return;
         case LAYER_PARAM_LEAVE_POLICY:
-            record->set_default_leave_policy(int(p_value));
+            record->set_default_leave_policy(LeavePolicy(int(p_value)));
             return;
         case LAYER_PARAM_PERCEPTION_POLICY:
-            record->set_default_perception_policy(int(p_value));
+            record->set_default_perception_policy(
+                PerceptionPolicy(int(p_value))
+            );
             return;
         default:
             NETW_ERR(
@@ -1553,10 +1555,8 @@ Ref<NetwInterestLayer> NetwMultiplayer::interest_layer_view(
     if (scene_owns_layer(layer_name_of(p_layer))) {
         NETW_ERROR(
             sys::INTEREST,
-            "a live scene owns this layer, and a scene's roster is derived "
-            "from the settled tree, so a write through the layer is either "
-            "erased by the next settle or never reconciled at all. Reach the "
-            "scene through Netw.scene(...) instead."
+            "this layer belongs to a multiplayer scene and cannot be changed "
+            "directly. Use Netw.scene(...) instead."
         );
         return Ref<NetwInterestLayer>();
     }

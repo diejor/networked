@@ -30,9 +30,9 @@ session's sync pump ships every change.
     func apply_stun(attacker: Node) -> void:
         play_stun(attacker)
 
-:ref:`Netw <class_Netw>` is the front door. It resolves the session for any
-node, carries the ``configure_*`` declarations, and addresses RPCs by an id
-rather than by node path, so renaming or moving a node never breaks one.
+Start with :ref:`Netw <class_Netw>`. It finds the session of any node and
+holds the ``configure_*`` methods. RPCs are sent by an id, not a node path, so
+renaming or moving a node does not break them.
 
 Beside the engine's nodes
 -------------------------
@@ -103,31 +103,12 @@ an argument, which arrives as the receiver's own copy of it.
 A call naming a node that peer has not spawned yet waits for the spawn, so the
 call and the spawn may cross in either order.
 
-Documentation status
---------------------
-
-**There is currently no hand-written guide.** The previous manual documented
-an earlier architecture built around an authored ``MultiplayerTree`` node, and
-it was deleted rather than repaired, because a guide that argues for a
-superseded design is worse than no guide while it still reads as maintained.
-A replacement is written once the published surface settles.
-
-Until then the :ref:`class reference <toc-class-ref>` is the documentation,
-generated from the same XML the in-editor help serves. Start at
-:ref:`Netw <class_Netw>` and :ref:`NetwMultiplayer <class_NetwMultiplayer>`.
-
 Writing in C#
 -------------
 
 The addon ships generated C# bindings under
 ``addons/networked/native_api/cs/``. Installing the addon is enough, the
 project's ``.csproj`` needs no changes.
-
-.. toctree::
-   :maxdepth: 1
-   :caption: Contributing
-
-   contributing/index
 
 .. toctree::
    :maxdepth: 2

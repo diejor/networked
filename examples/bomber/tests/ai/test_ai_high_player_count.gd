@@ -1,4 +1,3 @@
-# GdUnitGeneratedTestDescriptor
 extends BomberAiSuite
 
 func test_eight_players_mixed_goals_no_crash() -> void:
@@ -24,11 +23,8 @@ func test_eight_players_mixed_goals_no_crash() -> void:
 		ai.goal = goals[i]
 		ais.append(ai)
 
-	# A no-crash smoke needs a representative slice of mixed activity, not forty
-	# game-seconds. Eight game-seconds spans several bomb cycles at any tickrate.
 	await run_until(ais, game.seconds_to_ticks(8.0))
 
-	# Every player node still exists on every peer.
 	for r in runners:
 		for other in runners:
 			var _name := StringName(other.username)
@@ -44,9 +40,6 @@ func test_four_scorers_final_scores_consistent() -> void:
 		ai.goal = BomberAI.Goal.score()
 		ais.append(ai)
 
-	# Exit as soon as a score has landed and every peer agrees, rather than
-	# grinding a fixed budget. The cap is generous game time for the first bomb
-	# cycle to score and replicate; reaching it means the scenario never settled.
 	var scored_and_consistent := func() -> bool:
 		var host_total := 0
 		for r in runners:
@@ -66,14 +59,12 @@ func test_four_scorers_final_scores_consistent() -> void:
 	)
 	assert_int(settled).is_less(game.seconds_to_ticks(20.0))
 
-	# Every peer agrees on every player's score.
 	for r in runners:
 		for other in runners:
 			var s0 := get_score(game.host, other.peer_id)
 			var s_r := get_score(r, other.peer_id)
 			assert_int(s_r).is_equal(s0)
 
-	# At least one player scored.
 	var total := 0
 	for r in runners:
 		total += get_score(game.host, r.peer_id)

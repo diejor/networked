@@ -1,15 +1,3 @@
-## [NetwEmbeddingWorld] over a root-installed session, the shipping topology.
-##
-## The host is the [SceneTree]'s own default session with no
-## owning [MultiplayerTree], brought online by preparing its local player and
-## assigning a loopback server peer, the ordinary path. Clients are subpath
-## [MultiplayerTree]s that prepare and assign a loopback client peer, joining
-## across the mount boundary over the shared [LocalLoopbackSession] bus, the
-## in-process shipping-host mode the analysis names (§4.2-1). The root host is not
-## a node, so [method pump_until] pumps it by hand while [method SceneTree.process_frame]
-## pumps the client trees. The root override is captured and restored in
-## [method dispose] so it never leaks into the next case, the
-## [TestRootOverrideInstall] discipline.
 class_name NetwRootWorld
 extends NetwEmbeddingWorld
 
@@ -117,7 +105,6 @@ func dispose() -> void:
 	tree.set_multiplayer(_original)
 
 
-# Queues root-anchored content created by this provider.
 func _queue_added_root_children(root: Window) -> void:
 	for child: Node in root.get_children():
 		if not _initial_root_children.has(child.get_instance_id()):

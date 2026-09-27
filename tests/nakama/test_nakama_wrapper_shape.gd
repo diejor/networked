@@ -1,8 +1,3 @@
-## Shape tests for [NakamaWrapper] against the installed Nakama addon.
-##
-## These pin the optional addon API that [NakamaWrapper] and
-## [NakamaLobbyDirectory] call. The suite is skipped when the addon is absent,
-## so the project still parses on builds without Nakama.
 class_name TestNakamaWrapperShape
 extends NetwTestSuite
 

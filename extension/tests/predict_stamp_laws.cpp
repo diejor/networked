@@ -1385,14 +1385,14 @@ TEST_CASE(
             StringName("steer"),
             Ref<netw::NetwQuantize>(),
             false,
-            int64_t(godot::Variant::FLOAT)
+            netw::enums::NetwMultiplayer::ColumnType(godot::Variant::FLOAT)
         );
     const Ref<netw::NetwPropertySetColumn> retained_field
         = netw::NetwPropertySetColumn::create(
             StringName("name"),
             Ref<netw::NetwQuantize>(),
             false,
-            int64_t(godot::Variant::STRING)
+            netw::enums::NetwMultiplayer::ColumnType(godot::Variant::STRING)
         );
     retained_field->set_lane(int64_t(netw::NetwPropertySet::RETAINED));
     declared->columns.push_back(volatile_field);

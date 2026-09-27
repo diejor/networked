@@ -76,7 +76,7 @@ public sealed class NetwPropertyConfig : NetwMemberConfig
     }
 
     /// <summary>
-    /// The value of a set-wide setting nothing has written yet.
+    /// A setting no call has written yet.
     /// </summary>
     public const long Unset = -1;
 
@@ -452,30 +452,30 @@ public sealed class NetwPropertyConfig : NetwMemberConfig
         NetwApi.MethodBind(
             "NetwPropertyConfig",
             "get_set_trigger",
-            3905245786UL);
+            1412047978UL);
 
     private static readonly IntPtr _bindSetSetTrigger =
         NetwApi.MethodBind(
             "NetwPropertyConfig",
             "set_set_trigger",
-            1286410249UL);
+            986570375UL);
 
     /// <summary>
     /// Set by <see cref="NetwPropertyConfig.EveryTick"/> and
     /// <see cref="NetwPropertyConfig.OnChange"/>, or
     /// <see cref="NetwPropertyConfig.Unset"/>.
     /// </summary>
-    public long SetTrigger
+    public NetwPropertySet.TriggerEnum SetTrigger
     {
         get
         {
             long answered = default;
             NetwThunks.Ptrcall0_Long(_bindGetSetTrigger, Checked, ref answered);
-            return answered;
+            return (NetwPropertySet.TriggerEnum)answered;
         }
         set
         {
-            long slot0 = value;
+            long slot0 = (long)value;
             long discarded = default;
             NetwThunks.Ptrcall1_Long_Long(
                 _bindSetSetTrigger,
@@ -1145,8 +1145,8 @@ public sealed class NetwPropertyConfig : NetwMemberConfig
         NetwApi.MethodBind("NetwPropertyConfig", "every_tick", 2969492179UL);
 
     /// <summary>
-    /// Sends the set every tick even when nothing changed, at most once per
-    /// <paramref name="interval"/> seconds.
+    /// Sends properties of this kind every tick even when nothing changed, at
+    /// most once per <paramref name="interval"/> seconds.
     /// <code>
     /// # position changes every tick anyway
     /// Netw.configure_property(self, &amp;"position").state().every_tick()
@@ -1168,7 +1168,8 @@ public sealed class NetwPropertyConfig : NetwMemberConfig
         NetwApi.MethodBind("NetwPropertyConfig", "on_change", 1162647290UL);
 
     /// <summary>
-    /// Sends the set only when a property changed. This is the default.
+    /// Sends properties of this kind only when one changed. This is the
+    /// default.
     /// </summary>
     public NetwPropertyConfig OnChange()
     {
@@ -1181,9 +1182,9 @@ public sealed class NetwPropertyConfig : NetwMemberConfig
         NetwApi.MethodBind("NetwPropertyConfig", "heartbeat", 1358280359UL);
 
     /// <summary>
-    /// Re-sends the set every <paramref name="ticks"/> ticks even when nothing
-    /// changed, so a peer that missed a change catches up. An
-    /// <see cref="NetwPropertyConfig.Input"/> set ignores it.
+    /// Re-sends properties of this kind every <paramref name="ticks"/> ticks
+    /// even when nothing changed, so a peer that missed a change catches up.
+    /// <see cref="NetwPropertyConfig.Input"/> properties ignore it.
     /// <code>
     /// # a lost "stunned" change heals within a second at 60 ticks
     /// Netw.configure_property(self, &amp;"stunned").state().heartbeat(60)
@@ -1228,7 +1229,7 @@ public sealed class NetwPropertyConfig : NetwMemberConfig
         NetwApi.MethodBind("NetwPropertyConfig", "audience", 231730980UL);
 
     /// <summary>
-    /// Sends the set to the server only, or to every peer when
+    /// Sends properties of this kind to the server only, or to every peer when
     /// <paramref name="serverOnly"/> is <c>false</c>. Sets
     /// <see cref="NetwPropertySet.Audience"/>.
     /// <see cref="NetwPropertyConfig.Input"/> already sends to the server only.

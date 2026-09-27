@@ -108,17 +108,17 @@ void NetwClockHandle::set_display_offset(int64_t p_ticks) {
     api->clock_set_param(NetwMultiplayer::CLOCK_PARAM_DISPLAY_OFFSET, p_ticks);
 }
 
-int64_t NetwClockHandle::get_sync_mode() const {
+NetwMultiplayer::SyncMode NetwClockHandle::get_sync_mode() const {
     NetwMultiplayer *api = session();
     if (api == nullptr) {
         return NetwMultiplayer::SYNC_MODE_STRETCH;
     }
-    return int64_t(
-        api->clock_get_param(NetwMultiplayer::CLOCK_PARAM_SYNC_MODE)
+    return NetwMultiplayer::SyncMode(
+        int64_t(api->clock_get_param(NetwMultiplayer::CLOCK_PARAM_SYNC_MODE))
     );
 }
 
-void NetwClockHandle::set_sync_mode(int64_t p_mode) {
+void NetwClockHandle::set_sync_mode(NetwMultiplayer::SyncMode p_mode) {
     NetwMultiplayer *api = session();
     if (api == nullptr) {
         return;
@@ -144,11 +144,9 @@ void NetwClockHandle::set_ping_interval(double p_seconds) {
     api->clock_set_param(NetwMultiplayer::CLOCK_PARAM_PING_INTERVAL, p_seconds);
 }
 
-double NetwClockHandle::monitor(int64_t p_monitor) const {
+double NetwClockHandle::monitor(NetwMultiplayer::ClockMonitor p_monitor) const {
     NetwMultiplayer *api = session();
-    return api != nullptr
-        ? api->clock_get_monitor(NetwMultiplayer::ClockMonitor(p_monitor))
-        : 0.0;
+    return api != nullptr ? api->clock_get_monitor(p_monitor) : 0.0;
 }
 
 void NetwClockHandle::_bind_methods() {

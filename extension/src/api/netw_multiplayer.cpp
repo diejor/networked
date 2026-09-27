@@ -581,9 +581,8 @@ void NetwMultiplayer::membership_place_body(const Ref<NetwEntity> &p_entity) {
     if (membership_destination_foreign(owner)) {
         NETW_ERROR(
             sys::SCENE,
-            "route %d was parented under another session's tree, so this "
-            "session revokes its membership and adopts nothing. Despawn it "
-            "here and spawn it there",
+            "entity %d was moved under another MultiplayerTree, which is not "
+            "supported. Despawn it here and spawn it in the other tree.",
             int(p_entity->get_route())
         );
         scene = RID();
@@ -819,8 +818,7 @@ Error NetwMultiplayer::player_kick(
         !player_holds(p_who),
         ERR_INVALID_PARAMETER,
         sys::SESSION,
-        "session.kick: this player is not the session's current "
-        "membership, so there is nothing to remove."
+        "session.kick: this player already left."
     );
     const int64_t peer = p_who->get_peer_id();
     NETW_ERR_COND_V(
@@ -1286,7 +1284,7 @@ Error NetwMultiplayer::session_admits_join(
     if (!called) {
         NETW_ERROR(
             sys::SESSION,
-            "join: peer %d is refused because this session's admission "
+            "join: peer %d is refused because the Netw.configure_admission "
             "handler could not be called.",
             int(p_peer)
         );
@@ -1296,9 +1294,8 @@ Error NetwMultiplayer::session_admits_join(
     if (answered != Variant::INT && answered != Variant::FLOAT) {
         NETW_ERROR(
             sys::SESSION,
-            "join: peer %d is refused because this session's admission "
-            "handler answered %s rather than an Error. Answer OK to admit "
-            "and an Error to turn the join down.",
+            "join: peer %d is refused because the Netw.configure_admission "
+            "handler returned %s. Return OK to accept, or an Error to refuse.",
             int(p_peer),
             String(Variant::get_type_name(answered))
         );
@@ -1396,11 +1393,9 @@ void NetwMultiplayer::session_run_join_handler(
     if (!called) {
         NETW_ERROR(
             sys::SESSION,
-            "join: peer %d is a member, and this server's join handler "
-            "refused the arguments it carried. The membership stands, because "
-            "a join handler runs after one is minted. Fix the handler's "
-            "declared parameters, and turn a join down from the handler "
-            "Netw.configure_admission declares.",
+            "join: peer %d joined, but its join arguments do not match the "
+            "Netw.configure_join handler's parameters. Fix the parameters. "
+            "To refuse a join, use Netw.configure_admission.",
             int(peer)
         );
     }
@@ -2662,10 +2657,9 @@ void NetwMultiplayer::NETW_API_VIRTUAL(set_multiplayer_peer)(
         NETW_ERR_COND(
             config_readiness(pending) != OK,
             sys::SESSION,
-            "assigning a peer refused: this session's configuration is still "
-            "being authored. Start through Netw.connection(node) after "
-            "declaring configuration, or wait for the deferred configuration "
-            "to settle before assigning a peer directly."
+            "assigning a peer refused: the Netw.configure_* settings are not "
+            "applied yet. Assign the peer after the first frame, or use "
+            "Netw.connection(node)."
         );
         session_apply_auth_config();
     }
@@ -2824,7 +2818,7 @@ StringName NetwMultiplayer::transport_class_of(const RID &p_transport) const {
 
 RID NetwMultiplayer::transport_create_peer(
     const RID &p_transport,
-    int64_t p_mode,
+    TransportMode p_mode,
     const String &p_address,
     const Dictionary &p_settings,
     const Callable &p_completed,
@@ -3853,7 +3847,7 @@ Ref<NetwSessionConfig> NetwMultiplayer::session_get_config() const {
     Ref<NetwSessionConfig> snapshot;
     snapshot.instantiate();
     snapshot->set_app_id(session_settings.app_id);
-    snapshot->set_desired_role(session_settings.desired_role);
+    snapshot->set_desired_role(Role(session_settings.desired_role));
     if (session_settings.link_conditions.is_valid()) {
         Ref<NetwLinkConditions> link;
         link.instantiate();
@@ -4771,7 +4765,7 @@ void NetwMultiplayer::seam_refused(
         misused_seams.insert(p_seam);
         NETW_ERROR(
             sys::EVENT,
-            "seam %s answered with %s, so the default answer stands",
+            "the override of %s returned %s, so the default is used",
             String(p_seam),
             p_reason
         );

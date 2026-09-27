@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <class name="NetwBitStream" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
 	<brief_description>
-		A payload is described once and written, read and measured by the same code.
+		Writes and reads data bit by bit, with the same code.
 	</brief_description>
 	<description>
-		Write descriptions that run once in all three [enum Mode] values. [method writer] spends bits, [method reader] takes them back, and [method measurer] counts what they would cost without storing anything. Write the description as one function over a [NetwBitStream] and call it three times rather than writing an encoder and a decoder that must be kept in step.
+		Write one function that takes a [NetwBitStream]. Call it with a [method writer] to write, a [method reader] to read, or a [method measurer] to count the bits without writing.
 		[codeblock]
 		func describe(s: NetwBitStream, row: Dictionary) -&gt; Dictionary:
 		    row.hp = s.bits(row.get("hp", 0), 12)
@@ -21,9 +21,7 @@
 		if not back.ok() or back.bits_remaining() != 0:
 		    push_error("rejected")
 		[/codeblock]
-		Every verb after the failure is a no-op returning the value it was given. A decoder checks [method ok] once at the end rather than after each call.
-		After decoding a complete payload, [method bits_remaining] must return [code]0[/code]. Reject payloads with unread bits.
-		[method align_verify] pads to the next byte on a write and, on a read, rejects padding that is not zero. A payload always has tp end with [method align_verify].
+		After a read fails, every call does nothing, so check [method ok] once at the end. Reject the data when [method bits_remaining] is not [code]0[/code]. End every payload with [method align_verify].
 	</description>
 	<tutorials>
 	</tutorials>
@@ -31,13 +29,13 @@
 		<method name="align_verify">
 			<return type="bool" />
 			<description>
-				Pads to the next byte boundary when writing, and when reading rejects padding whose bits are not zero. Returns [code]false[/code] on rejection, which poisons the stream.
+				Pads with zeros to the next full byte. When reading, fails if the padding is not zero. Returns [code]false[/code] on failure.
 			</description>
 		</method>
 		<method name="bit_length">
 			<return type="int" />
 			<description>
-				Bits spent so far: written, read, or described, according to [method get_mode].
+				The number of bits written, read or counted so far.
 			</description>
 		</method>
 		<method name="bits">
@@ -45,20 +43,20 @@
 			<param index="0" name="value" type="int" />
 			<param index="1" name="count" type="int" />
 			<description>
-				Spends [param count] raw bits of [param value], at most 64, and returns what was spent. Reading returns the decoded bits; a [param count] outside [code]1[/code] to [code]64[/code] is rejected.
+				Writes the lowest [param count] bits of [param value], from [code]1[/code] to [code]64[/code]. When reading, returns the value read.
 			</description>
 		</method>
 		<method name="bits_remaining">
 			<return type="int" />
 			<description>
-				Bits the reader has not consumed, and [code]0[/code] in any other [enum Mode]. A whole payload ends at [code]0[/code].
+				The number of bits not read yet. Always [code]0[/code] when not reading.
 			</description>
 		</method>
 		<method name="bool1">
 			<return type="bool" />
 			<param index="0" name="value" type="bool" />
 			<description>
-				Spends one bit.
+				Writes or reads one bit.
 			</description>
 		</method>
 		<method name="bytes_capped">
@@ -66,13 +64,13 @@
 			<param index="0" name="value" type="PackedByteArray" />
 			<param index="1" name="cap" type="int" />
 			<description>
-				Spends a length wide enough for [param cap], then the bytes. A contiguous sequence of bytes longer than [param cap] is rejected by the writer, and a declared length above [param cap] is rejected by the reader.
+				Writes or reads a length, then the bytes. Fails when there are more than [param cap] bytes.
 			</description>
 		</method>
 		<method name="get_mode" qualifiers="const">
 			<return type="int" enum="NetwBitStream.Mode" />
 			<description>
-				Which of the three modes this stream was made in. It never changes.
+				Returns whether the stream writes, reads or counts.
 			</description>
 		</method>
 		<method name="int_range">
@@ -81,33 +79,33 @@
 			<param index="1" name="low" type="int" />
 			<param index="2" name="high" type="int" />
 			<description>
-				Spends exactly the bits the span [param low] to [param high] needs. A [param value] outside the span is rejected by the writer and a decoded value outside it is rejected by the reader, so an enum on the wire cannot arrive as a case the game has no branch for.
+				Writes or reads an integer from [param low] to [param high], using only the bits that range needs. Fails for a value outside the range.
 			</description>
 		</method>
 		<method name="measurer" qualifiers="static">
 			<return type="NetwBitStream" />
 			<description>
-				A stream in [constant MEASURE] that stores nothing and counts what a description would cost. This is how a payload is priced before it is built.
+				Returns a stream that only counts bits, in [constant MEASURE].
 			</description>
 		</method>
 		<method name="ok">
 			<return type="bool" />
 			<description>
-				Whether the stream is still healthy. A read that ran past the end, a rejected bound, or padding that was not zero clears this and it never comes back.
+				Returns [code]false[/code] once any call failed.
 			</description>
 		</method>
 		<method name="reader" qualifiers="static">
 			<return type="NetwBitStream" />
 			<param index="0" name="bytes" type="PackedByteArray" />
 			<description>
-				A stream in [constant READ] over [param bytes].
+				Returns a stream that reads [param bytes], in [constant READ].
 			</description>
 		</method>
 		<method name="string">
 			<return type="String" />
 			<param index="0" name="value" type="String" />
 			<description>
-				Spends the utf8 of [param value] as a [method bytes_capped] run of at most 1023 bytes.
+				Writes or reads a string of at most 1023 UTF-8 bytes.
 			</description>
 		</method>
 		<method name="svarint">
@@ -115,13 +113,13 @@
 			<param index="0" name="value" type="int" />
 			<param index="1" name="max_bytes" type="int" default="10" />
 			<description>
-				Spends a signed value as a zigzagged [method varuint], so a small negative number costs one group rather than ten.
+				Like [method varuint], for signed integers. Small negative numbers stay small.
 			</description>
 		</method>
 		<method name="to_bytes" qualifiers="const">
 			<return type="PackedByteArray" />
 			<description>
-				What the writer has spent, padded to a whole byte. Empty in any other [enum Mode].
+				Returns the written bytes. Empty when not writing.
 			</description>
 		</method>
 		<method name="varuint">
@@ -129,25 +127,25 @@
 			<param index="0" name="value" type="int" />
 			<param index="1" name="max_bytes" type="int" default="10" />
 			<description>
-				Spends an unsigned value as seven bit groups with a continuation bit, at most [param max_bytes] of them. Canonical and bounded: see the class description for what each end rejects.
+				Writes or reads an unsigned integer in as few bytes as it needs, at most [param max_bytes]. Small numbers take one byte.
 			</description>
 		</method>
 		<method name="writer" qualifiers="static">
 			<return type="NetwBitStream" />
 			<description>
-				A stream in [constant WRITE], empty, ready to spend bits.
+				Returns an empty stream that writes, in [constant WRITE].
 			</description>
 		</method>
 	</methods>
 	<constants>
 		<constant name="WRITE" value="0" enum="Mode">
-			The stream spends the value it is given and [method to_bytes] returns the result.
+			Writes the given values. Read the result with [method to_bytes].
 		</constant>
 		<constant name="READ" value="1" enum="Mode">
-			The stream takes values back out of the bytes [method reader] was given, ignoring the value it is passed and returning it unchanged once the stream is poisoned.
+			Returns values read from the bytes, ignoring the given values.
 		</constant>
 		<constant name="MEASURE" value="2" enum="Mode">
-			The stream stores nothing and only counts, so [method bit_length] returns what the same description would cost to write.
+			Only counts bits. Read the count with [method bit_length].
 		</constant>
 	</constants>
 </class>

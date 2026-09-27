@@ -3,10 +3,6 @@ extends SceneTree
 var _runner: Object = null
 
 
-# The suite runs from a physics frame rather than from _initialize because the
-# root is not inside the tree until after initialization, and because a
-# scenario that needs the physics server to step is driven one advance per
-# callback: the engine steps the space after this returns.
 func _physics_process(_delta: float) -> bool:
 	if _runner == null:
 		if not ClassDB.class_exists(&"NetwNativeTests"):
@@ -39,8 +35,6 @@ func _physics_process(_delta: float) -> bool:
 	return true
 
 
-# Written beside the JUnit because it is this run's output: a spec taken from a
-# different build describes a different format.
 func _write_wire_spec(runner: Object) -> void:
 	var spec: Dictionary = runner.wire_spec()
 	var path := "res://reports/native/wire.spec.json"

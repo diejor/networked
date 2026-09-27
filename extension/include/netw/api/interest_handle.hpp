@@ -28,8 +28,10 @@ public:
 
     godot::Ref<NetwInterestHandle> join(
         const godot::StringName &p_layer_id,
-        int64_t p_leave_policy = -1,
-        int64_t p_perception_policy = -1
+        NetwMultiplayer::LeavePolicy p_leave_policy
+        = NetwMultiplayer::LeavePolicy(-1),
+        NetwMultiplayer::PerceptionPolicy p_perception_policy
+        = NetwMultiplayer::PerceptionPolicy(-1)
     );
     godot::Ref<NetwInterestHandle> leave(const godot::StringName &p_layer_id);
     godot::TypedArray<godot::StringName> layer_ids() const;

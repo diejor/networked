@@ -5,6 +5,7 @@
 #include "godot/object.hpp"
 #include "godot/ref_counted.hpp"
 #include "godot/variant.hpp"
+#include "netw/api/enums.hpp"
 
 namespace netw {
 
@@ -39,12 +40,12 @@ public:
 
     int64_t get_display_offset() const;
     void set_display_offset(int64_t p_ticks);
-    int64_t get_sync_mode() const;
-    void set_sync_mode(int64_t p_mode);
+    enums::NetwMultiplayer::SyncMode get_sync_mode() const;
+    void set_sync_mode(enums::NetwMultiplayer::SyncMode p_mode);
     double get_ping_interval() const;
     void set_ping_interval(double p_seconds);
 
-    double monitor(int64_t p_monitor) const;
+    double monitor(enums::NetwMultiplayer::ClockMonitor p_monitor) const;
 };
 
 } // namespace netw

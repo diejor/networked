@@ -15,7 +15,7 @@ using netw::HostSceneView;
 using netw::NetwMultiplayer;
 using netw::ParticipantView;
 
-Ref<netw::NetwSessionConfig> authoring(int64_t p_role) {
+Ref<netw::NetwSessionConfig> authoring(NetwMultiplayer::Role p_role) {
     Ref<netw::NetwSessionConfig> settings;
     settings.instantiate();
     settings->set_desired_role(p_role);

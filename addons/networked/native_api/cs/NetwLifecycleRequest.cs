@@ -6,8 +6,8 @@ using Godot.NativeInterop;
 namespace Networked;
 
 /// <summary>
-/// A controller's spawn, despawn or move of an entity, waiting for the server's
-/// verdict.
+/// A spawn, despawn or move by a controlling client, waiting for the server to
+/// accept it.
 /// </summary>
 /// <remarks>
 /// The server receives one in <see cref="NetwEntity.LifecycleRequested"/> for

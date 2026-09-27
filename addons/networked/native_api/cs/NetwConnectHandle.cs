@@ -65,7 +65,7 @@ public sealed class NetwConnectHandle : NetwRefCounted
     ///     status.text = reason
     /// </code>
     /// </summary>
-    public event Action<long, string> JoinFailed
+    public event Action<Error, string> JoinFailed
     {
         add => Connect("join_failed", Callable.From(value));
         remove => Disconnect("join_failed", Callable.From(value));
@@ -150,7 +150,7 @@ public sealed class NetwConnectHandle : NetwRefCounted
     }
 
     private static readonly IntPtr _bindCreatePeer =
-        NetwApi.MethodBind("NetwConnectHandle", "create_peer", 2431768675UL);
+        NetwApi.MethodBind("NetwConnectHandle", "create_peer", 2597775451UL);
 
     /// <summary>
     /// Pass a <paramref name="transport"/> that can be any of the following:
@@ -195,7 +195,7 @@ public sealed class NetwConnectHandle : NetwRefCounted
     /// </summary>
     public Rid CreatePeer(
         Variant transport,
-        long mode,
+        NetwMultiplayer.TransportMode mode,
         string address,
         Godot.Collections.Dictionary settings,
         Callable completed,

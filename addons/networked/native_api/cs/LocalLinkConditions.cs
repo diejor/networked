@@ -6,23 +6,18 @@ using Godot.NativeInterop;
 namespace Networked;
 
 /// <summary>
-/// Declarative inbound impairment for one loopback link.
+/// Simulated latency and packet loss for a <see cref="LocalLoopbackSession"/>.
 /// </summary>
 /// <remarks>
-/// Describes a link condition in human units and feeds the simulator directly.
-/// Used for tests using [class LocalLoopbackSession].
+/// Used for tests.
 /// <code>
 /// var conditions := LocalLinkConditions.wifi()
 /// conditions.packet_loss = 0.05
 /// loopback_session.set_link_conditions(server, conditions)
 /// </code>
 /// <para>
-/// <see cref="LocalLinkConditions.PacketLoss"/> drops an unreliable packet
-/// outright. A reliable one is never dropped, and pays
-/// <see cref="LocalLinkConditions.EffectiveRetransmitMs"/> instead.
-/// <see cref="LocalLinkConditions.Seed"/> names the random streams this spec
-/// draws from, so two runs of the same scenario deliver packets in the same
-/// order.
+/// The same <see cref="LocalLinkConditions.Seed"/> gives the same results every
+/// run.
 /// </para>
 /// </remarks>
 public sealed class LocalLinkConditions : NetwRefCounted
@@ -54,7 +49,7 @@ public sealed class LocalLinkConditions : NetwRefCounted
             373806689UL);
 
     /// <summary>
-    /// Baseline one-way delay, in milliseconds.
+    /// One-way delay, in milliseconds.
     /// </summary>
     public double LatencyMs
     {
@@ -89,7 +84,8 @@ public sealed class LocalLinkConditions : NetwRefCounted
         NetwApi.MethodBind("LocalLinkConditions", "set_jitter_ms", 373806689UL);
 
     /// <summary>
-    /// Upper bound on the extra delay drawn per unreliable packet.
+    /// The most random extra delay added to an unreliable packet, in
+    /// milliseconds.
     /// </summary>
     public double JitterMs
     {
@@ -124,9 +120,8 @@ public sealed class LocalLinkConditions : NetwRefCounted
             373806689UL);
 
     /// <summary>
-    /// Probability that a packet is lost. An unreliable packet is dropped; a
-    /// reliable one is delayed by
-    /// <see cref="LocalLinkConditions.EffectiveRetransmitMs"/>.
+    /// Chance that a packet is lost. A lost reliable packet is delayed by
+    /// <see cref="LocalLinkConditions.EffectiveRetransmitMs"/> instead.
     /// </summary>
     public double PacketLoss
     {
@@ -158,8 +153,7 @@ public sealed class LocalLinkConditions : NetwRefCounted
         NetwApi.MethodBind("LocalLinkConditions", "set_reorder", 373806689UL);
 
     /// <summary>
-    /// Probability that an unreliable packet is held one extra period, which is
-    /// what puts it behind the packet sent after it.
+    /// Chance that an unreliable packet arrives after the next one.
     /// </summary>
     public double Reorder
     {
@@ -191,8 +185,7 @@ public sealed class LocalLinkConditions : NetwRefCounted
         NetwApi.MethodBind("LocalLinkConditions", "set_duplicate", 373806689UL);
 
     /// <summary>
-    /// Probability that an unreliable packet is delivered a second time, one
-    /// period later.
+    /// Chance that an unreliable packet arrives twice.
     /// </summary>
     public double Duplicate
     {
@@ -224,8 +217,7 @@ public sealed class LocalLinkConditions : NetwRefCounted
         NetwApi.MethodBind("LocalLinkConditions", "set_throttle", 373806689UL);
 
     /// <summary>
-    /// Probability of opening a throttle window, during which nothing is
-    /// delivered.
+    /// Chance of a pause during which nothing is delivered.
     /// </summary>
     public double Throttle
     {
@@ -260,7 +252,7 @@ public sealed class LocalLinkConditions : NetwRefCounted
             373806689UL);
 
     /// <summary>
-    /// How long a throttle window lasts, in milliseconds.
+    /// How long that pause lasts, in milliseconds.
     /// </summary>
     public double ThrottleMs
     {
@@ -298,9 +290,8 @@ public sealed class LocalLinkConditions : NetwRefCounted
             373806689UL);
 
     /// <summary>
-    /// How long a lost reliable packet is delayed. Negative means derive it
-    /// from <see cref="LocalLinkConditions.LatencyMs"/>, which is what
-    /// <see cref="LocalLinkConditions.EffectiveRetransmitMs"/> does.
+    /// How long a lost reliable packet is delayed, in milliseconds. Negative
+    /// computes it from <see cref="LocalLinkConditions.LatencyMs"/>.
     /// </summary>
     public double RetransmitMs
     {
@@ -332,8 +323,7 @@ public sealed class LocalLinkConditions : NetwRefCounted
         NetwApi.MethodBind("LocalLinkConditions", "set_seed", 1286410249UL);
 
     /// <summary>
-    /// Seeds every random stream this spec draws from. The same seed and the
-    /// same scenario produce the same delivery order.
+    /// The random seed. The same seed gives the same results.
     /// </summary>
     public long Seed
     {
@@ -359,8 +349,8 @@ public sealed class LocalLinkConditions : NetwRefCounted
         NetwApi.MethodBind("LocalLinkConditions", "create", 91535623UL);
 
     /// <summary>
-    /// Returns a spec seeded with <paramref name="seed"/>. A registered class's
-    /// <c>new()</c> takes no arguments, so this is where a seed goes.
+    /// Returns new conditions with <see cref="LocalLinkConditions.Seed"/> set
+    /// to <paramref name="seed"/>.
     /// </summary>
     public static LocalLinkConditions Create(long seed = 0)
     {
@@ -378,7 +368,7 @@ public sealed class LocalLinkConditions : NetwRefCounted
         NetwApi.MethodBind("LocalLinkConditions", "perfect", 391960112UL);
 
     /// <summary>
-    /// Returns a link with no simulated impairment.
+    /// Returns conditions with no latency or loss.
     /// </summary>
     public static LocalLinkConditions Perfect()
     {
@@ -443,9 +433,7 @@ public sealed class LocalLinkConditions : NetwRefCounted
         NetwApi.MethodBind("LocalLinkConditions", "clone", 1981408199UL);
 
     /// <summary>
-    /// Returns a copy of this spec.
-    /// <see cref="LocalLoopbackSession.SetLinkConditions"/> clones what it is
-    /// given, so editing a spec after installing it changes nothing.
+    /// Returns a copy.
     /// </summary>
     public LocalLinkConditions Clone()
     {
@@ -461,7 +449,8 @@ public sealed class LocalLinkConditions : NetwRefCounted
             1740695150UL);
 
     /// <summary>
-    /// Returns <see cref="LocalLinkConditions.LatencyMs"/>, floored at zero.
+    /// Returns <see cref="LocalLinkConditions.LatencyMs"/>, or <c>0.0</c> when
+    /// negative.
     /// </summary>
     public double EffectiveLatencyMs()
     {
@@ -480,9 +469,9 @@ public sealed class LocalLinkConditions : NetwRefCounted
             1740695150UL);
 
     /// <summary>
-    /// Returns how long a lost reliable packet waits before it arrives anyway.
-    /// While <see cref="LocalLinkConditions.RetransmitMs"/> stays negative this
-    /// derives from <see cref="LocalLinkConditions.LatencyMs"/>.
+    /// Returns how long a lost reliable packet is delayed, from
+    /// <see cref="LocalLinkConditions.RetransmitMs"/> or computed from
+    /// <see cref="LocalLinkConditions.LatencyMs"/> when it is negative.
     /// </summary>
     public double EffectiveRetransmitMs()
     {

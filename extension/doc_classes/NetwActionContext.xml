@@ -1,14 +1,14 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <class name="NetwActionContext" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
 	<brief_description>
-		The server-side request context of one [NetwAction].
+		Information about a [NetwAction] request, passed to its method on the server.
 	</brief_description>
 	<description>
-		Carries the requester, the clamped view tick, and the correlation key the optimistic effect was armed under. An authority method takes it first, ahead of whatever arguments [method NetwAction.request] carried, and calls [method bind] before adding a spawned entity to the tree, or [method deny] when validation rejects the request.
+		It is the first argument, before the arguments of [method NetwAction.request]. Call [method bind] on a node the action spawns, before adding it to the tree. Call [method deny] to reject the action.
 		[codeblock]
 		func _place_bomb(ctx: NetwActionContext) -&gt; void:
-		    var past := lag.sample(entity, ctx.view_tick)
-		    if past.is_empty():
+		    var past := Netw.sample(entity, ctx.view_tick)
+		    if not past.has_value(&amp;"position"):
 		        ctx.deny()
 		        return
 		    var bomb := BOMB.instantiate()
@@ -23,28 +23,28 @@
 			<return type="void" />
 			<param index="0" name="node" type="Node" />
 			<description>
-				Binds [param node] so its [member NetwEntity.entity_id] confirms this action when the authoritative spawn arrives. Call it before adding the node to the tree.
+				Links [param node] to this action, so the client's predicted copy is replaced by it. Call it before adding the node to the tree.
 			</description>
 		</method>
 		<method name="deny">
 			<return type="void" />
 			<description>
-				Denies this action and asks the requesting peer to revert it. Idempotent.
+				Rejects the action. The requesting client undoes its prediction.
 			</description>
 		</method>
 	</methods>
 	<members>
 		<member name="execution_tick" type="int" setter="" getter="get_execution_tick">
-			The server tick that ran the authority method.
+			The server tick the action runs on.
 		</member>
 		<member name="requested_tick" type="int" setter="" getter="get_requested_tick">
-			The tick the requester originally asked the server to evaluate, before clamping.
+			The tick the client asked for.
 		</member>
 		<member name="requester" type="int" setter="" getter="get_requester">
-			The peer id that sent the request.
+			The peer that sent the request.
 		</member>
 		<member name="view_tick" type="int" setter="" getter="get_view_tick">
-			The tick used for server validation, clamped to the executing tick.
+			The tick the client saw when it acted, no later than [member execution_tick]. Use it with [method Netw.rewind] and [method Netw.sample].
 		</member>
 	</members>
 </class>

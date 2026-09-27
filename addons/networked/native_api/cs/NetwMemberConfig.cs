@@ -6,28 +6,14 @@ using Godot.NativeInterop;
 namespace Networked;
 
 /// <summary>
-/// The travel declaration every script member shares, and the whole of what an
-/// RPC, a signal or a spawn function declares.
+/// Network settings for an RPC, a signal, a spawn function or a property.
 /// </summary>
 /// <remarks>
-/// A member is an RPC, a property, or a signal, and the same fluent builder
-/// declares all three because the axes are the same ones: who may author the
-/// stream (<see cref="NetwMemberConfig.Authority"/>,
-/// <see cref="NetwMemberConfig.Controller"/>,
-/// <see cref="NetwMemberConfig.AnyPeer"/>), how it travels
-/// (<see cref="NetwMemberConfig.Reliable"/>,
-/// <see cref="NetwMemberConfig.Unreliable"/>,
-/// <see cref="NetwMemberConfig.Quantize"/>), and what the receiver does with it
-/// (<see cref="NetwMemberConfig.DeferUntil"/>,
-/// <see cref="NetwMemberConfig.Interpolate"/>).
-/// <see cref="Netw.ConfigureRpc"/>, <see cref="Netw.ConfigureSignal"/> and
-/// <see cref="Netw.ConfigureSpawn"/> each return one of these, and
-/// <see cref="Netw.ConfigureProperty"/> returns the
-/// <see cref="NetwPropertyConfig"/> that extends it.
-/// <see cref="NetwMemberConfig.ContextType"/> is which of the three this is:
-/// <c>0</c> an RPC or spawn function, <c>1</c> a property, <c>2</c> a signal.
-/// Everything that has to tell them apart reads that ordinal, which is also why
-/// one class serves three doors.
+/// Returned by <see cref="Netw.ConfigureRpc"/>,
+/// <see cref="Netw.ConfigureSignal"/> and <see cref="Netw.ConfigureSpawn"/>.
+/// <see cref="Netw.ConfigureProperty"/> returns a
+/// <see cref="NetwPropertyConfig"/>, which extends it. The methods set who may
+/// send, how it is sent, and what the receiver does.
 /// <code>
 /// func _init() -&gt; void:
 ///     Netw.configure_rpc(self.fire).unreliable().controller_only()
@@ -35,20 +21,14 @@ namespace Networked;
 ///     Netw.configure_spawn(self._spawn_bullet).quantize(dir_q)
 /// </code>
 /// <para>
-/// A configuration is keyed per script while <c>Object._init</c> runs per
-/// instance, so every spawn of a script re-declares onto the config the first
-/// instance created. Re-declaring an axis with the value it already carries is
-/// therefore SILENT, and only a genuine disagreement between two call sites
-/// warns. That rule is what makes authoring in <c>Object._init</c> quiet rather
-/// than one warning per spawn. <b>The chain downgrades to this type.</b> A
-/// bound method records one return type, so every verb here returns a
-/// <see cref="NetwMemberConfig"/> even when it was called on a
-/// <see cref="NetwPropertyConfig"/>. A chain that passes through a base verb
-/// loses the property-only verbs from that point on, and a property declaration
-/// therefore orders its property-only verbs LAST:
+/// Settings are stored per script, so calling this in <c>Object._init</c> of
+/// every instance is fine. A warning is pushed only when two calls set
+/// different values. <b>Note:</b> these methods return a
+/// <see cref="NetwMemberConfig"/>, so call <see cref="NetwPropertyConfig"/>
+/// methods first in a chain.
 /// <code>
-/// Netw.configure_property(self, &amp;"position").state().quantize(pos_q)   # fine
-/// Netw.configure_property(self, &amp;"position").quantize(pos_q).state()   # state() is gone
+/// Netw.configure_property(self, &amp;"position").state().quantize(pos_q)   # works
+/// Netw.configure_property(self, &amp;"position").quantize(pos_q).state()   # state() is not found
 /// </code>
 /// </para>
 /// </remarks>
@@ -71,16 +51,15 @@ public class NetwMemberConfig : NetwRefCounted
     public enum Policy : long
     {
         /// <summary>
-        /// Only the node's multiplayer authority may write or emit.
+        /// Only the node's multiplayer authority may send.
         /// </summary>
         Authority = 0,
         /// <summary>
-        /// Only the peer holding <see cref="NetwEntity.Controller"/> may write
-        /// or emit.
+        /// Only the <see cref="NetwEntity.Controller"/> may send.
         /// </summary>
         Controller = 1,
         /// <summary>
-        /// Any peer may write or emit.
+        /// Any peer may send.
         /// </summary>
         AnyPeer = 2,
     }
@@ -88,11 +67,11 @@ public class NetwMemberConfig : NetwRefCounted
     public enum TransferModeEnum : long
     {
         /// <summary>
-        /// Transmit reliably.
+        /// Send reliably.
         /// </summary>
         Reliable = 0,
         /// <summary>
-        /// Transmit unreliably.
+        /// Send unreliably.
         /// </summary>
         Unreliable = 1,
     }
@@ -110,15 +89,8 @@ public class NetwMemberConfig : NetwRefCounted
             3657522847UL);
 
     /// <summary>
-    /// The <see cref="Script"/> that declares the member. The declaration and
-    /// <see cref="NetwMemberConfig.WritePolicy"/> use this as their key.
-    /// <c>null</c> means the property is declared directly on a node without a
-    /// script. Named WITHOUT being owned: the script is held by instance id and
-    /// resolved on every read, so a script that has been freed returns
-    /// <c>null</c> here rather than a stale object. A declaration is stored in
-    /// the declaring script's own metadata book, so an owning back-reference
-    /// would close a cycle out of which neither the script nor any config
-    /// declared on it could ever be freed.
+    /// The script that declares the member, or <c>null</c> for a node without a
+    /// script.
     /// </summary>
     public Script ContextScript
     {
@@ -155,13 +127,8 @@ public class NetwMemberConfig : NetwRefCounted
             1114965689UL);
 
     /// <summary>
-    /// An opaque weak reference to the body a property config was authored on,
-    /// or <c>null</c>. It is dereferenced only while resolving a property's
-    /// declared type, which is read off the live body rather than off
-    /// <see cref="NetwMemberConfig.ContextScript"/>, because a node the
-    /// framework tracks without a script has no declaration to read it from. A
-    /// body that has been freed returns <c>@GlobalScope.TYPE_NIL</c>, which is
-    /// why the reference is weak.
+    /// A weak reference to the node a property was declared on, used to read
+    /// the property's type.
     /// </summary>
     public Variant ContextNodeRef
     {
@@ -200,18 +167,9 @@ public class NetwMemberConfig : NetwRefCounted
             1414759222UL);
 
     /// <summary>
-    /// Who may write or emit this member. Declared through
-    /// <see cref="NetwMemberConfig.Authority"/>,
+    /// Set by <see cref="NetwMemberConfig.Authority"/>,
     /// <see cref="NetwMemberConfig.Controller"/> and
-    /// <see cref="NetwMemberConfig.AnyPeer"/>, and re-declaring the value it
-    /// already carries is silent. Writing it also COMPILES the rule into the
-    /// declaring script's own metadata book, so the receive gate returns off
-    /// the script rather than walking this registry for every arriving frame.
-    /// Nothing is published for an RPC
-    /// (<see cref="NetwMemberConfig.ContextType"/> <c>0</c>), which is policed
-    /// by its caller gate instead, or for a config naming no
-    /// <see cref="NetwMemberConfig.ContextScript"/>, which has no book to write
-    /// into.
+    /// <see cref="NetwMemberConfig.AnyPeer"/>.
     /// </summary>
     public NetwMemberConfig.Policy WritePolicy
     {
@@ -249,10 +207,8 @@ public class NetwMemberConfig : NetwRefCounted
             1591769103UL);
 
     /// <summary>
-    /// How the member travels. Declared through
-    /// <see cref="NetwMemberConfig.Reliable"/> and
-    /// <see cref="NetwMemberConfig.Unreliable"/>, and re-declaring the value it
-    /// already carries is silent.
+    /// Set by <see cref="NetwMemberConfig.Reliable"/> and
+    /// <see cref="NetwMemberConfig.Unreliable"/>.
     /// </summary>
     public NetwMemberConfig.TransferModeEnum TransferMode
     {
@@ -287,10 +243,8 @@ public class NetwMemberConfig : NetwRefCounted
             2586408642UL);
 
     /// <summary>
-    /// Whether the signal or RPC also runs on the sender. Declared through
-    /// <see cref="NetwMemberConfig.CallLocal"/> and
-    /// <see cref="NetwMemberConfig.CallRemote"/>, and re-declaring the value it
-    /// already carries is silent.
+    /// Set by <see cref="NetwMemberConfig.CallLocal"/> and
+    /// <see cref="NetwMemberConfig.CallRemote"/>.
     /// </summary>
     public bool IsCallLocal
     {
@@ -328,9 +282,7 @@ public class NetwMemberConfig : NetwRefCounted
             3304788590UL);
 
     /// <summary>
-    /// The member this config declares: a method name, a property name, or a
-    /// signal name, decided by <see cref="NetwMemberConfig.ContextType"/>.
-    /// Written by the <c>Netw.configure_*</c> door that created the config.
+    /// The name of the method, property or signal.
     /// </summary>
     public StringName ContextName
     {
@@ -369,11 +321,8 @@ public class NetwMemberConfig : NetwRefCounted
             1286410249UL);
 
     /// <summary>
-    /// Which kind of member this is: <c>0</c> an RPC or a spawn function,
-    /// <c>1</c> a property, <c>2</c> a signal. It decides which book
-    /// <see cref="NetwMemberConfig.WritePolicy"/> is published into, and which
-    /// reflection resolves the member's declared types: a method's argument
-    /// types, a live node's property type, or a signal's argument types.
+    /// <c>0</c> for an RPC or spawn function, <c>1</c> for a property, <c>2</c>
+    /// for a signal.
     /// </summary>
     public long ContextType
     {
@@ -411,9 +360,7 @@ public class NetwMemberConfig : NetwRefCounted
             3304788590UL);
 
     /// <summary>
-    /// The signal a received call waits on before it runs, or empty to run it
-    /// as soon as the node is live. Declared through
-    /// <see cref="NetwMemberConfig.DeferUntil"/>.
+    /// Set by <see cref="NetwMemberConfig.DeferUntil"/>.
     /// </summary>
     public StringName DeferSignalName
     {
@@ -452,8 +399,7 @@ public class NetwMemberConfig : NetwRefCounted
             2586408642UL);
 
     /// <summary>
-    /// Whether only the entity's controller, or the server, may call this RPC.
-    /// Declared through <see cref="NetwMemberConfig.ControllerOnly"/>.
+    /// Set by <see cref="NetwMemberConfig.ControllerOnly"/>.
     /// </summary>
     public bool IsControllerOnly
     {
@@ -485,10 +431,7 @@ public class NetwMemberConfig : NetwRefCounted
         NetwApi.MethodBind("NetwMemberConfig", "set_quantizers", 381264803UL);
 
     /// <summary>
-    /// Per-position <see cref="NetwQuantize"/> list packing the member's
-    /// values. Empty sends every value self-describing, and a null slot does
-    /// the same for one position. Declared through
-    /// <see cref="NetwMemberConfig.Quantize"/>.
+    /// Set by <see cref="NetwMemberConfig.Quantize"/>.
     /// </summary>
     public Godot.Collections.Array Quantizers
     {
@@ -528,9 +471,7 @@ public class NetwMemberConfig : NetwRefCounted
             381264803UL);
 
     /// <summary>
-    /// Per-position <see cref="NetwInterpolate"/> list smoothing received
-    /// values. Empty applies each received value directly. Declared through
-    /// <see cref="NetwMemberConfig.Interpolate"/>.
+    /// Set by <see cref="NetwMemberConfig.Interpolate"/>.
     /// </summary>
     public Godot.Collections.Array Interpolators
     {
@@ -561,10 +502,7 @@ public class NetwMemberConfig : NetwRefCounted
         NetwApi.MethodBind("NetwMemberConfig", "authority", 3574862355UL);
 
     /// <summary>
-    /// Declares <see cref="NetwMemberConfig.WritePolicy"/>
-    /// <see cref="NetwMemberConfig.Policy.Authority"/>: only the node's
-    /// multiplayer authority may write or emit. The default, and the safe
-    /// choice.
+    /// Only the node's multiplayer authority may send it. The default.
     /// </summary>
     public NetwMemberConfig Authority()
     {
@@ -577,10 +515,7 @@ public class NetwMemberConfig : NetwRefCounted
         NetwApi.MethodBind("NetwMemberConfig", "controller", 3574862355UL);
 
     /// <summary>
-    /// Declares <see cref="NetwMemberConfig.WritePolicy"/>
-    /// <see cref="NetwMemberConfig.Policy.Controller"/>: only the peer holding
-    /// <see cref="NetwEntity.Controller"/> may write or emit, which is how a
-    /// player drives their own entity.
+    /// Only the <see cref="NetwEntity.Controller"/> may send it.
     /// </summary>
     public NetwMemberConfig Controller()
     {
@@ -593,10 +528,7 @@ public class NetwMemberConfig : NetwRefCounted
         NetwApi.MethodBind("NetwMemberConfig", "any_peer", 3574862355UL);
 
     /// <summary>
-    /// Declares <see cref="NetwMemberConfig.WritePolicy"/>
-    /// <see cref="NetwMemberConfig.Policy.AnyPeer"/>: any peer may write or
-    /// emit. Trusts every client, so it belongs only where a forged write
-    /// cannot matter.
+    /// Any peer may send it. Only use it when a cheating client cannot do harm.
     /// </summary>
     public NetwMemberConfig AnyPeer()
     {
@@ -609,8 +541,7 @@ public class NetwMemberConfig : NetwRefCounted
         NetwApi.MethodBind("NetwMemberConfig", "reliable", 3574862355UL);
 
     /// <summary>
-    /// Declares <see cref="NetwMemberConfig.TransferMode"/>
-    /// <see cref="NetwMemberConfig.TransferModeEnum.Reliable"/>. The default.
+    /// Send reliably. The default.
     /// </summary>
     public NetwMemberConfig Reliable()
     {
@@ -623,8 +554,7 @@ public class NetwMemberConfig : NetwRefCounted
         NetwApi.MethodBind("NetwMemberConfig", "unreliable", 3574862355UL);
 
     /// <summary>
-    /// Declares <see cref="NetwMemberConfig.TransferMode"/>
-    /// <see cref="NetwMemberConfig.TransferModeEnum.Unreliable"/>.
+    /// Send unreliably.
     /// </summary>
     public NetwMemberConfig Unreliable()
     {
@@ -637,14 +567,8 @@ public class NetwMemberConfig : NetwRefCounted
         NetwApi.MethodBind("NetwMemberConfig", "call_local", 3574862355UL);
 
     /// <summary>
-    /// Declares <see cref="NetwMemberConfig.IsCallLocal"/>: the signal or RPC
-    /// also runs on the sender. <see cref="Netw.ConfigureSignal"/> starts here,
-    /// and <see cref="Netw.ConfigureRpc"/> starts at
-    /// <see cref="NetwMemberConfig.CallRemote"/>. A property
-    /// (<see cref="NetwMemberConfig.ContextType"/> <c>1</c>) has no local-call
-    /// axis, because a property assignment is local first by construction, so
-    /// declaring one on a <see cref="NetwPropertyConfig"/> warns and records
-    /// the axis anyway.
+    /// The signal or RPC also runs on the sender. The default for
+    /// <see cref="Netw.ConfigureSignal"/>. Not valid on a property.
     /// </summary>
     public NetwMemberConfig CallLocal()
     {
@@ -657,9 +581,8 @@ public class NetwMemberConfig : NetwRefCounted
         NetwApi.MethodBind("NetwMemberConfig", "call_remote", 3574862355UL);
 
     /// <summary>
-    /// Clears <see cref="NetwMemberConfig.IsCallLocal"/>: the signal or RPC
-    /// reaches remote peers only. The default for an RPC, and warns on a
-    /// property for the reason <see cref="NetwMemberConfig.CallLocal"/> gives.
+    /// The signal or RPC only runs on other peers. The default for
+    /// <see cref="Netw.ConfigureRpc"/>. Not valid on a property.
     /// </summary>
     public NetwMemberConfig CallRemote()
     {
@@ -672,10 +595,8 @@ public class NetwMemberConfig : NetwRefCounted
         NetwApi.MethodBind("NetwMemberConfig", "defer_until", 4061727032UL);
 
     /// <summary>
-    /// Defers a received call until <paramref name="sig"/> fires on the target
-    /// node. <c>self.ready</c> is a common choice. The configuration stores the
-    /// signal name in <see cref="NetwMemberConfig.DeferSignalName"/>. Declaring
-    /// a second signal for one member reports a warning.
+    /// A received call waits until <paramref name="sig"/> is emitted on the
+    /// node, such as <c>self.ready</c>.
     /// </summary>
     public NetwMemberConfig DeferUntil(Signal sig)
     {
@@ -695,8 +616,8 @@ public class NetwMemberConfig : NetwRefCounted
         NetwApi.MethodBind("NetwMemberConfig", "controller_only", 3574862355UL);
 
     /// <summary>
-    /// Declares <see cref="NetwMemberConfig.IsControllerOnly"/>: only the
-    /// entity's controller, or the server, may call this RPC.
+    /// Only the <see cref="NetwEntity.Controller"/> or the server may call this
+    /// RPC.
     /// </summary>
     public NetwMemberConfig ControllerOnly()
     {
@@ -709,29 +630,13 @@ public class NetwMemberConfig : NetwRefCounted
         NetwApi.MethodBind("NetwMemberConfig", "quantize", 2087025817UL);
 
     /// <summary>
-    /// Declares <see cref="NetwMemberConfig.Quantizers"/>, one
-    /// <see cref="NetwQuantize"/> per argument the member takes, in the order
-    /// the member declares them. A property or a one-argument member therefore
-    /// takes exactly one, and <c>null</c> sends an argument unpacked.
+    /// Compresses each argument with one <see cref="NetwQuantize"/>, in order.
+    /// <c>null</c> sends an argument as is. The number of quantizers must match
+    /// the number of arguments.
     /// <code>
     /// Netw.configure_property(self, &amp;"position").quantize(pos_q)
     /// Netw.configure_rpc(self.fire).quantize(dir_q, null, power_q)
     /// </code>
-    /// <para>
-    /// The count is checked against the arity of
-    /// <see cref="NetwMemberConfig.ContextName"/>, which
-    /// <see cref="NetwMemberConfig.ContextType"/> decides how to read, so a
-    /// member taking three arguments and given one quantizer is rejected rather
-    /// than packed halfway. A member whose declaration cannot be read at all is
-    /// taken on trust. Passing nothing, or an argument that is not a
-    /// <see cref="NetwQuantize"/>, is rejected with an error and leaves the
-    /// previous declaration standing. Re-declaring a layout-equal list
-    /// (<see cref="NetwQuantize.IsSameLayout"/>) is silent. Only a
-    /// re-declaration that changes the bit layout warns, since that is two call
-    /// sites genuinely disagreeing about one member's schema. Whether a
-    /// declared quantizer can pack the type it sits over is checked against
-    /// that same declared type.
-    /// </para>
     /// </summary>
     public NetwMemberConfig Quantize(params Variant[] rest)
     {
@@ -758,16 +663,8 @@ public class NetwMemberConfig : NetwRefCounted
         NetwApi.MethodBind("NetwMemberConfig", "interpolate", 2087025817UL);
 
     /// <summary>
-    /// Declares <see cref="NetwMemberConfig.Interpolators"/>, one
-    /// <see cref="NetwInterpolate"/> per value the member carries, in the order
-    /// the member declares them. A property or a one-argument member therefore
-    /// takes exactly one, and <c>null</c> leaves a value unsmoothed. The rules
-    /// are <see cref="NetwMemberConfig.Quantize"/>'s, read against
-    /// <see cref="NetwInterpolate.IsSameSpec"/> rather than a bit layout: a
-    /// re-declaration of equal specs returns immediately and changes nothing,
-    /// so an authoring shell can push freshly built but identical specs after a
-    /// reparent, and one that genuinely differs replaces the standing list and
-    /// warns.
+    /// Smooths received values with one <see cref="NetwInterpolate"/> per
+    /// argument, in order. <c>null</c> leaves an argument unsmoothed.
     /// <code>
     /// Netw.configure_property(self, &amp;"position").interpolate(pos_lerp)
     /// Netw.configure_signal(self.aimed).interpolate(null, dir_slerp)
@@ -806,11 +703,8 @@ public class NetwMemberConfig : NetwRefCounted
             36873697UL);
 
     /// <summary>
-    /// Whether <see cref="NetwMemberConfig.WritePolicy"/> was WRITTEN, rather
-    /// than what it holds. A set derived from several members of one script
-    /// asks this so that a member which declared its policy out loud owns the
-    /// set's policy and a member that declared none does not, and declaring the
-    /// default value is still declaring it.
+    /// Returns <c>true</c> when <see cref="NetwMemberConfig.WritePolicy"/> was
+    /// set, even to its default.
     /// </summary>
     public bool IsPolicyDeclared()
     {
@@ -826,9 +720,8 @@ public class NetwMemberConfig : NetwRefCounted
             36873697UL);
 
     /// <summary>
-    /// Whether <see cref="NetwMemberConfig.TransferMode"/> was WRITTEN, rather
-    /// than what it holds. Same reading as
-    /// <see cref="NetwMemberConfig.IsPolicyDeclared"/>.
+    /// Returns <c>true</c> when <see cref="NetwMemberConfig.TransferMode"/> was
+    /// set, even to its default.
     /// </summary>
     public bool IsTransferDeclared()
     {
@@ -847,16 +740,8 @@ public class NetwMemberConfig : NetwRefCounted
             36873697UL);
 
     /// <summary>
-    /// Whether this config only smooths a value and never claims a write: it
-    /// carries <see cref="NetwMemberConfig.Interpolators"/> and no
-    /// <see cref="NetwMemberConfig.WritePolicy"/>,
-    /// <see cref="NetwMemberConfig.TransferMode"/> or
-    /// <see cref="NetwMemberConfig.Quantizers"/> was DECLARED. It reads whether
-    /// each axis was written at all rather than what it holds, so declaring an
-    /// axis its own default value still ends the interpolation-only reading.
-    /// Smoothing a property some other set already replicates is expected, and
-    /// this is how that case is told apart from a second claim of authority
-    /// over the field.
+    /// Returns <c>true</c> when only <see cref="NetwMemberConfig.Interpolate"/>
+    /// was called, and no other setting.
     /// </summary>
     public bool IsInterpolationOnly()
     {

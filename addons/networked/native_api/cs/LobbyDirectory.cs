@@ -6,14 +6,13 @@ using Godot.NativeInterop;
 namespace Networked;
 
 /// <summary>
-/// Base class for a lobby provider.
+/// Extend it to host, join and list lobbies of an online service.
 /// </summary>
 /// <remarks>
-/// Lobbies are discovered by listening signals from <c>NetwConnectHandler</c>.
-/// A lobby dicrectory is a <see cref="NetwService"/> that implements the
+/// A lobby directory is a <see cref="NetwService"/> that implements
 /// <c>_host_lobby</c>, <c>_join_lobby</c>, <c>_list_lobbies</c> and
-/// <c>_leave_lobby</c> verbs. <c>NetwConnectHandler</c> can discover lobbies as
-/// any other endpoint.
+/// <c>_leave_lobby</c>. Its lobbies appear in <see cref="NetwConnectHandle"/>
+/// like any other server.
 /// <code>
 /// extends LobbyDirectory
 ///
@@ -64,26 +63,25 @@ public sealed class LobbyDirectory : NetwService
     public enum Capability : long
     {
         /// <summary>
-        /// <c>_list_lobbies</c> returns provider results.
+        /// <c>_list_lobbies</c> works.
         /// </summary>
         Browse = 1,
         /// <summary>
-        /// <see cref="NetwServerInfo.VisibilityEnum.FriendsOnly"/> is honored.
+        /// <see cref="NetwServerInfo.VisibilityEnum.FriendsOnly"/> works.
         /// </summary>
         FriendsOnlySupport = 2,
         /// <summary>
-        /// <see cref="LobbyDirectory.InviteReceived"/> can fire.
+        /// <see cref="LobbyDirectory.InviteReceived"/> is emitted.
         /// </summary>
         Invites = 4,
         /// <summary>
-        /// <c>_member_name</c> resolves personas.
+        /// <c>_member_name</c> returns real player names.
         /// </summary>
         FriendNames = 8,
     }
 
     /// <summary>
-    /// Emitted by <see cref="LobbyDirectory.Deliver"/> with the peer a host or
-    /// join request produced.
+    /// Emitted by <see cref="LobbyDirectory.Deliver"/>.
     /// </summary>
     public event Action<MultiplayerPeer> LobbyPeerReady
     {
@@ -92,8 +90,7 @@ public sealed class LobbyDirectory : NetwService
     }
 
     /// <summary>
-    /// Emitted by <see cref="LobbyDirectory.Fail"/> with the reason the request
-    /// in flight was rejected.
+    /// Emitted by <see cref="LobbyDirectory.Fail"/>.
     /// </summary>
     public event Action<Error, string> LobbyFailed
     {
@@ -102,8 +99,7 @@ public sealed class LobbyDirectory : NetwService
     }
 
     /// <summary>
-    /// Emitted by <see cref="LobbyDirectory.PublishLobbies"/> with the browse
-    /// rows a listing found.
+    /// Emitted by <see cref="LobbyDirectory.PublishLobbies"/>.
     /// </summary>
     public event Action<
         string[],
@@ -115,8 +111,8 @@ public sealed class LobbyDirectory : NetwService
     }
 
     /// <summary>
-    /// A platform invite arrived. Only a directory advertising
-    /// <see cref="LobbyDirectory.Capability.Invites"/> emits this.
+    /// Emitted when the player receives an invite. Needs
+    /// <see cref="LobbyDirectory.Capability.Invites"/>.
     /// </summary>
     public event Action<long, long> InviteReceived
     {
@@ -125,8 +121,7 @@ public sealed class LobbyDirectory : NetwService
     }
 
     /// <summary>
-    /// The provider cannot be used at all, so a browser drops it rather than
-    /// showing a failing row.
+    /// Emitted when the service cannot be used at all.
     /// </summary>
     public event Action<string> ProviderUnavailable
     {
@@ -138,9 +133,8 @@ public sealed class LobbyDirectory : NetwService
         NetwApi.MethodBind("LobbyDirectory", "deliver", 3694835298UL);
 
     /// <summary>
-    /// Reports <paramref name="peer"/> as the result to the request in flight.
-    /// The plane hands the peer to whoever asked for it, so a directory neither
-    /// assigns it nor keeps it alive on the caller's behalf.
+    /// Reports <paramref name="peer"/> as the result of the current request. Do
+    /// not assign it yourself.
     /// </summary>
     public void Deliver(MultiplayerPeer peer)
     {
@@ -157,9 +151,8 @@ public sealed class LobbyDirectory : NetwService
         NetwApi.MethodBind("LobbyDirectory", "fail", 3642839351UL);
 
     /// <summary>
-    /// Reports that the request in flight cannot be completed.
-    /// <paramref name="message"/> is shown to a player, so it names what the
-    /// provider rejected rather than restating <paramref name="error"/>.
+    /// Reports that the current request failed. <paramref name="message"/> is
+    /// shown to the player.
     /// </summary>
     public void Fail(Error error, string message)
     {
@@ -176,14 +169,9 @@ public sealed class LobbyDirectory : NetwService
         NetwApi.MethodBind("LobbyDirectory", "publish_lobbies", 4273026021UL);
 
     /// <summary>
-    /// Publishes the browse rows <c>_list_lobbies</c> found. The three arrays
-    /// are read in step: <paramref name="addresses"/> carries what
-    /// <c>_join_lobby</c> is later handed, <paramref name="names"/> what a row
-    /// is labelled with, and <paramref name="infos"/> the
-    /// <see cref="NetwServerInfo"/> a row is drawn and classified from. A row
-    /// whose <see cref="NetwServerInfo.AppId"/> does not match the local build
-    /// is listed as incompatible rather than dropped, so publish the tag the
-    /// host advertised rather than the local one.
+    /// Reports the lobbies <c>_list_lobbies</c> found. The three arrays are
+    /// matched by index. Use the <see cref="NetwServerInfo.AppId"/> the host
+    /// sent, so lobbies of other builds show as incompatible.
     /// </summary>
     public void PublishLobbies(
         string[] addresses,
@@ -212,9 +200,8 @@ public sealed class LobbyDirectory : NetwService
         NetwApi.MethodBind("LobbyDirectory", "supports", 1766254199UL);
 
     /// <summary>
-    /// Returns whether <c>_capabilities</c> includes
-    /// <paramref name="capability"/>, which is how a browser hides controls the
-    /// provider cannot honor.
+    /// Returns <c>true</c> when <c>_capabilities</c> includes
+    /// <paramref name="capability"/>.
     /// </summary>
     public bool Supports(LobbyDirectory.Capability capability)
     {
@@ -235,10 +222,7 @@ public sealed class LobbyDirectory : NetwService
             990163283UL);
 
     /// <summary>
-    /// The default result for <c>_member_name</c>, <c>"Player
-    /// &lt;peer_id&gt;"</c>. An override calls this for the peers it cannot
-    /// name itself, because a script cannot <c>super()</c> into a virtual the
-    /// extension declares.
+    /// The default <c>_member_name</c>, <c>"Player &lt;peer_id&gt;"</c>.
     /// </summary>
     public static string MemberNameDefault(long peerId)
     {
@@ -262,9 +246,7 @@ public sealed class LobbyDirectory : NetwService
             2841200299UL);
 
     /// <summary>
-    /// The default result for <c>_local_member_name</c>. An override calls this
-    /// for the case it does not resolve itself, because a script cannot
-    /// <c>super()</c> into a virtual the extension declares.
+    /// The default <c>_local_member_name</c>.
     /// </summary>
     public static string LocalMemberNameDefault()
     {

@@ -6,15 +6,16 @@ using Godot.NativeInterop;
 namespace Networked;
 
 /// <summary>
-/// Draws a listen-server host's scene.
+/// Displays the scene of the host's own player.
 /// </summary>
 /// <remarks>
-/// Only a scene declaring <see cref="NetwMultiplayer.SceneIsolation.OwnWorld"/>
-/// is hosted in an offscreen <see cref="SubViewport"/>, so this view exists
-/// only for one. On scene changes <see cref="NetwEntity.ViewActivated"/> fires.
+/// A host creates one by itself when its player's scene uses
+/// <see cref="NetwMultiplayer.SceneIsolation.OwnWorld"/>, since that scene is
+/// in a <see cref="SubViewport"/>. <see cref="NetwEntity.ViewActivated"/> is
+/// emitted when the displayed scene changes.
 /// <code>
 /// func _ready() -&gt; void:
-///     var entity := Netw.entity(self)
+///     var entity := NetwEntity.of(self)
 ///     entity.view_activated.connect(_on_view_activated)
 ///
 /// func _on_view_activated() -&gt; void:
@@ -44,8 +45,8 @@ public sealed class HostSceneView : ParticipantView
         NetwApi.MethodBind("HostSceneView", "set_suppressed", 2586408642UL);
 
     /// <summary>
-    /// Whether this view stands down. A suppressed view hides itself, drops its
-    /// target and stops forwarding input.
+    /// When <c>true</c>, the view hides, stops displaying and stops passing
+    /// input.
     /// </summary>
     public bool Suppressed
     {

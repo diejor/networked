@@ -1,8 +1,6 @@
-## Modal form for clients to connect directly to an address.
+## A form to join a server by its address.
 ##
-## Renders one field per key of the [code]client_settings[/code] entry of
-## [method NetwConnectHandle.transport] for the picked backend, because a
-## client reaching a room needs the same tracker and relay the host used.
+## Shows the client settings of the chosen transport.
 class_name JoinDirectPopup
 extends PopupPanel
 
@@ -52,11 +50,8 @@ func open_join_direct(
 	popup_centered()
 
 
-## Selects [param peer_class] and fills the address with [param address],
-## leaving the player only their name to confirm.
-##
-## A shared link names an endpoint and nothing else, so the form it opens
-## arrives already pointed at it.
+## Selects [param peer_class] and fills in [param address], as when opening a
+## shared link.
 func preset(peer_class: StringName, address: String) -> void:
 	for at in _transports.size():
 		if StringName(_transports[at].get("peer_class", &"")) != peer_class:

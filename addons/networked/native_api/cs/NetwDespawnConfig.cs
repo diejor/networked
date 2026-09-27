@@ -6,22 +6,12 @@ using Godot.NativeInterop;
 namespace Networked;
 
 /// <summary>
-/// Everything one entity <see cref="Script"/> declares about how a peer removes
-/// its nodes.
+/// How every peer removes a node when it despawns, returned by
+/// <see cref="Netw.ConfigureDespawn"/>.
 /// </summary>
 /// <remarks>
-/// The policy is authored on a <see cref="Script"/> and read back for every
-/// node that script drives, because <see cref="Netw.ConfigureDespawn"/> runs
-/// from <c>Object._init</c> and the removal happens later, on whichever peer
-/// received the DESPAWN frame. <see cref="NetwDespawnConfig.BeforeRemoval"/>
-/// stores only the method name, so the config does not retain a
-/// <see cref="Node"/> and can be reused for other instances. Before removal,
-/// the peer resolves the method on the node and skips it when absent. An author
-/// who declared nothing gets an empty
-/// <see cref="NetwDespawnConfig.HookMethod"/> and a
-/// <see cref="NetwDespawnConfig.LingerSeconds"/> of <c>0.0</c>, which frees
-/// immediately, so the defaults are the policy rather than an absence a reader
-/// branches on.
+/// Set in <c>Object._init</c>, and shared by every node of the same script. By
+/// default the node is freed at once.
 /// <code>
 /// func _init() -&gt; void:
 ///     Netw.configure_despawn(self) \
@@ -58,9 +48,7 @@ public sealed class NetwDespawnConfig : NetwRefCounted
             3304788590UL);
 
     /// <summary>
-    /// Method called on the entity root before removal, or empty for none.
-    /// Declared through <see cref="NetwDespawnConfig.BeforeRemoval"/>, which is
-    /// the only spelling that keeps the object out of the record.
+    /// Set by <see cref="NetwDespawnConfig.BeforeRemoval"/>.
     /// </summary>
     public StringName HookMethod
     {
@@ -99,10 +87,9 @@ public sealed class NetwDespawnConfig : NetwRefCounted
             373806689UL);
 
     /// <summary>
-    /// Seconds the node stays in the tree reporting
-    /// <see cref="NetwMultiplayer.EntityState.Lingering"/> before it is freed.
-    /// <c>0.0</c> frees it in the same pass. Declared through
-    /// <see cref="NetwDespawnConfig.Linger"/>.
+    /// Seconds the node stays in the tree before it is freed, as
+    /// <see cref="NetwMultiplayer.EntityState.Lingering"/>. <c>0.0</c> frees it
+    /// at once.
     /// </summary>
     public double LingerSeconds
     {
@@ -131,11 +118,9 @@ public sealed class NetwDespawnConfig : NetwRefCounted
         NetwApi.MethodBind("NetwDespawnConfig", "before_removal", 2556279349UL);
 
     /// <summary>
-    /// Declares that <paramref name="callable"/>'s method runs on the entity
-    /// root before the node leaves the tree, for death VFX or for handing
-    /// children off. Only <see cref="Callable.Method"/> is kept, into
-    /// <see cref="NetwDespawnConfig.HookMethod"/>. Returns the same config so
-    /// the declaration chains.
+    /// Calls the method of <paramref name="callable"/> on the entity root
+    /// before it is removed, for example to play an effect. Only the method
+    /// name is kept. Returns this config.
     /// </summary>
     public NetwDespawnConfig BeforeRemoval(Callable callable)
     {
@@ -155,8 +140,8 @@ public sealed class NetwDespawnConfig : NetwRefCounted
         NetwApi.MethodBind("NetwDespawnConfig", "linger", 933982787UL);
 
     /// <summary>
-    /// Declares <see cref="NetwDespawnConfig.LingerSeconds"/>. Returns the same
-    /// config so the declaration chains.
+    /// Sets <see cref="NetwDespawnConfig.LingerSeconds"/> and returns this
+    /// config.
     /// </summary>
     public NetwDespawnConfig Linger(double seconds)
     {

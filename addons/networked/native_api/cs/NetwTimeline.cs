@@ -6,31 +6,21 @@ using Godot.NativeInterop;
 namespace Networked;
 
 /// <summary>
-/// Per-entity, tick-keyed record of whole-entity state and input snapshots.
+/// The recent state and input of an entity, by tick.
 /// </summary>
 /// <remarks>
-/// State snapshots carry forward so a missing tick reads as unchanged, while
-/// input snapshots are exact so a missing tick reads as no action. Each side
-/// has exactly one writer (state: the server, input: the owning peer), so there
-/// is never a merge and no authority flags are needed. One timeline per entity
-/// serves both planes: the prediction engine reads its own state and input off
-/// it while the server's history recorder writes state into it. A second store
-/// for either plane would be a second history that agrees only by accident.
+/// Each entry is a <see cref="Godot.Collections.Dictionary"/> of property
+/// values. A tick with no state reads as the latest earlier state. A tick with
+/// no input reads as no input. The server writes state and the controlling peer
+/// writes input.
 /// <code>
-/// # Reconciliation on the owning client:
+/// # on the controlling client
 /// var predicted := timeline.latest_state_at_or_before(ack + 1)
 /// if diverged(predicted, authoritative):
 ///     for entry in timeline.inputs_in_range(ack + 1, now):
 ///         _network_tick(entry.input, delta, entry.tick, false)
 /// timeline.trim_before(ack)
 /// </code>
-/// <para>
-/// Snapshots are whole-entity <see cref="Godot.Collections.Dictionary"/> values
-/// keyed by a tick number, with each entry mapping a state or input field key
-/// to its value. Two ring buffers back the store, one for state and one for
-/// input, so a restore is a single atomic <see cref="NetwTimeline.StateAt"/>
-/// read rather than a per-property walk.
-/// </para>
 /// </remarks>
 public sealed class NetwTimeline : NetwRefCounted
 {
@@ -49,10 +39,8 @@ public sealed class NetwTimeline : NetwRefCounted
     }
 
     /// <summary>
-    /// Default ring capacity, roughly one second of ticks at 60 Hz.
-    /// Reconciliation only ever replays an input window of order RTT ticks, so
-    /// this is sized for the server rewind retention window, not the replay
-    /// depth.
+    /// The default number of ticks kept, about one second at 60 ticks per
+    /// second.
     /// </summary>
     public const long DefaultLimit = 64;
 
@@ -60,9 +48,8 @@ public sealed class NetwTimeline : NetwRefCounted
         NetwApi.MethodBind("NetwTimeline", "create", 42114688UL);
 
     /// <summary>
-    /// Returns a timeline retaining <paramref name="limit"/> ticks per ring. A
-    /// timeline built with <c>NetwTimeline.new()</c> instead uses
-    /// <see cref="NetwTimeline.DefaultLimit"/>.
+    /// Returns a timeline that keeps <paramref name="limit"/> ticks.
+    /// <c>new()</c> keeps <see cref="NetwTimeline.DefaultLimit"/>.
     /// </summary>
     public static NetwTimeline Create(long limit = 64)
     {
@@ -80,8 +67,8 @@ public sealed class NetwTimeline : NetwRefCounted
         NetwApi.MethodBind("NetwTimeline", "record_state", 64545446UL);
 
     /// <summary>
-    /// Records an authoritative whole-entity state <paramref name="snapshot"/>
-    /// at <paramref name="tick"/>.
+    /// Records the state <paramref name="snapshot"/> at
+    /// <paramref name="tick"/>.
     /// </summary>
     public void RecordState(long tick, Godot.Collections.Dictionary snapshot)
     {
@@ -103,7 +90,8 @@ public sealed class NetwTimeline : NetwRefCounted
         NetwApi.MethodBind("NetwTimeline", "record_input", 64545446UL);
 
     /// <summary>
-    /// Records an input <paramref name="snapshot"/> at <paramref name="tick"/>.
+    /// Records the input <paramref name="snapshot"/> at
+    /// <paramref name="tick"/>.
     /// </summary>
     public void RecordInput(long tick, Godot.Collections.Dictionary snapshot)
     {
@@ -125,8 +113,8 @@ public sealed class NetwTimeline : NetwRefCounted
         NetwApi.MethodBind("NetwTimeline", "state_at", 3485342025UL);
 
     /// <summary>
-    /// Returns the exact state snapshot at <paramref name="tick"/>, or an empty
-    /// <see cref="Godot.Collections.Dictionary"/>.
+    /// Returns the state recorded at exactly <paramref name="tick"/>, or an
+    /// empty <see cref="Godot.Collections.Dictionary"/>.
     /// </summary>
     public Godot.Collections.Dictionary StateAt(long tick)
     {
@@ -147,9 +135,8 @@ public sealed class NetwTimeline : NetwRefCounted
             3485342025UL);
 
     /// <summary>
-    /// Returns the newest state snapshot at or before <paramref name="tick"/>
-    /// (carry-forward), or an empty <see cref="Godot.Collections.Dictionary"/>
-    /// when nothing at or before it survives <see cref="NetwTimeline.Floor"/>.
+    /// Returns the newest state at or before <paramref name="tick"/>, or an
+    /// empty <see cref="Godot.Collections.Dictionary"/>.
     /// </summary>
     public Godot.Collections.Dictionary LatestStateAtOrBefore(long tick)
     {
@@ -174,18 +161,8 @@ public sealed class NetwTimeline : NetwRefCounted
             923996154UL);
 
     /// <summary>
-    /// Returns the tick <see cref="NetwTimeline.LatestStateAtOrBefore"/> would
-    /// read for <paramref name="tick"/>, or <c>-1</c> when it would read
-    /// nothing. Carry-forward means a read keyed at one tick can return with a
-    /// snapshot recorded at an older one, so a caller comparing two peers at
-    /// "the same tick" is only truly matched when this returns the tick it
-    /// asked for. Read it to tell a matched comparison from one carried forward
-    /// across a gap.
-    /// <code>
-    /// var predicted := timeline.latest_state_at_or_before(ack + 1)
-    /// var staleness := ack + 1 - timeline.latest_state_tick_at_or_before(ack + 1)
-    /// # staleness == 0: the compare is matched-tick
-    /// </code>
+    /// Returns the tick of the state
+    /// <see cref="NetwTimeline.LatestStateAtOrBefore"/> returns, or <c>-1</c>.
     /// </summary>
     public long LatestStateTickAtOrBefore(long tick)
     {
@@ -203,11 +180,8 @@ public sealed class NetwTimeline : NetwRefCounted
         NetwApi.MethodBind("NetwTimeline", "input_at", 3485342025UL);
 
     /// <summary>
-    /// Returns the exact input snapshot at <paramref name="tick"/>, or an empty
-    /// <see cref="Godot.Collections.Dictionary"/>. Input never carries forward:
-    /// a missing tick is a deliberate "no action", not a stale repeat. Use
-    /// <see cref="NetwTimeline.RecordInput"/>'s exact key, never a bracketed
-    /// read.
+    /// Returns the input at <paramref name="tick"/>, or an empty
+    /// <see cref="Godot.Collections.Dictionary"/>.
     /// </summary>
     public Godot.Collections.Dictionary InputAt(long tick)
     {
@@ -244,9 +218,7 @@ public sealed class NetwTimeline : NetwRefCounted
         NetwApi.MethodBind("NetwTimeline", "newest_input_tick", 3905245786UL);
 
     /// <summary>
-    /// Returns the newest recorded input tick, or <c>-1</c> when empty. The
-    /// server consume step reads this to tell a lost input tick (a later one
-    /// has arrived) from one that simply has not arrived yet.
+    /// Returns the newest tick with an input, or <c>-1</c>.
     /// </summary>
     public long NewestInputTick()
     {
@@ -259,15 +231,14 @@ public sealed class NetwTimeline : NetwRefCounted
         NetwApi.MethodBind("NetwTimeline", "inputs_in_range", 2345056839UL);
 
     /// <summary>
-    /// Returns recorded input snapshots for the inclusive tick range,
-    /// tick-ascending. This is the reconciliation replay window, skipping the
-    /// ticks that carry no input. The low bound is clamped to
-    /// <see cref="NetwTimeline.Floor"/>.
+    /// Returns the inputs from <paramref name="from"/> to
+    /// <paramref name="to"/>, both included, oldest first. Ticks with no input
+    /// are skipped.
     /// <code>
     /// Array[Dictionary]
     /// ┖╴entry
-    ///   ┠╴tick   int         the tick this input was recorded at
-    ///   ┖╴input  Dictionary  the exact snapshot recorded at that tick
+    ///   ┠╴tick   int         the tick
+    ///   ┖╴input  Dictionary  the input at that tick
     /// </code>
     /// </summary>
     public Godot.Collections.Array InputsInRange(long from, long to)
@@ -292,10 +263,8 @@ public sealed class NetwTimeline : NetwRefCounted
         NetwApi.MethodBind("NetwTimeline", "trim_before", 1286410249UL);
 
     /// <summary>
-    /// Advances the GC watermark so entries before <paramref name="tick"/> read
-    /// as absent. Memory is already bounded by the ring capacity, so this is a
-    /// logical trim: it moves <see cref="NetwTimeline.Floor"/> monotonically
-    /// and never rewinds it.
+    /// Ignores entries before <paramref name="tick"/> from now on. It cannot
+    /// move back.
     /// </summary>
     public void TrimBefore(long tick)
     {
@@ -312,9 +281,8 @@ public sealed class NetwTimeline : NetwRefCounted
         NetwApi.MethodBind("NetwTimeline", "floor", 3905245786UL);
 
     /// <summary>
-    /// Returns the trim watermark <see cref="NetwTimeline.TrimBefore"/> last
-    /// moved to. Every read treats an entry recorded strictly before it as
-    /// absent.
+    /// Returns the tick passed to <see cref="NetwTimeline.TrimBefore"/>.
+    /// Entries before it are ignored.
     /// </summary>
     public long Floor()
     {

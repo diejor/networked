@@ -10,8 +10,7 @@ namespace Networked;
 /// itself it will take one.
 /// </summary>
 /// <remarks>
-/// Two numbers, both optional. <see cref="Netw.ConfigureLagcomp"/> returns one
-/// of these to fill in.
+/// Returned by <see cref="Netw.ConfigureLagcomp"/>. Both values are optional.
 /// <code>
 /// func _init() -&gt; void:
 ///     Netw.configure_lagcomp(self) \
@@ -19,13 +18,9 @@ namespace Networked;
 ///             .max_future_action(4)
 /// </code>
 /// <para>
-/// Declaring this does not turn lag compensation on. The recording starts
-/// itself as soon as a predicted node or a <see cref="NetwAction"/> needs it,
-/// so a game that predicts declares nothing here and a game that predicts
-/// nothing pays for nothing. Declare one to move a number off its default. Once
-/// the session has read these values they are its own, so freeing the node that
-/// declared them stops nothing, and there is no way to take them back. A value
-/// written afterwards is reported and changes nothing.
+/// Lag compensation turns on by itself when a predicted entity or a
+/// <see cref="NetwAction"/> needs it. Use this only to change the defaults.
+/// Values are applied once, and later changes push a warning and do nothing.
 /// </para>
 /// </remarks>
 public sealed class NetwLagCompensationConfig : NetwRefCounted
@@ -58,9 +53,8 @@ public sealed class NetwLagCompensationConfig : NetwRefCounted
             1286410249UL);
 
     /// <summary>
-    /// How far ahead of the server's own tick an action may ask to happen
-    /// before it is denied. This is what stops a client claiming it acted in
-    /// the future. A negative count is rejected and the previous value stands.
+    /// How many ticks ahead of the server an action may be. Further ahead is
+    /// denied, so a client cannot claim it acted in the future.
     /// </summary>
     public long MaxFutureActionTicks
     {
@@ -100,10 +94,8 @@ public sealed class NetwLagCompensationConfig : NetwRefCounted
     /// <summary>
     /// How many ticks a
     /// <see cref="NetwAction.TimingModeEnum.TickAlignedStateReady"/> action
-    /// waits for the state its tick needs before it gives up and resolves on
-    /// what it has. Raise it for a link that loses input often, and lower it to
-    /// return a player sooner at the cost of judging on less. A negative count
-    /// is rejected and the previous value stands.
+    /// waits for missing input before running anyway. Raise it for connections
+    /// that lose packets often. Lower it to answer players sooner.
     /// </summary>
     public long InputGateDeadlineTicks
     {
@@ -136,8 +128,7 @@ public sealed class NetwLagCompensationConfig : NetwRefCounted
 
     /// <summary>
     /// Sets <see cref="NetwLagCompensationConfig.MaxFutureActionTicks"/> and
-    /// returns this same config, so a declaration reads as one chained
-    /// expression.
+    /// returns this config.
     /// </summary>
     public NetwLagCompensationConfig MaxFutureAction(long ticks)
     {
@@ -159,8 +150,7 @@ public sealed class NetwLagCompensationConfig : NetwRefCounted
 
     /// <summary>
     /// Sets <see cref="NetwLagCompensationConfig.InputGateDeadlineTicks"/> and
-    /// returns this same config, so a declaration reads as one chained
-    /// expression.
+    /// returns this config.
     /// </summary>
     public NetwLagCompensationConfig InputGateDeadline(long ticks)
     {

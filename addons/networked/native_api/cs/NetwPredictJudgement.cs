@@ -6,27 +6,15 @@ using Godot.NativeInterop;
 namespace Networked;
 
 /// <summary>
-/// What one acknowledged transition was judged to be worth.
+/// Whether a prediction was wrong, returned by
+/// <c>NetwMultiplayer._predict_evaluate</c>.
 /// </summary>
 /// <remarks>
-/// <c>NetwMultiplayer._predict_evaluate</c> returns one of these, and a game
-/// overriding that seam creates its own through
-/// <see cref="NetwPredictJudgement.Of"/>.
-/// <see cref="NetwPredictJudgement.Corrected"/> is not a threshold over
-/// <see cref="NetwPredictJudgement.Divergence"/>. A transition whose
-/// antecedents were all declared equal claimed reproducibility, so an exact
-/// predicate decides it and the magnitude is only ever reported. One whose
-/// antecedents were not is decided by tolerance, since the peers never claimed
-/// the exactness a fingerprint would test for.
+/// Create one with <see cref="NetwPredictJudgement.Of"/> in an override of
+/// <c>NetwMultiplayer._predict_evaluate</c>.
 /// <code>
 /// var judged := NetwPredictJudgement.of(INF, true)
 /// </code>
-/// <para>
-/// - <see cref="NetwPredictJudgement.Divergence"/> magnitude of the
-/// disagreement, <c>INF</c> when unjudged
-/// - <see cref="NetwPredictJudgement.Corrected"/> true when a recovery must be
-/// staged
-/// </para>
 /// </remarks>
 public sealed class NetwPredictJudgement : NetwRefCounted
 {
@@ -48,7 +36,7 @@ public sealed class NetwPredictJudgement : NetwRefCounted
         NetwApi.MethodBind("NetwPredictJudgement", "of", 3470222948UL);
 
     /// <summary>
-    /// Creates one judgement.
+    /// Creates a <see cref="NetwPredictJudgement"/>.
     /// </summary>
     public static NetwPredictJudgement Of(double divergence, bool corrected)
     {
@@ -68,10 +56,8 @@ public sealed class NetwPredictJudgement : NetwRefCounted
         NetwApi.MethodBind("NetwPredictJudgement", "divergence", 1740695150UL);
 
     /// <summary>
-    /// How far apart the two states were, as the worst per-property error. It
-    /// is <c>INF</c> when nothing was recorded at or before the
-    /// acknowledgement, which corrects, because an unjudged transition must
-    /// never pass as an agreeing one.
+    /// The largest error of any property, or <c>INF</c> when there was nothing
+    /// to compare.
     /// </summary>
     public double Divergence()
     {
@@ -84,7 +70,7 @@ public sealed class NetwPredictJudgement : NetwRefCounted
         NetwApi.MethodBind("NetwPredictJudgement", "corrected", 36873697UL);
 
     /// <summary>
-    /// Whether a recovery must be staged for this transition.
+    /// <c>true</c> when the prediction must be corrected.
     /// </summary>
     public bool Corrected()
     {

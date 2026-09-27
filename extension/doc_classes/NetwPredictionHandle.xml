@@ -193,7 +193,7 @@
 		<signal name="episode_closed">
 			<param index="0" name="report" type="Dictionary" />
 			<description>
-				Emitted when the peers have agreed again for long enough to close an episode. [param report] has the shape described in [signal episode_opened].
+				Emitted when the peers have agreed again for long enough, ending the episode [signal episode_opened] started. [param report] has the shape described in [signal episode_opened].
 			</description>
 		</signal>
 		<signal name="episode_fallback">
@@ -205,7 +205,7 @@
 		<signal name="episode_opened">
 			<param index="0" name="report" type="Dictionary" />
 			<description>
-				Emitted when a misprediction is large enough to act on. [param report] is a copy of the episode.
+				Emitted when a misprediction is large enough to act on. The corrections that follow, until the peers agree again, are reported together as one episode.
 				[codeblock lang=text]
 				Dictionary
 				┠╴id            int

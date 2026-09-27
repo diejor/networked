@@ -275,7 +275,14 @@ void NetwDatabase::_bind_methods() {
 
     ADD_SIGNAL(MethodInfo(
         "failed",
-        PropertyInfo(Variant::INT, "error"),
+        PropertyInfo(
+            Variant::INT,
+            "error",
+            PROPERTY_HINT_NONE,
+            "",
+            PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_CLASS_IS_ENUM,
+            "Error"
+        ),
         PropertyInfo(Variant::STRING, "detail")
     ));
 }

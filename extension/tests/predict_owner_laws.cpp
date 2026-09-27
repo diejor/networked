@@ -693,7 +693,7 @@ Ref<NetwPropertySetBinding> input_binding_on(Node *p_node) {
             StringName("throttle"),
             Ref<NetwQuantize>(),
             false,
-            int64_t(SchemaCore::VARIANT)
+            NetwMultiplayer::ColumnType(SchemaCore::VARIANT)
         )
     );
     return NetwPropertySetBinding::create(set, p_node);

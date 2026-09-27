@@ -6,19 +6,18 @@ using Godot.NativeInterop;
 namespace Networked;
 
 /// <summary>
-/// The server-side request context of one <see cref="NetwAction"/>.
+/// Information about a <see cref="NetwAction"/> request, passed to its method
+/// on the server.
 /// </summary>
 /// <remarks>
-/// Carries the requester, the clamped view tick, and the correlation key the
-/// optimistic effect was armed under. An authority method takes it first, ahead
-/// of whatever arguments <see cref="NetwAction.Request"/> carried, and calls
-/// <see cref="NetwActionContext.Bind"/> before adding a spawned entity to the
-/// tree, or <see cref="NetwActionContext.Deny"/> when validation rejects the
-/// request.
+/// It is the first argument, before the arguments of
+/// <see cref="NetwAction.Request"/>. Call <see cref="NetwActionContext.Bind"/>
+/// on a node the action spawns, before adding it to the tree. Call
+/// <see cref="NetwActionContext.Deny"/> to reject the action.
 /// <code>
 /// func _place_bomb(ctx: NetwActionContext) -&gt; void:
-///     var past := lag.sample(entity, ctx.view_tick)
-///     if past.is_empty():
+///     var past := Netw.sample(entity, ctx.view_tick)
+///     if not past.has_value(&amp;"position"):
 ///         ctx.deny()
 ///         return
 ///     var bomb := BOMB.instantiate()
@@ -46,7 +45,7 @@ public sealed class NetwActionContext : NetwRefCounted
         NetwApi.MethodBind("NetwActionContext", "get_requester", 3905245786UL);
 
     /// <summary>
-    /// The peer id that sent the request.
+    /// The peer that sent the request.
     /// </summary>
     public long Requester
     {
@@ -62,7 +61,9 @@ public sealed class NetwActionContext : NetwRefCounted
         NetwApi.MethodBind("NetwActionContext", "get_view_tick", 3905245786UL);
 
     /// <summary>
-    /// The tick used for server validation, clamped to the executing tick.
+    /// The tick the client saw when it acted, no later than
+    /// <see cref="NetwActionContext.ExecutionTick"/>. Use it with
+    /// <see cref="Netw.Rewind"/> and <see cref="Netw.Sample"/>.
     /// </summary>
     public long ViewTick
     {
@@ -81,8 +82,7 @@ public sealed class NetwActionContext : NetwRefCounted
             3905245786UL);
 
     /// <summary>
-    /// The tick the requester originally asked the server to evaluate, before
-    /// clamping.
+    /// The tick the client asked for.
     /// </summary>
     public long RequestedTick
     {
@@ -104,7 +104,7 @@ public sealed class NetwActionContext : NetwRefCounted
             3905245786UL);
 
     /// <summary>
-    /// The server tick that ran the authority method.
+    /// The server tick the action runs on.
     /// </summary>
     public long ExecutionTick
     {
@@ -123,9 +123,8 @@ public sealed class NetwActionContext : NetwRefCounted
         NetwApi.MethodBind("NetwActionContext", "bind", 1078189570UL);
 
     /// <summary>
-    /// Binds <paramref name="node"/> so its <see cref="NetwEntity.EntityId"/>
-    /// confirms this action when the authoritative spawn arrives. Call it
-    /// before adding the node to the tree.
+    /// Links <paramref name="node"/> to this action, so the client's predicted
+    /// copy is replaced by it. Call it before adding the node to the tree.
     /// </summary>
     public void Bind(Node node)
     {
@@ -142,8 +141,7 @@ public sealed class NetwActionContext : NetwRefCounted
         NetwApi.MethodBind("NetwActionContext", "deny", 3218959716UL);
 
     /// <summary>
-    /// Denies this action and asks the requesting peer to revert it.
-    /// Idempotent.
+    /// Rejects the action. The requesting client undoes its prediction.
     /// </summary>
     public void Deny()
     {

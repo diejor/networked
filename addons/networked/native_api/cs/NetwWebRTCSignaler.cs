@@ -6,18 +6,14 @@ using Godot.NativeInterop;
 namespace Networked;
 
 /// <summary>
-/// The rendezvous a game subclasses so a WebRTC session exchanges SDP and ICE
-/// over signaling it chooses.
+/// Extend it to exchange WebRTC offers, answers and ICE candidates through your
+/// own signaling server.
 /// </summary>
 /// <remarks>
-/// A WebRTC session is signaling-agnostic. It hands every outbound offer,
-/// answer and ICE bundle to a signaler and takes the inbound ones back, so a
-/// dedicated WebSocket server, a matchmaker or a tracker swarm are the same
-/// session behind different signaling. The session speaks engine multiplayer
-/// ids; a signaler maps those onto whatever address its own transport uses and
-/// keeps that mapping to itself. Pass a subclass to the WebRTC transport as the
-/// <c>signaler</c> settings key. The default is the built-in WebTorrent tracker
-/// signaler, which needs no server of any kind.
+/// The WebRTC transport sends every offer, answer and ICE candidate through a
+/// signaler, and receives the other peer's through it. Pass a subclass as the
+/// <c>signaler</c> setting of the WebRTC transport. The default uses public
+/// WebTorrent trackers and needs no server.
 /// <code>
 /// class_name RelaySignaler
 /// extends NetwWebRTCSignaler
@@ -52,39 +48,16 @@ namespace Networked;
 ///     _socket.close()
 /// </code>
 /// <para>
-/// A signaler reports upward by calling
-/// <see cref="NetwWebRTCSignaler.Receive"/>,
+/// Report back by calling <see cref="NetwWebRTCSignaler.Receive"/>,
 /// <see cref="NetwWebRTCSignaler.ReportReady"/>,
 /// <see cref="NetwWebRTCSignaler.ReportLost"/> and
-/// <see cref="NetwWebRTCSignaler.ReportUnreachable"/> rather than by emitting a
-/// signal, because the session drains what a signaler reports on its own poll
-/// rather than being re-entered mid-handshake. The distinction between
-/// <see cref="NetwWebRTCSignaler.ReportLost"/> and
-/// <see cref="NetwWebRTCSignaler.ReportUnreachable"/> is which end of the
-/// attempt failed: unreachable means no signaling route ever opened, lost means
-/// one opened and then went away. A wind-down the signaler chose itself, after
-/// <c>_on_session_connected</c> told it the native link is up, is neither and
-/// reports nothing. <b>Tracker diagnostics</b> The default tracker signaler
-/// warns once when every tracker it was given failed, naming each url and why.
-/// One tracker failing out of a redundant list is not a fault and is silent
-/// until <c>networked/webrtc/warn_on_tracker_failure</c> turns per-url warnings
-/// on.
-/// <code>
-/// every tracker failed   one warning naming each url, always
-/// one tracker failed     silent, unless warn_on_tracker_failure
-/// </code>
-/// </para>
-/// <para>
-/// A tracker reached over <c>wss</c> that fails its TLS handshake also prints
-/// the engine's own mbedtls error, which names no url. The warnings above are
-/// what identify the endpoint. The <c>kind</c> both
-/// <see cref="NetwWebRTCSignaler.Receive"/> and <c>_send</c> carry is
-/// <c>"offer"</c>, <c>"answer"</c> or <c>"candidate"</c>. The session bundles
-/// its gathered candidates into the offer and answer payloads, so a signaler
-/// whose transport relays exactly one directed message per peer carries a whole
-/// handshake in it. An empty <c>to_address</c> on <c>_send</c> means the
-/// session has not learned that remote's address yet, which a signaler capable
-/// of discovery treats as room-directed.
+/// <see cref="NetwWebRTCSignaler.ReportUnreachable"/>. <c>kind</c> in
+/// <see cref="NetwWebRTCSignaler.Receive"/> and <c>_send</c> is <c>"offer"</c>,
+/// <c>"answer"</c> or <c>"candidate"</c>. Offers and answers already include
+/// the gathered candidates, so one message per peer is enough. The default
+/// signaler warns once when every tracker fails. Enable
+/// <c>networked/webrtc/warn_on_tracker_failure</c> to also warn for each
+/// tracker that fails.
 /// </para>
 /// </remarks>
 public sealed class NetwWebRTCSignaler : NetwRefCounted
@@ -107,21 +80,15 @@ public sealed class NetwWebRTCSignaler : NetwRefCounted
         NetwApi.MethodBind("NetwWebRTCSignaler", "receive", 4199752328UL);
 
     /// <summary>
-    /// Reports one inbound offer, answer or ICE bundle from
-    /// <paramref name="fromPeer"/>, whose signaling address is
-    /// <paramref name="fromAddress"/>. A signaler that can receive the same
-    /// message twice is expected to report it once, because the session applies
-    /// what it is given. Which keys <paramref name="payload"/> carries is
-    /// decided by <paramref name="kind"/>.
+    /// Passes an offer, answer or candidate from <paramref name="fromPeer"/> to
+    /// the session. Pass each message once.
     /// <code>
     /// Dictionary
     /// ┠╴offer / answer
     /// ┃  ┠╴type        String             "offer" or "answer"
-    /// ┃  ┠╴sdp         String             the local session description
-    /// ┃  ┠╴candidates  Array[Dictionary]  every candidate gathered so far, each
-    /// ┃  ┃                                shaped like the candidate case below
-    /// ┃  ┖╴is_local    bool               true when both ends of this handshake
-    /// ┃                                   run in the same process
+    /// ┃  ┠╴sdp         String             the session description
+    /// ┃  ┠╴candidates  Array[Dictionary]  the candidates, shaped as below
+    /// ┃  ┖╴is_local    bool               true when both peers are in one process
     /// ┖╴candidate
     ///    ┠╴type           String  "candidate"
     ///    ┠╴candidate      String  the ICE candidate line
@@ -159,8 +126,7 @@ public sealed class NetwWebRTCSignaler : NetwRefCounted
         NetwApi.MethodBind("NetwWebRTCSignaler", "report_ready", 3218959716UL);
 
     /// <summary>
-    /// Reports that at least one signaling route is usable. Reporting this more
-    /// than once is harmless.
+    /// Call it when the signaling connection is open. Calling it again is fine.
     /// </summary>
     public void ReportReady()
     {
@@ -172,8 +138,7 @@ public sealed class NetwWebRTCSignaler : NetwRefCounted
         NetwApi.MethodBind("NetwWebRTCSignaler", "report_lost", 3218959716UL);
 
     /// <summary>
-    /// Reports that signaling was open and has gone away. A client that has not
-    /// yet reached its host treats this as a stalled join.
+    /// Call it when the signaling connection was open and was lost.
     /// </summary>
     public void ReportLost()
     {
@@ -188,7 +153,7 @@ public sealed class NetwWebRTCSignaler : NetwRefCounted
             3218959716UL);
 
     /// <summary>
-    /// Reports that no signaling route could be opened at all.
+    /// Call it when the signaling connection could not be opened.
     /// </summary>
     public void ReportUnreachable()
     {
@@ -221,8 +186,7 @@ public sealed class NetwWebRTCSignaler : NetwRefCounted
             2841200299UL);
 
     /// <summary>
-    /// The address other peers reach this signaler at, as the signaler itself
-    /// reports it.
+    /// Returns what <c>_local_signaler_id</c> returns.
     /// </summary>
     public string LocalSignalerId()
     {

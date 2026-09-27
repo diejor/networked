@@ -120,7 +120,7 @@ void NetwConnectHandle::relay_endpoint_updated(const RID &p_target) {
 
 RID NetwConnectHandle::create_peer(
     const Variant &p_transport,
-    int64_t p_mode,
+    NetwMultiplayer::TransportMode p_mode,
     const String &p_address,
     const Dictionary &p_settings,
     const Callable &p_completed,
@@ -510,7 +510,14 @@ void NetwConnectHandle::_bind_methods() {
 
     ADD_SIGNAL(MethodInfo(
         SIG_JOIN_FAILED,
-        PropertyInfo(Variant::INT, "error"),
+        PropertyInfo(
+            Variant::INT,
+            "error",
+            PROPERTY_HINT_NONE,
+            "",
+            PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_CLASS_IS_ENUM,
+            "Error"
+        ),
         PropertyInfo(Variant::STRING, "reason")
     ));
     ADD_SIGNAL(MethodInfo(

@@ -6,19 +6,12 @@ using Godot.NativeInterop;
 namespace Networked;
 
 /// <summary>
-/// An isolated window and viewport tree for one local participant.
+/// A <see cref="Window"/> for one of several players running in the same
+/// process.
 /// </summary>
 /// <remarks>
-/// Several participants sharing one process each need their own viewport, their
-/// own world and their own input, and a <see cref="Window"/> is the only node
-/// that gives all three. This is that window plus the identity of the
-/// participant mounted in it: <see cref="ParticipantWindow.MountedTree"/>,
-/// <see cref="ParticipantWindow.PeerId"/> and
-/// <see cref="ParticipantWindow.UserName"/> say whose it is, and
-/// <see cref="ParticipantViewport.AddSlot"/> places it. A window arrives hidden
-/// and borderless, so a process that never asks for a display never opens one.
-/// Only a tiler or an author calling
-/// <see cref="ParticipantWindow.SetTiledRect"/> makes it visible.
+/// Each player gets their own window, world and input. Add it to a
+/// <see cref="ParticipantViewport"/> to show it. It starts hidden.
 /// <code>
 /// var slot := ParticipantWindow.new()
 /// slot.own_world_3d = true
@@ -29,17 +22,9 @@ namespace Networked;
 /// tiler.assign_device(1, slot)
 /// </code>
 /// <para>
-/// The <c>stretch_</c> knobs are <see cref="ParticipantView"/>'s, resolved the
-/// same way against the project's <c>display/window/stretch/*</c> settings, and
-/// land on this window's own <see cref="Window.ContentScaleMode"/> family. A
-/// child <see cref="Window"/> inherits none of the root's content scaling on
-/// its own, so without this a tiled participant would draw at raw pixel size
-/// while the root window scaled. <see cref="ParticipantWindow.SendInput"/> is
-/// the routed path a container uses to deliver an event this window did not
-/// receive itself, such as a joypad bound to a particular seat. Events queue
-/// and flush deferred rather than being pushed where they arrive, because
-/// pushing input from inside an input callback re-enters the tree the caller is
-/// still walking.
+/// The <c>stretch_</c> members work like those of
+/// <see cref="ParticipantView"/>, using the project's
+/// <c>display/window/stretch/*</c> settings by default.
 /// </para>
 /// </remarks>
 public sealed class ParticipantWindow : NetwObject
@@ -71,10 +56,8 @@ public sealed class ParticipantWindow : NetwObject
             1078189570UL);
 
     /// <summary>
-    /// The session tree mounted inside this window. Identity rather than
-    /// machinery: nothing here reads it, and it is how a caller holding a
-    /// window finds the participant's session. Returns <c>null</c> once that
-    /// tree is freed.
+    /// The <see cref="MultiplayerTree"/> of the player in this window, or
+    /// <c>null</c>.
     /// </summary>
     public Node MountedTree
     {
@@ -105,8 +88,7 @@ public sealed class ParticipantWindow : NetwObject
         NetwApi.MethodBind("ParticipantWindow", "set_peer_id", 1286410249UL);
 
     /// <summary>
-    /// The network peer id assigned to the participant in this window. Zero
-    /// until the participant has joined.
+    /// The peer id of the player in this window, or <c>0</c> before they join.
     /// </summary>
     public long PeerId
     {
@@ -135,8 +117,7 @@ public sealed class ParticipantWindow : NetwObject
         NetwApi.MethodBind("ParticipantWindow", "set_username", 3304788590UL);
 
     /// <summary>
-    /// The name the participant in this window joined under. Identity, like
-    /// <see cref="ParticipantWindow.PeerId"/>, and the readable half of it.
+    /// The username of the player in this window.
     /// </summary>
     public StringName UserName
     {
@@ -168,9 +149,7 @@ public sealed class ParticipantWindow : NetwObject
             1179508947UL);
 
     /// <summary>
-    /// Which end of the fit this window renders. Maps to
-    /// <see cref="Window.ContentScaleMode"/> and defaults to the project
-    /// setting.
+    /// Sets <see cref="Window.ContentScaleMode"/>.
     /// </summary>
     public ParticipantView.StretchModeEnum StretchMode
     {
@@ -208,9 +187,7 @@ public sealed class ParticipantWindow : NetwObject
             929858435UL);
 
     /// <summary>
-    /// How the design resolution fits this window. Maps to
-    /// <see cref="Window.ContentScaleAspect"/> and defaults to the project
-    /// setting.
+    /// Sets <see cref="Window.ContentScaleAspect"/>.
     /// </summary>
     public ParticipantView.StretchAspectEnum StretchAspect
     {
@@ -248,9 +225,7 @@ public sealed class ParticipantWindow : NetwObject
             2755614822UL);
 
     /// <summary>
-    /// Whether the fit may use a fractional scale. Maps to
-    /// <see cref="Window.ContentScaleStretch"/> and defaults to the project
-    /// setting.
+    /// Sets <see cref="Window.ContentScaleStretch"/>.
     /// </summary>
     public ParticipantView.StretchScaleModeEnum StretchScaleMode
     {
@@ -288,8 +263,7 @@ public sealed class ParticipantWindow : NetwObject
             373806689UL);
 
     /// <summary>
-    /// Divides the design resolution. Maps to
-    /// <see cref="Window.ContentScaleFactor"/>. A value of zero or less uses
+    /// Sets <see cref="Window.ContentScaleFactor"/>. <c>0.0</c> or less uses
     /// the project setting.
     /// </summary>
     public double StretchScale
@@ -328,8 +302,7 @@ public sealed class ParticipantWindow : NetwObject
             1130785943UL);
 
     /// <summary>
-    /// The logical resolution this window's contents draw at, resolved onto
-    /// <see cref="Window.ContentScaleSize"/>. <c>Vector2i(0, 0)</c> inherits
+    /// Sets <see cref="Window.ContentScaleSize"/>. <c>Vector2i(0, 0)</c> uses
     /// the project's viewport size.
     /// </summary>
     public Vector2I StretchDesignSize
@@ -359,9 +332,8 @@ public sealed class ParticipantWindow : NetwObject
         NetwApi.MethodBind("ParticipantWindow", "set_tiled_rect", 1763793166UL);
 
     /// <summary>
-    /// Places this window at <paramref name="rect"/> and re-resolves its
-    /// content scaling for the new size. What <see cref="ParticipantViewport"/>
-    /// calls on every slot when the tiling changes.
+    /// Moves and resizes this window to <paramref name="rect"/>, and shows it.
+    /// <see cref="ParticipantViewport"/> calls it.
     /// </summary>
     public void SetTiledRect(Rect2I rect)
     {
@@ -378,10 +350,8 @@ public sealed class ParticipantWindow : NetwObject
         NetwApi.MethodBind("ParticipantWindow", "send_input", 3754044979UL);
 
     /// <summary>
-    /// Queues <paramref name="event"/> for this window's viewport, flushed as a
-    /// local event on the next deferred pass. The routed path: use it when
-    /// something outside this window decided the event belongs to it. Events
-    /// this window receives through normal focus need no help.
+    /// Sends <paramref name="event"/> to this window at the end of the frame.
+    /// Use it for input the window does not receive by focus, such as a joypad.
     /// </summary>
     public void SendInput(InputEvent @event)
     {

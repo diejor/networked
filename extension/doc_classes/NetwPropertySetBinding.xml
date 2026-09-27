@@ -1,12 +1,10 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <class name="NetwPropertySetBinding" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
 	<brief_description>
-		One live binding of a [NetwPropertySet] to the node that declares it through [method Netw.configure_property], the route-keyed gather source for a state or input group.
+		A [NetwPropertySet] attached to one node.
 	</brief_description>
 	<description>
-		The shell captures [member route], [member comp], and [member order_key] at registration. The set carries the wire contract, while the binding carries the live gather state: the two lanes' rows, the windowed input ring, and the row each lane last merged a frame onto.
-		A set's [constant NetwPropertySet.VOLATILE] fields ride the SYNC_ROW channel freshest-wins, and its [constant NetwPropertySet.RETAINED] fields ride the reliable SYNC_ROW_DELTA lane only when they change, so the two lanes of one set never re-send each other.
-		Both lanes offer the whole row every pass and neither decides what a recipient is owed. The send plane holds one baseline per peer per stream, a stream being one route, one component ordinal and one lane, and returns the columns that moved, which is why a binding carries no per-peer book of its own.
+		Created for each node that calls [method Netw.configure_property]. [member set] describes the properties, and this object reads them from the node.
 	</description>
 	<tutorials>
 	</tutorials>
@@ -15,93 +13,100 @@
 			<return type="StringName" />
 			<param index="0" name="property" type="StringName" />
 			<description>
-				Returns the sibling channel a recovery advances [param property] along, or an empty [StringName] when it is restored at the acknowledged value.
+				Returns the [method NetwPropertyConfig.carry_along] property of [param property], or empty.
 			</description>
 		</method>
 		<method name="converge_stiffness_of" qualifiers="const">
 			<return type="float" />
 			<param index="0" name="property" type="StringName" />
 			<description>
-				Returns how firmly a recovery pulls [param property] toward the authoritative value, or [code]0.0[/code] when it is restored outright.
+				Returns the [method NetwPropertyConfig.converge] value of [param property], or [code]0.0[/code].
 			</description>
 		</method>
 		<method name="epsilon_override_of" qualifiers="const">
 			<return type="float" />
 			<param index="0" name="property" type="StringName" />
 			<description>
-				Returns [param property]'s own divergence threshold, or a negative value when it inherits the entity's default.
+				Returns the [method NetwPropertyConfig.epsilon] of [param property], or a negative value when unset.
 			</description>
 		</method>
 		<method name="field_of" qualifiers="const">
 			<return type="NetwPropertySetColumn" />
 			<param index="0" name="property" type="StringName" />
 			<description>
-				Returns the declared [NetwPropertySetColumn] for [param property], or [code]null[/code] when this set does not carry it.
+				Returns the [NetwPropertySetColumn] of [param property], or [code]null[/code].
 			</description>
 		</method>
 		<method name="is_active" qualifiers="const">
 			<return type="bool" />
 			<description>
-				Returns [code]true[/code] while the node is alive, in the tree, and holds authority over the stream.
+				Returns [code]true[/code] while the node is in the tree and this peer sends its properties.
 			</description>
 		</method>
 		<method name="is_windowed" qualifiers="const">
 			<return type="bool" />
 			<description>
-				Returns whether this binding's volatile lane rides the redundant sample ring rather than a single row, which is what routes it onto the SYNC_ROW_WINDOW channel.
+				Returns [code]true[/code] when each send repeats past ticks, as set by [method NetwPropertyConfig.windowed].
 			</description>
 		</method>
 		<method name="node" qualifiers="const">
 			<return type="Node" />
 			<description>
-				Returns the declaring node, or [code]null[/code] once it has freed.
+				Returns the node, or [code]null[/code] once it is freed.
 			</description>
 		</method>
 		<method name="property_class_of" qualifiers="const">
 			<return type="int" />
 			<param index="0" name="property" type="StringName" />
 			<description>
-				Returns what [param property] does in the simulation, or [constant NetwPropertySet.CAUSAL] when the set does not declare it.
-				Reconciliation uses this to decide which values it may compare and restore. Undeclared properties default to causal recovery.
+				Returns the [enum NetwPropertySet.PropertyClass] of [param property], or [constant NetwPropertySet.CAUSAL] when unset.
 			</description>
 		</method>
 		<method name="reconcile_only_of" qualifiers="const">
 			<return type="bool" />
 			<param index="0" name="property" type="StringName" />
 			<description>
-				Returns whether [param property] is excluded from triggering a correction on its own.
+				Returns [code]true[/code] when [param property] uses [method NetwPropertyConfig.reconcile_only].
 			</description>
 		</method>
 		<method name="teleport_at_of" qualifiers="const">
 			<return type="float" />
 			<param index="0" name="property" type="StringName" />
 			<description>
-				Returns [param property]'s own teleport-tier distance, or a negative value when it inherits the entity's default.
+				Returns the [method NetwPropertyConfig.teleport_at] of [param property], or a negative value when unset.
 			</description>
 		</method>
 		<method name="teleport_only_of" qualifiers="const">
 			<return type="bool" />
 			<param index="0" name="property" type="StringName" />
 			<description>
-				Returns whether [param property] is restored only by a teleport-tier recovery.
+				Returns [code]true[/code] when [param property] uses [method NetwPropertyConfig.teleport_only].
 			</description>
 		</method>
 	</methods>
 	<members>
 		<member name="comp" type="int" setter="set_comp" getter="get_comp" default="0">
-			Registered component address under the entity root.
+			The index of the node within its entity. [code]0[/code] is the entity root.
 		</member>
 		<member name="on_applied" type="Callable" setter="set_on_applied" getter="get_on_applied" default="Callable()">
-			Called once per committed row, with the decoded header [code]{ordinal, tick, ack, payload, samples?}[/code]. It observes a row the receiver has already committed and cannot refuse one, so raising an error here does not undo it. A refused row never reaches this call. A prediction engine subscribes here so a state receive drives reconciliation and an input receive opens the consume cursor. Unset for a plain display set, which just snaps the node.
+			Called after received values are applied, as [code]on_applied(header)[/code].
+			[codeblock lang=text]
+			Dictionary
+			┠╴ordinal  int         the index of the set
+			┠╴tick     int         the tick of the values
+			┠╴ack      int         the last input the server used
+			┠╴payload  Array       the values
+			┖╴samples  Array       past ticks, only for a windowed set
+			[/codeblock]
 		</member>
 		<member name="order_key" type="StringName" setter="set_order_key" getter="get_order_key" default="&amp;&quot;&quot;">
-			Stable registration key used by the session's declaration table.
+			A key that sorts bindings the same way on every peer.
 		</member>
 		<member name="route" type="int" setter="set_route" getter="get_route" default="0">
-			Cached entity route. A zero value has not bound to liveness yet.
+			The route of the entity, or [code]0[/code] before it spawns.
 		</member>
 		<member name="set" type="NetwPropertySet" setter="set_set" getter="get_set">
-			The declaration this binding is a live instance of.
+			The [NetwPropertySet] this binding uses.
 		</member>
 	</members>
 </class>

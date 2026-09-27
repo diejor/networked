@@ -6,37 +6,25 @@ using Godot.NativeInterop;
 namespace Networked;
 
 /// <summary>
-/// Categorical outcome of a server probe.
+/// The result of checking whether a server can be joined.
 /// </summary>
 /// <remarks>
-/// What a server browser holds for one row, so the row can render before anyone
-/// commits to joining it. A probe never throws and never half-returns: every
-/// route out of it, including a null target and a transport that cannot probe
-/// at all, ends at one <see cref="NetwProbeResult.StatusEnum.Ok"/> ..
-/// <see cref="NetwProbeResult.StatusEnum.Incompatible"/> value, so a caller
-/// branches on <see cref="NetwProbeResult.Status"/> rather than on whether it
-/// got a result. <see cref="NetwProbeResult.Status"/> decides which of the
-/// other members carries anything. Only
+/// Check <see cref="NetwProbeResult.Status"/> first. Only
 /// <see cref="NetwProbeResult.StatusEnum.Ok"/> and
-/// <see cref="NetwProbeResult.StatusEnum.Incompatible"/> carry an
-/// <see cref="NetwProbeResult.Info"/>, only
-/// <see cref="NetwProbeResult.StatusEnum.Ok"/> carries a meaningful
-/// <see cref="NetwProbeResult.LatencyMs"/>, and
-/// <see cref="NetwProbeResult.Message"/> is diagnostic detail rather than text
-/// to show a player.
+/// <see cref="NetwProbeResult.StatusEnum.Incompatible"/> have an
+/// <see cref="NetwProbeResult.Info"/>, and only
+/// <see cref="NetwProbeResult.StatusEnum.Ok"/> has a
+/// <see cref="NetwProbeResult.LatencyMs"/>.
 /// <code>
 /// if result.is_ok():
 ///     print("%d/%d players, %d ms" % [
 ///         result.info.players, result.info.max_players, result.latency_ms,
 ///     ])
 /// elif result.status == NetwProbeResult.STATUS_INCOMPATIBLE:
-///     # info survives here, so the row can still show who is on the server.
 ///     show_banner("That server runs a different build.")
 /// </code>
 /// <para>
-/// The seven static factories are the only way to get a result whose status and
-/// payload agree, and a <see cref="NetwTransport"/> that returns a probe at all
-/// returns one of them.
+/// A <see cref="NetwTransport"/> creates results with the static methods.
 /// </para>
 /// </remarks>
 public sealed class NetwProbeResult : NetwRefCounted
@@ -58,38 +46,32 @@ public sealed class NetwProbeResult : NetwRefCounted
     public enum StatusEnum : long
     {
         /// <summary>
-        /// The server returned and this build may join it.
-        /// <see cref="NetwProbeResult.IsOk"/> tests for exactly this.
+        /// The server answered and can be joined.
         /// </summary>
         Ok = 0,
         /// <summary>
-        /// The connection or the peer authentication failed before the server
-        /// replied.
+        /// Could not connect to the server.
         /// </summary>
         Unreachable = 1,
         /// <summary>
-        /// Nothing came back inside the probe window.
+        /// The server did not answer in time.
         /// </summary>
         Timeout = 2,
         /// <summary>
-        /// The transport cannot probe, so the server's state is unknown rather
-        /// than bad.
+        /// The transport cannot check servers. The server may still be up.
         /// </summary>
         Unsupported = 3,
         /// <summary>
-        /// The server returned and rejected, being full or rate limiting
-        /// probes.
+        /// The server is full or receiving too many checks.
         /// </summary>
         Busy = 4,
         /// <summary>
-        /// The probe itself failed, with <see cref="NetwProbeResult.Message"/>
-        /// naming the step.
+        /// The check itself failed. See <see cref="NetwProbeResult.Message"/>.
         /// </summary>
         Error = 5,
         /// <summary>
-        /// The server returned with a build this client cannot join, and
-        /// <see cref="NetwProbeResult.Info"/> survives so a row can still be
-        /// rendered.
+        /// The server runs a different game or version.
+        /// <see cref="NetwProbeResult.Info"/> is set.
         /// </summary>
         Incompatible = 6,
     }
@@ -101,9 +83,7 @@ public sealed class NetwProbeResult : NetwRefCounted
         NetwApi.MethodBind("NetwProbeResult", "set_status", 1576803290UL);
 
     /// <summary>
-    /// The outcome category, and the member every caller branches on. It
-    /// defaults to <see cref="NetwProbeResult.StatusEnum.Unsupported"/>, so a
-    /// bare <c>new()</c> reads as "nothing was asked" rather than as a failure.
+    /// The result.
     /// </summary>
     public NetwProbeResult.StatusEnum Status
     {
@@ -132,10 +112,7 @@ public sealed class NetwProbeResult : NetwRefCounted
         NetwApi.MethodBind("NetwProbeResult", "set_info", 1251535023UL);
 
     /// <summary>
-    /// What the server advertised about itself, or <c>null</c> when it never
-    /// returned. Carried by <see cref="NetwProbeResult.StatusEnum.Ok"/> and
-    /// <see cref="NetwProbeResult.StatusEnum.Incompatible"/>, and by nothing
-    /// else.
+    /// What the server says about itself, or <c>null</c>.
     /// </summary>
     public NetwServerInfo Info
     {
@@ -164,9 +141,7 @@ public sealed class NetwProbeResult : NetwRefCounted
         NetwApi.MethodBind("NetwProbeResult", "set_latency_ms", 1286410249UL);
 
     /// <summary>
-    /// The probe round trip in milliseconds, or <c>-1</c> when the result came
-    /// from a directory listing instead of a round trip. Meaningful only under
-    /// <see cref="NetwProbeResult.StatusEnum.Ok"/>.
+    /// The round trip time in milliseconds, or <c>-1</c> when not measured.
     /// </summary>
     public long LatencyMs
     {
@@ -195,8 +170,7 @@ public sealed class NetwProbeResult : NetwRefCounted
         NetwApi.MethodBind("NetwProbeResult", "set_message", 83702148UL);
 
     /// <summary>
-    /// Diagnostic detail about why the probe ended the way it did. It names the
-    /// failing step for a log, so it is not player-facing text.
+    /// Details for logs, not for players.
     /// </summary>
     public string Message
     {
@@ -222,10 +196,8 @@ public sealed class NetwProbeResult : NetwRefCounted
         NetwApi.MethodBind("NetwProbeResult", "ok", 1547152133UL);
 
     /// <summary>
-    /// Returns a <see cref="NetwProbeResult.StatusEnum.Ok"/> result advertising
-    /// <paramref name="info"/>, measured at <paramref name="latencyMs"/>. A
-    /// result discovered through a lobby directory rather than a round trip
-    /// passes <c>-1</c>, which is how a browser marks a row it has no ping for.
+    /// Returns a <see cref="NetwProbeResult.StatusEnum.Ok"/> result. Pass
+    /// <c>-1</c> as <paramref name="latencyMs"/> when it was not measured.
     /// </summary>
     public static NetwProbeResult Ok(NetwServerInfo info, long latencyMs = 0)
     {
@@ -245,9 +217,7 @@ public sealed class NetwProbeResult : NetwRefCounted
         NetwApi.MethodBind("NetwProbeResult", "unreachable", 2096380847UL);
 
     /// <summary>
-    /// Returns a <see cref="NetwProbeResult.StatusEnum.Unreachable"/> result
-    /// carrying <paramref name="message"/>. The connection or the peer
-    /// authentication failed before any server reply.
+    /// Returns a <see cref="NetwProbeResult.StatusEnum.Unreachable"/> result.
     /// </summary>
     public static NetwProbeResult Unreachable(string message = "")
     {
@@ -267,9 +237,7 @@ public sealed class NetwProbeResult : NetwRefCounted
         NetwApi.MethodBind("NetwProbeResult", "timeout", 2096380847UL);
 
     /// <summary>
-    /// Returns a <see cref="NetwProbeResult.StatusEnum.Timeout"/> result
-    /// carrying <paramref name="message"/>. The probe reached the wire and
-    /// nothing came back inside the window.
+    /// Returns a <see cref="NetwProbeResult.StatusEnum.Timeout"/> result.
     /// </summary>
     public static NetwProbeResult Timeout(string message = "")
     {
@@ -290,8 +258,6 @@ public sealed class NetwProbeResult : NetwRefCounted
 
     /// <summary>
     /// Returns a <see cref="NetwProbeResult.StatusEnum.Unsupported"/> result.
-    /// This is what a <see cref="NetwTransport"/> returns when it has no cheap
-    /// way to ask, so a caller reads it as "unknown", never as "down".
     /// </summary>
     public static NetwProbeResult Unsupported()
     {
@@ -304,9 +270,7 @@ public sealed class NetwProbeResult : NetwRefCounted
         NetwApi.MethodBind("NetwProbeResult", "busy", 2096380847UL);
 
     /// <summary>
-    /// Returns a <see cref="NetwProbeResult.StatusEnum.Busy"/> result carrying
-    /// <paramref name="message"/>. The server returned and rejected: it is
-    /// full, or the probe arrived outside its rate window.
+    /// Returns a <see cref="NetwProbeResult.StatusEnum.Busy"/> result.
     /// </summary>
     public static NetwProbeResult Busy(string message = "")
     {
@@ -326,9 +290,7 @@ public sealed class NetwProbeResult : NetwRefCounted
         NetwApi.MethodBind("NetwProbeResult", "error", 2096380847UL);
 
     /// <summary>
-    /// Returns a <see cref="NetwProbeResult.StatusEnum.Error"/> result carrying
-    /// <paramref name="message"/>. The probe itself went wrong, rather than the
-    /// server returning something.
+    /// Returns a <see cref="NetwProbeResult.StatusEnum.Error"/> result.
     /// </summary>
     public static NetwProbeResult Error(string message = "")
     {
@@ -349,11 +311,7 @@ public sealed class NetwProbeResult : NetwRefCounted
 
     /// <summary>
     /// Returns a <see cref="NetwProbeResult.StatusEnum.Incompatible"/> result
-    /// carrying <paramref name="message"/>. The server returned with a
-    /// <see cref="NetwServerInfo.AppId"/> or
-    /// <see cref="NetwServerInfo.Version"/> this build cannot join, so
-    /// <paramref name="info"/> is kept: a browser row still has something to
-    /// show even though the join would be rejected.
+    /// with <paramref name="info"/>.
     /// </summary>
     public static NetwProbeResult Incompatible(
         NetwServerInfo info = null,
@@ -384,8 +342,7 @@ public sealed class NetwProbeResult : NetwRefCounted
 
     /// <summary>
     /// Returns <c>true</c> when <see cref="NetwProbeResult.Status"/> is
-    /// <see cref="NetwProbeResult.StatusEnum.Ok"/>, which is the one status
-    /// that says the server returned and this build may join it.
+    /// <see cref="NetwProbeResult.StatusEnum.Ok"/>.
     /// </summary>
     public bool IsOk()
     {

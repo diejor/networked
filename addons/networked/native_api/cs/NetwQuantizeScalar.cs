@@ -6,39 +6,25 @@ using Godot.NativeInterop;
 namespace Networked;
 
 /// <summary>
-/// <see cref="NetwQuantize"/> that snaps a number, or each axis of a
-/// <see cref="Vector2"/> or <see cref="Vector3"/>, onto a uniform grid across a
-/// bounded range.
+/// <see cref="NetwQuantize"/> for a number, or each axis of a
+/// <see cref="Vector2"/> or <see cref="Vector3"/>, within a range.
 /// </summary>
 /// <remarks>
-/// The grid is one number said two ways, and the class publishes both:
-/// <see cref="NetwQuantizeScalar.BitCount"/> is the wire budget and
-/// <see cref="NetwQuantizeScalar.ResolutionStep"/> is the precision it buys.
-/// Writing either derives the other from
-/// <see cref="NetwQuantizeScalar.MinLimit"/> and
-/// <see cref="NetwQuantizeScalar.MaxLimit"/>, so tuning a property by asking
-/// for 19 bits and tuning it by asking for 3cm of precision are the same act on
-/// the same object rather than two classes to choose between.
+/// Values between <see cref="NetwQuantizeScalar.MinLimit"/> and
+/// <see cref="NetwQuantizeScalar.MaxLimit"/> are rounded to
+/// <see cref="NetwQuantizeScalar.ResolutionStep"/>. Set the precision with
+/// <see cref="NetwQuantizeScalar.Bits"/> or with
+/// <see cref="NetwQuantizeScalar.Step"/>.
 /// <code>
 /// var q := NetwQuantizeScalar.new().limits(-2048.0, 2048.0).bits(19)
-///
-/// # the same grid, said the other way, and the swap is one word:
+/// # the same
 /// var q := NetwQuantizeScalar.new().limits(-2048.0, 2048.0).step(0.0078)
 /// </code>
 /// <para>
-/// <b>Declare the limits before the step.</b>
-/// <see cref="NetwQuantizeScalar.ResolutionStep"/> is a request rather than a
-/// stored field: setting it picks the smallest
-/// <see cref="NetwQuantizeScalar.BitCount"/> whose grid is at least that fine
-/// over the range currently declared, so a step written before its limits is
-/// derived against the wrong range. <see cref="NetwQuantizeScalar.Bits"/> is
-/// exact at any point in a chain. A <see cref="Vector3"/> or
-/// <see cref="Vector2"/> quantizes each axis the same way and costs
-/// <see cref="NetwQuantizeScalar.BitCount"/> bits per axis. The per-axis error
-/// is at most half <see cref="NetwQuantizeScalar.ResolutionStep"/>. Only the
-/// three stored fields decide the layout, so two of these that address the same
-/// grid return <c>true</c> to <see cref="NetwQuantize.IsSameLayout"/> however
-/// each was authored.
+/// Call <see cref="NetwQuantizeScalar.Limits"/> before
+/// <see cref="NetwQuantizeScalar.Step"/>. Each axis uses
+/// <see cref="NetwQuantizeScalar.BitCount"/> bits, and the error is at most
+/// half <see cref="NetwQuantizeScalar.ResolutionStep"/>.
 /// </para>
 /// </remarks>
 public sealed class NetwQuantizeScalar : NetwQuantize
@@ -64,9 +50,7 @@ public sealed class NetwQuantizeScalar : NetwQuantize
         NetwApi.MethodBind("NetwQuantizeScalar", "set_bit_count", 1286410249UL);
 
     /// <summary>
-    /// Bits spent per axis, clamped to 1..32. This is the stored knob and the
-    /// wire budget: the range is divided into <c>2 ** bit_count - 1</c> equal
-    /// steps, so a value at either limit round-trips exactly.
+    /// Bits per axis, from <c>1</c> to <c>32</c>.
     /// </summary>
     public int BitCount
     {
@@ -95,7 +79,7 @@ public sealed class NetwQuantizeScalar : NetwQuantize
         NetwApi.MethodBind("NetwQuantizeScalar", "set_min_limit", 373806689UL);
 
     /// <summary>
-    /// Inclusive lower bound of the encoded range. A value below it is clamped.
+    /// The smallest value. Smaller values are clamped.
     /// </summary>
     public double MinLimit
     {
@@ -124,9 +108,8 @@ public sealed class NetwQuantizeScalar : NetwQuantize
         NetwApi.MethodBind("NetwQuantizeScalar", "set_max_limit", 373806689UL);
 
     /// <summary>
-    /// Inclusive upper bound of the encoded range. A value above it is clamped
-    /// rather than wrapped, which is why an angle takes
-    /// <see cref="NetwQuantizeAngle"/> instead.
+    /// The largest value. Larger values are clamped. Use
+    /// <see cref="NetwQuantizeAngle"/> for angles.
     /// </summary>
     public double MaxLimit
     {
@@ -161,12 +144,9 @@ public sealed class NetwQuantizeScalar : NetwQuantize
             373806689UL);
 
     /// <summary>
-    /// Distance between two adjacent grid points, DERIVED from the other three
-    /// rather than stored: reading it returns <c>(max_limit - min_limit) / (2
-    /// ** bit_count - 1)</c>, and writing it moves
-    /// <see cref="NetwQuantizeScalar.BitCount"/> to the smallest budget that is
-    /// at least that fine. A step of zero or less is rejected, because no bit
-    /// count satisfies it.
+    /// The precision, <c>(max_limit - min_limit) / (2 ** bit_count - 1)</c>.
+    /// Setting it picks the smallest <see cref="NetwQuantizeScalar.BitCount"/>
+    /// that is at least this precise. Must be above <c>0.0</c>.
     /// </summary>
     public double ResolutionStep
     {
@@ -195,8 +175,8 @@ public sealed class NetwQuantizeScalar : NetwQuantize
         NetwApi.MethodBind("NetwQuantizeScalar", "bits", 3003927691UL);
 
     /// <summary>
-    /// Builder that sets <see cref="NetwQuantizeScalar.BitCount"/> and returns
-    /// this quantizer.
+    /// Sets <see cref="NetwQuantizeScalar.BitCount"/> and returns this
+    /// quantizer.
     /// </summary>
     public NetwQuantizeScalar Bits(int bits)
     {
@@ -214,10 +194,8 @@ public sealed class NetwQuantizeScalar : NetwQuantize
         NetwApi.MethodBind("NetwQuantizeScalar", "step", 3944915493UL);
 
     /// <summary>
-    /// Builder that asks for a grid at least as fine as <paramref name="step"/>
-    /// over the current range, by raising
-    /// <see cref="NetwQuantizeScalar.BitCount"/> to suit, and returns this
-    /// quantizer. Declare <see cref="NetwQuantizeScalar.Limits"/> first.
+    /// Sets <see cref="NetwQuantizeScalar.ResolutionStep"/> and returns this
+    /// quantizer. Call <see cref="NetwQuantizeScalar.Limits"/> first.
     /// </summary>
     public NetwQuantizeScalar Step(double step)
     {
@@ -235,12 +213,10 @@ public sealed class NetwQuantizeScalar : NetwQuantize
         NetwApi.MethodBind("NetwQuantizeScalar", "limits", 1961655323UL);
 
     /// <summary>
-    /// Builder that sets <see cref="NetwQuantizeScalar.MinLimit"/> and
-    /// <see cref="NetwQuantizeScalar.MaxLimit"/> and returns this quantizer. It
-    /// leaves <see cref="NetwQuantizeScalar.BitCount"/> alone, so widening the
-    /// range on a fixed budget coarsens
-    /// <see cref="NetwQuantizeScalar.ResolutionStep"/> rather than spending
-    /// more bits.
+    /// Sets <see cref="NetwQuantizeScalar.MinLimit"/> and
+    /// <see cref="NetwQuantizeScalar.MaxLimit"/> and returns this quantizer.
+    /// <see cref="NetwQuantizeScalar.BitCount"/> does not change, so a wider
+    /// range gives a larger <see cref="NetwQuantizeScalar.ResolutionStep"/>.
     /// </summary>
     public NetwQuantizeScalar Limits(double min, double max)
     {

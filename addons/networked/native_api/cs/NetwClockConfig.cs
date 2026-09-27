@@ -9,10 +9,10 @@ namespace Networked;
 /// Configuration for the clock of <see cref="Node.Multiplayer"/>.
 /// </summary>
 /// <remarks>
-/// Use <see cref="Netw.ConfigureClock"/> to configure the clock.
+/// Returned by <see cref="Netw.ConfigureClock"/>.
 /// <code>
 /// func _init() -&gt; void:
-///     Netw.configure_clock(self).tickrate(60).display_offset(2)
+///     Netw.configure_clock(self).ticks_per_second(60).display_offset_ticks(2)
 /// </code>
 /// </remarks>
 public sealed class NetwClockConfig : NetwRefCounted
@@ -38,7 +38,8 @@ public sealed class NetwClockConfig : NetwRefCounted
         NetwApi.MethodBind("NetwClockConfig", "set_tickrate", 1286410249UL);
 
     /// <summary>
-    /// How many simulation ticks to run per second.
+    /// Ticks per second. Higher is more precise, and costs more bandwidth and
+    /// CPU.
     /// </summary>
     public long Tickrate
     {
@@ -73,7 +74,7 @@ public sealed class NetwClockConfig : NetwRefCounted
             1286410249UL);
 
     /// <summary>
-    /// Maximum simulation ticks allowed to run in a single physics frame.
+    /// The most ticks run in one physics frame.
     /// </summary>
     public long MaxTicksPerFrame
     {
@@ -111,7 +112,7 @@ public sealed class NetwClockConfig : NetwRefCounted
             373806689UL);
 
     /// <summary>
-    /// Frame delta threshold before resetting the accumulator.
+    /// Seconds. A longer frame is treated as a hitch and skipped.
     /// </summary>
     public double StallThreshold
     {
@@ -149,8 +150,8 @@ public sealed class NetwClockConfig : NetwRefCounted
             2586408642UL);
 
     /// <summary>
-    /// Reads the engine's physics interpolation fraction when available instead
-    /// of a wall-clock estimate.
+    /// Whether <see cref="NetwClockHandle.TickFactor"/> follows
+    /// <c>Engine.get_physics_interpolation_fraction</c>.
     /// </summary>
     public bool UsePhysicsInterpolation
     {
@@ -176,26 +177,25 @@ public sealed class NetwClockConfig : NetwRefCounted
     }
 
     private static readonly IntPtr _bindGetSyncMode =
-        NetwApi.MethodBind("NetwClockConfig", "get_sync_mode", 3905245786UL);
+        NetwApi.MethodBind("NetwClockConfig", "get_sync_mode", 1957647188UL);
 
     private static readonly IntPtr _bindSetSyncMode =
-        NetwApi.MethodBind("NetwClockConfig", "set_sync_mode", 1286410249UL);
+        NetwApi.MethodBind("NetwClockConfig", "set_sync_mode", 2414319464UL);
 
     /// <summary>
-    /// Strategy used to align the local clock with the server, one of
-    /// <see cref="NetwMultiplayer.SyncMode"/>.
+    /// How the clock is corrected toward the server's.
     /// </summary>
-    public long SyncMode
+    public NetwMultiplayer.SyncMode SyncMode
     {
         get
         {
             long answered = default;
             NetwThunks.Ptrcall0_Long(_bindGetSyncMode, Checked, ref answered);
-            return answered;
+            return (NetwMultiplayer.SyncMode)answered;
         }
         set
         {
-            long slot0 = value;
+            long slot0 = (long)value;
             long discarded = default;
             NetwThunks.Ptrcall1_Long_Long(
                 _bindSetSyncMode,
@@ -218,8 +218,8 @@ public sealed class NetwClockConfig : NetwRefCounted
             1286410249UL);
 
     /// <summary>
-    /// The maximum allowed divergence before a hard
-    /// <see cref="NetwMultiplayer.SyncMode.Snap"/> is forced.
+    /// Ticks of difference from the server past which the clock snaps, even
+    /// with <see cref="NetwMultiplayer.SyncMode.Stretch"/>.
     /// </summary>
     public long PanicSnapThreshold
     {
@@ -257,8 +257,8 @@ public sealed class NetwClockConfig : NetwRefCounted
             373806689UL);
 
     /// <summary>
-    /// Fraction of the remaining divergence the
-    /// <see cref="NetwMultiplayer.SyncMode.Stretch"/> clock closes each frame.
+    /// The share of the difference
+    /// <see cref="NetwMultiplayer.SyncMode.Stretch"/> corrects each frame.
     /// </summary>
     public double StretchNudgeFactor
     {
@@ -293,7 +293,7 @@ public sealed class NetwClockConfig : NetwRefCounted
         NetwApi.MethodBind("NetwClockConfig", "set_ping_interval", 373806689UL);
 
     /// <summary>
-    /// How often the client pings the server to refresh RTT and recalibrate.
+    /// Seconds between pings to the server.
     /// </summary>
     public double PingInterval
     {
@@ -331,7 +331,8 @@ public sealed class NetwClockConfig : NetwRefCounted
             1286410249UL);
 
     /// <summary>
-    /// The number of ticks the visual display lags behind the simulation.
+    /// How many ticks in the past remote entities are shown. A small value
+    /// helps hide lag.
     /// </summary>
     public long DisplayOffset
     {
@@ -369,7 +370,8 @@ public sealed class NetwClockConfig : NetwRefCounted
             373806689UL);
 
     /// <summary>
-    /// Scales jitter impact on the recommended display offset.
+    /// How much jitter adds to
+    /// <see cref="NetwClockHandle.RecommendedDisplayOffset"/>.
     /// </summary>
     public double JitterMultiplier
     {
@@ -407,7 +409,7 @@ public sealed class NetwClockConfig : NetwRefCounted
             1286410249UL);
 
     /// <summary>
-    /// Number of recent RTT samples averaged for jitter and the recommendation.
+    /// How many recent pings are averaged.
     /// </summary>
     public long JitterWindow
     {
@@ -445,7 +447,7 @@ public sealed class NetwClockConfig : NetwRefCounted
             373806689UL);
 
     /// <summary>
-    /// The threshold below which the connection is considered stable.
+    /// Seconds of jitter under which the connection counts as stable.
     /// </summary>
     public double JitterStabilityThreshold
     {
@@ -512,21 +514,19 @@ public sealed class NetwClockConfig : NetwRefCounted
         NetwApi.MethodBind(
             "NetwClockConfig",
             "get_tickrate_mismatch_action",
-            3905245786UL);
+            3297432098UL);
 
     private static readonly IntPtr _bindSetTickrateMismatchAction =
         NetwApi.MethodBind(
             "NetwClockConfig",
             "set_tickrate_mismatch_action",
-            1286410249UL);
+            2041315952UL);
 
     /// <summary>
-    /// What this session does when a peer reports a different tickrate: warn,
-    /// disconnect it, or raise
-    /// <see cref="NetwMultiplayer.ClockTickrateMismatch"/> and leave the choice
-    /// to the game.
+    /// What happens when a peer has a different
+    /// <see cref="NetwClockConfig.Tickrate"/>.
     /// </summary>
-    public long TickrateMismatchAction
+    public NetwMultiplayer.MismatchAction TickrateMismatchAction
     {
         get
         {
@@ -535,11 +535,11 @@ public sealed class NetwClockConfig : NetwRefCounted
                 _bindGetTickrateMismatchAction,
                 Checked,
                 ref answered);
-            return answered;
+            return (NetwMultiplayer.MismatchAction)answered;
         }
         set
         {
-            long slot0 = value;
+            long slot0 = (long)value;
             long discarded = default;
             NetwThunks.Ptrcall1_Long_Long(
                 _bindSetTickrateMismatchAction,
@@ -553,9 +553,7 @@ public sealed class NetwClockConfig : NetwRefCounted
         NetwApi.MethodBind("NetwClockConfig", "ticks_per_second", 432295446UL);
 
     /// <summary>
-    /// How many simulation ticks to run per second. Increasing this value
-    /// increases the simulation fidelity, but also increases the network
-    /// traffic and CPU usage.
+    /// Sets <see cref="NetwClockConfig.Tickrate"/> and returns this config.
     /// </summary>
     public NetwClockConfig TicksPerSecond(long tickrate)
     {
@@ -576,10 +574,8 @@ public sealed class NetwClockConfig : NetwRefCounted
             432295446UL);
 
     /// <summary>
-    /// The number of ticks the visual display lags behind the simulation,
-    /// normally used to hide jitter and lag. The interpolation engine has its
-    /// own techniques to hide jitter and lag. Still, a small display offset is
-    /// recommended.
+    /// Sets <see cref="NetwClockConfig.DisplayOffset"/> and returns this
+    /// config.
     /// </summary>
     public NetwClockConfig DisplayOffsetTicks(long displayOffset)
     {
@@ -600,8 +596,8 @@ public sealed class NetwClockConfig : NetwRefCounted
             1852668278UL);
 
     /// <summary>
-    /// When <c>true</c>, the engine's physics interpolation fraction is used
-    /// when available instead of a wall-clock estimate.
+    /// Sets <see cref="NetwClockConfig.UsePhysicsInterpolation"/> and returns
+    /// this config.
     /// </summary>
     public NetwClockConfig PhysicsInterpolation(bool usePhysicsInterpolation)
     {
@@ -616,15 +612,14 @@ public sealed class NetwClockConfig : NetwRefCounted
     }
 
     private static readonly IntPtr _bindSync =
-        NetwApi.MethodBind("NetwClockConfig", "sync", 432295446UL);
+        NetwApi.MethodBind("NetwClockConfig", "sync", 3241163647UL);
 
     /// <summary>
-    /// The strategy used to align the local clock with the server, one of
-    /// <see cref="NetwMultiplayer.SyncMode"/>.
+    /// Sets <see cref="NetwClockConfig.SyncMode"/> and returns this config.
     /// </summary>
-    public NetwClockConfig Sync(long syncMode)
+    public NetwClockConfig Sync(NetwMultiplayer.SyncMode syncMode)
     {
-        long slot0 = syncMode;
+        long slot0 = (long)syncMode;
         IntPtr answered = default;
         NetwThunks.Ptrcall1_Long_IntPtr(
             _bindSync,

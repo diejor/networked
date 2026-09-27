@@ -4,7 +4,7 @@
 		An in-process [MultiplayerPeer] that routes packets through memory.
 	</brief_description>
 	<description>
-		Opens no socket. It implements the same peer IDs, connection status, and packet queues as [ENetMultiplayerPeer], allowing tests to run a session without a network.
+		Works like [ENetMultiplayerPeer] without a network, for tests. Peers connect to the server only, not to each other.
 		[codeblock]
 		var server := LocalMultiplayerPeer.new()
 		var client := LocalMultiplayerPeer.new()
@@ -13,7 +13,6 @@
 		server.force_connect_peer(42, client)
 		client.force_connect_peer(1, server)
 		[/codeblock]
-		The links form a star and not a mesh.
 	</description>
 	<tutorials>
 	</tutorials>
@@ -22,14 +21,14 @@
 			<return type="int" enum="Error" />
 			<param index="0" name="client_id" type="int" />
 			<description>
-				Initializes this peer as a client with [param client_id]. The peer reports [constant MultiplayerPeer.CONNECTION_CONNECTING] until its first [method MultiplayerPeer.poll].
+				Makes this peer a client with the id [param client_id]. It is [constant MultiplayerPeer.CONNECTION_CONNECTING] until its first [method MultiplayerPeer.poll].
 			</description>
 		</method>
 		<method name="create_server">
 			<return type="int" enum="Error" />
 			<param index="0" name="unique_id" type="int" default="1" />
 			<description>
-				Initializes this peer as the server under [param unique_id], which a rig leaves at [code]1[/code].
+				Makes this peer the server, with the id [param unique_id].
 			</description>
 		</method>
 		<method name="force_connect_peer">
@@ -37,26 +36,26 @@
 			<param index="0" name="peer_id" type="int" />
 			<param index="1" name="peer" type="LocalMultiplayerPeer" />
 			<description>
-				Records [param peer] as reachable under [param peer_id]. On the server side this also queues the [signal MultiplayerPeer.peer_connected] that the next [method MultiplayerPeer.poll] emits.
+				Connects this peer to [param peer], known as [param peer_id]. On the server, the next [method MultiplayerPeer.poll] emits [signal MultiplayerPeer.peer_connected].
 			</description>
 		</method>
 		<method name="is_linked_to" qualifiers="const">
 			<return type="bool" />
 			<param index="0" name="peer_id" type="int" />
 			<description>
-				Returns whether [param peer_id] is currently reachable from this peer.
+				Returns [code]true[/code] when this peer is connected to [param peer_id].
 			</description>
 		</method>
 		<method name="linked_peer_ids" qualifiers="const">
 			<return type="PackedInt32Array" />
 			<description>
-				Returns every reachable peer id, in the order they were linked.
+				Returns the ids of every connected peer, in the order they connected.
 			</description>
 		</method>
 	</methods>
 	<members>
 		<member name="loopback_session" type="LocalLoopbackSession" setter="set_loopback_session" getter="get_loopback_session">
-			The [LocalLoopbackSession] that conditions this peer's inbound traffic. It is held weakly, so it never keeps a session alive.
+			The [LocalLoopbackSession] that simulates latency and loss for this peer.
 		</member>
 	</members>
 </class>

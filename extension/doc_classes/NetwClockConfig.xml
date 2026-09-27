@@ -4,10 +4,10 @@
 		Configuration for the clock of [member Node.multiplayer].
 	</brief_description>
 	<description>
-		Use [method Netw.configure_clock] to configure the clock.
+		Returned by [method Netw.configure_clock].
 		[codeblock]
 		func _init() -&gt; void:
-		    Netw.configure_clock(self).tickrate(60).display_offset(2)
+		    Netw.configure_clock(self).ticks_per_second(60).display_offset_ticks(2)
 		[/codeblock]
 	</description>
 	<tutorials>
@@ -17,73 +17,73 @@
 			<return type="NetwClockConfig" />
 			<param index="0" name="display_offset" type="int" />
 			<description>
-				The number of ticks the visual display lags behind the simulation, normally used to hide jitter and lag. The interpolation engine has its own techniques to hide jitter and lag. Still, a small display offset is recommended.
+				Sets [member display_offset] and returns this config.
 			</description>
 		</method>
 		<method name="physics_interpolation">
 			<return type="NetwClockConfig" />
 			<param index="0" name="use_physics_interpolation" type="bool" />
 			<description>
-				When [code]true[/code], the engine's physics interpolation fraction is used when available instead of a wall-clock estimate.
+				Sets [member use_physics_interpolation] and returns this config.
 			</description>
 		</method>
 		<method name="sync">
 			<return type="NetwClockConfig" />
 			<param index="0" name="sync_mode" type="int" enum="NetwMultiplayer.SyncMode" />
 			<description>
-				The strategy used to align the local clock with the server, one of [enum NetwMultiplayer.SyncMode].
+				Sets [member sync_mode] and returns this config.
 			</description>
 		</method>
 		<method name="ticks_per_second">
 			<return type="NetwClockConfig" />
 			<param index="0" name="tickrate" type="int" />
 			<description>
-				How many simulation ticks to run per second. Increasing this value increases the simulation fidelity, but also increases the network traffic and CPU usage.
+				Sets [member tickrate] and returns this config.
 			</description>
 		</method>
 	</methods>
 	<members>
 		<member name="display_offset" type="int" setter="set_display_offset" getter="get_display_offset" default="2">
-			The number of ticks the visual display lags behind the simulation.
+			How many ticks in the past remote entities are shown. A small value helps hide lag.
 		</member>
 		<member name="enable_drift_logging" type="bool" setter="set_enable_drift_logging" getter="get_enable_drift_logging" default="false">
 			Logs average clock drift over 60-second windows to the console.
 		</member>
 		<member name="jitter_multiplier" type="float" setter="set_jitter_multiplier" getter="get_jitter_multiplier" default="2.0">
-			Scales jitter impact on the recommended display offset.
+			How much jitter adds to [member NetwClockHandle.recommended_display_offset].
 		</member>
 		<member name="jitter_stability_threshold" type="float" setter="set_jitter_stability_threshold" getter="get_jitter_stability_threshold" default="0.05">
-			The threshold below which the connection is considered stable.
+			Seconds of jitter under which the connection counts as stable.
 		</member>
 		<member name="jitter_window" type="int" setter="set_jitter_window" getter="get_jitter_window" default="16">
-			Number of recent RTT samples averaged for jitter and the recommendation.
+			How many recent pings are averaged.
 		</member>
 		<member name="max_ticks_per_frame" type="int" setter="set_max_ticks_per_frame" getter="get_max_ticks_per_frame" default="8">
-			Maximum simulation ticks allowed to run in a single physics frame.
+			The most ticks run in one physics frame.
 		</member>
 		<member name="panic_snap_threshold" type="int" setter="set_panic_snap_threshold" getter="get_panic_snap_threshold" default="20">
-			The maximum allowed divergence before a hard [constant NetwMultiplayer.SyncMode.SYNC_MODE_SNAP] is forced.
+			Ticks of difference from the server past which the clock snaps, even with [constant NetwMultiplayer.SYNC_MODE_STRETCH].
 		</member>
 		<member name="ping_interval" type="float" setter="set_ping_interval" getter="get_ping_interval" default="0.1">
-			How often the client pings the server to refresh RTT and recalibrate.
+			Seconds between pings to the server.
 		</member>
 		<member name="stall_threshold" type="float" setter="set_stall_threshold" getter="get_stall_threshold" default="1.0">
-			Frame delta threshold before resetting the accumulator.
+			Seconds. A longer frame is treated as a hitch and skipped.
 		</member>
 		<member name="stretch_nudge_factor" type="float" setter="set_stretch_nudge_factor" getter="get_stretch_nudge_factor" default="0.05">
-			Fraction of the remaining divergence the [constant NetwMultiplayer.SyncMode.SYNC_MODE_STRETCH] clock closes each frame.
+			The share of the difference [constant NetwMultiplayer.SYNC_MODE_STRETCH] corrects each frame.
 		</member>
 		<member name="sync_mode" type="int" setter="set_sync_mode" getter="get_sync_mode" enum="NetwMultiplayer.SyncMode" default="1">
-			Strategy used to align the local clock with the server, one of [enum NetwMultiplayer.SyncMode].
+			How the clock is corrected toward the server's.
 		</member>
 		<member name="tickrate" type="int" setter="set_tickrate" getter="get_tickrate" default="30">
-			How many simulation ticks to run per second.
+			Ticks per second. Higher is more precise, and costs more bandwidth and CPU.
 		</member>
 		<member name="tickrate_mismatch_action" type="int" setter="set_tickrate_mismatch_action" getter="get_tickrate_mismatch_action" enum="NetwMultiplayer.MismatchAction" default="0">
-			What this session does when a peer reports a different tickrate: warn, disconnect it, or raise [signal NetwMultiplayer.clock_tickrate_mismatch] and leave the choice to the game.
+			What happens when a peer has a different [member tickrate].
 		</member>
 		<member name="use_physics_interpolation" type="bool" setter="set_use_physics_interpolation" getter="get_use_physics_interpolation" default="true">
-			Reads the engine's physics interpolation fraction when available instead of a wall-clock estimate.
+			Whether [member NetwClockHandle.tick_factor] follows [method Engine.get_physics_interpolation_fraction].
 		</member>
 	</members>
 </class>

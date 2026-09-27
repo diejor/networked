@@ -6,25 +6,18 @@ using Godot.NativeInterop;
 namespace Networked;
 
 /// <summary>
-/// Abstract base for resources that round-trip through a
-/// <c>PackedByteArray</c>.
+/// A resource that converts itself to and from a <c>PackedByteArray</c>.
 /// </summary>
 /// <remarks>
-/// <see cref="Serde"/> keeps payload types responsible for their own byte
-/// representation. Callers can pass the result of <see cref="Serde.Serialize"/>
-/// across the wire or store it for a later <see cref="Serde.Deserialize"/>.
+/// Send or save the bytes from <see cref="Serde.Serialize"/>, and read them
+/// back with <see cref="Serde.Deserialize"/>.
 /// <code>
 /// var bytes := payload.serialize()
 /// copy.deserialize(bytes)
 /// </code>
 /// <para>
-/// A subclass supplies the representation by overriding <c>_serialize</c> and
-/// <c>_deserialize</c>, and callers always use the plain
-/// <see cref="Serde.Serialize"/> and <see cref="Serde.Deserialize"/> pair. The
-/// two spellings are one contract: the plain verb returns the override when a
-/// script supplies one and falls back to the native implementation otherwise,
-/// so the caller never asks which kind of subclass it holds.
-/// <see cref="DictionaryRecord"/> is the implementation this addon ships.
+/// Extend it and override <c>_serialize</c> and <c>_deserialize</c>.
+/// <see cref="DictionaryRecord"/> is an example.
 /// </para>
 /// </remarks>
 public class Serde : NetwRefCounted
@@ -47,10 +40,8 @@ public class Serde : NetwRefCounted
         NetwApi.MethodBind("Serde", "serialize", 2115431945UL);
 
     /// <summary>
-    /// Converts this resource to a <c>PackedByteArray</c>. A subclass that
-    /// overrides <c>_serialize</c> returns through it, and a
-    /// <see cref="Serde"/> with neither an override nor a native implementation
-    /// returns an empty array.
+    /// Converts this resource to bytes. Calls <c>_serialize</c>, and returns an
+    /// empty array when it is not overridden.
     /// </summary>
     public byte[] Serialize()
     {
@@ -66,10 +57,8 @@ public class Serde : NetwRefCounted
         NetwApi.MethodBind("Serde", "deserialize", 2971499966UL);
 
     /// <summary>
-    /// Repopulates this resource from <paramref name="bytes"/>. A subclass that
-    /// overrides <c>_deserialize</c> returns through it, and a
-    /// <see cref="Serde"/> with neither an override nor a native implementation
-    /// ignores the call.
+    /// Reads this resource from <paramref name="bytes"/>. Calls
+    /// <c>_deserialize</c>.
     /// </summary>
     public void Deserialize(byte[] bytes)
     {

@@ -23,14 +23,14 @@
 			<param index="0" name="session" type="Object" />
 			<param index="1" name="slot" type="StringName" />
 			<description>
-				Removes [param slot] and resolves an [enum @GlobalScope.Error], which [method NetwDatabase.delete_slot] settles with. Resolve an error when the slot could not be fully removed. [param session] is the [NetwMultiplayer] asking.
+				Removes [param slot] and resolves an [enum @GlobalScope.Error], which [method NetwDatabase.delete_slot] gives. Resolve an error when the slot could not be fully removed. [param session] is the [NetwMultiplayer] asking.
 			</description>
 		</method>
 		<method name="_list_slots" qualifiers="virtual">
 			<return type="NetwPromise" />
 			<param index="0" name="session" type="Object" />
 			<description>
-				Resolves a [PackedStringArray] of every slot in storage, including ones written by earlier runs. [method NetwDatabase.list_slots] settles with it. [param session] is the [NetwMultiplayer] asking.
+				Resolves a [PackedStringArray] of every slot in storage, including ones written by earlier runs. [method NetwDatabase.list_slots] gives it. [param session] is the [NetwMultiplayer] asking.
 			</description>
 		</method>
 		<method name="_open" qualifiers="virtual">

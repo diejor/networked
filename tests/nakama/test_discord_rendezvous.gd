@@ -1,15 +1,3 @@
-## Live end-to-end test of the Discord Activity rendezvous over a Nakama relay.
-##
-## Two [DiscordActivityService] participants share one fake instance id and carry
-## distinct device ids, the same shape a real Activity launch produces. The first
-## finds no record and hosts a relay match through its [NakamaDiscordRendezvous];
-## the second resolves the freshest record and joins it. Both must end up in one
-## match seeing each other.
-##
-## Needs a running server (see [code]tests/nakama/docker-compose.yml[/code])
-## and opts in through the [code]networked/tests/nakama_host[/code] project setting
-## (see [NakamaTestServer]), so a machine without the stack skips cleanly. This is
-## the automated replacement for the old [code]tier1_rendezvous_demo[/code] scene.
 class_name TestDiscordRendezvous
 extends NetwTestSuite
 
@@ -29,8 +17,6 @@ func before(
 
 
 func after_test() -> void:
-	# The rendezvous installs a global proxy resolver bound to a per-test
-	# rendezvous; drop it so it never leaks into another suite's Nakama connect.
 	NakamaWrapper.proxy_base_resolver = Callable()
 	await _delete_rendezvous_records()
 	for tree in _trees.duplicate():
@@ -40,8 +26,6 @@ func after_test() -> void:
 	await super.after_test()
 
 
-# Each hosting participant published a record owned by its own Nakama user.
-# Delete them so the shared collection never accumulates one record per run.
 func _delete_rendezvous_records() -> void:
 	if _instance_id.is_empty():
 		_services.clear()
@@ -63,8 +47,6 @@ func _delete_rendezvous_records() -> void:
 
 
 func test_two_participants_rendezvous_into_one_match() -> void:
-	# A per-run instance id so the shared rendezvous collection never collides with
-	# a leftover record from an earlier run.
 	var instance_id := "disc-%d-%d" % [Time.get_unix_time_from_system(), randi()]
 	_instance_id = instance_id
 
@@ -85,20 +67,14 @@ func test_two_participants_rendezvous_into_one_match() -> void:
 		"both Discord participants to connect",
 	)
 
-	# Two participants in one relay match: one remote peer each, both joined.
 	for tree in [host_tree, join_tree]:
 		assert_int(tree.multiplayer.get_peers().size()).is_equal(1)
 		assert_int(tree.api.players.size()).is_equal(2)
 
-	# The first participant hosts (peer 1); the second resolved the freshest record
-	# and joined, so it is never peer 1.
 	assert_int(host_tree.multiplayer.get_unique_id()).is_equal(1)
 	assert_int(join_tree.multiplayer.get_unique_id()).is_not_equal(1)
 
 
-# Builds a MultiplayerTree wired exactly like a game embedded in Discord: a shared
-# Nakama session, a relay directory, and a DiscordActivityService driven off the
-# fake instance-id seam so the rendezvous runs with no SDK and no proxy.
 func _build_participant(
 		username: String,
 		instance_id: String,
@@ -129,9 +105,6 @@ func _build_participant(
 	var service := NetwTestDiscordService.new()
 	service.name = &"DiscordActivity"
 	service.rendezvous = rdv
-	# Distinct device ids keep the two participants distinct Nakama users; the
-	# service pushes the id onto the rendezvous when it enters the tree. An empty
-	# client_id keeps the connection direct (no discordsays proxy) for localhost.
 	service.fake_instance_id = instance_id
 	service.fake_device_id = username
 	tree.add_child(service)
@@ -143,9 +116,6 @@ func _build_participant(
 
 
 func _both_connected(a: MultiplayerTree, b: MultiplayerTree) -> bool:
-	# Transport-connected is not enough: player registration lands a beat after
-	# the peer connects, so wait for both joins to propagate before the
-	# assertions read get_participants().
 	return a.api.is_online and b.api.is_online \
 			and a.multiplayer.get_peers().size() == 1 \
 			and b.multiplayer.get_peers().size() == 1 \

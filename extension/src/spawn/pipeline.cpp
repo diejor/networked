@@ -415,8 +415,8 @@ Ref<NetwEntity> Pipeline::replicate(
         NETW_ERR_V(
             Ref<NetwEntity>(),
             sys::SPAWN,
-            "Netw.replicate: identity must precede tree entry: call before "
-            "add_child; pre-placed nodes are the (future) Netw.adopt boundary"
+            "Netw.replicate: call it before add_child. The node is already in "
+            "the tree."
         );
     }
 

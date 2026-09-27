@@ -1,4 +1,3 @@
-## Unit tests for [NetwHarnessSession] shared harness plumbing.
 class_name TestNetwHarnessSession
 extends NetwTestSuite
 
@@ -153,18 +152,10 @@ func test_disconnect_tree_closes_peer_and_releases_held_packets() -> void:
 	assert_that(session.session().in_flight_count(peer)).is_equal(0)
 
 
-## The eraser reaches the kit by injection, so nothing anywhere errors if the
-## injection is never made and the symptom is a WebRTC suite going red months
-## later on a machine where the tolerated error actually fires. These three
-## cases are that failure mode's only alarm, and they live here because the
-## session hook installs the eraser for every suite in the run.
 func test_the_session_hook_installed_the_benign_error_eraser() -> void:
 	assert_bool(WebRTCTestSupport.erase_benign_error.is_valid()).is_true()
 
 
-## The end-to-end proof: an error matching every marker is recorded by the
-## framework and then erased, so the case ends clean despite having raised one.
-## Without the injection this case fails on the error it planted.
 func test_an_error_matching_every_benign_marker_is_erased() -> void:
 	push_error("SctpTransport::sendReset failed, errno=2")
 
@@ -173,9 +164,6 @@ func test_an_error_matching_every_benign_marker_is_erased() -> void:
 	assert_bool(true).is_true()
 
 
-## Erasure is narrow by construction: every marker has to appear before an entry
-## is dropped, so widening what the kit tolerates means adding a marker rather
-## than loosening a pattern.
 func test_the_tolerated_error_is_named_by_every_marker() -> void:
 	assert_int(WebRTCTestSupport.SCTP_RESET_MARKERS.size()).is_greater(1)
 

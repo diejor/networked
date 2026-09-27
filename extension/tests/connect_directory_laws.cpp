@@ -69,7 +69,11 @@ struct Bench {
         return core->transport_find(StringName(STUB_PEER_CLASS));
     }
 
-    RID ask(int p_mode, const String &p_address, const Dictionary &p_settings) {
+    RID ask(
+        NetwMultiplayer::TransportMode p_mode,
+        const String &p_address,
+        const Dictionary &p_settings
+    ) {
         return core->transport_create_peer(
             transport(),
             p_mode,

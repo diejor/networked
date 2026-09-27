@@ -2031,8 +2031,8 @@ Ref<NetwEntity> NetwMultiplayer::spawn_arm_identity(
         p_owner.is_valid() && !player_holds(p_owner),
         Ref<NetwEntity>(),
         sys::SPAWN,
-        "a spawn names player '%s', which is not one this session "
-        "currently holds, so nothing is armed",
+        "a spawn is for player '%s', who is not in the session, so nothing "
+        "is spawned",
         String(p_owner->get_username())
     );
     const Ref<NetwEntity> entity = NetwEntity::ensure(p_node);

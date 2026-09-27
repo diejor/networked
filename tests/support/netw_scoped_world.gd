@@ -1,14 +1,3 @@
-## [NetwEmbeddingWorld] over a subpath [MultiplayerTree], the scoped topology.
-##
-## The host is a [MultiplayerTree] mounted under the case's own node, brought
-## online by preparing its local player and assigning a [LocalLoopbackSession]
-## server peer. Clients are sibling [MultiplayerTree]s that prepare and assign a
-## client peer on the same bus. Every mount polls itself from
-## [method Node._process], so
-## [method pump_until] only has to yield frames.
-##
-## This is the same session the whole scoped suite runs on, cast as one
-## conformance provider so its facts can be compared against [NetwRootWorld].
 class_name NetwScopedWorld
 extends NetwEmbeddingWorld
 

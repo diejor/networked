@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <class name="NetwLifecycleRequest" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
 	<brief_description>
-		A controller's spawn, despawn or move of an entity, waiting for the server's verdict.
+		A spawn, despawn or move by a controlling client, waiting for the server to accept it.
 	</brief_description>
 	<description>
 		The server receives one in [signal NetwEntity.lifecycle_requested] for each change the [member NetwEntity.controller] of a [constant NetwEntity.LIFECYCLE_CONTROLLER] entity makes, and can call [method deny] before other peers see it.

@@ -1,20 +1,17 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <class name="NetwSessionConfig" inherits="Resource" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
 	<brief_description>
-		Draft the session machine is initialized from, declared on a scope node.
+		Session settings, returned by [method Netw.configure_session].
 	</brief_description>
 	<description>
-		[method Netw.configure_session] returns a draft the scope node owns. Edit it in place or through the fluent methods, and the session copies its values once, at a deferred boundary after the declaring call stack has finished. From then on the session holds owned values and this Resource is a spent authoring snapshot: a later setter reports the late write and moves nothing.
-		This resource carries only the facts the wire and the session machine own. What a session hosts or joins over is not among them: that is an argument of the verb that hosts, on [NetwConnectHandle].
+		Set the values in [method Object._init]. They are applied once, at the end of the frame, and changes after that push a warning and do nothing.
 		[codeblock]
 		func _init() -&gt; void:
 		    Netw.configure_session(self) \
-		        .app_id(&amp;"bomber-v2") \
-		        .role(NetwMultiplayer.Role.LISTEN_SERVER)
+		        .app(&amp;"bomber-v2") \
+		        .role(NetwMultiplayer.ROLE_LISTEN_SERVER)
 		[/codeblock]
-		A preset handed to that verb is copied rather than kept, so one [code].tres[/code] may seed several scenes and editing it afterwards reaches none of them. Nested [NetwLinkConditions] and [NetwServerInfo] values are copied too.
-		[method NetwMultiplayer.session_get_config] returns a detached snapshot of the running values, freshly copied nested objects included. Editing what it returns is a way to read the session, never a way to configure it.
-		A [MultiplayerTree]'s session exports are the fallback when no node declares one. An explicit declaration replaces that export whole, so a field left at its default here is the default rather than the tree's value, and the discarded non-default tree fields are named once in a warning.
+		A preset passed to [method Netw.configure_session] is copied, so one [code].tres[/code] can be used by several scenes. When no node calls [method Netw.configure_session], the settings of the [MultiplayerTree] are used. When one does, the [MultiplayerTree] settings are ignored.
 	</description>
 	<tutorials>
 	</tutorials>
@@ -23,56 +20,50 @@
 			<return type="NetwSessionConfig" />
 			<param index="0" name="app_id" type="StringName" />
 			<description>
-				Sets [member app_id] and returns this same draft, so a declaration reads as one chained expression.
+				Sets [member app_id] and returns this config.
 			</description>
 		</method>
 		<method name="link">
 			<return type="NetwSessionConfig" />
 			<param index="0" name="link_conditions" type="NetwLinkConditions" />
 			<description>
-				Sets [member link_conditions] and returns this same draft, so a declaration reads as one chained expression.
+				Sets [member link_conditions] and returns this config.
 			</description>
 		</method>
 		<method name="role">
 			<return type="NetwSessionConfig" />
 			<param index="0" name="desired_role" type="int" enum="NetwMultiplayer.Role" />
 			<description>
-				Sets [member desired_role] and returns this same draft, so a declaration reads as one chained expression.
+				Sets [member desired_role] and returns this config.
 			</description>
 		</method>
 		<method name="server">
 			<return type="NetwSessionConfig" />
 			<param index="0" name="server_info" type="NetwServerInfo" />
 			<description>
-				Sets [member server_info] and returns this same draft, so a declaration reads as one chained expression.
+				Sets [member server_info] and returns this config.
 			</description>
 		</method>
 	</methods>
 	<members>
 		<member name="app_id" type="StringName" setter="set_app_id" getter="get_app_id" default="&amp;&quot;&quot;">
-			Game-build tag that gates session admission.
-			A joining peer whose tag differs is rejected during authentication before it reaches [method MultiplayerAPI.get_peers]. Leave this empty to disable the check. The session derives one auth tag from this value.
-			It also names the space a signalled transport creates its room codes in, and is what makes a code short enough to read out. See [member MultiplayerTree.app_id].
+			The game and build. Peers with a different [member app_id] cannot connect. Leave it empty to accept any. WebRTC room codes are also created per [member app_id].
 		</member>
 		<member name="desired_role" type="int" setter="set_desired_role" getter="get_desired_role" enum="NetwMultiplayer.Role" default="3">
-			The [enum NetwMultiplayer.Role] the local peer intends to play once a session starts.
-			The live [member NetwMultiplayer.role] is only assigned when the session reaches [constant NetwMultiplayer.SessionState.ONLINE]. This is the intent the assignment edge reads to pick the server role. A value outside the enum is rejected and the previous role stands.
-			An embedded server is constructed with a dedicated-server role that constrains the effective role after consumption, whichever declaration supplied the other values.
+			The role this peer takes when it hosts, which becomes [member NetwMultiplayer.role]. A server made with [method MultiplayerTree.raise_embedded_server] is always [constant NetwMultiplayer.ROLE_DEDICATED_SERVER].
 		</member>
 		<member name="link_conditions" type="NetwLinkConditions" setter="set_link_conditions" getter="get_link_conditions">
-			Optional latency and loss simulation applied to this session's peer.
-			[NetwMultiplayer] wraps the built peer with it before assignment, so a session applies what it was configured with whether or not a [MultiplayerTree] owns it. Its four scalar fields are copied at consumption, so mutating the object afterwards reaches no running session.
+			Simulated latency and packet loss for testing. Copied when applied.
 		</member>
 		<member name="server_info" type="NetwServerInfo" setter="set_server_info" getter="get_server_info">
-			What this session tells a probing client about itself: its name, its player cap, its [enum NetwServerInfo.Visibility], and whatever else the game fills in.
-			This is the whole advert and its only door, authored in the inspector or declared before the session is brought up. [method NetwServerInfo.from_session] copies it and overlays the fields only a live session knows, so a game that leaves it unset still returns a probe honestly and a game that sets it never says the same thing twice. Its values, nested containers included, are copied at consumption.
+			What this server shows in server browsers. The player count and [member NetwServerInfo.app_id] are filled in automatically. Copied when applied.
 			[codeblock]
 			var info := NetwServerInfo.new()
 			info.motd = "Friday night"
 			info.max_players = 8
-			Netw.configure_session(self).server_info(info)
+			Netw.configure_session(self).server(info)
 			[/codeblock]
-			A game that computes its reply per probe declares a provider through [method Netw.configure_server_info] instead. That provider is handed this record, already copied and filled in from the live session, and returns the reply to send.
+			To change it for each request, use [method Netw.configure_server_info].
 		</member>
 	</members>
 </class>

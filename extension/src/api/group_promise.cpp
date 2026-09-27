@@ -240,7 +240,14 @@ void NetwGroupPromise::_bind_methods() {
     ));
     ADD_SIGNAL(MethodInfo(
         SIG_FAILED,
-        PropertyInfo(Variant::INT, "code"),
+        PropertyInfo(
+            Variant::INT,
+            "code",
+            PROPERTY_HINT_NONE,
+            "",
+            PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_CLASS_IS_ENUM,
+            "Error"
+        ),
         PropertyInfo(Variant::STRING, "detail")
     ));
     ADD_SIGNAL(MethodInfo(SIG_SETTLED));

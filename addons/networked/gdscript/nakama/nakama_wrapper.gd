@@ -20,54 +20,35 @@
 ## [/codeblock]
 class_name NakamaWrapper
 
-# The facade has no class_name and is not an autoload, so it is the one Nakama
-# script the wrapper must reach by path. Every other addon type resolves by
-# global class name through _nakama_class.
 const _FACADE_PATH := "res://addons/com.heroiclabs.nakama/Nakama.gd"
 const _NAKAMA_LOG_LEVEL_WARNING := 2
 
-## Nakama storage collection the relay lobby browse cards are written under.
+## The Nakama storage collection where lobby listings are saved.
 const LOBBY_COLLECTION := "lobbies"
 
-# Global class name -> resolved Script (or null when absent), memoized across
-# every wrapper instance so the class registry is scanned at most once per name.
 static var _class_cache: Dictionary = { }
 
-## Optional hook that routes Nakama traffic through a platform proxy.
-##
-## [method connect_async] applies the returned base to both the HTTP client and
-## realtime socket. Return [code]""[/code] to keep the configured Nakama host.
-## [codeblock]
-## Callable
-## ├── host_node (Node)
-## ├── config_host (String)
-## └── return (String)
-##     ├── ""                                  # direct
-##     └── "app.discordsays.com/.proxy/nakama" # proxied
-## [/codeblock]
+## Optional [Callable] that sends Nakama traffic through a proxy, such as a
+## Discord activity proxy. It is called as
+## [code]proxy_base_resolver(host_node, config_host)[/code] and returns the
+## proxy address, such as [code]"app.discordsays.com/.proxy/nakama"[/code], or
+## [code]""[/code] to connect directly.
 static var proxy_base_resolver: Callable
 
 
-# Returns the proxy base for this connection, or "" when no resolver is set or it
-# declines. host_node anchors the resolver's tree/service lookup; config_host is
-# the configured Nakama host it may key off.
 static func _resolve_proxy_base(host_node: Node, config_host: String) -> String:
 	if proxy_base_resolver.is_valid():
 		return String(proxy_base_resolver.call(host_node, config_host))
 	return ""
 
 
-# Rewrites the _base_uri of a Nakama client api or socket to scheme://base. A
-# no-op when base is empty, so the default direct connection is untouched. This
-# is the one place that reaches into the vendor object's private _base_uri.
 static func _apply_proxy_base(target: Object, base: String, scheme: String) -> void:
 	if target != null and not base.is_empty():
 		target._base_uri = "%s://%s" % [scheme, base]
 
 
-# Workaround for Godot HTML5 export bug (godot#116574): the browser transparently
-# decompresses, so the SDK's own gzip decode double-decompresses and fails. Off
-# the web this is a no-op. Reaches into the vendor client's http adapter.
+# The browser already decompresses gzip, so the SDK decompressing it again
+# fails. See godot#116574.
 static func _disable_web_gzip(client: Object) -> void:
 	if client == null:
 		return
@@ -79,61 +60,43 @@ static func _disable_web_gzip(client: Object) -> void:
 				node.accept_gzip = false
 	)
 
-## Emitted once the local peer id is granted and the match is fully joined.
-##
-## For a host this fires right after [method create_match] resolves. For a
-## client it fires when the host's peer id assignment arrives.
+## Emitted when the match is joined and this peer has its id.
 signal match_joined()
 
-## Emitted when joining or creating a match fails. Carries the Nakama error
+## Emitted when creating or joining a match fails, with the Nakama error
 ## [param message].
 signal match_join_error(message: String)
 
-## Emitted when the underlying socket closes, mirroring the host leaving or a
-## transport drop.
+## Emitted when the connection to Nakama closes.
 signal socket_closed()
 
-# Nakama handles. When _shared_session is set, _facade/_client/_session belong
-# to it and are read, not owned, by this wrapper.
 var _facade
 var _client
 var _session
 var _socket
 var _bridge
 
-# Optional shared authentication. When present, auth and storage route through
-# this session's account and the relay socket is built from its client. When
-# null, the wrapper self-authenticates (the standalone, pre-session path).
 var _shared_session: NakamaSessionService
 
 
-## Binds this wrapper to a shared [NakamaSessionService].
-##
-## Call before [method connect_async]. A bound wrapper reuses the shared account
-## for auth and storage. An unbound wrapper creates its own device session.
+## Uses the account of [param session] for login and storage. Call it before
+## [method connect_async]. Otherwise the wrapper logs in on its own.
 func use_session(session: NakamaSessionService) -> void:
 	_shared_session = session
 
-# Single-flight guard for connect_async. While a connect is in flight, late
-# callers await _connect_finished instead of starting a second connect that
-# would clobber the shared handles and orphan the first one's pending await.
+
 var _connecting := false
 signal _connect_finished(result: Dictionary)
 
 
-## Returns [code]true[/code] when the Nakama addon scripts are installed.
-##
-## Call it before using other [NakamaWrapper] methods in code that may run
-## without the addon.
+## Returns [code]true[/code] when the Nakama addon is installed. Check it
+## before calling other methods.
 static func is_addon_present() -> bool:
 	return _nakama_class("NakamaClient") != null
 
 
-## Authenticates a device session and opens the realtime socket under
-## [param host].
-##
-## [param config] carries the connection fields. A helper node is added under
-## [param host] to poll the socket.
+## Logs in to Nakama and opens the realtime connection. A helper node is
+## added under [param host].
 ## [codeblock]
 ## Dictionary
 ## ├── server_key (String)
@@ -154,14 +117,9 @@ func connect_async(host: Node, config: Dictionary) -> Dictionary:
 	if not is_instance_valid(host):
 		return { "ok": false, "error": "Invalid host node" }
 
-	# Already connected: hand back the live session without rebuilding it.
 	if is_ready():
 		return { "ok": true, "error": "" }
 
-	# A connect is already running: wait for it rather than starting a second
-	# one. Concurrent callers (the host path and a lobby-browse refresh) would
-	# otherwise both build a facade and overwrite each other's handles, leaving
-	# the first caller awaiting an orphaned client forever.
 	if _connecting:
 		return await _connect_finished
 
@@ -173,13 +131,12 @@ func connect_async(host: Node, config: Dictionary) -> Dictionary:
 
 
 func _perform_connect(host: Node, config: Dictionary) -> Dictionary:
-	# Shared-session path: auth and socket come from the one account.
 	if _shared_session != null:
 		_shared_session.configure(config)
 		var auth := await _shared_session.connect_async()
 		if not auth.ok:
 			return auth
-		_facade = null # owned by the shared session, not freed by leave()
+		_facade = null
 		_client = _shared_session.client()
 		_session = _shared_session.session()
 		_socket = _shared_session.create_socket()
@@ -231,10 +188,7 @@ func _perform_connect(host: Node, config: Dictionary) -> Dictionary:
 	return { "ok": true, "error": "" }
 
 
-# Wires the relay bridge over the open socket and re-emits its lifecycle signals.
 func _build_bridge() -> void:
-	# NakamaRelayBridge is a networked class that names no Nakama type, so the
-	# wrapper references it directly instead of loading it by path.
 	_bridge = NakamaRelayBridge.new(_socket)
 	_bridge.match_joined.connect(func() -> void: match_joined.emit())
 	_bridge.match_join_error.connect(_on_bridge_join_error)
@@ -332,21 +286,9 @@ func list_matches(min_size := 0, max_size := 100, limit := 100) -> Array:
 	return res.matches
 
 
-## Writes a public-read object under [param collection] and [param key].
-##
-## Any session can read the object. Only the writer can overwrite it. Nakama
-## scopes storage by collection, key, and owner, so the same key can exist once
-## per user.
-## [codeblock]
-## Storage object
-## ├── collection = collection
-## ├── key = key
-## ├── owner = session user id
-## ├── read = public
-## └── write = owner only
-## [/codeblock]
-## [method list_public_storage] preserves every owner entry. Use it when
-## concurrent writers can publish the same key.
+## Saves [param value] under [param collection] and [param key]. Everyone can
+## read it, and only this user can change it. Each user has their own object
+## for a key, and [method list_public_storage] returns all of them.
 func write_public_storage(collection: String, key: String, value: Dictionary) -> bool:
 	if collection.is_empty() or key.is_empty():
 		return false

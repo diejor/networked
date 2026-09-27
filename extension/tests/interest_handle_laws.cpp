@@ -164,8 +164,8 @@ TEST_CASE(
 
     made.interest->join(
         StringName("team:red"),
-        netw::interest::Decl::LEAVE_RETAIN,
-        netw::interest::Decl::PERCEPTION_SHOW
+        NetwMultiplayer::LEAVE_POLICY_RETAIN,
+        NetwMultiplayer::PERCEPTION_POLICY_SHOW
     );
     made.interest->join(StringName("sight"));
 

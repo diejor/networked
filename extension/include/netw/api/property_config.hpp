@@ -102,11 +102,11 @@ public:
         return teleport_at_override;
     }
 
-    void set_set_trigger(int64_t p_set_trigger) {
-        set_trigger = p_set_trigger;
+    void set_set_trigger(NetwPropertySet::Trigger p_set_trigger) {
+        set_trigger = int64_t(p_set_trigger);
     }
-    int64_t get_set_trigger() const {
-        return set_trigger;
+    NetwPropertySet::Trigger get_set_trigger() const {
+        return NetwPropertySet::Trigger(set_trigger);
     }
 
     void set_set_every_tick_interval(double p_set_every_tick_interval) {

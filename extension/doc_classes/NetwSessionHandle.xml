@@ -24,7 +24,7 @@
 			<param index="0" name="peer" type="int" />
 			<param index="1" name="type" type="Variant" />
 			<description>
-				The bucket of [param type] that [param peer] carries, [code]null[/code] when it carries none.
+				The per-peer game data of [param type] stored for [param peer], created on first use. See [method NetwMultiplayer.peer_get_bucket].
 			</description>
 		</method>
 		<method name="kick">
@@ -94,12 +94,12 @@
 		<member name="local_player" type="NetwPlayer" setter="" getter="get_local_player">
 			The [NetwPlayer] of this peer, [code]null[/code] until [signal local_joined].
 		</member>
+		<member name="players" type="NetwPlayer[]" setter="" getter="get_players" default="[]">
+			Every [NetwPlayer] that has joined, including those whose peer has since disconnected. See [member NetwMultiplayer.connected_players] for only the connected ones.
+		</member>
 		<member name="presented_scene" type="NetwSceneHandle" setter="" getter="get_presented_scene">
 			The scene this peer draws, [code]null[/code] when it draws none. It is the scene holding a body of this peer, or else the scene this peer watches. When there are two, it is [code]null[/code] and a warning is logged.
 			On a listen server this is what [HostSceneView] draws. See [method NetwSceneHandle.watch] to choose what a player receives.
-		</member>
-		<member name="players" type="NetwPlayer[]" setter="" getter="get_players" default="[]">
-			Every [NetwPlayer] that has joined, including those whose peer has since disconnected. See [member NetwMultiplayer.connected_players] for only the connected ones.
 		</member>
 		<member name="role" type="int" setter="" getter="get_role" enum="NetwMultiplayer.Role" default="0">
 			What this peer is in the session.
@@ -149,13 +149,6 @@
 				The [NetwPlayer] of this peer has joined. [member local_player] is set from here on.
 			</description>
 		</signal>
-		<signal name="presentation_changed">
-			<param index="0" name="from" type="NetwSceneHandle" />
-			<param index="1" name="to" type="NetwSceneHandle" />
-			<description>
-				[member presented_scene] changed from [param from] to [param to], either may be [code]null[/code].
-			</description>
-		</signal>
 		<signal name="player_joined">
 			<param index="0" name="player" type="NetwPlayer" />
 			<description>
@@ -166,6 +159,13 @@
 			<param index="0" name="player" type="NetwPlayer" />
 			<description>
 				A [NetwPlayer] has left, either because their peer disconnected or because of [method kick]. [member NetwPlayer.is_active] is already [code]false[/code].
+			</description>
+		</signal>
+		<signal name="presentation_changed">
+			<param index="0" name="from" type="NetwSceneHandle" />
+			<param index="1" name="to" type="NetwSceneHandle" />
+			<description>
+				[member presented_scene] changed from [param from] to [param to], either may be [code]null[/code].
 			</description>
 		</signal>
 		<signal name="scene_changed">

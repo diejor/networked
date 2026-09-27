@@ -11,7 +11,7 @@ using netw::NetwMultiplayer;
 using netw::NetwSessionConfig;
 using netw::SessionCore;
 
-static Ref<NetwSessionConfig> authoring(int64_t p_role) {
+static Ref<NetwSessionConfig> authoring(NetwMultiplayer::Role p_role) {
     Ref<NetwSessionConfig> config;
     config.instantiate();
     config->set_desired_role(p_role);
@@ -27,7 +27,7 @@ TEST_CASE(
     Ref<NetwMultiplayer> core;
     core.instantiate();
     const Ref<NetwSessionConfig> config
-        = authoring(SessionCore::ROLE_LISTEN_SERVER);
+        = authoring(NetwMultiplayer::ROLE_LISTEN_SERVER);
     core->session_initialize(config);
 
     NETW_CHECK_EQ(
@@ -35,7 +35,7 @@ TEST_CASE(
         int(SessionCore::ROLE_LISTEN_SERVER)
     );
 
-    config->set_desired_role(SessionCore::ROLE_CLIENT);
+    config->set_desired_role(NetwMultiplayer::ROLE_CLIENT);
 
     NETW_CHECK_EQ(
         int(core->session_get_authored_role()),
@@ -45,7 +45,7 @@ TEST_CASE(
         = core->session_get_config().ptr() != config.ptr();
     CHECK(answers_a_detached_copy);
 
-    core->session_get_config()->set_desired_role(SessionCore::ROLE_CLIENT);
+    core->session_get_config()->set_desired_role(NetwMultiplayer::ROLE_CLIENT);
 
     NETW_CHECK_EQ(
         int(core->session_get_authored_role()),
@@ -61,7 +61,8 @@ TEST_CASE(
     Ref<NetwMultiplayer> core;
     core.instantiate();
     SessionCore &session = core->session_plane();
-    const Ref<NetwSessionConfig> config = authoring(SessionCore::ROLE_CLIENT);
+    const Ref<NetwSessionConfig> config
+        = authoring(NetwMultiplayer::ROLE_CLIENT);
     core->session_initialize(config);
 
     NETW_CHECK_EQ(
@@ -95,7 +96,7 @@ TEST_CASE(
         int(SessionCore::ROLE_LISTEN_SERVER)
     );
 
-    core->session_initialize(authoring(SessionCore::ROLE_DEDICATED_SERVER));
+    core->session_initialize(authoring(NetwMultiplayer::ROLE_DEDICATED_SERVER));
 
     NETW_CHECK_EQ(
         int(core->session_get_authored_role()),
@@ -110,10 +111,11 @@ TEST_CASE(
 ) {
     Ref<NetwMultiplayer> core;
     core.instantiate();
-    const Ref<NetwSessionConfig> config = authoring(SessionCore::ROLE_CLIENT);
+    const Ref<NetwSessionConfig> config
+        = authoring(NetwMultiplayer::ROLE_CLIENT);
     core->session_initialize(config);
 
-    config->set_desired_role(9);
+    config->set_desired_role(NetwMultiplayer::Role(9));
 
     NETW_CHECK_EQ(
         int(config->get_desired_role()),
@@ -124,7 +126,7 @@ TEST_CASE(
         int(SessionCore::ROLE_CLIENT)
     );
 
-    config->set_desired_role(-1);
+    config->set_desired_role(NetwMultiplayer::Role(-1));
 
     NETW_CHECK_EQ(
         int(config->get_desired_role()),
@@ -144,7 +146,7 @@ TEST_CASE(
     Ref<NetwMultiplayer> core;
     core.instantiate();
     NETW_CHECK_EQ(
-        int(core->session_initialize(authoring(SessionCore::ROLE_CLIENT))),
+        int(core->session_initialize(authoring(NetwMultiplayer::ROLE_CLIENT))),
         int(OK)
     );
 
@@ -155,7 +157,7 @@ TEST_CASE(
 
     NETW_CHECK_EQ(
         int(core->session_initialize(
-            authoring(SessionCore::ROLE_DEDICATED_SERVER)
+            authoring(NetwMultiplayer::ROLE_DEDICATED_SERVER)
         )),
         int(ERR_ALREADY_IN_USE)
     );

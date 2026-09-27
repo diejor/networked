@@ -83,6 +83,9 @@
 		</method>
 	</methods>
 	<members>
+		<member name="bodies" type="NetwEntity[]" setter="" getter="get_bodies" default="[]">
+			Every body in this scene, in no particular order. A body is removed as soon as it is despawned, before its node is freed.
+		</member>
 		<member name="entities" type="NetwEntity[]" setter="" getter="get_entities" default="[]">
 			Every entity in this scene.
 		</member>
@@ -95,35 +98,20 @@
 		<member name="label" type="StringName" setter="" getter="get_label" default="&amp;&quot;&quot;">
 			The name [method Netw.scene] finds this scene by. See [method NetwSceneConfig.labeled].
 		</member>
-		<member name="local_bodies" type="NetwEntity[]" setter="" getter="get_local_bodies">
+		<member name="local_bodies" type="NetwEntity[]" setter="" getter="get_local_bodies" default="[]">
 			Every body in this scene that belongs to this peer.
-		</member>
-		<member name="viewers" type="NetwPlayer[]" setter="" getter="get_viewers" default="[]">
-			Every player this scene replicates to, see [method is_watching].
-		</member>
-		<member name="bodies" type="NetwEntity[]" setter="" getter="get_bodies" default="[]">
-			Every body in this scene, in no particular order. A body is removed as soon as it is despawned, before its node is freed.
 		</member>
 		<member name="root" type="Node" setter="" getter="get_root">
 			The node the scene was declared on, [code]null[/code] outside a session. When the scene is [method NetwSceneConfig.isolated], [method Netw.spawn] returns [member world] and this is the node inside it.
+		</member>
+		<member name="viewers" type="NetwPlayer[]" setter="" getter="get_viewers" default="[]">
+			Every player this scene replicates to, see [method is_watching].
 		</member>
 		<member name="world" type="Node" setter="" getter="get_world">
 			The [SubViewport] above [member root] that gives an [method NetwSceneConfig.isolated] scene its own [World2D] and [World3D], [code]null[/code] otherwise.
 		</member>
 	</members>
 	<signals>
-		<signal name="viewer_entered">
-			<param index="0" name="player" type="NetwPlayer" />
-			<description>
-				Emitted when this scene starts replicating to [param player]. [member viewers] already includes them. To spawn players, use [signal NetwSessionHandle.scene_changed] instead.
-			</description>
-		</signal>
-		<signal name="viewer_left">
-			<param index="0" name="player" type="NetwPlayer" />
-			<description>
-				Emitted when this scene stops replicating to [param player].
-			</description>
-		</signal>
 		<signal name="body_entered">
 			<param index="0" name="body" type="NetwEntity" />
 			<description>
@@ -134,6 +122,18 @@
 			<param index="0" name="body" type="NetwEntity" />
 			<description>
 				Emitted when [param body] leaves this scene.
+			</description>
+		</signal>
+		<signal name="viewer_entered">
+			<param index="0" name="player" type="NetwPlayer" />
+			<description>
+				Emitted when this scene starts replicating to [param player]. [member viewers] already includes them. To spawn players, use [signal NetwSessionHandle.scene_changed] instead.
+			</description>
+		</signal>
+		<signal name="viewer_left">
+			<param index="0" name="player" type="NetwPlayer" />
+			<description>
+				Emitted when this scene stops replicating to [param player].
 			</description>
 		</signal>
 	</signals>

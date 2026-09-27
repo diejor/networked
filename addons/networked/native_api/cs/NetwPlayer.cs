@@ -6,31 +6,23 @@ using Godot.NativeInterop;
 namespace Networked;
 
 /// <summary>
-/// Live handle for one accepted session player.
+/// A player whose join was accepted.
 /// </summary>
 /// <remarks>
-/// One accepted membership, and the object is the membership. The session mints
-/// exactly one player per acceptance and answers that same object every time,
-/// so <c>==</c> returns "the same player" and a
-/// <see cref="Godot.Collections.Dictionary"/> keys on it directly. A membership
-/// is not a transport peer. <see cref="NetwPlayer.PeerId"/> is where this
-/// player is reachable right now and is reused by whoever connects next, so a
-/// player whose membership ended reports <see cref="NetwPlayer.IsActive"/>
-/// false and keeps the <see cref="NetwPlayer.UserName"/> it joined under rather
-/// than reading whatever peer now holds that id. A membership is not a body
-/// either. <see cref="NetwPlayer.Bodies"/> is the set of bodies the session
-/// currently holds for it, which is empty for a spectator and holds more than
-/// one for a player the game gave several.
+/// The session creates one <see cref="NetwPlayer"/> when it accepts a join, and
+/// always returns the same object for it, so it can be compared with <c>==</c>
+/// and used as a <see cref="Godot.Collections.Dictionary"/> key. A connected
+/// peer that has not joined has none.
 /// <code>
-/// var player := api.peer_get_player(peer_id)
+/// var player := Netw.of(self).peer_get_player(peer_id)
 /// greet(player.username)
 /// for body: NetwEntity in player.bodies:
 ///     follow(body.owner)
 /// </code>
 /// <para>
-/// Created by the session at the moment it accepts a join. A peer that has
-/// connected and not joined has no membership, so
-/// <see cref="NetwMultiplayer.PeerGetPlayer"/> answers <c>null</c> for it.
+/// A player is not a peer. After the player leaves,
+/// <see cref="NetwPlayer.IsActive"/> is <c>false</c>, even if a new player
+/// connects with the same <see cref="NetwPlayer.PeerId"/>.
 /// </para>
 /// </remarks>
 public sealed class NetwPlayer : NetwRefCounted
@@ -53,8 +45,8 @@ public sealed class NetwPlayer : NetwRefCounted
         NetwApi.MethodBind("NetwPlayer", "get_peer_id", 3905245786UL);
 
     /// <summary>
-    /// The transport peer this membership is currently reachable on. A routing
-    /// detail rather than identity, because a reconnect reuses the id.
+    /// The peer this player is connected as. Another player may reuse it after
+    /// this one leaves.
     /// </summary>
     public long PeerId
     {
@@ -70,11 +62,8 @@ public sealed class NetwPlayer : NetwRefCounted
         NetwApi.MethodBind("NetwPlayer", "get_is_active", 36873697UL);
 
     /// <summary>
-    /// Whether this membership is still the one the session holds. A handle a
-    /// game kept across a disconnect answers <c>false</c> here even when
-    /// another player has since connected onto the same
-    /// <see cref="NetwPlayer.PeerId"/>, which is what a game checks before
-    /// acting on a player it stored.
+    /// <c>false</c> once the player has left. Check it before using a player
+    /// you stored.
     /// </summary>
     public bool IsActive
     {
@@ -90,15 +79,9 @@ public sealed class NetwPlayer : NetwRefCounted
         NetwApi.MethodBind("NetwPlayer", "get_username", 2002593661UL);
 
     /// <summary>
-    /// The username this membership was accepted under, and the conventional
-    /// save key a game reads back. Stamped at acceptance and never re-read, so
-    /// it survives the membership ending and never reports a later player's
-    /// name. A session admits every name a join claims, so two players may hold
-    /// one username. Each is still its own membership, and each body stamps the
-    /// name as its <see cref="NetwEntity.EntityId"/>, so a game keying
-    /// persistence or prediction on the name reads and writes one row for the
-    /// pair. A game that wants one player per name says so in the handler it
-    /// installs with <see cref="Netw.ConfigureAdmission"/>.
+    /// The username from <see cref="Netw.PrepareJoin"/>. It is kept after the
+    /// player leaves. Two players may join with the same name, unless
+    /// <see cref="Netw.ConfigureAdmission"/> refuses it.
     /// </summary>
     public StringName UserName
     {
@@ -116,17 +99,9 @@ public sealed class NetwPlayer : NetwRefCounted
         NetwApi.MethodBind("NetwPlayer", "get_bodies", 3995934104UL);
 
     /// <summary>
-    /// Every body the session currently holds for this membership, in no
-    /// promised order. Answered live from the session rather than stored, so a
-    /// body is gone from the read that follows the <see cref="Netw.Despawn"/>
-    /// call rather than from the frame its node is freed. A player nothing has
-    /// spawned for answers an empty array, which is the honest reading for a
-    /// spectator and for a player whose join handler has not placed it yet.
-    /// Several bodies at once is ordinary, so a game that means one body reads
-    /// the array and says which one it means. A body belongs to the membership
-    /// <see cref="Netw.SpawnPlayer"/> armed it for, so one left standing after
-    /// its player disconnected stays out of the array the next player on that
-    /// <see cref="NetwPlayer.PeerId"/> reads.
+    /// The entities spawned for this player with
+    /// <see cref="Netw.SpawnPlayer"/>, in no particular order. Empty for a
+    /// spectator.
     /// </summary>
     public Godot.Collections.Array Bodies
     {

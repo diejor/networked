@@ -202,6 +202,14 @@
 				Raise it when the saved columns change, and add a [method migrate] step from the previous version. It does not affect replication, so peers on different storage versions still connect.
 			</description>
 		</method>
+		<method name="string">
+			<return type="int" />
+			<param index="0" name="key" type="StringName" />
+			<param index="1" name="stride" type="int" default="1" />
+			<description>
+				Declares a [constant NetwMultiplayer.COLUMN_STRING] column. Like [method variant], a schema holding one cannot become a replicated table.
+			</description>
+		</method>
 		<method name="u8">
 			<return type="int" />
 			<param index="0" name="key" type="StringName" />
@@ -216,14 +224,6 @@
 			<param index="1" name="stride" type="int" default="1" />
 			<description>
 				Declares a [constant NetwMultiplayer.COLUMN_U16] column.
-			</description>
-		</method>
-		<method name="string">
-			<return type="int" />
-			<param index="0" name="key" type="StringName" />
-			<param index="1" name="stride" type="int" default="1" />
-			<description>
-				Declares a [constant NetwMultiplayer.COLUMN_STRING] column. Like [method variant], a schema holding one cannot become a replicated table.
 			</description>
 		</method>
 		<method name="variant">
@@ -269,6 +269,9 @@
 		</member>
 		<member name="schema_name" type="StringName" setter="" getter="get_schema_name">
 			The name this schema is registered under, which [method NetwMultiplayer.schema_find] takes.
+		</member>
+		<member name="stored_version" type="int" setter="" getter="get_storage_version">
+			The version set by [method storage_version].
 		</member>
 	</members>
 </class>

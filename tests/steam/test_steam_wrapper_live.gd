@@ -1,18 +1,5 @@
-## Live shape tests for [SteamWrapper] against the real GodotSteam singleton.
-##
-## These pin SEAM B: the assumptions [SteamWrapper] hardcodes about the GodotSteam
-## API (method names, signals + their arity, enum values) still hold against the
-## installed extension. They only need the extension *loaded*, not Steam
-## *running*, so they are safe in headless CI.
-## [br][br]
-## Skipped (early return) when the GodotSteam GDExtension is not installed, e.g.
-## on a platform where the binary was not built. This file never references a
-## [code]Steam.*[/code] symbol directly so it parses even when the extension is
-## absent; everything goes through the singleton [Variant] and [ClassDB].
 extends GdUnitTestSuite
 
-## camelCase singleton methods [SteamWrapper] forwards to. Keep in sync with
-## steam_wrapper.gd. ([code]run_callbacks[/code] is snake_case in GodotSteam.)
 const REQUIRED_METHODS: PackedStringArray = [
 	"steamInitEx",
 	"run_callbacks",
@@ -36,8 +23,6 @@ const REQUIRED_METHODS: PackedStringArray = [
 	"addRequestLobbyListDistanceFilter",
 ]
 
-## Signals [SteamWrapper] bridges, mapped to the handler arity it connects with.
-## A drift in arg count breaks the lambda connection at runtime, so pin both.
 const REQUIRED_SIGNALS := {
 	"lobby_created": 2,
 	"lobby_joined": 4,
@@ -54,8 +39,6 @@ func before_test() -> void:
 		_steam = Engine.get_singleton("Steam")
 
 
-## Returns true when the GodotSteam singleton is present. When false, the calling
-## test returns early as a no-op (the extension is not installed on this build).
 func _require_steam() -> bool:
 	return _steam != null
 
@@ -98,9 +81,6 @@ func test_singleton_exposes_required_signals() -> void:
 func test_lobby_type_enum_matches_godotsteam() -> void:
 	if not _require_steam():
 		return
-	# GodotSteam exposes LobbyType as integer constants on the Steam class.
-	# Constant names below follow GodotSteam's bindings; if a future version
-	# renames them this fails with guidance rather than silently passing.
 	var cls := _steam.get_class()
 	var names := ClassDB.class_get_integer_constant_list(cls, false)
 	var expected := {

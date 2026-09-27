@@ -80,10 +80,10 @@ Dictionary NetwAuthProtocol::decode_probe_request(
 }
 
 PackedByteArray NetwAuthProtocol::encode_probe_reply(
-    int p_status,
+    ProbeStatus p_status,
     const PackedByteArray &p_payload
 ) {
-    return auth::encode_probe_reply(p_status, p_payload);
+    return auth::encode_probe_reply(int(p_status), p_payload);
 }
 
 Dictionary NetwAuthProtocol::decode_probe_reply(const PackedByteArray &p_data) {

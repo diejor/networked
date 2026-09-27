@@ -594,6 +594,12 @@ class Defaults(unittest.TestCase):
     def test_an_enum_default_is_cast_because_the_dump_says_0(self):
         self.assertEqual(csharp.default_value("Netw.SceneChange", "0"), ("(Netw.SceneChange)0", None))
 
+    def test_a_negative_enum_default_is_parenthesized(self):
+        self.assertEqual(
+            csharp.default_value("NetwMultiplayer.LeavePolicy", "-1"),
+            ("(NetwMultiplayer.LeavePolicy)(-1)", None),
+        )
+
     def test_a_string_default_is_a_literal(self):
         self.assertEqual(csharp.default_value("string", '""'), ('""', None))
 

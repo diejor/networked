@@ -1,17 +1,16 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <class name="LocalLinkConditions" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
 	<brief_description>
-		Declarative inbound impairment for one loopback link.
+		Simulated latency and packet loss for a [LocalLoopbackSession].
 	</brief_description>
 	<description>
-		Describes a link condition in human units and feeds the simulator directly. Used for tests using [class LocalLoopbackSession].
+		Used for tests.
 		[codeblock]
 		var conditions := LocalLinkConditions.wifi()
 		conditions.packet_loss = 0.05
 		loopback_session.set_link_conditions(server, conditions)
 		[/codeblock]
-		[member packet_loss] drops an unreliable packet outright. A reliable one is never dropped, and pays [method effective_retransmit_ms] instead.
-		[member seed] names the random streams this spec draws from, so two runs of the same scenario deliver packets in the same order.
+		The same [member seed] gives the same results every run.
 	</description>
 	<tutorials>
 	</tutorials>
@@ -19,26 +18,26 @@
 		<method name="clone" qualifiers="const">
 			<return type="LocalLinkConditions" />
 			<description>
-				Returns a copy of this spec. [method LocalLoopbackSession.set_link_conditions] clones what it is given, so editing a spec after installing it changes nothing.
+				Returns a copy.
 			</description>
 		</method>
 		<method name="create" qualifiers="static">
 			<return type="LocalLinkConditions" />
 			<param index="0" name="seed" type="int" default="0" />
 			<description>
-				Returns a spec seeded with [param seed]. A registered class's [code]new()[/code] takes no arguments, so this is where a seed goes.
+				Returns new conditions with [member seed] set to [param seed].
 			</description>
 		</method>
 		<method name="effective_latency_ms" qualifiers="const">
 			<return type="float" />
 			<description>
-				Returns [member latency_ms], floored at zero.
+				Returns [member latency_ms], or [code]0.0[/code] when negative.
 			</description>
 		</method>
 		<method name="effective_retransmit_ms" qualifiers="const">
 			<return type="float" />
 			<description>
-				Returns how long a lost reliable packet waits before it arrives anyway. While [member retransmit_ms] stays negative this derives from [member latency_ms].
+				Returns how long a lost reliable packet is delayed, from [member retransmit_ms] or computed from [member latency_ms] when it is negative.
 			</description>
 		</method>
 		<method name="mobile_4g" qualifiers="static">
@@ -50,7 +49,7 @@
 		<method name="perfect" qualifiers="static">
 			<return type="LocalLinkConditions" />
 			<description>
-				Returns a link with no simulated impairment.
+				Returns conditions with no latency or loss.
 			</description>
 		</method>
 		<method name="poor_3g" qualifiers="static">
@@ -74,31 +73,31 @@
 	</methods>
 	<members>
 		<member name="duplicate" type="float" setter="set_duplicate" getter="get_duplicate" default="0.0">
-			Probability that an unreliable packet is delivered a second time, one period later.
+			Chance that an unreliable packet arrives twice.
 		</member>
 		<member name="jitter_ms" type="float" setter="set_jitter_ms" getter="get_jitter_ms" default="0.0">
-			Upper bound on the extra delay drawn per unreliable packet.
+			The most random extra delay added to an unreliable packet, in milliseconds.
 		</member>
 		<member name="latency_ms" type="float" setter="set_latency_ms" getter="get_latency_ms" default="0.0">
-			Baseline one-way delay, in milliseconds.
+			One-way delay, in milliseconds.
 		</member>
 		<member name="packet_loss" type="float" setter="set_packet_loss" getter="get_packet_loss" default="0.0">
-			Probability that a packet is lost. An unreliable packet is dropped; a reliable one is delayed by [method effective_retransmit_ms].
+			Chance that a packet is lost. A lost reliable packet is delayed by [method effective_retransmit_ms] instead.
 		</member>
 		<member name="reorder" type="float" setter="set_reorder" getter="get_reorder" default="0.0">
-			Probability that an unreliable packet is held one extra period, which is what puts it behind the packet sent after it.
+			Chance that an unreliable packet arrives after the next one.
 		</member>
 		<member name="retransmit_ms" type="float" setter="set_retransmit_ms" getter="get_retransmit_ms" default="-1.0">
-			How long a lost reliable packet is delayed. Negative means derive it from [member latency_ms], which is what [method effective_retransmit_ms] does.
+			How long a lost reliable packet is delayed, in milliseconds. Negative computes it from [member latency_ms].
 		</member>
 		<member name="seed" type="int" setter="set_seed" getter="get_seed" default="0">
-			Seeds every random stream this spec draws from. The same seed and the same scenario produce the same delivery order.
+			The random seed. The same seed gives the same results.
 		</member>
 		<member name="throttle" type="float" setter="set_throttle" getter="get_throttle" default="0.0">
-			Probability of opening a throttle window, during which nothing is delivered.
+			Chance of a pause during which nothing is delivered.
 		</member>
 		<member name="throttle_ms" type="float" setter="set_throttle_ms" getter="get_throttle_ms" default="0.0">
-			How long a throttle window lasts, in milliseconds.
+			How long that pause lasts, in milliseconds.
 		</member>
 	</members>
 </class>

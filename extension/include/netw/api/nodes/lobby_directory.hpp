@@ -6,26 +6,19 @@
 #include "godot/multiplayer.hpp"
 #include "godot/net_peers.hpp"
 #include "godot/variant.hpp"
+#include "netw/api/enums.hpp"
 #include "netw/api/nodes/service.hpp"
 #include "netw/api/server_info.hpp"
 
 namespace netw {
 
-class LobbyDirectory : public NetwService {
+class LobbyDirectory : public NetwService, public enums::LobbyDirectory {
     GDCLASS(LobbyDirectory, NetwService)
-
-public:
-    enum Capability {
-        CAPABILITY_BROWSE = 1,
-        CAPABILITY_FRIENDS_ONLY_SUPPORT = 2,
-        CAPABILITY_INVITES = 4,
-        CAPABILITY_FRIEND_NAMES = 8,
-    };
 
 protected:
     static void _bind_methods();
 
-    GDVIRTUAL0R(int64_t, _capabilities)
+    GDVIRTUAL0R(Capability, _capabilities)
     GDVIRTUAL0R(godot::StringName, _peer_class)
     GDVIRTUAL0R(godot::String, _display_name)
     GDVIRTUAL0R(bool, _is_available)
@@ -82,5 +75,3 @@ public:
 };
 
 } // namespace netw
-
-VARIANT_ENUM_CAST(netw::LobbyDirectory::Capability);

@@ -1,7 +1,4 @@
 extends "res://tests/support/chains/member_base.gd"
-## Test fixture: the derived half of the chain, overriding
-## [code]shared_call[/code] with a default argument so the most-derived
-## declaration answers a different arity than the base one.
 
 signal mike_event(value: float)
 

@@ -1,12 +1,5 @@
-## Test session that extends [NetwMultiplayer] itself and replaces one seam.
-##
-## A script whose base is the native class contributes no inherited entries to
-## its own method list, so what it declares is exactly what it replaced. The
-## override adds only [member consumes], so the action a caller sees is exactly
-## the one [method NetwMultiplayer.predict_consume] would have answered alone.
 extends NetwMultiplayer
 
-## How many times the replaced seam has answered.
 var consumes := 0
 var display_writes := 0
 var gathers := 0

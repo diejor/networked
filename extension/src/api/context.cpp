@@ -88,9 +88,8 @@ Ref<T> declare_config(
         standing.is_valid(),
         Ref<T>(),
         sys::SESSION,
-        "Netw.%s: '%s' already declares this configuration. Keep the Resource "
-        "returned by the first call and finish authoring it before "
-        "configuration settles.",
+        "Netw.%s: '%s' already called this. Keep the Resource the first "
+        "call returned and set its values in _init.",
         verb,
         String(p_node->get_name())
     );
@@ -493,10 +492,9 @@ Ref<NetwJoinConfig> Netw::configure_join(const Callable &p_handler) {
             && p_handler.get_argument_count() > 1,
         Ref<NetwJoinConfig>(),
         sys::SESSION,
-        "Netw.configure_join: a handler taking wire arguments must be a "
-        "named method, because its parameter types are the join's wire "
-        "schema and a lambda publishes none. Write 'func seat(who: "
-        "NetwPlayer, at: Vector3) -> void' and declare it by name."
+        "Netw.configure_join: a handler with join arguments must be a named "
+        "method with typed parameters, not a lambda. For example "
+        "'func spawn_at(who: NetwPlayer, at: Vector3) -> void'."
     );
     Ref<NetwJoinConfig> config;
     config.instantiate();

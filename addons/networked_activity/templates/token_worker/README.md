@@ -5,11 +5,9 @@ A ~50-line Hono Worker that exchanges the OAuth `code` from
 `DiscordSDK.command_authenticate(access_token)` to resolve the local
 `DiscordUser`. The `CLIENT_SECRET` never reaches the client.
 
-This is the **client-claimed** identity path. It is fine for friendly play but
-is **not spoof-proof**: in the Nakama listen-server topology "peer 1" is another
-player's browser and cannot hold a bot token. Verified identity (a Nakama
-runtime module or the dedicated WSS server doing `get_activity_instance`
-verification) is tracked as Track B.
+The identity is claimed by the client, so it is fine for friendly play but
+can be spoofed. With a Nakama listen server, peer 1 is another player's
+browser and cannot hold a bot token.
 
 ## Deploy
 

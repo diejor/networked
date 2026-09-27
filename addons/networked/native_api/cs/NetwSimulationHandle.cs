@@ -37,7 +37,7 @@ namespace Networked;
 /// <see cref="NetwSimulationHandle.ModeEnum.None"/>.
 /// </para>
 /// <para>
-/// <b>Modes</b> The peer that authors the entity runs it as
+/// <b>Modes</b> The peer with authority over the entity runs it as
 /// <see cref="NetwSimulationHandle.ModeEnum.Authority"/>, and a client
 /// predicting it runs it as
 /// <see cref="NetwSimulationHandle.ModeEnum.Predict"/>. Every other copy is a
@@ -85,8 +85,8 @@ public sealed class NetwSimulationHandle : NetwRefCounted
         /// </summary>
         None = 0,
         /// <summary>
-        /// This peer authors the entity. The step runs and the samples go out
-        /// from here.
+        /// This peer has authority over the entity. The step runs and the
+        /// samples go out from here.
         /// </summary>
         Authority = 1,
         /// <summary>
@@ -135,13 +135,13 @@ public sealed class NetwSimulationHandle : NetwRefCounted
     public enum ReplicasEnum : long
     {
         /// <summary>
-        /// Copies this peer does not author are
+        /// Copies this peer has no authority over are
         /// <see cref="NetwSimulationHandle.ModeEnum.Proxy"/>, unless a
         /// selection makes them active.
         /// </summary>
         Proxy = 0,
         /// <summary>
-        /// Copies this peer does not author are
+        /// Copies this peer has no authority over are
         /// <see cref="NetwSimulationHandle.ModeEnum.Active"/>.
         /// </summary>
         Active = 1,
@@ -150,7 +150,7 @@ public sealed class NetwSimulationHandle : NetwRefCounted
     public enum RestoreEnum : long
     {
         /// <summary>
-        /// A sample lands when it arrives, as it was authored.
+        /// A sample lands when it arrives, as it was sent.
         /// </summary>
         Exact = 0,
         /// <summary>
@@ -161,7 +161,7 @@ public sealed class NetwSimulationHandle : NetwRefCounted
         Extrapolated = 1,
         /// <summary>
         /// A sample is held until the clock's display tick reaches it, then
-        /// lands as it was authored.
+        /// lands as it was sent.
         /// </summary>
         Buffered = 2,
     }
@@ -261,7 +261,8 @@ public sealed class NetwSimulationHandle : NetwRefCounted
             1564817952UL);
 
     /// <summary>
-    /// How the copies this peer does not author run. It can change at any time.
+    /// How the copies this peer has no authority over run. It can change at any
+    /// time.
     /// </summary>
     public NetwSimulationHandle.ReplicasEnum Replicas
     {
@@ -290,7 +291,7 @@ public sealed class NetwSimulationHandle : NetwRefCounted
         NetwApi.MethodBind("NetwSimulationHandle", "set_restore", 146574968UL);
 
     /// <summary>
-    /// How a sample from the author lands on a
+    /// How a sample from the authority lands on a
     /// <see cref="NetwSimulationHandle.ModeEnum.Active"/> copy. Under
     /// <see cref="NetwMultiplayer.LiveMode.Chase"/> the body snaps to it and
     /// the drawn position glides, up to
@@ -566,8 +567,8 @@ public sealed class NetwSimulationHandle : NetwRefCounted
     /// <summary>
     /// Selects the <paramref name="count"/> entities nearest this one among
     /// those this peer holds in <paramref name="layer"/>. An empty
-    /// <paramref name="layer"/> reads this entity's own
-    /// <see cref="NetwInterestLayer"/> membership.
+    /// <paramref name="layer"/> uses the <see cref="NetwInterestLayer"/> layers
+    /// this entity is in.
     /// </summary>
     public void SimulateNearest(int count, StringName layer = null)
     {
@@ -622,8 +623,8 @@ public sealed class NetwSimulationHandle : NetwRefCounted
 
     /// <summary>
     /// Selects every entity this peer holds in <paramref name="layer"/>. An
-    /// empty <paramref name="layer"/> reads this entity's own
-    /// <see cref="NetwInterestLayer"/> membership.
+    /// empty <paramref name="layer"/> uses the <see cref="NetwInterestLayer"/>
+    /// layers this entity is in.
     /// </summary>
     public void SimulateAll(StringName layer = null)
     {

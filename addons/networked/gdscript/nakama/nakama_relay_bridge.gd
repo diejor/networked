@@ -1,15 +1,9 @@
 extends RefCounted
 
-## Adapts a Nakama realtime match socket into a [NakamaRelayPeer].
+## Turns a Nakama match into a [NakamaRelayPeer].
 ##
-## Nakama sends match state by session id. The bridge assigns Godot peer ids and
-## forwards packets between the socket and [member multiplayer_peer].
-## [codeblock]
-## Nakama socket
-## ├── match presence -> peer id map
-## ├── match state    -> deliver_packet()
-## └── packet_generated() -> send_match_state_async()
-## [/codeblock]
+## Gives each player in the match a Godot peer id, and forwards packets between
+## the Nakama socket and [member multiplayer_peer].
 class_name NakamaRelayBridge
 
 enum MatchState {

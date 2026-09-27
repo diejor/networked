@@ -6,15 +6,11 @@ using Godot.NativeInterop;
 namespace Networked;
 
 /// <summary>
-/// Pre-allocated ring buffer that stores values keyed by tick number.
+/// Stores values by tick, with a fixed capacity.
 /// </summary>
 /// <remarks>
-/// <see cref="NetwRingBuffer"/> rounds its capacity up to a power of two so
-/// <see cref="NetwRingBuffer.Record"/>, <see cref="NetwRingBuffer.GetAt"/>, and
-/// <see cref="NetwRingBuffer.BracketingTicks"/> can stay cheap in interpolation
-/// and rollback hot paths: a capacity that is a power of two wraps an index
-/// with a mask rather than a modulo, and that is the whole reason this type
-/// exists rather than an <see cref="Godot.Collections.Array"/>.
+/// Keeps the most recent values. Recording past its capacity removes the
+/// oldest.
 /// <code>
 /// var history := NetwRingBuffer.create(32)
 /// history.record(tick, snapshot)
@@ -42,9 +38,8 @@ public sealed class NetwRingBuffer : NetwRefCounted
         NetwApi.MethodBind("NetwRingBuffer", "create", 1495395315UL);
 
     /// <summary>
-    /// Returns a buffer holding at least <paramref name="capacity"/> entries,
-    /// rounded up to a power of two. Calling <c>new()</c> instead gives the
-    /// default capacity.
+    /// Returns a buffer holding at least <paramref name="capacity"/> values,
+    /// rounded up to a power of two. <c>new()</c> holds 16.
     /// </summary>
     public static NetwRingBuffer Create(long capacity = 16)
     {
@@ -62,17 +57,8 @@ public sealed class NetwRingBuffer : NetwRefCounted
         NetwApi.MethodBind("NetwRingBuffer", "record", 2152698145UL);
 
     /// <summary>
-    /// Records <paramref name="value"/> at <paramref name="tick"/>. Recording
-    /// past capacity evicts the oldest entry. A tick the buffer already holds
-    /// is replaced in place rather than appended, so one tick is one entry and
-    /// the newest write for it is the one <see cref="NetwRingBuffer.GetAt"/>
-    /// returns. A replay that re-runs a tick and records the state it reached
-    /// is the caller this exists for: appending would leave the pre-replay
-    /// value in front of the corrected one, where every reader would keep
-    /// finding the value the replay was run to supersede. The replace path is
-    /// guarded by a single comparison against
-    /// <see cref="NetwRingBuffer.NewestTick"/>, so an append at a rising tick,
-    /// which is what every hot caller does, never scans.
+    /// Records <paramref name="value"/> at <paramref name="tick"/>, replacing
+    /// any value already there. When full, the oldest value is removed.
     /// </summary>
     public void Record(long tick, Variant value)
     {
@@ -94,8 +80,7 @@ public sealed class NetwRingBuffer : NetwRefCounted
         NetwApi.MethodBind("NetwRingBuffer", "get_at", 4227898402UL);
 
     /// <summary>
-    /// Returns the value recorded at exactly <paramref name="tick"/>, or
-    /// <c>null</c> when that tick was never recorded or has since been evicted.
+    /// Returns the value at <paramref name="tick"/>, or <c>null</c>.
     /// </summary>
     public Variant GetAt(long tick)
     {
@@ -112,11 +97,9 @@ public sealed class NetwRingBuffer : NetwRefCounted
         NetwApi.MethodBind("NetwRingBuffer", "bracketing_ticks", 880721226UL);
 
     /// <summary>
-    /// Returns the <c>(prev, next)</c> ticks bracketing
-    /// <paramref name="tick"/>. <c>x</c> is the greatest recorded tick less
-    /// than or equal to <paramref name="tick"/> or <c>-1</c> if none exists.
-    /// <c>y</c> is the smallest recorded tick strictly greater than
-    /// <paramref name="tick"/> or <c>-1</c> if none exists.
+    /// Returns the recorded ticks around <paramref name="tick"/>. <c>x</c> is
+    /// the newest at or before it, and <c>y</c> the oldest after it, or
+    /// <c>-1</c> when there is none.
     /// </summary>
     public Vector2I BracketingTicks(long tick)
     {
@@ -153,8 +136,7 @@ public sealed class NetwRingBuffer : NetwRefCounted
         NetwApi.MethodBind("NetwRingBuffer", "oldest_tick", 3905245786UL);
 
     /// <summary>
-    /// Returns the oldest tick still held, or <c>-1</c> when the buffer is
-    /// empty.
+    /// Returns the oldest recorded tick, or <c>-1</c> when the buffer is empty.
     /// </summary>
     public long OldestTick()
     {
@@ -181,7 +163,7 @@ public sealed class NetwRingBuffer : NetwRefCounted
         NetwApi.MethodBind("NetwRingBuffer", "clear", 3218959716UL);
 
     /// <summary>
-    /// Drops every recorded entry, keeping the allocated capacity.
+    /// Removes every value.
     /// </summary>
     public void Clear()
     {
@@ -193,7 +175,7 @@ public sealed class NetwRingBuffer : NetwRefCounted
         NetwApi.MethodBind("NetwRingBuffer", "size", 3905245786UL);
 
     /// <summary>
-    /// Returns how many entries are recorded.
+    /// Returns how many values are recorded.
     /// </summary>
     public long Size()
     {

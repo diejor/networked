@@ -5,6 +5,7 @@
 #include "godot/resource.hpp"
 #include "godot/variant.hpp"
 #include "netw/api/config_draft.hpp"
+#include "netw/api/enums.hpp"
 #include "netw/api/link_conditions.hpp"
 #include "netw/api/server_info.hpp"
 
@@ -17,7 +18,8 @@ class NetwSessionConfig : public godot::Resource {
 
     struct Values {
         godot::StringName app_id;
-        int64_t desired_role = DEFAULT_DESIRED_ROLE;
+        enums::NetwMultiplayer::Role desired_role
+            = enums::NetwMultiplayer::Role(DEFAULT_DESIRED_ROLE);
         godot::Ref<NetwLinkConditions> link_conditions;
         godot::Ref<NetwServerInfo> server_info;
     };
@@ -38,8 +40,8 @@ public:
         return values.app_id;
     }
 
-    void set_desired_role(int64_t p_role);
-    int64_t get_desired_role() const {
+    void set_desired_role(enums::NetwMultiplayer::Role p_role);
+    enums::NetwMultiplayer::Role get_desired_role() const {
         return values.desired_role;
     }
 
@@ -64,7 +66,7 @@ public:
     }
 
     godot::Ref<NetwSessionConfig> app(const godot::StringName &p_app_id);
-    godot::Ref<NetwSessionConfig> role(int64_t p_role);
+    godot::Ref<NetwSessionConfig> role(enums::NetwMultiplayer::Role p_role);
     godot::Ref<NetwSessionConfig> link(
         const godot::Ref<NetwLinkConditions> &p_conditions
     );

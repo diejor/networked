@@ -6,31 +6,15 @@ using Godot.NativeInterop;
 namespace Networked;
 
 /// <summary>
-/// The single write that corrects one settled divergence, staged whole.
+/// How a misprediction is corrected, returned by
+/// <c>NetwMultiplayer._predict_recover</c>.
 /// </summary>
 /// <remarks>
-/// <c>NetwMultiplayer._predict_recover</c> returns one of these, and a game
-/// overriding that seam creates its own through
-/// <see cref="NetwPredictRecovery.Of"/>. The whole recovery is decided here and
-/// applied by the shell in one write, so a correction has no tail: nothing is
-/// left outstanding to ease in over later frames, and the state recorded after
-/// a recovery is exactly what was staged. Deciding it and performing it are
-/// separate for that reason, and a record is what carries the decision between
-/// them. <see cref="NetwPredictRecovery.Restore"/> and
-/// <see cref="NetwPredictRecovery.Write"/> are keyed by property name, which is
-/// the altitude the seam speaks: the engine's own plan is keyed by field slot.
+/// Create one with <see cref="NetwPredictRecovery.Of"/> in an override of
+/// <c>NetwMultiplayer._predict_recover</c>. The correction is applied at once.
 /// <code>
 /// var staged := NetwPredictRecovery.of(restore, restore, false, false)
 /// </code>
-/// <para>
-/// - <see cref="NetwPredictRecovery.Restore"/> the payload to apply, by
-/// property name
-/// - <see cref="NetwPredictRecovery.Write"/> what the display is told moved
-/// - <see cref="NetwPredictRecovery.Teleport"/> the body kept nothing worth
-/// blending from
-/// - <see cref="NetwPredictRecovery.Skip"/> this recovery declines to write at
-/// all
-/// </para>
 /// </remarks>
 public sealed class NetwPredictRecovery : NetwRefCounted
 {
@@ -52,7 +36,7 @@ public sealed class NetwPredictRecovery : NetwRefCounted
         NetwApi.MethodBind("NetwPredictRecovery", "of", 1369470726UL);
 
     /// <summary>
-    /// Creates one staged recovery.
+    /// Creates a correction. See each getter for the parameters.
     /// </summary>
     public static NetwPredictRecovery Of(
         Godot.Collections.Dictionary restore,
@@ -89,9 +73,7 @@ public sealed class NetwPredictRecovery : NetwRefCounted
         NetwApi.MethodBind("NetwPredictRecovery", "restore", 3102165223UL);
 
     /// <summary>
-    /// The payload to apply to the body, keyed by property name. A recovery
-    /// that withheld fields has already dropped them here, so a caller writes
-    /// what it is handed rather than filtering again.
+    /// The values to set, keyed by property name.
     /// </summary>
     public Godot.Collections.Dictionary Restore()
     {
@@ -107,15 +89,9 @@ public sealed class NetwPredictRecovery : NetwRefCounted
         NetwApi.MethodBind("NetwPredictRecovery", "write", 3102165223UL);
 
     /// <summary>
-    /// What the display is told moved. It is empty for a recovery that restores
-    /// without a visible correction, which is what a replay does. Separate from
-    /// <see cref="NetwPredictRecovery.Restore"/> because the two serve
-    /// different readers rather than because they hold different values: the
-    /// restore is applied to the simulated state, and this is the copy
-    /// something drains onto the bound node. Wherever both carry a field they
-    /// carry the same value, and a driver with nothing to drain reads the
-    /// restored state and leaves this undrained rather than being handed a
-    /// second truth.
+    /// The values the display should show changing, keyed by property name.
+    /// Usually the same as <see cref="NetwPredictRecovery.Restore"/>, or empty
+    /// for no visible correction.
     /// </summary>
     public Godot.Collections.Dictionary Write()
     {
@@ -131,9 +107,7 @@ public sealed class NetwPredictRecovery : NetwRefCounted
         NetwApi.MethodBind("NetwPredictRecovery", "teleport", 36873697UL);
 
     /// <summary>
-    /// Whether the body kept nothing worth blending from. The tier is measured
-    /// per property against its own threshold, because the errors have
-    /// different units and one number cannot be right for all of them.
+    /// <c>true</c> to jump to the values instead of smoothing.
     /// </summary>
     public bool Teleport()
     {
@@ -146,9 +120,7 @@ public sealed class NetwPredictRecovery : NetwRefCounted
         NetwApi.MethodBind("NetwPredictRecovery", "skip", 36873697UL);
 
     /// <summary>
-    /// Whether this recovery declines to write at all. A replay reaches the
-    /// present under its own power and an observing policy was only ever going
-    /// to report, so both decline while still having decided.
+    /// <c>true</c> to change nothing.
     /// </summary>
     public bool Skip()
     {

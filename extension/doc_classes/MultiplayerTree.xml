@@ -1,22 +1,21 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <class name="MultiplayerTree" inherits="Node" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
 	<brief_description>
-		The node one [member Node.multiplayer] branch is rooted at.
+		A node that gives its children their own [NetwMultiplayer].
 	</brief_description>
 	<description>
-		A tree owns one [MultiplayerAPI] and installs it on its own branch of the [SceneTree], so every descendant returns [member Node.multiplayer] with that session and two trees in one [SceneTree] are two independent sessions.
+		Every child's [member Node.multiplayer] is this tree's [member api], as with [method SceneTree.set_multiplayer]. Two trees in one [SceneTree] are two separate sessions, such as a server and a client in one process.
 		[codeblock]
 		tree.peer_class = &amp;"ENetMultiplayerPeer"
 		tree.transport_settings = { port = 21253 }
 
-		# A peer the game already holds.
+		# assign a peer as usual
 		var peer := ENetMultiplayerPeer.new()
 		peer.create_client("127.0.0.1", 21253)
 		tree.api.session_prepare_join(&amp;"PlayerOne", [])
 		tree.api.multiplayer_peer = peer
 
-		# Or one the provider knows how to build, prepared and assigned inside
-		# the window the offer arrives in.
+		# or let the transport create it
 		Netw.connection(tree).create_peer(
 		    tree.peer_class,
 		    NetwMultiplayer.TRANSPORT_MODE_CLIENT,
@@ -35,13 +34,13 @@
 		<method name="dispose">
 			<return type="void" />
 			<description>
-				Clears the service registry and the roster.
+				Removes every service and forgets every player.
 			</description>
 		</method>
 		<method name="raise_embedded_server">
 			<return type="MultiplayerTree" />
 			<description>
-				Duplicates this tree as a [constant NetwMultiplayer.ROLE_DEDICATED_SERVER] sibling named [code]Server[/code] and adds it beside this one.
+				Duplicates this tree as a sibling named [code]Server[/code], with the role [constant NetwMultiplayer.ROLE_DEDICATED_SERVER].
 				[codeblock]
 				var server := tree.raise_embedded_server()
 				var peer := ENetMultiplayerPeer.new()
@@ -53,32 +52,31 @@
 	</methods>
 	<members>
 		<member name="api" type="NetwMultiplayer" setter="" getter="get_api">
-			The [NetwMultiplayer] this tree owns and installs on its branch.
+			The [NetwMultiplayer] of this tree's children.
 		</member>
 		<member name="api_script" type="Script" setter="set_api_script" getter="get_api_script">
-			An optional [NetwMultiplayer] implementation script, passed to [method NetwMultiplayer.make].
+			An optional script extending [NetwMultiplayer], used for [member api].
 		</member>
 		<member name="app_id" type="StringName" setter="set_app_id" getter="get_app_id" default="&amp;&quot;&quot;">
-			A game-build tag that gates admission, baked into every build.
-			A joining peer whose tag differs is rejected during the auth handshake before it reaches the [MultiplayerAPI].
+			The game and build. Peers with a different [member app_id] cannot connect. See [member NetwSessionConfig.app_id].
 		</member>
 		<member name="auto_host_headless" type="bool" setter="set_auto_host_headless" getter="get_auto_host_headless" default="true">
-			On a headless build, hosts from [member peer_class] and [member transport_settings] without waiting to be asked.
+			When running headless, hosts at startup with [member peer_class] and [member transport_settings].
 		</member>
 		<member name="debug_join" type="DebugJoinConfig" setter="set_debug_join" getter="get_debug_join">
-			An auto-connect applied on play, in debug builds only.
+			Connects automatically when the game runs, in debug builds only.
 		</member>
 		<member name="desired_role" type="int" setter="set_desired_role" getter="get_desired_role" enum="NetwMultiplayer.Role" default="3">
-			The [enum NetwMultiplayer.Role] this tree intends to play.
+			The role this tree takes when it hosts.
 		</member>
 		<member name="link_conditions" type="NetwLinkConditions" setter="set_link_conditions" getter="get_link_conditions">
-			Latency and loss to simulate on this tree's peer.
+			Simulated latency and packet loss for testing.
 		</member>
 		<member name="peer_class" type="StringName" setter="set_peer_class" getter="get_peer_class" default="&amp;&quot;&quot;">
-			The class of peer this tree brings itself up with, such as [code]&amp;"ENetMultiplayerPeer"[/code].
+			The [MultiplayerPeer] class to use, such as [code]&amp;"ENetMultiplayerPeer"[/code].
 		</member>
 		<member name="transport_settings" type="Dictionary" setter="set_transport_settings" getter="get_transport_settings" default="{}">
-			The settings [member peer_class]'s transport is created with, such as [code]{ port = 21253 }[/code] for an ENet server.
+			The settings for creating a [member peer_class] peer, such as [code]{ port = 21253 }[/code] for ENet.
 		</member>
 	</members>
 </class>

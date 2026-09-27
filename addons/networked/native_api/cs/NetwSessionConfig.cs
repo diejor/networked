@@ -6,35 +6,23 @@ using Godot.NativeInterop;
 namespace Networked;
 
 /// <summary>
-/// Draft the session machine is initialized from, declared on a scope node.
+/// Session settings, returned by <see cref="Netw.ConfigureSession"/>.
 /// </summary>
 /// <remarks>
-/// <see cref="Netw.ConfigureSession"/> returns a draft the scope node owns.
-/// Edit it in place or through the fluent methods, and the session copies its
-/// values once, at a deferred boundary after the declaring call stack has
-/// finished. From then on the session holds owned values and this Resource is a
-/// spent authoring snapshot: a later setter reports the late write and moves
-/// nothing. This resource carries only the facts the wire and the session
-/// machine own. What a session hosts or joins over is not among them: that is
-/// an argument of the verb that hosts, on <see cref="NetwConnectHandle"/>.
+/// Set the values in <c>Object._init</c>. They are applied once, at the end of
+/// the frame, and changes after that push a warning and do nothing.
 /// <code>
 /// func _init() -&gt; void:
 ///     Netw.configure_session(self) \
-///         .app_id(&amp;"bomber-v2") \
-///         .role(NetwMultiplayer.Role.LISTEN_SERVER)
+///         .app(&amp;"bomber-v2") \
+///         .role(NetwMultiplayer.ROLE_LISTEN_SERVER)
 /// </code>
 /// <para>
-/// A preset handed to that verb is copied rather than kept, so one <c>.tres</c>
-/// may seed several scenes and editing it afterwards reaches none of them.
-/// Nested <see cref="NetwLinkConditions"/> and <see cref="NetwServerInfo"/>
-/// values are copied too. <see cref="NetwMultiplayer.SessionGetConfig"/>
-/// returns a detached snapshot of the running values, freshly copied nested
-/// objects included. Editing what it returns is a way to read the session,
-/// never a way to configure it. A <see cref="MultiplayerTree"/>'s session
-/// exports are the fallback when no node declares one. An explicit declaration
-/// replaces that export whole, so a field left at its default here is the
-/// default rather than the tree's value, and the discarded non-default tree
-/// fields are named once in a warning.
+/// A preset passed to <see cref="Netw.ConfigureSession"/> is copied, so one
+/// <c>.tres</c> can be used by several scenes. When no node calls
+/// <see cref="Netw.ConfigureSession"/>, the settings of the
+/// <see cref="MultiplayerTree"/> are used. When one does, the
+/// <see cref="MultiplayerTree"/> settings are ignored.
 /// </para>
 /// </remarks>
 public sealed class NetwSessionConfig : NetwRefCounted
@@ -60,13 +48,10 @@ public sealed class NetwSessionConfig : NetwRefCounted
         NetwApi.MethodBind("NetwSessionConfig", "set_app_id", 3304788590UL);
 
     /// <summary>
-    /// Game-build tag that gates session admission. A joining peer whose tag
-    /// differs is rejected during authentication before it reaches
-    /// <see cref="MultiplayerApi.GetPeers"/>. Leave this empty to disable the
-    /// check. The session derives one auth tag from this value. It also names
-    /// the space a signalled transport creates its room codes in, and is what
-    /// makes a code short enough to read out. See
-    /// <see cref="MultiplayerTree.AppId"/>.
+    /// The game and build. Peers with a different
+    /// <see cref="NetwSessionConfig.AppId"/> cannot connect. Leave it empty to
+    /// accept any. WebRTC room codes are also created per
+    /// <see cref="NetwSessionConfig.AppId"/>.
     /// </summary>
     public StringName AppId
     {
@@ -92,25 +77,21 @@ public sealed class NetwSessionConfig : NetwRefCounted
         NetwApi.MethodBind(
             "NetwSessionConfig",
             "get_desired_role",
-            3905245786UL);
+            2901618068UL);
 
     private static readonly IntPtr _bindSetDesiredRole =
         NetwApi.MethodBind(
             "NetwSessionConfig",
             "set_desired_role",
-            1286410249UL);
+            3233627807UL);
 
     /// <summary>
-    /// The <see cref="NetwMultiplayer.RoleEnum"/> the local peer intends to
-    /// play once a session starts. The live <see cref="NetwMultiplayer.Role"/>
-    /// is only assigned when the session reaches
-    /// <c>NetwMultiplayer.SessionState.ONLINE</c>. This is the intent the
-    /// assignment edge reads to pick the server role. A value outside the enum
-    /// is rejected and the previous role stands. An embedded server is
-    /// constructed with a dedicated-server role that constrains the effective
-    /// role after consumption, whichever declaration supplied the other values.
+    /// The role this peer takes when it hosts, which becomes
+    /// <see cref="NetwMultiplayer.Role"/>. A server made with
+    /// <see cref="MultiplayerTree.RaiseEmbeddedServer"/> is always
+    /// <see cref="NetwMultiplayer.RoleEnum.DedicatedServer"/>.
     /// </summary>
-    public long DesiredRole
+    public NetwMultiplayer.RoleEnum DesiredRole
     {
         get
         {
@@ -119,11 +100,11 @@ public sealed class NetwSessionConfig : NetwRefCounted
                 _bindGetDesiredRole,
                 Checked,
                 ref answered);
-            return answered;
+            return (NetwMultiplayer.RoleEnum)answered;
         }
         set
         {
-            long slot0 = value;
+            long slot0 = (long)value;
             long discarded = default;
             NetwThunks.Ptrcall1_Long_Long(
                 _bindSetDesiredRole,
@@ -146,12 +127,7 @@ public sealed class NetwSessionConfig : NetwRefCounted
             1089193088UL);
 
     /// <summary>
-    /// Optional latency and loss simulation applied to this session's peer.
-    /// <see cref="NetwMultiplayer"/> wraps the built peer with it before
-    /// assignment, so a session applies what it was configured with whether or
-    /// not a <see cref="MultiplayerTree"/> owns it. Its four scalar fields are
-    /// copied at consumption, so mutating the object afterwards reaches no
-    /// running session.
+    /// Simulated latency and packet loss for testing. Copied when applied.
     /// </summary>
     public NetwLinkConditions LinkConditions
     {
@@ -189,26 +165,18 @@ public sealed class NetwSessionConfig : NetwRefCounted
             1251535023UL);
 
     /// <summary>
-    /// What this session tells a probing client about itself: its name, its
-    /// player cap, its <see cref="NetwServerInfo.VisibilityEnum"/>, and
-    /// whatever else the game fills in. This is the whole advert and its only
-    /// door, authored in the inspector or declared before the session is
-    /// brought up. <see cref="NetwServerInfo.FromSession"/> copies it and
-    /// overlays the fields only a live session knows, so a game that leaves it
-    /// unset still returns a probe honestly and a game that sets it never says
-    /// the same thing twice. Its values, nested containers included, are copied
-    /// at consumption.
+    /// What this server shows in server browsers. The player count and
+    /// <see cref="NetwServerInfo.AppId"/> are filled in automatically. Copied
+    /// when applied.
     /// <code>
     /// var info := NetwServerInfo.new()
     /// info.motd = "Friday night"
     /// info.max_players = 8
-    /// Netw.configure_session(self).server_info(info)
+    /// Netw.configure_session(self).server(info)
     /// </code>
     /// <para>
-    /// A game that computes its reply per probe declares a provider through
-    /// <see cref="Netw.ConfigureServerInfo"/> instead. That provider is handed
-    /// this record, already copied and filled in from the live session, and
-    /// returns the reply to send.
+    /// To change it for each request, use
+    /// <see cref="Netw.ConfigureServerInfo"/>.
     /// </para>
     /// </summary>
     public NetwServerInfo ServerInfo
@@ -238,8 +206,7 @@ public sealed class NetwSessionConfig : NetwRefCounted
         NetwApi.MethodBind("NetwSessionConfig", "app", 243073128UL);
 
     /// <summary>
-    /// Sets <see cref="NetwSessionConfig.AppId"/> and returns this same draft,
-    /// so a declaration reads as one chained expression.
+    /// Sets <see cref="NetwSessionConfig.AppId"/> and returns this config.
     /// </summary>
     public NetwSessionConfig App(StringName appId)
     {
@@ -256,15 +223,15 @@ public sealed class NetwSessionConfig : NetwRefCounted
     }
 
     private static readonly IntPtr _bindRole =
-        NetwApi.MethodBind("NetwSessionConfig", "role", 3031268209UL);
+        NetwApi.MethodBind("NetwSessionConfig", "role", 2580083280UL);
 
     /// <summary>
-    /// Sets <see cref="NetwSessionConfig.DesiredRole"/> and returns this same
-    /// draft, so a declaration reads as one chained expression.
+    /// Sets <see cref="NetwSessionConfig.DesiredRole"/> and returns this
+    /// config.
     /// </summary>
-    public NetwSessionConfig Role(long desiredRole)
+    public NetwSessionConfig Role(NetwMultiplayer.RoleEnum desiredRole)
     {
-        long slot0 = desiredRole;
+        long slot0 = (long)desiredRole;
         IntPtr answered = default;
         NetwThunks.Ptrcall1_Long_IntPtr(
             _bindRole,
@@ -279,7 +246,7 @@ public sealed class NetwSessionConfig : NetwRefCounted
 
     /// <summary>
     /// Sets <see cref="NetwSessionConfig.LinkConditions"/> and returns this
-    /// same draft, so a declaration reads as one chained expression.
+    /// config.
     /// </summary>
     public NetwSessionConfig Link(NetwLinkConditions linkConditions)
     {
@@ -297,8 +264,7 @@ public sealed class NetwSessionConfig : NetwRefCounted
         NetwApi.MethodBind("NetwSessionConfig", "server", 2552003917UL);
 
     /// <summary>
-    /// Sets <see cref="NetwSessionConfig.ServerInfo"/> and returns this same
-    /// draft, so a declaration reads as one chained expression.
+    /// Sets <see cref="NetwSessionConfig.ServerInfo"/> and returns this config.
     /// </summary>
     public NetwSessionConfig Server(NetwServerInfo serverInfo)
     {

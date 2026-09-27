@@ -10,6 +10,7 @@
 #include "godot/rid.hpp"
 #include "godot/script.hpp"
 #include "godot/variant.hpp"
+#include "netw/api/enums.hpp"
 #include "netw/api/server_info.hpp"
 
 namespace netw {
@@ -51,7 +52,7 @@ public:
 
     godot::RID create_peer(
         const godot::Variant &p_transport,
-        int64_t p_mode,
+        enums::NetwMultiplayer::TransportMode p_mode,
         const godot::String &p_address,
         const godot::Dictionary &p_settings,
         const godot::Callable &p_completed,

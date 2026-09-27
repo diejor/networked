@@ -14,52 +14,6 @@
 	</description>
 	<tutorials>
 	</tutorials>
-	<methods>
-		<method name="_delete_slot" qualifiers="virtual">
-			<return type="NetwPromise" />
-			<param index="0" name="session" type="Object" />
-			<param index="1" name="slot" type="StringName" />
-			<description>
-				Removes the directory for [param slot] and every record inside it.
-				[codeblock lang=text]
-				Error
-				┠╴OK                    	slot was absent or was removed
-				┠╴ERR_FILE_CANT_OPEN    	slot could not be opened
-				┠╴ERR_FILE_NO_PERMISSION 	the process cannot remove the slot
-				┖╴ERR_FILE_CANT_WRITE   	removing the slot failed
-				[/codeblock]
-			</description>
-		</method>
-		<method name="_list_slots" qualifiers="virtual">
-			<return type="NetwPromise" />
-			<param index="0" name="session" type="Object" />
-			<description>
-				Reads [member root] and resolves every slot directory it contains.
-				[codeblock lang=text]
-				Error
-				┠╴OK                    	root was read and slots were listed
-				┠╴ERR_FILE_CANT_OPEN    	root could not be opened
-				┠╴ERR_FILE_NO_PERMISSION 	the process cannot read root
-				┖╴ERR_FILE_CANT_READ   		reading root failed
-				[/codeblock]
-			</description>
-		</method>
-		<method name="_open" qualifiers="virtual">
-			<return type="NetwPromise" />
-			<param index="0" name="session" type="Object" />
-			<param index="1" name="slot" type="StringName" />
-			<description>
-				Opens [param slot] and resolves a [NetwDatabaseConnection] for its directory.
-				[codeblock lang=text]
-				Error
-				┠╴OK                     	slot was opened
-				┠╴ERR_FILE_CANT_OPEN     	the slot could not be opened
-				┠╴ERR_FILE_NO_PERMISSION  	the process cannot open the slot
-				┖╴ERR_FILE_CANT_READ      	reading the slot failed
-				[/codeblock]
-			</description>
-		</method>
-	</methods>
 	<members>
 		<member name="root" type="String" setter="set_root" getter="get_root" default="&quot;user://saves&quot;">
 			The directory every slot lives under. Use a path under [code]user://[/code], which an exported game can write to on every platform.

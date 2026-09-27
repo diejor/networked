@@ -10,23 +10,17 @@ namespace Networked;
 /// count.
 /// </summary>
 /// <remarks>
-/// The value is taken modulo <c>@GDScript.TAU</c> and mapped to
-/// <see cref="NetwQuantizeAngle.BitCount"/> bits, so every angle has a code and
-/// the wrap costs nothing: two peers a hair either side of the boundary encode
-/// to neighbouring codes rather than to opposite ends of a range. Applies to a
-/// [float] angle. Which half-open range it decodes into is a declaration,
-/// because the field it writes back into has one. A Godot Euler component
-/// carries <c>-PI &lt; angle &lt;= PI</c>, so restoring <c>0 &lt;= angle &lt;
-/// TAU</c> into it would leave the game reading a value outside the range it
-/// stores angles in, even though the two name the same rotation.
+/// Compresses a [float] angle into <see cref="NetwQuantizeAngle.BitCount"/>
+/// bits. The angle wraps around, so values near <c>0</c> and
+/// <c>@GDScript.TAU</c> stay close.
 /// <code>
 /// var q := NetwQuantizeAngle.new().bits(8)              # 0 &lt;= angle &lt; TAU
 /// var e := NetwQuantizeAngle.new().bits(16).centered()  # -PI &lt; angle &lt;= PI
 /// </code>
 /// <para>
-/// Exactly PI stays positive, so the centered range is half-open the same way a
-/// Godot Euler component is and both peers agree on the boundary code. The
-/// error is at most half the angular resolution, <c>TAU / 2^bit_count</c>.
+/// Use <see cref="NetwQuantizeAngle.Centered"/> for <c>Node3D.rotation</c> and
+/// <c>Node2D.rotation</c>, which are in that range. The error is at most half
+/// of <c>TAU / 2 ** bit_count</c>.
 /// </para>
 /// </remarks>
 public sealed class NetwQuantizeAngle : NetwQuantize
@@ -52,7 +46,7 @@ public sealed class NetwQuantizeAngle : NetwQuantize
         NetwApi.MethodBind("NetwQuantizeAngle", "set_bit_count", 1286410249UL);
 
     /// <summary>
-    /// Bits for the angle, clamped to 1..32.
+    /// Bits for the angle, from <c>1</c> to <c>32</c>.
     /// </summary>
     public int BitCount
     {
@@ -87,9 +81,8 @@ public sealed class NetwQuantizeAngle : NetwQuantize
             2586408642UL);
 
     /// <summary>
-    /// Whether the decoded range is centered on zero (<c>-PI &lt; angle &lt;=
-    /// PI</c>) rather than starting there (<c>0 &lt;= angle &lt; TAU</c>). The
-    /// encoding is identical either way.
+    /// When <c>true</c>, decoded angles are between <c>-PI</c> and <c>PI</c>.
+    /// Otherwise they are between <c>0</c> and <c>TAU</c>.
     /// </summary>
     public bool CenteredOnZero
     {
@@ -118,8 +111,8 @@ public sealed class NetwQuantizeAngle : NetwQuantize
         NetwApi.MethodBind("NetwQuantizeAngle", "bits", 2593758425UL);
 
     /// <summary>
-    /// Builder that sets <see cref="NetwQuantizeAngle.BitCount"/> and returns
-    /// this quantizer.
+    /// Sets <see cref="NetwQuantizeAngle.BitCount"/> and returns this
+    /// quantizer.
     /// </summary>
     public NetwQuantizeAngle Bits(int bits)
     {
@@ -137,9 +130,8 @@ public sealed class NetwQuantizeAngle : NetwQuantize
         NetwApi.MethodBind("NetwQuantizeAngle", "centered", 2552784680UL);
 
     /// <summary>
-    /// Builder that sets <see cref="NetwQuantizeAngle.CenteredOnZero"/> and
-    /// returns this quantizer, matching the convention a Godot Euler component
-    /// stores its angles in.
+    /// Sets <see cref="NetwQuantizeAngle.CenteredOnZero"/> and returns this
+    /// quantizer.
     /// </summary>
     public NetwQuantizeAngle Centered()
     {

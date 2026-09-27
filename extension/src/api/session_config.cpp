@@ -1,6 +1,7 @@
 #include "netw/api/session_config.hpp"
 
 #include "godot/class_db.hpp"
+#include "netw/api/netw_multiplayer.hpp"
 
 using namespace godot;
 
@@ -95,8 +96,8 @@ void NetwSessionConfig::_bind_methods() {
     );
 }
 
-void NetwSessionConfig::set_desired_role(int64_t p_role) {
-    if (guard.takes_enum("desired_role", p_role, 4)) {
+void NetwSessionConfig::set_desired_role(NetwMultiplayer::Role p_role) {
+    if (guard.takes_enum("desired_role", int64_t(p_role), 4)) {
         values.desired_role = p_role;
     }
 }
@@ -106,7 +107,7 @@ Ref<NetwSessionConfig> NetwSessionConfig::app(const StringName &p_app_id) {
     return Ref<NetwSessionConfig>(this);
 }
 
-Ref<NetwSessionConfig> NetwSessionConfig::role(int64_t p_role) {
+Ref<NetwSessionConfig> NetwSessionConfig::role(NetwMultiplayer::Role p_role) {
     set_desired_role(p_role);
     return Ref<NetwSessionConfig>(this);
 }

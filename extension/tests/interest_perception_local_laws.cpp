@@ -19,7 +19,6 @@ using namespace godot;
 using netw::NetwEntity;
 using netw::NetwInterestLayer;
 using netw::NetwMultiplayer;
-using netw::interest::Perception;
 using netw_test::CallLog;
 using netw_test::EntityDecl;
 using netw_test::LoopbackRig;
@@ -144,7 +143,9 @@ TEST_CASE(
     );
     NETW_CHECK_EQ(made.owner->is_visible(), false);
 
-    made.layer->set_default_perception_policy(Perception::SHOW);
+    made.layer->set_default_perception_policy(
+        NetwMultiplayer::PERCEPTION_POLICY_SHOW
+    );
 
     NETW_CHECK_EQ(
         made.core->interest_player_sees(HOST_PEER, made.entity),
@@ -152,7 +153,9 @@ TEST_CASE(
     );
     NETW_CHECK_EQ(made.owner->is_visible(), true);
 
-    made.layer->set_default_perception_policy(Perception::HIDE);
+    made.layer->set_default_perception_policy(
+        NetwMultiplayer::PERCEPTION_POLICY_HIDE
+    );
 
     NETW_CHECK_EQ(
         made.core->interest_player_sees(HOST_PEER, made.entity),

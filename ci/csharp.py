@@ -426,7 +426,8 @@ def default_value(declared: str, raw: str) -> tuple[str | None, str | None]:
     if NUMBER.match(raw):
         if declared in NUMERIC_DECLARED:
             return raw + ("f" if declared == "float" else ""), None
-        return "(%s)%s" % (declared, raw), None
+        value = "(%s)" % raw if raw.startswith("-") else raw
+        return "(%s)%s" % (declared, value), None
     return None, None
 
 

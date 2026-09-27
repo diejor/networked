@@ -16,11 +16,8 @@ func _ready() -> void:
 	_cancel_button.pressed.connect(_on_cancel)
 
 
-## Displays the connecting screen and updates details from the endpoint
-## [param peer_class] and [param address] name on [param handle].
-##
-## An empty [param peer_class] is a host bring-up, which has no address to
-## render and is otherwise the same wait with the same cancel.
+## Shows the connecting screen for the server at [param peer_class] and
+## [param address]. An empty [param peer_class] means hosting.
 func open_connecting(
 		handle: NetwConnectHandle,
 		peer_class: StringName,
@@ -44,7 +41,8 @@ func open_connecting(
 	popup_centered()
 
 
-## Updates the displayed progress [param message] and determinate [param ratio].
+## Shows [param message], and a progress bar at [param ratio] when it is not
+## negative.
 func update_progress(message: String, ratio: float) -> void:
 	if not message.is_empty():
 		_title.text = message
@@ -53,7 +51,7 @@ func update_progress(message: String, ratio: float) -> void:
 		_progress.value = ratio
 
 
-## Displays the failure screen with [param message].
+## Shows the failure screen with [param message].
 func show_failed(message: String, detail: String = "") -> void:
 	_title.text = message
 	if not detail.is_empty():

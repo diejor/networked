@@ -1,7 +1,4 @@
-## A single detail item shown in the [ConnectBrowser] details container.
-##
-## Displays a top-level category label and a larger value label underneath
-## in a stacked layout.
+## A title and a value, shown in the [ConnectBrowser] details.
 class_name DetailItem
 extends VBoxContainer
 

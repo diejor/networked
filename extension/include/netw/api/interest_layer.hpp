@@ -7,6 +7,7 @@
 #include "godot/rid.hpp"
 #include "godot/variant.hpp"
 #include "netw/api/entity.hpp"
+#include "netw/api/enums.hpp"
 #include "netw/interest/engine.hpp"
 #include "netw/object_port.hpp"
 
@@ -57,14 +58,17 @@ public:
         return layer_id;
     }
 
-    bool set_policy(int p_policy);
-    int get_policy() const;
+    bool set_policy(enums::NetwMultiplayer::LayerPolicy p_policy);
+    enums::NetwMultiplayer::LayerPolicy get_policy() const;
 
-    void set_default_leave_policy(int p_policy);
-    int get_default_leave_policy() const;
+    void set_default_leave_policy(enums::NetwMultiplayer::LeavePolicy p_policy);
+    enums::NetwMultiplayer::LeavePolicy get_default_leave_policy() const;
 
-    void set_default_perception_policy(int p_policy);
-    int get_default_perception_policy() const;
+    void set_default_perception_policy(
+        enums::NetwMultiplayer::PerceptionPolicy p_policy
+    );
+    enums::NetwMultiplayer::PerceptionPolicy
+    get_default_perception_policy() const;
 
     godot::Dictionary get_viewers() const;
     godot::Dictionary get_entities();

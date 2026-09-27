@@ -6,31 +6,16 @@ using Godot.NativeInterop;
 namespace Networked;
 
 /// <summary>
-/// Wire-format codec for the packets Networked exchanges during
-/// <see cref="SceneMultiplayer"/>'s authentication phase.
+/// Reads and writes the packets Networked sends during
+/// <see cref="SceneMultiplayer"/> authentication.
 /// </summary>
 /// <remarks>
-/// Every packet is framed with a four-byte magic prefix naming its purpose, so
-/// a session can tell a joining player from a server browser before it reads a
-/// single byte of body. A packet matching neither magic is
-/// <see cref="NetwAuthProtocol.Kind.Unknown"/> and the receiver fails.
-/// <code>
-/// auth packet
-///  ┠╴ "NHEL"   a player opening a session
-///  ┃   ┠╴ version(1)    the framing this packet was written against
-///  ┃   ┠╴ app_tag(8)    the game build folded with the wire identity,
-///  ┃   ┃                so a mismatched build is rejected before the
-///  ┃   ┃                provider payload is read
-///  ┃   ┠╴ flags(1)      reserved
-///  ┃   ┖╴ provider payload, which is all a flow ever sees
-///  ┖╴ "NPRB"   a browser asking what this server is
-///      ┠╴ version(1)
-///      ┖╴ status-or-flags(1), then the reply payload
-/// </code>
-/// <para>
-/// A probe peer receives a response and disconnects without completing
-/// authentication, so it never enters the <see cref="MultiplayerApi"/>
-/// </para>
+/// A packet starts with four bytes that say what it is. A joining player sends
+/// <c>"NHEL"</c>, then a version byte, an 8-byte build tag, a flags byte, and
+/// the game's own authentication data. A server browser sends <c>"NPRB"</c>,
+/// then a version byte and a flags or status byte, and the reply follows. A
+/// server browser gets its reply and is disconnected, so it never appears in
+/// the <see cref="MultiplayerApi"/>.
 /// </remarks>
 public sealed class NetwAuthProtocol : NetwRefCounted
 {
@@ -51,17 +36,15 @@ public sealed class NetwAuthProtocol : NetwRefCounted
     public enum Kind : long
     {
         /// <summary>
-        /// The packet carries neither magic, or is shorter than a header. The
-        /// receiver fails closed on it.
+        /// Not a Networked packet.
         /// </summary>
         Unknown = 0,
         /// <summary>
-        /// A player opening a session.
+        /// A player joining.
         /// </summary>
         Hello = 1,
         /// <summary>
-        /// A browser probe. The server responds and disconnects the peer
-        /// without joining it.
+        /// A server browser asking about the server.
         /// </summary>
         Probe = 2,
     }
@@ -69,19 +52,19 @@ public sealed class NetwAuthProtocol : NetwRefCounted
     public enum ProbeStatus : long
     {
         /// <summary>
-        /// The reply carries server metadata.
+        /// The reply carries the server info.
         /// </summary>
         Ok = 0,
         /// <summary>
-        /// The server is online but temporarily cannot respond to this probe.
+        /// The server is busy.
         /// </summary>
         Busy = 1,
         /// <summary>
-        /// The server does not return probes at all.
+        /// The server does not answer server browsers.
         /// </summary>
         Unsupported = 2,
         /// <summary>
-        /// The server tried to return and could not.
+        /// The server failed to answer.
         /// </summary>
         Error = 3,
     }
@@ -93,7 +76,7 @@ public sealed class NetwAuthProtocol : NetwRefCounted
             2455072627UL);
 
     /// <summary>
-    /// The framing version this build writes and is the only one it accepts.
+    /// The packet version this build writes. It accepts no other.
     /// </summary>
     public static int ProtocolVersion()
     {
@@ -109,7 +92,7 @@ public sealed class NetwAuthProtocol : NetwRefCounted
         NetwApi.MethodBind("NetwAuthProtocol", "magic_hello", 2115431945UL);
 
     /// <summary>
-    /// The four bytes a hello packet opens with, <c>"NHEL"</c>.
+    /// The first four bytes of a join packet, <c>"NHEL"</c>.
     /// </summary>
     public static byte[] MagicHello()
     {
@@ -125,7 +108,7 @@ public sealed class NetwAuthProtocol : NetwRefCounted
         NetwApi.MethodBind("NetwAuthProtocol", "magic_probe", 2115431945UL);
 
     /// <summary>
-    /// The four bytes a probe packet opens with, <c>"NPRB"</c>.
+    /// The first four bytes of a server browser packet, <c>"NPRB"</c>.
     /// </summary>
     public static byte[] MagicProbe()
     {
@@ -141,9 +124,7 @@ public sealed class NetwAuthProtocol : NetwRefCounted
         NetwApi.MethodBind("NetwAuthProtocol", "classify", 1504776934UL);
 
     /// <summary>
-    /// Which <see cref="NetwAuthProtocol.Kind"/> <paramref name="data"/>'s
-    /// magic prefix names. A packet shorter than a header, or carrying neither
-    /// magic, is <see cref="NetwAuthProtocol.Kind.Unknown"/>.
+    /// Returns what kind of packet <paramref name="data"/> is.
     /// </summary>
     public static NetwAuthProtocol.Kind Classify(byte[] data)
     {
@@ -164,9 +145,9 @@ public sealed class NetwAuthProtocol : NetwRefCounted
             4277510008UL);
 
     /// <summary>
-    /// Writes a hello header stamped with <paramref name="appTag"/>, the 64-bit
-    /// build tag folded from <see cref="MultiplayerTree.AppId"/> and the wire
-    /// identity by <see cref="NetwMultiplayer.AuthSetAppTag"/>.
+    /// Writes a join packet header with the build tag
+    /// <paramref name="appTag"/>. See
+    /// <see cref="NetwMultiplayer.AuthSetAppTag"/>.
     /// </summary>
     public static byte[] EncodeClientHello(long appTag = 0, int flags = 0)
     {
@@ -194,19 +175,16 @@ public sealed class NetwAuthProtocol : NetwRefCounted
             2982885054UL);
 
     /// <summary>
-    /// Reads a hello packet, rejecting it when its build tag differs from
+    /// Reads a join packet. It is rejected when its build tag differs from
     /// <paramref name="localAppTag"/>.
     /// <code>
     /// Dictionary
-    /// ┠╴ok                bool             false on a rejection
+    /// ┠╴ok                bool             false when rejected
     /// ┠╴reason            String           "framing", "version" or "app", empty when ok
-    /// ┠╴version           int              the framing version the packet carried
-    /// ┠╴app_tag           int              the 64-bit build tag the packet carried
+    /// ┠╴version           int              the version in the packet
+    /// ┠╴app_tag           int              the build tag in the packet
     /// ┖╴flags             int              reserved
     /// </code>
-    /// <para>
-    /// A rejection still reports the <c>version</c> and <c>app_tag</c> it read.
-    /// </para>
     /// </summary>
     public static Godot.Collections.Dictionary DecodeClientHello(
         byte[] data,
@@ -236,7 +214,7 @@ public sealed class NetwAuthProtocol : NetwRefCounted
             3248152502UL);
 
     /// <summary>
-    /// Builds a probe request. <paramref name="flags"/> is reserved.
+    /// Writes a server browser request. <paramref name="flags"/> is reserved.
     /// </summary>
     public static byte[] EncodeProbeRequest(int flags = 0)
     {
@@ -261,12 +239,11 @@ public sealed class NetwAuthProtocol : NetwRefCounted
             249605730UL);
 
     /// <summary>
-    /// Reads a probe request. A packet with the wrong magic, a short header, or
-    /// a foreign version returns <c>ok</c> false.
+    /// Reads a server browser request.
     /// <code>
     /// Dictionary
-    /// ┠╴ok       bool  false on a rejection
-    /// ┠╴version  int   the framing version the packet carried
+    /// ┠╴ok       bool  false when the packet is invalid
+    /// ┠╴version  int   the version in the packet
     /// ┖╴flags    int   reserved
     /// </code>
     /// </summary>
@@ -290,14 +267,15 @@ public sealed class NetwAuthProtocol : NetwRefCounted
         NetwApi.MethodBind(
             "NetwAuthProtocol",
             "encode_probe_reply",
-            2768705602UL);
+            2369521315UL);
 
     /// <summary>
-    /// Wraps <paramref name="payload"/> in a probe-reply header stamped with
-    /// <paramref name="status"/>, one of
-    /// <see cref="NetwAuthProtocol.ProbeStatus"/>.
+    /// Writes a server browser reply with <paramref name="status"/> and
+    /// <paramref name="payload"/>.
     /// </summary>
-    public static byte[] EncodeProbeReply(int status, byte[] payload = null)
+    public static byte[] EncodeProbeReply(
+        NetwAuthProtocol.ProbeStatus status,
+        byte[] payload = null)
     {
         payload ??= System.Array.Empty<byte>();
         godot_variant slot0 = VariantUtils.CreateFromInt((long)status);
@@ -324,15 +302,13 @@ public sealed class NetwAuthProtocol : NetwRefCounted
             249605730UL);
 
     /// <summary>
-    /// Reads a probe reply. A packet with the wrong magic, a short header, or a
-    /// foreign version returns <c>ok</c> false and an empty payload. The status
-    /// it carries is one value of <see cref="NetwAuthProtocol.ProbeStatus"/>.
+    /// Reads a server browser reply.
     /// <code>
     /// Dictionary
-    /// ┠╴ok       bool             false on a rejection
-    /// ┠╴version  int              the framing version the packet carried
-    /// ┠╴status   int              what the server said about returning
-    /// ┖╴payload  PackedByteArray  the provider's own reply, empty on a rejection
+    /// ┠╴ok       bool             false when the packet is invalid
+    /// ┠╴version  int              the version in the packet
+    /// ┠╴status   int              a ProbeStatus value
+    /// ┖╴payload  PackedByteArray  the reply, empty when invalid
     /// </code>
     /// </summary>
     public static Godot.Collections.Dictionary DecodeProbeReply(byte[] data)

@@ -1,14 +1,3 @@
-## Live round trip for [NakamaDatabase] against a Docker Nakama server.
-##
-## [TestNakamaDatabase] proves the protocol against a fake service. This proves
-## the same verbs reach real Nakama storage, that a record survives the
-## connection that wrote it, and that a slot deletion clears the account. Each
-## run takes its own app namespace and deletes only that namespace, so two runs
-## never read each other's records.
-##
-## Needs a running server, see [code]tests/nakama/docker-compose.yml[/code], and
-## opts in through the [code]networked/tests/nakama_host[/code] project setting
-## or [code]NAKAMA_TEST_HOST[/code], so a machine without the stack skips.
 class_name TestNakamaDatabaseLive
 extends NetwTestSuite
 

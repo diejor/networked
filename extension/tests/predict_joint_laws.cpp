@@ -662,7 +662,7 @@ struct DeclaredBody {
                 StringName("position"),
                 Ref<NetwQuantize>(),
                 false,
-                int64_t(SchemaCore::VARIANT)
+                enums::NetwMultiplayer::ColumnType(SchemaCore::VARIANT)
             )
         );
         p_pool->adopt_declaration(

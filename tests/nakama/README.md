@@ -52,20 +52,15 @@ export NAKAMA_TEST_HOST=127.0.0.1
 $env:NAKAMA_TEST_HOST = "127.0.0.1"
 ```
 
-Leave both empty and the live tests early-return (no-op), so the suite stays
-green on machines without Docker. The setting and these suites are
-`export-ignore`d, so none of this reaches a game that installs the addon.
+Leave both empty and the live tests are skipped.
 
-Run the live tier directly:
+Run the live tests directly:
 
-```powershell
-godot --path . -s res://addons/gdUnit4/bin/GdUnitCmdTool.gd --headless `
-  --ignoreHeadlessMode --ignore-error-breaks -c -rc 1 -rd res://reports `
+```sh
+godot --path . -s res://addons/gdUnit4/bin/GdUnitCmdTool.gd --headless \
+  --ignoreHeadlessMode --ignore-error-breaks -c -rc 1 -rd res://reports \
   -a res://tests/nakama
 ```
-
-The default `-a res://tests` run discovers `tests/live/nakama`, but the suite
-skips before probing the network when no host is configured.
 
 ## Two-client / two-instance testing
 

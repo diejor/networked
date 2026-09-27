@@ -1,9 +1,5 @@
 class_name BomberAiSuite
 extends NetwTestSuite
-## Shared base for AI-driven bomber integration tests.
-##
-## Provides the game harness, player setup, tick helpers, and world
-## query utilities that every AI test category needs.
 
 const MAIN := preload("res://examples/bomber/main.tscn")
 
@@ -28,7 +24,6 @@ func before_test() -> void:
 	game.show_views()
 
 
-## Adds [param count] players (one host + clients) and begins the match.
 func add_players_and_start(count: int) -> Array[NetwSceneRunner]:
 	assert(count >= 1 and count <= PLAYER_NAMES.size())
 	var runners: Array[NetwSceneRunner] = []
@@ -44,7 +39,6 @@ func add_players_and_start(count: int) -> Array[NetwSceneRunner]:
 	return runners
 
 
-## Creates one [BomberAI] per runner, all sharing the same [param goal].
 func make_ais(
 		runners: Array[NetwSceneRunner],
 		shared_goal: BomberAI.Goal = null,
@@ -58,9 +52,6 @@ func make_ais(
 	return ais
 
 
-## Ticks all AIs for up to [param max_ticks], stopping early when [param done]
-## returns [code]true[/code]. Returns the tick count reached. Stepping is
-## deterministic, so the loop runs the requested ticks with no wall-clock cap.
 func run_until(
 		ais: Array[BomberAI],
 		max_ticks: int,
@@ -75,10 +66,6 @@ func run_until(
 	return max_ticks
 
 
-## Ticks until [param predicate] returns [code]true[/code] or [param max_ticks]
-## elapse. Returns whether it held. Use for eventual-consistency checks whose
-## settling tick count is not pinned, such as replication or interpolation
-## converging across peers.
 func tick_until(predicate: Callable, max_ticks: int = 120) -> bool:
 	for i in max_ticks:
 		if predicate.call():
@@ -128,7 +115,6 @@ func count_bombs(runner: NetwSceneRunner) -> int:
 	return bombs.get_child_count() if bombs else 0
 
 
-## Restores normal links for every remote runner.
 func settle_network(
 		runners: Array[NetwSceneRunner],
 		ticks: int = 60,

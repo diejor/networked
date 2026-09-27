@@ -6,16 +6,12 @@ using Godot.NativeInterop;
 namespace Networked;
 
 /// <summary>
-/// The server metadata an <c>NPRB</c> probe reply carries.
+/// What a server tells a server browser about itself.
 /// </summary>
 /// <remarks>
-/// A probe asks a host what it is without joining it, and this is the result:
-/// the fields a browser row needs to decide whether to connect at all. It is a
-/// plain record with a codec, so the same object crosses the wire and fills a
-/// list entry. A session with no declared provider returns
-/// <see cref="NetwServerInfo.FromSession"/>. A game that wants more declares
-/// one through <see cref="Netw.ConfigureServerInfo"/>, and is handed that same
-/// base record to edit rather than an API to read.
+/// A server browser can check a server without joining it, and gets one of
+/// these back. By default it is <see cref="NetwServerInfo.FromSession"/>. Use
+/// <see cref="Netw.ConfigureServerInfo"/> to change it.
 /// <code>
 /// func _init() -&gt; void:
 ///     Netw.configure_server_info(server_info)
@@ -26,13 +22,9 @@ namespace Networked;
 ///     return info
 /// </code>
 /// <para>
-/// Returning <c>null</c> or anything that is not a <see cref="NetwServerInfo"/>
-/// is a defect rather than a request for the default: the probe returns
-/// <see cref="NetwAuthProtocol.ProbeStatus.Error"/>, so a browser row reads a
-/// broken host as broken instead of as an empty one.
-/// <see cref="NetwServerInfo.Metadata"/> is the open field: anything a game
-/// wants a browser to read that the named fields do not carry, encoded and
-/// decoded with the rest of the record.
+/// Returning anything but a <see cref="NetwServerInfo"/> makes the browser show
+/// the server as broken. Put any extra values in
+/// <see cref="NetwServerInfo.Metadata"/>.
 /// </para>
 /// </remarks>
 public sealed class NetwServerInfo : NetwRefCounted
@@ -54,18 +46,16 @@ public sealed class NetwServerInfo : NetwRefCounted
     public enum VisibilityEnum : long
     {
         /// <summary>
-        /// Listed to anyone browsing.
+        /// Listed to everyone.
         /// </summary>
         Public = 0,
         /// <summary>
-        /// Listed only to players the host's platform calls friends. A
-        /// directory with no such notion treats it as
-        /// <see cref="NetwServerInfo.VisibilityEnum.Private"/>.
+        /// Listed only to friends, on services that have friends. Otherwise the
+        /// same as <see cref="NetwServerInfo.VisibilityEnum.Private"/>.
         /// </summary>
         FriendsOnly = 1,
         /// <summary>
-        /// Not listed at all. The host is still joinable by anyone holding its
-        /// address.
+        /// Not listed. Anyone with the address can still join.
         /// </summary>
         Private = 2,
     }
@@ -77,8 +67,7 @@ public sealed class NetwServerInfo : NetwRefCounted
         NetwApi.MethodBind("NetwServerInfo", "set_motd", 83702148UL);
 
     /// <summary>
-    /// The message the host shows in a browser row. Unset by the built-in
-    /// provider.
+    /// A message shown in the server browser.
     /// </summary>
     public string Motd
     {
@@ -107,7 +96,7 @@ public sealed class NetwServerInfo : NetwRefCounted
         NetwApi.MethodBind("NetwServerInfo", "set_players", 1286410249UL);
 
     /// <summary>
-    /// The live player count at the moment the reply was built.
+    /// The number of connected players.
     /// </summary>
     public long Players
     {
@@ -136,7 +125,7 @@ public sealed class NetwServerInfo : NetwRefCounted
         NetwApi.MethodBind("NetwServerInfo", "set_max_players", 1286410249UL);
 
     /// <summary>
-    /// The cap the host advertises. Advisory: the host's own admission decides.
+    /// The most players the server says it accepts. For display only.
     /// </summary>
     public long MaxPlayers
     {
@@ -165,8 +154,7 @@ public sealed class NetwServerInfo : NetwRefCounted
         NetwApi.MethodBind("NetwServerInfo", "set_game_mode", 3304788590UL);
 
     /// <summary>
-    /// The mode the host is running, as the game names it. Unset by the
-    /// built-in provider.
+    /// The game mode, named by the game.
     /// </summary>
     public StringName GameMode
     {
@@ -195,7 +183,7 @@ public sealed class NetwServerInfo : NetwRefCounted
         NetwApi.MethodBind("NetwServerInfo", "set_version", 83702148UL);
 
     /// <summary>
-    /// The build string the game publishes. Unset by the built-in provider.
+    /// The game version.
     /// </summary>
     public string Version
     {
@@ -224,8 +212,8 @@ public sealed class NetwServerInfo : NetwRefCounted
         NetwApi.MethodBind("NetwServerInfo", "set_app_id", 3304788590UL);
 
     /// <summary>
-    /// The application tag the host gates joins on, so a browser can hide a
-    /// host running a different game or a different build.
+    /// The game and build the server runs. A browser can hide servers of
+    /// another game or build.
     /// </summary>
     public StringName AppId
     {
@@ -260,8 +248,7 @@ public sealed class NetwServerInfo : NetwRefCounted
             2586408642UL);
 
     /// <summary>
-    /// Whether this record came from a live host rather than a directory
-    /// listing.
+    /// <c>true</c> when the server itself answered, not a lobby listing.
     /// </summary>
     public bool IsLocalListener
     {
@@ -293,8 +280,7 @@ public sealed class NetwServerInfo : NetwRefCounted
         NetwApi.MethodBind("NetwServerInfo", "set_metadata", 4155329257UL);
 
     /// <summary>
-    /// Free-form fields a game adds to the reply. Carried through the codec
-    /// untouched.
+    /// Any extra values for the browser.
     /// </summary>
     public Godot.Collections.Dictionary Metadata
     {
@@ -324,9 +310,8 @@ public sealed class NetwServerInfo : NetwRefCounted
         NetwApi.MethodBind("NetwServerInfo", "set_latency_ms", 1286410249UL);
 
     /// <summary>
-    /// The round trip <see cref="NetwMultiplayer.EndpointProbe"/> measured
-    /// reaching this host, in milliseconds. <c>-1</c> means unmeasured, which
-    /// is what a row assembled from a listing carries.
+    /// The round trip time to the server in milliseconds, or <c>-1</c> when not
+    /// measured.
     /// </summary>
     public long LatencyMs
     {
@@ -355,11 +340,8 @@ public sealed class NetwServerInfo : NetwRefCounted
         NetwApi.MethodBind("NetwServerInfo", "set_visibility", 2733874028UL);
 
     /// <summary>
-    /// How widely the host asked to be listed, as a
-    /// <see cref="NetwServerInfo.VisibilityEnum"/>. What a directory does with
-    /// anything but <see cref="NetwServerInfo.VisibilityEnum.Public"/> belongs
-    /// to that directory: this says what the host asked for, not what any
-    /// service enforces.
+    /// Who the server asks to be listed to. Each <see cref="LobbyDirectory"/>
+    /// decides how to honor it.
     /// </summary>
     public NetwServerInfo.VisibilityEnum Visibility
     {
@@ -385,17 +367,10 @@ public sealed class NetwServerInfo : NetwRefCounted
         NetwApi.MethodBind("NetwServerInfo", "from_session", 1568850436UL);
 
     /// <summary>
-    /// The default probe reply: a copy of
-    /// <see cref="NetwSessionConfig.ServerInfo"/> with the live fields
-    /// overlaid, which are the connected player count as
-    /// <see cref="NetwServerInfo.Players"/> and
-    /// <see cref="NetwSessionConfig.AppId"/>.
-    /// <see cref="NetwServerInfo.IsLocalListener"/> is marked, so a caller can
-    /// tell a live local host from a closed port. The declaration is copied
-    /// rather than returned, so replying to a probe can never write back into
-    /// what the game authored. This is what a probe returns when no
-    /// <see cref="Netw.ConfigureServerInfo"/> declaration governs the session,
-    /// and it is also the record a declared provider is handed.
+    /// Returns a copy of <see cref="NetwSessionConfig.ServerInfo"/> with
+    /// <see cref="NetwServerInfo.Players"/>, <see cref="NetwServerInfo.AppId"/>
+    /// and <see cref="NetwServerInfo.IsLocalListener"/> filled in from the
+    /// session.
     /// </summary>
     public static NetwServerInfo FromSession(NetwMultiplayer api)
     {
@@ -413,8 +388,8 @@ public sealed class NetwServerInfo : NetwRefCounted
         NetwApi.MethodBind("NetwServerInfo", "to_payload", 1028718623UL);
 
     /// <summary>
-    /// Serializes <paramref name="info"/> to the probe wire format, or an empty
-    /// array when <paramref name="info"/> is <c>null</c>.
+    /// Writes <paramref name="info"/> to bytes, or returns an empty array for
+    /// <c>null</c>.
     /// </summary>
     public static byte[] ToPayload(NetwServerInfo info)
     {
@@ -433,8 +408,8 @@ public sealed class NetwServerInfo : NetwRefCounted
         NetwApi.MethodBind("NetwServerInfo", "from_payload", 1671208832UL);
 
     /// <summary>
-    /// Decodes <paramref name="bytes"/> into a fresh record, or <c>null</c>
-    /// when <paramref name="bytes"/> is empty or does not carry one.
+    /// Reads a <see cref="NetwServerInfo"/> from <paramref name="bytes"/>, or
+    /// returns <c>null</c>.
     /// </summary>
     public static NetwServerInfo FromPayload(byte[] bytes)
     {

@@ -1,8 +1,7 @@
-## Modal form for adding and editing endpoints in the [ConnectBrowser].
+## A form to add or edit a saved server in the [ConnectBrowser].
 ##
-## Renders one field per key of the [code]client_settings[/code] entry of
-## [method NetwConnectHandle.transport] for the picked backend, so a bookmark
-## remembers the tracker or port it was reached on.
+## Shows the client settings of the chosen transport, which are saved with
+## the server.
 class_name AddPopup
 extends PopupPanel
 
@@ -42,8 +41,7 @@ func _ready() -> void:
 	_backend_picker.item_selected.connect(_on_backend_changed)
 
 
-## Opens the popup as an empty Add Server form, offering the backends
-## [param handle] reports.
+## Opens an empty form to add a server.
 func open_add(handle: NetwConnectHandle) -> void:
 	_connection = handle
 	_editing_peer_class = &""
@@ -57,9 +55,8 @@ func open_add(handle: NetwConnectHandle) -> void:
 	popup_centered()
 
 
-## Opens the popup as an Edit form populated from the endpoint [param
-## peer_class] and [param address] name on [param handle], with the settings
-## [param authored] holding whatever that bookmark was last saved with.
+## Opens the form to edit the saved server at [param peer_class] and
+## [param address], filled with its saved [param authored] settings.
 func open_edit(
 		handle: NetwConnectHandle,
 		peer_class: StringName,
@@ -122,8 +119,6 @@ func _on_backend_changed(_index: int) -> void:
 	_populate_settings()
 
 
-# The defaults name the fields and carry their types, and whatever this
-# bookmark was saved with overwrites the value of the ones it names.
 func _populate_settings() -> void:
 	var transport := _selected_transport()
 	var defaults: Dictionary = transport.get("client_settings", { })

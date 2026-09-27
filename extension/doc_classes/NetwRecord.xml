@@ -4,16 +4,13 @@
 		A row of named values.
 	</brief_description>
 	<description>
-		Used for saved entity rows, [NetwDatabase] rows, and [method Netw.sample]. It holds copies of values, not the node they came from.
+		[method Netw.sample] returns one. It holds copies of values, not the node they came from.
 		[codeblock]
-		var row: NetwRecord = await db.table(&amp;"players").fetch(username)
-		var health: int = row.get_value(&amp;"health", 100)
+		var past := Netw.sample(entity, tick)
+		var health: int = past.get_value(&amp;"health", 100)
 
-		row.set_value(&amp;"health", 75)
-		var hp: int = row.get_value(&amp;"health", 100)
-
-		for key in row:
-		    print(key, " = ", row.get_value(key))
+		for key in past:
+		    print(key, " = ", past.get_value(key))
 		[/codeblock]
 		A stored name can also be used as a property, so [code]row.health[/code] calls [method get_value] and assigning to it calls [method set_value]. The record's own properties, such as [code]resource_name[/code] or [code]script[/code], keep their normal meaning.
 		To supply your own storage, override [method _set_value], [method _get_value], [method _has_value] and [method _get_property_names]. Override [method _to_dict] and [method _from_dict] to rename stored names. [DictionaryRecord] is the storage this addon ships.

@@ -673,7 +673,7 @@ Ref<netw::NetwPropertySetBinding> binding_on(Node *p_node) {
             StringName("x"),
             Ref<netw::NetwQuantize>(),
             false,
-            netw::SchemaCore::VARIANT
+            netw::enums::NetwMultiplayer::ColumnType(netw::SchemaCore::VARIANT)
         );
     column->lane = netw::NetwPropertySet::VOLATILE;
     set->bind_column(column);

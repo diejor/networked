@@ -1,6 +1,7 @@
 #include "netw/api/property_set.hpp"
 
 #include "godot/class_db.hpp"
+#include "netw/api/netw_multiplayer.hpp"
 #include "netw/api/schema_core.hpp"
 
 using namespace godot;
@@ -11,7 +12,7 @@ Ref<NetwPropertySetColumn> NetwPropertySetColumn::create(
     const StringName &p_key,
     const Ref<NetwQuantize> &p_quantizer,
     bool p_watch,
-    int64_t p_type
+    NetwMultiplayer::ColumnType p_type
 ) {
     Ref<NetwPropertySetColumn> made;
     made.instantiate();
@@ -28,8 +29,8 @@ StringName NetwPropertySetColumn::get_key() const {
     return shape.key;
 }
 
-int64_t NetwPropertySetColumn::get_type() const {
-    return shape.type;
+NetwMultiplayer::ColumnType NetwPropertySetColumn::get_type() const {
+    return NetwMultiplayer::ColumnType(shape.type);
 }
 
 Ref<NetwQuantize> NetwPropertySetColumn::get_quantizer() const {
@@ -161,7 +162,7 @@ int64_t NetwPropertySet::wire_hash() const {
         const int64_t stride = column->shape.stride;
         parts.push_back(
             String::num_int64(at) + ":" + String(column->get_key()) + ":"
-            + String::num_int64(column->get_type()) + ":"
+            + String::num_int64(int64_t(column->get_type())) + ":"
             + String::num_int64(stride) + ":"
             + SchemaCore::quantizer_tag(&column->shape) + ":"
             + String::num_int64(column->lane)
@@ -180,7 +181,7 @@ int64_t NetwPropertySet::identity_hash() const {
         }
         parts.push_back(
             String::num_int64(at) + ":" + String(column->get_key()) + ":"
-            + String::num_int64(column->get_type()) + ":"
+            + String::num_int64(int64_t(column->get_type())) + ":"
             + String::num_int64(column->shape.stride) + ":"
             + SchemaCore::quantizer_tag(&column->shape) + ":"
             + String::num_int64(column->lane) + ":"
@@ -266,13 +267,15 @@ int64_t column_type_in(
 
 } // namespace
 
-int64_t NetwPropertySet::column_type_for(
+NetwMultiplayer::ColumnType NetwPropertySet::column_type_for(
     const Ref<Script> &p_script,
     Node *p_node,
     const StringName &p_property
 ) {
     PropertyTypeLists lists = lists_for(p_script);
-    return column_type_in(lists, p_node, p_property);
+    return NetwMultiplayer::ColumnType(
+        column_type_in(lists, p_node, p_property)
+    );
 }
 
 void NetwPropertySet::stamp_column_types(
@@ -326,7 +329,18 @@ void NetwPropertySetColumn::_bind_methods() {
         D_METHOD("get_type"),
         &NetwPropertySetColumn::get_type
     );
-    ADD_PROPERTY(PropertyInfo(Variant::INT, "type"), "", "get_type");
+    ADD_PROPERTY(
+        PropertyInfo(
+            Variant::INT,
+            "type",
+            PROPERTY_HINT_NONE,
+            "",
+            PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_CLASS_IS_ENUM,
+            "NetwMultiplayer.ColumnType"
+        ),
+        "",
+        "get_type"
+    );
     ClassDB::bind_method(
         D_METHOD("get_quantizer"),
         &NetwPropertySetColumn::get_quantizer
@@ -367,7 +381,14 @@ void NetwPropertySetColumn::_bind_methods() {
         &NetwPropertySetColumn::set_delta_mode
     );
     ADD_PROPERTY(
-        PropertyInfo(Variant::INT, "delta_mode"),
+        PropertyInfo(
+            Variant::INT,
+            "delta_mode",
+            PROPERTY_HINT_NONE,
+            "",
+            PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_CLASS_IS_ENUM,
+            "NetwPropertySetColumn.Delta"
+        ),
         "set_delta_mode",
         "get_delta_mode"
     );

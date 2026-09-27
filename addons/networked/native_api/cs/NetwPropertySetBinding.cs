@@ -6,25 +6,12 @@ using Godot.NativeInterop;
 namespace Networked;
 
 /// <summary>
-/// One live binding of a <see cref="NetwPropertySet"/> to the node that
-/// declares it through <see cref="Netw.ConfigureProperty"/>, the route-keyed
-/// gather source for a state or input group.
+/// A <see cref="NetwPropertySet"/> attached to one node.
 /// </summary>
 /// <remarks>
-/// The shell captures <see cref="NetwPropertySetBinding.Route"/>,
-/// <see cref="NetwPropertySetBinding.Comp"/>, and
-/// <see cref="NetwPropertySetBinding.OrderKey"/> at registration. The set
-/// carries the wire contract, while the binding carries the live gather state:
-/// the two lanes' rows, the windowed input ring, and the row each lane last
-/// merged a frame onto. A set's <see cref="NetwPropertySet.Lane.Volatile"/>
-/// fields ride the SYNC_ROW channel freshest-wins, and its
-/// <see cref="NetwPropertySet.Lane.Retained"/> fields ride the reliable
-/// SYNC_ROW_DELTA lane only when they change, so the two lanes of one set never
-/// re-send each other. Both lanes offer the whole row every pass and neither
-/// decides what a recipient is owed. The send plane holds one baseline per peer
-/// per stream, a stream being one route, one component ordinal and one lane,
-/// and returns the columns that moved, which is why a binding carries no
-/// per-peer book of its own.
+/// Created for each node that calls <see cref="Netw.ConfigureProperty"/>.
+/// <see cref="NetwPropertySetBinding.Set"/> describes the properties, and this
+/// object reads them from the node.
 /// </remarks>
 public sealed class NetwPropertySetBinding : NetwRefCounted
 {
@@ -50,7 +37,7 @@ public sealed class NetwPropertySetBinding : NetwRefCounted
         NetwApi.MethodBind("NetwPropertySetBinding", "set_set", 2351675682UL);
 
     /// <summary>
-    /// The declaration this binding is a live instance of.
+    /// The <see cref="NetwPropertySet"/> this binding uses.
     /// </summary>
     public NetwPropertySet Set
     {
@@ -79,7 +66,7 @@ public sealed class NetwPropertySetBinding : NetwRefCounted
         NetwApi.MethodBind("NetwPropertySetBinding", "set_route", 1286410249UL);
 
     /// <summary>
-    /// Cached entity route. A zero value has not bound to liveness yet.
+    /// The route of the entity, or <c>0</c> before it spawns.
     /// </summary>
     public long Route
     {
@@ -108,7 +95,7 @@ public sealed class NetwPropertySetBinding : NetwRefCounted
         NetwApi.MethodBind("NetwPropertySetBinding", "set_comp", 1286410249UL);
 
     /// <summary>
-    /// Registered component address under the entity root.
+    /// The index of the node within its entity. <c>0</c> is the entity root.
     /// </summary>
     public long Comp
     {
@@ -143,7 +130,7 @@ public sealed class NetwPropertySetBinding : NetwRefCounted
             3304788590UL);
 
     /// <summary>
-    /// Stable registration key used by the session's declaration table.
+    /// A key that sorts bindings the same way on every peer.
     /// </summary>
     public StringName OrderKey
     {
@@ -178,13 +165,15 @@ public sealed class NetwPropertySetBinding : NetwRefCounted
             1611583062UL);
 
     /// <summary>
-    /// Called once per committed row, with the decoded header <c>{ordinal,
-    /// tick, ack, payload, samples?}</c>. It observes a row the receiver has
-    /// already committed and cannot refuse one, so raising an error here does
-    /// not undo it. A refused row never reaches this call. A prediction engine
-    /// subscribes here so a state receive drives reconciliation and an input
-    /// receive opens the consume cursor. Unset for a plain display set, which
-    /// just snaps the node.
+    /// Called after received values are applied, as <c>on_applied(header)</c>.
+    /// <code>
+    /// Dictionary
+    /// ┠╴ordinal  int         the index of the set
+    /// ┠╴tick     int         the tick of the values
+    /// ┠╴ack      int         the last input the server used
+    /// ┠╴payload  Array       the values
+    /// ┖╴samples  Array       past ticks, only for a windowed set
+    /// </code>
     /// </summary>
     public Callable OnApplied
     {
@@ -214,7 +203,7 @@ public sealed class NetwPropertySetBinding : NetwRefCounted
         NetwApi.MethodBind("NetwPropertySetBinding", "node", 3160264692UL);
 
     /// <summary>
-    /// Returns the declaring node, or <c>null</c> once it has freed.
+    /// Returns the node, or <c>null</c> once it is freed.
     /// </summary>
     public Node Node()
     {
@@ -229,8 +218,8 @@ public sealed class NetwPropertySetBinding : NetwRefCounted
         NetwApi.MethodBind("NetwPropertySetBinding", "is_active", 36873697UL);
 
     /// <summary>
-    /// Returns <c>true</c> while the node is alive, in the tree, and holds
-    /// authority over the stream.
+    /// Returns <c>true</c> while the node is in the tree and this peer sends
+    /// its properties.
     /// </summary>
     public bool IsActive()
     {
@@ -243,9 +232,8 @@ public sealed class NetwPropertySetBinding : NetwRefCounted
         NetwApi.MethodBind("NetwPropertySetBinding", "is_windowed", 36873697UL);
 
     /// <summary>
-    /// Returns whether this binding's volatile lane rides the redundant sample
-    /// ring rather than a single row, which is what routes it onto the
-    /// SYNC_ROW_WINDOW channel.
+    /// Returns <c>true</c> when each send repeats past ticks, as set by
+    /// <see cref="NetwPropertyConfig.Windowed"/>.
     /// </summary>
     public bool IsWindowed()
     {
@@ -261,10 +249,9 @@ public sealed class NetwPropertySetBinding : NetwRefCounted
             2458036349UL);
 
     /// <summary>
-    /// Returns what <paramref name="property"/> does in the simulation, or
-    /// <see cref="NetwPropertySet.PropertyClass.Causal"/> when the set does not
-    /// declare it. Reconciliation uses this to decide which values it may
-    /// compare and restore. Undeclared properties default to causal recovery.
+    /// Returns the <see cref="NetwPropertySet.PropertyClass"/> of
+    /// <paramref name="property"/>, or
+    /// <see cref="NetwPropertySet.PropertyClass.Causal"/> when unset.
     /// </summary>
     public long PropertyClassOf(StringName property)
     {
@@ -284,8 +271,8 @@ public sealed class NetwPropertySetBinding : NetwRefCounted
             2349060816UL);
 
     /// <summary>
-    /// Returns how firmly a recovery pulls <paramref name="property"/> toward
-    /// the authoritative value, or <c>0.0</c> when it is restored outright.
+    /// Returns the <see cref="NetwPropertyConfig.Converge"/> value of
+    /// <paramref name="property"/>, or <c>0.0</c>.
     /// </summary>
     public double ConvergeStiffnessOf(StringName property)
     {
@@ -309,9 +296,8 @@ public sealed class NetwPropertySetBinding : NetwRefCounted
             1965194235UL);
 
     /// <summary>
-    /// Returns the sibling channel a recovery advances
-    /// <paramref name="property"/> along, or an empty <see cref="StringName"/>
-    /// when it is restored at the acknowledged value.
+    /// Returns the <see cref="NetwPropertyConfig.CarryAlong"/> property of
+    /// <paramref name="property"/>, or empty.
     /// </summary>
     public StringName CarryChannelOf(StringName property)
     {
@@ -331,8 +317,8 @@ public sealed class NetwPropertySetBinding : NetwRefCounted
             2619796661UL);
 
     /// <summary>
-    /// Returns whether <paramref name="property"/> is restored only by a
-    /// teleport-tier recovery.
+    /// Returns <c>true</c> when <paramref name="property"/> uses
+    /// <see cref="NetwPropertyConfig.TeleportOnly"/>.
     /// </summary>
     public bool TeleportOnlyOf(StringName property)
     {
@@ -352,8 +338,8 @@ public sealed class NetwPropertySetBinding : NetwRefCounted
             2619796661UL);
 
     /// <summary>
-    /// Returns whether <paramref name="property"/> is excluded from triggering
-    /// a correction on its own.
+    /// Returns <c>true</c> when <paramref name="property"/> uses
+    /// <see cref="NetwPropertyConfig.ReconcileOnly"/>.
     /// </summary>
     public bool ReconcileOnlyOf(StringName property)
     {
@@ -373,8 +359,8 @@ public sealed class NetwPropertySetBinding : NetwRefCounted
             2349060816UL);
 
     /// <summary>
-    /// Returns <paramref name="property"/>'s own divergence threshold, or a
-    /// negative value when it inherits the entity's default.
+    /// Returns the <see cref="NetwPropertyConfig.Epsilon"/> of
+    /// <paramref name="property"/>, or a negative value when unset.
     /// </summary>
     public double EpsilonOverrideOf(StringName property)
     {
@@ -398,8 +384,8 @@ public sealed class NetwPropertySetBinding : NetwRefCounted
             2349060816UL);
 
     /// <summary>
-    /// Returns <paramref name="property"/>'s own teleport-tier distance, or a
-    /// negative value when it inherits the entity's default.
+    /// Returns the <see cref="NetwPropertyConfig.TeleportAt"/> of
+    /// <paramref name="property"/>, or a negative value when unset.
     /// </summary>
     public double TeleportAtOf(StringName property)
     {
@@ -416,9 +402,8 @@ public sealed class NetwPropertySetBinding : NetwRefCounted
         NetwApi.MethodBind("NetwPropertySetBinding", "field_of", 1890347125UL);
 
     /// <summary>
-    /// Returns the declared <see cref="NetwPropertySetColumn"/> for
-    /// <paramref name="property"/>, or <c>null</c> when this set does not carry
-    /// it.
+    /// Returns the <see cref="NetwPropertySetColumn"/> of
+    /// <paramref name="property"/>, or <c>null</c>.
     /// </summary>
     public NetwPropertySetColumn FieldOf(StringName property)
     {

@@ -6,25 +6,17 @@ using Godot.NativeInterop;
 namespace Networked;
 
 /// <summary>
-/// One recorded transition, handed to a carry rule as it runs.
+/// One past tick, passed to a <see cref="NetwPropertyConfig.CarryStep"/>
+/// callback.
 /// </summary>
 /// <remarks>
-/// A rule advances an acknowledged value across the transitions the owner has
-/// driven since, so what it is given is one of those transitions rather than
-/// the present. Everything here is the recorded past, which is the whole reason
-/// a rule may not read the live world instead: the engine replays the rule
-/// against transitions the owner already recorded and retires it once it stops
-/// reproducing them.
+/// Read only from this object in the callback, not from the scene, since it
+/// describes a tick in the past.
 /// <code>
 /// func _carry(value: Vector3, ctx: NetwPredictCarryContext) -&gt; Vector3:
 ///     var axis := _drive_axis(ctx.state[&amp;"heading"])
 ///     return value + axis * ctx.state[&amp;"speed"] * ctx.delta
 /// </code>
-/// <para>
-/// Declared through <see cref="NetwPropertyConfig.CarryStep"/>. The record is
-/// created by the pool and read-only, because a rule that could write it would
-/// be writing the past it is judged against.
-/// </para>
 /// </remarks>
 public sealed class NetwPredictCarryContext : NetwRefCounted
 {
@@ -50,8 +42,8 @@ public sealed class NetwPredictCarryContext : NetwRefCounted
             3102165223UL);
 
     /// <summary>
-    /// The declared state the owner recorded before this transition drove, the
-    /// same values <see cref="NetwPropertyConfig.State"/> names.
+    /// The <see cref="NetwPropertyConfig.State"/> values at the start of the
+    /// tick.
     /// </summary>
     public Godot.Collections.Dictionary State
     {
@@ -73,8 +65,7 @@ public sealed class NetwPredictCarryContext : NetwRefCounted
             3102165223UL);
 
     /// <summary>
-    /// The command this transition ran, as
-    /// <see cref="NetwPropertyConfig.Input"/> declares it.
+    /// The <see cref="NetwPropertyConfig.Input"/> values of the tick.
     /// </summary>
     public Godot.Collections.Dictionary Input
     {
@@ -96,7 +87,7 @@ public sealed class NetwPredictCarryContext : NetwRefCounted
             1740695150UL);
 
     /// <summary>
-    /// This transition's width in simulated seconds.
+    /// The length of the tick, in seconds.
     /// </summary>
     public double Delta
     {
@@ -115,7 +106,7 @@ public sealed class NetwPredictCarryContext : NetwRefCounted
             3905245786UL);
 
     /// <summary>
-    /// The input tick this transition was labelled with.
+    /// The tick of the input.
     /// </summary>
     public long Label
     {

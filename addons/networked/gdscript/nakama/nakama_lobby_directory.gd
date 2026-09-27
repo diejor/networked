@@ -1,21 +1,8 @@
-## [LobbyDirectory] backed by Nakama relay matches.
+## A [LobbyDirectory] that hosts and joins Nakama relay matches.
 ##
-## Relay hosting does not open a listening socket. The host is the peer
-## that claims peer id [code]1[/code], so web exports can host through this
-## directory.
-## [codeblock]
-## MultiplayerTree
-## └── NakamaLobbyDirectory
-##     ├── NakamaWrapper
-##     ├── realtime socket
-##     └── relay match
-##         └── peer 1 = host
-## [/codeblock]
-## [method _host_lobby] writes browse metadata to Nakama storage because relay
-## matches only expose match ids and member counts. [method _list_lobbies] merges
-## that storage with [method NakamaWrapper.list_matches]. A lobby's address is
-## its relay match id, so a player joins one that was never browsed by pasting
-## the id its host shared.
+## The host needs no open port, so web exports can host. A lobby's address is
+## its match id, which players can share to join directly. Lobby names and
+## settings are stored in Nakama storage so they can be listed.
 class_name NakamaLobbyDirectory
 extends LobbyDirectory
 
@@ -33,51 +20,31 @@ const Async := preload("res://addons/networked/gdscript/async.gd")
 ## When [code]true[/code], connects over [code]https[/code] and [code]wss[/code].
 @export var use_ssl: bool = false
 
-## Device id used for authentication. Empty falls back to
-## [method OS.get_unique_id]. Set distinct ids per instance for reliable local
-## two-client testing.
+## Device id used for authentication. Empty uses [method OS.get_unique_id].
 @export var device_id: String = ""
 
-## Local Nakama username used for device authentication.
-##
-## Empty falls back to [method LobbyDirectory._local_member_name].
+## The Nakama username. Empty uses [method LobbyDirectory._local_member_name].
 @export var local_member_name: String = ""
 
-## Appends a per-process suffix to [member device_id] and
-## [member local_member_name] in debug desktop runs.
-##
-## This prevents local multi-instance runs from authenticating with the same
-## Nakama username. Override the suffix with [code]--nakama-instance=name[/code],
-## [code]--netw-instance=name[/code], [code]--instance=name[/code], or
+## In debug desktop builds, adds a suffix to [member device_id] and
+## [member local_member_name] so several instances on one machine log in as
+## different users. Set the suffix with [code]--nakama-instance=name[/code],
+## [code]--netw-instance=name[/code], [code]--instance=name[/code] or
 ## [code]NAKAMA_INSTANCE_SUFFIX[/code].
 @export var uniquify_debug_identity: bool = true
 
 ## Seconds to wait for a match to fully join before failing.
 @export_range(1.0, 30.0, 0.5, "suffix:s") var connect_timeout: float = 10.0
 
-## Maximum number of simultaneous lobby members advertised on the browse card.
-## An absent or [code]0[/code] [code]max_players[/code] advert key falls back
-## to this.
+## The player limit shown in the lobby list, when the host sets none.
 @export_range(1, 250, 1, "or_greater", "suffix:players") var max_clients: int = 8
 
-## Tag stored on every browse card and required on received cards, so different
-## games sharing a Nakama server do not pollute each other's lobby lists.
+## Only lobbies with the same tag are listed, so games sharing a Nakama server
+## do not see each other's lobbies.
 @export var browser_filter_uid: String = "networked"
 
 
-## Browse metadata for one relay match.
-##
-## [method to_dict] is stored by [method NakamaWrapper.write_lobby_card].
-## [method to_server_info] creates the browse entry
-## [method LobbyDirectory.publish_lobbies] carries.
-## [codeblock]
-## Storage
-## └── match_id
-##     └── LobbyCard.to_dict()
-##
-## Browse
-## └── LobbyCard.from_dict(match_id, value).to_server_info(size)
-## [/codeblock]
+## The listing of one lobby, as stored in Nakama.
 class LobbyCard:
 	extends Resource
 
@@ -91,8 +58,7 @@ class LobbyCard:
 	## Host display name.
 	@export var host: String = ""
 
-	## Hosting tree's [member MultiplayerTree.app_id] build tag, compared by the
-	## browser compatibility gate.
+	## The host's [member MultiplayerTree.app_id].
 	@export var app_id: String = ""
 
 	## Game tag, matching [member NakamaLobbyDirectory.browser_filter_uid].
@@ -106,7 +72,7 @@ class LobbyCard:
 			NetwServerInfo.VISIBILITY_PUBLIC
 
 
-	## Serializes the card body stored under the match id key.
+	## Returns the listing as a [Dictionary] to store.
 	func to_dict() -> Dictionary:
 		return {
 			"name": lobby_name,
@@ -118,7 +84,7 @@ class LobbyCard:
 		}
 
 
-	## Rebuilds a [NakamaLobbyDirectory.LobbyCard] from a browse read.
+	## Creates a listing from a stored [Dictionary].
 	static func from_dict(match_id: String, data: Dictionary) -> LobbyCard:
 		var card := LobbyCard.new()
 		card.match_id = match_id
@@ -133,8 +99,7 @@ class LobbyCard:
 		return card
 
 
-	## Builds the [NetwServerInfo] for a browse entry with [param players]
-	## members live in the match right now.
+	## Returns the listing as a [NetwServerInfo] with [param players] players.
 	func to_server_info(players: int) -> NetwServerInfo:
 		var info := NetwServerInfo.new()
 		info.app_id = StringName(app_id)
@@ -148,10 +113,9 @@ class LobbyCard:
 var _wrapper: NakamaWrapper
 var _peer: MultiplayerPeer
 var _hosted_match_id: String = ""
-var _session_bound: bool = false # shared session resolved lazily on first connect
+var _session_bound: bool = false
 
 
-## Initializes the internal [NakamaWrapper].
 func _service_entered(_api: NetwMultiplayer) -> void:
 	_wrapper = NakamaWrapper.new()
 	if not NakamaWrapper.is_addon_present():
@@ -162,7 +126,6 @@ func _service_entered(_api: NetwMultiplayer) -> void:
 	_wrapper.socket_closed.connect(_on_socket_closed)
 
 
-## Cleans up the hosted match and relay socket.
 func _service_exiting(_api: NetwMultiplayer) -> void:
 	if _wrapper != null:
 		if not _hosted_match_id.is_empty():
@@ -172,10 +135,8 @@ func _service_exiting(_api: NetwMultiplayer) -> void:
 	_peer = null
 
 
-## Creates a relay match and publishes its browse card.
-##
-## [constant NetwServerInfo.VISIBILITY_PRIVATE] skips the card and stays
-## join-by-id only.
+## A [constant NetwServerInfo.VISIBILITY_PRIVATE] lobby is not listed, and can
+## only be joined by its match id.
 func _host_lobby(settings: Dictionary) -> void:
 	if not await _ensure_connected():
 		fail(ERR_UNAVAILABLE, "the Nakama relay is unreachable.")
@@ -189,9 +150,6 @@ func _host_lobby(settings: Dictionary) -> void:
 	deliver(peer)
 
 
-# Writes the browse card for a freshly hosted match, downgrading FRIENDS_ONLY to
-# PRIVATE because Nakama friend gating is not wired yet. PRIVATE skips the card
-# so the match is reachable only by sharing its id.
 func _publish_card(settings: Dictionary) -> void:
 	var visibility := int(
 		settings.get(
@@ -225,11 +183,6 @@ func _publish_card(settings: Dictionary) -> void:
 		_hosted_match_id = ""
 
 
-## Joins the relay match [param address] names and delivers its connected
-## peer.
-##
-## [param address] is a relay match id, whether it came from a browse row or
-## from a host sharing it, so joining never depends on having browsed first.
 func _join_lobby(address: String) -> void:
 	if address.is_empty():
 		fail(ERR_INVALID_PARAMETER, "the match id is empty.")
@@ -245,10 +198,6 @@ func _join_lobby(address: String) -> void:
 	deliver(peer)
 
 
-## Lists public relay lobbies.
-##
-## Stored browse cards provide metadata. [method NakamaWrapper.list_matches]
-## provides live member counts. Cards whose match has ended are skipped.
 func _list_lobbies() -> void:
 	var addresses := PackedStringArray()
 	var names := PackedStringArray()
@@ -274,8 +223,6 @@ func _list_lobbies() -> void:
 	publish_lobbies(addresses, names, infos)
 
 
-## Returns the [enum LobbyDirectory.Capability] flags this directory honors:
-## browse and persona resolution.
 func _capabilities() -> LobbyDirectory.Capability:
 	return (
 			LobbyDirectory.CAPABILITY_BROWSE
@@ -283,7 +230,6 @@ func _capabilities() -> LobbyDirectory.Capability:
 	)
 
 
-## Deletes the host browse card and leaves the relay match.
 func _leave_lobby() -> void:
 	if _wrapper != null:
 		if not _hosted_match_id.is_empty():
@@ -293,47 +239,39 @@ func _leave_lobby() -> void:
 	_peer = null
 
 
-## Nakama lobbies join through [NakamaRelayPeer] by match id.
 func _peer_class() -> StringName:
 	return &"NakamaRelayPeer"
 
 
-## Browsers name this provider "Nakama".
 func _display_name() -> String:
 	return "Nakama"
 
 
-## The relay needs the Nakama addon, and nothing works without it.
 func _is_available() -> bool:
 	return NakamaWrapper.is_addon_present()
 
 
-## A relay match opens no listening socket, so a web export can host one.
 func _can_host_here() -> bool:
 	return NakamaWrapper.is_addon_present()
 
 
-## A Nakama address is an opaque relay match id.
 func _address_label() -> String:
 	return "Match ID"
 
 
-## Points a player at where a match id comes from.
 func _address_help() -> String:
 	return "Paste the Nakama match id shared by the host."
 
 
-## Returns the active relay match id others join this host by.
 func _join_address() -> String:
 	return _wrapper.match_id() if _wrapper != null else ""
 
 
-## Returns the active [NakamaWrapper], or [code]null[/code] before connect.
+## Returns the [NakamaWrapper] in use.
 func wrapper() -> NakamaWrapper:
 	return _wrapper
 
 
-## Resolves [param peer_id] to its Nakama username when known.
 func _member_name(peer_id: int) -> String:
 	if _wrapper == null:
 		return LobbyDirectory.member_name_default(peer_id)
@@ -341,13 +279,10 @@ func _member_name(peer_id: int) -> String:
 	return name if not name.is_empty() else LobbyDirectory.member_name_default(peer_id)
 
 
-## Returns [member local_member_name] when configured.
 func _local_member_name() -> String:
 	return _effective_local_member_name()
 
 
-# The hosting tree's build tag, stamped on the card so a browser can flag a
-# lobby it would be rejected from before it tries to join.
 func _local_app_id() -> String:
 	var session: NetwSessionHandle = Netw.session(self)
 	return String(session.config.app_id) if session else ""
@@ -358,9 +293,6 @@ func _ensure_connected() -> bool:
 		return false
 	if _wrapper.is_ready():
 		return true
-	# Bind the shared account lazily, after tree setup. add_child inside the
-	# _service_entered window fails while the tree is still building its children,
-	# so the shared account resolves lazily instead.
 	if not _session_bound:
 		_session_bound = true
 		var session := NakamaSessionService.of(self)
@@ -396,7 +328,6 @@ func _effective_local_member_name() -> String:
 	return _with_debug_instance_suffix(name)
 
 
-# Appends the unique process ID suffix if running in debug desktop mode.
 func _with_debug_instance_suffix(base: String) -> String:
 	if not _should_uniquify_debug_identity():
 		return base
@@ -405,7 +336,6 @@ func _with_debug_instance_suffix(base: String) -> String:
 	return (base + "-" + str(OS.get_process_id())).left(128)
 
 
-# Returns true if running a debug desktop instance.
 func _should_uniquify_debug_identity() -> bool:
 	return (
 			uniquify_debug_identity

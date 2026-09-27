@@ -46,7 +46,7 @@ public:
     );
 
     static godot::PackedByteArray encode_probe_reply(
-        int p_status,
+        ProbeStatus p_status,
         const godot::PackedByteArray &p_payload
     );
     static godot::Dictionary decode_probe_reply(

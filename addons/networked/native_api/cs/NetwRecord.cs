@@ -9,18 +9,14 @@ namespace Networked;
 /// A row of named values.
 /// </summary>
 /// <remarks>
-/// Used for saved entity rows, <see cref="NetwDatabase"/> rows, and
-/// <see cref="Netw.Sample"/>. It holds copies of values, not the node they came
-/// from.
+/// <see cref="Netw.Sample"/> returns one. It holds copies of values, not the
+/// node they came from.
 /// <code>
-/// var row: NetwRecord = await db.table(&amp;"players").fetch(username)
-/// var health: int = row.get_value(&amp;"health", 100)
+/// var past := Netw.sample(entity, tick)
+/// var health: int = past.get_value(&amp;"health", 100)
 ///
-/// row.set_value(&amp;"health", 75)
-/// var hp: int = row.get_value(&amp;"health", 100)
-///
-/// for key in row:
-///     print(key, " = ", row.get_value(key))
+/// for key in past:
+///     print(key, " = ", past.get_value(key))
 /// </code>
 /// <para>
 /// A stored name can also be used as a property, so <c>row.health</c> calls

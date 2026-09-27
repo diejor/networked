@@ -348,7 +348,26 @@ void NetwPropertyConfig::_bind_methods() {
     NETW_PROPERTY_CONFIG_PROPERTY(Variant::BOOL, in_broadcast_set);
     NETW_PROPERTY_CONFIG_PROPERTY(Variant::FLOAT, epsilon_override);
     NETW_PROPERTY_CONFIG_PROPERTY(Variant::FLOAT, teleport_at_override);
-    NETW_PROPERTY_CONFIG_PROPERTY(Variant::INT, set_trigger);
+    ClassDB::bind_method(
+        D_METHOD("set_set_trigger", "set_trigger"),
+        &NetwPropertyConfig::set_set_trigger
+    );
+    ClassDB::bind_method(
+        D_METHOD("get_set_trigger"),
+        &NetwPropertyConfig::get_set_trigger
+    );
+    ADD_PROPERTY(
+        PropertyInfo(
+            Variant::INT,
+            "set_trigger",
+            PROPERTY_HINT_NONE,
+            "",
+            PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_CLASS_IS_ENUM,
+            "NetwPropertySet.Trigger"
+        ),
+        "set_set_trigger",
+        "get_set_trigger"
+    );
     NETW_PROPERTY_CONFIG_PROPERTY(Variant::FLOAT, set_every_tick_interval);
     NETW_PROPERTY_CONFIG_PROPERTY(Variant::INT, set_heartbeat_ticks);
     NETW_PROPERTY_CONFIG_PROPERTY(Variant::INT, set_window);

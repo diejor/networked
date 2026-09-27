@@ -1,21 +1,19 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <class name="NetwProbeResult" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
 	<brief_description>
-		Categorical outcome of a server probe.
+		The result of checking whether a server can be joined.
 	</brief_description>
 	<description>
-		What a server browser holds for one row, so the row can render before anyone commits to joining it. A probe never throws and never half-returns: every route out of it, including a null target and a transport that cannot probe at all, ends at one [constant STATUS_OK] .. [constant STATUS_INCOMPATIBLE] value, so a caller branches on [member status] rather than on whether it got a result.
-		[member status] decides which of the other members carries anything. Only [constant STATUS_OK] and [constant STATUS_INCOMPATIBLE] carry an [member info], only [constant STATUS_OK] carries a meaningful [member latency_ms], and [member message] is diagnostic detail rather than text to show a player.
+		Check [member status] first. Only [constant STATUS_OK] and [constant STATUS_INCOMPATIBLE] have an [member info], and only [constant STATUS_OK] has a [member latency_ms].
 		[codeblock]
 		if result.is_ok():
 		    print("%d/%d players, %d ms" % [
 		        result.info.players, result.info.max_players, result.latency_ms,
 		    ])
 		elif result.status == NetwProbeResult.STATUS_INCOMPATIBLE:
-		    # info survives here, so the row can still show who is on the server.
 		    show_banner("That server runs a different build.")
 		[/codeblock]
-		The seven static factories are the only way to get a result whose status and payload agree, and a [NetwTransport] that returns a probe at all returns one of them.
+		A [NetwTransport] creates results with the static methods.
 	</description>
 	<tutorials>
 	</tutorials>
@@ -24,14 +22,14 @@
 			<return type="NetwProbeResult" />
 			<param index="0" name="message" type="String" default="&quot;&quot;" />
 			<description>
-				Returns a [constant STATUS_BUSY] result carrying [param message]. The server returned and rejected: it is full, or the probe arrived outside its rate window.
+				Returns a [constant STATUS_BUSY] result.
 			</description>
 		</method>
 		<method name="error" qualifiers="static">
 			<return type="NetwProbeResult" />
 			<param index="0" name="message" type="String" default="&quot;&quot;" />
 			<description>
-				Returns a [constant STATUS_ERROR] result carrying [param message]. The probe itself went wrong, rather than the server returning something.
+				Returns a [constant STATUS_ERROR] result.
 			</description>
 		</method>
 		<method name="incompatible" qualifiers="static">
@@ -39,13 +37,13 @@
 			<param index="0" name="info" type="NetwServerInfo" default="null" />
 			<param index="1" name="message" type="String" default="&quot;&quot;" />
 			<description>
-				Returns a [constant STATUS_INCOMPATIBLE] result carrying [param message]. The server returned with a [member NetwServerInfo.app_id] or [member NetwServerInfo.version] this build cannot join, so [param info] is kept: a browser row still has something to show even though the join would be rejected.
+				Returns a [constant STATUS_INCOMPATIBLE] result with [param info].
 			</description>
 		</method>
 		<method name="is_ok" qualifiers="const">
 			<return type="bool" />
 			<description>
-				Returns [code]true[/code] when [member status] is [constant STATUS_OK], which is the one status that says the server returned and this build may join it.
+				Returns [code]true[/code] when [member status] is [constant STATUS_OK].
 			</description>
 		</method>
 		<method name="ok" qualifiers="static">
@@ -53,65 +51,65 @@
 			<param index="0" name="info" type="NetwServerInfo" />
 			<param index="1" name="latency_ms" type="int" default="0" />
 			<description>
-				Returns a [constant STATUS_OK] result advertising [param info], measured at [param latency_ms]. A result discovered through a lobby directory rather than a round trip passes [code]-1[/code], which is how a browser marks a row it has no ping for.
+				Returns a [constant STATUS_OK] result. Pass [code]-1[/code] as [param latency_ms] when it was not measured.
 			</description>
 		</method>
 		<method name="timeout" qualifiers="static">
 			<return type="NetwProbeResult" />
 			<param index="0" name="message" type="String" default="&quot;&quot;" />
 			<description>
-				Returns a [constant STATUS_TIMEOUT] result carrying [param message]. The probe reached the wire and nothing came back inside the window.
+				Returns a [constant STATUS_TIMEOUT] result.
 			</description>
 		</method>
 		<method name="unreachable" qualifiers="static">
 			<return type="NetwProbeResult" />
 			<param index="0" name="message" type="String" default="&quot;&quot;" />
 			<description>
-				Returns a [constant STATUS_UNREACHABLE] result carrying [param message]. The connection or the peer authentication failed before any server reply.
+				Returns a [constant STATUS_UNREACHABLE] result.
 			</description>
 		</method>
 		<method name="unsupported" qualifiers="static">
 			<return type="NetwProbeResult" />
 			<description>
-				Returns a [constant STATUS_UNSUPPORTED] result. This is what a [NetwTransport] returns when it has no cheap way to ask, so a caller reads it as "unknown", never as "down".
+				Returns a [constant STATUS_UNSUPPORTED] result.
 			</description>
 		</method>
 	</methods>
 	<members>
 		<member name="info" type="NetwServerInfo" setter="set_info" getter="get_info">
-			What the server advertised about itself, or [code]null[/code] when it never returned. Carried by [constant STATUS_OK] and [constant STATUS_INCOMPATIBLE], and by nothing else.
+			What the server says about itself, or [code]null[/code].
 		</member>
 		<member name="latency_ms" type="int" setter="set_latency_ms" getter="get_latency_ms" default="0">
-			The probe round trip in milliseconds, or [code]-1[/code] when the result came from a directory listing instead of a round trip. Meaningful only under [constant STATUS_OK].
+			The round trip time in milliseconds, or [code]-1[/code] when not measured.
 		</member>
 		<member name="message" type="String" setter="set_message" getter="get_message" default="&quot;&quot;">
-			Diagnostic detail about why the probe ended the way it did. It names the failing step for a log, so it is not player-facing text.
+			Details for logs, not for players.
 		</member>
 		<member name="status" type="int" setter="set_status" getter="get_status" enum="NetwProbeResult.Status" default="3">
-			The outcome category, and the member every caller branches on. It defaults to [constant STATUS_UNSUPPORTED], so a bare [code]new()[/code] reads as "nothing was asked" rather than as a failure.
+			The result.
 		</member>
 	</members>
 	<constants>
 		<constant name="STATUS_OK" value="0" enum="Status">
-			The server returned and this build may join it. [method is_ok] tests for exactly this.
+			The server answered and can be joined.
 		</constant>
 		<constant name="STATUS_UNREACHABLE" value="1" enum="Status">
-			The connection or the peer authentication failed before the server replied.
+			Could not connect to the server.
 		</constant>
 		<constant name="STATUS_TIMEOUT" value="2" enum="Status">
-			Nothing came back inside the probe window.
+			The server did not answer in time.
 		</constant>
 		<constant name="STATUS_UNSUPPORTED" value="3" enum="Status">
-			The transport cannot probe, so the server's state is unknown rather than bad.
+			The transport cannot check servers. The server may still be up.
 		</constant>
 		<constant name="STATUS_BUSY" value="4" enum="Status">
-			The server returned and rejected, being full or rate limiting probes.
+			The server is full or receiving too many checks.
 		</constant>
 		<constant name="STATUS_ERROR" value="5" enum="Status">
-			The probe itself failed, with [member message] naming the step.
+			The check itself failed. See [member message].
 		</constant>
 		<constant name="STATUS_INCOMPATIBLE" value="6" enum="Status">
-			The server returned with a build this client cannot join, and [member info] survives so a row can still be rendered.
+			The server runs a different game or version. [member info] is set.
 		</constant>
 	</constants>
 </class>

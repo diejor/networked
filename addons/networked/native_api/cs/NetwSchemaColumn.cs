@@ -6,16 +6,10 @@ using Godot.NativeInterop;
 namespace Networked;
 
 /// <summary>
-/// One column exactly as a <see cref="NetwSchema"/> declares it, with no
-/// session behind it.
+/// One column of a <see cref="NetwSchema"/>.
 /// </summary>
 /// <remarks>
-/// A column as authored, before any session compiled it into a table. It
-/// carries no session state and no RID, which is what lets a declaration be
-/// written in a <c>static var</c> initializer that runs before any session
-/// exists. Columns are never built directly. <see cref="NetwSchema.Column"/>
-/// appends them in address order, and that order is the wire address every
-/// adopting peer seals in.
+/// Created by <see cref="NetwSchema.Column"/>, not directly.
 /// </remarks>
 public sealed class NetwSchemaColumn : NetwRefCounted
 {
@@ -40,7 +34,7 @@ public sealed class NetwSchemaColumn : NetwRefCounted
         NetwApi.MethodBind("NetwSchemaColumn", "set_key", 3304788590UL);
 
     /// <summary>
-    /// The caller-facing name, unique within its declaration.
+    /// The column name, unique in its schema.
     /// </summary>
     public StringName Key
     {
@@ -69,7 +63,7 @@ public sealed class NetwSchemaColumn : NetwRefCounted
         NetwApi.MethodBind("NetwSchemaColumn", "set_type", 275225891UL);
 
     /// <summary>
-    /// One of <see cref="NetwMultiplayer.ColumnType"/>.
+    /// The type of the values.
     /// </summary>
     public NetwMultiplayer.ColumnType Type
     {
@@ -98,7 +92,7 @@ public sealed class NetwSchemaColumn : NetwRefCounted
         NetwApi.MethodBind("NetwSchemaColumn", "set_stride", 1286410249UL);
 
     /// <summary>
-    /// How many elements one row occupies.
+    /// How many values each row holds.
     /// </summary>
     public int Stride
     {
@@ -127,7 +121,7 @@ public sealed class NetwSchemaColumn : NetwRefCounted
         NetwApi.MethodBind("NetwSchemaColumn", "set_quantizer", 1402227273UL);
 
     /// <summary>
-    /// The bit packer, or <c>null</c> for the raw memcpy path.
+    /// How the value is compressed, or <c>null</c> to send it as is.
     /// </summary>
     public NetwQuantize Quantizer
     {

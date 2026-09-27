@@ -6,28 +6,15 @@ using Godot.NativeInterop;
 namespace Networked;
 
 /// <summary>
-/// Draws one <see cref="SubViewport"/> into a <see cref="Control"/> rect and
-/// pushes input back into it.
+/// Displays a <see cref="SubViewport"/> inside a <see cref="Control"/> and
+/// passes input to it.
 /// </summary>
 /// <remarks>
-/// A view BORROWS its target's render state rather than owning it.
-/// <see cref="ParticipantView.SetTarget"/> saves the four render fields the
-/// target arrived with, forces it to draw every frame, and puts all four back
-/// when the view lets go, so a viewport that passes through a view reads
-/// afterwards exactly as it read before. That borrow is what makes a target
-/// single-owner: two views saving the same viewport would each save what the
-/// other already overwrote, so a second view asking for a claimed target is
-/// rejected and draws nothing. <see cref="ParticipantView.OwnerOf"/> returns
-/// which view holds one. The rect the target's texture lands in is solved from
-/// the same <c>display/window/stretch/*</c> pipeline Godot applies to the root
-/// window, so a scene hosted in a <see cref="SubViewport"/> letterboxes and
-/// scales the way the same scene would in the root. Every <c>stretch_</c> knob
-/// defaults to inheriting the project's return a result for that one field, so
-/// a view names only what it wants to differ.
-/// <see cref="ParticipantView.StretchDesignSize"/> is the exception a game
-/// usually has to name, because a project that never set
-/// <c>display/window/size/viewport_width</c> has no design resolution to
-/// inherit and the view falls back to drawing one to one.
+/// The <see cref="SubViewport"/> is scaled with the same stretch settings as
+/// the root window, from <c>display/window/stretch/*</c>. Each <c>stretch_</c>
+/// member can override one of them. Set
+/// <see cref="ParticipantView.StretchDesignSize"/> when the project does not
+/// set <c>display/window/size/viewport_width</c>.
 /// <code>
 /// var view := ParticipantView.new()
 /// view.stretch_mode = ParticipantView.STRETCH_MODE_CANVAS_ITEMS
@@ -36,17 +23,11 @@ namespace Networked;
 /// view.set_target(subviewport)
 /// </code>
 /// <para>
-/// Mouse events arriving through <c>Control._gui_input</c> are remapped out of
-/// the view's on-screen rect and into the target's own logical space before
-/// they are pushed, so a click lands where the player aimed whatever the
-/// letterbox is doing. Keyboard and joypad events are not routed by position
-/// and are forwarded only when
-/// <see cref="ParticipantView.ForwardsUnhandledInput"/> is set, which is what
-/// lets a container decide input routing for several views instead of every
-/// view grabbing what it sees. <see cref="HostSceneView"/> is the subclass a
-/// listen-server host mounts automatically; add a bare
-/// <see cref="ParticipantView"/> when you are placing and targeting the display
-/// yourself.
+/// Mouse events are passed to the target at the right position. Keyboard and
+/// joypad events are passed only when
+/// <see cref="ParticipantView.ForwardsUnhandledInput"/> is on. Only one view
+/// can display a given <see cref="SubViewport"/>. <see cref="HostSceneView"/>
+/// is the view a host creates by itself.
 /// </para>
 /// </remarks>
 public class ParticipantView : NetwObject
@@ -68,26 +49,19 @@ public class ParticipantView : NetwObject
     public enum StretchModeEnum : long
     {
         /// <summary>
-        /// Take <c>display/window/stretch/mode</c> from the project.
+        /// Use the project setting.
         /// </summary>
         Inherit = 0,
         /// <summary>
-        /// No stretch at all: the target renders at the control's pixel size,
-        /// one to one, with no size override.
+        /// No stretching. The target renders at the control's size.
         /// </summary>
         Disabled = 1,
         /// <summary>
-        /// Render at the on-screen pixel size and publish
-        /// <see cref="ParticipantView.StretchDesignSize"/> as the target's 2D
-        /// override, so text and canvas items stay crisp while cameras and UI
-        /// still see the design resolution.
+        /// Like the <c>canvas_items</c> stretch mode.
         /// </summary>
         CanvasItems = 2,
         /// <summary>
-        /// Render at the design resolution and stretch the texture into
-        /// <see cref="ParticipantView.GetInnerRect"/>, so upscaling gives whole
-        /// chunky pixels. The only mode
-        /// <see cref="ParticipantView.StretchScaleModeEnum.Integer"/> affects.
+        /// Like the <c>viewport</c> stretch mode.
         /// </summary>
         Viewport = 3,
     }
@@ -95,36 +69,27 @@ public class ParticipantView : NetwObject
     public enum StretchAspectEnum : long
     {
         /// <summary>
-        /// Take <c>display/window/stretch/aspect</c> from the project.
+        /// Use the project setting.
         /// </summary>
         Inherit = 0,
         /// <summary>
-        /// Fill the control, distorting the design's aspect rather than
-        /// letterboxing it.
+        /// Like the <c>ignore</c> stretch aspect.
         /// </summary>
         Ignore = 1,
         /// <summary>
-        /// Centre the design's aspect inside the control and letterbox the
-        /// rest. The only aspect that shrinks
-        /// <see cref="ParticipantView.GetInnerRect"/>.
+        /// Like the <c>keep</c> stretch aspect.
         /// </summary>
         Keep = 2,
         /// <summary>
-        /// Hold the design's width and grow its logical height to the control's
-        /// aspect, so a taller window shows more rather than smaller.
+        /// Like the <c>keep_width</c> stretch aspect.
         /// </summary>
         KeepWidth = 3,
         /// <summary>
-        /// Hold the design's height and grow its logical width to the control's
-        /// aspect.
+        /// Like the <c>keep_height</c> stretch aspect.
         /// </summary>
         KeepHeight = 4,
         /// <summary>
-        /// Grow whichever axis the control is looser against, so nothing is
-        /// ever cropped. Returns the same design as whichever of
-        /// <see cref="ParticipantView.StretchAspectEnum.KeepWidth"/> and
-        /// <see cref="ParticipantView.StretchAspectEnum.KeepHeight"/> holds the
-        /// tighter axis.
+        /// Like the <c>expand</c> stretch aspect.
         /// </summary>
         Expand = 5,
     }
@@ -132,22 +97,15 @@ public class ParticipantView : NetwObject
     public enum StretchScaleModeEnum : long
     {
         /// <summary>
-        /// Take <c>display/window/stretch/scale_mode</c> from the project.
+        /// Use the project setting.
         /// </summary>
         Inherit = 0,
         /// <summary>
-        /// Fit exactly, at whatever fractional multiple of the design that
-        /// takes.
+        /// Like the <c>fractional</c> scale mode.
         /// </summary>
         Fractional = 1,
         /// <summary>
-        /// Shrink the drawn rect to a whole multiple of the design, never below
-        /// one to one. Applies only under
-        /// <see cref="ParticipantView.StretchModeEnum.Viewport"/> with a
-        /// letterboxing aspect, since
-        /// <see cref="ParticipantView.StretchAspectEnum.Ignore"/> and
-        /// <see cref="ParticipantView.StretchAspectEnum.Expand"/> leave no
-        /// letterbox to snap inside.
+        /// Like the <c>integer</c> scale mode.
         /// </summary>
         Integer = 2,
     }
@@ -165,11 +123,8 @@ public class ParticipantView : NetwObject
             2586408642UL);
 
     /// <summary>
-    /// Whether non-mouse events reaching <c>Node._unhandled_input</c> are
-    /// pushed into the target. Mouse events are never forwarded this way,
-    /// because <c>Control._gui_input</c> already routes them by position.
-    /// <see cref="HostSceneView"/> sets this, since a host's view is the whole
-    /// window and nothing else is competing for the keyboard.
+    /// Whether keyboard and joypad events from <c>Node._unhandled_input</c> are
+    /// passed to the target.
     /// </summary>
     public bool ForwardsUnhandledInput
     {
@@ -201,8 +156,7 @@ public class ParticipantView : NetwObject
         NetwApi.MethodBind("ParticipantView", "set_stretch_mode", 1179508947UL);
 
     /// <summary>
-    /// Which end of the fit the target renders at. Mirrors the project's
-    /// <c>display/window/stretch/mode</c>.
+    /// Like <c>display/window/stretch/mode</c>.
     /// </summary>
     public ParticipantView.StretchModeEnum StretchMode
     {
@@ -240,8 +194,7 @@ public class ParticipantView : NetwObject
             929858435UL);
 
     /// <summary>
-    /// How the design resolution is fitted into the control rect. Either
-    /// letterboxes the rect or grows the logical design, never both.
+    /// Like <c>display/window/stretch/aspect</c>.
     /// </summary>
     public ParticipantView.StretchAspectEnum StretchAspect
     {
@@ -279,8 +232,7 @@ public class ParticipantView : NetwObject
             2755614822UL);
 
     /// <summary>
-    /// Whether the fit may land on a fractional multiple of the design. Mirrors
-    /// the project's <c>display/window/stretch/scale_mode</c>.
+    /// Like <c>display/window/stretch/scale_mode</c>.
     /// </summary>
     public ParticipantView.StretchScaleModeEnum StretchScaleMode
     {
@@ -315,9 +267,8 @@ public class ParticipantView : NetwObject
         NetwApi.MethodBind("ParticipantView", "set_stretch_scale", 373806689UL);
 
     /// <summary>
-    /// Divides the design resolution, so <c>2.0</c> halves the logical viewport
-    /// the game draws into and leaves the on-screen rect alone. Zero or less
-    /// inherits <c>display/window/stretch/scale</c>.
+    /// Like <c>display/window/stretch/scale</c>. <c>0.0</c> or less uses the
+    /// project setting.
     /// </summary>
     public double StretchScale
     {
@@ -355,10 +306,8 @@ public class ParticipantView : NetwObject
             1130785943UL);
 
     /// <summary>
-    /// The logical resolution the game draws at. <c>Vector2i(0, 0)</c> inherits
-    /// <c>display/window/size/viewport_width</c> and <c>viewport_height</c>,
-    /// and a design with no area makes the view draw one to one whatever
-    /// <see cref="ParticipantView.StretchMode"/> says.
+    /// The resolution the game is designed for. <c>Vector2i(0, 0)</c> uses
+    /// <c>display/window/size/viewport_width</c> and <c>viewport_height</c>.
     /// </summary>
     public Vector2I StretchDesignSize
     {
@@ -387,11 +336,7 @@ public class ParticipantView : NetwObject
         NetwApi.MethodBind("ParticipantView", "owner_of", 747824653UL);
 
     /// <summary>
-    /// The view that has borrowed <paramref name="target"/>'s render state, or
-    /// <c>null</c> when no view holds it. Ask before targeting a viewport
-    /// another view may already be drawing, because
-    /// <see cref="ParticipantView.SetTarget"/> rejects rather than taking it
-    /// over.
+    /// Returns the view displaying <paramref name="target"/>, or <c>null</c>.
     /// </summary>
     public static ParticipantView OwnerOf(SubViewport target)
     {
@@ -409,14 +354,10 @@ public class ParticipantView : NetwObject
         NetwApi.MethodBind("ParticipantView", "set_target", 3888077664UL);
 
     /// <summary>
-    /// Points this view at <paramref name="target"/>, saving its render state
-    /// and forcing it to draw every frame. Restores and releases whatever the
-    /// view was holding first, so retargeting never strands a viewport in
-    /// <see cref="SubViewport.UpdateMode.Always"/>. Rejected, with an error
-    /// naming both views, when <see cref="ParticipantView.OwnerOf"/> already
-    /// returns another live view for <paramref name="target"/>: the standing
-    /// view keeps the target and the state it saved, and this one is left
-    /// displaying nothing.
+    /// Displays <paramref name="target"/>. It is set to
+    /// <see cref="SubViewport.UpdateMode.Always"/>, and its settings are
+    /// restored when the view lets go. Fails with an error when another view
+    /// already displays <paramref name="target"/>.
     /// </summary>
     public void SetTarget(SubViewport target)
     {
@@ -433,9 +374,7 @@ public class ParticipantView : NetwObject
         NetwApi.MethodBind("ParticipantView", "get_target", 3750751911UL);
 
     /// <summary>
-    /// The viewport this view currently draws, or <c>null</c> when it holds
-    /// none. Returns <c>null</c> rather than a dangling handle once the target
-    /// leaves the tree.
+    /// Returns the displayed <see cref="SubViewport"/>, or <c>null</c>.
     /// </summary>
     public SubViewport GetTarget()
     {
@@ -451,9 +390,8 @@ public class ParticipantView : NetwObject
         NetwApi.MethodBind("ParticipantView", "clear_target", 3218959716UL);
 
     /// <summary>
-    /// Detaches from the current target, restoring the render state it was
-    /// holding. The same thing as <c>set_target(null)</c>, and what a view does
-    /// for itself when it leaves the tree or its target does.
+    /// Stops displaying the target and restores its settings. Same as
+    /// <c>set_target(null)</c>.
     /// </summary>
     public void ClearTarget()
     {
@@ -465,10 +403,7 @@ public class ParticipantView : NetwObject
         NetwApi.MethodBind("ParticipantView", "forward_input", 3754044979UL);
 
     /// <summary>
-    /// Pushes <paramref name="event"/> into the target viewport as a local
-    /// event, with no remapping. The routed path a container uses when it
-    /// decides which view an event belongs to. Does nothing when no target is
-    /// held.
+    /// Passes <paramref name="event"/> to the target unchanged.
     /// </summary>
     public void ForwardInput(InputEvent @event)
     {
@@ -485,9 +420,8 @@ public class ParticipantView : NetwObject
         NetwApi.MethodBind("ParticipantView", "get_inner_rect", 1639390495UL);
 
     /// <summary>
-    /// Where in this control's local space the target's texture is drawn. Every
-    /// pixel of the control outside it is letterbox the view leaves undrawn, so
-    /// an empty rect means the stretch pipeline has not solved yet.
+    /// Returns where the target is drawn, in local coordinates. The rest of the
+    /// control is empty letterbox.
     /// </summary>
     public Rect2 GetInnerRect()
     {

@@ -27,6 +27,7 @@ using netw::NetwPropertySetBinding;
 using netw::NetwPropertySetColumn;
 using netw::ReplicationSend;
 using netw::SchemaCore;
+using netw::enums::NetwMultiplayer;
 using netw::repl::RowArrival;
 using netw::wire::CodeRow;
 using netw::wire::WirePlan;
@@ -43,7 +44,7 @@ Ref<NetwPropertySet> pose_set() {
         StringName("position"),
         Ref<netw::NetwQuantize>(),
         false,
-        SchemaCore::VECTOR2
+        NetwMultiplayer::ColumnType(SchemaCore::VECTOR2)
     );
     position->lane = NetwPropertySet::VOLATILE;
     set->bind_column(position);
@@ -51,7 +52,7 @@ Ref<NetwPropertySet> pose_set() {
         StringName("rotation"),
         Ref<netw::NetwQuantize>(),
         false,
-        SchemaCore::F32
+        NetwMultiplayer::ColumnType(SchemaCore::F32)
     );
     rotation->lane = NetwPropertySet::VOLATILE;
     set->bind_column(rotation);

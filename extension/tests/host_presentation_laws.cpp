@@ -17,7 +17,7 @@ static Ref<NetwSessionConfig> author(
 ) {
     Ref<NetwSessionConfig> config;
     config.instantiate();
-    config->set_desired_role(p_role);
+    config->set_desired_role(NetwMultiplayer::Role(p_role));
     p_core->session_initialize(config);
     return config;
 }
@@ -36,7 +36,7 @@ TEST_CASE(
 
     CHECK(core->presents_as_listen_host());
 
-    config->set_desired_role(SessionCore::ROLE_DEDICATED_SERVER);
+    config->set_desired_role(NetwMultiplayer::ROLE_DEDICATED_SERVER);
 
     CHECK(core->presents_as_listen_host());
 }
@@ -84,7 +84,7 @@ TEST_CASE(
 
     CHECK_FALSE(core->presents_as_listen_host());
 
-    config->set_desired_role(SessionCore::ROLE_LISTEN_SERVER);
+    config->set_desired_role(NetwMultiplayer::ROLE_LISTEN_SERVER);
 
     CHECK_FALSE(core->presents_as_listen_host());
 

@@ -175,10 +175,10 @@ Variant NetwSessionHandle::bucket_of(
     return api != nullptr ? api->peer_get_bucket(p_peer, p_type) : Variant();
 }
 
-int64_t NetwSessionHandle::get_role() const {
+NetwMultiplayer::Role NetwSessionHandle::get_role() const {
     NetwMultiplayer *api = session();
-    return api != nullptr ? int64_t(api->session_get_role())
-                          : int64_t(NetwMultiplayer::ROLE_NONE);
+    return api != nullptr ? api->session_get_role()
+                          : NetwMultiplayer::ROLE_NONE;
 }
 
 bool NetwSessionHandle::get_is_online() const {
@@ -242,12 +242,11 @@ Ref<NetwPromise> NetwSessionHandle::save_entities() {
 
 Ref<NetwPromise> NetwSessionHandle::request_scene(
     const String &p_path,
-    int64_t p_scope
+    NetwMultiplayer::SceneChange p_scope
 ) {
     NetwMultiplayer *api = session();
-    return api != nullptr
-        ? api->scene_request(p_path, NetwMultiplayer::SceneChange(p_scope))
-        : NetwPromise::resolved(ERR_UNCONFIGURED);
+    return api != nullptr ? api->scene_request(p_path, p_scope)
+                          : NetwPromise::resolved(ERR_UNCONFIGURED);
 }
 
 void NetwSessionHandle::_bind_methods() {
@@ -305,7 +304,18 @@ void NetwSessionHandle::_bind_methods() {
     );
 
     ClassDB::bind_method(D_METHOD("get_role"), &NetwSessionHandle::get_role);
-    ADD_PROPERTY(PropertyInfo(Variant::INT, "role"), "", "get_role");
+    ADD_PROPERTY(
+        PropertyInfo(
+            Variant::INT,
+            "role",
+            PROPERTY_HINT_NONE,
+            "",
+            PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_CLASS_IS_ENUM,
+            "NetwMultiplayer.Role"
+        ),
+        "",
+        "get_role"
+    );
     ClassDB::bind_method(
         D_METHOD("get_is_online"),
         &NetwSessionHandle::get_is_online
@@ -421,7 +431,14 @@ void NetwSessionHandle::_bind_methods() {
     ));
     ADD_SIGNAL(MethodInfo(
         SIG_JOIN_FAILED,
-        PropertyInfo(Variant::INT, "code"),
+        PropertyInfo(
+            Variant::INT,
+            "code",
+            PROPERTY_HINT_NONE,
+            "",
+            PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_CLASS_IS_ENUM,
+            "Error"
+        ),
         PropertyInfo(Variant::STRING, "reason")
     ));
     ADD_SIGNAL(MethodInfo(

@@ -441,9 +441,9 @@ bool Book::report_unresolved(
     }
     NETW_WARN(
         sys::SESSION,
-        "%s refused: the configuration declared through Netw.%s by %s is no "
-        "longer in this session's branch. Keep its scope node alive until "
-        "configuration settles, or declare a replacement on this branch.",
+        "%s refused: the node that called Netw.%s, %s, left the tree before "
+        "its settings were applied. Keep it in the tree until the end of the "
+        "first frame.",
         p_action,
         verb,
         joined(scopes)

@@ -256,7 +256,7 @@ public sealed class NetwSceneHandle : NetwRefCounted
     }
 
     private static readonly IntPtr _bindObserve =
-        NetwApi.MethodBind("NetwSceneHandle", "observe", 957362965UL);
+        NetwApi.MethodBind("NetwSceneHandle", "observe", 3344628563UL);
 
     /// <summary>
     /// Calls <paramref name="callback"/> whenever this scene gains or loses a
@@ -276,7 +276,7 @@ public sealed class NetwSceneHandle : NetwRefCounted
     /// <see cref="NetwEntity"/>.
     /// </para>
     /// </summary>
-    public void Observe(long @event, Callable callback)
+    public void Observe(NetwMultiplayer.SceneEvent @event, Callable callback)
     {
         godot_variant slot0 = VariantUtils.CreateFromInt((long)@event);
         godot_variant slot1 = VariantUtils.CreateFromCallable(callback);
@@ -293,7 +293,7 @@ public sealed class NetwSceneHandle : NetwRefCounted
     }
 
     private static readonly IntPtr _bindUnobserve =
-        NetwApi.MethodBind("NetwSceneHandle", "unobserve", 957362965UL);
+        NetwApi.MethodBind("NetwSceneHandle", "unobserve", 3344628563UL);
 
     /// <summary>
     /// Removes a <paramref name="callback"/> registered with
@@ -301,7 +301,7 @@ public sealed class NetwSceneHandle : NetwRefCounted
     /// <see cref="Callable"/> that was passed to
     /// <see cref="NetwSceneHandle.Observe"/>.
     /// </summary>
-    public void Unobserve(long @event, Callable callback)
+    public void Unobserve(NetwMultiplayer.SceneEvent @event, Callable callback)
     {
         godot_variant slot0 = VariantUtils.CreateFromInt((long)@event);
         godot_variant slot1 = VariantUtils.CreateFromCallable(callback);
