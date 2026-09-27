@@ -34,7 +34,7 @@
 		func _ready() -&gt; void:
 		    Netw.connection(self).register_transport(RelayTransport)
 		[/codeblock]
-		[method _make_peer] and [method _probe] may [code]await[/code]. They report the result by calling [method deliver], [method deliver_probe] or [method fail] once, with the [param ticket] they received. Keep [param ticket] in a local variable, not a member, since another request may start while one awaits. With no report, the request fails after [method _timeout_hint] seconds.
+		[method _make_peer] and [method _probe] may [code]await[/code]. They report the result by calling [method deliver], [method deliver_probe] or [method fail] once, with the [code]ticket[/code] they received. Keep [code]ticket[/code] in a local variable, not a member, since another request may start while one awaits. With no report, the request fails after [method _timeout_hint] seconds.
 		Methods starting with an underscore are overridden. Each has a public method that calls it, and a [code]_default[/code] method with the default behavior.
 	</description>
 	<tutorials>

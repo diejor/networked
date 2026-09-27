@@ -159,7 +159,7 @@
 			<description>
 				The parameters a join form asks for. 
 
-				A join is a [code]transport[/code], an [code]address[/code], and a dictionary of settings. The schema is the list of those settings.
+				A join is a transport, an address, and a dictionary of settings. The schema is the list of those settings.
 				[codeblock lang=text]
 				Array[Dictionary]
 				┖╴entry

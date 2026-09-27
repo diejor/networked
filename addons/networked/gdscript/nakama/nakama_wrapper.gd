@@ -397,7 +397,7 @@ func delete_lobby_card(match_id: String) -> void:
 
 ## Returns the result every storage method on this wrapper answers.
 ##
-## [code]uncertain[/code] is true when the request was sent but Nakama never
+## [param uncertain] is true when the request was sent but Nakama never
 ## confirmed whether it applied.
 ## [codeblock]
 ## Dictionary

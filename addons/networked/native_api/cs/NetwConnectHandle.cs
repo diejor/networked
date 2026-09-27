@@ -394,8 +394,8 @@ public sealed class NetwConnectHandle : NetwRefCounted
     /// <summary>
     /// The parameters a join form asks for.
     /// <para>
-    /// A join is a <c>transport</c>, an <c>address</c>, and a dictionary of
-    /// settings. The schema is the list of those settings.
+    /// A join is a transport, an address, and a dictionary of settings. The
+    /// schema is the list of those settings.
     /// <code>
     /// Array[Dictionary]
     /// ┖╴entry

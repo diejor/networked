@@ -387,9 +387,9 @@ public sealed class NetwDatabase : NetwRefCounted
     /// <summary>
     /// Reads one page of up to <paramref name="limit"/> records matching
     /// <paramref name="filter"/>. The promise gives a
-    /// <see cref="Godot.Collections.Dictionary"/>. Pass the returned
-    /// <c>cursor</c> back as <paramref name="cursor"/> to read the next page.
-    /// The scan is done when <c>cursor</c> is empty.
+    /// <see cref="Godot.Collections.Dictionary"/>. Pass the cursor it returns
+    /// back as <paramref name="cursor"/> to read the next page. The scan is
+    /// done when the returned cursor is empty.
     /// <code>
     /// Dictionary
     /// ┠╴error    Error             @GlobalScope.Error. Check it before reading records

@@ -181,7 +181,7 @@
 			<param index="2" name="cursor" type="String" default="&quot;&quot;" />
 			<param index="3" name="limit" type="int" default="100" />
 			<description>
-				Reads one page of up to [param limit] records matching [param filter]. The promise gives a [Dictionary]. Pass the returned [code]cursor[/code] back as [param cursor] to read the next page. The scan is done when [code]cursor[/code] is empty.
+				Reads one page of up to [param limit] records matching [param filter]. The promise gives a [Dictionary]. Pass the cursor it returns back as [param cursor] to read the next page. The scan is done when the returned cursor is empty.
 				[codeblock lang=text]
 				Dictionary
 				┠╴error    Error             @GlobalScope.Error. Check it before reading records
