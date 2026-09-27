@@ -1021,18 +1021,16 @@ void NetwMultiplayer::_bind_methods() {
         PropertyInfo(Variant::INT, "route"),
         PropertyInfo(Variant::OBJECT, "entity")
     ));
-    ADD_SIGNAL(MethodInfo(
-        SIG_PLAYER_JOINED,
-        PropertyInfo(Variant::OBJECT, "player")
-    ));
+    ADD_SIGNAL(
+        MethodInfo(SIG_PLAYER_JOINED, PropertyInfo(Variant::OBJECT, "player"))
+    );
     ADD_SIGNAL(MethodInfo(
         SIG_PLAYER_LOCAL_JOINED,
         PropertyInfo(Variant::OBJECT, "player")
     ));
-    ADD_SIGNAL(MethodInfo(
-        SIG_PLAYER_LEFT,
-        PropertyInfo(Variant::OBJECT, "player")
-    ));
+    ADD_SIGNAL(
+        MethodInfo(SIG_PLAYER_LEFT, PropertyInfo(Variant::OBJECT, "player"))
+    );
     ADD_SIGNAL(MethodInfo(
         SIG_SCENE_PRESENTATION_CHANGED,
         PropertyInfo(Variant::OBJECT, "from"),
@@ -1107,10 +1105,7 @@ void NetwMultiplayer::_bind_methods() {
         D_METHOD("player_local"),
         &NetwMultiplayer::player_local
     );
-    ClassDB::bind_method(
-        D_METHOD("player_all"),
-        &NetwMultiplayer::player_all
-    );
+    ClassDB::bind_method(D_METHOD("player_all"), &NetwMultiplayer::player_all);
     ADD_PROPERTY(
         PropertyInfo(
             Variant::ARRAY,

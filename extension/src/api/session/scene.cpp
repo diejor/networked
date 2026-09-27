@@ -88,13 +88,10 @@ bool running_under_gdunit() {
 
 } // namespace
 
-Ref<NetwPlayer> NetwMultiplayer::scene_requester_player(
-    Node *p_requester
-) {
+Ref<NetwPlayer> NetwMultiplayer::scene_requester_player(Node *p_requester) {
     const Ref<NetwEntity> entity = NetwEntity::of(p_requester);
     if (entity.is_valid()) {
-        const Ref<NetwPlayer> owner
-            = player_of(entity->get_peer_id());
+        const Ref<NetwPlayer> owner = player_of(entity->get_peer_id());
         if (owner.is_valid()) {
             return owner;
         }
@@ -142,12 +139,8 @@ RID NetwMultiplayer::scene_report_entity_edge(
     scene_core
         ->dispatch(scene, NetwSceneCore::EVENT_ENTITY, p_present, p_subject);
     if (p_is_player) {
-        scene_core->dispatch(
-            scene,
-            NetwSceneCore::EVENT_BODY,
-            p_present,
-            p_subject
-        );
+        scene_core
+            ->dispatch(scene, NetwSceneCore::EVENT_BODY, p_present, p_subject);
         const Ref<NetwSceneHandle> view = scene_handle_of(scene);
         if (view.is_valid()) {
             view->announce_body(entity_get_view(p_subject), p_present);
@@ -465,11 +458,7 @@ void NetwMultiplayer::scene_root_online(Node *p_root) {
         publish.call();
         return;
     }
-    p_root->connect(
-        StringName("ready"),
-        publish,
-        Object::CONNECT_ONE_SHOT
-    );
+    p_root->connect(StringName("ready"), publish, Object::CONNECT_ONE_SHOT);
 }
 
 void NetwMultiplayer::scene_root_offline(Object *p_root) {
@@ -615,11 +604,7 @@ void NetwMultiplayer::scene_presentation_settle() {
     }
     const Ref<NetwSceneHandle> from = scene_handle_of(scene_presentation);
     scene_presentation = reached;
-    emit_signal(
-        SIG_SCENE_PRESENTATION_CHANGED,
-        from,
-        scene_handle_of(reached)
-    );
+    emit_signal(SIG_SCENE_PRESENTATION_CHANGED, from, scene_handle_of(reached));
 }
 
 RID NetwMultiplayer::scene_presented() const {
@@ -816,10 +801,7 @@ Ref<NetwPromise> NetwMultiplayer::scene_replace_sources(
             sys::SCENE,
             "refused a scene change: another change is already open"
         );
-        promise->reject(
-            ERR_BUSY,
-            String("a scene change is already open")
-        );
+        promise->reject(ERR_BUSY, String("a scene change is already open"));
         return promise;
     }
     Node *target = scene_existing_destination(p_destination);
@@ -866,8 +848,8 @@ void NetwMultiplayer::scene_land_transition() {
         scene_core->transition_fail(ERR_UNAVAILABLE);
         return;
     }
-    const PackedInt64Array arriving = scene_core->transition_scope()
-            == SCENE_CHANGE_SESSION
+    const PackedInt64Array arriving
+        = scene_core->transition_scope() == SCENE_CHANGE_SESSION
         ? scene_transition_every_member()
         : scene_core->transition_arrivals();
     for (int at = 0; at < sources.size(); at++) {
@@ -1259,8 +1241,10 @@ bool NetwMultiplayer::scene_unwatch(const RID &p_scene, int64_t p_peer) {
     return true;
 }
 
-bool NetwMultiplayer::scene_subscribes(const RID &p_scene, int64_t p_peer)
-    const {
+bool NetwMultiplayer::scene_subscribes(
+    const RID &p_scene,
+    int64_t p_peer
+) const {
     return interest_engine.layer_has_viewer(scene_layer_id(p_scene), p_peer);
 }
 
@@ -1504,8 +1488,7 @@ void NetwMultiplayer::scene_apply_viewers(
 
     PackedInt64Array wanted;
     for (uint32_t at = 0; at < p_members.size(); ++at) {
-        const int64_t peer
-            = player_peer_of_id(int64_t(p_members[at]));
+        const int64_t peer = player_peer_of_id(int64_t(p_members[at]));
         if (peer != 0) {
             wanted.push_back(peer);
         }
@@ -1653,10 +1636,14 @@ Ref<NetwPromise> NetwMultiplayer::scene_move_entity(
     const lifecycle::Ruling ruling = lifecycle::rule(facts);
     if (!ruling.admitted()) {
         const String text = structure_halted
-            ? String("scene_move: session authority is moving, so no entity "
-                     "changes scene until it lands")
-            : String("scene_move: only the session authority moves an entity "
-                     "between scenes");
+            ? String(
+                  "scene_move: session authority is moving, so no entity "
+                  "changes scene until it lands"
+              )
+            : String(
+                  "scene_move: only the session authority moves an entity "
+                  "between scenes"
+              );
         NETW_ERROR(sys::SCENE, "%s", text);
         promise->reject(ruling.code, text);
         return promise;
@@ -1723,12 +1710,8 @@ Ref<NetwPromise> NetwMultiplayer::entity_reparent(
         facts.destination = lifecycle_destination(body, p_parent);
     }
     String refusal;
-    const lifecycle::Ruling ruling = lifecycle_judge_verb(
-        facts,
-        String("Netw.reparent"),
-        body,
-        refusal
-    );
+    const lifecycle::Ruling ruling
+        = lifecycle_judge_verb(facts, String("Netw.reparent"), body, refusal);
     if (!ruling.admitted()) {
         promise->reject(ruling.code, refusal);
         return promise;
@@ -2189,9 +2172,7 @@ void NetwMultiplayer::scene_report_local_viewer(
     }
 }
 
-void NetwMultiplayer::scene_on_player_joined(
-    const Ref<NetwPlayer> &p_player
-) {
+void NetwMultiplayer::scene_on_player_joined(const Ref<NetwPlayer> &p_player) {
     const Ref<NetwPlayer> local = player_admitted_local();
     const Array scenes = scene_core->live_scenes();
     for (int i = 0; i < scenes.size(); i++) {
@@ -2312,9 +2293,8 @@ Ref<NetwPromise> NetwMultiplayer::scene_request_send(
     frame.path = p_path;
     frame.scope = p_scope;
     frame.source_route = scene_route_of(p_source);
-    frame.source_epoch = frame.source_route > 0
-        ? liveness_route_epoch(frame.source_route)
-        : 0;
+    frame.source_epoch
+        = frame.source_route > 0 ? liveness_route_epoch(frame.source_route) : 0;
     send_to(
         destination,
         0,
@@ -2445,9 +2425,8 @@ void NetwMultiplayer::scene_receive_request(
     int64_t p_source_route,
     int64_t p_source_epoch
 ) {
-    const Ref<NetwPlayer> player = Object::cast_to<NetwPlayer>(
-        player_admitted_of(p_peer).ptr()
-    );
+    const Ref<NetwPlayer> player
+        = Object::cast_to<NetwPlayer>(player_admitted_of(p_peer).ptr());
     if (player.is_null()) {
         NETW_WARN(
             sys::SCENE,
@@ -2543,8 +2522,7 @@ void NetwMultiplayer::scene_receive_path_request(
         scene_send_result(p_peer, p_request_id, ERR_INVALID_PARAMETER);
         return;
     }
-    const Error refusal
-        = scene_admits_request(p_player, resolved, p_scope);
+    const Error refusal = scene_admits_request(p_player, resolved, p_scope);
     if (refusal != OK) {
         scene_send_result(p_peer, p_request_id, refusal);
         return;
@@ -2876,9 +2854,7 @@ TypedArray<NetwEntity> NetwMultiplayer::scene_get_bodies(const RID &p_scene) {
     return out;
 }
 
-TypedArray<NetwPlayer> NetwMultiplayer::scene_get_viewers(
-    const RID &p_scene
-) {
+TypedArray<NetwPlayer> NetwMultiplayer::scene_get_viewers(const RID &p_scene) {
     TypedArray<NetwPlayer> out;
     const PackedInt32Array watching = scene_get_peers(p_scene);
     for (int at = 0; at < watching.size(); at++) {

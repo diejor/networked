@@ -91,9 +91,7 @@ class ChaseRestScenario final : public netw_test::FrameScenario {
     }
 
     RigidBody3D *body_at(int p_index) const {
-        return Object::cast_to<RigidBody3D>(
-            stand->node_at(A, routes[p_index])
-        );
+        return Object::cast_to<RigidBody3D>(stand->node_at(A, routes[p_index]));
     }
 
     int64_t written_at(int p_index) const {
@@ -134,11 +132,8 @@ class ChaseRestScenario final : public netw_test::FrameScenario {
         for (int index = 0; index < CUBES; ++index) {
             Array args;
             args.push_back(String(CUBE_ID) + String::num_int64(index));
-            const RID made = server->spawn_registered(
-                StringName(CUBE_ID),
-                args,
-                nullptr
-            );
+            const RID made
+                = server->spawn_registered(StringName(CUBE_ID), args, nullptr);
             Node *built = server->entity_get_node(made);
             if (built == nullptr) {
                 return false;

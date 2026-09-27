@@ -12,14 +12,14 @@ NakamaWrapper
 
 **Inherits:** :godot:`RefCounted`
 
-Parse-safe boundary around the optional Nakama addon.
+Wraps the optional Nakama addon.
 
 .. rst-class:: classref-introduction-group
 
 Description
 -----------
 
-:ref:`is_addon_present()<class_NakamaWrapper_method_is_addon_present>` is the availability gate. No vendor API type is named before that gate, so projects still load when ``com.heroiclabs.nakama`` is absent.  
+Projects still load when ``com.heroiclabs.nakama`` is not installed. Check :ref:`is_addon_present()<class_NakamaWrapper_method_is_addon_present>` before calling anything else.  
 
 \ :ref:`connect_async()<class_NakamaWrapper_method_connect_async>` creates or reuses a :ref:`NakamaSessionService<class_NakamaSessionService>` session, then :ref:`NakamaRelayBridge<class_NakamaRelayBridge>` turns the realtime socket into a :godot:`MultiplayerPeer`.
 
@@ -223,7 +223,7 @@ Binds this wrapper to a shared :ref:`NakamaSessionService<class_NakamaSessionSer
 
 :godot:`bool` **is_addon_present**\ (\ ) |static| :ref:`🔗<class_NakamaWrapper_method_is_addon_present>`
 
-Returns ``true`` when the Nakama addon scripts are installed.  This is the only public availability gate. Call it before using other **NakamaWrapper** methods in code that may run without the optional addon.
+Returns ``true`` when the Nakama addon scripts are installed.  Call it before using other **NakamaWrapper** methods in code that may run without the addon.
 
 .. rst-class:: classref-item-separator
 
@@ -235,7 +235,7 @@ Returns ``true`` when the Nakama addon scripts are installed.  This is the only 
 
 :godot:`Dictionary` **connect_async**\ (\ host\: :godot:`Node`, config\: :godot:`Dictionary`\ ) :ref:`🔗<class_NakamaWrapper_method_connect_async>`
 
-Authenticates a device session and opens the realtime socket under ``host``.  ``config`` carries the connection fields. The facade node is parented to ``host`` so the socket adapter self-polls inside the live tree.
+Authenticates a device session and opens the realtime socket under ``host``.  ``config`` carries the connection fields. A helper node is added under ``host`` to poll the socket.
 
 ::
 
@@ -388,7 +388,7 @@ Writes a public-read object under ``collection`` and ``key``.  Any session can r
 
 :godot:`Dictionary` **read_public_storage**\ (\ collection\: :godot:`String`, limit\: :godot:`int` = 100\ ) :ref:`🔗<class_NakamaWrapper_method_read_public_storage>`
 
-Reads public objects under ``collection`` across all owners.  This collapses same-key objects to one value. Use :ref:`list_public_storage()<class_NakamaWrapper_method_list_public_storage>` when the owner matters. Empty before the session is open.
+Reads public objects under ``collection`` across all owners.  Objects with the same key keep one value. Use :ref:`list_public_storage()<class_NakamaWrapper_method_list_public_storage>` when the owner matters. Empty before the session is open.
 
 ::
 
@@ -406,7 +406,7 @@ Reads public objects under ``collection`` across all owners.  This collapses sam
 
 :godot:`Array` **list_public_storage**\ (\ collection\: :godot:`String`, limit\: :godot:`int` = 100\ ) :ref:`🔗<class_NakamaWrapper_method_list_public_storage>`
 
-Lists public objects under ``collection`` across all owners.  Nakama scopes storage by collection, key, and owner. This preserves every owner entry, including multiple objects with the same key. ``limit`` is the server page size. The listing follows the server cursor until the collection is exhausted, so callers see every record, not just the first page.
+Lists public objects under ``collection`` across all owners.  Keeps every owner's object, including several with the same key. ``limit`` is the page size, and every page is read.
 
 ::
 
@@ -426,7 +426,7 @@ Lists public objects under ``collection`` across all owners.  Nakama scopes stor
 
 |void| **delete_public_storage**\ (\ collection\: :godot:`String`, key\: :godot:`String`\ ) :ref:`🔗<class_NakamaWrapper_method_delete_public_storage>`
 
-Deletes the caller-owned object under ``collection`` and ``key``.  The operation is best effort and idempotent on the server side.
+Deletes the caller-owned object under ``collection`` and ``key``.  Deleting an object that does not exist succeeds.
 
 .. rst-class:: classref-item-separator
 
@@ -438,7 +438,7 @@ Deletes the caller-owned object under ``collection`` and ``key``.  The operation
 
 :godot:`bool` **write_lobby_card**\ (\ match_id\: :godot:`String`, card\: :godot:`Dictionary`\ ) :ref:`🔗<class_NakamaWrapper_method_write_lobby_card>`
 
-Writes a public relay lobby card keyed by ``match_id``.  Relay matches do not carry browse metadata. The host stores that metadata in :ref:`LOBBY_COLLECTION<class_NakamaWrapper_constant_LOBBY_COLLECTION>`, and :ref:`read_lobby_cards()<class_NakamaWrapper_method_read_lobby_cards>` reads it back. :ref:`write_lobby_card()<class_NakamaWrapper_method_write_lobby_card>` is a typed alias over :ref:`write_public_storage()<class_NakamaWrapper_method_write_public_storage>`.
+Writes a public relay lobby card keyed by ``match_id``.  Relay matches carry no lobby metadata, so the host stores it in :ref:`LOBBY_COLLECTION<class_NakamaWrapper_constant_LOBBY_COLLECTION>` and :ref:`read_lobby_cards()<class_NakamaWrapper_method_read_lobby_cards>` reads it back.
 
 .. rst-class:: classref-item-separator
 
@@ -480,7 +480,7 @@ Deletes the local lobby card keyed by ``match_id``.
 
 :godot:`Dictionary` **storage_answer**\ (\ error\: :godot:`int`, detail\: :godot:`String`, uncertain\: :godot:`bool`\ ) |static| :ref:`🔗<class_NakamaWrapper_method_storage_answer>`
 
-Answers the result shape every storage helper on this wrapper resolves.  ``uncertain`` is true when the request left the process and the service never said whether it applied, so a caller must not retry it blindly and reports the outcome as unknown rather than guessing.
+Returns the result every storage method on this wrapper answers.  ``uncertain`` is true when the request was sent but Nakama never confirmed whether it applied.
 
 ::
 
@@ -499,7 +499,7 @@ Answers the result shape every storage helper on this wrapper resolves.  ``uncer
 
 :godot:`Dictionary` **unsent**\ (\ error\: :godot:`int`, detail\: :godot:`String`\ ) |static| :ref:`🔗<class_NakamaWrapper_method_unsent>`
 
-The answer for a request that never reached the service, so nothing applied.
+Returns the result for a request that was never sent.
 
 .. rst-class:: classref-item-separator
 
@@ -511,7 +511,7 @@ The answer for a request that never reached the service, so nothing applied.
 
 :godot:`Dictionary` **unauthenticated**\ (\ ) |static| :ref:`🔗<class_NakamaWrapper_method_unauthenticated>`
 
-The answer for a request no authenticated session could carry.
+Returns the result for a request made without an authenticated session.
 
 .. rst-class:: classref-item-separator
 
@@ -535,7 +535,7 @@ Returns the authenticated user's id, or an empty :godot:`String` before auth.
 
 :godot:`Dictionary` **write_storage_objects**\ (\ objects\: :godot:`Array`\ ) :ref:`🔗<class_NakamaWrapper_method_write_storage_objects>`
 
-Writes a batch of storage ``objects`` in one call.  Resolves the client from :ref:`NakamaSessionService<class_NakamaSessionService>` when bound, so a storage-only wrapper never opens a match socket.
+Writes a batch of storage ``objects`` in one call.  Does not need a match socket. Returns the result of :ref:`storage_answer()<class_NakamaWrapper_method_storage_answer>`.
 
 ::
 
@@ -546,8 +546,6 @@ Writes a batch of storage ``objects`` in one call.  Resolves the client from :re
         ├── value (String)   # JSON string.
         ├── read (int)       # Optional. Default 1.
         └── write (int)      # Optional. Default 1.
-
-\ Answers the shape :ref:`storage_answer()<class_NakamaWrapper_method_storage_answer>` draws.
 
 .. rst-class:: classref-item-separator
 
@@ -569,10 +567,10 @@ Reads a batch of storage objects named by ``ids``.  ``user_id`` defaults to the 
         ├── key (String)
         └── user_id (String)
 
-    Returns the shape [method storage_answer] draws, with the rows the service
-    held. A row the service does not hold is simply absent, at
-    [constant @GlobalScope.OK].
-    [codeblock]
+\ Returns the result of :ref:`storage_answer()<class_NakamaWrapper_method_storage_answer>` with the objects found. An object that is not stored is left out of ``objects``.
+
+::
+
     Dictionary
     ├── error (int)
     ├── detail (String)
@@ -594,7 +592,7 @@ Reads a batch of storage objects named by ``ids``.  ``user_id`` defaults to the 
 
 :godot:`Dictionary` **list_storage_objects**\ (\ collection\: :godot:`String`, limit\: :godot:`int` = 100, cursor\: :godot:`String` = "", owner\: :godot:`String` = ""\ ) :ref:`🔗<class_NakamaWrapper_method_list_storage_objects>`
 
-Lists one remote page of ``collection``, owned by ``owner``.  An empty ``owner`` lists every owner's objects. Pass :ref:`own_user_id()<class_NakamaWrapper_method_own_user_id>` for the session user alone. ``cursor`` is empty on the first page, and the answer's own cursor continues it. A page shorter than ``limit`` with a nonempty cursor is not exhaustion.
+Lists one page of ``collection``, owned by ``owner``.  An empty ``owner`` lists every owner's objects. Pass :ref:`own_user_id()<class_NakamaWrapper_method_own_user_id>` for the session user's objects only. Pass the returned cursor back as ``cursor`` for the next page. The listing is done when the cursor is empty.
 
 ::
 
@@ -619,7 +617,7 @@ Lists one remote page of ``collection``, owned by ``owner``.  An empty ``owner``
 
 :godot:`Dictionary` **delete_storage_objects**\ (\ ids\: :godot:`Array`\ ) :ref:`🔗<class_NakamaWrapper_method_delete_storage_objects>`
 
-Deletes a batch of storage objects named by ``ids``.  The operation is idempotent on the server side.
+Deletes a batch of storage objects named by ``ids``.  Deleting an object that does not exist succeeds. Returns the result of :ref:`storage_answer()<class_NakamaWrapper_method_storage_answer>`.
 
 ::
 
@@ -627,8 +625,6 @@ Deletes a batch of storage objects named by ``ids``.  The operation is idempoten
     └── Dictionary
         ├── collection (String)
         └── key (String)
-
-\ Answers the shape :ref:`storage_answer()<class_NakamaWrapper_method_storage_answer>` draws.
 
 .. rst-class:: classref-item-separator
 

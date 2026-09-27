@@ -39,7 +39,7 @@ func enter_race(player: NetwPlayer) -> void:
 			player,
 			root.spawn_vehicle,
 			grid.get_child_count(),
-		)
+		),
 	)
 
 

@@ -4,9 +4,9 @@
 		The client for persistent storage.
 	</brief_description>
 	<description>
-		[NetwDatabase] lets multiple Networked objects like [NetwEntity] and [NetwTableHandle] store and retrieve their state from a durable backend. A [NetwDatabase] needs a [NetwDatabaseBackend] which implements the actual storage and retrieval.
-		A database holds records. A record is a [Dictionary] created from a [NetwSchema] that can represent a [NetwEntity], a [NetwTableHandle] or any type of tabular data, stored under a durable [StringName] id. A [NetwSchema] can be interpreted as the table definition or shape and records as rows in this table.
-		A database admits no work until its [method open] has settled. Await it before starting play.
+		[NetwEntity], [NetwTableHandle] and your own code save and load their state through a [NetwDatabase]. A [NetwDatabaseBackend] does the actual storage.
+		A record is a [Dictionary] stored under a [StringName] id. Its [NetwSchema] is the table definition and the record is a row in it.
+		Await [method open] before reading or writing.
 		[codeblock]
 		func _ready() -&gt; void:
 		    Netw.configure_database(self, &amp;"saves").backend(preload("res://filesystem_backend.tres"))
@@ -26,14 +26,13 @@
 		<method name="batch">
 			<return type="NetwWriteBatch" />
 			<description>
-				Returns a [NetwWriteBatch] that submits several writes and erasures to this database in one call. It is synchronous, and nothing reaches storage until the batch is submitted.
+				Returns a [NetwWriteBatch] that submits several writes and erasures in one call.
 			</description>
 		</method>
 		<method name="close">
 			<return type="NetwPromise" />
 			<description>
-				Stops admitting work, waits for everything already admitted to settle and settles with a [enum @GlobalScope.Error].
-				An operation issued before the close settles normally. One that was still going on when the connection closed settles as canceled and never as a save.
+				Stops accepting new operations, waits for the pending ones to settle, and settles with a [enum @GlobalScope.Error].
 				[codeblock lang=text]
 				Error
 				┠╴OK               the database is closed
@@ -45,8 +44,7 @@
 			<return type="NetwPromise" />
 			<param index="0" name="slot" type="StringName" />
 			<description>
-				Removes [param slot] and everything stored in it, then settles with a [enum @GlobalScope.Error]. Deleting the slot this process holds open is refused with [constant @GlobalScope.ERR_BUSY].
-				Useful to delete a save the game has not loaded.
+				Removes [param slot] and everything stored in it, then settles with a [enum @GlobalScope.Error]. The slot must not be open.
 				[codeblock lang=text]
 				Error
 				┠╴OK                the backend removed the slot
@@ -83,7 +81,7 @@
 		<method name="flush">
 			<return type="NetwPromise" />
 			<description>
-				Settles with an [enum @GlobalScope.Error] once every operation admitted before this call has settled. A value changed after the call is not included.
+				Settles with an [enum @GlobalScope.Error] once every operation started before this call has settled.
 				[codeblock lang=text]
 				Error
 				┠╴OK               every earlier operation settled, whatever each one settled with
@@ -94,7 +92,7 @@
 		<method name="list_slots">
 			<return type="NetwPromise" />
 			<description>
-				All the slots the [NetwDatabaseBackend] holds, whether or not this process wrote them, settles with a [Dictionary].
+				Lists every slot the [NetwDatabaseBackend] holds, and settles with a [Dictionary]. Works before [method open].
 				[codeblock lang=text]
 				Dictionary
 				┠╴error    Error         		@GlobalScope.Error. Check it before reading slots
@@ -105,7 +103,6 @@
 				│                            		explanation from the backend
 				┖╴slots    PackedStringArray  	every slot the backend holds when error is OK
 				[/codeblock]
-				A backend-specific error is defined by the [method NetwDatabaseBackend._list_slots] implementation, see the concrete backend's documentation for its error mapping.
 			</description>
 		</method>
 		<method name="open">
@@ -113,7 +110,7 @@
 			<param index="0" name="slot" type="StringName" />
 			<description>
 				Opens [param slot] and settles with an [enum @GlobalScope.Error].
-				Opening a different slot is refused with [constant @GlobalScope.ERR_BUSY], so [method close] the one that is open first.
+				To switch slots, [method close] the open one first.
 				[codeblock lang=text]
 				Error
 				┠╴OK                slot is open, or was open already
@@ -133,14 +130,7 @@
 			<param index="1" name="id" type="StringName" />
 			<param index="2" name="values" type="Dictionary" />
 			<description>
-				Replaces the fields [param values] names in the record at [param id], keeps the rest, and settles with an [enum @GlobalScope.Error].
-				A record that is not there is refused with [constant @GlobalScope.ERR_DOES_NOT_EXIST]. An empty [param values] succeeds without touching storage. A field the schema does not declare refuses the whole patch.
-				[codeblock lang=text]
-				Dictionary
-				┠╴column_name  replacement value
-				┖╴...          ...                   ...
-				[/codeblock]
-				The dictionary may contain any subset of the columns in [param schema], including none.
+				Replaces the columns [param values] names in the existing record at [param id], keeps the rest, and settles with an [enum @GlobalScope.Error]. [param values] may hold any subset of the columns in [param schema].
 				[codeblock lang=text]
 				Error
 				┠╴OK                  the backend acknowledged the merged record, or values is empty
@@ -166,9 +156,7 @@
 			<param index="0" name="schema" type="NetwSchema" />
 			<param index="1" name="id" type="StringName" />
 			<description>
-				Reads the record at [param id] and settles with a [Dictionary] snapshot.
-				Absence and failure are separate answers. A record not saved yet settles with [code]found=false[/code] and [code]error[/code] [constant @GlobalScope.OK].
-				A record that cannot be read due to a problem with the database, schema, or id fails the promise.
+				Reads the record at [param id] and settles with a [Dictionary]. A record that was never saved settles with [code]found[/code] [code]false[/code] and [code]error[/code] [constant @GlobalScope.OK].
 				[codeblock lang=text]
 				Dictionary
 				┠╴error    Error       @GlobalScope.Error. Check it before reading anything else
@@ -195,9 +183,7 @@
 			<param index="2" name="cursor" type="String" default="&quot;&quot;" />
 			<param index="3" name="limit" type="int" default="100" />
 			<description>
-				Reads storage a page at a time, settling with a [Dictionary] of up to [param limit] records matching [param filter].
-				A page fails whole a single record the schema cannot read leaves [code]records[/code] empty and [code]error[/code] set. The scan is finished when [code]cursor[/code] is empty.
-				Pass the page's cursor back as [param cursor] to continue. A [param cursor] is an opaque string that the [NetwDatabaseBackend] returns to continue a scan.
+				Reads one page of up to [param limit] records matching [param filter], and settles with a [Dictionary]. Pass the returned [code]cursor[/code] back as [param cursor] to read the next page. The scan is done when [code]cursor[/code] is empty.
 				[codeblock lang=text]
 				Dictionary
 				┠╴error    Error             @GlobalScope.Error. Check it before reading records
@@ -211,10 +197,10 @@
 				│ │                        implements no _scan
 				│ ┖╴backend-defined        the backend could not read the page
 				┠╴detail   String            what went wrong, for a person to read. Empty when error is OK
-				┠╴records  Array[Dictionary]  each one a read reply, drawn on read
+				┠╴records  Array[Dictionary]  each one shaped like a read reply
 				┖╴cursor   String            pass this back to scan to continue. Empty when no records remain
 				[/codeblock]
-				These fail the promise, and [method NetwPromise.wait] answers the code.
+				These fail the promise instead, and [method NetwPromise.wait] returns the code.
 				[codeblock lang=text]
 				Error
 				┠╴ERR_UNCONFIGURED       the database is not open
@@ -244,8 +230,7 @@
 			<param index="1" name="id" type="StringName" />
 			<param index="2" name="values" type="Dictionary" />
 			<description>
-				Replaces the whole record at [param id] and settles with an [enum @GlobalScope.Error].
-				[param values] must carry every column [param schema] declares, at the declared type and stride, and nothing else. A row that does not is refused before the backend sees it, so a bad write never reaches storage. A successful write means the backing store acknowledged it.
+				Replaces the whole record at [param id] and settles with an [enum @GlobalScope.Error]. [param values] must hold every column [param schema] declares and nothing else.
 				[codeblock lang=text]
 				Error
 				┠╴OK                  the backend acknowledged the write
@@ -268,7 +253,7 @@
 	</methods>
 	<members>
 		<member name="is_valid" type="bool" setter="" getter="get_is_valid">
-			Whether the [NetwMultiplayer] that issued this handle still holds this database.
+			Whether the session that created this handle still exists.
 		</member>
 		<member name="name" type="StringName" setter="" getter="get_database_name">
 			The name this database was declared under.
@@ -285,8 +270,7 @@
 			<param index="0" name="error" type="int" enum="Error" />
 			<param index="1" name="detail" type="String" />
 			<description>
-				Emitted when an entity row in this database fails to load or save. [param detail] names the record.
-				[param error] is one of the codes [method NetwPersistenceHandle.load] and [method NetwPersistenceHandle.save] list. [param detail] follows the record id with the storage's own explanation, and counts the rows when one save left several unsaved.
+				Emitted when an entity fails to load or save its record. [param error] is one of the codes [method NetwPersistenceHandle.load] and [method NetwPersistenceHandle.save] list, and [param detail] names the record and what went wrong.
 				[codeblock]
 				func _ready() -&gt; void:
 				    Netw.database(self, &amp;"saves").failed.connect(show_save_error)

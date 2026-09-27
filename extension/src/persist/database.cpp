@@ -114,7 +114,8 @@ int64_t Databases::generation_of(const RID &p_database) const {
     return instance != nullptr ? instance->generation : 0;
 }
 
-Ref<NetwDatabaseConnection> Databases::connection_of(const RID &p_database
+Ref<NetwDatabaseConnection> Databases::connection_of(
+    const RID &p_database
 ) const {
     const Instance *instance = at(p_database);
     return instance != nullptr ? instance->connection
@@ -506,8 +507,7 @@ void Databases::retire(Instance *p_instance, int p_index) {
     for (uint32_t lock = 0; lock < held.locks.size(); ++lock) {
         const HashMap<String, int64_t>::Iterator found
             = p_instance->held.find(held.locks[lock]);
-        if (found != p_instance->held.end()
-            && found->value == held.sequence) {
+        if (found != p_instance->held.end() && found->value == held.sequence) {
             p_instance->held.remove(found);
         }
     }
@@ -746,17 +746,12 @@ Variant Databases::unpack(
                 if (opened != OK) {
                     return database_page_failure(opened, opened_detail);
                 }
-                out.push_back(
-                    database_read_hit(
-                        StringName(String(row.get("key", ""))),
-                        values
-                    )
-                );
+                out.push_back(database_read_hit(
+                    StringName(String(row.get("key", ""))),
+                    values
+                ));
             }
-            return database_page_of(
-                out,
-                String(p_reply.get(KEY_CURSOR, ""))
-            );
+            return database_page_of(out, String(p_reply.get(KEY_CURSOR, "")));
         }
         case Op::BATCH: {
             PackedInt32Array errors = p_reply.get(KEY_ERRORS, Variant());
@@ -782,19 +777,14 @@ Variant Databases::unpack(
                     worst = Error(errors[at]);
                 }
             }
-            return database_batch_result_of(
-                worst,
-                detail,
-                errors,
-                uncertain
-            );
+            return database_batch_result_of(worst, detail, errors, uncertain);
         }
         case Op::SNAPSHOT: {
             Dictionary out;
             out[KEY_ERROR] = int(reported);
             out[KEY_DETAIL] = detail;
-            out[KEY_FOUND] = reported == OK
-                && bool(p_reply.get(KEY_FOUND, false));
+            out[KEY_FOUND]
+                = reported == OK && bool(p_reply.get(KEY_FOUND, false));
             out[KEY_ENVELOPE] = p_reply.get(KEY_ENVELOPE, Dictionary());
             return out;
         }
@@ -850,8 +840,7 @@ Ref<NetwPromise> Databases::read(
     pending.op = Op::READ;
     pending.schema = p_schema;
     pending.id = p_id;
-    pending.address
-        = address_of(Kind::RECORD, schema->name, String(p_id));
+    pending.address = address_of(Kind::RECORD, schema->name, String(p_id));
     pending.locks.push_back(address_text(pending.address));
     return admit(p_database, pending);
 }
@@ -878,8 +867,7 @@ Ref<NetwPromise> Databases::read_snapshot(
     pending.op = Op::SNAPSHOT;
     pending.schema = p_schema;
     pending.id = p_key;
-    pending.address
-        = address_of(Kind::SNAPSHOT, schema->name, String(p_key));
+    pending.address = address_of(Kind::SNAPSHOT, schema->name, String(p_key));
     pending.locks.push_back(address_text(pending.address));
     return admit(p_database, pending);
 }
@@ -912,8 +900,7 @@ Ref<NetwPromise> Databases::write(
     pending.op = Op::WRITE;
     pending.schema = p_schema;
     pending.id = p_id;
-    pending.address
-        = address_of(Kind::RECORD, schema->name, String(p_id));
+    pending.address = address_of(Kind::RECORD, schema->name, String(p_id));
     pending.locks.push_back(address_text(pending.address));
     Dictionary operation;
     operation[KEY_KIND] = OP_REPLACE;
@@ -982,8 +969,7 @@ Ref<NetwPromise> Databases::patch(
     pending.schema = p_schema;
     pending.id = p_id;
     pending.patch_values = p_values.duplicate(true);
-    pending.address
-        = address_of(Kind::RECORD, schema->name, String(p_id));
+    pending.address = address_of(Kind::RECORD, schema->name, String(p_id));
     pending.locks.push_back(address_text(pending.address));
     return admit(p_database, pending);
 }
@@ -1010,8 +996,7 @@ Ref<NetwPromise> Databases::erase(
     pending.op = Op::ERASE;
     pending.schema = p_schema;
     pending.id = p_id;
-    pending.address
-        = address_of(Kind::RECORD, schema->name, String(p_id));
+    pending.address = address_of(Kind::RECORD, schema->name, String(p_id));
     pending.locks.push_back(address_text(pending.address));
     Dictionary operation;
     operation[KEY_KIND] = OP_ERASE;
@@ -1058,14 +1043,12 @@ Ref<NetwPromise> Databases::submit(
     const Array &p_operations
 ) {
     if (p_operations.is_empty()) {
-        return NetwPromise::resolved(
-            database_batch_result_of(
-                OK,
-                String(),
-                PackedInt32Array(),
-                PackedByteArray()
-            )
-        );
+        return NetwPromise::resolved(database_batch_result_of(
+            OK,
+            String(),
+            PackedInt32Array(),
+            PackedByteArray()
+        ));
     }
     Pending pending;
     pending.op = Op::BATCH;

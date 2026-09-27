@@ -75,10 +75,7 @@ TEST_CASE(
     NETW_CHECK_EQ(unspent, 0);
     NETW_CHECK_EQ(duplicates, 0);
     NETW_CHECK_EQ(int(seen.size()), MINTED_EACH * 4);
-    NETW_CHECK_EQ(
-        int(rig.server()->liveness_reserve_route()) > greatest,
-        true
-    );
+    NETW_CHECK_EQ(int(rig.server()->liveness_reserve_route()) > greatest, true);
 }
 
 TEST_CASE(

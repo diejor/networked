@@ -6,18 +6,12 @@ using Godot.NativeInterop;
 namespace Networked;
 
 /// <summary>
-/// One peer's bid to steer an entity, and the latch any listener rejects it
-/// with.
+/// A request to control a node.
 /// </summary>
 /// <remarks>
-/// <see cref="NetwEntity"/> emits <see cref="NetwEntity.ControlRequested"/>
-/// with one <see cref="NetwControlRequest"/> per request. Gameplay code may
-/// inspect <see cref="NetwControlRequest.Requester"/> and call
-/// <see cref="NetwControlRequest.Deny"/> before the default grant path runs.
-/// Every listener sees the same record, so
-/// <see cref="NetwControlRequest.Denied"/> is a latch: once a listener rejects,
-/// no listener after it can take the rejection back, and listener order does
-/// not decide who gets to steer.
+/// Passed by <see cref="NetwEntity.ControlRequested"/> on the server. Call
+/// <see cref="NetwControlRequest.Deny"/> to reject the request, otherwise it is
+/// granted.
 /// <code>
 /// func _on_control_requested(peer_id: int, request: NetwControlRequest) -&gt; void:
 ///     if not can_carry(peer_id):
@@ -77,7 +71,7 @@ public sealed class NetwControlRequest : NetwRefCounted
 
     /// <summary>
     /// Whether the request should be rejected. Writing <c>false</c> over a
-    /// rejection does nothing, because the rejection is a latch.
+    /// <see cref="NetwControlRequest.Deny"/> call has no effect.
     /// </summary>
     public bool Denied
     {

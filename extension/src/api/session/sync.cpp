@@ -941,11 +941,7 @@ void NetwMultiplayer::row_control_receive(
     const int64_t channel = wire::builtin_channel(StringName("ROW_CONTROL"));
     wire::ControlRecord record;
     if (!wire::read_control_record(p_payload, record)) {
-        attribution_note_refusal(
-            p_sender,
-            channel,
-            wire::Refusal::MALFORMED
-        );
+        attribution_note_refusal(p_sender, channel, wire::Refusal::MALFORMED);
         return;
     }
     const int peer = int(p_sender);
@@ -1222,9 +1218,9 @@ Error NetwMultiplayer::display_lane(
         ? replication->gate_seam(display_write_seam())
         : nullptr;
     const Error verdict = seam != nullptr
-        ? Error(int(
-              seam->call(display_write_seam(), p_entity, p_track, p_value)
-          ))
+        ? Error(
+              int(seam->call(display_write_seam(), p_entity, p_track, p_value))
+          )
         : display_write(p_entity, p_track, p_value);
 
     const int64_t route = liveness_core->route_of(p_entity);
@@ -2215,8 +2211,13 @@ Error NetwMultiplayer::display_write(
     Error answered = OK;
     const bool overridden = overrides_seam(display_write_seam());
     if (overridden
-        && GDVIRTUAL_CALL(_display_write, p_entity, p_track, p_value, answered)
-    ) {
+        && GDVIRTUAL_CALL(
+            _display_write,
+            p_entity,
+            p_track,
+            p_value,
+            answered
+        )) {
         return answered;
     }
     return display_write_default(p_entity, p_track, p_value);
@@ -2737,7 +2738,6 @@ RID NetwMultiplayer::property_set_get_schema(const RID &p_set) const {
     const RID *held = property_set_schema.getptr(p_set.get_id());
     return held != nullptr ? *held : RID();
 }
-
 
 void NetwMultiplayer::lagcomp_effect_adopt(const StringName &p_key) {
     effects.adopt(p_key);

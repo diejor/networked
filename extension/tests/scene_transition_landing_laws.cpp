@@ -185,17 +185,17 @@ TEST_CASE(
 
     NETW_CHECK_EQ(
         int(core->scene_sources_for_scope(
-                NetwMultiplayer::SCENE_CHANGE_SCENE,
-                nullptr
-            )
+                    NetwMultiplayer::SCENE_CHANGE_SCENE,
+                    nullptr
+        )
                 .size()),
         0
     );
     NETW_CHECK_EQ(
         int(core->scene_sources_for_scope(
-                NetwMultiplayer::SCENE_CHANGE_SCENE,
-                outsider
-            )
+                    NetwMultiplayer::SCENE_CHANGE_SCENE,
+                    outsider
+        )
                 .size()),
         0
     );
@@ -214,9 +214,9 @@ TEST_CASE(
 
     NETW_CHECK_EQ(
         int(core->scene_sources_for_scope(
-                NetwMultiplayer::SCENE_CHANGE_SCENE,
-                source.owner
-            )
+                    NetwMultiplayer::SCENE_CHANGE_SCENE,
+                    source.owner
+        )
                 .size()),
         1
     );
@@ -247,9 +247,9 @@ TEST_CASE(
     REQUIRE(named == source.owner);
     NETW_CHECK_EQ(
         int(core->scene_sources_for_scope(
-                NetwMultiplayer::SCENE_CHANGE_SCENE,
-                named
-            )
+                    NetwMultiplayer::SCENE_CHANGE_SCENE,
+                    named
+        )
                 .size()),
         1
     );
@@ -470,10 +470,7 @@ TEST_CASE(
     REQUIRE(core->scene_watch(target.handle, 9) == OK);
 
     const CallLog announced;
-    core->connect(
-        StringName("scene_changed"),
-        announced.callable("changed")
-    );
+    core->connect(StringName("scene_changed"), announced.callable("changed"));
 
     core->scene_replace_sources(
         target.owner,

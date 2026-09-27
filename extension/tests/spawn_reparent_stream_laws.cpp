@@ -473,8 +473,9 @@ class FrameRun {
     FrameEvidence seen;
 
 public:
-    explicit FrameRun(const FrameScenario &p_scenario) :
-            declared(p_scenario), seen(run_frame_scenario(p_scenario)) {}
+    explicit FrameRun(const FrameScenario &p_scenario)
+        : declared(p_scenario), seen(run_frame_scenario(p_scenario)) {
+    }
 
     const FrameScenario &scenario() const {
         return declared;
@@ -727,14 +728,15 @@ LateEvidence run_late_join() {
     Node *mover = scene->instantiate();
     mover->set_name("Mover");
     world.arena(-1)->add_child(mover, true);
-    REQUIRE(netw_test::pump_until_child(rig, world.arena(0), "Mover") != nullptr);
+    REQUIRE(
+        netw_test::pump_until_child(rig, world.arena(0), "Mover") != nullptr
+    );
 
     netw::NetwMultiplayer::entity_move(mover, vehicle);
     rig.pump(6);
     netw::wire::WriteStream stale;
     const int64_t route = route_of(mover);
-    uint64_t stale_revision
-        = rig.server()->liveness_route_anchor(route);
+    uint64_t stale_revision = rig.server()->liveness_route_anchor(route);
     REQUIRE(rig.server()->verb_head_write(stale, route));
     REQUIRE(rig.server()->anchor_encode(stale, world.arena(-1)));
     uint64_t stale_author = uint64_t(rig.peer_id(-1));
@@ -762,7 +764,10 @@ LateEvidence run_late_join() {
         rig.pump();
         arrived = rig.route_node(int(route), late);
     }
-    REQUIRE_MESSAGE(arrived != nullptr, "the late peer never spawned the mover");
+    REQUIRE_MESSAGE(
+        arrived != nullptr,
+        "the late peer never spawned the mover"
+    );
     seen.late_anchor = int64_t(rig.client(late)->liveness_route_anchor(route));
     seen.parent_on_arrival = String(arrived->get_parent()->get_name());
 
@@ -814,7 +819,9 @@ LateParkedEvidence run_late_parked() {
     Node *mover = scene->instantiate();
     mover->set_name("Mover");
     world.arena(-1)->add_child(mover, true);
-    REQUIRE(netw_test::pump_until_child(rig, world.arena(0), "Mover") != nullptr);
+    REQUIRE(
+        netw_test::pump_until_child(rig, world.arena(0), "Mover") != nullptr
+    );
 
     netw::NetwMultiplayer::entity_move(mover, vehicle);
     rig.pump(6);

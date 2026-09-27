@@ -66,9 +66,9 @@ TEST_CASE(
     NETW_CHECK_EQ(door->get_sync_mode(), NetwMultiplayer::SYNC_MODE_STRETCH);
     NETW_CHECK_ORDER(
         door->get_ping_interval(),
-        double(session->clock_get_param(
-            NetwMultiplayer::CLOCK_PARAM_PING_INTERVAL
-        )),
+        double(
+            session->clock_get_param(NetwMultiplayer::CLOCK_PARAM_PING_INTERVAL)
+        ),
         ==
     );
     NETW_CHECK_ORDER(
@@ -110,16 +110,17 @@ TEST_CASE(
 
     door->set_sync_mode(NetwMultiplayer::SYNC_MODE_SNAP);
     NETW_CHECK_EQ(
-        int64_t(session->clock_get_param(NetwMultiplayer::CLOCK_PARAM_SYNC_MODE)
+        int64_t(
+            session->clock_get_param(NetwMultiplayer::CLOCK_PARAM_SYNC_MODE)
         ),
         NetwMultiplayer::SYNC_MODE_SNAP
     );
 
     door->set_ping_interval(0.25);
     NETW_CHECK_ORDER(
-        double(session->clock_get_param(
-            NetwMultiplayer::CLOCK_PARAM_PING_INTERVAL
-        )),
+        double(
+            session->clock_get_param(NetwMultiplayer::CLOCK_PARAM_PING_INTERVAL)
+        ),
         0.25,
         ==
     );

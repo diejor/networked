@@ -282,8 +282,8 @@ void SceneMembership::clear() {
     edges.clear();
 }
 
-const LocalVector<SceneMembership::Edge> &SceneMembership::pending_edges()
-    const {
+const LocalVector<SceneMembership::Edge> &SceneMembership::
+    pending_edges() const {
     return edges;
 }
 

@@ -125,9 +125,8 @@ void NetwInterestHandle::layer_leave_live(const StringName &p_layer_id) {
     if (session == nullptr || bound.is_null() || !is_authority()) {
         return;
     }
-    const Ref<NetwInterestLayer> record = session->layer_record(
-        session->interest_layer_find(p_layer_id)
-    );
+    const Ref<NetwInterestLayer> record
+        = session->layer_record(session->interest_layer_find(p_layer_id));
     if (record.is_valid()) {
         record->remove_entity(bound);
     }

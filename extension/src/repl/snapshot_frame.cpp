@@ -307,8 +307,7 @@ bool read_snapshot_window(
     int64_t newest = -1;
     bool has_ack = false;
     if (!carry_window_naming(stream, token, revision) || revision < 1
-        || !stream.int_range(count, 1, 255)
-        || !read_ack_flag(stream, has_ack)
+        || !stream.int_range(count, 1, 255) || !read_ack_flag(stream, has_ack)
         || !read_ack_step(stream, has_ack, p_base_tick, ack)
         || !read_stamp(stream, true, p_base_tick, newest)) {
         NETW_DEBUG(sys::WIRE, "A window ended inside its header.");

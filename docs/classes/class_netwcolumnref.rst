@@ -12,16 +12,14 @@ NetwColumnRef
 
 **Inherits:** :godot:`RefCounted`
 
-One column of one schema, as a value a configuration call can hold.
+A column index together with the :ref:`NetwSchema<class_NetwSchema>` it belongs to.
 
 .. rst-class:: classref-introduction-group
 
 Description
 -----------
 
-A column index is a bare :godot:`int`, so index 0 of one schema and index 0 of another are the same value. A reference carries the schema too, which is what lets a binding refuse a column the entity never declared.
-
-\ :ref:`NetwSchema.column_ref()<class_NetwSchema_method_column_ref>` mints one, and the reference holds its schema alive. The schema holds no reference back, so a ``static var`` can keep both.
+Configuration calls such as :ref:`NetwPropertyConfig.persisted()<class_NetwPropertyConfig_method_persisted>` take a reference so they can check the column belongs to the right schema. Create one with :ref:`NetwSchema.column_ref()<class_NetwSchema_method_column_ref>`.
 
 ::
 
@@ -32,7 +30,7 @@ A column index is a bare :godot:`int`, so index 0 of one schema and index 0 of a
     static var gold := schema.column_ref(schema.i64(&"gold"))
     static var position := schema.column_ref(schema.vector2(&"position"))
 
-\ Per-tick code keeps using the :godot:`int` the declaration returned. A reference is for configuration, which runs once.
+\ Code that runs every tick, such as :ref:`NetwTableHandle.write_column()<class_NetwTableHandle_method_write_column>`, keeps using the :godot:`int` index.
 
 .. rst-class:: classref-reftable-group
 
@@ -81,7 +79,7 @@ Property Descriptions
 
 - :godot:`int` **get_index**\ (\ )
 
-The column's address in :ref:`schema<class_NetwColumnRef_property_schema>`, the same :godot:`int` its declaring method returned.
+The column's index in :ref:`schema<class_NetwColumnRef_property_schema>`, as returned by the method that declared it.
 
 .. rst-class:: classref-item-separator
 
@@ -97,7 +95,7 @@ The column's address in :ref:`schema<class_NetwColumnRef_property_schema>`, the 
 
 - :godot:`StringName` **get_key**\ (\ )
 
-The column's declared name, or empty when :ref:`is_valid()<class_NetwColumnRef_method_is_valid>` is ``false``.
+The column's name, or empty when :ref:`is_valid()<class_NetwColumnRef_method_is_valid>` is ``false``.
 
 .. rst-class:: classref-item-separator
 
@@ -130,7 +128,7 @@ Method Descriptions
 
 :godot:`bool` **is_valid**\ (\ ) |const| :ref:`🔗<class_NetwColumnRef_method_is_valid>`
 
-Whether :ref:`schema<class_NetwColumnRef_property_schema>` still declares a column at :ref:`index<class_NetwColumnRef_property_index>`. A reference minted by :ref:`NetwSchema.column_ref()<class_NetwSchema_method_column_ref>` is valid when it is made.
+Whether :ref:`schema<class_NetwColumnRef_property_schema>` has a column at :ref:`index<class_NetwColumnRef_property_index>`.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

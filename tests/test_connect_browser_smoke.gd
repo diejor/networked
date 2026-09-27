@@ -13,6 +13,7 @@ class SmokeInfoSource:
 	func _init() -> void:
 		Netw.configure_server_info(smoke_info)
 
+
 	func smoke_info(info: NetwServerInfo) -> NetwServerInfo:
 		info.players = 1
 		info.max_players = 8

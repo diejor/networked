@@ -1,8 +1,7 @@
-## Parse-safe boundary around the optional Nakama addon.
+## Wraps the optional Nakama addon.
 ##
-## [method is_addon_present] is the availability gate. No vendor API type is
-## named before that gate, so projects still load when
-## [code]com.heroiclabs.nakama[/code] is absent.
+## Projects still load when [code]com.heroiclabs.nakama[/code] is not
+## installed. Check [method is_addon_present] before calling anything else.
 ##
 ## [br][br]
 ## [method connect_async] creates or reuses a [NakamaSessionService] session, then
@@ -124,8 +123,8 @@ signal _connect_finished(result: Dictionary)
 
 ## Returns [code]true[/code] when the Nakama addon scripts are installed.
 ##
-## This is the only public availability gate. Call it before using other
-## [NakamaWrapper] methods in code that may run without the optional addon.
+## Call it before using other [NakamaWrapper] methods in code that may run
+## without the addon.
 static func is_addon_present() -> bool:
 	return _nakama_class("NakamaClient") != null
 
@@ -133,8 +132,8 @@ static func is_addon_present() -> bool:
 ## Authenticates a device session and opens the realtime socket under
 ## [param host].
 ##
-## [param config] carries the connection fields. The facade node is parented to
-## [param host] so the socket adapter self-polls inside the live tree.
+## [param config] carries the connection fields. A helper node is added under
+## [param host] to poll the socket.
 ## [codeblock]
 ## Dictionary
 ## ├── server_key (String)
@@ -368,7 +367,7 @@ func write_public_storage(collection: String, key: String, value: Dictionary) ->
 
 ## Reads public objects under [param collection] across all owners.
 ##
-## This collapses same-key objects to one value. Use [method list_public_storage]
+## Objects with the same key keep one value. Use [method list_public_storage]
 ## when the owner matters. Empty before the session is open.
 ## [codeblock]
 ## Dictionary
@@ -391,11 +390,8 @@ func read_public_storage(collection: String, limit := 100) -> Dictionary:
 
 ## Lists public objects under [param collection] across all owners.
 ##
-## Nakama scopes storage by collection, key, and owner. This preserves every
-## owner entry, including multiple objects with the same key. [param limit] is
-## the server page size. The listing follows the server cursor until the
-## collection is exhausted, so callers see every record, not just the first
-## page.
+## Keeps every owner's object, including several with the same key.
+## [param limit] is the page size, and every page is read.
 ## [codeblock]
 ## Array
 ## └── Dictionary
@@ -423,7 +419,7 @@ func list_public_storage(collection: String, limit := 100) -> Array:
 
 ## Deletes the caller-owned object under [param collection] and [param key].
 ##
-## The operation is best effort and idempotent on the server side.
+## Deleting an object that does not exist succeeds.
 func delete_public_storage(collection: String, key: String) -> void:
 	if collection.is_empty() or key.is_empty():
 		return
@@ -432,9 +428,8 @@ func delete_public_storage(collection: String, key: String) -> void:
 
 ## Writes a public relay lobby card keyed by [param match_id].
 ##
-## Relay matches do not carry browse metadata. The host stores that metadata in
-## [constant LOBBY_COLLECTION], and [method read_lobby_cards] reads it back.
-## [method write_lobby_card] is a typed alias over [method write_public_storage].
+## Relay matches carry no lobby metadata, so the host stores it in
+## [constant LOBBY_COLLECTION] and [method read_lobby_cards] reads it back.
 func write_lobby_card(match_id: String, card: Dictionary) -> bool:
 	return await write_public_storage(LOBBY_COLLECTION, match_id, card)
 
@@ -458,11 +453,10 @@ func delete_lobby_card(match_id: String) -> void:
 # Generic storage objects.
 
 
-## Answers the result shape every storage helper on this wrapper resolves.
+## Returns the result every storage method on this wrapper answers.
 ##
-## [code]uncertain[/code] is true when the request left the process and the
-## service never said whether it applied, so a caller must not retry it blindly
-## and reports the outcome as unknown rather than guessing.
+## [code]uncertain[/code] is true when the request was sent but Nakama never
+## confirmed whether it applied.
 ## [codeblock]
 ## Dictionary
 ## ├── error (int)        # @GlobalScope.Error
@@ -477,12 +471,12 @@ static func storage_answer(
 	return { "error": error, "detail": detail, "uncertain": uncertain }
 
 
-## The answer for a request that never reached the service, so nothing applied.
+## Returns the result for a request that was never sent.
 static func unsent(error: int, detail: String) -> Dictionary:
 	return storage_answer(error, detail, false)
 
 
-## The answer for a request no authenticated session could carry.
+## Returns the result for a request made without an authenticated session.
 static func unauthenticated() -> Dictionary:
 	return unsent(ERR_UNAUTHORIZED, "no authenticated Nakama session")
 
@@ -532,8 +526,7 @@ func own_user_id() -> String:
 
 ## Writes a batch of storage [param objects] in one call.
 ##
-## Resolves the client from [NakamaSessionService] when bound, so a storage-only
-## wrapper never opens a match socket.
+## Does not need a match socket. Returns the result of [method storage_answer].
 ## [codeblock]
 ## Array
 ## └── Dictionary
@@ -543,7 +536,6 @@ func own_user_id() -> String:
 ##     ├── read (int)       # Optional. Default 1.
 ##     └── write (int)      # Optional. Default 1.
 ## [/codeblock]
-## Answers the shape [method storage_answer] draws.
 func write_storage_objects(objects: Array) -> Dictionary:
 	var client = _resolve_client()
 	var session = _resolve_session()
@@ -583,10 +575,9 @@ func write_storage_objects(objects: Array) -> Dictionary:
 ##     ├── collection (String)
 ##     ├── key (String)
 ##     └── user_id (String)
-##
-## Returns the shape [method storage_answer] draws, with the rows the service
-## held. A row the service does not hold is simply absent, at
-## [constant @GlobalScope.OK].
+## [/codeblock]
+## Returns the result of [method storage_answer] with the objects found. An
+## object that is not stored is left out of [code]objects[/code].
 ## [codeblock]
 ## Dictionary
 ## ├── error (int)
@@ -647,12 +638,12 @@ func read_storage_objects(ids: Array) -> Dictionary:
 	return _with_objects(storage_answer(OK, "", false), out)
 
 
-## Lists one remote page of [param collection], owned by [param owner].
+## Lists one page of [param collection], owned by [param owner].
 ##
 ## An empty [param owner] lists every owner's objects. Pass [method own_user_id]
-## for the session user alone. [param cursor] is empty on the first page, and
-## the answer's own cursor continues it. A page shorter than [param limit] with
-## a nonempty cursor is not exhaustion.
+## for the session user's objects only. Pass the returned cursor back as
+## [param cursor] for the next page. The listing is done when the cursor is
+## empty.
 ## [codeblock]
 ## Dictionary
 ## ├── error (int)
@@ -709,14 +700,14 @@ func list_storage_objects(
 
 ## Deletes a batch of storage objects named by [param ids].
 ##
-## The operation is idempotent on the server side.
+## Deleting an object that does not exist succeeds. Returns the result of
+## [method storage_answer].
 ## [codeblock]
 ## Array
 ## └── Dictionary
 ##     ├── collection (String)
 ##     └── key (String)
 ## [/codeblock]
-## Answers the shape [method storage_answer] draws.
 func delete_storage_objects(ids: Array) -> Dictionary:
 	var client = _resolve_client()
 	var session = _resolve_session()
@@ -753,7 +744,6 @@ func _resolve_client():
 # Resolves the active session, preferring the shared session when bound.
 func _resolve_session():
 	return _shared_session.session() if _shared_session != null else _session
-
 
 
 # Resolves a Nakama API class by its global name through the engine class

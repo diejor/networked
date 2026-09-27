@@ -36,10 +36,12 @@ func test_a_record_and_a_table_snapshot_survive_a_process_restart() -> void:
 		true,
 	)
 	assert_int(code) \
-			.override_failure_message("the writer process exited %d\n%s" % [
-				code,
-				"\n".join(output),
-			]) \
+			.override_failure_message(
+				"the writer process exited %d\n%s" % [
+					code,
+					"\n".join(output),
+				],
+			) \
 			.is_equal(0)
 
 	var rows := PersistenceRestartRows.new()

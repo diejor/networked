@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <class name="DictionaryRecord" inherits="NetwRecord" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
 	<brief_description>
-		A record that stores as dictionary.
+		A record stored as a [Dictionary].
 	</brief_description>
 	<description>
 	</description>
@@ -9,7 +9,7 @@
 	</tutorials>
 	<members>
 		<member name="data" type="Dictionary" setter="set_data" getter="get_data" default="{}">
-			The backing dictionary serialized to disk.
+			The values of this record.
 		</member>
 	</members>
 </class>

@@ -56,22 +56,22 @@ TEST_CASE(
 ) {
     NETW_CHECK_EQ(
         int(write_control_record(open_of(1))
-                == blob(
-                    {0x00,
-                     0x01,
-                     0xAC,
-                     0x02,
-                     0x02,
-                     0x00,
-                     0x05,
-                     0x03,
-                     0x04,
-                     0x06,
-                     0xEF,
-                     0xBE,
-                     0xAD,
-                     0xDE}
-                )),
+            == blob(
+                {0x00,
+                 0x01,
+                 0xAC,
+                 0x02,
+                 0x02,
+                 0x00,
+                 0x05,
+                 0x03,
+                 0x04,
+                 0x06,
+                 0xEF,
+                 0xBE,
+                 0xAD,
+                 0xDE}
+            )),
         1
     );
 
@@ -103,10 +103,7 @@ TEST_CASE(
     ControlRecord closing;
     closing.tag = ControlTag::CLOSE;
     closing.token = 7;
-    NETW_CHECK_EQ(
-        int(write_control_record(closing) == blob({0x04, 0x07})),
-        1
-    );
+    NETW_CHECK_EQ(int(write_control_record(closing) == blob({0x04, 0x07})), 1);
 }
 
 TEST_CASE(
@@ -133,8 +130,7 @@ TEST_CASE(
     reset.request = 12;
     reset.token = 9001;
     ControlRecord back;
-    const bool carried
-        = read_control_record(write_control_record(reset), back);
+    const bool carried = read_control_record(write_control_record(reset), back);
     CHECK(carried);
     NETW_CHECK_EQ(int(back.tag), int(ControlTag::RESET));
     NETW_CHECK_EQ(back.request, 12);

@@ -19,7 +19,7 @@ namespace Networked;
 /// The committed rows gate the spawn and synchronization pipelines directly,
 /// and a client learns only the attribution for its own row. Use
 /// <see cref="NetwInterestLayer.InterestEnter"/> and
-/// <see cref="NetwInterestLayer.InterestExit"/> for server authority. Use
+/// <see cref="NetwInterestLayer.InterestExit"/> on the server. Use
 /// <see cref="NetwInterestLayer.EntityVisible"/> and
 /// <see cref="NetwInterestLayer.EntityHidden"/> for local visibility.
 /// <see cref="NetwEntity.ObserverEntered"/> reports observers of one entity.

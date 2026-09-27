@@ -12,16 +12,14 @@ NetwPersistenceConfig
 
 **Inherits:** :godot:`RefCounted`
 
-Which row of which :ref:`NetwDatabase<class_NetwDatabase>` one entity loads and saves.
+Which record of which :ref:`NetwDatabase<class_NetwDatabase>` an entity loads and saves.
 
 .. rst-class:: classref-introduction-group
 
 Description
 -----------
 
-The declaration belongs to the node that made it, so two players running one script keep two record ids. Every column of :ref:`schema()<class_NetwPersistenceConfig_method_schema>` is filled by one property that named it through :ref:`NetwPropertyConfig.persisted()<class_NetwPropertyConfig_method_persisted>`, and a column left unbound refuses the whole entity.
-
-\ :ref:`Netw.configure_database()<class_Netw_method_configure_database>` and :ref:`Netw.database()<class_Netw_method_database>` resolve the session through the :godot:`SceneTree`, so a database is declared from :godot:`Node._ready() <Node#class_Node_private_method__ready>` rather than from :godot:`Object._init() <Object#class_Object_private_method__init>`.
+Each column of :ref:`schema()<class_NetwPersistenceConfig_method_schema>` is filled by one property marked with :ref:`NetwPropertyConfig.persisted()<class_NetwPropertyConfig_method_persisted>`. A column with no property refuses the whole entity. Configure it from :godot:`Node._ready() <Node#class_Node_private_method__ready>`, where the node is in the tree.
 
 ::
 
@@ -37,9 +35,7 @@ The declaration belongs to the node that made it, so two players running one scr
     func account_name() -> StringName:
         return entity.entity_id
 
-\ :ref:`record_id()<class_NetwPersistenceConfig_method_record_id>` is read once, when the entity binds, and the id it answered is the row every later save writes. Moving the account the provider reads never retargets an enrolled save. A key that changes between sessions, such as a peer id, reads a different row every time the player joins.
-
-The row is reached through :ref:`NetwPersistenceHandle<class_NetwPersistenceHandle>`, as :ref:`NetwEntity.persistence<class_NetwEntity_property_persistence>`.
+\ Use a :ref:`record_id()<class_NetwPersistenceConfig_method_record_id>` that stays the same between sessions. A peer id changes every time the player joins. The record is reached through :ref:`NetwEntity.persistence<class_NetwEntity_property_persistence>`.
 
 .. rst-class:: classref-reftable-group
 
@@ -76,7 +72,7 @@ Method Descriptions
 
 :ref:`NetwPersistenceConfig<class_NetwPersistenceConfig>` **database**\ (\ name\: :godot:`StringName`\ ) :ref:`🔗<class_NetwPersistenceConfig_method_database>`
 
-Names the :ref:`NetwDatabase<class_NetwDatabase>` this entity's row lives in. The name resolves in the same session, so :ref:`Netw.configure_database()<class_Netw_method_configure_database>` declares it first. Returns the same config so the declaration chains.
+Names the :ref:`NetwDatabase<class_NetwDatabase>` this entity's record lives in, as :ref:`Netw.configure_database()<class_Netw_method_configure_database>` declared it.
 
 .. rst-class:: classref-item-separator
 
@@ -88,7 +84,7 @@ Names the :ref:`NetwDatabase<class_NetwDatabase>` this entity's row lives in. Th
 
 :ref:`NetwPersistenceConfig<class_NetwPersistenceConfig>` **interval**\ (\ seconds\: :godot:`float`\ ) :ref:`🔗<class_NetwPersistenceConfig_method_interval>`
 
-Saves the whole row this often while anything in it has changed. ``0.0`` saves only when the game calls :ref:`NetwPersistenceHandle.save()<class_NetwPersistenceHandle_method_save>`. Returns the same config so the declaration chains.
+Saves the record every ``seconds`` when something changed. ``0.0`` saves only when you call :ref:`NetwPersistenceHandle.save()<class_NetwPersistenceHandle_method_save>`.
 
 \ **Server Only.**
 
@@ -102,18 +98,7 @@ Saves the whole row this often while anything in it has changed. ``0.0`` saves o
 
 :ref:`NetwPersistenceConfig<class_NetwPersistenceConfig>` **load_on_spawn**\ (\ enabled\: :godot:`bool` = true\ ) :ref:`🔗<class_NetwPersistenceConfig_method_load_on_spawn>`
 
-Whether the stored row is read before the entity plays. Returns the same config so the declaration chains.
-
-The session authority starts the read when the entity's node is ready, and no peer receives the entity until it settles.
-
-.. code:: text
-
-    read settles
-    ┠╴row found    the row is applied, then the entity is sent to peers
-    ┠╴no row       the entity is sent with the values it spawned with
-    ┖╴failed       the entity is not sent until a retried load succeeds
-
-\ :ref:`NetwPersistenceHandle.load()<class_NetwPersistenceHandle_method_load>` retries a failed read. A bound property that changes while the row is being read fails the read, and the stored row is not applied over it.
+Whether the server loads the stored record when the entity's node is ready. Clients do not receive the entity until the load succeeds or finds no record. Call :ref:`NetwPersistenceHandle.load()<class_NetwPersistenceHandle_method_load>` to retry a failed load.
 
 .. rst-class:: classref-item-separator
 
@@ -125,7 +110,7 @@ The session authority starts the read when the entity's node is ready, and no pe
 
 :ref:`NetwPersistenceConfig<class_NetwPersistenceConfig>` **record_id**\ (\ provider\: :godot:`Callable`\ ) :ref:`🔗<class_NetwPersistenceConfig_method_record_id>`
 
-Answers the key this entity's row is stored under. It is called once, when the entity binds, and must answer a nonempty :godot:`StringName`. Returns the same config so the declaration chains.
+Sets the function that returns the id this entity's record is stored under. It is called once and must return a nonempty :godot:`StringName`.
 
 .. rst-class:: classref-item-separator
 
@@ -137,7 +122,7 @@ Answers the key this entity's row is stored under. It is called once, when the e
 
 :ref:`NetwPersistenceConfig<class_NetwPersistenceConfig>` **schema**\ (\ schema\: :ref:`NetwSchema<class_NetwSchema>`\ ) :ref:`🔗<class_NetwPersistenceConfig_method_schema>`
 
-Declares the shape of this entity's row. Every :ref:`NetwColumnRef<class_NetwColumnRef>` a property binds comes from this same :ref:`NetwSchema<class_NetwSchema>`, and one taken from another schema refuses the binding whatever its index. Returns the same config so the declaration chains.
+Sets the :ref:`NetwSchema<class_NetwSchema>` of this entity's record. Every :ref:`NetwColumnRef<class_NetwColumnRef>` passed to :ref:`NetwPropertyConfig.persisted()<class_NetwPropertyConfig_method_persisted>` must come from this schema.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

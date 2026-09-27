@@ -61,8 +61,7 @@ bool rows_agree(const Dictionary &p_left, const Dictionary &p_right) {
         }
         const Variant left = p_left[keys[at]];
         const Variant right = p_right[keys[at]];
-        if (left.get_type() != right.get_type()
-            || bool(left != right)) {
+        if (left.get_type() != right.get_type() || bool(left != right)) {
             return false;
         }
     }
@@ -156,8 +155,7 @@ void Bindings::unwithhold(ObjectID p_root) {
 }
 
 bool Bindings::withholds(Node *p_root) const {
-    return p_root != nullptr
-        && withheld.has(uint64_t(gd::instance_id(p_root)));
+    return p_root != nullptr && withheld.has(uint64_t(gd::instance_id(p_root)));
 }
 
 bool Bindings::awaits_load(const RID &p_binding) const {
@@ -260,8 +258,7 @@ RID Bindings::compile(Node *p_root) {
             if (declaration.is_null()) {
                 continue;
             }
-            const Ref<NetwColumnRef> column
-                = declaration->get_persist_column();
+            const Ref<NetwColumnRef> column = declaration->get_persist_column();
             if (column.is_null()) {
                 continue;
             }
@@ -331,11 +328,8 @@ RID Bindings::compile(Node *p_root) {
             const int stride
                 = session->schema_get_column_stride(schema, column_index);
             NETW_ERR_COND_V(
-                SchemaCore::validate_value(
-                    type,
-                    stride,
-                    node->get(property)
-                ) != OK,
+                SchemaCore::validate_value(type, stride, node->get(property))
+                    != OK,
                 RID(),
                 sys::TABLE,
                 "entity '%s' binds column '%s' of schema '%s' to '%s.%s', "

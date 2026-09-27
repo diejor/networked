@@ -232,7 +232,6 @@ TEST_CASE(
 constexpr const char *WATCHED_ID = "watched_body";
 constexpr const char *GATE_LAYER = "gate";
 
-
 Array position_columns() {
     Array out;
     out.push_back(StringName("position"));

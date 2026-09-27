@@ -261,11 +261,7 @@ TEST_CASE(
 
     const int rows_enough_to_force_growth = 8;
     for (int index = 0; index < rows_enough_to_force_growth; ++index) {
-        core->observe(
-            scenes[index % 4],
-            EVENT_PLAYER,
-            log.callable("filler")
-        );
+        core->observe(scenes[index % 4], EVENT_PLAYER, log.callable("filler"));
     }
 
     auto calls = std::make_shared<int>(0);
@@ -309,14 +305,9 @@ TEST_CASE(
     Ref<RefCounted> anchor;
     anchor.instantiate();
     const Callable guest = log.callable("guest");
-    const Callable reentrant(memnew(ReentrantSink(
-        core.ptr(),
-        scene,
-        EVENT_BODY,
-        guest,
-        anchor.ptr(),
-        calls
-    )));
+    const Callable reentrant(memnew(
+        ReentrantSink(core.ptr(), scene, EVENT_BODY, guest, anchor.ptr(), calls)
+    ));
 
     core->observe(scene, EVENT_BODY, doomed);
     core->observe(scene, EVENT_BODY, reentrant);
@@ -465,11 +456,7 @@ TEST_CASE(
     CHECK(
         NetwSceneCore::scope_names_an_operation(NetwSceneCore::SCOPE_SESSION)
     );
-    CHECK(
-        NetwSceneCore::scope_names_an_operation(
-            NetwSceneCore::SCOPE_PLAYER
-        )
-    );
+    CHECK(NetwSceneCore::scope_names_an_operation(NetwSceneCore::SCOPE_PLAYER));
     CHECK(NetwSceneCore::scope_names_an_operation(NetwSceneCore::SCOPE_SCENE));
 
     CHECK_FALSE(NetwSceneCore::scope_names_an_operation(-1));

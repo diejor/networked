@@ -13,9 +13,7 @@ namespace Networked;
 /// Every packet is framed with a four-byte magic prefix naming its purpose, so
 /// a session can tell a joining player from a server browser before it reads a
 /// single byte of body. A packet matching neither magic is
-/// <see cref="NetwAuthProtocol.Kind.Unknown"/> and the receiver fails closed on
-/// it, because an auth phase that guesses at an unrecognised packet is an auth
-/// phase that can be walked past.
+/// <see cref="NetwAuthProtocol.Kind.Unknown"/> and the receiver fails.
 /// <code>
 /// auth packet
 ///  ┠╴ "NHEL"   a player opening a session
@@ -31,10 +29,7 @@ namespace Networked;
 /// </code>
 /// <para>
 /// A probe peer receives a response and disconnects without completing
-/// authentication, so it never enters
-/// <see cref="MultiplayerPeer.GetUniqueId"/>'s peer list. This class reads and
-/// writes the framing for both sides. Every verb is static and the class is
-/// never instantiated.
+/// authentication, so it never enters the <see cref="MultiplayerApi"/>
 /// </para>
 /// </remarks>
 public sealed class NetwAuthProtocol : NetwRefCounted
@@ -98,10 +93,7 @@ public sealed class NetwAuthProtocol : NetwRefCounted
             2455072627UL);
 
     /// <summary>
-    /// The framing version this build writes and is the only one it accepts. It
-    /// is bumped when the framing changes in a way an older peer cannot read,
-    /// which is what makes a version mismatch a clean rejection rather than a
-    /// misparse.
+    /// The framing version this build writes and is the only one it accepts.
     /// </summary>
     public static int ProtocolVersion()
     {
@@ -174,11 +166,7 @@ public sealed class NetwAuthProtocol : NetwRefCounted
     /// <summary>
     /// Writes a hello header stamped with <paramref name="appTag"/>, the 64-bit
     /// build tag folded from <see cref="MultiplayerTree.AppId"/> and the wire
-    /// identity by <see cref="NetwMultiplayer.AuthSetAppTag"/>. There is no
-    /// ungated value. An empty <see cref="MultiplayerTree.AppId"/> still
-    /// carries the wire the build speaks, so two builds that disagree about the
-    /// format or the channel table are rejected whether or not the game named
-    /// itself. <paramref name="flags"/> is reserved.
+    /// identity by <see cref="NetwMultiplayer.AuthSetAppTag"/>.
     /// </summary>
     public static byte[] EncodeClientHello(long appTag = 0, int flags = 0)
     {
@@ -217,9 +205,7 @@ public sealed class NetwAuthProtocol : NetwRefCounted
     /// ┖╴flags             int              reserved
     /// </code>
     /// <para>
-    /// A rejection still reports the <c>version</c> and <c>app_tag</c> it read,
-    /// so the rejecting side can say what the peer claimed rather than only
-    /// that it said no.
+    /// A rejection still reports the <c>version</c> and <c>app_tag</c> it read.
     /// </para>
     /// </summary>
     public static Godot.Collections.Dictionary DecodeClientHello(

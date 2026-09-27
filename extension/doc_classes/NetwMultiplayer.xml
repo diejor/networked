@@ -78,8 +78,8 @@
 			<return type="void" />
 			<param index="0" name="delta" type="float" />
 			<description>
-				Runs the entity save pass. [method MultiplayerAPI.poll] calls it once per poll with [param delta], the seconds since the last poll. With no override this runs [method persist_tick_default].
-				Override it to decide when entity rows save. Call [method persist_tick_default] from the override to run the stock pass.
+				Saves entity rows. [method MultiplayerAPI.poll] calls it with [param delta], the seconds since the last poll.
+				Override it to decide when entity rows are saved, and call [method persist_tick_default] to run the default pass.
 			</description>
 		</method>
 		<method name="_predict_admit_frame" qualifiers="virtual">
@@ -137,7 +137,7 @@
 			<param index="8" name="tick_delta" type="float" />
 			<description>
 				The override point for the plan that says how a diverged entity is brought back onto authority's state. With no override this returns [method predict_recover_default].
-				[param policy] is the [method NetwPredictionHandle.resolved_recovery_policy] of the entity, [param payload] and [param current] are the two states being reconciled, and [param tick_delta] is the step the plan is measured against. Returning [code]null[/code] is not a way to abstain. The result is rejected, a [constant EVENT_SEAM_MISUSE] is emitted, and the default's plan stands. An override that handles one policy returns [method predict_recover_default] for the others.
+				[param policy] is the entity's [method NetwPredictionHandle.resolved_recovery_policy], [param payload] and [param current] are the two states being reconciled, and [param tick_delta] is the length of a tick. Return [method predict_recover_default] for any case the override does not handle. Returning [code]null[/code] emits [constant EVENT_SEAM_MISUSE] and the default plan is used.
 				Withholding fields is an in-domain refinement, and the default plan does not attempt it otherwise. A divergence outside the declared domain, or one nobody could charge while a contact was still disturbing the bodies, gives no ground for deciding which fields are safe to leave predicted, so the default re-bases the whole closure instead.
 			</description>
 		</method>
@@ -506,14 +506,14 @@
 		<method name="clock_request_handshake">
 			<return type="void" />
 			<description>
-				Asks server authority for its tickrate over the clock's handshake channel, so the two rates can be compared before any tick is calibrated against them. The server returns its own tickrate, and a reply that disagrees is what [method clock_set_mismatch_action] decides the response to.
-				Only a peer that is not server authority calls this. The session runs it once per transport generation, as soon as a connection to the server exists, so a host never asks itself.
+				Asks the server for its tickrate over the clock's handshake channel, so the two rates can be compared before any tick is calibrated against them. The server returns its own tickrate, and a reply that disagrees is what [method clock_set_mismatch_action] decides the response to.
+				Only a client calls this. The session runs it once per transport generation, as soon as a connection to the server exists, so a host never asks itself.
 			</description>
 		</method>
 		<method name="clock_send_ping">
 			<return type="void" />
 			<description>
-				Sends the local wall-clock timestamp to server authority over the clock's ping channel, unreliably, because a lost sample is cheaper than a late one. The server echoes it back with its own tick, and that reply lands as [signal clock_pong_received] once [method clock_ingest_pong] has processed it.
+				Sends the local wall-clock timestamp to the server over the clock's ping channel, unreliably, because a lost sample is cheaper than a late one. The server echoes it back with its own tick, and that reply lands as [signal clock_pong_received] once [method clock_ingest_pong] has processed it.
 				The handshake's reply triggers the first ping, and later pings repeat on whatever schedule drives recalibration.
 			</description>
 		</method>
@@ -597,7 +597,7 @@
 			<return type="NetwPromise" />
 			<param index="0" name="database" type="RID" />
 			<description>
-				Stops [param database] admitting work, waits for what it already admitted, releases its slot and settles with an [enum @GlobalScope.Error]. [method NetwDatabase.close] lists the codes.
+				Closes [param database] once its pending operations finish. The promise resolves with an [enum @GlobalScope.Error], see [method NetwDatabase.close].
 			</description>
 		</method>
 		<method name="database_create">
@@ -613,7 +613,7 @@
 			<param index="0" name="database" type="RID" />
 			<param index="1" name="slot" type="StringName" />
 			<description>
-				Removes [param slot] and everything stored in it, then settles with an [enum @GlobalScope.Error]. It works before [method database_open], and the slot [param database] holds open answers [constant @GlobalScope.ERR_BUSY]. [method NetwDatabase.delete_slot] lists the codes.
+				Removes [param slot] and everything stored in it. Can be called before [method database_open]. Deleting the open slot fails with [constant @GlobalScope.ERR_BUSY]. See [method NetwDatabase.delete_slot] for the errors.
 			</description>
 		</method>
 		<method name="database_erase">
@@ -622,7 +622,7 @@
 			<param index="1" name="schema" type="RID" />
 			<param index="2" name="id" type="StringName" />
 			<description>
-				Removes the record at [param id] and settles with an [enum @GlobalScope.Error]. Erasing a record that is not there succeeds. [method NetwDatabase.erase] lists the codes.
+				Removes the record at [param id]. Erasing a record that is not there succeeds. See [method NetwDatabase.erase] for the errors.
 			</description>
 		</method>
 		<method name="database_find" qualifiers="const">
@@ -636,7 +636,7 @@
 			<return type="NetwPromise" />
 			<param index="0" name="database" type="RID" />
 			<description>
-				Settles with an [enum @GlobalScope.Error] once every operation [param database] admitted before this call has settled. [method NetwDatabase.flush] lists the codes.
+				Resolves once every operation started on [param database] before this call has finished. See [method NetwDatabase.flush] for the errors.
 			</description>
 		</method>
 		<method name="database_get_slot" qualifiers="const">
@@ -657,7 +657,7 @@
 			<return type="NetwPromise" />
 			<param index="0" name="database" type="RID" />
 			<description>
-				Settles with the slots reply drawn in [method NetwDatabase.list_slots], naming every slot the backend of [param database] holds. It works before [method database_open].
+				Lists every slot stored in [param database], see [method NetwDatabase.list_slots]. Can be called before [method database_open].
 			</description>
 		</method>
 		<method name="database_open">
@@ -665,7 +665,7 @@
 			<param index="0" name="database" type="RID" />
 			<param index="1" name="slot" type="StringName" />
 			<description>
-				Opens [param slot] and settles with an [enum @GlobalScope.Error]. [param database] admits no work before it settles. Opening a different slot while one is open answers [constant @GlobalScope.ERR_BUSY]. [method NetwDatabase.open] lists the codes.
+				Opens [param slot]. Other operations fail until the promise resolves. Opening a different slot while one is open fails with [constant @GlobalScope.ERR_BUSY]. See [method NetwDatabase.open] for the errors.
 			</description>
 		</method>
 		<method name="database_patch">
@@ -675,7 +675,7 @@
 			<param index="2" name="id" type="StringName" />
 			<param index="3" name="values" type="Dictionary" />
 			<description>
-				Replaces the fields [param values] names in the record at [param id], keeps the rest, and settles with an [enum @GlobalScope.Error]. A record that is not there answers [constant @GlobalScope.ERR_DOES_NOT_EXIST]. [method NetwDatabase.patch] lists the codes.
+				Writes the fields in [param values] to the record at [param id] and keeps the rest. A missing record fails with [constant @GlobalScope.ERR_DOES_NOT_EXIST]. See [method NetwDatabase.patch] for the errors.
 			</description>
 		</method>
 		<method name="database_read">
@@ -684,7 +684,7 @@
 			<param index="1" name="schema" type="RID" />
 			<param index="2" name="id" type="StringName" />
 			<description>
-				Reads the record at [param id] and settles with the read reply drawn in [method NetwDatabase.read]. [param schema] is a sealed schema, as [method schema_find] answers it.
+				Reads the record at [param id], see [method NetwDatabase.read] for the result. [param schema] is a sealed schema, such as one from [method schema_find].
 				A [param database] that is not open fails the promise with [constant @GlobalScope.ERR_UNCONFIGURED], an unsealed [param schema] with [constant @GlobalScope.ERR_DOES_NOT_EXIST], and an empty [param id] with [constant @GlobalScope.ERR_INVALID_PARAMETER].
 			</description>
 		</method>
@@ -696,7 +696,7 @@
 			<param index="3" name="cursor" type="String" />
 			<param index="4" name="limit" type="int" />
 			<description>
-				Reads up to [param limit] records matching [param filter] and settles with the page reply drawn in [method NetwDatabase.scan], which also lists the codes that fail the promise. Pass the page's cursor back as [param cursor] to continue, and an empty [param cursor] to start.
+				Reads up to [param limit] records matching [param filter], see [method NetwDatabase.scan] for the result. Pass an empty [param cursor] to start, and the cursor of the previous page to continue.
 			</description>
 		</method>
 		<method name="database_submit">
@@ -704,7 +704,7 @@
 			<param index="0" name="database" type="RID" />
 			<param index="1" name="operations" type="Array" />
 			<description>
-				Applies [param operations] in order and settles with the batch reply drawn in [method NetwWriteBatch.submit]. The operations are the ones drawn in [method NetwDatabaseConnection._write_batch], and [NetwWriteBatch] is what builds them from a [NetwSchema].
+				Applies [param operations] in order, see [method NetwWriteBatch.submit] for the result. Build [param operations] with [NetwWriteBatch].
 			</description>
 		</method>
 		<method name="database_write">
@@ -714,7 +714,7 @@
 			<param index="2" name="id" type="StringName" />
 			<param index="3" name="values" type="Dictionary" />
 			<description>
-				Replaces the whole record at [param id] and settles with an [enum @GlobalScope.Error]. [param values] carries every column [param schema] declares and nothing else, and a row that does not is refused before storage sees it. [method NetwDatabase.write] lists the codes.
+				Replaces the whole record at [param id]. [param values] must hold every column [param schema] declares and nothing else. See [method NetwDatabase.write] for the errors.
 			</description>
 		</method>
 		<method name="disconnect_peer">
@@ -1010,7 +1010,7 @@
 			<return type="int" />
 			<param index="0" name="entity" type="RID" />
 			<description>
-				Reserves the next route and binds it to [param entity], the server-side counterpart to a client learning a route off the wire. Returns the route on success, and [code]0[/code] both off server authority and for an [param entity] [method entity_create] never created. An entity that already carries a route returns that route again rather than reserving a second one.
+				Reserves the next route and binds it to [param entity], the server-side counterpart to a client learning a route off the wire. Returns the route on success, and [code]0[/code] both on a client and for an [param entity] [method entity_create] never created. An entity that already carries a route returns that route again rather than reserving a second one.
 			</description>
 		</method>
 		<method name="entity_adopt">
@@ -1102,12 +1102,12 @@
 			<param index="1" name="opts" type="NetwDespawnOpts" default="null" />
 			<description>
 				Ends [param entity] on every peer that holds it, returning [constant @GlobalScope.OK] when the tear-down was accepted.
-				This ends the entity rather than hiding it. The route is retired and never reissued, so a receiver drops its row instead of expecting the entity back. To stop one peer seeing an entity that is still alive, use [method interest_leave], which can be undone. Rejected with [constant @GlobalScope.ERR_UNAUTHORIZED] off server authority, because a client that could end another peer's entity could end any of them.
+				This ends the entity rather than hiding it. The route is retired and never reissued, so a receiver drops its row instead of expecting the entity back. To stop one peer seeing an entity that is still alive, use [method interest_leave], which can be undone. Rejected with [constant @GlobalScope.ERR_UNAUTHORIZED] on a client.
 				[param opts] carries the linger window, the save flush and the deferred-free choice for this one call. It is the options of a call rather than an authored policy, which is what [NetwDespawnConfig] is.
 				[codeblock lang=text]
 				Error
 				┠╴OK                  the tear-down was accepted
-				┠╴ERR_UNAUTHORIZED    called off server authority
+				┠╴ERR_UNAUTHORIZED    called on a client
 				┖╴ERR_DOES_NOT_EXIST  entity resolves to no view
 				[/codeblock]
 				[b]Server Only.[/b]
@@ -1174,7 +1174,7 @@
 			<param index="0" name="entity" type="RID" />
 			<param index="1" name="peer" type="int" />
 			<description>
-				Hands control of [param entity] to [param peer]. A no-op off server authority or for a handle with no bound node.
+				Hands control of [param entity] to [param peer]. Does nothing on a client or for a handle with no bound node.
 			</description>
 		</method>
 		<method name="entity_of">
@@ -1341,7 +1341,7 @@
 			<param index="0" name="entity" type="RID" />
 			<description>
 				Whether [param entity] is subject to a visibility filter at all, which is what lets a send skip the per-peer verdict for an entity nothing narrows.
-				On server authority the result is the committed row, so an entity no layer names is unfiltered however it was declared. Off the server the committed row is empty until the server admits the entity, so the result is the entity's own declared labels, read from the interest facet's declaration.
+				On the server the result is the committed row, so an entity no layer names is unfiltered however it was declared. Off the server the committed row is empty until the server admits the entity, so the result is the entity's own declared labels, read from the interest facet's declaration.
 			</description>
 		</method>
 		<method name="interest_join">
@@ -1349,7 +1349,7 @@
 			<param index="0" name="entity" type="RID" />
 			<param index="1" name="layer_id" type="StringName" />
 			<description>
-				Adds [param entity] to the declaration for [param layer_id]. If [param entity] is live on server authority, the layer's live membership changes in the same call. The declaration is stored on the entity record, so authoring performed before session attachment survives packing, tree exits, and re-entry.
+				Adds [param entity] to the declaration for [param layer_id]. If [param entity] is live on the server, the layer's live membership changes in the same call. The declaration is stored on the entity record, so authoring performed before session attachment survives packing, tree exits, and re-entry.
 			</description>
 		</method>
 		<method name="interest_layer">
@@ -1371,7 +1371,7 @@
 				Error
 				┠╴OK                  the entity was staged into the layer
 				┠╴ERR_DOES_NOT_EXIST  layer or entity names nothing valid
-				┠╴ERR_UNAUTHORIZED    called off server authority
+				┠╴ERR_UNAUTHORIZED    called on a client
 				┖╴ERR_UNAVAILABLE     the layer rejected the entity
 				[/codeblock]
 			</description>
@@ -1487,7 +1487,7 @@
 			<param index="0" name="entity" type="RID" />
 			<param index="1" name="layer_id" type="StringName" />
 			<description>
-				Removes [param entity] from the declaration for [param layer_id]. If [param entity] is live on server authority, the layer's live membership changes in the same call.
+				Removes [param entity] from the declaration for [param layer_id]. If [param entity] is live on the server, the layer's live membership changes in the same call.
 			</description>
 		</method>
 		<method name="interest_monitor_snapshot">
@@ -1532,7 +1532,7 @@
 			<param index="2" name="policy" type="int" enum="NetwMultiplayer.LeavePolicy" />
 			<param index="3" name="custom_callback" type="Callable" default="Callable()" />
 			<description>
-				Sets the [enum LeavePolicy] for [param entity] on [param layer_id]. [constant LEAVE_POLICY_CUSTOM] requires [param custom_callback], called with [code](peer_id, layer_id)[/code] on server authority. Other policies reject a callback.
+				Sets the [enum LeavePolicy] for [param entity] on [param layer_id]. [constant LEAVE_POLICY_CUSTOM] requires [param custom_callback], called with [code](peer_id, layer_id)[/code] on the server. Other policies reject a callback.
 			</description>
 		</method>
 		<method name="interest_on_perception_policy">
@@ -1573,7 +1573,7 @@
 			<param index="0" name="peer_id" type="int" />
 			<param index="1" name="entity" type="NetwEntity" />
 			<description>
-				Whether traffic for [param entity] may reach [param peer_id], short-circuiting [code]true[/code] for the peer holding session authority, which is peer 1 in an ordinary star and the declared coordinator elsewhere, because that peer always knows every entity it holds. Every other peer falls through to [method interest_player_sees]. Replication and spawn gating call this rather than [method interest_player_sees], because a wire gate that hid the server's own entities from itself would stall authority rather than protect it.
+				Whether traffic for [param entity] may reach [param peer_id], always [code]true[/code] for the server. For every other peer it is [method interest_player_sees].
 			</description>
 		</method>
 		<method name="lagcomp_deny_action">
@@ -1740,7 +1740,7 @@
 			<description>
 				Creates [param count] fresh live routes and returns them, which is how a caller that owns its own records gets identity without a node or a wrapper for each one.
 				The routes come back live, so a table row addressed to one of them is deliverable immediately. [method liveness_release_routes] is the death edge, and a route this hands out is never reissued after that.
-				Only server authority creates routes. A client returns an empty array because routes must have one authority.
+				Only the server creates routes. A client returns an empty array because routes must have one authority.
 				[b]Server Only.[/b]
 			</description>
 		</method>
@@ -1783,11 +1783,11 @@
 			<description>
 				Retires [param routes] for the rest of the session, so a row for one of them can never be resurrected by an upsert that arrived late.
 				A release is three acts and a caller sees none of them apart. The route is retired, its rows are dropped out of every table, and the removal is queued so the next frame tells every peer the row died. Retiring without telling anyone would leave the host alone in knowing, which is the one way a released route can outlive its release.
-				Only server authority may release. A client returns [constant @GlobalScope.ERR_UNCONFIGURED] and queues nothing, while a session with no role at all releases its own routes. An empty [param routes] succeeds, because a teardown with nothing to give back is ordinary.
+				Only the server may release. A client returns [constant @GlobalScope.ERR_UNCONFIGURED] and queues nothing, while a session with no role at all releases its own routes. An empty [param routes] succeeds, because a teardown with nothing to give back is ordinary.
 				[codeblock lang=text]
 				Error
 				┠╴OK                the routes were released, or there were none to release
-				┖╴ERR_UNCONFIGURED  called off server authority
+				┖╴ERR_UNCONFIGURED  called on a client
 				[/codeblock]
 			</description>
 		</method>
@@ -1923,7 +1923,7 @@
 			<param index="0" name="peer_id" type="int" />
 			<param index="1" name="reason" type="String" default="&quot;&quot;" />
 			<description>
-				Removes [param peer_id] from the session on server authority, announcing [signal peer_kicked] to that peer first when [param reason] is non-empty. A session without server authority rejects the call and removes nobody.
+				Removes [param peer_id] from the session, emitting [signal peer_kicked] on that peer first when [param reason] is non-empty. Does nothing on a client.
 				The notice is sent before the connection closes, because a closed connection carries nothing and the kicked client would never learn why.
 			</description>
 		</method>
@@ -1943,7 +1943,7 @@
 				┠╴mode          String  "good" or "bad", the send governor's own reading
 				┖╴budget_bits   int     what one datagram to this peer may spend
 				[/codeblock]
-				Every field is measured for [param peer] alone. [code]rtt[/code] is timed from each datagram sent to that peer until an ack naming it arrives, so a host reads each client's own link. Until the first ack arrives, [code]rtt[/code] and [code]jitter[/code] read the session clock's figures.
+				Every field is measured for [param peer] alone. Until the first ack arrives, [code]rtt[/code] and [code]jitter[/code] are the clock's values.
 				[code]mode[/code] turns [code]bad[/code] when loss or round trip crosses the governor's thresholds, and [code]budget_bits[/code] halves with it down to a floor, so a link that is failing degrades instead of collapsing. It returns to [code]good[/code] only after a clean interval, and that interval doubles each time the link relapses, so a flapping link is not chased.
 				This is a tooling-cadence read. Read it beside [method sync_explain], which returns what one row did rather than what the link did.
 			</description>
@@ -1953,14 +1953,14 @@
 			<param index="0" name="peer_id" type="int" />
 			<param index="1" name="reason" type="String" default="&quot;&quot;" />
 			<description>
-				Asks server authority to remove [param peer_id], carrying [param reason] with the request. The server announces it as [signal peer_kick_requested] and decides. Nothing here removes anyone, which is what separates this from [method peer_kick].
+				Asks the server to remove [param peer_id], carrying [param reason] with the request. The server announces it as [signal peer_kick_requested] and decides. Nothing here removes anyone, which is what separates this from [method peer_kick].
 				The request rides a session control channel rather than a node [code]@rpc[/code], so a session with no scene tree still asks. A session that already holds authority publishes the request to itself, so the server's own handler is the single place the decision is taken.
 			</description>
 		</method>
 		<method name="persist_flush_all">
 			<return type="NetwPromise" />
 			<description>
-				Writes every entity row that changed since its last save and settles with an [enum @GlobalScope.Error] once each database has settled them. It is [constant @GlobalScope.OK] when every row is stored, and the error of the first row still unsaved otherwise. [method NetwSessionHandle.save_entities] lists the codes.
+				Saves every entity row that changed since its last save. The promise resolves with [constant @GlobalScope.OK] when every row is stored, or the error of the first unsaved row. See [method NetwSessionHandle.save_entities] for the errors.
 				[b]Server Only.[/b]
 			</description>
 		</method>
@@ -1975,14 +1975,14 @@
 			<return type="bool" />
 			<param index="0" name="entity" type="RID" />
 			<description>
-				Whether any property [param entity] binds differs from what was last saved. An entity that binds no persistence answers [code]false[/code].
+				Whether any property [param entity] binds differs from what was last saved. [code]false[/code] when [param entity] binds no persistence.
 			</description>
 		</method>
 		<method name="persist_load">
 			<return type="NetwPromise" />
 			<param index="0" name="entity" type="RID" />
 			<description>
-				Reads [param entity]'s stored row and applies it to the properties it binds. The promise answers [code]true[/code] when a row was found and [code]false[/code] when none was stored. [method NetwPersistenceHandle.load] lists the errors it fails with.
+				Reads [param entity]'s stored row and applies it to the properties it binds. The promise resolves with [code]true[/code] when a row was found and [code]false[/code] otherwise. See [method NetwPersistenceHandle.load] for the errors.
 				[b]Server Only.[/b]
 			</description>
 		</method>
@@ -1990,7 +1990,7 @@
 			<return type="NetwPromise" />
 			<param index="0" name="entity" type="RID" />
 			<description>
-				Writes the properties [param entity] binds as its row. The promise answers [code]true[/code] once the write is stored and [code]false[/code] when nothing had changed. [method NetwPersistenceHandle.save] lists the errors it fails with.
+				Saves the properties [param entity] binds as its row. The promise resolves with [code]true[/code] once stored and [code]false[/code] when nothing had changed. See [method NetwPersistenceHandle.save] for the errors.
 				[b]Server Only.[/b]
 			</description>
 		</method>
@@ -1998,8 +1998,8 @@
 			<return type="void" />
 			<param index="0" name="delta" type="float" />
 			<description>
-				The entity save pass [method _persist_tick] runs when nothing overrides it. It advances each entity's [method NetwPersistenceConfig.interval] by [param delta] seconds and writes the due rows that changed, batched per [NetwDatabase]. A peer that holds no session authority writes nothing.
-				A GDScript subclass cannot call [code]super[/code] on a [code]GDVIRTUAL[/code], so an override calls this to run the stock pass.
+				The default [method _persist_tick]. Saves the changed rows of every entity whose [method NetwPersistenceConfig.interval] has elapsed. Does nothing on a client.
+				Call it from an override of [method _persist_tick] to run the default pass.
 				[codeblock]
 				extends NetwMultiplayer
 
@@ -2036,7 +2036,7 @@
 			<description>
 				Whether authority replays a queued transition, waits, or has no transition. Uses [method _predict_consume] when overridden; otherwise uses [method predict_consume_default].
 				Authority replays whenever it holds a transition past [param buffer], which is zero by default, so the default result is simply whether the queue has anything in it. Raising [param buffer] moves that line and nothing else. The queue sits that much deeper and every arrival waits that much longer.
-				Declining a transition is not free. A frame that holds still solves, so the world advances by a step belonging to no transition and the next drive spans two, which is a quantum fault.
+				Waiting has a cost. The world still advances a step on that frame, and the next transition has to cover two.
 			</description>
 		</method>
 		<method name="predict_consume_default">
@@ -2116,7 +2116,7 @@
 			<param index="0" name="space" type="RID" />
 			<description>
 				The re-stepping driver [method predict_stepper_install] installed for a physics space, or [code]null[/code] when the space has none.
-				A prediction member declaring [constant NetwSimulationHandle.SCHEDULE_STEPPED] needs its space's driver to admit replay, because replaying a stepped body means re-running the solve rather than sampling it. Without one the member runs as [constant NetwSimulationHandle.SCHEDULE_FRAME], so this returning [code]null[/code] is a downgrade rather than a failure.
+				Without a driver, a member declaring [constant NetwSimulationHandle.SCHEDULE_STEPPED] runs as [constant NetwSimulationHandle.SCHEDULE_FRAME].
 			</description>
 		</method>
 		<method name="predict_get_tap_cost" qualifiers="const">
@@ -2154,7 +2154,7 @@
 			<param index="0" name="entity" type="RID" />
 			<param index="1" name="callback" type="Callable" />
 			<description>
-				Installs [param callback] as [member NetwPredictionHandle.predict_commands] on [param entity]'s prediction handle, a no-op when [param entity] has none.
+				Installs [param callback] as [member NetwPredictionHandle.predict_commands] on [param entity]. Does nothing when [param entity] has no prediction handle.
 			</description>
 		</method>
 		<method name="predict_set_corridor_callback">
@@ -2200,7 +2200,7 @@
 			<param index="1" name="stepper" type="NetwPhysicsStepper" default="null" />
 			<description>
 				Installs [param stepper] as the driver [method predict_get_stepper] returns for [param space], which is what a rollback needs in order to advance the same physics space more than once inside one frame. [param stepper] is asked [method NetwPhysicsStepper._can_step] at install time, and a [code]null[/code] stepper or one returning [code]false[/code] is rejected, leaving [param space] with no driver rather than an unusable one.
-				A member whose space has no driver still predicts, but only at [constant NetwSimulationHandle.SCHEDULE_FRAME] rather than [constant NetwSimulationHandle.SCHEDULE_STEPPED], because replaying a stepped body means re-running the solve rather than sampling it.
+				A member whose space has no driver runs as [constant NetwSimulationHandle.SCHEDULE_FRAME].
 			</description>
 		</method>
 		<method name="predict_undeclare">
@@ -2269,7 +2269,7 @@
 			<param index="2" name="peer" type="int" />
 			<description>
 				Calls [param callable] with [param args] on [param peer], where zero is every peer [method rpc_get_recipients] answers for the target and any other value is that one peer.
-				The audience for zero is narrowed by the interest this peer itself declares, which is authoritative membership only when this peer holds session authority. A call a client addresses to zero can therefore reach a peer an interest layer hides the target from, so interest bounds what a call costs rather than who may learn it.
+				The audience for zero is narrowed by the interest this peer itself declares, which is authoritative only on the server. A call a client addresses to zero can therefore reach a peer an interest layer hides the target from, so interest bounds what a call costs rather than who may learn it.
 				[param callable]'s object must be a node an entity governs, because a remote call is addressed by [member NetwEntity.route] and a node no entity holds has none. A node with no entity at all and a node whose route is not live are counted apart and both drop the call. Neither is an error, because a call issued in the frame an entity is despawning is ordinary rather than a defect.
 				A method the target's script neither annotates nor registers is rejected with a warning and nothing is sent, so a typo does not become a silent no-op on every peer.
 				A local dispatch happens before anything is sent, when the method is [code]call_local[/code] and [param peer] is zero or this peer. [member relay_sender] reads this peer for the length of that call and is restored afterwards. A [code]call_remote[/code] method addressed at this peer alone is an error rather than a send. An entity passed in [param args] is encoded as its route rather than as an object, which is what lets the receiving peer resolve it to its own node.
@@ -2337,7 +2337,7 @@
 				[codeblock lang=text]
 				Error
 				┠╴OK                     the peer reaches the scene
-				┠╴ERR_UNAUTHORIZED       called off server authority
+				┠╴ERR_UNAUTHORIZED       called on a client
 				┠╴ERR_INVALID_PARAMETER  peer is 0
 				┠╴ERR_DOES_NOT_EXIST     scene names no live node
 				┖╴ERR_UNAVAILABLE        the write did not take
@@ -2360,7 +2360,7 @@
 			<param index="1" name="path" type="String" />
 			<param index="2" name="scope" type="int" enum="NetwMultiplayer.SceneChange" default="0" />
 			<description>
-				Opens the file-backed scene at [param path] and makes players watch it, under server authority. No entity moves, so spawn the arrivals from [signal scene_changed].
+				Opens the file-backed scene at [param path] and makes players watch it. No entity moves, so spawn the arrivals from [signal scene_changed].
 				[param scope] says who the change is for and nothing infers it, so the same call means the same thing on a listen host and on a dedicated server. [param requester] names the node the change is asked from, which resolves the player a [constant SCENE_CHANGE_PLAYER] change acts on and the source scene a [constant SCENE_CHANGE_SCENE] change replaces. A scope that needs one and finds none is rejected rather than widened.
 				On authority the change applies directly. On a client it becomes a [method scene_request] whose result settles the returned [NetwPromise].
 				[codeblock]
@@ -2393,7 +2393,7 @@
 			<param index="0" name="entity" type="RID" />
 			<description>
 				Makes [param entity] a scene, so it can hold the nodes that belong to it and replicate them to the players it reaches.
-				Server authority may declare anything, and any peer may declare an entity whose route it already holds, because the server admitted that route. A client repeating a scene the server declared is following rather than inventing. A peer with neither authority nor a route returns [constant @GlobalScope.ERR_UNAUTHORIZED], because it would be inventing a scene the session never declared.
+				The server may declare anything, and a client may declare an entity whose route it already holds. Any other client call returns [constant @GlobalScope.ERR_UNAUTHORIZED].
 				Declare this before the entity is armed. A bound entity returns [constant @GlobalScope.ERR_UNCONFIGURED]. If the entity has no record yet, the session stores the declaration until [method entity_bind_node] creates the record.
 				[codeblock]
 				var mirror := api.entity_create()
@@ -2404,7 +2404,7 @@
 				[codeblock lang=text]
 				Error
 				┠╴OK                  the facet was written, or parked for arming
-				┠╴ERR_UNAUTHORIZED    called with neither server authority nor entity's own route
+				┠╴ERR_UNAUTHORIZED    called on a client without the entity's route
 				┠╴ERR_DOES_NOT_EXIST  entity is not a valid handle
 				┖╴ERR_UNCONFIGURED    entity is already armed with a node
 				[/codeblock]
@@ -2562,7 +2562,7 @@
 			<param index="0" name="path" type="String" />
 			<param index="1" name="scope" type="int" enum="NetwMultiplayer.SceneChange" default="0" />
 			<description>
-				Asks server authority to make the local player watch the scene file at [param path]. A label cannot be requested, because [method Netw.scene] is what resolves a live scene by label and a change names a path.
+				Asks the server to make the local player watch the scene file at [param path]. A label cannot be requested, because [method Netw.scene] is what resolves a live scene by label and a change names a path.
 				The promise rejects with [constant @GlobalScope.ERR_UNAUTHORIZED] when policy rejects, [constant @GlobalScope.ERR_SKIP] when a newer request supersedes it, and [constant @GlobalScope.ERR_TIMEOUT] when authority never returns within ten seconds.
 				[b]Player request.[/b]
 			</description>
@@ -2595,11 +2595,11 @@
 			<return type="int" enum="Error" />
 			<param index="0" name="entity" type="RID" />
 			<description>
-				Stops [param entity] being a scene, dropping the label and isolation it declared. This is the reverse of [method scene_declare] under the same rules. Server authority may undeclare anything, a peer holding the entity's route may undeclare its own copy, and a peer with neither returns [constant @GlobalScope.ERR_UNAUTHORIZED].
+				Stops [param entity] being a scene, dropping the label and isolation it declared. This is the reverse of [method scene_declare] under the same rules. The server may undeclare anything, a client holding the entity's route may undeclare its own copy, and any other client call returns [constant @GlobalScope.ERR_UNAUTHORIZED].
 				[codeblock lang=text]
 				Error
 				┠╴OK                  the facet was cleared, or parked for arming
-				┠╴ERR_UNAUTHORIZED    called with neither server authority nor entity's own route
+				┠╴ERR_UNAUTHORIZED    called on a client without the entity's route
 				┠╴ERR_DOES_NOT_EXIST  entity is not a valid handle
 				┖╴ERR_UNCONFIGURED    entity is already armed with a node
 				[/codeblock]
@@ -2919,9 +2919,9 @@
 		<method name="session_leave">
 			<return type="NetwPromise" />
 			<description>
-				Saves every entity row this peer holds as session authority, closes the active peer, and returns to [constant SESSION_STATE_OFFLINE]. The promise resolves with an [enum @GlobalScope.Error].
-				When the database refuses a row, the session stays online and the promise resolves with that error. Call it again to retry, or close [member MultiplayerAPI.multiplayer_peer] to disconnect without saving.
-				Once the rows are saved it waits up to three seconds for the server to acknowledge the departure, so a caller that awaits the promise knows the peer is closed. A session already at [constant SESSION_STATE_OFFLINE], and one with no scene tree to time the window with, return a promise that is already settled.
+				On the server, saves every entity row first. Then closes the peer and returns to [constant SESSION_STATE_OFFLINE]. The promise resolves with an [enum @GlobalScope.Error].
+				If the database refuses a row, the session stays online and the promise resolves with that error. Call it again to retry, or close [member MultiplayerAPI.multiplayer_peer] to disconnect without saving.
+				It waits up to three seconds for the server to acknowledge the departure. An offline session returns a promise that is already settled.
 				[codeblock]
 				var left := api.session_leave()
 				if not left.is_settled:
@@ -2935,7 +2935,7 @@
 			<return type="void" />
 			<param index="0" name="reason" type="String" default="&quot;&quot;" />
 			<description>
-				Warns every live peer that this server is going away, carrying [param reason], and announces [signal session_server_disconnecting] locally as well. A session without server authority rejects the call and warns nobody.
+				Warns every live peer that this server is going away, carrying [param reason], and announces [signal session_server_disconnecting] locally as well. Does nothing on a client.
 				The notice rides a session control channel rather than a node [code]@rpc[/code], so a session with no scene tree still warns its clients. Nothing here closes a peer, so the server still has to tear itself down afterwards.
 			</description>
 		</method>
@@ -2943,7 +2943,7 @@
 			<return type="void" />
 			<param index="0" name="reason" type="String" default="&quot;&quot;" />
 			<description>
-				Suspends the game on every live peer, each receiving [signal session_tree_paused] carrying [param reason], and on this session too. A session without server authority rejects the call and pauses nobody.
+				Suspends the game on every live peer, each receiving [signal session_tree_paused] carrying [param reason], and on this session too. Does nothing on a client.
 				The local announcement is made through the same channel decode a remote peer takes, so the host cannot end up in a pause state its clients disagree with.
 			</description>
 		</method>
@@ -2970,7 +2970,7 @@
 			<return type="void" />
 			<param index="0" name="reason" type="String" default="&quot;&quot;" />
 			<description>
-				Asks server authority for permission to leave, carrying [param reason]. The server announces it as [signal session_disconnect_requested] and decides. Nothing here closes a peer or leaves a session.
+				Asks the server for permission to leave, carrying [param reason]. The server announces it as [signal session_disconnect_requested] and decides. Nothing here closes a peer or leaves a session.
 				A session that already holds authority publishes the request to itself, so the server's own handler is the single place the decision is taken.
 			</description>
 		</method>
@@ -3038,7 +3038,7 @@
 		<method name="session_unpause">
 			<return type="void" />
 			<description>
-				Resumes the game on every live peer, each receiving [signal session_tree_unpaused], and on this session too. A session without server authority rejects the call and resumes nobody.
+				Resumes the game on every live peer, each receiving [signal session_tree_unpaused], and on this session too. Does nothing on a client.
 				The twin of [method session_pause]. It carries no reason and does not check that a pause came first, because a peer that missed the pause must still end up resumed.
 			</description>
 		</method>
@@ -3071,7 +3071,7 @@
 			<param index="0" name="entity" type="RID" />
 			<param index="1" name="callback" type="Callable" />
 			<description>
-				Installs [param callback] as [member NetwSimulationHandle.step] on [param entity]'s simulation handle, a no-op when [param entity] has none.
+				Installs [param callback] as [member NetwSimulationHandle.step] on [param entity]. Does nothing when [param entity] has no simulation handle.
 			</description>
 		</method>
 		<method name="spawn_admit_frame_default">
@@ -3083,7 +3083,7 @@
 			<description>
 				The stock verdict on one inbound spawn, despawn or reparent frame, and what an override of [method _spawn_admit_frame] narrows rather than replaces.
 				Only the server spawns, so [param sender] is judged before anything else and any other peer returns [constant @GlobalScope.ERR_UNAUTHORIZED] whatever channel it named. A channel this does not admit, or an empty [param payload], returns [constant @GlobalScope.ERR_INVALID_DATA].
-				[param route] is the route the frame names, read from its head before the verdict. A spawn frame names a route this peer does not hold yet, and a frame too short to name one passes [code]0[/code].
+				[param route] is the route the frame names, or [code]0[/code] when the frame is too short. For a spawn frame, this peer does not hold that route yet.
 				[codeblock lang=text]
 				Error
 				┠╴OK                  the frame is admitted
@@ -3336,7 +3336,7 @@
 			<param index="1" name="database" type="RID" />
 			<param index="2" name="key" type="StringName" />
 			<description>
-				Replaces every row of [param table] with the snapshot stored under [param key] in [param database], and settles with the load reply drawn in [method NetwTableHandle.load]. Each loaded row gets a new route.
+				Replaces every row of [param table] with the snapshot stored under [param key] in [param database], see [method NetwTableHandle.load] for the result. Each loaded row gets a new route.
 				[b]Server Only.[/b]
 			</description>
 		</method>
@@ -3376,7 +3376,7 @@
 			<param index="2" name="key" type="StringName" />
 			<param index="3" name="ids" type="PackedStringArray" />
 			<description>
-				Stores [param table]'s committed rows as one snapshot under [param key] in [param database], and settles with an [enum @GlobalScope.Error]. [param ids] names each row in the order of [method table_read_routes]. [method NetwTableHandle.save] lists the codes.
+				Stores [param table]'s committed rows as one snapshot under [param key] in [param database]. [param ids] names each row in the order of [method table_read_routes]. See [method NetwTableHandle.save] for the errors.
 				[b]Server Only.[/b]
 			</description>
 		</method>
@@ -3553,7 +3553,7 @@
 			Never [code]null[/code]. A session with none assigned makes its own at [code]/root[/code], because an empty root path is an error rather than an unset value. Assigning a new one re-binds everything this session listens to.
 		</member>
 		<member name="is_host" type="bool" setter="" getter="get_is_host" default="true">
-			Whether this peer holds server authority. A dedicated server, a listen server, and a session with no connection at all all return [code]true[/code].
+			Whether this peer is the server. A dedicated server, a listen server, and a session with no connection at all all return [code]true[/code].
 			A session that has connected to nothing is its own authority, which is what lets a single-player game admit its own entities, claim its own routes and create its own scenes with no network, exactly as [MultiplayerSpawner] and [MultiplayerSynchronizer] do. An ended session returns to that state.
 			Authority is withheld the moment a session declares itself something else. [method session_set_role] with [constant ROLE_CLIENT] returns [code]false[/code] before any connection exists, so a client waiting to connect never acts as a server.
 			An authority with no session has no peers, so every broadcast it authorizes reaches nobody. A caller that needs a live hosted session reads [member is_online] as well.
@@ -3706,7 +3706,7 @@
 			<param index="1" name="error" type="int" enum="Error" />
 			<param index="2" name="detail" type="String" />
 			<description>
-				Emitted when an entity row in [param database] fails to load or save. [param detail] names the record and follows it with the storage's own explanation. [signal NetwDatabase.failed] is this signal for one database.
+				Emitted when an entity row in [param database] fails to load or save. [param detail] names the record and the reason. See also [signal NetwDatabase.failed].
 			</description>
 		</signal>
 		<signal name="embed_phase_changed">
@@ -3813,13 +3813,13 @@
 			<param index="1" name="target_id" type="int" />
 			<param index="2" name="reason" type="String" />
 			<description>
-				Emitted when a client asks for a peer to be kicked. Heard only by the peer holding session authority, which is peer 1 in an ordinary star and the declared coordinator elsewhere. A request that does not carry a target and a reason is dropped rather than announced against a default target.
+				Emitted on the server when a client asks for a peer to be kicked. A request that does not carry a target and a reason is dropped rather than announced against a default target.
 			</description>
 		</signal>
 		<signal name="peer_kicked">
 			<param index="0" name="reason" type="String" />
 			<description>
-				Emitted when server authority kicks this peer, before the connection closes. A notice from anyone but the server is dropped.
+				Emitted when the server kicks this peer, before the connection closes. A notice from anyone but the server is dropped.
 			</description>
 		</signal>
 		<signal name="peer_packet">
@@ -3847,8 +3847,8 @@
 			<param index="1" name="entry" type="int" />
 			<param index="2" name="attribution" type="int" enum="NetwPredict.Attribution" />
 			<description>
-				Announced on server authority when an owner's claimed post-state for a transition disagrees with the state authority itself reached, so a diagnostic sink hears the disagreement the tick it is judged. [param peer] is the controller of the entity seated in the slot, [param entry] is the transition judged, and [param attribution] is the [enum NetwPredict.Attribution] the comparison charged the divergence to.
-				A claim that matched is not announced, and neither is one the comparison could charge to nothing, which leaves [constant NetwPredict.ATTRIBUTION_UNKNOWN] out of this signal's vocabulary.
+				Emitted on the server when the state a controller claims after a transition differs from the state the server reached. [param peer] is the controller, [param entry] is the transition, and [param attribution] is the cause of the divergence.
+				It is never emitted with [constant NetwPredict.ATTRIBUTION_UNKNOWN].
 			</description>
 		</signal>
 		<signal name="scene_activated">
@@ -3875,7 +3875,7 @@
 			<param index="0" name="scene" type="Object" />
 			<param index="1" name="arrived" type="Array" />
 			<description>
-				Emitted on server authority once a [method scene_change_to_file] has landed. [param scene] is the destination and [param arrived] holds the [NetwPlayer] rows it brought there.
+				Emitted on the server once a [method scene_change_to_file] has landed. [param scene] is the destination and [param arrived] holds the [NetwPlayer] rows it brought there.
 				A player already watching the destination is not in [param arrived], so a repeated change announces nobody.
 			</description>
 		</signal>
@@ -3902,7 +3902,7 @@
 		</signal>
 		<signal name="scene_startup_spawned">
 			<description>
-				Emitted once server authority enters the session. It reports that startup finished rather than that anything spawned, so a session with nothing to spawn still announces and a listener waiting on it never waits forever.
+				Emitted once the server enters the session. It reports that startup finished rather than that anything spawned, so a session with nothing to spawn still announces and a listener waiting on it never waits forever.
 			</description>
 		</signal>
 		<signal name="service_registered">
@@ -3921,7 +3921,7 @@
 			<param index="0" name="peer_id" type="int" />
 			<param index="1" name="reason" type="String" />
 			<description>
-				Emitted when a client asks to leave. Heard only by the peer holding session authority, which is peer 1 in an ordinary star and the declared coordinator elsewhere, and [param peer_id] is who actually sent the request rather than anything the request claims.
+				Emitted on the server when a client asks to leave. [param peer_id] is the peer that sent the request.
 			</description>
 		</signal>
 		<signal name="session_ended">
@@ -3977,7 +3977,7 @@
 		<signal name="session_tree_paused">
 			<param index="0" name="reason" type="String" />
 			<description>
-				Emitted when server authority pauses the session. Pausing the engine is something a listener does in response rather than part of the decision, so the session announces this once and everything that reacts reads the same announcement. A notice from anyone but the server is dropped.
+				Emitted when the server pauses the session. Pausing the engine is something a listener does in response rather than part of the decision, so the session announces this once and everything that reacts reads the same announcement. A notice from anyone but the server is dropped.
 			</description>
 		</signal>
 		<signal name="session_tree_unpaused">
@@ -4227,15 +4227,15 @@
 			Neither. The game decides, through the layer's own handler.
 		</constant>
 		<constant name="DISPLAY_ROLE_AUTO" value="0" enum="DisplayRole">
-			Resolve from [member NetwSimulationHandle.mode] on this peer. The default, and correct for almost every entity.
-			A peer running the entity in [constant NetwSimulationHandle.MODE_PREDICT] or [constant NetwSimulationHandle.MODE_ACTIVE] resolves to [constant DISPLAY_ROLE_PREDICTED]. A peer that only receives it resolves to [constant DISPLAY_ROLE_REMOTE]. A peer that controls an entity with no prediction resolves to [constant DISPLAY_ROLE_DISABLED], because it already writes that node itself. [constant DISPLAY_ROLE_AUTHORITY] is what an authoring peer resolves to for an entity it does not control.
+			Picked from [member NetwSimulationHandle.mode] on this peer. The default, and correct for almost every entity.
+			An entity this peer runs in [constant NetwSimulationHandle.MODE_PREDICT] or [constant NetwSimulationHandle.MODE_ACTIVE] uses [constant DISPLAY_ROLE_PREDICTED], and one it only receives uses [constant DISPLAY_ROLE_REMOTE]. An entity this peer controls without prediction uses [constant DISPLAY_ROLE_DISABLED]. The server uses [constant DISPLAY_ROLE_AUTHORITY] for an entity it does not control.
 		</constant>
 		<constant name="DISPLAY_ROLE_REMOTE" value="1" enum="DisplayRole">
 			Interpolate replicated snapshots. What a peer uses for somebody else's entity.
-			A rigid body is frozen here and drawn on the body itself, so its collider is where it is seen.
+			A rigid body is frozen and drawn where its collider is.
 		</constant>
 		<constant name="DISPLAY_ROLE_PREDICTED" value="2" enum="DisplayRole">
-			Follow the body this peer runs, the way [member NetwDisplayHandle.live_mode] says. What a player uses for their own entity.
+			Follow the body this peer runs, see [member NetwDisplayHandle.live_mode]. What a player uses for their own entity.
 		</constant>
 		<constant name="DISPLAY_ROLE_DISABLED" value="3" enum="DisplayRole">
 			No smoothing. The node is left alone for the game to drive.
@@ -4361,7 +4361,7 @@
 			The row was seen in a listing rather than named by a caller. A row can carry this and [constant ENDPOINT_FLAG_CALLER] at once.
 		</constant>
 		<constant name="SCENE_PARAM_LABEL" value="0" enum="SceneParam">
-			[StringName] naming what kind of scene this is. Two live copies of one arena share the name, because a scene is identified by its [RID]. See [member NetwSceneHandle.label]. Every [enum SceneParam] is read and written through [method scene_get_param] and [method scene_set_param].
+			[StringName] naming what kind of scene this is. Two live copies of one arena share the name. See [member NetwSceneHandle.label]. Every [enum SceneParam] is read and written through [method scene_get_param] and [method scene_set_param].
 		</constant>
 		<constant name="SCENE_PARAM_ISOLATION" value="1" enum="SceneParam">
 			The scene's [enum SceneIsolation]. Write-once before the entity arms, because it chooses the container every peer builds.
@@ -4486,7 +4486,7 @@
 			[float] seconds. How long a live visual takes to absorb a correction.
 		</constant>
 		<constant name="DISPLAY_PARAM_CHASE_GLIDE_TIME" value="3" enum="DisplayParam">
-			[float] seconds. How fast [constant LIVE_MODE_CHASE] decays the visual offset it opens on each recovery.
+			[float] seconds. How long [constant LIVE_MODE_CHASE] takes to smooth out the visual offset of a correction.
 		</constant>
 		<constant name="DISPLAY_PARAM_TIMELINE_MODE" value="4" enum="DisplayParam">
 			[enum TimelineMode]. Where on the timeline a remote entity renders.
@@ -4570,7 +4570,7 @@
 		</constant>
 		<constant name="COLUMN_F32" value="0" enum="ColumnType">
 			32-bit float. Every [enum ColumnType] is passed to [method schema_add_column] and says what a value is stored as and how wide it travels.
-			All of them but [constant COLUMN_VARIANT] and [constant COLUMN_STRING] are a fixed width, which is what makes a column a block of bytes and lets the session compute how many rows fit in a frame. Send anything of a length that varies through [method Netw.channel] instead.
+			All of them but [constant COLUMN_VARIANT] and [constant COLUMN_STRING] have a fixed width. Send data of varying length through [method Netw.channel] instead.
 		</constant>
 		<constant name="COLUMN_F64" value="1" enum="ColumnType">
 			64-bit float, for a value whose precision is the caller's to decide.
@@ -4615,10 +4615,10 @@
 			A route, the link one table draws to another. Resolve one back to a handle with [method entity_from_route].
 		</constant>
 		<constant name="COLUMN_VARIANT" value="15" enum="ColumnType">
-			The self-describing tier, what a [Dictionary] or a nested [Array] compiles to. Legal in a schema and in a property set, rejected by [method table_create], because variable width has no memcpy and no rows-per-frame budget.
+			Any [Variant], such as a [Dictionary] or a nested [Array]. Allowed in a schema and a property set, rejected by [method table_create].
 		</constant>
 		<constant name="COLUMN_STRING" value="16" enum="ColumnType">
-			Text. Rejected by [method table_create] for the same reason [constant COLUMN_VARIANT] is, and cheaper than it when the value is only ever a name or a path.
+			Text. Rejected by [method table_create]. Cheaper than [constant COLUMN_VARIANT] for a name or a path.
 		</constant>
 		<constant name="DATABASE_CLOSED" value="0" enum="DatabaseState">
 			No slot is open, and the database admits no work.
@@ -4950,10 +4950,10 @@
 			A remote peer holding no authority. Very little should test for this, because a listen-server host is also a player.
 		</constant>
 		<constant name="ROLE_DEDICATED_SERVER" value="2" enum="Role">
-			Server authority with no local player.
+			A server with no local player.
 		</constant>
 		<constant name="ROLE_LISTEN_SERVER" value="3" enum="Role">
-			Server authority held by a peer that is also playing. Server authority means this or [constant ROLE_DEDICATED_SERVER].
+			A server that is also playing, a listen server.
 		</constant>
 		<constant name="TRANSPORT_MODE_HOST" value="0" enum="TransportMode">
 			[method transport_create_peer] builds a server peer from its settings and ignores its address.

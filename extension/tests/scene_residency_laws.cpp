@@ -338,9 +338,12 @@ TEST_CASE(
         = open_scene(rig, StringName("Inner"), level_of(rig, outer));
     const int peer = rig.peer_id(0);
     REQUIRE(netw_test::seated_peer(host, peer, StringName("ana")).is_valid());
-    const int inner_body
-        = spawn_into(rig, level_of(rig, inner), Ref<netw::NetwPlayer>(),
-            "inside");
+    const int inner_body = spawn_into(
+        rig,
+        level_of(rig, inner),
+        Ref<netw::NetwPlayer>(),
+        "inside"
+    );
 
     REQUIRE(host->scene_admit_peer(inner, peer));
     rig.pump(10);
@@ -370,9 +373,12 @@ TEST_CASE(
     REQUIRE(netw_test::seated_peer(host, whole, StringName("bo")).is_valid());
     REQUIRE(netw_test::seated_peer(host, outside, StringName("cy")).is_valid());
 
-    const int sibling
-        = spawn_into(rig, level_of(rig, outer), Ref<netw::NetwPlayer>(),
-            "sibling");
+    const int sibling = spawn_into(
+        rig,
+        level_of(rig, outer),
+        Ref<netw::NetwPlayer>(),
+        "sibling"
+    );
 
     REQUIRE(host->scene_admit_peer(inner, nested));
     REQUIRE(host->scene_admit_peer(outer, whole));

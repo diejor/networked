@@ -32,7 +32,8 @@ int64_t static_memory() {
 TEST_CASE(
     "[Networked][Memory] a Dictionary move assignment releases the value it "
     "overwrites, so a thousand rows assigned into one live Dictionary leave "
-    "static memory where it started") {
+    "static memory where it started"
+) {
     Dictionary row = a_row(-1);
     const int64_t before = static_memory();
     for (int index = 0; index < ASSIGNMENTS; ++index) {

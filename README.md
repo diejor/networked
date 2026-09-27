@@ -163,8 +163,7 @@ dance when moving nodes around.
 - Thanks to
   [godot_debug_draw_3d](https://github.com/DmitriySalnikov/godot_debug_draw_3d)
   for the approach the C# bindings use. The addon exports C function pointers
-  and the generated C# loads and calls through them, rather than asking
-  GodotSharp to bind the classes.
+  and the generated C# calls through them.
 - *Multiplayer Game Programming. Architecting Networked Games* by Joshua
   Glazer and Sanjay Madhav was insightful reading for general netcode
   architecture.

@@ -241,17 +241,10 @@ TEST_CASE(
     NETW_CHECK_EQ(int(host_seat->get_peer_id()), 7);
     NETW_CHECK_EQ(int(member_seat->get_peer_id()), 9);
 
-    NETW_CHECK_EQ(
-        int(mesh.session_of(7)->get_connected_players().size()),
-        2
-    );
-    NETW_CHECK_EQ(
-        int(mesh.session_of(9)->get_connected_players().size()),
-        2
-    );
+    NETW_CHECK_EQ(int(mesh.session_of(7)->get_connected_players().size()), 2);
+    NETW_CHECK_EQ(int(mesh.session_of(9)->get_connected_players().size()), 2);
 
-    const Ref<NetwPlayer> local_at_member
-        = mesh.session_of(9)->player_local();
+    const Ref<NetwPlayer> local_at_member = mesh.session_of(9)->player_local();
     REQUIRE(local_at_member.is_valid());
     NETW_CHECK_EQ(int(local_at_member->get_peer_id()), 9);
     CHECK(mesh.session_of(9)->player_of(7).is_valid());
@@ -304,10 +297,7 @@ TEST_CASE(
 
     REQUIRE(mesh.join(11, StringName("eleven")).is_valid());
 
-    NETW_CHECK_EQ(
-        int(mesh.session_of(11)->get_connected_players().size()),
-        3
-    );
+    NETW_CHECK_EQ(int(mesh.session_of(11)->get_connected_players().size()), 3);
     CHECK(mesh.session_of(11)->player_of(7).is_valid());
     CHECK(mesh.session_of(11)->player_of(9).is_valid());
 }
@@ -333,10 +323,7 @@ TEST_CASE(
 
     REQUIRE(mesh.join(1, StringName("one")).is_valid());
 
-    NETW_CHECK_EQ(
-        int(mesh.session_of(1)->get_connected_players().size()),
-        3
-    );
+    NETW_CHECK_EQ(int(mesh.session_of(1)->get_connected_players().size()), 3);
     CHECK(mesh.session_of(1)->player_of(7).is_valid());
     CHECK(mesh.session_of(1)->player_of(9).is_valid());
     NETW_CHECK_EQ(int(mesh.capture_at(7).size()), 0);

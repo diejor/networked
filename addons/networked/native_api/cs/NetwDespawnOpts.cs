@@ -6,13 +6,10 @@ using Godot.NativeInterop;
 namespace Networked;
 
 /// <summary>
-/// What one <see cref="NetwEntity.Despawn"/> call asks for, beyond the fact
-/// that the entity is going.
+/// Options for <see cref="NetwEntity.Despawn"/>.
 /// </summary>
 /// <remarks>
-/// Carries the knobs that control teardown behavior. It is a record rather than
-/// an argument list so a new option can be added without breaking call sites,
-/// and its defaults are what make a despawn safe when a caller passes nothing.
+/// The defaults are safe to use, so passing no options is fine.
 /// <code>
 /// var opts := NetwDespawnOpts.create(&amp;"killed")
 /// opts.linger = true
@@ -42,10 +39,9 @@ public sealed class NetwDespawnOpts : NetwRefCounted
         NetwApi.MethodBind("NetwDespawnOpts", "set_reason", 3304788590UL);
 
     /// <summary>
-    /// Recorded on the despawn span and forwarded to the
-    /// <see cref="NetwEntity.Despawning"/> signal so user code can branch on
-    /// the cause. Common values: <c>&amp;"peer_disconnected"</c>,
-    /// <c>&amp;"killed"</c>, <c>&amp;"collected"</c>, <c>&amp;"timeout"</c>.
+    /// Passed to <see cref="NetwEntity.Despawning"/> so a game can react to the
+    /// cause, such as <c>&amp;"peer_disconnected"</c>, <c>&amp;"killed"</c> or
+    /// <c>&amp;"timeout"</c>.
     /// </summary>
     public StringName Reason
     {
@@ -74,12 +70,10 @@ public sealed class NetwDespawnOpts : NetwRefCounted
         NetwApi.MethodBind("NetwDespawnOpts", "set_flush_save", 2586408642UL);
 
     /// <summary>
-    /// When <c>true</c> (default), the entity's row is read at the despawn call
-    /// and written once the node has left the tree. <c>false</c> writes nothing
-    /// for this departure. The despawn never waits for the write, so a caller
-    /// that needs the row stored awaits
-    /// <see cref="NetwPersistenceHandle.Save"/> before despawning. See
-    /// <see cref="NetwPersistenceHandle"/>.
+    /// When <c>true</c>, the entity's row is saved after the node leaves the
+    /// tree. The despawn does not wait for the save, await
+    /// <see cref="NetwPersistenceHandle.Save"/> before despawning if you need
+    /// it stored.
     /// </summary>
     public bool FlushSave
     {
@@ -108,11 +102,9 @@ public sealed class NetwDespawnOpts : NetwRefCounted
         NetwApi.MethodBind("NetwDespawnOpts", "set_defer_free", 2586408642UL);
 
     /// <summary>
-    /// When <c>true</c> (default), the <see cref="Node.QueueFree"/> call is
-    /// deferred. This guarantees the engine's next process step sees the
-    /// authority change before the node leaves the tree, which fixes the race
-    /// where a <see cref="MultiplayerSynchronizer"/> tries to push state from a
-    /// freed authority peer.
+    /// When <c>true</c>, <see cref="Node.QueueFree"/> is deferred so a
+    /// <see cref="MultiplayerSynchronizer"/> does not push state from a node
+    /// that is already freed.
     /// </summary>
     public bool DeferFree
     {
@@ -141,12 +133,9 @@ public sealed class NetwDespawnOpts : NetwRefCounted
         NetwApi.MethodBind("NetwDespawnOpts", "set_linger", 2586408642UL);
 
     /// <summary>
-    /// When <c>true</c>, the entity deactivates now but is freed only after
-    /// <see cref="NetwDespawnOpts.LingerSeconds"/>, so a late shooter can still
-    /// validate against where it was. Its <see cref="NetwTimeline"/> freezes at
-    /// the despawn boundary and expires when the node frees. Default
-    /// <c>false</c> keeps the cheap rule: you cannot be shot after the server
-    /// saw you die.
+    /// When <c>true</c>, the entity is deactivated now but freed only after
+    /// <see cref="NetwDespawnOpts.LingerSeconds"/>, so a late shot can still
+    /// hit where it was.
     /// </summary>
     public bool Linger
     {
@@ -181,9 +170,8 @@ public sealed class NetwDespawnOpts : NetwRefCounted
             373806689UL);
 
     /// <summary>
-    /// Seconds a lingering entity stays rewindable before it frees. Sized to
-    /// the server rewind retention window, roughly one second of ticks. Ignored
-    /// unless <see cref="NetwDespawnOpts.Linger"/> is <c>true</c>.
+    /// Seconds a lingering entity can still be rewound before it is freed.
+    /// Ignored unless <see cref="NetwDespawnOpts.Linger"/> is <c>true</c>.
     /// </summary>
     public double LingerSeconds
     {
@@ -212,8 +200,8 @@ public sealed class NetwDespawnOpts : NetwRefCounted
         NetwApi.MethodBind("NetwDespawnOpts", "create", 3883629956UL);
 
     /// <summary>
-    /// Returns a record naming <paramref name="reason"/>, leaving every other
-    /// option at its default.
+    /// Returns options with <paramref name="reason"/> and every other option at
+    /// its default.
     /// </summary>
     public static NetwDespawnOpts Create(StringName reason = null)
     {

@@ -6,26 +6,22 @@ using Godot.NativeInterop;
 namespace Networked;
 
 /// <summary>
-/// Everything about one entity's display that is not about a single value
-/// stream, written and read through <see cref="NetwEntity.Interpolation"/>.
+/// How one <see cref="NetwEntity"/> is drawn, reached by
+/// <see cref="NetwEntity.Interpolation"/>.
 /// </summary>
 /// <remarks>
-/// A <see cref="NetwInterpolate"/> spec configures one value stream. Everything
-/// that applies to the whole entity instead of one stream lives here, so there
-/// is one result per entity to which node receives the smoothed write, which
-/// timeline it renders on, and how far behind the newest snapshot the playhead
-/// sits. The session pumps what this declares. Every setting below is a view,
-/// not a store. A write goes out through the session's display book and a read
-/// comes back from the same declaration, so the two spellings can never
-/// disagree about one entity. A setting authored before the entity has a live
-/// <see cref="NetwEntity.Rid"/> waits until it does, and is re-applied to each
-/// of the entity's lives, because liveness hands a re-admitted entity a fresh
-/// <see cref="NetwEntity.Rid"/> and the settings have to outlive it.
+/// A <see cref="NetwInterpolate"/> configures one property. This handle holds
+/// the settings that apply to the whole entity, such as which node receives the
+/// smoothed values and how far behind the newest snapshot it is drawn.
 /// <code>
 /// var handle := NetwEntity.of(self).interpolation
 /// handle.visual_root = NodePath("Visual")
 /// handle.display_role = NetwMultiplayer.DISPLAY_ROLE_REMOTE
 /// </code>
+/// <para>
+/// Settings written before the entity is spawned are applied once it is, and
+/// they are kept if the entity respawns.
+/// </para>
 /// </remarks>
 public sealed class NetwDisplayHandle : NetwRefCounted
 {
@@ -56,11 +52,10 @@ public sealed class NetwDisplayHandle : NetwRefCounted
             1348162250UL);
 
     /// <summary>
-    /// Visual child that receives smoothed output. A parented visual takes
-    /// global-space writes for the channels with a per-channel global setter,
-    /// position and rotation, while every other channel inherits from the body.
-    /// A visual with <see cref="CanvasItem.TopLevel"/> set takes absolute
-    /// writes on any channel.
+    /// The child node that receives the smoothed values. Position and rotation
+    /// are written in global space, and other properties are written as they
+    /// are. A visual with <see cref="CanvasItem.TopLevel"/> set receives every
+    /// property in global space.
     /// </summary>
     public NodePath VisualRoot
     {
@@ -100,8 +95,8 @@ public sealed class NetwDisplayHandle : NetwRefCounted
 
     /// <summary>
     /// How this entity is drawn. <see cref="NetwMultiplayer.DisplayRole.Auto"/>
-    /// works it out from <see cref="NetwSimulationHandle.Mode"/> and who
-    /// controls the entity, which is right for almost every one.
+    /// picks one from <see cref="NetwSimulationHandle.Mode"/> and who controls
+    /// the entity, and is right for most entities.
     /// </summary>
     public NetwMultiplayer.DisplayRole DisplayRole
     {
@@ -133,9 +128,9 @@ public sealed class NetwDisplayHandle : NetwRefCounted
         NetwApi.MethodBind("NetwDisplayHandle", "set_live_mode", 3681603989UL);
 
     /// <summary>
-    /// How a body this peer runs is drawn under
-    /// <see cref="NetwMultiplayer.DisplayRole.Predicted"/>. It covers a body in
-    /// <see cref="NetwSimulationHandle.ModeEnum.Predict"/> and a copy in
+    /// How an entity this peer simulates is drawn under
+    /// <see cref="NetwMultiplayer.DisplayRole.Predicted"/>, in
+    /// <see cref="NetwSimulationHandle.ModeEnum.Predict"/> or
     /// <see cref="NetwSimulationHandle.ModeEnum.Active"/>.
     /// </summary>
     public NetwMultiplayer.LiveMode LiveMode
@@ -171,9 +166,8 @@ public sealed class NetwDisplayHandle : NetwRefCounted
             373806689UL);
 
     /// <summary>
-    /// Exponential smoothing time for
-    /// <see cref="NetwMultiplayer.LiveMode.Chase"/>. <c>0</c> follows the tick
-    /// length.
+    /// Smoothing time in seconds for
+    /// <see cref="NetwMultiplayer.LiveMode.Chase"/>. <c>0</c> uses one tick.
     /// </summary>
     public double LiveSmoothTime
     {
@@ -211,7 +205,8 @@ public sealed class NetwDisplayHandle : NetwRefCounted
             2586408642UL);
 
     /// <summary>
-    /// Enables display lag adaptation for remote interpolation.
+    /// Lets the display delay of a remote entity grow when snapshots arrive
+    /// late.
     /// </summary>
     public bool EnableSmartDilation
     {
@@ -249,7 +244,7 @@ public sealed class NetwDisplayHandle : NetwRefCounted
             373806689UL);
 
     /// <summary>
-    /// Maximum extra ticks that display lag can grow while starving.
+    /// The most ticks <see cref="NetwDisplayHandle.DisplayLag"/> may grow to.
     /// </summary>
     public double MaxExtraDilation
     {
@@ -325,7 +320,8 @@ public sealed class NetwDisplayHandle : NetwRefCounted
             373806689UL);
 
     /// <summary>
-    /// Ticks per frame added after starvation is sustained.
+    /// Ticks added to <see cref="NetwDisplayHandle.DisplayLag"/> per frame once
+    /// the grace frames are spent.
     /// </summary>
     public double StarvationGrowth
     {
@@ -401,7 +397,8 @@ public sealed class NetwDisplayHandle : NetwRefCounted
             1286410249UL);
 
     /// <summary>
-    /// Starving frames tolerated before lag starts growing.
+    /// How many frames without a new snapshot are tolerated before
+    /// <see cref="NetwDisplayHandle.DisplayLag"/> starts growing.
     /// </summary>
     public long StarvationGraceFrames
     {
@@ -439,7 +436,7 @@ public sealed class NetwDisplayHandle : NetwRefCounted
             1286410249UL);
 
     /// <summary>
-    /// Frames between interpolation trace logs. <c>0</c> disables logs.
+    /// Frames between interpolation trace logs. <c>0</c> disables them.
     /// </summary>
     public long TraceInterval
     {
@@ -471,7 +468,8 @@ public sealed class NetwDisplayHandle : NetwRefCounted
             1740695150UL);
 
     /// <summary>
-    /// Read-only extra display delay in ticks measured by smart dilation.
+    /// The extra display delay in ticks that
+    /// <see cref="NetwDisplayHandle.EnableSmartDilation"/> has added.
     /// </summary>
     public double DisplayLag
     {
@@ -493,7 +491,7 @@ public sealed class NetwDisplayHandle : NetwRefCounted
             3905245786UL);
 
     /// <summary>
-    /// Returns the displayed STATE authoring tick, or <c>-1</c>.
+    /// The tick the drawn state was written at, or <c>-1</c>.
     /// </summary>
     public long DisplayedAuthoringTick()
     {
@@ -509,7 +507,7 @@ public sealed class NetwDisplayHandle : NetwRefCounted
         NetwApi.MethodBind("NetwDisplayHandle", "get_buffer", 3811683676UL);
 
     /// <summary>
-    /// Returns the <see cref="NetwRingBuffer"/> for
+    /// The <see cref="NetwRingBuffer"/> of snapshots for
     /// <paramref name="property"/>, or <c>null</c>.
     /// </summary>
     public NetwRingBuffer GetBuffer(StringName property)
@@ -530,9 +528,9 @@ public sealed class NetwDisplayHandle : NetwRefCounted
         NetwApi.MethodBind("NetwDisplayHandle", "reset", 3218959716UL);
 
     /// <summary>
-    /// Clears every interpolation history for this entity and writes its live
-    /// source values to the visual. Call it after applying a position
-    /// discontinuity locally so later movement resumes from the new position.
+    /// Clears the entity's interpolation history and writes its current values
+    /// to the visual. Call it after teleporting the entity locally, so it does
+    /// not interpolate from the old position.
     /// </summary>
     public void Reset()
     {
@@ -544,8 +542,8 @@ public sealed class NetwDisplayHandle : NetwRefCounted
         NetwApi.MethodBind("NetwDisplayHandle", "entity", 1711071689UL);
 
     /// <summary>
-    /// The <see cref="NetwEntity"/> this handle was bound to, or <c>null</c>
-    /// once that entity is gone.
+    /// The <see cref="NetwEntity"/> this handle belongs to, or <c>null</c> once
+    /// that entity is gone.
     /// </summary>
     public NetwEntity Entity()
     {

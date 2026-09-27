@@ -1768,11 +1768,7 @@ TEST_CASE(
     REQUIRE(drive.ran);
     const int64_t opened_row = drive.transition;
     pool->close_drive(slot, opened_row, 0, 0, 0, 0);
-    pool->mark_domain(
-        slot,
-        opened_row,
-        int(netw::predict::Domain::IN_DOMAIN)
-    );
+    pool->mark_domain(slot, opened_row, int(netw::predict::Domain::IN_DOMAIN));
 
     const PackedInt64Array armed = pool->open_comparison(slot, opened_row);
     NETW_CHECK_EQ(armed[NetwPredictionEngine::COMPARE_RECONSTRUCTED], 1);
@@ -2073,9 +2069,7 @@ TEST_CASE(
     CHECK(pool->journal_has(slot, opened));
     NETW_CHECK_EQ(
         pool->journal_row(slot, opened).c_hash,
-        netw::predict::fnv1a(
-            pool->canonical_input_bytes(slot, marked(5))
-        )
+        netw::predict::fnv1a(pool->canonical_input_bytes(slot, marked(5)))
     );
     NETW_CHECK_EQ(
         pool->drive_cursors(

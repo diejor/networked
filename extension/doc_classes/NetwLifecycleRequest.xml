@@ -4,13 +4,13 @@
 		A controller's spawn, despawn or move of an entity, waiting for the server's verdict.
 	</brief_description>
 	<description>
-		[NetwLifecycleRequest] is emitted, on the server only, by [signal NetwEntity.lifecycle_requested] with one [NetwLifecycleRequest] per change the [member NetwEntity.controller] of a [constant NetwEntity.LIFECYCLE_CONTROLLER] entity makes. The server may call [method deny] before the change reaches any other peer.
+		The server receives one in [signal NetwEntity.lifecycle_requested] for each change the [member NetwEntity.controller] of a [constant NetwEntity.LIFECYCLE_CONTROLLER] entity makes, and can call [method deny] before other peers see it.
 		[codeblock]
 		func _on_lifecycle_requested(peer_id: int, request: NetwLifecycleRequest) -&gt; void:
 		    if request.kind == NetwLifecycleRequest.KIND_DESPAWN and not may_remove(peer_id):
 		        request.deny("only the builder removes it")
 		[/codeblock]
-		The denial latches. A later [method deny] or a write of [code]false[/code] to [member denied] changes nothing, so listener order does not matter. The peer that made the change hears of it in [signal NetwEntity.lifecycle_refused], with the [member reason] the first [method deny] gave.
+		Once denied, the request stays denied. The peer that made the change receives [signal NetwEntity.lifecycle_refused] with the [member reason].
 	</description>
 	<tutorials>
 	</tutorials>
@@ -25,10 +25,10 @@
 	</methods>
 	<members>
 		<member name="denied" type="bool" setter="set_denied" getter="get_denied" default="false">
-			Whether the change is refused. Writing [code]false[/code] over a [method deny] call has no effect.
+			Whether the change is refused. Writing [code]false[/code] after [method deny] has no effect.
 		</member>
 		<member name="destination" type="Node" setter="" getter="get_destination">
-			The parent the entity is placed under, or [code]null[/code] for [constant KIND_DESPAWN]. On a spawn it is the handler's way into the world, because [member entity] has not entered the tree.
+			The parent the entity is placed under, or [code]null[/code] for [constant KIND_DESPAWN]. On a spawn [member entity] has not entered the tree yet, so read the world from here.
 		</member>
 		<member name="entity" type="NetwEntity" setter="" getter="get_entity">
 			The entity the change is about. On a spawn it is the server's copy, holding the values the controller sent.
@@ -40,7 +40,7 @@
 			What the server passed to [method deny], empty until then.
 		</member>
 		<member name="requester" type="int" setter="" getter="get_requester" default="0">
-			The peer id of the controller that made the change.
+			The peer that made the change.
 		</member>
 	</members>
 	<constants>

@@ -66,13 +66,8 @@ int spawn_arena(
     const Callable &p_build = callable_mp_static(&build_nested_arena),
     const StringName &p_id = StringName("nested_arena")
 ) {
-    return p_rig.spawn_registered(
-        p_id,
-        p_build,
-        one_arg(),
-        one_type(),
-        p_under
-    );
+    return p_rig
+        .spawn_registered(p_id, p_build, one_arg(), one_type(), p_under);
 }
 
 int64_t route_of(Node *p_node) {
@@ -331,10 +326,8 @@ TEST_CASE(
     ball->set_position(Vector2(12.0, 7.0));
     rig.pump(4);
 
-    const int late = seat_late(
-        rig,
-        rig.spawn_plane()->get_spawn_book()->ancestry_order()
-    );
+    const int late
+        = seat_late(rig, rig.spawn_plane()->get_spawn_book()->ancestry_order());
 
     Node2D *seat_ball = Object::cast_to<Node2D>(
         descend(rig.route_node(arena_route, late), BALL)

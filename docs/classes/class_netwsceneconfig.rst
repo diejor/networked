@@ -12,16 +12,14 @@ NetwSceneConfig
 
 **Inherits:** :godot:`RefCounted`
 
-The declaration that makes a node a multiplayer scene.
+Makes a node a multiplayer scene.
 
 .. rst-class:: classref-introduction-group
 
 Description
 -----------
 
-Returned by :ref:`Netw.configure_multiplayer_scene()<class_Netw_method_configure_multiplayer_scene>` and configured in place. A scene declares itself once from its own root, and that declaration is the only one: there is no second marking step and nothing else has to know the scene exists.
-
-The facts land on the root's **script**, not on this object, so nothing holds the config afterwards and a second instance of the same scene is declared the same way without re-running anything. The verbs may be called in any order.
+Returned by :ref:`Netw.configure_multiplayer_scene()<class_Netw_method_configure_multiplayer_scene>`. Declare it once from the scene root's :godot:`Object._init() <Object#class_Object_private_method__init>`, the methods can be called in any order.
 
 ::
 
@@ -30,7 +28,7 @@ The facts land on the root's **script**, not on this object, so nothing holds th
     func _init() -> void:
         Netw.configure_multiplayer_scene(self).labeled(&"Level1").isolated()
 
-\ Declare from :godot:`Object._init() <Object#class_Object_private_method__init>`, because the declaration is consumed once at :ref:`NetwEntity.arm()<class_NetwEntity_method_arm>` and has to ride the SPAWN packet. Declaring writes :ref:`NetwEntity.declares_scene<class_NetwEntity_property_declares_scene>`, so the root owns an admission boundary every descendant entity inherits; nothing else about the entity changes.
+\ Every entity below the root belongs to the scene through :ref:`NetwEntity.scene<class_NetwEntity_property_scene>`, and :ref:`NetwEntity.is_multiplayer_scene<class_NetwEntity_property_is_multiplayer_scene>` is ``true`` on the root.
 
 .. rst-class:: classref-reftable-group
 
@@ -79,7 +77,7 @@ Property Descriptions
 
 - :ref:`SceneIsolation<enum_Netw_SceneIsolation>` **get_isolation**\ (\ )
 
-:ref:`Netw.SCENE_ISOLATION_OWN_WORLD<class_Netw_constant_SCENE_ISOLATION_OWN_WORLD>` once :ref:`isolated()<class_NetwSceneConfig_method_isolated>` is declared, and :ref:`Netw.SCENE_ISOLATION_NONE<class_Netw_constant_SCENE_ISOLATION_NONE>` otherwise.
+:ref:`Netw.SCENE_ISOLATION_OWN_WORLD<class_Netw_constant_SCENE_ISOLATION_OWN_WORLD>` after :ref:`isolated()<class_NetwSceneConfig_method_isolated>`, :ref:`Netw.SCENE_ISOLATION_NONE<class_Netw_constant_SCENE_ISOLATION_NONE>` otherwise.
 
 .. rst-class:: classref-item-separator
 
@@ -95,7 +93,7 @@ Property Descriptions
 
 - :godot:`StringName` **get_label**\ (\ )
 
-The stem :ref:`labeled()<class_NetwSceneConfig_method_labeled>` declared, or the root node's name.
+The name given to :ref:`labeled()<class_NetwSceneConfig_method_labeled>`, or the root node's name.
 
 .. rst-class:: classref-section-separator
 
@@ -112,24 +110,16 @@ Method Descriptions
 
 :ref:`NetwSceneConfig<class_NetwSceneConfig>` **isolated**\ (\ ) :ref:`🔗<class_NetwSceneConfig_method_isolated>`
 
-Gives the scene its own physics and render world, so geometry overlapping another scene's cannot interact with it. Without this the scene shares the world it is parented into.
+Gives the scene its own physics and render world, so it does not collide with or draw over other scenes.
 
-Only a :godot:`Viewport` owns a world in Godot, so an isolated scene needs one and the framework builds it: :ref:`Netw.spawn()<class_Netw_method_spawn>` returns a :godot:`SubViewport` with the authored root inside, and the caller parents that. **So the node :ref:`Netw.spawn()<class_Netw_method_spawn>` returns is not the node the callable built.**\ 
-
-The scene is still the authored root. :ref:`Netw.scene()<class_Netw_method_scene>`, the roster, the admissions and the signals are unchanged, and the viewport carries no identity of its own. The one thing that differs is that the root's :godot:`Node.get_parent() <Node#class_Node_method_get_parent>` is the viewport rather than the node it was added to.
+\ :ref:`Netw.spawn()<class_Netw_method_spawn>` then returns a :godot:`SubViewport` with the scene root inside, and that is what the caller parents.
 
 ::
 
     var mount := Netw.spawn(spawn_level1)   # a SubViewport
     worlds.add_child(mount)
 
-.. code:: text
-
-    Worlds
-     ┖╴ Level1World (SubViewport)   # what spawn returned
-          ┖╴ Level1 (Node2D)        # the scene, what the callable built
-
-\ A :godot:`SubViewport` renders to a texture, and an isolated world reaches the screen on a listen host while it is :ref:`NetwSessionHandle.presented_scene<class_NetwSessionHandle_property_presented_scene>`.
+\ On a listen server, :ref:`HostSceneView<class_HostSceneView>` draws it while it is :ref:`NetwSessionHandle.presented_scene<class_NetwSessionHandle_property_presented_scene>`.
 
 .. rst-class:: classref-item-separator
 
@@ -141,9 +131,9 @@ The scene is still the authored root. :ref:`Netw.scene()<class_Netw_method_scene
 
 :ref:`NetwSceneConfig<class_NetwSceneConfig>` **labeled**\ (\ stem\: :godot:`StringName`\ ) :ref:`🔗<class_NetwSceneConfig_method_labeled>`
 
-Names the scene for :ref:`Netw.scene()<class_Netw_method_scene>`. Defaults to the root node's own name.
+Names the scene for :ref:`Netw.scene()<class_Netw_method_scene>`. Defaults to the root node's name.
 
-A label names a scene type, not an instance. :ref:`Netw.scene()<class_Netw_method_scene>` fails when multiple live scenes share the label. Use the handle returned by :ref:`Netw.spawn()<class_Netw_method_spawn>` to select an instance.
+\ :ref:`Netw.scene()<class_Netw_method_scene>` fails when several live scenes share the label. Use the node returned by :ref:`Netw.spawn()<class_Netw_method_spawn>` to select an instance.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

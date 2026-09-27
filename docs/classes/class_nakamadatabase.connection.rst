@@ -12,14 +12,7 @@ NakamaDatabase.Connection
 
 **Inherits:** :ref:`NetwDatabaseConnection<class_NetwDatabaseConnection>` **<** :godot:`RefCounted`
 
-One open slot of Nakama storage, and the only object that performs its I/O.
-
-.. rst-class:: classref-introduction-group
-
-Description
------------
-
-Every verb resolves once the service has answered, never once a request has been queued, so an acknowledged write is a write Nakama holds.
+One open slot of Nakama storage. Every method resolves after Nakama answers.
 
 .. rst-class:: classref-reftable-group
 
@@ -34,6 +27,24 @@ Properties
    +------------------+------------------------------------------------------------------------+
    | :godot:`String`  | :ref:`collection<class_NakamaDatabase_Connection_property_collection>` |
    +------------------+------------------------------------------------------------------------+
+
+.. rst-class:: classref-reftable-group
+
+Methods
+-------
+
+.. table::
+   :widths: auto
+
+   +---------------------------------------+---------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwPromise<class_NetwPromise>` | :ref:`_read<class_NakamaDatabase_Connection_private_method__read>`\ (\ address\: :godot:`Dictionary`\ )             |
+   +---------------------------------------+---------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwPromise<class_NetwPromise>` | :ref:`_scan<class_NakamaDatabase_Connection_private_method__scan>`\ (\ request\: :godot:`Dictionary`\ )             |
+   +---------------------------------------+---------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwPromise<class_NetwPromise>` | :ref:`_write_batch<class_NakamaDatabase_Connection_private_method__write_batch>`\ (\ operations\: :godot:`Array`\ ) |
+   +---------------------------------------+---------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwPromise<class_NetwPromise>` | :ref:`_close<class_NakamaDatabase_Connection_private_method__close>`\ (\ )                                          |
+   +---------------------------------------+---------------------------------------------------------------------------------------------------------------------+
 
 .. rst-class:: classref-section-separator
 
@@ -50,7 +61,7 @@ Property Descriptions
 
 :godot:`Variant` **wrapper** :ref:`🔗<class_NakamaDatabase_Connection_property_wrapper>`
 
-The :ref:`NakamaWrapper<class_NakamaWrapper>` this connection performs its storage through.
+The :ref:`NakamaWrapper<class_NakamaWrapper>` used for storage.
 
 .. rst-class:: classref-item-separator
 
@@ -63,6 +74,59 @@ The :ref:`NakamaWrapper<class_NakamaWrapper>` this connection performs its stora
 :godot:`String` **collection** :ref:`🔗<class_NakamaDatabase_Connection_property_collection>`
 
 The Nakama storage collection holding this slot's records.
+
+.. rst-class:: classref-section-separator
+
+----
+
+.. rst-class:: classref-descriptions-group
+
+Method Descriptions
+-------------------
+
+.. _class_NakamaDatabase_Connection_private_method__read:
+
+.. rst-class:: classref-method
+
+:ref:`NetwPromise<class_NetwPromise>` **_read**\ (\ address\: :godot:`Dictionary`\ ) :ref:`🔗<class_NakamaDatabase_Connection_private_method__read>`
+
+Reads the object at ``address``. A missing object is ``found`` ``false`` with :godot:`@GlobalScope.OK <@GlobalScope#class_@GlobalScope_constant_OK>`.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NakamaDatabase_Connection_private_method__scan:
+
+.. rst-class:: classref-method
+
+:ref:`NetwPromise<class_NetwPromise>` **_scan**\ (\ request\: :godot:`Dictionary`\ ) :ref:`🔗<class_NakamaDatabase_Connection_private_method__scan>`
+
+Reads one page of the collection and keeps the records of the requested schema. A page can hold no records and still return a cursor.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NakamaDatabase_Connection_private_method__write_batch:
+
+.. rst-class:: classref-method
+
+:ref:`NetwPromise<class_NetwPromise>` **_write_batch**\ (\ operations\: :godot:`Array`\ ) :ref:`🔗<class_NakamaDatabase_Connection_private_method__write_batch>`
+
+Sends each operation as its own request, in order. Each operation's code is in ``errors``, and ``error`` is always :godot:`@GlobalScope.OK <@GlobalScope#class_@GlobalScope_constant_OK>`.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NakamaDatabase_Connection_private_method__close:
+
+.. rst-class:: classref-method
+
+:ref:`NetwPromise<class_NetwPromise>` **_close**\ (\ ) :ref:`🔗<class_NakamaDatabase_Connection_private_method__close>`
+
+Resolves :godot:`@GlobalScope.OK <@GlobalScope#class_@GlobalScope_constant_OK>`.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

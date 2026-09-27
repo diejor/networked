@@ -84,10 +84,8 @@ Carrier *a_state_body(
     REQUIRE(entity.is_valid());
     p_branch->add_child(body);
     NETW_CHECK_EQ(
-        int(p_session->sync_pipeline()->register_property_set(
-            body,
-            a_state_stream(body)
-        )),
+        int(p_session->sync_pipeline()
+                ->register_property_set(body, a_state_stream(body))),
         int(OK)
     );
     return body;

@@ -10,25 +10,19 @@ namespace Networked;
 /// verdict.
 /// </summary>
 /// <remarks>
-/// <see cref="NetwLifecycleRequest"/> is emitted, on the server only, by
-/// <see cref="NetwEntity.LifecycleRequested"/> with one
-/// <see cref="NetwLifecycleRequest"/> per change the
-/// <see cref="NetwEntity.Controller"/> of a
-/// <see cref="NetwEntity.LifecycleEnum.Controller"/> entity makes. The server
-/// may call <see cref="NetwLifecycleRequest.Deny"/> before the change reaches
-/// any other peer.
+/// The server receives one in <see cref="NetwEntity.LifecycleRequested"/> for
+/// each change the <see cref="NetwEntity.Controller"/> of a
+/// <see cref="NetwEntity.LifecycleEnum.Controller"/> entity makes, and can call
+/// <see cref="NetwLifecycleRequest.Deny"/> before other peers see it.
 /// <code>
 /// func _on_lifecycle_requested(peer_id: int, request: NetwLifecycleRequest) -&gt; void:
 ///     if request.kind == NetwLifecycleRequest.KIND_DESPAWN and not may_remove(peer_id):
 ///         request.deny("only the builder removes it")
 /// </code>
 /// <para>
-/// The denial latches. A later <see cref="NetwLifecycleRequest.Deny"/> or a
-/// write of <c>false</c> to <see cref="NetwLifecycleRequest.Denied"/> changes
-/// nothing, so listener order does not matter. The peer that made the change
-/// hears of it in <see cref="NetwEntity.LifecycleRefused"/>, with the
-/// <see cref="NetwLifecycleRequest.Reason"/> the first
-/// <see cref="NetwLifecycleRequest.Deny"/> gave.
+/// Once denied, the request stays denied. The peer that made the change
+/// receives <see cref="NetwEntity.LifecycleRefused"/> with the
+/// <see cref="NetwLifecycleRequest.Reason"/>.
 /// </para>
 /// </remarks>
 public sealed class NetwLifecycleRequest : NetwRefCounted
@@ -89,7 +83,7 @@ public sealed class NetwLifecycleRequest : NetwRefCounted
             3905245786UL);
 
     /// <summary>
-    /// The peer id of the controller that made the change.
+    /// The peer that made the change.
     /// </summary>
     public long Requester
     {
@@ -126,9 +120,9 @@ public sealed class NetwLifecycleRequest : NetwRefCounted
 
     /// <summary>
     /// The parent the entity is placed under, or <c>null</c> for
-    /// <see cref="NetwLifecycleRequest.KindEnum.Despawn"/>. On a spawn it is
-    /// the handler's way into the world, because
-    /// <see cref="NetwLifecycleRequest.Entity"/> has not entered the tree.
+    /// <see cref="NetwLifecycleRequest.KindEnum.Despawn"/>. On a spawn
+    /// <see cref="NetwLifecycleRequest.Entity"/> has not entered the tree yet,
+    /// so read the world from here.
     /// </summary>
     public Node Destination
     {
@@ -149,8 +143,8 @@ public sealed class NetwLifecycleRequest : NetwRefCounted
         NetwApi.MethodBind("NetwLifecycleRequest", "set_denied", 2586408642UL);
 
     /// <summary>
-    /// Whether the change is refused. Writing <c>false</c> over a
-    /// <see cref="NetwLifecycleRequest.Deny"/> call has no effect.
+    /// Whether the change is refused. Writing <c>false</c> after
+    /// <see cref="NetwLifecycleRequest.Deny"/> has no effect.
     /// </summary>
     public bool Denied
     {

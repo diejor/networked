@@ -1,6 +1,7 @@
 #include "netw/display/build.hpp"
 
 #include "godot/class_db.hpp"
+#include "netw/colors.hpp"
 #include "netw/display/channel.hpp"
 #include "netw/display/decl.hpp"
 #include "netw/display/history.hpp"
@@ -9,7 +10,6 @@
 #include "netw/display/roles.hpp"
 #include "netw/display/spec_row.hpp"
 #include "netw/display/tracks.hpp"
-#include "netw/colors.hpp"
 #include "netw/log.hpp"
 #include "netw/profile.hpp"
 #include "netw/subsystems.hpp"

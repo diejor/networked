@@ -126,12 +126,8 @@ bool SessionSend::row_is_owed(
         return true;
     }
     r_repairing = true;
-    return writers.repair_due(
-        p_peer,
-        p_lane,
-        p_now_ms,
-        int64_t(link.rtt_ms(p_peer))
-    );
+    return writers
+        .repair_due(p_peer, p_lane, p_now_ms, int64_t(link.rtt_ms(p_peer)));
 }
 
 uint64_t SessionSend::revision_for(
@@ -368,13 +364,12 @@ LocalVector<RowSend> SessionSend::collect(
                 header.reconcile_ack = offer.ack;
                 const wire::CodeRow *baseline
                     = header.absolute() ? nullptr : stream->confirmed();
-                header.mask = header.absolute()
-                    ? reliable->plan().full_mask()
-                    : wire::CodeRow::changed_mask(
-                          reliable->plan(),
-                          *baseline,
-                          row
-                      );
+                header.mask = header.absolute() ? reliable->plan().full_mask()
+                                                : wire::CodeRow::changed_mask(
+                                                      reliable->plan(),
+                                                      *baseline,
+                                                      row
+                                                  );
                 RowSend send;
                 send.route = offer.route;
                 send.comp = offer.comp;
@@ -496,9 +491,8 @@ LocalVector<RowSend> SessionSend::collect(
                 p_now_ms,
                 repairing
             );
-            header.distance = repairing || beat
-                ? 0
-                : stream->distance_for(header.revision);
+            header.distance
+                = repairing || beat ? 0 : stream->distance_for(header.revision);
             header.tick = offer.tick;
             header.reconcile_ack = offer.ack;
             const wire::CodeRow *baseline
@@ -612,8 +606,10 @@ RowExplain SessionSend::explain(
         named.ordinal = p_comp;
         named.family = families[family];
         const wire::SnapshotSender *stream
-            = const_cast<wire::StreamWriterBook &>(writers)
-                  .sender(p_peer, named);
+            = const_cast<wire::StreamWriterBook &>(writers).sender(
+                p_peer,
+                named
+            );
         if (stream == nullptr) {
             continue;
         }
@@ -772,12 +768,7 @@ bool SessionSend::commit(
     int64_t p_frames,
     int64_t p_bits
 ) {
-    return pass.record_datagram(
-        p_peer,
-        p_seq,
-        uint16_t(p_frames),
-        p_bits
-    );
+    return pass.record_datagram(p_peer, p_seq, uint16_t(p_frames), p_bits);
 }
 
 void SessionSend::cancel(
@@ -875,8 +866,8 @@ LocalVector<int> SessionSend::known_peers() const {
          owed) {
         known.push_back(book.key);
     }
-    for (const godot::KeyValue<int, godot::HashMap<uint64_t, RowExplain>> &seen :
-         verdicts) {
+    for (const godot::KeyValue<int, godot::HashMap<uint64_t, RowExplain>>
+             &seen : verdicts) {
         bool counted = false;
         for (uint32_t at = 0; at < known.size(); ++at) {
             counted = counted || known[at] == seen.key;

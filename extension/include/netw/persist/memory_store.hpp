@@ -10,8 +10,9 @@
 namespace netw::persist {
 
 class MemoryStore {
-    godot::HashMap<godot::String, godot::HashMap<godot::String, godot::Dictionary>>
-        slots;
+    godot::
+        HashMap<godot::String, godot::HashMap<godot::String, godot::Dictionary>>
+            slots;
 
 public:
     bool has_slot(const godot::String &p_slot) const;
@@ -72,7 +73,8 @@ public:
 
     godot::Ref<NetwPromise> read(const godot::Dictionary &p_address) override;
     godot::Ref<NetwPromise> scan(const godot::Dictionary &p_request) override;
-    godot::Ref<NetwPromise> write_batch(const godot::Array &p_operations
+    godot::Ref<NetwPromise> write_batch(
+        const godot::Array &p_operations
     ) override;
     godot::Ref<NetwPromise> close() override;
 };

@@ -17,7 +17,8 @@ Ref<NetwDatabaseConfig> NetwDatabaseConfig::backend(
     return Ref<NetwDatabaseConfig>(this);
 }
 
-void NetwDatabaseConfig::set_backend(const Ref<NetwDatabaseBackend> &p_backend
+void NetwDatabaseConfig::set_backend(
+    const Ref<NetwDatabaseBackend> &p_backend
 ) {
     store = p_backend;
 }

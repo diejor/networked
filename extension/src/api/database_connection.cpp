@@ -63,7 +63,8 @@ Ref<NetwPromise> NetwDatabaseConnection::scan(const Dictionary &p_request) {
     return scan_default(p_request);
 }
 
-Ref<NetwPromise> NetwDatabaseConnection::write_batch(const Array &p_operations
+Ref<NetwPromise> NetwDatabaseConnection::write_batch(
+    const Array &p_operations
 ) {
     Ref<NetwPromise> answer;
     if (GDVIRTUAL_CALL(_write_batch, p_operations, answer)) {

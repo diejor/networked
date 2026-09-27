@@ -170,10 +170,7 @@ TEST_CASE(
     REQUIRE(asked_once);
     const uint64_t request = asked[0].request;
     send.writer_book().ready(PEER, request, next_stream_token());
-    NETW_CHECK_EQ(
-        int(send.run(registry(), one(11), WIDE, 0).sends.size()),
-        1
-    );
+    NETW_CHECK_EQ(int(send.run(registry(), one(11), WIDE, 0).sends.size()), 1);
 
     const uint64_t token = send.writer_book().token_of(PEER, volatile_lane());
     CHECK(send.writer_book().reset(PEER, request, token));

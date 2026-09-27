@@ -358,11 +358,7 @@ void drop(Node *p_mount) {
     memdelete(p_mount);
 }
 
-RigidBody2D *a_state_body(
-    NetwMultiplayer *p_core,
-    Node *p_branch,
-    double p_x
-) {
+RigidBody2D *a_state_body(NetwMultiplayer *p_core, Node *p_branch, double p_x) {
     RigidBody2D *body = memnew(RigidBody2D);
     body->set_name("StateBody");
     body->set_freeze_enabled(false);
@@ -469,9 +465,8 @@ TEST_CASE(
         int(RigidBody2D::FREEZE_MODE_KINEMATIC)
     );
 
-    const Dictionary standing = NetwEntity::of(authored)
-                                    ->get_state_binding()
-                                    ->snapshot_payload();
+    const Dictionary standing
+        = NetwEntity::of(authored)->get_state_binding()->snapshot_payload();
     NETW_CHECK_CLOSE(
         double(Vector2(standing[StringName("position")]).x),
         12.0,

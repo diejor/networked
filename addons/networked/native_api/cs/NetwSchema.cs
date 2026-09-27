@@ -6,20 +6,15 @@ using Godot.NativeInterop;
 namespace Networked;
 
 /// <summary>
-/// One named typed column list, declared beside the code that writes it and
-/// compiled by every consumer that reads it.
+/// A named list of typed columns.
 /// </summary>
 /// <remarks>
-/// A schema is both the chain a <c>static var</c> initializer runs and the data
-/// that chain leaves behind, because a game that had to terminate the chain to
-/// get the data was making a distinction it never wanted.
-/// <see cref="NetwSchema.Columns"/> is the address order, and it is the address
-/// order every adopting session seals in, so two peers built from the same
-/// scripts agree on layout without negotiating it. Column methods return an
-/// [int] index because schema declarations have no session state. That index is
-/// the wire address a writer and a reader both name the column by. Each session
-/// builds its own table from the declaration, and <see cref="Netw.Table"/> is
-/// how a game reaches one.
+/// Declare it in a <c>static var</c> beside the code that writes it. Every peer
+/// built from the same scripts ends up with the same
+/// <see cref="NetwSchema.Columns"/> in the same order. Each column method
+/// returns the column's index, which is how a writer and a reader name the
+/// column. <see cref="Netw.Table"/> opens the replicated table a session builds
+/// from the schema.
 /// <code>
 /// class Mobs:
 ///     static var schema := Netw.configure_schema(&amp;"Mob")
@@ -27,24 +22,20 @@ namespace Networked;
 ///         &amp;"pos",
 ///         NetwQuantizeScalar.new().limits(-512.0, 512.0).step(0.03),
 ///     )
-///     static var vel := schema.vector3(&amp;"vel")   # unquantized, the memcpy path
+///     static var vel := schema.vector3(&amp;"vel")   # no quantizer, sent as raw bytes
 ///     static var hp  := schema.u16(&amp;"hp")
 ///
 /// @onready var mobs := Netw.table(self, Mobs.schema.schema_name)
 /// </code>
 /// <para>
-/// A column with no quantizer crosses the wire as a raw little-endian copy of
-/// its buffer, which is the cheapest path in both directions. A quantizer buys
-/// bandwidth by paying per element, so reach for one on the columns a link
-/// actually cares about. One schema serves three consumers, so a declaration
-/// that only wants the database says so with
-/// <see cref="NetwSchema.Replicated"/> and creates no table at all.
-/// <see cref="NetwDatabase.Read"/> and the rest of the record verbs take this
-/// object directly. <see cref="NetwSchema.Variant"/> and
-/// <see cref="NetwSchema.String"/> are the tiers a table rejects and the other
-/// two accept. These method names are convenience and never freeze. They
-/// compile into <see cref="NetwMultiplayer.SchemaAddColumn"/> and
-/// <see cref="NetwMultiplayer.SchemaSetColumnQuantizer"/>, which do.
+/// A column with no quantizer is sent as a raw copy of its buffer, which is the
+/// cheapest to encode and decode. Add a quantizer to the columns where
+/// bandwidth matters. The same schema also types <see cref="NetwDatabase"/>
+/// records and <see cref="NetwPropertyConfig.Persisted"/> bindings. A schema
+/// used only for saves calls <see cref="NetwSchema.Replicated"/> with
+/// <c>false</c> so no table is created. <see cref="NetwSchema.String"/> and
+/// <see cref="NetwSchema.Variant"/> columns work for saves but not for
+/// replicated tables.
 /// </para>
 /// </remarks>
 public sealed class NetwSchema : NetwRefCounted
@@ -83,8 +74,8 @@ public sealed class NetwSchema : NetwRefCounted
         NetwApi.MethodBind("NetwSchema", "get_schema_name", 2002593661UL);
 
     /// <summary>
-    /// The registered schema name used by
-    /// <see cref="NetwMultiplayer.SchemaFind"/>.
+    /// The name this schema is registered under, which
+    /// <see cref="NetwMultiplayer.SchemaFind"/> takes.
     /// </summary>
     public StringName SchemaName
     {
@@ -102,8 +93,7 @@ public sealed class NetwSchema : NetwRefCounted
         NetwApi.MethodBind("NetwSchema", "get_columns", 3995934104UL);
 
     /// <summary>
-    /// The declared columns in address order. A consumer that types its own
-    /// storage from a schema reads this list.
+    /// The declared columns in index order.
     /// </summary>
     public Godot.Collections.Array Columns
     {
@@ -122,12 +112,10 @@ public sealed class NetwSchema : NetwRefCounted
         NetwApi.MethodBind("NetwSchema", "declare", 261365823UL);
 
     /// <summary>
-    /// Declares the schema named <paramref name="name"/> in the process-wide
-    /// schema registry and returns it, or <c>null</c> when the name is empty.
-    /// Calling it twice for one name extends one declaration rather than making
-    /// two, which is what lets a schema be declared beside each of the classes
-    /// that write it. <see cref="Netw.ConfigureSchema"/> is the front door and
-    /// this is what it returns.
+    /// Returns the registered schema named <paramref name="name"/>, creating it
+    /// if needed, or <c>null</c> when the name is empty. Calling it twice with
+    /// one name returns the same schema, so several classes can add columns to
+    /// it. <see cref="Netw.ConfigureSchema"/> calls this.
     /// </summary>
     public static NetwSchema Declare(StringName name)
     {
@@ -147,11 +135,9 @@ public sealed class NetwSchema : NetwRefCounted
         NetwApi.MethodBind("NetwSchema", "create", 261365823UL);
 
     /// <summary>
-    /// Builds a schema under <paramref name="name"/> without listing it in the
-    /// process-wide schema registry, for a consumer that types its own columns
-    /// rather than publishing them. A caller that wants the registry's copy
-    /// asks <see cref="Netw.ConfigureSchema"/> instead, and one holding a
-    /// detached schema lists it later with <see cref="NetwSchema.Register"/>.
+    /// Builds a schema under <paramref name="name"/> without adding it to the
+    /// schema registry. Use <see cref="Netw.ConfigureSchema"/> to get the
+    /// registered one, or call <see cref="NetwSchema.Register"/> later.
     /// </summary>
     public static NetwSchema Create(StringName name)
     {
@@ -171,17 +157,12 @@ public sealed class NetwSchema : NetwRefCounted
         NetwApi.MethodBind("NetwSchema", "column", 3200875955UL);
 
     /// <summary>
-    /// Appends one column of an <see cref="NetwMultiplayer.ColumnType"/> named
-    /// at runtime and returns its index, which is the wire address readers and
-    /// writers both name it by. The typed verbs beside it are this call with
-    /// the type filled in. A <paramref name="key"/> already declared with the
-    /// SAME <paramref name="type"/> and <paramref name="stride"/> returns the
-    /// index it already holds, which is what makes a script reload idempotent:
-    /// every static initializer runs again and every column lands on the
-    /// address it had. A <paramref name="key"/> already declared with a
-    /// DIFFERENT shape returns <c>-1</c> and appends nothing, because a column
-    /// index is a stable wire address and silently shifting it would leave two
-    /// peers reading each other's bytes at the wrong offsets.
+    /// Appends a column of <paramref name="type"/> and returns its index. The
+    /// typed methods such as <see cref="NetwSchema.Vector3"/> are this call
+    /// with the type filled in. Declaring a <paramref name="key"/> again with
+    /// the same <paramref name="type"/> and <paramref name="stride"/> returns
+    /// the index it already has, so a script reload is safe. Declaring it with
+    /// a different shape returns <c>-1</c> and appends nothing.
     /// </summary>
     public int Column(
         StringName key,
@@ -551,7 +532,7 @@ public sealed class NetwSchema : NetwRefCounted
     /// Declares a <see cref="NetwMultiplayer.ColumnType.Quaternion"/> column,
     /// stored as a <c>PackedVector4Array</c> and read as
     /// <see cref="Quaternion"/> so <see cref="NetwQuantizeQuaternion"/> can
-    /// pack it smallest-three.
+    /// compress it.
     /// </summary>
     public int Quaternion(
         StringName key,
@@ -584,7 +565,7 @@ public sealed class NetwSchema : NetwRefCounted
 
     /// <summary>
     /// Declares a <see cref="NetwMultiplayer.ColumnType.Entity"/> column of
-    /// routes, the forward-only link one table draws to another.
+    /// routes, pointing at rows of another table.
     /// </summary>
     public int Entity(StringName key, int stride = 1)
     {
@@ -608,16 +589,13 @@ public sealed class NetwSchema : NetwRefCounted
         NetwApi.MethodBind("NetwSchema", "variant", 518967810UL);
 
     /// <summary>
-    /// Declares a <see cref="NetwMultiplayer.ColumnType.Variant"/> column, the
-    /// self-describing tier a <see cref="Godot.Collections.Dictionary"/> or a
-    /// nested <see cref="Godot.Collections.Array"/> takes. A schema holding one
-    /// cannot become a table, because variable width has no memcpy and no
-    /// rows-per-frame budget. Reach for it on a schema the database and the
-    /// property binding consume, and leave the wire's fixed-width tier to the
-    /// columns that can carry it. A saved value carries data only. An
-    /// <see cref="GodotObject"/>, a <see cref="Resource"/>, a
-    /// <see cref="Callable"/>, a <see cref="Signal"/> and a <see cref="Rid"/>
-    /// are all refused, including nested inside an
+    /// Declares a <see cref="NetwMultiplayer.ColumnType.Variant"/> column, for
+    /// a <see cref="Godot.Collections.Dictionary"/>, an
+    /// <see cref="Godot.Collections.Array"/> or any other value. A schema
+    /// holding one cannot become a replicated table. A saved value holds data
+    /// only. An <see cref="GodotObject"/>, <see cref="Resource"/>,
+    /// <see cref="Callable"/>, <see cref="Signal"/> or <see cref="Rid"/> is
+    /// refused, including one nested inside an
     /// <see cref="Godot.Collections.Array"/> or a
     /// <see cref="Godot.Collections.Dictionary"/>.
     /// </summary>
@@ -643,11 +621,9 @@ public sealed class NetwSchema : NetwRefCounted
         NetwApi.MethodBind("NetwSchema", "string", 518967810UL);
 
     /// <summary>
-    /// Declares a <see cref="NetwMultiplayer.ColumnType.String"/> column of
-    /// text. Text has no fixed width, so a schema holding one cannot become a
-    /// table for the same reason <see cref="NetwSchema.Variant"/> cannot. Reach
-    /// for it when the saved value is a name or a path and the self-describing
-    /// tier would buy nothing.
+    /// Declares a <see cref="NetwMultiplayer.ColumnType.String"/> column. Like
+    /// <see cref="NetwSchema.Variant"/>, a schema holding one cannot become a
+    /// replicated table.
     /// </summary>
     public int String(StringName key, int stride = 1)
     {
@@ -671,12 +647,10 @@ public sealed class NetwSchema : NetwRefCounted
         NetwApi.MethodBind("NetwSchema", "column_ref", 4233560099UL);
 
     /// <summary>
-    /// Returns a <see cref="NetwColumnRef"/> naming the column at
+    /// Returns a <see cref="NetwColumnRef"/> for the column at
     /// <paramref name="index"/>, or <c>null</c> when this schema has no such
-    /// column. A configuration call takes the reference rather than the [int],
-    /// because the reference carries this schema and the [int] does not. Wrap
-    /// the index the declaring method returned, in the same <c>static var</c>
-    /// line.
+    /// column. Configuration calls such as
+    /// <see cref="NetwPropertyConfig.Persisted"/> take the reference.
     /// </summary>
     public NetwColumnRef ColumnRef(int index)
     {
@@ -695,12 +669,10 @@ public sealed class NetwSchema : NetwRefCounted
 
     /// <summary>
     /// Sets the version saved records of this schema carry, and returns this
-    /// schema. The first version is <c>1</c>, which is the default. Raise it
-    /// whenever the saved shape changes, adding a field included, and supply
-    /// the <see cref="NetwSchema.Migrate"/> step that reads the version below.
-    /// A record saved under a version this schema cannot reach fails its read
-    /// and stays untouched. The version is storage only. It does not enter the
-    /// wire hash, so two peers on different storage versions still replicate.
+    /// schema. The default is <c>1</c>. Raise it when the saved columns change,
+    /// and add a <see cref="NetwSchema.Migrate"/> step from the previous
+    /// version. It does not affect replication, so peers on different storage
+    /// versions still connect.
     /// </summary>
     public NetwSchema StorageVersion(int version)
     {
@@ -718,13 +690,12 @@ public sealed class NetwSchema : NetwRefCounted
         NetwApi.MethodBind("NetwSchema", "migrate", 3083647625UL);
 
     /// <summary>
-    /// Installs the step that reads a record saved under
-    /// <paramref name="fromVersion"/> and returns it shaped for the next
-    /// version, and returns this schema. <paramref name="step"/> takes one
-    /// <see cref="Godot.Collections.Dictionary"/> and returns one
-    /// <see cref="Godot.Collections.Dictionary"/>. It advances exactly one
-    /// version, so a save two versions behind runs two steps in order. A read
-    /// with a step missing fails and touches nothing.
+    /// Sets the function that upgrades a record saved under
+    /// <paramref name="fromVersion"/> to the next version, and returns this
+    /// schema. <paramref name="step"/> takes a
+    /// <see cref="Godot.Collections.Dictionary"/> and returns a
+    /// <see cref="Godot.Collections.Dictionary"/>. A save two versions behind
+    /// runs two steps in order, and a read with a missing step fails.
     /// <code>
     /// static var schema := NetwSchema.create(&amp;"players") \
     ///     .replicated(false) \
@@ -736,8 +707,8 @@ public sealed class NetwSchema : NetwRefCounted
     ///     return row
     /// </code>
     /// <para>
-    /// Migration does not rewrite what it read. The next save writes the
-    /// current version.
+    /// The stored record is not rewritten by the read. The next save writes it
+    /// at the current version.
     /// </para>
     /// </summary>
     public NetwSchema Migrate(int fromVersion, Callable step)
@@ -765,12 +736,10 @@ public sealed class NetwSchema : NetwRefCounted
         NetwApi.MethodBind("NetwSchema", "register", 2844667682UL);
 
     /// <summary>
-    /// Puts this declaration back in the process-wide schema registry if it is
-    /// not listed there, and returns itself. A <c>static var</c> initializer
-    /// runs once and never again, so a holder that outlives a registry reset
-    /// would otherwise keep a schema no session can find. Call this from the
-    /// <c>Node._ready</c> of whatever publishes the schema, which costs nothing
-    /// when the declaration is already registered.
+    /// Adds this schema to the schema registry if it is not there, and returns
+    /// it. A <c>static var</c> runs only once, so call this from
+    /// <c>Node._ready</c> when the registry may have been reset since. It does
+    /// nothing when the schema is already registered.
     /// </summary>
     public NetwSchema Register()
     {
@@ -783,12 +752,9 @@ public sealed class NetwSchema : NetwRefCounted
         NetwApi.MethodBind("NetwSchema", "replicated", 1843172997UL);
 
     /// <summary>
-    /// Sets whether an adopting session creates a replicated table from this
-    /// schema, and returns this schema. Read back through
-    /// <see cref="NetwSchema.IsReplicated"/>. Declaring a schema costs no wire
-    /// on its own. Passing <c>false</c> is how a schema that only types
-    /// database columns says so, and the session skips the table, the wire id,
-    /// and the frame budget entirely.
+    /// Sets whether a session creates a replicated table from this schema, and
+    /// returns this schema. Pass <c>false</c> for a schema that only describes
+    /// saved records.
     /// </summary>
     public NetwSchema Replicated(bool value = true)
     {
@@ -806,11 +772,10 @@ public sealed class NetwSchema : NetwRefCounted
         NetwApi.MethodBind("NetwSchema", "reliable", 1843172997UL);
 
     /// <summary>
-    /// Sends this schema's table commits on the reliable lane and returns this
-    /// schema. Read back through <see cref="NetwSchema.IsReliable"/>. Reach for
-    /// it when a table changes rarely, because a rare-change table has no next
-    /// commit to heal a lost datagram with. A table published every tick wants
-    /// the default, where loss costs one row one tick of freshness.
+    /// Sends this schema's table commits reliably, and returns this schema. Use
+    /// it for a table that changes rarely, where a lost packet would not be
+    /// fixed by the next commit. A table committed every tick is fine
+    /// unreliable.
     /// </summary>
     public NetwSchema Reliable(bool value = true)
     {
@@ -828,8 +793,8 @@ public sealed class NetwSchema : NetwRefCounted
         NetwApi.MethodBind("NetwSchema", "is_replicated", 36873697UL);
 
     /// <summary>
-    /// Whether an adopting session creates a replicated table from this schema,
-    /// as <see cref="NetwSchema.Replicated"/> left it.
+    /// Whether a session creates a replicated table from this schema, as
+    /// <see cref="NetwSchema.Replicated"/> set it.
     /// </summary>
     public bool IsReplicated()
     {
@@ -842,9 +807,8 @@ public sealed class NetwSchema : NetwRefCounted
         NetwApi.MethodBind("NetwSchema", "is_reliable", 36873697UL);
 
     /// <summary>
-    /// Whether this schema's table commits ride the reliable lane, as
-    /// <see cref="NetwSchema.Reliable"/> left it. Meaningless while
-    /// <see cref="NetwSchema.IsReplicated"/> returns <c>false</c>.
+    /// Whether this schema's table sends its commits reliably, as
+    /// <see cref="NetwSchema.Reliable"/> set it.
     /// </summary>
     public bool IsReliable()
     {

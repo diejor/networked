@@ -12,22 +12,18 @@ MemoryDatabase
 
 **Inherits:** :ref:`NetwDatabaseBackend<class_NetwDatabaseBackend>` **<** :godot:`Resource`
 
-A :ref:`NetwDatabaseBackend<class_NetwDatabaseBackend>` that keeps records in this process and nowhere else.
+A :ref:`NetwDatabaseBackend<class_NetwDatabaseBackend>` that keeps records in memory.
 
 .. rst-class:: classref-introduction-group
 
 Description
 -----------
 
-Records live for as long as the process does. Reach for it in a test, in a prototype, or wherever a save that outlives the run would get in the way.
+Records are lost when the game closes. Useful for tests and prototypes.
 
 ::
 
     Netw.configure_database(self, &"saves").backend(MemoryDatabase.new())
-
-\ It implements the whole backend contract, slots and scan cursors included, so a game written against it runs unchanged on a durable backend.
-
-Two backends sharing a :ref:`store<class_MemoryDatabase_property_store>` share their records, which is how a reopen can be exercised without leaving the process. This is a shared store and not durability.
 
 .. rst-class:: classref-reftable-group
 
@@ -40,6 +36,22 @@ Properties
    +---------------------+---------------------------------------------------+
    | :godot:`StringName` | :ref:`store<class_MemoryDatabase_property_store>` |
    +---------------------+---------------------------------------------------+
+
+.. rst-class:: classref-reftable-group
+
+Methods
+-------
+
+.. table::
+   :widths: auto
+
+   +---------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwPromise<class_NetwPromise>` | :ref:`_delete_slot<class_MemoryDatabase_private_method__delete_slot>`\ (\ session\: :godot:`Object`, slot\: :godot:`StringName`\ ) |virtual| |
+   +---------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwPromise<class_NetwPromise>` | :ref:`_list_slots<class_MemoryDatabase_private_method__list_slots>`\ (\ session\: :godot:`Object`\ ) |virtual|                               |
+   +---------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwPromise<class_NetwPromise>` | :ref:`_open<class_MemoryDatabase_private_method__open>`\ (\ session\: :godot:`Object`, slot\: :godot:`StringName`\ ) |virtual|               |
+   +---------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------+
 
 .. rst-class:: classref-section-separator
 
@@ -61,7 +73,48 @@ Property Descriptions
 - |void| **set_store**\ (\ value\: :godot:`StringName`\ )
 - :godot:`StringName` **get_store**\ (\ )
 
-Which in-process store to keep records in. Two backends naming the same store see each other's records.
+The name of the in-memory store this backend keeps its records in. Backends with the same :ref:`store<class_MemoryDatabase_property_store>` share records.
+
+.. rst-class:: classref-section-separator
+
+----
+
+.. rst-class:: classref-descriptions-group
+
+Method Descriptions
+-------------------
+
+.. _class_MemoryDatabase_private_method__delete_slot:
+
+.. rst-class:: classref-method
+
+:ref:`NetwPromise<class_NetwPromise>` **_delete_slot**\ (\ session\: :godot:`Object`, slot\: :godot:`StringName`\ ) |virtual| :ref:`🔗<class_MemoryDatabase_private_method__delete_slot>`
+
+Removes ``slot`` and every record in it from :ref:`store<class_MemoryDatabase_property_store>`. Resolves :godot:`@GlobalScope.OK <@GlobalScope#class_@GlobalScope_constant_OK>` even when the slot did not exist.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_MemoryDatabase_private_method__list_slots:
+
+.. rst-class:: classref-method
+
+:ref:`NetwPromise<class_NetwPromise>` **_list_slots**\ (\ session\: :godot:`Object`\ ) |virtual| :ref:`🔗<class_MemoryDatabase_private_method__list_slots>`
+
+Resolves every slot :ref:`store<class_MemoryDatabase_property_store>` holds.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_MemoryDatabase_private_method__open:
+
+.. rst-class:: classref-method
+
+:ref:`NetwPromise<class_NetwPromise>` **_open**\ (\ session\: :godot:`Object`, slot\: :godot:`StringName`\ ) |virtual| :ref:`🔗<class_MemoryDatabase_private_method__open>`
+
+Resolves a :ref:`NetwDatabaseConnection<class_NetwDatabaseConnection>` for ``slot`` in :ref:`store<class_MemoryDatabase_property_store>`, creating the slot if needed.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

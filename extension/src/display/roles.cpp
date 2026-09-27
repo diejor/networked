@@ -1,10 +1,10 @@
 #include "netw/display/roles.hpp"
 
+#include "netw/colors.hpp"
 #include "netw/display/build.hpp"
 #include "netw/display/channel.hpp"
 #include "netw/display/history.hpp"
 #include "netw/display/role_facts.hpp"
-#include "netw/colors.hpp"
 #include "netw/log.hpp"
 #include "netw/profile.hpp"
 #include "netw/subsystems.hpp"

@@ -12,14 +12,14 @@ NetwPropertyConfig
 
 **Inherits:** :ref:`NetwMemberConfig<class_NetwMemberConfig>` **<** :godot:`RefCounted`
 
-The property face of :ref:`NetwMemberConfig<class_NetwMemberConfig>`: one fluent declaration that decides how a script variable travels for the rest of its life.
+Declares how a script variable is replicated, reached by :ref:`Netw.configure_property()<class_Netw_method_configure_property>`.
 
 .. rst-class:: classref-introduction-group
 
 Description
 -----------
 
-Marking a field with :ref:`state()<class_NetwPropertyConfig_method_state>`, :ref:`input()<class_NetwPropertyConfig_method_input>`, or :ref:`broadcast()<class_NetwPropertyConfig_method_broadcast>` enrolls it in one of the script's per-tick sets, and from then on the session's sync pump ships every change automatically. Writing the variable is the whole job, there is no send call in the gameplay code.
+Mark a property with :ref:`state()<class_NetwPropertyConfig_method_state>`, :ref:`input()<class_NetwPropertyConfig_method_input>` or :ref:`broadcast()<class_NetwPropertyConfig_method_broadcast>`, and every change to it is sent each tick. There is no send call to make.
 
 ::
 
@@ -31,15 +31,24 @@ Marking a field with :ref:`state()<class_NetwPropertyConfig_method_state>`, :ref
     func _physics_process(_dt: float) -> void:
         move_dir = Input.get_vector("left", "right", "up", "down")
         aim_dir = (get_global_mouse_position() - position).normalized()
-        # no send call: the next pump tick ships every marked change
+        # the next tick sends every changed property
 
-\ Pick the kind by returning who owns the value, who sees it, and whether the server polices it. :ref:`Record<enum_NetwPropertySet_Record>` holds the comparison table. A field with no kind mark rides no per-tick set and syncs only when :ref:`Netw.sync_property()<class_Netw_method_sync_property>` pushes it explicitly.
+\ :ref:`Record<enum_NetwPropertySet_Record>` compares the three kinds. A property with none of them is sent only when :ref:`Netw.sync_property()<class_Netw_method_sync_property>` is called.
 
-\ :ref:`volatile()<class_NetwPropertyConfig_method_volatile>`, :ref:`retained()<class_NetwPropertyConfig_method_retained>`, :ref:`epsilon()<class_NetwPropertyConfig_method_epsilon>`, and :ref:`persisted()<class_NetwPropertyConfig_method_persisted>` refine one property. :ref:`every_tick()<class_NetwPropertyConfig_method_every_tick>`, :ref:`on_change()<class_NetwPropertyConfig_method_on_change>`, :ref:`heartbeat()<class_NetwPropertyConfig_method_heartbeat>`, :ref:`windowed()<class_NetwPropertyConfig_method_windowed>`, :ref:`audience()<class_NetwPropertyConfig_method_audience>`, and :ref:`masked()<class_NetwPropertyConfig_method_masked>` write through to the script's whole :ref:`NetwPropertySet<class_NetwPropertySet>` from any member, so the last member to name a knob owns it.
+\ :ref:`volatile()<class_NetwPropertyConfig_method_volatile>`, :ref:`retained()<class_NetwPropertyConfig_method_retained>`, :ref:`epsilon()<class_NetwPropertyConfig_method_epsilon>` and :ref:`persisted()<class_NetwPropertyConfig_method_persisted>` apply to one property. :ref:`every_tick()<class_NetwPropertyConfig_method_every_tick>`, :ref:`on_change()<class_NetwPropertyConfig_method_on_change>`, :ref:`heartbeat()<class_NetwPropertyConfig_method_heartbeat>`, :ref:`windowed()<class_NetwPropertyConfig_method_windowed>`, :ref:`audience()<class_NetwPropertyConfig_method_audience>` and :ref:`masked()<class_NetwPropertyConfig_method_masked>` apply to every property of the same kind on the script, so the last call wins.
 
-\ **The chain downgrades to the base type.**\ 
+\ **Rigid bodies**\ 
 
-\ :ref:`NetwMemberConfig.call_local()<class_NetwMemberConfig_method_call_local>` and :ref:`NetwMemberConfig.call_remote()<class_NetwMemberConfig_method_call_remote>` are not re-declared here, and neither is any other base verb: a bound method records one return type, so a chain that passes through a base verb returns a :ref:`NetwMemberConfig<class_NetwMemberConfig>` from that point on even though the object is still this **NetwPropertyConfig**. Property-only verbs therefore come LAST in a chain. The local-call axis has no meaning for a property, since a property assignment is local first by construction.
+When the entity root is a :godot:`RigidBody3D` or a :godot:`RigidBody2D`, ``position``, ``quaternion`` (``rotation`` in 2D), ``linear_velocity``, ``angular_velocity`` and ``sleeping`` read and write the body's physics state. ``position`` stays relative to the parent. While :godot:`RigidBody3D.freeze <RigidBody3D#class_RigidBody3D_property_freeze>` is on, position and rotation use the node transform.
+
+::
+
+    func _init() -> void:
+        Netw.configure_property(self, &"position").state()
+        Netw.configure_property(self, &"quaternion").state()
+        Netw.configure_property(self, &"linear_velocity").state()
+
+\ **Note:** a :ref:`NetwMemberConfig<class_NetwMemberConfig>` method such as :ref:`NetwMemberConfig.call_local()<class_NetwMemberConfig_method_call_local>` returns a :ref:`NetwMemberConfig<class_NetwMemberConfig>`, so call the methods of this class first in a chain.
 
 .. rst-class:: classref-reftable-group
 
@@ -160,7 +169,7 @@ Constants
 
 **UNSET** = ``-1`` :ref:`🔗<class_NetwPropertyConfig_constant_UNSET>`
 
-The spelling of an integer set-level knob no member has written yet, which is what :ref:`set_trigger<class_NetwPropertyConfig_property_set_trigger>`, :ref:`set_heartbeat_ticks<class_NetwPropertyConfig_property_set_heartbeat_ticks>` and :ref:`set_window<class_NetwPropertyConfig_property_set_window>` hold until one does. It is the absence of a declaration rather than a value, so a reader tests against it instead of using it.
+The value of a set-wide setting nothing has written yet.
 
 .. rst-class:: classref-section-separator
 
@@ -182,7 +191,7 @@ Property Descriptions
 - |void| **set_carry_channel**\ (\ value\: :godot:`StringName`\ )
 - :godot:`StringName` **get_carry_channel**\ (\ )
 
-The replicated channel a recovery advances this value along, or empty when it is restored at the acknowledged value. Declared through :ref:`carry_along()<class_NetwPropertyConfig_method_carry_along>`.
+Set by :ref:`carry_along()<class_NetwPropertyConfig_method_carry_along>`.
 
 .. rst-class:: classref-item-separator
 
@@ -199,7 +208,7 @@ The replicated channel a recovery advances this value along, or empty when it is
 - |void| **set_converge_stiffness**\ (\ value\: :godot:`float`\ )
 - :godot:`float` **get_converge_stiffness**\ (\ )
 
-How firmly a recovery pulls this value toward the authoritative one rather than writing it outright, or ``0.0`` to write it. Declared through :ref:`converge()<class_NetwPropertyConfig_method_converge>`.
+Set by :ref:`converge()<class_NetwPropertyConfig_method_converge>`.
 
 .. rst-class:: classref-item-separator
 
@@ -216,7 +225,7 @@ How firmly a recovery pulls this value toward the authoritative one rather than 
 - |void| **set_epsilon_override**\ (\ value\: :godot:`float`\ )
 - :godot:`float` **get_epsilon_override**\ (\ )
 
-The field's own divergence threshold, or a negative value to inherit the entity's :ref:`NetwPredictionHandle.divergence_epsilon<class_NetwPredictionHandle_property_divergence_epsilon>`. Declared through :ref:`epsilon()<class_NetwPropertyConfig_method_epsilon>`.
+Set by :ref:`epsilon()<class_NetwPropertyConfig_method_epsilon>`. A negative value uses :ref:`NetwPredictionHandle.divergence_epsilon<class_NetwPredictionHandle_property_divergence_epsilon>`.
 
 .. rst-class:: classref-item-separator
 
@@ -233,7 +242,7 @@ The field's own divergence threshold, or a negative value to inherit the entity'
 - |void| **set_explicit_reconcile_only**\ (\ value\: :godot:`bool`\ )
 - :godot:`bool` **get_explicit_reconcile_only**\ (\ )
 
-Whether :ref:`reconcile_only()<class_NetwPropertyConfig_method_reconcile_only>` excluded the field from triggering a correction on its own.
+Set by :ref:`reconcile_only()<class_NetwPropertyConfig_method_reconcile_only>`.
 
 .. rst-class:: classref-item-separator
 
@@ -250,7 +259,7 @@ Whether :ref:`reconcile_only()<class_NetwPropertyConfig_method_reconcile_only>` 
 - |void| **set_explicit_teleport_only**\ (\ value\: :godot:`bool`\ )
 - :godot:`bool` **get_explicit_teleport_only**\ (\ )
 
-Whether :ref:`teleport_only()<class_NetwPropertyConfig_method_teleport_only>` restricted the field to teleport-tier recoveries.
+Set by :ref:`teleport_only()<class_NetwPropertyConfig_method_teleport_only>`.
 
 .. rst-class:: classref-item-separator
 
@@ -267,7 +276,7 @@ Whether :ref:`teleport_only()<class_NetwPropertyConfig_method_teleport_only>` re
 - |void| **set_in_broadcast_set**\ (\ value\: :godot:`bool`\ )
 - :godot:`bool` **get_in_broadcast_set**\ (\ )
 
-Whether :ref:`broadcast()<class_NetwPropertyConfig_method_broadcast>` marked this property into its script's broadcast set, the trusted display stream outside the rewind boundary.
+Set by :ref:`broadcast()<class_NetwPropertyConfig_method_broadcast>`.
 
 .. rst-class:: classref-item-separator
 
@@ -284,7 +293,7 @@ Whether :ref:`broadcast()<class_NetwPropertyConfig_method_broadcast>` marked thi
 - |void| **set_in_input_set**\ (\ value\: :godot:`bool`\ )
 - :godot:`bool` **get_in_input_set**\ (\ )
 
-Whether :ref:`input()<class_NetwPropertyConfig_method_input>` marked this property into its script's input set.
+Set by :ref:`input()<class_NetwPropertyConfig_method_input>`.
 
 .. rst-class:: classref-item-separator
 
@@ -301,7 +310,7 @@ Whether :ref:`input()<class_NetwPropertyConfig_method_input>` marked this proper
 - |void| **set_in_state_set**\ (\ value\: :godot:`bool`\ )
 - :godot:`bool` **get_in_state_set**\ (\ )
 
-Whether :ref:`state()<class_NetwPropertyConfig_method_state>` marked this property into its script's state set.
+Set by :ref:`state()<class_NetwPropertyConfig_method_state>`.
 
 .. rst-class:: classref-item-separator
 
@@ -318,7 +327,7 @@ Whether :ref:`state()<class_NetwPropertyConfig_method_state>` marked this proper
 - |void| **set_is_property**\ (\ value\: :godot:`bool`\ )
 - :godot:`bool` **get_is_property**\ (\ )
 
-Always ``true`` on a property config, which is how a registry holding both kinds tells this apart from the plain :ref:`NetwMemberConfig<class_NetwMemberConfig>` an RPC or a signal returns when only the base type is known.
+Always ``true``. Tells this class apart from a :ref:`NetwMemberConfig<class_NetwMemberConfig>` for an RPC or a signal.
 
 .. rst-class:: classref-item-separator
 
@@ -335,7 +344,7 @@ Always ``true`` on a property config, which is how a registry holding both kinds
 - |void| **set_is_spawn_state**\ (\ value\: :godot:`bool`\ )
 - :godot:`bool` **get_is_spawn_state**\ (\ )
 
-Whether the property's value rides the SPAWN frame and is applied on every receiving peer before the node enters the tree. Declared through :ref:`on_spawn()<class_NetwPropertyConfig_method_on_spawn>`.
+Set by :ref:`on_spawn()<class_NetwPropertyConfig_method_on_spawn>`.
 
 .. rst-class:: classref-item-separator
 
@@ -352,7 +361,7 @@ Whether the property's value rides the SPAWN frame and is applied on every recei
 - |void| **set_lane**\ (\ value\: :ref:`Lane<enum_NetwPropertySet_Lane>`\ )
 - :ref:`Lane<enum_NetwPropertySet_Lane>` **get_lane**\ (\ )
 
-The field's delivery lane: :ref:`NetwPropertySet.VOLATILE<class_NetwPropertySet_constant_VOLATILE>` freshest wins, :ref:`NetwPropertySet.RETAINED<class_NetwPropertySet_constant_RETAINED>` reliable on change. Declared through :ref:`volatile()<class_NetwPropertyConfig_method_volatile>` and :ref:`retained()<class_NetwPropertyConfig_method_retained>`, and written by every kind mark.
+Whether changes are sent unreliably or reliably. Set by :ref:`volatile()<class_NetwPropertyConfig_method_volatile>` and :ref:`retained()<class_NetwPropertyConfig_method_retained>`.
 
 .. rst-class:: classref-item-separator
 
@@ -369,7 +378,7 @@ The field's delivery lane: :ref:`NetwPropertySet.VOLATILE<class_NetwPropertySet_
 - |void| **set_property_class**\ (\ value\: :ref:`PropertyClass<enum_NetwPropertySet_PropertyClass>`\ )
 - :ref:`PropertyClass<enum_NetwPropertySet_PropertyClass>` **get_property_class**\ (\ )
 
-What the value does in the simulation, which decides whether a reconciliation compares and restores it. Declared through :ref:`causal()<class_NetwPropertyConfig_method_causal>`, :ref:`derived()<class_NetwPropertyConfig_method_derived>` and :ref:`cosmetic()<class_NetwPropertyConfig_method_cosmetic>`.
+Whether a difference in the value causes a correction. Set by :ref:`causal()<class_NetwPropertyConfig_method_causal>`, :ref:`derived()<class_NetwPropertyConfig_method_derived>` and :ref:`cosmetic()<class_NetwPropertyConfig_method_cosmetic>`.
 
 .. rst-class:: classref-item-separator
 
@@ -386,7 +395,7 @@ What the value does in the simulation, which decides whether a reconciliation co
 - |void| **set_set_audience**\ (\ value\: :ref:`Audience<enum_NetwPropertySet_Audience>`\ )
 - :ref:`Audience<enum_NetwPropertySet_Audience>` **get_set_audience**\ (\ )
 
-The script set's :ref:`NetwPropertySet.audience<class_NetwPropertySet_property_audience>`. Written by :ref:`audience()<class_NetwPropertyConfig_method_audience>` and by the :ref:`input()<class_NetwPropertyConfig_method_input>` preset.
+Set by :ref:`audience()<class_NetwPropertyConfig_method_audience>` and :ref:`input()<class_NetwPropertyConfig_method_input>`.
 
 .. rst-class:: classref-item-separator
 
@@ -403,7 +412,7 @@ The script set's :ref:`NetwPropertySet.audience<class_NetwPropertySet_property_a
 - |void| **set_set_every_tick_interval**\ (\ value\: :godot:`float`\ )
 - :godot:`float` **get_set_every_tick_interval**\ (\ )
 
-The script set's every-tick throttle in seconds, or a negative value when unset. Written by :ref:`every_tick()<class_NetwPropertyConfig_method_every_tick>`.
+Set by :ref:`every_tick()<class_NetwPropertyConfig_method_every_tick>`. Negative when unset.
 
 .. rst-class:: classref-item-separator
 
@@ -420,7 +429,7 @@ The script set's every-tick throttle in seconds, or a negative value when unset.
 - |void| **set_set_heartbeat_ticks**\ (\ value\: :godot:`int`\ )
 - :godot:`int` **get_set_heartbeat_ticks**\ (\ )
 
-The script set's heartbeat interval in ticks, or :ref:`UNSET<class_NetwPropertyConfig_constant_UNSET>`. Written by :ref:`heartbeat()<class_NetwPropertyConfig_method_heartbeat>`.
+Set by :ref:`heartbeat()<class_NetwPropertyConfig_method_heartbeat>`, or :ref:`UNSET<class_NetwPropertyConfig_constant_UNSET>`.
 
 .. rst-class:: classref-item-separator
 
@@ -437,7 +446,7 @@ The script set's heartbeat interval in ticks, or :ref:`UNSET<class_NetwPropertyC
 - |void| **set_set_masked**\ (\ value\: :godot:`bool`\ )
 - :godot:`bool` **get_set_masked**\ (\ )
 
-The script set's :ref:`NetwPropertySet.masked<class_NetwPropertySet_property_masked>`. Written by :ref:`masked()<class_NetwPropertyConfig_method_masked>`.
+Set by :ref:`masked()<class_NetwPropertyConfig_method_masked>`.
 
 .. rst-class:: classref-item-separator
 
@@ -454,7 +463,7 @@ The script set's :ref:`NetwPropertySet.masked<class_NetwPropertySet_property_mas
 - |void| **set_set_trigger**\ (\ value\: :ref:`Trigger<enum_NetwPropertySet_Trigger>`\ )
 - :ref:`Trigger<enum_NetwPropertySet_Trigger>` **get_set_trigger**\ (\ )
 
-The script set's :ref:`NetwPropertySet.trigger<class_NetwPropertySet_property_trigger>`, or :ref:`UNSET<class_NetwPropertyConfig_constant_UNSET>`. Written by :ref:`every_tick()<class_NetwPropertyConfig_method_every_tick>` and :ref:`on_change()<class_NetwPropertyConfig_method_on_change>`, and by all three kind marks.
+Set by :ref:`every_tick()<class_NetwPropertyConfig_method_every_tick>` and :ref:`on_change()<class_NetwPropertyConfig_method_on_change>`, or :ref:`UNSET<class_NetwPropertyConfig_constant_UNSET>`.
 
 .. rst-class:: classref-item-separator
 
@@ -471,7 +480,7 @@ The script set's :ref:`NetwPropertySet.trigger<class_NetwPropertySet_property_tr
 - |void| **set_set_window**\ (\ value\: :godot:`int`\ )
 - :godot:`int` **get_set_window**\ (\ )
 
-The script set's :ref:`NetwPropertySet.window<class_NetwPropertySet_property_window>`, or :ref:`UNSET<class_NetwPropertyConfig_constant_UNSET>`. Written by :ref:`windowed()<class_NetwPropertyConfig_method_windowed>`.
+Set by :ref:`windowed()<class_NetwPropertyConfig_method_windowed>`, or :ref:`UNSET<class_NetwPropertyConfig_constant_UNSET>`.
 
 .. rst-class:: classref-item-separator
 
@@ -488,7 +497,7 @@ The script set's :ref:`NetwPropertySet.window<class_NetwPropertySet_property_win
 - |void| **set_teleport_at_override**\ (\ value\: :godot:`float`\ )
 - :godot:`float` **get_teleport_at_override**\ (\ )
 
-The field's own teleport-tier distance, or a negative value to inherit the entity's :ref:`NetwPredictionHandle.teleport_threshold<class_NetwPredictionHandle_property_teleport_threshold>`. Declared through :ref:`teleport_at()<class_NetwPropertyConfig_method_teleport_at>`.
+Set by :ref:`teleport_at()<class_NetwPropertyConfig_method_teleport_at>`. A negative value uses :ref:`NetwPredictionHandle.teleport_threshold<class_NetwPredictionHandle_property_teleport_threshold>`.
 
 .. rst-class:: classref-section-separator
 
@@ -505,7 +514,7 @@ Method Descriptions
 
 :ref:`NetwPropertyConfig<class_NetwPropertyConfig>` **audience**\ (\ server_only\: :godot:`bool` = true\ ) :ref:`🔗<class_NetwPropertyConfig_method_audience>`
 
-Narrows the set to the server only, or back to every recipient. Writes :ref:`set_audience<class_NetwPropertyConfig_property_set_audience>` for the whole set, which becomes the set's :ref:`NetwPropertySet.audience<class_NetwPropertySet_property_audience>`. The :ref:`input()<class_NetwPropertyConfig_method_input>` preset already narrows its set to the server.
+Sends the set to the server only, or to every peer when ``server_only`` is ``false``. Sets :ref:`NetwPropertySet.audience<class_NetwPropertySet_property_audience>`. :ref:`input()<class_NetwPropertyConfig_method_input>` already sends to the server only.
 
 .. rst-class:: classref-item-separator
 
@@ -517,7 +526,7 @@ Narrows the set to the server only, or back to every recipient. Writes :ref:`set
 
 :ref:`NetwPropertyConfig<class_NetwPropertyConfig>` **broadcast**\ (\ ) :ref:`🔗<class_NetwPropertyConfig_method_broadcast>`
 
-The controller owns this value, every observer sees it, and nobody checks it. The display kind, for cosmetic streams like an aim arrow or a look direction where being wrong costs nothing, so the server keeps no history and never rewinds it. See :ref:`Record<enum_NetwPropertySet_Record>` to compare kinds.
+The controlling peer owns the value and every peer sees it, with no server check. Use it for cosmetic values such as an aim direction. The server keeps no history of it.
 
 ::
 
@@ -526,10 +535,9 @@ The controller owns this value, every observer sees it, and nobody checks it. Th
 
     func _process(_dt: float) -> void:
         aim_dir = (get_global_mouse_position() - position).normalized()
-        # nothing else to do: each pump tick broadcasts the change and
-        # every other player's copy of this node updates its arrow
+        # every other peer's copy of this node follows
 
-\ Writes :ref:`in_broadcast_set<class_NetwPropertyConfig_property_in_broadcast_set>`, the :ref:`NetwPropertySet.VOLATILE<class_NetwPropertySet_constant_VOLATILE>` :ref:`lane<class_NetwPropertyConfig_property_lane>`, and a :ref:`set_trigger<class_NetwPropertyConfig_property_set_trigger>` of :ref:`NetwPropertySet.TRIGGER_ON_CHANGE<class_NetwPropertySet_constant_TRIGGER_ON_CHANGE>`, and nothing else. Add :ref:`masked()<class_NetwPropertyConfig_method_masked>` when many viewers watch the same entity, so each one receives only the fields that changed for them.
+\ Add :ref:`masked()<class_NetwPropertyConfig_method_masked>` when many peers watch the same entity.
 
 .. rst-class:: classref-item-separator
 
@@ -541,20 +549,14 @@ The controller owns this value, every observer sees it, and nobody checks it. Th
 
 :ref:`NetwPropertyConfig<class_NetwPropertyConfig>` **carry_along**\ (\ channel\: :godot:`StringName`\ ) :ref:`🔗<class_NetwPropertyConfig_method_carry_along>`
 
-Advances this value along ``channel``, a sibling replicated field holding its rate, when a recovery restores it. Writes :ref:`carry_channel<class_NetwPropertyConfig_property_carry_channel>`.
-
-A restore carries authority's value for the transition it acknowledged, which is already :ref:`NetwPredictionHandle.ack_age_ticks<class_NetwPredictionHandle_property_ack_age_ticks>` old by the time it lands, so a field still moving is written behind where it is. The channel is what closes that gap, at one constant rate, which is exact only while that rate holds still across the window. A field that declares nothing is written at the acknowledged value.
+When a correction restores this value, advances it to the present using the rate in ``channel``. Without it, the value is restored as the server had it a few ticks ago.
 
 ::
 
     # the body integrates position from velocity, so a restore advances along it
     Netw.configure_property(self, &"position").state().carry_along(&"velocity")
 
-\ ``channel`` must name another :ref:`state()<class_NetwPropertyConfig_method_state>` property of the same entity, and declaring the pair is also what sorts the two: this field joins the pose :ref:`NetwPredictionHandle.teleport_threshold<class_NetwPredictionHandle_property_teleport_threshold>` is measured over, and ``channel`` joins the momentum family. A value whose rate turns, decays, or jumps inside the window wants :ref:`carry_step()<class_NetwPropertyConfig_method_carry_step>` instead, and declaring both on one column is an error that keeps neither.
-
-A ``channel`` this entity's state set does not carry compiles to no projection at all, exactly as declaring none does, because a channel the set does not ship cannot be read at the same tick as the field it advances and the pair is not one the engine can honour.
-
-This is a reconciliation declaration, independent of :ref:`NetwInterpolate.project_by()<class_NetwInterpolate_method_project_by>`, which decides how a remote display extrapolates past its newest sample.
+\ ``channel`` must be another :ref:`state()<class_NetwPropertyConfig_method_state>` property of the same entity. Use :ref:`carry_step()<class_NetwPropertyConfig_method_carry_step>` instead when the rate changes quickly. Declaring both on one property is an error, and neither is used.
 
 .. rst-class:: classref-item-separator
 
@@ -566,29 +568,7 @@ This is a reconciliation declaration, independent of :ref:`NetwInterpolate.proje
 
 :ref:`NetwPropertyConfig<class_NetwPropertyConfig>` **carry_step**\ (\ step\: :godot:`Callable`\ ) :ref:`🔗<class_NetwPropertyConfig_method_carry_step>`
 
-Advances this value by running ``step`` once over each transition the owner recorded since the acknowledgement.
-
-Where :ref:`carry_along()<class_NetwPropertyConfig_method_carry_along>` extrapolates one rate, this re-runs the part of the simulation that moves this one field, so a rate that turns, decays or jumps inside the window is followed rather than averaged. Nothing else is re-simulated and the physics server is never stepped.
-
-\ **The rule must reproduce the whole change the transition made to this field**, and that is what the engine checks it against. So the verb is for a field whose change the game authors ENTIRELY. A field the solver also moves cannot be advanced this way, however correct the rule is about the game's own share: the recovery needs the value the body actually reached, and the solver's contribution is neither authored here nor re-runnable, and a physics server that could be re-stepped would not need this verb at all. Such a rule is rejected and retired, and the retirement says so.
-
-A carry result is accepted only when the rule did not write the body, reproduced the recorded transitions, returned the same finite type, and stayed below the teleport threshold. Otherwise recovery writes the acknowledged value.
-
-Declaring both this and :ref:`carry_along()<class_NetwPropertyConfig_method_carry_along>` on one column is an error and keeps NEITHER. One field, one forward model: the step is for a rate that varies across the acknowledgement window and the channel for one that holds still, and no field is both.
-
-::
-
-    # yes -- a scripted value the solver never touches
-    Netw.configure_property(self, &"charge").state().carry_step(_carry_charge)
-
-    # no -- the solver moves this too, so its whole change is not yours to
-    # restate. Measured on a rolling sphere: the game's own term was 1.667 rad/s
-    # per transition against a realized 0.329, and the rule was RIGHT about the
-    # 1.667.
-    Netw.configure_property(self, &"angular_velocity").state() \
-            .carry_step(_carry_spin)
-
-\ :ref:`NetwPredictionHandle.reachability()<class_NetwPredictionHandle_method_reachability>` reports whether a declared rule is live, and why when it is not.
+When a correction restores this value, advances it to the present by calling ``step`` once for each tick the server has not acknowledged yet. Use it for a value only your code changes. A value the physics engine also changes cannot be advanced this way, and the rule is disabled.
 
 ::
 
@@ -598,9 +578,7 @@ Declaring both this and :ref:`carry_along()<class_NetwPropertyConfig_method_carr
     func _carry_spin(value: Vector3, ctx: NetwPredictCarryContext) -> Vector3:
         return value + _drive_axis(ctx.state) * ctx.state[&"speed"] * ctx.delta
 
-\ ``step`` may read only its :ref:`NetwPredictCarryContext<class_NetwPredictCarryContext>` and must write nothing. The engine holds it to that rather than trusting it: a step is replayed against transitions the owner already recorded and retired once it stops reproducing them, and a rejected carry writes the acknowledged value exactly as an undeclared field does. :ref:`NetwPredictionHandle.field_recovery<class_NetwPredictionHandle_property_field_recovery>` counts both.
-
-The rule is stored per node rather than per script, because a :godot:`Callable` is bound to one body while a property declaration is shared by every instance of the script that declares it. ``step`` therefore has to be a method or lambda of a :godot:`Node`, which is the body it will advance. A ``step`` that is invalid, or valid but bound to something that is not a :godot:`Node`, is reported through the error channel and binds nothing, leaving this config exactly as it was. The rule lands in a per-node overlay, which is keyed by node instance rather than by :ref:`NetwMemberConfig.context_script<class_NetwMemberConfig_property_context_script>`.
+\ ``step`` must be a method or lambda of a :godot:`Node`, may read only its :ref:`NetwPredictCarryContext<class_NetwPredictCarryContext>`, and must not write anything. A result that does not reproduce the recorded ticks is rejected, and the value is restored as the server had it. Declaring both this and :ref:`carry_along()<class_NetwPropertyConfig_method_carry_along>` on one property is an error, and neither is used. :ref:`NetwPredictionHandle.reachability()<class_NetwPredictionHandle_method_reachability>` reports whether the rule is in use.
 
 .. rst-class:: classref-item-separator
 
@@ -612,15 +590,11 @@ The rule is stored per node rather than per script, because a :godot:`Callable` 
 
 :ref:`NetwPropertyConfig<class_NetwPropertyConfig>` **causal**\ (\ ) :ref:`🔗<class_NetwPropertyConfig_method_causal>`
 
-Marks the value an antecedent of the simulation, one the next step reads from, so a reconciliation compares it and restores it. The default :ref:`property_class<class_NetwPropertyConfig_property_property_class>`.
+Marks the value as one the next step reads, so it is compared and corrected. This is the default.
 
 ::
 
-    # the body integrates from velocity, so a restore that skipped it would
-    # rebase the position and then immediately drift away from it again
     Netw.configure_property(self, &"velocity").state().causal()
-
-\ See :ref:`PropertyClass<enum_NetwPropertySet_PropertyClass>` to compare classes.
 
 .. rst-class:: classref-item-separator
 
@@ -632,15 +606,11 @@ Marks the value an antecedent of the simulation, one the next step reads from, s
 
 :ref:`NetwPropertyConfig<class_NetwPropertyConfig>` **converge**\ (\ stiffness\: :godot:`float`\ ) :ref:`🔗<class_NetwPropertyConfig_method_converge>`
 
-Pulls the field toward the authoritative value at ``stiffness`` during a recovery instead of writing it outright, bounded to that one recovery. Writes :ref:`converge_stiffness<class_NetwPropertyConfig_property_converge_stiffness>`.
+Moves the value part of the way toward the server's value during a correction, by ``stiffness``, instead of writing it outright. ``0.0`` writes it outright. A value with no midpoint, such as a :godot:`bool`, is always written outright.
 
 ::
 
     Netw.configure_property(self, &"heading").state().causal().converge(0.4)
-
-\ A stiffness of ``0.0`` restores the value outright, the default.
-
-So does a value whose type has no meaningful midpoint, whatever stiffness is declared. Converging asks for the error between two values and a fraction of the way along it, which a boolean, a name or an id does not have, so such a field is restored outright rather than left uncorrected or moved to a value neither peer holds.
 
 .. rst-class:: classref-item-separator
 
@@ -652,13 +622,11 @@ So does a value whose type has no meaningful midpoint, whatever stiffness is dec
 
 :ref:`NetwPropertyConfig<class_NetwPropertyConfig>` **cosmetic**\ (\ ) :ref:`🔗<class_NetwPropertyConfig_method_cosmetic>`
 
-Marks the value display-only, so no reconciliation compares it, exactly as :ref:`derived()<class_NetwPropertyConfig_method_derived>` does and for the same reason. A cosmetic field that disagreed would otherwise correct a simulation over a value no simulation reads. A recovery still writes it, so observers see the authoritative value. The two classes differ in what they tell a reader rather than in what the kernel does. :ref:`derived()<class_NetwPropertyConfig_method_derived>` says the body recomputes the value, :ref:`cosmetic()<class_NetwPropertyConfig_method_cosmetic>` says nothing simulated reads it at all.
+Marks the value as display only, so a difference in it never causes a correction. A correction still writes it.
 
 ::
 
     Netw.configure_property(self, &"skid_intensity").state().cosmetic()
-
-\ See :ref:`PropertyClass<enum_NetwPropertySet_PropertyClass>` to compare classes.
 
 .. rst-class:: classref-item-separator
 
@@ -670,16 +638,12 @@ Marks the value display-only, so no reconciliation compares it, exactly as :ref:
 
 :ref:`NetwPropertyConfig<class_NetwPropertyConfig>` **derived**\ (\ ) :ref:`🔗<class_NetwPropertyConfig_method_derived>`
 
-Marks the value one the body recomputes from causal fields each step, so no reconciliation compares it and none is raised on its account.
-
-A recovery still writes it. Restoration is not gated on the class, and a value the next step recomputes is harmless to write and worth having for observers in the meantime. What the class buys is the vote. A field the body recomputes cannot demand a recovery for a disagreement that only restates one the causal fields already carry.
+Marks the value as one the body recomputes each step from other properties, so a difference in it never causes a correction. A correction still writes it.
 
 ::
 
-    # recomputed from velocity every tick, so it decides no correction
+    # recomputed from velocity every tick
     Netw.configure_property(self, &"speed").state().derived()
-
-\ See :ref:`PropertyClass<enum_NetwPropertySet_PropertyClass>` to compare classes.
 
 .. rst-class:: classref-item-separator
 
@@ -691,13 +655,13 @@ A recovery still writes it. Restoration is not gated on the class, and a value t
 
 :ref:`NetwPropertyConfig<class_NetwPropertyConfig>` **epsilon**\ (\ threshold\: :godot:`float`\ ) :ref:`🔗<class_NetwPropertyConfig_method_epsilon>`
 
-Sets this field's own divergence ``threshold``, the distance its predicted value may drift from the authoritative one before a correction triggers, in :ref:`epsilon_override<class_NetwPropertyConfig_property_epsilon_override>`. A field without one inherits the entity's :ref:`NetwPredictionHandle.divergence_epsilon<class_NetwPredictionHandle_property_divergence_epsilon>`. A single scalar mixes units badly for a body whose state spans meters, radians, and meters per second, so the field that needs its own tolerance declares it in its own units.
+How far this value may drift from the server's before it is corrected, in its own units. Without it, the value uses :ref:`NetwPredictionHandle.divergence_epsilon<class_NetwPredictionHandle_property_divergence_epsilon>`. ``0.0`` corrects any error.
 
 ::
 
     Netw.configure_property(self, &"velocity").state().epsilon(0.05)
 
-\ The threshold is the largest error the field is allowed to HOLD, so ``0.0`` means any error at all triggers a correction. That is how an exact field is declared, and it costs a recovery on every quantization step, so declare it only for a value whose grid the two peers truly share. A field that should never trigger is :ref:`reconcile_only()<class_NetwPropertyConfig_method_reconcile_only>`, not ``epsilon(INF)``.
+\ Use :ref:`reconcile_only()<class_NetwPropertyConfig_method_reconcile_only>` for a value that should never cause a correction.
 
 .. rst-class:: classref-item-separator
 
@@ -709,14 +673,12 @@ Sets this field's own divergence ``threshold``, the distance its predicted value
 
 :ref:`NetwPropertyConfig<class_NetwPropertyConfig>` **every_tick**\ (\ interval\: :godot:`float` = 0.0\ ) :ref:`🔗<class_NetwPropertyConfig_method_every_tick>`
 
-Sends the whole set every eligible tick whether or not a field changed, throttled to at most one send per ``interval`` seconds. Writes :ref:`set_trigger<class_NetwPropertyConfig_property_set_trigger>` and :ref:`set_every_tick_interval<class_NetwPropertyConfig_property_set_every_tick_interval>`, and so decides :ref:`NetwPropertySet.trigger<class_NetwPropertySet_property_trigger>` for every field in the set.
+Sends the set every tick even when nothing changed, at most once per ``interval`` seconds.
 
 ::
 
-    # position changes every tick anyway, change detection is pure overhead
+    # position changes every tick anyway
     Netw.configure_property(self, &"position").state().every_tick()
-
-\ A second member of the same script that writes the trigger warns, because that is two call sites disagreeing about one set-level knob.
 
 .. rst-class:: classref-item-separator
 
@@ -728,11 +690,11 @@ Sends the whole set every eligible tick whether or not a field changed, throttle
 
 :ref:`NetwPropertyConfig<class_NetwPropertyConfig>` **heartbeat**\ (\ ticks\: :godot:`int`\ ) :ref:`🔗<class_NetwPropertyConfig_method_heartbeat>`
 
-Re-sends the whole set every ``ticks`` ticks even when nothing changed, so a peer that missed an :ref:`on_change()<class_NetwPropertyConfig_method_on_change>` send converges in bounded time. Writes :ref:`set_heartbeat_ticks<class_NetwPropertyConfig_property_set_heartbeat_ticks>`, and warns when a second member of the same script writes it too.
+Re-sends the set every ``ticks`` ticks even when nothing changed, so a peer that missed a change catches up. An :ref:`input()<class_NetwPropertyConfig_method_input>` set ignores it.
 
 ::
 
-    # a lost "stunned" flip heals within a second at 60 ticks
+    # a lost "stunned" change heals within a second at 60 ticks
     Netw.configure_property(self, &"stunned").state().heartbeat(60)
 
 .. rst-class:: classref-item-separator
@@ -745,7 +707,7 @@ Re-sends the whole set every ``ticks`` ticks even when nothing changed, so a pee
 
 :ref:`NetwPropertyConfig<class_NetwPropertyConfig>` **input**\ (\ ) :ref:`🔗<class_NetwPropertyConfig_method_input>`
 
-The controller owns this value, only the server sees it, and the server re-runs it to verify. The controls kind, the command stream a client is trusted to author but never to resolve. See :ref:`Record<enum_NetwPropertySet_Record>` to compare kinds.
+The controlling peer owns the value and only the server sees it. Use it for player input.
 
 ::
 
@@ -755,12 +717,10 @@ The controller owns this value, only the server sees it, and the server re-runs 
     func _physics_process(dt: float) -> void:
         if entity.is_controlled_locally:
             move_dir = Input.get_vector("left", "right", "up", "down")
-        # both peers run this: the client predicts, the server decides
+        # both peers run this, the client predicts and the server decides
         velocity = move_dir * SPEED
 
-\ Writes :ref:`in_input_set<class_NetwPropertyConfig_property_in_input_set>`, the :ref:`NetwPropertySet.VOLATILE<class_NetwPropertySet_constant_VOLATILE>` :ref:`lane<class_NetwPropertyConfig_property_lane>`, a :ref:`set_trigger<class_NetwPropertyConfig_property_set_trigger>` of :ref:`NetwPropertySet.TRIGGER_ON_CHANGE<class_NetwPropertySet_constant_TRIGGER_ON_CHANGE>`, and the :ref:`NetwPropertySet.AUDIENCE_SERVER_ONLY<class_NetwPropertySet_constant_AUDIENCE_SERVER_ONLY>` :ref:`set_audience<class_NetwPropertyConfig_property_set_audience>`. That last axis is what makes it a command stream rather than a public one, and it is the only kind mark that writes it. An input set is windowed by default so a lost tick heals from a redundant sample instead of a retransmit. :ref:`windowed()<class_NetwPropertyConfig_method_windowed>` resizes that window.
-
-An input column is canonicalized and shipped, never recovered, so only its key, its quantizer and its type reach the engine. A recovery mark written onto an input column, a carry rule or a teleport distance among them, is read and discarded rather than rejected, because the input lane has no ladder that could read it.
+\ Each send also carries the last two ticks of input, so a lost packet is recovered from the next one. :ref:`windowed()<class_NetwPropertyConfig_method_windowed>` changes how many. Correction settings such as :ref:`carry_along()<class_NetwPropertyConfig_method_carry_along>` are ignored on an input.
 
 .. rst-class:: classref-item-separator
 
@@ -772,14 +732,12 @@ An input column is canonicalized and shipped, never recovered, so only its key, 
 
 :ref:`NetwPropertyConfig<class_NetwPropertyConfig>` **masked**\ (\ ) :ref:`🔗<class_NetwPropertyConfig_method_masked>`
 
-Sends each viewer only the fields that changed since they last confirmed, instead of one shared row to everyone. Writes :ref:`set_masked<class_NetwPropertyConfig_property_set_masked>`, and so :ref:`NetwPropertySet.masked<class_NetwPropertySet_property_masked>` for the whole set. The same values arrive, in fewer bytes.
+Sends each peer only the properties that changed since it last confirmed, which saves bandwidth when many peers watch one entity.
 
 ::
 
     # 50 spectators, each gets only what changed for them
     Netw.configure_property(self, &"position").broadcast().masked()
-
-\ Riding a masked set is not a mistake for a causal field, and the wiring report does not flag one. The reconstruction invariant means the owner rebuilds the whole row from the masked stream before anything compares it, so a masked causal field is still reconcilable.
 
 .. rst-class:: classref-item-separator
 
@@ -791,7 +749,7 @@ Sends each viewer only the fields that changed since they last confirmed, instea
 
 :ref:`NetwPropertyConfig<class_NetwPropertyConfig>` **on_change**\ (\ ) :ref:`🔗<class_NetwPropertyConfig_method_on_change>`
 
-Sends the set only when a field changed since the last send, by writing :ref:`set_trigger<class_NetwPropertyConfig_property_set_trigger>` :ref:`NetwPropertySet.TRIGGER_ON_CHANGE<class_NetwPropertySet_constant_TRIGGER_ON_CHANGE>`. The default :ref:`NetwPropertySet.trigger<class_NetwPropertySet_property_trigger>` of every kind mark, and warns on a second writer exactly as :ref:`every_tick()<class_NetwPropertyConfig_method_every_tick>` does.
+Sends the set only when a property changed. This is the default.
 
 .. rst-class:: classref-item-separator
 
@@ -803,7 +761,7 @@ Sends the set only when a field changed since the last send, by writing :ref:`se
 
 :ref:`NetwPropertyConfig<class_NetwPropertyConfig>` **on_spawn**\ (\ ) :ref:`🔗<class_NetwPropertyConfig_method_on_spawn>`
 
-Marks this property as spawn state, in :ref:`is_spawn_state<class_NetwPropertyConfig_property_is_spawn_state>`. The value is captured from the authority's instance when the SPAWN frame is snapshotted and applied on every receiving peer while the node is still orphaned, so :godot:`Node._enter_tree() <Node#class_Node_private_method__enter_tree>` and :godot:`Node._ready() <Node#class_Node_private_method__ready>` read it on every peer.
+Sends the value with the spawn, and sets it on every peer before the node enters the tree, so :godot:`Node._enter_tree() <Node#class_Node_private_method__enter_tree>` and :godot:`Node._ready() <Node#class_Node_private_method__ready>` can read it.
 
 ::
 
@@ -820,26 +778,24 @@ Marks this property as spawn state, in :ref:`is_spawn_state<class_NetwPropertyCo
 
 :ref:`NetwPropertyConfig<class_NetwPropertyConfig>` **persisted**\ (\ column\: :ref:`NetwColumnRef<class_NetwColumnRef>`\ ) :ref:`🔗<class_NetwPropertyConfig_method_persisted>`
 
-Fills ``column`` of this entity's saved row with this property, independent of whether the property also syncs. The database only ever sees the value the server sees.
-
-\ ``column`` comes from the same :ref:`NetwSchema<class_NetwSchema>` the entity handed :ref:`NetwPersistenceConfig.schema()<class_NetwPersistenceConfig_method_schema>`, and one taken from another schema is refused whatever its index. The property's declared type and stride have to be what that column stores.
+Saves the server's value of this property into ``column`` of the entity's saved row, whether or not it is also replicated. ``column`` must come from the :ref:`NetwSchema<class_NetwSchema>` given to :ref:`NetwPersistenceConfig.schema()<class_NetwPersistenceConfig_method_schema>` and match the property's type.
 
 ::
 
     var schema := game.save_schema
 
-    # never syncs, a server secret the row still keeps
+    # never replicated, the server still saves it
     Netw.configure_property(self, &"gold").persisted(schema.column_ref(0))
 
-    # synced per tick, and saved on the entity's own cadence
+    # replicated and saved
     Netw.configure_property(self, &"position") \
             .state().persisted(schema.column_ref(1))
 
-    # client-authored, savable because input() delivers it to the server
+    # sent by the client, saved by the server
     Netw.configure_property(self, &"loadout") \
             .input().persisted(schema.column_ref(2))
 
-\ The cadence belongs to the whole row, through :ref:`NetwPersistenceConfig.interval()<class_NetwPersistenceConfig_method_interval>`, so a column names no interval of its own.
+\ How often the row is saved is set with :ref:`NetwPersistenceConfig.interval()<class_NetwPersistenceConfig_method_interval>`.
 
 .. rst-class:: classref-item-separator
 
@@ -851,9 +807,7 @@ Fills ``column`` of this entity's saved row with this property, independent of w
 
 :ref:`NetwPropertyConfig<class_NetwPropertyConfig>` **reconcile_only**\ (\ ) :ref:`🔗<class_NetwPropertyConfig_method_reconcile_only>`
 
-Excludes the field from triggering a correction, while a correction another field triggers still restores it, by writing :ref:`explicit_reconcile_only<class_NetwPropertyConfig_property_explicit_reconcile_only>`. Right for a value whose own drift is tolerable but that must land with the rest of the closure when one lands.
-
-This is the mark a :ref:`causal()<class_NetwPropertyConfig_method_causal>` field needs to say that. No class but causal votes in the first place, so adding it to a :ref:`derived()<class_NetwPropertyConfig_method_derived>` or :ref:`cosmetic()<class_NetwPropertyConfig_method_cosmetic>` field states an intent the class already carries.
+A difference in this value never causes a correction, but a correction caused by another value still restores it.
 
 ::
 
@@ -869,14 +823,12 @@ This is the mark a :ref:`causal()<class_NetwPropertyConfig_method_causal>` field
 
 :ref:`NetwPropertyConfig<class_NetwPropertyConfig>` **retained**\ (\ ) :ref:`🔗<class_NetwPropertyConfig_method_retained>`
 
-Routes the field onto the :ref:`NetwPropertySet.RETAINED<class_NetwPropertySet_constant_RETAINED>` reliable-on-change :ref:`lane<class_NetwPropertyConfig_property_lane>`, right for a discrete value that changes rarely and must never miss a change.
+Sends changes reliably. Use it for a value that changes rarely and must not be missed. It cannot be used on the state of a predicted entity.
 
 ::
 
-    # a dropped "stunned = true" would desync forever, so it rides reliably
+    # a lost "stunned = true" would never be corrected
     Netw.configure_property(self, &"stunned").state().retained()
-
-\ Rejected on a PREDICTED entity's state, whatever the value is worth: predicted state has to be volatile for a timeline snapshot to arrive atomically, and a retained field would land on its own schedule and be compared against a row no single tick returns for.
 
 .. rst-class:: classref-item-separator
 
@@ -888,7 +840,7 @@ Routes the field onto the :ref:`NetwPropertySet.RETAINED<class_NetwPropertySet_c
 
 :ref:`NetwPropertyConfig<class_NetwPropertyConfig>` **state**\ (\ ) :ref:`🔗<class_NetwPropertyConfig_method_state>`
 
-The server owns this value, every observer sees it, and hit detection can rewind it. The authoritative kind, the body pose the whole game agrees on. See :ref:`Record<enum_NetwPropertySet_Record>` to compare kinds.
+The server owns the value, every peer sees it, and lag compensation can rewind it. A client predicting this entity is corrected against it, within :ref:`epsilon()<class_NetwPropertyConfig_method_epsilon>`.
 
 ::
 
@@ -897,10 +849,7 @@ The server owns this value, every observer sees it, and hit detection can rewind
 
     func _physics_process(dt: float) -> void:
         position += velocity * dt
-        # on the server that write is enough: the pump tick replicates it,
-        # and every client's copy of this node follows
-
-\ Writes :ref:`in_state_set<class_NetwPropertyConfig_property_in_state_set>`, the :ref:`NetwPropertySet.VOLATILE<class_NetwPropertySet_constant_VOLATILE>` :ref:`lane<class_NetwPropertyConfig_property_lane>`, and a :ref:`set_trigger<class_NetwPropertyConfig_property_set_trigger>` of :ref:`NetwPropertySet.TRIGGER_ON_CHANGE<class_NetwPropertySet_constant_TRIGGER_ON_CHANGE>`, and nothing else, so it leaves the audience public. A state field is also the reconciliation anchor: a client predicting this entity is corrected against the server's stream, within the tolerance :ref:`epsilon()<class_NetwPropertyConfig_method_epsilon>` grants.
+        # on the server that is enough, every client's copy follows
 
 .. rst-class:: classref-item-separator
 
@@ -912,9 +861,7 @@ The server owns this value, every observer sees it, and hit detection can rewind
 
 :ref:`NetwPropertyConfig<class_NetwPropertyConfig>` **teleport_at**\ (\ distance\: :godot:`float`\ ) :ref:`🔗<class_NetwPropertyConfig_method_teleport_at>`
 
-Sets this field's own teleport-tier ``distance`` in :ref:`teleport_at_override<class_NetwPropertyConfig_property_teleport_at_override>`: the error at which a recovery stops repairing partially and restores the whole closure verbatim. A field without one inherits the entity's :ref:`NetwPredictionHandle.teleport_threshold<class_NetwPredictionHandle_property_teleport_threshold>`.
-
-Same argument as :ref:`epsilon()<class_NetwPropertyConfig_method_epsilon>`, and the same units problem: the tier is measured over the fields that can be advanced to the present, which on a 3D body span metres, radians and radians per second. One scalar across them compares a rotation rate against a distance, so a field enrolled in that measurement declares the tier in its own units or inherits a number that means nothing for it.
+How large this value's error may be before a correction teleports the body, in its own units. Without it, the value uses :ref:`NetwPredictionHandle.teleport_threshold<class_NetwPredictionHandle_property_teleport_threshold>`. ``0.0`` teleports on every correction this value causes.
 
 ::
 
@@ -922,8 +869,6 @@ Same argument as :ref:`epsilon()<class_NetwPropertyConfig_method_epsilon>`, and 
             .carry_along(&"velocity").teleport_at(3.0)      # metres
     Netw.configure_property(self, &"heading").state() \
             .carry_along(&"angular_speed").teleport_at(1.0)  # radians
-
-\ Declaring it also enrols the field in the tier measurement, so a field with no :ref:`carry_along()<class_NetwPropertyConfig_method_carry_along>` channel can still name the distance past which its own error means the body holds nothing worth keeping. ``0.0`` therefore means every recovery this field triggers is a teleport.
 
 .. rst-class:: classref-item-separator
 
@@ -935,9 +880,7 @@ Same argument as :ref:`epsilon()<class_NetwPropertyConfig_method_epsilon>`, and 
 
 :ref:`NetwPropertyConfig<class_NetwPropertyConfig>` **teleport_only**\ (\ ) :ref:`🔗<class_NetwPropertyConfig_method_teleport_only>`
 
-Restricts the field to teleport-tier recoveries, so an ordinary one leaves it alone, by writing :ref:`explicit_teleport_only<class_NetwPropertyConfig_property_explicit_teleport_only>`. Right for a value whose mid-flight rewrite is more disruptive than the drift it would correct.
-
-Recovery cannot write a field marked this way until it promotes to a full restore. Pair it with :ref:`carry_along()<class_NetwPropertyConfig_method_carry_along>` or :ref:`carry_step()<class_NetwPropertyConfig_method_carry_step>` to restore it at the current state, or with :ref:`reconcile_only()<class_NetwPropertyConfig_method_reconcile_only>` to prevent its drift from triggering recovery of other fields.
+Only a teleport writes this value, and an ordinary correction leaves it alone. Pair it with :ref:`carry_along()<class_NetwPropertyConfig_method_carry_along>` or :ref:`carry_step()<class_NetwPropertyConfig_method_carry_step>` so the teleport restores it at the present, or with :ref:`reconcile_only()<class_NetwPropertyConfig_method_reconcile_only>` so it never causes a correction.
 
 ::
 
@@ -953,7 +896,7 @@ Recovery cannot write a field marked this way until it promotes to a full restor
 
 :ref:`NetwPropertyConfig<class_NetwPropertyConfig>` **volatile**\ (\ ) :ref:`🔗<class_NetwPropertyConfig_method_volatile>`
 
-Routes the field onto the :ref:`NetwPropertySet.VOLATILE<class_NetwPropertySet_constant_VOLATILE>` freshest-wins :ref:`lane<class_NetwPropertyConfig_property_lane>`, right for a value that changes continuously, where a lost sample is superseded by the next tick anyway. The default lane.
+Sends changes unreliably, and only the newest value counts. Use it for a value that changes every tick. This is the default.
 
 .. rst-class:: classref-item-separator
 
@@ -965,11 +908,11 @@ Routes the field onto the :ref:`NetwPropertySet.VOLATILE<class_NetwPropertySet_c
 
 :ref:`NetwPropertyConfig<class_NetwPropertyConfig>` **windowed**\ (\ samples\: :godot:`int`\ ) :ref:`🔗<class_NetwPropertyConfig_method_windowed>`
 
-Carries the last ``samples`` ticks of values in every volatile send, so a lost datagram heals from the next one's redundancy instead of a retransmit round trip. Writes :ref:`set_window<class_NetwPropertyConfig_property_set_window>`, and so :ref:`NetwPropertySet.window<class_NetwPropertySet_property_window>` for the whole set, warning when a second member of the same script writes it too.
+Each send also carries the last ``samples`` ticks of values, so a lost packet is recovered from the next one.
 
 ::
 
-    # input() already windows at 2; 3 survives two consecutive lost datagrams
+    # input() sends 2, and 3 survives two lost packets in a row
     Netw.configure_property(self, &"motion").input().windowed(3)
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`

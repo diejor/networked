@@ -77,7 +77,7 @@ func open_match(running: NetwSceneHandle) -> void:
 					player.username,
 					player.peer_id,
 					players.get_child_count(),
-				)
+				),
 			)
 			lobby.unwatch(player)
 

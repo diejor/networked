@@ -44,11 +44,8 @@ Placed place(NetwMultiplayer *p_core, Node *p_parent, bool p_declares_scene) {
         Node *level = memnew(Node);
         level->set_name(StringName("Arena"));
         made.owner->add_child(level);
-        p_core->get_scene_core()->scene_enter(
-            made.handle,
-            StringName("Arena"),
-            false
-        );
+        p_core->get_scene_core()
+            ->scene_enter(made.handle, StringName("Arena"), false);
     }
     return made;
 }

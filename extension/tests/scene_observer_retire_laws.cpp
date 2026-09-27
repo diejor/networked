@@ -32,10 +32,7 @@ TEST_CASE(
         0
     );
     NETW_CHECK_EQ(heard.count("done"), 1);
-    NETW_CHECK_EQ(
-        scenes->observer_count(arena, NetwSceneCore::EVENT_BODY),
-        0
-    );
+    NETW_CHECK_EQ(scenes->observer_count(arena, NetwSceneCore::EVENT_BODY), 0);
 
     scenes->dispatch(arena, NetwSceneCore::EVENT_BODY, true, Variant());
 
@@ -65,10 +62,7 @@ TEST_CASE(
 
     NETW_CHECK_EQ(heard.count("edge"), 2);
     NETW_CHECK_EQ(heard.count("falsey"), 1);
-    NETW_CHECK_EQ(
-        scenes->observer_count(arena, NetwSceneCore::EVENT_BODY),
-        1
-    );
+    NETW_CHECK_EQ(scenes->observer_count(arena, NetwSceneCore::EVENT_BODY), 1);
     NETW_CHECK_EQ(
         scenes->observer_count(arena, NetwSceneCore::EVENT_ENTITY),
         1
@@ -91,22 +85,13 @@ TEST_CASE(
         NetwSceneCore::EVENT_BODY,
         heard.answering("leaving", true)
     );
-    scenes->observe(
-        arena,
-        NetwSceneCore::EVENT_BODY,
-        heard.callable("staying")
-    );
-    NETW_CHECK_EQ(
-        scenes->observer_count(arena, NetwSceneCore::EVENT_BODY),
-        2
-    );
+    scenes
+        ->observe(arena, NetwSceneCore::EVENT_BODY, heard.callable("staying"));
+    NETW_CHECK_EQ(scenes->observer_count(arena, NetwSceneCore::EVENT_BODY), 2);
 
     scenes->dispatch(arena, NetwSceneCore::EVENT_BODY, true, Variant());
 
-    NETW_CHECK_EQ(
-        scenes->observer_count(arena, NetwSceneCore::EVENT_BODY),
-        1
-    );
+    NETW_CHECK_EQ(scenes->observer_count(arena, NetwSceneCore::EVENT_BODY), 1);
     NETW_CHECK_EQ(heard.count("leaving"), 1);
     NETW_CHECK_EQ(heard.count("staying"), 1);
 
@@ -128,11 +113,8 @@ TEST_CASE(
     const CallLog surviving;
     {
         const CallLog dying;
-        scenes->observe(
-            arena,
-            NetwSceneCore::EVENT_BODY,
-            dying.callable("gone")
-        );
+        scenes
+            ->observe(arena, NetwSceneCore::EVENT_BODY, dying.callable("gone"));
         scenes->observe(
             arena,
             NetwSceneCore::EVENT_BODY,
@@ -148,10 +130,7 @@ TEST_CASE(
         scenes->dispatch(arena, NetwSceneCore::EVENT_BODY, true, Variant()),
         1
     );
-    NETW_CHECK_EQ(
-        scenes->observer_count(arena, NetwSceneCore::EVENT_BODY),
-        1
-    );
+    NETW_CHECK_EQ(scenes->observer_count(arena, NetwSceneCore::EVENT_BODY), 1);
     NETW_CHECK_EQ(surviving.count("here"), 1);
 }
 

@@ -1,11 +1,10 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <class name="NetwPersistenceConfig" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
 	<brief_description>
-		Which row of which [NetwDatabase] one entity loads and saves.
+		Which record of which [NetwDatabase] an entity loads and saves.
 	</brief_description>
 	<description>
-		The declaration belongs to the node that made it, so two players running one script keep two record ids. Every column of [method schema] is filled by one property that named it through [method NetwPropertyConfig.persisted], and a column left unbound refuses the whole entity.
-		[method Netw.configure_database] and [method Netw.database] resolve the session through the [SceneTree], so a database is declared from [method Node._ready] rather than from [method Object._init].
+		Each column of [method schema] is filled by one property marked with [method NetwPropertyConfig.persisted]. A column with no property refuses the whole entity. Configure it from [method Node._ready], where the node is in the tree.
 		[codeblock]
 		func _ready() -&gt; void:
 		    Netw.configure_property(self, &amp;"position", false) \
@@ -19,8 +18,7 @@
 		func account_name() -&gt; StringName:
 		    return entity.entity_id
 		[/codeblock]
-		[method record_id] is read once, when the entity binds, and the id it answered is the row every later save writes. Moving the account the provider reads never retargets an enrolled save. A key that changes between sessions, such as a peer id, reads a different row every time the player joins.
-		The row is reached through [NetwPersistenceHandle], as [member NetwEntity.persistence].
+		Use a [method record_id] that stays the same between sessions. A peer id changes every time the player joins. The record is reached through [member NetwEntity.persistence].
 	</description>
 	<tutorials>
 	</tutorials>
@@ -29,14 +27,14 @@
 			<return type="NetwPersistenceConfig" />
 			<param index="0" name="name" type="StringName" />
 			<description>
-				Names the [NetwDatabase] this entity's row lives in. The name resolves in the same session, so [method Netw.configure_database] declares it first. Returns the same config so the declaration chains.
+				Names the [NetwDatabase] this entity's record lives in, as [method Netw.configure_database] declared it.
 			</description>
 		</method>
 		<method name="interval">
 			<return type="NetwPersistenceConfig" />
 			<param index="0" name="seconds" type="float" />
 			<description>
-				Saves the whole row this often while anything in it has changed. [code]0.0[/code] saves only when the game calls [method NetwPersistenceHandle.save]. Returns the same config so the declaration chains.
+				Saves the record every [param seconds] when something changed. [code]0.0[/code] saves only when you call [method NetwPersistenceHandle.save].
 				[b]Server Only.[/b]
 			</description>
 		</method>
@@ -44,29 +42,21 @@
 			<return type="NetwPersistenceConfig" />
 			<param index="0" name="enabled" type="bool" default="true" />
 			<description>
-				Whether the stored row is read before the entity plays. Returns the same config so the declaration chains.
-				The session authority starts the read when the entity's node is ready, and no peer receives the entity until it settles.
-				[codeblock lang=text]
-				read settles
-				┠╴row found    the row is applied, then the entity is sent to peers
-				┠╴no row       the entity is sent with the values it spawned with
-				┖╴failed       the entity is not sent until a retried load succeeds
-				[/codeblock]
-				[method NetwPersistenceHandle.load] retries a failed read. A bound property that changes while the row is being read fails the read, and the stored row is not applied over it.
+				Whether the server loads the stored record when the entity's node is ready. Clients do not receive the entity until the load succeeds or finds no record. Call [method NetwPersistenceHandle.load] to retry a failed load.
 			</description>
 		</method>
 		<method name="record_id">
 			<return type="NetwPersistenceConfig" />
 			<param index="0" name="provider" type="Callable" />
 			<description>
-				Answers the key this entity's row is stored under. It is called once, when the entity binds, and must answer a nonempty [StringName]. Returns the same config so the declaration chains.
+				Sets the function that returns the id this entity's record is stored under. It is called once and must return a nonempty [StringName].
 			</description>
 		</method>
 		<method name="schema">
 			<return type="NetwPersistenceConfig" />
 			<param index="0" name="schema" type="NetwSchema" />
 			<description>
-				Declares the shape of this entity's row. Every [NetwColumnRef] a property binds comes from this same [NetwSchema], and one taken from another schema refuses the binding whatever its index. Returns the same config so the declaration chains.
+				Sets the [NetwSchema] of this entity's record. Every [NetwColumnRef] passed to [method NetwPropertyConfig.persisted] must come from this schema.
 			</description>
 		</method>
 	</methods>

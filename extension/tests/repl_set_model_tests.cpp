@@ -863,9 +863,7 @@ TEST_CASE(
         SET_AUDIENCE_PUBLIC
     );
 
-    CHECK(
-        model.offer_row(ROUTE, 0, 1, 1, 7, PackedInt32Array(), 1).is_empty()
-    );
+    CHECK(model.offer_row(ROUTE, 0, 1, 1, 7, PackedInt32Array(), 1).is_empty());
     const Dictionary stats = model.stats();
     NETW_CHECK_EQ(int64_t(stats[StringName("skips_no_recipients")]), 1);
     NETW_CHECK_EQ(int64_t(stats[StringName("skips_not_author")]), 0);

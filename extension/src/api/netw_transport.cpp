@@ -508,13 +508,7 @@ void NetwTransport::make_peer(
     const String &p_address,
     const Dictionary &p_settings
 ) {
-    if (GDVIRTUAL_CALL(
-            _make_peer,
-            p_ticket,
-            p_mode,
-            p_address,
-            p_settings
-        )) {
+    if (GDVIRTUAL_CALL(_make_peer, p_ticket, p_mode, p_address, p_settings)) {
         return;
     }
     fail(p_ticket, ERR_UNCONFIGURED, "this transport cannot create a peer");

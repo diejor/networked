@@ -199,8 +199,7 @@ Error NetwSceneHandle::unwatch(const Ref<NetwPlayer> &p_player) {
         : ERR_DOES_NOT_EXIST;
 }
 
-bool NetwSceneHandle::is_watching(const Ref<NetwPlayer> &p_player
-) const {
+bool NetwSceneHandle::is_watching(const Ref<NetwPlayer> &p_player) const {
     NetwMultiplayer *session = core();
     return session != nullptr && p_player.is_valid()
         && session->scene_subscribes(get_entity(), p_player->get_peer_id());
@@ -217,10 +216,7 @@ void NetwSceneHandle::announce_viewer(
     const Ref<NetwPlayer> &p_player,
     bool p_present
 ) {
-    emit_signal(
-        p_present ? SNAME_VIEWER_ENTERED : SNAME_VIEWER_LEFT,
-        p_player
-    );
+    emit_signal(p_present ? SNAME_VIEWER_ENTERED : SNAME_VIEWER_LEFT, p_player);
 }
 
 void NetwSceneHandle::_bind_methods() {
@@ -263,10 +259,7 @@ void NetwSceneHandle::_bind_methods() {
     );
     ClassDB::bind_method(D_METHOD("get_label"), &NetwSceneHandle::get_label);
     ADD_PROPERTY(PropertyInfo(Variant::STRING_NAME, "label"), "", "get_label");
-    ClassDB::bind_method(
-        D_METHOD("get_bodies"),
-        &NetwSceneHandle::get_bodies
-    );
+    ClassDB::bind_method(D_METHOD("get_bodies"), &NetwSceneHandle::get_bodies);
     ADD_PROPERTY(
         PropertyInfo(
             Variant::ARRAY,
@@ -327,10 +320,7 @@ void NetwSceneHandle::_bind_methods() {
         D_METHOD("unobserve", "event", "callback"),
         &NetwSceneHandle::unobserve
     );
-    ClassDB::bind_method(
-        D_METHOD("watch", "player"),
-        &NetwSceneHandle::watch
-    );
+    ClassDB::bind_method(D_METHOD("watch", "player"), &NetwSceneHandle::watch);
     ClassDB::bind_method(
         D_METHOD("unwatch", "player"),
         &NetwSceneHandle::unwatch

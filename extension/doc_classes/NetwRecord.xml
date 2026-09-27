@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <class name="NetwRecord" inherits="Serde" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
 	<brief_description>
-		The named-value row a persisted or sampled value travels as, and the base a script subclasses to supply its own storage.
+		A row of named values.
 	</brief_description>
 	<description>
-		[NetwRecord] is the shared value object behind saved entity rows, [NetwDatabase] rows, and detached state samples. It stores named values without owning the scene object those values came from.
+		Used for saved entity rows, [NetwDatabase] rows, and [method Netw.sample]. It holds copies of values, not the node they came from.
 		[codeblock]
 		var row: NetwRecord = await db.table(&amp;"players").fetch(username)
 		var health: int = row.get_value(&amp;"health", 100)
@@ -15,8 +15,8 @@
 		for key in row:
 		    print(key, " = ", row.get_value(key))
 		[/codeblock]
-		A stored name is also readable and writable as a property, so [code]row.health[/code] returns [method get_value] and assigning to it calls [method set_value]. The class's own properties are never captured that way: [code]resource_name[/code], [code]resource_path[/code], [code]resource_local_to_scene[/code], [code]resource_scene_unique_id[/code], [code]script[/code] and a subclass's declared properties keep their normal meaning, so a record may hold a value under any of those names without shadowing the resource itself.
-		A script subclass supplies the storage by overriding [method _set_value], [method _get_value], [method _has_value] and [method _get_property_names], and may remap stored names by overriding [method _to_dict] and [method _from_dict]. Callers always use the plain verbs, which return an override when a script supplies one. [DictionaryRecord] is the storage this addon ships.
+		A stored name can also be used as a property, so [code]row.health[/code] calls [method get_value] and assigning to it calls [method set_value]. The record's own properties, such as [code]resource_name[/code] or [code]script[/code], keep their normal meaning.
+		To supply your own storage, override [method _set_value], [method _get_value], [method _has_value] and [method _get_property_names]. Override [method _to_dict] and [method _from_dict] to rename stored names. [DictionaryRecord] is the storage this addon ships.
 	</description>
 	<tutorials>
 	</tutorials>
@@ -35,7 +35,7 @@
 		<method name="_get_property_names" qualifiers="virtual const">
 			<return type="StringName[]" />
 			<description>
-				Returns the property names stored in this record. Override it together with [method _set_value], [method _get_value] and [method _has_value] to supply the storage; [method get_property_names] is what callers use.
+				Returns the property names stored in this record. Override it together with [method _set_value], [method _get_value] and [method _has_value] to supply the storage.
 			</description>
 		</method>
 		<method name="_get_value" qualifiers="virtual const">
@@ -43,14 +43,14 @@
 			<param index="0" name="property" type="StringName" />
 			<param index="1" name="default" type="Variant" />
 			<description>
-				Returns the value stored under [param property], or [param default] if absent. Override it to supply the storage; [method get_value] is what callers use.
+				Returns the value stored under [param property], or [param default] if absent. Override it to supply the storage.
 			</description>
 		</method>
 		<method name="_has_value" qualifiers="virtual const">
 			<return type="bool" />
 			<param index="0" name="property" type="StringName" />
 			<description>
-				Returns [code]true[/code] if [param property] is present. Override it to supply the storage; [method has_value] is what callers use.
+				Returns [code]true[/code] if [param property] is present. Override it to supply the storage.
 			</description>
 		</method>
 		<method name="_set_value" qualifiers="virtual">
@@ -58,7 +58,7 @@
 			<param index="0" name="property" type="StringName" />
 			<param index="1" name="value" type="Variant" />
 			<description>
-				Stores [param value] under [param property]. Override it to supply the storage; [method set_value] is what callers use.
+				Stores [param value] under [param property]. Override it to supply the storage.
 			</description>
 		</method>
 		<method name="_to_dict" qualifiers="virtual const">
@@ -81,7 +81,7 @@
 		<method name="get_property_names" qualifiers="const">
 			<return type="StringName[]" />
 			<description>
-				Returns the property names stored in this record, in the order the storage holds them. This is the sequence [code]for key in record[/code] walks and the one [method to_dict] reads.
+				Returns the property names stored in this record, in the order the storage holds them. [code]for key in record[/code] iterates the same names.
 			</description>
 		</method>
 		<method name="get_value" qualifiers="const">
@@ -102,7 +102,7 @@
 		<method name="is_empty" qualifiers="const">
 			<return type="bool" />
 			<description>
-				Returns [code]true[/code] when no values are stored, which is [method get_property_names] returning nothing.
+				Returns [code]true[/code] when no values are stored.
 			</description>
 		</method>
 		<method name="set_value">

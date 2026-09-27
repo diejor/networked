@@ -12,54 +12,30 @@ NetwWriteBatch
 
 **Inherits:** :godot:`RefCounted`
 
-Several record writes and erasures, submitted to one database in one call.
+Several record writes and erasures submitted to a :ref:`NetwDatabase<class_NetwDatabase>` in one call.
 
 .. rst-class:: classref-introduction-group
 
 Description
 -----------
 
-A batch is built synchronously and reaches storage only at :ref:`submit()<class_NetwWriteBatch_method_submit>`. It is validated whole first, so an invalid batch writes nothing at all.
+Nothing reaches storage until :ref:`submit()<class_NetwWriteBatch_method_submit>`. If any :ref:`write()<class_NetwWriteBatch_method_write>` or :ref:`erase()<class_NetwWriteBatch_method_erase>` call was refused, submitting writes nothing and reports that error.
 
 ::
 
     var batch: NetwWriteBatch = db.batch()
     batch.write(PlayerSave.schema, first_id, first_values)
     batch.erase(PlayerSave.schema, second_id)
-    var result: Dictionary = await batch.submit().wait()
-
-\ The builders answer an :godot:`@GlobalScope.Error <@GlobalScope#enum_@globalscope_Error>` each, and the batch remembers the first one that was not OK. Submitting after a refused builder call performs no I/O and reports that error, so a caller who ignored a builder result still cannot write half a batch.
-
-A batch seals at submission. Adding to it afterwards, or submitting it twice, is refused with :godot:`@GlobalScope.ERR_LOCKED <@GlobalScope#class_@GlobalScope_constant_ERR_LOCKED>`.
-
-Batching is not a transaction. Operations are applied in order and each reports its own outcome, and a backend failure partway can leave the earlier ones applied.
-
-\ **The batch reply**\ 
-
-\ :ref:`submit()<class_NetwWriteBatch_method_submit>` settles with one of these. ``errors`` and ``uncertain`` are parallel to the operations in the order they were added.
-
-.. code:: text
-
-    Dictionary
-    ┠╴error      int               the first non-OK entry of errors, or OK when every
-                                  operation landed
-    ┠╴detail     String            what went wrong, for a person to read. Empty when
-                                  error is OK
-    ┠╴errors     PackedInt32Array  one @GlobalScope.Error per submitted operation, in the
-                                  order they were added
-    ┖╴uncertain  PackedByteArray   1 where the operation at that index has an outcome
-                                  the backend could not establish, 0 otherwise
-
-::
 
     var result: Dictionary = await batch.submit().wait()
     for at in result.errors.size():
         if result.uncertain[at] == 1:
+            # the write may or may not have landed, read it back before retrying
             reconcile_later(at)
         elif result.errors[at] != OK:
             retry_later(at)
 
-\ An uncertain operation is one whose outcome the backend could not establish, such as a write that timed out after it was sent. It is neither a success nor a failure, and retrying it blindly can write an old value over a newer one. Read the stored record back before deciding.
+\ A batch is not a transaction. Operations are applied in order, and a failure partway can leave the earlier ones applied.
 
 .. rst-class:: classref-reftable-group
 
@@ -127,6 +103,15 @@ Method Descriptions
 
 Adds an erasure of the record at ``id``.
 
+.. code:: text
+
+    Error
+    ┠╴OK                     the erasure was added
+    ┠╴ERR_LOCKED             this batch was submitted already
+    ┠╴ERR_UNAVAILABLE        this batch outlived the session that issued it
+    ┠╴ERR_DOES_NOT_EXIST     schema is not sealed
+    ┖╴ERR_INVALID_PARAMETER  id is empty
+
 .. rst-class:: classref-item-separator
 
 ----
@@ -137,7 +122,34 @@ Adds an erasure of the record at ``id``.
 
 :ref:`NetwPromise<class_NetwPromise>` **submit**\ (\ ) :ref:`🔗<class_NetwWriteBatch_method_submit>`
 
-Seals this batch, sends it, and settles with the batch reply drawn in this class's description. An empty batch succeeds without touching storage.
+Sends this batch and settles with a :godot:`Dictionary`. A batch can be submitted once.
+
+.. code:: text
+
+    Dictionary
+    ┠╴error      Error             @GlobalScope.Error. Check it before reading errors
+    │ ┠╴OK                 every operation landed
+    │ ┠╴ERR_LOCKED         this batch was submitted already
+    │ ┠╴a builder's code   the first write or erase this batch refused, nothing ran
+    │ ┠╴ERR_UNAVAILABLE    this batch outlived its session, or the connection
+    │ │                    implements no _write_batch
+    │ ┠╴ERR_INVALID_DATA   the connection answered a different number of outcomes
+    │ ┖╴backend-defined    the whole batch failed, or the first non-OK entry of errors
+    ┠╴detail     String            what went wrong, for a person to read. Empty when
+    │                              error is OK
+    ┠╴errors     PackedInt32Array  one @GlobalScope.Error per submitted operation, in the
+    │                              order they were added
+    ┖╴uncertain  PackedByteArray   1 where the operation at that index has an outcome
+                                   the backend could not establish, 0 otherwise
+
+\ These fail the promise instead, and :ref:`NetwPromise.wait()<class_NetwPromise_method_wait>` returns the code.
+
+.. code:: text
+
+    Error
+    ┠╴ERR_UNCONFIGURED  the database is not open
+    ┠╴ERR_BUSY          the database already holds 4096 unsettled operations
+    ┖╴ERR_UNAVAILABLE   the database closed before the batch settled
 
 .. rst-class:: classref-item-separator
 
@@ -149,7 +161,17 @@ Seals this batch, sends it, and settles with the batch reply drawn in this class
 
 :godot:`Error <@GlobalScope#enum_@globalscope_Error>` **write**\ (\ schema\: :ref:`NetwSchema<class_NetwSchema>`, id\: :godot:`StringName`, values\: :godot:`Dictionary`\ ) :ref:`🔗<class_NetwWriteBatch_method_write>`
 
-Adds a complete replacement of the record at ``id``. ``values`` must be complete against ``schema``, the same as :ref:`NetwDatabase.write()<class_NetwDatabase_method_write>` requires.
+Adds a write of the whole record at ``id``, like :ref:`NetwDatabase.write()<class_NetwDatabase_method_write>`.
+
+.. code:: text
+
+    Error
+    ┠╴OK                     the write was added
+    ┠╴ERR_LOCKED             this batch was submitted already
+    ┠╴ERR_UNAVAILABLE        this batch outlived the session that issued it
+    ┠╴ERR_DOES_NOT_EXIST     schema is not sealed
+    ┠╴ERR_INVALID_PARAMETER  id is empty
+    ┖╴ERR_INVALID_DATA       values do not exactly match the schema
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

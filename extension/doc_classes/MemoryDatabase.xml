@@ -4,7 +4,7 @@
 		A [NetwDatabaseBackend] that keeps records in memory.
 	</brief_description>
 	<description>
-		Records live for as long as the process does. Used in tests, prototype, or wherever a save that outlives the run would get in the way.
+		Records are lost when the game closes. Useful for tests and prototypes.
 		[codeblock]
 		Netw.configure_database(self, &amp;"saves").backend(MemoryDatabase.new())
 		[/codeblock]
@@ -17,14 +17,14 @@
 			<param index="0" name="session" type="Object" />
 			<param index="1" name="slot" type="StringName" />
 			<description>
-				Removes [param slot] and every record in it from [member store]. It resolves [constant @GlobalScope.OK] whether or not the slot existed.
+				Removes [param slot] and every record in it from [member store]. Resolves [constant @GlobalScope.OK] even when the slot did not exist.
 			</description>
 		</method>
 		<method name="_list_slots" qualifiers="virtual">
 			<return type="NetwPromise" />
 			<param index="0" name="session" type="Object" />
 			<description>
-				Resolves every slot [member store] holds. It never rejects.
+				Resolves every slot [member store] holds.
 			</description>
 		</method>
 		<method name="_open" qualifiers="virtual">
@@ -32,13 +32,13 @@
 			<param index="0" name="session" type="Object" />
 			<param index="1" name="slot" type="StringName" />
 			<description>
-				Resolves a fresh [NetwDatabaseConnection] over [param slot] in [member store], creating the slot when it is absent. It never rejects.
+				Resolves a [NetwDatabaseConnection] for [param slot] in [member store], creating the slot if needed.
 			</description>
 		</method>
 	</methods>
 	<members>
 		<member name="store" type="StringName" setter="set_store" getter="get_store">
-			The name of the in-process store this backend keeps its records in.
+			The name of the in-memory store this backend keeps its records in. Backends with the same [member store] share records.
 		</member>
 	</members>
 </class>

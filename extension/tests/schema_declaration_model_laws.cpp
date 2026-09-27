@@ -321,7 +321,9 @@ TEST_CASE(
     Ref<netw::NetwColumnRef> held;
     {
         const Ref<NetwSchema> schema = NetwSchema::create("RefDetached");
-        held = schema->column_ref(schema->vector2("where", Ref<netw::NetwQuantize>(), 1));
+        held = schema->column_ref(
+            schema->vector2("where", Ref<netw::NetwQuantize>(), 1)
+        );
         CHECK(schema->column_ref(1).is_null());
         CHECK(schema->column_ref(-1).is_null());
     }

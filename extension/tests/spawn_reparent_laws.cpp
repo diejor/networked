@@ -296,9 +296,8 @@ TEST_CASE(
         int64_t(FIRST_MOVE + 1)
     );
     NETW_CHECK_EQ(
-        int64_t(world.core->spawn_plane()->counters()[StringName(
-            "drops_reparent_stale"
-        )]),
+        int64_t(world.core->spawn_plane()
+                    ->counters()[StringName("drops_reparent_stale")]),
         int64_t(1)
     );
 }

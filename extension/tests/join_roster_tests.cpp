@@ -76,7 +76,8 @@ TEST_CASE(
     roster.remember(join(4, "ana", 1));
     roster.refuse(4, "Username 'ana' is already in use");
 
-    CHECK(bool(roster.refusal(4) == String("Username 'ana' is already in use"))
+    CHECK(
+        bool(roster.refusal(4) == String("Username 'ana' is already in use"))
     );
 
     roster.forget(4);

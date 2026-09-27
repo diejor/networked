@@ -68,11 +68,8 @@ struct World {
 
         const RID made = session->get_databases()->create("saves");
         connection = MemoryConnection::opened(p_store, "slot1");
-        session->get_databases()->open(
-            made,
-            "slot1",
-            NetwPromise::resolved(connection)
-        );
+        session->get_databases()
+            ->open(made, "slot1", NetwPromise::resolved(connection));
         database = session->database_handle(made);
         database->connect("failed", log.callable("failed"));
 
@@ -150,7 +147,8 @@ TEST_CASE(
         world.root->set_position(Vector2(2, 2));
         world.connection->fail_next(ERR_FILE_CANT_WRITE);
 
-        const Ref<NetwPromise> refused = world.session->persist_save_binding(binding);
+        const Ref<NetwPromise> refused
+            = world.session->persist_save_binding(binding);
 
         CHECK(refused->get_is_failed());
         NETW_CHECK_EQ(world.log.count("failed"), 1);
@@ -177,7 +175,8 @@ TEST_CASE(
         const RID binding = world.enroll(false);
         world.root->set_position(Vector2(2, 2));
         world.connection->defer(true);
-        const Ref<NetwPromise> saving = world.session->persist_save_binding(binding);
+        const Ref<NetwPromise> saving
+            = world.session->persist_save_binding(binding);
 
         world.session->session_plane().set_role(SessionCore::ROLE_CLIENT);
         world.session->session_plane().set_role(SessionCore::ROLE_NONE);
@@ -190,7 +189,8 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Persistence][Hosted] PF2 a refused load emits the database's failed "
+    "[Networked][Persistence][Hosted] PF2 a refused load emits the database's "
+    "failed "
     "signal and no loaded signal, and a refused spawn load keeps the entity "
     "withheld"
 ) {
@@ -210,7 +210,8 @@ TEST_CASE(
         const RID binding = world.enroll(false);
         world.connection->fail_next(ERR_FILE_CANT_READ);
 
-        const Ref<NetwPromise> refused = world.session->persist_load_binding(binding);
+        const Ref<NetwPromise> refused
+            = world.session->persist_load_binding(binding);
 
         CHECK(refused->get_is_failed());
         NETW_CHECK_EQ(world.log.count("failed"), 1);
@@ -219,7 +220,8 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Persistence][Hosted] PF3 save_entities waits for writes already in "
+    "[Networked][Persistence][Hosted] PF3 save_entities waits for writes "
+    "already in "
     "flight, answers the first error while a row stays unsaved, and answers "
     "OK once every row is stored"
 ) {
@@ -263,7 +265,8 @@ TEST_CASE(
     world.root->set_position(Vector2(2, 2));
     world.connection->doubt_next(OK);
 
-    const Ref<NetwPromise> saving = world.session->persist_save_binding(binding);
+    const Ref<NetwPromise> saving
+        = world.session->persist_save_binding(binding);
 
     CHECK(saving->get_is_failed());
     NETW_CHECK_EQ(saving->get_code(), ERR_UNAVAILABLE);

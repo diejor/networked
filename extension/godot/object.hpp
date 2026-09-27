@@ -144,8 +144,10 @@ inline bool has_property(
     if (known == nullptr) {
         godot::HashSet<godot::StringName> names;
         const godot::TypedArray<godot::Dictionary> declared
-            = godot::ClassDBSingleton::get_singleton()
-                  ->class_get_property_list(native, false);
+            = godot::ClassDBSingleton::get_singleton()->class_get_property_list(
+                native,
+                false
+            );
         for (int at = 0; at < declared.size(); ++at) {
             const godot::Dictionary info = declared[at];
             names.insert(godot::StringName(info["name"]));

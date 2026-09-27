@@ -4,14 +4,13 @@
 		A [NetwDatabaseBackend] that keeps records in files under one directory.
 	</brief_description>
 	<description>
-		Records outlive the process, use it as the backend a singleplayer or listen server game saves into.
+		Records stay on disk after the game closes. Use it for a singleplayer or listen server game.
 		[codeblock]
 		var backend := FileSystemDatabase.new()
 		backend.root = "user://saves"
 		Netw.configure_database(self, &amp;"saves").backend(backend)
 		[/codeblock]
-		Each slot is a directory under [member root], and each record is one file inside it. A record is replaced by writing a new file beside it and renaming over the target.
-		A file this library did not write is reported as present and refused as unrecognized. It is never read as an empty save and it is never overwritten by the read that found it.
+		Each slot is a directory under [member root], and each record is one file inside it. A file this library did not write fails to read with [constant @GlobalScope.ERR_FILE_UNRECOGNIZED].
 	</description>
 	<tutorials>
 	</tutorials>
@@ -50,7 +49,7 @@
 			<param index="0" name="session" type="Object" />
 			<param index="1" name="slot" type="StringName" />
 			<description>
-				Opens [param slot] and resolves a fresh [NetwDatabaseConnection] rooted at its directory. The connection performs all record I/O for the slot.
+				Opens [param slot] and resolves a [NetwDatabaseConnection] for its directory.
 				[codeblock lang=text]
 				Error
 				┠╴OK                     	slot was opened
@@ -63,7 +62,7 @@
 	</methods>
 	<members>
 		<member name="root" type="String" setter="set_root" getter="get_root" default="&quot;user://saves&quot;">
-			The directory every slot lives under. A path under [code]user://[/code] is the one a shipped game can write to on every platform.
+			The directory every slot lives under. Use a path under [code]user://[/code], which an exported game can write to on every platform.
 		</member>
 	</members>
 </class>

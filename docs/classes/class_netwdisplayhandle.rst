@@ -12,22 +12,22 @@ NetwDisplayHandle
 
 **Inherits:** :godot:`RefCounted`
 
-Everything about one entity's display that is not about a single value stream, written and read through :ref:`NetwEntity.interpolation<class_NetwEntity_property_interpolation>`.
+How one :ref:`NetwEntity<class_NetwEntity>` is drawn, reached by :ref:`NetwEntity.interpolation<class_NetwEntity_property_interpolation>`.
 
 .. rst-class:: classref-introduction-group
 
 Description
 -----------
 
-A :ref:`NetwInterpolate<class_NetwInterpolate>` spec configures one value stream. Everything that applies to the whole entity instead of one stream lives here, so there is one result per entity to which node receives the smoothed write, which timeline it renders on, and how far behind the newest snapshot the playhead sits. The session pumps what this declares.
-
-Every setting below is a view, not a store. A write goes out through the session's display book and a read comes back from the same declaration, so the two spellings can never disagree about one entity. A setting authored before the entity has a live :ref:`NetwEntity.rid<class_NetwEntity_property_rid>` waits until it does, and is re-applied to each of the entity's lives, because liveness hands a re-admitted entity a fresh :ref:`NetwEntity.rid<class_NetwEntity_property_rid>` and the settings have to outlive it.
+A :ref:`NetwInterpolate<class_NetwInterpolate>` configures one property. This handle holds the settings that apply to the whole entity, such as which node receives the smoothed values and how far behind the newest snapshot it is drawn.
 
 ::
 
     var handle := NetwEntity.of(self).interpolation
     handle.visual_root = NodePath("Visual")
     handle.display_role = NetwMultiplayer.DISPLAY_ROLE_REMOTE
+
+\ Settings written before the entity is spawned are applied once it is, and they are kept if the entity respawns.
 
 .. rst-class:: classref-reftable-group
 
@@ -37,31 +37,31 @@ Properties
 .. table::
    :widths: auto
 
-   +----------------------------------------------------------+------------------------------------------------------------------------------------------+------------------+
-   | :godot:`float`                                           | :ref:`display_lag<class_NetwDisplayHandle_property_display_lag>`                         | ``0.0``          |
-   +----------------------------------------------------------+------------------------------------------------------------------------------------------+------------------+
-   | :ref:`DisplayRole<enum_NetwMultiplayer_DisplayRole>`     | :ref:`display_role<class_NetwDisplayHandle_property_display_role>`                       | ``0``            |
-   +----------------------------------------------------------+------------------------------------------------------------------------------------------+------------------+
-   | :godot:`bool`                                            | :ref:`enable_smart_dilation<class_NetwDisplayHandle_property_enable_smart_dilation>`     | ``false``        |
-   +----------------------------------------------------------+------------------------------------------------------------------------------------------+------------------+
-   | :godot:`float`                                           | :ref:`floor_smoothing<class_NetwDisplayHandle_property_floor_smoothing>`                 | ``0.0``          |
-   +----------------------------------------------------------+------------------------------------------------------------------------------------------+------------------+
-   | :godot:`float`                                           | :ref:`lag_adapt_rate<class_NetwDisplayHandle_property_lag_adapt_rate>`                   | ``0.0``          |
-   +----------------------------------------------------------+------------------------------------------------------------------------------------------+------------------+
-   | :godot:`float`                                           | :ref:`max_extra_dilation<class_NetwDisplayHandle_property_max_extra_dilation>`           | ``0.0``          |
-   +----------------------------------------------------------+------------------------------------------------------------------------------------------+------------------+
-   | :ref:`PredictedMode<enum_NetwMultiplayer_PredictedMode>` | :ref:`predicted_mode<class_NetwDisplayHandle_property_predicted_mode>`                   | ``0``            |
-   +----------------------------------------------------------+------------------------------------------------------------------------------------------+------------------+
-   | :godot:`float`                                           | :ref:`predicted_smooth_time<class_NetwDisplayHandle_property_predicted_smooth_time>`     | ``0.0``          |
-   +----------------------------------------------------------+------------------------------------------------------------------------------------------+------------------+
-   | :godot:`int`                                             | :ref:`starvation_grace_frames<class_NetwDisplayHandle_property_starvation_grace_frames>` | ``0``            |
-   +----------------------------------------------------------+------------------------------------------------------------------------------------------+------------------+
-   | :godot:`float`                                           | :ref:`starvation_growth<class_NetwDisplayHandle_property_starvation_growth>`             | ``0.0``          |
-   +----------------------------------------------------------+------------------------------------------------------------------------------------------+------------------+
-   | :godot:`int`                                             | :ref:`trace_interval<class_NetwDisplayHandle_property_trace_interval>`                   | ``0``            |
-   +----------------------------------------------------------+------------------------------------------------------------------------------------------+------------------+
-   | :godot:`NodePath`                                        | :ref:`visual_root<class_NetwDisplayHandle_property_visual_root>`                         | ``NodePath("")`` |
-   +----------------------------------------------------------+------------------------------------------------------------------------------------------+------------------+
+   +------------------------------------------------------+------------------------------------------------------------------------------------------+------------------+
+   | :godot:`float`                                       | :ref:`display_lag<class_NetwDisplayHandle_property_display_lag>`                         | ``0.0``          |
+   +------------------------------------------------------+------------------------------------------------------------------------------------------+------------------+
+   | :ref:`DisplayRole<enum_NetwMultiplayer_DisplayRole>` | :ref:`display_role<class_NetwDisplayHandle_property_display_role>`                       | ``0``            |
+   +------------------------------------------------------+------------------------------------------------------------------------------------------+------------------+
+   | :godot:`bool`                                        | :ref:`enable_smart_dilation<class_NetwDisplayHandle_property_enable_smart_dilation>`     | ``false``        |
+   +------------------------------------------------------+------------------------------------------------------------------------------------------+------------------+
+   | :godot:`float`                                       | :ref:`floor_smoothing<class_NetwDisplayHandle_property_floor_smoothing>`                 | ``0.0``          |
+   +------------------------------------------------------+------------------------------------------------------------------------------------------+------------------+
+   | :godot:`float`                                       | :ref:`lag_adapt_rate<class_NetwDisplayHandle_property_lag_adapt_rate>`                   | ``0.0``          |
+   +------------------------------------------------------+------------------------------------------------------------------------------------------+------------------+
+   | :ref:`LiveMode<enum_NetwMultiplayer_LiveMode>`       | :ref:`live_mode<class_NetwDisplayHandle_property_live_mode>`                             | ``0``            |
+   +------------------------------------------------------+------------------------------------------------------------------------------------------+------------------+
+   | :godot:`float`                                       | :ref:`live_smooth_time<class_NetwDisplayHandle_property_live_smooth_time>`               | ``0.0``          |
+   +------------------------------------------------------+------------------------------------------------------------------------------------------+------------------+
+   | :godot:`float`                                       | :ref:`max_extra_dilation<class_NetwDisplayHandle_property_max_extra_dilation>`           | ``0.0``          |
+   +------------------------------------------------------+------------------------------------------------------------------------------------------+------------------+
+   | :godot:`int`                                         | :ref:`starvation_grace_frames<class_NetwDisplayHandle_property_starvation_grace_frames>` | ``0``            |
+   +------------------------------------------------------+------------------------------------------------------------------------------------------+------------------+
+   | :godot:`float`                                       | :ref:`starvation_growth<class_NetwDisplayHandle_property_starvation_growth>`             | ``0.0``          |
+   +------------------------------------------------------+------------------------------------------------------------------------------------------+------------------+
+   | :godot:`int`                                         | :ref:`trace_interval<class_NetwDisplayHandle_property_trace_interval>`                   | ``0``            |
+   +------------------------------------------------------+------------------------------------------------------------------------------------------+------------------+
+   | :godot:`NodePath`                                    | :ref:`visual_root<class_NetwDisplayHandle_property_visual_root>`                         | ``NodePath("")`` |
+   +------------------------------------------------------+------------------------------------------------------------------------------------------+------------------+
 
 .. rst-class:: classref-reftable-group
 
@@ -100,7 +100,7 @@ Property Descriptions
 
 - :godot:`float` **get_display_lag**\ (\ )
 
-Read-only extra display delay in ticks measured by smart dilation.
+The extra display delay in ticks that :ref:`enable_smart_dilation<class_NetwDisplayHandle_property_enable_smart_dilation>` has added.
 
 .. rst-class:: classref-item-separator
 
@@ -117,7 +117,7 @@ Read-only extra display delay in ticks measured by smart dilation.
 - |void| **set_display_role**\ (\ value\: :ref:`DisplayRole<enum_NetwMultiplayer_DisplayRole>`\ )
 - :ref:`DisplayRole<enum_NetwMultiplayer_DisplayRole>` **get_display_role**\ (\ )
 
-How this entity is drawn. :ref:`NetwMultiplayer.DISPLAY_ROLE_AUTO<class_NetwMultiplayer_constant_DISPLAY_ROLE_AUTO>` works it out from who controls the entity, which is right for almost every one.
+How this entity is drawn. :ref:`NetwMultiplayer.DISPLAY_ROLE_AUTO<class_NetwMultiplayer_constant_DISPLAY_ROLE_AUTO>` picks one from :ref:`NetwSimulationHandle.mode<class_NetwSimulationHandle_property_mode>` and who controls the entity, and is right for most entities.
 
 .. rst-class:: classref-item-separator
 
@@ -134,7 +134,7 @@ How this entity is drawn. :ref:`NetwMultiplayer.DISPLAY_ROLE_AUTO<class_NetwMult
 - |void| **set_enable_smart_dilation**\ (\ value\: :godot:`bool`\ )
 - :godot:`bool` **get_enable_smart_dilation**\ (\ )
 
-Enables display lag adaptation for remote interpolation.
+Lets the display delay of a remote entity grow when snapshots arrive late.
 
 .. rst-class:: classref-item-separator
 
@@ -174,6 +174,40 @@ Per frame fraction used to track the measured lag floor.
 
 ----
 
+.. _class_NetwDisplayHandle_property_live_mode:
+
+.. rst-class:: classref-property
+
+:ref:`LiveMode<enum_NetwMultiplayer_LiveMode>` **live_mode** = ``0`` :ref:`🔗<class_NetwDisplayHandle_property_live_mode>`
+
+.. rst-class:: classref-property-setget
+
+- |void| **set_live_mode**\ (\ value\: :ref:`LiveMode<enum_NetwMultiplayer_LiveMode>`\ )
+- :ref:`LiveMode<enum_NetwMultiplayer_LiveMode>` **get_live_mode**\ (\ )
+
+How an entity this peer simulates is drawn under :ref:`NetwMultiplayer.DISPLAY_ROLE_PREDICTED<class_NetwMultiplayer_constant_DISPLAY_ROLE_PREDICTED>`, in :ref:`NetwSimulationHandle.MODE_PREDICT<class_NetwSimulationHandle_constant_MODE_PREDICT>` or :ref:`NetwSimulationHandle.MODE_ACTIVE<class_NetwSimulationHandle_constant_MODE_ACTIVE>`.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NetwDisplayHandle_property_live_smooth_time:
+
+.. rst-class:: classref-property
+
+:godot:`float` **live_smooth_time** = ``0.0`` :ref:`🔗<class_NetwDisplayHandle_property_live_smooth_time>`
+
+.. rst-class:: classref-property-setget
+
+- |void| **set_live_smooth_time**\ (\ value\: :godot:`float`\ )
+- :godot:`float` **get_live_smooth_time**\ (\ )
+
+Smoothing time in seconds for :ref:`NetwMultiplayer.LIVE_MODE_CHASE<class_NetwMultiplayer_constant_LIVE_MODE_CHASE>`. ``0`` uses one tick.
+
+.. rst-class:: classref-item-separator
+
+----
+
 .. _class_NetwDisplayHandle_property_max_extra_dilation:
 
 .. rst-class:: classref-property
@@ -185,41 +219,7 @@ Per frame fraction used to track the measured lag floor.
 - |void| **set_max_extra_dilation**\ (\ value\: :godot:`float`\ )
 - :godot:`float` **get_max_extra_dilation**\ (\ )
 
-Maximum extra ticks that display lag can grow while starving.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwDisplayHandle_property_predicted_mode:
-
-.. rst-class:: classref-property
-
-:ref:`PredictedMode<enum_NetwMultiplayer_PredictedMode>` **predicted_mode** = ``0`` :ref:`🔗<class_NetwDisplayHandle_property_predicted_mode>`
-
-.. rst-class:: classref-property-setget
-
-- |void| **set_predicted_mode**\ (\ value\: :ref:`PredictedMode<enum_NetwMultiplayer_PredictedMode>`\ )
-- :ref:`PredictedMode<enum_NetwMultiplayer_PredictedMode>` **get_predicted_mode**\ (\ )
-
-Predicted display filter used for local prediction.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwDisplayHandle_property_predicted_smooth_time:
-
-.. rst-class:: classref-property
-
-:godot:`float` **predicted_smooth_time** = ``0.0`` :ref:`🔗<class_NetwDisplayHandle_property_predicted_smooth_time>`
-
-.. rst-class:: classref-property-setget
-
-- |void| **set_predicted_smooth_time**\ (\ value\: :godot:`float`\ )
-- :godot:`float` **get_predicted_smooth_time**\ (\ )
-
-Exponential smoothing time for :ref:`NetwMultiplayer.PREDICTED_MODE_CHASE<class_NetwMultiplayer_constant_PREDICTED_MODE_CHASE>`.
+The most ticks :ref:`display_lag<class_NetwDisplayHandle_property_display_lag>` may grow to.
 
 .. rst-class:: classref-item-separator
 
@@ -236,7 +236,7 @@ Exponential smoothing time for :ref:`NetwMultiplayer.PREDICTED_MODE_CHASE<class_
 - |void| **set_starvation_grace_frames**\ (\ value\: :godot:`int`\ )
 - :godot:`int` **get_starvation_grace_frames**\ (\ )
 
-Starving frames tolerated before lag starts growing.
+How many frames without a new snapshot are tolerated before :ref:`display_lag<class_NetwDisplayHandle_property_display_lag>` starts growing.
 
 .. rst-class:: classref-item-separator
 
@@ -253,7 +253,7 @@ Starving frames tolerated before lag starts growing.
 - |void| **set_starvation_growth**\ (\ value\: :godot:`float`\ )
 - :godot:`float` **get_starvation_growth**\ (\ )
 
-Ticks per frame added after starvation is sustained.
+Ticks added to :ref:`display_lag<class_NetwDisplayHandle_property_display_lag>` per frame once the grace frames are spent.
 
 .. rst-class:: classref-item-separator
 
@@ -270,7 +270,7 @@ Ticks per frame added after starvation is sustained.
 - |void| **set_trace_interval**\ (\ value\: :godot:`int`\ )
 - :godot:`int` **get_trace_interval**\ (\ )
 
-Frames between interpolation trace logs. ``0`` disables logs.
+Frames between interpolation trace logs. ``0`` disables them.
 
 .. rst-class:: classref-item-separator
 
@@ -287,7 +287,7 @@ Frames between interpolation trace logs. ``0`` disables logs.
 - |void| **set_visual_root**\ (\ value\: :godot:`NodePath`\ )
 - :godot:`NodePath` **get_visual_root**\ (\ )
 
-Visual child that receives smoothed output. A parented visual takes global-space writes for the channels with a per-channel global setter, position and rotation, while every other channel inherits from the body. A visual with :godot:`CanvasItem.top_level <CanvasItem#class_CanvasItem_property_top_level>` set takes absolute writes on any channel.
+The child node that receives the smoothed values. Position and rotation are written in global space, and other properties are written as they are. A visual with :godot:`CanvasItem.top_level <CanvasItem#class_CanvasItem_property_top_level>` set receives every property in global space.
 
 .. rst-class:: classref-section-separator
 
@@ -304,7 +304,7 @@ Method Descriptions
 
 :godot:`int` **displayed_authoring_tick**\ (\ ) |const| :ref:`🔗<class_NetwDisplayHandle_method_displayed_authoring_tick>`
 
-Returns the displayed STATE authoring tick, or ``-1``.
+The tick the drawn state was written at, or ``-1``.
 
 .. rst-class:: classref-item-separator
 
@@ -316,7 +316,7 @@ Returns the displayed STATE authoring tick, or ``-1``.
 
 :ref:`NetwEntity<class_NetwEntity>` **entity**\ (\ ) |const| :ref:`🔗<class_NetwDisplayHandle_method_entity>`
 
-The :ref:`NetwEntity<class_NetwEntity>` this handle was bound to, or ``null`` once that entity is gone.
+The :ref:`NetwEntity<class_NetwEntity>` this handle belongs to, or ``null`` once that entity is gone.
 
 .. rst-class:: classref-item-separator
 
@@ -328,7 +328,7 @@ The :ref:`NetwEntity<class_NetwEntity>` this handle was bound to, or ``null`` on
 
 :ref:`NetwRingBuffer<class_NetwRingBuffer>` **get_buffer**\ (\ property\: :godot:`StringName`\ ) |const| :ref:`🔗<class_NetwDisplayHandle_method_get_buffer>`
 
-Returns the :ref:`NetwRingBuffer<class_NetwRingBuffer>` for ``property``, or ``null``.
+The :ref:`NetwRingBuffer<class_NetwRingBuffer>` of snapshots for ``property``, or ``null``.
 
 .. rst-class:: classref-item-separator
 
@@ -340,9 +340,7 @@ Returns the :ref:`NetwRingBuffer<class_NetwRingBuffer>` for ``property``, or ``n
 
 |void| **reset**\ (\ ) :ref:`🔗<class_NetwDisplayHandle_method_reset>`
 
-Clears every interpolation history for this entity and writes its live source values to the visual.
-
-Call it after applying a position discontinuity locally so later movement resumes from the new position.
+Clears the entity's interpolation history and writes its current values to the visual. Call it after teleporting the entity locally, so it does not interpolate from the old position.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

@@ -63,7 +63,7 @@ func paint(color: Color) -> void:
 
 func claim(hold: NetwEntity.Hold) -> void:
 	if entity.is_control_pending or entity.hold >= hold and (
-		entity.is_controlled_locally or entity.controller != 0
+			entity.is_controlled_locally or entity.controller != 0
 	):
 		return
 	entity.claim_authority(hold).catch_error(refused)

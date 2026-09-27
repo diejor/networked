@@ -202,11 +202,8 @@ class ReleaseScenario : public netw_test::FrameScenario {
         const Ref<netw::LocalLinkConditions> flight
             = netw::LocalLinkConditions::create(43);
         flight->set_latency_ms(double(FLIGHT_TICKS) * 1000.0 / TICKRATE);
-        stand->loopback()->set_link_conditions(
-            stand->peer(-1),
-            flight,
-            int(holder)
-        );
+        stand->loopback()
+            ->set_link_conditions(stand->peer(-1), flight, int(holder));
         evidence().holder = holder;
         evidence().seated = true;
         return true;

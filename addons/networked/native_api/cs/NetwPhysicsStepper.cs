@@ -6,17 +6,16 @@ using Godot.NativeInterop;
 namespace Networked;
 
 /// <summary>
-/// The base a game subclasses to let one physics space be stepped, saved and
-/// rewound more than once inside a single frame.
+/// Steps a physics space on demand, so a rollback can advance it several times
+/// in one frame.
 /// </summary>
 /// <remarks>
-/// Godot advances a physics space once per physics frame, from the state that
-/// frame happens to hold. A rollback needs the opposite: the same space
-/// advanced several times inside one frame, each time from a state some earlier
-/// tick held. Nothing in the engine offers that, so the game owns it and
-/// <see cref="NetwPhysicsStepper"/> is where it plugs in. Once installed for a
-/// space, the engine holds that space inactive and steps it itself, on the
-/// forward path and on a joint replay alike.
+/// Godot steps each physics space once per physics frame. Extend this class to
+/// step a space yourself, and install it with
+/// <see cref="NetwMultiplayer.PredictStepperInstall"/>. While an entity with
+/// <see cref="NetwSimulationHandle.ScheduleEnum.Stepped"/> is in that space,
+/// Networked stops the engine from stepping it and calls <c>_step</c> once per
+/// tick instead, and again for each tick it replays.
 /// <code>
 /// extends NetwPhysicsStepper
 ///
@@ -29,37 +28,18 @@ namespace Networked;
 /// api.predict_stepper_install(space_rid, MyStepper.new())
 /// </code>
 /// <para>
-/// Install one per space with
-/// <see cref="NetwMultiplayer.PredictStepperInstall"/>, which rejects a stepper
-/// whose <c>_can_step</c> does not return <c>true</c>. Installing with a
-/// <c>null</c> stepper uninstalls. Read back what a space holds with
-/// <see cref="NetwMultiplayer.PredictGetStepper"/>. Only a member declared
-/// <see cref="NetwSimulationHandle.ScheduleEnum.Stepped"/> reaches a stepper at
-/// all. A space with none runs that member at
-/// <see cref="NetwSimulationHandle.ScheduleEnum.Frame"/>, and a member on
-/// <see cref="NetwSimulationHandle.ScheduleEnum.Tick"/> never asks for one. The
-/// hold on a space starts at the first network tick a
-/// <see cref="NetwSimulationHandle.ScheduleEnum.Stepped"/> member stands in it,
-/// because <see cref="NetwMultiplayer.PredictStepperInstall"/> takes a bare
-/// <c>RID</c> and only a member standing in it reveals the dimension the hold
-/// needs, and the hold ends when the stepper is uninstalled. <b>Forward
-/// path.</b> Once per network tick the engine drives every
-/// <see cref="NetwSimulationHandle.ScheduleEnum.Stepped"/> member standing in
-/// the space, applying that tick's command to each, and only then calls
-/// <c>_step</c> and <c>_snapshot</c>, once for the space however many members
-/// stand in it. That order is what makes one step integrate what the whole
-/// group authored rather than a world one member wrote alone. <b>Joint
-/// replay.</b> When a <see cref="NetwSimulationHandle.ScheduleEnum.Stepped"/>
-/// entity under <see cref="NetwPredict.Reconcile.Joint"/> rebases itself and
-/// the entities its <see cref="NetwEntity.Simulation"/> selects to a basis
-/// tick, the engine restores every member's own columns from its timeline,
-/// calls <c>_restore</c> once for the whole pass, then for each unacknowledged
-/// tick after the basis applies that tick's commands and calls <c>_step</c> and
-/// <c>_snapshot</c> once for the whole group. <c>_snapshot</c> and
-/// <c>_restore</c> exist only for a stepped space holding dynamic bodies no
-/// entity governs, such as loose debris the engine cannot restore from an
-/// entity's own timeline. A stepper whose space holds only entities implements
-/// neither.
+/// Install <c>null</c> to uninstall, and read the installed stepper back with
+/// <see cref="NetwMultiplayer.PredictGetStepper"/>. Without a stepper, a
+/// <see cref="NetwSimulationHandle.ScheduleEnum.Stepped"/> entity runs as
+/// <see cref="NetwSimulationHandle.ScheduleEnum.Frame"/>. Once no such entity
+/// is left in the space, the engine steps it again as usual. Each tick, every
+/// entity in the space applies its input first, then <c>_step</c> and
+/// <c>_snapshot</c> run once for the whole space. Under
+/// <see cref="NetwPredict.Reconcile.Joint"/> a replay restores every entity,
+/// calls <c>_restore</c> once, then steps each replayed tick the same way.
+/// Implement <c>_snapshot</c> and <c>_restore</c> only when the space holds
+/// bodies that are not entities, such as loose debris. Entities are restored by
+/// Networked.
 /// </para>
 /// </remarks>
 public sealed class NetwPhysicsStepper : NetwRefCounted
@@ -82,7 +62,8 @@ public sealed class NetwPhysicsStepper : NetwRefCounted
         NetwApi.MethodBind("NetwPhysicsStepper", "can_step", 2240911060UL);
 
     /// <summary>
-    /// Returns <c>_can_step</c>, or <c>false</c> when nothing overrode it.
+    /// Calls <c>_can_step</c>, or returns <c>false</c> when it is not
+    /// overridden.
     /// </summary>
     public bool CanStep()
     {
@@ -95,7 +76,7 @@ public sealed class NetwPhysicsStepper : NetwRefCounted
         NetwApi.MethodBind("NetwPhysicsStepper", "step", 1794382983UL);
 
     /// <summary>
-    /// Calls <c>_step</c>, and does nothing when nothing overrode it.
+    /// Calls <c>_step</c> when it is overridden.
     /// </summary>
     public void Step(Rid space, double delta)
     {
@@ -114,7 +95,7 @@ public sealed class NetwPhysicsStepper : NetwRefCounted
         NetwApi.MethodBind("NetwPhysicsStepper", "snapshot", 3411492887UL);
 
     /// <summary>
-    /// Calls <c>_snapshot</c>, and does nothing when nothing overrode it.
+    /// Calls <c>_snapshot</c> when it is overridden.
     /// </summary>
     public void Snapshot(Rid space, long tick)
     {
@@ -133,7 +114,7 @@ public sealed class NetwPhysicsStepper : NetwRefCounted
         NetwApi.MethodBind("NetwPhysicsStepper", "restore", 3411492887UL);
 
     /// <summary>
-    /// Calls <c>_restore</c>, and does nothing when nothing overrode it.
+    /// Calls <c>_restore</c> when it is overridden.
     /// </summary>
     public void Restore(Rid space, long tick)
     {

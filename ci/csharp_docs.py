@@ -30,15 +30,11 @@ class Docs:
         self.constants: dict[str, str] = {}
 
         for found in root.findall("./methods/method"):
-            self.methods[found.get("name")] = (
-                found.findtext("description") or ""
-            ).strip()
+            self.methods[found.get("name")] = (found.findtext("description") or "").strip()
         for found in root.findall("./members/member"):
             self.members[found.get("name")] = (found.text or "").strip()
         for found in root.findall("./signals/signal"):
-            self.signals[found.get("name")] = (
-                found.findtext("description") or ""
-            ).strip()
+            self.signals[found.get("name")] = (found.findtext("description") or "").strip()
         for found in root.findall("./constants/constant"):
             self.constants[found.get("name")] = (found.text or "").strip()
 
@@ -71,9 +67,7 @@ class SharpDocs:
             self.paths[kind].add(spelled)
             if kind == "F" and spelled.count(".") == 2:
                 owner, held, leaf = spelled.split(".")
-                self.fields_by_owner.setdefault(owner, set()).add(
-                    "%s.%s" % (held, leaf)
-                )
+                self.fields_by_owner.setdefault(owner, set()).add("%s.%s" % (held, leaf))
 
     @classmethod
     def load(cls, path: Path) -> "SharpDocs":
@@ -106,12 +100,11 @@ class SharpDocs:
         bare = leaf
         for opening in ("get_", "set_", "is_"):
             if bare.startswith(opening):
-                bare = bare[len(opening):]
+                bare = bare[len(opening) :]
                 break
         return self.first(
             "MPF",
-            [direct, "%s.%s" % (owner, pascal_leaf(bare)),
-             "%s.Get%s" % (owner, spelled)],
+            [direct, "%s.%s" % (owner, pascal_leaf(bare)), "%s.Get%s" % (owner, spelled)],
         )
 
     def nested_constant(self, owner: str, name: str) -> str | None:
@@ -131,18 +124,14 @@ class SharpDocs:
             leaf = pascal_leaf("_".join(parts[start:]))
             dropped = pascal_leaf("_".join(parts[:start]))
             matched = sorted(
-                one for one in held
-                if one.split(".")[-1] == leaf
-                and one.split(".")[0].startswith(dropped)
+                one for one in held if one.split(".")[-1] == leaf and one.split(".")[0].startswith(dropped)
             )
             if matched:
                 return "%s.%s" % (owner, matched[0])
         return None
 
 
-REFERENCE = re.compile(
-    r"\[(method|member|signal|constant|enum|param|theme_item)\s+([@\w\./]+)\]"
-)
+REFERENCE = re.compile(r"\[(method|member|signal|constant|enum|param|theme_item)\s+([@\w\./]+)\]")
 BARE_TYPE = re.compile(r"\[([A-Z]\w*(?:\.\w+)*)\]")
 INLINE_CODE = re.compile(r"\[code(?:\s[^\]]*)?\](.*?)\[/code\]", re.S)
 BLOCKS = re.compile(r"\[codeblocks\](.*?)\[/codeblocks\]", re.S)
@@ -252,10 +241,7 @@ class Prose:
         def carried(body: str) -> str:
             self.blocks_carried += 1
             dedented = textwrap.dedent(body.strip("\n")).rstrip()
-            return stash(
-                "<code>\n%s\n</code>"
-                % "\n".join(escape(one.rstrip()) for one in dedented.split("\n"))
-            )
+            return stash("<code>\n%s\n</code>" % "\n".join(escape(one.rstrip()) for one in dedented.split("\n")))
 
         def on_blocks(match: re.Match) -> str:
             """Godot's dual-language form. The C# twin is the one a C# caller
@@ -290,9 +276,7 @@ class Prose:
 
         text = BLOCKS.sub(on_blocks, text)
         text = BLOCK.sub(on_block, text)
-        text = INLINE_CODE.sub(
-            lambda m: stash("<c>%s</c>" % escape(m.group(1).strip())), text
-        )
+        text = INLINE_CODE.sub(lambda m: stash("<c>%s</c>" % escape(m.group(1).strip())), text)
         text = REFERENCE.sub(on_reference, text)
         text = BARE_TYPE.sub(on_type, text)
         text = EMPHASIS.sub("", text)
@@ -367,9 +351,7 @@ def wrap(text: str, indent: str) -> list[str]:
                 continue
             run.append(stripped)
         lines.extend(reflow(" ".join(run), room))
-    return [
-        "%s/// %s" % (indent, one) if one else "%s///" % indent for one in lines
-    ]
+    return ["%s/// %s" % (indent, one) if one else "%s///" % indent for one in lines]
 
 
 def tagged(indent: str, tag: str, text: str) -> list[str]:

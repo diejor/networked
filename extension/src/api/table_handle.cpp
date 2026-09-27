@@ -160,7 +160,8 @@ int NetwTableHandle::row_of(int64_t p_route) const {
     return api != nullptr ? api->table_get_row(table, p_route) : -1;
 }
 
-PackedInt32Array NetwTableHandle::rows_of(const PackedInt64Array &p_routes
+PackedInt32Array NetwTableHandle::rows_of(
+    const PackedInt64Array &p_routes
 ) const {
     NetwMultiplayer *api = session();
     return api != nullptr ? api->table_get_rows(table, p_routes)
@@ -179,12 +180,7 @@ Ref<NetwPromise> NetwTableHandle::save(
             "the table and the database belong to different sessions"
         );
     }
-    return api->table_save(
-        table,
-        p_database->get_database(),
-        p_key,
-        p_ids
-    );
+    return api->table_save(table, p_database->get_database(), p_key, p_ids);
 }
 
 Ref<NetwPromise> NetwTableHandle::load(
@@ -193,12 +189,10 @@ Ref<NetwPromise> NetwTableHandle::load(
 ) {
     NetwMultiplayer *api = session();
     if (api == nullptr || p_database.is_null() || !p_database->serves(api)) {
-        return NetwPromise::resolved(
-            table_load_failure(
-                ERR_DOES_NOT_EXIST,
-                "the table and the database belong to different sessions"
-            )
-        );
+        return NetwPromise::resolved(table_load_failure(
+            ERR_DOES_NOT_EXIST,
+            "the table and the database belong to different sessions"
+        ));
     }
     return api->table_load(table, p_database->get_database(), p_key);
 }
@@ -260,10 +254,7 @@ void NetwTableHandle::_bind_methods() {
         D_METHOD("read_deaths"),
         &NetwTableHandle::read_deaths
     );
-    ClassDB::bind_method(
-        D_METHOD("row_of", "route"),
-        &NetwTableHandle::row_of
-    );
+    ClassDB::bind_method(D_METHOD("row_of", "route"), &NetwTableHandle::row_of);
     ClassDB::bind_method(
         D_METHOD("rows_of", "routes"),
         &NetwTableHandle::rows_of
@@ -276,7 +267,6 @@ void NetwTableHandle::_bind_methods() {
         D_METHOD("load", "database", "key"),
         &NetwTableHandle::load
     );
-
 
     ADD_PROPERTY(PropertyInfo(Variant::RID, "table"), "", "get_table");
     ADD_PROPERTY(

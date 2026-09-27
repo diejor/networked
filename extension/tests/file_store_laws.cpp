@@ -45,12 +45,8 @@ struct World {
         plane = session->get_databases();
         database = plane->create("saves");
         schema = session->schema_create("players");
-        session->schema_add_column(
-            schema,
-            "gold",
-            NetwMultiplayer::COLUMN_I64,
-            1
-        );
+        session
+            ->schema_add_column(schema, "gold", NetwMultiplayer::COLUMN_I64, 1);
         session->schema_seal(schema);
         connection = FileConnection::opened(root, "slot1");
     }
@@ -60,11 +56,8 @@ struct World {
     }
 
     Error open() {
-        const Ref<NetwPromise> opened = plane->open(
-            database,
-            "slot1",
-            NetwPromise::resolved(connection)
-        );
+        const Ref<NetwPromise> opened
+            = plane->open(database, "slot1", NetwPromise::resolved(connection));
         return opened->get_is_failed() ? opened->get_code() : OK;
     }
 };
@@ -118,14 +111,10 @@ TEST_CASE(
     World again("fs1");
     NETW_CHECK_EQ(again.open(), OK);
     const Dictionary answered
-        = again.plane->read(again.database, again.schema, "hero")
-              ->get_result();
+        = again.plane->read(again.database, again.schema, "hero")->get_result();
     NETW_CHECK_EQ(int(answered["error"]), OK);
     CHECK(bool(answered["found"]));
-    NETW_CHECK_EQ(
-        int64_t(Dictionary(answered["values"])["gold"]),
-        int64_t(7)
-    );
+    NETW_CHECK_EQ(int64_t(Dictionary(answered["values"])["gold"]), int64_t(7));
 }
 
 TEST_CASE(
@@ -194,9 +183,11 @@ TEST_CASE(
         CHECK(found);
     }
 
-    CHECK_FALSE(netw::gd::file_exists(
-        String("user://netw_file_store_laws/escaped.netwrec")
-    ));
+    CHECK_FALSE(
+        netw::gd::file_exists(
+            String("user://netw_file_store_laws/escaped.netwrec")
+        )
+    );
     CHECK_FALSE(netw::gd::file_exists(String("user://escaped.netwrec")));
 }
 
@@ -212,8 +203,9 @@ TEST_CASE(
 
     NETW_CHECK_EQ(store.replace("slot1", record, sealed(world, 1)), OK);
     NETW_CHECK_EQ(store.replace("slot1", snapshot, sealed(world, 2)), OK);
-    CHECK(bool(store.path_of("slot1", record)
-               != store.path_of("slot1", snapshot)));
+    CHECK(
+        bool(store.path_of("slot1", record) != store.path_of("slot1", snapshot))
+    );
 
     NETW_CHECK_EQ(store.erase("slot1", record), OK);
     Dictionary held;
@@ -339,15 +331,21 @@ TEST_CASE(
     NETW_CHECK_EQ(PackedByteArray(reply["uncertain"]).size(), 3);
 
     FileStore store(world.root);
-    CHECK(netw::gd::file_exists(
-        store.path_of("slot1", address(world, Kind::RECORD, "one"))
-    ));
-    CHECK_FALSE(netw::gd::file_exists(
-        store.path_of("slot1", address(world, Kind::RECORD, "two"))
-    ));
-    CHECK(netw::gd::file_exists(
-        store.path_of("slot1", address(world, Kind::RECORD, "three"))
-    ));
+    CHECK(
+        netw::gd::file_exists(
+            store.path_of("slot1", address(world, Kind::RECORD, "one"))
+        )
+    );
+    CHECK_FALSE(
+        netw::gd::file_exists(
+            store.path_of("slot1", address(world, Kind::RECORD, "two"))
+        )
+    );
+    CHECK(
+        netw::gd::file_exists(
+            store.path_of("slot1", address(world, Kind::RECORD, "three"))
+        )
+    );
 }
 
 TEST_CASE(
@@ -356,15 +354,15 @@ TEST_CASE(
 ) {
     scrub("fs9");
     World world("fs9");
-    const Dictionary missing
-        = reply_of(world.connection->read(address(world, Kind::RECORD, "ghost"))
-        );
+    const Dictionary missing = reply_of(
+        world.connection->read(address(world, Kind::RECORD, "ghost"))
+    );
     NETW_CHECK_EQ(int(missing["error"]), int(OK));
     NETW_CHECK_EQ(bool(missing["found"]), false);
     CHECK_FALSE(missing.has("envelope"));
 
     FileStore store(world.root);
-    const char *keys[] = { "a", "b", "c" };
+    const char *keys[] = {"a", "b", "c"};
     for (int at = 0; at < 3; ++at) {
         NETW_CHECK_EQ(
             store.replace(
@@ -446,10 +444,12 @@ TEST_CASE(
             int(door.db->write(door.schema, "hero", values)->get_result()),
             int(OK)
         );
-        CHECK(netw::gd::file_exists(FileStore(door.root).path_of(
-            "slot1",
-            netw::persist::address_of(Kind::RECORD, "players", "hero")
-        )));
+        CHECK(
+            netw::gd::file_exists(FileStore(door.root).path_of(
+                "slot1",
+                netw::persist::address_of(Kind::RECORD, "players", "hero")
+            ))
+        );
     }
 
     netw::persist::forget_stores();
@@ -462,10 +462,7 @@ TEST_CASE(
     const Dictionary read = again.db->read(again.schema, "hero")->get_result();
     NETW_CHECK_EQ(int(read["error"]), OK);
     CHECK(bool(read["found"]));
-    NETW_CHECK_EQ(
-        int64_t(Dictionary(read["values"])["gold"]),
-        int64_t(11)
-    );
+    NETW_CHECK_EQ(int64_t(Dictionary(read["values"])["gold"]), int64_t(11));
 }
 
 TEST_CASE(

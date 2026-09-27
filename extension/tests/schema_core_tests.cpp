@@ -436,7 +436,10 @@ TEST_CASE(
     Dictionary plain;
     plain["gold"] = 12;
     plain["where"] = Vector2(3, 4);
-    NETW_CHECK_EQ(SchemaCore::validate_value(SchemaCore::VARIANT, 1, plain), OK);
+    NETW_CHECK_EQ(
+        SchemaCore::validate_value(SchemaCore::VARIANT, 1, plain),
+        OK
+    );
 }
 
 TEST_CASE("[Networked][Table][Hosted] A self-nesting value terminates") {

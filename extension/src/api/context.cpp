@@ -7,18 +7,18 @@
 #include "godot/utility.hpp"
 #include "godot/vararg.hpp"
 #include "netw/api/entity_record.hpp"
-#include "netw/api/native_api.hpp"
 #include "netw/api/link_conditions.hpp"
+#include "netw/api/native_api.hpp"
 #include "netw/api/replication_core.hpp"
 #include "netw/api/sync_pipeline.hpp"
+#include "netw/colors.hpp"
 #include "netw/connect/transport.hpp"
 #include "netw/log.hpp"
+#include "netw/profile.hpp"
 #include "netw/scene_core.hpp"
 #include "netw/scene_decl.hpp"
 #include "netw/script/model.hpp"
 #include "netw/session_decl.hpp"
-#include "netw/colors.hpp"
-#include "netw/profile.hpp"
 
 using namespace godot;
 
@@ -277,8 +277,7 @@ void schedule_derived_registration(Node *p_node) {
 
 bool is_persist_only(const Ref<NetwPropertyConfig> &p_config) {
     return p_config->get_persist_column().is_valid()
-        && !p_config->is_policy_declared()
-        && !p_config->is_transfer_declared()
+        && !p_config->is_policy_declared() && !p_config->is_transfer_declared()
         && p_config->get_quantizers().is_empty();
 }
 
@@ -899,10 +898,7 @@ Ref<NetwDatabase> Netw::database(Node *p_node, const StringName &p_name) {
     return NetwDatabase::of(p_node, p_name);
 }
 
-Ref<NetwEntity> Netw::replicate(
-    Node *p_node,
-    const Ref<NetwPlayer> &p_owner
-) {
+Ref<NetwEntity> Netw::replicate(Node *p_node, const Ref<NetwPlayer> &p_owner) {
     NetwMultiplayer *api = sole_session("replicate");
     if (api == nullptr) {
         return Ref<NetwEntity>();
@@ -1025,8 +1021,7 @@ Ref<NetwPromise> Netw::claim_authority(Node *p_node, NetwEntity::Hold p_hold) {
 }
 
 Ref<NetwPromise> Netw::release_authority(Node *p_node, int64_t p_successor) {
-    const Ref<NetwEntity> entity
-        = entity_for_verb(p_node, "release_authority");
+    const Ref<NetwEntity> entity = entity_for_verb(p_node, "release_authority");
     if (entity.is_null()) {
         return rejected_for_no_entity("release_authority");
     }

@@ -65,8 +65,7 @@ void JoinRoster::refuse(int64_t p_peer, const String &p_reason) {
 }
 
 String JoinRoster::refusal(int64_t p_peer) const {
-    const HashMap<int64_t, String>::ConstIterator found
-        = refusals.find(p_peer);
+    const HashMap<int64_t, String>::ConstIterator found = refusals.find(p_peer);
     return found != refusals.end() ? found->value : String();
 }
 

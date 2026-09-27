@@ -80,10 +80,7 @@ void NetwSessionConfig::_bind_methods() {
         "get_server_info"
     );
 
-    ClassDB::bind_method(
-        D_METHOD("app", "app_id"),
-        &NetwSessionConfig::app
-    );
+    ClassDB::bind_method(D_METHOD("app", "app_id"), &NetwSessionConfig::app);
     ClassDB::bind_method(
         D_METHOD("role", "desired_role"),
         &NetwSessionConfig::role

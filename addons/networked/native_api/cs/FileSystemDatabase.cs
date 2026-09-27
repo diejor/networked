@@ -10,8 +10,8 @@ namespace Networked;
 /// directory.
 /// </summary>
 /// <remarks>
-/// Records outlive the process, so this is the backend a shipped single player
-/// or listen server game saves into.
+/// Records stay on disk after the game closes. Use it for a singleplayer or
+/// listen server game.
 /// <code>
 /// var backend := FileSystemDatabase.new()
 /// backend.root = "user://saves"
@@ -19,14 +19,8 @@ namespace Networked;
 /// </code>
 /// <para>
 /// Each slot is a directory under <see cref="FileSystemDatabase.Root"/>, and
-/// each record is one file inside it. A record is replaced by writing a new
-/// file beside it and renaming over the target, so a write that fails partway
-/// leaves the previous record readable rather than a half-written one. A file
-/// this library did not write is reported as present and refused as
-/// unrecognized. It is never read as an empty save and it is never overwritten
-/// by the read that found it. <c>NetwDatabaseBackend._list_slots</c> reads
-/// <see cref="FileSystemDatabase.Root"/> itself, so a slot written by an
-/// earlier run of the game appears without being opened first.
+/// each record is one file inside it. A file this library did not write fails
+/// to read with <c>@GlobalScope.ERR_FILE_UNRECOGNIZED</c>.
 /// </para>
 /// </remarks>
 public sealed class FileSystemDatabase : NetwDatabaseBackend
@@ -52,8 +46,8 @@ public sealed class FileSystemDatabase : NetwDatabaseBackend
         NetwApi.MethodBind("FileSystemDatabase", "set_root", 83702148UL);
 
     /// <summary>
-    /// The directory every slot lives under. A path under <c>user://</c> is the
-    /// one a shipped game can write to on every platform.
+    /// The directory every slot lives under. Use a path under <c>user://</c>,
+    /// which an exported game can write to on every platform.
     /// </summary>
     public string Root
     {

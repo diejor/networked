@@ -65,8 +65,7 @@ void deny_every_request(int64_t, Object *p_request) {
 }
 
 Ref<netw::LocalLinkConditions> latency_of(int p_ticks) {
-    Ref<netw::LocalLinkConditions> made
-        = netw::LocalLinkConditions::create(31);
+    Ref<netw::LocalLinkConditions> made = netw::LocalLinkConditions::create(31);
     made->set_latency_ms(double(p_ticks) * TICK_MS);
     return made;
 }
@@ -267,8 +266,8 @@ TEST_CASE(
     CHECK(grab->get_is_completed());
     CHECK(toss->get_is_completed());
     const Vector<StringName> heard = log.order();
-    const bool grab_first = heard.size() == 2
-        && heard[0] == StringName("grab") && heard[1] == StringName("throw");
+    const bool grab_first = heard.size() == 2 && heard[0] == StringName("grab")
+        && heard[1] == StringName("throw");
     CHECK(grab_first);
     const Ref<NetwEntity> host = stand.entity(-1);
     NETW_CHECK_EQ(host->get_controller(), int64_t(a));

@@ -39,23 +39,16 @@ struct World {
             NetwMultiplayer::COLUMN_VECTOR2,
             1
         );
-        session->schema_add_column(
-            schema,
-            "hp",
-            NetwMultiplayer::COLUMN_I64,
-            1
-        );
+        session
+            ->schema_add_column(schema, "hp", NetwMultiplayer::COLUMN_I64, 1);
         session->schema_seal(schema);
         table = session->table_create(schema);
         session->liveness_claim_routes(GAME_ROUTES);
 
         database = session->get_databases()->create("saves");
         connection = MemoryConnection::opened(p_store, "slot1");
-        session->get_databases()->open(
-            database,
-            "slot1",
-            NetwPromise::resolved(connection)
-        );
+        session->get_databases()
+            ->open(database, "slot1", NetwPromise::resolved(connection));
     }
 
     ~World() {
@@ -148,11 +141,8 @@ TEST_CASE(
     NETW_CHECK_EQ(world.save(ids_of(3)), OK);
 
     world.connection->defer(true);
-    const Ref<NetwPromise> loading = world.session->table_load(
-        world.table,
-        world.database,
-        "forest"
-    );
+    const Ref<NetwPromise> loading
+        = world.session->table_load(world.table, world.database, "forest");
     CHECK_FALSE(loading->get_is_settled());
     NETW_CHECK_EQ(world.commit(world.table, 20, 1, 7), OK);
     world.connection->release();
@@ -229,18 +219,10 @@ TEST_CASE(
     REQUIRE(bool(earlier.size() == 2));
 
     const RID herd = world.session->schema_create("herd");
-    world.session->schema_add_column(
-        herd,
-        "where",
-        NetwMultiplayer::COLUMN_VECTOR2,
-        1
-    );
-    world.session->schema_add_column(
-        herd,
-        "hp",
-        NetwMultiplayer::COLUMN_I64,
-        1
-    );
+    world.session
+        ->schema_add_column(herd, "where", NetwMultiplayer::COLUMN_VECTOR2, 1);
+    world.session
+        ->schema_add_column(herd, "hp", NetwMultiplayer::COLUMN_I64, 1);
     world.session->schema_seal(herd);
     const RID other = world.session->table_create(herd);
     REQUIRE(bool(other != world.table));

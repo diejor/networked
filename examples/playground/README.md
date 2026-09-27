@@ -1,9 +1,8 @@
 ## Cube Playground
 
 Each player rolls a cube through a field of 900 small cubes. A small cube
-takes the colour of the player that controls it, so authority is visible as
-it spreads through a pile by contact and fades back to grey once the cube
-rests.
+takes the colour of the player that has authority over it, and fades back to
+grey once it rests.
 
 ```text
 arrows / WASD   roll
@@ -20,6 +19,5 @@ are its work.
 
 Both follow Glenn Fiedler's
 [Networked Physics](https://gafferongames.com/categories/networked-physics/)
-series. This port keeps only its state synchronization model, with each
-player simulating the cubes it touches and the session deciding who holds
-each cube.
+series. This port uses its state synchronization model. Each player simulates
+the cubes it touches and the server decides who has authority over each cube.

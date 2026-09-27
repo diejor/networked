@@ -12,24 +12,7 @@ DictionaryRecord
 
 **Inherits:** :ref:`NetwRecord<class_NetwRecord>` **<** :ref:`Serde<class_Serde>` **<** :godot:`Resource`
 
-The record this addon ships, and the one a table creates when it declares none of its own.
-
-.. rst-class:: classref-introduction-group
-
-Description
------------
-
-**DictionaryRecord** is the default mutable record implementation. It stores arbitrary :godot:`Variant` values keyed by :godot:`StringName` and serializes them with :godot:`@GlobalScope.var_to_bytes() <@GlobalScope#class_@GlobalScope_method_var_to_bytes>`.
-
-::
-
-    var record := DictionaryRecord.new()
-    record.set_value(&"health", 100)
-    record.position = Vector2(10, 20)
-
-    var bytes := record.serialize()
-    var copy := DictionaryRecord.new()
-    copy.deserialize(bytes)
+A record stored as a :godot:`Dictionary`.
 
 .. rst-class:: classref-reftable-group
 
@@ -63,7 +46,7 @@ Property Descriptions
 - |void| **set_data**\ (\ value\: :godot:`Dictionary`\ )
 - :godot:`Dictionary` **get_data**\ (\ )
 
-The backing dictionary serialized to disk and transmitted over the network. :ref:`Serde.serialize()<class_Serde_method_serialize>` writes it and :ref:`Serde.deserialize()<class_Serde_method_deserialize>` replaces it.
+The values of this record.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

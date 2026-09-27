@@ -6,55 +6,29 @@ using Godot.NativeInterop;
 namespace Networked;
 
 /// <summary>
-/// Several record writes and erasures, submitted to one database in one call.
+/// Several record writes and erasures submitted to a <see cref="NetwDatabase"/>
+/// in one call.
 /// </summary>
 /// <remarks>
-/// A batch is built synchronously and reaches storage only at
-/// <see cref="NetwWriteBatch.Submit"/>. It is validated whole first, so an
-/// invalid batch writes nothing at all.
+/// Nothing reaches storage until <see cref="NetwWriteBatch.Submit"/>. If any
+/// <see cref="NetwWriteBatch.Write"/> or <see cref="NetwWriteBatch.Erase"/>
+/// call was refused, submitting writes nothing and reports that error.
 /// <code>
 /// var batch: NetwWriteBatch = db.batch()
 /// batch.write(PlayerSave.schema, first_id, first_values)
 /// batch.erase(PlayerSave.schema, second_id)
-/// var result: Dictionary = await batch.submit().wait()
-/// </code>
-/// <para>
-/// The builders answer an <c>@GlobalScope.Error</c> each, and the batch
-/// remembers the first one that was not OK. Submitting after a refused builder
-/// call performs no I/O and reports that error, so a caller who ignored a
-/// builder result still cannot write half a batch. A batch seals at submission.
-/// Adding to it afterwards, or submitting it twice, is refused with
-/// <c>@GlobalScope.ERR_LOCKED</c>. Batching is not a transaction. Operations
-/// are applied in order and each reports its own outcome, and a backend failure
-/// partway can leave the earlier ones applied. <b>The batch reply</b>
-/// <see cref="NetwWriteBatch.Submit"/> settles with one of these. <c>errors</c>
-/// and <c>uncertain</c> are parallel to the operations in the order they were
-/// added.
-/// <code>
-/// Dictionary
-/// ┠╴error      Error             the first non-OK entry of errors, or OK when every
-///                               operation landed
-/// ┠╴detail     String            what went wrong, for a person to read. Empty when
-///                               error is OK
-/// ┠╴errors     PackedInt32Array  one @GlobalScope.Error per submitted operation, in the
-///                               order they were added
-/// ┖╴uncertain  PackedByteArray   1 where the operation at that index has an outcome
-///                               the backend could not establish, 0 otherwise
-/// </code>
-/// <code>
+///
 /// var result: Dictionary = await batch.submit().wait()
 /// for at in result.errors.size():
 ///     if result.uncertain[at] == 1:
+///         # the write may or may not have landed, read it back before retrying
 ///         reconcile_later(at)
 ///     elif result.errors[at] != OK:
 ///         retry_later(at)
 /// </code>
-/// </para>
 /// <para>
-/// An uncertain operation is one whose outcome the backend could not establish,
-/// such as a write that timed out after it was sent. It is neither a success
-/// nor a failure, and retrying it blindly can write an old value over a newer
-/// one. Read the stored record back before deciding.
+/// A batch is not a transaction. Operations are applied in order, and a failure
+/// partway can leave the earlier ones applied.
 /// </para>
 /// </remarks>
 public sealed class NetwWriteBatch : NetwRefCounted
@@ -93,10 +67,17 @@ public sealed class NetwWriteBatch : NetwRefCounted
         NetwApi.MethodBind("NetwWriteBatch", "write", 2312547653UL);
 
     /// <summary>
-    /// Adds a complete replacement of the record at <paramref name="id"/>.
-    /// <paramref name="values"/> must be complete against
-    /// <paramref name="schema"/>, the same as <see cref="NetwDatabase.Write"/>
-    /// requires.
+    /// Adds a write of the whole record at <paramref name="id"/>, like
+    /// <see cref="NetwDatabase.Write"/>.
+    /// <code>
+    /// Error
+    /// ┠╴OK                     the write was added
+    /// ┠╴ERR_LOCKED             this batch was submitted already
+    /// ┠╴ERR_UNAVAILABLE        this batch outlived the session that issued it
+    /// ┠╴ERR_DOES_NOT_EXIST     schema is not sealed
+    /// ┠╴ERR_INVALID_PARAMETER  id is empty
+    /// ┖╴ERR_INVALID_DATA       values do not exactly match the schema
+    /// </code>
     /// </summary>
     public Error Write(
         NetwSchema schema,
@@ -129,6 +110,14 @@ public sealed class NetwWriteBatch : NetwRefCounted
 
     /// <summary>
     /// Adds an erasure of the record at <paramref name="id"/>.
+    /// <code>
+    /// Error
+    /// ┠╴OK                     the erasure was added
+    /// ┠╴ERR_LOCKED             this batch was submitted already
+    /// ┠╴ERR_UNAVAILABLE        this batch outlived the session that issued it
+    /// ┠╴ERR_DOES_NOT_EXIST     schema is not sealed
+    /// ┖╴ERR_INVALID_PARAMETER  id is empty
+    /// </code>
     /// </summary>
     public Error Erase(NetwSchema schema, StringName id)
     {
@@ -149,9 +138,36 @@ public sealed class NetwWriteBatch : NetwRefCounted
         NetwApi.MethodBind("NetwWriteBatch", "submit", 1931563502UL);
 
     /// <summary>
-    /// Seals this batch, sends it, and settles with the batch reply drawn in
-    /// this class's description. An empty batch succeeds without touching
-    /// storage.
+    /// Sends this batch and settles with a
+    /// <see cref="Godot.Collections.Dictionary"/>. A batch can be submitted
+    /// once.
+    /// <code>
+    /// Dictionary
+    /// ┠╴error      Error             @GlobalScope.Error. Check it before reading errors
+    /// │ ┠╴OK                 every operation landed
+    /// │ ┠╴ERR_LOCKED         this batch was submitted already
+    /// │ ┠╴a builder's code   the first write or erase this batch refused, nothing ran
+    /// │ ┠╴ERR_UNAVAILABLE    this batch outlived its session, or the connection
+    /// │ │                    implements no _write_batch
+    /// │ ┠╴ERR_INVALID_DATA   the connection answered a different number of outcomes
+    /// │ ┖╴backend-defined    the whole batch failed, or the first non-OK entry of errors
+    /// ┠╴detail     String            what went wrong, for a person to read. Empty when
+    /// │                              error is OK
+    /// ┠╴errors     PackedInt32Array  one @GlobalScope.Error per submitted operation, in the
+    /// │                              order they were added
+    /// ┖╴uncertain  PackedByteArray   1 where the operation at that index has an outcome
+    ///                                the backend could not establish, 0 otherwise
+    /// </code>
+    /// <para>
+    /// These fail the promise instead, and <see cref="NetwPromise.Wait"/>
+    /// returns the code.
+    /// <code>
+    /// Error
+    /// ┠╴ERR_UNCONFIGURED  the database is not open
+    /// ┠╴ERR_BUSY          the database already holds 4096 unsettled operations
+    /// ┖╴ERR_UNAVAILABLE   the database closed before the batch settled
+    /// </code>
+    /// </para>
     /// </summary>
     public NetwPromise Submit()
     {

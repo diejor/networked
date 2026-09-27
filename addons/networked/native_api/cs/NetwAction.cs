@@ -10,14 +10,7 @@ namespace Networked;
 /// </summary>
 /// <remarks>
 /// Pairs a local <see cref="NetwAction.Predict"/> effect with a reliable server
-/// request. The server receives a <see cref="NetwActionContext"/>, validates at
-/// <see cref="NetwActionContext.ViewTick"/>, and either binds an authoritative
-/// spawned <see cref="NetwEntity"/> result with
-/// <see cref="NetwActionContext.Bind"/> or denies it with
-/// <see cref="NetwActionContext.Deny"/>. Each authority method on an entity has
-/// its own slot, so actions created at one view tick use distinct effect keys.
-/// Create one with <see cref="Netw.Action"/>. The authority method must be a
-/// plain <see cref="Callable"/>, not an RPC.
+/// request.
 /// <code>
 /// @onready var place_bomb := Netw.action(_place_bomb)
 ///
@@ -258,28 +251,39 @@ public sealed class NetwAction : NetwRefCounted
     }
 
     private static readonly IntPtr _bindRequest =
-        NetwApi.MethodBind("NetwAction", "request", 762430443UL);
+        NetwApi.MethodBind("NetwAction", "request", 2026504150UL);
 
     /// <summary>
-    /// Requests the server authority method for <paramref name="viewTick"/>,
-    /// carrying <paramref name="data"/> as its second argument. The local
-    /// controller gets an immediate <see cref="NetwAction.Predict"/> effect.
-    /// Non-owning peers do nothing, so server consume and remote display passes
-    /// cannot double fire a command. <b>Player request.</b>
+    /// Asks the server to run the action at <paramref name="viewTick"/>. Every
+    /// argument after <paramref name="viewTick"/> reaches that method in the
+    /// order it was written, after the <see cref="NetwActionContext"/> the
+    /// method always takes first.
+    /// <code>
+    /// place_bomb.request(tick, position, fuse)
+    ///
+    /// func _place_bomb(ctx: NetwActionContext, pos: Vector2, fuse: float) -&gt; void:
+    /// </code>
+    /// <para>
+    /// The local controller gets an immediate <see cref="NetwAction.Predict"/>
+    /// effect. Non-owning peers do nothing. <b>Player request.</b>
+    /// </para>
     /// </summary>
-    public void Request(long viewTick, Variant data = default)
+    public void Request(long viewTick, params Variant[] rest)
     {
+        int total = 1 + (rest == null ? 0 : rest.Length);
+        IntPtr pack = NetwThunks.ArgsNew(total);
         godot_variant slot0 = VariantUtils.CreateFromInt((long)viewTick);
-        godot_variant slot1 = data.CopyNativeVariant();
-        godot_variant answered = default;
-        NetwThunks.Call2(
-            _bindRequest,
-            Checked,
-            in slot0,
-            in slot1,
-            ref answered);
+        NetwThunks.ArgsSet(pack, 0, in slot0);
         slot0.Dispose();
-        slot1.Dispose();
+        for (int index = 1; index < total; index++)
+        {
+            godot_variant carried = rest[index - 1].CopyNativeVariant();
+            NetwThunks.ArgsSet(pack, index, in carried);
+            carried.Dispose();
+        }
+        godot_variant answered = default;
+        NetwThunks.CallPack(_bindRequest, Checked, pack, total, ref answered);
+        NetwThunks.ArgsFree(pack);
         answered.Dispose();
     }
 }

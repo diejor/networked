@@ -542,11 +542,7 @@ ReadyVerdict StreamWriterBook::ready(
     return ReadyVerdict::SEATED;
 }
 
-bool StreamWriterBook::reset(
-    int p_peer,
-    uint64_t p_request,
-    uint64_t p_token
-) {
+bool StreamWriterBook::reset(int p_peer, uint64_t p_request, uint64_t p_token) {
     Connection *live = connections.getptr(p_peer);
     if (live == nullptr) {
         return false;
@@ -579,10 +575,7 @@ uint64_t StreamWriterBook::request_of(int p_peer, const StreamLane &p_lane) {
     return held == nullptr ? 0 : held->request;
 }
 
-SnapshotSender *StreamWriterBook::sender(
-    int p_peer,
-    const StreamLane &p_lane
-) {
+SnapshotSender *StreamWriterBook::sender(int p_peer, const StreamLane &p_lane) {
     Lane *held = lane_at(p_peer, p_lane);
     return held == nullptr ? nullptr : &held->sender;
 }

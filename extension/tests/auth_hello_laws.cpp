@@ -49,10 +49,7 @@ TEST_CASE(
     "app tag is refused by name"
 ) {
     const Ref<NetwMultiplayer> session = tagged_session();
-    session->auth_receive_hello(
-        PEER,
-        auth::encode_client_hello(0x11111111, 0)
-    );
+    session->auth_receive_hello(PEER, auth::encode_client_hello(0x11111111, 0));
     check_text(
         String(session->session_refusal(PEER)),
         String("Incompatible game build")

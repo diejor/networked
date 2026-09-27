@@ -12,98 +12,57 @@ NetwPredict
 
 **Inherits:** :godot:`Object`
 
-The enum vocabulary of the prediction family, on a leaf nobody has to import an engine to read.
+The enums used by :ref:`NetwPredictionHandle<class_NetwPredictionHandle>`.
 
 .. rst-class:: classref-introduction-group
 
 Description
 -----------
 
-Every value a prediction setting is written with. :ref:`NetwPredictionHandle<class_NetwPredictionHandle>` is where a game writes and reads them, and this class exists so naming one costs nothing, because nothing here holds state and nothing here can be constructed.
+This class only holds constants. Set them on :ref:`NetwEntity.prediction<class_NetwEntity_property_prediction>`.
 
 ::
 
-    entity.prediction.schedule = NetwPredict.SCHEDULE_FRAME
-    if entity.prediction.role == NetwPredict.ROLE_PREDICT:
-        ...
+    entity.prediction.archetype = NetwPredict.ARCHETYPE_SOLVER_BODY
+    entity.prediction.recovery_policy = NetwPredict.RECOVERY_POLICY_REBASE_RECOVER
 
-\ **What a game declares**\ 
+\ The schedule and simulation mode of an entity are :ref:`NetwSimulationHandle<class_NetwSimulationHandle>` values.
 
-- :ref:`Archetype<enum_NetwPredict_Archetype>` what kind of body this is, which presets the rest
+\ **Settings**\ 
 
-- :ref:`Schedule<enum_NetwPredict_Schedule>` how often the entity is driven
+- :ref:`Archetype<enum_NetwPredict_Archetype>` a preset for the other settings
 
-- :ref:`CorrectionMode<enum_NetwPredict_CorrectionMode>` how a correction is applied
+- :ref:`RecoveryPolicy<enum_NetwPredict_RecoveryPolicy>` how a misprediction is corrected
 
-- :ref:`RestoreMode<enum_NetwPredict_RestoreMode>` how a snapped correction places the state
+- :ref:`MissingInput<enum_NetwPredict_MissingInput>` what the server does when an input never arrives
 
-- :ref:`RecoveryPolicy<enum_NetwPredict_RecoveryPolicy>` what a recovery is allowed to do
+- :ref:`BreachResponse<enum_NetwPredict_BreachResponse>` what happens on an unpredicted contact
 
-- :ref:`MissingInput<enum_NetwPredict_MissingInput>` what the server does about an input that never came
+- :ref:`Reconcile<enum_NetwPredict_Reconcile>` whether entities are corrected alone or together
 
-- :ref:`BreachResponse<enum_NetwPredict_BreachResponse>` what happens on a contact outside the prediction
+\ **Reports**\ 
 
-- :ref:`Fidelity<enum_NetwPredict_Fidelity>` how one member of an island is represented here
+- :ref:`DriveKind<enum_NetwPredict_DriveKind>` which input drove the last step
 
-- :ref:`Promotion<enum_NetwPredict_Promotion>` which island members are simulated locally
+- :ref:`ConsumeAction<enum_NetwPredict_ConsumeAction>` what the server did with its input queue
 
-- :ref:`Pacing<enum_NetwPredict_Pacing>` when an island's members open a transition
+- :ref:`ContactClass<enum_NetwPredict_ContactClass>` what the body touched
 
-- :ref:`Reconcile<enum_NetwPredict_Reconcile>` whether an island is corrected together or apart
+- :ref:`CommandOrigin<enum_NetwPredict_CommandOrigin>` where a replayed input came from
 
-\ **What the session reports back**\ 
+- :ref:`ExactVerdict<enum_NetwPredict_ExactVerdict>` whether two peers produced the same result
 
-- :ref:`Role<enum_NetwPredict_Role>` the name for one :ref:`InputSource<enum_NetwPredict_InputSource>` and :ref:`SimMode<enum_NetwPredict_SimMode>` pair
+- :ref:`Domain<enum_NetwPredict_Domain>` whether a step is compared exactly or by tolerance
 
-- :ref:`InputSource<enum_NetwPredict_InputSource>` where this peer's copy gets its input
+- :ref:`TriggerShape<enum_NetwPredict_TriggerShape>` what asked for a correction
 
-- :ref:`SimMode<enum_NetwPredict_SimMode>` what this peer's simulation counts for
+- :ref:`Attribution<enum_NetwPredict_Attribution>` what a misprediction is blamed on
 
-- :ref:`DriveKind<enum_NetwPredict_DriveKind>` how the last drive chose its input
+- :ref:`Operator<enum_NetwPredict_Operator>` how a correction wrote the body
 
-- :ref:`ConsumeAction<enum_NetwPredict_ConsumeAction>` what a consume pass did this frame
+- :ref:`OperatorOutcome<enum_NetwPredict_OperatorOutcome>` whether a correction helped
 
-- :ref:`ContactClass<enum_NetwPredict_ContactClass>` what the local solve reported touching
-
-- :ref:`WitnessClass<enum_NetwPredict_WitnessClass>` what both peers agree was touched
-
-- :ref:`CommandOrigin<enum_NetwPredict_CommandOrigin>` where one replayed input came from
-
-- :ref:`CellProvenance<enum_NetwPredict_CellProvenance>` the same, ranked, when a group replays together
-
-- :ref:`ExactVerdict<enum_NetwPredict_ExactVerdict>` whether fingerprints have been compared yet
-
-- :ref:`TriggerShape<enum_NetwPredict_TriggerShape>` what asked for a recovery
-
-- :ref:`OperatorOutcome<enum_NetwPredict_OperatorOutcome>` what a recovery attempt achieved
-
-- :ref:`EpisodeState<enum_NetwPredict_EpisodeState>` how far a divergence episode has got
-
-- :ref:`VerdictReason<enum_NetwPredict_VerdictReason>` why a comparison did not reach the body
-
-.. rst-class:: classref-reftable-group
-
-Methods
--------
-
-.. table::
-   :widths: auto
-
-   +---------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`String`     | :ref:`drive_kind_name<class_NetwPredict_method_drive_kind_name>`\ (\ kind\: :ref:`DriveKind<enum_NetwPredict_DriveKind>`\ ) |static|                                                                                       |
-   +---------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`String`     | :ref:`episode_state_name<class_NetwPredict_method_episode_state_name>`\ (\ state\: :ref:`EpisodeState<enum_NetwPredict_EpisodeState>`\ ) |static|                                                                          |
-   +---------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`int`        | :ref:`joint_cell<class_NetwPredict_method_joint_cell>`\ (\ authored\: :godot:`bool`, relayed\: :godot:`bool`, predictor_valid\: :godot:`bool`\ ) |static|                                                                  |
-   +---------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`Dictionary` | :ref:`joint_floor<class_NetwPredict_method_joint_floor>`\ (\ bases\: :godot:`Dictionary`, relay_floors\: :godot:`Dictionary`, epoch_floor\: :godot:`int`, history_floor\: :godot:`int`, present\: :godot:`int`\ ) |static| |
-   +---------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`String`     | :ref:`operator_outcome_name<class_NetwPredict_method_operator_outcome_name>`\ (\ outcome\: :godot:`int`\ ) |static|                                                                                                        |
-   +---------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`String`     | :ref:`schedule_name<class_NetwPredict_method_schedule_name>`\ (\ schedule\: :ref:`Schedule<enum_NetwPredict_Schedule>`\ ) |static|                                                                                         |
-   +---------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`String`     | :ref:`verdict_reason_name<class_NetwPredict_method_verdict_reason_name>`\ (\ reason\: :ref:`VerdictReason<enum_NetwPredict_VerdictReason>`\ ) |static|                                                                     |
-   +---------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+- :ref:`EpisodeState<enum_NetwPredict_EpisodeState>` whether a misprediction is still being corrected
 
 .. rst-class:: classref-section-separator
 
@@ -113,172 +72,6 @@ Methods
 
 Enumerations
 ------------
-
-.. _enum_NetwPredict_Role:
-
-.. rst-class:: classref-enumeration
-
-enum **Role**: :ref:`🔗<enum_NetwPredict_Role>`
-
-.. _class_NetwPredict_constant_ROLE_PREDICT:
-
-.. rst-class:: classref-enumeration-constant
-
-:ref:`Role<enum_NetwPredict_Role>` **ROLE_PREDICT** = ``0``
-
-A remote client controls the entity, which predicts and corrects itself when the server acknowledges.
-
-A role is never chosen on its own. It is the name :ref:`NetwPredictionHandle.role_for_axes()<class_NetwPredictionHandle_method_role_for_axes>` gives to a pair of :ref:`NetwPredictionHandle.input_source<class_NetwPredictionHandle_property_input_source>` and :ref:`NetwPredictionHandle.sim_mode<class_NetwPredictionHandle_property_sim_mode>`, so the name and the two facts behind it cannot disagree.
-
-Every role is driven, because the work done for an entity is the same whichever peer owns it. A role decides whether a caller reaches the simulation at all and never what the simulation then does, which is what makes a transition recorded under one role comparable against the same transition recorded under another.
-
-.. _class_NetwPredict_constant_ROLE_CONSUME:
-
-.. rst-class:: classref-enumeration-constant
-
-:ref:`Role<enum_NetwPredict_Role>` **ROLE_CONSUME** = ``1``
-
-The server consumes a remote peer's received input into authoritative state.
-
-.. _class_NetwPredict_constant_ROLE_HOST_LOCAL:
-
-.. rst-class:: classref-enumeration-constant
-
-:ref:`Role<enum_NetwPredict_Role>` **ROLE_HOST_LOCAL** = ``2``
-
-A listen-server host controls its own entity, simulating authoritatively.
-
-.. _class_NetwPredict_constant_ROLE_REMOTE:
-
-.. rst-class:: classref-enumeration-constant
-
-:ref:`Role<enum_NetwPredict_Role>` **ROLE_REMOTE** = ``3``
-
-A remote display. Never simulates here, the interpolator shows it.
-
-.. _class_NetwPredict_constant_ROLE_SIMULATE:
-
-.. rst-class:: classref-enumeration-constant
-
-:ref:`Role<enum_NetwPredict_Role>` **ROLE_SIMULATE** = ``4``
-
-A replicated remote stepped locally with a predicted command.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _enum_NetwPredict_InputSource:
-
-.. rst-class:: classref-enumeration
-
-enum **InputSource**: :ref:`🔗<enum_NetwPredict_InputSource>`
-
-.. _class_NetwPredict_constant_INPUT_SOURCE_LOCAL:
-
-.. rst-class:: classref-enumeration-constant
-
-:ref:`InputSource<enum_NetwPredict_InputSource>` **INPUT_SOURCE_LOCAL** = ``0``
-
-This peer produces the input it simulates. Read the entity value from :ref:`NetwPredictionHandle.input_source<class_NetwPredictionHandle_property_input_source>`.
-
-.. _class_NetwPredict_constant_INPUT_SOURCE_RECEIVED:
-
-.. rst-class:: classref-enumeration-constant
-
-:ref:`InputSource<enum_NetwPredict_InputSource>` **INPUT_SOURCE_RECEIVED** = ``1``
-
-This peer reads a command another peer authored and sent.
-
-.. _class_NetwPredict_constant_INPUT_SOURCE_PREDICTED:
-
-.. rst-class:: classref-enumeration-constant
-
-:ref:`InputSource<enum_NetwPredict_InputSource>` **INPUT_SOURCE_PREDICTED** = ``2``
-
-This peer guesses a command nobody sent, for a simulated island participant.
-
-.. _class_NetwPredict_constant_INPUT_SOURCE_NONE:
-
-.. rst-class:: classref-enumeration-constant
-
-:ref:`InputSource<enum_NetwPredict_InputSource>` **INPUT_SOURCE_NONE** = ``3``
-
-This peer simulates nothing, so it needs no command.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _enum_NetwPredict_SimMode:
-
-.. rst-class:: classref-enumeration
-
-enum **SimMode**: :ref:`🔗<enum_NetwPredict_SimMode>`
-
-.. _class_NetwPredict_constant_SIM_MODE_AUTHORITATIVE:
-
-.. rst-class:: classref-enumeration-constant
-
-:ref:`SimMode<enum_NetwPredict_SimMode>` **SIM_MODE_AUTHORITATIVE** = ``0``
-
-The simulation produces the authoritative state. Read the entity value from :ref:`NetwPredictionHandle.sim_mode<class_NetwPredictionHandle_property_sim_mode>`.
-
-.. _class_NetwPredict_constant_SIM_MODE_SPECULATIVE:
-
-.. rst-class:: classref-enumeration-constant
-
-:ref:`SimMode<enum_NetwPredict_SimMode>` **SIM_MODE_SPECULATIVE** = ``1``
-
-The simulation produces a guess this peer will reconcile.
-
-.. _class_NetwPredict_constant_SIM_MODE_DISPLAY:
-
-.. rst-class:: classref-enumeration-constant
-
-:ref:`SimMode<enum_NetwPredict_SimMode>` **SIM_MODE_DISPLAY** = ``2``
-
-No simulation runs and received state is shown.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _enum_NetwPredict_Schedule:
-
-.. rst-class:: classref-enumeration
-
-enum **Schedule**: :ref:`🔗<enum_NetwPredict_Schedule>`
-
-.. _class_NetwPredict_constant_SCHEDULE_TICK:
-
-.. rst-class:: classref-enumeration-constant
-
-:ref:`Schedule<enum_NetwPredict_Schedule>` **SCHEDULE_TICK** = ``0``
-
-Drive once for every network tick, which is what a kinematic body predicts under.
-
-.. _class_NetwPredict_constant_SCHEDULE_FRAME:
-
-.. rst-class:: classref-enumeration-constant
-
-:ref:`Schedule<enum_NetwPredict_Schedule>` **SCHEDULE_FRAME** = ``1``
-
-Apply once after every physics frame's network tick loop.
-
-.. _class_NetwPredict_constant_SCHEDULE_STEPPED:
-
-.. rst-class:: classref-enumeration-constant
-
-:ref:`Schedule<enum_NetwPredict_Schedule>` **SCHEDULE_STEPPED** = ``2``
-
-Apply once per network tick through a :ref:`NetwPhysicsStepper<class_NetwPhysicsStepper>`, which can re-run a space step inside one frame. Every member in the space is driven first and the space is stepped once after all of them, so one step integrates the forces the whole tick authored and the state each member records is the one that step produced.
-
-A space with no stepper installed cannot re-run a step, so a member declaring this there resolves to :ref:`SCHEDULE_FRAME<class_NetwPredict_constant_SCHEDULE_FRAME>` and the engine reports that once, naming the entity and the space. The handle keeps the declaration the game wrote and so does the recovery policy, so installing a stepper with :ref:`NetwMultiplayer.predict_stepper_install()<class_NetwMultiplayer_method_predict_stepper_install>` restores the schedule that was asked for.
-
-.. rst-class:: classref-item-separator
-
-----
 
 .. _enum_NetwPredict_ContactClass:
 
@@ -292,7 +85,7 @@ enum **ContactClass**: :ref:`🔗<enum_NetwPredict_ContactClass>`
 
 :ref:`ContactClass<enum_NetwPredict_ContactClass>` **CONTACT_CLASS_NONE** = ``0``
 
-The solve reported no collider. A :ref:`ContactClass<enum_NetwPredict_ContactClass>` is kept for reading afterwards and is never compared between peers.
+The body touched nothing.
 
 .. _class_NetwPredict_constant_CONTACT_CLASS_DECLARED_SUPPORT:
 
@@ -300,7 +93,7 @@ The solve reported no collider. A :ref:`ContactClass<enum_NetwPredict_ContactCla
 
 :ref:`ContactClass<enum_NetwPredict_ContactClass>` **CONTACT_CLASS_DECLARED_SUPPORT** = ``1``
 
-The collider is the support reported by the declared ground sensor.
+The ground reported by the ground sensor.
 
 .. _class_NetwPredict_constant_CONTACT_CLASS_OTHER_STATIC:
 
@@ -308,7 +101,7 @@ The collider is the support reported by the declared ground sensor.
 
 :ref:`ContactClass<enum_NetwPredict_ContactClass>` **CONTACT_CLASS_OTHER_STATIC** = ``2``
 
-Static geometry other than the declared support.
+Static geometry other than the ground.
 
 .. _class_NetwPredict_constant_CONTACT_CLASS_PREDICTED_DYNAMIC:
 
@@ -316,7 +109,7 @@ Static geometry other than the declared support.
 
 :ref:`ContactClass<enum_NetwPredict_ContactClass>` **CONTACT_CLASS_PREDICTED_DYNAMIC** = ``3``
 
-A dynamic entity this peer predicts or simulates authoritatively.
+A moving entity this peer predicts or simulates.
 
 .. _class_NetwPredict_constant_CONTACT_CLASS_UNPREDICTED_DYNAMIC:
 
@@ -324,7 +117,7 @@ A dynamic entity this peer predicts or simulates authoritatively.
 
 :ref:`ContactClass<enum_NetwPredict_ContactClass>` **CONTACT_CLASS_UNPREDICTED_DYNAMIC** = ``4``
 
-A dynamic entity outside this peer's prediction island.
+A moving entity this peer does not simulate.
 
 .. _class_NetwPredict_constant_CONTACT_CLASS_KINEMATIC_PROXY:
 
@@ -332,49 +125,7 @@ A dynamic entity outside this peer's prediction island.
 
 :ref:`ContactClass<enum_NetwPredict_ContactClass>` **CONTACT_CLASS_KINEMATIC_PROXY** = ``5``
 
-A kinematic or animated collision proxy.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _enum_NetwPredict_WitnessClass:
-
-.. rst-class:: classref-enumeration
-
-enum **WitnessClass**: :ref:`🔗<enum_NetwPredict_WitnessClass>`
-
-.. _class_NetwPredict_constant_WITNESS_CLASS_NONE:
-
-.. rst-class:: classref-enumeration-constant
-
-:ref:`WitnessClass<enum_NetwPredict_WitnessClass>` **WITNESS_CLASS_NONE** = ``0``
-
-Nothing was touched. A :ref:`WitnessClass<enum_NetwPredict_WitnessClass>` reads the same on every peer, which is what lets it travel in a fingerprint and be compared.
-
-.. _class_NetwPredict_constant_WITNESS_CLASS_SUPPORT:
-
-.. rst-class:: classref-enumeration-constant
-
-:ref:`WitnessClass<enum_NetwPredict_WitnessClass>` **WITNESS_CLASS_SUPPORT** = ``1``
-
-The declared support was contacted.
-
-.. _class_NetwPredict_constant_WITNESS_CLASS_STATIC:
-
-.. rst-class:: classref-enumeration-constant
-
-:ref:`WitnessClass<enum_NetwPredict_WitnessClass>` **WITNESS_CLASS_STATIC** = ``2``
-
-Static geometry other than the declared support was contacted.
-
-.. _class_NetwPredict_constant_WITNESS_CLASS_DYNAMIC_ENTITY:
-
-.. rst-class:: classref-enumeration-constant
-
-:ref:`WitnessClass<enum_NetwPredict_WitnessClass>` **WITNESS_CLASS_DYNAMIC_ENTITY** = ``4``
-
-A replicated dynamic entity was contacted.
+A kinematic or animated body.
 
 .. rst-class:: classref-item-separator
 
@@ -392,7 +143,7 @@ enum **CommandOrigin**: :ref:`🔗<enum_NetwPredict_CommandOrigin>`
 
 :ref:`CommandOrigin<enum_NetwPredict_CommandOrigin>` **COMMAND_ORIGIN_PREDICTED** = ``0``
 
-This peer's own guess for an entity it does not own. A group replaying its members together replays them from these, so the origin is what says whether a replay reproduced what a player actually did or repeated a guess.
+This peer guessed the input with :ref:`NetwPredictionHandle.predict_commands<class_NetwPredictionHandle_property_predict_commands>`.
 
 .. _class_NetwPredict_constant_COMMAND_ORIGIN_RELAYED:
 
@@ -400,7 +151,7 @@ This peer's own guess for an entity it does not own. A group replaying its membe
 
 :ref:`CommandOrigin<enum_NetwPredict_CommandOrigin>` **COMMAND_ORIGIN_RELAYED** = ``1``
 
-The authoring peer's own command, relayed through the server.
+The controlling peer's own input, relayed through the server.
 
 .. rst-class:: classref-item-separator
 
@@ -418,7 +169,7 @@ enum **DriveKind**: :ref:`🔗<enum_NetwPredict_DriveKind>`
 
 :ref:`DriveKind<enum_NetwPredict_DriveKind>` **DRIVE_KIND_NONE** = ``0``
 
-No drive has run yet.
+Nothing has stepped yet.
 
 .. _class_NetwPredict_constant_DRIVE_KIND_FRESH:
 
@@ -426,7 +177,7 @@ No drive has run yet.
 
 :ref:`DriveKind<enum_NetwPredict_DriveKind>` **DRIVE_KIND_FRESH** = ``1``
 
-A newly authored input label drove the simulation.
+A new input drove the step.
 
 .. _class_NetwPredict_constant_DRIVE_KIND_REPEAT:
 
@@ -434,7 +185,7 @@ A newly authored input label drove the simulation.
 
 :ref:`DriveKind<enum_NetwPredict_DriveKind>` **DRIVE_KIND_REPEAT** = ``2``
 
-The previous input label drove the simulation again.
+The previous input drove the step again.
 
 .. _class_NetwPredict_constant_DRIVE_KIND_HOLD:
 
@@ -442,7 +193,7 @@ The previous input label drove the simulation again.
 
 :ref:`DriveKind<enum_NetwPredict_DriveKind>` **DRIVE_KIND_HOLD** = ``3``
 
-The consume cursor held while repeating its acknowledged input.
+The server held its input buffer, so nothing stepped this tick.
 
 .. _class_NetwPredict_constant_DRIVE_KIND_STARVED:
 
@@ -450,7 +201,7 @@ The consume cursor held while repeating its acknowledged input.
 
 :ref:`DriveKind<enum_NetwPredict_DriveKind>` **DRIVE_KIND_STARVED** = ``4``
 
-The consume cursor had no input stream and repeated its acknowledged input.
+The server had no input queued, so nothing stepped this tick.
 
 .. _class_NetwPredict_constant_DRIVE_KIND_FOLD_DRIVE:
 
@@ -458,7 +209,7 @@ The consume cursor had no input stream and repeated its acknowledged input.
 
 :ref:`DriveKind<enum_NetwPredict_DriveKind>` **DRIVE_KIND_FOLD_DRIVE** = ``5``
 
-A fresh input drove after older eligible labels were folded away.
+A new input drove the step after older ones were skipped.
 
 .. _class_NetwPredict_constant_DRIVE_KIND_MISSING:
 
@@ -466,7 +217,7 @@ A fresh input drove after older eligible labels were folded away.
 
 :ref:`DriveKind<enum_NetwPredict_DriveKind>` **DRIVE_KIND_MISSING** = ``6``
 
-A missing input label drove through ``missing_policy``.
+The input never arrived, and :ref:`NetwPredictionHandle.missing_policy<class_NetwPredictionHandle_property_missing_policy>` drove the step.
 
 .. _class_NetwPredict_constant_DRIVE_KIND_SUBSTITUTED:
 
@@ -474,7 +225,7 @@ A missing input label drove through ``missing_policy``.
 
 :ref:`DriveKind<enum_NetwPredict_DriveKind>` **DRIVE_KIND_SUBSTITUTED** = ``7``
 
-A command this peer predicted for an entity it does not own drove the simulation, so the owner never authored the input the transition ran.
+An input this peer guessed for an entity it does not control drove the step.
 
 .. rst-class:: classref-item-separator
 
@@ -492,9 +243,7 @@ enum **TriggerShape**: :ref:`🔗<enum_NetwPredict_TriggerShape>`
 
 :ref:`TriggerShape<enum_NetwPredict_TriggerShape>` **TRIGGER_SHAPE_NONE** = ``0``
 
-No field that can trigger was past its own tolerance. The fingerprints can still disagree while every field sits inside its tolerance, so a recovery can be prepared with nothing having asked for one.
-
-A :ref:`TriggerShape<enum_NetwPredict_TriggerShape>` records what the triggering fields looked like when the recovery was judged. The distinction that matters is whether the recovery could write any of them. A write returning a withheld field and a writable one did repair something, while a write whose every trigger was withheld repaired nothing.
+No field was past its tolerance.
 
 .. _class_NetwPredict_constant_TRIGGER_SHAPE_MIXED:
 
@@ -502,7 +251,7 @@ A :ref:`TriggerShape<enum_NetwPredict_TriggerShape>` records what the triggering
 
 :ref:`TriggerShape<enum_NetwPredict_TriggerShape>` **TRIGGER_SHAPE_MIXED** = ``1``
 
-At least one field past its epsilon is one a sub-teleport restore may write.
+At least one field past its tolerance can be written by an ordinary correction.
 
 .. _class_NetwPredict_constant_TRIGGER_SHAPE_ALL_WITHHELD:
 
@@ -510,7 +259,7 @@ At least one field past its epsilon is one a sub-teleport restore may write.
 
 :ref:`TriggerShape<enum_NetwPredict_TriggerShape>` **TRIGGER_SHAPE_ALL_WITHHELD** = ``2``
 
-Every field past its epsilon is one no sub-teleport restore may write.
+Every field past its tolerance is :ref:`NetwPropertyConfig.teleport_only()<class_NetwPropertyConfig_method_teleport_only>`, so only a teleport can write it.
 
 .. rst-class:: classref-item-separator
 
@@ -528,7 +277,7 @@ enum **ConsumeAction**: :ref:`🔗<enum_NetwPredict_ConsumeAction>`
 
 :ref:`ConsumeAction<enum_NetwPredict_ConsumeAction>` **CONSUME_ACTION_REPLAY** = ``0``
 
-A queued transition is available past the buffer being held, so it runs.
+The server ran a queued input.
 
 .. _class_NetwPredict_constant_CONSUME_ACTION_HOLD:
 
@@ -536,7 +285,7 @@ A queued transition is available past the buffer being held, so it runs.
 
 :ref:`ConsumeAction<enum_NetwPredict_ConsumeAction>` **CONSUME_ACTION_HOLD** = ``1``
 
-Transitions are queued but not yet past the buffer, so the pass waits.
+The server kept its queued inputs in the buffer.
 
 .. _class_NetwPredict_constant_CONSUME_ACTION_STARVED:
 
@@ -544,7 +293,7 @@ Transitions are queued but not yet past the buffer, so the pass waits.
 
 :ref:`ConsumeAction<enum_NetwPredict_ConsumeAction>` **CONSUME_ACTION_STARVED** = ``2``
 
-Nothing is queued at all, so the pass has no command to run.
+The server had no input queued.
 
 .. rst-class:: classref-item-separator
 
@@ -562,7 +311,7 @@ enum **ExactVerdict**: :ref:`🔗<enum_NetwPredict_ExactVerdict>`
 
 :ref:`ExactVerdict<enum_NetwPredict_ExactVerdict>` **EXACT_VERDICT_UNJUDGED** = ``0``
 
-Nobody has compared fingerprints for this transition yet.
+Not compared yet.
 
 .. _class_NetwPredict_constant_EXACT_VERDICT_EQUAL:
 
@@ -570,7 +319,7 @@ Nobody has compared fingerprints for this transition yet.
 
 :ref:`ExactVerdict<enum_NetwPredict_ExactVerdict>` **EXACT_VERDICT_EQUAL** = ``1``
 
-The two independently recorded fingerprints are equal.
+Both peers produced the same result.
 
 .. _class_NetwPredict_constant_EXACT_VERDICT_UNEQUAL:
 
@@ -578,7 +327,7 @@ The two independently recorded fingerprints are equal.
 
 :ref:`ExactVerdict<enum_NetwPredict_ExactVerdict>` **EXACT_VERDICT_UNEQUAL** = ``2``
 
-The two independently recorded fingerprints differ.
+The peers produced different results.
 
 .. rst-class:: classref-item-separator
 
@@ -596,7 +345,7 @@ enum **MissingInput**: :ref:`🔗<enum_NetwPredict_MissingInput>`
 
 :ref:`MissingInput<enum_NetwPredict_MissingInput>` **MISSING_INPUT_STALL** = ``0``
 
-With no input, the entity does not move.
+The entity does not move.
 
 .. _class_NetwPredict_constant_MISSING_INPUT_REPEAT_LAST:
 
@@ -604,67 +353,7 @@ With no input, the entity does not move.
 
 :ref:`MissingInput<enum_NetwPredict_MissingInput>` **MISSING_INPUT_REPEAT_LAST** = ``1``
 
-Carry the last input forward over the gap.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _enum_NetwPredict_CorrectionMode:
-
-.. rst-class:: classref-enumeration
-
-enum **CorrectionMode**: :ref:`🔗<enum_NetwPredict_CorrectionMode>`
-
-.. _class_NetwPredict_constant_CORRECTION_MODE_AUTO:
-
-.. rst-class:: classref-enumeration-constant
-
-:ref:`CorrectionMode<enum_NetwPredict_CorrectionMode>` **CORRECTION_MODE_AUTO** = ``0``
-
-Decide from what the body is. A kinematic body gets :ref:`CORRECTION_MODE_REPLAY<class_NetwPredict_constant_CORRECTION_MODE_REPLAY>` and a dynamic one gets :ref:`CORRECTION_MODE_SNAP<class_NetwPredict_constant_CORRECTION_MODE_SNAP>`.
-
-.. _class_NetwPredict_constant_CORRECTION_MODE_REPLAY:
-
-.. rst-class:: classref-enumeration-constant
-
-:ref:`CorrectionMode<enum_NetwPredict_CorrectionMode>` **CORRECTION_MODE_REPLAY** = ``1``
-
-Restore authoritative state, then replay every unacked input over it.
-
-.. _class_NetwPredict_constant_CORRECTION_MODE_SNAP:
-
-.. rst-class:: classref-enumeration-constant
-
-:ref:`CorrectionMode<enum_NetwPredict_CorrectionMode>` **CORRECTION_MODE_SNAP** = ``2``
-
-Restore authoritative state and stop, with no replay.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _enum_NetwPredict_RestoreMode:
-
-.. rst-class:: classref-enumeration
-
-enum **RestoreMode**: :ref:`🔗<enum_NetwPredict_RestoreMode>`
-
-.. _class_NetwPredict_constant_RESTORE_MODE_EXACT:
-
-.. rst-class:: classref-enumeration-constant
-
-:ref:`RestoreMode<enum_NetwPredict_RestoreMode>` **RESTORE_MODE_EXACT** = ``0``
-
-Write the state that arrived, exactly, at the tick it belongs to.
-
-.. _class_NetwPredict_constant_RESTORE_MODE_EXTRAPOLATED:
-
-.. rst-class:: classref-enumeration-constant
-
-:ref:`RestoreMode<enum_NetwPredict_RestoreMode>` **RESTORE_MODE_EXTRAPOLATED** = ``1``
-
-Project each carry-declaring field forward to the present tick by its replicated velocity before restoring, so a dynamic body lands near where it is instead of snapping back to a stale tick.
+The last input is repeated.
 
 .. rst-class:: classref-item-separator
 
@@ -682,17 +371,15 @@ enum **Archetype**: :ref:`🔗<enum_NetwPredict_Archetype>`
 
 :ref:`Archetype<enum_NetwPredict_Archetype>` **ARCHETYPE_NONE** = ``0``
 
-No preset, so every setting keeps its own default until something declares it.
+No preset. Every setting keeps its default. Settings written after an archetype override it, and no archetype sets :ref:`NetwPredictionHandle.breach_response<class_NetwPredictionHandle_property_breach_response>`.
 
-An archetype is a starting point rather than a limit. Writing one applies its settings, and anything declared afterwards overrides what it applied. No archetype sets a :ref:`BreachResponse<enum_NetwPredict_BreachResponse>`, because that decides whether a body stops predicting at all, and a preset choosing it would change the most visible behaviour an entity has with no game file saying so.
-
-.. _class_NetwPredict_constant_ARCHETYPE_KINEMATIC:
+.. _class_NetwPredict_constant_ARCHETYPE_SCRIPTED:
 
 .. rst-class:: classref-enumeration-constant
 
-:ref:`Archetype<enum_NetwPredict_Archetype>` **ARCHETYPE_KINEMATIC** = ``1``
+:ref:`Archetype<enum_NetwPredict_Archetype>` **ARCHETYPE_SCRIPTED** = ``1``
 
-A body whose step is ordinary code and can be re-run inside one frame. It sets :ref:`SCHEDULE_TICK<class_NetwPredict_constant_SCHEDULE_TICK>`, :ref:`MISSING_INPUT_STALL<class_NetwPredict_constant_MISSING_INPUT_STALL>` and :ref:`RECOVERY_POLICY_REBASE_REPLAY<class_NetwPredict_constant_RECOVERY_POLICY_REBASE_REPLAY>`, because a velocity that comes straight from the input catches up again on the next tick.
+A body moved by your own code, such as a :godot:`CharacterBody3D`. Sets :ref:`NetwSimulationHandle.SCHEDULE_TICK<class_NetwSimulationHandle_constant_SCHEDULE_TICK>`, :ref:`MISSING_INPUT_STALL<class_NetwPredict_constant_MISSING_INPUT_STALL>` and :ref:`RECOVERY_POLICY_REBASE_REPLAY<class_NetwPredict_constant_RECOVERY_POLICY_REBASE_REPLAY>`.
 
 .. _class_NetwPredict_constant_ARCHETYPE_SOLVER_BODY:
 
@@ -700,7 +387,7 @@ A body whose step is ordinary code and can be re-run inside one frame. It sets :
 
 :ref:`Archetype<enum_NetwPredict_Archetype>` **ARCHETYPE_SOLVER_BODY** = ``2``
 
-A body the physics engine solves, whose step cannot be re-run once per input. It sets :ref:`SCHEDULE_FRAME<class_NetwPredict_constant_SCHEDULE_FRAME>`, :ref:`MISSING_INPUT_REPEAT_LAST<class_NetwPredict_constant_MISSING_INPUT_REPEAT_LAST>`, :ref:`RECOVERY_POLICY_REBASE_RECOVER<class_NetwPredict_constant_RECOVERY_POLICY_REBASE_RECOVER>` and :ref:`RESTORE_MODE_EXTRAPOLATED<class_NetwPredict_constant_RESTORE_MODE_EXTRAPOLATED>`, with a teleport distance sized for a body that settles through contacts.
+A body moved by the physics engine, such as a :godot:`RigidBody3D`. Sets :ref:`NetwSimulationHandle.SCHEDULE_FRAME<class_NetwSimulationHandle_constant_SCHEDULE_FRAME>`, :ref:`MISSING_INPUT_REPEAT_LAST<class_NetwPredict_constant_MISSING_INPUT_REPEAT_LAST>`, :ref:`RECOVERY_POLICY_REBASE_RECOVER<class_NetwPredict_constant_RECOVERY_POLICY_REBASE_RECOVER>` and :ref:`NetwSimulationHandle.RESTORE_EXTRAPOLATED<class_NetwSimulationHandle_constant_RESTORE_EXTRAPOLATED>`.
 
 .. rst-class:: classref-item-separator
 
@@ -718,7 +405,7 @@ enum **RecoveryPolicy**: :ref:`🔗<enum_NetwPredict_RecoveryPolicy>`
 
 :ref:`RecoveryPolicy<enum_NetwPredict_RecoveryPolicy>` **RECOVERY_POLICY_REBASE_REPLAY** = ``0``
 
-Restore the acknowledged state and replay every unacknowledged input over it, which reaches the present through the entity's own simulation. :ref:`NetwPredictionHandle.recovery_policy<class_NetwPredictionHandle_property_recovery_policy>` is where an entity declares one, and it names what the entity wants rather than how the engine does it.
+Restore the server's state and replay every input the server has not acknowledged yet. A :godot:`RigidBody3D` or :godot:`RigidBody2D` at :ref:`NetwSimulationHandle.SCHEDULE_FRAME<class_NetwSimulationHandle_constant_SCHEDULE_FRAME>` cannot replay, so it uses :ref:`RECOVERY_POLICY_REBASE_RECOVER<class_NetwPredict_constant_RECOVERY_POLICY_REBASE_RECOVER>` and warns once.
 
 .. _class_NetwPredict_constant_RECOVERY_POLICY_REBASE_RECOVER:
 
@@ -726,7 +413,7 @@ Restore the acknowledged state and replay every unacknowledged input over it, wh
 
 :ref:`RecoveryPolicy<enum_NetwPredict_RecoveryPolicy>` **RECOVERY_POLICY_REBASE_RECOVER** = ``1``
 
-Restore the acknowledged state and write the correction directly, with no replay.
+Restore the server's state and write the correction directly, without replaying.
 
 .. _class_NetwPredict_constant_RECOVERY_POLICY_DELAY_CLOSED:
 
@@ -734,7 +421,7 @@ Restore the acknowledged state and write the correction directly, with no replay
 
 :ref:`RecoveryPolicy<enum_NetwPredict_RecoveryPolicy>` **RECOVERY_POLICY_DELAY_CLOSED** = ``2``
 
-Do not predict at all. Simulate only where the input is already authoritative, and draw what arrives everywhere else.
+Do not predict. Simulate only with inputs the server confirmed, and draw the server's state otherwise.
 
 .. _class_NetwPredict_constant_RECOVERY_POLICY_OBSERVE:
 
@@ -742,103 +429,15 @@ Do not predict at all. Simulate only where the input is already authoritative, a
 
 :ref:`RecoveryPolicy<enum_NetwPredict_RecoveryPolicy>` **RECOVERY_POLICY_OBSERVE** = ``3``
 
-Report the divergence and write nothing. An entity under this policy can hold an episode open for as long as it keeps diverging, and it can never oscillate between corrections, because it makes none.
+Report mispredictions and correct nothing.
 
-.. rst-class:: classref-item-separator
-
-----
-
-.. _enum_NetwPredict_Fidelity:
-
-.. rst-class:: classref-enumeration
-
-enum **Fidelity**: :ref:`🔗<enum_NetwPredict_Fidelity>`
-
-.. _class_NetwPredict_constant_FIDELITY_PROXY:
+.. _class_NetwPredict_constant_RECOVERY_POLICY_AUTO:
 
 .. rst-class:: classref-enumeration-constant
 
-:ref:`Fidelity<enum_NetwPredict_Fidelity>` **FIDELITY_PROXY** = ``0``
+:ref:`RecoveryPolicy<enum_NetwPredict_RecoveryPolicy>` **RECOVERY_POLICY_AUTO** = ``4``
 
-Draw the state that arrives, and treat contact with it as contact with a stand-in.
-
-.. _class_NetwPredict_constant_FIDELITY_SIMULATED:
-
-.. rst-class:: classref-enumeration-constant
-
-:ref:`Fidelity<enum_NetwPredict_Fidelity>` **FIDELITY_SIMULATED** = ``1``
-
-Step the member locally with substituted commands.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _enum_NetwPredict_Promotion:
-
-.. rst-class:: classref-enumeration
-
-enum **Promotion**: :ref:`🔗<enum_NetwPredict_Promotion>`
-
-.. _class_NetwPredict_constant_PROMOTION_NONE:
-
-.. rst-class:: classref-enumeration-constant
-
-:ref:`Promotion<enum_NetwPredict_Promotion>` **PROMOTION_NONE** = ``0``
-
-Promote nothing on its own. A member named outright through :ref:`NetwPredictIsland.simulate()<class_NetwPredictIsland_method_simulate>` is still promoted, because naming one is not a policy and this decides only what happens to the members nobody named.
-
-The two policies differ in what limits them. A count is a budget a game knows it can afford, and a radius is a claim about where contact can happen.
-
-.. _class_NetwPredict_constant_PROMOTION_NEAREST:
-
-.. rst-class:: classref-enumeration-constant
-
-:ref:`Promotion<enum_NetwPredict_Promotion>` **PROMOTION_NEAREST** = ``1``
-
-Promote the nearest ``promotion_count`` produced members.
-
-.. _class_NetwPredict_constant_PROMOTION_WITHIN:
-
-.. rst-class:: classref-enumeration-constant
-
-:ref:`Promotion<enum_NetwPredict_Promotion>` **PROMOTION_WITHIN** = ``2``
-
-Promote produced members within ``promotion_meters``.
-
-.. _class_NetwPredict_constant_PROMOTION_ALL:
-
-.. rst-class:: classref-enumeration-constant
-
-:ref:`Promotion<enum_NetwPredict_Promotion>` **PROMOTION_ALL** = ``3``
-
-Promote every produced member. The honest expensive mode of a joint group, where partial promotion is meaningless.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _enum_NetwPredict_Pacing:
-
-.. rst-class:: classref-enumeration
-
-enum **Pacing**: :ref:`🔗<enum_NetwPredict_Pacing>`
-
-.. _class_NetwPredict_constant_PACING_SPECULATE:
-
-.. rst-class:: classref-enumeration-constant
-
-:ref:`Pacing<enum_NetwPredict_Pacing>` **PACING_SPECULATE** = ``0``
-
-Open a transition as soon as there is one to open, and correct it afterwards.
-
-.. _class_NetwPredict_constant_PACING_DELAY_CLOSED:
-
-.. rst-class:: classref-enumeration-constant
-
-:ref:`Pacing<enum_NetwPredict_Pacing>` **PACING_DELAY_CLOSED** = ``1``
-
-Open a transition only when every member's command for it is in hand. Nothing speculates, nothing rolls back, and the cost is the declared input delay plus the slowest peer's transport.
+:ref:`RECOVERY_POLICY_REBASE_RECOVER<class_NetwPredict_constant_RECOVERY_POLICY_REBASE_RECOVER>` for a :godot:`RigidBody3D` or :godot:`RigidBody2D`, and :ref:`RECOVERY_POLICY_REBASE_REPLAY<class_NetwPredict_constant_RECOVERY_POLICY_REBASE_REPLAY>` for any other body. :ref:`NetwPredictionHandle.resolved_recovery_policy()<class_NetwPredictionHandle_method_resolved_recovery_policy>` returns the result.
 
 .. rst-class:: classref-item-separator
 
@@ -856,7 +455,7 @@ enum **Reconcile**: :ref:`🔗<enum_NetwPredict_Reconcile>`
 
 :ref:`Reconcile<enum_NetwPredict_Reconcile>` **RECONCILE_INDEPENDENT** = ``0``
 
-Correct each predicted entity on its own.
+Correct each entity on its own.
 
 .. _class_NetwPredict_constant_RECONCILE_JOINT:
 
@@ -864,51 +463,7 @@ Correct each predicted entity on its own.
 
 :ref:`Reconcile<enum_NetwPredict_Reconcile>` **RECONCILE_JOINT** = ``1``
 
-Restore and replay the island together. The engine admits the group at membership commit, where every member's schedule is known.
-
-An authoritative row a member receives here is where a replay starts from rather than somewhere to jump to. The group replays from one floor, so a member that snapped to wherever its own extrapolated row landed would enter that replay from a state no other member's history knows about. The unextrapolated payload is the basis, and the pass re-runs the transitions the extrapolation was standing in for.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _enum_NetwPredict_CellProvenance:
-
-.. rst-class:: classref-enumeration
-
-enum **CellProvenance**: :ref:`🔗<enum_NetwPredict_CellProvenance>`
-
-.. _class_NetwPredict_constant_CELL_PROVENANCE_COAST:
-
-.. rst-class:: classref-enumeration-constant
-
-:ref:`CellProvenance<enum_NetwPredict_CellProvenance>` **CELL_PROVENANCE_COAST** = ``0``
-
-Nothing named this one, so it coasts on the value it already held.
-
-.. _class_NetwPredict_constant_CELL_PROVENANCE_SUBSTITUTED:
-
-.. rst-class:: classref-enumeration-constant
-
-:ref:`CellProvenance<enum_NetwPredict_CellProvenance>` **CELL_PROVENANCE_SUBSTITUTED** = ``1``
-
-A registered command predictor guessed the cell for an entity this peer does not own.
-
-.. _class_NetwPredict_constant_CELL_PROVENANCE_RELAYED:
-
-.. rst-class:: classref-enumeration-constant
-
-:ref:`CellProvenance<enum_NetwPredict_CellProvenance>` **CELL_PROVENANCE_RELAYED** = ``2``
-
-The authoring peer's own command reached here through the server.
-
-.. _class_NetwPredict_constant_CELL_PROVENANCE_AUTHORED:
-
-.. rst-class:: classref-enumeration-constant
-
-:ref:`CellProvenance<enum_NetwPredict_CellProvenance>` **CELL_PROVENANCE_AUTHORED** = ``3``
-
-The owner authored this cell itself, which is the only provenance a replay reproduces rather than repeats.
+Correct this entity together with the entities its :ref:`NetwEntity.simulation<class_NetwEntity_property_simulation>` selects, restoring and replaying them from the same tick.
 
 .. rst-class:: classref-item-separator
 
@@ -926,9 +481,7 @@ enum **BreachResponse**: :ref:`🔗<enum_NetwPredict_BreachResponse>`
 
 :ref:`BreachResponse<enum_NetwPredict_BreachResponse>` **BREACH_RESPONSE_PREDICT_THROUGH** = ``0``
 
-Keep predicting and let an ordinary recovery absorb whatever divergence follows.
-
-Touching the unmoving world is never a breach, because every peer solves against the same world. A breach is contact with a moving body this peer does not simulate, whose drawn pose is a stand-in the solve cannot reproduce.
+Keep predicting and correct as usual. A breach is a contact with a moving body this peer does not simulate. Touching static geometry is not a breach.
 
 .. _class_NetwPredict_constant_BREACH_RESPONSE_DEMOTE:
 
@@ -936,7 +489,7 @@ Touching the unmoving world is never a breach, because every peer solves against
 
 :ref:`BreachResponse<enum_NetwPredict_BreachResponse>` **BREACH_RESPONSE_DEMOTE** = ``1``
 
-Follow authority immediately while commands continue to flow.
+Stop predicting and follow the server, while still sending input.
 
 .. rst-class:: classref-item-separator
 
@@ -954,7 +507,7 @@ enum **EpisodeState**: :ref:`🔗<enum_NetwPredict_EpisodeState>`
 
 :ref:`EpisodeState<enum_NetwPredict_EpisodeState>` **EPISODE_STATE_OPEN** = ``0``
 
-The episode is still taking in comparisons and the results of recovery attempts.
+The misprediction is still being corrected.
 
 .. _class_NetwPredict_constant_EPISODE_STATE_CLOSED:
 
@@ -962,7 +515,7 @@ The episode is still taking in comparisons and the results of recovery attempts.
 
 :ref:`EpisodeState<enum_NetwPredict_EpisodeState>` **EPISODE_STATE_CLOSED** = ``1``
 
-A verified agreement run retired the episode.
+The peers agree again.
 
 .. _class_NetwPredict_constant_EPISODE_STATE_FALLBACK:
 
@@ -970,7 +523,7 @@ A verified agreement run retired the episode.
 
 :ref:`EpisodeState<enum_NetwPredict_EpisodeState>` **EPISODE_STATE_FALLBACK** = ``2``
 
-Bounded recovery evidence was exhausted.
+Corrections did not help, and the entity follows the server.
 
 .. rst-class:: classref-item-separator
 
@@ -988,7 +541,7 @@ enum **OperatorOutcome**: :ref:`🔗<enum_NetwPredict_OperatorOutcome>`
 
 :ref:`OperatorOutcome<enum_NetwPredict_OperatorOutcome>` **OPERATOR_OUTCOME_PENDING** = ``0``
 
-No later comparison has judged the write yet.
+Not judged yet.
 
 .. _class_NetwPredict_constant_OPERATOR_OUTCOME_CONTRACTED:
 
@@ -996,7 +549,7 @@ No later comparison has judged the write yet.
 
 :ref:`OperatorOutcome<enum_NetwPredict_OperatorOutcome>` **OPERATOR_OUTCOME_CONTRACTED** = ``1``
 
-A later comparison strictly reduced or closed the aligned error.
+The error shrank or closed.
 
 .. _class_NetwPredict_constant_OPERATOR_OUTCOME_FAILED_TO_CONTRACT:
 
@@ -1004,7 +557,7 @@ A later comparison strictly reduced or closed the aligned error.
 
 :ref:`OperatorOutcome<enum_NetwPredict_OperatorOutcome>` **OPERATOR_OUTCOME_FAILED_TO_CONTRACT** = ``2``
 
-The verification window held or grew the aligned error.
+The error held or grew.
 
 .. _class_NetwPredict_constant_OPERATOR_OUTCOME_INTRODUCED_BOUNDARY:
 
@@ -1012,7 +565,7 @@ The verification window held or grew the aligned error.
 
 :ref:`OperatorOutcome<enum_NetwPredict_OperatorOutcome>` **OPERATOR_OUTCOME_INTRODUCED_BOUNDARY** = ``3``
 
-The write introduced a realized boundary absent on authority.
+The correction caused a contact the server did not have.
 
 .. _class_NetwPredict_constant_OPERATOR_OUTCOME_WITHHELD:
 
@@ -1020,109 +573,197 @@ The write introduced a realized boundary absent on authority.
 
 :ref:`OperatorOutcome<enum_NetwPredict_OperatorOutcome>` **OPERATOR_OUTCOME_WITHHELD** = ``4``
 
-Every field that asked for this recovery was one the recovery was declared never to write, so the error it holds belongs to the declaration rather than to the operator.
-
-It is recorded beside :ref:`OPERATOR_OUTCOME_FAILED_TO_CONTRACT<class_NetwPredict_constant_OPERATOR_OUTCOME_FAILED_TO_CONTRACT>` rather than as a kind of it, because the two look identical from outside and mean opposite things. One is an operator that tried and did not shrink the error, and the other is an operator that was forbidden to touch it. Spending an episode's evidence on the second turns a gap in the declaration into a breach, and a breach into a demotion, which leaves the game worse off than declaring nothing at all.
+Every field that asked for the correction is :ref:`NetwPropertyConfig.teleport_only()<class_NetwPropertyConfig_method_teleport_only>`, so the correction could not write it.
 
 .. rst-class:: classref-item-separator
 
 ----
 
-.. _enum_NetwPredict_VerdictReason:
+.. _enum_NetwPredict_Attribution:
 
 .. rst-class:: classref-enumeration
 
-enum **VerdictReason**: :ref:`🔗<enum_NetwPredict_VerdictReason>`
+enum **Attribution**: :ref:`🔗<enum_NetwPredict_Attribution>`
 
-.. _class_NetwPredict_constant_VERDICT_REASON_NONE:
-
-.. rst-class:: classref-enumeration-constant
-
-:ref:`VerdictReason<enum_NetwPredict_VerdictReason>` **VERDICT_REASON_NONE** = ``0``
-
-Nothing stood between the comparison and the body. Either it found agreement, or a recovery ran and decided what to write.
-
-\ :ref:`NetwPredictionHandle.state_evaluated<class_NetwPredictionHandle_signal_state_evaluated>` reports a comparison, not a write. This value identifies paths that detect divergence without applying a correction.
-
-.. _class_NetwPredict_constant_VERDICT_REASON_AWAITING_RECONSTRUCTION:
+.. _class_NetwPredict_constant_ATTRIBUTION_UNKNOWN:
 
 .. rst-class:: classref-enumeration-constant
 
-:ref:`VerdictReason<enum_NetwPredict_VerdictReason>` **VERDICT_REASON_AWAITING_RECONSTRUCTION** = ``1``
+:ref:`Attribution<enum_NetwPredict_Attribution>` **ATTRIBUTION_UNKNOWN** = ``0``
 
-No comparison ran. A masked set is reconciled only once the stream has seen its gain-edge full row, and before that edge a receive is recorded having judged nothing.
+Nothing to blame was found. :ref:`NetwPredictionHandle.divergence_detected<class_NetwPredictionHandle_signal_divergence_detected>` carries an :ref:`Attribution<enum_NetwPredict_Attribution>`.
 
-.. _class_NetwPredict_constant_VERDICT_REASON_REALIGN_PENDING:
-
-.. rst-class:: classref-enumeration-constant
-
-:ref:`VerdictReason<enum_NetwPredict_VerdictReason>` **VERDICT_REASON_REALIGN_PENDING** = ``2``
-
-The reseed's evidence-free horizon alignment is still waiting for its command epoch, so this receive is neither compared nor written.
-
-.. _class_NetwPredict_constant_VERDICT_REASON_RESEED_IGNORED:
+.. _class_NetwPredict_constant_ATTRIBUTION_PRE_STATE:
 
 .. rst-class:: classref-enumeration-constant
 
-:ref:`VerdictReason<enum_NetwPredict_VerdictReason>` **VERDICT_REASON_RESEED_IGNORED** = ``3``
+:ref:`Attribution<enum_NetwPredict_Attribution>` **ATTRIBUTION_PRE_STATE** = ``1``
 
-The acknowledgement is at or before the reseed horizon, so the row returns for transitions the seed has already replaced.
+The peers started the tick from different state.
 
-.. _class_NetwPredict_constant_VERDICT_REASON_PROBATION_REQUARANTINE:
-
-.. rst-class:: classref-enumeration-constant
-
-:ref:`VerdictReason<enum_NetwPredict_VerdictReason>` **VERDICT_REASON_PROBATION_REQUARANTINE** = ``4``
-
-The first comparison after resuming disagreed, so the entity went straight back to following authority. It writes nothing, spends no evidence, and does not count against the next attempt, because a resume that was never proven says nothing a longer wait would not settle.
-
-.. _class_NetwPredict_constant_VERDICT_REASON_EVIDENCE_EXHAUSTED:
+.. _class_NetwPredict_constant_ATTRIBUTION_COMMAND:
 
 .. rst-class:: classref-enumeration-constant
 
-:ref:`VerdictReason<enum_NetwPredict_VerdictReason>` **VERDICT_REASON_EVIDENCE_EXHAUSTED** = ``5``
+:ref:`Attribution<enum_NetwPredict_Attribution>` **ATTRIBUTION_COMMAND** = ``2``
 
-The episode's bounded recovery evidence ran out on this comparison, so speculation closed instead of correcting.
+The server ran an input the controlling peer did not send.
 
-.. _class_NetwPredict_constant_VERDICT_REASON_TRANSPORT_PENDING:
-
-.. rst-class:: classref-enumeration-constant
-
-:ref:`VerdictReason<enum_NetwPredict_VerdictReason>` **VERDICT_REASON_TRANSPORT_PENDING** = ``6``
-
-A transport is already staged against this divergence and owns the write that returns it.
-
-.. _class_NetwPredict_constant_VERDICT_REASON_DISSIPATE_PENDING:
+.. _class_NetwPredict_constant_ATTRIBUTION_ENVIRONMENT:
 
 .. rst-class:: classref-enumeration-constant
 
-:ref:`VerdictReason<enum_NetwPredict_VerdictReason>` **VERDICT_REASON_DISSIPATE_PENDING** = ``7``
+:ref:`Attribution<enum_NetwPredict_Attribution>` **ATTRIBUTION_ENVIRONMENT** = ``3``
 
-A dissipation is already staged against this divergence.
+The :ref:`NetwPredictionHandle.sensors<class_NetwPredictionHandle_property_sensors>` read different values.
 
-.. _class_NetwPredict_constant_VERDICT_REASON_DISSIPATED:
-
-.. rst-class:: classref-enumeration-constant
-
-:ref:`VerdictReason<enum_NetwPredict_VerdictReason>` **VERDICT_REASON_DISSIPATED** = ``8``
-
-The comparison chose to let the divergence fade without writing a correction.
-
-.. _class_NetwPredict_constant_VERDICT_REASON_WITNESS_DEFERRED:
+.. _class_NetwPredict_constant_ATTRIBUTION_TOPOLOGY:
 
 .. rst-class:: classref-enumeration-constant
 
-:ref:`VerdictReason<enum_NetwPredict_VerdictReason>` **VERDICT_REASON_WITNESS_DEFERRED** = ``9``
+:ref:`Attribution<enum_NetwPredict_Attribution>` **ATTRIBUTION_TOPOLOGY** = ``4``
 
-The operator is deferred until an authority witness covers the boundary it would rebase across.
+The peers simulated the entity in different ways.
 
-.. _class_NetwPredict_constant_VERDICT_REASON_DECLINED:
+.. _class_NetwPredict_constant_ATTRIBUTION_EXECUTION:
 
 .. rst-class:: classref-enumeration-constant
 
-:ref:`VerdictReason<enum_NetwPredict_VerdictReason>` **VERDICT_REASON_DECLINED** = ``10``
+:ref:`Attribution<enum_NetwPredict_Attribution>` **ATTRIBUTION_EXECUTION** = ``5``
 
-The ladder ran and the recovery it selected declined to write.
+The state agreed but the raw results differed.
+
+.. _class_NetwPredict_constant_ATTRIBUTION_CONTACT:
+
+.. rst-class:: classref-enumeration-constant
+
+:ref:`Attribution<enum_NetwPredict_Attribution>` **ATTRIBUTION_CONTACT** = ``6``
+
+The same input produced a different contact.
+
+.. _class_NetwPredict_constant_ATTRIBUTION_CLOSURE:
+
+.. rst-class:: classref-enumeration-constant
+
+:ref:`Attribution<enum_NetwPredict_Attribution>` **ATTRIBUTION_CLOSURE** = ``7``
+
+Everything going in agreed, and the result still differed.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _enum_NetwPredict_Operator:
+
+.. rst-class:: classref-enumeration
+
+enum **Operator**: :ref:`🔗<enum_NetwPredict_Operator>`
+
+.. _class_NetwPredict_constant_OPERATOR_NONE:
+
+.. rst-class:: classref-enumeration-constant
+
+:ref:`Operator<enum_NetwPredict_Operator>` **OPERATOR_NONE** = ``0``
+
+Nothing wrote the body.
+
+.. _class_NetwPredict_constant_OPERATOR_REBASE_PROJECTED:
+
+.. rst-class:: classref-enumeration-constant
+
+:ref:`Operator<enum_NetwPredict_Operator>` **OPERATOR_REBASE_PROJECTED** = ``1``
+
+The server's state was restored, advanced to the present.
+
+.. _class_NetwPredict_constant_OPERATOR_REBASE_EXACT:
+
+.. rst-class:: classref-enumeration-constant
+
+:ref:`Operator<enum_NetwPredict_Operator>` **OPERATOR_REBASE_EXACT** = ``2``
+
+The server's state was restored as is.
+
+.. _class_NetwPredict_constant_OPERATOR_FULL_CLOSURE:
+
+.. rst-class:: classref-enumeration-constant
+
+:ref:`Operator<enum_NetwPredict_Operator>` **OPERATOR_FULL_CLOSURE** = ``3``
+
+A teleport restored every field.
+
+.. _class_NetwPredict_constant_OPERATOR_TRANSPORT_DELTA:
+
+.. rst-class:: classref-enumeration-constant
+
+:ref:`Operator<enum_NetwPredict_Operator>` **OPERATOR_TRANSPORT_DELTA** = ``4``
+
+The body was moved to where it should be now, along a path :ref:`NetwPredictionHandle.transport_corridor<class_NetwPredictionHandle_property_transport_corridor>` allowed.
+
+.. _class_NetwPredict_constant_OPERATOR_RESEED:
+
+.. rst-class:: classref-enumeration-constant
+
+:ref:`Operator<enum_NetwPredict_Operator>` **OPERATOR_RESEED** = ``5``
+
+The body was reset to the server's state after a fallback.
+
+.. _class_NetwPredict_constant_OPERATOR_RESEED_ALIGN:
+
+.. rst-class:: classref-enumeration-constant
+
+:ref:`Operator<enum_NetwPredict_Operator>` **OPERATOR_RESEED_ALIGN** = ``6``
+
+The first comparison after a reset caught up with the server.
+
+.. _class_NetwPredict_constant_OPERATOR_DEMOTE:
+
+.. rst-class:: classref-enumeration-constant
+
+:ref:`Operator<enum_NetwPredict_Operator>` **OPERATOR_DEMOTE** = ``7``
+
+A breach stopped prediction while input keeps being sent.
+
+.. _class_NetwPredict_constant_OPERATOR_DISSIPATE:
+
+.. rst-class:: classref-enumeration-constant
+
+:ref:`Operator<enum_NetwPredict_Operator>` **OPERATOR_DISSIPATE** = ``8``
+
+Only the velocity differed, and it was left to fade.
+
+.. _class_NetwPredict_constant_OPERATOR_JOINT_REBASE:
+
+.. rst-class:: classref-enumeration-constant
+
+:ref:`Operator<enum_NetwPredict_Operator>` **OPERATOR_JOINT_REBASE** = ``9``
+
+The whole :ref:`RECONCILE_JOINT<class_NetwPredict_constant_RECONCILE_JOINT>` group was restored to the same tick.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _enum_NetwPredict_Domain:
+
+.. rst-class:: classref-enumeration
+
+enum **Domain**: :ref:`🔗<enum_NetwPredict_Domain>`
+
+.. _class_NetwPredict_constant_DOMAIN_IN:
+
+.. rst-class:: classref-enumeration-constant
+
+:ref:`Domain<enum_NetwPredict_Domain>` **DOMAIN_IN** = ``0``
+
+Every input to the step is known equal on both peers, so the results must match exactly.
+
+.. _class_NetwPredict_constant_DOMAIN_OUT:
+
+.. rst-class:: classref-enumeration-constant
+
+:ref:`Domain<enum_NetwPredict_Domain>` **DOMAIN_OUT** = ``1``
+
+Some input to the step may differ between peers, so the results are compared by tolerance.
 
 .. rst-class:: classref-section-separator
 
@@ -1139,112 +780,7 @@ Constants
 
 **ACK_AGE_MAX** = ``64`` :ref:`🔗<class_NetwPredict_constant_ACK_AGE_MAX>`
 
-The unacknowledged span, in transitions, past which the prediction governor stops speculating and holds.
-
-A hard limit rather than something to tune. It is a quarter of the 256 transitions the engine records, so how far ahead an entity may run can never outrun the record a recovery would replay against. Read it beside :ref:`NetwPredictionHandle.ack_age_ticks<class_NetwPredictionHandle_property_ack_age_ticks>`.
-
-.. rst-class:: classref-section-separator
-
-----
-
-.. rst-class:: classref-descriptions-group
-
-Method Descriptions
--------------------
-
-.. _class_NetwPredict_method_drive_kind_name:
-
-.. rst-class:: classref-method
-
-:godot:`String` **drive_kind_name**\ (\ kind\: :ref:`DriveKind<enum_NetwPredict_DriveKind>`\ ) |static| :ref:`🔗<class_NetwPredict_method_drive_kind_name>`
-
-The :ref:`DriveKind<enum_NetwPredict_DriveKind>` member ``kind`` names, without its prefix. Returns with the decimal value when it names no member, so a capture written by a newer build stays readable rather than reporting a wrong name.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwPredict_method_episode_state_name:
-
-.. rst-class:: classref-method
-
-:godot:`String` **episode_state_name**\ (\ state\: :ref:`EpisodeState<enum_NetwPredict_EpisodeState>`\ ) |static| :ref:`🔗<class_NetwPredict_method_episode_state_name>`
-
-The :ref:`EpisodeState<enum_NetwPredict_EpisodeState>` member ``state`` names, without its prefix. Returns with the decimal value when it names no member, so a capture written by a newer build stays readable rather than reporting a wrong name.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwPredict_method_joint_cell:
-
-.. rst-class:: classref-method
-
-:godot:`int` **joint_cell**\ (\ authored\: :godot:`bool`, relayed\: :godot:`bool`, predictor_valid\: :godot:`bool`\ ) |static| :ref:`🔗<class_NetwPredict_method_joint_cell>`
-
-The :ref:`CellProvenance<enum_NetwPredict_CellProvenance>` one replayed input receives, ranked. What the owner actually did outranks a relay, a relay outranks a substituted guess, and one with none of the three coasts on what it already held.
-
-Ranked rather than exclusive because more than one can be true at once, and a replay that charged the weaker of two would report a guess where authorship was reproduced.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwPredict_method_joint_floor:
-
-.. rst-class:: classref-method
-
-:godot:`Dictionary` **joint_floor**\ (\ bases\: :godot:`Dictionary`, relay_floors\: :godot:`Dictionary`, epoch_floor\: :godot:`int`, history_floor\: :godot:`int`, present\: :godot:`int`\ ) |static| :ref:`🔗<class_NetwPredict_method_joint_floor>`
-
-The one transition a joint group replays from, as ``floor``, and whether reaching it needed a heal, as ``heal``.
-
-The floor is the oldest point any member still needs, because a group replaying from a newer one would leave a member re-running transitions its own history no longer covers. A negative value is a member with nothing outstanding and does not lower the floor.
-
-A floor older than ``history_floor`` is one no member can still replay across, so the group heals to ``present`` instead and says so. A caller reading ``floor`` without ``heal`` cannot tell a group that rewound from one that gave up on rewinding.
-
-.. code:: text
-
-    Dictionary
-    ┠╴floor  int   the transition the group replays from
-    ┖╴heal   bool  true when no member's floor could be honored
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwPredict_method_operator_outcome_name:
-
-.. rst-class:: classref-method
-
-:godot:`String` **operator_outcome_name**\ (\ outcome\: :godot:`int`\ ) |static| :ref:`🔗<class_NetwPredict_method_operator_outcome_name>`
-
-.. container:: contribute
-
-	There is currently no description for this method. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwPredict_method_schedule_name:
-
-.. rst-class:: classref-method
-
-:godot:`String` **schedule_name**\ (\ schedule\: :ref:`Schedule<enum_NetwPredict_Schedule>`\ ) |static| :ref:`🔗<class_NetwPredict_method_schedule_name>`
-
-The :ref:`Schedule<enum_NetwPredict_Schedule>` member ``schedule`` names, without its prefix. Returns with the decimal value when it names no member, so a capture written by a newer build stays readable rather than reporting a wrong name.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwPredict_method_verdict_reason_name:
-
-.. rst-class:: classref-method
-
-:godot:`String` **verdict_reason_name**\ (\ reason\: :ref:`VerdictReason<enum_NetwPredict_VerdictReason>`\ ) |static| :ref:`🔗<class_NetwPredict_method_verdict_reason_name>`
-
-The :ref:`VerdictReason<enum_NetwPredict_VerdictReason>` member ``reason`` names, without its prefix. Returns with the decimal value when it names no member, so a capture written by a newer build stays readable rather than reporting a wrong name.
+The most ticks a client may predict ahead of the last input the server acknowledged. Past it, prediction holds. See :ref:`NetwPredictionHandle.ack_age_ticks<class_NetwPredictionHandle_property_ack_age_ticks>`.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

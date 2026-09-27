@@ -14,14 +14,14 @@ NetwRecord
 
 **Inherited By:** :ref:`DictionaryRecord<class_DictionaryRecord>`
 
-The named-value row a persisted or sampled value travels as, and the base a script subclasses to supply its own storage.
+A row of named values.
 
 .. rst-class:: classref-introduction-group
 
 Description
 -----------
 
-**NetwRecord** is the shared value object behind saved entity rows, :ref:`NetwDatabase<class_NetwDatabase>` rows, and detached state samples. It stores named values without owning the scene object those values came from.
+Used for saved entity rows, :ref:`NetwDatabase<class_NetwDatabase>` rows, and :ref:`Netw.sample()<class_Netw_method_sample>`. It holds copies of values, not the node they came from.
 
 ::
 
@@ -34,9 +34,9 @@ Description
     for key in row:
         print(key, " = ", row.get_value(key))
 
-\ A stored name is also readable and writable as a property, so ``row.health`` returns :ref:`get_value()<class_NetwRecord_method_get_value>` and assigning to it calls :ref:`set_value()<class_NetwRecord_method_set_value>`. The class's own properties are never captured that way: ``resource_name``, ``resource_path``, ``resource_local_to_scene``, ``resource_scene_unique_id``, ``script`` and a subclass's declared properties keep their normal meaning, so a record may hold a value under any of those names without shadowing the resource itself.
+\ A stored name can also be used as a property, so ``row.health`` calls :ref:`get_value()<class_NetwRecord_method_get_value>` and assigning to it calls :ref:`set_value()<class_NetwRecord_method_set_value>`. The record's own properties, such as ``resource_name`` or ``script``, keep their normal meaning.
 
-A script subclass supplies the storage by overriding :ref:`_set_value()<class_NetwRecord_private_method__set_value>`, :ref:`_get_value()<class_NetwRecord_private_method__get_value>`, :ref:`_has_value()<class_NetwRecord_private_method__has_value>` and :ref:`_get_property_names()<class_NetwRecord_private_method__get_property_names>`, and may remap stored names by overriding :ref:`_to_dict()<class_NetwRecord_private_method__to_dict>` and :ref:`_from_dict()<class_NetwRecord_private_method__from_dict>`. Callers always use the plain verbs, which return an override when a script supplies one. :ref:`DictionaryRecord<class_DictionaryRecord>` is the storage this addon ships.
+To supply your own storage, override :ref:`_set_value()<class_NetwRecord_private_method__set_value>`, :ref:`_get_value()<class_NetwRecord_private_method__get_value>`, :ref:`_has_value()<class_NetwRecord_private_method__has_value>` and :ref:`_get_property_names()<class_NetwRecord_private_method__get_property_names>`. Override :ref:`_to_dict()<class_NetwRecord_private_method__to_dict>` and :ref:`_from_dict()<class_NetwRecord_private_method__from_dict>` to rename stored names. :ref:`DictionaryRecord<class_DictionaryRecord>` is the storage this addon ships.
 
 .. rst-class:: classref-reftable-group
 
@@ -106,7 +106,7 @@ Populates this record from ``data``. Override it to coerce types or migrate stor
 
 :godot:`Array`\[:godot:`StringName`\] **_get_property_names**\ (\ ) |virtual| |const| :ref:`🔗<class_NetwRecord_private_method__get_property_names>`
 
-Returns the property names stored in this record. Override it together with :ref:`_set_value()<class_NetwRecord_private_method__set_value>`, :ref:`_get_value()<class_NetwRecord_private_method__get_value>` and :ref:`_has_value()<class_NetwRecord_private_method__has_value>` to supply the storage; :ref:`get_property_names()<class_NetwRecord_method_get_property_names>` is what callers use.
+Returns the property names stored in this record. Override it together with :ref:`_set_value()<class_NetwRecord_private_method__set_value>`, :ref:`_get_value()<class_NetwRecord_private_method__get_value>` and :ref:`_has_value()<class_NetwRecord_private_method__has_value>` to supply the storage.
 
 .. rst-class:: classref-item-separator
 
@@ -118,7 +118,7 @@ Returns the property names stored in this record. Override it together with :ref
 
 :godot:`Variant` **_get_value**\ (\ property\: :godot:`StringName`, default\: :godot:`Variant`\ ) |virtual| |const| :ref:`🔗<class_NetwRecord_private_method__get_value>`
 
-Returns the value stored under ``property``, or ``default`` if absent. Override it to supply the storage; :ref:`get_value()<class_NetwRecord_method_get_value>` is what callers use.
+Returns the value stored under ``property``, or ``default`` if absent. Override it to supply the storage.
 
 .. rst-class:: classref-item-separator
 
@@ -130,7 +130,7 @@ Returns the value stored under ``property``, or ``default`` if absent. Override 
 
 :godot:`bool` **_has_value**\ (\ property\: :godot:`StringName`\ ) |virtual| |const| :ref:`🔗<class_NetwRecord_private_method__has_value>`
 
-Returns ``true`` if ``property`` is present. Override it to supply the storage; :ref:`has_value()<class_NetwRecord_method_has_value>` is what callers use.
+Returns ``true`` if ``property`` is present. Override it to supply the storage.
 
 .. rst-class:: classref-item-separator
 
@@ -142,7 +142,7 @@ Returns ``true`` if ``property`` is present. Override it to supply the storage; 
 
 |void| **_set_value**\ (\ property\: :godot:`StringName`, value\: :godot:`Variant`\ ) |virtual| :ref:`🔗<class_NetwRecord_private_method__set_value>`
 
-Stores ``value`` under ``property``. Override it to supply the storage; :ref:`set_value()<class_NetwRecord_method_set_value>` is what callers use.
+Stores ``value`` under ``property``. Override it to supply the storage.
 
 .. rst-class:: classref-item-separator
 
@@ -183,7 +183,7 @@ Populates this record from ``data``. Without a :ref:`_from_dict()<class_NetwReco
 
 :godot:`Array`\[:godot:`StringName`\] **get_property_names**\ (\ ) |const| :ref:`🔗<class_NetwRecord_method_get_property_names>`
 
-Returns the property names stored in this record, in the order the storage holds them. This is the sequence ``for key in record`` walks and the one :ref:`to_dict()<class_NetwRecord_method_to_dict>` reads.
+Returns the property names stored in this record, in the order the storage holds them. ``for key in record`` iterates the same names.
 
 .. rst-class:: classref-item-separator
 
@@ -219,7 +219,7 @@ Returns ``true`` if ``property`` is present.
 
 :godot:`bool` **is_empty**\ (\ ) |const| :ref:`🔗<class_NetwRecord_method_is_empty>`
 
-Returns ``true`` when no values are stored, which is :ref:`get_property_names()<class_NetwRecord_method_get_property_names>` returning nothing.
+Returns ``true`` when no values are stored.
 
 .. rst-class:: classref-item-separator
 

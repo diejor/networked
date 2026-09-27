@@ -409,7 +409,8 @@ Error NetwConnectHandle::transport_set_browse_settings(
         return ERR_UNCONFIGURED;
     }
     return api->transport_set_browse_settings(
-        resolve_transport(p_transport), p_settings
+        resolve_transport(p_transport),
+        p_settings
     );
 }
 

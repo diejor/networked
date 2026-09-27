@@ -117,9 +117,9 @@ TEST_CASE(
     Branch branch("CG3");
     Node *scope = child_named(branch.node, "Session");
 
-    Netw::configure_lagcomp(scope)
-        ->max_future_action(21)
-        ->input_gate_deadline(33);
+    Netw::configure_lagcomp(scope)->max_future_action(21)->input_gate_deadline(
+        33
+    );
 
     branch.api->config_settle();
 

@@ -21,8 +21,12 @@ var forward := Vector3.FORWARD
 var material := StandardMaterial3D.new()
 var held: Array[PlayCube] = []
 var pressed := {
-	&"left": false, &"right": false, &"forward": false, &"back": false,
-	&"hover": false, &"attract": false,
+	&"left": false,
+	&"right": false,
+	&"forward": false,
+	&"back": false,
+	&"hover": false,
+	&"attract": false,
 }
 var attracting := false
 var hovering := false

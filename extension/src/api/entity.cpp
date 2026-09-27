@@ -9,15 +9,15 @@
 #include "netw/api/netw_multiplayer.hpp"
 #include "netw/api/persistence_handle.hpp"
 #include "netw/api/prediction_handle.hpp"
-#include "netw/api/simulation_handle.hpp"
 #include "netw/api/replication_core.hpp"
+#include "netw/api/simulation_handle.hpp"
+#include "netw/colors.hpp"
 #include "netw/entity/control.hpp"
 #include "netw/entity/stage.hpp"
 #include "netw/lifecycle/rule.hpp"
 #include "netw/log.hpp"
-#include "netw/repl/set_model.hpp"
-#include "netw/colors.hpp"
 #include "netw/profile.hpp"
+#include "netw/repl/set_model.hpp"
 #include "netw/sync_authoring.hpp"
 #include "netw/synchronizers.hpp"
 #include "netw/wire/stream.hpp"
@@ -769,8 +769,7 @@ bool NetwEntity::holds_copy(int64_t p_peer) {
     if (p_peer == local_peer() || p_peer == core->session_authority_peer()) {
         return true;
     }
-    return core->rpc_get_recipients(Ref<NetwEntity>(this))
-        .has(int32_t(p_peer));
+    return core->rpc_get_recipients(Ref<NetwEntity>(this)).has(int32_t(p_peer));
 }
 
 TypedArray<NetwPropertySetBinding> NetwEntity::image_bindings() {
@@ -1156,7 +1155,6 @@ void NetwEntity::seed_control(
     control()->seed(p_revision, p_tenure, p_hold);
 }
 
-
 void NetwEntity::_handle_control_request(
     int64_t p_sender,
     const session::ControlRequest &p_request
@@ -1218,9 +1216,10 @@ entity::Control::Outcome NetwEntity::decide_request(
         outcome = Outcome::UNAUTHORIZED;
     } else if (!controls_source(p_requester, p_source_route)) {
         outcome = Outcome::UNAUTHORIZED;
-    } else if (ruling == Ruling::ASK_FILTER
-               && record->admit_control_request(this, p_requester, p_hold)
-                   == 0) {
+    } else if (
+        ruling == Ruling::ASK_FILTER
+        && record->admit_control_request(this, p_requester, p_hold) == 0
+    ) {
         outcome = Outcome::UNAUTHORIZED;
     }
     NetwMultiplayer *core = session_core();
@@ -1234,7 +1233,7 @@ entity::Control::Outcome NetwEntity::decide_request(
             detail,
             get_entity_id(),
             p_requester,
-            outcome == Outcome::GRANTED ? OK
+            outcome == Outcome::GRANTED           ? OK
                 : outcome == Outcome::UNAVAILABLE ? ERR_UNAVAILABLE
                                                   : ERR_UNAUTHORIZED,
             Dictionary()
@@ -1642,12 +1641,8 @@ Node *NetwEntity::spawn_under(
         return nullptr;
     }
     if (core != nullptr) {
-        return core->entity_spawn_under(
-            get_owner(),
-            p_parent,
-            p_id,
-            p_configure
-        );
+        return core
+            ->entity_spawn_under(get_owner(), p_parent, p_id, p_configure);
     }
     return NetwMultiplayer::entity_spawn_copy_under(
         get_owner(),
@@ -1805,7 +1800,6 @@ NodePath NetwEntity::property_path(
         p_base != nullptr ? p_base : get_owner()
     );
 }
-
 
 Ref<NetwPropertySetBinding> NetwEntity::derived_binding(
     int64_t p_record
@@ -2101,10 +2095,7 @@ void NetwEntity::_bind_methods() {
         "get_on_parent_despawn"
     );
 
-    ClassDB::bind_method(
-        D_METHOD("get_lifecycle"),
-        &NetwEntity::get_lifecycle
-    );
+    ClassDB::bind_method(D_METHOD("get_lifecycle"), &NetwEntity::get_lifecycle);
     ClassDB::bind_method(
         D_METHOD("set_lifecycle", "value"),
         &NetwEntity::set_lifecycle
@@ -2273,10 +2264,7 @@ void NetwEntity::_bind_methods() {
         "get_is_session_authority"
     );
 
-    ClassDB::bind_method(
-        D_METHOD("get_player"),
-        &NetwEntity::get_player
-    );
+    ClassDB::bind_method(D_METHOD("get_player"), &NetwEntity::get_player);
     ADD_PROPERTY(
         PropertyInfo(
             Variant::OBJECT,

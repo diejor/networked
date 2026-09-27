@@ -250,8 +250,7 @@ TEST_CASE(
     notes.resize(OVERSIZED_NOTES);
     stand.node(0)->set("notes", notes);
     stand.draw(0, 8);
-    const PackedByteArray image
-        = stand.entity(0)->final_image_under_test(0);
+    const PackedByteArray image = stand.entity(0)->final_image_under_test(0);
     CHECK(image.is_empty());
     const Ref<NetwPromise> release = stand.entity(0)->release_authority();
     stand.rig.step_ticks(8);

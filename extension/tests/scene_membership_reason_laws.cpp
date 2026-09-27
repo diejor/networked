@@ -218,10 +218,7 @@ TEST_CASE(
 
     book.forget_member(ONE);
     NETW_CHECK_EQ(book.subscriptions_of(ONE), 0);
-    NETW_CHECK_EQ(
-        removals_for(book, SceneMembership::REMOVAL_MEMBER_GONE),
-        2
-    );
+    NETW_CHECK_EQ(removals_for(book, SceneMembership::REMOVAL_MEMBER_GONE), 2);
     CHECK(book.subscribes(TWO, barn));
     book.clear_edges();
 
@@ -262,11 +259,8 @@ TEST_CASE(
     Node *root = memnew(Node);
     const Declared arena = declare_scene(core, root, "Arena");
     const StringName owned = core->scene_layer_id(arena.handle);
-    core->get_scene_core()->scene_enter(
-        arena.handle,
-        StringName("Arena"),
-        false
-    );
+    core->get_scene_core()
+        ->scene_enter(arena.handle, StringName("Arena"), false);
     REQUIRE(core->get_scene_core()->is_live(arena.handle));
 
     const RID layer = core->interest_layer_create(owned);

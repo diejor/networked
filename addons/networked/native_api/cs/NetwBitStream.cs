@@ -6,14 +6,12 @@ using Godot.NativeInterop;
 namespace Networked;
 
 /// <summary>
-/// One bit vocabulary in three modes, so a payload is described once and
-/// written, read and measured by the same code.
+/// A payload is described once and written, read and measured by the same code.
 /// </summary>
 /// <remarks>
-/// Every verb takes the value and returns the value, so a description written
-/// once runs in all three <see cref="NetwBitStream.Mode"/> values:
-/// <see cref="NetwBitStream.Writer"/> spends bits,
-/// <see cref="NetwBitStream.Reader"/> takes them back, and
+/// Write descriptions that run once in all three
+/// <see cref="NetwBitStream.Mode"/> values. <see cref="NetwBitStream.Writer"/>
+/// spends bits, <see cref="NetwBitStream.Reader"/> takes them back, and
 /// <see cref="NetwBitStream.Measurer"/> counts what they would cost without
 /// storing anything. Write the description as one function over a
 /// <see cref="NetwBitStream"/> and call it three times rather than writing an
@@ -35,23 +33,13 @@ namespace Networked;
 ///     push_error("rejected")
 /// </code>
 /// <para>
-/// <b>A failed read poisons the stream.</b> Every verb after the failure is a
-/// no-op returning the value it was given, so a decoder checks
-/// <see cref="NetwBitStream.Ok"/> once at the end rather than after each call.
-/// This is what makes a hand-written decoder safe against a remote sender: the
-/// values a poisoned read returns are the caller's own defaults and never bytes
-/// that were not there. After decoding a complete payload,
+/// Every verb after the failure is a no-op returning the value it was given. A
+/// decoder checks <see cref="NetwBitStream.Ok"/> once at the end rather than
+/// after each call. After decoding a complete payload,
 /// <see cref="NetwBitStream.BitsRemaining"/> must return <c>0</c>. Reject
 /// payloads with unread bits. <see cref="NetwBitStream.AlignVerify"/> pads to
 /// the next byte on a write and, on a read, rejects padding that is not zero. A
-/// payload ends with it so its length is a whole number of bytes and its tail
-/// cannot carry anything undeclared. <see cref="NetwBitStream.Varuint"/> and
-/// <see cref="NetwBitStream.Svarint"/> are canonical and bounded by the
-/// <c>max_bytes</c> the field declares: a value too large to spell in that many
-/// groups is rejected rather than truncated, and a redundant final group is
-/// rejected rather than accepted as a second spelling of one number. This is
-/// the same vocabulary the framework's own frames are written in, and
-/// <c>extension/WIRE.md</c> states them field for field in it.
+/// payload always has tp end with <see cref="NetwBitStream.AlignVerify"/>.
 /// </para>
 /// </remarks>
 public sealed class NetwBitStream : NetwRefCounted
@@ -269,10 +257,9 @@ public sealed class NetwBitStream : NetwRefCounted
 
     /// <summary>
     /// Spends a length wide enough for <paramref name="cap"/>, then the bytes.
-    /// A run longer than <paramref name="cap"/> is rejected by the writer, and
-    /// a declared length above <paramref name="cap"/> is rejected by the
-    /// reader, so the bound is checked on both sides rather than trusted from
-    /// the wire.
+    /// A contiguous sequence of bytes longer than <paramref name="cap"/> is
+    /// rejected by the writer, and a declared length above
+    /// <paramref name="cap"/> is rejected by the reader.
     /// </summary>
     public byte[] BytesCapped(byte[] value, int cap)
     {

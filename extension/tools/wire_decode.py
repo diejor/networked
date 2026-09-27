@@ -494,8 +494,7 @@ AGAINST_SPEC = [
             "source_route": 7,
             "source_epoch": 1,
         },
-        "why": "WIRE.md 16, request 9 asks for a scene at scope 1 from scene 7 "
-        "at epoch 1",
+        "why": "WIRE.md 16, request 9 asks for a scene at scope 1 from scene 7 " "at epoch 1",
     },
     {
         "record": "SceneResult",
@@ -986,9 +985,7 @@ def self_test(spec_path=None):
             stranger = (max(magics) + 1) & 0xFF
             rejects(
                 "format %s refuses a datagram magic it does not speak" % spec_format,
-                lambda m=stranger: walk_datagram(
-                    records, {}, bytes([m]) + b"\x01", magics
-                ),
+                lambda m=stranger: walk_datagram(records, {}, bytes([m]) + b"\x01", magics),
             )
 
         for frame in AGAINST_SPEC:
@@ -1113,9 +1110,7 @@ def account(path, spec_path=None):
                 if channel == 41:
                     continue
                 try:
-                    token, revision, distance, token_bits, revision_bits = (
-                        read_row_head(frame["payload"])
-                    )
+                    token, revision, distance, token_bits, revision_bits = read_row_head(frame["payload"])
                 except Poisoned:
                     errors += 1
                     continue
@@ -1145,11 +1140,7 @@ def account(path, spec_path=None):
                         sent = exposed_at.get((token, revision))
                         if sent is not None:
                             receipt_latency.append(wall - sent)
-        owing = sum(
-            1
-            for token, high in exposed_high.items()
-            if high > confirmed.get(token, 0)
-        )
+        owing = sum(1 for token, high in exposed_high.items() if high > confirmed.get(token, 0))
         pending_series.append(owing)
 
     print("ACCOUNT %s format=%s" % (path, header.get("format")))

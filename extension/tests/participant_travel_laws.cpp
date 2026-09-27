@@ -80,14 +80,11 @@ TEST_CASE(
     const Destination arena = a_scene(rig, StringName("Arena"), true);
 
     NETW_CHECK_EQ(
-        refusal_of(
-            rig.server()->player_travel(Ref<NetwPlayer>(), arena.view)
-        ),
+        refusal_of(rig.server()->player_travel(Ref<NetwPlayer>(), arena.view)),
         int(ERR_INVALID_PARAMETER)
     );
 
-    const Ref<NetwPlayer> traveller
-        = netw_test::seated_peer(rig.server(), 7);
+    const Ref<NetwPlayer> traveller = netw_test::seated_peer(rig.server(), 7);
     REQUIRE(traveller.is_valid());
     NETW_CHECK_EQ(
         refusal_of(
@@ -107,8 +104,7 @@ TEST_CASE(
     LoopbackRig rig(0);
     rig.mount();
     const Destination absent = a_scene(rig, StringName("Elsewhere"), false);
-    const Ref<NetwPlayer> traveller
-        = netw_test::seated_peer(rig.server(), 7);
+    const Ref<NetwPlayer> traveller = netw_test::seated_peer(rig.server(), 7);
 
     NETW_CHECK_EQ(
         refusal_of(rig.server()->player_travel(traveller, absent.view)),
@@ -146,8 +142,7 @@ TEST_CASE(
     LoopbackRig rig(1);
     rig.mount();
     const Destination arena = a_scene(rig, StringName("Arena"), true);
-    const Ref<NetwPlayer> traveller
-        = netw_test::seated_peer(rig.client(0), 7);
+    const Ref<NetwPlayer> traveller = netw_test::seated_peer(rig.client(0), 7);
 
     NETW_CHECK_EQ(
         refusal_of(rig.client(0)->player_travel(traveller, arena.view)),

@@ -24,12 +24,28 @@ constexpr uint64_t CODE_CEILING = 65535;
 constexpr int POSE_COLUMNS = 9;
 constexpr int NARROW_COLUMNS = 2;
 
-const int64_t EVERY_MAGNITUDE[] = {0,   1,    -1,   7,    8,     -8,
-                                   15,  16,   -16,  127,  128,   -128,
-                                   255, 256,  -256, 4096, -4096, 31000};
+const int64_t EVERY_MAGNITUDE[]
+    = {0,
+       1,
+       -1,
+       7,
+       8,
+       -8,
+       15,
+       16,
+       -16,
+       127,
+       128,
+       -128,
+       255,
+       256,
+       -256,
+       4096,
+       -4096,
+       31000};
 
-const int64_t INTEGRATED[] = {0,  1, -1, 2, -2, 3, -3, 4, -4, 5,
-                              -5, 6, -6, 7, -7, 5, -5, 2, -2, 1};
+const int64_t INTEGRATED[]
+    = {0, 1, -1, 2, -2, 3, -3, 4, -4, 5, -5, 6, -6, 7, -7, 5, -5, 2, -2, 1};
 
 const int64_t NUDGED[] = {9, -9, 20, -20, 60, -60, 120, -120};
 
@@ -251,8 +267,7 @@ TEST_CASE(
     const Run lost = drive_schedules(POSE_COLUMNS, true, Arm::LOSS);
     const Run reordered = drive_schedules(POSE_COLUMNS, true, Arm::REORDER);
     NETW_CHECK_EQ(lost.diverged + reordered.diverged, 0);
-    const bool loss_still_saves
-        = lost.stepped_written < lost.stepped_absolute;
+    const bool loss_still_saves = lost.stepped_written < lost.stepped_absolute;
     CHECK(loss_still_saves);
     const bool reorder_still_saves
         = reordered.stepped_written < reordered.stepped_absolute;
@@ -291,6 +306,5 @@ TEST_CASE(
         < narrow.stepped_written * pose.stepped_absolute;
     CHECK(a_pose_saves_a_larger_share);
 }
-
 
 } // namespace TestWireLadderSchedule

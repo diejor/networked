@@ -76,9 +76,7 @@ Ref<NetwServerInfo> NetwServerInfo::from_payload(
     info.instantiate();
     info->set_motd(row.get(KEY_MOTD, String()));
     info->set_visibility(
-        NetwServerInfo::Visibility(
-            int64_t(row.get(KEY_VISIBILITY, int64_t(0)))
-        )
+        NetwServerInfo::Visibility(int64_t(row.get(KEY_VISIBILITY, int64_t(0))))
     );
     info->set_players(int64_t(row.get(KEY_PLAYERS, 0)));
     info->set_max_players(int64_t(row.get(KEY_MAX_PLAYERS, 0)));

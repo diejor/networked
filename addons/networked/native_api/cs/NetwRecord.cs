@@ -6,13 +6,12 @@ using Godot.NativeInterop;
 namespace Networked;
 
 /// <summary>
-/// The named-value row a persisted or sampled value travels as, and the base a
-/// script subclasses to supply its own storage.
+/// A row of named values.
 /// </summary>
 /// <remarks>
-/// <see cref="NetwRecord"/> is the shared value object behind saved entity
-/// rows, <see cref="NetwDatabase"/> rows, and detached state samples. It stores
-/// named values without owning the scene object those values came from.
+/// Used for saved entity rows, <see cref="NetwDatabase"/> rows, and
+/// <see cref="Netw.Sample"/>. It holds copies of values, not the node they came
+/// from.
 /// <code>
 /// var row: NetwRecord = await db.table(&amp;"players").fetch(username)
 /// var health: int = row.get_value(&amp;"health", 100)
@@ -24,19 +23,14 @@ namespace Networked;
 ///     print(key, " = ", row.get_value(key))
 /// </code>
 /// <para>
-/// A stored name is also readable and writable as a property, so
-/// <c>row.health</c> returns <see cref="NetwRecord.GetValue"/> and assigning to
-/// it calls <see cref="NetwRecord.SetValue"/>. The class's own properties are
-/// never captured that way: <c>resource_name</c>, <c>resource_path</c>,
-/// <c>resource_local_to_scene</c>, <c>resource_scene_unique_id</c>,
-/// <c>script</c> and a subclass's declared properties keep their normal
-/// meaning, so a record may hold a value under any of those names without
-/// shadowing the resource itself. A script subclass supplies the storage by
-/// overriding <c>_set_value</c>, <c>_get_value</c>, <c>_has_value</c> and
-/// <c>_get_property_names</c>, and may remap stored names by overriding
-/// <c>_to_dict</c> and <c>_from_dict</c>. Callers always use the plain verbs,
-/// which return an override when a script supplies one.
-/// <see cref="DictionaryRecord"/> is the storage this addon ships.
+/// A stored name can also be used as a property, so <c>row.health</c> calls
+/// <see cref="NetwRecord.GetValue"/> and assigning to it calls
+/// <see cref="NetwRecord.SetValue"/>. The record's own properties, such as
+/// <c>resource_name</c> or <c>script</c>, keep their normal meaning. To supply
+/// your own storage, override <c>_set_value</c>, <c>_get_value</c>,
+/// <c>_has_value</c> and <c>_get_property_names</c>. Override <c>_to_dict</c>
+/// and <c>_from_dict</c> to rename stored names. <see cref="DictionaryRecord"/>
+/// is the storage this addon ships.
 /// </para>
 /// </remarks>
 public class NetwRecord : Serde
@@ -124,8 +118,7 @@ public class NetwRecord : Serde
 
     /// <summary>
     /// Returns the property names stored in this record, in the order the
-    /// storage holds them. This is the sequence <c>for key in record</c> walks
-    /// and the one <see cref="NetwRecord.ToDict"/> reads.
+    /// storage holds them. <c>for key in record</c> iterates the same names.
     /// </summary>
     public Godot.Collections.Array GetPropertyNames()
     {
@@ -140,8 +133,7 @@ public class NetwRecord : Serde
         NetwApi.MethodBind("NetwRecord", "is_empty", 36873697UL);
 
     /// <summary>
-    /// Returns <c>true</c> when no values are stored, which is
-    /// <see cref="NetwRecord.GetPropertyNames"/> returning nothing.
+    /// Returns <c>true</c> when no values are stored.
     /// </summary>
     public bool IsEmpty()
     {

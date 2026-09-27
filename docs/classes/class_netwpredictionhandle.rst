@@ -19,7 +19,7 @@ Prediction settings and diagnostics for one :ref:`NetwEntity<class_NetwEntity>`.
 Description
 -----------
 
-Access this handle through :ref:`NetwEntity.prediction<class_NetwEntity_property_prediction>`. It stores entity-level prediction settings and the latest comparison against authoritative state.
+Reached by :ref:`NetwEntity.prediction<class_NetwEntity_property_prediction>`. The client predicts its entity ahead of the server and corrects it when the server's state disagrees. This handle sets how that happens.
 
 ::
 
@@ -27,13 +27,10 @@ Access this handle through :ref:`NetwEntity.prediction<class_NetwEntity_property
     pred.archetype = NetwPredict.ARCHETYPE_SOLVER_BODY
     pred.witness_contacts = _sample_contacts
     pred.breach_response = NetwPredict.BREACH_RESPONSE_DEMOTE
-    pred.island.add(opponent)
 
-\ Declare field-level behavior, including tolerances and recovery rules, with :ref:`NetwPropertyConfig<class_NetwPropertyConfig>`. Configure related predicted entities with :ref:`NetwPredictIsland<class_NetwPredictIsland>`.
+\ Only an entity with a :ref:`NetwPropertyConfig.state()<class_NetwPropertyConfig_method_state>` property is predicted, because that state is what gets compared and restored. Per-field tolerances are set with :ref:`NetwPropertyConfig<class_NetwPropertyConfig>`. The schedule and the simulation mode are on :ref:`NetwEntity.simulation<class_NetwEntity_property_simulation>`.
 
-A :godot:`MultiplayerSynchronizer` may provide scene defaults. Later assignments in code override those values.
-
-Use :ref:`input_source<class_NetwPredictionHandle_property_input_source>` and :ref:`sim_mode<class_NetwPredictionHandle_property_sim_mode>` to inspect the entity's role. Use :ref:`stats<class_NetwPredictionHandle_property_stats>`, :ref:`journal()<class_NetwPredictionHandle_method_journal>`, and :ref:`episode()<class_NetwPredictionHandle_method_episode>` for comparison diagnostics. Use :ref:`reachability()<class_NetwPredictionHandle_method_reachability>` to validate referenced objects.
+Values set on a :godot:`MultiplayerSynchronizer` in the scene act as defaults, and values set in code override them.
 
 .. rst-class:: classref-reftable-group
 
@@ -43,79 +40,47 @@ Properties
 .. table::
    :widths: auto
 
-   +---------------------------------------------------------+---------------------------------------------------------------------------------------------------+----------------+
-   | :godot:`int`                                            | :ref:`ack_age_ticks<class_NetwPredictionHandle_property_ack_age_ticks>`                           | ``0``          |
-   +---------------------------------------------------------+---------------------------------------------------------------------------------------------------+----------------+
-   | :godot:`int`                                            | :ref:`acknowledged_tick<class_NetwPredictionHandle_property_acknowledged_tick>`                   | ``-1``         |
-   +---------------------------------------------------------+---------------------------------------------------------------------------------------------------+----------------+
-   | :ref:`Archetype<enum_NetwPredict_Archetype>`            | :ref:`archetype<class_NetwPredictionHandle_property_archetype>`                                   | ``0``          |
-   +---------------------------------------------------------+---------------------------------------------------------------------------------------------------+----------------+
-   | :ref:`BreachResponse<enum_NetwPredict_BreachResponse>`  | :ref:`breach_response<class_NetwPredictionHandle_property_breach_response>`                       | ``0``          |
-   +---------------------------------------------------------+---------------------------------------------------------------------------------------------------+----------------+
-   | :godot:`int`                                            | :ref:`collision_cooldown_ticks<class_NetwPredictionHandle_property_collision_cooldown_ticks>`     | ``6``          |
-   +---------------------------------------------------------+---------------------------------------------------------------------------------------------------+----------------+
-   | :godot:`int`                                            | :ref:`consume_buffer_ticks<class_NetwPredictionHandle_property_consume_buffer_ticks>`             | ``0``          |
-   +---------------------------------------------------------+---------------------------------------------------------------------------------------------------+----------------+
-   | :ref:`CorrectionMode<enum_NetwPredict_CorrectionMode>`  | :ref:`correction_mode<class_NetwPredictionHandle_property_correction_mode>`                       | ``0``          |
-   +---------------------------------------------------------+---------------------------------------------------------------------------------------------------+----------------+
-   | :godot:`float`                                          | :ref:`divergence_epsilon<class_NetwPredictionHandle_property_divergence_epsilon>`                 | ``0.01``       |
-   +---------------------------------------------------------+---------------------------------------------------------------------------------------------------+----------------+
-   | :godot:`int`                                            | :ref:`epoch<class_NetwPredictionHandle_property_epoch>`                                           | ``-1``         |
-   +---------------------------------------------------------+---------------------------------------------------------------------------------------------------+----------------+
-   | :godot:`Dictionary`                                     | :ref:`field_recovery<class_NetwPredictionHandle_property_field_recovery>`                         | ``{}``         |
-   +---------------------------------------------------------+---------------------------------------------------------------------------------------------------+----------------+
-   | :ref:`InputSource<enum_NetwPredict_InputSource>`        | :ref:`input_source<class_NetwPredictionHandle_property_input_source>`                             | ``3``          |
-   +---------------------------------------------------------+---------------------------------------------------------------------------------------------------+----------------+
-   | :godot:`bool`                                           | :ref:`is_reconciling<class_NetwPredictionHandle_property_is_reconciling>`                         | ``false``      |
-   +---------------------------------------------------------+---------------------------------------------------------------------------------------------------+----------------+
-   | :ref:`NetwPredictIsland<class_NetwPredictIsland>`       | :ref:`island<class_NetwPredictionHandle_property_island>`                                         |                |
-   +---------------------------------------------------------+---------------------------------------------------------------------------------------------------+----------------+
-   | :godot:`int`                                            | :ref:`last_attributed_transition<class_NetwPredictionHandle_property_last_attributed_transition>` | ``-1``         |
-   +---------------------------------------------------------+---------------------------------------------------------------------------------------------------+----------------+
-   | :ref:`Attribution<enum_NetwPredictJournal_Attribution>` | :ref:`last_attribution<class_NetwPredictionHandle_property_last_attribution>`                     | ``0``          |
-   +---------------------------------------------------------+---------------------------------------------------------------------------------------------------+----------------+
-   | :godot:`int`                                            | :ref:`last_compare_staleness<class_NetwPredictionHandle_property_last_compare_staleness>`         | ``-1``         |
-   +---------------------------------------------------------+---------------------------------------------------------------------------------------------------+----------------+
-   | :godot:`Dictionary`                                     | :ref:`last_field_divergence<class_NetwPredictionHandle_property_last_field_divergence>`           | ``{}``         |
-   +---------------------------------------------------------+---------------------------------------------------------------------------------------------------+----------------+
-   | :godot:`Dictionary`                                     | :ref:`last_tier_errors<class_NetwPredictionHandle_property_last_tier_errors>`                     | ``{}``         |
-   +---------------------------------------------------------+---------------------------------------------------------------------------------------------------+----------------+
-   | :godot:`int`                                            | :ref:`last_verdict_reason<class_NetwPredictionHandle_property_last_verdict_reason>`               | ``0``          |
-   +---------------------------------------------------------+---------------------------------------------------------------------------------------------------+----------------+
-   | :godot:`int`                                            | :ref:`max_consume_lag_ticks<class_NetwPredictionHandle_property_max_consume_lag_ticks>`           | ``60``         |
-   +---------------------------------------------------------+---------------------------------------------------------------------------------------------------+----------------+
-   | :godot:`int`                                            | :ref:`max_consume_per_tick<class_NetwPredictionHandle_property_max_consume_per_tick>`             | ``1``          |
-   +---------------------------------------------------------+---------------------------------------------------------------------------------------------------+----------------+
-   | :godot:`int`                                            | :ref:`max_restore_ticks<class_NetwPredictionHandle_property_max_restore_ticks>`                   | ``6``          |
-   +---------------------------------------------------------+---------------------------------------------------------------------------------------------------+----------------+
-   | :ref:`MissingInput<enum_NetwPredict_MissingInput>`      | :ref:`missing_policy<class_NetwPredictionHandle_property_missing_policy>`                         | ``0``          |
-   +---------------------------------------------------------+---------------------------------------------------------------------------------------------------+----------------+
-   | :ref:`Reconcile<enum_NetwPredict_Reconcile>`            | :ref:`reconcile_mode<class_NetwPredictionHandle_property_reconcile_mode>`                         | ``0``          |
-   +---------------------------------------------------------+---------------------------------------------------------------------------------------------------+----------------+
-   | :ref:`RecoveryPolicy<enum_NetwPredict_RecoveryPolicy>`  | :ref:`recovery_policy<class_NetwPredictionHandle_property_recovery_policy>`                       | ``-1``         |
-   +---------------------------------------------------------+---------------------------------------------------------------------------------------------------+----------------+
-   | :godot:`int`                                            | :ref:`replay_buffer_depth<class_NetwPredictionHandle_property_replay_buffer_depth>`               | ``0``          |
-   +---------------------------------------------------------+---------------------------------------------------------------------------------------------------+----------------+
-   | :ref:`Schedule<enum_NetwPredict_Schedule>`              | :ref:`schedule<class_NetwPredictionHandle_property_schedule>`                                     | ``0``          |
-   +---------------------------------------------------------+---------------------------------------------------------------------------------------------------+----------------+
-   | :godot:`Dictionary`                                     | :ref:`sensors<class_NetwPredictionHandle_property_sensors>`                                       | ``{}``         |
-   +---------------------------------------------------------+---------------------------------------------------------------------------------------------------+----------------+
-   | :ref:`SimMode<enum_NetwPredict_SimMode>`                | :ref:`sim_mode<class_NetwPredictionHandle_property_sim_mode>`                                     | ``2``          |
-   +---------------------------------------------------------+---------------------------------------------------------------------------------------------------+----------------+
-   | :godot:`Callable`                                       | :ref:`simulate<class_NetwPredictionHandle_property_simulate>`                                     | ``Callable()`` |
-   +---------------------------------------------------------+---------------------------------------------------------------------------------------------------+----------------+
-   | :godot:`bool`                                           | :ref:`sleeping<class_NetwPredictionHandle_property_sleeping>`                                     | ``false``      |
-   +---------------------------------------------------------+---------------------------------------------------------------------------------------------------+----------------+
-   | :ref:`RestoreMode<enum_NetwPredict_RestoreMode>`        | :ref:`snap_restore<class_NetwPredictionHandle_property_snap_restore>`                             | ``0``          |
-   +---------------------------------------------------------+---------------------------------------------------------------------------------------------------+----------------+
-   | :ref:`NetwPredictStats<class_NetwPredictStats>`         | :ref:`stats<class_NetwPredictionHandle_property_stats>`                                           |                |
-   +---------------------------------------------------------+---------------------------------------------------------------------------------------------------+----------------+
-   | :godot:`float`                                          | :ref:`teleport_threshold<class_NetwPredictionHandle_property_teleport_threshold>`                 | ``2.0``        |
-   +---------------------------------------------------------+---------------------------------------------------------------------------------------------------+----------------+
-   | :godot:`Callable`                                       | :ref:`transport_corridor<class_NetwPredictionHandle_property_transport_corridor>`                 | ``Callable()`` |
-   +---------------------------------------------------------+---------------------------------------------------------------------------------------------------+----------------+
-   | :godot:`Callable`                                       | :ref:`witness_contacts<class_NetwPredictionHandle_property_witness_contacts>`                     | ``Callable()`` |
-   +---------------------------------------------------------+---------------------------------------------------------------------------------------------------+----------------+
+   +--------------------------------------------------------+-----------------------------------------------------------------------------------------------+----------------+
+   | :godot:`int`                                           | :ref:`ack_age_ticks<class_NetwPredictionHandle_property_ack_age_ticks>`                       | ``0``          |
+   +--------------------------------------------------------+-----------------------------------------------------------------------------------------------+----------------+
+   | :ref:`Archetype<enum_NetwPredict_Archetype>`           | :ref:`archetype<class_NetwPredictionHandle_property_archetype>`                               | ``0``          |
+   +--------------------------------------------------------+-----------------------------------------------------------------------------------------------+----------------+
+   | :ref:`BreachResponse<enum_NetwPredict_BreachResponse>` | :ref:`breach_response<class_NetwPredictionHandle_property_breach_response>`                   | ``0``          |
+   +--------------------------------------------------------+-----------------------------------------------------------------------------------------------+----------------+
+   | :godot:`int`                                           | :ref:`collision_cooldown_ticks<class_NetwPredictionHandle_property_collision_cooldown_ticks>` | ``6``          |
+   +--------------------------------------------------------+-----------------------------------------------------------------------------------------------+----------------+
+   | :godot:`int`                                           | :ref:`consume_buffer_ticks<class_NetwPredictionHandle_property_consume_buffer_ticks>`         | ``0``          |
+   +--------------------------------------------------------+-----------------------------------------------------------------------------------------------+----------------+
+   | :godot:`float`                                         | :ref:`divergence_epsilon<class_NetwPredictionHandle_property_divergence_epsilon>`             | ``0.01``       |
+   +--------------------------------------------------------+-----------------------------------------------------------------------------------------------+----------------+
+   | :godot:`int`                                           | :ref:`epoch<class_NetwPredictionHandle_property_epoch>`                                       | ``-1``         |
+   +--------------------------------------------------------+-----------------------------------------------------------------------------------------------+----------------+
+   | :godot:`int`                                           | :ref:`max_consume_lag_ticks<class_NetwPredictionHandle_property_max_consume_lag_ticks>`       | ``60``         |
+   +--------------------------------------------------------+-----------------------------------------------------------------------------------------------+----------------+
+   | :godot:`int`                                           | :ref:`max_consume_per_tick<class_NetwPredictionHandle_property_max_consume_per_tick>`         | ``1``          |
+   +--------------------------------------------------------+-----------------------------------------------------------------------------------------------+----------------+
+   | :ref:`MissingInput<enum_NetwPredict_MissingInput>`     | :ref:`missing_policy<class_NetwPredictionHandle_property_missing_policy>`                     | ``0``          |
+   +--------------------------------------------------------+-----------------------------------------------------------------------------------------------+----------------+
+   | :godot:`Callable`                                      | :ref:`predict_commands<class_NetwPredictionHandle_property_predict_commands>`                 | ``Callable()`` |
+   +--------------------------------------------------------+-----------------------------------------------------------------------------------------------+----------------+
+   | :ref:`Reconcile<enum_NetwPredict_Reconcile>`           | :ref:`reconcile_mode<class_NetwPredictionHandle_property_reconcile_mode>`                     | ``0``          |
+   +--------------------------------------------------------+-----------------------------------------------------------------------------------------------+----------------+
+   | :ref:`RecoveryPolicy<enum_NetwPredict_RecoveryPolicy>` | :ref:`recovery_policy<class_NetwPredictionHandle_property_recovery_policy>`                   | ``4``          |
+   +--------------------------------------------------------+-----------------------------------------------------------------------------------------------+----------------+
+   | :godot:`int`                                           | :ref:`replay_buffer_depth<class_NetwPredictionHandle_property_replay_buffer_depth>`           | ``0``          |
+   +--------------------------------------------------------+-----------------------------------------------------------------------------------------------+----------------+
+   | :godot:`Dictionary`                                    | :ref:`sensors<class_NetwPredictionHandle_property_sensors>`                                   | ``{}``         |
+   +--------------------------------------------------------+-----------------------------------------------------------------------------------------------+----------------+
+   | :godot:`bool`                                          | :ref:`sleeping<class_NetwPredictionHandle_property_sleeping>`                                 | ``false``      |
+   +--------------------------------------------------------+-----------------------------------------------------------------------------------------------+----------------+
+   | :ref:`NetwPredictStats<class_NetwPredictStats>`        | :ref:`stats<class_NetwPredictionHandle_property_stats>`                                       |                |
+   +--------------------------------------------------------+-----------------------------------------------------------------------------------------------+----------------+
+   | :godot:`float`                                         | :ref:`teleport_threshold<class_NetwPredictionHandle_property_teleport_threshold>`             | ``2.0``        |
+   +--------------------------------------------------------+-----------------------------------------------------------------------------------------------+----------------+
+   | :godot:`Callable`                                      | :ref:`transport_corridor<class_NetwPredictionHandle_property_transport_corridor>`             | ``Callable()`` |
+   +--------------------------------------------------------+-----------------------------------------------------------------------------------------------+----------------+
+   | :godot:`Callable`                                      | :ref:`witness_contacts<class_NetwPredictionHandle_property_witness_contacts>`                 | ``Callable()`` |
+   +--------------------------------------------------------+-----------------------------------------------------------------------------------------------+----------------+
 
 .. rst-class:: classref-reftable-group
 
@@ -125,71 +90,25 @@ Methods
 .. table::
    :widths: auto
 
-   +--------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | |void|                                                 | :ref:`bind_entity<class_NetwPredictionHandle_method_bind_entity>`\ (\ entity\: :ref:`NetwEntity<class_NetwEntity>`\ )                                                                                                                                                               |
-   +--------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`bool`                                          | :ref:`diverged<class_NetwPredictionHandle_method_diverged>`\ (\ predicted\: :godot:`Dictionary`, authoritative\: :godot:`Dictionary`, epsilon\: :godot:`float`, overrides\: :godot:`Dictionary`, excludes\: :godot:`Dictionary` = {}, angles\: :godot:`Dictionary` = {}\ ) |static| |
-   +--------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`float`                                         | :ref:`divergence<class_NetwPredictionHandle_method_divergence>`\ (\ predicted\: :godot:`Dictionary`, authoritative\: :godot:`Dictionary`, angles\: :godot:`Dictionary` = {}\ ) |static|                                                                                             |
-   +--------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`float`                                         | :ref:`divergence_by_field<class_NetwPredictionHandle_method_divergence_by_field>`\ (\ predicted\: :godot:`Dictionary`, authoritative\: :godot:`Dictionary`, out\: :godot:`Dictionary`, angles\: :godot:`Dictionary` = {}\ ) |static|                                                |
-   +--------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwEntity<class_NetwEntity>`                    | :ref:`entity<class_NetwPredictionHandle_method_entity>`\ (\ ) |const|                                                                                                                                                                                                               |
-   +--------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`Dictionary`                                    | :ref:`episode<class_NetwPredictionHandle_method_episode>`\ (\ ) |const|                                                                                                                                                                                                             |
-   +--------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`Dictionary`                                    | :ref:`episode_digest<class_NetwPredictionHandle_method_episode_digest>`\ (\ ) |const|                                                                                                                                                                                               |
-   +--------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`float`                                         | :ref:`field_error<class_NetwPredictionHandle_method_field_error>`\ (\ a\: :godot:`Variant`, b\: :godot:`Variant`, is_angle\: :godot:`bool`\ ) |static|                                                                                                                              |
-   +--------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`bool`                                          | :ref:`has_consumed_state_tick<class_NetwPredictionHandle_method_has_consumed_state_tick>`\ (\ state_tick\: :godot:`int`\ ) |const|                                                                                                                                                  |
-   +--------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`int`                                           | :ref:`history_record_tick<class_NetwPredictionHandle_method_history_record_tick>`\ (\ fallback\: :godot:`int`\ ) |const|                                                                                                                                                            |
-   +--------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`bool`                                          | :ref:`is_registered<class_NetwPredictionHandle_method_is_registered>`\ (\ ) |const|                                                                                                                                                                                                 |
-   +--------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwPredictJournal<class_NetwPredictJournal>`    | :ref:`journal<class_NetwPredictionHandle_method_journal>`\ (\ ) |const|                                                                                                                                                                                                             |
-   +--------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | |void|                                                 | :ref:`notify_contact<class_NetwPredictionHandle_method_notify_contact>`\ (\ )                                                                                                                                                                                                       |
-   +--------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`Callable`                                      | :ref:`predicted_command_callable<class_NetwPredictionHandle_method_predicted_command_callable>`\ (\ ) |const|                                                                                                                                                                       |
-   +--------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`Dictionary`                                    | :ref:`reachability<class_NetwPredictionHandle_method_reachability>`\ (\ ) |const|                                                                                                                                                                                                   |
-   +--------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | |void|                                                 | :ref:`record_server_input<class_NetwPredictionHandle_method_record_server_input>`\ (\ tick\: :godot:`int`, input\: :godot:`Dictionary`\ )                                                                                                                                           |
-   +--------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`CorrectionMode<enum_NetwPredict_CorrectionMode>` | :ref:`resolve_correction_mode_for<class_NetwPredictionHandle_method_resolve_correction_mode_for>`\ (\ body\: :godot:`Object`, mode\: :ref:`CorrectionMode<enum_NetwPredict_CorrectionMode>`, solves\: :godot:`bool` = false\ ) |static|                                             |
-   +--------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`CorrectionMode<enum_NetwPredict_CorrectionMode>` | :ref:`resolved_correction_mode<class_NetwPredictionHandle_method_resolved_correction_mode>`\ (\ ) |const|                                                                                                                                                                           |
-   +--------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`RecoveryPolicy<enum_NetwPredict_RecoveryPolicy>` | :ref:`resolved_recovery_policy<class_NetwPredictionHandle_method_resolved_recovery_policy>`\ (\ ) |const|                                                                                                                                                                           |
-   +--------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | |void|                                                 | :ref:`restate_declaration<class_NetwPredictionHandle_method_restate_declaration>`\ (\ )                                                                                                                                                                                             |
-   +--------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`Role<enum_NetwPredict_Role>`                     | :ref:`role_for_axes<class_NetwPredictionHandle_method_role_for_axes>`\ (\ source\: :ref:`InputSource<enum_NetwPredict_InputSource>`, mode\: :ref:`SimMode<enum_NetwPredict_SimMode>`\ ) |static|                                                                                    |
-   +--------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`Variant`                                       | :ref:`sensor<class_NetwPredictionHandle_method_sensor>`\ (\ name\: :godot:`StringName`, default\: :godot:`Variant` = null\ ) |const|                                                                                                                                                |
-   +--------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | |void|                                                 | :ref:`set_simulated_by<class_NetwPredictionHandle_method_set_simulated_by>`\ (\ subject\: :ref:`NetwEntity<class_NetwEntity>`, enabled\: :godot:`bool`, predictor\: :godot:`Callable` = Callable()\ )                                                                               |
-   +--------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | |void|                                                 | :ref:`simulate_frame<class_NetwPredictionHandle_method_simulate_frame>`\ (\ delta\: :godot:`float`\ )                                                                                                                                                                               |
-   +--------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | |void|                                                 | :ref:`simulate_tick<class_NetwPredictionHandle_method_simulate_tick>`\ (\ delta\: :godot:`float`, tick\: :godot:`int`\ )                                                                                                                                                            |
-   +--------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`int`                                           | :ref:`simulated_by_count<class_NetwPredictionHandle_method_simulated_by_count>`\ (\ ) |const|                                                                                                                                                                                       |
-   +--------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | |void|                                                 | :ref:`stamp_episode<class_NetwPredictionHandle_method_stamp_episode>`\ (\ )                                                                                                                                                                                                         |
-   +--------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`Array`\[:godot:`Dictionary`\]                  | :ref:`tape_transitions<class_NetwPredictionHandle_method_tape_transitions>`\ (\ ) |const|                                                                                                                                                                                           |
-   +--------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`Dictionary`                                    | :ref:`teleport_distances<class_NetwPredictionHandle_method_teleport_distances>`\ (\ ) |const|                                                                                                                                                                                       |
-   +--------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`Dictionary`                                    | :ref:`transition_state_at<class_NetwPredictionHandle_method_transition_state_at>`\ (\ transition\: :godot:`int`\ ) |const|                                                                                                                                                          |
-   +--------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`bool`                                          | :ref:`triggers<class_NetwPredictionHandle_method_triggers>`\ (\ error\: :godot:`float`, tolerance\: :godot:`float`\ ) |static|                                                                                                                                                      |
-   +--------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`float`                                         | :ref:`value_error<class_NetwPredictionHandle_method_value_error>`\ (\ a\: :godot:`Variant`, b\: :godot:`Variant`\ ) |static|                                                                                                                                                        |
-   +--------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   +--------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------+
+   | |void|                                                 | :ref:`bind_entity<class_NetwPredictionHandle_method_bind_entity>`\ (\ entity\: :ref:`NetwEntity<class_NetwEntity>`\ )                |
+   +--------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwEntity<class_NetwEntity>`                    | :ref:`entity<class_NetwPredictionHandle_method_entity>`\ (\ ) |const|                                                                |
+   +--------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`bool`                                          | :ref:`is_registered<class_NetwPredictionHandle_method_is_registered>`\ (\ ) |const|                                                  |
+   +--------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------+
+   | |void|                                                 | :ref:`notify_contact<class_NetwPredictionHandle_method_notify_contact>`\ (\ )                                                        |
+   +--------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`Dictionary`                                    | :ref:`reachability<class_NetwPredictionHandle_method_reachability>`\ (\ ) |const|                                                    |
+   +--------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`RecoveryPolicy<enum_NetwPredict_RecoveryPolicy>` | :ref:`resolved_recovery_policy<class_NetwPredictionHandle_method_resolved_recovery_policy>`\ (\ ) |const|                            |
+   +--------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`Variant`                                       | :ref:`sensor<class_NetwPredictionHandle_method_sensor>`\ (\ name\: :godot:`StringName`, default\: :godot:`Variant` = null\ ) |const| |
+   +--------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------+
+   | |void|                                                 | :ref:`simulate_frame<class_NetwPredictionHandle_method_simulate_frame>`\ (\ delta\: :godot:`float`\ )                                |
+   +--------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------+
+   | |void|                                                 | :ref:`simulate_tick<class_NetwPredictionHandle_method_simulate_tick>`\ (\ delta\: :godot:`float`, tick\: :godot:`int`\ )             |
+   +--------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------+
 
 .. rst-class:: classref-section-separator
 
@@ -204,17 +123,15 @@ Signals
 
 .. rst-class:: classref-signal
 
-**divergence_detected**\ (\ entry\: :godot:`int`, attribution\: :ref:`Attribution<enum_NetwPredictJournal_Attribution>`\ ) :ref:`🔗<class_NetwPredictionHandle_signal_divergence_detected>`
+**divergence_detected**\ (\ entry\: :godot:`int`, attribution\: :ref:`Attribution<enum_NetwPredict_Attribution>`\ ) :ref:`🔗<class_NetwPredictionHandle_signal_divergence_detected>`
 
-Emitted when a transition is found to disagree with authority, before anything is done about it, naming the transition and what the disagreement is blamed on.
-
-It is emitted whether or not the disagreement is then corrected, so a game that only watches hears about one exactly as loudly as a game that corrects.
+Emitted when a predicted tick disagrees with the server, with what the disagreement is blamed on. It is emitted whether or not a correction follows.
 
 ::
 
     entity.prediction.divergence_detected.connect(
-        func(entry: int, attribution: NetwPredictJournal.Attribution):
-            if attribution == NetwPredictJournal.CLOSURE:
+        func(entry: int, attribution: NetwPredict.Attribution):
+            if attribution == NetwPredict.ATTRIBUTION_CLOSURE:
                 push_warning("transition %d diverged" % entry)
     )
 
@@ -228,7 +145,7 @@ It is emitted whether or not the disagreement is then corrected, so a game that 
 
 **episode_closed**\ (\ report\: :godot:`Dictionary`\ ) :ref:`🔗<class_NetwPredictionHandle_signal_episode_closed>`
 
-Emitted when a run of agreement long enough to be trusted closes an episode. ``report`` is shaped exactly as :ref:`episode()<class_NetwPredictionHandle_method_episode>` describes, it is a copy, and it stays valid after later journal rows have pushed out the row it names.
+Emitted when the peers have agreed again for long enough to close an episode. ``report`` has the shape described in :ref:`episode_opened<class_NetwPredictionHandle_signal_episode_opened>`.
 
 .. rst-class:: classref-item-separator
 
@@ -240,7 +157,7 @@ Emitted when a run of agreement long enough to be trusted closes an episode. ``r
 
 **episode_fallback**\ (\ report\: :godot:`Dictionary`\ ) :ref:`🔗<class_NetwPredictionHandle_signal_episode_fallback>`
 
-Emitted when an episode runs out of evidence to recover with and the entity starts following authority instead. ``report`` is shaped exactly as :ref:`episode()<class_NetwPredictionHandle_method_episode>` describes. The entity keeps sending its input while it has stopped predicting ahead.
+Emitted when corrections stop helping and the entity starts following the server. It keeps sending input. ``report`` has the shape described in :ref:`episode_opened<class_NetwPredictionHandle_signal_episode_opened>`.
 
 .. rst-class:: classref-item-separator
 
@@ -252,885 +169,7 @@ Emitted when an episode runs out of evidence to recover with and the entity star
 
 **episode_opened**\ (\ report\: :godot:`Dictionary`\ ) :ref:`🔗<class_NetwPredictionHandle_signal_episode_opened>`
 
-Emitted when a settled comparison diverges far enough to act on and opens an episode. ``report`` is shaped exactly as :ref:`episode()<class_NetwPredictionHandle_method_episode>` describes.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwPredictionHandle_signal_recovered:
-
-.. rst-class:: classref-signal
-
-**recovered**\ (\ entry\: :godot:`int`, deltas\: :godot:`Dictionary`, teleported\: :godot:`bool`, attribution\: :ref:`Attribution<enum_NetwPredictJournal_Attribution>`\ ) :ref:`🔗<class_NetwPredictionHandle_signal_recovered>`
-
-Emitted after a recovery wrote the body. It names the transition it went back to, how far each field moved as ``after - before``, whether the move was large enough to be a teleport, and what the divergence was blamed on. An angle's change is given as the shorter way around.
-
-A recovery is one write, so this fires once per recovery and ``deltas`` is the whole of it. A game does not have to absorb them by hand. Under :ref:`NetwMultiplayer.PREDICTED_MODE_CHASE<class_NetwMultiplayer_constant_PREDICTED_MODE_CHASE>` the smoothing already turns each one into an offset that decays away, reset for each recovery and snapped through on a teleport.
-
-::
-
-    entity.interpolation.predicted_mode = \
-            NetwMultiplayer.PREDICTED_MODE_CHASE
-    api.display_set_param(entity.rid,
-            NetwMultiplayer.DISPLAY_PARAM_CHASE_GLIDE_TIME, 0.15)
-
-\ A recovery that moved nothing does not fire this at all, because a signal carrying no change reads exactly like one that repaired the body. ``deltas`` is what the recovery wrote rather than what the node reads back now, because a setter backed by the physics server may not reach its node until the next physics frame, and reading it now would report no movement.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwPredictionHandle_signal_state_evaluated:
-
-.. rst-class:: classref-signal
-
-**state_evaluated**\ (\ recv_tick\: :godot:`int`, ack\: :godot:`int`, divergence\: :godot:`float`, diverged\: :godot:`bool`\ ) :ref:`🔗<class_NetwPredictionHandle_signal_state_evaluated>`
-
-Emitted every time state arrives on the owning client, carrying the full divergence including values under :ref:`divergence_epsilon<class_NetwPredictionHandle_property_divergence_epsilon>`, and what the comparison decided.
-
-\ ``diverged`` is what was decided and not what was written. A comparison that found a divergence reports it here whether or not anything was written for it, and several paths deliberately write nothing, such as the evidence running out or an operator waiting on a witness. Those still report true, so a reader that only watches sees a divergence the engine chose not to act on. :ref:`last_verdict_reason<class_NetwPredictionHandle_property_last_verdict_reason>` says why, and :ref:`recovered<class_NetwPredictionHandle_signal_recovered>` is the signal for the write.
-
-A frame that reached no comparison at all still fires this, with a zero divergence and no correction, so a listener sees the frame arrive rather than losing it silently. :ref:`last_verdict_reason<class_NetwPredictionHandle_property_last_verdict_reason>` tells such a row from one that compared and agreed.
-
-\ :ref:`divergence_detected<class_NetwPredictionHandle_signal_divergence_detected>` fires only when a transition actually disagrees. A drift that grows tick over tick and never crosses :ref:`divergence_epsilon<class_NetwPredictionHandle_property_divergence_epsilon>` is heard here and never there, so anything watching for a drift nothing acted on reads this one. ``divergence`` is the worst field alone, and :ref:`last_field_divergence<class_NetwPredictionHandle_property_last_field_divergence>` breaks it out per field.
-
-.. rst-class:: classref-section-separator
-
-----
-
-.. rst-class:: classref-descriptions-group
-
-Constants
----------
-
-.. _class_NetwPredictionHandle_constant_GENERATOR_UNKNOWN_BEYOND_RETENTION:
-
-.. rst-class:: classref-constant
-
-**GENERATOR_UNKNOWN_BEYOND_RETENTION** = ``0`` :ref:`🔗<class_NetwPredictionHandle_constant_GENERATOR_UNKNOWN_BEYOND_RETENTION>`
-
-Generator status when the causal fork predates retained journal rows.
-
-.. rst-class:: classref-section-separator
-
-----
-
-.. rst-class:: classref-descriptions-group
-
-Property Descriptions
----------------------
-
-.. _class_NetwPredictionHandle_property_ack_age_ticks:
-
-.. rst-class:: classref-property
-
-:godot:`int` **ack_age_ticks** = ``0`` :ref:`🔗<class_NetwPredictionHandle_property_ack_age_ticks>`
-
-.. rst-class:: classref-property-setget
-
-- |void| **set_ack_age_ticks**\ (\ value\: :godot:`int`\ )
-- :godot:`int` **get_ack_age_ticks**\ (\ )
-
-How many ticks behind the newest input the acknowledgement is, updated every tick.
-
-On the owning client it is the span a restore has to project across, and :ref:`max_restore_ticks<class_NetwPredictionHandle_property_max_restore_ticks>` caps it. On the server it is the backlog waiting to be consumed, and :ref:`max_consume_per_tick<class_NetwPredictionHandle_property_max_consume_per_tick>` drains it. A healthy link holds it near zero, and a growing value means the server is falling behind.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwPredictionHandle_property_acknowledged_tick:
-
-.. rst-class:: classref-property
-
-:godot:`int` **acknowledged_tick** = ``-1`` :ref:`🔗<class_NetwPredictionHandle_property_acknowledged_tick>`
-
-.. rst-class:: classref-property-setget
-
-- :godot:`int` **get_acknowledged_tick**\ (\ )
-
-The newest transition authority has acknowledged, or ``-1`` before any acknowledgement has reached this peer. :ref:`NetwPredictStats.ack_confirmed<class_NetwPredictStats_property_ack_confirmed>` counts how many have arrived.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwPredictionHandle_property_archetype:
-
-.. rst-class:: classref-property
-
-:ref:`Archetype<enum_NetwPredict_Archetype>` **archetype** = ``0`` :ref:`🔗<class_NetwPredictionHandle_property_archetype>`
-
-.. rst-class:: classref-property-setget
-
-- |void| **set_archetype**\ (\ value\: :ref:`Archetype<enum_NetwPredict_Archetype>`\ )
-- :ref:`Archetype<enum_NetwPredict_Archetype>` **get_archetype**\ (\ )
-
-The set of prediction settings this entity starts from, or :ref:`NetwPredict.ARCHETYPE_NONE<class_NetwPredict_constant_ARCHETYPE_NONE>`.
-
-A preset is a starting point. Writing it applies that set's schedule and recovery settings outright, and anything written afterwards refines them. A scene declaring prediction on its :godot:`MultiplayerSynchronizer` therefore applies its archetype first and writes only the values it actually moved, so a value left at its default cannot overwrite the preset it was meant to refine.
-
-No preset sets :ref:`breach_response<class_NetwPredictionHandle_property_breach_response>`, because it is the one recovery setting that changes :ref:`sim_mode<class_NetwPredictionHandle_property_sim_mode>`, stopping speculation at a witnessed contact and following authority until the entity is reseeded. A game that wants that says so itself.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwPredictionHandle_property_breach_response:
-
-.. rst-class:: classref-property
-
-:ref:`BreachResponse<enum_NetwPredict_BreachResponse>` **breach_response** = ``0`` :ref:`🔗<class_NetwPredictionHandle_property_breach_response>`
-
-.. rst-class:: classref-property-setget
-
-- |void| **set_breach_response**\ (\ value\: :ref:`BreachResponse<enum_NetwPredict_BreachResponse>`\ )
-- :ref:`BreachResponse<enum_NetwPredict_BreachResponse>` **get_breach_response**\ (\ )
-
-What this entity does the moment it touches something it was not predicted to touch. It is armed only when :ref:`witness_contacts<class_NetwPredictionHandle_property_witness_contacts>` declares how contacts are observed. :ref:`NetwPredict.BREACH_RESPONSE_DEMOTE<class_NetwPredict_constant_BREACH_RESPONSE_DEMOTE>` follows authority from then on while the entity keeps sending its input.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwPredictionHandle_property_collision_cooldown_ticks:
-
-.. rst-class:: classref-property
-
-:godot:`int` **collision_cooldown_ticks** = ``6`` :ref:`🔗<class_NetwPredictionHandle_property_collision_cooldown_ticks>`
-
-.. rst-class:: classref-property-setget
-
-- |void| **set_collision_cooldown_ticks**\ (\ value\: :godot:`int`\ )
-- :godot:`int` **get_collision_cooldown_ticks**\ (\ )
-
-How many ticks :ref:`notify_contact()<class_NetwPredictionHandle_method_notify_contact>` holds off corrections for. A collision makes the predicted and the authoritative body genuinely differ for a few ticks while both settle, and correcting through that fights the physics. A disagreement past :ref:`teleport_threshold<class_NetwPredictionHandle_property_teleport_threshold>` still snaps.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwPredictionHandle_property_consume_buffer_ticks:
-
-.. rst-class:: classref-property
-
-:godot:`int` **consume_buffer_ticks** = ``0`` :ref:`🔗<class_NetwPredictionHandle_property_consume_buffer_ticks>`
-
-.. rst-class:: classref-property-setget
-
-- |void| **set_consume_buffer_ticks**\ (\ value\: :godot:`int`\ )
-- :godot:`int` **get_consume_buffer_ticks**\ (\ )
-
-How many ticks of input the server keeps in hand rather than consuming the queue to empty. Input arrives on two clocks that run independently, so it drifts across the server's consume boundary, and a server holding nothing spare alternates ticks where the entity does not step at all with ticks where it drains a burst.
-
-This is a target the server keeps to rather than a warm-up it does once. A tick whose queue has fallen to the target consumes nothing and rebuilds the slack instead, which :ref:`NetwPredictStats.held<class_NetwPredictStats_property_held>` counts, and :ref:`max_consume_per_tick<class_NetwPredictionHandle_property_max_consume_per_tick>` trims a burst back to the target rather than to zero.
-
-.. code:: text
-
-    span > buffer        consume, draining toward buffer + 1
-    0 < span <= buffer   hold, and the slack rebuilds     (held)
-    span <= 0            starved, no input exists      (starved)
-
-\ Every tick of depth costs a tick of input latency, and a hold delays one input by one step. A value of ``0`` consumes inputs as they arrive, with no slack to absorb any drift.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwPredictionHandle_property_correction_mode:
-
-.. rst-class:: classref-property
-
-:ref:`CorrectionMode<enum_NetwPredict_CorrectionMode>` **correction_mode** = ``0`` :ref:`🔗<class_NetwPredictionHandle_property_correction_mode>`
-
-.. rst-class:: classref-property-setget
-
-- |void| **set_correction_mode**\ (\ value\: :ref:`CorrectionMode<enum_NetwPredict_CorrectionMode>`\ )
-- :ref:`CorrectionMode<enum_NetwPredict_CorrectionMode>` **get_correction_mode**\ (\ )
-
-How a correction is applied, a :ref:`CorrectionMode<enum_NetwPredict_CorrectionMode>` value.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwPredictionHandle_property_divergence_epsilon:
-
-.. rst-class:: classref-property
-
-:godot:`float` **divergence_epsilon** = ``0.01`` :ref:`🔗<class_NetwPredictionHandle_property_divergence_epsilon>`
-
-.. rst-class:: classref-property-setget
-
-- |void| **set_divergence_epsilon**\ (\ value\: :godot:`float`\ )
-- :godot:`float` **get_divergence_epsilon**\ (\ )
-
-How far this entity may drift before an arriving state triggers a correction. A field needing a tolerance of its own declares one with :ref:`NetwPropertyConfig.epsilon()<class_NetwPropertyConfig_method_epsilon>`, which replaces this for that field alone.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwPredictionHandle_property_epoch:
-
-.. rst-class:: classref-property
-
-:godot:`int` **epoch** = ``-1`` :ref:`🔗<class_NetwPredictionHandle_property_epoch>`
-
-.. rst-class:: classref-property-setget
-
-- |void| **set_epoch**\ (\ value\: :godot:`int`\ )
-- :godot:`int` **get_epoch**\ (\ )
-
-Which version of the unmoving world this entity simulates against, or ``-1`` while none is declared.
-
-Raising it reopens the tolerance window, because two peers cannot have taken a change to the world on the same transition. Like :ref:`sensors<class_NetwPredictionHandle_property_sensors>` this describes the world rather than the group the entity is simulated with, so it never enters the entity into a fingerprint comparison.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwPredictionHandle_property_field_recovery:
-
-.. rst-class:: classref-property
-
-:godot:`Dictionary` **field_recovery** = ``{}`` :ref:`🔗<class_NetwPredictionHandle_property_field_recovery>`
-
-.. rst-class:: classref-property-setget
-
-- :godot:`Dictionary` **get_field_recovery**\ (\ )
-
-How often each field has asked for a recovery and how often one repaired it, counted since the entity spawned.
-
-A field may trigger correction without being writable by that correction. :ref:`NetwPropertyConfig.teleport_only()<class_NetwPropertyConfig_method_teleport_only>` reserves its write for a teleport, so smaller corrections may update other fields. This flag records that condition across the full run.
-
-::
-
-    var row := entity.prediction.field_recovery[&"angular_velocity"]
-    print(row.triggered, row.repaired, row.contracted)   # 1393  50  0
-
-\ A row like that one triggers nearly every recovery, is withheld from nearly every one, and the few writes it did get made it no smaller, so nothing is repairing it.
-
-Inside the comparison a correction is decided by fingerprint rather than by tolerance, so :ref:`NetwPredictFieldRecovery.triggered<class_NetwPredictFieldRecovery_property_triggered>` names the fields that were also past their tolerance rather than the ones that decided it. A field declared :ref:`NetwPropertyConfig.reconcile_only()<class_NetwPropertyConfig_method_reconcile_only>` never counts a trigger at all.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwPredictionHandle_property_input_source:
-
-.. rst-class:: classref-property
-
-:ref:`InputSource<enum_NetwPredict_InputSource>` **input_source** = ``3`` :ref:`🔗<class_NetwPredictionHandle_property_input_source>`
-
-.. rst-class:: classref-property-setget
-
-- |void| **set_input_source**\ (\ value\: :ref:`InputSource<enum_NetwPredict_InputSource>`\ )
-- :ref:`InputSource<enum_NetwPredict_InputSource>` **get_input_source**\ (\ )
-
-Where this peer's copy of the entity gets its input, decided when the entity is set up. It is read-only, because who has authority and who is controlling the entity decide it.
-
-This and :ref:`sim_mode<class_NetwPredictionHandle_property_sim_mode>` are the two values combined by :ref:`Role<enum_NetwPredict_Role>`. Read them separately when only one axis matters.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwPredictionHandle_property_is_reconciling:
-
-.. rst-class:: classref-property
-
-:godot:`bool` **is_reconciling** = ``false`` :ref:`🔗<class_NetwPredictionHandle_property_is_reconciling>`
-
-.. rst-class:: classref-property-setget
-
-- :godot:`bool` **get_is_reconciling**\ (\ )
-
-True while a correction is restoring and replaying, which is what code that plays an effect reads before playing one.
-
-It clears only after the replay has actually run, never before, so a reader never sees it false over a body still being re-run. An effect held back while it is true would otherwise fire in the middle of the replay it was meant to sit out.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwPredictionHandle_property_island:
-
-.. rst-class:: classref-property
-
-:ref:`NetwPredictIsland<class_NetwPredictIsland>` **island** :ref:`🔗<class_NetwPredictionHandle_property_island>`
-
-.. rst-class:: classref-property-setget
-
-- |void| **set_island**\ (\ value\: :ref:`NetwPredictIsland<class_NetwPredictIsland>`\ )
-- :ref:`NetwPredictIsland<class_NetwPredictIsland>` **get_island**\ (\ )
-
-The entities this one claims to simulate the way authority does.
-
-Naming members through :ref:`NetwPredictIsland.participants<class_NetwPredictIsland_property_participants>`, or a producer through :ref:`NetwPredictIsland.from_interest()<class_NetwPredictIsland_method_from_interest>`, is what enters this entity into the fingerprint comparison, and :ref:`NetwPredictIsland.declared<class_NetwPredictIsland_property_declared>` reports exactly that claim. An entity claiming nothing is simply outside the comparison rather than failing it.
-
-Named entities and producers feed one runtime set, and a producer reading interest admits only entities this peer already has. Some members are then promoted to :ref:`NetwPredict.FIDELITY_SIMULATED<class_NetwPredict_constant_FIDELITY_SIMULATED>` and the rest stay a watched :ref:`NetwPredict.FIDELITY_PROXY<class_NetwPredict_constant_FIDELITY_PROXY>`. Changes take effect at a transition boundary, with a margin on distance so a member on the edge does not flicker, and without changing fidelity mid-contact.
-
-A simulated member coasts on no input unless :ref:`NetwPredictIsland.predict_commands()<class_NetwPredictIsland_method_predict_commands>` supplies one, and every arriving authority state re-bases it, so its error is bounded by how often state arrives times how wrong the substituted command was. What the player sees follows the simulated body.
-
-::
-
-    var island := NetwEntity.of(self).prediction.island
-    island.from_interest()
-    island.simulate_nearest(1)
-
-\ Never ``null``. Assigning one installs it and binds it to this entity, which is how a scene passes its own rule down.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwPredictionHandle_property_last_attributed_transition:
-
-.. rst-class:: classref-property
-
-:godot:`int` **last_attributed_transition** = ``-1`` :ref:`🔗<class_NetwPredictionHandle_property_last_attributed_transition>`
-
-.. rst-class:: classref-property-setget
-
-- :godot:`int` **get_last_attributed_transition**\ (\ )
-
-The transition :ref:`last_attribution<class_NetwPredictionHandle_property_last_attribution>` describes, or ``-1`` while no divergence has been blamed on anything.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwPredictionHandle_property_last_attribution:
-
-.. rst-class:: classref-property
-
-:ref:`Attribution<enum_NetwPredictJournal_Attribution>` **last_attribution** = ``0`` :ref:`🔗<class_NetwPredictionHandle_property_last_attribution>`
-
-.. rst-class:: classref-property-setget
-
-- :ref:`Attribution<enum_NetwPredictJournal_Attribution>` **get_last_attribution**\ (\ )
-
-What the most recent divergence was blamed on, as a :ref:`Attribution<enum_NetwPredictJournal_Attribution>` value. It means nothing until :ref:`last_attributed_transition<class_NetwPredictionHandle_property_last_attributed_transition>` is no longer ``-1``.
-
-\ :godot:`NetwPredictJournal.Attribution.UNKNOWN <NetwPredictJournal#class_NetwPredictJournal_constant_Attribution.UNKNOWN>` means the evidence needed to return was not there. Every other value names the first thing the two runs disagreed about.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwPredictionHandle_property_last_compare_staleness:
-
-.. rst-class:: classref-property
-
-:godot:`int` **last_compare_staleness** = ``-1`` :ref:`🔗<class_NetwPredictionHandle_property_last_compare_staleness>`
-
-.. rst-class:: classref-property-setget
-
-- :godot:`int` **get_last_compare_staleness**\ (\ )
-
-How many ticks older than the arriving state the prediction compared against it was, or ``-1`` when nothing was recorded to compare at all.
-
-A comparison is only honest at zero. When the owner recorded nothing at the acknowledged tick the comparison falls back to an older prediction, and the resulting :ref:`last_field_divergence<class_NetwPredictionHandle_property_last_field_divergence>` then mixes real divergence with the distance the body simply travelled in between. Read this beside every divergence number to tell the two apart.
-
-It is non-zero on the ticks the owner did not simulate at all, which is the two sides running on different schedules rather than the physics disagreeing.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwPredictionHandle_property_last_field_divergence:
-
-.. rst-class:: classref-property
-
-:godot:`Dictionary` **last_field_divergence** = ``{}`` :ref:`🔗<class_NetwPredictionHandle_property_last_field_divergence>`
-
-.. rst-class:: classref-property-setget
-
-- :godot:`Dictionary` **get_last_field_divergence**\ (\ )
-
-Each field's own divergence from the most recent comparison, refreshed every time state arrives on the owning client. Empty until the first comparison.
-
-\ :ref:`state_evaluated<class_NetwPredictionHandle_signal_state_evaluated>` carries only the worst field's error, and a set mixing meters, radians and meters per second cannot say from that number which field moved. Read this to tell a position drifting from a velocity drifting, especially for a field declared :ref:`NetwPropertyConfig.reconcile_only()<class_NetwPropertyConfig_method_reconcile_only>` or :ref:`NetwPropertyConfig.teleport_only()<class_NetwPropertyConfig_method_teleport_only>`, which can drift without ever triggering a correction or being restored by one.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwPredictionHandle_property_last_tier_errors:
-
-.. rst-class:: classref-property
-
-:godot:`Dictionary` **last_tier_errors** = ``{}`` :ref:`🔗<class_NetwPredictionHandle_property_last_tier_errors>`
-
-.. rst-class:: classref-property-setget
-
-- :godot:`Dictionary` **get_last_tier_errors**\ (\ )
-
-The error the teleport test last measured for each pose field, or empty when the last comparison measured none.
-
-This is a different number from :ref:`last_field_divergence<class_NetwPredictionHandle_property_last_field_divergence>`, which is why both are published. A divergence is measured against the value that arrived. This is measured against that value carried forward to now through the field's :ref:`NetwPropertyConfig.carry_along()<class_NetwPropertyConfig_method_carry_along>`. A field whose carry overshoots can reach the teleport distance while its plain divergence stays small, so a capture explaining a teleport with the divergence is quoting a number that did not cause it.
-
-Read it against the distance the field declared with :ref:`NetwPropertyConfig.teleport_at()<class_NetwPropertyConfig_method_teleport_at>`.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwPredictionHandle_property_last_verdict_reason:
-
-.. rst-class:: classref-property
-
-:godot:`int` **last_verdict_reason** = ``0`` :ref:`🔗<class_NetwPredictionHandle_property_last_verdict_reason>`
-
-.. rst-class:: classref-property-setget
-
-- :godot:`int` **get_last_verdict_reason**\ (\ )
-
-Why the most recent comparison did not reach the body, or :ref:`NetwPredict.VERDICT_REASON_NONE<class_NetwPredict_constant_VERDICT_REASON_NONE>` when nothing stood in its way. It is cleared at the start of every arriving frame, before the comparison runs, so it always describes the comparison in front of the reader.
-
-Read it beside every :ref:`state_evaluated<class_NetwPredictionHandle_signal_state_evaluated>`, the way :ref:`last_compare_staleness<class_NetwPredictionHandle_property_last_compare_staleness>` is read beside every divergence. The signal carries what the comparison decided and this carries what was done about it.
-
-More than one reason can stand at once, and the ranking is fixed.
-
-- :ref:`NetwPredict.VERDICT_REASON_EVIDENCE_EXHAUSTED<class_NetwPredict_constant_VERDICT_REASON_EVIDENCE_EXHAUSTED>` outranks a pending operator
-
-- :ref:`NetwPredict.VERDICT_REASON_TRANSPORT_PENDING<class_NetwPredict_constant_VERDICT_REASON_TRANSPORT_PENDING>` outranks :ref:`NetwPredict.VERDICT_REASON_DISSIPATE_PENDING<class_NetwPredict_constant_VERDICT_REASON_DISSIPATE_PENDING>`\ 
-
-For :ref:`NetwPredict.VERDICT_REASON_EVIDENCE_EXHAUSTED<class_NetwPredict_constant_VERDICT_REASON_EVIDENCE_EXHAUSTED>`, the caller must choose the fallback. The pending reasons indicate that the current pass is still gathering data.
-
-A comparison that agreed is never rejected and reads :ref:`NetwPredict.VERDICT_REASON_NONE<class_NetwPredict_constant_VERDICT_REASON_NONE>`, so this rather than the corrected flag is what tells a rejection from an agreement. Counting corrections off the verdict alone counts comparisons that wrote nothing and cannot tell them from repairs.
-
-::
-
-    entity.prediction.state_evaluated.connect(
-        func(_r, ack, error, corrected):
-            var pred := entity.prediction
-            if corrected and pred.last_verdict_reason \
-                    != NetwPredict.VERDICT_REASON_NONE:
-                print("transition %d disagreed by %.3f and wrote nothing"
-                        % [ack, error])
-    )
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwPredictionHandle_property_max_consume_lag_ticks:
-
-.. rst-class:: classref-property
-
-:godot:`int` **max_consume_lag_ticks** = ``60`` :ref:`🔗<class_NetwPredictionHandle_property_max_consume_lag_ticks>`
-
-.. rst-class:: classref-property-setget
-
-- |void| **set_max_consume_lag_ticks**\ (\ value\: :godot:`int`\ )
-- :godot:`int` **get_max_consume_lag_ticks**\ (\ )
-
-How far the server may fall behind the newest input before it stops catching up one tick at a time and jumps to the live edge.
-
-The server never steps over a missing tick, so across a gap it gains one tick per server tick while the client keeps producing one per tick. A gap therefore never closes on its own and the acknowledgement stays behind forever, which reads as an entity that simulates and is never corrected. The usual way to open one is a client whose clock re-anchors after it has already produced input, joining a session that has been running a while.
-
-.. code:: text
-
-    within the ceiling   walk forward, filling holes one at a time
-    past the ceiling     re-open at the newest input, less
-                         consume_buffer_ticks
-
-\ Input skipped that way is a second old and no longer worth simulating, and :ref:`NetwPredictStats.skipped<class_NetwPredictStats_property_skipped>` counts it. A value of ``0`` turns the recovery off and lets the server fall as far behind as it falls.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwPredictionHandle_property_max_consume_per_tick:
-
-.. rst-class:: classref-property
-
-:godot:`int` **max_consume_per_tick** = ``1`` :ref:`🔗<class_NetwPredictionHandle_property_max_consume_per_tick>`
-
-.. rst-class:: classref-property-setget
-
-- |void| **set_max_consume_per_tick**\ (\ value\: :godot:`int`\ )
-- :godot:`int` **get_max_consume_per_tick**\ (\ )
-
-How many queued input ticks one frame may fold together when a backlog has built up, for an entity at :ref:`NetwPredict.SCHEDULE_FRAME<class_NetwPredict_constant_SCHEDULE_FRAME>`.
-
-The client produces one input per tick, so the default of ``1`` keeps the two in step. A higher value lets a frame skip past inputs that have already arrived rather than working through the backlog one frame at a time. Folding never steps over a lost tick, and folded inputs are counted by :ref:`NetwPredictStats.folded<class_NetwPredictStats_property_folded>` rather than simulated, so it is never extra work.
-
-An entity at :ref:`NetwPredict.SCHEDULE_TICK<class_NetwPredict_constant_SCHEDULE_TICK>` ignores this and advances by exactly one per tick, because authority may not run a transition its own clock has not reached.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwPredictionHandle_property_max_restore_ticks:
-
-.. rst-class:: classref-property
-
-:godot:`int` **max_restore_ticks** = ``6`` :ref:`🔗<class_NetwPredictionHandle_property_max_restore_ticks>`
-
-.. rst-class:: classref-property-setget
-
-- |void| **set_max_restore_ticks**\ (\ value\: :godot:`int`\ )
-- :godot:`int` **get_max_restore_ticks**\ (\ )
-
-How far a :ref:`NetwPredict.RESTORE_MODE_EXTRAPOLATED<class_NetwPredict_constant_RESTORE_MODE_EXTRAPOLATED>` restore may project forward, in ticks. It projects across :ref:`ack_age_ticks<class_NetwPredictionHandle_property_ack_age_ticks>`, and a straight-line projection over a long span can land a body a long way off a curved path. This caps that span the way :ref:`NetwMultiplayer.DISPLAY_PARAM_MAX_FORECAST_TICKS<class_NetwMultiplayer_constant_DISPLAY_PARAM_MAX_FORECAST_TICKS>` caps the display forecast, so an old acknowledgement never launches the body, and it defaults to the same ``6``.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwPredictionHandle_property_missing_policy:
-
-.. rst-class:: classref-property
-
-:ref:`MissingInput<enum_NetwPredict_MissingInput>` **missing_policy** = ``0`` :ref:`🔗<class_NetwPredictionHandle_property_missing_policy>`
-
-.. rst-class:: classref-property-setget
-
-- |void| **set_missing_policy**\ (\ value\: :ref:`MissingInput<enum_NetwPredict_MissingInput>`\ )
-- :ref:`MissingInput<enum_NetwPredict_MissingInput>` **get_missing_policy**\ (\ )
-
-What the server does about an input tick that never arrived, as a :ref:`MissingInput<enum_NetwPredict_MissingInput>` value.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwPredictionHandle_property_reconcile_mode:
-
-.. rst-class:: classref-property
-
-:ref:`Reconcile<enum_NetwPredict_Reconcile>` **reconcile_mode** = ``0`` :ref:`🔗<class_NetwPredictionHandle_property_reconcile_mode>`
-
-.. rst-class:: classref-property-setget
-
-- |void| **set_reconcile_mode**\ (\ value\: :ref:`Reconcile<enum_NetwPredict_Reconcile>`\ )
-- :ref:`Reconcile<enum_NetwPredict_Reconcile>` **get_reconcile_mode**\ (\ )
-
-Whether this entity is corrected on its own or together with the rest of its :ref:`island<class_NetwPredictionHandle_property_island>`, as a :ref:`Reconcile<enum_NetwPredict_Reconcile>` value.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwPredictionHandle_property_recovery_policy:
-
-.. rst-class:: classref-property
-
-:ref:`RecoveryPolicy<enum_NetwPredict_RecoveryPolicy>` **recovery_policy** = ``-1`` :ref:`🔗<class_NetwPredictionHandle_property_recovery_policy>`
-
-.. rst-class:: classref-property-setget
-
-- |void| **set_recovery_policy**\ (\ value\: :ref:`RecoveryPolicy<enum_NetwPredict_RecoveryPolicy>`\ )
-- :ref:`RecoveryPolicy<enum_NetwPredict_RecoveryPolicy>` **get_recovery_policy**\ (\ )
-
-The :ref:`RecoveryPolicy<enum_NetwPredict_RecoveryPolicy>` this entity recovers under, or ``-1`` while none has been declared, in which case :ref:`resolved_recovery_policy()<class_NetwPredictionHandle_method_resolved_recovery_policy>` works one out from :ref:`correction_mode<class_NetwPredictionHandle_property_correction_mode>`.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwPredictionHandle_property_replay_buffer_depth:
-
-.. rst-class:: classref-property
-
-:godot:`int` **replay_buffer_depth** = ``0`` :ref:`🔗<class_NetwPredictionHandle_property_replay_buffer_depth>`
-
-.. rst-class:: classref-property-setget
-
-- |void| **set_replay_buffer_depth**\ (\ value\: :godot:`int`\ )
-- :godot:`int` **get_replay_buffer_depth**\ (\ )
-
-How many transitions authority leaves standing in the queue instead of replaying, for an entity at :ref:`NetwPredict.SCHEDULE_FRAME<class_NetwPredict_constant_SCHEDULE_FRAME>`. It is latency added to every command and it buys nothing back, which is why it defaults to zero.
-
-Authority replays at most one transition per frame, so it can never drain faster than the owner fills, and a reserve that cannot be spent faster than it is refilled absorbs no jitter. Every tick of depth is another tick of :ref:`ack_age_ticks<class_NetwPredictionHandle_property_ack_age_ticks>` behind every recovery.
-
-.. code:: text
-
-    depth > buffer       replay one transition        (consumed)
-    0 < depth <= buffer  hold, spending nothing           (held)
-    depth == 0           the queue is dry              (starved)
-
-\ At the default of zero the middle row cannot happen, so a frame either replays the transition it has or reports that it has none. Raise it only to trade acknowledgement latency for a later replay position. It will not smooth arrival, because what covers a dry frame is depth an earlier burst already built, at any buffer including zero.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwPredictionHandle_property_schedule:
-
-.. rst-class:: classref-property
-
-:ref:`Schedule<enum_NetwPredict_Schedule>` **schedule** = ``0`` :ref:`🔗<class_NetwPredictionHandle_property_schedule>`
-
-.. rst-class:: classref-property-setget
-
-- |void| **set_schedule**\ (\ value\: :ref:`Schedule<enum_NetwPredict_Schedule>`\ )
-- :ref:`Schedule<enum_NetwPredict_Schedule>` **get_schedule**\ (\ )
-
-How often this entity is driven, as a :ref:`Schedule<enum_NetwPredict_Schedule>` value. That is once per network tick, once per physics frame, or once per network tick with the physics space stepped after it.
-
-A body the physics engine solves declares :ref:`NetwPredict.SCHEDULE_FRAME<class_NetwPredict_constant_SCHEDULE_FRAME>`, because such a body's transition is a physics step and recording it as anything else records something that did not happen. One whose space holds a :ref:`NetwPhysicsStepper<class_NetwPhysicsStepper>` declares :ref:`NetwPredict.SCHEDULE_STEPPED<class_NetwPredict_constant_SCHEDULE_STEPPED>` instead, which keeps that true while putting the step on the network's clock so a rollback can re-run it.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwPredictionHandle_property_sensors:
-
-.. rst-class:: classref-property
-
-:godot:`Dictionary` **sensors** = ``{}`` :ref:`🔗<class_NetwPredictionHandle_property_sensors>`
-
-.. rst-class:: classref-property-setget
-
-- |void| **set_sensors**\ (\ value\: :godot:`Dictionary`\ )
-- :godot:`Dictionary` **get_sensors**\ (\ )
-
-The world facts this entity's transition reads, by name.
-
-Each sampler is called once before each drive and recorded with it, which is what lets a divergence be blamed on the world rather than left unexplained. :ref:`sensor()<class_NetwPredictionHandle_method_sensor>` reads the sample back. A sampler that cannot be called is skipped when it would have been sampled rather than rejected here, so the record describes exactly the facts the drive ran against.
-
-Declaring a sensor says where a divergence came from and claims nothing about exactness, so declaring them alone leaves every transition :godot:`NetwPredictJournal.Domain.OUT_OF_DOMAIN <NetwPredictJournal#class_NetwPredictJournal_constant_Domain.OUT_OF_DOMAIN>`.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwPredictionHandle_property_sim_mode:
-
-.. rst-class:: classref-property
-
-:ref:`SimMode<enum_NetwPredict_SimMode>` **sim_mode** = ``2`` :ref:`🔗<class_NetwPredictionHandle_property_sim_mode>`
-
-.. rst-class:: classref-property-setget
-
-- |void| **set_sim_mode**\ (\ value\: :ref:`SimMode<enum_NetwPredict_SimMode>`\ )
-- :ref:`SimMode<enum_NetwPredict_SimMode>` **get_sim_mode**\ (\ )
-
-What this peer's simulation of the entity counts for, decided when the entity is set up. It is read-only, because who has authority and who is controlling the entity decide it.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwPredictionHandle_property_simulate:
-
-.. rst-class:: classref-property
-
-:godot:`Callable` **simulate** = ``Callable()`` :ref:`🔗<class_NetwPredictionHandle_property_simulate>`
-
-.. rst-class:: classref-property-setget
-
-- |void| **set_simulate**\ (\ value\: :godot:`Callable`\ )
-- :godot:`Callable` **get_simulate**\ (\ )
-
-The simulation step, which is the entity root's ``_network_tick(delta, tick, is_fresh)`` unless something else is assigned here. It is one :godot:`Callable` and never a list, so exactly one step runs per entity per tick.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwPredictionHandle_property_sleeping:
-
-.. rst-class:: classref-property
-
-:godot:`bool` **sleeping** = ``false`` :ref:`🔗<class_NetwPredictionHandle_property_sleeping>`
-
-.. rst-class:: classref-property-setget
-
-- |void| **set_sleeping**\ (\ value\: :godot:`bool`\ )
-- :godot:`bool` **get_sleeping**\ (\ )
-
-True while the authoritative body is asleep. Corrections pause while it is, so a sleeping body is never nudged awake by one. A game writes it when its own body sleeps and wakes.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwPredictionHandle_property_snap_restore:
-
-.. rst-class:: classref-property
-
-:ref:`RestoreMode<enum_NetwPredict_RestoreMode>` **snap_restore** = ``0`` :ref:`🔗<class_NetwPredictionHandle_property_snap_restore>`
-
-.. rst-class:: classref-property-setget
-
-- |void| **set_snap_restore**\ (\ value\: :ref:`RestoreMode<enum_NetwPredict_RestoreMode>`\ )
-- :ref:`RestoreMode<enum_NetwPredict_RestoreMode>` **get_snap_restore**\ (\ )
-
-How a :ref:`NetwPredict.CORRECTION_MODE_SNAP<class_NetwPredict_constant_CORRECTION_MODE_SNAP>` restore lands on the body, as a :ref:`RestoreMode<enum_NetwPredict_RestoreMode>` value. :ref:`NetwPredict.RESTORE_MODE_EXTRAPOLATED<class_NetwPredict_constant_RESTORE_MODE_EXTRAPOLATED>` carries each field that declares a :ref:`NetwInterpolate.project_channel<class_NetwInterpolate_property_project_channel>` forward to the present tick, and the default :ref:`NetwPredict.RESTORE_MODE_EXACT<class_NetwPredict_constant_RESTORE_MODE_EXACT>` writes what arrived.
-
-It is ignored under :ref:`NetwPredict.CORRECTION_MODE_REPLAY<class_NetwPredict_constant_CORRECTION_MODE_REPLAY>`, because replaying the inputs already brings the body up to the present.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwPredictionHandle_property_stats:
-
-.. rst-class:: classref-property
-
-:ref:`NetwPredictStats<class_NetwPredictStats>` **stats** :ref:`🔗<class_NetwPredictionHandle_property_stats>`
-
-.. rst-class:: classref-property-setget
-
-- :ref:`NetwPredictStats<class_NetwPredictStats>` **get_stats**\ (\ )
-
-Everything this entity's engine counted, one name per fact, on a :ref:`NetwPredictStats<class_NetwPredictStats>`.
-
-These are for reading, printing and charting. Build a rule on the signals and the named properties beside them instead, because those are the ones that will not change under a game.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwPredictionHandle_property_teleport_threshold:
-
-.. rst-class:: classref-property
-
-:godot:`float` **teleport_threshold** = ``2.0`` :ref:`🔗<class_NetwPredictionHandle_property_teleport_threshold>`
-
-.. rst-class:: classref-property-setget
-
-- |void| **set_teleport_threshold**\ (\ value\: :godot:`float`\ )
-- :godot:`float` **get_teleport_threshold**\ (\ )
-
-How far the pose may be wrong, in the pose field's own units, before a recovery restores everything instead of withholding the fields declared :ref:`NetwPropertyConfig.teleport_only()<class_NetwPropertyConfig_method_teleport_only>`.
-
-An error that large means something really went wrong, such as a wall bounce or a teleport, rather than a field slowly drifting, and past it the predicted body holds nothing worth keeping. The error is measured over the fields that declared a :ref:`NetwPropertyConfig.carry_along()<class_NetwPropertyConfig_method_carry_along>` or named their own :ref:`NetwPropertyConfig.teleport_at()<class_NetwPropertyConfig_method_teleport_at>`. An entity with neither has no pose to measure, and every recovery it makes restores everything.
-
-This is the default for such a field that named no distance of its own, and it only means anything for fields in the same units. A pose spanning metres, radians and radians per second cannot be served by one number, so a field in any other unit declares :ref:`NetwPropertyConfig.teleport_at()<class_NetwPropertyConfig_method_teleport_at>` rather than inheriting one that means nothing for it. Each field is compared against its own distance, and any one of them reaching it is enough.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwPredictionHandle_property_transport_corridor:
-
-.. rst-class:: classref-property
-
-:godot:`Callable` **transport_corridor** = ``Callable()`` :ref:`🔗<class_NetwPredictionHandle_property_transport_corridor>`
-
-.. rst-class:: classref-property-setget
-
-- |void| **set_transport_corridor**\ (\ value\: :godot:`Callable`\ )
-- :godot:`Callable` **get_transport_corridor**\ (\ )
-
-Returns whether the path to a proposed pose is clear.
-
-A correction that moves a body to where it should be now, across a path nobody checked, is how a body arrives inside a wall, so that correction is only available once this is declared. An unset or invalid :godot:`Callable` leaves it unavailable.
-
-It is called as ``corridor(current, proposed)``, and only after everything the engine can decide for itself has already passed, so it is the game's last word rather than its first. A game rejecting a move the engine would have rejected anyway is paying for a call that changes nothing.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwPredictionHandle_property_witness_contacts:
-
-.. rst-class:: classref-property
-
-:godot:`Callable` **witness_contacts** = ``Callable()`` :ref:`🔗<class_NetwPredictionHandle_property_witness_contacts>`
-
-.. rst-class:: classref-property-setget
-
-- |void| **set_witness_contacts**\ (\ value\: :godot:`Callable`\ )
-- :godot:`Callable` **get_witness_contacts**\ (\ )
-
-Samples what this peer's body actually touched on the transition just solved.
-
-It is called once per solved transition and returns the colliders the body touched, which is what lets a divergence be blamed on a contact. An unset or invalid :godot:`Callable` leaves that unknown, which is the absence of an observation rather than an observation that nothing was touched.
-
-.. rst-class:: classref-section-separator
-
-----
-
-.. rst-class:: classref-descriptions-group
-
-Method Descriptions
--------------------
-
-.. _class_NetwPredictionHandle_method_bind_entity:
-
-.. rst-class:: classref-method
-
-|void| **bind_entity**\ (\ entity\: :ref:`NetwEntity<class_NetwEntity>`\ ) :ref:`🔗<class_NetwPredictionHandle_method_bind_entity>`
-
-Binds the entity this handle belongs to and arms its island. Called by the entity record's factory, which is the only thing that creates a handle.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwPredictionHandle_method_diverged:
-
-.. rst-class:: classref-method
-
-:godot:`bool` **diverged**\ (\ predicted\: :godot:`Dictionary`, authoritative\: :godot:`Dictionary`, epsilon\: :godot:`float`, overrides\: :godot:`Dictionary`, excludes\: :godot:`Dictionary` = {}, angles\: :godot:`Dictionary` = {}\ ) |static| :ref:`🔗<class_NetwPredictionHandle_method_diverged>`
-
-Whether any property has drifted past its own threshold, reading ``epsilon`` as refined per property by ``overrides``. It is per property because a 3D body mixes meters, radians and meters per second, and no single number serves all three. An ``overrides`` entry of ``0.0`` means any error at all triggers, as :ref:`NetwPropertyConfig.epsilon()<class_NetwPropertyConfig_method_epsilon>` says.
-
-A key in ``excludes`` never triggers on its own. It is skipped here so a field declared :ref:`NetwPropertyConfig.reconcile_only()<class_NetwPropertyConfig_method_reconcile_only>`, or one that is not :ref:`NetwPropertySet.CAUSAL<class_NetwPropertySet_constant_CAUSAL>`, does not force a correction, though a correction some other field triggers still restores it.
-
-A key in ``angles`` is compared as a wrapped angle through :godot:`@GlobalScope.angle_difference() <@GlobalScope#class_@GlobalScope_method_angle_difference>`, so a heading crossing the half turn does not read as an almost complete rotation.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwPredictionHandle_method_divergence:
-
-.. rst-class:: classref-method
-
-:godot:`float` **divergence**\ (\ predicted\: :godot:`Dictionary`, authoritative\: :godot:`Dictionary`, angles\: :godot:`Dictionary` = {}\ ) |static| :ref:`🔗<class_NetwPredictionHandle_method_divergence>`
-
-The largest error any one property shows between a predicted and an authoritative snapshot, or ``INF`` when a key is missing. This is what the divergence signals report, and :ref:`diverged()<class_NetwPredictionHandle_method_diverged>` is what decides whether to correct. A key in ``angles`` is compared as a wrapped angle, so a heading crossing the half turn reads as its true arc.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwPredictionHandle_method_divergence_by_field:
-
-.. rst-class:: classref-method
-
-:godot:`float` **divergence_by_field**\ (\ predicted\: :godot:`Dictionary`, authoritative\: :godot:`Dictionary`, out\: :godot:`Dictionary`, angles\: :godot:`Dictionary` = {}\ ) |static| :ref:`🔗<class_NetwPredictionHandle_method_divergence_by_field>`
-
-Fills ``out`` with each field's own divergence and returns the worst of them, which is the same value :ref:`divergence()<class_NetwPredictionHandle_method_divergence>` reports.
-
-That one number cannot say which field drifted, and a set of fields mixing meters, radians and meters per second drifts differently in each, so a caller working out why corrections do or do not fire reads the breakdown.
-
-\ ``out`` is cleared and refilled, so one dictionary can be reused across arrivals instead of allocating a new one per comparison.
-
-A key in ``angles`` wraps, so its error is the shorter way around.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwPredictionHandle_method_entity:
-
-.. rst-class:: classref-method
-
-:ref:`NetwEntity<class_NetwEntity>` **entity**\ (\ ) |const| :ref:`🔗<class_NetwPredictionHandle_method_entity>`
-
-The entity this handle declares prediction for, or ``null`` once that entity is gone.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwPredictionHandle_method_episode:
-
-.. rst-class:: classref-method
-
-:godot:`Dictionary` **episode**\ (\ ) |const| :ref:`🔗<class_NetwPredictionHandle_method_episode>`
-
-The current or most recent prediction episode. An empty result means no episode has started. Returns a copy.
+Emitted when a misprediction is large enough to act on. ``report`` is a copy of the episode.
 
 .. code:: text
 
@@ -1138,10 +177,10 @@ The current or most recent prediction episode. An empty result means no episode 
     ┠╴id            int
     ┠╴generator     Dictionary
     ┃ ┠╴transition  int
-    ┃ ┠╴boundary    NetwPredictJournal.Attribution
+    ┃ ┠╴boundary    NetwPredict.Attribution
     ┃ ┖╴row         Dictionary
     ┠╴operators     Array[Dictionary]
-    ┃ ┠╴operator    NetwPredictJournal.Operator
+    ┃ ┠╴operator    NetwPredict.Operator
     ┃ ┠╴basis       int
     ┃ ┠╴eligible    bool
     ┃ ┠╴applied     bool
@@ -1167,88 +206,436 @@ The current or most recent prediction episode. An empty result means no episode 
     ┃ ┖╴evidence_dropped      int
     ┖╴reopen_chain  Array[int]
 
-\ ``generator.row`` is the journal row that was kept, and its ``witness_detail`` carries the contact behind the witness fingerprint. A run that began before the kept window starts reads :ref:`GENERATOR_UNKNOWN_BEYOND_RETENTION<class_NetwPredictionHandle_constant_GENERATOR_UNKNOWN_BEYOND_RETENTION>`. Later diverging rows appear under ``taint``, and failures that began on their own appear under ``secondary_generators``. An operator that was rejected has ``outcome = -1`` and an empty ``write``.
-
-Each series is kept only to a bounded window, because an episode has no limit on how long it may stay open. A trim keeps the newest entries and counts what it dropped, so a truncated series can be told apart from a short one.
-
-Reading this copies the whole record. A reader running every frame calls :ref:`episode_digest()<class_NetwPredictionHandle_method_episode_digest>` instead and comes here only when the digest says something changed.
+\ ``generator`` is the tick where the peers first disagreed, or :ref:`GENERATOR_UNKNOWN_BEYOND_RETENTION<class_NetwPredictionHandle_constant_GENERATOR_UNKNOWN_BEYOND_RETENTION>` when it is too old to be kept. An operator that was rejected has ``outcome = -1`` and an empty ``write``. Long series are trimmed to the newest entries, and ``evidence_dropped`` counts what was trimmed.
 
 .. rst-class:: classref-item-separator
 
 ----
 
-.. _class_NetwPredictionHandle_method_episode_digest:
+.. _class_NetwPredictionHandle_signal_recovered:
 
-.. rst-class:: classref-method
+.. rst-class:: classref-signal
 
-:godot:`Dictionary` **episode_digest**\ (\ ) |const| :ref:`🔗<class_NetwPredictionHandle_method_episode_digest>`
+**recovered**\ (\ entry\: :godot:`int`, deltas\: :godot:`Dictionary`, teleported\: :godot:`bool`, attribution\: :ref:`Attribution<enum_NetwPredict_Attribution>`\ ) :ref:`🔗<class_NetwPredictionHandle_signal_recovered>`
 
-The episode's current numbers, without copying any of its evidence.
+Emitted after a correction moved the body. ``deltas`` holds how far each field moved, as ``after - before``, with angles taken the short way around. ``teleported`` is ``true`` when the correction was a teleport.
 
-\ :ref:`episode()<class_NetwPredictionHandle_method_episode>` copies the whole record, and an open episode keeps one entry per settled comparison, so a per-frame reader wanting only the disposition would pay for every comparison the episode has ever seen. This costs the same whatever the episode's age, which is what makes it safe to read every frame.
+Under :ref:`NetwMultiplayer.LIVE_MODE_CHASE<class_NetwMultiplayer_constant_LIVE_MODE_CHASE>` the display already smooths the correction away.
 
 ::
 
-    var digest := entity.prediction.episode_digest()
-    if digest.is_empty():
-        return
-    if digest[&"revision"] != _last_seen:
-        _last_seen = digest[&"revision"]
-        _export(entity.prediction.episode())
-
-.. code:: text
-
-    Dictionary
-    ┠╴id                          int   the open or last retired episode
-    ┠╴revision                    int   rises on every change to evidence
-    ┠╴last_comparison_transition  int   newest settled comparison
-    ┠╴last_meter                  int   that comparison's error
-    ┠╴generator             Dictionary  {transition, boundary}, where and
-    ┃                                   how the two runs first parted
-    ┠╴last_operator         Dictionary  {operator, basis, outcome}, empty
-    ┃                                   until one has been attempted
-    ┠╴disposition           Dictionary  the same section episode() gives
-    ┖╴evidence              Dictionary  {comparisons, writes, decisions,
-                                        taint, secondary_generators,
-                                        dropped}
-
-\ ``evidence.dropped`` counts the entries a trim removed once the episode outlived the kept window, so a short series can be told from a truncated one. ``last_operator.outcome`` is ``-1`` for an attempt rejected before it wrote.
+    entity.interpolation.live_mode = NetwMultiplayer.LIVE_MODE_CHASE
+    api.display_set_param(entity.rid,
+            NetwMultiplayer.DISPLAY_PARAM_CHASE_GLIDE_TIME, 0.15)
 
 .. rst-class:: classref-item-separator
 
 ----
 
-.. _class_NetwPredictionHandle_method_field_error:
+.. _class_NetwPredictionHandle_signal_state_evaluated:
 
-.. rst-class:: classref-method
+.. rst-class:: classref-signal
 
-:godot:`float` **field_error**\ (\ a\: :godot:`Variant`, b\: :godot:`Variant`, is_angle\: :godot:`bool`\ ) |static| :ref:`🔗<class_NetwPredictionHandle_method_field_error>`
+**state_evaluated**\ (\ recv_tick\: :godot:`int`, ack\: :godot:`int`, divergence\: :godot:`float`, diverged\: :godot:`bool`\ ) :ref:`🔗<class_NetwPredictionHandle_signal_state_evaluated>`
 
-One field's error, wrapped as an angle when the declaration says the field wraps. Everything else falls through to :ref:`value_error()<class_NetwPredictionHandle_method_value_error>`.
+Emitted on the controlling client each time server state arrives. ``divergence`` is the largest error of any field, including errors under :ref:`divergence_epsilon<class_NetwPredictionHandle_property_divergence_epsilon>`. ``diverged`` is whether the error was large enough to act on, even when no correction was written. Connect to :ref:`recovered<class_NetwPredictionHandle_signal_recovered>` to know when the body actually moved.
+
+.. rst-class:: classref-section-separator
+
+----
+
+.. rst-class:: classref-descriptions-group
+
+Constants
+---------
+
+.. _class_NetwPredictionHandle_constant_GENERATOR_UNKNOWN_BEYOND_RETENTION:
+
+.. rst-class:: classref-constant
+
+**GENERATOR_UNKNOWN_BEYOND_RETENTION** = ``0`` :ref:`🔗<class_NetwPredictionHandle_constant_GENERATOR_UNKNOWN_BEYOND_RETENTION>`
+
+The tick where the peers first disagreed is older than the kept history.
+
+.. rst-class:: classref-section-separator
+
+----
+
+.. rst-class:: classref-descriptions-group
+
+Property Descriptions
+---------------------
+
+.. _class_NetwPredictionHandle_property_ack_age_ticks:
+
+.. rst-class:: classref-property
+
+:godot:`int` **ack_age_ticks** = ``0`` :ref:`🔗<class_NetwPredictionHandle_property_ack_age_ticks>`
+
+.. rst-class:: classref-property-setget
+
+- |void| **set_ack_age_ticks**\ (\ value\: :godot:`int`\ )
+- :godot:`int` **get_ack_age_ticks**\ (\ )
+
+How many ticks the last input the server acknowledged is behind the newest input. On a healthy connection it stays near zero, and a growing value means the server is falling behind. :ref:`NetwSimulationHandle.max_restore_ticks<class_NetwSimulationHandle_property_max_restore_ticks>` caps it on the client.
 
 .. rst-class:: classref-item-separator
 
 ----
 
-.. _class_NetwPredictionHandle_method_has_consumed_state_tick:
+.. _class_NetwPredictionHandle_property_archetype:
 
-.. rst-class:: classref-method
+.. rst-class:: classref-property
 
-:godot:`bool` **has_consumed_state_tick**\ (\ state_tick\: :godot:`int`\ ) |const| :ref:`🔗<class_NetwPredictionHandle_method_has_consumed_state_tick>`
+:ref:`Archetype<enum_NetwPredict_Archetype>` **archetype** = ``0`` :ref:`🔗<class_NetwPredictionHandle_property_archetype>`
 
-Whether the engine has consumed everything up to ``state_tick``. A handle with no engine, or one that is not consuming, returns ready.
+.. rst-class:: classref-property-setget
+
+- |void| **set_archetype**\ (\ value\: :ref:`Archetype<enum_NetwPredict_Archetype>`\ )
+- :ref:`Archetype<enum_NetwPredict_Archetype>` **get_archetype**\ (\ )
+
+A preset for this entity's prediction settings and :ref:`NetwSimulationHandle.schedule<class_NetwSimulationHandle_property_schedule>`. Settings written afterwards override the preset. No preset sets :ref:`breach_response<class_NetwPredictionHandle_property_breach_response>`.
 
 .. rst-class:: classref-item-separator
 
 ----
 
-.. _class_NetwPredictionHandle_method_history_record_tick:
+.. _class_NetwPredictionHandle_property_breach_response:
+
+.. rst-class:: classref-property
+
+:ref:`BreachResponse<enum_NetwPredict_BreachResponse>` **breach_response** = ``0`` :ref:`🔗<class_NetwPredictionHandle_property_breach_response>`
+
+.. rst-class:: classref-property-setget
+
+- |void| **set_breach_response**\ (\ value\: :ref:`BreachResponse<enum_NetwPredict_BreachResponse>`\ )
+- :ref:`BreachResponse<enum_NetwPredict_BreachResponse>` **get_breach_response**\ (\ )
+
+What this entity does when it touches a moving body this peer does not simulate. It only takes effect once :ref:`witness_contacts<class_NetwPredictionHandle_property_witness_contacts>` is set.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NetwPredictionHandle_property_collision_cooldown_ticks:
+
+.. rst-class:: classref-property
+
+:godot:`int` **collision_cooldown_ticks** = ``6`` :ref:`🔗<class_NetwPredictionHandle_property_collision_cooldown_ticks>`
+
+.. rst-class:: classref-property-setget
+
+- |void| **set_collision_cooldown_ticks**\ (\ value\: :godot:`int`\ )
+- :godot:`int` **get_collision_cooldown_ticks**\ (\ )
+
+How many ticks :ref:`notify_contact()<class_NetwPredictionHandle_method_notify_contact>` holds off corrections. An error past :ref:`teleport_threshold<class_NetwPredictionHandle_property_teleport_threshold>` still corrects.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NetwPredictionHandle_property_consume_buffer_ticks:
+
+.. rst-class:: classref-property
+
+:godot:`int` **consume_buffer_ticks** = ``0`` :ref:`🔗<class_NetwPredictionHandle_property_consume_buffer_ticks>`
+
+.. rst-class:: classref-property-setget
+
+- |void| **set_consume_buffer_ticks**\ (\ value\: :godot:`int`\ )
+- :godot:`int` **get_consume_buffer_ticks**\ (\ )
+
+How many ticks of input the server keeps queued before running them. A small buffer absorbs jitter so the entity steps every tick, and each tick of buffer adds a tick of input latency. ``0`` runs inputs as they arrive.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NetwPredictionHandle_property_divergence_epsilon:
+
+.. rst-class:: classref-property
+
+:godot:`float` **divergence_epsilon** = ``0.01`` :ref:`🔗<class_NetwPredictionHandle_property_divergence_epsilon>`
+
+.. rst-class:: classref-property-setget
+
+- |void| **set_divergence_epsilon**\ (\ value\: :godot:`float`\ )
+- :godot:`float` **get_divergence_epsilon**\ (\ )
+
+How far the predicted state may drift from the server's before it is corrected. :ref:`NetwPropertyConfig.epsilon()<class_NetwPropertyConfig_method_epsilon>` overrides it for one field.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NetwPredictionHandle_property_epoch:
+
+.. rst-class:: classref-property
+
+:godot:`int` **epoch** = ``-1`` :ref:`🔗<class_NetwPredictionHandle_property_epoch>`
+
+.. rst-class:: classref-property-setget
+
+- |void| **set_epoch**\ (\ value\: :godot:`int`\ )
+- :godot:`int` **get_epoch**\ (\ )
+
+The version of the static world this entity simulates against, or ``-1`` when unset. Raise it when the level changes, so the next mispredictions are tolerated while peers catch up.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NetwPredictionHandle_property_max_consume_lag_ticks:
+
+.. rst-class:: classref-property
+
+:godot:`int` **max_consume_lag_ticks** = ``60`` :ref:`🔗<class_NetwPredictionHandle_property_max_consume_lag_ticks>`
+
+.. rst-class:: classref-property-setget
+
+- |void| **set_max_consume_lag_ticks**\ (\ value\: :godot:`int`\ )
+- :godot:`int` **get_max_consume_lag_ticks**\ (\ )
+
+How far the server may fall behind the newest input before it skips ahead to it. Without this, a client that joins a running session can leave the server behind for good. ``0`` disables skipping.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NetwPredictionHandle_property_max_consume_per_tick:
+
+.. rst-class:: classref-property
+
+:godot:`int` **max_consume_per_tick** = ``1`` :ref:`🔗<class_NetwPredictionHandle_property_max_consume_per_tick>`
+
+.. rst-class:: classref-property-setget
+
+- |void| **set_max_consume_per_tick**\ (\ value\: :godot:`int`\ )
+- :godot:`int` **get_max_consume_per_tick**\ (\ )
+
+How many queued inputs the server may skip in one frame to catch up, for an entity at :ref:`NetwSimulationHandle.SCHEDULE_FRAME<class_NetwSimulationHandle_constant_SCHEDULE_FRAME>`. An entity at :ref:`NetwSimulationHandle.SCHEDULE_TICK<class_NetwSimulationHandle_constant_SCHEDULE_TICK>` ignores it.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NetwPredictionHandle_property_missing_policy:
+
+.. rst-class:: classref-property
+
+:ref:`MissingInput<enum_NetwPredict_MissingInput>` **missing_policy** = ``0`` :ref:`🔗<class_NetwPredictionHandle_property_missing_policy>`
+
+.. rst-class:: classref-property-setget
+
+- |void| **set_missing_policy**\ (\ value\: :ref:`MissingInput<enum_NetwPredict_MissingInput>`\ )
+- :ref:`MissingInput<enum_NetwPredict_MissingInput>` **get_missing_policy**\ (\ )
+
+What the server does when an input never arrives.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NetwPredictionHandle_property_predict_commands:
+
+.. rst-class:: classref-property
+
+:godot:`Callable` **predict_commands** = ``Callable()`` :ref:`🔗<class_NetwPredictionHandle_property_predict_commands>`
+
+.. rst-class:: classref-property-setget
+
+- |void| **set_predict_commands**\ (\ value\: :godot:`Callable`\ )
+- :godot:`Callable` **get_predict_commands**\ (\ )
+
+Guesses the input of an entity this peer simulates but does not control, through :ref:`NetwEntity.simulation<class_NetwEntity_property_simulation>`. The real input relayed from its controller replaces the guess.
+
+It is called as ``(entity: NetwEntity, tick: int)`` and returns a :godot:`Dictionary` of input values. Missing values are zero.
+
+::
+
+    func _init() -> void:
+        entity.prediction.predict_commands = func(_e, _tick): return {&"throttle": 1.0}
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NetwPredictionHandle_property_reconcile_mode:
+
+.. rst-class:: classref-property
+
+:ref:`Reconcile<enum_NetwPredict_Reconcile>` **reconcile_mode** = ``0`` :ref:`🔗<class_NetwPredictionHandle_property_reconcile_mode>`
+
+.. rst-class:: classref-property-setget
+
+- |void| **set_reconcile_mode**\ (\ value\: :ref:`Reconcile<enum_NetwPredict_Reconcile>`\ )
+- :ref:`Reconcile<enum_NetwPredict_Reconcile>` **get_reconcile_mode**\ (\ )
+
+Whether this entity is corrected alone or together with the entities its :ref:`NetwEntity.simulation<class_NetwEntity_property_simulation>` selects.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NetwPredictionHandle_property_recovery_policy:
+
+.. rst-class:: classref-property
+
+:ref:`RecoveryPolicy<enum_NetwPredict_RecoveryPolicy>` **recovery_policy** = ``4`` :ref:`🔗<class_NetwPredictionHandle_property_recovery_policy>`
+
+.. rst-class:: classref-property-setget
+
+- |void| **set_recovery_policy**\ (\ value\: :ref:`RecoveryPolicy<enum_NetwPredict_RecoveryPolicy>`\ )
+- :ref:`RecoveryPolicy<enum_NetwPredict_RecoveryPolicy>` **get_recovery_policy**\ (\ )
+
+How this entity is corrected. :ref:`resolved_recovery_policy()<class_NetwPredictionHandle_method_resolved_recovery_policy>` returns the policy in use.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NetwPredictionHandle_property_replay_buffer_depth:
+
+.. rst-class:: classref-property
+
+:godot:`int` **replay_buffer_depth** = ``0`` :ref:`🔗<class_NetwPredictionHandle_property_replay_buffer_depth>`
+
+.. rst-class:: classref-property-setget
+
+- |void| **set_replay_buffer_depth**\ (\ value\: :godot:`int`\ )
+- :godot:`int` **get_replay_buffer_depth**\ (\ )
+
+How many inputs the server keeps queued before running them, for an entity at :ref:`NetwSimulationHandle.SCHEDULE_FRAME<class_NetwSimulationHandle_constant_SCHEDULE_FRAME>`. Each one adds a tick of latency, so leave it at ``0`` unless you need it.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NetwPredictionHandle_property_sensors:
+
+.. rst-class:: classref-property
+
+:godot:`Dictionary` **sensors** = ``{}`` :ref:`🔗<class_NetwPredictionHandle_property_sensors>`
+
+.. rst-class:: classref-property-setget
+
+- |void| **set_sensors**\ (\ value\: :godot:`Dictionary`\ )
+- :godot:`Dictionary` **get_sensors**\ (\ )
+
+Callables that sample the world this entity reads, by name. Each is called once before each step, and :ref:`sensor()<class_NetwPredictionHandle_method_sensor>` reads the sample back. A misprediction can then be blamed on the world.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NetwPredictionHandle_property_sleeping:
+
+.. rst-class:: classref-property
+
+:godot:`bool` **sleeping** = ``false`` :ref:`🔗<class_NetwPredictionHandle_property_sleeping>`
+
+.. rst-class:: classref-property-setget
+
+- |void| **set_sleeping**\ (\ value\: :godot:`bool`\ )
+- :godot:`bool` **get_sleeping**\ (\ )
+
+Set it while the server's body is asleep. Corrections pause, so they do not wake it.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NetwPredictionHandle_property_stats:
+
+.. rst-class:: classref-property
+
+:ref:`NetwPredictStats<class_NetwPredictStats>` **stats** :ref:`🔗<class_NetwPredictionHandle_property_stats>`
+
+.. rst-class:: classref-property-setget
+
+- :ref:`NetwPredictStats<class_NetwPredictStats>` **get_stats**\ (\ )
+
+This entity's prediction counters.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NetwPredictionHandle_property_teleport_threshold:
+
+.. rst-class:: classref-property
+
+:godot:`float` **teleport_threshold** = ``2.0`` :ref:`🔗<class_NetwPredictionHandle_property_teleport_threshold>`
+
+.. rst-class:: classref-property-setget
+
+- |void| **set_teleport_threshold**\ (\ value\: :godot:`float`\ )
+- :godot:`float` **get_teleport_threshold**\ (\ )
+
+How large an error may be before a correction teleports the body, restoring every field including :ref:`NetwPropertyConfig.teleport_only()<class_NetwPropertyConfig_method_teleport_only>` ones. It applies to fields declared with :ref:`NetwPropertyConfig.carry_along()<class_NetwPropertyConfig_method_carry_along>`, and :ref:`NetwPropertyConfig.teleport_at()<class_NetwPropertyConfig_method_teleport_at>` overrides it per field. An entity with no such field teleports on every correction.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NetwPredictionHandle_property_transport_corridor:
+
+.. rst-class:: classref-property
+
+:godot:`Callable` **transport_corridor** = ``Callable()`` :ref:`🔗<class_NetwPredictionHandle_property_transport_corridor>`
+
+.. rst-class:: classref-property-setget
+
+- |void| **set_transport_corridor**\ (\ value\: :godot:`Callable`\ )
+- :godot:`Callable` **get_transport_corridor**\ (\ )
+
+Returns whether the path to a proposed pose is clear, called as ``corridor(current, proposed)``. Set it to let a correction move the body straight to where it should be now, without going through a wall.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NetwPredictionHandle_property_witness_contacts:
+
+.. rst-class:: classref-property
+
+:godot:`Callable` **witness_contacts** = ``Callable()`` :ref:`🔗<class_NetwPredictionHandle_property_witness_contacts>`
+
+.. rst-class:: classref-property-setget
+
+- |void| **set_witness_contacts**\ (\ value\: :godot:`Callable`\ )
+- :godot:`Callable` **get_witness_contacts**\ (\ )
+
+Returns the colliders this peer's body touched in the step just solved. Set it so a misprediction can be blamed on a contact and :ref:`breach_response<class_NetwPredictionHandle_property_breach_response>` can take effect.
+
+.. rst-class:: classref-section-separator
+
+----
+
+.. rst-class:: classref-descriptions-group
+
+Method Descriptions
+-------------------
+
+.. _class_NetwPredictionHandle_method_bind_entity:
 
 .. rst-class:: classref-method
 
-:godot:`int` **history_record_tick**\ (\ fallback\: :godot:`int`\ ) |const| :ref:`🔗<class_NetwPredictionHandle_method_history_record_tick>`
+|void| **bind_entity**\ (\ entity\: :ref:`NetwEntity<class_NetwEntity>`\ ) :ref:`🔗<class_NetwPredictionHandle_method_bind_entity>`
 
-The :ref:`NetwTimeline<class_NetwTimeline>` key to record the newest authoritative snapshot under. It returns ``fallback``, or the tick an input backed on a consuming engine, or ``-1`` when this tick consumed no input and so wrote no state worth keying. A caller recording history skips a negative key and leaves the slot as the last real consume wrote it.
+Binds the entity this handle belongs to. Called by Networked when it creates the handle.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NetwPredictionHandle_method_entity:
+
+.. rst-class:: classref-method
+
+:ref:`NetwEntity<class_NetwEntity>` **entity**\ (\ ) |const| :ref:`🔗<class_NetwPredictionHandle_method_entity>`
+
+The entity this handle belongs to, or ``null`` once that entity is gone.
 
 .. rst-class:: classref-item-separator
 
@@ -1260,27 +647,7 @@ The :ref:`NetwTimeline<class_NetwTimeline>` key to record the newest authoritati
 
 :godot:`bool` **is_registered**\ (\ ) |const| :ref:`🔗<class_NetwPredictionHandle_method_is_registered>`
 
-True once an engine is attached to this handle, which is how a caller tells an entity that is actually predicting from one that has only been configured.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwPredictionHandle_method_journal:
-
-.. rst-class:: classref-method
-
-:ref:`NetwPredictJournal<class_NetwPredictJournal>` **journal**\ (\ ) |const| :ref:`🔗<class_NetwPredictionHandle_method_journal>`
-
-The :ref:`NetwPredictJournal<class_NetwPredictJournal>` recording every transition this entity's engine drove, or ``null`` before an engine is attached.
-
-It is the engine's own record, so reading it changes nothing about the simulation, and its rows outlive the correction that consumed them.
-
-::
-
-    var journal := entity.prediction.journal()
-    if journal and journal.first_unmatched() >= 0:
-        print("unverified from transition ", journal.first_unmatched())
+Whether the entity is being predicted, as opposed to only configured.
 
 .. rst-class:: classref-item-separator
 
@@ -1292,19 +659,7 @@ It is the engine's own record, so reading it changes nothing about the simulatio
 
 |void| **notify_contact**\ (\ ) :ref:`🔗<class_NetwPredictionHandle_method_notify_contact>`
 
-Opens a window of :ref:`collision_cooldown_ticks<class_NetwPredictionHandle_property_collision_cooldown_ticks>` during which a recovery smaller than :ref:`teleport_threshold<class_NetwPredictionHandle_property_teleport_threshold>` is held off, so the brief disagreement a collision causes is not corrected through. Call it from the controlling client when the predicted body registers a collision. It does nothing with no engine attached.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwPredictionHandle_method_predicted_command_callable:
-
-.. rst-class:: classref-method
-
-:godot:`Callable` **predicted_command_callable**\ (\ ) |const| :ref:`🔗<class_NetwPredictionHandle_method_predicted_command_callable>`
-
-The substituted command producer this entity runs, taken from the lowest-numbered subject that promotes it and declared one. Empty when nothing promotes it or nothing declared one, which is the zero-input COAST policy.
+Holds off small corrections for :ref:`collision_cooldown_ticks<class_NetwPredictionHandle_property_collision_cooldown_ticks>`. Call it on the controlling client when the predicted body collides, so the correction does not fight the collision.
 
 .. rst-class:: classref-item-separator
 
@@ -1316,9 +671,7 @@ The substituted command producer this entity runs, taken from the lowest-numbere
 
 :godot:`Dictionary` **reachability**\ (\ ) |const| :ref:`🔗<class_NetwPredictionHandle_method_reachability>`
 
-What this entity's declarations actually reach, field by field, or an empty :godot:`Dictionary` before the entity is attached to an engine.
-
-A declaration can be legal, be accepted, and still do nothing. :ref:`NetwPropertyConfig.carry_step()<class_NetwPropertyConfig_method_carry_step>` under :ref:`NetwPredict.SCHEDULE_TICK<class_NetwPredict_constant_SCHEDULE_TICK>` is rejected the first time it is used and never tried again, a :ref:`NetwPropertyConfig.teleport_only()<class_NetwPropertyConfig_method_teleport_only>` field that is free to trigger asks for corrections no smaller restore may write, and an :ref:`NetwPropertyConfig.epsilon()<class_NetwPropertyConfig_method_epsilon>` on a field no comparison reads bounds nothing. This is where a game finds that out while wiring rather than in a capture.
+Reports, field by field, whether this entity's prediction settings take effect. Returns an empty :godot:`Dictionary` before the entity is predicted. Use it while wiring an entity to find settings that are accepted but do nothing.
 
 ::
 
@@ -1345,43 +698,7 @@ A declaration can be legal, be accepted, and still do nothing. :ref:`NetwPropert
     ┠╴operators      what may write it during a recovery
     ┖╴forward_model  {kind, live, why}
 
-\ ``findings`` is the same list the wiring report prints, so a test asserts on it rather than on log text. Everything here is read from what this handle already carries, so a caller gathers no arguments.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwPredictionHandle_method_record_server_input:
-
-.. rst-class:: classref-method
-
-|void| **record_server_input**\ (\ tick\: :godot:`int`, input\: :godot:`Dictionary`\ ) :ref:`🔗<class_NetwPredictionHandle_method_record_server_input>`
-
-Records one input the server consumed at ``tick`` into the server's timeline, as an arriving input frame would. It does nothing on a peer that is not consuming.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwPredictionHandle_method_resolve_correction_mode_for:
-
-.. rst-class:: classref-method
-
-:ref:`CorrectionMode<enum_NetwPredict_CorrectionMode>` **resolve_correction_mode_for**\ (\ body\: :godot:`Object`, mode\: :ref:`CorrectionMode<enum_NetwPredict_CorrectionMode>`, solves\: :godot:`bool` = false\ ) |static| :ref:`🔗<class_NetwPredictionHandle_method_resolve_correction_mode_for>`
-
-Resolves ``mode`` against what ``body`` is. :ref:`NetwPredict.CORRECTION_MODE_AUTO<class_NetwPredict_constant_CORRECTION_MODE_AUTO>` picks :ref:`NetwPredict.CORRECTION_MODE_SNAP<class_NetwPredict_constant_CORRECTION_MODE_SNAP>` for a :godot:`RigidBody2D` or :godot:`RigidBody3D`, whose solver cannot be stepped once per input, and :ref:`NetwPredict.CORRECTION_MODE_REPLAY<class_NetwPredict_constant_CORRECTION_MODE_REPLAY>` for anything else. A mode named outright passes through. It is static so a tool can resolve one with no entity in hand.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwPredictionHandle_method_resolved_correction_mode:
-
-.. rst-class:: classref-method
-
-:ref:`CorrectionMode<enum_NetwPredict_CorrectionMode>` **resolved_correction_mode**\ (\ ) |const| :ref:`🔗<class_NetwPredictionHandle_method_resolved_correction_mode>`
-
-The :ref:`CorrectionMode<enum_NetwPredict_CorrectionMode>` this entity actually corrects with. It never returns :ref:`NetwPredict.CORRECTION_MODE_AUTO<class_NetwPredict_constant_CORRECTION_MODE_AUTO>`, because that has already been resolved into one of the real modes.
+\ ``findings`` lists the same warnings printed when the entity is set up.
 
 .. rst-class:: classref-item-separator
 
@@ -1393,41 +710,7 @@ The :ref:`CorrectionMode<enum_NetwPredict_CorrectionMode>` this entity actually 
 
 :ref:`RecoveryPolicy<enum_NetwPredict_RecoveryPolicy>` **resolved_recovery_policy**\ (\ ) |const| :ref:`🔗<class_NetwPredictionHandle_method_resolved_recovery_policy>`
 
-The :ref:`RecoveryPolicy<enum_NetwPredict_RecoveryPolicy>` this entity recovers under, resolving :ref:`NetwPredict.CORRECTION_MODE_AUTO<class_NetwPredict_constant_CORRECTION_MODE_AUTO>` against what the body is, the way :ref:`resolved_correction_mode()<class_NetwPredictionHandle_method_resolved_correction_mode>` does.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwPredictionHandle_method_restate_declaration:
-
-.. rst-class:: classref-method
-
-|void| **restate_declaration**\ (\ ) :ref:`🔗<class_NetwPredictionHandle_method_restate_declaration>`
-
-.. container:: contribute
-
-	There is currently no description for this method. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwPredictionHandle_method_role_for_axes:
-
-.. rst-class:: classref-method
-
-:ref:`Role<enum_NetwPredict_Role>` **role_for_axes**\ (\ source\: :ref:`InputSource<enum_NetwPredict_InputSource>`, mode\: :ref:`SimMode<enum_NetwPredict_SimMode>`\ ) |static| :ref:`🔗<class_NetwPredictionHandle_method_role_for_axes>`
-
-The :ref:`Role<enum_NetwPredict_Role>` that ``source`` and ``mode`` together name. Those two are what the session actually decides, and the role is the name for a pair of them, so every role is reachable and no pair names a role that contradicts it.
-
-.. code:: text
-
-                   AUTHORITATIVE  SPECULATIVE   DISPLAY
-    LOCAL          HOST_LOCAL     PREDICT       REMOTE
-    RECEIVED       CONSUME        unreachable   REMOTE
-    PREDICTED      unreachable    SIMULATE      REMOTE
-    NONE           REMOTE         REMOTE        REMOTE
+The :ref:`RecoveryPolicy<enum_NetwPredict_RecoveryPolicy>` this entity actually uses. :ref:`NetwPredict.RECOVERY_POLICY_AUTO<class_NetwPredict_constant_RECOVERY_POLICY_AUTO>` is resolved from the body, and a physics body at :ref:`NetwSimulationHandle.SCHEDULE_FRAME<class_NetwSimulationHandle_constant_SCHEDULE_FRAME>` resolves :ref:`NetwPredict.RECOVERY_POLICY_REBASE_REPLAY<class_NetwPredict_constant_RECOVERY_POLICY_REBASE_REPLAY>` to :ref:`NetwPredict.RECOVERY_POLICY_REBASE_RECOVER<class_NetwPredict_constant_RECOVERY_POLICY_REBASE_RECOVER>`.
 
 .. rst-class:: classref-item-separator
 
@@ -1439,9 +722,7 @@ The :ref:`Role<enum_NetwPredict_Role>` that ``source`` and ``mode`` together nam
 
 :godot:`Variant` **sensor**\ (\ name\: :godot:`StringName`, default\: :godot:`Variant` = null\ ) |const| :ref:`🔗<class_NetwPredictionHandle_method_sensor>`
 
-The value the engine sampled for the declared sensor ``name`` before the drive now running, or ``default`` when nothing has sampled it.
-
-A declared sensor is sampled once per drive and recorded with that drive. A simulation that reads the sample here instead of asking the world again runs against exactly the facts that were recorded, so a disagreement about the world can be blamed on the world.
+The value sampled for the sensor ``name`` before the current step, or ``default`` when nothing sampled it. Read the world through this in your step, so a misprediction can be blamed on the world.
 
 ::
 
@@ -1455,27 +736,13 @@ A declared sensor is sampled once per drive and recorded with that drive. A simu
 
 ----
 
-.. _class_NetwPredictionHandle_method_set_simulated_by:
-
-.. rst-class:: classref-method
-
-|void| **set_simulated_by**\ (\ subject\: :ref:`NetwEntity<class_NetwEntity>`, enabled\: :godot:`bool`, predictor\: :godot:`Callable` = Callable()\ ) :ref:`🔗<class_NetwPredictionHandle_method_set_simulated_by>`
-
-Adds or withdraws one island's claim to step this entity locally, with the command it substitutes. Withdrawing the last claim also drops the entity back to :ref:`NetwPredict.RECONCILE_INDEPENDENT<class_NetwPredict_constant_RECONCILE_INDEPENDENT>`, because a member no group promotes owes no group evidence.
-
-.. rst-class:: classref-item-separator
-
-----
-
 .. _class_NetwPredictionHandle_method_simulate_frame:
 
 .. rst-class:: classref-method
 
 |void| **simulate_frame**\ (\ delta\: :godot:`float`\ ) :ref:`🔗<class_NetwPredictionHandle_method_simulate_frame>`
 
-Runs one drive for an entity scheduled per frame. It does nothing for an entity scheduled per tick, or with no engine attached.
-
-The transition it writes is labelled from the clock exactly as the session's own frame drive labels one, so driving an entity by hand and letting the session drive it produce the same transition.
+Steps an entity at :ref:`NetwSimulationHandle.SCHEDULE_FRAME<class_NetwSimulationHandle_constant_SCHEDULE_FRAME>` once, as the session would. Does nothing for an entity at :ref:`NetwSimulationHandle.SCHEDULE_TICK<class_NetwSimulationHandle_constant_SCHEDULE_TICK>` or one that is not predicted.
 
 .. rst-class:: classref-item-separator
 
@@ -1487,105 +754,7 @@ The transition it writes is labelled from the clock exactly as the session's own
 
 |void| **simulate_tick**\ (\ delta\: :godot:`float`, tick\: :godot:`int`\ ) :ref:`🔗<class_NetwPredictionHandle_method_simulate_tick>`
 
-Steps prediction or consumption for ``tick``, and does nothing with no engine attached.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwPredictionHandle_method_simulated_by_count:
-
-.. rst-class:: classref-method
-
-:godot:`int` **simulated_by_count**\ (\ ) |const| :ref:`🔗<class_NetwPredictionHandle_method_simulated_by_count>`
-
-How many other entities currently promote this one to local simulation.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwPredictionHandle_method_stamp_episode:
-
-.. rst-class:: classref-method
-
-|void| **stamp_episode**\ (\ ) :ref:`🔗<class_NetwPredictionHandle_method_stamp_episode>`
-
-Bumps the revision an episode reader watches for change. The record itself is the pool's, so nothing is stored here.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwPredictionHandle_method_tape_transitions:
-
-.. rst-class:: classref-method
-
-:godot:`Array`\[:godot:`Dictionary`\] **tape_transitions**\ (\ ) |const| :ref:`🔗<class_NetwPredictionHandle_method_tape_transitions>`
-
-Every recorded transition, oldest first. The client that owns the entity returns the transitions it wrote, and the consuming server returns the ones it decoded. For an entity at :ref:`NetwPredict.SCHEDULE_TICK<class_NetwPredict_constant_SCHEDULE_TICK>` the index, the label and the tick are all the same number and every entry is fresh.
-
-.. code:: text
-
-    Array[Dictionary]
-    ┖╴entry
-      ┠╴index  int   position in the tape, oldest first
-      ┠╴label  int   the tick this transition is filed under
-      ┖╴fresh  bool  true when a newer input drove it
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwPredictionHandle_method_teleport_distances:
-
-.. rst-class:: classref-method
-
-:godot:`Dictionary` **teleport_distances**\ (\ ) |const| :ref:`🔗<class_NetwPredictionHandle_method_teleport_distances>`
-
-The teleport distance in force for each field, as a copy.
-
-\ :ref:`reachability()<class_NetwPredictionHandle_method_reachability>` returns this too and much more besides, which is why it is the wrong call for a recorder. It rebuilds its whole report every time, and a recorder runs once per arriving state. This is the cheap read of the one fact.
-
-A field missing from the result declared no distance of its own and uses :ref:`teleport_threshold<class_NetwPredictionHandle_property_teleport_threshold>`.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwPredictionHandle_method_transition_state_at:
-
-.. rst-class:: classref-method
-
-:godot:`Dictionary` **transition_state_at**\ (\ transition\: :godot:`int`\ ) |const| :ref:`🔗<class_NetwPredictionHandle_method_transition_state_at>`
-
-The predicted state ``transition`` produced, or an empty :godot:`Dictionary` before that state has been captured.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwPredictionHandle_method_triggers:
-
-.. rst-class:: classref-method
-
-:godot:`bool` **triggers**\ (\ error\: :godot:`float`, tolerance\: :godot:`float`\ ) |static| :ref:`🔗<class_NetwPredictionHandle_method_triggers>`
-
-Whether an error on one field needs a recovery at a given tolerance. Everything asking that question calls this, so the ranking that decides which divergence a recovery returns cannot read a tolerance differently from the test that raised the correction.
-
-The comparison is strictly greater, so a tolerance is the largest error a field may hold rather than the smallest it is corrected for. A tolerance of ``0.0`` therefore means any error at all, which is what lets a field ask to be exact.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwPredictionHandle_method_value_error:
-
-.. rst-class:: classref-method
-
-:godot:`float` **value_error**\ (\ a\: :godot:`Variant`, b\: :godot:`Variant`\ ) |static| :ref:`🔗<class_NetwPredictionHandle_method_value_error>`
-
-The error between two values of one property. A rotation returns radians, whether it is a :godot:`Quaternion` or a :godot:`Basis`, so a rotation wants a threshold of its own.
+Steps the entity for ``tick``. Does nothing for an entity that is not predicted.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

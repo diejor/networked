@@ -55,7 +55,9 @@ TEST_CASE("[Networked][Wire][Hosted] the oracle agrees on one complete image") {
     NETW_CHECK_EQ(verdict.diverged, 0);
 }
 
-TEST_CASE("[Networked][Wire][Hosted] the oracle names an omitted column divergence") {
+TEST_CASE(
+    "[Networked][Wire][Hosted] the oracle names an omitted column divergence"
+) {
     const WirePlan plan = pair_plan(SchemaCore::I16);
     RowImageLedger ledger;
     ledger.stage(TOKEN, 4, plan, pair(plan, 0, 0));
@@ -73,7 +75,9 @@ TEST_CASE("[Networked][Wire][Hosted] the oracle names an omitted column divergen
     NETW_CHECK_EQ(int64_t(verdict.fault.accepted_code), 1);
 }
 
-TEST_CASE("[Networked][Wire][Hosted] the oracle judges the image, not its provenance") {
+TEST_CASE(
+    "[Networked][Wire][Hosted] the oracle judges the image, not its provenance"
+) {
     const WirePlan plan = pair_plan(SchemaCore::I16);
     const CodeRow staged = pair(plan, 300, 400);
     netw::repl::SnapshotHeader header;
@@ -107,7 +111,9 @@ TEST_CASE("[Networked][Wire][Hosted] the oracle judges the image, not its proven
     NETW_CHECK_EQ(verdict.agreed, 1);
 }
 
-TEST_CASE("[Networked][Wire][Hosted] the oracle refuses a row no sender staged") {
+TEST_CASE(
+    "[Networked][Wire][Hosted] the oracle refuses a row no sender staged"
+) {
     const WirePlan plan = pair_plan(SchemaCore::I16);
     RowImageLedger ledger;
     ledger.accept(TOKEN, 9, plan, pair(plan, 1, 2));
@@ -119,7 +125,9 @@ TEST_CASE("[Networked][Wire][Hosted] the oracle refuses a row no sender staged")
     NETW_CHECK_EQ(int64_t(verdict.fault_revision), 9);
 }
 
-TEST_CASE("[Networked][Wire][Hosted] an unaccepted staged row is owed, not wrong") {
+TEST_CASE(
+    "[Networked][Wire][Hosted] an unaccepted staged row is owed, not wrong"
+) {
     const WirePlan plan = pair_plan(SchemaCore::I16);
     RowImageLedger ledger;
     ledger.stage(TOKEN, 5, plan, pair(plan, 1, 2));
@@ -160,7 +168,9 @@ TEST_CASE("[Networked][Wire][Hosted] one token does not answer for another") {
     NETW_CHECK_EQ(verdict.agreed, 0);
 }
 
-TEST_CASE("[Networked][Wire][Hosted] the oracle refuses two rows of unequal shape") {
+TEST_CASE(
+    "[Networked][Wire][Hosted] the oracle refuses two rows of unequal shape"
+) {
     const WirePlan narrow = pair_plan(SchemaCore::I16);
     const WirePlan wide = pair_plan(SchemaCore::I32);
     const ImageComparison compared = compare_row_images(
@@ -179,7 +189,9 @@ TEST_CASE("[Networked][Wire][Hosted] the oracle refuses two rows of unequal shap
     NETW_CHECK_EQ(verdict.diverged, 1);
 }
 
-TEST_CASE("[Networked][Wire][Hosted] the oracle reads every column of a wide row") {
+TEST_CASE(
+    "[Networked][Wire][Hosted] the oracle reads every column of a wide row"
+) {
     SchemaRecord record;
     record.name = godot::StringName("OracleWide");
     for (int at = 0; at < 6; ++at) {

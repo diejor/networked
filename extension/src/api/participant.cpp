@@ -55,39 +55,22 @@ StringName NetwPlayer::get_username() const {
 TypedArray<NetwEntity> NetwPlayer::get_bodies() const {
     NETW_ZONE_NC("NetwPlayer bodies", colors::SESSION);
     NetwMultiplayer *held = core();
-    return held == nullptr
-        ? TypedArray<NetwEntity>()
-        : held->player_bodies_held(peer_id, incarnation);
+    return held == nullptr ? TypedArray<NetwEntity>()
+                           : held->player_bodies_held(peer_id, incarnation);
 }
 
 void NetwPlayer::_bind_methods() {
-    ClassDB::bind_method(
-        D_METHOD("get_peer_id"),
-        &NetwPlayer::get_peer_id
-    );
+    ClassDB::bind_method(D_METHOD("get_peer_id"), &NetwPlayer::get_peer_id);
     ADD_PROPERTY(PropertyInfo(Variant::INT, "peer_id"), "", "get_peer_id");
-    ClassDB::bind_method(
-        D_METHOD("get_is_active"),
-        &NetwPlayer::get_is_active
-    );
-    ADD_PROPERTY(
-        PropertyInfo(Variant::BOOL, "is_active"),
-        "",
-        "get_is_active"
-    );
-    ClassDB::bind_method(
-        D_METHOD("get_username"),
-        &NetwPlayer::get_username
-    );
+    ClassDB::bind_method(D_METHOD("get_is_active"), &NetwPlayer::get_is_active);
+    ADD_PROPERTY(PropertyInfo(Variant::BOOL, "is_active"), "", "get_is_active");
+    ClassDB::bind_method(D_METHOD("get_username"), &NetwPlayer::get_username);
     ADD_PROPERTY(
         PropertyInfo(Variant::STRING_NAME, "username"),
         "",
         "get_username"
     );
-    ClassDB::bind_method(
-        D_METHOD("get_bodies"),
-        &NetwPlayer::get_bodies
-    );
+    ClassDB::bind_method(D_METHOD("get_bodies"), &NetwPlayer::get_bodies);
     ADD_PROPERTY(
         PropertyInfo(
             Variant::ARRAY,

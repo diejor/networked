@@ -36,7 +36,7 @@ const char *KIND_LABELS[KIND_COUNT] = {
     "CharacterBody3D",
 };
 
-const char *DROPS[2] = { "drops_spawn_unresolved", "drops_despawn_unknown" };
+const char *DROPS[2] = {"drops_spawn_unresolved", "drops_despawn_unknown"};
 
 struct DetachEvidence {
     bool driven = false;
@@ -49,7 +49,7 @@ struct DetachEvidence {
     double basis_error = -1.0;
     int64_t session_anchor = 0;
     int64_t receiver_anchor = 0;
-    int64_t drops[2] = { -1, -1 };
+    int64_t drops[2] = {-1, -1};
 };
 
 struct DetachBodyEvidence {
@@ -142,17 +142,17 @@ Ref<netw::NetwMultiplayer> pair_session(
 class Pair {
     Ref<netw::LocalLoopbackSession> link;
     Ref<netw::NetwMultiplayer> sides[2];
-    Node *branches[2] = { nullptr, nullptr };
+    Node *branches[2] = {nullptr, nullptr};
 
 public:
-    Node *arenas[2] = { nullptr, nullptr };
+    Node *arenas[2] = {nullptr, nullptr};
 
     Pair() {
         link.instantiate();
         sides[0] = pair_session(link->get_server_peer());
         sides[1] = pair_session(link->create_client_peer());
         pump();
-        const char *names[2] = { "PairSession", "PairReceiver" };
+        const char *names[2] = {"PairSession", "PairReceiver"};
         for (int side = 0; side < 2; ++side) {
             branches[side] = memnew(Node);
             branches[side]->set_name(names[side]);
@@ -210,9 +210,7 @@ public:
     }
 
     netw::spawn::Pipeline *spawn_plane(int p_side = -1) const {
-        return sides[p_side + 1]
-            ->get_replication_plane()
-            ->get_spawn_pipeline();
+        return sides[p_side + 1]->get_replication_plane()->get_spawn_pipeline();
     }
 
     int spawn_registered(
@@ -243,11 +241,11 @@ class DetachBodyScenario final : public netw_test::FrameScenario {
     int kind = 0;
     int step = 0;
     Pair *rig = nullptr;
-    Node *arenas[2] = { nullptr, nullptr };
+    Node *arenas[2] = {nullptr, nullptr};
     int avatar = 0;
     int cube = 0;
     ObjectID receiver_cube;
-    int64_t counted[2] = { 0, 0 };
+    int64_t counted[2] = {0, 0};
 
     void open() {
         rig = new Pair();
@@ -272,18 +270,16 @@ class DetachBodyScenario final : public netw_test::FrameScenario {
     void despawn() {
         DetachEvidence &seen = detach_body_evidence().kinds[kind];
         Node *held = rig->route_node(cube, 0);
-        Node *hand = rig->route_node(avatar, 0)->get_node_or_null(
-            NodePath("Hand")
-        );
+        Node *hand
+            = rig->route_node(avatar, 0)->get_node_or_null(NodePath("Hand"));
         seen.held_by_hand = held != nullptr && held->get_parent() == hand;
         receiver_cube = netw::gd::instance_id(held);
         const Dictionary before = Dictionary(rig->spawn_plane(0)->counters());
         for (int at = 0; at < 2; ++at) {
             counted[at] = int64_t(before[StringName(DROPS[at])]);
         }
-        NetwEntity::of(rig->route_node(avatar))->despawn(
-            Ref<netw::NetwDespawnOpts>()
-        );
+        NetwEntity::of(rig->route_node(avatar))
+            ->despawn(Ref<netw::NetwDespawnOpts>());
         rig->pump(8);
     }
 

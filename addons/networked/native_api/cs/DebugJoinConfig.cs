@@ -6,29 +6,9 @@ using Godot.NativeInterop;
 namespace Networked;
 
 /// <summary>
-/// Editor authored stand in for the join arguments that auto connect a
-/// <see cref="MultiplayerTree"/> in debug builds.
+/// Used by <see cref="MultiplayerTree"/> in debug builds to auto connect a peer
+/// with a given name and join intent.
 /// </summary>
-/// <remarks>
-/// The join intent stays coherent with the server because
-/// <see cref="DebugJoinConfig.JoinArgs"/> holds the very values a live client
-/// fills into the form drawn from
-/// <see cref="NetwMultiplayer.SessionGetJoinSchema"/>. Author one entry per
-/// parameter the installed handler declares after its <see cref="NetwPlayer"/>.
-/// <code>
-/// # On a debug MultiplayerTree, assign a DebugJoinConfig and the tree hosts
-/// # straight into the game on play, skipping ConnectBrowser.
-/// debug_join.username = &amp;"Dev"
-/// debug_join.join_args = [&amp;"Arena", ^"Player"]
-/// </code>
-/// <para>
-/// The array is copied on the way in and on the way out, so a tree that hosts
-/// twice off one config cannot have its second join mutated by whatever the
-/// first did with the args. <see cref="MultiplayerTree.DebugJoin"/> is the one
-/// place it is read, and only when <see cref="OS.HasFeature"/> returns
-/// <c>true</c> for <c>"debug"</c>, so a release build never auto connects.
-/// </para>
-/// </remarks>
 public sealed class DebugJoinConfig : NetwRefCounted
 {
     public DebugJoinConfig(IntPtr native) : base(native)
@@ -53,12 +33,8 @@ public sealed class DebugJoinConfig : NetwRefCounted
 
     /// <summary>
     /// Display name for the auto connected player, submitted alongside
-    /// <see cref="DebugJoinConfig.JoinArgs"/>. Left at its default, the name
-    /// actually submitted carries this process's id after it, so a dev loop
-    /// launching the same build twice joins as two players holding two save
-    /// keys rather than as one <see cref="NetwPlayer.UserName"/> read and
-    /// written from both windows. Write a name here and it is submitted exactly
-    /// as written.
+    /// <see cref="DebugJoinConfig.JoinArgs"/>. Changes by process-id to avoid
+    /// collisions when multiple debug builds run on the same machine.
     /// </summary>
     public StringName UserName
     {
@@ -88,9 +64,7 @@ public sealed class DebugJoinConfig : NetwRefCounted
 
     /// <summary>
     /// The typed join args the tree submits alongside
-    /// <see cref="DebugJoinConfig.UserName"/>, one per wire parameter the
-    /// handler <see cref="Netw.ConfigureJoin"/> installed declares. Leave it
-    /// empty to express no join intent.
+    /// <see cref="DebugJoinConfig.UserName"/>.
     /// </summary>
     public Godot.Collections.Array JoinArgs
     {

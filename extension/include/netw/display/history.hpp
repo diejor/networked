@@ -47,6 +47,7 @@ private:
         const godot::Variant &to,
         double distance
     ) const;
+
 public:
     bool is_close(const godot::Variant &from, const godot::Variant &to) const;
 

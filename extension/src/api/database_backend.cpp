@@ -17,7 +17,10 @@ Ref<NetwPromise> unimplemented(const char *p_verb) {
     );
 }
 
-Ref<NetwPromise> answered(const Ref<NetwPromise> &p_answer, const char *p_verb) {
+Ref<NetwPromise> answered(
+    const Ref<NetwPromise> &p_answer,
+    const char *p_verb
+) {
     if (p_answer.is_valid()) {
         return p_answer;
     }
@@ -170,9 +173,7 @@ Ref<NetwPromise> FileSystemDatabase::delete_slot_default(
         return NetwPromise::resolved(OK);
     }
     store.erase_slot(String(p_slot));
-    return NetwPromise::resolved(
-        store.has_slot(String(p_slot)) ? FAILED : OK
-    );
+    return NetwPromise::resolved(store.has_slot(String(p_slot)) ? FAILED : OK);
 }
 
 void FileSystemDatabase::_bind_methods() {

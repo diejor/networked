@@ -14,8 +14,8 @@
 #include "netw/api/entity.hpp"
 #include "netw/api/netw_multiplayer.hpp"
 #include "netw/api/property_set.hpp"
-#include "netw/api/simulation_handle.hpp"
 #include "netw/api/replication_core.hpp"
+#include "netw/api/simulation_handle.hpp"
 #include "netw/api/sync_pipeline.hpp"
 #include "netw/sync_authoring.hpp"
 
@@ -179,8 +179,7 @@ TEST_CASE(
 
     netw::authoring::apply(root, sync);
 
-    const Ref<netw::NetwSimulationHandle> simulation
-        = entity->get_simulation();
+    const Ref<netw::NetwSimulationHandle> simulation = entity->get_simulation();
     REQUIRE(simulation.is_valid());
     NETW_CHECK_EQ(
         simulation->get_schedule(),

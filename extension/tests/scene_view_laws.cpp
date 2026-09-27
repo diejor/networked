@@ -175,10 +175,7 @@ TEST_CASE(
     CHECK(subject == joiner);
 
     SUBCASE("unobserving the same callback stops the edges") {
-        view->unobserve(
-            netw::NetwMultiplayer::SCENE_EVENT_VIEWER,
-            watcher
-        );
+        view->unobserve(netw::NetwMultiplayer::SCENE_EVENT_VIEWER, watcher);
         NETW_CHECK_EQ(int(view->unwatch(joiner)), int(OK));
         NETW_CHECK_EQ(heard.count("edge"), 1);
     }

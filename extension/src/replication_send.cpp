@@ -79,13 +79,7 @@ bool ReplicationSend::commit(
     if (p_seq < 0) {
         return false;
     }
-    return impl.commit(
-        int(p_peer),
-        uint16_t(p_seq),
-        p_rows,
-        p_frames,
-        p_bits
-    );
+    return impl.commit(int(p_peer), uint16_t(p_seq), p_rows, p_frames, p_bits);
 }
 
 void ReplicationSend::cancel(

@@ -12,14 +12,14 @@ NetwPhysicsStepper
 
 **Inherits:** :godot:`RefCounted`
 
-The base a game subclasses to let one physics space be stepped, saved and rewound more than once inside a single frame.
+Steps a physics space on demand, so a rollback can advance it several times in one frame.
 
 .. rst-class:: classref-introduction-group
 
 Description
 -----------
 
-Godot advances a physics space once per physics frame, from the state that frame happens to hold. A rollback needs the opposite: the same space advanced several times inside one frame, each time from a state some earlier tick held. Nothing in the engine offers that, so the game owns it and **NetwPhysicsStepper** is where it plugs in. Once installed for a space, the engine holds that space inactive and steps it itself, on the forward path and on a joint replay alike.
+Godot steps each physics space once per physics frame. Extend this class to step a space yourself, and install it with :ref:`NetwMultiplayer.predict_stepper_install()<class_NetwMultiplayer_method_predict_stepper_install>`. While an entity with :ref:`NetwSimulationHandle.SCHEDULE_STEPPED<class_NetwSimulationHandle_constant_SCHEDULE_STEPPED>` is in that space, Networked stops the engine from stepping it and calls :ref:`_step()<class_NetwPhysicsStepper_private_method__step>` once per tick instead, and again for each tick it replays.
 
 ::
 
@@ -33,15 +33,11 @@ Godot advances a physics space once per physics frame, from the state that frame
 
     api.predict_stepper_install(space_rid, MyStepper.new())
 
-\ Install one per space with :ref:`NetwMultiplayer.predict_stepper_install()<class_NetwMultiplayer_method_predict_stepper_install>`, which rejects a stepper whose :ref:`_can_step()<class_NetwPhysicsStepper_private_method__can_step>` does not return ``true``; installing with a ``null`` stepper uninstalls. Read back what a space holds with :ref:`NetwMultiplayer.predict_get_stepper()<class_NetwMultiplayer_method_predict_get_stepper>`. Only a member declared :ref:`NetwPredict.SCHEDULE_STEPPED<class_NetwPredict_constant_SCHEDULE_STEPPED>` reaches a stepper at all: a space with none downgrades that member to :ref:`NetwPredict.SCHEDULE_FRAME<class_NetwPredict_constant_SCHEDULE_FRAME>` instead, as :ref:`NetwPredict.SCHEDULE_STEPPED<class_NetwPredict_constant_SCHEDULE_STEPPED>` describes, and a member on :ref:`NetwPredict.SCHEDULE_TICK<class_NetwPredict_constant_SCHEDULE_TICK>` never asks for one.
+\ Install ``null`` to uninstall, and read the installed stepper back with :ref:`NetwMultiplayer.predict_get_stepper()<class_NetwMultiplayer_method_predict_get_stepper>`. Without a stepper, a :ref:`NetwSimulationHandle.SCHEDULE_STEPPED<class_NetwSimulationHandle_constant_SCHEDULE_STEPPED>` entity runs as :ref:`NetwSimulationHandle.SCHEDULE_FRAME<class_NetwSimulationHandle_constant_SCHEDULE_FRAME>`. Once no such entity is left in the space, the engine steps it again as usual.
 
-The hold on a space starts at the first network tick a :ref:`NetwPredict.SCHEDULE_STEPPED<class_NetwPredict_constant_SCHEDULE_STEPPED>` member stands in it, because :ref:`NetwMultiplayer.predict_stepper_install()<class_NetwMultiplayer_method_predict_stepper_install>` takes a bare ``RID`` and only a member standing in it reveals the dimension the hold needs, and the hold ends when the stepper is uninstalled.
+Each tick, every entity in the space applies its input first, then :ref:`_step()<class_NetwPhysicsStepper_private_method__step>` and :ref:`_snapshot()<class_NetwPhysicsStepper_private_method__snapshot>` run once for the whole space. Under :ref:`NetwPredict.RECONCILE_JOINT<class_NetwPredict_constant_RECONCILE_JOINT>` a replay restores every entity, calls :ref:`_restore()<class_NetwPhysicsStepper_private_method__restore>` once, then steps each replayed tick the same way.
 
-\ **Forward path.** Once per network tick the engine drives every :ref:`NetwPredict.SCHEDULE_STEPPED<class_NetwPredict_constant_SCHEDULE_STEPPED>` member standing in the space, applying that tick's command to each, and only then calls :ref:`_step()<class_NetwPhysicsStepper_private_method__step>` and :ref:`_snapshot()<class_NetwPhysicsStepper_private_method__snapshot>`, once for the space however many members or islands stand in it. That order is what makes one step integrate what the whole group authored rather than a world one member wrote alone.
-
-\ **Joint replay.** When a :ref:`NetwPredictIsland<class_NetwPredictIsland>` whose owner is :ref:`NetwPredict.SCHEDULE_STEPPED<class_NetwPredict_constant_SCHEDULE_STEPPED>` rebases to a basis tick, the engine restores every member's own columns from its timeline, calls :ref:`_restore()<class_NetwPhysicsStepper_private_method__restore>` once for the whole pass, then for each unacknowledged tick after the basis applies that tick's commands and calls :ref:`_step()<class_NetwPhysicsStepper_private_method__step>` and :ref:`_snapshot()<class_NetwPhysicsStepper_private_method__snapshot>` once for the whole group.
-
-\ :ref:`_snapshot()<class_NetwPhysicsStepper_private_method__snapshot>` and :ref:`_restore()<class_NetwPhysicsStepper_private_method__restore>` exist only for a stepped space holding dynamic bodies no entity governs, such as loose debris the engine cannot restore from an entity's own timeline. A stepper whose space holds only entities implements neither.
+Implement :ref:`_snapshot()<class_NetwPhysicsStepper_private_method__snapshot>` and :ref:`_restore()<class_NetwPhysicsStepper_private_method__restore>` only when the space holds bodies that are not entities, such as loose debris. Entities are restored by Networked.
 
 .. rst-class:: classref-reftable-group
 
@@ -84,7 +80,7 @@ Method Descriptions
 
 :godot:`bool` **_can_step**\ (\ ) |virtual| :ref:`🔗<class_NetwPhysicsStepper_private_method__can_step>`
 
-Whether this stepper can drive a space at all. Returning ``false``, which is also what an unimplemented seam returns, makes :ref:`NetwMultiplayer.predict_stepper_install()<class_NetwMultiplayer_method_predict_stepper_install>` install nothing.
+Return ``true`` to accept a space. A stepper that returns ``false``, or does not override this, is not installed.
 
 .. rst-class:: classref-item-separator
 
@@ -96,7 +92,7 @@ Whether this stepper can drive a space at all. Returning ``false``, which is als
 
 |void| **_restore**\ (\ space\: :godot:`RID`, tick\: :godot:`int`\ ) |virtual| :ref:`🔗<class_NetwPhysicsStepper_private_method__restore>`
 
-Puts ``space`` back into the state :ref:`_snapshot()<class_NetwPhysicsStepper_private_method__snapshot>` filed under ``tick``. A joint replay calls this once per pass, right after the engine restores every member's own columns from its timeline and before re-running the ticks after ``tick``.
+Puts ``space`` back into the state :ref:`_snapshot()<class_NetwPhysicsStepper_private_method__snapshot>` saved for ``tick``. Called once per replay, after every entity is restored and before the replayed ticks run.
 
 .. rst-class:: classref-item-separator
 
@@ -108,7 +104,7 @@ Puts ``space`` back into the state :ref:`_snapshot()<class_NetwPhysicsStepper_pr
 
 |void| **_snapshot**\ (\ space\: :godot:`RID`, tick\: :godot:`int`\ ) |virtual| :ref:`🔗<class_NetwPhysicsStepper_private_method__snapshot>`
 
-Files ``space``'s current state under ``tick``, so a later :ref:`_restore()<class_NetwPhysicsStepper_private_method__restore>` can name it. The engine calls this right after every :ref:`_step()<class_NetwPhysicsStepper_private_method__step>`, on the forward path and inside a joint replay alike.
+Saves the current state of ``space`` for ``tick``. Called after every :ref:`_step()<class_NetwPhysicsStepper_private_method__step>`.
 
 .. rst-class:: classref-item-separator
 
@@ -120,7 +116,7 @@ Files ``space``'s current state under ``tick``, so a later :ref:`_restore()<clas
 
 |void| **_step**\ (\ space\: :godot:`RID`, delta\: :godot:`float`\ ) |virtual| :ref:`🔗<class_NetwPhysicsStepper_private_method__step>`
 
-Advances ``space`` by exactly ``delta`` and nothing else. Member state belongs to the engine, which restores it from each member's own timeline, so this must not read or write it. This runs inside a frame the engine is already stepping, once per network tick and again for each replayed tick during a joint rebase, so it must solve ``space`` on demand rather than wait for the next physics frame.
+Advances ``space`` by ``delta`` immediately. Do not read or write entity state here.
 
 .. rst-class:: classref-item-separator
 
@@ -132,7 +128,7 @@ Advances ``space`` by exactly ``delta`` and nothing else. Member state belongs t
 
 :godot:`bool` **can_step**\ (\ ) :ref:`🔗<class_NetwPhysicsStepper_method_can_step>`
 
-Returns :ref:`_can_step()<class_NetwPhysicsStepper_private_method__can_step>`, or ``false`` when nothing overrode it.
+Calls :ref:`_can_step()<class_NetwPhysicsStepper_private_method__can_step>`, or returns ``false`` when it is not overridden.
 
 .. rst-class:: classref-item-separator
 
@@ -144,7 +140,7 @@ Returns :ref:`_can_step()<class_NetwPhysicsStepper_private_method__can_step>`, o
 
 |void| **restore**\ (\ space\: :godot:`RID`, tick\: :godot:`int`\ ) :ref:`🔗<class_NetwPhysicsStepper_method_restore>`
 
-Calls :ref:`_restore()<class_NetwPhysicsStepper_private_method__restore>`, and does nothing when nothing overrode it.
+Calls :ref:`_restore()<class_NetwPhysicsStepper_private_method__restore>` when it is overridden.
 
 .. rst-class:: classref-item-separator
 
@@ -156,7 +152,7 @@ Calls :ref:`_restore()<class_NetwPhysicsStepper_private_method__restore>`, and d
 
 |void| **snapshot**\ (\ space\: :godot:`RID`, tick\: :godot:`int`\ ) :ref:`🔗<class_NetwPhysicsStepper_method_snapshot>`
 
-Calls :ref:`_snapshot()<class_NetwPhysicsStepper_private_method__snapshot>`, and does nothing when nothing overrode it.
+Calls :ref:`_snapshot()<class_NetwPhysicsStepper_private_method__snapshot>` when it is overridden.
 
 .. rst-class:: classref-item-separator
 
@@ -168,7 +164,7 @@ Calls :ref:`_snapshot()<class_NetwPhysicsStepper_private_method__snapshot>`, and
 
 |void| **step**\ (\ space\: :godot:`RID`, delta\: :godot:`float`\ ) :ref:`🔗<class_NetwPhysicsStepper_method_step>`
 
-Calls :ref:`_step()<class_NetwPhysicsStepper_private_method__step>`, and does nothing when nothing overrode it.
+Calls :ref:`_step()<class_NetwPhysicsStepper_private_method__step>` when it is overridden.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

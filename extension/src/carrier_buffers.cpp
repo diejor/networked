@@ -53,7 +53,8 @@ HashMap<int64_t, CarrierBatch> &NetwCarrierBuffers::lane(bool p_reliable) {
     return p_reliable ? reliable : unreliable;
 }
 
-const HashMap<int64_t, CarrierBatch> &NetwCarrierBuffers::lane(bool p_reliable
+const HashMap<int64_t, CarrierBatch> &NetwCarrierBuffers::lane(
+    bool p_reliable
 ) const {
     return p_reliable ? reliable : unreliable;
 }

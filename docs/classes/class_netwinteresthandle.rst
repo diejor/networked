@@ -95,7 +95,7 @@ Adds the entity to ``layer_id`` and returns this handle. Idempotent.
 
 \ ``leave_policy`` is one of :ref:`LeavePolicy<enum_NetwMultiplayer_LeavePolicy>` and ``perception_policy`` one of :ref:`PerceptionPolicy<enum_NetwMultiplayer_PerceptionPolicy>`, each declared in passing for the layer being joined. ``-1`` declares neither and leaves whatever :ref:`on_leave_policy()<class_NetwInterestHandle_method_on_leave_policy>` and :ref:`on_perception_policy()<class_NetwInterestHandle_method_on_perception_policy>` already set, which are also the door for the ``CUSTOM`` rows because those need a callback.
 
-The declaration is safe in :godot:`Object._init() <Object#class_Object_private_method__init>` on every peer. Only server authority mutates the live :ref:`NetwInterestLayer<class_NetwInterestLayer>` entity set.
+The declaration is safe in :godot:`Object._init() <Object#class_Object_private_method__init>` on every peer. Only the server changes the live :ref:`NetwInterestLayer<class_NetwInterestLayer>` entity set.
 
 .. rst-class:: classref-item-separator
 
@@ -173,7 +173,7 @@ An empty ``layer_id`` registers against every layer :ref:`layer_ids()<class_Netw
 
 Overrides the wire behavior for ``layer_id`` with one of :ref:`LeavePolicy<enum_NetwMultiplayer_LeavePolicy>`, and returns this handle.
 
-\ :ref:`NetwMultiplayer.LEAVE_POLICY_CUSTOM<class_NetwMultiplayer_constant_LEAVE_POLICY_CUSTOM>` requires ``custom_callback``, called with ``(peer_id, layer_id)`` on server authority. Other policies reject a callback so configuration mistakes fail at declaration time.
+\ :ref:`NetwMultiplayer.LEAVE_POLICY_CUSTOM<class_NetwMultiplayer_constant_LEAVE_POLICY_CUSTOM>` requires ``custom_callback``, called with ``(peer_id, layer_id)`` on the server. Other policies reject a callback.
 
 .. rst-class:: classref-item-separator
 

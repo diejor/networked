@@ -208,9 +208,6 @@ func test_client_disconnect_keeps_match_running() -> void:
 	await drain_frames(get_tree(), 10)
 
 
-# On a listen server, admission runs synchronously inside player_joined,
-# so scene_local_changed has to be relayed by then or the host's first scene
-# change is dropped and it stays stuck on the browser.
 func test_host_lobby_ui_spawns_inside_scene_with_roster() -> void:
 	var valeria := await game.add_host("valeria", false)
 	await drain_frames(get_tree(), 5)
@@ -294,12 +291,12 @@ func test_every_peer_runs_each_player_in_its_own_cell() -> void:
 	jose.simulate_action_press("move_right")
 	await game.sync_ticks(8)
 
-	var own :=NetwSimulationHandle.MODE_PREDICT
+	var own := NetwSimulationHandle.MODE_PREDICT
 	var host := NetwSimulationHandle.MODE_AUTHORITY
 	var other := NetwSimulationHandle.MODE_PROXY
 	var bracketed := NetwMultiplayer.DISPLAY_PUMP_BRACKETED
 	var remote := NetwMultiplayer.DISPLAY_PUMP_REMOTE
-	var peers := {&"valeria": valeria, &"jose": jose, &"ana": ana}
+	var peers := { &"valeria": valeria, &"jose": jose, &"ana": ana }
 	var cells := [
 		[&"valeria", &"valeria", host, bracketed],
 		[&"valeria", &"jose", host, bracketed],

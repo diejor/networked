@@ -135,8 +135,7 @@ LocalVector<ControlRecord> ControlScheduler::flush(
     uint32_t sent_lifecycle = 0;
     while (sent_lifecycle < held.lifecycle.size()) {
         const ControlRecord &next = held.lifecycle[sent_lifecycle];
-        const int64_t cost
-            = int64_t(write_control_record(next).size());
+        const int64_t cost = int64_t(write_control_record(next).size());
         if (cost == 0) {
             sent_lifecycle += 1;
             continue;

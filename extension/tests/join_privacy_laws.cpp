@@ -65,11 +65,15 @@ TEST_CASE(
     rig.pump(4);
 
     Node *holder = scripted_handler(rig.branch(-1));
-    REQUIRE(netw::Netw::configure_join(Callable(holder, StringName("seat")))
-                .is_valid());
+    REQUIRE(
+        netw::Netw::configure_join(Callable(holder, StringName("seat")))
+            .is_valid()
+    );
     Node *joiner = scripted_handler(rig.branch(0));
-    REQUIRE(netw::Netw::configure_join(Callable(joiner, StringName("seat")))
-                .is_valid());
+    REQUIRE(
+        netw::Netw::configure_join(Callable(joiner, StringName("seat")))
+            .is_valid()
+    );
 
     const Ref<netw::NetwPlayer> seated
         = rig.join(0, StringName("ana"), one_arg(SECRET));
@@ -108,8 +112,7 @@ TEST_CASE(
     const int first = rig.peer_id(0);
     NetwMultiplayer *watcher = rig.client(1);
 
-    const Ref<netw::NetwPlayer> seen
-        = watcher->peer_get_player(first);
+    const Ref<netw::NetwPlayer> seen = watcher->peer_get_player(first);
     REQUIRE(seen.is_valid());
     CHECK(bool(watcher->peer_get_player(first) == seen));
 
@@ -135,8 +138,7 @@ TEST_CASE(
     const int reused = rig.peer_id(0);
 
     REQUIRE(rig.join(0, StringName("ana")).is_valid());
-    const Ref<netw::NetwPlayer> before
-        = host->peer_get_player(reused);
+    const Ref<netw::NetwPlayer> before = host->peer_get_player(reused);
     REQUIRE(before.is_valid());
     const int64_t first_membership = host->player_incarnation(reused);
     CHECK(host->player_is_active(reused, first_membership));

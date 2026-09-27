@@ -1211,8 +1211,10 @@ PackedInt64Array Engine::compute_entity_row(
         grant = BitSet::intersect(grant, record.intent);
     }
     if (scene_roots.has(key)) {
-        grant
-            = BitSet::union_of(grant, nested_scene_residency(key, rows_by_layer));
+        grant = BitSet::union_of(
+            grant,
+            nested_scene_residency(key, rows_by_layer)
+        );
     }
     if (record.parent != 0) {
         const HashMap<int64_t, PackedInt64Array>::ConstIterator pending

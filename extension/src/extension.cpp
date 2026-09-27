@@ -40,11 +40,8 @@ void method_ptrcall(
         return;
     }
 #if defined(NETW_MODULE)
-    reinterpret_cast<::MethodBind *>(p_bind)->ptrcall(
-        reinterpret_cast<::Object *>(p_instance),
-        p_args,
-        r_return
-    );
+    reinterpret_cast<::MethodBind *>(p_bind)
+        ->ptrcall(reinterpret_cast<::Object *>(p_instance), p_args, r_return);
 #else
     godot::gdextension_interface::object_method_bind_ptrcall(
         p_bind,

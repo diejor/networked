@@ -13,8 +13,8 @@
 #include "netw/api/quantize.hpp"
 #include "netw/session/frames.hpp"
 #include "netw/session_decl.hpp"
-#include "support/joined_peer.h"
 #include "support/declared_seams.h"
+#include "support/joined_peer.h"
 #include "support/loopback_rig.h"
 #include "support/minted_script.h"
 #include "support/netw_call_log.h"
@@ -154,8 +154,7 @@ TEST_CASE(
 
     NetwMultiplayer *client_scenes = rig.client(0);
     REQUIRE(client_scenes != nullptr);
-    const Ref<netw::NetwPlayer> seated
-        = rig.client(0)->player_local();
+    const Ref<netw::NetwPlayer> seated = rig.client(0)->player_local();
     REQUIRE(seated.is_valid());
 
     NETW_CHECK_EQ(int(client_scenes->scene_list().size()), 1);
@@ -312,10 +311,7 @@ TEST_CASE(
     const Ref<RefCounted> handler = script->call("new");
     REQUIRE(handler.is_valid());
     CallLog announced;
-    core->connect(
-        StringName("player_joined"),
-        announced.callable("joined")
-    );
+    core->connect(StringName("player_joined"), announced.callable("joined"));
 
     Array carried;
     carried.push_back(arena_node);

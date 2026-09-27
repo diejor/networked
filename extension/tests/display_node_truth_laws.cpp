@@ -594,8 +594,8 @@ public:
             ->interpolate(netw::gd::array_of(lerp_to(StringName("position"))));
         bench.seat(node);
         bench.bind(entity, p_scenario.route);
-        const bool steered = p_scenario.rung == RUNG_STEERED
-            || p_scenario.rung == RUNG_AVATAR;
+        const bool steered
+            = p_scenario.rung == RUNG_STEERED || p_scenario.rung == RUNG_AVATAR;
         if (steered
             && p_plant != PLANT_THE_LADDER_READS_A_STEERED_ENTITY_AS_OWNED) {
             entity->set_controller(1);

@@ -6,46 +6,42 @@ using Godot.NativeInterop;
 namespace Networked;
 
 /// <summary>
-/// The enum vocabulary of the prediction family, on a leaf nobody has to import
-/// an engine to read.
+/// The enums used by <see cref="NetwPredictionHandle"/>.
 /// </summary>
 /// <remarks>
-/// Every value a prediction setting is written with.
-/// <see cref="NetwPredictionHandle"/> is where a game writes and reads them,
-/// and this class exists so naming one costs nothing, because nothing here
-/// holds state and nothing here can be constructed.
+/// This class only holds constants. Set them on
+/// <see cref="NetwEntity.Prediction"/>.
 /// <code>
 /// entity.prediction.archetype = NetwPredict.ARCHETYPE_SOLVER_BODY
 /// entity.prediction.recovery_policy = NetwPredict.RECOVERY_POLICY_REBASE_RECOVER
 /// </code>
 /// <para>
-/// The schedule, the restore and the mode an entity runs in are
-/// <see cref="NetwSimulationHandle"/> values. <b>What a game declares</b>
-/// - <see cref="NetwPredict.Archetype"/> what kind of body this is, which
-/// presets the rest
-/// - <see cref="NetwPredict.RecoveryPolicy"/> what a recovery is allowed to do
-/// - <see cref="NetwPredict.MissingInput"/> what the server does about an input
-/// that never came
-/// - <see cref="NetwPredict.BreachResponse"/> what happens on a contact outside
-/// the prediction
-/// - <see cref="NetwPredict.Reconcile"/> whether a selection is corrected
-/// together or apart
-/// <b>What the session reports back</b>
-/// - <see cref="NetwPredict.DriveKind"/> how the last drive chose its input
-/// - <see cref="NetwPredict.ConsumeAction"/> what a consume pass did this frame
-/// - <see cref="NetwPredict.ContactClass"/> what the local solve reported
-/// touching
-/// - <see cref="NetwPredict.CommandOrigin"/> where one replayed input came from
-/// - <see cref="NetwPredict.ExactVerdict"/> whether fingerprints have been
-/// compared yet
-/// - <see cref="NetwPredict.Domain"/> whether a transition is judged by
-/// fingerprint or by tolerance
-/// - <see cref="NetwPredict.TriggerShape"/> what asked for a recovery
-/// - <see cref="NetwPredict.Attribution"/> what a divergence is blamed on
-/// - <see cref="NetwPredict.Operator"/> what wrote the body during a recovery
-/// - <see cref="NetwPredict.OperatorOutcome"/> what a recovery attempt achieved
-/// - <see cref="NetwPredict.EpisodeState"/> how far a divergence episode has
-/// got
+/// The schedule and simulation mode of an entity are
+/// <see cref="NetwSimulationHandle"/> values. <b>Settings</b>
+/// - <see cref="NetwPredict.Archetype"/> a preset for the other settings
+/// - <see cref="NetwPredict.RecoveryPolicy"/> how a misprediction is corrected
+/// - <see cref="NetwPredict.MissingInput"/> what the server does when an input
+/// never arrives
+/// - <see cref="NetwPredict.BreachResponse"/> what happens on an unpredicted
+/// contact
+/// - <see cref="NetwPredict.Reconcile"/> whether entities are corrected alone
+/// or together
+/// <b>Reports</b>
+/// - <see cref="NetwPredict.DriveKind"/> which input drove the last step
+/// - <see cref="NetwPredict.ConsumeAction"/> what the server did with its input
+/// queue
+/// - <see cref="NetwPredict.ContactClass"/> what the body touched
+/// - <see cref="NetwPredict.CommandOrigin"/> where a replayed input came from
+/// - <see cref="NetwPredict.ExactVerdict"/> whether two peers produced the same
+/// result
+/// - <see cref="NetwPredict.Domain"/> whether a step is compared exactly or by
+/// tolerance
+/// - <see cref="NetwPredict.TriggerShape"/> what asked for a correction
+/// - <see cref="NetwPredict.Attribution"/> what a misprediction is blamed on
+/// - <see cref="NetwPredict.Operator"/> how a correction wrote the body
+/// - <see cref="NetwPredict.OperatorOutcome"/> whether a correction helped
+/// - <see cref="NetwPredict.EpisodeState"/> whether a misprediction is still
+/// being corrected
 /// </para>
 /// </remarks>
 public sealed class NetwPredict : NetwObject
@@ -67,29 +63,27 @@ public sealed class NetwPredict : NetwObject
     public enum ContactClass : long
     {
         /// <summary>
-        /// The solve reported no collider. A
-        /// <see cref="NetwPredict.ContactClass"/> is kept for reading
-        /// afterwards and is never compared between peers.
+        /// The body touched nothing.
         /// </summary>
         None = 0,
         /// <summary>
-        /// The collider is the support reported by the declared ground sensor.
+        /// The ground reported by the ground sensor.
         /// </summary>
         DeclaredSupport = 1,
         /// <summary>
-        /// Static geometry other than the declared support.
+        /// Static geometry other than the ground.
         /// </summary>
         OtherStatic = 2,
         /// <summary>
-        /// A dynamic entity this peer predicts or simulates authoritatively.
+        /// A moving entity this peer predicts or simulates.
         /// </summary>
         PredictedDynamic = 3,
         /// <summary>
-        /// A dynamic entity this peer neither predicts nor selects.
+        /// A moving entity this peer does not simulate.
         /// </summary>
         UnpredictedDynamic = 4,
         /// <summary>
-        /// A kinematic or animated collision proxy.
+        /// A kinematic or animated body.
         /// </summary>
         KinematicProxy = 5,
     }
@@ -97,14 +91,12 @@ public sealed class NetwPredict : NetwObject
     public enum CommandOrigin : long
     {
         /// <summary>
-        /// This peer's own guess for an entity it does not own. A group
-        /// replaying its members together replays them from these, so the
-        /// origin is what says whether a replay reproduced what a player
-        /// actually did or repeated a guess.
+        /// This peer guessed the input with
+        /// <see cref="NetwPredictionHandle.PredictCommands"/>.
         /// </summary>
         Predicted = 0,
         /// <summary>
-        /// The authoring peer's own command, relayed through the server.
+        /// The controlling peer's own input, relayed through the server.
         /// </summary>
         Relayed = 1,
     }
@@ -112,39 +104,37 @@ public sealed class NetwPredict : NetwObject
     public enum DriveKind : long
     {
         /// <summary>
-        /// No drive has run yet.
+        /// Nothing has stepped yet.
         /// </summary>
         None = 0,
         /// <summary>
-        /// A newly authored input label drove the simulation.
+        /// A new input drove the step.
         /// </summary>
         Fresh = 1,
         /// <summary>
-        /// The previous input label drove the simulation again.
+        /// The previous input drove the step again.
         /// </summary>
         Repeat = 2,
         /// <summary>
-        /// The consume cursor held past its buffer, so nothing drove the
-        /// simulation this tick.
+        /// The server held its input buffer, so nothing stepped this tick.
         /// </summary>
         Hold = 3,
         /// <summary>
-        /// The consume cursor had no input queued at all, so nothing drove the
-        /// simulation this tick.
+        /// The server had no input queued, so nothing stepped this tick.
         /// </summary>
         Starved = 4,
         /// <summary>
-        /// A fresh input drove after older eligible labels were folded away.
+        /// A new input drove the step after older ones were skipped.
         /// </summary>
         FoldDrive = 5,
         /// <summary>
-        /// A missing input label drove through <c>missing_policy</c>.
+        /// The input never arrived, and
+        /// <see cref="NetwPredictionHandle.MissingPolicy"/> drove the step.
         /// </summary>
         Missing = 6,
         /// <summary>
-        /// A command this peer predicted for an entity it does not own drove
-        /// the simulation, so the owner never authored the input the transition
-        /// ran.
+        /// An input this peer guessed for an entity it does not control drove
+        /// the step.
         /// </summary>
         Substituted = 7,
     }
@@ -152,25 +142,18 @@ public sealed class NetwPredict : NetwObject
     public enum TriggerShape : long
     {
         /// <summary>
-        /// No field that can trigger was past its own tolerance. The
-        /// fingerprints can still disagree while every field sits inside its
-        /// tolerance, so a recovery can be prepared with nothing having asked
-        /// for one. A <see cref="NetwPredict.TriggerShape"/> records what the
-        /// triggering fields looked like when the recovery was judged. The
-        /// distinction that matters is whether the recovery could write any of
-        /// them. A write returning a withheld field and a writable one did
-        /// repair something, while a write whose every trigger was withheld
-        /// repaired nothing.
+        /// No field was past its tolerance.
         /// </summary>
         None = 0,
         /// <summary>
-        /// At least one field past its epsilon is one a sub-teleport restore
-        /// may write.
+        /// At least one field past its tolerance can be written by an ordinary
+        /// correction.
         /// </summary>
         Mixed = 1,
         /// <summary>
-        /// Every field past its epsilon is one no sub-teleport restore may
-        /// write.
+        /// Every field past its tolerance is
+        /// <see cref="NetwPropertyConfig.TeleportOnly"/>, so only a teleport
+        /// can write it.
         /// </summary>
         AllWithheld = 2,
     }
@@ -178,17 +161,15 @@ public sealed class NetwPredict : NetwObject
     public enum ConsumeAction : long
     {
         /// <summary>
-        /// A queued transition is available past the buffer being held, so it
-        /// runs.
+        /// The server ran a queued input.
         /// </summary>
         Replay = 0,
         /// <summary>
-        /// Transitions are queued but not yet past the buffer, so the pass
-        /// waits.
+        /// The server kept its queued inputs in the buffer.
         /// </summary>
         Hold = 1,
         /// <summary>
-        /// Nothing is queued at all, so the pass has no command to run.
+        /// The server had no input queued.
         /// </summary>
         Starved = 2,
     }
@@ -196,15 +177,15 @@ public sealed class NetwPredict : NetwObject
     public enum ExactVerdict : long
     {
         /// <summary>
-        /// Nobody has compared fingerprints for this transition yet.
+        /// Not compared yet.
         /// </summary>
         Unjudged = 0,
         /// <summary>
-        /// The two independently recorded fingerprints are equal.
+        /// Both peers produced the same result.
         /// </summary>
         Equal = 1,
         /// <summary>
-        /// The two independently recorded fingerprints differ.
+        /// The peers produced different results.
         /// </summary>
         Unequal = 2,
     }
@@ -212,11 +193,11 @@ public sealed class NetwPredict : NetwObject
     public enum MissingInput : long
     {
         /// <summary>
-        /// With no input, the entity does not move.
+        /// The entity does not move.
         /// </summary>
         Stall = 0,
         /// <summary>
-        /// Carry the last input forward over the gap.
+        /// The last input is repeated.
         /// </summary>
         RepeatLast = 1,
     }
@@ -224,33 +205,26 @@ public sealed class NetwPredict : NetwObject
     public enum Archetype : long
     {
         /// <summary>
-        /// No preset, so every setting keeps its own default until something
-        /// declares it. An archetype is a starting point rather than a limit.
-        /// Writing one applies its settings, and anything declared afterwards
-        /// overrides what it applied. No archetype sets a
-        /// <see cref="NetwPredict.BreachResponse"/>, because that decides
-        /// whether a body stops predicting at all, and a preset choosing it
-        /// would change the most visible behaviour an entity has with no game
-        /// file saying so.
+        /// No preset. Every setting keeps its default. Settings written after
+        /// an archetype override it, and no archetype sets
+        /// <see cref="NetwPredictionHandle.BreachResponse"/>.
         /// </summary>
         None = 0,
         /// <summary>
-        /// A body whose step is ordinary code and can be re-run inside one
-        /// frame. It sets <see cref="NetwSimulationHandle.ScheduleEnum.Tick"/>,
+        /// A body moved by your own code, such as a
+        /// <see cref="CharacterBody3D"/>. Sets
+        /// <see cref="NetwSimulationHandle.ScheduleEnum.Tick"/>,
         /// <see cref="NetwPredict.MissingInput.Stall"/> and
-        /// <see cref="NetwPredict.RecoveryPolicy.RebaseReplay"/>, because a
-        /// velocity that comes straight from the input catches up again on the
-        /// next tick.
+        /// <see cref="NetwPredict.RecoveryPolicy.RebaseReplay"/>.
         /// </summary>
         Scripted = 1,
         /// <summary>
-        /// A body the physics engine solves, whose step cannot be re-run once
-        /// per input. It sets
+        /// A body moved by the physics engine, such as a
+        /// <see cref="RigidBody3D"/>. Sets
         /// <see cref="NetwSimulationHandle.ScheduleEnum.Frame"/>,
         /// <see cref="NetwPredict.MissingInput.RepeatLast"/>,
         /// <see cref="NetwPredict.RecoveryPolicy.RebaseRecover"/> and
-        /// <see cref="NetwSimulationHandle.RestoreEnum.Extrapolated"/>, with a
-        /// teleport distance sized for a body that settles through contacts.
+        /// <see cref="NetwSimulationHandle.RestoreEnum.Extrapolated"/>.
         /// </summary>
         SolverBody = 2,
     }
@@ -258,42 +232,34 @@ public sealed class NetwPredict : NetwObject
     public enum RecoveryPolicy : long
     {
         /// <summary>
-        /// Restore the acknowledged state and replay every unacknowledged input
-        /// over it, which reaches the present through the entity's own
-        /// simulation. <see cref="NetwPredictionHandle.RecoveryPolicy"/> is
-        /// where an entity declares one, and it names what the entity wants
-        /// rather than how the engine does it. A <see cref="RigidBody3D"/> or
+        /// Restore the server's state and replay every input the server has not
+        /// acknowledged yet. A <see cref="RigidBody3D"/> or
         /// <see cref="RigidBody2D"/> at
-        /// <see cref="NetwSimulationHandle.ScheduleEnum.Frame"/> recovers under
-        /// <see cref="NetwPredict.RecoveryPolicy.RebaseRecover"/> and warns
-        /// once. The engine applies its forces only when the space steps, and
-        /// nothing steps the space between replayed inputs.
+        /// <see cref="NetwSimulationHandle.ScheduleEnum.Frame"/> cannot replay,
+        /// so it uses <see cref="NetwPredict.RecoveryPolicy.RebaseRecover"/>
+        /// and warns once.
         /// </summary>
         RebaseReplay = 0,
         /// <summary>
-        /// Restore the acknowledged state and write the correction directly,
-        /// with no replay.
+        /// Restore the server's state and write the correction directly,
+        /// without replaying.
         /// </summary>
         RebaseRecover = 1,
         /// <summary>
-        /// Do not predict at all. Simulate only where the input is already
-        /// authoritative, and draw what arrives everywhere else.
+        /// Do not predict. Simulate only with inputs the server confirmed, and
+        /// draw the server's state otherwise.
         /// </summary>
         DelayClosed = 2,
         /// <summary>
-        /// Report the divergence and write nothing. An entity under this policy
-        /// can hold an episode open for as long as it keeps diverging, and it
-        /// can never oscillate between corrections, because it makes none.
+        /// Report mispredictions and correct nothing.
         /// </summary>
         Observe = 3,
         /// <summary>
-        /// Pick from the body. A <see cref="RigidBody3D"/> or
-        /// <see cref="RigidBody2D"/> recovers under
-        /// <see cref="NetwPredict.RecoveryPolicy.RebaseRecover"/> and any other
-        /// body under <see cref="NetwPredict.RecoveryPolicy.RebaseReplay"/>.
-        /// This is the default, and
-        /// <see cref="NetwPredictionHandle.ResolvedRecoveryPolicy"/> returns
-        /// the pick.
+        /// <see cref="NetwPredict.RecoveryPolicy.RebaseRecover"/> for a
+        /// <see cref="RigidBody3D"/> or <see cref="RigidBody2D"/>, and
+        /// <see cref="NetwPredict.RecoveryPolicy.RebaseReplay"/> for any other
+        /// body. <see cref="NetwPredictionHandle.ResolvedRecoveryPolicy"/>
+        /// returns the result.
         /// </summary>
         Auto = 4,
     }
@@ -301,20 +267,13 @@ public sealed class NetwPredict : NetwObject
     public enum Reconcile : long
     {
         /// <summary>
-        /// Correct each predicted entity on its own.
+        /// Correct each entity on its own.
         /// </summary>
         Independent = 0,
         /// <summary>
-        /// Restore and replay this entity together with the entities its
-        /// <see cref="NetwEntity.Simulation"/> selects. The engine admits the
-        /// group when the selection commits, where every member's schedule is
-        /// known. An authoritative row a member receives here is where a replay
-        /// starts from rather than somewhere to jump to. The group replays from
-        /// one floor, so a member that snapped to wherever its own extrapolated
-        /// row landed would enter that replay from a state no other member's
-        /// history knows about. The unextrapolated payload is the basis, and
-        /// the pass re-runs the transitions the extrapolation was standing in
-        /// for.
+        /// Correct this entity together with the entities its
+        /// <see cref="NetwEntity.Simulation"/> selects, restoring and replaying
+        /// them from the same tick.
         /// </summary>
         Joint = 1,
     }
@@ -322,15 +281,13 @@ public sealed class NetwPredict : NetwObject
     public enum BreachResponse : long
     {
         /// <summary>
-        /// Keep predicting and let an ordinary recovery absorb whatever
-        /// divergence follows. Touching the unmoving world is never a breach,
-        /// because every peer solves against the same world. A breach is
-        /// contact with a moving body this peer does not simulate, whose drawn
-        /// pose is a stand-in the solve cannot reproduce.
+        /// Keep predicting and correct as usual. A breach is a contact with a
+        /// moving body this peer does not simulate. Touching static geometry is
+        /// not a breach.
         /// </summary>
         PredictThrough = 0,
         /// <summary>
-        /// Follow authority immediately while commands continue to flow.
+        /// Stop predicting and follow the server, while still sending input.
         /// </summary>
         Demote = 1,
     }
@@ -338,16 +295,15 @@ public sealed class NetwPredict : NetwObject
     public enum EpisodeState : long
     {
         /// <summary>
-        /// The episode is still taking in comparisons and the results of
-        /// recovery attempts.
+        /// The misprediction is still being corrected.
         /// </summary>
         Open = 0,
         /// <summary>
-        /// A verified agreement run retired the episode.
+        /// The peers agree again.
         /// </summary>
         Closed = 1,
         /// <summary>
-        /// Bounded recovery evidence was exhausted.
+        /// Corrections did not help, and the entity follows the server.
         /// </summary>
         Fallback = 2,
     }
@@ -355,32 +311,25 @@ public sealed class NetwPredict : NetwObject
     public enum OperatorOutcome : long
     {
         /// <summary>
-        /// No later comparison has judged the write yet.
+        /// Not judged yet.
         /// </summary>
         Pending = 0,
         /// <summary>
-        /// A later comparison strictly reduced or closed the aligned error.
+        /// The error shrank or closed.
         /// </summary>
         Contracted = 1,
         /// <summary>
-        /// The verification window held or grew the aligned error.
+        /// The error held or grew.
         /// </summary>
         FailedToContract = 2,
         /// <summary>
-        /// The write introduced a realized boundary absent on authority.
+        /// The correction caused a contact the server did not have.
         /// </summary>
         IntroducedBoundary = 3,
         /// <summary>
-        /// Every field that asked for this recovery was one the recovery was
-        /// declared never to write, so the error it holds belongs to the
-        /// declaration rather than to the operator. It is recorded beside
-        /// <see cref="NetwPredict.OperatorOutcome.FailedToContract"/> rather
-        /// than as a kind of it, because the two look identical from outside
-        /// and mean opposite things. One is an operator that tried and did not
-        /// shrink the error, and the other is an operator that was forbidden to
-        /// touch it. Spending an episode's evidence on the second turns a gap
-        /// in the declaration into a breach, and a breach into a demotion,
-        /// which leaves the game worse off than declaring nothing at all.
+        /// Every field that asked for the correction is
+        /// <see cref="NetwPropertyConfig.TeleportOnly"/>, so the correction
+        /// could not write it.
         /// </summary>
         Withheld = 4,
     }
@@ -388,40 +337,38 @@ public sealed class NetwPredict : NetwObject
     public enum Attribution : long
     {
         /// <summary>
-        /// The evidence needed to blame a boundary was absent. Every other
-        /// <see cref="NetwPredict.Attribution"/> names the first thing the two
-        /// runs disagreed about, and
-        /// <see cref="NetwPredictionHandle.DivergenceDetected"/> carries it.
+        /// Nothing to blame was found.
+        /// <see cref="NetwPredictionHandle.DivergenceDetected"/> carries an
+        /// <see cref="NetwPredict.Attribution"/>.
         /// </summary>
         Unknown = 0,
         /// <summary>
-        /// The peers entered the transition with different declared state.
+        /// The peers started the tick from different state.
         /// </summary>
         PreState = 1,
         /// <summary>
-        /// Authority ran input the owner did not author.
+        /// The server ran an input the controlling peer did not send.
         /// </summary>
         Command = 2,
         /// <summary>
-        /// The transition ran against unequal world facts.
+        /// The <see cref="NetwPredictionHandle.Sensors"/> read different
+        /// values.
         /// </summary>
         Environment = 3,
         /// <summary>
-        /// The execution topology or body mode differed.
+        /// The peers simulated the entity in different ways.
         /// </summary>
         Topology = 4,
         /// <summary>
-        /// The declared state agreed but the optional raw execution bits
-        /// differed.
+        /// The state agreed but the raw results differed.
         /// </summary>
         Execution = 5,
         /// <summary>
-        /// Equal inputs produced a different contact.
+        /// The same input produced a different contact.
         /// </summary>
         Contact = 6,
         /// <summary>
-        /// Everything observed going in agreed and the produced state still
-        /// differed.
+        /// Everything going in agreed, and the result still differed.
         /// </summary>
         Closure = 7,
     }
@@ -429,47 +376,45 @@ public sealed class NetwPredict : NetwObject
     public enum Operator : long
     {
         /// <summary>
-        /// Nothing wrote the body since the preceding transition. An
-        /// <see cref="NetwPredict.Operator"/> is what an episode records for
-        /// each recovery attempt.
+        /// Nothing wrote the body.
         /// </summary>
         None = 0,
         /// <summary>
-        /// A projected authoritative state was restored.
+        /// The server's state was restored, advanced to the present.
         /// </summary>
         RebaseProjected = 1,
         /// <summary>
-        /// An exact authoritative state was restored.
+        /// The server's state was restored as is.
         /// </summary>
         RebaseExact = 2,
         /// <summary>
-        /// A teleport restored every declared field.
+        /// A teleport restored every field.
         /// </summary>
         FullClosure = 3,
         /// <summary>
-        /// The body was moved to where it should be now, across a path
-        /// <see cref="NetwPredictionHandle.TransportCorridor"/> cleared.
+        /// The body was moved to where it should be now, along a path
+        /// <see cref="NetwPredictionHandle.TransportCorridor"/> allowed.
         /// </summary>
         TransportDelta = 4,
         /// <summary>
-        /// The body was seeded from authority after a fallback.
+        /// The body was reset to the server's state after a fallback.
         /// </summary>
         Reseed = 5,
         /// <summary>
-        /// The first comparison after a reseed aligned the acknowledgement.
+        /// The first comparison after a reset caught up with the server.
         /// </summary>
         ReseedAlign = 6,
         /// <summary>
-        /// A witnessed breach stopped prediction while input keeps flowing.
+        /// A breach stopped prediction while input keeps being sent.
         /// </summary>
         Demote = 7,
         /// <summary>
-        /// A divergence in velocity alone was left to fade with no write.
+        /// Only the velocity differed, and it was left to fade.
         /// </summary>
         Dissipate = 8,
         /// <summary>
-        /// A joint pass restored the whole group to its shared starting
-        /// transition.
+        /// The whole <see cref="NetwPredict.Reconcile.Joint"/> group was
+        /// restored to the same tick.
         /// </summary>
         JointRebase = 9,
     }
@@ -477,23 +422,20 @@ public sealed class NetwPredict : NetwObject
     public enum Domain : long
     {
         /// <summary>
-        /// Everything the transition read is declared equal on both peers, so
-        /// its fingerprints must match exactly.
+        /// Every input to the step is known equal on both peers, so the results
+        /// must match exactly.
         /// </summary>
         In = 0,
         /// <summary>
-        /// Something the transition read is declared unequal or unknown, so it
-        /// is compared by tolerance.
+        /// Some input to the step may differ between peers, so the results are
+        /// compared by tolerance.
         /// </summary>
         Out = 1,
     }
 
     /// <summary>
-    /// The unacknowledged span, in transitions, past which the prediction
-    /// governor stops speculating and holds. A hard limit rather than something
-    /// to tune. It is a quarter of the 256 transitions the engine records, so
-    /// how far ahead an entity may run can never outrun the record a recovery
-    /// would replay against. Read it beside
+    /// The most ticks a client may predict ahead of the last input the server
+    /// acknowledged. Past it, prediction holds. See
     /// <see cref="NetwPredictionHandle.AckAgeTicks"/>.
     /// </summary>
     public const long AckAgeMax = 64;

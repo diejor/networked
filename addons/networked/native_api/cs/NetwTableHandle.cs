@@ -56,23 +56,11 @@ namespace Networked;
 /// <para>
 /// <see cref="NetwTableHandle.ReadBirths"/> and
 /// <see cref="NetwTableHandle.ReadDeaths"/> name the routes the latest wave
-/// added and removed. A reader that keeps an object per row steps them from
-/// those two rather than diffing the table. <b>Saving</b>
+/// added and removed, which is useful to keep one node per row. <b>Saving</b>
 /// <see cref="NetwTableHandle.Save"/> stores the committed rows in a
 /// <see cref="NetwDatabase"/> under a key, and
-/// <see cref="NetwTableHandle.Load"/> replaces the whole table with them.
-/// Routes are new in every session, so the game names each row with a stable id
-/// and pairs the ids with the routes a load hands back.
-/// <see cref="NetwTableHandle.Load"/> settles with one of these. The row saved
-/// as <c>ids[i]</c> now lives at <c>routes[i]</c>.
-/// <code>
-/// Dictionary
-/// ┠╴error    Error              @GlobalScope.Error. Check it before reading anything else
-/// ┠╴detail   String             what went wrong, for a person to read. Empty when error is OK
-/// ┠╴found    bool               whether a snapshot was stored under the key
-/// ┠╴ids      PackedStringArray  the id each loaded row was saved under
-/// ┖╴routes   PackedInt64Array   the route each loaded row now lives at
-/// </code>
+/// <see cref="NetwTableHandle.Load"/> replaces the table with them. Routes
+/// change between sessions, so give each row a stable id when saving.
 /// <code>
 /// func save_forest() -&gt; Error:
 ///     return await mobs.save(db, &amp;"forest", mob_ids).wait()
@@ -83,6 +71,7 @@ namespace Networked;
 ///         show_load_error(loaded.error)
 ///         return
 ///     if loaded.found:
+///         # the row saved as ids[i] now lives at routes[i]
 ///         rebuild_mob_index(loaded.ids, loaded.routes)
 /// </code>
 /// </para>
@@ -104,9 +93,8 @@ public sealed class NetwTableHandle : NetwRefCounted
     }
 
     /// <summary>
-    /// Emitted once for each wave this table produced or an arriving frame
-    /// touched. <c>tick</c> is the one the commit stamped, so several commits
-    /// inside one tick collapse to the last.
+    /// Emitted when this table is committed locally or receives data from a
+    /// peer. <c>tick</c> is the tick of the commit.
     /// </summary>
     public event Action<long> Received
     {
@@ -153,9 +141,8 @@ public sealed class NetwTableHandle : NetwRefCounted
         NetwApi.MethodBind("NetwTableHandle", "get_wire_hash", 3905245786UL);
 
     /// <summary>
-    /// The sealed schema hash this table carries on the wire. Two peers that
-    /// bound different sets of tables number them differently, and this is what
-    /// catches that.
+    /// A hash of this table's schema, sent with its data so peers can detect a
+    /// schema mismatch.
     /// </summary>
     public int WireHash
     {
@@ -191,9 +178,8 @@ public sealed class NetwTableHandle : NetwRefCounted
         NetwApi.MethodBind("NetwTableHandle", "set_reliable", 2586408642UL);
 
     /// <summary>
-    /// Whether this table's frames are sent reliably. Leave it <c>false</c> for
-    /// state that the next wave replaces anyway, and set it for a table whose
-    /// rows a peer cannot afford to miss.
+    /// Whether this table's commits are sent reliably. Set it for a table that
+    /// changes rarely.
     /// </summary>
     public bool Reliable
     {
@@ -247,8 +233,8 @@ public sealed class NetwTableHandle : NetwRefCounted
         NetwApi.MethodBind("NetwTableHandle", "write_routes", 820105581UL);
 
     /// <summary>
-    /// Stages <paramref name="routes"/> as this table's row identity column.
-    /// Its size is how many elements every other staged column owes.
+    /// Stages <paramref name="routes"/> as this table's rows. Every other
+    /// staged column must hold one element per route, times its stride.
     /// </summary>
     public Error WriteRoutes(long[] routes)
     {
@@ -299,8 +285,7 @@ public sealed class NetwTableHandle : NetwRefCounted
         NetwApi.MethodBind("NetwTableHandle", "commit", 166280745UL);
 
     /// <summary>
-    /// Fixes the columns as the applied state readers compare against, stamped
-    /// with the session's own tick.
+    /// Applies the staged routes and columns, stamped with the session's tick.
     /// <code>
     /// Error
     /// ┠╴OK                  the wave was applied
@@ -426,22 +411,25 @@ public sealed class NetwTableHandle : NetwRefCounted
         NetwApi.MethodBind("NetwTableHandle", "save", 1008792111UL);
 
     /// <summary>
-    /// Stores the committed rows as one snapshot under <paramref name="key"/>
-    /// in <paramref name="database"/>, and settles with an
+    /// Stores the committed rows under <paramref name="key"/> in
+    /// <paramref name="database"/>, and settles with an
     /// <c>@GlobalScope.Error</c>. <paramref name="ids"/> names each row in the
-    /// order of <see cref="NetwTableHandle.ReadRoutes"/>. The rows are copied
-    /// before this returns, so a later <see cref="NetwTableHandle.Commit"/>
-    /// does not change what is written. <c>NetwMultiplayer.table_save</c>. A
-    /// snapshot of zero rows is stored, and loading it empties the table.
-    /// Values are stored at full precision whatever the column's wire
-    /// quantizer.
+    /// order of <see cref="NetwTableHandle.ReadRoutes"/>. Values are saved at
+    /// full precision, ignoring the column's quantizer.
     /// <code>
     /// Error
     /// ┠╴OK                     the snapshot was stored
-    /// ┠╴ERR_UNAUTHORIZED       this peer holds no session authority
-    /// ┠╴ERR_INVALID_DATA       an id is empty or repeated, or the ids and rows disagree in count
+    /// ┠╴ERR_UNAUTHORIZED       this peer is not the server
+    /// ┠╴ERR_INVALID_DATA       an id is empty or repeated, the ids and rows disagree in
+    /// │                        count, or the connection answered no outcome
     /// ┠╴ERR_INVALID_PARAMETER  the key is empty, or the schema has a COLUMN_ENTITY column
-    /// ┖╴ERR_DOES_NOT_EXIST     the table and the database belong to different sessions
+    /// ┠╴ERR_DOES_NOT_EXIST     the table and the database belong to different sessions,
+    /// │                        or the table's schema is not sealed
+    /// ┠╴ERR_UNCONFIGURED       the database is not open
+    /// ┠╴ERR_BUSY               the database already holds 4096 unsettled operations
+    /// ┠╴ERR_UNAVAILABLE        the connection implements no _write_batch, or the
+    /// │                        database closed before the snapshot settled
+    /// ┖╴backend-defined        the backend refused or could not complete the write
     /// </code>
     /// <para>
     /// <b>Server Only.</b>
@@ -477,18 +465,35 @@ public sealed class NetwTableHandle : NetwRefCounted
         NetwApi.MethodBind("NetwTableHandle", "load", 976549617UL);
 
     /// <summary>
-    /// Replaces every row of the table with the snapshot stored under
+    /// Replaces every row of the table with the rows saved under
     /// <paramref name="key"/> in <paramref name="database"/>, and settles with
-    /// the load reply drawn in this class's description. Each loaded row gets a
-    /// new route. <c>NetwMultiplayer.table_load</c>. The table is untouched
-    /// unless the whole snapshot is applied. A missing snapshot answers
-    /// <c>found</c> false, and a snapshot that does not decode against the
-    /// schema answers its error. A <see cref="NetwTableHandle.Commit"/> while
-    /// the snapshot is being read makes the load answer
-    /// <c>@GlobalScope.ERR_BUSY</c>, so a load never overwrites rows written
-    /// after it started. Routes an earlier load handed out are released once no
-    /// other table holds them. Routes the game wrote itself are never released
-    /// by a load. <b>Server Only.</b>
+    /// a <see cref="Godot.Collections.Dictionary"/>. Each loaded row gets a new
+    /// route. On any error the table is left unchanged.
+    /// <code>
+    /// Dictionary
+    /// ┠╴error    Error              @GlobalScope.Error. Check it before reading anything else
+    /// │ ┠╴OK                     the snapshot was applied, or none is stored
+    /// │ ┠╴ERR_UNAUTHORIZED       this peer is not the server
+    /// │ ┠╴ERR_DOES_NOT_EXIST     the table and the database belong to different
+    /// │ │                        sessions, or the table's schema is not sealed
+    /// │ ┠╴ERR_INVALID_PARAMETER  key is empty
+    /// │ ┠╴ERR_UNCONFIGURED       the database is not open
+    /// │ ┠╴ERR_BUSY               a commit landed while the snapshot was read, or the
+    /// │ │                        database is full
+    /// │ ┠╴ERR_FILE_UNRECOGNIZED  the snapshot is not in this library's format, or
+    /// │ │                        carries a newer storage version than the schema
+    /// │ ┠╴ERR_INVALID_DATA       the snapshot does not match the schema
+    /// │ ┠╴ERR_UNAVAILABLE        the database closed while
+    /// │ │                        the snapshot was read
+    /// │ ┖╴backend-defined        the backend could not read the snapshot
+    /// ┠╴detail   String             what went wrong, for a person to read. Empty when error is OK
+    /// ┠╴found    bool               whether a snapshot was stored under the key
+    /// ┠╴ids      PackedStringArray  the id each loaded row was saved under
+    /// ┖╴routes   PackedInt64Array   the route each loaded row now lives at
+    /// </code>
+    /// <para>
+    /// <b>Server Only.</b>
+    /// </para>
     /// </summary>
     public NetwPromise Load(NetwDatabase database, StringName key)
     {

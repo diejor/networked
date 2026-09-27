@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <class name="NetwDespawnOpts" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
 	<brief_description>
-		What one [method NetwEntity.despawn] call asks for, beyond the fact that the entity is going.
+		Options for [method NetwEntity.despawn].
 	</brief_description>
 	<description>
-		Carries the knobs that control teardown behavior. It is a record rather than an argument list so a new option can be added without breaking call sites, and its defaults are what make a despawn safe when a caller passes nothing.
+		The defaults are safe to use, so passing no options is fine.
 		[codeblock]
 		var opts := NetwDespawnOpts.create(&amp;"killed")
 		opts.linger = true
@@ -18,25 +18,25 @@
 			<return type="NetwDespawnOpts" />
 			<param index="0" name="reason" type="StringName" default="&amp;&quot;&quot;" />
 			<description>
-				Returns a record naming [param reason], leaving every other option at its default.
+				Returns options with [param reason] and every other option at its default.
 			</description>
 		</method>
 	</methods>
 	<members>
 		<member name="defer_free" type="bool" setter="set_defer_free" getter="get_defer_free" default="true">
-			When [code]true[/code] (default), the [method Node.queue_free] call is deferred. This guarantees the engine's next process step sees the authority change before the node leaves the tree, which fixes the race where a [MultiplayerSynchronizer] tries to push state from a freed authority peer.
+			When [code]true[/code], [method Node.queue_free] is deferred so a [MultiplayerSynchronizer] does not push state from a node that is already freed.
 		</member>
 		<member name="flush_save" type="bool" setter="set_flush_save" getter="get_flush_save" default="true">
-			When [code]true[/code] (default), the entity's row is read at the despawn call and written once the node has left the tree. [code]false[/code] writes nothing for this departure. The despawn never waits for the write, so a caller that needs the row stored awaits [method NetwPersistenceHandle.save] before despawning. See [NetwPersistenceHandle].
+			When [code]true[/code], the entity's row is saved after the node leaves the tree. The despawn does not wait for the save, await [method NetwPersistenceHandle.save] before despawning if you need it stored.
 		</member>
 		<member name="linger" type="bool" setter="set_linger" getter="get_linger" default="false">
-			When [code]true[/code], the entity deactivates now but is freed only after [member linger_seconds], so a late shooter can still validate against where it was. Its [NetwTimeline] freezes at the despawn boundary and expires when the node frees. Default [code]false[/code] keeps the cheap rule: you cannot be shot after the server saw you die.
+			When [code]true[/code], the entity is deactivated now but freed only after [member linger_seconds], so a late shot can still hit where it was.
 		</member>
 		<member name="linger_seconds" type="float" setter="set_linger_seconds" getter="get_linger_seconds" default="1.0">
-			Seconds a lingering entity stays rewindable before it frees. Sized to the server rewind retention window, roughly one second of ticks. Ignored unless [member linger] is [code]true[/code].
+			Seconds a lingering entity can still be rewound before it is freed. Ignored unless [member linger] is [code]true[/code].
 		</member>
 		<member name="reason" type="StringName" setter="set_reason" getter="get_reason" default="&amp;&quot;&quot;">
-			Recorded on the despawn span and forwarded to the [signal NetwEntity.despawning] signal so user code can branch on the cause. Common values: [code]&amp;"peer_disconnected"[/code], [code]&amp;"killed"[/code], [code]&amp;"collected"[/code], [code]&amp;"timeout"[/code].
+			Passed to [signal NetwEntity.despawning] so a game can react to the cause, such as [code]&amp;"peer_disconnected"[/code], [code]&amp;"killed"[/code] or [code]&amp;"timeout"[/code].
 		</member>
 	</members>
 </class>

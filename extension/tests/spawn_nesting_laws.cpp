@@ -495,7 +495,7 @@ TEST_CASE(
     Node *client_arena = rig.branch(0)->get_node_or_null(NodePath("Arena"));
     REQUIRE(client_arena != nullptr);
 
-    const int moved[2] = { held.cube, held.coin };
+    const int moved[2] = {held.cube, held.coin};
     Transform3D before[2][2];
     for (int side = -1; side <= 0; ++side) {
         for (int at = 0; at < 2; ++at) {
@@ -504,14 +504,13 @@ TEST_CASE(
     }
     const Dictionary counted = Dictionary(rig.spawn_plane(0)->counters());
 
-    NetwEntity::of(rig.route_node(held.avatar))->despawn(
-        Ref<netw::NetwDespawnOpts>()
-    );
+    NetwEntity::of(rig.route_node(held.avatar))
+        ->despawn(Ref<netw::NetwDespawnOpts>());
     Node *host_avatar = rig.route_node(held.avatar);
     host_avatar->get_parent()->remove_child(host_avatar);
     rig.pump(8);
 
-    Node *arenas[2] = { arena, client_arena };
+    Node *arenas[2] = {arena, client_arena};
     for (int side = -1; side <= 0; ++side) {
         NETW_FORMAT_TEXT(netw_side_text, side < 0 ? "session" : "client");
         CAPTURE(netw_side_text);
@@ -520,10 +519,9 @@ TEST_CASE(
             const bool detached = survivor != nullptr
                 && survivor->get_parent() == arenas[side + 1];
             CHECK(detached);
-            CHECK(stands_at(
-                world_of(rig, moved[at], side),
-                before[side + 1][at]
-            ));
+            CHECK(
+                stands_at(world_of(rig, moved[at], side), before[side + 1][at])
+            );
             NETW_CHECK_EQ(
                 state_on(rig, side, moved[at]),
                 int64_t(netw::NetwLivenessCore::STATE_LIVE)
@@ -550,7 +548,7 @@ TEST_CASE(
     NETW_CHECK_EQ(int64_t(rig.server()->liveness_route_anchor(held.cube)), 2);
     const Dictionary after = Dictionary(rig.spawn_plane(0)->counters());
     for (const char *drop :
-         { "drops_spawn_unresolved", "drops_despawn_unknown" }) {
+         {"drops_spawn_unresolved", "drops_despawn_unknown"}) {
         NETW_CHECK_EQ(
             int64_t(after[StringName(drop)]),
             int64_t(counted[StringName(drop)])

@@ -43,10 +43,24 @@ TEST_CASE(
 
     StreamReaderBook reader;
     uint64_t token = 0;
-    reader.open(HOST, lane_of(7, 0, StreamFamily::VOLATILE), 10, EPOCH, SCHEMA, token);
+    reader.open(
+        HOST,
+        lane_of(7, 0, StreamFamily::VOLATILE),
+        10,
+        EPOCH,
+        SCHEMA,
+        token
+    );
     const uint64_t before = token;
     reader.forget_peer(HOST);
-    reader.open(HOST, lane_of(7, 0, StreamFamily::VOLATILE), 11, EPOCH, SCHEMA, token);
+    reader.open(
+        HOST,
+        lane_of(7, 0, StreamFamily::VOLATILE),
+        11,
+        EPOCH,
+        SCHEMA,
+        token
+    );
     NETW_CHECK_ORDER(token, before, >);
 }
 
@@ -139,7 +153,14 @@ TEST_CASE(
 
     uint64_t reopened = 0;
     NETW_CHECK_EQ(
-        int(reader.open(CLIENT, lane, next_open_request(), EPOCH, SCHEMA, reopened)),
+        int(reader.open(
+            CLIENT,
+            lane,
+            next_open_request(),
+            EPOCH,
+            SCHEMA,
+            reopened
+        )),
         int(OpenVerdict::MINTED)
     );
     const bool reachable_6 = (reader.receiver(CLIENT, reopened)) != nullptr;
@@ -211,10 +232,31 @@ TEST_CASE(
     StreamReaderBook reader;
     StreamWriterBook writer;
     uint64_t token = 0;
-    reader.open(HOST, lane_of(3, 0, StreamFamily::VOLATILE), next_open_request(), EPOCH, SCHEMA, token);
+    reader.open(
+        HOST,
+        lane_of(3, 0, StreamFamily::VOLATILE),
+        next_open_request(),
+        EPOCH,
+        SCHEMA,
+        token
+    );
     const uint64_t doomed = token;
-    reader.open(HOST, lane_of(3, 1, StreamFamily::RETAINED), next_open_request(), EPOCH, SCHEMA, token);
-    reader.open(HOST, lane_of(4, 0, StreamFamily::VOLATILE), next_open_request(), EPOCH, SCHEMA, token);
+    reader.open(
+        HOST,
+        lane_of(3, 1, StreamFamily::RETAINED),
+        next_open_request(),
+        EPOCH,
+        SCHEMA,
+        token
+    );
+    reader.open(
+        HOST,
+        lane_of(4, 0, StreamFamily::VOLATILE),
+        next_open_request(),
+        EPOCH,
+        SCHEMA,
+        token
+    );
     const uint64_t spared = token;
     NETW_CHECK_EQ(reader.stream_count(), 3);
 
@@ -230,9 +272,12 @@ TEST_CASE(
     NETW_CHECK_EQ(writer.stream_count(), 2);
     writer.close_route(3);
     NETW_CHECK_EQ(writer.stream_count(), 1);
-    const bool reachable_9 = (writer.sender(HOST, lane_of(3, 0, StreamFamily::VOLATILE))) != nullptr;
+    const bool reachable_9
+        = (writer.sender(HOST, lane_of(3, 0, StreamFamily::VOLATILE)))
+        != nullptr;
     CHECK(!reachable_9);
-    const bool reachable_10 = (writer.sender(HOST, lane_of(4, 0, StreamFamily::WINDOW))) != nullptr;
+    const bool reachable_10
+        = (writer.sender(HOST, lane_of(4, 0, StreamFamily::WINDOW))) != nullptr;
     CHECK(reachable_10);
 }
 
@@ -342,8 +387,7 @@ TEST_CASE(
     NETW_CHECK_EQ(int64_t(writer.unknown_receipt_count()), int64_t(2));
 
     StreamLane named;
-    const bool strangers_name_nothing
-        = writer.names(HOST, token + 1000, named);
+    const bool strangers_name_nothing = writer.names(HOST, token + 1000, named);
     CHECK(!strangers_name_nothing);
 }
 

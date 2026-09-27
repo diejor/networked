@@ -572,8 +572,10 @@ TEST_CASE(
         NETW_CHECK_EQ(log.count("moved"), 1);
     }
 
-    SUBCASE("the controller-zero fallback names the session coordinator, "
-            "not the literal peer 1") {
+    SUBCASE(
+        "the controller-zero fallback names the session coordinator, "
+        "not the literal peer 1"
+    ) {
         record->get_control()->set_controller(0);
         record->apply_control(wrapper.ptr(), owner, 7);
         NETW_CHECK_EQ(owner->get_multiplayer_authority(), 7);

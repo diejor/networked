@@ -6,21 +6,10 @@ using Godot.NativeInterop;
 namespace Networked;
 
 /// <summary>
-/// Where a <see cref="NetwDatabase"/> keeps its saves, and how a slot of them
-/// is opened.
+/// Where a <see cref="NetwDatabase"/> keeps its saves.
 /// </summary>
 /// <remarks>
-/// A backend describes storage. It holds no open slot, no queue and no cached
-/// record, which is what lets one backend Resource serve several sessions at
-/// once. Opening it answers a fresh <see cref="NetwDatabaseConnection"/>, and
-/// that connection owns all the I/O. Two ship, and a game written against
-/// either runs unchanged on the other.
-/// - <see cref="FileSystemDatabase"/> keeps records in files under one
-/// directory, and is what a shipped game saves into
-/// - <see cref="MemoryDatabase"/> keeps them in this process, for a test or a
-/// prototype
-/// Subclass this to reach storage the shipped backends do not cover. Implement
-/// the three methods below and hand back a connection.
+/// Subclass this to store records in a file, in memory, or on a server.
 /// <code>
 /// extends NetwDatabaseBackend
 ///
@@ -30,11 +19,10 @@ namespace Networked;
 ///     return NetwPromise.resolved(MyConnection.new(root, slot))
 /// </code>
 /// <para>
-/// A method left unimplemented rejects with <c>@GlobalScope.ERR_UNAVAILABLE</c>
-/// rather than succeeding quietly, so a missing verb is visible the first time
-/// a game reaches for it. <b>Permissions</b> A backend enforces whatever its
-/// storage actually allows. Holding session authority locally does not grant
-/// permission to write someone else's remote save.
+/// A method left unimplemented rejects with
+/// <c>@GlobalScope.ERR_UNAVAILABLE</c>. The records themselves are read and
+/// written by the <see cref="NetwDatabaseConnection"/> that <c>_open</c>
+/// returns.
 /// </para>
 /// </remarks>
 public class NetwDatabaseBackend : NetwRefCounted

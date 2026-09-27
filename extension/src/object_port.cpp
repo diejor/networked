@@ -111,8 +111,7 @@ bool names_body_state(const StringName &p_key) {
         || p_key == angular_velocity_name() || p_key == sleeping_name();
 }
 
-template <typename T>
-T *root_body(Object *p_owner) {
+template <typename T> T *root_body(Object *p_owner) {
     T *body = Object::cast_to<T>(p_owner);
     if (body == nullptr || !body->is_inside_tree()
         || !body->has_meta(entity_mark())) {
@@ -150,8 +149,8 @@ bool read_3d(RigidBody3D *p_body, BodyKey p_key, Variant &r_value) {
                 body,
                 PhysicsServer3D::BODY_STATE_TRANSFORM
             );
-            const Transform3D local = frame_of(p_body).affine_inverse()
-                * global;
+            const Transform3D local
+                = frame_of(p_body).affine_inverse() * global;
             r_value = p_key == BodyKey::POSITION
                 ? Variant(local.origin)
                 : Variant(local.basis.get_rotation_quaternion());
@@ -194,8 +193,8 @@ bool read_2d(RigidBody2D *p_body, BodyKey p_key, Variant &r_value) {
                 body,
                 PhysicsServer2D::BODY_STATE_TRANSFORM
             );
-            const Transform2D local = frame_of(p_body).affine_inverse()
-                * global;
+            const Transform2D local
+                = frame_of(p_body).affine_inverse() * global;
             r_value = p_key == BodyKey::POSITION
                 ? Variant(local.get_origin())
                 : Variant(double(local.get_rotation()));
@@ -226,10 +225,10 @@ bool read_2d(RigidBody2D *p_body, BodyKey p_key, Variant &r_value) {
 }
 
 bool write_3d(RigidBody3D *p_body, BodyKey p_key, const Variant &p_value) {
-    const bool placed = p_key == BodyKey::POSITION
-        && p_value.get_type() == Variant::VECTOR3;
-    const bool turned = p_key == BodyKey::TURN
-        && p_value.get_type() == Variant::QUATERNION;
+    const bool placed
+        = p_key == BodyKey::POSITION && p_value.get_type() == Variant::VECTOR3;
+    const bool turned
+        = p_key == BodyKey::TURN && p_value.get_type() == Variant::QUATERNION;
     if ((!placed && !turned) || p_body->is_freeze_enabled()) {
         return false;
     }
@@ -257,8 +256,8 @@ bool write_3d(RigidBody3D *p_body, BodyKey p_key, const Variant &p_value) {
 }
 
 bool write_2d(RigidBody2D *p_body, BodyKey p_key, const Variant &p_value) {
-    const bool placed = p_key == BodyKey::POSITION
-        && p_value.get_type() == Variant::VECTOR2;
+    const bool placed
+        = p_key == BodyKey::POSITION && p_value.get_type() == Variant::VECTOR2;
     const bool turned = p_key == BodyKey::TURN
         && (p_value.get_type() == Variant::FLOAT
             || p_value.get_type() == Variant::INT);

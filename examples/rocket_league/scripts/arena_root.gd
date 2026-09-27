@@ -21,4 +21,3 @@ func cars() -> Array[RocketCar]:
 		if child is RocketCar:
 			out.append(child)
 	return out
-

@@ -237,11 +237,14 @@ class BeachBallScenario final : public netw_test::FrameScenario {
             if (row == nullptr) {
                 continue;
             }
-            const double body_step = ball_at(client)->get_global_position()
-                                         .distance_to(body_was[client + 1]);
-            const double visual_step = visual_at(client)
-                                           ->get_global_position()
-                                           .distance_to(visual_was[client + 1]);
+            const double body_step
+                = ball_at(client)->get_global_position().distance_to(
+                    body_was[client + 1]
+                );
+            const double visual_step
+                = visual_at(client)->get_global_position().distance_to(
+                    visual_was[client + 1]
+                );
             copy.flight_frames += 1;
             copy.one_install_frames
                 += row->installs.stats.installed - installed_was[client + 1]
@@ -309,9 +312,10 @@ class BeachBallScenario final : public netw_test::FrameScenario {
             drifted.heal_ticks = frame - drift_frame;
             drifted.heal_body_jump = body.distance_to(body_was[DRIFTED + 1]);
         }
-        const double visual_step = visual_at(DRIFTED)
-                                       ->get_global_position()
-                                       .distance_to(visual_was[DRIFTED + 1]);
+        const double visual_step
+            = visual_at(DRIFTED)->get_global_position().distance_to(
+                visual_was[DRIFTED + 1]
+            );
         drifted.worst_heal_visual_step
             = MAX(drifted.worst_heal_visual_step, visual_step);
         if (row != nullptr) {
@@ -323,8 +327,8 @@ class BeachBallScenario final : public netw_test::FrameScenario {
         const netw::sim::Row *quiet = row_at(AGREEING);
         agreeing.awake_frames += ball_at(AGREEING)->is_sleeping() ? 0 : 1;
         if (quiet != nullptr) {
-            agreeing.rest_installs
-                += quiet->installs.stats.installed - installed_was[AGREEING + 1];
+            agreeing.rest_installs += quiet->installs.stats.installed
+                - installed_was[AGREEING + 1];
             agreeing.rest_skips
                 += quiet->installs.stats.skipped - skipped_was[AGREEING + 1];
         }
@@ -346,7 +350,8 @@ public:
         }
         const bool unheard
             = drift_frame < 0 && frame > REST_FRAME + BEAT_WAIT_FRAMES;
-        if (unheard || (drift_frame >= 0 && frame > drift_frame + WATCH_FRAMES)) {
+        if (unheard
+            || (drift_frame >= 0 && frame > drift_frame + WATCH_FRAMES)) {
             close();
             frame = -1;
             return false;

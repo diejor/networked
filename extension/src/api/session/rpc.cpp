@@ -765,22 +765,22 @@ Dictionary NetwMultiplayer::relay_stats_snapshot() {
     const Dictionary repl = plane == nullptr ? Dictionary() : plane->counters();
     const Dictionary rpc = rpc_counters();
     static const char *RELAYED[] = {
-        "drops_unknown_route",     "drops_not_live",
-        "drops_no_node",           "drops_traversal",
-        "drops_comp_unresolved",   "sync_drops_stale",
-        "derived_sets_active",     "derived_frames_in",
-        "drops_derived_no_set",    "drops_derived_bad_sender",
-        "drops_derived_schema",    "row_frames_out",
-        "row_frames_full",         "row_frames_stage_refused",
-        "row_frames_ungathered",   "row_frames_deferred",
-        "retained_frames_out",
-        "window_frames_out",       "window_samples_out",
-        "sync_sets_active",        "sync_frames_out",
-        "sync_frames_in",          "delta_frames_out",
-        "delta_frames_in",         "drops_sync_no_set",
-        "drops_sync_bad_sender",   "drops_sync_poisoned",
-        "drops_sync_unknown_flag", "spawn_book_armed",
-        "spawn_book_spawned",      "spawn_book_recv",
+        "drops_unknown_route",   "drops_not_live",
+        "drops_no_node",         "drops_traversal",
+        "drops_comp_unresolved", "sync_drops_stale",
+        "derived_sets_active",   "derived_frames_in",
+        "drops_derived_no_set",  "drops_derived_bad_sender",
+        "drops_derived_schema",  "row_frames_out",
+        "row_frames_full",       "row_frames_stage_refused",
+        "row_frames_ungathered", "row_frames_deferred",
+        "retained_frames_out",   "window_frames_out",
+        "window_samples_out",    "sync_sets_active",
+        "sync_frames_out",       "sync_frames_in",
+        "delta_frames_out",      "delta_frames_in",
+        "drops_sync_no_set",     "drops_sync_bad_sender",
+        "drops_sync_poisoned",   "drops_sync_unknown_flag",
+        "spawn_book_armed",      "spawn_book_spawned",
+        "spawn_book_recv",
     };
     Dictionary out;
     for (const char *key : RELAYED) {
@@ -1560,8 +1560,7 @@ void NetwMultiplayer::rpc_handle_call(
         options.is_valid() ? options->get_interpolators() : Array()
     );
 
-    if (target_type != CALL_TARGET_EVERYONE
-        && target_peer != get_unique_id()) {
+    if (target_type != CALL_TARGET_EVERYONE && target_peer != get_unique_id()) {
         NETW_WARN(
             sys::TRANSPORT,
             "a call for '%s' addressed peer %d and arrived at %d",
@@ -1821,13 +1820,8 @@ int64_t NetwMultiplayer::carrier_dispose(
         return -1;
     }
     bool sent = false;
-    const int64_t seq = send_datagram(
-        p_peer,
-        p_batch.bytes(),
-        p_reliable,
-        p_carrier,
-        &sent
-    );
+    const int64_t seq
+        = send_datagram(p_peer, p_batch.bytes(), p_reliable, p_carrier, &sent);
     if (!sent) {
         carrier_cancel(p_peer, p_batch);
         return -1;

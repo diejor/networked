@@ -6,71 +6,40 @@ using Godot.NativeInterop;
 namespace Networked;
 
 /// <summary>
-/// Runtime identity record for one networked entity root, player or
-/// server-owned.
+/// The identity of one networked node, player or server-owned.
 /// </summary>
 /// <remarks>
 /// One networked entity is one root node holding one <see cref="NetwEntity"/>.
-/// Sibling nodes reach the record to share identity instead of depending on
-/// each other. A component reads <see cref="NetwEntity.EntityId"/> and
-/// <see cref="NetwEntity.PeerId"/>, learns who steers the entity from
-/// <see cref="NetwEntity.Controller"/>, reaches session services such as
-/// <see cref="NetwEntity.Persistence"/> and
-/// <see cref="NetwEntity.Interpolation"/>, and follows the lifecycle through
-/// <see cref="NetwEntity.Spawning"/>, <see cref="NetwEntity.Spawned"/>,
-/// <see cref="NetwEntity.Despawning"/> and <see cref="NetwEntity.Hidden"/>.
-/// Identity is sealed once, when the entity reaches
-/// <see cref="NetwEntity.StageEnum.Armed"/>, and never changes after.
-/// Everything that configures the entity runs before that moment and everything
-/// that reads it runs after. <see cref="NetwEntity.Controller"/> resolves at
-/// the same moment, so authority is settled before the node enters the tree and
-/// <see cref="Node.IsMultiplayerAuthority"/> is already correct in every
-/// <c>Node._enter_tree</c> and <c>Node._ready</c>, on every peer.
-/// <see cref="NetwEntity.PeerId"/> classifies the entity. A non-zero value is a
-/// player and names the peer it represents. <c>0</c> is a server-owned entity
-/// such as an NPC or world object. See <see cref="NetwEntity.IsPlayer"/> and
-/// <see cref="NetwEntity.OwnershipEnum"/>. <b>Reaching the record</b> Three
-/// entry points, chosen by moment. <see cref="NetwEntity.Of"/> walks up from
-/// any node to its record and is the everyday in-tree lookup.
-/// <see cref="Netw.ConfigureEntity"/> get-or-creates on an orphan, so it is how
-/// a root claims its own record before the tree, and it is named for the
-/// declaration it makes rather than for the lookup it starts with.
-/// <see cref="NetwEntity.Ensure"/> forces the record onto one exact node.
+/// Nodes under the root read it to learn who the entity is, who controls it,
+/// and when it spawns and despawns.
 /// <code>
-/// NetwEntity.of(node)         # in-tree lookup, null when node is under no entity
-/// Netw.configure_entity(self) # get-or-create on an orphan, for a root's _init
-/// NetwEntity.ensure(root)     # force the record onto this exact root
+/// NetwEntity.of(node)         # walks up to the entity, null when there is none
+/// Netw.configure_entity(self) # gets or creates it on a root, in _init
+/// NetwEntity.ensure(root)     # gets or creates it on this exact node
 /// </code>
 /// <para>
-/// <b>Authoring a root</b> A root configures itself in <c>_init</c>. It is
-/// still an orphan there, so <see cref="Netw.ConfigureEntity"/> creates the
-/// record on the root, and the archetype
-/// (<see cref="NetwEntity.InitialController"/>), the spawn-packet properties
-/// (<see cref="NetwPropertyConfig.OnSpawn"/>) and any lifecycle connections all
-/// settle in one place before the entity spawns, beside the rest of the
-/// <c>Netw.configure_*</c> sheet.
+/// <see cref="NetwEntity.Controller"/> is settled before the node enters the
+/// tree, so <see cref="Node.IsMultiplayerAuthority"/> is already correct in
+/// <c>Node._enter_tree</c> and <c>Node._ready</c> on every peer.
 /// <code>
+/// var entity := NetwEntity.of(hit_node)
+/// if entity and entity.is_player:
+///     eliminate(entity.peer_id)
+/// </code>
+/// </para>
+/// <para>
+/// <b>Declaring an entity</b> A root declares itself in <c>_init</c>. A child
+/// marks its own spawn properties in its <c>_init</c> and connects to the
+/// entity in <c>Node._ready</c>, once it has a parent to walk up to.
+/// <code>
+/// # on the root
 /// func _init() -&gt; void:
 ///     var entity := Netw.configure_entity(self)
 ///     entity.initial_controller = NetwEntity.INITIAL_REPRESENTED_PEER
 ///     entity.spawned.connect(_on_spawned)
 ///     Netw.configure_property(self, &amp;"position").on_spawn()
-/// </code>
-/// </para>
-/// <para>
-/// <b>Reaching it from a sibling</b> A child marks its own
-/// <see cref="NetwPropertyConfig.OnSpawn"/> properties in <c>_init</c>, the
-/// same as a root, because the mark records against the script and needs no
-/// parent, and the spawn packet collects it by walking the whole subtree.
-/// Connecting the entity's signals is the part that waits for
-/// <c>Node._ready</c>, where <see cref="NetwEntity.Of"/> walks up to the
-/// resolved record, because a signal needs that record and a child has no
-/// parent in its own <c>_init</c>. A reusable component that must also work
-/// under a scriptless root calls <see cref="Netw.ConfigureEntity"/> on
-/// <see cref="Node.NotificationParented"/> to provision the record itself
-/// before the tree, which is the first moment its parent chain exists to be
-/// climbed.
-/// <code>
+///
+/// # on a child
 /// func _init() -&gt; void:
 ///     Netw.configure_property(self, &amp;"health").on_spawn()
 ///
@@ -79,62 +48,37 @@ namespace Networked;
 /// </code>
 /// </para>
 /// <para>
-/// <b>Acting on an entity</b> The server drives the lifecycle. It creates
-/// entities with <see cref="Netw.Spawn"/> and <see cref="Netw.SpawnPlayer"/>,
-/// moves one with <see cref="Node.Reparent"/> or <see cref="Netw.Reparent"/>,
-/// and ends one with <see cref="NetwEntity.Despawn"/>. A client asks the server
-/// through <see cref="NetwEntity.ClaimAuthority"/> and reads whether it steers
-/// the entity from <see cref="NetwEntity.IsControlledLocally"/>. An entity that
-/// declares <see cref="NetwEntity.Lifecycle"/> lets its
-/// <see cref="NetwEntity.Controller"/> use the same verbs.
+/// A node placed in a scene by hand sets its own
+/// <see cref="NetwEntity.EntityId"/>. A spawned copy receives it with the
+/// spawn.
 /// <code>
-/// var entity := NetwEntity.of(hit_node)
-/// if entity and entity.is_player:
-///     eliminate(entity.peer_id)
+/// func _init() -&gt; void:
+///     Netw.configure_entity(self).entity_id = &amp;"ball"
 /// </code>
 /// </para>
 /// <para>
 /// <b>Control</b> <see cref="NetwEntity.Controller"/> is the peer that steers
-/// the entity, and <c>0</c> means the server. It moves only by a decision the
-/// server sends to every peer that holds the entity.
-/// <see cref="NetwEntity.ControlChanged"/> fires once on each peer after the
-/// decision is in place.
+/// the entity, and <c>0</c> means the server. The root and every node under it
+/// take the controller as their multiplayer authority, as if
+/// <c>Node.set_multiplayer_authority</c> was called on each.
+/// <see cref="NetwEntity.FollowSession"/> keeps a subtree with the server,
+/// which is where a <see cref="MultiplayerSynchronizer"/> the server writes
+/// belongs.
 /// <code>
+/// func _init() -&gt; void:
+///     Netw.configure_entity(self).follow_session(^"ServerSync")
+///
 /// func _physics_process(_delta: float) -&gt; void:
 ///     if entity.is_controlled_locally:
 ///         steer()
 /// </code>
 /// </para>
 /// <para>
-/// <b>Node authority</b> The entity root and every node under it take
-/// <see cref="NetwEntity.Controller"/> as their multiplayer authority, and the
-/// server while <see cref="NetwEntity.Controller"/> is <c>0</c>.
-/// <see cref="NetwEntity.FollowSession"/> keeps one node and everything under
-/// it with the server. That is where a <see cref="MultiplayerSynchronizer"/>
-/// the server writes belongs.
-/// <code>
-/// func _init() -&gt; void:
-///     Netw.configure_entity(self).follow_session(^"ServerSync")
-/// </code>
-/// <code>
-/// controller     root   ServerSync   InputSync
-/// 0              1      1            1
-/// granted to A   A      1            A
-/// revoked        1      1            1
-/// </code>
-/// </para>
-/// <para>
-/// A node added later follows the same rule when it enters the tree. A nested
-/// entity keeps its own <see cref="NetwEntity.Controller"/>. A
-/// <c>Node.set_multiplayer_authority</c> call on a node inside the entity is
-/// replaced at the next change of <see cref="NetwEntity.Controller"/>, and the
-/// first one warns with the node's path. <b>Taking control</b> The session
-/// authority moves control by writing <see cref="NetwEntity.Controller"/>, and
-/// nothing refuses it. A peer asks with <see cref="NetwEntity.ClaimAuthority"/>
-/// and gives control on with <see cref="NetwEntity.ReleaseAuthority"/>. Both
-/// return a <see cref="NetwPromise"/> that resolves with this entity once the
-/// decision reaches this peer. <see cref="Netw.ClaimAuthority"/> and
-/// <see cref="Netw.ReleaseAuthority"/> do the same from any node of the entity.
+/// The server moves control by writing <see cref="NetwEntity.Controller"/>. A
+/// client asks with <see cref="NetwEntity.ClaimAuthority"/> and hands it on
+/// with <see cref="NetwEntity.ReleaseAuthority"/>. Both return a
+/// <see cref="NetwPromise"/> that resolves once the server's decision reaches
+/// this peer.
 /// <code>
 /// private void Grab()
 /// {
@@ -150,89 +94,32 @@ namespace Networked;
 /// </code>
 /// </para>
 /// <para>
-/// <see cref="NetwEntity.Transfer"/> decides whether a peer may ask.
-/// <see cref="NetwEntity.TransferEnum.Fixed"/> refuses every request.
-/// <see cref="NetwEntity.TransferEnum.Requestable"/> changes nothing until the
-/// decision arrives. <see cref="NetwEntity.TransferEnum.Immediate"/> lets the
-/// asking peer run the entity before the decision. <b>Running ahead of the
-/// decision</b> While a request under
-/// <see cref="NetwEntity.TransferEnum.Immediate"/> waits,
-/// <see cref="NetwEntity.IsControlPending"/> and
-/// <see cref="NetwEntity.IsControlledLocally"/> are both <c>true</c> and the
-/// peer writes the entity as if it held it. Nothing it writes is sent, and node
-/// authority waits for the grant. A refusal or a timeout writes back the newest
-/// values the <see cref="NetwEntity.Controller"/> sent.
-/// <code>
-/// claim_authority()     is_control_pending and is_controlled_locally true
-///   granted             controller is this peer, its values are sent
-///   refused, timed out  the controller's values written back
-/// </code>
-/// </para>
-/// <para>
-/// <b>Holds</b> A request names a <see cref="NetwEntity.HoldEnum"/>, and the
-/// hold decides which later requests are refused. The server decides a request
-/// by the first line below that applies.
-/// <code>
-/// the asker already controls it          granted, only the hold changes
-/// another peer holds HOLD_EXCLUSIVE      refused
-/// HOLD_YIELDABLE while another peer has  refused
-/// control_requested calls deny()         refused
-/// otherwise                              granted
-/// </code>
-/// </para>
-/// <para>
-/// A write to <see cref="NetwEntity.Controller"/> moves the entity whatever it
-/// holds, and leaves it at <see cref="NetwEntity.HoldEnum.None"/>. <b>Control
-/// by contact</b> A body can take control of the free bodies it touches and
-/// hand them back once they rest.
+/// <see cref="NetwEntity.Transfer"/> decides whether a peer may ask, and the
+/// <see cref="NetwEntity.HoldEnum"/> of the current controller decides whether
+/// the server refuses. Under <see cref="NetwEntity.TransferEnum.Immediate"/>
+/// the asking peer runs the entity before the decision arrives.
 /// <see cref="NetwSimulationHandle.ClaimOnContact"/> and
-/// <see cref="NetwSimulationHandle.ReleaseOnRest"/> declare it on
-/// <see cref="NetwEntity.Simulation"/>. <b>Letting the controller drive the
-/// lifecycle</b> An entity whose <see cref="NetwEntity.Lifecycle"/> is
-/// <see cref="NetwEntity.LifecycleEnum.Controller"/> may be spawned, moved and
-/// despawned by the peer in <see cref="NetwEntity.Controller"/>, with
-/// <see cref="Netw.Spawn"/>, <see cref="Netw.Reparent"/> and
-/// <see cref="NetwEntity.Despawn"/>. A client that spawns one becomes its
-/// <see cref="NetwEntity.Controller"/>. The change appears on that peer at
-/// once, and the server admits it before any other peer sees it.
+/// <see cref="NetwSimulationHandle.ReleaseOnRest"/> let a body take control of
+/// what it touches and hand it back once it rests.
+/// </para>
+/// <para>
+/// <b>Letting the controller spawn and despawn</b> Only the server spawns,
+/// moves and despawns an entity by default. When
+/// <see cref="NetwEntity.Lifecycle"/> is
+/// <see cref="NetwEntity.LifecycleEnum.Controller"/> the
+/// <see cref="NetwEntity.Controller"/> may too, and the change shows on its
+/// screen at once. The server can refuse it in
+/// <see cref="NetwEntity.LifecycleRequested"/>, and the change is then undone
+/// on the controller.
 /// <code>
 /// func _init() -&gt; void:
 ///     Netw.configure_entity(self).lifecycle = NetwEntity.LIFECYCLE_CONTROLLER
 /// </code>
-/// <code>
-/// the controller acts    the change shows on its own screen at once
-///   server admits        every other peer takes the change
-///   server refuses       undone on the controller, which hears lifecycle_refused
-/// </code>
 /// </para>
 /// <para>
-/// The server refuses a change it denies in
-/// <see cref="NetwEntity.LifecycleRequested"/> through a
-/// <see cref="NetwLifecycleRequest"/>, and a change made on an entity the
-/// server has moved since. <b>Owning identity before the tree</b> A spawned
-/// <see cref="Node"/> must own its identity before it enters the tree. A
-/// replicated spawn carries it in the SPAWN frame and stamps it during
-/// reconstruction, and <see cref="Netw.SpawnPlayer"/> stamps a player's body
-/// from the <see cref="NetwPlayer.UserName"/> it was spawned for. A node the
-/// game authors into a scene declares its own, and one that declares none is
-/// inert.
-/// <code>
-/// func _init() -&gt; void:
-///     Netw.configure_entity(self).entity_id = &amp;"ball"
-/// </code>
-/// </para>
-/// <para>
-/// A node name is never an identity. A scene requires each spawned
-/// <see cref="Node"/> to own its record, which <see cref="NetwEntity.Ensure"/>
-/// provides before the node joins the scene's subtree. <b>The facets it
-/// returns</b> <see cref="NetwEntity.Scene"/>,
-/// <see cref="NetwEntity.Interest"/>, <see cref="NetwEntity.Simulation"/>,
-/// <see cref="NetwEntity.Prediction"/>, and
-/// <see cref="NetwEntity.Interpolation"/> are created once per entity. Repeated
-/// reads return the same object. <see cref="NetwEntity.Simulation"/> says where
-/// and how the entity's body runs on each peer,
-/// <see cref="NetwEntity.Prediction"/> how a controller runs it ahead, and
-/// <see cref="NetwEntity.Interpolation"/> how it is drawn.
+/// <b>Simulation</b> <see cref="NetwEntity.Simulation"/> says how the entity's
+/// body runs on each peer, <see cref="NetwEntity.Prediction"/> how a controller
+/// runs it ahead, and <see cref="NetwEntity.Interpolation"/> how it is drawn.
 /// <code>
 /// func _init() -&gt; void:
 ///     var entity := Netw.configure_entity(self)
@@ -260,8 +147,7 @@ public sealed class NetwEntity : NetwRefCounted
     public enum OwnershipEnum : long
     {
         /// <summary>
-        /// Represents a joined peer. A player. <see cref="NetwEntity.PeerId"/>
-        /// is non-zero.
+        /// A player. <see cref="NetwEntity.PeerId"/> is not <c>0</c>.
         /// </summary>
         Peer = 0,
         /// <summary>
@@ -274,8 +160,8 @@ public sealed class NetwEntity : NetwRefCounted
     public enum ControlKindEnum : long
     {
         /// <summary>
-        /// A peer currently controls the entity.
-        /// <see cref="NetwEntity.Controller"/> is non-zero.
+        /// A peer controls the entity. <see cref="NetwEntity.Controller"/> is
+        /// not <c>0</c>.
         /// </summary>
         PeerControlled = 0,
         /// <summary>
@@ -288,13 +174,12 @@ public sealed class NetwEntity : NetwRefCounted
     public enum InitialControllerEnum : long
     {
         /// <summary>
-        /// The server controls the entity at spawn. Use it for props, NPCs and
-        /// player entities the server should steer.
+        /// The server controls the entity at spawn.
         /// </summary>
         Server = 0,
         /// <summary>
-        /// The represented peer controls the entity at spawn. Use it when a
-        /// player entity starts controlled by <see cref="NetwEntity.PeerId"/>.
+        /// The peer in <see cref="NetwEntity.PeerId"/> controls the entity at
+        /// spawn.
         /// </summary>
         RepresentedPeer = 1,
     }
@@ -302,23 +187,19 @@ public sealed class NetwEntity : NetwRefCounted
     public enum TransferEnum : long
     {
         /// <summary>
-        /// Control never changes through
-        /// <see cref="NetwEntity.ClaimAuthority"/>. Use it for fixed player
-        /// entities and server props.
+        /// Every <see cref="NetwEntity.ClaimAuthority"/> is refused.
         /// </summary>
         Fixed = 0,
         /// <summary>
-        /// Peers may ask the server for control. The server arbitrates.
+        /// Peers may ask the server for control.
         /// </summary>
         Requestable = 1,
         /// <summary>
-        /// Peers may ask the server for control as with
-        /// <see cref="NetwEntity.TransferEnum.Requestable"/>, and the asking
-        /// peer runs the entity before the decision arrives. A refusal puts
-        /// back the newest rows the controller sent, the spawn values included.
-        /// A request is refused when the entity has a
-        /// <see cref="NetwPropertyConfig.State"/> row, declares prediction, or
-        /// is replicated by a <see cref="MultiplayerSynchronizer"/>.
+        /// Like <see cref="NetwEntity.TransferEnum.Requestable"/>, and the
+        /// asking peer runs the entity before the decision arrives. A refusal
+        /// puts back the controller's latest values. Not available on an entity
+        /// with a <see cref="NetwPropertyConfig.State"/> property, prediction,
+        /// or a <see cref="MultiplayerSynchronizer"/>.
         /// </summary>
         Immediate = 2,
     }
@@ -326,20 +207,18 @@ public sealed class NetwEntity : NetwRefCounted
     public enum HoldEnum : long
     {
         /// <summary>
-        /// Keeps no other peer out. The hold of an entity the server controls
-        /// and of every decision the server makes by itself.
+        /// Keeps no other peer out.
         /// </summary>
         None = 0,
         /// <summary>
-        /// Another peer's <see cref="NetwEntity.HoldEnum.Exclusive"/> request
-        /// can take the entity. Another peer's
-        /// <see cref="NetwEntity.HoldEnum.Yieldable"/> request is refused.
+        /// Another peer's <see cref="NetwEntity.HoldEnum.Exclusive"/> claim
+        /// takes the entity. Another peer's
+        /// <see cref="NetwEntity.HoldEnum.Yieldable"/> claim is refused.
         /// </summary>
         Yieldable = 1,
         /// <summary>
-        /// Every other peer's claim is refused. Only a write to
-        /// <see cref="NetwEntity.Controller"/> on the session authority moves
-        /// the entity.
+        /// Every other peer's claim is refused. Only the server writing
+        /// <see cref="NetwEntity.Controller"/> moves the entity.
         /// </summary>
         Exclusive = 2,
     }
@@ -347,8 +226,7 @@ public sealed class NetwEntity : NetwRefCounted
     public enum DisconnectRule : long
     {
         /// <summary>
-        /// Control reverts to the server when the controller disconnects. A
-        /// dropped vehicle stays in the world.
+        /// The server takes control when the controller disconnects.
         /// </summary>
         RevertToServer = 0,
         /// <summary>
@@ -364,10 +242,8 @@ public sealed class NetwEntity : NetwRefCounted
         /// </summary>
         Cascade = 0,
         /// <summary>
-        /// Before the entity above it despawns, the server moves this entity
-        /// under that entity's own parent where it stands, and every peer moves
-        /// it there too. A held item drops where its holder stood. The entities
-        /// below this one move with it.
+        /// The entity moves up to its despawning parent's own parent, keeping
+        /// where it stands. A held item drops where its holder stood.
         /// </summary>
         Detach = 1,
     }
@@ -375,31 +251,19 @@ public sealed class NetwEntity : NetwRefCounted
     public enum LifecycleEnum : long
     {
         /// <summary>
-        /// Only the session authority spawns, moves and despawns the entity.
-        /// Every other peer is refused with
-        /// <c>@GlobalScope.ERR_UNAUTHORIZED</c>.
+        /// Only the server spawns, moves and despawns the entity. Other peers
+        /// are refused with <c>@GlobalScope.ERR_UNAUTHORIZED</c>.
         /// </summary>
         Session = 0,
         /// <summary>
-        /// The entity declares that its confirmed
-        /// <see cref="NetwEntity.Controller"/> drives its lifecycle beside the
-        /// session authority, and so does a peer whose
-        /// <see cref="NetwEntity.ClaimAuthority"/> on a
-        /// <see cref="NetwEntity.TransferEnum.Immediate"/> entity is waiting.
-        /// Every other peer is refused with
-        /// <c>@GlobalScope.ERR_UNAUTHORIZED</c>, except that any peer may spawn
-        /// one and becomes its <see cref="NetwEntity.Controller"/>. A predicted
-        /// entity, a player's body and an entity replicated through a
-        /// <see cref="MultiplayerSynchronizer"/> or a
-        /// <see cref="MultiplayerSpawner"/> refuse every peer but the session
-        /// authority with <c>@GlobalScope.ERR_UNAVAILABLE</c>. The controller
-        /// moves the entity with <see cref="Netw.Reparent"/> or
-        /// <see cref="Node.Reparent"/>, and the move lands on its own screen at
-        /// once. The session authority then applies it for every other peer, or
-        /// refuses it, and a refused move is undone on the controller, which
-        /// ends where the session holds the entity with its world pose kept. A
-        /// move the session makes while a controller's move is on its way
-        /// refuses the controller's move.
+        /// The <see cref="NetwEntity.Controller"/> may also spawn, move and
+        /// despawn the entity, and a peer that spawns one becomes its
+        /// controller. Other peers are refused with
+        /// <c>@GlobalScope.ERR_UNAUTHORIZED</c>. A predicted entity, a player's
+        /// body, and an entity replicated by a
+        /// <see cref="MultiplayerSynchronizer"/> or
+        /// <see cref="MultiplayerSpawner"/> allow only the server, and refuse
+        /// other peers with <c>@GlobalScope.ERR_UNAVAILABLE</c>.
         /// </summary>
         Controller = 1,
     }
@@ -407,42 +271,39 @@ public sealed class NetwEntity : NetwRefCounted
     public enum StageEnum : long
     {
         /// <summary>
-        /// Identity unbound and inert toward the wire: no route, no
-        /// registration, and never process-disabled behind its back. A bare
-        /// programmatic node lives here.
+        /// No identity yet, and nothing is sent for it. A node created in code
+        /// starts here.
         /// </summary>
         Unbound = 0,
         /// <summary>
-        /// A declared editor-placed factory scene. Deactivated. Terminal.
+        /// A template. See <see cref="NetwEntity.IsTemplate"/>.
         /// </summary>
         Template = 1,
         /// <summary>
-        /// Identity sealed, awaiting tree entry. The spawn-state orphan window.
+        /// Identity is set and the node has not entered the tree yet.
         /// </summary>
         Armed = 2,
         /// <summary>
-        /// In the tree and routable.
+        /// In the tree with a <see cref="NetwEntity.Route"/>.
         /// </summary>
         Live = 3,
         /// <summary>
-        /// Teardown in flight, on every peer. See
-        /// <see cref="NetwEntity.ActiveDespawnOpts"/>.
+        /// Being despawned. See <see cref="NetwEntity.ActiveDespawnOpts"/>.
         /// </summary>
         Despawning = 4,
         /// <summary>
-        /// Deactivated but rewindable, awaiting free.
+        /// Inactive but still available to rewind, waiting to be freed.
         /// </summary>
         Lingering = 5,
         /// <summary>
-        /// The owner is gone. Terminal.
+        /// The owner is gone.
         /// </summary>
         Freed = 6,
     }
 
     /// <summary>
-    /// Emitted once after identity, authority and spawn-packet properties are
-    /// applied. The owner is in the tree, but <c>Node._ready</c> may still be
-    /// running.
+    /// Emitted once after identity, authority and spawn properties are applied.
+    /// The owner is in the tree, but <c>Node._ready</c> may still be running.
     /// </summary>
     public event Action Spawning
     {
@@ -451,8 +312,7 @@ public sealed class NetwEntity : NetwRefCounted
     }
 
     /// <summary>
-    /// Emitted once after scene registration and the owner's <c>Node._ready</c>
-    /// complete.
+    /// Emitted once after the owner's <c>Node._ready</c> completes.
     /// </summary>
     public event Action Spawned
     {
@@ -461,16 +321,10 @@ public sealed class NetwEntity : NetwRefCounted
     }
 
     /// <summary>
-    /// Emitted right before <see cref="NetwEntity.Despawn"/> tears the entity
-    /// down, carrying the despawn <c>reason</c>, while
-    /// <see cref="NetwEntity.Owner"/> is still readable. A listener reads
-    /// <see cref="NetwEntity.ActiveDespawnOpts"/> during this emission to
-    /// branch on the despawn mode. Completion is
-    /// <see cref="NetwEntity.Despawned"/>, after any configured linger. Only a
-    /// declared despawn owes this warning. A move and a hide emit nothing here,
-    /// and removing or freeing an owner outright gives no preparation at all,
-    /// because there is no moment at which the framework could honestly promise
-    /// one.
+    /// Emitted right before <see cref="NetwEntity.Despawn"/> frees the entity,
+    /// with its <c>reason</c>, while <see cref="NetwEntity.Owner"/> can still
+    /// be read. <see cref="NetwEntity.ActiveDespawnOpts"/> is set during it.
+    /// Freeing the owner directly does not emit it.
     /// </summary>
     public event Action<StringName> Despawning
     {
@@ -479,20 +333,11 @@ public sealed class NetwEntity : NetwRefCounted
     }
 
     /// <summary>
-    /// Emitted once when a death has actually completed at
-    /// <see cref="NetwEntity.StageEnum.Freed"/>, after the session has released
-    /// the entity's services. It reports a completion rather than an intention,
-    /// so it covers a <see cref="NetwEntity.Despawn"/> and equally an
-    /// authoritative owner that was removed or freed with no despawn command,
-    /// and it is meaningful for a tracked entity that never held a
-    /// <see cref="NetwEntity.Route"/>. A move and a hide complete no death and
-    /// emit nothing here. An undeclared removal resolves at the next
-    /// <see cref="NetwMultiplayer.SessionFlushDeferred"/>, by which time
-    /// <see cref="NetwEntity.Owner"/> may be <c>null</c> or may still exist
-    /// outside the tree. This is not a signal a dying node can use for its own
-    /// cleanup; an observer that outlives the owner can. Read live component
-    /// state from <see cref="NetwEntity.Despawning"/> instead, which only a
-    /// declared despawn owes.
+    /// Emitted once the entity has been freed, by
+    /// <see cref="NetwEntity.Despawn"/> or by freeing
+    /// <see cref="NetwEntity.Owner"/> directly. <see cref="NetwEntity.Owner"/>
+    /// may already be <c>null</c>, so cleanup that needs the node belongs in
+    /// <see cref="NetwEntity.Despawning"/>.
     /// </summary>
     public event Action Despawned
     {
@@ -501,23 +346,13 @@ public sealed class NetwEntity : NetwRefCounted
     }
 
     /// <summary>
-    /// Emitted when this receiving peer loses its local body without learning
-    /// that the entity died. The session has already let go of that body's
-    /// persistence enrollment, without writing it out, along with its local
-    /// layer membership, perception and its prediction, replication and display
-    /// state. The route reads <see cref="NetwMultiplayer.EntityState.Absent"/>,
-    /// the identity and any parked liveness waiters stand, and a later
-    /// authoritative spawn binds the same <see cref="NetwEntity.Rid"/> to a
-    /// fresh body. A server-issued hide under
-    /// <see cref="NetwMultiplayer.LeavePolicy.Hide"/> reports while
-    /// <see cref="NetwEntity.Owner"/> is still readable and the framework frees
-    /// it after. A copy this peer deleted itself reports at the next
-    /// <see cref="NetwMultiplayer.SessionFlushDeferred"/>, when that owner is
-    /// already gone. Neither emits <see cref="NetwEntity.Despawning"/> or
-    /// <see cref="NetwEntity.Despawned"/>, neither advances the stage, and
-    /// neither revokes the server's scene admission. Subscribe here for
-    /// anything that must let go of a body that may come back, and to
-    /// <see cref="NetwEntity.Despawning"/> for a body that is ending.
+    /// Emitted on a client that loses its copy of the entity without the entity
+    /// being despawned, such as a hide under
+    /// <see cref="NetwMultiplayer.LeavePolicy.Hide"/>. The entity may come back
+    /// later with the same <see cref="NetwEntity.Rid"/>. Neither
+    /// <see cref="NetwEntity.Despawning"/> nor
+    /// <see cref="NetwEntity.Despawned"/> is emitted, so anything tied to a
+    /// body that may return connects here.
     /// </summary>
     public event Action Hidden
     {
@@ -526,11 +361,9 @@ public sealed class NetwEntity : NetwRefCounted
     }
 
     /// <summary>
-    /// Emitted when this entity becomes visible to <c>peer_id</c>. On the
-    /// server <c>peer_id</c> is the observer; on a client it is the local peer
-    /// and means this entity's synchronizers became visible. Prefer
-    /// <see cref="NetwInterestLayer.EntityVisible"/> when client code needs the
-    /// layer that caused the transition.
+    /// Emitted when <c>peer_id</c> starts seeing this entity. On a client
+    /// <c>peer_id</c> is the local peer.
+    /// <see cref="NetwInterestLayer.EntityVisible"/> also names the layer.
     /// </summary>
     public event Action<long> InterestEnter
     {
@@ -539,7 +372,7 @@ public sealed class NetwEntity : NetwRefCounted
     }
 
     /// <summary>
-    /// Emitted when this entity stops being visible to <c>peer_id</c>.
+    /// Emitted when <c>peer_id</c> stops seeing this entity.
     /// </summary>
     public event Action<long> InterestExit
     {
@@ -548,9 +381,8 @@ public sealed class NetwEntity : NetwRefCounted
     }
 
     /// <summary>
-    /// Emitted on the owner client when another peer <c>peer_id</c> gains
-    /// visibility of this entity through <c>layer_id</c>. Use it for owner-side
-    /// UI such as "who can see me?" indicators.
+    /// Emitted when <c>peer_id</c> starts seeing this entity through
+    /// <c>layer_id</c>.
     /// </summary>
     public event Action<StringName, long> ObserverEntered
     {
@@ -559,8 +391,8 @@ public sealed class NetwEntity : NetwRefCounted
     }
 
     /// <summary>
-    /// Emitted on the owner client when <c>peer_id</c> stops observing this
-    /// entity through <c>layer_id</c>.
+    /// Emitted when <c>peer_id</c> stops seeing this entity through
+    /// <c>layer_id</c>.
     /// </summary>
     public event Action<StringName, long> ObserverLeft
     {
@@ -569,11 +401,8 @@ public sealed class NetwEntity : NetwRefCounted
     }
 
     /// <summary>
-    /// Emitted once when <see cref="NetwEntity.Controller"/> changes. On a
-    /// transfer through a write to <see cref="NetwEntity.Controller"/>, a
-    /// granted <see cref="NetwEntity.ClaimAuthority"/>, a
-    /// <see cref="NetwEntity.ReleaseAuthority"/> or a received control frame,
-    /// it fires after the node authority has moved.
+    /// Emitted once on each peer when <see cref="NetwEntity.Controller"/>
+    /// changes, after node authority has moved.
     /// </summary>
     public event Action<long, long> ControlChanged
     {
@@ -582,13 +411,10 @@ public sealed class NetwEntity : NetwRefCounted
     }
 
     /// <summary>
-    /// Emitted on the server when a peer asks for control through
-    /// <see cref="NetwEntity.ClaimAuthority"/>. Gameplay code may inspect
-    /// <c>request</c> and call <see cref="NetwControlRequest.Deny"/> before the
-    /// default grant path runs. The denial is a latch, so listener order does
-    /// not matter. It is not emitted when the current
-    /// <see cref="NetwEntity.Controller"/> changes its own
-    /// <see cref="NetwEntity.Hold"/>, or when another peer's
+    /// Emitted on the server when a peer calls
+    /// <see cref="NetwEntity.ClaimAuthority"/>. Calling
+    /// <see cref="NetwControlRequest.Deny"/> on <c>request</c> refuses it,
+    /// whatever the listener order. Not emitted when a
     /// <see cref="NetwEntity.Hold"/> already refuses the request.
     /// </summary>
     public event Action<long, Variant> ControlRequested
@@ -600,9 +426,8 @@ public sealed class NetwEntity : NetwRefCounted
     /// <summary>
     /// Emitted on the server when the <see cref="NetwEntity.Controller"/> of a
     /// <see cref="NetwEntity.LifecycleEnum.Controller"/> entity spawns,
-    /// despawns or moves it, before any other peer sees the change. Calling
-    /// <see cref="NetwLifecycleRequest.Deny"/> on <c>request</c> refuses it,
-    /// and the change is undone on <c>peer_id</c>.
+    /// despawns or moves it, before other peers see the change. Calling
+    /// <see cref="NetwLifecycleRequest.Deny"/> on <c>request</c> refuses it.
     /// <code>
     /// public Crate()
     /// {
@@ -617,10 +442,8 @@ public sealed class NetwEntity : NetwRefCounted
     /// }
     /// </code>
     /// <para>
-    /// On a spawn it is emitted on the server's copy, which holds the values
-    /// <c>peer_id</c> sent and has not entered the tree yet, so
-    /// <see cref="NetwLifecycleRequest.Destination"/> is the handler's way into
-    /// the world. A change the server makes itself emits nothing.
+    /// On a spawn the entity has not entered the tree yet, so
+    /// <see cref="NetwLifecycleRequest.Destination"/> is where it will go.
     /// </para>
     /// </summary>
     public event Action<long, Variant> LifecycleRequested
@@ -631,12 +454,10 @@ public sealed class NetwEntity : NetwRefCounted
 
     /// <summary>
     /// Emitted on the peer whose spawn, despawn or move of this entity the
-    /// server refused, before the change is undone there.
+    /// server refused, before the change is undone.
     /// <see cref="NetwLifecycleRequest.Reason"/> is what the server passed to
-    /// <see cref="NetwLifecycleRequest.Deny"/>, and it is empty when something
-    /// else refused the change, such as a move the server made first. A refused
-    /// spawn emits it on the copy about to be removed, and a refused despawn
-    /// emits it on the entity the server serves back.
+    /// <see cref="NetwLifecycleRequest.Deny"/>, or empty when the server
+    /// refused for another reason.
     /// </summary>
     public event Action<Variant> LifecycleRefused
     {
@@ -645,26 +466,13 @@ public sealed class NetwEntity : NetwRefCounted
     }
 
     /// <summary>
-    /// Emitted once per settled move, after the session has made this entity's
-    /// ancestry consistent, whether it was made with
-    /// <see cref="Node.Reparent"/>, with a bare <see cref="Node.RemoveChild"/>
-    /// followed by <see cref="Node.AddChild"/>, or through
-    /// <see cref="Netw.Reparent"/>. Standing up for the first time is not a
-    /// move and reports nothing. Several hops before one settle are one move,
-    /// reported at the parent the owner ended under. A component that
-    /// unregisters in <c>_exit_tree</c> reconnects its runtime service
-    /// registration here, so a move self-heals without
-    /// <see cref="Node.RequestReady"/>. The signal takes no argument. Its fact
-    /// is that the owner has landed, so a listener reads the final parent or
-    /// <see cref="NetwEntity.Scene"/> off the live owner. What a move ASKED FOR
-    /// is a command input, and it reaches an observer in the detail of
-    /// <see cref="NetwMultiplayer.Event.Reparented"/> instead.
-    /// <c>_exit_tree</c> fires on the first half of a move as well as on a real
-    /// departure, and nothing readable at that moment tells them apart. So a
-    /// PAIRED handler belongs there, because re-entry re-arms it, and a ONE-WAY
-    /// teardown never does: hang that on <see cref="NetwEntity.Despawning"/> or
-    /// <see cref="NetwEntity.Despawned"/>, which fire for teardowns only, or on
-    /// <see cref="NetwEntity.Hidden"/> for a body that may come back.
+    /// Emitted once after the entity moves to a new parent, by
+    /// <see cref="Node.Reparent"/>, <see cref="Netw.Reparent"/>, or
+    /// <see cref="Node.RemoveChild"/> followed by <see cref="Node.AddChild"/>.
+    /// Read the new parent from <see cref="NetwEntity.Owner"/>.
+    /// <c>_exit_tree</c> also runs during a move, so teardown that must happen
+    /// once belongs in <see cref="NetwEntity.Despawning"/> or
+    /// <see cref="NetwEntity.Hidden"/>.
     /// <code>
     /// NetwEntity.of(self).reparented.connect(reset_smoothing)
     /// </code>
@@ -676,12 +484,9 @@ public sealed class NetwEntity : NetwRefCounted
     }
 
     /// <summary>
-    /// Announces that this entity's player is now the locally displayed view.
-    /// Driven by the local display whenever this player's scene becomes the one
-    /// shown on this peer, on the initial display and on every return. When
-    /// this signal has no connections, <see cref="HostSceneView"/> makes the
-    /// first conventional camera current; connect it to take ownership with a
-    /// custom camera rig.
+    /// Emitted when this entity's player becomes the view shown on this peer.
+    /// With nothing connected, <see cref="HostSceneView"/> makes the first
+    /// camera current, so connect it to use your own camera.
     /// </summary>
     public event Action ViewActivated
     {
@@ -694,7 +499,7 @@ public sealed class NetwEntity : NetwRefCounted
 
     /// <summary>
     /// The root <see cref="Node"/> that holds this entity, or <c>null</c> once
-    /// the tree has freed it.
+    /// it is freed.
     /// </summary>
     public Node Owner
     {
@@ -715,13 +520,11 @@ public sealed class NetwEntity : NetwRefCounted
         NetwApi.MethodBind("NetwEntity", "set_entity_id", 3304788590UL);
 
     /// <summary>
-    /// The stable display, save and debug label for this entity, and what
-    /// identifies it across peers. An entity a game authors into a scene sets
-    /// it in <c>Object._init</c>, before the node enters the tree, because an
-    /// entity carrying none never activates. A spawn leaves it to
-    /// <see cref="Netw.SpawnPlayer"/>, which stamps the player's
-    /// <see cref="NetwPlayer.UserName"/> onto the body it was spawned for. A
-    /// game handing one player several bodies stamps a distinct id on each.
+    /// The name that identifies this entity on every peer, and in saves and
+    /// logs. A node placed in a scene sets it in <c>Object._init</c>, since an
+    /// entity without one stays inactive. <see cref="Netw.SpawnPlayer"/> sets
+    /// it to the player's <see cref="NetwPlayer.UserName"/>, so a game giving
+    /// one player several bodies sets a distinct id on each.
     /// </summary>
     public StringName EntityId
     {
@@ -751,11 +554,8 @@ public sealed class NetwEntity : NetwRefCounted
 
     /// <summary>
     /// The peer this entity represents, or <c>0</c> for a server-owned entity
-    /// such as an NPC, prop or world object. A non-zero value drives
-    /// <see cref="NetwPlayer.Bodies"/>, the scene subscription a residing body
-    /// grants, and an automatic <see cref="NetwEntity.Despawn"/> when its peer
-    /// disconnects. This is the source of the player test. See
-    /// <see cref="NetwEntity.IsPlayer"/>.
+    /// such as an NPC or prop. A player's entity is listed in
+    /// <see cref="NetwPlayer.Bodies"/> and despawns when that peer disconnects.
     /// </summary>
     public long PeerId
     {
@@ -781,12 +581,9 @@ public sealed class NetwEntity : NetwRefCounted
         NetwApi.MethodBind("NetwEntity", "get_route", 3905245786UL);
 
     /// <summary>
-    /// The compact wire route naming this entity, or <c>0</c> when unroutable.
-    /// Decoded from the SPAWN header. Every frame envelope carries this value
-    /// instead of a node path, so a packet can always be addressed even while
-    /// the node it targets is still spawning. See
-    /// <see cref="NetwMultiplayer.LivenessRouteOf"/> for lookups by entity and
-    /// <see cref="NetwMultiplayer.EntityFromRoute"/> for the reverse.
+    /// The number that addresses this entity in packets, or <c>0</c> when it
+    /// has none. <see cref="NetwMultiplayer.EntityFromRoute"/> maps it back to
+    /// the entity.
     /// </summary>
     public long Route
     {
@@ -802,18 +599,12 @@ public sealed class NetwEntity : NetwRefCounted
         NetwApi.MethodBind("NetwEntity", "get_rid", 2944877500UL);
 
     /// <summary>
-    /// The handle naming this entity, valid from construction until this record
-    /// is freed. One handle names one entity across every life it has, created
-    /// from <c>NetwEntityIds</c> rather than from any session, because an
-    /// entity is configured and read before a session exists to number it.
-    /// Nothing clears it: an entity re-admitted onto a tombstoned
-    /// <see cref="NetwEntity.Route"/> adopts the record that route already
-    /// stands for, one <see cref="NetwMultiplayer.EntityGetEpoch"/> higher, and
-    /// that epoch is what tells a packet authored before the re-admission from
-    /// one authored after. Holding a handle is not the same as a session
-    /// knowing it, so compare <see cref="NetwMultiplayer.EntityGetState"/>
-    /// against <see cref="NetwMultiplayer.EntityState.Unknown"/> before using a
-    /// flat verb rather than asking <see cref="Rid.IsValid"/>.
+    /// The <see cref="Rid"/> naming this entity, valid until this record is
+    /// freed. A respawn on the same <see cref="NetwEntity.Route"/> keeps it and
+    /// raises <see cref="NetwMultiplayer.EntityGetEpoch"/>. To check that the
+    /// session knows the entity, compare
+    /// <see cref="NetwMultiplayer.EntityGetState"/> against
+    /// <see cref="NetwMultiplayer.EntityState.Unknown"/>.
     /// <code>
     /// if api.entity_get_state(entity.rid) != NetwMultiplayer.ENTITY_STATE_UNKNOWN:
     ///     var state := api.entity_get_state(entity.rid)
@@ -833,16 +624,9 @@ public sealed class NetwEntity : NetwRefCounted
         NetwApi.MethodBind("NetwEntity", "get_multiplayer", 406750475UL);
 
     /// <summary>
-    /// The <see cref="NetwMultiplayer"/> session this entity belongs to, or
-    /// <c>null</c> when it has none, which is an offline rig or an orphan
-    /// before activation. Mirrors <see cref="Node.Multiplayer"/> on the entity
-    /// root once live, but handed over by the creator rather than
-    /// re-discovered: stamped once, when the entity reaches
-    /// <see cref="NetwEntity.StageEnum.Armed"/> on a spawn path, or at first
-    /// tree entry for an entity a game authored into a scene. Immutable
-    /// afterward, since an entity changes sessions only by despawn and respawn.
-    /// Every session-derived member resolves through this one handle, so "no
-    /// session" is the single condition <c>multiplayer == null</c>.
+    /// The <see cref="NetwMultiplayer"/> this entity belongs to, the same as
+    /// the root's <see cref="Node.Multiplayer"/>. <c>null</c> offline or before
+    /// the entity spawns, and it does not change afterwards.
     /// </summary>
     public MultiplayerApi Multiplayer
     {
@@ -867,14 +651,8 @@ public sealed class NetwEntity : NetwRefCounted
             4242440256UL);
 
     /// <summary>
-    /// The spawn-time control rule, as an
-    /// <see cref="NetwEntity.InitialControllerEnum"/>. An archetype config
-    /// field, written while the record is
-    /// <see cref="NetwEntity.StageEnum.Unbound"/> and read once, when the
-    /// entity reaches <see cref="NetwEntity.StageEnum.Armed"/>. The
-    /// serialization-safe home is the entity root's own <c>_init</c>, which
-    /// re-runs on every instantiate so a packed scene carries the rule without
-    /// a marker node or metadata.
+    /// Who controls the entity when it spawns. Set it in the root's
+    /// <c>_init</c>.
     /// <code>
     /// func _init() -&gt; void:
     ///     var entity := Netw.configure_entity(self)
@@ -911,14 +689,9 @@ public sealed class NetwEntity : NetwRefCounted
         NetwApi.MethodBind("NetwEntity", "set_transfer", 1617541268UL);
 
     /// <summary>
-    /// The player request policy for control transfer, as a
-    /// <see cref="NetwEntity.TransferEnum"/>. An archetype config field written
-    /// in the entity root's <c>_init</c> alongside
-    /// <see cref="NetwEntity.InitialController"/> and read while the record is
-    /// <see cref="NetwEntity.StageEnum.Unbound"/>.
-    /// <see cref="NetwEntity.TransferEnum.Requestable"/> lets peers call
-    /// <see cref="NetwEntity.ClaimAuthority"/>, and the server emits
-    /// <see cref="NetwEntity.ControlRequested"/> before granting.
+    /// Whether peers may ask for control with
+    /// <see cref="NetwEntity.ClaimAuthority"/>. Set it in the root's
+    /// <c>_init</c> beside <see cref="NetwEntity.InitialController"/>.
     /// </summary>
     public NetwEntity.TransferEnum Transfer
     {
@@ -953,10 +726,8 @@ public sealed class NetwEntity : NetwRefCounted
             3931776110UL);
 
     /// <summary>
-    /// The lifetime rule for an entity whose controller disconnects, as a
-    /// <see cref="NetwEntity.DisconnectRule"/>. It applies only when the
-    /// disconnected peer controls the entity without being represented by it:
-    /// player representation still despawns through
+    /// What happens to the entity when its <see cref="NetwEntity.Controller"/>
+    /// disconnects. A player's own body still despawns with its
     /// <see cref="NetwEntity.PeerId"/>.
     /// </summary>
     public NetwEntity.DisconnectRule OnControllerDisconnect
@@ -989,12 +760,9 @@ public sealed class NetwEntity : NetwRefCounted
         NetwApi.MethodBind("NetwEntity", "set_on_parent_despawn", 2694955054UL);
 
     /// <summary>
-    /// What happens to this entity when an entity above it is ended with
-    /// <see cref="NetwEntity.Despawn"/>, as a
-    /// <see cref="NetwEntity.ParentDespawnRule"/>. Set it in <c>_init</c>
-    /// beside <see cref="NetwEntity.Transfer"/>. A parent freed without
-    /// <see cref="NetwEntity.Despawn"/> takes every descendant with it,
-    /// whatever this rule says.
+    /// What happens to this entity when an entity above it is despawned with
+    /// <see cref="NetwEntity.Despawn"/>. A parent freed without
+    /// <see cref="NetwEntity.Despawn"/> frees this entity too.
     /// <code>
     /// func _init() -&gt; void:
     ///     var entity := Netw.configure_entity(self)
@@ -1031,22 +799,12 @@ public sealed class NetwEntity : NetwRefCounted
         NetwApi.MethodBind("NetwEntity", "set_lifecycle", 3204602022UL);
 
     /// <summary>
-    /// Who may spawn, move and despawn this entity, as a
-    /// <see cref="NetwEntity.LifecycleEnum"/>. Set it in <c>_init</c> beside
-    /// <see cref="NetwEntity.Transfer"/>, so every peer that builds the entity
-    /// reads the same declaration. A verb the declaration does not allow on
-    /// this peer is refused before anything moves or is sent. The refusal
-    /// pushes an error naming this member and the root, and the verb answers
-    /// its own failure value. <see cref="Netw.Spawn"/>,
-    /// <see cref="Netw.Replicate"/> and <see cref="NetwEntity.SpawnUnder"/>
-    /// answer <c>null</c>, <see cref="Netw.Despawn"/> answers the refusal's
-    /// code, and <see cref="Netw.Reparent"/> answers a rejected
-    /// <see cref="NetwPromise"/>. A <see cref="Node.Reparent"/> cannot be
-    /// refused, so it warns once per entity and the move stays on this peer.
-    /// Every peer, the server included, refuses these verbs with
-    /// <c>@GlobalScope.ERR_BUSY</c> during a prediction replay, whatever this
-    /// member declares, so a predicted step spawns on a fresh tick only. The
-    /// refusal raises no error, so a step that calls them needs no guard.
+    /// Who may spawn, move and despawn this entity. Set it in <c>_init</c>
+    /// beside <see cref="NetwEntity.Transfer"/>. A refused call pushes an error
+    /// and returns its failure value. <see cref="Node.Reparent"/> cannot be
+    /// refused, so it warns and the move stays on this peer. During a
+    /// prediction replay these calls return <c>@GlobalScope.ERR_BUSY</c> with
+    /// no error, so a predicted step spawns only on a fresh tick.
     /// <code>
     /// func _init() -&gt; void:
     ///     var entity := Netw.configure_entity(self)
@@ -1080,12 +838,10 @@ public sealed class NetwEntity : NetwRefCounted
             36873697UL);
 
     /// <summary>
-    /// <c>true</c> when this entity is a multiplayer scene, the one
-    /// <see cref="NetwEntity.Scene"/> resolves to for itself and every entity
-    /// below it. A scene spawns, replicates and despawns like any other entity.
-    /// It is declared with <see cref="Netw.ConfigureMultiplayerScene"/> while
-    /// the record is <see cref="NetwEntity.StageEnum.Unbound"/>, because the
-    /// declaration travels in the spawn packet.
+    /// <c>true</c> when this entity is a multiplayer scene, which
+    /// <see cref="NetwEntity.Scene"/> returns for it and every entity under it.
+    /// Declared with <see cref="Netw.ConfigureMultiplayerScene"/> in
+    /// <c>_init</c>.
     /// <code>
     /// func _init() -&gt; void:
     ///     Netw.configure_multiplayer_scene(self).labeled(&amp;"Arena")
@@ -1111,31 +867,17 @@ public sealed class NetwEntity : NetwRefCounted
         NetwApi.MethodBind("NetwEntity", "set_controller", 1286410249UL);
 
     /// <summary>
-    /// The peer that currently steers this entity, <c>0</c> for the server. A
-    /// write before the entity reaches <see cref="NetwEntity.StageEnum.Armed"/>
-    /// sets the controller it starts with, in place of the
-    /// <see cref="NetwEntity.InitialController"/> rule. A write after that
-    /// moves control. On the session authority it reaches every peer that holds
-    /// the entity, moves node authority, ignores <see cref="NetwEntity.Hold"/>
-    /// and leaves it at <see cref="NetwEntity.HoldEnum.None"/>. Nothing refuses
-    /// it. Any other peer's write is refused with an error, and that peer asks
-    /// with <see cref="NetwEntity.ClaimAuthority"/> instead.
+    /// The peer that steers this entity, <c>0</c> for the server. Written
+    /// before the entity reaches <see cref="NetwEntity.StageEnum.Armed"/>, it
+    /// sets the starting controller in place of
+    /// <see cref="NetwEntity.InitialController"/>. Written on the server after
+    /// that, it moves control on every peer and resets
+    /// <see cref="NetwEntity.Hold"/> to <see cref="NetwEntity.HoldEnum.None"/>.
+    /// A client asks with <see cref="NetwEntity.ClaimAuthority"/>.
     /// <code>
     /// entity.controller = peer_id   # hand it to a peer
     /// entity.controller = 0         # take it back to the server
     /// </code>
-    /// <para>
-    /// Rows of a <see cref="NetwPropertySet.RecordEnum.Input"/> or
-    /// <see cref="NetwPropertySet.RecordEnum.Broadcast"/> record belong to the
-    /// controller that wrote them. Once a change of controller reaches a peer,
-    /// that peer drops every row the previous controller still has in flight,
-    /// even when control later returns to the same peer.
-    /// <code>
-    /// var entity := NetwEntity.of(ball)
-    /// if entity.control_kind == NetwEntity.CONTROL_PEER_CONTROLLED:
-    ///     show_controller(entity.controller_player)
-    /// </code>
-    /// </para>
     /// </summary>
     public long Controller
     {
@@ -1161,7 +903,7 @@ public sealed class NetwEntity : NetwRefCounted
         NetwApi.MethodBind("NetwEntity", "get_control_kind", 382292765UL);
 
     /// <summary>
-    /// Derived from <see cref="NetwEntity.Controller"/>. See
+    /// Whether a peer or the server controls this entity. See
     /// <see cref="NetwEntity.ControlKindEnum"/>.
     /// </summary>
     public NetwEntity.ControlKindEnum ControlKind
@@ -1184,8 +926,7 @@ public sealed class NetwEntity : NetwRefCounted
             36873697UL);
 
     /// <summary>
-    /// <c>true</c> when the local peer controls this entity, or has a
-    /// <see cref="NetwEntity.ClaimAuthority"/> waiting on a
+    /// <c>true</c> when this peer controls the entity, or is claiming a
     /// <see cref="NetwEntity.TransferEnum.Immediate"/> entity.
     /// </summary>
     public bool IsControlledLocally
@@ -1205,9 +946,9 @@ public sealed class NetwEntity : NetwRefCounted
         NetwApi.MethodBind("NetwEntity", "get_controller_player", 1167648220UL);
 
     /// <summary>
-    /// The player steering <see cref="NetwEntity.Controller"/>, or <c>null</c>.
-    /// Independent from <see cref="NetwEntity.Player"/>: a server-owned entity
-    /// can be controlled by a player without representing that player.
+    /// The player <see cref="NetwEntity.Controller"/> names, or <c>null</c>. It
+    /// can differ from <see cref="NetwEntity.Player"/>, since a player can
+    /// steer a server-owned entity.
     /// </summary>
     public NetwPlayer ControllerPlayer
     {
@@ -1226,9 +967,8 @@ public sealed class NetwEntity : NetwRefCounted
         NetwApi.MethodBind("NetwEntity", "get_action_spawn_tick", 3905245786UL);
 
     /// <summary>
-    /// The logical tick that produced this spawned action result. <c>-1</c>
-    /// means the entity did not come from <see cref="NetwAction"/>. Rides the
-    /// SPAWN frame header directly.
+    /// The tick of the <see cref="NetwAction"/> that spawned this entity, or
+    /// <c>-1</c> when no action spawned it.
     /// </summary>
     public long ActionSpawnTick
     {
@@ -1247,8 +987,8 @@ public sealed class NetwEntity : NetwRefCounted
         NetwApi.MethodBind("NetwEntity", "get_action_requester", 3905245786UL);
 
     /// <summary>
-    /// The peer that requested the <see cref="NetwAction"/> result this entity
-    /// came from, or <c>0</c>. Rides the SPAWN frame header directly.
+    /// The peer whose <see cref="NetwAction"/> spawned this entity, or
+    /// <c>0</c>.
     /// </summary>
     public long ActionRequester
     {
@@ -1267,9 +1007,9 @@ public sealed class NetwEntity : NetwRefCounted
         NetwApi.MethodBind("NetwEntity", "get_hold", 1976353525UL);
 
     /// <summary>
-    /// How strongly the <see cref="NetwEntity.Controller"/> holds this entity,
-    /// as a <see cref="NetwEntity.HoldEnum"/>. Every decision the server makes
-    /// by itself holds <see cref="NetwEntity.HoldEnum.None"/>.
+    /// How strongly <see cref="NetwEntity.Controller"/> holds this entity.
+    /// Control the server gives out by itself holds
+    /// <see cref="NetwEntity.HoldEnum.None"/>.
     /// </summary>
     public NetwEntity.HoldEnum Hold
     {
@@ -1308,16 +1048,9 @@ public sealed class NetwEntity : NetwRefCounted
             36873697UL);
 
     /// <summary>
-    /// Whether this peer is the session authority, which writes this entity's
-    /// state, decides every <see cref="NetwEntity.ClaimAuthority"/> and moves
-    /// <see cref="NetwEntity.Controller"/>. True on the server, and true
-    /// offline, since an entity with no session has no other peer to defer to.
-    /// It answers a different question from
-    /// <see cref="NetwEntity.Controller"/>. The controller steers the entity
-    /// and is its nodes' multiplayer authority, and the session authority
-    /// decides who that is. <see cref="NetwEntity.IsControlledLocally"/> asks
-    /// whether this peer steers it, and <see cref="NetwMultiplayer.IsHost"/>
-    /// asks whether the session opened in a hosting role.
+    /// Whether this peer is the server, which decides
+    /// <see cref="NetwEntity.Controller"/> and every
+    /// <see cref="NetwEntity.ClaimAuthority"/>. Also <c>true</c> offline.
     /// </summary>
     public bool IsSessionAuthority
     {
@@ -1336,9 +1069,8 @@ public sealed class NetwEntity : NetwRefCounted
         NetwApi.MethodBind("NetwEntity", "get_player", 1167648220UL);
 
     /// <summary>
-    /// The player <see cref="NetwEntity.PeerId"/> represents, or <c>null</c>.
-    /// This resolves the live session handle for player avatars; server-owned
-    /// entities, props and NPCs return <c>null</c>.
+    /// The player <see cref="NetwEntity.PeerId"/> represents, or <c>null</c>
+    /// for a server-owned entity.
     /// </summary>
     public NetwPlayer Player
     {
@@ -1354,7 +1086,7 @@ public sealed class NetwEntity : NetwRefCounted
         NetwApi.MethodBind("NetwEntity", "get_ownership", 2060038782UL);
 
     /// <summary>
-    /// Derived from <see cref="NetwEntity.PeerId"/>. See
+    /// Whether this entity is a player or server-owned. See
     /// <see cref="NetwEntity.OwnershipEnum"/>.
     /// </summary>
     public NetwEntity.OwnershipEnum Ownership
@@ -1371,9 +1103,8 @@ public sealed class NetwEntity : NetwRefCounted
         NetwApi.MethodBind("NetwEntity", "get_is_player", 36873697UL);
 
     /// <summary>
-    /// <c>true</c> when this entity represents a player rather than a
-    /// server-owned object. The canonical player test across the addon,
-    /// equivalent to a non-zero <see cref="NetwEntity.PeerId"/>.
+    /// <c>true</c> when this entity represents a player, meaning
+    /// <see cref="NetwEntity.PeerId"/> is not <c>0</c>.
     /// </summary>
     public bool IsPlayer
     {
@@ -1392,22 +1123,19 @@ public sealed class NetwEntity : NetwRefCounted
         NetwApi.MethodBind("NetwEntity", "set_is_template", 2586408642UL);
 
     /// <summary>
-    /// <c>true</c> when this entity is a template, a copy kept only to spawn
-    /// others from with <see cref="NetwEntity.SpawnUnder"/>. A template is
-    /// deactivated and hidden, and never spawns itself. A root placed inside
-    /// another scene in the editor that carries no
-    /// <see cref="NetwEntity.EntityId"/> is a template already. One assembled
-    /// in code is marked before it enters the tree, on every peer, and from
-    /// outside, because each copy runs the template's own <c>_init</c> too.
+    /// <c>true</c> when this entity is a hidden, inactive copy kept only to
+    /// spawn others from with <see cref="NetwEntity.SpawnUnder"/>. A root
+    /// placed inside another scene in the editor with no
+    /// <see cref="NetwEntity.EntityId"/> is already a template. One built in
+    /// code is marked before it enters the tree, from outside, because every
+    /// copy runs its <c>_init</c> too.
     /// <code>
     /// var spawner := preload("res://mob.tscn").instantiate()
     /// NetwEntity.ensure(spawner).is_template = true
     /// add_child(spawner)
     /// </code>
     /// <para>
-    /// The mark is permanent. Writing <c>false</c> to a template is refused,
-    /// and so is writing <c>true</c> once the entity has reached
-    /// <see cref="NetwEntity.StageEnum.Armed"/>.
+    /// The mark cannot be undone.
     /// </para>
     /// </summary>
     public bool IsTemplate
@@ -1434,9 +1162,7 @@ public sealed class NetwEntity : NetwRefCounted
         NetwApi.MethodBind("NetwEntity", "get_stage", 920056488UL);
 
     /// <summary>
-    /// The entity's current lifecycle position, as a
-    /// <see cref="NetwEntity.StageEnum"/>. Read-only, and moved only along an
-    /// edge the stage table admits, so a rejected move leaves it where it was.
+    /// Where the entity is in its lifecycle.
     /// </summary>
     public NetwEntity.StageEnum Stage
     {
@@ -1455,11 +1181,8 @@ public sealed class NetwEntity : NetwRefCounted
             322918898UL);
 
     /// <summary>
-    /// The <see cref="NetwDespawnOpts"/> of the
-    /// <see cref="NetwEntity.Despawn"/> currently in flight, or <c>null</c>
-    /// outside a despawn. Set for the duration of the
-    /// <see cref="NetwEntity.Despawning"/> emission, so a listener can branch
-    /// on the despawn mode.
+    /// The <see cref="NetwDespawnOpts"/> of the despawn in progress, readable
+    /// during <see cref="NetwEntity.Despawning"/>, or <c>null</c>.
     /// </summary>
     public NetwDespawnOpts ActiveDespawnOpts
     {
@@ -1478,10 +1201,8 @@ public sealed class NetwEntity : NetwRefCounted
         NetwApi.MethodBind("NetwEntity", "get_interest", 4264838351UL);
 
     /// <summary>
-    /// Entity-level interest membership and transition configuration. Stable
-    /// across accesses and tree exits, and never <c>null</c>. Membership
-    /// declared through it reattaches when the entity enters a session, and the
-    /// callbacks registered on it follow the same lifecycle.
+    /// The entity's <see cref="NetwInterestHandle"/>. Never <c>null</c>, and
+    /// what is declared on it survives leaving and re-entering the tree.
     /// </summary>
     public NetwInterestHandle Interest
     {
@@ -1497,14 +1218,11 @@ public sealed class NetwEntity : NetwRefCounted
         NetwApi.MethodBind("NetwEntity", "get_scene", 931191233UL);
 
     /// <summary>
-    /// The scene this entity belongs to. Never <c>null</c>. Self-inclusive: an
-    /// entity that declares itself a scene resolves to itself, and any other
-    /// entity resolves to its nearest scene ancestor. Ask the handle whether it
-    /// is declared to tell "no scene resolved" from a real one, because it
-    /// returns either way rather than handing back null. One scene has one
-    /// handle, so two entities in the same scene read the same object and
-    /// <c>==</c> returns "the same scene" without anyone having to compare by
-    /// hand.
+    /// The scene this entity belongs to, which is itself when
+    /// <see cref="NetwEntity.IsMultiplayerScene"/> is set and otherwise the
+    /// nearest scene above it. Never <c>null</c>, so read
+    /// <see cref="NetwSceneHandle.IsDeclared"/> to know whether one was found.
+    /// Two entities in the same scene return the same handle.
     /// <code>
     /// if NetwEntity.of(shooter).scene == NetwEntity.of(target).scene:
     ///     apply_damage()
@@ -1524,13 +1242,9 @@ public sealed class NetwEntity : NetwRefCounted
         NetwApi.MethodBind("NetwEntity", "get_prediction", 3543205949UL);
 
     /// <summary>
-    /// The entity-level prediction handle. It holds the prediction and
-    /// reconciliation config the prediction block a scene declares on its
-    /// <see cref="MultiplayerSynchronizer"/> supplies, or a caller sets in
-    /// code, plus the live counters
-    /// <see cref="NetwMultiplayer.LagcompMetrics"/> reads. Never <c>null</c>,
-    /// and it reports itself unregistered until an engine wires. The step and
-    /// the schedule it drives are on <see cref="NetwEntity.Simulation"/>.
+    /// The entity's <see cref="NetwPredictionHandle"/>, holding its prediction
+    /// settings and counters. Never <c>null</c>. How the entity steps is on
+    /// <see cref="NetwEntity.Simulation"/>.
     /// </summary>
     public NetwPredictionHandle Prediction
     {
@@ -1549,8 +1263,8 @@ public sealed class NetwEntity : NetwRefCounted
         NetwApi.MethodBind("NetwEntity", "get_simulation", 2406380865UL);
 
     /// <summary>
-    /// Where and how this entity's body runs on each peer, and which other
-    /// entities it runs here. Never <c>null</c>.
+    /// How this entity's body runs on each peer, and which other entities it
+    /// runs here. Never <c>null</c>.
     /// </summary>
     public NetwSimulationHandle Simulation
     {
@@ -1569,10 +1283,9 @@ public sealed class NetwEntity : NetwRefCounted
         NetwApi.MethodBind("NetwEntity", "get_persistence", 1183214497UL);
 
     /// <summary>
-    /// The entity's stored row. Reaching it compiles the
-    /// <see cref="NetwPersistenceConfig"/> this entity declared together with
-    /// every <see cref="NetwPropertyConfig.Persisted"/> declaration under it,
-    /// and the row is read and written on the live scene.
+    /// The entity's saved row, built from its
+    /// <see cref="NetwPersistenceConfig"/> and the
+    /// <see cref="NetwPropertyConfig.Persisted"/> properties under it.
     /// </summary>
     public NetwPersistenceHandle Persistence
     {
@@ -1591,9 +1304,9 @@ public sealed class NetwEntity : NetwRefCounted
         NetwApi.MethodBind("NetwEntity", "get_interpolation", 1343330632UL);
 
     /// <summary>
-    /// The entity-level display handle. Every entity-wide display setting is
-    /// written and read here, and the session pumps what it declares. Per-value
-    /// smoothing is declared with <see cref="NetwInterpolate"/> instead.
+    /// The entity's <see cref="NetwDisplayHandle"/>, which configures how the
+    /// entity is drawn. A single value is smoothed with
+    /// <see cref="NetwInterpolate"/>.
     /// </summary>
     public NetwDisplayHandle Interpolation
     {
@@ -1612,14 +1325,9 @@ public sealed class NetwEntity : NetwRefCounted
         NetwApi.MethodBind("NetwEntity", "get_timeline", 2956180358UL);
 
     /// <summary>
-    /// The entity's per-entity tick-keyed <see cref="NetwTimeline"/> of state
-    /// and input snapshots, published by <see cref="NetwMultiplayer"/>, or
-    /// <c>null</c>. Held by instance id, so it clears when the timeline frees.
-    /// A move keeps the registration and invalidates what it holds: the samples
-    /// describe a coordinate frame the owner has left, so the timeline's floor
-    /// advances past them and a rewind resumes from the first capture taken
-    /// after the move. Only the last state binding going away, an explicit
-    /// undeclare, a hide or a death unregisters the timeline itself.
+    /// The entity's <see cref="NetwTimeline"/> of state and input snapshots, or
+    /// <c>null</c>. Moving the entity drops the snapshots taken before the
+    /// move, so a rewind starts after it.
     /// </summary>
     public NetwTimeline Timeline
     {
@@ -1635,8 +1343,8 @@ public sealed class NetwEntity : NetwRefCounted
         NetwApi.MethodBind("NetwEntity", "of", 1743742259UL);
 
     /// <summary>
-    /// The <see cref="NetwEntity"/> on <paramref name="node"/>'s entity root,
-    /// walking the parent chain, or <c>null</c> when <paramref name="node"/> is
+    /// The <see cref="NetwEntity"/> of <paramref name="node"/>'s entity root,
+    /// walking up the parents, or <c>null</c> when <paramref name="node"/> is
     /// under no entity.
     /// </summary>
     public static NetwEntity Of(Node node)
@@ -1655,8 +1363,8 @@ public sealed class NetwEntity : NetwRefCounted
         NetwApi.MethodBind("NetwEntity", "ensure", 1743742259UL);
 
     /// <summary>
-    /// Get-or-creates the record on the exact <paramref name="root"/> node,
-    /// even when <paramref name="root"/> has an ambiguous owner or parent.
+    /// Gets or creates the record on <paramref name="root"/> itself, without
+    /// walking up to a parent entity.
     /// </summary>
     public static NetwEntity Ensure(Node root)
     {
@@ -1677,31 +1385,23 @@ public sealed class NetwEntity : NetwRefCounted
     /// Asks the server to make this peer the
     /// <see cref="NetwEntity.Controller"/> with <paramref name="hold"/>. The
     /// returned <see cref="NetwPromise"/> resolves with this entity once the
-    /// decision has arrived here. It fails with
-    /// <c>@GlobalScope.ERR_UNAUTHORIZED</c> when another peer's
-    /// <see cref="NetwEntity.Hold"/> or the
-    /// <see cref="NetwEntity.ControlRequested"/> filter refuses, with
-    /// <c>@GlobalScope.ERR_UNAVAILABLE</c> when the entity does not offer the
-    /// transfer, and with <c>@GlobalScope.ERR_TIMEOUT</c> when no decision
-    /// arrives within one second of session ticks. A claim the current decision
-    /// already refuses fails before anything is sent. A grant that arrives
-    /// after the timeout is handed straight back to the server. Under
-    /// <see cref="NetwEntity.TransferEnum.Immediate"/> the local peer uses the
-    /// entity before this returns. <see cref="NetwEntity.IsControlledLocally"/>
-    /// is <c>true</c>, a simulated entity is in
-    /// <see cref="NetwSimulationHandle.ModeEnum.Authority"/> with
-    /// <see cref="NetwSimulationHandle.ModeChanged"/> already emitted, and rows
-    /// from the current <see cref="NetwEntity.Controller"/> are kept aside and
-    /// not written. Nothing is published and node authority does not move until
-    /// the grant. A refusal or a timeout writes the newest kept rows back
-    /// through their setters and returns the simulation to its earlier mode,
-    /// with no <see cref="NetwEntity.ControlChanged"/>. A second claim made
-    /// while one is waiting is sent after it and settles on its own.
+    /// decision reaches this peer.
+    /// <code>
+    /// Error
+    /// ┠╴ERR_UNAUTHORIZED   another peer's hold or control_requested refused it
+    /// ┠╴ERR_UNAVAILABLE    transfer does not allow a claim
+    /// ┖╴ERR_TIMEOUT        no decision arrived within one second
+    /// </code>
+    /// <para>
+    /// Under <see cref="NetwEntity.TransferEnum.Immediate"/> this peer runs the
+    /// entity before the decision, and a refusal writes back the controller's
+    /// latest values.
     /// <code>
     /// entity.claim_authority(NetwEntity.HOLD_YIELDABLE) \
     ///     .then(func(_held: NetwEntity) -&gt; void: pick_up()) \
     ///     .catch_error(func(_code: Error, _detail: String) -&gt; void: shrug())
     /// </code>
+    /// </para>
     /// <para>
     /// <b>Player request.</b>
     /// </para>
@@ -1723,27 +1423,22 @@ public sealed class NetwEntity : NetwRefCounted
         NetwApi.MethodBind("NetwEntity", "release_authority", 339970911UL);
 
     /// <summary>
-    /// Hands control of this entity to the peer <paramref name="successor"/>,
-    /// or to the server when it is <c>0</c>. The returned
-    /// <see cref="NetwPromise"/> resolves with this entity once the decision
-    /// naming <paramref name="successor"/> has arrived here. The request
-    /// carries the entity's final state, one row of each
-    /// <see cref="NetwPropertyConfig.Broadcast"/> record as this peer holds it
-    /// now. The server writes it before <paramref name="successor"/> takes
-    /// over, and every peer holding the entity writes it as the first sample
-    /// under the new <see cref="NetwEntity.Controller"/>. A simulated entity
-    /// takes it by its <see cref="NetwSimulationHandle.Restore"/> policy. A
-    /// peer whose own <see cref="NetwEntity.ClaimAuthority"/> is still waiting
-    /// keeps its own state. A final state larger than 1024 bytes is not sent.
-    /// The release still happens, <paramref name="successor"/> starts from its
-    /// own copy, and a warning names the entity. It fails with
-    /// <c>@GlobalScope.ERR_UNAUTHORIZED</c> when this peer neither controls the
-    /// entity nor has a <see cref="NetwEntity.ClaimAuthority"/> waiting, and
-    /// with <c>@GlobalScope.ERR_UNAVAILABLE</c> when
-    /// <paramref name="successor"/> holds no copy of it. A release made while
-    /// this peer's own <see cref="NetwEntity.ClaimAuthority"/> is waiting is
-    /// sent after it, and resolves with nothing to do when that claim is
-    /// refused. <b>Player request.</b>
+    /// Hands control of this entity to <paramref name="successor"/>, or to the
+    /// server when it is <c>0</c>. The returned <see cref="NetwPromise"/>
+    /// resolves with this entity once the decision reaches this peer. The
+    /// request carries this peer's latest
+    /// <see cref="NetwPropertyConfig.Broadcast"/> values, and
+    /// <paramref name="successor"/> starts from them. Values larger than 1024
+    /// bytes are not sent, and <paramref name="successor"/> starts from its own
+    /// copy.
+    /// <code>
+    /// Error
+    /// ┠╴ERR_UNAUTHORIZED   this peer neither controls the entity nor is claiming it
+    /// ┖╴ERR_UNAVAILABLE    successor holds no copy of the entity
+    /// </code>
+    /// <para>
+    /// <b>Player request.</b>
+    /// </para>
     /// </summary>
     public NetwPromise ReleaseAuthority(long successor = 0)
     {
@@ -1764,9 +1459,8 @@ public sealed class NetwEntity : NetwRefCounted
     /// Keeps the node at <paramref name="path"/>, and every node under it, with
     /// the server as its multiplayer authority whoever the
     /// <see cref="NetwEntity.Controller"/> is. <paramref name="path"/> is
-    /// relative to the entity root and names a node under it. Declare it in
-    /// <c>_init</c> so every peer holds the same rule. A later call applies at
-    /// once.
+    /// relative to the entity root. Call it in <c>_init</c> so every peer
+    /// applies the same rule.
     /// </summary>
     public void FollowSession(NodePath path)
     {
@@ -1785,9 +1479,8 @@ public sealed class NetwEntity : NetwRefCounted
     /// <paramref name="parent"/>, which defaults to the owner's own parent.
     /// <paramref name="id"/> sets the copy's <see cref="NetwEntity.EntityId"/>.
     /// <paramref name="configure"/> receives the copy's
-    /// <see cref="NetwEntity"/> after <paramref name="id"/> is stamped and
-    /// before the copy is sent or enters the tree, so what it writes wins and
-    /// reaches every peer with the spawn.
+    /// <see cref="NetwEntity"/> before it is sent, so what it sets reaches
+    /// every peer with the spawn.
     /// <code>
     /// var mob := entity.spawn_under($World/Mobs, &amp;"skeleton_1")
     /// var wild := entity.spawn_under()   # same parent as template
@@ -1796,10 +1489,10 @@ public sealed class NetwEntity : NetwRefCounted
     /// )
     /// </code>
     /// <para>
-    /// The session authority may always call it, and a client may when the copy
-    /// declares <see cref="NetwEntity.Lifecycle"/> as
-    /// <see cref="NetwEntity.LifecycleEnum.Controller"/>, becoming the copy's
-    /// <see cref="NetwEntity.Controller"/>.
+    /// The server may call it, and so may a client when the copy's
+    /// <see cref="NetwEntity.Lifecycle"/> is
+    /// <see cref="NetwEntity.LifecycleEnum.Controller"/>. That client becomes
+    /// the copy's <see cref="NetwEntity.Controller"/>.
     /// </para>
     /// </summary>
     public Node SpawnUnder(
@@ -1832,12 +1525,10 @@ public sealed class NetwEntity : NetwRefCounted
 
     /// <summary>
     /// Frees <see cref="NetwEntity.Owner"/> after emitting
-    /// <see cref="NetwEntity.Despawning"/> and flushing persisted state through
-    /// <see cref="NetwEntity.Persistence"/>. Every entity below
-    /// <see cref="NetwEntity.Owner"/> despawns with it, except one whose
-    /// <see cref="NetwEntity.OnParentDespawn"/> is
-    /// <see cref="NetwEntity.ParentDespawnRule.Detach"/>, which is moved out
-    /// first.
+    /// <see cref="NetwEntity.Despawning"/> and saving its
+    /// <see cref="NetwEntity.Persistence"/>. Entities under it despawn too,
+    /// unless their <see cref="NetwEntity.OnParentDespawn"/> is
+    /// <see cref="NetwEntity.ParentDespawnRule.Detach"/>.
     /// <code>
     /// entity.despawn()
     ///
@@ -1846,11 +1537,9 @@ public sealed class NetwEntity : NetwRefCounted
     /// entity.despawn(opts)
     /// </code>
     /// <para>
-    /// The session authority may always call it, and the
-    /// <see cref="NetwEntity.Controller"/> may for an entity whose
-    /// <see cref="NetwEntity.Lifecycle"/> is
-    /// <see cref="NetwEntity.LifecycleEnum.Controller"/>. The entity leaves the
-    /// controller's peer at once, and the server serves it back if it refuses.
+    /// The server may call it, and so may the
+    /// <see cref="NetwEntity.Controller"/> of a
+    /// <see cref="NetwEntity.LifecycleEnum.Controller"/> entity.
     /// </para>
     /// </summary>
     public void Despawn(NetwDespawnOpts opts = null)
@@ -1868,10 +1557,7 @@ public sealed class NetwEntity : NetwRefCounted
         NetwApi.MethodBind("NetwEntity", "parent_entity", 1711071689UL);
 
     /// <summary>
-    /// The nearest ancestor <see cref="NetwEntity"/>, or <c>null</c>. The
-    /// session walks the marked ancestors, so the mark and the walk that reads
-    /// it stay one implementation and the result follows a move with nothing to
-    /// invalidate.
+    /// The nearest ancestor <see cref="NetwEntity"/>, or <c>null</c>.
     /// </summary>
     public NetwEntity ParentEntity()
     {

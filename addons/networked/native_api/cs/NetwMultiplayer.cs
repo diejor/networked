@@ -574,30 +574,28 @@ public sealed class NetwMultiplayer : NetwRefCounted
     public enum DisplayRole : long
     {
         /// <summary>
-        /// Resolve from <see cref="NetwSimulationHandle.Mode"/> on this peer.
-        /// The default, and correct for almost every entity. A peer running the
-        /// entity in <see cref="NetwSimulationHandle.ModeEnum.Predict"/> or
-        /// <see cref="NetwSimulationHandle.ModeEnum.Active"/> resolves to
-        /// <see cref="NetwMultiplayer.DisplayRole.Predicted"/>. A peer that
-        /// only receives it resolves to
-        /// <see cref="NetwMultiplayer.DisplayRole.Remote"/>. A peer that
-        /// controls an entity with no prediction resolves to
-        /// <see cref="NetwMultiplayer.DisplayRole.Disabled"/>, because it
-        /// already writes that node itself.
-        /// <see cref="NetwMultiplayer.DisplayRole.Authority"/> is what an
-        /// authoring peer resolves to for an entity it does not control.
+        /// Picked from <see cref="NetwSimulationHandle.Mode"/> on this peer.
+        /// The default, and correct for almost every entity. An entity this
+        /// peer runs in <see cref="NetwSimulationHandle.ModeEnum.Predict"/> or
+        /// <see cref="NetwSimulationHandle.ModeEnum.Active"/> uses
+        /// <see cref="NetwMultiplayer.DisplayRole.Predicted"/>, and one it only
+        /// receives uses <see cref="NetwMultiplayer.DisplayRole.Remote"/>. An
+        /// entity this peer controls without prediction uses
+        /// <see cref="NetwMultiplayer.DisplayRole.Disabled"/>. The server uses
+        /// <see cref="NetwMultiplayer.DisplayRole.Authority"/> for an entity it
+        /// does not control.
         /// </summary>
         Auto = 0,
         /// <summary>
         /// Interpolate replicated snapshots. What a peer uses for somebody
-        /// else's entity. A rigid body is frozen here and drawn on the body
-        /// itself, so its collider is where it is seen.
+        /// else's entity. A rigid body is frozen and drawn where its collider
+        /// is.
         /// </summary>
         Remote = 1,
         /// <summary>
-        /// Follow the body this peer runs, the way
-        /// <see cref="NetwDisplayHandle.LiveMode"/> says. What a player uses
-        /// for their own entity.
+        /// Follow the body this peer runs, see
+        /// <see cref="NetwDisplayHandle.LiveMode"/>. What a player uses for
+        /// their own entity.
         /// </summary>
         Predicted = 2,
         /// <summary>
@@ -886,10 +884,10 @@ public sealed class NetwMultiplayer : NetwRefCounted
     {
         /// <summary>
         /// <see cref="StringName"/> naming what kind of scene this is. Two live
-        /// copies of one arena share the name, because a scene is identified by
-        /// its <see cref="Rid"/>. See <see cref="NetwSceneHandle.Label"/>.
-        /// Every <see cref="NetwMultiplayer.SceneParam"/> is read and written
-        /// through <see cref="NetwMultiplayer.SceneGetParam"/> and
+        /// copies of one arena share the name. See
+        /// <see cref="NetwSceneHandle.Label"/>. Every
+        /// <see cref="NetwMultiplayer.SceneParam"/> is read and written through
+        /// <see cref="NetwMultiplayer.SceneGetParam"/> and
         /// <see cref="NetwMultiplayer.SceneSetParam"/>.
         /// </summary>
         Label = 0,
@@ -1150,9 +1148,9 @@ public sealed class NetwMultiplayer : NetwRefCounted
         /// </summary>
         LiveSmoothTime = 2,
         /// <summary>
-        /// [float] seconds. How fast
-        /// <see cref="NetwMultiplayer.LiveMode.Chase"/> decays the visual
-        /// offset it opens on each recovery.
+        /// [float] seconds. How long
+        /// <see cref="NetwMultiplayer.LiveMode.Chase"/> takes to smooth out the
+        /// visual offset of a correction.
         /// </summary>
         ChaseGlideTime = 3,
         /// <summary>
@@ -1319,10 +1317,9 @@ public sealed class NetwMultiplayer : NetwRefCounted
         /// passed to <see cref="NetwMultiplayer.SchemaAddColumn"/> and says
         /// what a value is stored as and how wide it travels. All of them but
         /// <see cref="NetwMultiplayer.ColumnType.Variant"/> and
-        /// <see cref="NetwMultiplayer.ColumnType.String"/> are a fixed width,
-        /// which is what makes a column a block of bytes and lets the session
-        /// compute how many rows fit in a frame. Send anything of a length that
-        /// varies through <see cref="Netw.Channel"/> instead.
+        /// <see cref="NetwMultiplayer.ColumnType.String"/> have a fixed width.
+        /// Send data of varying length through <see cref="Netw.Channel"/>
+        /// instead.
         /// </summary>
         F32 = 0,
         /// <summary>
@@ -1385,18 +1382,16 @@ public sealed class NetwMultiplayer : NetwRefCounted
         /// </summary>
         Entity = 14,
         /// <summary>
-        /// The self-describing tier, what a
+        /// Any <see cref="Variant"/>, such as a
         /// <see cref="Godot.Collections.Dictionary"/> or a nested
-        /// <see cref="Godot.Collections.Array"/> compiles to. Legal in a schema
-        /// and in a property set, rejected by
-        /// <see cref="NetwMultiplayer.TableCreate"/>, because variable width
-        /// has no memcpy and no rows-per-frame budget.
+        /// <see cref="Godot.Collections.Array"/>. Allowed in a schema and a
+        /// property set, rejected by <see cref="NetwMultiplayer.TableCreate"/>.
         /// </summary>
         Variant = 15,
         /// <summary>
-        /// Text. Rejected by <see cref="NetwMultiplayer.TableCreate"/> for the
-        /// same reason <see cref="NetwMultiplayer.ColumnType.Variant"/> is, and
-        /// cheaper than it when the value is only ever a name or a path.
+        /// Text. Rejected by <see cref="NetwMultiplayer.TableCreate"/>. Cheaper
+        /// than <see cref="NetwMultiplayer.ColumnType.Variant"/> for a name or
+        /// a path.
         /// </summary>
         String = 16,
     }
@@ -1948,13 +1943,11 @@ public sealed class NetwMultiplayer : NetwRefCounted
         /// </summary>
         Client = 1,
         /// <summary>
-        /// Server authority with no local player.
+        /// A server with no local player.
         /// </summary>
         DedicatedServer = 2,
         /// <summary>
-        /// Server authority held by a peer that is also playing. Server
-        /// authority means this or
-        /// <see cref="NetwMultiplayer.RoleEnum.DedicatedServer"/>.
+        /// A server that is also playing, a listen server.
         /// </summary>
         ListenServer = 3,
     }
@@ -2057,16 +2050,11 @@ public sealed class NetwMultiplayer : NetwRefCounted
     }
 
     /// <summary>
-    /// Announced on server authority when an owner's claimed post-state for a
-    /// transition disagrees with the state authority itself reached, so a
-    /// diagnostic sink hears the disagreement the tick it is judged.
-    /// <c>peer</c> is the controller of the entity seated in the slot,
-    /// <c>entry</c> is the transition judged, and <c>attribution</c> is the
-    /// <see cref="NetwPredict.Attribution"/> the comparison charged the
-    /// divergence to. A claim that matched is not announced, and neither is one
-    /// the comparison could charge to nothing, which leaves
-    /// <see cref="NetwPredict.Attribution.Unknown"/> out of this signal's
-    /// vocabulary.
+    /// Emitted on the server when the state a controller claims after a
+    /// transition differs from the state the server reached. <c>peer</c> is the
+    /// controller, <c>entry</c> is the transition, and <c>attribution</c> is
+    /// the cause of the divergence. It is never emitted with
+    /// <see cref="NetwPredict.Attribution.Unknown"/>.
     /// </summary>
     public event Action<
         long,
@@ -2144,10 +2132,9 @@ public sealed class NetwMultiplayer : NetwRefCounted
     }
 
     /// <summary>
-    /// Emitted once server authority enters the session. It reports that
-    /// startup finished rather than that anything spawned, so a session with
-    /// nothing to spawn still announces and a listener waiting on it never
-    /// waits forever.
+    /// Emitted once the server enters the session. It reports that startup
+    /// finished rather than that anything spawned, so a session with nothing to
+    /// spawn still announces and a listener waiting on it never waits forever.
     /// </summary>
     public event Action SceneStartupSpawned
     {
@@ -2408,9 +2395,8 @@ public sealed class NetwMultiplayer : NetwRefCounted
 
     /// <summary>
     /// Emitted when an entity row in <c>database</c> fails to load or save.
-    /// <c>detail</c> names the record and follows it with the storage's own
-    /// explanation. <see cref="NetwDatabase.Failed"/> is this signal for one
-    /// database.
+    /// <c>detail</c> names the record and the reason. See also
+    /// <see cref="NetwDatabase.Failed"/>.
     /// </summary>
     public event Action<Rid, long, string> DatabaseFailed
     {
@@ -2452,8 +2438,8 @@ public sealed class NetwMultiplayer : NetwRefCounted
     }
 
     /// <summary>
-    /// Emitted when server authority kicks this peer, before the connection
-    /// closes. A notice from anyone but the server is dropped.
+    /// Emitted when the server kicks this peer, before the connection closes. A
+    /// notice from anyone but the server is dropped.
     /// </summary>
     public event Action<string> PeerKicked
     {
@@ -2474,11 +2460,9 @@ public sealed class NetwMultiplayer : NetwRefCounted
     }
 
     /// <summary>
-    /// Emitted when a client asks for a peer to be kicked. Heard only by the
-    /// peer holding session authority, which is peer 1 in an ordinary star and
-    /// the declared coordinator elsewhere. A request that does not carry a
-    /// target and a reason is dropped rather than announced against a default
-    /// target.
+    /// Emitted on the server when a client asks for a peer to be kicked. A
+    /// request that does not carry a target and a reason is dropped rather than
+    /// announced against a default target.
     /// </summary>
     public event Action<long, long, string> PeerKickRequested
     {
@@ -2487,10 +2471,8 @@ public sealed class NetwMultiplayer : NetwRefCounted
     }
 
     /// <summary>
-    /// Emitted when a client asks to leave. Heard only by the peer holding
-    /// session authority, which is peer 1 in an ordinary star and the declared
-    /// coordinator elsewhere, and <c>peer_id</c> is who actually sent the
-    /// request rather than anything the request claims.
+    /// Emitted on the server when a client asks to leave. <c>peer_id</c> is the
+    /// peer that sent the request.
     /// </summary>
     public event Action<long, string> SessionDisconnectRequested
     {
@@ -2501,7 +2483,7 @@ public sealed class NetwMultiplayer : NetwRefCounted
     }
 
     /// <summary>
-    /// Emitted when server authority pauses the session. Pausing the engine is
+    /// Emitted when the server pauses the session. Pausing the engine is
     /// something a listener does in response rather than part of the decision,
     /// so the session announces this once and everything that reacts reads the
     /// same announcement. A notice from anyone but the server is dropped.
@@ -2673,7 +2655,7 @@ public sealed class NetwMultiplayer : NetwRefCounted
     }
 
     /// <summary>
-    /// Emitted on server authority once a
+    /// Emitted on the server once a
     /// <see cref="NetwMultiplayer.SceneChangeToFile"/> has landed. <c>scene</c>
     /// is the destination and <c>arrived</c> holds the <see cref="NetwPlayer"/>
     /// rows it brought there. A player already watching the destination is not
@@ -2873,9 +2855,9 @@ public sealed class NetwMultiplayer : NetwRefCounted
         NetwApi.MethodBind("NetwMultiplayer", "get_is_host", 36873697UL);
 
     /// <summary>
-    /// Whether this peer holds server authority. A dedicated server, a listen
-    /// server, and a session with no connection at all all return <c>true</c>.
-    /// A session that has connected to nothing is its own authority, which is
+    /// Whether this peer is the server. A dedicated server, a listen server,
+    /// and a session with no connection at all all return <c>true</c>. A
+    /// session that has connected to nothing is its own authority, which is
     /// what lets a single-player game admit its own entities, claim its own
     /// routes and create its own scenes with no network, exactly as
     /// <see cref="MultiplayerSpawner"/> and
@@ -3746,15 +3728,8 @@ public sealed class NetwMultiplayer : NetwRefCounted
 
     /// <summary>
     /// Whether traffic for <paramref name="entity"/> may reach
-    /// <paramref name="peerId"/>, short-circuiting <c>true</c> for the peer
-    /// holding session authority, which is peer 1 in an ordinary star and the
-    /// declared coordinator elsewhere, because that peer always knows every
-    /// entity it holds. Every other peer falls through to
-    /// <see cref="NetwMultiplayer.InterestPlayerSees"/>. Replication and spawn
-    /// gating call this rather than
-    /// <see cref="NetwMultiplayer.InterestPlayerSees"/>, because a wire gate
-    /// that hid the server's own entities from itself would stall authority
-    /// rather than protect it.
+    /// <paramref name="peerId"/>, always <c>true</c> for the server. For every
+    /// other peer it is <see cref="NetwMultiplayer.InterestPlayerSees"/>.
     /// </summary>
     public bool InterestWireAdmits(long peerId, NetwEntity entity)
     {
@@ -3893,13 +3868,13 @@ public sealed class NetwMultiplayer : NetwRefCounted
             3218959716UL);
 
     /// <summary>
-    /// Asks server authority for its tickrate over the clock's handshake
-    /// channel, so the two rates can be compared before any tick is calibrated
-    /// against them. The server returns its own tickrate, and a reply that
-    /// disagrees is what <see cref="NetwMultiplayer.ClockSetMismatchAction"/>
-    /// decides the response to. Only a peer that is not server authority calls
-    /// this. The session runs it once per transport generation, as soon as a
-    /// connection to the server exists, so a host never asks itself.
+    /// Asks the server for its tickrate over the clock's handshake channel, so
+    /// the two rates can be compared before any tick is calibrated against
+    /// them. The server returns its own tickrate, and a reply that disagrees is
+    /// what <see cref="NetwMultiplayer.ClockSetMismatchAction"/> decides the
+    /// response to. Only a client calls this. The session runs it once per
+    /// transport generation, as soon as a connection to the server exists, so a
+    /// host never asks itself.
     /// </summary>
     public void ClockRequestHandshake()
     {
@@ -3914,10 +3889,10 @@ public sealed class NetwMultiplayer : NetwRefCounted
         NetwApi.MethodBind("NetwMultiplayer", "clock_send_ping", 3218959716UL);
 
     /// <summary>
-    /// Sends the local wall-clock timestamp to server authority over the
-    /// clock's ping channel, unreliably, because a lost sample is cheaper than
-    /// a late one. The server echoes it back with its own tick, and that reply
-    /// lands as <see cref="NetwMultiplayer.ClockPongReceived"/> once
+    /// Sends the local wall-clock timestamp to the server over the clock's ping
+    /// channel, unreliably, because a lost sample is cheaper than a late one.
+    /// The server echoes it back with its own tick, and that reply lands as
+    /// <see cref="NetwMultiplayer.ClockPongReceived"/> once
     /// <see cref="NetwMultiplayer.ClockIngestPong"/> has processed it. The
     /// handshake's reply triggers the first ping, and later pings repeat on
     /// whatever schedule drives recalibration.
@@ -3932,7 +3907,7 @@ public sealed class NetwMultiplayer : NetwRefCounted
         NetwApi.MethodBind("NetwMultiplayer", "scene_request", 4150322833UL);
 
     /// <summary>
-    /// Asks server authority to make the local player watch the scene file at
+    /// Asks the server to make the local player watch the scene file at
     /// <paramref name="path"/>. A label cannot be requested, because
     /// <see cref="Netw.Scene"/> is what resolves a live scene by label and a
     /// change names a path. The promise rejects with
@@ -3971,19 +3946,18 @@ public sealed class NetwMultiplayer : NetwRefCounted
     /// <paramref name="peer"/>, where zero is every peer
     /// <see cref="NetwMultiplayer.RpcGetRecipients"/> answers for the target
     /// and any other value is that one peer. The audience for zero is narrowed
-    /// by the interest this peer itself declares, which is authoritative
-    /// membership only when this peer holds session authority. A call a client
-    /// addresses to zero can therefore reach a peer an interest layer hides the
-    /// target from, so interest bounds what a call costs rather than who may
-    /// learn it. <paramref name="callable"/>'s object must be a node an entity
-    /// governs, because a remote call is addressed by
-    /// <see cref="NetwEntity.Route"/> and a node no entity holds has none. A
-    /// node with no entity at all and a node whose route is not live are
-    /// counted apart and both drop the call. Neither is an error, because a
-    /// call issued in the frame an entity is despawning is ordinary rather than
-    /// a defect. A method the target's script neither annotates nor registers
-    /// is rejected with a warning and nothing is sent, so a typo does not
-    /// become a silent no-op on every peer. A local dispatch happens before
+    /// by the interest this peer itself declares, which is authoritative only
+    /// on the server. A call a client addresses to zero can therefore reach a
+    /// peer an interest layer hides the target from, so interest bounds what a
+    /// call costs rather than who may learn it. <paramref name="callable"/>'s
+    /// object must be a node an entity governs, because a remote call is
+    /// addressed by <see cref="NetwEntity.Route"/> and a node no entity holds
+    /// has none. A node with no entity at all and a node whose route is not
+    /// live are counted apart and both drop the call. Neither is an error,
+    /// because a call issued in the frame an entity is despawning is ordinary
+    /// rather than a defect. A method the target's script neither annotates nor
+    /// registers is rejected with a warning and nothing is sent, so a typo does
+    /// not become a silent no-op on every peer. A local dispatch happens before
     /// anything is sent, when the method is <c>call_local</c> and
     /// <paramref name="peer"/> is zero or this peer.
     /// <see cref="NetwMultiplayer.RelaySender"/> reads this peer for the length
@@ -4555,8 +4529,8 @@ public sealed class NetwMultiplayer : NetwRefCounted
     /// <summary>
     /// Whether <paramref name="entity"/> is subject to a visibility filter at
     /// all, which is what lets a send skip the per-peer verdict for an entity
-    /// nothing narrows. On server authority the result is the committed row, so
-    /// an entity no layer names is unfiltered however it was declared. Off the
+    /// nothing narrows. On the server the result is the committed row, so an
+    /// entity no layer names is unfiltered however it was declared. Off the
     /// server the committed row is empty until the server admits the entity, so
     /// the result is the entity's own declared labels, read from the interest
     /// facet's declaration.
@@ -5491,13 +5465,10 @@ public sealed class NetwMultiplayer : NetwRefCounted
             373806689UL);
 
     /// <summary>
-    /// The entity save pass <c>_persist_tick</c> runs when nothing overrides
-    /// it. It advances each entity's
-    /// <see cref="NetwPersistenceConfig.Interval"/> by <paramref name="delta"/>
-    /// seconds and writes the due rows that changed, batched per
-    /// <see cref="NetwDatabase"/>. A peer that holds no session authority
-    /// writes nothing. A GDScript subclass cannot call <c>super</c> on a
-    /// <c>GDVIRTUAL</c>, so an override calls this to run the stock pass.
+    /// The default <c>_persist_tick</c>. Saves the changed rows of every entity
+    /// whose <see cref="NetwPersistenceConfig.Interval"/> has elapsed. Does
+    /// nothing on a client. Call it from an override of <c>_persist_tick</c> to
+    /// run the default pass.
     /// <code>
     /// extends NetwMultiplayer
     ///
@@ -5568,11 +5539,10 @@ public sealed class NetwMultiplayer : NetwRefCounted
         NetwApi.MethodBind("NetwMultiplayer", "database_open", 953185257UL);
 
     /// <summary>
-    /// Opens <paramref name="slot"/> and settles with an
-    /// <c>@GlobalScope.Error</c>. <paramref name="database"/> admits no work
-    /// before it settles. Opening a different slot while one is open answers
-    /// <c>@GlobalScope.ERR_BUSY</c>. <see cref="NetwDatabase.Open"/> lists the
-    /// codes.
+    /// Opens <paramref name="slot"/>. Other operations fail until the promise
+    /// resolves. Opening a different slot while one is open fails with
+    /// <c>@GlobalScope.ERR_BUSY</c>. See <see cref="NetwDatabase.Open"/> for
+    /// the errors.
     /// </summary>
     public NetwPromise DatabaseOpen(Rid database, StringName slot)
     {
@@ -5599,10 +5569,9 @@ public sealed class NetwMultiplayer : NetwRefCounted
         NetwApi.MethodBind("NetwMultiplayer", "database_close", 999707434UL);
 
     /// <summary>
-    /// Stops <paramref name="database"/> admitting work, waits for what it
-    /// already admitted, releases its slot and settles with an
-    /// <c>@GlobalScope.Error</c>. <see cref="NetwDatabase.Close"/> lists the
-    /// codes.
+    /// Closes <paramref name="database"/> once its pending operations finish.
+    /// The promise resolves with an <c>@GlobalScope.Error</c>, see
+    /// <see cref="NetwDatabase.Close"/>.
     /// </summary>
     public NetwPromise DatabaseClose(Rid database)
     {
@@ -5620,9 +5589,9 @@ public sealed class NetwMultiplayer : NetwRefCounted
         NetwApi.MethodBind("NetwMultiplayer", "database_flush", 999707434UL);
 
     /// <summary>
-    /// Settles with an <c>@GlobalScope.Error</c> once every operation
-    /// <paramref name="database"/> admitted before this call has settled.
-    /// <see cref="NetwDatabase.Flush"/> lists the codes.
+    /// Resolves once every operation started on <paramref name="database"/>
+    /// before this call has finished. See <see cref="NetwDatabase.Flush"/> for
+    /// the errors.
     /// </summary>
     public NetwPromise DatabaseFlush(Rid database)
     {
@@ -5640,11 +5609,11 @@ public sealed class NetwMultiplayer : NetwRefCounted
         NetwApi.MethodBind("NetwMultiplayer", "database_read", 2669361998UL);
 
     /// <summary>
-    /// Reads the record at <paramref name="id"/> and settles with the read
-    /// reply drawn in <see cref="NetwDatabase.Read"/>.
-    /// <paramref name="schema"/> is a sealed schema, as
-    /// <see cref="NetwMultiplayer.SchemaFind"/> answers it. A
-    /// <paramref name="database"/> that is not open fails the promise with
+    /// Reads the record at <paramref name="id"/>, see
+    /// <see cref="NetwDatabase.Read"/> for the result.
+    /// <paramref name="schema"/> is a sealed schema, such as one from
+    /// <see cref="NetwMultiplayer.SchemaFind"/>. A <paramref name="database"/>
+    /// that is not open fails the promise with
     /// <c>@GlobalScope.ERR_UNCONFIGURED</c>, an unsealed
     /// <paramref name="schema"/> with <c>@GlobalScope.ERR_DOES_NOT_EXIST</c>,
     /// and an empty <paramref name="id"/> with
@@ -5678,11 +5647,10 @@ public sealed class NetwMultiplayer : NetwRefCounted
         NetwApi.MethodBind("NetwMultiplayer", "database_write", 45203095UL);
 
     /// <summary>
-    /// Replaces the whole record at <paramref name="id"/> and settles with an
-    /// <c>@GlobalScope.Error</c>. <paramref name="values"/> carries every
-    /// column <paramref name="schema"/> declares and nothing else, and a row
-    /// that does not is refused before storage sees it.
-    /// <see cref="NetwDatabase.Write"/> lists the codes.
+    /// Replaces the whole record at <paramref name="id"/>.
+    /// <paramref name="values"/> must hold every column
+    /// <paramref name="schema"/> declares and nothing else. See
+    /// <see cref="NetwDatabase.Write"/> for the errors.
     /// </summary>
     public NetwPromise DatabaseWrite(
         Rid database,
@@ -5719,11 +5687,10 @@ public sealed class NetwMultiplayer : NetwRefCounted
         NetwApi.MethodBind("NetwMultiplayer", "database_patch", 45203095UL);
 
     /// <summary>
-    /// Replaces the fields <paramref name="values"/> names in the record at
-    /// <paramref name="id"/>, keeps the rest, and settles with an
-    /// <c>@GlobalScope.Error</c>. A record that is not there answers
-    /// <c>@GlobalScope.ERR_DOES_NOT_EXIST</c>. <see cref="NetwDatabase.Patch"/>
-    /// lists the codes.
+    /// Writes the fields in <paramref name="values"/> to the record at
+    /// <paramref name="id"/> and keeps the rest. A missing record fails with
+    /// <c>@GlobalScope.ERR_DOES_NOT_EXIST</c>. See
+    /// <see cref="NetwDatabase.Patch"/> for the errors.
     /// </summary>
     public NetwPromise DatabasePatch(
         Rid database,
@@ -5760,9 +5727,8 @@ public sealed class NetwMultiplayer : NetwRefCounted
         NetwApi.MethodBind("NetwMultiplayer", "database_erase", 2669361998UL);
 
     /// <summary>
-    /// Removes the record at <paramref name="id"/> and settles with an
-    /// <c>@GlobalScope.Error</c>. Erasing a record that is not there succeeds.
-    /// <see cref="NetwDatabase.Erase"/> lists the codes.
+    /// Removes the record at <paramref name="id"/>. Erasing a record that is
+    /// not there succeeds. See <see cref="NetwDatabase.Erase"/> for the errors.
     /// </summary>
     public NetwPromise DatabaseErase(Rid database, Rid schema, StringName id)
     {
@@ -5793,10 +5759,9 @@ public sealed class NetwMultiplayer : NetwRefCounted
 
     /// <summary>
     /// Reads up to <paramref name="limit"/> records matching
-    /// <paramref name="filter"/> and settles with the page reply drawn in
-    /// <see cref="NetwDatabase.Scan"/>, which also lists the codes that fail
-    /// the promise. Pass the page's cursor back as <paramref name="cursor"/> to
-    /// continue, and an empty <paramref name="cursor"/> to start.
+    /// <paramref name="filter"/>, see <see cref="NetwDatabase.Scan"/> for the
+    /// result. Pass an empty <paramref name="cursor"/> to start, and the cursor
+    /// of the previous page to continue.
     /// </summary>
     public NetwPromise DatabaseScan(
         Rid database,
@@ -5836,11 +5801,9 @@ public sealed class NetwMultiplayer : NetwRefCounted
         NetwApi.MethodBind("NetwMultiplayer", "database_submit", 2156562950UL);
 
     /// <summary>
-    /// Applies <paramref name="operations"/> in order and settles with the
-    /// batch reply drawn in <see cref="NetwWriteBatch.Submit"/>. The operations
-    /// are the ones drawn in <c>NetwDatabaseConnection._write_batch</c>, and
-    /// <see cref="NetwWriteBatch"/> is what builds them from a
-    /// <see cref="NetwSchema"/>.
+    /// Applies <paramref name="operations"/> in order, see
+    /// <see cref="NetwWriteBatch.Submit"/> for the result. Build
+    /// <paramref name="operations"/> with <see cref="NetwWriteBatch"/>.
     /// </summary>
     public NetwPromise DatabaseSubmit(
         Rid database,
@@ -5872,9 +5835,8 @@ public sealed class NetwMultiplayer : NetwRefCounted
             999707434UL);
 
     /// <summary>
-    /// Settles with the slots reply drawn in
-    /// <see cref="NetwDatabase.ListSlots"/>, naming every slot the backend of
-    /// <paramref name="database"/> holds. It works before
+    /// Lists every slot stored in <paramref name="database"/>, see
+    /// <see cref="NetwDatabase.ListSlots"/>. Can be called before
     /// <see cref="NetwMultiplayer.DatabaseOpen"/>.
     /// </summary>
     public NetwPromise DatabaseListSlots(Rid database)
@@ -5896,12 +5858,10 @@ public sealed class NetwMultiplayer : NetwRefCounted
             953185257UL);
 
     /// <summary>
-    /// Removes <paramref name="slot"/> and everything stored in it, then
-    /// settles with an <c>@GlobalScope.Error</c>. It works before
-    /// <see cref="NetwMultiplayer.DatabaseOpen"/>, and the slot
-    /// <paramref name="database"/> holds open answers
-    /// <c>@GlobalScope.ERR_BUSY</c>. <see cref="NetwDatabase.DeleteSlot"/>
-    /// lists the codes.
+    /// Removes <paramref name="slot"/> and everything stored in it. Can be
+    /// called before <see cref="NetwMultiplayer.DatabaseOpen"/>. Deleting the
+    /// open slot fails with <c>@GlobalScope.ERR_BUSY</c>. See
+    /// <see cref="NetwDatabase.DeleteSlot"/> for the errors.
     /// </summary>
     public NetwPromise DatabaseDeleteSlot(Rid database, StringName slot)
     {
@@ -5972,10 +5932,10 @@ public sealed class NetwMultiplayer : NetwRefCounted
 
     /// <summary>
     /// Reads <paramref name="entity"/>'s stored row and applies it to the
-    /// properties it binds. The promise answers <c>true</c> when a row was
-    /// found and <c>false</c> when none was stored.
-    /// <see cref="NetwPersistenceHandle.Load"/> lists the errors it fails with.
-    /// <b>Server Only.</b>
+    /// properties it binds. The promise resolves with <c>true</c> when a row
+    /// was found and <c>false</c> otherwise. See
+    /// <see cref="NetwPersistenceHandle.Load"/> for the errors. <b>Server
+    /// Only.</b>
     /// </summary>
     public NetwPromise PersistLoad(Rid entity)
     {
@@ -5993,10 +5953,10 @@ public sealed class NetwMultiplayer : NetwRefCounted
         NetwApi.MethodBind("NetwMultiplayer", "persist_save", 999707434UL);
 
     /// <summary>
-    /// Writes the properties <paramref name="entity"/> binds as its row. The
-    /// promise answers <c>true</c> once the write is stored and <c>false</c>
-    /// when nothing had changed. <see cref="NetwPersistenceHandle.Save"/> lists
-    /// the errors it fails with. <b>Server Only.</b>
+    /// Saves the properties <paramref name="entity"/> binds as its row. The
+    /// promise resolves with <c>true</c> once stored and <c>false</c> when
+    /// nothing had changed. See <see cref="NetwPersistenceHandle.Save"/> for
+    /// the errors. <b>Server Only.</b>
     /// </summary>
     public NetwPromise PersistSave(Rid entity)
     {
@@ -6015,8 +5975,8 @@ public sealed class NetwMultiplayer : NetwRefCounted
 
     /// <summary>
     /// Whether any property <paramref name="entity"/> binds differs from what
-    /// was last saved. An entity that binds no persistence answers
-    /// <c>false</c>.
+    /// was last saved. <c>false</c> when <paramref name="entity"/> binds no
+    /// persistence.
     /// </summary>
     public bool PersistIsDirty(Rid entity)
     {
@@ -6062,11 +6022,10 @@ public sealed class NetwMultiplayer : NetwRefCounted
             1931563502UL);
 
     /// <summary>
-    /// Writes every entity row that changed since its last save and settles
-    /// with an <c>@GlobalScope.Error</c> once each database has settled them.
-    /// It is <c>@GlobalScope.OK</c> when every row is stored, and the error of
-    /// the first row still unsaved otherwise.
-    /// <see cref="NetwSessionHandle.SaveEntities"/> lists the codes. <b>Server
+    /// Saves every entity row that changed since its last save. The promise
+    /// resolves with <c>@GlobalScope.OK</c> when every row is stored, or the
+    /// error of the first unsaved row. See
+    /// <see cref="NetwSessionHandle.SaveEntities"/> for the errors. <b>Server
     /// Only.</b>
     /// </summary>
     public NetwPromise PersistFlushAll()
@@ -6081,10 +6040,10 @@ public sealed class NetwMultiplayer : NetwRefCounted
 
     /// <summary>
     /// Stores <paramref name="table"/>'s committed rows as one snapshot under
-    /// <paramref name="key"/> in <paramref name="database"/>, and settles with
-    /// an <c>@GlobalScope.Error</c>. <paramref name="ids"/> names each row in
-    /// the order of <see cref="NetwMultiplayer.TableReadRoutes"/>.
-    /// <see cref="NetwTableHandle.Save"/> lists the codes. <b>Server Only.</b>
+    /// <paramref name="key"/> in <paramref name="database"/>.
+    /// <paramref name="ids"/> names each row in the order of
+    /// <see cref="NetwMultiplayer.TableReadRoutes"/>. See
+    /// <see cref="NetwTableHandle.Save"/> for the errors. <b>Server Only.</b>
     /// </summary>
     public NetwPromise TableSave(
         Rid table,
@@ -6122,9 +6081,9 @@ public sealed class NetwMultiplayer : NetwRefCounted
 
     /// <summary>
     /// Replaces every row of <paramref name="table"/> with the snapshot stored
-    /// under <paramref name="key"/> in <paramref name="database"/>, and settles
-    /// with the load reply drawn in <see cref="NetwTableHandle.Load"/>. Each
-    /// loaded row gets a new route. <b>Server Only.</b>
+    /// under <paramref name="key"/> in <paramref name="database"/>, see
+    /// <see cref="NetwTableHandle.Load"/> for the result. Each loaded row gets
+    /// a new route. <b>Server Only.</b>
     /// </summary>
     public NetwPromise TableLoad(Rid table, Rid database, StringName key)
     {
@@ -6216,25 +6175,24 @@ public sealed class NetwMultiplayer : NetwRefCounted
     /// <code>
     /// Dictionary
     /// ┠╴loss          float   lost share of the last 32 acked datagrams
-    /// ┠╴rtt           float   seconds, the session clock's averaged round trip
-    /// ┠╴jitter        float   seconds, the session clock's own deviation
+    /// ┠╴rtt           float   seconds, smoothed send-to-ack round trip
+    /// ┠╴jitter        float   seconds, that round trip's mean deviation
     /// ┠╴reorders      int     datagrams that arrived behind a fresher one
     /// ┠╴duplicates    int     datagrams that arrived twice
     /// ┠╴mode          String  "good" or "bad", the send governor's own reading
     /// ┖╴budget_bits   int     what one datagram to this peer may spend
     /// </code>
     /// <para>
-    /// <c>loss</c>, <c>mode</c> and <c>budget_bits</c> are measured for
-    /// <paramref name="peer"/> alone. <c>rtt</c> and <c>jitter</c> come from
-    /// the session clock, which counts one round trip for the session, so every
-    /// peer of one session reads the same two numbers. <c>mode</c> turns
-    /// <c>bad</c> when loss or round trip crosses the governor's thresholds,
-    /// and <c>budget_bits</c> halves with it down to a floor, so a link that is
-    /// failing degrades instead of collapsing. It returns to <c>good</c> only
-    /// after a clean interval, and that interval doubles each time the link
-    /// relapses, so a flapping link is not chased. This is a tooling-cadence
-    /// read. Read it beside <see cref="NetwMultiplayer.SyncExplain"/>, which
-    /// returns what one row did rather than what the link did.
+    /// Every field is measured for <paramref name="peer"/> alone. Until the
+    /// first ack arrives, <c>rtt</c> and <c>jitter</c> are the clock's values.
+    /// <c>mode</c> turns <c>bad</c> when loss or round trip crosses the
+    /// governor's thresholds, and <c>budget_bits</c> halves with it down to a
+    /// floor, so a link that is failing degrades instead of collapsing. It
+    /// returns to <c>good</c> only after a clean interval, and that interval
+    /// doubles each time the link relapses, so a flapping link is not chased.
+    /// This is a tooling-cadence read. Read it beside
+    /// <see cref="NetwMultiplayer.SyncExplain"/>, which returns what one row
+    /// did rather than what the link did.
     /// </para>
     /// </summary>
     public Godot.Collections.Dictionary PeerLinkStats(long peer)
@@ -7864,12 +7822,12 @@ public sealed class NetwMultiplayer : NetwRefCounted
 
     /// <summary>
     /// Opens the file-backed scene at <paramref name="path"/> and makes players
-    /// watch it, under server authority. No entity moves, so spawn the arrivals
-    /// from <see cref="NetwMultiplayer.SceneChanged"/>.
-    /// <paramref name="scope"/> says who the change is for and nothing infers
-    /// it, so the same call means the same thing on a listen host and on a
-    /// dedicated server. <paramref name="requester"/> names the node the change
-    /// is asked from, which resolves the player a
+    /// watch it. No entity moves, so spawn the arrivals from
+    /// <see cref="NetwMultiplayer.SceneChanged"/>. <paramref name="scope"/>
+    /// says who the change is for and nothing infers it, so the same call means
+    /// the same thing on a listen host and on a dedicated server.
+    /// <paramref name="requester"/> names the node the change is asked from,
+    /// which resolves the player a
     /// <see cref="NetwMultiplayer.SceneChange.Player"/> change acts on and the
     /// source scene a <see cref="NetwMultiplayer.SceneChange.Scene"/> change
     /// replaces. A scope that needs one and finds none is rejected rather than
@@ -8344,7 +8302,7 @@ public sealed class NetwMultiplayer : NetwRefCounted
     /// <code>
     /// Error
     /// ┠╴OK                     the peer reaches the scene
-    /// ┠╴ERR_UNAUTHORIZED       called off server authority
+    /// ┠╴ERR_UNAUTHORIZED       called on a client
     /// ┠╴ERR_INVALID_PARAMETER  peer is 0
     /// ┠╴ERR_DOES_NOT_EXIST     scene names no live node
     /// ┖╴ERR_UNAVAILABLE        the write did not take
@@ -8668,18 +8626,14 @@ public sealed class NetwMultiplayer : NetwRefCounted
         NetwApi.MethodBind("NetwMultiplayer", "session_leave", 1931563502UL);
 
     /// <summary>
-    /// Saves every entity row this peer holds as session authority, closes the
-    /// active peer, and returns to
-    /// <see cref="NetwMultiplayer.SessionState.Offline"/>. The promise resolves
-    /// with an <c>@GlobalScope.Error</c>. When the database refuses a row, the
-    /// session stays online and the promise resolves with that error. Call it
-    /// again to retry, or close <see cref="MultiplayerApi.MultiplayerPeer"/> to
-    /// disconnect without saving. Once the rows are saved it waits up to three
-    /// seconds for the server to acknowledge the departure, so a caller that
-    /// awaits the promise knows the peer is closed. A session already at
-    /// <see cref="NetwMultiplayer.SessionState.Offline"/>, and one with no
-    /// scene tree to time the window with, return a promise that is already
-    /// settled.
+    /// On the server, saves every entity row first. Then closes the peer and
+    /// returns to <see cref="NetwMultiplayer.SessionState.Offline"/>. The
+    /// promise resolves with an <c>@GlobalScope.Error</c>. If the database
+    /// refuses a row, the session stays online and the promise resolves with
+    /// that error. Call it again to retry, or close
+    /// <see cref="MultiplayerApi.MultiplayerPeer"/> to disconnect without
+    /// saving. It waits up to three seconds for the server to acknowledge the
+    /// departure. An offline session returns a promise that is already settled.
     /// <code>
     /// var left := api.session_leave()
     /// if not left.is_settled:
@@ -9021,7 +8975,7 @@ public sealed class NetwMultiplayer : NetwRefCounted
     /// Error
     /// ┠╴OK                  the entity was staged into the layer
     /// ┠╴ERR_DOES_NOT_EXIST  layer or entity names nothing valid
-    /// ┠╴ERR_UNAUTHORIZED    called off server authority
+    /// ┠╴ERR_UNAUTHORIZED    called on a client
     /// ┖╴ERR_UNAVAILABLE     the layer rejected the entity
     /// </code>
     /// </summary>
@@ -9119,9 +9073,8 @@ public sealed class NetwMultiplayer : NetwRefCounted
     /// zero by default, so the default result is simply whether the queue has
     /// anything in it. Raising <paramref name="buffer"/> moves that line and
     /// nothing else. The queue sits that much deeper and every arrival waits
-    /// that much longer. Declining a transition is not free. A frame that holds
-    /// still solves, so the world advances by a step belonging to no transition
-    /// and the next drive spans two, which is a quantum fault.
+    /// that much longer. Waiting has a cost. The world still advances a step on
+    /// that frame, and the next transition has to cover two.
     /// </summary>
     public NetwPredict.ConsumeAction PredictConsume(int depth, int buffer)
     {
@@ -9369,9 +9322,9 @@ public sealed class NetwMultiplayer : NetwRefCounted
 
     /// <summary>
     /// Adds <paramref name="entity"/> to the declaration for
-    /// <paramref name="layerId"/>. If <paramref name="entity"/> is live on
-    /// server authority, the layer's live membership changes in the same call.
-    /// The declaration is stored on the entity record, so authoring performed
+    /// <paramref name="layerId"/>. If <paramref name="entity"/> is live on the
+    /// server, the layer's live membership changes in the same call. The
+    /// declaration is stored on the entity record, so authoring performed
     /// before session attachment survives packing, tree exits, and re-entry.
     /// </summary>
     public void InterestJoin(Rid entity, StringName layerId)
@@ -9395,8 +9348,8 @@ public sealed class NetwMultiplayer : NetwRefCounted
 
     /// <summary>
     /// Removes <paramref name="entity"/> from the declaration for
-    /// <paramref name="layerId"/>. If <paramref name="entity"/> is live on
-    /// server authority, the layer's live membership changes in the same call.
+    /// <paramref name="layerId"/>. If <paramref name="entity"/> is live on the
+    /// server, the layer's live membership changes in the same call.
     /// </summary>
     public void InterestLeave(Rid entity, StringName layerId)
     {
@@ -9517,7 +9470,7 @@ public sealed class NetwMultiplayer : NetwRefCounted
     /// <paramref name="entity"/> on <paramref name="layerId"/>.
     /// <see cref="NetwMultiplayer.LeavePolicy.Custom"/> requires
     /// <paramref name="customCallback"/>, called with <c>(peer_id,
-    /// layer_id)</c> on server authority. Other policies reject a callback.
+    /// layer_id)</c> on the server. Other policies reject a callback.
     /// </summary>
     public void InterestOnLeavePolicy(
         Rid entity,
@@ -9598,11 +9551,8 @@ public sealed class NetwMultiplayer : NetwRefCounted
     /// <paramref name="stepper"/> is asked <c>NetwPhysicsStepper._can_step</c>
     /// at install time, and a <c>null</c> stepper or one returning <c>false</c>
     /// is rejected, leaving <paramref name="space"/> with no driver rather than
-    /// an unusable one. A member whose space has no driver still predicts, but
-    /// only at <see cref="NetwSimulationHandle.ScheduleEnum.Frame"/> rather
-    /// than <see cref="NetwSimulationHandle.ScheduleEnum.Stepped"/>, because
-    /// replaying a stepped body means re-running the solve rather than sampling
-    /// it.
+    /// an unusable one. A member whose space has no driver runs as
+    /// <see cref="NetwSimulationHandle.ScheduleEnum.Frame"/>.
     /// </summary>
     public void PredictStepperInstall(
         Rid space,
@@ -9971,9 +9921,9 @@ public sealed class NetwMultiplayer : NetwRefCounted
     /// node or a wrapper for each one. The routes come back live, so a table
     /// row addressed to one of them is deliverable immediately.
     /// <see cref="NetwMultiplayer.LivenessReleaseRoutes"/> is the death edge,
-    /// and a route this hands out is never reissued after that. Only server
-    /// authority creates routes. A client returns an empty array because routes
-    /// must have one authority. <b>Server Only.</b>
+    /// and a route this hands out is never reissued after that. Only the server
+    /// creates routes. A client returns an empty array because routes must have
+    /// one authority. <b>Server Only.</b>
     /// </summary>
     public long[] LivenessClaimRoutes(int count)
     {
@@ -10004,7 +9954,7 @@ public sealed class NetwMultiplayer : NetwRefCounted
     /// is retired, its rows are dropped out of every table, and the removal is
     /// queued so the next frame tells every peer the row died. Retiring without
     /// telling anyone would leave the host alone in knowing, which is the one
-    /// way a released route can outlive its release. Only server authority may
+    /// way a released route can outlive its release. Only the server may
     /// release. A client returns <c>@GlobalScope.ERR_UNCONFIGURED</c> and
     /// queues nothing, while a session with no role at all releases its own
     /// routes. An empty <paramref name="routes"/> succeeds, because a teardown
@@ -10012,7 +9962,7 @@ public sealed class NetwMultiplayer : NetwRefCounted
     /// <code>
     /// Error
     /// ┠╴OK                the routes were released, or there were none to release
-    /// ┖╴ERR_UNCONFIGURED  called off server authority
+    /// ┖╴ERR_UNCONFIGURED  called on a client
     /// </code>
     /// </summary>
     public Error LivenessReleaseRoutes(long[] routes)
@@ -10040,16 +9990,15 @@ public sealed class NetwMultiplayer : NetwRefCounted
     /// so a receiver drops its row instead of expecting the entity back. To
     /// stop one peer seeing an entity that is still alive, use
     /// <see cref="NetwMultiplayer.InterestLeave"/>, which can be undone.
-    /// Rejected with <c>@GlobalScope.ERR_UNAUTHORIZED</c> off server authority,
-    /// because a client that could end another peer's entity could end any of
-    /// them. <paramref name="opts"/> carries the linger window, the save flush
-    /// and the deferred-free choice for this one call. It is the options of a
-    /// call rather than an authored policy, which is what
+    /// Rejected with <c>@GlobalScope.ERR_UNAUTHORIZED</c> on a client.
+    /// <paramref name="opts"/> carries the linger window, the save flush and
+    /// the deferred-free choice for this one call. It is the options of a call
+    /// rather than an authored policy, which is what
     /// <see cref="NetwDespawnConfig"/> is.
     /// <code>
     /// Error
     /// ┠╴OK                  the tear-down was accepted
-    /// ┠╴ERR_UNAUTHORIZED    called off server authority
+    /// ┠╴ERR_UNAUTHORIZED    called on a client
     /// ┖╴ERR_DOES_NOT_EXIST  entity resolves to no view
     /// </code>
     /// <para>
@@ -10381,8 +10330,8 @@ public sealed class NetwMultiplayer : NetwRefCounted
     /// <summary>
     /// Installs <paramref name="callback"/> as
     /// <see cref="NetwPredictionHandle.PredictCommands"/> on
-    /// <paramref name="entity"/>'s prediction handle, a no-op when
-    /// <paramref name="entity"/> has none.
+    /// <paramref name="entity"/>. Does nothing when <paramref name="entity"/>
+    /// has no prediction handle.
     /// </summary>
     public void PredictSetCommandsCallback(Rid entity, Callable callback)
     {
@@ -10476,8 +10425,8 @@ public sealed class NetwMultiplayer : NetwRefCounted
 
     /// <summary>
     /// Installs <paramref name="callback"/> as
-    /// <see cref="NetwSimulationHandle.Step"/> on <paramref name="entity"/>'s
-    /// simulation handle, a no-op when <paramref name="entity"/> has none.
+    /// <see cref="NetwSimulationHandle.Step"/> on <paramref name="entity"/>.
+    /// Does nothing when <paramref name="entity"/> has no simulation handle.
     /// </summary>
     public void SimulationSetStepCallback(Rid entity, Callable callback)
     {
@@ -10621,12 +10570,10 @@ public sealed class NetwMultiplayer : NetwRefCounted
     /// <summary>
     /// The re-stepping driver
     /// <see cref="NetwMultiplayer.PredictStepperInstall"/> installed for a
-    /// physics space, or <c>null</c> when the space has none. A prediction
-    /// member declaring <see cref="NetwSimulationHandle.ScheduleEnum.Stepped"/>
-    /// needs its space's driver to admit replay, because replaying a stepped
-    /// body means re-running the solve rather than sampling it. Without one the
-    /// member runs as <see cref="NetwSimulationHandle.ScheduleEnum.Frame"/>, so
-    /// this returning <c>null</c> is a downgrade rather than a failure.
+    /// physics space, or <c>null</c> when the space has none. Without a driver,
+    /// a member declaring
+    /// <see cref="NetwSimulationHandle.ScheduleEnum.Stepped"/> runs as
+    /// <see cref="NetwSimulationHandle.ScheduleEnum.Frame"/>.
     /// </summary>
     public NetwPhysicsStepper PredictGetStepper(Rid space)
     {
@@ -11562,13 +11509,10 @@ public sealed class NetwMultiplayer : NetwRefCounted
 
     /// <summary>
     /// Makes <paramref name="entity"/> a scene, so it can hold the nodes that
-    /// belong to it and replicate them to the players it reaches. Server
-    /// authority may declare anything, and any peer may declare an entity whose
-    /// route it already holds, because the server admitted that route. A client
-    /// repeating a scene the server declared is following rather than
-    /// inventing. A peer with neither authority nor a route returns
-    /// <c>@GlobalScope.ERR_UNAUTHORIZED</c>, because it would be inventing a
-    /// scene the session never declared. Declare this before the entity is
+    /// belong to it and replicate them to the players it reaches. The server
+    /// may declare anything, and a client may declare an entity whose route it
+    /// already holds. Any other client call returns
+    /// <c>@GlobalScope.ERR_UNAUTHORIZED</c>. Declare this before the entity is
     /// armed. A bound entity returns <c>@GlobalScope.ERR_UNCONFIGURED</c>. If
     /// the entity has no record yet, the session stores the declaration until
     /// <see cref="NetwMultiplayer.EntityBindNode"/> creates the record.
@@ -11583,7 +11527,7 @@ public sealed class NetwMultiplayer : NetwRefCounted
     /// <code>
     /// Error
     /// ┠╴OK                  the facet was written, or parked for arming
-    /// ┠╴ERR_UNAUTHORIZED    called with neither server authority nor entity's own route
+    /// ┠╴ERR_UNAUTHORIZED    called on a client without the entity's route
     /// ┠╴ERR_DOES_NOT_EXIST  entity is not a valid handle
     /// ┖╴ERR_UNCONFIGURED    entity is already armed with a node
     /// </code>
@@ -11607,14 +11551,14 @@ public sealed class NetwMultiplayer : NetwRefCounted
     /// <summary>
     /// Stops <paramref name="entity"/> being a scene, dropping the label and
     /// isolation it declared. This is the reverse of
-    /// <see cref="NetwMultiplayer.SceneDeclare"/> under the same rules. Server
-    /// authority may undeclare anything, a peer holding the entity's route may
-    /// undeclare its own copy, and a peer with neither returns
+    /// <see cref="NetwMultiplayer.SceneDeclare"/> under the same rules. The
+    /// server may undeclare anything, a client holding the entity's route may
+    /// undeclare its own copy, and any other client call returns
     /// <c>@GlobalScope.ERR_UNAUTHORIZED</c>.
     /// <code>
     /// Error
     /// ┠╴OK                  the facet was cleared, or parked for arming
-    /// ┠╴ERR_UNAUTHORIZED    called with neither server authority nor entity's own route
+    /// ┠╴ERR_UNAUTHORIZED    called on a client without the entity's route
     /// ┠╴ERR_DOES_NOT_EXIST  entity is not a valid handle
     /// ┖╴ERR_UNCONFIGURED    entity is already armed with a node
     /// </code>
@@ -12043,37 +11987,6 @@ public sealed class NetwMultiplayer : NetwRefCounted
         answered.Dispose();
     }
 
-    private static readonly IntPtr _bindLawExtensionNamed =
-        NetwApi.MethodBind(
-            "NetwMultiplayer",
-            "law_extension_named",
-            2240911060UL);
-
-    public static bool LawExtensionNamed()
-    {
-        byte answered = default;
-        NetwThunks.Ptrcall0_Byte(
-            _bindLawExtensionNamed,
-            IntPtr.Zero,
-            ref answered);
-        return answered != 0;
-    }
-
-    private static readonly IntPtr _bindLawExtensionScript =
-        NetwApi.MethodBind(
-            "NetwMultiplayer",
-            "law_extension_script",
-            2146468882UL);
-
-    public static Script LawExtensionScript()
-    {
-        godot_variant answered = default;
-        NetwThunks.Call0(_bindLawExtensionScript, IntPtr.Zero, ref answered);
-        Script result = (Script)VariantUtils.ConvertToGodotObject(answered);
-        answered.Dispose();
-        return result;
-    }
-
     private static readonly IntPtr _bindEntityAddPropertySet =
         NetwApi.MethodBind(
             "NetwMultiplayer",
@@ -12362,11 +12275,10 @@ public sealed class NetwMultiplayer : NetwRefCounted
     /// <summary>
     /// Reserves the next route and binds it to <paramref name="entity"/>, the
     /// server-side counterpart to a client learning a route off the wire.
-    /// Returns the route on success, and <c>0</c> both off server authority and
-    /// for an <paramref name="entity"/>
-    /// <see cref="NetwMultiplayer.EntityCreate"/> never created. An entity that
-    /// already carries a route returns that route again rather than reserving a
-    /// second one.
+    /// Returns the route on success, and <c>0</c> both on a client and for an
+    /// <paramref name="entity"/> <see cref="NetwMultiplayer.EntityCreate"/>
+    /// never created. An entity that already carries a route returns that route
+    /// again rather than reserving a second one.
     /// </summary>
     public long EntityAdmit(Rid entity)
     {
@@ -12557,8 +12469,8 @@ public sealed class NetwMultiplayer : NetwRefCounted
             3411492887UL);
 
     /// <summary>
-    /// Hands control of <paramref name="entity"/> to <paramref name="peer"/>. A
-    /// no-op off server authority or for a handle with no bound node.
+    /// Hands control of <paramref name="entity"/> to <paramref name="peer"/>.
+    /// Does nothing on a client or for a handle with no bound node.
     /// </summary>
     public void EntityGrantControl(Rid entity, long peer)
     {
@@ -13042,11 +12954,10 @@ public sealed class NetwMultiplayer : NetwRefCounted
     /// <summary>
     /// Suspends the game on every live peer, each receiving
     /// <see cref="NetwMultiplayer.SessionTreePaused"/> carrying
-    /// <paramref name="reason"/>, and on this session too. A session without
-    /// server authority rejects the call and pauses nobody. The local
-    /// announcement is made through the same channel decode a remote peer
-    /// takes, so the host cannot end up in a pause state its clients disagree
-    /// with.
+    /// <paramref name="reason"/>, and on this session too. Does nothing on a
+    /// client. The local announcement is made through the same channel decode a
+    /// remote peer takes, so the host cannot end up in a pause state its
+    /// clients disagree with.
     /// </summary>
     public void SessionPause(string reason = "")
     {
@@ -13063,10 +12974,10 @@ public sealed class NetwMultiplayer : NetwRefCounted
     /// <summary>
     /// Resumes the game on every live peer, each receiving
     /// <see cref="NetwMultiplayer.SessionTreeUnpaused"/>, and on this session
-    /// too. A session without server authority rejects the call and resumes
-    /// nobody. The twin of <see cref="NetwMultiplayer.SessionPause"/>. It
-    /// carries no reason and does not check that a pause came first, because a
-    /// peer that missed the pause must still end up resumed.
+    /// too. Does nothing on a client. The twin of
+    /// <see cref="NetwMultiplayer.SessionPause"/>. It carries no reason and
+    /// does not check that a pause came first, because a peer that missed the
+    /// pause must still end up resumed.
     /// </summary>
     public void SessionUnpause()
     {
@@ -13084,11 +12995,10 @@ public sealed class NetwMultiplayer : NetwRefCounted
     /// Warns every live peer that this server is going away, carrying
     /// <paramref name="reason"/>, and announces
     /// <see cref="NetwMultiplayer.SessionServerDisconnecting"/> locally as
-    /// well. A session without server authority rejects the call and warns
-    /// nobody. The notice rides a session control channel rather than a node
-    /// <c>@rpc</c>, so a session with no scene tree still warns its clients.
-    /// Nothing here closes a peer, so the server still has to tear itself down
-    /// afterwards.
+    /// well. Does nothing on a client. The notice rides a session control
+    /// channel rather than a node <c>@rpc</c>, so a session with no scene tree
+    /// still warns its clients. Nothing here closes a peer, so the server still
+    /// has to tear itself down afterwards.
     /// </summary>
     public void SessionNotifyShutdown(string reason = "")
     {
@@ -13110,7 +13020,7 @@ public sealed class NetwMultiplayer : NetwRefCounted
             3005725572UL);
 
     /// <summary>
-    /// Asks server authority for permission to leave, carrying
+    /// Asks the server for permission to leave, carrying
     /// <paramref name="reason"/>. The server announces it as
     /// <see cref="NetwMultiplayer.SessionDisconnectRequested"/> and decides.
     /// Nothing here closes a peer or leaves a session. A session that already
@@ -13134,12 +13044,11 @@ public sealed class NetwMultiplayer : NetwRefCounted
         NetwApi.MethodBind("NetwMultiplayer", "peer_kick", 3576329613UL);
 
     /// <summary>
-    /// Removes <paramref name="peerId"/> from the session on server authority,
-    /// announcing <see cref="NetwMultiplayer.PeerKicked"/> to that peer first
-    /// when <paramref name="reason"/> is non-empty. A session without server
-    /// authority rejects the call and removes nobody. The notice is sent before
-    /// the connection closes, because a closed connection carries nothing and
-    /// the kicked client would never learn why.
+    /// Removes <paramref name="peerId"/> from the session, emitting
+    /// <see cref="NetwMultiplayer.PeerKicked"/> on that peer first when
+    /// <paramref name="reason"/> is non-empty. Does nothing on a client. The
+    /// notice is sent before the connection closes, because a closed connection
+    /// carries nothing and the kicked client would never learn why.
     /// </summary>
     public void PeerKick(long peerId, string reason = "")
     {
@@ -13164,7 +13073,7 @@ public sealed class NetwMultiplayer : NetwRefCounted
             3576329613UL);
 
     /// <summary>
-    /// Asks server authority to remove <paramref name="peerId"/>, carrying
+    /// Asks the server to remove <paramref name="peerId"/>, carrying
     /// <paramref name="reason"/> with the request. The server announces it as
     /// <see cref="NetwMultiplayer.PeerKickRequested"/> and decides. Nothing
     /// here removes anyone, which is what separates this from
@@ -13204,9 +13113,8 @@ public sealed class NetwMultiplayer : NetwRefCounted
     /// <c>@GlobalScope.ERR_UNAUTHORIZED</c> whatever channel it named. A
     /// channel this does not admit, or an empty <paramref name="payload"/>,
     /// returns <c>@GlobalScope.ERR_INVALID_DATA</c>. <paramref name="route"/>
-    /// is the route the frame names, read from its head before the verdict. A
-    /// spawn frame names a route this peer does not hold yet, and a frame too
-    /// short to name one passes <c>0</c>.
+    /// is the route the frame names, or <c>0</c> when the frame is too short.
+    /// For a spawn frame, this peer does not hold that route yet.
     /// <code>
     /// Error
     /// ┠╴OK                  the frame is admitted

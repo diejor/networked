@@ -109,19 +109,14 @@ Ref<NetwPromise> NetwDatabase::read(
 ) {
     NetwMultiplayer *api = session();
     if (api == nullptr) {
-        return NetwPromise::resolved(
-            database_read_failure(
-                p_id,
-                ERR_UNAVAILABLE,
-                "this database handle outlived the session that issued it"
-            )
-        );
+        return NetwPromise::resolved(database_read_failure(
+            p_id,
+            ERR_UNAVAILABLE,
+            "this database handle outlived the session that issued it"
+        ));
     }
-    return api->database_read(
-        database,
-        api->schema_of_declaration(p_schema),
-        p_id
-    );
+    return api
+        ->database_read(database, api->schema_of_declaration(p_schema), p_id);
 }
 
 Ref<NetwPromise> NetwDatabase::write(
@@ -175,12 +170,10 @@ Ref<NetwPromise> NetwDatabase::scan(
 ) {
     NetwMultiplayer *api = session();
     if (api == nullptr) {
-        return NetwPromise::resolved(
-            database_page_failure(
-                ERR_UNAVAILABLE,
-                "this database handle outlived the session that issued it"
-            )
-        );
+        return NetwPromise::resolved(database_page_failure(
+            ERR_UNAVAILABLE,
+            "this database handle outlived the session that issued it"
+        ));
     }
     return api->database_scan(
         database,
@@ -194,12 +187,10 @@ Ref<NetwPromise> NetwDatabase::scan(
 Ref<NetwPromise> NetwDatabase::list_slots() {
     NetwMultiplayer *api = session();
     if (api == nullptr) {
-        return NetwPromise::resolved(
-            database_slots_failure(
-                ERR_UNAVAILABLE,
-                "this database handle outlived the session that issued it"
-            )
-        );
+        return NetwPromise::resolved(database_slots_failure(
+            ERR_UNAVAILABLE,
+            "this database handle outlived the session that issued it"
+        ));
     }
     return api->database_list_slots(database);
 }
@@ -239,10 +230,7 @@ void NetwDatabase::_bind_methods() {
     ClassDB::bind_method(D_METHOD("open", "slot"), &NetwDatabase::open);
     ClassDB::bind_method(D_METHOD("close"), &NetwDatabase::close);
     ClassDB::bind_method(D_METHOD("flush"), &NetwDatabase::flush);
-    ClassDB::bind_method(
-        D_METHOD("read", "schema", "id"),
-        &NetwDatabase::read
-    );
+    ClassDB::bind_method(D_METHOD("read", "schema", "id"), &NetwDatabase::read);
     ClassDB::bind_method(
         D_METHOD("write", "schema", "id", "values"),
         &NetwDatabase::write
@@ -273,7 +261,11 @@ void NetwDatabase::_bind_methods() {
         D_METHOD("get_database_name"),
         &NetwDatabase::get_database_name
     );
-    ADD_PROPERTY(read_only(Variant::STRING_NAME, "name"), "", "get_database_name");
+    ADD_PROPERTY(
+        read_only(Variant::STRING_NAME, "name"),
+        "",
+        "get_database_name"
+    );
     ClassDB::bind_method(D_METHOD("get_slot"), &NetwDatabase::get_slot);
     ADD_PROPERTY(read_only(Variant::STRING_NAME, "slot"), "", "get_slot");
     ClassDB::bind_method(D_METHOD("get_state"), &NetwDatabase::get_state);
@@ -367,32 +359,26 @@ Ref<NetwPromise> NetwWriteBatch::submit() {
     NetwMultiplayer *api = session();
     const int count = operations.size();
     if (sealed) {
-        return NetwPromise::resolved(
-            database_batch_result_refused(
-                count,
-                ERR_LOCKED,
-                "this batch was submitted already"
-            )
-        );
+        return NetwPromise::resolved(database_batch_result_refused(
+            count,
+            ERR_LOCKED,
+            "this batch was submitted already"
+        ));
     }
     sealed = true;
     if (api == nullptr) {
-        return NetwPromise::resolved(
-            database_batch_result_refused(
-                count,
-                ERR_UNAVAILABLE,
-                "this batch outlived the session that issued it"
-            )
-        );
+        return NetwPromise::resolved(database_batch_result_refused(
+            count,
+            ERR_UNAVAILABLE,
+            "this batch outlived the session that issued it"
+        ));
     }
     if (first_fault != OK) {
-        return NetwPromise::resolved(
-            database_batch_result_refused(
-                count,
-                first_fault,
-                "a builder call on this batch was refused, so none of it ran"
-            )
-        );
+        return NetwPromise::resolved(database_batch_result_refused(
+            count,
+            first_fault,
+            "a builder call on this batch was refused, so none of it ran"
+        ));
     }
     return api->database_submit(database, operations);
 }

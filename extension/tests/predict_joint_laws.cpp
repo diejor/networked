@@ -657,12 +657,14 @@ struct DeclaredBody {
         Ref<NetwPropertySet> set;
         set.instantiate();
         set->record = NetwPropertySet::RECORD_STATE;
-        set->bind_column(NetwPropertySetColumn::create(
-            StringName("position"),
-            Ref<NetwQuantize>(),
-            false,
-            int64_t(SchemaCore::VARIANT)
-        ));
+        set->bind_column(
+            NetwPropertySetColumn::create(
+                StringName("position"),
+                Ref<NetwQuantize>(),
+                false,
+                int64_t(SchemaCore::VARIANT)
+            )
+        );
         p_pool->adopt_declaration(
             entity,
             NetwPropertySetBinding::create(set, owner),
@@ -750,7 +752,8 @@ TEST_CASE(
     REQUIRE(restored >= 0);
     const Dictionary payload
         = engine->restore_payload_of(member.slot, plan, restored);
-    const Vector3 restored_pose = payload.get(StringName("position"), Vector3());
+    const Vector3 restored_pose
+        = payload.get(StringName("position"), Vector3());
     NETW_CHECK_CLOSE(restored_pose.x, -7.0, 1.0e-9);
 }
 

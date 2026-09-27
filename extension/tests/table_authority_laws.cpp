@@ -241,9 +241,8 @@ TEST_CASE(
     const int refused = int(
         guest->table_admit_frame_default(TRANSPORT_SERVER, channel, body(4))
     );
-    const int admitted = int(
-        guest->table_admit_frame_default(COORDINATOR, channel, body(4))
-    );
+    const int admitted
+        = int(guest->table_admit_frame_default(COORDINATOR, channel, body(4)));
     NETW_CHECK_EQ(refused, int(ERR_UNAUTHORIZED));
     NETW_CHECK_EQ(int(admitted == int(ERR_UNAUTHORIZED)), 0);
 }

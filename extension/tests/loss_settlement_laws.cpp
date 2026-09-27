@@ -95,7 +95,7 @@ TEST_CASE(
         == NetwMultiplayer::SESSION_STATE_ONLINE
     );
 
-    Recorder seen(rig.server(), { "session_ended" });
+    Recorder seen(rig.server(), {"session_ended"});
     rig.server()->session_relay_peer_disconnected(7);
 
     NETW_CHECK_EQ(seen.count("session_ended"), 1);
@@ -117,7 +117,7 @@ TEST_CASE(
         == NetwMultiplayer::SESSION_STATE_ONLINE
     );
 
-    Recorder seen(rig.server(), { "session_ended", "peer_disconnected" });
+    Recorder seen(rig.server(), {"session_ended", "peer_disconnected"});
     rig.server()->session_relay_peer_disconnected(1);
 
     NETW_CHECK_EQ(seen.count("session_ended"), 0);
@@ -166,7 +166,7 @@ TEST_CASE(
     LoopbackRig rig(1, 7);
     rig.mount();
 
-    Recorder seen(rig.server(), { "session_ended" });
+    Recorder seen(rig.server(), {"session_ended"});
     rig.server()->session_relay_peer_disconnected(7);
     rig.server()->session_relay_peer_disconnected(7);
     rig.server()->peer_mark_unreachable(7);

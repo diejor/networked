@@ -21,10 +21,7 @@ class HostSceneView : public ParticipantView {
     void on_roster_changed();
     void reannounce();
     void announce(godot::SubViewport *p_viewport);
-    void activate(
-        const godot::Ref<NetwEntity> &p_player,
-        bool p_adopts_camera
-    );
+    void activate(const godot::Ref<NetwEntity> &p_player, bool p_adopts_camera);
 
 protected:
     static void _bind_methods();

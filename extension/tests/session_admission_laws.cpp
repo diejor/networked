@@ -114,8 +114,9 @@ TEST_CASE(
     Node *gate = gate_on(branch, GATE);
     REQUIRE(gate != nullptr);
     REQUIRE(
-        int(netw::Netw::configure_admission(Callable(gate, StringName("admit"))
-        ))
+        int(
+            netw::Netw::configure_admission(Callable(gate, StringName("admit")))
+        )
         == int(OK)
     );
 
@@ -137,8 +138,9 @@ TEST_CASE(
     Node *gate = gate_on(branch, GATE);
     gate->set(StringName("verdict"), int(ERR_UNAUTHORIZED));
     REQUIRE(
-        int(netw::Netw::configure_admission(Callable(gate, StringName("admit"))
-        ))
+        int(
+            netw::Netw::configure_admission(Callable(gate, StringName("admit")))
+        )
         == int(OK)
     );
 
@@ -163,8 +165,9 @@ TEST_CASE(
     Node *gate = gate_on(branch, GATE);
     gate->set(StringName("verdict"), int(ERR_UNAUTHORIZED));
     REQUIRE(
-        int(netw::Netw::configure_admission(Callable(gate, StringName("admit"))
-        ))
+        int(
+            netw::Netw::configure_admission(Callable(gate, StringName("admit")))
+        )
         == int(OK)
     );
 
@@ -188,11 +191,14 @@ TEST_CASE(
     Node *branch = mounted_branch("AdmitG4");
     const Ref<NetwMultiplayer> host = branch_session(branch);
     Node *gate = gate_on(branch, GATE);
-    REQUIRE(netw::Netw::configure_join(Callable(gate, StringName("seat")))
-                .is_valid());
     REQUIRE(
-        int(netw::Netw::configure_admission(Callable(gate, StringName("admit"))
-        ))
+        netw::Netw::configure_join(Callable(gate, StringName("seat")))
+            .is_valid()
+    );
+    REQUIRE(
+        int(
+            netw::Netw::configure_admission(Callable(gate, StringName("admit")))
+        )
         == int(OK)
     );
 
@@ -205,10 +211,8 @@ TEST_CASE(
         int64_t(gate->get(StringName("seen_peer"))),
         int64_t(host->NETW_API_VIRTUAL(get_unique_id)())
     );
-    CHECK(StringName(gate->get(StringName("seen_name")))
-          == StringName("ana"));
-    CHECK(StringName(gate->get(StringName("seen_team")))
-          == StringName("red"));
+    CHECK(StringName(gate->get(StringName("seen_name"))) == StringName("ana"));
+    CHECK(StringName(gate->get(StringName("seen_team"))) == StringName("red"));
 
     release_branch(host, branch);
 }
@@ -224,8 +228,9 @@ TEST_CASE(
     Node *gate = gate_on(branch, GATE);
     gate->set(StringName("verdict"), int(ERR_UNAUTHORIZED));
     REQUIRE(
-        int(netw::Netw::configure_admission(Callable(gate, StringName("admit"))
-        ))
+        int(
+            netw::Netw::configure_admission(Callable(gate, StringName("admit")))
+        )
         == int(OK)
     );
 
@@ -246,8 +251,9 @@ TEST_CASE(
     const Ref<NetwMultiplayer> host = branch_session(branch);
     Node *gate = gate_on(branch, GATE_ANSWERING_NO_ERROR);
     REQUIRE(
-        int(netw::Netw::configure_admission(Callable(gate, StringName("admit"))
-        ))
+        int(
+            netw::Netw::configure_admission(Callable(gate, StringName("admit")))
+        )
         == int(OK)
     );
 

@@ -319,10 +319,7 @@ TEST_CASE(
     Node *doomed = memnew(Node);
     const Callable dead(doomed, StringName("get_name"));
     memdelete(doomed);
-    NETW_CHECK_EQ(
-        Netw::configure_server_info(dead),
-        ERR_INVALID_PARAMETER
-    );
+    NETW_CHECK_EQ(Netw::configure_server_info(dead), ERR_INVALID_PARAMETER);
 
     CHECK(probe_answers(branch.api.ptr()));
     NETW_CHECK_EQ(log.count("kept"), 1);

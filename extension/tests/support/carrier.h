@@ -225,9 +225,8 @@ public:
 
     void arm_action(
         netw::NetwMultiplayer *p_api,
-        const godot::StringName &p_authority = godot::StringName(
-            "_server_action"
-        )
+        const godot::StringName &p_authority
+        = godot::StringName("_server_action")
     ) {
         REQUIRE_MESSAGE(p_api != nullptr, "an action needs a session");
         action = p_api->lagcomp_action(godot::Callable(this, p_authority));

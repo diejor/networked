@@ -373,9 +373,8 @@ void NetwMultiplayer::interest_apply_awareness(
     edge.kind = int32_t(p_kind);
     const bool entered = edge.kind == interest::Awareness::ENTER;
     if (edge.type == interest::Awareness::LAYER) {
-        const Ref<NetwInterestLayer> event_layer = layer_record_ensure(
-            p_layer_id
-        );
+        const Ref<NetwInterestLayer> event_layer
+            = layer_record_ensure(p_layer_id);
         if (event_layer.is_null()) {
             return;
         }
@@ -934,8 +933,7 @@ void NetwMultiplayer::interest_clear_session() {
 void NetwMultiplayer::interest_sync_scene_membership(
     const Ref<NetwEntity> &p_entity
 ) {
-    if (!is_host() || p_entity.is_null()
-        || p_entity->get_owner() == nullptr) {
+    if (!is_host() || p_entity.is_null() || p_entity->get_owner() == nullptr) {
         return;
     }
     liveness_adopt(p_entity.ptr());
@@ -946,8 +944,9 @@ void NetwMultiplayer::interest_sync_scene_membership(
         = scene.is_valid() ? scene_layer_id(scene) : StringName();
     interest_engine.set_scene_root(
         slot,
-        p_entity->get_declares_scene() ? scene_layer_id(p_entity->get_rid_handle())
-                                       : StringName()
+        p_entity->get_declares_scene()
+            ? scene_layer_id(p_entity->get_rid_handle())
+            : StringName()
     );
     if (!interest_engine.set_scene_membership(slot, current)) {
         return;

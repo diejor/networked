@@ -6,15 +6,12 @@ using Godot.NativeInterop;
 namespace Networked;
 
 /// <summary>
-/// One column of one schema, as a value a configuration call can hold.
+/// A column index together with the <see cref="NetwSchema"/> it belongs to.
 /// </summary>
 /// <remarks>
-/// A column index is a bare [int], so index 0 of one schema and index 0 of
-/// another are the same value. A reference carries the schema too, which is
-/// what lets a binding refuse a column the entity never declared.
-/// <see cref="NetwSchema.ColumnRef"/> mints one, and the reference holds its
-/// schema alive. The schema holds no reference back, so a <c>static var</c> can
-/// keep both.
+/// Configuration calls such as <see cref="NetwPropertyConfig.Persisted"/> take
+/// a reference so they can check the column belongs to the right schema. Create
+/// one with <see cref="NetwSchema.ColumnRef"/>.
 /// <code>
 /// class_name PlayerSave
 /// extends RefCounted
@@ -24,8 +21,8 @@ namespace Networked;
 /// static var position := schema.column_ref(schema.vector2(&amp;"position"))
 /// </code>
 /// <para>
-/// Per-tick code keeps using the [int] the declaration returned. A reference is
-/// for configuration, which runs once.
+/// Code that runs every tick, such as
+/// <see cref="NetwTableHandle.WriteColumn"/>, keeps using the [int] index.
 /// </para>
 /// </remarks>
 public sealed class NetwColumnRef : NetwRefCounted
@@ -64,8 +61,8 @@ public sealed class NetwColumnRef : NetwRefCounted
         NetwApi.MethodBind("NetwColumnRef", "get_index", 3905245786UL);
 
     /// <summary>
-    /// The column's address in <see cref="NetwColumnRef.Schema"/>, the same
-    /// [int] its declaring method returned.
+    /// The column's index in <see cref="NetwColumnRef.Schema"/>, as returned by
+    /// the method that declared it.
     /// </summary>
     public int Index
     {
@@ -81,8 +78,7 @@ public sealed class NetwColumnRef : NetwRefCounted
         NetwApi.MethodBind("NetwColumnRef", "get_key", 2002593661UL);
 
     /// <summary>
-    /// The column's declared name, or empty when <c>is_valid</c> is
-    /// <c>false</c>.
+    /// The column's name, or empty when <c>is_valid</c> is <c>false</c>.
     /// </summary>
     public StringName Key
     {

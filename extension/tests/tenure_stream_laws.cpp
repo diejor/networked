@@ -235,8 +235,8 @@ TEST_CASE(
         = broadcast_lane(rig.client(0), pair.mirror(0));
     netw::wire::StreamWriterBook &writers
         = row_send_of(rig.client(0))->writer_book();
-    const bool seated = writers.token_of(1, lane) != 0
-        && writers.token_of(b, lane) != 0;
+    const bool seated
+        = writers.token_of(1, lane) != 0 && writers.token_of(b, lane) != 0;
     REQUIRE(seated);
     const uint64_t unknown_before
         = readers_of(rig.server()).unknown_token_count();
@@ -378,9 +378,8 @@ struct Regrant {
         for (int step = 0; step < 3 && request == 0; ++step) {
             author_if_steering(rig, pair, 0, 0.0);
             rig.step_ticks(1);
-            request = row_send_of(rig.client(0))
-                          ->writer_book()
-                          .request_of(b, lane);
+            request
+                = row_send_of(rig.client(0))->writer_book().request_of(b, lane);
         }
         REQUIRE(bool(request != 0));
     }
@@ -466,10 +465,9 @@ TEST_CASE(
     CHECK(expired);
     const bool decided = stand.at_b()->get_control_tenure() == tenure;
     CHECK(decided);
-    const uint64_t reopened
-        = row_send_of(stand.rig.client(0))
-              ->writer_book()
-              .request_of(stand.b, stand.lane);
+    const uint64_t reopened = row_send_of(stand.rig.client(0))
+                                  ->writer_book()
+                                  .request_of(stand.b, stand.lane);
     const bool opened_again = reopened > stand.request;
     CHECK(opened_again);
     const uint64_t seated = row_send_of(stand.rig.client(0))

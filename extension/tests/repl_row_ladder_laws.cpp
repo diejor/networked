@@ -430,13 +430,8 @@ TEST_CASE(
     same.revision = stepped.revision;
     same.distance = stepped.revision - one.sends[0].revision;
     same.mask = stepped.mask;
-    const PackedByteArray unstepped = write_snapshot_row(
-        same,
-        0,
-        whole_plan,
-        stepped.row,
-        &confirmed
-    );
+    const PackedByteArray unstepped
+        = write_snapshot_row(same, 0, whole_plan, stepped.row, &confirmed);
     NETW_REQUIRE_EQ(unstepped.size() > 0, true);
     const bool the_ladder_saved_bytes = stepped.bytes.size() < unstepped.size();
     CHECK(the_ladder_saved_bytes);

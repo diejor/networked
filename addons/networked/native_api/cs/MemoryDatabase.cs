@@ -6,22 +6,13 @@ using Godot.NativeInterop;
 namespace Networked;
 
 /// <summary>
-/// A <see cref="NetwDatabaseBackend"/> that keeps records in this process and
-/// nowhere else.
+/// A <see cref="NetwDatabaseBackend"/> that keeps records in memory.
 /// </summary>
 /// <remarks>
-/// Records live for as long as the process does. Reach for it in a test, in a
-/// prototype, or wherever a save that outlives the run would get in the way.
+/// Records are lost when the game closes. Useful for tests and prototypes.
 /// <code>
 /// Netw.configure_database(self, &amp;"saves").backend(MemoryDatabase.new())
 /// </code>
-/// <para>
-/// It implements the whole backend contract, slots and scan cursors included,
-/// so a game written against it runs unchanged on a durable backend. Two
-/// backends sharing a <see cref="MemoryDatabase.Store"/> share their records,
-/// which is how a reopen can be exercised without leaving the process. This is
-/// a shared store and not durability.
-/// </para>
 /// </remarks>
 public sealed class MemoryDatabase : NetwDatabaseBackend
 {
@@ -46,8 +37,8 @@ public sealed class MemoryDatabase : NetwDatabaseBackend
         NetwApi.MethodBind("MemoryDatabase", "set_store", 3304788590UL);
 
     /// <summary>
-    /// Which in-process store to keep records in. Two backends naming the same
-    /// store see each other's records.
+    /// The name of the in-memory store this backend keeps its records in.
+    /// Backends with the same <see cref="MemoryDatabase.Store"/> share records.
     /// </summary>
     public StringName Store
     {

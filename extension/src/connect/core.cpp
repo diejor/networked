@@ -958,10 +958,8 @@ void ConnectCore::open_browsers() {
         if (made == nullptr) {
             continue;
         }
-        const Dictionary settings
-            = browse_settings.get(named, Dictionary());
-        if (made->set_browse_settings(settings) != OK
-            || !made->can_browse()) {
+        const Dictionary settings = browse_settings.get(named, Dictionary());
+        if (made->set_browse_settings(settings) != OK || !made->can_browse()) {
             delete made;
             continue;
         }

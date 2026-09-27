@@ -27,7 +27,7 @@ const char *KEY_SCHEMA = "schema_name";
 const char *KEY_KEY = "key";
 const char *KEY_ADDRESS = "address";
 
-const uint8_t MAGIC[] = { 'N', 'E', 'T', 'W', 'R', 'E', 'C', '1' };
+const uint8_t MAGIC[] = {'N', 'E', 'T', 'W', 'R', 'E', 'C', '1'};
 constexpr int MAGIC_LENGTH = 8;
 
 String escaped(const String &p_text) {
@@ -86,8 +86,10 @@ String FileStore::slot_path(const String &p_slot) const {
     return root.path_join(escaped(p_slot));
 }
 
-String FileStore::path_of(const String &p_slot, const Dictionary &p_address)
-    const {
+String FileStore::path_of(
+    const String &p_slot,
+    const Dictionary &p_address
+) const {
     return slot_path(p_slot)
         .path_join(kind_folder(int(p_address.get(KEY_KIND, 0))))
         .path_join(escaped(String(p_address.get(KEY_SCHEMA, ""))))
@@ -248,9 +250,12 @@ Array FileStore::page(
         const String key = String(stems[at]).uri_decode();
         Dictionary envelope;
         bool found = false;
-        read(p_slot, address_of(Kind(p_kind), StringName(p_schema_name), key),
-             envelope,
-             found);
+        read(
+            p_slot,
+            address_of(Kind(p_kind), StringName(p_schema_name), key),
+            envelope,
+            found
+        );
         Dictionary row;
         row[KEY_KEY] = key;
         row[KEY_ENVELOPE] = envelope;
@@ -287,12 +292,11 @@ Ref<NetwPromise> FileConnection::read(const Dictionary &p_address) {
     const Error code = store().read(slot, p_address, envelope, found);
     Dictionary reply;
     reply[KEY_ERROR] = int(code);
-    reply[KEY_DETAIL] = code == OK
-        ? String()
-        : vformat(
-              "the file store could not read '%s'",
-              store().path_of(slot, p_address)
-          );
+    reply[KEY_DETAIL] = code == OK ? String()
+                                   : vformat(
+                                         "the file store could not read '%s'",
+                                         store().path_of(slot, p_address)
+                                     );
     reply[KEY_FOUND] = found;
     if (found) {
         reply[KEY_ENVELOPE] = envelope;
@@ -329,11 +333,13 @@ Ref<NetwPromise> FileConnection::write_batch(const Array &p_operations) {
         if (kind == "erase") {
             errors.push_back(int(held.erase(slot, address)));
         } else if (kind == "replace") {
-            errors.push_back(int(held.replace(
-                slot,
-                address,
-                operation.get(KEY_ENVELOPE, Dictionary())
-            )));
+            errors.push_back(
+                int(held.replace(
+                    slot,
+                    address,
+                    operation.get(KEY_ENVELOPE, Dictionary())
+                ))
+            );
         } else {
             errors.push_back(int(ERR_INVALID_DATA));
         }

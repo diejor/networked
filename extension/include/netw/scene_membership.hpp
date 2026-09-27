@@ -37,8 +37,11 @@ private:
     godot::LocalVector<Reason> reasons;
     godot::LocalVector<Edge> edges;
 
-    int reason_at(int64_t p_member, const godot::RID &p_scene, int64_t p_body)
-        const;
+    int reason_at(
+        int64_t p_member,
+        const godot::RID &p_scene,
+        int64_t p_body
+    ) const;
     int reasons_for(int64_t p_member, const godot::RID &p_scene) const;
     void announce(
         int64_t p_member,

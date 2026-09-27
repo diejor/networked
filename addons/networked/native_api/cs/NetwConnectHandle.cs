@@ -6,16 +6,21 @@ using Godot.NativeInterop;
 namespace Networked;
 
 /// <summary>
-/// The connect plane of one session, gathered onto one object.
+/// A connection model that builds on top of <see cref="MultiplayerApi"/>.
 /// </summary>
 /// <remarks>
-/// A client over the <c>endpoint_*</c>, <c>transport_*</c>, <c>discovery_*</c>
-/// and <c>peer_*</c> families on <see cref="NetwMultiplayer"/>, reached as
-/// <see cref="Netw.Connection"/> from any <see cref="Node"/>. Every member
-/// forwards to a flat verb, and the flat verb is the stable spelling: this
-/// repository's own suites, examples and browser call
-/// <see cref="NetwMultiplayer"/> directly, and a game reaches for this when it
-/// would rather hold the plane as one object.
+/// The way <see cref="MultiplayerApi"/> normally connects is by assigning a
+/// peer as follows:
+/// <code>
+/// var peer := ENetMultiplayerPeer.new()
+/// peer.create_client("203.0.113.42", 21253)
+/// multiplayer.multiplayer_peer = peer
+/// </code>
+/// <para>
+/// After <see cref="MultiplayerApi.MultiplayerPeer"/> has been assigned, the
+/// <see cref="MultiplayerApi"/> is initialized and the peer connects.
+/// <see cref="NetwConnectHandle"/> allows to declare multiple endpoints that an
+/// UI can choose from.
 /// <code>
 /// var c := Netw.connection(self)
 /// c.endpoint_add(ENetMultiplayerPeer, "203.0.113.42:21253")
@@ -23,36 +28,12 @@ namespace Networked;
 ///         ENetMultiplayerPeer,
 ///         NetwMultiplayer.TRANSPORT_MODE_CLIENT,
 ///         "203.0.113.42:21253", {}, take_the_peer)
+/// # the peer returned is ready to be assigned to [member Node.multiplayer] and will connect immediately.
 /// </code>
+/// </para>
 /// <para>
-/// An endpoint is addressed by the pair it actually is, a transport and an
-/// address, never by a handle a caller must hold onto: every method on this
-/// axis takes a transport named any way
-/// <see cref="NetwConnectHandle.Transport"/> accepts (the peer class itself, a
-/// <see cref="Script"/>, a <see cref="StringName"/>, a live peer, or a handle
-/// already in hand) together with an address, and returns a snapshot
-/// <see cref="Godot.Collections.Dictionary"/> rather than a resource. The
-/// session still keys a row by <see cref="Rid"/> internally, because it is the
-/// one thing here that outlives a file and a listing republish, but that
-/// <see cref="Rid"/> never crosses onto this view. An endpoint snapshot carries
-/// <c>peer_class</c>, <c>address</c>, <c>display_name</c>, <c>status</c>,
-/// <c>info</c>, <c>is_caller_added</c>, <c>is_available</c> and
-/// <c>is_observed</c>. A transport snapshot carries <c>peer_class</c>,
-/// <c>display_name</c>, <c>address_label</c>, <c>address_placeholder</c>,
-/// <c>address_help</c>, <c>capabilities</c>, <c>host_settings</c> and
-/// <c>client_settings</c>. An empty <see cref="Godot.Collections.Dictionary"/>
-/// means absent, everywhere on this object. <b>This view holds no connection
-/// attempt state, and it never brings a session up.</b> A session comes online
-/// the ordinary Godot way, by assigning a <see cref="MultiplayerPeer"/> to
-/// <see cref="MultiplayerApi.MultiplayerPeer"/>.
-/// <see cref="NetwConnectHandle.CreatePeer"/> is here for the peer a provider
-/// rather than the game knows how to build, and it returns that one operation
-/// through the callables it was handed: the outcome reaches <c>completed</c>,
-/// each named step reaches <c>progress</c>, and
-/// <see cref="NetwConnectHandle.CancelPeerCreation"/> withdraws exactly that
-/// ticket. What the SESSION is doing is read from the session, through
-/// <see cref="NetwMultiplayer.SessionStateChanged"/> and
-/// <see cref="NetwMultiplayer.SessionEntered"/>.
+/// Endpoints are pairs of <c>(transport, address)</c> that can be probed by
+/// <see cref="NetwConnectHandle"/> to determine if they are reachable.
 /// </para>
 /// </remarks>
 public sealed class NetwConnectHandle : NetwRefCounted
@@ -72,16 +53,10 @@ public sealed class NetwConnectHandle : NetwRefCounted
     }
 
     /// <summary>
-    /// This peer's own join was rejected, locally or by the server, and no
-    /// player was seated for it. <c>reason</c> is the server's own words where
-    /// the rejection came from one, and <c>error</c> is why. A rejection is not
-    /// a disconnect notice. It is the result to the join this peer asked for,
-    /// so a game shows it where it asked, beside its username field rather than
-    /// in a lobby-lost banner. A server rejects when the handler declared
-    /// through <see cref="Netw.ConfigureAdmission"/> turns the join down, when
-    /// the handler declared through <see cref="Netw.ConfigureJoin"/> is
-    /// unavailable, when the join carried no arguments a declared handler
-    /// needs, or when that handler returned something that is not a placement.
+    /// Emits when a join request is rejected by
+    /// <see cref="Netw.ConfigureAdmission"/>, the <see cref="MultiplayerApi"/>
+    /// failed to establish the underlying connection, or
+    /// <see cref="NetwConnectHandle.CreatePeer"/> was canceled.
     /// <code>
     /// func _ready() -&gt; void:
     ///     Netw.connection(self).join_failed.connect(show_refusal)
@@ -97,8 +72,10 @@ public sealed class NetwConnectHandle : NetwRefCounted
     }
 
     /// <summary>
-    /// <see cref="NetwMultiplayer.EndpointAdded"/>, relayed by the pair it
-    /// names. A row already known announces nothing.
+    /// Fired when a new endpoint is added to the session, either by
+    /// <see cref="NetwConnectHandle.EndpointAdd"/> or by a probe that
+    /// discovered a new row. The row can be read back through
+    /// <see cref="NetwConnectHandle.Endpoint"/>.
     /// </summary>
     public event Action<StringName, string> EndpointAdded
     {
@@ -107,8 +84,10 @@ public sealed class NetwConnectHandle : NetwRefCounted
     }
 
     /// <summary>
-    /// <see cref="NetwMultiplayer.EndpointRemoved"/>, relayed by the pair it
-    /// named.
+    /// Fireswhen an endpoint is removed from the session, either by
+    /// <see cref="NetwConnectHandle.EndpointRemove"/> or by a probe that lost a
+    /// row. The row can be read back through
+    /// <see cref="NetwConnectHandle.Endpoint"/>.
     /// </summary>
     public event Action<StringName, string> EndpointRemoved
     {
@@ -117,9 +96,9 @@ public sealed class NetwConnectHandle : NetwRefCounted
     }
 
     /// <summary>
-    /// <see cref="NetwMultiplayer.EndpointUpdated"/>, relayed by the pair it
-    /// names. What changed is read back through
-    /// <see cref="NetwConnectHandle.Endpoint"/>.
+    /// Fires when an endpoint is updated in the session, either by
+    /// <c>endpoint_update</c> or by a probe that detected a change. What
+    /// changed is read back through <see cref="NetwConnectHandle.Endpoint"/>.
     /// </summary>
     public event Action<StringName, string> EndpointUpdated
     {
@@ -134,8 +113,9 @@ public sealed class NetwConnectHandle : NetwRefCounted
             201670096UL);
 
     /// <summary>
-    /// <see cref="NetwMultiplayer.PeerJoinAddress"/>: the address another
-    /// player would use to reach this session.
+    /// The possible addresses another peer would use to reach this session. The
+    /// list is empty when no transport has been registered, or when the session
+    /// is not hosting.
     /// </summary>
     public string JoinAddress
     {
@@ -153,7 +133,8 @@ public sealed class NetwConnectHandle : NetwRefCounted
         NetwApi.MethodBind("NetwConnectHandle", "get_endpoints", 3995934104UL);
 
     /// <summary>
-    /// Every row this session knows how to reach, as endpoint snapshots.
+    /// Every row this session knows how to reach, as endpoint snapshots. See
+    /// <see cref="NetwConnectHandle.Endpoint"/> for the shape of each row.
     /// </summary>
     public Godot.Collections.Array Endpoints
     {
@@ -172,23 +153,21 @@ public sealed class NetwConnectHandle : NetwRefCounted
         NetwApi.MethodBind("NetwConnectHandle", "create_peer", 2431768675UL);
 
     /// <summary>
-    /// <see cref="NetwMultiplayer.TransportCreatePeer"/> with
-    /// <paramref name="transport"/> named the way every verb on this view names
-    /// one: the peer class itself, a game transport's <see cref="Script"/>, a
-    /// <see cref="StringName"/>, or a live peer of that class. That document
-    /// carries the law, and it is short: <paramref name="completed"/> runs once
-    /// in a later frame as <c>completed(peer, error, detail)</c>, and <b>the
-    /// peer is assigned inside it, before it returns</b>. Returning without
-    /// assigning declines the offer, and the session closes the peer. The
-    /// result is a <see cref="Rid"/> and it is the one on this view. It is the
-    /// ticket <see cref="NetwConnectHandle.CancelPeerCreation"/> consumes, and
-    /// it is a bridge rather than an identity: it is write-once, use-once, it
-    /// has no name and no pair to be spelled by, and it retires itself the
-    /// moment <paramref name="completed"/> has run. Everything else this view
-    /// returns is a <see cref="Godot.Collections.Dictionary"/> or a [bool], and
-    /// everything it takes is named on the <see cref="Variant"/> axis.
+    /// Pass a <paramref name="transport"/> that can be any of the following:
+    /// - The peer class itself.
+    /// - A game transport's <see cref="Script"/>.
+    /// - A <see cref="StringName"/> of the type.
+    /// - A live peer of that class.
+    /// <paramref name="completed"/> runs once in a later frame as
+    /// <c>completed(peer, error, detail)</c>, the peer has to be assigned
+    /// inside this <see cref="Callable"/>, otherwise, returning without
+    /// assigning declines the offer.
+    /// <para>
+    /// The result is a <see cref="Rid"/> handle that can be passed to
+    /// <see cref="NetwConnectHandle.CancelPeerCreation"/> to cancel the request
+    /// before it completes.
     /// <code>
-    /// var _ticket := RID()
+    /// var _ticket := RID() # at this point the ticket is empty
     ///
     /// func join(address: String) -&gt; void:
     ///     abort_join()
@@ -204,10 +183,15 @@ public sealed class NetwConnectHandle : NetwRefCounted
     /// func _created(peer: MultiplayerPeer, error: Error, detail: String):
     ///     _ticket = RID()
     ///     if error == OK:
-    ///         Netw.of(self).multiplayer_peer = peer
+    ///         multiplayer.multiplayer_peer = peer
     ///     elif error != ERR_SKIP:
     ///         _say(detail)
     /// </code>
+    /// </para>
+    /// <para>
+    /// The returned peer is ready to be assigned to
+    /// <see cref="Node.Multiplayer"/> and will connect immediately.
+    /// </para>
     /// </summary>
     public Rid CreatePeer(
         Variant transport,
@@ -251,14 +235,11 @@ public sealed class NetwConnectHandle : NetwRefCounted
             2722037293UL);
 
     /// <summary>
-    /// <see cref="NetwMultiplayer.TransportCancelPeerCreation"/> for the ticket
-    /// <see cref="NetwConnectHandle.CreatePeer"/> returned. The request settles
-    /// with one <c>(null, ERR_SKIP, "")</c> callback and no peer is offered. A
-    /// ticket that already completed, or one this session never created, is a
-    /// no-op, so a view may cancel unconditionally before starting the next
-    /// creation. The caller's own <see cref="Callable"/> is not what names the
-    /// work: two creations sharing one bound <see cref="Callable"/> would be
-    /// ambiguous, and the ticket never is.
+    /// Cancel the peer creation request named by <paramref name="ticket"/>. The
+    /// request settles with one <c>(null, ERR_SKIP, "")</c> callback and no
+    /// peer is offered. A ticket that already completed, or one this
+    /// <see cref="Node.Multiplayer"/> never created, is a no-op, so a view may
+    /// cancel unconditionally before starting the next creation.
     /// </summary>
     public void CancelPeerCreation(Rid ticket)
     {
@@ -310,12 +291,10 @@ public sealed class NetwConnectHandle : NetwRefCounted
         NetwApi.MethodBind("NetwConnectHandle", "transport", 2321877293UL);
 
     /// <summary>
-    /// The snapshot for a transport named any way a caller has it: the peer
-    /// class itself (<c>ENetMultiplayerPeer</c>), a game transport's
-    /// <see cref="Script"/>, a <see cref="StringName"/>, a live peer, or a
-    /// handle already in hand. This is the view's whole job on this axis, so a
-    /// game never types a class name and <see cref="NetwMultiplayer"/> can take
-    /// nothing but the handle. Empty when this session holds no such transport.
+    /// The representation of a transport in this session, empty when this
+    /// session holds no such transport. See
+    /// <see cref="NetwConnectHandle.CreatePeer"/> for the ways to name a
+    /// transport.
     /// <code>
     /// Dictionary
     /// ┠╴peer_class            StringName  the key this transport is registered under
@@ -356,19 +335,10 @@ public sealed class NetwConnectHandle : NetwRefCounted
             1164469251UL);
 
     /// <summary>
-    /// Registers a <see cref="NetwTransport"/> subclass with the session this
-    /// view sees, so its peer class joins
-    /// <see cref="NetwConnectHandle.Transports"/> and can be named anywhere a
-    /// transport is. <c>true</c> when the session took it.
-    /// <see cref="NetwMultiplayer.TransportRegister"/> is the same operation
-    /// and carries the ownership law: the registration belongs to the session
-    /// and is released with it, a peer class is unique within a session, and
-    /// the stock transports need no registration at all. Registering the same
-    /// <paramref name="type"/> twice is not an error and changes nothing, so a
-    /// scene that re-enters the tree may call this again. A <i>different</i>
-    /// script for a peer class this session already registers returns
-    /// <c>false</c> with a logged reason: call
-    /// <see cref="NetwConnectHandle.UnregisterTransport"/> first.
+    /// Registers a <see cref="NetwTransport"/> subclass. A transport allows to
+    /// give more meanings to the underlying <c>MultipalyerPeer</c> class the
+    /// transport wraps. <c>false</c> when this session already registered a
+    /// transport of that class, <c>true</c> otherwise.
     /// <code>
     /// func _ready() -&gt; void:
     ///     var c := Netw.connection(self)
@@ -398,19 +368,10 @@ public sealed class NetwConnectHandle : NetwRefCounted
             4100417191UL);
 
     /// <summary>
-    /// Withdraws a registration
-    /// <see cref="NetwConnectHandle.RegisterTransport"/> made, naming it the
-    /// way every verb on this view names a transport: the <see cref="Script"/>
-    /// that was registered, its peer class as a <see cref="StringName"/>, or a
-    /// live peer of that class. <c>true</c> when this session held it,
-    /// <c>false</c> for anything it did not register, a stock transport
-    /// included. <b>It is not a disconnect.</b> A peer this transport already
-    /// handed over stays assigned, exactly as
-    /// <see cref="NetwMultiplayer.TransportUnregister"/> describes. What ends
-    /// is unfinished work: a build still in flight settles with
-    /// <c>@GlobalScope.ERR_UNAVAILABLE</c>, and the transport's browsing
-    /// closes, so its rows stop arriving on
-    /// <see cref="NetwConnectHandle.EndpointAdded"/>.
+    /// Unregisters a transport. <c>false</c> when this session never registered
+    /// a transport of that class, <c>true</c> otherwise. See
+    /// <see cref="NetwConnectHandle.CreatePeer"/> for the ways to name a
+    /// transport.
     /// </summary>
     public bool UnregisterTransport(Variant of)
     {
@@ -431,8 +392,10 @@ public sealed class NetwConnectHandle : NetwRefCounted
         NetwApi.MethodBind("NetwConnectHandle", "join_schema", 3995934104UL);
 
     /// <summary>
-    /// <see cref="NetwMultiplayer.SessionGetJoinSchema"/>, the wire parameters
-    /// a Join form draws.
+    /// The parameters a join form asks for.
+    /// <para>
+    /// A join is a <c>transport</c>, an <c>address</c>, and a dictionary of
+    /// settings. The schema is the list of those settings.
     /// <code>
     /// Array[Dictionary]
     /// ┖╴entry
@@ -441,6 +404,7 @@ public sealed class NetwConnectHandle : NetwRefCounted
     ///   ┠╴class_name  StringName  empty for every type this build resolves
     ///   ┖╴default     Variant     the value a Join form pre-fills, or null
     /// </code>
+    /// </para>
     /// </summary>
     public Godot.Collections.Array JoinSchema()
     {
@@ -497,8 +461,9 @@ public sealed class NetwConnectHandle : NetwRefCounted
         NetwApi.MethodBind("NetwConnectHandle", "endpoint_add", 2832336870UL);
 
     /// <summary>
-    /// <see cref="NetwMultiplayer.EndpointAdd"/>. Returns <c>true</c> once the
-    /// row exists, <c>false</c> when <paramref name="transport"/> names nothing
+    /// Adds the endpoint <paramref name="transport"/> and
+    /// <paramref name="address"/> name. Returns <c>true</c> once the row
+    /// exists, <c>false</c> when <paramref name="transport"/> names nothing
     /// this build carries.
     /// </summary>
     public bool EndpointAdd(
@@ -532,8 +497,8 @@ public sealed class NetwConnectHandle : NetwRefCounted
             3068562873UL);
 
     /// <summary>
-    /// <see cref="NetwMultiplayer.EndpointRemove"/> for the endpoint
-    /// <paramref name="transport"/> and <paramref name="address"/> name.
+    /// Removes the endpoint <paramref name="transport"/> and
+    /// <paramref name="address"/> name.
     /// </summary>
     public void EndpointRemove(Variant transport, string address)
     {
@@ -595,9 +560,9 @@ public sealed class NetwConnectHandle : NetwRefCounted
         NetwApi.MethodBind("NetwConnectHandle", "endpoint_probe", 3068562873UL);
 
     /// <summary>
-    /// <see cref="NetwMultiplayer.EndpointProbe"/> for the endpoint
-    /// <paramref name="transport"/> and <paramref name="address"/> name,
-    /// returning through <see cref="NetwConnectHandle.EndpointUpdated"/>.
+    /// Probes the endpoint <paramref name="transport"/> and
+    /// <paramref name="address"/> name, returning through
+    /// <see cref="NetwConnectHandle.EndpointUpdated"/>.
     /// </summary>
     public void EndpointProbe(Variant transport, string address)
     {
@@ -661,15 +626,8 @@ public sealed class NetwConnectHandle : NetwRefCounted
             3218959716UL);
 
     /// <summary>
-    /// <see cref="NetwMultiplayer.EndpointRefresh"/>: re-probes every known
-    /// endpoint and reports each result through
-    /// <see cref="NetwConnectHandle.EndpointUpdated"/>. Discovery has its own
-    /// lifetime, separate from the connection. A query opened here is torn down
-    /// when the session is disposed or the provider behind it is withdrawn, and
-    /// that teardown releases the query alone: it never closes the assigned
-    /// peer, and never abandons a lobby the session is already in. A browser
-    /// may therefore refresh, close, or be freed at any moment, including after
-    /// the match it found has started, and the match outlives it.
+    /// Re-probes every known endpoint and reports each result through
+    /// <see cref="NetwConnectHandle.EndpointUpdated"/>.
     /// </summary>
     public void EndpointRefresh()
     {

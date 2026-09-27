@@ -562,25 +562,23 @@ void SyncPipeline::remove_binding(uint32_t p_at) {
     bindings.remove_at(p_at);
     binding_entities.remove_at(p_at);
     binding_nodes.remove_at(p_at);
-    const auto take_out = [&](
-                              HashMap<uint64_t, LocalVector<IndexedBinding>>
-                                  &p_index,
-                              uint64_t p_key
-                          ) {
-        LocalVector<IndexedBinding> *held = p_index.getptr(p_key);
-        if (held == nullptr) {
-            return;
-        }
-        for (uint32_t at = 0; at < held->size(); ++at) {
-            if ((*held)[at].binding == previous) {
-                held->remove_at(at);
-                break;
-            }
-        }
-        if (held->is_empty()) {
-            p_index.erase(p_key);
-        }
-    };
+    const auto take_out
+        = [&](HashMap<uint64_t, LocalVector<IndexedBinding>> &p_index,
+              uint64_t p_key) {
+              LocalVector<IndexedBinding> *held = p_index.getptr(p_key);
+              if (held == nullptr) {
+                  return;
+              }
+              for (uint32_t at = 0; at < held->size(); ++at) {
+                  if ((*held)[at].binding == previous) {
+                      held->remove_at(at);
+                      break;
+                  }
+              }
+              if (held->is_empty()) {
+                  p_index.erase(p_key);
+              }
+          };
     take_out(bindings_by_entity, entity_key);
     take_out(bindings_by_node, node_key);
 }
@@ -917,13 +915,8 @@ void SyncPipeline::commit_pending_masked(int64_t p_peer_id, int64_t p_seq) {
     }
     carrier_rows = nullptr;
     if (row_sender_armed) {
-        row_sender.commit(
-            p_peer_id,
-            p_seq,
-            *rows,
-            carrier_frames,
-            carrier_bits
-        );
+        row_sender
+            .commit(p_peer_id, p_seq, *rows, carrier_frames, carrier_bits);
     }
 }
 
@@ -1348,7 +1341,8 @@ void SyncPipeline::apply_row(
         return;
     }
     wire::StreamLane addressed;
-    const bool names_this_lane = book.names(int(p_sender), named.token, addressed)
+    const bool names_this_lane
+        = book.names(int(p_sender), named.token, addressed)
         && addressed.route == route && addressed.ordinal == uint8_t(p_ordinal);
     wire::SnapshotReceiver *reader
         = names_this_lane ? book.receiver(int(p_sender), named.token) : nullptr;
@@ -1377,9 +1371,9 @@ void SyncPipeline::apply_row(
         );
         return;
     }
-    const wire::CodeRow *baseline
-        = named.absolute() ? nullptr
-                           : reader->baseline(named.baseline_revision());
+    const wire::CodeRow *baseline = named.absolute()
+        ? nullptr
+        : reader->baseline(named.baseline_revision());
     if (!named.absolute() && baseline == nullptr) {
         reset_stream_of(int(p_sender), named.token);
         plane->attribution_note_refusal(

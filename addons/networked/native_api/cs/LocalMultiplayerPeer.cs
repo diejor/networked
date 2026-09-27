@@ -22,14 +22,7 @@ namespace Networked;
 /// client.force_connect_peer(1, server)
 /// </code>
 /// <para>
-/// The links form a star and not a mesh: a client is linked to the server and
-/// to nobody else, so a packet addressed to another client reaches the server
-/// for relaying and costs a second poll. Connection events are queued and
-/// emitted on <see cref="MultiplayerPeer.Poll"/>, which is what makes them land
-/// at a point the caller chose. Setting
-/// <see cref="LocalMultiplayerPeer.LoopbackSession"/> gives that session first
-/// rejection on every inbound packet, so <see cref="LocalLinkConditions"/> can
-/// hold or drop one before it is ever visible here.
+/// The links form a star and not a mesh.
 /// </para>
 /// </remarks>
 public sealed class LocalMultiplayerPeer : NetwRefCounted

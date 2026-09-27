@@ -841,13 +841,10 @@ inline ScenarioRun ScenarioRun::session(
         track.lane.lane_frames = p_scenario.run_ticks;
         track.lane.lane_authoring_clamped
             = int(client_fact("authoring_clamped"));
-        track.lane.lane_quantum_declared
-            = int(client_fact("quantum_declared"));
+        track.lane.lane_quantum_declared = int(client_fact("quantum_declared"));
         track.lane.lane_quantum_steps = int(client_fact("quantum_steps"));
-        track.lane.lane_quantum_faults
-            = int(client_fact("quantum_faults"));
-        track.lane.lane_max_replay_depth
-            = int(client_fact("max_replay_depth"));
+        track.lane.lane_quantum_faults = int(client_fact("quantum_faults"));
+        track.lane.lane_max_replay_depth = int(client_fact("max_replay_depth"));
         if (p_plant == PLANT_FORGE_REPLAY_DEPTH) {
             track.lane.lane_max_replay_depth = p_scenario.run_ticks;
         }
@@ -866,12 +863,10 @@ inline ScenarioRun ScenarioRun::session(
         track.lane.lane_missing = int(server_fact("missing"));
         track.lane.lane_held = int(server_fact("held"));
         track.lane.lane_starved = int(server_fact("starved"));
-        track.lane.lane_speculation_held
-            = int(client_fact("speculation_held"));
+        track.lane.lane_speculation_held = int(client_fact("speculation_held"));
         track.lane.lane_resyncs = int(server_fact("resync"));
         track.lane.lane_skipped = int(server_fact("skipped"));
-        track.lane.lane_queue_depth
-            = int(server_fact("tape_queue_depth"));
+        track.lane.lane_queue_depth = int(server_fact("tape_queue_depth"));
         netw::predict::JournalSnapshot authority_journal;
         p_rig.prediction_pool()->journal_snapshot(
             p_rig.prediction_slot(track.name),
@@ -1187,7 +1182,8 @@ inline godot::Vector<Membership> ScenarioRun::read_scene_rows(
 
         row.boundary = p_rig.server()->scene_get_layer(scene).is_valid();
         for (int client = 0; client < p_rig.count(); ++client) {
-            if (p_rig.server()->scene_subscribes(scene, p_rig.peer_id(client))) {
+            if (p_rig.server()
+                    ->scene_subscribes(scene, p_rig.peer_id(client))) {
                 row.subscribed.push_back(client);
             }
         }

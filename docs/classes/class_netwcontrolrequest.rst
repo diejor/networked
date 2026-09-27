@@ -12,16 +12,14 @@ NetwControlRequest
 
 **Inherits:** :godot:`RefCounted`
 
-One peer's bid to steer an entity, and the latch any listener rejects it with.
+A request to control a node.
 
 .. rst-class:: classref-introduction-group
 
 Description
 -----------
 
-:ref:`NetwEntity<class_NetwEntity>` emits :ref:`NetwEntity.control_requested<class_NetwEntity_signal_control_requested>` with one **NetwControlRequest** per request. Gameplay code may inspect :ref:`requester<class_NetwControlRequest_property_requester>` and call :ref:`deny()<class_NetwControlRequest_method_deny>` before the default grant path runs.
-
-Every listener sees the same record, so :ref:`denied<class_NetwControlRequest_property_denied>` is a latch: once a listener rejects, no listener after it can take the rejection back, and listener order does not decide who gets to steer.
+Passed by :ref:`NetwEntity.control_requested<class_NetwEntity_signal_control_requested>` on the server. Call :ref:`deny()<class_NetwControlRequest_method_deny>` to reject the request, otherwise it is granted.
 
 ::
 
@@ -37,11 +35,13 @@ Properties
 .. table::
    :widths: auto
 
-   +---------------+---------------------------------------------------------------+-----------+
-   | :godot:`bool` | :ref:`denied<class_NetwControlRequest_property_denied>`       | ``false`` |
-   +---------------+---------------------------------------------------------------+-----------+
-   | :godot:`int`  | :ref:`requester<class_NetwControlRequest_property_requester>` | ``0``     |
-   +---------------+---------------------------------------------------------------+-----------+
+   +-----------------------------------+---------------------------------------------------------------+-----------+
+   | :godot:`bool`                     | :ref:`denied<class_NetwControlRequest_property_denied>`       | ``false`` |
+   +-----------------------------------+---------------------------------------------------------------+-----------+
+   | :ref:`Hold<enum_NetwEntity_Hold>` | :ref:`hold<class_NetwControlRequest_property_hold>`           | ``2``     |
+   +-----------------------------------+---------------------------------------------------------------+-----------+
+   | :godot:`int`                      | :ref:`requester<class_NetwControlRequest_property_requester>` | ``0``     |
+   +-----------------------------------+---------------------------------------------------------------+-----------+
 
 .. rst-class:: classref-reftable-group
 
@@ -75,7 +75,23 @@ Property Descriptions
 - |void| **set_denied**\ (\ value\: :godot:`bool`\ )
 - :godot:`bool` **get_denied**\ (\ )
 
-Whether the request should be rejected. Writing ``false`` over a rejection does nothing, because the rejection is a latch.
+Whether the request should be rejected. Writing ``false`` over a :ref:`deny()<class_NetwControlRequest_method_deny>` call has no effect.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NetwControlRequest_property_hold:
+
+.. rst-class:: classref-property
+
+:ref:`Hold<enum_NetwEntity_Hold>` **hold** = ``2`` :ref:`🔗<class_NetwControlRequest_property_hold>`
+
+.. rst-class:: classref-property-setget
+
+- :ref:`Hold<enum_NetwEntity_Hold>` **get_hold**\ (\ )
+
+The :ref:`Hold<enum_NetwEntity_Hold>` the peer asked to hold the entity with.
 
 .. rst-class:: classref-item-separator
 

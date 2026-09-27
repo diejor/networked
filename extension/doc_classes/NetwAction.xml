@@ -28,7 +28,7 @@
 			<return type="void" />
 			<param index="0" name="view_tick" type="int" />
 			<description>
-				Requests the server authority method for [param view_tick]. Every argument after [param view_tick] reaches that method in the order it was written, after the [NetwActionContext] the method always takes first.
+				Asks the server to run the action at [param view_tick]. Every argument after [param view_tick] reaches that method in the order it was written, after the [NetwActionContext] the method always takes first.
 				[codeblock]
 				place_bomb.request(tick, position, fuse)
 

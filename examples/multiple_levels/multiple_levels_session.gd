@@ -11,8 +11,8 @@ const SAVES := &"saves"
 const WHERE := 0
 const LEVEL := 1
 
-var makers: Dictionary = {}
-var levels: Dictionary = {}
+var makers: Dictionary = { }
+var levels: Dictionary = { }
 var save_schema: NetwSchema
 
 @onready var session: NetwSessionHandle = Netw.session(self)

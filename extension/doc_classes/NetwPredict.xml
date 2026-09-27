@@ -1,247 +1,240 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <class name="NetwPredict" inherits="Object" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
 	<brief_description>
-		The enum vocabulary of the prediction family, on a leaf nobody has to import an engine to read.
+		The enums used by [NetwPredictionHandle].
 	</brief_description>
 	<description>
-		Every value a prediction setting is written with. [NetwPredictionHandle] is where a game writes and reads them, and this class exists so naming one costs nothing, because nothing here holds state and nothing here can be constructed.
+		This class only holds constants. Set them on [member NetwEntity.prediction].
 		[codeblock]
 		entity.prediction.archetype = NetwPredict.ARCHETYPE_SOLVER_BODY
 		entity.prediction.recovery_policy = NetwPredict.RECOVERY_POLICY_REBASE_RECOVER
 		[/codeblock]
-		The schedule, the restore and the mode an entity runs in are [NetwSimulationHandle] values.
-		[b]What a game declares[/b]
-		- [enum Archetype] what kind of body this is, which presets the rest
-		- [enum RecoveryPolicy] what a recovery is allowed to do
-		- [enum MissingInput] what the server does about an input that never came
-		- [enum BreachResponse] what happens on a contact outside the prediction
-		- [enum Reconcile] whether a selection is corrected together or apart
-		[b]What the session reports back[/b]
-		- [enum DriveKind] how the last drive chose its input
-		- [enum ConsumeAction] what a consume pass did this frame
-		- [enum ContactClass] what the local solve reported touching
-		- [enum CommandOrigin] where one replayed input came from
-		- [enum ExactVerdict] whether fingerprints have been compared yet
-		- [enum Domain] whether a transition is judged by fingerprint or by tolerance
-		- [enum TriggerShape] what asked for a recovery
-		- [enum Attribution] what a divergence is blamed on
-		- [enum Operator] what wrote the body during a recovery
-		- [enum OperatorOutcome] what a recovery attempt achieved
-		- [enum EpisodeState] how far a divergence episode has got
+		The schedule and simulation mode of an entity are [NetwSimulationHandle] values.
+		[b]Settings[/b]
+		- [enum Archetype] a preset for the other settings
+		- [enum RecoveryPolicy] how a misprediction is corrected
+		- [enum MissingInput] what the server does when an input never arrives
+		- [enum BreachResponse] what happens on an unpredicted contact
+		- [enum Reconcile] whether entities are corrected alone or together
+		[b]Reports[/b]
+		- [enum DriveKind] which input drove the last step
+		- [enum ConsumeAction] what the server did with its input queue
+		- [enum ContactClass] what the body touched
+		- [enum CommandOrigin] where a replayed input came from
+		- [enum ExactVerdict] whether two peers produced the same result
+		- [enum Domain] whether a step is compared exactly or by tolerance
+		- [enum TriggerShape] what asked for a correction
+		- [enum Attribution] what a misprediction is blamed on
+		- [enum Operator] how a correction wrote the body
+		- [enum OperatorOutcome] whether a correction helped
+		- [enum EpisodeState] whether a misprediction is still being corrected
 	</description>
 	<tutorials>
 	</tutorials>
 	<constants>
 		<constant name="ACK_AGE_MAX" value="64">
-			The unacknowledged span, in transitions, past which the prediction governor stops speculating and holds.
-			A hard limit rather than something to tune. It is a quarter of the 256 transitions the engine records, so how far ahead an entity may run can never outrun the record a recovery would replay against. Read it beside [member NetwPredictionHandle.ack_age_ticks].
+			The most ticks a client may predict ahead of the last input the server acknowledged. Past it, prediction holds. See [member NetwPredictionHandle.ack_age_ticks].
 		</constant>
 		<constant name="CONTACT_CLASS_NONE" value="0" enum="ContactClass">
-			The solve reported no collider. A [enum ContactClass] is kept for reading afterwards and is never compared between peers.
+			The body touched nothing.
 		</constant>
 		<constant name="CONTACT_CLASS_DECLARED_SUPPORT" value="1" enum="ContactClass">
-			The collider is the support reported by the declared ground sensor.
+			The ground reported by the ground sensor.
 		</constant>
 		<constant name="CONTACT_CLASS_OTHER_STATIC" value="2" enum="ContactClass">
-			Static geometry other than the declared support.
+			Static geometry other than the ground.
 		</constant>
 		<constant name="CONTACT_CLASS_PREDICTED_DYNAMIC" value="3" enum="ContactClass">
-			A dynamic entity this peer predicts or simulates authoritatively.
+			A moving entity this peer predicts or simulates.
 		</constant>
 		<constant name="CONTACT_CLASS_UNPREDICTED_DYNAMIC" value="4" enum="ContactClass">
-			A dynamic entity this peer neither predicts nor selects.
+			A moving entity this peer does not simulate.
 		</constant>
 		<constant name="CONTACT_CLASS_KINEMATIC_PROXY" value="5" enum="ContactClass">
-			A kinematic or animated collision proxy.
+			A kinematic or animated body.
 		</constant>
 		<constant name="COMMAND_ORIGIN_PREDICTED" value="0" enum="CommandOrigin">
-			This peer's own guess for an entity it does not own. A group replaying its members together replays them from these, so the origin is what says whether a replay reproduced what a player actually did or repeated a guess.
+			This peer guessed the input with [member NetwPredictionHandle.predict_commands].
 		</constant>
 		<constant name="COMMAND_ORIGIN_RELAYED" value="1" enum="CommandOrigin">
-			The authoring peer's own command, relayed through the server.
+			The controlling peer's own input, relayed through the server.
 		</constant>
 		<constant name="DRIVE_KIND_NONE" value="0" enum="DriveKind">
-			No drive has run yet.
+			Nothing has stepped yet.
 		</constant>
 		<constant name="DRIVE_KIND_FRESH" value="1" enum="DriveKind">
-			A newly authored input label drove the simulation.
+			A new input drove the step.
 		</constant>
 		<constant name="DRIVE_KIND_REPEAT" value="2" enum="DriveKind">
-			The previous input label drove the simulation again.
+			The previous input drove the step again.
 		</constant>
 		<constant name="DRIVE_KIND_HOLD" value="3" enum="DriveKind">
-			The consume cursor held past its buffer, so nothing drove the simulation this tick.
+			The server held its input buffer, so nothing stepped this tick.
 		</constant>
 		<constant name="DRIVE_KIND_STARVED" value="4" enum="DriveKind">
-			The consume cursor had no input queued at all, so nothing drove the simulation this tick.
+			The server had no input queued, so nothing stepped this tick.
 		</constant>
 		<constant name="DRIVE_KIND_FOLD_DRIVE" value="5" enum="DriveKind">
-			A fresh input drove after older eligible labels were folded away.
+			A new input drove the step after older ones were skipped.
 		</constant>
 		<constant name="DRIVE_KIND_MISSING" value="6" enum="DriveKind">
-			A missing input label drove through [code]missing_policy[/code].
+			The input never arrived, and [member NetwPredictionHandle.missing_policy] drove the step.
 		</constant>
 		<constant name="DRIVE_KIND_SUBSTITUTED" value="7" enum="DriveKind">
-			A command this peer predicted for an entity it does not own drove the simulation, so the owner never authored the input the transition ran.
+			An input this peer guessed for an entity it does not control drove the step.
 		</constant>
 		<constant name="TRIGGER_SHAPE_NONE" value="0" enum="TriggerShape">
-			No field that can trigger was past its own tolerance. The fingerprints can still disagree while every field sits inside its tolerance, so a recovery can be prepared with nothing having asked for one.
-			A [enum TriggerShape] records what the triggering fields looked like when the recovery was judged. The distinction that matters is whether the recovery could write any of them. A write returning a withheld field and a writable one did repair something, while a write whose every trigger was withheld repaired nothing.
+			No field was past its tolerance.
 		</constant>
 		<constant name="TRIGGER_SHAPE_MIXED" value="1" enum="TriggerShape">
-			At least one field past its epsilon is one a sub-teleport restore may write.
+			At least one field past its tolerance can be written by an ordinary correction.
 		</constant>
 		<constant name="TRIGGER_SHAPE_ALL_WITHHELD" value="2" enum="TriggerShape">
-			Every field past its epsilon is one no sub-teleport restore may write.
+			Every field past its tolerance is [method NetwPropertyConfig.teleport_only], so only a teleport can write it.
 		</constant>
 		<constant name="CONSUME_ACTION_REPLAY" value="0" enum="ConsumeAction">
-			A queued transition is available past the buffer being held, so it runs.
+			The server ran a queued input.
 		</constant>
 		<constant name="CONSUME_ACTION_HOLD" value="1" enum="ConsumeAction">
-			Transitions are queued but not yet past the buffer, so the pass waits.
+			The server kept its queued inputs in the buffer.
 		</constant>
 		<constant name="CONSUME_ACTION_STARVED" value="2" enum="ConsumeAction">
-			Nothing is queued at all, so the pass has no command to run.
+			The server had no input queued.
 		</constant>
 		<constant name="EXACT_VERDICT_UNJUDGED" value="0" enum="ExactVerdict">
-			Nobody has compared fingerprints for this transition yet.
+			Not compared yet.
 		</constant>
 		<constant name="EXACT_VERDICT_EQUAL" value="1" enum="ExactVerdict">
-			The two independently recorded fingerprints are equal.
+			Both peers produced the same result.
 		</constant>
 		<constant name="EXACT_VERDICT_UNEQUAL" value="2" enum="ExactVerdict">
-			The two independently recorded fingerprints differ.
+			The peers produced different results.
 		</constant>
 		<constant name="MISSING_INPUT_STALL" value="0" enum="MissingInput">
-			With no input, the entity does not move.
+			The entity does not move.
 		</constant>
 		<constant name="MISSING_INPUT_REPEAT_LAST" value="1" enum="MissingInput">
-			Carry the last input forward over the gap.
+			The last input is repeated.
 		</constant>
 		<constant name="ARCHETYPE_NONE" value="0" enum="Archetype">
-			No preset, so every setting keeps its own default until something declares it.
-			An archetype is a starting point rather than a limit. Writing one applies its settings, and anything declared afterwards overrides what it applied. No archetype sets a [enum BreachResponse], because that decides whether a body stops predicting at all, and a preset choosing it would change the most visible behaviour an entity has with no game file saying so.
+			No preset. Every setting keeps its default. Settings written after an archetype override it, and no archetype sets [member NetwPredictionHandle.breach_response].
 		</constant>
 		<constant name="ARCHETYPE_SCRIPTED" value="1" enum="Archetype">
-			A body whose step is ordinary code and can be re-run inside one frame. It sets [constant NetwSimulationHandle.SCHEDULE_TICK], [constant MISSING_INPUT_STALL] and [constant RECOVERY_POLICY_REBASE_REPLAY], because a velocity that comes straight from the input catches up again on the next tick.
+			A body moved by your own code, such as a [CharacterBody3D]. Sets [constant NetwSimulationHandle.SCHEDULE_TICK], [constant MISSING_INPUT_STALL] and [constant RECOVERY_POLICY_REBASE_REPLAY].
 		</constant>
 		<constant name="ARCHETYPE_SOLVER_BODY" value="2" enum="Archetype">
-			A body the physics engine solves, whose step cannot be re-run once per input. It sets [constant NetwSimulationHandle.SCHEDULE_FRAME], [constant MISSING_INPUT_REPEAT_LAST], [constant RECOVERY_POLICY_REBASE_RECOVER] and [constant NetwSimulationHandle.RESTORE_EXTRAPOLATED], with a teleport distance sized for a body that settles through contacts.
+			A body moved by the physics engine, such as a [RigidBody3D]. Sets [constant NetwSimulationHandle.SCHEDULE_FRAME], [constant MISSING_INPUT_REPEAT_LAST], [constant RECOVERY_POLICY_REBASE_RECOVER] and [constant NetwSimulationHandle.RESTORE_EXTRAPOLATED].
 		</constant>
 		<constant name="RECOVERY_POLICY_REBASE_REPLAY" value="0" enum="RecoveryPolicy">
-			Restore the acknowledged state and replay every unacknowledged input over it, which reaches the present through the entity's own simulation. [member NetwPredictionHandle.recovery_policy] is where an entity declares one, and it names what the entity wants rather than how the engine does it.
-			A [RigidBody3D] or [RigidBody2D] at [constant NetwSimulationHandle.SCHEDULE_FRAME] recovers under [constant RECOVERY_POLICY_REBASE_RECOVER] and warns once. The engine applies its forces only when the space steps, and nothing steps the space between replayed inputs.
+			Restore the server's state and replay every input the server has not acknowledged yet. A [RigidBody3D] or [RigidBody2D] at [constant NetwSimulationHandle.SCHEDULE_FRAME] cannot replay, so it uses [constant RECOVERY_POLICY_REBASE_RECOVER] and warns once.
 		</constant>
 		<constant name="RECOVERY_POLICY_REBASE_RECOVER" value="1" enum="RecoveryPolicy">
-			Restore the acknowledged state and write the correction directly, with no replay.
+			Restore the server's state and write the correction directly, without replaying.
 		</constant>
 		<constant name="RECOVERY_POLICY_DELAY_CLOSED" value="2" enum="RecoveryPolicy">
-			Do not predict at all. Simulate only where the input is already authoritative, and draw what arrives everywhere else.
+			Do not predict. Simulate only with inputs the server confirmed, and draw the server's state otherwise.
 		</constant>
 		<constant name="RECOVERY_POLICY_OBSERVE" value="3" enum="RecoveryPolicy">
-			Report the divergence and write nothing. An entity under this policy can hold an episode open for as long as it keeps diverging, and it can never oscillate between corrections, because it makes none.
+			Report mispredictions and correct nothing.
 		</constant>
 		<constant name="RECOVERY_POLICY_AUTO" value="4" enum="RecoveryPolicy">
-			Pick from the body. A [RigidBody3D] or [RigidBody2D] recovers under [constant RECOVERY_POLICY_REBASE_RECOVER] and any other body under [constant RECOVERY_POLICY_REBASE_REPLAY]. This is the default, and [method NetwPredictionHandle.resolved_recovery_policy] returns the pick.
+			[constant RECOVERY_POLICY_REBASE_RECOVER] for a [RigidBody3D] or [RigidBody2D], and [constant RECOVERY_POLICY_REBASE_REPLAY] for any other body. [method NetwPredictionHandle.resolved_recovery_policy] returns the result.
 		</constant>
 		<constant name="RECONCILE_INDEPENDENT" value="0" enum="Reconcile">
-			Correct each predicted entity on its own.
+			Correct each entity on its own.
 		</constant>
 		<constant name="RECONCILE_JOINT" value="1" enum="Reconcile">
-			Restore and replay this entity together with the entities its [member NetwEntity.simulation] selects. The engine admits the group when the selection commits, where every member's schedule is known.
-			An authoritative row a member receives here is where a replay starts from rather than somewhere to jump to. The group replays from one floor, so a member that snapped to wherever its own extrapolated row landed would enter that replay from a state no other member's history knows about. The unextrapolated payload is the basis, and the pass re-runs the transitions the extrapolation was standing in for.
+			Correct this entity together with the entities its [member NetwEntity.simulation] selects, restoring and replaying them from the same tick.
 		</constant>
 		<constant name="BREACH_RESPONSE_PREDICT_THROUGH" value="0" enum="BreachResponse">
-			Keep predicting and let an ordinary recovery absorb whatever divergence follows.
-			Touching the unmoving world is never a breach, because every peer solves against the same world. A breach is contact with a moving body this peer does not simulate, whose drawn pose is a stand-in the solve cannot reproduce.
+			Keep predicting and correct as usual. A breach is a contact with a moving body this peer does not simulate. Touching static geometry is not a breach.
 		</constant>
 		<constant name="BREACH_RESPONSE_DEMOTE" value="1" enum="BreachResponse">
-			Follow authority immediately while commands continue to flow.
+			Stop predicting and follow the server, while still sending input.
 		</constant>
 		<constant name="EPISODE_STATE_OPEN" value="0" enum="EpisodeState">
-			The episode is still taking in comparisons and the results of recovery attempts.
+			The misprediction is still being corrected.
 		</constant>
 		<constant name="EPISODE_STATE_CLOSED" value="1" enum="EpisodeState">
-			A verified agreement run retired the episode.
+			The peers agree again.
 		</constant>
 		<constant name="EPISODE_STATE_FALLBACK" value="2" enum="EpisodeState">
-			Bounded recovery evidence was exhausted.
+			Corrections did not help, and the entity follows the server.
 		</constant>
 		<constant name="OPERATOR_OUTCOME_PENDING" value="0" enum="OperatorOutcome">
-			No later comparison has judged the write yet.
+			Not judged yet.
 		</constant>
 		<constant name="OPERATOR_OUTCOME_CONTRACTED" value="1" enum="OperatorOutcome">
-			A later comparison strictly reduced or closed the aligned error.
+			The error shrank or closed.
 		</constant>
 		<constant name="OPERATOR_OUTCOME_FAILED_TO_CONTRACT" value="2" enum="OperatorOutcome">
-			The verification window held or grew the aligned error.
+			The error held or grew.
 		</constant>
 		<constant name="OPERATOR_OUTCOME_INTRODUCED_BOUNDARY" value="3" enum="OperatorOutcome">
-			The write introduced a realized boundary absent on authority.
+			The correction caused a contact the server did not have.
 		</constant>
 		<constant name="OPERATOR_OUTCOME_WITHHELD" value="4" enum="OperatorOutcome">
-			Every field that asked for this recovery was one the recovery was declared never to write, so the error it holds belongs to the declaration rather than to the operator.
-			It is recorded beside [constant OPERATOR_OUTCOME_FAILED_TO_CONTRACT] rather than as a kind of it, because the two look identical from outside and mean opposite things. One is an operator that tried and did not shrink the error, and the other is an operator that was forbidden to touch it. Spending an episode's evidence on the second turns a gap in the declaration into a breach, and a breach into a demotion, which leaves the game worse off than declaring nothing at all.
+			Every field that asked for the correction is [method NetwPropertyConfig.teleport_only], so the correction could not write it.
 		</constant>
 		<constant name="ATTRIBUTION_UNKNOWN" value="0" enum="Attribution">
-			The evidence needed to blame a boundary was absent. Every other [enum Attribution] names the first thing the two runs disagreed about, and [signal NetwPredictionHandle.divergence_detected] carries it.
+			Nothing to blame was found. [signal NetwPredictionHandle.divergence_detected] carries an [enum Attribution].
 		</constant>
 		<constant name="ATTRIBUTION_PRE_STATE" value="1" enum="Attribution">
-			The peers entered the transition with different declared state.
+			The peers started the tick from different state.
 		</constant>
 		<constant name="ATTRIBUTION_COMMAND" value="2" enum="Attribution">
-			Authority ran input the owner did not author.
+			The server ran an input the controlling peer did not send.
 		</constant>
 		<constant name="ATTRIBUTION_ENVIRONMENT" value="3" enum="Attribution">
-			The transition ran against unequal world facts.
+			The [member NetwPredictionHandle.sensors] read different values.
 		</constant>
 		<constant name="ATTRIBUTION_TOPOLOGY" value="4" enum="Attribution">
-			The execution topology or body mode differed.
+			The peers simulated the entity in different ways.
 		</constant>
 		<constant name="ATTRIBUTION_EXECUTION" value="5" enum="Attribution">
-			The declared state agreed but the optional raw execution bits differed.
+			The state agreed but the raw results differed.
 		</constant>
 		<constant name="ATTRIBUTION_CONTACT" value="6" enum="Attribution">
-			Equal inputs produced a different contact.
+			The same input produced a different contact.
 		</constant>
 		<constant name="ATTRIBUTION_CLOSURE" value="7" enum="Attribution">
-			Everything observed going in agreed and the produced state still differed.
+			Everything going in agreed, and the result still differed.
 		</constant>
 		<constant name="OPERATOR_NONE" value="0" enum="Operator">
-			Nothing wrote the body since the preceding transition. An [enum Operator] is what an episode records for each recovery attempt.
+			Nothing wrote the body.
 		</constant>
 		<constant name="OPERATOR_REBASE_PROJECTED" value="1" enum="Operator">
-			A projected authoritative state was restored.
+			The server's state was restored, advanced to the present.
 		</constant>
 		<constant name="OPERATOR_REBASE_EXACT" value="2" enum="Operator">
-			An exact authoritative state was restored.
+			The server's state was restored as is.
 		</constant>
 		<constant name="OPERATOR_FULL_CLOSURE" value="3" enum="Operator">
-			A teleport restored every declared field.
+			A teleport restored every field.
 		</constant>
 		<constant name="OPERATOR_TRANSPORT_DELTA" value="4" enum="Operator">
-			The body was moved to where it should be now, across a path [member NetwPredictionHandle.transport_corridor] cleared.
+			The body was moved to where it should be now, along a path [member NetwPredictionHandle.transport_corridor] allowed.
 		</constant>
 		<constant name="OPERATOR_RESEED" value="5" enum="Operator">
-			The body was seeded from authority after a fallback.
+			The body was reset to the server's state after a fallback.
 		</constant>
 		<constant name="OPERATOR_RESEED_ALIGN" value="6" enum="Operator">
-			The first comparison after a reseed aligned the acknowledgement.
+			The first comparison after a reset caught up with the server.
 		</constant>
 		<constant name="OPERATOR_DEMOTE" value="7" enum="Operator">
-			A witnessed breach stopped prediction while input keeps flowing.
+			A breach stopped prediction while input keeps being sent.
 		</constant>
 		<constant name="OPERATOR_DISSIPATE" value="8" enum="Operator">
-			A divergence in velocity alone was left to fade with no write.
+			Only the velocity differed, and it was left to fade.
 		</constant>
 		<constant name="OPERATOR_JOINT_REBASE" value="9" enum="Operator">
-			A joint pass restored the whole group to its shared starting transition.
+			The whole [constant RECONCILE_JOINT] group was restored to the same tick.
 		</constant>
 		<constant name="DOMAIN_IN" value="0" enum="Domain">
-			Everything the transition read is declared equal on both peers, so its fingerprints must match exactly.
+			Every input to the step is known equal on both peers, so the results must match exactly.
 		</constant>
 		<constant name="DOMAIN_OUT" value="1" enum="Domain">
-			Something the transition read is declared unequal or unknown, so it is compared by tolerance.
+			Some input to the step may differ between peers, so the results are compared by tolerance.
 		</constant>
 	</constants>
 </class>

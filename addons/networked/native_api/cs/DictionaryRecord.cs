@@ -6,34 +6,8 @@ using Godot.NativeInterop;
 namespace Networked;
 
 /// <summary>
-/// The record this addon ships, and the one a table creates when it declares
-/// none of its own.
+/// A record stored as a <see cref="Godot.Collections.Dictionary"/>.
 /// </summary>
-/// <remarks>
-/// <see cref="DictionaryRecord"/> is the default mutable record implementation.
-/// It stores arbitrary <see cref="Variant"/> values keyed by
-/// <see cref="StringName"/> and serializes them with
-/// <c>@GlobalScope.var_to_bytes</c>.
-/// <code>
-/// var record := DictionaryRecord.new()
-/// record.set_value(&amp;"health", 100)
-/// record.position = Vector2(10, 20)
-///
-/// var bytes := record.serialize()
-/// var copy := DictionaryRecord.new()
-/// copy.deserialize(bytes)
-/// </code>
-/// <para>
-/// It is the concrete end of the chain, so it implements the
-/// <see cref="NetwRecord"/> and <see cref="Serde"/> verbs natively rather than
-/// through their virtuals. A script that needs different storage extends
-/// <see cref="NetwRecord"/> and overrides the virtuals there.
-/// <see cref="DictionaryRecord.Data"/> is a declared property, so it is the one
-/// name <see cref="NetwRecord.SetValue"/> cannot be reached through by
-/// assignment. Store a value under <c>&amp;"data"</c> with
-/// <see cref="NetwRecord.SetValue"/> itself.
-/// </para>
-/// </remarks>
 public sealed class DictionaryRecord : NetwRecord
 {
     public DictionaryRecord(IntPtr native) : base(native)
@@ -57,9 +31,7 @@ public sealed class DictionaryRecord : NetwRecord
         NetwApi.MethodBind("DictionaryRecord", "set_data", 4155329257UL);
 
     /// <summary>
-    /// The backing dictionary serialized to disk and transmitted over the
-    /// network. <see cref="Serde.Serialize"/> writes it and
-    /// <see cref="Serde.Deserialize"/> replaces it.
+    /// The values of this record.
     /// </summary>
     public Godot.Collections.Dictionary Data
     {

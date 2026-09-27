@@ -26,7 +26,7 @@
 				    ctx.bind(bomb)
 				    bombs.add_child(bomb)
 				[/codeblock]
-				Use an action to judge before anyone sees it. [member NetwEntity.lifecycle] lets a client spawn, move and despawn without server approval.
+				The server judges an action before other peers see it. To let a client spawn, move and despawn a node first and have the server confirm it later, see [member NetwEntity.lifecycle].
 			</description>
 		</method>
 		<method name="change_scene_to_file" qualifiers="static">
@@ -73,7 +73,7 @@
 			<param index="0" name="node" type="Node" />
 			<param index="1" name="hold" type="int" enum="NetwEntity.Hold" default="2" />
 			<description>
-				Asks the server to make this peer the [member NetwEntity.controller] of the entity [param node] belongs to, which is [method NetwEntity.claim_authority] reached from any node of it.
+				Asks the server to make this peer the [member NetwEntity.controller] of the entity [param node] belongs to. Same as [method NetwEntity.claim_authority].
 				[codeblock]
 				Netw.claim_authority(self, NetwEntity.HOLD_YIELDABLE).then(pick_up)
 				[/codeblock]
@@ -122,7 +122,7 @@
 			<param index="0" name="node" type="Node" />
 			<param index="1" name="preset" type="NetwClockConfig" default="null" />
 			<description>
-				Sets up the clock for the [Node.multiplayer] and returns the [NetwClockConfig] to fill in.
+				Sets up the clock for the [member Node.multiplayer] and returns the [NetwClockConfig] to fill in.
 				[codeblock]
 				func _init() -&gt; void:
 				    Netw.configure_clock(self) \
@@ -206,8 +206,8 @@
 				func spawn_at(who: NetwPlayer, point: StringName, team: int) -&gt; void:
 				    arena.add_child(Netw.spawn_player(who, _spawn_avatar, team))
 				[/codeblock]
-				[param handler] takes the [NetwPlayer] first, the rest of parameters are the areguments passed to [method prepare_join] before the [MultiplayerAPI] connected. 
-				[b]Note:[/b] the username passed to [method prepare_join] crosses as [member NetwPlayer.username].
+				[param handler] takes the [NetwPlayer] first, the rest of parameters are the arguments passed to [method prepare_join] before the [MultiplayerAPI] connected.
+				[b]Note:[/b] the username passed to [method prepare_join] arrives as [member NetwPlayer.username].
 				[b]Server Only.[/b]
 			</description>
 		</method>
@@ -249,7 +249,7 @@
 				            .schema(game.save_schema) \
 				            .record_id(account_name)
 				[/codeblock]
-				The declaration belongs to [param node] itself, so two entities running one script keep two record ids. Read [NetwPersistenceConfig] for what an entity declares, [NetwPersistenceHandle] for reaching the row, and [NetwDatabase] for the database architecture.
+				Read [NetwPersistenceConfig] for what an entity declares, [NetwPersistenceHandle] for reaching the row, and [NetwDatabase] for the database architecture.
 			</description>
 		</method>
 		<method name="configure_property" qualifiers="static">
@@ -432,8 +432,7 @@
 				[/codeblock]
 				[param opts] configures what happens to the node on every peer, see [NetwDespawnOpts] for the options.
 				It returns [constant @GlobalScope.ERR_DOES_NOT_EXIST] for a node that is not a spawned one and [constant @GlobalScope.ERR_UNAVAILABLE] for a node in no [MultiplayerAPI].
-				The session authority may always call it, and the [member NetwEntity.controller] may for a node whose [member NetwEntity.lifecycle] is [constant NetwEntity.LIFECYCLE_CONTROLLER].
-				The node leaves the controller's peer at once, and the server serves it back if it refuses.
+				The server can always call it. The [member NetwEntity.controller] can too when [member NetwEntity.lifecycle] is [constant NetwEntity.LIFECYCLE_CONTROLLER], and the node is removed on its peer at once and comes back if the server refuses.
 			</description>
 		</method>
 		<method name="emit_entity_signal" qualifiers="vararg static">
@@ -486,7 +485,7 @@
 			<param index="0" name="node" type="Node" />
 			<param index="1" name="successor" type="int" default="0" />
 			<description>
-				Hands control of the entity [param node] belongs to on to [param successor], or to the server when it is [code]0[/code], with this peer's final state. It is [method NetwEntity.release_authority] reached from any node of it.
+				Hands control of the entity [param node] belongs to on to [param successor], or to the server when it is [code]0[/code], with this peer's final state. Same as [method NetwEntity.release_authority].
 				A [param node] under no entity answers a promise rejected with [constant @GlobalScope.ERR_DOES_NOT_EXIST].
 				[b]Player request.[/b]
 			</description>
@@ -504,15 +503,14 @@
 			<param index="0" name="node" type="Node" />
 			<param index="1" name="new_parent" type="Node" />
 			<description>
-				Moves [param node] under [param new_parent] the way [method Node.reparent] does, and answers a [NetwPromise] that resolves once the session authority holds the node under its new parent. Every other peer that holds the node takes the move after that.
+				Moves [param node] under [param new_parent] the way [method Node.reparent] does, and answers a [NetwPromise] that resolves once the node is under its new parent on the server. The other peers move it after that.
 				[codeblock]
 				await Netw.reparent(body, level2.get_node(^"Players")).wait()
 				[/codeblock]
 				What it adds over [method Node.reparent] is a window that masks the mover off the physics server across the parent swap, basically a workaround for this [url=https://github.com/godotengine/godot/issues/14578]issue[/url].
 				[method Node.reparent] stays fully supported and is the right verb for anything that doesn't depend on area signals.
 				A [param node] that is no entity answers [constant @GlobalScope.ERR_DOES_NOT_EXIST] and one in no session answers [constant @GlobalScope.ERR_UNAVAILABLE].
-				The session authority may always call it, and the [member NetwEntity.controller] may for a node whose [member NetwEntity.lifecycle] is [constant NetwEntity.LIFECYCLE_CONTROLLER].
-				The controller's move lands on its own peer at once, and a refusal from the server rejects the promise and moves the node back. At most eight such moves of one entity wait on the server at a time, and the ninth is moved back and rejected with [constant @GlobalScope.ERR_UNAVAILABLE].
+				The server can always call it. The [member NetwEntity.controller] can too when [member NetwEntity.lifecycle] is [constant NetwEntity.LIFECYCLE_CONTROLLER], and the node moves on its peer at once. If the server refuses, the promise is rejected and the node moves back.
 			</description>
 		</method>
 		<method name="replicate" qualifiers="static">
@@ -528,7 +526,7 @@
 				body.position = spawn_point
 				scene.add_child(body)
 				[/codeblock]
-				The session authority may always call it, and a client may with no [param owner] when [param node] declares [member NetwEntity.lifecycle] as [constant NetwEntity.LIFECYCLE_CONTROLLER], becoming its [member NetwEntity.controller].
+				The server can always call it. A client can too, without [param owner], when [param node] sets [member NetwEntity.lifecycle] to [constant NetwEntity.LIFECYCLE_CONTROLLER], and becomes its [member NetwEntity.controller].
 			</description>
 		</method>
 		<method name="request" qualifiers="vararg static">
@@ -689,8 +687,7 @@
 				muzzle.add_child(Netw.spawn(_spawn_bullet, dir, 2))
 				[/codeblock]
 				Register [param fn] with [method configure_spawn] first, and parent the node returned before the next tick.
-				The session authority may always call it, and a client may when the node [param fn] builds declares [member NetwEntity.lifecycle] as [constant NetwEntity.LIFECYCLE_CONTROLLER], becoming its [member NetwEntity.controller].
-				The node shows on that client at once, and is removed if the server refuses it.
+				The server can always call it. A client can too when the node sets [member NetwEntity.lifecycle] to [constant NetwEntity.LIFECYCLE_CONTROLLER], and becomes its [member NetwEntity.controller]. The node shows on that client at once and is removed if the server refuses it.
 			</description>
 		</method>
 		<method name="spawn_player" qualifiers="vararg static">
@@ -704,7 +701,7 @@
 				    Netw.spawn_player(player, _spawn_avatar, character_class)
 				)
 				[/codeblock]
-				The node becomes tied to [param player] lifecycle. A node that declares [method NetwPersistenceConfig.load_on_spawn] reaches the other peers once its stored row is applied.
+				The node becomes tied to [param player] lifecycle. With [method NetwPersistenceConfig.load_on_spawn], other peers see the node once its saved row is loaded.
 				[b]Server Only.[/b]
 			</description>
 		</method>

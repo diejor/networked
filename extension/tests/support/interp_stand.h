@@ -315,10 +315,7 @@ struct InterpHarness {
         const godot::Vector2 &p_initial
     ) {
         build_runtime(netw::display::PUMP_CHASE);
-        config.set_param(
-            netw::display::PARAM_LIVE_SMOOTH_TIME,
-            p_smooth_time
-        );
+        config.set_param(netw::display::PARAM_LIVE_SMOOTH_TIME, p_smooth_time);
         runtime->set_config(config);
         body = memnew(godot::Node2D);
         body->set_position(p_initial);

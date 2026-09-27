@@ -100,12 +100,7 @@ TEST_CASE(
     CHECK_FALSE(decoded.ok());
     NETW_CHECK_EQ(int(decoded.refusal), int(auth::Refusal::FRAMING));
 
-    CHECK_FALSE(
-        auth::decode_probe_request(
-            auth::encode_client_hello(0, 0)
-        )
-            .ok
-    );
+    CHECK_FALSE(auth::decode_probe_request(auth::encode_client_hello(0, 0)).ok);
 
     PackedByteArray stale = auth::magic_hello();
     stale.push_back(0xFF);

@@ -6,36 +6,14 @@ using Godot.NativeInterop;
 namespace Networked;
 
 /// <summary>
-/// Draft the session clock is initialized from, declared on a scope node.
+/// Configuration for the clock of <see cref="Node.Multiplayer"/>.
 /// </summary>
 /// <remarks>
-/// <see cref="Netw.ConfigureClock"/> returns a draft the scope node owns. Edit
-/// it in place or through the fluent methods, and the session copies its values
-/// once, at a deferred boundary after the declaring call stack has finished.
-/// From then on the clock holds owned values and this Resource is a spent
-/// authoring snapshot: a later setter reports the late write and moves nothing.
+/// Use <see cref="Netw.ConfigureClock"/> to configure the clock.
 /// <code>
 /// func _init() -&gt; void:
 ///     Netw.configure_clock(self).tickrate(60).display_offset(2)
 /// </code>
-/// <para>
-/// Consuming one also arms the session's AUTOMATIC pump: the clock advances on
-/// the <see cref="SceneTree"/>'s own physics frame, reading that frame's actual
-/// delta, and the session's poll advances nothing. The pump runs only while the
-/// session is mounted on a branch, its peer is connected,
-/// <see cref="NetwMultiplayer.ClockParam.ManualTick"/> is off, the editor is
-/// not authoring and the tree is not paused, so a paused game's clock stands
-/// still and resumes without catching up. A manual driver still advances it
-/// deliberately with <see cref="NetwMultiplayer.ClockPhysicsStep"/>.
-/// <see cref="NetwMultiplayer.ClockGetConfig"/> returns a detached snapshot of
-/// the running values. Live tuning goes through
-/// <see cref="NetwMultiplayer.ClockSetParam"/>, which updates the engine and
-/// shows up in that snapshot without ever reopening this draft. Tickrate is not
-/// tunable that way: it is initialization. A preset handed to the verb is
-/// copied rather than kept, so one <c>.tres</c> may seed several scenes.
-/// <see cref="NetwMultiplayer.ClockConfigured"/> fires once, after consumption
-/// and runtime setup.
-/// </para>
 /// </remarks>
 public sealed class NetwClockConfig : NetwRefCounted
 {
@@ -575,8 +553,9 @@ public sealed class NetwClockConfig : NetwRefCounted
         NetwApi.MethodBind("NetwClockConfig", "ticks_per_second", 432295446UL);
 
     /// <summary>
-    /// Sets <see cref="NetwClockConfig.Tickrate"/> and returns this same draft,
-    /// so a declaration reads as one chained expression.
+    /// How many simulation ticks to run per second. Increasing this value
+    /// increases the simulation fidelity, but also increases the network
+    /// traffic and CPU usage.
     /// </summary>
     public NetwClockConfig TicksPerSecond(long tickrate)
     {
@@ -597,8 +576,10 @@ public sealed class NetwClockConfig : NetwRefCounted
             432295446UL);
 
     /// <summary>
-    /// Sets <see cref="NetwClockConfig.DisplayOffset"/> and returns this same
-    /// draft, so a declaration reads as one chained expression.
+    /// The number of ticks the visual display lags behind the simulation,
+    /// normally used to hide jitter and lag. The interpolation engine has its
+    /// own techniques to hide jitter and lag. Still, a small display offset is
+    /// recommended.
     /// </summary>
     public NetwClockConfig DisplayOffsetTicks(long displayOffset)
     {
@@ -619,8 +600,8 @@ public sealed class NetwClockConfig : NetwRefCounted
             1852668278UL);
 
     /// <summary>
-    /// Sets <see cref="NetwClockConfig.UsePhysicsInterpolation"/> and returns
-    /// this same draft, so a declaration reads as one chained expression.
+    /// When <c>true</c>, the engine's physics interpolation fraction is used
+    /// when available instead of a wall-clock estimate.
     /// </summary>
     public NetwClockConfig PhysicsInterpolation(bool usePhysicsInterpolation)
     {
@@ -638,8 +619,8 @@ public sealed class NetwClockConfig : NetwRefCounted
         NetwApi.MethodBind("NetwClockConfig", "sync", 432295446UL);
 
     /// <summary>
-    /// Sets <see cref="NetwClockConfig.SyncMode"/> and returns this same draft,
-    /// so a declaration reads as one chained expression.
+    /// The strategy used to align the local clock with the server, one of
+    /// <see cref="NetwMultiplayer.SyncMode"/>.
     /// </summary>
     public NetwClockConfig Sync(long syncMode)
     {

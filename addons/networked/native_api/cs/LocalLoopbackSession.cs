@@ -10,8 +10,7 @@ namespace Networked;
 /// instances and simulates the link between them.
 /// </summary>
 /// <remarks>
-/// Session time advances only when something advances it, which is what makes a
-/// delay countable in polls instead of in wall clock and a run reproducible.
+/// Session time advances only when something advances it.
 /// <code>
 /// var session := LocalLoopbackSession.new()
 /// var server := session.get_server_peer()
@@ -20,21 +19,6 @@ namespace Networked;
 ///
 /// session.set_link_conditions(server, LocalLinkConditions.wifi())
 /// </code>
-/// <para>
-/// Conditions are installed on the receiving peer, optionally narrowed to one
-/// sender, and they apply when the packet arrives rather than when it was sent.
-/// <code>
-/// put_packet
-///   ┖╴the receiving peer offers the packet to its session
-///      ┠╴no conditions      the packet queues immediately
-///      ┖╴conditions         the packet waits in flight until it is due
-///                           and a poll releases it
-/// </code>
-/// </para>
-/// <para>
-/// Peer ids are drawn rather than counted, so nothing may hardcode one. Read it
-/// back with <see cref="MultiplayerPeer.GetUniqueId"/>.
-/// </para>
 /// </remarks>
 public sealed class LocalLoopbackSession : NetwRefCounted
 {

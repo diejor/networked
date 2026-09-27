@@ -53,11 +53,8 @@ bool matches(
 ) {
     for (int at = 0; at < p_keys.size(); ++at) {
         const StringName key = p_keys[at];
-        const double error = predict::value_error(
-            port_get(p_node, key),
-            p_values[at],
-            false
-        );
+        const double error
+            = predict::value_error(port_get(p_node, key), p_values[at], false);
         if (error > epsilon_of(p_binding, key, p_values[at])) {
             return false;
         }

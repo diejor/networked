@@ -699,8 +699,11 @@ TEST_CASE(
     NetwMultiplayer *session = stage.rig.server();
     NetwMultiplayer *observer = stage.rig.client(1);
     const int64_t session_peer = stage.rig.peer_id(-1);
-    Node *made
-        = stage.author_spawns("authored_crate", named("Left"), stage.arena_on(0));
+    Node *made = stage.author_spawns(
+        "authored_crate",
+        named("Left"),
+        stage.arena_on(0)
+    );
     REQUIRE(made != nullptr);
     const int route = route_of(made);
     REQUIRE(route > 0);

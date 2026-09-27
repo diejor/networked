@@ -410,9 +410,8 @@ TEST_CASE(
     rig.pump(10);
     NETW_CHECK_EQ(entity_at(rig, route, -1)->get_controller(), rig.peer_id(0));
     NETW_CHECK_EQ(hold_at(rig, route, 1), int(Control::HOLD_YIELDABLE));
-    const int64_t touched = int64_t(
-        entity_at(rig, route, -1)->get_control_tenure()
-    );
+    const int64_t touched
+        = int64_t(entity_at(rig, route, -1)->get_control_tenure());
 
     const Ref<NetwPromise> nudged
         = entity_at(rig, route, 1)->claim_authority(Control::HOLD_YIELDABLE);
@@ -458,10 +457,8 @@ TEST_CASE(
     const int64_t revision = int64_t(host->get_control_revision());
 
     CallLog log;
-    entity_at(rig, route, 0)->connect(
-        StringName("control_changed"),
-        log.callable("changed")
-    );
+    entity_at(rig, route, 0)
+        ->connect(StringName("control_changed"), log.callable("changed"));
     host->connect(
         StringName("control_requested"),
         callable_mp_static(&deny_every_request)
@@ -754,10 +751,11 @@ TEST_CASE(
     const char *tags[COUNT] = {"e0", "e1", "e2", "e3", "e4", "e5"};
     for (int at = 0; at < COUNT; ++at) {
         routes[at] = seat_free(rig, arena, tags[at]);
-        entity_at(rig, routes[at], -1)->connect(
-            StringName("control_requested"),
-            log.callable(StringName(tags[at]))
-        );
+        entity_at(rig, routes[at], -1)
+            ->connect(
+                StringName("control_requested"),
+                log.callable(StringName(tags[at]))
+            );
     }
 
     const Ref<netw::LocalLinkConditions> shuffling
@@ -853,8 +851,7 @@ TEST_CASE(
     const int route = seat_free(rig, arena, "Dropped");
 
     rig.hold(0);
-    const Ref<NetwPromise> asked
-        = entity_at(rig, route, 0)->claim_authority();
+    const Ref<NetwPromise> asked = entity_at(rig, route, 0)->claim_authority();
     REQUIRE_FALSE(asked->get_is_settled());
 
     Node *copy = rig.route_node(route, 0);

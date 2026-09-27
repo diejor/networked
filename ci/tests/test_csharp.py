@@ -142,9 +142,7 @@ def entity_class() -> dict:
                 "name": "set_ownership",
                 "hash": 21,
                 "return_value": None,
-                "arguments": [
-                    {"name": "value", "type": "enum::NetwEntity.Ownership"}
-                ],
+                "arguments": [{"name": "value", "type": "enum::NetwEntity.Ownership"}],
             },
             {
                 "name": "get_ownership",
@@ -280,8 +278,7 @@ class Boxes(unittest.TestCase):
         boxed = self.surface.box({"type": "NetwPromise"})
         self.assertEqual(
             boxed.from_variant,
-            "NetwPromise.Adopt(NetwApi.Retained("
-            "VariantUtils.ConvertToGodotObjectPtr({name})))",
+            "NetwPromise.Adopt(NetwApi.Retained(" "VariantUtils.ConvertToGodotObjectPtr({name})))",
         )
 
     def test_an_unowned_answer_is_adopted_without_a_reference(self):
@@ -305,12 +302,8 @@ class Boxes(unittest.TestCase):
         self.assertIsNone(self.surface.encode({"type": "Node"}, "return"))
 
     def test_an_engine_class_takes_its_csharp_spelling(self):
-        self.assertEqual(
-            self.surface.box({"type": "Object"}).declared, "GodotObject"
-        )
-        self.assertEqual(
-            self.surface.box({"type": "MultiplayerAPI"}).declared, "MultiplayerApi"
-        )
+        self.assertEqual(self.surface.box({"type": "Object"}).declared, "GodotObject")
+        self.assertEqual(self.surface.box({"type": "MultiplayerAPI"}).declared, "MultiplayerApi")
 
     def test_a_type_the_tables_do_not_carry_is_refused(self):
         self.assertIsNone(self.surface.box({"type": "NoSuchType"}))
@@ -337,9 +330,7 @@ class Folding(unittest.TestCase):
         self.assertTrue(all(len(line) <= csharp.WIDTH for line in lines))
 
     def test_a_nested_call_is_one_piece(self):
-        self.assertEqual(
-            csharp.split_arguments("a, f(b, c), d"), ["a", "f(b, c)", "d"]
-        )
+        self.assertEqual(csharp.split_arguments("a, f(b, c), d"), ["a", "f(b, c)", "d"])
 
 
 class Emission(unittest.TestCase):
@@ -352,9 +343,7 @@ class Emission(unittest.TestCase):
 
     def test_a_property_reads_through_its_getter_bind(self):
         self.assertIn("public long Tick", self.clock)
-        self.assertIn(
-            'MethodBind("NetwClockHandle", "get_tick", 111UL)', self.clock
-        )
+        self.assertIn('MethodBind("NetwClockHandle", "get_tick", 111UL)', self.clock)
 
     def test_an_accessor_is_not_also_emitted_as_a_method(self):
         self.assertNotIn("public long GetTick(", self.clock)
@@ -452,9 +441,7 @@ class Vocabulary(unittest.TestCase):
         self.assertEqual(encoded.to_slot, "(long){name}")
 
     def test_a_global_enum_keeps_its_engine_spelling(self):
-        self.assertEqual(
-            self.surface.encode({"type": "enum::Error"}).declared, "Error"
-        )
+        self.assertEqual(self.surface.encode({"type": "enum::Error"}).declared, "Error")
 
     def test_an_enum_no_class_declares_crosses_as_an_integer(self):
         encoded = self.surface.encode({"type": "enum::NoSuchClass.Mode"})
@@ -471,9 +458,7 @@ class Vocabulary(unittest.TestCase):
         self.assertIn("public event Action<long, Variant> InterestEnter", self.entity)
 
     def test_a_refcounted_handle_is_retained_when_it_comes_from_a_variant(self):
-        self.assertIn(
-            "return Adopt(NetwApi.Retained(NetwApi.ObjectOf(value)));", self.entity
-        )
+        self.assertIn("return Adopt(NetwApi.Retained(NetwApi.ObjectOf(value)));", self.entity)
 
     def test_an_unowned_handle_is_not_retained(self):
         tree = self.emitter.emit(tree_class())
@@ -511,9 +496,7 @@ void initialize_networked_module() {
     def test_the_registry_answers_what_the_addon_publishes(self):
         with tempfile.TemporaryDirectory() as workspace:
             names = csharp.registered_classes(self.registry_file(workspace))
-        self.assertEqual(
-            names, {"Netw", "NetwAuthProtocol", "MultiplayerTree"}
-        )
+        self.assertEqual(names, {"Netw", "NetwAuthProtocol", "MultiplayerTree"})
 
     def test_a_class_registered_only_under_the_test_flag_is_not_published(self):
         with tempfile.TemporaryDirectory() as workspace:
@@ -579,8 +562,7 @@ class Refusals(unittest.TestCase):
         with tempfile.TemporaryDirectory() as workspace:
             dump = Path(workspace) / "api.json"
             dump.write_text(
-                '{"classes": [%s]}'
-                % '{"name": "NetwClockHandle", "api_type": "extension", '
+                '{"classes": [%s]}' % '{"name": "NetwClockHandle", "api_type": "extension", '
                 '"is_refcounted": true, "methods": [], "properties": []}',
                 encoding="utf-8",
             )
@@ -593,16 +575,13 @@ class Defaults(unittest.TestCase):
     passes what a GDScript caller omits."""
 
     def test_a_reference_default_is_null(self):
-        self.assertEqual(csharp.default_value("NetwQuantize", "null"),
-                         ("null", None))
+        self.assertEqual(csharp.default_value("NetwQuantize", "null"), ("null", None))
 
     def test_a_variant_cannot_be_null_because_it_is_a_struct(self):
-        self.assertEqual(csharp.default_value("Variant", "null"),
-                         ("default", None))
+        self.assertEqual(csharp.default_value("Variant", "null"), ("default", None))
 
     def test_a_callable_takes_the_struct_default(self):
-        self.assertEqual(csharp.default_value("Callable", "Callable()"),
-                         ("default", None))
+        self.assertEqual(csharp.default_value("Callable", "Callable()"), ("default", None))
 
     def test_a_number_is_a_literal(self):
         self.assertEqual(csharp.default_value("int", "1"), ("1", None))
@@ -613,8 +592,7 @@ class Defaults(unittest.TestCase):
         self.assertEqual(csharp.default_value("float", "0.0"), ("0.0f", None))
 
     def test_an_enum_default_is_cast_because_the_dump_says_0(self):
-        self.assertEqual(csharp.default_value("Netw.SceneChange", "0"),
-                         ("(Netw.SceneChange)0", None))
+        self.assertEqual(csharp.default_value("Netw.SceneChange", "0"), ("(Netw.SceneChange)0", None))
 
     def test_a_string_default_is_a_literal(self):
         self.assertEqual(csharp.default_value("string", '""'), ('""', None))
@@ -624,22 +602,17 @@ class Defaults(unittest.TestCase):
         Dictionary is not, so the parameter is null and the body fills it."""
         for declared, raw, filled in (
             ("StringName", '&""', 'new StringName("")'),
-            ("Godot.Collections.Dictionary", "{}",
-             "new Godot.Collections.Dictionary()"),
-            ("Godot.Collections.Array", "[]",
-             "new Godot.Collections.Array()"),
+            ("Godot.Collections.Dictionary", "{}", "new Godot.Collections.Dictionary()"),
+            ("Godot.Collections.Array", "[]", "new Godot.Collections.Array()"),
             ("byte[]", "PackedByteArray()", "System.Array.Empty<byte>()"),
-            ("string[]", "PackedStringArray()",
-             "System.Array.Empty<string>()"),
+            ("string[]", "PackedStringArray()", "System.Array.Empty<string>()"),
         ):
-            self.assertEqual(csharp.default_value(declared, raw),
-                             ("null", filled))
+            self.assertEqual(csharp.default_value(declared, raw), ("null", filled))
 
     def test_an_unknown_default_leaves_the_parameter_required(self):
         """Refusing is the answer, because inventing a default would change
         what the method does."""
-        self.assertEqual(csharp.default_value("Vector3", "Vector3(1, 2, 3)"),
-                         (None, None))
+        self.assertEqual(csharp.default_value("Vector3", "Vector3(1, 2, 3)"), (None, None))
 
 
 class Documentation(unittest.TestCase):
@@ -651,24 +624,23 @@ class Documentation(unittest.TestCase):
         "member Node.name": "Node.Name",
         "member Node.multiplayer_authority": "Node.GetMultiplayerAuthority",
         "method Callable.get_method": "Callable.Method",
-        "constant MultiplayerPeer.CONNECTION_CONNECTING":
-            "MultiplayerPeer.ConnectionStatus.Connecting",
-        "signal MultiplayerPeer.peer_connected":
-            "MultiplayerPeer.PeerConnected",
+        "constant MultiplayerPeer.CONNECTION_CONNECTING": "MultiplayerPeer.ConnectionStatus.Connecting",
+        "signal MultiplayerPeer.peer_connected": "MultiplayerPeer.PeerConnected",
     }
 
     def setUp(self):
         self.prose = csharp_docs.Prose(
             exports={
-                "NetwClockHandle": {"tick": "Tick", "get_tick": "Tick",
-                                    "SYNC_MODE_SNAP": "SyncMode.Snap"},
+                "NetwClockHandle": {"tick": "Tick", "get_tick": "Tick", "SYNC_MODE_SNAP": "SyncMode.Snap"},
                 "Netw": {"clock": "Clock"},
             },
             classes={"NetwClockHandle", "Netw"},
-            engine={"Node": "Node", "Object": "GodotObject",
-                    "MultiplayerPeer": "MultiplayerPeer"},
-            builtins={"Dictionary": "Godot.Collections.Dictionary",
-                      "PackedByteArray": "byte[]", "Callable": "Callable"},
+            engine={"Node": "Node", "Object": "GodotObject", "MultiplayerPeer": "MultiplayerPeer"},
+            builtins={
+                "Dictionary": "Godot.Collections.Dictionary",
+                "PackedByteArray": "byte[]",
+                "Callable": "Callable",
+            },
             names=self.NAMES,
         )
 
@@ -679,31 +651,25 @@ class Documentation(unittest.TestCase):
         self.assertEqual(self.render("[Netw]"), '<see cref="Netw"/>')
 
     def test_a_member_resolves_through_the_emitters_own_naming(self):
-        self.assertEqual(self.render("[member tick]"),
-                         '<see cref="NetwClockHandle.Tick"/>')
+        self.assertEqual(self.render("[member tick]"), '<see cref="NetwClockHandle.Tick"/>')
 
     def test_an_accessor_resolves_to_the_property_it_became(self):
         """C2 renamed these, so a guess at the C# spelling would drift."""
-        self.assertEqual(self.render("[method get_tick]"),
-                         '<see cref="NetwClockHandle.Tick"/>')
+        self.assertEqual(self.render("[method get_tick]"), '<see cref="NetwClockHandle.Tick"/>')
 
     def test_an_enum_constant_carries_its_enum(self):
-        self.assertEqual(self.render("[constant SYNC_MODE_SNAP]"),
-                         '<see cref="NetwClockHandle.SyncMode.Snap"/>')
+        self.assertEqual(self.render("[constant SYNC_MODE_SNAP]"), '<see cref="NetwClockHandle.SyncMode.Snap"/>')
 
     def test_an_engine_method_follows_godots_spelling(self):
-        self.assertEqual(self.render("[method Node.get_parent]"),
-                         '<see cref="Node.GetParent"/>')
+        self.assertEqual(self.render("[method Node.get_parent]"), '<see cref="Node.GetParent"/>')
 
     def test_an_engine_property_resolves_through_the_index(self):
         """It cannot be derived, because GodotSharp publishes some of Godot's
         properties as a method pair instead."""
-        self.assertEqual(self.render("[member Node.name]"),
-                         '<see cref="Node.Name"/>')
+        self.assertEqual(self.render("[member Node.name]"), '<see cref="Node.Name"/>')
 
     def test_an_engine_getter_resolves_to_the_property_it_became(self):
-        self.assertEqual(self.render("[method Callable.get_method]"),
-                         '<see cref="Callable.Method"/>')
+        self.assertEqual(self.render("[method Callable.get_method]"), '<see cref="Callable.Method"/>')
 
     def test_an_engine_property_that_is_a_method_pair_takes_the_method(self):
         self.assertEqual(
@@ -726,25 +692,21 @@ class Documentation(unittest.TestCase):
         )
 
     def test_an_engine_name_absent_from_the_index_falls_back(self):
-        self.assertEqual(self.render("[method Node.no_such_verb]"),
-                         "<c>Node.no_such_verb</c>")
+        self.assertEqual(self.render("[method Node.no_such_verb]"), "<c>Node.no_such_verb</c>")
 
     def test_an_underscore_leaf_never_resolves(self):
         """Node.Ready EXISTS as a signal, so a lookup for _ready could answer
         confidently with the wrong member and the compiler would accept it.
         The refusal happens before any lookup, in Prose and in the table
         writer both."""
-        self.assertEqual(self.render("[method Node._ready]"),
-                         "<c>Node._ready</c>")
-        self.assertEqual(self.render("[method _enter_tree]"),
-                         "<c>_enter_tree</c>")
+        self.assertEqual(self.render("[method Node._ready]"), "<c>Node._ready</c>")
+        self.assertEqual(self.render("[method _enter_tree]"), "<c>_enter_tree</c>")
 
     def test_an_array_type_has_no_cref_syntax(self):
         self.assertEqual(self.render("[PackedByteArray]"), "<c>PackedByteArray</c>")
 
     def test_an_unknown_name_falls_back_and_is_counted(self):
-        self.assertEqual(self.render("[NetwServerBrowser]"),
-                         "<c>NetwServerBrowser</c>")
+        self.assertEqual(self.render("[NetwServerBrowser]"), "<c>NetwServerBrowser</c>")
         self.assertEqual(len(self.prose.fallbacks), 1)
 
     def test_a_param_becomes_a_paramref_without_its_escape(self):
@@ -765,25 +727,20 @@ class Documentation(unittest.TestCase):
 
     def test_a_dual_language_block_prefers_the_csharp_twin(self):
         rendered = self.render(
-            "[codeblocks][gdscript]Netw.join()[/gdscript]"
-            "[csharp]Netw.Join();[/csharp][/codeblocks]"
+            "[codeblocks][gdscript]Netw.join()[/gdscript]" "[csharp]Netw.Join();[/csharp][/codeblocks]"
         )
         self.assertIn("Netw.Join();", rendered)
         self.assertNotIn("Netw.join()", rendered)
         self.assertEqual(self.prose.gdscript_twins_dropped, 1)
 
     def test_a_dual_language_block_with_no_csharp_twin_carries_nothing(self):
-        rendered = self.render(
-            "[codeblocks][gdscript]Netw.join()[/gdscript][/codeblocks]"
-        )
+        rendered = self.render("[codeblocks][gdscript]Netw.join()[/gdscript][/codeblocks]")
         self.assertNotIn("Netw.join()", rendered)
 
     def test_emphasis_survives_because_an_authority_marker_needs_it(self):
         """AGENTS.md 3.9 writes a marker as [b]Server Only.[/b], and Godot
         maps emphasis to <b> rather than stripping it."""
-        self.assertEqual(
-            self.render("[b]Server Only.[/b]"), "<b>Server Only.</b>"
-        )
+        self.assertEqual(self.render("[b]Server Only.[/b]"), "<b>Server Only.</b>")
 
     def test_prose_is_escaped_but_a_payload_is_not(self):
         rendered = self.render("a < b & [code]x[/code]")

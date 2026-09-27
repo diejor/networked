@@ -99,13 +99,7 @@ PackedByteArray pose_frame(
     header.tick = -1;
     header.reconcile_ack = -1;
     header.mask = p_baseline == nullptr ? plan.full_mask() : p_mask;
-    return netw::repl::write_snapshot_row(
-        header,
-        -1,
-        plan,
-        row,
-        p_baseline
-    );
+    return netw::repl::write_snapshot_row(header, -1, plan, row, p_baseline);
 }
 
 RowArrival arrival() {
@@ -115,7 +109,6 @@ RowArrival arrival() {
     out.seq = -1;
     return out;
 }
-
 
 TEST_CASE(
     "[Networked][Repl][Hosted] C4-1 a staged row that is then denied leaves "
@@ -147,8 +140,7 @@ TEST_CASE(
     CHECK(the_denied_row_decoded);
     binding->discard_staged();
 
-    const bool the_node_did_not_move
-        = dst->get_position() == Vector2(1.0, 1.0);
+    const bool the_node_did_not_move = dst->get_position() == Vector2(1.0, 1.0);
     CHECK(the_node_did_not_move);
 
     binding->apply_row_frame(
@@ -344,8 +336,7 @@ TEST_CASE(
     NETW_CHECK_EQ(log.count(StringName("applied")), 0);
 
     Dictionary header;
-    const bool the_row_committed
-        = binding->commit_staged(&send, header) == OK;
+    const bool the_row_committed = binding->commit_staged(&send, header) == OK;
     CHECK(the_row_committed);
     NETW_CHECK_EQ(log.count(StringName("applied")), 1);
 

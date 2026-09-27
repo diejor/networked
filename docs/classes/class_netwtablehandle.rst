@@ -67,22 +67,11 @@ A column comes back as the packed array it was written as, in row order.
         for row in pos.size():
             multimesh.set_instance_transform(row, Transform3D(Basis(), pos[row]))
 
-\ :ref:`read_births()<class_NetwTableHandle_method_read_births>` and :ref:`read_deaths()<class_NetwTableHandle_method_read_deaths>` name the routes the latest wave added and removed. A reader that keeps an object per row steps them from those two rather than diffing the table.
+\ :ref:`read_births()<class_NetwTableHandle_method_read_births>` and :ref:`read_deaths()<class_NetwTableHandle_method_read_deaths>` name the routes the latest wave added and removed, which is useful to keep one node per row.
 
 \ **Saving**\ 
 
-\ :ref:`save()<class_NetwTableHandle_method_save>` stores the committed rows in a :ref:`NetwDatabase<class_NetwDatabase>` under a key, and :ref:`load()<class_NetwTableHandle_method_load>` replaces the whole table with them. Routes are new in every session, so the game names each row with a stable id and pairs the ids with the routes a load hands back.
-
-\ :ref:`load()<class_NetwTableHandle_method_load>` settles with one of these. The row saved as ``ids[i]`` now lives at ``routes[i]``.
-
-.. code:: text
-
-    Dictionary
-    ┠╴error    int                @GlobalScope.Error. Check it before reading anything else
-    ┠╴detail   String             what went wrong, for a person to read. Empty when error is OK
-    ┠╴found    bool               whether a snapshot was stored under the key
-    ┠╴ids      PackedStringArray  the id each loaded row was saved under
-    ┖╴routes   PackedInt64Array   the route each loaded row now lives at
+\ :ref:`save()<class_NetwTableHandle_method_save>` stores the committed rows in a :ref:`NetwDatabase<class_NetwDatabase>` under a key, and :ref:`load()<class_NetwTableHandle_method_load>` replaces the table with them. Routes change between sessions, so give each row a stable id when saving.
 
 ::
 
@@ -95,6 +84,7 @@ A column comes back as the packed array it was written as, in row order.
             show_load_error(loaded.error)
             return
         if loaded.found:
+            # the row saved as ids[i] now lives at routes[i]
             rebuild_mob_index(loaded.ids, loaded.routes)
 
 .. rst-class:: classref-reftable-group
@@ -168,7 +158,7 @@ Signals
 
 **received**\ (\ tick\: :godot:`int`\ ) :ref:`🔗<class_NetwTableHandle_signal_received>`
 
-Emitted once for each wave this table produced or an arriving frame touched. ``tick`` is the one the commit stamped, so several commits inside one tick collapse to the last.
+Emitted when this table is committed locally or receives data from a peer. ``tick`` is the tick of the commit.
 
 .. rst-class:: classref-section-separator
 
@@ -189,7 +179,7 @@ Property Descriptions
 
 - :godot:`bool` **get_is_valid**\ (\ )
 
-Whether the session this handle names is still alive. A handle outliving its session answers every other member empty and every verb :godot:`@GlobalScope.ERR_DOES_NOT_EXIST <@GlobalScope#class_@GlobalScope_constant_ERR_DOES_NOT_EXIST>`.
+Whether the session this handle belongs to still exists. Once it is gone, every method returns :godot:`@GlobalScope.ERR_DOES_NOT_EXIST <@GlobalScope#class_@GlobalScope_constant_ERR_DOES_NOT_EXIST>`.
 
 .. rst-class:: classref-item-separator
 
@@ -206,7 +196,7 @@ Whether the session this handle names is still alive. A handle outliving its ses
 - |void| **set_reliable**\ (\ value\: :godot:`bool`\ )
 - :godot:`bool` **get_reliable**\ (\ )
 
-Whether this table's frames are sent reliably. Leave it ``false`` for state that the next wave replaces anyway, and set it for a table whose rows a peer cannot afford to miss.
+Whether this table's commits are sent reliably. Set it for a table that changes rarely.
 
 .. rst-class:: classref-item-separator
 
@@ -270,7 +260,7 @@ The tick carried by the latest committed wave, or ``-1`` before the first commit
 
 - :godot:`int` **get_wire_hash**\ (\ )
 
-The sealed schema hash this table carries on the wire. Two peers that bound different sets of tables number them differently, and this is what catches that.
+A hash of this table's schema, sent with its data so peers can detect a schema mismatch.
 
 .. rst-class:: classref-section-separator
 
@@ -287,7 +277,7 @@ Method Descriptions
 
 :godot:`Error <@GlobalScope#enum_@globalscope_Error>` **commit**\ (\ ) :ref:`🔗<class_NetwTableHandle_method_commit>`
 
-Fixes the columns as the applied state readers compare against, stamped with the session's own tick.
+Applies the staged routes and columns, stamped with the session's tick.
 
 .. code:: text
 
@@ -308,13 +298,30 @@ Fixes the columns as the applied state readers compare against, stamped with the
 
 :ref:`NetwPromise<class_NetwPromise>` **load**\ (\ database\: :ref:`NetwDatabase<class_NetwDatabase>`, key\: :godot:`StringName`\ ) :ref:`🔗<class_NetwTableHandle_method_load>`
 
-Replaces every row of the table with the snapshot stored under ``key`` in ``database``, and settles with the load reply drawn in this class's description. Each loaded row gets a new route. :ref:`NetwMultiplayer.table_load()<class_NetwMultiplayer_method_table_load>`.
+Replaces every row of the table with the rows saved under ``key`` in ``database``, and settles with a :godot:`Dictionary`. Each loaded row gets a new route. On any error the table is left unchanged.
 
-The table is untouched unless the whole snapshot is applied. A missing snapshot answers ``found`` false, and a snapshot that does not decode against the schema answers its error.
+.. code:: text
 
-A :ref:`commit()<class_NetwTableHandle_method_commit>` while the snapshot is being read makes the load answer :godot:`@GlobalScope.ERR_BUSY <@GlobalScope#class_@GlobalScope_constant_ERR_BUSY>`, so a load never overwrites rows written after it started.
-
-Routes an earlier load handed out are released once no other table holds them. Routes the game wrote itself are never released by a load.
+    Dictionary
+    ┠╴error    Error              @GlobalScope.Error. Check it before reading anything else
+    │ ┠╴OK                     the snapshot was applied, or none is stored
+    │ ┠╴ERR_UNAUTHORIZED       this peer is not the server
+    │ ┠╴ERR_DOES_NOT_EXIST     the table and the database belong to different
+    │ │                        sessions, or the table's schema is not sealed
+    │ ┠╴ERR_INVALID_PARAMETER  key is empty
+    │ ┠╴ERR_UNCONFIGURED       the database is not open
+    │ ┠╴ERR_BUSY               a commit landed while the snapshot was read, or the
+    │ │                        database is full
+    │ ┠╴ERR_FILE_UNRECOGNIZED  the snapshot is not in this library's format, or
+    │ │                        carries a newer storage version than the schema
+    │ ┠╴ERR_INVALID_DATA       the snapshot does not match the schema
+    │ ┠╴ERR_UNAVAILABLE        the database closed while
+    │ │                        the snapshot was read
+    │ ┖╴backend-defined        the backend could not read the snapshot
+    ┠╴detail   String             what went wrong, for a person to read. Empty when error is OK
+    ┠╴found    bool               whether a snapshot was stored under the key
+    ┠╴ids      PackedStringArray  the id each loaded row was saved under
+    ┖╴routes   PackedInt64Array   the route each loaded row now lives at
 
 \ **Server Only.**
 
@@ -412,18 +419,23 @@ The routes stored in this table, in row order.
 
 :ref:`NetwPromise<class_NetwPromise>` **save**\ (\ database\: :ref:`NetwDatabase<class_NetwDatabase>`, key\: :godot:`StringName`, ids\: :godot:`PackedStringArray`\ ) :ref:`🔗<class_NetwTableHandle_method_save>`
 
-Stores the committed rows as one snapshot under ``key`` in ``database``, and settles with an :godot:`@GlobalScope.Error <@GlobalScope#enum_@globalscope_Error>`. ``ids`` names each row in the order of :ref:`read_routes()<class_NetwTableHandle_method_read_routes>`. The rows are copied before this returns, so a later :ref:`commit()<class_NetwTableHandle_method_commit>` does not change what is written. :ref:`NetwMultiplayer.table_save()<class_NetwMultiplayer_method_table_save>`.
-
-A snapshot of zero rows is stored, and loading it empties the table. Values are stored at full precision whatever the column's wire quantizer.
+Stores the committed rows under ``key`` in ``database``, and settles with an :godot:`@GlobalScope.Error <@GlobalScope#enum_@globalscope_Error>`. ``ids`` names each row in the order of :ref:`read_routes()<class_NetwTableHandle_method_read_routes>`. Values are saved at full precision, ignoring the column's quantizer.
 
 .. code:: text
 
     Error
     ┠╴OK                     the snapshot was stored
-    ┠╴ERR_UNAUTHORIZED       this peer holds no session authority
-    ┠╴ERR_INVALID_DATA       an id is empty or repeated, or the ids and rows disagree in count
+    ┠╴ERR_UNAUTHORIZED       this peer is not the server
+    ┠╴ERR_INVALID_DATA       an id is empty or repeated, the ids and rows disagree in
+    │                        count, or the connection answered no outcome
     ┠╴ERR_INVALID_PARAMETER  the key is empty, or the schema has a COLUMN_ENTITY column
-    ┖╴ERR_DOES_NOT_EXIST     the table and the database belong to different sessions
+    ┠╴ERR_DOES_NOT_EXIST     the table and the database belong to different sessions,
+    │                        or the table's schema is not sealed
+    ┠╴ERR_UNCONFIGURED       the database is not open
+    ┠╴ERR_BUSY               the database already holds 4096 unsettled operations
+    ┠╴ERR_UNAVAILABLE        the connection implements no _write_batch, or the
+    │                        database closed before the snapshot settled
+    ┖╴backend-defined        the backend refused or could not complete the write
 
 \ **Server Only.**
 
@@ -458,7 +470,7 @@ Stages ``data`` for ``column``. A column is addressed by the index its :ref:`Net
 
 :godot:`Error <@GlobalScope#enum_@globalscope_Error>` **write_routes**\ (\ routes\: :godot:`PackedInt64Array`\ ) :ref:`🔗<class_NetwTableHandle_method_write_routes>`
 
-Stages ``routes`` as this table's row identity column. Its size is how many elements every other staged column owes.
+Stages ``routes`` as this table's rows. Every other staged column must hold one element per route, times its stride.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

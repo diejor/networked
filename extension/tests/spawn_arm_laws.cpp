@@ -27,10 +27,7 @@ using netw::NetwPlayer;
 using netw::spawn::Record;
 using netw_test::CallLog;
 
-Ref<NetwPlayer> seated(
-    const Ref<NetwMultiplayer> &p_core,
-    int64_t p_peer
-) {
+Ref<NetwPlayer> seated(const Ref<NetwMultiplayer> &p_core, int64_t p_peer) {
     Ref<NetwPlayer> owner;
     owner.instantiate();
     p_core->player_adopt(p_peer, owner);
@@ -38,10 +35,7 @@ Ref<NetwPlayer> seated(
     return owner;
 }
 
-Ref<NetwPlayer> a_stranger(
-    const Ref<NetwMultiplayer> &p_core,
-    int64_t p_peer
-) {
+Ref<NetwPlayer> a_stranger(const Ref<NetwMultiplayer> &p_core, int64_t p_peer) {
     Ref<NetwPlayer> stranger;
     stranger.instantiate();
     stranger->bind_to(p_core.ptr(), p_peer);
@@ -159,12 +153,7 @@ TEST_CASE(
     node->set_name("Crate");
 
     Record scratch;
-    CHECK(core->spawn_arm_identity(
-                  nullptr,
-                  node,
-                  Ref<NetwPlayer>(),
-                  Callable()
-    )
+    CHECK(core->spawn_arm_identity(nullptr, node, Ref<NetwPlayer>(), Callable())
               .is_null());
     CHECK(core->spawn_arm_identity(
                   &scratch,
@@ -173,13 +162,10 @@ TEST_CASE(
                   Callable()
     )
               .is_null());
-    CHECK(core->spawn_arm_identity(
-                  &scratch,
-                  node,
-                  Ref<NetwPlayer>(),
-                  Callable()
-    )
-              .is_valid());
+    CHECK(
+        core->spawn_arm_identity(&scratch, node, Ref<NetwPlayer>(), Callable())
+            .is_valid()
+    );
 
     memdelete(node);
 }

@@ -137,12 +137,18 @@ TEST_CASE(
     CHECK(host->scene_watches(arena, first));
     CHECK(host->scene_watches(arena, second));
 
-    host->scene_apply_viewers(head_for(host, route, 6), roster({uint64_t(one)}));
+    host->scene_apply_viewers(
+        head_for(host, route, 6),
+        roster({uint64_t(one)})
+    );
 
     CHECK(host->scene_watches(arena, first));
     CHECK(host->scene_watches(arena, second));
 
-    host->scene_apply_viewers(head_for(host, route, 8), roster({uint64_t(one)}));
+    host->scene_apply_viewers(
+        head_for(host, route, 8),
+        roster({uint64_t(one)})
+    );
 
     CHECK(host->scene_watches(arena, first));
     CHECK_FALSE(host->scene_watches(arena, second));

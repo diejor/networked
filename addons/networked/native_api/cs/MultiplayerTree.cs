@@ -6,27 +6,13 @@ using Godot.NativeInterop;
 namespace Networked;
 
 /// <summary>
-/// The node one session's branch is rooted at.
+/// The node one <see cref="Node.Multiplayer"/> branch is rooted at.
 /// </summary>
 /// <remarks>
-/// A tree owns one <see cref="NetwMultiplayer"/> and installs it on its own
+/// A tree owns one <see cref="MultiplayerApi"/> and installs it on its own
 /// branch of the <see cref="SceneTree"/>, so every descendant returns
-/// <see cref="Netw.Of"/> with that session and two trees in one
-/// <see cref="SceneTree"/> are two independent sessions. It carries the exports
-/// that configure the session and nothing else: the state, the role, the roster
-/// and the service registry all belong to <see cref="MultiplayerTree.Api"/>.
-/// Assign a <see cref="MultiplayerPeer"/> to start a session. Assigning one
-/// while configuration is still being declared fails. Use
-/// <see cref="Netw.Connection"/> or wait until configuration is complete.
-/// <see cref="MultiplayerTree.AppId"/>,
-/// <see cref="MultiplayerTree.DesiredRole"/> and
-/// <see cref="MultiplayerTree.LinkConditions"/> are the session's whole
-/// FALLBACK, used when no node declared one through
-/// <see cref="Netw.ConfigureSession"/>. An explicit declaration replaces them
-/// whole: no field is merged, and any non-default export it discards is named
-/// once in a warning. Once the session has consumed its configuration these
-/// exports are immutable, and a setter reports the late write and keeps its old
-/// value.
+/// <see cref="Node.Multiplayer"/> with that session and two trees in one
+/// <see cref="SceneTree"/> are two independent sessions.
 /// <code>
 /// tree.peer_class = &amp;"ENetMultiplayerPeer"
 /// tree.transport_settings = { port = 21253 }
@@ -50,13 +36,6 @@ namespace Networked;
 ///             tree.api.multiplayer_peer = peer,
 /// )
 /// </code>
-/// <para>
-/// The tree brings itself up in exactly two cases, both of which have no caller
-/// to return to: a headless build with
-/// <see cref="MultiplayerTree.AutoHostHeadless"/> set, and a debug build
-/// carrying a <see cref="MultiplayerTree.DebugJoin"/>. Everything else is the
-/// game's own composition.
-/// </para>
 /// </remarks>
 public sealed class MultiplayerTree : NetwObject
 {
@@ -82,12 +61,7 @@ public sealed class MultiplayerTree : NetwObject
 
     /// <summary>
     /// The class of peer this tree brings itself up with, such as
-    /// <c>&amp;"ENetMultiplayerPeer"</c>. Passed to
-    /// <see cref="NetwConnectHandle.CreatePeer"/>, so a tree naming no peer
-    /// class has nothing to bring itself up with and reports a configuration
-    /// warning. Read <see cref="NetwConnectHandle.Transports"/> for the names a
-    /// running build has registered. It does not constrain a peer the game
-    /// assigns itself.
+    /// <c>&amp;"ENetMultiplayerPeer"</c>.
     /// </summary>
     public StringName PeerClass
     {
@@ -127,13 +101,7 @@ public sealed class MultiplayerTree : NetwObject
 
     /// <summary>
     /// The settings <see cref="MultiplayerTree.PeerClass"/>'s transport is
-    /// created with, such as <c>{ port = 21253 }</c> for an ENet server. Passed
-    /// to <see cref="NetwConnectHandle.CreatePeer"/> beside
-    /// <see cref="MultiplayerTree.PeerClass"/>, and carried as the advert, so
-    /// the <c>name</c>, <c>max_players</c> and <c>visibility</c> keys ride here
-    /// alongside the transport's own. Read the <c>host_settings</c> entry of
-    /// <see cref="NetwConnectHandle.Transport"/> for the keys a given peer
-    /// class accepts.
+    /// created with, such as <c>{ port = 21253 }</c> for an ENet server.
     /// </summary>
     public Godot.Collections.Dictionary TransportSettings
     {
@@ -173,12 +141,7 @@ public sealed class MultiplayerTree : NetwObject
             1089193088UL);
 
     /// <summary>
-    /// Latency and loss to simulate on this tree's peer. Carried in the tree's
-    /// session fallback as <see cref="NetwSessionConfig.LinkConditions"/>,
-    /// which is the one home the session reads when it wraps an assigned peer.
-    /// A release export never wraps at all, because
-    /// <see cref="NetwLinkConditions.WrapPeer"/> gates the impairment itself,
-    /// so authoring one here carries no shipped cost.
+    /// Latency and loss to simulate on this tree's peer.
     /// </summary>
     public NetwLinkConditions LinkConditions
     {
@@ -218,10 +181,7 @@ public sealed class MultiplayerTree : NetwObject
     /// <summary>
     /// On a headless build, hosts from <see cref="MultiplayerTree.PeerClass"/>
     /// and <see cref="MultiplayerTree.TransportSettings"/> without waiting to
-    /// be asked. Only a <see cref="NetwMultiplayer.RoleEnum.ListenServer"/> or
-    /// <see cref="NetwMultiplayer.RoleEnum.DedicatedServer"/> tree does this,
-    /// and only one naming a <see cref="MultiplayerTree.PeerClass"/>, so a tree
-    /// nobody configured never opens a socket on its own.
+    /// be asked.
     /// </summary>
     public bool AutoHostHeadless
     {
@@ -253,12 +213,7 @@ public sealed class MultiplayerTree : NetwObject
         NetwApi.MethodBind("MultiplayerTree", "set_desired_role", 3233627807UL);
 
     /// <summary>
-    /// The <see cref="NetwMultiplayer.RoleEnum"/> this tree intends to play,
-    /// carried in the tree's session fallback as
-    /// <see cref="NetwSessionConfig.DesiredRole"/>. Configured intent rather
-    /// than live state: the role a session is actually running is
-    /// <see cref="NetwMultiplayer.Role"/>, and it is assigned when the session
-    /// comes online.
+    /// The <see cref="NetwMultiplayer.RoleEnum"/> this tree intends to play.
     /// </summary>
     public NetwMultiplayer.RoleEnum DesiredRole
     {
@@ -292,17 +247,7 @@ public sealed class MultiplayerTree : NetwObject
     /// <summary>
     /// A game-build tag that gates admission, baked into every build. A joining
     /// peer whose tag differs is rejected during the auth handshake before it
-    /// reaches <see cref="MultiplayerApi.GetPeers"/>, so an incompatible build
-    /// never corrupts a session. The tag folds this name together with the wire
-    /// identity the build speaks, so no value turns the gate off: leaving this
-    /// empty still rejects a peer whose format version or channel table
-    /// differs, and naming it adds the game's own compatibility on top. Bump it
-    /// when the game's own payloads break in a way the wire identity cannot
-    /// see. This export is part of the tree's session FALLBACK, not a live
-    /// setting. It is immutable once the session has consumed its
-    /// configuration. The tag also scopes room codes for signaled transports.
-    /// Builds with different tags do not share rendezvous rooms. Changing the
-    /// tag invalidates room codes created with the previous value.
+    /// reaches the <see cref="MultiplayerApi"/>.
     /// </summary>
     public StringName AppId
     {
@@ -331,12 +276,7 @@ public sealed class MultiplayerTree : NetwObject
         NetwApi.MethodBind("MultiplayerTree", "set_debug_join", 2720545769UL);
 
     /// <summary>
-    /// An auto-connect applied on play, in debug builds only. When set, the
-    /// tree hosts on ready under the username and join arguments it carries,
-    /// skipping the server browser. A release build strips this path because
-    /// <see cref="OS.HasFeature"/> returns <c>false</c> for <c>"debug"</c>,
-    /// which is also what keeps <see cref="MultiplayerTree.LinkConditions"/>
-    /// free of a release cost.
+    /// An auto-connect applied on play, in debug builds only.
     /// </summary>
     public DebugJoinConfig DebugJoin
     {
@@ -369,10 +309,7 @@ public sealed class MultiplayerTree : NetwObject
 
     /// <summary>
     /// An optional <see cref="NetwMultiplayer"/> implementation script, passed
-    /// to <see cref="NetwMultiplayer.Make"/>. The one door a game replaces this
-    /// session's stages through. Immutable once the tree is inside the
-    /// <see cref="SceneTree"/>, so assign it before adding a programmatically
-    /// created tree.
+    /// to <see cref="NetwMultiplayer.Make"/>.
     /// </summary>
     public Script ApiScript
     {
@@ -401,11 +338,7 @@ public sealed class MultiplayerTree : NetwObject
 
     /// <summary>
     /// The <see cref="NetwMultiplayer"/> this tree owns and installs on its
-    /// branch. Built once when the tree is constructed and never replaced, so a
-    /// reference taken from it stays valid for the tree's whole life. A backend
-    /// bringing its own transport swaps <see cref="NetwMultiplayer.Inner"/>
-    /// rather than this. A tree whose installed API is not a
-    /// <see cref="NetwMultiplayer"/> is unrepresentable.
+    /// branch.
     /// </summary>
     public NetwMultiplayer Api
     {
@@ -426,13 +359,7 @@ public sealed class MultiplayerTree : NetwObject
     /// <summary>
     /// Duplicates this tree as a
     /// <see cref="NetwMultiplayer.RoleEnum.DedicatedServer"/> sibling named
-    /// <c>Server</c> and adds it beside this one. Node work only. The sibling
-    /// is raised with <see cref="MultiplayerTree.AutoHostHeadless"/> cleared
-    /// and returned, and bringing it online is an ordinary peer assignment on
-    /// its own <see cref="MultiplayerTree.Api"/>, which is what keeps one
-    /// bring-up from being written twice. Returns <c>null</c> when this tree
-    /// has no parent to add a sibling to. The sibling is freed when this tree's
-    /// session ends.
+    /// <c>Server</c> and adds it beside this one.
     /// <code>
     /// var server := tree.raise_embedded_server()
     /// var peer := ENetMultiplayerPeer.new()

@@ -89,8 +89,8 @@ public sealed class NetwInterestHandle : NetwRefCounted
     /// <see cref="NetwInterestHandle.OnPerceptionPolicy"/> already set, which
     /// are also the door for the <c>CUSTOM</c> rows because those need a
     /// callback. The declaration is safe in <c>Object._init</c> on every peer.
-    /// Only server authority mutates the live <see cref="NetwInterestLayer"/>
-    /// entity set.
+    /// Only the server changes the live <see cref="NetwInterestLayer"/> entity
+    /// set.
     /// </summary>
     public NetwInterestHandle Join(
         StringName layerId,
@@ -240,8 +240,7 @@ public sealed class NetwInterestHandle : NetwRefCounted
     /// <see cref="NetwMultiplayer.LeavePolicy"/>, and returns this handle.
     /// <see cref="NetwMultiplayer.LeavePolicy.Custom"/> requires
     /// <paramref name="customCallback"/>, called with <c>(peer_id,
-    /// layer_id)</c> on server authority. Other policies reject a callback so
-    /// configuration mistakes fail at declaration time.
+    /// layer_id)</c> on the server. Other policies reject a callback.
     /// </summary>
     public NetwInterestHandle OnLeavePolicy(
         StringName layerId,

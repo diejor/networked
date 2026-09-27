@@ -59,7 +59,10 @@ TEST_CASE(
     NETW_CHECK_EQ(int(door->get_is_valid()), 1);
     NETW_CHECK_EQ(door->get_wire_hash(), core->table_get_wire_hash(table));
     NETW_CHECK_EQ(door->get_tick(), core->table_get_tick(table));
-    NETW_CHECK_EQ(door->read_routes().size(), core->table_read_routes(table).size());
+    NETW_CHECK_EQ(
+        door->read_routes().size(),
+        core->table_read_routes(table).size()
+    );
 
     NETW_CHECK_EQ(int(door->get_reliable()), 0);
     door->set_reliable(true);

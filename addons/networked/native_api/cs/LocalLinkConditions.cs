@@ -9,16 +9,12 @@ namespace Networked;
 /// Declarative inbound impairment for one loopback link.
 /// </summary>
 /// <remarks>
-/// One spec describes a link in human units and feeds the simulator directly,
-/// so there is no compile step. <see cref="LocalLinkConditions.LatencyMs"/>,
-/// <see cref="LocalLinkConditions.JitterMs"/> and
-/// <see cref="LocalLinkConditions.PacketLoss"/> are read at receive time and
-/// never quantized to the physics rate, which is what keeps a latency shorter
-/// than one frame expressible.
+/// Describes a link condition in human units and feeds the simulator directly.
+/// Used for tests using [class LocalLoopbackSession].
 /// <code>
 /// var conditions := LocalLinkConditions.wifi()
 /// conditions.packet_loss = 0.05
-/// session.set_link_conditions(server, conditions)
+/// loopback_session.set_link_conditions(server, conditions)
 /// </code>
 /// <para>
 /// <see cref="LocalLinkConditions.PacketLoss"/> drops an unreliable packet

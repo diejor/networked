@@ -6,7 +6,7 @@
 	<description>
 		A layer combines [member entities], [member viewers] and [member policy] into one per-peer verdict. It holds no state of its own: every read and every mutation lands in the session's interest engine, so two handles on the same [member layer_id] are the same layer, and a layer outlives nothing the session does not.
 		Membership never crosses the wire. The committed rows gate the spawn and synchronization pipelines directly, and a client learns only the attribution for its own row.
-		Use [signal interest_enter] and [signal interest_exit] for server authority. Use [signal entity_visible] and [signal entity_hidden] for local visibility. [signal NetwEntity.observer_entered] reports observers of one entity.
+		Use [signal interest_enter] and [signal interest_exit] on the server. Use [signal entity_visible] and [signal entity_hidden] for local visibility. [signal NetwEntity.observer_entered] reports observers of one entity.
 		[codeblock]
 		# Server: decide who can see the target.
 		var sight := server_tree.interest.layer(&amp;"sight")

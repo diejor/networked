@@ -410,10 +410,7 @@ void NetwSimulationHandle::_bind_methods() {
         "set_release_on_rest",
         "get_release_on_rest"
     );
-    ClassDB::bind_method(
-        D_METHOD("get_step"),
-        &NetwSimulationHandle::get_step
-    );
+    ClassDB::bind_method(D_METHOD("get_step"), &NetwSimulationHandle::get_step);
     ClassDB::bind_method(
         D_METHOD("set_step", "value"),
         &NetwSimulationHandle::set_step
@@ -423,10 +420,7 @@ void NetwSimulationHandle::_bind_methods() {
         "set_step",
         "get_step"
     );
-    ClassDB::bind_method(
-        D_METHOD("get_mode"),
-        &NetwSimulationHandle::get_mode
-    );
+    ClassDB::bind_method(D_METHOD("get_mode"), &NetwSimulationHandle::get_mode);
     ADD_PROPERTY(
         PropertyInfo(
             Variant::INT,

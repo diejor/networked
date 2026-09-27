@@ -2,8 +2,8 @@
 
 #include <cstdint>
 
-#include "godot/variant.hpp"
 #include "godot/local_vector.hpp"
+#include "godot/variant.hpp"
 #include "netw/repl/window_ring.hpp"
 #include "netw/wire/code_row.hpp"
 #include "netw/wire/plan.hpp"

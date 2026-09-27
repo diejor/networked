@@ -12,21 +12,21 @@ NetwDatabaseConfig
 
 **Inherits:** :godot:`Resource`
 
-What a named database is made of, written once at :ref:`Netw.configure_database()<class_Netw_method_configure_database>`.
+The configuration of a named :ref:`NetwDatabase<class_NetwDatabase>`, returned by :ref:`Netw.configure_database()<class_Netw_method_configure_database>`.
 
 .. rst-class:: classref-introduction-group
 
 Description
 -----------
 
-A config names the storage a database opens. It carries no runtime state, so the same config Resource can be saved to disk and shared between sessions.
+Sets the :ref:`NetwDatabaseBackend<class_NetwDatabaseBackend>` a database opens.
 
 ::
 
     func _ready() -> void:
         Netw.configure_database(self, &"saves").backend(preload("res://save_backend.tres"))
 
-\ Declaring the same name twice in one session with a different backend is refused, because two declarations of one name would disagree about where saves live.
+\ Configuring the same name twice in one session with a different backend is refused.
 
 .. rst-class:: classref-reftable-group
 
@@ -72,7 +72,7 @@ Property Descriptions
 - |void| **set_backend**\ (\ value\: :ref:`NetwDatabaseBackend<class_NetwDatabaseBackend>`\ )
 - :ref:`NetwDatabaseBackend<class_NetwDatabaseBackend>` **get_backend**\ (\ )
 
-The storage this database opens, as :ref:`backend()<class_NetwDatabaseConfig_method_backend>` left it.
+The storage this database opens, as :ref:`backend()<class_NetwDatabaseConfig_method_backend>` set it.
 
 .. rst-class:: classref-section-separator
 
@@ -89,7 +89,7 @@ Method Descriptions
 
 :ref:`NetwDatabaseConfig<class_NetwDatabaseConfig>` **backend**\ (\ backend\: :ref:`NetwDatabaseBackend<class_NetwDatabaseBackend>`\ ) :ref:`🔗<class_NetwDatabaseConfig_method_backend>`
 
-Sets the storage this database opens, and returns this config so the call chains. A database with no backend refuses :ref:`NetwDatabase.open()<class_NetwDatabase_method_open>`.
+Sets the storage this database opens, and returns this config.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

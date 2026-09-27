@@ -56,7 +56,7 @@ func add_car(arena: NetwSceneHandle, player: NetwPlayer) -> void:
 			arena.root.spawn_car,
 			grid_slot % 2,
 			slot,
-		)
+		),
 	)
 
 

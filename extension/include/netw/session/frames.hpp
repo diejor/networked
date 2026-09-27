@@ -123,7 +123,10 @@ struct SceneRequest {
             netw::wire::varuint(5)
         ),
         netw::wire::field<&SceneRequest::path>("path", netw::wire::string()),
-        netw::wire::field<&SceneRequest::scope>("scope", netw::wire::svarint(2)),
+        netw::wire::field<&SceneRequest::scope>(
+            "scope",
+            netw::wire::svarint(2)
+        ),
         netw::wire::field<&SceneRequest::source_route>(
             "source_route",
             netw::wire::svarint(4)

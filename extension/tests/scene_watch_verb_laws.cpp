@@ -135,10 +135,7 @@ TEST_CASE(
         int(core->scene_watch(arena.handle, 0)),
         int(ERR_INVALID_PARAMETER)
     );
-    NETW_CHECK_EQ(
-        int(core->scene_watch(RID(), peer)),
-        int(ERR_DOES_NOT_EXIST)
-    );
+    NETW_CHECK_EQ(int(core->scene_watch(RID(), peer)), int(ERR_DOES_NOT_EXIST));
     CHECK_FALSE(engine.layer_has_viewer(arena_layer, peer));
 
     NETW_CHECK_EQ(int(core->scene_watch(arena.handle, peer)), int(OK));
@@ -204,10 +201,7 @@ TEST_CASE(
     CHECK(core->scene_unwatch(arena.handle, peer));
 
     NETW_CHECK_EQ(int(core->scene_subscribes(arena.handle, peer)), 0);
-    NETW_CHECK_EQ(
-        int(core->interest_plane().layer_has_viewer(layer, peer)),
-        0
-    );
+    NETW_CHECK_EQ(int(core->interest_plane().layer_has_viewer(layer, peer)), 0);
     NETW_CHECK_EQ(int(core->scene_get_viewers(arena.handle).size()), 0);
 
     memdelete(root);

@@ -87,7 +87,7 @@
 			Whether a [NetwClockConfig] has settled on this session, which is what [method Netw.configure_clock] declares. A component that steps on the tick reads this before it trusts [member tick].
 		</member>
 		<member name="is_synchronized" type="bool" setter="" getter="get_is_synchronized" default="false">
-			Whether this peer's clock has agreed a tick with server authority. A server reads [code]true[/code] because it is the authority, and a client reads [code]false[/code] until the first pong lands. [method NetwMultiplayer.clock_is_synchronized].
+			Whether this peer's tick agrees with the server. Always [code]true[/code] on the server, and [code]false[/code] on a client until the first pong lands. [method NetwMultiplayer.clock_is_synchronized].
 		</member>
 		<member name="physics_factor" type="float" setter="" getter="get_physics_factor" default="1.0">
 			Physics frames per tick, unrounded. A per-frame quantity such as a velocity is scaled by this to cover one tick's worth of ground. [method NetwMultiplayer.clock_get_physics_factor].

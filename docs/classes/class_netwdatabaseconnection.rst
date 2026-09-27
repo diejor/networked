@@ -14,22 +14,20 @@ NetwDatabaseConnection
 
 **Inherited By:** :ref:`NakamaDatabase.Connection<class_NakamaDatabase_Connection>`
 
-One open slot's storage, and the only object that performs storage I/O.
+Reads and writes the records of one open slot.
 
 .. rst-class:: classref-introduction-group
 
 Description
 -----------
 
-A backend describes where saves live. A connection is one open slot of that storage, and it is what a game subclasses to reach storage the shipped backends do not cover. Opening the same backend twice makes two connections, so nothing a connection holds is shared with the next one.
+Subclass it, together with a :ref:`NetwDatabaseBackend<class_NetwDatabaseBackend>` whose :ref:`NetwDatabaseBackend._open()<class_NetwDatabaseBackend_private_method__open>` returns it, to store records somewhere the shipped backends do not.
 
-The connection performs four acts. It reads one address, it scans a page of them, it applies a batch of complete replacements and erasures, and it closes. Every other verb the database publishes is built from those, including patch, which the core performs as an ordered read, merge and replace.
-
-Every method answers a :ref:`NetwPromise<class_NetwPromise>`. A method this connection does not implement rejects with :godot:`@GlobalScope.ERR_UNAVAILABLE <@GlobalScope#class_@GlobalScope_constant_ERR_UNAVAILABLE>`, and never a successful empty answer.
+Implement :ref:`_read()<class_NetwDatabaseConnection_private_method__read>`, :ref:`_scan()<class_NetwDatabaseConnection_private_method__scan>`, :ref:`_write_batch()<class_NetwDatabaseConnection_private_method__write_batch>` and :ref:`_close()<class_NetwDatabaseConnection_private_method__close>`. :ref:`NetwDatabase<class_NetwDatabase>` builds every other operation from these. Each returns a :ref:`NetwPromise<class_NetwPromise>`, and a method left unimplemented rejects with :godot:`@GlobalScope.ERR_UNAVAILABLE <@GlobalScope#class_@GlobalScope_constant_ERR_UNAVAILABLE>`.
 
 \ **Address**\ 
 
-Every read, scan and operation names what it is about with the same three fields.
+Reads, scans and writes name a record with this :godot:`Dictionary`.
 
 .. code:: text
 
@@ -38,60 +36,7 @@ Every read, scan and operation names what it is about with the same three fields
     ┠╴schema_name   String  the schema the record belongs to
     ┖╴key           String  the record's durable id
 
-\ **Reading**\ 
-
-\ :ref:`_read()<class_NetwDatabaseConnection_private_method__read>` answers a reply that separates absence from failure. A record that is not there is ``found`` false and ``error`` OK. A record the storage could not be asked about carries the error, and the core never reads it as absence.
-
-.. code:: text
-
-    Dictionary
-    ┠╴error      int         @GlobalScope.Error
-    ┠╴detail     String      what went wrong, for a person to read
-    ┠╴found      bool
-    ┖╴envelope   Dictionary  the stored record, only when found
-
-\ **Scanning**\ 
-
-\ :ref:`_scan()<class_NetwDatabaseConnection_private_method__scan>` takes a request and answers a page. A page shorter than ``limit`` with a nonempty ``cursor`` is not exhaustion. The caller passes that cursor back to continue.
-
-.. code:: text
-
-    Dictionary                 the request
-    ┠╴schema_name   String
-    ┠╴kind          int
-    ┠╴filter        Dictionary
-    ┠╴cursor        String      empty on the first page
-    ┖╴limit         int
-
-    Dictionary                 the reply
-    ┠╴error     int
-    ┠╴detail    String
-    ┠╴records   Array[Dictionary]
-    │           ┠╴key        String
-    │           ┖╴envelope   Dictionary
-    ┖╴cursor    String      empty when the scan is exhausted
-
-\ **Writing**\ 
-
-\ :ref:`_write_batch()<class_NetwDatabaseConnection_private_method__write_batch>` applies operations in the order it is given them and answers one outcome per operation, in that same order. A connection that answers a different number of outcomes fails the whole batch.
-
-.. code:: text
-
-    Array[Dictionary]          the operations
-    ┖╴operation
-      ┠╴kind       String      "replace" or "erase"
-      ┠╴address    Dictionary
-      ┖╴envelope   Dictionary  replace only
-
-    Dictionary                 the reply
-    ┠╴error       int
-    ┠╴detail      String
-    ┠╴errors      PackedInt32Array   one @GlobalScope.Error per operation
-    ┖╴uncertain   PackedByteArray    1 where the outcome is unknown
-
-\ An operation is complete replacement or erasure. There is no partial write, because the core has already read and merged anything that needed merging.
-
-A successful outcome means the backing store acknowledged it. Do not report OK for work that has only been queued. When a timeout or a lost link leaves an operation's outcome genuinely unknown, mark it uncertain rather than guessing, and the core will refuse to retry it blindly.
+\ An envelope is a record as :ref:`NetwDatabase<class_NetwDatabase>` hands it to you. Store it as given and return it unchanged.
 
 .. rst-class:: classref-reftable-group
 
@@ -134,7 +79,7 @@ Method Descriptions
 
 :ref:`NetwPromise<class_NetwPromise>` **_close**\ (\ ) |virtual| :ref:`🔗<class_NetwDatabaseConnection_private_method__close>`
 
-Releases this slot. It is called once the database has settled every operation it admitted, so nothing is outstanding when it runs. Closing an already closed connection succeeds.
+Releases this slot. It is called after every pending operation has settled. :ref:`NetwDatabase.close()<class_NetwDatabase_method_close>` does not wait for this promise.
 
 .. rst-class:: classref-item-separator
 
@@ -146,7 +91,15 @@ Releases this slot. It is called once the database has settled every operation i
 
 :ref:`NetwPromise<class_NetwPromise>` **_read**\ (\ address\: :godot:`Dictionary`\ ) |virtual| :ref:`🔗<class_NetwDatabaseConnection_private_method__read>`
 
-Reads the record at ``address`` and resolves the read reply drawn in this class's description. Report a record that is not stored as ``found`` false rather than as an error.
+Reads the record at ``address`` and resolves a reply. A record that is not stored is ``found`` ``false`` with :godot:`@GlobalScope.OK <@GlobalScope#class_@GlobalScope_constant_OK>`. Set ``error`` only when storage could not be read.
+
+.. code:: text
+
+    Dictionary
+    ┠╴error      Error       OK, or why storage could not be asked
+    ┠╴detail     String      a human-readable explanation, empty when error is OK
+    ┠╴found      bool        whether a record is stored at address
+    ┖╴envelope   Dictionary  the envelope last written to address, only when found
 
 .. rst-class:: classref-item-separator
 
@@ -158,7 +111,29 @@ Reads the record at ``address`` and resolves the read reply drawn in this class'
 
 :ref:`NetwPromise<class_NetwPromise>` **_scan**\ (\ request\: :godot:`Dictionary`\ ) |virtual| :ref:`🔗<class_NetwDatabaseConnection_private_method__scan>`
 
-Reads one page of records matching ``request`` and resolves the scan reply drawn in this class's description. Bound the remote work each call performs, and answer a cursor whenever records remain.
+Reads one page of records matching ``request`` and resolves a reply.
+
+.. code:: text
+
+    Dictionary
+    ┠╴schema_name   String      the schema every record in the page belongs to
+    ┠╴kind          int         the address kind, 0 for a record
+    ┠╴filter        Dictionary  the filter the game passed to NetwDatabase.scan
+    ┠╴cursor        String      the previous page's cursor, empty on the first page
+    ┖╴limit         int         the most records one page may carry
+
+\ Return a nonempty ``cursor`` while records remain, even when the page is shorter than ``limit``.
+
+.. code:: text
+
+    Dictionary
+    ┠╴error     Error              OK, or why the page could not be read
+    ┠╴detail    String             a human-readable explanation, empty when error is OK
+    ┠╴records   Array[Dictionary]
+    │ ┖╴record
+    │   ┠╴key        String       the record's durable id
+    │   ┖╴envelope   Dictionary   the envelope last written to it
+    ┖╴cursor    String             where the next page starts, empty when the scan is done
 
 .. rst-class:: classref-item-separator
 
@@ -170,7 +145,27 @@ Reads one page of records matching ``request`` and resolves the scan reply drawn
 
 :ref:`NetwPromise<class_NetwPromise>` **_write_batch**\ (\ operations\: :godot:`Array`\ ) |virtual| :ref:`🔗<class_NetwDatabaseConnection_private_method__write_batch>`
 
-Applies ``operations`` in order and resolves the batch reply drawn in this class's description. The outcome array is parallel to ``operations``.
+Applies ``operations`` in order and resolves one outcome per operation, in the same order. Each one replaces or erases a whole record.
+
+.. code:: text
+
+    Array[Dictionary]
+    ┖╴operation
+      ┠╴kind       String      "replace" or "erase"
+      ┠╴address    Dictionary  the record's address, see the class description
+      ┖╴envelope   Dictionary  the record to store, replace only
+
+\ Report :godot:`@GlobalScope.OK <@GlobalScope#class_@GlobalScope_constant_OK>` only once storage has confirmed the operation. When a timeout leaves the outcome unknown, mark it uncertain.
+
+.. code:: text
+
+    Dictionary
+    ┠╴error       Error              OK, or a failure of the whole batch
+    ┠╴detail      String             a human-readable explanation, empty when error is OK
+    ┠╴errors      PackedInt32Array   one Error per operation
+    ┖╴uncertain   PackedByteArray    1 where the outcome is unknown, 0 otherwise
+
+\ An ``errors`` of the wrong length fails every operation with :godot:`@GlobalScope.ERR_INVALID_DATA <@GlobalScope#class_@GlobalScope_constant_ERR_INVALID_DATA>`.
 
 .. rst-class:: classref-item-separator
 

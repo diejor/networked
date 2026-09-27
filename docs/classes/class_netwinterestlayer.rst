@@ -23,7 +23,7 @@ A layer combines :ref:`entities<class_NetwInterestLayer_property_entities>`, :re
 
 Membership never crosses the wire. The committed rows gate the spawn and synchronization pipelines directly, and a client learns only the attribution for its own row.
 
-Use :ref:`interest_enter<class_NetwInterestLayer_signal_interest_enter>` and :ref:`interest_exit<class_NetwInterestLayer_signal_interest_exit>` for server authority. Use :ref:`entity_visible<class_NetwInterestLayer_signal_entity_visible>` and :ref:`entity_hidden<class_NetwInterestLayer_signal_entity_hidden>` for local visibility. :ref:`NetwEntity.observer_entered<class_NetwEntity_signal_observer_entered>` reports observers of one entity.
+Use :ref:`interest_enter<class_NetwInterestLayer_signal_interest_enter>` and :ref:`interest_exit<class_NetwInterestLayer_signal_interest_exit>` on the server. Use :ref:`entity_visible<class_NetwInterestLayer_signal_entity_visible>` and :ref:`entity_hidden<class_NetwInterestLayer_signal_entity_hidden>` for local visibility. :ref:`NetwEntity.observer_entered<class_NetwEntity_signal_observer_entered>` reports observers of one entity.
 
 ::
 

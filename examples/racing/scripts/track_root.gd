@@ -39,5 +39,7 @@ func grid_slot(slot: int) -> Vector3:
 	var row := slot / GRID_COLUMNS
 	var offset := (GRID_COLUMNS - 1) * GRID_SPACING * 0.5
 	return START_ANCHOR + Vector3(
-		column * GRID_SPACING - offset, 0.0, row * GRID_SPACING
+		column * GRID_SPACING - offset,
+		0.0,
+		row * GRID_SPACING,
 	)

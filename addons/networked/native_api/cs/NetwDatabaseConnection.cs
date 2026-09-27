@@ -6,21 +6,17 @@ using Godot.NativeInterop;
 namespace Networked;
 
 /// <summary>
-/// One open slot's storage, and the only object that performs storage I/O.
+/// Reads and writes the records of one open slot.
 /// </summary>
 /// <remarks>
-/// A backend describes where saves live. A connection is one open slot of that
-/// storage, and it is what a game subclasses to reach storage the shipped
-/// backends do not cover. Opening the same backend twice makes two connections,
-/// so nothing a connection holds is shared with the next one. The connection
-/// performs four acts. It reads one address, it scans a page of them, it
-/// applies a batch of complete replacements and erasures, and it closes. Every
-/// other verb the database publishes is built from those, including patch,
-/// which the core performs as an ordered read, merge and replace. Every method
-/// answers a <see cref="NetwPromise"/>. A method this connection does not
-/// implement rejects with <c>@GlobalScope.ERR_UNAVAILABLE</c>, and never a
-/// successful empty answer. <b>Address</b> Every read, scan and operation names
-/// what it is about with the same three fields.
+/// Subclass it, together with a <see cref="NetwDatabaseBackend"/> whose
+/// <c>NetwDatabaseBackend._open</c> returns it, to store records somewhere the
+/// shipped backends do not. Implement <c>_read</c>, <c>_scan</c>,
+/// <c>_write_batch</c> and <c>_close</c>. <see cref="NetwDatabase"/> builds
+/// every other operation from these. Each returns a <see cref="NetwPromise"/>,
+/// and a method left unimplemented rejects with
+/// <c>@GlobalScope.ERR_UNAVAILABLE</c>. <b>Address</b> Reads, scans and writes
+/// name a record with this <see cref="Godot.Collections.Dictionary"/>.
 /// <code>
 /// Dictionary
 /// ┠╴kind          int     0 for a record, 1 for a table snapshot
@@ -28,65 +24,8 @@ namespace Networked;
 /// ┖╴key           String  the record's durable id
 /// </code>
 /// <para>
-/// <b>Reading</b> <c>_read</c> answers a reply that separates absence from
-/// failure. A record that is not there is <c>found</c> false and <c>error</c>
-/// OK. A record the storage could not be asked about carries the error, and the
-/// core never reads it as absence.
-/// <code>
-/// Dictionary
-/// ┠╴error      Error       @GlobalScope.Error
-/// ┠╴detail     String      what went wrong, for a person to read
-/// ┠╴found      bool
-/// ┖╴envelope   Dictionary  the stored record, only when found
-/// </code>
-/// </para>
-/// <para>
-/// <b>Scanning</b> <c>_scan</c> takes a request and answers a page. A page
-/// shorter than <c>limit</c> with a nonempty <c>cursor</c> is not exhaustion.
-/// The caller passes that cursor back to continue.
-/// <code>
-/// Dictionary                 the request
-/// ┠╴schema_name   String
-/// ┠╴kind          int
-/// ┠╴filter        Dictionary
-/// ┠╴cursor        String      empty on the first page
-/// ┖╴limit         int
-///
-/// Dictionary                 the reply
-/// ┠╴error     Error
-/// ┠╴detail    String
-/// ┠╴records   Array[Dictionary]
-/// │           ┠╴key        String
-/// │           ┖╴envelope   Dictionary
-/// ┖╴cursor    String      empty when the scan is exhausted
-/// </code>
-/// </para>
-/// <para>
-/// <b>Writing</b> <c>_write_batch</c> applies operations in the order it is
-/// given them and answers one outcome per operation, in that same order. A
-/// connection that answers a different number of outcomes fails the whole
-/// batch.
-/// <code>
-/// Array[Dictionary]          the operations
-/// ┖╴operation
-///   ┠╴kind       String      "replace" or "erase"
-///   ┠╴address    Dictionary
-///   ┖╴envelope   Dictionary  replace only
-///
-/// Dictionary                 the reply
-/// ┠╴error       Error
-/// ┠╴detail      String
-/// ┠╴errors      PackedInt32Array   one @GlobalScope.Error per operation
-/// ┖╴uncertain   PackedByteArray    1 where the outcome is unknown
-/// </code>
-/// </para>
-/// <para>
-/// An operation is complete replacement or erasure. There is no partial write,
-/// because the core has already read and merged anything that needed merging. A
-/// successful outcome means the backing store acknowledged it. Do not report OK
-/// for work that has only been queued. When a timeout or a lost link leaves an
-/// operation's outcome genuinely unknown, mark it uncertain rather than
-/// guessing, and the core will refuse to retry it blindly.
+/// An envelope is a record as <see cref="NetwDatabase"/> hands it to you. Store
+/// it as given and return it unchanged.
 /// </para>
 /// </remarks>
 public sealed class NetwDatabaseConnection : NetwRefCounted

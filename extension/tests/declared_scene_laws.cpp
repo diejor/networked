@@ -154,10 +154,9 @@ LawVerdict law_a_boundary_is_answerable(const ScenarioRun &p_run) {
         }
         if (scene.has_boundary() != named) {
             return law_broken(
-                named
-                    ? "a scene holding %d viewer(s) answers with no layer"
-                    : "a scene nobody watches answers with a layer, "
-                      "holding %d viewer(s)",
+                named ? "a scene holding %d viewer(s) answers with no layer"
+                      : "a scene nobody watches answers with a layer, "
+                        "holding %d viewer(s)",
                 scene.viewers()
             );
         }

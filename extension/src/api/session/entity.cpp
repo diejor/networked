@@ -324,10 +324,7 @@ void configure_copy(Node *p_copy, const Callable &p_configure) {
     p_configure.call(NetwMultiplayer::wrapper_ensure(p_copy));
 }
 
-void rename_reserved_to_identity(
-    Node *p_owner,
-    const StringName &p_entity_id
-) {
+void rename_reserved_to_identity(Node *p_owner, const StringName &p_entity_id) {
     const String seated = String(p_owner->get_name());
     if (seated == seated.validate_node_name()) {
         return;
@@ -461,7 +458,6 @@ Node *NetwMultiplayer::entity_component_node(
     }
     return wrapper->comp_node_of(p_comp);
 }
-
 
 RID NetwMultiplayer::spawn_fn(
     const Callable &p_function,
@@ -901,8 +897,7 @@ void NetwMultiplayer::wrapper_sweep_retired() {
     if (retired_wrappers.is_empty()) {
         return;
     }
-    for (const KeyValue<int64_t, Ref<NetwEntity>> &retired :
-         retired_wrappers) {
+    for (const KeyValue<int64_t, Ref<NetwEntity>> &retired : retired_wrappers) {
         if (!wrapper_records.has(retired.key)) {
             wrapper_unindex_owner(retired.key, retired.value.ptr());
         }
@@ -1167,8 +1162,7 @@ int64_t NetwMultiplayer::liveness_lease_remaining() const {
 }
 
 void NetwMultiplayer::liveness_grant_lease(int64_t p_peer) {
-    const int base
-        = liveness_core->grant_lease(int(p_peer), ROUTE_LEASE_BLOCK);
+    const int base = liveness_core->grant_lease(int(p_peer), ROUTE_LEASE_BLOCK);
     if (base == 0) {
         return;
     }
@@ -1474,9 +1468,10 @@ void NetwMultiplayer::entity_capture_exit(Object *p_wrapper) {
             if (!row.terminal && !admitted_here
                 && spawns->holds_spawned_route(row.route)) {
                 entity_advance_anchor(row.route);
-            } else if (!row.terminal && !row.minted && row.received
-                       && !applying_remote_frame
-                       && lifecycle_authors_move(entity)) {
+            } else if (
+                !row.terminal && !row.minted && row.received
+                && !applying_remote_frame && lifecycle_authors_move(entity)
+            ) {
                 const AnchorRevision base = anchor_installed(row.route);
                 row.base = base.revision;
                 row.base_author = base.author;
@@ -1499,7 +1494,6 @@ void NetwMultiplayer::entity_capture_exit(Object *p_wrapper) {
         StringName(vformat("entity-departure?%d", int64_t(instance)))
     );
 }
-
 
 void NetwMultiplayer::entity_capture_residency(
     EntityDeparture &r_row,
@@ -1895,13 +1889,13 @@ Error NetwMultiplayer::spawn_admit_frame_default(
     }
     if (p_channel == gate_channels.reparent) {
         kind = lifecycle::Kind::REPARENT;
-    } else if (p_channel == gate_channels.despawn
-               || p_channel == gate_channels.hide) {
+    } else if (
+        p_channel == gate_channels.despawn || p_channel == gate_channels.hide
+    ) {
         kind = lifecycle::Kind::DESPAWN;
     }
-    const lifecycle::Ruling ruling = lifecycle::rule(
-        lifecycle_frame_facts(p_sender, kind, p_payload)
-    );
+    const lifecycle::Ruling ruling
+        = lifecycle::rule(lifecycle_frame_facts(p_sender, kind, p_payload));
     if (!ruling.admitted()) {
         return ruling.code;
     }

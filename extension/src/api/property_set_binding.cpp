@@ -11,8 +11,8 @@
 #include "netw/repl/set_model.hpp"
 #include "netw/replication_send.hpp"
 #include "netw/sim/install.hpp"
-#include "netw/subsystems.hpp"
 #include "netw/staged_writes.hpp"
+#include "netw/subsystems.hpp"
 #include "netw/wire/registry.hpp"
 
 using namespace godot;
@@ -623,7 +623,8 @@ void NetwPropertySetBinding::offer_rows(
     }
 }
 
-Dictionary NetwPropertySetBinding::header_of(const Candidate &p_candidate
+Dictionary NetwPropertySetBinding::header_of(
+    const Candidate &p_candidate
 ) const {
     StagedWrites staged;
     staged.ordinal = p_candidate.ordinal;

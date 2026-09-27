@@ -22,9 +22,9 @@ using netw::NetwCarrierBuffers;
 using netw::SchemaCore;
 using netw::repl::RowOffer;
 using netw::repl::RowSend;
+using netw::repl::RowVerdict;
 using netw::repl::SessionResult;
 using netw::repl::SessionSend;
-using netw::repl::RowVerdict;
 using netw::table::SchemaRecord;
 using netw::wire::ChannelDecl;
 using netw::wire::Delivery;
@@ -99,8 +99,7 @@ public:
         int64_t p_max_bits
     ) {
         netw_test::seat_streams(send, p_offers);
-        const SessionResult out
-            = send.run(registry(), p_offers, p_max_bits, 0);
+        const SessionResult out = send.run(registry(), p_offers, p_max_bits, 0);
         LocalVector<RowSend> sends;
         for (uint32_t at = 0; at < out.sends.size(); ++at) {
             sends.push_back(out.sends[at]);
@@ -286,8 +285,7 @@ TEST_CASE(
     const bool nothing_was_confirmed = !link.promoted(1);
     CHECK(nothing_was_confirmed);
 
-    const netw::repl::RowExplain verdict
-        = link.sender().explain(1, 0, PEER);
+    const netw::repl::RowExplain verdict = link.sender().explain(1, 0, PEER);
     const bool the_row_is_owed_again = verdict.verdict == RowVerdict::REFUSED;
     CHECK(the_row_is_owed_again);
 

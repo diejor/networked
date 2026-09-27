@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <class name="NetwSchema" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
 	<brief_description>
-		One named typed column list, declared beside the code that writes it and compiled by every consumer that reads it.
+		A named list of typed columns.
 	</brief_description>
 	<description>
-		A schema is both the chain a [code]static var[/code] initializer runs and the data that chain leaves behind, because a game that had to terminate the chain to get the data was making a distinction it never wanted. [member columns] is the address order, and it is the address order every adopting session seals in, so two peers built from the same scripts agree on layout without negotiating it.
-		Column methods return an [int] index because schema declarations have no session state. That index is the wire address a writer and a reader both name the column by. Each session builds its own table from the declaration, and [method Netw.table] is how a game reaches one.
+		Declare it in a [code]static var[/code] beside the code that writes it. Every peer built from the same scripts ends up with the same [member columns] in the same order.
+		Each column method returns the column's index, which is how a writer and a reader name the column. [method Netw.table] opens the replicated table a session builds from the schema.
 		[codeblock]
 		class Mobs:
 		    static var schema := Netw.configure_schema(&amp;"Mob")
@@ -13,14 +13,13 @@
 		        &amp;"pos",
 		        NetwQuantizeScalar.new().limits(-512.0, 512.0).step(0.03),
 		    )
-		    static var vel := schema.vector3(&amp;"vel")   # unquantized, the memcpy path
+		    static var vel := schema.vector3(&amp;"vel")   # no quantizer, sent as raw bytes
 		    static var hp  := schema.u16(&amp;"hp")
 
 		@onready var mobs := Netw.table(self, Mobs.schema.schema_name)
 		[/codeblock]
-		A column with no quantizer crosses the wire as a raw little-endian copy of its buffer, which is the cheapest path in both directions. A quantizer buys bandwidth by paying per element, so reach for one on the columns a link actually cares about.
-		One schema serves three consumers, so a declaration that only wants the database says so with [method replicated] and creates no table at all. [method NetwDatabase.read] and the rest of the record verbs take this object directly. [method variant] and [method string] are the tiers a table rejects and the other two accept.
-		These method names are convenience and never freeze. They compile into [method NetwMultiplayer.schema_add_column] and [method NetwMultiplayer.schema_set_column_quantizer], which do.
+		A column with no quantizer is sent as a raw copy of its buffer, which is the cheapest to encode and decode. Add a quantizer to the columns where bandwidth matters.
+		The same schema also types [NetwDatabase] records and [method NetwPropertyConfig.persisted] bindings. A schema used only for saves calls [method replicated] with [code]false[/code] so no table is created. [method string] and [method variant] columns work for saves but not for replicated tables.
 	</description>
 	<tutorials>
 	</tutorials>
@@ -49,30 +48,29 @@
 			<param index="2" name="stride" type="int" default="1" />
 			<param index="3" name="quantizer" type="NetwQuantize" default="null" />
 			<description>
-				Appends one column of an [enum NetwMultiplayer.ColumnType] named at runtime and returns its index, which is the wire address readers and writers both name it by. The typed verbs beside it are this call with the type filled in.
-				A [param key] already declared with the SAME [param type] and [param stride] returns the index it already holds, which is what makes a script reload idempotent: every static initializer runs again and every column lands on the address it had. A [param key] already declared with a DIFFERENT shape returns [code]-1[/code] and appends nothing, because a column index is a stable wire address and silently shifting it would leave two peers reading each other's bytes at the wrong offsets.
+				Appends a column of [param type] and returns its index. The typed methods such as [method vector3] are this call with the type filled in.
+				Declaring a [param key] again with the same [param type] and [param stride] returns the index it already has, so a script reload is safe. Declaring it with a different shape returns [code]-1[/code] and appends nothing.
 			</description>
 		</method>
 		<method name="column_ref">
 			<return type="NetwColumnRef" />
 			<param index="0" name="index" type="int" />
 			<description>
-				Returns a [NetwColumnRef] naming the column at [param index], or [code]null[/code] when this schema has no such column.
-				A configuration call takes the reference rather than the [int], because the reference carries this schema and the [int] does not. Wrap the index the declaring method returned, in the same [code]static var[/code] line.
+				Returns a [NetwColumnRef] for the column at [param index], or [code]null[/code] when this schema has no such column. Configuration calls such as [method NetwPropertyConfig.persisted] take the reference.
 			</description>
 		</method>
 		<method name="create" qualifiers="static">
 			<return type="NetwSchema" />
 			<param index="0" name="name" type="StringName" />
 			<description>
-				Builds a schema under [param name] without listing it in the process-wide schema registry, for a consumer that types its own columns rather than publishing them. A caller that wants the registry's copy asks [method Netw.configure_schema] instead, and one holding a detached schema lists it later with [method register].
+				Builds a schema under [param name] without adding it to the schema registry. Use [method Netw.configure_schema] to get the registered one, or call [method register] later.
 			</description>
 		</method>
 		<method name="declare" qualifiers="static">
 			<return type="NetwSchema" />
 			<param index="0" name="name" type="StringName" />
 			<description>
-				Declares the schema named [param name] in the process-wide schema registry and returns it, or [code]null[/code] when the name is empty. Calling it twice for one name extends one declaration rather than making two, which is what lets a schema be declared beside each of the classes that write it. [method Netw.configure_schema] is the front door and this is what it returns.
+				Returns the registered schema named [param name], creating it if needed, or [code]null[/code] when the name is empty. Calling it twice with one name returns the same schema, so several classes can add columns to it. [method Netw.configure_schema] calls this.
 			</description>
 		</method>
 		<method name="entity">
@@ -80,7 +78,7 @@
 			<param index="0" name="key" type="StringName" />
 			<param index="1" name="stride" type="int" default="1" />
 			<description>
-				Declares a [constant NetwMultiplayer.COLUMN_ENTITY] column of routes, the forward-only link one table draws to another.
+				Declares a [constant NetwMultiplayer.COLUMN_ENTITY] column of routes, pointing at rows of another table.
 			</description>
 		</method>
 		<method name="f32">
@@ -136,13 +134,13 @@
 		<method name="is_reliable" qualifiers="const">
 			<return type="bool" />
 			<description>
-				Whether this schema's table commits ride the reliable lane, as [method reliable] left it. Meaningless while [method is_replicated] returns [code]false[/code].
+				Whether this schema's table sends its commits reliably, as [method reliable] set it.
 			</description>
 		</method>
 		<method name="is_replicated" qualifiers="const">
 			<return type="bool" />
 			<description>
-				Whether an adopting session creates a replicated table from this schema, as [method replicated] left it.
+				Whether a session creates a replicated table from this schema, as [method replicated] set it.
 			</description>
 		</method>
 		<method name="migrate">
@@ -150,8 +148,8 @@
 			<param index="0" name="from_version" type="int" />
 			<param index="1" name="step" type="Callable" />
 			<description>
-				Installs the step that reads a record saved under [param from_version] and returns it shaped for the next version, and returns this schema.
-				[param step] takes one [Dictionary] and returns one [Dictionary]. It advances exactly one version, so a save two versions behind runs two steps in order. A read with a step missing fails and touches nothing.
+				Sets the function that upgrades a record saved under [param from_version] to the next version, and returns this schema.
+				[param step] takes a [Dictionary] and returns a [Dictionary]. A save two versions behind runs two steps in order, and a read with a missing step fails.
 				[codeblock]
 				static var schema := NetwSchema.create(&amp;"players") \
 				    .replicated(false) \
@@ -162,7 +160,7 @@
 				    row[&amp;"position"] = Vector2.ZERO
 				    return row
 				[/codeblock]
-				Migration does not rewrite what it read. The next save writes the current version.
+				The stored record is not rewritten by the read. The next save writes it at the current version.
 			</description>
 		</method>
 		<method name="quaternion">
@@ -171,39 +169,37 @@
 			<param index="1" name="quantizer" type="NetwQuantize" default="null" />
 			<param index="2" name="stride" type="int" default="1" />
 			<description>
-				Declares a [constant NetwMultiplayer.COLUMN_QUATERNION] column, stored as a [PackedVector4Array] and read as [Quaternion] so [NetwQuantizeQuaternion] can pack it smallest-three.
+				Declares a [constant NetwMultiplayer.COLUMN_QUATERNION] column, stored as a [PackedVector4Array] and read as [Quaternion] so [NetwQuantizeQuaternion] can compress it.
 			</description>
 		</method>
 		<method name="register">
 			<return type="NetwSchema" />
 			<description>
-				Puts this declaration back in the process-wide schema registry if it is not listed there, and returns itself.
-				A [code]static var[/code] initializer runs once and never again, so a holder that outlives a registry reset would otherwise keep a schema no session can find. Call this from the [method Node._ready] of whatever publishes the schema, which costs nothing when the declaration is already registered.
+				Adds this schema to the schema registry if it is not there, and returns it.
+				A [code]static var[/code] runs only once, so call this from [method Node._ready] when the registry may have been reset since. It does nothing when the schema is already registered.
 			</description>
 		</method>
 		<method name="reliable">
 			<return type="NetwSchema" />
 			<param index="0" name="value" type="bool" default="true" />
 			<description>
-				Sends this schema's table commits on the reliable lane and returns this schema. Read back through [method is_reliable].
-				Reach for it when a table changes rarely, because a rare-change table has no next commit to heal a lost datagram with. A table published every tick wants the default, where loss costs one row one tick of freshness.
+				Sends this schema's table commits reliably, and returns this schema.
+				Use it for a table that changes rarely, where a lost packet would not be fixed by the next commit. A table committed every tick is fine unreliable.
 			</description>
 		</method>
 		<method name="replicated">
 			<return type="NetwSchema" />
 			<param index="0" name="value" type="bool" default="true" />
 			<description>
-				Sets whether an adopting session creates a replicated table from this schema, and returns this schema. Read back through [method is_replicated].
-				Declaring a schema costs no wire on its own. Passing [code]false[/code] is how a schema that only types database columns says so, and the session skips the table, the wire id, and the frame budget entirely.
+				Sets whether a session creates a replicated table from this schema, and returns this schema. Pass [code]false[/code] for a schema that only describes saved records.
 			</description>
 		</method>
 		<method name="storage_version">
 			<return type="NetwSchema" />
 			<param index="0" name="version" type="int" />
 			<description>
-				Sets the version saved records of this schema carry, and returns this schema. The first version is [code]1[/code], which is the default.
-				Raise it whenever the saved shape changes, adding a field included, and supply the [method migrate] step that reads the version below. A record saved under a version this schema cannot reach fails its read and stays untouched.
-				The version is storage only. It does not enter the wire hash, so two peers on different storage versions still replicate.
+				Sets the version saved records of this schema carry, and returns this schema. The default is [code]1[/code].
+				Raise it when the saved columns change, and add a [method migrate] step from the previous version. It does not affect replication, so peers on different storage versions still connect.
 			</description>
 		</method>
 		<method name="u8">
@@ -227,8 +223,7 @@
 			<param index="0" name="key" type="StringName" />
 			<param index="1" name="stride" type="int" default="1" />
 			<description>
-				Declares a [constant NetwMultiplayer.COLUMN_STRING] column of text.
-				Text has no fixed width, so a schema holding one cannot become a table for the same reason [method variant] cannot. Reach for it when the saved value is a name or a path and the self-describing tier would buy nothing.
+				Declares a [constant NetwMultiplayer.COLUMN_STRING] column. Like [method variant], a schema holding one cannot become a replicated table.
 			</description>
 		</method>
 		<method name="variant">
@@ -236,9 +231,8 @@
 			<param index="0" name="key" type="StringName" />
 			<param index="1" name="stride" type="int" default="1" />
 			<description>
-				Declares a [constant NetwMultiplayer.COLUMN_VARIANT] column, the self-describing tier a [Dictionary] or a nested [Array] takes.
-				A schema holding one cannot become a table, because variable width has no memcpy and no rows-per-frame budget. Reach for it on a schema the database and the property binding consume, and leave the wire's fixed-width tier to the columns that can carry it.
-				A saved value carries data only. An [Object], a [Resource], a [Callable], a [Signal] and a [RID] are all refused, including nested inside an [Array] or a [Dictionary].
+				Declares a [constant NetwMultiplayer.COLUMN_VARIANT] column, for a [Dictionary], an [Array] or any other value. A schema holding one cannot become a replicated table.
+				A saved value holds data only. An [Object], [Resource], [Callable], [Signal] or [RID] is refused, including one nested inside an [Array] or a [Dictionary].
 			</description>
 		</method>
 		<method name="vector2">
@@ -271,10 +265,10 @@
 	</methods>
 	<members>
 		<member name="columns" type="NetwSchemaColumn[]" setter="" getter="get_columns">
-			The declared columns in address order. A consumer that types its own storage from a schema reads this list.
+			The declared columns in index order.
 		</member>
 		<member name="schema_name" type="StringName" setter="" getter="get_schema_name">
-			The registered schema name used by [method NetwMultiplayer.schema_find].
+			The name this schema is registered under, which [method NetwMultiplayer.schema_find] takes.
 		</member>
 	</members>
 </class>

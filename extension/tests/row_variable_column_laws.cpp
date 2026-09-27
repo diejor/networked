@@ -197,12 +197,12 @@ TEST_CASE(
     board.rig.step_ticks(6);
     REQUIRE(board.every_peer_holds("ink", stroke(3)));
 
-    NetwEntity::of(board.node(-1))->connect(
-        StringName("control_requested"),
-        callable_mp_static(&deny_every_request)
-    );
-    Ref<netw::LocalLinkConditions> slow
-        = netw::LocalLinkConditions::create(31);
+    NetwEntity::of(board.node(-1))
+        ->connect(
+            StringName("control_requested"),
+            callable_mp_static(&deny_every_request)
+        );
+    Ref<netw::LocalLinkConditions> slow = netw::LocalLinkConditions::create(31);
     slow->set_latency_ms(double(CLAIM_FLIGHT_TICKS) * 1000.0 / TICKRATE);
     board.rig.conditions(-1, slow, board.rig.peer_id(0));
 

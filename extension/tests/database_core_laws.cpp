@@ -29,12 +29,8 @@ struct World {
         plane = session->get_databases();
         database = plane->create("saves");
         schema = session->schema_create("players");
-        session->schema_add_column(
-            schema,
-            "gold",
-            NetwMultiplayer::COLUMN_I64,
-            1
-        );
+        session
+            ->schema_add_column(schema, "gold", NetwMultiplayer::COLUMN_I64, 1);
         session->schema_add_column(
             schema,
             "where",
@@ -47,11 +43,8 @@ struct World {
     }
 
     Error open() {
-        const Ref<NetwPromise> opened = plane->open(
-            database,
-            "slot1",
-            NetwPromise::resolved(connection)
-        );
+        const Ref<NetwPromise> opened
+            = plane->open(database, "slot1", NetwPromise::resolved(connection));
         return opened->get_is_failed() ? opened->get_code() : OK;
     }
 };
@@ -78,7 +71,10 @@ TEST_CASE(
     "has settled"
 ) {
     World world("db1");
-    NETW_CHECK_EQ(int(world.plane->state_of(world.database)), int(State::CLOSED));
+    NETW_CHECK_EQ(
+        int(world.plane->state_of(world.database)),
+        int(State::CLOSED)
+    );
 
     const Ref<NetwPromise> refused
         = world.plane->read(world.database, world.schema, "hero");
@@ -170,18 +166,16 @@ TEST_CASE(
     );
     NETW_CHECK_EQ(int(written->get_result()), int(OK));
 
-    const Dictionary found = read_of(
-        world.plane->read(world.database, world.schema, "hero")
-    );
+    const Dictionary found
+        = read_of(world.plane->read(world.database, world.schema, "hero"));
     NETW_CHECK_EQ(int(found["error"]), OK);
     CHECK(bool(found["found"]));
     const Dictionary found_values = found["values"];
     NETW_CHECK_EQ(int64_t(found_values["gold"]), int64_t(12));
     CHECK(bool(Vector2(found_values["where"]) == Vector2(3, 4)));
 
-    const Dictionary absent = read_of(
-        world.plane->read(world.database, world.schema, "nobody")
-    );
+    const Dictionary absent
+        = read_of(world.plane->read(world.database, world.schema, "nobody"));
     NETW_CHECK_EQ(int(absent["error"]), OK);
     CHECK_FALSE(bool(absent["found"]));
     CHECK(Dictionary(absent["values"]).is_empty());
@@ -195,9 +189,8 @@ TEST_CASE(
     NETW_CHECK_EQ(world.open(), OK);
     world.connection->fail_next(ERR_FILE_CANT_READ);
 
-    const Dictionary answered = read_of(
-        world.plane->read(world.database, world.schema, "hero")
-    );
+    const Dictionary answered
+        = read_of(world.plane->read(world.database, world.schema, "hero"));
     NETW_CHECK_EQ(int(answered["error"]), ERR_FILE_CANT_READ);
     CHECK_FALSE(bool(answered["found"]));
 }
@@ -211,18 +204,13 @@ TEST_CASE(
 
     Dictionary missing;
     missing["gold"] = 1;
-    const Ref<NetwPromise> short_row = world.plane->write(
-        world.database,
-        world.schema,
-        "hero",
-        missing
-    );
+    const Ref<NetwPromise> short_row
+        = world.plane->write(world.database, world.schema, "hero", missing);
     CHECK(short_row->get_is_failed());
 
     Dictionary mistyped = row(1, Vector2());
     mistyped["where"] = 7;
-    CHECK(world.plane
-              ->write(world.database, world.schema, "hero", mistyped)
+    CHECK(world.plane->write(world.database, world.schema, "hero", mistyped)
               ->get_is_failed());
 
     Dictionary extra = row(1, Vector2());
@@ -231,8 +219,9 @@ TEST_CASE(
               ->get_is_failed());
 
     CHECK_FALSE(
-        bool(read_of(world.plane->read(world.database, world.schema, "hero"))
-                 ["found"])
+        bool(read_of(
+            world.plane->read(world.database, world.schema, "hero")
+        )["found"])
     );
 }
 
@@ -242,7 +231,8 @@ TEST_CASE(
 ) {
     World world("db7");
     NETW_CHECK_EQ(world.open(), OK);
-    world.plane->write(world.database, world.schema, "hero", row(12, Vector2(3, 4)));
+    world.plane
+        ->write(world.database, world.schema, "hero", row(12, Vector2(3, 4)));
 
     Dictionary just_gold;
     just_gold["gold"] = 99;
@@ -251,9 +241,8 @@ TEST_CASE(
               ->get_result();
     NETW_CHECK_EQ(int(patched.get_type()), int(Variant::INT));
     NETW_CHECK_EQ(int(patched), int(OK));
-    const Dictionary after = read_of(
-        world.plane->read(world.database, world.schema, "hero")
-    );
+    const Dictionary after
+        = read_of(world.plane->read(world.database, world.schema, "hero"));
     const Dictionary after_values = after["values"];
     NETW_CHECK_EQ(int64_t(after_values["gold"]), int64_t(99));
     CHECK(bool(Vector2(after_values["where"]) == Vector2(3, 4)));
@@ -266,8 +255,7 @@ TEST_CASE(
 
     Dictionary unknown;
     unknown["nothing"] = 1;
-    CHECK(world.plane
-              ->patch(world.database, world.schema, "hero", unknown)
+    CHECK(world.plane->patch(world.database, world.schema, "hero", unknown)
               ->get_is_failed());
 }
 
@@ -278,7 +266,8 @@ TEST_CASE(
 ) {
     World world("db7b");
     NETW_CHECK_EQ(world.open(), OK);
-    world.plane->write(world.database, world.schema, "hero", row(12, Vector2()));
+    world.plane
+        ->write(world.database, world.schema, "hero", row(12, Vector2()));
     Dictionary just_gold;
     just_gold["gold"] = 99;
 
@@ -306,7 +295,8 @@ TEST_CASE(
 ) {
     World world("db8");
     NETW_CHECK_EQ(world.open(), OK);
-    world.plane->write(world.database, world.schema, "hero", row(12, Vector2()));
+    world.plane
+        ->write(world.database, world.schema, "hero", row(12, Vector2()));
 
     NETW_CHECK_EQ(
         int(world.plane->erase(world.database, world.schema, "hero")
@@ -314,8 +304,9 @@ TEST_CASE(
         int(OK)
     );
     CHECK_FALSE(
-        bool(read_of(world.plane->read(world.database, world.schema, "hero"))
-                 ["found"])
+        bool(read_of(
+            world.plane->read(world.database, world.schema, "hero")
+        )["found"])
     );
     NETW_CHECK_EQ(
         int(world.plane->erase(world.database, world.schema, "hero")
@@ -332,18 +323,12 @@ TEST_CASE(
     NETW_CHECK_EQ(world.open(), OK);
     world.connection->defer(true);
 
-    const Ref<NetwPromise> first = world.plane->write(
-        world.database,
-        world.schema,
-        "hero",
-        row(1, Vector2())
-    );
-    const Ref<NetwPromise> second = world.plane->write(
-        world.database,
-        world.schema,
-        "hero",
-        row(2, Vector2())
-    );
+    const Ref<NetwPromise> first
+        = world.plane
+              ->write(world.database, world.schema, "hero", row(1, Vector2()));
+    const Ref<NetwPromise> second
+        = world.plane
+              ->write(world.database, world.schema, "hero", row(2, Vector2()));
     NETW_CHECK_EQ(world.connection->withheld_count(), 1);
     CHECK_FALSE(first->get_is_settled());
     CHECK_FALSE(second->get_is_settled());
@@ -454,23 +439,21 @@ TEST_CASE(
     world.plane->write(world.database, world.schema, "c", row(3, Vector2()));
 
     const Dictionary first
-        = world.plane
-              ->scan(world.database, world.schema, Dictionary(), "", 2)
+        = world.plane->scan(world.database, world.schema, Dictionary(), "", 2)
               ->get_result();
     NETW_CHECK_EQ(int(first["error"]), OK);
     NETW_CHECK_EQ(Array(first["records"]).size(), 2);
     CHECK_FALSE(String(first["cursor"]).is_empty());
 
-    const Dictionary next
-        = world.plane
-              ->scan(
-                  world.database,
-                  world.schema,
-                  Dictionary(),
-                  String(first["cursor"]),
-                  2
-              )
-              ->get_result();
+    const Dictionary next = world.plane
+                                ->scan(
+                                    world.database,
+                                    world.schema,
+                                    Dictionary(),
+                                    String(first["cursor"]),
+                                    2
+                                )
+                                ->get_result();
     NETW_CHECK_EQ(Array(next["records"]).size(), 1);
     CHECK(String(next["cursor"]).is_empty());
 }
@@ -485,7 +468,8 @@ TEST_CASE(
     world.connection->defer(true);
 
     const Ref<NetwPromise> written
-        = world.plane->write(world.database, world.schema, "hero", row(1, Vector2()));
+        = world.plane
+              ->write(world.database, world.schema, "hero", row(1, Vector2()));
     const Ref<NetwPromise> closing = world.plane->close(world.database);
     NETW_CHECK_EQ(
         int(world.plane->state_of(world.database)),
@@ -532,10 +516,7 @@ TEST_CASE(
 
     here.plane->write(here.database, here.schema, "hero", row(7, Vector2()));
     here.plane->close(here.database);
-    NETW_CHECK_EQ(
-        int(there.plane->state_of(there.database)),
-        int(State::OPEN)
-    );
+    NETW_CHECK_EQ(int(there.plane->state_of(there.database)), int(State::OPEN));
     const Dictionary hero_values = Dictionary(
         read_of(there.plane->read(there.database, there.schema, "hero"))
     )["values"];
@@ -601,7 +582,8 @@ TEST_CASE(
         NetwMultiplayer::COLUMN_VECTOR2,
         1
     );
-    session->schema_add_column(schema, "title", NetwMultiplayer::COLUMN_STRING, 1);
+    session
+        ->schema_add_column(schema, "title", NetwMultiplayer::COLUMN_STRING, 1);
     SchemaCore *core = session->get_schema_core();
     core->set_storage_version(schema, 2);
     core->add_migration(schema, 1, callable_mp_static(&name_the_hero));
@@ -638,9 +620,8 @@ TEST_CASE(
     }
     World behind("db18", 1);
     NETW_CHECK_EQ(behind.open(), OK);
-    const Dictionary answered = read_of(
-        behind.plane->read(behind.database, behind.schema, "hero")
-    );
+    const Dictionary answered
+        = read_of(behind.plane->read(behind.database, behind.schema, "hero"));
     NETW_CHECK_EQ(int(answered["error"]), ERR_FILE_UNRECOGNIZED);
     CHECK_FALSE(bool(answered["found"]));
 }
@@ -653,9 +634,8 @@ TEST_CASE(
     NETW_CHECK_EQ(world.open(), OK);
     world.plane->write(world.database, world.schema, "hero", row(1, Vector2()));
 
-    Dictionary answered = read_of(
-        world.plane->read(world.database, world.schema, "hero")
-    );
+    Dictionary answered
+        = read_of(world.plane->read(world.database, world.schema, "hero"));
     Dictionary values = answered["values"];
     values["gold"] = 404;
 
@@ -685,8 +665,7 @@ TEST_CASE(
 
     world.connection->doubt_next(OK);
     NETW_CHECK_EQ(
-        int(world.plane
-                ->patch(world.database, world.schema, "hero", just_gold)
+        int(world.plane->patch(world.database, world.schema, "hero", just_gold)
                 ->get_result()),
         int(ERR_UNAVAILABLE)
     );

@@ -19,9 +19,9 @@ The scene an entity belongs to, reached as :ref:`NetwEntity.scene<class_NetwEnti
 Description
 -----------
 
-The view a game holds for one scene. It answers who is in it, who it reaches, and when that changes. It holds no authoritative state, so it can be reconstructed at any moment. One scene has one handle, so ``==`` returns "the same scene" and a listener connected through any route hears every edge. Reach it with :ref:`Netw.scene()<class_Netw_method_scene>` or :ref:`NetwEntity.scene<class_NetwEntity_property_scene>`. Never ``null`` for an entity in a session. An entity that declares itself a scene resolves to itself, and any other entity resolves to its nearest scene ancestor. Ask :ref:`is_declared<class_NetwSceneHandle_property_is_declared>` when the difference matters.
+Tells who is in a multiplayer scene and which players it replicates to. Reach it with :ref:`Netw.scene()<class_Netw_method_scene>` or :ref:`NetwEntity.scene<class_NetwEntity_property_scene>`. An entity declared with :ref:`Netw.configure_multiplayer_scene()<class_Netw_method_configure_multiplayer_scene>` resolves to itself, any other entity to its closest scene ancestor. Each scene has one handle, so ``==`` compares scenes.
 
-\ **A scene reaches a player for a reason, and there are two of them.** A body of theirs residing here is one, so parenting a player in is the whole of it and no call follows. A :ref:`watch()<class_NetwSceneHandle_method_watch>` is the other, and it is the one for a player with no body here at all. The two are independent and the scene keeps replicating until the last of them is gone, so :ref:`unwatch()<class_NetwSceneHandle_method_unwatch>` does not evict a player still standing in the room. A player may hold as many scenes at once as the game gives them reasons for.
+A scene replicates to a player while a body of theirs is in it, or while the player watches it with :ref:`watch()<class_NetwSceneHandle_method_watch>`. :ref:`unwatch()<class_NetwSceneHandle_method_unwatch>` does not remove a player whose body is still in the scene.
 
 ::
 
@@ -29,26 +29,9 @@ The view a game holds for one scene. It answers who is in it, who it reaches, an
     arena.add_child(Netw.spawn_player(player, make_player))
     lobby.unwatch(player)
 
-\ Reaching a player is scene-wide and it is not the last word on any one node. :ref:`NetwInterestLayer<class_NetwInterestLayer>` still filters entity by entity inside a scene this player reaches, so a scene arriving does not mean everything in it arrived.
+\ Inside a scene, :ref:`NetwInterestLayer<class_NetwInterestLayer>` still filters which entities a player receives.
 
-\ **Putting a body somewhere**\ 
-
-Three calls move a body and they differ in what they answer, not in where the body lands. Only the last carries a :ref:`NetwPromise<class_NetwPromise>`.
-
-.. code:: text
-
-    arena.add_child(body)      a first placement. there is nothing to await
-    body.reparent(other)       an ordinary Godot move, taken here and
-                               replicated. it answers nothing
-    Netw.reparent(body, other) the same move carrying a NetwPromise, which
-                               resolves only once the body stands under
-                               its new parent on every peer that has it
-
-\ Only :ref:`Netw.reparent()<class_Netw_method_reparent>` can be awaited, so a game that has to know the move landed everywhere takes that one, and it holds the law with the carry window included.
-
-A view resolves its session through the branch its scene node sits in, so a scene whose container is not in the tree returns :ref:`is_declared<class_NetwSceneHandle_property_is_declared>` ``false`` and every other member empty.
-
-\ :ref:`NetwMultiplayer<class_NetwMultiplayer>` keeps the same surface keyed by :godot:`RID` for callers that already hold one, and :ref:`entity<class_NetwSceneHandle_property_entity>` is the bridge to it: :ref:`NetwMultiplayer.scene_get_bodies()<class_NetwMultiplayer_method_scene_get_bodies>`, :ref:`NetwMultiplayer.scene_watch()<class_NetwMultiplayer_method_scene_watch>` and :ref:`NetwMultiplayer.scene_observe()<class_NetwMultiplayer_method_scene_observe>` are the flat spellings of :ref:`bodies<class_NetwSceneHandle_property_bodies>`, :ref:`watch()<class_NetwSceneHandle_method_watch>` and the signals here.
+A body is moved with :godot:`Node.reparent() <Node#class_Node_method_reparent>` as you would normally do. Use :ref:`Netw.reparent()<class_Netw_method_reparent>` when you need to await the server taking the move.
 
 .. rst-class:: classref-reftable-group
 
@@ -113,9 +96,7 @@ Signals
 
 **viewer_entered**\ (\ player\: :ref:`NetwPlayer<class_NetwPlayer>`\ ) :ref:`🔗<class_NetwSceneHandle_signal_viewer_entered>`
 
-Emitted when this scene starts replicating to ``player``, after the boundary is written, so a listener reading :ref:`viewers<class_NetwSceneHandle_property_viewers>` sees them.
-
-This reports delivery, not arrival. A body standing here and a :ref:`watch()<class_NetwSceneHandle_method_watch>` both raise it and it cannot say which, so a game that spawns players uses :ref:`NetwSessionHandle.scene_changed<class_NetwSessionHandle_signal_scene_changed>` instead.
+Emitted when this scene starts replicating to ``player``. :ref:`viewers<class_NetwSceneHandle_property_viewers>` already includes them. To spawn players, use :ref:`NetwSessionHandle.scene_changed<class_NetwSessionHandle_signal_scene_changed>` instead.
 
 .. rst-class:: classref-item-separator
 
@@ -127,7 +108,7 @@ This reports delivery, not arrival. A body standing here and a :ref:`watch()<cla
 
 **viewer_left**\ (\ player\: :ref:`NetwPlayer<class_NetwPlayer>`\ ) :ref:`🔗<class_NetwSceneHandle_signal_viewer_left>`
 
-Emitted when this scene stops replicating to ``player``, whether the last body of theirs left it, a watch was withdrawn, or the membership ended.
+Emitted when this scene stops replicating to ``player``.
 
 .. rst-class:: classref-item-separator
 
@@ -139,7 +120,7 @@ Emitted when this scene stops replicating to ``player``, whether the last body o
 
 **body_entered**\ (\ body\: :ref:`NetwEntity<class_NetwEntity>`\ ) :ref:`🔗<class_NetwSceneHandle_signal_body_entered>`
 
-Emitted when ``body`` joins this scene's roster. A join changes what every other body in the scene is compared against, so a listener that maintains per-body state rebuilds the whole roster here rather than only the newcomer.
+Emitted when ``body`` enters this scene.
 
 .. rst-class:: classref-item-separator
 
@@ -151,7 +132,7 @@ Emitted when ``body`` joins this scene's roster. A join changes what every other
 
 **body_left**\ (\ body\: :ref:`NetwEntity<class_NetwEntity>`\ ) :ref:`🔗<class_NetwSceneHandle_signal_body_left>`
 
-Emitted when ``body`` leaves this scene's roster.
+Emitted when ``body`` leaves this scene.
 
 .. rst-class:: classref-section-separator
 
@@ -172,7 +153,7 @@ Property Descriptions
 
 - :godot:`Array`\[:ref:`NetwEntity<class_NetwEntity>`\] **get_entities**\ (\ )
 
-Every entity standing in this scene, as the :ref:`NetwEntity<class_NetwEntity>` each one is read through. :ref:`NetwMultiplayer.scene_get_entities()<class_NetwMultiplayer_method_scene_get_entities>` returns the same set under the flat spelling, as the internal handles the session keys its rows by; this member resolves each one so a caller never holds an :godot:`RID` it would only hand straight back.
+Every entity in this scene.
 
 .. rst-class:: classref-item-separator
 
@@ -188,9 +169,7 @@ Every entity standing in this scene, as the :ref:`NetwEntity<class_NetwEntity>` 
 
 - :godot:`RID` **get_entity**\ (\ )
 
-The resolved scene's entity RID, or an invalid RID outside a session.
-
-Resolution is self-inclusive and walks the parent-entity chain, so it follows the tree and self-heals on reparent without anything re-enrolling the entity. This is the identity every :ref:`NetwMultiplayer.scene_find()<class_NetwMultiplayer_method_scene_find>`-family verb works on, and the bridge from the entity sugar to the flat surface.
+The :godot:`RID` of the scene's entity, invalid outside a session. The ``scene_*`` methods of :ref:`NetwMultiplayer<class_NetwMultiplayer>` take it.
 
 .. rst-class:: classref-item-separator
 
@@ -206,7 +185,7 @@ Resolution is self-inclusive and walks the parent-entity chain, so it follows th
 
 - :godot:`bool` **get_is_declared**\ (\ )
 
-Whether a scene resolved at all. ``false`` for an entity outside every scene, where every other member reads empty. The session-keyed read for a resolved scene is :ref:`NetwMultiplayer.scene_is_declared()<class_NetwMultiplayer_method_scene_is_declared>` over :ref:`entity<class_NetwSceneHandle_property_entity>`.
+Whether a scene was found. ``false`` for an entity outside every scene or not in the tree, and every other member is empty.
 
 .. rst-class:: classref-item-separator
 
@@ -222,7 +201,7 @@ Whether a scene resolved at all. ``false`` for an entity outside every scene, wh
 
 - :godot:`StringName` **get_label**\ (\ )
 
-The name this scene was declared under, which is the name :ref:`Netw.scene()<class_Netw_method_scene>` and :ref:`NetwMultiplayer.scene_find()<class_NetwMultiplayer_method_scene_find>` resolve.
+The name :ref:`Netw.scene()<class_Netw_method_scene>` finds this scene by. See :ref:`NetwSceneConfig.labeled()<class_NetwSceneConfig_method_labeled>`.
 
 .. rst-class:: classref-item-separator
 
@@ -238,7 +217,7 @@ The name this scene was declared under, which is the name :ref:`Netw.scene()<cla
 
 - :godot:`Array`\[:ref:`NetwEntity<class_NetwEntity>`\] **get_local_bodies**\ (\ )
 
-Every body in this scene that this peer represents, which is empty for a peer with no body here and holds more than one where a game gave it several.
+Every body in this scene that belongs to this peer.
 
 .. rst-class:: classref-item-separator
 
@@ -254,7 +233,7 @@ Every body in this scene that this peer represents, which is empty for a peer wi
 
 - :godot:`Array`\[:ref:`NetwPlayer<class_NetwPlayer>`\] **get_viewers**\ (\ )
 
-Every player this scene currently replicates to, whether a body of theirs stands here or a :ref:`watch()<class_NetwSceneHandle_method_watch>` put them here. A player is a person in the session; a body is the entity they steer, and :ref:`bodies<class_NetwSceneHandle_property_bodies>` returns those.
+Every player this scene replicates to, see :ref:`is_watching()<class_NetwSceneHandle_method_is_watching>`.
 
 .. rst-class:: classref-item-separator
 
@@ -270,7 +249,7 @@ Every player this scene currently replicates to, whether a body of theirs stands
 
 - :godot:`Array`\[:ref:`NetwEntity<class_NetwEntity>`\] **get_bodies**\ (\ )
 
-Every body in this scene, in no declared order. A body leaves this array in the call that despawned it, not in the frame its node is freed.
+Every body in this scene, in no particular order. A body is removed as soon as it is despawned, before its node is freed.
 
 .. rst-class:: classref-item-separator
 
@@ -286,9 +265,7 @@ Every body in this scene, in no declared order. A body leaves this array in the 
 
 - :godot:`Node` **get_root**\ (\ )
 
-The authored node this scene was declared on, which is the scene's own identity, or ``null`` outside a session.
-
-This is the node a game parents content under and reparents players into. :ref:`Netw.spawn()<class_Netw_method_spawn>` returns :ref:`world<class_NetwSceneHandle_property_world>` rather than this node when the scene declared :ref:`NetwSceneConfig.isolated()<class_NetwSceneConfig_method_isolated>`, so a caller that spawned an isolated scene reads the root back through here.
+The node the scene was declared on, ``null`` outside a session. When the scene is :ref:`NetwSceneConfig.isolated()<class_NetwSceneConfig_method_isolated>`, :ref:`Netw.spawn()<class_Netw_method_spawn>` returns :ref:`world<class_NetwSceneHandle_property_world>` and this is the node inside it.
 
 .. rst-class:: classref-item-separator
 
@@ -304,9 +281,7 @@ This is the node a game parents content under and reparents players into. :ref:`
 
 - :godot:`Node` **get_world**\ (\ )
 
-The :godot:`SubViewport` the framework inserted above :ref:`root<class_NetwSceneHandle_property_root>` to give this scene a :godot:`World2D` and :godot:`World3D` of its own, or ``null`` for a scene that shares the session's world.
-
-Only a :godot:`Viewport` owns a world in Godot, so :ref:`NetwSceneConfig.isolated()<class_NetwSceneConfig_method_isolated>` is delivered by inserting one rather than by a flag on the authored root. It carries no scene identity of its own and every materializing peer inserts the same one.
+The :godot:`SubViewport` above :ref:`root<class_NetwSceneHandle_property_root>` that gives an :ref:`NetwSceneConfig.isolated()<class_NetwSceneConfig_method_isolated>` scene its own :godot:`World2D` and :godot:`World3D`, ``null`` otherwise.
 
 .. rst-class:: classref-section-separator
 
@@ -323,9 +298,7 @@ Method Descriptions
 
 :godot:`bool` **is_watching**\ (\ player\: :ref:`NetwPlayer<class_NetwPlayer>`\ ) |const| :ref:`🔗<class_NetwSceneHandle_method_is_watching>`
 
-Whether this scene currently replicates to ``player``, for any reason at all.
-
-A body of theirs residing here is a reason, and so is a watch :ref:`watch()<class_NetwSceneHandle_method_watch>` placed. This answers the effective question, so it stays ``true`` after :ref:`unwatch()<class_NetwSceneHandle_method_unwatch>` while a body of theirs is still standing in the scene.
+Whether this scene replicates to ``player``, either because a body of theirs is in it or because of :ref:`watch()<class_NetwSceneHandle_method_watch>`.
 
 .. rst-class:: classref-item-separator
 
@@ -337,9 +310,7 @@ A body of theirs residing here is a reason, and so is a watch :ref:`watch()<clas
 
 |void| **observe**\ (\ event\: :ref:`SceneEvent<enum_NetwMultiplayer_SceneEvent>`, callback\: :godot:`Callable`\ ) :ref:`🔗<class_NetwSceneHandle_method_observe>`
 
-Calls ``callback`` whenever this scene gains or loses a subject of ``event``, one of :ref:`SceneEvent<enum_NetwMultiplayer_SceneEvent>`. Registering the same ``callback`` for the same ``event`` twice does nothing.
-
-\ **The callback is handed the subject as the object a game holds, never as the internal handle the scene book keys its rows by.** That is the one place this class does more than forward: :ref:`NetwMultiplayer.scene_observe()<class_NetwMultiplayer_method_scene_observe>` hands a raw subject straight through, and a game writing this signature would have to name an :godot:`RID` it can do nothing with.
+Calls ``callback`` whenever this scene gains or loses a subject of ``event``. Registering the same ``callback`` twice does nothing.
 
 ::
 
@@ -349,7 +320,7 @@ Calls ``callback`` whenever this scene gains or loses a subject of ``event``, on
             reshuffle(car)
             return false        # true drops the subscription
 
-\ :ref:`NetwMultiplayer.SCENE_EVENT_VIEWER<class_NetwMultiplayer_constant_SCENE_EVENT_VIEWER>` carries a :ref:`NetwPlayer<class_NetwPlayer>`; :ref:`NetwMultiplayer.SCENE_EVENT_BODY<class_NetwMultiplayer_constant_SCENE_EVENT_BODY>` and :ref:`NetwMultiplayer.SCENE_EVENT_ENTITY<class_NetwMultiplayer_constant_SCENE_EVENT_ENTITY>` carry a :ref:`NetwEntity<class_NetwEntity>`. Returning ``true`` from the callback withdraws it, exactly as the flat verb's does, and :ref:`unobserve()<class_NetwSceneHandle_method_unobserve>` withdraws it by name.
+\ :ref:`NetwMultiplayer.SCENE_EVENT_VIEWER<class_NetwMultiplayer_constant_SCENE_EVENT_VIEWER>` passes a :ref:`NetwPlayer<class_NetwPlayer>`. :ref:`NetwMultiplayer.SCENE_EVENT_BODY<class_NetwMultiplayer_constant_SCENE_EVENT_BODY>` and :ref:`NetwMultiplayer.SCENE_EVENT_ENTITY<class_NetwMultiplayer_constant_SCENE_EVENT_ENTITY>` pass a :ref:`NetwEntity<class_NetwEntity>`.
 
 .. rst-class:: classref-item-separator
 
@@ -361,7 +332,7 @@ Calls ``callback`` whenever this scene gains or loses a subject of ``event``, on
 
 |void| **unobserve**\ (\ event\: :ref:`SceneEvent<enum_NetwMultiplayer_SceneEvent>`, callback\: :godot:`Callable`\ ) :ref:`🔗<class_NetwSceneHandle_method_unobserve>`
 
-Withdraws the ``callback`` a :ref:`observe()<class_NetwSceneHandle_method_observe>` call registered for ``event``. It must be the same :godot:`Callable` that was passed to :ref:`observe()<class_NetwSceneHandle_method_observe>`, because that is the name the relay is filed under; a fresh :godot:`Callable` over the same method is a different name and withdraws nothing.
+Removes a ``callback`` registered with :ref:`observe()<class_NetwSceneHandle_method_observe>`. It must be the same :godot:`Callable` that was passed to :ref:`observe()<class_NetwSceneHandle_method_observe>`.
 
 .. rst-class:: classref-item-separator
 
@@ -373,9 +344,7 @@ Withdraws the ``callback`` a :ref:`observe()<class_NetwSceneHandle_method_observ
 
 :godot:`Error <@GlobalScope#enum_@globalscope_Error>` **unwatch**\ (\ player\: :ref:`NetwPlayer<class_NetwPlayer>`\ ) :ref:`🔗<class_NetwSceneHandle_method_unwatch>`
 
-Withdraws the watch :ref:`watch()<class_NetwSceneHandle_method_watch>` placed, so this scene stops replicating to ``player`` once nothing else keeps them here.
-
-A watch is one reason among several. Withdrawing it does not evict a player whose body is still in this scene, which is what stops a lobby leaving a game to also blind the player it left behind.
+Undoes :ref:`watch()<class_NetwSceneHandle_method_watch>`. The scene keeps replicating to ``player`` while a body of theirs is in it.
 
 .. code:: text
 
@@ -396,17 +365,13 @@ A watch is one reason among several. Withdrawing it does not evict a player whos
 
 :godot:`Error <@GlobalScope#enum_@globalscope_Error>` **watch**\ (\ player\: :ref:`NetwPlayer<class_NetwPlayer>`\ ) :ref:`🔗<class_NetwSceneHandle_method_watch>`
 
-Replicates this scene to ``player`` for as long as the watch stands, without giving them a body in it.
-
-Watching is not exclusive and not a move. A player may watch several scenes at once, and watching this one withdraws nothing elsewhere, which is what an avatarless lobby and a spectator both need.
+Replicates this scene to ``player`` without giving them a body in it, such as for a lobby or a spectator. A player can watch several scenes at once.
 
 ::
 
     Netw.scene(lobby).watch(who)
 
-\ A scene nested inside another arrives with the scene roots it hangs from, because a watcher cannot hold a node whose parent it has never seen. Those roots arrive as structure alone. Their own content stays with the players they already reach, so watching an inner scene never reveals what sits beside it in the outer one.
-
-Idempotent, and refused for a player this session no longer holds, so a handle kept across a disconnect cannot seat whoever reconnected onto that peer id.
+\ Watching a nested scene also sends the scene roots above it, but not their content.
 
 .. code:: text
 

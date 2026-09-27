@@ -17,8 +17,10 @@ class JoinDeclarer:
 	var seen: Array = []
 	var calls := 0
 
+
 	func _init() -> void:
 		Netw.configure_join(accepted)
+
 
 	func accepted(who: NetwPlayer, tag: StringName, payload: Array) -> void:
 		calls += 1

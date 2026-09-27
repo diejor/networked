@@ -10,7 +10,8 @@ namespace Networked;
 /// </summary>
 /// <remarks>
 /// Carries the requester, the clamped view tick, and the correlation key the
-/// optimistic effect was armed under. An authority method calls
+/// optimistic effect was armed under. An authority method takes it first, ahead
+/// of whatever arguments <see cref="NetwAction.Request"/> carried, and calls
 /// <see cref="NetwActionContext.Bind"/> before adding a spawned entity to the
 /// tree, or <see cref="NetwActionContext.Deny"/> when validation rejects the
 /// request.

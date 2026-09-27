@@ -212,10 +212,9 @@ struct RuleRun {
     Ruling ruling;
     const Refusal *expected = nullptr;
 
-    explicit RuleRun(const RuleCell &p_cell) :
-            cell(p_cell),
-            ruling(netw::lifecycle::rule(p_cell.facts())),
-            expected(first_refusal(p_cell)) {
+    explicit RuleRun(const RuleCell &p_cell)
+        : cell(p_cell), ruling(netw::lifecycle::rule(p_cell.facts())),
+          expected(first_refusal(p_cell)) {
     }
 };
 
@@ -235,8 +234,8 @@ LawVerdict law_code(const RuleRun &p_run) {
 }
 
 LawVerdict law_kind(const RuleRun &p_run) {
-    const Verdict wanted = p_run.expected != nullptr ? p_run.expected->verdict
-                                                     : Verdict::ADMIT;
+    const Verdict wanted
+        = p_run.expected != nullptr ? p_run.expected->verdict : Verdict::ADMIT;
     if (p_run.ruling.verdict != wanted) {
         return law_broken(
             "the rule ruled kind %d where %s names %d",
@@ -249,8 +248,7 @@ LawVerdict law_kind(const RuleRun &p_run) {
 }
 
 LawVerdict law_session_arbitrates(const RuleRun &p_run) {
-    if (!p_run.cell.off_session()
-        && p_run.ruling.verdict == Verdict::DYNAMIC) {
+    if (!p_run.cell.off_session() && p_run.ruling.verdict == Verdict::DYNAMIC) {
         return law_broken("the session's own op was refused dynamically");
     }
     return law_held();

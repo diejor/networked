@@ -6,12 +6,12 @@ using Godot.NativeInterop;
 namespace Networked;
 
 /// <summary>
-/// What one entity's prediction engine counted.
+/// Prediction counters for one <see cref="NetwEntity"/>, reached by
+/// <see cref="NetwPredictionHandle.Stats"/>.
 /// </summary>
 /// <remarks>
-/// Read it through <see cref="NetwPredictionHandle.Stats"/>. A count is for
-/// reading, printing and charting. A rule a game acts on hangs on the
-/// <see cref="NetwPredictionHandle"/> signals.
+/// Use these for debug overlays and charts. To react to a correction, connect
+/// to the <see cref="NetwPredictionHandle"/> signals.
 /// <code>
 /// var stats := NetwEntity.of(self).prediction.stats
 /// print("%d corrections" % stats.corrections)

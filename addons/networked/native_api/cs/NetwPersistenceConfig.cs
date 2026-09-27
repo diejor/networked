@@ -6,17 +6,13 @@ using Godot.NativeInterop;
 namespace Networked;
 
 /// <summary>
-/// Which row of which <see cref="NetwDatabase"/> one entity loads and saves.
+/// Which record of which <see cref="NetwDatabase"/> an entity loads and saves.
 /// </summary>
 /// <remarks>
-/// The declaration belongs to the node that made it, so two players running one
-/// script keep two record ids. Every column of
-/// <see cref="NetwPersistenceConfig.Schema"/> is filled by one property that
-/// named it through <see cref="NetwPropertyConfig.Persisted"/>, and a column
-/// left unbound refuses the whole entity. <see cref="Netw.ConfigureDatabase"/>
-/// and <see cref="Netw.Database"/> resolve the session through the
-/// <see cref="SceneTree"/>, so a database is declared from <c>Node._ready</c>
-/// rather than from <c>Object._init</c>.
+/// Each column of <see cref="NetwPersistenceConfig.Schema"/> is filled by one
+/// property marked with <see cref="NetwPropertyConfig.Persisted"/>. A column
+/// with no property refuses the whole entity. Configure it from
+/// <c>Node._ready</c>, where the node is in the tree.
 /// <code>
 /// func _ready() -&gt; void:
 ///     Netw.configure_property(self, &amp;"position", false) \
@@ -31,13 +27,9 @@ namespace Networked;
 ///     return entity.entity_id
 /// </code>
 /// <para>
-/// <see cref="NetwPersistenceConfig.RecordId"/> is read once, when the entity
-/// binds, and the id it answered is the row every later save writes. Moving the
-/// account the provider reads never retargets an enrolled save. A key that
-/// changes between sessions, such as a peer id, reads a different row every
-/// time the player joins. The row is reached through
-/// <see cref="NetwPersistenceHandle"/>, as
-/// <see cref="NetwEntity.Persistence"/>.
+/// Use a <see cref="NetwPersistenceConfig.RecordId"/> that stays the same
+/// between sessions. A peer id changes every time the player joins. The record
+/// is reached through <see cref="NetwEntity.Persistence"/>.
 /// </para>
 /// </remarks>
 public sealed class NetwPersistenceConfig : NetwRefCounted
@@ -60,10 +52,8 @@ public sealed class NetwPersistenceConfig : NetwRefCounted
         NetwApi.MethodBind("NetwPersistenceConfig", "database", 3751466617UL);
 
     /// <summary>
-    /// Names the <see cref="NetwDatabase"/> this entity's row lives in. The
-    /// name resolves in the same session, so
-    /// <see cref="Netw.ConfigureDatabase"/> declares it first. Returns the same
-    /// config so the declaration chains.
+    /// Names the <see cref="NetwDatabase"/> this entity's record lives in, as
+    /// <see cref="Netw.ConfigureDatabase"/> declared it.
     /// </summary>
     public NetwPersistenceConfig Database(StringName name)
     {
@@ -83,11 +73,9 @@ public sealed class NetwPersistenceConfig : NetwRefCounted
         NetwApi.MethodBind("NetwPersistenceConfig", "schema", 2962147809UL);
 
     /// <summary>
-    /// Declares the shape of this entity's row. Every
-    /// <see cref="NetwColumnRef"/> a property binds comes from this same
-    /// <see cref="NetwSchema"/>, and one taken from another schema refuses the
-    /// binding whatever its index. Returns the same config so the declaration
-    /// chains.
+    /// Sets the <see cref="NetwSchema"/> of this entity's record. Every
+    /// <see cref="NetwColumnRef"/> passed to
+    /// <see cref="NetwPropertyConfig.Persisted"/> must come from this schema.
     /// </summary>
     public NetwPersistenceConfig Schema(NetwSchema schema)
     {
@@ -105,10 +93,9 @@ public sealed class NetwPersistenceConfig : NetwRefCounted
         NetwApi.MethodBind("NetwPersistenceConfig", "record_id", 2383254644UL);
 
     /// <summary>
-    /// Answers the key this entity's row is stored under. It is called once,
-    /// when the entity binds, and must answer a nonempty
-    /// <see cref="StringName"/>. Returns the same config so the declaration
-    /// chains.
+    /// Sets the function that returns the id this entity's record is stored
+    /// under. It is called once and must return a nonempty
+    /// <see cref="StringName"/>.
     /// </summary>
     public NetwPersistenceConfig RecordId(Callable provider)
     {
@@ -128,10 +115,9 @@ public sealed class NetwPersistenceConfig : NetwRefCounted
         NetwApi.MethodBind("NetwPersistenceConfig", "interval", 3557262514UL);
 
     /// <summary>
-    /// Saves the whole row this often while anything in it has changed.
-    /// <c>0.0</c> saves only when the game calls
-    /// <see cref="NetwPersistenceHandle.Save"/>. Returns the same config so the
-    /// declaration chains. <b>Server Only.</b>
+    /// Saves the record every <paramref name="seconds"/> when something
+    /// changed. <c>0.0</c> saves only when you call
+    /// <see cref="NetwPersistenceHandle.Save"/>. <b>Server Only.</b>
     /// </summary>
     public NetwPersistenceConfig Interval(double seconds)
     {
@@ -152,21 +138,10 @@ public sealed class NetwPersistenceConfig : NetwRefCounted
             1161358066UL);
 
     /// <summary>
-    /// Whether the stored row is read before the entity plays. Returns the same
-    /// config so the declaration chains. The session authority starts the read
-    /// when the entity's node is ready, and no peer receives the entity until
-    /// it settles.
-    /// <code>
-    /// read settles
-    /// ┠╴row found    the row is applied, then the entity is sent to peers
-    /// ┠╴no row       the entity is sent with the values it spawned with
-    /// ┖╴failed       the entity is not sent until a retried load succeeds
-    /// </code>
-    /// <para>
-    /// <see cref="NetwPersistenceHandle.Load"/> retries a failed read. A bound
-    /// property that changes while the row is being read fails the read, and
-    /// the stored row is not applied over it.
-    /// </para>
+    /// Whether the server loads the stored record when the entity's node is
+    /// ready. Clients do not receive the entity until the load succeeds or
+    /// finds no record. Call <see cref="NetwPersistenceHandle.Load"/> to retry
+    /// a failed load.
     /// </summary>
     public NetwPersistenceConfig LoadOnSpawn(bool enabled = true)
     {

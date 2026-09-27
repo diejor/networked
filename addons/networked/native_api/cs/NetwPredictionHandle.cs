@@ -9,9 +9,9 @@ namespace Networked;
 /// Prediction settings and diagnostics for one <see cref="NetwEntity"/>.
 /// </summary>
 /// <remarks>
-/// Access this handle through <see cref="NetwEntity.Prediction"/>. It stores
-/// entity-level prediction settings and the latest comparison against
-/// authoritative state.
+/// Reached by <see cref="NetwEntity.Prediction"/>. The client predicts its
+/// entity ahead of the server and corrects it when the server's state
+/// disagrees. This handle sets how that happens.
 /// <code>
 /// var pred := NetwEntity.of(self).prediction
 /// pred.archetype = NetwPredict.ARCHETYPE_SOLVER_BODY
@@ -19,21 +19,12 @@ namespace Networked;
 /// pred.breach_response = NetwPredict.BREACH_RESPONSE_DEMOTE
 /// </code>
 /// <para>
-/// Declare field-level behavior, including tolerances and recovery rules, with
-/// <see cref="NetwPropertyConfig"/>. The step, the schedule and the entities
-/// this one runs with are on <see cref="NetwEntity.Simulation"/>, and
-/// <see cref="NetwSimulationHandle.Mode"/> says how this peer runs the entity.
-/// Prediction registers only on an entity with a
-/// <see cref="NetwPropertyConfig.State"/> row, because the state is what it
-/// compares and restores. An entity that declares an
-/// <see cref="NetwPredictionHandle.Archetype"/> with no state row reports one
-/// error when its owner is ready and is not predicted. A
-/// <see cref="MultiplayerSynchronizer"/> may provide scene defaults. Later
-/// assignments in code override those values.
-/// <see cref="NetwPredictionHandle.Stats"/> counts corrections. The signals
-/// report each divergence, episode and recovery as it happens.
-/// <see cref="NetwPredictionHandle.Reachability"/> says what each declaration
-/// actually reaches.
+/// Only an entity with a <see cref="NetwPropertyConfig.State"/> property is
+/// predicted, because that state is what gets compared and restored. Per-field
+/// tolerances are set with <see cref="NetwPropertyConfig"/>. The schedule and
+/// the simulation mode are on <see cref="NetwEntity.Simulation"/>. Values set
+/// on a <see cref="MultiplayerSynchronizer"/> in the scene act as defaults, and
+/// values set in code override them.
 /// </para>
 /// </remarks>
 public sealed class NetwPredictionHandle : NetwRefCounted
@@ -53,16 +44,14 @@ public sealed class NetwPredictionHandle : NetwRefCounted
     }
 
     /// <summary>
-    /// Generator status when the causal fork predates retained rows.
+    /// The tick where the peers first disagreed is older than the kept history.
     /// </summary>
     public const long GeneratorUnknownBeyondRetention = 0;
 
     /// <summary>
-    /// Emitted when a transition is found to disagree with authority, before
-    /// anything is done about it, naming the transition and what the
-    /// disagreement is blamed on. It is emitted whether or not the disagreement
-    /// is then corrected, so a game that only watches hears about one exactly
-    /// as loudly as a game that corrects.
+    /// Emitted when a predicted tick disagrees with the server, with what the
+    /// disagreement is blamed on. It is emitted whether or not a correction
+    /// follows.
     /// <code>
     /// entity.prediction.divergence_detected.connect(
     ///     func(entry: int, attribution: NetwPredict.Attribution):
@@ -78,12 +67,8 @@ public sealed class NetwPredictionHandle : NetwRefCounted
     }
 
     /// <summary>
-    /// Emitted when a settled comparison diverges far enough to act on and
-    /// opens an episode. <c>report</c> is a copy of the episode record. The
-    /// attribution is a <see cref="NetwPredict.Attribution"/>, each operator a
-    /// <see cref="NetwPredict.Operator"/> with a
-    /// <see cref="NetwPredict.OperatorOutcome"/>, and the disposition state a
-    /// <see cref="NetwPredict.EpisodeState"/>.
+    /// Emitted when a misprediction is large enough to act on. <c>report</c> is
+    /// a copy of the episode.
     /// <code>
     /// Dictionary
     /// ┠╴id            int
@@ -119,17 +104,11 @@ public sealed class NetwPredictionHandle : NetwRefCounted
     /// ┖╴reopen_chain  Array[int]
     /// </code>
     /// <para>
-    /// <c>generator.row</c> is the recorded row for that transition, and its
-    /// <c>witness_detail</c> carries the contact behind the witness
-    /// fingerprint. A run that began before the kept window starts reads
-    /// <see cref="NetwPredictionHandle.GeneratorUnknownBeyondRetention"/>.
-    /// Later diverging rows appear under <c>taint</c>, and failures that began
-    /// on their own appear under <c>secondary_generators</c>. An operator that
-    /// was rejected has <c>outcome = -1</c> and an empty <c>write</c>. Each
-    /// series is kept only to a bounded window, because an episode has no limit
-    /// on how long it may stay open. A trim keeps the newest entries and counts
-    /// what it dropped, so a truncated series can be told apart from a short
-    /// one.
+    /// <c>generator</c> is the tick where the peers first disagreed, or
+    /// <see cref="NetwPredictionHandle.GeneratorUnknownBeyondRetention"/> when
+    /// it is too old to be kept. An operator that was rejected has <c>outcome =
+    /// -1</c> and an empty <c>write</c>. Long series are trimmed to the newest
+    /// entries, and <c>evidence_dropped</c> counts what was trimmed.
     /// </para>
     /// </summary>
     public event Action<Godot.Collections.Dictionary> EpisodeOpened
@@ -139,11 +118,9 @@ public sealed class NetwPredictionHandle : NetwRefCounted
     }
 
     /// <summary>
-    /// Emitted when a run of agreement long enough to be trusted closes an
-    /// episode. <c>report</c> is shaped as
-    /// <see cref="NetwPredictionHandle.EpisodeOpened"/> describes. It is a
-    /// copy, and it stays valid after later rows have pushed out the row it
-    /// names.
+    /// Emitted when the peers have agreed again for long enough to close an
+    /// episode. <c>report</c> has the shape described in
+    /// <see cref="NetwPredictionHandle.EpisodeOpened"/>.
     /// </summary>
     public event Action<Godot.Collections.Dictionary> EpisodeClosed
     {
@@ -152,10 +129,9 @@ public sealed class NetwPredictionHandle : NetwRefCounted
     }
 
     /// <summary>
-    /// Emitted when an episode runs out of evidence to recover with and the
-    /// entity starts following authority instead. <c>report</c> is shaped as
-    /// <see cref="NetwPredictionHandle.EpisodeOpened"/> describes. The entity
-    /// keeps sending its input while it has stopped predicting ahead.
+    /// Emitted when corrections stop helping and the entity starts following
+    /// the server. It keeps sending input. <c>report</c> has the shape
+    /// described in <see cref="NetwPredictionHandle.EpisodeOpened"/>.
     /// </summary>
     public event Action<Godot.Collections.Dictionary> EpisodeFallback
     {
@@ -164,28 +140,16 @@ public sealed class NetwPredictionHandle : NetwRefCounted
     }
 
     /// <summary>
-    /// Emitted after a recovery wrote the body. It names the transition it went
-    /// back to, how far each field moved as <c>after - before</c>, whether the
-    /// move was large enough to be a teleport, and what the divergence was
-    /// blamed on. An angle's change is given as the shorter way around. A
-    /// recovery is one write, so this fires once per recovery and <c>deltas</c>
-    /// is the whole of it. A game does not have to absorb them by hand. Under
-    /// <see cref="NetwMultiplayer.LiveMode.Chase"/> the smoothing already turns
-    /// each one into an offset that decays away, reset for each recovery and
-    /// snapped through on a teleport.
+    /// Emitted after a correction moved the body. <c>deltas</c> holds how far
+    /// each field moved, as <c>after - before</c>, with angles taken the short
+    /// way around. <c>teleported</c> is <c>true</c> when the correction was a
+    /// teleport. Under <see cref="NetwMultiplayer.LiveMode.Chase"/> the display
+    /// already smooths the correction away.
     /// <code>
     /// entity.interpolation.live_mode = NetwMultiplayer.LIVE_MODE_CHASE
     /// api.display_set_param(entity.rid,
     ///         NetwMultiplayer.DISPLAY_PARAM_CHASE_GLIDE_TIME, 0.15)
     /// </code>
-    /// <para>
-    /// A recovery that moved nothing does not fire this at all, because a
-    /// signal carrying no change reads exactly like one that repaired the body.
-    /// <c>deltas</c> is what the recovery wrote rather than what the node reads
-    /// back now, because a setter backed by the physics server may not reach
-    /// its node until the next physics frame, and reading it now would report
-    /// no movement.
-    /// </para>
     /// </summary>
     public event Action<
         long,
@@ -198,24 +162,13 @@ public sealed class NetwPredictionHandle : NetwRefCounted
     }
 
     /// <summary>
-    /// Emitted every time state arrives on the owning client, carrying the full
-    /// divergence including values under
-    /// <see cref="NetwPredictionHandle.DivergenceEpsilon"/>, and what the
-    /// comparison decided. <c>diverged</c> is what was decided and not what was
-    /// written. A comparison that found a divergence reports it here whether or
-    /// not anything was written for it, and several paths deliberately write
-    /// nothing, such as the evidence running out or an operator waiting on a
-    /// witness. Those still report true, so a reader that only watches sees a
-    /// divergence the engine chose not to act on.
-    /// <see cref="NetwPredictionHandle.Recovered"/> is the signal for the
-    /// write. A frame that reached no comparison at all still fires this, with
-    /// a zero divergence and no correction, so a listener sees the frame arrive
-    /// rather than losing it silently.
-    /// <see cref="NetwPredictionHandle.DivergenceDetected"/> fires only when a
-    /// transition actually disagrees. A drift that grows tick over tick and
-    /// never crosses <see cref="NetwPredictionHandle.DivergenceEpsilon"/> is
-    /// heard here and never there, so anything watching for a drift nothing
-    /// acted on reads this one. <c>divergence</c> is the worst field alone.
+    /// Emitted on the controlling client each time server state arrives.
+    /// <c>divergence</c> is the largest error of any field, including errors
+    /// under <see cref="NetwPredictionHandle.DivergenceEpsilon"/>.
+    /// <c>diverged</c> is whether the error was large enough to act on, even
+    /// when no correction was written. Connect to
+    /// <see cref="NetwPredictionHandle.Recovered"/> to know when the body
+    /// actually moved.
     /// </summary>
     public event Action<long, long, double, bool> StateEvaluated
     {
@@ -236,12 +189,12 @@ public sealed class NetwPredictionHandle : NetwRefCounted
             1611583062UL);
 
     /// <summary>
-    /// The command this entity runs on a peer that selects it through
-    /// <see cref="NetwEntity.Simulation"/> and has no input from its
-    /// controller. A command relayed from the controller always wins over it.
-    /// It is called as <c>(entity: NetwEntity, tick: int)</c> and returns a
-    /// <see cref="Godot.Collections.Dictionary"/> laid over a zero command.
-    /// Empty means the entity coasts on the zero command.
+    /// Guesses the input of an entity this peer simulates but does not control,
+    /// through <see cref="NetwEntity.Simulation"/>. The real input relayed from
+    /// its controller replaces the guess. It is called as <c>(entity:
+    /// NetwEntity, tick: int)</c> and returns a
+    /// <see cref="Godot.Collections.Dictionary"/> of input values. Missing
+    /// values are zero.
     /// <code>
     /// func _init() -&gt; void:
     ///     entity.prediction.predict_commands = func(_e, _tick): return {&amp;"throttle": 1.0}
@@ -284,10 +237,9 @@ public sealed class NetwPredictionHandle : NetwRefCounted
             46739939UL);
 
     /// <summary>
-    /// The <see cref="NetwPredict.RecoveryPolicy"/> this entity declares. The
-    /// default <see cref="NetwPredict.RecoveryPolicy.Auto"/> picks one from the
-    /// body, and <see cref="NetwPredictionHandle.ResolvedRecoveryPolicy"/>
-    /// returns the policy the entity actually recovers under.
+    /// How this entity is corrected.
+    /// <see cref="NetwPredictionHandle.ResolvedRecoveryPolicy"/> returns the
+    /// policy in use.
     /// </summary>
     public NetwPredict.RecoveryPolicy RecoveryPolicy
     {
@@ -325,11 +277,9 @@ public sealed class NetwPredictionHandle : NetwRefCounted
             3443898135UL);
 
     /// <summary>
-    /// What this entity does the moment it touches something it was not
-    /// predicted to touch. It is armed only when
-    /// <see cref="NetwPredictionHandle.WitnessContacts"/> declares how contacts
-    /// are observed. <see cref="NetwPredict.BreachResponse.Demote"/> follows
-    /// authority from then on while the entity keeps sending its input.
+    /// What this entity does when it touches a moving body this peer does not
+    /// simulate. It only takes effect once
+    /// <see cref="NetwPredictionHandle.WitnessContacts"/> is set.
     /// </summary>
     public NetwPredict.BreachResponse BreachResponse
     {
@@ -361,15 +311,10 @@ public sealed class NetwPredictionHandle : NetwRefCounted
         NetwApi.MethodBind("NetwPredictionHandle", "set_sensors", 4155329257UL);
 
     /// <summary>
-    /// The world facts this entity's transition reads, by name. Each sampler is
-    /// called once before each drive and recorded with it, which is what lets a
-    /// divergence be blamed on the world rather than left unexplained.
+    /// Callables that sample the world this entity reads, by name. Each is
+    /// called once before each step, and
     /// <see cref="NetwPredictionHandle.Sensor"/> reads the sample back. A
-    /// sampler that cannot be called is skipped when it would have been sampled
-    /// rather than rejected here, so the record describes exactly the facts the
-    /// drive ran against. Declaring a sensor says where a divergence came from
-    /// and claims nothing about exactness, so declaring them alone leaves every
-    /// transition <see cref="NetwPredict.Domain.Out"/>.
+    /// misprediction can then be blamed on the world.
     /// </summary>
     public Godot.Collections.Dictionary Sensors
     {
@@ -399,12 +344,9 @@ public sealed class NetwPredictionHandle : NetwRefCounted
         NetwApi.MethodBind("NetwPredictionHandle", "set_epoch", 1286410249UL);
 
     /// <summary>
-    /// Which version of the unmoving world this entity simulates against, or
-    /// <c>-1</c> while none is declared. Raising it reopens the tolerance
-    /// window, because two peers cannot have taken a change to the world on the
-    /// same transition. Like <see cref="NetwPredictionHandle.Sensors"/> this
-    /// describes the world rather than the group the entity is simulated with,
-    /// so it never enters the entity into a fingerprint comparison.
+    /// The version of the static world this entity simulates against, or
+    /// <c>-1</c> when unset. Raise it when the level changes, so the next
+    /// mispredictions are tolerated while peers catch up.
     /// </summary>
     public long Epoch
     {
@@ -439,12 +381,9 @@ public sealed class NetwPredictionHandle : NetwRefCounted
             1611583062UL);
 
     /// <summary>
-    /// Samples what this peer's body actually touched on the transition just
-    /// solved. It is called once per solved transition and returns the
-    /// colliders the body touched, which is what lets a divergence be blamed on
-    /// a contact. An unset or invalid <see cref="Callable"/> leaves that
-    /// unknown, which is the absence of an observation rather than an
-    /// observation that nothing was touched.
+    /// Returns the colliders this peer's body touched in the step just solved.
+    /// Set it so a misprediction can be blamed on a contact and
+    /// <see cref="NetwPredictionHandle.BreachResponse"/> can take effect.
     /// </summary>
     public Callable WitnessContacts
     {
@@ -483,15 +422,9 @@ public sealed class NetwPredictionHandle : NetwRefCounted
             1611583062UL);
 
     /// <summary>
-    /// Returns whether the path to a proposed pose is clear. A correction that
-    /// moves a body to where it should be now, across a path nobody checked, is
-    /// how a body arrives inside a wall, so that correction is only available
-    /// once this is declared. An unset or invalid <see cref="Callable"/> leaves
-    /// it unavailable. It is called as <c>corridor(current, proposed)</c>, and
-    /// only after everything the engine can decide for itself has already
-    /// passed, so it is the game's last word rather than its first. A game
-    /// rejecting a move the engine would have rejected anyway is paying for a
-    /// call that changes nothing.
+    /// Returns whether the path to a proposed pose is clear, called as
+    /// <c>corridor(current, proposed)</c>. Set it to let a correction move the
+    /// body straight to where it should be now, without going through a wall.
     /// </summary>
     public Callable TransportCorridor
     {
@@ -530,22 +463,12 @@ public sealed class NetwPredictionHandle : NetwRefCounted
             373806689UL);
 
     /// <summary>
-    /// How far the pose may be wrong, in the pose field's own units, before a
-    /// recovery restores everything instead of withholding the fields declared
-    /// <see cref="NetwPropertyConfig.TeleportOnly"/>. An error that large means
-    /// something really went wrong, such as a wall bounce or a teleport, rather
-    /// than a field slowly drifting, and past it the predicted body holds
-    /// nothing worth keeping. The error is measured over the fields that
-    /// declared a <see cref="NetwPropertyConfig.CarryAlong"/> or named their
-    /// own <see cref="NetwPropertyConfig.TeleportAt"/>. An entity with neither
-    /// has no pose to measure, and every recovery it makes restores everything.
-    /// This is the default for such a field that named no distance of its own,
-    /// and it only means anything for fields in the same units. A pose spanning
-    /// metres, radians and radians per second cannot be served by one number,
-    /// so a field in any other unit declares
-    /// <see cref="NetwPropertyConfig.TeleportAt"/> rather than inheriting one
-    /// that means nothing for it. Each field is compared against its own
-    /// distance, and any one of them reaching it is enough.
+    /// How large an error may be before a correction teleports the body,
+    /// restoring every field including
+    /// <see cref="NetwPropertyConfig.TeleportOnly"/> ones. It applies to fields
+    /// declared with <see cref="NetwPropertyConfig.CarryAlong"/>, and
+    /// <see cref="NetwPropertyConfig.TeleportAt"/> overrides it per field. An
+    /// entity with no such field teleports on every correction.
     /// </summary>
     public double TeleportThreshold
     {
@@ -584,10 +507,8 @@ public sealed class NetwPredictionHandle : NetwRefCounted
 
     /// <summary>
     /// How many ticks <see cref="NetwPredictionHandle.NotifyContact"/> holds
-    /// off corrections for. A collision makes the predicted and the
-    /// authoritative body genuinely differ for a few ticks while both settle,
-    /// and correcting through that fights the physics. A disagreement past
-    /// <see cref="NetwPredictionHandle.TeleportThreshold"/> still snaps.
+    /// off corrections. An error past
+    /// <see cref="NetwPredictionHandle.TeleportThreshold"/> still corrects.
     /// </summary>
     public int CollisionCooldownTicks
     {
@@ -622,9 +543,8 @@ public sealed class NetwPredictionHandle : NetwRefCounted
             2586408642UL);
 
     /// <summary>
-    /// True while the authoritative body is asleep. Corrections pause while it
-    /// is, so a sleeping body is never nudged awake by one. A game writes it
-    /// when its own body sleeps and wakes.
+    /// Set it while the server's body is asleep. Corrections pause, so they do
+    /// not wake it.
     /// </summary>
     public bool Sleeping
     {
@@ -659,8 +579,7 @@ public sealed class NetwPredictionHandle : NetwRefCounted
             4277099358UL);
 
     /// <summary>
-    /// What the server does about an input tick that never arrived, as a
-    /// <see cref="NetwPredict.MissingInput"/> value.
+    /// What the server does when an input never arrives.
     /// </summary>
     public NetwPredict.MissingInput MissingPolicy
     {
@@ -698,17 +617,10 @@ public sealed class NetwPredictionHandle : NetwRefCounted
             1286410249UL);
 
     /// <summary>
-    /// How many queued input ticks one frame may fold together when a backlog
-    /// has built up, for an entity at
-    /// <see cref="NetwSimulationHandle.ScheduleEnum.Frame"/>. The client
-    /// produces one input per tick, so the default of <c>1</c> keeps the two in
-    /// step. A higher value lets a frame skip past inputs that have already
-    /// arrived rather than working through the backlog one frame at a time.
-    /// Folding never steps over a lost tick, and folded inputs are skipped
-    /// rather than simulated, so it is never extra work. An entity at
-    /// <see cref="NetwSimulationHandle.ScheduleEnum.Tick"/> ignores this and
-    /// advances by exactly one per tick, because authority may not run a
-    /// transition its own clock has not reached.
+    /// How many queued inputs the server may skip in one frame to catch up, for
+    /// an entity at <see cref="NetwSimulationHandle.ScheduleEnum.Frame"/>. An
+    /// entity at <see cref="NetwSimulationHandle.ScheduleEnum.Tick"/> ignores
+    /// it.
     /// </summary>
     public int MaxConsumePerTick
     {
@@ -746,25 +658,10 @@ public sealed class NetwPredictionHandle : NetwRefCounted
             1286410249UL);
 
     /// <summary>
-    /// How many ticks of input the server keeps in hand rather than consuming
-    /// the queue to empty. Input arrives on two clocks that run independently,
-    /// so it drifts across the server's consume boundary, and a server holding
-    /// nothing spare alternates ticks where the entity does not step at all
-    /// with ticks where it drains a burst. This is a target the server keeps to
-    /// rather than a warm-up it does once. A tick whose queue has fallen to the
-    /// target consumes nothing and rebuilds the slack instead, and
-    /// <see cref="NetwPredictionHandle.MaxConsumePerTick"/> trims a burst back
-    /// to the target rather than to zero.
-    /// <code>
-    /// span &gt; buffer        consume, draining toward buffer + 1
-    /// 0 &lt; span &lt;= buffer   hold, and the slack rebuilds
-    /// span &lt;= 0            starved, no input exists
-    /// </code>
-    /// <para>
-    /// Every tick of depth costs a tick of input latency, and a hold delays one
-    /// input by one step. A value of <c>0</c> consumes inputs as they arrive,
-    /// with no slack to absorb any drift.
-    /// </para>
+    /// How many ticks of input the server keeps queued before running them. A
+    /// small buffer absorbs jitter so the entity steps every tick, and each
+    /// tick of buffer adds a tick of input latency. <c>0</c> runs inputs as
+    /// they arrive.
     /// </summary>
     public int ConsumeBufferTicks
     {
@@ -802,27 +699,9 @@ public sealed class NetwPredictionHandle : NetwRefCounted
             1286410249UL);
 
     /// <summary>
-    /// How many transitions authority leaves standing in the queue instead of
-    /// replaying, for an entity at
-    /// <see cref="NetwSimulationHandle.ScheduleEnum.Frame"/>. It is latency
-    /// added to every command and it buys nothing back, which is why it
-    /// defaults to zero. Authority replays at most one transition per frame, so
-    /// it can never drain faster than the owner fills, and a reserve that
-    /// cannot be spent faster than it is refilled absorbs no jitter. Every tick
-    /// of depth is another tick of
-    /// <see cref="NetwPredictionHandle.AckAgeTicks"/> behind every recovery.
-    /// <code>
-    /// depth &gt; buffer       replay one transition        (consumed)
-    /// 0 &lt; depth &lt;= buffer  hold, spending nothing           (held)
-    /// depth == 0           the queue is dry              (starved)
-    /// </code>
-    /// <para>
-    /// At the default of zero the middle row cannot happen, so a frame either
-    /// replays the transition it has or reports that it has none. Raise it only
-    /// to trade acknowledgement latency for a later replay position. It will
-    /// not smooth arrival, because what covers a dry frame is depth an earlier
-    /// burst already built, at any buffer including zero.
-    /// </para>
+    /// How many inputs the server keeps queued before running them, for an
+    /// entity at <see cref="NetwSimulationHandle.ScheduleEnum.Frame"/>. Each
+    /// one adds a tick of latency, so leave it at <c>0</c> unless you need it.
     /// </summary>
     public int ReplayBufferDepth
     {
@@ -860,25 +739,9 @@ public sealed class NetwPredictionHandle : NetwRefCounted
             1286410249UL);
 
     /// <summary>
-    /// How far the server may fall behind the newest input before it stops
-    /// catching up one tick at a time and jumps to the live edge. The server
-    /// never steps over a missing tick, so across a gap it gains one tick per
-    /// server tick while the client keeps producing one per tick. A gap
-    /// therefore never closes on its own and the acknowledgement stays behind
-    /// forever, which reads as an entity that simulates and is never corrected.
-    /// The usual way to open one is a client whose clock re-anchors after it
-    /// has already produced input, joining a session that has been running a
-    /// while.
-    /// <code>
-    /// within the ceiling   walk forward, filling holes one at a time
-    /// past the ceiling     re-open at the newest input, less
-    ///                      consume_buffer_ticks
-    /// </code>
-    /// <para>
-    /// Input skipped that way is a second old and no longer worth simulating. A
-    /// value of <c>0</c> turns the recovery off and lets the server fall as far
-    /// behind as it falls.
-    /// </para>
+    /// How far the server may fall behind the newest input before it skips
+    /// ahead to it. Without this, a client that joins a running session can
+    /// leave the server behind for good. <c>0</c> disables skipping.
     /// </summary>
     public int MaxConsumeLagTicks
     {
@@ -916,13 +779,11 @@ public sealed class NetwPredictionHandle : NetwRefCounted
             1286410249UL);
 
     /// <summary>
-    /// How many ticks behind the newest input the acknowledgement is, updated
-    /// every tick. On the owning client it is the span a restore has to project
-    /// across, and <see cref="NetwSimulationHandle.MaxRestoreTicks"/> caps it.
-    /// On the server it is the backlog waiting to be consumed, and
-    /// <see cref="NetwPredictionHandle.MaxConsumePerTick"/> drains it. A
-    /// healthy link holds it near zero, and a growing value means the server is
-    /// falling behind.
+    /// How many ticks the last input the server acknowledged is behind the
+    /// newest input. On a healthy connection it stays near zero, and a growing
+    /// value means the server is falling behind.
+    /// <see cref="NetwSimulationHandle.MaxRestoreTicks"/> caps it on the
+    /// client.
     /// </summary>
     public int AckAgeTicks
     {
@@ -957,10 +818,9 @@ public sealed class NetwPredictionHandle : NetwRefCounted
             373806689UL);
 
     /// <summary>
-    /// How far this entity may drift before an arriving state triggers a
-    /// correction. A field needing a tolerance of its own declares one with
-    /// <see cref="NetwPropertyConfig.Epsilon"/>, which replaces this for that
-    /// field alone.
+    /// How far the predicted state may drift from the server's before it is
+    /// corrected. <see cref="NetwPropertyConfig.Epsilon"/> overrides it for one
+    /// field.
     /// </summary>
     public double DivergenceEpsilon
     {
@@ -998,9 +858,8 @@ public sealed class NetwPredictionHandle : NetwRefCounted
             3859961898UL);
 
     /// <summary>
-    /// Whether this entity is corrected on its own or together with the
-    /// entities its <see cref="NetwEntity.Simulation"/> selects, as a
-    /// <see cref="NetwPredict.Reconcile"/> value.
+    /// Whether this entity is corrected alone or together with the entities its
+    /// <see cref="NetwEntity.Simulation"/> selects.
     /// </summary>
     public NetwPredict.Reconcile ReconcileMode
     {
@@ -1038,24 +897,10 @@ public sealed class NetwPredictionHandle : NetwRefCounted
             251036612UL);
 
     /// <summary>
-    /// The set of prediction settings this entity starts from, or
-    /// <see cref="NetwPredict.Archetype.None"/>. A preset is a starting point.
-    /// Writing it applies that set's recovery settings and
-    /// <see cref="NetwSimulationHandle.Schedule"/> outright, and anything
-    /// written afterwards refines them.
-    /// <see cref="NetwPredict.Archetype.Scripted"/> writes
-    /// <see cref="NetwSimulationHandle.ScheduleEnum.Tick"/>.
-    /// <see cref="NetwPredict.Archetype.SolverBody"/> writes
-    /// <see cref="NetwSimulationHandle.ScheduleEnum.Frame"/> and
-    /// <see cref="NetwSimulationHandle.RestoreEnum.Extrapolated"/>. A scene
-    /// declaring prediction on its <see cref="MultiplayerSynchronizer"/>
-    /// therefore applies its archetype first and writes only the values it
-    /// actually moved, so a value left at its default cannot overwrite the
-    /// preset it was meant to refine. No preset sets
-    /// <see cref="NetwPredictionHandle.BreachResponse"/>, because it is the one
-    /// recovery setting that stops speculation at a witnessed contact and
-    /// follows authority until the entity is reseeded. A game that wants that
-    /// says so itself.
+    /// A preset for this entity's prediction settings and
+    /// <see cref="NetwSimulationHandle.Schedule"/>. Settings written afterwards
+    /// override the preset. No preset sets
+    /// <see cref="NetwPredictionHandle.BreachResponse"/>.
     /// </summary>
     public NetwPredict.Archetype Archetype
     {
@@ -1081,7 +926,7 @@ public sealed class NetwPredictionHandle : NetwRefCounted
         NetwApi.MethodBind("NetwPredictionHandle", "get_stats", 4290843155UL);
 
     /// <summary>
-    /// What this entity's engine counted, on a <see cref="NetwPredictStats"/>.
+    /// This entity's prediction counters.
     /// </summary>
     public NetwPredictStats Stats
     {
@@ -1097,8 +942,8 @@ public sealed class NetwPredictionHandle : NetwRefCounted
         NetwApi.MethodBind("NetwPredictionHandle", "bind_entity", 3949104711UL);
 
     /// <summary>
-    /// Binds the entity this handle belongs to. Called by the entity record's
-    /// factory, which is the only thing that creates a handle.
+    /// Binds the entity this handle belongs to. Called by Networked when it
+    /// creates the handle.
     /// </summary>
     public void BindEntity(NetwEntity entity)
     {
@@ -1115,8 +960,8 @@ public sealed class NetwPredictionHandle : NetwRefCounted
         NetwApi.MethodBind("NetwPredictionHandle", "entity", 1711071689UL);
 
     /// <summary>
-    /// The entity this handle declares prediction for, or <c>null</c> once that
-    /// entity is gone.
+    /// The entity this handle belongs to, or <c>null</c> once that entity is
+    /// gone.
     /// </summary>
     public NetwEntity Entity()
     {
@@ -1129,9 +974,7 @@ public sealed class NetwPredictionHandle : NetwRefCounted
         NetwApi.MethodBind("NetwPredictionHandle", "is_registered", 36873697UL);
 
     /// <summary>
-    /// True once an engine is attached to this handle, which is how a caller
-    /// tells an entity that is actually predicting from one that has only been
-    /// configured.
+    /// Whether the entity is being predicted, as opposed to only configured.
     /// </summary>
     public bool IsRegistered()
     {
@@ -1144,13 +987,10 @@ public sealed class NetwPredictionHandle : NetwRefCounted
         NetwApi.MethodBind("NetwPredictionHandle", "sensor", 3990617847UL);
 
     /// <summary>
-    /// The value the engine sampled for the declared sensor
-    /// <paramref name="name"/> before the drive now running, or
-    /// <paramref name="default"/> when nothing has sampled it. A declared
-    /// sensor is sampled once per drive and recorded with that drive. A
-    /// simulation that reads the sample here instead of asking the world again
-    /// runs against exactly the facts that were recorded, so a disagreement
-    /// about the world can be blamed on the world.
+    /// The value sampled for the sensor <paramref name="name"/> before the
+    /// current step, or <paramref name="default"/> when nothing sampled it.
+    /// Read the world through this in your step, so a misprediction can be
+    /// blamed on the world.
     /// <code>
     /// func _init() -&gt; void:
     ///     entity.prediction.sensors[&amp;"ground"] = _sample_ground
@@ -1184,11 +1024,11 @@ public sealed class NetwPredictionHandle : NetwRefCounted
             4095437614UL);
 
     /// <summary>
-    /// The <see cref="NetwPredict.RecoveryPolicy"/> this entity recovers under.
-    /// It never returns <see cref="NetwPredict.RecoveryPolicy.Auto"/>, which it
-    /// resolves against the body. A physics body at
-    /// <see cref="NetwSimulationHandle.ScheduleEnum.Frame"/> that declares
-    /// <see cref="NetwPredict.RecoveryPolicy.RebaseReplay"/> resolves
+    /// The <see cref="NetwPredict.RecoveryPolicy"/> this entity actually uses.
+    /// <see cref="NetwPredict.RecoveryPolicy.Auto"/> is resolved from the body,
+    /// and a physics body at
+    /// <see cref="NetwSimulationHandle.ScheduleEnum.Frame"/> resolves
+    /// <see cref="NetwPredict.RecoveryPolicy.RebaseReplay"/> to
     /// <see cref="NetwPredict.RecoveryPolicy.RebaseRecover"/>.
     /// </summary>
     public NetwPredict.RecoveryPolicy ResolvedRecoveryPolicy()
@@ -1208,8 +1048,8 @@ public sealed class NetwPredictionHandle : NetwRefCounted
             1005356550UL);
 
     /// <summary>
-    /// Steps prediction or consumption for <paramref name="tick"/>, and does
-    /// nothing with no engine attached.
+    /// Steps the entity for <paramref name="tick"/>. Does nothing for an entity
+    /// that is not predicted.
     /// </summary>
     public void SimulateTick(double delta, long tick)
     {
@@ -1231,11 +1071,10 @@ public sealed class NetwPredictionHandle : NetwRefCounted
             373806689UL);
 
     /// <summary>
-    /// Runs one drive for an entity scheduled per frame. It does nothing for an
-    /// entity scheduled per tick, or with no engine attached. The transition it
-    /// writes is labelled from the clock exactly as the session's own frame
-    /// drive labels one, so driving an entity by hand and letting the session
-    /// drive it produce the same transition.
+    /// Steps an entity at <see cref="NetwSimulationHandle.ScheduleEnum.Frame"/>
+    /// once, as the session would. Does nothing for an entity at
+    /// <see cref="NetwSimulationHandle.ScheduleEnum.Tick"/> or one that is not
+    /// predicted.
     /// </summary>
     public void SimulateFrame(double delta)
     {
@@ -1255,17 +1094,10 @@ public sealed class NetwPredictionHandle : NetwRefCounted
             3102165223UL);
 
     /// <summary>
-    /// What this entity's declarations actually reach, field by field, or an
-    /// empty <see cref="Godot.Collections.Dictionary"/> before the entity is
-    /// attached to an engine. A declaration can be legal, be accepted, and
-    /// still do nothing. <see cref="NetwPropertyConfig.CarryStep"/> under
-    /// <see cref="NetwSimulationHandle.ScheduleEnum.Tick"/> is rejected the
-    /// first time it is used and never tried again, a
-    /// <see cref="NetwPropertyConfig.TeleportOnly"/> field that is free to
-    /// trigger asks for corrections no smaller restore may write, and an
-    /// <see cref="NetwPropertyConfig.Epsilon"/> on a field no comparison reads
-    /// bounds nothing. This is where a game finds that out while wiring rather
-    /// than in a capture.
+    /// Reports, field by field, whether this entity's prediction settings take
+    /// effect. Returns an empty <see cref="Godot.Collections.Dictionary"/>
+    /// before the entity is predicted. Use it while wiring an entity to find
+    /// settings that are accepted but do nothing.
     /// <code>
     /// var report := entity.prediction.reachability()
     /// for key: StringName in report[&amp;"fields"]:
@@ -1291,9 +1123,8 @@ public sealed class NetwPredictionHandle : NetwRefCounted
     /// </code>
     /// </para>
     /// <para>
-    /// <c>findings</c> is the same list the wiring report prints, so a test
-    /// asserts on it rather than on log text. Everything here is read from what
-    /// this handle already carries, so a caller gathers no arguments.
+    /// <c>findings</c> lists the same warnings printed when the entity is set
+    /// up.
     /// </para>
     /// </summary>
     public Godot.Collections.Dictionary Reachability()
@@ -1313,13 +1144,10 @@ public sealed class NetwPredictionHandle : NetwRefCounted
             3218959716UL);
 
     /// <summary>
-    /// Opens a window of
-    /// <see cref="NetwPredictionHandle.CollisionCooldownTicks"/> during which a
-    /// recovery smaller than
-    /// <see cref="NetwPredictionHandle.TeleportThreshold"/> is held off, so the
-    /// brief disagreement a collision causes is not corrected through. Call it
-    /// from the controlling client when the predicted body registers a
-    /// collision. It does nothing with no engine attached.
+    /// Holds off small corrections for
+    /// <see cref="NetwPredictionHandle.CollisionCooldownTicks"/>. Call it on
+    /// the controlling client when the predicted body collides, so the
+    /// correction does not fight the collision.
     /// </summary>
     public void NotifyContact()
     {

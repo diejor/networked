@@ -6,16 +6,12 @@ using Godot.NativeInterop;
 namespace Networked;
 
 /// <summary>
-/// The declaration that makes a node a multiplayer scene.
+/// Makes a node a multiplayer scene.
 /// </summary>
 /// <remarks>
-/// Returned by <see cref="Netw.ConfigureMultiplayerScene"/> and configured in
-/// place. A scene declares itself once from its own root, and that declaration
-/// is the only one: there is no second marking step and nothing else has to
-/// know the scene exists. The facts land on the root's <b>script</b>, not on
-/// this object, so nothing holds the config afterwards and a second instance of
-/// the same scene is declared the same way without re-running anything. The
-/// verbs may be called in any order.
+/// Returned by <see cref="Netw.ConfigureMultiplayerScene"/>. Declare it once
+/// from the scene root's <c>Object._init</c>, the methods can be called in any
+/// order.
 /// <code>
 /// extends Node2D
 ///
@@ -23,12 +19,9 @@ namespace Networked;
 ///     Netw.configure_multiplayer_scene(self).labeled(&amp;"Level1").isolated()
 /// </code>
 /// <para>
-/// Declare from <c>Object._init</c>, because the declaration is read once, when
-/// the entity reaches <see cref="NetwEntity.StageEnum.Armed"/>, and travels in
-/// the spawn packet. Declaring makes
-/// <see cref="NetwEntity.IsMultiplayerScene"/> <c>true</c>, and every entity
-/// below the root belongs to it through <see cref="NetwEntity.Scene"/>. Nothing
-/// else about the entity changes.
+/// Every entity below the root belongs to the scene through
+/// <see cref="NetwEntity.Scene"/>, and
+/// <see cref="NetwEntity.IsMultiplayerScene"/> is <c>true</c> on the root.
 /// </para>
 /// </remarks>
 public sealed class NetwSceneConfig : NetwRefCounted
@@ -51,7 +44,7 @@ public sealed class NetwSceneConfig : NetwRefCounted
         NetwApi.MethodBind("NetwSceneConfig", "get_label", 2002593661UL);
 
     /// <summary>
-    /// The stem <see cref="NetwSceneConfig.Labeled"/> declared, or the root
+    /// The name given to <see cref="NetwSceneConfig.Labeled"/>, or the root
     /// node's name.
     /// </summary>
     public StringName Label
@@ -70,8 +63,8 @@ public sealed class NetwSceneConfig : NetwRefCounted
         NetwApi.MethodBind("NetwSceneConfig", "get_isolation", 3905245786UL);
 
     /// <summary>
-    /// <see cref="Netw.SceneIsolation.OwnWorld"/> once
-    /// <see cref="NetwSceneConfig.Isolated"/> is declared, and
+    /// <see cref="Netw.SceneIsolation.OwnWorld"/> after
+    /// <see cref="NetwSceneConfig.Isolated"/>,
     /// <see cref="Netw.SceneIsolation.None"/> otherwise.
     /// </summary>
     public int Isolation
@@ -89,10 +82,9 @@ public sealed class NetwSceneConfig : NetwRefCounted
 
     /// <summary>
     /// Names the scene for <see cref="Netw.Scene"/>. Defaults to the root
-    /// node's own name. A label names a scene type, not an instance.
-    /// <see cref="Netw.Scene"/> fails when multiple live scenes share the
-    /// label. Use the handle returned by <see cref="Netw.Spawn"/> to select an
-    /// instance.
+    /// node's name. <see cref="Netw.Scene"/> fails when several live scenes
+    /// share the label. Use the node returned by <see cref="Netw.Spawn"/> to
+    /// select an instance.
     /// </summary>
     public NetwSceneConfig Labeled(StringName stem)
     {
@@ -112,30 +104,16 @@ public sealed class NetwSceneConfig : NetwRefCounted
         NetwApi.MethodBind("NetwSceneConfig", "isolated", 973840745UL);
 
     /// <summary>
-    /// Gives the scene its own physics and render world, so geometry
-    /// overlapping another scene's cannot interact with it. Without this the
-    /// scene shares the world it is parented into. Only a
-    /// <see cref="Viewport"/> owns a world in Godot, so an isolated scene needs
-    /// one and the framework builds it: <see cref="Netw.Spawn"/> returns a
-    /// <see cref="SubViewport"/> with the authored root inside, and the caller
-    /// parents that. <b>So the node <see cref="Netw.Spawn"/> returns is not the
-    /// node the callable built.</b> The scene is still the authored root.
-    /// <see cref="Netw.Scene"/>, the roster, the admissions and the signals are
-    /// unchanged, and the viewport carries no identity of its own. The one
-    /// thing that differs is that the root's <see cref="Node.GetParent"/> is
-    /// the viewport rather than the node it was added to.
+    /// Gives the scene its own physics and render world, so it does not collide
+    /// with or draw over other scenes. <see cref="Netw.Spawn"/> then returns a
+    /// <see cref="SubViewport"/> with the scene root inside, and that is what
+    /// the caller parents.
     /// <code>
     /// var mount := Netw.spawn(spawn_level1)   # a SubViewport
     /// worlds.add_child(mount)
     /// </code>
-    /// <code>
-    /// Worlds
-    ///  ┖╴ Level1World (SubViewport)   # what spawn returned
-    ///       ┖╴ Level1 (Node2D)        # the scene, what the callable built
-    /// </code>
     /// <para>
-    /// A <see cref="SubViewport"/> renders to a texture, and an isolated world
-    /// reaches the screen on a listen host while it is
+    /// On a listen server, <see cref="HostSceneView"/> draws it while it is
     /// <see cref="NetwSessionHandle.PresentedScene"/>.
     /// </para>
     /// </summary>

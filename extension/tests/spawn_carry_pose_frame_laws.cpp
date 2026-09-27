@@ -327,8 +327,7 @@ TEST_CASE(
     "[Networked][Spawn][Frame] a peer applying a reparent frame keeps a "
     "moving body's velocity"
 ) {
-    const PoseEvidence &seen
-        = carry_pose_evidence().kinds[KIND_RIGID_SLIDING];
+    const PoseEvidence &seen = carry_pose_evidence().kinds[KIND_RIGID_SLIDING];
     REQUIRE(seen.driven);
     NETW_CHECK_GT(double(seen.velocity_before.x), 2.9);
     NETW_CHECK_LT(

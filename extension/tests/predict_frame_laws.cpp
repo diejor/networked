@@ -677,13 +677,7 @@ TEST_CASE(
     );
     CHECK_FALSE(netw::predict::is_lane(1));
     NETW_CHECK_EQ(
-        admit_frame(
-            registry,
-            1,
-            from(AUTHORITY_PEER, true),
-            false,
-            LIVE
-        ),
+        admit_frame(registry, 1, from(AUTHORITY_PEER, true), false, LIVE),
         godot::Error::ERR_INVALID_DATA
     );
 }

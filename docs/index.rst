@@ -119,9 +119,9 @@ generated from the same XML the in-editor help serves. Start at
 Writing in C#
 -------------
 
-A C# game reaches the same surface. The addon ships generated bindings under
-``addons/networked/native_api/cs/``, so installing it is the whole install and
-the project's ``.csproj`` needs nothing added.
+The addon ships generated C# bindings under
+``addons/networked/native_api/cs/``. Installing the addon is enough, the
+project's ``.csproj`` needs no changes.
 
 .. toctree::
    :maxdepth: 1

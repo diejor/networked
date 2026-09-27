@@ -1766,7 +1766,6 @@ Array NetwPredictionEngine::ledger_fields(int64_t p_slot) const {
     return out;
 }
 
-
 int NetwPredictionEngine::simulation_subject_count(int64_t p_slot) const {
     NetwMultiplayer *host = core();
     const Ref<NetwEntity> seated = owner_entity(p_slot);
@@ -4258,11 +4257,7 @@ void NetwPredictionEngine::record_input_bytes(
     if (core() == nullptr) {
         return;
     }
-    record_input(
-        p_slot,
-        p_tick,
-        predict::fnv1a(input_bytes(p_slot, p_input))
-    );
+    record_input(p_slot, p_tick, predict::fnv1a(input_bytes(p_slot, p_input)));
 }
 
 void NetwPredictionEngine::run_replay_step(
@@ -5701,8 +5696,7 @@ Dictionary NetwPredictionEngine::seal_transition(
         const Dictionary written
             = lane.is_valid() ? lane->input_at(p_transition) : Dictionary();
         const bool authored = !written.is_empty();
-        const bool relayed
-            = origin == int(predict::CellProvenance::RELAYED);
+        const bool relayed = origin == int(predict::CellProvenance::RELAYED);
         const bool substituted
             = origin == int(predict::CellProvenance::SUBSTITUTED);
         Variant command = coast_command(p_slot);

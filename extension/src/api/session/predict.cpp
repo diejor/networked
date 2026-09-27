@@ -745,8 +745,7 @@ sim::Mode NetwMultiplayer::sim_resolve(
 }
 
 void NetwMultiplayer::sim_follow_session_authority() {
-    const LocalVector<RID> moved
-        = sim_rows.follow_session_authority(is_host());
+    const LocalVector<RID> moved = sim_rows.follow_session_authority(is_host());
     for (const RID &entity : moved) {
         if (NetwPredictSlotEngine *engine = predict_engine_for(entity)) {
             engine->rewire();

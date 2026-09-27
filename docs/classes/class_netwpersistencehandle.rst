@@ -12,18 +12,16 @@ NetwPersistenceHandle
 
 **Inherits:** :godot:`RefCounted`
 
-One entity's stored row, reached as :ref:`NetwEntity.persistence<class_NetwEntity_property_persistence>`.
+One entity's saved record, reached as :ref:`NetwEntity.persistence<class_NetwEntity_property_persistence>`.
 
 .. rst-class:: classref-introduction-group
 
 Description
 -----------
 
-The session authority compiles the entity's :ref:`NetwPersistenceConfig<class_NetwPersistenceConfig>` and every :ref:`NetwPropertyConfig.persisted()<class_NetwPropertyConfig_method_persisted>` declaration under it into one row when the entity's node is ready. A declaration that does not hold refuses the whole entity with an error naming the property and the column, so an entity either saves its whole row or saves nothing.
+On the server, the entity's :ref:`NetwPersistenceConfig<class_NetwPersistenceConfig>` and its :ref:`NetwPropertyConfig.persisted()<class_NetwPropertyConfig_method_persisted>` properties become one record when the node is ready. If any of them is invalid, the entity saves nothing and an error names the property.
 
-Code that depends on the stored values waits for :ref:`loaded<class_NetwPersistenceHandle_signal_loaded>`. :godot:`Node._ready() <Node#class_Node_private_method__ready>` runs before the row is read.
-
-A save freezes its values at the moment it is submitted. A property that moved while the write was in flight leaves the entity :ref:`dirty<class_NetwPersistenceHandle_property_dirty>` after the acknowledgement, so the next save carries the newer value.
+\ :godot:`Node._ready() <Node#class_Node_private_method__ready>` runs before the record is read, so wait for :ref:`loaded<class_NetwPersistenceHandle_signal_loaded>` before using the stored values.
 
 ::
 
@@ -32,11 +30,7 @@ A save freezes its values at the moment it is submitted. A property that moved w
         row.saved.connect(func() -> void: print("stored as ", row.record_id))
         row.save()
 
-\ :ref:`NetwPersistenceConfig.interval()<class_NetwPersistenceConfig_method_interval>` saves the row on its own cadence, and an entity that changed nothing submits no write at all.
-
-An entity whose node leaves the tree for good writes the values it held as it left, and the write completes after the node is freed. A move to another parent writes nothing and keeps the row bound. A final write the database refuses stays owed, and :ref:`NetwSessionHandle.save_entities()<class_NetwSessionHandle_method_save_entities>` writes it again.
-
-A load or save that fails emits :ref:`NetwDatabase.failed<class_NetwDatabase_signal_failed>` on the entity's database. The interval and the final write have no caller to answer, so that signal is where their failures arrive.
+\ :ref:`NetwPersistenceConfig.interval()<class_NetwPersistenceConfig_method_interval>` saves automatically, and only when something changed. An entity whose node is freed saves one last time. Failed loads and saves emit :ref:`NetwDatabase.failed<class_NetwDatabase_signal_failed>`.
 
 .. rst-class:: classref-reftable-group
 
@@ -83,7 +77,7 @@ Signals
 
 **loaded**\ (\ found\: :godot:`bool`\ ) :ref:`🔗<class_NetwPersistenceHandle_signal_loaded>`
 
-Emitted once a load has applied the stored row, including the read :ref:`NetwPersistenceConfig.load_on_spawn()<class_NetwPersistenceConfig_method_load_on_spawn>` starts. ``found`` is ``false`` when the database held no row for :ref:`record_id<class_NetwPersistenceHandle_property_record_id>`. A failed load emits :ref:`NetwDatabase.failed<class_NetwDatabase_signal_failed>` instead. :ref:`NetwMultiplayer.persist_loaded<class_NetwMultiplayer_signal_persist_loaded>`.
+Emitted when a load finishes, including the one :ref:`NetwPersistenceConfig.load_on_spawn()<class_NetwPersistenceConfig_method_load_on_spawn>` starts. ``found`` is ``false`` when no record was stored for :ref:`record_id<class_NetwPersistenceHandle_property_record_id>`.
 
 .. rst-class:: classref-item-separator
 
@@ -95,7 +89,7 @@ Emitted once a load has applied the stored row, including the read :ref:`NetwPer
 
 **saved**\ (\ ) :ref:`🔗<class_NetwPersistenceHandle_signal_saved>`
 
-Emitted once a write has been acknowledged and its values have become the saved ones. A refused write emits :ref:`NetwDatabase.failed<class_NetwDatabase_signal_failed>` instead. :ref:`NetwMultiplayer.persist_saved<class_NetwMultiplayer_signal_persist_saved>`.
+Emitted when a save is stored.
 
 .. rst-class:: classref-section-separator
 
@@ -116,7 +110,7 @@ Property Descriptions
 
 - :godot:`StringName` **get_database**\ (\ )
 
-The :ref:`NetwDatabase<class_NetwDatabase>` this row lives in, as :ref:`NetwPersistenceConfig.database()<class_NetwPersistenceConfig_method_database>` named it.
+The :ref:`NetwDatabase<class_NetwDatabase>` this record lives in, as :ref:`NetwPersistenceConfig.database()<class_NetwPersistenceConfig_method_database>` named it.
 
 .. rst-class:: classref-item-separator
 
@@ -132,7 +126,7 @@ The :ref:`NetwDatabase<class_NetwDatabase>` this row lives in, as :ref:`NetwPers
 
 - :godot:`bool` **get_dirty**\ (\ )
 
-Whether any bound property differs from what was last saved. :ref:`NetwMultiplayer.persist_is_dirty()<class_NetwMultiplayer_method_persist_is_dirty>`.
+Whether any bound property differs from what was last saved.
 
 .. rst-class:: classref-item-separator
 
@@ -148,7 +142,7 @@ Whether any bound property differs from what was last saved. :ref:`NetwMultiplay
 
 - :godot:`StringName` **get_record_id**\ (\ )
 
-The key this row is stored under, as :ref:`NetwPersistenceConfig.record_id()<class_NetwPersistenceConfig_method_record_id>` answered it when the entity bound. :ref:`NetwMultiplayer.persist_get_record_id()<class_NetwMultiplayer_method_persist_get_record_id>`.
+The id this record is stored under, as :ref:`NetwPersistenceConfig.record_id()<class_NetwPersistenceConfig_method_record_id>` returned it.
 
 .. rst-class:: classref-section-separator
 
@@ -165,19 +159,24 @@ Method Descriptions
 
 :ref:`NetwPromise<class_NetwPromise>` **load**\ (\ ) :ref:`🔗<class_NetwPersistenceHandle_method_load>`
 
-Reads the stored row and applies it to the bound properties. The promise answers ``true`` when a row was found and ``false`` when none was stored, which leaves the entity's own values standing. :ref:`NetwMultiplayer.persist_load()<class_NetwMultiplayer_method_persist_load>`.
-
-While the read started by :ref:`NetwPersistenceConfig.load_on_spawn()<class_NetwPersistenceConfig_method_load_on_spawn>` is outstanding, this returns that same promise.
+Reads the stored record and applies it to the bound properties. The promise returns ``true`` when a record was found, and ``false`` when none was stored and the properties keep their values. A failed load fails the promise, and :ref:`NetwPromise.wait()<class_NetwPromise_method_wait>` returns the code.
 
 .. code:: text
 
     Error
-    ┠╴ERR_UNAUTHORIZED   this peer holds no session authority
-    ┠╴ERR_BUSY           a bound property changed since the last load or save, a write
-                         is in flight, or a property changed while the row was read
-    ┠╴ERR_DOES_NOT_EXIST a bound node was freed while the row was applied
-    ┖╴ERR_UNAVAILABLE    session authority moved or the database closed while the row
-                         was read, so the load was canceled
+    ┠╴ERR_UNCONFIGURED       the entity binds no persistence, the database is not open,
+    │                        or the schema declares no migration from the stored row
+    ┠╴ERR_UNAUTHORIZED       this peer is not the server
+    ┠╴ERR_BUSY             a bound property changed since the last load or save, a
+    │                        write is in flight, a property changed while the row was
+    │                        read, or the database is full
+    ┠╴ERR_DOES_NOT_EXIST     a bound node was freed while the row was applied
+    ┠╴ERR_FILE_UNRECOGNIZED  the stored row is not in this library's format, or carries
+    │                        a newer storage version than the schema
+    ┠╴ERR_INVALID_DATA       the stored row does not match the schema
+    ┠╴ERR_UNAVAILABLE        the database closed or
+    │                        the session ended while the row was read
+    ┖╴backend-defined        the backend could not read the row
 
 \ **Server Only.**
 
@@ -191,13 +190,21 @@ While the read started by :ref:`NetwPersistenceConfig.load_on_spawn()<class_Netw
 
 :ref:`NetwPromise<class_NetwPromise>` **save**\ (\ ) :ref:`🔗<class_NetwPersistenceHandle_method_save>`
 
-Writes the bound properties as this entity's row. The promise answers ``false`` when nothing had changed and no write was submitted. A write the database refused never becomes the saved values, so the entity stays :ref:`dirty<class_NetwPersistenceHandle_property_dirty>` and the next save carries them again. :ref:`NetwMultiplayer.persist_save()<class_NetwMultiplayer_method_persist_save>`.
+Writes the bound properties as this entity's record. The promise returns ``false`` when nothing had changed. A failed save fails the promise, and :ref:`NetwPromise.wait()<class_NetwPromise_method_wait>` returns the code. The entity stays :ref:`dirty<class_NetwPersistenceHandle_property_dirty>` so the next save tries again.
 
-A peer holding no session authority is refused with :godot:`@GlobalScope.ERR_UNAUTHORIZED <@GlobalScope#class_@GlobalScope_constant_ERR_UNAUTHORIZED>`. Its copy of the bound properties is the authority's row arriving over the wire, so storing it would write the wrong values under the right key.
+.. code:: text
 
-An entity whose spawn load has not succeeded is refused with :godot:`@GlobalScope.ERR_BUSY <@GlobalScope#class_@GlobalScope_constant_ERR_BUSY>`, so the values it spawned with never overwrite the stored row.
-
-A write that settles after this peer lost session authority, or after the database closed, fails with :godot:`@GlobalScope.ERR_UNAVAILABLE <@GlobalScope#class_@GlobalScope_constant_ERR_UNAVAILABLE>` and leaves the entity :ref:`dirty<class_NetwPersistenceHandle_property_dirty>`. The write itself may still have reached storage.
+    Error
+    ┠╴ERR_UNCONFIGURED    the entity binds no persistence, or the database is not open
+    ┠╴ERR_UNAUTHORIZED    this peer is not the server
+    ┠╴ERR_BUSY            a write is in flight, the spawn load has not succeeded, or
+    │                     the database is full
+    ┠╴ERR_INVALID_DATA    the bound values do not match the schema, or the connection
+    │                     answered no outcome for the row
+    ┠╴ERR_UNAVAILABLE     the bound nodes are gone, or this peer stopped being the
+    │                     server or the database closed before the write settled.
+    │                     The write may still have reached storage
+    ┖╴backend-defined     the backend refused or could not complete the write
 
 \ **Server Only.**
 

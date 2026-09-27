@@ -174,10 +174,7 @@ TEST_CASE(
     session->session_set_authority_peer(7);
 
     CHECK(session->is_host());
-    NETW_CHECK_EQ(
-        session->session_get_role(),
-        NetwMultiplayer::ROLE_NONE
-    );
+    NETW_CHECK_EQ(session->session_get_role(), NetwMultiplayer::ROLE_NONE);
 }
 
 PackedByteArray deny_payload(const StringName &p_key) {

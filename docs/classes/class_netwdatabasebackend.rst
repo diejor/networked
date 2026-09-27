@@ -14,22 +14,14 @@ NetwDatabaseBackend
 
 **Inherited By:** :ref:`FileSystemDatabase<class_FileSystemDatabase>`, :ref:`MemoryDatabase<class_MemoryDatabase>`, :ref:`NakamaDatabase<class_NakamaDatabase>`
 
-Where a :ref:`NetwDatabase<class_NetwDatabase>` keeps its saves, and how a slot of them is opened.
+Where a :ref:`NetwDatabase<class_NetwDatabase>` keeps its saves.
 
 .. rst-class:: classref-introduction-group
 
 Description
 -----------
 
-A backend describes storage. It holds no open slot, no queue and no cached record, which is what lets one backend Resource serve several sessions at once. Opening it answers a fresh :ref:`NetwDatabaseConnection<class_NetwDatabaseConnection>`, and that connection owns all the I/O.
-
-Two ship, and a game written against either runs unchanged on the other.
-
-- :ref:`FileSystemDatabase<class_FileSystemDatabase>` keeps records in files under one directory, and is what a shipped game saves into
-
-- :ref:`MemoryDatabase<class_MemoryDatabase>` keeps them in this process, for a test or a prototype
-
-Subclass this to reach storage the shipped backends do not cover. Implement the three methods below and hand back a connection.
+Subclass this to store records in a file, in memory, or on a server.
 
 ::
 
@@ -40,11 +32,7 @@ Subclass this to reach storage the shipped backends do not cover. Implement the 
     func _open(session: Object, slot: StringName) -> NetwPromise:
         return NetwPromise.resolved(MyConnection.new(root, slot))
 
-\ A method left unimplemented rejects with :godot:`@GlobalScope.ERR_UNAVAILABLE <@GlobalScope#class_@GlobalScope_constant_ERR_UNAVAILABLE>` rather than succeeding quietly, so a missing verb is visible the first time a game reaches for it.
-
-\ **Permissions**\ 
-
-A backend enforces whatever its storage actually allows. Holding session authority locally does not grant permission to write someone else's remote save.
+\ A method left unimplemented rejects with :godot:`@GlobalScope.ERR_UNAVAILABLE <@GlobalScope#class_@GlobalScope_constant_ERR_UNAVAILABLE>`. The records themselves are read and written by the :ref:`NetwDatabaseConnection<class_NetwDatabaseConnection>` that :ref:`_open()<class_NetwDatabaseBackend_private_method__open>` returns.
 
 .. rst-class:: classref-reftable-group
 
@@ -83,7 +71,7 @@ Method Descriptions
 
 :ref:`NetwPromise<class_NetwPromise>` **_delete_slot**\ (\ session\: :godot:`Object`, slot\: :godot:`StringName`\ ) |virtual| :ref:`🔗<class_NetwDatabaseBackend_private_method__delete_slot>`
 
-Removes ``slot`` and everything under it, and resolves an :godot:`@GlobalScope.Error <@GlobalScope#enum_@globalscope_Error>`. Failed cleanup must stay discoverable and retryable rather than reporting success.
+Removes ``slot`` and resolves an :godot:`@GlobalScope.Error <@GlobalScope#enum_@globalscope_Error>`, which :ref:`NetwDatabase.delete_slot()<class_NetwDatabase_method_delete_slot>` settles with. Resolve an error when the slot could not be fully removed. ``session`` is the :ref:`NetwMultiplayer<class_NetwMultiplayer>` asking.
 
 .. rst-class:: classref-item-separator
 
@@ -95,7 +83,7 @@ Removes ``slot`` and everything under it, and resolves an :godot:`@GlobalScope.E
 
 :ref:`NetwPromise<class_NetwPromise>` **_list_slots**\ (\ session\: :godot:`Object`\ ) |virtual| :ref:`🔗<class_NetwDatabaseBackend_private_method__list_slots>`
 
-Resolves a :godot:`PackedStringArray` of every slot this storage holds. Read it from storage, so a slot written by an earlier run appears.
+Resolves a :godot:`PackedStringArray` of every slot in storage, including ones written by earlier runs. :ref:`NetwDatabase.list_slots()<class_NetwDatabase_method_list_slots>` settles with it. ``session`` is the :ref:`NetwMultiplayer<class_NetwMultiplayer>` asking.
 
 .. rst-class:: classref-item-separator
 
@@ -107,7 +95,7 @@ Resolves a :godot:`PackedStringArray` of every slot this storage holds. Read it 
 
 :ref:`NetwPromise<class_NetwPromise>` **_open**\ (\ session\: :godot:`Object`, slot\: :godot:`StringName`\ ) |virtual| :ref:`🔗<class_NetwDatabaseBackend_private_method__open>`
 
-Resolves a fresh :ref:`NetwDatabaseConnection<class_NetwDatabaseConnection>` over ``slot``, or rejects with why it could not. Build a new connection every time, rather than handing back one that was already open.
+Resolves a new :ref:`NetwDatabaseConnection<class_NetwDatabaseConnection>` for ``slot``, or rejects with an error. ``session`` is the :ref:`NetwMultiplayer<class_NetwMultiplayer>` opening the slot.
 
 .. rst-class:: classref-item-separator
 

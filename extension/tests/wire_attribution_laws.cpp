@@ -248,7 +248,9 @@ TEST_CASE(
     a_synced_body(rig, "Watched", 2.0);
     rig.step_ticks(4);
     netw_test::seat_pending(
-        *host->get_replication_plane()->get_sync_pipeline()->row_send_under_test(),
+        *host->get_replication_plane()
+             ->get_sync_pipeline()
+             ->row_send_under_test(),
         rig.peer_id(0)
     );
     rig.step_ticks(8);

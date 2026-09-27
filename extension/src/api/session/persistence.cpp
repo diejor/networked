@@ -179,8 +179,7 @@ Ref<NetwPromise> NetwMultiplayer::database_open(
     if (!plane->is_valid(p_database)) {
         return unknown_database();
     }
-    const Ref<NetwDatabaseBackend> backend
-        = database_backend_of(p_database);
+    const Ref<NetwDatabaseBackend> backend = database_backend_of(p_database);
     if (backend.is_null()) {
         return NetwPromise::rejected(
             ERR_UNCONFIGURED,
@@ -269,12 +268,10 @@ Ref<NetwPromise> NetwMultiplayer::database_submit(
 Ref<NetwPromise> NetwMultiplayer::database_list_slots(const RID &p_database) {
     const Ref<NetwDatabaseBackend> backend = database_backend_of(p_database);
     if (backend.is_null()) {
-        return NetwPromise::resolved(
-            database_slots_failure(
-                ERR_UNCONFIGURED,
-                "this database declares no backend to list slots of"
-            )
-        );
+        return NetwPromise::resolved(database_slots_failure(
+            ERR_UNCONFIGURED,
+            "this database declares no backend to list slots of"
+        ));
     }
     const Ref<NetwPromise> asked = backend->list_slots(this);
     Ref<NetwPromise> answer;
@@ -295,21 +292,16 @@ void NetwMultiplayer::database_slots_settled(
     }
     if (p_asked->get_is_failed()) {
         p_answer->resolve(
-            database_slots_failure(
-                p_asked->get_code(),
-                p_asked->get_detail()
-            )
+            database_slots_failure(p_asked->get_code(), p_asked->get_detail())
         );
         return;
     }
     const Variant answered = p_asked->get_result();
     if (answered.get_type() != Variant::PACKED_STRING_ARRAY) {
-        p_answer->resolve(
-            database_slots_failure(
-                ERR_INVALID_DATA,
-                "the backend answered no PackedStringArray of slots"
-            )
-        );
+        p_answer->resolve(database_slots_failure(
+            ERR_INVALID_DATA,
+            "the backend answered no PackedStringArray of slots"
+        ));
         return;
     }
     p_answer->resolve(database_slots_of(PackedStringArray(answered)));
@@ -377,12 +369,7 @@ Error NetwMultiplayer::database_batch_write(
     String detail;
     const Error checked = persist::validate_row(*schema, p_values, detail);
     if (checked != OK) {
-        NETW_ERR_V(
-            checked,
-            sys::TABLE,
-            "%s",
-            detail.utf8().get_data()
-        );
+        NETW_ERR_V(checked, sys::TABLE, "%s", detail.utf8().get_data());
     }
     Dictionary operation;
     operation["kind"] = "replace";
@@ -446,8 +433,9 @@ RID NetwMultiplayer::persist_binding_of_entity(const RID &p_entity) const {
 
 RID NetwMultiplayer::persist_entity_of_binding(const RID &p_binding) const {
     const persist::Binding *held = bindings.at(p_binding);
-    Node *root = held != nullptr ? Object::cast_to<Node>(gd::object_of(held->root))
-                                 : nullptr;
+    Node *root = held != nullptr
+        ? Object::cast_to<Node>(gd::object_of(held->root))
+        : nullptr;
     const Ref<NetwEntity> entity = NetwEntity::resolve(root);
     return entity.is_valid() ? entity->get_rid_handle() : RID();
 }
@@ -508,7 +496,10 @@ StringName NetwMultiplayer::persist_get_record_id(const RID &p_entity) const {
                               : StringName();
 }
 
-void NetwMultiplayer::persist_notify_loaded(const RID &p_binding, bool p_found) {
+void NetwMultiplayer::persist_notify_loaded(
+    const RID &p_binding,
+    bool p_found
+) {
     emit_signal(
         StringName(SIG_PERSIST_LOADED),
         persist_entity_of_binding(p_binding),
@@ -710,7 +701,8 @@ void NetwMultiplayer::persist_read_settled(
         return;
     }
     const Dictionary read = p_asked->get_result();
-    const Error read_error = Error(int(read.get("error", int(ERR_INVALID_DATA))));
+    const Error read_error
+        = Error(int(read.get("error", int(ERR_INVALID_DATA))));
     if (read_error != OK) {
         persist_load_failed(
             p_binding,
@@ -908,8 +900,8 @@ void NetwMultiplayer::persist_batch_settled(
         error = ERR_UNAVAILABLE;
         detail = STALE_WRITE;
     } else if (refused) {
-        error = p_asked->get_is_failed() ? p_asked->get_code()
-                                         : ERR_INVALID_DATA;
+        error
+            = p_asked->get_is_failed() ? p_asked->get_code() : ERR_INVALID_DATA;
         detail = p_asked->get_is_failed()
             ? p_asked->get_detail()
             : String("the database answered no batch outcome");
@@ -1078,12 +1070,7 @@ void NetwMultiplayer::persist_write(const LocalVector<RID> &p_bindings) {
     for (uint32_t at = 0; at < targets.size(); ++at) {
         Dictionary tally;
         tally["left"] = 1;
-        persist_write_rows(
-            targets[at],
-            batched[at],
-            Ref<NetwPromise>(),
-            tally
-        );
+        persist_write_rows(targets[at], batched[at], Ref<NetwPromise>(), tally);
     }
 }
 
@@ -1123,10 +1110,11 @@ Ref<NetwPromise> NetwMultiplayer::persist_flush_all() {
     Dictionary tally;
     tally["left"] = int(writing.size());
     for (uint32_t at = 0; at < writing.size(); ++at) {
-        database_flush(writing[at])->when_settled(
-            callable_mp(this, &NetwMultiplayer::persist_flush_waited)
-                .bind(answer, tally)
-        );
+        database_flush(writing[at])
+            ->when_settled(
+                callable_mp(this, &NetwMultiplayer::persist_flush_waited)
+                    .bind(answer, tally)
+            );
     }
     return answer;
 }
@@ -1246,10 +1234,8 @@ Ref<NetwPromise> NetwMultiplayer::table_save(
     const Ref<NetwPromise> asked = database_submit(p_database, operations);
     Ref<NetwPromise> answer;
     answer.instantiate();
-    asked->when_settled(
-        callable_mp(this, &NetwMultiplayer::persist_table_saved)
-            .bind(asked, answer)
-    );
+    asked->when_settled(callable_mp(this, &NetwMultiplayer::persist_table_saved)
+                            .bind(asked, answer));
     return answer;
 }
 
@@ -1274,20 +1260,16 @@ Ref<NetwPromise> NetwMultiplayer::table_load(
     const StringName &p_key
 ) {
     if (!is_host()) {
-        return NetwPromise::resolved(
-            table_load_failure(
-                ERR_UNAUTHORIZED,
-                "a peer holding no session authority loads no table"
-            )
-        );
+        return NetwPromise::resolved(table_load_failure(
+            ERR_UNAUTHORIZED,
+            "a peer holding no session authority loads no table"
+        ));
     }
     if (!table_core->is_valid(p_table)) {
-        return NetwPromise::resolved(
-            table_load_failure(
-                ERR_DOES_NOT_EXIST,
-                "this handle names no table in this session"
-            )
-        );
+        return NetwPromise::resolved(table_load_failure(
+            ERR_DOES_NOT_EXIST,
+            "this handle names no table in this session"
+        ));
     }
     const int64_t tenure = persist_tenure();
     const int64_t generation = databases.generation_of(p_database);
@@ -1298,18 +1280,16 @@ Ref<NetwPromise> NetwMultiplayer::table_load(
     );
     Ref<NetwPromise> answer;
     answer.instantiate();
-    asked->when_settled(
-        callable_mp(this, &NetwMultiplayer::persist_table_read)
-            .bind(
-                p_table,
-                table_core->revision(p_table),
-                asked,
-                answer,
-                tenure,
-                p_database,
-                generation
-            )
-    );
+    asked->when_settled(callable_mp(this, &NetwMultiplayer::persist_table_read)
+                            .bind(
+                                p_table,
+                                table_core->revision(p_table),
+                                asked,
+                                answer,
+                                tenure,
+                                p_database,
+                                generation
+                            ));
     return answer;
 }
 
@@ -1364,13 +1344,11 @@ void NetwMultiplayer::persist_table_read(
         return;
     }
     if (table_core->revision(p_table) != p_revision) {
-        p_answer->resolve(
-            table_load_failure(
-                ERR_BUSY,
-                "the table committed new rows while its snapshot was read, "
-                "and the snapshot would replace them"
-            )
-        );
+        p_answer->resolve(table_load_failure(
+            ERR_BUSY,
+            "the table committed new rows while its snapshot was read, "
+            "and the snapshot would replace them"
+        ));
         return;
     }
     PackedInt64Array routes;
@@ -1385,20 +1363,18 @@ void NetwMultiplayer::persist_table_read(
         clock_engine().get_tick()
     );
     if (replaced != OK) {
-        p_answer->resolve(
-            table_load_failure(
-                replaced,
-                "the snapshot's columns do not fit the table's schema"
-            )
-        );
+        p_answer->resolve(table_load_failure(
+            replaced,
+            "the snapshot's columns do not fit the table's schema"
+        ));
         return;
     }
     liveness_bind_routes_data(routes);
     const HashMap<RID, PackedInt64Array>::Iterator held
         = table_snapshot_routes.find(p_table);
-    const PackedInt64Array previous
-        = held != table_snapshot_routes.end() ? held->value
-                                              : PackedInt64Array();
+    const PackedInt64Array previous = held != table_snapshot_routes.end()
+        ? held->value
+        : PackedInt64Array();
     table_snapshot_routes[p_table] = routes;
     persist_table_retire(p_table, previous);
     p_answer->resolve(table_load_of(ids, routes));

@@ -19,7 +19,7 @@ A :ref:`NetwDatabaseBackend<class_NetwDatabaseBackend>` that keeps records in fi
 Description
 -----------
 
-Records outlive the process, so this is the backend a shipped single player or listen server game saves into.
+Records stay on disk after the game closes. Use it for a singleplayer or listen server game.
 
 ::
 
@@ -27,11 +27,7 @@ Records outlive the process, so this is the backend a shipped single player or l
     backend.root = "user://saves"
     Netw.configure_database(self, &"saves").backend(backend)
 
-\ Each slot is a directory under :ref:`root<class_FileSystemDatabase_property_root>`, and each record is one file inside it. A record is replaced by writing a new file beside it and renaming over the target, so a write that fails partway leaves the previous record readable rather than a half-written one.
-
-A file this library did not write is reported as present and refused as unrecognized. It is never read as an empty save and it is never overwritten by the read that found it.
-
-\ :ref:`NetwDatabaseBackend._list_slots()<class_NetwDatabaseBackend_private_method__list_slots>` reads :ref:`root<class_FileSystemDatabase_property_root>` itself, so a slot written by an earlier run of the game appears without being opened first.
+\ Each slot is a directory under :ref:`root<class_FileSystemDatabase_property_root>`, and each record is one file inside it. A file this library did not write fails to read with :godot:`@GlobalScope.ERR_FILE_UNRECOGNIZED <@GlobalScope#class_@GlobalScope_constant_ERR_FILE_UNRECOGNIZED>`.
 
 .. rst-class:: classref-reftable-group
 
@@ -44,6 +40,22 @@ Properties
    +-----------------+-----------------------------------------------------+--------------------+
    | :godot:`String` | :ref:`root<class_FileSystemDatabase_property_root>` | ``"user://saves"`` |
    +-----------------+-----------------------------------------------------+--------------------+
+
+.. rst-class:: classref-reftable-group
+
+Methods
+-------
+
+.. table::
+   :widths: auto
+
+   +---------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwPromise<class_NetwPromise>` | :ref:`_delete_slot<class_FileSystemDatabase_private_method__delete_slot>`\ (\ session\: :godot:`Object`, slot\: :godot:`StringName`\ ) |virtual| |
+   +---------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwPromise<class_NetwPromise>` | :ref:`_list_slots<class_FileSystemDatabase_private_method__list_slots>`\ (\ session\: :godot:`Object`\ ) |virtual|                               |
+   +---------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwPromise<class_NetwPromise>` | :ref:`_open<class_FileSystemDatabase_private_method__open>`\ (\ session\: :godot:`Object`, slot\: :godot:`StringName`\ ) |virtual|               |
+   +---------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------+
 
 .. rst-class:: classref-section-separator
 
@@ -65,7 +77,72 @@ Property Descriptions
 - |void| **set_root**\ (\ value\: :godot:`String`\ )
 - :godot:`String` **get_root**\ (\ )
 
-The directory every slot lives under. A path under ``user://`` is the one a shipped game can write to on every platform.
+The directory every slot lives under. Use a path under ``user://``, which an exported game can write to on every platform.
+
+.. rst-class:: classref-section-separator
+
+----
+
+.. rst-class:: classref-descriptions-group
+
+Method Descriptions
+-------------------
+
+.. _class_FileSystemDatabase_private_method__delete_slot:
+
+.. rst-class:: classref-method
+
+:ref:`NetwPromise<class_NetwPromise>` **_delete_slot**\ (\ session\: :godot:`Object`, slot\: :godot:`StringName`\ ) |virtual| :ref:`🔗<class_FileSystemDatabase_private_method__delete_slot>`
+
+Removes the directory for ``slot`` and every record inside it.
+
+.. code:: text
+
+    Error
+    ┠╴OK                    	slot was absent or was removed
+    ┠╴ERR_FILE_CANT_OPEN    	slot could not be opened
+    ┠╴ERR_FILE_NO_PERMISSION 	the process cannot remove the slot
+    ┖╴ERR_FILE_CANT_WRITE   	removing the slot failed
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_FileSystemDatabase_private_method__list_slots:
+
+.. rst-class:: classref-method
+
+:ref:`NetwPromise<class_NetwPromise>` **_list_slots**\ (\ session\: :godot:`Object`\ ) |virtual| :ref:`🔗<class_FileSystemDatabase_private_method__list_slots>`
+
+Reads :ref:`root<class_FileSystemDatabase_property_root>` and resolves every slot directory it contains.
+
+.. code:: text
+
+    Error
+    ┠╴OK                    	root was read and slots were listed
+    ┠╴ERR_FILE_CANT_OPEN    	root could not be opened
+    ┠╴ERR_FILE_NO_PERMISSION 	the process cannot read root
+    ┖╴ERR_FILE_CANT_READ   		reading root failed
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_FileSystemDatabase_private_method__open:
+
+.. rst-class:: classref-method
+
+:ref:`NetwPromise<class_NetwPromise>` **_open**\ (\ session\: :godot:`Object`, slot\: :godot:`StringName`\ ) |virtual| :ref:`🔗<class_FileSystemDatabase_private_method__open>`
+
+Opens ``slot`` and resolves a :ref:`NetwDatabaseConnection<class_NetwDatabaseConnection>` for its directory.
+
+.. code:: text
+
+    Error
+    ┠╴OK                     	slot was opened
+    ┠╴ERR_FILE_CANT_OPEN     	the slot could not be opened
+    ┠╴ERR_FILE_NO_PERMISSION  	the process cannot open the slot
+    ┖╴ERR_FILE_CANT_READ      	reading the slot failed
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

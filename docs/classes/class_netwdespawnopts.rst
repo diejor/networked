@@ -12,14 +12,14 @@ NetwDespawnOpts
 
 **Inherits:** :godot:`RefCounted`
 
-What one :ref:`NetwEntity.despawn()<class_NetwEntity_method_despawn>` call asks for, beyond the fact that the entity is going.
+Options for :ref:`NetwEntity.despawn()<class_NetwEntity_method_despawn>`.
 
 .. rst-class:: classref-introduction-group
 
 Description
 -----------
 
-Carries the knobs that control teardown behavior. It is a record rather than an argument list so a new option can be added without breaking call sites, and its defaults are what make a despawn safe when a caller passes nothing.
+The defaults are safe to use, so passing no options is fine.
 
 ::
 
@@ -79,7 +79,7 @@ Property Descriptions
 - |void| **set_defer_free**\ (\ value\: :godot:`bool`\ )
 - :godot:`bool` **get_defer_free**\ (\ )
 
-When ``true`` (default), the :godot:`Node.queue_free() <Node#class_Node_method_queue_free>` call is deferred. This guarantees the engine's next process step sees the authority change before the node leaves the tree, which fixes the race where a :godot:`MultiplayerSynchronizer` tries to push state from a freed authority peer.
+When ``true``, :godot:`Node.queue_free() <Node#class_Node_method_queue_free>` is deferred so a :godot:`MultiplayerSynchronizer` does not push state from a node that is already freed.
 
 .. rst-class:: classref-item-separator
 
@@ -96,7 +96,7 @@ When ``true`` (default), the :godot:`Node.queue_free() <Node#class_Node_method_q
 - |void| **set_flush_save**\ (\ value\: :godot:`bool`\ )
 - :godot:`bool` **get_flush_save**\ (\ )
 
-When ``true`` (default), the entity's row is read at the despawn call and written once the node has left the tree. ``false`` writes nothing for this departure. The despawn never waits for the write, so a caller that needs the row stored awaits :ref:`NetwPersistenceHandle.save()<class_NetwPersistenceHandle_method_save>` before despawning. See :ref:`NetwPersistenceHandle<class_NetwPersistenceHandle>`.
+When ``true``, the entity's row is saved after the node leaves the tree. The despawn does not wait for the save, await :ref:`NetwPersistenceHandle.save()<class_NetwPersistenceHandle_method_save>` before despawning if you need it stored.
 
 .. rst-class:: classref-item-separator
 
@@ -113,7 +113,7 @@ When ``true`` (default), the entity's row is read at the despawn call and writte
 - |void| **set_linger**\ (\ value\: :godot:`bool`\ )
 - :godot:`bool` **get_linger**\ (\ )
 
-When ``true``, the entity deactivates now but is freed only after :ref:`linger_seconds<class_NetwDespawnOpts_property_linger_seconds>`, so a late shooter can still validate against where it was. Its :ref:`NetwTimeline<class_NetwTimeline>` freezes at the despawn boundary and expires when the node frees. Default ``false`` keeps the cheap rule: you cannot be shot after the server saw you die.
+When ``true``, the entity is deactivated now but freed only after :ref:`linger_seconds<class_NetwDespawnOpts_property_linger_seconds>`, so a late shot can still hit where it was.
 
 .. rst-class:: classref-item-separator
 
@@ -130,7 +130,7 @@ When ``true``, the entity deactivates now but is freed only after :ref:`linger_s
 - |void| **set_linger_seconds**\ (\ value\: :godot:`float`\ )
 - :godot:`float` **get_linger_seconds**\ (\ )
 
-Seconds a lingering entity stays rewindable before it frees. Sized to the server rewind retention window, roughly one second of ticks. Ignored unless :ref:`linger<class_NetwDespawnOpts_property_linger>` is ``true``.
+Seconds a lingering entity can still be rewound before it is freed. Ignored unless :ref:`linger<class_NetwDespawnOpts_property_linger>` is ``true``.
 
 .. rst-class:: classref-item-separator
 
@@ -147,7 +147,7 @@ Seconds a lingering entity stays rewindable before it frees. Sized to the server
 - |void| **set_reason**\ (\ value\: :godot:`StringName`\ )
 - :godot:`StringName` **get_reason**\ (\ )
 
-Recorded on the despawn span and forwarded to the :ref:`NetwEntity.despawning<class_NetwEntity_signal_despawning>` signal so user code can branch on the cause. Common values: ``&"peer_disconnected"``, ``&"killed"``, ``&"collected"``, ``&"timeout"``.
+Passed to :ref:`NetwEntity.despawning<class_NetwEntity_signal_despawning>` so a game can react to the cause, such as ``&"peer_disconnected"``, ``&"killed"`` or ``&"timeout"``.
 
 .. rst-class:: classref-section-separator
 
@@ -164,7 +164,7 @@ Method Descriptions
 
 :ref:`NetwDespawnOpts<class_NetwDespawnOpts>` **create**\ (\ reason\: :godot:`StringName` = &""\ ) |static| :ref:`🔗<class_NetwDespawnOpts_method_create>`
 
-Returns a record naming ``reason``, leaving every other option at its default.
+Returns options with ``reason`` and every other option at its default.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <class name="NetwPredictStats" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
 	<brief_description>
-		What one entity's prediction engine counted.
+		Prediction counters for one [NetwEntity], reached by [member NetwPredictionHandle.stats].
 	</brief_description>
 	<description>
-		Read it through [member NetwPredictionHandle.stats]. A count is for reading, printing and charting. A rule a game acts on hangs on the [NetwPredictionHandle] signals.
+		Use these for debug overlays and charts. To react to a correction, connect to the [NetwPredictionHandle] signals.
 		[codeblock]
 		var stats := NetwEntity.of(self).prediction.stats
 		print("%d corrections" % stats.corrections)

@@ -302,8 +302,7 @@ TEST_CASE(
     Solid world(false);
     world.set_state(
         PhysicsServer3D::BODY_STATE_TRANSFORM,
-        world.parent->get_global_transform()
-            * Transform3D(Basis(), STEPPED_AT)
+        world.parent->get_global_transform() * Transform3D(Basis(), STEPPED_AT)
     );
     NETW_CHECK_LT(apart(world.get(position_key()), AUTHORED_AT), NEAR);
 }

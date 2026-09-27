@@ -117,7 +117,7 @@ const Hold REST_FINAL_HOLDS[CUBES] = {
     Hold::HOLD_EXCLUSIVE,
     Hold::HOLD_EXCLUSIVE,
 };
-const bool REST_FROZEN[CUBES] = { false, true, false, true, false };
+const bool REST_FROZEN[CUBES] = {false, true, false, true, false};
 constexpr int REGRAB = 4;
 
 Script *cube_script = nullptr;
@@ -419,9 +419,8 @@ class ContactScenario : public netw_test::FrameScenario {
             case Kind::REST:
             case Kind::WAKE:
                 for (int index = 0; index < cube_count(); ++index) {
-                    const Hold hold = kind == Kind::WAKE
-                        ? Hold::HOLD_YIELDABLE
-                        : REST_HOLDS[index];
+                    const Hold hold = kind == Kind::WAKE ? Hold::HOLD_YIELDABLE
+                                                         : REST_HOLDS[index];
                     entity_at(A, index)->claim_authority(hold);
                     RigidBody3D *sphere = sphere_at(A, index);
                     if (kind == Kind::REST && REST_FROZEN[index]) {

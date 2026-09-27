@@ -23,30 +23,107 @@ DOC_DIR = ROOT / "extension" / "doc_classes"
 NAMES_FILE = CI_DIR / "engine_names.json"
 
 REGISTRATION = re.compile(
-    r"GDREGISTER_(?:ABSTRACT_|RUNTIME_|VIRTUAL_)?CLASS\("
-    r"(?:[A-Za-z0-9_]+::)*([A-Za-z0-9_]+)\s*\)"
+    r"GDREGISTER_(?:ABSTRACT_|RUNTIME_|VIRTUAL_)?CLASS\(" r"(?:[A-Za-z0-9_]+::)*([A-Za-z0-9_]+)\s*\)"
 )
 
 TEST_GUARD = "NETW_TESTS"
 
 KEYWORDS = {
-    "abstract", "as", "base", "bool", "break", "byte", "case", "catch",
-    "char", "checked", "class", "const", "continue", "decimal", "default",
-    "delegate", "do", "double", "else", "enum", "event", "explicit",
-    "extern", "false", "finally", "fixed", "float", "for", "foreach",
-    "goto", "if", "implicit", "in", "int", "interface", "internal", "is",
-    "lock", "long", "namespace", "new", "null", "object", "operator",
-    "out", "override", "params", "private", "protected", "public",
-    "readonly", "ref", "return", "sbyte", "sealed", "short", "sizeof",
-    "stackalloc", "static", "string", "struct", "switch", "this", "throw",
-    "true", "try", "typeof", "uint", "ulong", "unchecked", "unsafe",
-    "ushort", "using", "virtual", "void", "volatile", "while",
+    "abstract",
+    "as",
+    "base",
+    "bool",
+    "break",
+    "byte",
+    "case",
+    "catch",
+    "char",
+    "checked",
+    "class",
+    "const",
+    "continue",
+    "decimal",
+    "default",
+    "delegate",
+    "do",
+    "double",
+    "else",
+    "enum",
+    "event",
+    "explicit",
+    "extern",
+    "false",
+    "finally",
+    "fixed",
+    "float",
+    "for",
+    "foreach",
+    "goto",
+    "if",
+    "implicit",
+    "in",
+    "int",
+    "interface",
+    "internal",
+    "is",
+    "lock",
+    "long",
+    "namespace",
+    "new",
+    "null",
+    "object",
+    "operator",
+    "out",
+    "override",
+    "params",
+    "private",
+    "protected",
+    "public",
+    "readonly",
+    "ref",
+    "return",
+    "sbyte",
+    "sealed",
+    "short",
+    "sizeof",
+    "stackalloc",
+    "static",
+    "string",
+    "struct",
+    "switch",
+    "this",
+    "throw",
+    "true",
+    "try",
+    "typeof",
+    "uint",
+    "ulong",
+    "unchecked",
+    "unsafe",
+    "ushort",
+    "using",
+    "virtual",
+    "void",
+    "volatile",
+    "while",
 }
 
 RESERVED = {
-    "Adopt", "Checked", "Connect", "Disconnect", "Dispose", "Equals",
-    "Finalize", "From", "GetHashCode", "GetType", "IsConnected", "IsValid",
-    "MemberwiseClone", "Native", "ToString",
+    "Adopt",
+    "Checked",
+    "Connect",
+    "Disconnect",
+    "Dispose",
+    "Equals",
+    "Finalize",
+    "From",
+    "GetHashCode",
+    "GetType",
+    "IsConnected",
+    "IsValid",
+    "MemberwiseClone",
+    "Native",
+    "ToString",
 }
 
 GLOBAL_ENUMS = {"Error"}
@@ -81,10 +158,7 @@ class Thunks:
 
     def ptrcall(self, slots: list[str], answered: str) -> str:
         if len(slots) > PTRCALL_MAX_ARITY:
-            raise fail(
-                "a ptrcall of arity %d has no thunk, so it belongs on the "
-                "call path" % len(slots)
-            )
+            raise fail("a ptrcall of arity %d has no thunk, so it belongs on the " "call path" % len(slots))
         shape = (tuple(slots), returned_slot(answered))
         self.ptrcalls.add(shape)
         return self.ptrcall_name(*shape)
@@ -208,9 +282,7 @@ BUILTIN_BOXES = {
     "Vector3i": simple_box("Vector3I", "Vector3I", "Vector3I"),
     "Vector4": simple_box("Vector4", "Vector4", "Vector4"),
     "Vector4i": simple_box("Vector4I", "Vector4I", "Vector4I"),
-    "Dictionary": simple_box(
-        "Godot.Collections.Dictionary", "Dictionary", "Dictionary"
-    ),
+    "Dictionary": simple_box("Godot.Collections.Dictionary", "Dictionary", "Dictionary"),
     "Array": simple_box("Godot.Collections.Array", "Array", "Array"),
     "PackedByteArray": packed_box("byte[]", "Byte"),
     "PackedInt32Array": packed_box("int[]", "Int32"),
@@ -234,9 +306,7 @@ ENGINE_NAMES = {
     "MultiplayerAPI": "MultiplayerApi",
 }
 
-BUILTIN_CREFS = {
-    name: boxed.declared for name, boxed in BUILTIN_BOXES.items()
-}
+BUILTIN_CREFS = {name: boxed.declared for name, boxed in BUILTIN_BOXES.items()}
 
 
 WIDTH = 80
@@ -282,25 +352,52 @@ def fold(indent: str, statement: str) -> list[str]:
 
 
 PASCAL_PART_OVERRIDES = {
-    "AA": "AA", "AO": "AO", "FILENAME": "FileName", "FADEIN": "FadeIn",
-    "FADEOUT": "FadeOut", "FX": "FX", "GI": "GI", "GZIP": "GZip",
-    "HBOX": "HBox", "ID": "Id", "IO": "IO", "IP": "IP", "IV": "IV",
-    "MACOS": "MacOS", "NODEPATH": "NodePath", "SPIRV": "SpirV",
-    "STDIN": "StdIn", "STDOUT": "StdOut", "USERNAME": "UserName",
-    "UV": "UV", "UV2": "UV2", "VBOX": "VBox", "WHITESPACE": "WhiteSpace",
-    "WM": "WM", "XR": "XR", "XRAPI": "XRApi",
+    "AA": "AA",
+    "AO": "AO",
+    "FILENAME": "FileName",
+    "FADEIN": "FadeIn",
+    "FADEOUT": "FadeOut",
+    "FX": "FX",
+    "GI": "GI",
+    "GZIP": "GZip",
+    "HBOX": "HBox",
+    "ID": "Id",
+    "IO": "IO",
+    "IP": "IP",
+    "IV": "IV",
+    "MACOS": "MacOS",
+    "NODEPATH": "NodePath",
+    "SPIRV": "SpirV",
+    "STDIN": "StdIn",
+    "STDOUT": "StdOut",
+    "USERNAME": "UserName",
+    "UV": "UV",
+    "UV2": "UV2",
+    "VBOX": "VBox",
+    "WHITESPACE": "WhiteSpace",
+    "WM": "WM",
+    "XR": "XR",
+    "XRAPI": "XRApi",
 }
 
 
 NUMBER = re.compile(r"^-?\d+(\.\d+)?$")
 
 NUMERIC_DECLARED = {
-    "sbyte", "byte", "short", "ushort", "int", "uint", "long", "ulong",
-    "float", "double",
+    "sbyte",
+    "byte",
+    "short",
+    "ushort",
+    "int",
+    "uint",
+    "long",
+    "ulong",
+    "float",
+    "double",
 }
 
 EMPTY_VALUES = {
-    "&\"\"": "new StringName(\"\")",
+    '&""': 'new StringName("")',
     "{}": "new Godot.Collections.Dictionary()",
     "[]": "new Godot.Collections.Array()",
     "PackedByteArray()": "System.Array.Empty<byte>()",
@@ -449,37 +546,22 @@ class Surface:
     """The extension's own classes, indexed by name."""
 
     def __init__(self, dump: dict, owned: set[str] | None = None):
-        published = {
-            entry["name"]: entry
-            for entry in dump.get("classes", [])
-            if entry.get("api_type") == "extension"
-        }
+        published = {entry["name"]: entry for entry in dump.get("classes", []) if entry.get("api_type") == "extension"}
         if not published:
             raise fail(
-                "the dump carries no api_type 'extension' classes, so the addon "
-                "was not loaded when it was written"
+                "the dump carries no api_type 'extension' classes, so the addon " "was not loaded when it was written"
             )
         self.classes = (
-            published
-            if owned is None
-            else {
-                name: entry for name, entry in published.items() if name in owned
-            }
+            published if owned is None else {name: entry for name, entry in published.items() if name in owned}
         )
         if not self.classes:
             raise fail(
                 "the dump carries none of the classes %s registers, so it was "
                 "written against a project without this addon" % REGISTRY.name
             )
-        self.engine = {
-            entry["name"]
-            for entry in dump.get("classes", [])
-            if entry.get("api_type") != "extension"
-        }
+        self.engine = {entry["name"] for entry in dump.get("classes", []) if entry.get("api_type") != "extension"}
         self.subclassed = {
-            entry.get("inherits")
-            for entry in self.classes.values()
-            if entry.get("inherits") in self.classes
+            entry.get("inherits") for entry in self.classes.values() if entry.get("inherits") in self.classes
         }
         self.enums: dict[str, str] = {}
         for entry in dump.get("classes", []):
@@ -530,9 +612,7 @@ class Surface:
             declared = self.enum_name(type_name)
             if declared is None:
                 return INTEGER_SLOTS["int64"]
-            return Encoded(
-                declared, "long", "(long){name}", "(%s){name}" % declared
-            )
+            return Encoded(declared, "long", "(long){name}", "(%s){name}" % declared)
         meta = entry.get("meta")
         if type_name == "int" and meta in INTEGER_SLOTS:
             return INTEGER_SLOTS[meta]
@@ -599,8 +679,7 @@ class Surface:
                 read = "NetwApi.Retained(%s)" % read
             return Boxed(
                 type_name,
-                "VariantUtils.CreateFromGodotObjectPtr("
-                "{name}?.Native ?? IntPtr.Zero)",
+                "VariantUtils.CreateFromGodotObjectPtr(" "{name}?.Native ?? IntPtr.Zero)",
                 "%s.Adopt(%s)" % (type_name, read),
             )
         if type_name in self.engine:
@@ -711,28 +790,22 @@ class Emitter:
         if inherited or entry.get("is_refcounted"):
             opening = "    public %s(IntPtr native) : base(native)" % name
         else:
-            opening = (
-                "    public %s(IntPtr native) : base(native, owned: false)" % name
-            )
+            opening = "    public %s(IntPtr native) : base(native, owned: false)" % name
         return [
             opening,
             "    {",
             "    }",
             "",
-            "    public %sstatic %s Adopt(IntPtr native)"
-            % ("new " if inherited else "", name),
+            "    public %sstatic %s Adopt(IntPtr native)" % ("new " if inherited else "", name),
             "    {",
             "        return native == IntPtr.Zero ? null : new %s(native);" % name,
             "    }",
             "",
-            "    public %sstatic %s From(Variant value)"
-            % ("new " if inherited else "", name),
+            "    public %sstatic %s From(Variant value)" % ("new " if inherited else "", name),
             "    {",
             "        return Adopt(%s);"
             % (
-                "NetwApi.Retained(NetwApi.ObjectOf(value))"
-                if entry.get("is_refcounted")
-                else "NetwApi.ObjectOf(value)"
+                "NetwApi.Retained(NetwApi.ObjectOf(value))" if entry.get("is_refcounted") else "NetwApi.ObjectOf(value)"
             ),
             "    }",
         ]
@@ -754,12 +827,8 @@ class Emitter:
             while name in taken:
                 name += "_"
             taken.add(name)
-            self.record(
-                "%s.%s" % (class_name, one["name"]), "%s.%s" % (spelled, name)
-            )
-            lines.extend(
-                self.doc_of(class_name, "constants", one["name"], "        ")
-            )
+            self.record("%s.%s" % (class_name, one["name"]), "%s.%s" % (spelled, name))
+            lines.extend(self.doc_of(class_name, "constants", one["name"], "        "))
             lines.append("        %s = %d," % (name, one["value"]))
         lines.append("    }")
         return lines
@@ -770,9 +839,7 @@ class Emitter:
             spelled = enum_constant(one["name"], 0)
             if not self.claim("%s.%s" % (class_name, one["name"]), spelled):
                 continue
-            lines.extend(
-                self.doc_of(class_name, "constants", one["name"], "    ")
-            )
+            lines.extend(self.doc_of(class_name, "constants", one["name"], "    "))
             lines.append("    public const long %s = %d;" % (spelled, one["value"]))
         return lines
 
@@ -794,8 +861,7 @@ class Emitter:
             "    public event %s %s" % (handler, spelled),
             "    {",
             '        add => Connect("%s", Callable.From(value));' % signal["name"],
-            '        remove => Disconnect("%s", Callable.From(value));'
-            % signal["name"],
+            '        remove => Disconnect("%s", Callable.From(value));' % signal["name"],
             "    }",
         ]
 
@@ -837,9 +903,7 @@ class Emitter:
         if held is None:
             return []
         text = getattr(held, kind).get(name, "")
-        return csharp_docs.block(
-            indent, self.prose.render(class_name, text, params)
-        )
+        return csharp_docs.block(indent, self.prose.render(class_name, text, params))
 
     def bind_field(self, class_name: str, method: dict) -> tuple[str, list[str]]:
         """The field holding this method's bind, declared once however many
@@ -851,16 +915,15 @@ class Emitter:
         while field in self.binds.values():
             field += "_"
         self.binds[name] = field
-        line = (
-            "    private static readonly IntPtr %s = "
-            'NetwApi.MethodBind("%s", "%s", %dUL);'
-            % (field, class_name, name, method["hash"])
+        line = "    private static readonly IntPtr %s = " 'NetwApi.MethodBind("%s", "%s", %dUL);' % (
+            field,
+            class_name,
+            name,
+            method["hash"],
         )
         return field, [line]
 
-    def declared_arguments(
-        self, arguments: list[dict], names: list[str], plans: list
-    ) -> tuple[str, list[str]]:
+    def declared_arguments(self, arguments: list[dict], names: list[str], plans: list) -> tuple[str, list[str]]:
         """The parameter list one method publishes, and the statements its
         body owes for a default C# cannot spell as a constant."""
         spelled: list[str] = []
@@ -871,15 +934,11 @@ class Emitter:
             if raw is not None:
                 value, substitute = default_value(one.declared, raw)
                 if value is None:
-                    self.required.append(
-                        "%s %s = %s" % (one.declared, name, raw)
-                    )
+                    self.required.append("%s %s = %s" % (one.declared, name, raw))
                 else:
                     text += " = %s" % value
                     if substitute is not None:
-                        filled.append(
-                            "        %s ??= %s;" % (name, substitute)
-                        )
+                        filled.append("        %s ??= %s;" % (name, substitute))
             spelled.append(text)
         return ", ".join(spelled), filled
 
@@ -907,16 +966,10 @@ class Emitter:
         passed = []
         for index, (expression, encoded) in enumerate(arguments):
             slot = "slot%d" % index
-            body.append(
-                indent
-                + "%s %s = %s;"
-                % (encoded.slot, slot, encoded.to_slot.format(name=expression))
-            )
+            body.append(indent + "%s %s = %s;" % (encoded.slot, slot, encoded.to_slot.format(name=expression)))
             passed.append("in %s" % slot)
 
-        thunk = self.thunks.ptrcall(
-            [encoded.slot for _, encoded in arguments], answered.slot
-        )
+        thunk = self.thunks.ptrcall([encoded.slot for _, encoded in arguments], answered.slot)
         held = returned_slot(answered.slot)
         answer = "answered" if answered.declared != "void" else "discarded"
         body.append(indent + "%s %s = default;" % (held, answer))
@@ -929,9 +982,7 @@ class Emitter:
             )
         )
         if answered.declared != "void":
-            body.append(
-                indent + "return %s;" % answered.from_slot.format(name="answered")
-            )
+            body.append(indent + "return %s;" % answered.from_slot.format(name="answered"))
         return body
 
     def call_lines(
@@ -945,19 +996,13 @@ class Emitter:
     ) -> list[str]:
         fixed = len(arguments)
         if varargs is not None or fixed > CALL_MAX_ARITY:
-            return self.pack_lines(
-                field, instance, arguments, answered, indent, varargs
-            )
+            return self.pack_lines(field, instance, arguments, answered, indent, varargs)
 
         body = []
         passed = []
         for index, (expression, boxed) in enumerate(arguments):
             slot = "slot%d" % index
-            body.append(
-                indent
-                + "godot_variant %s = %s;"
-                % (slot, boxed.to_variant.format(name=expression))
-            )
+            body.append(indent + "godot_variant %s = %s;" % (slot, boxed.to_variant.format(name=expression)))
             passed.append("in %s" % slot)
 
         body.append(indent + "godot_variant answered = default;")
@@ -989,11 +1034,7 @@ class Emitter:
         fixed = len(arguments)
         body = []
         if varargs is not None:
-            body.append(
-                indent
-                + "int total = %d + (%s == null ? 0 : %s.Length);"
-                % (fixed, varargs, varargs)
-            )
+            body.append(indent + "int total = %d + (%s == null ? 0 : %s.Length);" % (fixed, varargs, varargs))
             total = "total"
         else:
             total = str(fixed)
@@ -1001,9 +1042,7 @@ class Emitter:
         for index, (expression, boxed) in enumerate(arguments):
             body.extend(
                 [
-                    indent
-                    + "godot_variant slot%d = %s;"
-                    % (index, boxed.to_variant.format(name=expression)),
+                    indent + "godot_variant slot%d = %s;" % (index, boxed.to_variant.format(name=expression)),
                     indent + "NetwThunks.ArgsSet(pack, %d, in slot%d);" % (index, index),
                     indent + "slot%d.Dispose();" % index,
                 ]
@@ -1013,9 +1052,7 @@ class Emitter:
                 [
                     indent + "for (int index = %d; index < total; index++)" % fixed,
                     indent + "{",
-                    indent
-                    + "    godot_variant carried = %s[index - %d]"
-                    ".CopyNativeVariant();" % (varargs, fixed),
+                    indent + "    godot_variant carried = %s[index - %d]" ".CopyNativeVariant();" % (varargs, fixed),
                     indent + "    NetwThunks.ArgsSet(pack, index, in carried);",
                     indent + "    carried.Dispose();",
                     indent + "}",
@@ -1024,9 +1061,7 @@ class Emitter:
         body.extend(
             [
                 indent + "godot_variant answered = default;",
-                indent
-                + "NetwThunks.CallPack(%s, %s, pack, %s, ref answered);"
-                % (field, instance, total),
+                indent + "NetwThunks.CallPack(%s, %s, pack, %s, ref answered);" % (field, instance, total),
                 indent + "NetwThunks.ArgsFree(pack);",
             ]
         )
@@ -1036,16 +1071,12 @@ class Emitter:
         if answered.declared == "void":
             return [indent + "answered.Dispose();"]
         return [
-            indent
-            + "%s result = %s;"
-            % (answered.declared, answered.from_variant.format(name="answered")),
+            indent + "%s result = %s;" % (answered.declared, answered.from_variant.format(name="answered")),
             indent + "answered.Dispose();",
             indent + "return result;",
         ]
 
-    def ptrcall_plan(
-        self, method: dict, arguments: list[dict]
-    ) -> tuple[Encoded, list[Encoded]] | None:
+    def ptrcall_plan(self, method: dict, arguments: list[dict]) -> tuple[Encoded, list[Encoded]] | None:
         if method.get("is_vararg") or len(arguments) > PTRCALL_MAX_ARITY:
             return None
         answered = self.surface.encode(method.get("return_value"), "return")
@@ -1059,9 +1090,7 @@ class Emitter:
             encoded.append(one)
         return answered, encoded
 
-    def call_plan(
-        self, method: dict, arguments: list[dict]
-    ) -> tuple[Boxed, list[Boxed]] | None:
+    def call_plan(self, method: dict, arguments: list[dict]) -> tuple[Boxed, list[Boxed]] | None:
         answered = self.surface.box(method.get("return_value"))
         if answered is None:
             return None
@@ -1091,21 +1120,14 @@ class Emitter:
             "methods",
             method["name"],
             "    ",
-            {
-                argument["name"]: name
-                for argument, name in zip(arguments, names)
-            },
+            {argument["name"]: name for argument, name in zip(arguments, names)},
         )
 
         plan = self.ptrcall_plan(method, arguments)
         if plan is not None:
             answered, encoded = plan
-            signature, filled = self.declared_arguments(
-                arguments, names, encoded
-            )
-            body = filled + self.ptrcall_lines(
-                field, instance, list(zip(names, encoded)), answered, "        "
-            )
+            signature, filled = self.declared_arguments(arguments, names, encoded)
+            body = filled + self.ptrcall_lines(field, instance, list(zip(names, encoded)), answered, "        ")
             return [
                 *head,
                 *told,
@@ -1143,9 +1165,7 @@ class Emitter:
             "    }",
         ]
 
-    def property_of(
-        self, class_name: str, member: dict, methods: dict
-    ) -> list[str] | None:
+    def property_of(self, class_name: str, member: dict, methods: dict) -> list[str] | None:
         subject = "%s.%s" % (class_name, member["name"])
         spelled = pascal(member["name"])
         getter = methods.get(member.get("getter", ""))
@@ -1225,9 +1245,7 @@ class Emitter:
                 answered = Encoded("void", "void", "", "")
             else:
                 declared = answered.declared
-            body = self.ptrcall_lines(
-                field, instance, list(zip(expressions, encoded)), answered, indent
-            )
+            body = self.ptrcall_lines(field, instance, list(zip(expressions, encoded)), answered, indent)
             return declared, body, declaration
 
         plan = self.call_plan(method, arguments)
@@ -1239,9 +1257,7 @@ class Emitter:
             answered = Boxed("void", "", "")
         else:
             declared = answered.declared
-        body = self.call_lines(
-            field, instance, list(zip(expressions, boxed)), answered, indent
-        )
+        body = self.call_lines(field, instance, list(zip(expressions, boxed)), answered, indent)
         return declared, body, declaration
 
 
@@ -1293,8 +1309,7 @@ def thunk_registry(thunks: Thunks) -> str:
                 "",
                 "    internal static void %s(%s)" % (name, signature),
                 "    {",
-                '        %sFn thunk = %s ??= NetwApi.Thunk<%sFn>("%s");'
-                % (name, field, name, exported),
+                '        %sFn thunk = %s ??= NetwApi.Thunk<%sFn>("%s");' % (name, field, name, exported),
                 "        thunk(%s);" % handed,
                 "    }",
             ]
@@ -1335,8 +1350,7 @@ def thunk_registry(thunks: Thunks) -> str:
                 "",
                 "    internal static IntPtr ArgsNew(long count)",
                 "    {",
-                '        ArgsNewFn thunk = _argsNew ??= '
-                'NetwApi.Thunk<ArgsNewFn>("args_new");',
+                "        ArgsNewFn thunk = _argsNew ??= " 'NetwApi.Thunk<ArgsNewFn>("args_new");',
                 "        return thunk(count);",
                 "    }",
             ]
@@ -1396,10 +1410,7 @@ def write_engine_names(dump_path: Path) -> dict:
     surface = Surface(load_json(dump_path), registered_classes())
     sharp = csharp_docs.SharpDocs.load(sharp_docs(dump_path))
     docs = csharp_docs.Docs.load(DOC_DIR)
-    builtins = {
-        name: spelled for name, spelled in BUILTIN_CREFS.items()
-        if "[" not in spelled
-    }
+    builtins = {name: spelled for name, spelled in BUILTIN_CREFS.items() if "[" not in spelled}
 
     names: dict[str, str] = {}
     missing: list[str] = []
@@ -1415,10 +1426,7 @@ def write_engine_names(dump_path: Path) -> dict:
                 leaf = target.split(".")[-1]
                 if outer in surface.classes or leaf.startswith("_"):
                     continue
-                spelled = (
-                    surface.engine_name(outer) if outer in surface.engine
-                    else builtins.get(outer)
-                )
+                spelled = surface.engine_name(outer) if outer in surface.engine else builtins.get(outer)
                 if spelled is None:
                     continue
                 key = "%s %s.%s" % (kind, spelled, leaf)
@@ -1430,9 +1438,7 @@ def write_engine_names(dump_path: Path) -> dict:
                 else:
                     names[key] = found
 
-    NAMES_FILE.write_text(
-        json.dumps(names, indent=2, sort_keys=True) + "\n", encoding="utf-8"
-    )
+    NAMES_FILE.write_text(json.dumps(names, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return {"written": len(names), "missing": sorted(set(missing))}
 
 
@@ -1459,15 +1465,12 @@ def emit_tree(dump_path: Path, output: Path, only: list[str] | None) -> dict:
         BUILTIN_CREFS,
         engine_names(),
     )
-    emitted = {name: emitter.emit(surface.classes[name]) for name in
-               sorted(surface.classes)}
+    emitted = {name: emitter.emit(surface.classes[name]) for name in sorted(surface.classes)}
     written = []
     for name in chosen:
         (output / ("%s.cs" % name)).write_text(emitted[name], encoding="utf-8")
         written.append(name)
-    (output / THUNKS_NAME).write_text(
-        thunk_registry(emitter.thunks), encoding="utf-8"
-    )
+    (output / THUNKS_NAME).write_text(thunk_registry(emitter.thunks), encoding="utf-8")
 
     return {
         "written": written,
@@ -1489,9 +1492,7 @@ def check_tree(dump_path: Path, output: Path) -> dict:
             held = output / written.name
             if not held.is_file():
                 drifted.append("%s is missing" % written.name)
-            elif held.read_text(encoding="utf-8") != written.read_text(
-                encoding="utf-8"
-            ):
+            elif held.read_text(encoding="utf-8") != written.read_text(encoding="utf-8"):
                 drifted.append("%s is stale" % written.name)
         emitted = {written.name for written in fresh.glob("*.cs")}
         for held in sorted(output.glob("*.cs")):
@@ -1552,13 +1553,18 @@ def sharp_docs(dump_path: Path) -> Path:
     dump and nothing else.
     """
     found = (
-        Path.home() / ".nuget" / "packages" / "godotsharp" /
-        sharp_version(dump_path) / "lib" / "net8.0" / "GodotSharp.xml"
+        Path.home()
+        / ".nuget"
+        / "packages"
+        / "godotsharp"
+        / sharp_version(dump_path)
+        / "lib"
+        / "net8.0"
+        / "GodotSharp.xml"
     )
     if not found.is_file():
         raise fail(
-            "no GodotSharp documentation at %s. Run `ci/csharp.py compile` "
-            "first, which restores the package" % found
+            "no GodotSharp documentation at %s. Run `ci/csharp.py compile` " "first, which restores the package" % found
         )
     return found
 
@@ -1590,9 +1596,7 @@ def sharp_range(dump_path: Path) -> str:
     return "[%d.%d.0,%d.%d.0)" % (major, minor, major, minor + 1)
 
 
-def compile_tree(
-    output: Path, workspace: Path, version: str, timeout: float
-) -> int:
+def compile_tree(output: Path, workspace: Path, version: str, timeout: float) -> int:
     """Compile the emitted tree against GodotSharp, which is the only reader
     that catches a name or an encoding the generator got wrong."""
     if workspace.exists():
@@ -1625,9 +1629,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     compile_check = sub.add_parser("compile")
     compile_check.add_argument("--output", type=Path, default=OUTPUT_DIR)
-    compile_check.add_argument(
-        "--workspace", type=Path, default=CI_DIR / "cache" / "bindings"
-    )
+    compile_check.add_argument("--workspace", type=Path, default=CI_DIR / "cache" / "bindings")
     compile_check.add_argument("--sharp-version")
     return parser
 
@@ -1644,8 +1646,7 @@ def run_cli(argv: list[str] | None = None) -> int:
 
     if args.action == "names":
         report = write_engine_names(args.dump)
-        print("NAMES engine=%d unresolved=%d" % (
-            report["written"], len(report["missing"])))
+        print("NAMES engine=%d unresolved=%d" % (report["written"], len(report["missing"])))
         for one in report["missing"][:20]:
             print("  no C# name for %s" % one)
         return 0
@@ -1657,9 +1658,7 @@ def run_cli(argv: list[str] | None = None) -> int:
 
     if args.action == "check":
         report = check_tree(args.dump, args.output)
-        print("CHECK classes=%d skipped=%d" % (
-            len(report["written"]), len(report["skipped"])
-        ))
+        print("CHECK classes=%d skipped=%d" % (len(report["written"]), len(report["skipped"])))
         return 0
 
     report = emit_tree(args.dump, args.output, args.only)

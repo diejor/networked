@@ -33,10 +33,9 @@ TEST_CASE(
 
     CHECK(client->interest_player_sees(rig.peer_id(0), seen));
     CHECK_FALSE(client->interest_player_sees(0, seen));
-    CHECK_FALSE(client->interest_player_sees(
-        rig.peer_id(0),
-        Ref<netw::NetwEntity>()
-    ));
+    CHECK_FALSE(
+        client->interest_player_sees(rig.peer_id(0), Ref<netw::NetwEntity>())
+    );
 }
 
 } // namespace TestSceneClientVisibilityLaws

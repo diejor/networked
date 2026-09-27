@@ -52,8 +52,18 @@ const int64_t BASE_TICK = netw_test::COMPOSED_BASE_TICK;
 WirePlan pair_plan() {
     SchemaRecord record;
     record.name = godot::StringName("ComposedRow");
-    SchemaCore::append_column(&record, godot::StringName("x"), SchemaCore::I16, 1);
-    SchemaCore::append_column(&record, godot::StringName("y"), SchemaCore::I16, 1);
+    SchemaCore::append_column(
+        &record,
+        godot::StringName("x"),
+        SchemaCore::I16,
+        1
+    );
+    SchemaCore::append_column(
+        &record,
+        godot::StringName("y"),
+        SchemaCore::I16,
+        1
+    );
     SchemaCore::fix(&record);
     return WirePlan::compile(record);
 }
@@ -262,8 +272,7 @@ TEST_CASE(
         = link.writers.reset(WRITER, reset_request, reset_token);
     CHECK(the_writer_took_the_reset);
 
-    const bool a_reset_lane_carries_no_row
-        = link.publish(link.pair(9, 9)) == 0;
+    const bool a_reset_lane_carries_no_row = link.publish(link.pair(9, 9)) == 0;
     CHECK(a_reset_lane_carries_no_row);
 
     link.seat(WRITER);

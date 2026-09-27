@@ -385,12 +385,16 @@ void NetwPredictionHandle::set_archetype(NetwPredict::Archetype p_value) {
             NetwSimulationHandle::Restore(int(axes[StringName("snap_restore")]))
         );
     }
-    set_missing_policy(static_cast<NetwPredict::MissingInput>(
-        int(axes[StringName("missing_policy")])
-    ));
-    set_recovery_policy(static_cast<NetwPredict::RecoveryPolicy>(
-        int(axes[StringName("recovery_policy")])
-    ));
+    set_missing_policy(
+        static_cast<NetwPredict::MissingInput>(
+            int(axes[StringName("missing_policy")])
+        )
+    );
+    set_recovery_policy(
+        static_cast<NetwPredict::RecoveryPolicy>(
+            int(axes[StringName("recovery_policy")])
+        )
+    );
     if (bool(axes[StringName("declares_teleport_threshold")])) {
         set_teleport_threshold(double(axes[StringName("teleport_threshold")]));
     }

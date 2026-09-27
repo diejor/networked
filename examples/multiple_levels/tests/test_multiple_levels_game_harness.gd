@@ -330,7 +330,7 @@ func test_teleport_to_a_missing_marker_rejects_and_leaves_the_player_home() -> v
 	var before: Vector2 = (valeria.local_player as Node2D).global_position
 
 	var promise := await _wait_for_promise(
-		tp.teleport(_LEVEL_2_PATH, ^"%Teleporter/NoSuchMarker")
+		tp.teleport(_LEVEL_2_PATH, ^"%Teleporter/NoSuchMarker"),
 	)
 	assert_bool(promise.is_settled) \
 			.override_failure_message("a missing marker never settled the promise") \

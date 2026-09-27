@@ -81,11 +81,8 @@ struct World {
 
         database = session->get_databases()->create("saves");
         connection = MemoryConnection::opened(p_store, "slot1");
-        session->get_databases()->open(
-            database,
-            "slot1",
-            NetwPromise::resolved(connection)
-        );
+        session->get_databases()
+            ->open(database, "slot1", NetwPromise::resolved(connection));
 
         root = p_root != nullptr ? p_root : memnew(Node2D);
         root->set_name("Player");
@@ -303,7 +300,8 @@ TEST_CASE(
         const RID binding = world.loaded();
         world.root->set_position(Vector2(8, 8));
         world.connection->defer(true);
-        const Ref<NetwPromise> saving = world.session->persist_save_binding(binding);
+        const Ref<NetwPromise> saving
+            = world.session->persist_save_binding(binding);
 
         world.authority_away_and_back();
         world.connection->release();
@@ -444,11 +442,8 @@ struct Leaving {
 
         database = server->get_databases()->create("saves");
         connection = MemoryConnection::opened("lc8", "slot1");
-        server->get_databases()->open(
-            database,
-            "slot1",
-            NetwPromise::resolved(connection)
-        );
+        server->get_databases()
+            ->open(database, "slot1", NetwPromise::resolved(connection));
         root = memnew(Node2D);
         netw::Netw::configure_persistence(root)
             ->database(StringName("saves"))
@@ -531,11 +526,8 @@ struct Departing {
         schema->f32("spin", Ref<NetwQuantize>(), 1);
         database = server->get_databases()->create("saves");
         connection = MemoryConnection::opened("lc9", "slot1");
-        server->get_databases()->open(
-            database,
-            "slot1",
-            NetwPromise::resolved(connection)
-        );
+        server->get_databases()
+            ->open(database, "slot1", NetwPromise::resolved(connection));
         Node *body = pair.authored;
         netw::Netw::configure_persistence(body)
             ->database(StringName("saves"))

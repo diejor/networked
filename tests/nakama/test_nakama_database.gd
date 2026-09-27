@@ -21,19 +21,24 @@ class FakeNakama extends RefCounted:
 	var forced: Dictionary = { }
 	var calls: PackedStringArray = []
 
+
 	func own_user_id() -> String:
 		return user
+
 
 	func fail_next(verb: String, answer: Dictionary) -> void:
 		forced[verb] = answer
 
+
 	func stored(collection: String) -> Dictionary:
 		return rows.get(collection, { })
+
 
 	func plant(collection: String, key: String, value: String) -> void:
 		if not rows.has(collection):
 			rows[collection] = { }
 		rows[collection][key] = value
+
 
 	func _taken(verb: String) -> Dictionary:
 		if not forced.has(verb):
@@ -41,6 +46,7 @@ class FakeNakama extends RefCounted:
 		var answer: Dictionary = forced[verb]
 		forced.erase(verb)
 		return answer
+
 
 	func write_storage_objects(objects: Array) -> Dictionary:
 		calls.append("write")
@@ -56,6 +62,7 @@ class FakeNakama extends RefCounted:
 				String(entry["value"]),
 			)
 		return NakamaWrapper.storage_answer(OK, "", false)
+
 
 	func read_storage_objects(ids: Array) -> Dictionary:
 		calls.append("read")
@@ -79,6 +86,7 @@ class FakeNakama extends RefCounted:
 		var answer := NakamaWrapper.storage_answer(OK, "", false)
 		answer["objects"] = out
 		return answer
+
 
 	func list_storage_objects(
 			collection: String,
@@ -117,6 +125,7 @@ class FakeNakama extends RefCounted:
 		answer["cursor"] = last if remaining else ""
 		return answer
 
+
 	func delete_storage_objects(ids: Array) -> Dictionary:
 		calls.append("delete")
 		var refused := _taken("delete")
@@ -133,6 +142,7 @@ class FakeException extends RefCounted:
 	var message := ""
 	var status_code := -1
 	var cancelled := false
+
 
 	func _init(p_message: String, p_status: int, p_cancelled := false) -> void:
 		message = p_message

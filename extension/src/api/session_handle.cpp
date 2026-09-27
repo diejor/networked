@@ -100,9 +100,7 @@ void NetwSessionHandle::relay_disconnecting(const String &p_reason) {
     emit_signal(StringName(SIG_DISCONNECTING), p_reason);
 }
 
-void NetwSessionHandle::relay_player_joined(
-    const Ref<NetwPlayer> &p_who
-) {
+void NetwSessionHandle::relay_player_joined(const Ref<NetwPlayer> &p_who) {
     emit_signal(StringName(SIG_PLAYER_JOINED), p_who);
 }
 
@@ -110,9 +108,7 @@ void NetwSessionHandle::relay_local_joined(const Ref<NetwPlayer> &p_who) {
     emit_signal(StringName(SIG_LOCAL_JOINED), p_who);
 }
 
-void NetwSessionHandle::relay_player_left(
-    const Ref<NetwPlayer> &p_who
-) {
+void NetwSessionHandle::relay_player_left(const Ref<NetwPlayer> &p_who) {
     emit_signal(StringName(SIG_PLAYER_LEFT), p_who);
 }
 
@@ -158,8 +154,7 @@ Ref<NetwSceneHandle> NetwSessionHandle::get_presented_scene() const {
 
 TypedArray<NetwPlayer> NetwSessionHandle::get_players() const {
     NetwMultiplayer *api = session();
-    return api != nullptr ? api->player_joined_all()
-                          : TypedArray<NetwPlayer>();
+    return api != nullptr ? api->player_joined_all() : TypedArray<NetwPlayer>();
 }
 
 Ref<NetwPlayer> NetwSessionHandle::get_local_player() const {
@@ -169,8 +164,7 @@ Ref<NetwPlayer> NetwSessionHandle::get_local_player() const {
 
 Ref<NetwPlayer> NetwSessionHandle::player_of(int64_t p_peer) const {
     NetwMultiplayer *api = session();
-    return api != nullptr ? api->peer_get_player(p_peer)
-                          : Ref<NetwPlayer>();
+    return api != nullptr ? api->peer_get_player(p_peer) : Ref<NetwPlayer>();
 }
 
 Variant NetwSessionHandle::bucket_of(

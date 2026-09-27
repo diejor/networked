@@ -219,21 +219,14 @@ def lane_consumer(godot: str, *, archive: Path, workspace: Path, timeout: float)
     return 0
 
 
-def lane_csharp(
-    godot: str, *, dump: Path, sharp_version: str | None, timeout: float
-) -> int:
+def lane_csharp(godot: str, *, dump: Path, sharp_version: str | None, timeout: float) -> int:
     """The committed C# bindings are what the installed addon publishes, and
     they compile against GodotSharp."""
     csharp.dump_api(godot, dump, timeout)
     report = csharp.check_tree(dump, csharp.OUTPUT_DIR)
     version = sharp_version or csharp.sharp_range(dump)
-    csharp.compile_tree(
-        csharp.OUTPUT_DIR, ROOT / "dist" / "bindings", version, timeout
-    )
-    print(
-        "CSHARP classes=%d skipped=%d sharp=%s"
-        % (len(report["written"]), len(report["skipped"]), version)
-    )
+    csharp.compile_tree(csharp.OUTPUT_DIR, ROOT / "dist" / "bindings", version, timeout)
+    print("CSHARP classes=%d skipped=%d sharp=%s" % (len(report["written"]), len(report["skipped"]), version))
     return 0
 
 
@@ -367,9 +360,7 @@ def build_parser() -> argparse.ArgumentParser:
     consumer.add_argument("--workspace", type=Path, default=ROOT / "dist" / "consumer")
 
     sharp = sub.add_parser("csharp")
-    sharp.add_argument(
-        "--dump", type=Path, default=CI_DIR / "cache" / csharp.DUMP_NAME
-    )
+    sharp.add_argument("--dump", type=Path, default=CI_DIR / "cache" / csharp.DUMP_NAME)
     sharp.add_argument("--sharp-version")
 
     parse = sub.add_parser("parse")

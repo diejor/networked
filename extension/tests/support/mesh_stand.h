@@ -342,8 +342,7 @@ public:
             "the join preparation did not settle"
         );
         NETW_CHECK_EQ(int(prepared->get_code()), int(godot::OK));
-        const godot::Ref<netw::NetwPlayer> seated
-            = submit_join(p_id, p_pumps);
+        const godot::Ref<netw::NetwPlayer> seated = submit_join(p_id, p_pumps);
         netw::NetwMultiplayer *host = session_of(coordinator);
         const bool host_seated_it
             = host != nullptr && host->player_of(p_id).is_valid();

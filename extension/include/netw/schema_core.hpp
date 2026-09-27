@@ -71,8 +71,10 @@ public:
     godot::Error seal(const godot::RID &schema);
 
     int storage_version_of(const godot::RID &schema) const;
-    godot::Callable migration_from(const godot::RID &schema, int from_version)
-        const;
+    godot::Callable migration_from(
+        const godot::RID &schema,
+        int from_version
+    ) const;
 
     bool is_valid(const godot::RID &schema) const;
     godot::RID find(const godot::StringName &name) const;

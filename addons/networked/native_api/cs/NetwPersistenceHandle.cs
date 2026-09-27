@@ -6,20 +6,15 @@ using Godot.NativeInterop;
 namespace Networked;
 
 /// <summary>
-/// One entity's stored row, reached as <see cref="NetwEntity.Persistence"/>.
+/// One entity's saved record, reached as <see cref="NetwEntity.Persistence"/>.
 /// </summary>
 /// <remarks>
-/// The session authority compiles the entity's
-/// <see cref="NetwPersistenceConfig"/> and every
-/// <see cref="NetwPropertyConfig.Persisted"/> declaration under it into one row
-/// when the entity's node is ready. A declaration that does not hold refuses
-/// the whole entity with an error naming the property and the column, so an
-/// entity either saves its whole row or saves nothing. Code that depends on the
-/// stored values waits for <see cref="NetwPersistenceHandle.Loaded"/>.
-/// <c>Node._ready</c> runs before the row is read. A save freezes its values at
-/// the moment it is submitted. A property that moved while the write was in
-/// flight leaves the entity <see cref="NetwPersistenceHandle.Dirty"/> after the
-/// acknowledgement, so the next save carries the newer value.
+/// On the server, the entity's <see cref="NetwPersistenceConfig"/> and its
+/// <see cref="NetwPropertyConfig.Persisted"/> properties become one record when
+/// the node is ready. If any of them is invalid, the entity saves nothing and
+/// an error names the property. <c>Node._ready</c> runs before the record is
+/// read, so wait for <see cref="NetwPersistenceHandle.Loaded"/> before using
+/// the stored values.
 /// <code>
 /// func _on_chest_opened() -&gt; void:
 ///     var row := entity.persistence
@@ -27,15 +22,9 @@ namespace Networked;
 ///     row.save()
 /// </code>
 /// <para>
-/// <see cref="NetwPersistenceConfig.Interval"/> saves the row on its own
-/// cadence, and an entity that changed nothing submits no write at all. An
-/// entity whose node leaves the tree for good writes the values it held as it
-/// left, and the write completes after the node is freed. A move to another
-/// parent writes nothing and keeps the row bound. A final write the database
-/// refuses stays owed, and <see cref="NetwSessionHandle.SaveEntities"/> writes
-/// it again. A load or save that fails emits <see cref="NetwDatabase.Failed"/>
-/// on the entity's database. The interval and the final write have no caller to
-/// answer, so that signal is where their failures arrive.
+/// <see cref="NetwPersistenceConfig.Interval"/> saves automatically, and only
+/// when something changed. An entity whose node is freed saves one last time.
+/// Failed loads and saves emit <see cref="NetwDatabase.Failed"/>.
 /// </para>
 /// </remarks>
 public sealed class NetwPersistenceHandle : NetwRefCounted
@@ -55,12 +44,10 @@ public sealed class NetwPersistenceHandle : NetwRefCounted
     }
 
     /// <summary>
-    /// Emitted once a load has applied the stored row, including the read
+    /// Emitted when a load finishes, including the one
     /// <see cref="NetwPersistenceConfig.LoadOnSpawn"/> starts. <c>found</c> is
-    /// <c>false</c> when the database held no row for
-    /// <see cref="NetwPersistenceHandle.RecordId"/>. A failed load emits
-    /// <see cref="NetwDatabase.Failed"/> instead.
-    /// <c>NetwMultiplayer.persist_loaded</c>.
+    /// <c>false</c> when no record was stored for
+    /// <see cref="NetwPersistenceHandle.RecordId"/>.
     /// </summary>
     public event Action<bool> Loaded
     {
@@ -69,9 +56,7 @@ public sealed class NetwPersistenceHandle : NetwRefCounted
     }
 
     /// <summary>
-    /// Emitted once a write has been acknowledged and its values have become
-    /// the saved ones. A refused write emits <see cref="NetwDatabase.Failed"/>
-    /// instead. <c>NetwMultiplayer.persist_saved</c>.
+    /// Emitted when a save is stored.
     /// </summary>
     public event Action Saved
     {
@@ -84,7 +69,6 @@ public sealed class NetwPersistenceHandle : NetwRefCounted
 
     /// <summary>
     /// Whether any bound property differs from what was last saved.
-    /// <c>NetwMultiplayer.persist_is_dirty</c>.
     /// </summary>
     public bool Dirty
     {
@@ -103,9 +87,8 @@ public sealed class NetwPersistenceHandle : NetwRefCounted
             2737447660UL);
 
     /// <summary>
-    /// The key this row is stored under, as
-    /// <see cref="NetwPersistenceConfig.RecordId"/> answered it when the entity
-    /// bound. <c>NetwMultiplayer.persist_get_record_id</c>.
+    /// The id this record is stored under, as
+    /// <see cref="NetwPersistenceConfig.RecordId"/> returned it.
     /// </summary>
     public StringName RecordId
     {
@@ -126,7 +109,7 @@ public sealed class NetwPersistenceHandle : NetwRefCounted
             2737447660UL);
 
     /// <summary>
-    /// The <see cref="NetwDatabase"/> this row lives in, as
+    /// The <see cref="NetwDatabase"/> this record lives in, as
     /// <see cref="NetwPersistenceConfig.Database"/> named it.
     /// </summary>
     public StringName Database
@@ -145,20 +128,25 @@ public sealed class NetwPersistenceHandle : NetwRefCounted
         NetwApi.MethodBind("NetwPersistenceHandle", "load", 1931563502UL);
 
     /// <summary>
-    /// Reads the stored row and applies it to the bound properties. The promise
-    /// answers <c>true</c> when a row was found and <c>false</c> when none was
-    /// stored, which leaves the entity's own values standing.
-    /// <c>NetwMultiplayer.persist_load</c>. While the read started by
-    /// <see cref="NetwPersistenceConfig.LoadOnSpawn"/> is outstanding, this
-    /// returns that same promise.
+    /// Reads the stored record and applies it to the bound properties. The
+    /// promise returns <c>true</c> when a record was found, and <c>false</c>
+    /// when none was stored and the properties keep their values. A failed load
+    /// fails the promise, and <see cref="NetwPromise.Wait"/> returns the code.
     /// <code>
     /// Error
-    /// ┠╴ERR_UNAUTHORIZED   this peer holds no session authority
-    /// ┠╴ERR_BUSY           a bound property changed since the last load or save, a write
-    ///                      is in flight, or a property changed while the row was read
-    /// ┠╴ERR_DOES_NOT_EXIST a bound node was freed while the row was applied
-    /// ┖╴ERR_UNAVAILABLE    session authority moved or the database closed while the row
-    ///                      was read, so the load was canceled
+    /// ┠╴ERR_UNCONFIGURED       the entity binds no persistence, the database is not open,
+    /// │                        or the schema declares no migration from the stored row
+    /// ┠╴ERR_UNAUTHORIZED       this peer is not the server
+    /// ┠╴ERR_BUSY             a bound property changed since the last load or save, a
+    /// │                        write is in flight, a property changed while the row was
+    /// │                        read, or the database is full
+    /// ┠╴ERR_DOES_NOT_EXIST     a bound node was freed while the row was applied
+    /// ┠╴ERR_FILE_UNRECOGNIZED  the stored row is not in this library's format, or carries
+    /// │                        a newer storage version than the schema
+    /// ┠╴ERR_INVALID_DATA       the stored row does not match the schema
+    /// ┠╴ERR_UNAVAILABLE        the database closed or
+    /// │                        the session ended while the row was read
+    /// ┖╴backend-defined        the backend could not read the row
     /// </code>
     /// <para>
     /// <b>Server Only.</b>
@@ -175,21 +163,26 @@ public sealed class NetwPersistenceHandle : NetwRefCounted
         NetwApi.MethodBind("NetwPersistenceHandle", "save", 1931563502UL);
 
     /// <summary>
-    /// Writes the bound properties as this entity's row. The promise answers
-    /// <c>false</c> when nothing had changed and no write was submitted. A
-    /// write the database refused never becomes the saved values, so the entity
-    /// stays <see cref="NetwPersistenceHandle.Dirty"/> and the next save
-    /// carries them again. <c>NetwMultiplayer.persist_save</c>. A peer holding
-    /// no session authority is refused with
-    /// <c>@GlobalScope.ERR_UNAUTHORIZED</c>. Its copy of the bound properties
-    /// is the authority's row arriving over the wire, so storing it would write
-    /// the wrong values under the right key. An entity whose spawn load has not
-    /// succeeded is refused with <c>@GlobalScope.ERR_BUSY</c>, so the values it
-    /// spawned with never overwrite the stored row. A write that settles after
-    /// this peer lost session authority, or after the database closed, fails
-    /// with <c>@GlobalScope.ERR_UNAVAILABLE</c> and leaves the entity
-    /// <see cref="NetwPersistenceHandle.Dirty"/>. The write itself may still
-    /// have reached storage. <b>Server Only.</b>
+    /// Writes the bound properties as this entity's record. The promise returns
+    /// <c>false</c> when nothing had changed. A failed save fails the promise,
+    /// and <see cref="NetwPromise.Wait"/> returns the code. The entity stays
+    /// <see cref="NetwPersistenceHandle.Dirty"/> so the next save tries again.
+    /// <code>
+    /// Error
+    /// ┠╴ERR_UNCONFIGURED    the entity binds no persistence, or the database is not open
+    /// ┠╴ERR_UNAUTHORIZED    this peer is not the server
+    /// ┠╴ERR_BUSY            a write is in flight, the spawn load has not succeeded, or
+    /// │                     the database is full
+    /// ┠╴ERR_INVALID_DATA    the bound values do not match the schema, or the connection
+    /// │                     answered no outcome for the row
+    /// ┠╴ERR_UNAVAILABLE     the bound nodes are gone, or this peer stopped being the
+    /// │                     server or the database closed before the write settled.
+    /// │                     The write may still have reached storage
+    /// ┖╴backend-defined     the backend refused or could not complete the write
+    /// </code>
+    /// <para>
+    /// <b>Server Only.</b>
+    /// </para>
     /// </summary>
     public NetwPromise Save()
     {

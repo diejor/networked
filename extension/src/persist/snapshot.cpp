@@ -241,10 +241,8 @@ Error validate_ids(
             return ERR_INVALID_DATA;
         }
         if (seen.has(p_ids[at])) {
-            r_detail = vformat(
-                "durable id '%s' names more than one row",
-                p_ids[at]
-            );
+            r_detail
+                = vformat("durable id '%s' names more than one row", p_ids[at]);
             return ERR_INVALID_DATA;
         }
         seen.insert(p_ids[at]);
@@ -259,7 +257,8 @@ Dictionary seal_snapshot(
     const LocalVector<Variant> &p_columns
 ) {
     Dictionary columns;
-    for (uint32_t at = 0; at < p_columns.size() && at < uint32_t(p_schema.column_count());
+    for (uint32_t at = 0;
+         at < p_columns.size() && at < uint32_t(p_schema.column_count());
          ++at) {
         columns[String(p_schema.at(int(at))->key)] = p_columns[at];
     }
@@ -333,8 +332,8 @@ Error open_snapshot(
 
     const Dictionary payload = p_envelope[KEY_PAYLOAD];
     const PackedStringArray ids = payload.get(KEY_IDS, PackedStringArray());
-    Dictionary stored = Dictionary(payload.get(KEY_COLUMNS, Dictionary()))
-                            .duplicate(true);
+    Dictionary stored
+        = Dictionary(payload.get(KEY_COLUMNS, Dictionary())).duplicate(true);
 
     if (have < want) {
         const Error stepped = migrate_rows(
@@ -382,8 +381,7 @@ Error open_snapshot(
             return ERR_INVALID_DATA;
         }
         const Variant held = stored[key];
-        if (int(held.get_type())
-            != SchemaCore::storage_type(column->type)) {
+        if (int(held.get_type()) != SchemaCore::storage_type(column->type)) {
             r_detail = vformat(
                 "column '%s' is stored as type %d and schema '%s' declares "
                 "%d",

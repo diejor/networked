@@ -122,8 +122,8 @@ Error validate_element(int type, const Variant &value) {
     }
     if (type == SchemaCore::STRING) {
         const Variant::Type given = value.get_type();
-        const bool text = given == Variant::STRING
-            || given == Variant::STRING_NAME;
+        const bool text
+            = given == Variant::STRING || given == Variant::STRING_NAME;
         return text ? OK : ERR_INVALID_DATA;
     }
     const Variant::Type want
@@ -188,8 +188,7 @@ int SchemaCore::storage_version_of(const RID &schema) const {
     return record != nullptr ? record->storage_version : 0;
 }
 
-Callable SchemaCore::migration_from(const RID &schema, int from_version)
-    const {
+Callable SchemaCore::migration_from(const RID &schema, int from_version) const {
     const SchemaRecord *record = record_of(schema);
     if (record == nullptr) {
         return Callable();

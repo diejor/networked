@@ -1,8 +1,8 @@
 #pragma once
 
 #include "godot/local_vector.hpp"
-#include "netw/replication_send.hpp"
 #include "netw/repl/session_send.hpp"
+#include "netw/replication_send.hpp"
 #include "netw/wire/stream_book.hpp"
 
 namespace netw_test {
@@ -86,10 +86,7 @@ inline void accept_streams(
     accept_streams(p_send.writer_book(), p_offers, p_peer);
 }
 
-inline void seat_pending(
-    netw::wire::StreamWriterBook &p_writer,
-    int p_peer
-) {
+inline void seat_pending(netw::wire::StreamWriterBook &p_writer, int p_peer) {
     const godot::LocalVector<netw::wire::StreamLane> waiting
         = p_writer.unready(p_peer);
     for (uint32_t at = 0; at < waiting.size(); ++at) {

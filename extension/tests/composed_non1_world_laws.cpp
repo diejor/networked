@@ -234,10 +234,7 @@ struct ComposedWorld {
             int(handle->watch(host->player_of(TRANSPORT_SERVER))),
             int(OK)
         );
-        NETW_CHECK_EQ(
-            int(handle->watch(host->player_of(MEMBER))),
-            int(OK)
-        );
+        NETW_CHECK_EQ(int(handle->watch(host->player_of(MEMBER))), int(OK));
         stand.step_ticks(6);
 
         teach_player(host);
@@ -297,10 +294,7 @@ struct ComposedWorld {
         REQUIRE(stand.join(LATECOMER, StringName("eleven")).is_valid());
         const Ref<NetwSceneHandle> handle = host->scene_handle_of(world);
         REQUIRE(handle.is_valid());
-        NETW_CHECK_EQ(
-            int(handle->watch(host->player_of(LATECOMER))),
-            int(OK)
-        );
+        NETW_CHECK_EQ(int(handle->watch(host->player_of(LATECOMER))), int(OK));
         stand.step_ticks(10);
     }
 
@@ -651,10 +645,7 @@ struct ForgedCall {
         const RID seat = p_world.host->entity_create();
         sink_route = p_world.host->entity_admit(seat);
         REQUIRE(sink_route > 0);
-        NETW_CHECK_EQ(
-            int(p_world.host->entity_bind_node(seat, sink)),
-            int(OK)
-        );
+        NETW_CHECK_EQ(int(p_world.host->entity_bind_node(seat, sink)), int(OK));
         p_world.stand.pump(4);
 
         script = sink->get_script();
@@ -688,17 +679,19 @@ struct ForgedCall {
         uint64_t arrives_at_seven = uint64_t(COORDINATOR);
         REQUIRE(writer.bits(addresses_a_peer, 8));
         REQUIRE(writer.bits(arrives_at_seven, 32));
-        REQUIRE(netw::script::model::write_call_body(
-            writer,
-            p_world.host->rpc_method_token(
-                wrapper,
-                sink,
-                StringName("receive_node")
-            ),
-            encoded,
-            options.is_valid() ? options->get_quantizers() : Array(),
-            arg_types
-        ));
+        REQUIRE(
+            netw::script::model::write_call_body(
+                writer,
+                p_world.host->rpc_method_token(
+                    wrapper,
+                    sink,
+                    StringName("receive_node")
+                ),
+                encoded,
+                options.is_valid() ? options->get_quantizers() : Array(),
+                arg_types
+            )
+        );
         REQUIRE(writer.align_verify());
 
         NETW_CHECK_EQ(
@@ -793,10 +786,7 @@ TEST_CASE(
     REQUIRE(at_one != nullptr);
     const int64_t held_controller = NetwEntity::of(at_host)->get_controller();
     const int64_t held_authority = at_host->get_multiplayer_authority();
-    NETW_REQUIRE_EQ(
-        NetwEntity::of(at_one)->get_controller(),
-        held_controller
-    );
+    NETW_REQUIRE_EQ(NetwEntity::of(at_one)->get_controller(), held_controller);
 
     deliver_control_apply(cw.host, route, MEMBER, MEMBER);
     deliver_control_apply(cw.one, route, MEMBER, MEMBER);
@@ -811,7 +801,10 @@ TEST_CASE(
     deliver_control_apply(cw.one, route, MEMBER, COORDINATOR);
 
     NETW_CHECK_EQ(NetwEntity::of(at_one)->get_controller(), int64_t(MEMBER));
-    NETW_CHECK_EQ(int64_t(at_one->get_multiplayer_authority()), int64_t(MEMBER));
+    NETW_CHECK_EQ(
+        int64_t(at_one->get_multiplayer_authority()),
+        int64_t(MEMBER)
+    );
 }
 
 TEST_CASE(

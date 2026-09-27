@@ -10,9 +10,10 @@ namespace Networked;
 /// channel <see cref="NetwChannel.Id"/>.
 /// </summary>
 /// <remarks>
-/// Use this for session-scoped traffic that has no entity to associate with,
-/// such as a voice stream, a chat line, or a compressed world grid. Ids run
-/// <c>100</c> to <c>254</c>. Give each channel a distinct
+/// Channels are used to send and receive custom data between peers in a
+/// networked game. Use this for session-scoped traffic that has no entity to
+/// associate with, such as a voice stream, a chat line, or a compressed world
+/// grid. Ids run <c>100</c> to <c>254</c>. Give each channel a distinct
 /// <see cref="NetwChannel.Id"/> and call <see cref="NetwChannel.Register"/>
 /// once per peer.
 /// <code>
@@ -25,11 +26,6 @@ namespace Networked;
 /// # any peer, any time:
 /// chat.broadcast("gg".to_utf8_buffer())
 /// </code>
-/// <para>
-/// Pass <c>batched</c> as <c>true</c> to <see cref="NetwChannel.Send"/> or
-/// <see cref="NetwChannel.Broadcast"/> to aggregate payloads into the shared
-/// peer buffers the session flushes at the end of its frame.
-/// </para>
 /// </remarks>
 public sealed class NetwChannel : NetwRefCounted
 {
@@ -81,10 +77,7 @@ public sealed class NetwChannel : NetwRefCounted
 
     /// <summary>
     /// Opens channel <paramref name="id"/> over the session governing
-    /// <paramref name="node"/>, or returns <c>null</c> and reports when no
-    /// session governs it or <paramref name="id"/> is outside <c>100</c> to
-    /// <c>254</c>. <see cref="Netw.Channel"/> is the front door and this is
-    /// what it returns.
+    /// <paramref name="node"/>.
     /// </summary>
     public static NetwChannel Of(Node node, long id)
     {

@@ -9,12 +9,11 @@ namespace Networked;
 /// Where and how one <see cref="NetwEntity"/>'s body runs on each peer.
 /// </summary>
 /// <remarks>
-/// Reach it through <see cref="NetwEntity.Simulation"/>. It is never
-/// <c>null</c>, and there is one per entity. Each peer resolves one
-/// <see cref="NetwSimulationHandle.Mode"/> for the entity. The body's freeze,
-/// the <see cref="NetwSimulationHandle.Step"/>, how an arriving sample lands
-/// and how the entity is drawn all follow that mode. A game writes the
-/// declaration below and reads the mode, and never writes the mode.
+/// Reached through <see cref="NetwEntity.Simulation"/>. Each peer runs the
+/// entity in one <see cref="NetwSimulationHandle.Mode"/>, which decides whether
+/// <see cref="NetwSimulationHandle.Step"/> runs and whether the body is frozen.
+/// A game sets the members below and reads
+/// <see cref="NetwSimulationHandle.Mode"/>.
 /// <code>
 /// public Car()
 /// {
@@ -31,55 +30,36 @@ namespace Networked;
 /// }
 /// </code>
 /// <para>
-/// An entity is simulated when it writes any member here, calls a selection
-/// method, declares <see cref="NetwPredictionHandle.Archetype"/>, or has a
-/// <see cref="RigidBody2D"/> or <see cref="RigidBody3D"/> root that
-/// <see cref="NetwEntity.Interpolation"/> draws. Every other entity stays
-/// <see cref="NetwSimulationHandle.ModeEnum.None"/> on every peer. <b>Modes</b>
-/// The peer that authors the entity runs it as
-/// <see cref="NetwSimulationHandle.ModeEnum.Authority"/>. A controller running
-/// a predicted entity ahead runs it as
-/// <see cref="NetwSimulationHandle.ModeEnum.Predict"/>. Every other copy is
-/// <see cref="NetwSimulationHandle.ModeEnum.Proxy"/>, frozen and drawn from
-/// history, unless <see cref="NetwSimulationHandle.Replicas"/> or a selection
-/// makes it <see cref="NetwSimulationHandle.ModeEnum.Active"/>.
-/// <code>
-/// mode       the step           the body
-/// AUTHORITY  runs               runs with the settings the scene authored
-/// PREDICT    runs and replays   runs with the settings the scene authored
-/// ACTIVE     runs, never fresh  runs, and installs each sample it receives
-/// PROXY      does not run       frozen kinematic, drawn from history
-/// NONE       does not run       untouched
-/// </code>
+/// An entity is simulated once it sets or calls anything here, declares
+/// <see cref="NetwPredictionHandle.Archetype"/>, or has a
+/// <see cref="RigidBody2D"/> or <see cref="RigidBody3D"/> root drawn by
+/// <see cref="NetwEntity.Interpolation"/>. Other entities stay
+/// <see cref="NetwSimulationHandle.ModeEnum.None"/>.
 /// </para>
 /// <para>
-/// An <see cref="NetwSimulationHandle.ModeEnum.Active"/> copy that touches a
-/// body this peer runs as <see cref="NetwSimulationHandle.ModeEnum.Authority"/>
-/// or <see cref="NetwSimulationHandle.ModeEnum.Predict"/> keeps its own
-/// response to the touch. It skips every sample the author sent before the
-/// touch, and the author's later samples correct it as usual. One of the two
-/// bodies must report contacts through <c>RigidBody3D.contact_monitor</c>.
+/// <b>Modes</b> The peer that authors the entity runs it as
+/// <see cref="NetwSimulationHandle.ModeEnum.Authority"/>, and a client
+/// predicting it runs it as
+/// <see cref="NetwSimulationHandle.ModeEnum.Predict"/>. Every other copy is a
+/// frozen <see cref="NetwSimulationHandle.ModeEnum.Proxy"/>, unless
+/// <see cref="NetwSimulationHandle.Replicas"/> or a selection makes it
+/// <see cref="NetwSimulationHandle.ModeEnum.Active"/>.
+/// </para>
+/// <para>
 /// <b>Selection</b> While this entity runs here as
 /// <see cref="NetwSimulationHandle.ModeEnum.Authority"/> or
 /// <see cref="NetwSimulationHandle.ModeEnum.Predict"/>, it can pick other
 /// entities to run here as <see cref="NetwSimulationHandle.ModeEnum.Active"/>.
-/// <see cref="NetwSimulationHandle.Simulate"/> names one, and
+/// <see cref="NetwSimulationHandle.Simulate"/> names one.
 /// <see cref="NetwSimulationHandle.SimulateNearest"/>,
 /// <see cref="NetwSimulationHandle.SimulateWithin"/> and
-/// <see cref="NetwSimulationHandle.SimulateAll"/> set one automatic policy,
-/// which the last call replaces. A change takes effect at the start of the next
-/// tick.
+/// <see cref="NetwSimulationHandle.SimulateAll"/> set a policy, and each call
+/// replaces the last.
 /// <code>
 /// func _ready() -&gt; void:
 ///     entity.simulation.simulate(ball)
 ///     entity.simulation.simulate_nearest(2, &amp;"arena")
 /// </code>
-/// </para>
-/// <para>
-/// An entity named with <see cref="NetwSimulationHandle.Simulate"/> never
-/// spends the automatic policy's budget. A predicted entity keeps an entity it
-/// selected while the two touch. The selection belongs to this handle, so it
-/// holds across prediction being declared again.
 /// </para>
 /// </remarks>
 public sealed class NetwSimulationHandle : NetwRefCounted
@@ -181,14 +161,14 @@ public sealed class NetwSimulationHandle : NetwRefCounted
         Extrapolated = 1,
         /// <summary>
         /// A sample is held until the clock's display tick reaches it, then
-        /// lands as it was authored, so every sample lands at the same age.
+        /// lands as it was authored.
         /// </summary>
         Buffered = 2,
     }
 
     /// <summary>
     /// Emitted when <see cref="NetwSimulationHandle.Mode"/> changes on this
-    /// peer, after the body and the arriving samples have moved to <c>mode</c>.
+    /// peer, after the body has switched to <c>mode</c>.
     /// </summary>
     public event Action<
         NetwSimulationHandle.ModeEnum,
@@ -205,13 +185,11 @@ public sealed class NetwSimulationHandle : NetwRefCounted
         NetwApi.MethodBind("NetwSimulationHandle", "set_bodies", 381264803UL);
 
     /// <summary>
-    /// The physics bodies this entity's simulation owns, as paths from the
-    /// entity root. The core freezes them on a
-    /// <see cref="NetwSimulationHandle.ModeEnum.Proxy"/> copy and restores the
-    /// <c>RigidBody3D.freeze</c> settings the scene authored when the copy runs
-    /// again. Empty means the root, when it is a <see cref="RigidBody2D"/> or
-    /// <see cref="RigidBody3D"/>. A value written after the entity goes live
-    /// warns, and the bodies it had stay in effect.
+    /// The physics bodies this entity runs, as paths from the entity root. They
+    /// are frozen on a <see cref="NetwSimulationHandle.ModeEnum.Proxy"/> copy.
+    /// Empty means the root, when it is a <see cref="RigidBody2D"/> or
+    /// <see cref="RigidBody3D"/>. Set it in <c>_init</c>. A later write warns
+    /// and is ignored.
     /// </summary>
     public Godot.Collections.Array Bodies
     {
@@ -283,10 +261,7 @@ public sealed class NetwSimulationHandle : NetwRefCounted
             1564817952UL);
 
     /// <summary>
-    /// How the copies this peer does not author run.
-    /// <see cref="NetwSimulationHandle.ReplicasEnum.Active"/> makes every such
-    /// copy <see cref="NetwSimulationHandle.ModeEnum.Active"/>. It can change
-    /// at any time.
+    /// How the copies this peer does not author run. It can change at any time.
     /// </summary>
     public NetwSimulationHandle.ReplicasEnum Replicas
     {
@@ -317,9 +292,9 @@ public sealed class NetwSimulationHandle : NetwRefCounted
     /// <summary>
     /// How a sample from the author lands on a
     /// <see cref="NetwSimulationHandle.ModeEnum.Active"/> copy. Under
-    /// <see cref="NetwMultiplayer.LiveMode.Chase"/> the drawn position absorbs
-    /// the jump up to <see cref="NetwPredictionHandle.TeleportThreshold"/>, so
-    /// the body snaps and the visual glides.
+    /// <see cref="NetwMultiplayer.LiveMode.Chase"/> the body snaps to it and
+    /// the drawn position glides, up to
+    /// <see cref="NetwPredictionHandle.TeleportThreshold"/>.
     /// </summary>
     public NetwSimulationHandle.RestoreEnum Restore
     {
@@ -398,16 +373,11 @@ public sealed class NetwSimulationHandle : NetwRefCounted
     /// <see cref="NetwSimulationHandle.ModeEnum.Authority"/> and touches a free
     /// entity that also sets it, this peer claims that entity with
     /// <see cref="NetwEntity.HoldEnum.Yieldable"/>. A claimed entity claims
-    /// what it touches in the same tick. A touch claims when it begins or while
-    /// the touched body moves. A body that
-    /// <see cref="NetwSimulationHandle.ReleaseOnRest"/> gave back while it
-    /// still touches stays free until it moves again. The session grants the
-    /// claim only while this peer controls the entity that touched it, so a
-    /// refused grab takes nothing it touched. Setting it turns on
+    /// what it touches in the same tick. It turns on
     /// <c>RigidBody3D.contact_monitor</c> for the bodies. It needs
     /// <see cref="NetwEntity.TransferEnum.Immediate"/> on an entity with no
-    /// <see cref="NetwPropertyConfig.State"/> row and no prediction, and does
-    /// nothing otherwise.
+    /// <see cref="NetwPropertyConfig.State"/> property and no prediction, and
+    /// does nothing otherwise.
     /// </summary>
     public bool ClaimOnContact
     {
@@ -446,15 +416,12 @@ public sealed class NetwSimulationHandle : NetwRefCounted
 
     /// <summary>
     /// The seconds the bodies must sleep before this peer releases the entity
-    /// with <see cref="NetwEntity.ReleaseAuthority"/>. It acts only while this
-    /// peer is the confirmed controller with
-    /// <see cref="NetwEntity.HoldEnum.Yieldable"/> and no body is frozen, so
-    /// <see cref="NetwEntity.HoldEnum.Exclusive"/> never releases itself. A
-    /// body that wakes before the session decides claims the entity again.
-    /// <c>0</c> turns it off. It needs
+    /// with <see cref="NetwEntity.ReleaseAuthority"/>, or <c>0</c> to never
+    /// release. It only releases an entity this peer holds with
+    /// <see cref="NetwEntity.HoldEnum.Yieldable"/>. It needs
     /// <see cref="NetwEntity.TransferEnum.Immediate"/> on an entity with no
-    /// <see cref="NetwPropertyConfig.State"/> row and no prediction, and does
-    /// nothing otherwise.
+    /// <see cref="NetwPropertyConfig.State"/> property and no prediction, and
+    /// does nothing otherwise.
     /// </summary>
     public double ReleaseOnRest
     {
@@ -486,16 +453,11 @@ public sealed class NetwSimulationHandle : NetwRefCounted
         NetwApi.MethodBind("NetwSimulationHandle", "set_step", 1611583062UL);
 
     /// <summary>
-    /// The step the core calls in the phase
-    /// <see cref="NetwSimulationHandle.Schedule"/> names, while
-    /// <see cref="NetwSimulationHandle.Mode"/> runs the body. It is called as
-    /// <c>(delta: float, tick: int, is_fresh: bool)</c>. It reads the root's
-    /// <c>_network_tick</c> when none is set. <c>is_fresh</c> is true on a
-    /// <see cref="NetwSimulationHandle.ModeEnum.Authority"/> or
-    /// <see cref="NetwSimulationHandle.ModeEnum.Predict"/> step that moves the
-    /// entity forward, and false in a replay and on every
-    /// <see cref="NetwSimulationHandle.ModeEnum.Active"/> step. Gate input on
-    /// it, so an active copy coasts on the samples it installs.
+    /// Called each tick as <c>(delta: float, tick: int, is_fresh: bool)</c>
+    /// while <see cref="NetwSimulationHandle.Mode"/> runs the body. Defaults to
+    /// the root's <c>_network_tick</c>. <c>is_fresh</c> is <c>false</c> in a
+    /// replay and on a <see cref="NetwSimulationHandle.ModeEnum.Active"/> copy,
+    /// so read input only when it is <c>true</c>.
     /// </summary>
     public Callable Step
     {
@@ -560,11 +522,11 @@ public sealed class NetwSimulationHandle : NetwRefCounted
         NetwApi.MethodBind("NetwSimulationHandle", "simulate", 3949104711UL);
 
     /// <summary>
-    /// Always selects <paramref name="entity"/>, so it runs here as
+    /// Selects <paramref name="entity"/>, so it runs here as
     /// <see cref="NetwSimulationHandle.ModeEnum.Active"/> while this entity
     /// runs here as <see cref="NetwSimulationHandle.ModeEnum.Authority"/> or
     /// <see cref="NetwSimulationHandle.ModeEnum.Predict"/>. An entity in
-    /// another scene is refused with an error and is not selected.
+    /// another scene is refused with an error.
     /// </summary>
     public void Simulate(NetwEntity entity)
     {
@@ -605,8 +567,7 @@ public sealed class NetwSimulationHandle : NetwRefCounted
     /// Selects the <paramref name="count"/> entities nearest this one among
     /// those this peer holds in <paramref name="layer"/>. An empty
     /// <paramref name="layer"/> reads this entity's own
-    /// <see cref="NetwInterestLayer"/> membership. A negative
-    /// <paramref name="count"/> selects nothing.
+    /// <see cref="NetwInterestLayer"/> membership.
     /// </summary>
     public void SimulateNearest(int count, StringName layer = null)
     {
@@ -633,9 +594,8 @@ public sealed class NetwSimulationHandle : NetwRefCounted
 
     /// <summary>
     /// Selects the entities within <paramref name="meters"/> of this one among
-    /// those this peer holds in <paramref name="layer"/>. A selected entity
-    /// leaves only once it is 10% past <paramref name="meters"/>. A negative
-    /// <paramref name="meters"/> selects nothing.
+    /// those this peer holds in <paramref name="layer"/>. A selected entity is
+    /// dropped once it is 10% past <paramref name="meters"/>.
     /// </summary>
     public void SimulateWithin(double meters, StringName layer = null)
     {

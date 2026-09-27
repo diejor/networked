@@ -6,8 +6,7 @@ and the models, sounds and vehicle arithmetic are its work. The 2D sprites, 3D
 models and sound effects are CC0, the skid sound effect is by
 [Landeplage](https://github.com/Landeplage) and is also CC0.
 
-`vehicle.gd` keeps most of its shape. What the port adds is the six
-`Netw.configure_property` broadcast declarations, the interest join, and the
-`simulation.bodies` declaration that makes a car nobody here controls a proxy.
-The upstream `_physics_process` runs as `_network_tick`, which the framework
-calls on the peer that controls the car.
+`vehicle.gd` is mostly unchanged. The port adds six
+`Netw.configure_property` broadcast declarations, an interest join, and a
+`simulation.bodies` declaration. The upstream `_physics_process` runs as
+`_network_tick`, which only runs on the peer that controls the car.

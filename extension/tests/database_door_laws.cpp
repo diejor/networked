@@ -110,8 +110,7 @@ TEST_CASE(
                 ->get_result()),
         int(OK)
     );
-    const Dictionary read
-        = world.db->read(world.schema, "hero")->get_result();
+    const Dictionary read = world.db->read(world.schema, "hero")->get_result();
     NETW_CHECK_EQ(int(read["error"]), OK);
     CHECK(bool(read["found"]));
     const Dictionary read_values = read["values"];
@@ -131,16 +130,18 @@ TEST_CASE(
     NETW_CHECK_EQ(batch->erase(world.schema, "two"), OK);
     NETW_CHECK_EQ(batch->get_size(), 2);
     CHECK_FALSE(
-        bool(Dictionary(world.db->read(world.schema, "one")->get_result())
-                 ["found"])
+        bool(Dictionary(
+            world.db->read(world.schema, "one")->get_result()
+        )["found"])
     );
 
     const Dictionary result = batch->submit()->get_result();
     NETW_CHECK_EQ(int(result["error"]), OK);
     NETW_CHECK_EQ(PackedInt32Array(result["errors"]).size(), 2);
     CHECK(
-        bool(Dictionary(world.db->read(world.schema, "one")->get_result())
-                 ["found"])
+        bool(Dictionary(
+            world.db->read(world.schema, "one")->get_result()
+        )["found"])
     );
 
     NETW_CHECK_EQ(batch->write(world.schema, "three", row(3, "c")), ERR_LOCKED);
@@ -166,8 +167,9 @@ TEST_CASE(
     const Dictionary result = batch->submit()->get_result();
     NETW_CHECK_ORDER(int(result["error"]), int(OK), !=);
     CHECK_FALSE(
-        bool(Dictionary(world.db->read(world.schema, "one")->get_result())
-                 ["found"])
+        bool(Dictionary(
+            world.db->read(world.schema, "one")->get_result()
+        )["found"])
     );
 }
 

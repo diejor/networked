@@ -19,7 +19,7 @@ A :ref:`NetwDatabaseBackend<class_NetwDatabaseBackend>` that keeps records in Na
 Description
 -----------
 
-Every record is one Nakama storage object owned by the authenticated user, so a save follows the account rather than the device. A slot is one storage collection, and :ref:`app<class_NakamaDatabase_property_app>` names the manifest collection that lists them.
+Every record is a Nakama storage object owned by the logged in user, so saves follow the account across devices. Each slot is one storage collection.
 
 ::
 
@@ -29,7 +29,17 @@ Every record is one Nakama storage object owned by the authenticated user, so a 
 
 
 
-\ Nakama cannot enumerate its own collections, so :godot:`Resource._list_slots() <Resource#class_Resource_private_method__list_slots>` reads a manifest this backend maintains. :godot:`Resource._open() <Resource#class_Resource_private_method__open>` writes a slot's manifest entry before any record under it, so a slot that holds data is always listed.
+\ Storage requests settle with one of these codes. An uncertain code means the request was sent but Nakama never confirmed whether it applied.
+
+.. code:: text
+
+    OK                    Nakama applied the request
+    ERR_UNAUTHORIZED      no authenticated session, or Nakama answered 401 or 403
+    ERR_UNAVAILABLE       the Nakama addon is absent
+    ERR_INVALID_DATA      Nakama answered another 4xx status
+    ERR_TIMEOUT           canceled, or ended with no HTTP status. Uncertain
+    ERR_CONNECTION_ERROR  Nakama answered nothing or a 5xx status. Uncertain
+    FAILED                any other exception. Uncertain
 
 .. rst-class:: classref-reftable-group
 
@@ -53,19 +63,25 @@ Methods
 .. table::
    :widths: auto
 
-   +---------------------+--------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`String`     | :ref:`encoded<class_NakamaDatabase_method_encoded>`\ (\ text\: :godot:`String`\ ) |static|                                           |
-   +---------------------+--------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`String`     | :ref:`address_key<class_NakamaDatabase_method_address_key>`\ (\ address\: :godot:`Dictionary`\ ) |static|                            |
-   +---------------------+--------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`String`     | :ref:`address_prefix<class_NakamaDatabase_method_address_prefix>`\ (\ kind\: :godot:`int`, schema_name\: :godot:`String`\ ) |static| |
-   +---------------------+--------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`String`     | :ref:`packed<class_NakamaDatabase_method_packed>`\ (\ envelope\: :godot:`Dictionary`\ ) |static|                                     |
-   +---------------------+--------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`Dictionary` | :ref:`unpacked<class_NakamaDatabase_method_unpacked>`\ (\ value\: :godot:`Variant`\ ) |static|                                       |
-   +---------------------+--------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`String`     | :ref:`collection_for<class_NakamaDatabase_method_collection_for>`\ (\ slot\: :godot:`String`\ )                                      |
-   +---------------------+--------------------------------------------------------------------------------------------------------------------------------------+
+   +---------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`String`                       | :ref:`encoded<class_NakamaDatabase_method_encoded>`\ (\ text\: :godot:`String`\ ) |static|                                           |
+   +---------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`String`                       | :ref:`address_key<class_NakamaDatabase_method_address_key>`\ (\ address\: :godot:`Dictionary`\ ) |static|                            |
+   +---------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`String`                       | :ref:`address_prefix<class_NakamaDatabase_method_address_prefix>`\ (\ kind\: :godot:`int`, schema_name\: :godot:`String`\ ) |static| |
+   +---------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`String`                       | :ref:`packed<class_NakamaDatabase_method_packed>`\ (\ envelope\: :godot:`Dictionary`\ ) |static|                                     |
+   +---------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`Dictionary`                   | :ref:`unpacked<class_NakamaDatabase_method_unpacked>`\ (\ value\: :godot:`Variant`\ ) |static|                                       |
+   +---------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`String`                       | :ref:`collection_for<class_NakamaDatabase_method_collection_for>`\ (\ slot\: :godot:`String`\ )                                      |
+   +---------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwPromise<class_NetwPromise>` | :ref:`_open<class_NakamaDatabase_private_method__open>`\ (\ session\: :godot:`Object`, slot\: :godot:`StringName`\ )                 |
+   +---------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwPromise<class_NetwPromise>` | :ref:`_list_slots<class_NakamaDatabase_private_method__list_slots>`\ (\ session\: :godot:`Object`\ )                                 |
+   +---------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwPromise<class_NetwPromise>` | :ref:`_delete_slot<class_NakamaDatabase_private_method__delete_slot>`\ (\ session\: :godot:`Object`, slot\: :godot:`StringName`\ )   |
+   +---------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------+
 
 .. rst-class:: classref-section-separator
 
@@ -82,7 +98,7 @@ Constants
 
 **FORMAT_VERSION** = ``1`` :ref:`🔗<class_NakamaDatabase_constant_FORMAT_VERSION>`
 
-Version stamped into every stored value, refused on read when it disagrees.
+Format version written into every stored value. A value with another version fails to read.
 
 .. rst-class:: classref-section-separator
 
@@ -99,7 +115,7 @@ Property Descriptions
 
 :godot:`String` **app** = ``"netw_saves"`` :ref:`🔗<class_NakamaDatabase_property_app>`
 
-The manifest collection, and the prefix every slot's collection carries.
+The collection listing every slot, and the prefix of each slot's collection.
 
 .. rst-class:: classref-item-separator
 
@@ -111,7 +127,7 @@ The manifest collection, and the prefix every slot's collection carries.
 
 :godot:`Variant` **wrapper** :ref:`🔗<class_NakamaDatabase_property_wrapper>`
 
-The :ref:`NakamaWrapper<class_NakamaWrapper>` this backend performs its storage through.  A backend with no wrapper rejects every verb with :godot:`@GlobalScope.ERR_UNCONFIGURED <@GlobalScope#class_@GlobalScope_constant_ERR_UNCONFIGURED>` rather than answering an empty save.
+The :ref:`NakamaWrapper<class_NakamaWrapper>` used for storage. Without one, every method rejects with :godot:`@GlobalScope.ERR_UNCONFIGURED <@GlobalScope#class_@GlobalScope_constant_ERR_UNCONFIGURED>`.
 
 .. rst-class:: classref-section-separator
 
@@ -128,7 +144,7 @@ Method Descriptions
 
 :godot:`String` **encoded**\ (\ text\: :godot:`String`\ ) |static| :ref:`🔗<class_NakamaDatabase_method_encoded>`
 
-Encodes ``text`` so it survives as one Nakama collection or key segment.  The encoding is injective, so two different names never meet in one key.
+Encodes ``text`` for use in a Nakama collection or key. Different names always encode differently.
 
 .. rst-class:: classref-item-separator
 
@@ -140,7 +156,7 @@ Encodes ``text`` so it survives as one Nakama collection or key segment.  The en
 
 :godot:`String` **address_key**\ (\ address\: :godot:`Dictionary`\ ) |static| :ref:`🔗<class_NakamaDatabase_method_address_key>`
 
-Returns the storage key naming ``address``.  ``kind`` leads, so a record and a table snapshot spelled with the same key are two objects.
+Returns the storage key for ``address``. A record and a table snapshot with the same key are stored separately.
 
 .. rst-class:: classref-item-separator
 
@@ -152,7 +168,7 @@ Returns the storage key naming ``address``.  ``kind`` leads, so a record and a t
 
 :godot:`String` **address_prefix**\ (\ kind\: :godot:`int`, schema_name\: :godot:`String`\ ) |static| :ref:`🔗<class_NakamaDatabase_method_address_prefix>`
 
-Returns the key prefix every record of ``schema_name`` at ``kind`` carries.
+Returns the key prefix shared by every record of ``schema_name`` and ``kind``.
 
 .. rst-class:: classref-item-separator
 
@@ -164,7 +180,7 @@ Returns the key prefix every record of ``schema_name`` at ``kind`` carries.
 
 :godot:`String` **packed**\ (\ envelope\: :godot:`Dictionary`\ ) |static| :ref:`🔗<class_NakamaDatabase_method_packed>`
 
-Encodes ``envelope`` into the JSON string Nakama stores.  The payload is a :godot:`Variant` the game declared, which JSON cannot carry, so the envelope travels as base64 of its binary form.
+Encodes ``envelope`` as the JSON string Nakama stores, with the envelope as base64 of :godot:`@GlobalScope.var_to_bytes() <@GlobalScope#class_@GlobalScope_method_var_to_bytes>`.
 
 .. rst-class:: classref-item-separator
 
@@ -176,7 +192,7 @@ Encodes ``envelope`` into the JSON string Nakama stores.  The payload is a :godo
 
 :godot:`Dictionary` **unpacked**\ (\ value\: :godot:`Variant`\ ) |static| :ref:`🔗<class_NakamaDatabase_method_unpacked>`
 
-Decodes a stored ``value`` back into an envelope.  A value this library did not write answers an empty :godot:`Dictionary`, which the reading session refuses as :godot:`@GlobalScope.ERR_FILE_UNRECOGNIZED <@GlobalScope#class_@GlobalScope_constant_ERR_FILE_UNRECOGNIZED>` rather than reading as an empty save.
+Decodes a stored ``value`` back into an envelope. Returns an empty :godot:`Dictionary` for a value this library did not write, which fails the read with :godot:`@GlobalScope.ERR_FILE_UNRECOGNIZED <@GlobalScope#class_@GlobalScope_constant_ERR_FILE_UNRECOGNIZED>`.
 
 .. rst-class:: classref-item-separator
 
@@ -189,6 +205,42 @@ Decodes a stored ``value`` back into an envelope.  A value this library did not 
 :godot:`String` **collection_for**\ (\ slot\: :godot:`String`\ ) :ref:`🔗<class_NakamaDatabase_method_collection_for>`
 
 Returns the storage collection holding ``slot``'s records.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NakamaDatabase_private_method__open:
+
+.. rst-class:: classref-method
+
+:ref:`NetwPromise<class_NetwPromise>` **_open**\ (\ session\: :godot:`Object`, slot\: :godot:`StringName`\ ) :ref:`🔗<class_NakamaDatabase_private_method__open>`
+
+Adds ``slot`` to the slot list, then resolves a :ref:`NakamaDatabase.Connection<class_NakamaDatabase_Connection>` for its collection.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NakamaDatabase_private_method__list_slots:
+
+.. rst-class:: classref-method
+
+:ref:`NetwPromise<class_NetwPromise>` **_list_slots**\ (\ session\: :godot:`Object`\ ) :ref:`🔗<class_NakamaDatabase_private_method__list_slots>`
+
+Resolves every slot in the slot list.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NakamaDatabase_private_method__delete_slot:
+
+.. rst-class:: classref-method
+
+:ref:`NetwPromise<class_NetwPromise>` **_delete_slot**\ (\ session\: :godot:`Object`, slot\: :godot:`StringName`\ ) :ref:`🔗<class_NakamaDatabase_private_method__delete_slot>`
+
+Deletes every record in ``slot`` and removes it from the slot list. On failure the slot stays listed, so the delete can be retried.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

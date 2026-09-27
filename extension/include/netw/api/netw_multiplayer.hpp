@@ -18,6 +18,7 @@
 #include "netw/api/clock_config.hpp"
 #include "netw/api/clock_handle.hpp"
 #include "netw/api/connect_handle.hpp"
+#include "netw/api/database_config.hpp"
 #include "netw/api/entity_record.hpp"
 #include "netw/api/event_plane.hpp"
 #include "netw/api/group_promise.hpp"
@@ -63,7 +64,6 @@
 #include "netw/lagcomp_core.hpp"
 #include "netw/lifecycle/rule.hpp"
 #include "netw/liveness_core.hpp"
-#include "netw/api/database_config.hpp"
 #include "netw/persist/binding.hpp"
 #include "netw/persist/database.hpp"
 #include "netw/predict/engine.hpp"
@@ -628,15 +628,11 @@ private:
     persist::Databases databases;
     godot::HashMap<godot::StringName, godot::Ref<NetwDatabaseConfig>>
         database_configs;
-    godot::HashMap<godot::RID, godot::Ref<godot::RefCounted>>
-        database_handles;
+    godot::HashMap<godot::RID, godot::Ref<godot::RefCounted>> database_handles;
     bool databases_bound = false;
 
     void database_settled(const godot::RID &p_database, int64_t p_sequence);
-    void database_connected(
-        const godot::RID &p_database,
-        int64_t p_generation
-    );
+    void database_connected(const godot::RID &p_database, int64_t p_generation);
 
     persist::Bindings bindings;
     bool bindings_bound = false;
@@ -1845,9 +1841,7 @@ public:
     void scene_open_admission(godot::Node *p_container);
     void scene_close_admission(godot::Object *p_container);
     void scene_report_local_viewer(const godot::RID &p_scene, bool p_present);
-    void scene_on_player_joined(
-        const godot::Ref<NetwPlayer> &p_player
-    );
+    void scene_on_player_joined(const godot::Ref<NetwPlayer> &p_player);
     void scene_on_admission_visible(
         const godot::Ref<NetwEntity> &p_entity,
         const godot::RID &p_scene
@@ -2094,7 +2088,10 @@ public:
     };
     BookSizes book_sizes() const;
 #endif
-    sim::Mode sim_resolve(const godot::RID &p_entity, const sim::Facts &p_facts);
+    sim::Mode sim_resolve(
+        const godot::RID &p_entity,
+        const sim::Facts &p_facts
+    );
     void sim_follow_session_authority();
     sim::Facts sim_body_facts(const godot::Ref<NetwEntity> &p_entity) const;
     void sim_settle_body(const godot::Ref<NetwEntity> &p_entity);
@@ -2388,8 +2385,6 @@ public:
     bool interest_is_filtered(const godot::RID &p_entity);
 
     godot::Array interest_membership_ids(const godot::RID &p_entity);
-
-
 
     spawn::Pipeline *spawn_plane() const;
     void spawn_on_peer_connected(int64_t p_peer_id);
@@ -2732,9 +2727,7 @@ public:
     godot::StringName scene_get_label(const godot::RID &p_scene) const;
     godot::TypedArray<godot::RID> scene_get_entities(const godot::RID &p_scene);
     godot::TypedArray<NetwEntity> scene_get_bodies(const godot::RID &p_scene);
-    godot::TypedArray<NetwPlayer> scene_get_viewers(
-        const godot::RID &p_scene
-    );
+    godot::TypedArray<NetwPlayer> scene_get_viewers(const godot::RID &p_scene);
     godot::TypedArray<NetwEntity> scene_get_local_bodies(
         const godot::RID &p_scene
     );
@@ -4436,10 +4429,7 @@ public:
     godot::Ref<NetwPlayer> player_ensure(
         const session::AcceptFrame &p_accepted
     );
-    void player_adopt(
-        int64_t p_peer,
-        const godot::Ref<NetwPlayer> &p_player
-    );
+    void player_adopt(int64_t p_peer, const godot::Ref<NetwPlayer> &p_player);
     godot::Ref<NetwPlayer> player_of(int64_t p_peer) const;
     godot::Ref<NetwPlayer> player_joined_of(int64_t p_peer);
     godot::TypedArray<NetwPlayer> player_joined_all();
@@ -4455,14 +4445,10 @@ public:
     godot::Ref<NetwPlayer> player_admitted_of(int64_t p_peer) const;
     godot::TypedArray<godot::Object> player_admitted_all() const;
     godot::Ref<NetwPlayer> player_admitted_local();
-    godot::Ref<NetwPlayer> scene_requester_player(
-        godot::Node *p_requester
-    );
+    godot::Ref<NetwPlayer> scene_requester_player(godot::Node *p_requester);
     void player_publish_joined(int64_t p_peer);
     void player_publish_left(const godot::Ref<NetwPlayer> &p_who);
-    void player_release_id(
-        const godot::Ref<NetwPlayer> &p_who
-    );
+    void player_release_id(const godot::Ref<NetwPlayer> &p_who);
 
     int64_t player_incarnation(int64_t p_peer) const;
     godot::TypedArray<NetwEntity> player_bodies_held(

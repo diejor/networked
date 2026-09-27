@@ -2,7 +2,8 @@ extends Node2D
 
 @onready var in_lobby: InLobby = %InLobby
 @onready var gamestate: BomberGamestate = Netw.service(
-	self, BomberGamestate,
+	self,
+	BomberGamestate,
 ) as BomberGamestate
 
 

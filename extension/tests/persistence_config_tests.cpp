@@ -42,12 +42,14 @@ TEST_CASE(
     first->record_id(Callable(left.ptr(), "get_schema_name"));
     second->record_id(Callable(right.ptr(), "get_schema_name"));
 
-    CHECK(bool(
-        StringName(first->get_id_provider().call()) == StringName("left")
-    ));
-    CHECK(bool(
-        StringName(second->get_id_provider().call()) == StringName("right")
-    ));
+    CHECK(
+        bool(StringName(first->get_id_provider().call()) == StringName("left"))
+    );
+    CHECK(
+        bool(
+            StringName(second->get_id_provider().call()) == StringName("right")
+        )
+    );
 }
 
 TEST_CASE(

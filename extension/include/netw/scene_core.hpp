@@ -133,7 +133,6 @@ public:
     godot::Array pump_retired();
     godot::Array retiring_scenes() const;
 
-
     bool is_live(const godot::RID &scene) const;
     godot::RID scene_named(const godot::StringName &stem) const;
     godot::Array scenes_named(const godot::StringName &stem) const;

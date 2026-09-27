@@ -529,9 +529,7 @@ TEST_CASE(
             )
         );
 
-        mirrored->set_reconcile_mode(
-            netw::NetwPredict::RECONCILE_INDEPENDENT
-        );
+        mirrored->set_reconcile_mode(netw::NetwPredict::RECONCILE_INDEPENDENT);
         decoded.set_epoch(decoded.epoch() + 1);
         pool->admit_relayed_payload(relayed_to, decoded.to_bytes());
         const int64_t alone = pool->joint_epoch_floor_of(relayed_to);

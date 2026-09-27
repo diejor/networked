@@ -35,7 +35,7 @@
 			<description>
 				Adds the entity to [param layer_id] and returns this handle. Idempotent.
 				[param leave_policy] is one of [enum NetwMultiplayer.LeavePolicy] and [param perception_policy] one of [enum NetwMultiplayer.PerceptionPolicy], each declared in passing for the layer being joined. [code]-1[/code] declares neither and leaves whatever [method on_leave_policy] and [method on_perception_policy] already set, which are also the door for the [code]CUSTOM[/code] rows because those need a callback.
-				The declaration is safe in [method Object._init] on every peer. Only server authority mutates the live [NetwInterestLayer] entity set.
+				The declaration is safe in [method Object._init] on every peer. Only the server changes the live [NetwInterestLayer] entity set.
 			</description>
 		</method>
 		<method name="layer_ids" qualifiers="const">
@@ -83,7 +83,7 @@
 			<param index="2" name="custom_callback" type="Callable" default="Callable()" />
 			<description>
 				Overrides the wire behavior for [param layer_id] with one of [enum NetwMultiplayer.LeavePolicy], and returns this handle.
-				[constant NetwMultiplayer.LEAVE_POLICY_CUSTOM] requires [param custom_callback], called with [code](peer_id, layer_id)[/code] on server authority. Other policies reject a callback so configuration mistakes fail at declaration time.
+				[constant NetwMultiplayer.LEAVE_POLICY_CUSTOM] requires [param custom_callback], called with [code](peer_id, layer_id)[/code] on the server. Other policies reject a callback.
 			</description>
 		</method>
 		<method name="on_perception_policy">

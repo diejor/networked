@@ -172,8 +172,7 @@ class IdleScenario final : public netw_test::FrameScenario {
             }
             const netw::display::Runtime *runtime = book->runtime_of(cube);
             if (runtime != nullptr
-                && runtime->get_pump_mode()
-                    == netw::display::PUMP_BRACKETED) {
+                && runtime->get_pump_mode() == netw::display::PUMP_BRACKETED) {
                 seen.bracketed += 1;
             }
             RigidBody3D *body

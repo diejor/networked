@@ -436,11 +436,7 @@ TEST_CASE(
     REQUIRE(evidence.driven);
     NETW_CHECK_GT(evidence.rest.y, evidence.spawn.y + 100.0);
     NETW_CHECK_CLOSE(evidence.one_step.distance_to(evidence.rest), 0.0, 1.0);
-    NETW_CHECK_CLOSE(
-        evidence.three_steps.distance_to(evidence.rest),
-        0.0,
-        1.0
-    );
+    NETW_CHECK_CLOSE(evidence.three_steps.distance_to(evidence.rest), 0.0, 1.0);
 }
 
 TEST_CASE(

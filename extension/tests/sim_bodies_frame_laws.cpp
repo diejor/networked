@@ -376,25 +376,31 @@ class BodiesScenario final : public netw_test::FrameScenario {
         }
     }
 
-    template <typename F>
-    void each_body(F p_visit) {
+    template <typename F> void each_body(F p_visit) {
         for (int kind = 0; kind < KINDS; ++kind) {
             for (int at = 0; at < OBSERVERS; ++at) {
-                for (int body = 0; body < BODY_COUNT[shape_of(kind)];
-                     ++body) {
-                    p_visit(kind, at, body, body_at(kind, OBSERVER_AT[at], body));
+                for (int body = 0; body < BODY_COUNT[shape_of(kind)]; ++body) {
+                    p_visit(
+                        kind,
+                        at,
+                        body,
+                        body_at(kind, OBSERVER_AT[at], body)
+                    );
                 }
             }
         }
     }
 
     void read_proxy() {
-        each_body([this](int p_kind, int p_at, int p_body, RigidBody3D *p_node) {
-            CopySeen &copy = seen(p_kind, p_at);
-            const netw::sim::Row *row = row_at(p_kind, OBSERVER_AT[p_at]);
-            copy.proxy_mode = row != nullptr ? row->bodies.applied : Mode::NONE;
-            copy.bodies[p_body].proxy_frozen = p_node->is_freeze_enabled();
-        });
+        each_body(
+            [this](int p_kind, int p_at, int p_body, RigidBody3D *p_node) {
+                CopySeen &copy = seen(p_kind, p_at);
+                const netw::sim::Row *row = row_at(p_kind, OBSERVER_AT[p_at]);
+                copy.proxy_mode
+                    = row != nullptr ? row->bodies.applied : Mode::NONE;
+                copy.bodies[p_body].proxy_frozen = p_node->is_freeze_enabled();
+            }
+        );
     }
 
     void flip() {
@@ -409,40 +415,43 @@ class BodiesScenario final : public netw_test::FrameScenario {
 
     void sample_start() {
         const double expected = step_length();
-        each_body([this, expected](
-                      int p_kind,
-                      int p_at,
-                      int p_body,
-                      RigidBody3D *p_node
-                  ) {
-            BodySeen &body = seen(p_kind, p_at).bodies[p_body];
-            const double moved = p_node->get_global_position().distance_to(
-                ended[p_kind][p_at][p_body]
-            );
-            body.stepped += 1;
-            body.integrated += moved > expected * 0.5 ? 1 : 0;
-            body.worst_step_error
-                = MAX(body.worst_step_error, Math::abs(moved - expected));
-        });
+        each_body(
+            [this,
+             expected](int p_kind, int p_at, int p_body, RigidBody3D *p_node) {
+                BodySeen &body = seen(p_kind, p_at).bodies[p_body];
+                const double moved = p_node->get_global_position().distance_to(
+                    ended[p_kind][p_at][p_body]
+                );
+                body.stepped += 1;
+                body.integrated += moved > expected * 0.5 ? 1 : 0;
+                body.worst_step_error
+                    = MAX(body.worst_step_error, Math::abs(moved - expected));
+            }
+        );
     }
 
     void sample_end() {
-        each_body([this](int p_kind, int p_at, int p_body, RigidBody3D *p_node) {
-            ended[p_kind][p_at][p_body] = p_node->get_global_position();
-        });
+        each_body(
+            [this](int p_kind, int p_at, int p_body, RigidBody3D *p_node) {
+                ended[p_kind][p_at][p_body] = p_node->get_global_position();
+            }
+        );
     }
 
     void read_active() {
-        each_body([this](int p_kind, int p_at, int p_body, RigidBody3D *p_node) {
-            CopySeen &copy = seen(p_kind, p_at);
-            const netw::sim::Row *row = row_at(p_kind, OBSERVER_AT[p_at]);
-            copy.active_mode = row != nullptr ? row->bodies.applied : Mode::NONE;
-            if (row != nullptr) {
-                copy.installed = row->installs.stats.installed;
-                copy.newest_age = row->installs.stats.newest_age;
+        each_body(
+            [this](int p_kind, int p_at, int p_body, RigidBody3D *p_node) {
+                CopySeen &copy = seen(p_kind, p_at);
+                const netw::sim::Row *row = row_at(p_kind, OBSERVER_AT[p_at]);
+                copy.active_mode
+                    = row != nullptr ? row->bodies.applied : Mode::NONE;
+                if (row != nullptr) {
+                    copy.installed = row->installs.stats.installed;
+                    copy.newest_age = row->installs.stats.newest_age;
+                }
+                copy.bodies[p_body].active_frozen = p_node->is_freeze_enabled();
             }
-            copy.bodies[p_body].active_frozen = p_node->is_freeze_enabled();
-        });
+        );
     }
 
     void drift() {
@@ -459,28 +468,32 @@ class BodiesScenario final : public netw_test::FrameScenario {
     }
 
     void read_healed() {
-        each_body([this](int p_kind, int p_at, int p_body, RigidBody3D *p_node) {
-            CopySeen &copy = seen(p_kind, p_at);
-            const netw::sim::Row *row = row_at(p_kind, OBSERVER_AT[p_at]);
-            if (row != nullptr) {
-                copy.installed_after_drift = row->installs.stats.installed
-                    - installed_at_drift[p_kind][p_at];
-                copy.youngest_age = row->installs.stats.youngest_age;
-                copy.oldest_age = row->installs.stats.oldest_age;
+        each_body(
+            [this](int p_kind, int p_at, int p_body, RigidBody3D *p_node) {
+                CopySeen &copy = seen(p_kind, p_at);
+                const netw::sim::Row *row = row_at(p_kind, OBSERVER_AT[p_at]);
+                if (row != nullptr) {
+                    copy.installed_after_drift = row->installs.stats.installed
+                        - installed_at_drift[p_kind][p_at];
+                    copy.youngest_age = row->installs.stats.youngest_age;
+                    copy.oldest_age = row->installs.stats.oldest_age;
+                }
+                const Vector3 author
+                    = body_at(p_kind, AUTHOR, p_body)->get_global_position();
+                copy.bodies[p_body].drift_left
+                    = Math::abs(p_node->get_global_position().z - author.z);
             }
-            const Vector3 author
-                = body_at(p_kind, AUTHOR, p_body)->get_global_position();
-            copy.bodies[p_body].drift_left
-                = Math::abs(p_node->get_global_position().z - author.z);
-        });
+        );
     }
 
     void read_advance() {
-        each_body([this](int p_kind, int p_at, int p_body, RigidBody3D *p_node) {
-            seen(p_kind, p_at).bodies[p_body].healed_advance
-                = p_node->get_global_position().x
-                - ended[p_kind][p_at][p_body].x;
-        });
+        each_body(
+            [this](int p_kind, int p_at, int p_body, RigidBody3D *p_node) {
+                seen(p_kind, p_at).bodies[p_body].healed_advance
+                    = p_node->get_global_position().x
+                    - ended[p_kind][p_at][p_body].x;
+            }
+        );
     }
 
 public:

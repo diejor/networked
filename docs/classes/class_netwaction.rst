@@ -248,7 +248,7 @@ Method Descriptions
 
 |void| **request**\ (\ view_tick\: :godot:`int`, ...\ ) |vararg| :ref:`🔗<class_NetwAction_method_request>`
 
-Requests the server authority method for ``view_tick``. Every argument after ``view_tick`` reaches that method in the order it was written, after the :ref:`NetwActionContext<class_NetwActionContext>` the method always takes first.
+Asks the server to run the action at ``view_tick``. Every argument after ``view_tick`` reaches that method in the order it was written, after the :ref:`NetwActionContext<class_NetwActionContext>` the method always takes first.
 
 ::
 

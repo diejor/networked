@@ -609,14 +609,12 @@ TEST_CASE(
     CHECK(not_quiet_yet);
 
     link.sender.desire(triple(link.plan, 2, 2, 2));
-    const bool a_restated_target_still_awaits
-        = link.sender.awaiting_receipt();
+    const bool a_restated_target_still_awaits = link.sender.awaiting_receipt();
     CHECK(a_restated_target_still_awaits);
     NETW_CHECK_EQ(link.sender.exposed_high_water(), first);
 
     link.sender.desire(triple(link.plan, 2, 2, 3));
-    const bool a_moved_target_owes_a_revision
-        = !link.sender.awaiting_receipt();
+    const bool a_moved_target_owes_a_revision = !link.sender.awaiting_receipt();
     CHECK(a_moved_target_owes_a_revision);
 
     link.sender.desire(triple(link.plan, 2, 2, 2));
@@ -650,8 +648,7 @@ TEST_CASE(
         const uint64_t spare = link.sender.reserve();
         link.sender.expose(spare, triple(link.plan, 5, 0, uint64_t(at)));
     }
-    const bool the_repair_outlives_the_eviction
-        = link.sender.holds(repair);
+    const bool the_repair_outlives_the_eviction = link.sender.holds(repair);
     CHECK(the_repair_outlives_the_eviction);
     NETW_CHECK_EQ(link.sender.pinned_repair(), repair);
 }

@@ -155,11 +155,8 @@ class ReplayScenario final : public netw_test::FrameScenario {
         const Ref<netw::LocalLinkConditions> flight
             = netw::LocalLinkConditions::create(61);
         flight->set_latency_ms(double(ACK_DELAY_TICKS) * 1000.0 / TICKRATE);
-        stand->loopback()->set_link_conditions(
-            stand->peer(-1),
-            flight,
-            stand->peer_id(A)
-        );
+        stand->loopback()
+            ->set_link_conditions(stand->peer(-1), flight, stand->peer_id(A));
         replay_evidence().seated = true;
         return true;
     }
@@ -167,8 +164,7 @@ class ReplayScenario final : public netw_test::FrameScenario {
     void replay() {
         NetwMultiplayer *author = stand->session(A);
         netw::NetwPredictionEngine *engine = author->get_prediction_engine();
-        const int64_t slot
-            = engine->slot_of(NetwEntity::of(avatar_at(A)));
+        const int64_t slot = engine->slot_of(NetwEntity::of(avatar_at(A)));
         for (int at = 0; at < DEPTH_COUNT; ++at) {
             replay_evidence().windows[at] = engine->replay_tick_window(
                 slot,

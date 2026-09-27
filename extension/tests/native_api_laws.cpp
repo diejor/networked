@@ -18,8 +18,14 @@ using MethodBindFn = void *(*)(const char *, const char *, uint64_t);
 using Ptrcall0Fn = void (*)(void *, void *, void *);
 using Ptrcall1Fn = void (*)(void *, void *, const void *, void *);
 using Ptrcall2Fn = void (*)(void *, void *, const void *, const void *, void *);
-using Ptrcall3Fn =
-    void (*)(void *, void *, const void *, const void *, const void *, void *);
+using Ptrcall3Fn = void (*)(
+    void *,
+    void *,
+    const void *,
+    const void *,
+    const void *,
+    void *
+);
 using Call0Fn = void (*)(void *, void *, void *);
 using Call1Fn = void (*)(void *, void *, const void *, void *);
 using Call2Fn = void (*)(void *, void *, const void *, const void *, void *);
@@ -69,7 +75,8 @@ T function_at(const Dictionary &p_table, const char *p_name) {
 
 } // namespace
 
-TEST_CASE("[Networked][NativeApi][Hosted] NA1 the table publishes every address"
+TEST_CASE(
+    "[Networked][NativeApi][Hosted] NA1 the table publishes every address"
 ) {
     const Dictionary table = netw::native_api_table();
 
@@ -77,29 +84,32 @@ TEST_CASE("[Networked][NativeApi][Hosted] NA1 the table publishes every address"
     CHECK(int64_t(table["hash"]) != 0);
 
     const Dictionary functions = table["functions"];
-    NETW_CHECK_EQ(functions.size(), int(sizeof(EXPORTED) / sizeof(EXPORTED[0])));
+    NETW_CHECK_EQ(
+        functions.size(),
+        int(sizeof(EXPORTED) / sizeof(EXPORTED[0]))
+    );
     for (const char *name : EXPORTED) {
         CHECK(int64_t(functions[name]) != 0);
     }
 }
 
-TEST_CASE("[Networked][NativeApi][Hosted] NA2 a bind answers for a real method"
+TEST_CASE(
+    "[Networked][NativeApi][Hosted] NA2 a bind answers for a real method"
 ) {
     const Dictionary table = netw::native_api_table();
     const auto bind_of = function_at<MethodBindFn>(table, "method_bind");
 
-    void *found = bind_of(
-        "RefCounted",
-        "get_reference_count",
-        REFERENCE_COUNT_HASH
-    );
+    void *found
+        = bind_of("RefCounted", "get_reference_count", REFERENCE_COUNT_HASH);
     CHECK(found != nullptr);
 
     void *missing = bind_of("RefCounted", "no_such_method", 1);
     CHECK(missing == nullptr);
 }
 
-TEST_CASE("[Networked][NativeApi][Hosted] NA3 a ptrcall reaches a live object") {
+TEST_CASE(
+    "[Networked][NativeApi][Hosted] NA3 a ptrcall reaches a live object"
+) {
     const Dictionary table = netw::native_api_table();
     const auto bind_of = function_at<MethodBindFn>(table, "method_bind");
     const auto ptrcall0 = function_at<Ptrcall0Fn>(table, "ptrcall0");
@@ -109,11 +119,8 @@ TEST_CASE("[Networked][NativeApi][Hosted] NA3 a ptrcall reaches a live object") 
     config.instantiate();
     void *raw = netw::gd::engine_object(config.ptr());
 
-    void *bind = bind_of(
-        "RefCounted",
-        "get_reference_count",
-        REFERENCE_COUNT_HASH
-    );
+    void *bind
+        = bind_of("RefCounted", "get_reference_count", REFERENCE_COUNT_HASH);
     REQUIRE(bind != nullptr);
 
     int64_t before = 0;
@@ -142,11 +149,8 @@ TEST_CASE("[Networked][NativeApi][Hosted] NA4 a retain balances a release") {
     config.instantiate();
     void *raw = netw::gd::engine_object(config.ptr());
 
-    void *bind = bind_of(
-        "RefCounted",
-        "get_reference_count",
-        REFERENCE_COUNT_HASH
-    );
+    void *bind
+        = bind_of("RefCounted", "get_reference_count", REFERENCE_COUNT_HASH);
     REQUIRE(bind != nullptr);
 
     int64_t before = 0;
@@ -258,7 +262,9 @@ TEST_CASE("[Networked][NativeApi][Hosted] NA7 a thunk gathers every arity") {
     CHECK(after_range > after_bits);
 }
 
-TEST_CASE("[Networked][NativeApi][Hosted] NA8 an argument pack carries a tail") {
+TEST_CASE(
+    "[Networked][NativeApi][Hosted] NA8 an argument pack carries a tail"
+) {
     const Dictionary table = netw::native_api_table();
     const auto bind_of = function_at<MethodBindFn>(table, "method_bind");
     const auto call1 = function_at<Call1Fn>(table, "call1");
@@ -292,7 +298,8 @@ TEST_CASE("[Networked][NativeApi][Hosted] NA8 an argument pack carries a tail") 
     CHECK(String(answered) == String("carried"));
 }
 
-TEST_CASE("[Networked][NativeApi][Hosted] NA9 a pack holds an index it never sized"
+TEST_CASE(
+    "[Networked][NativeApi][Hosted] NA9 a pack holds an index it never sized"
 ) {
     const Dictionary table = netw::native_api_table();
     const auto args_new = function_at<ArgsNewFn>(table, "args_new");
@@ -314,7 +321,8 @@ TEST_CASE("[Networked][NativeApi][Hosted] NA9 a pack holds an index it never siz
     CHECK(discarded.get_type() == Variant::NIL);
 }
 
-TEST_CASE("[Networked][NativeApi][Hosted] NA10 a ptrcall answers a refcounted object"
+TEST_CASE(
+    "[Networked][NativeApi][Hosted] NA10 a ptrcall answers a refcounted object"
 ) {
     const Dictionary table = netw::native_api_table();
     const auto bind_of = function_at<MethodBindFn>(table, "method_bind");
@@ -323,11 +331,8 @@ TEST_CASE("[Networked][NativeApi][Hosted] NA10 a ptrcall answers a refcounted ob
     const auto release = function_at<ReleaseFn>(table, "release");
 
     void *make = bind_of("NetwBitStream", "writer", WRITER_HASH);
-    void *count = bind_of(
-        "RefCounted",
-        "get_reference_count",
-        REFERENCE_COUNT_HASH
-    );
+    void *count
+        = bind_of("RefCounted", "get_reference_count", REFERENCE_COUNT_HASH);
     void *one = bind_of("NetwBitStream", "bool1", BOOL1_HASH);
     void *length = bind_of("NetwBitStream", "bit_length", BIT_LENGTH_HASH);
     REQUIRE(make != nullptr);

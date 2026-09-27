@@ -89,9 +89,7 @@ public:
     static godot::Ref<NetwJoinConfig> configure_join(
         const godot::Callable &p_handler
     );
-    static godot::Error configure_admission(
-        const godot::Callable &p_handler
-    );
+    static godot::Error configure_admission(const godot::Callable &p_handler);
     static godot::Ref<NetwSessionConfig> configure_session(
         godot::Node *p_node,
         const godot::Ref<NetwSessionConfig> &p_preset

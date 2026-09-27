@@ -70,11 +70,8 @@ struct World {
 
         database = session->get_databases()->create("saves");
         connection = MemoryConnection::opened(p_store, "slot1");
-        session->get_databases()->open(
-            database,
-            "slot1",
-            NetwPromise::resolved(connection)
-        );
+        session->get_databases()
+            ->open(database, "slot1", NetwPromise::resolved(connection));
 
         arena = memnew(Node);
         arena->set_name("Arena");
@@ -227,7 +224,9 @@ TEST_CASE(
     CHECK(world.session->persist_withholds(world.root));
     CHECK(bool(world.root->get_position() == Vector2(1, 1)));
     NETW_CHECK_EQ(world.published(log), 0);
-    CHECK(world.session->persist_save_binding(world.binding())->get_is_failed());
+    CHECK(
+        world.session->persist_save_binding(world.binding())->get_is_failed()
+    );
 
     const Ref<NetwPromise> retried
         = world.session->persist_load_binding(world.binding());
@@ -305,8 +304,9 @@ TEST_CASE(
     CHECK_FALSE(world.session->persist_enroll(world.root));
     CHECK_FALSE(world.session->persist_withholds(world.root));
 
-    const Ref<NetwPromise> refused
-        = world.session->persist_load_binding(world.session->persist_bind(world.root));
+    const Ref<NetwPromise> refused = world.session->persist_load_binding(
+        world.session->persist_bind(world.root)
+    );
     CHECK(refused->get_is_failed());
     NETW_CHECK_EQ(int(refused->get_code()), int(ERR_UNAUTHORIZED));
     CHECK(bool(world.root->get_position() == Vector2(1, 1)));

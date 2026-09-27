@@ -6,18 +6,14 @@ using Godot.NativeInterop;
 namespace Networked;
 
 /// <summary>
-/// The peer source for one peer class, backed by a platform's lobbies.
+/// Base class for a lobby provider.
 /// </summary>
 /// <remarks>
-/// A directory is what the connect plane asks when a game names a
-/// <see cref="MultiplayerTree.PeerClass"/> the plane has no built-in transport
-/// for. Register one under a session and it becomes the provider for the peer
-/// class <c>_peer_class</c> names, so hosting, joining and browsing that class
-/// all reach this node. Every request method returns <c>void</c> and completes
-/// later through <see cref="LobbyDirectory.Deliver"/>,
-/// <see cref="LobbyDirectory.Fail"/>, or
-/// <see cref="LobbyDirectory.PublishLobbies"/>. Each request completes exactly
-/// once.
+/// Lobbies are discovered by listening signals from <c>NetwConnectHandler</c>.
+/// A lobby dicrectory is a <see cref="NetwService"/> that implements the
+/// <c>_host_lobby</c>, <c>_join_lobby</c>, <c>_list_lobbies</c> and
+/// <c>_leave_lobby</c> verbs. <c>NetwConnectHandler</c> can discover lobbies as
+/// any other endpoint.
 /// <code>
 /// extends LobbyDirectory
 ///
@@ -48,11 +44,6 @@ namespace Networked;
 /// func _leave_lobby() -&gt; void:
 ///     Rooms.leave()
 /// </code>
-/// <para>
-/// Each seam has a default result, so a provider overrides only what it differs
-/// on. The reading verbs are C++ and the plane calls them directly; a script
-/// reads its own override.
-/// </para>
 /// </remarks>
 public sealed class LobbyDirectory : NetwService
 {

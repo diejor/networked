@@ -148,8 +148,8 @@ public:
 
     explicit MoveStage(
         NetwEntity::Transfer p_transfer = NetwEntity::TRANSFER_REQUESTABLE
-    ) :
-            rig(2) {
+    )
+        : rig(2) {
         rig.mount();
         netw_test::flow_clocks(rig, TICKRATE);
         rig.mirror_child("Arena");
@@ -729,10 +729,7 @@ TEST_CASE(
         CHECK_FALSE(claimant->has_structure_ops());
         CHECK(stage.all_under_arena());
         CHECK(stage.anchors_agree());
-        NETW_CHECK_EQ(
-            counter_of(session, "lifecycle_ops_refused"),
-            int64_t(1)
-        );
+        NETW_CHECK_EQ(counter_of(session, "lifecycle_ops_refused"), int64_t(1));
         NETW_CHECK_EQ(
             counter_of(session, "lifecycle_ops_admitted"),
             int64_t(0)

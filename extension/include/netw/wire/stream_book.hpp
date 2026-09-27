@@ -264,11 +264,7 @@ public:
         int64_t p_smoothed_rtt_ms
     );
 
-    void note_attempt(
-        int p_peer,
-        const StreamLane &p_lane,
-        int64_t p_now_ms
-    );
+    void note_attempt(int p_peer, const StreamLane &p_lane, int64_t p_now_ms);
 
     godot::LocalVector<StreamLane> unready(int p_peer) const;
 

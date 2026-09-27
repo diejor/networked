@@ -13,8 +13,7 @@
 		func _open(session: Object, slot: StringName) -&gt; NetwPromise:
 		    return NetwPromise.resolved(MyConnection.new(root, slot))
 		[/codeblock]
-		A method left unimplemented rejects with [constant @GlobalScope.ERR_UNAVAILABLE] rather than succeeding quietly.
-		Read [NetwDatabaseConnection] for the interface a backend must implement to perform record I/O.
+		A method left unimplemented rejects with [constant @GlobalScope.ERR_UNAVAILABLE]. The records themselves are read and written by the [NetwDatabaseConnection] that [method _open] returns.
 	</description>
 	<tutorials>
 	</tutorials>
@@ -24,29 +23,14 @@
 			<param index="0" name="session" type="Object" />
 			<param index="1" name="slot" type="StringName" />
 			<description>
-				Removes [param slot], and resolves an [enum @GlobalScope.Error]. Failed cleanup must stay discoverable and retryable rather than reporting success.
-				[param session] is the [NetwMultiplayer] asking. [method NetwDatabase.delete_slot] settles with what this answers.
-				[codeblock lang=text]
-				this promise              NetwDatabase.delete_slot settles with
-				┠╴resolves an Error       that Error
-				┠╴rejects                 the reject's code
-				┖╴is null                 ERR_INVALID_DATA
-				[/codeblock]
+				Removes [param slot] and resolves an [enum @GlobalScope.Error], which [method NetwDatabase.delete_slot] settles with. Resolve an error when the slot could not be fully removed. [param session] is the [NetwMultiplayer] asking.
 			</description>
 		</method>
 		<method name="_list_slots" qualifiers="virtual">
 			<return type="NetwPromise" />
 			<param index="0" name="session" type="Object" />
 			<description>
-				Resolves a [PackedStringArray] of every slot this storage holds. Read it from storage, so a slot written by an earlier run appears.
-				[param session] is the [NetwMultiplayer] asking. [method NetwDatabase.list_slots] builds its reply from what this answers.
-				[codeblock lang=text]
-				this promise                   the reply's error
-				┠╴resolves a PackedStringArray OK, and the array becomes slots
-				┠╴resolves anything else       ERR_INVALID_DATA
-				┠╴rejects                      the reject's code, and its detail becomes detail
-				┖╴is null                      ERR_INVALID_DATA
-				[/codeblock]
+				Resolves a [PackedStringArray] of every slot in storage, including ones written by earlier runs. [method NetwDatabase.list_slots] settles with it. [param session] is the [NetwMultiplayer] asking.
 			</description>
 		</method>
 		<method name="_open" qualifiers="virtual">
@@ -54,15 +38,7 @@
 			<param index="0" name="session" type="Object" />
 			<param index="1" name="slot" type="StringName" />
 			<description>
-				Resolves a fresh [NetwDatabaseConnection] over [param slot], or rejects with why it could not. Build a new connection every time, rather than handing back one that was already open.
-				[param session] is the [NetwMultiplayer] opening the slot. [method NetwDatabase.open] settles with what this answers, and the database stays closed on any answer but a connection.
-				[codeblock lang=text]
-				this promise                   NetwDatabase.open settles with
-				┠╴resolves a connection        OK
-				┠╴resolves anything else       ERR_CANT_CREATE
-				┠╴rejects                      the reject's code and detail
-				┖╴is null                      ERR_INVALID_DATA
-				[/codeblock]
+				Resolves a new [NetwDatabaseConnection] for [param slot], or rejects with an error. [param session] is the [NetwMultiplayer] opening the slot.
 			</description>
 		</method>
 		<method name="delete_slot_default">

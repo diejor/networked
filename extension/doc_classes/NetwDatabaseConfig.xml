@@ -1,15 +1,15 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <class name="NetwDatabaseConfig" inherits="Resource" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
 	<brief_description>
-		What a named database is made of, written once at [method Netw.configure_database].
+		The configuration of a named [NetwDatabase], returned by [method Netw.configure_database].
 	</brief_description>
 	<description>
-		A config names the storage a database opens. It carries no runtime state, so the same config Resource can be saved to disk and shared between sessions.
+		Sets the [NetwDatabaseBackend] a database opens.
 		[codeblock]
 		func _ready() -&gt; void:
 		    Netw.configure_database(self, &amp;"saves").backend(preload("res://save_backend.tres"))
 		[/codeblock]
-		Declaring the same name twice in one session with a different backend is refused, because two declarations of one name would disagree about where saves live.
+		Configuring the same name twice in one session with a different backend is refused.
 	</description>
 	<tutorials>
 	</tutorials>
@@ -18,13 +18,13 @@
 			<return type="NetwDatabaseConfig" />
 			<param index="0" name="backend" type="NetwDatabaseBackend" />
 			<description>
-				Sets the storage this database opens, and returns this config so the call chains. A database with no backend refuses [method NetwDatabase.open].
+				Sets the storage this database opens, and returns this config.
 			</description>
 		</method>
 	</methods>
 	<members>
 		<member name="store" type="NetwDatabaseBackend" setter="set_backend" getter="get_backend">
-			The storage this database opens, as [method backend] left it.
+			The storage this database opens, as [method backend] set it.
 		</member>
 	</members>
 </class>

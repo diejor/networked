@@ -28,6 +28,8 @@ A tick is a numbered step of the simulation. Every peer counts the same ticks, a
     c.on_tick.connect(step)
     label.text = "tick %d" % c.tick
 
+
+
 \ **How a tick is produced**\ 
 
 The clock does not use a timer. It banks the time each physics frame delivers and spends it one tick at a time, so a slow frame produces two ticks and a fast one produces none.
@@ -36,7 +38,7 @@ The clock does not use a timer. It banks the time each physics frame delivers an
 
     ticktime = 1 / tickrate
 
-    each physics frame, given that frame's delta in seconds
+    # each physics frame, given that frame's delta in seconds
         accumulator += delta
         while accumulator >= ticktime
             accumulator -= ticktime
@@ -45,6 +47,8 @@ The clock does not use a timer. It banks the time each physics frame delivers an
 \ At a tickrate of 30 under 60 Hz physics the loop announces a tick every second frame. :ref:`physics_factor<class_NetwClockHandle_property_physics_factor>` is that ratio, 2.0 here, and :ref:`tick_phase<class_NetwClockHandle_property_tick_phase>` is how far into the current tick the accumulator sits.
 
 The loop announces at most :ref:`NetwMultiplayer.CLOCK_PARAM_MAX_TICKS_PER_FRAME<class_NetwMultiplayer_constant_CLOCK_PARAM_MAX_TICKS_PER_FRAME>` ticks in one frame. A peer that keeps hitting the ceiling cannot catch up, and :ref:`behind_count<class_NetwClockHandle_property_behind_count>` is how often that happened.
+
+
 
 \ **How a client agrees with the server**\ 
 
@@ -59,9 +63,13 @@ The client pings the server every :ref:`ping_interval<class_NetwClockHandle_prop
 
     target = server_tick + server_phase + one_way / ticktime + lead_ticks
 
+
+
 \ ``target`` is a fractional tick, not a whole one. Keeping the server's phase is what stops the target jumping a full tick each time a pong lands on the other side of a tick boundary.
 
 The first pong sets the clock to the target outright, because there is nothing to drift from yet. Every pong after that is handled by :ref:`sync_mode<class_NetwClockHandle_property_sync_mode>`.
+
+
 
 \ **Snap and stretch**\ 
 
@@ -77,7 +85,11 @@ The first pong sets the clock to the target outright, because there is nothing t
         gap       = estimate - current
         accumulator += gap * ticktime * stretch_nudge_factor
 
+
+
 \ :ref:`NetwMultiplayer.CLOCK_PARAM_STRETCH_NUDGE_FACTOR<class_NetwMultiplayer_constant_CLOCK_PARAM_STRETCH_NUDGE_FACTOR>` is that fraction. At 0.05 the clock closes a twentieth of the gap per frame, so it runs slightly fast or slightly slow until the gap is spent and the tick never jumps. Above :ref:`NetwMultiplayer.CLOCK_PARAM_PANIC_SNAP_THRESHOLD<class_NetwMultiplayer_constant_CLOCK_PARAM_PANIC_SNAP_THRESHOLD>` ticks of gap it snaps instead, because a gap that large is a desync and not drift.
+
+
 
 \ **Reading remote state**\ 
 
@@ -87,11 +99,9 @@ A remote peer's state is always at least one-way latency old, so the newest tick
 
     recommended_display_offset = ceil((one_way + jitter * jitter_multiplier) * tickrate)
 
+
+
 \ Nothing applies that number on its own. :ref:`recommended_display_offset<class_NetwClockHandle_property_recommended_display_offset>` is the measurement and :ref:`display_offset<class_NetwClockHandle_property_display_offset>` is what the clock uses, and :ref:`NetwMultiplayer.clock_auto_configure_offset()<class_NetwMultiplayer_method_clock_auto_configure_offset>` is what samples the first for a while and writes the largest reading into the second.
-
-\ **Settings**\ 
-
-\ :ref:`display_offset<class_NetwClockHandle_property_display_offset>`, :ref:`sync_mode<class_NetwClockHandle_property_sync_mode>` and :ref:`ping_interval<class_NetwClockHandle_property_ping_interval>` are writable while the session runs. :ref:`tickrate<class_NetwClockHandle_property_tickrate>` is not, because a peer that changed its tickrate mid-session would count different ticks from everyone else. :ref:`Netw.configure_clock()<class_Netw_method_configure_clock>` declares it, and the rest of :ref:`NetwClockConfig<class_NetwClockConfig>` with it.
 
 .. rst-class:: classref-reftable-group
 
@@ -236,7 +246,7 @@ Whether a :ref:`NetwClockConfig<class_NetwClockConfig>` has settled on this sess
 
 - :godot:`bool` **get_is_synchronized**\ (\ )
 
-Whether this peer's clock has agreed a tick with server authority. A server reads ``true`` because it is the authority, and a client reads ``false`` until the first pong lands. :ref:`NetwMultiplayer.clock_is_synchronized()<class_NetwMultiplayer_method_clock_is_synchronized>`.
+Whether this peer's tick agrees with the server. Always ``true`` on the server, and ``false`` on a client until the first pong lands. :ref:`NetwMultiplayer.clock_is_synchronized()<class_NetwMultiplayer_method_clock_is_synchronized>`.
 
 .. rst-class:: classref-item-separator
 

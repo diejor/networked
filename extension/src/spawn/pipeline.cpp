@@ -806,8 +806,7 @@ void Pipeline::publish_nested(Node *p_node) {
     Record record;
     record.set_recipe(Book::RECIPE_ADOPT);
     record.bind_origin(NetwMultiplayer::scene_outer_of(p_node)->get_parent());
-    if (arm_authoritative_spawn(&record, p_node, Ref<NetwPlayer>())
-            .is_null()) {
+    if (arm_authoritative_spawn(&record, p_node, Ref<NetwPlayer>()).is_null()) {
         return;
     }
     if (NetwMultiplayer *plane = core()) {
@@ -1884,9 +1883,8 @@ SpawnBuild::Outcome Pipeline::build_spawn(
     bool adopted = false;
 
     if (recipe == Book::RECIPE_ADOPT) {
-        const Dictionary &found_under = frame.moved_from_origin
-            ? frame.origin_anchor
-            : parent_anchor;
+        const Dictionary &found_under
+            = frame.moved_from_origin ? frame.origin_anchor : parent_anchor;
         const int64_t origin_route = int64_t(found_under[StringName("route")]);
         if (origin_route > 0
             && Park::anchor_parks(plane->liveness_route_state(origin_route))) {

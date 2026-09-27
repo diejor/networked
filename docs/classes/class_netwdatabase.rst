@@ -12,21 +12,23 @@ NetwDatabase
 
 **Inherits:** :godot:`RefCounted`
 
-One named save store of one session, reached by :ref:`Netw.database()<class_Netw_method_database>`.
+The client for persistent storage.
 
 .. rst-class:: classref-introduction-group
 
 Description
 -----------
 
-A database holds records. A record is a :godot:`Dictionary` complete against a :ref:`NetwSchema<class_NetwSchema>`, stored under a durable :godot:`StringName` id, inside one slot. A slot is one independent set of records, which is what a game draws as a save file.
+:ref:`NetwEntity<class_NetwEntity>`, :ref:`NetwTableHandle<class_NetwTableHandle>` and your own code save and load their state through a **NetwDatabase**. A :ref:`NetwDatabaseBackend<class_NetwDatabaseBackend>` does the actual storage.
 
-A database admits no work until its :ref:`open()<class_NetwDatabase_method_open>` has settled. Await it before starting play.
+A record is a :godot:`Dictionary` stored under a :godot:`StringName` id. Its :ref:`NetwSchema<class_NetwSchema>` is the table definition and the record is a row in it.
+
+Await :ref:`open()<class_NetwDatabase_method_open>` before reading or writing.
 
 ::
 
     func _ready() -> void:
-        Netw.configure_database(self, &"saves").backend(preload("res://save_backend.tres"))
+        Netw.configure_database(self, &"saves").backend(preload("res://filesystem_backend.tres"))
 
     func start_game(slot: StringName) -> void:
         var db: NetwDatabase = Netw.database(self, &"saves")
@@ -35,96 +37,6 @@ A database admits no work until its :ref:`open()<class_NetwDatabase_method_open>
             show_load_error(error)
             return
         enter_game()
-
-\ Every asynchronous method answers a :ref:`NetwPromise<class_NetwPromise>`. Read its settled value with ``await promise.wait()``. A call refused on entry fails the promise, and ``wait()`` then answers the :godot:`@GlobalScope.Error <@GlobalScope#enum_@globalscope_Error>`.
-
-.. code:: text
-
-    open, close, flush, write, patch, erase, delete_slot   Error
-    read                                                   Dictionary, the read reply
-    scan                                                   Dictionary, the page reply
-    list_slots                                             Dictionary, the slots reply
-    batch().submit()                                       Dictionary, the batch reply
-
-\ :ref:`NetwWriteBatch.submit()<class_NetwWriteBatch_method_submit>` draws the batch reply.
-
-\ **Records**\ 
-
-\ :ref:`write()<class_NetwDatabase_method_write>` replaces a whole record and refuses a row that is not complete against its schema. :ref:`patch()<class_NetwDatabase_method_patch>` replaces only the fields it names and refuses a record that is not there. Neither adds to a stored value.
-
-::
-
-    var error: Error = await db.write(PlayerSave.schema, account_id, {
-        &"gold": player.gold,
-        &"position": player.position,
-    }).wait()
-
-\ **Ordering**\ 
-
-Operations on one record settle in the order they were admitted, however long an earlier one takes, and that includes a read after a write. Operations on different records do not wait for each other. The values a write submits are frozen when it is admitted, so changing the :godot:`Dictionary` afterwards cannot change what is stored.
-
-\ **The read reply**\ 
-
-An admitted :ref:`read()<class_NetwDatabase_method_read>` settles with one of these, including when storage fails. A read on a closed database, with an unsealed schema or an empty id, fails the promise. Absence and failure are separate answers. A record nobody has saved yet is ``found`` false with ``error`` OK, and a record the storage could not be asked about carries the error.
-
-.. code:: text
-
-    Dictionary
-    ┠╴error    int         @GlobalScope.Error. Check it before reading anything else
-    ┠╴detail   String      what went wrong, for a person to read. Empty when error is OK
-    ┠╴found    bool        whether a record was stored under id. False on any failure
-    ┠╴id       StringName  the record id the read asked for
-    ┖╴values   Dictionary  the stored row, keyed by column name, complete against the
-                          schema that read it. Empty unless found is true
-
-\ The reply is a snapshot. ``values`` is the caller's own copy, so changing it cannot reach stored state.
-
-\ **The page reply**\ 
-
-\ :ref:`scan()<class_NetwDatabase_method_scan>` reads storage a page at a time so a large collection never arrives as one allocation. A page fails whole, so a single record the schema cannot read leaves ``records`` empty and ``error`` set. A partial page never reads as complete.
-
-.. code:: text
-
-    Dictionary
-    ┠╴error    int               @GlobalScope.Error. Check it before reading records
-    ┠╴detail   String            what went wrong, for a person to read. Empty when error is OK
-    ┠╴records  Array[Dictionary]  each one a read reply, drawn above
-    ┖╴cursor   String            pass this back to scan to continue. Empty when no records remain
-
-\ An empty ``records`` with a nonempty ``cursor`` means this page matched nothing, not that the scan is finished. The scan is finished when ``cursor`` is empty.
-
-::
-
-    var cursor := ""
-    while true:
-        var page: Dictionary = await db.scan(PlayerSave.schema, {}, cursor).wait()
-        if page.error != OK:
-            show_load_error(page.error)
-            return
-        for read in page.records:
-            roster.append(read.values)
-        if page.cursor.is_empty():
-            break
-        cursor = page.cursor
-
-\ **The slots reply**\ 
-
-\ :ref:`list_slots()<class_NetwDatabase_method_list_slots>` answers every slot this backend holds, including a slot written by an earlier run. It works before :ref:`open()<class_NetwDatabase_method_open>`.
-
-.. code:: text
-
-    Dictionary
-    ┠╴error   int                @GlobalScope.Error. Check it before reading slots
-    ┠╴detail  String             what went wrong, for a person to read. Empty when error is OK
-    ┖╴slots   PackedStringArray  every slot this backend holds, whether or not this process wrote it
-
-\ **Failure and absence**\ 
-
-A record nobody has saved is a miss, not a failure. The read reply carries both facts separately, so a first-time player and an unreachable disk never look alike.
-
-A successful write means the backing store acknowledged it. It does not promise survival of every machine or service failure.
-
-An entity row that fails to load or save emits :ref:`failed<class_NetwDatabase_signal_failed>`. Rows also save on their own interval and when their entity leaves, so this signal is where a game hears about a save nobody awaited.
 
 .. rst-class:: classref-reftable-group
 
@@ -191,9 +103,7 @@ Signals
 
 **failed**\ (\ error\: :godot:`Error <@GlobalScope#enum_@globalscope_Error>`, detail\: :godot:`String`\ ) :ref:`🔗<class_NetwDatabase_signal_failed>`
 
-Emitted when an entity row in this database fails to load or save. ``detail`` names the record. A failed load emits no :ref:`NetwPersistenceHandle.loaded<class_NetwPersistenceHandle_signal_loaded>` and a failed save emits no :ref:`NetwPersistenceHandle.saved<class_NetwPersistenceHandle_signal_saved>`. :ref:`NetwMultiplayer.database_failed<class_NetwMultiplayer_signal_database_failed>`.
-
-A load or save that settles after session authority moved or the database closed is canceled and emits nothing.
+Emitted when an entity fails to load or save its record. ``error`` is one of the codes :ref:`NetwPersistenceHandle.load()<class_NetwPersistenceHandle_method_load>` and :ref:`NetwPersistenceHandle.save()<class_NetwPersistenceHandle_method_save>` list, and ``detail`` names the record and what went wrong.
 
 ::
 
@@ -202,8 +112,6 @@ A load or save that settles after session authority moved or the database closed
 
     func show_save_error(_error: Error, detail: String) -> void:
         status.text = detail
-
-\ A row that failed to save stays owed, and :ref:`NetwSessionHandle.save_entities()<class_NetwSessionHandle_method_save_entities>` writes it again.
 
 .. rst-class:: classref-section-separator
 
@@ -224,7 +132,7 @@ Property Descriptions
 
 - :godot:`bool` **get_is_valid**\ (\ )
 
-Whether the session that issued this handle still holds this database.
+Whether the session that created this handle still exists.
 
 .. rst-class:: classref-item-separator
 
@@ -256,7 +164,7 @@ The name this database was declared under.
 
 - :godot:`StringName` **get_slot**\ (\ )
 
-The open slot, or empty when this database is not open. :ref:`NetwMultiplayer.database_get_slot()<class_NetwMultiplayer_method_database_get_slot>`.
+The open slot, or empty when this database is not open.
 
 .. rst-class:: classref-item-separator
 
@@ -272,7 +180,7 @@ The open slot, or empty when this database is not open. :ref:`NetwMultiplayer.da
 
 - :godot:`int` **get_state**\ (\ )
 
-A :ref:`DatabaseState<enum_NetwMultiplayer_DatabaseState>` saying whether this database is closed, opening, open, closing or faulted. :ref:`NetwMultiplayer.database_get_state()<class_NetwMultiplayer_method_database_get_state>`.
+The state of the connection to the :ref:`NetwDatabaseBackend<class_NetwDatabaseBackend>`.
 
 .. rst-class:: classref-section-separator
 
@@ -289,7 +197,7 @@ Method Descriptions
 
 :ref:`NetwWriteBatch<class_NetwWriteBatch>` **batch**\ (\ ) :ref:`🔗<class_NetwDatabase_method_batch>`
 
-Returns a :ref:`NetwWriteBatch<class_NetwWriteBatch>` that submits several writes and erasures to this database in one call. It is synchronous, and nothing reaches storage until the batch is submitted.
+Returns a :ref:`NetwWriteBatch<class_NetwWriteBatch>` that submits several writes and erasures in one call.
 
 .. rst-class:: classref-item-separator
 
@@ -301,9 +209,13 @@ Returns a :ref:`NetwWriteBatch<class_NetwWriteBatch>` that submits several write
 
 :ref:`NetwPromise<class_NetwPromise>` **close**\ (\ ) :ref:`🔗<class_NetwDatabase_method_close>`
 
-Stops admitting work, waits for everything already admitted to settle, releases the slot and advances this database's generation, then settles with an :godot:`@GlobalScope.Error <@GlobalScope#enum_@globalscope_Error>`. :ref:`NetwMultiplayer.database_close()<class_NetwMultiplayer_method_database_close>`.
+Stops accepting new operations, waits for the pending ones to settle, and settles with a :godot:`@GlobalScope.Error <@GlobalScope#enum_@globalscope_Error>`.
 
-An operation issued before the close settles normally. One that was still outstanding when the connection went away settles as canceled and never as a save.
+.. code:: text
+
+    Error
+    ┠╴OK               the database is closed
+    ┖╴ERR_UNAVAILABLE  this handle outlived the session that issued it
 
 .. rst-class:: classref-item-separator
 
@@ -315,9 +227,18 @@ An operation issued before the close settles normally. One that was still outsta
 
 :ref:`NetwPromise<class_NetwPromise>` **delete_slot**\ (\ slot\: :godot:`StringName`\ ) :ref:`🔗<class_NetwDatabase_method_delete_slot>`
 
-Removes ``slot`` and everything stored in it, then settles with an :godot:`@GlobalScope.Error <@GlobalScope#enum_@globalscope_Error>`. Deleting the slot this process holds open is refused with :godot:`@GlobalScope.ERR_BUSY <@GlobalScope#class_@GlobalScope_constant_ERR_BUSY>`. :ref:`NetwMultiplayer.database_delete_slot()<class_NetwMultiplayer_method_database_delete_slot>`.
+Removes ``slot`` and everything stored in it, then settles with a :godot:`@GlobalScope.Error <@GlobalScope#enum_@globalscope_Error>`. The slot must not be open.
 
-This is an administration call. It works before :ref:`open()<class_NetwDatabase_method_open>`, which is how a menu deletes a save the game has not loaded.
+.. code:: text
+
+    Error
+    ┠╴OK                the backend removed the slot
+    ┠╴ERR_BUSY          slot is the one this database holds open
+    ┠╴ERR_UNCONFIGURED  the database declares no backend
+    ┠╴ERR_UNAVAILABLE   this handle outlived its session, or the backend
+    │                   implements no _delete_slot
+    ┠╴ERR_INVALID_DATA  the backend's _delete_slot answered no promise
+    ┖╴backend-defined   the backend could not remove the slot
 
 .. rst-class:: classref-item-separator
 
@@ -329,7 +250,21 @@ This is an administration call. It works before :ref:`open()<class_NetwDatabase_
 
 :ref:`NetwPromise<class_NetwPromise>` **erase**\ (\ schema\: :ref:`NetwSchema<class_NetwSchema>`, id\: :godot:`StringName`\ ) :ref:`🔗<class_NetwDatabase_method_erase>`
 
-Removes the record at ``id`` and settles with an :godot:`@GlobalScope.Error <@GlobalScope#enum_@globalscope_Error>`. Erasing a record that is not there succeeds. :ref:`NetwMultiplayer.database_erase()<class_NetwMultiplayer_method_database_erase>`.
+Removes the record at ``id`` and settles with a :godot:`@GlobalScope.Error <@GlobalScope#enum_@globalscope_Error>`.
+
+.. code:: text
+
+    Error
+    ┠╴OK                  the backend acknowledged the erase
+    ┠╴ERR_UNCONFIGURED    the database is not open
+    ┠╴ERR_BUSY            the database already holds 4096 unsettled operations
+    ┠╴ERR_DOES_NOT_EXIST  the schema is not sealed
+    ┠╴ERR_INVALID_PARAMETER
+    │                     id is empty
+    ┠╴ERR_INVALID_DATA    the connection answered no outcome for the erase
+    ┠╴ERR_UNAVAILABLE     the backend or connection cannot perform the erase, or the
+    │                     database closed before it settled
+    ┖╴backend-defined     the backend rejected or could not complete the erase
 
 .. rst-class:: classref-item-separator
 
@@ -341,7 +276,13 @@ Removes the record at ``id`` and settles with an :godot:`@GlobalScope.Error <@Gl
 
 :ref:`NetwPromise<class_NetwPromise>` **flush**\ (\ ) :ref:`🔗<class_NetwDatabase_method_flush>`
 
-Settles with an :godot:`@GlobalScope.Error <@GlobalScope#enum_@globalscope_Error>` once every operation admitted before this call has settled. It gathers no new state, so a value changed after the call is not included. :ref:`NetwMultiplayer.database_flush()<class_NetwMultiplayer_method_database_flush>`.
+Settles with an :godot:`@GlobalScope.Error <@GlobalScope#enum_@globalscope_Error>` once every operation started before this call has settled.
+
+.. code:: text
+
+    Error
+    ┠╴OK               every earlier operation settled, whatever each one settled with
+    ┖╴ERR_UNAVAILABLE  the session ended first, or this handle outlived it
 
 .. rst-class:: classref-item-separator
 
@@ -353,7 +294,18 @@ Settles with an :godot:`@GlobalScope.Error <@GlobalScope#enum_@globalscope_Error
 
 :ref:`NetwPromise<class_NetwPromise>` **list_slots**\ (\ ) :ref:`🔗<class_NetwDatabase_method_list_slots>`
 
-Settles with the slots reply drawn in this class's description, naming every slot this backend holds, including slots written by an earlier run. Works before :ref:`open()<class_NetwDatabase_method_open>`. :ref:`NetwMultiplayer.database_list_slots()<class_NetwMultiplayer_method_database_list_slots>`.
+Lists every slot the :ref:`NetwDatabaseBackend<class_NetwDatabaseBackend>` holds, and settles with a :godot:`Dictionary`. Works before :ref:`open()<class_NetwDatabase_method_open>`.
+
+.. code:: text
+
+    Dictionary
+    ┠╴error    Error         		@GlobalScope.Error. Check it before reading slots
+    │ ┠╴OK                   		listing succeeded
+    │ ┠╴ERR_UNAVAILABLE      		the backend does not implement slot listing
+    │ ┖╴backend-defined      		the backend could not read its storage
+    ┠╴detail   String        		empty when error is OK, otherwise a human-readable
+    │                            		explanation from the backend
+    ┖╴slots    PackedStringArray  	every slot the backend holds when error is OK
 
 .. rst-class:: classref-item-separator
 
@@ -365,9 +317,21 @@ Settles with the slots reply drawn in this class's description, naming every slo
 
 :ref:`NetwPromise<class_NetwPromise>` **open**\ (\ slot\: :godot:`StringName`\ ) :ref:`🔗<class_NetwDatabase_method_open>`
 
-Opens ``slot`` and settles with an :godot:`@GlobalScope.Error <@GlobalScope#enum_@globalscope_Error>`. Nothing this database admits reaches storage before it settles. :ref:`NetwMultiplayer.database_open()<class_NetwMultiplayer_method_database_open>`.
+Opens ``slot`` and settles with an :godot:`@GlobalScope.Error <@GlobalScope#enum_@globalscope_Error>`.
 
-Opening the slot that is already open succeeds without reopening it. A second open of the same slot while the first is still running shares that first result. Opening a different slot is refused with :godot:`@GlobalScope.ERR_BUSY <@GlobalScope#class_@GlobalScope_constant_ERR_BUSY>`, so close the one that is open first. An open that fails leaves the database closed, which is what makes a retry safe.
+To switch slots, :ref:`close()<class_NetwDatabase_method_close>` the open one first.
+
+.. code:: text
+
+    Error
+    ┠╴OK                slot is open, or was open already
+    ┠╴ERR_BUSY          another slot is open or opening, or the database is closing
+    ┠╴ERR_UNCONFIGURED  the database declares no backend
+    ┠╴ERR_CANT_CREATE   the backend resolved no connection
+    ┠╴ERR_INVALID_DATA  the backend's _open answered no promise
+    ┠╴ERR_UNAVAILABLE   this handle outlived its session, or the backend implements
+    │                   no _open
+    ┖╴backend-defined   the backend could not open slot
 
 .. rst-class:: classref-item-separator
 
@@ -379,9 +343,26 @@ Opening the slot that is already open succeeds without reopening it. A second op
 
 :ref:`NetwPromise<class_NetwPromise>` **patch**\ (\ schema\: :ref:`NetwSchema<class_NetwSchema>`, id\: :godot:`StringName`, values\: :godot:`Dictionary`\ ) :ref:`🔗<class_NetwDatabase_method_patch>`
 
-Replaces the fields ``values`` names in the record at ``id``, keeps the rest, and settles with an :godot:`@GlobalScope.Error <@GlobalScope#enum_@globalscope_Error>`. :ref:`NetwMultiplayer.database_patch()<class_NetwMultiplayer_method_database_patch>`.
+Replaces the columns ``values`` names in the existing record at ``id``, keeps the rest, and settles with an :godot:`@GlobalScope.Error <@GlobalScope#enum_@globalscope_Error>`. ``values`` may hold any subset of the columns in ``schema``.
 
-A record that is not there is refused with :godot:`@GlobalScope.ERR_DOES_NOT_EXIST <@GlobalScope#class_@GlobalScope_constant_ERR_DOES_NOT_EXIST>`, because a patch has nothing to merge into. An empty ``values`` succeeds without touching storage. A field the schema does not declare refuses the whole patch.
+.. code:: text
+
+    Error
+    ┠╴OK                  the backend acknowledged the merged record, or values is empty
+    ┠╴ERR_UNCONFIGURED    the database is not open, or the schema declares no
+    │                     migration from the stored record's storage version
+    ┠╴ERR_BUSY            the database already holds 4096 unsettled operations
+    ┠╴ERR_DOES_NOT_EXIST  the schema is not sealed, or no record is stored at id
+    ┠╴ERR_INVALID_PARAMETER
+    │                     id is empty
+    ┠╴ERR_INVALID_DATA    values names an undeclared column or a value its column
+    │                     refuses, or the stored record does not match the schema
+    ┠╴ERR_FILE_UNRECOGNIZED
+    │                     the stored record is not in this library's format, or
+    │                     carries a newer storage version than the schema
+    ┠╴ERR_UNAVAILABLE     the backend or connection cannot perform the patch, or the
+    │                     database closed before it settled
+    ┖╴backend-defined     the backend could not read or write the record
 
 .. rst-class:: classref-item-separator
 
@@ -393,7 +374,17 @@ A record that is not there is refused with :godot:`@GlobalScope.ERR_DOES_NOT_EXI
 
 :ref:`NetwPromise<class_NetwPromise>` **read**\ (\ schema\: :ref:`NetwSchema<class_NetwSchema>`, id\: :godot:`StringName`\ ) :ref:`🔗<class_NetwDatabase_method_read>`
 
-Settles with the read reply drawn in this class's description, for the record at ``id``. :ref:`NetwMultiplayer.database_read()<class_NetwMultiplayer_method_database_read>`.
+Reads the record at ``id`` and settles with a :godot:`Dictionary`. A record that was never saved settles with ``found`` ``false`` and ``error`` :godot:`@GlobalScope.OK <@GlobalScope#class_@GlobalScope_constant_OK>`.
+
+.. code:: text
+
+    Dictionary
+    ┠╴error    Error       @GlobalScope.Error. Check it before reading anything else
+    ┠╴detail   String      what went wrong, for a person to read. Empty when error is OK
+    ┠╴found    bool        whether a record was stored under id. False on any failure
+    ┠╴id       StringName  the record id the read asked for
+    ┖╴values   Dictionary  the stored row, keyed by column name, complete against the
+                        	schema that read it. Empty unless found is true
 
 ::
 
@@ -414,7 +405,49 @@ Settles with the read reply drawn in this class's description, for the record at
 
 :ref:`NetwPromise<class_NetwPromise>` **scan**\ (\ schema\: :ref:`NetwSchema<class_NetwSchema>`, filter\: :godot:`Dictionary` = {}, cursor\: :godot:`String` = "", limit\: :godot:`int` = 100\ ) :ref:`🔗<class_NetwDatabase_method_scan>`
 
-Settles with the page reply drawn in this class's description, of up to ``limit`` records matching ``filter``. Pass the page's cursor back as ``cursor`` to continue. :ref:`NetwMultiplayer.database_scan()<class_NetwMultiplayer_method_database_scan>`.
+Reads one page of up to ``limit`` records matching ``filter``, and settles with a :godot:`Dictionary`. Pass the returned ``cursor`` back as ``cursor`` to read the next page. The scan is done when ``cursor`` is empty.
+
+.. code:: text
+
+    Dictionary
+    ┠╴error    Error             @GlobalScope.Error. Check it before reading records
+    │ ┠╴OK                     the page was read
+    │ ┠╴ERR_FILE_UNRECOGNIZED  a record is not in this library's format, or carries
+    │ │                        a newer storage version than the schema
+    │ ┠╴ERR_INVALID_DATA       a record does not match the schema
+    │ ┠╴ERR_UNCONFIGURED       the schema declares no migration from a record's
+    │ │                        storage version
+    │ ┠╴ERR_UNAVAILABLE        this handle outlived its session, or the connection
+    │ │                        implements no _scan
+    │ ┖╴backend-defined        the backend could not read the page
+    ┠╴detail   String            what went wrong, for a person to read. Empty when error is OK
+    ┠╴records  Array[Dictionary]  each one shaped like a read reply
+    ┖╴cursor   String            pass this back to scan to continue. Empty when no records remain
+
+\ These fail the promise instead, and :ref:`NetwPromise.wait()<class_NetwPromise_method_wait>` returns the code.
+
+.. code:: text
+
+    Error
+    ┠╴ERR_UNCONFIGURED       the database is not open
+    ┠╴ERR_BUSY               the database already holds 4096 unsettled operations
+    ┠╴ERR_DOES_NOT_EXIST     the schema is not sealed
+    ┠╴ERR_INVALID_PARAMETER  limit is below 1
+    ┖╴ERR_UNAVAILABLE        the database closed before the page settled
+
+::
+
+    var cursor := ""
+    while true:
+        var page: Dictionary = await db.scan(PlayerSave.schema, {}, cursor).wait()
+        if page.error != OK:
+            show_load_error(page.error)
+            return
+        for read in page.records:
+            roster.append(read.values)
+        if page.cursor.is_empty():
+            break
+        cursor = page.cursor
 
 .. rst-class:: classref-item-separator
 
@@ -426,9 +459,26 @@ Settles with the page reply drawn in this class's description, of up to ``limit`
 
 :ref:`NetwPromise<class_NetwPromise>` **write**\ (\ schema\: :ref:`NetwSchema<class_NetwSchema>`, id\: :godot:`StringName`, values\: :godot:`Dictionary`\ ) :ref:`🔗<class_NetwDatabase_method_write>`
 
-Replaces the whole record at ``id`` and settles with an :godot:`@GlobalScope.Error <@GlobalScope#enum_@globalscope_Error>`. :ref:`NetwMultiplayer.database_write()<class_NetwMultiplayer_method_database_write>`.
+Replaces the whole record at ``id`` and settles with an :godot:`@GlobalScope.Error <@GlobalScope#enum_@globalscope_Error>`. ``values`` must hold every column ``schema`` declares and nothing else.
 
-\ ``values`` must carry every column ``schema`` declares, at the declared type and stride, and nothing else. A row that does not is refused before the backend sees it, so a bad write never reaches storage.
+.. code:: text
+
+    Error
+    ┠╴OK                  the backend acknowledged the write
+    ┠╴ERR_UNCONFIGURED    the database is not open
+    ┠╴ERR_DOES_NOT_EXIST  the schema is not sealed
+    ┠╴ERR_INVALID_PARAMETER
+    │                     id is empty
+    ┠╴ERR_INVALID_DATA    values do not exactly match the schema
+    ┠╴ERR_UNAVAILABLE     the backend or connection cannot perform the write
+    ┖╴backend-defined     the backend rejected or could not complete the write
+
+::
+
+    var error: Error = await db.write(PlayerSave.schema, account_id, {
+        &"gold": player.gold,
+        &"position": player.position,
+    }).wait()
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

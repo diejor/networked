@@ -55,9 +55,9 @@ bool Record::encode_header(
         || !p_stream.svarint(control, 5) || !p_stream.varuint(revision, 5)
         || !p_stream.varuint(tenure, 5) || !p_stream.varuint(anchor, 5)
         || !p_stream.varuint(anchor_author, 5)
-        || !p_stream.varuint(spawn_tick, 5)
-        || !p_stream.svarint(requester, 5) || !p_stream.bits(comp_hash, 32)
-        || !p_stream.bits(hold, 2) || !p_stream.bool1(declares_scene)) {
+        || !p_stream.varuint(spawn_tick, 5) || !p_stream.svarint(requester, 5)
+        || !p_stream.bits(comp_hash, 32) || !p_stream.bits(hold, 2)
+        || !p_stream.bool1(declares_scene)) {
         return false;
     }
     if (declares_scene && !wire::string_field(p_stream, scene_label)) {
@@ -215,9 +215,9 @@ bool Record::decode_header(wire::ReadStream &p_stream, Dictionary &r_header) {
         || !p_stream.svarint(control, 5) || !p_stream.varuint(revision, 5)
         || !p_stream.varuint(tenure, 5) || !p_stream.varuint(anchor, 5)
         || !p_stream.varuint(anchor_author, 5)
-        || !p_stream.varuint(spawn_tick, 5)
-        || !p_stream.svarint(requester, 5) || !p_stream.bits(comp_hash, 32)
-        || !p_stream.bits(hold, 2) || !p_stream.bool1(declares_scene)) {
+        || !p_stream.varuint(spawn_tick, 5) || !p_stream.svarint(requester, 5)
+        || !p_stream.bits(comp_hash, 32) || !p_stream.bits(hold, 2)
+        || !p_stream.bool1(declares_scene)) {
         return false;
     }
     if (declares_scene && !wire::string_field(p_stream, scene_label)) {

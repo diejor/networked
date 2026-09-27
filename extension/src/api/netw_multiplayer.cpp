@@ -334,9 +334,7 @@ uint8_t NetwMultiplayer::declared_channel(const char *p_name) const {
     return decl ? decl->id : 0;
 }
 
-NetwMultiplayer::PlayerRow *NetwMultiplayer::player_row(
-    int64_t p_peer
-) {
+NetwMultiplayer::PlayerRow *NetwMultiplayer::player_row(int64_t p_peer) {
     const int64_t *player_id = player_id_of_peer.getptr(p_peer);
     return player_id != nullptr ? players.getptr(*player_id) : nullptr;
 }
@@ -354,8 +352,7 @@ int64_t NetwMultiplayer::player_mint_id() {
     return minted;
 }
 
-int64_t NetwMultiplayer::player_peer_of_id(int64_t p_player_id
-) const {
+int64_t NetwMultiplayer::player_peer_of_id(int64_t p_player_id) const {
     const PlayerRow *found = players.getptr(p_player_id);
     return found != nullptr ? found->peer : 0;
 }
@@ -367,10 +364,7 @@ void NetwMultiplayer::participant_index_peer(
     player_id_of_peer[p_peer] = p_player_id;
 }
 
-void NetwMultiplayer::participant_unindex(
-    int64_t p_peer,
-    int64_t p_player_id
-) {
+void NetwMultiplayer::participant_unindex(int64_t p_peer, int64_t p_player_id) {
     const int64_t *current = player_id_of_peer.getptr(p_peer);
     if (current != nullptr && *current == p_player_id) {
         player_id_of_peer.erase(p_peer);
@@ -402,12 +396,7 @@ Ref<NetwPlayer> NetwMultiplayer::player_ensure(
     }
     Ref<NetwPlayer> minted;
     minted.instantiate();
-    minted->bind_to(
-        this,
-        p_accepted.peer_id,
-        player_id,
-        p_accepted.username
-    );
+    minted->bind_to(this, p_accepted.peer_id, player_id, p_accepted.username);
     NETW_TRACE(
         sys::SESSION,
         "minted player id %d for peer %d",
@@ -473,8 +462,7 @@ TypedArray<NetwPlayer> NetwMultiplayer::player_joined_all() {
     const LocalVector<session::AcceptFrame> joins = session_accepted_joins();
     TypedArray<NetwPlayer> out;
     for (uint32_t at = 0; at < joins.size(); ++at) {
-        const Ref<NetwPlayer> seated
-            = player_joined_of(joins[at].peer_id);
+        const Ref<NetwPlayer> seated = player_joined_of(joins[at].peer_id);
         if (seated.is_valid()) {
             out.push_back(seated);
         }
@@ -495,9 +483,7 @@ bool NetwMultiplayer::player_admit(int64_t p_peer) {
     return true;
 }
 
-Ref<NetwPlayer> NetwMultiplayer::player_admitted_of(
-    int64_t p_peer
-) const {
+Ref<NetwPlayer> NetwMultiplayer::player_admitted_of(int64_t p_peer) const {
     const PlayerRow *found = player_row(p_peer);
     if (found == nullptr || !found->admitted) {
         return Ref<NetwPlayer>();
@@ -793,9 +779,7 @@ void NetwMultiplayer::player_clear() {
     scene_membership.clear();
 }
 
-void NetwMultiplayer::bind_local_player(
-    const Ref<NetwPlayer> &p_row
-) {
+void NetwMultiplayer::bind_local_player(const Ref<NetwPlayer> &p_row) {
     local_player = p_row;
 }
 
@@ -813,9 +797,7 @@ bool NetwMultiplayer::player_is_active(
         && found->incarnation == p_incarnation;
 }
 
-bool NetwMultiplayer::player_holds(
-    const Ref<NetwPlayer> &p_who
-) const {
+bool NetwMultiplayer::player_holds(const Ref<NetwPlayer> &p_who) const {
     if (p_who.is_null()) {
         return false;
     }
@@ -853,9 +835,7 @@ Error NetwMultiplayer::player_kick(
     return OK;
 }
 
-void NetwMultiplayer::player_release_id(
-    const Ref<NetwPlayer> &p_who
-) {
+void NetwMultiplayer::player_release_id(const Ref<NetwPlayer> &p_who) {
     const int64_t peer = p_who->get_peer_id();
     PlayerRow *found = player_row(peer);
     if (found != nullptr) {
@@ -868,9 +848,7 @@ void NetwMultiplayer::player_release_id(
     player_forget(peer);
 }
 
-void NetwMultiplayer::player_publish_left(
-    const Ref<NetwPlayer> &p_who
-) {
+void NetwMultiplayer::player_publish_left(const Ref<NetwPlayer> &p_who) {
     if (p_who.is_null()) {
         return;
     }
@@ -1533,8 +1511,7 @@ void NetwMultiplayer::session_settle_peer_loss(int64_t p_peer) {
     settled_peer_departures.insert(p_peer);
 
     const bool terminates_session = p_peer == session_authority_peer()
-        && !embed_is_disposing()
-        && session_get_state() == SESSION_STATE_ONLINE;
+        && !embed_is_disposing() && session_get_state() == SESSION_STATE_ONLINE;
 
     unreachable_peers.insert(p_peer);
     session_clear_disconnected_peer(p_peer);
@@ -1790,7 +1767,8 @@ void NetwMultiplayer::session_announce_edge(int p_old, int p_new) {
     session_after_edge(p_old, p_new);
 }
 
-session::AcceptFrame NetwMultiplayer::session_accepted_join(int64_t p_peer
+session::AcceptFrame NetwMultiplayer::session_accepted_join(
+    int64_t p_peer
 ) const {
     return join_roster.accepted_join(p_peer);
 }
@@ -1799,8 +1777,8 @@ bool NetwMultiplayer::session_has_accepted(int64_t p_peer) const {
     return join_roster.has_accepted(p_peer);
 }
 
-LocalVector<session::AcceptFrame> NetwMultiplayer::session_accepted_joins(
-) const {
+LocalVector<session::AcceptFrame> NetwMultiplayer::
+    session_accepted_joins() const {
     return join_roster.accepted_joins();
 }
 
@@ -2113,9 +2091,10 @@ void NetwMultiplayer::auth_send_hello(int64_t p_peer) {
         int(p_peer),
         String::num_uint64(auth_app_tag, 16)
     );
-    const Error sent
-        = send_auth(p_peer, auth::encode_client_hello(uint64_t(auth_app_tag), 0)
-        );
+    const Error sent = send_auth(
+        p_peer,
+        auth::encode_client_hello(uint64_t(auth_app_tag), 0)
+    );
     if (sent != OK) {
         NETW_WARN(
             sys::SESSION,
@@ -3503,12 +3482,9 @@ void NetwMultiplayer::clock_receive_pong(
     const uint32_t elapsed
         = uint32_t((clock_wall_usec() & 0xFFFFFFFF) - client_usec);
     const double sample = double(elapsed) / 1'000'000.0;
-    const Dictionary metrics = clock_engine().handle_pong(
-        sample,
-        int(server_tick),
-        server_phase,
-        !is_host()
-    );
+    const Dictionary metrics
+        = clock_engine()
+              .handle_pong(sample, int(server_tick), server_phase, !is_host());
     emit_signal(SIG_CLOCK_PONG_RECEIVED, metrics);
 }
 

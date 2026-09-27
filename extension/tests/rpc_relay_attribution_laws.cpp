@@ -58,7 +58,7 @@ Seated seat_star(LoopbackRig &p_rig) {
         int(OK)
     );
 
-    Node *seats[2] = { nullptr, nullptr };
+    Node *seats[2] = {nullptr, nullptr};
     for (int index = 0; index < 2; ++index) {
         seats[index] = a_sink();
         p_rig.branch(index)->add_child(seats[index]);
@@ -79,7 +79,7 @@ Seated seat_star(LoopbackRig &p_rig) {
 }
 
 void retire_star(const Seated &p_seated) {
-    for (Node *node : { p_seated.hub, p_seated.first, p_seated.second }) {
+    for (Node *node : {p_seated.hub, p_seated.first, p_seated.second}) {
         if (node != nullptr && node->get_parent() != nullptr) {
             node->get_parent()->remove_child(node);
         }
@@ -127,11 +127,8 @@ TEST_CASE(
 
     Array args;
     args.push_back(22);
-    rig.client(0)->rpc_call(
-        Callable(seated.first, StringName("note_call")),
-        args,
-        0
-    );
+    rig.client(0)
+        ->rpc_call(Callable(seated.first, StringName("note_call")), args, 0);
     rig.pump(6);
 
     NETW_CHECK_EQ(int(seated.second->get(StringName("calls"))), 1);
@@ -195,13 +192,15 @@ TEST_CASE(
     uint64_t elsewhere = 9;
     REQUIRE(writer.bits(addresses_a_peer, 8));
     REQUIRE(writer.bits(elsewhere, 32));
-    REQUIRE(script_model::write_call_body(
-        writer,
-        core->rpc_method_token(wrapper, sink, StringName("note_call")),
-        encoded,
-        Array(),
-        Array()
-    ));
+    REQUIRE(
+        script_model::write_call_body(
+            writer,
+            core->rpc_method_token(wrapper, sink, StringName("note_call")),
+            encoded,
+            Array(),
+            Array()
+        )
+    );
     REQUIRE(writer.align_verify());
 
     core->receive_carrier(
@@ -450,10 +449,7 @@ TEST_CASE(
     NETW_CHECK_EQ(int(at_coordinator->entity_bind_node(seat, held)), int(OK));
     const RID mirror = at_member->entity_create();
     NETW_CHECK_EQ(int(at_member->entity_bind_route(mirror, route)), int(OK));
-    NETW_CHECK_EQ(
-        int(at_member->entity_bind_node(mirror, elsewhere)),
-        int(OK)
-    );
+    NETW_CHECK_EQ(int(at_member->entity_bind_node(mirror, elsewhere)), int(OK));
     stand.pump(4);
 
     const CallLog seen;
@@ -498,11 +494,7 @@ TEST_CASE(
     core->session_publish_control(channel, 1, PackedByteArray());
     NETW_CHECK_EQ(seen.count(StringName("unpaused")), 0);
 
-    core->session_publish_control(
-        channel,
-        MESH_COORDINATOR,
-        PackedByteArray()
-    );
+    core->session_publish_control(channel, MESH_COORDINATOR, PackedByteArray());
     NETW_CHECK_EQ(seen.count(StringName("unpaused")), 1);
 }
 

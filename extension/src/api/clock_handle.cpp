@@ -105,10 +105,7 @@ void NetwClockHandle::set_display_offset(int64_t p_ticks) {
     if (api == nullptr) {
         return;
     }
-    api->clock_set_param(
-        NetwMultiplayer::CLOCK_PARAM_DISPLAY_OFFSET,
-        p_ticks
-    );
+    api->clock_set_param(NetwMultiplayer::CLOCK_PARAM_DISPLAY_OFFSET, p_ticks);
 }
 
 int64_t NetwClockHandle::get_sync_mode() const {
@@ -144,10 +141,7 @@ void NetwClockHandle::set_ping_interval(double p_seconds) {
     if (api == nullptr) {
         return;
     }
-    api->clock_set_param(
-        NetwMultiplayer::CLOCK_PARAM_PING_INTERVAL,
-        p_seconds
-    );
+    api->clock_set_param(NetwMultiplayer::CLOCK_PARAM_PING_INTERVAL, p_seconds);
 }
 
 double NetwClockHandle::monitor(int64_t p_monitor) const {

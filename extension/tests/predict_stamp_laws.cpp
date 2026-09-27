@@ -2439,31 +2439,45 @@ TEST_CASE(
     relays[StringName("a")] = 37;
 
     const godot::Dictionary settled
-        = netw::prediction_core::calculate_joint_floor(bases, relays, 39, 30, 50);
+        = netw::prediction_core::calculate_joint_floor(
+            bases,
+            relays,
+            39,
+            30,
+            50
+        );
     NETW_CHECK_EQ(int64_t(settled[StringName("floor")]), 34);
     CHECK_FALSE(bool(settled[StringName("heal")]));
 
     const godot::Dictionary healed
-        = netw::prediction_core::calculate_joint_floor(bases, relays, 39, 36, 50);
+        = netw::prediction_core::calculate_joint_floor(
+            bases,
+            relays,
+            39,
+            36,
+            50
+        );
     NETW_CHECK_EQ(int64_t(healed[StringName("floor")]), 50);
     CHECK(bool(healed[StringName("heal")]));
 
-    const godot::Dictionary epoch_bound = netw::prediction_core::calculate_joint_floor(
-        godot::Dictionary(),
-        relays,
-        12,
-        0,
-        50
-    );
+    const godot::Dictionary epoch_bound
+        = netw::prediction_core::calculate_joint_floor(
+            godot::Dictionary(),
+            relays,
+            12,
+            0,
+            50
+        );
     NETW_CHECK_EQ(int64_t(epoch_bound[StringName("floor")]), 12);
 
-    const godot::Dictionary nothing = netw::prediction_core::calculate_joint_floor(
-        godot::Dictionary(),
-        godot::Dictionary(),
-        -1,
-        0,
-        50
-    );
+    const godot::Dictionary nothing
+        = netw::prediction_core::calculate_joint_floor(
+            godot::Dictionary(),
+            godot::Dictionary(),
+            -1,
+            0,
+            50
+        );
     NETW_CHECK_EQ(int64_t(nothing[StringName("floor")]), 50);
     CHECK_FALSE(bool(nothing[StringName("heal")]));
 }

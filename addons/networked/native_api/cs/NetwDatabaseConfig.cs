@@ -6,20 +6,18 @@ using Godot.NativeInterop;
 namespace Networked;
 
 /// <summary>
-/// What a named database is made of, written once at
+/// The configuration of a named <see cref="NetwDatabase"/>, returned by
 /// <see cref="Netw.ConfigureDatabase"/>.
 /// </summary>
 /// <remarks>
-/// A config names the storage a database opens. It carries no runtime state, so
-/// the same config Resource can be saved to disk and shared between sessions.
+/// Sets the <see cref="NetwDatabaseBackend"/> a database opens.
 /// <code>
 /// func _ready() -&gt; void:
 ///     Netw.configure_database(self, &amp;"saves").backend(preload("res://save_backend.tres"))
 /// </code>
 /// <para>
-/// Declaring the same name twice in one session with a different backend is
-/// refused, because two declarations of one name would disagree about where
-/// saves live.
+/// Configuring the same name twice in one session with a different backend is
+/// refused.
 /// </para>
 /// </remarks>
 public sealed class NetwDatabaseConfig : NetwRefCounted
@@ -46,7 +44,7 @@ public sealed class NetwDatabaseConfig : NetwRefCounted
 
     /// <summary>
     /// The storage this database opens, as
-    /// <see cref="NetwDatabaseConfig.Backend"/> left it.
+    /// <see cref="NetwDatabaseConfig.Backend"/> set it.
     /// </summary>
     public NetwDatabaseBackend Store
     {
@@ -72,9 +70,7 @@ public sealed class NetwDatabaseConfig : NetwRefCounted
         NetwApi.MethodBind("NetwDatabaseConfig", "backend", 4173819317UL);
 
     /// <summary>
-    /// Sets the storage this database opens, and returns this config so the
-    /// call chains. A database with no backend refuses
-    /// <see cref="NetwDatabase.Open"/>.
+    /// Sets the storage this database opens, and returns this config.
     /// </summary>
     public NetwDatabaseConfig Backend(NetwDatabaseBackend backend)
     {

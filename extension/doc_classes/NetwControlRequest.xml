@@ -4,13 +4,12 @@
 		A request to control a node.
 	</brief_description>
 	<description>
-		[NetwControlRequest] is emitted, in the server only, by [signal NetwEntity.control_requested] with one [NetwControlRequest] per request. The server may call [method deny] before the default grant path runs.
+		Passed by [signal NetwEntity.control_requested] on the server. Call [method deny] to reject the request, otherwise it is granted.
 		[codeblock]
 		func _on_control_requested(peer_id: int, request: NetwControlRequest) -&gt; void:
 		    if not can_carry(peer_id):
 		        request.deny()
 		[/codeblock]
-		Writing [code]false[/code] to [member denied] commits the denial, subsequent writes have no effect.
 	</description>
 	<tutorials>
 	</tutorials>

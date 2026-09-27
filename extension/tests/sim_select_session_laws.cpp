@@ -159,10 +159,9 @@ TEST_CASE(
         netw::gd::live_object(owner->get_prediction())
     );
     REQUIRE(handle != nullptr);
-    const PackedStringArray published
-        = handle->get_stats()->get_names_fact(
-            netw::NetwPredictStats::FACT_ISLAND_MEMBERS
-        );
+    const PackedStringArray published = handle->get_stats()->get_names_fact(
+        netw::NetwPredictStats::FACT_ISLAND_MEMBERS
+    );
     REQUIRE(published.size() == 2);
     NETW_CHECK_EQ(String(published[0]) < String(published[1]), 1);
 }

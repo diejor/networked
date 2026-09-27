@@ -70,7 +70,8 @@ public:
         godot::Object *p_session,
         const godot::StringName &p_slot
     ) override;
-    godot::Ref<NetwPromise> list_slots_default(godot::Object *p_session
+    godot::Ref<NetwPromise> list_slots_default(
+        godot::Object *p_session
     ) override;
     godot::Ref<NetwPromise> delete_slot_default(
         godot::Object *p_session,
@@ -96,7 +97,8 @@ public:
         godot::Object *p_session,
         const godot::StringName &p_slot
     ) override;
-    godot::Ref<NetwPromise> list_slots_default(godot::Object *p_session
+    godot::Ref<NetwPromise> list_slots_default(
+        godot::Object *p_session
     ) override;
     godot::Ref<NetwPromise> delete_slot_default(
         godot::Object *p_session,

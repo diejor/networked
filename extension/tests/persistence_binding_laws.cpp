@@ -56,11 +56,8 @@ struct World {
 
         database = session->get_databases()->create("saves");
         connection = MemoryConnection::opened(p_store, "slot1");
-        session->get_databases()->open(
-            database,
-            "slot1",
-            NetwPromise::resolved(connection)
-        );
+        session->get_databases()
+            ->open(database, "slot1", NetwPromise::resolved(connection));
 
         root = memnew(Node2D);
         root->set_name("Player");
@@ -123,10 +120,12 @@ TEST_CASE(
 
     const RID binding = world.compile();
     REQUIRE(binding.is_valid());
-    CHECK(bool(
-        world.session->persist_get_record_id_binding(binding)
-        == StringName("hero")
-    ));
+    CHECK(
+        bool(
+            world.session->persist_get_record_id_binding(binding)
+            == StringName("hero")
+        )
+    );
     CHECK(bool(world.session->persist_get_database(binding) == world.database));
     CHECK(world.session->persist_is_dirty_binding(binding));
 }
@@ -248,10 +247,12 @@ TEST_CASE(
 
     world.account->set_name("villain");
 
-    CHECK(bool(
-        world.session->persist_get_record_id_binding(binding)
-        == StringName("hero")
-    ));
+    CHECK(
+        bool(
+            world.session->persist_get_record_id_binding(binding)
+            == StringName("hero")
+        )
+    );
 }
 
 TEST_CASE(
@@ -272,16 +273,16 @@ TEST_CASE(
     CHECK_FALSE(bool(settled(again)));
 
     const Dictionary stored = world.session
-                                   ->database_read(
-                                       world.database,
-                                       world.session->schema_find("players"),
-                                       "hero"
-                                   )
-                                   ->get_result();
+                                  ->database_read(
+                                      world.database,
+                                      world.session->schema_find("players"),
+                                      "hero"
+                                  )
+                                  ->get_result();
     CHECK(bool(stored["found"]));
-    CHECK(bool(
-        Vector2(Dictionary(stored["values"])["where"]) == Vector2(3, 4)
-    ));
+    CHECK(
+        bool(Vector2(Dictionary(stored["values"])["where"]) == Vector2(3, 4))
+    );
 }
 
 TEST_CASE(
@@ -335,7 +336,8 @@ TEST_CASE(
     world.session->persist_save_binding(binding);
     world.root->set_position(Vector2(1, 1));
 
-    const Ref<NetwPromise> refused = world.session->persist_load_binding(binding);
+    const Ref<NetwPromise> refused
+        = world.session->persist_load_binding(binding);
     CHECK(refused->get_is_failed());
     NETW_CHECK_EQ(int(refused->get_code()), int(ERR_BUSY));
 }
@@ -356,7 +358,8 @@ TEST_CASE(
 
     world.connection->defer(true);
     world.root->set_position(Vector2(4, 4));
-    const Ref<NetwPromise> writing = world.session->persist_save_binding(binding);
+    const Ref<NetwPromise> writing
+        = world.session->persist_save_binding(binding);
     CHECK_FALSE(writing->get_is_settled());
 
     world.root->set_position(Vector2(6, 6));
@@ -379,7 +382,8 @@ TEST_CASE(
     world.root->set_position(Vector2(7, 7));
 
     world.connection->fail_next(ERR_FILE_CANT_WRITE);
-    const Ref<NetwPromise> refused = world.session->persist_save_binding(binding);
+    const Ref<NetwPromise> refused
+        = world.session->persist_save_binding(binding);
     CHECK(refused->get_is_failed());
     CHECK(world.session->persist_is_dirty_binding(binding));
 
@@ -451,7 +455,8 @@ TEST_CASE(
     world.root->set_position(Vector2(1, 2));
     world.become_replica();
 
-    const Ref<NetwPromise> refused = world.session->persist_save_binding(binding);
+    const Ref<NetwPromise> refused
+        = world.session->persist_save_binding(binding);
     CHECK(refused->get_is_failed());
     NETW_CHECK_EQ(refused->get_code(), ERR_UNAUTHORIZED);
     CHECK(world.session->persist_is_dirty_binding(binding));
@@ -502,16 +507,19 @@ TEST_CASE(
         Callable(second, "answer")
     );
 
-    const Ref<NetwPersistenceConfig> left = model::get_persistence_config(first);
+    const Ref<NetwPersistenceConfig> left
+        = model::get_persistence_config(first);
     const Ref<NetwPersistenceConfig> right
         = model::get_persistence_config(second);
     REQUIRE(left.is_valid());
     REQUIRE(right.is_valid());
     CHECK(bool(left != right));
-    CHECK(bool(StringName(left->get_id_provider().call()) == StringName("ada")));
-    CHECK(bool(
-        StringName(right->get_id_provider().call()) == StringName("bob")
-    ));
+    CHECK(
+        bool(StringName(left->get_id_provider().call()) == StringName("ada"))
+    );
+    CHECK(
+        bool(StringName(right->get_id_provider().call()) == StringName("bob"))
+    );
 
     model::clear_node_overlay(first);
     model::clear_node_overlay(second);

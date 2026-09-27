@@ -72,8 +72,10 @@ void NetwMultiplayer::sim_settle_body(const Ref<NetwEntity> &p_entity) {
     sim::Mode mode = sim::Mode::NONE;
     if (seated) {
         mode = standing->mode;
-    } else if (predict_engine_for(entity) != nullptr
-               || authoring::declares_prediction(owner)) {
+    } else if (
+        predict_engine_for(entity) != nullptr
+        || authoring::declares_prediction(owner)
+    ) {
         return;
     } else {
         mode = sim_rows.resolve(entity, sim_body_facts(p_entity));

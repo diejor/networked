@@ -104,6 +104,7 @@ Other classes
     class_netwbitstream
     class_netwchannel
     class_netwclockconfig
+    class_netwclockhandle
     class_netwcolumnref
     class_netwconnecthandle
     class_netwcontrolrequest
@@ -121,6 +122,7 @@ Other classes
     class_netwinterpolate
     class_netwjoinconfig
     class_netwlagcompensationconfig
+    class_netwlifecyclerequest
     class_netwlinkconditions
     class_netwmemberconfig
     class_netwmultiplayer
@@ -130,11 +132,8 @@ Other classes
     class_netwplayer
     class_netwpredict
     class_netwpredictcarrycontext
-    class_netwpredictfieldrecovery
     class_netwpredictfold
     class_netwpredictionhandle
-    class_netwpredictisland
-    class_netwpredictjournal
     class_netwpredictjudgement
     class_netwpredictrecovery
     class_netwpredictstats
@@ -160,6 +159,7 @@ Other classes
     class_netwservice
     class_netwsessionconfig
     class_netwsessionhandle
+    class_netwsimulationhandle
     class_netwtablehandle
     class_netwtimeline
     class_netwtransport

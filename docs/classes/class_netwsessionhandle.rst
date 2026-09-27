@@ -12,14 +12,14 @@ NetwSessionHandle
 
 **Inherits:** :godot:`RefCounted`
 
-The session plane of one session, gathered onto one object.
+The players, scenes and signals of a :godot:`Node.multiplayer <Node#class_Node_property_multiplayer>` session.
 
 .. rst-class:: classref-introduction-group
 
 Description
 -----------
 
-A client over the ``session_*``, ``player_*``, ``peer_*`` and ``stats_*`` families on :ref:`NetwMultiplayer<class_NetwMultiplayer>`, reached as :ref:`Netw.session()<class_Netw_method_session>` from any :godot:`Node`. Every member forwards to a flat verb, and the flat verb is the stable spelling: this repository's own suites, examples and browser call :ref:`NetwMultiplayer<class_NetwMultiplayer>` directly, and a game reaches for this when it would rather hold the plane as one object.
+Reached with :ref:`Netw.session()<class_Netw_method_session>` from any :godot:`Node`. Mostly useful for connecting signals.
 
 ::
 
@@ -30,11 +30,9 @@ A client over the ``session_*``, ``player_*``, ``peer_*`` and ``stats_*`` famili
     for player: NetwPlayer in s.players:
             scoreboard.add(player)
 
-\ **What this object buys over the flat surface is its signals.** :ref:`Netw<class_Netw>` is static and a static class publishes none, so a game that wants to hear a session's edges has to name the session to hear them. This object is where they are named once: :ref:`entered<class_NetwSessionHandle_signal_entered>`, :ref:`ended<class_NetwSessionHandle_signal_ended>`, :ref:`disconnected<class_NetwSessionHandle_signal_disconnected>`, :ref:`disconnecting<class_NetwSessionHandle_signal_disconnecting>`, :ref:`player_joined<class_NetwSessionHandle_signal_player_joined>`, :ref:`local_joined<class_NetwSessionHandle_signal_local_joined>`, :ref:`player_left<class_NetwSessionHandle_signal_player_left>`, :ref:`join_failed<class_NetwSessionHandle_signal_join_failed>`, :ref:`scene_live<class_NetwSessionHandle_signal_scene_live>`, :ref:`scene_changed<class_NetwSessionHandle_signal_scene_changed>` and :ref:`presentation_changed<class_NetwSessionHandle_signal_presentation_changed>`, all relayed from the session that created it. One handle exists per session for the life of that session, so a game may hold it across an await.
+\ There is one handle per session, so it is safe to keep it across an await.
 
-\ :ref:`disconnected<class_NetwSessionHandle_signal_disconnected>` is the one member that relays a signal this framework does not own. :godot:`MultiplayerAPI.server_disconnected <MultiplayerAPI#class_MultiplayerAPI_signal_server_disconnected>` is Godot's and stays reachable on ``multiplayer``; it is re-emitted here so one object returns every cause a session has to end, which is what a game pairing it with :ref:`ended<class_NetwSessionHandle_signal_ended>` under one handler actually wants.
-
-Bringing a session UP is not on this object. A session comes online the ordinary Godot way, by assigning a :godot:`MultiplayerPeer` to :godot:`MultiplayerAPI.multiplayer_peer <MultiplayerAPI#class_MultiplayerAPI_property_multiplayer_peer>`, the connect plane is :ref:`NetwConnectHandle<class_NetwConnectHandle>` reached as :ref:`Netw.connection()<class_Netw_method_connection>`, and joining is :ref:`Netw.prepare_join()<class_Netw_method_prepare_join>`, which routes prepare against submit off session state. This object is what a session already up admits, reports, and tears down.
+Connecting is done as you would normally do with :godot:`SceneMultiplayer`, by assigning :godot:`MultiplayerAPI.multiplayer_peer <MultiplayerAPI#class_MultiplayerAPI_property_multiplayer_peer>`. See :ref:`NetwConnectHandle<class_NetwConnectHandle>` to manage endpoints and :ref:`Netw.prepare_join()<class_Netw_method_prepare_join>` to join as a player.
 
 .. rst-class:: classref-reftable-group
 
@@ -105,9 +103,7 @@ Signals
 
 **disconnected**\ (\ ) :ref:`🔗<class_NetwSessionHandle_signal_disconnected>`
 
-Relayed from :godot:`MultiplayerAPI.server_disconnected <MultiplayerAPI#class_MultiplayerAPI_signal_server_disconnected>`: the server this peer was connected to is gone, without having said so first.
-
-Godot's own signal, re-emitted here so one object returns every cause a session has to end. :ref:`ended<class_NetwSessionHandle_signal_ended>` is the same event when this peer's own session tore down, and :ref:`disconnecting<class_NetwSessionHandle_signal_disconnecting>` is the host announcing it in advance.
+Same as :godot:`MultiplayerAPI.server_disconnected <MultiplayerAPI#class_MultiplayerAPI_signal_server_disconnected>`, re-emitted here so it can be connected beside :ref:`ended<class_NetwSessionHandle_signal_ended>`.
 
 .. rst-class:: classref-item-separator
 
@@ -119,7 +115,7 @@ Godot's own signal, re-emitted here so one object returns every cause a session 
 
 **disconnecting**\ (\ reason\: :godot:`String`\ ) :ref:`🔗<class_NetwSessionHandle_signal_disconnecting>`
 
-The server has announced that it is going down, carrying ``reason``. :ref:`disconnected<class_NetwSessionHandle_signal_disconnected>` is what arrives when it does not announce.
+The server announced it is going down with ``reason``.
 
 .. rst-class:: classref-item-separator
 
@@ -131,7 +127,7 @@ The server has announced that it is going down, carrying ``reason``. :ref:`disco
 
 **ended**\ (\ ) :ref:`🔗<class_NetwSessionHandle_signal_ended>`
 
-This session has torn down. Relayed from :ref:`NetwMultiplayer.session_ended<class_NetwMultiplayer_signal_session_ended>`.
+This session has ended.
 
 .. rst-class:: classref-item-separator
 
@@ -143,7 +139,7 @@ This session has torn down. Relayed from :ref:`NetwMultiplayer.session_ended<cla
 
 **entered**\ (\ ) :ref:`🔗<class_NetwSessionHandle_signal_entered>`
 
-This peer's join was accepted and the session is live for it. Relayed from :ref:`NetwMultiplayer.session_entered<class_NetwMultiplayer_signal_session_entered>`.
+This peer's join was accepted.
 
 .. rst-class:: classref-item-separator
 
@@ -155,9 +151,7 @@ This peer's join was accepted and the session is live for it. Relayed from :ref:
 
 **join_failed**\ (\ code\: :godot:`Error <@GlobalScope#enum_@globalscope_Error>`, reason\: :godot:`String`\ ) :ref:`🔗<class_NetwSessionHandle_signal_join_failed>`
 
-This peer's own join was turned down, carrying the ``code`` and the ``reason`` the server gave. Relayed from :ref:`NetwMultiplayer.session_join_failed<class_NetwMultiplayer_signal_session_join_failed>`.
-
-No membership was created, so :ref:`local_player<class_NetwSessionHandle_property_local_player>` is still ``null`` and :ref:`local_joined<class_NetwSessionHandle_signal_local_joined>` never fires for that attempt. :ref:`Netw.prepare_join()<class_Netw_method_prepare_join>`'s promise reports only that the request went out, so this is where a refusal arrives.
+This peer's join was rejected with ``code`` and the ``reason`` the server gave. :ref:`local_player<class_NetwSessionHandle_property_local_player>` stays ``null``.
 
 .. rst-class:: classref-item-separator
 
@@ -169,7 +163,7 @@ No membership was created, so :ref:`local_player<class_NetwSessionHandle_propert
 
 **local_joined**\ (\ player\: :ref:`NetwPlayer<class_NetwPlayer>`\ ) :ref:`🔗<class_NetwSessionHandle_signal_local_joined>`
 
-The :ref:`NetwPlayer<class_NetwPlayer>` the session holds for THIS peer has joined, which is also when :ref:`local_player<class_NetwSessionHandle_property_local_player>` starts returning. Relayed from :ref:`NetwMultiplayer.player_local_joined<class_NetwMultiplayer_signal_player_local_joined>`.
+The :ref:`NetwPlayer<class_NetwPlayer>` of this peer has joined. :ref:`local_player<class_NetwSessionHandle_property_local_player>` is set from here on.
 
 .. rst-class:: classref-item-separator
 
@@ -181,9 +175,7 @@ The :ref:`NetwPlayer<class_NetwPlayer>` the session holds for THIS peer has join
 
 **presentation_changed**\ (\ from\: :ref:`NetwSceneHandle<class_NetwSceneHandle>`, to\: :ref:`NetwSceneHandle<class_NetwSceneHandle>`\ ) :ref:`🔗<class_NetwSessionHandle_signal_presentation_changed>`
 
-The scene this peer draws has changed, carrying the handle left and the one taken, either of which may be ``null``. Relayed from :ref:`NetwMultiplayer.scene_presentation_changed<class_NetwMultiplayer_signal_scene_presentation_changed>`. :ref:`presented_scene<class_NetwSessionHandle_property_presented_scene>` is what changed and how it is derived.
-
-Spent on a change and never on a repeat. It is the edge a move across worlds lands on, because the body that arrives is a new object on the peer that owns it and this announces the arrival rather than the object.
+:ref:`presented_scene<class_NetwSessionHandle_property_presented_scene>` changed from ``from`` to ``to``, either may be ``null``.
 
 .. rst-class:: classref-item-separator
 
@@ -195,7 +187,7 @@ Spent on a change and never on a repeat. It is the edge a move across worlds lan
 
 **player_joined**\ (\ player\: :ref:`NetwPlayer<class_NetwPlayer>`\ ) :ref:`🔗<class_NetwSessionHandle_signal_player_joined>`
 
-A :ref:`NetwPlayer<class_NetwPlayer>` has joined, this peer's own row included. Relayed from :ref:`NetwMultiplayer.player_joined<class_NetwMultiplayer_signal_player_joined>`.
+A :ref:`NetwPlayer<class_NetwPlayer>` has joined, including this peer's own.
 
 .. rst-class:: classref-item-separator
 
@@ -207,9 +199,7 @@ A :ref:`NetwPlayer<class_NetwPlayer>` has joined, this peer's own row included. 
 
 **player_left**\ (\ player\: :ref:`NetwPlayer<class_NetwPlayer>`\ ) :ref:`🔗<class_NetwSessionHandle_signal_player_left>`
 
-A :ref:`NetwPlayer<class_NetwPlayer>`'s membership has ended, whether their peer disconnected or :ref:`kick()<class_NetwSessionHandle_method_kick>` ended it. Relayed from :ref:`NetwMultiplayer.player_left<class_NetwMultiplayer_signal_player_left>`, which carries the ordering.
-
-\ :ref:`NetwPlayer.is_active<class_NetwPlayer_property_is_active>` already reads ``false`` here, so this is the last edge at which a game can read the handle it filed that player under and erase its own row for them.
+A :ref:`NetwPlayer<class_NetwPlayer>` has left, either because their peer disconnected or because of :ref:`kick()<class_NetwSessionHandle_method_kick>`. :ref:`NetwPlayer.is_active<class_NetwPlayer_property_is_active>` is already ``false``.
 
 .. rst-class:: classref-item-separator
 
@@ -221,9 +211,7 @@ A :ref:`NetwPlayer<class_NetwPlayer>`'s membership has ended, whether their peer
 
 **scene_changed**\ (\ scene\: :ref:`NetwSceneHandle<class_NetwSceneHandle>`, arrived\: :godot:`Array`\[:ref:`NetwPlayer<class_NetwPlayer>`\]\ ) :ref:`🔗<class_NetwSessionHandle_signal_scene_changed>`
 
-A :ref:`Netw.change_scene_to_file()<class_Netw_method_change_scene_to_file>` has landed. ``scene`` is the destination and ``arrived`` holds the players it brought there. Relayed from :ref:`NetwMultiplayer.scene_changed<class_NetwMultiplayer_signal_scene_changed>`.
-
-A change carries no body, so this is where the server gives the arrivals one. A player already watching the destination is not in ``arrived``, so a repeated change announces nobody and the spawn happens once.
+A :ref:`Netw.change_scene_to_file()<class_Netw_method_change_scene_to_file>` has finished. ``scene`` is the destination and ``arrived`` are the players it brought, which is where their nodes are spawned. A player already watching the destination is not in ``arrived``.
 
 ::
 
@@ -246,11 +234,7 @@ A change carries no body, so this is where the server gives the arrivals one. A 
 
 **scene_live**\ (\ scene\: :ref:`NetwSceneHandle<class_NetwSceneHandle>`\ ) :ref:`🔗<class_NetwSessionHandle_signal_scene_live>`
 
-A scene is live and reachable, carrying the :ref:`NetwSceneHandle<class_NetwSceneHandle>` it is read through. Relayed from :ref:`NetwMultiplayer.scene_live<class_NetwMultiplayer_signal_scene_live>`.
-
-This is where a game puts what a scene needs, and the handle it is handed is the one to keep. Watching a player, observing an edge, and reading the scene's entities are all members on it.
-
-It fires once the scene root is ready, so the whole scene is mounted and a handler may reach into it. Their :godot:`Node.multiplayer <Node#class_Node_property_multiplayer>` answers and their ``@onready`` fields are set.
+A scene is live. It fires after the scene root is ready, so the whole scene can be accessed.
 
 ::
 
@@ -276,7 +260,7 @@ Property Descriptions
 
 - :ref:`NetwSessionConfig<class_NetwSessionConfig>` **get_config**\ (\ )
 
-A :ref:`NetwSessionConfig<class_NetwSessionConfig>` SNAPSHOT of what this session was configured with. Each read creates a new one and writing to it changes nothing, which is :ref:`NetwMultiplayer.session_get_config()<class_NetwMultiplayer_method_session_get_config>`'s own contract: the live edits are :ref:`Netw.configure_session()<class_Netw_method_configure_session>` before the session comes up and :ref:`set_server_info()<class_NetwSessionHandle_method_set_server_info>` after.
+A copy of the :ref:`NetwSessionConfig<class_NetwSessionConfig>` this session was configured with. Writing to it changes nothing, use :ref:`Netw.configure_session()<class_Netw_method_configure_session>` before connecting and :ref:`set_server_info()<class_NetwSessionHandle_method_set_server_info>` after.
 
 .. rst-class:: classref-item-separator
 
@@ -292,7 +276,7 @@ A :ref:`NetwSessionConfig<class_NetwSessionConfig>` SNAPSHOT of what this sessio
 
 - :godot:`bool` **get_is_local_client**\ (\ )
 
-Whether this peer is a client of a session hosted elsewhere, so a listen-server host reads ``false`` here. :ref:`NetwMultiplayer.is_local_client<class_NetwMultiplayer_property_is_local_client>`.
+Whether this peer is a client. A listen server host reads ``false``.
 
 .. rst-class:: classref-item-separator
 
@@ -308,7 +292,7 @@ Whether this peer is a client of a session hosted elsewhere, so a listen-server 
 
 - :godot:`bool` **get_is_online**\ (\ )
 
-Whether this session has a peer assigned and connected. :ref:`NetwMultiplayer.is_online<class_NetwMultiplayer_property_is_online>`.
+Whether a peer is assigned and connected.
 
 .. rst-class:: classref-item-separator
 
@@ -324,7 +308,7 @@ Whether this session has a peer assigned and connected. :ref:`NetwMultiplayer.is
 
 - :ref:`NetwPlayer<class_NetwPlayer>` **get_local_player**\ (\ )
 
-The :ref:`NetwPlayer<class_NetwPlayer>` this session holds for this peer, ``null`` before the local join is accepted. :ref:`local_joined<class_NetwSessionHandle_signal_local_joined>` is the edge that fills it.
+The :ref:`NetwPlayer<class_NetwPlayer>` of this peer, ``null`` until :ref:`local_joined<class_NetwSessionHandle_signal_local_joined>`.
 
 .. rst-class:: classref-item-separator
 
@@ -340,20 +324,9 @@ The :ref:`NetwPlayer<class_NetwPlayer>` this session holds for this peer, ``null
 
 - :ref:`NetwSceneHandle<class_NetwSceneHandle>` **get_presented_scene**\ (\ )
 
-The scene this peer draws, ``null`` while it draws none. A game writes nothing to reach it. :ref:`presentation_changed<class_NetwSessionHandle_signal_presentation_changed>` is its edge and :ref:`NetwMultiplayer.scene_presented()<class_NetwMultiplayer_method_scene_presented>` is the flat reading.
+The scene this peer draws, ``null`` when it draws none. It is the scene holding a body of this peer, or else the scene this peer watches. When there are two, it is ``null`` and a warning is logged.
 
-It follows where this peer is, so it is a local reading and no other peer sees anything of it. :ref:`NetwSceneHandle.watch()<class_NetwSceneHandle_method_watch>` is the separate verb that decides what a player actually receives.
-
-.. code:: text
-
-    one scene holds a body of this peer    that scene
-    no body, one scene this peer watches   that scene
-    bodies in two, or two watched          nothing, with a warning
-    neither                                nothing
-
-\ Two worlds at once draw nothing rather than one of them, because a peer standing in two places is a question only the game can answer and a framework answering it draws the wrong world in silence.
-
-On a listen server this is what :ref:`HostSceneView<class_HostSceneView>` draws, because only a host runs scenes in worlds of their own. Several bodies in the presented scene each hear :ref:`NetwEntity.view_activated<class_NetwEntity_signal_view_activated>`, and the camera is adopted automatically only where exactly one of them is local.
+On a listen server this is what :ref:`HostSceneView<class_HostSceneView>` draws. See :ref:`NetwSceneHandle.watch()<class_NetwSceneHandle_method_watch>` to choose what a player receives.
 
 .. rst-class:: classref-item-separator
 
@@ -369,7 +342,7 @@ On a listen server this is what :ref:`HostSceneView<class_HostSceneView>` draws,
 
 - :godot:`Array`\[:ref:`NetwPlayer<class_NetwPlayer>`\] **get_players**\ (\ )
 
-Every :ref:`NetwPlayer<class_NetwPlayer>` that has joined, including rows whose peer has since gone, which is what :ref:`NetwMultiplayer.players<class_NetwMultiplayer_property_players>` returns and is the roster a scoreboard wants. The rows still CONNECTED are :ref:`NetwMultiplayer.connected_players<class_NetwMultiplayer_property_connected_players>`.
+Every :ref:`NetwPlayer<class_NetwPlayer>` that has joined, including those whose peer has since disconnected. See :ref:`NetwMultiplayer.connected_players<class_NetwMultiplayer_property_connected_players>` for only the connected ones.
 
 .. rst-class:: classref-item-separator
 
@@ -385,7 +358,7 @@ Every :ref:`NetwPlayer<class_NetwPlayer>` that has joined, including rows whose 
 
 - :ref:`Role<enum_NetwMultiplayer_Role>` **get_role**\ (\ )
 
-What this peer is in the session, one of :ref:`Role<enum_NetwMultiplayer_Role>`. :ref:`NetwMultiplayer.role<class_NetwMultiplayer_property_role>`.
+What this peer is in the session.
 
 .. rst-class:: classref-item-separator
 
@@ -401,7 +374,7 @@ What this peer is in the session, one of :ref:`Role<enum_NetwMultiplayer_Role>`.
 
 - :godot:`Node` **get_root**\ (\ )
 
-The :godot:`Node` this session's replicated branch hangs under, ``null`` when the session is not mounted. :ref:`NetwMultiplayer.root<class_NetwMultiplayer_property_root>`.
+The :godot:`Node` replicated nodes are under, ``null`` when the session is not in the tree.
 
 .. rst-class:: classref-item-separator
 
@@ -417,7 +390,7 @@ The :godot:`Node` this session's replicated branch hangs under, ``null`` when th
 
 - :godot:`Array`\[:ref:`NetwSceneHandle<class_NetwSceneHandle>`\] **get_scenes**\ (\ )
 
-Every live scene, as the :ref:`NetwSceneHandle<class_NetwSceneHandle>` each one is read through. The session keys its rows by an internal handle, and that handle never crosses onto this view: a caller naming one scene reaches for :ref:`Netw.scene()<class_Netw_method_scene>` instead.
+Every live scene. Use :ref:`Netw.scene()<class_Netw_method_scene>` to reach one by name.
 
 .. rst-class:: classref-item-separator
 
@@ -433,7 +406,7 @@ Every live scene, as the :ref:`NetwSceneHandle<class_NetwSceneHandle>` each one 
 
 - :godot:`Dictionary` **get_stats**\ (\ )
 
-:ref:`NetwMultiplayer.stats_snapshot()<class_NetwMultiplayer_method_stats_snapshot>`: every counter this session keeps, keyed by the :ref:`Stat<enum_NetwMultiplayer_Stat>` constant that names it.
+Every counter this session keeps, keyed by :ref:`Stat<enum_NetwMultiplayer_Stat>`.
 
 .. rst-class:: classref-section-separator
 
@@ -450,7 +423,7 @@ Method Descriptions
 
 :godot:`Variant` **bucket_of**\ (\ peer\: :godot:`int`, type\: :godot:`Variant`\ ) |const| :ref:`🔗<class_NetwSessionHandle_method_bucket_of>`
 
-:ref:`NetwMultiplayer.peer_get_bucket()<class_NetwMultiplayer_method_peer_get_bucket>`: the per-peer bucket of ``type`` that ``peer`` carries, ``null`` when it carries none.
+The bucket of ``type`` that ``peer`` carries, ``null`` when it carries none.
 
 .. rst-class:: classref-item-separator
 
@@ -462,9 +435,7 @@ Method Descriptions
 
 :godot:`Error <@GlobalScope#enum_@globalscope_Error>` **kick**\ (\ player\: :ref:`NetwPlayer<class_NetwPlayer>`, reason\: :godot:`String` = ""\ ) :ref:`🔗<class_NetwSessionHandle_method_kick>`
 
-:ref:`NetwMultiplayer.player_kick()<class_NetwMultiplayer_method_player_kick>`: ends ``player``'s membership and turns their peer away carrying ``reason``, which holds the law and the errors.
-
-This ends a membership rather than closing a connection, and :ref:`leave()<class_NetwSessionHandle_method_leave>` is how a peer ends its own. The local server's player is refused here for that reason.
+Removes ``player`` from the session and disconnects their peer with ``reason``. The server's own player cannot be kicked, use :ref:`leave()<class_NetwSessionHandle_method_leave>` instead.
 
 \ **Server Only.**
 
@@ -478,7 +449,7 @@ This ends a membership rather than closing a connection, and :ref:`leave()<class
 
 :ref:`NetwPromise<class_NetwPromise>` **leave**\ (\ ) :ref:`🔗<class_NetwSessionHandle_method_leave>`
 
-Leaves the session this handle was created by. The session authority saves its entity rows first, and a row the database refuses keeps the session online. The promise resolves with an :godot:`@GlobalScope.Error <@GlobalScope#enum_@globalscope_Error>` once the peer is down or the save failed. Forwards to :ref:`NetwMultiplayer.session_leave()<class_NetwMultiplayer_method_session_leave>`.
+Leaves the session. The server saves its entity rows first, and stays online if the database refuses a row. The promise resolves with an :godot:`@GlobalScope.Error <@GlobalScope#enum_@globalscope_Error>` once the peer is down or the save failed.
 
 .. rst-class:: classref-item-separator
 
@@ -490,7 +461,7 @@ Leaves the session this handle was created by. The session authority saves its e
 
 :ref:`NetwPlayer<class_NetwPlayer>` **player_of**\ (\ peer\: :godot:`int`\ ) |const| :ref:`🔗<class_NetwSessionHandle_method_player_of>`
 
-The :ref:`NetwPlayer<class_NetwPlayer>` this session holds for ``peer``, ``null`` when it holds none. Forwards to :ref:`NetwMultiplayer.peer_get_player()<class_NetwMultiplayer_method_peer_get_player>`, which is the same result under the flat spelling.
+The :ref:`NetwPlayer<class_NetwPlayer>` of ``peer``, ``null`` when there is none.
 
 .. rst-class:: classref-item-separator
 
@@ -502,9 +473,7 @@ The :ref:`NetwPlayer<class_NetwPlayer>` this session holds for ``peer``, ``null`
 
 :ref:`NetwPromise<class_NetwPromise>` **request_scene**\ (\ path\: :godot:`String`, scope\: :ref:`SceneChange<enum_NetwMultiplayer_SceneChange>` = 0\ ) :ref:`🔗<class_NetwSessionHandle_method_request_scene>`
 
-:ref:`NetwMultiplayer.scene_request()<class_NetwMultiplayer_method_scene_request>`: asks server authority for the scene at ``path`` over ``scope``, one of :ref:`SceneChange<enum_NetwMultiplayer_SceneChange>`, returning the promise that resolves when the scene is live or rejects when authority declines.
-
-A scene already live is reached by :ref:`Netw.scene()<class_Netw_method_scene>` and read through its own :ref:`NetwSceneHandle<class_NetwSceneHandle>`; this verb is the asking.
+Asks the server for the scene at ``path`` over ``scope``. The promise resolves when the scene is live, or is rejected when the server declines.
 
 \ **Player request.**
 
@@ -518,9 +487,15 @@ A scene already live is reached by :ref:`Netw.scene()<class_Netw_method_scene>` 
 
 :ref:`NetwPromise<class_NetwPromise>` **save_entities**\ (\ ) :ref:`🔗<class_NetwSessionHandle_method_save_entities>`
 
-Writes every entity row that changed since its last save, including the final rows of entities that already left, and waits for the writes each :ref:`NetwDatabase<class_NetwDatabase>` had already admitted. The promise resolves with an :godot:`@GlobalScope.Error <@GlobalScope#enum_@globalscope_Error>`. It is :godot:`@GlobalScope.OK <@GlobalScope#class_@GlobalScope_constant_OK>` when every row is stored, and the error of the first row still unsaved otherwise. :ref:`NetwMultiplayer.persist_flush_all()<class_NetwMultiplayer_method_persist_flush_all>`.
+Saves every entity row that changed since its last save, including rows of entities that already left. Call it again to retry a row the database refused. :ref:`leave()<class_NetwSessionHandle_method_leave>` runs the same save.
 
-Call it again to retry a row the database refused. :ref:`leave()<class_NetwSessionHandle_method_leave>` runs the same save before the peer goes down. A peer that holds no session authority gets :godot:`@GlobalScope.ERR_UNAUTHORIZED <@GlobalScope#class_@GlobalScope_constant_ERR_UNAUTHORIZED>`.
+.. code:: text
+
+    Error
+    ┠╴OK                every changed row is stored
+    ┠╴ERR_UNAUTHORIZED  this peer is not the server
+    ┠╴ERR_UNCONFIGURED  this handle outlived its session
+    ┖╴a row's code      the first row still unsaved, see NetwPersistenceHandle.save
 
 \ **Server Only.**
 
@@ -534,7 +509,7 @@ Call it again to retry a row the database refused. :ref:`leave()<class_NetwSessi
 
 |void| **set_server_info**\ (\ info\: :ref:`NetwServerInfo<class_NetwServerInfo>`\ ) :ref:`🔗<class_NetwSessionHandle_method_set_server_info>`
 
-:ref:`NetwMultiplayer.session_set_server_info()<class_NetwMultiplayer_method_session_set_server_info>`: replaces what this session advertises about itself, at runtime, so a name a player typed reaches the listing rather than the snapshot the session started from.
+Replaces what this session advertises about itself, such as the name shown in a server list.
 
 \ **Server Only.**
 

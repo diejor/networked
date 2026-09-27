@@ -27,7 +27,8 @@ struct World {
             NetwMultiplayer::COLUMN_VECTOR2,
             1
         );
-        session->schema_add_column(schema, "hp", NetwMultiplayer::COLUMN_I64, 1);
+        session
+            ->schema_add_column(schema, "hp", NetwMultiplayer::COLUMN_I64, 1);
         session->get_schema_core()->set_storage_version(schema, p_version);
         session->schema_seal(schema);
         table = session->table_create(schema);
@@ -69,7 +70,8 @@ TEST_CASE(
 ) {
     World world;
     NETW_CHECK_EQ(
-        world.core()->replace_rows(world.table, routes_of(10, 3), two_columns(3), 7),
+        world.core()
+            ->replace_rows(world.table, routes_of(10, 3), two_columns(3), 7),
         OK
     );
     NETW_CHECK_EQ(world.core()->read_routes(world.table).size(), 3);
@@ -83,8 +85,10 @@ TEST_CASE(
     "changes no column and no route"
 ) {
     World world;
-    world.core()->replace_rows(world.table, routes_of(10, 3), two_columns(3), 7);
-    const PackedInt64Array before_routes = world.core()->read_routes(world.table);
+    world.core()
+        ->replace_rows(world.table, routes_of(10, 3), two_columns(3), 7);
+    const PackedInt64Array before_routes
+        = world.core()->read_routes(world.table);
     const PackedVector2Array before_where
         = world.core()->read_column(world.table, 0);
 
@@ -98,7 +102,10 @@ TEST_CASE(
         ERR_INVALID_DATA
     );
 
-    NETW_CHECK_EQ(world.core()->read_routes(world.table).size(), before_routes.size());
+    NETW_CHECK_EQ(
+        world.core()->read_routes(world.table).size(),
+        before_routes.size()
+    );
     NETW_CHECK_EQ(int(world.core()->read_routes(world.table)[0]), 10);
     const PackedVector2Array after_where
         = world.core()->read_column(world.table, 0);
@@ -141,12 +148,8 @@ TEST_CASE(
         return out;
     }();
     const LocalVector<Variant> columns = two_columns(3);
-    const Dictionary sealed = netw::persist::seal_snapshot(
-        *world.record(),
-        1,
-        ids,
-        columns
-    );
+    const Dictionary sealed
+        = netw::persist::seal_snapshot(*world.record(), 1, ids, columns);
 
     PackedStringArray read_ids;
     LocalVector<Variant> read_columns;
@@ -233,12 +236,8 @@ TEST_CASE(
     World ahead(3);
     PackedStringArray ids;
     ids.push_back("a");
-    const Dictionary sealed = netw::persist::seal_snapshot(
-        *ahead.record(),
-        3,
-        ids,
-        two_columns(1)
-    );
+    const Dictionary sealed
+        = netw::persist::seal_snapshot(*ahead.record(), 3, ids, two_columns(1));
 
     World behind(1);
     PackedStringArray read_ids;

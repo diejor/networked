@@ -1,6 +1,5 @@
 extends SceneTree
 
-
 func _initialize() -> void:
 	write.call_deferred()
 
@@ -19,7 +18,7 @@ func write() -> void:
 	var wrote: Error = await db.write(
 		rows.players,
 		PersistenceRestartRows.HERO,
-		{&"gold": PersistenceRestartRows.GOLD},
+		{ &"gold": PersistenceRestartRows.GOLD },
 	).wait()
 	if wrote != OK:
 		quit(4)

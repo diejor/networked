@@ -323,9 +323,7 @@ Resolved resolve_through_prediction(const Concrete &p_point) {
     );
     pool.set_fallback_latched(slot, p_point.closure == FALLBACK);
     if (p_point.closure == DELAY_CLOSED) {
-        handle->set_recovery_policy(
-            NetwPredict::RECOVERY_POLICY_DELAY_CLOSED
-        );
+        handle->set_recovery_policy(NetwPredict::RECOVERY_POLICY_DELAY_CLOSED);
     }
     Facts facts = pool.resolution_facts(slot, handle);
     facts.selection_count = p_point.selection == SELECTED ? 1 : 0;
@@ -490,9 +488,7 @@ TEST_CASE(
         {"a controller-authored entity runs on its controller",
          steered_here(),
          Mode::AUTHORITY},
-        {"and is a proxy elsewhere",
-         steered_elsewhere(),
-         Mode::PROXY},
+        {"and is a proxy elsewhere", steered_elsewhere(), Mode::PROXY},
         {"controller 0 hands authorship to the session authority",
          steered_by_nobody_on_the_session_authority(),
          Mode::AUTHORITY},
@@ -511,9 +507,7 @@ TEST_CASE(
         {"a pending claim runs a free body the session was authoring",
          claimed_on_a_free_body(),
          Mode::AUTHORITY},
-        {"active replicas run every copy",
-         active_replicas(),
-         Mode::ACTIVE},
+        {"active replicas run every copy", active_replicas(), Mode::ACTIVE},
         {"a closed active replica is a proxy",
          active_replicas_closed(),
          Mode::PROXY},
@@ -539,7 +533,10 @@ TEST_CASE(
     server_body.predicted = true;
     server_body.input_rows = true;
     server_body.session_authority_here = true;
-    NETW_CHECK_EQ(int(rows.resolve(steered, server_body)), int(Mode::AUTHORITY));
+    NETW_CHECK_EQ(
+        int(rows.resolve(steered, server_body)),
+        int(Mode::AUTHORITY)
+    );
 
     Facts client_copy = server_body;
     client_copy.session_authority_here = false;

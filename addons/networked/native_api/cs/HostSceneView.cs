@@ -6,30 +6,12 @@ using Godot.NativeInterop;
 namespace Networked;
 
 /// <summary>
-/// Draws a listen-server host's offscreen player scene edge to edge, so the
-/// host sees what a client sees.
+/// Draws a listen-server host's scene.
 /// </summary>
 /// <remarks>
 /// Only a scene declaring <see cref="NetwMultiplayer.SceneIsolation.OwnWorld"/>
 /// is hosted in an offscreen <see cref="SubViewport"/>, so this view exists
-/// only for one. A dedicated server renders no scene and a host whose scene
-/// shares the session's world already renders in the root viewport, so neither
-/// builds this view. The session creates this node for a listen server when a
-/// live scene owns its own world and no <see cref="ParticipantView"/> exists
-/// under the session root. Add one manually only to configure or position the
-/// window. Use <see cref="NetwMultiplayer.SceneSetHostViewFactory"/> to create
-/// a different node type. The world it draws is
-/// <see cref="NetwSessionHandle.PresentedScene"/>, so a host presenting nothing
-/// draws nothing however many worlds stand live beside it. It follows
-/// <see cref="NetwMultiplayer.ParticipantViewportChanged"/> to retarget, and
-/// re-announces as entities go live, because the display resolves before the
-/// local player has spawned into it. On every announce it emits
-/// <see cref="NetwEntity.ViewActivated"/> on every local player standing in
-/// that world, and it makes a camera current only where exactly one of them is
-/// there. Several local players is the couch case, and choosing one of them is
-/// the game's call rather than this node's, so connect the signal to take it.
-/// With one local player and nothing listening, the first conventional camera
-/// in the player branch becomes current, falling back to the scene's level.
+/// only for one. On scene changes <see cref="NetwEntity.ViewActivated"/> fires.
 /// <code>
 /// func _ready() -&gt; void:
 ///     var entity := Netw.entity(self)
@@ -38,13 +20,6 @@ namespace Networked;
 /// func _on_view_activated() -&gt; void:
 ///     $Rig/SpringArm3D/Camera3D.make_current()
 /// </code>
-/// <para>
-/// Stretch behaviour is <see cref="ParticipantView"/>'s, defaulting to the
-/// project's own <c>display/window/stretch/*</c> returns, and the view fills
-/// its parent rect. The mouse passes through to whatever is under it while the
-/// keyboard and joypad events nothing else handled are forwarded into the
-/// target, so ordinary UI over the top of the game still works.
-/// </para>
 /// </remarks>
 public sealed class HostSceneView : ParticipantView
 {
@@ -70,10 +45,7 @@ public sealed class HostSceneView : ParticipantView
 
     /// <summary>
     /// Whether this view stands down. A suppressed view hides itself, drops its
-    /// target and stops forwarding input, which is how a game shows something
-    /// else over the whole window without losing the view or the display it was
-    /// tracking. Clearing it re-adopts whatever
-    /// <see cref="NetwMultiplayer.ScenePlayerViewport"/> now returns.
+    /// target and stops forwarding input.
     /// </summary>
     public bool Suppressed
     {

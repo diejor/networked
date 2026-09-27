@@ -6,18 +6,19 @@ using Godot.NativeInterop;
 namespace Networked;
 
 /// <summary>
-/// One named save store of one session, reached by <see cref="Netw.Database"/>.
+/// The client for persistent storage.
 /// </summary>
 /// <remarks>
-/// A database holds records. A record is a
-/// <see cref="Godot.Collections.Dictionary"/> complete against a
-/// <see cref="NetwSchema"/>, stored under a durable <see cref="StringName"/>
-/// id, inside one slot. A slot is one independent set of records, which is what
-/// a game draws as a save file. A database admits no work until its
-/// <see cref="NetwDatabase.Open"/> has settled. Await it before starting play.
+/// <see cref="NetwEntity"/>, <see cref="NetwTableHandle"/> and your own code
+/// save and load their state through a <see cref="NetwDatabase"/>. A
+/// <see cref="NetwDatabaseBackend"/> does the actual storage. A record is a
+/// <see cref="Godot.Collections.Dictionary"/> stored under a
+/// <see cref="StringName"/> id. Its <see cref="NetwSchema"/> is the table
+/// definition and the record is a row in it. Await
+/// <see cref="NetwDatabase.Open"/> before reading or writing.
 /// <code>
 /// func _ready() -&gt; void:
-///     Netw.configure_database(self, &amp;"saves").backend(preload("res://save_backend.tres"))
+///     Netw.configure_database(self, &amp;"saves").backend(preload("res://filesystem_backend.tres"))
 ///
 /// func start_game(slot: StringName) -&gt; void:
 ///     var db: NetwDatabase = Netw.database(self, &amp;"saves")
@@ -27,20 +28,6 @@ namespace Networked;
 ///         return
 ///     enter_game()
 /// </code>
-/// <para>
-/// Every asynchronous method answers a <see cref="NetwPromise"/>. Read its
-/// settled value with <c>await promise.wait()</c>. A call refused on entry
-/// fails the promise, and <c>wait()</c> then answers the
-/// <c>@GlobalScope.Error</c>. Operations on one record settle in the order they
-/// were admitted, however long an earlier one takes, and that includes a read
-/// after a write. Operations on different records do not wait for each other.
-/// The values a write submits are frozen when it is admitted, so changing the
-/// <see cref="Godot.Collections.Dictionary"/> afterwards cannot change what is
-/// stored. An entity row that fails to load or save emits
-/// <see cref="NetwDatabase.Failed"/>. Rows also save on their own interval and
-/// when their entity leaves, so this signal is where a game hears about a save
-/// nobody awaited.
-/// </para>
 /// </remarks>
 public sealed class NetwDatabase : NetwRefCounted
 {
@@ -59,13 +46,10 @@ public sealed class NetwDatabase : NetwRefCounted
     }
 
     /// <summary>
-    /// Emitted when an entity row in this database fails to load or save.
-    /// <c>detail</c> names the record. A failed load emits no
-    /// <see cref="NetwPersistenceHandle.Loaded"/> and a failed save emits no
-    /// <see cref="NetwPersistenceHandle.Saved"/>.
-    /// <c>NetwMultiplayer.database_failed</c>. A load or save that settles
-    /// after session authority moved or the database closed is canceled and
-    /// emits nothing.
+    /// Emitted when an entity fails to load or save its record. <c>error</c> is
+    /// one of the codes <see cref="NetwPersistenceHandle.Load"/> and
+    /// <see cref="NetwPersistenceHandle.Save"/> list, and <c>detail</c> names
+    /// the record and what went wrong.
     /// <code>
     /// func _ready() -&gt; void:
     ///     Netw.database(self, &amp;"saves").failed.connect(show_save_error)
@@ -73,10 +57,6 @@ public sealed class NetwDatabase : NetwRefCounted
     /// func show_save_error(_error: Error, detail: String) -&gt; void:
     ///     status.text = detail
     /// </code>
-    /// <para>
-    /// A row that failed to save stays owed, and
-    /// <see cref="NetwSessionHandle.SaveEntities"/> writes it again.
-    /// </para>
     /// </summary>
     public event Action<long, string> Failed
     {
@@ -107,7 +87,6 @@ public sealed class NetwDatabase : NetwRefCounted
 
     /// <summary>
     /// The open slot, or empty when this database is not open.
-    /// <c>NetwMultiplayer.database_get_slot</c>.
     /// </summary>
     public StringName Slot
     {
@@ -125,9 +104,7 @@ public sealed class NetwDatabase : NetwRefCounted
         NetwApi.MethodBind("NetwDatabase", "get_state", 1003870803UL);
 
     /// <summary>
-    /// A <see cref="NetwMultiplayer.DatabaseState"/> saying whether this
-    /// database is closed, opening, open, closing or faulted.
-    /// <c>NetwMultiplayer.database_get_state</c>.
+    /// The state of the connection to the <see cref="NetwDatabaseBackend"/>.
     /// </summary>
     public NetwMultiplayer.DatabaseState State
     {
@@ -144,14 +121,19 @@ public sealed class NetwDatabase : NetwRefCounted
 
     /// <summary>
     /// Opens <paramref name="slot"/> and settles with an
-    /// <c>@GlobalScope.Error</c>. Nothing this database admits reaches storage
-    /// before it settles. <c>NetwMultiplayer.database_open</c>. Opening the
-    /// slot that is already open succeeds without reopening it. A second open
-    /// of the same slot while the first is still running shares that first
-    /// result. Opening a different slot is refused with
-    /// <c>@GlobalScope.ERR_BUSY</c>, so close the one that is open first. An
-    /// open that fails leaves the database closed, which is what makes a retry
-    /// safe.
+    /// <c>@GlobalScope.Error</c>. To switch slots,
+    /// <see cref="NetwDatabase.Close"/> the open one first.
+    /// <code>
+    /// Error
+    /// ┠╴OK                slot is open, or was open already
+    /// ┠╴ERR_BUSY          another slot is open or opening, or the database is closing
+    /// ┠╴ERR_UNCONFIGURED  the database declares no backend
+    /// ┠╴ERR_CANT_CREATE   the backend resolved no connection
+    /// ┠╴ERR_INVALID_DATA  the backend's _open answered no promise
+    /// ┠╴ERR_UNAVAILABLE   this handle outlived its session, or the backend implements
+    /// │                   no _open
+    /// ┖╴backend-defined   the backend could not open slot
+    /// </code>
     /// </summary>
     public NetwPromise Open(StringName slot)
     {
@@ -171,12 +153,13 @@ public sealed class NetwDatabase : NetwRefCounted
         NetwApi.MethodBind("NetwDatabase", "close", 1931563502UL);
 
     /// <summary>
-    /// Stops admitting work, waits for everything already admitted to settle,
-    /// releases the slot and advances this database's generation, then settles
-    /// with an <c>@GlobalScope.Error</c>.
-    /// <c>NetwMultiplayer.database_close</c>. An operation issued before the
-    /// close settles normally. One that was still outstanding when the
-    /// connection went away settles as canceled and never as a save.
+    /// Stops accepting new operations, waits for the pending ones to settle,
+    /// and settles with a <c>@GlobalScope.Error</c>.
+    /// <code>
+    /// Error
+    /// ┠╴OK               the database is closed
+    /// ┖╴ERR_UNAVAILABLE  this handle outlived the session that issued it
+    /// </code>
     /// </summary>
     public NetwPromise Close()
     {
@@ -189,10 +172,13 @@ public sealed class NetwDatabase : NetwRefCounted
         NetwApi.MethodBind("NetwDatabase", "flush", 1931563502UL);
 
     /// <summary>
-    /// Settles with an <c>@GlobalScope.Error</c> once every operation admitted
-    /// before this call has settled. It gathers no new state, so a value
-    /// changed after the call is not included.
-    /// <c>NetwMultiplayer.database_flush</c>.
+    /// Settles with an <c>@GlobalScope.Error</c> once every operation started
+    /// before this call has settled.
+    /// <code>
+    /// Error
+    /// ┠╴OK               every earlier operation settled, whatever each one settled with
+    /// ┖╴ERR_UNAVAILABLE  the session ended first, or this handle outlived it
+    /// </code>
     /// </summary>
     public NetwPromise Flush()
     {
@@ -206,12 +192,9 @@ public sealed class NetwDatabase : NetwRefCounted
 
     /// <summary>
     /// Reads the record at <paramref name="id"/> and settles with a
-    /// <see cref="Godot.Collections.Dictionary"/> snapshot.
-    /// <c>NetwMultiplayer.database_read</c>. Absence and failure are separate
-    /// answers. A record nobody has saved yet settles with <c>found</c> false
-    /// and <c>error</c> OK, and a record storage could not be asked about
-    /// carries the error. A read on a closed database, with an unsealed schema
-    /// or an empty id, fails the promise.
+    /// <see cref="Godot.Collections.Dictionary"/>. A record that was never
+    /// saved settles with <c>found</c> <c>false</c> and <c>error</c>
+    /// <c>@GlobalScope.OK</c>.
     /// <code>
     /// Dictionary
     /// ┠╴error    Error       @GlobalScope.Error. Check it before reading anything else
@@ -219,7 +202,7 @@ public sealed class NetwDatabase : NetwRefCounted
     /// ┠╴found    bool        whether a record was stored under id. False on any failure
     /// ┠╴id       StringName  the record id the read asked for
     /// ┖╴values   Dictionary  the stored row, keyed by column name, complete against the
-    ///                       schema that read it. Empty unless found is true
+    ///                     	schema that read it. Empty unless found is true
     /// </code>
     /// <code>
     /// var read: Dictionary = await db.read(PlayerSave.schema, account_id).wait()
@@ -229,10 +212,6 @@ public sealed class NetwDatabase : NetwRefCounted
     /// if read.found:
     ///     player.gold = read.values[&amp;"gold"]
     /// </code>
-    /// <para>
-    /// <c>values</c> is the caller's own copy, so changing it cannot reach
-    /// stored state.
-    /// </para>
     /// </summary>
     public NetwPromise Read(NetwSchema schema, StringName id)
     {
@@ -257,12 +236,19 @@ public sealed class NetwDatabase : NetwRefCounted
 
     /// <summary>
     /// Replaces the whole record at <paramref name="id"/> and settles with an
-    /// <c>@GlobalScope.Error</c>. <c>NetwMultiplayer.database_write</c>.
-    /// <paramref name="values"/> must carry every column
-    /// <paramref name="schema"/> declares, at the declared type and stride, and
-    /// nothing else. A row that does not is refused before the backend sees it,
-    /// so a bad write never reaches storage. A successful write means the
-    /// backing store acknowledged it.
+    /// <c>@GlobalScope.Error</c>. <paramref name="values"/> must hold every
+    /// column <paramref name="schema"/> declares and nothing else.
+    /// <code>
+    /// Error
+    /// ┠╴OK                  the backend acknowledged the write
+    /// ┠╴ERR_UNCONFIGURED    the database is not open
+    /// ┠╴ERR_DOES_NOT_EXIST  the schema is not sealed
+    /// ┠╴ERR_INVALID_PARAMETER
+    /// │                     id is empty
+    /// ┠╴ERR_INVALID_DATA    values do not exactly match the schema
+    /// ┠╴ERR_UNAVAILABLE     the backend or connection cannot perform the write
+    /// ┖╴backend-defined     the backend rejected or could not complete the write
+    /// </code>
     /// <code>
     /// var error: Error = await db.write(PlayerSave.schema, account_id, {
     ///     &amp;"gold": player.gold,
@@ -303,13 +289,28 @@ public sealed class NetwDatabase : NetwRefCounted
         NetwApi.MethodBind("NetwDatabase", "patch", 659202569UL);
 
     /// <summary>
-    /// Replaces the fields <paramref name="values"/> names in the record at
-    /// <paramref name="id"/>, keeps the rest, and settles with an
-    /// <c>@GlobalScope.Error</c>. <c>NetwMultiplayer.database_patch</c>. A
-    /// record that is not there is refused with
-    /// <c>@GlobalScope.ERR_DOES_NOT_EXIST</c>, because a patch has nothing to
-    /// merge into. An empty <paramref name="values"/> succeeds without touching
-    /// storage. A field the schema does not declare refuses the whole patch.
+    /// Replaces the columns <paramref name="values"/> names in the existing
+    /// record at <paramref name="id"/>, keeps the rest, and settles with an
+    /// <c>@GlobalScope.Error</c>. <paramref name="values"/> may hold any subset
+    /// of the columns in <paramref name="schema"/>.
+    /// <code>
+    /// Error
+    /// ┠╴OK                  the backend acknowledged the merged record, or values is empty
+    /// ┠╴ERR_UNCONFIGURED    the database is not open, or the schema declares no
+    /// │                     migration from the stored record's storage version
+    /// ┠╴ERR_BUSY            the database already holds 4096 unsettled operations
+    /// ┠╴ERR_DOES_NOT_EXIST  the schema is not sealed, or no record is stored at id
+    /// ┠╴ERR_INVALID_PARAMETER
+    /// │                     id is empty
+    /// ┠╴ERR_INVALID_DATA    values names an undeclared column or a value its column
+    /// │                     refuses, or the stored record does not match the schema
+    /// ┠╴ERR_FILE_UNRECOGNIZED
+    /// │                     the stored record is not in this library's format, or
+    /// │                     carries a newer storage version than the schema
+    /// ┠╴ERR_UNAVAILABLE     the backend or connection cannot perform the patch, or the
+    /// │                     database closed before it settled
+    /// ┖╴backend-defined     the backend could not read or write the record
+    /// </code>
     /// </summary>
     public NetwPromise Patch(
         NetwSchema schema,
@@ -344,9 +345,21 @@ public sealed class NetwDatabase : NetwRefCounted
         NetwApi.MethodBind("NetwDatabase", "erase", 794457893UL);
 
     /// <summary>
-    /// Removes the record at <paramref name="id"/> and settles with an
-    /// <c>@GlobalScope.Error</c>. Erasing a record that is not there succeeds.
-    /// <c>NetwMultiplayer.database_erase</c>.
+    /// Removes the record at <paramref name="id"/> and settles with a
+    /// <c>@GlobalScope.Error</c>.
+    /// <code>
+    /// Error
+    /// ┠╴OK                  the backend acknowledged the erase
+    /// ┠╴ERR_UNCONFIGURED    the database is not open
+    /// ┠╴ERR_BUSY            the database already holds 4096 unsettled operations
+    /// ┠╴ERR_DOES_NOT_EXIST  the schema is not sealed
+    /// ┠╴ERR_INVALID_PARAMETER
+    /// │                     id is empty
+    /// ┠╴ERR_INVALID_DATA    the connection answered no outcome for the erase
+    /// ┠╴ERR_UNAVAILABLE     the backend or connection cannot perform the erase, or the
+    /// │                     database closed before it settled
+    /// ┖╴backend-defined     the backend rejected or could not complete the erase
+    /// </code>
     /// </summary>
     public NetwPromise Erase(NetwSchema schema, StringName id)
     {
@@ -370,21 +383,37 @@ public sealed class NetwDatabase : NetwRefCounted
         NetwApi.MethodBind("NetwDatabase", "scan", 2758729333UL);
 
     /// <summary>
-    /// Reads storage a page at a time, settling with a
-    /// <see cref="Godot.Collections.Dictionary"/> of up to
-    /// <paramref name="limit"/> records matching <paramref name="filter"/>.
-    /// <c>NetwMultiplayer.database_scan</c>. A page fails whole, so a single
-    /// record the schema cannot read leaves <c>records</c> empty and
-    /// <c>error</c> set. An empty <c>records</c> with a nonempty <c>cursor</c>
-    /// means this page matched nothing, not that the scan is finished. Pass the
-    /// page's cursor back as <paramref name="cursor"/> to continue. The scan is
-    /// finished when <c>cursor</c> is empty.
+    /// Reads one page of up to <paramref name="limit"/> records matching
+    /// <paramref name="filter"/>, and settles with a
+    /// <see cref="Godot.Collections.Dictionary"/>. Pass the returned
+    /// <c>cursor</c> back as <paramref name="cursor"/> to read the next page.
+    /// The scan is done when <c>cursor</c> is empty.
     /// <code>
     /// Dictionary
     /// ┠╴error    Error             @GlobalScope.Error. Check it before reading records
+    /// │ ┠╴OK                     the page was read
+    /// │ ┠╴ERR_FILE_UNRECOGNIZED  a record is not in this library's format, or carries
+    /// │ │                        a newer storage version than the schema
+    /// │ ┠╴ERR_INVALID_DATA       a record does not match the schema
+    /// │ ┠╴ERR_UNCONFIGURED       the schema declares no migration from a record's
+    /// │ │                        storage version
+    /// │ ┠╴ERR_UNAVAILABLE        this handle outlived its session, or the connection
+    /// │ │                        implements no _scan
+    /// │ ┖╴backend-defined        the backend could not read the page
     /// ┠╴detail   String            what went wrong, for a person to read. Empty when error is OK
-    /// ┠╴records  Array[Dictionary]  each one a read reply, drawn on [method read]
+    /// ┠╴records  Array[Dictionary]  each one shaped like a read reply
     /// ┖╴cursor   String            pass this back to scan to continue. Empty when no records remain
+    /// </code>
+    /// <para>
+    /// These fail the promise instead, and <see cref="NetwPromise.Wait"/>
+    /// returns the code.
+    /// <code>
+    /// Error
+    /// ┠╴ERR_UNCONFIGURED       the database is not open
+    /// ┠╴ERR_BUSY               the database already holds 4096 unsettled operations
+    /// ┠╴ERR_DOES_NOT_EXIST     the schema is not sealed
+    /// ┠╴ERR_INVALID_PARAMETER  limit is below 1
+    /// ┖╴ERR_UNAVAILABLE        the database closed before the page settled
     /// </code>
     /// <code>
     /// var cursor := ""
@@ -399,6 +428,7 @@ public sealed class NetwDatabase : NetwRefCounted
     ///         break
     ///     cursor = page.cursor
     /// </code>
+    /// </para>
     /// </summary>
     public NetwPromise Scan(
         NetwSchema schema,
@@ -438,14 +468,18 @@ public sealed class NetwDatabase : NetwRefCounted
         NetwApi.MethodBind("NetwDatabase", "list_slots", 1931563502UL);
 
     /// <summary>
-    /// Answers every slot this backend holds, including a slot written by an
-    /// earlier run. Works before <see cref="NetwDatabase.Open"/>.
-    /// <c>NetwMultiplayer.database_list_slots</c>.
+    /// Lists every slot the <see cref="NetwDatabaseBackend"/> holds, and
+    /// settles with a <see cref="Godot.Collections.Dictionary"/>. Works before
+    /// <see cref="NetwDatabase.Open"/>.
     /// <code>
     /// Dictionary
-    /// ┠╴error   Error              @GlobalScope.Error. Check it before reading slots
-    /// ┠╴detail  String             what went wrong, for a person to read. Empty when error is OK
-    /// ┖╴slots   PackedStringArray  every slot this backend holds, whether or not this process wrote it
+    /// ┠╴error    Error         		@GlobalScope.Error. Check it before reading slots
+    /// │ ┠╴OK                   		listing succeeded
+    /// │ ┠╴ERR_UNAVAILABLE      		the backend does not implement slot listing
+    /// │ ┖╴backend-defined      		the backend could not read its storage
+    /// ┠╴detail   String        		empty when error is OK, otherwise a human-readable
+    /// │                            		explanation from the backend
+    /// ┖╴slots    PackedStringArray  	every slot the backend holds when error is OK
     /// </code>
     /// </summary>
     public NetwPromise ListSlots()
@@ -460,11 +494,17 @@ public sealed class NetwDatabase : NetwRefCounted
 
     /// <summary>
     /// Removes <paramref name="slot"/> and everything stored in it, then
-    /// settles with an <c>@GlobalScope.Error</c>. Deleting the slot this
-    /// process holds open is refused with <c>@GlobalScope.ERR_BUSY</c>.
-    /// <c>NetwMultiplayer.database_delete_slot</c>. This is an administration
-    /// call. It works before <see cref="NetwDatabase.Open"/>, which is how a
-    /// menu deletes a save the game has not loaded.
+    /// settles with a <c>@GlobalScope.Error</c>. The slot must not be open.
+    /// <code>
+    /// Error
+    /// ┠╴OK                the backend removed the slot
+    /// ┠╴ERR_BUSY          slot is the one this database holds open
+    /// ┠╴ERR_UNCONFIGURED  the database declares no backend
+    /// ┠╴ERR_UNAVAILABLE   this handle outlived its session, or the backend
+    /// │                   implements no _delete_slot
+    /// ┠╴ERR_INVALID_DATA  the backend's _delete_slot answered no promise
+    /// ┖╴backend-defined   the backend could not remove the slot
+    /// </code>
     /// </summary>
     public NetwPromise DeleteSlot(StringName slot)
     {
@@ -485,8 +525,7 @@ public sealed class NetwDatabase : NetwRefCounted
 
     /// <summary>
     /// Returns a <see cref="NetwWriteBatch"/> that submits several writes and
-    /// erasures to this database in one call. It is synchronous, and nothing
-    /// reaches storage until the batch is submitted.
+    /// erasures in one call.
     /// </summary>
     public NetwWriteBatch Batch()
     {

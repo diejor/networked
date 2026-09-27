@@ -79,8 +79,7 @@ TEST_CASE(
     );
 
     scheduler.accept(PEER, 7, 2);
-    const bool too_soon
-        = scheduler.due(PEER, CONTROL_FLUSH_PERIOD_MS - 1);
+    const bool too_soon = scheduler.due(PEER, CONTROL_FLUSH_PERIOD_MS - 1);
     CHECK(!too_soon);
     NETW_CHECK_EQ(
         scheduler
@@ -150,8 +149,7 @@ TEST_CASE(
     for (uint64_t at = 1; at <= 40; ++at) {
         scheduler.accept(PEER, at, at);
     }
-    const godot::LocalVector<ControlRecord> tight
-        = scheduler.flush(PEER, 0, 8);
+    const godot::LocalVector<ControlRecord> tight = scheduler.flush(PEER, 0, 8);
     NETW_CHECK_EQ(tight.size(), 0);
     NETW_CHECK_EQ(scheduler.pending_receipts(PEER), 40);
 
@@ -212,9 +210,7 @@ TEST_CASE(
     NETW_CHECK_EQ(one_receipt ? out[0].receipts[0].token : 0, 8);
 }
 
-TEST_CASE(
-    "[Networked][Wire][Hosted] a forgotten peer owes no control at all"
-) {
+TEST_CASE("[Networked][Wire][Hosted] a forgotten peer owes no control at all") {
     ControlScheduler scheduler;
     scheduler.accept(PEER, 7, 4);
     scheduler.queue(PEER, open_of(3, 0, 1));

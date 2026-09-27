@@ -1,30 +1,24 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <class name="NetwWriteBatch" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
 	<brief_description>
-		Several record writes and erasures, submitted to one database in one call.
+		Several record writes and erasures submitted to a [NetwDatabase] in one call.
 	</brief_description>
 	<description>
-		A batch is built synchronously and reaches storage only at [method submit]. It is validated whole first, so an invalid batch writes nothing at all.
+		Nothing reaches storage until [method submit]. If any [method write] or [method erase] call was refused, submitting writes nothing and reports that error.
 		[codeblock]
 		var batch: NetwWriteBatch = db.batch()
 		batch.write(PlayerSave.schema, first_id, first_values)
 		batch.erase(PlayerSave.schema, second_id)
-		var result: Dictionary = await batch.submit().wait()
-		[/codeblock]
-		The builders answer an [enum @GlobalScope.Error] each, and the batch remembers the first one that was not OK. Submitting after a refused builder call performs no I/O and reports that error, so a caller who ignored a builder result still cannot write half a batch.
-		A batch seals at submission. Adding to it afterwards, or submitting it twice, is refused with [constant @GlobalScope.ERR_LOCKED].
-		Batching is not a transaction. Operations are applied in order and each reports its own outcome, and a backend failure partway can leave the earlier ones applied.
-		[b]The batch reply[/b]
-		The reply [method submit] settles with carries [code]errors[/code] and [code]uncertain[/code] parallel to the operations in the order they were added.
-		[codeblock]
+
 		var result: Dictionary = await batch.submit().wait()
 		for at in result.errors.size():
 		    if result.uncertain[at] == 1:
+		        # the write may or may not have landed, read it back before retrying
 		        reconcile_later(at)
 		    elif result.errors[at] != OK:
 		        retry_later(at)
 		[/codeblock]
-		An uncertain operation is one whose outcome the backend could not establish, such as a write that timed out after it was sent. It is neither a success nor a failure, and retrying it blindly can write an old value over a newer one. Read the stored record back before deciding.
+		A batch is not a transaction. Operations are applied in order, and a failure partway can leave the earlier ones applied.
 	</description>
 	<tutorials>
 	</tutorials>
@@ -48,13 +42,13 @@
 		<method name="submit">
 			<return type="NetwPromise" />
 			<description>
-				Seals this batch, sends it, and settles with a [Dictionary]. An empty batch succeeds without touching storage.
+				Sends this batch and settles with a [Dictionary]. A batch can be submitted once.
 				[codeblock lang=text]
 				Dictionary
 				┠╴error      Error             @GlobalScope.Error. Check it before reading errors
 				│ ┠╴OK                 every operation landed
 				│ ┠╴ERR_LOCKED         this batch was submitted already
-				│ ┠╴a builder's code   the first builder call this batch refused, so none of it ran
+				│ ┠╴a builder's code   the first write or erase this batch refused, nothing ran
 				│ ┠╴ERR_UNAVAILABLE    this batch outlived its session, or the connection
 				│ │                    implements no _write_batch
 				│ ┠╴ERR_INVALID_DATA   the connection answered a different number of outcomes
@@ -66,7 +60,7 @@
 				┖╴uncertain  PackedByteArray   1 where the operation at that index has an outcome
 				                               the backend could not establish, 0 otherwise
 				[/codeblock]
-				A database that cannot admit the batch fails the promise, and [method NetwPromise.wait] answers the code.
+				These fail the promise instead, and [method NetwPromise.wait] returns the code.
 				[codeblock lang=text]
 				Error
 				┠╴ERR_UNCONFIGURED  the database is not open
@@ -81,7 +75,7 @@
 			<param index="1" name="id" type="StringName" />
 			<param index="2" name="values" type="Dictionary" />
 			<description>
-				Adds a complete replacement of the record at [param id]. [param values] must be complete against [param schema], the same as [method NetwDatabase.write] requires.
+				Adds a write of the whole record at [param id], like [method NetwDatabase.write].
 				[codeblock lang=text]
 				Error
 				┠╴OK                     the write was added

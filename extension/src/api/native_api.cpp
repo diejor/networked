@@ -56,54 +56,38 @@ int64_t address_of(void *p_function) {
 
 Dictionary native_api_table() {
     Dictionary functions;
-    functions["method_bind"] = address_of(
-        reinterpret_cast<void *>(&netw_native_method_bind)
-    );
-    functions["ptrcall0"] = address_of(
-        reinterpret_cast<void *>(&netw_native_ptrcall0)
-    );
-    functions["ptrcall1"] = address_of(
-        reinterpret_cast<void *>(&netw_native_ptrcall1)
-    );
-    functions["ptrcall2"] = address_of(
-        reinterpret_cast<void *>(&netw_native_ptrcall2)
-    );
-    functions["ptrcall3"] = address_of(
-        reinterpret_cast<void *>(&netw_native_ptrcall3)
-    );
-    functions["call0"] = address_of(
-        reinterpret_cast<void *>(&netw_native_call0)
-    );
-    functions["call1"] = address_of(
-        reinterpret_cast<void *>(&netw_native_call1)
-    );
-    functions["call2"] = address_of(
-        reinterpret_cast<void *>(&netw_native_call2)
-    );
-    functions["call3"] = address_of(
-        reinterpret_cast<void *>(&netw_native_call3)
-    );
-    functions["call4"] = address_of(
-        reinterpret_cast<void *>(&netw_native_call4)
-    );
-    functions["args_new"] = address_of(
-        reinterpret_cast<void *>(&netw_native_args_new)
-    );
-    functions["args_set"] = address_of(
-        reinterpret_cast<void *>(&netw_native_args_set)
-    );
-    functions["call_pack"] = address_of(
-        reinterpret_cast<void *>(&netw_native_call_pack)
-    );
-    functions["args_free"] = address_of(
-        reinterpret_cast<void *>(&netw_native_args_free)
-    );
-    functions["retain"] = address_of(
-        reinterpret_cast<void *>(&netw_native_retain)
-    );
-    functions["release"] = address_of(
-        reinterpret_cast<void *>(&netw_native_release)
-    );
+    functions["method_bind"]
+        = address_of(reinterpret_cast<void *>(&netw_native_method_bind));
+    functions["ptrcall0"]
+        = address_of(reinterpret_cast<void *>(&netw_native_ptrcall0));
+    functions["ptrcall1"]
+        = address_of(reinterpret_cast<void *>(&netw_native_ptrcall1));
+    functions["ptrcall2"]
+        = address_of(reinterpret_cast<void *>(&netw_native_ptrcall2));
+    functions["ptrcall3"]
+        = address_of(reinterpret_cast<void *>(&netw_native_ptrcall3));
+    functions["call0"]
+        = address_of(reinterpret_cast<void *>(&netw_native_call0));
+    functions["call1"]
+        = address_of(reinterpret_cast<void *>(&netw_native_call1));
+    functions["call2"]
+        = address_of(reinterpret_cast<void *>(&netw_native_call2));
+    functions["call3"]
+        = address_of(reinterpret_cast<void *>(&netw_native_call3));
+    functions["call4"]
+        = address_of(reinterpret_cast<void *>(&netw_native_call4));
+    functions["args_new"]
+        = address_of(reinterpret_cast<void *>(&netw_native_args_new));
+    functions["args_set"]
+        = address_of(reinterpret_cast<void *>(&netw_native_args_set));
+    functions["call_pack"]
+        = address_of(reinterpret_cast<void *>(&netw_native_call_pack));
+    functions["args_free"]
+        = address_of(reinterpret_cast<void *>(&netw_native_args_free));
+    functions["retain"]
+        = address_of(reinterpret_cast<void *>(&netw_native_retain));
+    functions["release"]
+        = address_of(reinterpret_cast<void *>(&netw_native_release));
 
     Dictionary table;
     table["version"] = ABI_VERSION;
@@ -234,8 +218,8 @@ void netw_native_args_set(void *p_pack, int64_t p_index, const void *p_value) {
     if (p_index < 0 || uint32_t(p_index) >= pack->values.size()) {
         return;
     }
-    pack->values[uint32_t(p_index)] =
-        *reinterpret_cast<const Variant *>(p_value);
+    pack->values[uint32_t(p_index)]
+        = *reinterpret_cast<const Variant *>(p_value);
 }
 
 void netw_native_call_pack(

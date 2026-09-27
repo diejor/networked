@@ -277,10 +277,7 @@ void NetwClockConfig::_bind_methods() {
         D_METHOD("physics_interpolation", "use_physics_interpolation"),
         &NetwClockConfig::physics_interpolation
     );
-    ClassDB::bind_method(
-        D_METHOD("sync", "sync_mode"),
-        &NetwClockConfig::sync
-    );
+    ClassDB::bind_method(D_METHOD("sync", "sync_mode"), &NetwClockConfig::sync);
 }
 
 Ref<NetwClockConfig> NetwClockConfig::ticks_per_second(int64_t p_value) {

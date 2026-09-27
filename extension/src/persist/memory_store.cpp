@@ -115,8 +115,8 @@ Array MemoryStore::page(
     }
     addresses.sort();
 
-    const String prefix = String::num_int64(p_kind) + "/"
-        + p_schema_name.uri_encode() + "/";
+    const String prefix
+        = String::num_int64(p_kind) + "/" + p_schema_name.uri_encode() + "/";
     int taken = 0;
     for (int at = 0; at < addresses.size(); ++at) {
         const String address = addresses[at];
@@ -210,11 +210,8 @@ Ref<NetwPromise> MemoryConnection::read(const Dictionary &p_address) {
         return NetwPromise::rejected(code, "the memory store was told to fail");
     }
     Dictionary envelope;
-    const bool found = store_named(root).read(
-        slot,
-        address_text(p_address),
-        envelope
-    );
+    const bool found
+        = store_named(root).read(slot, address_text(p_address), envelope);
     Dictionary reply;
     reply[KEY_ERROR] = int(OK);
     reply[KEY_DETAIL] = String();
