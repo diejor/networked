@@ -33,25 +33,9 @@ Properties
 .. table::
    :widths: auto
 
-   +---------------------+---------------------------------------------------+
-   | :godot:`StringName` | :ref:`store<class_MemoryDatabase_property_store>` |
-   +---------------------+---------------------------------------------------+
-
-.. rst-class:: classref-reftable-group
-
-Methods
--------
-
-.. table::
-   :widths: auto
-
-   +---------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwPromise<class_NetwPromise>` | :ref:`_delete_slot<class_MemoryDatabase_private_method__delete_slot>`\ (\ session\: :godot:`Object`, slot\: :godot:`StringName`\ ) |virtual| |
-   +---------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwPromise<class_NetwPromise>` | :ref:`_list_slots<class_MemoryDatabase_private_method__list_slots>`\ (\ session\: :godot:`Object`\ ) |virtual|                               |
-   +---------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwPromise<class_NetwPromise>` | :ref:`_open<class_MemoryDatabase_private_method__open>`\ (\ session\: :godot:`Object`, slot\: :godot:`StringName`\ ) |virtual|               |
-   +---------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------+
+   +---------------------+---------------------------------------------------+---------+
+   | :godot:`StringName` | :ref:`store<class_MemoryDatabase_property_store>` | ``&""`` |
+   +---------------------+---------------------------------------------------+---------+
 
 .. rst-class:: classref-section-separator
 
@@ -66,7 +50,7 @@ Property Descriptions
 
 .. rst-class:: classref-property
 
-:godot:`StringName` **store** :ref:`🔗<class_MemoryDatabase_property_store>`
+:godot:`StringName` **store** = ``&""`` :ref:`🔗<class_MemoryDatabase_property_store>`
 
 .. rst-class:: classref-property-setget
 
@@ -74,47 +58,6 @@ Property Descriptions
 - :godot:`StringName` **get_store**\ (\ )
 
 The name of the in-memory store this backend keeps its records in. Backends with the same :ref:`store<class_MemoryDatabase_property_store>` share records.
-
-.. rst-class:: classref-section-separator
-
-----
-
-.. rst-class:: classref-descriptions-group
-
-Method Descriptions
--------------------
-
-.. _class_MemoryDatabase_private_method__delete_slot:
-
-.. rst-class:: classref-method
-
-:ref:`NetwPromise<class_NetwPromise>` **_delete_slot**\ (\ session\: :godot:`Object`, slot\: :godot:`StringName`\ ) |virtual| :ref:`🔗<class_MemoryDatabase_private_method__delete_slot>`
-
-Removes ``slot`` and every record in it from :ref:`store<class_MemoryDatabase_property_store>`. Resolves :godot:`@GlobalScope.OK <@GlobalScope#class_@GlobalScope_constant_OK>` even when the slot did not exist.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_MemoryDatabase_private_method__list_slots:
-
-.. rst-class:: classref-method
-
-:ref:`NetwPromise<class_NetwPromise>` **_list_slots**\ (\ session\: :godot:`Object`\ ) |virtual| :ref:`🔗<class_MemoryDatabase_private_method__list_slots>`
-
-Resolves every slot :ref:`store<class_MemoryDatabase_property_store>` holds.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_MemoryDatabase_private_method__open:
-
-.. rst-class:: classref-method
-
-:ref:`NetwPromise<class_NetwPromise>` **_open**\ (\ session\: :godot:`Object`, slot\: :godot:`StringName`\ ) |virtual| :ref:`🔗<class_MemoryDatabase_private_method__open>`
-
-Resolves a :ref:`NetwDatabaseConnection<class_NetwDatabaseConnection>` for ``slot`` in :ref:`store<class_MemoryDatabase_property_store>`, creating the slot if needed.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

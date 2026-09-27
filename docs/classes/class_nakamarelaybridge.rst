@@ -12,21 +12,14 @@ NakamaRelayBridge
 
 **Inherits:** :godot:`RefCounted`
 
-Adapts a Nakama realtime match socket into a :ref:`NakamaRelayPeer<class_NakamaRelayPeer>`.
+Turns a Nakama match into a :ref:`NakamaRelayPeer<class_NakamaRelayPeer>`.
 
 .. rst-class:: classref-introduction-group
 
 Description
 -----------
 
-Nakama sends match state by session id. The bridge assigns Godot peer ids and forwards packets between the socket and :ref:`multiplayer_peer<class_NakamaRelayBridge_property_multiplayer_peer>`.
-
-::
-
-    Nakama socket
-    ├── match presence -> peer id map
-    ├── match state    -> deliver_packet()
-    └── packet_generated() -> send_match_state_async()
+Gives each player in the match a Godot peer id, and forwards packets between the Nakama socket and :ref:`multiplayer_peer<class_NakamaRelayBridge_property_multiplayer_peer>`.
 
 .. rst-class:: classref-reftable-group
 

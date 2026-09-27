@@ -12,7 +12,7 @@ StatusDot
 
 **Inherits:** :godot:`Panel`
 
-A color-coded circular status dot indicating server health and probing.
+A colored dot showing whether a server can be reached.
 
 .. rst-class:: classref-reftable-group
 
@@ -43,7 +43,7 @@ Method Descriptions
 
 |void| **bind_result**\ (\ result\: :godot:`Dictionary`\ ) :ref:`🔗<class_StatusDot_method_bind_result>`
 
-Binds this status dot to one probe answer for a :ref:`ConnectBrowser<class_ConnectBrowser>` row.  ``result`` is a ``{ error, info }`` pair built from the ``status`` and ``info`` keys of the snapshot :ref:`NetwConnectHandle.endpoint()<class_NetwConnectHandle_method_endpoint>` answers, and an empty :godot:`Dictionary` is a row nobody has probed yet, which shows as pending rather than as a failure.
+Shows the probe ``result``, a :godot:`Dictionary` with ``error`` and ``info``. An empty ``result`` shows as checking.
 
 .. rst-class:: classref-item-separator
 
@@ -55,7 +55,7 @@ Binds this status dot to one probe answer for a :ref:`ConnectBrowser<class_Conne
 
 |void| **bind_unavailable**\ (\ ) :ref:`🔗<class_StatusDot_method_bind_unavailable>`
 
-Marks this dot as a transport that cannot run on the current platform.  Availability is distinct from a probe result, so this never routes through :ref:`bind_result()<class_StatusDot_method_bind_result>`.
+Shows that the transport does not work on this platform.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

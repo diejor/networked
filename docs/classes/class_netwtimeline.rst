@@ -12,27 +12,23 @@ NetwTimeline
 
 **Inherits:** :godot:`RefCounted`
 
-Per-entity, tick-keyed record of whole-entity state and input snapshots.
+The recent state and input of an entity, by tick.
 
 .. rst-class:: classref-introduction-group
 
 Description
 -----------
 
-State snapshots carry forward so a missing tick reads as unchanged, while input snapshots are exact so a missing tick reads as no action. Each side has exactly one writer (state: the server, input: the owning peer), so there is never a merge and no authority flags are needed.
-
-One timeline per entity serves both planes: the prediction engine reads its own state and input off it while the server's history recorder writes state into it. A second store for either plane would be a second history that agrees only by accident.
+Each entry is a :godot:`Dictionary` of property values. A tick with no state reads as the latest earlier state. A tick with no input reads as no input. The server writes state and the controlling peer writes input.
 
 ::
 
-    # Reconciliation on the owning client:
+    # on the controlling client
     var predicted := timeline.latest_state_at_or_before(ack + 1)
     if diverged(predicted, authoritative):
         for entry in timeline.inputs_in_range(ack + 1, now):
             _network_tick(entry.input, delta, entry.tick, false)
     timeline.trim_before(ack)
-
-\ Snapshots are whole-entity :godot:`Dictionary` values keyed by a tick number, with each entry mapping a state or input field key to its value. Two ring buffers back the store, one for state and one for input, so a restore is a single atomic :ref:`state_at()<class_NetwTimeline_method_state_at>` read rather than a per-property walk.
 
 .. rst-class:: classref-reftable-group
 
@@ -83,7 +79,7 @@ Constants
 
 **DEFAULT_LIMIT** = ``64`` :ref:`🔗<class_NetwTimeline_constant_DEFAULT_LIMIT>`
 
-Default ring capacity, roughly one second of ticks at 60 Hz. Reconciliation only ever replays an input window of order RTT ticks, so this is sized for the server rewind retention window, not the replay depth.
+The default number of ticks kept, about one second at 60 ticks per second.
 
 .. rst-class:: classref-section-separator
 
@@ -100,7 +96,7 @@ Method Descriptions
 
 :ref:`NetwTimeline<class_NetwTimeline>` **create**\ (\ limit\: :godot:`int` = 64\ ) |static| :ref:`🔗<class_NetwTimeline_method_create>`
 
-Returns a timeline retaining ``limit`` ticks per ring. A timeline built with ``NetwTimeline.new()`` instead uses :ref:`DEFAULT_LIMIT<class_NetwTimeline_constant_DEFAULT_LIMIT>`.
+Returns a timeline that keeps ``limit`` ticks. ``new()`` keeps :ref:`DEFAULT_LIMIT<class_NetwTimeline_constant_DEFAULT_LIMIT>`.
 
 .. rst-class:: classref-item-separator
 
@@ -112,7 +108,7 @@ Returns a timeline retaining ``limit`` ticks per ring. A timeline built with ``N
 
 :godot:`int` **floor**\ (\ ) |const| :ref:`🔗<class_NetwTimeline_method_floor>`
 
-Returns the trim watermark :ref:`trim_before()<class_NetwTimeline_method_trim_before>` last moved to. Every read treats an entry recorded strictly before it as absent.
+Returns the tick passed to :ref:`trim_before()<class_NetwTimeline_method_trim_before>`. Entries before it are ignored.
 
 .. rst-class:: classref-item-separator
 
@@ -136,9 +132,7 @@ Returns ``true`` when an input snapshot is recorded at ``tick``.
 
 :godot:`Dictionary` **input_at**\ (\ tick\: :godot:`int`\ ) |const| :ref:`🔗<class_NetwTimeline_method_input_at>`
 
-Returns the exact input snapshot at ``tick``, or an empty :godot:`Dictionary`.
-
-Input never carries forward: a missing tick is a deliberate "no action", not a stale repeat. Use :ref:`record_input()<class_NetwTimeline_method_record_input>`'s exact key, never a bracketed read.
+Returns the input at ``tick``, or an empty :godot:`Dictionary`.
 
 .. rst-class:: classref-item-separator
 
@@ -150,16 +144,14 @@ Input never carries forward: a missing tick is a deliberate "no action", not a s
 
 :godot:`Array` **inputs_in_range**\ (\ from\: :godot:`int`, to\: :godot:`int`\ ) |const| :ref:`🔗<class_NetwTimeline_method_inputs_in_range>`
 
-Returns recorded input snapshots for the inclusive tick range, tick-ascending.
-
-This is the reconciliation replay window, skipping the ticks that carry no input. The low bound is clamped to :ref:`floor()<class_NetwTimeline_method_floor>`.
+Returns the inputs from ``from`` to ``to``, both included, oldest first. Ticks with no input are skipped.
 
 .. code:: text
 
     Array[Dictionary]
     ┖╴entry
-      ┠╴tick   int         the tick this input was recorded at
-      ┖╴input  Dictionary  the exact snapshot recorded at that tick
+      ┠╴tick   int         the tick
+      ┖╴input  Dictionary  the input at that tick
 
 .. rst-class:: classref-item-separator
 
@@ -171,7 +163,7 @@ This is the reconciliation replay window, skipping the ticks that carry no input
 
 :godot:`Dictionary` **latest_state_at_or_before**\ (\ tick\: :godot:`int`\ ) |const| :ref:`🔗<class_NetwTimeline_method_latest_state_at_or_before>`
 
-Returns the newest state snapshot at or before ``tick`` (carry-forward), or an empty :godot:`Dictionary` when nothing at or before it survives :ref:`floor()<class_NetwTimeline_method_floor>`.
+Returns the newest state at or before ``tick``, or an empty :godot:`Dictionary`.
 
 .. rst-class:: classref-item-separator
 
@@ -183,15 +175,7 @@ Returns the newest state snapshot at or before ``tick`` (carry-forward), or an e
 
 :godot:`int` **latest_state_tick_at_or_before**\ (\ tick\: :godot:`int`\ ) |const| :ref:`🔗<class_NetwTimeline_method_latest_state_tick_at_or_before>`
 
-Returns the tick :ref:`latest_state_at_or_before()<class_NetwTimeline_method_latest_state_at_or_before>` would read for ``tick``, or ``-1`` when it would read nothing.
-
-Carry-forward means a read keyed at one tick can return with a snapshot recorded at an older one, so a caller comparing two peers at "the same tick" is only truly matched when this returns the tick it asked for. Read it to tell a matched comparison from one carried forward across a gap.
-
-::
-
-    var predicted := timeline.latest_state_at_or_before(ack + 1)
-    var staleness := ack + 1 - timeline.latest_state_tick_at_or_before(ack + 1)
-    # staleness == 0: the compare is matched-tick
+Returns the tick of the state :ref:`latest_state_at_or_before()<class_NetwTimeline_method_latest_state_at_or_before>` returns, or ``-1``.
 
 .. rst-class:: classref-item-separator
 
@@ -203,9 +187,7 @@ Carry-forward means a read keyed at one tick can return with a snapshot recorded
 
 :godot:`int` **newest_input_tick**\ (\ ) |const| :ref:`🔗<class_NetwTimeline_method_newest_input_tick>`
 
-Returns the newest recorded input tick, or ``-1`` when empty.
-
-The server consume step reads this to tell a lost input tick (a later one has arrived) from one that simply has not arrived yet.
+Returns the newest tick with an input, or ``-1``.
 
 .. rst-class:: classref-item-separator
 
@@ -217,7 +199,7 @@ The server consume step reads this to tell a lost input tick (a later one has ar
 
 |void| **record_input**\ (\ tick\: :godot:`int`, snapshot\: :godot:`Dictionary`\ ) :ref:`🔗<class_NetwTimeline_method_record_input>`
 
-Records an input ``snapshot`` at ``tick``.
+Records the input ``snapshot`` at ``tick``.
 
 .. rst-class:: classref-item-separator
 
@@ -229,7 +211,7 @@ Records an input ``snapshot`` at ``tick``.
 
 |void| **record_state**\ (\ tick\: :godot:`int`, snapshot\: :godot:`Dictionary`\ ) :ref:`🔗<class_NetwTimeline_method_record_state>`
 
-Records an authoritative whole-entity state ``snapshot`` at ``tick``.
+Records the state ``snapshot`` at ``tick``.
 
 .. rst-class:: classref-item-separator
 
@@ -241,7 +223,7 @@ Records an authoritative whole-entity state ``snapshot`` at ``tick``.
 
 :godot:`Dictionary` **state_at**\ (\ tick\: :godot:`int`\ ) |const| :ref:`🔗<class_NetwTimeline_method_state_at>`
 
-Returns the exact state snapshot at ``tick``, or an empty :godot:`Dictionary`.
+Returns the state recorded at exactly ``tick``, or an empty :godot:`Dictionary`.
 
 .. rst-class:: classref-item-separator
 
@@ -253,9 +235,7 @@ Returns the exact state snapshot at ``tick``, or an empty :godot:`Dictionary`.
 
 |void| **trim_before**\ (\ tick\: :godot:`int`\ ) :ref:`🔗<class_NetwTimeline_method_trim_before>`
 
-Advances the GC watermark so entries before ``tick`` read as absent.
-
-Memory is already bounded by the ring capacity, so this is a logical trim: it moves :ref:`floor()<class_NetwTimeline_method_floor>` monotonically and never rewinds it.
+Ignores entries before ``tick`` from now on. It cannot move back.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

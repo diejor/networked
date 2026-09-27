@@ -46,15 +46,15 @@ Properties
 .. table::
    :widths: auto
 
-   +---------------------+-------------------------------------------------------+
-   | :godot:`bool`       | :ref:`is_valid<class_NetwDatabase_property_is_valid>` |
-   +---------------------+-------------------------------------------------------+
-   | :godot:`StringName` | :ref:`name<class_NetwDatabase_property_name>`         |
-   +---------------------+-------------------------------------------------------+
-   | :godot:`StringName` | :ref:`slot<class_NetwDatabase_property_slot>`         |
-   +---------------------+-------------------------------------------------------+
-   | :godot:`int`        | :ref:`state<class_NetwDatabase_property_state>`       |
-   +---------------------+-------------------------------------------------------+
+   +----------------------------------------------------------+-------------------------------------------------------+
+   | :godot:`bool`                                            | :ref:`is_valid<class_NetwDatabase_property_is_valid>` |
+   +----------------------------------------------------------+-------------------------------------------------------+
+   | :godot:`StringName`                                      | :ref:`name<class_NetwDatabase_property_name>`         |
+   +----------------------------------------------------------+-------------------------------------------------------+
+   | :godot:`StringName`                                      | :ref:`slot<class_NetwDatabase_property_slot>`         |
+   +----------------------------------------------------------+-------------------------------------------------------+
+   | :ref:`DatabaseState<enum_NetwMultiplayer_DatabaseState>` | :ref:`state<class_NetwDatabase_property_state>`       |
+   +----------------------------------------------------------+-------------------------------------------------------+
 
 .. rst-class:: classref-reftable-group
 
@@ -174,11 +174,11 @@ The open slot, or empty when this database is not open.
 
 .. rst-class:: classref-property
 
-:godot:`int` **state** :ref:`🔗<class_NetwDatabase_property_state>`
+:ref:`DatabaseState<enum_NetwMultiplayer_DatabaseState>` **state** :ref:`🔗<class_NetwDatabase_property_state>`
 
 .. rst-class:: classref-property-setget
 
-- :godot:`int` **get_state**\ (\ )
+- :ref:`DatabaseState<enum_NetwMultiplayer_DatabaseState>` **get_state**\ (\ )
 
 The state of the connection to the :ref:`NetwDatabaseBackend<class_NetwDatabaseBackend>`.
 
@@ -209,7 +209,7 @@ Returns a :ref:`NetwWriteBatch<class_NetwWriteBatch>` that submits several write
 
 :ref:`NetwPromise<class_NetwPromise>` **close**\ (\ ) :ref:`🔗<class_NetwDatabase_method_close>`
 
-Stops accepting new operations, waits for the pending ones to settle, and settles with a :godot:`@GlobalScope.Error <@GlobalScope#enum_@globalscope_Error>`.
+Stops accepting new operations and waits for the pending ones to finish. The promise gives an :godot:`@GlobalScope.Error <@GlobalScope#enum_@globalscope_Error>`.
 
 .. code:: text
 
@@ -227,7 +227,7 @@ Stops accepting new operations, waits for the pending ones to settle, and settle
 
 :ref:`NetwPromise<class_NetwPromise>` **delete_slot**\ (\ slot\: :godot:`StringName`\ ) :ref:`🔗<class_NetwDatabase_method_delete_slot>`
 
-Removes ``slot`` and everything stored in it, then settles with a :godot:`@GlobalScope.Error <@GlobalScope#enum_@globalscope_Error>`. The slot must not be open.
+Removes ``slot`` and everything stored in it. The slot must not be open. The promise gives an :godot:`@GlobalScope.Error <@GlobalScope#enum_@globalscope_Error>`.
 
 .. code:: text
 
@@ -250,20 +250,20 @@ Removes ``slot`` and everything stored in it, then settles with a :godot:`@Globa
 
 :ref:`NetwPromise<class_NetwPromise>` **erase**\ (\ schema\: :ref:`NetwSchema<class_NetwSchema>`, id\: :godot:`StringName`\ ) :ref:`🔗<class_NetwDatabase_method_erase>`
 
-Removes the record at ``id`` and settles with a :godot:`@GlobalScope.Error <@GlobalScope#enum_@globalscope_Error>`.
+Removes the record at ``id``. The promise gives an :godot:`@GlobalScope.Error <@GlobalScope#enum_@globalscope_Error>`.
 
 .. code:: text
 
     Error
     ┠╴OK                  the backend acknowledged the erase
     ┠╴ERR_UNCONFIGURED    the database is not open
-    ┠╴ERR_BUSY            the database already holds 4096 unsettled operations
+    ┠╴ERR_BUSY            the database already holds 4096 pending operations
     ┠╴ERR_DOES_NOT_EXIST  the schema is not sealed
     ┠╴ERR_INVALID_PARAMETER
     │                     id is empty
     ┠╴ERR_INVALID_DATA    the connection answered no outcome for the erase
     ┠╴ERR_UNAVAILABLE     the backend or connection cannot perform the erase, or the
-    │                     database closed before it settled
+    │                     database closed before it finished
     ┖╴backend-defined     the backend rejected or could not complete the erase
 
 .. rst-class:: classref-item-separator
@@ -276,12 +276,12 @@ Removes the record at ``id`` and settles with a :godot:`@GlobalScope.Error <@Glo
 
 :ref:`NetwPromise<class_NetwPromise>` **flush**\ (\ ) :ref:`🔗<class_NetwDatabase_method_flush>`
 
-Settles with an :godot:`@GlobalScope.Error <@GlobalScope#enum_@globalscope_Error>` once every operation started before this call has settled.
+Waits for every operation started before this call to finish. The promise gives an :godot:`@GlobalScope.Error <@GlobalScope#enum_@globalscope_Error>`.
 
 .. code:: text
 
     Error
-    ┠╴OK               every earlier operation settled, whatever each one settled with
+    ┠╴OK               every earlier operation finished, whatever its result
     ┖╴ERR_UNAVAILABLE  the session ended first, or this handle outlived it
 
 .. rst-class:: classref-item-separator
@@ -294,18 +294,17 @@ Settles with an :godot:`@GlobalScope.Error <@GlobalScope#enum_@globalscope_Error
 
 :ref:`NetwPromise<class_NetwPromise>` **list_slots**\ (\ ) :ref:`🔗<class_NetwDatabase_method_list_slots>`
 
-Lists every slot the :ref:`NetwDatabaseBackend<class_NetwDatabaseBackend>` holds, and settles with a :godot:`Dictionary`. Works before :ref:`open()<class_NetwDatabase_method_open>`.
+Lists every slot the :ref:`NetwDatabaseBackend<class_NetwDatabaseBackend>` holds. Works before :ref:`open()<class_NetwDatabase_method_open>`. The promise gives a :godot:`Dictionary`.
 
 .. code:: text
 
     Dictionary
-    ┠╴error    Error         		@GlobalScope.Error. Check it before reading slots
-    │ ┠╴OK                   		listing succeeded
-    │ ┠╴ERR_UNAVAILABLE      		the backend does not implement slot listing
-    │ ┖╴backend-defined      		the backend could not read its storage
-    ┠╴detail   String        		empty when error is OK, otherwise a human-readable
-    │                            		explanation from the backend
-    ┖╴slots    PackedStringArray  	every slot the backend holds when error is OK
+    ┠╴error    Error              check it before reading slots
+    │ ┠╴OK                      listing succeeded
+    │ ┠╴ERR_UNAVAILABLE         the backend does not implement slot listing
+    │ ┖╴backend-defined         the backend could not read its storage
+    ┠╴detail   String             what went wrong, for a person to read. Empty when error is OK
+    ┖╴slots    PackedStringArray  every slot the backend holds when error is OK
 
 .. rst-class:: classref-item-separator
 
@@ -317,9 +316,7 @@ Lists every slot the :ref:`NetwDatabaseBackend<class_NetwDatabaseBackend>` holds
 
 :ref:`NetwPromise<class_NetwPromise>` **open**\ (\ slot\: :godot:`StringName`\ ) :ref:`🔗<class_NetwDatabase_method_open>`
 
-Opens ``slot`` and settles with an :godot:`@GlobalScope.Error <@GlobalScope#enum_@globalscope_Error>`.
-
-To switch slots, :ref:`close()<class_NetwDatabase_method_close>` the open one first.
+Opens ``slot``. To switch slots, :ref:`close()<class_NetwDatabase_method_close>` the open one first. The promise gives an :godot:`@GlobalScope.Error <@GlobalScope#enum_@globalscope_Error>`.
 
 .. code:: text
 
@@ -343,7 +340,7 @@ To switch slots, :ref:`close()<class_NetwDatabase_method_close>` the open one fi
 
 :ref:`NetwPromise<class_NetwPromise>` **patch**\ (\ schema\: :ref:`NetwSchema<class_NetwSchema>`, id\: :godot:`StringName`, values\: :godot:`Dictionary`\ ) :ref:`🔗<class_NetwDatabase_method_patch>`
 
-Replaces the columns ``values`` names in the existing record at ``id``, keeps the rest, and settles with an :godot:`@GlobalScope.Error <@GlobalScope#enum_@globalscope_Error>`. ``values`` may hold any subset of the columns in ``schema``.
+Replaces the columns ``values`` names in the existing record at ``id`` and keeps the rest. ``values`` may hold any subset of the columns in ``schema``. The promise gives an :godot:`@GlobalScope.Error <@GlobalScope#enum_@globalscope_Error>`.
 
 .. code:: text
 
@@ -351,7 +348,7 @@ Replaces the columns ``values`` names in the existing record at ``id``, keeps th
     ┠╴OK                  the backend acknowledged the merged record, or values is empty
     ┠╴ERR_UNCONFIGURED    the database is not open, or the schema declares no
     │                     migration from the stored record's storage version
-    ┠╴ERR_BUSY            the database already holds 4096 unsettled operations
+    ┠╴ERR_BUSY            the database already holds 4096 pending operations
     ┠╴ERR_DOES_NOT_EXIST  the schema is not sealed, or no record is stored at id
     ┠╴ERR_INVALID_PARAMETER
     │                     id is empty
@@ -361,7 +358,7 @@ Replaces the columns ``values`` names in the existing record at ``id``, keeps th
     │                     the stored record is not in this library's format, or
     │                     carries a newer storage version than the schema
     ┠╴ERR_UNAVAILABLE     the backend or connection cannot perform the patch, or the
-    │                     database closed before it settled
+    │                     database closed before it finished
     ┖╴backend-defined     the backend could not read or write the record
 
 .. rst-class:: classref-item-separator
@@ -374,7 +371,7 @@ Replaces the columns ``values`` names in the existing record at ``id``, keeps th
 
 :ref:`NetwPromise<class_NetwPromise>` **read**\ (\ schema\: :ref:`NetwSchema<class_NetwSchema>`, id\: :godot:`StringName`\ ) :ref:`🔗<class_NetwDatabase_method_read>`
 
-Reads the record at ``id`` and settles with a :godot:`Dictionary`. A record that was never saved settles with ``found`` ``false`` and ``error`` :godot:`@GlobalScope.OK <@GlobalScope#class_@GlobalScope_constant_OK>`.
+Reads the record at ``id``. The promise gives a :godot:`Dictionary`. A record that was never saved gives ``found`` ``false`` and ``error`` :godot:`@GlobalScope.OK <@GlobalScope#class_@GlobalScope_constant_OK>`.
 
 .. code:: text
 
@@ -384,7 +381,7 @@ Reads the record at ``id`` and settles with a :godot:`Dictionary`. A record that
     ┠╴found    bool        whether a record was stored under id. False on any failure
     ┠╴id       StringName  the record id the read asked for
     ┖╴values   Dictionary  the stored row, keyed by column name, complete against the
-                        	schema that read it. Empty unless found is true
+                           schema that read it. Empty unless found is true
 
 ::
 
@@ -405,7 +402,7 @@ Reads the record at ``id`` and settles with a :godot:`Dictionary`. A record that
 
 :ref:`NetwPromise<class_NetwPromise>` **scan**\ (\ schema\: :ref:`NetwSchema<class_NetwSchema>`, filter\: :godot:`Dictionary` = {}, cursor\: :godot:`String` = "", limit\: :godot:`int` = 100\ ) :ref:`🔗<class_NetwDatabase_method_scan>`
 
-Reads one page of up to ``limit`` records matching ``filter``, and settles with a :godot:`Dictionary`. Pass the returned ``cursor`` back as ``cursor`` to read the next page. The scan is done when ``cursor`` is empty.
+Reads one page of up to ``limit`` records matching ``filter``. The promise gives a :godot:`Dictionary`. Pass the cursor it returns back as ``cursor`` to read the next page. The scan is done when the returned cursor is empty.
 
 .. code:: text
 
@@ -430,10 +427,10 @@ Reads one page of up to ``limit`` records matching ``filter``, and settles with 
 
     Error
     ┠╴ERR_UNCONFIGURED       the database is not open
-    ┠╴ERR_BUSY               the database already holds 4096 unsettled operations
+    ┠╴ERR_BUSY               the database already holds 4096 pending operations
     ┠╴ERR_DOES_NOT_EXIST     the schema is not sealed
     ┠╴ERR_INVALID_PARAMETER  limit is below 1
-    ┖╴ERR_UNAVAILABLE        the database closed before the page settled
+    ┖╴ERR_UNAVAILABLE        the database closed before the page was read
 
 ::
 
@@ -444,7 +441,7 @@ Reads one page of up to ``limit`` records matching ``filter``, and settles with 
             show_load_error(page.error)
             return
         for read in page.records:
-            roster.append(read.values)
+            saves.append(read.values)
         if page.cursor.is_empty():
             break
         cursor = page.cursor
@@ -459,7 +456,7 @@ Reads one page of up to ``limit`` records matching ``filter``, and settles with 
 
 :ref:`NetwPromise<class_NetwPromise>` **write**\ (\ schema\: :ref:`NetwSchema<class_NetwSchema>`, id\: :godot:`StringName`, values\: :godot:`Dictionary`\ ) :ref:`🔗<class_NetwDatabase_method_write>`
 
-Replaces the whole record at ``id`` and settles with an :godot:`@GlobalScope.Error <@GlobalScope#enum_@globalscope_Error>`. ``values`` must hold every column ``schema`` declares and nothing else.
+Replaces the whole record at ``id``. ``values`` must hold every column ``schema`` declares and nothing else. The promise gives an :godot:`@GlobalScope.Error <@GlobalScope#enum_@globalscope_Error>`.
 
 .. code:: text
 

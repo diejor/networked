@@ -21,18 +21,15 @@ A row of named values.
 Description
 -----------
 
-Used for saved entity rows, :ref:`NetwDatabase<class_NetwDatabase>` rows, and :ref:`Netw.sample()<class_Netw_method_sample>`. It holds copies of values, not the node they came from.
+:ref:`Netw.sample()<class_Netw_method_sample>` returns one. It holds copies of values, not the node they came from.
 
 ::
 
-    var row: NetwRecord = await db.table(&"players").fetch(username)
-    var health: int = row.get_value(&"health", 100)
+    var past := Netw.sample(entity, tick)
+    var health: int = past.get_value(&"health", 100)
 
-    row.set_value(&"health", 75)
-    var hp: int = row.get_value(&"health", 100)
-
-    for key in row:
-        print(key, " = ", row.get_value(key))
+    for key in past:
+        print(key, " = ", past.get_value(key))
 
 \ A stored name can also be used as a property, so ``row.health`` calls :ref:`get_value()<class_NetwRecord_method_get_value>` and assigning to it calls :ref:`set_value()<class_NetwRecord_method_set_value>`. The record's own properties, such as ``resource_name`` or ``script``, keep their normal meaning.
 

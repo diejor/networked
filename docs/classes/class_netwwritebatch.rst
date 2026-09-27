@@ -122,7 +122,7 @@ Adds an erasure of the record at ``id``.
 
 :ref:`NetwPromise<class_NetwPromise>` **submit**\ (\ ) :ref:`🔗<class_NetwWriteBatch_method_submit>`
 
-Sends this batch and settles with a :godot:`Dictionary`. A batch can be submitted once.
+Sends this batch. A batch can be submitted once. The promise gives a :godot:`Dictionary`.
 
 .. code:: text
 
@@ -148,8 +148,8 @@ Sends this batch and settles with a :godot:`Dictionary`. A batch can be submitte
 
     Error
     ┠╴ERR_UNCONFIGURED  the database is not open
-    ┠╴ERR_BUSY          the database already holds 4096 unsettled operations
-    ┖╴ERR_UNAVAILABLE   the database closed before the batch settled
+    ┠╴ERR_BUSY          the database already holds 4096 pending operations
+    ┖╴ERR_UNAVAILABLE   the database closed before the batch finished
 
 .. rst-class:: classref-item-separator
 

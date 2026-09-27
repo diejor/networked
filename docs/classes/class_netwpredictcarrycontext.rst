@@ -12,22 +12,20 @@ NetwPredictCarryContext
 
 **Inherits:** :godot:`RefCounted`
 
-One recorded transition, handed to a carry rule as it runs.
+One past tick, passed to a :ref:`NetwPropertyConfig.carry_step()<class_NetwPropertyConfig_method_carry_step>` callback.
 
 .. rst-class:: classref-introduction-group
 
 Description
 -----------
 
-A rule advances an acknowledged value across the transitions the owner has driven since, so what it is given is one of those transitions rather than the present. Everything here is the recorded past, which is the whole reason a rule may not read the live world instead: the engine replays the rule against transitions the owner already recorded and retires it once it stops reproducing them.
+Read only from this object in the callback, not from the scene, since it describes a tick in the past.
 
 ::
 
     func _carry(value: Vector3, ctx: NetwPredictCarryContext) -> Vector3:
         var axis := _drive_axis(ctx.state[&"heading"])
         return value + axis * ctx.state[&"speed"] * ctx.delta
-
-\ Declared through :ref:`NetwPropertyConfig.carry_step()<class_NetwPropertyConfig_method_carry_step>`. The record is created by the pool and read-only, because a rule that could write it would be writing the past it is judged against.
 
 .. rst-class:: classref-reftable-group
 
@@ -66,7 +64,7 @@ Property Descriptions
 
 - :godot:`float` **get_delta**\ (\ )
 
-This transition's width in simulated seconds.
+The length of the tick, in seconds.
 
 .. rst-class:: classref-item-separator
 
@@ -82,7 +80,7 @@ This transition's width in simulated seconds.
 
 - :godot:`Dictionary` **get_input**\ (\ )
 
-The command this transition ran, as :ref:`NetwPropertyConfig.input()<class_NetwPropertyConfig_method_input>` declares it.
+The :ref:`NetwPropertyConfig.input()<class_NetwPropertyConfig_method_input>` values of the tick.
 
 .. rst-class:: classref-item-separator
 
@@ -98,7 +96,7 @@ The command this transition ran, as :ref:`NetwPropertyConfig.input()<class_NetwP
 
 - :godot:`int` **get_label**\ (\ )
 
-The input tick this transition was labelled with.
+The tick of the input.
 
 .. rst-class:: classref-item-separator
 
@@ -114,7 +112,7 @@ The input tick this transition was labelled with.
 
 - :godot:`Dictionary` **get_state**\ (\ )
 
-The declared state the owner recorded before this transition drove, the same values :ref:`NetwPropertyConfig.state()<class_NetwPropertyConfig_method_state>` names.
+The :ref:`NetwPropertyConfig.state()<class_NetwPropertyConfig_method_state>` values at the start of the tick.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

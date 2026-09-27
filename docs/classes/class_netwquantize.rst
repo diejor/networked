@@ -14,25 +14,20 @@ NetwQuantize
 
 **Inherited By:** :ref:`NetwQuantizeAngle<class_NetwQuantizeAngle>`, :ref:`NetwQuantizeQuaternion<class_NetwQuantizeQuaternion>`, :ref:`NetwQuantizeScalar<class_NetwQuantizeScalar>`, :ref:`NetwQuantizeTransform2D<class_NetwQuantizeTransform2D>`, :ref:`NetwQuantizeTransform3D<class_NetwQuantizeTransform3D>`
 
-The base a game extends to give one value type its own bit packer, and the type every quantizer slot is declared as.
+Compresses a value into fewer bits, losing some precision.
 
 .. rst-class:: classref-introduction-group
 
 Description
 -----------
 
-A quantizer turns a value into a fixed number of bits and back, trading precision for size. One is assigned per property through :ref:`NetwMemberConfig.quantize()<class_NetwMemberConfig_method_quantize>`, and the same resource may be shared by as many properties as want it. One quantizer handles :godot:`Vector2`, :godot:`float` and :godot:`int` without nesting, because it is told the type.
-
-A quantizer turns a value into codes and never touches a stream itself. :ref:`_stride()<class_NetwQuantize_private_method__stride>` says how many codes one value spends, :ref:`_bit_width()<class_NetwQuantize_private_method__bit_width>` says how wide each of them is, :ref:`_encode()<class_NetwQuantize_private_method__encode>` returns one code per element, and :ref:`_decode()<class_NetwQuantize_private_method__decode>` rebuilds the value from all of them. The session writes those codes into its own packed row through :ref:`NetwBitStream<class_NetwBitStream>`, so a quantizer allocates nothing and a script override runs once per element rather than once per write.
-
-Each behaviour has two spellings. A subclass overrides :ref:`_encode()<class_NetwQuantize_private_method__encode>`, :ref:`_decode()<class_NetwQuantize_private_method__decode>`, :ref:`_stride()<class_NetwQuantize_private_method__stride>`, :ref:`_supports_type()<class_NetwQuantize_private_method__supports_type>`, :ref:`_bit_width()<class_NetwQuantize_private_method__bit_width>` and :ref:`_max_error()<class_NetwQuantize_private_method__max_error>`. Every caller uses :ref:`encode()<class_NetwQuantize_method_encode>`, :ref:`decode()<class_NetwQuantize_method_decode>`, :ref:`stride()<class_NetwQuantize_method_stride>`, :ref:`supports_type()<class_NetwQuantize_method_supports_type>`, :ref:`bit_width()<class_NetwQuantize_method_bit_width>` and :ref:`max_error()<class_NetwQuantize_method_max_error>` instead, because an override point reaches a GDScript override only and would find nothing on a quantizer written in C++. One written in C++ overrides the plain method, so no script is entered for it at all.
+Assign one to a property with :ref:`NetwMemberConfig.quantize()<class_NetwMemberConfig_method_quantize>`. One quantizer can be shared by many properties. Both peers must use the same settings.
 
 ::
 
-    # Assigned on a synchronizer's codec/<prop> slot, or in code:
     Netw.configure_property(self, &"position").quantize(NetwQuantizeScalar.new())
 
-\ Widths come from this resource on both peers, never the wire, so the decoder reconstructs the exact layout the encoder wrote. This base is abstract: a subclass (:ref:`NetwQuantizeScalar<class_NetwQuantizeScalar>`, :ref:`NetwQuantizeAngle<class_NetwQuantizeAngle>`, :ref:`NetwQuantizeQuaternion<class_NetwQuantizeQuaternion>`, :ref:`NetwQuantizeTransform2D<class_NetwQuantizeTransform2D>`, :ref:`NetwQuantizeTransform3D<class_NetwQuantizeTransform3D>`) supplies the actual layout, and a game supplies its own by overriding the six virtuals.
+\ Use :ref:`NetwQuantizeScalar<class_NetwQuantizeScalar>`, :ref:`NetwQuantizeAngle<class_NetwQuantizeAngle>`, :ref:`NetwQuantizeQuaternion<class_NetwQuantizeQuaternion>`, :ref:`NetwQuantizeTransform2D<class_NetwQuantizeTransform2D>` or :ref:`NetwQuantizeTransform3D<class_NetwQuantizeTransform3D>`, or extend this class. A value is split into :ref:`_stride()<class_NetwQuantize_private_method__stride>` integers of :ref:`_bit_width()<class_NetwQuantize_private_method__bit_width>` bits each. :ref:`_encode()<class_NetwQuantize_private_method__encode>` returns one of them and :ref:`_decode()<class_NetwQuantize_private_method__decode>` rebuilds the value from all of them. Override the methods that start with an underscore, and call the ones without.
 
 ::
 
@@ -106,7 +101,7 @@ Method Descriptions
 
 :godot:`int` **_bit_width**\ (\ type\: :godot:`Variant.Type <@GlobalScope#enum_@globalscope_Variant.Type>`\ ) |virtual| |const| :ref:`🔗<class_NetwQuantize_private_method__bit_width>`
 
-Returns the width of ONE code for a value of ``type``, not the total. The total is :ref:`total_bits()<class_NetwQuantize_method_total_bits>`, which is this times :ref:`_stride()<class_NetwQuantize_private_method__stride>`. Reached through :ref:`bit_width()<class_NetwQuantize_method_bit_width>`.
+Return how many bits each integer of a ``type`` value uses.
 
 .. rst-class:: classref-item-separator
 
@@ -118,7 +113,7 @@ Returns the width of ONE code for a value of ``type``, not the total. The total 
 
 :godot:`Variant` **_decode**\ (\ codes\: :godot:`PackedInt64Array`, type\: :godot:`Variant.Type <@GlobalScope#enum_@globalscope_Variant.Type>`\ ) |virtual| |const| :ref:`🔗<class_NetwQuantize_private_method__decode>`
 
-Returns the value of ``type`` that ``codes`` stands for, inverting :ref:`_encode()<class_NetwQuantize_private_method__encode>`. ``codes`` holds exactly :ref:`_stride()<class_NetwQuantize_private_method__stride>` entries, in element order. Reached through :ref:`decode()<class_NetwQuantize_method_decode>`.
+Return the ``type`` value rebuilt from ``codes``, the :ref:`_stride()<class_NetwQuantize_private_method__stride>` integers from :ref:`_encode()<class_NetwQuantize_private_method__encode>`.
 
 .. rst-class:: classref-item-separator
 
@@ -130,7 +125,7 @@ Returns the value of ``type`` that ``codes`` stands for, inverting :ref:`_encode
 
 :godot:`int` **_encode**\ (\ value\: :godot:`Variant`, element\: :godot:`int`\ ) |virtual| |const| :ref:`🔗<class_NetwQuantize_private_method__encode>`
 
-Returns the code for element ``element`` of ``value``, which must fit in :ref:`_bit_width()<class_NetwQuantize_private_method__bit_width>` bits. A row that meets a wider code rejects the whole row rather than truncating it. Reached through :ref:`encode()<class_NetwQuantize_method_encode>`.
+Return integer number ``element`` of ``value``. It must fit in :ref:`_bit_width()<class_NetwQuantize_private_method__bit_width>` bits, or the whole update is dropped.
 
 .. rst-class:: classref-item-separator
 
@@ -142,9 +137,7 @@ Returns the code for element ``element`` of ``value``, which must fit in :ref:`_
 
 :godot:`float` **_max_error**\ (\ type\: :godot:`Variant.Type <@GlobalScope#enum_@globalscope_Variant.Type>`\ ) |virtual| |const| :ref:`🔗<class_NetwQuantize_private_method__max_error>`
 
-Returns the worst-case round-trip error for a value of ``type``. Reached through :ref:`max_error()<class_NetwQuantize_method_max_error>`.
-
-For a :godot:`Vector2` this is the error magnitude with both axes at their bound, so it compares directly against a reconciliation deadzone (:ref:`NetwPredictionHandle.divergence_epsilon<class_NetwPredictionHandle_property_divergence_epsilon>`). A correction threshold below this value triggers on quantization noise alone.
+Return the largest error compression can add to a ``type`` value. Keep :ref:`NetwPredictionHandle.divergence_epsilon<class_NetwPredictionHandle_property_divergence_epsilon>` above it, or compression alone causes corrections.
 
 .. rst-class:: classref-item-separator
 
@@ -156,7 +149,7 @@ For a :godot:`Vector2` this is the error magnitude with both axes at their bound
 
 :godot:`int` **_stride**\ (\ type\: :godot:`Variant.Type <@GlobalScope#enum_@globalscope_Variant.Type>`\ ) |virtual| |const| :ref:`🔗<class_NetwQuantize_private_method__stride>`
 
-Returns how many codes one value of ``type`` spends. A scalar spends one, a :godot:`Vector2` two. A layout whose parts do not share one width packs them into a single code instead, the way :ref:`NetwQuantizeQuaternion<class_NetwQuantizeQuaternion>` does. Reached through :ref:`stride()<class_NetwQuantize_method_stride>`.
+Return how many integers a ``type`` value is split into, such as ``1`` for a :godot:`float` and ``2`` for a :godot:`Vector2`.
 
 .. rst-class:: classref-item-separator
 
@@ -168,7 +161,7 @@ Returns how many codes one value of ``type`` spends. A scalar spends one, a :god
 
 :godot:`bool` **_supports_type**\ (\ type\: :godot:`Variant.Type <@GlobalScope#enum_@globalscope_Variant.Type>`\ ) |virtual| |const| :ref:`🔗<class_NetwQuantize_private_method__supports_type>`
 
-Returns whether this quantizer can encode a value of ``type``. Reached through :ref:`supports_type()<class_NetwQuantize_method_supports_type>`.
+Return ``true`` when this quantizer can compress a ``type`` value.
 
 .. rst-class:: classref-item-separator
 
@@ -180,7 +173,7 @@ Returns whether this quantizer can encode a value of ``type``. Reached through :
 
 :godot:`int` **bit_width**\ (\ type\: :godot:`Variant.Type <@GlobalScope#enum_@globalscope_Variant.Type>`\ ) |const| :ref:`🔗<class_NetwQuantize_method_bit_width>`
 
-Returns the width of ONE code for a value of ``type``. :ref:`total_bits()<class_NetwQuantize_method_total_bits>` is what a whole value costs.
+Calls :ref:`_bit_width()<class_NetwQuantize_private_method__bit_width>`. :ref:`total_bits()<class_NetwQuantize_method_total_bits>` is the size of the whole value.
 
 .. rst-class:: classref-item-separator
 
@@ -192,7 +185,7 @@ Returns the width of ONE code for a value of ``type``. :ref:`total_bits()<class_
 
 :godot:`Variant` **decode**\ (\ codes\: :godot:`PackedInt64Array`, type\: :godot:`Variant.Type <@GlobalScope#enum_@globalscope_Variant.Type>`\ ) |const| :ref:`🔗<class_NetwQuantize_method_decode>`
 
-Returns the value of ``type`` that ``codes`` stands for, inverting :ref:`encode()<class_NetwQuantize_method_encode>`.
+Calls :ref:`_decode()<class_NetwQuantize_private_method__decode>`.
 
 .. rst-class:: classref-item-separator
 
@@ -204,7 +197,7 @@ Returns the value of ``type`` that ``codes`` stands for, inverting :ref:`encode(
 
 :godot:`int` **encode**\ (\ value\: :godot:`Variant`, element\: :godot:`int`\ ) |const| :ref:`🔗<class_NetwQuantize_method_encode>`
 
-Returns the code for element ``element`` of ``value``.
+Calls :ref:`_encode()<class_NetwQuantize_private_method__encode>`.
 
 .. rst-class:: classref-item-separator
 
@@ -216,9 +209,7 @@ Returns the code for element ``element`` of ``value``.
 
 :godot:`bool` **is_same_layout**\ (\ other\: :ref:`NetwQuantize<class_NetwQuantize>`\ ) |const| :ref:`🔗<class_NetwQuantize_method_is_same_layout>`
 
-Returns whether ``other`` encodes the identical bit layout: the same quantizer class and script with the same stored parameters.
-
-Two layout-equal quantizers read each other's bits, so a configuration re-declared per instance with fresh but identical quantizers is the same schema, not a conflict. :ref:`NetwMemberConfig.quantize()<class_NetwMemberConfig_method_quantize>` warns only when a re-declaration fails this check.
+Returns ``true`` when ``other`` has the same class, script and settings, so each can read what the other writes.
 
 .. rst-class:: classref-item-separator
 
@@ -230,7 +221,7 @@ Two layout-equal quantizers read each other's bits, so a configuration re-declar
 
 :godot:`float` **max_error**\ (\ type\: :godot:`Variant.Type <@GlobalScope#enum_@globalscope_Variant.Type>`\ ) |const| :ref:`🔗<class_NetwQuantize_method_max_error>`
 
-Returns the worst-case round-trip error for a value of ``type``.
+Calls :ref:`_max_error()<class_NetwQuantize_private_method__max_error>`.
 
 .. rst-class:: classref-item-separator
 
@@ -242,7 +233,7 @@ Returns the worst-case round-trip error for a value of ``type``.
 
 :godot:`int` **stride**\ (\ type\: :godot:`Variant.Type <@GlobalScope#enum_@globalscope_Variant.Type>`\ ) |const| :ref:`🔗<class_NetwQuantize_method_stride>`
 
-Returns how many codes one value of ``type`` spends.
+Calls :ref:`_stride()<class_NetwQuantize_private_method__stride>`.
 
 .. rst-class:: classref-item-separator
 
@@ -254,9 +245,7 @@ Returns how many codes one value of ``type`` spends.
 
 :godot:`bool` **supports_type**\ (\ type\: :godot:`Variant.Type <@GlobalScope#enum_@globalscope_Variant.Type>`\ ) |const| :ref:`🔗<class_NetwQuantize_method_supports_type>`
 
-Returns whether this quantizer can encode a value of ``type``.
-
-Callers that quantize opportunistically (entity RPC arguments) ask this before handing a value to :ref:`encode()<class_NetwQuantize_method_encode>`, so the set of encodable types stays owned by each quantizer instead of duplicated at the call site.
+Calls :ref:`_supports_type()<class_NetwQuantize_private_method__supports_type>`.
 
 .. rst-class:: classref-item-separator
 
@@ -268,7 +257,7 @@ Callers that quantize opportunistically (entity RPC arguments) ask this before h
 
 :godot:`int` **total_bits**\ (\ type\: :godot:`Variant.Type <@GlobalScope#enum_@globalscope_Variant.Type>`\ ) |const| :ref:`🔗<class_NetwQuantize_method_total_bits>`
 
-Returns what a whole value of ``type`` costs, which is :ref:`bit_width()<class_NetwQuantize_method_bit_width>` times :ref:`stride()<class_NetwQuantize_method_stride>`.
+Returns the bits of a whole ``type`` value, :ref:`bit_width()<class_NetwQuantize_method_bit_width>` times :ref:`stride()<class_NetwQuantize_method_stride>`.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

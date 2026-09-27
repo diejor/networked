@@ -12,14 +12,14 @@ LocalLoopbackSession
 
 **Inherits:** :godot:`Resource`
 
-An in-process session that links :ref:`LocalMultiplayerPeer<class_LocalMultiplayerPeer>` instances and simulates the link between them.
+Connects :ref:`LocalMultiplayerPeer<class_LocalMultiplayerPeer>` peers inside one process, with optional simulated latency and loss.
 
 .. rst-class:: classref-introduction-group
 
 Description
 -----------
 
-Session time advances only when something advances it.
+Useful for tests. Time only moves when :ref:`poll()<class_LocalLoopbackSession_method_poll>` or :ref:`advance_time()<class_LocalLoopbackSession_method_advance_time>` is called.
 
 ::
 
@@ -116,7 +116,7 @@ Property Descriptions
 - |void| **set_server_app_id**\ (\ value\: :godot:`StringName`\ )
 - :godot:`StringName` **get_server_app_id**\ (\ )
 
-An application tag carried alongside the session, so a client can tell whose server it reached.
+The :ref:`NetwSessionConfig.app_id<class_NetwSessionConfig_property_app_id>` of the server.
 
 .. rst-class:: classref-section-separator
 
@@ -133,7 +133,7 @@ Method Descriptions
 
 |void| **advance_time**\ (\ ms\: :godot:`float`\ ) :ref:`🔗<class_LocalLoopbackSession_method_advance_time>`
 
-Advances session time by ``ms`` and delivers whatever came due, for steppers that drive time themselves rather than off physics frames.
+Moves time forward by ``ms`` milliseconds and delivers the packets that are due.
 
 .. rst-class:: classref-item-separator
 
@@ -145,7 +145,7 @@ Advances session time by ``ms`` and delivers whatever came due, for steppers tha
 
 |void| **clear_all_link_conditions**\ (\ ) :ref:`🔗<class_LocalLoopbackSession_method_clear_all_link_conditions>`
 
-Removes every installed condition and flushes every delayed packet.
+Removes every link condition and delivers every delayed packet.
 
 .. rst-class:: classref-item-separator
 
@@ -157,7 +157,7 @@ Removes every installed condition and flushes every delayed packet.
 
 |void| **clear_link_conditions**\ (\ peer\: :ref:`LocalMultiplayerPeer<class_LocalMultiplayerPeer>`, sender_id\: :godot:`int` = 0\ ) :ref:`🔗<class_LocalLoopbackSession_method_clear_link_conditions>`
 
-Removes the conditions installed for ``sender_id`` and flushes whatever they were holding.
+Removes the link conditions for ``sender_id`` and delivers the packets they delayed.
 
 .. rst-class:: classref-item-separator
 
@@ -193,7 +193,7 @@ Creates a client peer and returns it.
 
 :godot:`Array` **get_client_peers**\ (\ ) |const| :ref:`🔗<class_LocalLoopbackSession_method_get_client_peers>`
 
-Returns every client peer this session handed out, including ones that have since closed.
+Returns every client peer created, including closed ones.
 
 .. rst-class:: classref-item-separator
 
@@ -229,7 +229,7 @@ Returns the server peer, creating it first if necessary.
 
 :ref:`LocalLoopbackSession<class_LocalLoopbackSession>` **get_shared_session**\ (\ ) |static| :ref:`🔗<class_LocalLoopbackSession_method_get_shared_session>`
 
-Returns the process-wide session, creating one on first access. Use :ref:`has_shared_session()<class_LocalLoopbackSession_method_has_shared_session>` to ask whether one exists without creating it.
+Returns the shared session, creating it if needed. :ref:`has_shared_session()<class_LocalLoopbackSession_method_has_shared_session>` checks without creating it.
 
 .. rst-class:: classref-item-separator
 
@@ -241,7 +241,7 @@ Returns the process-wide session, creating one on first access. Use :ref:`has_sh
 
 :godot:`bool` **has_live_server**\ (\ ) |const| :ref:`🔗<class_LocalLoopbackSession_method_has_live_server>`
 
-Returns whether this session's server peer exists and is not disconnected.
+Returns ``true`` when the server peer exists and is connected.
 
 .. rst-class:: classref-item-separator
 
@@ -253,7 +253,7 @@ Returns whether this session's server peer exists and is not disconnected.
 
 :godot:`bool` **has_shared_session**\ (\ ) |static| :ref:`🔗<class_LocalLoopbackSession_method_has_shared_session>`
 
-Returns whether a process-wide session exists.
+Returns ``true`` when a shared session exists.
 
 .. rst-class:: classref-item-separator
 
@@ -301,7 +301,7 @@ Creates the server peer if there is not already a live one.
 
 :godot:`bool` **is_holding_inbound**\ (\ peer\: :ref:`LocalMultiplayerPeer<class_LocalMultiplayerPeer>`\ ) |const| :ref:`🔗<class_LocalLoopbackSession_method_is_holding_inbound>`
 
-Returns whether ``peer`` is holding everything, per :ref:`hold_inbound_packets()<class_LocalLoopbackSession_method_hold_inbound_packets>`.
+Returns ``true`` while :ref:`hold_inbound_packets()<class_LocalLoopbackSession_method_hold_inbound_packets>` holds packets for ``peer``.
 
 .. rst-class:: classref-item-separator
 
@@ -313,7 +313,7 @@ Returns whether ``peer`` is holding everything, per :ref:`hold_inbound_packets()
 
 |void| **poll**\ (\ ) :ref:`🔗<class_LocalLoopbackSession_method_poll>`
 
-Advances session time by one physics period and delivers whatever came due.
+Moves time forward by one physics tick and delivers the packets that are due.
 
 .. rst-class:: classref-item-separator
 
@@ -325,7 +325,7 @@ Advances session time by one physics period and delivers whatever came due.
 
 |void| **poll_frame_scoped**\ (\ ) :ref:`🔗<class_LocalLoopbackSession_method_poll_frame_scoped>`
 
-Advances session time by however many physics frames have actually passed. A latency in milliseconds therefore stays that latency however many idle frames the engine ran between physics steps.
+Moves time forward by the physics frames that passed since the last call.
 
 .. rst-class:: classref-item-separator
 
@@ -337,7 +337,7 @@ Advances session time by however many physics frames have actually passed. A lat
 
 |void| **purge_packets_from**\ (\ sender_id\: :godot:`int`\ ) :ref:`🔗<class_LocalLoopbackSession_method_purge_packets_from>`
 
-Drops whatever ``sender_id`` still has in flight, on every receiver.
+Drops every packet from ``sender_id`` not delivered yet.
 
 .. rst-class:: classref-item-separator
 
@@ -349,7 +349,7 @@ Drops whatever ``sender_id`` still has in flight, on every receiver.
 
 |void| **release_inbound_packets**\ (\ peer\: :ref:`LocalMultiplayerPeer<class_LocalMultiplayerPeer>`\ ) :ref:`🔗<class_LocalLoopbackSession_method_release_inbound_packets>`
 
-Delivers what :ref:`hold_inbound_packets()<class_LocalLoopbackSession_method_hold_inbound_packets>` held, ahead of anything that arrived after it.
+Delivers the packets :ref:`hold_inbound_packets()<class_LocalLoopbackSession_method_hold_inbound_packets>` held, in order.
 
 .. rst-class:: classref-item-separator
 
@@ -373,9 +373,7 @@ Closes every peer and empties the session so a new server can host.
 
 |void| **set_link_conditions**\ (\ peer\: :ref:`LocalMultiplayerPeer<class_LocalMultiplayerPeer>`, conditions\: :ref:`LocalLinkConditions<class_LocalLinkConditions>`, sender_id\: :godot:`int` = 0\ ) :ref:`🔗<class_LocalLoopbackSession_method_set_link_conditions>`
 
-Installs ``conditions`` on packets arriving at ``peer``. A ``sender_id`` of ``0`` conditions every sender. Packets already queued on ``peer`` are pulled back into flight, so conditioning a live link leaves no hole behind it.
-
-\ ``conditions`` is cloned, so editing it afterwards changes nothing.
+Applies ``conditions`` to packets arriving at ``peer`` from ``sender_id``, or from everyone when ``0``. ``conditions`` is copied.
 
 .. rst-class:: classref-item-separator
 
@@ -387,7 +385,7 @@ Installs ``conditions`` on packets arriving at ``peer``. A ``sender_id`` of ``0`
 
 |void| **set_shared_session**\ (\ session\: :ref:`LocalLoopbackSession<class_LocalLoopbackSession>`\ ) |static| :ref:`🔗<class_LocalLoopbackSession_method_set_shared_session>`
 
-Installs ``session`` as the process-wide one, or clears it when ``session`` is ``null``.
+Sets the shared session. ``null`` clears it.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

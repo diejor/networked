@@ -12,24 +12,18 @@ NetwPredictJudgement
 
 **Inherits:** :godot:`RefCounted`
 
-What one acknowledged transition was judged to be worth.
+Whether a prediction was wrong, returned by :ref:`NetwMultiplayer._predict_evaluate()<class_NetwMultiplayer_private_method__predict_evaluate>`.
 
 .. rst-class:: classref-introduction-group
 
 Description
 -----------
 
-:ref:`NetwMultiplayer._predict_evaluate()<class_NetwMultiplayer_private_method__predict_evaluate>` returns one of these, and a game overriding that seam creates its own through :ref:`of()<class_NetwPredictJudgement_method_of>`.
-
-\ :ref:`corrected()<class_NetwPredictJudgement_method_corrected>` is not a threshold over :ref:`divergence()<class_NetwPredictJudgement_method_divergence>`. A transition whose antecedents were all declared equal claimed reproducibility, so an exact predicate decides it and the magnitude is only ever reported. One whose antecedents were not is decided by tolerance, since the peers never claimed the exactness a fingerprint would test for.
+Create one with :ref:`of()<class_NetwPredictJudgement_method_of>` in an override of :ref:`NetwMultiplayer._predict_evaluate()<class_NetwMultiplayer_private_method__predict_evaluate>`.
 
 ::
 
     var judged := NetwPredictJudgement.of(INF, true)
-
-\ - :ref:`divergence()<class_NetwPredictJudgement_method_divergence>` magnitude of the disagreement, ``INF`` when unjudged
-
-- :ref:`corrected()<class_NetwPredictJudgement_method_corrected>` true when a recovery must be staged
 
 .. rst-class:: classref-reftable-group
 
@@ -62,7 +56,7 @@ Method Descriptions
 
 :godot:`bool` **corrected**\ (\ ) |const| :ref:`🔗<class_NetwPredictJudgement_method_corrected>`
 
-Whether a recovery must be staged for this transition.
+``true`` when the prediction must be corrected.
 
 .. rst-class:: classref-item-separator
 
@@ -74,7 +68,7 @@ Whether a recovery must be staged for this transition.
 
 :godot:`float` **divergence**\ (\ ) |const| :ref:`🔗<class_NetwPredictJudgement_method_divergence>`
 
-How far apart the two states were, as the worst per-property error. It is ``INF`` when nothing was recorded at or before the acknowledgement, which corrects, because an unjudged transition must never pass as an agreeing one.
+The largest error of any property, or ``INF`` when there was nothing to compare.
 
 .. rst-class:: classref-item-separator
 
@@ -86,7 +80,7 @@ How far apart the two states were, as the worst per-property error. It is ``INF`
 
 :ref:`NetwPredictJudgement<class_NetwPredictJudgement>` **of**\ (\ divergence\: :godot:`float`, corrected\: :godot:`bool`\ ) |static| :ref:`🔗<class_NetwPredictJudgement_method_of>`
 
-Creates one judgement.
+Creates a **NetwPredictJudgement**.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

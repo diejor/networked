@@ -12,25 +12,14 @@ NakamaLobbyDirectory
 
 **Inherits:** :ref:`LobbyDirectory<class_LobbyDirectory>` **<** :ref:`NetwService<class_NetwService>` **<** :godot:`Node`
 
-:ref:`LobbyDirectory<class_LobbyDirectory>` backed by Nakama relay matches.
+A :ref:`LobbyDirectory<class_LobbyDirectory>` that hosts and joins Nakama relay matches.
 
 .. rst-class:: classref-introduction-group
 
 Description
 -----------
 
-Relay hosting does not open a listening socket. The host is the peer that claims peer id ``1``, so web exports can host through this directory.
-
-::
-
-    MultiplayerTree
-    └── NakamaLobbyDirectory
-        ├── NakamaWrapper
-        ├── realtime socket
-        └── relay match
-            └── peer 1 = host
-
-\ :ref:`_host_lobby()<class_NakamaLobbyDirectory_private_method__host_lobby>` writes browse metadata to Nakama storage because relay matches only expose match ids and member counts. :ref:`_list_lobbies()<class_NakamaLobbyDirectory_private_method__list_lobbies>` merges that storage with :ref:`NakamaWrapper.list_matches()<class_NakamaWrapper_method_list_matches>`. A lobby's address is its relay match id, so a player joins one that was never browsed by pasting the id its host shared.
+The host needs no open port, so web exports can host. A lobby's address is its match id, which players can share to join directly. Lobby names and settings are stored in Nakama storage so they can be listed.
 
 .. rst-class:: classref-reftable-group
 
@@ -70,41 +59,11 @@ Methods
 .. table::
    :widths: auto
 
-   +---------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------+
-   | |void|                                            | :ref:`_service_entered<class_NakamaLobbyDirectory_private_method__service_entered>`\ (\ _api\: :ref:`NetwMultiplayer<class_NetwMultiplayer>`\ ) |
-   +---------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------+
-   | |void|                                            | :ref:`_service_exiting<class_NakamaLobbyDirectory_private_method__service_exiting>`\ (\ _api\: :ref:`NetwMultiplayer<class_NetwMultiplayer>`\ ) |
-   +---------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------+
-   | |void|                                            | :ref:`_host_lobby<class_NakamaLobbyDirectory_private_method__host_lobby>`\ (\ settings\: :godot:`Dictionary`\ )                                 |
-   +---------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------+
-   | |void|                                            | :ref:`_join_lobby<class_NakamaLobbyDirectory_private_method__join_lobby>`\ (\ address\: :godot:`String`\ )                                      |
-   +---------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------+
-   | |void|                                            | :ref:`_list_lobbies<class_NakamaLobbyDirectory_private_method__list_lobbies>`\ (\ )                                                             |
-   +---------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`Capability<enum_LobbyDirectory_Capability>` | :ref:`_capabilities<class_NakamaLobbyDirectory_private_method__capabilities>`\ (\ )                                                             |
-   +---------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------+
-   | |void|                                            | :ref:`_leave_lobby<class_NakamaLobbyDirectory_private_method__leave_lobby>`\ (\ )                                                               |
-   +---------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`StringName`                               | :ref:`_peer_class<class_NakamaLobbyDirectory_private_method__peer_class>`\ (\ )                                                                 |
-   +---------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`String`                                   | :ref:`_display_name<class_NakamaLobbyDirectory_private_method__display_name>`\ (\ )                                                             |
-   +---------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`bool`                                     | :ref:`_is_available<class_NakamaLobbyDirectory_private_method__is_available>`\ (\ )                                                             |
-   +---------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`bool`                                     | :ref:`_can_host_here<class_NakamaLobbyDirectory_private_method__can_host_here>`\ (\ )                                                           |
-   +---------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`String`                                   | :ref:`_address_label<class_NakamaLobbyDirectory_private_method__address_label>`\ (\ )                                                           |
-   +---------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`String`                                   | :ref:`_address_help<class_NakamaLobbyDirectory_private_method__address_help>`\ (\ )                                                             |
-   +---------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`String`                                   | :ref:`_join_address<class_NakamaLobbyDirectory_private_method__join_address>`\ (\ )                                                             |
-   +---------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NakamaWrapper<class_NakamaWrapper>`         | :ref:`wrapper<class_NakamaLobbyDirectory_method_wrapper>`\ (\ )                                                                                 |
-   +---------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`String`                                   | :ref:`_member_name<class_NakamaLobbyDirectory_private_method__member_name>`\ (\ peer_id\: :godot:`int`\ )                                       |
-   +---------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`String`                                   | :ref:`_local_member_name<class_NakamaLobbyDirectory_private_method__local_member_name>`\ (\ )                                                   |
-   +---------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------+
+   +-------------------------------------------+-----------------------------------------------------------------------------------------------------------------+
+   | |void|                                    | :ref:`_host_lobby<class_NakamaLobbyDirectory_private_method__host_lobby>`\ (\ settings\: :godot:`Dictionary`\ ) |
+   +-------------------------------------------+-----------------------------------------------------------------------------------------------------------------+
+   | :ref:`NakamaWrapper<class_NakamaWrapper>` | :ref:`wrapper<class_NakamaLobbyDirectory_method_wrapper>`\ (\ )                                                 |
+   +-------------------------------------------+-----------------------------------------------------------------------------------------------------------------+
 
 .. rst-class:: classref-section-separator
 
@@ -190,7 +149,7 @@ When ``true``, connects over ``https`` and ``wss``.
 
 :godot:`String` **device_id** = ``""`` :ref:`🔗<class_NakamaLobbyDirectory_property_device_id>`
 
-Device id used for authentication. Empty falls back to :godot:`OS.get_unique_id() <OS#class_OS_method_get_unique_id>`. Set distinct ids per instance for reliable local two-client testing.
+Device id used for authentication. Empty uses :godot:`OS.get_unique_id() <OS#class_OS_method_get_unique_id>`.
 
 .. rst-class:: classref-item-separator
 
@@ -202,7 +161,7 @@ Device id used for authentication. Empty falls back to :godot:`OS.get_unique_id(
 
 :godot:`String` **local_member_name** = ``""`` :ref:`🔗<class_NakamaLobbyDirectory_property_local_member_name>`
 
-Local Nakama username used for device authentication.  Empty falls back to :ref:`LobbyDirectory._local_member_name()<class_LobbyDirectory_private_method__local_member_name>`.
+The Nakama username. Empty uses :ref:`LobbyDirectory._local_member_name()<class_LobbyDirectory_private_method__local_member_name>`.
 
 .. rst-class:: classref-item-separator
 
@@ -214,7 +173,7 @@ Local Nakama username used for device authentication.  Empty falls back to :ref:
 
 :godot:`bool` **uniquify_debug_identity** = ``true`` :ref:`🔗<class_NakamaLobbyDirectory_property_uniquify_debug_identity>`
 
-Appends a per-process suffix to :ref:`device_id<class_NakamaLobbyDirectory_property_device_id>` and :ref:`local_member_name<class_NakamaLobbyDirectory_property_local_member_name>` in debug desktop runs.  This prevents local multi-instance runs from authenticating with the same Nakama username. Override the suffix with ``--nakama-instance=name``, ``--netw-instance=name``, ``--instance=name``, or ``NAKAMA_INSTANCE_SUFFIX``.
+In debug desktop builds, adds a suffix to :ref:`device_id<class_NakamaLobbyDirectory_property_device_id>` and :ref:`local_member_name<class_NakamaLobbyDirectory_property_local_member_name>` so several instances on one machine log in as different users. Set the suffix with ``--nakama-instance=name``, ``--netw-instance=name``, ``--instance=name`` or ``NAKAMA_INSTANCE_SUFFIX``.
 
 .. rst-class:: classref-item-separator
 
@@ -238,7 +197,7 @@ Seconds to wait for a match to fully join before failing.
 
 :godot:`int` **max_clients** = ``8`` :ref:`🔗<class_NakamaLobbyDirectory_property_max_clients>`
 
-Maximum number of simultaneous lobby members advertised on the browse card. An absent or ``0`` ``max_players`` advert key falls back to this.
+The player limit shown in the lobby list, when the host sets none.
 
 .. rst-class:: classref-item-separator
 
@@ -250,7 +209,7 @@ Maximum number of simultaneous lobby members advertised on the browse card. An a
 
 :godot:`String` **browser_filter_uid** = ``"networked"`` :ref:`🔗<class_NakamaLobbyDirectory_property_browser_filter_uid>`
 
-Tag stored on every browse card and required on received cards, so different games sharing a Nakama server do not pollute each other's lobby lists.
+Only lobbies with the same tag are listed, so games sharing a Nakama server do not see each other's lobbies.
 
 .. rst-class:: classref-section-separator
 
@@ -261,169 +220,13 @@ Tag stored on every browse card and required on received cards, so different gam
 Method Descriptions
 -------------------
 
-.. _class_NakamaLobbyDirectory_private_method__service_entered:
-
-.. rst-class:: classref-method
-
-|void| **_service_entered**\ (\ _api\: :ref:`NetwMultiplayer<class_NetwMultiplayer>`\ ) :ref:`🔗<class_NakamaLobbyDirectory_private_method__service_entered>`
-
-Initializes the internal :ref:`NakamaWrapper<class_NakamaWrapper>`.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NakamaLobbyDirectory_private_method__service_exiting:
-
-.. rst-class:: classref-method
-
-|void| **_service_exiting**\ (\ _api\: :ref:`NetwMultiplayer<class_NetwMultiplayer>`\ ) :ref:`🔗<class_NakamaLobbyDirectory_private_method__service_exiting>`
-
-Cleans up the hosted match and relay socket.
-
-.. rst-class:: classref-item-separator
-
-----
-
 .. _class_NakamaLobbyDirectory_private_method__host_lobby:
 
 .. rst-class:: classref-method
 
 |void| **_host_lobby**\ (\ settings\: :godot:`Dictionary`\ ) :ref:`🔗<class_NakamaLobbyDirectory_private_method__host_lobby>`
 
-Creates a relay match and publishes its browse card.  :ref:`NetwServerInfo.VISIBILITY_PRIVATE<class_NetwServerInfo_constant_VISIBILITY_PRIVATE>` skips the card and stays join-by-id only.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NakamaLobbyDirectory_private_method__join_lobby:
-
-.. rst-class:: classref-method
-
-|void| **_join_lobby**\ (\ address\: :godot:`String`\ ) :ref:`🔗<class_NakamaLobbyDirectory_private_method__join_lobby>`
-
-Joins the relay match ``address`` names and delivers its connected peer.  ``address`` is a relay match id, whether it came from a browse row or from a host sharing it, so joining never depends on having browsed first.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NakamaLobbyDirectory_private_method__list_lobbies:
-
-.. rst-class:: classref-method
-
-|void| **_list_lobbies**\ (\ ) :ref:`🔗<class_NakamaLobbyDirectory_private_method__list_lobbies>`
-
-Lists public relay lobbies.  Stored browse cards provide metadata. :ref:`NakamaWrapper.list_matches()<class_NakamaWrapper_method_list_matches>` provides live member counts. Cards whose match has ended are skipped.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NakamaLobbyDirectory_private_method__capabilities:
-
-.. rst-class:: classref-method
-
-:ref:`Capability<enum_LobbyDirectory_Capability>` **_capabilities**\ (\ ) :ref:`🔗<class_NakamaLobbyDirectory_private_method__capabilities>`
-
-Returns the :ref:`Capability<enum_LobbyDirectory_Capability>` flags this directory honors: browse and persona resolution.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NakamaLobbyDirectory_private_method__leave_lobby:
-
-.. rst-class:: classref-method
-
-|void| **_leave_lobby**\ (\ ) :ref:`🔗<class_NakamaLobbyDirectory_private_method__leave_lobby>`
-
-Deletes the host browse card and leaves the relay match.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NakamaLobbyDirectory_private_method__peer_class:
-
-.. rst-class:: classref-method
-
-:godot:`StringName` **_peer_class**\ (\ ) :ref:`🔗<class_NakamaLobbyDirectory_private_method__peer_class>`
-
-Nakama lobbies join through :ref:`NakamaRelayPeer<class_NakamaRelayPeer>` by match id.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NakamaLobbyDirectory_private_method__display_name:
-
-.. rst-class:: classref-method
-
-:godot:`String` **_display_name**\ (\ ) :ref:`🔗<class_NakamaLobbyDirectory_private_method__display_name>`
-
-Browsers name this provider "Nakama".
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NakamaLobbyDirectory_private_method__is_available:
-
-.. rst-class:: classref-method
-
-:godot:`bool` **_is_available**\ (\ ) :ref:`🔗<class_NakamaLobbyDirectory_private_method__is_available>`
-
-The relay needs the Nakama addon, and nothing works without it.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NakamaLobbyDirectory_private_method__can_host_here:
-
-.. rst-class:: classref-method
-
-:godot:`bool` **_can_host_here**\ (\ ) :ref:`🔗<class_NakamaLobbyDirectory_private_method__can_host_here>`
-
-A relay match opens no listening socket, so a web export can host one.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NakamaLobbyDirectory_private_method__address_label:
-
-.. rst-class:: classref-method
-
-:godot:`String` **_address_label**\ (\ ) :ref:`🔗<class_NakamaLobbyDirectory_private_method__address_label>`
-
-A Nakama address is an opaque relay match id.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NakamaLobbyDirectory_private_method__address_help:
-
-.. rst-class:: classref-method
-
-:godot:`String` **_address_help**\ (\ ) :ref:`🔗<class_NakamaLobbyDirectory_private_method__address_help>`
-
-Points a player at where a match id comes from.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NakamaLobbyDirectory_private_method__join_address:
-
-.. rst-class:: classref-method
-
-:godot:`String` **_join_address**\ (\ ) :ref:`🔗<class_NakamaLobbyDirectory_private_method__join_address>`
-
-Returns the active relay match id others join this host by.
+A :ref:`NetwServerInfo.VISIBILITY_PRIVATE<class_NetwServerInfo_constant_VISIBILITY_PRIVATE>` lobby is not listed, and can only be joined by its match id.
 
 .. rst-class:: classref-item-separator
 
@@ -435,31 +238,7 @@ Returns the active relay match id others join this host by.
 
 :ref:`NakamaWrapper<class_NakamaWrapper>` **wrapper**\ (\ ) :ref:`🔗<class_NakamaLobbyDirectory_method_wrapper>`
 
-Returns the active :ref:`NakamaWrapper<class_NakamaWrapper>`, or ``null`` before connect.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NakamaLobbyDirectory_private_method__member_name:
-
-.. rst-class:: classref-method
-
-:godot:`String` **_member_name**\ (\ peer_id\: :godot:`int`\ ) :ref:`🔗<class_NakamaLobbyDirectory_private_method__member_name>`
-
-Resolves ``peer_id`` to its Nakama username when known.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NakamaLobbyDirectory_private_method__local_member_name:
-
-.. rst-class:: classref-method
-
-:godot:`String` **_local_member_name**\ (\ ) :ref:`🔗<class_NakamaLobbyDirectory_private_method__local_member_name>`
-
-Returns :ref:`local_member_name<class_NakamaLobbyDirectory_property_local_member_name>` when configured.
+Returns the :ref:`NakamaWrapper<class_NakamaWrapper>` in use.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

@@ -12,14 +12,14 @@ NetwLinkConditions
 
 **Inherits:** :godot:`Resource`
 
-Author-time latency and loss simulation for a session's own outbound peer.
+Simulated latency and packet loss for testing a real connection.
 
 .. rst-class:: classref-introduction-group
 
 Description
 -----------
 
-Delays are authored in milliseconds and loss as a percent, the units a game designer tunes in, and :ref:`wrap_peer()<class_NetwLinkConditions_method_wrap_peer>` is what converts them: :ref:`one_way_delay_min<class_NetwLinkConditions_property_one_way_delay_min>` and :ref:`one_way_delay_max<class_NetwLinkConditions_property_one_way_delay_max>` scale down to seconds and :ref:`lag_packet_loss_percent<class_NetwLinkConditions_property_lag_packet_loss_percent>` scales down to a ratio, which are the units ``LaggyMultiplayerPeer`` takes. Install one through :ref:`NetwSessionConfig.link_conditions<class_NetwSessionConfig_property_link_conditions>`, authored beside the transport it tunes, and :ref:`NetwMultiplayer<class_NetwMultiplayer>` wraps the built peer with it at bring-up.
+Set it as :ref:`NetwSessionConfig.link_conditions<class_NetwSessionConfig_property_link_conditions>`. The peer is wrapped in a ``LaggyMultiplayerPeer``, an optional extension that must be installed.
 
 ::
 
@@ -29,13 +29,9 @@ Delays are authored in milliseconds and loss as a percent, the units a game desi
     conditions.lag_packet_loss_percent = 2.0
     config.link_conditions = conditions
 
-\ :ref:`wrap_peer()<class_NetwLinkConditions_method_wrap_peer>` returns the peer it was given unchanged, with a warning, when :ref:`simulate_lag<class_NetwLinkConditions_property_simulate_lag>` is on but the build carries no ``LaggyMultiplayerPeer`` extension. A missing simulator is a reason to run without it, never a reason the session fails to come up.
+\ It only works in debug builds and the editor. Set the environment variable ``NETW_SHAPING`` or the command line argument ``--netw-shaping`` to ``on`` or ``off`` to change that. The environment variable wins.
 
-This is a development tool. :ref:`wrap_peer()<class_NetwLinkConditions_method_wrap_peer>` returns the original peer in release exports, regardless of :ref:`simulate_lag<class_NetwLinkConditions_property_simulate_lag>`. Compare the returned peer with the input to determine whether simulation is active.
-
-A debug build and the editor shape their link, and a release export does not. ``NETW_SHAPING`` in the environment, or ``--netw-shaping=on|off`` on the command line, overrides that in both directions, for the playtest shipped on a debug template and for the release build a tester needs to impair. The environment wins over the flag, and a value that is neither an on word (``on``, ``1``, ``true``, ``yes``) nor an off word (``off``, ``0``, ``false``, ``no``) is no override at all, so a typo cannot quietly impair a shipped build.
-
-The impairment applies to this session's own peer, so it shapes every link that peer carries at once. A server wrapped this way is slow to every client rather than to one, and per-remote-peer impairment exists only on the loopback, through :ref:`LocalLoopbackSession.set_link_conditions()<class_LocalLoopbackSession_method_set_link_conditions>`.
+It slows every connection of this peer. To slow one peer only, use :ref:`LocalLoopbackSession.set_link_conditions()<class_LocalLoopbackSession_method_set_link_conditions>`.
 
 .. rst-class:: classref-reftable-group
 
@@ -87,7 +83,7 @@ Property Descriptions
 - |void| **set_lag_packet_loss_percent**\ (\ value\: :godot:`float`\ )
 - :godot:`float` **get_lag_packet_loss_percent**\ (\ )
 
-Percent chance a packet is dropped, clamped to ``0..100`` by :ref:`wrap_peer()<class_NetwLinkConditions_method_wrap_peer>`. Authored as a percent and converted to a ratio for the wrapper.
+Percent chance that a packet is lost, from ``0`` to ``100``.
 
 .. rst-class:: classref-item-separator
 
@@ -104,7 +100,7 @@ Percent chance a packet is dropped, clamped to ``0..100`` by :ref:`wrap_peer()<c
 - |void| **set_one_way_delay_max**\ (\ value\: :godot:`float`\ )
 - :godot:`float` **get_one_way_delay_max**\ (\ )
 
-The upper bound of the simulated one-way delay, in milliseconds. :ref:`wrap_peer()<class_NetwLinkConditions_method_wrap_peer>` floors it at :ref:`one_way_delay_min<class_NetwLinkConditions_property_one_way_delay_min>`.
+The largest one-way delay, in milliseconds.
 
 .. rst-class:: classref-item-separator
 
@@ -121,7 +117,7 @@ The upper bound of the simulated one-way delay, in milliseconds. :ref:`wrap_peer
 - |void| **set_one_way_delay_min**\ (\ value\: :godot:`float`\ )
 - :godot:`float` **get_one_way_delay_min**\ (\ )
 
-The lower bound of the simulated one-way delay, in milliseconds. :ref:`wrap_peer()<class_NetwLinkConditions_method_wrap_peer>` floors it at zero.
+The smallest one-way delay, in milliseconds.
 
 .. rst-class:: classref-item-separator
 
@@ -138,7 +134,7 @@ The lower bound of the simulated one-way delay, in milliseconds. :ref:`wrap_peer
 - |void| **set_simulate_lag**\ (\ value\: :godot:`bool`\ )
 - :godot:`bool` **get_simulate_lag**\ (\ )
 
-Whether :ref:`wrap_peer()<class_NetwLinkConditions_method_wrap_peer>` wraps the peer at all. ``false`` returns the base peer untouched, so a spec left on a config with this off costs nothing.
+Turns the simulation on.
 
 .. rst-class:: classref-section-separator
 
@@ -155,9 +151,7 @@ Method Descriptions
 
 :godot:`MultiplayerPeer` **wrap_peer**\ (\ base\: :godot:`MultiplayerPeer`\ ) |const| :ref:`🔗<class_NetwLinkConditions_method_wrap_peer>`
 
-Returns ``base`` wrapped in a ``LaggyMultiplayerPeer`` carrying this spec's delays and loss, converted to the wrapper's units. Returns ``base`` itself when :ref:`simulate_lag<class_NetwLinkConditions_property_simulate_lag>` is ``false``, when ``base`` is ``null``, when this build does not shape its link, or when the wrapper class is unavailable or publishes no ``create``.
-
-\ **Note:** Impairment also needs the optional ``LaggyMultiplayerPeer`` extension present in the build. A build that shapes its link but carries no simulator still returns ``base``.
+Returns ``base`` wrapped in a ``LaggyMultiplayerPeer`` with these settings. Returns ``base`` unchanged when :ref:`simulate_lag<class_NetwLinkConditions_property_simulate_lag>` is off, in a release build, or when ``LaggyMultiplayerPeer`` is not installed.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

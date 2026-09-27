@@ -19,7 +19,7 @@ A predicted discrete action bound to one authority method.
 Description
 -----------
 
-Pairs a local :ref:`predict<class_NetwAction_property_predict>` effect with a reliable server request.
+Shows the result of an action right away on the client that asked for it, then keeps or removes it once the server answers. Create one with :ref:`Netw.action()<class_Netw_method_action>`.
 
 ::
 
@@ -84,7 +84,7 @@ Signals
 
 **confirmed**\ (\ ) :ref:`🔗<class_NetwAction_signal_confirmed>`
 
-Emitted when the authoritative result adopts the optimistic effect.
+Emitted when the server accepted the action.
 
 .. rst-class:: classref-item-separator
 
@@ -96,7 +96,7 @@ Emitted when the authoritative result adopts the optimistic effect.
 
 **denied**\ (\ ) :ref:`🔗<class_NetwAction_signal_denied>`
 
-Emitted when the server denies the optimistic effect or it times out.
+Emitted when the server denied the action or did not answer in time.
 
 .. rst-class:: classref-section-separator
 
@@ -119,7 +119,7 @@ enum **TimingMode**: :ref:`🔗<enum_NetwAction_TimingMode>`
 
 :ref:`TimingMode<enum_NetwAction_TimingMode>` **TIMING_TICK_ALIGNED** = ``0``
 
-Execute on the server when :ref:`NetwActionContext.view_tick<class_NetwActionContext_property_view_tick>` arrives.
+Runs on the server when its tick reaches :ref:`NetwActionContext.view_tick<class_NetwActionContext_property_view_tick>`.
 
 .. _class_NetwAction_constant_TIMING_TICK_ALIGNED_STATE_READY:
 
@@ -127,13 +127,7 @@ Execute on the server when :ref:`NetwActionContext.view_tick<class_NetwActionCon
 
 :ref:`TimingMode<enum_NetwAction_TimingMode>` **TIMING_TICK_ALIGNED_STATE_READY** = ``1``
 
-Execute after server history records :ref:`NetwActionContext.view_tick<class_NetwActionContext_property_view_tick>`.
-
-This mode is owner-anchored. It guarantees only that the action owner's recorded state is ready at the view tick, and gates no other entity, so cross-entity validation must use :ref:`NetwMultiplayer.lagcomp_sample()<class_NetwMultiplayer_method_lagcomp_sample>` or :ref:`NetwMultiplayer.lagcomp_rewind()<class_NetwMultiplayer_method_lagcomp_rewind>` for those targets.
-
-Determinism is a precondition, not a toggle. The placement agrees with the client only when consuming the same input yields the same state, and resolution is deferred until that state exists, so remote peers see the result later. Use :ref:`TIMING_IMMEDIATE<class_NetwAction_constant_TIMING_IMMEDIATE>` when the action must not wait.
-
-Under loss, the consume policy may fill a missing input slot: this mode guarantees a recorded state exists, not that it came from the real input.
+Runs on the server once it has recorded the requesting entity's state at :ref:`NetwActionContext.view_tick<class_NetwActionContext_property_view_tick>`, so the action sees the same state the client saw. Other peers see the result later. Read other entities with :ref:`Netw.sample()<class_Netw_method_sample>`.
 
 .. _class_NetwAction_constant_TIMING_IMMEDIATE:
 
@@ -141,7 +135,7 @@ Under loss, the consume policy may fill a missing input slot: this mode guarante
 
 :ref:`TimingMode<enum_NetwAction_TimingMode>` **TIMING_IMMEDIATE** = ``2``
 
-Execute as soon as the request reaches the server.
+Runs as soon as the request reaches the server.
 
 .. rst-class:: classref-section-separator
 
@@ -163,7 +157,7 @@ Property Descriptions
 - |void| **set_confirm**\ (\ value\: :godot:`Callable`\ )
 - :godot:`Callable` **get_confirm**\ (\ )
 
-Confirms the optimistic effect, taking the ghost :godot:`Node` :ref:`predict<class_NetwAction_property_predict>` returned. Unset, the ghost is freed with :godot:`Node.queue_free() <Node#class_Node_method_queue_free>`.
+Called with the :godot:`Node` :ref:`predict<class_NetwAction_property_predict>` returned when the server accepted the action. Unset, that node is freed with :godot:`Node.queue_free() <Node#class_Node_method_queue_free>`.
 
 .. rst-class:: classref-item-separator
 
@@ -180,7 +174,7 @@ Confirms the optimistic effect, taking the ghost :godot:`Node` :ref:`predict<cla
 - |void| **set_predict**\ (\ value\: :godot:`Callable`\ )
 - :godot:`Callable` **get_predict**\ (\ )
 
-Creates the local optimistic effect and returns the ghost :godot:`Node` that :ref:`confirm<class_NetwAction_property_confirm>` and :ref:`revert<class_NetwAction_property_revert>` later receive.
+Shows the action locally and returns a :godot:`Node`, usually a placeholder, that :ref:`confirm<class_NetwAction_property_confirm>` or :ref:`revert<class_NetwAction_property_revert>` later receives.
 
 .. rst-class:: classref-item-separator
 
@@ -197,7 +191,7 @@ Creates the local optimistic effect and returns the ghost :godot:`Node` that :re
 - |void| **set_revert**\ (\ value\: :godot:`Callable`\ )
 - :godot:`Callable` **get_revert**\ (\ )
 
-Reverts the optimistic effect, taking the ghost :godot:`Node` :ref:`predict<class_NetwAction_property_predict>` returned. Unset, the ghost is freed with :godot:`Node.queue_free() <Node#class_Node_method_queue_free>`.
+Called with the :godot:`Node` :ref:`predict<class_NetwAction_property_predict>` returned when the server denied the action or did not answer in time. Unset, that node is freed with :godot:`Node.queue_free() <Node#class_Node_method_queue_free>`.
 
 .. rst-class:: classref-item-separator
 
@@ -214,7 +208,7 @@ Reverts the optimistic effect, taking the ghost :godot:`Node` :ref:`predict<clas
 - |void| **set_timeout_ticks**\ (\ value\: :godot:`int`\ )
 - :godot:`int` **get_timeout_ticks**\ (\ )
 
-Ticks before an unresolved request reverts. ``0`` derives a conservative default from the lag-compensation engine.
+How many ticks to wait for the server before reverting. ``0`` waits 120 ticks.
 
 .. rst-class:: classref-item-separator
 
@@ -231,7 +225,7 @@ Ticks before an unresolved request reverts. ``0`` derives a conservative default
 - |void| **set_timing_mode**\ (\ value\: :ref:`TimingMode<enum_NetwAction_TimingMode>`\ )
 - :ref:`TimingMode<enum_NetwAction_TimingMode>` **get_timing_mode**\ (\ )
 
-The server execution policy. Defaults to :ref:`TIMING_IMMEDIATE<class_NetwAction_constant_TIMING_IMMEDIATE>`, which is arrival-time execution with no readiness assumptions, so stricter modes are opted into per action.
+When the server runs the action.
 
 .. rst-class:: classref-section-separator
 
@@ -256,7 +250,7 @@ Asks the server to run the action at ``view_tick``. Every argument after ``view_
 
     func _place_bomb(ctx: NetwActionContext, pos: Vector2, fuse: float) -> void:
 
-\ The local controller gets an immediate :ref:`predict<class_NetwAction_property_predict>` effect. Non-owning peers do nothing.
+\ On the peer controlling the entity, :ref:`predict<class_NetwAction_property_predict>` runs immediately. On any other peer the call does nothing.
 
 \ **Player request.**
 

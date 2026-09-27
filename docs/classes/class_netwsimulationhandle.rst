@@ -59,7 +59,7 @@ An entity is simulated once it sets or calls anything here, declares :ref:`NetwP
 
 \ **Modes**\ 
 
-The peer that authors the entity runs it as :ref:`MODE_AUTHORITY<class_NetwSimulationHandle_constant_MODE_AUTHORITY>`, and a client predicting it runs it as :ref:`MODE_PREDICT<class_NetwSimulationHandle_constant_MODE_PREDICT>`. Every other copy is a frozen :ref:`MODE_PROXY<class_NetwSimulationHandle_constant_MODE_PROXY>`, unless :ref:`replicas<class_NetwSimulationHandle_property_replicas>` or a selection makes it :ref:`MODE_ACTIVE<class_NetwSimulationHandle_constant_MODE_ACTIVE>`.
+The peer with authority over the entity runs it as :ref:`MODE_AUTHORITY<class_NetwSimulationHandle_constant_MODE_AUTHORITY>`, and a client predicting it runs it as :ref:`MODE_PREDICT<class_NetwSimulationHandle_constant_MODE_PREDICT>`. Every other copy is a frozen :ref:`MODE_PROXY<class_NetwSimulationHandle_constant_MODE_PROXY>`, unless :ref:`replicas<class_NetwSimulationHandle_property_replicas>` or a selection makes it :ref:`MODE_ACTIVE<class_NetwSimulationHandle_constant_MODE_ACTIVE>`.
 
 
 
@@ -171,7 +171,7 @@ Not simulated. The entity follows plain replication.
 
 :ref:`Mode<enum_NetwSimulationHandle_Mode>` **MODE_AUTHORITY** = ``1``
 
-This peer authors the entity. The step runs and the samples go out from here.
+This peer has authority over the entity. The step runs and the samples go out from here.
 
 .. _class_NetwSimulationHandle_constant_MODE_PREDICT:
 
@@ -255,7 +255,7 @@ enum **Replicas**: :ref:`🔗<enum_NetwSimulationHandle_Replicas>`
 
 :ref:`Replicas<enum_NetwSimulationHandle_Replicas>` **REPLICAS_PROXY** = ``0``
 
-Copies this peer does not author are :ref:`MODE_PROXY<class_NetwSimulationHandle_constant_MODE_PROXY>`, unless a selection makes them active.
+Copies this peer has no authority over are :ref:`MODE_PROXY<class_NetwSimulationHandle_constant_MODE_PROXY>`, unless a selection makes them active.
 
 .. _class_NetwSimulationHandle_constant_REPLICAS_ACTIVE:
 
@@ -263,7 +263,7 @@ Copies this peer does not author are :ref:`MODE_PROXY<class_NetwSimulationHandle
 
 :ref:`Replicas<enum_NetwSimulationHandle_Replicas>` **REPLICAS_ACTIVE** = ``1``
 
-Copies this peer does not author are :ref:`MODE_ACTIVE<class_NetwSimulationHandle_constant_MODE_ACTIVE>`.
+Copies this peer has no authority over are :ref:`MODE_ACTIVE<class_NetwSimulationHandle_constant_MODE_ACTIVE>`.
 
 .. rst-class:: classref-item-separator
 
@@ -281,7 +281,7 @@ enum **Restore**: :ref:`🔗<enum_NetwSimulationHandle_Restore>`
 
 :ref:`Restore<enum_NetwSimulationHandle_Restore>` **RESTORE_EXACT** = ``0``
 
-A sample lands when it arrives, as it was authored.
+A sample lands when it arrives, as it was sent.
 
 .. _class_NetwSimulationHandle_constant_RESTORE_EXTRAPOLATED:
 
@@ -297,7 +297,7 @@ A sample lands when it arrives, carried forward by its age along the property it
 
 :ref:`Restore<enum_NetwSimulationHandle_Restore>` **RESTORE_BUFFERED** = ``2``
 
-A sample is held until the clock's display tick reaches it, then lands as it was authored.
+A sample is held until the clock's display tick reaches it, then lands as it was sent.
 
 .. rst-class:: classref-section-separator
 
@@ -409,7 +409,7 @@ It needs :ref:`NetwEntity.TRANSFER_IMMEDIATE<class_NetwEntity_constant_TRANSFER_
 - |void| **set_replicas**\ (\ value\: :ref:`Replicas<enum_NetwSimulationHandle_Replicas>`\ )
 - :ref:`Replicas<enum_NetwSimulationHandle_Replicas>` **get_replicas**\ (\ )
 
-How the copies this peer does not author run. It can change at any time.
+How the copies this peer has no authority over run. It can change at any time.
 
 .. rst-class:: classref-item-separator
 
@@ -426,7 +426,7 @@ How the copies this peer does not author run. It can change at any time.
 - |void| **set_restore**\ (\ value\: :ref:`Restore<enum_NetwSimulationHandle_Restore>`\ )
 - :ref:`Restore<enum_NetwSimulationHandle_Restore>` **get_restore**\ (\ )
 
-How a sample from the author lands on a :ref:`MODE_ACTIVE<class_NetwSimulationHandle_constant_MODE_ACTIVE>` copy. Under :ref:`NetwMultiplayer.LIVE_MODE_CHASE<class_NetwMultiplayer_constant_LIVE_MODE_CHASE>` the body snaps to it and the drawn position glides, up to :ref:`NetwPredictionHandle.teleport_threshold<class_NetwPredictionHandle_property_teleport_threshold>`.
+How a sample from the authority lands on a :ref:`MODE_ACTIVE<class_NetwSimulationHandle_constant_MODE_ACTIVE>` copy. Under :ref:`NetwMultiplayer.LIVE_MODE_CHASE<class_NetwMultiplayer_constant_LIVE_MODE_CHASE>` the body snaps to it and the drawn position glides, up to :ref:`NetwPredictionHandle.teleport_threshold<class_NetwPredictionHandle_property_teleport_threshold>`.
 
 .. rst-class:: classref-item-separator
 
@@ -519,7 +519,7 @@ Selects ``entity``, so it runs here as :ref:`MODE_ACTIVE<class_NetwSimulationHan
 
 |void| **simulate_all**\ (\ layer\: :godot:`StringName` = &""\ ) :ref:`🔗<class_NetwSimulationHandle_method_simulate_all>`
 
-Selects every entity this peer holds in ``layer``. An empty ``layer`` reads this entity's own :ref:`NetwInterestLayer<class_NetwInterestLayer>` membership.
+Selects every entity this peer holds in ``layer``. An empty ``layer`` uses the :ref:`NetwInterestLayer<class_NetwInterestLayer>` layers this entity is in.
 
 .. rst-class:: classref-item-separator
 
@@ -531,7 +531,7 @@ Selects every entity this peer holds in ``layer``. An empty ``layer`` reads this
 
 |void| **simulate_nearest**\ (\ count\: :godot:`int`, layer\: :godot:`StringName` = &""\ ) :ref:`🔗<class_NetwSimulationHandle_method_simulate_nearest>`
 
-Selects the ``count`` entities nearest this one among those this peer holds in ``layer``. An empty ``layer`` reads this entity's own :ref:`NetwInterestLayer<class_NetwInterestLayer>` membership.
+Selects the ``count`` entities nearest this one among those this peer holds in ``layer``. An empty ``layer`` uses the :ref:`NetwInterestLayer<class_NetwInterestLayer>` layers this entity is in.
 
 .. rst-class:: classref-item-separator
 

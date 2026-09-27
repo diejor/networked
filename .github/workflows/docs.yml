@@ -40,6 +40,21 @@ jobs:
 
       - uses: ./.github/actions/build-docs-classes
 
+      - name: Check The Committed Class Reference
+        shell: bash
+        run: |
+          set -eu
+          drift="$(git status --porcelain -- docs/classes)"
+          if [ -n "$drift" ]; then
+            printf '%s\n' "$drift"
+            git diff --stat -- docs/classes
+            echo "::error::docs/classes is stale, and Read the Docs publishes it as committed."
+            echo "::error::Regenerate it from a netw_tests=yes build with the engine in ci/engines.json:"
+            echo "::error::  python3 docs/tools/build_reference.py --godot <godot>"
+            echo "::error::then commit docs/classes."
+            exit 1
+          fi
+
       - name: Cache Sphinx doctrees
         uses: actions/cache@v4
         with:

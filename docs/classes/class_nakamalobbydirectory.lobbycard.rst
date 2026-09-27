@@ -12,23 +12,7 @@ NakamaLobbyDirectory.LobbyCard
 
 **Inherits:** :godot:`Resource`
 
-Browse metadata for one relay match.
-
-.. rst-class:: classref-introduction-group
-
-Description
------------
-
-:ref:`to_dict()<class_NakamaLobbyDirectory_LobbyCard_method_to_dict>` is stored by :ref:`NakamaWrapper.write_lobby_card()<class_NakamaWrapper_method_write_lobby_card>`. :ref:`to_server_info()<class_NakamaLobbyDirectory_LobbyCard_method_to_server_info>` creates the browse entry :ref:`LobbyDirectory.publish_lobbies()<class_LobbyDirectory_method_publish_lobbies>` carries.
-
-::
-
-    Storage
-    └── match_id
-        └── LobbyCard.to_dict()
-
-    Browse
-    └── LobbyCard.from_dict(match_id, value).to_server_info(size)
+The listing of one lobby, as stored in Nakama.
 
 .. rst-class:: classref-reftable-group
 
@@ -121,7 +105,7 @@ Host display name.
 
 :godot:`String` **app_id** = ``""`` :ref:`🔗<class_NakamaLobbyDirectory_LobbyCard_property_app_id>`
 
-Hosting tree's :ref:`MultiplayerTree.app_id<class_MultiplayerTree_property_app_id>` build tag, compared by the browser compatibility gate.
+The host's :ref:`MultiplayerTree.app_id<class_MultiplayerTree_property_app_id>`.
 
 .. rst-class:: classref-item-separator
 
@@ -174,7 +158,7 @@ Method Descriptions
 
 :godot:`Dictionary` **to_dict**\ (\ ) :ref:`🔗<class_NakamaLobbyDirectory_LobbyCard_method_to_dict>`
 
-Serializes the card body stored under the match id key.
+Returns the listing as a :godot:`Dictionary` to store.
 
 .. rst-class:: classref-item-separator
 
@@ -186,7 +170,7 @@ Serializes the card body stored under the match id key.
 
 :ref:`NakamaLobbyDirectory.LobbyCard<class_NakamaLobbyDirectory_LobbyCard>` **from_dict**\ (\ match_id\: :godot:`String`, data\: :godot:`Dictionary`\ ) |static| :ref:`🔗<class_NakamaLobbyDirectory_LobbyCard_method_from_dict>`
 
-Rebuilds a **NakamaLobbyDirectory.LobbyCard** from a browse read.
+Creates a listing from a stored :godot:`Dictionary`.
 
 .. rst-class:: classref-item-separator
 
@@ -198,7 +182,7 @@ Rebuilds a **NakamaLobbyDirectory.LobbyCard** from a browse read.
 
 :ref:`NetwServerInfo<class_NetwServerInfo>` **to_server_info**\ (\ players\: :godot:`int`\ ) :ref:`🔗<class_NakamaLobbyDirectory_LobbyCard_method_to_server_info>`
 
-Builds the :ref:`NetwServerInfo<class_NetwServerInfo>` for a browse entry with ``players`` members live in the match right now.
+Returns the listing as a :ref:`NetwServerInfo<class_NetwServerInfo>` with ``players`` players.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

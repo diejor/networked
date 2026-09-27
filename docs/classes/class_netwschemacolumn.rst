@@ -12,16 +12,14 @@ NetwSchemaColumn
 
 **Inherits:** :godot:`RefCounted`
 
-One column exactly as a :ref:`NetwSchema<class_NetwSchema>` declares it, with no session behind it.
+One column of a :ref:`NetwSchema<class_NetwSchema>`.
 
 .. rst-class:: classref-introduction-group
 
 Description
 -----------
 
-A column as authored, before any session compiled it into a table. It carries no session state and no RID, which is what lets a declaration be written in a ``static var`` initializer that runs before any session exists.
-
-Columns are never built directly. :ref:`NetwSchema.column()<class_NetwSchema_method_column>` appends them in address order, and that order is the wire address every adopting peer seals in.
+Created by :ref:`NetwSchema.column()<class_NetwSchema_method_column>`, not directly.
 
 .. rst-class:: classref-reftable-group
 
@@ -61,7 +59,7 @@ Property Descriptions
 - |void| **set_key**\ (\ value\: :godot:`StringName`\ )
 - :godot:`StringName` **get_key**\ (\ )
 
-The caller-facing name, unique within its declaration.
+The column name, unique in its schema.
 
 .. rst-class:: classref-item-separator
 
@@ -78,7 +76,7 @@ The caller-facing name, unique within its declaration.
 - |void| **set_quantizer**\ (\ value\: :ref:`NetwQuantize<class_NetwQuantize>`\ )
 - :ref:`NetwQuantize<class_NetwQuantize>` **get_quantizer**\ (\ )
 
-The bit packer, or ``null`` for the raw memcpy path.
+How the value is compressed, or ``null`` to send it as is.
 
 .. rst-class:: classref-item-separator
 
@@ -95,7 +93,7 @@ The bit packer, or ``null`` for the raw memcpy path.
 - |void| **set_stride**\ (\ value\: :godot:`int`\ )
 - :godot:`int` **get_stride**\ (\ )
 
-How many elements one row occupies.
+How many values each row holds.
 
 .. rst-class:: classref-item-separator
 
@@ -112,7 +110,7 @@ How many elements one row occupies.
 - |void| **set_type**\ (\ value\: :ref:`ColumnType<enum_NetwMultiplayer_ColumnType>`\ )
 - :ref:`ColumnType<enum_NetwMultiplayer_ColumnType>` **get_type**\ (\ )
 
-One of :ref:`ColumnType<enum_NetwMultiplayer_ColumnType>`.
+The type of the values.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

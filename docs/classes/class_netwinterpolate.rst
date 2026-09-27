@@ -12,14 +12,14 @@ NetwInterpolate
 
 **Inherits:** :godot:`Resource`
 
-How one replicated value is smoothed on its way to the property that shows it.
+How a received value is smoothed before it is shown.
 
 .. rst-class:: classref-introduction-group
 
 Description
 -----------
 
-**NetwInterpolate** names how one decoded value enters the interpolation history. :ref:`target<class_NetwInterpolate_property_target>` names the property that receives the smoothed output. :ref:`mode<class_NetwInterpolate_property_mode>`, :ref:`smoothing<class_NetwInterpolate_property_smoothing>`, and :ref:`snap_distance<class_NetwInterpolate_property_snap_distance>` are read by the session's display pump as each sample is recorded.
+Received values are interpolated into the property :ref:`target<class_NetwInterpolate_property_target>`.
 
 ::
 
@@ -27,9 +27,9 @@ Description
         NetwInterpolate.new().lerp().smooth(0.05).to(&"position")
     )
 
-\ The same resource shape is used by :ref:`Netw.configure_property()<class_Netw_method_configure_property>`, :ref:`Netw.configure_rpc()<class_Netw_method_configure_rpc>`, and :ref:`Netw.configure_signal()<class_Netw_method_configure_signal>`.
+\ It works the same with :ref:`Netw.configure_property()<class_Netw_method_configure_property>`, :ref:`Netw.configure_rpc()<class_Netw_method_configure_rpc>` and :ref:`Netw.configure_signal()<class_Netw_method_configure_signal>`.
 
-When :ref:`NetwDisplayHandle.visual_root<class_NetwDisplayHandle_property_visual_root>` is set the visual keeps inheriting the body transform and spatial values are written in global space, so a smoothed channel is not dragged by body writes. Add a second **NetwInterpolate** to also smooth ``rotation``.
+When :ref:`NetwDisplayHandle.visual_root<class_NetwDisplayHandle_property_visual_root>` is set, values are written in global space. Add a second **NetwInterpolate** to also smooth ``rotation``.
 
 .. rst-class:: classref-reftable-group
 
@@ -114,7 +114,7 @@ No interpolation.
 
 :ref:`Mode<enum_NetwInterpolate_Mode>` **MODE_LERP** = ``1``
 
-Linear interpolation through :godot:`@GlobalScope.lerp() <@GlobalScope#class_@GlobalScope_method_lerp>`.
+Linear, with :godot:`@GlobalScope.lerp() <@GlobalScope#class_@GlobalScope_method_lerp>`.
 
 .. _class_NetwInterpolate_constant_MODE_ANGLE:
 
@@ -122,7 +122,7 @@ Linear interpolation through :godot:`@GlobalScope.lerp() <@GlobalScope#class_@Gl
 
 :ref:`Mode<enum_NetwInterpolate_Mode>` **MODE_ANGLE** = ``2``
 
-Angular interpolation through :godot:`@GlobalScope.lerp_angle() <@GlobalScope#class_@GlobalScope_method_lerp_angle>`.
+Angles, with :godot:`@GlobalScope.lerp_angle() <@GlobalScope#class_@GlobalScope_method_lerp_angle>`.
 
 .. _class_NetwInterpolate_constant_MODE_SLERP:
 
@@ -130,7 +130,7 @@ Angular interpolation through :godot:`@GlobalScope.lerp_angle() <@GlobalScope#cl
 
 :ref:`Mode<enum_NetwInterpolate_Mode>` **MODE_SLERP** = ``3``
 
-Spherical interpolation for :godot:`Quaternion` rotations.
+Spherical, for :godot:`Quaternion` rotations.
 
 .. rst-class:: classref-item-separator
 
@@ -148,7 +148,7 @@ enum **Tail**: :ref:`🔗<enum_NetwInterpolate_Tail>`
 
 :ref:`Tail<enum_NetwInterpolate_Tail>` **TAIL_AUTO** = ``0``
 
-Extrapolates past the newest sample by its derivative, capped by :ref:`NetwMultiplayer.DISPLAY_PARAM_MAX_FORECAST_TICKS<class_NetwMultiplayer_constant_DISPLAY_PARAM_MAX_FORECAST_TICKS>`. The derivative is :ref:`project_channel<class_NetwInterpolate_property_project_channel>` when set, otherwise the finite difference of the last two samples.
+Guess ahead from the velocity, up to :ref:`NetwMultiplayer.DISPLAY_PARAM_MAX_FORECAST_TICKS<class_NetwMultiplayer_constant_DISPLAY_PARAM_MAX_FORECAST_TICKS>`.
 
 .. _class_NetwInterpolate_constant_TAIL_HOLD:
 
@@ -156,7 +156,7 @@ Extrapolates past the newest sample by its derivative, capped by :ref:`NetwMulti
 
 :ref:`Tail<enum_NetwInterpolate_Tail>` **TAIL_HOLD** = ``1``
 
-Holds the newest sample and never projects, for discrete or flag values.
+Keep the newest value and never guess ahead.
 
 .. rst-class:: classref-section-separator
 
@@ -178,7 +178,7 @@ Property Descriptions
 - |void| **set_forecast_tail**\ (\ value\: :ref:`Tail<enum_NetwInterpolate_Tail>`\ )
 - :ref:`Tail<enum_NetwInterpolate_Tail>` **get_forecast_tail**\ (\ )
 
-Tail policy under a forecasting playhead. :ref:`TAIL_AUTO<class_NetwInterpolate_constant_TAIL_AUTO>` projects, :ref:`TAIL_HOLD<class_NetwInterpolate_constant_TAIL_HOLD>` never does. Ignored while the entity buffers.
+Whether the value is guessed ahead with :ref:`NetwMultiplayer.TIMELINE_MODE_FORECAST<class_NetwMultiplayer_constant_TIMELINE_MODE_FORECAST>`.
 
 .. rst-class:: classref-item-separator
 
@@ -195,7 +195,7 @@ Tail policy under a forecasting playhead. :ref:`TAIL_AUTO<class_NetwInterpolate_
 - |void| **set_mode**\ (\ value\: :ref:`Mode<enum_NetwInterpolate_Mode>`\ )
 - :ref:`Mode<enum_NetwInterpolate_Mode>` **get_mode**\ (\ )
 
-Interpolation algorithm used for this value.
+How the value is interpolated.
 
 .. rst-class:: classref-item-separator
 
@@ -212,9 +212,7 @@ Interpolation algorithm used for this value.
 - |void| **set_project_channel**\ (\ value\: :godot:`StringName`\ )
 - :godot:`StringName` **get_project_channel**\ (\ )
 
-Sibling channel whose sampled value is this channel's derivative.
-
-Empty falls back to the finite difference of the last two samples. Set it through :ref:`project_by()<class_NetwInterpolate_method_project_by>` to a channel that replicates velocity at the same authoring tick, so a torn pair never manufactures a phantom trajectory.
+Another synchronized property holding this value's velocity, used to guess ahead. When empty, the velocity is computed from the last two values.
 
 .. rst-class:: classref-item-separator
 
@@ -231,7 +229,7 @@ Empty falls back to the finite difference of the last two samples. Set it throug
 - |void| **set_smoothing**\ (\ value\: :godot:`float`\ )
 - :godot:`float` **get_smoothing**\ (\ )
 
-Exponential smoothing time in seconds layered onto bracketed interpolation.
+Extra smoothing time, in seconds.
 
 .. rst-class:: classref-item-separator
 
@@ -248,7 +246,7 @@ Exponential smoothing time in seconds layered onto bracketed interpolation.
 - |void| **set_snap_distance**\ (\ value\: :godot:`float`\ )
 - :godot:`float` **get_snap_distance**\ (\ )
 
-Distance that snaps instead of interpolating. ``0.0`` disables it.
+A change larger than this jumps instead of interpolating. ``0.0`` never jumps.
 
 .. rst-class:: classref-item-separator
 
@@ -265,9 +263,7 @@ Distance that snaps instead of interpolating. ``0.0`` disables it.
 - |void| **set_target**\ (\ value\: :godot:`StringName`\ )
 - :godot:`StringName` **get_target**\ (\ )
 
-Property receiving the smoothed output.
-
-Empty means the source property name for :ref:`Netw.configure_property()<class_Netw_method_configure_property>`. RPC and signal arguments should set an explicit :ref:`target<class_NetwInterpolate_property_target>`.
+The property that receives the smoothed value. When empty, :ref:`Netw.configure_property()<class_Netw_method_configure_property>` uses its own property. Always set it for RPC and signal arguments.
 
 .. rst-class:: classref-section-separator
 
@@ -284,7 +280,7 @@ Method Descriptions
 
 :ref:`NetwInterpolate<class_NetwInterpolate>` **angle**\ (\ ) :ref:`🔗<class_NetwInterpolate_method_angle>`
 
-Selects :ref:`MODE_ANGLE<class_NetwInterpolate_constant_MODE_ANGLE>`.
+Sets :ref:`mode<class_NetwInterpolate_property_mode>` to :ref:`MODE_ANGLE<class_NetwInterpolate_constant_MODE_ANGLE>`.
 
 .. rst-class:: classref-item-separator
 
@@ -296,7 +292,7 @@ Selects :ref:`MODE_ANGLE<class_NetwInterpolate_constant_MODE_ANGLE>`.
 
 :ref:`NetwInterpolate<class_NetwInterpolate>` **hold**\ (\ ) :ref:`🔗<class_NetwInterpolate_method_hold>`
 
-Selects :ref:`TAIL_HOLD<class_NetwInterpolate_constant_TAIL_HOLD>` so the channel never projects past its newest sample, for discrete or flag values that must not extrapolate.
+Sets :ref:`forecast_tail<class_NetwInterpolate_property_forecast_tail>` to :ref:`TAIL_HOLD<class_NetwInterpolate_constant_TAIL_HOLD>`, for values that must not be guessed ahead, such as flags.
 
 .. rst-class:: classref-item-separator
 
@@ -308,7 +304,7 @@ Selects :ref:`TAIL_HOLD<class_NetwInterpolate_constant_TAIL_HOLD>` so the channe
 
 :godot:`bool` **is_same_spec**\ (\ other\: :ref:`NetwInterpolate<class_NetwInterpolate>`\ ) |const| :ref:`🔗<class_NetwInterpolate_method_is_same_spec>`
 
-Returns ``true`` when ``other`` declares the same smoothing behavior. Compared by value, so a freshly built spec equal to a stored one is recognized as the same declaration and re-applying it is idempotent.
+Returns ``true`` when ``other`` has the same settings.
 
 .. rst-class:: classref-item-separator
 
@@ -320,7 +316,7 @@ Returns ``true`` when ``other`` declares the same smoothing behavior. Compared b
 
 :ref:`NetwInterpolate<class_NetwInterpolate>` **lerp**\ (\ ) :ref:`🔗<class_NetwInterpolate_method_lerp>`
 
-Selects :ref:`MODE_LERP<class_NetwInterpolate_constant_MODE_LERP>`.
+Sets :ref:`mode<class_NetwInterpolate_property_mode>` to :ref:`MODE_LERP<class_NetwInterpolate_constant_MODE_LERP>`.
 
 .. rst-class:: classref-item-separator
 
@@ -332,7 +328,7 @@ Selects :ref:`MODE_LERP<class_NetwInterpolate_constant_MODE_LERP>`.
 
 :ref:`NetwInterpolate<class_NetwInterpolate>` **none**\ (\ ) :ref:`🔗<class_NetwInterpolate_method_none>`
 
-Selects :ref:`MODE_NONE<class_NetwInterpolate_constant_MODE_NONE>`.
+Sets :ref:`mode<class_NetwInterpolate_property_mode>` to :ref:`MODE_NONE<class_NetwInterpolate_constant_MODE_NONE>`.
 
 .. rst-class:: classref-item-separator
 
@@ -344,9 +340,7 @@ Selects :ref:`MODE_NONE<class_NetwInterpolate_constant_MODE_NONE>`.
 
 :ref:`NetwInterpolate<class_NetwInterpolate>` **project_by**\ (\ channel\: :godot:`StringName`\ ) :ref:`🔗<class_NetwInterpolate_method_project_by>`
 
-Projects the forecast tail using sibling ``channel`` as the derivative.
-
-The named channel should replicate this value's velocity at the same authoring tick. Leaving it unset projects by finite difference instead.
+Sets :ref:`project_channel<class_NetwInterpolate_property_project_channel>`, the velocity used to guess ahead.
 
 .. rst-class:: classref-item-separator
 
@@ -358,7 +352,7 @@ The named channel should replicate this value's velocity at the same authoring t
 
 :ref:`NetwInterpolate<class_NetwInterpolate>` **slerp**\ (\ ) :ref:`🔗<class_NetwInterpolate_method_slerp>`
 
-Selects :ref:`MODE_SLERP<class_NetwInterpolate_constant_MODE_SLERP>`.
+Sets :ref:`mode<class_NetwInterpolate_property_mode>` to :ref:`MODE_SLERP<class_NetwInterpolate_constant_MODE_SLERP>`.
 
 .. rst-class:: classref-item-separator
 
@@ -370,7 +364,7 @@ Selects :ref:`MODE_SLERP<class_NetwInterpolate_constant_MODE_SLERP>`.
 
 :ref:`NetwInterpolate<class_NetwInterpolate>` **smooth**\ (\ seconds\: :godot:`float`\ ) :ref:`🔗<class_NetwInterpolate_method_smooth>`
 
-Sets :ref:`smoothing<class_NetwInterpolate_property_smoothing>` to ``seconds``.
+Sets :ref:`smoothing<class_NetwInterpolate_property_smoothing>`.
 
 .. rst-class:: classref-item-separator
 
@@ -382,9 +376,7 @@ Sets :ref:`smoothing<class_NetwInterpolate_property_smoothing>` to ``seconds``.
 
 :godot:`float` **smoothing_weight**\ (\ frame_delta\: :godot:`float`\ ) |const| :ref:`🔗<class_NetwInterpolate_method_smoothing_weight>`
 
-How far one frame of ``frame_delta`` seconds moves the display toward its sampled target, given :ref:`smoothing<class_NetwInterpolate_property_smoothing>`.
-
-Frame-rate independent by construction: two frames of half the delta compose to the same weight as one whole frame, so a display filtered here looks the same at any frame rate. A channel with no :ref:`smoothing<class_NetwInterpolate_property_smoothing>` takes the whole step.
+How far one frame of ``frame_delta`` seconds moves toward the target, given :ref:`smoothing<class_NetwInterpolate_property_smoothing>`. The result looks the same at any frame rate.
 
 .. rst-class:: classref-item-separator
 
@@ -396,7 +388,7 @@ Frame-rate independent by construction: two frames of half the delta compose to 
 
 :ref:`NetwInterpolate<class_NetwInterpolate>` **snap_at**\ (\ distance\: :godot:`float`\ ) :ref:`🔗<class_NetwInterpolate_method_snap_at>`
 
-Sets :ref:`snap_distance<class_NetwInterpolate_property_snap_distance>` to ``distance``.
+Sets :ref:`snap_distance<class_NetwInterpolate_property_snap_distance>`.
 
 .. rst-class:: classref-item-separator
 
@@ -408,7 +400,7 @@ Sets :ref:`snap_distance<class_NetwInterpolate_property_snap_distance>` to ``dis
 
 :ref:`NetwInterpolate<class_NetwInterpolate>` **to**\ (\ property\: :godot:`StringName`\ ) :ref:`🔗<class_NetwInterpolate_method_to>`
 
-Sets :ref:`target<class_NetwInterpolate_property_target>` to ``property``.
+Sets :ref:`target<class_NetwInterpolate_property_target>`.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

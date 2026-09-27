@@ -12,18 +12,14 @@ NetwJoinConfig
 
 **Inherits:** :godot:`RefCounted`
 
-Everything one declaration says about the wire schema of its join handler.
+Settings for the join handler, returned by :ref:`Netw.configure_join()<class_Netw_method_configure_join>`.
 
 .. rst-class:: classref-introduction-group
 
 Description
 -----------
 
-:ref:`Netw.configure_join()<class_Netw_method_configure_join>` declares the handler run once for each join its session accepts, and returns this config, which carries the packing that one declaration asks for. It belongs to that declaration: a second node declaring the same handler gets its own, and re-declaring on one node replaces it.
-
-A client fills only the handler's parameters after the :ref:`NetwPlayer<class_NetwPlayer>` the server supplies itself, and passes them as the arguments of :ref:`Netw.prepare_join()<class_Netw_method_prepare_join>` that follow the username. So the list :ref:`quantize()<class_NetwJoinConfig_method_quantize>` takes lines up with that shorter list, and its position zero is the handler's second parameter.
-
-An author who never calls :ref:`quantize()<class_NetwJoinConfig_method_quantize>` declares no packing at all, which sends every wire argument self-describing. A null slot inside a declared list does the same for that one argument, so a schema packs the fields worth packing and leaves the rest alone.
+:ref:`quantize()<class_NetwJoinConfig_method_quantize>` compresses the arguments a client passes to :ref:`Netw.prepare_join()<class_Netw_method_prepare_join>` after its username. The first quantizer is for the second parameter of the handler, after its :ref:`NetwPlayer<class_NetwPlayer>`.
 
 ::
 
@@ -33,8 +29,6 @@ An author who never calls :ref:`quantize()<class_NetwJoinConfig_method_quantize>
 
     func spawn_at(who: NetwPlayer, point: StringName, team: int) -> void:
         ...
-
-\ Whether a declared quantizer can pack the parameter it sits over is judged against the handler method's own declared argument types, past the :ref:`NetwPlayer<class_NetwPlayer>` the client never sends. The rule applied to that list is the same one :ref:`NetwMemberConfig<class_NetwMemberConfig>` enforces for a script member, spelled once. A mismatch is reported and the declaration is still stored, which keeps a mispacked schema visible in the editor without changing what a release build sends.
 
 .. rst-class:: classref-reftable-group
 
@@ -63,9 +57,7 @@ Method Descriptions
 
 :ref:`NetwJoinConfig<class_NetwJoinConfig>` **quantize**\ (\ ...\ ) |vararg| :ref:`🔗<class_NetwJoinConfig_method_quantize>`
 
-Declares the packing, one :ref:`NetwQuantize<class_NetwQuantize>` per argument in the order the handler declares them past its :ref:`NetwPlayer<class_NetwPlayer>`, and ``null`` for an argument that travels self-describing. The count is checked against that sliced schema, so a handler taking two wire arguments and given one quantizer is rejected rather than packed halfway, and a handler whose parameters cannot be read at all is taken on trust. Passing nothing, or an argument that is not a :ref:`NetwQuantize<class_NetwQuantize>`, is rejected with an error and leaves the previous declaration standing, because a typo in one chained call should not silently unpack a schema that was already declared.
-
-Returns the same config so the declaration chains.
+Compresses each join argument with one :ref:`NetwQuantize<class_NetwQuantize>`, in order. ``null`` sends an argument as is. The number of quantizers must match the number of arguments. Returns this config.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

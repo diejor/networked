@@ -12,14 +12,7 @@ ConnectFieldList
 
 **Inherits:** :godot:`RefCounted`
 
-One rendered list of labelled fields, and the values read back out of it.
-
-.. rst-class:: classref-introduction-group
-
-Description
------------
-
-A form hands it a container and either a settings :godot:`Dictionary` or a join schema :godot:`Array`, and reads the rows back as whichever shape it needs.
+A list of labelled form fields, built from a settings :godot:`Dictionary` or a join schema :godot:`Array`.
 
 .. rst-class:: classref-reftable-group
 
@@ -77,7 +70,7 @@ Method Descriptions
 
 |void| **render_settings**\ (\ container\: :godot:`Container`, defaults\: :godot:`Dictionary`\ ) :ref:`🔗<class_ConnectFieldList_method_render_settings>`
 
-Draws one row per authorable entry of ``defaults`` into ``container``, replacing whatever it held. An entry whose default no control can carry is skipped, so an installation seam never becomes a field.
+Replaces the contents of ``container`` with one field per entry of ``defaults``. Entries that cannot be edited in a field are skipped.
 
 .. rst-class:: classref-item-separator
 
@@ -89,7 +82,7 @@ Draws one row per authorable entry of ``defaults`` into ``container``, replacing
 
 |void| **render_schema**\ (\ container\: :godot:`Container`, schema\: :godot:`Array`\ ) :ref:`🔗<class_ConnectFieldList_method_render_schema>`
 
-Draws one row per entry of ``schema`` into ``container``, in the order the schema lists them, seeded with the empty value of each type.
+Replaces the contents of ``container`` with one empty field per entry of ``schema``, in order.
 
 .. rst-class:: classref-item-separator
 
@@ -101,7 +94,7 @@ Draws one row per entry of ``schema`` into ``container``, in the order the schem
 
 :godot:`bool` **is_empty**\ (\ ) :ref:`🔗<class_ConnectFieldList_method_is_empty>`
 
-Whether anything was drawn, which is what decides if a settings section is worth showing at all.
+Returns ``true`` when there are no fields.
 
 .. rst-class:: classref-item-separator
 
@@ -113,7 +106,7 @@ Whether anything was drawn, which is what decides if a settings section is worth
 
 :godot:`Dictionary` **as_dictionary**\ (\ ) :ref:`🔗<class_ConnectFieldList_method_as_dictionary>`
 
-The rows read back as a :godot:`Dictionary` keyed the way they were rendered.
+Returns the field values, keyed by name.
 
 .. rst-class:: classref-item-separator
 
@@ -125,7 +118,7 @@ The rows read back as a :godot:`Dictionary` keyed the way they were rendered.
 
 :godot:`Array` **as_array**\ (\ ) :ref:`🔗<class_ConnectFieldList_method_as_array>`
 
-The rows read back positionally, which is the shape a join schema takes.
+Returns the field values in order, as join arguments.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

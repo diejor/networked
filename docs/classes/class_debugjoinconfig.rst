@@ -12,7 +12,7 @@ DebugJoinConfig
 
 **Inherits:** :godot:`Resource`
 
-Used by :ref:`MultiplayerTree<class_MultiplayerTree>` in debug builds to auto connect a peer with a given name and join intent.
+Joins automatically in debug builds, set as :ref:`MultiplayerTree.debug_join<class_MultiplayerTree_property_debug_join>`.
 
 .. rst-class:: classref-reftable-group
 
@@ -48,7 +48,7 @@ Property Descriptions
 - |void| **set_join_args**\ (\ value\: :godot:`Array`\ )
 - :godot:`Array` **get_join_args**\ (\ )
 
-The typed join args the tree submits alongside :ref:`username<class_DebugJoinConfig_property_username>`.
+The arguments passed to :ref:`Netw.prepare_join()<class_Netw_method_prepare_join>` after :ref:`username<class_DebugJoinConfig_property_username>`.
 
 .. rst-class:: classref-item-separator
 
@@ -65,7 +65,7 @@ The typed join args the tree submits alongside :ref:`username<class_DebugJoinCon
 - |void| **set_username**\ (\ value\: :godot:`StringName`\ )
 - :godot:`StringName` **get_username**\ (\ )
 
-Display name for the auto connected player, submitted alongside :ref:`join_args<class_DebugJoinConfig_property_join_args>`. Changes by process-id to avoid collisions when multiple debug builds run on the same machine.
+The username to join with. The process id is added so several instances on one machine get different names.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

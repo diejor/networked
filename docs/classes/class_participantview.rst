@@ -14,16 +14,14 @@ ParticipantView
 
 **Inherited By:** :ref:`HostSceneView<class_HostSceneView>`
 
-Draws one :godot:`SubViewport` into a :godot:`Control` rect and pushes input back into it.
+Displays a :godot:`SubViewport` inside a :godot:`Control` and passes input to it.
 
 .. rst-class:: classref-introduction-group
 
 Description
 -----------
 
-A view BORROWS its target's render state rather than owning it. :ref:`set_target()<class_ParticipantView_method_set_target>` saves the four render fields the target arrived with, forces it to draw every frame, and puts all four back when the view lets go, so a viewport that passes through a view reads afterwards exactly as it read before. That borrow is what makes a target single-owner: two views saving the same viewport would each save what the other already overwrote, so a second view asking for a claimed target is rejected and draws nothing. :ref:`owner_of()<class_ParticipantView_method_owner_of>` returns which view holds one.
-
-The rect the target's texture lands in is solved from the same ``display/window/stretch/*`` pipeline Godot applies to the root window, so a scene hosted in a :godot:`SubViewport` letterboxes and scales the way the same scene would in the root. Every ``stretch_`` knob defaults to inheriting the project's return a result for that one field, so a view names only what it wants to differ. :ref:`stretch_design_size<class_ParticipantView_property_stretch_design_size>` is the exception a game usually has to name, because a project that never set ``display/window/size/viewport_width`` has no design resolution to inherit and the view falls back to drawing one to one.
+The :godot:`SubViewport` is scaled with the same stretch settings as the root window, from ``display/window/stretch/*``. Each ``stretch_`` member can override one of them. Set :ref:`stretch_design_size<class_ParticipantView_property_stretch_design_size>` when the project does not set ``display/window/size/viewport_width``.
 
 ::
 
@@ -33,9 +31,9 @@ The rect the target's texture lands in is solved from the same ``display/window/
     add_child(view)
     view.set_target(subviewport)
 
-\ Mouse events arriving through :godot:`Control._gui_input() <Control#class_Control_private_method__gui_input>` are remapped out of the view's on-screen rect and into the target's own logical space before they are pushed, so a click lands where the player aimed whatever the letterbox is doing. Keyboard and joypad events are not routed by position and are forwarded only when :ref:`forwards_unhandled_input<class_ParticipantView_property_forwards_unhandled_input>` is set, which is what lets a container decide input routing for several views instead of every view grabbing what it sees.
+\ Mouse events are passed to the target at the right position. Keyboard and joypad events are passed only when :ref:`forwards_unhandled_input<class_ParticipantView_property_forwards_unhandled_input>` is on.
 
-\ :ref:`HostSceneView<class_HostSceneView>` is the subclass a listen-server host mounts automatically; add a bare **ParticipantView** when you are placing and targeting the display yourself.
+Only one view can display a given :godot:`SubViewport`. :ref:`HostSceneView<class_HostSceneView>` is the view a host creates by itself.
 
 .. rst-class:: classref-reftable-group
 
@@ -102,7 +100,7 @@ enum **StretchMode**: :ref:`🔗<enum_ParticipantView_StretchMode>`
 
 :ref:`StretchMode<enum_ParticipantView_StretchMode>` **STRETCH_MODE_INHERIT** = ``0``
 
-Take ``display/window/stretch/mode`` from the project.
+Use the project setting.
 
 .. _class_ParticipantView_constant_STRETCH_MODE_DISABLED:
 
@@ -110,7 +108,7 @@ Take ``display/window/stretch/mode`` from the project.
 
 :ref:`StretchMode<enum_ParticipantView_StretchMode>` **STRETCH_MODE_DISABLED** = ``1``
 
-No stretch at all: the target renders at the control's pixel size, one to one, with no size override.
+No stretching. The target renders at the control's size.
 
 .. _class_ParticipantView_constant_STRETCH_MODE_CANVAS_ITEMS:
 
@@ -118,7 +116,7 @@ No stretch at all: the target renders at the control's pixel size, one to one, w
 
 :ref:`StretchMode<enum_ParticipantView_StretchMode>` **STRETCH_MODE_CANVAS_ITEMS** = ``2``
 
-Render at the on-screen pixel size and publish :ref:`stretch_design_size<class_ParticipantView_property_stretch_design_size>` as the target's 2D override, so text and canvas items stay crisp while cameras and UI still see the design resolution.
+Like the ``canvas_items`` stretch mode.
 
 .. _class_ParticipantView_constant_STRETCH_MODE_VIEWPORT:
 
@@ -126,7 +124,7 @@ Render at the on-screen pixel size and publish :ref:`stretch_design_size<class_P
 
 :ref:`StretchMode<enum_ParticipantView_StretchMode>` **STRETCH_MODE_VIEWPORT** = ``3``
 
-Render at the design resolution and stretch the texture into :ref:`get_inner_rect()<class_ParticipantView_method_get_inner_rect>`, so upscaling gives whole chunky pixels. The only mode :ref:`STRETCH_SCALE_MODE_INTEGER<class_ParticipantView_constant_STRETCH_SCALE_MODE_INTEGER>` affects.
+Like the ``viewport`` stretch mode.
 
 .. rst-class:: classref-item-separator
 
@@ -144,7 +142,7 @@ enum **StretchAspect**: :ref:`🔗<enum_ParticipantView_StretchAspect>`
 
 :ref:`StretchAspect<enum_ParticipantView_StretchAspect>` **STRETCH_ASPECT_INHERIT** = ``0``
 
-Take ``display/window/stretch/aspect`` from the project.
+Use the project setting.
 
 .. _class_ParticipantView_constant_STRETCH_ASPECT_IGNORE:
 
@@ -152,7 +150,7 @@ Take ``display/window/stretch/aspect`` from the project.
 
 :ref:`StretchAspect<enum_ParticipantView_StretchAspect>` **STRETCH_ASPECT_IGNORE** = ``1``
 
-Fill the control, distorting the design's aspect rather than letterboxing it.
+Like the ``ignore`` stretch aspect.
 
 .. _class_ParticipantView_constant_STRETCH_ASPECT_KEEP:
 
@@ -160,7 +158,7 @@ Fill the control, distorting the design's aspect rather than letterboxing it.
 
 :ref:`StretchAspect<enum_ParticipantView_StretchAspect>` **STRETCH_ASPECT_KEEP** = ``2``
 
-Centre the design's aspect inside the control and letterbox the rest. The only aspect that shrinks :ref:`get_inner_rect()<class_ParticipantView_method_get_inner_rect>`.
+Like the ``keep`` stretch aspect.
 
 .. _class_ParticipantView_constant_STRETCH_ASPECT_KEEP_WIDTH:
 
@@ -168,7 +166,7 @@ Centre the design's aspect inside the control and letterbox the rest. The only a
 
 :ref:`StretchAspect<enum_ParticipantView_StretchAspect>` **STRETCH_ASPECT_KEEP_WIDTH** = ``3``
 
-Hold the design's width and grow its logical height to the control's aspect, so a taller window shows more rather than smaller.
+Like the ``keep_width`` stretch aspect.
 
 .. _class_ParticipantView_constant_STRETCH_ASPECT_KEEP_HEIGHT:
 
@@ -176,7 +174,7 @@ Hold the design's width and grow its logical height to the control's aspect, so 
 
 :ref:`StretchAspect<enum_ParticipantView_StretchAspect>` **STRETCH_ASPECT_KEEP_HEIGHT** = ``4``
 
-Hold the design's height and grow its logical width to the control's aspect.
+Like the ``keep_height`` stretch aspect.
 
 .. _class_ParticipantView_constant_STRETCH_ASPECT_EXPAND:
 
@@ -184,7 +182,7 @@ Hold the design's height and grow its logical width to the control's aspect.
 
 :ref:`StretchAspect<enum_ParticipantView_StretchAspect>` **STRETCH_ASPECT_EXPAND** = ``5``
 
-Grow whichever axis the control is looser against, so nothing is ever cropped. Returns the same design as whichever of :ref:`STRETCH_ASPECT_KEEP_WIDTH<class_ParticipantView_constant_STRETCH_ASPECT_KEEP_WIDTH>` and :ref:`STRETCH_ASPECT_KEEP_HEIGHT<class_ParticipantView_constant_STRETCH_ASPECT_KEEP_HEIGHT>` holds the tighter axis.
+Like the ``expand`` stretch aspect.
 
 .. rst-class:: classref-item-separator
 
@@ -202,7 +200,7 @@ enum **StretchScaleMode**: :ref:`🔗<enum_ParticipantView_StretchScaleMode>`
 
 :ref:`StretchScaleMode<enum_ParticipantView_StretchScaleMode>` **STRETCH_SCALE_MODE_INHERIT** = ``0``
 
-Take ``display/window/stretch/scale_mode`` from the project.
+Use the project setting.
 
 .. _class_ParticipantView_constant_STRETCH_SCALE_MODE_FRACTIONAL:
 
@@ -210,7 +208,7 @@ Take ``display/window/stretch/scale_mode`` from the project.
 
 :ref:`StretchScaleMode<enum_ParticipantView_StretchScaleMode>` **STRETCH_SCALE_MODE_FRACTIONAL** = ``1``
 
-Fit exactly, at whatever fractional multiple of the design that takes.
+Like the ``fractional`` scale mode.
 
 .. _class_ParticipantView_constant_STRETCH_SCALE_MODE_INTEGER:
 
@@ -218,7 +216,7 @@ Fit exactly, at whatever fractional multiple of the design that takes.
 
 :ref:`StretchScaleMode<enum_ParticipantView_StretchScaleMode>` **STRETCH_SCALE_MODE_INTEGER** = ``2``
 
-Shrink the drawn rect to a whole multiple of the design, never below one to one. Applies only under :ref:`STRETCH_MODE_VIEWPORT<class_ParticipantView_constant_STRETCH_MODE_VIEWPORT>` with a letterboxing aspect, since :ref:`STRETCH_ASPECT_IGNORE<class_ParticipantView_constant_STRETCH_ASPECT_IGNORE>` and :ref:`STRETCH_ASPECT_EXPAND<class_ParticipantView_constant_STRETCH_ASPECT_EXPAND>` leave no letterbox to snap inside.
+Like the ``integer`` scale mode.
 
 .. rst-class:: classref-section-separator
 
@@ -240,7 +238,7 @@ Property Descriptions
 - |void| **set_forwards_unhandled_input**\ (\ value\: :godot:`bool`\ )
 - :godot:`bool` **get_forwards_unhandled_input**\ (\ )
 
-Whether non-mouse events reaching :godot:`Node._unhandled_input() <Node#class_Node_private_method__unhandled_input>` are pushed into the target. Mouse events are never forwarded this way, because :godot:`Control._gui_input() <Control#class_Control_private_method__gui_input>` already routes them by position. :ref:`HostSceneView<class_HostSceneView>` sets this, since a host's view is the whole window and nothing else is competing for the keyboard.
+Whether keyboard and joypad events from :godot:`Node._unhandled_input() <Node#class_Node_private_method__unhandled_input>` are passed to the target.
 
 .. rst-class:: classref-item-separator
 
@@ -257,7 +255,7 @@ Whether non-mouse events reaching :godot:`Node._unhandled_input() <Node#class_No
 - |void| **set_stretch_aspect**\ (\ value\: :ref:`StretchAspect<enum_ParticipantView_StretchAspect>`\ )
 - :ref:`StretchAspect<enum_ParticipantView_StretchAspect>` **get_stretch_aspect**\ (\ )
 
-How the design resolution is fitted into the control rect. Either letterboxes the rect or grows the logical design, never both.
+Like ``display/window/stretch/aspect``.
 
 .. rst-class:: classref-item-separator
 
@@ -274,7 +272,7 @@ How the design resolution is fitted into the control rect. Either letterboxes th
 - |void| **set_stretch_design_size**\ (\ value\: :godot:`Vector2i`\ )
 - :godot:`Vector2i` **get_stretch_design_size**\ (\ )
 
-The logical resolution the game draws at. ``Vector2i(0, 0)`` inherits ``display/window/size/viewport_width`` and ``viewport_height``, and a design with no area makes the view draw one to one whatever :ref:`stretch_mode<class_ParticipantView_property_stretch_mode>` says.
+The resolution the game is designed for. ``Vector2i(0, 0)`` uses ``display/window/size/viewport_width`` and ``viewport_height``.
 
 .. rst-class:: classref-item-separator
 
@@ -291,7 +289,7 @@ The logical resolution the game draws at. ``Vector2i(0, 0)`` inherits ``display/
 - |void| **set_stretch_mode**\ (\ value\: :ref:`StretchMode<enum_ParticipantView_StretchMode>`\ )
 - :ref:`StretchMode<enum_ParticipantView_StretchMode>` **get_stretch_mode**\ (\ )
 
-Which end of the fit the target renders at. Mirrors the project's ``display/window/stretch/mode``.
+Like ``display/window/stretch/mode``.
 
 .. rst-class:: classref-item-separator
 
@@ -308,7 +306,7 @@ Which end of the fit the target renders at. Mirrors the project's ``display/wind
 - |void| **set_stretch_scale**\ (\ value\: :godot:`float`\ )
 - :godot:`float` **get_stretch_scale**\ (\ )
 
-Divides the design resolution, so ``2.0`` halves the logical viewport the game draws into and leaves the on-screen rect alone. Zero or less inherits ``display/window/stretch/scale``.
+Like ``display/window/stretch/scale``. ``0.0`` or less uses the project setting.
 
 .. rst-class:: classref-item-separator
 
@@ -325,7 +323,7 @@ Divides the design resolution, so ``2.0`` halves the logical viewport the game d
 - |void| **set_stretch_scale_mode**\ (\ value\: :ref:`StretchScaleMode<enum_ParticipantView_StretchScaleMode>`\ )
 - :ref:`StretchScaleMode<enum_ParticipantView_StretchScaleMode>` **get_stretch_scale_mode**\ (\ )
 
-Whether the fit may land on a fractional multiple of the design. Mirrors the project's ``display/window/stretch/scale_mode``.
+Like ``display/window/stretch/scale_mode``.
 
 .. rst-class:: classref-section-separator
 
@@ -342,7 +340,7 @@ Method Descriptions
 
 |void| **clear_target**\ (\ ) :ref:`🔗<class_ParticipantView_method_clear_target>`
 
-Detaches from the current target, restoring the render state it was holding. The same thing as ``set_target(null)``, and what a view does for itself when it leaves the tree or its target does.
+Stops displaying the target and restores its settings. Same as ``set_target(null)``.
 
 .. rst-class:: classref-item-separator
 
@@ -354,7 +352,7 @@ Detaches from the current target, restoring the render state it was holding. The
 
 |void| **forward_input**\ (\ event\: :godot:`InputEvent`\ ) :ref:`🔗<class_ParticipantView_method_forward_input>`
 
-Pushes ``event`` into the target viewport as a local event, with no remapping. The routed path a container uses when it decides which view an event belongs to. Does nothing when no target is held.
+Passes ``event`` to the target unchanged.
 
 .. rst-class:: classref-item-separator
 
@@ -366,7 +364,7 @@ Pushes ``event`` into the target viewport as a local event, with no remapping. T
 
 :godot:`Rect2` **get_inner_rect**\ (\ ) |const| :ref:`🔗<class_ParticipantView_method_get_inner_rect>`
 
-Where in this control's local space the target's texture is drawn. Every pixel of the control outside it is letterbox the view leaves undrawn, so an empty rect means the stretch pipeline has not solved yet.
+Returns where the target is drawn, in local coordinates. The rest of the control is empty letterbox.
 
 .. rst-class:: classref-item-separator
 
@@ -378,7 +376,7 @@ Where in this control's local space the target's texture is drawn. Every pixel o
 
 :godot:`SubViewport` **get_target**\ (\ ) |const| :ref:`🔗<class_ParticipantView_method_get_target>`
 
-The viewport this view currently draws, or ``null`` when it holds none. Returns ``null`` rather than a dangling handle once the target leaves the tree.
+Returns the displayed :godot:`SubViewport`, or ``null``.
 
 .. rst-class:: classref-item-separator
 
@@ -390,7 +388,7 @@ The viewport this view currently draws, or ``null`` when it holds none. Returns 
 
 :ref:`ParticipantView<class_ParticipantView>` **owner_of**\ (\ target\: :godot:`SubViewport`\ ) |static| :ref:`🔗<class_ParticipantView_method_owner_of>`
 
-The view that has borrowed ``target``'s render state, or ``null`` when no view holds it. Ask before targeting a viewport another view may already be drawing, because :ref:`set_target()<class_ParticipantView_method_set_target>` rejects rather than taking it over.
+Returns the view displaying ``target``, or ``null``.
 
 .. rst-class:: classref-item-separator
 
@@ -402,9 +400,7 @@ The view that has borrowed ``target``'s render state, or ``null`` when no view h
 
 |void| **set_target**\ (\ target\: :godot:`SubViewport`\ ) :ref:`🔗<class_ParticipantView_method_set_target>`
 
-Points this view at ``target``, saving its render state and forcing it to draw every frame. Restores and releases whatever the view was holding first, so retargeting never strands a viewport in :godot:`SubViewport.UPDATE_ALWAYS <SubViewport#class_SubViewport_constant_UPDATE_ALWAYS>`.
-
-Rejected, with an error naming both views, when :ref:`owner_of()<class_ParticipantView_method_owner_of>` already returns another live view for ``target``: the standing view keeps the target and the state it saved, and this one is left displaying nothing.
+Displays ``target``. It is set to :godot:`SubViewport.UPDATE_ALWAYS <SubViewport#class_SubViewport_constant_UPDATE_ALWAYS>`, and its settings are restored when the view lets go. Fails with an error when another view already displays ``target``.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

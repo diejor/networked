@@ -12,20 +12,18 @@ NetwQuantizeQuaternion
 
 **Inherits:** :ref:`NetwQuantize<class_NetwQuantize>` **<** :godot:`Resource`
 
-:ref:`NetwQuantize<class_NetwQuantize>` that compresses a unit :godot:`Quaternion` with smallest-three encoding.
+:ref:`NetwQuantize<class_NetwQuantize>` for a normalized :godot:`Quaternion`.
 
 .. rst-class:: classref-introduction-group
 
 Description
 -----------
 
-The largest component is omitted and reconstructed from unit length. The other three components are quantized across ``-1 / sqrt(2) <= component <= 1 / sqrt(2)``. This stores any rotation in ``2 + bit_count * 3`` bits.
+Sends three of the four components, and rebuilds the largest one. Any rotation takes ``2 + bit_count * 3`` bits.
 
 ::
 
     var q := NetwQuantizeQuaternion.new().bits(10)
-
-\ The sign of the omitted component is normalized away before packing, so two quaternions naming the same rotation encode to the same bits.
 
 .. rst-class:: classref-reftable-group
 
@@ -71,7 +69,7 @@ Property Descriptions
 - |void| **set_bit_count**\ (\ value\: :godot:`int`\ )
 - :godot:`int` **get_bit_count**\ (\ )
 
-Bits per stored quaternion component, clamped to 1..20.
+Bits per component, from ``1`` to ``20``.
 
 .. rst-class:: classref-section-separator
 
@@ -88,7 +86,7 @@ Method Descriptions
 
 :ref:`NetwQuantizeQuaternion<class_NetwQuantizeQuaternion>` **bits**\ (\ bits\: :godot:`int`\ ) :ref:`🔗<class_NetwQuantizeQuaternion_method_bits>`
 
-Builder that sets :ref:`bit_count<class_NetwQuantizeQuaternion_property_bit_count>` and returns this quantizer.
+Sets :ref:`bit_count<class_NetwQuantizeQuaternion_property_bit_count>` and returns this quantizer.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

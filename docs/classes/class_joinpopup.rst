@@ -12,14 +12,14 @@ JoinPopup
 
 **Inherits:** :godot:`PopupPanel`
 
-Modal form for clients to configure join options.
+A form to join a server.
 
 .. rst-class:: classref-introduction-group
 
 Description
 -----------
 
-Renders one field per entry of :ref:`NetwConnectHandle.join_schema()<class_NetwConnectHandle_method_join_schema>` and one per key of the picked endpoint's ``client_settings``, seeded with whatever that bookmark was saved with.
+Shows the fields of :ref:`NetwConnectHandle.join_schema()<class_NetwConnectHandle_method_join_schema>` and the client settings of the server's transport.
 
 .. rst-class:: classref-reftable-group
 
@@ -98,7 +98,7 @@ Method Descriptions
 
 |void| **open_join**\ (\ handle\: :ref:`NetwConnectHandle<class_NetwConnectHandle>`, default_username\: :godot:`String`, peer_class\: :godot:`StringName` = &"", authored\: :godot:`Dictionary` = {}\ ) :ref:`🔗<class_JoinPopup_method_open_join>`
 
-Opens the join popup for the endpoint on ``peer_class``, rendering one field per entry of ``handle``'s :ref:`NetwConnectHandle.join_schema()<class_NetwConnectHandle_method_join_schema>` and one per client setting that transport names, seeded from ``authored``.
+Opens the form for the server on ``peer_class``, filled with its saved ``authored`` settings.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

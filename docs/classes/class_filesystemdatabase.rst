@@ -41,22 +41,6 @@ Properties
    | :godot:`String` | :ref:`root<class_FileSystemDatabase_property_root>` | ``"user://saves"`` |
    +-----------------+-----------------------------------------------------+--------------------+
 
-.. rst-class:: classref-reftable-group
-
-Methods
--------
-
-.. table::
-   :widths: auto
-
-   +---------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwPromise<class_NetwPromise>` | :ref:`_delete_slot<class_FileSystemDatabase_private_method__delete_slot>`\ (\ session\: :godot:`Object`, slot\: :godot:`StringName`\ ) |virtual| |
-   +---------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwPromise<class_NetwPromise>` | :ref:`_list_slots<class_FileSystemDatabase_private_method__list_slots>`\ (\ session\: :godot:`Object`\ ) |virtual|                               |
-   +---------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwPromise<class_NetwPromise>` | :ref:`_open<class_FileSystemDatabase_private_method__open>`\ (\ session\: :godot:`Object`, slot\: :godot:`StringName`\ ) |virtual|               |
-   +---------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------+
-
 .. rst-class:: classref-section-separator
 
 ----
@@ -78,71 +62,6 @@ Property Descriptions
 - :godot:`String` **get_root**\ (\ )
 
 The directory every slot lives under. Use a path under ``user://``, which an exported game can write to on every platform.
-
-.. rst-class:: classref-section-separator
-
-----
-
-.. rst-class:: classref-descriptions-group
-
-Method Descriptions
--------------------
-
-.. _class_FileSystemDatabase_private_method__delete_slot:
-
-.. rst-class:: classref-method
-
-:ref:`NetwPromise<class_NetwPromise>` **_delete_slot**\ (\ session\: :godot:`Object`, slot\: :godot:`StringName`\ ) |virtual| :ref:`🔗<class_FileSystemDatabase_private_method__delete_slot>`
-
-Removes the directory for ``slot`` and every record inside it.
-
-.. code:: text
-
-    Error
-    ┠╴OK                    	slot was absent or was removed
-    ┠╴ERR_FILE_CANT_OPEN    	slot could not be opened
-    ┠╴ERR_FILE_NO_PERMISSION 	the process cannot remove the slot
-    ┖╴ERR_FILE_CANT_WRITE   	removing the slot failed
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_FileSystemDatabase_private_method__list_slots:
-
-.. rst-class:: classref-method
-
-:ref:`NetwPromise<class_NetwPromise>` **_list_slots**\ (\ session\: :godot:`Object`\ ) |virtual| :ref:`🔗<class_FileSystemDatabase_private_method__list_slots>`
-
-Reads :ref:`root<class_FileSystemDatabase_property_root>` and resolves every slot directory it contains.
-
-.. code:: text
-
-    Error
-    ┠╴OK                    	root was read and slots were listed
-    ┠╴ERR_FILE_CANT_OPEN    	root could not be opened
-    ┠╴ERR_FILE_NO_PERMISSION 	the process cannot read root
-    ┖╴ERR_FILE_CANT_READ   		reading root failed
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_FileSystemDatabase_private_method__open:
-
-.. rst-class:: classref-method
-
-:ref:`NetwPromise<class_NetwPromise>` **_open**\ (\ session\: :godot:`Object`, slot\: :godot:`StringName`\ ) |virtual| :ref:`🔗<class_FileSystemDatabase_private_method__open>`
-
-Opens ``slot`` and resolves a :ref:`NetwDatabaseConnection<class_NetwDatabaseConnection>` for its directory.
-
-.. code:: text
-
-    Error
-    ┠╴OK                     	slot was opened
-    ┠╴ERR_FILE_CANT_OPEN     	the slot could not be opened
-    ┠╴ERR_FILE_NO_PERMISSION  	the process cannot open the slot
-    ┖╴ERR_FILE_CANT_READ      	reading the slot failed
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

@@ -127,7 +127,7 @@ Signals
 
 **match_joined**\ (\ ) :ref:`🔗<class_NakamaWrapper_signal_match_joined>`
 
-Emitted once the local peer id is granted and the match is fully joined.  For a host this fires right after :ref:`create_match()<class_NakamaWrapper_method_create_match>` resolves. For a client it fires when the host's peer id assignment arrives.
+Emitted when the match is joined and this peer has its id.
 
 .. rst-class:: classref-item-separator
 
@@ -139,7 +139,7 @@ Emitted once the local peer id is granted and the match is fully joined.  For a 
 
 **match_join_error**\ (\ message\: :godot:`String`\ ) :ref:`🔗<class_NakamaWrapper_signal_match_join_error>`
 
-Emitted when joining or creating a match fails. Carries the Nakama error ``message``.
+Emitted when creating or joining a match fails, with the Nakama error ``message``.
 
 .. rst-class:: classref-item-separator
 
@@ -151,7 +151,7 @@ Emitted when joining or creating a match fails. Carries the Nakama error ``messa
 
 **socket_closed**\ (\ ) :ref:`🔗<class_NakamaWrapper_signal_socket_closed>`
 
-Emitted when the underlying socket closes, mirroring the host leaving or a transport drop.
+Emitted when the connection to Nakama closes.
 
 .. rst-class:: classref-section-separator
 
@@ -168,7 +168,7 @@ Constants
 
 **LOBBY_COLLECTION** = ``"lobbies"`` :ref:`🔗<class_NakamaWrapper_constant_LOBBY_COLLECTION>`
 
-Nakama storage collection the relay lobby browse cards are written under.
+The Nakama storage collection where lobby listings are saved.
 
 .. rst-class:: classref-section-separator
 
@@ -185,16 +185,7 @@ Property Descriptions
 
 :godot:`Callable` **proxy_base_resolver** :ref:`🔗<class_NakamaWrapper_property_proxy_base_resolver>`
 
-Optional hook that routes Nakama traffic through a platform proxy.  :ref:`connect_async()<class_NakamaWrapper_method_connect_async>` applies the returned base to both the HTTP client and realtime socket. Return ``""`` to keep the configured Nakama host.
-
-::
-
-    Callable
-    ├── host_node (Node)
-    ├── config_host (String)
-    └── return (String)
-        ├── ""                                  # direct
-        └── "app.discordsays.com/.proxy/nakama" # proxied
+Optional :godot:`Callable` that sends Nakama traffic through a proxy, such as a Discord activity proxy. It is called as ``proxy_base_resolver(host_node, config_host)`` and returns the proxy address, such as ``"app.discordsays.com/.proxy/nakama"``, or ``""`` to connect directly.
 
 .. rst-class:: classref-section-separator
 
@@ -211,7 +202,7 @@ Method Descriptions
 
 |void| **use_session**\ (\ session\: :ref:`NakamaSessionService<class_NakamaSessionService>`\ ) :ref:`🔗<class_NakamaWrapper_method_use_session>`
 
-Binds this wrapper to a shared :ref:`NakamaSessionService<class_NakamaSessionService>`.  Call before :ref:`connect_async()<class_NakamaWrapper_method_connect_async>`. A bound wrapper reuses the shared account for auth and storage. An unbound wrapper creates its own device session.
+Uses the account of ``session`` for login and storage. Call it before :ref:`connect_async()<class_NakamaWrapper_method_connect_async>`. Otherwise the wrapper logs in on its own.
 
 .. rst-class:: classref-item-separator
 
@@ -223,7 +214,7 @@ Binds this wrapper to a shared :ref:`NakamaSessionService<class_NakamaSessionSer
 
 :godot:`bool` **is_addon_present**\ (\ ) |static| :ref:`🔗<class_NakamaWrapper_method_is_addon_present>`
 
-Returns ``true`` when the Nakama addon scripts are installed.  Call it before using other **NakamaWrapper** methods in code that may run without the addon.
+Returns ``true`` when the Nakama addon is installed. Check it before calling other methods.
 
 .. rst-class:: classref-item-separator
 
@@ -235,7 +226,7 @@ Returns ``true`` when the Nakama addon scripts are installed.  Call it before us
 
 :godot:`Dictionary` **connect_async**\ (\ host\: :godot:`Node`, config\: :godot:`Dictionary`\ ) :ref:`🔗<class_NakamaWrapper_method_connect_async>`
 
-Authenticates a device session and opens the realtime socket under ``host``.  ``config`` carries the connection fields. A helper node is added under ``host`` to poll the socket.
+Logs in to Nakama and opens the realtime connection. A helper node is added under ``host``.
 
 ::
 
@@ -365,18 +356,7 @@ Lists active relay matches.  Relay matches are listed with ``authoritative = fal
 
 :godot:`bool` **write_public_storage**\ (\ collection\: :godot:`String`, key\: :godot:`String`, value\: :godot:`Dictionary`\ ) :ref:`🔗<class_NakamaWrapper_method_write_public_storage>`
 
-Writes a public-read object under ``collection`` and ``key``.  Any session can read the object. Only the writer can overwrite it. Nakama scopes storage by collection, key, and owner, so the same key can exist once per user.
-
-::
-
-    Storage object
-    ├── collection = collection
-    ├── key = key
-    ├── owner = session user id
-    ├── read = public
-    └── write = owner only
-
-\ :ref:`list_public_storage()<class_NakamaWrapper_method_list_public_storage>` preserves every owner entry. Use it when concurrent writers can publish the same key.
+Saves ``value`` under ``collection`` and ``key``. Everyone can read it, and only this user can change it. Each user has their own object for a key, and :ref:`list_public_storage()<class_NakamaWrapper_method_list_public_storage>` returns all of them.
 
 .. rst-class:: classref-item-separator
 

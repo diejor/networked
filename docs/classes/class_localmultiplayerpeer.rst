@@ -19,7 +19,7 @@ An in-process :godot:`MultiplayerPeer` that routes packets through memory.
 Description
 -----------
 
-Opens no socket. It implements the same peer IDs, connection status, and packet queues as :godot:`ENetMultiplayerPeer`, allowing tests to run a session without a network.
+Works like :godot:`ENetMultiplayerPeer` without a network, for tests. Peers connect to the server only, not to each other.
 
 ::
 
@@ -29,8 +29,6 @@ Opens no socket. It implements the same peer IDs, connection status, and packet 
     client.create_client(42)
     server.force_connect_peer(42, client)
     client.force_connect_peer(1, server)
-
-\ The links form a star and not a mesh.
 
 .. rst-class:: classref-reftable-group
 
@@ -84,7 +82,7 @@ Property Descriptions
 - |void| **set_loopback_session**\ (\ value\: :ref:`LocalLoopbackSession<class_LocalLoopbackSession>`\ )
 - :ref:`LocalLoopbackSession<class_LocalLoopbackSession>` **get_loopback_session**\ (\ )
 
-The :ref:`LocalLoopbackSession<class_LocalLoopbackSession>` that conditions this peer's inbound traffic. It is held weakly, so it never keeps a session alive.
+The :ref:`LocalLoopbackSession<class_LocalLoopbackSession>` that simulates latency and loss for this peer.
 
 .. rst-class:: classref-section-separator
 
@@ -101,7 +99,7 @@ Method Descriptions
 
 :godot:`Error <@GlobalScope#enum_@globalscope_Error>` **create_client**\ (\ client_id\: :godot:`int`\ ) :ref:`🔗<class_LocalMultiplayerPeer_method_create_client>`
 
-Initializes this peer as a client with ``client_id``. The peer reports :godot:`MultiplayerPeer.CONNECTION_CONNECTING <MultiplayerPeer#class_MultiplayerPeer_constant_CONNECTION_CONNECTING>` until its first :godot:`MultiplayerPeer.poll() <MultiplayerPeer#class_MultiplayerPeer_method_poll>`.
+Makes this peer a client with the id ``client_id``. It is :godot:`MultiplayerPeer.CONNECTION_CONNECTING <MultiplayerPeer#class_MultiplayerPeer_constant_CONNECTION_CONNECTING>` until its first :godot:`MultiplayerPeer.poll() <MultiplayerPeer#class_MultiplayerPeer_method_poll>`.
 
 .. rst-class:: classref-item-separator
 
@@ -113,7 +111,7 @@ Initializes this peer as a client with ``client_id``. The peer reports :godot:`M
 
 :godot:`Error <@GlobalScope#enum_@globalscope_Error>` **create_server**\ (\ unique_id\: :godot:`int` = 1\ ) :ref:`🔗<class_LocalMultiplayerPeer_method_create_server>`
 
-Initializes this peer as the server under ``unique_id``, which a rig leaves at ``1``.
+Makes this peer the server, with the id ``unique_id``.
 
 .. rst-class:: classref-item-separator
 
@@ -125,7 +123,7 @@ Initializes this peer as the server under ``unique_id``, which a rig leaves at `
 
 |void| **force_connect_peer**\ (\ peer_id\: :godot:`int`, peer\: :ref:`LocalMultiplayerPeer<class_LocalMultiplayerPeer>`\ ) :ref:`🔗<class_LocalMultiplayerPeer_method_force_connect_peer>`
 
-Records ``peer`` as reachable under ``peer_id``. On the server side this also queues the :godot:`MultiplayerPeer.peer_connected <MultiplayerPeer#class_MultiplayerPeer_signal_peer_connected>` that the next :godot:`MultiplayerPeer.poll() <MultiplayerPeer#class_MultiplayerPeer_method_poll>` emits.
+Connects this peer to ``peer``, known as ``peer_id``. On the server, the next :godot:`MultiplayerPeer.poll() <MultiplayerPeer#class_MultiplayerPeer_method_poll>` emits :godot:`MultiplayerPeer.peer_connected <MultiplayerPeer#class_MultiplayerPeer_signal_peer_connected>`.
 
 .. rst-class:: classref-item-separator
 
@@ -137,7 +135,7 @@ Records ``peer`` as reachable under ``peer_id``. On the server side this also qu
 
 :godot:`bool` **is_linked_to**\ (\ peer_id\: :godot:`int`\ ) |const| :ref:`🔗<class_LocalMultiplayerPeer_method_is_linked_to>`
 
-Returns whether ``peer_id`` is currently reachable from this peer.
+Returns ``true`` when this peer is connected to ``peer_id``.
 
 .. rst-class:: classref-item-separator
 
@@ -149,7 +147,7 @@ Returns whether ``peer_id`` is currently reachable from this peer.
 
 :godot:`PackedInt32Array` **linked_peer_ids**\ (\ ) |const| :ref:`🔗<class_LocalMultiplayerPeer_method_linked_peer_ids>`
 
-Returns every reachable peer id, in the order they were linked.
+Returns the ids of every connected peer, in the order they connected.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

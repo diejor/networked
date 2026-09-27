@@ -79,7 +79,7 @@ Method Descriptions
 
 :ref:`NetwPromise<class_NetwPromise>` **_close**\ (\ ) |virtual| :ref:`🔗<class_NetwDatabaseConnection_private_method__close>`
 
-Releases this slot. It is called after every pending operation has settled. :ref:`NetwDatabase.close()<class_NetwDatabase_method_close>` does not wait for this promise.
+Releases this slot. It is called after every pending operation has finished. :ref:`NetwDatabase.close()<class_NetwDatabase_method_close>` does not wait for this promise.
 
 .. rst-class:: classref-item-separator
 

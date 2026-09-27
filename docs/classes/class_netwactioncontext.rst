@@ -12,20 +12,20 @@ NetwActionContext
 
 **Inherits:** :godot:`RefCounted`
 
-The server-side request context of one :ref:`NetwAction<class_NetwAction>`.
+Information about a :ref:`NetwAction<class_NetwAction>` request, passed to its method on the server.
 
 .. rst-class:: classref-introduction-group
 
 Description
 -----------
 
-Carries the requester, the clamped view tick, and the correlation key the optimistic effect was armed under. An authority method takes it first, ahead of whatever arguments :ref:`NetwAction.request()<class_NetwAction_method_request>` carried, and calls :ref:`bind()<class_NetwActionContext_method_bind>` before adding a spawned entity to the tree, or :ref:`deny()<class_NetwActionContext_method_deny>` when validation rejects the request.
+It is the first argument, before the arguments of :ref:`NetwAction.request()<class_NetwAction_method_request>`. Call :ref:`bind()<class_NetwActionContext_method_bind>` on a node the action spawns, before adding it to the tree. Call :ref:`deny()<class_NetwActionContext_method_deny>` to reject the action.
 
 ::
 
     func _place_bomb(ctx: NetwActionContext) -> void:
-        var past := lag.sample(entity, ctx.view_tick)
-        if past.is_empty():
+        var past := Netw.sample(entity, ctx.view_tick)
+        if not past.has_value(&"position"):
             ctx.deny()
             return
         var bomb := BOMB.instantiate()
@@ -83,7 +83,7 @@ Property Descriptions
 
 - :godot:`int` **get_execution_tick**\ (\ )
 
-The server tick that ran the authority method.
+The server tick the action runs on.
 
 .. rst-class:: classref-item-separator
 
@@ -99,7 +99,7 @@ The server tick that ran the authority method.
 
 - :godot:`int` **get_requested_tick**\ (\ )
 
-The tick the requester originally asked the server to evaluate, before clamping.
+The tick the client asked for.
 
 .. rst-class:: classref-item-separator
 
@@ -115,7 +115,7 @@ The tick the requester originally asked the server to evaluate, before clamping.
 
 - :godot:`int` **get_requester**\ (\ )
 
-The peer id that sent the request.
+The peer that sent the request.
 
 .. rst-class:: classref-item-separator
 
@@ -131,7 +131,7 @@ The peer id that sent the request.
 
 - :godot:`int` **get_view_tick**\ (\ )
 
-The tick used for server validation, clamped to the executing tick.
+The tick the client saw when it acted, no later than :ref:`execution_tick<class_NetwActionContext_property_execution_tick>`. Use it with :ref:`Netw.rewind()<class_Netw_method_rewind>` and :ref:`Netw.sample()<class_Netw_method_sample>`.
 
 .. rst-class:: classref-section-separator
 
@@ -148,7 +148,7 @@ Method Descriptions
 
 |void| **bind**\ (\ node\: :godot:`Node`\ ) :ref:`🔗<class_NetwActionContext_method_bind>`
 
-Binds ``node`` so its :ref:`NetwEntity.entity_id<class_NetwEntity_property_entity_id>` confirms this action when the authoritative spawn arrives. Call it before adding the node to the tree.
+Links ``node`` to this action, so the client's predicted copy is replaced by it. Call it before adding the node to the tree.
 
 .. rst-class:: classref-item-separator
 
@@ -160,7 +160,7 @@ Binds ``node`` so its :ref:`NetwEntity.entity_id<class_NetwEntity_property_entit
 
 |void| **deny**\ (\ ) :ref:`🔗<class_NetwActionContext_method_deny>`
 
-Denies this action and asks the requesting peer to revert it. Idempotent.
+Rejects the action. The requesting client undoes its prediction.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

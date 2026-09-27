@@ -14,16 +14,14 @@ NetwMemberConfig
 
 **Inherited By:** :ref:`NetwPropertyConfig<class_NetwPropertyConfig>`
 
-The travel declaration every script member shares, and the whole of what an RPC, a signal or a spawn function declares.
+Network settings for an RPC, a signal, a spawn function or a property.
 
 .. rst-class:: classref-introduction-group
 
 Description
 -----------
 
-A member is an RPC, a property, or a signal, and the same fluent builder declares all three because the axes are the same ones: who may author the stream (:ref:`authority()<class_NetwMemberConfig_method_authority>`, :ref:`controller()<class_NetwMemberConfig_method_controller>`, :ref:`any_peer()<class_NetwMemberConfig_method_any_peer>`), how it travels (:ref:`reliable()<class_NetwMemberConfig_method_reliable>`, :ref:`unreliable()<class_NetwMemberConfig_method_unreliable>`, :ref:`quantize()<class_NetwMemberConfig_method_quantize>`), and what the receiver does with it (:ref:`defer_until()<class_NetwMemberConfig_method_defer_until>`, :ref:`interpolate()<class_NetwMemberConfig_method_interpolate>`). :ref:`Netw.configure_rpc()<class_Netw_method_configure_rpc>`, :ref:`Netw.configure_signal()<class_Netw_method_configure_signal>` and :ref:`Netw.configure_spawn()<class_Netw_method_configure_spawn>` each return one of these, and :ref:`Netw.configure_property()<class_Netw_method_configure_property>` returns the :ref:`NetwPropertyConfig<class_NetwPropertyConfig>` that extends it.
-
-\ :ref:`context_type<class_NetwMemberConfig_property_context_type>` is which of the three this is: ``0`` an RPC or spawn function, ``1`` a property, ``2`` a signal. Everything that has to tell them apart reads that ordinal, which is also why one class serves three doors.
+Returned by :ref:`Netw.configure_rpc()<class_Netw_method_configure_rpc>`, :ref:`Netw.configure_signal()<class_Netw_method_configure_signal>` and :ref:`Netw.configure_spawn()<class_Netw_method_configure_spawn>`. :ref:`Netw.configure_property()<class_Netw_method_configure_property>` returns a :ref:`NetwPropertyConfig<class_NetwPropertyConfig>`, which extends it. The methods set who may send, how it is sent, and what the receiver does.
 
 ::
 
@@ -32,16 +30,14 @@ A member is an RPC, a property, or a signal, and the same fluent builder declare
         Netw.configure_signal(self.exploded).any_peer()
         Netw.configure_spawn(self._spawn_bullet).quantize(dir_q)
 
-\ A configuration is keyed per script while :godot:`Object._init() <Object#class_Object_private_method__init>` runs per instance, so every spawn of a script re-declares onto the config the first instance created. Re-declaring an axis with the value it already carries is therefore SILENT, and only a genuine disagreement between two call sites warns. That rule is what makes authoring in :godot:`Object._init() <Object#class_Object_private_method__init>` quiet rather than one warning per spawn.
+\ Settings are stored per script, so calling this in :godot:`Object._init() <Object#class_Object_private_method__init>` of every instance is fine. A warning is pushed only when two calls set different values.
 
-\ **The chain downgrades to this type.**\ 
-
-A bound method records one return type, so every verb here returns a **NetwMemberConfig** even when it was called on a :ref:`NetwPropertyConfig<class_NetwPropertyConfig>`. A chain that passes through a base verb loses the property-only verbs from that point on, and a property declaration therefore orders its property-only verbs LAST:
+\ **Note:** these methods return a **NetwMemberConfig**, so call :ref:`NetwPropertyConfig<class_NetwPropertyConfig>` methods first in a chain.
 
 ::
 
-    Netw.configure_property(self, &"position").state().quantize(pos_q)   # fine
-    Netw.configure_property(self, &"position").quantize(pos_q).state()   # state() is gone
+    Netw.configure_property(self, &"position").state().quantize(pos_q)   # works
+    Netw.configure_property(self, &"position").quantize(pos_q).state()   # state() is not found
 
 .. rst-class:: classref-reftable-group
 
@@ -134,7 +130,7 @@ enum **Policy**: :ref:`🔗<enum_NetwMemberConfig_Policy>`
 
 :ref:`Policy<enum_NetwMemberConfig_Policy>` **POLICY_AUTHORITY** = ``0``
 
-Only the node's multiplayer authority may write or emit.
+Only the node's multiplayer authority may send.
 
 .. _class_NetwMemberConfig_constant_POLICY_CONTROLLER:
 
@@ -142,7 +138,7 @@ Only the node's multiplayer authority may write or emit.
 
 :ref:`Policy<enum_NetwMemberConfig_Policy>` **POLICY_CONTROLLER** = ``1``
 
-Only the peer holding :ref:`NetwEntity.controller<class_NetwEntity_property_controller>` may write or emit.
+Only the :ref:`NetwEntity.controller<class_NetwEntity_property_controller>` may send.
 
 .. _class_NetwMemberConfig_constant_POLICY_ANY_PEER:
 
@@ -150,7 +146,7 @@ Only the peer holding :ref:`NetwEntity.controller<class_NetwEntity_property_cont
 
 :ref:`Policy<enum_NetwMemberConfig_Policy>` **POLICY_ANY_PEER** = ``2``
 
-Any peer may write or emit.
+Any peer may send.
 
 .. rst-class:: classref-item-separator
 
@@ -168,7 +164,7 @@ enum **TransferMode**: :ref:`🔗<enum_NetwMemberConfig_TransferMode>`
 
 :ref:`TransferMode<enum_NetwMemberConfig_TransferMode>` **TRANSFER_RELIABLE** = ``0``
 
-Transmit reliably.
+Send reliably.
 
 .. _class_NetwMemberConfig_constant_TRANSFER_UNRELIABLE:
 
@@ -176,7 +172,7 @@ Transmit reliably.
 
 :ref:`TransferMode<enum_NetwMemberConfig_TransferMode>` **TRANSFER_UNRELIABLE** = ``1``
 
-Transmit unreliably.
+Send unreliably.
 
 .. rst-class:: classref-section-separator
 
@@ -198,7 +194,7 @@ Property Descriptions
 - |void| **set_context_name**\ (\ value\: :godot:`StringName`\ )
 - :godot:`StringName` **get_context_name**\ (\ )
 
-The member this config declares: a method name, a property name, or a signal name, decided by :ref:`context_type<class_NetwMemberConfig_property_context_type>`. Written by the ``Netw.configure_*`` door that created the config.
+The name of the method, property or signal.
 
 .. rst-class:: classref-item-separator
 
@@ -215,7 +211,7 @@ The member this config declares: a method name, a property name, or a signal nam
 - |void| **set_context_node_ref**\ (\ value\: :godot:`Variant`\ )
 - :godot:`Variant` **get_context_node_ref**\ (\ )
 
-An opaque weak reference to the body a property config was authored on, or ``null``. It is dereferenced only while resolving a property's declared type, which is read off the live body rather than off :ref:`context_script<class_NetwMemberConfig_property_context_script>`, because a node the framework tracks without a script has no declaration to read it from. A body that has been freed returns :godot:`@GlobalScope.TYPE_NIL <@GlobalScope#class_@GlobalScope_constant_TYPE_NIL>`, which is why the reference is weak.
+A weak reference to the node a property was declared on, used to read the property's type.
 
 .. rst-class:: classref-item-separator
 
@@ -232,9 +228,7 @@ An opaque weak reference to the body a property config was authored on, or ``nul
 - |void| **set_context_script**\ (\ value\: :godot:`Script`\ )
 - :godot:`Script` **get_context_script**\ (\ )
 
-The :godot:`Script` that declares the member. The declaration and :ref:`write_policy<class_NetwMemberConfig_property_write_policy>` use this as their key. ``null`` means the property is declared directly on a node without a script.
-
-Named WITHOUT being owned: the script is held by instance id and resolved on every read, so a script that has been freed returns ``null`` here rather than a stale object. A declaration is stored in the declaring script's own metadata book, so an owning back-reference would close a cycle out of which neither the script nor any config declared on it could ever be freed.
+The script that declares the member, or ``null`` for a node without a script.
 
 .. rst-class:: classref-item-separator
 
@@ -251,7 +245,7 @@ Named WITHOUT being owned: the script is held by instance id and resolved on eve
 - |void| **set_context_type**\ (\ value\: :godot:`int`\ )
 - :godot:`int` **get_context_type**\ (\ )
 
-Which kind of member this is: ``0`` an RPC or a spawn function, ``1`` a property, ``2`` a signal. It decides which book :ref:`write_policy<class_NetwMemberConfig_property_write_policy>` is published into, and which reflection resolves the member's declared types: a method's argument types, a live node's property type, or a signal's argument types.
+``0`` for an RPC or spawn function, ``1`` for a property, ``2`` for a signal.
 
 .. rst-class:: classref-item-separator
 
@@ -268,7 +262,7 @@ Which kind of member this is: ``0`` an RPC or a spawn function, ``1`` a property
 - |void| **set_defer_signal_name**\ (\ value\: :godot:`StringName`\ )
 - :godot:`StringName` **get_defer_signal_name**\ (\ )
 
-The signal a received call waits on before it runs, or empty to run it as soon as the node is live. Declared through :ref:`defer_until()<class_NetwMemberConfig_method_defer_until>`.
+Set by :ref:`defer_until()<class_NetwMemberConfig_method_defer_until>`.
 
 .. rst-class:: classref-item-separator
 
@@ -285,7 +279,7 @@ The signal a received call waits on before it runs, or empty to run it as soon a
 - |void| **set_interpolators**\ (\ value\: :godot:`Array`\ )
 - :godot:`Array` **get_interpolators**\ (\ )
 
-Per-position :ref:`NetwInterpolate<class_NetwInterpolate>` list smoothing received values. Empty applies each received value directly. Declared through :ref:`interpolate()<class_NetwMemberConfig_method_interpolate>`.
+Set by :ref:`interpolate()<class_NetwMemberConfig_method_interpolate>`.
 
 .. rst-class:: classref-item-separator
 
@@ -302,7 +296,7 @@ Per-position :ref:`NetwInterpolate<class_NetwInterpolate>` list smoothing receiv
 - |void| **set_is_call_local**\ (\ value\: :godot:`bool`\ )
 - :godot:`bool` **get_is_call_local**\ (\ )
 
-Whether the signal or RPC also runs on the sender. Declared through :ref:`call_local()<class_NetwMemberConfig_method_call_local>` and :ref:`call_remote()<class_NetwMemberConfig_method_call_remote>`, and re-declaring the value it already carries is silent.
+Set by :ref:`call_local()<class_NetwMemberConfig_method_call_local>` and :ref:`call_remote()<class_NetwMemberConfig_method_call_remote>`.
 
 .. rst-class:: classref-item-separator
 
@@ -319,7 +313,7 @@ Whether the signal or RPC also runs on the sender. Declared through :ref:`call_l
 - |void| **set_is_controller_only**\ (\ value\: :godot:`bool`\ )
 - :godot:`bool` **get_is_controller_only**\ (\ )
 
-Whether only the entity's controller, or the server, may call this RPC. Declared through :ref:`controller_only()<class_NetwMemberConfig_method_controller_only>`.
+Set by :ref:`controller_only()<class_NetwMemberConfig_method_controller_only>`.
 
 .. rst-class:: classref-item-separator
 
@@ -336,7 +330,7 @@ Whether only the entity's controller, or the server, may call this RPC. Declared
 - |void| **set_quantizers**\ (\ value\: :godot:`Array`\ )
 - :godot:`Array` **get_quantizers**\ (\ )
 
-Per-position :ref:`NetwQuantize<class_NetwQuantize>` list packing the member's values. Empty sends every value self-describing, and a null slot does the same for one position. Declared through :ref:`quantize()<class_NetwMemberConfig_method_quantize>`.
+Set by :ref:`quantize()<class_NetwMemberConfig_method_quantize>`.
 
 .. rst-class:: classref-item-separator
 
@@ -353,7 +347,7 @@ Per-position :ref:`NetwQuantize<class_NetwQuantize>` list packing the member's v
 - |void| **set_transfer_mode**\ (\ value\: :ref:`TransferMode<enum_NetwMemberConfig_TransferMode>`\ )
 - :ref:`TransferMode<enum_NetwMemberConfig_TransferMode>` **get_transfer_mode**\ (\ )
 
-How the member travels. Declared through :ref:`reliable()<class_NetwMemberConfig_method_reliable>` and :ref:`unreliable()<class_NetwMemberConfig_method_unreliable>`, and re-declaring the value it already carries is silent.
+Set by :ref:`reliable()<class_NetwMemberConfig_method_reliable>` and :ref:`unreliable()<class_NetwMemberConfig_method_unreliable>`.
 
 .. rst-class:: classref-item-separator
 
@@ -370,9 +364,7 @@ How the member travels. Declared through :ref:`reliable()<class_NetwMemberConfig
 - |void| **set_write_policy**\ (\ value\: :ref:`Policy<enum_NetwMemberConfig_Policy>`\ )
 - :ref:`Policy<enum_NetwMemberConfig_Policy>` **get_write_policy**\ (\ )
 
-Who may write or emit this member. Declared through :ref:`authority()<class_NetwMemberConfig_method_authority>`, :ref:`controller()<class_NetwMemberConfig_method_controller>` and :ref:`any_peer()<class_NetwMemberConfig_method_any_peer>`, and re-declaring the value it already carries is silent.
-
-Writing it also COMPILES the rule into the declaring script's own metadata book, so the receive gate returns off the script rather than walking this registry for every arriving frame. Nothing is published for an RPC (:ref:`context_type<class_NetwMemberConfig_property_context_type>` ``0``), which is policed by its caller gate instead, or for a config naming no :ref:`context_script<class_NetwMemberConfig_property_context_script>`, which has no book to write into.
+Set by :ref:`authority()<class_NetwMemberConfig_method_authority>`, :ref:`controller()<class_NetwMemberConfig_method_controller>` and :ref:`any_peer()<class_NetwMemberConfig_method_any_peer>`.
 
 .. rst-class:: classref-section-separator
 
@@ -389,7 +381,7 @@ Method Descriptions
 
 :ref:`NetwMemberConfig<class_NetwMemberConfig>` **any_peer**\ (\ ) :ref:`🔗<class_NetwMemberConfig_method_any_peer>`
 
-Declares :ref:`write_policy<class_NetwMemberConfig_property_write_policy>` :ref:`POLICY_ANY_PEER<class_NetwMemberConfig_constant_POLICY_ANY_PEER>`: any peer may write or emit. Trusts every client, so it belongs only where a forged write cannot matter.
+Any peer may send it. Only use it when a cheating client cannot do harm.
 
 .. rst-class:: classref-item-separator
 
@@ -401,7 +393,7 @@ Declares :ref:`write_policy<class_NetwMemberConfig_property_write_policy>` :ref:
 
 :ref:`NetwMemberConfig<class_NetwMemberConfig>` **authority**\ (\ ) :ref:`🔗<class_NetwMemberConfig_method_authority>`
 
-Declares :ref:`write_policy<class_NetwMemberConfig_property_write_policy>` :ref:`POLICY_AUTHORITY<class_NetwMemberConfig_constant_POLICY_AUTHORITY>`: only the node's multiplayer authority may write or emit. The default, and the safe choice.
+Only the node's multiplayer authority may send it. The default.
 
 .. rst-class:: classref-item-separator
 
@@ -413,9 +405,7 @@ Declares :ref:`write_policy<class_NetwMemberConfig_property_write_policy>` :ref:
 
 :ref:`NetwMemberConfig<class_NetwMemberConfig>` **call_local**\ (\ ) :ref:`🔗<class_NetwMemberConfig_method_call_local>`
 
-Declares :ref:`is_call_local<class_NetwMemberConfig_property_is_call_local>`: the signal or RPC also runs on the sender. :ref:`Netw.configure_signal()<class_Netw_method_configure_signal>` starts here, and :ref:`Netw.configure_rpc()<class_Netw_method_configure_rpc>` starts at :ref:`call_remote()<class_NetwMemberConfig_method_call_remote>`.
-
-A property (:ref:`context_type<class_NetwMemberConfig_property_context_type>` ``1``) has no local-call axis, because a property assignment is local first by construction, so declaring one on a :ref:`NetwPropertyConfig<class_NetwPropertyConfig>` warns and records the axis anyway.
+The signal or RPC also runs on the sender. The default for :ref:`Netw.configure_signal()<class_Netw_method_configure_signal>`. Not valid on a property.
 
 .. rst-class:: classref-item-separator
 
@@ -427,7 +417,7 @@ A property (:ref:`context_type<class_NetwMemberConfig_property_context_type>` ``
 
 :ref:`NetwMemberConfig<class_NetwMemberConfig>` **call_remote**\ (\ ) :ref:`🔗<class_NetwMemberConfig_method_call_remote>`
 
-Clears :ref:`is_call_local<class_NetwMemberConfig_property_is_call_local>`: the signal or RPC reaches remote peers only. The default for an RPC, and warns on a property for the reason :ref:`call_local()<class_NetwMemberConfig_method_call_local>` gives.
+The signal or RPC only runs on other peers. The default for :ref:`Netw.configure_rpc()<class_Netw_method_configure_rpc>`. Not valid on a property.
 
 .. rst-class:: classref-item-separator
 
@@ -439,7 +429,7 @@ Clears :ref:`is_call_local<class_NetwMemberConfig_property_is_call_local>`: the 
 
 :ref:`NetwMemberConfig<class_NetwMemberConfig>` **controller**\ (\ ) :ref:`🔗<class_NetwMemberConfig_method_controller>`
 
-Declares :ref:`write_policy<class_NetwMemberConfig_property_write_policy>` :ref:`POLICY_CONTROLLER<class_NetwMemberConfig_constant_POLICY_CONTROLLER>`: only the peer holding :ref:`NetwEntity.controller<class_NetwEntity_property_controller>` may write or emit, which is how a player drives their own entity.
+Only the :ref:`NetwEntity.controller<class_NetwEntity_property_controller>` may send it.
 
 .. rst-class:: classref-item-separator
 
@@ -451,7 +441,7 @@ Declares :ref:`write_policy<class_NetwMemberConfig_property_write_policy>` :ref:
 
 :ref:`NetwMemberConfig<class_NetwMemberConfig>` **controller_only**\ (\ ) :ref:`🔗<class_NetwMemberConfig_method_controller_only>`
 
-Declares :ref:`is_controller_only<class_NetwMemberConfig_property_is_controller_only>`: only the entity's controller, or the server, may call this RPC.
+Only the :ref:`NetwEntity.controller<class_NetwEntity_property_controller>` or the server may call this RPC.
 
 .. rst-class:: classref-item-separator
 
@@ -463,7 +453,7 @@ Declares :ref:`is_controller_only<class_NetwMemberConfig_property_is_controller_
 
 :ref:`NetwMemberConfig<class_NetwMemberConfig>` **defer_until**\ (\ sig\: :godot:`Signal`\ ) :ref:`🔗<class_NetwMemberConfig_method_defer_until>`
 
-Defers a received call until ``sig`` fires on the target node. ``self.ready`` is a common choice. The configuration stores the signal name in :ref:`defer_signal_name<class_NetwMemberConfig_property_defer_signal_name>`. Declaring a second signal for one member reports a warning.
+A received call waits until ``sig`` is emitted on the node, such as ``self.ready``.
 
 .. rst-class:: classref-item-separator
 
@@ -475,7 +465,7 @@ Defers a received call until ``sig`` fires on the target node. ``self.ready`` is
 
 :ref:`NetwMemberConfig<class_NetwMemberConfig>` **interpolate**\ (\ ...\ ) |vararg| :ref:`🔗<class_NetwMemberConfig_method_interpolate>`
 
-Declares :ref:`interpolators<class_NetwMemberConfig_property_interpolators>`, one :ref:`NetwInterpolate<class_NetwInterpolate>` per value the member carries, in the order the member declares them. A property or a one-argument member therefore takes exactly one, and ``null`` leaves a value unsmoothed. The rules are :ref:`quantize()<class_NetwMemberConfig_method_quantize>`'s, read against :ref:`NetwInterpolate.is_same_spec()<class_NetwInterpolate_method_is_same_spec>` rather than a bit layout: a re-declaration of equal specs returns immediately and changes nothing, so an authoring shell can push freshly built but identical specs after a reparent, and one that genuinely differs replaces the standing list and warns.
+Smooths received values with one :ref:`NetwInterpolate<class_NetwInterpolate>` per argument, in order. ``null`` leaves an argument unsmoothed.
 
 ::
 
@@ -492,7 +482,7 @@ Declares :ref:`interpolators<class_NetwMemberConfig_property_interpolators>`, on
 
 :godot:`bool` **is_interpolation_only**\ (\ ) |const| :ref:`🔗<class_NetwMemberConfig_method_is_interpolation_only>`
 
-Whether this config only smooths a value and never claims a write: it carries :ref:`interpolators<class_NetwMemberConfig_property_interpolators>` and no :ref:`write_policy<class_NetwMemberConfig_property_write_policy>`, :ref:`transfer_mode<class_NetwMemberConfig_property_transfer_mode>` or :ref:`quantizers<class_NetwMemberConfig_property_quantizers>` was DECLARED. It reads whether each axis was written at all rather than what it holds, so declaring an axis its own default value still ends the interpolation-only reading. Smoothing a property some other set already replicates is expected, and this is how that case is told apart from a second claim of authority over the field.
+Returns ``true`` when only :ref:`interpolate()<class_NetwMemberConfig_method_interpolate>` was called, and no other setting.
 
 .. rst-class:: classref-item-separator
 
@@ -504,7 +494,7 @@ Whether this config only smooths a value and never claims a write: it carries :r
 
 :godot:`bool` **is_policy_declared**\ (\ ) |const| :ref:`🔗<class_NetwMemberConfig_method_is_policy_declared>`
 
-Whether :ref:`write_policy<class_NetwMemberConfig_property_write_policy>` was WRITTEN, rather than what it holds. A set derived from several members of one script asks this so that a member which declared its policy out loud owns the set's policy and a member that declared none does not, and declaring the default value is still declaring it.
+Returns ``true`` when :ref:`write_policy<class_NetwMemberConfig_property_write_policy>` was set, even to its default.
 
 .. rst-class:: classref-item-separator
 
@@ -516,7 +506,7 @@ Whether :ref:`write_policy<class_NetwMemberConfig_property_write_policy>` was WR
 
 :godot:`bool` **is_transfer_declared**\ (\ ) |const| :ref:`🔗<class_NetwMemberConfig_method_is_transfer_declared>`
 
-Whether :ref:`transfer_mode<class_NetwMemberConfig_property_transfer_mode>` was WRITTEN, rather than what it holds. Same reading as :ref:`is_policy_declared()<class_NetwMemberConfig_method_is_policy_declared>`.
+Returns ``true`` when :ref:`transfer_mode<class_NetwMemberConfig_property_transfer_mode>` was set, even to its default.
 
 .. rst-class:: classref-item-separator
 
@@ -528,16 +518,12 @@ Whether :ref:`transfer_mode<class_NetwMemberConfig_property_transfer_mode>` was 
 
 :ref:`NetwMemberConfig<class_NetwMemberConfig>` **quantize**\ (\ ...\ ) |vararg| :ref:`🔗<class_NetwMemberConfig_method_quantize>`
 
-Declares :ref:`quantizers<class_NetwMemberConfig_property_quantizers>`, one :ref:`NetwQuantize<class_NetwQuantize>` per argument the member takes, in the order the member declares them. A property or a one-argument member therefore takes exactly one, and ``null`` sends an argument unpacked.
+Compresses each argument with one :ref:`NetwQuantize<class_NetwQuantize>`, in order. ``null`` sends an argument as is. The number of quantizers must match the number of arguments.
 
 ::
 
     Netw.configure_property(self, &"position").quantize(pos_q)
     Netw.configure_rpc(self.fire).quantize(dir_q, null, power_q)
-
-\ The count is checked against the arity of :ref:`context_name<class_NetwMemberConfig_property_context_name>`, which :ref:`context_type<class_NetwMemberConfig_property_context_type>` decides how to read, so a member taking three arguments and given one quantizer is rejected rather than packed halfway. A member whose declaration cannot be read at all is taken on trust. Passing nothing, or an argument that is not a :ref:`NetwQuantize<class_NetwQuantize>`, is rejected with an error and leaves the previous declaration standing.
-
-Re-declaring a layout-equal list (:ref:`NetwQuantize.is_same_layout()<class_NetwQuantize_method_is_same_layout>`) is silent. Only a re-declaration that changes the bit layout warns, since that is two call sites genuinely disagreeing about one member's schema. Whether a declared quantizer can pack the type it sits over is checked against that same declared type.
 
 .. rst-class:: classref-item-separator
 
@@ -549,7 +535,7 @@ Re-declaring a layout-equal list (:ref:`NetwQuantize.is_same_layout()<class_Netw
 
 :ref:`NetwMemberConfig<class_NetwMemberConfig>` **reliable**\ (\ ) :ref:`🔗<class_NetwMemberConfig_method_reliable>`
 
-Declares :ref:`transfer_mode<class_NetwMemberConfig_property_transfer_mode>` :ref:`TRANSFER_RELIABLE<class_NetwMemberConfig_constant_TRANSFER_RELIABLE>`. The default.
+Send reliably. The default.
 
 .. rst-class:: classref-item-separator
 
@@ -561,7 +547,7 @@ Declares :ref:`transfer_mode<class_NetwMemberConfig_property_transfer_mode>` :re
 
 :ref:`NetwMemberConfig<class_NetwMemberConfig>` **unreliable**\ (\ ) :ref:`🔗<class_NetwMemberConfig_method_unreliable>`
 
-Declares :ref:`transfer_mode<class_NetwMemberConfig_property_transfer_mode>` :ref:`TRANSFER_UNRELIABLE<class_NetwMemberConfig_constant_TRANSFER_UNRELIABLE>`.
+Send unreliably.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

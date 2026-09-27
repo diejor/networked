@@ -48,11 +48,13 @@ Properties
 .. table::
    :widths: auto
 
-   +-------------------------------------------------------------------+-----------------------------------------------------------+
-   | :godot:`Array`\[:ref:`NetwSchemaColumn<class_NetwSchemaColumn>`\] | :ref:`columns<class_NetwSchema_property_columns>`         |
-   +-------------------------------------------------------------------+-----------------------------------------------------------+
-   | :godot:`StringName`                                               | :ref:`schema_name<class_NetwSchema_property_schema_name>` |
-   +-------------------------------------------------------------------+-----------------------------------------------------------+
+   +-------------------------------------------------------------------+-----------------------------------------------------------------+
+   | :godot:`Array`\[:ref:`NetwSchemaColumn<class_NetwSchemaColumn>`\] | :ref:`columns<class_NetwSchema_property_columns>`               |
+   +-------------------------------------------------------------------+-----------------------------------------------------------------+
+   | :godot:`StringName`                                               | :ref:`schema_name<class_NetwSchema_property_schema_name>`       |
+   +-------------------------------------------------------------------+-----------------------------------------------------------------+
+   | :godot:`int`                                                      | :ref:`stored_version<class_NetwSchema_property_stored_version>` |
+   +-------------------------------------------------------------------+-----------------------------------------------------------------+
 
 .. rst-class:: classref-reftable-group
 
@@ -105,11 +107,11 @@ Methods
    +-------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | :ref:`NetwSchema<class_NetwSchema>`       | :ref:`storage_version<class_NetwSchema_method_storage_version>`\ (\ version\: :godot:`int`\ )                                                                                                                                    |
    +-------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`int`                              | :ref:`string<class_NetwSchema_method_string>`\ (\ key\: :godot:`StringName`, stride\: :godot:`int` = 1\ )                                                                                                                        |
+   +-------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | :godot:`int`                              | :ref:`u8<class_NetwSchema_method_u8>`\ (\ key\: :godot:`StringName`, stride\: :godot:`int` = 1\ )                                                                                                                                |
    +-------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | :godot:`int`                              | :ref:`u16<class_NetwSchema_method_u16>`\ (\ key\: :godot:`StringName`, stride\: :godot:`int` = 1\ )                                                                                                                              |
-   +-------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`int`                              | :ref:`string<class_NetwSchema_method_string>`\ (\ key\: :godot:`StringName`, stride\: :godot:`int` = 1\ )                                                                                                                        |
    +-------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | :godot:`int`                              | :ref:`variant<class_NetwSchema_method_variant>`\ (\ key\: :godot:`StringName`, stride\: :godot:`int` = 1\ )                                                                                                                      |
    +-------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
@@ -156,6 +158,22 @@ The declared columns in index order.
 - :godot:`StringName` **get_schema_name**\ (\ )
 
 The name this schema is registered under, which :ref:`NetwMultiplayer.schema_find()<class_NetwMultiplayer_method_schema_find>` takes.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NetwSchema_property_stored_version:
+
+.. rst-class:: classref-property
+
+:godot:`int` **stored_version** :ref:`🔗<class_NetwSchema_property_stored_version>`
+
+.. rst-class:: classref-property-setget
+
+- :godot:`int` **get_storage_version**\ (\ )
+
+The version set by :ref:`storage_version()<class_NetwSchema_method_storage_version>`.
 
 .. rst-class:: classref-section-separator
 
@@ -441,6 +459,18 @@ Raise it when the saved columns change, and add a :ref:`migrate()<class_NetwSche
 
 ----
 
+.. _class_NetwSchema_method_string:
+
+.. rst-class:: classref-method
+
+:godot:`int` **string**\ (\ key\: :godot:`StringName`, stride\: :godot:`int` = 1\ ) :ref:`🔗<class_NetwSchema_method_string>`
+
+Declares a :ref:`NetwMultiplayer.COLUMN_STRING<class_NetwMultiplayer_constant_COLUMN_STRING>` column. Like :ref:`variant()<class_NetwSchema_method_variant>`, a schema holding one cannot become a replicated table.
+
+.. rst-class:: classref-item-separator
+
+----
+
 .. _class_NetwSchema_method_u8:
 
 .. rst-class:: classref-method
@@ -460,18 +490,6 @@ Declares a :ref:`NetwMultiplayer.COLUMN_U8<class_NetwMultiplayer_constant_COLUMN
 :godot:`int` **u16**\ (\ key\: :godot:`StringName`, stride\: :godot:`int` = 1\ ) :ref:`🔗<class_NetwSchema_method_u16>`
 
 Declares a :ref:`NetwMultiplayer.COLUMN_U16<class_NetwMultiplayer_constant_COLUMN_U16>` column.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwSchema_method_string:
-
-.. rst-class:: classref-method
-
-:godot:`int` **string**\ (\ key\: :godot:`StringName`, stride\: :godot:`int` = 1\ ) :ref:`🔗<class_NetwSchema_method_string>`
-
-Declares a :ref:`NetwMultiplayer.COLUMN_STRING<class_NetwMultiplayer_constant_COLUMN_STRING>` column. Like :ref:`variant()<class_NetwSchema_method_variant>`, a schema holding one cannot become a replicated table.
 
 .. rst-class:: classref-item-separator
 

@@ -145,7 +145,7 @@ Emitted when a predicted tick disagrees with the server, with what the disagreem
 
 **episode_closed**\ (\ report\: :godot:`Dictionary`\ ) :ref:`🔗<class_NetwPredictionHandle_signal_episode_closed>`
 
-Emitted when the peers have agreed again for long enough to close an episode. ``report`` has the shape described in :ref:`episode_opened<class_NetwPredictionHandle_signal_episode_opened>`.
+Emitted when the peers have agreed again for long enough, ending the episode :ref:`episode_opened<class_NetwPredictionHandle_signal_episode_opened>` started. ``report`` has the shape described in :ref:`episode_opened<class_NetwPredictionHandle_signal_episode_opened>`.
 
 .. rst-class:: classref-item-separator
 
@@ -169,7 +169,7 @@ Emitted when corrections stop helping and the entity starts following the server
 
 **episode_opened**\ (\ report\: :godot:`Dictionary`\ ) :ref:`🔗<class_NetwPredictionHandle_signal_episode_opened>`
 
-Emitted when a misprediction is large enough to act on. ``report`` is a copy of the episode.
+Emitted when a misprediction is large enough to act on. The corrections that follow, until the peers agree again, are reported together as one episode.
 
 .. code:: text
 

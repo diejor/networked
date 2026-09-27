@@ -12,18 +12,14 @@ NetwDespawnConfig
 
 **Inherits:** :godot:`RefCounted`
 
-Everything one entity :godot:`Script` declares about how a peer removes its nodes.
+How every peer removes a node when it despawns, returned by :ref:`Netw.configure_despawn()<class_Netw_method_configure_despawn>`.
 
 .. rst-class:: classref-introduction-group
 
 Description
 -----------
 
-The policy is authored on a :godot:`Script` and read back for every node that script drives, because :ref:`Netw.configure_despawn()<class_Netw_method_configure_despawn>` runs from :godot:`Object._init() <Object#class_Object_private_method__init>` and the removal happens later, on whichever peer received the DESPAWN frame.
-
-\ :ref:`before_removal()<class_NetwDespawnConfig_method_before_removal>` stores only the method name, so the config does not retain a :godot:`Node` and can be reused for other instances. Before removal, the peer resolves the method on the node and skips it when absent.
-
-An author who declared nothing gets an empty :ref:`hook_method<class_NetwDespawnConfig_property_hook_method>` and a :ref:`linger_seconds<class_NetwDespawnConfig_property_linger_seconds>` of ``0.0``, which frees immediately, so the defaults are the policy rather than an absence a reader branches on.
+Set in :godot:`Object._init() <Object#class_Object_private_method__init>`, and shared by every node of the same script. By default the node is freed at once.
 
 ::
 
@@ -80,7 +76,7 @@ Property Descriptions
 - |void| **set_hook_method**\ (\ value\: :godot:`StringName`\ )
 - :godot:`StringName` **get_hook_method**\ (\ )
 
-Method called on the entity root before removal, or empty for none. Declared through :ref:`before_removal()<class_NetwDespawnConfig_method_before_removal>`, which is the only spelling that keeps the object out of the record.
+Set by :ref:`before_removal()<class_NetwDespawnConfig_method_before_removal>`.
 
 .. rst-class:: classref-item-separator
 
@@ -97,7 +93,7 @@ Method called on the entity root before removal, or empty for none. Declared thr
 - |void| **set_linger_seconds**\ (\ value\: :godot:`float`\ )
 - :godot:`float` **get_linger_seconds**\ (\ )
 
-Seconds the node stays in the tree reporting :ref:`NetwMultiplayer.ENTITY_STATE_LINGERING<class_NetwMultiplayer_constant_ENTITY_STATE_LINGERING>` before it is freed. ``0.0`` frees it in the same pass. Declared through :ref:`linger()<class_NetwDespawnConfig_method_linger>`.
+Seconds the node stays in the tree before it is freed, as :ref:`NetwMultiplayer.ENTITY_STATE_LINGERING<class_NetwMultiplayer_constant_ENTITY_STATE_LINGERING>`. ``0.0`` frees it at once.
 
 .. rst-class:: classref-section-separator
 
@@ -114,7 +110,7 @@ Method Descriptions
 
 :ref:`NetwDespawnConfig<class_NetwDespawnConfig>` **before_removal**\ (\ callable\: :godot:`Callable`\ ) :ref:`🔗<class_NetwDespawnConfig_method_before_removal>`
 
-Declares that ``callable``'s method runs on the entity root before the node leaves the tree, for death VFX or for handing children off. Only :godot:`Callable.get_method() <Callable#class_Callable_method_get_method>` is kept, into :ref:`hook_method<class_NetwDespawnConfig_property_hook_method>`. Returns the same config so the declaration chains.
+Calls the method of ``callable`` on the entity root before it is removed, for example to play an effect. Only the method name is kept. Returns this config.
 
 .. rst-class:: classref-item-separator
 
@@ -126,7 +122,7 @@ Declares that ``callable``'s method runs on the entity root before the node leav
 
 :ref:`NetwDespawnConfig<class_NetwDespawnConfig>` **linger**\ (\ seconds\: :godot:`float`\ ) :ref:`🔗<class_NetwDespawnConfig_method_linger>`
 
-Declares :ref:`linger_seconds<class_NetwDespawnConfig_property_linger_seconds>`. Returns the same config so the declaration chains.
+Sets :ref:`linger_seconds<class_NetwDespawnConfig_property_linger_seconds>` and returns this config.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

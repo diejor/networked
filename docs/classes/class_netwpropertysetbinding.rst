@@ -12,18 +12,14 @@ NetwPropertySetBinding
 
 **Inherits:** :godot:`RefCounted`
 
-One live binding of a :ref:`NetwPropertySet<class_NetwPropertySet>` to the node that declares it through :ref:`Netw.configure_property()<class_Netw_method_configure_property>`, the route-keyed gather source for a state or input group.
+A :ref:`NetwPropertySet<class_NetwPropertySet>` attached to one node.
 
 .. rst-class:: classref-introduction-group
 
 Description
 -----------
 
-The shell captures :ref:`route<class_NetwPropertySetBinding_property_route>`, :ref:`comp<class_NetwPropertySetBinding_property_comp>`, and :ref:`order_key<class_NetwPropertySetBinding_property_order_key>` at registration. The set carries the wire contract, while the binding carries the live gather state: the two lanes' rows, the windowed input ring, and the row each lane last merged a frame onto.
-
-A set's :ref:`NetwPropertySet.VOLATILE<class_NetwPropertySet_constant_VOLATILE>` fields ride the SYNC_ROW channel freshest-wins, and its :ref:`NetwPropertySet.RETAINED<class_NetwPropertySet_constant_RETAINED>` fields ride the reliable SYNC_ROW_DELTA lane only when they change, so the two lanes of one set never re-send each other.
-
-Both lanes offer the whole row every pass and neither decides what a recipient is owed. The send plane holds one baseline per peer per stream, a stream being one route, one component ordinal and one lane, and returns the columns that moved, which is why a binding carries no per-peer book of its own.
+Created for each node that calls :ref:`Netw.configure_property()<class_Netw_method_configure_property>`. :ref:`set<class_NetwPropertySetBinding_property_set>` describes the properties, and this object reads them from the node.
 
 .. rst-class:: classref-reftable-group
 
@@ -97,7 +93,7 @@ Property Descriptions
 - |void| **set_comp**\ (\ value\: :godot:`int`\ )
 - :godot:`int` **get_comp**\ (\ )
 
-Registered component address under the entity root.
+The index of the node within its entity. ``0`` is the entity root.
 
 .. rst-class:: classref-item-separator
 
@@ -114,7 +110,16 @@ Registered component address under the entity root.
 - |void| **set_on_applied**\ (\ value\: :godot:`Callable`\ )
 - :godot:`Callable` **get_on_applied**\ (\ )
 
-Called once per committed row, with the decoded header ``{ordinal, tick, ack, payload, samples?}``. It observes a row the receiver has already committed and cannot refuse one, so raising an error here does not undo it. A refused row never reaches this call. A prediction engine subscribes here so a state receive drives reconciliation and an input receive opens the consume cursor. Unset for a plain display set, which just snaps the node.
+Called after received values are applied, as ``on_applied(header)``.
+
+.. code:: text
+
+    Dictionary
+    ┠╴ordinal  int         the index of the set
+    ┠╴tick     int         the tick of the values
+    ┠╴ack      int         the last input the server used
+    ┠╴payload  Array       the values
+    ┖╴samples  Array       past ticks, only for a windowed set
 
 .. rst-class:: classref-item-separator
 
@@ -131,7 +136,7 @@ Called once per committed row, with the decoded header ``{ordinal, tick, ack, pa
 - |void| **set_order_key**\ (\ value\: :godot:`StringName`\ )
 - :godot:`StringName` **get_order_key**\ (\ )
 
-Stable registration key used by the session's declaration table.
+A key that sorts bindings the same way on every peer.
 
 .. rst-class:: classref-item-separator
 
@@ -148,7 +153,7 @@ Stable registration key used by the session's declaration table.
 - |void| **set_route**\ (\ value\: :godot:`int`\ )
 - :godot:`int` **get_route**\ (\ )
 
-Cached entity route. A zero value has not bound to liveness yet.
+The route of the entity, or ``0`` before it spawns.
 
 .. rst-class:: classref-item-separator
 
@@ -165,7 +170,7 @@ Cached entity route. A zero value has not bound to liveness yet.
 - |void| **set_set**\ (\ value\: :ref:`NetwPropertySet<class_NetwPropertySet>`\ )
 - :ref:`NetwPropertySet<class_NetwPropertySet>` **get_set**\ (\ )
 
-The declaration this binding is a live instance of.
+The :ref:`NetwPropertySet<class_NetwPropertySet>` this binding uses.
 
 .. rst-class:: classref-section-separator
 
@@ -182,7 +187,7 @@ Method Descriptions
 
 :godot:`StringName` **carry_channel_of**\ (\ property\: :godot:`StringName`\ ) |const| :ref:`🔗<class_NetwPropertySetBinding_method_carry_channel_of>`
 
-Returns the sibling channel a recovery advances ``property`` along, or an empty :godot:`StringName` when it is restored at the acknowledged value.
+Returns the :ref:`NetwPropertyConfig.carry_along()<class_NetwPropertyConfig_method_carry_along>` property of ``property``, or empty.
 
 .. rst-class:: classref-item-separator
 
@@ -194,7 +199,7 @@ Returns the sibling channel a recovery advances ``property`` along, or an empty 
 
 :godot:`float` **converge_stiffness_of**\ (\ property\: :godot:`StringName`\ ) |const| :ref:`🔗<class_NetwPropertySetBinding_method_converge_stiffness_of>`
 
-Returns how firmly a recovery pulls ``property`` toward the authoritative value, or ``0.0`` when it is restored outright.
+Returns the :ref:`NetwPropertyConfig.converge()<class_NetwPropertyConfig_method_converge>` value of ``property``, or ``0.0``.
 
 .. rst-class:: classref-item-separator
 
@@ -206,7 +211,7 @@ Returns how firmly a recovery pulls ``property`` toward the authoritative value,
 
 :godot:`float` **epsilon_override_of**\ (\ property\: :godot:`StringName`\ ) |const| :ref:`🔗<class_NetwPropertySetBinding_method_epsilon_override_of>`
 
-Returns ``property``'s own divergence threshold, or a negative value when it inherits the entity's default.
+Returns the :ref:`NetwPropertyConfig.epsilon()<class_NetwPropertyConfig_method_epsilon>` of ``property``, or a negative value when unset.
 
 .. rst-class:: classref-item-separator
 
@@ -218,7 +223,7 @@ Returns ``property``'s own divergence threshold, or a negative value when it inh
 
 :ref:`NetwPropertySetColumn<class_NetwPropertySetColumn>` **field_of**\ (\ property\: :godot:`StringName`\ ) |const| :ref:`🔗<class_NetwPropertySetBinding_method_field_of>`
 
-Returns the declared :ref:`NetwPropertySetColumn<class_NetwPropertySetColumn>` for ``property``, or ``null`` when this set does not carry it.
+Returns the :ref:`NetwPropertySetColumn<class_NetwPropertySetColumn>` of ``property``, or ``null``.
 
 .. rst-class:: classref-item-separator
 
@@ -230,7 +235,7 @@ Returns the declared :ref:`NetwPropertySetColumn<class_NetwPropertySetColumn>` f
 
 :godot:`bool` **is_active**\ (\ ) |const| :ref:`🔗<class_NetwPropertySetBinding_method_is_active>`
 
-Returns ``true`` while the node is alive, in the tree, and holds authority over the stream.
+Returns ``true`` while the node is in the tree and this peer sends its properties.
 
 .. rst-class:: classref-item-separator
 
@@ -242,7 +247,7 @@ Returns ``true`` while the node is alive, in the tree, and holds authority over 
 
 :godot:`bool` **is_windowed**\ (\ ) |const| :ref:`🔗<class_NetwPropertySetBinding_method_is_windowed>`
 
-Returns whether this binding's volatile lane rides the redundant sample ring rather than a single row, which is what routes it onto the SYNC_ROW_WINDOW channel.
+Returns ``true`` when each send repeats past ticks, as set by :ref:`NetwPropertyConfig.windowed()<class_NetwPropertyConfig_method_windowed>`.
 
 .. rst-class:: classref-item-separator
 
@@ -254,7 +259,7 @@ Returns whether this binding's volatile lane rides the redundant sample ring rat
 
 :godot:`Node` **node**\ (\ ) |const| :ref:`🔗<class_NetwPropertySetBinding_method_node>`
 
-Returns the declaring node, or ``null`` once it has freed.
+Returns the node, or ``null`` once it is freed.
 
 .. rst-class:: classref-item-separator
 
@@ -266,9 +271,7 @@ Returns the declaring node, or ``null`` once it has freed.
 
 :godot:`int` **property_class_of**\ (\ property\: :godot:`StringName`\ ) |const| :ref:`🔗<class_NetwPropertySetBinding_method_property_class_of>`
 
-Returns what ``property`` does in the simulation, or :ref:`NetwPropertySet.CAUSAL<class_NetwPropertySet_constant_CAUSAL>` when the set does not declare it.
-
-Reconciliation uses this to decide which values it may compare and restore. Undeclared properties default to causal recovery.
+Returns the :ref:`PropertyClass<enum_NetwPropertySet_PropertyClass>` of ``property``, or :ref:`NetwPropertySet.CAUSAL<class_NetwPropertySet_constant_CAUSAL>` when unset.
 
 .. rst-class:: classref-item-separator
 
@@ -280,7 +283,7 @@ Reconciliation uses this to decide which values it may compare and restore. Unde
 
 :godot:`bool` **reconcile_only_of**\ (\ property\: :godot:`StringName`\ ) |const| :ref:`🔗<class_NetwPropertySetBinding_method_reconcile_only_of>`
 
-Returns whether ``property`` is excluded from triggering a correction on its own.
+Returns ``true`` when ``property`` uses :ref:`NetwPropertyConfig.reconcile_only()<class_NetwPropertyConfig_method_reconcile_only>`.
 
 .. rst-class:: classref-item-separator
 
@@ -292,7 +295,7 @@ Returns whether ``property`` is excluded from triggering a correction on its own
 
 :godot:`float` **teleport_at_of**\ (\ property\: :godot:`StringName`\ ) |const| :ref:`🔗<class_NetwPropertySetBinding_method_teleport_at_of>`
 
-Returns ``property``'s own teleport-tier distance, or a negative value when it inherits the entity's default.
+Returns the :ref:`NetwPropertyConfig.teleport_at()<class_NetwPropertyConfig_method_teleport_at>` of ``property``, or a negative value when unset.
 
 .. rst-class:: classref-item-separator
 
@@ -304,7 +307,7 @@ Returns ``property``'s own teleport-tier distance, or a negative value when it i
 
 :godot:`bool` **teleport_only_of**\ (\ property\: :godot:`StringName`\ ) |const| :ref:`🔗<class_NetwPropertySetBinding_method_teleport_only_of>`
 
-Returns whether ``property`` is restored only by a teleport-tier recovery.
+Returns ``true`` when ``property`` uses :ref:`NetwPropertyConfig.teleport_only()<class_NetwPropertyConfig_method_teleport_only>`.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

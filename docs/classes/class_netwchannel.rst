@@ -12,14 +12,14 @@ NetwChannel
 
 **Inherits:** :godot:`RefCounted`
 
-A raw byte channel multiplexed over the session carrier, addressed by a channel :ref:`id<class_NetwChannel_property_id>`.
+Sends raw bytes between peers on a numbered channel.
 
 .. rst-class:: classref-introduction-group
 
 Description
 -----------
 
-Channels are used to send and receive custom data between peers in a networked game. Use this for session-scoped traffic that has no entity to associate with, such as a voice stream, a chat line, or a compressed world grid. Ids run ``100`` to ``254``. Give each channel a distinct :ref:`id<class_NetwChannel_property_id>` and call :ref:`register()<class_NetwChannel_method_register>` once per peer.
+Use it for data that belongs to no node, such as voice, chat or a compressed map. Channels are numbered from ``100`` to ``254``. Call :ref:`register()<class_NetwChannel_method_register>` once on every peer.
 
 ::
 
@@ -82,7 +82,7 @@ Property Descriptions
 - |void| **set_id**\ (\ value\: :godot:`int`\ )
 - :godot:`int` **get_id**\ (\ )
 
-The channel identifier. Must be between 100 and 254.
+The channel number, from ``100`` to ``254``.
 
 .. rst-class:: classref-section-separator
 
@@ -99,7 +99,7 @@ Method Descriptions
 
 |void| **broadcast**\ (\ payload\: :godot:`PackedByteArray`, reliable\: :godot:`bool` = true, batched\: :godot:`bool` = false\ ) :ref:`🔗<class_NetwChannel_method_broadcast>`
 
-Broadcasts the custom channel payload to all other connected peers.
+Sends ``payload`` to every other peer.
 
 .. rst-class:: classref-item-separator
 
@@ -111,7 +111,7 @@ Broadcasts the custom channel payload to all other connected peers.
 
 :ref:`NetwChannel<class_NetwChannel>` **of**\ (\ node\: :godot:`Node`, id\: :godot:`int`\ ) |static| :ref:`🔗<class_NetwChannel_method_of>`
 
-Opens channel ``id`` over the session governing ``node``.
+Same as :ref:`Netw.channel()<class_Netw_method_channel>`.
 
 .. rst-class:: classref-item-separator
 
@@ -123,9 +123,7 @@ Opens channel ``id`` over the session governing ``node``.
 
 |void| **register**\ (\ handler\: :godot:`Callable`\ ) :ref:`🔗<class_NetwChannel_method_register>`
 
-Registers a ``handler`` to receive payloads for this custom channel.
-
-The ``handler`` is called as ``handler(sender: int, payload: PackedByteArray)``.
+Calls ``handler`` as ``handler(sender, payload)`` for every payload received on this channel.
 
 .. rst-class:: classref-item-separator
 
@@ -137,9 +135,7 @@ The ``handler`` is called as ``handler(sender: int, payload: PackedByteArray)``.
 
 |void| **send**\ (\ peer_id\: :godot:`int`, payload\: :godot:`PackedByteArray`, reliable\: :godot:`bool` = true, batched\: :godot:`bool` = false\ ) :ref:`🔗<class_NetwChannel_method_send>`
 
-Sends the custom channel payload to the specified ``peer_id``.
-
-With ``batched`` as ``true``, the payload queues into the peer aggregation buffers the session flushes at the end of its frame.
+Sends ``payload`` to ``peer_id``. With ``batched``, it is sent at the end of the frame together with other data, in fewer packets.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

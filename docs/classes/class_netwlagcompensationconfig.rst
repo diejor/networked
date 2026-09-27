@@ -19,7 +19,7 @@ How long the server waits for a late player action, and how far ahead of itself 
 Description
 -----------
 
-Two numbers, both optional. :ref:`Netw.configure_lagcomp()<class_Netw_method_configure_lagcomp>` returns one of these to fill in.
+Returned by :ref:`Netw.configure_lagcomp()<class_Netw_method_configure_lagcomp>`. Both values are optional.
 
 ::
 
@@ -28,9 +28,7 @@ Two numbers, both optional. :ref:`Netw.configure_lagcomp()<class_Netw_method_con
                 .input_gate_deadline(16) \
                 .max_future_action(4)
 
-\ Declaring this does not turn lag compensation on. The recording starts itself as soon as a predicted node or a :ref:`NetwAction<class_NetwAction>` needs it, so a game that predicts declares nothing here and a game that predicts nothing pays for nothing. Declare one to move a number off its default.
-
-Once the session has read these values they are its own, so freeing the node that declared them stops nothing, and there is no way to take them back. A value written afterwards is reported and changes nothing.
+\ Lag compensation turns on by itself when a predicted entity or a :ref:`NetwAction<class_NetwAction>` needs it. Use this only to change the defaults. Values are applied once, and later changes push a warning and do nothing.
 
 .. rst-class:: classref-reftable-group
 
@@ -80,7 +78,7 @@ Property Descriptions
 - |void| **set_input_gate_deadline_ticks**\ (\ value\: :godot:`int`\ )
 - :godot:`int` **get_input_gate_deadline_ticks**\ (\ )
 
-How many ticks a :ref:`NetwAction.TIMING_TICK_ALIGNED_STATE_READY<class_NetwAction_constant_TIMING_TICK_ALIGNED_STATE_READY>` action waits for the state its tick needs before it gives up and resolves on what it has. Raise it for a link that loses input often, and lower it to return a player sooner at the cost of judging on less. A negative count is rejected and the previous value stands.
+How many ticks a :ref:`NetwAction.TIMING_TICK_ALIGNED_STATE_READY<class_NetwAction_constant_TIMING_TICK_ALIGNED_STATE_READY>` action waits for missing input before running anyway. Raise it for connections that lose packets often. Lower it to answer players sooner.
 
 .. rst-class:: classref-item-separator
 
@@ -97,7 +95,7 @@ How many ticks a :ref:`NetwAction.TIMING_TICK_ALIGNED_STATE_READY<class_NetwActi
 - |void| **set_max_future_action_ticks**\ (\ value\: :godot:`int`\ )
 - :godot:`int` **get_max_future_action_ticks**\ (\ )
 
-How far ahead of the server's own tick an action may ask to happen before it is denied. This is what stops a client claiming it acted in the future. A negative count is rejected and the previous value stands.
+How many ticks ahead of the server an action may be. Further ahead is denied, so a client cannot claim it acted in the future.
 
 .. rst-class:: classref-section-separator
 
@@ -114,7 +112,7 @@ Method Descriptions
 
 :ref:`NetwLagCompensationConfig<class_NetwLagCompensationConfig>` **input_gate_deadline**\ (\ ticks\: :godot:`int`\ ) :ref:`🔗<class_NetwLagCompensationConfig_method_input_gate_deadline>`
 
-Sets :ref:`input_gate_deadline_ticks<class_NetwLagCompensationConfig_property_input_gate_deadline_ticks>` and returns this same config, so a declaration reads as one chained expression.
+Sets :ref:`input_gate_deadline_ticks<class_NetwLagCompensationConfig_property_input_gate_deadline_ticks>` and returns this config.
 
 .. rst-class:: classref-item-separator
 
@@ -126,7 +124,7 @@ Sets :ref:`input_gate_deadline_ticks<class_NetwLagCompensationConfig_property_in
 
 :ref:`NetwLagCompensationConfig<class_NetwLagCompensationConfig>` **max_future_action**\ (\ ticks\: :godot:`int`\ ) :ref:`🔗<class_NetwLagCompensationConfig_method_max_future_action>`
 
-Sets :ref:`max_future_action_ticks<class_NetwLagCompensationConfig_property_max_future_action_ticks>` and returns this same config, so a declaration reads as one chained expression.
+Sets :ref:`max_future_action_ticks<class_NetwLagCompensationConfig_property_max_future_action_ticks>` and returns this config.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

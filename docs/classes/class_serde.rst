@@ -14,23 +14,21 @@ Serde
 
 **Inherited By:** :ref:`NetwRecord<class_NetwRecord>`
 
-Abstract base for resources that round-trip through a :godot:`PackedByteArray`.
+A resource that converts itself to and from a :godot:`PackedByteArray`.
 
 .. rst-class:: classref-introduction-group
 
 Description
 -----------
 
-**Serde** keeps payload types responsible for their own byte representation. Callers can pass the result of :ref:`serialize()<class_Serde_method_serialize>` across the wire or store it for a later :ref:`deserialize()<class_Serde_method_deserialize>`.
+Send or save the bytes from :ref:`serialize()<class_Serde_method_serialize>`, and read them back with :ref:`deserialize()<class_Serde_method_deserialize>`.
 
 ::
 
     var bytes := payload.serialize()
     copy.deserialize(bytes)
 
-\ A subclass supplies the representation by overriding :ref:`_serialize()<class_Serde_private_method__serialize>` and :ref:`_deserialize()<class_Serde_private_method__deserialize>`, and callers always use the plain :ref:`serialize()<class_Serde_method_serialize>` and :ref:`deserialize()<class_Serde_method_deserialize>` pair. The two spellings are one contract: the plain verb returns the override when a script supplies one and falls back to the native implementation otherwise, so the caller never asks which kind of subclass it holds.
-
-\ :ref:`DictionaryRecord<class_DictionaryRecord>` is the implementation this addon ships.
+\ Extend it and override :ref:`_serialize()<class_Serde_private_method__serialize>` and :ref:`_deserialize()<class_Serde_private_method__deserialize>`. :ref:`DictionaryRecord<class_DictionaryRecord>` is an example.
 
 .. rst-class:: classref-reftable-group
 
@@ -65,7 +63,7 @@ Method Descriptions
 
 |void| **_deserialize**\ (\ bytes\: :godot:`PackedByteArray`\ ) |virtual| :ref:`🔗<class_Serde_private_method__deserialize>`
 
-Repopulates this resource from ``bytes``, undoing :ref:`_serialize()<class_Serde_private_method__serialize>`. Override it in a script subclass; :ref:`deserialize()<class_Serde_method_deserialize>` is what callers use.
+Override it to read this resource from ``bytes`` written by :ref:`_serialize()<class_Serde_private_method__serialize>`.
 
 .. rst-class:: classref-item-separator
 
@@ -77,7 +75,7 @@ Repopulates this resource from ``bytes``, undoing :ref:`_serialize()<class_Serde
 
 :godot:`PackedByteArray` **_serialize**\ (\ ) |virtual| :ref:`🔗<class_Serde_private_method__serialize>`
 
-Converts this resource to a :godot:`PackedByteArray`. Override it in a script subclass; :ref:`serialize()<class_Serde_method_serialize>` is what callers use.
+Override it to convert this resource to bytes.
 
 .. rst-class:: classref-item-separator
 
@@ -89,7 +87,7 @@ Converts this resource to a :godot:`PackedByteArray`. Override it in a script su
 
 |void| **deserialize**\ (\ bytes\: :godot:`PackedByteArray`\ ) :ref:`🔗<class_Serde_method_deserialize>`
 
-Repopulates this resource from ``bytes``. A subclass that overrides :ref:`_deserialize()<class_Serde_private_method__deserialize>` returns through it, and a **Serde** with neither an override nor a native implementation ignores the call.
+Reads this resource from ``bytes``. Calls :ref:`_deserialize()<class_Serde_private_method__deserialize>`.
 
 .. rst-class:: classref-item-separator
 
@@ -101,7 +99,7 @@ Repopulates this resource from ``bytes``. A subclass that overrides :ref:`_deser
 
 :godot:`PackedByteArray` **serialize**\ (\ ) :ref:`🔗<class_Serde_method_serialize>`
 
-Converts this resource to a :godot:`PackedByteArray`. A subclass that overrides :ref:`_serialize()<class_Serde_private_method__serialize>` returns through it, and a **Serde** with neither an override nor a native implementation returns an empty array.
+Converts this resource to bytes. Calls :ref:`_serialize()<class_Serde_private_method__serialize>`, and returns an empty array when it is not overridden.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

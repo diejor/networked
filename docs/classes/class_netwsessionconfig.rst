@@ -12,29 +12,23 @@ NetwSessionConfig
 
 **Inherits:** :godot:`Resource`
 
-Draft the session machine is initialized from, declared on a scope node.
+Session settings, returned by :ref:`Netw.configure_session()<class_Netw_method_configure_session>`.
 
 .. rst-class:: classref-introduction-group
 
 Description
 -----------
 
-:ref:`Netw.configure_session()<class_Netw_method_configure_session>` returns a draft the scope node owns. Edit it in place or through the fluent methods, and the session copies its values once, at a deferred boundary after the declaring call stack has finished. From then on the session holds owned values and this Resource is a spent authoring snapshot: a later setter reports the late write and moves nothing.
-
-This resource carries only the facts the wire and the session machine own. What a session hosts or joins over is not among them: that is an argument of the verb that hosts, on :ref:`NetwConnectHandle<class_NetwConnectHandle>`.
+Set the values in :godot:`Object._init() <Object#class_Object_private_method__init>`. They are applied once, at the end of the frame, and changes after that push a warning and do nothing.
 
 ::
 
     func _init() -> void:
         Netw.configure_session(self) \
-            .app_id(&"bomber-v2") \
-            .role(NetwMultiplayer.Role.LISTEN_SERVER)
+            .app(&"bomber-v2") \
+            .role(NetwMultiplayer.ROLE_LISTEN_SERVER)
 
-\ A preset handed to that verb is copied rather than kept, so one ``.tres`` may seed several scenes and editing it afterwards reaches none of them. Nested :ref:`NetwLinkConditions<class_NetwLinkConditions>` and :ref:`NetwServerInfo<class_NetwServerInfo>` values are copied too.
-
-\ :ref:`NetwMultiplayer.session_get_config()<class_NetwMultiplayer_method_session_get_config>` returns a detached snapshot of the running values, freshly copied nested objects included. Editing what it returns is a way to read the session, never a way to configure it.
-
-A :ref:`MultiplayerTree<class_MultiplayerTree>`'s session exports are the fallback when no node declares one. An explicit declaration replaces that export whole, so a field left at its default here is the default rather than the tree's value, and the discarded non-default tree fields are named once in a warning.
+\ A preset passed to :ref:`Netw.configure_session()<class_Netw_method_configure_session>` is copied, so one ``.tres`` can be used by several scenes. When no node calls :ref:`Netw.configure_session()<class_Netw_method_configure_session>`, the settings of the :ref:`MultiplayerTree<class_MultiplayerTree>` are used. When one does, the :ref:`MultiplayerTree<class_MultiplayerTree>` settings are ignored.
 
 .. rst-class:: classref-reftable-group
 
@@ -92,11 +86,7 @@ Property Descriptions
 - |void| **set_app_id**\ (\ value\: :godot:`StringName`\ )
 - :godot:`StringName` **get_app_id**\ (\ )
 
-Game-build tag that gates session admission.
-
-A joining peer whose tag differs is rejected during authentication before it reaches :godot:`MultiplayerAPI.get_peers() <MultiplayerAPI#class_MultiplayerAPI_method_get_peers>`. Leave this empty to disable the check. The session derives one auth tag from this value.
-
-It also names the space a signalled transport creates its room codes in, and is what makes a code short enough to read out. See :ref:`MultiplayerTree.app_id<class_MultiplayerTree_property_app_id>`.
+The game and build. Peers with a different :ref:`app_id<class_NetwSessionConfig_property_app_id>` cannot connect. Leave it empty to accept any. WebRTC room codes are also created per :ref:`app_id<class_NetwSessionConfig_property_app_id>`.
 
 .. rst-class:: classref-item-separator
 
@@ -113,11 +103,7 @@ It also names the space a signalled transport creates its room codes in, and is 
 - |void| **set_desired_role**\ (\ value\: :ref:`Role<enum_NetwMultiplayer_Role>`\ )
 - :ref:`Role<enum_NetwMultiplayer_Role>` **get_desired_role**\ (\ )
 
-The :ref:`Role<enum_NetwMultiplayer_Role>` the local peer intends to play once a session starts.
-
-The live :ref:`NetwMultiplayer.role<class_NetwMultiplayer_property_role>` is only assigned when the session reaches :godot:`NetwMultiplayer.SessionState.ONLINE <NetwMultiplayer#class_NetwMultiplayer_constant_SessionState.ONLINE>`. This is the intent the assignment edge reads to pick the server role. A value outside the enum is rejected and the previous role stands.
-
-An embedded server is constructed with a dedicated-server role that constrains the effective role after consumption, whichever declaration supplied the other values.
+The role this peer takes when it hosts, which becomes :ref:`NetwMultiplayer.role<class_NetwMultiplayer_property_role>`. A server made with :ref:`MultiplayerTree.raise_embedded_server()<class_MultiplayerTree_method_raise_embedded_server>` is always :ref:`NetwMultiplayer.ROLE_DEDICATED_SERVER<class_NetwMultiplayer_constant_ROLE_DEDICATED_SERVER>`.
 
 .. rst-class:: classref-item-separator
 
@@ -134,9 +120,7 @@ An embedded server is constructed with a dedicated-server role that constrains t
 - |void| **set_link_conditions**\ (\ value\: :ref:`NetwLinkConditions<class_NetwLinkConditions>`\ )
 - :ref:`NetwLinkConditions<class_NetwLinkConditions>` **get_link_conditions**\ (\ )
 
-Optional latency and loss simulation applied to this session's peer.
-
-\ :ref:`NetwMultiplayer<class_NetwMultiplayer>` wraps the built peer with it before assignment, so a session applies what it was configured with whether or not a :ref:`MultiplayerTree<class_MultiplayerTree>` owns it. Its four scalar fields are copied at consumption, so mutating the object afterwards reaches no running session.
+Simulated latency and packet loss for testing. Copied when applied.
 
 .. rst-class:: classref-item-separator
 
@@ -153,18 +137,16 @@ Optional latency and loss simulation applied to this session's peer.
 - |void| **set_server_info**\ (\ value\: :ref:`NetwServerInfo<class_NetwServerInfo>`\ )
 - :ref:`NetwServerInfo<class_NetwServerInfo>` **get_server_info**\ (\ )
 
-What this session tells a probing client about itself: its name, its player cap, its :ref:`Visibility<enum_NetwServerInfo_Visibility>`, and whatever else the game fills in.
-
-This is the whole advert and its only door, authored in the inspector or declared before the session is brought up. :ref:`NetwServerInfo.from_session()<class_NetwServerInfo_method_from_session>` copies it and overlays the fields only a live session knows, so a game that leaves it unset still returns a probe honestly and a game that sets it never says the same thing twice. Its values, nested containers included, are copied at consumption.
+What this server shows in server browsers. The player count and :ref:`NetwServerInfo.app_id<class_NetwServerInfo_property_app_id>` are filled in automatically. Copied when applied.
 
 ::
 
     var info := NetwServerInfo.new()
     info.motd = "Friday night"
     info.max_players = 8
-    Netw.configure_session(self).server_info(info)
+    Netw.configure_session(self).server(info)
 
-\ A game that computes its reply per probe declares a provider through :ref:`Netw.configure_server_info()<class_Netw_method_configure_server_info>` instead. That provider is handed this record, already copied and filled in from the live session, and returns the reply to send.
+\ To change it for each request, use :ref:`Netw.configure_server_info()<class_Netw_method_configure_server_info>`.
 
 .. rst-class:: classref-section-separator
 
@@ -181,7 +163,7 @@ Method Descriptions
 
 :ref:`NetwSessionConfig<class_NetwSessionConfig>` **app**\ (\ app_id\: :godot:`StringName`\ ) :ref:`🔗<class_NetwSessionConfig_method_app>`
 
-Sets :ref:`app_id<class_NetwSessionConfig_property_app_id>` and returns this same draft, so a declaration reads as one chained expression.
+Sets :ref:`app_id<class_NetwSessionConfig_property_app_id>` and returns this config.
 
 .. rst-class:: classref-item-separator
 
@@ -193,7 +175,7 @@ Sets :ref:`app_id<class_NetwSessionConfig_property_app_id>` and returns this sam
 
 :ref:`NetwSessionConfig<class_NetwSessionConfig>` **link**\ (\ link_conditions\: :ref:`NetwLinkConditions<class_NetwLinkConditions>`\ ) :ref:`🔗<class_NetwSessionConfig_method_link>`
 
-Sets :ref:`link_conditions<class_NetwSessionConfig_property_link_conditions>` and returns this same draft, so a declaration reads as one chained expression.
+Sets :ref:`link_conditions<class_NetwSessionConfig_property_link_conditions>` and returns this config.
 
 .. rst-class:: classref-item-separator
 
@@ -205,7 +187,7 @@ Sets :ref:`link_conditions<class_NetwSessionConfig_property_link_conditions>` an
 
 :ref:`NetwSessionConfig<class_NetwSessionConfig>` **role**\ (\ desired_role\: :ref:`Role<enum_NetwMultiplayer_Role>`\ ) :ref:`🔗<class_NetwSessionConfig_method_role>`
 
-Sets :ref:`desired_role<class_NetwSessionConfig_property_desired_role>` and returns this same draft, so a declaration reads as one chained expression.
+Sets :ref:`desired_role<class_NetwSessionConfig_property_desired_role>` and returns this config.
 
 .. rst-class:: classref-item-separator
 
@@ -217,7 +199,7 @@ Sets :ref:`desired_role<class_NetwSessionConfig_property_desired_role>` and retu
 
 :ref:`NetwSessionConfig<class_NetwSessionConfig>` **server**\ (\ server_info\: :ref:`NetwServerInfo<class_NetwServerInfo>`\ ) :ref:`🔗<class_NetwSessionConfig_method_server>`
 
-Sets :ref:`server_info<class_NetwSessionConfig_property_server_info>` and returns this same draft, so a declaration reads as one chained expression.
+Sets :ref:`server_info<class_NetwSessionConfig_property_server_info>` and returns this config.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

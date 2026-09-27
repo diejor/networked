@@ -51,9 +51,9 @@ Properties
    +-----------------------------------------------------------------+--------------------------------------------------------------------------+-----------+
    | :ref:`NetwPlayer<class_NetwPlayer>`                             | :ref:`local_player<class_NetwSessionHandle_property_local_player>`       |           |
    +-----------------------------------------------------------------+--------------------------------------------------------------------------+-----------+
-   | :ref:`NetwSceneHandle<class_NetwSceneHandle>`                   | :ref:`presented_scene<class_NetwSessionHandle_property_presented_scene>` |           |
-   +-----------------------------------------------------------------+--------------------------------------------------------------------------+-----------+
    | :godot:`Array`\[:ref:`NetwPlayer<class_NetwPlayer>`\]           | :ref:`players<class_NetwSessionHandle_property_players>`                 | ``[]``    |
+   +-----------------------------------------------------------------+--------------------------------------------------------------------------+-----------+
+   | :ref:`NetwSceneHandle<class_NetwSceneHandle>`                   | :ref:`presented_scene<class_NetwSessionHandle_property_presented_scene>` |           |
    +-----------------------------------------------------------------+--------------------------------------------------------------------------+-----------+
    | :ref:`Role<enum_NetwMultiplayer_Role>`                          | :ref:`role<class_NetwSessionHandle_property_role>`                       | ``0``     |
    +-----------------------------------------------------------------+--------------------------------------------------------------------------+-----------+
@@ -169,18 +169,6 @@ The :ref:`NetwPlayer<class_NetwPlayer>` of this peer has joined. :ref:`local_pla
 
 ----
 
-.. _class_NetwSessionHandle_signal_presentation_changed:
-
-.. rst-class:: classref-signal
-
-**presentation_changed**\ (\ from\: :ref:`NetwSceneHandle<class_NetwSceneHandle>`, to\: :ref:`NetwSceneHandle<class_NetwSceneHandle>`\ ) :ref:`🔗<class_NetwSessionHandle_signal_presentation_changed>`
-
-:ref:`presented_scene<class_NetwSessionHandle_property_presented_scene>` changed from ``from`` to ``to``, either may be ``null``.
-
-.. rst-class:: classref-item-separator
-
-----
-
 .. _class_NetwSessionHandle_signal_player_joined:
 
 .. rst-class:: classref-signal
@@ -200,6 +188,18 @@ A :ref:`NetwPlayer<class_NetwPlayer>` has joined, including this peer's own.
 **player_left**\ (\ player\: :ref:`NetwPlayer<class_NetwPlayer>`\ ) :ref:`🔗<class_NetwSessionHandle_signal_player_left>`
 
 A :ref:`NetwPlayer<class_NetwPlayer>` has left, either because their peer disconnected or because of :ref:`kick()<class_NetwSessionHandle_method_kick>`. :ref:`NetwPlayer.is_active<class_NetwPlayer_property_is_active>` is already ``false``.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NetwSessionHandle_signal_presentation_changed:
+
+.. rst-class:: classref-signal
+
+**presentation_changed**\ (\ from\: :ref:`NetwSceneHandle<class_NetwSceneHandle>`, to\: :ref:`NetwSceneHandle<class_NetwSceneHandle>`\ ) :ref:`🔗<class_NetwSessionHandle_signal_presentation_changed>`
+
+:ref:`presented_scene<class_NetwSessionHandle_property_presented_scene>` changed from ``from`` to ``to``, either may be ``null``.
 
 .. rst-class:: classref-item-separator
 
@@ -314,6 +314,22 @@ The :ref:`NetwPlayer<class_NetwPlayer>` of this peer, ``null`` until :ref:`local
 
 ----
 
+.. _class_NetwSessionHandle_property_players:
+
+.. rst-class:: classref-property
+
+:godot:`Array`\[:ref:`NetwPlayer<class_NetwPlayer>`\] **players** = ``[]`` :ref:`🔗<class_NetwSessionHandle_property_players>`
+
+.. rst-class:: classref-property-setget
+
+- :godot:`Array`\[:ref:`NetwPlayer<class_NetwPlayer>`\] **get_players**\ (\ )
+
+Every :ref:`NetwPlayer<class_NetwPlayer>` that has joined, including those whose peer has since disconnected. See :ref:`NetwMultiplayer.connected_players<class_NetwMultiplayer_property_connected_players>` for only the connected ones.
+
+.. rst-class:: classref-item-separator
+
+----
+
 .. _class_NetwSessionHandle_property_presented_scene:
 
 .. rst-class:: classref-property
@@ -327,22 +343,6 @@ The :ref:`NetwPlayer<class_NetwPlayer>` of this peer, ``null`` until :ref:`local
 The scene this peer draws, ``null`` when it draws none. It is the scene holding a body of this peer, or else the scene this peer watches. When there are two, it is ``null`` and a warning is logged.
 
 On a listen server this is what :ref:`HostSceneView<class_HostSceneView>` draws. See :ref:`NetwSceneHandle.watch()<class_NetwSceneHandle_method_watch>` to choose what a player receives.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwSessionHandle_property_players:
-
-.. rst-class:: classref-property
-
-:godot:`Array`\[:ref:`NetwPlayer<class_NetwPlayer>`\] **players** = ``[]`` :ref:`🔗<class_NetwSessionHandle_property_players>`
-
-.. rst-class:: classref-property-setget
-
-- :godot:`Array`\[:ref:`NetwPlayer<class_NetwPlayer>`\] **get_players**\ (\ )
-
-Every :ref:`NetwPlayer<class_NetwPlayer>` that has joined, including those whose peer has since disconnected. See :ref:`NetwMultiplayer.connected_players<class_NetwMultiplayer_property_connected_players>` for only the connected ones.
 
 .. rst-class:: classref-item-separator
 
@@ -423,7 +423,7 @@ Method Descriptions
 
 :godot:`Variant` **bucket_of**\ (\ peer\: :godot:`int`, type\: :godot:`Variant`\ ) |const| :ref:`🔗<class_NetwSessionHandle_method_bucket_of>`
 
-The bucket of ``type`` that ``peer`` carries, ``null`` when it carries none.
+The per-peer game data of ``type`` stored for ``peer``, created on first use. See :ref:`NetwMultiplayer.peer_get_bucket()<class_NetwMultiplayer_method_peer_get_bucket>`.
 
 .. rst-class:: classref-item-separator
 

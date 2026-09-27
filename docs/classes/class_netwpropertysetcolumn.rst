@@ -12,14 +12,14 @@ NetwPropertySetColumn
 
 **Inherits:** :godot:`RefCounted`
 
-One member column of a :ref:`NetwPropertySet<class_NetwPropertySet>`, positioned in wire order inside :ref:`NetwPropertySet.columns<class_NetwPropertySet_property_columns>`.
+One property of a :ref:`NetwPropertySet<class_NetwPropertySet>`.
 
 .. rst-class:: classref-introduction-group
 
 Description
 -----------
 
-What the column holds is read from :ref:`schema_column<class_NetwPropertySetColumn_property_schema_column>`, the schema's own declaration, so a set never carries a second copy of a key or a quantizer that could disagree with the table and the database. Everything else here says how the column travels and what a correction does with it.
+The name, type and quantizer come from the :ref:`NetwSchema<class_NetwSchema>` column at :ref:`schema_column<class_NetwPropertySetColumn_property_schema_column>`. The rest says how the property is sent and corrected. Most members are set by :ref:`NetwPropertyConfig<class_NetwPropertyConfig>`.
 
 .. rst-class:: classref-reftable-group
 
@@ -92,7 +92,7 @@ enum **Delta**: :ref:`🔗<enum_NetwPropertySetColumn_Delta>`
 
 :ref:`Delta<enum_NetwPropertySetColumn_Delta>` **DELTA_AUTO** = ``0``
 
-The core derives :ref:`delta_mode<class_NetwPropertySetColumn_property_delta_mode>` from the declaration.
+Chosen from the declaration. See :ref:`delta_mode<class_NetwPropertySetColumn_property_delta_mode>`.
 
 .. _class_NetwPropertySetColumn_constant_DELTA_FULL:
 
@@ -100,7 +100,7 @@ The core derives :ref:`delta_mode<class_NetwPropertySetColumn_property_delta_mod
 
 :ref:`Delta<enum_NetwPropertySetColumn_Delta>` **DELTA_FULL** = ``1``
 
-Every element writes its whole code, which is what a peer holding no baseline can read.
+Always send the full value.
 
 .. _class_NetwPropertySetColumn_constant_DELTA_LADDER:
 
@@ -108,7 +108,7 @@ Every element writes its whole code, which is what a peer holding no baseline ca
 
 :ref:`Delta<enum_NetwPropertySetColumn_Delta>` **DELTA_LADDER** = ``2``
 
-Every element writes a two-bit selector and either its whole code or a signed step in the smallest bucket that holds it.
+Send the change from the last confirmed value when it is smaller.
 
 .. rst-class:: classref-section-separator
 
@@ -130,7 +130,7 @@ Property Descriptions
 - |void| **set_carry_channel**\ (\ value\: :godot:`StringName`\ )
 - :godot:`StringName` **get_carry_channel**\ (\ )
 
-The sibling column a recovery advances this value along, from the transition it acknowledged to the present, or empty when the acknowledged value is written as it stands.
+Set by :ref:`NetwPropertyConfig.carry_along()<class_NetwPropertyConfig_method_carry_along>`.
 
 .. rst-class:: classref-item-separator
 
@@ -147,7 +147,7 @@ The sibling column a recovery advances this value along, from the transition it 
 - |void| **set_converge_stiffness**\ (\ value\: :godot:`float`\ )
 - :godot:`float` **get_converge_stiffness**\ (\ )
 
-How firmly a restored value is pulled toward the authoritative one instead of being written to it, or ``0.0`` to write it outright.
+Set by :ref:`NetwPropertyConfig.converge()<class_NetwPropertyConfig_method_converge>`.
 
 .. rst-class:: classref-item-separator
 
@@ -164,15 +164,7 @@ How firmly a restored value is pulled toward the authoritative one instead of be
 - |void| **set_delta_mode**\ (\ value\: :ref:`Delta<enum_NetwPropertySetColumn_Delta>`\ )
 - :ref:`Delta<enum_NetwPropertySetColumn_Delta>` **get_delta_mode**\ (\ )
 
-Whether the column spends a per-element selector to write a signed step from the baseline its frame names, or writes its whole code every time.
-
-\ :ref:`DELTA_AUTO<class_NetwPropertySetColumn_constant_DELTA_AUTO>` derives the result from the declaration, and the derivation is the measured one. A ladder pays 39 to 71 percent on a value a solver integrates and costs 12.5 percent on one a player authors or one that wraps, so it is taken only for a quantized column wider than eight bits on a set whose :ref:`NetwPropertySet.record<class_NetwPropertySet_property_record>` is :ref:`NetwPropertySet.RECORD_STATE<class_NetwPropertySet_constant_RECORD_STATE>`, and never for a :ref:`NetwQuantizeAngle<class_NetwQuantizeAngle>`.
-
-Override it where the declaration cannot see what the value does. An integrated column on a set that is not state is one such case, and an authored one whose declaration looks integrated is the other.
-
-A column narrower than five bits is :ref:`DELTA_FULL<class_NetwPropertySetColumn_constant_DELTA_FULL>` whatever this says, because no bucket is narrower than the code it would replace.
-
-The result is absent from :ref:`NetwPropertySet.wire_hash()<class_NetwPropertySet_method_wire_hash>`. Both ends derive it from the same declaration and neither writes it on the wire, so a build that overrides it here overrides it on every peer.
+Whether the value is sent as a change from the last value the peer confirmed, or in full. :ref:`DELTA_AUTO<class_NetwPropertySetColumn_constant_DELTA_AUTO>` sends changes only for a quantized value wider than eight bits in a :ref:`NetwPropertySet.RECORD_STATE<class_NetwPropertySet_constant_RECORD_STATE>` set, and never for a :ref:`NetwQuantizeAngle<class_NetwQuantizeAngle>`. Values narrower than five bits are always sent in full.
 
 .. rst-class:: classref-item-separator
 
@@ -189,7 +181,7 @@ The result is absent from :ref:`NetwPropertySet.wire_hash()<class_NetwPropertySe
 - |void| **set_epsilon_override**\ (\ value\: :godot:`float`\ )
 - :godot:`float` **get_epsilon_override**\ (\ )
 
-The column's own divergence threshold, or a negative value to inherit the entity's default.
+Set by :ref:`NetwPropertyConfig.epsilon()<class_NetwPropertyConfig_method_epsilon>`. Negative uses the entity's default.
 
 .. rst-class:: classref-item-separator
 
@@ -206,7 +198,7 @@ The column's own divergence threshold, or a negative value to inherit the entity
 - |void| **set_explicit_reconcile_only**\ (\ value\: :godot:`bool`\ )
 - :godot:`bool` **get_explicit_reconcile_only**\ (\ )
 
-When ``true`` the column never triggers a correction on its own, while a correction another column triggers still restores it.
+Set by :ref:`NetwPropertyConfig.reconcile_only()<class_NetwPropertyConfig_method_reconcile_only>`.
 
 .. rst-class:: classref-item-separator
 
@@ -223,7 +215,7 @@ When ``true`` the column never triggers a correction on its own, while a correct
 - |void| **set_explicit_teleport_only**\ (\ value\: :godot:`bool`\ )
 - :godot:`bool` **get_explicit_teleport_only**\ (\ )
 
-When ``true`` the column is restored only by a teleport-tier recovery, never by an ordinary one.
+Set by :ref:`NetwPropertyConfig.teleport_only()<class_NetwPropertyConfig_method_teleport_only>`.
 
 .. rst-class:: classref-item-separator
 
@@ -239,7 +231,7 @@ When ``true`` the column is restored only by a teleport-tier recovery, never by 
 
 - :godot:`StringName` **get_key**\ (\ )
 
-Payload name, stable across peers because both read it off the same declaration.
+The property name.
 
 .. rst-class:: classref-item-separator
 
@@ -256,7 +248,7 @@ Payload name, stable across peers because both read it off the same declaration.
 - |void| **set_lane**\ (\ value\: :godot:`int`\ )
 - :godot:`int` **get_lane**\ (\ )
 
-The delivery lane, the axis form of :ref:`watch<class_NetwPropertySetColumn_property_watch>`.
+A :ref:`Lane<enum_NetwPropertySet_Lane>`. The same as :ref:`watch<class_NetwPropertySetColumn_property_watch>`.
 
 .. rst-class:: classref-item-separator
 
@@ -273,7 +265,7 @@ The delivery lane, the axis form of :ref:`watch<class_NetwPropertySetColumn_prop
 - |void| **set_property_class**\ (\ value\: :godot:`int`\ )
 - :godot:`int` **get_property_class**\ (\ )
 
-What the column's value does in the simulation, which decides whether a reconciliation compares it, restores it, or leaves it to display.
+A :ref:`PropertyClass<enum_NetwPropertySet_PropertyClass>`, which decides whether a difference causes a correction.
 
 .. rst-class:: classref-item-separator
 
@@ -290,7 +282,7 @@ What the column's value does in the simulation, which decides whether a reconcil
 - |void| **set_quantizer**\ (\ value\: :ref:`NetwQuantize<class_NetwQuantize>`\ )
 - :ref:`NetwQuantize<class_NetwQuantize>` **get_quantizer**\ (\ )
 
-Bit-packer for this column, or ``null`` for a self-describing raw :godot:`Variant` on the wire. Part of the schema's shape, so two peers that packed it differently disagree on :ref:`NetwPropertySet.wire_hash()<class_NetwPropertySet_method_wire_hash>`.
+How the value is compressed, or ``null`` to send it as is.
 
 .. rst-class:: classref-item-separator
 
@@ -307,7 +299,7 @@ Bit-packer for this column, or ``null`` for a self-describing raw :godot:`Varian
 - |void| **set_schema_column**\ (\ value\: :godot:`int`\ )
 - :godot:`int` **get_schema_column**\ (\ )
 
-The address this column has in the schema its set was declared from, the one address it has anywhere.
+The index of this property in its :ref:`NetwSchema<class_NetwSchema>`.
 
 .. rst-class:: classref-item-separator
 
@@ -324,7 +316,7 @@ The address this column has in the schema its set was declared from, the one add
 - |void| **set_teleport_at_override**\ (\ value\: :godot:`float`\ )
 - :godot:`float` **get_teleport_at_override**\ (\ )
 
-The column's own teleport-tier distance, or a negative value to inherit the entity's default.
+Set by :ref:`NetwPropertyConfig.teleport_at()<class_NetwPropertyConfig_method_teleport_at>`. Negative uses the entity's default.
 
 .. rst-class:: classref-item-separator
 
@@ -340,7 +332,7 @@ The column's own teleport-tier distance, or a negative value to inherit the enti
 
 - :ref:`ColumnType<enum_NetwMultiplayer_ColumnType>` **get_type**\ (\ )
 
-The declared :ref:`NetwMultiplayer<class_NetwMultiplayer>` column type fixed into the schema.
+The column type in the schema.
 
 .. rst-class:: classref-item-separator
 
@@ -357,7 +349,7 @@ The declared :ref:`NetwMultiplayer<class_NetwMultiplayer>` column type fixed int
 - |void| **set_watch**\ (\ value\: :godot:`bool`\ )
 - :godot:`bool` **get_watch**\ (\ )
 
-When ``true`` the column replicates reliably on change, otherwise it is volatile and freshest-wins.
+``true`` sends the value reliably when it changes. ``false`` sends it unreliably.
 
 .. rst-class:: classref-section-separator
 
@@ -374,9 +366,7 @@ Method Descriptions
 
 :ref:`NetwPropertySetColumn<class_NetwPropertySetColumn>` **create**\ (\ key\: :godot:`StringName`, quantizer\: :ref:`NetwQuantize<class_NetwQuantize>` = null, watch\: :godot:`bool` = false, type\: :ref:`ColumnType<enum_NetwMultiplayer_ColumnType>` = 15\ ) |static| :ref:`🔗<class_NetwPropertySetColumn_method_create>`
 
-Builds a member whose shape is a fresh single-column declaration.
-
-A set compiled from a declaration passes its column through :ref:`schema_column<class_NetwPropertySetColumn_property_schema_column>` instead, so this form is for a set assembled by hand with no schema of its own.
+Creates a column for a set built by hand, with no :ref:`NetwSchema<class_NetwSchema>`.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

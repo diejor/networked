@@ -12,14 +12,14 @@ NetwRingBuffer
 
 **Inherits:** :godot:`RefCounted`
 
-Pre-allocated ring buffer that stores values keyed by tick number.
+Stores values by tick, with a fixed capacity.
 
 .. rst-class:: classref-introduction-group
 
 Description
 -----------
 
-**NetwRingBuffer** rounds its capacity up to a power of two so :ref:`record()<class_NetwRingBuffer_method_record>`, :ref:`get_at()<class_NetwRingBuffer_method_get_at>`, and :ref:`bracketing_ticks()<class_NetwRingBuffer_method_bracketing_ticks>` can stay cheap in interpolation and rollback hot paths: a capacity that is a power of two wraps an index with a mask rather than a modulo, and that is the whole reason this type exists rather than an :godot:`Array`.
+Keeps the most recent values. Recording past its capacity removes the oldest.
 
 ::
 
@@ -73,9 +73,7 @@ Method Descriptions
 
 :godot:`Vector2i` **bracketing_ticks**\ (\ tick\: :godot:`int`\ ) |const| :ref:`🔗<class_NetwRingBuffer_method_bracketing_ticks>`
 
-Returns the ``(prev, next)`` ticks bracketing ``tick``.
-
-\ ``x`` is the greatest recorded tick less than or equal to ``tick`` or ``-1`` if none exists. ``y`` is the smallest recorded tick strictly greater than ``tick`` or ``-1`` if none exists.
+Returns the recorded ticks around ``tick``. ``x`` is the newest at or before it, and ``y`` the oldest after it, or ``-1`` when there is none.
 
 .. rst-class:: classref-item-separator
 
@@ -87,7 +85,7 @@ Returns the ``(prev, next)`` ticks bracketing ``tick``.
 
 |void| **clear**\ (\ ) :ref:`🔗<class_NetwRingBuffer_method_clear>`
 
-Drops every recorded entry, keeping the allocated capacity.
+Removes every value.
 
 .. rst-class:: classref-item-separator
 
@@ -99,7 +97,7 @@ Drops every recorded entry, keeping the allocated capacity.
 
 :ref:`NetwRingBuffer<class_NetwRingBuffer>` **create**\ (\ capacity\: :godot:`int` = 16\ ) |static| :ref:`🔗<class_NetwRingBuffer_method_create>`
 
-Returns a buffer holding at least ``capacity`` entries, rounded up to a power of two. Calling ``new()`` instead gives the default capacity.
+Returns a buffer holding at least ``capacity`` values, rounded up to a power of two. ``new()`` holds 16.
 
 .. rst-class:: classref-item-separator
 
@@ -111,7 +109,7 @@ Returns a buffer holding at least ``capacity`` entries, rounded up to a power of
 
 :godot:`Variant` **get_at**\ (\ tick\: :godot:`int`\ ) |const| :ref:`🔗<class_NetwRingBuffer_method_get_at>`
 
-Returns the value recorded at exactly ``tick``, or ``null`` when that tick was never recorded or has since been evicted.
+Returns the value at ``tick``, or ``null``.
 
 .. rst-class:: classref-item-separator
 
@@ -159,7 +157,7 @@ Returns the most recently recorded tick, or ``-1`` when the buffer is empty.
 
 :godot:`int` **oldest_tick**\ (\ ) |const| :ref:`🔗<class_NetwRingBuffer_method_oldest_tick>`
 
-Returns the oldest tick still held, or ``-1`` when the buffer is empty.
+Returns the oldest recorded tick, or ``-1`` when the buffer is empty.
 
 .. rst-class:: classref-item-separator
 
@@ -171,11 +169,7 @@ Returns the oldest tick still held, or ``-1`` when the buffer is empty.
 
 |void| **record**\ (\ tick\: :godot:`int`, value\: :godot:`Variant`\ ) :ref:`🔗<class_NetwRingBuffer_method_record>`
 
-Records ``value`` at ``tick``. Recording past capacity evicts the oldest entry.
-
-A tick the buffer already holds is replaced in place rather than appended, so one tick is one entry and the newest write for it is the one :ref:`get_at()<class_NetwRingBuffer_method_get_at>` returns. A replay that re-runs a tick and records the state it reached is the caller this exists for: appending would leave the pre-replay value in front of the corrected one, where every reader would keep finding the value the replay was run to supersede.
-
-The replace path is guarded by a single comparison against :ref:`newest_tick()<class_NetwRingBuffer_method_newest_tick>`, so an append at a rising tick, which is what every hot caller does, never scans.
+Records ``value`` at ``tick``, replacing any value already there. When full, the oldest value is removed.
 
 .. rst-class:: classref-item-separator
 
@@ -187,7 +181,7 @@ The replace path is guarded by a single comparison against :ref:`newest_tick()<c
 
 :godot:`int` **size**\ (\ ) |const| :ref:`🔗<class_NetwRingBuffer_method_size>`
 
-Returns how many entries are recorded.
+Returns how many values are recorded.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

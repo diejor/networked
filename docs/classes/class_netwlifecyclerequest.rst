@@ -12,7 +12,7 @@ NetwLifecycleRequest
 
 **Inherits:** :godot:`RefCounted`
 
-A controller's spawn, despawn or move of an entity, waiting for the server's verdict.
+A spawn, despawn or move by a controlling client, waiting for the server to accept it.
 
 .. rst-class:: classref-introduction-group
 

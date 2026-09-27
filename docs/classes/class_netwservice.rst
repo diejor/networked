@@ -14,14 +14,14 @@ NetwService
 
 **Inherited By:** :ref:`LobbyDirectory<class_LobbyDirectory>`, :ref:`NakamaSessionService<class_NakamaSessionService>`
 
-Opt-in base for a :godot:`Node` that registers itself as a session service on the :ref:`NetwMultiplayer<class_NetwMultiplayer>` of its branch.
+A :godot:`Node` that registers itself as a service of its :godot:`Node.multiplayer <Node#class_Node_property_multiplayer>` while it is in the tree.
 
 .. rst-class:: classref-introduction-group
 
 Description
 -----------
 
-Registration is bound to tree membership. The service enters the registry when the node enters the tree and leaves when it exits, skipping the editor, so it is discoverable through :ref:`NetwMultiplayer.service_get()<class_NetwMultiplayer_method_service_get>` exactly while it is mounted under a live tree. The lifecycle is sealed: a subclass overrides :ref:`_service_entered()<class_NetwService_private_method__service_entered>` and :ref:`_service_exiting()<class_NetwService_private_method__service_exiting>` rather than the tree notifications, so no forgotten ``super`` call can silently drop registration. The lifecycle resolves the session through the branch :ref:`NetwMultiplayer<class_NetwMultiplayer>`, not through a :ref:`MultiplayerTree<class_MultiplayerTree>`, so a service configures under a root install with no owning tree exactly as it does under a scoped tree.
+Get it with :ref:`Netw.service()<class_Netw_method_service>`. Override :ref:`_service_entered()<class_NetwService_private_method__service_entered>` and :ref:`_service_exiting()<class_NetwService_private_method__service_exiting>` for setup and cleanup.
 
 ::
 
@@ -29,7 +29,7 @@ Registration is bound to tree membership. The service enters the registry when t
     extends NetwService
 
     func _service_type() -> Script:
-        return MatchClock           # register under a family base, optional
+        return MatchClock
 
     func _service_entered(api: NetwMultiplayer) -> void:
         api.session_entered.connect(_on_session_entered)
@@ -37,9 +37,7 @@ Registration is bound to tree membership. The service enters the registry when t
     func _service_exiting(api: NetwMultiplayer) -> void:
         api.session_entered.disconnect(_on_session_entered)
 
-\ A node that already extends a non-:godot:`Node` base cannot adopt this one under GDScript single inheritance. It calls :ref:`register()<class_NetwService_method_register>` and :ref:`unregister()<class_NetwService_method_unregister>` directly instead.
-
-A subclass written in C++ rather than GDScript overrides the ``service_entered`` and ``service_exiting`` C++ virtuals instead, and skips :ref:`_service_type()<class_NetwService_private_method__service_type>` entirely: a class with no script attached has no :godot:`Script` to return with, and :ref:`NetwMultiplayer.service_register()<class_NetwMultiplayer_method_service_register>` keys it by its own class name. :ref:`LobbyDirectory<class_LobbyDirectory>` is the shipped example.
+\ A node that extends another class can call :ref:`register()<class_NetwService_method_register>` and :ref:`unregister()<class_NetwService_method_unregister>` instead.
 
 .. rst-class:: classref-reftable-group
 
@@ -84,9 +82,7 @@ Method Descriptions
 
 |void| **_service_entered**\ (\ api\: :ref:`NetwMultiplayer<class_NetwMultiplayer>`\ ) |virtual| :ref:`🔗<class_NetwService_private_method__service_entered>`
 
-Called after the service registers, with the ``api`` of its branch.
-
-Override for per-service setup such as signal wiring or clock binding. It does not run in the editor, when :ref:`_should_register()<class_NetwService_private_method__should_register>` returns ``false``, or when the node resolves no session at all.
+Called after the service registers, when it enters the tree. Not called in the editor, or when :ref:`_should_register()<class_NetwService_private_method__should_register>` returns ``false``.
 
 .. rst-class:: classref-item-separator
 
@@ -98,9 +94,7 @@ Override for per-service setup such as signal wiring or clock binding. It does n
 
 |void| **_service_exiting**\ (\ api\: :ref:`NetwMultiplayer<class_NetwMultiplayer>`\ ) |virtual| :ref:`🔗<class_NetwService_private_method__service_exiting>`
 
-Called before the service unregisters, with the ``api`` of its branch.
-
-Override to tear down whatever :ref:`_service_entered()<class_NetwService_private_method__service_entered>` set up. Mirrors the conditions of :ref:`_service_entered()<class_NetwService_private_method__service_entered>`.
+Called before the service unregisters, when it leaves the tree. Undo :ref:`_service_entered()<class_NetwService_private_method__service_entered>` here.
 
 .. rst-class:: classref-item-separator
 
@@ -112,9 +106,7 @@ Override to tear down whatever :ref:`_service_entered()<class_NetwService_privat
 
 :godot:`Script` **_service_type**\ (\ ) |virtual| :ref:`🔗<class_NetwService_private_method__service_type>`
 
-Override to return the registration key for this service.
-
-Return a family base type so :ref:`NetwMultiplayer.service_get()<class_NetwMultiplayer_method_service_get>` and :ref:`NetwMultiplayer.service_get_all()<class_NetwMultiplayer_method_service_get_all>` resolve its subclasses. Return ``null`` to register the concrete script. Instances that share a key replace each other, so multi-instance families should keep concrete keys and use :ref:`NetwMultiplayer.service_get_all()<class_NetwMultiplayer_method_service_get_all>`.
+Return the type to register the service as, such as a base class. ``null`` uses the script itself. A service replaces any other registered as the same type.
 
 .. rst-class:: classref-item-separator
 
@@ -126,9 +118,7 @@ Return a family base type so :ref:`NetwMultiplayer.service_get()<class_NetwMulti
 
 :godot:`bool` **_should_register**\ (\ ) |virtual| :ref:`🔗<class_NetwService_private_method__should_register>`
 
-Override to return ``false`` when this service should not register on entering the tree, for example under a test runner or behind a feature flag. A service that does not override this always registers.
-
-A transport service that needs peer-to-peer or a native client consults :ref:`is_transport_restricted()<class_NetwService_method_is_transport_restricted>` here to stay dormant in a restricted environment.
+Return ``false`` to not register, for example behind a feature flag. ``true`` by default.
 
 .. rst-class:: classref-item-separator
 
@@ -140,7 +130,7 @@ A transport service that needs peer-to-peer or a native client consults :ref:`is
 
 :godot:`Callable` **get_transport_restricted_probe**\ (\ ) |static| :ref:`🔗<class_NetwService_method_get_transport_restricted_probe>`
 
-Returns the probe :ref:`set_transport_restricted_probe()<class_NetwService_method_set_transport_restricted_probe>` installed, or an invalid :godot:`Callable` when none is.
+Returns the :godot:`Callable` from :ref:`set_transport_restricted_probe()<class_NetwService_method_set_transport_restricted_probe>`.
 
 .. rst-class:: classref-item-separator
 
@@ -152,7 +142,7 @@ Returns the probe :ref:`set_transport_restricted_probe()<class_NetwService_metho
 
 :godot:`bool` **is_transport_restricted**\ (\ ) |static| :ref:`🔗<class_NetwService_method_is_transport_restricted>`
 
-Returns ``true`` when the probe installed through :ref:`set_transport_restricted_probe()<class_NetwService_method_set_transport_restricted_probe>` reports that the environment forbids peer-to-peer and native transports. Returns ``false`` when no probe is installed, which is the normal case.
+Returns what the :godot:`Callable` from :ref:`set_transport_restricted_probe()<class_NetwService_method_set_transport_restricted_probe>` returns, or ``false`` when none is set.
 
 .. rst-class:: classref-item-separator
 
@@ -164,9 +154,7 @@ Returns ``true`` when the probe installed through :ref:`set_transport_restricted
 
 |void| **register**\ (\ service\: :godot:`Node`, type\: :godot:`Script` = null\ ) |static| :ref:`🔗<class_NetwService_method_register>`
 
-Registers ``service`` as a session service on the :ref:`NetwMultiplayer<class_NetwMultiplayer>` of its branch, reached through :godot:`Node.multiplayer <Node#class_Node_property_multiplayer>`. When ``type`` is ``null``, the script class of ``service`` is the registration key.
-
-This is the entry point for a node that cannot extend **NetwService**, and it seals nothing: such a caller owns the matching :ref:`unregister()<class_NetwService_method_unregister>`. A branch whose API is a plain :godot:`SceneMultiplayer` is a silent no-op, so the node still works as an ordinary :godot:`Node` and features degrade rather than error.
+Registers ``service`` with its :godot:`Node.multiplayer <Node#class_Node_property_multiplayer>`, as ``type`` or its own script. Call :ref:`unregister()<class_NetwService_method_unregister>` when it leaves the tree. Does nothing when :godot:`Node.multiplayer <Node#class_Node_property_multiplayer>` is not a :ref:`NetwMultiplayer<class_NetwMultiplayer>`.
 
 ::
 
@@ -183,7 +171,7 @@ This is the entry point for a node that cannot extend **NetwService**, and it se
 
 |void| **set_transport_restricted_probe**\ (\ probe\: :godot:`Callable`\ ) |static| :ref:`🔗<class_NetwService_method_set_transport_restricted_probe>`
 
-Installs the ``probe`` an embedding addon calls when the runtime environment allows only a WebSocket or HTTP relay, such as a Discord iframe that forbids WebRTC and native SDKs. The probe returns a :godot:`bool` and :ref:`is_transport_restricted()<class_NetwService_method_is_transport_restricted>` is what reads it. Nothing installs one in a normal build, so nothing pays for it.
+Sets a :godot:`Callable` that returns ``true`` when only WebSocket or HTTP connections are allowed, such as inside a Discord activity. Services can check :ref:`is_transport_restricted()<class_NetwService_method_is_transport_restricted>` to stay inactive there.
 
 .. rst-class:: classref-item-separator
 
@@ -195,7 +183,7 @@ Installs the ``probe`` an embedding addon calls when the runtime environment all
 
 |void| **unregister**\ (\ service\: :godot:`Node`, type\: :godot:`Script` = null\ ) |static| :ref:`🔗<class_NetwService_method_unregister>`
 
-Unregisters ``service`` from the :ref:`NetwMultiplayer<class_NetwMultiplayer>` of its branch, under the same ``type`` key :ref:`register()<class_NetwService_method_register>` used.
+Reverses :ref:`register()<class_NetwService_method_register>`, with the same ``type``.
 
 ::
 

@@ -12,27 +12,22 @@ NetwQuantizeScalar
 
 **Inherits:** :ref:`NetwQuantize<class_NetwQuantize>` **<** :godot:`Resource`
 
-:ref:`NetwQuantize<class_NetwQuantize>` that snaps a number, or each axis of a :godot:`Vector2` or :godot:`Vector3`, onto a uniform grid across a bounded range.
+:ref:`NetwQuantize<class_NetwQuantize>` for a number, or each axis of a :godot:`Vector2` or :godot:`Vector3`, within a range.
 
 .. rst-class:: classref-introduction-group
 
 Description
 -----------
 
-The grid is one number said two ways, and the class publishes both: :ref:`bit_count<class_NetwQuantizeScalar_property_bit_count>` is the wire budget and :ref:`resolution_step<class_NetwQuantizeScalar_property_resolution_step>` is the precision it buys. Writing either derives the other from :ref:`min_limit<class_NetwQuantizeScalar_property_min_limit>` and :ref:`max_limit<class_NetwQuantizeScalar_property_max_limit>`, so tuning a property by asking for 19 bits and tuning it by asking for 3cm of precision are the same act on the same object rather than two classes to choose between.
+Values between :ref:`min_limit<class_NetwQuantizeScalar_property_min_limit>` and :ref:`max_limit<class_NetwQuantizeScalar_property_max_limit>` are rounded to :ref:`resolution_step<class_NetwQuantizeScalar_property_resolution_step>`. Set the precision with :ref:`bits()<class_NetwQuantizeScalar_method_bits>` or with :ref:`step()<class_NetwQuantizeScalar_method_step>`.
 
 ::
 
     var q := NetwQuantizeScalar.new().limits(-2048.0, 2048.0).bits(19)
-
-    # the same grid, said the other way, and the swap is one word:
+    # the same
     var q := NetwQuantizeScalar.new().limits(-2048.0, 2048.0).step(0.0078)
 
-\ **Declare the limits before the step.** :ref:`resolution_step<class_NetwQuantizeScalar_property_resolution_step>` is a request rather than a stored field: setting it picks the smallest :ref:`bit_count<class_NetwQuantizeScalar_property_bit_count>` whose grid is at least that fine over the range currently declared, so a step written before its limits is derived against the wrong range. :ref:`bits()<class_NetwQuantizeScalar_method_bits>` is exact at any point in a chain.
-
-A :godot:`Vector3` or :godot:`Vector2` quantizes each axis the same way and costs :ref:`bit_count<class_NetwQuantizeScalar_property_bit_count>` bits per axis. The per-axis error is at most half :ref:`resolution_step<class_NetwQuantizeScalar_property_resolution_step>`.
-
-Only the three stored fields decide the layout, so two of these that address the same grid return ``true`` to :ref:`NetwQuantize.is_same_layout()<class_NetwQuantize_method_is_same_layout>` however each was authored.
+\ Call :ref:`limits()<class_NetwQuantizeScalar_method_limits>` before :ref:`step()<class_NetwQuantizeScalar_method_step>`. Each axis uses :ref:`bit_count<class_NetwQuantizeScalar_property_bit_count>` bits, and the error is at most half :ref:`resolution_step<class_NetwQuantizeScalar_property_resolution_step>`.
 
 .. rst-class:: classref-reftable-group
 
@@ -88,7 +83,7 @@ Property Descriptions
 - |void| **set_bit_count**\ (\ value\: :godot:`int`\ )
 - :godot:`int` **get_bit_count**\ (\ )
 
-Bits spent per axis, clamped to 1..32. This is the stored knob and the wire budget: the range is divided into ``2 ** bit_count - 1`` equal steps, so a value at either limit round-trips exactly.
+Bits per axis, from ``1`` to ``32``.
 
 .. rst-class:: classref-item-separator
 
@@ -105,7 +100,7 @@ Bits spent per axis, clamped to 1..32. This is the stored knob and the wire budg
 - |void| **set_max_limit**\ (\ value\: :godot:`float`\ )
 - :godot:`float` **get_max_limit**\ (\ )
 
-Inclusive upper bound of the encoded range. A value above it is clamped rather than wrapped, which is why an angle takes :ref:`NetwQuantizeAngle<class_NetwQuantizeAngle>` instead.
+The largest value. Larger values are clamped. Use :ref:`NetwQuantizeAngle<class_NetwQuantizeAngle>` for angles.
 
 .. rst-class:: classref-item-separator
 
@@ -122,7 +117,7 @@ Inclusive upper bound of the encoded range. A value above it is clamped rather t
 - |void| **set_min_limit**\ (\ value\: :godot:`float`\ )
 - :godot:`float` **get_min_limit**\ (\ )
 
-Inclusive lower bound of the encoded range. A value below it is clamped.
+The smallest value. Smaller values are clamped.
 
 .. rst-class:: classref-item-separator
 
@@ -139,7 +134,7 @@ Inclusive lower bound of the encoded range. A value below it is clamped.
 - |void| **set_resolution_step**\ (\ value\: :godot:`float`\ )
 - :godot:`float` **get_resolution_step**\ (\ )
 
-Distance between two adjacent grid points, DERIVED from the other three rather than stored: reading it returns ``(max_limit - min_limit) / (2 ** bit_count - 1)``, and writing it moves :ref:`bit_count<class_NetwQuantizeScalar_property_bit_count>` to the smallest budget that is at least that fine. A step of zero or less is rejected, because no bit count satisfies it.
+The precision, ``(max_limit - min_limit) / (2 ** bit_count - 1)``. Setting it picks the smallest :ref:`bit_count<class_NetwQuantizeScalar_property_bit_count>` that is at least this precise. Must be above ``0.0``.
 
 .. rst-class:: classref-section-separator
 
@@ -156,7 +151,7 @@ Method Descriptions
 
 :ref:`NetwQuantizeScalar<class_NetwQuantizeScalar>` **bits**\ (\ bits\: :godot:`int`\ ) :ref:`🔗<class_NetwQuantizeScalar_method_bits>`
 
-Builder that sets :ref:`bit_count<class_NetwQuantizeScalar_property_bit_count>` and returns this quantizer.
+Sets :ref:`bit_count<class_NetwQuantizeScalar_property_bit_count>` and returns this quantizer.
 
 .. rst-class:: classref-item-separator
 
@@ -168,7 +163,7 @@ Builder that sets :ref:`bit_count<class_NetwQuantizeScalar_property_bit_count>` 
 
 :ref:`NetwQuantizeScalar<class_NetwQuantizeScalar>` **limits**\ (\ min\: :godot:`float`, max\: :godot:`float`\ ) :ref:`🔗<class_NetwQuantizeScalar_method_limits>`
 
-Builder that sets :ref:`min_limit<class_NetwQuantizeScalar_property_min_limit>` and :ref:`max_limit<class_NetwQuantizeScalar_property_max_limit>` and returns this quantizer. It leaves :ref:`bit_count<class_NetwQuantizeScalar_property_bit_count>` alone, so widening the range on a fixed budget coarsens :ref:`resolution_step<class_NetwQuantizeScalar_property_resolution_step>` rather than spending more bits.
+Sets :ref:`min_limit<class_NetwQuantizeScalar_property_min_limit>` and :ref:`max_limit<class_NetwQuantizeScalar_property_max_limit>` and returns this quantizer. :ref:`bit_count<class_NetwQuantizeScalar_property_bit_count>` does not change, so a wider range gives a larger :ref:`resolution_step<class_NetwQuantizeScalar_property_resolution_step>`.
 
 .. rst-class:: classref-item-separator
 
@@ -180,7 +175,7 @@ Builder that sets :ref:`min_limit<class_NetwQuantizeScalar_property_min_limit>` 
 
 :ref:`NetwQuantizeScalar<class_NetwQuantizeScalar>` **step**\ (\ step\: :godot:`float`\ ) :ref:`🔗<class_NetwQuantizeScalar_method_step>`
 
-Builder that asks for a grid at least as fine as ``step`` over the current range, by raising :ref:`bit_count<class_NetwQuantizeScalar_property_bit_count>` to suit, and returns this quantizer. Declare :ref:`limits()<class_NetwQuantizeScalar_method_limits>` first.
+Sets :ref:`resolution_step<class_NetwQuantizeScalar_property_resolution_step>` and returns this quantizer. Call :ref:`limits()<class_NetwQuantizeScalar_method_limits>` first.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

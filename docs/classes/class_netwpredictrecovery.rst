@@ -12,30 +12,18 @@ NetwPredictRecovery
 
 **Inherits:** :godot:`RefCounted`
 
-The single write that corrects one settled divergence, staged whole.
+How a misprediction is corrected, returned by :ref:`NetwMultiplayer._predict_recover()<class_NetwMultiplayer_private_method__predict_recover>`.
 
 .. rst-class:: classref-introduction-group
 
 Description
 -----------
 
-:ref:`NetwMultiplayer._predict_recover()<class_NetwMultiplayer_private_method__predict_recover>` returns one of these, and a game overriding that seam creates its own through :ref:`of()<class_NetwPredictRecovery_method_of>`.
-
-The whole recovery is decided here and applied by the shell in one write, so a correction has no tail: nothing is left outstanding to ease in over later frames, and the state recorded after a recovery is exactly what was staged. Deciding it and performing it are separate for that reason, and a record is what carries the decision between them.
-
-\ :ref:`restore()<class_NetwPredictRecovery_method_restore>` and :ref:`write()<class_NetwPredictRecovery_method_write>` are keyed by property name, which is the altitude the seam speaks: the engine's own plan is keyed by field slot.
+Create one with :ref:`of()<class_NetwPredictRecovery_method_of>` in an override of :ref:`NetwMultiplayer._predict_recover()<class_NetwMultiplayer_private_method__predict_recover>`. The correction is applied at once.
 
 ::
 
     var staged := NetwPredictRecovery.of(restore, restore, false, false)
-
-\ - :ref:`restore()<class_NetwPredictRecovery_method_restore>` the payload to apply, by property name
-
-- :ref:`write()<class_NetwPredictRecovery_method_write>` what the display is told moved
-
-- :ref:`teleport()<class_NetwPredictRecovery_method_teleport>` the body kept nothing worth blending from
-
-- :ref:`skip()<class_NetwPredictRecovery_method_skip>` this recovery declines to write at all
 
 .. rst-class:: classref-reftable-group
 
@@ -72,7 +60,7 @@ Method Descriptions
 
 :ref:`NetwPredictRecovery<class_NetwPredictRecovery>` **of**\ (\ restore\: :godot:`Dictionary`, write\: :godot:`Dictionary`, teleport\: :godot:`bool`, skip\: :godot:`bool`\ ) |static| :ref:`🔗<class_NetwPredictRecovery_method_of>`
 
-Creates one staged recovery.
+Creates a correction. See each getter for the parameters.
 
 .. rst-class:: classref-item-separator
 
@@ -84,7 +72,7 @@ Creates one staged recovery.
 
 :godot:`Dictionary` **restore**\ (\ ) |const| :ref:`🔗<class_NetwPredictRecovery_method_restore>`
 
-The payload to apply to the body, keyed by property name. A recovery that withheld fields has already dropped them here, so a caller writes what it is handed rather than filtering again.
+The values to set, keyed by property name.
 
 .. rst-class:: classref-item-separator
 
@@ -96,7 +84,7 @@ The payload to apply to the body, keyed by property name. A recovery that withhe
 
 :godot:`bool` **skip**\ (\ ) |const| :ref:`🔗<class_NetwPredictRecovery_method_skip>`
 
-Whether this recovery declines to write at all. A replay reaches the present under its own power and an observing policy was only ever going to report, so both decline while still having decided.
+``true`` to change nothing.
 
 .. rst-class:: classref-item-separator
 
@@ -108,7 +96,7 @@ Whether this recovery declines to write at all. A replay reaches the present und
 
 :godot:`bool` **teleport**\ (\ ) |const| :ref:`🔗<class_NetwPredictRecovery_method_teleport>`
 
-Whether the body kept nothing worth blending from. The tier is measured per property against its own threshold, because the errors have different units and one number cannot be right for all of them.
+``true`` to jump to the values instead of smoothing.
 
 .. rst-class:: classref-item-separator
 
@@ -120,9 +108,7 @@ Whether the body kept nothing worth blending from. The tier is measured per prop
 
 :godot:`Dictionary` **write**\ (\ ) |const| :ref:`🔗<class_NetwPredictRecovery_method_write>`
 
-What the display is told moved. It is empty for a recovery that restores without a visible correction, which is what a replay does.
-
-Separate from :ref:`restore()<class_NetwPredictRecovery_method_restore>` because the two serve different readers rather than because they hold different values: the restore is applied to the simulated state, and this is the copy something drains onto the bound node. Wherever both carry a field they carry the same value, and a driver with nothing to drain reads the restored state and leaves this undrained rather than being handed a second truth.
+The values the display should show changing, keyed by property name. Usually the same as :ref:`restore()<class_NetwPredictRecovery_method_restore>`, or empty for no visible correction.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

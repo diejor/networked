@@ -12,14 +12,14 @@ HostPopup
 
 **Inherits:** :godot:`PopupPanel`
 
-Modal form for hosting multiplayer sessions.
+A form to host a game.
 
 .. rst-class:: classref-introduction-group
 
 Description
 -----------
 
-Renders one field per key of the ``host_settings`` entry of :ref:`NetwConnectHandle.transport()<class_NetwConnectHandle_method_transport>` for the picked backend, so it authors no per-transport controls of its own.
+Shows the host settings of the chosen transport.
 
 .. rst-class:: classref-reftable-group
 
@@ -98,7 +98,7 @@ Method Descriptions
 
 |void| **open_host**\ (\ handle\: :ref:`NetwConnectHandle<class_NetwConnectHandle>`, default_username\: :godot:`String`\ ) :ref:`🔗<class_HostPopup_method_open_host>`
 
-Opens the host form for ``handle``, offering only the backends it reports as available and hostable on this build.
+Opens the form, listing the transports that can host on this build.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

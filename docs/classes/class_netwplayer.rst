@@ -12,27 +12,23 @@ NetwPlayer
 
 **Inherits:** :godot:`RefCounted`
 
-Live handle for one accepted session player.
+A player whose join was accepted.
 
 .. rst-class:: classref-introduction-group
 
 Description
 -----------
 
-One accepted membership, and the object is the membership. The session mints exactly one player per acceptance and answers that same object every time, so ``==`` returns "the same player" and a :godot:`Dictionary` keys on it directly.
-
-A membership is not a transport peer. :ref:`peer_id<class_NetwPlayer_property_peer_id>` is where this player is reachable right now and is reused by whoever connects next, so a player whose membership ended reports :ref:`is_active<class_NetwPlayer_property_is_active>` false and keeps the :ref:`username<class_NetwPlayer_property_username>` it joined under rather than reading whatever peer now holds that id.
-
-A membership is not a body either. :ref:`bodies<class_NetwPlayer_property_bodies>` is the set of bodies the session currently holds for it, which is empty for a spectator and holds more than one for a player the game gave several.
+The session creates one **NetwPlayer** when it accepts a join, and always returns the same object for it, so it can be compared with ``==`` and used as a :godot:`Dictionary` key. A connected peer that has not joined has none.
 
 ::
 
-    var player := api.peer_get_player(peer_id)
+    var player := Netw.of(self).peer_get_player(peer_id)
     greet(player.username)
     for body: NetwEntity in player.bodies:
         follow(body.owner)
 
-\ Created by the session at the moment it accepts a join. A peer that has connected and not joined has no membership, so :ref:`NetwMultiplayer.peer_get_player()<class_NetwMultiplayer_method_peer_get_player>` answers ``null`` for it.
+\ A player is not a peer. After the player leaves, :ref:`is_active<class_NetwPlayer_property_is_active>` is ``false``, even if a new player connects with the same :ref:`peer_id<class_NetwPlayer_property_peer_id>`.
 
 .. rst-class:: classref-reftable-group
 
@@ -43,11 +39,11 @@ Properties
    :widths: auto
 
    +-------------------------------------------------------+-------------------------------------------------------+-----------+
+   | :godot:`Array`\[:ref:`NetwEntity<class_NetwEntity>`\] | :ref:`bodies<class_NetwPlayer_property_bodies>`       | ``[]``    |
+   +-------------------------------------------------------+-------------------------------------------------------+-----------+
    | :godot:`bool`                                         | :ref:`is_active<class_NetwPlayer_property_is_active>` | ``false`` |
    +-------------------------------------------------------+-------------------------------------------------------+-----------+
    | :godot:`int`                                          | :ref:`peer_id<class_NetwPlayer_property_peer_id>`     | ``0``     |
-   +-------------------------------------------------------+-------------------------------------------------------+-----------+
-   | :godot:`Array`\[:ref:`NetwEntity<class_NetwEntity>`\] | :ref:`bodies<class_NetwPlayer_property_bodies>`       |           |
    +-------------------------------------------------------+-------------------------------------------------------+-----------+
    | :godot:`StringName`                                   | :ref:`username<class_NetwPlayer_property_username>`   | ``&""``   |
    +-------------------------------------------------------+-------------------------------------------------------+-----------+
@@ -61,6 +57,22 @@ Properties
 Property Descriptions
 ---------------------
 
+.. _class_NetwPlayer_property_bodies:
+
+.. rst-class:: classref-property
+
+:godot:`Array`\[:ref:`NetwEntity<class_NetwEntity>`\] **bodies** = ``[]`` :ref:`🔗<class_NetwPlayer_property_bodies>`
+
+.. rst-class:: classref-property-setget
+
+- :godot:`Array`\[:ref:`NetwEntity<class_NetwEntity>`\] **get_bodies**\ (\ )
+
+The entities spawned for this player with :ref:`Netw.spawn_player()<class_Netw_method_spawn_player>`, in no particular order. Empty for a spectator.
+
+.. rst-class:: classref-item-separator
+
+----
+
 .. _class_NetwPlayer_property_is_active:
 
 .. rst-class:: classref-property
@@ -71,9 +83,7 @@ Property Descriptions
 
 - :godot:`bool` **get_is_active**\ (\ )
 
-Whether this membership is still the one the session holds.
-
-A handle a game kept across a disconnect answers ``false`` here even when another player has since connected onto the same :ref:`peer_id<class_NetwPlayer_property_peer_id>`, which is what a game checks before acting on a player it stored.
+``false`` once the player has left. Check it before using a player you stored.
 
 .. rst-class:: classref-item-separator
 
@@ -89,29 +99,7 @@ A handle a game kept across a disconnect answers ``false`` here even when anothe
 
 - :godot:`int` **get_peer_id**\ (\ )
 
-The transport peer this membership is currently reachable on. A routing detail rather than identity, because a reconnect reuses the id.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwPlayer_property_bodies:
-
-.. rst-class:: classref-property
-
-:godot:`Array`\[:ref:`NetwEntity<class_NetwEntity>`\] **bodies** :ref:`🔗<class_NetwPlayer_property_bodies>`
-
-.. rst-class:: classref-property-setget
-
-- :godot:`Array`\[:ref:`NetwEntity<class_NetwEntity>`\] **get_bodies**\ (\ )
-
-Every body the session currently holds for this membership, in no promised order.
-
-Answered live from the session rather than stored, so a body is gone from the read that follows the :ref:`Netw.despawn()<class_Netw_method_despawn>` call rather than from the frame its node is freed. A player nothing has spawned for answers an empty array, which is the honest reading for a spectator and for a player whose join handler has not placed it yet.
-
-Several bodies at once is ordinary, so a game that means one body reads the array and says which one it means.
-
-A body belongs to the membership :ref:`Netw.spawn_player()<class_Netw_method_spawn_player>` armed it for, so one left standing after its player disconnected stays out of the array the next player on that :ref:`peer_id<class_NetwPlayer_property_peer_id>` reads.
+The peer this player is connected as. Another player may reuse it after this one leaves.
 
 .. rst-class:: classref-item-separator
 
@@ -127,11 +115,7 @@ A body belongs to the membership :ref:`Netw.spawn_player()<class_Netw_method_spa
 
 - :godot:`StringName` **get_username**\ (\ )
 
-The username this membership was accepted under, and the conventional save key a game reads back.
-
-Stamped at acceptance and never re-read, so it survives the membership ending and never reports a later player's name.
-
-A session admits every name a join claims, so two players may hold one username. Each is still its own membership, and each body stamps the name as its :ref:`NetwEntity.entity_id<class_NetwEntity_property_entity_id>`, so a game keying persistence or prediction on the name reads and writes one row for the pair. A game that wants one player per name says so in the handler it installs with :ref:`Netw.configure_admission()<class_Netw_method_configure_admission>`.
+The username from :ref:`Netw.prepare_join()<class_Netw_method_prepare_join>`. It is kept after the player leaves. Two players may join with the same name, unless :ref:`Netw.configure_admission()<class_Netw_method_configure_admission>` refuses it.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

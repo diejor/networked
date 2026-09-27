@@ -12,14 +12,14 @@ NakamaAuth
 
 **Inherits:** :godot:`Node`
 
-Admission handler that admits a join only under the username Nakama attests for the joining peer.
+Accepts a join only when its username is the peer's Nakama username.
 
 .. rst-class:: classref-introduction-group
 
 Description
 -----------
 
-The host trusts the Nakama server's presence list, which maps each peer to their authenticated Nakama user id. That is what makes the username spoof-proof even though the listen-server host is itself an untrusted browser in the relay topology. Mount it inside the session's branch, where it declares itself. 
+The username is checked against the Nakama server, so a player cannot use someone else's name. Add it under the :ref:`MultiplayerTree<class_MultiplayerTree>`.
 
 ::
 
@@ -55,7 +55,7 @@ Method Descriptions
 
 |void| **bind_tree**\ (\ tree\: :ref:`MultiplayerTree<class_MultiplayerTree>`\ ) :ref:`🔗<class_NakamaAuth_method_bind_tree>`
 
-Binds the :ref:`MultiplayerTree<class_MultiplayerTree>` whose relay presence attests a join.
+Sets the :ref:`MultiplayerTree<class_MultiplayerTree>` whose Nakama match is checked.
 
 .. rst-class:: classref-item-separator
 
@@ -67,7 +67,7 @@ Binds the :ref:`MultiplayerTree<class_MultiplayerTree>` whose relay presence att
 
 :godot:`Error <@GlobalScope#enum_@globalscope_Error>` **admit**\ (\ peer_id\: :godot:`int`, username\: :godot:`StringName`, _args\: :godot:`Array` = []\ ) :ref:`🔗<class_NakamaAuth_method_admit>`
 
-Admits ``peer_id`` only under the username Nakama attests for it.  
+Accepts ``peer_id`` only with its own Nakama username.  
 
 \ **Server Only.**
 

@@ -194,11 +194,11 @@ Properties
    +-------------------------------------------------------------+-------------------------------------------------------------------------------------+----------------------+
    | :ref:`Ownership<enum_NetwEntity_Ownership>`                 | :ref:`ownership<class_NetwEntity_property_ownership>`                               |                      |
    +-------------------------------------------------------------+-------------------------------------------------------------------------------------+----------------------+
-   | :ref:`NetwPlayer<class_NetwPlayer>`                         | :ref:`player<class_NetwEntity_property_player>`                                     |                      |
-   +-------------------------------------------------------------+-------------------------------------------------------------------------------------+----------------------+
    | :godot:`int`                                                | :ref:`peer_id<class_NetwEntity_property_peer_id>`                                   | ``0``                |
    +-------------------------------------------------------------+-------------------------------------------------------------------------------------+----------------------+
    | :ref:`NetwPersistenceHandle<class_NetwPersistenceHandle>`   | :ref:`persistence<class_NetwEntity_property_persistence>`                           |                      |
+   +-------------------------------------------------------------+-------------------------------------------------------------------------------------+----------------------+
+   | :ref:`NetwPlayer<class_NetwPlayer>`                         | :ref:`player<class_NetwEntity_property_player>`                                     |                      |
    +-------------------------------------------------------------+-------------------------------------------------------------------------------------+----------------------+
    | :ref:`NetwPredictionHandle<class_NetwPredictionHandle>`     | :ref:`prediction<class_NetwEntity_property_prediction>`                             |                      |
    +-------------------------------------------------------------+-------------------------------------------------------------------------------------+----------------------+
@@ -239,8 +239,6 @@ Methods
    | :ref:`NetwEntity<class_NetwEntity>`   | :ref:`parent_entity<class_NetwEntity_method_parent_entity>`\ (\ ) |const|                                                                                                |
    +---------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | :ref:`NetwPromise<class_NetwPromise>` | :ref:`release_authority<class_NetwEntity_method_release_authority>`\ (\ successor\: :godot:`int` = 0\ )                                                                  |
-   +---------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`Node`                         | :ref:`spawn_player<class_NetwEntity_method_spawn_player>`\ (\ player\: :ref:`NetwPlayer<class_NetwPlayer>`, scene\: :ref:`NetwSceneHandle<class_NetwSceneHandle>`\ )     |
    +---------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | :godot:`Node`                         | :ref:`spawn_under<class_NetwEntity_method_spawn_under>`\ (\ parent\: :godot:`Node` = null, id\: :godot:`StringName` = &"", configure\: :godot:`Callable` = Callable()\ ) |
    +---------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
@@ -1069,7 +1067,7 @@ Whether this peer is the server, which decides :ref:`controller<class_NetwEntity
 
 ``true`` when this entity is a hidden, inactive copy kept only to spawn others from with :ref:`spawn_under()<class_NetwEntity_method_spawn_under>`.
 
-A root placed inside another scene in the editor with no :ref:`entity_id<class_NetwEntity_property_entity_id>` is already a template. One built in code is marked before it enters the tree, from outside, because every copy runs its ``_init`` too.
+A root placed inside another scene in the editor with no :ref:`entity_id<class_NetwEntity_property_entity_id>` is already a template. To make one in code, set this before it enters the tree, from outside its own script.
 
 ::
 
@@ -1120,7 +1118,7 @@ During a prediction replay these calls return :godot:`@GlobalScope.ERR_BUSY <@Gl
 
 - :godot:`MultiplayerAPI` **get_multiplayer**\ (\ )
 
-The :ref:`NetwMultiplayer<class_NetwMultiplayer>` this entity belongs to, the same as the root's :godot:`Node.multiplayer <Node#class_Node_property_multiplayer>`. ``null`` offline or before the entity spawns, and it does not change afterwards.
+The root's :godot:`Node.multiplayer <Node#class_Node_property_multiplayer>`, or ``null`` before the entity spawns.
 
 .. rst-class:: classref-item-separator
 
@@ -1198,22 +1196,6 @@ Whether this entity is a player or server-owned. See :ref:`Ownership<enum_NetwEn
 
 ----
 
-.. _class_NetwEntity_property_player:
-
-.. rst-class:: classref-property
-
-:ref:`NetwPlayer<class_NetwPlayer>` **player** :ref:`🔗<class_NetwEntity_property_player>`
-
-.. rst-class:: classref-property-setget
-
-- :ref:`NetwPlayer<class_NetwPlayer>` **get_player**\ (\ )
-
-The player :ref:`peer_id<class_NetwEntity_property_peer_id>` represents, or ``null`` for a server-owned entity.
-
-.. rst-class:: classref-item-separator
-
-----
-
 .. _class_NetwEntity_property_peer_id:
 
 .. rst-class:: classref-property
@@ -1249,6 +1231,22 @@ The entity's saved row, built from its :ref:`NetwPersistenceConfig<class_NetwPer
 
 ----
 
+.. _class_NetwEntity_property_player:
+
+.. rst-class:: classref-property
+
+:ref:`NetwPlayer<class_NetwPlayer>` **player** :ref:`🔗<class_NetwEntity_property_player>`
+
+.. rst-class:: classref-property-setget
+
+- :ref:`NetwPlayer<class_NetwPlayer>` **get_player**\ (\ )
+
+The player :ref:`peer_id<class_NetwEntity_property_peer_id>` represents, or ``null`` for a server-owned entity.
+
+.. rst-class:: classref-item-separator
+
+----
+
 .. _class_NetwEntity_property_prediction:
 
 .. rst-class:: classref-property
@@ -1275,14 +1273,11 @@ The entity's :ref:`NetwPredictionHandle<class_NetwPredictionHandle>`, holding it
 
 - :godot:`RID` **get_rid**\ (\ )
 
-The :godot:`RID` naming this entity, valid until this record is freed. A respawn on the same :ref:`route<class_NetwEntity_property_route>` keeps it and raises :ref:`NetwMultiplayer.entity_get_epoch()<class_NetwMultiplayer_method_entity_get_epoch>`.
-
-To check that the session knows the entity, compare :ref:`NetwMultiplayer.entity_get_state()<class_NetwMultiplayer_method_entity_get_state>` against :ref:`NetwMultiplayer.ENTITY_STATE_UNKNOWN<class_NetwMultiplayer_constant_ENTITY_STATE_UNKNOWN>`.
+The :godot:`RID` that :ref:`NetwMultiplayer<class_NetwMultiplayer>` methods take for this entity.
 
 ::
 
-    if api.entity_get_state(entity.rid) != NetwMultiplayer.ENTITY_STATE_UNKNOWN:
-        var state := api.entity_get_state(entity.rid)
+    var state := Netw.of(self).entity_get_state(entity.rid)
 
 .. rst-class:: classref-item-separator
 
@@ -1513,20 +1508,6 @@ The request carries this peer's latest :ref:`NetwPropertyConfig.broadcast()<clas
     ┖╴ERR_UNAVAILABLE    successor holds no copy of the entity
 
 \ **Player request.**
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwEntity_method_spawn_player:
-
-.. rst-class:: classref-method
-
-:godot:`Node` **spawn_player**\ (\ player\: :ref:`NetwPlayer<class_NetwPlayer>`, scene\: :ref:`NetwSceneHandle<class_NetwSceneHandle>`\ ) :ref:`🔗<class_NetwEntity_method_spawn_player>`
-
-Spawns a player copy of :ref:`owner<class_NetwEntity_property_owner>`'s scene into ``scene`` from ``player``.
-
-\ **Server Only.**
 
 .. rst-class:: classref-item-separator
 

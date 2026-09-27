@@ -12,16 +12,14 @@ NetwQuantizeTransform2D
 
 **Inherits:** :ref:`NetwQuantize<class_NetwQuantize>` **<** :godot:`Resource`
 
-:ref:`NetwQuantize<class_NetwQuantize>` that composes :godot:`Transform2D` from origin, rotation, and optional scale quantizers.
+:ref:`NetwQuantize<class_NetwQuantize>` for a :godot:`Transform2D`, with one quantizer for each part.
 
 .. rst-class:: classref-introduction-group
 
 Description
 -----------
 
-:ref:`origin_quantizer<class_NetwQuantizeTransform2D_property_origin_quantizer>` writes :godot:`Transform2D.origin <Transform2D#class_Transform2D_property_origin>`. :ref:`rotation_quantizer<class_NetwQuantizeTransform2D_property_rotation_quantizer>` writes :godot:`Transform2D.get_rotation() <Transform2D#class_Transform2D_method_get_rotation>`. :ref:`scale_quantizer<class_NetwQuantizeTransform2D_property_scale_quantizer>` writes :godot:`Transform2D.get_scale() <Transform2D#class_Transform2D_method_get_scale>` when present. Skew is not encoded.
-
-An unset origin or rotation encodes through a stock quantizer, so a fresh instance encodes without any configuration. A transform whose parts were never declared would otherwise write nothing and decode to identity. The stock is not the member's value: both read ``null`` until something assigns them.
+Compresses the origin, rotation and, when :ref:`scale_quantizer<class_NetwQuantizeTransform2D_property_scale_quantizer>` is set, scale. Skew is lost. An unset origin or rotation quantizer uses a default one.
 
 ::
 
@@ -65,7 +63,7 @@ Property Descriptions
 - |void| **set_origin_quantizer**\ (\ value\: :ref:`NetwQuantize<class_NetwQuantize>`\ )
 - :ref:`NetwQuantize<class_NetwQuantize>` **get_origin_quantizer**\ (\ )
 
-Quantizer for :godot:`Transform2D.origin <Transform2D#class_Transform2D_property_origin>`. Unset, the origin encodes through a stock :ref:`NetwQuantizeScalar<class_NetwQuantizeScalar>` spanning ``-2048`` to ``2048`` in steps of ``0.5``.
+Quantizer for :godot:`Transform2D.origin <Transform2D#class_Transform2D_property_origin>`. When ``null``, a :ref:`NetwQuantizeScalar<class_NetwQuantizeScalar>` from ``-2048`` to ``2048`` with a step of ``0.5`` is used.
 
 .. rst-class:: classref-item-separator
 
@@ -82,7 +80,7 @@ Quantizer for :godot:`Transform2D.origin <Transform2D#class_Transform2D_property
 - |void| **set_rotation_quantizer**\ (\ value\: :ref:`NetwQuantize<class_NetwQuantize>`\ )
 - :ref:`NetwQuantize<class_NetwQuantize>` **get_rotation_quantizer**\ (\ )
 
-Quantizer for :godot:`Transform2D.get_rotation() <Transform2D#class_Transform2D_method_get_rotation>`. Unset, the rotation encodes through a stock :ref:`NetwQuantizeAngle<class_NetwQuantizeAngle>`.
+Quantizer for :godot:`Transform2D.get_rotation() <Transform2D#class_Transform2D_method_get_rotation>`. When ``null``, a default :ref:`NetwQuantizeAngle<class_NetwQuantizeAngle>` is used.
 
 .. rst-class:: classref-item-separator
 
@@ -99,7 +97,7 @@ Quantizer for :godot:`Transform2D.get_rotation() <Transform2D#class_Transform2D_
 - |void| **set_scale_quantizer**\ (\ value\: :ref:`NetwQuantize<class_NetwQuantize>`\ )
 - :ref:`NetwQuantize<class_NetwQuantize>` **get_scale_quantizer**\ (\ )
 
-Optional quantizer for :godot:`Transform2D.get_scale() <Transform2D#class_Transform2D_method_get_scale>`. Left unset, scale is not encoded and decodes as one.
+Quantizer for :godot:`Transform2D.get_scale() <Transform2D#class_Transform2D_method_get_scale>`. When ``null``, the scale is not sent and is ``1``.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

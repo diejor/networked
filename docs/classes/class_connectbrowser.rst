@@ -12,33 +12,20 @@ ConnectBrowser
 
 **Inherits:** :godot:`Control`
 
-A drop-in server browser UI containing a server list, Add / Host / Refresh, and a join flow, ready to use.
+A ready-made server browser, with a server list, Add, Host, Refresh and Join.
 
 .. rst-class:: classref-introduction-group
 
 Description
 -----------
 
-Drop this scene anywhere under a session and players can browse saved servers, watch live status, host a new game, or join one with no glue code. It is a client of one object, :ref:`NetwConnectHandle<class_NetwConnectHandle>`, reached as :ref:`Netw.connection()<class_Netw_method_connection>`. Everything this browser draws (the list, the Host and Join forms, progress and outcomes) comes from that handle.
+Add this scene under a :ref:`MultiplayerTree<class_MultiplayerTree>` and players can browse, host and join servers with no extra code. It uses :ref:`Netw.connection()<class_Netw_method_connection>` of its ancestors, or the :ref:`NetwConnectHandle<class_NetwConnectHandle>` passed to :ref:`bind()<class_ConnectBrowser_method_bind>`.
 
 ::
 
     browser.bind(Netw.connection(other_node))
 
-\ The browser finds its handle in two steps, first wins: an explicit :ref:`bind()<class_ConnectBrowser_method_bind>`, then :ref:`Netw.connection()<class_Netw_method_connection>` over its own ancestry. Drop it under a session for zero config. 
-
-Pressing Host or Join runs one setup the browser composes itself, out of three ordinary steps: :ref:`NetwConnectHandle.create_peer()<class_NetwConnectHandle_method_create_peer>` asks the provider for a peer, :ref:`Netw.prepare_join()<class_Netw_method_prepare_join>` arranges the player the form collected, and the peer is assigned. The assignment happens inside the creation callback, which is the only window the seam offers, and progress comes from that one operation rather than from anything session-wide. Success is :ref:`NetwMultiplayer.session_entered<class_NetwMultiplayer_signal_session_entered>`, which is the event the player was actually waiting for.
-
-::
-
-    create_peer ──> completed(peer, error, detail)
-                        ┠╴ error  ──> banner, and the offer is declined
-                        ┖╴ ok     ──> prepare_join, then assign
-                                          ──> session_entered
-
-\ Cancelling withdraws only what this browser owns: the ticket it minted, and the peer it assigned while that peer is still the installed one. Once the session is entered the setup is over, so closing or freeing the browser cannot end a match, and neither can a peer the game assigned meanwhile be cleared by a browser the player merely dismissed. 
-
-Bookmarks are the browser's own, not the session's. What it saved to :ref:`server_list_path<class_ConnectBrowser_property_server_list_path>` it offers back to the session on ready, and only those rows can be edited or removed here. Every other row the session holds is drawn live and left alone, so two browsers over one session keep two separate files.
+\ Host and Join create a peer with :ref:`NetwConnectHandle.create_peer()<class_NetwConnectHandle_method_create_peer>`, call :ref:`Netw.prepare_join()<class_Netw_method_prepare_join>` with the form's values, and assign the peer. Closing the browser after that does not disconnect.  Saved servers are stored in :ref:`server_list_path<class_ConnectBrowser_property_server_list_path>`. Only those can be edited or removed here.
 
 .. rst-class:: classref-reftable-group
 
@@ -101,7 +88,7 @@ Constants
 
 **PLACEHOLDER_SERVER_NAME** = ``"My Server"`` :ref:`🔗<class_ConnectBrowser_constant_PLACEHOLDER_SERVER_NAME>`
 
-Default server name used when none is provided.
+The server name used when the player enters none.
 
 .. _class_ConnectBrowser_constant_DEFAULT_SERVER_LIST_PATH:
 
@@ -109,7 +96,7 @@ Default server name used when none is provided.
 
 **DEFAULT_SERVER_LIST_PATH** = ``"user://netw_servers.cfg"`` :ref:`🔗<class_ConnectBrowser_constant_DEFAULT_SERVER_LIST_PATH>`
 
-Bookmark file used when :ref:`server_list_path<class_ConnectBrowser_property_server_list_path>` is empty.
+The saved server file used when :ref:`server_list_path<class_ConnectBrowser_property_server_list_path>` is empty.
 
 .. rst-class:: classref-section-separator
 
@@ -126,7 +113,7 @@ Property Descriptions
 
 :godot:`bool` **hide_when_session_active** = ``true`` :ref:`🔗<class_ConnectBrowser_property_hide_when_session_active>`
 
-When ``true``, hides this browser once the session comes online and shows it again once the session ends.
+Hides the browser while connected.
 
 .. rst-class:: classref-item-separator
 
@@ -138,7 +125,7 @@ When ``true``, hides this browser once the session comes online and shows it aga
 
 :godot:`String` **server_list_path** = ``""`` :ref:`🔗<class_ConnectBrowser_property_server_list_path>`
 
-:godot:`ConfigFile` path this browser reads its own bookmarks from and writes them back to.
+The :godot:`ConfigFile` path where saved servers are stored.
 
 .. rst-class:: classref-item-separator
 
@@ -150,7 +137,7 @@ When ``true``, hides this browser once the session comes online and shows it aga
 
 :godot:`Array`\[:ref:`ConnectTransportConfig<class_ConnectTransportConfig>`\] **transport_defaults** = ``[]`` :ref:`🔗<class_ConnectBrowser_property_transport_defaults>`
 
-Game-authored defaults for forms and discovery, consumed when binding.
+Default form values for each transport.
 
 .. rst-class:: classref-item-separator
 
@@ -162,7 +149,7 @@ Game-authored defaults for forms and discovery, consumed when binding.
 
 :godot:`bool` **use_url_fragment** = ``true`` :ref:`🔗<class_ConnectBrowser_property_use_url_fragment>`
 
-When ``true`` on a web export, mirrors the hosted room code into the page URL's fragment and joins the room a fragment already names.
+On the web, puts the hosted room code in the page URL after ``#``, and joins the room such a URL names.
 
 .. rst-class:: classref-item-separator
 
@@ -174,7 +161,7 @@ When ``true`` on a web export, mirrors the hosted room code into the page URL's 
 
 :ref:`NetwLinkConditions<class_NetwLinkConditions>` **debug_link** :ref:`🔗<class_ConnectBrowser_property_debug_link>`
 
-Latency and loss to impair every connection this browser starts with, for testing a build against a link the developer's own machine does not have.
+Simulated latency and packet loss for connections made from this browser.
 
 .. rst-class:: classref-section-separator
 
@@ -205,7 +192,7 @@ Method Descriptions
 
 :godot:`String` **url_room**\ (\ ) :ref:`🔗<class_ConnectBrowser_method_url_room>`
 
-The room code the page URL names, empty when it names none.  A link a host shared carries the code as its fragment, so a player opening it arrives with the room already chosen and the join form filled in.
+The room code after ``#`` in the page URL, or empty.
 
 .. rst-class:: classref-item-separator
 
@@ -217,7 +204,7 @@ The room code the page URL names, empty when it names none.  A link a host share
 
 :godot:`String` **format_peer_class_label**\ (\ peer_class\: :godot:`StringName`\ ) |static| :ref:`🔗<class_ConnectBrowser_method_format_peer_class_label>`
 
-Human-readable label for a ``peer_class``, such as ``&"ENetMultiplayerPeer"`` -> "ENet". "-" when empty.
+A short name for ``peer_class``, such as ``"ENet"`` for ``&"ENetMultiplayerPeer"``, or ``"-"`` when empty.
 
 .. rst-class:: classref-item-separator
 
@@ -229,7 +216,7 @@ Human-readable label for a ``peer_class``, such as ``&"ENetMultiplayerPeer"`` ->
 
 :godot:`String` **format_address**\ (\ endpoint\: :godot:`Dictionary`\ ) |static| :ref:`🔗<class_ConnectBrowser_method_format_address>`
 
-Displayable address for an ``endpoint`` snapshot. Either its explicit address or "-" when it relies on a transport's own local default.
+The address of ``endpoint`` to display, or ``"-"`` when it has none.
 
 .. rst-class:: classref-item-separator
 
@@ -241,7 +228,7 @@ Displayable address for an ``endpoint`` snapshot. Either its explicit address or
 
 :godot:`Control` **make_value_control**\ (\ value\: :godot:`Variant`, field_name\: :godot:`StringName` = &""\ ) |static| :ref:`🔗<class_ConnectBrowser_method_make_value_control>`
 
-Builds a :godot:`Control` typed by ``value``'s :godot:`Variant` type, seeded with ``value``. ``field_name`` selects a dedicated editor when a setting has more structure than its type describes. Shared by the Host settings form and any generic Join form drawn from :ref:`NetwConnectHandle.join_schema()<class_NetwConnectHandle_method_join_schema>`.
+Creates a form field for the type of ``value``, filled with it. Some ``field_name`` values get a special editor.
 
 .. rst-class:: classref-item-separator
 
@@ -253,7 +240,7 @@ Builds a :godot:`Control` typed by ``value``'s :godot:`Variant` type, seeded wit
 
 :godot:`Variant` **value_from_control**\ (\ control\: :godot:`Control`, value_type\: :godot:`int`\ ) |static| :ref:`🔗<class_ConnectBrowser_method_value_from_control>`
 
-Reads back ``control``'s value, cast to ``value_type``.
+Returns the value of ``control`` as ``value_type``.
 
 .. rst-class:: classref-item-separator
 
@@ -265,7 +252,7 @@ Reads back ``control``'s value, cast to ``value_type``.
 
 :godot:`bool` **can_author_value**\ (\ value\: :godot:`Variant`\ ) |static| :ref:`🔗<class_ConnectBrowser_method_can_author_value>`
 
-Whether a settings entry seeded with ``value`` can be drawn as a field and read back from it.
+Returns ``true`` when ``value`` can be edited in a form field.
 
 .. rst-class:: classref-item-separator
 
@@ -277,7 +264,7 @@ Whether a settings entry seeded with ``value`` can be drawn as a field and read 
 
 :godot:`Variant` **zero_value**\ (\ value_type\: :godot:`int`\ ) |static| :ref:`🔗<class_ConnectBrowser_method_zero_value>`
 
-The empty value of ``value_type``, used to seed a :ref:`make_value_control()<class_ConnectBrowser_method_make_value_control>` call when no default is known, as :ref:`NetwConnectHandle.join_schema()<class_NetwConnectHandle_method_join_schema>` entries never carry one.
+The empty value of ``value_type``, such as ``0`` or ``""``.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

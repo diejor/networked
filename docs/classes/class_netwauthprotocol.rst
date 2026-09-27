@@ -12,30 +12,16 @@ NetwAuthProtocol
 
 **Inherits:** :godot:`RefCounted`
 
-Wire-format codec for the packets Networked exchanges during :godot:`SceneMultiplayer`'s authentication phase.
+Reads and writes the packets Networked sends during :godot:`SceneMultiplayer` authentication.
 
 .. rst-class:: classref-introduction-group
 
 Description
 -----------
 
-Every packet is framed with a four-byte magic prefix naming its purpose, so a session can tell a joining player from a server browser before it reads a single byte of body. A packet matching neither magic is :ref:`KIND_UNKNOWN<class_NetwAuthProtocol_constant_KIND_UNKNOWN>` and the receiver fails.
+A packet starts with four bytes that say what it is. A joining player sends ``"NHEL"``, then a version byte, an 8-byte build tag, a flags byte, and the game's own authentication data. A server browser sends ``"NPRB"``, then a version byte and a flags or status byte, and the reply follows.
 
-.. code:: text
-
-    auth packet
-     ┠╴ "NHEL"   a player opening a session
-     ┃   ┠╴ version(1)    the framing this packet was written against
-     ┃   ┠╴ app_tag(8)    the game build folded with the wire identity,
-     ┃   ┃                so a mismatched build is rejected before the
-     ┃   ┃                provider payload is read
-     ┃   ┠╴ flags(1)      reserved
-     ┃   ┖╴ provider payload, which is all a flow ever sees
-     ┖╴ "NPRB"   a browser asking what this server is
-         ┠╴ version(1)
-         ┖╴ status-or-flags(1), then the reply payload
-
-\ A probe peer receives a response and disconnects without completing authentication, so it never enters the :godot:`MultiplayerAPI`
+A server browser gets its reply and is disconnected, so it never appears in the :godot:`MultiplayerAPI`.
 
 .. rst-class:: classref-reftable-group
 
@@ -88,7 +74,7 @@ enum **Kind**: :ref:`🔗<enum_NetwAuthProtocol_Kind>`
 
 :ref:`Kind<enum_NetwAuthProtocol_Kind>` **KIND_UNKNOWN** = ``0``
 
-The packet carries neither magic, or is shorter than a header. The receiver fails closed on it.
+Not a Networked packet.
 
 .. _class_NetwAuthProtocol_constant_KIND_HELLO:
 
@@ -96,7 +82,7 @@ The packet carries neither magic, or is shorter than a header. The receiver fail
 
 :ref:`Kind<enum_NetwAuthProtocol_Kind>` **KIND_HELLO** = ``1``
 
-A player opening a session.
+A player joining.
 
 .. _class_NetwAuthProtocol_constant_KIND_PROBE:
 
@@ -104,7 +90,7 @@ A player opening a session.
 
 :ref:`Kind<enum_NetwAuthProtocol_Kind>` **KIND_PROBE** = ``2``
 
-A browser probe. The server responds and disconnects the peer without joining it.
+A server browser asking about the server.
 
 .. rst-class:: classref-item-separator
 
@@ -122,7 +108,7 @@ enum **ProbeStatus**: :ref:`🔗<enum_NetwAuthProtocol_ProbeStatus>`
 
 :ref:`ProbeStatus<enum_NetwAuthProtocol_ProbeStatus>` **PROBE_OK** = ``0``
 
-The reply carries server metadata.
+The reply carries the server info.
 
 .. _class_NetwAuthProtocol_constant_PROBE_BUSY:
 
@@ -130,7 +116,7 @@ The reply carries server metadata.
 
 :ref:`ProbeStatus<enum_NetwAuthProtocol_ProbeStatus>` **PROBE_BUSY** = ``1``
 
-The server is online but temporarily cannot respond to this probe.
+The server is busy.
 
 .. _class_NetwAuthProtocol_constant_PROBE_UNSUPPORTED:
 
@@ -138,7 +124,7 @@ The server is online but temporarily cannot respond to this probe.
 
 :ref:`ProbeStatus<enum_NetwAuthProtocol_ProbeStatus>` **PROBE_UNSUPPORTED** = ``2``
 
-The server does not return probes at all.
+The server does not answer server browsers.
 
 .. _class_NetwAuthProtocol_constant_PROBE_ERROR:
 
@@ -146,7 +132,7 @@ The server does not return probes at all.
 
 :ref:`ProbeStatus<enum_NetwAuthProtocol_ProbeStatus>` **PROBE_ERROR** = ``3``
 
-The server tried to return and could not.
+The server failed to answer.
 
 .. rst-class:: classref-section-separator
 
@@ -163,7 +149,7 @@ Method Descriptions
 
 :ref:`Kind<enum_NetwAuthProtocol_Kind>` **classify**\ (\ data\: :godot:`PackedByteArray`\ ) |static| :ref:`🔗<class_NetwAuthProtocol_method_classify>`
 
-Which :ref:`Kind<enum_NetwAuthProtocol_Kind>` ``data``'s magic prefix names. A packet shorter than a header, or carrying neither magic, is :ref:`KIND_UNKNOWN<class_NetwAuthProtocol_constant_KIND_UNKNOWN>`.
+Returns what kind of packet ``data`` is.
 
 .. rst-class:: classref-item-separator
 
@@ -175,18 +161,16 @@ Which :ref:`Kind<enum_NetwAuthProtocol_Kind>` ``data``'s magic prefix names. A p
 
 :godot:`Dictionary` **decode_client_hello**\ (\ data\: :godot:`PackedByteArray`, local_app_tag\: :godot:`int` = 0\ ) |static| :ref:`🔗<class_NetwAuthProtocol_method_decode_client_hello>`
 
-Reads a hello packet, rejecting it when its build tag differs from ``local_app_tag``.
+Reads a join packet. It is rejected when its build tag differs from ``local_app_tag``.
 
 .. code:: text
 
     Dictionary
-    ┠╴ok                bool             false on a rejection
+    ┠╴ok                bool             false when rejected
     ┠╴reason            String           "framing", "version" or "app", empty when ok
-    ┠╴version           int              the framing version the packet carried
-    ┠╴app_tag           int              the 64-bit build tag the packet carried
+    ┠╴version           int              the version in the packet
+    ┠╴app_tag           int              the build tag in the packet
     ┖╴flags             int              reserved
-
-\ A rejection still reports the ``version`` and ``app_tag`` it read.
 
 .. rst-class:: classref-item-separator
 
@@ -198,15 +182,15 @@ Reads a hello packet, rejecting it when its build tag differs from ``local_app_t
 
 :godot:`Dictionary` **decode_probe_reply**\ (\ data\: :godot:`PackedByteArray`\ ) |static| :ref:`🔗<class_NetwAuthProtocol_method_decode_probe_reply>`
 
-Reads a probe reply. A packet with the wrong magic, a short header, or a foreign version returns ``ok`` false and an empty payload. The status it carries is one value of :ref:`ProbeStatus<enum_NetwAuthProtocol_ProbeStatus>`.
+Reads a server browser reply.
 
 .. code:: text
 
     Dictionary
-    ┠╴ok       bool             false on a rejection
-    ┠╴version  int              the framing version the packet carried
-    ┠╴status   int              what the server said about returning
-    ┖╴payload  PackedByteArray  the provider's own reply, empty on a rejection
+    ┠╴ok       bool             false when the packet is invalid
+    ┠╴version  int              the version in the packet
+    ┠╴status   int              a ProbeStatus value
+    ┖╴payload  PackedByteArray  the reply, empty when invalid
 
 .. rst-class:: classref-item-separator
 
@@ -218,13 +202,13 @@ Reads a probe reply. A packet with the wrong magic, a short header, or a foreign
 
 :godot:`Dictionary` **decode_probe_request**\ (\ data\: :godot:`PackedByteArray`\ ) |static| :ref:`🔗<class_NetwAuthProtocol_method_decode_probe_request>`
 
-Reads a probe request. A packet with the wrong magic, a short header, or a foreign version returns ``ok`` false.
+Reads a server browser request.
 
 .. code:: text
 
     Dictionary
-    ┠╴ok       bool  false on a rejection
-    ┠╴version  int   the framing version the packet carried
+    ┠╴ok       bool  false when the packet is invalid
+    ┠╴version  int   the version in the packet
     ┖╴flags    int   reserved
 
 .. rst-class:: classref-item-separator
@@ -237,7 +221,7 @@ Reads a probe request. A packet with the wrong magic, a short header, or a forei
 
 :godot:`PackedByteArray` **encode_client_hello**\ (\ app_tag\: :godot:`int` = 0, flags\: :godot:`int` = 0\ ) |static| :ref:`🔗<class_NetwAuthProtocol_method_encode_client_hello>`
 
-Writes a hello header stamped with ``app_tag``, the 64-bit build tag folded from :ref:`MultiplayerTree.app_id<class_MultiplayerTree_property_app_id>` and the wire identity by :ref:`NetwMultiplayer.auth_set_app_tag()<class_NetwMultiplayer_method_auth_set_app_tag>`.
+Writes a join packet header with the build tag ``app_tag``. See :ref:`NetwMultiplayer.auth_set_app_tag()<class_NetwMultiplayer_method_auth_set_app_tag>`.
 
 .. rst-class:: classref-item-separator
 
@@ -249,7 +233,7 @@ Writes a hello header stamped with ``app_tag``, the 64-bit build tag folded from
 
 :godot:`PackedByteArray` **encode_probe_reply**\ (\ status\: :ref:`ProbeStatus<enum_NetwAuthProtocol_ProbeStatus>`, payload\: :godot:`PackedByteArray` = PackedByteArray()\ ) |static| :ref:`🔗<class_NetwAuthProtocol_method_encode_probe_reply>`
 
-Wraps ``payload`` in a probe-reply header stamped with ``status``, one of :ref:`ProbeStatus<enum_NetwAuthProtocol_ProbeStatus>`.
+Writes a server browser reply with ``status`` and ``payload``.
 
 .. rst-class:: classref-item-separator
 
@@ -261,7 +245,7 @@ Wraps ``payload`` in a probe-reply header stamped with ``status``, one of :ref:`
 
 :godot:`PackedByteArray` **encode_probe_request**\ (\ flags\: :godot:`int` = 0\ ) |static| :ref:`🔗<class_NetwAuthProtocol_method_encode_probe_request>`
 
-Builds a probe request. ``flags`` is reserved.
+Writes a server browser request. ``flags`` is reserved.
 
 .. rst-class:: classref-item-separator
 
@@ -273,7 +257,7 @@ Builds a probe request. ``flags`` is reserved.
 
 :godot:`PackedByteArray` **magic_hello**\ (\ ) |static| :ref:`🔗<class_NetwAuthProtocol_method_magic_hello>`
 
-The four bytes a hello packet opens with, ``"NHEL"``.
+The first four bytes of a join packet, ``"NHEL"``.
 
 .. rst-class:: classref-item-separator
 
@@ -285,7 +269,7 @@ The four bytes a hello packet opens with, ``"NHEL"``.
 
 :godot:`PackedByteArray` **magic_probe**\ (\ ) |static| :ref:`🔗<class_NetwAuthProtocol_method_magic_probe>`
 
-The four bytes a probe packet opens with, ``"NPRB"``.
+The first four bytes of a server browser packet, ``"NPRB"``.
 
 .. rst-class:: classref-item-separator
 
@@ -297,7 +281,7 @@ The four bytes a probe packet opens with, ``"NPRB"``.
 
 :godot:`int` **protocol_version**\ (\ ) |static| :ref:`🔗<class_NetwAuthProtocol_method_protocol_version>`
 
-The framing version this build writes and is the only one it accepts.
+The packet version this build writes. It accepts no other.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

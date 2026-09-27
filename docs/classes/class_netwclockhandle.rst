@@ -19,7 +19,7 @@ The tick every peer in the session counts, reached by :ref:`Netw.clock()<class_N
 Description
 -----------
 
-A tick is a numbered step of the simulation. Every peer counts the same ticks, and a client keeps its count aligned with the server's by measuring the round trip and correcting for it. :ref:`tick<class_NetwClockHandle_property_tick>` is the number every :ref:`NetwRecord<class_NetwRecord>` and every lag-compensation query is stamped against.
+A tick is a numbered step of the simulation. Every peer counts the same ticks, and a client keeps its count in step with the server's. :ref:`tick<class_NetwClockHandle_property_tick>` is the number every :ref:`NetwRecord<class_NetwRecord>` and lag compensation uses.
 
 ::
 
@@ -32,76 +32,23 @@ A tick is a numbered step of the simulation. Every peer counts the same ticks, a
 
 \ **How a tick is produced**\ 
 
-The clock does not use a timer. It banks the time each physics frame delivers and spends it one tick at a time, so a slow frame produces two ticks and a fast one produces none.
+Each physics frame adds its delta to an accumulator, and every ``1 / tickrate`` seconds in it runs one tick. A slow frame can run two ticks and a fast one none. At a :ref:`tickrate<class_NetwClockHandle_property_tickrate>` of 30 with 60 physics ticks per second, a tick runs every second frame, and :ref:`physics_factor<class_NetwClockHandle_property_physics_factor>` is ``2.0``.
 
-.. code:: text
-
-    ticktime = 1 / tickrate
-
-    # each physics frame, given that frame's delta in seconds
-        accumulator += delta
-        while accumulator >= ticktime
-            accumulator -= ticktime
-            announce a tick, tick += 1
-
-\ At a tickrate of 30 under 60 Hz physics the loop announces a tick every second frame. :ref:`physics_factor<class_NetwClockHandle_property_physics_factor>` is that ratio, 2.0 here, and :ref:`tick_phase<class_NetwClockHandle_property_tick_phase>` is how far into the current tick the accumulator sits.
-
-The loop announces at most :ref:`NetwMultiplayer.CLOCK_PARAM_MAX_TICKS_PER_FRAME<class_NetwMultiplayer_constant_CLOCK_PARAM_MAX_TICKS_PER_FRAME>` ticks in one frame. A peer that keeps hitting the ceiling cannot catch up, and :ref:`behind_count<class_NetwClockHandle_property_behind_count>` is how often that happened.
+At most :ref:`NetwMultiplayer.CLOCK_PARAM_MAX_TICKS_PER_FRAME<class_NetwMultiplayer_constant_CLOCK_PARAM_MAX_TICKS_PER_FRAME>` ticks run in one frame. :ref:`behind_count<class_NetwClockHandle_property_behind_count>` counts how often that limit was hit.
 
 
 
-\ **How a client agrees with the server**\ 
+\ **How a client follows the server**\ 
 
-The client pings the server every :ref:`ping_interval<class_NetwClockHandle_property_ping_interval>` seconds and the server answers with its own tick and phase. The answer is already stale by the time it lands, so the client aims ahead of it by the time the trip took.
+The client pings the server every :ref:`ping_interval<class_NetwClockHandle_property_ping_interval>` seconds. The server answers with its tick, and the client aims ahead of it by half the round trip plus :ref:`NetwMultiplayer.CLOCK_PARAM_LEAD_TICKS<class_NetwMultiplayer_constant_CLOCK_PARAM_LEAD_TICKS>`. The first answer sets the tick directly. After that, :ref:`sync_mode<class_NetwClockHandle_property_sync_mode>` decides.
 
-.. code:: text
-
-    rtt        the round trip this ping and its pong measured, in seconds
-    rtt_avg    the mean of the last jitter_window samples
-    jitter     the mean distance of those samples from rtt_avg
-    one_way    rtt_avg / 2
-
-    target = server_tick + server_phase + one_way / ticktime + lead_ticks
+\ :ref:`NetwMultiplayer.SYNC_MODE_SNAP<class_NetwMultiplayer_constant_SYNC_MODE_SNAP>` sets the tick directly every time, which can move it backwards. :ref:`NetwMultiplayer.SYNC_MODE_STRETCH<class_NetwMultiplayer_constant_SYNC_MODE_STRETCH>`, the default, runs the clock slightly faster or slower each frame by :ref:`NetwMultiplayer.CLOCK_PARAM_STRETCH_NUDGE_FACTOR<class_NetwMultiplayer_constant_CLOCK_PARAM_STRETCH_NUDGE_FACTOR>` of the difference, so the tick never jumps. A difference larger than :ref:`NetwMultiplayer.CLOCK_PARAM_PANIC_SNAP_THRESHOLD<class_NetwMultiplayer_constant_CLOCK_PARAM_PANIC_SNAP_THRESHOLD>` ticks is snapped.
 
 
 
-\ ``target`` is a fractional tick, not a whole one. Keeping the server's phase is what stops the target jumping a full tick each time a pong lands on the other side of a tick boundary.
+\ **Showing remote state**\ 
 
-The first pong sets the clock to the target outright, because there is nothing to drift from yet. Every pong after that is handled by :ref:`sync_mode<class_NetwClockHandle_property_sync_mode>`.
-
-
-
-\ **Snap and stretch**\ 
-
-\ :ref:`NetwMultiplayer.SYNC_MODE_SNAP<class_NetwMultiplayer_constant_SYNC_MODE_SNAP>` writes the target straight into the tick and the accumulator. It is correct immediately and it can move the tick backwards, which any code holding a tick number will see.
-
-\ :ref:`NetwMultiplayer.SYNC_MODE_STRETCH<class_NetwMultiplayer_constant_SYNC_MODE_STRETCH>` is the default. It keeps the target as an estimate that advances on its own, then closes a fixed fraction of the remaining gap each frame.
-
-.. code:: text
-
-    each physics frame
-        estimate += delta * tickrate
-        current   = tick + accumulator / ticktime
-        gap       = estimate - current
-        accumulator += gap * ticktime * stretch_nudge_factor
-
-
-
-\ :ref:`NetwMultiplayer.CLOCK_PARAM_STRETCH_NUDGE_FACTOR<class_NetwMultiplayer_constant_CLOCK_PARAM_STRETCH_NUDGE_FACTOR>` is that fraction. At 0.05 the clock closes a twentieth of the gap per frame, so it runs slightly fast or slightly slow until the gap is spent and the tick never jumps. Above :ref:`NetwMultiplayer.CLOCK_PARAM_PANIC_SNAP_THRESHOLD<class_NetwMultiplayer_constant_CLOCK_PARAM_PANIC_SNAP_THRESHOLD>` ticks of gap it snaps instead, because a gap that large is a desync and not drift.
-
-
-
-\ **Reading remote state**\ 
-
-A remote peer's state is always at least one-way latency old, so the newest tick has nothing in it yet for anyone but this peer. :ref:`display_offset<class_NetwClockHandle_property_display_offset>` is how many ticks back the view reads, and the useful value is the one that covers the trip plus the spread in it.
-
-.. code:: text
-
-    recommended_display_offset = ceil((one_way + jitter * jitter_multiplier) * tickrate)
-
-
-
-\ Nothing applies that number on its own. :ref:`recommended_display_offset<class_NetwClockHandle_property_recommended_display_offset>` is the measurement and :ref:`display_offset<class_NetwClockHandle_property_display_offset>` is what the clock uses, and :ref:`NetwMultiplayer.clock_auto_configure_offset()<class_NetwMultiplayer_method_clock_auto_configure_offset>` is what samples the first for a while and writes the largest reading into the second.
+State from other peers arrives late, so remote entities are shown :ref:`display_offset<class_NetwClockHandle_property_display_offset>` ticks in the past. :ref:`recommended_display_offset<class_NetwClockHandle_property_recommended_display_offset>` is the offset the current connection needs, the one-way latency plus the jitter times :ref:`NetwMultiplayer.CLOCK_PARAM_JITTER_MULTIPLIER<class_NetwMultiplayer_constant_CLOCK_PARAM_JITTER_MULTIPLIER>`, in ticks. It is not applied automatically. :ref:`NetwMultiplayer.clock_auto_configure_offset()<class_NetwMultiplayer_method_clock_auto_configure_offset>` applies it.
 
 .. rst-class:: classref-reftable-group
 
@@ -164,7 +111,7 @@ Signals
 
 **before_tick**\ (\ delta\: :godot:`float`, tick\: :godot:`int`\ ) :ref:`🔗<class_NetwClockHandle_signal_before_tick>`
 
-Emitted before the simulation steps ``tick``, carrying that step's ``delta``. This is where input for the tick is sampled, because what is written here is what the tick then simulates. Relayed from :ref:`NetwMultiplayer.clock_before_tick<class_NetwMultiplayer_signal_clock_before_tick>`.
+Emitted before ``tick`` runs. Read input here.
 
 .. rst-class:: classref-item-separator
 
@@ -176,7 +123,7 @@ Emitted before the simulation steps ``tick``, carrying that step's ``delta``. Th
 
 **on_tick**\ (\ delta\: :godot:`float`, tick\: :godot:`int`\ ) :ref:`🔗<class_NetwClockHandle_signal_on_tick>`
 
-Emitted as the simulation steps ``tick``, carrying that step's ``delta``. Relayed from :ref:`NetwMultiplayer.clock_on_tick<class_NetwMultiplayer_signal_clock_on_tick>`.
+Emitted when ``tick`` runs. Run game logic here.
 
 .. rst-class:: classref-section-separator
 
@@ -197,7 +144,7 @@ Property Descriptions
 
 - :godot:`int` **get_behind_count**\ (\ )
 
-How many frames wanted a tick the per-frame ceiling refused. Sustained growth means this peer cannot sustain its own tickrate, which no setting repairs. :ref:`NetwMultiplayer.clock_get_simulation_behind_count()<class_NetwMultiplayer_method_clock_get_simulation_behind_count>`.
+How many frames could not run every tick they needed. If it keeps growing, this machine is too slow for :ref:`tickrate<class_NetwClockHandle_property_tickrate>`.
 
 .. rst-class:: classref-item-separator
 
@@ -214,7 +161,7 @@ How many frames wanted a tick the per-frame ceiling refused. Sustained growth me
 - |void| **set_display_offset**\ (\ value\: :godot:`int`\ )
 - :godot:`int` **get_display_offset**\ (\ )
 
-How many ticks behind :ref:`tick<class_NetwClockHandle_property_tick>` the view of remote state reads, so that what it reads has already arrived. :ref:`recommended_display_offset<class_NetwClockHandle_property_recommended_display_offset>` is what the measured link suggests for it.
+How many ticks in the past remote entities are shown. See :ref:`recommended_display_offset<class_NetwClockHandle_property_recommended_display_offset>`.
 
 .. rst-class:: classref-item-separator
 
@@ -230,7 +177,7 @@ How many ticks behind :ref:`tick<class_NetwClockHandle_property_tick>` the view 
 
 - :godot:`bool` **get_is_configured**\ (\ )
 
-Whether a :ref:`NetwClockConfig<class_NetwClockConfig>` has settled on this session, which is what :ref:`Netw.configure_clock()<class_Netw_method_configure_clock>` declares. A component that steps on the tick reads this before it trusts :ref:`tick<class_NetwClockHandle_property_tick>`.
+``true`` once the settings from :ref:`Netw.configure_clock()<class_Netw_method_configure_clock>` are applied. :ref:`tick<class_NetwClockHandle_property_tick>` does not move before that.
 
 .. rst-class:: classref-item-separator
 
@@ -246,7 +193,7 @@ Whether a :ref:`NetwClockConfig<class_NetwClockConfig>` has settled on this sess
 
 - :godot:`bool` **get_is_synchronized**\ (\ )
 
-Whether this peer's tick agrees with the server. Always ``true`` on the server, and ``false`` on a client until the first pong lands. :ref:`NetwMultiplayer.clock_is_synchronized()<class_NetwMultiplayer_method_clock_is_synchronized>`.
+``true`` once the tick follows the server. Always ``true`` on the server.
 
 .. rst-class:: classref-item-separator
 
@@ -262,7 +209,7 @@ Whether this peer's tick agrees with the server. Always ``true`` on the server, 
 
 - :godot:`float` **get_physics_factor**\ (\ )
 
-Physics frames per tick, unrounded. A per-frame quantity such as a velocity is scaled by this to cover one tick's worth of ground. :ref:`NetwMultiplayer.clock_get_physics_factor()<class_NetwMultiplayer_method_clock_get_physics_factor>`.
+Physics frames per tick. Multiply a per-frame value by it to get a per-tick value.
 
 .. rst-class:: classref-item-separator
 
@@ -279,7 +226,7 @@ Physics frames per tick, unrounded. A per-frame quantity such as a velocity is s
 - |void| **set_ping_interval**\ (\ value\: :godot:`float`\ )
 - :godot:`float` **get_ping_interval**\ (\ )
 
-How many seconds pass between the pings a client measures the link with. Shorter samples the link more often and costs more packets.
+Seconds between pings. Shorter follows the connection more closely and sends more packets.
 
 .. rst-class:: classref-item-separator
 
@@ -295,7 +242,7 @@ How many seconds pass between the pings a client measures the link with. Shorter
 
 - :godot:`int` **get_recommended_display_offset**\ (\ )
 
-The display offset the measured link suggests, in ticks. Nothing applies it. :ref:`NetwMultiplayer.clock_get_recommended_display_offset()<class_NetwMultiplayer_method_clock_get_recommended_display_offset>`.
+The :ref:`display_offset<class_NetwClockHandle_property_display_offset>` the current connection needs, in ticks. Not applied automatically.
 
 .. rst-class:: classref-item-separator
 
@@ -312,7 +259,7 @@ The display offset the measured link suggests, in ticks. Nothing applies it. :re
 - |void| **set_sync_mode**\ (\ value\: :ref:`SyncMode<enum_NetwMultiplayer_SyncMode>`\ )
 - :ref:`SyncMode<enum_NetwMultiplayer_SyncMode>` **get_sync_mode**\ (\ )
 
-How a calibration is taken, either :ref:`NetwMultiplayer.SYNC_MODE_SNAP<class_NetwMultiplayer_constant_SYNC_MODE_SNAP>` at once or :ref:`NetwMultiplayer.SYNC_MODE_STRETCH<class_NetwMultiplayer_constant_SYNC_MODE_STRETCH>` spread over frames.
+How the tick is corrected toward the server's.
 
 .. rst-class:: classref-item-separator
 
@@ -328,7 +275,7 @@ How a calibration is taken, either :ref:`NetwMultiplayer.SYNC_MODE_SNAP<class_Ne
 
 - :godot:`int` **get_tick**\ (\ )
 
-The current network tick, the number every :ref:`NetwRecord<class_NetwRecord>` and every lag-compensation query is stamped against. :ref:`NetwMultiplayer.clock_get_tick()<class_NetwMultiplayer_method_clock_get_tick>`.
+The current tick.
 
 .. rst-class:: classref-item-separator
 
@@ -344,7 +291,7 @@ The current network tick, the number every :ref:`NetwRecord<class_NetwRecord>` a
 
 - :godot:`float` **get_tick_factor**\ (\ )
 
-How far the simulation has advanced past the last tick, in ticks, counting the part of the current frame already drawn. This is what a renderer interpolates with. :ref:`NetwMultiplayer.clock_get_tick_factor()<class_NetwMultiplayer_method_clock_get_tick_factor>`.
+How far time has moved past the last tick, as a fraction of a tick. Use it to interpolate.
 
 .. rst-class:: classref-item-separator
 
@@ -360,7 +307,7 @@ How far the simulation has advanced past the last tick, in ticks, counting the p
 
 - :godot:`float` **get_tick_phase**\ (\ )
 
-Where the accumulator sits inside the current tick, from zero to one. :ref:`NetwMultiplayer.clock_get_tick_phase()<class_NetwMultiplayer_method_clock_get_tick_phase>`.
+How far into the current tick the clock is, from ``0.0`` to ``1.0``.
 
 .. rst-class:: classref-item-separator
 
@@ -376,7 +323,7 @@ Where the accumulator sits inside the current tick, from zero to one. :ref:`Netw
 
 - :godot:`int` **get_tickrate**\ (\ )
 
-Ticks per second, which :ref:`Netw.configure_clock()<class_Netw_method_configure_clock>` declares and nothing changes afterwards. Every peer in a session counts at this rate.
+Ticks per second, set by :ref:`Netw.configure_clock()<class_Netw_method_configure_clock>`. The same on every peer.
 
 .. rst-class:: classref-section-separator
 
@@ -393,13 +340,11 @@ Method Descriptions
 
 :godot:`float` **monitor**\ (\ monitor\: :ref:`ClockMonitor<enum_NetwMultiplayer_ClockMonitor>`\ ) |const| :ref:`🔗<class_NetwClockHandle_method_monitor>`
 
-One link or cadence measurement as a :godot:`float`. The vocabulary is :ref:`ClockMonitor<enum_NetwMultiplayer_ClockMonitor>`, and every member of it is a uniform scalar so a debug overlay can sample the whole family in a loop.
+Returns one clock diagnostic value.
 
 ::
 
     var rtt := Netw.clock(self).monitor(NetwMultiplayer.CLOCK_MONITOR_RTT_AVG)
-
-\ The numbers that shape the simulation are properties. :ref:`physics_factor<class_NetwClockHandle_property_physics_factor>`, :ref:`tick_factor<class_NetwClockHandle_property_tick_factor>`, :ref:`tick_phase<class_NetwClockHandle_property_tick_phase>` and :ref:`recommended_display_offset<class_NetwClockHandle_property_recommended_display_offset>` are each read directly.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

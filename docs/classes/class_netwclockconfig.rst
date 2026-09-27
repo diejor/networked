@@ -19,12 +19,12 @@ Configuration for the clock of :godot:`Node.multiplayer <Node#class_Node_propert
 Description
 -----------
 
-Use :ref:`Netw.configure_clock()<class_Netw_method_configure_clock>` to configure the clock.
+Returned by :ref:`Netw.configure_clock()<class_Netw_method_configure_clock>`.
 
 ::
 
     func _init() -> void:
-        Netw.configure_clock(self).tickrate(60).display_offset(2)
+        Netw.configure_clock(self).ticks_per_second(60).display_offset_ticks(2)
 
 .. rst-class:: classref-reftable-group
 
@@ -102,7 +102,7 @@ Property Descriptions
 - |void| **set_display_offset**\ (\ value\: :godot:`int`\ )
 - :godot:`int` **get_display_offset**\ (\ )
 
-The number of ticks the visual display lags behind the simulation.
+How many ticks in the past remote entities are shown. A small value helps hide lag.
 
 .. rst-class:: classref-item-separator
 
@@ -136,7 +136,7 @@ Logs average clock drift over 60-second windows to the console.
 - |void| **set_jitter_multiplier**\ (\ value\: :godot:`float`\ )
 - :godot:`float` **get_jitter_multiplier**\ (\ )
 
-Scales jitter impact on the recommended display offset.
+How much jitter adds to :ref:`NetwClockHandle.recommended_display_offset<class_NetwClockHandle_property_recommended_display_offset>`.
 
 .. rst-class:: classref-item-separator
 
@@ -153,7 +153,7 @@ Scales jitter impact on the recommended display offset.
 - |void| **set_jitter_stability_threshold**\ (\ value\: :godot:`float`\ )
 - :godot:`float` **get_jitter_stability_threshold**\ (\ )
 
-The threshold below which the connection is considered stable.
+Seconds of jitter under which the connection counts as stable.
 
 .. rst-class:: classref-item-separator
 
@@ -170,7 +170,7 @@ The threshold below which the connection is considered stable.
 - |void| **set_jitter_window**\ (\ value\: :godot:`int`\ )
 - :godot:`int` **get_jitter_window**\ (\ )
 
-Number of recent RTT samples averaged for jitter and the recommendation.
+How many recent pings are averaged.
 
 .. rst-class:: classref-item-separator
 
@@ -187,7 +187,7 @@ Number of recent RTT samples averaged for jitter and the recommendation.
 - |void| **set_max_ticks_per_frame**\ (\ value\: :godot:`int`\ )
 - :godot:`int` **get_max_ticks_per_frame**\ (\ )
 
-Maximum simulation ticks allowed to run in a single physics frame.
+The most ticks run in one physics frame.
 
 .. rst-class:: classref-item-separator
 
@@ -204,7 +204,7 @@ Maximum simulation ticks allowed to run in a single physics frame.
 - |void| **set_panic_snap_threshold**\ (\ value\: :godot:`int`\ )
 - :godot:`int` **get_panic_snap_threshold**\ (\ )
 
-The maximum allowed divergence before a hard :godot:`NetwMultiplayer.SyncMode.SYNC_MODE_SNAP <NetwMultiplayer#class_NetwMultiplayer_constant_SyncMode.SYNC_MODE_SNAP>` is forced.
+Ticks of difference from the server past which the clock snaps, even with :ref:`NetwMultiplayer.SYNC_MODE_STRETCH<class_NetwMultiplayer_constant_SYNC_MODE_STRETCH>`.
 
 .. rst-class:: classref-item-separator
 
@@ -221,7 +221,7 @@ The maximum allowed divergence before a hard :godot:`NetwMultiplayer.SyncMode.SY
 - |void| **set_ping_interval**\ (\ value\: :godot:`float`\ )
 - :godot:`float` **get_ping_interval**\ (\ )
 
-How often the client pings the server to refresh RTT and recalibrate.
+Seconds between pings to the server.
 
 .. rst-class:: classref-item-separator
 
@@ -238,7 +238,7 @@ How often the client pings the server to refresh RTT and recalibrate.
 - |void| **set_stall_threshold**\ (\ value\: :godot:`float`\ )
 - :godot:`float` **get_stall_threshold**\ (\ )
 
-Frame delta threshold before resetting the accumulator.
+Seconds. A longer frame is treated as a hitch and skipped.
 
 .. rst-class:: classref-item-separator
 
@@ -255,7 +255,7 @@ Frame delta threshold before resetting the accumulator.
 - |void| **set_stretch_nudge_factor**\ (\ value\: :godot:`float`\ )
 - :godot:`float` **get_stretch_nudge_factor**\ (\ )
 
-Fraction of the remaining divergence the :godot:`NetwMultiplayer.SyncMode.SYNC_MODE_STRETCH <NetwMultiplayer#class_NetwMultiplayer_constant_SyncMode.SYNC_MODE_STRETCH>` clock closes each frame.
+The share of the difference :ref:`NetwMultiplayer.SYNC_MODE_STRETCH<class_NetwMultiplayer_constant_SYNC_MODE_STRETCH>` corrects each frame.
 
 .. rst-class:: classref-item-separator
 
@@ -272,7 +272,7 @@ Fraction of the remaining divergence the :godot:`NetwMultiplayer.SyncMode.SYNC_M
 - |void| **set_sync_mode**\ (\ value\: :ref:`SyncMode<enum_NetwMultiplayer_SyncMode>`\ )
 - :ref:`SyncMode<enum_NetwMultiplayer_SyncMode>` **get_sync_mode**\ (\ )
 
-Strategy used to align the local clock with the server, one of :ref:`SyncMode<enum_NetwMultiplayer_SyncMode>`.
+How the clock is corrected toward the server's.
 
 .. rst-class:: classref-item-separator
 
@@ -289,7 +289,7 @@ Strategy used to align the local clock with the server, one of :ref:`SyncMode<en
 - |void| **set_tickrate**\ (\ value\: :godot:`int`\ )
 - :godot:`int` **get_tickrate**\ (\ )
 
-How many simulation ticks to run per second.
+Ticks per second. Higher is more precise, and costs more bandwidth and CPU.
 
 .. rst-class:: classref-item-separator
 
@@ -306,7 +306,7 @@ How many simulation ticks to run per second.
 - |void| **set_tickrate_mismatch_action**\ (\ value\: :ref:`MismatchAction<enum_NetwMultiplayer_MismatchAction>`\ )
 - :ref:`MismatchAction<enum_NetwMultiplayer_MismatchAction>` **get_tickrate_mismatch_action**\ (\ )
 
-What this session does when a peer reports a different tickrate: warn, disconnect it, or raise :ref:`NetwMultiplayer.clock_tickrate_mismatch<class_NetwMultiplayer_signal_clock_tickrate_mismatch>` and leave the choice to the game.
+What happens when a peer has a different :ref:`tickrate<class_NetwClockConfig_property_tickrate>`.
 
 .. rst-class:: classref-item-separator
 
@@ -323,7 +323,7 @@ What this session does when a peer reports a different tickrate: warn, disconnec
 - |void| **set_use_physics_interpolation**\ (\ value\: :godot:`bool`\ )
 - :godot:`bool` **get_use_physics_interpolation**\ (\ )
 
-Reads the engine's physics interpolation fraction when available instead of a wall-clock estimate.
+Whether :ref:`NetwClockHandle.tick_factor<class_NetwClockHandle_property_tick_factor>` follows :godot:`Engine.get_physics_interpolation_fraction() <Engine#class_Engine_method_get_physics_interpolation_fraction>`.
 
 .. rst-class:: classref-section-separator
 
@@ -340,7 +340,7 @@ Method Descriptions
 
 :ref:`NetwClockConfig<class_NetwClockConfig>` **display_offset_ticks**\ (\ display_offset\: :godot:`int`\ ) :ref:`🔗<class_NetwClockConfig_method_display_offset_ticks>`
 
-The number of ticks the visual display lags behind the simulation, normally used to hide jitter and lag. The interpolation engine has its own techniques to hide jitter and lag. Still, a small display offset is recommended.
+Sets :ref:`display_offset<class_NetwClockConfig_property_display_offset>` and returns this config.
 
 .. rst-class:: classref-item-separator
 
@@ -352,7 +352,7 @@ The number of ticks the visual display lags behind the simulation, normally used
 
 :ref:`NetwClockConfig<class_NetwClockConfig>` **physics_interpolation**\ (\ use_physics_interpolation\: :godot:`bool`\ ) :ref:`🔗<class_NetwClockConfig_method_physics_interpolation>`
 
-When ``true``, the engine's physics interpolation fraction is used when available instead of a wall-clock estimate.
+Sets :ref:`use_physics_interpolation<class_NetwClockConfig_property_use_physics_interpolation>` and returns this config.
 
 .. rst-class:: classref-item-separator
 
@@ -364,7 +364,7 @@ When ``true``, the engine's physics interpolation fraction is used when availabl
 
 :ref:`NetwClockConfig<class_NetwClockConfig>` **sync**\ (\ sync_mode\: :ref:`SyncMode<enum_NetwMultiplayer_SyncMode>`\ ) :ref:`🔗<class_NetwClockConfig_method_sync>`
 
-The strategy used to align the local clock with the server, one of :ref:`SyncMode<enum_NetwMultiplayer_SyncMode>`.
+Sets :ref:`sync_mode<class_NetwClockConfig_property_sync_mode>` and returns this config.
 
 .. rst-class:: classref-item-separator
 
@@ -376,7 +376,7 @@ The strategy used to align the local clock with the server, one of :ref:`SyncMod
 
 :ref:`NetwClockConfig<class_NetwClockConfig>` **ticks_per_second**\ (\ tickrate\: :godot:`int`\ ) :ref:`🔗<class_NetwClockConfig_method_ticks_per_second>`
 
-How many simulation ticks to run per second. Increasing this value increases the simulation fidelity, but also increases the network traffic and CPU usage.
+Sets :ref:`tickrate<class_NetwClockConfig_property_tickrate>` and returns this config.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

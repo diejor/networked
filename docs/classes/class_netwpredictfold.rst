@@ -12,26 +12,18 @@ NetwPredictFold
 
 **Inherits:** :godot:`RefCounted`
 
-Which input one prediction frame drives, and under what label.
+Which input a predicted entity simulates this frame, returned by :ref:`NetwMultiplayer._predict_drive()<class_NetwMultiplayer_private_method__predict_drive>`.
 
 .. rst-class:: classref-introduction-group
 
 Description
 -----------
 
-:ref:`NetwMultiplayer._predict_drive()<class_NetwMultiplayer_private_method__predict_drive>` returns one of these, and a game overriding that seam creates its own through :ref:`of()<class_NetwPredictFold_method_of>`.
-
-Every driven frame is labeled, including one that had no new input, so a frame with nothing newer than the last driven repeats the input it already had rather than inventing one. That is why :ref:`label()<class_NetwPredictFold_method_label>` is never absent and :ref:`fresh()<class_NetwPredictFold_method_fresh>` is what separates the two cases.
+Create one with :ref:`of()<class_NetwPredictFold_method_of>` in an override of :ref:`NetwMultiplayer._predict_drive()<class_NetwMultiplayer_private_method__predict_drive>`. A frame with no new input repeats the last one.
 
 ::
 
-    var fold := NetwPredictFold.of(tick, true, NetwPredict.DriveKind.FRESH)
-
-\ - :ref:`label()<class_NetwPredictFold_method_label>` the tick the transition is filed under
-
-- :ref:`fresh()<class_NetwPredictFold_method_fresh>` true when a newer input drove it
-
-- :ref:`kind()<class_NetwPredictFold_method_kind>` a :ref:`DriveKind<enum_NetwPredict_DriveKind>` value
+    var fold := NetwPredictFold.of(tick, true, NetwPredict.DRIVE_KIND_FRESH)
 
 .. rst-class:: classref-reftable-group
 
@@ -66,7 +58,7 @@ Method Descriptions
 
 :godot:`bool` **fresh**\ (\ ) |const| :ref:`🔗<class_NetwPredictFold_method_fresh>`
 
-Whether a newer input drove this frame. A frame that is not fresh repeats the input it already had, and the tape gains no entry the input does not justify.
+``true`` when this frame uses a new input, ``false`` when it repeats the last one.
 
 .. rst-class:: classref-item-separator
 
@@ -78,7 +70,7 @@ Whether a newer input drove this frame. A frame that is not fresh repeats the in
 
 :ref:`DriveKind<enum_NetwPredict_DriveKind>` **kind**\ (\ ) |const| :ref:`🔗<class_NetwPredictFold_method_kind>`
 
-How the frame was driven, as a :ref:`DriveKind<enum_NetwPredict_DriveKind>`.
+Which input was used.
 
 .. rst-class:: classref-item-separator
 
@@ -90,7 +82,7 @@ How the frame was driven, as a :ref:`DriveKind<enum_NetwPredict_DriveKind>`.
 
 :godot:`int` **label**\ (\ ) |const| :ref:`🔗<class_NetwPredictFold_method_label>`
 
-The tick the transition is filed under, which is the input's own tick whenever one has arrived and the pass timing when none has.
+The tick of the input, or the current tick when there is no input.
 
 .. rst-class:: classref-item-separator
 
@@ -102,7 +94,7 @@ The tick the transition is filed under, which is the input's own tick whenever o
 
 :ref:`NetwPredictFold<class_NetwPredictFold>` **of**\ (\ label\: :godot:`int`, fresh\: :godot:`bool`, kind\: :ref:`DriveKind<enum_NetwPredict_DriveKind>`\ ) |static| :ref:`🔗<class_NetwPredictFold_method_of>`
 
-Creates one drive choice. ``kind`` is a :ref:`DriveKind<enum_NetwPredict_DriveKind>` and naming no member of it is rejected, because a fold the tape cannot classify would file an entry under a kind no reader can act on.
+Creates a **NetwPredictFold**. ``kind`` must be a valid :ref:`DriveKind<enum_NetwPredict_DriveKind>`.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

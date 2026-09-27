@@ -12,16 +12,14 @@ NetwInterestHandle
 
 **Inherits:** :godot:`RefCounted`
 
-Which layers one entity is in, who may therefore see it, and what it is told when that changes.
+The :ref:`NetwInterestLayer<class_NetwInterestLayer>` layers an entity is in, and callbacks for when peers start or stop seeing it.
 
 .. rst-class:: classref-introduction-group
 
 Description
 -----------
 
-Membership declarations survive tree exits and reapply when the entity enters a session, so a layer declared in :godot:`Object._init() <Object#class_Object_private_method__init>` is the same layer the server admits later. The server owns the real :ref:`NetwInterestLayer<class_NetwInterestLayer>` membership. Clients keep the same labels and callback surface for local visibility and observer-awareness events.
-
-Declaring interest and reading it back are ONE type: :ref:`Netw.configure_interest()<class_Netw_method_configure_interest>` returns this handle and so does :ref:`NetwEntity.interest<class_NetwEntity_property_interest>`, so a helper takes either and a chain in :godot:`Object._init() <Object#class_Object_private_method__init>` is the same object a later frame mutates. Every verb returns the handle, so one chained expression declares an entity's layers and the callbacks that ride them.
+Get it from :ref:`Netw.configure_interest()<class_Netw_method_configure_interest>` or :ref:`NetwEntity.interest<class_NetwEntity_property_interest>`. Every method returns the handle, so calls can be chained. It is safe to call in :godot:`Object._init() <Object#class_Object_private_method__init>`, before the node is in a session. The server applies the layers, and clients keep them for their own callbacks.
 
 ::
 
@@ -31,10 +29,8 @@ Declaring interest and reading it back are ONE type: :ref:`Netw.configure_intere
                 .join(&"sight") \
                 .on_enter(_on_interest_enter)
 
-    # and the same handle, later:
+    # later
     Netw.configure_entity(self).interest.join(&"team:blue")
-
-\ The handle holds no interest state of its own. Every declaration lives on the entity's own row, which is why a chain declared before the entity attaches to a session is the state the session adopts rather than a copy it has to replay.
 
 .. rst-class:: classref-reftable-group
 
@@ -79,7 +75,7 @@ Method Descriptions
 
 :ref:`NetwEntity<class_NetwEntity>` **entity**\ (\ ) |const| :ref:`🔗<class_NetwInterestHandle_method_entity>`
 
-The :ref:`NetwEntity<class_NetwEntity>` this handle was bound to, or ``null`` once that entity is gone.
+Returns the :ref:`NetwEntity<class_NetwEntity>`, or ``null`` once it is gone.
 
 .. rst-class:: classref-item-separator
 
@@ -91,11 +87,7 @@ The :ref:`NetwEntity<class_NetwEntity>` this handle was bound to, or ``null`` on
 
 :ref:`NetwInterestHandle<class_NetwInterestHandle>` **join**\ (\ layer_id\: :godot:`StringName`, leave_policy\: :ref:`LeavePolicy<enum_NetwMultiplayer_LeavePolicy>` = -1, perception_policy\: :ref:`PerceptionPolicy<enum_NetwMultiplayer_PerceptionPolicy>` = -1\ ) :ref:`🔗<class_NetwInterestHandle_method_join>`
 
-Adds the entity to ``layer_id`` and returns this handle. Idempotent.
-
-\ ``leave_policy`` is one of :ref:`LeavePolicy<enum_NetwMultiplayer_LeavePolicy>` and ``perception_policy`` one of :ref:`PerceptionPolicy<enum_NetwMultiplayer_PerceptionPolicy>`, each declared in passing for the layer being joined. ``-1`` declares neither and leaves whatever :ref:`on_leave_policy()<class_NetwInterestHandle_method_on_leave_policy>` and :ref:`on_perception_policy()<class_NetwInterestHandle_method_on_perception_policy>` already set, which are also the door for the ``CUSTOM`` rows because those need a callback.
-
-The declaration is safe in :godot:`Object._init() <Object#class_Object_private_method__init>` on every peer. Only the server changes the live :ref:`NetwInterestLayer<class_NetwInterestLayer>` entity set.
+Adds the entity to the layer ``layer_id``. ``leave_policy`` and ``perception_policy`` set what happens when a peer stops seeing it through this layer. ``-1`` keeps the current setting. Use :ref:`on_leave_policy()<class_NetwInterestHandle_method_on_leave_policy>` and :ref:`on_perception_policy()<class_NetwInterestHandle_method_on_perception_policy>` for the custom policies.
 
 .. rst-class:: classref-item-separator
 
@@ -107,7 +99,7 @@ The declaration is safe in :godot:`Object._init() <Object#class_Object_private_m
 
 :godot:`Array`\[:godot:`StringName`\] **layer_ids**\ (\ ) |const| :ref:`🔗<class_NetwInterestHandle_method_layer_ids>`
 
-Returns a copy of the locally known layer labels.
+Returns a copy of the layer names the entity joined.
 
 .. rst-class:: classref-item-separator
 
@@ -119,7 +111,7 @@ Returns a copy of the locally known layer labels.
 
 :ref:`NetwInterestHandle<class_NetwInterestHandle>` **leave**\ (\ layer_id\: :godot:`StringName`\ ) :ref:`🔗<class_NetwInterestHandle_method_leave>`
 
-Removes the entity from ``layer_id`` and returns this handle. Idempotent.
+Removes the entity from the layer ``layer_id``.
 
 .. rst-class:: classref-item-separator
 
@@ -131,7 +123,7 @@ Removes the entity from ``layer_id`` and returns this handle. Idempotent.
 
 :ref:`NetwInterestHandle<class_NetwInterestHandle>` **of**\ (\ node\: :godot:`Node`\ ) |static| :ref:`🔗<class_NetwInterestHandle_method_of>`
 
-Ensures the entity rooted at ``node`` and returns its :ref:`NetwEntity.interest<class_NetwEntity_property_interest>`. :ref:`Netw.configure_interest()<class_Netw_method_configure_interest>` is the front door and this is what it returns. A ``node`` that roots no entity is reported and returned ``null``.
+Same as :ref:`Netw.configure_interest()<class_Netw_method_configure_interest>`. Returns ``null`` and pushes an error when ``node`` is not an entity root.
 
 .. rst-class:: classref-item-separator
 
@@ -143,9 +135,7 @@ Ensures the entity rooted at ``node`` and returns its :ref:`NetwEntity.interest<
 
 :ref:`NetwInterestHandle<class_NetwInterestHandle>` **on_enter**\ (\ callback\: :godot:`Callable`, layer_id\: :godot:`StringName` = &""\ ) :ref:`🔗<class_NetwInterestHandle_method_on_enter>`
 
-Calls ``callback`` with ``(layer_id, peer_id)`` whenever this entity becomes visible through ``layer_id``, and returns this handle.
-
-An empty ``layer_id`` registers ``callback`` against every layer :ref:`layer_ids()<class_NetwInterestHandle_method_layer_ids>` currently returns, which is what lets one chain declare a set of layers and then give them all one callback. It reads what the entity has joined, not what this expression joined, so a callback declared after a later :ref:`join()<class_NetwInterestHandle_method_join>` does not reach back to it.
+Calls ``callback`` as ``callback(layer_id, peer_id)`` when a peer starts seeing the entity through ``layer_id``. An empty ``layer_id`` means every layer joined so far.
 
 .. rst-class:: classref-item-separator
 
@@ -157,9 +147,7 @@ An empty ``layer_id`` registers ``callback`` against every layer :ref:`layer_ids
 
 :ref:`NetwInterestHandle<class_NetwInterestHandle>` **on_leave**\ (\ callback\: :godot:`Callable`, layer_id\: :godot:`StringName` = &""\ ) :ref:`🔗<class_NetwInterestHandle_method_on_leave>`
 
-Calls ``callback`` with ``(layer_id, peer_id)`` whenever this entity stops being visible through ``layer_id``, and returns this handle.
-
-An empty ``layer_id`` registers against every layer :ref:`layer_ids()<class_NetwInterestHandle_method_layer_ids>` currently returns, as :ref:`on_enter()<class_NetwInterestHandle_method_on_enter>` does.
+Calls ``callback`` as ``callback(layer_id, peer_id)`` when a peer stops seeing the entity through ``layer_id``. An empty ``layer_id`` means every layer joined so far.
 
 .. rst-class:: classref-item-separator
 
@@ -171,9 +159,7 @@ An empty ``layer_id`` registers against every layer :ref:`layer_ids()<class_Netw
 
 :ref:`NetwInterestHandle<class_NetwInterestHandle>` **on_leave_policy**\ (\ layer_id\: :godot:`StringName`, policy\: :ref:`LeavePolicy<enum_NetwMultiplayer_LeavePolicy>`, custom_callback\: :godot:`Callable` = Callable()\ ) :ref:`🔗<class_NetwInterestHandle_method_on_leave_policy>`
 
-Overrides the wire behavior for ``layer_id`` with one of :ref:`LeavePolicy<enum_NetwMultiplayer_LeavePolicy>`, and returns this handle.
-
-\ :ref:`NetwMultiplayer.LEAVE_POLICY_CUSTOM<class_NetwMultiplayer_constant_LEAVE_POLICY_CUSTOM>` requires ``custom_callback``, called with ``(peer_id, layer_id)`` on the server. Other policies reject a callback.
+Sets what happens to a peer's copy when it stops seeing the entity through ``layer_id``. :ref:`NetwMultiplayer.LEAVE_POLICY_CUSTOM<class_NetwMultiplayer_constant_LEAVE_POLICY_CUSTOM>` requires ``custom_callback``, called on the server as ``custom_callback(peer_id, layer_id)``.
 
 .. rst-class:: classref-item-separator
 
@@ -185,9 +171,7 @@ Overrides the wire behavior for ``layer_id`` with one of :ref:`LeavePolicy<enum_
 
 :ref:`NetwInterestHandle<class_NetwInterestHandle>` **on_perception_policy**\ (\ layer_id\: :godot:`StringName`, policy\: :ref:`PerceptionPolicy<enum_NetwMultiplayer_PerceptionPolicy>`, custom_callback\: :godot:`Callable` = Callable()\ ) :ref:`🔗<class_NetwInterestHandle_method_on_perception_policy>`
 
-Overrides local presentation behavior for ``layer_id`` with one of :ref:`PerceptionPolicy<enum_NetwMultiplayer_PerceptionPolicy>`, and returns this handle.
-
-\ :ref:`NetwMultiplayer.PERCEPTION_POLICY_CUSTOM<class_NetwMultiplayer_constant_PERCEPTION_POLICY_CUSTOM>` requires ``custom_callback``. The callback receives ``(visible, peer_id, layer_id)`` on both local player edges. Other policies reject a callback.
+Sets whether this peer keeps showing the entity when it stops seeing it through ``layer_id``. :ref:`NetwMultiplayer.PERCEPTION_POLICY_CUSTOM<class_NetwMultiplayer_constant_PERCEPTION_POLICY_CUSTOM>` requires ``custom_callback``, called as ``custom_callback(visible, peer_id, layer_id)``.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

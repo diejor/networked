@@ -49,7 +49,7 @@ Method Descriptions
 
 |void| **set_placeholder**\ (\ text\: :godot:`String`\ ) :ref:`🔗<class_addons_networked_gdscript_connect_ui_string_list_edit_gd_method_set_placeholder>`
 
-The hint an empty row shows. A form sets it before the control is mounted, so it is remembered and applied to rows added later.
+Sets the placeholder text of every row, including rows added later.
 
 .. rst-class:: classref-item-separator
 
@@ -61,7 +61,7 @@ The hint an empty row shows. A form sets it before the control is mounted, so it
 
 |void| **set_value**\ (\ entries\: :godot:`Variant`\ ) :ref:`🔗<class_addons_networked_gdscript_connect_ui_string_list_edit_gd_method_set_value>`
 
-Replaces every row with one per entry of ``entries``, which may be a :godot:`PackedStringArray` or an :godot:`Array`.
+Replaces the rows with ``entries``, a :godot:`PackedStringArray` or an :godot:`Array`.
 
 .. rst-class:: classref-item-separator
 
@@ -73,7 +73,7 @@ Replaces every row with one per entry of ``entries``, which may be a :godot:`Pac
 
 :godot:`PackedStringArray` **get_value**\ (\ ) :ref:`🔗<class_addons_networked_gdscript_connect_ui_string_list_edit_gd_method_get_value>`
 
-The rows as a :godot:`PackedStringArray`, dropping any left blank.
+Returns the rows that are not empty.
 
 .. rst-class:: classref-item-separator
 

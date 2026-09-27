@@ -12,24 +12,14 @@ SteamLobbyDirectory
 
 **Inherits:** :ref:`LobbyDirectory<class_LobbyDirectory>` **<** :ref:`NetwService<class_NetwService>` **<** :godot:`Node`
 
-The :ref:`LobbyDirectory<class_LobbyDirectory>` over Steam's P2P matchmaking.
+A :ref:`LobbyDirectory<class_LobbyDirectory>` that hosts, joins and lists Steam lobbies.
 
 .. rst-class:: classref-introduction-group
 
 Description
 -----------
 
-Owns the :ref:`SteamWrapper<class_SteamWrapper>`, runs Steam callbacks, and publishes the peer class ``SteamMultiplayerPeer``, so a session that holds this node hosts and joins Steam lobbies through the connect plane with nothing else registered. A lobby's address is its Steam lobby id. 
-
-Only one instance may exist per process. :ref:`browser_filter_uid<class_SteamLobbyDirectory_property_browser_filter_uid>` tags hosted lobbies so browsers only return lobbies created by the same game.
-
-::
-
-    MultiplayerTree
-    └── SteamLobbyDirectory
-        ├── _list_lobbies() -> publish_lobbies(ids, names, infos)
-        ├── _host_lobby(settings) -> deliver(SteamMultiplayerPeer)
-        └── _join_lobby(id) -> deliver(SteamMultiplayerPeer)
+Add it under a :ref:`MultiplayerTree<class_MultiplayerTree>` to use Steam lobbies with ``SteamMultiplayerPeer``. A lobby's address is its Steam lobby id.  Steam allows one instance per process, so a second one frees itself.
 
 .. rst-class:: classref-reftable-group
 
@@ -61,39 +51,13 @@ Methods
 .. table::
    :widths: auto
 
-   +---------------------------------------------------+----------------------------------------------------------------------------------------------------------------+
-   | :godot:`bool`                                     | :ref:`is_ready<class_SteamLobbyDirectory_method_is_ready>`\ (\ )                                               |
-   +---------------------------------------------------+----------------------------------------------------------------------------------------------------------------+
-   | :ref:`Capability<enum_LobbyDirectory_Capability>` | :ref:`_capabilities<class_SteamLobbyDirectory_private_method__capabilities>`\ (\ )                             |
-   +---------------------------------------------------+----------------------------------------------------------------------------------------------------------------+
-   | :godot:`int`                                      | :ref:`get_lobby_id<class_SteamLobbyDirectory_method_get_lobby_id>`\ (\ )                                       |
-   +---------------------------------------------------+----------------------------------------------------------------------------------------------------------------+
-   | :godot:`String`                                   | :ref:`get_persona_name<class_SteamLobbyDirectory_method_get_persona_name>`\ (\ )                               |
-   +---------------------------------------------------+----------------------------------------------------------------------------------------------------------------+
-   | :godot:`String`                                   | :ref:`_member_name<class_SteamLobbyDirectory_private_method__member_name>`\ (\ peer_id\: :godot:`int`\ )       |
-   +---------------------------------------------------+----------------------------------------------------------------------------------------------------------------+
-   | :godot:`String`                                   | :ref:`_local_member_name<class_SteamLobbyDirectory_private_method__local_member_name>`\ (\ )                   |
-   +---------------------------------------------------+----------------------------------------------------------------------------------------------------------------+
-   | :godot:`String`                                   | :ref:`_display_name<class_SteamLobbyDirectory_private_method__display_name>`\ (\ )                             |
-   +---------------------------------------------------+----------------------------------------------------------------------------------------------------------------+
-   | :godot:`bool`                                     | :ref:`_is_available<class_SteamLobbyDirectory_private_method__is_available>`\ (\ )                             |
-   +---------------------------------------------------+----------------------------------------------------------------------------------------------------------------+
-   | :godot:`String`                                   | :ref:`_address_label<class_SteamLobbyDirectory_private_method__address_label>`\ (\ )                           |
-   +---------------------------------------------------+----------------------------------------------------------------------------------------------------------------+
-   | :godot:`String`                                   | :ref:`_address_help<class_SteamLobbyDirectory_private_method__address_help>`\ (\ )                             |
-   +---------------------------------------------------+----------------------------------------------------------------------------------------------------------------+
-   | |void|                                            | :ref:`_list_lobbies<class_SteamLobbyDirectory_private_method__list_lobbies>`\ (\ )                             |
-   +---------------------------------------------------+----------------------------------------------------------------------------------------------------------------+
-   | |void|                                            | :ref:`_leave_lobby<class_SteamLobbyDirectory_private_method__leave_lobby>`\ (\ )                               |
-   +---------------------------------------------------+----------------------------------------------------------------------------------------------------------------+
-   | :godot:`StringName`                               | :ref:`_peer_class<class_SteamLobbyDirectory_private_method__peer_class>`\ (\ )                                 |
-   +---------------------------------------------------+----------------------------------------------------------------------------------------------------------------+
-   | :godot:`String`                                   | :ref:`_join_address<class_SteamLobbyDirectory_private_method__join_address>`\ (\ )                             |
-   +---------------------------------------------------+----------------------------------------------------------------------------------------------------------------+
-   | |void|                                            | :ref:`_host_lobby<class_SteamLobbyDirectory_private_method__host_lobby>`\ (\ settings\: :godot:`Dictionary`\ ) |
-   +---------------------------------------------------+----------------------------------------------------------------------------------------------------------------+
-   | |void|                                            | :ref:`_join_lobby<class_SteamLobbyDirectory_private_method__join_lobby>`\ (\ address\: :godot:`String`\ )      |
-   +---------------------------------------------------+----------------------------------------------------------------------------------------------------------------+
+   +-----------------+----------------------------------------------------------------------------------+
+   | :godot:`bool`   | :ref:`is_ready<class_SteamLobbyDirectory_method_is_ready>`\ (\ )                 |
+   +-----------------+----------------------------------------------------------------------------------+
+   | :godot:`int`    | :ref:`get_lobby_id<class_SteamLobbyDirectory_method_get_lobby_id>`\ (\ )         |
+   +-----------------+----------------------------------------------------------------------------------+
+   | :godot:`String` | :ref:`get_persona_name<class_SteamLobbyDirectory_method_get_persona_name>`\ (\ ) |
+   +-----------------+----------------------------------------------------------------------------------+
 
 .. rst-class:: classref-section-separator
 
@@ -110,7 +74,7 @@ Signals
 
 **peer_connect_failed**\ (\ reason\: :godot:`String`\ ) :ref:`🔗<class_SteamLobbyDirectory_signal_peer_connect_failed>`
 
-Emitted when Steam reports a connection failure during :ref:`_join_lobby()<class_SteamLobbyDirectory_private_method__join_lobby>`.
+Emitted when Steam reports a connection failure during :godot:`Node._join_lobby() <Node#class_Node_private_method__join_lobby>`.
 
 .. rst-class:: classref-section-separator
 
@@ -172,7 +136,7 @@ Property Descriptions
 
 :godot:`int` **max_clients** = ``8`` :ref:`🔗<class_SteamLobbyDirectory_property_max_clients>`
 
-Maximum number of simultaneous lobby members.
+The player limit, when the host sets none.
 
 .. rst-class:: classref-item-separator
 
@@ -184,7 +148,7 @@ Maximum number of simultaneous lobby members.
 
 :godot:`String` **browser_filter_uid** = ``"networked"`` :ref:`🔗<class_SteamLobbyDirectory_property_browser_filter_uid>`
 
-Tag stored under the ``uid`` lobby key. Browser filters on this so different games don't pollute each other's lobby lists.
+Only lobbies with the same tag are listed, so games do not see each other's lobbies.
 
 .. rst-class:: classref-item-separator
 
@@ -196,7 +160,7 @@ Tag stored under the ``uid`` lobby key. Browser filters on this so different gam
 
 :godot:`bool` **disable_nagle** = ``true`` :ref:`🔗<class_SteamLobbyDirectory_property_disable_nagle>`
 
-If ``true``, disables Nagle's algorithm on the produced peer.
+Disables Nagle's algorithm on the peer.
 
 .. rst-class:: classref-item-separator
 
@@ -208,7 +172,7 @@ If ``true``, disables Nagle's algorithm on the produced peer.
 
 :godot:`bool` **allow_p2p_relay** = ``true`` :ref:`🔗<class_SteamLobbyDirectory_property_allow_p2p_relay>`
 
-If ``true``, allows Steam to relay traffic when direct P2P fails.
+Lets Steam relay traffic when a direct connection fails.
 
 .. rst-class:: classref-item-separator
 
@@ -220,7 +184,7 @@ If ``true``, allows Steam to relay traffic when direct P2P fails.
 
 :godot:`bool` **allow_spacewar_fallback** = ``false`` :ref:`🔗<class_SteamLobbyDirectory_property_allow_spacewar_fallback>`
 
-If ``true``, uses Spacewar when ``steam/initialization/app_id`` is missing, empty, or ``0``. This runtime fallback does not save project settings.
+Uses the Spacewar test app when ``steam/initialization/app_id`` is not set. The project settings are not changed.
 
 .. rst-class:: classref-item-separator
 
@@ -232,7 +196,7 @@ If ``true``, uses Spacewar when ``steam/initialization/app_id`` is missing, empt
 
 :godot:`bool` **reject_own_lobbies** = ``true`` :ref:`🔗<class_SteamLobbyDirectory_property_reject_own_lobbies>`
 
-When ``true``, lobbies owned by the local Steam account are hidden and rejected. Steam does not support testing two local peers through one account reliably.
+Hides lobbies hosted by your own Steam account, since one account cannot reliably join itself.
 
 .. rst-class:: classref-section-separator
 
@@ -250,18 +214,6 @@ Method Descriptions
 :godot:`bool` **is_ready**\ (\ ) :ref:`🔗<class_SteamLobbyDirectory_method_is_ready>`
 
 Returns ``true`` if Steam initialized successfully.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_SteamLobbyDirectory_private_method__capabilities:
-
-.. rst-class:: classref-method
-
-:ref:`Capability<enum_LobbyDirectory_Capability>` **_capabilities**\ (\ ) :ref:`🔗<class_SteamLobbyDirectory_private_method__capabilities>`
-
-Steam backs every lobby tier: browse, friends-only visibility, overlay invites, and persona resolution.
 
 .. rst-class:: classref-item-separator
 
@@ -286,150 +238,6 @@ Returns the active lobby ID, or ``0`` when no lobby is joined.
 :godot:`String` **get_persona_name**\ (\ ) :ref:`🔗<class_SteamLobbyDirectory_method_get_persona_name>`
 
 Returns the local user's display name.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_SteamLobbyDirectory_private_method__member_name:
-
-.. rst-class:: classref-method
-
-:godot:`String` **_member_name**\ (\ peer_id\: :godot:`int`\ ) :ref:`🔗<class_SteamLobbyDirectory_private_method__member_name>`
-
-Resolves ``peer_id`` to a Steam persona name when possible.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_SteamLobbyDirectory_private_method__local_member_name:
-
-.. rst-class:: classref-method
-
-:godot:`String` **_local_member_name**\ (\ ) :ref:`🔗<class_SteamLobbyDirectory_private_method__local_member_name>`
-
-Returns the local Steam persona name.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_SteamLobbyDirectory_private_method__display_name:
-
-.. rst-class:: classref-method
-
-:godot:`String` **_display_name**\ (\ ) :ref:`🔗<class_SteamLobbyDirectory_private_method__display_name>`
-
-Browsers name this provider "Steam".
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_SteamLobbyDirectory_private_method__is_available:
-
-.. rst-class:: classref-method
-
-:godot:`bool` **_is_available**\ (\ ) :ref:`🔗<class_SteamLobbyDirectory_private_method__is_available>`
-
-Steam has no web export, so nothing here works on one.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_SteamLobbyDirectory_private_method__address_label:
-
-.. rst-class:: classref-method
-
-:godot:`String` **_address_label**\ (\ ) :ref:`🔗<class_SteamLobbyDirectory_private_method__address_label>`
-
-A Steam address is a lobby id.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_SteamLobbyDirectory_private_method__address_help:
-
-.. rst-class:: classref-method
-
-:godot:`String` **_address_help**\ (\ ) :ref:`🔗<class_SteamLobbyDirectory_private_method__address_help>`
-
-Points a player at the browser rather than at a field they cannot fill.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_SteamLobbyDirectory_private_method__list_lobbies:
-
-.. rst-class:: classref-method
-
-|void| **_list_lobbies**\ (\ ) :ref:`🔗<class_SteamLobbyDirectory_private_method__list_lobbies>`
-
-Requests Steam lobby rows for :ref:`browser_filter_uid<class_SteamLobbyDirectory_property_browser_filter_uid>`.  Results arrive through :ref:`LobbyDirectory.publish_lobbies()<class_LobbyDirectory_method_publish_lobbies>`.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_SteamLobbyDirectory_private_method__leave_lobby:
-
-.. rst-class:: classref-method
-
-|void| **_leave_lobby**\ (\ ) :ref:`🔗<class_SteamLobbyDirectory_private_method__leave_lobby>`
-
-Leaves the active Steam lobby and clears the current peer.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_SteamLobbyDirectory_private_method__peer_class:
-
-.. rst-class:: classref-method
-
-:godot:`StringName` **_peer_class**\ (\ ) :ref:`🔗<class_SteamLobbyDirectory_private_method__peer_class>`
-
-Steam lobbies join through ``SteamMultiplayerPeer`` by lobby id.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_SteamLobbyDirectory_private_method__join_address:
-
-.. rst-class:: classref-method
-
-:godot:`String` **_join_address**\ (\ ) :ref:`🔗<class_SteamLobbyDirectory_private_method__join_address>`
-
-Returns the lobby id others join this host by, or empty outside a lobby.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_SteamLobbyDirectory_private_method__host_lobby:
-
-.. rst-class:: classref-method
-
-|void| **_host_lobby**\ (\ settings\: :godot:`Dictionary`\ ) :ref:`🔗<class_SteamLobbyDirectory_private_method__host_lobby>`
-
-Creates a Steam lobby and delivers its connected host peer.  The advert key ``visibility`` maps to a Steam lobby type, and ``max_players`` falls back to :ref:`max_clients<class_SteamLobbyDirectory_property_max_clients>` when it is absent or ``0``.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_SteamLobbyDirectory_private_method__join_lobby:
-
-.. rst-class:: classref-method
-
-|void| **_join_lobby**\ (\ address\: :godot:`String`\ ) :ref:`🔗<class_SteamLobbyDirectory_private_method__join_lobby>`
-
-Joins the Steam lobby ``address`` names and delivers its connected peer.  Reports a failure when Steam is unavailable, the id is unreadable, the local account owns the lobby, the P2P session collapses, or the join times out.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

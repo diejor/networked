@@ -12,14 +12,14 @@ AddPopup
 
 **Inherits:** :godot:`PopupPanel`
 
-Modal form for adding and editing endpoints in the :ref:`ConnectBrowser<class_ConnectBrowser>`.
+A form to add or edit a saved server in the :ref:`ConnectBrowser<class_ConnectBrowser>`.
 
 .. rst-class:: classref-introduction-group
 
 Description
 -----------
 
-Renders one field per key of the ``client_settings`` entry of :ref:`NetwConnectHandle.transport()<class_NetwConnectHandle_method_transport>` for the picked backend, so a bookmark remembers the tracker or port it was reached on.
+Shows the client settings of the chosen transport, which are saved with the server.
 
 .. rst-class:: classref-reftable-group
 
@@ -100,7 +100,7 @@ Method Descriptions
 
 |void| **open_add**\ (\ handle\: :ref:`NetwConnectHandle<class_NetwConnectHandle>`\ ) :ref:`🔗<class_AddPopup_method_open_add>`
 
-Opens the popup as an empty Add Server form, offering the backends ``handle`` reports.
+Opens an empty form to add a server.
 
 .. rst-class:: classref-item-separator
 
@@ -112,7 +112,7 @@ Opens the popup as an empty Add Server form, offering the backends ``handle`` re
 
 |void| **open_edit**\ (\ handle\: :ref:`NetwConnectHandle<class_NetwConnectHandle>`, peer_class\: :godot:`StringName`, address\: :godot:`String`, authored\: :godot:`Dictionary` = {}\ ) :ref:`🔗<class_AddPopup_method_open_edit>`
 
-Opens the popup as an Edit form populated from the endpoint ``peer_class`` and ``address`` name on ``handle``, with the settings ``authored`` holding whatever that bookmark was last saved with.
+Opens the form to edit the saved server at ``peer_class`` and ``address``, filled with its saved ``authored`` settings.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

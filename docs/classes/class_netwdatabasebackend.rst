@@ -71,7 +71,7 @@ Method Descriptions
 
 :ref:`NetwPromise<class_NetwPromise>` **_delete_slot**\ (\ session\: :godot:`Object`, slot\: :godot:`StringName`\ ) |virtual| :ref:`🔗<class_NetwDatabaseBackend_private_method__delete_slot>`
 
-Removes ``slot`` and resolves an :godot:`@GlobalScope.Error <@GlobalScope#enum_@globalscope_Error>`, which :ref:`NetwDatabase.delete_slot()<class_NetwDatabase_method_delete_slot>` settles with. Resolve an error when the slot could not be fully removed. ``session`` is the :ref:`NetwMultiplayer<class_NetwMultiplayer>` asking.
+Removes ``slot`` and resolves an :godot:`@GlobalScope.Error <@GlobalScope#enum_@globalscope_Error>`, which :ref:`NetwDatabase.delete_slot()<class_NetwDatabase_method_delete_slot>` gives. Resolve an error when the slot could not be fully removed. ``session`` is the :ref:`NetwMultiplayer<class_NetwMultiplayer>` asking.
 
 .. rst-class:: classref-item-separator
 
@@ -83,7 +83,7 @@ Removes ``slot`` and resolves an :godot:`@GlobalScope.Error <@GlobalScope#enum_@
 
 :ref:`NetwPromise<class_NetwPromise>` **_list_slots**\ (\ session\: :godot:`Object`\ ) |virtual| :ref:`🔗<class_NetwDatabaseBackend_private_method__list_slots>`
 
-Resolves a :godot:`PackedStringArray` of every slot in storage, including ones written by earlier runs. :ref:`NetwDatabase.list_slots()<class_NetwDatabase_method_list_slots>` settles with it. ``session`` is the :ref:`NetwMultiplayer<class_NetwMultiplayer>` asking.
+Resolves a :godot:`PackedStringArray` of every slot in storage, including ones written by earlier runs. :ref:`NetwDatabase.list_slots()<class_NetwDatabase_method_list_slots>` gives it. ``session`` is the :ref:`NetwMultiplayer<class_NetwMultiplayer>` asking.
 
 .. rst-class:: classref-item-separator
 

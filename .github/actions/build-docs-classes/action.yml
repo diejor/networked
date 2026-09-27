@@ -33,6 +33,7 @@ runs:
         cell: linux:x86_64:template_debug
         platform: linux
         suffix: .linux.template_debug.x86_64
+        scons-args: netw_tests=yes
         python-version: ${{ inputs.python-version }}
 
     - name: Cache Godot binary

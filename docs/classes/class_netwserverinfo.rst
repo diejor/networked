@@ -12,16 +12,14 @@ NetwServerInfo
 
 **Inherits:** :godot:`Resource`
 
-The server metadata an ``NPRB`` probe reply carries.
+What a server tells a server browser about itself.
 
 .. rst-class:: classref-introduction-group
 
 Description
 -----------
 
-A probe asks a host what it is without joining it, and this is the result: the fields a browser row needs to decide whether to connect at all. It is a plain record with a codec, so the same object crosses the wire and fills a list entry.
-
-A session with no declared provider returns :ref:`from_session()<class_NetwServerInfo_method_from_session>`. A game that wants more declares one through :ref:`Netw.configure_server_info()<class_Netw_method_configure_server_info>`, and is handed that same base record to edit rather than an API to read.
+A server browser can check a server without joining it, and gets one of these back. By default it is :ref:`from_session()<class_NetwServerInfo_method_from_session>`. Use :ref:`Netw.configure_server_info()<class_Netw_method_configure_server_info>` to change it.
 
 ::
 
@@ -33,9 +31,7 @@ A session with no declared provider returns :ref:`from_session()<class_NetwServe
         info.game_mode = &"ranked"
         return info
 
-\ Returning ``null`` or anything that is not a **NetwServerInfo** is a defect rather than a request for the default: the probe returns :ref:`NetwAuthProtocol.PROBE_ERROR<class_NetwAuthProtocol_constant_PROBE_ERROR>`, so a browser row reads a broken host as broken instead of as an empty one.
-
-\ :ref:`metadata<class_NetwServerInfo_property_metadata>` is the open field: anything a game wants a browser to read that the named fields do not carry, encoded and decoded with the rest of the record.
+\ Returning anything but a **NetwServerInfo** makes the browser show the server as broken. Put any extra values in :ref:`metadata<class_NetwServerInfo_property_metadata>`.
 
 .. rst-class:: classref-reftable-group
 
@@ -45,27 +41,27 @@ Properties
 .. table::
    :widths: auto
 
-   +---------------------+---------------------------------------------------------------------------+-----------+
-   | :godot:`StringName` | :ref:`app_id<class_NetwServerInfo_property_app_id>`                       | ``&""``   |
-   +---------------------+---------------------------------------------------------------------------+-----------+
-   | :godot:`StringName` | :ref:`game_mode<class_NetwServerInfo_property_game_mode>`                 | ``&""``   |
-   +---------------------+---------------------------------------------------------------------------+-----------+
-   | :godot:`bool`       | :ref:`is_local_listener<class_NetwServerInfo_property_is_local_listener>` | ``false`` |
-   +---------------------+---------------------------------------------------------------------------+-----------+
-   | :godot:`int`        | :ref:`latency_ms<class_NetwServerInfo_property_latency_ms>`               | ``-1``    |
-   +---------------------+---------------------------------------------------------------------------+-----------+
-   | :godot:`int`        | :ref:`max_players<class_NetwServerInfo_property_max_players>`             | ``0``     |
-   +---------------------+---------------------------------------------------------------------------+-----------+
-   | :godot:`Dictionary` | :ref:`metadata<class_NetwServerInfo_property_metadata>`                   | ``{}``    |
-   +---------------------+---------------------------------------------------------------------------+-----------+
-   | :godot:`String`     | :ref:`motd<class_NetwServerInfo_property_motd>`                           | ``""``    |
-   +---------------------+---------------------------------------------------------------------------+-----------+
-   | :godot:`int`        | :ref:`players<class_NetwServerInfo_property_players>`                     | ``0``     |
-   +---------------------+---------------------------------------------------------------------------+-----------+
-   | :godot:`String`     | :ref:`version<class_NetwServerInfo_property_version>`                     | ``""``    |
-   +---------------------+---------------------------------------------------------------------------+-----------+
-   | :godot:`int`        | :ref:`visibility<class_NetwServerInfo_property_visibility>`               | ``0``     |
-   +---------------------+---------------------------------------------------------------------------+-----------+
+   +---------------------------------------------------+---------------------------------------------------------------------------+-----------+
+   | :godot:`StringName`                               | :ref:`app_id<class_NetwServerInfo_property_app_id>`                       | ``&""``   |
+   +---------------------------------------------------+---------------------------------------------------------------------------+-----------+
+   | :godot:`StringName`                               | :ref:`game_mode<class_NetwServerInfo_property_game_mode>`                 | ``&""``   |
+   +---------------------------------------------------+---------------------------------------------------------------------------+-----------+
+   | :godot:`bool`                                     | :ref:`is_local_listener<class_NetwServerInfo_property_is_local_listener>` | ``false`` |
+   +---------------------------------------------------+---------------------------------------------------------------------------+-----------+
+   | :godot:`int`                                      | :ref:`latency_ms<class_NetwServerInfo_property_latency_ms>`               | ``-1``    |
+   +---------------------------------------------------+---------------------------------------------------------------------------+-----------+
+   | :godot:`int`                                      | :ref:`max_players<class_NetwServerInfo_property_max_players>`             | ``0``     |
+   +---------------------------------------------------+---------------------------------------------------------------------------+-----------+
+   | :godot:`Dictionary`                               | :ref:`metadata<class_NetwServerInfo_property_metadata>`                   | ``{}``    |
+   +---------------------------------------------------+---------------------------------------------------------------------------+-----------+
+   | :godot:`String`                                   | :ref:`motd<class_NetwServerInfo_property_motd>`                           | ``""``    |
+   +---------------------------------------------------+---------------------------------------------------------------------------+-----------+
+   | :godot:`int`                                      | :ref:`players<class_NetwServerInfo_property_players>`                     | ``0``     |
+   +---------------------------------------------------+---------------------------------------------------------------------------+-----------+
+   | :godot:`String`                                   | :ref:`version<class_NetwServerInfo_property_version>`                     | ``""``    |
+   +---------------------------------------------------+---------------------------------------------------------------------------+-----------+
+   | :ref:`Visibility<enum_NetwServerInfo_Visibility>` | :ref:`visibility<class_NetwServerInfo_property_visibility>`               | ``0``     |
+   +---------------------------------------------------+---------------------------------------------------------------------------+-----------+
 
 .. rst-class:: classref-reftable-group
 
@@ -104,7 +100,7 @@ enum **Visibility**: :ref:`🔗<enum_NetwServerInfo_Visibility>`
 
 :ref:`Visibility<enum_NetwServerInfo_Visibility>` **VISIBILITY_PUBLIC** = ``0``
 
-Listed to anyone browsing.
+Listed to everyone.
 
 .. _class_NetwServerInfo_constant_VISIBILITY_FRIENDS_ONLY:
 
@@ -112,7 +108,7 @@ Listed to anyone browsing.
 
 :ref:`Visibility<enum_NetwServerInfo_Visibility>` **VISIBILITY_FRIENDS_ONLY** = ``1``
 
-Listed only to players the host's platform calls friends. A directory with no such notion treats it as :ref:`VISIBILITY_PRIVATE<class_NetwServerInfo_constant_VISIBILITY_PRIVATE>`.
+Listed only to friends, on services that have friends. Otherwise the same as :ref:`VISIBILITY_PRIVATE<class_NetwServerInfo_constant_VISIBILITY_PRIVATE>`.
 
 .. _class_NetwServerInfo_constant_VISIBILITY_PRIVATE:
 
@@ -120,7 +116,7 @@ Listed only to players the host's platform calls friends. A directory with no su
 
 :ref:`Visibility<enum_NetwServerInfo_Visibility>` **VISIBILITY_PRIVATE** = ``2``
 
-Not listed at all. The host is still joinable by anyone holding its address.
+Not listed. Anyone with the address can still join.
 
 .. rst-class:: classref-section-separator
 
@@ -142,7 +138,7 @@ Property Descriptions
 - |void| **set_app_id**\ (\ value\: :godot:`StringName`\ )
 - :godot:`StringName` **get_app_id**\ (\ )
 
-The application tag the host gates joins on, so a browser can hide a host running a different game or a different build.
+The game and build the server runs. A browser can hide servers of another game or build.
 
 .. rst-class:: classref-item-separator
 
@@ -159,7 +155,7 @@ The application tag the host gates joins on, so a browser can hide a host runnin
 - |void| **set_game_mode**\ (\ value\: :godot:`StringName`\ )
 - :godot:`StringName` **get_game_mode**\ (\ )
 
-The mode the host is running, as the game names it. Unset by the built-in provider.
+The game mode, named by the game.
 
 .. rst-class:: classref-item-separator
 
@@ -176,7 +172,7 @@ The mode the host is running, as the game names it. Unset by the built-in provid
 - |void| **set_is_local_listener**\ (\ value\: :godot:`bool`\ )
 - :godot:`bool` **get_is_local_listener**\ (\ )
 
-Whether this record came from a live host rather than a directory listing.
+``true`` when the server itself answered, not a lobby listing.
 
 .. rst-class:: classref-item-separator
 
@@ -193,7 +189,7 @@ Whether this record came from a live host rather than a directory listing.
 - |void| **set_latency_ms**\ (\ value\: :godot:`int`\ )
 - :godot:`int` **get_latency_ms**\ (\ )
 
-The round trip :ref:`NetwMultiplayer.endpoint_probe()<class_NetwMultiplayer_method_endpoint_probe>` measured reaching this host, in milliseconds. ``-1`` means unmeasured, which is what a row assembled from a listing carries.
+The round trip time to the server in milliseconds, or ``-1`` when not measured.
 
 .. rst-class:: classref-item-separator
 
@@ -210,7 +206,7 @@ The round trip :ref:`NetwMultiplayer.endpoint_probe()<class_NetwMultiplayer_meth
 - |void| **set_max_players**\ (\ value\: :godot:`int`\ )
 - :godot:`int` **get_max_players**\ (\ )
 
-The cap the host advertises. Advisory: the host's own admission decides.
+The most players the server says it accepts. For display only.
 
 .. rst-class:: classref-item-separator
 
@@ -227,7 +223,7 @@ The cap the host advertises. Advisory: the host's own admission decides.
 - |void| **set_metadata**\ (\ value\: :godot:`Dictionary`\ )
 - :godot:`Dictionary` **get_metadata**\ (\ )
 
-Free-form fields a game adds to the reply. Carried through the codec untouched.
+Any extra values for the browser.
 
 .. rst-class:: classref-item-separator
 
@@ -244,7 +240,7 @@ Free-form fields a game adds to the reply. Carried through the codec untouched.
 - |void| **set_motd**\ (\ value\: :godot:`String`\ )
 - :godot:`String` **get_motd**\ (\ )
 
-The message the host shows in a browser row. Unset by the built-in provider.
+A message shown in the server browser.
 
 .. rst-class:: classref-item-separator
 
@@ -261,7 +257,7 @@ The message the host shows in a browser row. Unset by the built-in provider.
 - |void| **set_players**\ (\ value\: :godot:`int`\ )
 - :godot:`int` **get_players**\ (\ )
 
-The live player count at the moment the reply was built.
+The number of connected players.
 
 .. rst-class:: classref-item-separator
 
@@ -278,7 +274,7 @@ The live player count at the moment the reply was built.
 - |void| **set_version**\ (\ value\: :godot:`String`\ )
 - :godot:`String` **get_version**\ (\ )
 
-The build string the game publishes. Unset by the built-in provider.
+The game version.
 
 .. rst-class:: classref-item-separator
 
@@ -288,14 +284,14 @@ The build string the game publishes. Unset by the built-in provider.
 
 .. rst-class:: classref-property
 
-:godot:`int` **visibility** = ``0`` :ref:`🔗<class_NetwServerInfo_property_visibility>`
+:ref:`Visibility<enum_NetwServerInfo_Visibility>` **visibility** = ``0`` :ref:`🔗<class_NetwServerInfo_property_visibility>`
 
 .. rst-class:: classref-property-setget
 
-- |void| **set_visibility**\ (\ value\: :godot:`int`\ )
-- :godot:`int` **get_visibility**\ (\ )
+- |void| **set_visibility**\ (\ value\: :ref:`Visibility<enum_NetwServerInfo_Visibility>`\ )
+- :ref:`Visibility<enum_NetwServerInfo_Visibility>` **get_visibility**\ (\ )
 
-How widely the host asked to be listed, as a :ref:`Visibility<enum_NetwServerInfo_Visibility>`. What a directory does with anything but :ref:`VISIBILITY_PUBLIC<class_NetwServerInfo_constant_VISIBILITY_PUBLIC>` belongs to that directory: this says what the host asked for, not what any service enforces.
+Who the server asks to be listed to. Each :ref:`LobbyDirectory<class_LobbyDirectory>` decides how to honor it.
 
 .. rst-class:: classref-section-separator
 
@@ -312,7 +308,7 @@ Method Descriptions
 
 :ref:`NetwServerInfo<class_NetwServerInfo>` **from_payload**\ (\ bytes\: :godot:`PackedByteArray`\ ) |static| :ref:`🔗<class_NetwServerInfo_method_from_payload>`
 
-Decodes ``bytes`` into a fresh record, or ``null`` when ``bytes`` is empty or does not carry one.
+Reads a **NetwServerInfo** from ``bytes``, or returns ``null``.
 
 .. rst-class:: classref-item-separator
 
@@ -324,9 +320,7 @@ Decodes ``bytes`` into a fresh record, or ``null`` when ``bytes`` is empty or do
 
 :ref:`NetwServerInfo<class_NetwServerInfo>` **from_session**\ (\ api\: :ref:`NetwMultiplayer<class_NetwMultiplayer>`\ ) |static| :ref:`🔗<class_NetwServerInfo_method_from_session>`
 
-The default probe reply: a copy of :ref:`NetwSessionConfig.server_info<class_NetwSessionConfig_property_server_info>` with the live fields overlaid, which are the connected player count as :ref:`players<class_NetwServerInfo_property_players>` and :ref:`NetwSessionConfig.app_id<class_NetwSessionConfig_property_app_id>`. :ref:`is_local_listener<class_NetwServerInfo_property_is_local_listener>` is marked, so a caller can tell a live local host from a closed port. The declaration is copied rather than returned, so replying to a probe can never write back into what the game authored.
-
-This is what a probe returns when no :ref:`Netw.configure_server_info()<class_Netw_method_configure_server_info>` declaration governs the session, and it is also the record a declared provider is handed.
+Returns a copy of :ref:`NetwSessionConfig.server_info<class_NetwSessionConfig_property_server_info>` with :ref:`players<class_NetwServerInfo_property_players>`, :ref:`app_id<class_NetwServerInfo_property_app_id>` and :ref:`is_local_listener<class_NetwServerInfo_property_is_local_listener>` filled in from the session.
 
 .. rst-class:: classref-item-separator
 
@@ -338,7 +332,7 @@ This is what a probe returns when no :ref:`Netw.configure_server_info()<class_Ne
 
 :godot:`PackedByteArray` **to_payload**\ (\ info\: :ref:`NetwServerInfo<class_NetwServerInfo>`\ ) |static| :ref:`🔗<class_NetwServerInfo_method_to_payload>`
 
-Serializes ``info`` to the probe wire format, or an empty array when ``info`` is ``null``.
+Writes ``info`` to bytes, or returns an empty array for ``null``.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

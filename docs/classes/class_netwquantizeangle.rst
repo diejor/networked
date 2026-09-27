@@ -19,18 +19,14 @@ NetwQuantizeAngle
 Description
 -----------
 
-The value is taken modulo :godot:`@GDScript.TAU <@GDScript#class_@GDScript_constant_TAU>` and mapped to :ref:`bit_count<class_NetwQuantizeAngle_property_bit_count>` bits, so every angle has a code and the wrap costs nothing: two peers a hair either side of the boundary encode to neighbouring codes rather than to opposite ends of a range. Applies to a :godot:`float` angle.
-
-Which half-open range it decodes into is a declaration, because the field it writes back into has one. A Godot Euler component carries ``-PI < angle <= PI``, so restoring ``0 <= angle < TAU`` into it would leave the game reading a value outside the range it stores angles in, even though the two name the same rotation.
+Compresses a :godot:`float` angle into :ref:`bit_count<class_NetwQuantizeAngle_property_bit_count>` bits. The angle wraps around, so values near ``0`` and :godot:`@GDScript.TAU <@GDScript#class_@GDScript_constant_TAU>` stay close.
 
 ::
 
     var q := NetwQuantizeAngle.new().bits(8)              # 0 <= angle < TAU
     var e := NetwQuantizeAngle.new().bits(16).centered()  # -PI < angle <= PI
 
-\ Exactly PI stays positive, so the centered range is half-open the same way a Godot Euler component is and both peers agree on the boundary code.
-
-The error is at most half the angular resolution, ``TAU / 2^bit_count``.
+\ Use :ref:`centered()<class_NetwQuantizeAngle_method_centered>` for :godot:`Node3D.rotation <Node3D#class_Node3D_property_rotation>` and :godot:`Node2D.rotation <Node2D#class_Node2D_property_rotation>`, which are in that range. The error is at most half of ``TAU / 2 ** bit_count``.
 
 .. rst-class:: classref-reftable-group
 
@@ -80,7 +76,7 @@ Property Descriptions
 - |void| **set_bit_count**\ (\ value\: :godot:`int`\ )
 - :godot:`int` **get_bit_count**\ (\ )
 
-Bits for the angle, clamped to 1..32.
+Bits for the angle, from ``1`` to ``32``.
 
 .. rst-class:: classref-item-separator
 
@@ -97,7 +93,7 @@ Bits for the angle, clamped to 1..32.
 - |void| **set_centered_on_zero**\ (\ value\: :godot:`bool`\ )
 - :godot:`bool` **get_centered_on_zero**\ (\ )
 
-Whether the decoded range is centered on zero (``-PI < angle <= PI``) rather than starting there (``0 <= angle < TAU``). The encoding is identical either way.
+When ``true``, decoded angles are between ``-PI`` and ``PI``. Otherwise they are between ``0`` and ``TAU``.
 
 .. rst-class:: classref-section-separator
 
@@ -114,7 +110,7 @@ Method Descriptions
 
 :ref:`NetwQuantizeAngle<class_NetwQuantizeAngle>` **bits**\ (\ bits\: :godot:`int`\ ) :ref:`🔗<class_NetwQuantizeAngle_method_bits>`
 
-Builder that sets :ref:`bit_count<class_NetwQuantizeAngle_property_bit_count>` and returns this quantizer.
+Sets :ref:`bit_count<class_NetwQuantizeAngle_property_bit_count>` and returns this quantizer.
 
 .. rst-class:: classref-item-separator
 
@@ -126,7 +122,7 @@ Builder that sets :ref:`bit_count<class_NetwQuantizeAngle_property_bit_count>` a
 
 :ref:`NetwQuantizeAngle<class_NetwQuantizeAngle>` **centered**\ (\ ) :ref:`🔗<class_NetwQuantizeAngle_method_centered>`
 
-Builder that sets :ref:`centered_on_zero<class_NetwQuantizeAngle_property_centered_on_zero>` and returns this quantizer, matching the convention a Godot Euler component stores its angles in.
+Sets :ref:`centered_on_zero<class_NetwQuantizeAngle_property_centered_on_zero>` and returns this quantizer.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

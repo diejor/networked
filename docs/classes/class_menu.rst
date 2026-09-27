@@ -86,7 +86,7 @@ Method Descriptions
 
 |void| **show_for_target**\ (\ is_editable\: :godot:`bool`, screen_position\: :godot:`Vector2`\ ) :ref:`🔗<class_Menu_method_show_for_target>`
 
-Pops up the menu at the specified ``screen_position``, enabling Edit and Remove only when ``is_editable``, which the :ref:`ConnectBrowser<class_ConnectBrowser>` answers for a row it bookmarked itself.
+Shows the menu at ``screen_position``. Edit and Remove are enabled only when ``is_editable``.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

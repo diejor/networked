@@ -12,28 +12,27 @@ MultiplayerTree
 
 **Inherits:** :godot:`Node`
 
-The node one :godot:`Node.multiplayer <Node#class_Node_property_multiplayer>` branch is rooted at.
+A node that gives its children their own :ref:`NetwMultiplayer<class_NetwMultiplayer>`.
 
 .. rst-class:: classref-introduction-group
 
 Description
 -----------
 
-A tree owns one :godot:`MultiplayerAPI` and installs it on its own branch of the :godot:`SceneTree`, so every descendant returns :godot:`Node.multiplayer <Node#class_Node_property_multiplayer>` with that session and two trees in one :godot:`SceneTree` are two independent sessions.
+Every child's :godot:`Node.multiplayer <Node#class_Node_property_multiplayer>` is this tree's :ref:`api<class_MultiplayerTree_property_api>`, as with :godot:`SceneTree.set_multiplayer() <SceneTree#class_SceneTree_method_set_multiplayer>`. Two trees in one :godot:`SceneTree` are two separate sessions, such as a server and a client in one process.
 
 ::
 
     tree.peer_class = &"ENetMultiplayerPeer"
     tree.transport_settings = { port = 21253 }
 
-    # A peer the game already holds.
+    # assign a peer as usual
     var peer := ENetMultiplayerPeer.new()
     peer.create_client("127.0.0.1", 21253)
     tree.api.session_prepare_join(&"PlayerOne", [])
     tree.api.multiplayer_peer = peer
 
-    # Or one the provider knows how to build, prepared and assigned inside
-    # the window the offer arrives in.
+    # or let the transport create it
     Netw.connection(tree).create_peer(
         tree.peer_class,
         NetwMultiplayer.TRANSPORT_MODE_CLIENT,
@@ -106,7 +105,7 @@ Property Descriptions
 
 - :ref:`NetwMultiplayer<class_NetwMultiplayer>` **get_api**\ (\ )
 
-The :ref:`NetwMultiplayer<class_NetwMultiplayer>` this tree owns and installs on its branch.
+The :ref:`NetwMultiplayer<class_NetwMultiplayer>` of this tree's children.
 
 .. rst-class:: classref-item-separator
 
@@ -123,7 +122,7 @@ The :ref:`NetwMultiplayer<class_NetwMultiplayer>` this tree owns and installs on
 - |void| **set_api_script**\ (\ value\: :godot:`Script`\ )
 - :godot:`Script` **get_api_script**\ (\ )
 
-An optional :ref:`NetwMultiplayer<class_NetwMultiplayer>` implementation script, passed to :ref:`NetwMultiplayer.make()<class_NetwMultiplayer_method_make>`.
+An optional script extending :ref:`NetwMultiplayer<class_NetwMultiplayer>`, used for :ref:`api<class_MultiplayerTree_property_api>`.
 
 .. rst-class:: classref-item-separator
 
@@ -140,9 +139,7 @@ An optional :ref:`NetwMultiplayer<class_NetwMultiplayer>` implementation script,
 - |void| **set_app_id**\ (\ value\: :godot:`StringName`\ )
 - :godot:`StringName` **get_app_id**\ (\ )
 
-A game-build tag that gates admission, baked into every build.
-
-A joining peer whose tag differs is rejected during the auth handshake before it reaches the :godot:`MultiplayerAPI`.
+The game and build. Peers with a different :ref:`app_id<class_MultiplayerTree_property_app_id>` cannot connect. See :ref:`NetwSessionConfig.app_id<class_NetwSessionConfig_property_app_id>`.
 
 .. rst-class:: classref-item-separator
 
@@ -159,7 +156,7 @@ A joining peer whose tag differs is rejected during the auth handshake before it
 - |void| **set_auto_host_headless**\ (\ value\: :godot:`bool`\ )
 - :godot:`bool` **get_auto_host_headless**\ (\ )
 
-On a headless build, hosts from :ref:`peer_class<class_MultiplayerTree_property_peer_class>` and :ref:`transport_settings<class_MultiplayerTree_property_transport_settings>` without waiting to be asked.
+When running headless, hosts at startup with :ref:`peer_class<class_MultiplayerTree_property_peer_class>` and :ref:`transport_settings<class_MultiplayerTree_property_transport_settings>`.
 
 .. rst-class:: classref-item-separator
 
@@ -176,7 +173,7 @@ On a headless build, hosts from :ref:`peer_class<class_MultiplayerTree_property_
 - |void| **set_debug_join**\ (\ value\: :ref:`DebugJoinConfig<class_DebugJoinConfig>`\ )
 - :ref:`DebugJoinConfig<class_DebugJoinConfig>` **get_debug_join**\ (\ )
 
-An auto-connect applied on play, in debug builds only.
+Connects automatically when the game runs, in debug builds only.
 
 .. rst-class:: classref-item-separator
 
@@ -193,7 +190,7 @@ An auto-connect applied on play, in debug builds only.
 - |void| **set_desired_role**\ (\ value\: :ref:`Role<enum_NetwMultiplayer_Role>`\ )
 - :ref:`Role<enum_NetwMultiplayer_Role>` **get_desired_role**\ (\ )
 
-The :ref:`Role<enum_NetwMultiplayer_Role>` this tree intends to play.
+The role this tree takes when it hosts.
 
 .. rst-class:: classref-item-separator
 
@@ -210,7 +207,7 @@ The :ref:`Role<enum_NetwMultiplayer_Role>` this tree intends to play.
 - |void| **set_link_conditions**\ (\ value\: :ref:`NetwLinkConditions<class_NetwLinkConditions>`\ )
 - :ref:`NetwLinkConditions<class_NetwLinkConditions>` **get_link_conditions**\ (\ )
 
-Latency and loss to simulate on this tree's peer.
+Simulated latency and packet loss for testing.
 
 .. rst-class:: classref-item-separator
 
@@ -227,7 +224,7 @@ Latency and loss to simulate on this tree's peer.
 - |void| **set_peer_class**\ (\ value\: :godot:`StringName`\ )
 - :godot:`StringName` **get_peer_class**\ (\ )
 
-The class of peer this tree brings itself up with, such as ``&"ENetMultiplayerPeer"``.
+The :godot:`MultiplayerPeer` class to use, such as ``&"ENetMultiplayerPeer"``.
 
 .. rst-class:: classref-item-separator
 
@@ -244,7 +241,7 @@ The class of peer this tree brings itself up with, such as ``&"ENetMultiplayerPe
 - |void| **set_transport_settings**\ (\ value\: :godot:`Dictionary`\ )
 - :godot:`Dictionary` **get_transport_settings**\ (\ )
 
-The settings :ref:`peer_class<class_MultiplayerTree_property_peer_class>`'s transport is created with, such as ``{ port = 21253 }`` for an ENet server.
+The settings for creating a :ref:`peer_class<class_MultiplayerTree_property_peer_class>` peer, such as ``{ port = 21253 }`` for ENet.
 
 .. rst-class:: classref-section-separator
 
@@ -261,7 +258,7 @@ Method Descriptions
 
 |void| **dispose**\ (\ ) :ref:`🔗<class_MultiplayerTree_method_dispose>`
 
-Clears the service registry and the roster.
+Removes every service and forgets every player.
 
 .. rst-class:: classref-item-separator
 
@@ -273,7 +270,7 @@ Clears the service registry and the roster.
 
 :ref:`MultiplayerTree<class_MultiplayerTree>` **raise_embedded_server**\ (\ ) :ref:`🔗<class_MultiplayerTree_method_raise_embedded_server>`
 
-Duplicates this tree as a :ref:`NetwMultiplayer.ROLE_DEDICATED_SERVER<class_NetwMultiplayer_constant_ROLE_DEDICATED_SERVER>` sibling named ``Server`` and adds it beside this one.
+Duplicates this tree as a sibling named ``Server``, with the role :ref:`NetwMultiplayer.ROLE_DEDICATED_SERVER<class_NetwMultiplayer_constant_ROLE_DEDICATED_SERVER>`.
 
 ::
 

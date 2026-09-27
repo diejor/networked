@@ -12,16 +12,14 @@ ParticipantViewport
 
 **Inherits:** :godot:`Node`
 
-Tiles several :ref:`ParticipantWindow<class_ParticipantWindow>` nodes into the enclosing viewport, one per local participant.
+Shows several :ref:`ParticipantWindow<class_ParticipantWindow>` nodes side by side, one per local player.
 
 .. rst-class:: classref-introduction-group
 
 Description
 -----------
 
-Several participants running in one process each hold their own :ref:`ParticipantWindow<class_ParticipantWindow>`, and this node is what puts all of them on one screen. Registered slots partition the enclosing viewport into the squarest grid that holds them, re-tiled whenever a slot is added, removed, or the enclosing viewport resizes.
-
-Mouse and keyboard follow native window focus, which the engine already routes, so this node does not touch them. Joypads have no focus, so they are routed by device id: :ref:`assign_device()<class_ParticipantViewport_method_assign_device>` binds one device to one slot and every joypad event from that device is delivered there and marked handled.
+Splits the screen into a grid with one cell per added window, and updates it when windows are added, removed or resized. Mouse and keyboard follow window focus as usual. Joypads are sent to the window chosen with :ref:`assign_device()<class_ParticipantViewport_method_assign_device>`.
 
 ::
 
@@ -31,9 +29,7 @@ Mouse and keyboard follow native window focus, which the engine already routes, 
         tiler.add_slot(seat.window)
         tiler.assign_device(seat.device_id, seat.window)
 
-\ A slot must be registered before it can take a device, because a binding to an unplaced window would swallow that player's input into something nothing is drawing. Removing a slot drops its device bindings with it, so a device whose window left routes nowhere rather than somewhere invisible.
-
-Registration is not parenthood: this node tiles the windows it is given and never reparents or frees them, so a slot may live anywhere in the tree and outlive the tiling.
+\ Windows are not reparented or freed by this node.
 
 .. rst-class:: classref-reftable-group
 
@@ -89,7 +85,7 @@ Property Descriptions
 - |void| **set_embeds_subwindows**\ (\ value\: :godot:`bool`\ )
 - :godot:`bool` **get_embeds_subwindows**\ (\ )
 
-Whether the enclosing viewport draws child :godot:`Window` nodes inside itself rather than as real OS windows. On by default, because a tiling of native windows is a tiling the window manager gets a vote on. Turn it off to give each participant a real window to move around.
+Same as :godot:`Viewport.gui_embed_subwindows <Viewport#class_Viewport_property_gui_embed_subwindows>` on the enclosing viewport. Turn it off to give each player a separate OS window.
 
 .. rst-class:: classref-section-separator
 
@@ -106,7 +102,7 @@ Method Descriptions
 
 :ref:`ParticipantWindow<class_ParticipantWindow>` **add_slot**\ (\ slot\: :ref:`ParticipantWindow<class_ParticipantWindow>`\ ) :ref:`🔗<class_ParticipantViewport_method_add_slot>`
 
-Registers ``slot`` for tiling, makes it visible and re-tiles every slot. Returns ``slot`` so a caller can build and place in one expression, or ``null`` when handed nothing. Registering a slot twice is inert.
+Adds ``slot`` to the grid, shows it, and returns it. Adding it twice has no effect.
 
 .. rst-class:: classref-item-separator
 
@@ -118,7 +114,7 @@ Registers ``slot`` for tiling, makes it visible and re-tiles every slot. Returns
 
 |void| **assign_device**\ (\ device_id\: :godot:`int`, slot\: :ref:`ParticipantWindow<class_ParticipantWindow>`\ ) :ref:`🔗<class_ParticipantViewport_method_assign_device>`
 
-Routes every joypad event carrying ``device_id`` into ``slot``. Rejected, with an error, when ``slot`` is not registered here, because a binding this node cannot tile would drop that player's input where nobody can see it. One device binds to one slot; binding it again replaces the first.
+Sends every joypad event from ``device_id`` to ``slot``. ``slot`` must be added first. Assigning the device again replaces the previous slot.
 
 .. rst-class:: classref-item-separator
 
@@ -130,7 +126,7 @@ Routes every joypad event carrying ``device_id`` into ``slot``. Rejected, with a
 
 :ref:`ParticipantWindow<class_ParticipantWindow>` **device_slot**\ (\ device_id\: :godot:`int`\ ) |const| :ref:`🔗<class_ParticipantViewport_method_device_slot>`
 
-The slot ``device_id`` is routed to, or ``null`` when the device is unbound or its slot has since been removed or freed.
+Returns the slot ``device_id`` is assigned to, or ``null``.
 
 .. rst-class:: classref-item-separator
 
@@ -142,7 +138,7 @@ The slot ``device_id`` is routed to, or ``null`` when the device is unbound or i
 
 :godot:`Array`\[:ref:`ParticipantWindow<class_ParticipantWindow>`\] **get_slots**\ (\ ) |const| :ref:`🔗<class_ParticipantViewport_method_get_slots>`
 
-The registered slots, in tiling order, skipping any that have been freed. Position in this array is position in the grid: index zero is the top left cell and the row fills left to right.
+Returns the slots in grid order, from the top left, row by row.
 
 .. rst-class:: classref-item-separator
 
@@ -154,7 +150,7 @@ The registered slots, in tiling order, skipping any that have been freed. Positi
 
 :godot:`bool` **has_slot**\ (\ slot\: :ref:`ParticipantWindow<class_ParticipantWindow>`\ ) |const| :ref:`🔗<class_ParticipantViewport_method_has_slot>`
 
-Whether ``slot`` is registered for tiling here. ``false`` for ``null`` and for a window this node has never been given.
+Returns ``true`` when ``slot`` was added.
 
 .. rst-class:: classref-item-separator
 
@@ -166,7 +162,7 @@ Whether ``slot`` is registered for tiling here. ``false`` for ``null`` and for a
 
 |void| **remove_slot**\ (\ slot\: :ref:`ParticipantWindow<class_ParticipantWindow>`\ ) :ref:`🔗<class_ParticipantViewport_method_remove_slot>`
 
-Unregisters ``slot``, hides it, drops every device bound to it and re-tiles the rest. Does not free it. Removing a slot that was never registered is inert.
+Removes ``slot`` from the grid, hides it, and unassigns its devices. Does not free it.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

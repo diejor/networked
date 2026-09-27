@@ -12,16 +12,14 @@ ParticipantWindow
 
 **Inherits:** :godot:`Window`
 
-An isolated window and viewport tree for one local participant.
+A :godot:`Window` for one of several players running in the same process.
 
 .. rst-class:: classref-introduction-group
 
 Description
 -----------
 
-Several participants sharing one process each need their own viewport, their own world and their own input, and a :godot:`Window` is the only node that gives all three. This is that window plus the identity of the participant mounted in it: :ref:`mounted_tree<class_ParticipantWindow_property_mounted_tree>`, :ref:`peer_id<class_ParticipantWindow_property_peer_id>` and :ref:`username<class_ParticipantWindow_property_username>` say whose it is, and :ref:`ParticipantViewport.add_slot()<class_ParticipantViewport_method_add_slot>` places it.
-
-A window arrives hidden and borderless, so a process that never asks for a display never opens one. Only a tiler or an author calling :ref:`set_tiled_rect()<class_ParticipantWindow_method_set_tiled_rect>` makes it visible.
+Each player gets their own window, world and input. Add it to a :ref:`ParticipantViewport<class_ParticipantViewport>` to show it. It starts hidden.
 
 ::
 
@@ -33,9 +31,7 @@ A window arrives hidden and borderless, so a process that never asks for a displ
     tiler.add_slot(slot)
     tiler.assign_device(1, slot)
 
-\ The ``stretch_`` knobs are :ref:`ParticipantView<class_ParticipantView>`'s, resolved the same way against the project's ``display/window/stretch/*`` settings, and land on this window's own :godot:`Window.content_scale_mode <Window#class_Window_property_content_scale_mode>` family. A child :godot:`Window` inherits none of the root's content scaling on its own, so without this a tiled participant would draw at raw pixel size while the root window scaled.
-
-\ :ref:`send_input()<class_ParticipantWindow_method_send_input>` is the routed path a container uses to deliver an event this window did not receive itself, such as a joypad bound to a particular seat. Events queue and flush deferred rather than being pushed where they arrive, because pushing input from inside an input callback re-enters the tree the caller is still walking.
+\ The ``stretch_`` members work like those of :ref:`ParticipantView<class_ParticipantView>`, using the project's ``display/window/stretch/*`` settings by default.
 
 .. rst-class:: classref-reftable-group
 
@@ -103,7 +99,7 @@ Property Descriptions
 - |void| **set_mounted_tree**\ (\ value\: :godot:`Node`\ )
 - :godot:`Node` **get_mounted_tree**\ (\ )
 
-The session tree mounted inside this window. Identity rather than machinery: nothing here reads it, and it is how a caller holding a window finds the participant's session. Returns ``null`` once that tree is freed.
+The :ref:`MultiplayerTree<class_MultiplayerTree>` of the player in this window, or ``null``.
 
 .. rst-class:: classref-item-separator
 
@@ -120,7 +116,7 @@ The session tree mounted inside this window. Identity rather than machinery: not
 - |void| **set_peer_id**\ (\ value\: :godot:`int`\ )
 - :godot:`int` **get_peer_id**\ (\ )
 
-The network peer id assigned to the participant in this window. Zero until the participant has joined.
+The peer id of the player in this window, or ``0`` before they join.
 
 .. rst-class:: classref-item-separator
 
@@ -137,7 +133,7 @@ The network peer id assigned to the participant in this window. Zero until the p
 - |void| **set_stretch_aspect**\ (\ value\: :ref:`StretchAspect<enum_ParticipantView_StretchAspect>`\ )
 - :ref:`StretchAspect<enum_ParticipantView_StretchAspect>` **get_stretch_aspect**\ (\ )
 
-How the design resolution fits this window. Maps to :godot:`Window.content_scale_aspect <Window#class_Window_property_content_scale_aspect>` and defaults to the project setting.
+Sets :godot:`Window.content_scale_aspect <Window#class_Window_property_content_scale_aspect>`.
 
 .. rst-class:: classref-item-separator
 
@@ -154,7 +150,7 @@ How the design resolution fits this window. Maps to :godot:`Window.content_scale
 - |void| **set_stretch_design_size**\ (\ value\: :godot:`Vector2i`\ )
 - :godot:`Vector2i` **get_stretch_design_size**\ (\ )
 
-The logical resolution this window's contents draw at, resolved onto :godot:`Window.content_scale_size <Window#class_Window_property_content_scale_size>`. ``Vector2i(0, 0)`` inherits the project's viewport size.
+Sets :godot:`Window.content_scale_size <Window#class_Window_property_content_scale_size>`. ``Vector2i(0, 0)`` uses the project's viewport size.
 
 .. rst-class:: classref-item-separator
 
@@ -171,7 +167,7 @@ The logical resolution this window's contents draw at, resolved onto :godot:`Win
 - |void| **set_stretch_mode**\ (\ value\: :ref:`StretchMode<enum_ParticipantView_StretchMode>`\ )
 - :ref:`StretchMode<enum_ParticipantView_StretchMode>` **get_stretch_mode**\ (\ )
 
-Which end of the fit this window renders. Maps to :godot:`Window.content_scale_mode <Window#class_Window_property_content_scale_mode>` and defaults to the project setting.
+Sets :godot:`Window.content_scale_mode <Window#class_Window_property_content_scale_mode>`.
 
 .. rst-class:: classref-item-separator
 
@@ -188,7 +184,7 @@ Which end of the fit this window renders. Maps to :godot:`Window.content_scale_m
 - |void| **set_stretch_scale**\ (\ value\: :godot:`float`\ )
 - :godot:`float` **get_stretch_scale**\ (\ )
 
-Divides the design resolution. Maps to :godot:`Window.content_scale_factor <Window#class_Window_property_content_scale_factor>`. A value of zero or less uses the project setting.
+Sets :godot:`Window.content_scale_factor <Window#class_Window_property_content_scale_factor>`. ``0.0`` or less uses the project setting.
 
 .. rst-class:: classref-item-separator
 
@@ -205,7 +201,7 @@ Divides the design resolution. Maps to :godot:`Window.content_scale_factor <Wind
 - |void| **set_stretch_scale_mode**\ (\ value\: :ref:`StretchScaleMode<enum_ParticipantView_StretchScaleMode>`\ )
 - :ref:`StretchScaleMode<enum_ParticipantView_StretchScaleMode>` **get_stretch_scale_mode**\ (\ )
 
-Whether the fit may use a fractional scale. Maps to :godot:`Window.content_scale_stretch <Window#class_Window_property_content_scale_stretch>` and defaults to the project setting.
+Sets :godot:`Window.content_scale_stretch <Window#class_Window_property_content_scale_stretch>`.
 
 .. rst-class:: classref-item-separator
 
@@ -222,7 +218,7 @@ Whether the fit may use a fractional scale. Maps to :godot:`Window.content_scale
 - |void| **set_username**\ (\ value\: :godot:`StringName`\ )
 - :godot:`StringName` **get_username**\ (\ )
 
-The name the participant in this window joined under. Identity, like :ref:`peer_id<class_ParticipantWindow_property_peer_id>`, and the readable half of it.
+The username of the player in this window.
 
 .. rst-class:: classref-section-separator
 
@@ -239,7 +235,7 @@ Method Descriptions
 
 |void| **send_input**\ (\ event\: :godot:`InputEvent`\ ) :ref:`🔗<class_ParticipantWindow_method_send_input>`
 
-Queues ``event`` for this window's viewport, flushed as a local event on the next deferred pass. The routed path: use it when something outside this window decided the event belongs to it. Events this window receives through normal focus need no help.
+Sends ``event`` to this window at the end of the frame. Use it for input the window does not receive by focus, such as a joypad.
 
 .. rst-class:: classref-item-separator
 
@@ -251,7 +247,7 @@ Queues ``event`` for this window's viewport, flushed as a local event on the nex
 
 |void| **set_tiled_rect**\ (\ rect\: :godot:`Rect2i`\ ) :ref:`🔗<class_ParticipantWindow_method_set_tiled_rect>`
 
-Places this window at ``rect`` and re-resolves its content scaling for the new size. What :ref:`ParticipantViewport<class_ParticipantViewport>` calls on every slot when the tiling changes.
+Moves and resizes this window to ``rect``, and shows it. :ref:`ParticipantViewport<class_ParticipantViewport>` calls it.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

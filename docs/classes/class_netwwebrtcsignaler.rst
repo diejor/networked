@@ -12,16 +12,14 @@ NetwWebRTCSignaler
 
 **Inherits:** :godot:`RefCounted`
 
-The rendezvous a game subclasses so a WebRTC session exchanges SDP and ICE over signaling it chooses.
+Extend it to exchange WebRTC offers, answers and ICE candidates through your own signaling server.
 
 .. rst-class:: classref-introduction-group
 
 Description
 -----------
 
-A WebRTC session is signaling-agnostic. It hands every outbound offer, answer and ICE bundle to a signaler and takes the inbound ones back, so a dedicated WebSocket server, a matchmaker or a tracker swarm are the same session behind different signaling. The session speaks engine multiplayer ids; a signaler maps those onto whatever address its own transport uses and keeps that mapping to itself.
-
-Pass a subclass to the WebRTC transport as the ``signaler`` settings key. The default is the built-in WebTorrent tracker signaler, which needs no server of any kind.
+The WebRTC transport sends every offer, answer and ICE candidate through a signaler, and receives the other peer's through it. Pass a subclass as the ``signaler`` setting of the WebRTC transport. The default uses public WebTorrent trackers and needs no server.
 
 ::
 
@@ -57,24 +55,11 @@ Pass a subclass to the WebRTC transport as the ``signaler`` settings key. The de
     func _close() -> void:
         _socket.close()
 
-\ A signaler reports upward by calling :ref:`receive()<class_NetwWebRTCSignaler_method_receive>`, :ref:`report_ready()<class_NetwWebRTCSignaler_method_report_ready>`, :ref:`report_lost()<class_NetwWebRTCSignaler_method_report_lost>` and :ref:`report_unreachable()<class_NetwWebRTCSignaler_method_report_unreachable>` rather than by emitting a signal, because the session drains what a signaler reports on its own poll rather than being re-entered mid-handshake.
+\ Report back by calling :ref:`receive()<class_NetwWebRTCSignaler_method_receive>`, :ref:`report_ready()<class_NetwWebRTCSignaler_method_report_ready>`, :ref:`report_lost()<class_NetwWebRTCSignaler_method_report_lost>` and :ref:`report_unreachable()<class_NetwWebRTCSignaler_method_report_unreachable>`.
 
-The distinction between :ref:`report_lost()<class_NetwWebRTCSignaler_method_report_lost>` and :ref:`report_unreachable()<class_NetwWebRTCSignaler_method_report_unreachable>` is which end of the attempt failed: unreachable means no signaling route ever opened, lost means one opened and then went away. A wind-down the signaler chose itself, after :ref:`_on_session_connected()<class_NetwWebRTCSignaler_private_method__on_session_connected>` told it the native link is up, is neither and reports nothing.
+\ ``kind`` in :ref:`receive()<class_NetwWebRTCSignaler_method_receive>` and :ref:`_send()<class_NetwWebRTCSignaler_private_method__send>` is ``"offer"``, ``"answer"`` or ``"candidate"``. Offers and answers already include the gathered candidates, so one message per peer is enough.
 
-\ **Tracker diagnostics**\ 
-
-The default tracker signaler warns once when every tracker it was given failed, naming each url and why. One tracker failing out of a redundant list is not a fault and is silent until ``networked/webrtc/warn_on_tracker_failure`` turns per-url warnings on.
-
-.. code:: text
-
-    every tracker failed   one warning naming each url, always
-    one tracker failed     silent, unless warn_on_tracker_failure
-
-\ A tracker reached over ``wss`` that fails its TLS handshake also prints the engine's own mbedtls error, which names no url. The warnings above are what identify the endpoint.
-
-The ``kind`` both :ref:`receive()<class_NetwWebRTCSignaler_method_receive>` and :ref:`_send()<class_NetwWebRTCSignaler_private_method__send>` carry is ``"offer"``, ``"answer"`` or ``"candidate"``. The session bundles its gathered candidates into the offer and answer payloads, so a signaler whose transport relays exactly one directed message per peer carries a whole handshake in it.
-
-An empty ``to_address`` on :ref:`_send()<class_NetwWebRTCSignaler_private_method__send>` means the session has not learned that remote's address yet, which a signaler capable of discovery treats as room-directed.
+The default signaler warns once when every tracker fails. Enable ``networked/webrtc/warn_on_tracker_failure`` to also warn for each tracker that fails.
 
 .. rst-class:: classref-reftable-group
 
@@ -127,7 +112,7 @@ Method Descriptions
 
 |void| **_close**\ (\ ) |virtual| :ref:`🔗<class_NetwWebRTCSignaler_private_method__close>`
 
-Releases the signaling transport. Called when the session closes, and by a signaler's own wind-down after the native link is up.
+Closes the connection to the signaling server. Called when the session closes.
 
 .. rst-class:: classref-item-separator
 
@@ -139,7 +124,7 @@ Releases the signaling transport. Called when the session closes, and by a signa
 
 :godot:`String` **_local_signaler_id**\ (\ ) |virtual| :ref:`🔗<class_NetwWebRTCSignaler_private_method__local_signaler_id>`
 
-Returns this peer's own address on the signaling transport. Returns an empty :godot:`String` when the signaler has no address of its own, which is the stock behaviour.
+Returns this peer's address on the signaling server. Empty by default.
 
 .. rst-class:: classref-item-separator
 
@@ -151,7 +136,7 @@ Returns this peer's own address on the signaling transport. Returns an empty :go
 
 |void| **_on_session_connected**\ (\ peer_id\: :godot:`int`\ ) |virtual| :ref:`🔗<class_NetwWebRTCSignaler_private_method__on_session_connected>`
 
-Reports that the native WebRTC link to ``peer_id`` is open, so a signaler that costs something to keep alive may wind itself down. Overriding this is optional; the stock behaviour keeps signaling up until the session closes.
+Called when the WebRTC connection to ``peer_id`` is open. Override it to disconnect from the signaling server early.
 
 .. rst-class:: classref-item-separator
 
@@ -163,7 +148,7 @@ Reports that the native WebRTC link to ``peer_id`` is open, so a signaler that c
 
 :godot:`Error <@GlobalScope#enum_@globalscope_Error>` **_open**\ (\ room_id\: :godot:`String`, local_peer_id\: :godot:`int`\ ) |virtual| :ref:`🔗<class_NetwWebRTCSignaler_private_method__open>`
 
-Opens signaling for ``room_id`` as ``local_peer_id``. A host is always id 1 and may be given an empty ``room_id``, which means the signaler generates one and returns it from :ref:`_room_id()<class_NetwWebRTCSignaler_private_method__room_id>`. Returning anything but :godot:`@GlobalScope.OK <@GlobalScope#class_@GlobalScope_constant_OK>` fails the bring-up with that code.
+Connects to the signaling server for ``room_id`` as ``local_peer_id``. The host is always ``1``, and gets an empty ``room_id`` when the signaler should create one and return it from :ref:`_room_id()<class_NetwWebRTCSignaler_private_method__room_id>`. Returning an error fails the connection.
 
 .. rst-class:: classref-item-separator
 
@@ -175,7 +160,7 @@ Opens signaling for ``room_id`` as ``local_peer_id``. A host is always id 1 and 
 
 |void| **_poll**\ (\ delta\: :godot:`float`\ ) |virtual| :ref:`🔗<class_NetwWebRTCSignaler_private_method__poll>`
 
-Drives the signaling transport for one frame. Everything a signaler reports upward is reported from here or from :ref:`_open()<class_NetwWebRTCSignaler_private_method__open>`.
+Called every frame. Poll the signaling connection here.
 
 .. rst-class:: classref-item-separator
 
@@ -187,7 +172,7 @@ Drives the signaling transport for one frame. Everything a signaler reports upwa
 
 :godot:`String` **_room_id**\ (\ ) |virtual| :ref:`🔗<class_NetwWebRTCSignaler_private_method__room_id>`
 
-Returns the room this signaler opened, normalized or generated during :ref:`_open()<class_NetwWebRTCSignaler_private_method__open>`. This is the address a joiner is given, so it must be readable by a person if a person is expected to pass it along.
+Returns the room opened by :ref:`_open()<class_NetwWebRTCSignaler_private_method__open>`. Players share it to join, so keep it readable.
 
 .. rst-class:: classref-item-separator
 
@@ -199,7 +184,7 @@ Returns the room this signaler opened, normalized or generated during :ref:`_ope
 
 |void| **_send**\ (\ to_peer_id\: :godot:`int`, to_address\: :godot:`String`, kind\: :godot:`String`, payload\: :godot:`Dictionary`\ ) |virtual| :ref:`🔗<class_NetwWebRTCSignaler_private_method__send>`
 
-Carries ``payload`` of ``kind`` toward ``to_peer_id``. ``to_address`` is that peer's own signaling address when the session has learned it, and empty when it has not. ``payload`` arrives in the shape :ref:`receive()<class_NetwWebRTCSignaler_method_receive>` draws, for the matching ``kind``.
+Sends ``payload`` to ``to_peer_id``. ``to_address`` is that peer's signaling address, or empty when unknown, in which case send it to the room. ``payload`` has the shape shown in :ref:`receive()<class_NetwWebRTCSignaler_method_receive>`.
 
 .. rst-class:: classref-item-separator
 
@@ -211,7 +196,7 @@ Carries ``payload`` of ``kind`` toward ``to_peer_id``. ``to_address`` is that pe
 
 :godot:`String` **local_signaler_id**\ (\ ) :ref:`🔗<class_NetwWebRTCSignaler_method_local_signaler_id>`
 
-The address other peers reach this signaler at, as the signaler itself reports it.
+Returns what :ref:`_local_signaler_id()<class_NetwWebRTCSignaler_private_method__local_signaler_id>` returns.
 
 .. rst-class:: classref-item-separator
 
@@ -223,18 +208,16 @@ The address other peers reach this signaler at, as the signaler itself reports i
 
 |void| **receive**\ (\ from_peer\: :godot:`int`, from_address\: :godot:`String`, kind\: :godot:`String`, payload\: :godot:`Dictionary`\ ) :ref:`🔗<class_NetwWebRTCSignaler_method_receive>`
 
-Reports one inbound offer, answer or ICE bundle from ``from_peer``, whose signaling address is ``from_address``. A signaler that can receive the same message twice is expected to report it once, because the session applies what it is given. Which keys ``payload`` carries is decided by ``kind``.
+Passes an offer, answer or candidate from ``from_peer`` to the session. Pass each message once.
 
 .. code:: text
 
     Dictionary
     ┠╴offer / answer
     ┃  ┠╴type        String             "offer" or "answer"
-    ┃  ┠╴sdp         String             the local session description
-    ┃  ┠╴candidates  Array[Dictionary]  every candidate gathered so far, each
-    ┃  ┃                                shaped like the candidate case below
-    ┃  ┖╴is_local    bool               true when both ends of this handshake
-    ┃                                   run in the same process
+    ┃  ┠╴sdp         String             the session description
+    ┃  ┠╴candidates  Array[Dictionary]  the candidates, shaped as below
+    ┃  ┖╴is_local    bool               true when both peers are in one process
     ┖╴candidate
        ┠╴type           String  "candidate"
        ┠╴candidate      String  the ICE candidate line
@@ -251,7 +234,7 @@ Reports one inbound offer, answer or ICE bundle from ``from_peer``, whose signal
 
 |void| **report_lost**\ (\ ) :ref:`🔗<class_NetwWebRTCSignaler_method_report_lost>`
 
-Reports that signaling was open and has gone away. A client that has not yet reached its host treats this as a stalled join.
+Call it when the signaling connection was open and was lost.
 
 .. rst-class:: classref-item-separator
 
@@ -263,7 +246,7 @@ Reports that signaling was open and has gone away. A client that has not yet rea
 
 |void| **report_ready**\ (\ ) :ref:`🔗<class_NetwWebRTCSignaler_method_report_ready>`
 
-Reports that at least one signaling route is usable. Reporting this more than once is harmless.
+Call it when the signaling connection is open. Calling it again is fine.
 
 .. rst-class:: classref-item-separator
 
@@ -275,7 +258,7 @@ Reports that at least one signaling route is usable. Reporting this more than on
 
 |void| **report_unreachable**\ (\ ) :ref:`🔗<class_NetwWebRTCSignaler_method_report_unreachable>`
 
-Reports that no signaling route could be opened at all.
+Call it when the signaling connection could not be opened.
 
 .. rst-class:: classref-item-separator
 

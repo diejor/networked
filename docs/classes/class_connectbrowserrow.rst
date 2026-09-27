@@ -12,7 +12,7 @@ ConnectBrowserRow
 
 **Inherits:** :godot:`PanelContainer`
 
-One row in the :ref:`ConnectBrowser<class_ConnectBrowser>`. Renders a browse endpoint read through a :ref:`NetwConnectHandle<class_NetwConnectHandle>` and its latest snapshot :godot:`Dictionary`.
+One server in the :ref:`ConnectBrowser<class_ConnectBrowser>` list.
 
 .. rst-class:: classref-reftable-group
 

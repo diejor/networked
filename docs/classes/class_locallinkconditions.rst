@@ -12,14 +12,14 @@ LocalLinkConditions
 
 **Inherits:** :godot:`RefCounted`
 
-Declarative inbound impairment for one loopback link.
+Simulated latency and packet loss for a :ref:`LocalLoopbackSession<class_LocalLoopbackSession>`.
 
 .. rst-class:: classref-introduction-group
 
 Description
 -----------
 
-Describes a link condition in human units and feeds the simulator directly. Used for tests using ``[class LocalLoopbackSession]``.
+Used for tests.
 
 ::
 
@@ -27,9 +27,7 @@ Describes a link condition in human units and feeds the simulator directly. Used
     conditions.packet_loss = 0.05
     loopback_session.set_link_conditions(server, conditions)
 
-\ :ref:`packet_loss<class_LocalLinkConditions_property_packet_loss>` drops an unreliable packet outright. A reliable one is never dropped, and pays :ref:`effective_retransmit_ms()<class_LocalLinkConditions_method_effective_retransmit_ms>` instead.
-
-\ :ref:`seed<class_LocalLinkConditions_property_seed>` names the random streams this spec draws from, so two runs of the same scenario deliver packets in the same order.
+\ The same :ref:`seed<class_LocalLinkConditions_property_seed>` gives the same results every run.
 
 .. rst-class:: classref-reftable-group
 
@@ -107,7 +105,7 @@ Property Descriptions
 - |void| **set_duplicate**\ (\ value\: :godot:`float`\ )
 - :godot:`float` **get_duplicate**\ (\ )
 
-Probability that an unreliable packet is delivered a second time, one period later.
+Chance that an unreliable packet arrives twice.
 
 .. rst-class:: classref-item-separator
 
@@ -124,7 +122,7 @@ Probability that an unreliable packet is delivered a second time, one period lat
 - |void| **set_jitter_ms**\ (\ value\: :godot:`float`\ )
 - :godot:`float` **get_jitter_ms**\ (\ )
 
-Upper bound on the extra delay drawn per unreliable packet.
+The most random extra delay added to an unreliable packet, in milliseconds.
 
 .. rst-class:: classref-item-separator
 
@@ -141,7 +139,7 @@ Upper bound on the extra delay drawn per unreliable packet.
 - |void| **set_latency_ms**\ (\ value\: :godot:`float`\ )
 - :godot:`float` **get_latency_ms**\ (\ )
 
-Baseline one-way delay, in milliseconds.
+One-way delay, in milliseconds.
 
 .. rst-class:: classref-item-separator
 
@@ -158,7 +156,7 @@ Baseline one-way delay, in milliseconds.
 - |void| **set_packet_loss**\ (\ value\: :godot:`float`\ )
 - :godot:`float` **get_packet_loss**\ (\ )
 
-Probability that a packet is lost. An unreliable packet is dropped; a reliable one is delayed by :ref:`effective_retransmit_ms()<class_LocalLinkConditions_method_effective_retransmit_ms>`.
+Chance that a packet is lost. A lost reliable packet is delayed by :ref:`effective_retransmit_ms()<class_LocalLinkConditions_method_effective_retransmit_ms>` instead.
 
 .. rst-class:: classref-item-separator
 
@@ -175,7 +173,7 @@ Probability that a packet is lost. An unreliable packet is dropped; a reliable o
 - |void| **set_reorder**\ (\ value\: :godot:`float`\ )
 - :godot:`float` **get_reorder**\ (\ )
 
-Probability that an unreliable packet is held one extra period, which is what puts it behind the packet sent after it.
+Chance that an unreliable packet arrives after the next one.
 
 .. rst-class:: classref-item-separator
 
@@ -192,7 +190,7 @@ Probability that an unreliable packet is held one extra period, which is what pu
 - |void| **set_retransmit_ms**\ (\ value\: :godot:`float`\ )
 - :godot:`float` **get_retransmit_ms**\ (\ )
 
-How long a lost reliable packet is delayed. Negative means derive it from :ref:`latency_ms<class_LocalLinkConditions_property_latency_ms>`, which is what :ref:`effective_retransmit_ms()<class_LocalLinkConditions_method_effective_retransmit_ms>` does.
+How long a lost reliable packet is delayed, in milliseconds. Negative computes it from :ref:`latency_ms<class_LocalLinkConditions_property_latency_ms>`.
 
 .. rst-class:: classref-item-separator
 
@@ -209,7 +207,7 @@ How long a lost reliable packet is delayed. Negative means derive it from :ref:`
 - |void| **set_seed**\ (\ value\: :godot:`int`\ )
 - :godot:`int` **get_seed**\ (\ )
 
-Seeds every random stream this spec draws from. The same seed and the same scenario produce the same delivery order.
+The random seed. The same seed gives the same results.
 
 .. rst-class:: classref-item-separator
 
@@ -226,7 +224,7 @@ Seeds every random stream this spec draws from. The same seed and the same scena
 - |void| **set_throttle**\ (\ value\: :godot:`float`\ )
 - :godot:`float` **get_throttle**\ (\ )
 
-Probability of opening a throttle window, during which nothing is delivered.
+Chance of a pause during which nothing is delivered.
 
 .. rst-class:: classref-item-separator
 
@@ -243,7 +241,7 @@ Probability of opening a throttle window, during which nothing is delivered.
 - |void| **set_throttle_ms**\ (\ value\: :godot:`float`\ )
 - :godot:`float` **get_throttle_ms**\ (\ )
 
-How long a throttle window lasts, in milliseconds.
+How long that pause lasts, in milliseconds.
 
 .. rst-class:: classref-section-separator
 
@@ -260,7 +258,7 @@ Method Descriptions
 
 :ref:`LocalLinkConditions<class_LocalLinkConditions>` **clone**\ (\ ) |const| :ref:`🔗<class_LocalLinkConditions_method_clone>`
 
-Returns a copy of this spec. :ref:`LocalLoopbackSession.set_link_conditions()<class_LocalLoopbackSession_method_set_link_conditions>` clones what it is given, so editing a spec after installing it changes nothing.
+Returns a copy.
 
 .. rst-class:: classref-item-separator
 
@@ -272,7 +270,7 @@ Returns a copy of this spec. :ref:`LocalLoopbackSession.set_link_conditions()<cl
 
 :ref:`LocalLinkConditions<class_LocalLinkConditions>` **create**\ (\ seed\: :godot:`int` = 0\ ) |static| :ref:`🔗<class_LocalLinkConditions_method_create>`
 
-Returns a spec seeded with ``seed``. A registered class's ``new()`` takes no arguments, so this is where a seed goes.
+Returns new conditions with :ref:`seed<class_LocalLinkConditions_property_seed>` set to ``seed``.
 
 .. rst-class:: classref-item-separator
 
@@ -284,7 +282,7 @@ Returns a spec seeded with ``seed``. A registered class's ``new()`` takes no arg
 
 :godot:`float` **effective_latency_ms**\ (\ ) |const| :ref:`🔗<class_LocalLinkConditions_method_effective_latency_ms>`
 
-Returns :ref:`latency_ms<class_LocalLinkConditions_property_latency_ms>`, floored at zero.
+Returns :ref:`latency_ms<class_LocalLinkConditions_property_latency_ms>`, or ``0.0`` when negative.
 
 .. rst-class:: classref-item-separator
 
@@ -296,7 +294,7 @@ Returns :ref:`latency_ms<class_LocalLinkConditions_property_latency_ms>`, floore
 
 :godot:`float` **effective_retransmit_ms**\ (\ ) |const| :ref:`🔗<class_LocalLinkConditions_method_effective_retransmit_ms>`
 
-Returns how long a lost reliable packet waits before it arrives anyway. While :ref:`retransmit_ms<class_LocalLinkConditions_property_retransmit_ms>` stays negative this derives from :ref:`latency_ms<class_LocalLinkConditions_property_latency_ms>`.
+Returns how long a lost reliable packet is delayed, from :ref:`retransmit_ms<class_LocalLinkConditions_property_retransmit_ms>` or computed from :ref:`latency_ms<class_LocalLinkConditions_property_latency_ms>` when it is negative.
 
 .. rst-class:: classref-item-separator
 
@@ -320,7 +318,7 @@ Returns a typical mobile 4G profile.
 
 :ref:`LocalLinkConditions<class_LocalLinkConditions>` **perfect**\ (\ ) |static| :ref:`🔗<class_LocalLinkConditions_method_perfect>`
 
-Returns a link with no simulated impairment.
+Returns conditions with no latency or loss.
 
 .. rst-class:: classref-item-separator
 

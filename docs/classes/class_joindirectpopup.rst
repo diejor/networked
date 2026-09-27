@@ -12,14 +12,14 @@ JoinDirectPopup
 
 **Inherits:** :godot:`PopupPanel`
 
-Modal form for clients to connect directly to an address.
+A form to join a server by its address.
 
 .. rst-class:: classref-introduction-group
 
 Description
 -----------
 
-Renders one field per key of the ``client_settings`` entry of :ref:`NetwConnectHandle.transport()<class_NetwConnectHandle_method_transport>` for the picked backend, because a client reaching a room needs the same tracker and relay the host used.
+Shows the client settings of the chosen transport.
 
 .. rst-class:: classref-reftable-group
 
@@ -112,7 +112,7 @@ Opens the direct join popup for ``handle``.
 
 |void| **preset**\ (\ peer_class\: :godot:`StringName`, address\: :godot:`String`\ ) :ref:`🔗<class_JoinDirectPopup_method_preset>`
 
-Selects ``peer_class`` and fills the address with ``address``, leaving the player only their name to confirm.  A shared link names an endpoint and nothing else, so the form it opens arrives already pointed at it.
+Selects ``peer_class`` and fills in ``address``, as when opening a shared link.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

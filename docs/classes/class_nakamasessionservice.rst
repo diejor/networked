@@ -12,25 +12,14 @@ NakamaSessionService
 
 **Inherits:** :ref:`NetwService<class_NetwService>` **<** :godot:`Node`
 
-Session-global Nakama authentication shared by every Nakama consumer.
+The Nakama account of a session, shared by :ref:`NakamaLobbyDirectory<class_NakamaLobbyDirectory>` and :ref:`NakamaDatabase<class_NakamaDatabase>`.
 
 .. rst-class:: classref-introduction-group
 
 Description
 -----------
 
-One session has one authenticated Nakama account. Consumers resolve it through :ref:`of()<class_NakamaSessionService_method_of>`, so relay matches and storage calls use the same user.
-
-::
-
-    the session's branch root
-    ├── NakamaSessionService
-    │   ├── client
-    │   └── session
-    ├── NakamaLobbyDirectory
-    │   └── create_socket()
-    └── NakamaDatabase
-        └── session user storage
+Get it with :ref:`of()<class_NakamaSessionService_method_of>`, so matches and storage use the same user.
 
 .. rst-class:: classref-reftable-group
 
@@ -240,7 +229,7 @@ Method Descriptions
 
 :ref:`NakamaSessionService<class_NakamaSessionService>` **of**\ (\ node\: :godot:`Node`\ ) |static| :ref:`🔗<class_NakamaSessionService_method_of>`
 
-Returns the **NakamaSessionService** of the session enclosing ``node``, creating it on first access.  A registered service wins, else a node already sitting under :ref:`NetwSessionHandle.root<class_NetwSessionHandle_property_root>` is adopted and registered, else a fresh one is created there. Returns ``null`` in the editor, for a node that reaches no session, and for a session with no branch root to parent one under.
+Returns the **NakamaSessionService** of the session ``node`` is in, creating it under :ref:`NetwSessionHandle.root<class_NetwSessionHandle_property_root>` if needed. Returns ``null`` in the editor or outside a session.
 
 .. rst-class:: classref-item-separator
 

@@ -14,14 +14,14 @@ LobbyDirectory
 
 **Inherited By:** :ref:`NakamaLobbyDirectory<class_NakamaLobbyDirectory>`, :ref:`SteamLobbyDirectory<class_SteamLobbyDirectory>`
 
-Base class for a lobby provider.
+Extend it to host, join and list lobbies of an online service.
 
 .. rst-class:: classref-introduction-group
 
 Description
 -----------
 
-Lobbies are discovered by listening signals from :godot:`NetwConnectHandler`. A lobby dicrectory is a :ref:`NetwService<class_NetwService>` that implements the :ref:`_host_lobby()<class_LobbyDirectory_private_method__host_lobby>`, :ref:`_join_lobby()<class_LobbyDirectory_private_method__join_lobby>`, :ref:`_list_lobbies()<class_LobbyDirectory_private_method__list_lobbies>` and :ref:`_leave_lobby()<class_LobbyDirectory_private_method__leave_lobby>` verbs. :godot:`NetwConnectHandler` can discover lobbies as any other endpoint.
+A lobby directory is a :ref:`NetwService<class_NetwService>` that implements :ref:`_host_lobby()<class_LobbyDirectory_private_method__host_lobby>`, :ref:`_join_lobby()<class_LobbyDirectory_private_method__join_lobby>`, :ref:`_list_lobbies()<class_LobbyDirectory_private_method__list_lobbies>` and :ref:`_leave_lobby()<class_LobbyDirectory_private_method__leave_lobby>`. Its lobbies appear in :ref:`NetwConnectHandle<class_NetwConnectHandle>` like any other server.
 
 ::
 
@@ -101,6 +101,8 @@ Methods
    +---------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | :godot:`StringName`                               | :ref:`_peer_class<class_LobbyDirectory_private_method__peer_class>`\ (\ ) |virtual|                                                                                                                                          |
    +---------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`float`                                    | :ref:`_timeout_hint<class_LobbyDirectory_private_method__timeout_hint>`\ (\ ) |virtual|                                                                                                                                      |
+   +---------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | |void|                                            | :ref:`deliver<class_LobbyDirectory_method_deliver>`\ (\ peer\: :godot:`MultiplayerPeer`\ )                                                                                                                                   |
    +---------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | |void|                                            | :ref:`fail<class_LobbyDirectory_method_fail>`\ (\ error\: :godot:`Error <@GlobalScope#enum_@globalscope_Error>`, message\: :godot:`String`\ )                                                                                |
@@ -129,7 +131,7 @@ Signals
 
 **invite_received**\ (\ lobby_id\: :godot:`int`, sender_id\: :godot:`int`\ ) :ref:`🔗<class_LobbyDirectory_signal_invite_received>`
 
-A platform invite arrived. Only a directory advertising :ref:`CAPABILITY_INVITES<class_LobbyDirectory_constant_CAPABILITY_INVITES>` emits this.
+Emitted when the player receives an invite. Needs :ref:`CAPABILITY_INVITES<class_LobbyDirectory_constant_CAPABILITY_INVITES>`.
 
 .. rst-class:: classref-item-separator
 
@@ -141,7 +143,7 @@ A platform invite arrived. Only a directory advertising :ref:`CAPABILITY_INVITES
 
 **lobby_failed**\ (\ error\: :godot:`Error <@GlobalScope#enum_@globalscope_Error>`, message\: :godot:`String`\ ) :ref:`🔗<class_LobbyDirectory_signal_lobby_failed>`
 
-Emitted by :ref:`fail()<class_LobbyDirectory_method_fail>` with the reason the request in flight was rejected.
+Emitted by :ref:`fail()<class_LobbyDirectory_method_fail>`.
 
 .. rst-class:: classref-item-separator
 
@@ -153,7 +155,7 @@ Emitted by :ref:`fail()<class_LobbyDirectory_method_fail>` with the reason the r
 
 **lobby_list_published**\ (\ addresses\: :godot:`PackedStringArray`, names\: :godot:`PackedStringArray`, infos\: :godot:`Array`\ ) :ref:`🔗<class_LobbyDirectory_signal_lobby_list_published>`
 
-Emitted by :ref:`publish_lobbies()<class_LobbyDirectory_method_publish_lobbies>` with the browse rows a listing found.
+Emitted by :ref:`publish_lobbies()<class_LobbyDirectory_method_publish_lobbies>`.
 
 .. rst-class:: classref-item-separator
 
@@ -165,7 +167,7 @@ Emitted by :ref:`publish_lobbies()<class_LobbyDirectory_method_publish_lobbies>`
 
 **lobby_peer_ready**\ (\ peer\: :godot:`MultiplayerPeer`\ ) :ref:`🔗<class_LobbyDirectory_signal_lobby_peer_ready>`
 
-Emitted by :ref:`deliver()<class_LobbyDirectory_method_deliver>` with the peer a host or join request produced.
+Emitted by :ref:`deliver()<class_LobbyDirectory_method_deliver>`.
 
 .. rst-class:: classref-item-separator
 
@@ -177,7 +179,7 @@ Emitted by :ref:`deliver()<class_LobbyDirectory_method_deliver>` with the peer a
 
 **provider_unavailable**\ (\ reason\: :godot:`String`\ ) :ref:`🔗<class_LobbyDirectory_signal_provider_unavailable>`
 
-The provider cannot be used at all, so a browser drops it rather than showing a failing row.
+Emitted when the service cannot be used at all.
 
 .. rst-class:: classref-section-separator
 
@@ -200,7 +202,7 @@ enum **Capability**: :ref:`🔗<enum_LobbyDirectory_Capability>`
 
 :ref:`Capability<enum_LobbyDirectory_Capability>` **CAPABILITY_BROWSE** = ``1``
 
-:ref:`_list_lobbies()<class_LobbyDirectory_private_method__list_lobbies>` returns provider results.
+:ref:`_list_lobbies()<class_LobbyDirectory_private_method__list_lobbies>` works.
 
 .. _class_LobbyDirectory_constant_CAPABILITY_FRIENDS_ONLY_SUPPORT:
 
@@ -208,7 +210,7 @@ enum **Capability**: :ref:`🔗<enum_LobbyDirectory_Capability>`
 
 :ref:`Capability<enum_LobbyDirectory_Capability>` **CAPABILITY_FRIENDS_ONLY_SUPPORT** = ``2``
 
-:ref:`NetwServerInfo.VISIBILITY_FRIENDS_ONLY<class_NetwServerInfo_constant_VISIBILITY_FRIENDS_ONLY>` is honored.
+:ref:`NetwServerInfo.VISIBILITY_FRIENDS_ONLY<class_NetwServerInfo_constant_VISIBILITY_FRIENDS_ONLY>` works.
 
 .. _class_LobbyDirectory_constant_CAPABILITY_INVITES:
 
@@ -216,7 +218,7 @@ enum **Capability**: :ref:`🔗<enum_LobbyDirectory_Capability>`
 
 :ref:`Capability<enum_LobbyDirectory_Capability>` **CAPABILITY_INVITES** = ``4``
 
-:ref:`invite_received<class_LobbyDirectory_signal_invite_received>` can fire.
+:ref:`invite_received<class_LobbyDirectory_signal_invite_received>` is emitted.
 
 .. _class_LobbyDirectory_constant_CAPABILITY_FRIEND_NAMES:
 
@@ -224,7 +226,7 @@ enum **Capability**: :ref:`🔗<enum_LobbyDirectory_Capability>`
 
 :ref:`Capability<enum_LobbyDirectory_Capability>` **CAPABILITY_FRIEND_NAMES** = ``8``
 
-:ref:`_member_name()<class_LobbyDirectory_private_method__member_name>` resolves personas.
+:ref:`_member_name()<class_LobbyDirectory_private_method__member_name>` returns real player names.
 
 .. rst-class:: classref-section-separator
 
@@ -241,7 +243,7 @@ Method Descriptions
 
 :godot:`bool` **_accepts_empty_address**\ (\ ) |virtual| :ref:`🔗<class_LobbyDirectory_private_method__accepts_empty_address>`
 
-Whether an empty address means something to this provider, so a form accepts a blank field. Defaults to ``false``.
+Return ``true`` when an empty address is valid. ``false`` by default.
 
 .. rst-class:: classref-item-separator
 
@@ -253,7 +255,7 @@ Whether an empty address means something to this provider, so a form accepts a b
 
 :godot:`String` **_address_help**\ (\ ) |virtual| :ref:`🔗<class_LobbyDirectory_private_method__address_help>`
 
-The sentence a form shows under the address field, telling a player where an address comes from. Defaults to empty.
+Return a sentence to show under the address field, such as where to find a lobby id. Empty by default.
 
 .. rst-class:: classref-item-separator
 
@@ -265,7 +267,7 @@ The sentence a form shows under the address field, telling a player where an add
 
 :godot:`String` **_address_label**\ (\ ) |virtual| :ref:`🔗<class_LobbyDirectory_private_method__address_label>`
 
-What a form calls the address field, such as ``"Lobby ID"``. Defaults to ``"Lobby"``.
+Return the title of the address field, such as ``"Lobby ID"``. ``"Lobby"`` by default.
 
 .. rst-class:: classref-item-separator
 
@@ -277,7 +279,7 @@ What a form calls the address field, such as ``"Lobby ID"``. Defaults to ``"Lobb
 
 :godot:`String` **_address_placeholder**\ (\ ) |virtual| :ref:`🔗<class_LobbyDirectory_private_method__address_placeholder>`
 
-The greyed sample text a form shows in an empty address field. Defaults to empty.
+Return the placeholder text of the address field. Empty by default.
 
 .. rst-class:: classref-item-separator
 
@@ -289,7 +291,7 @@ The greyed sample text a form shows in an empty address field. Defaults to empty
 
 :godot:`bool` **_can_host_here**\ (\ ) |virtual| :ref:`🔗<class_LobbyDirectory_private_method__can_host_here>`
 
-Whether this build may open a lobby, as opposed to only joining one. Defaults to ``true``.
+Return ``false`` when this build can only join lobbies. ``true`` by default.
 
 .. rst-class:: classref-item-separator
 
@@ -301,7 +303,7 @@ Whether this build may open a lobby, as opposed to only joining one. Defaults to
 
 :godot:`bool` **_can_probe**\ (\ ) |virtual| :ref:`🔗<class_LobbyDirectory_private_method__can_probe>`
 
-Whether an address supports probing without joining. Lobby providers usually expose this through :ref:`_list_lobbies()<class_LobbyDirectory_private_method__list_lobbies>`, so the default is ``false``.
+Return ``true`` when a lobby can be checked without joining it. ``false`` by default.
 
 .. rst-class:: classref-item-separator
 
@@ -313,7 +315,7 @@ Whether an address supports probing without joining. Lobby providers usually exp
 
 :ref:`Capability<enum_LobbyDirectory_Capability>` **_capabilities**\ (\ ) |virtual| :ref:`🔗<class_LobbyDirectory_private_method__capabilities>`
 
-The :ref:`Capability<enum_LobbyDirectory_Capability>` flags this directory can honor, which is what :ref:`supports()<class_LobbyDirectory_method_supports>` reads. Defaults to none.
+Return the :ref:`Capability<enum_LobbyDirectory_Capability>` flags this directory supports. None by default.
 
 .. rst-class:: classref-item-separator
 
@@ -325,9 +327,7 @@ The :ref:`Capability<enum_LobbyDirectory_Capability>` flags this directory can h
 
 :godot:`Dictionary` **_client_settings**\ (\ ) |virtual| :ref:`🔗<class_LobbyDirectory_private_method__client_settings>`
 
-The settings a join form starts from, which :ref:`_join_lobby()<class_LobbyDirectory_private_method__join_lobby>` is later handed with the player's edits applied. Defaults to empty.
-
-Return a setting key here when joining uses it. :ref:`_host_settings()<class_LobbyDirectory_private_method__host_settings>` provides the host settings. Shared settings may appear in both.
+Return the fields a join form asks for, with their default values. They are passed to :ref:`_join_lobby()<class_LobbyDirectory_private_method__join_lobby>`. Empty by default.
 
 .. rst-class:: classref-item-separator
 
@@ -339,7 +339,7 @@ Return a setting key here when joining uses it. :ref:`_host_settings()<class_Lob
 
 :godot:`String` **_display_name**\ (\ ) |virtual| :ref:`🔗<class_LobbyDirectory_private_method__display_name>`
 
-The provider name a browser shows. Defaults to :ref:`_peer_class()<class_LobbyDirectory_private_method__peer_class>`.
+Return the name shown in a server browser. :ref:`_peer_class()<class_LobbyDirectory_private_method__peer_class>` by default.
 
 .. rst-class:: classref-item-separator
 
@@ -351,9 +351,7 @@ The provider name a browser shows. Defaults to :ref:`_peer_class()<class_LobbyDi
 
 |void| **_host_lobby**\ (\ settings\: :godot:`Dictionary`\ ) |virtual| :ref:`🔗<class_LobbyDirectory_private_method__host_lobby>`
 
-Creates a lobby. Completes through :ref:`deliver()<class_LobbyDirectory_method_deliver>` or :ref:`fail()<class_LobbyDirectory_method_fail>` with a connected host :godot:`MultiplayerPeer`.
-
-\ ``settings`` is :ref:`_host_settings()<class_LobbyDirectory_private_method__host_settings>` with the caller's edits applied, so a directory reads only the keys its provider can honor. The advert keys are ``name``, ``max_players`` and ``visibility``, the last a :ref:`Visibility<enum_NetwServerInfo_Visibility>`.
+Create a lobby, then call :ref:`deliver()<class_LobbyDirectory_method_deliver>` with the host :godot:`MultiplayerPeer`, or :ref:`fail()<class_LobbyDirectory_method_fail>`. ``settings`` holds the fields from :ref:`_host_settings()<class_LobbyDirectory_private_method__host_settings>`. ``name``, ``max_players`` and ``visibility``, a :ref:`Visibility<enum_NetwServerInfo_Visibility>`, are common.
 
 .. rst-class:: classref-item-separator
 
@@ -365,7 +363,7 @@ Creates a lobby. Completes through :ref:`deliver()<class_LobbyDirectory_method_d
 
 :godot:`Dictionary` **_host_settings**\ (\ ) |virtual| :ref:`🔗<class_LobbyDirectory_private_method__host_settings>`
 
-The settings a host form starts from, which :ref:`_host_lobby()<class_LobbyDirectory_private_method__host_lobby>` is later handed with the player's edits applied. Defaults to empty.
+Return the fields a host form asks for, with their default values. They are passed to :ref:`_host_lobby()<class_LobbyDirectory_private_method__host_lobby>`. Empty by default.
 
 .. rst-class:: classref-item-separator
 
@@ -377,7 +375,7 @@ The settings a host form starts from, which :ref:`_host_lobby()<class_LobbyDirec
 
 :godot:`bool` **_is_available**\ (\ ) |virtual| :ref:`🔗<class_LobbyDirectory_private_method__is_available>`
 
-Whether the provider can be used on this build and platform, so a browser greys out what will never work here. Defaults to ``true``.
+Return ``false`` when the service does not work on this platform. ``true`` by default.
 
 .. rst-class:: classref-item-separator
 
@@ -389,7 +387,7 @@ Whether the provider can be used on this build and platform, so a browser greys 
 
 :godot:`String` **_join_address**\ (\ ) |virtual| :ref:`🔗<class_LobbyDirectory_private_method__join_address>`
 
-The address others join the lobby this directory currently holds by, so a host can show what to share. Empty while it holds no lobby, which is the default.
+Return the address of the current lobby, for the host to share. Empty by default.
 
 .. rst-class:: classref-item-separator
 
@@ -401,9 +399,7 @@ The address others join the lobby this directory currently holds by, so a host c
 
 |void| **_join_lobby**\ (\ address\: :godot:`String`\ ) |virtual| :ref:`🔗<class_LobbyDirectory_private_method__join_lobby>`
 
-Joins the lobby named by ``address``. Completes through :ref:`deliver()<class_LobbyDirectory_method_deliver>` or :ref:`fail()<class_LobbyDirectory_method_fail>` with a connected :godot:`MultiplayerPeer`.
-
-\ ``address`` is one of the strings :ref:`publish_lobbies()<class_LobbyDirectory_method_publish_lobbies>` published, or whatever a player typed into the field :ref:`_address_label()<class_LobbyDirectory_private_method__address_label>` names.
+Join the lobby at ``address``, then call :ref:`deliver()<class_LobbyDirectory_method_deliver>` with the :godot:`MultiplayerPeer`, or :ref:`fail()<class_LobbyDirectory_method_fail>`. ``address`` is one from :ref:`publish_lobbies()<class_LobbyDirectory_method_publish_lobbies>`, or one a player typed.
 
 .. rst-class:: classref-item-separator
 
@@ -415,7 +411,7 @@ Joins the lobby named by ``address``. Completes through :ref:`deliver()<class_Lo
 
 |void| **_leave_lobby**\ (\ ) |virtual| :ref:`🔗<class_LobbyDirectory_private_method__leave_lobby>`
 
-Leaves the lobby this directory holds, if any. Idempotent, and reached when a match is torn down rather than when a browse is closed.
+Leave the current lobby, if any. Called when the match ends.
 
 .. rst-class:: classref-item-separator
 
@@ -427,7 +423,7 @@ Leaves the lobby this directory holds, if any. Idempotent, and reached when a ma
 
 |void| **_list_lobbies**\ (\ ) |virtual| :ref:`🔗<class_LobbyDirectory_private_method__list_lobbies>`
 
-Requests the browse rows. Completes through :ref:`publish_lobbies()<class_LobbyDirectory_method_publish_lobbies>` or :ref:`fail()<class_LobbyDirectory_method_fail>`.
+List the lobbies, then call :ref:`publish_lobbies()<class_LobbyDirectory_method_publish_lobbies>` or :ref:`fail()<class_LobbyDirectory_method_fail>`.
 
 .. rst-class:: classref-item-separator
 
@@ -439,7 +435,7 @@ Requests the browse rows. Completes through :ref:`publish_lobbies()<class_LobbyD
 
 :godot:`String` **_local_member_name**\ (\ ) |virtual| :ref:`🔗<class_LobbyDirectory_private_method__local_member_name>`
 
-The local member's display name. Providers may override this before a Godot peer id exists. Defaults to :ref:`local_member_name_default()<class_LobbyDirectory_method_local_member_name_default>`.
+Return the local player's display name. :ref:`local_member_name_default()<class_LobbyDirectory_method_local_member_name_default>` by default.
 
 .. rst-class:: classref-item-separator
 
@@ -451,7 +447,7 @@ The local member's display name. Providers may override this before a Godot peer
 
 :godot:`String` **_member_name**\ (\ peer_id\: :godot:`int`\ ) |virtual| :ref:`🔗<class_LobbyDirectory_private_method__member_name>`
 
-Resolves ``peer_id`` to a display name. Providers with an identity graph override this. Defaults to :ref:`member_name_default()<class_LobbyDirectory_method_member_name_default>`.
+Return the display name of ``peer_id``. :ref:`member_name_default()<class_LobbyDirectory_method_member_name_default>` by default.
 
 .. rst-class:: classref-item-separator
 
@@ -463,7 +459,19 @@ Resolves ``peer_id`` to a display name. Providers with an identity graph overrid
 
 :godot:`StringName` **_peer_class**\ (\ ) |virtual| :ref:`🔗<class_LobbyDirectory_private_method__peer_class>`
 
-The :godot:`MultiplayerPeer` class this directory's lobbies join through, such as ``&"SteamMultiplayerPeer"``. This is the key a session registers the directory under, so two directories in one session name two classes. Empty by default, which no session adapts.
+Return the class name of the :godot:`MultiplayerPeer` this service uses, such as ``&"SteamMultiplayerPeer"``. Two directories in one session must return different classes.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_LobbyDirectory_private_method__timeout_hint:
+
+.. rst-class:: classref-method
+
+:godot:`float` **_timeout_hint**\ (\ ) |virtual| :ref:`🔗<class_LobbyDirectory_private_method__timeout_hint>`
+
+Return how many seconds a request may take before it fails with :godot:`@GlobalScope.ERR_TIMEOUT <@GlobalScope#class_@GlobalScope_constant_ERR_TIMEOUT>`.
 
 .. rst-class:: classref-item-separator
 
@@ -475,9 +483,7 @@ The :godot:`MultiplayerPeer` class this directory's lobbies join through, such a
 
 |void| **deliver**\ (\ peer\: :godot:`MultiplayerPeer`\ ) :ref:`🔗<class_LobbyDirectory_method_deliver>`
 
-Reports ``peer`` as the result to the request in flight.
-
-The plane hands the peer to whoever asked for it, so a directory neither assigns it nor keeps it alive on the caller's behalf.
+Reports ``peer`` as the result of the current request. Do not assign it yourself.
 
 .. rst-class:: classref-item-separator
 
@@ -489,9 +495,7 @@ The plane hands the peer to whoever asked for it, so a directory neither assigns
 
 |void| **fail**\ (\ error\: :godot:`Error <@GlobalScope#enum_@globalscope_Error>`, message\: :godot:`String`\ ) :ref:`🔗<class_LobbyDirectory_method_fail>`
 
-Reports that the request in flight cannot be completed.
-
-\ ``message`` is shown to a player, so it names what the provider rejected rather than restating ``error``.
+Reports that the current request failed. ``message`` is shown to the player.
 
 .. rst-class:: classref-item-separator
 
@@ -503,9 +507,7 @@ Reports that the request in flight cannot be completed.
 
 :godot:`String` **local_member_name_default**\ (\ ) |static| :ref:`🔗<class_LobbyDirectory_method_local_member_name_default>`
 
-The default result for :ref:`_local_member_name()<class_LobbyDirectory_private_method__local_member_name>`.
-
-An override calls this for the case it does not resolve itself, because a script cannot ``super()`` into a virtual the extension declares.
+The default :ref:`_local_member_name()<class_LobbyDirectory_private_method__local_member_name>`.
 
 .. rst-class:: classref-item-separator
 
@@ -517,9 +519,7 @@ An override calls this for the case it does not resolve itself, because a script
 
 :godot:`String` **member_name_default**\ (\ peer_id\: :godot:`int`\ ) |static| :ref:`🔗<class_LobbyDirectory_method_member_name_default>`
 
-The default result for :ref:`_member_name()<class_LobbyDirectory_private_method__member_name>`, ``"Player <peer_id>"``.
-
-An override calls this for the peers it cannot name itself, because a script cannot ``super()`` into a virtual the extension declares.
+The default :ref:`_member_name()<class_LobbyDirectory_private_method__member_name>`, ``"Player <peer_id>"``.
 
 .. rst-class:: classref-item-separator
 
@@ -531,9 +531,7 @@ An override calls this for the peers it cannot name itself, because a script can
 
 |void| **publish_lobbies**\ (\ addresses\: :godot:`PackedStringArray`, names\: :godot:`PackedStringArray`, infos\: :godot:`Array`\[:ref:`NetwServerInfo<class_NetwServerInfo>`\]\ ) :ref:`🔗<class_LobbyDirectory_method_publish_lobbies>`
 
-Publishes the browse rows :ref:`_list_lobbies()<class_LobbyDirectory_private_method__list_lobbies>` found.
-
-The three arrays are read in step: ``addresses`` carries what :ref:`_join_lobby()<class_LobbyDirectory_private_method__join_lobby>` is later handed, ``names`` what a row is labelled with, and ``infos`` the :ref:`NetwServerInfo<class_NetwServerInfo>` a row is drawn and classified from. A row whose :ref:`NetwServerInfo.app_id<class_NetwServerInfo_property_app_id>` does not match the local build is listed as incompatible rather than dropped, so publish the tag the host advertised rather than the local one.
+Reports the lobbies :ref:`_list_lobbies()<class_LobbyDirectory_private_method__list_lobbies>` found. The three arrays are matched by index. Use the :ref:`NetwServerInfo.app_id<class_NetwServerInfo_property_app_id>` the host sent, so lobbies of other builds show as incompatible.
 
 .. rst-class:: classref-item-separator
 
@@ -545,7 +543,7 @@ The three arrays are read in step: ``addresses`` carries what :ref:`_join_lobby(
 
 :godot:`bool` **supports**\ (\ capability\: :ref:`Capability<enum_LobbyDirectory_Capability>`\ ) :ref:`🔗<class_LobbyDirectory_method_supports>`
 
-Returns whether :ref:`_capabilities()<class_LobbyDirectory_private_method__capabilities>` includes ``capability``, which is how a browser hides controls the provider cannot honor.
+Returns ``true`` when :ref:`_capabilities()<class_LobbyDirectory_private_method__capabilities>` includes ``capability``.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

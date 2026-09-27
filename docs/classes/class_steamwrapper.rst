@@ -12,14 +12,14 @@ SteamWrapper
 
 **Inherits:** :godot:`RefCounted`
 
-Internal wrapper for the Steam singleton to provide a clean API.
+Calls the GodotSteam singleton, ``Engine.get_singleton("Steam")``.
 
 .. rst-class:: classref-introduction-group
 
 Description
 -----------
 
-All methods are thin proxies over ``Engine.get_singleton("Steam")``. Use :ref:`is_available()<class_SteamWrapper_method_is_available>` to check whether the GodotSteam GDExtension is present before invoking other methods.
+Check :ref:`is_available()<class_SteamWrapper_method_is_available>` before calling other methods, since GodotSteam may not be installed.
 
 .. rst-class:: classref-reftable-group
 

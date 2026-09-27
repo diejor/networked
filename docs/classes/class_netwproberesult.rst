@@ -12,16 +12,14 @@ NetwProbeResult
 
 **Inherits:** :godot:`RefCounted`
 
-Categorical outcome of a server probe.
+The result of checking whether a server can be joined.
 
 .. rst-class:: classref-introduction-group
 
 Description
 -----------
 
-What a server browser holds for one row, so the row can render before anyone commits to joining it. A probe never throws and never half-returns: every route out of it, including a null target and a transport that cannot probe at all, ends at one :ref:`STATUS_OK<class_NetwProbeResult_constant_STATUS_OK>` .. :ref:`STATUS_INCOMPATIBLE<class_NetwProbeResult_constant_STATUS_INCOMPATIBLE>` value, so a caller branches on :ref:`status<class_NetwProbeResult_property_status>` rather than on whether it got a result.
-
-\ :ref:`status<class_NetwProbeResult_property_status>` decides which of the other members carries anything. Only :ref:`STATUS_OK<class_NetwProbeResult_constant_STATUS_OK>` and :ref:`STATUS_INCOMPATIBLE<class_NetwProbeResult_constant_STATUS_INCOMPATIBLE>` carry an :ref:`info<class_NetwProbeResult_property_info>`, only :ref:`STATUS_OK<class_NetwProbeResult_constant_STATUS_OK>` carries a meaningful :ref:`latency_ms<class_NetwProbeResult_property_latency_ms>`, and :ref:`message<class_NetwProbeResult_property_message>` is diagnostic detail rather than text to show a player.
+Check :ref:`status<class_NetwProbeResult_property_status>` first. Only :ref:`STATUS_OK<class_NetwProbeResult_constant_STATUS_OK>` and :ref:`STATUS_INCOMPATIBLE<class_NetwProbeResult_constant_STATUS_INCOMPATIBLE>` have an :ref:`info<class_NetwProbeResult_property_info>`, and only :ref:`STATUS_OK<class_NetwProbeResult_constant_STATUS_OK>` has a :ref:`latency_ms<class_NetwProbeResult_property_latency_ms>`.
 
 ::
 
@@ -30,10 +28,9 @@ What a server browser holds for one row, so the row can render before anyone com
             result.info.players, result.info.max_players, result.latency_ms,
         ])
     elif result.status == NetwProbeResult.STATUS_INCOMPATIBLE:
-        # info survives here, so the row can still show who is on the server.
         show_banner("That server runs a different build.")
 
-\ The seven static factories are the only way to get a result whose status and payload agree, and a :ref:`NetwTransport<class_NetwTransport>` that returns a probe at all returns one of them.
+\ A :ref:`NetwTransport<class_NetwTransport>` creates results with the static methods.
 
 .. rst-class:: classref-reftable-group
 
@@ -100,7 +97,7 @@ enum **Status**: :ref:`🔗<enum_NetwProbeResult_Status>`
 
 :ref:`Status<enum_NetwProbeResult_Status>` **STATUS_OK** = ``0``
 
-The server returned and this build may join it. :ref:`is_ok()<class_NetwProbeResult_method_is_ok>` tests for exactly this.
+The server answered and can be joined.
 
 .. _class_NetwProbeResult_constant_STATUS_UNREACHABLE:
 
@@ -108,7 +105,7 @@ The server returned and this build may join it. :ref:`is_ok()<class_NetwProbeRes
 
 :ref:`Status<enum_NetwProbeResult_Status>` **STATUS_UNREACHABLE** = ``1``
 
-The connection or the peer authentication failed before the server replied.
+Could not connect to the server.
 
 .. _class_NetwProbeResult_constant_STATUS_TIMEOUT:
 
@@ -116,7 +113,7 @@ The connection or the peer authentication failed before the server replied.
 
 :ref:`Status<enum_NetwProbeResult_Status>` **STATUS_TIMEOUT** = ``2``
 
-Nothing came back inside the probe window.
+The server did not answer in time.
 
 .. _class_NetwProbeResult_constant_STATUS_UNSUPPORTED:
 
@@ -124,7 +121,7 @@ Nothing came back inside the probe window.
 
 :ref:`Status<enum_NetwProbeResult_Status>` **STATUS_UNSUPPORTED** = ``3``
 
-The transport cannot probe, so the server's state is unknown rather than bad.
+The transport cannot check servers. The server may still be up.
 
 .. _class_NetwProbeResult_constant_STATUS_BUSY:
 
@@ -132,7 +129,7 @@ The transport cannot probe, so the server's state is unknown rather than bad.
 
 :ref:`Status<enum_NetwProbeResult_Status>` **STATUS_BUSY** = ``4``
 
-The server returned and rejected, being full or rate limiting probes.
+The server is full or receiving too many checks.
 
 .. _class_NetwProbeResult_constant_STATUS_ERROR:
 
@@ -140,7 +137,7 @@ The server returned and rejected, being full or rate limiting probes.
 
 :ref:`Status<enum_NetwProbeResult_Status>` **STATUS_ERROR** = ``5``
 
-The probe itself failed, with :ref:`message<class_NetwProbeResult_property_message>` naming the step.
+The check itself failed. See :ref:`message<class_NetwProbeResult_property_message>`.
 
 .. _class_NetwProbeResult_constant_STATUS_INCOMPATIBLE:
 
@@ -148,7 +145,7 @@ The probe itself failed, with :ref:`message<class_NetwProbeResult_property_messa
 
 :ref:`Status<enum_NetwProbeResult_Status>` **STATUS_INCOMPATIBLE** = ``6``
 
-The server returned with a build this client cannot join, and :ref:`info<class_NetwProbeResult_property_info>` survives so a row can still be rendered.
+The server runs a different game or version. :ref:`info<class_NetwProbeResult_property_info>` is set.
 
 .. rst-class:: classref-section-separator
 
@@ -170,7 +167,7 @@ Property Descriptions
 - |void| **set_info**\ (\ value\: :ref:`NetwServerInfo<class_NetwServerInfo>`\ )
 - :ref:`NetwServerInfo<class_NetwServerInfo>` **get_info**\ (\ )
 
-What the server advertised about itself, or ``null`` when it never returned. Carried by :ref:`STATUS_OK<class_NetwProbeResult_constant_STATUS_OK>` and :ref:`STATUS_INCOMPATIBLE<class_NetwProbeResult_constant_STATUS_INCOMPATIBLE>`, and by nothing else.
+What the server says about itself, or ``null``.
 
 .. rst-class:: classref-item-separator
 
@@ -187,7 +184,7 @@ What the server advertised about itself, or ``null`` when it never returned. Car
 - |void| **set_latency_ms**\ (\ value\: :godot:`int`\ )
 - :godot:`int` **get_latency_ms**\ (\ )
 
-The probe round trip in milliseconds, or ``-1`` when the result came from a directory listing instead of a round trip. Meaningful only under :ref:`STATUS_OK<class_NetwProbeResult_constant_STATUS_OK>`.
+The round trip time in milliseconds, or ``-1`` when not measured.
 
 .. rst-class:: classref-item-separator
 
@@ -204,7 +201,7 @@ The probe round trip in milliseconds, or ``-1`` when the result came from a dire
 - |void| **set_message**\ (\ value\: :godot:`String`\ )
 - :godot:`String` **get_message**\ (\ )
 
-Diagnostic detail about why the probe ended the way it did. It names the failing step for a log, so it is not player-facing text.
+Details for logs, not for players.
 
 .. rst-class:: classref-item-separator
 
@@ -221,7 +218,7 @@ Diagnostic detail about why the probe ended the way it did. It names the failing
 - |void| **set_status**\ (\ value\: :ref:`Status<enum_NetwProbeResult_Status>`\ )
 - :ref:`Status<enum_NetwProbeResult_Status>` **get_status**\ (\ )
 
-The outcome category, and the member every caller branches on. It defaults to :ref:`STATUS_UNSUPPORTED<class_NetwProbeResult_constant_STATUS_UNSUPPORTED>`, so a bare ``new()`` reads as "nothing was asked" rather than as a failure.
+The result.
 
 .. rst-class:: classref-section-separator
 
@@ -238,7 +235,7 @@ Method Descriptions
 
 :ref:`NetwProbeResult<class_NetwProbeResult>` **busy**\ (\ message\: :godot:`String` = ""\ ) |static| :ref:`🔗<class_NetwProbeResult_method_busy>`
 
-Returns a :ref:`STATUS_BUSY<class_NetwProbeResult_constant_STATUS_BUSY>` result carrying ``message``. The server returned and rejected: it is full, or the probe arrived outside its rate window.
+Returns a :ref:`STATUS_BUSY<class_NetwProbeResult_constant_STATUS_BUSY>` result.
 
 .. rst-class:: classref-item-separator
 
@@ -250,7 +247,7 @@ Returns a :ref:`STATUS_BUSY<class_NetwProbeResult_constant_STATUS_BUSY>` result 
 
 :ref:`NetwProbeResult<class_NetwProbeResult>` **error**\ (\ message\: :godot:`String` = ""\ ) |static| :ref:`🔗<class_NetwProbeResult_method_error>`
 
-Returns a :ref:`STATUS_ERROR<class_NetwProbeResult_constant_STATUS_ERROR>` result carrying ``message``. The probe itself went wrong, rather than the server returning something.
+Returns a :ref:`STATUS_ERROR<class_NetwProbeResult_constant_STATUS_ERROR>` result.
 
 .. rst-class:: classref-item-separator
 
@@ -262,7 +259,7 @@ Returns a :ref:`STATUS_ERROR<class_NetwProbeResult_constant_STATUS_ERROR>` resul
 
 :ref:`NetwProbeResult<class_NetwProbeResult>` **incompatible**\ (\ info\: :ref:`NetwServerInfo<class_NetwServerInfo>` = null, message\: :godot:`String` = ""\ ) |static| :ref:`🔗<class_NetwProbeResult_method_incompatible>`
 
-Returns a :ref:`STATUS_INCOMPATIBLE<class_NetwProbeResult_constant_STATUS_INCOMPATIBLE>` result carrying ``message``. The server returned with a :ref:`NetwServerInfo.app_id<class_NetwServerInfo_property_app_id>` or :ref:`NetwServerInfo.version<class_NetwServerInfo_property_version>` this build cannot join, so ``info`` is kept: a browser row still has something to show even though the join would be rejected.
+Returns a :ref:`STATUS_INCOMPATIBLE<class_NetwProbeResult_constant_STATUS_INCOMPATIBLE>` result with ``info``.
 
 .. rst-class:: classref-item-separator
 
@@ -274,7 +271,7 @@ Returns a :ref:`STATUS_INCOMPATIBLE<class_NetwProbeResult_constant_STATUS_INCOMP
 
 :godot:`bool` **is_ok**\ (\ ) |const| :ref:`🔗<class_NetwProbeResult_method_is_ok>`
 
-Returns ``true`` when :ref:`status<class_NetwProbeResult_property_status>` is :ref:`STATUS_OK<class_NetwProbeResult_constant_STATUS_OK>`, which is the one status that says the server returned and this build may join it.
+Returns ``true`` when :ref:`status<class_NetwProbeResult_property_status>` is :ref:`STATUS_OK<class_NetwProbeResult_constant_STATUS_OK>`.
 
 .. rst-class:: classref-item-separator
 
@@ -286,7 +283,7 @@ Returns ``true`` when :ref:`status<class_NetwProbeResult_property_status>` is :r
 
 :ref:`NetwProbeResult<class_NetwProbeResult>` **ok**\ (\ info\: :ref:`NetwServerInfo<class_NetwServerInfo>`, latency_ms\: :godot:`int` = 0\ ) |static| :ref:`🔗<class_NetwProbeResult_method_ok>`
 
-Returns a :ref:`STATUS_OK<class_NetwProbeResult_constant_STATUS_OK>` result advertising ``info``, measured at ``latency_ms``. A result discovered through a lobby directory rather than a round trip passes ``-1``, which is how a browser marks a row it has no ping for.
+Returns a :ref:`STATUS_OK<class_NetwProbeResult_constant_STATUS_OK>` result. Pass ``-1`` as ``latency_ms`` when it was not measured.
 
 .. rst-class:: classref-item-separator
 
@@ -298,7 +295,7 @@ Returns a :ref:`STATUS_OK<class_NetwProbeResult_constant_STATUS_OK>` result adve
 
 :ref:`NetwProbeResult<class_NetwProbeResult>` **timeout**\ (\ message\: :godot:`String` = ""\ ) |static| :ref:`🔗<class_NetwProbeResult_method_timeout>`
 
-Returns a :ref:`STATUS_TIMEOUT<class_NetwProbeResult_constant_STATUS_TIMEOUT>` result carrying ``message``. The probe reached the wire and nothing came back inside the window.
+Returns a :ref:`STATUS_TIMEOUT<class_NetwProbeResult_constant_STATUS_TIMEOUT>` result.
 
 .. rst-class:: classref-item-separator
 
@@ -310,7 +307,7 @@ Returns a :ref:`STATUS_TIMEOUT<class_NetwProbeResult_constant_STATUS_TIMEOUT>` r
 
 :ref:`NetwProbeResult<class_NetwProbeResult>` **unreachable**\ (\ message\: :godot:`String` = ""\ ) |static| :ref:`🔗<class_NetwProbeResult_method_unreachable>`
 
-Returns a :ref:`STATUS_UNREACHABLE<class_NetwProbeResult_constant_STATUS_UNREACHABLE>` result carrying ``message``. The connection or the peer authentication failed before any server reply.
+Returns a :ref:`STATUS_UNREACHABLE<class_NetwProbeResult_constant_STATUS_UNREACHABLE>` result.
 
 .. rst-class:: classref-item-separator
 
@@ -322,7 +319,7 @@ Returns a :ref:`STATUS_UNREACHABLE<class_NetwProbeResult_constant_STATUS_UNREACH
 
 :ref:`NetwProbeResult<class_NetwProbeResult>` **unsupported**\ (\ ) |static| :ref:`🔗<class_NetwProbeResult_method_unsupported>`
 
-Returns a :ref:`STATUS_UNSUPPORTED<class_NetwProbeResult_constant_STATUS_UNSUPPORTED>` result. This is what a :ref:`NetwTransport<class_NetwTransport>` returns when it has no cheap way to ask, so a caller reads it as "unknown", never as "down".
+Returns a :ref:`STATUS_UNSUPPORTED<class_NetwProbeResult_constant_STATUS_UNSUPPORTED>` result.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

@@ -34,13 +34,13 @@ Data travels as columns in one message. :ref:`NetwSchema<class_NetwSchema>` decl
 
 
 
-A route is a session-stable row identity, a row index would be unstable because tables can add and remove rows.
+Each row is identified by a route. Row indices change when rows are added or removed, and routes do not.
 
 
 
 \ **Writing**\ 
 
-Every column the schema declares crosses the wire in waves. :ref:`commit()<class_NetwTableHandle_method_commit>` stamps the wave with the session's tick.
+Write the routes and every column, then call :ref:`commit()<class_NetwTableHandle_method_commit>` to apply them with the current tick and send them.
 
 ::
 
@@ -67,7 +67,7 @@ A column comes back as the packed array it was written as, in row order.
         for row in pos.size():
             multimesh.set_instance_transform(row, Transform3D(Basis(), pos[row]))
 
-\ :ref:`read_births()<class_NetwTableHandle_method_read_births>` and :ref:`read_deaths()<class_NetwTableHandle_method_read_deaths>` name the routes the latest wave added and removed, which is useful to keep one node per row.
+\ :ref:`read_births()<class_NetwTableHandle_method_read_births>` and :ref:`read_deaths()<class_NetwTableHandle_method_read_deaths>` name the routes the latest commit added and removed, which is useful to keep one node per row.
 
 \ **Saving**\ 
 
@@ -102,7 +102,7 @@ Properties
    +---------------------+----------------------------------------------------------------+-----------+
    | :godot:`StringName` | :ref:`schema_name<class_NetwTableHandle_property_schema_name>` | ``&""``   |
    +---------------------+----------------------------------------------------------------+-----------+
-   | :godot:`RID`        | :ref:`table<class_NetwTableHandle_property_table>`             |           |
+   | :godot:`RID`        | :ref:`table<class_NetwTableHandle_property_table>`             | ``RID()`` |
    +---------------------+----------------------------------------------------------------+-----------+
    | :godot:`int`        | :ref:`tick<class_NetwTableHandle_property_tick>`               | ``-1``    |
    +---------------------+----------------------------------------------------------------+-----------+
@@ -124,10 +124,6 @@ Methods
    +-------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | :ref:`NetwTableHandle<class_NetwTableHandle>`         | :ref:`of<class_NetwTableHandle_method_of>`\ (\ node\: :godot:`Node`, name\: :godot:`StringName`\ ) |static|                                                           |
    +-------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`int`                                          | :ref:`row_of<class_NetwTableHandle_method_row_of>`\ (\ route\: :godot:`int`\ ) |const|                                                                                |
-   +-------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`PackedInt32Array`                             | :ref:`rows_of<class_NetwTableHandle_method_rows_of>`\ (\ routes\: :godot:`PackedInt64Array`\ ) |const|                                                                |
-   +-------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | :godot:`PackedInt64Array`                             | :ref:`read_births<class_NetwTableHandle_method_read_births>`\ (\ ) |const|                                                                                            |
    +-------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | :godot:`Variant`                                      | :ref:`read_column<class_NetwTableHandle_method_read_column>`\ (\ column\: :godot:`int`\ ) |const|                                                                     |
@@ -135,6 +131,10 @@ Methods
    | :godot:`PackedInt64Array`                             | :ref:`read_deaths<class_NetwTableHandle_method_read_deaths>`\ (\ ) |const|                                                                                            |
    +-------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | :godot:`PackedInt64Array`                             | :ref:`read_routes<class_NetwTableHandle_method_read_routes>`\ (\ ) |const|                                                                                            |
+   +-------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`int`                                          | :ref:`row_of<class_NetwTableHandle_method_row_of>`\ (\ route\: :godot:`int`\ ) |const|                                                                                |
+   +-------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`PackedInt32Array`                             | :ref:`rows_of<class_NetwTableHandle_method_rows_of>`\ (\ routes\: :godot:`PackedInt64Array`\ ) |const|                                                                |
    +-------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | :ref:`NetwPromise<class_NetwPromise>`                 | :ref:`save<class_NetwTableHandle_method_save>`\ (\ database\: :ref:`NetwDatabase<class_NetwDatabase>`, key\: :godot:`StringName`, ids\: :godot:`PackedStringArray`\ ) |
    +-------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------+
@@ -222,7 +222,7 @@ The name this table was declared under, which is the name :ref:`Netw.table()<cla
 
 .. rst-class:: classref-property
 
-:godot:`RID` **table** :ref:`🔗<class_NetwTableHandle_property_table>`
+:godot:`RID` **table** = ``RID()`` :ref:`🔗<class_NetwTableHandle_property_table>`
 
 .. rst-class:: classref-property-setget
 
@@ -244,7 +244,7 @@ The session's handle for this table.
 
 - :godot:`int` **get_tick**\ (\ )
 
-The tick carried by the latest committed wave, or ``-1`` before the first commit.
+The tick of the latest commit, or ``-1`` before the first commit.
 
 .. rst-class:: classref-item-separator
 
@@ -277,16 +277,16 @@ Method Descriptions
 
 :godot:`Error <@GlobalScope#enum_@globalscope_Error>` **commit**\ (\ ) :ref:`🔗<class_NetwTableHandle_method_commit>`
 
-Applies the staged routes and columns, stamped with the session's tick.
+Applies the written routes and columns with the current tick, and sends them from the server.
 
 .. code:: text
 
     Error
-    ┠╴OK                  the wave was applied
+    ┠╴OK                  the rows were applied
     ┠╴ERR_DOES_NOT_EXIST  the session this handle names is gone
-    ┖╴ERR_INVALID_DATA    the schema is open, a route was never written, a column was
-                         not written this wave, or a column's element count disagrees
-                         with the row ID count times its declared stride
+    ┖╴ERR_INVALID_DATA    the schema is open, the routes or a column were not written
+                          since the last commit, or a column's size
+                          is not the row count times its stride
 
 .. rst-class:: classref-item-separator
 
@@ -298,7 +298,7 @@ Applies the staged routes and columns, stamped with the session's tick.
 
 :ref:`NetwPromise<class_NetwPromise>` **load**\ (\ database\: :ref:`NetwDatabase<class_NetwDatabase>`, key\: :godot:`StringName`\ ) :ref:`🔗<class_NetwTableHandle_method_load>`
 
-Replaces every row of the table with the rows saved under ``key`` in ``database``, and settles with a :godot:`Dictionary`. Each loaded row gets a new route. On any error the table is left unchanged.
+Replaces every row of the table with the rows saved under ``key`` in ``database``. The promise gives a :godot:`Dictionary`. Each loaded row gets a new route. On any error the table is left unchanged.
 
 .. code:: text
 
@@ -341,6 +341,54 @@ The table declared under ``name`` in :godot:`Node.multiplayer <Node#class_Node_p
 
 ----
 
+.. _class_NetwTableHandle_method_read_births:
+
+.. rst-class:: classref-method
+
+:godot:`PackedInt64Array` **read_births**\ (\ ) |const| :ref:`🔗<class_NetwTableHandle_method_read_births>`
+
+The routes added by the latest update. See :ref:`read_routes()<class_NetwTableHandle_method_read_routes>` for the order of elements.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NetwTableHandle_method_read_column:
+
+.. rst-class:: classref-method
+
+:godot:`Variant` **read_column**\ (\ column\: :godot:`int`\ ) |const| :ref:`🔗<class_NetwTableHandle_method_read_column>`
+
+The packed values stored in ``column``. See :ref:`NetwSchema<class_NetwSchema>` for the column's storage type and stride.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NetwTableHandle_method_read_deaths:
+
+.. rst-class:: classref-method
+
+:godot:`PackedInt64Array` **read_deaths**\ (\ ) |const| :ref:`🔗<class_NetwTableHandle_method_read_deaths>`
+
+The routes removed by the latest update.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NetwTableHandle_method_read_routes:
+
+.. rst-class:: classref-method
+
+:godot:`PackedInt64Array` **read_routes**\ (\ ) |const| :ref:`🔗<class_NetwTableHandle_method_read_routes>`
+
+The routes stored in this table, in row order.
+
+.. rst-class:: classref-item-separator
+
+----
+
 .. _class_NetwTableHandle_method_row_of:
 
 .. rst-class:: classref-method
@@ -365,61 +413,13 @@ The row for each entry in ``routes``, preserving input order and returning ``-1`
 
 ----
 
-.. _class_NetwTableHandle_method_read_births:
-
-.. rst-class:: classref-method
-
-:godot:`PackedInt64Array` **read_births**\ (\ ) |const| :ref:`🔗<class_NetwTableHandle_method_read_births>`
-
-The routes added by the latest admitted wave. See :ref:`read_routes()<class_NetwTableHandle_method_read_routes>` for the order of elements.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwTableHandle_method_read_column:
-
-.. rst-class:: classref-method
-
-:godot:`Variant` **read_column**\ (\ column\: :godot:`int`\ ) |const| :ref:`🔗<class_NetwTableHandle_method_read_column>`
-
-The packed values stored in ``column``. See :ref:`NetwSchema<class_NetwSchema>` for the column's storage type and stride.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwTableHandle_method_read_deaths:
-
-.. rst-class:: classref-method
-
-:godot:`PackedInt64Array` **read_deaths**\ (\ ) |const| :ref:`🔗<class_NetwTableHandle_method_read_deaths>`
-
-The routes removed by the latest admitted wave.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwTableHandle_method_read_routes:
-
-.. rst-class:: classref-method
-
-:godot:`PackedInt64Array` **read_routes**\ (\ ) |const| :ref:`🔗<class_NetwTableHandle_method_read_routes>`
-
-The routes stored in this table, in row order.
-
-.. rst-class:: classref-item-separator
-
-----
-
 .. _class_NetwTableHandle_method_save:
 
 .. rst-class:: classref-method
 
 :ref:`NetwPromise<class_NetwPromise>` **save**\ (\ database\: :ref:`NetwDatabase<class_NetwDatabase>`, key\: :godot:`StringName`, ids\: :godot:`PackedStringArray`\ ) :ref:`🔗<class_NetwTableHandle_method_save>`
 
-Stores the committed rows under ``key`` in ``database``, and settles with an :godot:`@GlobalScope.Error <@GlobalScope#enum_@globalscope_Error>`. ``ids`` names each row in the order of :ref:`read_routes()<class_NetwTableHandle_method_read_routes>`. Values are saved at full precision, ignoring the column's quantizer.
+Stores the committed rows under ``key`` in ``database``. The promise gives an :godot:`@GlobalScope.Error <@GlobalScope#enum_@globalscope_Error>`. ``ids`` names each row in the order of :ref:`read_routes()<class_NetwTableHandle_method_read_routes>`. Values are saved at full precision, ignoring the column's quantizer.
 
 .. code:: text
 
@@ -432,9 +432,9 @@ Stores the committed rows under ``key`` in ``database``, and settles with an :go
     ┠╴ERR_DOES_NOT_EXIST     the table and the database belong to different sessions,
     │                        or the table's schema is not sealed
     ┠╴ERR_UNCONFIGURED       the database is not open
-    ┠╴ERR_BUSY               the database already holds 4096 unsettled operations
+    ┠╴ERR_BUSY               the database already holds 4096 pending operations
     ┠╴ERR_UNAVAILABLE        the connection implements no _write_batch, or the
-    │                        database closed before the snapshot settled
+    │                        database closed before the write finished
     ┖╴backend-defined        the backend refused or could not complete the write
 
 \ **Server Only.**

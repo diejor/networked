@@ -64,7 +64,7 @@ Method Descriptions
 
 |void| **open_connecting**\ (\ handle\: :ref:`NetwConnectHandle<class_NetwConnectHandle>`, peer_class\: :godot:`StringName`, address\: :godot:`String`\ ) :ref:`🔗<class_ConnectingPopup_method_open_connecting>`
 
-Displays the connecting screen and updates details from the endpoint ``peer_class`` and ``address`` name on ``handle``.  An empty ``peer_class`` is a host bring-up, which has no address to render and is otherwise the same wait with the same cancel.
+Shows the connecting screen for the server at ``peer_class`` and ``address``. An empty ``peer_class`` means hosting.
 
 .. rst-class:: classref-item-separator
 
@@ -76,7 +76,7 @@ Displays the connecting screen and updates details from the endpoint ``peer_clas
 
 |void| **update_progress**\ (\ message\: :godot:`String`, ratio\: :godot:`float`\ ) :ref:`🔗<class_ConnectingPopup_method_update_progress>`
 
-Updates the displayed progress ``message`` and determinate ``ratio``.
+Shows ``message``, and a progress bar at ``ratio`` when it is not negative.
 
 .. rst-class:: classref-item-separator
 
@@ -88,7 +88,7 @@ Updates the displayed progress ``message`` and determinate ``ratio``.
 
 |void| **show_failed**\ (\ message\: :godot:`String`, detail\: :godot:`String` = ""\ ) :ref:`🔗<class_ConnectingPopup_method_show_failed>`
 
-Displays the failure screen with ``message``.
+Shows the failure screen with ``message``.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

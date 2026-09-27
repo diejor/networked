@@ -12,14 +12,7 @@ DetailItem
 
 **Inherits:** :godot:`VBoxContainer`
 
-A single detail item shown in the :ref:`ConnectBrowser<class_ConnectBrowser>` details container.
-
-.. rst-class:: classref-introduction-group
-
-Description
------------
-
-Displays a top-level category label and a larger value label underneath in a stacked layout.
+A title and a value, shown in the :ref:`ConnectBrowser<class_ConnectBrowser>` details.
 
 .. rst-class:: classref-reftable-group
 

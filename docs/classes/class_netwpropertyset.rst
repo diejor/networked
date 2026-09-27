@@ -12,20 +12,16 @@ NetwPropertySet
 
 **Inherits:** :godot:`RefCounted`
 
-One row-major binding of a schema, the ordered subset of its columns a script replicates under one :ref:`Record<enum_NetwPropertySet_Record>` kind.
+The properties of a script that are synchronized together, in the order they are sent.
 
 .. rst-class:: classref-introduction-group
 
 Description
 -----------
 
-The set owns no shape. A column's key, type, stride, and quantizer belong to the schema, which is also what the column-major table and :ref:`NetwDatabase<class_NetwDatabase>` read, so the three consumers cannot drift. What the set owns is the binding: which columns are members, in what wire order, on which lane, and under which delivery knobs.
+A set is built from the :ref:`Netw.configure_property()<class_Netw_method_configure_property>` calls of a script. The type and quantizer of each property come from its :ref:`NetwSchema<class_NetwSchema>`. The set decides which properties are sent, in what order, and how.
 
-Membership is explicit because a script's schema holds every configured property, including the ones that only persist. A column that joins no set rides no lane, which is what keeps a persisted-only value off the wire by construction rather than by a negation mark.
-
-The order is the wire order, so :ref:`keys()<class_NetwPropertySet_method_keys>` and :ref:`quantizers()<class_NetwPropertySet_method_quantizers>` are parallel arrays a positional codec walks in lockstep, and a receiver decodes by position with no per-column tag on the wire.
-
-A set is compiled from the :ref:`NetwPropertyConfig<class_NetwPropertyConfig>` rows a script declares through :ref:`Netw.configure_property()<class_Netw_method_configure_property>`, never assembled by hand.
+Properties are sent in the order of :ref:`keys()<class_NetwPropertySet_method_keys>`, with no names on the wire. Both peers must build the same set, which :ref:`wire_hash()<class_NetwPropertySet_method_wire_hash>` checks.
 
 .. rst-class:: classref-reftable-group
 
@@ -116,7 +112,7 @@ enum **Cadence**: :ref:`🔗<enum_NetwPropertySet_Cadence>`
 
 :ref:`Cadence<enum_NetwPropertySet_Cadence>` **TICK** = ``0``
 
-Rides the per-tick sender pump.
+Sent every tick.
 
 .. _class_NetwPropertySet_constant_ON_DEMAND:
 
@@ -124,7 +120,7 @@ Rides the per-tick sender pump.
 
 :ref:`Cadence<enum_NetwPropertySet_Cadence>` **ON_DEMAND** = ``1``
 
-Leaves only on an explicit request.
+Sent only by :ref:`Netw.sync_property()<class_Netw_method_sync_property>`.
 
 .. _class_NetwPropertySet_constant_ON_CHANGE:
 
@@ -132,7 +128,7 @@ Leaves only on an explicit request.
 
 :ref:`Cadence<enum_NetwPropertySet_Cadence>` **ON_CHANGE** = ``2``
 
-Rides the same pump but only when a field changed.
+Sent on a tick where a value changed.
 
 .. rst-class:: classref-item-separator
 
@@ -150,7 +146,7 @@ enum **Profile**: :ref:`🔗<enum_NetwPropertySet_Profile>`
 
 :ref:`Profile<enum_NetwPropertySet_Profile>` **PLAIN** = ``0``
 
-The bare positional payload.
+Only the values.
 
 .. _class_NetwPropertySet_constant_STAMPED:
 
@@ -158,7 +154,7 @@ The bare positional payload.
 
 :ref:`Profile<enum_NetwPropertySet_Profile>` **STAMPED** = ``1``
 
-Prepends the authoring-tick framing the interpolation and prediction clocks read.
+The values and the tick they belong to.
 
 .. rst-class:: classref-item-separator
 
@@ -176,7 +172,7 @@ enum **Trigger**: :ref:`🔗<enum_NetwPropertySet_Trigger>`
 
 :ref:`Trigger<enum_NetwPropertySet_Trigger>` **TRIGGER_TICK** = ``0``
 
-Sends every eligible pass.
+Sent every tick.
 
 .. _class_NetwPropertySet_constant_TRIGGER_ON_CHANGE:
 
@@ -184,7 +180,7 @@ Sends every eligible pass.
 
 :ref:`Trigger<enum_NetwPropertySet_Trigger>` **TRIGGER_ON_CHANGE** = ``1``
 
-Sends only when a field changed.
+Sent when a value changed.
 
 .. _class_NetwPropertySet_constant_TRIGGER_ON_DEMAND:
 
@@ -192,7 +188,7 @@ Sends only when a field changed.
 
 :ref:`Trigger<enum_NetwPropertySet_Trigger>` **TRIGGER_ON_DEMAND** = ``2``
 
-Sends only on an explicit request.
+Sent only by :ref:`Netw.sync_property()<class_Netw_method_sync_property>`.
 
 .. rst-class:: classref-item-separator
 
@@ -210,7 +206,7 @@ enum **Stamp**: :ref:`🔗<enum_NetwPropertySet_Stamp>`
 
 :ref:`Stamp<enum_NetwPropertySet_Stamp>` **STAMP_NONE** = ``0``
 
-The bare payload.
+Only the values.
 
 .. _class_NetwPropertySet_constant_STAMP_TICK:
 
@@ -218,7 +214,7 @@ The bare payload.
 
 :ref:`Stamp<enum_NetwPropertySet_Stamp>` **STAMP_TICK** = ``1``
 
-Frames the authoring tick the interpolation and prediction clocks read.
+The values and their tick.
 
 .. _class_NetwPropertySet_constant_STAMP_TICK_ACK:
 
@@ -226,7 +222,7 @@ Frames the authoring tick the interpolation and prediction clocks read.
 
 :ref:`Stamp<enum_NetwPropertySet_Stamp>` **STAMP_TICK_ACK** = ``2``
 
-Additionally carries the reconciliation ack, the state stream's framing.
+The values, their tick, and the last input the server used.
 
 .. rst-class:: classref-item-separator
 
@@ -244,7 +240,7 @@ enum **Record**: :ref:`🔗<enum_NetwPropertySet_Record>`
 
 :ref:`Record<enum_NetwPropertySet_Record>` **RECORD_NONE** = ``0``
 
-A field synced on demand, in no per-tick set.
+Sent only by :ref:`Netw.sync_property()<class_Netw_method_sync_property>`.
 
 .. _class_NetwPropertySet_constant_RECORD_STATE:
 
@@ -252,7 +248,7 @@ A field synced on demand, in no per-tick set.
 
 :ref:`Record<enum_NetwPropertySet_Record>` **RECORD_STATE** = ``1``
 
-The server's own truth, kept in a :ref:`NetwEntity<class_NetwEntity>` timeline for rewind.
+The server owns the values and every peer receives them. Kept for rewinding. See :ref:`NetwPropertyConfig.state()<class_NetwPropertyConfig_method_state>`.
 
 .. _class_NetwPropertySet_constant_RECORD_INPUT:
 
@@ -260,7 +256,7 @@ The server's own truth, kept in a :ref:`NetwEntity<class_NetwEntity>` timeline f
 
 :ref:`Record<enum_NetwPropertySet_Record>` **RECORD_INPUT** = ``2``
 
-A claim the server verifies, kept in a timeline for rewind.
+The controlling client owns the values and only the server receives them. Kept for rewinding. See :ref:`NetwPropertyConfig.input()<class_NetwPropertyConfig_method_input>`.
 
 .. _class_NetwPropertySet_constant_RECORD_BROADCAST:
 
@@ -268,7 +264,7 @@ A claim the server verifies, kept in a timeline for rewind.
 
 :ref:`Record<enum_NetwPropertySet_Record>` **RECORD_BROADCAST** = ``3``
 
-Trusted display, which keeps nothing.
+The controlling peer owns the values and every peer receives them. Not kept. See :ref:`NetwPropertyConfig.broadcast()<class_NetwPropertyConfig_method_broadcast>`.
 
 .. rst-class:: classref-item-separator
 
@@ -286,7 +282,7 @@ enum **Lane**: :ref:`🔗<enum_NetwPropertySet_Lane>`
 
 :ref:`Lane<enum_NetwPropertySet_Lane>` **VOLATILE** = ``0``
 
-Rides the sync frame freshest-wins.
+Sent unreliably. Only the newest value counts.
 
 .. _class_NetwPropertySet_constant_RETAINED:
 
@@ -294,7 +290,7 @@ Rides the sync frame freshest-wins.
 
 :ref:`Lane<enum_NetwPropertySet_Lane>` **RETAINED** = ``1``
 
-Rides the reliable delta lane only when it changes.
+Sent reliably, only when it changes.
 
 .. rst-class:: classref-item-separator
 
@@ -312,7 +308,7 @@ enum **PropertyClass**: :ref:`🔗<enum_NetwPropertySet_PropertyClass>`
 
 :ref:`PropertyClass<enum_NetwPropertySet_PropertyClass>` **CAUSAL** = ``0``
 
-An antecedent of the recurrence, so it is compared and restored.
+Affects the next step, so it is compared and corrected.
 
 .. _class_NetwPropertySet_constant_DERIVED:
 
@@ -320,7 +316,7 @@ An antecedent of the recurrence, so it is compared and restored.
 
 :ref:`PropertyClass<enum_NetwPropertySet_PropertyClass>` **DERIVED** = ``1``
 
-Recomputed by the body from causal ones, so restoring it writes a value the next step overwrites.
+Computed from other properties each step, so it is not compared.
 
 .. _class_NetwPropertySet_constant_COSMETIC:
 
@@ -328,7 +324,7 @@ Recomputed by the body from causal ones, so restoring it writes a value the next
 
 :ref:`PropertyClass<enum_NetwPropertySet_PropertyClass>` **COSMETIC** = ``2``
 
-Reaches display only, so comparing it would correct a simulation over a value no simulation reads.
+Only affects display, so it is not compared.
 
 .. rst-class:: classref-item-separator
 
@@ -346,7 +342,7 @@ enum **Audience**: :ref:`🔗<enum_NetwPropertySet_Audience>`
 
 :ref:`Audience<enum_NetwPropertySet_Audience>` **AUDIENCE_PUBLIC** = ``0``
 
-Reaches every admitted recipient.
+Sent to every peer that sees the entity.
 
 .. _class_NetwPropertySet_constant_AUDIENCE_SERVER_ONLY:
 
@@ -354,7 +350,7 @@ Reaches every admitted recipient.
 
 :ref:`Audience<enum_NetwPropertySet_Audience>` **AUDIENCE_SERVER_ONLY** = ``1``
 
-Narrows the set to the server, the input stream's reach.
+Sent to the server only.
 
 .. rst-class:: classref-section-separator
 
@@ -376,7 +372,7 @@ Property Descriptions
 - |void| **set_audience**\ (\ value\: :godot:`int`\ )
 - :godot:`int` **get_audience**\ (\ )
 
-Which peers the set reaches.
+Which peers receive the set, as an :ref:`Audience<enum_NetwPropertySet_Audience>`.
 
 .. rst-class:: classref-item-separator
 
@@ -393,7 +389,7 @@ Which peers the set reaches.
 - |void| **set_cadence**\ (\ value\: :godot:`int`\ )
 - :godot:`int` **get_cadence**\ (\ )
 
-When the set's values leave this peer.
+When the set is sent, as a :ref:`Cadence<enum_NetwPropertySet_Cadence>`.
 
 .. rst-class:: classref-item-separator
 
@@ -410,7 +406,7 @@ When the set's values leave this peer.
 - |void| **set_channel**\ (\ value\: :godot:`int`\ )
 - :godot:`int` **get_channel**\ (\ )
 
-The wire channel id the set rides, unset until a factory derives it from the declaration. The ids are the built-in channel table's, written down in ``extension/WIRE.md`` section 3.
+The channel the set is sent on, or ``-1`` until it is assigned.
 
 .. rst-class:: classref-item-separator
 
@@ -427,7 +423,7 @@ The wire channel id the set rides, unset until a factory derives it from the dec
 - |void| **set_columns**\ (\ value\: :godot:`Array`\[:ref:`NetwPropertySetColumn<class_NetwPropertySetColumn>`\]\ )
 - :godot:`Array`\[:ref:`NetwPropertySetColumn<class_NetwPropertySetColumn>`\] **get_columns**\ (\ )
 
-Ordered member columns, the wire order both peers walk positionally.
+The properties, in the order they are sent.
 
 .. rst-class:: classref-item-separator
 
@@ -444,7 +440,7 @@ Ordered member columns, the wire order both peers walk positionally.
 - |void| **set_masked**\ (\ value\: :godot:`bool`\ )
 - :godot:`bool` **get_masked**\ (\ )
 
-Whether the volatile lane rides the masked per-recipient diff instead of a shared broadcast row. Illegal combined with :ref:`window<class_NetwPropertySet_property_window>`, since a redundant sample already defeats masking.
+Whether each peer receives only what changed for it. See :ref:`NetwPropertyConfig.masked()<class_NetwPropertyConfig_method_masked>`. Cannot be combined with :ref:`window<class_NetwPropertySet_property_window>`.
 
 .. rst-class:: classref-item-separator
 
@@ -461,7 +457,7 @@ Whether the volatile lane rides the masked per-recipient diff instead of a share
 - |void| **set_policy**\ (\ value\: :ref:`Policy<enum_NetwMemberConfig_Policy>`\ )
 - :ref:`Policy<enum_NetwMemberConfig_Policy>` **get_policy**\ (\ )
 
-Who may author the stream, as a :ref:`Policy<enum_NetwMemberConfig_Policy>` ordinal, checked on the receiver against the target's script.
+Which peer may send the set.
 
 .. rst-class:: classref-item-separator
 
@@ -478,7 +474,7 @@ Who may author the stream, as a :ref:`Policy<enum_NetwMemberConfig_Policy>` ordi
 - |void| **set_profile**\ (\ value\: :godot:`int`\ )
 - :godot:`int` **get_profile**\ (\ )
 
-How the payload bytes are framed.
+Whether the tick is sent with the values, as a :ref:`Profile<enum_NetwPropertySet_Profile>`.
 
 .. rst-class:: classref-item-separator
 
@@ -495,7 +491,7 @@ How the payload bytes are framed.
 - |void| **set_record**\ (\ value\: :godot:`int`\ )
 - :godot:`int` **get_record**\ (\ )
 
-The timeline a received set captures into, always explicit.
+The kind of values in the set, as a :ref:`Record<enum_NetwPropertySet_Record>`.
 
 .. rst-class:: classref-item-separator
 
@@ -512,7 +508,7 @@ The timeline a received set captures into, always explicit.
 - |void| **set_reliable**\ (\ value\: :godot:`bool`\ )
 - :godot:`bool` **get_reliable**\ (\ )
 
-Whether a :ref:`ON_DEMAND<class_NetwPropertySet_constant_ON_DEMAND>` send transmits reliably. A :ref:`TICK<class_NetwPropertySet_constant_TICK>` set's reliability is chosen per send by its sender, so this default governs only the on-demand door.
+Whether an :ref:`ON_DEMAND<class_NetwPropertySet_constant_ON_DEMAND>` send is reliable.
 
 .. rst-class:: classref-item-separator
 
@@ -529,7 +525,7 @@ Whether a :ref:`ON_DEMAND<class_NetwPropertySet_constant_ON_DEMAND>` send transm
 - |void| **set_rid_handle**\ (\ value\: :godot:`RID`\ )
 - :godot:`RID` **get_rid_handle**\ (\ )
 
-The flat property set handle, or an invalid RID for a compatibility-only set.
+The :godot:`RID` :ref:`NetwMultiplayer<class_NetwMultiplayer>` methods take for this set.
 
 .. rst-class:: classref-item-separator
 
@@ -546,9 +542,7 @@ The flat property set handle, or an invalid RID for a compatibility-only set.
 - |void| **set_sealed**\ (\ value\: :godot:`bool`\ )
 - :godot:`bool` **get_sealed**\ (\ )
 
-``true`` after the compiler fixes the wire hash and freezes mutation.
-
-Writing ``true`` here is not :ref:`seal()<class_NetwPropertySet_method_seal>` and not :ref:`compile_against()<class_NetwPropertySet_method_compile_against>`. It sets the flag alone, leaving the column types exactly as they stood, so a set typed by neither call is frozen with untyped columns that can put no row on a wire. Reach for :ref:`compile_against()<class_NetwPropertySet_method_compile_against>`.
+``true`` after :ref:`seal()<class_NetwPropertySet_method_seal>`. Setting it by hand does not read the property types, so use :ref:`compile_against()<class_NetwPropertySet_method_compile_against>`.
 
 .. rst-class:: classref-item-separator
 
@@ -565,7 +559,7 @@ Writing ``true`` here is not :ref:`seal()<class_NetwPropertySet_method_seal>` an
 - |void| **set_stamp**\ (\ value\: :godot:`int`\ )
 - :godot:`int` **get_stamp**\ (\ )
 
-The tick framing on the payload, the axis form of :ref:`profile<class_NetwPropertySet_property_profile>`.
+What is sent with the values, as a :ref:`Stamp<enum_NetwPropertySet_Stamp>`.
 
 .. rst-class:: classref-item-separator
 
@@ -582,7 +576,7 @@ The tick framing on the payload, the axis form of :ref:`profile<class_NetwProper
 - |void| **set_trigger**\ (\ value\: :godot:`int`\ )
 - :godot:`int` **get_trigger**\ (\ )
 
-The send condition for the set, the axis form of :ref:`cadence<class_NetwPropertySet_property_cadence>`.
+When the set is sent, as a :ref:`Trigger<enum_NetwPropertySet_Trigger>`.
 
 .. rst-class:: classref-item-separator
 
@@ -599,7 +593,7 @@ The send condition for the set, the axis form of :ref:`cadence<class_NetwPropert
 - |void| **set_window**\ (\ value\: :godot:`int`\ )
 - :godot:`int` **get_window**\ (\ )
 
-Redundant volatile sample count, ``0`` for none. Only a volatile-lane set with a windowed input stream sets this.
+How many past ticks each send repeats. See :ref:`NetwPropertyConfig.windowed()<class_NetwPropertyConfig_method_windowed>`.
 
 .. rst-class:: classref-section-separator
 
@@ -616,7 +610,7 @@ Method Descriptions
 
 :ref:`NetwPropertySetColumn<class_NetwPropertySetColumn>` **bind**\ (\ column\: :ref:`NetwPropertySetColumn<class_NetwPropertySetColumn>`\ ) :ref:`🔗<class_NetwPropertySet_method_bind>`
 
-Appends ``column`` to the schema and to the membership, returning it. The column takes the next schema address, so binding is what fixes wire order.
+Adds ``column`` to the end of the set and returns it.
 
 .. rst-class:: classref-item-separator
 
@@ -628,9 +622,7 @@ Appends ``column`` to the schema and to the membership, returning it. The column
 
 :ref:`ColumnType<enum_NetwMultiplayer_ColumnType>` **column_type_for**\ (\ script\: :godot:`Script`, node\: :godot:`Node`, property\: :godot:`StringName`\ ) |static| :ref:`🔗<class_NetwPropertySet_method_column_type_for>`
 
-Returns the :ref:`NetwMultiplayer<class_NetwMultiplayer>` column type ``property`` compiles to on ``script``, reflected through ``node`` when the script's own property list does not carry it.
-
-Half the properties a game replicates are engine properties of the node's native class, which a :godot:`Script` cannot see, so a lookup without a node types those :ref:`NetwMultiplayer.COLUMN_VARIANT<class_NetwMultiplayer_constant_COLUMN_VARIANT>`.
+Returns the column type of ``property`` on ``script``. Built-in properties such as ``position`` are read from ``node``, and are :ref:`NetwMultiplayer.COLUMN_VARIANT<class_NetwMultiplayer_constant_COLUMN_VARIANT>` without one.
 
 .. rst-class:: classref-item-separator
 
@@ -642,9 +634,7 @@ Half the properties a game replicates are engine properties of the node's native
 
 |void| **compile_against**\ (\ node\: :godot:`Node`\ ) :ref:`🔗<class_NetwPropertySet_method_compile_against>`
 
-Types every member column against ``node`` and seals the set.
-
-A column's declared type is what a lane plans its row against, and half the properties a game replicates are engine properties of the node's native class that a :godot:`Script`'s own list cannot see, so the node is the only place the shape can be read from. An already sealed set is left alone, because its shape is what its peers agreed on.
+Reads the type of every property from ``node``, then calls :ref:`seal()<class_NetwPropertySet_method_seal>`. Does nothing on a sealed set.
 
 .. rst-class:: classref-item-separator
 
@@ -656,7 +646,7 @@ A column's declared type is what a lane plans its row against, and half the prop
 
 :godot:`Array`\[:godot:`StringName`\] **keys**\ (\ ) |const| :ref:`🔗<class_NetwPropertySet_method_keys>`
 
-Returns the member keys in wire order.
+Returns the property names, in the order they are sent.
 
 .. rst-class:: classref-item-separator
 
@@ -668,7 +658,7 @@ Returns the member keys in wire order.
 
 :ref:`NetwPropertySetColumn<class_NetwPropertySetColumn>` **member**\ (\ schema_column\: :godot:`int`\ ) |const| :ref:`🔗<class_NetwPropertySet_method_member>`
 
-Returns the member column at ``schema_column``, or ``null`` when the schema declares that column but this set does not bind it.
+Returns the column at ``schema_column`` in the schema, or ``null`` when this set does not include it.
 
 .. rst-class:: classref-item-separator
 
@@ -680,7 +670,7 @@ Returns the member column at ``schema_column``, or ``null`` when the schema decl
 
 :godot:`Array` **quantizers**\ (\ ) |const| :ref:`🔗<class_NetwPropertySet_method_quantizers>`
 
-Returns the per-column quantizers in wire order, parallel to :ref:`keys()<class_NetwPropertySet_method_keys>`, ``null`` where a column is self-describing.
+Returns the quantizer of each property, in the same order as :ref:`keys()<class_NetwPropertySet_method_keys>`, or ``null`` for a property sent as is.
 
 .. rst-class:: classref-item-separator
 
@@ -692,9 +682,7 @@ Returns the per-column quantizers in wire order, parallel to :ref:`keys()<class_
 
 |void| **reproject_lanes**\ (\ ) :ref:`🔗<class_NetwPropertySet_method_reproject_lanes>`
 
-Drops the cached per-lane schema projections so the next send splits the columns as they stand now.
-
-The two projections are subsequences of the declaration selected by :ref:`NetwPropertySetColumn.lane<class_NetwPropertySetColumn_property_lane>`, so anything that moves a column between lanes has to call this or the two lanes keep sending each other's columns.
+Call it after changing :ref:`NetwPropertySetColumn.lane<class_NetwPropertySetColumn_property_lane>` on a column, so the next send uses the new lane.
 
 .. rst-class:: classref-item-separator
 
@@ -706,9 +694,7 @@ The two projections are subsequences of the declaration selected by :ref:`NetwPr
 
 |void| **seal**\ (\ ) :ref:`🔗<class_NetwPropertySet_method_seal>`
 
-Freezes the wire fingerprint over the column types the set already carries. Sealing is what fixes membership order, and membership order is wire order.
-
-It stamps no types of its own. A set whose columns were never typed against a node seals with every one of them :ref:`NetwMultiplayer.COLUMN_VARIANT<class_NetwMultiplayer_constant_COLUMN_VARIANT>`, and a variant column has no wire width, so the lane cannot be planned and not one row of that set ever leaves this peer. Nothing reports this, because an unplannable set is silently carrying no rows rather than failing. :ref:`compile_against()<class_NetwPropertySet_method_compile_against>` is the call that types the columns and then seals, and it is what a caller wants unless :ref:`stamp_column_types()<class_NetwPropertySet_method_stamp_column_types>` already ran.
+Locks the set and computes :ref:`wire_hash()<class_NetwPropertySet_method_wire_hash>`. It does not read property types, so an untyped set seals with every column as :ref:`NetwMultiplayer.COLUMN_VARIANT<class_NetwMultiplayer_constant_COLUMN_VARIANT>` and sends nothing. Use :ref:`compile_against()<class_NetwPropertySet_method_compile_against>`.
 
 .. rst-class:: classref-item-separator
 
@@ -720,7 +706,7 @@ It stamps no types of its own. A set whose columns were never typed against a no
 
 |void| **stamp_column_types**\ (\ set\: :ref:`NetwPropertySet<class_NetwPropertySet>`, script\: :godot:`Script`, node\: :godot:`Node`\ ) |static| :ref:`🔗<class_NetwPropertySet_method_stamp_column_types>`
 
-Types every member column of ``set`` from ``node``, falling back to ``script``'s own property list. A node rather than the script, because position, velocity, and rotation are engine properties of the native class and a script's own property list does not carry them.
+Reads the type of every property in ``set`` from ``node``, or from ``script`` when ``node`` does not have it.
 
 .. rst-class:: classref-item-separator
 
@@ -732,11 +718,7 @@ Types every member column of ``set`` from ``node``, falling back to ``script``'s
 
 :godot:`int` **wire_hash**\ (\ ) |const| :ref:`🔗<class_NetwPropertySet_method_wire_hash>`
 
-Returns the 32-bit fingerprint of this binding. Each member's shape is folded with its membership position and its lane.
-
-The shape half is what the schema fixed, so a peer that declared a different key, type, stride, or quantizer disagrees here. The binding half is membership, order, and lane, so a peer that bound a different subset, in a different order, or moved a column between lanes disagrees too. The two lanes ride separate channels, which is why a lane change is a wire change rather than a local one.
-
-The schema's own name is deliberately absent. A schema is named by the script that declared it, and a script with no resource path has no name two peers can agree on, so folding one would poison a binding over a purely local fact.
+Returns a 32-bit hash of the properties, their order, types, quantizers and lanes. Peers with different hashes cannot read each other's packets.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

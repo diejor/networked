@@ -12,24 +12,14 @@ NakamaRelayPeer
 
 **Inherits:** :godot:`MultiplayerPeerExtension`
 
-:godot:`MultiplayerPeerExtension` driven by :ref:`NakamaRelayBridge<class_NakamaRelayBridge>`.
+A :godot:`MultiplayerPeer` that sends packets through a Nakama match.
 
 .. rst-class:: classref-introduction-group
 
 Description
 -----------
 
-The bridge owns peer registration and packet delivery. This peer exposes those events through Godot's multiplayer peer API.
-
-::
-
-    NakamaRelayBridge
-    ├── register_peer()
-    ├── unregister_peer()
-    └── deliver_packet()
-
-    MultiplayerAPI
-    └── _get_packet_script()
+:ref:`NakamaRelayBridge<class_NakamaRelayBridge>` creates it, adds peers and delivers received packets.
 
 .. rst-class:: classref-reftable-group
 

@@ -169,7 +169,7 @@ Constants
 
 **UNSET** = ``-1`` :ref:`🔗<class_NetwPropertyConfig_constant_UNSET>`
 
-The value of a set-wide setting nothing has written yet.
+A setting no call has written yet.
 
 .. rst-class:: classref-section-separator
 
@@ -514,7 +514,7 @@ Method Descriptions
 
 :ref:`NetwPropertyConfig<class_NetwPropertyConfig>` **audience**\ (\ server_only\: :godot:`bool` = true\ ) :ref:`🔗<class_NetwPropertyConfig_method_audience>`
 
-Sends the set to the server only, or to every peer when ``server_only`` is ``false``. Sets :ref:`NetwPropertySet.audience<class_NetwPropertySet_property_audience>`. :ref:`input()<class_NetwPropertyConfig_method_input>` already sends to the server only.
+Sends properties of this kind to the server only, or to every peer when ``server_only`` is ``false``. Sets :ref:`NetwPropertySet.audience<class_NetwPropertySet_property_audience>`. :ref:`input()<class_NetwPropertyConfig_method_input>` already sends to the server only.
 
 .. rst-class:: classref-item-separator
 
@@ -673,7 +673,7 @@ How far this value may drift from the server's before it is corrected, in its ow
 
 :ref:`NetwPropertyConfig<class_NetwPropertyConfig>` **every_tick**\ (\ interval\: :godot:`float` = 0.0\ ) :ref:`🔗<class_NetwPropertyConfig_method_every_tick>`
 
-Sends the set every tick even when nothing changed, at most once per ``interval`` seconds.
+Sends properties of this kind every tick even when nothing changed, at most once per ``interval`` seconds.
 
 ::
 
@@ -690,7 +690,7 @@ Sends the set every tick even when nothing changed, at most once per ``interval`
 
 :ref:`NetwPropertyConfig<class_NetwPropertyConfig>` **heartbeat**\ (\ ticks\: :godot:`int`\ ) :ref:`🔗<class_NetwPropertyConfig_method_heartbeat>`
 
-Re-sends the set every ``ticks`` ticks even when nothing changed, so a peer that missed a change catches up. An :ref:`input()<class_NetwPropertyConfig_method_input>` set ignores it.
+Re-sends properties of this kind every ``ticks`` ticks even when nothing changed, so a peer that missed a change catches up. :ref:`input()<class_NetwPropertyConfig_method_input>` properties ignore it.
 
 ::
 
@@ -749,7 +749,7 @@ Sends each peer only the properties that changed since it last confirmed, which 
 
 :ref:`NetwPropertyConfig<class_NetwPropertyConfig>` **on_change**\ (\ ) :ref:`🔗<class_NetwPropertyConfig_method_on_change>`
 
-Sends the set only when a property changed. This is the default.
+Sends properties of this kind only when one changed. This is the default.
 
 .. rst-class:: classref-item-separator
 

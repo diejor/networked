@@ -12,16 +12,16 @@ NetwGroupPromise
 
 **Inherits:** :godot:`RefCounted`
 
-The pending results of a one-to-many broadcast request, one entry per responding peer.
+The results of a request sent to many peers, one per peer.
 
 .. rst-class:: classref-introduction-group
 
 Description
 -----------
 
-:ref:`Netw.request_all()<class_Netw_method_request_all>` returns one of these after fanning a request out to every live peer. The awaited set is snapshotted at send time, so a peer that joins mid-flight is not waited on, and a peer that disconnects is dropped from the set so the group can still complete.
+:ref:`Netw.request_all()<class_Netw_method_request_all>` returns one. It waits for the peers connected when the request was sent. A peer that disconnects is no longer waited for.
 
-\ :ref:`then()<class_NetwGroupPromise_method_then>` fires once with the full ``peer_id -> value`` map when the last response lands, while :ref:`completed_single<class_NetwGroupPromise_signal_completed_single>` reports each response as it arrives.
+\ :ref:`then()<class_NetwGroupPromise_method_then>` runs once with every result, as a ``peer_id -> value`` :godot:`Dictionary`. :ref:`completed_single<class_NetwGroupPromise_signal_completed_single>` reports each result as it arrives.
 
 ::
 
@@ -30,9 +30,7 @@ Description
             start_when_all_ready(votes)
         )
 
-\ On timeout the group settles through :ref:`catch_error()<class_NetwGroupPromise_method_catch_error>` with :godot:`@GlobalScope.ERR_TIMEOUT <@GlobalScope#class_@GlobalScope_constant_ERR_TIMEOUT>`, and whatever responses arrived first remain readable on :ref:`results<class_NetwGroupPromise_property_results>`. It settles exactly once, whichever way it goes, and chaining after it settled fires the callback immediately, so there is no race between sending and subscribing.
-
-It shares the settle vocabulary of :ref:`NetwPromise<class_NetwPromise>`, which is the one-to-one form. The two are siblings rather than a base and a subclass: a group's answer is a map and a promise's is a value, and nothing reads them through one type.
+\ On timeout, :ref:`catch_error()<class_NetwGroupPromise_method_catch_error>` runs with :godot:`@GlobalScope.ERR_TIMEOUT <@GlobalScope#class_@GlobalScope_constant_ERR_TIMEOUT>`, and the results that did arrive stay in :ref:`results<class_NetwGroupPromise_property_results>`. It works like :ref:`NetwPromise<class_NetwPromise>` otherwise.
 
 .. rst-class:: classref-reftable-group
 
@@ -101,7 +99,7 @@ Signals
 
 **completed**\ (\ results\: :godot:`Dictionary`\ ) :ref:`🔗<class_NetwGroupPromise_signal_completed>`
 
-Emitted once every awaited peer has resolved.
+Emitted when every peer answered.
 
 .. rst-class:: classref-item-separator
 
@@ -113,7 +111,7 @@ Emitted once every awaited peer has resolved.
 
 **completed_single**\ (\ peer_id\: :godot:`int`, value\: :godot:`Variant`\ ) :ref:`🔗<class_NetwGroupPromise_signal_completed_single>`
 
-Emitted as each awaited peer resolves, before the group itself settles.
+Emitted when one peer answers.
 
 .. rst-class:: classref-item-separator
 
@@ -125,7 +123,7 @@ Emitted as each awaited peer resolves, before the group itself settles.
 
 **failed**\ (\ code\: :godot:`Error <@GlobalScope#enum_@globalscope_Error>`, detail\: :godot:`String`\ ) :ref:`🔗<class_NetwGroupPromise_signal_failed>`
 
-Emitted when the group is rejected by a timeout or a failure.
+Emitted when the group fails or times out.
 
 .. rst-class:: classref-item-separator
 
@@ -137,9 +135,7 @@ Emitted when the group is rejected by a timeout or a failure.
 
 **ready**\ (\ answer\: :godot:`Variant`\ ) :ref:`🔗<class_NetwGroupPromise_signal_ready>`
 
-Carries :ref:`answer()<class_NetwGroupPromise_method_answer>`. A pending batch emits this once when it settles. :ref:`wait()<class_NetwGroupPromise_method_wait>` emits it later for each call made after settlement.
-
-\ **Note:** connect to :ref:`settled<class_NetwGroupPromise_signal_settled>` instead. Because a settled batch emits this per call, a subscriber attached by hand can see it more than once. :ref:`wait()<class_NetwGroupPromise_method_wait>` is its only intended producer and consumer.
+Used by :ref:`wait()<class_NetwGroupPromise_method_wait>`. Connect to :ref:`settled<class_NetwGroupPromise_signal_settled>` instead, since this can be emitted more than once.
 
 .. rst-class:: classref-item-separator
 
@@ -151,7 +147,7 @@ Carries :ref:`answer()<class_NetwGroupPromise_method_answer>`. A pending batch e
 
 **settled**\ (\ ) :ref:`🔗<class_NetwGroupPromise_signal_settled>`
 
-Emitted once the group settled, whichever way it went, after :ref:`completed<class_NetwGroupPromise_signal_completed>` or :ref:`failed<class_NetwGroupPromise_signal_failed>`.
+Emitted once after :ref:`completed<class_NetwGroupPromise_signal_completed>` or :ref:`failed<class_NetwGroupPromise_signal_failed>`.
 
 .. rst-class:: classref-section-separator
 
@@ -172,7 +168,7 @@ Property Descriptions
 
 - :godot:`Error <@GlobalScope#enum_@globalscope_Error>` **get_code**\ (\ )
 
-The settle code when :ref:`is_failed<class_NetwGroupPromise_property_is_failed>`, otherwise :godot:`@GlobalScope.OK <@GlobalScope#class_@GlobalScope_constant_OK>`.
+The error when :ref:`is_failed<class_NetwGroupPromise_property_is_failed>`, otherwise :godot:`@GlobalScope.OK <@GlobalScope#class_@GlobalScope_constant_OK>`.
 
 .. rst-class:: classref-item-separator
 
@@ -188,7 +184,7 @@ The settle code when :ref:`is_failed<class_NetwGroupPromise_property_is_failed>`
 
 - :godot:`String` **get_detail**\ (\ )
 
-The human-readable reason behind :ref:`code<class_NetwGroupPromise_property_code>`, empty when the code says it all. Diagnostics only, never a branch condition.
+A readable reason for :ref:`code<class_NetwGroupPromise_property_code>`, or empty. For display only.
 
 .. rst-class:: classref-item-separator
 
@@ -204,7 +200,7 @@ The human-readable reason behind :ref:`code<class_NetwGroupPromise_property_code
 
 - :godot:`PackedInt32Array` **get_expected_peers**\ (\ )
 
-The peers still owed an answer, in the order the group was created with.
+The peers that have not answered yet.
 
 **Note:** The returned array is copied and any changes to it will not update the original property value. See :godot:`PackedInt32Array` for more details.
 
@@ -222,7 +218,7 @@ The peers still owed an answer, in the order the group was created with.
 
 - :godot:`bool` **get_is_completed**\ (\ )
 
-Whether every awaited peer resolved.
+``true`` when every peer answered.
 
 .. rst-class:: classref-item-separator
 
@@ -238,7 +234,7 @@ Whether every awaited peer resolved.
 
 - :godot:`bool` **get_is_failed**\ (\ )
 
-Whether the request failed or timed out.
+``true`` when the group failed.
 
 .. rst-class:: classref-item-separator
 
@@ -254,7 +250,7 @@ Whether the request failed or timed out.
 
 - :godot:`bool` **get_is_settled**\ (\ )
 
-Whether the group settled, whichever way it went.
+``true`` when the group completed or failed.
 
 .. rst-class:: classref-item-separator
 
@@ -270,7 +266,7 @@ Whether the group settled, whichever way it went.
 
 - :godot:`Dictionary` **get_results**\ (\ )
 
-The ``peer_id -> result`` map of every answer received so far, readable before the group settles and after it fails.
+The results received so far, as ``peer_id -> value``.
 
 .. rst-class:: classref-section-separator
 
@@ -287,7 +283,7 @@ Method Descriptions
 
 :godot:`Variant` **answer**\ (\ ) |const| :ref:`🔗<class_NetwGroupPromise_method_answer>`
 
-Returns :ref:`results<class_NetwGroupPromise_property_results>` after success or :ref:`code<class_NetwGroupPromise_property_code>` after failure. :ref:`ready<class_NetwGroupPromise_signal_ready>` carries the same value.
+Returns :ref:`results<class_NetwGroupPromise_property_results>` on success, or :ref:`code<class_NetwGroupPromise_property_code>` on failure.
 
 .. rst-class:: classref-item-separator
 
@@ -299,7 +295,7 @@ Returns :ref:`results<class_NetwGroupPromise_property_results>` after success or
 
 :ref:`NetwGroupPromise<class_NetwGroupPromise>` **catch_error**\ (\ cb\: :godot:`Callable`\ ) :ref:`🔗<class_NetwGroupPromise_method_catch_error>`
 
-Chains ``cb`` to run when the group fails or times out, receiving :ref:`code<class_NetwGroupPromise_property_code>` and :ref:`detail<class_NetwGroupPromise_property_detail>`. A group that already failed runs it immediately.
+Calls ``cb`` as ``cb(code, detail)`` when the group fails. Returns the group.
 
 .. rst-class:: classref-item-separator
 
@@ -311,7 +307,7 @@ Chains ``cb`` to run when the group fails or times out, receiving :ref:`code<cla
 
 :ref:`NetwGroupPromise<class_NetwGroupPromise>` **create**\ (\ peers\: :godot:`PackedInt32Array`\ ) |static| :ref:`🔗<class_NetwGroupPromise_method_create>`
 
-A group awaiting exactly ``peers``. An empty set is already satisfied and is deliberately NOT settled here, because nothing has subscribed yet: whoever hands the group to a caller settles it at their session's next settle, which is the first moment the caller can have chained onto it.
+Creates a group waiting for ``peers``. An empty group does not complete by itself, so call :ref:`resolve_all()<class_NetwGroupPromise_method_resolve_all>` once callbacks are attached.
 
 .. rst-class:: classref-item-separator
 
@@ -323,7 +319,7 @@ A group awaiting exactly ``peers``. An empty set is already satisfied and is del
 
 |void| **reject**\ (\ err_code\: :godot:`Error <@GlobalScope#enum_@globalscope_Error>`, err_detail\: :godot:`String` = ""\ ) :ref:`🔗<class_NetwGroupPromise_method_reject>`
 
-Settles the group as failed. Emits :ref:`failed<class_NetwGroupPromise_signal_failed>` then :ref:`settled<class_NetwGroupPromise_signal_settled>` and runs every chained :ref:`catch_error()<class_NetwGroupPromise_method_catch_error>`. A group that already settled is unchanged.
+Fails the group and emits :ref:`failed<class_NetwGroupPromise_signal_failed>`, then :ref:`settled<class_NetwGroupPromise_signal_settled>`. Does nothing when already settled.
 
 .. rst-class:: classref-item-separator
 
@@ -335,7 +331,7 @@ Settles the group as failed. Emits :ref:`failed<class_NetwGroupPromise_signal_fa
 
 |void| **remove_peer**\ (\ peer_id\: :godot:`int`\ ) :ref:`🔗<class_NetwGroupPromise_method_remove_peer>`
 
-Drops ``peer_id`` from the awaited set without recording an answer for it, which is what a disconnect during the flight does. Settles the group when it was the last one awaited.
+Stops waiting for ``peer_id``, as when it disconnects. Completes the group if it was the last one.
 
 .. rst-class:: classref-item-separator
 
@@ -347,7 +343,7 @@ Drops ``peer_id`` from the awaited set without recording an answer for it, which
 
 |void| **resolve_all**\ (\ ) :ref:`🔗<class_NetwGroupPromise_method_resolve_all>`
 
-Settles the group as completed with whatever :ref:`results<class_NetwGroupPromise_property_results>` holds. Emits :ref:`completed<class_NetwGroupPromise_signal_completed>` then :ref:`settled<class_NetwGroupPromise_signal_settled>` and runs every chained :ref:`then()<class_NetwGroupPromise_method_then>`.
+Completes the group with the current :ref:`results<class_NetwGroupPromise_property_results>`, and emits :ref:`completed<class_NetwGroupPromise_signal_completed>`, then :ref:`settled<class_NetwGroupPromise_signal_settled>`.
 
 .. rst-class:: classref-item-separator
 
@@ -359,9 +355,7 @@ Settles the group as completed with whatever :ref:`results<class_NetwGroupPromis
 
 |void| **resolve_peer**\ (\ peer_id\: :godot:`int`, val\: :godot:`Variant`\ ) :ref:`🔗<class_NetwGroupPromise_method_resolve_peer>`
 
-Records ``peer_id``'s answer and emits :ref:`completed_single<class_NetwGroupPromise_signal_completed_single>`. Settles the group when it was the last one awaited.
-
-A result from a peer outside the awaited set is ignored.
+Records the result of ``peer_id`` and emits :ref:`completed_single<class_NetwGroupPromise_signal_completed_single>`. Completes the group if it was the last one. Ignored for a peer the group is not waiting for.
 
 .. rst-class:: classref-item-separator
 
@@ -373,7 +367,7 @@ A result from a peer outside the awaited set is ignored.
 
 :ref:`NetwGroupPromise<class_NetwGroupPromise>` **then**\ (\ cb\: :godot:`Callable`\ ) :ref:`🔗<class_NetwGroupPromise_method_then>`
 
-Chains ``cb`` to run when every awaited peer has answered, receiving the :ref:`results<class_NetwGroupPromise_property_results>` map. A group that already completed runs it immediately.
+Calls ``cb`` with :ref:`results<class_NetwGroupPromise_property_results>` when every peer answered. Returns the group.
 
 .. rst-class:: classref-item-separator
 
@@ -385,15 +379,11 @@ Chains ``cb`` to run when every awaited peer has answered, receiving the :ref:`r
 
 :godot:`Signal` **wait**\ (\ ) :ref:`🔗<class_NetwGroupPromise_method_wait>`
 
-Returns a :godot:`Signal` on the :ref:`ready<class_NetwGroupPromise_signal_ready>` channel that is safe to ``await`` whether or not the batch has already settled, carrying :ref:`answer()<class_NetwGroupPromise_method_answer>`.
-
-This is the idiom. Awaiting :ref:`completed<class_NetwGroupPromise_signal_completed>` directly is a race the caller cannot win: a batch whose peers all resolved before the wait has already emitted it, and the caller waits forever. An already-settled batch defers its emission here, so the ``await`` subscribes before the answer is delivered.
+Returns a signal to ``await``, which gives :ref:`answer()<class_NetwGroupPromise_method_answer>`. It works even when the group already settled.
 
 ::
 
     await destination.move_players(peers).wait()
-
-\ This never re-emits :ref:`completed<class_NetwGroupPromise_signal_completed>`, :ref:`failed<class_NetwGroupPromise_signal_failed>` or :ref:`settled<class_NetwGroupPromise_signal_settled>`, so an earlier subscriber is notified exactly once no matter how late anyone waits.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

@@ -151,7 +151,7 @@ Lets the display delay of a remote entity grow when snapshots arrive late.
 - |void| **set_floor_smoothing**\ (\ value\: :godot:`float`\ )
 - :godot:`float` **get_floor_smoothing**\ (\ )
 
-Per frame fraction used to low pass the lag floor.
+How quickly, as a fraction per frame, the smallest delay :ref:`enable_smart_dilation<class_NetwDisplayHandle_property_enable_smart_dilation>` measures follows a new measurement. Lower is smoother.
 
 .. rst-class:: classref-item-separator
 
@@ -168,7 +168,7 @@ Per frame fraction used to low pass the lag floor.
 - |void| **set_lag_adapt_rate**\ (\ value\: :godot:`float`\ )
 - :godot:`float` **get_lag_adapt_rate**\ (\ )
 
-Per frame fraction used to track the measured lag floor.
+How quickly, as a fraction per frame, :ref:`display_lag<class_NetwDisplayHandle_property_display_lag>` shrinks back toward the smallest delay needed once snapshots arrive on time.
 
 .. rst-class:: classref-item-separator
 

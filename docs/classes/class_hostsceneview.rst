@@ -12,21 +12,19 @@ HostSceneView
 
 **Inherits:** :ref:`ParticipantView<class_ParticipantView>` **<** :godot:`Control`
 
-Draws a listen-server host's scene.
+Displays the scene of the host's own player.
 
 .. rst-class:: classref-introduction-group
 
 Description
 -----------
 
-Only a scene declaring :ref:`NetwMultiplayer.SCENE_ISOLATION_OWN_WORLD<class_NetwMultiplayer_constant_SCENE_ISOLATION_OWN_WORLD>` is hosted in an offscreen :godot:`SubViewport`, so this view exists only for one.
-
-On scene changes :ref:`NetwEntity.view_activated<class_NetwEntity_signal_view_activated>` fires.
+A host creates one by itself when its player's scene uses :ref:`NetwMultiplayer.SCENE_ISOLATION_OWN_WORLD<class_NetwMultiplayer_constant_SCENE_ISOLATION_OWN_WORLD>`, since that scene is in a :godot:`SubViewport`. :ref:`NetwEntity.view_activated<class_NetwEntity_signal_view_activated>` is emitted when the displayed scene changes.
 
 ::
 
     func _ready() -> void:
-        var entity := Netw.entity(self)
+        var entity := NetwEntity.of(self)
         entity.view_activated.connect(_on_view_activated)
 
     func _on_view_activated() -> void:
@@ -64,7 +62,7 @@ Property Descriptions
 - |void| **set_suppressed**\ (\ value\: :godot:`bool`\ )
 - :godot:`bool` **get_suppressed**\ (\ )
 
-Whether this view stands down. A suppressed view hides itself, drops its target and stops forwarding input.
+When ``true``, the view hides, stops displaying and stops passing input.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`
