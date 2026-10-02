@@ -3,7 +3,7 @@
 #include "netw/api/netw_multiplayer.hpp"
 #include "netw/persist/snapshot.hpp"
 #include "netw/schema_core.hpp"
-#include "netw/table/core.hpp"
+#include "netw/store/array.hpp"
 
 namespace TestTableSnapshot {
 
@@ -11,7 +11,7 @@ using namespace godot;
 using netw::NetwMultiplayer;
 using netw::SchemaCore;
 using netw::SchemaRecord;
-using netw::table::Core;
+using netw::store::Arrays;
 
 struct World {
     Ref<NetwMultiplayer> session;
@@ -34,8 +34,8 @@ struct World {
         table = session->table_create(schema);
     }
 
-    Core *core() const {
-        return session->get_table_core().ptr();
+    Arrays *core() const {
+        return &session->store_arrays();
     }
 
     const SchemaRecord *record() const {

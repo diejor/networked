@@ -3,7 +3,6 @@
 #include "godot/callable.hpp"
 #include "godot/ref_counted.hpp"
 #include "godot/variant.hpp"
-#include "netw/api/schema_model.hpp"
 
 namespace netw {
 
@@ -12,7 +11,9 @@ class NetwPersistenceConfig : public godot::RefCounted {
 
 private:
     godot::StringName database_name;
-    godot::Ref<NetwSchema> declared_schema;
+    godot::StringName table_name;
+    int version = 1;
+    godot::Dictionary migrations;
     godot::Callable id_provider;
     double save_interval = 0.0;
     bool load_at_spawn = true;
@@ -21,44 +22,40 @@ protected:
     static void _bind_methods();
 
 public:
-    void set_database_name(const godot::StringName &p_name) {
-        database_name = p_name;
-    }
     godot::StringName get_database_name() const {
         return database_name;
     }
 
-    void set_schema(const godot::Ref<NetwSchema> &p_schema) {
-        declared_schema = p_schema;
-    }
-    godot::Ref<NetwSchema> get_schema() const {
-        return declared_schema;
+    godot::StringName get_table_name() const {
+        return table_name;
     }
 
-    void set_id_provider(const godot::Callable &p_provider) {
-        id_provider = p_provider;
+    int get_storage_version() const {
+        return version;
     }
+
+    godot::Dictionary get_migrations() const {
+        return migrations;
+    }
+
     godot::Callable get_id_provider() const {
         return id_provider;
     }
 
-    void set_save_interval(double p_seconds) {
-        save_interval = p_seconds;
-    }
     double get_save_interval() const {
         return save_interval;
     }
 
-    void set_load_at_spawn(bool p_enabled) {
-        load_at_spawn = p_enabled;
-    }
     bool get_load_at_spawn() const {
         return load_at_spawn;
     }
 
     godot::Ref<NetwPersistenceConfig> database(const godot::StringName &p_name);
-    godot::Ref<NetwPersistenceConfig> schema(
-        const godot::Ref<NetwSchema> &p_schema
+    godot::Ref<NetwPersistenceConfig> table(const godot::StringName &p_name);
+    godot::Ref<NetwPersistenceConfig> storage_version(int p_version);
+    godot::Ref<NetwPersistenceConfig> migrate(
+        int p_from_version,
+        const godot::Callable &p_step
     );
     godot::Ref<NetwPersistenceConfig> record_id(
         const godot::Callable &p_provider

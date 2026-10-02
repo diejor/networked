@@ -8,7 +8,6 @@
 #include "godot/rid.hpp"
 #include "godot/variant.hpp"
 #include "netw/api/netw_multiplayer.hpp"
-#include "netw/api/ring_buffer.hpp"
 #include "netw/display/decl.hpp"
 
 namespace netw {
@@ -53,9 +52,6 @@ public:
 
     double get_display_lag() const;
     int64_t displayed_authoring_tick() const;
-    godot::Ref<NetwRingBuffer> get_buffer(
-        const godot::StringName &p_property
-    ) const;
     void reset();
 
 private:

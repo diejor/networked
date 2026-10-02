@@ -7,6 +7,8 @@
 #include "godot/rid.hpp"
 #include "godot/variant.hpp"
 #include "netw/api/quantize.hpp"
+#include "netw/table/schema_record.hpp"
+#include "netw/wire/plan.hpp"
 
 namespace netw::predict {
 
@@ -34,22 +36,30 @@ struct FieldDecl {
     bool teleport_only = false;
     bool reconcile_only = false;
     bool angle = false;
+    int column_type = -1;
 };
 
 struct FieldCodec {
     godot::LocalVector<godot::StringName> keys;
     godot::LocalVector<godot::Ref<NetwQuantize>> quantizers;
     godot::LocalVector<int> types;
+    table::SchemaRecord schema;
+    wire::WirePlan plan;
 
     void append(
         const godot::StringName &p_key,
         const godot::Ref<NetwQuantize> &p_quantizer,
-        int p_type
+        int p_type,
+        int p_column_type = -1
     );
+
+    void seal();
 
     int count() const {
         return int(keys.size());
     }
+
+    bool holds(int p_field, const godot::Variant &p_value) const;
 
     void clear();
 };
@@ -64,7 +74,12 @@ godot::Dictionary canonicalize(
     const godot::Dictionary &p_payload
 );
 
-godot::Dictionary zero_row(const FieldCodec &p_codec);
+bool codes_agree(
+    const FieldCodec &p_codec,
+    const wire::WirePlan &p_plan,
+    const table::SchemaRecord &p_schema,
+    const godot::Array &p_keys
+);
 
 class FieldTable {
     godot::LocalVector<godot::StringName> names;

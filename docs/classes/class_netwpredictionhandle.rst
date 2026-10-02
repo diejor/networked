@@ -61,7 +61,7 @@ Properties
    +--------------------------------------------------------+-----------------------------------------------------------------------------------------------+----------------+
    | :ref:`MissingInput<enum_NetwPredict_MissingInput>`     | :ref:`missing_policy<class_NetwPredictionHandle_property_missing_policy>`                     | ``0``          |
    +--------------------------------------------------------+-----------------------------------------------------------------------------------------------+----------------+
-   | :godot:`Callable`                                      | :ref:`predict_commands<class_NetwPredictionHandle_property_predict_commands>`                 | ``Callable()`` |
+   | :godot:`Callable`                                      | :ref:`predict_input<class_NetwPredictionHandle_property_predict_input>`                       | ``Callable()`` |
    +--------------------------------------------------------+-----------------------------------------------------------------------------------------------+----------------+
    | :ref:`Reconcile<enum_NetwPredict_Reconcile>`           | :ref:`reconcile_mode<class_NetwPredictionHandle_property_reconcile_mode>`                     | ``0``          |
    +--------------------------------------------------------+-----------------------------------------------------------------------------------------------+----------------+
@@ -77,7 +77,7 @@ Properties
    +--------------------------------------------------------+-----------------------------------------------------------------------------------------------+----------------+
    | :godot:`float`                                         | :ref:`teleport_threshold<class_NetwPredictionHandle_property_teleport_threshold>`             | ``2.0``        |
    +--------------------------------------------------------+-----------------------------------------------------------------------------------------------+----------------+
-   | :godot:`Callable`                                      | :ref:`transport_corridor<class_NetwPredictionHandle_property_transport_corridor>`             | ``Callable()`` |
+   | :godot:`Callable`                                      | :ref:`correction_path_clear<class_NetwPredictionHandle_property_correction_path_clear>`       | ``Callable()`` |
    +--------------------------------------------------------+-----------------------------------------------------------------------------------------------+----------------+
    | :godot:`Callable`                                      | :ref:`witness_contacts<class_NetwPredictionHandle_property_witness_contacts>`                 | ``Callable()`` |
    +--------------------------------------------------------+-----------------------------------------------------------------------------------------------+----------------+
@@ -436,25 +436,58 @@ What the server does when an input never arrives.
 
 ----
 
-.. _class_NetwPredictionHandle_property_predict_commands:
+.. _class_NetwPredictionHandle_property_predict_input:
 
 .. rst-class:: classref-property
 
-:godot:`Callable` **predict_commands** = ``Callable()`` :ref:`🔗<class_NetwPredictionHandle_property_predict_commands>`
+:godot:`Callable` **predict_input** = ``Callable()`` :ref:`🔗<class_NetwPredictionHandle_property_predict_input>`
 
 .. rst-class:: classref-property-setget
 
-- |void| **set_predict_commands**\ (\ value\: :godot:`Callable`\ )
-- :godot:`Callable` **get_predict_commands**\ (\ )
+- |void| **set_predict_input**\ (\ value\: :godot:`Callable`\ )
+- :godot:`Callable` **get_predict_input**\ (\ )
 
-Guesses the input of an entity this peer simulates but does not control, through :ref:`NetwEntity.simulation<class_NetwEntity_property_simulation>`. The real input relayed from its controller replaces the guess.
+Guesses input for an entity selected by :ref:`NetwEntity.simulation<class_NetwEntity_property_simulation>` that this peer does not control. Relayed input replaces the guess. Unset callbacks and omitted fields supply zero input.
 
-It is called as ``(entity: NetwEntity, tick: int)`` and returns a :godot:`Dictionary` of input values. Missing values are zero.
+The returned :godot:`Dictionary` uses names declared with :ref:`NetwPropertyConfig.input()<class_NetwPropertyConfig_method_input>`.
 
-::
+.. code:: text
+
+    Dictionary
+    ┖╴property_name  Variant  guessed value of a declared input property
+
+\ 
+.. tabs::
+
+ .. code-tab:: gdscript
 
     func _init() -> void:
-        entity.prediction.predict_commands = func(_e, _tick): return {&"throttle": 1.0}
+        var entity := Netw.configure_entity(self)
+        entity.prediction.predict_input = guess_input
+
+    func guess_input(entity: NetwEntity, tick: int) -> Dictionary:
+        return {&"throttle": 1.0, &"steering": 0.0}
+
+ .. code-tab:: csharp
+
+    public Car()
+    {
+        var entity = Netw.ConfigureEntity(this);
+        entity.Prediction.PredictInput = Callable.From<
+            GodotObject, long, Godot.Collections.Dictionary>(GuessInput);
+    }
+
+    private Godot.Collections.Dictionary GuessInput(
+        GodotObject entity, long tick)
+    {
+        return new Godot.Collections.Dictionary
+        {
+            [new StringName("throttle")] = 1.0,
+            [new StringName("steering")] = 0.0,
+        };
+    }
+
+\ 
 
 .. rst-class:: classref-item-separator
 
@@ -578,18 +611,86 @@ How large an error may be before a correction teleports the body, restoring ever
 
 ----
 
-.. _class_NetwPredictionHandle_property_transport_corridor:
+.. _class_NetwPredictionHandle_property_correction_path_clear:
 
 .. rst-class:: classref-property
 
-:godot:`Callable` **transport_corridor** = ``Callable()`` :ref:`🔗<class_NetwPredictionHandle_property_transport_corridor>`
+:godot:`Callable` **correction_path_clear** = ``Callable()`` :ref:`🔗<class_NetwPredictionHandle_property_correction_path_clear>`
 
 .. rst-class:: classref-property-setget
 
-- |void| **set_transport_corridor**\ (\ value\: :godot:`Callable`\ )
-- :godot:`Callable` **get_transport_corridor**\ (\ )
+- |void| **set_correction_path_clear**\ (\ value\: :godot:`Callable`\ )
+- :godot:`Callable` **get_correction_path_clear**\ (\ )
 
-Returns whether the path to a proposed pose is clear, called as ``corridor(current, proposed)``. Set it to let a correction move the body straight to where it should be now, without going through a wall.
+Checks whether an eligible correction can carry the body to its proposed present pose. Return ``true`` only when the swept path is clear. The engine moves the body. An unset callback disables this correction.
+
+Both :godot:`Dictionary` arguments contain state declared with :ref:`NetwPropertyConfig.state()<class_NetwPropertyConfig_method_state>`. This example sweeps an unscaled :godot:`RigidBody3D` with :godot:`Node3D.position <Node3D#class_Node3D_property_position>` and :godot:`Node3D.quaternion <Node3D#class_Node3D_property_quaternion>` state. It refuses rotation changes because :godot:`PhysicsServer3D.body_test_motion() <PhysicsServer3D#class_PhysicsServer3D_method_body_test_motion>` sweeps translation only.
+
+.. code:: text
+
+    Dictionary
+    ┖╴property_name  Variant  current or proposed value of a state property
+
+\ 
+.. tabs::
+
+ .. code-tab:: gdscript
+
+    var correction_motion := PhysicsTestMotionParameters3D.new()
+
+    func _init() -> void:
+        var entity := Netw.configure_entity(self)
+        entity.prediction.correction_path_clear = correction_is_clear
+
+    func correction_is_clear(
+        current: Dictionary, proposed: Dictionary
+    ) -> bool:
+        if current[&"quaternion"] != proposed[&"quaternion"]:
+            return false
+        var parent_pose := global_transform * transform.affine_inverse()
+        var start := Transform3D(
+            Basis(current[&"quaternion"]), current[&"position"]
+        )
+        correction_motion.from = parent_pose * start
+        var destination: Vector3 = parent_pose * proposed[&"position"]
+        correction_motion.motion = (
+            destination - correction_motion.from.origin
+        )
+        correction_motion.recovery_as_collision = true
+        return not PhysicsServer3D.body_test_motion(
+            get_rid(), correction_motion
+        )
+
+ .. code-tab:: csharp
+
+    private readonly PhysicsTestMotionParameters3D correctionMotion = new();
+
+    public Car()
+    {
+        var entity = Netw.ConfigureEntity(this);
+        entity.Prediction.CorrectionPathClear = Callable.From<
+            Godot.Collections.Dictionary,
+            Godot.Collections.Dictionary, bool>(CorrectionIsClear);
+    }
+
+    private bool CorrectionIsClear(
+        Godot.Collections.Dictionary current,
+        Godot.Collections.Dictionary proposed)
+    {
+        var rotation = current["quaternion"].AsQuaternion();
+        if (rotation != proposed["quaternion"].AsQuaternion())
+            return false;
+        var parentPose = GlobalTransform * Transform.AffineInverse();
+        var start = new Transform3D(
+            new Basis(rotation), current["position"].AsVector3());
+        correctionMotion.From = parentPose * start;
+        var destination = parentPose * proposed["position"].AsVector3();
+        correctionMotion.Motion = destination - correctionMotion.From.Origin;
+        correctionMotion.RecoveryAsCollision = true;
+        return !PhysicsServer3D.BodyTestMotion(GetRid(), correctionMotion);
+    }
+
+\ 
 
 .. rst-class:: classref-item-separator
 
@@ -690,7 +791,7 @@ Reports, field by field, whether this entity's prediction settings take effect. 
 .. code:: text
 
     Dictionary
-    ┠╴class          which NetwPropertySet.PropertyClass it is
+    ┠╴class          which NetwPropertyConfig.PropertyClass it is
     ┠╴triggers       whether it can force a correction on its own
     ┠╴tolerance      the epsilon in force, and who declared it
     ┠╴teleport_at    the teleport distance, and who declared it

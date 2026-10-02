@@ -27,13 +27,6 @@
 				The [NetwEntity] this handle belongs to, or [code]null[/code] once that entity is gone.
 			</description>
 		</method>
-		<method name="get_buffer" qualifiers="const">
-			<return type="NetwRingBuffer" />
-			<param index="0" name="property" type="StringName" />
-			<description>
-				The [NetwRingBuffer] of snapshots for [param property], or [code]null[/code].
-			</description>
-		</method>
 		<method name="reset">
 			<return type="void" />
 			<description>

@@ -41,6 +41,8 @@ Properties
    +-----------------------------------------------------+--------------------------------------------------------------------------+---------+
    | :godot:`StringName`                                 | :ref:`app_id<class_NetwSessionConfig_property_app_id>`                   | ``&""`` |
    +-----------------------------------------------------+--------------------------------------------------------------------------+---------+
+   | :godot:`int`                                        | :ref:`bandwidth_kbps<class_NetwSessionConfig_property_bandwidth_kbps>`   | ``0``   |
+   +-----------------------------------------------------+--------------------------------------------------------------------------+---------+
    | :ref:`Role<enum_NetwMultiplayer_Role>`              | :ref:`desired_role<class_NetwSessionConfig_property_desired_role>`       | ``3``   |
    +-----------------------------------------------------+--------------------------------------------------------------------------+---------+
    | :ref:`NetwLinkConditions<class_NetwLinkConditions>` | :ref:`link_conditions<class_NetwSessionConfig_property_link_conditions>` |         |
@@ -58,6 +60,8 @@ Methods
 
    +---------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------+
    | :ref:`NetwSessionConfig<class_NetwSessionConfig>` | :ref:`app<class_NetwSessionConfig_method_app>`\ (\ app_id\: :godot:`StringName`\ )                                            |
+   +---------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwSessionConfig<class_NetwSessionConfig>` | :ref:`bandwidth<class_NetwSessionConfig_method_bandwidth>`\ (\ kbps\: :godot:`int`\ )                                         |
    +---------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------+
    | :ref:`NetwSessionConfig<class_NetwSessionConfig>` | :ref:`link<class_NetwSessionConfig_method_link>`\ (\ link_conditions\: :ref:`NetwLinkConditions<class_NetwLinkConditions>`\ ) |
    +---------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------+
@@ -87,6 +91,25 @@ Property Descriptions
 - :godot:`StringName` **get_app_id**\ (\ )
 
 The game and build. Peers with a different :ref:`app_id<class_NetwSessionConfig_property_app_id>` cannot connect. Leave it empty to accept any. WebRTC room codes are also created per :ref:`app_id<class_NetwSessionConfig_property_app_id>`.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NetwSessionConfig_property_bandwidth_kbps:
+
+.. rst-class:: classref-property
+
+:godot:`int` **bandwidth_kbps** = ``0`` :ref:`🔗<class_NetwSessionConfig_property_bandwidth_kbps>`
+
+.. rst-class:: classref-property-setget
+
+- |void| **set_bandwidth_kbps**\ (\ value\: :godot:`int`\ )
+- :godot:`int` **get_bandwidth_kbps**\ (\ )
+
+The budget each peer is sent, in kbit/s. ``0`` allows each peer one datagram a tick of :godot:`SceneMultiplayer.max_sync_packet_size <SceneMultiplayer#class_SceneMultiplayer_property_max_sync_packet_size>`, less 150 bytes of headroom. A negative value is refused.
+
+While a peer loses packets its budget halves, and each round trip without loss adds back an eighth of it, up to this value. :ref:`NetwSessionHandle.set_peer_bandwidth()<class_NetwSessionHandle_method_set_peer_bandwidth>` gives one peer its own budget.
 
 .. rst-class:: classref-item-separator
 
@@ -164,6 +187,22 @@ Method Descriptions
 :ref:`NetwSessionConfig<class_NetwSessionConfig>` **app**\ (\ app_id\: :godot:`StringName`\ ) :ref:`🔗<class_NetwSessionConfig_method_app>`
 
 Sets :ref:`app_id<class_NetwSessionConfig_property_app_id>` and returns this config.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NetwSessionConfig_method_bandwidth:
+
+.. rst-class:: classref-method
+
+:ref:`NetwSessionConfig<class_NetwSessionConfig>` **bandwidth**\ (\ kbps\: :godot:`int`\ ) :ref:`🔗<class_NetwSessionConfig_method_bandwidth>`
+
+Sets :ref:`bandwidth_kbps<class_NetwSessionConfig_property_bandwidth_kbps>` and returns this config.
+
+::
+
+    Netw.configure_session(self).bandwidth(256)
 
 .. rst-class:: classref-item-separator
 

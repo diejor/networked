@@ -399,7 +399,7 @@ void WebRTCTransport::host_peer(const Dictionary &p_settings) {
         return;
     }
     const String room = signaler->room_id();
-    NETW_INFO(sys::TRANSPORT, "the WebRTC room %s is ready", room);
+    NETW_INFO(sys::TRANSPORT, "The WebRTC room %s is ready.", room);
     register_local_room(room);
     if (!board_backed) {
         deliver(session_core->peer());
@@ -487,7 +487,7 @@ void WebRTCTransport::pump_outcomes() {
             case SessionOutcome::NATIVE_CONNECTED: {
                 NETW_INFO(
                     sys::TRANSPORT,
-                    "the WebRTC link to %d is open",
+                    "The WebRTC connection to peer %d is open.",
                     reported[at].peer
                 );
                 signaler->on_session_connected(reported[at].peer);
@@ -495,7 +495,7 @@ void WebRTCTransport::pump_outcomes() {
             case SessionOutcome::NATIVE_DISCONNECTED: {
                 NETW_INFO(
                     sys::TRANSPORT,
-                    "the WebRTC link to %d is gone",
+                    "The WebRTC connection to peer %d closed.",
                     reported[at].peer
                 );
             } break;
@@ -503,7 +503,7 @@ void WebRTCTransport::pump_outcomes() {
                 connect_started_msec = 0;
                 NETW_WARN(
                     sys::TRANSPORT,
-                    "the WebRTC link to %d failed: %s",
+                    "The WebRTC connection to peer %d failed (%s).",
                     reported[at].peer,
                     reported[at].reason
                 );
@@ -543,7 +543,8 @@ void WebRTCTransport::pump_inbound() {
                     connect_started_msec = 0;
                     NETW_WARN(
                         sys::TRANSPORT,
-                        "WebRTC signaling went away before the host answered"
+                        "WebRTC signaling was lost before the host answered, "
+                        "so the connection failed. Try joining again."
                     );
                 }
             } break;
@@ -563,7 +564,8 @@ void WebRTCTransport::watch_signaling(int64_t p_now_msec) {
         connect_started_msec = 0;
         NETW_WARN(
             sys::TRANSPORT,
-            "WebRTC reached no signaling inside the connect budget"
+            "WebRTC reached no signaling server before the connection timed "
+            "out. Check the network, or pass your own NetwWebRTCSignaler."
         );
     }
 }

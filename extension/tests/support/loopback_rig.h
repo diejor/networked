@@ -181,6 +181,14 @@ class LoopbackRig {
         for (int index = 0; index < p_decl.synced_columns().size(); ++index) {
             p_api->property_set_add_column(state, index);
         }
+        if (!p_decl.projection().is_empty()) {
+            p_api->property_set_set_column_param(
+                state,
+                0,
+                netw::NetwMultiplayer::COLUMN_PARAM_CARRY_CHANNEL,
+                p_decl.projection()
+            );
+        }
         p_api->property_set_seal(state);
         REQUIRE_MESSAGE(
             int(p_api->entity_add_property_set(p_entity, state, 0))
@@ -1178,7 +1186,8 @@ public:
     ) const {
         godot::Node *owner = node_of(entity_of(p_name, p_client), p_client);
         REQUIRE_MESSAGE(owner != nullptr, "prediction needs an entity owner");
-        godot::Object *wrapper = owner->get_meta("netw_entity");
+        const godot::Ref<netw::NetwEntity> held = netw::NetwEntity::of(owner);
+        godot::Object *wrapper = held.ptr();
         REQUIRE_MESSAGE(wrapper != nullptr, "the entity has no wrapper");
         netw::NetwPredictionHandle *handle
             = godot::Object::cast_to<netw::NetwPredictionHandle>(

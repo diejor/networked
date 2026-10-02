@@ -21,8 +21,18 @@ namespace netw {
 const char *NetwPredictionHandle::GENERATOR_UNKNOWN_BEYOND_RETENTION
     = "UNKNOWN_BEYOND_RETENTION";
 
-NetwPredictionHandle::NetwPredictionHandle() {
-    counters.instantiate();
+NetwPredictionHandle::~NetwPredictionHandle() {
+    if (counters.is_valid()) {
+        counters->keep(facts);
+    }
+}
+
+Ref<NetwPredictStats> NetwPredictionHandle::get_stats() const {
+    if (counters.is_null()) {
+        counters.instantiate();
+        counters->view(const_cast<NetwPredictStats::Book *>(&facts));
+    }
+    return counters;
 }
 
 NetwPredictTiming NetwPredictionHandle::frame_reading() const {
@@ -79,31 +89,28 @@ void NetwPredictionHandle::seat_control_changed(
     }
 }
 
-void NetwPredictionHandle::seat_state_frame(const Dictionary &p_header) {
-    if (engine_seat != nullptr) {
-        engine_seat->on_state_frame(p_header);
-    }
-}
-
-void NetwPredictionHandle::seat_input_frame(const Dictionary &p_header) {
-    if (engine_seat != nullptr) {
-        engine_seat->on_input_frame(p_header);
-    }
-}
-
-void NetwPredictionHandle::seat_simulated_state_frame(
-    const Dictionary &p_header
+void NetwPredictionHandle::seat_arrival(
+    predict::Listener p_listener,
+    const predict::Arrival &p_arrival
 ) {
-    if (engine_seat != nullptr) {
-        engine_seat->on_simulated_state_frame(p_header);
+    if (engine_seat == nullptr) {
+        return;
     }
-}
-
-void NetwPredictionHandle::seat_quarantine_state_frame(
-    const Dictionary &p_header
-) {
-    if (engine_seat != nullptr) {
-        engine_seat->on_quarantine_state_frame(p_header);
+    switch (p_listener) {
+        case predict::Listener::STATE:
+            engine_seat->on_state_frame(p_arrival);
+            break;
+        case predict::Listener::INPUT:
+            engine_seat->on_input_frame(p_arrival);
+            break;
+        case predict::Listener::SIMULATED:
+            engine_seat->on_simulated_state_frame(p_arrival);
+            break;
+        case predict::Listener::QUARANTINE:
+            engine_seat->on_quarantine_state_frame(p_arrival);
+            break;
+        default:
+            break;
     }
 }
 
@@ -135,16 +142,6 @@ void NetwPredictionHandle::seat_fallback(
 ) {
     if (engine_seat != nullptr) {
         engine_seat->enter_fallback(p_transition, p_attribution, p_demoted);
-    }
-}
-
-void NetwPredictionHandle::seat_reseed_alignment(
-    int64_t p_recv_tick,
-    int64_t p_ack,
-    const Dictionary &p_payload
-) {
-    if (engine_seat != nullptr) {
-        engine_seat->finish_reseed_alignment(p_recv_tick, p_ack, p_payload);
     }
 }
 
@@ -304,19 +301,19 @@ void NetwPredictionHandle::set_witness_contacts(const Callable &p_value) {
     NETW_ERR_COND(
         !p_value.is_null() && !p_value.is_valid(),
         sys::PREDICTION,
-        "PredictionHandle.witness_contacts: sampler must be a valid Callable. "
-        "The witness boundary stays unknown."
+        "NetwPredictionHandle.witness_contacts needs a valid Callable, so "
+        "the value was ignored. Pass a method of a live object."
     );
     witness_sampler = p_value;
     rewire();
 }
 
-void NetwPredictionHandle::set_transport_corridor(const Callable &p_value) {
+void NetwPredictionHandle::set_correction_path_clear(const Callable &p_value) {
     NETW_ERR_COND(
         !p_value.is_null() && !p_value.is_valid(),
         sys::PREDICTION,
-        "PredictionHandle.transport_corridor: sweep must be a valid Callable. "
-        "Transport stays disabled."
+        "NetwPredictionHandle.correction_path_clear needs a valid Callable, "
+        "so the value was ignored. Pass a method of a live object."
     );
     corridor_sweep = p_value;
 }
@@ -470,7 +467,7 @@ void NetwPredictionHandle::simulate_frame(double p_delta) {
 Dictionary NetwPredictionHandle::reachability() const {
     NetwPredictionEngine *held = pool();
     const int64_t seated = held != nullptr ? slot() : -1;
-    if (held == nullptr || held->state_binding_of(seated).is_null()) {
+    if (held == nullptr || held->state_binding_of(seated) == nullptr) {
         return Dictionary();
     }
     return held->reachability_report_of(seated);
@@ -483,7 +480,7 @@ void NetwPredictionHandle::notify_contact() {
     }
 }
 
-void NetwPredictionHandle::set_predict_commands(const Callable &p_predictor) {
+void NetwPredictionHandle::set_predict_input(const Callable &p_predictor) {
     command_predictor = p_predictor;
 }
 
@@ -528,17 +525,17 @@ void NetwPredictionHandle::_bind_methods() {
     );
 
     ClassDB::bind_method(
-        D_METHOD("get_predict_commands"),
-        &NetwPredictionHandle::get_predict_commands
+        D_METHOD("get_predict_input"),
+        &NetwPredictionHandle::get_predict_input
     );
     ClassDB::bind_method(
-        D_METHOD("set_predict_commands", "value"),
-        &NetwPredictionHandle::set_predict_commands
+        D_METHOD("set_predict_input", "value"),
+        &NetwPredictionHandle::set_predict_input
     );
     ADD_PROPERTY(
-        PropertyInfo(Variant::CALLABLE, "predict_commands"),
-        "set_predict_commands",
-        "get_predict_commands"
+        PropertyInfo(Variant::CALLABLE, "predict_input"),
+        "set_predict_input",
+        "get_predict_input"
     );
     ClassDB::bind_method(
         D_METHOD("get_recovery_policy"),
@@ -616,17 +613,17 @@ void NetwPredictionHandle::_bind_methods() {
         "get_witness_contacts"
     );
     ClassDB::bind_method(
-        D_METHOD("get_transport_corridor"),
-        &NetwPredictionHandle::get_transport_corridor
+        D_METHOD("get_correction_path_clear"),
+        &NetwPredictionHandle::get_correction_path_clear
     );
     ClassDB::bind_method(
-        D_METHOD("set_transport_corridor", "value"),
-        &NetwPredictionHandle::set_transport_corridor
+        D_METHOD("set_correction_path_clear", "value"),
+        &NetwPredictionHandle::set_correction_path_clear
     );
     ADD_PROPERTY(
-        PropertyInfo(Variant::CALLABLE, "transport_corridor"),
-        "set_transport_corridor",
-        "get_transport_corridor"
+        PropertyInfo(Variant::CALLABLE, "correction_path_clear"),
+        "set_correction_path_clear",
+        "get_correction_path_clear"
     );
     ClassDB::bind_method(
         D_METHOD("get_teleport_threshold"),

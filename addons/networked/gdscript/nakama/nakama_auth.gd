@@ -31,8 +31,9 @@ func admit(peer_id: int, username: StringName, _args: Array = []) -> Error:
 	var wrapper := _active_wrapper()
 	if wrapper == null:
 		push_error(
-			"NakamaAuth: the relay presence is unavailable, so this join is "
-			+ "turned down rather than taken on the name it claimed.",
+			"NakamaAuth refused a join, because it found no "
+			+ "NakamaLobbyDirectory. Call NakamaAuth.bind_tree with the tree "
+			+ "that hosts the Nakama match.",
 		)
 		return ERR_UNAVAILABLE
 	if wrapper.user_id_for_peer(peer_id).is_empty():

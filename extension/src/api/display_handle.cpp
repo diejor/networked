@@ -181,21 +181,6 @@ int64_t NetwDisplayHandle::displayed_authoring_tick() const {
     return session != nullptr ? session->display_get_tick(entity_rid()) : -1;
 }
 
-Ref<NetwRingBuffer> NetwDisplayHandle::get_buffer(
-    const StringName &p_property
-) const {
-    NetwMultiplayer *session = core();
-    if (session == nullptr) {
-        return Ref<NetwRingBuffer>();
-    }
-    const Variant answered = session->display_get_track_stat(
-        entity_rid(),
-        p_property,
-        StringName("buffer")
-    );
-    return Ref<NetwRingBuffer>(answered);
-}
-
 void NetwDisplayHandle::reset() {
     NetwMultiplayer *session = core();
     if (session != nullptr) {
@@ -373,10 +358,6 @@ void NetwDisplayHandle::_bind_methods() {
     ClassDB::bind_method(
         D_METHOD("displayed_authoring_tick"),
         &NetwDisplayHandle::displayed_authoring_tick
-    );
-    ClassDB::bind_method(
-        D_METHOD("get_buffer", "property"),
-        &NetwDisplayHandle::get_buffer
     );
     ClassDB::bind_method(D_METHOD("reset"), &NetwDisplayHandle::reset);
     ClassDB::bind_method(D_METHOD("entity"), &NetwDisplayHandle::entity);

@@ -352,12 +352,16 @@ TEST_CASE(
         int(session->display_lane(RID(), StringName("x"), Variant())),
         int(ERR_SKIP)
     );
-    const Array gathered = session->run_gather_set(RID(), 7, Callable());
+    PackedInt64Array routes;
+    routes.push_back(7);
+    const Array gathered = session->run_gather_rows(RID(), routes);
+    CHECK(session->store_gathers_by_seam());
     NETW_CHECK_EQ(gathered.size(), 1);
     REQUIRE(bool(gathered.size() == 1));
     NETW_CHECK_EQ(int(gathered[0]), 7);
+    CHECK(session->store_applies_by_seam());
     NETW_CHECK_EQ(
-        int(session->run_apply_set(RID(), 7, Array(), Callable())),
+        int(session->run_apply_rows(RID(), routes, Array())),
         int(ERR_SKIP)
     );
     NETW_CHECK_EQ(int(session->get("display_writes")), 1);
@@ -414,39 +418,32 @@ TEST_CASE(
 
 TEST_CASE(
     "[Networked][Session][Hosted] L13 with no override and no installed seam "
-    "the stock bodies are the staged callables themselves, so a caller that "
-    "hands its own gatherer and applier round-trips the values through them"
+    "the stock bodies answer, so a gather reads one row per route it was "
+    "handed and an apply names a table the store holds"
 ) {
     Ref<NetwMultiplayer> session = make_session();
-    CallLog log;
+    CHECK_FALSE(session->store_gathers_by_seam());
+    CHECK_FALSE(session->store_applies_by_seam());
 
-    Array offered;
-    offered.push_back(Vector2(3.0, 4.0));
+    PackedInt64Array routes;
+    routes.push_back(3);
+    routes.push_back(4);
+    const Array rows = session->run_gather_rows(RID(), routes);
+    NETW_CHECK_EQ(rows.size(), 2);
+    REQUIRE(bool(rows.size() == 2));
+    NETW_CHECK_EQ(Array(rows[0]).size(), 0);
 
-    const Array gathered
-        = session->run_gather_set(RID(), 0, log.answering("gather", offered));
-    NETW_CHECK_EQ(log.count("gather"), 1);
-    NETW_CHECK_EQ(gathered.size(), 1);
-    REQUIRE(bool(gathered.size() == 1));
-    CHECK(Vector2(gathered[0]) == Vector2(3.0, 4.0));
-
+    Array columns;
+    columns.push_back(Array());
     NETW_CHECK_EQ(
-        int(session->run_apply_set(RID(), 0, gathered, log.callable("apply"))),
-        int(OK)
+        int(session->run_apply_rows(RID(), routes, columns)),
+        int(ERR_DOES_NOT_EXIST)
     );
-    NETW_CHECK_EQ(log.count("apply"), 1);
-    const Array handed = log.args("apply");
-    REQUIRE(bool(handed.size() == 1));
-    CHECK(Array(handed[0]) == gathered);
 
-    SUBCASE(
-        "a caller that stages nothing gathers nothing and applies "
-        "nowhere, rather than reaching for a gatherer it never got"
-    ) {
-        NETW_CHECK_EQ(session->run_gather_set(RID(), 0, Callable()).size(), 0);
+    SUBCASE("a caller that names no route gathers nothing") {
         NETW_CHECK_EQ(
-            int(session->run_apply_set(RID(), 0, Array(), Callable())),
-            int(ERR_UNCONFIGURED)
+            session->run_gather_rows(RID(), PackedInt64Array()).size(),
+            0
         );
     }
 }

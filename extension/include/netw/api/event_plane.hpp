@@ -10,6 +10,7 @@
 #include "godot/rid.hpp"
 #include "godot/templates.hpp"
 #include "godot/variant.hpp"
+#include "netw/profile.hpp"
 
 namespace netw {
 
@@ -161,7 +162,7 @@ private:
     std::atomic_bool armed_for_lane_threads = {false};
     std::atomic<int32_t> hot_for_lane_threads[EVENT_LIMIT] = {};
 
-    mutable std::mutex staged_lock;
+    mutable NETW_LOCKABLE(std::mutex, staged_lock);
     godot::LocalVector<Emission> staged;
 
     void rebuild_hot();

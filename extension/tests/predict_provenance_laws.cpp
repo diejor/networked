@@ -91,7 +91,7 @@ bool chain_broken(
 }
 
 int64_t chain_breaks(NetwPredictionEngine *p_pool, int64_t p_slot) {
-    return p_pool->drive_stats(p_slot)[NetwPredictionEngine::STAT_CHAIN_BREAKS];
+    return p_pool->drive_stat(p_slot, NetwPredictionEngine::STAT_CHAIN_BREAKS);
 }
 
 void close_a_row_the_next_drive_cannot_continue(
@@ -171,6 +171,7 @@ TEST_CASE(
     NetwPredictionEngine held_pool;
     NetwPredictionEngine *const pool = &held_pool;
     const int64_t slot = driving_slot(pool);
+    pool->attach_journal_reader(slot, true);
     close_a_row_the_next_drive_cannot_continue(pool, slot);
 
     pool->set_pending_provenance(slot, staged_write(7, 3, 42));

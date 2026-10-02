@@ -40,7 +40,7 @@ Ref<NetwSchema> players_schema() {
     Ref<NetwSchema> schema = NetwSchema::create("players");
     schema->replicated(false);
     schema->vector2("where", Ref<NetwQuantize>(), 1);
-    schema->f32("spin", Ref<NetwQuantize>(), 1);
+    schema->f64("spin", Ref<NetwQuantize>(), 1);
     return schema;
 }
 
@@ -94,7 +94,7 @@ struct World {
 
         netw::Netw::configure_persistence(root)
             ->database(StringName("saves"))
-            ->schema(schema)
+            ->table(schema->get_schema_name())
             ->record_id(Callable(account, "get_name"));
     }
 
@@ -120,7 +120,7 @@ struct World {
 
     void bind(Node *p_node, const StringName &p_property, int p_column) {
         model::configure_node_property(p_node, p_property)
-            ->persisted(schema->column_ref(p_column));
+            ->persisted(StringName(p_column == 0 ? "where" : "spin"));
     }
 
     void bind_both() {
@@ -256,7 +256,7 @@ TEST_CASE(
 
     SUBCASE("the binding never compiled") {
         World world("lc4b");
-        world.bind(world.root, "position", 0);
+        world.bind(world.root, "no_such_property", 0);
         CHECK(world.session->persist_enroll(world.root));
         CHECK_FALSE(world.binding().is_valid());
 
@@ -447,10 +447,10 @@ struct Leaving {
         root = memnew(Node2D);
         netw::Netw::configure_persistence(root)
             ->database(StringName("saves"))
-            ->schema(schema)
+            ->table(schema->get_schema_name())
             ->record_id(Callable(account, "get_name"));
         model::configure_node_property(root, "position")
-            ->persisted(schema->column_ref(0));
+            ->persisted(StringName("where"));
         binding = server->persist_bind(root);
     }
 
@@ -523,7 +523,7 @@ struct Departing {
         account->set_name("hero");
         schema = NetwSchema::create("players");
         schema->replicated(false);
-        schema->f32("spin", Ref<NetwQuantize>(), 1);
+        schema->f64("spin", Ref<NetwQuantize>(), 1);
         database = server->get_databases()->create("saves");
         connection = MemoryConnection::opened("lc9", "slot1");
         server->get_databases()
@@ -531,10 +531,10 @@ struct Departing {
         Node *body = pair.authored;
         netw::Netw::configure_persistence(body)
             ->database(StringName("saves"))
-            ->schema(schema)
+            ->table(schema->get_schema_name())
             ->record_id(Callable(account, "get_name"));
         model::configure_node_property(body, "rotation")
-            ->persisted(schema->column_ref(0));
+            ->persisted(StringName("spin"));
         body_id = netw::gd::instance_id(body);
     }
 

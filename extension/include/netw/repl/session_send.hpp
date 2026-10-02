@@ -15,50 +15,45 @@
 #include "netw/repl/snapshot_frame.hpp"
 #include "netw/repl/window_ring.hpp"
 #include "netw/wire/control_scheduler.hpp"
+#include "netw/wire/registry.hpp"
 #include "netw/wire/stream_book.hpp"
+
+namespace netw::store {
+class World;
+class Table;
+} // namespace netw::store
 
 namespace netw::repl {
 
 using netw::table::SchemaRecord;
 
-struct RowOffer {
-    int64_t route = 0;
-    uint8_t comp = 0;
-    uint8_t channel = 0;
-    const SchemaRecord *schema = nullptr;
-    godot::Array values;
-    godot::LocalVector<int> recipients;
-    float priority = 1.0f;
-    bool masked = false;
-    bool reliable = false;
-    bool windowed = false;
-    uint32_t window = 0;
-    int64_t heartbeat = 0;
-    int64_t tick = -1;
-    int64_t ack = -1;
-    int64_t life = 0;
-    wire::StreamTenure tenure;
-
-    const SchemaRecord &declared() const {
-        static const SchemaRecord unplannable;
-        return schema != nullptr ? *schema : unplannable;
-    }
-};
+enum class RowForm : uint8_t { FRESH, REPAIR, REFRESH, WINDOW };
 
 struct RowSend {
     int64_t route = 0;
     uint8_t comp = 0;
+    uint8_t channel = 0;
     int peer = 0;
-    uint32_t offer = 0;
+    uint32_t table = 0;
+    uint32_t row = 0;
+    RowForm form = RowForm::FRESH;
     uint64_t mask = 0;
     uint64_t token = 0;
     uint64_t revision = 0;
     int64_t bits = 0;
+    int64_t framed = 0;
     uint32_t sample_count = 0;
     bool masked = false;
     bool reliable = false;
     bool windowed = false;
-    wire::CodeRow row;
+    bool whole = false;
+    bool resend = false;
+    godot::PackedByteArray bytes;
+};
+
+struct TableFrame {
+    int peer = 0;
+    bool reliable = false;
     godot::PackedByteArray bytes;
 };
 
@@ -69,6 +64,7 @@ struct SessionResult {
     uint32_t deferred = 0;
     uint32_t staged_out = 0;
     int64_t sent_bits = 0;
+    godot::LocalVector<TableFrame> tables;
 };
 
 struct AckReport {
@@ -83,7 +79,6 @@ enum class RowVerdict : uint8_t {
     DEFERRED,
     CAUGHT_UP,
     UNGATHERED,
-    REFUSED
 };
 
 struct RowExplain {
@@ -92,104 +87,219 @@ struct RowExplain {
     uint64_t confirmed = 0;
     uint64_t exposed = 0;
     bool has_baseline = false;
+    float priority = 0.0f;
+    int64_t age_ticks = -1;
+    const char *row_class = "resting";
+};
+
+struct PeerAccount {
+    double balance = 0.0;
+    double rate = 0.0;
+    double fill = 0.0;
+    int64_t filled_tick = 0;
+    bool filled = false;
+    int64_t sent_bytes = 0;
+    uint32_t deferred = 0;
 };
 
 class SessionSend {
+    struct Candidate {
+        uint32_t table = 0;
+        uint32_t row = 0;
+        uint32_t order = 0;
+        float acc = 0.0f;
+        RowForm form = RowForm::FRESH;
+        bool nodeless = false;
+    };
+
     LaneSet lanes;
     SendPass pass;
     LinkGovernor link;
     wire::StreamReaderBook readers;
-    wire::StreamWriterBook writers;
     wire::ControlScheduler control;
-    godot::HashMap<int, godot::HashMap<uint64_t, float>> owed;
-    godot::HashMap<int, godot::HashMap<uint64_t, RowExplain>> verdicts;
-    godot::HashMap<int, int64_t> row_spent_bits;
+    godot::HashMap<int, PeerAccount> accounts;
+    double session_rate = 0.0;
+    int64_t tickrate = 60;
     int64_t row_budget_bits = 0;
+    int64_t pass_tick = -1;
     godot::Callable stage;
-
-    static uint64_t address_of(const RowSend &p_send);
-
-    static uint64_t address_of(int64_t p_route, uint8_t p_comp);
-
-    void note_verdict(
-        int64_t p_route,
-        uint8_t p_comp,
-        int p_peer,
-        RowVerdict p_verdict,
-        int64_t p_tick
-    );
-
-    void note_offer_verdict(
-        const RowOffer &p_offer,
-        RowVerdict p_verdict,
-        int64_t p_tick
-    );
-
-    wire::SnapshotSender *stream_ready(
-        int p_peer,
-        const RowOffer &p_offer,
-        wire::StreamFamily p_family,
-        uint64_t &r_token,
-        wire::StreamLane &r_lane
-    );
-
-    bool row_is_owed(
-        wire::SnapshotSender &p_stream,
-        int p_peer,
-        const wire::StreamLane &p_lane,
-        const RowOffer &p_offer,
-        int64_t p_base_tick,
-        int64_t p_now_ms,
-        bool &r_repairing,
-        bool &r_beat
-    );
-
-    uint64_t revision_for(
-        wire::SnapshotSender &p_stream,
-        int p_peer,
-        const wire::StreamLane &p_lane,
-        int64_t p_base_tick,
-        int64_t p_now_ms,
-        bool p_repairing
-    );
-
-    void expose_send(const RowSend &p_send);
+    bool stage_wanted = true;
+    bool tables_published = true;
+    store::World *world = nullptr;
+    godot::LocalVector<Candidate> candidates;
+    godot::LocalVector<godot::LocalVector<uint32_t>> table_picks;
+    godot::LocalVector<uint32_t> refreshed;
+    wire::CodeRow image;
+    wire::CodeRow baseline;
+    wire::WriteStream stream;
+    SessionResult result;
 
     void queue_close(int p_peer, uint64_t p_token);
 
     void queue_closes(const godot::LocalVector<wire::ClosedLane> &p_closed);
 
-    godot::LocalVector<int> known_peers() const;
+    void queue_open(
+        int p_peer,
+        const store::Table &p_table,
+        uint32_t p_row,
+        uint64_t p_request
+    );
 
-    float owed_by(const RowSend &p_send, float p_priority) const;
+    bool stream_seated(uint32_t p_peer, uint32_t p_table, uint32_t p_row);
+
+    bool classify(
+        uint32_t p_peer,
+        uint32_t p_table,
+        uint32_t p_row,
+        bool p_due,
+        int64_t p_now_ms,
+        RowForm &r_form,
+        SessionResult &r_out
+    );
+
+    bool unfitted(
+        const wire::WireRegistry &p_registry,
+        const store::Table &p_table
+    ) const;
+
+    void record_windows(int64_t p_base_tick);
+
+    bool encode(
+        uint32_t p_peer,
+        uint32_t p_table,
+        uint32_t p_row,
+        RowForm p_form,
+        int64_t p_base_tick,
+        RowSend &r_send,
+        SessionResult &r_out
+    );
+
+    void commit_send(
+        uint32_t p_peer,
+        const RowSend &p_send,
+        int64_t p_base_tick,
+        int64_t p_now_ms
+    );
+
+    void pass_peer(
+        const wire::WireRegistry &p_registry,
+        uint32_t p_peer,
+        int64_t p_max_bits,
+        int64_t p_base_tick,
+        int64_t p_now_ms,
+        SessionResult &r_out
+    );
+
+    void offer_nodeless(
+        uint32_t p_index,
+        int p_peer,
+        int64_t p_tick,
+        uint32_t &r_order
+    );
+
+    bool take_nodeless(
+        const Candidate &p_held,
+        int p_peer,
+        PeerAccount &r_account
+    );
+
+    void emit_nodeless(
+        int p_peer,
+        int64_t p_max_bits,
+        PeerAccount &r_account,
+        SessionResult &r_out
+    );
+
+    PeerAccount &refill(int p_peer, int64_t p_max_bits, int64_t p_tick);
 
     godot::PackedByteArray price(
         const RowSend &p_send,
         int64_t p_base_tick
     ) const;
 
-    godot::LocalVector<RowSend> collect(
-        const godot::LocalVector<RowOffer> &p_offers,
-        int64_t p_base_tick,
-        int64_t p_now_ms,
-        godot::LocalVector<wire::FitCandidate> &r_candidates,
-        SessionResult &r_out
-    );
-
 public:
-    static constexpr int64_t VOLATILE_FLOOR_BITS = 128 * 8;
+    static constexpr uint32_t MISSES_PER_TICK = 4;
+    static constexpr double BANKED_TICKS = 2.0;
+
+    void set_rate(double p_bytes_per_second) {
+        session_rate = p_bytes_per_second;
+    }
+
+    void set_peer_rate(int p_peer, double p_bytes_per_second);
+
+    void set_tickrate(int64_t p_tickrate) {
+        tickrate = p_tickrate > 0 ? p_tickrate : 60;
+    }
+
+    double configured_rate(int p_peer, int64_t p_max_bits) const;
+
+    double fill_of(int p_peer, int64_t p_max_bits) const {
+        return configured_rate(p_peer, p_max_bits) * double(link.share(p_peer))
+            / double(tickrate);
+    }
+
+    void charge(int p_peer, int64_t p_bytes);
+
+    void note_backlog(int p_peer, int64_t p_buffered, int64_t p_now_ms) {
+        link.note_backlog(p_peer, p_buffered, p_now_ms);
+    }
+
+    const PeerAccount *account(int p_peer) const {
+        return accounts.getptr(p_peer);
+    }
+
+#if defined(NETW_TESTS)
+    int64_t rows_touched = 0;
+#endif
 
     void set_encode_stage(const godot::Callable &p_stage) {
         stage = p_stage;
+    }
+
+    void want_encode_stage(bool p_wanted) {
+        stage_wanted = p_wanted;
+    }
+
+    void publish_tables(bool p_publishes) {
+        tables_published = p_publishes;
     }
 
     bool has_encode_stage() const {
         return stage.is_valid();
     }
 
-    SessionResult run(
+    void watch_store(store::World *p_world) {
+        world = p_world;
+    }
+
+    store::World *store() const {
+        return world;
+    }
+
+    uint64_t stream_open(
+        int p_peer,
+        const wire::StreamLane &p_lane,
+        const wire::StreamTenure &p_tenure = wire::StreamTenure()
+    );
+
+    wire::ReadyVerdict stream_ready(
+        int p_peer,
+        uint64_t p_request,
+        uint64_t p_token
+    );
+
+    wire::ReceiptVerdict stream_receipt(
+        int p_peer,
+        uint64_t p_token,
+        uint64_t p_revision
+    );
+
+    bool stream_reset(int p_peer, uint64_t p_request, uint64_t p_token);
+
+    uint64_t token_of(int p_peer, const wire::StreamLane &p_lane) const;
+
+    const SessionResult &run(
         const wire::WireRegistry &p_registry,
-        const godot::LocalVector<RowOffer> &p_offers,
         int64_t p_max_bits,
         int64_t p_base_tick,
         int64_t p_now_ms = 0
@@ -221,7 +331,7 @@ public:
         uint32_t p_history,
         double p_rtt_ms = 0.0,
         double p_jitter_ms = 0.0,
-        int64_t p_tick = 0
+        int64_t p_now_ms = 0
     );
 
     LinkGovernor::Mode link_mode(int p_peer) const {
@@ -242,21 +352,11 @@ public:
         return readers;
     }
 
-    wire::StreamWriterBook &writer_book() {
-        return writers;
-    }
-
     wire::ControlScheduler &control_scheduler() {
         return control;
     }
 
-    void retain(const godot::LocalVector<int> &p_recipients);
-
-    void retain_row(
-        int64_t p_route,
-        uint8_t p_comp,
-        const godot::LocalVector<int> &p_recipients
-    );
+    void hide(int p_peer, const wire::StreamLane &p_lane);
 
     void close_route(int64_t p_route);
 
@@ -265,14 +365,6 @@ public:
     void close_anchors(int64_t p_route, uint64_t p_anchor, uint64_t p_author);
 
     godot::LocalVector<wire::ParkedOpen> expire_parks(int64_t p_now_ms);
-
-    uint32_t lane_count() const {
-        return lanes.size();
-    }
-
-    uint32_t retained_lane_count() const {
-        return lanes.retained_size();
-    }
 
     uint32_t window_lane_count() const {
         return lanes.window_size();

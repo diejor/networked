@@ -407,7 +407,8 @@ PackedByteArray encode_command(
         !valid_command_shape(p_frame, p_input_plan),
         PackedByteArray(),
         sys::PREDICTION,
-        "Command frame shape does not match its input plan."
+        "An input command does not match the input properties it was built "
+        "from, so it was not sent."
     );
     CommandFrame staged = p_frame;
     WriteStream writer;
@@ -415,11 +416,11 @@ PackedByteArray encode_command(
         !serialize_command(writer, staged, p_input_plan),
         PackedByteArray(),
         sys::PREDICTION,
-        "Command frame exceeds its declared wire bounds."
+        "An input command did not fit its packet layout, so it was not sent."
     );
     NETW_TRACE(
         sys::PREDICTION,
-        "command transitions=%d payloads=%d bytes=%d",
+        "Built an input command with %d ticks and %d payloads in %d bytes.",
         int(p_frame.transitions.size()),
         int(p_frame.payloads.size()),
         writer.to_bytes().size()
@@ -454,7 +455,8 @@ PackedByteArray encode_ack(const AckFrame &p_frame) {
         !serialize_ack(writer, staged),
         PackedByteArray(),
         sys::PREDICTION,
-        "Acknowledgement frame exceeds its declared wire bounds."
+        "An input acknowledgement did not fit its packet layout, so it was "
+        "not sent."
     );
     NETW_ASSERT(
         writer.to_bytes().size() <= ACK_FRAME_BYTES_MAX,
@@ -463,7 +465,7 @@ PackedByteArray encode_ack(const AckFrame &p_frame) {
     );
     NETW_TRACE(
         sys::PREDICTION,
-        "ack records=%d bytes=%d",
+        "Built an input acknowledgement with %d records in %d bytes.",
         int(staged.records.size()),
         writer.to_bytes().size()
     );

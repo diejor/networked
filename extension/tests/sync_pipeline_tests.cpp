@@ -1,35 +1,39 @@
 #include "support/netw_test.h"
 
 #include "godot/node.hpp"
+#include "godot/scene_tree.hpp"
 #include "netw/api/netw_multiplayer.hpp"
 #include "netw/api/quantize.hpp"
 #include "netw/api/replication_core.hpp"
 #include "netw/api/sync_pipeline.hpp"
+#include "netw/repl/property_set.hpp"
 
 namespace TestSyncPipeline {
 
 using namespace godot;
 using netw::NetwEntity;
 using netw::NetwMultiplayer;
-using netw::NetwPropertySet;
-using netw::NetwPropertySetColumn;
 using netw::NetwSyncModel;
 using netw::SyncPipeline;
+using netw::repl::PropertyColumn;
+using netw::repl::PropertySet;
+using netw::repl::SetBook;
 
-Ref<NetwPropertySet> one_column(const StringName &p_key, int64_t p_record) {
-    Ref<NetwPropertySet> set;
-    set.instantiate();
-    const Ref<NetwPropertySetColumn> column = NetwPropertySetColumn::create(
+uint64_t one_column(
+    SetBook &r_sets,
+    const StringName &p_key,
+    int64_t p_record
+) {
+    const uint64_t declared = r_sets.create();
+    PropertySet *set = r_sets.get(declared);
+    set->columns.push_back(PropertyColumn::create(
         p_key,
         Ref<netw::NetwQuantize>(),
         false,
         NetwMultiplayer::ColumnType(Variant::NIL)
-    );
-    TypedArray<NetwPropertySetColumn> columns;
-    columns.push_back(column);
-    set->set_columns(columns);
-    set->set_record(p_record);
-    return set;
+    ));
+    set->record = p_record;
+    return declared;
 }
 
 struct Stand {
@@ -44,6 +48,13 @@ struct Stand {
         pipeline->set_channels(20, 21, 22, 43, 17, 18);
     }
 
+    uint64_t sealed(const char *p_key, int64_t p_record) {
+        SetBook &sets = core->property_set_book();
+        const uint64_t declared = one_column(sets, p_key, p_record);
+        sets.get(declared)->sealed = true;
+        return declared;
+    }
+
     int64_t counter(const char *p_key) const {
         return int64_t(pipeline->counters()[StringName(p_key)]);
     }
@@ -56,8 +67,11 @@ TEST_CASE(
     Stand stand;
     Node *node = memnew(Node);
 
-    const Ref<NetwPropertySet> unsealed
-        = one_column("position", NetwPropertySet::RECORD_STATE);
+    const uint64_t unsealed = one_column(
+        stand.core->property_set_book(),
+        "position",
+        PropertySet::RECORD_STATE
+    );
 
     NETW_CHECK_EQ(
         int(stand.pipeline->register_property_set(node, unsealed)),
@@ -80,32 +94,29 @@ TEST_CASE(
     Stand stand;
     Node *node = memnew(Node);
 
-    Ref<NetwPropertySet> state
-        = one_column("position", NetwPropertySet::RECORD_STATE);
-    state->set_sealed(true);
+    const uint64_t state = stand.sealed("position", PropertySet::RECORD_STATE);
     NETW_CHECK_EQ(
         int(stand.pipeline->register_property_set(node, state)),
         int(OK)
     );
     NETW_CHECK_EQ(stand.counter("derived_sets_active"), int64_t(1));
 
-    Ref<NetwPropertySet> wider
-        = one_column("velocity", NetwPropertySet::RECORD_STATE);
-    wider->set_sealed(true);
+    const uint64_t wider = stand.sealed("velocity", PropertySet::RECORD_STATE);
     stand.pipeline->register_property_set(node, wider);
     NETW_CHECK_EQ(stand.counter("derived_sets_active"), int64_t(1));
 
-    Ref<NetwPropertySet> input
-        = one_column("throttle", NetwPropertySet::RECORD_INPUT);
-    input->set_sealed(true);
+    const uint64_t input = stand.sealed("throttle", PropertySet::RECORD_INPUT);
     stand.pipeline->register_property_set(node, input);
     NETW_CHECK_EQ(stand.counter("derived_sets_active"), int64_t(2));
 
-    CHECK(stand.pipeline->derived_binding(node, NetwPropertySet::RECORD_STATE)
-              .is_valid());
-    CHECK(stand.pipeline
-              ->derived_binding(node, NetwPropertySet::RECORD_BROADCAST)
-              .is_null());
+    const bool holds_state
+        = stand.pipeline->derived_binding(node, PropertySet::RECORD_STATE)
+        != nullptr;
+    CHECK(holds_state);
+    const bool holds_no_broadcast
+        = stand.pipeline->derived_binding(node, PropertySet::RECORD_BROADCAST)
+        == nullptr;
+    CHECK(holds_no_broadcast);
 
     stand.pipeline->unregister_derived(node);
     NETW_CHECK_EQ(stand.counter("derived_sets_active"), int64_t(0));
@@ -119,14 +130,37 @@ TEST_CASE(
 ) {
     Stand stand;
     Node *node = memnew(Node);
-    Ref<NetwPropertySet> state
-        = one_column("position", NetwPropertySet::RECORD_STATE);
-    state->set_sealed(true);
+    const uint64_t state = stand.sealed("position", PropertySet::RECORD_STATE);
     stand.pipeline->register_property_set(node, state);
     NETW_CHECK_EQ(stand.counter("derived_sets_active"), int64_t(1));
 
     memdelete(node);
 
+    stand.pipeline->pump(1);
+
+    NETW_CHECK_EQ(stand.counter("derived_sets_active"), int64_t(0));
+}
+
+TEST_CASE(
+    "[Networked][Sync][Hosted][SceneTree] a binding whose node leaves the tree "
+    "is kept while the node lives and pruned by the first pump after it is "
+    "freed"
+) {
+    Node *root = netw::gd::scene_root();
+    REQUIRE(root != nullptr);
+    Stand stand;
+    Node *node = memnew(Node);
+    root->add_child(node);
+    const uint64_t state = stand.sealed("position", PropertySet::RECORD_STATE);
+    stand.pipeline->register_property_set(node, state);
+    stand.pipeline->pump(1);
+    NETW_CHECK_EQ(stand.counter("derived_sets_active"), int64_t(1));
+
+    root->remove_child(node);
+    stand.pipeline->pump(1);
+    NETW_CHECK_EQ(stand.counter("derived_sets_active"), int64_t(1));
+
+    memdelete(node);
     stand.pipeline->pump(1);
 
     NETW_CHECK_EQ(stand.counter("derived_sets_active"), int64_t(0));
@@ -195,17 +229,15 @@ TEST_CASE(
     Node *node = memnew(Node);
     node->set_name("Body");
 
-    Ref<NetwPropertySet> set
-        = one_column("name", NetwPropertySet::RECORD_STATE);
-    const Ref<NetwPropertySetColumn> ghost = NetwPropertySetColumn::create(
+    SetBook sets;
+    PropertySet *set
+        = sets.get(one_column(sets, "name", PropertySet::RECORD_STATE));
+    set->columns.push_back(PropertyColumn::create(
         StringName("nowhere"),
         Ref<netw::NetwQuantize>(),
         false,
         NetwMultiplayer::ColumnType(Variant::NIL)
-    );
-    TypedArray<NetwPropertySetColumn> columns = set->get_columns();
-    columns.push_back(ghost);
-    set->set_columns(columns);
+    ));
 
     const Dictionary gathered = SyncPipeline::gather_payload(node, set);
     NETW_CHECK_EQ(gathered.size(), 1);
@@ -259,8 +291,8 @@ TEST_CASE(
         String("racer@31")
     );
 
-    CHECK(message.begins_with("Prediction: racer@31 declares"));
-    CHECK(message.contains("declares no prediction"));
+    CHECK(message.begins_with("racer@31 declares"));
+    CHECK(message.contains("but no prediction"));
     CHECK(message.contains("MultiplayerSynchronizer"));
 }
 

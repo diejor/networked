@@ -120,7 +120,7 @@ bool raw_code(
 bool raw_value(
     int p_type,
     int p_width,
-    const LocalVector<uint64_t> &p_codes,
+    const uint64_t *p_codes,
     Variant &r_value
 ) {
     if (p_type == SchemaCore::ENTITY) {
@@ -196,6 +196,79 @@ bool scalar_schema(const SchemaRecord &p_schema, const WirePlan &p_plan) {
 
 } // namespace
 
+bool is_scalar_schema(const SchemaRecord &p_schema, const WirePlan &p_plan) {
+    return scalar_schema(p_schema, p_plan);
+}
+
+bool encode_scalar_column(
+    const SchemaColumn &p_column,
+    const ColumnPlan &p_slot,
+    uint32_t p_index,
+    const Variant &p_value,
+    CodeRow &r_row
+) {
+    const int at = int(p_index);
+    const Variant::Type expected
+        = Variant::Type(SchemaCore::element_type(p_column.type));
+    if (p_slot.variable) {
+        const bool textual = p_column.type != SchemaCore::STRING
+            || Variant::can_convert_strict(p_value.get_type(), Variant::STRING);
+        NETW_ERR_COND_V(
+            !textual || SchemaCore::validate_storable(p_value) != OK,
+            false,
+            sys::WIRE,
+            "Column %d got a value that cannot be sent. Use a plain value, "
+            "not an Object.",
+            at
+        );
+        r_row.write_value(p_index, p_value);
+        return true;
+    }
+    NETW_ERR_COND_V(
+        !Variant::can_convert_strict(p_value.get_type(), expected),
+        false,
+        sys::WIRE,
+        "Column %d got a value of the wrong type. Write the type its schema "
+        "declares.",
+        at
+    );
+    if (p_column.quantizer.is_valid()) {
+        NETW_ERR_COND_V(
+            !p_column.quantizer->supports_type(expected),
+            false,
+            sys::WIRE,
+            "Column %d has a quantizer that does not support its type. Use "
+            "a quantizer made for that type.",
+            at
+        );
+        for (int element = 0; element < p_slot.stride; ++element) {
+            const uint64_t code
+                = uint64_t(p_column.quantizer->encode(p_value, element));
+            NETW_ERR_COND_V(
+                !r_row.write(p_slot, element, code),
+                false,
+                sys::WIRE,
+                "Column %d's quantizer produced more bits than it declares. "
+                "Check the quantizer's bit count.",
+                at
+            );
+        }
+        return true;
+    }
+    for (int element = 0; element < p_slot.stride; ++element) {
+        uint64_t code = 0;
+        NETW_ERR_COND_V(
+            !raw_code(p_column.type, p_slot.width, p_value, element, code)
+                || !r_row.write(p_slot, element, code),
+            false,
+            sys::WIRE,
+            "Column %d has a type that cannot be packed into a fixed row.",
+            at
+        );
+    }
+    return true;
+}
+
 bool encode_scalar_row(
     const SchemaRecord &p_schema,
     const Array &p_values,
@@ -208,95 +281,66 @@ bool encode_scalar_row(
             || p_values.size() != p_schema.column_count(),
         false,
         sys::WIRE,
-        "Value row does not match its sealed scalar schema."
+        "The row's values do not match its schema. Pass one value for each "
+        "column."
     );
     CodeRow staged = CodeRow::for_plan(plan);
     for (int at = 0; at < p_schema.column_count(); ++at) {
-        const SchemaColumn *column = p_schema.at(at);
-        const ColumnPlan &slot = plan.column(uint32_t(at));
-        const Variant::Type expected
-            = Variant::Type(SchemaCore::element_type(column->type));
-        if (slot.variable) {
-            const bool textual = column->type != SchemaCore::STRING
-                || Variant::can_convert_strict(
-                                     p_values[at].get_type(),
-                                     Variant::STRING
-                );
-            NETW_ERR_COND_V(
-                !textual || SchemaCore::validate_storable(p_values[at]) != OK,
-                false,
-                sys::WIRE,
-                "Column %d holds a value no row can carry.",
-                at
-            );
-            staged.write_value(uint32_t(at), p_values[at]);
-            continue;
-        }
-        NETW_ERR_COND_V(
-            !Variant::can_convert_strict(p_values[at].get_type(), expected),
-            false,
-            sys::WIRE,
-            "Column %d value does not match its declared type.",
-            at
-        );
-        if (column->quantizer.is_valid()) {
-            NETW_ERR_COND_V(
-                !column->quantizer->supports_type(expected),
-                false,
-                sys::WIRE,
-                "Column %d quantizer does not support its declared type.",
-                at
-            );
-            for (int element = 0; element < slot.stride; ++element) {
-                const uint64_t code = uint64_t(
-                    column->quantizer->encode(p_values[at], element)
-                );
-                NETW_ERR_COND_V(
-                    !staged.write(slot, element, code),
-                    false,
-                    sys::WIRE,
-                    "Column %d answered a code wider than it declared.",
-                    at
-                );
-            }
-            continue;
-        }
-        for (int element = 0; element < slot.stride; ++element) {
-            uint64_t code = 0;
-            NETW_ERR_COND_V(
-                !raw_code(column->type, slot.width, p_values[at], element, code)
-                    || !staged.write(slot, element, code),
-                false,
-                sys::WIRE,
-                "Column %d has no fixed value-row encoding.",
-                at
-            );
+        if (!encode_scalar_column(
+                *p_schema.at(at),
+                plan.column(uint32_t(at)),
+                uint32_t(at),
+                p_values[at],
+                staged
+            )) {
+            return false;
         }
     }
     r_row = staged;
     NETW_TRACE(
         sys::WIRE,
-        "value row columns=%d bits=%d",
+        "Packed %d values into %d bits.",
         p_values.size(),
         int(plan.row_bits())
     );
     return true;
 }
 
-bool gather_scalar_row(
-    const SchemaRecord &p_schema,
-    const WirePlan &p_plan,
-    const Array &p_values,
-    CodeRow &r_row
+bool decode_scalar_column(
+    const SchemaColumn &p_column,
+    const ColumnPlan &p_slot,
+    uint32_t p_index,
+    const CodeRow &p_row,
+    PackedInt64Array &r_codes,
+    Variant &r_value
 ) {
-    if (!p_plan.valid()) {
+    if (p_slot.variable) {
+        r_value = p_row.read_value(p_index);
+        return true;
+    }
+    constexpr int WIDEST = 16;
+    if (p_slot.stride < 1 || p_slot.stride > WIDEST) {
         return false;
     }
-    CodeRow staged = CodeRow::for_plan(p_plan);
-    if (!encode_scalar_row(p_schema, p_values, staged)) {
+    uint64_t codes[WIDEST] = {};
+    for (int element = 0; element < p_slot.stride; ++element) {
+        codes[element] = p_row.read(p_slot, element);
+    }
+    if (p_column.quantizer.is_null()) {
+        return raw_value(p_column.type, p_slot.width, codes, r_value);
+    }
+    const Variant::Type expected
+        = Variant::Type(SchemaCore::element_type(p_column.type));
+    if (!p_column.quantizer->supports_type(expected)) {
         return false;
     }
-    r_row = staged;
+    if (r_codes.size() != int64_t(p_slot.stride)) {
+        r_codes.resize(int64_t(p_slot.stride));
+    }
+    for (int element = 0; element < p_slot.stride; ++element) {
+        r_codes.set(int64_t(element), int64_t(codes[element]));
+    }
+    r_value = p_column.quantizer->decode(r_codes, expected);
     return true;
 }
 
@@ -311,32 +355,17 @@ bool decode_scalar_row(
         return false;
     }
     Array staged;
-    LocalVector<uint64_t> codes;
+    PackedInt64Array held;
     for (int at = 0; at < p_schema.column_count(); ++at) {
-        const SchemaColumn *column = p_schema.at(at);
-        const ColumnPlan &slot = plan.column(uint32_t(at));
-        if (slot.variable) {
-            staged.push_back(p_row.read_value(uint32_t(at)));
-            continue;
-        }
-        codes.clear();
-        for (int element = 0; element < slot.stride; ++element) {
-            codes.push_back(p_row.read(slot, element));
-        }
         Variant value;
-        if (column->quantizer.is_valid()) {
-            const Variant::Type expected
-                = Variant::Type(SchemaCore::element_type(column->type));
-            if (!column->quantizer->supports_type(expected)) {
-                return false;
-            }
-            PackedInt64Array held;
-            held.resize(int64_t(codes.size()));
-            for (uint32_t element = 0; element < codes.size(); ++element) {
-                held.set(int64_t(element), int64_t(codes[element]));
-            }
-            value = column->quantizer->decode(held, expected);
-        } else if (!raw_value(column->type, slot.width, codes, value)) {
+        if (!decode_scalar_column(
+                *p_schema.at(at),
+                plan.column(uint32_t(at)),
+                uint32_t(at),
+                p_row,
+                held,
+                value
+            )) {
             return false;
         }
         staged.push_back(value);

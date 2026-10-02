@@ -7,23 +7,32 @@
 #include "godot/script.hpp"
 #include "godot/variant.hpp"
 #include "netw/api/member_config.hpp"
-#include "netw/api/property_set.hpp"
+#include "netw/repl/property_set.hpp"
 
 namespace netw::property_set_builder {
 
-godot::Ref<NetwPropertySet> for_record(int64_t p_record);
+void for_record(repl::PropertySet &r_set, int64_t p_record);
 
-godot::Ref<NetwPropertySet> from_property_config(
+void from_property_config(
+    repl::PropertySet &r_set,
     const godot::StringName &p_property,
     const godot::Ref<NetwMemberConfig> &p_config
 );
 
-godot::Ref<NetwPropertySet> from_property_configs(
+bool from_property_configs(
+    repl::PropertySet &r_set,
     const godot::Dictionary &p_configs,
     int64_t p_record
 );
 
-godot::Ref<NetwPropertySet> from_script(
+bool compile_script(
+    repl::PropertySet &r_set,
+    const godot::Ref<godot::Script> &p_script,
+    int64_t p_record,
+    godot::Node *p_node
+);
+
+uint64_t from_script(
     const godot::Ref<godot::Script> &p_script,
     int64_t p_record,
     godot::Object *p_api,

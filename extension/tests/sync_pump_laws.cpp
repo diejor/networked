@@ -6,10 +6,9 @@
 #include "godot/scene_tree.hpp"
 #include "netw/api/entity.hpp"
 #include "netw/api/netw_multiplayer.hpp"
-#include "netw/api/property_set.hpp"
-#include "netw/api/property_set_binding.hpp"
 #include "netw/api/schema_core.hpp"
 #include "netw/api/sync_model.hpp"
+#include "netw/repl/property_binding.hpp"
 #include "netw/replication_send.hpp"
 #include "support/netw_call_log.h"
 
@@ -18,40 +17,63 @@ namespace TestNetwSyncPump {
 using namespace godot;
 using netw::NetwEntity;
 using netw::NetwMultiplayer;
-using netw::NetwPropertySet;
-using netw::NetwPropertySetBinding;
-using netw::NetwPropertySetColumn;
 using netw::NetwSyncModel;
+using netw::repl::PropertyBinding;
+using netw::repl::PropertyBindingPtr;
+using netw::repl::PropertyColumn;
+using netw::repl::PropertySet;
 using netw::ReplicationSend;
 using netw::SchemaCore;
 using netw_test::CallLog;
 
 const int64_t SYNC_ROW = 39;
 
-Ref<NetwPropertySet> a_set() {
-    Ref<NetwPropertySet> set;
-    set.instantiate();
-    Ref<NetwPropertySetColumn> column = NetwPropertySetColumn::create(
+uint64_t a_set(netw::repl::SetBook &r_sets) {
+    const uint64_t declared = r_sets.create();
+    PropertySet *set = r_sets.get(declared);
+    PropertyColumn column = PropertyColumn::create(
         StringName("hp"),
         Ref<netw::NetwQuantize>(),
         false,
         NetwMultiplayer::ColumnType(SchemaCore::I32)
     );
-    column->lane = NetwPropertySet::VOLATILE;
+    column.lane = PropertySet::VOLATILE;
     set->bind_column(column);
-    return set;
+    return declared;
 }
 
-Ref<NetwPropertySetBinding> a_binding(Node *p_node, int64_t p_route) {
-    const Ref<NetwPropertySetBinding> binding
-        = NetwPropertySetBinding::create(a_set(), p_node);
+PropertyBindingPtr a_binding(
+    const Ref<NetwMultiplayer> &p_core,
+    Node *p_node,
+    int64_t p_route
+) {
+    netw::repl::SetBook &sets = p_core->property_set_book();
+    const PropertyBindingPtr binding
+        = p_core->property_binding_book().create(a_set(sets), p_node);
     binding->order_key = StringName(".");
     binding->route = p_route;
     return binding;
 }
 
-NetwSyncModel a_model(const Ref<NetwPropertySetBinding> &p_binding) {
+bool sends_nothing(const Ref<NetwMultiplayer> &p_core) {
+    netw::store::World &world = p_core->store();
+    for (uint32_t index = 0; index < world.table_count(); ++index) {
+        const netw::store::Table &table = world.table(index);
+        for (uint32_t peer = 0; peer < table.peers.size(); ++peer) {
+            if (table.peers[peer].sendable.population() != 0) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+NetwSyncModel a_model(
+    const Ref<NetwMultiplayer> &p_core,
+    const PropertyBindingPtr &p_binding
+) {
     NetwSyncModel model;
+    model.attach_book(&p_core->property_binding_book());
     model.declare(
         p_binding->get_route(),
         int64_t(NetwSyncModel::KIND_DERIVED),
@@ -82,27 +104,24 @@ TEST_CASE(
     ReplicationSend send;
     CallLog log;
 
+    Node *gone = memnew(Node);
     Node *bare = memnew(Node);
     Node *carrying = memnew(Node);
     NetwEntity::ensure(carrying);
 
-    Array bindings;
-    bindings.push_back(Ref<NetwPropertySetBinding>());
-    bindings.push_back(a_binding(nullptr, 1));
-    bindings.push_back(a_binding(bare, 1));
-    bindings.push_back(a_binding(carrying, 0));
+    LocalVector<PropertyBindingPtr> bindings;
+    bindings.push_back(a_binding(core, gone, 1));
+    bindings.push_back(a_binding(core, bare, 1));
+    bindings.push_back(a_binding(core, carrying, 0));
+    for (const PropertyBindingPtr &binding : bindings) {
+        core->store_admit(binding);
+    }
+    memdelete(gone);
 
     NetwSyncModel model;
-    const LocalVector<netw::repl::RowOffer> offers = core->sync_pump_offers(
-        &model,
-        &send,
-        bindings,
-        4,
-        Callable(),
-        Callable()
-    );
+    core->sync_pump_rows(&model, &send, 4, Callable(), Callable());
 
-    CHECK(offers.is_empty());
+    CHECK(sends_nothing(core));
     const Dictionary stats = core->sync_flush_stats();
     NETW_CHECK_EQ(
         int64_t(stats[StringName("pump_skips_invalid_node")]),
@@ -135,26 +154,21 @@ TEST_CASE(
     Node *bound = memnew(Node);
     NetwEntity::ensure(bound);
 
-    Array bindings;
-    bindings.push_back(a_binding(node, 0));
-    bindings.push_back(a_binding(bound, 3));
+    LocalVector<PropertyBindingPtr> bindings;
+    bindings.push_back(a_binding(core, node, 0));
+    bindings.push_back(a_binding(core, bound, 3));
+    for (const PropertyBindingPtr &binding : bindings) {
+        core->store_admit(binding);
+    }
 
     NetwSyncModel model;
-    CHECK(core->sync_pump_offers(
-                  &model,
-                  &send,
-                  bindings,
-                  4,
-                  log.callable("bind"),
-                  Callable()
-    )
-              .is_empty());
+    core->sync_pump_rows(&model, &send, 4, log.callable("bind"), Callable());
+    CHECK(sends_nothing(core));
     NETW_CHECK_EQ(log.count("bind"), 1);
     const Array asked = log.args("bind", 0);
     NETW_CHECK_EQ(int64_t(asked.size()), int64_t(1));
     if (asked.size() == 1) {
-        const Ref<NetwPropertySetBinding> offered = asked[0];
-        CHECK(offered == Ref<NetwPropertySetBinding>(bindings[0]));
+        NETW_CHECK_EQ(uint64_t(int64_t(asked[0])), bindings[0]->id);
     }
 
     memdelete(bound);
@@ -173,23 +187,14 @@ TEST_CASE(
     Node *node = memnew(Node);
     netw::gd::scene_root()->add_child(node);
     NetwEntity::ensure(node);
-    const Ref<NetwPropertySetBinding> binding = a_binding(node, 1);
+    const PropertyBindingPtr binding = a_binding(core, node, 1);
     binding->set_authored_tick(41);
-    NetwSyncModel model = a_model(binding);
+    NetwSyncModel model = a_model(core, binding);
+    core->store_admit(binding);
 
-    Array bindings;
-    bindings.push_back(binding);
+    core->sync_pump_rows(&model, &send, 4, Callable(), log.callable("tap"));
 
-    const LocalVector<netw::repl::RowOffer> offers = core->sync_pump_offers(
-        &model,
-        &send,
-        bindings,
-        4,
-        Callable(),
-        log.callable("tap")
-    );
-
-    CHECK(offers.is_empty());
+    CHECK(sends_nothing(core));
     NETW_CHECK_EQ(log.count("tap"), 0);
     const Dictionary model_stats = model.stats();
     NETW_CHECK_EQ(
@@ -202,15 +207,8 @@ TEST_CASE(
         int64_t(0)
     );
 
-    CHECK(core->sync_pump_offers(
-                  nullptr,
-                  &send,
-                  bindings,
-                  4,
-                  Callable(),
-                  Callable()
-    )
-              .is_empty());
+    core->sync_pump_rows(nullptr, &send, 4, Callable(), Callable());
+    CHECK(sends_nothing(core));
 
     netw::gd::scene_root()->remove_child(node);
     memdelete(node);
@@ -226,21 +224,13 @@ TEST_CASE(
     Node *node = memnew(Node);
     netw::gd::scene_root()->add_child(node);
     NetwEntity::ensure(node);
-    const Ref<NetwPropertySetBinding> binding = a_binding(node, 7);
+    const PropertyBindingPtr binding = a_binding(core, node, 7);
 
     NetwSyncModel model;
-    Array bindings;
-    bindings.push_back(binding);
+    core->store_admit(binding);
 
-    CHECK(core->sync_pump_offers(
-                  &model,
-                  &send,
-                  bindings,
-                  4,
-                  Callable(),
-                  Callable()
-    )
-              .is_empty());
+    core->sync_pump_rows(&model, &send, 4, Callable(), Callable());
+    CHECK(sends_nothing(core));
     NETW_CHECK_EQ(
         int64_t(core->sync_flush_stats()[StringName("pump_skips_no_route")]),
         int64_t(1)

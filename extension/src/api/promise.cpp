@@ -111,7 +111,8 @@ void NetwPromise::reject(Error error_code, const String &error_detail) {
         && !has_connections(StringName(SIG_FAILED))) {
         NETW_WARN(
             sys::SESSION,
-            "a promise was rejected with no error handler attached: %d %s",
+            "A NetwPromise failed with error %d (%s) and nothing handled it. "
+            "Attach NetwPromise.catch_error or connect its failed signal.",
             error_code,
             error_detail
         );

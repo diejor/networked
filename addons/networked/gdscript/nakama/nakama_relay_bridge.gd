@@ -91,7 +91,11 @@ func _init(p_nakama_socket) -> void:
 ## Creates a new relay match and claims host peer id [code]1[/code].
 func create_match() -> void:
 	if _match_state != MatchState.DISCONNECTED:
-		push_error("Cannot create match when state is %s" % MatchState.keys()[_match_state])
+		push_error(
+			"NakamaRelayBridge.create_match ran while the bridge is %s. Call "
+			% MatchState.keys()[_match_state]
+			+ "leave first.",
+		)
 		return
 
 	_match_state = MatchState.JOINING
@@ -110,7 +114,11 @@ func create_match() -> void:
 ## Joins the relay match named by [param p_match_id].
 func join_match(p_match_id: String) -> void:
 	if _match_state != MatchState.DISCONNECTED:
-		push_error("Cannot join match when state is %s" % MatchState.keys()[_match_state])
+		push_error(
+			"NakamaRelayBridge.join_match ran while the bridge is %s. Call "
+			% MatchState.keys()[_match_state]
+			+ "leave first.",
+		)
 		return
 
 	_match_state = MatchState.JOINING
@@ -130,7 +138,11 @@ func join_match(p_match_id: String) -> void:
 ## The first peer to arrive claims host peer id [code]1[/code].
 func join_named_match(_match_name: String) -> void:
 	if _match_state != MatchState.DISCONNECTED:
-		push_error("Cannot join match when state is %s" % MatchState.keys()[_match_state])
+		push_error(
+			"NakamaRelayBridge.join_named_match ran while the bridge is %s. "
+			% MatchState.keys()[_match_state]
+			+ "Call leave first.",
+		)
 		return
 
 	_match_state = MatchState.JOINING
@@ -150,10 +162,17 @@ func join_named_match(_match_name: String) -> void:
 ## Starts Nakama matchmaking with [param ticket].
 func start_matchmaking(ticket) -> void:
 	if _match_state != MatchState.DISCONNECTED:
-		push_error("Cannot start matchmaking when state is %s" % MatchState.keys()[_match_state])
+		push_error(
+			"NakamaRelayBridge.start_matchmaking ran while the bridge is %s. "
+			% MatchState.keys()[_match_state]
+			+ "Call leave first.",
+		)
 		return
 	if ticket.is_exception():
-		push_error("Ticket with exception passed into start_matchmaking()")
+		push_error(
+			"NakamaRelayBridge.start_matchmaking got a ticket that failed. "
+			+ "Check the ticket for an exception before passing it.",
+		)
 		return
 
 	_match_state = MatchState.JOINING
@@ -377,8 +396,9 @@ func _on_nakama_socket_received_match_state(data) -> void:
 			if _id_map.has(1):
 				# @todo Can we mediate this dispute?
 				push_error(
-					"User %s claiming to be host, when user %s has already claimed it"
-					% [data.presence.session_id, _id_map[1]],
+					"Nakama user %s claimed to be host, but user %s already is, so "
+					% [data.presence.session_id, _id_map[1]]
+					+ "the claim was ignored.",
 				)
 			else:
 				_map_id_to_session(1, data.presence.session_id)
@@ -387,8 +407,9 @@ func _on_nakama_socket_received_match_state(data) -> void:
 		# Ensure that any meta messages are coming from the host!
 		if data.presence.session_id != _id_map[1]:
 			push_error(
-				"Received meta message from user %s who isn't the host: %s"
-				% [data.presence.session_id, content],
+				"Nakama user %s sent a host message but is not the host, so it "
+				% [data.presence.session_id]
+				+ "was ignored (%s)." % [content],
 			)
 			return
 
@@ -398,7 +419,10 @@ func _on_nakama_socket_received_match_state(data) -> void:
 
 			if _users.has(session_id) and _users[session_id].peer_id != 0:
 				push_error(
-					"Attempting to assign peer id %s to %s which already has id %s" % [
+					(
+						"The host gave peer id %s to Nakama user %s, who "
+						+ "already has peer id %s, so it was ignored."
+					) % [
 						peer_id,
 						session_id,
 						_users[session_id].peer_id,
@@ -421,7 +445,11 @@ func _on_nakama_socket_received_match_state(data) -> void:
 	elif data.op_code == rpc_op_code:
 		var from_session_id: String = data.presence.session_id
 		if not _users.has(from_session_id) or _users[from_session_id].peer_id == 0:
-			push_error("Received RPC from %s which isn't assigned a peer id" % data.presence.session_id)
+			push_error(
+				"A packet from Nakama user %s arrived before it had a peer id, "
+				% data.presence.session_id
+				+ "so it was dropped.",
+			)
 			return
 		var from_peer_id = _users[from_session_id].peer_id
 		_multiplayer_peer.deliver_packet(data.binary_data, from_peer_id)
@@ -432,9 +460,12 @@ func _on_multiplayer_peer_packet_generated(peer_id: int, buffer: PackedByteArray
 		var target_presences = null
 		if peer_id > 0:
 			if not _id_map.has(peer_id):
-				push_error("Attempting to send RPC to unknown peer id: %s" % peer_id)
+				push_error("A packet for unknown peer %s was dropped." % peer_id)
 				return
 			target_presences = [_users[_id_map[peer_id]].presence]
 		_nakama_socket.send_match_state_raw_async(_match_id, rpc_op_code, buffer, target_presences)
 	else:
-		push_error("RPC sent while the NakamaMultiplayerBridge isn't connected!")
+		push_error(
+			"A packet was sent before NakamaRelayBridge connected, so it was "
+			+ "dropped.",
+		)

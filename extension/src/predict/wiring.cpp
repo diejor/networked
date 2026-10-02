@@ -1,94 +1,122 @@
 #include "netw/predict/wiring.hpp"
 
-#include "netw/call_args.hpp"
+#include "netw/predict/compare.hpp"
+
+#include "netw/api/schema_core.hpp"
 #include "netw/colors.hpp"
 #include "netw/profile.hpp"
+#include "netw/wire/code_row.hpp"
+#include "netw/wire/stream.hpp"
+#include "netw/wire/value_row.hpp"
 
 using namespace godot;
 
 namespace netw::predict {
 
-namespace {
-
-bool quantizes(
-    const Ref<NetwQuantize> &p_quantizer,
-    int p_type,
-    const Variant &p_value
-) {
-    return p_quantizer.is_valid()
-        && p_quantizer->supports_type(static_cast<Variant::Type>(p_type))
-        && p_quantizer->supports_type(p_value.get_type());
-}
-
-struct Selection {
-    LocalVector<int> fields;
-    PackedByteArray bytes;
-    bool written = false;
-};
-
-Selection write_selected(
-    const FieldCodec &p_codec,
-    const Dictionary &p_payload
-) {
-    Selection out;
-    for (int at = 0; at < p_codec.count(); ++at) {
-        if (p_payload.has(p_codec.keys[at])) {
-            out.fields.push_back(at);
-        }
-    }
-    if (out.fields.is_empty()) {
-        return out;
-    }
-    wire::WriteStream stream;
-    uint64_t count = uint64_t(out.fields.size());
-    if (!stream.varuint(count, 2)) {
-        return out;
-    }
-    for (const int at : out.fields) {
-        const Variant value = p_payload[p_codec.keys[at]];
-        const Ref<NetwQuantize> &quantizer = p_codec.quantizers[at];
-        bool quantized = quantizes(quantizer, p_codec.types[at], value);
-        if (!stream.bool1(quantized)
-            || !call_args::value_write(
-                stream,
-                value,
-                quantized ? quantizer : Ref<NetwQuantize>()
-            )) {
-            return out;
-        }
-    }
-    if (!stream.align_verify()) {
-        return out;
-    }
-    out.bytes = stream.to_bytes();
-    out.written = true;
-    return out;
-}
-
-} // namespace
-
 void FieldCodec::append(
     const StringName &p_key,
     const Ref<NetwQuantize> &p_quantizer,
-    int p_type
+    int p_type,
+    int p_column_type
 ) {
     keys.push_back(p_key);
     quantizers.push_back(p_quantizer);
     types.push_back(p_type);
+    table::SchemaColumn column;
+    column.key = p_key;
+    column.type = p_column_type >= 0 ? p_column_type
+                                     : SchemaCore::type_from_variant(p_type);
+    column.quantizer = p_quantizer;
+    schema.columns.push_back(column);
+    schema.sealed = false;
+}
+
+void FieldCodec::seal() {
+    if (!schema.sealed) {
+        SchemaCore::fix(&schema);
+    }
+    plan = wire::WirePlan::compile(schema);
+}
+
+bool FieldCodec::holds(int p_field, const Variant &p_value) const {
+    if (!plan.valid() || p_field < 0 || p_field >= int(plan.column_count())) {
+        return false;
+    }
+    const wire::ColumnPlan &slot = plan.column(uint32_t(p_field));
+    if (slot.variable) {
+        return false;
+    }
+    const table::SchemaColumn &column = *schema.at(p_field);
+    const Variant::Type expected
+        = Variant::Type(SchemaCore::element_type(column.type));
+    if (p_value.get_type() != expected) {
+        return false;
+    }
+    return column.quantizer.is_null()
+        || column.quantizer->supports_type(expected);
 }
 
 void FieldCodec::clear() {
     keys.clear();
     quantizers.clear();
     types.clear();
+    schema = table::SchemaRecord();
+    plan = wire::WirePlan();
 }
 
 PackedByteArray canonical_bytes(
     const FieldCodec &p_codec,
     const Dictionary &p_payload
 ) {
-    NETW_ZONE_NC("predict canonical bytes", colors::PREDICTION);
-    return write_selected(p_codec, p_payload).bytes;
+    NETW_ZONE_LEAF(
+        "Predict canonical bytes",
+        colors::PREDICTION,
+        profile::SUBSYSTEM_PREDICTION
+    );
+    wire::CodeRow row = wire::CodeRow::for_plan(p_codec.plan);
+    wire::WriteStream stream;
+    uint64_t count = 0;
+    for (int at = 0; at < p_codec.count(); ++at) {
+        count += p_payload.has(p_codec.keys[at]) ? 1 : 0;
+    }
+    if (count == 0 || !stream.varuint(count, 2)) {
+        return PackedByteArray();
+    }
+    for (int at = 0; at < p_codec.count(); ++at) {
+        if (!p_payload.has(p_codec.keys[at])) {
+            continue;
+        }
+        const Variant value = p_payload[p_codec.keys[at]];
+        bool coded = p_codec.holds(at, value)
+            && wire::encode_scalar_column(
+                *p_codec.schema.at(at),
+                p_codec.plan.column(uint32_t(at)),
+                uint32_t(at),
+                value,
+                row
+            );
+        if (!stream.bool1(coded)) {
+            return PackedByteArray();
+        }
+        if (!coded) {
+            Variant carried = value;
+            if (!wire::carry_value(stream, carried)) {
+                return PackedByteArray();
+            }
+            continue;
+        }
+        const wire::ColumnPlan &slot = p_codec.plan.column(uint32_t(at));
+        for (int element = 0; element < slot.stride; ++element) {
+            uint64_t code = row.read(slot, element);
+            if (!stream.bits(code, slot.width)) {
+                return PackedByteArray();
+            }
+        }
+    }
+    if (!stream.align_verify()) {
+        return PackedByteArray();
+    }
+    return stream.to_bytes();
 }
 
 namespace {
@@ -146,48 +174,82 @@ bool zero_of(int p_type, Variant &r_zero) {
 
 } // namespace
 
-Dictionary zero_row(const FieldCodec &p_codec) {
-    Dictionary out;
+
+void zero_state_row(const FieldCodec &p_codec, StateRow &r_row) {
+    r_row.resize(int(p_codec.keys.size()));
     for (uint32_t at = 0; at < p_codec.keys.size(); ++at) {
         Variant zero;
         if (zero_of(p_codec.types[at], zero)) {
-            out[p_codec.keys[at]] = zero;
+            r_row.set(int(at), zero);
         }
     }
-    return out;
+}
+
+bool codes_agree(
+    const FieldCodec &p_codec,
+    const wire::WirePlan &p_plan,
+    const table::SchemaRecord &p_schema,
+    const Array &p_keys
+) {
+    const uint32_t count = p_codec.keys.size();
+    if (!p_codec.plan.valid() || !p_plan.valid()
+        || p_codec.plan.column_count() != count
+        || p_plan.column_count() != count
+        || p_schema.columns.size() != count || uint32_t(p_keys.size()) != count
+        || p_codec.plan.row_bits() != p_plan.row_bits()) {
+        return false;
+    }
+    for (uint32_t at = 0; at < count; ++at) {
+        const table::SchemaColumn &own = *p_codec.schema.at(int(at));
+        const table::SchemaColumn &wire_column = p_schema.columns[at];
+        const wire::ColumnPlan &mine = p_codec.plan.column(at);
+        const wire::ColumnPlan &theirs = p_plan.column(at);
+        if (StringName(p_keys[int(at)]) != p_codec.keys[at]
+            || wire_column.key != own.key || wire_column.type != own.type
+            || wire_column.quantizer != own.quantizer || mine.variable
+            || theirs.variable || mine.width != theirs.width
+            || mine.stride != theirs.stride || mine.offset != theirs.offset) {
+            return false;
+        }
+    }
+    return true;
 }
 
 Dictionary canonicalize(
     const FieldCodec &p_codec,
     const Dictionary &p_payload
 ) {
-    NETW_ZONE_NC("predict canonicalize", colors::PREDICTION);
-    const Selection written = write_selected(p_codec, p_payload);
+    NETW_ZONE_LEAF(
+        "Predict canonicalize",
+        colors::PREDICTION,
+        profile::SUBSYSTEM_PREDICTION
+    );
     Dictionary out = p_payload.duplicate();
-    if (!written.written) {
-        return out;
-    }
-    wire::ReadStream reader(written.bytes);
-    uint64_t count = 0;
-    if (!reader.varuint(count, 2)) {
-        return out;
-    }
-    for (uint64_t at = 0; at < count; ++at) {
-        bool quantized = false;
-        const int field = written.fields[uint32_t(at)];
-        Variant value;
-        if (!reader.bool1(quantized)
-            || !call_args::value_read(
-                reader,
-                static_cast<Variant::Type>(
-                    quantized ? p_codec.types[field] : int(Variant::NIL)
-                ),
-                quantized ? p_codec.quantizers[field] : Ref<NetwQuantize>(),
-                value
-            )) {
-            return p_payload.duplicate();
+    wire::CodeRow row = wire::CodeRow::for_plan(p_codec.plan);
+    PackedInt64Array codes;
+    for (int at = 0; at < p_codec.count(); ++at) {
+        const StringName &key = p_codec.keys[at];
+        if (!p_payload.has(key)) {
+            continue;
         }
-        out[p_codec.keys[field]] = value;
+        const Variant value = p_payload[key];
+        if (!p_codec.holds(at, value)) {
+            continue;
+        }
+        const table::SchemaColumn &column = *p_codec.schema.at(at);
+        const wire::ColumnPlan &slot = p_codec.plan.column(uint32_t(at));
+        Variant decoded;
+        if (wire::encode_scalar_column(column, slot, uint32_t(at), value, row)
+            && wire::decode_scalar_column(
+                column,
+                slot,
+                uint32_t(at),
+                row,
+                codes,
+                decoded
+            )) {
+            out[key] = decoded;
+        }
     }
     return out;
 }
@@ -259,10 +321,12 @@ Wiring compile(const LocalVector<FieldDecl> &p_declaration) {
             out.codec.append(
                 p_declaration[at].key,
                 p_declaration[at].quantizer,
-                p_declaration[at].type
+                p_declaration[at].type,
+                p_declaration[at].column_type
             );
         }
     }
+    out.codec.seal();
     out.resize(out.fields.count());
 
     for (uint32_t at = 0; at < p_declaration.size(); ++at) {

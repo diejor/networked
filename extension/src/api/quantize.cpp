@@ -529,7 +529,11 @@ int64_t NetwQuantizeQuaternion::encode(
     int element
 ) const {
     (void)element;
-    Quaternion quaternion = Quaternion(value).normalized();
+    return encode_turn(Quaternion(value));
+}
+
+int64_t NetwQuantizeQuaternion::encode_turn(const Quaternion &value) const {
+    Quaternion quaternion = value.normalized();
     std::array<double, 4> components = {
         quaternion.x,
         quaternion.y,
@@ -564,7 +568,10 @@ Variant NetwQuantizeQuaternion::decode(
     Variant::Type type
 ) const {
     (void)type;
-    const int64_t packed = codes[0];
+    return decode_turn(codes[0]);
+}
+
+Quaternion NetwQuantizeQuaternion::decode_turn(int64_t packed) const {
     const int largest = int(packed & 0x3);
     const int64_t mask = (int64_t(1) << bit_count) - 1;
     std::array<double, 4> components = {0.0, 0.0, 0.0, 0.0};

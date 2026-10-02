@@ -54,9 +54,9 @@ void AttributionBook::stage(
     const Attribution &p_frame
 ) {
     const uint64_t key = lane_key(p_frame.peer, p_reliable, p_carrier);
-    Vector<Attribution> *run = staged.getptr(key);
+    LocalVector<Attribution> *run = staged.getptr(key);
     if (run == nullptr) {
-        staged.insert(key, Vector<Attribution>());
+        staged.insert(key, LocalVector<Attribution>());
         run = staged.getptr(key);
     }
     run->push_back(p_frame);
@@ -69,12 +69,12 @@ int64_t AttributionBook::commit(
     int64_t p_seq
 ) {
     const uint64_t key = lane_key(p_peer, p_reliable, p_carrier);
-    Vector<Attribution> *run = staged.getptr(key);
+    LocalVector<Attribution> *run = staged.getptr(key);
     if (run == nullptr) {
         return 0;
     }
     int64_t bits = 0;
-    for (int at = 0; at < run->size(); ++at) {
+    for (uint32_t at = 0; at < run->size(); ++at) {
         Attribution frame = (*run)[at];
         frame.seq = p_seq;
         bits += frame.bits;
@@ -84,17 +84,17 @@ int64_t AttributionBook::commit(
         bytes_out[peer_channel_key(frame.peer, frame.channel)] += bytes;
         route_out[frame.route] += bytes;
     }
-    staged.erase(key);
+    run->clear();
     return bits / 8;
 }
 
 void AttributionBook::discard(int64_t p_peer, bool p_reliable, bool p_carrier) {
     const uint64_t key = lane_key(p_peer, p_reliable, p_carrier);
-    const Vector<Attribution> *run = staged.getptr(key);
+    LocalVector<Attribution> *run = staged.getptr(key);
     if (run == nullptr) {
         return;
     }
-    for (int at = 0; at < run->size(); ++at) {
+    for (uint32_t at = 0; at < run->size(); ++at) {
         staged_dropped_out += (*run)[at].bits / 8;
     }
     staged.erase(key);

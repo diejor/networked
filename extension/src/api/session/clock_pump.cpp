@@ -37,11 +37,9 @@ Error NetwMultiplayer::clock_initialize(const Ref<NetwClockConfig> &p_from) {
     if (config_consumption[slot].consumed) {
         NETW_WARN(
             sys::CLOCK,
-            "Netw.configure_clock: 'clock configuration' on '%s' was "
-            "configured after this session consumed its configuration. The "
-            "running values are unchanged. Configure before startup and "
-            "finish the fluent chain without awaiting.",
-            String("this session")
+            "Netw.configure_clock came after the session started, so the "
+            "clock did not change. Configure it before the session starts, "
+            "and finish the chain without await."
         );
         return ERR_ALREADY_IN_USE;
     }
@@ -49,7 +47,7 @@ Error NetwMultiplayer::clock_initialize(const Ref<NetwClockConfig> &p_from) {
         p_from.is_null(),
         ERR_INVALID_PARAMETER,
         sys::CLOCK,
-        "the clock refused an initialization carrying no values"
+        "The clock was configured with a null NetwClockConfig."
     );
     config_consumption[slot].consumed = true;
     const Error configured = clock_configure(p_from);
@@ -91,9 +89,8 @@ void NetwMultiplayer::clock_offer_fallback(
         clock_fallback.is_valid() && clock_fallback_source != source
             && gd::object_of(clock_fallback_source) != nullptr,
         sys::CLOCK,
-        "two mounts export clock settings for one session, so this session "
-        "has no single configuration. Keep one declaration on the session's "
-        "branch."
+        "Two nodes set clock settings for one session, so the second was "
+        "ignored. Call Netw.configure_clock from one node only."
     );
     clock_fallback = p_draft;
     clock_fallback_source = source;
@@ -158,7 +155,7 @@ void NetwMultiplayer::clock_on_physics_frame() {
     }
     clock_physics_step(delta);
     clock_step_auto_config(delta);
-    if (!hosting && clock_is_synchronized() && clock_consume_ping_due(delta)) {
+    if (!hosting && clock_consume_ping_due(delta)) {
         clock_send_ping();
     }
 }
@@ -191,13 +188,16 @@ void NetwMultiplayer::clock_auto_configure_offset() {
     NETW_ERR_COND(
         !clock_engine().get_configured(),
         sys::CLOCK,
-        "measuring a display offset needs a configured clock, so this "
-        "session has nothing to measure against yet"
+        "The display delay cannot be measured before the clock is "
+        "configured. Wait for the session to start."
     );
     if (is_host()) {
         return;
     }
-    NETW_INFO(sys::CLOCK, "the clock opened a 5s display-offset measurement");
+    NETW_INFO(
+        sys::CLOCK,
+        "The clock started measuring its display offset for 5 seconds."
+    );
     clock_auto_config_left = AUTO_CONFIG_SECONDS;
     clock_auto_config_best = 0;
 }
@@ -217,7 +217,7 @@ void NetwMultiplayer::clock_step_auto_config(double p_delta) {
     clock_set_param(CLOCK_PARAM_DISPLAY_OFFSET, clock_auto_config_best);
     NETW_INFO(
         sys::CLOCK,
-        "the clock settled its measurement at display_offset %d",
+        "The clock measured a display offset of %d.",
         int(clock_auto_config_best)
     );
 }

@@ -92,7 +92,7 @@ public sealed class NetwPredict : NetwObject
     {
         /// <summary>
         /// This peer guessed the input with
-        /// <see cref="NetwPredictionHandle.PredictCommands"/>.
+        /// <see cref="NetwPredictionHandle.PredictInput"/>.
         /// </summary>
         Predicted = 0,
         /// <summary>
@@ -393,7 +393,7 @@ public sealed class NetwPredict : NetwObject
         FullClosure = 3,
         /// <summary>
         /// The body was moved to where it should be now, along a path
-        /// <see cref="NetwPredictionHandle.TransportCorridor"/> allowed.
+        /// <see cref="NetwPredictionHandle.CorrectionPathClear"/> allowed.
         /// </summary>
         TransportDelta = 4,
         /// <summary>

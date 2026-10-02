@@ -9,14 +9,14 @@
 #include "netw/log.hpp"
 #include "netw/profile.hpp"
 #include "netw/project.hpp"
+#include "netw/store/validate.hpp"
+#include "netw/store/world.hpp"
 
 namespace netw::display {
 
 using namespace godot;
 
 namespace {
-
-constexpr int64_t DEFAULT_CAPACITY = 16;
 
 constexpr double SETTLED = 0.001;
 constexpr double NEGLIGIBLE = 0.0001;
@@ -36,11 +36,114 @@ double spatial_distance(const Variant &from, const Variant &to) {
     return Vector3(from).distance_to(Vector3(to));
 }
 
+#if defined(NETW_TESTS)
+struct SampleMeter {
+    bool metered = false;
+    int64_t opened = 0;
+
+    explicit SampleMeter(bool p_metered)
+        : metered(p_metered), opened(store::allocations_seen()) {
+    }
+
+    ~SampleMeter() {
+        if (metered) {
+            sample_work().samples += 1;
+            sample_work().allocations += store::allocations_seen() - opened;
+        }
+    }
+};
+#endif
+
 } // namespace
+
+#if defined(NETW_TESTS)
+SampleWork &sample_work() {
+    static SampleWork work;
+    return work;
+}
+#endif
 
 double angle_difference(double p_from, double p_to) {
     const double difference = std::fmod(p_to - p_from, TURN);
     return std::fmod(2.0 * difference, TURN) - difference;
+}
+
+History::History() : ring(TickRing::DEFAULT_CAPACITY) {
+}
+
+History::Rows History::rows() const {
+    Rows out;
+    if (world == nullptr) {
+        out.count = ring.size();
+        return out;
+    }
+    const store::RowAddress at = world->row_of(owner, lane);
+    if (!at.valid()) {
+        return out;
+    }
+    const store::Table &table = world->table(at.table);
+    if (column >= table.columns.size() || at.row >= table.row_count()) {
+        return out;
+    }
+    out.table = &table;
+    out.row = at.row;
+    if (floor_pending) {
+        return out;
+    }
+    int64_t visible = int64_t(table.history_appends[at.row] - floor_append);
+    if (visible < 1
+        && table.sources[at.row] == uint8_t(store::Source::LOCAL)) {
+        visible = 1;
+    }
+    out.count = std::min(int64_t(table.history_count(at.row)), visible);
+    return out;
+}
+
+int64_t History::tick_in(const Rows &p_rows, int64_t p_age) const {
+    if (p_age < 0 || p_age >= p_rows.count) {
+        return -1;
+    }
+    return p_rows.table != nullptr
+        ? p_rows.table->history_tick(p_rows.row, uint32_t(p_age))
+        : ring.tick_of_age(p_age);
+}
+
+Variant History::value_in(const Rows &p_rows, int64_t p_age) const {
+    if (p_age < 0 || p_age >= p_rows.count) {
+        return Variant();
+    }
+    return p_rows.table != nullptr
+        ? p_rows.table->history_value(p_rows.row, uint32_t(p_age), column)
+        : ring.value_of_age(p_age);
+}
+
+Vector2i History::bracket_in(const Rows &p_rows, int64_t p_tick) const {
+    if (p_rows.table == nullptr) {
+        return ring.bracketing_ticks(p_tick);
+    }
+    int64_t previous = -1;
+    int64_t next = -1;
+    for (int64_t age = 0; age < p_rows.count; ++age) {
+        const int64_t stored = tick_in(p_rows, age);
+        if (stored <= p_tick) {
+            previous = std::max(previous, stored);
+        } else if (next == -1 || stored < next) {
+            next = stored;
+        }
+    }
+    return Vector2i(int32_t(previous), int32_t(next));
+}
+
+Variant History::at_in(const Rows &p_rows, int64_t p_tick) const {
+    if (p_rows.table == nullptr) {
+        return ring.get_at(p_tick);
+    }
+    for (int64_t age = 0; age < p_rows.count; ++age) {
+        if (tick_in(p_rows, age) == p_tick) {
+            return value_in(p_rows, age);
+        }
+    }
+    return Variant();
 }
 
 int History::pass_verdict(
@@ -58,12 +161,79 @@ int History::pass_verdict(
     return p_forecast && !holds ? PASS_SAMPLE_PROJECT : PASS_SAMPLE;
 }
 
-History::History() {
-    buffer = NetwRingBuffer::create(DEFAULT_CAPACITY);
+void History::follow(
+    const store::World *p_world,
+    uint64_t p_owner,
+    uint32_t p_lane,
+    uint32_t p_column
+) {
+    if (follows(p_owner, p_lane, p_column) && world == p_world) {
+        return;
+    }
+    ring.release();
+    world = p_world;
+    owner = p_owner;
+    lane = p_lane;
+    column = p_column;
+    tick_domain = -1;
+    has_recorded = false;
+    source_rested = false;
+    sleeping = false;
+    floor_pending = false;
+    const Rows held = rows();
+    const uint32_t appends
+        = held.table != nullptr ? held.table->history_appends[held.row] : 0;
+    floor_append = appends > 0 ? appends - 1 : 0;
+    seen_append = appends;
+}
+
+void History::unfollow() {
+    world = nullptr;
+    clear();
+}
+
+bool History::table_pulls() const {
+    const Rows held = rows();
+    return held.table != nullptr && held.table->scalar;
+}
+
+bool History::table_rests() const {
+    const Rows held = rows();
+    if (held.table == nullptr
+        || held.table->columns[column].body == store::BodyKey::NONE) {
+        return false;
+    }
+    return (held.table->flags[held.row] & store::Table::RESTED) != 0;
+}
+
+void History::notice() {
+    if (world == nullptr) {
+        return;
+    }
+    if (floor_pending) {
+        clear();
+        return;
+    }
+    const Rows held = rows();
+    if (held.table == nullptr) {
+        return;
+    }
+    const uint32_t appends = held.table->history_appends[held.row];
+    if (appends != seen_append) {
+        seen_append = appends;
+        sleeping = false;
+    }
 }
 
 void History::record(int64_t tick, const Variant &value, bool authoring_tick) {
-    NETW_ZONE_SYS(profile::SUBSYSTEM_INTERPOLATION);
+    NETW_ZONE_LEAF(
+        "Display history record",
+        colors::INTERP,
+        profile::SUBSYSTEM_INTERPOLATION
+    );
+    if (world != nullptr) {
+        return;
+    }
     source_rested = false;
     const int domain = authoring_tick ? 1 : 0;
     if (tick_domain == -1) {
@@ -72,7 +242,8 @@ void History::record(int64_t tick, const Variant &value, bool authoring_tick) {
         NETW_ERR_COND(
             tick_domain != domain,
             sys::INTERPOLATION,
-            "A display channel cannot mix authoring and receive ticks."
+            "An interpolated value was dropped, because it mixed ticks from "
+            "this peer with ticks from the server."
         );
     }
 
@@ -83,45 +254,61 @@ void History::record(int64_t tick, const Variant &value, bool authoring_tick) {
         NETW_ERR_COND(
             value_type != type,
             sys::INTERPOLATION,
-            "A display channel cannot change its value type."
+            "An interpolated property changed its type, so the value was "
+            "dropped. Give the property a static type."
         );
     }
 
     if (has_recorded && value == last_recorded) {
         return;
     }
-    buffer->record(tick, value);
+    ring.record(tick, value);
     last_recorded = value;
     has_recorded = true;
     sleeping = false;
 }
 
 void History::clear() {
-    buffer->clear();
+    ring.clear();
     tick_domain = -1;
     has_recorded = false;
     source_rested = false;
     sleeping = false;
+    if (world == nullptr) {
+        return;
+    }
+    floor_pending = false;
+    const Rows held = rows();
+    if (held.table == nullptr) {
+        floor_pending = true;
+        return;
+    }
+    floor_append = held.table->history_appends[held.row];
+    seen_append = floor_append;
 }
 
 bool History::is_empty() const {
-    return buffer->is_empty();
+    return rows().count == 0;
+}
+
+int64_t History::size() const {
+    return rows().count;
 }
 
 int64_t History::newest_tick() const {
-    return buffer->newest_tick();
+    return tick_in(rows(), 0);
 }
 
 bool History::has_tick_after(int64_t tick) const {
-    return buffer->has_tick_after(tick);
+    return newest_tick() > tick;
 }
 
 Vector2i History::bracketing_ticks(int64_t tick) const {
-    return buffer->bracketing_ticks(tick);
+    return bracket_in(rows(), tick);
 }
 
 Variant History::get_at(int64_t tick) const {
-    return buffer->get_at(tick);
+    return at_in(rows(), tick);
 }
 
 Variant History::sample(
@@ -135,11 +322,19 @@ Variant History::sample(
     const Variant &explicit_velocity,
     bool has_explicit_velocity
 ) {
-    NETW_ZONE_SYS(profile::SUBSYSTEM_INTERPOLATION);
+    NETW_ZONE_LEAF(
+        "Display history sample",
+        colors::INTERP,
+        profile::SUBSYSTEM_INTERPOLATION
+    );
     projected = false;
     snap_taken = false;
 
-    const Vector2i bracket = buffer->bracketing_ticks(dt);
+    const Rows held = rows();
+#if defined(NETW_TESTS)
+    const SampleMeter meter(held.table != nullptr);
+#endif
+    const Vector2i bracket = bracket_in(held, dt);
     const int64_t previous_tick = bracket.x;
     const int64_t next_tick = bracket.y;
     if (previous_tick == -1) {
@@ -147,11 +342,11 @@ Variant History::sample(
     }
 
     if (next_tick == -1) {
-        const Variant result = buffer->get_at(previous_tick);
+        const Variant result = at_in(held, previous_tick);
         if (forecast && project::supports(result.get_type())) {
             const Variant velocity = has_explicit_velocity
                 ? explicit_velocity
-                : finite_velocity(previous_tick, ticktime);
+                : finite_velocity(held, previous_tick, ticktime);
             if (velocity.get_type() != Variant::NIL
                 && !velocity_negligible(velocity)) {
                 const double age = std::clamp(
@@ -164,15 +359,15 @@ Variant History::sample(
                 return project::forward(result, velocity, age * ticktime);
             }
         }
-        if (!buffer->has_tick_after(previous_tick)
+        if (!(tick_in(held, 0) > previous_tick)
             && is_close(last_written, result)) {
             sleeping = true;
         }
         return result;
     }
 
-    const Variant previous = buffer->get_at(previous_tick);
-    const Variant next = buffer->get_at(next_tick);
+    const Variant previous = at_in(held, previous_tick);
+    const Variant next = at_in(held, next_tick);
     if (snap_distance > 0.0 && exceeds(previous, next, snap_distance)) {
         snap_taken = true;
         return next;
@@ -203,11 +398,15 @@ Variant History::smooth_toward(
     return interpolate(last_written, result, weight);
 }
 
-Variant History::finite_velocity(int64_t newest, double ticktime) const {
+Variant History::finite_velocity(
+    const Rows &p_rows,
+    int64_t newest,
+    double ticktime
+) const {
     if (ticktime <= 0.0) {
         return Variant();
     }
-    const int64_t older = buffer->bracketing_ticks(newest - 1).x;
+    const int64_t older = bracket_in(p_rows, newest - 1).x;
     if (older == -1 || older == newest) {
         return Variant();
     }
@@ -216,8 +415,8 @@ Variant History::finite_velocity(int64_t newest, double ticktime) const {
         return Variant();
     }
 
-    const Variant recent = buffer->get_at(newest);
-    const Variant earlier = buffer->get_at(older);
+    const Variant recent = at_in(p_rows, newest);
+    const Variant earlier = at_in(p_rows, older);
     switch (recent.get_type()) {
         case Variant::FLOAT: {
             const double difference = mode == NetwInterpolate::MODE_ANGLE

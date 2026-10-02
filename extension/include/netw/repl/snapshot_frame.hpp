@@ -7,6 +7,7 @@
 #include "netw/repl/window_ring.hpp"
 #include "netw/wire/code_row.hpp"
 #include "netw/wire/plan.hpp"
+#include "netw/wire/stream.hpp"
 
 namespace netw::repl {
 
@@ -44,6 +45,15 @@ godot::PackedByteArray write_snapshot_row(
     const wire::CodeRow *p_baseline
 );
 
+godot::PackedByteArray write_snapshot_row(
+    wire::WriteStream &r_stream,
+    const SnapshotHeader &p_header,
+    int64_t p_base_tick,
+    const wire::WirePlan &p_plan,
+    const wire::CodeRow &p_row,
+    const wire::CodeRow *p_baseline
+);
+
 bool name_snapshot_row(
     const godot::PackedByteArray &p_bytes,
     SnapshotHeader &r_header
@@ -59,7 +69,25 @@ bool read_snapshot_row(
     SnapshotRefusal *r_refusal = nullptr
 );
 
+bool read_snapshot_row_into(
+    const godot::PackedByteArray &p_bytes,
+    int64_t p_base_tick,
+    const wire::WirePlan &p_plan,
+    SnapshotHeader &r_header,
+    wire::CodeRow &r_landing,
+    const wire::CodeRow *p_baseline,
+    SnapshotRefusal *r_refusal = nullptr
+);
+
 godot::PackedByteArray write_snapshot_window(
+    const SnapshotHeader &p_header,
+    int64_t p_base_tick,
+    const wire::WirePlan &p_plan,
+    const godot::LocalVector<WindowSample> &p_samples
+);
+
+godot::PackedByteArray write_snapshot_window(
+    wire::WriteStream &r_stream,
     const SnapshotHeader &p_header,
     int64_t p_base_tick,
     const wire::WirePlan &p_plan,

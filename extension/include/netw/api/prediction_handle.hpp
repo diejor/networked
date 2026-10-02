@@ -10,6 +10,7 @@
 #include "netw/api/predict.hpp"
 #include "netw/api/predict_stats.hpp"
 #include "netw/api/simulation_handle.hpp"
+#include "netw/predict/arrival.hpp"
 
 namespace netw {
 
@@ -46,7 +47,8 @@ private:
     double epsilon_value = 0.01;
     int reconcile_value = NetwPredict::RECONCILE_INDEPENDENT;
     NetwPredict::Archetype archetype_value = NetwPredict::ARCHETYPE_NONE;
-    godot::Ref<NetwPredictStats> counters;
+    NetwPredictStats::Book facts;
+    mutable godot::Ref<NetwPredictStats> counters;
 
     godot::ObjectID entity_id;
     NetwPredictSlotEngine *engine_seat = nullptr;
@@ -64,25 +66,21 @@ protected:
 public:
     static const char *GENERATOR_UNKNOWN_BEYOND_RETENTION;
 
-    NetwPredictionHandle();
+    NetwPredictionHandle() = default;
+    ~NetwPredictionHandle();
 
     void bind_entity(const godot::Ref<NetwEntity> &p_entity);
     void bind_engine(NetwPredictSlotEngine *p_engine);
 
     void seat_control_changed(int64_t p_previous_peer, int64_t p_peer);
-    void seat_state_frame(const godot::Dictionary &p_header);
-    void seat_input_frame(const godot::Dictionary &p_header);
-    void seat_simulated_state_frame(const godot::Dictionary &p_header);
-    void seat_quarantine_state_frame(const godot::Dictionary &p_header);
+    void seat_arrival(
+        predict::Listener p_listener,
+        const predict::Arrival &p_arrival
+    );
     void seat_quarantine_witness(int64_t p_basis);
     void seat_deferred_operator_retry(int64_t p_basis);
     void seat_fallback_at(int64_t p_transition, int p_attribution);
     void seat_fallback(int64_t p_transition, int p_attribution, bool p_demoted);
-    void seat_reseed_alignment(
-        int64_t p_recv_tick,
-        int64_t p_ack,
-        const godot::Dictionary &p_payload
-    );
     void seat_reachability_findings(const godot::Array &p_findings);
     void seat_breach(int64_t p_transition, const godot::Dictionary &p_solve);
     void seat_reconcile_mode();
@@ -117,7 +115,7 @@ public:
     void set_sensors(const godot::Dictionary &p_value);
     void set_epoch(int64_t p_value);
     void set_witness_contacts(const godot::Callable &p_value);
-    void set_transport_corridor(const godot::Callable &p_value);
+    void set_correction_path_clear(const godot::Callable &p_value);
     void set_teleport_threshold(double p_value);
     void set_collision_cooldown_ticks(int p_value);
     void set_sleeping(bool p_value);
@@ -164,7 +162,7 @@ public:
         return witness_sampler;
     }
 
-    godot::Callable get_transport_corridor() const {
+    godot::Callable get_correction_path_clear() const {
         return corridor_sweep;
     }
 
@@ -216,8 +214,14 @@ public:
         return archetype_value;
     }
 
-    godot::Ref<NetwPredictStats> get_stats() const {
-        return counters;
+    godot::Ref<NetwPredictStats> get_stats() const;
+
+    NetwPredictStats::Book *fact_book() {
+        return &facts;
+    }
+
+    bool stats_minted() const {
+        return counters.is_valid();
     }
 
     godot::Variant sensor(
@@ -234,9 +238,9 @@ public:
     godot::Dictionary reachability() const;
     void notify_contact();
 
-    void set_predict_commands(const godot::Callable &p_predictor);
+    void set_predict_input(const godot::Callable &p_predictor);
 
-    godot::Callable get_predict_commands() const {
+    godot::Callable get_predict_input() const {
         return command_predictor;
     }
 

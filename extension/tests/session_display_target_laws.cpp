@@ -25,7 +25,7 @@ TEST_CASE(
 
     SUBCASE("with no sink parked, a track write finds nowhere to land") {
         NETW_CHECK_EQ(
-            session->display_write_default(
+            session->display_write_track(
                 entity,
                 StringName("position"),
                 Variant()
@@ -37,7 +37,7 @@ TEST_CASE(
     SUBCASE("an entity nobody minted parks nothing either") {
         session->display_set_callback(RID(), Callable());
         NETW_CHECK_EQ(
-            session->display_write_default(RID(), StringName("x"), Variant()),
+            session->display_write_track(RID(), StringName("x"), Variant()),
             ERR_DOES_NOT_EXIST
         );
     }
@@ -94,7 +94,7 @@ TEST_CASE(
 
     session->display_undeclare(entity);
     NETW_CHECK_EQ(
-        session->display_write_default(entity, StringName("x"), Variant()),
+        session->display_write_track(entity, StringName("x"), Variant()),
         ERR_DOES_NOT_EXIST
     );
 }

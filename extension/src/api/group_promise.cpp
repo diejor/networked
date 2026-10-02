@@ -135,8 +135,9 @@ void NetwGroupPromise::reject(Error p_code, const String &p_detail) {
         && !has_connections(StringName(SIG_FAILED))) {
         NETW_WARN(
             sys::SESSION,
-            "a group promise was rejected with no error handler attached: "
-            "%d %s",
+            "A NetwGroupPromise failed with error %d (%s) and nothing "
+            "handled it. Attach NetwGroupPromise.catch_error or connect its "
+            "failed signal.",
             p_code,
             p_detail
         );

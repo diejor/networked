@@ -119,7 +119,10 @@ var _session_bound: bool = false
 func _service_entered(_api: NetwMultiplayer) -> void:
 	_wrapper = NakamaWrapper.new()
 	if not NakamaWrapper.is_addon_present():
-		push_warning("NakamaLobbyDirectory: Nakama addon not present.")
+		push_warning(
+			"The Nakama addon is not installed, so NakamaLobbyDirectory is "
+			+ "unavailable. Install the Nakama addon.",
+		)
 		provider_unavailable.emit.call_deferred("Nakama addon not present")
 		return
 	_wrapper.match_join_error.connect(_on_match_join_error)
@@ -159,7 +162,8 @@ func _publish_card(settings: Dictionary) -> void:
 	) as NetwServerInfo.Visibility
 	if visibility == NetwServerInfo.VISIBILITY_FRIENDS_ONLY:
 		push_warning(
-			"NakamaLobbyDirectory: FRIENDS_ONLY unsupported, hosting PRIVATE.",
+			"Nakama has no friends-only lobbies, so this lobby is private. "
+			+ "Use VISIBILITY_PRIVATE or VISIBILITY_PUBLIC.",
 		)
 		visibility = NetwServerInfo.VISIBILITY_PRIVATE
 	if visibility == NetwServerInfo.VISIBILITY_PRIVATE:
@@ -179,7 +183,10 @@ func _publish_card(settings: Dictionary) -> void:
 	_hosted_match_id = mid
 	var ok := await _wrapper.write_lobby_card(mid, card.to_dict())
 	if not ok:
-		push_warning("NakamaLobbyDirectory: failed to publish lobby card.")
+		push_warning(
+			"The lobby could not be listed on the Nakama server, so other "
+			+ "players will not see it in the browser.",
+		)
 		_hosted_match_id = ""
 
 
@@ -310,8 +317,12 @@ func _ensure_connected() -> bool:
 		},
 	)
 	if not res.ok:
-		var details := "connect to %s:%d failed: %s" % [host, port, res.error]
-		push_warning("NakamaLobbyDirectory: %s" % details)
+		var details := "Connecting to the Nakama server at %s:%d failed (%s)." % [
+			host,
+			port,
+			res.error,
+		]
+		push_warning(details)
 		provider_unavailable.emit(details)
 		return false
 	return true
@@ -353,8 +364,10 @@ func _await_match(op: String) -> MultiplayerPeer:
 	)
 	if outcome.result != "success":
 		push_error(
-			"NakamaLobbyDirectory: %s did not join (%s)."
-			% [op, outcome.result],
+			(
+				"NakamaLobbyDirectory.%s did not join a match (%s). Check the "
+				+ "server, or raise connect_timeout."
+			) % [op, outcome.result],
 		)
 		_wrapper.leave()
 		return null
@@ -363,7 +376,7 @@ func _await_match(op: String) -> MultiplayerPeer:
 
 
 func _on_match_join_error(message: String) -> void:
-	push_warning("NakamaLobbyDirectory: match join error: %s" % [message])
+	push_warning("Joining the Nakama match failed (%s)." % [message])
 
 
 func _on_socket_closed() -> void:

@@ -9,8 +9,25 @@ using namespace godot;
 
 namespace netw::spawn {
 
+void Book::hold_node(const Record &record) {
+    node_holds[uint64_t(record.get_node_id())] += 1;
+}
+
+void Book::release_node(const Record &record) {
+    const uint64_t key = uint64_t(record.get_node_id());
+    int *holds = node_holds.getptr(key);
+    if (holds != nullptr && --(*holds) <= 0) {
+        node_holds.erase(key);
+    }
+}
+
 void Book::arm(const Record &record) {
+    const Record *held = armed.getptr(record.get_route());
+    if (held != nullptr) {
+        release_node(*held);
+    }
     armed[record.get_route()] = record;
+    hold_node(record);
 }
 
 bool Book::take_armed(int64_t route, Record &out) {
@@ -19,6 +36,7 @@ bool Book::take_armed(int64_t route, Record &out) {
         return false;
     }
     out = found->value;
+    release_node(found->value);
     armed.remove(found);
     return true;
 }
@@ -28,24 +46,20 @@ bool Book::has_armed(int64_t route) const {
 }
 
 bool Book::drop_armed(int64_t route) {
-    return armed.erase(route);
+    const HashMap<int64_t, Record>::Iterator found = armed.find(route);
+    if (!found) {
+        return false;
+    }
+    release_node(found->value);
+    armed.remove(found);
+    return true;
 }
 
 bool Book::books_node(Node *p_node) const {
     if (p_node == nullptr) {
         return false;
     }
-    for (const KeyValue<int64_t, Record> &row : armed) {
-        if (row.value.node() == p_node) {
-            return true;
-        }
-    }
-    for (const KeyValue<int64_t, Record> &row : spawned) {
-        if (row.value.node() == p_node) {
-            return true;
-        }
-    }
-    return false;
+    return node_holds.has(uint64_t(gd::instance_id(p_node)));
 }
 
 int Book::armed_count() const {
@@ -53,7 +67,12 @@ int Book::armed_count() const {
 }
 
 Record *Book::issue(const Record &record) {
+    const Record *held = spawned.getptr(record.get_route());
+    if (held != nullptr) {
+        release_node(*held);
+    }
     spawned[record.get_route()] = record;
+    hold_node(record);
     return spawned_of(record.get_route());
 }
 
@@ -72,7 +91,13 @@ bool Book::has_spawned(int64_t route) const {
 }
 
 bool Book::drop_spawned(int64_t route) {
-    return spawned.erase(route);
+    const HashMap<int64_t, Record>::Iterator found = spawned.find(route);
+    if (!found) {
+        return false;
+    }
+    release_node(found->value);
+    spawned.remove(found);
+    return true;
 }
 
 PackedInt64Array Book::spawned_routes() const {
@@ -223,8 +248,8 @@ void Book::clear() {
         }
         NETW_WARN(
             sys::SPAWN,
-            "spawn::Book: node '%s' (%s) was still armed at session end. A "
-            "replicate ran but the node never entered the tree.",
+            "'%s' (%s) was replicated but never entered the tree before the "
+            "session ended. Call add_child after Netw.replicate.",
             node->get_name(),
             row.value.get_scene_path()
         );
@@ -232,6 +257,7 @@ void Book::clear() {
     armed.clear();
     spawned.clear();
     received.clear();
+    node_holds.clear();
 }
 
 } // namespace netw::spawn

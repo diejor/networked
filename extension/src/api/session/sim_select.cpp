@@ -100,6 +100,14 @@ void take(
 } // namespace
 
 void NetwMultiplayer::sim_release_row(const RID &p_entity) {
+    if (const sim::Row *row = sim_rows.row_of(p_entity)) {
+        for (const sim::AuthoredBody &held : row->bodies.held) {
+            const RID *indexed = sim_bodies.getptr(uint64_t(held.node));
+            if (indexed != nullptr && *indexed == p_entity) {
+                sim_bodies.erase(uint64_t(held.node));
+            }
+        }
+    }
     sim_refresh_members(sim_rows.release(p_entity));
 }
 
@@ -112,14 +120,15 @@ Error NetwMultiplayer::sim_simulate(
         subject.is_null() || p_entity.is_null(),
         ERR_INVALID_PARAMETER,
         sys::PREDICTION,
-        "simulate: the subject and the entity must both be live."
+        "NetwSimulationHandle.simulate needs two live entities, and one of "
+        "them is gone."
     );
     NETW_ERR_COND_V(
         !same_scene(*this, subject, p_entity),
         ERR_INVALID_PARAMETER,
         sys::PREDICTION,
-        "simulate: %s is in another scene than %s, and a selection cannot "
-        "cross scenes.",
+        "NetwSimulationHandle.simulate refused '%s', because it is in another "
+        "scene than '%s'. Select entities in the same scene.",
         String(p_entity->get_entity_id()).utf8().get_data(),
         String(subject->get_entity_id()).utf8().get_data()
     );
@@ -434,11 +443,12 @@ void NetwMultiplayer::sim_seed(sim::Row &r_row) {
     if (entity.is_null()) {
         return;
     }
-    const Ref<NetwSimulationHandle> handle = entity->get_simulation();
-    if (handle.is_null()) {
-        return;
-    }
-    const sim::Declaration &held = handle->declaration();
+    r_row.view = entity.ptr();
+    r_row.steering = sim_steering_of(*entity.ptr());
+    const Ref<NetwSimulationHandle> handle = entity->simulation_if_minted();
+    const sim::Declaration undeclared;
+    const sim::Declaration &held
+        = handle.is_valid() ? handle->declaration() : undeclared;
     if (!r_row.bodies.recorded) {
         r_row.declaration.bodies = held.bodies;
     }
@@ -450,7 +460,8 @@ void NetwMultiplayer::sim_seed(sim::Row &r_row) {
     r_row.declaration.claim_on_contact = held.claim_on_contact;
     r_row.declaration.release_on_rest = held.release_on_rest;
     r_row.facts.replicas = held.replicas;
-    r_row.choice = handle->selection_choice();
+    r_row.choice = handle.is_valid() ? handle->selection_choice()
+                                     : sim::Choice();
 }
 
 void NetwMultiplayer::sim_declare(const Ref<NetwEntity> &p_entity) {
@@ -462,13 +473,8 @@ void NetwMultiplayer::sim_declare(const Ref<NetwEntity> &p_entity) {
         return;
     }
     sim::Row *standing = sim_rows.find(entity);
-    const Ref<NetwSimulationHandle> handle = standing != nullptr
-        ? p_entity->get_simulation()
-        : p_entity->simulation_if_minted();
-    if (handle.is_null()) {
-        return;
-    }
-    if (standing == nullptr && !handle->is_declared()) {
+    const Ref<NetwSimulationHandle> handle = p_entity->simulation_if_minted();
+    if (standing == nullptr && (handle.is_null() || !handle->is_declared())) {
         return;
     }
     {
@@ -481,17 +487,12 @@ void NetwMultiplayer::sim_declare(const Ref<NetwEntity> &p_entity) {
 }
 
 void NetwMultiplayer::sim_announce(const RID &p_entity) {
-    sim::Row *row = sim_rows.find(p_entity);
+    sim::Row *row = sim_rows.peek(p_entity);
     if (row == nullptr || (row->has_announced && row->announced == row->mode)) {
         return;
     }
     const Ref<NetwEntity> entity = entity_get_view(p_entity);
     if (entity.is_null()) {
-        return;
-    }
-    const Ref<NetwSimulationHandle> handle = entity->get_simulation();
-    row = sim_rows.find(p_entity);
-    if (handle.is_null() || row == nullptr) {
         return;
     }
     const sim::Mode mode = row->mode;
@@ -500,7 +501,10 @@ void NetwMultiplayer::sim_announce(const RID &p_entity) {
 #if defined(NETW_TESTS)
     idle_work.announced += 1;
 #endif
-    handle->announce(NetwSimulationHandle::Mode(int(mode)));
+    const Ref<NetwSimulationHandle> handle = entity->simulation_if_minted();
+    if (handle.is_valid()) {
+        handle->announce(NetwSimulationHandle::Mode(int(mode)));
+    }
 }
 
 void NetwMultiplayer::sim_refresh_members(const LocalVector<RID> &p_members) {

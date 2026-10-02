@@ -90,7 +90,8 @@ void ParticipantViewport::assign_device(
     NETW_ERR_COND(
         !has_slot(p_slot),
         sys::SCENE,
-        "device %d cannot be routed to a window this viewport does not tile",
+        "Device %d was assigned to a slot this ParticipantViewport does not "
+        "hold. Call ParticipantViewport.add_slot first.",
         p_device_id
     );
     device_slots[p_device_id] = gd::instance_id(p_slot);

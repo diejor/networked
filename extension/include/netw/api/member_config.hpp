@@ -115,9 +115,7 @@ public:
         return quantizers;
     }
 
-    void set_interpolators(const godot::Array &p_interpolators) {
-        interpolators = p_interpolators;
-    }
+    void set_interpolators(const godot::Array &p_interpolators);
     godot::Array get_interpolators() const {
         return interpolators;
     }

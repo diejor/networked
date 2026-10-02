@@ -11,7 +11,10 @@ TEST_CASE(
     "[Networked][Registry] The module registers its classes with the engine"
 ) {
     CHECK(godot::ClassDB::class_exists("NetwBitStream"));
-    CHECK(godot::ClassDB::class_exists("NetwRingBuffer"));
+    CHECK_FALSE(godot::ClassDB::class_exists("NetwRingBuffer"));
+    CHECK_FALSE(godot::ClassDB::class_exists("NetwPropertySet"));
+    CHECK_FALSE(godot::ClassDB::class_exists("NetwPropertySetColumn"));
+    CHECK_FALSE(godot::ClassDB::class_exists("NetwPropertySetBinding"));
     CHECK(godot::ClassDB::class_exists("NetwMultiplayer"));
     CHECK(
         godot::ClassDB::get_parent_class("NetwBitStream")

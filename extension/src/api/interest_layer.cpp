@@ -2,6 +2,7 @@
 #include "netw/api/interest_handle.hpp"
 
 #include "godot/class_db.hpp"
+#include "netw/api/entity_record.hpp"
 #include "netw/api/netw_multiplayer.hpp"
 #include "netw/log.hpp"
 
@@ -29,11 +30,11 @@ PropertyInfo entity_param() {
     );
 }
 
-Ref<NetwInterestHandle> facet_of(const Ref<NetwEntity> &p_entity) {
-    if (p_entity.is_null()) {
-        return Ref<NetwInterestHandle>();
+interest::Facet *facet_of(const Ref<NetwEntity> &p_entity) {
+    if (p_entity.is_null() || p_entity->get_record() == nullptr) {
+        return nullptr;
     }
-    return p_entity->get_interest();
+    return p_entity->get_record()->find_interest_facet();
 }
 
 } // namespace
@@ -94,8 +95,8 @@ void NetwInterestLayer::dispatch_enter(
     const Ref<NetwEntity> &p_entity,
     int64_t p_peer_id
 ) {
-    const Ref<NetwInterestHandle> facet = facet_of(p_entity);
-    if (facet.is_valid()) {
+    interest::Facet *facet = facet_of(p_entity);
+    if (facet != nullptr) {
         facet->dispatch_enter(layer_id, p_peer_id);
     }
 }
@@ -104,16 +105,15 @@ void NetwInterestLayer::dispatch_leave(
     const Ref<NetwEntity> &p_entity,
     int64_t p_peer_id
 ) {
-    const Ref<NetwInterestHandle> facet = facet_of(p_entity);
-    if (facet.is_valid()) {
+    interest::Facet *facet = facet_of(p_entity);
+    if (facet != nullptr) {
         facet->dispatch_leave(layer_id, p_peer_id);
     }
 }
 
 void NetwInterestLayer::join_label(const Ref<NetwEntity> &p_entity) {
-    const Ref<NetwInterestHandle> facet = facet_of(p_entity);
-    if (facet.is_valid()) {
-        facet->client_join_label(layer_id);
+    if (p_entity.is_valid() && p_entity->get_record() != nullptr) {
+        p_entity->get_record()->get_interest_facet().join(layer_id);
     }
 }
 
@@ -247,9 +247,8 @@ bool NetwInterestLayer::add_viewer(int64_t p_peer_id) {
         && owner->interest_peer_bit(p_peer_id) < 0) {
         NETW_WARN(
             sys::INTEREST,
-            "layer '%s' adds viewer %d, which is not a connected peer. Use a "
-            "peer id from multiplayer.peer_connected or "
-            "multiplayer.get_peers().",
+            "Interest layer '%s' got viewer %d, which is not a connected "
+            "peer. Use a peer id from multiplayer.get_peers().",
             String(layer_id).utf8().get_data(),
             int(p_peer_id)
         );
@@ -280,7 +279,8 @@ bool NetwInterestLayer::add_entity(const Ref<NetwEntity> &p_entity) {
         p_entity.is_null(),
         false,
         sys::INTEREST,
-        "layer %s was asked to admit no entity",
+        "NetwInterestLayer.add_entity on '%s' needs an entity, and it was "
+        "null.",
         String(layer_id)
     );
     if (!holds_authority()) {
@@ -299,7 +299,8 @@ bool NetwInterestLayer::remove_entity(const Ref<NetwEntity> &p_entity) {
         p_entity.is_null(),
         false,
         sys::INTEREST,
-        "layer %s was asked to drop no entity",
+        "NetwInterestLayer.remove_entity on '%s' needs an entity, and it "
+        "was null.",
         String(layer_id)
     );
     if (!holds_authority()) {
@@ -321,7 +322,8 @@ void NetwInterestLayer::client_admit(const Ref<NetwEntity> &p_entity) {
     NETW_ERR_COND(
         p_entity.is_null(),
         sys::INTEREST,
-        "layer %s was asked to admit no entity on a client",
+        "NetwInterestLayer.client_admit on '%s' needs an entity, and it "
+        "was null.",
         String(layer_id)
     );
     if (!engine->roster_add(layer_id, slot_of(p_entity))) {
@@ -338,7 +340,8 @@ void NetwInterestLayer::client_revoke(const Ref<NetwEntity> &p_entity) {
     NETW_ERR_COND(
         p_entity.is_null(),
         sys::INTEREST,
-        "layer %s was asked to revoke no entity on a client",
+        "NetwInterestLayer.client_revoke on '%s' needs an entity, and it "
+        "was null.",
         String(layer_id)
     );
     if (!engine->roster_remove(layer_id, slot_of(p_entity))) {
@@ -353,7 +356,8 @@ void NetwInterestLayer::client_untrack_entity(const Ref<NetwEntity> &p_entity) {
     NETW_ERR_COND(
         p_entity.is_null(),
         sys::INTEREST,
-        "layer %s was asked to untrack no entity on a client",
+        "NetwInterestLayer.client_untrack_entity on '%s' needs an entity, "
+        "and it was null.",
         String(layer_id)
     );
     if (!engine->roster_remove(layer_id, slot_of(p_entity))) {

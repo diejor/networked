@@ -13,7 +13,7 @@ bool ordinal_names_one(int value, int limit, const char *what) {
         value < 0 || value >= limit,
         false,
         sys::INTERPOLATION,
-        "display decl set_param: %s ordinal %d names nothing.",
+        "Display setting %s got %d, which is not one of its values.",
         what,
         value
     );
@@ -59,7 +59,7 @@ Dirt Decl::set_param(int param, const Variant &value) {
                     && type != Variant::STRING_NAME,
                 DIRT_NONE,
                 sys::INTERPOLATION,
-                "display decl set_param: a visual root is a path, not a %s.",
+                "NetwDisplayHandle.visual_root must be a NodePath, not a %s.",
                 Variant::get_type_name(type)
             );
             visual_root = value.operator NodePath();
@@ -101,7 +101,7 @@ Dirt Decl::set_param(int param, const Variant &value) {
     NETW_ERR_V(
         DIRT_NONE,
         sys::INTERPOLATION,
-        "display decl set_param: %d names no display setting.",
+        "Display setting %d does not exist.",
         param
     );
 }
@@ -142,7 +142,7 @@ Variant Decl::get_param(int param) const {
     NETW_ERR_V(
         Variant(),
         sys::INTERPOLATION,
-        "display decl get_param: %d names no display setting.",
+        "Display setting %d does not exist.",
         param
     );
 }

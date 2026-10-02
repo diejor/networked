@@ -866,6 +866,27 @@ TEST_CASE(
     rig.pump(4);
 }
 
+TEST_CASE(
+    "[Networked][Entity] CA18 an entity its own session outlives only inside "
+    "that session's teardown is freed there, and a request it still holds "
+    "fails as unavailable"
+) {
+    Ref<NetwPromise> asked;
+    {
+        LoopbackRig rig(1);
+        rig.mount();
+        Node *arena = rig.mirror_child("Arena");
+        teach_every_session(rig);
+        const int route = seat_free(rig, arena, "Orphaned");
+        rig.hold(0);
+        asked = entity_at(rig, route, 0)->claim_authority();
+        REQUIRE_FALSE(asked->get_is_settled());
+    }
+
+    CHECK(asked->get_is_failed());
+    NETW_CHECK_EQ(int(asked->get_code()), int(ERR_UNAVAILABLE));
+}
+
 } // namespace TestControlAxis
 
 #endif

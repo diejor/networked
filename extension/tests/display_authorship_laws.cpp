@@ -2,6 +2,7 @@
 
 #if defined(NETW_TIER_HOSTED)
 
+#include "support/books.h"
 #include "support/loopback_rig.h"
 #include "support/mesh_stand.h"
 #include "support/netw_cells.h"
@@ -18,11 +19,11 @@
 #include "netw/api/member_config.hpp"
 #include "netw/api/netw_multiplayer.hpp"
 #include "netw/api/property_config.hpp"
-#include "netw/api/property_set.hpp"
 #include "netw/api/sync_pipeline.hpp"
 #include "netw/display/book.hpp"
 #include "netw/display/decl.hpp"
 #include "netw/property_set_builder.hpp"
+#include "netw/repl/property_set.hpp"
 
 namespace TestNetwDisplayAuthorshipLaws {
 
@@ -33,9 +34,9 @@ using netw::NetwEntity;
 using netw::NetwInterpolate;
 using netw::NetwMultiplayer;
 using netw::NetwPropertyConfig;
-using netw::NetwPropertySet;
+using netw::repl::PropertySet;
+using netw::repl::SetBook;
 using netw_test::MeshStand;
-namespace property_set_builder = netw::property_set_builder;
 using netw_test::law_broken;
 using netw_test::law_held;
 using netw_test::LawRowFor;
@@ -49,7 +50,7 @@ enum Plant {
 
 struct AuthorshipScenario {
     String label;
-    int64_t record = NetwPropertySet::RECORD_STATE;
+    int64_t record = PropertySet::RECORD_STATE;
     bool controller_policed = false;
 };
 
@@ -62,7 +63,7 @@ AuthorshipScenario a_state_set_the_server_authors() {
 AuthorshipScenario a_broadcast_set_the_controller_authors() {
     AuthorshipScenario scenario;
     scenario.label = "a-broadcast-set-the-controller-authors";
-    scenario.record = NetwPropertySet::RECORD_BROADCAST;
+    scenario.record = PropertySet::RECORD_BROADCAST;
     scenario.controller_policed = true;
     return scenario;
 }
@@ -89,7 +90,7 @@ class AuthorshipRun {
         return planted == p_plant;
     }
 
-    Ref<NetwPropertySet> declare_stream(Node *p_node) const {
+    uint64_t declare_stream(SetBook &r_sets, Node *p_node) const {
         Ref<NetwPropertyConfig> config
             = Netw::configure_property(p_node, StringName("position"), true);
         Ref<NetwInterpolate> spec;
@@ -99,7 +100,7 @@ class AuthorshipRun {
                 spec->lerp()->smooth(0.0)->to(StringName("position"))
             )
         );
-        if (declared.record == NetwPropertySet::RECORD_BROADCAST) {
+        if (declared.record == PropertySet::RECORD_BROADCAST) {
             config->broadcast();
         } else {
             config->state();
@@ -113,13 +114,9 @@ class AuthorshipRun {
 
         Dictionary configs;
         configs[StringName("position")] = config;
-        const Ref<NetwPropertySet> set
-            = property_set_builder::from_property_configs(
-                configs,
-                declared.record
-            );
-        REQUIRE(set.is_valid());
-        set->set_sealed(true);
+        const uint64_t set
+            = netw_test::sealed_set(r_sets, configs, declared.record);
+        REQUIRE(set != SetBook::NONE);
         return set;
     }
 
@@ -137,7 +134,8 @@ class AuthorshipRun {
         p_branch->add_child(body);
 
         const Ref<NetwEntity> entity = NetwEntity::ensure(body);
-        const Ref<NetwPropertySet> set = declare_stream(body);
+        const uint64_t set
+            = declare_stream(p_core->property_set_book(), body);
         NETW_CHECK_EQ(
             int(p_core->sync_pipeline()->register_property_set(body, set)),
             int(OK)
@@ -233,7 +231,7 @@ LawVerdict law_tracked(const AuthorshipRun &p_run) {
 LawVerdict law_authorship(const AuthorshipRun &p_run) {
     const Evidence &read = p_run.evidence();
     const bool server_owed
-        = p_run.scenario().record == NetwPropertySet::RECORD_STATE;
+        = p_run.scenario().record == PropertySet::RECORD_STATE;
     if (read.server_authors != server_owed) {
         return law_broken(
             "the server reads authorship %d for a %s stream",
@@ -380,13 +378,12 @@ RigidBody2D *a_state_body(NetwMultiplayer *p_core, Node *p_branch, double p_x) {
     config->state();
     Dictionary configs;
     configs[StringName("position")] = config;
-    const Ref<NetwPropertySet> set
-        = property_set_builder::from_property_configs(
-            configs,
-            NetwPropertySet::RECORD_STATE
-        );
-    REQUIRE(set.is_valid());
-    set->set_sealed(true);
+    const uint64_t set = netw_test::sealed_set(
+        p_core->property_set_book(),
+        configs,
+        PropertySet::RECORD_STATE
+    );
+    REQUIRE(set != SetBook::NONE);
     NETW_CHECK_EQ(
         int(p_core->sync_pipeline()->register_property_set(body, set)),
         int(OK)

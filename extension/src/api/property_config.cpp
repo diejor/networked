@@ -9,6 +9,8 @@ using namespace godot;
 
 namespace netw {
 
+using repl::PropertySet;
+
 namespace {
 
 Callable &carry_binder() {
@@ -31,8 +33,8 @@ void NetwPropertyConfig::warn_double_set(
     }
     NETW_WARN(
         sys::SESSION,
-        "NetwPropertyConfig: the set-level %s of '%s' was already declared "
-        "with another value.",
+        "The %s of '%s' was declared twice with different values, and the "
+        "last one wins. Declare it once.",
         String(p_axis),
         String(get_context_name())
     );
@@ -40,48 +42,48 @@ void NetwPropertyConfig::warn_double_set(
 
 Ref<NetwPropertyConfig> NetwPropertyConfig::state() {
     in_state_set = true;
-    lane = NetwPropertySet::VOLATILE;
-    set_trigger = NetwPropertySet::TRIGGER_ON_CHANGE;
+    lane = PropertySet::VOLATILE;
+    set_trigger = PropertySet::TRIGGER_ON_CHANGE;
     return Ref<NetwPropertyConfig>(this);
 }
 
 Ref<NetwPropertyConfig> NetwPropertyConfig::input() {
     in_input_set = true;
-    lane = NetwPropertySet::VOLATILE;
-    set_trigger = NetwPropertySet::TRIGGER_ON_CHANGE;
-    set_audience = NetwPropertySet::AUDIENCE_SERVER_ONLY;
+    lane = PropertySet::VOLATILE;
+    set_trigger = PropertySet::TRIGGER_ON_CHANGE;
+    set_audience = PropertySet::AUDIENCE_SERVER_ONLY;
     return Ref<NetwPropertyConfig>(this);
 }
 
 Ref<NetwPropertyConfig> NetwPropertyConfig::broadcast() {
     in_broadcast_set = true;
-    lane = NetwPropertySet::VOLATILE;
-    set_trigger = NetwPropertySet::TRIGGER_ON_CHANGE;
+    lane = PropertySet::VOLATILE;
+    set_trigger = PropertySet::TRIGGER_ON_CHANGE;
     return Ref<NetwPropertyConfig>(this);
 }
 
 Ref<NetwPropertyConfig> NetwPropertyConfig::volatile_lane() {
-    lane = NetwPropertySet::VOLATILE;
+    lane = PropertySet::VOLATILE;
     return Ref<NetwPropertyConfig>(this);
 }
 
 Ref<NetwPropertyConfig> NetwPropertyConfig::retained() {
-    lane = NetwPropertySet::RETAINED;
+    lane = PropertySet::RETAINED;
     return Ref<NetwPropertyConfig>(this);
 }
 
 Ref<NetwPropertyConfig> NetwPropertyConfig::causal() {
-    property_class = NetwPropertySet::CAUSAL;
+    property_class = PropertySet::CAUSAL;
     return Ref<NetwPropertyConfig>(this);
 }
 
 Ref<NetwPropertyConfig> NetwPropertyConfig::derived() {
-    property_class = NetwPropertySet::DERIVED;
+    property_class = PropertySet::DERIVED;
     return Ref<NetwPropertyConfig>(this);
 }
 
 Ref<NetwPropertyConfig> NetwPropertyConfig::cosmetic() {
-    property_class = NetwPropertySet::COSMETIC;
+    property_class = PropertySet::COSMETIC;
     return Ref<NetwPropertyConfig>(this);
 }
 
@@ -102,9 +104,8 @@ Ref<NetwPropertyConfig> NetwPropertyConfig::carry_step(const Callable &p_step) {
     if (!p_step.is_valid() || owner == nullptr) {
         NETW_ERROR(
             sys::SESSION,
-            "NetwPropertyConfig.carry_step: '%s' needs a Callable bound to "
-            "the Node it advances, so the rule belongs to one body rather "
-            "than to every instance of its script.",
+            "NetwPropertyConfig.carry_step on '%s' needs a valid method of "
+            "the node it moves. Pass a method of that node.",
             String(get_context_name())
         );
         return Ref<NetwPropertyConfig>(this);
@@ -142,25 +143,13 @@ Ref<NetwPropertyConfig> NetwPropertyConfig::reconcile_only() {
     return Ref<NetwPropertyConfig>(this);
 }
 
-Ref<NetwPropertyConfig> NetwPropertyConfig::every_tick(double p_interval) {
-    warn_double_set(
-        set_trigger != UNSET
-            && (set_trigger != NetwPropertySet::TRIGGER_TICK
-                || set_every_tick_interval != p_interval),
-        "trigger"
-    );
-    set_trigger = NetwPropertySet::TRIGGER_TICK;
-    set_every_tick_interval = p_interval;
-    return Ref<NetwPropertyConfig>(this);
-}
-
 Ref<NetwPropertyConfig> NetwPropertyConfig::on_change() {
     warn_double_set(
         set_trigger != UNSET
-            && set_trigger != NetwPropertySet::TRIGGER_ON_CHANGE,
+            && set_trigger != PropertySet::TRIGGER_ON_CHANGE,
         "trigger"
     );
-    set_trigger = NetwPropertySet::TRIGGER_ON_CHANGE;
+    set_trigger = PropertySet::TRIGGER_ON_CHANGE;
     return Ref<NetwPropertyConfig>(this);
 }
 
@@ -180,8 +169,8 @@ Ref<NetwPropertyConfig> NetwPropertyConfig::windowed(int64_t p_samples) {
 }
 
 Ref<NetwPropertyConfig> NetwPropertyConfig::audience(bool p_server_only) {
-    set_audience = p_server_only ? NetwPropertySet::AUDIENCE_SERVER_ONLY
-                                 : NetwPropertySet::AUDIENCE_PUBLIC;
+    set_audience = p_server_only ? PropertySet::AUDIENCE_SERVER_ONLY
+                                 : PropertySet::AUDIENCE_PUBLIC;
     return Ref<NetwPropertyConfig>(this);
 }
 
@@ -191,17 +180,10 @@ Ref<NetwPropertyConfig> NetwPropertyConfig::masked() {
 }
 
 Ref<NetwPropertyConfig> NetwPropertyConfig::persisted(
-    const Ref<NetwColumnRef> &p_column
+    const StringName &p_saved_column_name
 ) {
-    NETW_ERR_COND_V(
-        p_column.is_null() || !p_column->is_valid(),
-        Ref<NetwPropertyConfig>(this),
-        sys::TABLE,
-        "NetwPropertyConfig.persisted: '%s' needs the column of a schema, "
-        "which Netw.configure_schema(name).column_ref(index) answers",
-        String(get_context_name()).utf8().get_data()
-    );
-    persist_column = p_column;
+    persist = true;
+    saved_column = p_saved_column_name;
     return Ref<NetwPropertyConfig>(this);
 }
 
@@ -250,11 +232,6 @@ void NetwPropertyConfig::_bind_methods() {
         D_METHOD("reconcile_only"),
         &NetwPropertyConfig::reconcile_only
     );
-    ClassDB::bind_method(
-        D_METHOD("every_tick", "interval"),
-        &NetwPropertyConfig::every_tick,
-        DEFVAL(0.0)
-    );
     ClassDB::bind_method(D_METHOD("on_change"), &NetwPropertyConfig::on_change);
     ClassDB::bind_method(
         D_METHOD("heartbeat", "ticks"),
@@ -271,8 +248,9 @@ void NetwPropertyConfig::_bind_methods() {
     );
     ClassDB::bind_method(D_METHOD("masked"), &NetwPropertyConfig::masked);
     ClassDB::bind_method(
-        D_METHOD("persisted", "column"),
-        &NetwPropertyConfig::persisted
+        D_METHOD("persisted", "saved_column_name"),
+        &NetwPropertyConfig::persisted,
+        DEFVAL(StringName())
     );
     ClassDB::bind_method(D_METHOD("on_spawn"), &NetwPropertyConfig::on_spawn);
 
@@ -363,12 +341,11 @@ void NetwPropertyConfig::_bind_methods() {
             PROPERTY_HINT_NONE,
             "",
             PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_CLASS_IS_ENUM,
-            "NetwPropertySet.Trigger"
+            "NetwPropertyConfig.Trigger"
         ),
         "set_set_trigger",
         "get_set_trigger"
     );
-    NETW_PROPERTY_CONFIG_PROPERTY(Variant::FLOAT, set_every_tick_interval);
     NETW_PROPERTY_CONFIG_PROPERTY(Variant::INT, set_heartbeat_ticks);
     NETW_PROPERTY_CONFIG_PROPERTY(Variant::INT, set_window);
     NETW_PROPERTY_CONFIG_PROPERTY(Variant::BOOL, set_masked);
@@ -379,6 +356,16 @@ void NetwPropertyConfig::_bind_methods() {
 
 #undef NETW_PROPERTY_CONFIG_PROPERTY
 
+    BIND_ENUM_CONSTANT(TRIGGER_TICK);
+    BIND_ENUM_CONSTANT(TRIGGER_ON_CHANGE);
+    BIND_ENUM_CONSTANT(TRIGGER_ON_DEMAND);
+    BIND_ENUM_CONSTANT(VOLATILE);
+    BIND_ENUM_CONSTANT(RETAINED);
+    BIND_ENUM_CONSTANT(CAUSAL);
+    BIND_ENUM_CONSTANT(DERIVED);
+    BIND_ENUM_CONSTANT(COSMETIC);
+    BIND_ENUM_CONSTANT(AUDIENCE_PUBLIC);
+    BIND_ENUM_CONSTANT(AUDIENCE_SERVER_ONLY);
     BIND_CONSTANT(UNSET);
 }
 

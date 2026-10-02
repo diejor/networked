@@ -437,6 +437,34 @@ public sealed class NetwSessionHandle : NetwRefCounted
             ref discarded);
     }
 
+    private static readonly IntPtr _bindSetPeerBandwidth =
+        NetwApi.MethodBind(
+            "NetwSessionHandle",
+            "set_peer_bandwidth",
+            3937882851UL);
+
+    /// <summary>
+    /// Gives <paramref name="peer"/> its own budget in kbit/s, in place of
+    /// <see cref="NetwSessionConfig.BandwidthKbps"/>, for what this peer sends
+    /// it. <c>0</c> returns it to the session's budget, and a negative value is
+    /// refused. The budget lasts until <paramref name="peer"/> disconnects.
+    /// <code>
+    /// Netw.session(self).set_peer_bandwidth(player.peer_id, 64)
+    /// </code>
+    /// </summary>
+    public void SetPeerBandwidth(long peer, long kbps)
+    {
+        long slot0 = peer;
+        long slot1 = kbps;
+        long discarded = default;
+        NetwThunks.Ptrcall2_Long_Long_Long(
+            _bindSetPeerBandwidth,
+            Checked,
+            in slot0,
+            in slot1,
+            ref discarded);
+    }
+
     private static readonly IntPtr _bindLeave =
         NetwApi.MethodBind("NetwSessionHandle", "leave", 1931563502UL);
 

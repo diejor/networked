@@ -44,7 +44,7 @@ void WatchBook::poll(
     const Array &p_values,
     const Array &p_readable
 ) {
-    NETW_ZONE_NC("Watch poll", colors::WIRE);
+    NETW_ZONE_LEAF("Watch poll", colors::WIRE, profile::SUBSYSTEM_WIRE);
     Stream &stream = streams[p_key];
     if (!stream.inited) {
         stream.change_counter = 1;

@@ -109,7 +109,7 @@ Error TrackerSignaler::open(const String &p_room, int64_t p_local_peer) {
     }
     NETW_DEBUG(
         sys::TRANSPORT,
-        "the tracker signaler opened room %s as id %d",
+        "Opened signaling room %s as peer %d.",
         room,
         local_peer
     );
@@ -189,7 +189,7 @@ void TrackerSignaler::poll(
             case TrackerEvent::CLOSED: {
                 NETW_INFO(
                     sys::TRANSPORT,
-                    "the tracker signaler lost every tracker"
+                    "Every signaling tracker was lost."
                 );
                 SignalerEvent down;
                 down.kind = SignalerEvent::LOST;
@@ -198,7 +198,7 @@ void TrackerSignaler::poll(
             case TrackerEvent::UNREACHABLE: {
                 NETW_INFO(
                     sys::TRANSPORT,
-                    "the tracker signaler reached no tracker"
+                    "No signaling tracker could be reached."
                 );
                 SignalerEvent none;
                 none.kind = SignalerEvent::UNREACHABLE;
@@ -219,7 +219,7 @@ void TrackerSignaler::poll(
             close_delay = -1.0;
             NETW_TRACE(
                 sys::TRANSPORT,
-                "the tracker signaler is winding down behind a live link"
+                "Signaling is closing now that a peer connection is live."
             );
             send_stop();
             release();

@@ -163,9 +163,9 @@ void NetwMultiplayer::session_report_discarded_fallback(const String &p_scope) {
         = Object::cast_to<Node>(gd::object_of(session_fallback_source));
     NETW_WARN(
         sys::SESSION,
-        "Netw.configure_session: the declaration on '%s' replaces the whole "
-        "session configuration exported by '%s'. These non-default tree "
-        "fields are ignored: %s. Put all session settings in the declaration.",
+        "Netw.configure_session on '%s' replaces the session settings set on "
+        "'%s', so these are ignored: %s. Put all session settings in "
+        "Netw.configure_session.",
         p_scope,
         source != nullptr ? String(source->get_name()) : String("a freed node"),
         lost
@@ -184,18 +184,16 @@ Error NetwMultiplayer::lagcomp_initialize(
         p_max_future_action_ticks < 0 || p_input_gate_deadline_ticks < 0,
         ERR_INVALID_PARAMETER,
         sys::PREDICTION,
-        "lag compensation refused a negative tick count, so the session keeps "
-        "the values it already had"
+        "Lag compensation tick counts cannot be negative, so the settings did "
+        "not change."
     );
     const int slot = slot_of(session_decl::KIND_LAGCOMP_CONFIG);
     if (config_consumption[slot].consumed) {
         NETW_WARN(
             sys::PREDICTION,
-            "Netw.configure_lagcomp: 'lag compensation' on '%s' was "
-            "configured after this session consumed its configuration. The "
-            "running values are unchanged. Configure before startup and "
-            "finish the fluent chain without awaiting.",
-            String("this session")
+            "Netw.configure_lagcomp came after the session started, so lag "
+            "compensation did not change. Configure it before the session "
+            "starts, and finish the chain without await."
         );
         return ERR_ALREADY_IN_USE;
     }

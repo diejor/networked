@@ -84,9 +84,8 @@ void ParticipantView::set_target(SubViewport *p_target) {
         if (standing != nullptr && standing != this) {
             NETW_ERROR(
                 sys::SCENE,
-                "'%s' already displays '%s', and a SubViewport borrows its "
-                "render state to one view at a time, so '%s' is left blank "
-                "rather than overwriting what the standing view saved",
+                "'%s' already displays '%s', so '%s' was left blank. A "
+                "SubViewport shows in one ParticipantView at a time.",
                 standing->get_name(),
                 p_target->get_name(),
                 get_name()

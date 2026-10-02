@@ -24,17 +24,29 @@ bool carry_value(Stream &p_stream, godot::Variant &r_value) {
     return true;
 }
 
+bool is_scalar_schema(const SchemaRecord &p_schema, const WirePlan &p_plan);
+
+bool encode_scalar_column(
+    const netw::table::SchemaColumn &p_column,
+    const ColumnPlan &p_slot,
+    uint32_t p_index,
+    const godot::Variant &p_value,
+    CodeRow &r_row
+);
+
 bool encode_scalar_row(
     const SchemaRecord &p_schema,
     const godot::Array &p_values,
     CodeRow &r_row
 );
 
-bool gather_scalar_row(
-    const SchemaRecord &p_schema,
-    const WirePlan &p_plan,
-    const godot::Array &p_values,
-    CodeRow &r_row
+bool decode_scalar_column(
+    const netw::table::SchemaColumn &p_column,
+    const ColumnPlan &p_slot,
+    uint32_t p_index,
+    const CodeRow &p_row,
+    godot::PackedInt64Array &r_codes,
+    godot::Variant &r_value
 );
 
 bool decode_scalar_row(

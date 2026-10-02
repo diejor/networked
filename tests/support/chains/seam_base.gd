@@ -16,17 +16,22 @@ func _predict_consume(depth: int, buffer: int) -> int:
 	return predict_consume_default(depth, buffer)
 
 
-func _display_write(_entity: RID, _track: StringName, _value: Variant) -> Error:
+func _display_write_rows(
+		_table: RID,
+		_column: int,
+		_routes: PackedInt64Array,
+		_values: Array,
+) -> Error:
 	display_writes += 1
 	return ERR_SKIP
 
 
-func _sync_gather_set(_entity: RID, comp: int) -> Array:
+func _sync_gather_rows(_table: RID, routes: PackedInt64Array) -> Array:
 	gathers += 1
-	return [comp]
+	return Array(routes)
 
 
-func _sync_apply_set(_entity: RID, _comp: int, _values: Array) -> Error:
+func _sync_apply_rows(_table: RID, _routes: PackedInt64Array, _columns: Array) -> Error:
 	applies += 1
 	return ERR_SKIP
 

@@ -21,9 +21,9 @@ bool late(Guard &p_guard, const char *p_field) {
     p_guard.late_reported = true;
     NETW_WARN(
         sys::SESSION,
-        "Netw.%s: '%s' on '%s' was configured after this session consumed "
-        "its configuration. The running values are unchanged. Configure "
-        "before startup and finish the fluent chain without awaiting.",
+        "Netw.%s set '%s' on '%s' after the session started, so the running "
+        "value is unchanged. Set it before startup and finish the chain "
+        "without awaiting.",
         p_guard.verb,
         p_field,
         p_guard.scope
@@ -34,11 +34,11 @@ bool late(Guard &p_guard, const char *p_field) {
 bool refuse(const Guard &p_guard, const char *p_field, const String &p_saw) {
     NETW_WARN(
         sys::SESSION,
-        "Netw.%s: '%s' keeps its previous value, because %s is outside what "
-        "this field accepts.",
+        "Netw.%s got %s for '%s', which it does not accept, so the previous "
+        "value stays. Pass a value in the range its documentation gives.",
         p_guard.verb,
-        p_field,
-        p_saw
+        p_saw,
+        p_field
     );
     return false;
 }

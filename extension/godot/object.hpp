@@ -34,6 +34,17 @@ inline godot::Object *object_of(godot::ObjectID p_id) {
 #endif
 }
 
+inline bool object_registered(godot::ObjectID p_id) {
+#if defined(NETW_MODULE)
+    return ::ObjectDB::get_instance(p_id) != nullptr;
+#else
+    return ::godot::gdextension_interface::object_get_instance_from_id(
+               uint64_t(p_id)
+           )
+        != nullptr;
+#endif
+}
+
 inline godot::Variant held(godot::Object *p_object) {
     if (p_object == nullptr) {
         return godot::Variant();

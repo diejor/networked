@@ -374,8 +374,10 @@ public sealed class NetwSimulationHandle : NetwRefCounted
     /// <see cref="NetwSimulationHandle.ModeEnum.Authority"/> and touches a free
     /// entity that also sets it, this peer claims that entity with
     /// <see cref="NetwEntity.HoldEnum.Yieldable"/>. A claimed entity claims
-    /// what it touches in the same tick. It turns on
-    /// <c>RigidBody3D.contact_monitor</c> for the bodies. It needs
+    /// what it touches in the same tick. It raises
+    /// <c>RigidBody3D.max_contacts_reported</c> on the bodies.
+    /// <c>RigidBody3D.body_entered</c> and <c>RigidBody3D.body_exited</c> need
+    /// the game's own <c>RigidBody3D.contact_monitor</c>. It needs
     /// <see cref="NetwEntity.TransferEnum.Immediate"/> on an entity with no
     /// <see cref="NetwPropertyConfig.State"/> property and no prediction, and
     /// does nothing otherwise.

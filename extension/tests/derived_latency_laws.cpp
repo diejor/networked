@@ -12,7 +12,7 @@
 namespace TestDerivedLatencyLaws {
 
 using namespace godot;
-using netw::NetwPropertySet;
+using netw::repl::PropertySet;
 using netw_test::authored_value;
 using netw_test::FlowCapture;
 using netw_test::FlowPair;
@@ -27,8 +27,12 @@ const char *DERIVED_BODY = netw_test::gdsrc::STATE_AND_INPUT;
 
 FlowCapture CAPTURE;
 
-void on_state_applied(Dictionary p_header) {
-    CAPTURE.note(p_header, StringName("position"));
+void on_state_applied(
+    void *p_context,
+    const netw::store::Table &p_table,
+    uint32_t p_row
+) {
+    CAPTURE.note(p_table, p_row, StringName("position"));
 }
 
 enum Plant {
@@ -95,13 +99,13 @@ Reading drive(
     }
     rig.conditions(0, conditions, 1);
 
-    const Ref<netw::NetwPropertySetBinding> mirror_state
-        = netw_test::binding_of(pair.mirror(0), NetwPropertySet::RECORD_STATE);
-    REQUIRE_MESSAGE(mirror_state.is_valid(), "the mirror holds no state set");
+    const netw::repl::PropertyBindingPtr mirror_state
+        = netw_test::binding_of(pair.mirror(0), PropertySet::RECORD_STATE);
+    REQUIRE_MESSAGE(mirror_state != nullptr, "the mirror holds no state set");
     CAPTURE.reset();
     CAPTURE.measuring = false;
     CAPTURE.receiver = &rig.clock_of(rig.client(0));
-    mirror_state->on_applied = callable_mp_static(&on_state_applied);
+    mirror_state->on_landed = &on_state_applied;
 
     for (int step = 0; step < p_warmup + p_measure; ++step) {
         if (step == p_warmup) {
@@ -112,13 +116,13 @@ Reading drive(
             pair.authored,
             StringName("position"),
             authored_value(next),
-            NetwPropertySet::RECORD_STATE,
+            PropertySet::RECORD_STATE,
             next
         );
         rig.step_ticks(1);
     }
 
-    mirror_state->on_applied = Callable();
+    mirror_state->on_landed = nullptr;
     Reading reading;
     reading.rows = CAPTURE.latency_rows;
     reading.spread = CAPTURE.spread();

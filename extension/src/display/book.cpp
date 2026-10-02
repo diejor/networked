@@ -53,6 +53,7 @@ void Book::forget(const RID &p_entity) {
         by_route.erase(found->value.route);
     }
     if (found->value.runtime != nullptr) {
+        release(found->value.runtime);
         memdelete(found->value.runtime);
     }
     rows.remove(found);
@@ -82,8 +83,53 @@ Runtime *Book::open_runtime(const RID &p_entity) {
     Row &row = row_for(p_entity);
     if (row.runtime == nullptr) {
         row.runtime = memnew(Runtime);
+        live.push_back(row.runtime);
+        wake(row.runtime);
     }
     return row.runtime;
+}
+
+void Book::release(Runtime *p_runtime) {
+    const int64_t at = live.find(p_runtime);
+    if (at >= 0) {
+        live.remove_at(uint32_t(at));
+    }
+    if (p_runtime->get_pump_listed()) {
+        const int64_t listed = pumping.find(p_runtime);
+        if (listed >= 0) {
+            pumping[uint32_t(listed)] = nullptr;
+        }
+    }
+    if (p_runtime->get_record_listed()) {
+        const int64_t listed = recording.find(p_runtime);
+        if (listed >= 0) {
+            recording[uint32_t(listed)] = nullptr;
+        }
+    }
+}
+
+void Book::wake(Runtime *p_runtime) {
+    if (p_runtime == nullptr) {
+        return;
+    }
+    if (!p_runtime->get_pump_listed()) {
+        p_runtime->set_pump_listed(true);
+        pumping.push_back(p_runtime);
+    }
+    if (!p_runtime->get_record_listed()) {
+        p_runtime->set_record_listed(true);
+        recording.push_back(p_runtime);
+    }
+}
+
+void Book::wake_route(int64_t p_route) {
+    wake(runtime_at(p_route));
+}
+
+void Book::wake_all() {
+    for (uint32_t at = 0; at < live.size(); ++at) {
+        wake(live[at]);
+    }
 }
 
 Runtime *Book::runtime_of(const RID &p_entity) const {
@@ -98,11 +144,9 @@ Runtime *Book::runtime_at(int64_t p_route) const {
 
 LocalVector<Runtime *> Book::runtimes() const {
     LocalVector<Runtime *> out;
-    for (uint32_t at = 0; at < order.size(); ++at) {
-        HashMap<RID, Row>::ConstIterator found = rows.find(order[at]);
-        if (found != rows.end() && found->value.runtime != nullptr) {
-            out.push_back(found->value.runtime);
-        }
+    out.resize(live.size());
+    for (uint32_t at = 0; at < live.size(); ++at) {
+        out[at] = live[at];
     }
     return out;
 }
@@ -112,6 +156,7 @@ void Book::set_decl(const RID &p_entity, const Decl &p_decl) {
     row.decl = p_decl;
     if (row.runtime != nullptr) {
         row.runtime->set_config(row.decl);
+        wake(row.runtime);
     }
 }
 
@@ -177,6 +222,7 @@ int Book::write_param(
     Runtime *runtime = runtime_of(p_entity);
     if (runtime != nullptr) {
         runtime->set_config(*decl);
+        wake(runtime);
     }
     mark_dirty(p_entity, dirt);
     return dirt;
@@ -222,6 +268,9 @@ void Book::clear() {
     by_route.clear();
     order.clear();
     dirty.clear();
+    live.clear();
+    pumping.clear();
+    recording.clear();
 }
 
 int Book::size() const {

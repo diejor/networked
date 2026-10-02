@@ -124,7 +124,10 @@ func _assert_clean_state(event: GdUnitEvent) -> void:
 			leaks.append("%s:<%s>" % [child.name, child.get_class()])
 
 		push_error(
-			"TEST ISOLATION LEAK [%s]: Leaked %d root children: %s" % [
+			(
+				"Test %s left %d nodes under the root (%s). Free them before "
+				+ "the test ends."
+			) % [
 				event.test_name(),
 				current_count - _baseline_child_count,
 				", ".join(leaks),
@@ -181,9 +184,12 @@ func _report_resource_delta() -> void:
 			],
 		)
 	push_warning(
-		"TEST RESOURCE GROWTH (top %d offenders, baseline %d):\n%s" % [
-			_top_resource_growths.size(),
+		(
+			"Resources grew during the run, from a baseline of %d. The %d "
+			+ "largest growths follow.\n%s"
+		) % [
 			_baseline_resource_count,
+			_top_resource_growths.size(),
 			"\n".join(lines),
 		],
 	)

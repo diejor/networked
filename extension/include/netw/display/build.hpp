@@ -16,10 +16,6 @@ godot::StringName state_key_for(
 
 bool is_spatial(const godot::StringName &p_prop);
 
-bool draws_on_owner(Runtime *p_runtime);
-
-void retarget_drawn_node(Runtime *p_runtime);
-
 Channel *ensure_state(
     Runtime *p_runtime,
     godot::Node *p_node,

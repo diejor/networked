@@ -18,9 +18,10 @@ using godot::Array;
 using godot::LocalVector;
 using godot::Ref;
 using netw::SchemaCore;
-using netw::repl::RowOffer;
+using netw::repl::RowVerdict;
 using netw::repl::SessionResult;
-using netw::repl::SessionSend;
+using netw_test::RowOffer;
+using netw_test::SessionSend;
 using netw::table::SchemaRecord;
 using netw::wire::ChannelDecl;
 using netw::wire::Delivery;
@@ -86,7 +87,7 @@ SessionResult uncarried(
 int64_t one_frame_bits(const LocalVector<RowOffer> &p_offers) {
     SessionSend probe;
     const SessionResult out = uncarried(probe, p_offers);
-    return out.sends.is_empty() ? 0 : out.sends[0].bits;
+    return out.sends.is_empty() ? 0 : out.sends[0].framed * 8;
 }
 
 class Carrier {
@@ -152,7 +153,7 @@ RowOffer offer(int64_t route, int64_t value, const LocalVector<int> &peers) {
     out.comp = 0;
     out.channel = CHANNEL;
     out.schema = &body();
-    out.values.push_back(value);
+    netw_test::offer_value(out, value);
     out.recipients = peers;
     out.masked = true;
     return out;
@@ -191,8 +192,10 @@ RowOffer retained_offer(
     out.comp = 0;
     out.channel = CHANNEL;
     out.schema = &banner();
-    out.values.push_back(hp);
-    out.values.push_back(mp);
+    Array values;
+    values.push_back(hp);
+    values.push_back(mp);
+    netw_test::offer_values(out, values);
     out.recipients = peers;
     out.reliable = true;
     return out;
@@ -209,12 +212,17 @@ RowOffer window_offer(
     out.comp = 0;
     out.channel = CHANNEL;
     out.schema = &body();
-    out.values.push_back(value);
+    netw_test::offer_value(out, value);
     out.recipients = peers;
     out.windowed = true;
     out.window = 3;
     out.tick = tick;
     return out;
+}
+
+bool settled(SessionSend &p_session, int64_t p_route) {
+    return p_session.explain(p_route, 0, PEER).verdict
+        == netw::repl::RowVerdict::CAUGHT_UP;
 }
 
 LocalVector<int> peers(int a, int b = -1) {
@@ -238,7 +246,6 @@ TEST_CASE(
     NETW_CHECK_EQ(result.sends.size(), 2);
     NETW_CHECK_EQ(result.caught_up, 0);
     NETW_CHECK_EQ(result.ungathered, 0);
-    NETW_CHECK_EQ(session.lane_count(), 1);
     NETW_CHECK_EQ(result.deferred, 0);
 }
 
@@ -258,8 +265,10 @@ TEST_CASE(
     const SessionResult result = drive_send(session, reg, again, 10000, 2);
 
     NETW_CHECK_EQ(result.sends.size(), 0);
-    NETW_CHECK_EQ(result.caught_up, 1);
+    NETW_CHECK_EQ(result.caught_up, 0);
     NETW_CHECK_EQ(result.ungathered, 0);
+    const bool it_says_caught_up = settled(session, 1);
+    CHECK(it_says_caught_up);
 }
 
 TEST_CASE(
@@ -270,7 +279,7 @@ TEST_CASE(
     SessionSend session;
 
     RowOffer bad = offer(1, 10, peers(PEER));
-    bad.values = Array();
+    bad.codes = nullptr;
 
     LocalVector<RowOffer> offers;
     offers.push_back(bad);
@@ -310,7 +319,8 @@ TEST_CASE(
     const SessionResult second = drive_send(session, reg, again, 10000, 2);
 
     NETW_CHECK_EQ(second.sends.size(), 2);
-    NETW_CHECK_EQ(second.caught_up, 1);
+    const bool the_route_that_rode_is_settled = settled(session, rode);
+    CHECK(the_route_that_rode_is_settled);
     for (uint32_t at = 0; at < second.sends.size(); ++at) {
         const bool a_route_the_budget_held_back_rode
             = second.sends[at].route != rode;
@@ -336,7 +346,8 @@ TEST_CASE(
     again.push_back(offer(2, 20, peers(PEER)));
     const SessionResult result = drive_send(session, reg, again, 10000, 2);
     NETW_CHECK_EQ(result.sends.size(), 0);
-    NETW_CHECK_EQ(result.caught_up, 2);
+    const bool both_settled = settled(session, 1) && settled(session, 2);
+    CHECK(both_settled);
 }
 
 TEST_CASE(
@@ -351,8 +362,7 @@ TEST_CASE(
     NETW_REQUIRE_EQ(drive_send(session, reg, offers, 10000, 1).sends.size(), 2);
     session.acknowledge(PEER, 1, 0);
 
-    LocalVector<int> nobody;
-    session.retain(nobody);
+    session.forget_peer(PEER);
 
     LocalVector<RowOffer> again;
     again.push_back(offer(1, 10, peers(PEER)));
@@ -418,7 +428,9 @@ TEST_CASE(
     settled[0].masked = false;
     const SessionResult quiet = carrier.carry(session, settled);
     NETW_CHECK_EQ(quiet.sends.size(), 0);
-    NETW_CHECK_EQ(quiet.caught_up, 1);
+    const bool it_says_caught_up
+        = session.explain(1, 0, PEER).verdict == RowVerdict::CAUGHT_UP;
+    CHECK(it_says_caught_up);
 }
 
 TEST_CASE(
@@ -495,8 +507,7 @@ TEST_CASE(
     offers.push_back(offer(1, 10, peers(PEER)));
     NETW_REQUIRE_EQ(carrier.carry(session, offers).sends.size(), 1);
 
-    LocalVector<int> nobody;
-    session.retain(nobody);
+    session.forget_peer(PEER);
     carrier.cancel(session, PEER);
     NETW_CHECK_EQ(carrier.pending_count(PEER), 0);
 
@@ -519,7 +530,6 @@ TEST_CASE(
     const SessionResult first = carrier.carry(session, offers);
     NETW_CHECK_EQ(first.sends.size(), 1);
     CHECK(first.sends[0].reliable);
-    NETW_CHECK_EQ(session.retained_lane_count(), 1);
 
     NETW_CHECK_EQ(carrier.pending_count(PEER), 0);
 
@@ -556,9 +566,6 @@ TEST_CASE(
     const SessionResult result = carrier.carry(session, offers);
     NETW_CHECK_EQ(result.sends.size(), 2);
     NETW_CHECK_EQ(result.ungathered, 0);
-    NETW_CHECK_EQ(session.lane_count(), 1);
-    NETW_CHECK_EQ(session.retained_lane_count(), 1);
-
     NETW_CHECK_EQ(carrier.pending_count(PEER), 1);
 }
 
@@ -587,8 +594,7 @@ TEST_CASE(
     carrier.commit(session, PEER, 5);
     session.acknowledge(PEER, 5, 0);
 
-    LocalVector<int> nobody;
-    session.retain(nobody);
+    session.forget_peer(PEER);
 
     LocalVector<RowOffer> again;
     again.push_back(offer(1, 10, peers(PEER)));
@@ -608,7 +614,6 @@ TEST_CASE(
     NETW_REQUIRE_EQ(carrier.carry(session, offers).sends.size(), 1);
 
     session.close_route(1);
-    NETW_CHECK_EQ(session.retained_lane_count(), 0);
 
     LocalVector<RowOffer> reused;
     reused.push_back(retained_offer(1, 30, 40, peers(PEER)));
@@ -625,7 +630,10 @@ TEST_CASE(
     offers.push_back(retained_offer(1, 30, 40, peers(PEER, OTHER)));
     NETW_REQUIRE_EQ(carrier.carry(session, offers).sends.size(), 2);
 
-    session.retain_row(1, 0, peers(PEER));
+    netw::wire::StreamLane lane;
+    lane.route = 1;
+    lane.family = netw::wire::StreamFamily::RETAINED;
+    session.hide(OTHER, lane);
 
     LocalVector<RowOffer> again;
     again.push_back(retained_offer(1, 30, 40, peers(PEER, OTHER)));
@@ -707,8 +715,6 @@ TEST_CASE("[Networked][Repl][Hosted] all three lane shapes share one address") {
     const SessionResult result = carrier.carry(session, offers);
     NETW_CHECK_EQ(result.sends.size(), 3);
     NETW_CHECK_EQ(result.ungathered, 0);
-    NETW_CHECK_EQ(session.lane_count(), 1);
-    NETW_CHECK_EQ(session.retained_lane_count(), 1);
     NETW_CHECK_EQ(session.window_lane_count(), 1);
 }
 
@@ -719,8 +725,10 @@ TEST_CASE(
     Carrier carrier;
     LocalVector<RowOffer> offers;
     offers.push_back(window_offer(1, 40, 10, peers(PEER)));
-    offers.push_back(window_offer(1, 41, 11, peers(PEER)));
-    NETW_REQUIRE_EQ(carrier.carry(session, offers).sends.size(), 2);
+    NETW_REQUIRE_EQ(carrier.carry(session, offers).sends.size(), 1);
+    LocalVector<RowOffer> later;
+    later.push_back(window_offer(1, 41, 11, peers(PEER)));
+    NETW_REQUIRE_EQ(carrier.carry(session, later).sends.size(), 1);
 
     session.close_route(1);
     NETW_CHECK_EQ(session.window_lane_count(), 0);
@@ -766,28 +774,6 @@ TEST_CASE(
             = healed.sends[at].masked == (healed.sends[at].route == 1);
         CHECK(only_the_confirmed_lane_takes_a_delta);
     }
-}
-
-TEST_CASE(
-    "[Networked][Repl][Hosted] a send that never reached the carrier is never "
-    "staged"
-) {
-    SessionSend session;
-    Carrier carrier;
-    LocalVector<RowOffer> offers;
-    offers.push_back(offer(1, 10, peers(PEER)));
-    NETW_CHECK_EQ(uncarried(session, offers).sends.size(), 1);
-
-    NETW_CHECK_EQ(carrier.pending_count(PEER), 0);
-    carrier.commit(session, PEER, 5);
-    session.acknowledge(PEER, 5, 0);
-    NETW_CHECK_EQ(session.explain(1, 0, PEER).exposed, 0);
-
-    LocalVector<RowOffer> again;
-    again.push_back(offer(1, 10, peers(PEER)));
-    const SessionResult result = uncarried(session, again);
-    NETW_CHECK_EQ(result.caught_up, 0);
-    NETW_CHECK_EQ(result.sends.size(), 1);
 }
 
 TEST_CASE(
@@ -845,7 +831,7 @@ TEST_CASE(
     const WireRegistry reg = registry();
     SessionSend session;
     RowOffer bad = offer(1, 10, peers(PEER));
-    bad.values = Array();
+    bad.codes = nullptr;
 
     LocalVector<RowOffer> offers;
     offers.push_back(bad);
@@ -873,7 +859,7 @@ TEST_CASE(
     const SessionResult light = drive_send(roomy, reg, offers, budget, 1);
     int64_t rows_bits = 0;
     for (uint32_t at = 0; at < light.sends.size(); ++at) {
-        rows_bits += light.sends[at].bits;
+        rows_bits += light.sends[at].framed * 8;
     }
     NETW_CHECK_EQ(
         roomy.control_budget_bytes(PEER, reserved),

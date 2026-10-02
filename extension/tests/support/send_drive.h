@@ -51,9 +51,9 @@ inline void settle_batch(
 }
 
 inline netw::repl::SessionResult drive_send(
-    netw::repl::SessionSend &p_session,
+    SessionSend &p_session,
     const netw::wire::WireRegistry &p_registry,
-    const godot::LocalVector<netw::repl::RowOffer> &p_offers,
+    const godot::LocalVector<RowOffer> &p_offers,
     int64_t p_max_bits,
     uint16_t p_seq,
     int64_t p_base_tick = 0

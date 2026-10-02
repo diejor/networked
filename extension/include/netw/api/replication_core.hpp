@@ -9,11 +9,11 @@
 #include "godot/variant.hpp"
 #include "netw/api/entity.hpp"
 #include "netw/api/participant.hpp"
-#include "netw/api/property_set_binding.hpp"
 #include "netw/api/sync_compat.hpp"
 #include "netw/api/sync_model.hpp"
 #include "netw/api/sync_pipeline.hpp"
 #include "netw/channel_book.hpp"
+#include "netw/repl/property_binding.hpp"
 #include "netw/session/frames.hpp"
 #include "netw/spawn/pipeline.hpp"
 #include "netw/spawn/spawner_compat.hpp"
@@ -77,7 +77,6 @@ private:
 
     NetwMultiplayer *core() const;
     godot::Object *api() const;
-    godot::Object *table_core() const;
     godot::Error finish_receive_pass(
         int64_t p_frames,
         godot::Error p_verdict,
@@ -158,11 +157,13 @@ public:
     void register_protocol(int64_t p_channel, const godot::Callable &p_handler);
     godot::Error settle_channels();
 
-    godot::Ref<NetwPropertySetBinding> derived_binding(
+    repl::PropertyBindingPtr derived_binding(
         godot::Node *p_node,
         int64_t p_record
     );
-    godot::TypedArray<NetwPropertySetBinding> derived_group(int64_t p_route);
+    godot::LocalVector<repl::PropertyBindingPtr> derived_group(
+        int64_t p_route
+    );
     void note_peer_ack(
         int64_t p_peer_id,
         int64_t p_acked_seq,
@@ -250,6 +251,7 @@ public:
 
     void on_clock_tick(int64_t p_tick);
     void pump_tables(int64_t p_tick);
+    void send_table_removals(int64_t p_tick);
     void replay_tables(int64_t p_peer_id);
     void on_frame_end();
     void on_poll();

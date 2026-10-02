@@ -21,6 +21,23 @@ Description
 
 The interface provided by this class is optional and is supposed to work with the default :godot:`SceneMultiplayer`.
 
+\ **Bandwidth**\ 
+
+Every peer is sent at most its byte budget each tick. Changed rows that do not fit wait for a later tick, and the ones that have waited longest and matter most go first.
+
+::
+
+    func _init() -> void:
+        Netw.configure_session(self).bandwidth(256)
+
+    func _on_slow_player(player: NetwPlayer) -> void:
+        Netw.session(self).set_peer_bandwidth(player.peer_id, 64)
+
+    func _ready() -> void:
+        NetwEntity.of(self).replication_priority = 4.0
+
+\ RPCs, spawns and :ref:`NetwPropertyConfig.retained()<class_NetwPropertyConfig_method_retained>` properties always go when they are due, and a peer they pushed over its budget receives no more rows until the overdraft is repaid. :ref:`NetwMultiplayer.peer_link_stats()<class_NetwMultiplayer_method_peer_link_stats>` shows the budget and the overdraft.
+
 .. rst-class:: classref-reftable-group
 
 Methods
@@ -531,16 +548,15 @@ Makes ``node`` a multiplayer scene. Players only see its children while they are
 
 :ref:`NetwPersistenceConfig<class_NetwPersistenceConfig>` **configure_persistence**\ (\ node\: :godot:`Node`\ ) |static| :ref:`🔗<class_Netw_method_configure_persistence>`
 
-Declares which row of which :ref:`NetwDatabase<class_NetwDatabase>` ``node`` loads and saves from.
+Declares which record of which :ref:`NetwDatabase<class_NetwDatabase>` ``node`` loads and saves. The record holds every property marked with :ref:`NetwPropertyConfig.persisted()<class_NetwPropertyConfig_method_persisted>`.
 
 ::
 
     func _ready() -> void:
-        Netw.configure_property(self, &"gold") \
-                .persisted(game.save_schema.column_ref(0))
+        Netw.configure_property(self, &"gold", false).persisted()
         Netw.configure_persistence(self) \
                 .database(&"saves") \
-                .schema(game.save_schema) \
+                .table(&"players") \
                 .record_id(account_name)
 
 \ See :ref:`NetwPersistenceConfig<class_NetwPersistenceConfig>`, :ref:`NetwPersistenceHandle<class_NetwPersistenceHandle>` and :ref:`NetwDatabase<class_NetwDatabase>`.

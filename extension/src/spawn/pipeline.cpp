@@ -357,8 +357,8 @@ bool Pipeline::armed_owner_survives(int64_t p_route) {
     }
     NETW_INFO(
         sys::SPAWN,
-        "the spawn armed for player '%s' is mounted after that "
-        "player left, so its body is discarded rather than replicated",
+        "Player '%s' left before their spawn was added, so its body was "
+        "discarded.",
         String(owner->get_username())
     );
     return false;
@@ -405,7 +405,7 @@ Ref<NetwEntity> Pipeline::replicate(
         NETW_ERR_V(
             Ref<NetwEntity>(),
             sys::SPAWN,
-            "Netw.replicate: node is null or freed"
+            "Netw.replicate was given a null or freed node."
         );
     }
     if (!spawn_admitted(p_node, p_owner, "Netw.replicate")) {
@@ -415,8 +415,8 @@ Ref<NetwEntity> Pipeline::replicate(
         NETW_ERR_V(
             Ref<NetwEntity>(),
             sys::SPAWN,
-            "Netw.replicate: call it before add_child. The node is already in "
-            "the tree."
+            "Netw.replicate was called on a node already in the tree. Call it "
+            "before add_child."
         );
     }
 
@@ -426,14 +426,15 @@ Ref<NetwEntity> Pipeline::replicate(
             NETW_ERR_V(
                 Ref<NetwEntity>(),
                 sys::SPAWN,
-                "Netw.replicate: '%s' was materialized from the server; this "
-                "peer cannot take authority of a remote-owned instance",
+                "Netw.replicate cannot take '%s', because another peer spawned "
+                "it. Only the peer that spawned a node can replicate it.",
                 p_node->get_name()
             );
         }
         NETW_WARN(
             sys::SPAWN,
-            "Netw.replicate: '%s' is already replicated (route %d)",
+            "Netw.replicate was called twice on '%s', so it returned the "
+            "entity it already has, route %d.",
             p_node->get_name(),
             existing->get_route()
         );
@@ -444,8 +445,8 @@ Ref<NetwEntity> Pipeline::replicate(
         NETW_ERR_V(
             Ref<NetwEntity>(),
             sys::SPAWN,
-            "Netw.replicate: node has no reconstruction recipe. Instantiate it "
-            "from a scene or use Netw.spawn with a configured spawn function."
+            "Netw.replicate needs a node instantiated from a scene file. Use "
+            "Netw.spawn with a Netw.configure_spawn function for other nodes."
         );
     }
 
@@ -466,8 +467,8 @@ Node *Pipeline::spawn(
         NETW_ERR_V(
             nullptr,
             sys::SPAWN,
-            "Netw.spawn: the spawn function must be a method on a Node host "
-            "that exists on every peer"
+            "Netw.spawn needs a method of a Node. Pass a method of a node that "
+            "exists on every peer."
         );
     }
     const Ref<Script> script = host->get_script();
@@ -476,8 +477,8 @@ Node *Pipeline::spawn(
         NETW_ERR_V(
             nullptr,
             sys::SPAWN,
-            "Netw.spawn: spawn function '%s' is not registered; call "
-            "Netw.configure_spawn in the host's _init()",
+            "Spawn function '%s' is not registered. Register it with "
+            "Netw.configure_spawn in its node's _init.",
             method
         );
     }
@@ -489,7 +490,8 @@ Node *Pipeline::spawn(
         NETW_ERR_V(
             nullptr,
             sys::SPAWN,
-            "Netw.spawn: argument count mismatch for spawn function '%s'",
+            "Netw.spawn was given the wrong number of arguments for spawn "
+            "function '%s'.",
             method
         );
     }
@@ -504,8 +506,8 @@ Node *Pipeline::spawn(
         NETW_ERR_V(
             nullptr,
             sys::SPAWN,
-            "Netw.spawn: spawn function '%s' must return an orphan Node. A "
-            "spawn function must not be a coroutine.",
+            "Spawn function '%s' did not return a Node outside the tree. "
+            "Return the new node without adding it, and do not await in it.",
             method
         );
     }
@@ -514,7 +516,9 @@ Node *Pipeline::spawn(
         NETW_ERR_V(
             nullptr,
             sys::SPAWN,
-            "Netw.spawn: the spawn function returned an already replicated node"
+            "Spawn function '%s' returned a node that is already replicated. "
+            "Return a new node.",
+            method
         );
     }
     bool admitted = false;
@@ -610,7 +614,8 @@ Node *Pipeline::spawn_registered(
         NETW_ERR_V(
             nullptr,
             sys::SPAWN,
-            "spawn_registered: no constructor registered under id '%s'",
+            "Spawn constructor '%s' is not registered. Register it with "
+            "NetwMultiplayer.spawn_register_constructor.",
             p_id
         );
     }
@@ -620,7 +625,8 @@ Node *Pipeline::spawn_registered(
         NETW_ERR_V(
             nullptr,
             sys::SPAWN,
-            "spawn_registered: constructor '%s' must return an orphan node",
+            "Spawn constructor '%s' did not return a Node outside the tree. "
+            "Return the new node without adding it.",
             p_id
         );
     }
@@ -655,6 +661,21 @@ Ref<NetwEntity> Pipeline::adopt_in_place(Node *p_root) {
         flush_armed_spawn(record.get_route());
     }
     return entity;
+}
+
+bool Pipeline::readmit(Node *p_node, const Record &p_recipe) {
+    if (!is_server_authority() || p_node == nullptr
+        || !p_node->is_inside_tree()) {
+        return false;
+    }
+    Record record = p_recipe;
+    record.set_route(0);
+    record.set_parent_route(0);
+    record.set_recipients(PackedInt32Array());
+    record.bind_node(p_node);
+    record.bind_origin(p_node->get_parent());
+    return arm_authoritative_spawn(&record, p_node, Ref<NetwPlayer>())
+        .is_valid();
 }
 
 Ref<NetwEntity> Pipeline::arm_consumed_spawn(
@@ -1180,7 +1201,8 @@ PackedByteArray Pipeline::encode_record_frame(
         )) {
         NETW_ERROR(
             sys::SPAWN,
-            "route %d carries a header no frame can hold",
+            "The spawn of route %d could not be written to a packet, so it "
+            "was not sent.",
             int(p_route)
         );
         return PackedByteArray();
@@ -1199,17 +1221,18 @@ PackedByteArray Pipeline::encode_record_frame(
         || !stream.bool1(parent_is_spawn_target)) {
         NETW_ERROR(
             sys::SPAWN,
-            "unknown spawn recipe %d for route %d",
-            recipe,
-            p_record->get_route()
+            "The spawn of route %d was not sent, because its way of building "
+            "the node, %d, is unknown.",
+            p_record->get_route(),
+            recipe
         );
         return PackedByteArray();
     }
     if (!parent_is_spawn_target && !plane->anchor_encode(stream, parent)) {
         NETW_ERROR(
             sys::SPAWN,
-            "parent of '%s' is outside the session root, the spawn cannot "
-            "be addressed",
+            "'%s' was not spawned, because its parent is outside the "
+            "multiplayer root. Add it under a node inside the root.",
             p_node->get_name()
         );
         return PackedByteArray();
@@ -1232,8 +1255,8 @@ PackedByteArray Pipeline::encode_record_frame(
         if (spawner == nullptr || !plane->anchor_encode(stream, spawner)) {
             NETW_ERROR(
                 sys::SPAWN,
-                "consumed spawner for route %d is gone or outside the "
-                "session root",
+                "The spawn of route %d was not sent, because its "
+                "MultiplayerSpawner is gone or outside the multiplayer root.",
                 p_record->get_route()
             );
             return PackedByteArray();
@@ -1255,7 +1278,9 @@ PackedByteArray Pipeline::encode_record_frame(
         if (!fn.is_valid()) {
             NETW_ERROR(
                 sys::SPAWN,
-                "no spawn constructor registered under id '%s' for route %d",
+                "Spawn constructor '%s' is not registered, so route %d was not "
+                "sent. Register it with "
+                "NetwMultiplayer.spawn_register_constructor.",
                 id,
                 p_record->get_route()
             );
@@ -1265,9 +1290,9 @@ PackedByteArray Pipeline::encode_record_frame(
         if (schema.get_type() == Variant::NIL) {
             NETW_ERROR(
                 sys::SPAWN,
-                "spawn constructor '%s' for route %d declares no argument "
-                "schema, so no receiver could decode the bytes this would "
-                "write",
+                "Spawn constructor '%s' has no argument types, so route %d was "
+                "not sent. Pass arg_types to "
+                "NetwMultiplayer.spawn_register_constructor.",
                 id,
                 p_record->get_route()
             );
@@ -1284,8 +1309,8 @@ PackedByteArray Pipeline::encode_record_frame(
         if (host == nullptr || !plane->anchor_encode(stream, host)) {
             NETW_ERROR(
                 sys::SPAWN,
-                "spawn function host for route %d is gone or outside the "
-                "session root",
+                "The spawn of route %d was not sent, because the node holding "
+                "its spawn function is gone or outside the multiplayer root.",
                 p_record->get_route()
             );
             return PackedByteArray();
@@ -1295,9 +1320,8 @@ PackedByteArray Pipeline::encode_record_frame(
         if (schema.get_type() == Variant::NIL) {
             NETW_ERROR(
                 sys::SPAWN,
-                "spawn function '%s' for route %d is not registered through "
-                "Netw.configure_spawn, so no receiver could decode the bytes "
-                "this would write",
+                "Spawn function '%s' is not registered, so route %d was not "
+                "sent. Register it with Netw.configure_spawn in _init.",
                 p_record->get_fn_method(),
                 p_record->get_route()
             );
@@ -1570,7 +1594,11 @@ bool Pipeline::frame_read(bool p_healthy, int64_t p_route) {
     drops_spawn_truncated += 1;
     NetwMultiplayer *plane = core();
     if (plane != nullptr && plane->warn_verdict(ERR_INVALID_DATA, p_route)) {
-        NETW_WARN(sys::SPAWN, "SPAWN for route %d ran out of bits", p_route);
+        NETW_WARN(
+            sys::SPAWN,
+            "A spawn packet for route %d ended early, so it was dropped.",
+            p_route
+        );
     }
     return false;
 }
@@ -1784,8 +1812,8 @@ void Pipeline::apply_parked(
         spawn_park_refused += 1;
         NETW_WARN(
             sys::SPAWN,
-            "SPAWN for route %d waited on an anchor and peer %d no longer "
-            "holds the authority to apply it",
+            "A spawn for route %d was dropped, because peer %d lost its "
+            "authority while the spawn waited for its parent.",
             int(p_route),
             int(p_sender)
         );
@@ -1911,7 +1939,8 @@ SpawnBuild::Outcome Pipeline::build_spawn(
         if (packed.is_null()) {
             NETW_WARN(
                 sys::SPAWN,
-                "SPAWN for route %d names an unknown scene '%s'",
+                "A spawn for route %d was dropped, because scene '%s' does "
+                "not exist on this peer. Export the same scenes on every peer.",
                 route,
                 scene_path
             );
@@ -1950,8 +1979,9 @@ SpawnBuild::Outcome Pipeline::build_spawn(
             if (elided_parent == nullptr) {
                 NETW_WARN(
                     sys::SPAWN,
-                    "SPAWN for route %d elides its parent anchor and this "
-                    "peer's spawner names no spawn target",
+                    "A spawn for route %d was dropped, because this peer's "
+                    "MultiplayerSpawner has no node at its spawn_path. Make "
+                    "spawn_path point to a node on every peer.",
                     route
                 );
                 drops_spawn_unresolved += 1;
@@ -1965,7 +1995,8 @@ SpawnBuild::Outcome Pipeline::build_spawn(
         if (node == nullptr) {
             NETW_WARN(
                 sys::SPAWN,
-                "consumed spawner could not reconstruct route %d",
+                "A spawn for route %d was dropped, because its "
+                "MultiplayerSpawner did not build a node on this peer.",
                 route
             );
             drops_spawn_unresolved += 1;
@@ -1977,8 +2008,9 @@ SpawnBuild::Outcome Pipeline::build_spawn(
         if (!fn.is_valid()) {
             NETW_WARN(
                 sys::SPAWN,
-                "SPAWN for route %d names spawn constructor '%s' that is not "
-                "registered",
+                "A spawn for route %d was dropped, because spawn constructor "
+                "'%s' is not registered on this peer. Register it with "
+                "NetwMultiplayer.spawn_register_constructor on every peer.",
                 route,
                 id
             );
@@ -1989,8 +2021,9 @@ SpawnBuild::Outcome Pipeline::build_spawn(
         if (schema.get_type() == Variant::NIL) {
             NETW_WARN(
                 sys::SPAWN,
-                "SPAWN for route %d names constructor '%s' whose arguments "
-                "are not configured",
+                "A spawn for route %d was dropped, because spawn constructor "
+                "'%s' has no argument types on this peer. Register it with the "
+                "same arg_types on every peer.",
                 route,
                 id
             );
@@ -2011,7 +2044,8 @@ SpawnBuild::Outcome Pipeline::build_spawn(
         if (node == nullptr) {
             NETW_WARN(
                 sys::SPAWN,
-                "spawn constructor '%s' did not return a Node for route %d",
+                "Spawn constructor '%s' did not return a Node, so route %d was "
+                "dropped.",
                 id,
                 route
             );
@@ -2031,7 +2065,8 @@ SpawnBuild::Outcome Pipeline::build_spawn(
         if (host == nullptr) {
             NETW_WARN(
                 sys::SPAWN,
-                "SPAWN for route %d cannot resolve its spawn function host",
+                "A spawn for route %d was dropped, because the node holding "
+                "its spawn function does not exist on this peer.",
                 route
             );
             drops_spawn_unresolved += 1;
@@ -2043,8 +2078,9 @@ SpawnBuild::Outcome Pipeline::build_spawn(
         if (schema.get_type() == Variant::NIL) {
             NETW_WARN(
                 sys::SPAWN,
-                "SPAWN for route %d names spawn function '%s' that is not "
-                "registered on '%s'",
+                "A spawn for route %d was dropped, because spawn function '%s' "
+                "is not registered on '%s' on this peer. Call "
+                "Netw.configure_spawn for it on every peer.",
                 route,
                 method,
                 host->get_name()
@@ -2066,7 +2102,8 @@ SpawnBuild::Outcome Pipeline::build_spawn(
         if (node == nullptr) {
             NETW_WARN(
                 sys::SPAWN,
-                "spawn function '%s' did not return a Node for route %d",
+                "Spawn function '%s' did not return a Node, so route %d was "
+                "dropped.",
                 method,
                 route
             );
@@ -2081,7 +2118,8 @@ SpawnBuild::Outcome Pipeline::build_spawn(
     if (parent == nullptr) {
         NETW_WARN(
             sys::SPAWN,
-            "SPAWN for route %d cannot resolve its parent anchor '%s'",
+            "A spawn for route %d was dropped, because its parent '%s' does "
+            "not exist on this peer.",
             route,
             String(parent_anchor[StringName("path")])
         );
@@ -2461,8 +2499,8 @@ void Pipeline::handle_reparent_frame(
     if (parent == nullptr) {
         NETW_WARN(
             sys::SPAWN,
-            "REPARENT for route %d names anchor %d, which this peer cannot "
-            "resolve and can no longer be shown",
+            "Route %d could not be moved, because its new parent, route %d, "
+            "does not exist on this peer.",
             int(route),
             int(anchor_route)
         );
@@ -2594,8 +2632,8 @@ void Pipeline::retry_scene_parked_spawns(int64_t, const Ref<NetwEntity> &) {
             spawn_park_expired += 1;
             NETW_WARN(
                 sys::SPAWN,
-                "SPAWN for route %d gave up waiting for its consumed "
-                "spawner's scene",
+                "A spawn for route %d was dropped, because its "
+                "MultiplayerSpawner never appeared on this peer.",
                 parked_route
             );
             continue;
@@ -2642,8 +2680,9 @@ void Pipeline::retry_adopt_parked() {
             drops_spawn_unresolved += 1;
             NETW_WARN(
                 sys::SPAWN,
-                "ADOPT for route %d gave up waiting for a node named by the "
-                "authority; the peers' structure must match",
+                "Route %d was dropped, because the node the server named for "
+                "it never appeared on this peer. Build the same scene tree on "
+                "every peer.",
                 parked_route
             );
             continue;
@@ -2860,6 +2899,14 @@ void NetwMultiplayer::spawn_note_nested_candidate(int64_t p_route) {
     if (spawn::Pipeline *pipeline = spawn_plane()) {
         pipeline->note_nested_candidate(p_route);
     }
+}
+
+bool NetwMultiplayer::spawn_readmit(
+    Node *p_node,
+    const spawn::Record &p_recipe
+) {
+    spawn::Pipeline *pipeline = spawn_plane();
+    return pipeline != nullptr && pipeline->readmit(p_node, p_recipe);
 }
 
 void NetwMultiplayer::spawn_flush_armed_spawn(int64_t p_route) {

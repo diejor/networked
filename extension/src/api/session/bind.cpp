@@ -122,15 +122,19 @@ void NetwMultiplayer::_bind_methods() {
         &NetwMultiplayer::interest_player_sees
     );
     ClassDB::bind_method(
-        D_METHOD("sync_gather_set_default", "entity", "comp"),
-        &NetwMultiplayer::sync_gather_set_default
+        D_METHOD("sync_apply_rows_default", "table", "routes", "columns"),
+        &NetwMultiplayer::sync_apply_rows_default
     );
     ClassDB::bind_method(
-        D_METHOD("sync_apply_set_default", "entity", "comp", "values"),
-        &NetwMultiplayer::sync_apply_set_default
+        D_METHOD("sync_gather_rows_default", "table", "routes"),
+        &NetwMultiplayer::sync_gather_rows_default
     );
-    GDVIRTUAL_BIND(_sync_gather_set, "entity", "comp");
-    GDVIRTUAL_BIND(_sync_apply_set, "entity", "comp", "values");
+    ClassDB::bind_method(
+        D_METHOD("store_describe"),
+        &NetwMultiplayer::store_describe
+    );
+    GDVIRTUAL_BIND(_sync_gather_rows, "table", "routes");
+    GDVIRTUAL_BIND(_sync_apply_rows, "table", "routes", "columns");
     ClassDB::bind_method(
         D_METHOD("interest_resolved_layer_ids", "entity"),
         &NetwMultiplayer::interest_resolved_layer_ids
@@ -1429,10 +1433,16 @@ void NetwMultiplayer::_bind_methods() {
         &NetwMultiplayer::scene_is_declared
     );
     ClassDB::bind_method(
-        D_METHOD("display_write_default", "entity", "track", "value"),
-        &NetwMultiplayer::display_write_default
+        D_METHOD(
+            "display_write_rows_default",
+            "table",
+            "column",
+            "routes",
+            "values"
+        ),
+        &NetwMultiplayer::display_write_rows_default
     );
-    GDVIRTUAL_BIND(_display_write, "entity", "track", "value");
+    GDVIRTUAL_BIND(_display_write_rows, "table", "column", "routes", "values");
     ClassDB::bind_method(
         D_METHOD("liveness_node_of", "route"),
         &NetwMultiplayer::liveness_node_of
@@ -1867,12 +1877,12 @@ void NetwMultiplayer::_bind_methods() {
         &NetwMultiplayer::predict_set_witness_callback
     );
     ClassDB::bind_method(
-        D_METHOD("predict_set_corridor_callback", "entity", "callback"),
-        &NetwMultiplayer::predict_set_corridor_callback
+        D_METHOD("predict_set_correction_path_callback", "entity", "callback"),
+        &NetwMultiplayer::predict_set_correction_path_callback
     );
     ClassDB::bind_method(
-        D_METHOD("predict_set_commands_callback", "entity", "callback"),
-        &NetwMultiplayer::predict_set_commands_callback
+        D_METHOD("predict_set_input_callback", "entity", "callback"),
+        &NetwMultiplayer::predict_set_input_callback
     );
     ClassDB::bind_method(
         D_METHOD("simulation_set_param", "entity", "param", "value"),
@@ -1913,10 +1923,6 @@ void NetwMultiplayer::_bind_methods() {
     ClassDB::bind_method(
         D_METHOD("lagcomp_deny_action", "requester", "key"),
         &NetwMultiplayer::lagcomp_deny_action
-    );
-    ClassDB::bind_method(
-        D_METHOD("property_set_record", "set"),
-        &NetwMultiplayer::property_set_record
     );
     ClassDB::bind_method(
         D_METHOD("clock_get_config"),
@@ -2182,10 +2188,6 @@ void NetwMultiplayer::_bind_methods() {
     ClassDB::bind_method(
         D_METHOD("lagcomp_timeline_undeclare", "entity"),
         &NetwMultiplayer::lagcomp_timeline_undeclare
-    );
-    ClassDB::bind_method(
-        D_METHOD("lagcomp_timeline_of", "entity"),
-        &NetwMultiplayer::lagcomp_timeline_of
     );
     ClassDB::bind_method(
         D_METHOD("entity_admit", "entity"),

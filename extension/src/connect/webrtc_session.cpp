@@ -120,7 +120,8 @@ Error WebRTCSession::create_server(int64_t p_now_msec) {
     if (err != OK) {
         NETW_ERROR(
             sys::TRANSPORT,
-            "the WebRTC session refused to open a server"
+            "WebRTCMultiplayerPeer.create_server failed with error %d.",
+            int(err)
         );
         return err;
     }
@@ -139,7 +140,8 @@ Error WebRTCSession::create_client(int64_t p_id, int64_t p_now_msec) {
     if (err != OK) {
         NETW_ERROR(
             sys::TRANSPORT,
-            "the WebRTC session refused to open a client"
+            "WebRTCMultiplayerPeer.create_client failed with error %d.",
+            int(err)
         );
         return err;
     }
@@ -259,7 +261,7 @@ void WebRTCSession::handle_description(
     if (sdp.is_empty()) {
         NETW_DEBUG(
             sys::TRANSPORT,
-            "the WebRTC session dropped an SDP-less %s for id %d",
+            "A WebRTC %s for peer %d had no SDP, so it was dropped.",
             p_kind,
             r_row.peer
         );
@@ -274,7 +276,7 @@ void WebRTCSession::handle_description(
         if (link->set_remote_description(p_kind, sdp) != OK) {
             NETW_DEBUG(
                 sys::TRANSPORT,
-                "the WebRTC session ignored a stale %s for id %d",
+                "A stale WebRTC %s for peer %d was ignored.",
                 p_kind,
                 r_row.peer
             );

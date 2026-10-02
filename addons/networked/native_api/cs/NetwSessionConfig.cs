@@ -202,6 +202,50 @@ public sealed class NetwSessionConfig : NetwRefCounted
         }
     }
 
+    private static readonly IntPtr _bindGetBandwidthKbps =
+        NetwApi.MethodBind(
+            "NetwSessionConfig",
+            "get_bandwidth_kbps",
+            3905245786UL);
+
+    private static readonly IntPtr _bindSetBandwidthKbps =
+        NetwApi.MethodBind(
+            "NetwSessionConfig",
+            "set_bandwidth_kbps",
+            1286410249UL);
+
+    /// <summary>
+    /// The budget each peer is sent, in kbit/s. <c>0</c> allows each peer one
+    /// datagram a tick of <c>SceneMultiplayer.max_sync_packet_size</c>, less
+    /// 150 bytes of headroom. A negative value is refused. While a peer loses
+    /// packets its budget halves, and each round trip without loss adds back an
+    /// eighth of it, up to this value.
+    /// <see cref="NetwSessionHandle.SetPeerBandwidth"/> gives one peer its own
+    /// budget.
+    /// </summary>
+    public long BandwidthKbps
+    {
+        get
+        {
+            long answered = default;
+            NetwThunks.Ptrcall0_Long(
+                _bindGetBandwidthKbps,
+                Checked,
+                ref answered);
+            return answered;
+        }
+        set
+        {
+            long slot0 = value;
+            long discarded = default;
+            NetwThunks.Ptrcall1_Long_Long(
+                _bindSetBandwidthKbps,
+                Checked,
+                in slot0,
+                ref discarded);
+        }
+    }
+
     private static readonly IntPtr _bindApp =
         NetwApi.MethodBind("NetwSessionConfig", "app", 243073128UL);
 
@@ -272,6 +316,28 @@ public sealed class NetwSessionConfig : NetwRefCounted
         IntPtr answered = default;
         NetwThunks.Ptrcall1_IntPtr_IntPtr(
             _bindServer,
+            Checked,
+            in slot0,
+            ref answered);
+        return NetwSessionConfig.Adopt(answered);
+    }
+
+    private static readonly IntPtr _bindBandwidth =
+        NetwApi.MethodBind("NetwSessionConfig", "bandwidth", 3031268209UL);
+
+    /// <summary>
+    /// Sets <see cref="NetwSessionConfig.BandwidthKbps"/> and returns this
+    /// config.
+    /// <code>
+    /// Netw.configure_session(self).bandwidth(256)
+    /// </code>
+    /// </summary>
+    public NetwSessionConfig Bandwidth(long kbps)
+    {
+        long slot0 = kbps;
+        IntPtr answered = default;
+        NetwThunks.Ptrcall1_Long_IntPtr(
+            _bindBandwidth,
             Checked,
             in slot0,
             ref answered);

@@ -2,6 +2,7 @@
 
 #include "godot/variant.hpp"
 #include "netw/api/schema_core.hpp"
+#include "netw/predict/compare.hpp"
 #include "netw/predict/frames.hpp"
 
 namespace netw::predict {
@@ -35,7 +36,12 @@ public:
     int64_t ack_of_acks() const;
 
     bool append_transition(int64_t p_index, int64_t p_label, bool p_fresh);
-    bool append_payload(const godot::Array &p_values);
+    bool append_values(const godot::LocalVector<godot::Variant> &p_values);
+    bool append_codes(const uint64_t *p_words);
+
+    const wire::WirePlan &row_plan() const {
+        return plan;
+    }
     bool append_evidence(
         int p_evidence_mask,
         int p_pre_fp,
@@ -60,7 +66,11 @@ public:
         return int(frame.payloads.size());
     }
 
-    godot::Array payload_at(int p_index) const;
+    bool read_payload(
+        int p_index,
+        const godot::LocalVector<int> &p_fields,
+        StateRow &r_row
+    ) const;
 
     int evidence_count() const {
         return int(frame.evidence.size());

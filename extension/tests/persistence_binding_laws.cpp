@@ -9,6 +9,7 @@
 #include "netw/api/property_config.hpp"
 #include "netw/api/schema_model.hpp"
 #include "netw/persist/binding.hpp"
+#include "netw/persist/envelope.hpp"
 #include "netw/persist/memory_store.hpp"
 #include "netw/schema_model.hpp"
 #include "netw/script/model.hpp"
@@ -21,13 +22,10 @@
 namespace TestPersistenceBinding {
 
 using namespace godot;
-using netw::NetwColumnRef;
 using netw::NetwMultiplayer;
 using netw::NetwPersistenceConfig;
 using netw::NetwPromise;
 using netw::NetwPropertyConfig;
-using netw::NetwQuantize;
-using netw::NetwSchema;
 using netw::SessionCore;
 using netw::persist::MemoryConnection;
 namespace model = netw::script::model;
@@ -35,8 +33,8 @@ namespace schema_model = netw::schema_model;
 
 struct World {
     Ref<NetwMultiplayer> session;
-    Ref<NetwSchema> schema;
     Ref<MemoryConnection> connection;
+    String store;
     RID database;
     Node2D *root = nullptr;
     Node2D *limb = nullptr;
@@ -46,13 +44,9 @@ struct World {
         schema_model::clear();
         netw::persist::forget_stores();
         session.instantiate();
+        store = p_store;
         account = memnew(Node);
         account->set_name("hero");
-
-        schema = NetwSchema::create("players");
-        schema->replicated(false);
-        schema->vector2("where", Ref<NetwQuantize>(), 1);
-        schema->f32("spin", Ref<NetwQuantize>(), 1);
 
         database = session->get_databases()->create("saves");
         connection = MemoryConnection::opened(p_store, "slot1");
@@ -81,7 +75,7 @@ struct World {
         const Ref<NetwPersistenceConfig> config
             = netw::Netw::configure_persistence(root);
         config->database(StringName("saves"))
-            ->schema(schema)
+            ->table(StringName("players"))
             ->record_id(Callable(account, "get_name"))
             ->interval(p_interval);
         return config;
@@ -92,8 +86,20 @@ struct World {
     }
 
     void bind_both() {
-        property(root, "position")->persisted(schema->column_ref(0));
-        property(limb, "rotation")->persisted(schema->column_ref(1));
+        property(root, "position")->persisted(StringName("where"));
+        property(limb, "rotation")->persisted(StringName("spin"));
+    }
+
+    void store_record(const Dictionary &p_envelope) {
+        netw::persist::store_named(store).replace(
+            "slot1",
+            netw::persist::address_text(netw::persist::address_of(
+                netw::persist::Kind::RECORD,
+                StringName("players"),
+                "hero"
+            )),
+            p_envelope
+        );
     }
 
     RID compile() {
@@ -131,76 +137,164 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Persistence][Hosted] PB2 a column reference taken from "
-    "another schema refuses the whole binding, even where its index names a "
-    "column of the declared schema"
-) {
-    World world("pb2");
-    world.declare();
-    const Ref<NetwSchema> stranger = NetwSchema::create("monsters");
-    stranger->vector2("where", Ref<NetwQuantize>(), 1);
-    stranger->f32("spin", Ref<NetwQuantize>(), 1);
-
-    world.property(world.root, "position")->persisted(stranger->column_ref(0));
-    world.property(world.limb, "rotation")
-        ->persisted(world.schema->column_ref(1));
-
-    CHECK_FALSE(world.compile().is_valid());
-}
-
-TEST_CASE(
-    "[Networked][Persistence][Hosted] PB3 a declared column that no property "
-    "binds refuses the whole binding, so a saved row is never half a row"
+    "[Networked][Persistence][Hosted] PB3 a table no property is persisted "
+    "into refuses the binding, so a saved record is never an empty row"
 ) {
     World world("pb3");
     world.declare();
-    world.property(world.root, "position")
-        ->persisted(world.schema->column_ref(0));
+    world.property(world.root, "position");
 
     CHECK_FALSE(world.compile().is_valid());
 }
 
 TEST_CASE(
-    "[Networked][Persistence][Hosted] PB4 two properties naming one column "
-    "refuse the binding, including from sibling nodes, because one column "
-    "holds one property"
+    "[Networked][Persistence][Hosted] PB4 two properties saved under one "
+    "column name refuse the binding, including from sibling nodes, because "
+    "one column holds one property"
 ) {
     World world("pb4");
     world.declare();
-    world.property(world.root, "position")
-        ->persisted(world.schema->column_ref(0));
-    world.property(world.limb, "position")
-        ->persisted(world.schema->column_ref(0));
+    world.property(world.root, "position")->persisted(StringName("where"));
+    world.property(world.limb, "position")->persisted(StringName("where"));
 
     CHECK_FALSE(world.compile().is_valid());
 }
 
 TEST_CASE(
-    "[Networked][Persistence][Hosted] PB5 a property a node does not carry, "
-    "and a property whose value the column cannot store, each refuse the "
-    "binding"
+    "[Networked][Persistence][Hosted] PB5 a property a node does not carry "
+    "refuses the binding, and a stored record whose column type disagrees "
+    "with the property's declared type is refused on load"
 ) {
     SUBCASE("a name no node carries") {
         World world("pb5a");
         world.declare();
-        world.property(world.root, "position")
-            ->persisted(world.schema->column_ref(0));
+        world.property(world.root, "position")->persisted(StringName("where"));
         world.property(world.limb, "no_such_property")
-            ->persisted(world.schema->column_ref(1));
+            ->persisted(StringName("spin"));
 
         CHECK_FALSE(world.compile().is_valid());
     }
 
-    SUBCASE("a Vector2 offered to a float column") {
+    SUBCASE("a float stored where the property holds a Vector2") {
         World world("pb5b");
         world.declare();
-        world.property(world.root, "position")
-            ->persisted(world.schema->column_ref(0));
-        world.property(world.limb, "position")
-            ->persisted(world.schema->column_ref(1));
+        world.bind_both();
+        const RID binding = world.compile();
+        REQUIRE(binding.is_valid());
+        world.session->persist_save_binding(binding);
+        world.root->set_position(Vector2(5, 5));
+        world.session->persist_save_binding(binding);
 
-        CHECK_FALSE(world.compile().is_valid());
+        Array where;
+        where.push_back(String("where"));
+        where.push_back(int(netw::SchemaCore::F64));
+        where.push_back(1);
+        Array spin;
+        spin.push_back(String("spin"));
+        spin.push_back(int(netw::SchemaCore::F64));
+        spin.push_back(1);
+        Array descriptor;
+        descriptor.push_back(spin);
+        descriptor.push_back(where);
+        Dictionary payload;
+        payload["where"] = 3.0;
+        payload["spin"] = 0.0;
+        Dictionary envelope;
+        envelope["format_version"] = 1;
+        envelope["kind"] = 0;
+        envelope["schema_name"] = String("players");
+        envelope["schema_version"] = 1;
+        envelope["descriptor"] = descriptor;
+        envelope["payload"] = payload;
+        world.store_record(envelope);
+
+        const Ref<NetwPromise> refused
+            = world.session->persist_load_binding(binding);
+        CHECK(refused->get_is_failed());
+        CHECK(bool(world.root->get_position() == Vector2(5, 5)));
     }
+}
+
+TEST_CASE(
+    "[Networked][Persistence][Hosted] PB19 one record holds properties from "
+    "different lanes and from a property no lane replicates, each captured "
+    "once"
+) {
+    World world("pb19");
+    world.declare();
+    world.property(world.root, "position")->state()->persisted(
+        StringName("where")
+    );
+    world.property(world.limb, "rotation")->input()->persisted(
+        StringName("spin")
+    );
+    world.property(world.limb, "editor_description")
+        ->persisted(StringName("note"));
+    const RID binding = world.compile();
+    REQUIRE(binding.is_valid());
+    world.root->set_position(Vector2(8, 9));
+    world.limb->set_rotation(0.5);
+    world.limb->set_editor_description("kept");
+
+    CHECK(bool(settled(world.session->persist_save_binding(binding))));
+    const Dictionary stored = world.session
+                                  ->database_read(
+                                      world.database,
+                                      world.session->schema_find("players"),
+                                      "hero"
+                                  )
+                                  ->get_result();
+    const Dictionary values = stored["values"];
+    NETW_CHECK_EQ(int(values.size()), 3);
+    CHECK(bool(Vector2(values["where"]) == Vector2(8, 9)));
+    NETW_CHECK_CLOSE(double(values["spin"]), 0.5, 1e-6);
+    CHECK(bool(String(values["note"]) == String("kept")));
+}
+
+TEST_CASE(
+    "[Networked][Persistence][Hosted] PB18 a record in the layout the "
+    "explicit save schema wrote loads into the properties that now declare "
+    "it, with no migration"
+) {
+    World world("pb18");
+    world.declare();
+    world.property(world.root, "position")->persisted(StringName("where"));
+    world.property(world.limb, "editor_description")
+        ->persisted(StringName("level"));
+    const RID binding = world.compile();
+    REQUIRE(binding.is_valid());
+
+    Array level;
+    level.push_back(String("level"));
+    level.push_back(int(netw::SchemaCore::STRING));
+    level.push_back(1);
+    Array where;
+    where.push_back(String("where"));
+    where.push_back(int(netw::SchemaCore::VECTOR2));
+    where.push_back(1);
+    Array descriptor;
+    descriptor.push_back(level);
+    descriptor.push_back(where);
+    Dictionary payload;
+    payload["level"] = String("res://examples/multiple_levels/Level2.tscn");
+    payload["where"] = Vector2(120, 48);
+    Dictionary envelope;
+    envelope["format_version"] = 1;
+    envelope["kind"] = 0;
+    envelope["schema_name"] = String("players");
+    envelope["schema_version"] = 1;
+    envelope["descriptor"] = descriptor;
+    envelope["payload"] = payload;
+    world.store_record(envelope);
+
+    CHECK(bool(settled(world.session->persist_load_binding(binding))));
+    CHECK(bool(world.root->get_position() == Vector2(120, 48)));
+    CHECK(
+        bool(
+            world.limb->get_editor_description()
+            == String("res://examples/multiple_levels/Level2.tscn")
+        )
+    );
 }
 
 TEST_CASE(

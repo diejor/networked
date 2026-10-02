@@ -216,6 +216,7 @@ TEST_CASE(
     "evidence column"
 ) {
     netw::predict::Journal journal;
+    journal.arm_diagnostics(true);
     netw::predict::JournalOpen opened;
     opened.label = 41;
     opened.kind = 2;
@@ -351,7 +352,7 @@ TEST_CASE(
         int(netw::RestoreMode::EXACT)
     ));
 
-    const int count = netw::predict::JOURNAL_CAPACITY_DEFAULT + 2;
+    const int count = pool->journal_capacity(slot) + 2;
     for (int transition = 0; transition < count; ++transition) {
         pool->record_input(slot, transition, transition + 100);
         REQUIRE(pool->replay_drive(

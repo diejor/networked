@@ -265,7 +265,7 @@ class SessionRun {
             core->table_write_column(table, 0, hp);
             for (int index = 0; index < declared.commits; index++) {
                 if (plant_is(PLANT_COMMIT_BEHIND_THE_SESSION)) {
-                    core->get_table_core()->commit(table, COMMIT_TICK);
+                    core->store_arrays().commit(table, COMMIT_TICK);
                 } else {
                     core->table_commit(table);
                 }

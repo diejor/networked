@@ -2,7 +2,9 @@
 
 #include <algorithm>
 
+#include "netw/colors.hpp"
 #include "netw/log.hpp"
+#include "netw/profile.hpp"
 
 using namespace godot;
 
@@ -170,21 +172,23 @@ void Slot::adopt_timing(const Timing &p_timing) {
         NETW_WARN_COND(
             p_timing.quantum < 1,
             sys::PREDICTION,
-            "A declared simulation quantum must be a positive integer."
+            "Prediction was given %d physics steps per tick, which is not "
+            "positive, so it uses 1.",
+            p_timing.quantum
         );
     }
     declared_quantum = p_timing.quantum < 1 ? 1 : p_timing.quantum;
 }
 
 void Slot::record_input(int64_t p_tick, int32_t p_c_hash) {
-    latest_input_tick = p_tick;
+    recorded_input_tick = p_tick;
     pending_c_hash = p_c_hash;
 }
 
 void Slot::refresh_ack_age() {
     const int64_t age = config.schedule == int(Schedule::FRAME)
         ? next_tape_entry_index - latest_authority_ack - 1
-        : last_driven_input_tick - latest_authority_ack;
+        : drive_input_tick - latest_authority_ack;
     stats.ack_age_ticks = age > 0 ? age : 0;
 }
 
@@ -196,52 +200,240 @@ bool Slot::horizon_full() {
     return stats.ack_age_ticks >= ACK_AGE_MAX;
 }
 
-void Slot::adopt_timeline(const Ref<NetwTimeline> &p_timeline) {
-    timeline = p_timeline;
+void Slot::open_lane() {
+    inputs.drop_origin(uint8_t(CellProvenance::AUTHORED), true);
+    input_floor = -1;
+    lane_open = true;
 }
 
-void Slot::reset_entry_history() {
-    entry_history = NetwTimeline::create(TAPE_HISTORY_LIMIT);
+void Slot::close_lane() {
+    inputs.drop_origin(uint8_t(CellProvenance::AUTHORED), true);
+    input_floor = -1;
+    lane_open = false;
+}
+
+int32_t Slot::topology_fp(const Dictionary &p_topology) {
+    if (topology_fp_quantum != last_quantum
+        || topology_fp_facts != p_topology) {
+        topology_fp_facts = p_topology.duplicate();
+        topology_fp_quantum = last_quantum;
+        topology_fp_value = topology_fingerprint(p_topology, last_quantum);
+    }
+    return topology_fp_value;
+}
+
+bool Slot::record_authored_row(
+    int64_t p_key,
+    int64_t p_label,
+    bool p_fresh,
+    const StateRow &p_input
+) {
+    return inputs.record_row(
+        input_codec,
+        p_key,
+        p_label,
+        p_fresh,
+        p_input,
+        uint8_t(CellProvenance::AUTHORED)
+    );
+}
+
+
+void Slot::unacknowledged_row(int64_t p_key, StateRow &r_input) const {
+    if (!lane_open || inputs.origin_of(p_key) != int(CellProvenance::AUTHORED)
+        || !inputs.read_row(input_codec, p_key, r_input)) {
+        r_input.resize(input_codec.count());
+    }
+}
+
+void Slot::authored_row(int64_t p_key, StateRow &r_input) const {
+    if (p_key < input_floor) {
+        r_input.resize(input_codec.count());
+        return;
+    }
+    unacknowledged_row(p_key, r_input);
+}
+
+bool Slot::holds_authored(int64_t p_key) const {
+    return lane_open && inputs.origin_of(p_key) == int(CellProvenance::AUTHORED)
+        && inputs.carries_fields(p_key);
+}
+
+bool Slot::has_authored(int64_t p_key) const {
+    return p_key >= input_floor && holds_authored(p_key);
+}
+
+int64_t Slot::newest_authored() const {
+    const int64_t newest = inputs.newest_key();
+    for (int64_t key = newest;
+         key >= 0 && key > newest - int64_t(inputs.capacity());
+         --key) {
+        if (inputs.origin_of(key) == int(CellProvenance::AUTHORED)) {
+            return key;
+        }
+    }
+    return -1;
+}
+
+void Slot::authored_ticks(
+    int64_t p_from,
+    int64_t p_to,
+    LocalVector<int64_t> &r_ticks
+) const {
+    NETW_ZONE_LEAF(
+        "Predict input window",
+        colors::PREDICTION,
+        profile::SUBSYSTEM_PREDICTION
+    );
+    r_ticks.clear();
+    if (!lane_open) {
+        return;
+    }
+    for (int64_t tick = std::max(p_from, input_floor); tick <= p_to; ++tick) {
+        if (inputs.origin_of(tick) == int(CellProvenance::AUTHORED)) {
+            r_ticks.push_back(tick);
+        }
+    }
+}
+
+bool Slot::admit_command(
+    int64_t p_key,
+    int64_t p_label,
+    bool p_fresh,
+    const StateRow &p_command
+) {
+    return inputs.origin_of(p_key) < int(CellProvenance::AUTHORED)
+        && inputs.record_row(
+            input_codec,
+            p_key,
+            p_label,
+            p_fresh,
+            p_command,
+            uint8_t(CellProvenance::AUTHORED)
+        );
+}
+
+bool Slot::record_joint_command(
+    int64_t p_key,
+    const StateRow &p_command,
+    CellProvenance p_provenance
+) {
+    if (inputs.origin_of(p_key) >= int(p_provenance)) {
+        return false;
+    }
+    return inputs.record_row(
+        input_codec,
+        p_key,
+        p_key,
+        true,
+        p_command,
+        uint8_t(p_provenance)
+    );
+}
+
+
+int Slot::command_depth_from(int64_t p_cursor) const {
+    if (p_cursor < 0) {
+        return 0;
+    }
+    int depth = 0;
+    while (holds_command(p_cursor + depth)) {
+        depth += 1;
+    }
+    return depth;
+}
+
+bool Slot::holds_command(int64_t p_key) const {
+    return inputs.origin_of(p_key) == int(CellProvenance::AUTHORED);
+}
+
+PackedInt64Array Slot::command_keys() const {
+    PackedInt64Array out;
+    const int64_t newest = inputs.newest_key();
+    if (newest < 0) {
+        return out;
+    }
+    for (int64_t key = std::max(int64_t(0), inputs.oldest_key()); key <= newest;
+         ++key) {
+        if (holds_command(key)) {
+            out.push_back(key);
+        }
+    }
+    return out;
 }
 
 LocalVector<ReplayEntry> Slot::replay_entries(int64_t p_basis) const {
     LocalVector<ReplayEntry> out;
-    const bool has_lane = timeline.is_valid();
     if (config.schedule != int(Schedule::FRAME)) {
-        for (int64_t tick = p_basis + 1; tick <= latest_input_tick; ++tick) {
+        for (int64_t tick = p_basis + 1; tick <= recorded_input_tick; ++tick) {
             ReplayEntry entry;
             entry.index = tick;
             entry.label = tick;
-            entry.input = has_lane ? timeline->input_at(tick) : Dictionary();
+            entry.input_key = tick;
             out.push_back(entry);
         }
         return out;
     }
     const int64_t newest = tape.newest_index();
-    Dictionary carried
-        = has_lane ? timeline->input_at(tape.label_of(p_basis)) : Dictionary();
+    int64_t carried = p_basis;
     for (int64_t index = std::max(tape.oldest_index(), p_basis + 1);
          index <= newest;
          ++index) {
         ReplayEntry entry;
         entry.index = index;
         entry.label = tape.label_of(index);
-        if (has_lane && tape.is_fresh(index)) {
-            const Dictionary authored = timeline->input_at(entry.label);
-            if (!authored.is_empty()) {
-                carried = authored;
-            }
+        if (tape.is_fresh(index) && has_authored(index)) {
+            carried = index;
         }
-        entry.input = carried;
+        entry.input_key = carried;
         out.push_back(entry);
     }
     return out;
 }
 
-Dictionary Slot::state_before(int64_t p_transition) const {
-    const Ref<NetwTimeline> &book
-        = config.schedule == int(Schedule::FRAME) ? entry_history : timeline;
-    return book.is_valid() ? book->state_at(p_transition) : Dictionary();
+int64_t Slot::label_for(int64_t p_key) const {
+    if (config.schedule != int(Schedule::FRAME)) {
+        return p_key;
+    }
+    const int64_t label = tape.label_of(p_key - 1);
+    return label < 0 ? -1 : label + 1;
+}
+
+bool Slot::record_state_row(int64_t p_key, const StateRow &p_state) {
+    const bool framed = config.schedule == int(Schedule::FRAME);
+    return book.record_row(
+        wiring.codec,
+        p_key,
+        label_for(p_key),
+        !framed || tape.is_fresh(p_key - 1),
+        p_state
+    );
+}
+
+
+bool Slot::joint_state(int64_t p_transition, StateRow &r_state) const {
+    return p_transition > joint.state_floor
+        && book.read_row(wiring.codec, p_transition + 1, r_state)
+        && r_state.any();
+}
+
+int64_t Slot::joint_newest_state(int64_t p_transition) const {
+    const int64_t key = book.newest_at_or_before(p_transition + 1);
+    return key - 1 > joint.state_floor ? key - 1 : -1;
+}
+
+int64_t Slot::joint_oldest_state() const {
+    const int64_t key = book.oldest_key();
+    if (key < 0) {
+        return -1;
+    }
+    return std::max(key - 1, joint.state_floor + 1);
+}
+
+void Slot::clear_joint_cells() {
+    inputs.drop_origin(uint8_t(CellProvenance::AUTHORED), false);
+    inputs.forget_relays();
+    joint.clear_cells(book.newest_key() - 1);
 }
 
 void Slot::mark_carry_dirty(int64_t p_transition) {
@@ -257,33 +449,27 @@ bool Slot::carry_judgeable(int64_t p_transition) const {
 }
 
 void Slot::trim_history(int64_t p_ack) {
-    if (config.schedule == int(Schedule::FRAME)) {
-        if (timeline.is_valid()) {
-            timeline->trim_before(tape.label_of(p_ack));
-        }
-        if (entry_history.is_valid()) {
-            entry_history->trim_before(p_ack);
-        }
-        return;
-    }
-    if (timeline.is_valid()) {
-        timeline->trim_before(p_ack);
+    book.trim_before(p_ack);
+    if (lane_open) {
+        input_floor = std::max(input_floor, p_ack);
     }
 }
 
 void Slot::reset_tape(int64_t p_epoch) {
     tape_epoch = p_epoch;
     tape.clear();
-    // These stores use transition keys, which are unique only within an epoch.
-    // Clear them before the new epoch reuses a key.
     journal.clear(p_epoch);
-    commands.clear();
-    reset_entry_history();
+    if (config.schedule == int(Schedule::FRAME)) {
+        inputs.clear();
+        input_floor = -1;
+        book.clear();
+        joint.state_floor = -1;
+    }
     next_tape_entry_index = 0;
     last_driven_entry_index = -1;
-    latest_input_tick = -1;
-    last_driven_input_tick = -1;
-    last_frame_transition_tick = -1;
+    recorded_input_tick = -1;
+    drive_input_tick = -1;
+    drive_frame_tick = -1;
     latest_authority_ack = -1;
     pending_c_hash = 0;
     stats.tape_epoch = p_epoch;
@@ -413,22 +599,18 @@ bool FieldReadings::empty() const {
 
 void Slot::rewire(const Wiring &p_wiring) {
     wiring = p_wiring;
+    book.reset(wiring.codec);
+    joint.state_floor = -1;
     report.divergence.resize(p_wiring.count());
     report.tier_error.resize(p_wiring.count());
     recovery_ledger.resize(p_wiring.count());
     state = StateRow();
     state.resize(wiring.count());
     recovery = RecoveryState();
-    // A rewire re-keys the transitions the quarantine gathered its evidence
-    // over, so a seed retained across one would replay a payload keyed to a
-    // numbering that no longer exists. The latch and the proof's target
-    // survive, because neither is keyed by transition.
     quarantine.pending_states.clear();
     quarantine.witnesses.clear();
     quarantine.last_basis = -1;
     quarantine.wait_anchor = -1;
-    // A rule declared against the replaced field table would be judged under
-    // a numbering it never saw.
     carry_rules.clear();
     carry_dirty.clear();
     episode.retire_agreement_run();
@@ -510,14 +692,14 @@ void Slot::record_drive(
             stats.quantum_faults += 1;
             NETW_DEBUG(
                 sys::PREDICTION,
-                "quantum mismatch measured=%d declared=%d transition=%d",
+                "A tick ran %d physics steps where %d were expected (tick %d).",
                 last_quantum,
                 declared_quantum,
                 p_transition
             );
         }
     }
-    row.topo_fp = topology_fingerprint(p_topology, last_quantum);
+    row.topo_fp = topology_fp(p_topology);
     journal.open(p_transition, row);
 
     if (!is_new) {
@@ -547,22 +729,23 @@ DriveRecord Slot::open_drive(
     const Dictionary &p_topology,
     const StateStamp &p_pre
 ) {
-    NETW_ZONE_NC("NetwPredict open drive", colors::PREDICTION);
+    NETW_ZONE_LEAF(
+        "Predict open drive",
+        colors::PREDICTION,
+        profile::SUBSYSTEM_PREDICTION
+    );
     adopt_timing(p_timing);
     DriveRecord out;
 
     const bool framed = config.schedule == int(Schedule::FRAME);
     if (framed) {
-        // A frame the clock held bought no simulated time, so it opens no
-        // transition. The command lane keeps flowing: holding the world must
-        // never hold the player's input.
         if (!p_timing.simulating
-            || p_timing.tick <= last_frame_transition_tick) {
+            || p_timing.tick <= drive_frame_tick) {
             stats.authoring_clamped += 1;
             out.clamped = true;
             return out;
         }
-        last_frame_transition_tick = p_timing.tick;
+        drive_frame_tick = p_timing.tick;
     }
 
     if (horizon_full()) {
@@ -572,22 +755,18 @@ DriveRecord Slot::open_drive(
     }
 
     const Fold decided = prediction_core::fold(
-        latest_input_tick,
-        last_driven_input_tick,
+        recorded_input_tick,
+        drive_input_tick,
         p_timing.tick
     );
 
-    // A TICK drive is its own transition, so the tape entry is degenerate:
-    // index, label and tick are the same number and every entry is fresh. The
-    // lane codec implies contiguous indices, so a clock re-anchor that gaps the
-    // tick sequence starts a new epoch instead of straddling it.
     if (!framed) {
         prepare_tick_tape(p_timing.tick);
     }
     const int64_t transition = next_tape_entry_index;
     author_tape_entry(decided.label, framed ? decided.fresh : true);
     if (!framed || decided.fresh) {
-        last_driven_input_tick = framed ? decided.label : p_timing.tick;
+        drive_input_tick = framed ? decided.label : p_timing.tick;
     }
     record_drive(transition, decided, p_topology, p_pre);
 
@@ -608,7 +787,11 @@ DriveRecord Slot::replay_drive(
     const StateStamp &p_pre,
     bool p_authoring
 ) {
-    NETW_ZONE_NC("NetwPredict replay drive", colors::PREDICTION);
+    NETW_ZONE_LEAF(
+        "Predict replay drive",
+        colors::PREDICTION,
+        profile::SUBSYSTEM_PREDICTION
+    );
     adopt_timing(p_timing);
 
     Fold replayed;
@@ -621,7 +804,7 @@ DriveRecord Slot::replay_drive(
         prepare_tick_tape(p_timing.tick);
         transition = next_tape_entry_index;
         author_tape_entry(p_label, true);
-        last_driven_input_tick = p_timing.tick;
+        drive_input_tick = p_timing.tick;
     }
     record_drive(transition, replayed, p_topology, p_pre);
 
@@ -642,30 +825,33 @@ bool Slot::record_evidence(
     const LocalVector<WitnessContact> &p_contacts,
     bool p_sleeping
 ) {
-    NETW_ZONE_NC("NetwPredict record evidence", colors::PREDICTION);
+    NETW_ZONE_LEAF(
+        "Predict record evidence",
+        colors::PREDICTION,
+        profile::SUBSYSTEM_PREDICTION
+    );
     NETW_ERR_COND_V(
         journal.slot_of(p_transition) < 0
             || (journal.flags_of(p_transition) & ROW_CLOSED) != 0,
         false,
         sys::PREDICTION,
-        "Solve evidence needs an open journal row at transition %d.",
+        "Prediction got physics results for tick %d, which it has no open "
+        "record of.",
         p_transition
     );
     NETW_ERR_COND_V(
         !config.witness && !p_contacts.is_empty(),
         false,
         sys::PREDICTION,
-        "Solve evidence carries contacts without a witness declaration."
+        "Prediction got contacts for an entity with no "
+        "NetwPredictionHandle.witness_contacts, so it ignored them."
     );
     WitnessSummary witness;
     if (config.witness) {
         witness = summarize_witness(p_contacts, p_sleeping);
-        NETW_ERR_COND_V(
-            !witness.valid,
-            false,
-            sys::PREDICTION,
-            "Solve evidence contains an invalid witness."
-        );
+        if (!witness.valid) {
+            return false;
+        }
         last_witness = witness;
     }
     journal.mark_e_digest(
@@ -687,7 +873,7 @@ bool Slot::record_evidence(
     }
     journal.mark_solve(
         p_transition,
-        topology_fingerprint(p_topology, last_quantum),
+        topology_fp(p_topology),
         witness.fingerprint,
         evidence_mask,
         witness.class_bits,
@@ -696,7 +882,7 @@ bool Slot::record_evidence(
     );
     NETW_TRACE(
         sys::PREDICTION,
-        "evidence transition=%d quantum=%d witness=%d",
+        "Recorded tick %d after %d physics steps with %d contacts.",
         p_transition,
         last_quantum,
         witness.contact_count
@@ -752,7 +938,7 @@ AckVerdict Slot::admit_ack(
     return out;
 }
 
-StateVerdict Slot::compare(
+const StateVerdict &Slot::compare(
     int64_t p_recv_tick,
     int64_t p_transition,
     const StateRow &p_predicted,
@@ -763,7 +949,7 @@ StateVerdict Slot::compare(
     bool p_stream_reconstructed,
     bool p_ack_domain_confirmed
 ) {
-    last_state_verdict = compare_state(
+    compare_state(
         wiring,
         journal,
         p_recv_tick,
@@ -773,7 +959,8 @@ StateVerdict Slot::compare(
         p_correction_tolerances,
         p_meter_tolerances,
         p_fallback_epsilon,
-        p_stream_reconstructed
+        p_stream_reconstructed,
+        last_state_verdict
     );
     if (p_ack_domain_confirmed && p_transition > latest_authority_ack) {
         latest_authority_ack = p_transition;
@@ -823,18 +1010,21 @@ StateVerdict Slot::compare(
 }
 
 void Slot::set_state(const StateRow &p_state) {
-    state = StateRow();
     state.resize(wiring.count());
+    for (uint32_t at = 0; at < state.values.size(); ++at) {
+        state.values[at] = Variant();
+    }
     apply_restore(state, p_state);
 }
 
-WritePlan Slot::recover(const RecoveryRequest &p_request) {
-    RecoveryRequest effective = p_request;
+const WritePlan &Slot::recover(const RecoveryRequest &p_request) {
+    RecoveryRequest &effective = recovering.effective;
+    effective = p_request;
     effective.contact_window
         = effective.contact_window || recovery.window_contains(effective.basis);
     effective.suppressed = effective.suppressed
         || recovery.suppressed_at(effective.current_label);
-    last_write_plan = stage_recovery(wiring, config, effective, recovery);
+    stage_recovery_into(wiring, config, effective, recovery, last_write_plan);
     const TriggerShape shape = trigger_shape(
         wiring,
         effective.field_errors,
@@ -850,6 +1040,7 @@ WritePlan Slot::recover(const RecoveryRequest &p_request) {
     set_state(p_request.current);
     apply_restore(state, last_write_plan.restore);
     recovery_stats.corrections += 1;
+    NETW_TALLY(profile::names::PREDICT_CORRECTIONS, 1);
     recovery_stats.teleports += last_write_plan.teleport ? 1 : 0;
     recovery_stats.escalations += last_write_plan.escalated ? 1 : 0;
     episode.record_write(
@@ -962,7 +1153,7 @@ int Slot::transition_span(int64_t p_basis) const {
     if (config.schedule == int(Schedule::FRAME)) {
         return int(std::max<int64_t>(0, next_tape_entry_index - p_basis - 1));
     }
-    return int(std::max<int64_t>(0, last_driven_input_tick - p_basis));
+    return int(std::max<int64_t>(0, drive_input_tick - p_basis));
 }
 
 void Slot::latch_quarantine(
@@ -971,16 +1162,10 @@ void Slot::latch_quarantine(
     Attribution p_attribution,
     bool p_demoted
 ) {
-    // Re-entering a slot already latched in fallback would reprice the
-    // clean-run target against a flap the slot did not have.
     if (quarantine.latched && episode.active
         && episode.state == EpisodeState::FALLBACK) {
         return;
     }
-    // Fallback is a state of an open episode, so a caller quarantining for a
-    // reason no comparison judged supplies the episode the quarantine is a
-    // state of. Latching without one produces a proof whose reseed has no
-    // episode to write into.
     if (!episode.active || episode.state != EpisodeState::OPEN) {
         episode.open(journal, p_transition, p_attribution);
     }

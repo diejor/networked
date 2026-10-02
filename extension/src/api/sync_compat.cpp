@@ -1,7 +1,10 @@
 #include "netw/api/sync_compat.hpp"
 
+#include <algorithm>
+
 #include "godot/class_db.hpp"
 #include "godot/resource.hpp"
+#include "godot/scene_tree.hpp"
 #include "godot/time.hpp"
 #include "netw/api/event_plane.hpp"
 #include "netw/api/netw_multiplayer.hpp"
@@ -10,12 +13,15 @@
 #include "netw/liveness_core.hpp"
 #include "netw/log.hpp"
 #include "netw/profile.hpp"
+#include "netw/repl/property_binding.hpp"
 #include "netw/script/model.hpp"
 #include "netw/spawn/record.hpp"
+#include "netw/store/validate.hpp"
 #include "netw/subsystems.hpp"
 #include "netw/sync_authoring.hpp"
 #include "netw/sync_kernel.hpp"
 #include "netw/synchronizers.hpp"
+#include "netw/tree_hook.hpp"
 
 using namespace godot;
 
@@ -28,6 +34,7 @@ const char *SIG_VISIBILITY_CHANGED = "visibility_changed";
 const char *SIG_ENTITY_LIVE = "entity_live";
 const char *SIG_SYNCHRONIZED = "synchronized";
 const char *SIG_DELTA_SYNCHRONIZED = "delta_synchronized";
+const char *SIG_NODE_REMOVED = "node_removed";
 
 bool throttle_elapsed(int64_t p_last_usec, double p_interval, int64_t p_now) {
     if (p_interval <= 0.0 || p_last_usec < 0) {
@@ -36,51 +43,38 @@ bool throttle_elapsed(int64_t p_last_usec, double p_interval, int64_t p_now) {
     return p_now - p_last_usec >= int64_t(p_interval * 1000000.0);
 }
 
-Array read_path(Node *p_root, const NodePath &p_path) {
-    Array out;
-    Node *target = p_root;
-    const NodePath names = NodePath(p_path.get_concatenated_names());
-    if (!names.is_empty() && target != nullptr) {
-        target = target->get_node_or_null(names);
+Node *target_of(Node *p_root, const NodePath &p_target) {
+    if (p_target.is_empty() || p_root == nullptr) {
+        return p_root;
     }
-    if (target == nullptr) {
-        out.push_back(false);
-        out.push_back(Variant());
-        return out;
-    }
-    out.push_back(true);
-    out.push_back(
-        gd::get_indexed(
-            target,
-            NodePath(String(":") + String(p_path.get_concatenated_subnames()))
-        )
-    );
-    return out;
+    return p_root->get_node_or_null(p_target);
 }
 
-void write_path(Node *p_root, const NodePath &p_path, const Variant &p_value) {
-    Node *target = p_root;
-    const NodePath names = NodePath(p_path.get_concatenated_names());
-    if (!names.is_empty() && target != nullptr) {
-        target = target->get_node_or_null(names);
-    }
-    if (target == nullptr) {
+template <typename K, typename T>
+void unlink(HashMap<K, LocalVector<T *>> &r_index, const K &p_key, T *p_row) {
+    LocalVector<T *> *held = r_index.getptr(p_key);
+    if (held == nullptr) {
         return;
     }
-    gd::set_indexed(
-        target,
-        NodePath(String(":") + String(p_path.get_concatenated_subnames())),
-        p_value
-    );
+    held->erase(p_row);
+    if (held->is_empty()) {
+        r_index.erase(p_key);
+    }
 }
 
 } // namespace
 
 MultiplayerSynchronizer *SyncCompat::Consumed::sync_node() const {
+    if (resident) {
+        return sync_at;
+    }
     return Object::cast_to<MultiplayerSynchronizer>(gd::instance_from_id(sync));
 }
 
 Node *SyncCompat::Consumed::root_node() const {
+    if (resident) {
+        return root_at;
+    }
     return Object::cast_to<Node>(gd::instance_from_id(root));
 }
 
@@ -117,7 +111,7 @@ void NetwMultiplayer::sync_compat_entity_live(
     int64_t p_route,
     const Ref<NetwEntity> &p_entity
 ) {
-    NETW_ZONE_NC("SyncCompat on entity live", colors::WIRE);
+    NETW_ZONE_NC("Compat entity live", colors::WIRE);
     if (SyncCompat *adapter = sync_adapter()) {
         adapter->on_entity_live(p_route, p_entity);
     }
@@ -138,20 +132,15 @@ void NetwMultiplayer::sync_compat_config_changed() {
     }
 }
 
+void NetwMultiplayer::sync_compat_node_removed(Node *p_node) {
+    if (SyncCompat *adapter = sync_adapter()) {
+        adapter->on_node_removed(p_node);
+    }
+}
+
 Error NetwMultiplayer::sync_compat_decode_stage_body() {
     SyncCompat *adapter = sync_adapter();
     return adapter != nullptr ? adapter->decode_stage_body() : ERR_UNCONFIGURED;
-}
-
-Array NetwMultiplayer::sync_compat_gather_stage() {
-    SyncCompat *adapter = sync_adapter();
-    return adapter != nullptr ? adapter->gather_stage() : Array();
-}
-
-Error NetwMultiplayer::sync_compat_apply_stage(const Array &p_staged) {
-    SyncCompat *adapter = sync_adapter();
-    return adapter != nullptr ? adapter->apply_stage(p_staged)
-                              : ERR_UNCONFIGURED;
 }
 
 void SyncCompat::set_sync_model(NetwSyncModel *p_model) {
@@ -183,22 +172,42 @@ void SyncCompat::set_channels(int64_t p_sync, int64_t p_sync_delta) {
     channel_sync_delta = p_sync_delta;
 }
 
-SyncCompat::Consumed *SyncCompat::row_of(Object *p_sync) const {
-    for (uint32_t at = 0; at < rows.size(); ++at) {
-        if (rows[at]->sync_node() == p_sync) {
-            return rows[at];
-        }
+SyncCompat::Consumed *SyncCompat::row_of(Object *p_sync) {
+    Consumed **found = rows_by_sync.getptr(uint64_t(gd::instance_id(p_sync)));
+    if (found == nullptr) {
+        return nullptr;
     }
-    return nullptr;
+    rows_examined += 1;
+    return *found;
 }
 
-void SyncCompat::drop_row(uint32_t p_at) {
-    Consumed *row = rows[p_at];
-    drop_declaration(row);
-    disconnect_config(row);
-    watch_book.reset(row->id);
-    rows.remove_at(p_at);
-    memdelete(row);
+void SyncCompat::index_row(Consumed *p_row) {
+    rows_by_sync.insert(uint64_t(p_row->sync), p_row);
+    rows_by_root[uint64_t(p_row->root)].push_back(p_row);
+}
+
+void SyncCompat::set_route(Consumed *p_row, int64_t p_route) {
+    if (p_row->route == p_route) {
+        return;
+    }
+    p_row->ordinal_revision = UINT64_MAX;
+    if (p_row->route != 0) {
+        unlink(rows_by_route, p_row->route, p_row);
+    }
+    p_row->route = p_route;
+    if (p_route != 0) {
+        rows_by_route[p_route].push_back(p_row);
+    }
+}
+
+void SyncCompat::drop_row(Consumed *p_row) {
+    drop_declaration(p_row);
+    disconnect_config(p_row);
+    watch_book.reset(p_row->id);
+    rows_by_sync.erase(uint64_t(p_row->sync));
+    unlink(rows_by_root, uint64_t(p_row->root), p_row);
+    rows.erase(p_row);
+    memdelete(p_row);
 }
 
 Error SyncCompat::consume(Node *p_root, Object *p_sync) {
@@ -224,6 +233,8 @@ Error SyncCompat::consume(Node *p_root, Object *p_sync) {
     row->root = gd::instance_id(p_root);
     refresh_row(row);
     rows.push_back(row);
+    index_row(row);
+    watch_tree();
     authoring::apply(p_root, sync);
     capture_declaration(row);
     refresh_row_intent(row);
@@ -246,10 +257,10 @@ Error SyncCompat::consume_remove(Node *p_root, Object *p_sync) {
             sync->disconnect(SIG_VISIBILITY_CHANGED, watcher);
         }
     }
-    for (uint32_t at = rows.size(); at > 0; --at) {
-        if (rows[at - 1]->sync_node() == sync) {
-            drop_row(at - 1);
-        }
+    if (sync == nullptr) {
+        prune();
+    } else if (Consumed *row = row_of(sync)) {
+        drop_row(row);
     }
     refresh_interest_intent(p_root);
     return OK;
@@ -259,9 +270,12 @@ void SyncCompat::on_sync_visibility_changed(int64_t, Node *p_root) {
     if (core() == nullptr) {
         return;
     }
-    for (uint32_t at = 0; at < rows.size(); ++at) {
-        if (rows[at]->root_node() == p_root) {
-            refresh_row_intent(rows[at]);
+    const LocalVector<Consumed *> *held
+        = rows_by_root.getptr(uint64_t(gd::instance_id(p_root)));
+    if (p_root != nullptr && held != nullptr) {
+        for (Consumed *row : *held) {
+            rows_examined += 1;
+            refresh_row_intent(row);
         }
     }
     refresh_interest_intent(p_root);
@@ -343,27 +357,19 @@ void SyncCompat::refresh_row_intent(Consumed *p_row) {
     }
 }
 
-bool SyncCompat::config_still_held(
-    const ObjectID &p_config,
-    Consumed *p_except
-) const {
-    for (uint32_t at = 0; at < rows.size(); ++at) {
-        if (rows[at] != p_except && rows[at]->config == p_config) {
-            return true;
-        }
-    }
-    return false;
-}
-
 void SyncCompat::disconnect_config(Consumed *p_row) {
     if (!p_row->config.is_valid()) {
         return;
     }
     Object *cfg = gd::instance_from_id(p_row->config);
-    const ObjectID held = p_row->config;
+    const uint64_t held = uint64_t(p_row->config);
     p_row->config = ObjectID();
+    int *holds = config_holds.getptr(held);
+    if (holds != nullptr && --(*holds) <= 0) {
+        config_holds.erase(held);
+    }
     NetwMultiplayer *plane = core();
-    if (cfg == nullptr || plane == nullptr || config_still_held(held, p_row)) {
+    if (cfg == nullptr || plane == nullptr || config_holds.has(held)) {
         return;
     }
     const Callable hook
@@ -393,6 +399,7 @@ void SyncCompat::refresh_row(Consumed *p_row) {
     NetwMultiplayer *plane = core();
     if (cfg.is_valid() && plane != nullptr) {
         p_row->config = wanted;
+        config_holds[uint64_t(wanted)] += 1;
         const Callable hook
             = callable_mp(plane, &NetwMultiplayer::sync_compat_config_changed);
         if (!cfg->is_connected(SIG_CHANGED, hook)) {
@@ -425,7 +432,8 @@ void SyncCompat::refresh_row(Consumed *p_row) {
                 p_row,
                 0,
                 vformat(
-                    "watches %d properties, above the 64-bit delta mask limit",
+                    "it watches %d properties and the limit is 64. Split "
+                    "them across more synchronizers",
                     int(watch.size())
                 )
             );
@@ -443,6 +451,8 @@ void SyncCompat::refresh_row(Consumed *p_row) {
         }
         watch_book.reset(p_row->id);
     }
+    resolve_fields(p_row->sync_paths, p_row->sync_fields);
+    resolve_fields(p_row->watch_paths, p_row->watch_fields);
     p_row->schema_hash = schema_fingerprint(p_row);
     declare_model_row(p_row);
 }
@@ -467,8 +477,8 @@ void SyncCompat::poison(
     MultiplayerSynchronizer *sync = p_row->sync_node();
     NETW_ERROR(
         sys::WIRE,
-        "consumed synchronizer '%s' (route %d) poisoned: %s. Its replication "
-        "config must be identical on every peer.",
+        "MultiplayerSynchronizer '%s' on route %d stopped replicating, "
+        "because %s.",
         sync != nullptr ? String(sync->get_name()) : String("<freed>"),
         p_route,
         p_reason
@@ -495,7 +505,8 @@ void SyncCompat::validate_schema(Consumed *p_row, int64_t p_route) {
             p_row,
             p_route,
             vformat(
-                "schema hash %08x disagrees with the spawn descriptor %08x",
+                "its replication config (%08x) differs from the server's "
+                "(%08x). Give it the same config on every peer",
                 p_row->schema_hash,
                 declared
             )
@@ -503,9 +514,14 @@ void SyncCompat::validate_schema(Consumed *p_row, int64_t p_route) {
     }
 }
 
-int64_t SyncCompat::ordinal_of(const Consumed *p_row) const {
+int64_t SyncCompat::ordinal_of(Consumed *p_row) {
     if (sync_model == nullptr) {
         return -1;
+    }
+    const uint64_t revision = sync_model->revision();
+    if (p_row->ordinal_revision == revision
+        && store::validation_interval() <= 0) {
+        return p_row->ordinal;
     }
     const repl::SetRow *row = sync_model->row_for(
         p_row->route,
@@ -513,13 +529,28 @@ int64_t SyncCompat::ordinal_of(const Consumed *p_row) const {
         p_row->order_key,
         0
     );
-    return row != nullptr ? row->ordinal : -1;
+    const int64_t ordinal = row != nullptr ? row->ordinal : -1;
+    if (p_row->ordinal_revision == revision && ordinal != p_row->ordinal) {
+        store::Miss missed;
+        missed.route = p_row->route;
+        missed.column = StringName("compat_ordinal");
+        missed.gate = "model_revision";
+        store::report_miss(missed);
+    }
+#if defined(NETW_TESTS)
+    if (p_row->ordinal_revision == revision) {
+        store::validation_audit::ledger().checks += 1;
+    }
+#endif
+    p_row->ordinal = ordinal;
+    p_row->ordinal_revision = revision;
+    return ordinal;
 }
 
 SyncCompat::Consumed *SyncCompat::row_by_ordinal(
     int64_t p_route,
     int64_t p_ordinal
-) const {
+) {
     if (sync_model == nullptr || p_ordinal < 0) {
         return nullptr;
     }
@@ -527,9 +558,14 @@ SyncCompat::Consumed *SyncCompat::row_by_ordinal(
     if (row == nullptr || row->kind != NetwSyncModel::KIND_CONSUMED) {
         return nullptr;
     }
-    for (uint32_t at = 0; at < rows.size(); ++at) {
-        if (rows[at]->route == p_route && rows[at]->order_key == row->key) {
-            return rows[at];
+    const LocalVector<Consumed *> *held = rows_by_route.getptr(p_route);
+    if (held == nullptr) {
+        return nullptr;
+    }
+    for (Consumed *candidate : *held) {
+        rows_examined += 1;
+        if (candidate->order_key == row->key) {
+            return candidate;
         }
     }
     return nullptr;
@@ -548,8 +584,9 @@ void SyncCompat::capture_declaration(Consumed *p_row) {
     }
     const RID rid = entity->get_rid_handle();
     const int64_t route = plane->get_liveness_core()->route_of(rid);
-    p_row->route = route > 0 ? route : entity->get_route();
+    set_route(p_row, route > 0 ? route : entity->get_route());
     p_row->entity = rid;
+    p_row->ordinal_revision = UINT64_MAX;
     p_row->order_key
         = StringName(String(entity->get_owner()->get_path_to(sync)));
     p_row->comp = entity->comp_of(root);
@@ -584,33 +621,162 @@ void SyncCompat::drop_declaration(Consumed *p_row) {
             0
         );
     }
-    p_row->route = 0;
+    set_route(p_row, 0);
+}
+
+void SyncCompat::rows_under(Node *p_owner, LocalVector<Consumed *> &r_rows) {
+    if (p_owner == nullptr || rows_by_root.is_empty()) {
+        return;
+    }
+    LocalVector<Node *> walk;
+    walk.push_back(p_owner);
+    while (!walk.is_empty()) {
+        Node *node = walk[walk.size() - 1];
+        walk.resize(walk.size() - 1);
+        const LocalVector<Consumed *> *held
+            = rows_by_root.getptr(uint64_t(gd::instance_id(node)));
+        if (held != nullptr) {
+            for (Consumed *row : *held) {
+                r_rows.push_back(row);
+            }
+        }
+        const int children = node->get_child_count(true);
+        for (int at = 0; at < children; ++at) {
+            Node *child = node->get_child(at, true);
+            if (tree::entity_object_at(child) == nullptr) {
+                walk.push_back(child);
+            }
+        }
+    }
+    std::sort(
+        r_rows.ptr(),
+        r_rows.ptr() + r_rows.size(),
+        [](const Consumed *a, const Consumed *b) { return a->id < b->id; }
+    );
 }
 
 void SyncCompat::on_entity_live(
     int64_t p_route,
     const Ref<NetwEntity> &p_entity
 ) {
-    for (uint32_t at = 0; at < rows.size(); ++at) {
-        Node *root = rows[at]->root_node();
+    if (p_entity.is_null()) {
+        return;
+    }
+    LocalVector<Consumed *> matched;
+    rows_under(p_entity->get_owner(), matched);
+    const RID handle = p_entity->get_rid_handle();
+    for (Consumed *row : matched) {
+        rows_examined += 1;
+        Node *root = row->root_node();
         if (root == nullptr) {
             continue;
         }
         const Ref<NetwEntity> found = NetwEntity::of(root);
-        if (found.is_valid() && p_entity.is_valid()
-            && found->get_rid_handle() == p_entity->get_rid_handle()) {
-            rows[at]->route = p_route;
-            capture_declaration(rows[at]);
+        if (found.is_valid() && found->get_rid_handle() == handle) {
+            row->entity_at.unref();
+            set_route(row, p_route);
+            capture_declaration(row);
         }
     }
 }
 
 void SyncCompat::prune() {
     for (uint32_t at = rows.size(); at > 0; --at) {
-        if (rows[at - 1]->sync_node() == nullptr) {
-            drop_row(at - 1);
+        Consumed *row = rows[at - 1];
+        if (!row->resident && row->sync_node() == nullptr) {
+            drop_row(row);
         }
     }
+}
+
+void SyncCompat::watch_tree() {
+    NetwMultiplayer *plane = core();
+    SceneTree *tree = gd::scene_tree();
+    if (tree_watched || plane == nullptr || tree == nullptr) {
+        return;
+    }
+    const Callable heard
+        = callable_mp(plane, &NetwMultiplayer::sync_compat_node_removed);
+    if (!tree->is_connected(SIG_NODE_REMOVED, heard)) {
+        tree->connect(SIG_NODE_REMOVED, heard);
+    }
+    tree_watched = true;
+}
+
+void SyncCompat::forget_nodes(Consumed *p_row) {
+    p_row->resident = false;
+    p_row->sync_at = nullptr;
+    p_row->root_at = nullptr;
+    p_row->entity_at.unref();
+}
+
+void SyncCompat::on_node_removed(Node *p_node) {
+    const uint64_t key = uint64_t(gd::instance_id(p_node));
+    Consumed **by_sync = rows_by_sync.getptr(key);
+    if (by_sync != nullptr) {
+        forget_nodes(*by_sync);
+    }
+    LocalVector<Consumed *> *by_root = rows_by_root.getptr(key);
+    if (by_root != nullptr) {
+        for (Consumed *row : *by_root) {
+            forget_nodes(row);
+        }
+    }
+}
+
+bool SyncCompat::locate(Consumed *p_row) {
+    if (p_row->resident) {
+        if (store::validation_interval() > 0) {
+#if defined(NETW_TESTS)
+            store::validation_audit::ledger().checks += 1;
+#endif
+            Object *sync = gd::instance_from_id(p_row->sync);
+            Object *root = gd::instance_from_id(p_row->root);
+            if (sync != p_row->sync_at || root != p_row->root_at
+                || !p_row->sync_at->is_inside_tree()
+                || !p_row->root_at->is_inside_tree()) {
+                store::Miss missed;
+                missed.route = p_row->route;
+                missed.column = StringName("compat_nodes");
+                missed.gate = "node_removed";
+                store::report_miss(missed);
+            }
+        }
+        return true;
+    }
+    forget_nodes(p_row);
+    MultiplayerSynchronizer *sync = p_row->sync_node();
+    Node *root = p_row->root_node();
+    if (sync == nullptr || root == nullptr || !sync->is_inside_tree()) {
+        return false;
+    }
+    p_row->sync_at = sync;
+    p_row->root_at = root;
+    p_row->resident = tree_watched && root->is_inside_tree();
+    return true;
+}
+
+Ref<NetwEntity> SyncCompat::entity_of(Consumed *p_row) {
+    if (p_row->resident && p_row->entity_at.is_valid()) {
+        if (store::validation_interval() > 0) {
+#if defined(NETW_TESTS)
+            store::validation_audit::ledger().checks += 1;
+#endif
+            if (NetwEntity::of(p_row->root_at) != p_row->entity_at) {
+                store::Miss missed;
+                missed.route = p_row->route;
+                missed.column = StringName("compat_entity");
+                missed.gate = "entity_live";
+                store::report_miss(missed);
+            }
+        }
+        return p_row->entity_at;
+    }
+    const Ref<NetwEntity> entity = NetwEntity::of(p_row->root_at);
+    if (p_row->resident) {
+        p_row->entity_at = entity;
+    }
+    return entity;
 }
 
 int64_t SyncCompat::local_peer_id() {
@@ -641,18 +807,20 @@ PackedInt32Array SyncCompat::recipients_for(
     if (plane == nullptr) {
         return out;
     }
-    const int64_t local_id = plane->get_unique_id();
-    if (!plane->has_server_role()) {
-        const PackedInt32Array peers
-            = gd::api_peer_ids(plane->session_get_inner());
-        for (int at = 0; at < peers.size(); ++at) {
-            if (peers[at] == local_id) {
+    const int64_t local_id = pump_local_id;
+    if (!pump_server) {
+        for (int at = 0; at < pump_peers.size(); ++at) {
+            if (pump_peers[at] == local_id) {
                 continue;
             }
-            if (!synchronizer_verdict(peers[at], p_root)) {
+            if (!synchronizers::visibility_verdict(
+                    p_root,
+                    pump_peers[at],
+                    local_id
+                )) {
                 continue;
             }
-            out.push_back(peers[at]);
+            out.push_back(pump_peers[at]);
         }
         return out;
     }
@@ -662,7 +830,9 @@ PackedInt32Array SyncCompat::recipients_for(
     if (spawn_book->has_armed(p_route)) {
         return out;
     }
-    PackedInt32Array base;
+    PackedInt32Array listed;
+    const int32_t *base = nullptr;
+    int count = 0;
     const spawn::Record *record = spawn_book->spawned_of(p_route);
     if (record != nullptr) {
         const RID rid
@@ -671,12 +841,15 @@ PackedInt32Array SyncCompat::recipients_for(
             != NetwLivenessCore::STATE_LIVE) {
             return out;
         }
-        base = record->recipients();
+        base = record->recipient_list().ptr();
+        count = int(record->recipient_list().size());
     } else {
-        base = plane->rpc_get_recipients(p_entity);
+        listed = plane->rpc_get_recipients(p_entity);
+        base = listed.ptr();
+        count = listed.size();
     }
     const bool filtered = plane->interest_entity_has_filter(p_entity);
-    for (int at = 0; at < base.size(); ++at) {
+    for (int at = 0; at < count; ++at) {
         const int64_t peer_id = base[at];
         if (peer_id == local_id) {
             continue;
@@ -695,6 +868,7 @@ PackedInt32Array SyncCompat::recipients_for(
 }
 
 void SyncCompat::pump() {
+    NETW_ZONE_NC("Compat pass", colors::WIRE);
     NetwMultiplayer *plane = core();
     if (plane == nullptr || plane->session_get_inner().is_null()
         || plane->session_get_inner()->get_multiplayer_peer().is_null()) {
@@ -710,23 +884,38 @@ void SyncCompat::pump() {
         return;
     }
     const bool host = plane->is_host();
+    pump_local_id = plane->get_unique_id();
+    pump_server = plane->has_server_role();
+    pump_peers = pump_server ? PackedInt32Array()
+                             : gd::api_peer_ids(plane->session_get_inner());
+    static const StringName encode_seam("_sync_encode");
+    pump_encodes = plane->overrides_seam(encode_seam);
 
-    LocalVector<Consumed *> pass;
+    LocalVector<Consumed *> &pass = pump_pass;
+    pass.clear();
     for (uint32_t at = 0; at < rows.size(); ++at) {
         pass.push_back(rows[at]);
     }
+    NETW_ZONE_VALUE(pass.size());
     for (uint32_t at = 0; at < pass.size(); ++at) {
         Consumed *row = pass[at];
-        MultiplayerSynchronizer *sync = row->sync_node();
-        Node *root = row->root_node();
-        if (sync == nullptr || root == nullptr || !sync->is_inside_tree()) {
+        NETW_ZONE_LEAF_F(
+            "Compat synchronizer",
+            colors::WIRE,
+            profile::SUBSYSTEM_ENTITY,
+            "entity %lld",
+            static_cast<long long>(row->route)
+        );
+        if (!locate(row)) {
             continue;
         }
+        MultiplayerSynchronizer *sync = row->sync_at;
+        Node *root = row->root_at;
         refresh_row(row);
         if (row->poisoned) {
             continue;
         }
-        Ref<NetwEntity> entity = NetwEntity::of(root);
+        Ref<NetwEntity> entity = entity_of(row);
         if (entity.is_null() && host && !row->adopt_attempted) {
             if (adopt_seam.is_valid()) {
                 adopt_seam.call(root);
@@ -805,20 +994,21 @@ PackedByteArray SyncCompat::encode_sync_frame(
     Consumed *p_row,
     int64_t p_route
 ) {
-    Array readable;
-    const Array values
-        = gather_paths(p_row, p_row->sync_paths, false, readable);
-    if (values.size() != int(p_row->sync_paths.size())) {
+    NETW_ZONE_LEAF("Compat encode sync", colors::WIRE, profile::SUBSYSTEM_WIRE);
+    if (!gather(p_row, p_row->sync_fields, false)) {
         return PackedByteArray();
     }
-    return sync_kernel::encode_volatile(ordinal_of(p_row), values);
+    return sync_kernel::encode_volatile(ordinal_of(p_row), gathered);
 }
 
 void SyncCompat::poll_watchers(Consumed *p_row) {
-    Array readable;
-    const Array values
-        = gather_paths(p_row, p_row->watch_paths, true, readable);
-    watch_book.poll(p_row->id, values, readable);
+    NETW_ZONE_LEAF(
+        "Compat gather watched",
+        colors::WIRE,
+        profile::SUBSYSTEM_WIRE
+    );
+    gather(p_row, p_row->watch_fields, true);
+    watch_book.poll(p_row->id, gathered, gathered_readable);
 }
 
 void SyncCompat::send_deltas(
@@ -865,7 +1055,8 @@ PackedByteArray SyncCompat::run_encode_stage(
     const PackedByteArray &p_stock
 ) {
     PackedByteArray bytes = p_stock;
-    if (encode_stage.is_valid()) {
+    if (encode_stage.is_valid() && pump_encodes) {
+        stage_calls += 1;
         bytes = encode_stage.call(p_peer, p_stock, int64_t(-1));
     }
     NetwMultiplayer *plane = core();
@@ -886,10 +1077,18 @@ PackedByteArray SyncCompat::run_encode_stage(
 }
 
 Error SyncCompat::decode_stage_body() {
-    stage_decoded = stage_retained
-        ? sync_kernel::decode_retained(stage_payload, stage_keys)
-        : sync_kernel::decode_volatile(stage_payload, stage_keys);
-    return stage_decoded.is_valid() ? OK : ERR_INVALID_DATA;
+    stage_valid = stage_retained
+        ? sync_kernel::decode_retained(
+              stage_payload,
+              stage_columns,
+              stage_decoded
+          )
+        : sync_kernel::decode_volatile(
+              stage_payload,
+              stage_columns,
+              stage_decoded
+          );
+    return stage_valid ? OK : ERR_INVALID_DATA;
 }
 
 Error SyncCompat::run_decode_stage(
@@ -900,9 +1099,12 @@ Error SyncCompat::run_decode_stage(
 ) {
     NetwMultiplayer *plane = core();
     Error verdict = OK;
-    if (!decode_stage.is_valid()) {
+    static const StringName decode_seam("_sync_decode");
+    if (!decode_stage.is_valid() || plane == nullptr
+        || !plane->overrides_seam(decode_seam)) {
         verdict = decode_stage_body();
     } else {
+        stage_calls += 1;
         verdict = Error(
             int(decode_stage.call(
                 p_entity,
@@ -936,89 +1138,68 @@ Error SyncCompat::run_decode_stage(
     return verdict;
 }
 
-Array SyncCompat::gather_stage() {
-    Array values;
-    if (stage_paths == nullptr) {
-        return values;
+const SyncCompat::Field *SyncCompat::field_of(const NodePath &p_path) {
+    const String key = String(p_path);
+    const Field *held = fields.getptr(key);
+    if (held != nullptr) {
+        return held;
     }
-    for (uint32_t at = 0; at < stage_paths->size(); ++at) {
-        const Array read = read_path(stage_root, (*stage_paths)[at]);
-        const bool resolved = read[0];
-        stage_readable.push_back(resolved);
-        if (!resolved && !stage_allow_missing) {
-            return Array();
-        }
-        values.push_back(resolved ? read[1] : Variant());
-    }
-    return values;
+    Field field;
+    field.target = NodePath(p_path.get_concatenated_names());
+    field.property
+        = NodePath(String(":") + String(p_path.get_concatenated_subnames()));
+    fields_resolved += 1;
+    return &fields.insert(key, field)->value;
 }
 
-Array SyncCompat::gather_paths(
-    Consumed *p_row,
+void SyncCompat::resolve_fields(
     const LocalVector<NodePath> &p_paths,
-    bool p_allow_missing,
-    Array &r_readable
+    LocalVector<const Field *> &r_fields
 ) {
-    NetwMultiplayer *plane = core();
-    stage_root = p_row->root_node();
-    stage_paths = &p_paths;
-    stage_allow_missing = p_allow_missing;
-    stage_readable = Array();
-    Array values;
-    if (plane != nullptr) {
-        values = plane->run_gather_set(
-            p_row->entity,
-            p_row->comp,
-            callable_mp(plane, &NetwMultiplayer::sync_compat_gather_stage)
-        );
-    } else {
-        values = gather_stage();
+    r_fields.clear();
+    for (const NodePath &path : p_paths) {
+        r_fields.push_back(field_of(path));
     }
-    r_readable = stage_readable;
-    stage_paths = nullptr;
-    stage_root = nullptr;
-    if (r_readable.size() != int(p_paths.size())
-        && values.size() == int(p_paths.size())) {
-        r_readable.clear();
-        for (uint32_t at = 0; at < p_paths.size(); ++at) {
-            r_readable.push_back(true);
-        }
-    }
-    return values;
 }
 
-Error SyncCompat::apply_stage(const Array &p_staged) {
-    if (stage_paths == nullptr || p_staged.size() != int(stage_paths->size())) {
-        return ERR_INVALID_DATA;
-    }
-    for (uint32_t at = 0; at < stage_paths->size(); ++at) {
-        write_path(stage_root, (*stage_paths)[at], p_staged[at]);
-    }
-    return OK;
-}
-
-Error SyncCompat::apply_paths(
+bool SyncCompat::gather(
     Consumed *p_row,
-    const LocalVector<NodePath> &p_paths,
+    const LocalVector<const Field *> &p_fields,
+    bool p_allow_missing
+) {
+    Node *root = p_row->root_node();
+    const int count = int(p_fields.size());
+    gathered.resize(count);
+    gathered_readable.resize(count);
+    for (int at = 0; at < count; ++at) {
+        const Field &field = *p_fields[at];
+        Node *target = target_of(root, field.target);
+        if (target == nullptr) {
+            if (!p_allow_missing) {
+                return false;
+            }
+            gathered.set(at, Variant());
+            gathered_readable.set(at, false);
+            continue;
+        }
+        gathered.set(at, gd::get_indexed(target, field.property));
+        gathered_readable.set(at, true);
+    }
+    return true;
+}
+
+void SyncCompat::apply(
+    Consumed *p_row,
+    const LocalVector<const Field *> &p_fields,
     const Array &p_values
 ) {
-    NetwMultiplayer *plane = core();
-    stage_root = p_row->root_node();
-    stage_paths = &p_paths;
-    Error verdict = OK;
-    if (plane != nullptr) {
-        verdict = plane->run_apply_set(
-            p_row->entity,
-            p_row->comp,
-            p_values,
-            callable_mp(plane, &NetwMultiplayer::sync_compat_apply_stage)
-        );
-    } else {
-        verdict = apply_stage(p_values);
+    Node *root = p_row->root_node();
+    for (uint32_t at = 0; at < p_fields.size(); ++at) {
+        Node *target = target_of(root, p_fields[at]->target);
+        if (target != nullptr) {
+            gd::set_indexed(target, p_fields[at]->property, p_values[at]);
+        }
     }
-    stage_paths = nullptr;
-    stage_root = nullptr;
-    return verdict;
 }
 
 void SyncCompat::handle_sync(
@@ -1026,6 +1207,14 @@ void SyncCompat::handle_sync(
     const PackedByteArray &p_payload,
     int64_t p_sender
 ) {
+    NETW_ZONE_LEAF_F(
+        "Compat apply sync",
+        colors::WIRE,
+        profile::SUBSYSTEM_ENTITY,
+        "entity %lld",
+        p_entity.is_valid() ? static_cast<long long>(p_entity->get_route())
+                            : 0LL
+    );
     NetwMultiplayer *plane = core();
     if (plane == nullptr || p_entity.is_null()) {
         return;
@@ -1056,40 +1245,43 @@ void SyncCompat::handle_sync(
     const int64_t flags = int64_t(head.flags);
     if (flags != sync_kernel::RESERVED) {
         drops_sync_unknown_flag += 1;
-        NETW_WARN(
+        NETW_WARN_ONCE(
             sys::WIRE,
-            "consumed synchronizer '%s' SYNC flags %d unimplemented, frame "
-            "dropped. Peers must run the same Networked version.",
+            "MultiplayerSynchronizer '%s' got an update with unknown flags "
+            "%d, so it was dropped. Run the same Networked version on every "
+            "peer.",
             sync->get_name(),
             flags
         );
         return;
     }
 
-    stage_keys = Array();
-    for (uint32_t at = 0; at < row->sync_paths.size(); ++at) {
-        stage_keys.push_back(StringName(String(row->sync_paths[at])));
-    }
+    stage_columns = int64_t(row->sync_paths.size());
     stage_payload = p_payload;
     stage_retained = false;
-    stage_decoded = StagedWrites();
+    stage_valid = false;
     const Error verdict = run_decode_stage(
         p_entity->get_rid_handle(),
         row->comp,
         flags,
         p_payload
     );
-    const StagedWrites staged = stage_decoded;
-    stage_decoded = StagedWrites();
-    if (verdict != OK || !staged.is_valid()
-        || staged.values.size() != int(row->sync_paths.size())) {
+    const bool valid = stage_valid;
+    const Array values = stage_decoded.values;
+    stage_decoded = sync_kernel::DecodedRow();
+    stage_valid = false;
+    if (verdict != OK || !valid
+        || values.size() != int(row->sync_paths.size())) {
         drops_sync_poisoned += 1;
-        poison(row, route, "SYNC row size mismatch");
+        poison(
+            row,
+            route,
+            "an update carried the wrong number of values. Give it the same "
+            "replication config on every peer"
+        );
         return;
     }
-    if (apply_paths(row, row->sync_paths, staged.values) != OK) {
-        return;
-    }
+    apply(row, row->sync_fields, values);
     sync_frames_in += 1;
     sync->emit_signal(SIG_SYNCHRONIZED);
     feed_interpolation(row);
@@ -1100,6 +1292,14 @@ void SyncCompat::handle_sync_delta(
     const PackedByteArray &p_payload,
     int64_t p_sender
 ) {
+    NETW_ZONE_LEAF_F(
+        "Compat apply delta",
+        colors::WIRE,
+        profile::SUBSYSTEM_ENTITY,
+        "entity %lld",
+        p_entity.is_valid() ? static_cast<long long>(p_entity->get_route())
+                            : 0LL
+    );
     NetwMultiplayer *plane = core();
     if (plane == nullptr || p_entity.is_null()) {
         return;
@@ -1127,33 +1327,34 @@ void SyncCompat::handle_sync_delta(
         drops_sync_bad_sender += 1;
         return;
     }
-    LocalVector<NodePath> selected;
-    for (uint32_t at = 0; at < row->watch_paths.size(); ++at) {
+    LocalVector<const Field *> selected;
+    for (uint32_t at = 0; at < row->watch_fields.size(); ++at) {
         if (head.mask & (uint64_t(1) << at)) {
-            selected.push_back(row->watch_paths[at]);
+            selected.push_back(row->watch_fields[at]);
         }
     }
 
-    stage_keys = Array();
-    for (uint32_t at = 0; at < row->watch_paths.size(); ++at) {
-        stage_keys.push_back(StringName(String(row->watch_paths[at])));
-    }
+    stage_columns = int64_t(row->watch_paths.size());
     stage_payload = p_payload;
     stage_retained = true;
-    stage_decoded = StagedWrites();
+    stage_valid = false;
     const Error verdict
         = run_decode_stage(p_entity->get_rid_handle(), row->comp, 0, p_payload);
-    const StagedWrites staged = stage_decoded;
-    stage_decoded = StagedWrites();
-    if (verdict != OK || !staged.is_valid()
-        || staged.values.size() != int(selected.size())) {
+    const bool valid = stage_valid;
+    const Array values = stage_decoded.values;
+    stage_decoded = sync_kernel::DecodedRow();
+    stage_valid = false;
+    if (verdict != OK || !valid || values.size() != int(selected.size())) {
         drops_sync_poisoned += 1;
-        poison(row, route, "SYNC_DELTA mask and value count disagree");
+        poison(
+            row,
+            route,
+            "a delta update carried the wrong number of values. Give it the "
+            "same replication config on every peer"
+        );
         return;
     }
-    if (apply_paths(row, selected, staged.values) != OK) {
-        return;
-    }
+    apply(row, selected, values);
     delta_frames_in += 1;
     sync->emit_signal(SIG_DELTA_SYNCHRONIZED);
     feed_interpolation(row);
@@ -1176,6 +1377,63 @@ void SyncCompat::build_feed(Consumed *p_row, MultiplayerSynchronizer *p_sync) {
         }
     }
     p_row->feed_built = true;
+    p_row->feed_epoch = UINT64_MAX;
+}
+
+void SyncCompat::refresh_feed(Consumed *p_row) {
+    const uint64_t epoch = script::model::interpolation_epoch();
+    bool current = p_row->feed_epoch == epoch
+        && p_row->feed_scripts.size() == p_row->feed_nodes.size();
+    for (uint32_t at = 0; current && at < p_row->feed_nodes.size(); ++at) {
+        Node *node = Object::cast_to<Node>(
+            gd::instance_from_id(p_row->feed_nodes[at])
+        );
+        current = node != nullptr
+            && repl::PropertyBinding::script_generation_of(node)
+                == p_row->feed_scripts[at];
+    }
+    if (current && store::validation_interval() <= 0) {
+        return;
+    }
+    LocalVector<uint64_t> scripts;
+    LocalVector<uint8_t> live;
+    bool any = false;
+    bool same = p_row->feed_live.size() == p_row->feed_nodes.size();
+    for (uint32_t at = 0; at < p_row->feed_nodes.size(); ++at) {
+        Node *node = Object::cast_to<Node>(
+            gd::instance_from_id(p_row->feed_nodes[at])
+        );
+        if (node == nullptr) {
+            p_row->feed_built = false;
+        }
+        scripts.push_back(repl::PropertyBinding::script_generation_of(node));
+        feed_lookups += current ? 0 : 1;
+        const bool interpolated = node != nullptr
+            && script::model::get_node_property_interpolator(
+                   node,
+                   p_row->feed_props[at]
+            )
+                   .is_valid();
+        live.push_back(interpolated ? 1 : 0);
+        any = any || interpolated;
+        same = same && p_row->feed_live[at] == live[at];
+    }
+    if (current && !same) {
+        store::Miss missed;
+        missed.route = p_row->route;
+        missed.column = StringName("compat_interpolated");
+        missed.gate = "interpolation_epoch";
+        store::report_miss(missed);
+    }
+#if defined(NETW_TESTS)
+    if (current) {
+        store::validation_audit::ledger().checks += 1;
+    }
+#endif
+    p_row->feed_scripts = scripts;
+    p_row->feed_live = live;
+    p_row->feed_any = any;
+    p_row->feed_epoch = epoch;
 }
 
 void SyncCompat::feed_interpolation(Consumed *p_row) {
@@ -1194,6 +1452,10 @@ void SyncCompat::feed_interpolation(Consumed *p_row) {
     if (p_row->feed_nodes.is_empty()) {
         return;
     }
+    refresh_feed(p_row);
+    if (!p_row->feed_any) {
+        return;
+    }
     const ClockEngine &clock = plane->clock_engine();
     const int64_t tick = clock.get_configured() ? clock.get_tick() : 0;
     for (uint32_t at = 0; at < p_row->feed_nodes.size(); ++at) {
@@ -1202,6 +1464,9 @@ void SyncCompat::feed_interpolation(Consumed *p_row) {
         );
         if (node == nullptr) {
             p_row->feed_built = false;
+            continue;
+        }
+        if (!p_row->feed_live[at]) {
             continue;
         }
         const StringName prop = p_row->feed_props[at];
@@ -1254,16 +1519,22 @@ void SyncCompat::clear_session() {
         rows[at]->last_sync_usec = -1;
         rows[at]->last_watch_usec = -1;
         rows[at]->route = 0;
+        rows[at]->ordinal_revision = UINT64_MAX;
     }
+    rows_by_route.clear();
 }
 
 void SyncCompat::clear_route(int64_t p_route) {
     pending_schema.erase(p_route);
-    for (uint32_t at = 0; at < rows.size(); ++at) {
-        if (rows[at]->route == p_route) {
-            rows[at]->route = 0;
-        }
+    const LocalVector<Consumed *> *held = rows_by_route.getptr(p_route);
+    if (held == nullptr) {
+        return;
     }
+    for (Consumed *row : *held) {
+        row->route = 0;
+        row->ordinal_revision = UINT64_MAX;
+    }
+    rows_by_route.erase(p_route);
 }
 
 void SyncCompat::clear_peer(int64_t p_peer_id) {
@@ -1278,6 +1549,16 @@ void SyncCompat::dispose() {
         if (plane->is_connected(SIG_ENTITY_LIVE, live)) {
             plane->disconnect(SIG_ENTITY_LIVE, live);
         }
+        const Callable heard
+            = callable_mp(plane, &NetwMultiplayer::sync_compat_node_removed);
+        SceneTree *tree = gd::scene_tree();
+        if (tree != nullptr && tree->is_connected(SIG_NODE_REMOVED, heard)) {
+            tree->disconnect(SIG_NODE_REMOVED, heard);
+        }
+    }
+    tree_watched = false;
+    for (Consumed *row : rows) {
+        forget_nodes(row);
     }
     for (uint32_t at = 0; at < rows.size(); ++at) {
         disconnect_config(rows[at]);

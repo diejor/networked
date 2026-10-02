@@ -31,6 +31,7 @@ struct SetRow {
     int64_t schema_hash = 0;
     int64_t policy = int64_t(entity::Control::WritePolicy::AUTHORITY);
     int64_t audience = SET_AUDIENCE_PUBLIC;
+    uint64_t binding = 0;
 };
 
 constexpr bool record_follows_tenure(int64_t p_record) {
@@ -84,6 +85,8 @@ class SetModel {
     static void reindex(godot::LocalVector<SetRow> &r_rows);
 
 public:
+    uint64_t revision = 0;
+
     int64_t declare(
         int64_t p_route,
         int64_t p_kind,
@@ -103,6 +106,13 @@ public:
         int64_t p_record
     );
 
+    bool bind_row(
+        int64_t p_route,
+        int64_t p_kind,
+        const godot::StringName &p_key,
+        int64_t p_record,
+        uint64_t p_binding
+    );
     const SetRow *row(int64_t p_route, int64_t p_ordinal) const;
 
     const SetRow *row_for(

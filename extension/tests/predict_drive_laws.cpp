@@ -7,6 +7,7 @@
 #include "netw/predict/engine.hpp"
 #include "netw/predict/frame_records.hpp"
 #include "support/netw_cells.h"
+#include "support/predict_rows.h"
 #include "support/scenario_run.h"
 
 using namespace godot;
@@ -260,6 +261,14 @@ int64_t scheduled_slot(
         )
     );
     const int64_t slot = p_pool->open(fields);
+    godot::LocalVector<netw::predict::FieldDecl> input;
+    input.push_back(
+        netw::field_decl(
+            godot::StringName("mark"),
+            int(netw::predict::PropertyClass::CAUSAL)
+        )
+    );
+    p_pool->rewire(slot, fields, input);
     REQUIRE(p_pool->configure(
         slot,
         int(p_schedule),
@@ -280,8 +289,43 @@ Dictionary marked(int64_t p_value) {
     return out;
 }
 
+netw::predict::StateRow mark_row(int64_t p_value) {
+    netw::predict::StateRow out;
+    out.resize(1);
+    out.set(0, p_value);
+    return out;
+}
+
+netw::predict::StateRow place_row(int64_t p_value) {
+    netw::predict::StateRow out;
+    out.resize(1);
+    out.set(0, p_value);
+    return out;
+}
+
+int64_t position_at(
+    NetwPredictionEngine *p_pool,
+    int64_t p_slot,
+    int64_t p_key
+) {
+    netw::predict::StateRow state;
+    if (!p_pool->read_predicted(p_slot, p_key, state) || !state.has(0)) {
+        return -1;
+    }
+    return int64_t(state.values[0]);
+}
+
+bool predicted_any(
+    NetwPredictionEngine *p_pool,
+    int64_t p_slot,
+    int64_t p_key
+) {
+    netw::predict::StateRow state;
+    return p_pool->read_predicted(p_slot, p_key, state) && state.any();
+}
+
 int64_t stat_of(NetwPredictionEngine *p_pool, int64_t p_slot, int p_column) {
-    return p_pool->drive_stats(p_slot)[p_column];
+    return p_pool->drive_stat(p_slot, p_column);
 }
 
 } // namespace
@@ -698,42 +742,46 @@ TEST_CASE(
 
 TEST_CASE(
     "[Networked][Predict][Hosted][Drive] an acknowledged transition retires "
-    "the entry book by index and the input lane by the label it authored"
+    "the entry book and the input book by the transition it names"
 ) {
     NetwPredictionEngine held_pool;
     NetwPredictionEngine *const pool = &held_pool;
     const int64_t framed = framed_slot(pool);
 
-    Ref<netw::NetwTimeline> lane = netw::NetwTimeline::create(64);
-    pool->bind_timeline(framed, lane);
-    const Ref<netw::NetwTimeline> entries = pool->entry_history(framed);
-    REQUIRE(entries.is_valid());
+    pool->open_lane(framed);
+    const netw::predict::TransitionBook *entries
+        = pool->predicted_book(framed);
+    REQUIRE(entries != nullptr);
 
     for (int64_t index = 0; index < 3; index += 1) {
+        pool->record_authored_command(
+            framed,
+            index,
+            100 + index,
+            true,
+            mark_row(index)
+        );
         pool->tape_author(framed, 100 + index, true);
-        entries->record_state(index, marked(index));
-        lane->record_input(100 + index, marked(index));
+        pool->record_predicted(framed, index, place_row(index));
     }
 
     pool->trim_history(framed, 1);
     NETW_CHECK_EQ(entries->floor(), 1);
-    NETW_CHECK_EQ(lane->floor(), 101);
-    CHECK(entries->state_at(0).is_empty());
-    CHECK_FALSE(entries->state_at(1).is_empty());
-    CHECK_FALSE(lane->has_input_at(100));
-    CHECK(lane->has_input_at(101));
+    CHECK_FALSE(predicted_any(pool, framed, 0));
+    CHECK(predicted_any(pool, framed, 1));
+    CHECK_FALSE(pool->has_authored_input(framed, 0));
+    CHECK(pool->has_authored_input(framed, 1));
+    NETW_CHECK_EQ(pool->input_label_of(framed, 1), 101);
 
     const int64_t ticked = scheduled_slot(pool, netw::Schedule::TICK);
-    Ref<netw::NetwTimeline> ticks = netw::NetwTimeline::create(64);
-    pool->bind_timeline(ticked, ticks);
+    pool->open_lane(ticked);
     for (int64_t tick = 5; tick < 8; tick += 1) {
-        ticks->record_input(tick, marked(tick));
+        pool->record_authored_command(ticked, tick, tick, true, mark_row(tick));
     }
 
     pool->trim_history(ticked, 6);
-    NETW_CHECK_EQ(ticks->floor(), 6);
-    CHECK_FALSE(ticks->has_input_at(5));
-    CHECK(ticks->has_input_at(6));
+    CHECK_FALSE(pool->has_authored_input(ticked, 5));
+    CHECK(pool->has_authored_input(ticked, 6));
 
     pool->trim_history(framed + 9000, 1);
 }
@@ -745,15 +793,14 @@ TEST_CASE(
     NetwPredictionEngine held_pool;
     NetwPredictionEngine *const pool = &held_pool;
     const int64_t slot = framed_slot(pool);
-    Ref<netw::NetwTimeline> lane = netw::NetwTimeline::create(64);
-    pool->bind_timeline(slot, lane);
+    pool->open_lane(slot);
 
     pool->tape_author(slot, 10, true);
     pool->tape_author(slot, 11, false);
     pool->tape_author(slot, 12, true);
-    lane->record_input(10, marked(10));
-    lane->record_input(11, marked(11));
-    lane->record_input(12, marked(12));
+    pool->record_authored_command(slot, 0, 10, true, mark_row(10));
+    pool->record_authored_command(slot, 1, 11, false, mark_row(11));
+    pool->record_authored_command(slot, 2, 12, true, mark_row(12));
 
     godot::LocalVector<netw::predict::ReplayEntry> entries
         = pool->replay_entries(slot, -1);
@@ -761,33 +808,38 @@ TEST_CASE(
     const netw::predict::ReplayEntry repeated = entries[1];
     NETW_CHECK_EQ(repeated.index, 1);
     NETW_CHECK_EQ(repeated.label, 11);
-    NETW_CHECK_EQ(int64_t(repeated.input[godot::StringName("mark")]), 10);
+    NETW_CHECK_EQ(repeated.input_key, 0);
+    netw::predict::StateRow replayed;
+    REQUIRE(pool->read_command_at(slot, repeated.input_key, replayed));
+    REQUIRE(replayed.has(0));
+    NETW_CHECK_EQ(int64_t(replayed.values[0]), 10);
 
     const netw::predict::ReplayEntry fresh = entries[2];
     NETW_CHECK_EQ(fresh.index, 2);
-    NETW_CHECK_EQ(int64_t(fresh.input[godot::StringName("mark")]), 12);
+    NETW_CHECK_EQ(fresh.input_key, 2);
+    REQUIRE(pool->read_command_at(slot, fresh.input_key, replayed));
+    NETW_CHECK_EQ(int64_t(replayed.values[0]), 12);
 
     entries = pool->replay_entries(slot, 0);
     REQUIRE(entries.size() == 2);
     const netw::predict::ReplayEntry first = entries[0];
     NETW_CHECK_EQ(first.index, 1);
-    NETW_CHECK_EQ(int64_t(first.input[godot::StringName("mark")]), 10);
+    NETW_CHECK_EQ(first.input_key, 0);
 
     CHECK(pool->replay_entries(slot + 9000, -1).is_empty());
 }
 
 TEST_CASE(
     "[Networked][Predict][Hosted][Drive] a tick tier walks every tick past "
-    "the basis, and reads its states out of the lane"
+    "the basis, and reads its states out of the predicted book"
 ) {
     NetwPredictionEngine held_pool;
     NetwPredictionEngine *const pool = &held_pool;
     const int64_t slot = scheduled_slot(pool, netw::Schedule::TICK);
-    Ref<netw::NetwTimeline> lane = netw::NetwTimeline::create(64);
-    pool->bind_timeline(slot, lane);
+    pool->open_lane(slot);
 
-    lane->record_input(5, marked(5));
-    lane->record_input(7, marked(7));
+    pool->record_authored_command(slot, 5, 5, true, mark_row(5));
+    pool->record_authored_command(slot, 7, 7, true, mark_row(7));
     pool->record_input(slot, 7, 0);
 
     const godot::LocalVector<netw::predict::ReplayEntry> entries
@@ -799,35 +851,28 @@ TEST_CASE(
         NETW_CHECK_EQ(entry.label, 5 + int64_t(at));
     }
     const netw::predict::ReplayEntry silent = entries[1];
-    CHECK(silent.input.is_empty());
+    NETW_CHECK_EQ(silent.input_key, 6);
+    CHECK_FALSE(pool->has_authored_input(slot, silent.input_key));
 
-    lane->record_state(6, marked(66));
-    NETW_CHECK_EQ(
-        int64_t(pool->state_before(slot, 6)[godot::StringName("mark")]),
-        66
-    );
-    CHECK(pool->state_before(slot + 9000, 6).is_empty());
+    pool->record_predicted(slot, 6, place_row(66));
+    NETW_CHECK_EQ(position_at(pool, slot, 6), 66);
+    NETW_CHECK_EQ(position_at(pool, slot + 9000, 6), -1);
 }
 
 TEST_CASE(
     "[Networked][Predict][Hosted][Drive] a FRAME transition reads its "
-    "pre-state out of the entry book and not out of the lane"
+    "pre-state out of the predicted book, and a reconfigure keeps that book"
 ) {
     NetwPredictionEngine held_pool;
     NetwPredictionEngine *const pool = &held_pool;
     const int64_t slot = framed_slot(pool);
-    Ref<netw::NetwTimeline> lane = netw::NetwTimeline::create(64);
-    pool->bind_timeline(slot, lane);
+    pool->open_lane(slot);
 
-    pool->entry_history(slot)->record_state(3, marked(3));
-    lane->record_state(3, marked(99));
+    pool->record_predicted(slot, 3, place_row(3));
 
-    NETW_CHECK_EQ(
-        int64_t(pool->state_before(slot, 3)[godot::StringName("mark")]),
-        3
-    );
+    NETW_CHECK_EQ(position_at(pool, slot, 3), 3);
 
-    const Ref<netw::NetwTimeline> held = pool->entry_history(slot);
+    const netw::predict::TransitionBook *held = pool->predicted_book(slot);
     pool->configure(
         slot,
         int(netw::Schedule::FRAME),
@@ -835,34 +880,35 @@ TEST_CASE(
         int(netw::CorrectionMode::SNAP),
         int(netw::RestoreMode::EXACT)
     );
-    CHECK(pool->entry_history(slot) == held);
-    NETW_CHECK_EQ(
-        int64_t(pool->state_before(slot, 3)[godot::StringName("mark")]),
-        3
-    );
+    CHECK(pool->predicted_book(slot) == held);
+    NETW_CHECK_EQ(position_at(pool, slot, 3), 3);
 }
 
 TEST_CASE(
-    "[Networked][Predict][Hosted][Drive] a tape epoch mints a fresh entry "
-    "book, and the bound input lane survives it"
+    "[Networked][Predict][Hosted][Drive] a FRAME tape epoch mints fresh entry "
+    "and input books, because both are keyed by a transition the epoch "
+    "renumbers, while a tick lane keyed by tick survives it"
 ) {
     NetwPredictionEngine held_pool;
     NetwPredictionEngine *const pool = &held_pool;
     const int64_t slot = framed_slot(pool);
 
-    Ref<netw::NetwTimeline> lane = netw::NetwTimeline::create(64);
-    pool->bind_timeline(slot, lane);
-    lane->record_input(100, marked(100));
-    pool->entry_history(slot)->record_state(0, marked(0));
+    pool->open_lane(slot);
+    pool->record_authored_command(slot, 0, 100, true, mark_row(100));
+    pool->record_predicted(slot, 0, place_row(0));
+    CHECK(predicted_any(pool, slot, 0));
 
     pool->tape_reset(slot, 9);
-    const Ref<netw::NetwTimeline> entries = pool->entry_history(slot);
-    REQUIRE(entries.is_valid());
-    CHECK(entries->state_at(0).is_empty());
+    CHECK_FALSE(predicted_any(pool, slot, 0));
+    CHECK_FALSE(pool->has_authored_input(slot, 0));
 
-    CHECK(lane->has_input_at(100));
+    const int64_t ticked = scheduled_slot(pool, netw::Schedule::TICK);
+    pool->open_lane(ticked);
+    pool->record_authored_command(ticked, 100, 100, true, mark_row(100));
+    pool->tape_reset(ticked, 9);
+    CHECK(pool->has_authored_input(ticked, 100));
 
-    CHECK(pool->entry_history(slot + 9000).is_null());
+    CHECK(pool->predicted_book(slot + 9000) == nullptr);
 }
 
 TEST_CASE(
@@ -1292,15 +1338,17 @@ TEST_CASE(
     payload[field] = godot::Vector2(2.0, 5.0);
     payload[StringName("unknown")] = 9.0;
 
-    const Array columns = pool->state_columns_of(slot, payload);
-    NETW_CHECK_EQ(int(columns.size()), 1);
-    CHECK(columns[0] == godot::Vector2(2.0, 5.0));
+    const netw::predict::StateRow columns
+        = netw_test::state_row(pool, slot, payload);
+    NETW_CHECK_EQ(int(columns.values.size()), 1);
+    REQUIRE(columns.has(0));
+    const bool placed = columns.values[0] == godot::Vector2(2.0, 5.0);
+    CHECK(placed);
 
-    const Array absent = pool->state_columns_of(slot, Dictionary());
-    NETW_CHECK_EQ(int(absent.size()), 1);
-    CHECK(absent[0].get_type() == Variant::NIL);
-
-    NETW_CHECK_EQ(int(pool->state_columns_of(slot + 9000, payload).size()), 0);
+    const netw::predict::StateRow absent
+        = netw_test::state_row(pool, slot, Dictionary());
+    NETW_CHECK_EQ(int(absent.values.size()), 1);
+    CHECK_FALSE(absent.has(0));
 
     Dictionary tolerances;
     tolerances[field] = 0.5;
@@ -1335,8 +1383,9 @@ TEST_CASE(
     CHECK(absent.restore.is_empty());
     CHECK(absent.write.is_empty());
 
-    Array payload;
-    payload.append(godot::Vector2(3.0, 4.0));
+    netw::predict::StateRow payload;
+    payload.resize(1);
+    payload.set(0, godot::Vector2(3.0, 4.0));
     const netw::predict::WritePlan planned
         = pool->align_reseed(slot, 4, payload, 9);
 
@@ -1562,15 +1611,19 @@ TEST_CASE(
     const int64_t slot = framed_slot(pool);
     const StringName field("position");
 
-    Dictionary payload;
-    payload[field] = godot::Vector2(3.0, 4.0);
+    Dictionary given;
+    given[field] = godot::Vector2(3.0, 4.0);
+    const netw::predict::StateRow payload
+        = netw_test::state_row(pool, slot, given);
 
-    const Dictionary unruled = pool->carry_payload(slot, payload, 1, 2.0, 0.01);
+    pool->carry_rows(slot, payload, 1, 2.0, 0.01);
     NETW_CHECK_EQ(int(pool->carry_attempts(slot).size()), 0);
+    const Dictionary unruled = pool->recovery_carried_of(slot);
     CHECK(unruled[field] == godot::Vector2(3.0, 4.0));
 
     pool->set_carry(slot, field, callable_mp_static(&declared_rule));
-    const Dictionary refused = pool->carry_payload(slot, payload, 1, 2.0, 0.01);
+    pool->carry_rows(slot, payload, 1, 2.0, 0.01);
+    const Dictionary refused = pool->recovery_carried_of(slot);
 
     const LocalVector<netw::predict::CarryAttempt> charged
         = pool->carry_attempts(slot);
@@ -1580,9 +1633,9 @@ TEST_CASE(
     NETW_CHECK_EQ(only.verdict, int(NetwPredictionEngine::CARRY_DECLINED));
 
     CHECK(refused[field] == godot::Vector2(3.0, 4.0));
-    CHECK(payload[field] == godot::Vector2(3.0, 4.0));
+    CHECK(given[field] == godot::Vector2(3.0, 4.0));
 
-    CHECK(pool->carry_payload(slot + 9000, payload, 1, 2.0, 0.01) == payload);
+    pool->carry_rows(slot + 9000, payload, 1, 2.0, 0.01);
     NETW_CHECK_EQ(int(pool->carry_attempts(slot + 9000).size()), 0);
 }
 
@@ -1688,6 +1741,7 @@ TEST_CASE(
     NetwPredictionEngine held_pool;
     NetwPredictionEngine *const pool = &held_pool;
     const int64_t slot = framed_slot(pool);
+    pool->attach_journal_reader(slot, true);
 
     pool->mark_aligned_error(slot, 40, 2.5);
     pool->mark_aligned_error(slot + 9000, 40, 2.5);
@@ -1726,25 +1780,15 @@ TEST_CASE(
     NetwPredictionEngine *const pool = &held_pool;
     const int64_t slot = framed_slot(pool);
 
-    const PackedInt64Array absent = pool->open_comparison(slot + 9000, 1);
-    NETW_CHECK_EQ(
-        int(absent.size()),
-        int(NetwPredictionEngine::COMPARE_COLUMN_COUNT)
-    );
-    NETW_CHECK_EQ(
-        absent[NetwPredictionEngine::COMPARE_DOMAIN],
-        int(netw::predict::Domain::OUT_OF_DOMAIN)
-    );
-    NETW_CHECK_EQ(absent[NetwPredictionEngine::COMPARE_EPISODE_STATE], -1);
+    const netw::OpenedComparison absent = pool->open_comparison(slot + 9000, 1);
+    NETW_CHECK_EQ(absent.domain, int(netw::predict::Domain::OUT_OF_DOMAIN));
+    NETW_CHECK_EQ(absent.episode_state, -1);
 
     pool->note_divergence(slot, Dictionary());
-    const PackedInt64Array unarmed = pool->open_comparison(slot, 1);
-    NETW_CHECK_EQ(unarmed[NetwPredictionEngine::COMPARE_RECONSTRUCTED], 0);
-    NETW_CHECK_EQ(
-        unarmed[NetwPredictionEngine::COMPARE_DOMAIN],
-        int(netw::predict::Domain::OUT_OF_DOMAIN)
-    );
-    NETW_CHECK_EQ(unarmed[NetwPredictionEngine::COMPARE_ROW_FLAGS], 0);
+    const netw::OpenedComparison unarmed = pool->open_comparison(slot, 1);
+    CHECK_FALSE(unarmed.reconstructed);
+    NETW_CHECK_EQ(unarmed.domain, int(netw::predict::Domain::OUT_OF_DOMAIN));
+    NETW_CHECK_EQ(unarmed.row_flags, 0);
     NETW_CHECK_EQ(
         pool->verdict_reason_of(slot),
         int(netw::predict::VERDICT_REASON_AWAITING_RECONSTRUCTION)
@@ -1770,22 +1814,14 @@ TEST_CASE(
     pool->close_drive(slot, opened_row, 0, 0, 0, 0);
     pool->mark_domain(slot, opened_row, int(netw::predict::Domain::IN_DOMAIN));
 
-    const PackedInt64Array armed = pool->open_comparison(slot, opened_row);
-    NETW_CHECK_EQ(armed[NetwPredictionEngine::COMPARE_RECONSTRUCTED], 1);
+    const netw::OpenedComparison armed
+        = pool->open_comparison(slot, opened_row);
+    CHECK(armed.reconstructed);
+    NETW_CHECK_EQ(armed.domain, int(netw::predict::Domain::IN_DOMAIN));
+    NETW_CHECK_EQ(armed.row_flags, pool->journal_row(slot, opened_row).flags);
+    NETW_CHECK_EQ(armed.episode_state, pool->episode_state(slot));
     NETW_CHECK_EQ(
-        armed[NetwPredictionEngine::COMPARE_DOMAIN],
-        int(netw::predict::Domain::IN_DOMAIN)
-    );
-    NETW_CHECK_EQ(
-        armed[NetwPredictionEngine::COMPARE_ROW_FLAGS],
-        pool->journal_row(slot, opened_row).flags
-    );
-    NETW_CHECK_EQ(
-        armed[NetwPredictionEngine::COMPARE_EPISODE_STATE],
-        pool->episode_state(slot)
-    );
-    NETW_CHECK_EQ(
-        armed[NetwPredictionEngine::COMPARE_PROBATION],
+        armed.probation ? 1 : 0,
         pool->probation_pending(slot) ? 1 : 0
     );
     NETW_CHECK_EQ(
@@ -1872,7 +1908,10 @@ TEST_CASE(
     pool->set_owner_ack_floor(slot, 3);
     const int64_t epoch = pool->tape_epoch_of(slot);
 
-    pool->reset_for_rewire(slot, false, true, true, marked(9));
+    netw::predict::StateRow stall;
+    stall.resize(1);
+    stall.set(0, 9);
+    pool->reset_for_rewire(slot, false, true, true, stall);
 
     NETW_CHECK_EQ(pool->tape_epoch_of(slot), (epoch + 1) & 0xFF);
     NETW_CHECK_EQ(pool->next_tape_entry_index_of(slot), 0);
@@ -1883,16 +1922,21 @@ TEST_CASE(
     NETW_CHECK_EQ(pool->last_recorded_input_tick_of(slot), -1);
     NETW_CHECK_EQ(pool->attribution_of(slot), 0);
     NETW_CHECK_EQ(pool->attributed_transition_of(slot), -1);
-    NETW_CHECK_EQ(
-        int64_t(pool->stall_input_of(slot)[godot::StringName("mark")]),
-        9
-    );
+    REQUIRE(pool->stall_row_of(slot) != nullptr);
+    REQUIRE(pool->stall_row_of(slot)->has(0));
+    NETW_CHECK_EQ(int64_t(pool->stall_row_of(slot)->values[0]), 9);
     CHECK(pool->raw_fingerprints_of(slot));
 
     CHECK(pool->stream_reconstructed_of(slot));
     CHECK(pool->ack_domain_confirmed_of(slot));
 
-    pool->reset_for_rewire(slot, true, false, false, Dictionary());
+    pool->reset_for_rewire(
+        slot,
+        true,
+        false,
+        false,
+        netw::predict::StateRow()
+    );
     CHECK_FALSE(pool->stream_reconstructed_of(slot));
     CHECK_FALSE(pool->ack_domain_confirmed_of(slot));
     CHECK_FALSE(pool->raw_fingerprints_of(slot));
@@ -1953,8 +1997,9 @@ TEST_CASE(
     NetwPredictionEngine *const pool = &held_pool;
     const int64_t slot = framed_slot(pool);
 
-    Array payload;
-    payload.append(godot::Vector2(1.0, 0.0));
+    netw::predict::StateRow payload;
+    payload.resize(1);
+    payload.set(0, godot::Vector2(1.0, 0.0));
     pool->enter_quarantine(slot, 4, true, 0, false);
     for (int64_t basis = 5; basis <= 7; ++basis) {
         pool->quarantine_state(slot, basis, basis, payload, true);
@@ -1992,39 +2037,32 @@ TEST_CASE(
     NetwPredictionEngine *const pool = &held_pool;
     const int64_t framed = framed_slot(pool);
 
-    CHECK(pool->select_comparison(framed, 0).is_empty());
+    CHECK_FALSE(pool->select_comparison(framed, 0).chosen);
     pool->tape_author(framed, 11, true);
-    CHECK(pool->select_comparison(framed, 0).is_empty());
+    CHECK_FALSE(pool->select_comparison(framed, 0).chosen);
 
-    pool->entry_history(framed)->record_state(1, marked(42));
-    const Dictionary chosen = pool->select_comparison(framed, 0);
-    REQUIRE_FALSE(chosen.is_empty());
-    NETW_CHECK_EQ(int64_t(chosen[godot::StringName("label")]), 11);
-    const Dictionary predicted = chosen[godot::StringName("predicted")];
-    NETW_CHECK_EQ(int64_t(predicted[godot::StringName("mark")]), 42);
+    pool->record_predicted(framed, 1, place_row(42));
+    const netw::ComparisonChoice chosen = pool->select_comparison(framed, 0);
+    REQUIRE(chosen.chosen);
+    NETW_CHECK_EQ(chosen.label, 11);
+    NETW_CHECK_EQ(position_at(pool, framed, chosen.key), 42);
     NETW_CHECK_EQ(pool->compare_staleness_of(framed), 0);
 
     const int64_t ticked = scheduled_slot(pool, netw::Schedule::TICK);
-    Ref<netw::NetwTimeline> lane = netw::NetwTimeline::create(64);
-    pool->bind_timeline(ticked, lane);
+    pool->open_lane(ticked);
 
-    const Dictionary unstated = pool->select_comparison(ticked, 5);
-    REQUIRE_FALSE(unstated.is_empty());
-    NETW_CHECK_EQ(int64_t(unstated[godot::StringName("label")]), 5);
-    CHECK(Dictionary(unstated[godot::StringName("predicted")]).is_empty());
+    const netw::ComparisonChoice unstated = pool->select_comparison(ticked, 5);
+    REQUIRE(unstated.chosen);
+    NETW_CHECK_EQ(unstated.label, 5);
+    NETW_CHECK_EQ(unstated.key, -1);
     NETW_CHECK_EQ(pool->compare_staleness_of(ticked), -1);
 
-    lane->record_state(3, marked(7));
-    const Dictionary stale = pool->select_comparison(ticked, 5);
-    NETW_CHECK_EQ(
-        int64_t(Dictionary(
-            stale[godot::StringName("predicted")]
-        )[godot::StringName("mark")]),
-        7
-    );
+    pool->record_predicted(ticked, 3, place_row(7));
+    const netw::ComparisonChoice stale = pool->select_comparison(ticked, 5);
+    NETW_CHECK_EQ(position_at(pool, ticked, stale.key), 7);
     NETW_CHECK_EQ(pool->compare_staleness_of(ticked), 3);
 
-    CHECK(pool->select_comparison(framed + 9000, 0).is_empty());
+    CHECK_FALSE(pool->select_comparison(framed + 9000, 0).chosen);
 }
 
 TEST_CASE(
@@ -2036,40 +2074,37 @@ TEST_CASE(
     NetwPredictionEngine *const pool = &held_pool;
     const int64_t slot = framed_slot(pool);
 
-    const Dictionary refused = pool->record_drive(
+    const netw::DriveOutcome refused = pool->record_drive_hashed(
         slot,
         -1,
         1,
         int(netw::DriveKind::NONE),
-        marked(1),
+        pool->command_hash_row(slot, mark_row(1)),
         -1,
         false
     );
-    CHECK(refused.is_empty());
+    CHECK_FALSE(refused.ran);
     NETW_CHECK_EQ(stat_of(pool, slot, NetwPredictionEngine::STAT_DRIVE_SEQ), 0);
 
-    const Dictionary drove = pool->record_drive(
+    const netw::DriveOutcome drove = pool->record_drive_hashed(
         slot,
         -1,
         5,
         int(netw::DriveKind::NONE),
-        marked(5),
+        pool->command_hash_row(slot, mark_row(5)),
         1,
         false
     );
-    REQUIRE_FALSE(drove.is_empty());
-    const int64_t opened = drove[godot::StringName("transition")];
+    REQUIRE(drove.ran);
+    const int64_t opened = drove.transition;
     CHECK(opened >= 0);
-    NETW_CHECK_EQ(int64_t(drove[godot::StringName("label")]), 5);
-    NETW_CHECK_EQ(
-        int(drove[godot::StringName("kind")]),
-        int(netw::DriveKind::FRESH)
-    );
-    CHECK(bool(drove[godot::StringName("fresh")]));
+    NETW_CHECK_EQ(drove.label, 5);
+    NETW_CHECK_EQ(int(drove.kind), int(netw::DriveKind::FRESH));
+    CHECK(drove.fresh);
     CHECK(pool->journal_has(slot, opened));
     NETW_CHECK_EQ(
         pool->journal_row(slot, opened).c_hash,
-        netw::predict::fnv1a(pool->canonical_input_bytes(slot, marked(5)))
+        pool->command_hash_row(slot, mark_row(5))
     );
     NETW_CHECK_EQ(
         pool->drive_cursors(
@@ -2079,12 +2114,12 @@ TEST_CASE(
     );
     pool->close_drive(slot, opened, 0, 0, 0, 0);
 
-    pool->record_drive(
+    pool->record_drive_hashed(
         slot,
         -1,
         6,
         int(netw::DriveKind::NONE),
-        marked(6),
+        pool->command_hash_row(slot, mark_row(6)),
         2,
         false,
         true

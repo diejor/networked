@@ -1,31 +1,105 @@
 #include "netw/sim/row.hpp"
 
+#include <algorithm>
+
 namespace netw::sim {
 
 using godot::KeyValue;
 using godot::LocalVector;
 using godot::RID;
 
+bool steered_here(const Steering &p_steering, int64_t p_local_peer) {
+    return p_local_peer != 0 && p_steering.controller == p_local_peer;
+}
+
+bool steered_locally(const Steering &p_steering, int64_t p_local_peer) {
+    return steered_here(p_steering, p_local_peer)
+        || (p_steering.immediate && p_steering.claiming);
+}
+
+bool steps(const Row &p_row) {
+    const bool declared
+        = p_row.declaration.step.is_valid() || p_row.owner_ticks;
+    return !p_row.facts.predicted && (declared || !p_row.bodies.recorded);
+}
+
+bool chooses(const Row &p_row) {
+    return !p_row.facts.predicted
+        && (p_row.choice.declared() || p_row.selecting.count() > 0);
+}
+
+bool contact_moded(const Row &p_row) {
+    return p_row.mode == Mode::ACTIVE || leads(p_row.mode);
+}
+
 void Rows::seed_with(Seed p_seed, void *p_context) {
     seed = p_seed;
     seed_context = p_context;
 }
 
+void Rows::mark(Row &r_row) {
+    if (stale.get(r_row.index)) {
+        return;
+    }
+    stale.set(r_row.index, true);
+    stale_list.push_back(r_row.index);
+}
+
+void Rows::derive(Row &r_row) {
+    const uint32_t at = r_row.index;
+    bodied_bits.set(at, !r_row.bodies.held.is_empty());
+    stepping_bits.set(at, steps(r_row));
+    chooser_bits.set(at, chooses(r_row));
+}
+
 Row &Rows::ensure(const RID &p_entity) {
     Row *held = rows.getptr(p_entity.get_id());
     if (held != nullptr) {
+        mark(*held);
         return *held;
+    }
+    uint32_t index = 0;
+    if (!free_index.is_empty()) {
+        index = free_index[free_index.size() - 1];
+        free_index.resize(free_index.size() - 1);
+    } else {
+        index = by_index.size();
+        by_index.push_back(nullptr);
+        const uint32_t count = by_index.size();
+        stale.resize(count);
+        due.resize(count);
+        bodied_bits.resize(count);
+        stepping_bits.resize(count);
+        chooser_bits.resize(count);
+        awake_bits.resize(count);
+        resting_bits.resize(count);
     }
     Row fresh;
     fresh.entity = p_entity;
+    fresh.index = index;
+    fresh.order = next_order++;
     Row &made = rows.insert(p_entity.get_id(), fresh)->value;
+    by_index[index] = &made;
+    stale.set(index, false);
+    due.set(index, false);
+    awake_bits.set(index, false);
+    resting_bits.set(index, false);
     if (seed != nullptr) {
         seed(seed_context, made);
     }
+    mark(made);
     return made;
 }
 
 Row *Rows::find(const RID &p_entity) {
+    Row *held = rows.getptr(p_entity.get_id());
+    if (held != nullptr) {
+        mark(*held);
+    }
+    return held;
+}
+
+Row *Rows::peek(const RID &p_entity) {
     return rows.getptr(p_entity.get_id());
 }
 
@@ -44,6 +118,19 @@ Mode Rows::resolve(const RID &p_entity, const Facts &p_facts) {
 
 LocalVector<RID> Rows::release(const RID &p_entity) {
     LocalVector<RID> moved = drop_selections(p_entity);
+    Row *held = rows.getptr(p_entity.get_id());
+    if (held != nullptr) {
+        const uint32_t at = held->index;
+        by_index[at] = nullptr;
+        stale.set(at, false);
+        due.set(at, false);
+        bodied_bits.set(at, false);
+        stepping_bits.set(at, false);
+        chooser_bits.set(at, false);
+        awake_bits.set(at, false);
+        resting_bits.set(at, false);
+        free_index.push_back(at);
+    }
     rows.erase(p_entity.get_id());
     return moved;
 }
@@ -85,6 +172,7 @@ LocalVector<RID> Rows::drop_selections(const RID &p_subject) {
     for (const uint64_t member : subject->selecting.ids) {
         Row *row = rows.getptr(member);
         if (row != nullptr && row->selected_by.erase(id)) {
+            mark(*row);
             row->facts.selection_count = row->selected_by.count();
             moved.push_back(row->entity);
         }
@@ -113,15 +201,36 @@ void Rows::hold_poses(
     }
 }
 
-void Rows::choosers(LocalVector<RID> &r_out) const {
+void Rows::sort_gathered() {
+    const LocalVector<Row *> &rows_at = by_index;
+    std::sort(
+        gathered.ptr(),
+        gathered.ptr() + gathered.size(),
+        [&rows_at](uint32_t p_left, uint32_t p_right) {
+            return rows_at[p_left]->order < rows_at[p_right]->order;
+        }
+    );
+}
+
+void Rows::gather(const store::Bits &p_bits, LocalVector<RID> &r_out) {
     r_out.clear();
-    for (const KeyValue<uint64_t, Row> &held : rows) {
-        const Row &row = held.value;
-        if (!row.facts.predicted
-            && (row.choice.declared() || row.selecting.count() > 0)) {
-            r_out.push_back(held.value.entity);
+    gathered.clear();
+    for (uint32_t word = 0; word < p_bits.words.size(); ++word) {
+        uint64_t bits = p_bits.words[word];
+        while (bits != 0) {
+            gathered.push_back(word * 64 + store::Bits::lowest(bits));
+            bits &= bits - 1;
         }
     }
+    sort_gathered();
+    for (uint32_t at = 0; at < gathered.size(); ++at) {
+        r_out.push_back(by_index[gathered[at]]->entity);
+    }
+}
+
+void Rows::choosers(LocalVector<RID> &r_out) {
+    settle();
+    gather(chooser_bits, r_out);
 }
 
 LocalVector<RID> Rows::follow_session_authority(bool p_here) {
@@ -131,6 +240,7 @@ LocalVector<RID> Rows::follow_session_authority(bool p_here) {
         if (row.facts.session_authority_here == p_here) {
             continue;
         }
+        mark(row);
         row.facts.session_authority_here = p_here;
         if (sim::resolve(row.facts) != row.mode) {
             moved.push_back(row.entity);
@@ -139,32 +249,98 @@ LocalVector<RID> Rows::follow_session_authority(bool p_here) {
     return moved;
 }
 
-LocalVector<RID> Rows::holding() const {
-    LocalVector<RID> out;
-    for (const KeyValue<uint64_t, Row> &held : rows) {
-        if (!held.value.installs.held.is_empty()) {
-            out.push_back(held.value.entity);
-        }
-    }
-    return out;
+void Rows::stepping(LocalVector<RID> &r_out) {
+    settle();
+    gather(stepping_bits, r_out);
 }
 
-void Rows::bodied(LocalVector<RID> &r_out) const {
-    r_out.clear();
-    for (const KeyValue<uint64_t, Row> &held : rows) {
-        if (!held.value.bodies.held.is_empty()) {
-            r_out.push_back(held.value.entity);
+void Rows::settle() {
+    for (uint32_t at = 0; at < stale_list.size(); ++at) {
+        const uint32_t index = stale_list[at];
+        if (index >= by_index.size() || !stale.get(index)) {
+            continue;
         }
+        stale.set(index, false);
+        Row *row = by_index[index];
+        if (row == nullptr) {
+            continue;
+        }
+        derive(*row);
+        due.set(index, true);
+    }
+    stale_list.clear();
+}
+
+void Rows::contact_walk(LocalVector<uint32_t> &r_out) {
+    settle();
+    gathered.clear();
+    for (uint32_t word = 0; word < due.words.size(); ++word) {
+        const uint64_t forced = due.words[word] | resting_bits.words[word];
+        uint64_t bits = forced | awake_bits.words[word];
+        bits &= bodied_bits.words[word];
+        while (bits != 0) {
+            const uint32_t index = word * 64 + store::Bits::lowest(bits);
+            const uint64_t bit = bits & (~bits + 1);
+            bits &= bits - 1;
+            const Row *row = by_index[index];
+            if (row == nullptr) {
+                continue;
+            }
+            if ((forced & bit) != 0 || contact_moded(*row)) {
+                gathered.push_back(index);
+            }
+        }
+    }
+    due.clear();
+    sort_gathered();
+    r_out.clear();
+    for (uint32_t at = 0; at < gathered.size(); ++at) {
+        r_out.push_back(gathered[at]);
     }
 }
 
-void Rows::stepping(LocalVector<RID> &r_out) const {
+Row *Rows::at(uint32_t p_index) const {
+    return p_index < by_index.size() ? by_index[p_index] : nullptr;
+}
+
+bool Rows::is_due(uint32_t p_index) const {
+    return p_index < by_index.size()
+        && (due.get(p_index) || stale.get(p_index));
+}
+
+bool Rows::is_awake(uint32_t p_index) const {
+    return p_index < by_index.size() && awake_bits.get(p_index);
+}
+
+bool Rows::is_resting(uint32_t p_index) const {
+    return p_index < by_index.size() && resting_bits.get(p_index);
+}
+
+bool Rows::is_bodied(uint32_t p_index) const {
+    return p_index < by_index.size() && bodied_bits.get(p_index);
+}
+
+bool Rows::is_stepping(uint32_t p_index) const {
+    return p_index < by_index.size() && stepping_bits.get(p_index);
+}
+
+bool Rows::is_chooser(uint32_t p_index) const {
+    return p_index < by_index.size() && chooser_bits.get(p_index);
+}
+
+void Rows::set_awake(const Row &p_row, bool p_awake) {
+    awake_bits.set(p_row.index, p_awake);
+}
+
+void Rows::set_resting(const Row &p_row, bool p_resting) {
+    resting_bits.set(p_row.index, p_resting);
+}
+
+void Rows::each(LocalVector<Row *> &r_out) const {
     r_out.clear();
-    for (const KeyValue<uint64_t, Row> &held : rows) {
-        const Row &row = held.value;
-        const bool steps = row.declaration.step.is_valid() || row.owner_ticks;
-        if (!row.facts.predicted && (steps || !row.bodies.recorded)) {
-            r_out.push_back(row.entity);
+    for (uint32_t at = 0; at < by_index.size(); ++at) {
+        if (by_index[at] != nullptr) {
+            r_out.push_back(by_index[at]);
         }
     }
 }

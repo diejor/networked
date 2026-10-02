@@ -24,7 +24,7 @@ using namespace godot;
 using namespace netw_test;
 using netw::NetwEntity;
 using netw::NetwMultiplayer;
-using netw::NetwPropertySet;
+using netw::repl::PropertySet;
 
 using netw_test::gdsrc::BROADCAST_MASKED_AIM;
 
@@ -60,9 +60,9 @@ netw::wire::StreamReaderBook &readers_of(NetwMultiplayer *p_core) {
 }
 
 netw::wire::StreamLane broadcast_lane(NetwMultiplayer *p_core, Node *p_node) {
-    const Ref<netw::NetwPropertySetBinding> binding
+    const netw::repl::PropertyBindingPtr binding
         = NetwEntity::of(p_node)->get_broadcast_binding();
-    REQUIRE(binding.is_valid());
+    REQUIRE(binding != nullptr);
     const netw::repl::SetRow *row
         = p_core->get_replication_plane()->get_sync_model()->row_for(
             binding->get_route(),
@@ -93,7 +93,7 @@ bool author_if_steering(
         mirror,
         AIM(),
         Vector2(p_base + double(tick), 0.0),
-        NetwPropertySet::RECORD_BROADCAST,
+        PropertySet::RECORD_BROADCAST,
         tick
     );
     return true;
@@ -190,7 +190,7 @@ TEST_CASE(
         pair.mirror(0),
         AIM(),
         Vector2(20.0, 0.0),
-        NetwPropertySet::RECORD_BROADCAST,
+        PropertySet::RECORD_BROADCAST,
         shared_tick
     );
     rig.step_ticks(6);
@@ -206,7 +206,7 @@ TEST_CASE(
         pair.mirror(1),
         AIM(),
         Vector2(5000.0, 0.0),
-        NetwPropertySet::RECORD_BROADCAST,
+        PropertySet::RECORD_BROADCAST,
         shared_tick
     );
     for (int step = 0; step < 12 && aim_x(pair.authored) != 5000.0; ++step) {
@@ -233,8 +233,7 @@ TEST_CASE(
     }
     const netw::wire::StreamLane lane
         = broadcast_lane(rig.client(0), pair.mirror(0));
-    netw::wire::StreamWriterBook &writers
-        = row_send_of(rig.client(0))->writer_book();
+    netw::store::World &writers = *row_send_of(rig.client(0))->store();
     const bool seated
         = writers.token_of(1, lane) != 0 && writers.token_of(b, lane) != 0;
     REQUIRE(seated);
@@ -308,7 +307,7 @@ TEST_CASE(
                     mine,
                     AIM(),
                     Vector2(double(tick), 0.0),
-                    NetwPropertySet::RECORD_BROADCAST,
+                    PropertySet::RECORD_BROADCAST,
                     tick
                 );
             }
@@ -378,8 +377,7 @@ struct Regrant {
         for (int step = 0; step < 3 && request == 0; ++step) {
             author_if_steering(rig, pair, 0, 0.0);
             rig.step_ticks(1);
-            request
-                = row_send_of(rig.client(0))->writer_book().request_of(b, lane);
+            request = row_send_of(rig.client(0))->store()->request_of(b, lane);
         }
         REQUIRE(bool(request != 0));
     }
@@ -466,13 +464,12 @@ TEST_CASE(
     const bool decided = stand.at_b()->get_control_tenure() == tenure;
     CHECK(decided);
     const uint64_t reopened = row_send_of(stand.rig.client(0))
-                                  ->writer_book()
-                                  .request_of(stand.b, stand.lane);
+                                  ->store()
+                                  ->request_of(stand.b, stand.lane);
     const bool opened_again = reopened > stand.request;
     CHECK(opened_again);
     const uint64_t seated = row_send_of(stand.rig.client(0))
-                                ->writer_book()
-                                .token_of(stand.b, stand.lane);
+                                ->token_of(stand.b, stand.lane);
     const bool reseated
         = seated != 0 && readers.token_at(stand.a, stand.lane) == seated;
     CHECK(reseated);

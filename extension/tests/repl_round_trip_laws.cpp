@@ -21,9 +21,9 @@ using godot::Ref;
 using netw::NetwQuantizeScalar;
 using netw::SchemaCore;
 using netw::repl::read_snapshot_row;
-using netw::repl::RowOffer;
 using netw::repl::SessionResult;
-using netw::repl::SessionSend;
+using netw_test::RowOffer;
+using netw_test::SessionSend;
 using netw::repl::SnapshotHeader;
 using netw::table::SchemaRecord;
 using netw::wire::ChannelDecl;
@@ -93,7 +93,7 @@ RowOffer offer(const SchemaRecord &p_schema, const Array &p_values) {
     out.comp = 3;
     out.channel = CHANNEL;
     out.schema = &p_schema;
-    out.values = p_values;
+    netw_test::offer_values(out, p_values);
     out.recipients.push_back(PEER);
     out.masked = true;
     return out;
@@ -183,7 +183,7 @@ TEST_CASE(
         receive(schema, plan, one.sends[0].bytes, nullptr, held).size() == 3
     );
 
-    const CodeRow confirmed = one.sends[0].row;
+    const CodeRow confirmed = held;
     netw_test::accept_streams(session, first, PEER);
 
     LocalVector<RowOffer> second;
@@ -219,7 +219,9 @@ TEST_CASE(
     const SessionResult quiet = drive_send(session, reg, same, 100000, 2);
 
     NETW_CHECK_EQ(quiet.sends.size(), 0);
-    NETW_CHECK_EQ(quiet.caught_up, 1);
+    const bool it_says_caught_up = session.explain(12, 3, PEER).verdict
+        == netw::repl::RowVerdict::CAUGHT_UP;
+    CHECK(it_says_caught_up);
 }
 
 } // namespace TestNetwReplRoundTrip

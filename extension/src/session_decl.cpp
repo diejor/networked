@@ -237,8 +237,7 @@ Error declare(
         p_scope == nullptr,
         ERR_INVALID_PARAMETER,
         sys::SESSION,
-        "Netw.%s: a scope node is required, because the node names the "
-        "multiplayer branch the declaration governs",
+        "Netw.%s needs a node, and it was null.",
         p_verb
     );
     NETW_ERR_COND_V(
@@ -246,8 +245,8 @@ Error declare(
             && !p_callable.is_valid(),
         ERR_INVALID_PARAMETER,
         sys::SESSION,
-        "Netw.%s: the handler is not callable, so '%s' keeps the declaration "
-        "it already had. Pass an ordinary method, or Callable() to clear it.",
+        "Netw.%s got a handler that cannot be called, so '%s' keeps its "
+        "previous one. Pass a method, or an empty Callable to clear it.",
         p_verb,
         String(p_scope->get_name())
     );
@@ -427,12 +426,11 @@ bool Book::report_unresolved(
         }
         NETW_ERROR(
             sys::SESSION,
-            "%s refused: %s is declared by more than one live node (%s), so "
-            "this session has no single configuration. Keep one declaration "
-            "on the session's branch.",
-            p_action,
+            "Netw.%s was called on more than one node (%s), so %s was "
+            "refused. Call it on one node per session.",
             verb,
-            joined(scopes)
+            joined(scopes),
+            p_action
         );
         return true;
     }
@@ -441,12 +439,12 @@ bool Book::report_unresolved(
     }
     NETW_WARN(
         sys::SESSION,
-        "%s refused: the node that called Netw.%s, %s, left the tree before "
-        "its settings were applied. Keep it in the tree until the end of the "
-        "first frame.",
-        p_action,
+        "Netw.%s was called by %s, which left the tree before its settings "
+        "were applied, so %s was refused. Keep that node in the tree until "
+        "the end of its first frame.",
         verb,
-        joined(scopes)
+        joined(scopes),
+        p_action
     );
     return true;
 }

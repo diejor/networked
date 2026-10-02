@@ -60,6 +60,16 @@ struct NetwCarrierFrame {
         int64_t p_tick
     );
 
+    static godot::PackedByteArray build(
+        wire::WriteStream &r_stream,
+        const godot::PackedByteArray &p_payload,
+        bool p_reliable,
+        int64_t p_seq,
+        int64_t p_ack,
+        uint32_t p_history,
+        int64_t p_tick
+    );
+
     static NetwCarrierFrame read(const godot::PackedByteArray &p_packet);
 
     static godot::Dictionary spec_records();

@@ -1,10 +1,11 @@
 #include "support/netw_test.h"
 
-#include "netw/api/property_set.hpp"
-#include "netw/api/property_set_binding.hpp"
 #include "netw/api/schema_core.hpp"
 #include "netw/predict/engine.hpp"
+#include "netw/repl/property_binding.hpp"
+#include "support/books.h"
 #include "support/carrier.h"
+#include "support/predict_rows.h"
 
 #include "godot/variant.hpp"
 
@@ -167,12 +168,38 @@ TEST_CASE(
     engine->bind_owner(slot, owner);
 
     const Dictionary state = engine->capture_state(slot);
-    const Dictionary input = engine->capture_input(slot);
+    CHECK(engine->capture_command(slot));
+    const netw::predict::StateRow *input = engine->command_of(slot);
 
     CHECK(state.has(StringName("speed")));
     CHECK_FALSE(state.has(StringName("throttle")));
-    CHECK(input.has(StringName("throttle")));
-    CHECK_FALSE(input.has(StringName("speed")));
+    REQUIRE(input != nullptr);
+    NETW_CHECK_EQ(int(input->values.size()), 1);
+    REQUIRE(input->has(0));
+    NETW_CHECK_CLOSE(double(input->values[0]), 2.0, 0.0);
+    memdelete(owner);
+}
+
+TEST_CASE(
+    "[Networked][Predict][Owner] HL1 a host-local step authors the input "
+    "its node holds into the input book at that tick"
+) {
+    NetwPredictionEngine held;
+    NetwPredictionEngine *const engine = &held;
+    const int64_t slot = engine->open(fields(one("speed")));
+    engine->rewire(slot, fields(one("speed")), fields(one("throttle")));
+    Carrier *owner = carrier();
+    owner->set("throttle", 3.0);
+    engine->bind_owner(slot, owner);
+    engine->open_lane(slot);
+
+    engine->host_local_step(slot, 1.0 / 60.0, 5);
+
+    CHECK(engine->has_authored_input(slot, 5));
+    netw::predict::StateRow authored;
+    REQUIRE(engine->read_command_at(slot, 5, authored));
+    REQUIRE(authored.has(0));
+    NETW_CHECK_CLOSE(double(authored.values[0]), 3.0, 0.0);
     memdelete(owner);
 }
 
@@ -212,13 +239,13 @@ TEST_CASE(
     CHECK(captured.is_empty());
     CHECK_FALSE(engine->owner_bound(slot));
     NETW_CHECK_EQ(
-        engine->drive_stats(slot)[NetwPredictionEngine::STAT_OWNER_LOST],
+        engine->drive_stat(slot, NetwPredictionEngine::STAT_OWNER_LOST),
         1
     );
 
     CHECK(engine->capture_state(slot).is_empty());
     NETW_CHECK_EQ(
-        engine->drive_stats(slot)[NetwPredictionEngine::STAT_OWNER_LOST],
+        engine->drive_stat(slot, NetwPredictionEngine::STAT_OWNER_LOST),
         1
     );
 }
@@ -304,8 +331,8 @@ public:
 };
 
 TEST_CASE(
-    "[Networked][Predict][Owner] a step reads the input it was handed "
-    "and yields what it produced"
+    "[Networked][Predict][Owner] a step reads the input it was handed, "
+    "and a capture into the book pulls what it produced"
 ) {
     NetwPredictionEngine held;
     NetwPredictionEngine *const engine = &held;
@@ -314,10 +341,13 @@ TEST_CASE(
     Carrier *owner = carrier();
     engine->bind_owner(slot, owner);
     engine->set_simulate(slot, Callable(owner, "sum_into_speed"));
-    Dictionary input;
-    input[StringName("throttle")] = 2.0;
+    netw::predict::StateRow input;
+    input.resize(1);
+    input.set(0, 2.0);
 
-    const Dictionary produced = engine->run_step(slot, input, 0.5, 7, true);
+    CHECK(engine->run_command(slot, input, 0.5, 7, true));
+    CHECK(engine->capture_predicted(slot, 8));
+    const Dictionary produced = netw_test::predicted_state(engine, slot, 8);
 
     NETW_CHECK_CLOSE(double(owner->get("throttle")), 2.0, 0.0);
     NETW_CHECK_CLOSE(double(produced[StringName("speed")]), 2.0, 0.0);
@@ -358,7 +388,7 @@ TEST_CASE(
 
     NETW_CHECK_EQ(engine->pass_depth(), 0);
 
-    engine->run_step(slot, Dictionary(), 0.5, 7, true);
+    engine->run_command(slot, netw::predict::StateRow(), 0.5, 7, true);
 
     NETW_CHECK_EQ(engine->pass_depth(), 0);
     CHECK(engine->is_open(slot));
@@ -376,7 +406,7 @@ TEST_CASE(
     const int64_t slot = engine->open(fields(one("speed")));
     Carrier *owner = carrier();
     engine->bind_owner(slot, owner);
-    engine->run_step(slot, Dictionary(), 0.5, 7, true);
+    engine->run_command(slot, netw::predict::StateRow(), 0.5, 7, true);
 
     engine->close(slot);
 
@@ -398,9 +428,10 @@ TEST_CASE(
     engine->bind_owner(slot, owner);
     engine->set_simulate(slot, Callable(owner, "_network_tick"));
 
-    engine->run_step(slot, Dictionary(), 1.0 / 60.0, 7, true);
-    engine->run_step(slot, Dictionary(), 1.0 / 60.0, 7, false);
-    engine->run_step(slot, Dictionary(), 1.0 / 60.0, 7, false);
+    const netw::predict::StateRow none;
+    engine->run_command(slot, none, 1.0 / 60.0, 7, true);
+    engine->run_command(slot, none, 1.0 / 60.0, 7, false);
+    engine->run_command(slot, none, 1.0 / 60.0, 7, false);
 
     NETW_CHECK_EQ(owner->fresh_effects(), 1);
     memdelete(owner);
@@ -464,10 +495,10 @@ struct CarryFixture {
     NetwPredictionEngine *const engine = &held;
     int64_t slot = 0;
     Carrier *owner = nullptr;
-    Ref<netw::NetwTimeline> lane;
 
     CarryFixture(const char *p_rule) {
         slot = engine->open(fields(one("speed")));
+        engine->rewire(slot, fields(one("speed")), fields(one("throttle")));
         REQUIRE(engine->configure(
             slot,
             int(Schedule::FRAME),
@@ -482,19 +513,27 @@ struct CarryFixture {
         engine->bind_owner(slot, owner);
         engine->set_carry(slot, StringName("speed"), Callable(owner, p_rule));
 
-        lane = netw::NetwTimeline::create(64);
-        engine->bind_timeline(slot, lane);
+        engine->open_lane(slot);
         Dictionary command;
         command[StringName("throttle")] = 2.0;
         for (int64_t label = 1; label <= 2; label += 1) {
             engine->tape_author(slot, label, true);
-            lane->record_input(label, command);
+            engine->record_authored_command(
+                slot,
+                engine->tape_span(slot)[1],
+                label,
+                true,
+                netw_test::input_row(engine, slot, command)
+            );
         }
-        const Ref<netw::NetwTimeline> entries = engine->entry_history(slot);
         for (int64_t at = 0; at <= 2; at += 1) {
             Dictionary state;
             state[StringName("speed")] = double(at) * 2.0;
-            entries->record_state(at, state);
+            engine->record_predicted(
+                slot,
+                at,
+                netw_test::state_row(engine, slot, state)
+            );
         }
     }
 
@@ -684,26 +723,31 @@ TEST_CASE(
     memdelete(owner);
 }
 
-Ref<NetwPropertySetBinding> input_binding_on(Node *p_node) {
-    Ref<NetwPropertySet> set;
-    set.instantiate();
-    set->record = NetwPropertySet::RECORD_INPUT;
+repl::PropertyBindingPtr input_binding_on(
+    netw_test::Books &p_books,
+    Node *p_node
+) {
+    const uint64_t declared = p_books.sets.create();
+    repl::PropertySet *set = p_books.sets.get(declared);
+    set->record = repl::PropertySet::RECORD_INPUT;
     set->bind_column(
-        NetwPropertySetColumn::create(
+        repl::PropertyColumn::create(
             StringName("throttle"),
             Ref<NetwQuantize>(),
             false,
             NetwMultiplayer::ColumnType(SchemaCore::VARIANT)
         )
     );
-    return NetwPropertySetBinding::create(set, p_node);
+    return p_books.bindings.create(declared, p_node);
 }
 
 TEST_CASE(
     "[Networked][Predict][Owner] input declared off the bound owner is "
     "captured from and applied to the node that declares it"
 ) {
+    netw_test::Books books;
     NetwPredictionEngine held;
+    held.attach_bindings(&books.bindings);
     NetwPredictionEngine *const engine = &held;
     const int64_t slot = engine->open(fields(one("speed")));
     engine->rewire(slot, fields(one("speed")), fields(one("throttle")));
@@ -716,17 +760,20 @@ TEST_CASE(
     engine->bind_owner(slot, owner);
     engine->bind_property_sets(
         slot,
-        Ref<NetwPropertySetBinding>(),
-        input_binding_on(controls)
+        repl::PropertyBindingPtr(),
+        input_binding_on(books, controls)
     );
 
-    const Dictionary captured = engine->capture_input(slot);
-    CHECK(captured.has(StringName("throttle")));
-    NETW_CHECK_CLOSE(double(captured[StringName("throttle")]), 2.0, 0.0);
+    CHECK(engine->capture_command(slot));
+    const netw::predict::StateRow *captured = engine->command_of(slot);
+    REQUIRE(captured != nullptr);
+    REQUIRE(captured->has(0));
+    NETW_CHECK_CLOSE(double(captured->values[0]), 2.0, 0.0);
 
-    Dictionary payload;
-    payload[StringName("throttle")] = 5.0;
-    CHECK(engine->apply_input(slot, payload));
+    netw::predict::StateRow payload;
+    payload.resize(1);
+    payload.set(0, 5.0);
+    CHECK(engine->apply_command(slot, payload));
     NETW_CHECK_CLOSE(double(controls->get("throttle")), 5.0, 0.0);
 
     memdelete(controls);

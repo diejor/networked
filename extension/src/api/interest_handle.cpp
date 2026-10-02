@@ -20,14 +20,6 @@ void NetwInterestHandle::bind(NetwEntity *p_entity) {
     if (root == nullptr) {
         return;
     }
-    const Callable enter = callable_mp(this, &NetwInterestHandle::activate);
-    const Callable exit = callable_mp(this, &NetwInterestHandle::deactivate);
-    if (!root->is_connected("tree_entered", enter)) {
-        root->connect("tree_entered", enter);
-    }
-    if (!root->is_connected("tree_exiting", exit)) {
-        root->connect("tree_exiting", exit);
-    }
     const Callable observed
         = callable_mp(this, &NetwInterestHandle::on_observer_entered);
     const Callable unobserved
@@ -137,7 +129,8 @@ Ref<NetwInterestHandle> NetwInterestHandle::of(Node *p_node) {
     if (entity.is_null()) {
         NETW_ERROR(
             sys::INTEREST,
-            "NetwInterestHandle.of: the node roots no entity"
+            "Netw.configure_interest got a node that is not an entity root. "
+            "Pass the entity's root node."
         );
         return Ref<NetwInterestHandle>();
     }
@@ -369,13 +362,6 @@ Callable NetwInterestHandle::custom_perception_for(
     return held != nullptr
         ? held->declaration()->custom_perception_for(p_layer_id)
         : Callable();
-}
-
-void NetwInterestHandle::client_join_label(const StringName &p_layer_id) {
-    interest::Facet *held = facet();
-    if (held != nullptr) {
-        held->join(p_layer_id);
-    }
 }
 
 void NetwInterestHandle::dispatch_enter(

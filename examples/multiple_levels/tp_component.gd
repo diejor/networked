@@ -27,7 +27,7 @@ func _notification(what: int) -> void:
 
 func _ready() -> void:
 	Netw.configure_property(self, &"current_scene_path", false) \
-			.persisted(game.save_schema.column_ref(MultipleLevelsSession.LEVEL))
+			.persisted(&"level")
 	entity.reparented.connect(apply_arrival_marker)
 	layer = Netw.service(self, TPLayer)
 

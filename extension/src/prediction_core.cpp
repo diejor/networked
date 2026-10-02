@@ -330,7 +330,8 @@ Ref<NetwPredictFold> NetwPredictFold::of(
         kind < int(DriveKind::NONE) || kind > int(DriveKind::SUBSTITUTED),
         Ref<NetwPredictFold>(),
         sys::PREDICTION,
-        "NetwPredictFold.of: kind %d names no drive kind.",
+        "NetwPredictFold.of got kind %d, which is not a "
+        "NetwPredict.DriveKind value. Pass one of its constants.",
         kind
     );
     NETW_NOTE_RECORD_MINT();

@@ -35,6 +35,12 @@ String entity_name(const Ref<NetwEntity> &p_entity) {
 
 void NetwSimulationHandle::bind(NetwEntity *p_entity) {
     entity_id = gd::instance_id(p_entity);
+    NetwMultiplayer *session = core();
+    const sim::Row *row
+        = session != nullptr ? session->sim_row_of(entity_rid()) : nullptr;
+    if (row != nullptr && row->has_announced) {
+        announced = Mode(int(row->announced));
+    }
 }
 
 Ref<NetwEntity> NetwSimulationHandle::entity() const {
@@ -115,8 +121,8 @@ void NetwSimulationHandle::set_bodies(const TypedArray<NodePath> &p_value) {
         bodies_warned = true;
         NETW_WARN(
             sys::PREDICTION,
-            "simulation.bodies on %s was written after the entity went live. "
-            "The bodies it declared when it went live stay in effect.",
+            "NetwSimulationHandle.bodies on %s changed after the entity "
+            "spawned, so the change is ignored. Set it in _init.",
             entity_name(entity()).utf8().get_data()
         );
     }
@@ -236,7 +242,8 @@ void NetwSimulationHandle::simulate(const Ref<NetwEntity> &p_entity) {
     NETW_ERR_COND(
         p_entity.is_null(),
         sys::PREDICTION,
-        "simulation.simulate on %s names no entity.",
+        "NetwSimulationHandle.simulate on %s needs an entity, and it was "
+        "null.",
         entity_name(entity()).utf8().get_data()
     );
     if (live() && p_entity->get_owner() != nullptr

@@ -36,11 +36,11 @@ bool declared_slots_are(
         }
         NETW_ERROR(
             sys::SESSION,
-            "%s: argument %d of '%s' is a %s rather than a %s.",
+            "%s got a %s for value %d of '%s'. Pass a %s or null there.",
             p_verb,
+            type_label(int(slot.get_type())),
             index,
             String(p_member),
-            type_label(int(slot.get_type())),
             p_expected
         );
         return false;
@@ -62,14 +62,13 @@ bool declared_count_fits_arity(
     }
     NETW_ERROR(
         sys::SESSION,
-        "%s: '%s' on script '%s' takes %d arguments and %d were declared. "
-        "Pass one per argument, and null for an argument that travels "
-        "unchanged.",
+        "%s got %d entries for '%s' in '%s', which has %d values. Pass one "
+        "entry per value, and null for a value to leave as it is.",
         p_verb,
+        p_declared_count,
         String(p_member),
         script_file(p_script),
-        p_types.size(),
-        p_declared_count
+        p_types.size()
     );
     return false;
 }
@@ -118,12 +117,13 @@ bool quantizers_fit_types(
         }
         NETW_WARN(
             sys::SESSION,
-            "Quantizer of type '%s' does not support the declared type '%s' "
-            "for '%s' on script '%s'.",
+            "%s cannot pack the %s value of '%s' in '%s'. Use a quantizer "
+            "that supports %s.",
             packer->get_class(),
             type_label(type),
             String(p_member),
-            script_file(p_script)
+            script_file(p_script),
+            type_label(type)
         );
         return false;
     }
@@ -147,11 +147,12 @@ bool interpolators_fit_types(
         }
         NETW_WARN(
             sys::SESSION,
-            "Interpolator does not support the declared type '%s' for '%s' "
-            "on script '%s'.",
-            type_label(type),
+            "The interpolator for '%s' in '%s' cannot blend its %s value. Use "
+            "an interpolator that supports %s.",
             String(p_member),
-            script_file(p_script)
+            script_file(p_script),
+            type_label(type),
+            type_label(type)
         );
         return false;
     }

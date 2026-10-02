@@ -10,11 +10,11 @@
 #include "netw/api/entity.hpp"
 #include "netw/api/netw_multiplayer.hpp"
 #include "netw/api/property_config.hpp"
-#include "netw/api/property_set.hpp"
 #include "netw/api/record.hpp"
 #include "netw/api/sync_pipeline.hpp"
-#include "netw/api/timeline.hpp"
+#include "netw/lagcomp_core.hpp"
 #include "netw/property_set_builder.hpp"
+#include "support/books.h"
 #include "support/carrier.h"
 
 namespace TestNetwLagCompTimelineEnrollmentLaws {
@@ -26,8 +26,7 @@ using netw::NetwClockConfig;
 using netw::NetwEntity;
 using netw::NetwMultiplayer;
 using netw::NetwPropertyConfig;
-using netw::NetwPropertySet;
-namespace property_set_builder = netw::property_set_builder;
+using netw::repl::PropertySet;
 
 constexpr int COORDINATOR = 7;
 constexpr int MEMBER = 9;
@@ -55,19 +54,18 @@ void arm_simulation(NetwMultiplayer *p_session) {
     NETW_CHECK_EQ(int(p_session->lagcomp_initialize(8, 12)), int(OK));
 }
 
-Ref<NetwPropertySet> a_state_stream(Node *p_node) {
+uint64_t a_state_stream(NetwMultiplayer *p_session, Node *p_node) {
     const Ref<NetwPropertyConfig> config
         = Netw::configure_property(p_node, StringName("position"), true);
     config->state();
     Dictionary configs;
     configs[StringName("position")] = config;
-    const Ref<NetwPropertySet> set
-        = property_set_builder::from_property_configs(
-            configs,
-            NetwPropertySet::RECORD_STATE
-        );
-    REQUIRE(set.is_valid());
-    set->set_sealed(true);
+    const uint64_t set = sealed_set(
+        p_session->property_set_book(),
+        configs,
+        PropertySet::RECORD_STATE
+    );
+    REQUIRE(set != netw::repl::SetBook::NONE);
     return set;
 }
 
@@ -85,7 +83,10 @@ Carrier *a_state_body(
     p_branch->add_child(body);
     NETW_CHECK_EQ(
         int(p_session->sync_pipeline()
-                ->register_property_set(body, a_state_stream(body))),
+                ->register_property_set(
+                    body,
+                    a_state_stream(p_session, body)
+                )),
         int(OK)
     );
     return body;
@@ -97,13 +98,19 @@ RID handle_of(NetwMultiplayer *p_session, Node *p_body) {
     return p_session->entity_of(entity->get_owner());
 }
 
+int64_t rewind_slot(NetwMultiplayer *p_session, const RID &p_entity) {
+    return p_session->get_lagcomp_core()->timeline_slot_of(
+        p_session->entity_get_view(p_entity)
+    );
+}
+
+int enrolled(NetwMultiplayer *p_session, const RID &p_entity) {
+    return rewind_slot(p_session, p_entity) >= 0 ? 1 : 0;
+}
+
 int64_t newest_recorded_tick(NetwMultiplayer *p_session, const RID &p_entity) {
-    const Ref<netw::NetwTimeline> history
-        = p_session->lagcomp_timeline_of(p_entity);
-    if (history.is_null()) {
-        return -1;
-    }
-    return history->latest_state_tick_at_or_before(
+    return p_session->get_lagcomp_core()->timeline_sample_tick(
+        rewind_slot(p_session, p_entity),
         int64_t(p_session->clock_engine().get_tick())
     );
 }
@@ -149,14 +156,8 @@ TEST_CASE(
     Carrier *authored = a_state_body(host, held, "Target", 10.0);
     Carrier *received = a_state_body(guest, seen, "Target", 10.0);
 
-    NETW_CHECK_EQ(
-        int(host->lagcomp_timeline_of(handle_of(host, authored)).is_valid()),
-        1
-    );
-    NETW_CHECK_EQ(
-        int(guest->lagcomp_timeline_of(handle_of(guest, received)).is_valid()),
-        0
-    );
+    NETW_CHECK_EQ(enrolled(host, handle_of(host, authored)), 1);
+    NETW_CHECK_EQ(enrolled(guest, handle_of(guest, received)), 0);
 
     drop(seen);
     drop(held);
@@ -182,7 +183,7 @@ TEST_CASE(
 
     Carrier *body = a_state_body(host, held, "Target", 10.0);
     const RID entity = handle_of(host, body);
-    NETW_CHECK_EQ(int(host->lagcomp_timeline_of(entity).is_valid()), 1);
+    NETW_CHECK_EQ(enrolled(host, entity), 1);
 
     stand.step_ticks(3);
     const int64_t standing = newest_recorded_tick(host, entity);
@@ -233,19 +234,19 @@ TEST_CASE(
     Carrier *staying = a_state_body(host, held, "Staying", 20.0);
     const RID gone = handle_of(host, leaving);
     const RID kept = handle_of(host, staying);
-    NETW_CHECK_EQ(int(host->lagcomp_timeline_of(gone).is_valid()), 1);
-    NETW_CHECK_EQ(int(host->lagcomp_timeline_of(kept).is_valid()), 1);
+    NETW_CHECK_EQ(enrolled(host, gone), 1);
+    NETW_CHECK_EQ(enrolled(host, kept), 1);
 
     host->sync_pipeline()->unregister_derived(leaving);
     host->sync_pipeline()->reconcile_state_timeline_for_test(leaving);
 
-    NETW_CHECK_EQ(int(host->lagcomp_timeline_of(gone).is_valid()), 0);
-    NETW_CHECK_EQ(int(host->lagcomp_timeline_of(kept).is_valid()), 1);
+    NETW_CHECK_EQ(enrolled(host, gone), 0);
+    NETW_CHECK_EQ(enrolled(host, kept), 1);
 
     host->sync_pipeline()->unregister_derived(staying);
     host->sync_pipeline()->reconcile_dropped_state_timelines_for_test();
 
-    NETW_CHECK_EQ(int(host->lagcomp_timeline_of(kept).is_valid()), 0);
+    NETW_CHECK_EQ(enrolled(host, kept), 0);
 
     drop(held);
 }

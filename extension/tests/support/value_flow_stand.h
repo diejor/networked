@@ -16,9 +16,9 @@
 #include "netw/api/entity.hpp"
 #include "netw/api/loopback.hpp"
 #include "netw/api/netw_multiplayer.hpp"
-#include "netw/api/property_set.hpp"
-#include "netw/api/property_set_binding.hpp"
 #include "netw/object_port.hpp"
+#include "netw/repl/property_binding.hpp"
+#include "netw/store/table.hpp"
 
 namespace netw_test {
 
@@ -126,16 +126,16 @@ inline void steer(const FlowPair &p_pair, int p_controller) {
     }
 }
 
-inline godot::Ref<netw::NetwPropertySetBinding> binding_of(
+inline netw::repl::PropertyBindingPtr binding_of(
     godot::Node *p_node,
-    netw::NetwPropertySet::Record p_record
+    netw::repl::PropertySet::Record p_record
 ) {
     const godot::Ref<netw::NetwEntity> entity = netw::NetwEntity::of(p_node);
     REQUIRE_MESSAGE(entity.is_valid(), "the body has no record");
-    if (p_record == netw::NetwPropertySet::RECORD_INPUT) {
+    if (p_record == netw::repl::PropertySet::RECORD_INPUT) {
         return entity->get_input_binding();
     }
-    if (p_record == netw::NetwPropertySet::RECORD_BROADCAST) {
+    if (p_record == netw::repl::PropertySet::RECORD_BROADCAST) {
         return entity->get_broadcast_binding();
     }
     return entity->get_state_binding();
@@ -145,13 +145,13 @@ inline void author_at(
     godot::Node2D *p_node,
     const godot::StringName &p_property,
     const godot::Variant &p_value,
-    netw::NetwPropertySet::Record p_record,
+    netw::repl::PropertySet::Record p_record,
     int64_t p_tick
 ) {
     netw::port_set(p_node, p_property, p_value);
-    const godot::Ref<netw::NetwPropertySetBinding> binding
+    const netw::repl::PropertyBindingPtr binding
         = binding_of(p_node, p_record);
-    if (binding.is_valid()) {
+    if (binding != nullptr) {
         binding->authored_tick = p_tick;
     }
 }
@@ -196,10 +196,11 @@ struct FlowCapture {
     }
 
     void note(
-        const godot::Dictionary &p_header,
+        const netw::store::Table &p_table,
+        uint32_t p_row,
         const godot::StringName &p_field
     ) {
-        const int64_t tick = int64_t(p_header.get("tick", -1));
+        const int64_t tick = p_table.arrived_tick;
         if (tick < 0) {
             return;
         }
@@ -214,9 +215,13 @@ struct FlowCapture {
             repeats += 1;
         }
         last_tick = tick;
-        const godot::Dictionary payload
-            = p_header.get("payload", godot::Dictionary());
-        const godot::Vector2 held = payload.get(p_field, godot::Vector2());
+        godot::Vector2 held;
+        for (int column = 0; column < p_table.schema.column_count();
+             ++column) {
+            if (p_table.schema.at(column)->key == p_field) {
+                held = p_table.read_value(p_row, uint32_t(column));
+            }
+        }
         if (!held.is_equal_approx(authored_value(tick))) {
             torn += 1;
         }

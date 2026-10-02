@@ -1,13 +1,14 @@
 #include "support/netw_test.h"
 
 #include "netw/api/netw_multiplayer.hpp"
-#include "netw/api/property_set.hpp"
+#include "netw/repl/property_set.hpp"
 
 namespace TestNetwSessionPropertySet {
 
 using namespace godot;
 using netw::NetwMultiplayer;
-using netw::NetwPropertySet;
+using netw::repl::PropertyColumn;
+using netw::repl::PropertySet;
 
 bool same_rid(const RID &p_a, const RID &p_b) {
     return p_a == p_b;
@@ -151,14 +152,14 @@ TEST_CASE(
         set,
         field,
         NetwMultiplayer::COLUMN_PARAM_LANE,
-        NetwPropertySet::RETAINED
+        PropertySet::RETAINED
     );
 
-    const TypedArray<netw::NetwPropertySetColumn> held
-        = world.session->property_set_record(set)->get_columns();
-    const Ref<netw::NetwPropertySetColumn> column = held[field];
-    NETW_CHECK_EQ(column->get_lane(), NetwPropertySet::RETAINED);
-    CHECK(column->get_watch());
+    const PropertySet *held = world.session->property_set_of(set);
+    REQUIRE(held != nullptr);
+    const PropertyColumn &column = held->columns[uint32_t(field)];
+    NETW_CHECK_EQ(column.lane, PropertySet::RETAINED);
+    CHECK(column.watch);
 }
 
 } // namespace TestNetwSessionPropertySet

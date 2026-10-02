@@ -143,7 +143,7 @@ enum **CommandOrigin**: :ref:`🔗<enum_NetwPredict_CommandOrigin>`
 
 :ref:`CommandOrigin<enum_NetwPredict_CommandOrigin>` **COMMAND_ORIGIN_PREDICTED** = ``0``
 
-This peer guessed the input with :ref:`NetwPredictionHandle.predict_commands<class_NetwPredictionHandle_property_predict_commands>`.
+This peer guessed the input with :ref:`NetwPredictionHandle.predict_input<class_NetwPredictionHandle_property_predict_input>`.
 
 .. _class_NetwPredict_constant_COMMAND_ORIGIN_RELAYED:
 
@@ -697,7 +697,7 @@ A teleport restored every field.
 
 :ref:`Operator<enum_NetwPredict_Operator>` **OPERATOR_TRANSPORT_DELTA** = ``4``
 
-The body was moved to where it should be now, along a path :ref:`NetwPredictionHandle.transport_corridor<class_NetwPredictionHandle_property_transport_corridor>` allowed.
+The body was moved to where it should be now, along a path :ref:`NetwPredictionHandle.correction_path_clear<class_NetwPredictionHandle_property_correction_path_clear>` allowed.
 
 .. _class_NetwPredict_constant_OPERATOR_RESEED:
 

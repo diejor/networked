@@ -1,8 +1,13 @@
 #include "netw/repl/session_send.hpp"
 
+#include <algorithm>
+
 #include "netw/colors.hpp"
 #include "netw/log.hpp"
 #include "netw/profile.hpp"
+#include "netw/store/schedule.hpp"
+#include "netw/store/world.hpp"
+#include "netw/wire/frame.hpp"
 
 namespace netw::repl {
 
@@ -10,60 +15,23 @@ using namespace godot;
 
 namespace {
 
-RowFrameHeader header_of(const RowOffer &p_offer, uint64_t p_mask) {
-    RowFrameHeader header;
-    header.life = p_offer.life % ROW_LIFE_WRAP;
-    header.reconcile_ack = p_offer.ack;
-    header.tick = p_offer.tick;
-    header.mask = p_mask;
-    return header;
+wire::StreamLane lane_at(const store::Table &p_table, uint32_t p_row) {
+    wire::StreamLane lane;
+    lane.route = p_table.routes[p_row];
+    lane.ordinal = p_table.ordinals[p_row];
+    lane.family = wire::StreamFamily(uint8_t(p_table.family));
+    return lane;
+}
+
+bool stream_is(
+    const store::PeerRows &p_rows,
+    uint32_t p_row,
+    store::Stream p_stream
+) {
+    return p_rows.stream[p_row] == uint8_t(p_stream);
 }
 
 } // namespace
-
-wire::SnapshotSender *SessionSend::stream_ready(
-    int p_peer,
-    const RowOffer &p_offer,
-    wire::StreamFamily p_family,
-    uint64_t &r_token,
-    wire::StreamLane &r_lane
-) {
-    wire::StreamLane lane;
-    lane.route = p_offer.route;
-    lane.ordinal = p_offer.comp;
-    lane.family = p_family;
-    r_lane = lane;
-    if (!writers.holds_tenure(p_peer, lane, p_offer.tenure)) {
-        uint64_t closed = 0;
-        if (writers.close(p_peer, lane, closed)) {
-            queue_close(p_peer, closed);
-        }
-    }
-    r_token = writers.token_of(p_peer, lane);
-    if (r_token != 0) {
-        return writers.sender(p_peer, lane);
-    }
-    const uint64_t epoch = uint64_t(p_offer.life);
-    const uint32_t schema = uint32_t(p_offer.declared().shape_hash);
-    const uint64_t request
-        = writers.open(p_peer, lane, epoch, schema, p_offer.tenure);
-    if (request == 0) {
-        return nullptr;
-    }
-    wire::ControlRecord asking;
-    asking.tag = wire::ControlTag::OPEN;
-    asking.request = request;
-    asking.route = lane.route;
-    asking.ordinal = lane.ordinal;
-    asking.family = p_family;
-    asking.epoch = epoch;
-    asking.tenure = p_offer.tenure.tenure;
-    asking.anchor = p_offer.tenure.anchor;
-    asking.anchor_author = p_offer.tenure.anchor_author;
-    asking.schema = schema;
-    control.queue(p_peer, asking);
-    return nullptr;
-}
 
 void SessionSend::queue_close(int p_peer, uint64_t p_token) {
     control.drop_token(p_peer, p_token);
@@ -73,8 +41,18 @@ void SessionSend::queue_close(int p_peer, uint64_t p_token) {
     control.queue(p_peer, closing);
 }
 
+void SessionSend::queue_closes(const LocalVector<wire::ClosedLane> &p_closed) {
+    for (uint32_t at = 0; at < p_closed.size(); ++at) {
+        if (p_closed[at].token != 0) {
+            queue_close(p_closed[at].peer, p_closed[at].token);
+        }
+    }
+}
+
 void SessionSend::close_tenures(int64_t p_route, uint64_t p_tenure) {
-    queue_closes(writers.close_tenures_other_than(p_route, p_tenure));
+    if (world != nullptr) {
+        queue_closes(world->close_tenures_other_than(p_route, p_tenure));
+    }
 }
 
 void SessionSend::close_anchors(
@@ -82,13 +60,75 @@ void SessionSend::close_anchors(
     uint64_t p_anchor,
     uint64_t p_author
 ) {
-    queue_closes(writers.close_anchors_other_than(p_route, p_anchor, p_author));
+    if (world != nullptr) {
+        queue_closes(
+            world->close_anchors_other_than(p_route, p_anchor, p_author)
+        );
+    }
 }
 
-void SessionSend::queue_closes(const LocalVector<wire::ClosedLane> &p_closed) {
-    for (uint32_t at = 0; at < p_closed.size(); ++at) {
-        queue_close(p_closed[at].peer, p_closed[at].token);
-    }
+void SessionSend::queue_open(
+    int p_peer,
+    const store::Table &p_table,
+    uint32_t p_row,
+    uint64_t p_request
+) {
+    const wire::StreamTenure &tenure = p_table.tenures[p_row];
+    wire::ControlRecord asking;
+    asking.tag = wire::ControlTag::OPEN;
+    asking.request = p_request;
+    asking.route = p_table.routes[p_row];
+    asking.ordinal = p_table.ordinals[p_row];
+    asking.family = wire::StreamFamily(uint8_t(p_table.family));
+    asking.epoch = uint64_t(world->epoch_of(p_table.slots[p_row]));
+    asking.tenure = tenure.tenure;
+    asking.anchor = tenure.anchor;
+    asking.anchor_author = tenure.anchor_author;
+    asking.schema = uint32_t(p_table.schema.shape_hash);
+    control.queue(p_peer, asking);
+}
+
+uint64_t SessionSend::stream_open(
+    int p_peer,
+    const wire::StreamLane &p_lane,
+    const wire::StreamTenure &p_tenure
+) {
+    return world != nullptr ? world->stream_open(p_peer, p_lane, p_tenure)
+                            : 0;
+}
+
+wire::ReadyVerdict SessionSend::stream_ready(
+    int p_peer,
+    uint64_t p_request,
+    uint64_t p_token
+) {
+    return world != nullptr ? world->stream_ready(p_peer, p_request, p_token)
+                            : wire::ReadyVerdict::UNKNOWN;
+}
+
+wire::ReceiptVerdict SessionSend::stream_receipt(
+    int p_peer,
+    uint64_t p_token,
+    uint64_t p_revision
+) {
+    return world != nullptr
+        ? world->stream_receipt(p_peer, p_token, p_revision)
+        : wire::ReceiptVerdict::IGNORED;
+}
+
+bool SessionSend::stream_reset(
+    int p_peer,
+    uint64_t p_request,
+    uint64_t p_token
+) {
+    return world != nullptr && world->stream_reset(p_peer, p_request, p_token);
+}
+
+uint64_t SessionSend::token_of(
+    int p_peer,
+    const wire::StreamLane &p_lane
+) const {
+    return world != nullptr ? world->token_of(p_peer, p_lane) : 0;
 }
 
 LocalVector<wire::ParkedOpen> SessionSend::expire_parks(int64_t p_now_ms) {
@@ -106,629 +146,751 @@ LocalVector<wire::ParkedOpen> SessionSend::expire_parks(int64_t p_now_ms) {
     return out;
 }
 
-bool SessionSend::row_is_owed(
-    wire::SnapshotSender &p_stream,
-    int p_peer,
-    const wire::StreamLane &p_lane,
-    const RowOffer &p_offer,
-    int64_t p_base_tick,
-    int64_t p_now_ms,
-    bool &r_repairing,
-    bool &r_beat
-) {
-    r_repairing = false;
-    r_beat = false;
-    if (p_stream.quiet()) {
-        r_beat = p_stream.beat_due(p_base_tick, p_offer.heartbeat);
-        return r_beat;
-    }
-    if (!p_stream.awaiting_receipt()) {
-        return true;
-    }
-    r_repairing = true;
-    return writers
-        .repair_due(p_peer, p_lane, p_now_ms, int64_t(link.rtt_ms(p_peer)));
-}
-
-uint64_t SessionSend::revision_for(
-    wire::SnapshotSender &p_stream,
-    int p_peer,
-    const wire::StreamLane &p_lane,
-    int64_t p_base_tick,
-    int64_t p_now_ms,
-    bool p_repairing
-) {
-    if (p_repairing) {
-        return p_stream.pinned_repair();
-    }
-    writers.note_attempt(p_peer, p_lane, p_now_ms);
-    return p_stream.mint(p_base_tick);
-}
-
 PackedByteArray SessionSend::price(
     const RowSend &p_send,
     int64_t p_base_tick
 ) const {
-    if (!stage.is_valid()) {
+    if (!stage_wanted || !stage.is_valid()) {
         return p_send.bytes;
     }
-    Array args;
-    args.push_back(int64_t(p_send.peer));
-    args.push_back(p_base_tick);
-    args.push_back(p_send.route);
-    args.push_back(int64_t(p_send.comp));
-    args.push_back(int64_t(p_send.mask));
-    args.push_back(p_send.bytes);
-    return stage.callv(args);
+    return stage.call(
+        int64_t(p_send.peer),
+        p_base_tick,
+        p_send.route,
+        int64_t(p_send.comp),
+        int64_t(p_send.mask),
+        p_send.bytes
+    );
 }
 
-LocalVector<RowSend> SessionSend::collect(
-    const LocalVector<RowOffer> &p_offers,
-    int64_t p_base_tick,
-    int64_t p_now_ms,
-    LocalVector<wire::FitCandidate> &r_candidates,
-    SessionResult &r_out
+bool SessionSend::stream_seated(
+    uint32_t p_peer,
+    uint32_t p_table,
+    uint32_t p_row
 ) {
-    LocalVector<RowSend> staged;
-    for (uint32_t at = 0; at < p_offers.size(); ++at) {
-        const RowOffer &offer = p_offers[at];
-        if (offer.windowed) {
-            WindowRing *ring = lanes.open_window(
-                offer.route,
-                offer.comp,
-                offer.declared(),
-                offer.window
-            );
-            wire::CodeRow row;
-            if (ring == nullptr || !ring->valid()) {
-                NETW_WARN_ONCE(
-                    sys::WIRE,
-                    "windowed offer on route %d comp %d opened no ring",
-                    int(offer.route),
-                    int(offer.comp)
-                );
-                r_out.ungathered += 1;
-                note_offer_verdict(offer, RowVerdict::UNGATHERED, p_base_tick);
-                continue;
-            }
-            if (!ring->gather(offer.values, row)) {
-                NETW_WARN_ONCE(
-                    sys::WIRE,
-                    "windowed offer on route %d comp %d did not gather",
-                    int(offer.route),
-                    int(offer.comp)
-                );
-                r_out.ungathered += 1;
-                note_offer_verdict(offer, RowVerdict::UNGATHERED, p_base_tick);
-                continue;
-            }
-            ring->record(offer.tick, row);
-            const godot::LocalVector<WindowSample> samples = ring->pending();
-            if (samples.is_empty()) {
-                r_out.caught_up += 1;
-                note_offer_verdict(offer, RowVerdict::CAUGHT_UP, p_base_tick);
-                continue;
-            }
-            NETW_WARN_COND_ONCE(
-                offer.recipients.size() > 1,
-                sys::WIRE,
-                "a window ring holds one floor for every recipient, so route "
-                "%d comp %d offered to %d peers settles them against each "
-                "other",
-                int(offer.route),
-                int(offer.comp),
-                int(offer.recipients.size())
-            );
-            const uint64_t whole = ring->plan().full_mask();
-            for (uint32_t which = 0; which < offer.recipients.size(); ++which) {
-                uint64_t token = 0;
-                wire::StreamLane lane;
-                wire::SnapshotSender *stream = stream_ready(
-                    offer.recipients[which],
-                    offer,
-                    wire::StreamFamily::WINDOW,
-                    token,
-                    lane
-                );
-                if (stream == nullptr) {
-                    r_out.deferred += 1;
-                    note_verdict(
-                        offer.route,
-                        offer.comp,
-                        offer.recipients[which],
-                        RowVerdict::DEFERRED,
-                        p_base_tick
-                    );
-                    continue;
-                }
-                SnapshotHeader header;
-                header.token = token;
-                header.revision = stream->reserve();
-                header.reconcile_ack = offer.ack;
-                RowSend send;
-                send.route = offer.route;
-                send.comp = offer.comp;
-                send.peer = offer.recipients[which];
-                send.offer = at;
-                send.mask = whole;
-                send.token = token;
-                send.revision = header.revision;
-                send.windowed = true;
-                send.sample_count = samples.size();
-                send.row = row;
-                send.bytes = write_snapshot_window(
-                    header,
-                    p_base_tick,
-                    ring->plan(),
-                    samples
-                );
-                send.bytes = price(send, p_base_tick);
-                if (send.bytes.is_empty()) {
-                    r_out.staged_out += 1;
-                    note_verdict(
-                        offer.route,
-                        offer.comp,
-                        send.peer,
-                        RowVerdict::REFUSED,
-                        p_base_tick
-                    );
-                    continue;
-                }
-                send.bits = int64_t(send.bytes.size()) * 8;
-                staged.push_back(send);
-
-                wire::FitCandidate candidate;
-                candidate.channel_id = offer.channel;
-                candidate.peer = send.peer;
-                candidate.bytes = send.bytes.size();
-                candidate.payload_bits = send.bits;
-                candidate.priority = offer.priority;
-                candidate.accumulated_priority = owed_by(send, offer.priority);
-                candidate.send_id = int64_t(staged.size()) - 1;
-                r_candidates.push_back(candidate);
-            }
-            continue;
-        }
-        if (offer.reliable) {
-            RetainedLane *reliable = lanes.open_retained(
-                offer.route,
-                offer.comp,
-                offer.declared()
-            );
-            wire::CodeRow row;
-            if (reliable == nullptr || !reliable->valid()
-                || !reliable->gather(offer.values, row)) {
-                r_out.ungathered += 1;
-                note_offer_verdict(offer, RowVerdict::UNGATHERED, p_base_tick);
-                continue;
-            }
-            for (uint32_t which = 0; which < offer.recipients.size(); ++which) {
-                const int peer = offer.recipients[which];
-                uint64_t token = 0;
-                wire::StreamLane lane;
-                wire::SnapshotSender *stream = stream_ready(
-                    peer,
-                    offer,
-                    wire::StreamFamily::RETAINED,
-                    token,
-                    lane
-                );
-                if (stream == nullptr) {
-                    r_out.deferred += 1;
-                    note_verdict(
-                        offer.route,
-                        offer.comp,
-                        peer,
-                        RowVerdict::DEFERRED,
-                        p_base_tick
-                    );
-                    continue;
-                }
-                stream->desire(row);
-                bool repairing = false;
-                bool beat = false;
-                if (!row_is_owed(
-                        *stream,
-                        peer,
-                        lane,
-                        offer,
-                        p_base_tick,
-                        p_now_ms,
-                        repairing,
-                        beat
-                    )) {
-                    r_out.caught_up += 1;
-                    note_verdict(
-                        offer.route,
-                        offer.comp,
-                        peer,
-                        RowVerdict::CAUGHT_UP,
-                        p_base_tick
-                    );
-                    continue;
-                }
-                SnapshotHeader header;
-                header.token = token;
-                header.revision = revision_for(
-                    *stream,
-                    peer,
-                    lane,
-                    p_base_tick,
-                    p_now_ms,
-                    repairing
-                );
-                header.distance = repairing || beat
-                    ? 0
-                    : stream->distance_for(header.revision);
-                header.tick = offer.tick;
-                header.reconcile_ack = offer.ack;
-                const wire::CodeRow *baseline
-                    = header.absolute() ? nullptr : stream->confirmed();
-                header.mask = header.absolute() ? reliable->plan().full_mask()
-                                                : wire::CodeRow::changed_mask(
-                                                      reliable->plan(),
-                                                      *baseline,
-                                                      row
-                                                  );
-                RowSend send;
-                send.route = offer.route;
-                send.comp = offer.comp;
-                send.peer = peer;
-                send.offer = at;
-                send.mask = header.mask;
-                send.token = token;
-                send.revision = header.revision;
-                send.masked = !header.absolute();
-                send.reliable = true;
-                send.row = row;
-                send.bytes = write_snapshot_row(
-                    header,
-                    p_base_tick,
-                    reliable->plan(),
-                    row,
-                    baseline
-                );
-                send.bytes = price(send, p_base_tick);
-                if (send.bytes.is_empty()) {
-                    r_out.staged_out += 1;
-                    note_verdict(
-                        offer.route,
-                        offer.comp,
-                        peer,
-                        RowVerdict::REFUSED,
-                        p_base_tick
-                    );
-                    continue;
-                }
-                send.bits = int64_t(send.bytes.size()) * 8;
-                note_verdict(
-                    offer.route,
-                    offer.comp,
-                    peer,
-                    RowVerdict::SENT,
-                    p_base_tick
-                );
-                staged.push_back(send);
-            }
-            continue;
-        }
-        RowLane *lane = lanes.open(offer.route, offer.comp, offer.declared());
-        if (lane == nullptr || !lane->valid()) {
-            NETW_WARN_ONCE(
-                sys::WIRE,
-                "offer on route %d comp %d opened no lane",
-                int(offer.route),
-                int(offer.comp)
-            );
-            r_out.ungathered += 1;
-            note_offer_verdict(offer, RowVerdict::UNGATHERED, p_base_tick);
-            continue;
-        }
-        wire::CodeRow row;
-        if (!lane->gather(offer.values, row)) {
-            NETW_WARN_ONCE(
-                sys::WIRE,
-                "offer on route %d comp %d did not gather",
-                int(offer.route),
-                int(offer.comp)
-            );
-            r_out.ungathered += 1;
-            note_offer_verdict(offer, RowVerdict::UNGATHERED, p_base_tick);
-            continue;
-        }
-        for (uint32_t which = 0; which < offer.recipients.size(); ++which) {
-            const int peer = offer.recipients[which];
-            uint64_t token = 0;
-            wire::StreamLane stream_lane;
-            wire::SnapshotSender *stream = stream_ready(
-                peer,
-                offer,
-                wire::StreamFamily::VOLATILE,
-                token,
-                stream_lane
-            );
-            if (stream == nullptr) {
-                r_out.deferred += 1;
-                note_verdict(
-                    offer.route,
-                    offer.comp,
-                    peer,
-                    RowVerdict::DEFERRED,
-                    p_base_tick
-                );
-                continue;
-            }
-            stream->desire(row);
-            bool repairing = false;
-            bool beat = false;
-            if (!row_is_owed(
-                    *stream,
-                    peer,
-                    stream_lane,
-                    offer,
-                    p_base_tick,
-                    p_now_ms,
-                    repairing,
-                    beat
-                )) {
-                r_out.caught_up += 1;
-                note_verdict(
-                    offer.route,
-                    offer.comp,
-                    peer,
-                    RowVerdict::CAUGHT_UP,
-                    p_base_tick
-                );
-                continue;
-            }
-            SnapshotHeader header;
-            header.token = token;
-            header.revision = revision_for(
-                *stream,
-                peer,
-                stream_lane,
-                p_base_tick,
-                p_now_ms,
-                repairing
-            );
-            header.distance
-                = repairing || beat ? 0 : stream->distance_for(header.revision);
-            header.tick = offer.tick;
-            header.reconcile_ack = offer.ack;
-            const wire::CodeRow *baseline
-                = header.absolute() ? nullptr : stream->confirmed();
-            header.mask = header.absolute()
-                ? lane->plan().full_mask()
-                : wire::CodeRow::changed_mask(lane->plan(), *baseline, row);
-            RowSend send;
-            send.route = offer.route;
-            send.comp = offer.comp;
-            send.peer = peer;
-            send.offer = at;
-            send.mask = header.mask;
-            send.token = token;
-            send.revision = header.revision;
-            send.masked = !header.absolute();
-            send.row = row;
-            send.bytes = write_snapshot_row(
-                header,
-                p_base_tick,
-                lane->plan(),
-                row,
-                baseline
-            );
-            send.bytes = price(send, p_base_tick);
-            if (send.bytes.is_empty()) {
-                r_out.staged_out += 1;
-                note_verdict(
-                    offer.route,
-                    offer.comp,
-                    peer,
-                    RowVerdict::REFUSED,
-                    p_base_tick
-                );
-                continue;
-            }
-            send.bits = int64_t(send.bytes.size()) * 8;
-            staged.push_back(send);
-
-            wire::FitCandidate candidate;
-            candidate.channel_id = offer.channel;
-            candidate.peer = peer;
-            candidate.bytes = send.bytes.size();
-            candidate.payload_bits = send.bits;
-            candidate.priority = offer.priority;
-            candidate.accumulated_priority = owed_by(send, offer.priority);
-            candidate.send_id = int64_t(staged.size()) - 1;
-            r_candidates.push_back(candidate);
+    store::Table &table = world->table(p_table);
+    const store::PeerRows &rows = table.peers[p_peer];
+    const int id = world->peer_id(p_peer);
+    const wire::StreamLane lane = lane_at(table, p_row);
+    if (!stream_is(rows, p_row, store::Stream::NONE)
+        && !(rows.opened[p_row] == table.tenures[p_row])) {
+        uint64_t token = 0;
+        world->stream_close(id, lane, token);
+        if (token != 0) {
+            queue_close(id, token);
         }
     }
-    return staged;
+    if (stream_is(rows, p_row, store::Stream::READY)) {
+        return true;
+    }
+    const uint64_t request
+        = world->stream_open(id, lane, table.tenures[p_row]);
+    if (request != 0) {
+        queue_open(id, table, p_row, request);
+    }
+    return false;
 }
 
-uint64_t SessionSend::address_of(int64_t p_route, uint8_t p_comp) {
-    return (uint64_t(p_route) << 8) | uint64_t(p_comp);
-}
-
-uint64_t SessionSend::address_of(const RowSend &p_send) {
-    return address_of(p_send.route, p_send.comp);
-}
-
-void SessionSend::note_verdict(
-    int64_t p_route,
-    uint8_t p_comp,
-    int p_peer,
-    RowVerdict p_verdict,
-    int64_t p_tick
+bool SessionSend::classify(
+    uint32_t p_peer,
+    uint32_t p_table,
+    uint32_t p_row,
+    bool p_due,
+    int64_t p_now_ms,
+    RowForm &r_form,
+    SessionResult &r_out
 ) {
-    RowExplain &held = verdicts[p_peer][address_of(p_route, p_comp)];
-    held.verdict = p_verdict;
-    held.tick = p_tick;
+#if defined(NETW_TESTS)
+    rows_touched += 1;
+#endif
+    store::Table &table = world->table(p_table);
+    const uint8_t flags = table.flags[p_row];
+    if ((flags & store::Table::UNGATHERED) != 0) {
+        return false;
+    }
+    if ((flags & store::Table::UNENCODED) != 0) {
+        r_out.ungathered += 1;
+        return false;
+    }
+    if (!stream_seated(p_peer, p_table, p_row)) {
+        r_out.deferred += 1;
+        return false;
+    }
+    const store::PeerRows &rows = table.peers[p_peer];
+    if (table.family == store::Family::WINDOW) {
+        WindowRing *ring = lanes.open_window(
+            table.routes[p_row],
+            table.ordinals[p_row],
+            table.schema,
+            table.window
+        );
+        if (ring == nullptr || ring->held() == 0) {
+            r_out.caught_up += 1;
+            return false;
+        }
+        r_form = RowForm::WINDOW;
+        return true;
+    }
+    if (!rows.owed.get(p_row)) {
+        if (!p_due || rows.acked_rev[p_row] == 0) {
+            r_out.caught_up += 1;
+            return false;
+        }
+        r_form = RowForm::REFRESH;
+        return true;
+    }
+    const uint64_t exposed = rows.exposed_rev[p_row];
+    const store::Flight *newest = exposed > rows.acked_rev[p_row]
+        ? world->flight_of(p_peer, rows.token[p_row], exposed)
+        : nullptr;
+    if (newest == nullptr || !table.holds_image(p_row, newest->image)) {
+        r_form = RowForm::FRESH;
+        return true;
+    }
+    const int64_t wait = wire::repair_interval_ms(
+        int64_t(link.rtt_ms(world->peer_id(p_peer)))
+    );
+    if (p_now_ms - rows.repair_at[p_row] < wait) {
+        r_out.caught_up += 1;
+        return false;
+    }
+    r_form = RowForm::REPAIR;
+    return true;
 }
 
-void SessionSend::note_offer_verdict(
-    const RowOffer &p_offer,
-    RowVerdict p_verdict,
-    int64_t p_tick
+bool SessionSend::unfitted(
+    const wire::WireRegistry &p_registry,
+    const store::Table &p_table
+) const {
+    if (p_table.family == store::Family::RETAINED) {
+        return true;
+    }
+    const wire::ChannelDecl *decl = p_registry.find_channel(p_table.channel);
+    return decl != nullptr && decl->delivery == wire::Delivery::IMMEDIATE;
+}
+
+void SessionSend::record_windows(int64_t p_base_tick) {
+    NETW_ZONE_NC("Record windows", colors::WIRE);
+    for (uint32_t index = 0; index < world->table_count(); ++index) {
+        store::Table &table = world->table(index);
+        if (table.family != store::Family::WINDOW) {
+            continue;
+        }
+        for (uint32_t row = 0; row < table.row_count(); ++row) {
+            if (table.routes[row] <= 0
+                || table.sources[row] != uint8_t(store::Source::LOCAL)
+                || (table.flags[row]
+                    & (store::Table::UNGATHERED | store::Table::UNENCODED))
+                    != 0) {
+                continue;
+            }
+            bool reaches = false;
+            for (uint32_t peer = 0; peer < table.peers.size() && !reaches;
+                 ++peer) {
+                reaches = world->peer_joined(peer)
+                    && table.peers[peer].sendable.get(row);
+            }
+            if (!reaches) {
+                continue;
+            }
+            world->stamp(index, row);
+            WindowRing *ring = lanes.open_window(
+                table.routes[row],
+                table.ordinals[row],
+                table.schema,
+                table.window
+            );
+            if (ring == nullptr || !ring->valid()) {
+                continue;
+            }
+            image.assign(
+                ring->plan(),
+                table.codes_of(row),
+                table.carried_of(row)
+            );
+            const int64_t tick = table.frame_ticks[row] >= 0
+                ? table.frame_ticks[row]
+                : p_base_tick;
+            ring->record(tick, image);
+        }
+    }
+}
+
+bool SessionSend::encode(
+    uint32_t p_peer,
+    uint32_t p_table,
+    uint32_t p_row,
+    RowForm p_form,
+    int64_t p_base_tick,
+    RowSend &r_send,
+    SessionResult &r_out
 ) {
-    for (uint32_t at = 0; at < p_offer.recipients.size(); ++at) {
-        note_verdict(
-            p_offer.route,
-            p_offer.comp,
-            p_offer.recipients[at],
-            p_verdict,
-            p_tick
+    world->stamp(p_table, p_row);
+    store::Table &table = world->table(p_table);
+    const store::PeerRows &rows = table.peers[p_peer];
+    const wire::WirePlan &plan = table.plan;
+    image.assign(plan, table.codes_of(p_row), table.carried_of(p_row));
+    r_send = RowSend();
+    r_send.route = table.routes[p_row];
+    r_send.comp = table.ordinals[p_row];
+    r_send.channel = table.channel;
+    r_send.peer = world->peer_id(p_peer);
+    r_send.table = p_table;
+    r_send.row = p_row;
+    r_send.form = p_form;
+    r_send.token = rows.token[p_row];
+    r_send.reliable = table.family == store::Family::RETAINED;
+    r_send.windowed = table.family == store::Family::WINDOW;
+
+    SnapshotHeader header;
+    header.token = r_send.token;
+    header.reconcile_ack = table.reconcile_acks[p_row];
+    header.tick = table.frame_ticks[p_row];
+    if (p_form == RowForm::WINDOW) {
+        WindowRing *ring = lanes.open_window(
+            table.routes[p_row],
+            table.ordinals[p_row],
+            table.schema,
+            table.window
+        );
+        const LocalVector<WindowSample> samples = ring->pending();
+        header.revision = rows.next_rev[p_row];
+        header.tick = -1;
+        r_send.revision = header.revision;
+        r_send.mask = ring->plan().full_mask();
+        r_send.whole = true;
+        r_send.sample_count = samples.size();
+        r_send.bytes = write_snapshot_window(
+            stream,
+            header,
+            p_base_tick,
+            ring->plan(),
+            samples
+        );
+    } else {
+        const store::Flight *pinned = p_form == RowForm::REPAIR
+            ? world->pinned_of(p_peer, rows.token[p_row])
+            : nullptr;
+        r_send.resend = pinned != nullptr
+            && table.holds_image(p_row, pinned->image);
+        header.revision
+            = r_send.resend ? pinned->revision : rows.next_rev[p_row];
+        const uint64_t acked = rows.acked_rev[p_row];
+        const uint64_t span = header.revision - acked;
+        const bool deltas
+            = p_form == RowForm::FRESH || p_form == RowForm::REFRESH;
+        header.distance = deltas && acked != 0
+                && header.revision > acked
+                && span <= wire::SNAPSHOT_DELTA_SPAN
+            ? span
+            : 0;
+        if (!header.absolute()) {
+            baseline.assign(
+                plan,
+                rows.baseline.ptr() + uint64_t(p_row) * table.words,
+                table.carried != 0 ? rows.baseline_carried.ptr()
+                        + uint64_t(p_row) * table.carried
+                                   : nullptr
+            );
+        }
+        header.mask = header.absolute()
+            ? plan.full_mask()
+            : wire::CodeRow::changed_mask(plan, baseline, image);
+        r_send.revision = header.revision;
+        r_send.mask = header.mask;
+        r_send.masked = !header.absolute();
+        r_send.whole = header.mask == plan.full_mask();
+        r_send.bytes = write_snapshot_row(
+            stream,
+            header,
+            p_base_tick,
+            plan,
+            image,
+            header.absolute() ? nullptr : &baseline
+        );
+    }
+    if (r_send.bytes.is_empty()) {
+        r_out.staged_out += 1;
+        return false;
+    }
+    r_send.bytes = price(r_send, p_base_tick);
+    if (r_send.bytes.is_empty()) {
+        r_out.staged_out += 1;
+        return false;
+    }
+    r_send.bits = int64_t(r_send.bytes.size()) * 8;
+    r_send.framed = wire::frame_size(r_send.route, r_send.bytes.size());
+    return true;
+}
+
+void SessionSend::commit_send(
+    uint32_t p_peer,
+    const RowSend &p_send,
+    int64_t p_base_tick,
+    int64_t p_now_ms
+) {
+    store::Table &table = world->table(p_send.table);
+    store::PeerRows &rows = table.peers[p_peer];
+    const store::RowAddress at{p_send.table, p_send.row};
+    if (!p_send.resend) {
+        image.assign(
+            table.plan,
+            table.codes_of(p_send.row),
+            table.carried_of(p_send.row)
+        );
+        world->mint(at, p_peer, image, p_send.form == RowForm::REPAIR);
+    }
+    rows.repair_at[p_send.row] = p_now_ms;
+    rows.acc[p_send.row] = 0.0f;
+    if (p_send.form == RowForm::REPAIR) {
+        return;
+    }
+    rows.last_sent[p_send.row] = p_base_tick;
+    rows.due.set(p_send.row, false);
+    world->arm_refresh(
+        at,
+        p_peer,
+        table.heartbeat > 0 ? p_base_tick + table.heartbeat : -1
+    );
+}
+
+void SessionSend::pass_peer(
+    const wire::WireRegistry &p_registry,
+    uint32_t p_peer,
+    int64_t p_max_bits,
+    int64_t p_base_tick,
+    int64_t p_now_ms,
+    SessionResult &r_out
+) {
+    const int id = world->peer_id(p_peer);
+    NETW_ZONE_NC("Send to peer", colors::WIRE);
+    NETW_ZONE_TEXT_F("peer %d", id);
+    candidates.clear();
+    PeerAccount &account = refill(id, p_max_bits, p_base_tick);
+    const int64_t bytes_before = account.sent_bytes;
+    const uint32_t rows_before = r_out.sends.size();
+    if (NETW_PROFILE_CONNECTED()) {
+        int64_t owed = 0;
+        for (uint32_t index = 0; index < world->table_count(); ++index) {
+            const store::Table &table = world->table(index);
+            if (p_peer < table.peers.size()) {
+                owed += table.peers[p_peer].owed.population();
+            }
+        }
+        NETW_PLOT(
+            profile::plot_name(
+                profile::names::ROWS_OWED,
+                id,
+                profile::PlotFormat::NUMBER,
+                colors::WIRE
+            ),
+            owed
+        );
+        NETW_PLOT(
+            profile::plot_name(
+                profile::names::BYTE_BUDGET,
+                id,
+                profile::PlotFormat::MEMORY,
+                colors::TRANSPORT
+            ),
+            account.balance
+        );
+    }
+    uint32_t order = 0;
+    {
+        NETW_ZONE_NC("Send gather", colors::WIRE);
+        world->come_due(p_peer, p_base_tick);
+        const auto consider = [&](uint32_t p_table,
+                                  uint32_t p_row,
+                                  bool p_due) {
+            NETW_ZONE_LEAF_F(
+                "Send consider row",
+                colors::WIRE,
+                profile::SUBSYSTEM_WIRE,
+                "entity %lld",
+                static_cast<long long>(world->table(p_table).routes[p_row])
+            );
+            RowForm form = RowForm::FRESH;
+            if (!classify(
+                    p_peer,
+                    p_table,
+                    p_row,
+                    p_due,
+                    p_now_ms,
+                    form,
+                    r_out
+                )) {
+                return;
+            }
+            store::Table &table = world->table(p_table);
+            if (unfitted(p_registry, table)) {
+                RowSend send;
+                if (!encode(
+                        p_peer,
+                        p_table,
+                        p_row,
+                        form,
+                        p_base_tick,
+                        send,
+                        r_out
+                    )) {
+                    return;
+                }
+                commit_send(p_peer, send, p_base_tick, p_now_ms);
+                account.balance -= double(send.framed);
+                account.sent_bytes += send.framed;
+                r_out.sends.push_back(send);
+                return;
+            }
+            store::PeerRows &rows = table.peers[p_peer];
+            rows.acc[p_row] += store::importance(
+                *world,
+                table,
+                p_row,
+                p_base_tick,
+                form == RowForm::REFRESH
+            );
+            Candidate made;
+            made.table = p_table;
+            made.row = p_row;
+            made.order = order++;
+            made.acc = rows.acc[p_row];
+            made.form = form;
+            candidates.push_back(made);
+        };
+        for (uint32_t index = 0; index < world->table_count(); ++index) {
+            store::Table &table = world->table(index);
+            if (p_peer >= table.peers.size()) {
+                continue;
+            }
+            const store::PeerRows &rows = table.peers[p_peer];
+            const bool window = table.family == store::Family::WINDOW;
+            for (uint32_t word = 0; word < rows.sendable.words.size(); ++word) {
+                uint64_t bits = rows.sendable.words[word]
+                    & (window ? ~uint64_t(0) : rows.owed.words[word]);
+                while (bits != 0) {
+                    const uint32_t row = word * 64 + store::Bits::lowest(bits);
+                    bits &= bits - 1;
+                    consider(index, row, rows.due.get(row));
+                }
+            }
+        }
+        const LocalVector<uint64_t> &due = world->due_lanes(p_peer);
+        for (uint32_t at = 0; at < due.size(); ++at) {
+            const store::RowAddress row = world->lane_row(due[at]);
+            if (!row.valid()) {
+                continue;
+            }
+            store::Table &table = world->table(row.table);
+            store::PeerRows &rows = table.peers[p_peer];
+            if (rows.refresh_at[row.row] < 0 || !rows.sendable.get(row.row)) {
+                rows.due.set(row.row, false);
+                continue;
+            }
+            if (rows.owed.get(row.row)
+                || table.family == store::Family::WINDOW) {
+                continue;
+            }
+            consider(row.table, row.row, true);
+        }
+        offer_nodeless(p_peer, id, p_base_tick, order);
+    }
+    {
+        NETW_ZONE_NC("Send sort", colors::WIRE);
+        std::stable_sort(
+            candidates.ptr(),
+            candidates.ptr() + candidates.size(),
+            [](const Candidate &p_left, const Candidate &p_right) {
+                const bool left_refresh = p_left.form == RowForm::REFRESH;
+                const bool right_refresh = p_right.form == RowForm::REFRESH;
+                if (left_refresh != right_refresh) {
+                    return right_refresh;
+                }
+                return p_left.acc > p_right.acc;
+            }
+        );
+    }
+    {
+        NETW_ZONE_NC("Send encode", colors::WIRE);
+        account.deferred = 0;
+        const int64_t datagram = p_max_bits / 8;
+        int64_t room = datagram;
+        uint32_t misses = 0;
+        for (uint32_t at = 0; at < candidates.size(); ++at) {
+            const Candidate &held = candidates[at];
+            if (account.balance <= 0.0 || misses >= MISSES_PER_TICK) {
+                r_out.deferred += 1;
+                account.deferred += 1;
+                continue;
+            }
+            if (held.nodeless) {
+                if (!take_nodeless(held, id, account)) {
+                    misses += 1;
+                    r_out.deferred += 1;
+                    account.deferred += 1;
+                }
+                continue;
+            }
+            NETW_ZONE_LEAF_F(
+                "Send encode row",
+                colors::WIRE,
+                profile::SUBSYSTEM_WIRE,
+                "entity %lld",
+                static_cast<long long>(
+                    world->table(held.table).routes[held.row]
+                )
+            );
+            RowSend send;
+            if (!encode(
+                    p_peer,
+                    held.table,
+                    held.row,
+                    held.form,
+                    p_base_tick,
+                    send,
+                    r_out
+                )) {
+                continue;
+            }
+            const bool opens = send.framed > room && room < datagram
+                && account.balance >= double(datagram);
+            if (double(send.framed) > account.balance
+                || (send.framed > room && room < datagram && !opens)) {
+                misses += 1;
+                r_out.deferred += 1;
+                account.deferred += 1;
+                continue;
+            }
+            if (opens) {
+                room = datagram;
+            }
+            commit_send(p_peer, send, p_base_tick, p_now_ms);
+            room -= send.framed;
+            account.balance -= double(send.framed);
+            account.sent_bytes += send.framed;
+            r_out.sent_bits += send.bits;
+            r_out.sends.push_back(send);
+        }
+        emit_nodeless(id, p_max_bits, account, r_out);
+    }
+    world->settle_due(p_peer);
+    if (NETW_PROFILE_CONNECTED()) {
+        NETW_PLOT(
+            profile::plot_name(
+                profile::names::ROWS_SENT,
+                id,
+                profile::PlotFormat::NUMBER,
+                colors::WIRE
+            ),
+            int64_t(r_out.sends.size() - rows_before)
+        );
+        NETW_PLOT(
+            profile::plot_name(
+                profile::names::BYTES_SENT,
+                id,
+                profile::PlotFormat::MEMORY,
+                colors::TRANSPORT
+            ),
+            account.sent_bytes - bytes_before
         );
     }
 }
 
-RowExplain SessionSend::explain(
-    int64_t p_route,
-    uint8_t p_comp,
-    int p_peer
-) const {
-    RowExplain out;
-    const godot::HashMap<uint64_t, RowExplain> *book = verdicts.getptr(p_peer);
-    if (book != nullptr) {
-        const RowExplain *held = book->getptr(address_of(p_route, p_comp));
-        if (held != nullptr) {
-            out = *held;
-        }
+void SessionSend::offer_nodeless(
+    uint32_t p_index,
+    int p_peer,
+    int64_t p_tick,
+    uint32_t &r_order
+) {
+    store::Arrays &arrays = world->arrays;
+    if (table_picks.size() < arrays.table_count()) {
+        table_picks.resize(arrays.table_count());
     }
-    const wire::StreamFamily families[3] = {
-        wire::StreamFamily::VOLATILE,
-        wire::StreamFamily::RETAINED,
-        wire::StreamFamily::WINDOW,
-    };
-    for (uint32_t family = 0; family < 3; ++family) {
-        wire::StreamLane named;
-        named.route = p_route;
-        named.ordinal = p_comp;
-        named.family = families[family];
-        const wire::SnapshotSender *stream
-            = const_cast<wire::StreamWriterBook &>(writers).sender(
-                p_peer,
-                named
-            );
-        if (stream == nullptr) {
+    for (uint32_t index = 0; index < arrays.table_count(); ++index) {
+        table_picks[index].clear();
+    }
+    if (!tables_published) {
+        return;
+    }
+    for (uint32_t index = 0; index < arrays.table_count(); ++index) {
+        store::ArrayTable &held = arrays.table_at(index);
+        if (held.tick < 0 || held.row_count() == 0
+            || arrays.wire_id(held.rid) == 0) {
             continue;
         }
-        out.confirmed = stream->confirmed_at();
-        out.exposed = stream->exposed_high_water();
-        out.has_baseline = stream->confirmed() != nullptr;
-        break;
+        store::ArrayPeer &peer = arrays.peer_of(held, p_peer);
+        const auto offer = [&](uint32_t p_row, RowForm p_form) {
+            const uint32_t slot = held.slots[p_row];
+            if (slot != store::Table::NO_SLOT
+                && !world->reaches(slot, p_index)) {
+                return;
+            }
+            const int64_t changed = held.changed_ticks[p_row];
+            const bool moving = p_form != RowForm::REFRESH && changed >= 0
+                && p_tick - changed < store::MOVING_TICKS;
+            peer.acc[p_row] += store::class_weight(
+                moving ? store::RowClass::MOVING : store::RowClass::RESTING
+            );
+            Candidate made;
+            made.table = index;
+            made.row = p_row;
+            made.order = r_order++;
+            made.acc = peer.acc[p_row];
+            made.form = p_form;
+            made.nodeless = true;
+            candidates.push_back(made);
+        };
+        for (uint32_t word = 0; word < peer.owed.words.size(); ++word) {
+            uint64_t bits = peer.owed.words[word];
+            while (bits != 0) {
+                offer(word * 64 + store::Bits::lowest(bits), RowForm::FRESH);
+                bits &= bits - 1;
+            }
+        }
+        if (!held.dirty) {
+            continue;
+        }
+        arrays.refresh_rows(held, peer, refreshed);
+        for (const uint32_t row : refreshed) {
+            offer(row, RowForm::REFRESH);
+        }
     }
-    return out;
 }
 
-void SessionSend::expose_send(const RowSend &p_send) {
-    wire::SnapshotSender *stream
-        = writers.sender_of_token(p_send.peer, p_send.token);
-    if (stream != nullptr) {
-        stream->expose(p_send.revision, p_send.row);
+bool SessionSend::take_nodeless(
+    const Candidate &p_held,
+    int p_peer,
+    PeerAccount &r_account
+) {
+    (void)p_peer;
+    store::Arrays &arrays = world->arrays;
+    const store::ArrayTable &held = arrays.table_at(p_held.table);
+    LocalVector<uint32_t> &picks = table_picks[p_held.table];
+    const int64_t price = (held.row_bits + 7) / 8
+        + (picks.is_empty() ? arrays.frame_head_bytes() : 0);
+    if (double(price) > r_account.balance) {
+        return false;
+    }
+    picks.push_back(p_held.row);
+    r_account.balance -= double(price);
+    r_account.sent_bytes += price;
+    return true;
+}
+
+void SessionSend::emit_nodeless(
+    int p_peer,
+    int64_t p_max_bits,
+    PeerAccount &r_account,
+    SessionResult &r_out
+) {
+    store::Arrays &arrays = world->arrays;
+    if (!tables_published) {
+        return;
+    }
+    const uint32_t count = MIN(table_picks.size(), arrays.table_count());
+    for (uint32_t index = 0; index < count; ++index) {
+        store::ArrayTable &held = arrays.table_at(index);
+        LocalVector<uint32_t> &picks = table_picks[index];
+        if ((picks.is_empty() && !held.dirty) || held.tick < 0
+            || held.row_count() == 0 || arrays.wire_id(held.rid) == 0) {
+            continue;
+        }
+        const int64_t charged = picks.is_empty()
+            ? 0
+            : int64_t(picks.size()) * ((held.row_bits + 7) / 8)
+                + arrays.frame_head_bytes();
+        picks.sort();
+        TypedArray<PackedByteArray> frames;
+        arrays.encode_picked(
+            held,
+            arrays.peer_of(held, p_peer),
+            picks,
+            int(p_max_bits / 8),
+            frames
+        );
+        int64_t actual = 0;
+        for (int at = 0; at < frames.size(); ++at) {
+            TableFrame made;
+            made.peer = p_peer;
+            made.reliable = held.reliable;
+            made.bytes = frames[at];
+            actual += made.bytes.size();
+            r_out.tables.push_back(made);
+        }
+        r_account.balance -= double(actual - charged);
+        r_account.sent_bytes += actual - charged;
+        picks.clear();
     }
 }
 
-float SessionSend::owed_by(const RowSend &p_send, float p_priority) const {
-    const godot::HashMap<uint64_t, float> *book = owed.getptr(p_send.peer);
-    if (book == nullptr) {
-        return p_priority;
+double SessionSend::configured_rate(int p_peer, int64_t p_max_bits) const {
+    const PeerAccount *held = accounts.getptr(p_peer);
+    if (held != nullptr && held->rate > 0.0) {
+        return held->rate;
     }
-    const float *held = book->getptr(address_of(p_send));
-    return held == nullptr ? p_priority : *held;
+    if (session_rate > 0.0) {
+        return session_rate;
+    }
+    return double(p_max_bits) / 8.0 * double(tickrate);
 }
 
-SessionResult SessionSend::run(
+PeerAccount &SessionSend::refill(
+    int p_peer,
+    int64_t p_max_bits,
+    int64_t p_tick
+) {
+    PeerAccount &held = accounts[p_peer];
+    held.fill = fill_of(p_peer, p_max_bits);
+    const int64_t elapsed = held.filled ? p_tick - held.filled_tick : 1;
+    held.balance += held.fill * double(elapsed > 1 ? elapsed : 1);
+    const double banked = held.fill * BANKED_TICKS;
+    if (held.balance > banked) {
+        held.balance = banked;
+    }
+    held.filled = true;
+    held.filled_tick = p_tick;
+    return held;
+}
+
+void SessionSend::set_peer_rate(int p_peer, double p_bytes_per_second) {
+    accounts[p_peer].rate = p_bytes_per_second;
+}
+
+void SessionSend::charge(int p_peer, int64_t p_bytes) {
+    PeerAccount &held = accounts[p_peer];
+    held.balance -= double(p_bytes);
+    held.sent_bytes += p_bytes;
+}
+
+const SessionResult &SessionSend::run(
     const wire::WireRegistry &p_registry,
-    const LocalVector<RowOffer> &p_offers,
     int64_t p_max_bits,
     int64_t p_base_tick,
     int64_t p_now_ms
 ) {
-    NETW_ZONE_NC("Session send", colors::WIRE);
-    NETW_ZONE_VALUE(p_offers.size());
-    SessionResult out;
+    SessionResult &out = result;
+    out.sends.clear();
+    out.ungathered = 0;
+    out.caught_up = 0;
+    out.deferred = 0;
+    out.staged_out = 0;
+    out.sent_bits = 0;
+    out.tables.clear();
     row_budget_bits = p_max_bits;
-    row_spent_bits.clear();
-
-    LocalVector<wire::FitCandidate> candidates;
-    LocalVector<RowSend> staged
-        = collect(p_offers, p_base_tick, p_now_ms, candidates, out);
-
-    LocalVector<int> peers;
-    LocalVector<int64_t> reliable_bits;
-    for (uint32_t at = 0; at < staged.size(); ++at) {
-        const RowSend &send = staged[at];
-        uint32_t slot = 0;
-        while (slot < peers.size() && peers[slot] != send.peer) {
-            ++slot;
-        }
-        if (slot == peers.size()) {
-            peers.push_back(send.peer);
-            reliable_bits.push_back(0);
-        }
-        if (send.reliable) {
-            reliable_bits[slot] += send.bits;
-            expose_send(send);
-            out.sends.push_back(send);
-        }
+    pass_tick = p_base_tick;
+    if (world == nullptr) {
+        return out;
     }
-
-    for (uint32_t slot = 0; slot < peers.size(); ++slot) {
-        const int peer = peers[slot];
-        row_spent_bits[peer] = reliable_bits[slot];
-        LocalVector<wire::FitCandidate> mine;
-        for (uint32_t at = 0; at < candidates.size(); ++at) {
-            if (candidates[at].peer == peer) {
-                mine.push_back(candidates[at]);
-            }
-        }
-        if (mine.is_empty()) {
-            continue;
-        }
-        const int64_t governed = link.budget_bits(peer, p_max_bits);
-        const int64_t floor
-            = governed < VOLATILE_FLOOR_BITS ? governed : VOLATILE_FLOOR_BITS;
-        const int64_t left = governed - reliable_bits[slot];
-        const int64_t volatile_bits = left > floor ? left : floor;
-        const PassResult fitted
-            = pass.run(p_registry, peer, mine, volatile_bits);
-        out.sent_bits += fitted.sent_bits;
-        row_spent_bits[peer] += fitted.sent_bits;
-        out.deferred += fitted.deferred.size();
-        for (uint32_t at = 0; at < fitted.sent.size(); ++at) {
-            const int64_t which = fitted.sent[at].send_id;
-            if (which < 0 || uint32_t(which) >= staged.size()) {
-                continue;
-            }
-            const RowSend &send = staged[uint32_t(which)];
-            godot::HashMap<uint64_t, float> *book = owed.getptr(peer);
-            if (book != nullptr) {
-                book->erase(address_of(send));
-            }
-            note_verdict(
-                send.route,
-                send.comp,
+    record_windows(p_base_tick);
+    for (uint32_t peer = 0; peer < world->peer_capacity(); ++peer) {
+        if (world->peer_joined(peer)) {
+            pass_peer(
+                p_registry,
                 peer,
-                RowVerdict::SENT,
-                p_base_tick
-            );
-            out.sends.push_back(send);
-        }
-        for (uint32_t at = 0; at < fitted.deferred.size(); ++at) {
-            const int64_t which = fitted.deferred[at].send_id;
-            if (which < 0 || uint32_t(which) >= staged.size()) {
-                continue;
-            }
-            const RowSend &send = staged[uint32_t(which)];
-            owed[peer][address_of(send)]
-                = fitted.deferred[at].accumulated_priority;
-            note_verdict(
-                send.route,
-                send.comp,
-                peer,
-                RowVerdict::DEFERRED,
-                p_base_tick
+                p_max_bits,
+                p_base_tick,
+                p_now_ms,
+                out
             );
         }
     }
@@ -739,10 +901,13 @@ int64_t SessionSend::control_budget_bytes(
     int p_peer,
     int64_t p_reserved_bytes
 ) const {
-    const int64_t *spent = row_spent_bits.getptr(p_peer);
-    const int64_t spare_bytes = (link.budget_bits(p_peer, row_budget_bits)
-                                 - (spent != nullptr ? *spent : 0))
-        / 8;
+    const PeerAccount *held = accounts.getptr(p_peer);
+    const int64_t spare_bytes = held != nullptr
+        ? int64_t(held->balance)
+        : int64_t(
+              configured_rate(p_peer, row_budget_bits)
+              * double(link.share(p_peer)) / double(tickrate)
+          );
     return spare_bytes > p_reserved_bytes ? spare_bytes : p_reserved_bytes;
 }
 
@@ -756,8 +921,6 @@ bool SessionSend::describe(const RowSend &p_send, CarrierRow &r_row) {
     r_row.token = p_send.token;
     r_row.revision = p_send.revision;
     r_row.masked = p_send.masked;
-    r_row.row.copy_from(p_send.row);
-    expose_send(p_send);
     return true;
 }
 
@@ -776,58 +939,91 @@ void SessionSend::cancel(
     const LocalVector<CarrierRow> &p_rows,
     int64_t p_tick
 ) {
+    if (world == nullptr) {
+        return;
+    }
     for (uint32_t at = 0; at < p_rows.size(); ++at) {
-        wire::SnapshotSender *stream
-            = writers.sender_of_token(p_peer, p_rows[at].token);
-        if (stream != nullptr) {
-            stream->withdraw(p_rows[at].revision);
-        }
-        note_verdict(
-            p_rows[at].route,
-            p_rows[at].comp,
-            p_peer,
-            RowVerdict::REFUSED,
-            p_tick
-        );
+        world->stream_withdrawn(p_peer, p_rows[at].token, p_rows[at].revision);
     }
 }
 
+RowExplain SessionSend::explain(
+    int64_t p_route,
+    uint8_t p_comp,
+    int p_peer
+) const {
+    RowExplain out;
+    if (world == nullptr) {
+        return out;
+    }
+    const uint32_t peer = world->peer_of(p_peer);
+    if (peer == store::Table::NO_SLOT) {
+        return out;
+    }
+    const wire::StreamFamily families[3] = {
+        wire::StreamFamily::VOLATILE,
+        wire::StreamFamily::RETAINED,
+        wire::StreamFamily::WINDOW,
+    };
+    for (uint32_t family = 0; family < 3; ++family) {
+        wire::StreamLane named;
+        named.route = p_route;
+        named.ordinal = p_comp;
+        named.family = families[family];
+        const store::RowAddress at = world->lane_row(named);
+        if (!at.valid()) {
+            continue;
+        }
+        const store::Table &table = world->table(at.table);
+        const store::PeerRows &rows = table.peers[peer];
+        out.tick = rows.last_sent[at.row];
+        out.confirmed = rows.acked_rev[at.row];
+        out.exposed = rows.exposed_rev[at.row];
+        out.has_baseline = rows.acked_rev[at.row] != 0;
+        out.priority = rows.acc[at.row];
+        out.row_class = store::class_name(store::row_class(
+            *world,
+            table,
+            at.row,
+            pass_tick,
+            rows.due.get(at.row) && !rows.owed.get(at.row)
+        ));
+        out.age_ticks = rows.last_sent[at.row] >= 0 && pass_tick >= 0
+            ? pass_tick - rows.last_sent[at.row]
+            : -1;
+        if (!rows.sendable.get(at.row)) {
+            out.verdict = RowVerdict::UNOFFERED;
+        } else if ((table.flags[at.row] & store::Table::UNENCODED) != 0) {
+            out.verdict = RowVerdict::UNGATHERED;
+        } else if (pass_tick >= 0 && rows.last_sent[at.row] == pass_tick
+                   && rows.owed.get(at.row) && rows.acc[at.row] == 0.0f) {
+            out.verdict = RowVerdict::SENT;
+        } else if (rows.owed.get(at.row) || rows.due.get(at.row)) {
+            out.verdict = RowVerdict::DEFERRED;
+        } else {
+            out.verdict = RowVerdict::CAUGHT_UP;
+        }
+        break;
+    }
+    return out;
+}
+
 void SessionSend::forget_peer(int p_peer) {
-    owed.erase(p_peer);
-    verdicts.erase(p_peer);
     link.forget(p_peer);
     pass.forget(p_peer);
     readers.forget_peer(p_peer);
-    writers.forget_peer(p_peer);
     control.forget_peer(p_peer);
+    accounts.erase(p_peer);
+    if (world != nullptr) {
+        world->peer_leave(p_peer);
+    }
 }
 
 void SessionSend::close_route(int64_t p_route) {
     lanes.close_route(p_route);
     readers.close_route(p_route);
-    writers.close_route(p_route);
-    for (godot::KeyValue<int, godot::HashMap<uint64_t, float>> &book : owed) {
-        LocalVector<uint64_t> gone;
-        for (const godot::KeyValue<uint64_t, float> &row : book.value) {
-            if (int64_t(row.key >> 8) == p_route) {
-                gone.push_back(row.key);
-            }
-        }
-        for (uint32_t at = 0; at < gone.size(); ++at) {
-            book.value.erase(gone[at]);
-        }
-    }
-    for (godot::KeyValue<int, godot::HashMap<uint64_t, RowExplain>> &book :
-         verdicts) {
-        LocalVector<uint64_t> gone;
-        for (const godot::KeyValue<uint64_t, RowExplain> &row : book.value) {
-            if (int64_t(row.key >> 8) == p_route) {
-                gone.push_back(row.key);
-            }
-        }
-        for (uint32_t at = 0; at < gone.size(); ++at) {
-            book.value.erase(gone[at]);
-        }
+    if (world != nullptr) {
+        world->route_closed(p_route);
     }
 }
 
@@ -837,7 +1033,7 @@ AckReport SessionSend::acknowledge(
     uint32_t p_history,
     double p_rtt_ms,
     double p_jitter_ms,
-    int64_t p_tick
+    int64_t p_now_ms
 ) {
     LocalVector<wire::AckEntry> delivered;
     LocalVector<wire::AckEntry> lost;
@@ -848,7 +1044,7 @@ AckReport SessionSend::acknowledge(
         lost.size(),
         p_rtt_ms,
         p_jitter_ms,
-        p_tick
+        p_now_ms
     );
 
     AckReport report;
@@ -860,76 +1056,13 @@ AckReport SessionSend::acknowledge(
     return report;
 }
 
-LocalVector<int> SessionSend::known_peers() const {
-    LocalVector<int> known;
-    for (const godot::KeyValue<int, godot::HashMap<uint64_t, float>> &book :
-         owed) {
-        known.push_back(book.key);
+void SessionSend::hide(int p_peer, const wire::StreamLane &p_lane) {
+    if (world == nullptr) {
+        return;
     }
-    for (const godot::KeyValue<int, godot::HashMap<uint64_t, RowExplain>>
-             &seen : verdicts) {
-        bool counted = false;
-        for (uint32_t at = 0; at < known.size(); ++at) {
-            counted = counted || known[at] == seen.key;
-        }
-        if (!counted) {
-            known.push_back(seen.key);
-        }
-    }
-    return known;
-}
-
-void SessionSend::retain_row(
-    int64_t p_route,
-    uint8_t p_comp,
-    const LocalVector<int> &p_recipients
-) {
-    const LocalVector<int> known = known_peers();
-    for (uint32_t which = 0; which < known.size(); ++which) {
-        bool kept = false;
-        for (uint32_t at = 0; at < p_recipients.size(); ++at) {
-            kept = kept || p_recipients[at] == known[which];
-        }
-        if (kept) {
-            continue;
-        }
-        const wire::StreamFamily families[3] = {
-            wire::StreamFamily::VOLATILE,
-            wire::StreamFamily::RETAINED,
-            wire::StreamFamily::WINDOW,
-        };
-        for (uint32_t family = 0; family < 3; ++family) {
-            wire::StreamLane lane;
-            lane.route = p_route;
-            lane.ordinal = p_comp;
-            lane.family = families[family];
-            uint64_t token = 0;
-            writers.close(known[which], lane, token);
-            control.drop_token(known[which], token);
-        }
-    }
-}
-
-void SessionSend::retain(const LocalVector<int> &p_recipients) {
-    const LocalVector<int> known = known_peers();
-    LocalVector<int> forgotten;
-    for (uint32_t which = 0; which < known.size(); ++which) {
-        bool kept = false;
-        for (uint32_t at = 0; at < p_recipients.size(); ++at) {
-            kept = kept || p_recipients[at] == known[which];
-        }
-        if (!kept) {
-            forgotten.push_back(known[which]);
-        }
-    }
-    for (uint32_t at = 0; at < forgotten.size(); ++at) {
-        owed.erase(forgotten[at]);
-        verdicts.erase(forgotten[at]);
-        link.forget(forgotten[at]);
-        pass.forget(forgotten[at]);
-        readers.forget_peer(forgotten[at]);
-        writers.forget_peer(forgotten[at]);
-        control.forget_peer(forgotten[at]);
+    const uint64_t token = world->token_of(p_peer, p_lane);
+    if (world->stream_hide(p_peer, p_lane) && token != 0) {
+        control.drop_token(p_peer, token);
     }
 }
 

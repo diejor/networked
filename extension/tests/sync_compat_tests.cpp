@@ -78,11 +78,11 @@ struct Stand {
         return int64_t(compat->counters()[StringName(p_key)]);
     }
 
-    PackedByteArray sync_payload(
+    static PackedByteArray sync_payload(
         int64_t p_ordinal,
         int64_t p_flags,
         const Array &p_values
-    ) const {
+    ) {
         netw::wire::WriteStream stream;
         sync_kernel::VolatileHead head;
         head.ordinal = uint64_t(p_ordinal);
@@ -359,6 +359,101 @@ TEST_CASE(
 
     NETW_CHECK_EQ(stand.counter("drops_sync_poisoned"), int64_t(1));
     NETW_CHECK_EQ(stand.counter("sync_frames_in"), int64_t(0));
+}
+
+TEST_CASE(
+    "[Networked][Sync][Hosted] a join of many consumed synchronizers looks up "
+    "each row a bounded number of times, so the join grows linearly"
+) {
+    const int COUNT = 64;
+    const int64_t FIRST_ROUTE = 100;
+    Ref<NetwMultiplayer> core;
+    core.instantiate();
+    NetwSyncModel model;
+    SyncCompat *compat = core->get_replication_plane()->get_sync_compat();
+    compat->set_sync_model(&model);
+    Ref<SceneReplicationConfig> config;
+    config.instantiate();
+    const NodePath field(".:editor_description");
+    config->add_property(field);
+    config->property_set_replication_mode(
+        field,
+        SceneReplicationConfig::REPLICATION_MODE_ALWAYS
+    );
+
+    LocalVector<Node *> roots;
+    LocalVector<MultiplayerSynchronizer *> syncs;
+    LocalVector<Ref<NetwEntity>> entities;
+    for (int at = 0; at < COUNT; ++at) {
+        Node *root = memnew(Node);
+        MultiplayerSynchronizer *sync = memnew(MultiplayerSynchronizer);
+        sync->set_name("Sync");
+        sync->set_root_path(NodePath(".."));
+        sync->set_replication_config(config);
+        root->add_child(sync);
+        entities.push_back(NetwEntity::ensure(root));
+        compat->consume(root, sync);
+        roots.push_back(root);
+        syncs.push_back(sync);
+    }
+
+    Array one;
+    one.push_back(String("joined"));
+    const PackedByteArray payload = Stand::sync_payload(0, 0, one);
+    for (int at = 0; at < COUNT; ++at) {
+        core->liveness_bind_route(FIRST_ROUTE + at, entities[at].ptr());
+        core->emit_signal(
+            StringName("entity_live"),
+            FIRST_ROUTE + at,
+            entities[at]
+        );
+        compat->handle_sync(entities[at], payload, 1);
+    }
+    NETW_CHECK_EQ(
+        int64_t(compat->counters()[StringName("sync_frames_in")]),
+        int64_t(COUNT)
+    );
+    NETW_CHECK_LE(compat->get_rows_examined(), int64_t(4 * COUNT));
+
+    for (int at = 0; at < COUNT; ++at) {
+        compat->consume_remove(roots[at], syncs[at]);
+    }
+    NETW_CHECK_EQ(
+        int64_t(compat->counters()[StringName("sync_sets_active")]),
+        int64_t(0)
+    );
+    NETW_CHECK_LE(compat->get_rows_examined(), int64_t(6 * COUNT));
+
+    for (int at = 0; at < COUNT; ++at) {
+        entities[at].unref();
+        memdelete(roots[at]);
+    }
+}
+
+bool minted(const Ref<NetwEntity> &p_entity, int64_t p_part) {
+    return Ref<RefCounted>(p_entity->get_record()->minted_part(p_part))
+        .is_valid();
+}
+
+TEST_CASE(
+    "[Networked][Sync][Hosted] a consumed synchronizer that declares no "
+    "Networked key mints no prediction, simulation or display handle"
+) {
+    using netw::NetwEntityRecord;
+    Stand plain;
+    plain.declare("name", SceneReplicationConfig::REPLICATION_MODE_ALWAYS);
+    plain.arm();
+    CHECK_FALSE(minted(plain.entity, NetwEntityRecord::PART_PREDICTION));
+    CHECK_FALSE(minted(plain.entity, NetwEntityRecord::PART_SIMULATION));
+    CHECK_FALSE(minted(plain.entity, NetwEntityRecord::PART_DISPLAY));
+
+    Stand keyed;
+    keyed.declare("name", SceneReplicationConfig::REPLICATION_MODE_ALWAYS);
+    keyed.sync->set_meta(StringName("netw_max_consume_per_tick"), 3);
+    keyed.sync->set_meta(StringName("netw_live_smooth_time"), 0.25);
+    keyed.arm();
+    CHECK(minted(keyed.entity, NetwEntityRecord::PART_PREDICTION));
+    CHECK(minted(keyed.entity, NetwEntityRecord::PART_DISPLAY));
 }
 
 } // namespace TestSyncCompat

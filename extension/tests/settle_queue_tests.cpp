@@ -237,9 +237,6 @@ TEST_CASE("[Networked][Settle][Hosted] an open window is not a cycle") {
 
     const PackedStringArray pending = queue.drain();
 
-    // The drain reached a fixed point: the held row is waiting rather than
-    // failing to settle, so reporting it would name a cycle that is not one,
-    // and dropping it would cancel a window nobody closed.
     NETW_CHECK_EQ(pending.size(), 0);
     NETW_CHECK_EQ(log.count("now"), 1);
     NETW_CHECK_EQ(queue.has(StringName("later")), true);

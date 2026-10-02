@@ -63,21 +63,19 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][LagComp][Timeline] the store a slot samples is the store the "
-    "prediction plane reads"
+    "[Networked][LagComp][Timeline] the book a slot samples is the book its "
+    "trim floors"
 ) {
     NetwLagCompCore history;
     const int64_t slot = history.timeline_open(8);
     history.timeline_record(slot, 10, at(1.0));
     history.timeline_record(slot, 14, at(2.0));
 
-    REQUIRE(history.timeline_history(slot).is_valid());
-    NETW_CHECK_EQ(
-        x_of(history.timeline_history(slot)->latest_state_at_or_before(13)),
-        1.0
-    );
-    history.timeline_history(slot)->trim_before(14);
+    REQUIRE(history.book_of(slot) != nullptr);
+    NETW_CHECK_EQ(history.book_of(slot)->sample_tick(13), 10);
+    history.timeline_trim_before(slot, 14);
     CHECK(history.timeline_sample(slot, 13).is_empty());
+    NETW_CHECK_EQ(history.book_of(slot)->floor(), 14);
 }
 
 TEST_CASE(
@@ -305,10 +303,9 @@ TEST_CASE(
     history.timeline_record(seat, 10, at(1.0));
     NETW_CHECK_EQ(x_of(history.timeline_sample(seat, 10)), 1.0);
 
-    const Dictionary seated = history.timeline_entities();
-    NETW_CHECK_EQ(int64_t(seated.size()), int64_t(2));
-    CHECK(seated.has(first));
-    CHECK(seated[first] == history.timeline_history(seat));
+    CHECK(history.entity_at(seat) == first);
+    CHECK(history.entity_at(other) == second);
+    CHECK(history.book_of(seat) != history.book_of(other));
 }
 
 TEST_CASE(
@@ -365,22 +362,6 @@ TEST_CASE(
     history.timeline_unregister(seated);
     CHECK(history.timeline_sample_entity(seated, 10).is_empty());
     NETW_CHECK_EQ(x_of(history.timeline_sample_entity(other, 10)), 77.0);
-}
-
-TEST_CASE(
-    "[Networked][LagComp][Timeline] registering publishes the history onto the "
-    "entity, so a reader never has to know the slot"
-) {
-    NetwLagCompCore history;
-    Node2D *body = memnew(Node2D);
-    const Ref<NetwEntity> entity = NetwEntity::ensure(body);
-
-    const int64_t slot = history.timeline_register(entity, 8);
-
-    CHECK(entity->get_timeline() == Variant(history.timeline_history(slot)));
-
-    history.timeline_unregister(entity);
-    memdelete(body);
 }
 
 #endif

@@ -141,8 +141,8 @@ Ref<MultiplayerPeer> NetwLinkConditions::wrap_peer(
     if (!link_shaping_allowed()) {
         NETW_INFO(
             sys::TRANSPORT,
-            "lag simulation is authored but this build does not shape its "
-            "link, so the peer is installed unimpaired"
+            "Lag simulation is set, but this build does not simulate lag, so "
+            "the peer runs without it."
         );
         return p_base;
     }
@@ -151,7 +151,9 @@ Ref<MultiplayerPeer> NetwLinkConditions::wrap_peer(
     if (!ClassDB::class_exists(laggy_class)) {
         NETW_WARN(
             sys::TRANSPORT,
-            "lag simulation is enabled but LaggyMultiplayerPeer is missing"
+            "NetwLinkConditions.simulate_lag is on, but the class "
+            "LaggyMultiplayerPeer does not exist, so the link is not "
+            "impaired. Add LaggyMultiplayerPeer, or turn simulate_lag off."
         );
         return p_base;
     }
@@ -167,8 +169,8 @@ Ref<MultiplayerPeer> NetwLinkConditions::wrap_peer(
     if (!laggy->has_method(StringName("create"))) {
         NETW_WARN(
             sys::TRANSPORT,
-            "the installed LaggyMultiplayerPeer publishes no create(base), "
-            "so the peer is installed unimpaired"
+            "LaggyMultiplayerPeer has no create(base) method, so the link "
+            "is not impaired. Use a LaggyMultiplayerPeer that provides it."
         );
         return p_base;
     }

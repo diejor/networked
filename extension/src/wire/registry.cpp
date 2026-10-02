@@ -18,7 +18,8 @@ bool WireRegistry::register_channel(const ChannelDecl &decl) {
     if (decl.id == 0 && !decl.is_reserved) {
         NETW_WARN(
             sys::WIRE,
-            "Channel '%s' claims the reserved id 0 and was not registered.",
+            "Channel '%s' was not registered, because id 0 is reserved. "
+            "Give it another id.",
             godot::String(decl.name).utf8().get_data()
         );
         return false;
@@ -26,7 +27,8 @@ bool WireRegistry::register_channel(const ChannelDecl &decl) {
     NETW_WARN_COND(
         registered[decl.id] && channels[decl.id].name != decl.name,
         sys::WIRE,
-        "Channel id %d moves from '%s' to '%s'.",
+        "Channel id %d was registered as '%s' and now as '%s', and the last "
+        "one wins. Give each channel its own id.",
         int(decl.id),
         godot::String(channels[decl.id].name).utf8().get_data(),
         godot::String(decl.name).utf8().get_data()
@@ -613,7 +615,8 @@ WireRegistry WireRegistry::create_default() {
         NETW_WARN_COND(
             decl == nullptr,
             sys::WIRE,
-            "Channel '%s' batches on the tick flush but is not declared.",
+            "Built-in channel '%s' is marked for batching but is not "
+            "declared.",
             name
         );
         if (decl != nullptr) {
@@ -640,7 +643,7 @@ int64_t builtin_channel(const godot::StringName &name) {
         NETW_ERR_V(
             -1,
             sys::WIRE,
-            "The built-in channel table declares no channel named '%s'.",
+            "No built-in channel is named '%s'.",
             godot::String(name).utf8().get_data()
         );
     }

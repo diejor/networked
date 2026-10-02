@@ -1,4 +1,5 @@
 #include "support/loopback_rig.h"
+#include "support/predict_rows.h"
 
 #if defined(NETW_TIER_HOSTED)
 
@@ -8,7 +9,6 @@
 #include "netw/api/netw_multiplayer.hpp"
 #include "netw/api/predict.hpp"
 #include "netw/api/prediction_handle.hpp"
-#include "netw/api/timeline.hpp"
 #include "netw/lagcomp_core.hpp"
 #include "netw/predict/engine.hpp"
 #include "support/value_flow_stand.h"
@@ -26,7 +26,6 @@ using netw::NetwLagCompCore;
 using netw::NetwMultiplayer;
 using netw::NetwPredict;
 using netw::NetwPredictionEngine;
-using netw::NetwTimeline;
 
 const char *WIRED_ID = "wired_player";
 
@@ -61,23 +60,16 @@ Ref<NetwEntity> seat_player(LoopbackRig &p_rig, Node *p_parent) {
     return NetwEntity::of(node);
 }
 
-Ref<NetwTimeline> registry_history(
-    NetwMultiplayer *p_core,
-    const Ref<NetwEntity> &p_entity
-) {
+int64_t rewind_slot(NetwMultiplayer *p_core, const Ref<NetwEntity> &p_entity) {
     NetwLagCompCore *registry = p_core->get_lagcomp_core();
     REQUIRE(registry != nullptr);
-    const int64_t seated
-        = registry->timeline_register(p_entity, NetwTimeline::DEFAULT_LIMIT);
-    REQUIRE(seated >= 0);
-    return registry->timeline_history(seated);
+    return registry->timeline_slot_of(p_entity);
 }
 
 TEST_CASE(
-    "[Networked][Predict][Law] TW1 a role that READS authority is "
-    "wired to the registry's own history, and a role that SPECULATES gets a "
-    "private one, so a consumer and the rewind server never disagree about "
-    "what authority recorded"
+    "[Networked][Predict][Law] TW1 a role that READS authority enrolls "
+    "the entity in the rewind registry and takes an input lane of its own, "
+    "and a role that SPECULATES takes a private lane and enrolls nothing"
 ) {
     LoopbackRig rig(1);
     rig.mount();
@@ -91,43 +83,46 @@ TEST_CASE(
     REQUIRE(pool != nullptr);
     const int64_t slot = pool->slot_register(seated);
     REQUIRE(slot >= 0);
+    NETW_CHECK_EQ(rewind_slot(core, seated), int64_t(-1));
 
-    const Ref<NetwTimeline> registered = registry_history(core, seated);
-    REQUIRE(registered.is_valid());
-
-    const Ref<NetwTimeline> declared
-        = NetwTimeline::create(NetwTimeline::DEFAULT_LIMIT);
-    CHECK(pool->wire_role_timeline(
+    CHECK(
+        pool->wire_role_timeline(slot, int(NetwPredict::ROLE_CONSUME), false)
+    );
+    const int64_t enrolled = rewind_slot(core, seated);
+    CHECK(enrolled >= 0);
+    REQUIRE(pool->input_lane_open(slot));
+    LocalVector<netw::predict::FieldDecl> fire;
+    fire.push_back(netw::field_decl(StringName("fire"), 0));
+    pool->rewire(slot, LocalVector<netw::predict::FieldDecl>(), fire);
+    Dictionary pressed;
+    pressed[StringName("fire")] = true;
+    pool->record_authored_command(
         slot,
-        int(NetwPredict::ROLE_CONSUME),
-        false,
-        declared
-    ));
-    CHECK(pool->timeline_of(slot) == registered);
-    CHECK(pool->timeline_of(slot) != declared);
+        3,
+        3,
+        true,
+        netw_test::input_row(pool, slot, pressed)
+    );
+    CHECK(pool->has_authored_input(slot, 3));
 
-    SUBCASE("a host-local role reads the same registered history") {
+    SUBCASE("a host-local role keeps the same enrollment") {
         CHECK(pool->wire_role_timeline(
             slot,
             int(NetwPredict::ROLE_HOST_LOCAL),
-            false,
-            declared
+            false
         ));
-        CHECK(pool->timeline_of(slot) == registered);
+        NETW_CHECK_EQ(rewind_slot(core, seated), enrolled);
+        CHECK(pool->input_lane_open(slot));
     }
 
-    SUBCASE("and a predicting role takes a private history instead") {
+    SUBCASE("and a predicting role takes a fresh private lane instead") {
         CHECK(pool->wire_role_timeline(
             slot,
             int(NetwPredict::ROLE_PREDICT),
-            false,
-            declared
+            false
         ));
-        const Ref<NetwTimeline> own = pool->timeline_of(slot);
-        REQUIRE(own.is_valid());
-        CHECK(own != registered);
-        CHECK(own != declared);
-        CHECK(seated->get_timeline() == own);
+        REQUIRE(pool->input_lane_open(slot));
+        CHECK_FALSE(pool->has_authored_input(slot, 3));
     }
 }
 
@@ -147,26 +142,17 @@ TEST_CASE(
     const int64_t slot = pool->slot_register(seated);
     REQUIRE(slot >= 0);
 
-    const Ref<NetwTimeline> declared
-        = NetwTimeline::create(NetwTimeline::DEFAULT_LIMIT);
-    CHECK_FALSE(pool->wire_role_timeline(
-        slot,
-        int(NetwPredict::ROLE_REMOTE),
-        false,
-        declared
-    ));
+    CHECK_FALSE(
+        pool->wire_role_timeline(slot, int(NetwPredict::ROLE_REMOTE), false)
+    );
+    CHECK_FALSE(pool->input_lane_open(slot));
 
     SUBCASE("but a latched remote speculates, so it does take one") {
-        CHECK(pool->wire_role_timeline(
-            slot,
-            int(NetwPredict::ROLE_REMOTE),
-            true,
-            declared
-        ));
-        const Ref<NetwTimeline> own = pool->timeline_of(slot);
-        REQUIRE(own.is_valid());
-        CHECK(own != declared);
-        CHECK(own != registry_history(core, seated));
+        CHECK(
+            pool->wire_role_timeline(slot, int(NetwPredict::ROLE_REMOTE), true)
+        );
+        CHECK(pool->input_lane_open(slot));
+        NETW_CHECK_EQ(rewind_slot(core, seated), int64_t(-1));
     }
 }
 
@@ -186,9 +172,9 @@ TEST_CASE(
     );
     const Ref<NetwEntity> seated = NetwEntity::of(pair.authored);
     REQUIRE(seated.is_valid());
-    REQUIRE(seated->get_state_binding().is_valid());
+    REQUIRE(seated->get_state_binding() != nullptr);
     REQUIRE_MESSAGE(
-        seated->get_input_binding().is_null(),
+        seated->get_input_binding() == nullptr,
         "the fixture declares no input, which is what this law is about"
     );
 

@@ -10,7 +10,27 @@ namespace Networked;
 /// </summary>
 /// <remarks>
 /// The interface provided by this class is optional and is supposed to work
-/// with the default <see cref="SceneMultiplayer"/>.
+/// with the default <see cref="SceneMultiplayer"/>. <b>Bandwidth</b> Every peer
+/// is sent at most its byte budget each tick. Changed rows that do not fit wait
+/// for a later tick, and the ones that have waited longest and matter most go
+/// first.
+/// <code>
+/// func _init() -&gt; void:
+///     Netw.configure_session(self).bandwidth(256)
+///
+/// func _on_slow_player(player: NetwPlayer) -&gt; void:
+///     Netw.session(self).set_peer_bandwidth(player.peer_id, 64)
+///
+/// func _ready() -&gt; void:
+///     NetwEntity.of(self).replication_priority = 4.0
+/// </code>
+/// <para>
+/// RPCs, spawns and <see cref="NetwPropertyConfig.Retained"/> properties always
+/// go when they are due, and a peer they pushed over its budget receives no
+/// more rows until the overdraft is repaid.
+/// <see cref="NetwMultiplayer.PeerLinkStats"/> shows the budget and the
+/// overdraft.
+/// </para>
 /// </remarks>
 public sealed class Netw : NetwRefCounted
 {
@@ -764,15 +784,15 @@ public sealed class Netw : NetwRefCounted
         NetwApi.MethodBind("Netw", "configure_persistence", 2962870821UL);
 
     /// <summary>
-    /// Declares which row of which <see cref="NetwDatabase"/>
-    /// <paramref name="node"/> loads and saves from.
+    /// Declares which record of which <see cref="NetwDatabase"/>
+    /// <paramref name="node"/> loads and saves. The record holds every property
+    /// marked with <see cref="NetwPropertyConfig.Persisted"/>.
     /// <code>
     /// func _ready() -&gt; void:
-    ///     Netw.configure_property(self, &amp;"gold") \
-    ///             .persisted(game.save_schema.column_ref(0))
+    ///     Netw.configure_property(self, &amp;"gold", false).persisted()
     ///     Netw.configure_persistence(self) \
     ///             .database(&amp;"saves") \
-    ///             .schema(game.save_schema) \
+    ///             .table(&amp;"players") \
     ///             .record_id(account_name)
     /// </code>
     /// <para>

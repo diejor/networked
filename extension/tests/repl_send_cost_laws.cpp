@@ -16,9 +16,9 @@ namespace TestNetwReplSendCost {
 using godot::Array;
 using godot::LocalVector;
 using netw::SchemaCore;
-using netw::repl::RowOffer;
 using netw::repl::SessionResult;
-using netw::repl::SessionSend;
+using netw_test::RowOffer;
+using netw_test::SessionSend;
 using netw::table::SchemaRecord;
 using netw::wire::ChannelDecl;
 using netw::wire::Delivery;
@@ -65,7 +65,7 @@ RowOffer offer(int64_t p_route, int64_t p_tick) {
     values.push_back(Vector3(float(p_tick), float(p_route), 0.0f));
     values.push_back(Quaternion());
     values.push_back(int64_t(p_tick % 100));
-    out.values = values;
+    netw_test::offer_values(out, values);
     for (int peer = 1; peer <= PEERS; ++peer) {
         out.recipients.push_back(peer);
     }
@@ -98,7 +98,7 @@ TEST_CASE(
     }
 
     NETW_CHECK_EQ(sends, int64_t(ENTITIES) * int64_t(PEERS) * int64_t(TICKS));
-    NETW_CHECK_EQ(session.lane_count(), uint32_t(ENTITIES));
+    NETW_CHECK_EQ(session.world.table(0).row_count(), uint32_t(ENTITIES));
 }
 
 } // namespace TestNetwReplSendCost

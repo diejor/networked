@@ -7,6 +7,7 @@
 #include "godot/spatial_node.hpp"
 #include "netw/api/entity_record.hpp"
 #include "netw/log.hpp"
+#include "netw/tree_hook.hpp"
 
 using namespace godot;
 
@@ -41,8 +42,8 @@ Object *ObjectPort::resolve(SubsystemName p_module) {
     lost += 1;
     NETW_WARN_ONCE(
         p_module,
-        "a bound slot's owner was freed; the slot unbound itself and stopped "
-        "touching properties"
+        "A node with synced properties was freed while still bound, so its "
+        "properties stopped syncing."
     );
     return nullptr;
 }
@@ -81,11 +82,6 @@ const StringName &sleeping_name() {
     return name;
 }
 
-const StringName &entity_mark() {
-    static const StringName name = NetwEntityRecord::entity_meta();
-    return name;
-}
-
 BodyKey body_key_of(const StringName &p_key, const StringName &p_turn) {
     if (p_key == position_name()) {
         return BodyKey::POSITION;
@@ -114,7 +110,7 @@ bool names_body_state(const StringName &p_key) {
 template <typename T> T *root_body(Object *p_owner) {
     T *body = Object::cast_to<T>(p_owner);
     if (body == nullptr || !body->is_inside_tree()
-        || !body->has_meta(entity_mark())) {
+        || !tree::is_entity_root(body)) {
         return nullptr;
     }
     return body;

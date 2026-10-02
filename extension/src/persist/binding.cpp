@@ -68,6 +68,123 @@ bool rows_agree(const Dictionary &p_left, const Dictionary &p_right) {
     return true;
 }
 
+int saved_type_of(Node *p_node, const StringName &p_property) {
+    const Array infos = gd::property_list(p_node);
+    for (int at = 0; at < infos.size(); ++at) {
+        const Dictionary info = infos[at];
+        if (StringName(info["name"]) != p_property) {
+            continue;
+        }
+        switch (int(info["type"])) {
+            case Variant::BOOL:
+                return SchemaCore::BOOL;
+            case Variant::INT:
+                return SchemaCore::I64;
+            case Variant::FLOAT:
+                return SchemaCore::F64;
+            case Variant::VECTOR2:
+                return SchemaCore::VECTOR2;
+            case Variant::VECTOR3:
+                return SchemaCore::VECTOR3;
+            case Variant::VECTOR4:
+                return SchemaCore::VECTOR4;
+            case Variant::COLOR:
+                return SchemaCore::COLOR;
+            case Variant::QUATERNION:
+                return SchemaCore::QUATERNION;
+            case Variant::STRING:
+            case Variant::STRING_NAME:
+                return SchemaCore::STRING;
+            default:
+                return SchemaCore::VARIANT;
+        }
+    }
+    return SchemaCore::VARIANT;
+}
+
+void order_by_key(
+    LocalVector<BoundColumn> &r_bound,
+    LocalVector<int> &r_types
+) {
+    for (uint32_t at = 1; at < r_bound.size(); ++at) {
+        for (uint32_t back = at; back > 0; --back) {
+            if (String(r_bound[back - 1].key) <= String(r_bound[back].key)) {
+                break;
+            }
+            const BoundColumn column = r_bound[back];
+            r_bound[back] = r_bound[back - 1];
+            r_bound[back - 1] = column;
+            const int type = r_types[back];
+            r_types[back] = r_types[back - 1];
+            r_types[back - 1] = type;
+        }
+    }
+}
+
+bool schema_matches(
+    NetwMultiplayer *p_session,
+    const RID &p_schema,
+    const LocalVector<BoundColumn> &p_bound,
+    const LocalVector<int> &p_types,
+    int p_version
+) {
+    SchemaCore *core = p_session->get_schema_core();
+    if (core->column_count(p_schema) != int(p_bound.size())
+        || core->storage_version_of(p_schema) != p_version) {
+        return false;
+    }
+    for (uint32_t at = 0; at < p_bound.size(); ++at) {
+        const int column = core->find_column(p_schema, p_bound[at].key);
+        if (column < 0 || core->column_type(p_schema, column) != p_types[at]
+            || core->column_stride(p_schema, column) != 1) {
+            return false;
+        }
+    }
+    return true;
+}
+
+RID durable_schema(
+    NetwMultiplayer *p_session,
+    const StringName &p_name,
+    const LocalVector<BoundColumn> &p_bound,
+    const LocalVector<int> &p_types,
+    const Ref<NetwPersistenceConfig> &p_config,
+    String &r_detail
+) {
+    const int version = p_config->get_storage_version();
+    const RID existing = p_session->schema_find(p_name);
+    if (existing.is_valid()) {
+        if (!schema_matches(p_session, existing, p_bound, p_types, version)) {
+            r_detail = "Another entity already declared it with other "
+                       "columns, types or storage version. Declare the same "
+                       "saved properties on both.";
+            return RID();
+        }
+        return existing;
+    }
+    const RID schema = p_session->schema_create(p_name);
+    for (uint32_t at = 0; at < p_bound.size(); ++at) {
+        p_session->schema_add_column(
+            schema,
+            p_bound[at].key,
+            NetwMultiplayer::ColumnType(p_types[at]),
+            1
+        );
+    }
+    SchemaCore *core = p_session->get_schema_core();
+    core->set_storage_version(schema, version);
+    const Dictionary steps = p_config->get_migrations();
+    const Array froms = steps.keys();
+    for (int at = 0; at < froms.size(); ++at) {
+        core->add_migration(schema, int(froms[at]), Callable(steps[froms[at]]));
+    }
+    if (p_session->schema_seal(schema) != OK) {
+        r_detail = "Its columns could not be built into a table.";
+        return RID();
+    }
+    return schema;
+}
+
 } // namespace
 
 Bindings::~Bindings() {
@@ -169,7 +286,7 @@ RID Bindings::compile(Node *p_root) {
         session == nullptr || p_root == nullptr,
         RID(),
         sys::TABLE,
-        "a persistence binding needs a session and an entity root"
+        "Persistence was bound with no session or no entity root."
     );
     const RID standing = find(p_root);
     if (standing.is_valid()) {
@@ -181,21 +298,20 @@ RID Bindings::compile(Node *p_root) {
         config.is_null(),
         RID(),
         sys::TABLE,
-        "entity '%s' binds no persistence, because it declared none. Declare "
-        "it with Netw.configure_persistence(self) from _ready",
+        "'%s' was asked to save, but it declares no persistence. Call "
+        "Netw.configure_persistence(self) in its _ready.",
         name_of(p_root).utf8().get_data()
     );
 
-    const Ref<NetwSchema> declared = config->get_schema();
+    const StringName schema_name = config->get_table_name();
     NETW_ERR_COND_V(
-        declared.is_null(),
+        String(schema_name).is_empty(),
         RID(),
         sys::TABLE,
-        "entity '%s' declares persistence with no schema. Hand one to "
-        "Netw.configure_persistence(self).schema(...)",
+        "'%s' declares persistence with no table. Name one with "
+        "NetwPersistenceConfig.table.",
         name_of(p_root).utf8().get_data()
     );
-    const StringName schema_name = declared->get_schema_name();
 
     const StringName database_name = config->get_database_name();
     const RID database = session->database_find(database_name);
@@ -203,20 +319,10 @@ RID Bindings::compile(Node *p_root) {
         !database.is_valid(),
         RID(),
         sys::TABLE,
-        "entity '%s' saves into database '%s', which this session does not "
-        "declare. Declare it with Netw.configure_database(self, name) first",
+        "'%s' saves into database '%s', which this session does not "
+        "declare. Call Netw.configure_database with that name first.",
         name_of(p_root).utf8().get_data(),
         String(database_name).utf8().get_data()
-    );
-
-    const RID schema = session->schema_of_declaration(declared);
-    NETW_ERR_COND_V(
-        !schema.is_valid(),
-        RID(),
-        sys::TABLE,
-        "entity '%s' names schema '%s', which this session could not seal",
-        name_of(p_root).utf8().get_data(),
-        String(schema_name).utf8().get_data()
     );
 
     const Callable provider = config->get_id_provider();
@@ -224,9 +330,8 @@ RID Bindings::compile(Node *p_root) {
         provider.is_null(),
         RID(),
         sys::TABLE,
-        "entity '%s' declares no record id, so schema '%s' has no row to save "
-        "into. Hand a Callable to "
-        "Netw.configure_persistence(self).record_id(...)",
+        "'%s' declares no record id, so table '%s' has no row to save "
+        "into. Pass a Callable to NetwPersistenceConfig.record_id.",
         name_of(p_root).utf8().get_data(),
         String(schema_name).utf8().get_data()
     );
@@ -236,17 +341,17 @@ RID Bindings::compile(Node *p_root) {
         String(record_id).is_empty(),
         RID(),
         sys::TABLE,
-        "entity '%s' answered an empty record id for schema '%s', and a row "
-        "with no id is a row nothing can read back",
+        "The record id Callable of '%s' returned an empty id for table '%s'. "
+        "Return a non-empty id from it.",
         name_of(p_root).utf8().get_data(),
         String(schema_name).utf8().get_data()
     );
 
-    const int column_count = session->schema_get_column_count(schema);
     LocalVector<Node *> nodes;
     collect_nodes(p_root, nodes);
 
     LocalVector<BoundColumn> bound;
+    LocalVector<int> types;
     for (uint32_t at = 0; at < nodes.size(); ++at) {
         Node *node = nodes[at];
         const Dictionary configs
@@ -255,53 +360,20 @@ RID Bindings::compile(Node *p_root) {
         for (int index = 0; index < names.size(); ++index) {
             const StringName property = names[index];
             const Ref<NetwPropertyConfig> declaration = configs[property];
-            if (declaration.is_null()) {
+            if (declaration.is_null() || !declaration->is_persisted()) {
                 continue;
             }
-            const Ref<NetwColumnRef> column = declaration->get_persist_column();
-            if (column.is_null()) {
-                continue;
-            }
-            NETW_ERR_COND_V(
-                column->get_schema() != declared,
-                RID(),
-                sys::TABLE,
-                "entity '%s' saves into schema '%s', and '%s.%s' names a "
-                "column of schema '%s'. A column reference belongs to the "
-                "schema it was taken from",
-                name_of(p_root).utf8().get_data(),
-                String(schema_name).utf8().get_data(),
-                name_of(node).utf8().get_data(),
-                String(property).utf8().get_data(),
-                column->get_schema().is_valid()
-                    ? String(column->get_schema()->get_schema_name())
-                          .utf8()
-                          .get_data()
-                    : "a freed schema"
-            );
-            const int column_index = column->get_index();
-            NETW_ERR_COND_V(
-                column_index < 0 || column_index >= column_count,
-                RID(),
-                sys::TABLE,
-                "entity '%s' binds '%s.%s' to column %d of schema '%s', which "
-                "carries %d columns",
-                name_of(p_root).utf8().get_data(),
-                name_of(node).utf8().get_data(),
-                String(property).utf8().get_data(),
-                int(column_index),
-                String(schema_name).utf8().get_data(),
-                int(column_count)
-            );
-            const StringName key
-                = session->schema_get_column_key(schema, column_index);
+            const StringName key = declaration->get_saved_column().is_empty()
+                ? property
+                : declaration->get_saved_column();
             for (uint32_t seen = 0; seen < bound.size(); ++seen) {
                 NETW_ERR_COND_V(
-                    bound[seen].index == column_index,
+                    bound[seen].key == key,
                     RID(),
                     sys::TABLE,
-                    "entity '%s' binds column '%s' of schema '%s' twice, from "
-                    "'%s.%s' and from '%s.%s'. One column holds one property",
+                    "'%s' saves column '%s' of table '%s' twice, from "
+                    "'%s.%s' and from '%s.%s'. Give one of them another "
+                    "name in NetwPropertyConfig.persisted.",
                     name_of(p_root).utf8().get_data(),
                     String(key).utf8().get_data(),
                     String(schema_name).utf8().get_data(),
@@ -315,25 +387,8 @@ RID Bindings::compile(Node *p_root) {
                 !gd::has_property(node, property),
                 RID(),
                 sys::TABLE,
-                "entity '%s' binds column '%s' of schema '%s' to '%s.%s', "
-                "which that node does not carry",
-                name_of(p_root).utf8().get_data(),
-                String(key).utf8().get_data(),
-                String(schema_name).utf8().get_data(),
-                name_of(node).utf8().get_data(),
-                String(property).utf8().get_data()
-            );
-            const int type
-                = int(session->schema_get_column_type(schema, column_index));
-            const int stride
-                = session->schema_get_column_stride(schema, column_index);
-            NETW_ERR_COND_V(
-                SchemaCore::validate_value(type, stride, node->get(property))
-                    != OK,
-                RID(),
-                sys::TABLE,
-                "entity '%s' binds column '%s' of schema '%s' to '%s.%s', "
-                "which holds a value that column cannot store",
+                "'%s' saves column '%s' of table '%s' from '%s.%s', but "
+                "that node has no such property. Fix the property name.",
                 name_of(p_root).utf8().get_data(),
                 String(key).utf8().get_data(),
                 String(schema_name).utf8().get_data(),
@@ -341,24 +396,38 @@ RID Bindings::compile(Node *p_root) {
                 String(property).utf8().get_data()
             );
             BoundColumn entry;
-            entry.index = column_index;
             entry.key = key;
             entry.node = gd::instance_id(node);
             entry.property = property;
             bound.push_back(entry);
+            types.push_back(saved_type_of(node, property));
         }
     }
 
     NETW_ERR_COND_V(
-        int(bound.size()) != column_count,
+        bound.is_empty(),
         RID(),
         sys::TABLE,
-        "entity '%s' binds %d of the %d columns of schema '%s'. Every column "
-        "of a declared schema holds one property of this entity",
+        "'%s' saves into table '%s', but no property is marked to save. "
+        "Call NetwPropertyConfig.persisted on each property to save.",
         name_of(p_root).utf8().get_data(),
-        int(bound.size()),
-        int(column_count),
         String(schema_name).utf8().get_data()
+    );
+    order_by_key(bound, types);
+    for (uint32_t at = 0; at < bound.size(); ++at) {
+        bound[at].index = int(at);
+    }
+    String detail;
+    const RID schema
+        = durable_schema(session, schema_name, bound, types, config, detail);
+    NETW_ERR_COND_V(
+        !schema.is_valid(),
+        RID(),
+        sys::TABLE,
+        "'%s' cannot save into table '%s'. %s",
+        name_of(p_root).utf8().get_data(),
+        String(schema_name).utf8().get_data(),
+        detail.utf8().get_data()
     );
 
     Binding *made = memnew(Binding);

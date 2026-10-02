@@ -1,12 +1,13 @@
 #include "support/netw_test.h"
+#include "support/books.h"
+#include "support/predict_rows.h"
 
 #include "godot/spatial_node.hpp"
 #include "netw/api/prediction_handle.hpp"
-#include "netw/api/property_set.hpp"
-#include "netw/api/property_set_binding.hpp"
 #include "netw/api/schema_core.hpp"
 #include "netw/predict/engine.hpp"
 #include "netw/predict/joint.hpp"
+#include "netw/repl/property_binding.hpp"
 #include "netw/sim/select.hpp"
 
 namespace TestNetwPredictJointLaws {
@@ -21,10 +22,41 @@ LocalVector<FieldDecl> declaration() {
     return out;
 }
 
-Array state(int p_value) {
-    Array out;
-    out.push_back(p_value);
+predict::StateRow one_field(const Variant &p_value) {
+    predict::StateRow out;
+    out.resize(1);
+    out.set(0, p_value);
     return out;
+}
+
+predict::StateRow state(int p_value) {
+    return one_field(p_value);
+}
+
+int64_t commanded(NetwPredictionEngine *p_pool) {
+    const int64_t slot = p_pool->open(declaration());
+    LocalVector<FieldDecl> input;
+    input.push_back(field_decl(StringName("command"), 0));
+    p_pool->rewire(slot, declaration(), input);
+    return slot;
+}
+
+predict::StateRow command(int p_value) {
+    return one_field(p_value);
+}
+
+predict::StateRow held_command(
+    NetwPredictionEngine *p_pool,
+    int64_t p_slot,
+    int64_t p_transition
+) {
+    predict::StateRow out;
+    p_pool->read_command_at(p_slot, p_transition, out);
+    return out;
+}
+
+int command_of(const predict::StateRow &p_command) {
+    return p_command.has(0) ? int(p_command.values[0]) : 0;
 }
 
 void configure_joint(
@@ -212,24 +244,23 @@ TEST_CASE(
 TEST_CASE(
     "[Networked][Predict][Hosted][Joint] a late command keeps the state"
 ) {
-    StateRow observed;
-    observed.resize(1);
-    observed.set(0, Variant(70));
+    NetwPredictionEngine held;
+    NetwPredictionEngine *const engine = &held;
+    const int64_t slot = commanded(engine);
+    engine->joint_record(slot, 4, state(70), command(7), false, false, true);
+    engine
+        ->joint_record(slot, 4, predict::StateRow(), command(9), false, true, false);
 
-    JointTrack track;
-    track.record(4, observed, Variant(7), CellProvenance::SUBSTITUTED);
-    track.record(4, StateRow(), Variant(9), CellProvenance::RELAYED);
-
-    REQUIRE(track.state_at(4) != nullptr);
-    NETW_CHECK_EQ(int(track.state_at(4)->values[0]), 70);
-    REQUIRE(track.command_at(4) != nullptr);
-    NETW_CHECK_EQ(int(track.command_at(4)->command), 9);
+    const Dictionary kept = netw_test::predicted_state(engine, slot, 5);
+    REQUIRE(kept.has(StringName("value")));
+    NETW_CHECK_EQ(int(kept[StringName("value")]), 70);
+    NETW_CHECK_EQ(command_of(held_command(engine,slot, 4)), 9);
 }
 
 TEST_CASE("[Networked][Predict][Hosted][Joint] a slot with no island records") {
     NetwPredictionEngine held;
     NetwPredictionEngine *const engine = &held;
-    const int64_t slot = engine->open(declaration());
+    const int64_t slot = commanded(engine);
     CHECK(engine->configure(
         slot,
         int(Schedule::TICK),
@@ -240,31 +271,39 @@ TEST_CASE("[Networked][Predict][Hosted][Joint] a slot with no island records") {
         NetwPredictionEngine::ISLAND_NONE
     ));
 
-    engine->joint_record(slot, 3, state(30), Variant(7), false, false, true);
-    NETW_CHECK_EQ(int(engine->joint_command_at(slot, 3)), 7);
+    engine->joint_record(slot, 3, state(30), command(7), false, false, true);
+    NETW_CHECK_EQ(command_of(held_command(engine,slot, 3)), 7);
     NETW_CHECK_EQ(
         engine->joint_provenance_at(slot, 3),
         int(CellProvenance::SUBSTITUTED)
     );
 
-    engine->joint_record(slot, 3, Array(), Variant(9), false, true, false);
-    NETW_CHECK_EQ(int(engine->joint_command_at(slot, 3)), 9);
-    engine->joint_record(slot, 3, Array(), Variant(11), false, false, true);
-    NETW_CHECK_EQ(int(engine->joint_command_at(slot, 3)), 9);
-    NETW_CHECK_EQ(int(engine->joint_command_at(slot, 4)), 0);
+    engine
+        ->joint_record(slot, 3, predict::StateRow(), command(9), false, true, false);
+    NETW_CHECK_EQ(command_of(held_command(engine,slot, 3)), 9);
+    engine
+        ->joint_record(slot, 3, predict::StateRow(), command(11), false, false, true);
+    NETW_CHECK_EQ(command_of(held_command(engine,slot, 3)), 9);
+    NETW_CHECK_EQ(command_of(held_command(engine,slot, 4)), 0);
     NETW_CHECK_EQ(engine->joint_provenance_at(slot, 4), -1);
 }
 
 TEST_CASE("[Networked][Predict][Hosted][Joint] command provenance improves") {
-    JointTrack track;
-    track.record(4, StateRow(), Variant(10), CellProvenance::SUBSTITUTED);
-    track.record(4, StateRow(), Variant(20), CellProvenance::RELAYED);
-    track.record(4, StateRow(), Variant(30), CellProvenance::COAST);
-    NETW_CHECK_EQ(track.commands.size(), 1);
-    const JointCommandRecord *command = track.command_at(4);
-    REQUIRE(command != nullptr);
-    NETW_CHECK_EQ(int(command->provenance), int(CellProvenance::RELAYED));
-    NETW_CHECK_EQ(int(command->command), 20);
+    NetwPredictionEngine held;
+    NetwPredictionEngine *const engine = &held;
+    const int64_t slot = commanded(engine);
+    engine
+        ->joint_record(slot, 4, predict::StateRow(), command(10), false, false, true);
+    engine
+        ->joint_record(slot, 4, predict::StateRow(), command(20), false, true, false);
+    engine
+        ->joint_record(slot, 4, predict::StateRow(), command(30), false, false, false);
+    NETW_CHECK_EQ(int(engine->input_book(slot)->count()), 1);
+    NETW_CHECK_EQ(
+        engine->joint_provenance_at(slot, 4),
+        int(CellProvenance::RELAYED)
+    );
+    NETW_CHECK_EQ(command_of(held_command(engine,slot, 4)), 20);
 }
 
 TEST_CASE("[Networked][Predict][Hosted][Joint] support admits declared axes") {
@@ -327,12 +366,12 @@ TEST_CASE(
     adopt_member(engine, owner, member, 0);
     NETW_CHECK_EQ(engine->joint_member_count(owner), 1);
 
-    engine->joint_record(owner, 0, state(0), Variant(0), true, false, false);
+    engine->joint_record(owner, 0, state(0), command(0), true, false, false);
     engine
-        ->joint_record(member, 0, state(100), Variant(200), false, false, true);
-    engine->joint_record(owner, 1, state(1), Variant(1), true, false, false);
+        ->joint_record(member, 0, state(100), command(200), false, false, true);
+    engine->joint_record(owner, 1, state(1), command(1), true, false, false);
     engine
-        ->joint_record(member, 1, state(101), Variant(201), false, false, true);
+        ->joint_record(member, 1, state(101), command(201), false, false, true);
     engine->joint_note_basis(owner, 0, NetwPredictionEngine::JOINT_FLOOR_STATE);
 
     const predict::JointPassPlan plan = engine->joint_pass(owner, 1);
@@ -347,8 +386,8 @@ TEST_CASE(
 ) {
     NetwPredictionEngine held;
     NetwPredictionEngine *const engine = &held;
-    const int64_t owner = engine->open(declaration());
-    const int64_t member = engine->open(declaration());
+    const int64_t owner = commanded(engine);
+    const int64_t member = commanded(engine);
     configure_joint(engine, owner, member);
     adopt_member(engine, owner, member, 0);
 
@@ -357,7 +396,7 @@ TEST_CASE(
             owner,
             transition,
             state(transition),
-            Variant(transition),
+            command(transition),
             true,
             false,
             false
@@ -366,14 +405,14 @@ TEST_CASE(
             member,
             transition,
             state(100 + transition),
-            Variant(200 + transition),
+            command(200 + transition),
             false,
             false,
             true
         );
     }
     engine
-        ->joint_record(member, 2, state(102), Variant(302), false, true, false);
+        ->joint_record(member, 2, state(102), command(302), false, true, false);
     engine->joint_note_basis(owner, 1, NetwPredictionEngine::JOINT_FLOOR_STATE);
     engine->joint_note_basis(owner, 0, NetwPredictionEngine::JOINT_FLOOR_STATE);
 
@@ -388,7 +427,7 @@ TEST_CASE(
     NETW_CHECK_EQ(plan.steps[0].transition, 2);
     NETW_CHECK_EQ(plan.steps[0].slot, member);
     NETW_CHECK_EQ(int(plan.steps[0].provenance), int(CellProvenance::RELAYED));
-    NETW_CHECK_EQ(int(plan.steps[0].command), 302);
+    NETW_CHECK_EQ(command_of(plan.steps[0].command), 302);
     NETW_CHECK_EQ(plan.steps[1].slot, owner);
     NETW_CHECK_EQ(plan.steps[2].transition, 3);
     NETW_CHECK_EQ(plan.steps[2].slot, member);
@@ -421,7 +460,7 @@ TEST_CASE("[Networked][Predict][Hosted][Joint] linger ends past tenure") {
             owner,
             transition,
             state(transition),
-            Variant(),
+            predict::StateRow(),
             false,
             false,
             false
@@ -430,7 +469,7 @@ TEST_CASE("[Networked][Predict][Hosted][Joint] linger ends past tenure") {
             member,
             transition,
             state(100 + transition),
-            Variant(),
+            predict::StateRow(),
             false,
             false,
             false
@@ -606,34 +645,43 @@ TEST_CASE(
     CHECK(engine->contact_is_equivalent(owner, false));
 }
 
-StateRow one_field(const Variant &p_value) {
-    StateRow out;
-    out.resize(1);
-    out.set(0, p_value);
-    return out;
-}
-
 TEST_CASE(
     "[Networked][Predict][Hosted][Joint] a late transition evicts the oldest"
 ) {
-    JointTrack track;
-    for (int64_t transition = 1; transition <= 256; ++transition) {
-        track.record(
+    NetwPredictionEngine held;
+    NetwPredictionEngine *const engine = &held;
+    const int64_t slot = engine->open(declaration());
+    const int depth = int(engine->book_depth(slot));
+    for (int transition = 1; transition <= depth; ++transition) {
+        engine->joint_record(
+            slot,
             transition,
-            one_field(transition),
-            Variant(),
-            CellProvenance::COAST
+            state(transition),
+            predict::StateRow(),
+            false,
+            false,
+            false
         );
     }
-    NETW_CHECK_EQ(int(track.states.size()), 256);
-    CHECK((track.state_at(1) != nullptr));
+    const predict::TransitionBook *book = engine->predicted_book(slot);
+    REQUIRE(book != nullptr);
+    NETW_CHECK_EQ(int(book->count()), depth);
+    CHECK(book->holds(2));
 
-    track.record(0, one_field(0), Variant(), CellProvenance::COAST);
+    engine->joint_record(
+        slot,
+        0,
+        state(0),
+        predict::StateRow(),
+        false,
+        false,
+        false
+    );
 
-    NETW_CHECK_EQ(int(track.states.size()), 256);
-    CHECK((track.state_at(0) == nullptr));
-    CHECK((track.state_at(1) != nullptr));
-    CHECK((track.state_at(256) != nullptr));
+    NETW_CHECK_EQ(int(book->count()), depth);
+    CHECK_FALSE(book->holds(1));
+    CHECK(book->holds(2));
+    CHECK(book->holds(depth + 1));
 }
 
 struct DeclaredBody {
@@ -642,6 +690,7 @@ struct DeclaredBody {
     int64_t slot = -1;
 
     DeclaredBody(
+        netw_test::Books &p_books,
         NetwPredictionEngine *p_pool,
         const char *p_id,
         int p_role,
@@ -654,11 +703,11 @@ struct DeclaredBody {
         entity->set_peer_id(1);
         slot = p_pool->slot_register(entity);
         REQUIRE(slot >= 0);
-        Ref<NetwPropertySet> set;
-        set.instantiate();
-        set->record = NetwPropertySet::RECORD_STATE;
+        const uint64_t declared = p_books.sets.create();
+        repl::PropertySet *set = p_books.sets.get(declared);
+        set->record = repl::PropertySet::RECORD_STATE;
         set->bind_column(
-            NetwPropertySetColumn::create(
+            repl::PropertyColumn::create(
                 StringName("position"),
                 Ref<NetwQuantize>(),
                 false,
@@ -667,8 +716,8 @@ struct DeclaredBody {
         );
         p_pool->adopt_declaration(
             entity,
-            NetwPropertySetBinding::create(set, owner),
-            Ref<NetwPropertySetBinding>(),
+            p_books.bindings.create(declared, owner),
+            repl::PropertyBindingPtr(),
             int(Schedule::TICK),
             p_role,
             int(CorrectionMode::SNAP),
@@ -684,25 +733,27 @@ struct DeclaredBody {
     }
 };
 
-Array pose(double p_x) {
-    Array out;
-    out.push_back(Vector3(p_x, 0.0, 0.0));
-    return out;
+predict::StateRow pose(double p_x) {
+    return one_field(Vector3(p_x, 0.0, 0.0));
 }
 
 TEST_CASE(
     "[Networked][Predict][Hosted][Joint] a pass restores a member from the "
     "payload that arrived at the floor"
 ) {
+    netw_test::Books books;
     NetwPredictionEngine held;
+    held.attach_bindings(&books.bindings);
     NetwPredictionEngine *const engine = &held;
     DeclaredBody owner(
+        books,
         engine,
         "owner",
         int(Role::PREDICT),
         NetwPredictionEngine::ISLAND_JOINT
     );
     DeclaredBody member(
+        books,
         engine,
         "member",
         int(Role::SIMULATE),
@@ -716,7 +767,7 @@ TEST_CASE(
             owner.slot,
             transition,
             pose(transition),
-            Variant(transition),
+            command(transition),
             true,
             false,
             false
@@ -725,18 +776,16 @@ TEST_CASE(
             member.slot,
             transition,
             pose(100 + transition),
-            Variant(),
+            predict::StateRow(),
             false,
             false,
             true
         );
     }
-    Dictionary arrived;
-    arrived[StringName("position")] = Vector3(-7.0, 0.0, 0.0);
     engine->note_joint_basis(
         member.slot,
         1,
-        arrived,
+        pose(-7.0),
         NetwPredictionEngine::JOINT_FLOOR_STATE
     );
 
@@ -750,10 +799,9 @@ TEST_CASE(
         }
     }
     REQUIRE(restored >= 0);
-    const Dictionary payload
-        = engine->restore_payload_of(member.slot, plan, restored);
-    const Vector3 restored_pose
-        = payload.get(StringName("position"), Vector3());
+    const predict::StateRow &state = plan.restores[uint32_t(restored)].state;
+    REQUIRE(state.has(0));
+    const Vector3 restored_pose = state.values[0];
     NETW_CHECK_CLOSE(restored_pose.x, -7.0, 1.0e-9);
 }
 

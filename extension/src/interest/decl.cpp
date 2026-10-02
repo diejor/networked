@@ -28,14 +28,14 @@ bool guard_pair(
         layer_id.is_empty(),
         false,
         sys::INTEREST,
-        "%s: layer id is empty.",
+        "%s needs a layer name, and it was empty.",
         verb
     );
     NETW_ERR_COND_V(
         policy < 0 || policy > custom_policy,
         false,
         sys::INTEREST,
-        "%s: unknown policy %d.",
+        "%s got policy %d, which does not exist.",
         verb,
         policy
     );
@@ -43,14 +43,16 @@ bool guard_pair(
         policy == custom_policy && !custom.is_valid(),
         false,
         sys::INTEREST,
-        "%s: CUSTOM requires a callback.",
+        "%s got a CUSTOM policy with no callback. Pass the callback that "
+        "decides it.",
         verb
     );
     NETW_ERR_COND_V(
         policy != custom_policy && custom.is_valid(),
         false,
         sys::INTEREST,
-        "%s: a callback requires CUSTOM.",
+        "%s got a callback with a policy that is not CUSTOM. Use the CUSTOM "
+        "policy, or drop the callback.",
         verb
     );
     return true;
@@ -63,7 +65,7 @@ bool Decl::join(const StringName &layer_id) {
         layer_id.is_empty(),
         false,
         sys::INTEREST,
-        "interest::Decl.join: layer id is empty."
+        "NetwInterestHandle.join needs a layer name, and it was empty."
     );
     if (index_of(label_ids, layer_id) >= 0) {
         return false;
@@ -103,7 +105,7 @@ bool Decl::set_leave_policy(
             policy,
             LEAVE_CUSTOM,
             custom,
-            "interest::Decl.set_leave_policy"
+            "NetwInterestHandle.on_leave_policy"
         )) {
         return false;
     }
@@ -126,7 +128,7 @@ bool Decl::set_perception_policy(
             policy,
             PERCEPTION_CUSTOM,
             custom,
-            "interest::Decl.set_perception_policy"
+            "NetwInterestHandle.on_perception_policy"
         )) {
         return false;
     }
@@ -225,7 +227,7 @@ bool Facet::on_enter(const StringName &layer_id, const Callable &callback) {
         !callback.is_valid(),
         false,
         sys::INTEREST,
-        "on_enter: callback is invalid"
+        "NetwInterestHandle.on_enter needs a valid Callable."
     );
     remember(enter_callbacks, layer_id, callback);
     return true;
@@ -236,7 +238,7 @@ bool Facet::on_leave(const StringName &layer_id, const Callable &callback) {
         !callback.is_valid(),
         false,
         sys::INTEREST,
-        "on_leave: callback is invalid"
+        "NetwInterestHandle.on_leave needs a valid Callable."
     );
     remember(leave_callbacks, layer_id, callback);
     return true;
@@ -247,7 +249,7 @@ bool Facet::on_observed(const Callable &callback) {
         !callback.is_valid(),
         false,
         sys::INTEREST,
-        "on_observed: callback is invalid"
+        "An observed callback needs a valid Callable."
     );
     decl.set_reports_observers(true);
     if (!observed_callbacks.has(callback)) {
@@ -261,7 +263,7 @@ bool Facet::on_unobserved(const Callable &callback) {
         !callback.is_valid(),
         false,
         sys::INTEREST,
-        "on_unobserved: callback is invalid"
+        "An unobserved callback needs a valid Callable."
     );
     decl.set_reports_observers(true);
     if (!unobserved_callbacks.has(callback)) {

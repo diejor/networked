@@ -8,10 +8,9 @@
 #include "netw/api/entity.hpp"
 #include "netw/api/physics_stepper.hpp"
 #include "netw/api/predict.hpp"
-#include "netw/api/property_set_binding.hpp"
-#include "netw/api/timeline.hpp"
 #include "netw/predict/engine.hpp"
 #include "netw/predict/slot_verdicts.hpp"
+#include "netw/repl/property_binding.hpp"
 
 namespace netw {
 
@@ -23,18 +22,21 @@ class NetwPredictSlotEngine {
     friend class NetwPredictionHandle;
 
     struct Declaration {
-        godot::Ref<NetwPropertySetBinding> state;
-        godot::Ref<NetwPropertySetBinding> input;
-        godot::Ref<NetwTimeline> timeline;
+        uint64_t state = 0;
+        uint64_t input = 0;
         bool authority = false;
         bool controlled_locally = false;
     };
 
     godot::ObjectID core_id;
     NetwPredictionEngine *pool = nullptr;
+    int64_t seat = -1;
     godot::Ref<NetwEntity> entity;
     godot::Ref<NetwPredictionHandle> handle;
     Declaration declaration;
+    godot::Callable fallback_at_sink;
+    godot::Dictionary unsampled;
+    godot::PackedStringArray unparticipated;
 
     NetwMultiplayer *core_seated() const;
     NetwPredictSlotEngine *sibling(
@@ -48,10 +50,9 @@ class NetwPredictSlotEngine {
     void set_role_column(int p_role);
     int correction() const;
     void set_correction_column(int p_correction);
-    godot::Ref<NetwPropertySetBinding> state_binding() const;
-    godot::Ref<NetwPropertySetBinding> input_binding() const;
-    godot::Ref<NetwTimeline> timeline() const;
-    godot::Ref<NetwTimeline> entry_history() const;
+    repl::PropertyBindingPtr state_binding() const;
+    repl::PropertyBindingPtr input_binding() const;
+    bool lane_open() const;
     double tick_delta() const;
     bool fallback_latched() const;
     int64_t schedule() const;
@@ -71,20 +72,18 @@ class NetwPredictSlotEngine {
     bool defer_operator_for_witness(
         int64_t p_recv_tick,
         int64_t p_basis,
-        const godot::Dictionary &p_payload
+        const predict::StateRow &p_payload
     );
     void begin_reseed(const predict::WritePlan &p_plan);
     void send_command_frame();
     void send_ack_frame();
     void file_command_cell(
         int64_t p_transition,
-        const godot::Dictionary &p_command,
+        const predict::StateRow &p_command,
         int p_origin
     );
-    godot::Dictionary command_cell_at(int64_t p_transition) const;
     void judge_owner_claim(int64_t p_transition, int64_t p_fingerprint);
     int64_t recorded_transition() const;
-    void record_input_to_pool(int64_t p_tick, const godot::Dictionary &p_input);
     int declared_correction() const;
     int resolve_correction() const;
     int resolve_axes();
@@ -105,22 +104,24 @@ class NetwPredictSlotEngine {
     void predict_step(double p_delta, int64_t p_tick);
     void simulated_step(double p_delta, int64_t p_tick);
     void simulated_frame_step(const NetwPredictTiming &p_timing);
-    godot::Dictionary predicted_command(int64_t p_tick);
     void prepare_tick_tape(int64_t p_tick);
     bool speculation_horizon_full();
     void publish_ack_age(int64_t p_age);
     void on_state(
         int64_t p_recv_tick,
         int64_t p_ack,
-        const godot::Dictionary &p_payload
+        const predict::Arrival *p_arrival,
+        const predict::StateRow *p_held
     );
 
-    godot::Dictionary restore_payload(
-        const predict::JointPassPlan &p_plan,
-        int p_index
-    ) const;
+    void restore_row(
+        const predict::StateRow &p_state,
+        int p_operator,
+        int64_t p_basis,
+        NetwPredictSlotEngine *p_provenance_owner,
+        int64_t p_entry
+    );
     RecoveryPlan plan_of(const predict::WritePlan &p_plan) const;
-    godot::Array state_columns(const godot::Dictionary &p_payload) const;
     void close_replayed_entry(int64_t p_index);
     bool is_steppable() const;
     godot::LocalVector<NetwPredictSlotEngine *> joint_group();
@@ -141,7 +142,7 @@ class NetwPredictSlotEngine {
     );
     void release_lingering(int64_t p_floor_transition);
     void joint_heal();
-    void note_joint_writes(const godot::Dictionary &p_before);
+    void note_joint_writes(const predict::StateRow &p_before);
     int64_t ledger_drive_frontier() const;
     predict::JointPassPlan pool_joint_pass(int64_t p_present);
 
@@ -160,34 +161,19 @@ class NetwPredictSlotEngine {
     int64_t queued_span() const;
     void consume_one(double p_delta);
 
-    godot::Dictionary record_drive(
-        int64_t p_transition,
-        int64_t p_label,
-        int p_kind,
-        const godot::Dictionary &p_input,
-        int64_t p_drive_tick,
-        bool p_caller_selected,
-        bool p_input_recorded = false,
-        bool p_authoring = false
-    );
     void mark_idle_drive(int64_t p_label, int p_kind);
     void adopt_tape_position(int64_t p_transition);
     void author_command_entry(int64_t p_label, bool p_fresh);
     void refresh_tape_diagnostics();
-    void run(
-        const godot::Dictionary &p_input,
+    void run_command(
+        const predict::StateRow &p_command,
         double p_delta,
         int64_t p_tick,
         bool p_fresh
     );
     godot::Dictionary capture() const;
-    godot::Dictionary capture_input_raw() const;
-    void apply_input_raw(const godot::Dictionary &p_payload);
-    int64_t state_fingerprint(const godot::Dictionary &p_payload) const;
-    void close_journal_row(
-        int64_t p_transition,
-        const godot::Dictionary &p_state
-    );
+    void close_captured_row(int64_t p_transition);
+    void close_journal_row(int64_t p_transition);
     godot::Dictionary witness_sample() const;
     godot::PackedStringArray island_participant_ids() const;
     void restore(
@@ -196,17 +182,18 @@ class NetwPredictSlotEngine {
         int64_t p_basis,
         NetwPredictSlotEngine *p_provenance_owner = nullptr,
         bool p_evidence_free = false,
-        bool p_pool_planned = false
+        bool p_pool_planned = false,
+        int64_t p_entry = -1
     );
     void register_with_loop();
     void unregister_from_loop();
 
     void on_control_changed(int64_t p_previous_peer, int64_t p_peer);
     void on_reparented();
-    void on_state_frame(const godot::Dictionary &p_header);
-    void on_input_frame(const godot::Dictionary &p_header);
-    void on_simulated_state_frame(const godot::Dictionary &p_header);
-    void on_quarantine_state_frame(const godot::Dictionary &p_header);
+    void on_state_frame(const predict::Arrival &p_arrival);
+    void on_input_frame(const predict::Arrival &p_arrival);
+    void on_simulated_state_frame(const predict::Arrival &p_arrival);
+    void on_quarantine_state_frame(const predict::Arrival &p_arrival);
     void apply_quarantine_witness(int64_t p_basis);
     void retry_deferred_operator(int64_t p_basis);
     void enter_fallback_at(int64_t p_transition, int p_attribution);
@@ -218,7 +205,7 @@ class NetwPredictSlotEngine {
     void finish_reseed_alignment(
         int64_t p_recv_tick,
         int64_t p_ack,
-        const godot::Dictionary &p_payload
+        const predict::StateRow &p_payload
     );
     void emit_reachability_findings(const godot::Array &p_findings);
     void maybe_demote_for_breach(
@@ -273,12 +260,10 @@ public:
     void finalize_stepped_state();
 
     bool uses_schedule(int p_schedule) const;
-    godot::Dictionary transition_state_at(int64_t p_entry_index) const;
     int64_t history_record_tick(int64_t p_fallback_tick) const;
     bool consumed_unslotted_transition() const;
     bool has_consumed_state_tick(int64_t p_state_tick) const;
-    void record_server_input(int64_t p_tick, const godot::Dictionary &p_input);
-    void finalize_recorded_state(const godot::Dictionary &p_payload);
+    void finalize_recorded_state();
 };
 
 } // namespace netw

@@ -18,9 +18,9 @@ using netw::SchemaCore;
 using netw::repl::mask_ladders;
 using netw::repl::read_snapshot_row;
 using netw::repl::RowFrameHeader;
-using netw::repl::RowOffer;
 using netw::repl::SessionResult;
-using netw::repl::SessionSend;
+using netw_test::RowOffer;
+using netw_test::SessionSend;
 using netw::repl::SnapshotHeader;
 using netw::repl::SnapshotRefusal;
 using netw::repl::write_snapshot_row;
@@ -81,7 +81,7 @@ RowOffer live_offer(const SchemaRecord &p_schema, const Array &p_values) {
     out.comp = 2;
     out.channel = LIVE_CHANNEL;
     out.schema = &p_schema;
-    out.values = p_values;
+    netw_test::offer_values(out, p_values);
     out.recipients.push_back(LIVE_PEER);
     out.masked = true;
     return out;
@@ -414,7 +414,7 @@ TEST_CASE(
     first.push_back(live_offer(laddered, triple_of(10000, 20000, true)));
     const SessionResult one = drive_send(session, reg, first, 100000, 1);
     NETW_REQUIRE_EQ(int64_t(one.sends.size()), int64_t(1));
-    const CodeRow confirmed = one.sends[0].row;
+    const CodeRow confirmed = netw_test::sent_row(session.world, one.sends[0]);
     accept_streams(session, first, LIVE_PEER);
 
     LocalVector<RowOffer> second;
@@ -422,6 +422,7 @@ TEST_CASE(
     const SessionResult two = drive_send(session, reg, second, 100000, 2);
     NETW_REQUIRE_EQ(int64_t(two.sends.size()), int64_t(1));
     const netw::repl::RowSend &stepped = two.sends[0];
+    const CodeRow stepped_row = netw_test::sent_row(session.world, stepped);
     CHECK(stepped.masked);
     NETW_CHECK_EQ(stepped.mask, uint64_t(0b011));
 
@@ -431,7 +432,7 @@ TEST_CASE(
     same.distance = stepped.revision - one.sends[0].revision;
     same.mask = stepped.mask;
     const PackedByteArray unstepped
-        = write_snapshot_row(same, 0, whole_plan, stepped.row, &confirmed);
+        = write_snapshot_row(same, 0, whole_plan, stepped_row, &confirmed);
     NETW_REQUIRE_EQ(unstepped.size() > 0, true);
     const bool the_ladder_saved_bytes = stepped.bytes.size() < unstepped.size();
     CHECK(the_ladder_saved_bytes);
@@ -450,7 +451,7 @@ TEST_CASE(
         ),
         true
     );
-    CHECK(landed.equals(stepped.row));
+    CHECK(landed.equals(stepped_row));
 }
 
 TEST_CASE(
@@ -483,7 +484,7 @@ TEST_CASE(
         ),
         true
     );
-    CHECK(landed.equals(one.sends[0].row));
+    CHECK(landed.equals(netw_test::sent_row(session.world, one.sends[0])));
 
     LocalVector<RowOffer> second;
     second.push_back(live_offer(laddered, triple_of(10003, 19997, true)));
@@ -503,7 +504,7 @@ TEST_CASE(
         ),
         true
     );
-    CHECK(landed.equals(two.sends[0].row));
+    CHECK(landed.equals(netw_test::sent_row(session.world, two.sends[0])));
 }
 
 } // namespace TestNetwReplRowLadder

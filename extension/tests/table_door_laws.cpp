@@ -67,7 +67,7 @@ TEST_CASE(
     NETW_CHECK_EQ(int(door->get_reliable()), 0);
     door->set_reliable(true);
     NETW_CHECK_EQ(int(door->get_reliable()), 1);
-    NETW_CHECK_EQ(int(core->get_table_core()->is_reliable(table)), 1);
+    NETW_CHECK_EQ(int(core->store_arrays().is_reliable(table)), 1);
 }
 
 TEST_CASE(

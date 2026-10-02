@@ -73,6 +73,7 @@ struct ParkedOpen {
 struct ClosedLane {
     int peer = 0;
     uint64_t token = 0;
+    StreamLane lane;
 };
 
 class StreamReaderBook {
@@ -83,7 +84,6 @@ class StreamReaderBook {
         uint32_t schema = 0;
         StreamTenure tenure;
         bool invalidated = false;
-        SnapshotReceiver receiver;
     };
 
     struct Connection {
@@ -144,7 +144,7 @@ public:
         uint64_t p_author
     );
 
-    SnapshotReceiver *receiver(int p_peer, uint64_t p_token);
+    bool reaches(int p_peer, uint64_t p_token);
 
     bool names(int p_peer, uint64_t p_token, StreamLane &r_lane) const;
 
@@ -178,103 +178,6 @@ public:
     }
 
     uint32_t parked_count() const;
-
-    uint32_t stream_count() const;
-};
-
-class StreamWriterBook {
-    struct Lane {
-        uint64_t request = 0;
-        uint64_t token = 0;
-        uint64_t epoch = 0;
-        uint32_t schema = 0;
-        StreamTenure tenure;
-        int64_t repaired_at_ms = 0;
-        bool token_was_reset = false;
-        SnapshotSender sender;
-    };
-
-    struct Connection {
-        godot::HashMap<uint64_t, Lane> lanes;
-        godot::HashMap<uint64_t, uint64_t> requests;
-        godot::HashMap<uint64_t, uint64_t> tokens;
-    };
-
-    godot::HashMap<int, Connection> connections;
-    uint64_t unknown_receipts = 0;
-
-    Lane *lane_at(int p_peer, const StreamLane &p_lane);
-    Lane *lane_by_token(int p_peer, uint64_t p_token);
-    godot::LocalVector<ClosedLane> close_where(
-        int64_t p_route,
-        TenureDooms p_dooms,
-        const StreamTenure &p_bar
-    );
-
-public:
-    uint64_t open(
-        int p_peer,
-        const StreamLane &p_lane,
-        uint64_t p_epoch,
-        uint32_t p_schema,
-        const StreamTenure &p_tenure = StreamTenure()
-    );
-
-    bool holds_tenure(
-        int p_peer,
-        const StreamLane &p_lane,
-        const StreamTenure &p_tenure
-    );
-
-    godot::LocalVector<ClosedLane> close_tenures_other_than(
-        int64_t p_route,
-        uint64_t p_tenure
-    );
-
-    godot::LocalVector<ClosedLane> close_anchors_other_than(
-        int64_t p_route,
-        uint64_t p_anchor,
-        uint64_t p_author
-    );
-
-    ReadyVerdict ready(int p_peer, uint64_t p_request, uint64_t p_token);
-
-    bool reset(int p_peer, uint64_t p_request, uint64_t p_token);
-
-    uint64_t token_of(int p_peer, const StreamLane &p_lane);
-
-    uint64_t request_of(int p_peer, const StreamLane &p_lane);
-
-    SnapshotSender *sender(int p_peer, const StreamLane &p_lane);
-
-    SnapshotSender *sender_of_token(int p_peer, uint64_t p_token);
-
-    bool names(int p_peer, uint64_t p_token, StreamLane &r_lane) const;
-
-    ReceiptVerdict receipt(int p_peer, uint64_t p_token, uint64_t p_revision);
-
-    uint64_t unknown_receipt_count() const {
-        return unknown_receipts;
-    }
-
-    bool repair_due(
-        int p_peer,
-        const StreamLane &p_lane,
-        int64_t p_now_ms,
-        int64_t p_smoothed_rtt_ms
-    );
-
-    void note_attempt(int p_peer, const StreamLane &p_lane, int64_t p_now_ms);
-
-    godot::LocalVector<StreamLane> unready(int p_peer) const;
-
-    bool close(int p_peer, const StreamLane &p_lane, uint64_t &r_token);
-
-    void forget_peer(int p_peer);
-
-    void close_route(int64_t p_route);
-
-    void clear();
 
     uint32_t stream_count() const;
 };

@@ -484,7 +484,7 @@ TEST_CASE(
     "its error names NetwEntity.lifecycle and the root"
 ) {
     const char *UNDECLARED
-        = "NetwEntity.lifecycle = LIFECYCLE_CONTROLLER in its root's _init";
+        = "NetwEntity.lifecycle to LIFECYCLE_CONTROLLER in its root's _init";
     const char *NOT_HIS = "neither the session authority nor its controller";
     const char *MOVING = "session authority is moving";
     const RefusalScenario CORPUS[] = {

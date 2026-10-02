@@ -7,6 +7,7 @@
 #include "godot/ref_counted.hpp"
 #include "godot/rid.hpp"
 #include "godot/variant.hpp"
+#include "netw/slot_rows.hpp"
 
 namespace netw {
 
@@ -22,6 +23,7 @@ public:
 
 private:
     struct Record {
+        godot::RID entity;
         int32_t route = 0;
         State state = STATE_UNKNOWN;
         int32_t epoch = 0;
@@ -37,7 +39,7 @@ private:
         bool on_clock = false;
     };
 
-    godot::HashMap<godot::RID, Record> records;
+    SlotRows<Record> records;
     godot::HashMap<int32_t, godot::RID> by_route;
     struct LeaseBlock {
         int32_t peer = 0;
@@ -52,8 +54,13 @@ private:
     int32_t route_counter = 0;
     int32_t minted_high = 0;
     int32_t frame_counter = 0;
+    godot::LocalVector<int32_t> moved;
+    bool moved_overflow = false;
+
+    static constexpr uint32_t MOVED_KEPT = 4096;
 
     Record *record_of(const godot::RID &entity) const;
+    void note_moved(int32_t route);
     godot::PackedInt32Array sweep_pending(int clock_tick);
 
 public:
@@ -119,6 +126,8 @@ public:
 
     godot::PackedInt32Array poll(int clock_tick);
     int frame() const;
+
+    bool take_moved(godot::LocalVector<int32_t> &r_routes);
 
     void clear();
 };

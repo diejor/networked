@@ -58,13 +58,13 @@ class NetwQuantizeScalar : public NetwQuantize {
     double max_limit = 1.0;
 
     int64_t top_code() const;
-    int64_t encode_axis(double value) const;
-    double decode_axis(int64_t code) const;
 
 protected:
     static void _bind_methods();
 
 public:
+    int64_t encode_axis(double value) const;
+    double decode_axis(int64_t code) const;
     void set_bit_count(int value);
     int get_bit_count() const;
     void set_min_limit(double value);
@@ -126,6 +126,8 @@ protected:
     static void _bind_methods();
 
 public:
+    int64_t encode_turn(const godot::Quaternion &value) const;
+    godot::Quaternion decode_turn(int64_t packed) const;
     void set_bit_count(int value);
     int get_bit_count() const;
     godot::Ref<NetwQuantizeQuaternion> bits(int value);

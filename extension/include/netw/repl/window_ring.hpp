@@ -19,7 +19,6 @@ struct WindowSample {
 
 class WindowRing {
     godot::LocalVector<WindowSample> samples;
-    SchemaRecord declaration;
     wire::WirePlan compiled;
     uint32_t depth = 1;
     int64_t confirmed = -1;
@@ -36,8 +35,6 @@ public:
     const wire::WirePlan &plan() const {
         return compiled;
     }
-
-    bool gather(const godot::Array &p_values, wire::CodeRow &r_row) const;
 
     uint32_t held() const {
         return samples.size();

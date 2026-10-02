@@ -88,9 +88,8 @@ Error SpawnerCompat::consume(Node *p_node, Object *p_spawner) {
     if (plane != nullptr && !plane->is_session_authority()) {
         NETW_ERROR(
             sys::SPAWN,
-            "'%s' was added under a MultiplayerSpawner this peer holds "
-            "authority over, but only the session authority spawns. Spawn it "
-            "on the session with Netw.spawn",
+            "'%s' was added under a MultiplayerSpawner on a client, and only "
+            "the server spawns. Add it on the server, or use Netw.spawn.",
             p_node->get_name()
         );
         return ERR_UNAUTHORIZED;
@@ -109,8 +108,9 @@ Error SpawnerCompat::consume(Node *p_node, Object *p_spawner) {
             drops_uncaptured_custom += 1;
             NETW_WARN(
                 sys::SPAWN,
-                "'%s' has no matching spawnable scene and no captured spawn "
-                "argument, dropping the consumed spawn",
+                "'%s' was not spawned, because its scene is not in the "
+                "MultiplayerSpawner's spawnable scenes. Add the scene there, "
+                "or spawn it with MultiplayerSpawner.spawn.",
                 p_node->get_name()
             );
             return OK;
@@ -206,7 +206,8 @@ Node *SpawnerCompat::instantiate(
     if (limit > 0 && roster.produced_count(spawner) >= limit) {
         NETW_WARN(
             sys::SPAWN,
-            "spawn limit reached for '%s'",
+            "MultiplayerSpawner '%s' reached its spawn_limit, so a spawn was "
+            "dropped. Raise spawn_limit or free spawned nodes.",
             spawner->get_name()
         );
         return nullptr;

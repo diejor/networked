@@ -16,7 +16,7 @@ ROOT = Path(Dir("#").abspath)
 DEPS_FILE = ROOT / "deps.env"
 SUBSYSTEMS_FILE = ROOT / "include" / "netw" / "subsystems.hpp"
 
-LEAF_ZONE_SUBSYSTEMS = ("WIRE", "INTERPOLATION")
+LEAF_ZONE_SUBSYSTEMS = ("WIRE", "INTERPOLATION", "ENTITY", "PREDICTION")
 
 
 def leaf_masked_subsystems():

@@ -225,7 +225,7 @@ int NetwPredictStats::fact_count() {
     return FACT_COUNT;
 }
 
-NetwPredictStats::NetwPredictStats() {
+NetwPredictStats::Book::Book() {
     held.resize(HELD_COUNT);
     for (int at = 0; at < FACT_COUNT; ++at) {
         if (FACTS[at].source == SOURCE_HELD) {
@@ -236,22 +236,26 @@ NetwPredictStats::NetwPredictStats() {
     replay_depth.resize(REPLAY_DEPTH_BUCKETS);
 }
 
-void NetwPredictStats::bind_slot(
+void NetwPredictStats::Book::bind_slot(
     NetwPredictionEngine *p_pool,
     const Ref<NetwEntity> &p_entity
 ) {
     pool = p_pool;
     entity = p_entity;
+    seat = pool != nullptr && entity.is_valid() ? pool->slot_of(entity) : -1;
 }
 
-int64_t NetwPredictStats::slot() const {
+int64_t NetwPredictStats::Book::slot() const {
     if (pool == nullptr || entity.is_null()) {
         return -1;
     }
-    return pool->slot_of(entity);
+    if (seat < 0 || !pool->is_open(seat)) {
+        seat = pool->slot_of(entity);
+    }
+    return seat;
 }
 
-int64_t NetwPredictStats::column(
+int64_t NetwPredictStats::Book::column(
     Source source,
     int index,
     int64_t fallback
@@ -263,8 +267,9 @@ int64_t NetwPredictStats::column(
     PackedInt64Array columns;
     switch (source) {
         case SOURCE_DRIVE:
-            columns = pool->drive_stats(at);
-            break;
+            return index < NetwPredictionEngine::STAT_COUNT
+                ? pool->drive_stat(at, index)
+                : fallback;
         case SOURCE_COMPARE:
             columns = pool->compare_stats(at);
             break;
@@ -281,7 +286,7 @@ int64_t NetwPredictStats::column(
     return columns[index];
 }
 
-Variant NetwPredictStats::read(const Fact &fact) const {
+Variant NetwPredictStats::Book::read(const Fact &fact) const {
     switch (fact.source) {
         case SOURCE_HELD:
             return held[fact.index];
@@ -326,7 +331,7 @@ Variant NetwPredictStats::read(const Fact &fact) const {
     }
 }
 
-int64_t NetwPredictStats::get_int_fact(int index) const {
+int64_t NetwPredictStats::Book::get_int_fact(int index) const {
     if (index < 0 || index >= FACT_COUNT) {
         return 0;
     }
@@ -337,7 +342,7 @@ int64_t NetwPredictStats::get_int_fact(int index) const {
     return column(fact.source, fact.index, fact.fallback);
 }
 
-void NetwPredictStats::set_int_fact(int index, int64_t value) {
+void NetwPredictStats::Book::set_int_fact(int index, int64_t value) {
     if (index < 0 || index >= FACT_COUNT) {
         return;
     }
@@ -347,14 +352,17 @@ void NetwPredictStats::set_int_fact(int index, int64_t value) {
     }
 }
 
-Dictionary NetwPredictStats::get_dict_fact(int index) const {
+Dictionary NetwPredictStats::Book::get_dict_fact(int index) const {
     if (index < 0 || index >= FACT_COUNT) {
         return Dictionary();
     }
     return read(FACTS[index]);
 }
 
-void NetwPredictStats::set_dict_fact(int index, const Dictionary &value) {
+void NetwPredictStats::Book::set_dict_fact(
+    int index,
+    const Dictionary &value
+) {
     if (index < 0 || index >= FACT_COUNT) {
         return;
     }
@@ -370,14 +378,14 @@ void NetwPredictStats::set_dict_fact(int index, const Dictionary &value) {
     }
 }
 
-PackedInt32Array NetwPredictStats::get_buckets_fact(int index) const {
+PackedInt32Array NetwPredictStats::Book::get_buckets_fact(int index) const {
     if (index < 0 || index >= FACT_COUNT) {
         return PackedInt32Array();
     }
     return read(FACTS[index]);
 }
 
-void NetwPredictStats::set_buckets_fact(
+void NetwPredictStats::Book::set_buckets_fact(
     int index,
     const PackedInt32Array &value
 ) {
@@ -396,14 +404,14 @@ void NetwPredictStats::set_buckets_fact(
     }
 }
 
-PackedStringArray NetwPredictStats::get_names_fact(int index) const {
+PackedStringArray NetwPredictStats::Book::get_names_fact(int index) const {
     if (index < 0 || index >= FACT_COUNT) {
         return PackedStringArray();
     }
     return read(FACTS[index]);
 }
 
-void NetwPredictStats::set_names_fact(
+void NetwPredictStats::Book::set_names_fact(
     int index,
     const PackedStringArray &value
 ) {
@@ -422,12 +430,25 @@ void NetwPredictStats::set_names_fact(
     }
 }
 
-Dictionary NetwPredictStats::to_dictionary() const {
+Dictionary NetwPredictStats::Book::to_dictionary() const {
     Dictionary out;
     for (int at = 0; at < FACT_COUNT; ++at) {
         out[StringName(FACTS[at].name)] = read(FACTS[at]);
     }
     return out;
+}
+
+void NetwPredictStats::view(Book *p_book) {
+    book = p_book != nullptr ? p_book : &own;
+}
+
+void NetwPredictStats::keep(const Book &p_book) {
+    own = p_book;
+    book = &own;
+}
+
+Dictionary NetwPredictStats::to_dictionary() const {
+    return book->to_dictionary();
 }
 
 int64_t NetwPredictStats::get_corrections() const {

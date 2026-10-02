@@ -1,5 +1,7 @@
 #include "netw/carrier_buffers.hpp"
 
+#include <utility>
+
 #include "netw/log.hpp"
 
 namespace netw {
@@ -20,12 +22,11 @@ void CarrierBatch::attach(const CarrierRow &p_row) {
             continue;
         }
         if (p_row.revision >= descriptors[at].revision) {
-            descriptors[at].copy_from(p_row);
+            descriptors[at] = p_row;
         }
         return;
     }
-    descriptors.resize(descriptors.size() + 1);
-    descriptors[descriptors.size() - 1].copy_from(p_row);
+    descriptors.push_back(p_row);
 }
 
 void CarrierBatch::close_route(int64_t p_route) {
@@ -35,7 +36,7 @@ void CarrierBatch::close_route(int64_t p_route) {
             continue;
         }
         if (kept != at) {
-            descriptors[kept].copy_from(descriptors[at]);
+            descriptors[kept] = descriptors[at];
         }
         ++kept;
     }
@@ -47,6 +48,13 @@ void CarrierBatch::release() {
     descriptors.clear();
     frames = 0;
     bits = 0;
+}
+
+void CarrierBatch::swap(CarrierBatch &r_other) {
+    std::swap(held, r_other.held);
+    std::swap(descriptors, r_other.descriptors);
+    std::swap(frames, r_other.frames);
+    std::swap(bits, r_other.bits);
 }
 
 HashMap<int64_t, CarrierBatch> &NetwCarrierBuffers::lane(bool p_reliable) {
@@ -79,14 +87,14 @@ CarrierBatch NetwCarrierBuffers::append(
     if (overflows) {
         NETW_TRACE(
             sys::TRANSPORT,
-            "peer %d flushes early: %d held + %d frame over %d",
+            "Sending early to peer %d, because %d held bytes and a %d byte "
+            "frame exceed %d.",
             p_peer,
             int(run->size()),
             p_frame.size(),
             p_budget
         );
-        owed = *run;
-        run->release();
+        owed.swap(*run);
     }
     run->take_frame(p_frame);
     if (p_row != nullptr) {
@@ -97,13 +105,25 @@ CarrierBatch NetwCarrierBuffers::append(
 
 CarrierBatch NetwCarrierBuffers::take(int64_t p_peer, bool p_reliable) {
     HashMap<int64_t, CarrierBatch> &runs = lane(p_reliable);
+    CarrierBatch out;
     CarrierBatch *run = runs.getptr(p_peer);
-    if (run == nullptr) {
-        return CarrierBatch();
+    if (run != nullptr) {
+        out.swap(*run);
     }
-    const CarrierBatch out = *run;
-    runs.erase(p_peer);
     return out;
+}
+
+void NetwCarrierBuffers::recycle(
+    int64_t p_peer,
+    bool p_reliable,
+    CarrierBatch &r_spent
+) {
+    CarrierBatch *run = lane(p_reliable).getptr(p_peer);
+    if (run == nullptr || !run->is_empty() || !run->rows().is_empty()) {
+        return;
+    }
+    r_spent.release();
+    run->swap(r_spent);
 }
 
 void NetwCarrierBuffers::close_route(int64_t p_route) {

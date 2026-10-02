@@ -97,7 +97,10 @@ void LocalLoopbackSession::init_server_side() {
     server_peer.instantiate();
     server_peer->set_loopback_session(this);
     if (server_peer->create_server() != Error::OK) {
-        NETW_WARN(sys::TRANSPORT, "loopback server could not be created");
+        NETW_WARN(
+            sys::TRANSPORT,
+            "LocalLoopbackSession could not create its server peer."
+        );
     }
 }
 
@@ -109,7 +112,10 @@ Ref<LocalMultiplayerPeer> LocalLoopbackSession::create_client_peer() {
     client->set_loopback_session(this);
     const int client_id = int(gd::randi_range(2, 2147483647));
     if (client->create_client(client_id) != Error::OK) {
-        NETW_WARN(sys::TRANSPORT, "loopback client could not be created");
+        NETW_WARN(
+            sys::TRANSPORT,
+            "LocalLoopbackSession could not create a client peer."
+        );
         return client;
     }
 
@@ -118,7 +124,7 @@ Ref<LocalMultiplayerPeer> LocalLoopbackSession::create_client_peer() {
     client_peers.push_back(client);
     NETW_INFO(
         sys::TRANSPORT,
-        "loopback handshake complete for client=%d",
+        "The local handshake finished for client %d.",
         client_id
     );
     return client;

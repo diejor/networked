@@ -102,9 +102,8 @@ Ref<NetwPlayer> NetwMultiplayer::scene_requester_player(Node *p_requester) {
 RID NetwMultiplayer::scene_of(const RID &p_entity) const {
     RID walker = p_entity;
     while (walker.is_valid()) {
-        NetwEntityRecord *const *record
-            = wrapper_records.getptr(walker.get_id());
-        if (record != nullptr && (*record)->get_declares_scene()) {
+        NetwEntityRecord *const record = slot_record(walker.get_id());
+        if (record != nullptr && record->get_declares_scene()) {
             return walker;
         }
         walker = entity_parent_of(walker);
@@ -113,11 +112,11 @@ RID NetwMultiplayer::scene_of(const RID &p_entity) const {
 }
 
 Ref<NetwSceneHandle> NetwMultiplayer::scene_handle_of(const RID &p_entity) {
-    NetwEntityRecord *const *record = wrapper_records.getptr(p_entity.get_id());
+    NetwEntityRecord *const record = slot_record(p_entity.get_id());
     if (record == nullptr) {
         return Ref<NetwSceneHandle>();
     }
-    return (*record)->part(
+    return record->part(
         NetwEntityRecord::PART_SCENE,
         entity_get_view(p_entity).ptr()
     );
@@ -376,7 +375,7 @@ Node *NetwMultiplayer::scene_spawn_node(
             packed.is_null(),
             nullptr,
             sys::SCENE,
-            "no scene file at %s",
+            "No scene file exists at '%s'.",
             String(p_data)
         );
         level = packed->instantiate();
@@ -578,17 +577,16 @@ RID NetwMultiplayer::scene_presentation_derive() {
         if (stands) {
             NETW_WARN(
                 sys::SCENE,
-                "this peer holds bodies in %d scenes at once, %s, so it "
-                "presents none of them. Leave one of them to present the "
-                "other",
+                "This peer has players in %d scenes at once, %s, so it shows "
+                "none of them. Leave all but one scene to show it.",
                 int(reached.size()),
                 named
             );
         } else {
             NETW_TRACE(
                 sys::SCENE,
-                "this peer watches %d scenes and stands in none, %s, so it "
-                "presents none of them",
+                "This peer watches %d scenes (%s) and is in none of them, so "
+                "it shows none.",
                 int(reached.size()),
                 named
             );
@@ -703,10 +701,10 @@ void NetwMultiplayer::scene_on_native_change() {
     }
     NETW_ERROR(
         sys::SCENE,
-        "SceneTree.change_scene_to_* freed the scene this session was mounted "
-        "in, so its root and every world under it are gone while the peers it "
-        "was talking to are not. Mount the session outside the scene it "
-        "presents, and change scenes with Netw.change_scene_to_file()."
+        "A SceneTree scene change freed the scene that held this session, so "
+        "the session is gone while its peers are still connected. Keep the "
+        "session outside the scene, and change scenes with "
+        "Netw.change_scene_to_file."
     );
 }
 
@@ -738,7 +736,8 @@ Node *NetwMultiplayer::scene_activate(const Variant &p_destination) {
             NETW_ERR_V(
                 nullptr,
                 sys::SCENE,
-                "cannot activate an in-memory PackedScene"
+                "A PackedScene with no file path cannot be activated. Save it "
+                "to a file first."
             );
         case NetwSceneCore::DESTINATION_PACKED: {
             Object *object = p_destination;
@@ -762,8 +761,8 @@ Node *NetwMultiplayer::scene_activate(const Variant &p_destination) {
     NETW_ERR_V(
         nullptr,
         sys::SCENE,
-        "scene activation expects a file-backed PackedScene: a label names a "
-        "live scene, not a recipe, and cannot be activated"
+        "Only a PackedScene saved to a file can be activated. A scene name "
+        "cannot be."
     );
 }
 
@@ -799,7 +798,8 @@ Ref<NetwPromise> NetwMultiplayer::scene_replace_sources(
     if (!scene_core->transition_open()) {
         NETW_TRACE(
             sys::SCENE,
-            "refused a scene change: another change is already open"
+            "A scene change was refused, because another change is already "
+            "open."
         );
         promise->reject(ERR_BUSY, String("a scene change is already open"));
         return promise;
@@ -1062,7 +1062,7 @@ bool NetwMultiplayer::scene_destroy(const RID &p_scene) {
 }
 
 void NetwMultiplayer::scene_pump_retired() {
-    NETW_ZONE_NC("session scene pump retired", colors::SCENE);
+    NETW_ZONE_NC("Scene retire pump", colors::SCENE);
     const Array retired = scene_core->pump_retired();
     for (int at = 0; at < retired.size(); ++at) {
         const RID scene = retired[at];
@@ -1189,7 +1189,8 @@ Error NetwMultiplayer::scene_watch(const RID &p_scene, int64_t p_peer) {
         !is_host(),
         ERR_UNAUTHORIZED,
         sys::SCENE,
-        "scene_watch is server-only, and peer %d asked",
+        "NetwMultiplayer.scene_watch runs only on the server, and was called "
+        "for peer %d on a client.",
         int(p_peer)
     );
     if (p_peer == 0) {
@@ -1198,7 +1199,7 @@ Error NetwMultiplayer::scene_watch(const RID &p_scene, int64_t p_peer) {
     if (scene_entity_node(p_scene) == nullptr) {
         NETW_TRACE(
             sys::SCENE,
-            "scene %d names no live node, so peer %d does not watch it",
+            "Scene %d has no live node, so peer %d does not watch it.",
             int(p_scene.get_id()),
             int(p_peer)
         );
@@ -1206,10 +1207,9 @@ Error NetwMultiplayer::scene_watch(const RID &p_scene, int64_t p_peer) {
     }
     scene_admit_peer(p_scene, p_peer);
     if (!scene_subscribes(p_scene, p_peer)) {
-        NETW_WARN_COND(
-            true,
+        NETW_WARN(
             sys::SCENE,
-            "peer %d did not reach scene %d",
+            "Peer %d could not be added to scene %d.",
             int(p_peer),
             int(p_scene.get_id())
         );
@@ -1225,7 +1225,8 @@ bool NetwMultiplayer::scene_unwatch(const RID &p_scene, int64_t p_peer) {
         !is_host(),
         false,
         sys::SCENE,
-        "scene_unwatch is server-only, and peer %d asked",
+        "NetwMultiplayer.scene_unwatch runs only on the server, and was "
+        "called for peer %d on a client.",
         int(p_peer)
     );
     if (!is_host() || scene_entity_node(p_scene) == nullptr) {
@@ -1253,8 +1254,8 @@ bool NetwMultiplayer::scene_watches(const RID &p_scene, int64_t p_peer) const {
 }
 
 bool NetwMultiplayer::scene_is_declared(const RID &p_entity) const {
-    NetwEntityRecord *const *record = wrapper_records.getptr(p_entity.get_id());
-    return record != nullptr && (*record)->get_declares_scene();
+    NetwEntityRecord *const record = slot_record(p_entity.get_id());
+    return record != nullptr && record->get_declares_scene();
 }
 
 Node *NetwMultiplayer::scene_entity_node(const RID &p_entity) const {
@@ -1380,9 +1381,8 @@ void NetwMultiplayer::scene_publish_viewers(const RID &p_scene) {
     if (!scene_collect_viewers(p_scene, members)) {
         NETW_ERROR(
             sys::SCENE,
-            "scene %d holds %d viewers and a snapshot carries at most %d, so "
-            "its roster is not published. A partial roster would read as the "
-            "absent players having left.",
+            "Scene %d has %d players and its player list holds at most %d, so "
+            "the list was not sent. Split the players across more scenes.",
             int(route),
             int(members.size()),
             int(session::VIEWERS_MAX)
@@ -1451,8 +1451,8 @@ void NetwMultiplayer::scene_apply_viewers(
     if (p_head.generation != session_core.get_generation()) {
         NETW_TRACE(
             sys::SCENE,
-            "a viewer snapshot from session generation %d reaches generation "
-            "%d and cannot name anyone in it",
+            "A viewer list from session generation %d arrived in generation "
+            "%d, so it was ignored.",
             int(p_head.generation),
             int(session_core.get_generation())
         );
@@ -1473,8 +1473,8 @@ void NetwMultiplayer::scene_apply_viewers(
     if (!liveness_epoch_admits(p_head.route, int64_t(p_head.epoch))) {
         NETW_TRACE(
             sys::SCENE,
-            "a viewer snapshot for route %d names epoch %d, which this peer "
-            "has already replaced",
+            "A viewer list for route %d names epoch %d, which this peer has "
+            "already replaced.",
             int(p_head.route),
             int(p_head.epoch)
         );
@@ -1518,7 +1518,7 @@ void NetwMultiplayer::scene_receive_viewers_frame(
     if (!session::viewers_read(p_payload, head, members)) {
         NETW_TRACE(
             sys::SCENE,
-            "a viewer snapshot that did not decode whole seats nobody"
+            "A viewer list that did not decode fully was ignored."
         );
         return;
     }
@@ -1658,10 +1658,10 @@ Ref<NetwPromise> NetwMultiplayer::scene_move_entity(
         source == target
     );
     if (verdict == SCENE_MOVE_REFUSED) {
-        NETW_WARN_COND(
-            true,
+        NETW_WARN(
             sys::SCENE,
-            "scene_move: entity %d or destination %d is unreachable",
+            "Entity %d could not move to scene %d, because one of them is not "
+            "in the tree.",
             int(p_entity.get_id()),
             int(p_destination.get_id())
         );
@@ -1674,7 +1674,7 @@ Ref<NetwPromise> NetwMultiplayer::scene_move_entity(
     if (verdict == SCENE_MOVE_ALREADY_THERE) {
         NETW_TRACE(
             sys::SCENE,
-            "move %d already belongs to %d",
+            "Entity %d is already in scene %d.",
             int(p_entity.get_id()),
             int(p_destination.get_id())
         );
@@ -1683,7 +1683,7 @@ Ref<NetwPromise> NetwMultiplayer::scene_move_entity(
     }
     NETW_TRACE(
         sys::SCENE,
-        "move %d into %d",
+        "Moving entity %d into scene %d.",
         int(p_entity.get_id()),
         int(p_destination.get_id())
     );
@@ -1719,7 +1719,8 @@ Ref<NetwPromise> NetwMultiplayer::entity_reparent(
     if (mover.is_null() || body == nullptr || p_parent == nullptr) {
         NETW_WARN(
             sys::SCENE,
-            "reparent: entity %d or its new parent is unreachable",
+            "Netw.reparent could not move entity %d, because it or its new "
+            "parent is not in the tree.",
             int(p_entity.get_id())
         );
         promise->reject(
@@ -1731,7 +1732,7 @@ Ref<NetwPromise> NetwMultiplayer::entity_reparent(
     if (body->get_parent() == p_parent) {
         NETW_TRACE(
             sys::SCENE,
-            "reparent %d already stands under its new parent",
+            "Reparent %d is already under its new parent.",
             int(p_entity.get_id())
         );
         promise->resolve(OK);
@@ -1739,7 +1740,7 @@ Ref<NetwPromise> NetwMultiplayer::entity_reparent(
     }
     NETW_TRACE(
         sys::SCENE,
-        "reparent %d under %s",
+        "Reparenting %d under %s.",
         int(p_entity.get_id()),
         String(p_parent->get_name())
     );
@@ -1771,7 +1772,10 @@ void NetwMultiplayer::scene_carry_begin(
     NETW_ZONE_NC("NetwMultiplayer scene_carry_begin", colors::SCENE);
     Node *body = p_body;
     if (body == nullptr || p_entity.is_null()) {
-        NETW_TRACE(sys::SCENE, "carry refused: the mover has no live body");
+        NETW_TRACE(
+            sys::SCENE,
+            "A move was refused, because the moving entity has no live body."
+        );
         p_promise->reject(
             ERR_UNAVAILABLE,
             "scene_carry: the mover has no body to reparent"
@@ -1891,7 +1895,11 @@ void NetwMultiplayer::scene_carry_abandon(int64_t p_id) {
     const SceneCarry carry = *found;
     scene_carries.erase(p_id);
     guard_let_go(carry.guard);
-    NETW_TRACE(sys::SCENE, "carry %d abandoned mid-flight", int(p_id));
+    NETW_TRACE(
+        sys::SCENE,
+        "Move %d was abandoned before it finished.",
+        int(p_id)
+    );
     if (carry.promise.is_valid()) {
         carry.promise->reject(
             ERR_UNAVAILABLE,
@@ -2238,21 +2246,7 @@ void NetwMultiplayer::scene_watch_entity(const Ref<NetwEntity> &p_entity) {
     if (!subject.is_valid()) {
         return;
     }
-    {
-        NETW_ZONE_NC("scene watch connect edges", colors::SCENE);
-        const Callable entered
-            = callable_mp(this, &NetwMultiplayer::scene_report_live_entity_edge)
-                  .bind(p_entity, subject, true);
-        const Callable exited
-            = callable_mp(this, &NetwMultiplayer::scene_report_live_entity_edge)
-                  .bind(p_entity, subject, false);
-        if (!node->is_connected("tree_entered", entered)) {
-            node->connect("tree_entered", entered);
-        }
-        if (!node->is_connected("tree_exiting", exited)) {
-            node->connect("tree_exiting", exited);
-        }
-    }
+    p_entity->watch_scene_edges(subject);
     if (node->is_inside_tree()) {
         NETW_ZONE_NC("scene watch report edge", colors::SCENE);
         scene_report_live_entity_edge(p_entity, subject, true);
@@ -2341,7 +2335,7 @@ void NetwMultiplayer::scene_request_arm_deadline(
     if (tree == nullptr) {
         NETW_TRACE(
             sys::SCENE,
-            "no scene tree, so scene request %d never expires",
+            "There is no SceneTree, so scene request %d never expires.",
             p_request_id
         );
         return;
@@ -2350,7 +2344,7 @@ void NetwMultiplayer::scene_request_arm_deadline(
     if (countdown.is_null()) {
         NETW_TRACE(
             sys::SCENE,
-            "the tree minted no timer, so scene request %d never expires",
+            "The SceneTree made no timer, so scene request %d never expires.",
             p_request_id
         );
         return;
@@ -2410,7 +2404,7 @@ void NetwMultiplayer::scene_receive_released_frame(
     if (!released.is_valid()) {
         NETW_TRACE(
             sys::SCENE,
-            "a released frame named no scene this peer subscribes to"
+            "A released frame names no scene this peer watches."
         );
         return;
     }
@@ -2430,7 +2424,8 @@ void NetwMultiplayer::scene_receive_request(
     if (player.is_null()) {
         NETW_WARN(
             sys::SCENE,
-            "peer %d asked for a scene change with no admitted player",
+            "Peer %d asked for a scene change before it joined, so it was "
+            "refused.",
             int(p_peer)
         );
         scene_send_result(p_peer, p_request_id, ERR_UNAUTHORIZED);
@@ -2439,8 +2434,8 @@ void NetwMultiplayer::scene_receive_request(
     if (!NetwSceneCore::scope_names_an_operation(p_scope)) {
         NETW_WARN(
             sys::SCENE,
-            "peer %d asked for a scene change at scope %d, which names no "
-            "operation",
+            "Peer %d asked for a scene change with unknown scope %d, so it was "
+            "refused.",
             int(p_peer),
             p_scope
         );
@@ -2470,8 +2465,8 @@ Node *NetwMultiplayer::scene_request_source(
     if (!named.is_valid()) {
         NETW_WARN(
             sys::SCENE,
-            "peer %d named scene %d as the source of a scene change, and this "
-            "session holds no live scene under that route",
+            "Peer %d asked to leave scene %d, which does not exist, so the "
+            "scene change was refused.",
             int(p_peer),
             int(p_source_route)
         );
@@ -2480,8 +2475,8 @@ Node *NetwMultiplayer::scene_request_source(
     if (liveness_route_epoch(p_source_route) != p_source_epoch) {
         NETW_WARN(
             sys::SCENE,
-            "peer %d named scene %d at epoch %d, and that route now carries "
-            "epoch %d, so the source it meant is gone",
+            "Peer %d asked to leave scene %d (epoch %d), which was replaced by "
+            "epoch %d, so the scene change was refused.",
             int(p_peer),
             int(p_source_route),
             int(p_source_epoch),
@@ -2492,7 +2487,8 @@ Node *NetwMultiplayer::scene_request_source(
     if (!scene_subscribes(named, p_peer)) {
         NETW_WARN(
             sys::SCENE,
-            "peer %d named a source scene %d it does not subscribe to",
+            "Peer %d asked to leave scene %d, which it is not in, so the scene "
+            "change was refused.",
             int(p_peer),
             int(p_source_route)
         );
@@ -2535,8 +2531,8 @@ void NetwMultiplayer::scene_receive_path_request(
     if (scene_packed_root_script(packed).is_null()) {
         NETW_TRACE(
             sys::SCENE,
-            "an approved scene request loaded %s, whose root declares no "
-            "multiplayer scene",
+            "An approved scene request loaded %s, whose root is not a "
+            "multiplayer scene.",
             resolved
         );
         scene_send_result(p_peer, p_request_id, ERR_INVALID_DATA);
@@ -2571,10 +2567,9 @@ Error NetwMultiplayer::scene_admits_request(
         if (claim_verdict_warning(ERR_UNAUTHORIZED, 0)) {
             NETW_WARN(
                 sys::SCENE,
-                "refusing a client's scene request for %s because this "
-                "session installs no handler. Netw.configure_scene_requests "
-                "is what decides these, and without one every request is "
-                "refused.",
+                "A client's scene request for '%s' was refused, because no "
+                "handler decides scene requests. Install one with "
+                "Netw.configure_scene_requests.",
                 String(p_destination)
             );
         }
@@ -2586,8 +2581,8 @@ Error NetwMultiplayer::scene_admits_request(
         && claim_verdict_warning(ERR_INVALID_DATA, 0)) {
         NETW_WARN(
             sys::SCENE,
-            "a scene request handler answered no Error, so the request is "
-            "refused. Answer OK to admit and an Error to refuse."
+            "The scene request handler did not return an Error, so the request "
+            "was refused. Return OK to accept it or an Error to refuse it."
         );
     }
     return verdict;
@@ -2677,7 +2672,7 @@ Error NetwMultiplayer::write_scene_facet(const RID &p_entity, bool p_declared) {
         !is_host() && entity_get_route(p_entity) <= 0,
         ERR_UNAUTHORIZED,
         sys::SCENE,
-        "a scene facet was written off server authority for an unrouted entity"
+        "A client cannot set the scene of an entity that has not spawned yet."
     );
 
     const Ref<NetwEntity> wrapper = entity_get_view(p_entity);
@@ -2760,7 +2755,7 @@ Error NetwMultiplayer::scene_set_param(
             NETW_ERR_V(
                 ERR_INVALID_PARAMETER,
                 sys::SCENE,
-                "scene parameter {} names no scene setting",
+                "Scene setting %d does not exist.",
                 p_param
             );
     }
@@ -2900,7 +2895,7 @@ RID NetwMultiplayer::scene_create(
         !is_host(),
         RID(),
         sys::SCENE,
-        "a scene was created off server authority"
+        "NetwMultiplayer.scene_create runs only on the server."
     );
     Node *node = scene_spawn(p_recipe, p_isolation);
     if (node == nullptr) {

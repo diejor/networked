@@ -75,7 +75,10 @@ TEST_CASE(
 
     SUBCASE("and undeclaring one that was never declared is a no-op") {
         session->lagcomp_timeline_undeclare(entity);
-        CHECK(session->lagcomp_timeline_of(entity).is_null());
+        NETW_CHECK_EQ(
+            session->get_lagcomp_core()->timeline_registered(),
+            int64_t(0)
+        );
     }
 }
 

@@ -4,9 +4,9 @@
 #include "godot/node.hpp"
 #include "godot/object.hpp"
 #include "netw/api/entity.hpp"
-#include "netw/api/property_set_binding.hpp"
 #include "netw/api/replication_core.hpp"
 #include "netw/display/book.hpp"
+#include "netw/display/roles.hpp"
 #include "netw/sim/body.hpp"
 #include "netw/sim/row.hpp"
 #include "netw/sync_authoring.hpp"
@@ -34,7 +34,7 @@ sim::Facts NetwMultiplayer::sim_body_facts(
 ) const {
     sim::Facts facts;
     facts.declared = true;
-    facts.state_rows = p_entity->get_state_binding().is_valid();
+    facts.state_rows = p_entity->get_state_binding() != nullptr;
     facts.session_authority_here = is_host();
     facts.controller_is_nobody = p_entity->get_controller() == 0;
     facts.controller_here
@@ -69,6 +69,8 @@ void NetwMultiplayer::sim_settle_body(const Ref<NetwEntity> &p_entity) {
         return;
     }
     const bool seated = standing != nullptr && standing->facts.predicted;
+    const sim::Mode settled = standing != nullptr ? standing->mode
+                                                  : sim::Mode::NONE;
     sim::Mode mode = sim::Mode::NONE;
     if (seated) {
         mode = standing->mode;
@@ -88,11 +90,13 @@ void NetwMultiplayer::sim_settle_body(const Ref<NetwEntity> &p_entity) {
             row.declaration.bodies,
             display_config_for(p_entity).visual_root
         );
+        row.bodies.residents = &store().residents;
         row.owner_ticks = owner->has_method(network_tick_name());
         row.control_hook
             = callable_mp(this, &NetwMultiplayer::sim_on_body_control)
                   .bind(entity);
         p_entity->connect(control_changed_name(), row.control_hook);
+        sim_watch_sleep(row, true);
         if (display::Runtime *runtime = display_book->runtime_of(entity)) {
             display_seat_bodies(runtime);
         }
@@ -103,30 +107,21 @@ void NetwMultiplayer::sim_settle_body(const Ref<NetwEntity> &p_entity) {
     if (!seated) {
         sim_announce(entity);
     }
+    if (row.mode != settled) {
+        display_follow_mode(entity);
+    }
 }
 
-bool NetwMultiplayer::sim_draws_column(
-    const RID &p_entity,
-    Node *p_node,
-    const StringName &p_key
-) const {
-    const sim::Row *row = sim_rows.row_of(p_entity);
-    if (row == nullptr || row->bodies.applied != sim::Mode::PROXY) {
-        return false;
-    }
+void NetwMultiplayer::display_follow_mode(const RID &p_entity) {
     display::Runtime *runtime = display_book->runtime_of(p_entity);
-    if (runtime == nullptr
-        || runtime->get_pump_mode() != display::PUMP_REMOTE) {
-        return false;
+    if (runtime == nullptr) {
+        return;
     }
-    const int64_t at = runtime->display_tracks().by_key(
-        display::state_key_for(p_node, p_key)
-    );
-    if (at < 0) {
-        return false;
-    }
-    Object *drawn = runtime->channels()[at]->get_target_obj();
-    return runtime->holds_body(drawn);
+#if defined(NETW_TESTS)
+    idle_work.role_resolves += 1;
+#endif
+    display::resolve_role(runtime, display_hooks);
+    display_book->wake(runtime);
 }
 
 void NetwMultiplayer::sim_settle_body_of(const RID &p_entity) {
@@ -148,12 +143,11 @@ void NetwMultiplayer::sim_install_newest(const Ref<NetwEntity> &p_entity) {
     }
     const int64_t live = liveness_route_of(p_entity.ptr());
     const int64_t route = live > 0 ? live : p_entity->get_route();
-    const TypedArray<NetwPropertySetBinding> bindings
+    const LocalVector<repl::PropertyBindingPtr> bindings
         = plane->derived_group(route);
-    for (int at = 0; at < bindings.size(); at++) {
-        const Ref<NetwPropertySetBinding> binding = bindings[at];
-        if (binding.is_valid()) {
-            binding->reinstall_accepted();
+    for (const repl::PropertyBindingPtr &binding : bindings) {
+        if (binding != nullptr) {
+            store_reinstall(binding);
         }
     }
 }
@@ -163,6 +157,7 @@ void NetwMultiplayer::sim_release_body(const RID &p_entity, bool p_restore) {
     if (row == nullptr) {
         return;
     }
+    sim_watch_sleep(*row, false);
     if (p_restore) {
         sim::release(row->bodies);
     } else {

@@ -3,11 +3,16 @@
 #include <cstdint>
 
 #include "godot/variant.hpp"
-#include "netw/staged_writes.hpp"
 #include "netw/wire/describe.hpp"
 #include "netw/wire/stream.hpp"
 
 namespace netw::sync_kernel {
+
+struct DecodedRow {
+    int64_t ordinal = 0;
+    uint64_t mask = 0;
+    godot::Array values;
+};
 
 inline constexpr int RESERVED = 0;
 
@@ -47,9 +52,10 @@ godot::PackedByteArray encode_volatile(
     const godot::Array &p_values
 );
 
-StagedWrites decode_volatile(
+bool decode_volatile(
     const godot::PackedByteArray &p_payload,
-    const godot::Array &p_keys
+    int64_t p_columns,
+    DecodedRow &r_row
 );
 
 godot::PackedByteArray encode_retained(
@@ -58,9 +64,10 @@ godot::PackedByteArray encode_retained(
     const godot::Array &p_values
 );
 
-StagedWrites decode_retained(
+bool decode_retained(
     const godot::PackedByteArray &p_payload,
-    const godot::Array &p_keys
+    int64_t p_columns,
+    DecodedRow &r_row
 );
 
 godot::Dictionary frame_spec_records();

@@ -3,8 +3,6 @@
 #include "godot/class_db.hpp"
 #include "godot/extension.hpp"
 
-#include "netw/api/ring_buffer.hpp"
-
 #include "netw/api/action.hpp"
 #include "netw/api/auth_protocol.hpp"
 #include "netw/api/bit_stream.hpp"
@@ -49,8 +47,6 @@
 #include "netw/api/probe_result.hpp"
 #include "netw/api/promise.hpp"
 #include "netw/api/property_config.hpp"
-#include "netw/api/property_set.hpp"
-#include "netw/api/property_set_binding.hpp"
 #include "netw/api/record.hpp"
 #include "netw/api/replication_core.hpp"
 #include "netw/api/scene_config.hpp"
@@ -109,19 +105,18 @@
 #include "netw/api/loopback.hpp"
 #include "netw/api/netw_transport.hpp"
 #include "netw/api/quantize.hpp"
-#include "netw/api/ring_buffer.hpp"
 #include "netw/api/session_handle.hpp"
 #include "netw/api/table_handle.hpp"
 #include "netw/api/tests.hpp"
-#include "netw/api/timeline.hpp"
 #include "netw/api/webrtc_signaler.hpp"
 #include "netw/connect/transports.hpp"
 #include "netw/connect/webrtc_link.hpp"
-#include "netw/table/core.hpp"
+#include "netw/store/validate.hpp"
 #include "netw/txn_book.hpp"
 
 #if defined(NETW_TESTS) && defined(NETW_GDEXTENSION)
 #include "tests/support/carrier.h"
+#include "tests/support/fault_log.h"
 #include "tests/support/spawn_probe.h"
 #endif
 
@@ -143,12 +138,11 @@ void initialize_networked_module(ModuleInitializationLevel level) {
     netw::profile::startup();
     netw::profile::configure_plots();
     netw::log::configure();
+    netw::store::configure();
 #if defined(NETW_TESTS) && defined(NETW_GDEXTENSION)
     const PackedStringArray before_registration
         = ClassDBSingleton::get_singleton()->get_class_list();
 #endif
-    GDREGISTER_CLASS(netw::NetwRingBuffer);
-    GDREGISTER_CLASS(netw::NetwTimeline);
     GDREGISTER_CLASS(netw::NetwBitStream);
     GDREGISTER_CLASS(netw::Netw);
     GDREGISTER_CLASS(netw::NetwInterpolate);
@@ -173,9 +167,6 @@ void initialize_networked_module(ModuleInitializationLevel level) {
     GDREGISTER_CLASS(netw::NetwInterestHandle);
     GDREGISTER_CLASS(netw::NetwSceneConfig);
     GDREGISTER_CLASS(netw::NetwSceneHandle);
-    GDREGISTER_CLASS(netw::NetwPropertySetColumn);
-    GDREGISTER_CLASS(netw::NetwPropertySet);
-    GDREGISTER_CLASS(netw::NetwPropertySetBinding);
     GDREGISTER_CLASS(netw::NetwChannel);
     GDREGISTER_ABSTRACT_CLASS(netw::NetwQuantize);
     GDREGISTER_CLASS(netw::NetwQuantizeScalar);
@@ -221,8 +212,6 @@ void initialize_networked_module(ModuleInitializationLevel level) {
     GDREGISTER_CLASS(netw::NetwClockConfig);
     GDREGISTER_CLASS(netw::NetwLagCompensationConfig);
     GDREGISTER_CLASS(netw::NetwSessionConfig);
-    GDREGISTER_CLASS(netw::NetwColumnRef);
-    GDREGISTER_CLASS(netw::NetwSchemaColumn);
     GDREGISTER_CLASS(netw::NetwSchema);
     GDREGISTER_CLASS(netw::NetwControlRequest);
     GDREGISTER_CLASS(netw::NetwLifecycleRequest);
@@ -252,11 +241,13 @@ void initialize_networked_module(ModuleInitializationLevel level) {
 #if defined(NETW_TESTS)
 #if defined(NETW_GDEXTENSION)
     GDREGISTER_CLASS(netw_test::Carrier);
+    GDREGISTER_CLASS(netw_test::FaultLog);
     GDREGISTER_CLASS(netw_test::SpawnIdentityProbe);
     GDREGISTER_CLASS(netw::NetwNativeTests);
 #endif
     GDREGISTER_CLASS(netw_test::RecordingStepper);
 #endif
+    netw::profile::install_logger();
     netw::NetwEntityRecord::set_part_factory(
         netw::NetwEntityRecord::PART_DISPLAY,
         callable_mp_static(&netw::build_display_handle)
@@ -297,6 +288,7 @@ void uninitialize_networked_module(ModuleInitializationLevel level) {
     netw::connect::TransportBook::shared().clear();
     netw::schema_model::clear();
     netw::entity::shutdown();
+    netw::profile::remove_logger();
     netw::profile::shutdown();
 }
 

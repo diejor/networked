@@ -75,7 +75,7 @@ Error NetwMultiplayer::predict_admit_frame(
     int64_t p_channel,
     const PackedByteArray &p_payload
 ) {
-    NETW_ZONE_NC("predict admit frame", colors::PREDICTION);
+    NETW_ZONE_NC("Predict admit frame", colors::PREDICTION);
     Error answered = OK;
     if (GDVIRTUAL_CALL(
             _predict_admit_frame,
@@ -123,8 +123,8 @@ int64_t NetwMultiplayer::arm_rewind_timeline(const Ref<NetwEntity> &p_entity) {
     if (slot < 0) {
         return -1;
     }
-    const Ref<NetwPropertySetBinding> state = p_entity->get_state_binding();
-    if (state.is_null() || state->get_set().is_null()) {
+    const repl::PropertyBindingPtr state = p_entity->get_state_binding();
+    if (state == nullptr || state->get_set() == nullptr) {
         return -1;
     }
     Node *node = state->node();
@@ -133,11 +133,8 @@ int64_t NetwMultiplayer::arm_rewind_timeline(const Ref<NetwEntity> &p_entity) {
     }
     lagcomp_core.timeline_bind_owner(slot, node);
     Array keys;
-    const TypedArray<NetwPropertySetColumn> columns
-        = state->get_set()->get_columns();
-    for (int at = 0; at < columns.size(); at++) {
-        const Ref<NetwPropertySetColumn> column = columns[at];
-        keys.push_back(column->get_key());
+    for (const repl::PropertyColumn &column : state->get_set()->columns) {
+        keys.push_back(column.get_key());
     }
     lagcomp_core.timeline_declare(slot, keys);
     return slot;
@@ -209,6 +206,7 @@ bool NetwMultiplayer::predict_tap_open() {
         return false;
     }
     predict_tap.open(dir);
+    prediction_engine.attach_journal_readers(true);
     return true;
 }
 
@@ -223,7 +221,7 @@ void NetwMultiplayer::predict_tap_drain(
 }
 
 void NetwMultiplayer::predict_tap_pump() {
-    NETW_ZONE_NC("NetwPredict tap pump", colors::PREDICTION);
+    NETW_ZONE_NC("Predict tap pump", colors::PREDICTION);
     if (!predict_tap_open()) {
         return;
     }
@@ -319,13 +317,12 @@ void NetwMultiplayer::warn_pacing_rate_mismatch_once() {
         = engine != nullptr ? engine->get_physics_ticks_per_second() : 60;
     NETW_WARN(
         sys::PREDICTION,
-        "a gated space paces physics at %d steps per second against a %d "
-        "tick session, and %d is not an integer multiple of %d, so the "
-        "space's steps will drift against the ticks that gate it",
+        "Physics runs at %d steps per second and the tickrate is %d, so a "
+        "tick is %.3f steps and peers drift apart. Make "
+        "physics_ticks_per_second a whole multiple of the tickrate.",
         physics_rate,
         clock_engine().get_tickrate(),
-        physics_rate,
-        clock_engine().get_tickrate()
+        factor
     );
 }
 
@@ -618,6 +615,22 @@ void NetwMultiplayer::predict_reresolve_space(const RID &p_space) {
     }
 }
 
+void NetwMultiplayer::predict_rebind_replaced(uint64_t p_binding) {
+    LocalVector<NetwPredictSlotEngine *> named;
+    for (const KeyValue<int64_t, NetwPredictSlotEngine *> &row :
+         predict_engines) {
+        const repl::PropertyBindingPtr state = row.value->state_binding();
+        const repl::PropertyBindingPtr input = row.value->input_binding();
+        if ((state != nullptr && state->id == p_binding)
+            || (input != nullptr && input->id == p_binding)) {
+            named.push_back(row.value);
+        }
+    }
+    for (NetwPredictSlotEngine *engine : named) {
+        engine->rewire();
+    }
+}
+
 Ref<NetwPhysicsStepper> NetwMultiplayer::predict_get_stepper(
     const RID &p_space
 ) const {
@@ -656,7 +669,8 @@ bool NetwMultiplayer::predict_space_has_stepped_member(
         if (member.is_null()) {
             continue;
         }
-        const Ref<NetwSimulationHandle> simulation = member->get_simulation();
+        const Ref<NetwSimulationHandle> simulation
+            = member->simulation_if_minted();
         if (simulation.is_valid()
             && simulation->get_schedule()
                 == NetwSimulationHandle::SCHEDULE_STEPPED
@@ -771,16 +785,15 @@ void NetwMultiplayer::predict_history_record(
     int p_schedule,
     bool p_include_unregistered
 ) {
-    NETW_ZONE_NC("predict history record", colors::PREDICTION);
+    NETW_ZONE_NC("Predict history record", colors::PREDICTION);
     if (!lagcomp_configured || !is_host()) {
         return;
     }
-    const Dictionary timelines = lagcomp_core.timeline_entities();
-    const Array carriers = timelines.keys();
-    for (int64_t at = 0; at < carriers.size(); ++at) {
-        const Ref<NetwEntity> entity
-            = Object::cast_to<NetwEntity>(carriers[at]);
-        if (entity.is_null()) {
+    for (uint32_t seat = 0; seat < lagcomp_core.seat_capacity(); ++seat) {
+        const int64_t at = lagcomp_core.slot_at_seat(seat);
+        const Ref<RefCounted> carrier = lagcomp_core.entity_at(at);
+        NetwEntity *entity = Object::cast_to<NetwEntity>(carrier.ptr());
+        if (entity == nullptr) {
             continue;
         }
         Node *owner = entity->get_owner();
@@ -790,8 +803,8 @@ void NetwMultiplayer::predict_history_record(
         if (owner->is_inside_tree() && !owner->can_process()) {
             continue;
         }
-        const Ref<NetwPropertySetBinding> state = entity->get_state_binding();
-        if (state.is_null()) {
+        const repl::PropertyBindingPtr state = entity->get_state_binding();
+        if (state == nullptr) {
             continue;
         }
         int64_t record_tick = p_tick;
@@ -805,7 +818,7 @@ void NetwMultiplayer::predict_history_record(
             if (record_tick < 0 && !engine->consumed_unslotted_transition()) {
                 NETW_TRACE(
                     sys::PREDICTION,
-                    "history: tick %d slots nothing the ack can key",
+                    "Tick %d has no history entry an acknowledgement can use.",
                     int(p_tick)
                 );
                 continue;
@@ -815,15 +828,17 @@ void NetwMultiplayer::predict_history_record(
         }
         const Dictionary payload
             = state->canonicalize_payload(state->snapshot_payload());
-        if (record_tick >= 0) {
-            const Ref<NetwTimeline> history
-                = Object::cast_to<NetwTimeline>(timelines[entity]);
-            if (history.is_valid()) {
-                history->record_state(record_tick, payload);
-            }
+        repl::PropertySet *declared = state->get_set();
+        if (record_tick >= 0 && declared != nullptr) {
+            lagcomp_core.timeline_record_coded(
+                at,
+                record_tick,
+                payload,
+                declared->get_codec()
+            );
         }
         if (engine != nullptr) {
-            engine->finalize_recorded_state(payload);
+            engine->finalize_recorded_state();
         }
     }
 }
@@ -883,8 +898,8 @@ void NetwMultiplayer::wire_lagcomp_service() {
     if (plane == nullptr) {
         NETW_TRACE(
             sys::PREDICTION,
-            "the action and prediction carriers have no replication plane "
-            "to land on"
+            "Action and prediction channels were not set up, because "
+            "replication is not running."
         );
         return;
     }
@@ -923,7 +938,7 @@ void NetwMultiplayer::predict_receive_command_carrier(
     const PackedByteArray &p_payload,
     int64_t p_sender
 ) {
-    NETW_ZONE_NC("predict command carrier", colors::PREDICTION);
+    NETW_ZONE_NC("Predict command carrier", colors::PREDICTION);
     NetwPredictSlotEngine *engine = predict_engine_for(
         p_entity.is_valid() ? p_entity->get_rid_handle() : RID()
     );
@@ -938,7 +953,7 @@ void NetwMultiplayer::predict_receive_relay_carrier(
     const PackedByteArray &p_payload,
     int64_t
 ) {
-    NETW_ZONE_NC("predict relay carrier", colors::PREDICTION);
+    NETW_ZONE_NC("Predict relay carrier", colors::PREDICTION);
     NetwPredictSlotEngine *engine = predict_engine_for(
         p_entity.is_valid() ? p_entity->get_rid_handle() : RID()
     );
@@ -952,7 +967,7 @@ void NetwMultiplayer::predict_receive_ack_carrier(
     const PackedByteArray &p_payload,
     int64_t
 ) {
-    NETW_ZONE_NC("predict ack carrier", colors::PREDICTION);
+    NETW_ZONE_NC("Predict ack carrier", colors::PREDICTION);
     NetwPredictSlotEngine *engine = predict_engine_for(
         p_entity.is_valid() ? p_entity->get_rid_handle() : RID()
     );
@@ -970,7 +985,7 @@ void NetwMultiplayer::predict_receive_relay_request_carrier(
     if (request < 0) {
         NETW_TRACE(
             sys::PREDICTION,
-            "peer %d sent an unreadable relay request",
+            "Peer %d sent a relay request that could not be read.",
             int(p_sender)
         );
         return;
@@ -995,7 +1010,7 @@ void NetwMultiplayer::predict_relay_command_frame(
     if (route <= 0) {
         NETW_TRACE(
             sys::PREDICTION,
-            "a relayed command found no live route for entity %d",
+            "A relayed input found no live route for entity %d.",
             int(handle.get_id())
         );
         return;
@@ -1039,7 +1054,7 @@ void NetwMultiplayer::action_receive_carrier(
     if (!session::frame_read(p_payload, body)) {
         NETW_TRACE(
             sys::PREDICTION,
-            "peer %d sent an action carrier that did not decode whole",
+            "Peer %d sent an action that did not decode fully.",
             int(p_sender)
         );
         return;
@@ -1048,7 +1063,7 @@ void NetwMultiplayer::action_receive_carrier(
     if (carried.get_type() != Variant::ARRAY) {
         NETW_TRACE(
             sys::PREDICTION,
-            "peer %d sent action arguments that are not an argument list",
+            "Peer %d sent action arguments that are not an Array.",
             int(p_sender)
         );
         return;
@@ -1078,7 +1093,7 @@ void NetwMultiplayer::lagcomp_deny_action(
     if (remote) {
         NETW_TRACE(
             sys::PREDICTION,
-            "action %s refused, telling peer %d to revert",
+            "Action %s was refused, so peer %d is told to undo it.",
             String(p_key).utf8().get_data(),
             int(p_requester)
         );
@@ -1096,7 +1111,7 @@ void NetwMultiplayer::lagcomp_deny_action(
     }
     NETW_TRACE(
         sys::PREDICTION,
-        "action %s refused locally, discarding its effect",
+        "Action %s was refused on this peer, so its effect is undone.",
         String(p_key).utf8().get_data()
     );
     lagcomp_effect_discard(p_key);
@@ -1107,7 +1122,7 @@ void NetwMultiplayer::predict_history_record_tick(int64_t p_tick) {
 }
 
 void NetwMultiplayer::tick_step(double p_delta, int64_t p_tick) {
-    NETW_ZONE_NC("session tick step", colors::PREDICTION);
+    NETW_ZONE_NC("Simulation tick", colors::PREDICTION);
     sim_contact_pass(p_tick);
     sim_drain_installs();
     sim_run(sim::Schedule::TICK, p_delta, p_tick);
@@ -1120,7 +1135,7 @@ void NetwMultiplayer::tick_step(double p_delta, int64_t p_tick) {
 }
 
 void NetwMultiplayer::before_frame_step() {
-    NETW_ZONE_NC("session before frame step", colors::PREDICTION);
+    NETW_ZONE_NC("Frame start step", colors::PREDICTION);
     if (!lagcomp_configured) {
         return;
     }
@@ -1131,7 +1146,7 @@ void NetwMultiplayer::before_frame_step() {
 }
 
 void NetwMultiplayer::frame_step() {
-    NETW_ZONE_NC("session frame step", colors::PREDICTION);
+    NETW_ZONE_NC("Frame step", colors::PREDICTION);
     const ClockEngine &clock = clock_engine();
     if (clock.is_simulating()) {
         sim_run(sim::Schedule::FRAME, clock.ticktime(), clock.get_tick() - 1);
@@ -1145,7 +1160,8 @@ void NetwMultiplayer::frame_step() {
     if (plane == nullptr) {
         NETW_TRACE(
             sys::PREDICTION,
-            "the frame closed with no replication plane to flush"
+            "The frame ended with nothing sent, because replication is not "
+            "running."
         );
         return;
     }
@@ -1238,10 +1254,7 @@ Dictionary NetwMultiplayer::predict_metrics() const {
         if (handle.is_null()) {
             continue;
         }
-        const Ref<NetwPredictStats> counters = handle->get_stats();
-        if (counters.is_null()) {
-            continue;
-        }
+        const NetwPredictStats::Book *counters = handle->fact_book();
         for (int fact = 0; fact < CENSUS_COUNT; ++fact) {
             const int64_t held = counters->get_int_fact(column[fact]);
             if (fact == CENSUS_MAX_REPLAY_DEPTH
@@ -1329,7 +1342,8 @@ void NetwMultiplayer::session_flush_deferred() {
     }
     NETW_ERROR(
         sys::SESSION,
-        "settle did not reach a fixed point in %d passes, still pending: %s",
+        "Deferred session work did not finish in %d passes. Still pending: "
+        "%s.",
         settle_max_passes(),
         String(", ").join(pending).utf8().get_data()
     );
@@ -1366,9 +1380,8 @@ Ref<NetwMultiplayer> NetwMultiplayer::resolve_required(Node *p_node) {
     }
     NETW_ERROR(
         sys::PREDICTION,
-        "%s needs a LagCompensation node mounted under the MultiplayerTree, "
-        "but none was found. Add one as a child of the tree to enable "
-        "prediction and rewind.",
+        "%s needs lag compensation, which this session has not set up. Call "
+        "Netw.configure_lagcomp, or declare prediction on an entity.",
         p_node != nullptr ? String(p_node->get_class()) : String("A node")
     );
     return Ref<NetwMultiplayer>();
@@ -1389,17 +1402,51 @@ void NetwMultiplayer::predict_reconcile_declaration(
     predict_declare(p_entity->get_rid_handle());
 }
 
+void NetwMultiplayer::predict_readmit(const Ref<NetwEntity> &p_entity) {
+    const RID entity = p_entity->get_rid_handle();
+    const Ref<NetwPredictionHandle> handle = p_entity->prediction_if_minted();
+    if (predict_engine_seated(entity)
+        || (handle.is_valid()
+            && handle->get_archetype() != NetwPredict::ARCHETYPE_NONE)) {
+        return;
+    }
+    Node *owner = p_entity->get_owner();
+    const CharString named
+        = (owner != nullptr ? String(owner->get_path())
+                            : String(p_entity->get_entity_id()))
+              .utf8();
+    if (p_entity->get_state_binding() == nullptr) {
+        NETW_ERROR(
+            sys::PREDICTION,
+            "%s came back without prediction, because its state properties "
+            "were lost when it left. Declare prediction on it again.",
+            named.get_data()
+        );
+        return;
+    }
+    const Error declared = predict_declare(entity);
+    if (declared != OK) {
+        NETW_ERROR(
+            sys::PREDICTION,
+            "%s came back without prediction, because declaring it again "
+            "failed with error %d.",
+            named.get_data(),
+            int(declared)
+        );
+    }
+}
+
 bool NetwMultiplayer::predict_lacks_state_rows(
     const Ref<NetwEntity> &p_entity
 ) const {
     const Ref<NetwPredictionHandle> handle = p_entity->prediction_if_minted();
     return handle.is_valid()
         && handle->get_archetype() != NetwPredict::ARCHETYPE_NONE
-        && p_entity->get_state_binding().is_null();
+        && p_entity->get_state_binding() == nullptr;
 }
 
 void NetwMultiplayer::register_prediction(const Ref<NetwEntity> &p_entity) {
-    NETW_ZONE_NC("predict register", colors::PREDICTION);
+    NETW_ZONE_NC("Predict register", colors::PREDICTION);
     if (p_entity.is_null()) {
         return;
     }
@@ -1410,6 +1457,7 @@ void NetwMultiplayer::register_prediction(const Ref<NetwEntity> &p_entity) {
     NetwPredictSlotEngine *engine = memnew(NetwPredictSlotEngine);
     predict_engine_install(entity, engine);
     prediction_engine.slot_register(p_entity);
+    store_bind_entity(p_entity);
     const Ref<NetwPredictionHandle> handle = p_entity->get_prediction();
     if (handle.is_valid()) {
         handle->bind_engine(engine);
@@ -1418,7 +1466,7 @@ void NetwMultiplayer::register_prediction(const Ref<NetwEntity> &p_entity) {
 }
 
 void NetwMultiplayer::unregister_prediction(const Ref<NetwEntity> &p_entity) {
-    NETW_ZONE_NC("predict unregister", colors::PREDICTION);
+    NETW_ZONE_NC("Predict unregister", colors::PREDICTION);
     if (p_entity.is_null()) {
         return;
     }
@@ -1430,7 +1478,8 @@ void NetwMultiplayer::unregister_prediction(const Ref<NetwEntity> &p_entity) {
     engine->release();
     sim_release_body(entity, true);
     sim_release_row(entity);
-    const Ref<NetwSimulationHandle> simulation = p_entity->get_simulation();
+    const Ref<NetwSimulationHandle> simulation
+        = p_entity->simulation_if_minted();
     if (simulation.is_valid()) {
         simulation->announce(NetwSimulationHandle::MODE_NONE);
     }
@@ -1448,7 +1497,7 @@ Error NetwMultiplayer::predict_declare(const RID &p_entity) {
     if (wrapper.is_null()) {
         NETW_TRACE(
             sys::PREDICTION,
-            "declaring prediction found no entity for %d",
+            "Prediction was declared for %d, which has no entity.",
             int(p_entity.get_id())
         );
         return ERR_DOES_NOT_EXIST;
@@ -1482,6 +1531,7 @@ Error NetwMultiplayer::predict_declare(const RID &p_entity) {
 void NetwMultiplayer::predict_undeclare(const RID &p_entity) {
     const Ref<NetwEntity> wrapper = entity_get_view(p_entity);
     if (wrapper.is_valid()) {
+        wrapper->note_departed_prediction(false);
         unregister_prediction(wrapper);
     }
 }
@@ -1538,7 +1588,7 @@ void NetwMultiplayer::predict_set_param(
         default:
             NETW_ERR(
                 sys::PREDICTION,
-                "predict parameter {} names no prediction setting",
+                "Prediction setting %d does not exist.",
                 p_param
             );
     }
@@ -1608,23 +1658,23 @@ void NetwMultiplayer::predict_set_witness_callback(
     }
 }
 
-void NetwMultiplayer::predict_set_corridor_callback(
+void NetwMultiplayer::predict_set_correction_path_callback(
     const RID &p_entity,
     const Callable &p_callback
 ) {
     const Ref<NetwPredictionHandle> handle = prediction_handle(p_entity);
     if (handle.is_valid()) {
-        handle->set_transport_corridor(p_callback);
+        handle->set_correction_path_clear(p_callback);
     }
 }
 
-void NetwMultiplayer::predict_set_commands_callback(
+void NetwMultiplayer::predict_set_input_callback(
     const RID &p_entity,
     const Callable &p_callback
 ) {
     const Ref<NetwPredictionHandle> handle = prediction_handle(p_entity);
     if (handle.is_valid()) {
-        handle->set_predict_commands(p_callback);
+        handle->set_predict_input(p_callback);
     }
 }
 
@@ -1695,7 +1745,7 @@ void NetwMultiplayer::simulation_set_param(
         default:
             NETW_ERR(
                 sys::PREDICTION,
-                "simulation parameter {} names no simulation setting",
+                "Simulation setting %d does not exist.",
                 p_param
             );
     }
@@ -1781,7 +1831,7 @@ Error NetwMultiplayer::lagcomp_timeline_declare(const RID &p_entity) {
     if (wrapper.is_null()) {
         return ERR_DOES_NOT_EXIST;
     }
-    lagcomp_core.timeline_register(wrapper, NetwTimeline::DEFAULT_LIMIT);
+    register_rewind(wrapper);
     return OK;
 }
 
@@ -1790,18 +1840,6 @@ void NetwMultiplayer::lagcomp_timeline_undeclare(const RID &p_entity) {
     if (wrapper.is_valid()) {
         lagcomp_core.timeline_unregister(wrapper);
     }
-}
-
-Ref<NetwTimeline> NetwMultiplayer::lagcomp_timeline_of(
-    const RID &p_entity
-) const {
-    const Ref<NetwEntity> wrapper = entity_get_view(p_entity);
-    if (wrapper.is_null()) {
-        return Ref<NetwTimeline>();
-    }
-    return lagcomp_core.timeline_history(
-        lagcomp_core.timeline_slot_of(wrapper)
-    );
 }
 
 static const char *OBSERVE_KEY_PREFIX = "lagcomp-observe-node?";

@@ -228,6 +228,13 @@ Dictionary NetwSessionHandle::get_stats() const {
     return api != nullptr ? api->stats_snapshot() : Dictionary();
 }
 
+void NetwSessionHandle::set_peer_bandwidth(int64_t p_peer, int64_t p_kbps) {
+    NetwMultiplayer *api = session();
+    if (api != nullptr) {
+        api->session_set_peer_bandwidth(p_peer, p_kbps);
+    }
+}
+
 Ref<NetwPromise> NetwSessionHandle::leave() {
     NetwMultiplayer *api = session();
     return api != nullptr ? api->session_leave()
@@ -379,6 +386,11 @@ void NetwSessionHandle::_bind_methods() {
     );
     ClassDB::bind_method(D_METHOD("get_stats"), &NetwSessionHandle::get_stats);
     ADD_PROPERTY(PropertyInfo(Variant::DICTIONARY, "stats"), "", "get_stats");
+
+    ClassDB::bind_method(
+        D_METHOD("set_peer_bandwidth", "peer", "kbps"),
+        &NetwSessionHandle::set_peer_bandwidth
+    );
 
     ClassDB::bind_method(D_METHOD("leave"), &NetwSessionHandle::leave);
     ClassDB::bind_method(

@@ -21,18 +21,6 @@ namespace netw::display {
 static const char *GLOBAL_SPACE_CHANNELS[]
     = {"position", "rotation", "global_position", "global_rotation"};
 
-bool draws_on_owner(Runtime *p_runtime) {
-    return p_runtime != nullptr
-        && p_runtime->get_pump_mode() == netw::display::PUMP_REMOTE
-        && owner_is_solver_body(p_runtime->owner());
-}
-
-static bool draws_on_body(Runtime *p_runtime, Node *p_source) {
-    return draws_on_owner(p_runtime)
-        || (p_runtime->get_pump_mode() == netw::display::PUMP_REMOTE
-            && p_runtime->holds_body(p_source));
-}
-
 static bool is_global_space_channel(const StringName &p_prop) {
     for (const char *name : GLOBAL_SPACE_CHANNELS) {
         if (p_prop == StringName(name)) {
@@ -65,8 +53,8 @@ static void warn_double_write(Channel *p_standing, Channel *p_fresh) {
         p_standing->get_target_obj() == p_fresh->get_target_obj()
             && p_standing->get_target_prop() == p_fresh->get_target_prop(),
         sys::INTERPOLATION,
-        "two channels write '%s' on the same object, so the later one wins "
-        "every frame and the earlier one is spent smoothing nothing",
+        "Two interpolations write '%s' on the same node, so only the later "
+        "one shows. Interpolate each property once.",
         String(p_fresh->get_target_prop())
     );
 }
@@ -107,10 +95,9 @@ Channel *ensure_state(
             has_source && visual == nullptr,
             nullptr,
             sys::INTERPOLATION,
-            "the declared visual root '%s' names no node under '%s', so "
-            "'%s' would be written onto '%s', which is the node holding "
-            "the state: a live body would be dragged off its own solution "
-            "every frame. The channel is refused",
+            "NetwDisplayHandle.visual_root '%s' is not a node under '%s', so "
+            "'%s' is not interpolated, to keep it off the simulated node "
+            "'%s'. Point visual_root at a child node.",
             String(config.visual_root),
             String(owner->get_name()),
             String(p_target_prop),
@@ -123,15 +110,15 @@ Channel *ensure_state(
             && p_runtime->holds_body(p_node),
         nullptr,
         sys::INTERPOLATION,
-        "'%s' on '%s' follows '%s' but writes '%s' on the same simulated "
-        "body, so a live display would drag the body off its own solution "
-        "every frame. The channel is refused. Draw it on a visual_root",
+        "'%s' on '%s' is not interpolated, because it follows '%s' but "
+        "writes '%s' on the simulated body itself. Set "
+        "NetwDisplayHandle.visual_root to draw it on a child node.",
         String(p_target_prop),
         String(p_node->get_name()),
         String(p_source_prop),
         String(p_target_prop)
     );
-    Node *target = split && !draws_on_body(p_runtime, p_node) ? visual : p_node;
+    Node *target = split ? visual : p_node;
     state->set_target_obj(target);
 
     const Ref<NetwEntity> entity = p_runtime->entity();
@@ -152,9 +139,9 @@ Channel *ensure_state(
         visual != nullptr && target == visual && !port.get_global_space()
             && !bool(visual->get("top_level")) && is_spatial(p_target_prop),
         sys::INTERPOLATION,
-        "'%s' on a parented visual is written in LOCAL space and will be "
-        "dragged by body writes; set top_level on the visual, or interpolate "
-        "position and rotation instead",
+        "'%s' on the visual node is written in local space, so the body "
+        "drags it. Set top_level on the visual node, or interpolate position "
+        "and rotation.",
         String(p_target_prop)
     );
 
@@ -178,36 +165,6 @@ Channel *ensure_state(
         warn_double_write(p_runtime->channels()[claimant], added);
     }
     return added;
-}
-
-void retarget_drawn_node(Runtime *p_runtime) {
-    Node *owner = p_runtime->owner();
-    const Decl &config = p_runtime->get_config();
-    if (owner == nullptr || config.visual_root.is_empty()) {
-        return;
-    }
-    Node *visual = owner->get_node_or_null(config.visual_root);
-    if (visual == nullptr || visual == owner) {
-        return;
-    }
-    const bool on_owner = draws_on_owner(p_runtime);
-    const LocalVector<Channel *> &states = p_runtime->channels();
-    for (int at = 0; at < int(states.size()); ++at) {
-        Channel *state = states[at];
-        if (state->get_source_obj().get_type() == Variant::NIL) {
-            continue;
-        }
-        Object *held = state->get_source_obj();
-        Node *source = Object::cast_to<Node>(held);
-        Node *drawn = visual;
-        if (on_owner) {
-            drawn = owner;
-        } else if (draws_on_body(p_runtime, source)) {
-            drawn = source;
-        }
-        state->set_target_obj(drawn);
-        state->display_port().bind(drawn, owner);
-    }
 }
 
 void build_states(

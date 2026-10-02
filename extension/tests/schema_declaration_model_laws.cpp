@@ -11,7 +11,6 @@ using namespace godot;
 using netw::NetwMultiplayer;
 using netw::NetwQuantizeScalar;
 using netw::NetwSchema;
-using netw::NetwSchemaColumn;
 namespace schema_model = netw::schema_model;
 using netw::SchemaCore;
 
@@ -49,11 +48,13 @@ TEST_CASE(
     if (declared.is_null()) {
         return;
     }
-    const TypedArray<NetwSchemaColumn> columns = declared->get_columns();
-    NETW_CHECK_EQ(columns.size(), 2);
-    const Ref<NetwSchemaColumn> first = columns[0];
-    CHECK(bool(first->get_key() == StringName("pos")));
-    NETW_CHECK_EQ(first->get_type(), int(SchemaCore::VECTOR3));
+    const LocalVector<NetwSchema::Column> &columns = declared->columns_of();
+    NETW_CHECK_EQ(int(columns.size()), 2);
+    if (columns.size() != 2) {
+        return;
+    }
+    CHECK(bool(columns[0].key == StringName("pos")));
+    NETW_CHECK_EQ(int(columns[0].type), int(SchemaCore::VECTOR3));
 }
 
 TEST_CASE(
@@ -105,15 +106,14 @@ TEST_CASE(
     if (declared.is_null()) {
         return;
     }
-    const TypedArray<NetwSchemaColumn> columns = declared->get_columns();
-    NETW_CHECK_EQ(columns.size(), 16);
+    const LocalVector<NetwSchema::Column> &columns = declared->columns_of();
+    NETW_CHECK_EQ(int(columns.size()), 16);
     if (columns.size() != 16) {
         return;
     }
     int agreeing = 0;
     for (int at = 0; at < 16; ++at) {
-        const Ref<NetwSchemaColumn> column = columns[at];
-        if (indices[at] == at && column->get_type() == expected[at]) {
+        if (indices[at] == at && int(columns[at].type) == expected[at]) {
             agreeing += 1;
         }
     }
@@ -130,7 +130,10 @@ TEST_CASE(
     const int again = declare("ModelReload")->vector3("pos", none, 1);
 
     NETW_CHECK_EQ(first, again);
-    NETW_CHECK_EQ(schema_model::find("ModelReload")->get_columns().size(), 1);
+    NETW_CHECK_EQ(
+        int(schema_model::find("ModelReload")->columns_of().size()),
+        1
+    );
     NETW_CHECK_EQ(schema_model::declarations().size(), 1);
 }
 
@@ -145,7 +148,10 @@ TEST_CASE(
 
     NETW_CHECK_EQ(schema->vector2("pos", none, 1), -1);
     NETW_CHECK_EQ(schema->vector3("pos", none, 4), -1);
-    NETW_CHECK_EQ(schema_model::find("ModelSkew")->get_columns().size(), 1);
+    NETW_CHECK_EQ(
+        int(schema_model::find("ModelSkew")->columns_of().size()),
+        1
+    );
 }
 
 TEST_CASE(
@@ -188,7 +194,7 @@ TEST_CASE(
     if (back.is_null()) {
         return;
     }
-    NETW_CHECK_EQ(back->get_columns().size(), 1);
+    NETW_CHECK_EQ(int(back->columns_of().size()), 1);
 }
 
 TEST_CASE(
@@ -253,7 +259,7 @@ TEST_CASE(
     if (!table.is_valid()) {
         return;
     }
-    CHECK(core->get_table_core()->is_reliable(table));
+    CHECK(core->store_arrays().is_reliable(table));
 }
 
 TEST_CASE(
@@ -293,44 +299,6 @@ TEST_CASE(
     );
 }
 
-TEST_CASE(
-    "[Networked][Table][Hosted] A column reference names its own schema, so "
-    "index 0 of one is not index 0 of another"
-) {
-    Registry registry;
-    const Ref<NetwSchema> players = declare("RefPlayers");
-    const Ref<NetwSchema> chests = declare("RefChests");
-    const Ref<netw::NetwColumnRef> gold
-        = players->column_ref(players->i64("gold", 1));
-    const Ref<netw::NetwColumnRef> loot
-        = chests->column_ref(chests->i64("loot", 1));
-
-    NETW_CHECK_EQ(gold->get_index(), 0);
-    NETW_CHECK_EQ(loot->get_index(), 0);
-    CHECK(gold->is_valid());
-    CHECK(bool(gold->get_key() == StringName("gold")));
-    CHECK(gold->get_schema() == players);
-    CHECK(loot->get_schema() != players);
-}
-
-TEST_CASE(
-    "[Networked][Table][Hosted] A column reference holds its schema alive and "
-    "refuses an index the schema does not have"
-) {
-    Registry registry;
-    Ref<netw::NetwColumnRef> held;
-    {
-        const Ref<NetwSchema> schema = NetwSchema::create("RefDetached");
-        held = schema->column_ref(
-            schema->vector2("where", Ref<netw::NetwQuantize>(), 1)
-        );
-        CHECK(schema->column_ref(1).is_null());
-        CHECK(schema->column_ref(-1).is_null());
-    }
-    CHECK(held.is_valid());
-    CHECK(held->is_valid());
-    CHECK(bool(held->get_key() == StringName("where")));
-}
 
 TEST_CASE(
     "[Networked][Table][Hosted] A declared storage version and its migrations "

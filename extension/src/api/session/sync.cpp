@@ -22,6 +22,7 @@
 #include "godot/world.hpp"
 #include "netw/api/display_handle.hpp"
 #include "netw/api/entity.hpp"
+#include "netw/api/entity_record.hpp"
 #include "netw/api/join_request.hpp"
 #include "netw/api/predict.hpp"
 #include "netw/api/prediction_handle.hpp"
@@ -48,6 +49,11 @@ using namespace netw;
 
 namespace netw {
 
+using repl::PropertyBinding;
+using repl::PropertyBindingPtr;
+using repl::PropertyColumn;
+using repl::PropertySet;
+
 namespace {
 
 const char *SIG_TABLE_RECEIVED = "table_received";
@@ -55,7 +61,7 @@ const char *SIG_TABLE_RECEIVED = "table_received";
 constexpr double SHUTDOWN_NOTIFY_DELAY = 0.5;
 
 const StringName &display_write_seam() {
-    static const StringName name("_display_write");
+    static const StringName name("_display_write_rows");
     return name;
 }
 
@@ -109,9 +115,9 @@ OpenSeat open_seat(
     if (p_tenure < current) {
         return OpenSeat::REFUSE;
     }
-    const Ref<NetwPropertySetBinding> binding
+    const PropertyBindingPtr binding
         = p_model->binding_of(p_lane.route, int64_t(p_lane.ordinal));
-    Node *node = binding.is_valid() ? binding->node() : nullptr;
+    Node *node = binding != nullptr ? binding->node() : nullptr;
     if (node != nullptr
         && !p_model->admits_sender(
             p_lane.route,
@@ -290,12 +296,14 @@ Error NetwMultiplayer::receive_carrier(
     int64_t p_seq,
     int64_t p_base_tick
 ) {
-    NETW_ZONE_NC("session receive carrier", colors::WIRE);
+    NETW_ZONE_NC("Receive carrier", colors::WIRE);
+    NETW_ZONE_TEXT_F("peer %lld", static_cast<long long>(p_sender));
     ReplicationCore *plane = (get_replication_plane());
     if (plane == nullptr) {
         NETW_TRACE(
             sys::WIRE,
-            "dropped %d carrier bytes from peer %d, no replication plane",
+            "Dropped %d bytes from peer %d, because replication is not "
+            "running.",
             int(p_framed.size()),
             int(p_sender)
         );
@@ -332,6 +340,9 @@ PackedByteArray NetwMultiplayer::sync_pipeline_stage_row_frame(
     int64_t p_mask,
     const PackedByteArray &p_bytes
 ) {
+#if defined(NETW_TESTS)
+    idle_work.staged += 1;
+#endif
     SyncPipeline *pipeline = sync_pipeline();
     return pipeline != nullptr ? pipeline->stage_row_frame(
                                      p_peer,
@@ -350,22 +361,20 @@ Error NetwMultiplayer::sync_pipeline_decode_stage_body() {
                                : ERR_UNCONFIGURED;
 }
 
-Array NetwMultiplayer::sync_pipeline_gather_stage() {
+void NetwMultiplayer::sync_pipeline_bind_declaration(int64_t p_binding) {
     SyncPipeline *pipeline = sync_pipeline();
-    return pipeline != nullptr ? pipeline->gather_stage() : Array();
+    PropertyBinding *binding = binding_book.live(uint64_t(p_binding));
+    if (pipeline != nullptr && binding != nullptr) {
+        pipeline->bind_declaration(binding);
+    }
 }
 
-Error NetwMultiplayer::sync_pipeline_apply_one_value(const Array &p_values) {
-    SyncPipeline *pipeline = sync_pipeline();
-    return pipeline != nullptr ? pipeline->apply_one_value(p_values)
-                               : ERR_UNCONFIGURED;
-}
-
-void NetwMultiplayer::sync_pipeline_bind_declaration(
-    const Ref<NetwPropertySetBinding> &p_binding
-) {
+void NetwMultiplayer::sync_note_node_removed(Node *p_node) {
+    if (p_node != nullptr) {
+        store().residents.note_removed(uint64_t(p_node->get_instance_id()));
+    }
     if (SyncPipeline *pipeline = sync_pipeline()) {
-        pipeline->bind_declaration(p_binding);
+        pipeline->note_node_removed(p_node);
     }
 }
 
@@ -424,8 +433,8 @@ Error NetwMultiplayer::sync_send_property(
         node == nullptr,
         ERR_DOES_NOT_EXIST,
         sys::WIRE,
-        "property %s addressed component %d of an entity that resolves to no "
-        "node",
+        "Property '%s' was not sent, because component %d of its entity has "
+        "no node.",
         String(p_property),
         int(p_comp)
     );
@@ -433,7 +442,7 @@ Error NetwMultiplayer::sync_send_property(
         !gd::has_property(node, p_property),
         ERR_INVALID_DATA,
         sys::WIRE,
-        "node %s declares no property %s",
+        "'%s' has no property '%s', so it was not sent.",
         node->get_name(),
         String(p_property)
     );
@@ -442,7 +451,8 @@ Error NetwMultiplayer::sync_send_property(
         pipeline == nullptr,
         ERR_UNCONFIGURED,
         sys::WIRE,
-        "property %s was sent with no sync pipeline installed",
+        "Property '%s' was not sent, because replication is not running on "
+        "this peer.",
         String(p_property)
     );
     pipeline->send_property(node, p_property);
@@ -460,8 +470,8 @@ Error NetwMultiplayer::sync_send_signal(
         node == nullptr,
         ERR_DOES_NOT_EXIST,
         sys::WIRE,
-        "signal %s addressed component %d of an entity that resolves to no "
-        "node",
+        "Signal '%s' was not sent, because component %d of its entity has no "
+        "node.",
         String(p_signal),
         int(p_comp)
     );
@@ -469,7 +479,7 @@ Error NetwMultiplayer::sync_send_signal(
         !node->has_signal(p_signal),
         ERR_INVALID_DATA,
         sys::WIRE,
-        "node %s declares no signal %s",
+        "'%s' has no signal '%s', so it was not sent.",
         node->get_name(),
         String(p_signal)
     );
@@ -478,7 +488,8 @@ Error NetwMultiplayer::sync_send_signal(
         pipeline == nullptr,
         ERR_UNCONFIGURED,
         sys::WIRE,
-        "signal %s was sent with no sync pipeline installed",
+        "Signal '%s' was not sent, because replication is not running on "
+        "this peer.",
         String(p_signal)
     );
     pipeline->send_signal(node, p_signal, p_args);
@@ -486,13 +497,14 @@ Error NetwMultiplayer::sync_send_signal(
 }
 
 RID NetwMultiplayer::entity_replicate(Object *p_node, Object *p_owner) {
-    NETW_ZONE_NC("session spawn replicate", colors::LIVENESS);
+    NETW_ZONE_NC("Spawn replicate", colors::LIVENESS);
     spawn::Pipeline *pipeline = spawn_plane();
     NETW_ERR_COND_V(
         pipeline == nullptr,
         RID(),
         sys::SPAWN,
-        "a node was armed for replication with no spawn pipeline installed"
+        "Netw.replicate did nothing, because replication is not running on "
+        "this peer."
     );
     const Ref<NetwEntity> wrapper = pipeline->replicate(
         Object::cast_to<Node>(p_node),
@@ -550,7 +562,7 @@ Error NetwMultiplayer::sync_admit_frame(
     int64_t p_tick,
     const PackedByteArray &p_payload
 ) const {
-    NETW_ZONE_NC("sync admit frame", colors::WIRE);
+    NETW_ZONE_LEAF("Row admit frame", colors::WIRE, profile::SUBSYSTEM_WIRE);
     Error answered = OK;
     if (GDVIRTUAL_CALL(
             _sync_admit_frame,
@@ -600,15 +612,16 @@ void NetwMultiplayer::report_event(
 }
 
 void NetwMultiplayer::table_announce_intake() {
-    const TypedArray<RID> touched = table_core->touched_tables();
+    store::Arrays &arrays = store_world.arrays;
+    const TypedArray<RID> touched = arrays.touched_tables();
     for (int index = 0; index < touched.size(); index++) {
         table_announce(touched[index]);
     }
-    table_core->begin_intake();
+    arrays.begin_intake();
 }
 
 void NetwMultiplayer::table_announce(const RID &p_table) {
-    const int64_t tick = table_core->tick_of(p_table);
+    const int64_t tick = store_world.arrays.tick_of(p_table);
     emit_signal(SIG_TABLE_RECEIVED, p_table, tick);
     if (const Ref<NetwTableHandle> *handle
         = table_handles.getptr(int64_t(p_table.get_id()))) {
@@ -629,13 +642,13 @@ Error NetwMultiplayer::table_admit_frame_default(
         return ERR_INVALID_DATA;
     }
     if (p_sender != session_authority_peer()) {
-        table_core->count_bad_sender();
+        store_world.arrays.count_bad_sender();
         return ERR_UNAUTHORIZED;
     }
     if (p_payload.is_empty()) {
         return ERR_INVALID_DATA;
     }
-    return table_core->admit_header(netw::table::Core::peek_header(p_payload));
+    return store_world.arrays.admit_header(p_payload);
 }
 
 Error NetwMultiplayer::table_admit_frame(
@@ -643,7 +656,7 @@ Error NetwMultiplayer::table_admit_frame(
     int64_t p_channel,
     const PackedByteArray &p_payload
 ) {
-    NETW_ZONE_NC("table admit frame", colors::TABLE);
+    NETW_ZONE_NC("Table admit frame", colors::TABLE);
     Error answered = OK;
     if (GDVIRTUAL_CALL(
             _table_admit_frame,
@@ -673,9 +686,9 @@ Node *NetwMultiplayer::repl_comp_node(
         }
         NETW_TRACE(
             sys::TRANSPORT,
-            "dropped a frame for route %d, %s",
+            "Dropped a frame for route %d, because the route is %s.",
             int(p_route),
-            lingering ? "lingering" : "dead"
+            lingering ? "closing" : "gone"
         );
         return nullptr;
     }
@@ -691,7 +704,8 @@ Node *NetwMultiplayer::repl_comp_node(
         case NetwCompTable::ADDRESS_HOSTILE:
             NETW_WARN(
                 sys::TRANSPORT,
-                "path traversal clamp rejected '%s' on '%s'",
+                "A packet named path '%s', which leaves entity '%s', so it "
+                "was dropped.",
                 String(p_path).utf8().get_data(),
                 String(root->get_name()).utf8().get_data()
             );
@@ -706,7 +720,7 @@ Node *NetwMultiplayer::repl_comp_node(
                 repl_drops.comp_unresolved++;
                 NETW_TRACE(
                     sys::TRANSPORT,
-                    "component '%s' on '%s' is not resolved yet",
+                    "Component '%s' on '%s' is not found yet.",
                     String(p_path).utf8().get_data(),
                     String(root->get_name()).utf8().get_data()
                 );
@@ -715,7 +729,8 @@ Node *NetwMultiplayer::repl_comp_node(
             if (held != root && !root->is_ancestor_of(held)) {
                 NETW_WARN(
                     sys::TRANSPORT,
-                    "component path '%s' escaped the entity subtree on '%s'",
+                    "A packet named path '%s', which leaves entity '%s', so "
+                    "it was dropped.",
                     String(p_path).utf8().get_data(),
                     String(root->get_name()).utf8().get_data()
                 );
@@ -762,118 +777,141 @@ Dictionary NetwMultiplayer::repl_drop_stats() const {
     return out;
 }
 
-LocalVector<repl::RowOffer> NetwMultiplayer::sync_pump_offers(
+void NetwMultiplayer::sync_pump_rows(
     NetwSyncModel *p_model,
     ReplicationSend *p_send,
-    const Array &p_bindings,
     int64_t p_tick,
     const Callable &p_bind,
     const Callable &p_tap
 ) {
-    NETW_ZONE_NC("sync pump offers", colors::WIRE);
-    NETW_ZONE_VALUE(p_bindings.size());
-    LocalVector<repl::RowOffer> offers;
+    NETW_ZONE_NC("Pull pass", colors::WIRE);
     if (p_model == nullptr) {
-        return offers;
+        return;
     }
-    for (int at = 0; at < p_bindings.size(); at++) {
-        const Ref<NetwPropertySetBinding> binding = p_bindings[at];
-        if (binding.is_null()) {
-            continue;
-        }
-        Node *node = binding->node();
-        if (node == nullptr) {
-            sync_flush.skips_invalid_node++;
-            continue;
-        }
-        const Ref<NetwEntity> entity = NetwEntity::of(node);
-        if (entity.is_null()) {
-            sync_flush.skips_no_entity++;
-            continue;
-        }
-        if (binding->get_route() <= 0 && p_bind.is_valid()) {
-            p_bind.call(binding);
-        }
-        const int64_t route = binding->get_route();
-        if (route <= 0) {
-            sync_flush.skips_no_route++;
-            continue;
-        }
-        const repl::SetRow *row = p_model->row_for(
-            route,
-            int64_t(NetwSyncModel::KIND_DERIVED),
-            binding->get_order_key(),
-            binding->get_set().is_valid() ? binding->get_set()->record : 0
-        );
-        if (row == nullptr) {
-            sync_flush.skips_no_route++;
-            continue;
-        }
-        const int64_t ordinal = row->ordinal;
-        const PackedInt32Array recipients = p_model->offer_row(
-            route,
-            ordinal,
-            int64_t(get_unique_id()),
-            node->is_inside_tree() ? int64_t(node->get_multiplayer_authority())
-                                   : 0,
-            entity->get_controller(),
-            rpc_get_recipients(entity),
-            session_authority_peer()
-        );
-        if (recipients.is_empty()) {
-            continue;
-        }
-        if (p_tap.is_valid()) {
-            p_tap.call(
-                binding,
-                route,
-                binding->get_authored_tick() >= 0 ? binding->get_authored_tick()
-                                                  : p_tick
-            );
-        }
-        const uint32_t first = offers.size();
-        binding->offer_rows(
-            ordinal,
-            recipients,
-            p_tick,
-            liveness_route_epoch(route),
-            offers
-        );
-        wire::StreamTenure tenure;
-        tenure.bound = repl::record_follows_tenure(row->record);
-        tenure.tenure = tenure.bound ? entity->get_control_tenure() : 0;
-        const AnchorRevision installed = anchor_installed(route);
-        tenure.anchor = installed.revision;
-        tenure.anchor_author = installed.author;
-        for (uint32_t made = first; made < offers.size(); ++made) {
-            offers[made].tenure = tenure;
-        }
-        if (p_send != nullptr) {
-            p_send->retain_row(route, ordinal, recipients);
+#if defined(NETW_TESTS)
+    const int64_t allocated = store::allocations_seen();
+#endif
+    const bool by_seam = store_gathers_by_seam();
+    if (store_model != p_model
+        || store_model_revision != p_model->revision()) {
+        store_model = p_model;
+        store_model_revision = p_model->revision();
+        store_world.unsource_all();
+    }
+    store_tap = p_tap;
+    store_refresh();
+    for (uint32_t at = 0; at < store_world.table_count(); ++at) {
+        store_world.table(at).stamp_tick = p_tick;
+        store_sources(p_model, p_send, at, p_bind, p_tick);
+        store_world.pull(at, p_tick, by_seam);
+        const store::Table &table = store_world.table(at);
+        if (by_seam && !table.selected.is_empty()) {
+            PackedInt64Array routes;
+            routes.resize(int64_t(table.selected.size()));
+            for (uint32_t which = 0; which < table.selected.size(); ++which) {
+                routes.set(int64_t(which), table.routes[table.selected[which]]);
+            }
+            store_world.absorb(at, run_gather_rows(table.rid, routes), p_tick);
         }
     }
-    return offers;
+    for (uint32_t at = 0; at < store_world.woken.size(); ++at) {
+        sim_note_push(gd::object_of(ObjectID(store_world.woken[at])));
+    }
+    store_world.woken.clear();
+    for (uint32_t at = 0; at < store_world.reprobed.size(); ++at) {
+        sim_note_push(gd::object_of(ObjectID(store_world.reprobed[at])));
+    }
+    store_world.reprobed.clear();
+#if defined(NETW_TESTS)
+    idle_work.pump_allocations += store::allocations_seen() - allocated;
+#endif
 }
 
-void NetwMultiplayer::sync_flush_offers(
+void NetwMultiplayer::session_set_peer_bandwidth(
+    int64_t p_peer,
+    int64_t p_kbps
+) {
+    NETW_ERR_COND(
+        p_kbps < 0,
+        sys::SESSION,
+        "NetwSessionHandle.set_peer_bandwidth got %d kbit/s for peer %d, "
+        "which is negative. Pass a rate in kbit/s, or 0 for the session's "
+        "rate.",
+        p_kbps,
+        p_peer
+    );
+    ReplicationSend *send = row_send_of(get_replication_plane());
+    if (send != nullptr) {
+        send->set_peer_rate(p_peer, double(p_kbps) * KBPS_BYTES);
+    }
+}
+
+void NetwMultiplayer::sync_note_backlog(ReplicationSend *p_send) {
+    static const StringName webrtc("WebRTCMultiplayerPeer");
+    static const StringName get_peer("get_peer");
+    static const StringName buffered_amount("get_buffered_amount");
+    static const StringName channels_key("channels");
+    const Ref<MultiplayerPeer> transport = inner.is_valid()
+        ? inner->get_multiplayer_peer()
+        : Ref<MultiplayerPeer>();
+    if (transport.is_null() || !transport->is_class(webrtc)) {
+        return;
+    }
+    const int64_t now = session_elapsed_ms();
+    for (uint32_t at = 0; at < store_roster.size(); ++at) {
+        const Dictionary described
+            = transport->call(get_peer, int64_t(store_roster[at]));
+        const Array channels = described.get(channels_key, Array());
+        int64_t buffered = 0;
+        for (int64_t which = 0; which < channels.size(); ++which) {
+            Object *channel = channels[which];
+            if (channel != nullptr) {
+                buffered += int64_t(channel->call(buffered_amount));
+            }
+        }
+        p_send->note_backlog(store_roster[at], buffered, now);
+    }
+}
+
+void NetwMultiplayer::sync_flush_rows(
     ReplicationSend *p_send,
-    const LocalVector<repl::RowOffer> &p_offers,
     int64_t p_row_channel,
     int64_t p_window_channel,
     int64_t p_delta_channel
 ) {
-    if (p_send == nullptr || p_offers.is_empty()) {
+    NETW_ZONE_NC("Send pass", colors::WIRE);
+    if (p_send == nullptr) {
         return;
     }
-    const repl::SessionResult result = p_send->run(
-        p_offers,
+    const int64_t rate = int64_t(clock_engine().get_tickrate());
+    if (rate > 0) {
+        p_send->set_tickrate(rate);
+    }
+    p_send->set_rate(double(session_settings.bandwidth_kbps) * KBPS_BYTES);
+    p_send->publish_tables(table_publishes());
+    sync_note_backlog(p_send);
+    static const StringName encode_seam("_sync_encode");
+    p_send->want_encode_stage(
+        overrides_seam(encode_seam)
+        || event_wants(int64_t(EventPlane::SYNC_ENCODE), 0)
+    );
+#if defined(NETW_TESTS)
+    const int64_t allocated = store::allocations_seen();
+#endif
+    const repl::SessionResult &result = p_send->run(
         datagram_budget() * 8,
         datagram_base_tick(),
         session_elapsed_ms()
     );
+#if defined(NETW_TESTS)
+    idle_work.send_allocations += store::allocations_seen() - allocated;
+    idle_work.sends += 1;
+    idle_work.sent_rows += int64_t(result.sends.size());
+#endif
     if (event_wants(int64_t(EventPlane::GATHER), 0)) {
         Dictionary detail;
-        detail[StringName("offers")] = int64_t(p_offers.size());
+        detail[StringName("offers")]
+            = int64_t(result.sends.size() + result.deferred);
         detail[StringName("sends")] = int64_t(result.sends.size());
         event_emit(
             int64_t(EventPlane::GATHER),
@@ -885,11 +923,15 @@ void NetwMultiplayer::sync_flush_offers(
             Dictionary()
         );
     }
+#if defined(NETW_TESTS)
+    store::AllocationTally framing(idle_work.frame_allocations);
+#endif
     const bool grain = attribution_is_armed();
     for (uint32_t at = 0; at < result.sends.size(); at++) {
         const repl::RowSend &send = result.sends[at];
-        if (grain) {
-            sync_note_columns(p_offers[send.offer], send.mask);
+        if (grain && p_send->store() != nullptr) {
+            const store::Table &table = p_send->store()->table(send.table);
+            sync_note_columns(table.schema, table.plan, send.mask);
         }
         CarrierRow descriptor;
         const bool owns_baseline = p_send->describe(send, descriptor);
@@ -914,15 +956,31 @@ void NetwMultiplayer::sync_flush_offers(
             continue;
         }
         sync_flush.rows++;
-        const wire::WirePlan plan
-            = wire::WirePlan::compile(p_offers[send.offer].declared());
-        if (send.mask == plan.full_mask()) {
+        if (send.whole) {
             sync_flush.whole_rows++;
         }
     }
     sync_flush.staged_out += int64_t(result.staged_out);
     sync_flush.ungathered += int64_t(result.ungathered);
     sync_flush.deferred += int64_t(result.deferred);
+    if (!table_publishes()) {
+        return;
+    }
+    for (uint32_t at = 0; at < result.tables.size(); ++at) {
+        const repl::TableFrame &frame = result.tables[at];
+        send_frame(
+            int64_t(frame.peer),
+            0,
+            gate_channels.table,
+            frame.bytes,
+            frame.reliable,
+            0,
+            String(),
+            true,
+            nullptr,
+            true
+        );
+    }
 }
 
 void NetwMultiplayer::row_control_receive(
@@ -980,12 +1038,12 @@ void NetwMultiplayer::row_control_receive(
             return;
         }
         case wire::ControlTag::READY: {
-            send->writer_book().ready(peer, record.request, record.token);
+            send->stream_ready(peer, record.request, record.token);
             return;
         }
         case wire::ControlTag::ACCEPT: {
             for (uint32_t at = 0; at < record.receipts.size(); ++at) {
-                send->writer_book().receipt(
+                send->stream_receipt(
                     peer,
                     record.receipts[at].token,
                     record.receipts[at].revision
@@ -994,7 +1052,7 @@ void NetwMultiplayer::row_control_receive(
             return;
         }
         case wire::ControlTag::RESET: {
-            send->writer_book().reset(peer, record.request, record.token);
+            send->stream_reset(peer, record.request, record.token);
             return;
         }
         case wire::ControlTag::CLOSE: {
@@ -1071,6 +1129,7 @@ void NetwMultiplayer::row_streams_follow_anchor(
     uint64_t p_anchor,
     uint64_t p_author
 ) {
+    store_resource_route(p_route);
     ReplicationCore *plane = get_replication_plane();
     ReplicationSend *send = row_send_of(plane);
     if (send == nullptr || p_route <= 0) {
@@ -1082,6 +1141,7 @@ void NetwMultiplayer::row_streams_follow_anchor(
 }
 
 void NetwMultiplayer::row_streams_reopen(int64_t p_route) {
+    store_resource_route(p_route);
     ReplicationSend *send = row_send_of(get_replication_plane());
     if (send == nullptr || p_route <= 0) {
         return;
@@ -1112,11 +1172,12 @@ void NetwMultiplayer::row_streams_reseat_parks(
 }
 
 void NetwMultiplayer::sync_note_columns(
-    const repl::RowOffer &p_offer,
+    const table::SchemaRecord &p_schema,
+    const wire::WirePlan &p_plan,
     uint64_t p_mask
 ) {
-    const wire::WirePlan plan = wire::WirePlan::compile(p_offer.declared());
-    const int64_t schema = int64_t(p_offer.declared().shape_hash);
+    const wire::WirePlan &plan = p_plan;
+    const int64_t schema = int64_t(p_schema.shape_hash);
     for (uint32_t index = 0; index < plan.column_count(); ++index) {
         if ((p_mask & (uint64_t(1) << index)) == 0) {
             continue;
@@ -1144,6 +1205,10 @@ Dictionary NetwMultiplayer::peer_link_stats(int64_t p_peer) const {
     out[StringName("loss")] = 0.0;
     out[StringName("mode")] = String("good");
     out[StringName("budget_bits")] = datagram_budget() * 8;
+    out[StringName("budget_bytes")] = datagram_budget();
+    out[StringName("sent_bytes")] = int64_t(0);
+    out[StringName("debt_bytes")] = int64_t(0);
+    out[StringName("deferred_rows")] = int64_t(0);
 
     ReplicationCore *plane = get_replication_plane();
     SyncPipeline *pipeline
@@ -1159,6 +1224,16 @@ Dictionary NetwMultiplayer::peer_link_stats(int64_t p_peer) const {
     );
     out[StringName("budget_bits")]
         = send->link_budget_bits(p_peer, datagram_budget() * 8);
+    out[StringName("budget_bytes")]
+        = int64_t(send->fill_of(p_peer, datagram_budget() * 8));
+    const repl::PeerAccount *account = send->account(p_peer);
+    out[StringName("sent_bytes")]
+        = account != nullptr ? account->sent_bytes : int64_t(0);
+    out[StringName("debt_bytes")] = account != nullptr && account->balance < 0.0
+        ? int64_t(-account->balance)
+        : int64_t(0);
+    out[StringName("deferred_rows")]
+        = account != nullptr ? int64_t(account->deferred) : int64_t(0);
     return out;
 }
 
@@ -1178,17 +1253,15 @@ Dictionary NetwMultiplayer::sync_explain(
     }
     const repl::RowExplain held = send->explain(p_route, p_comp, p_peer);
     static const char *const NAMES[]
-        = {"unoffered",
-           "sent",
-           "deferred",
-           "caught_up",
-           "ungathered",
-           "refused"};
+        = {"unoffered", "sent", "deferred", "caught_up", "ungathered"};
     out[StringName("verdict")] = String(NAMES[int(held.verdict)]);
     out[StringName("tick")] = held.tick;
     out[StringName("confirmed")] = int64_t(held.confirmed);
     out[StringName("exposed")] = int64_t(held.exposed);
     out[StringName("has_baseline")] = held.has_baseline;
+    out[StringName("priority")] = double(held.priority);
+    out[StringName("class")] = String(held.row_class);
+    out[StringName("age_ticks")] = held.age_ticks;
     return out;
 }
 
@@ -1213,15 +1286,7 @@ Error NetwMultiplayer::display_lane(
     const StringName &p_track,
     const Variant &p_value
 ) {
-    ReplicationCore *replication = get_replication_plane();
-    Object *seam = replication != nullptr
-        ? replication->gate_seam(display_write_seam())
-        : nullptr;
-    const Error verdict = seam != nullptr
-        ? Error(
-              int(seam->call(display_write_seam(), p_entity, p_track, p_value))
-          )
-        : display_write(p_entity, p_track, p_value);
+    const Error verdict = display_write(p_entity, p_track, p_value);
 
     const int64_t route = liveness_core->route_of(p_entity);
     if (!event_wants(EventPlane::DISPLAY_WRITE, route)) {
@@ -1241,83 +1306,17 @@ Error NetwMultiplayer::display_lane(
     return verdict;
 }
 
-Array NetwMultiplayer::sync_gather_set_default(const RID &, int64_t) {
-    return staged_gatherer.is_valid() ? Array(staged_gatherer.call()) : Array();
-}
-
-Array NetwMultiplayer::gather_set(const RID &p_entity, int64_t p_comp) {
-    Array answered;
-    if (GDVIRTUAL_CALL(_sync_gather_set, p_entity, p_comp, answered)) {
-        return answered;
-    }
-    return sync_gather_set_default(p_entity, p_comp);
-}
-
-Error NetwMultiplayer::sync_apply_set_default(
-    const RID &,
-    int64_t,
-    const Array &p_values
-) {
-    return staged_applier.is_valid() ? Error(int(staged_applier.call(p_values)))
-                                     : ERR_UNCONFIGURED;
-}
-
-Error NetwMultiplayer::apply_set(
-    const RID &p_entity,
-    int64_t p_comp,
-    const Array &p_values
-) {
-    Error answered = OK;
-    if (GDVIRTUAL_CALL(_sync_apply_set, p_entity, p_comp, p_values, answered)) {
-        return answered;
-    }
-    return sync_apply_set_default(p_entity, p_comp, p_values);
-}
-
-Array NetwMultiplayer::run_gather_set(
-    const RID &p_entity,
-    int64_t p_comp,
-    const Callable &p_gatherer
-) {
-    NETW_ZONE_NC("session gather set seam", colors::WIRE);
-    staged_gatherer = p_gatherer;
-    ReplicationCore *plane = (get_replication_plane());
-    Object *seam = plane != nullptr
-        ? plane->gate_seam(StringName("_sync_gather_set"))
-        : nullptr;
-    const Array values = seam != nullptr
-        ? Array(seam->call("_sync_gather_set", p_entity, p_comp))
-        : gather_set(p_entity, p_comp);
-    staged_gatherer = Callable();
-    return values;
-}
-
-Error NetwMultiplayer::run_apply_set(
-    const RID &p_entity,
-    int64_t p_comp,
-    const Array &p_values,
-    const Callable &p_applier
-) {
-    NETW_ZONE_NC("session apply set seam", colors::WIRE);
-    staged_applier = p_applier;
-    ReplicationCore *plane = (get_replication_plane());
-    Object *seam = plane != nullptr
-        ? plane->gate_seam(StringName("_sync_apply_set"))
-        : nullptr;
-    const Error verdict = seam != nullptr
-        ? Error(int(seam->call("_sync_apply_set", p_entity, p_comp, p_values)))
-        : apply_set(p_entity, p_comp, p_values);
-    staged_applier = Callable();
-    return verdict;
-}
-
 void NetwMultiplayer::display_resolve_role(display::Runtime *p_runtime) {
     if (p_runtime != nullptr) {
+#if defined(NETW_TESTS)
+        idle_work.role_resolves += 1;
+#endif
         {
-            NETW_ZONE_NC("display settle body", colors::INTERP);
+            NETW_ZONE_NC("Display settle body", colors::INTERP);
             sim_settle_body(p_runtime->entity());
         }
         display::resolve_role(p_runtime, display_hooks);
+        display_book->wake(p_runtime);
     }
 }
 
@@ -1327,10 +1326,12 @@ bool NetwMultiplayer::display_wants_runtime(Node *p_owner) const {
 
 void NetwMultiplayer::display_rebuild_runtime(display::Runtime *p_runtime) {
     if (p_runtime != nullptr) {
-        NETW_ZONE_NC("display seat bodies", colors::INTERP);
+        NETW_ZONE_NC("Display seat bodies", colors::INTERP);
         display_seat_bodies(p_runtime);
     }
     display::rebuild_runtime(p_runtime, display_hooks);
+    display_follow_tables(p_runtime);
+    display_book->wake(p_runtime);
 }
 
 void NetwMultiplayer::display_seat_bodies(display::Runtime *p_runtime) {
@@ -1509,13 +1510,10 @@ static bool sync_feeds_runtime(
 
 static bool set_feeds_runtime(
     display::Runtime *p_runtime,
-    const Ref<NetwPropertySet> &p_set
+    const PropertySet *p_set
 ) {
-    const TypedArray<NetwPropertySetColumn> columns = p_set->get_columns();
-    for (int at = 0; at < columns.size(); at++) {
-        const Ref<NetwPropertySetColumn> column = columns[at];
-        if (column.is_valid()
-            && runtime_tracks_key(p_runtime, column->get_key())) {
+    for (const PropertyColumn &column : p_set->columns) {
+        if (runtime_tracks_key(p_runtime, column.get_key())) {
             return true;
         }
     }
@@ -1531,7 +1529,7 @@ void NetwMultiplayer::display_compute_sync_intervals(const RID &p_entity) {
     if (entity.is_null()) {
         return;
     }
-    p_runtime->set_authoring_binding(Ref<RefCounted>());
+    p_runtime->set_authored_by_state(false);
 
     double widest = 0.0;
     const TypedArray<MultiplayerSynchronizer> held = entity->synchronizers();
@@ -1548,9 +1546,9 @@ void NetwMultiplayer::display_compute_sync_intervals(const RID &p_entity) {
         );
     }
 
-    const Ref<NetwPropertySetBinding> state = entity->get_state_binding();
-    if (state.is_valid() && set_feeds_runtime(p_runtime, state->get_set())) {
-        p_runtime->set_authoring_binding(state);
+    const PropertyBindingPtr state = entity->get_state_binding();
+    if (state != nullptr && set_feeds_runtime(p_runtime, state->get_set())) {
+        p_runtime->set_authored_by_state(true);
     }
     if (widest <= 0.0 || !clock_engine().get_configured()) {
         return;
@@ -1590,19 +1588,19 @@ bool NetwMultiplayer::display_default_authors_streams(const RID &p_entity) {
     if (plane == nullptr) {
         return found;
     }
-    const TypedArray<NetwPropertySetBinding> derived
+    const LocalVector<PropertyBindingPtr> derived
         = plane->derived_group(p_runtime->get_route());
-    for (int at = 0; at < derived.size(); at++) {
-        const Ref<NetwPropertySetBinding> binding = derived[at];
-        if (binding.is_null()) {
+    for (const PropertyBindingPtr &binding : derived) {
+        if (binding == nullptr) {
             continue;
         }
         Node *node = binding->node();
         if (node == nullptr || !node->is_inside_tree()) {
             continue;
         }
-        const Ref<NetwPropertySet> set = binding->get_set();
-        if (set->get_audience() != NetwPropertySet::AUDIENCE_PUBLIC
+        const PropertySet *set = binding->get_set();
+        if (set == nullptr
+            || set->get_audience() != PropertySet::AUDIENCE_PUBLIC
             || !set_feeds_runtime(p_runtime, set)) {
             continue;
         }
@@ -1652,7 +1650,7 @@ Error NetwMultiplayer::display_pump_entity(
         runtime == nullptr,
         ERR_DOES_NOT_EXIST,
         sys::INTERPOLATION,
-        "no display runtime for entity %d",
+        "Entity %d has no display state, so it was not drawn.",
         int(p_entity.get_id())
     );
     display_pump_runtime(runtime, p_timing, display_book->get_stats());
@@ -1668,6 +1666,19 @@ void NetwMultiplayer::display_absorb_recovery(
         return;
     }
     display::absorb_recovery(p_runtime, p_deltas, p_teleported, display_hooks);
+    display_book->wake(p_runtime);
+}
+
+void NetwMultiplayer::display_absorb_moved(
+    display::Runtime *p_runtime,
+    const LocalVector<StringName> &p_keys,
+    const LocalVector<Variant> &p_deltas
+) {
+    if (p_runtime == nullptr) {
+        return;
+    }
+    display::absorb_moved(p_runtime, p_keys, p_deltas, display_hooks);
+    display_book->wake(p_runtime);
 }
 
 bool NetwMultiplayer::counts_verdict(Error p_verdict) {
@@ -1695,16 +1706,17 @@ Error NetwMultiplayer::sink_verdict(Error p_verdict, int64_t p_route) {
             if (verdict_book.claim_warning(p_verdict, p_route)) {
                 NETW_WARN(
                     sys::TRANSPORT,
-                    "refused carrier input with error %d on route %d",
-                    int(p_verdict),
-                    int(p_route)
+                    "A packet for route %d was refused with error %d.",
+                    int(p_route),
+                    int(p_verdict)
                 );
             }
             break;
         case GateVerdictBook::DEFECT:
             NETW_ERROR(
                 sys::TRANSPORT,
-                "a carrier sink answered %d, which is not a verdict",
+                "A packet handler returned error %d, which it should never "
+                "return.",
                 int(p_verdict)
             );
             break;
@@ -1814,24 +1826,15 @@ void NetwMultiplayer::adopt_schema_declarations() {
         if (!schema.is_valid()) {
             continue;
         }
-        const TypedArray<NetwSchemaColumn> columns = declaration->get_columns();
-        for (int at_column = 0; at_column < columns.size(); ++at_column) {
-            const Ref<NetwSchemaColumn> column = columns[at_column];
-            if (column.is_null()) {
-                continue;
-            }
+        for (const NetwSchema::Column &column : declaration->columns_of()) {
             const int index = schema_add_column(
                 schema,
-                column->get_key(),
-                static_cast<ColumnType>(column->get_type()),
-                column->get_stride()
+                column.key,
+                column.type,
+                column.stride
             );
             if (index >= 0) {
-                schema_set_column_quantizer(
-                    schema,
-                    index,
-                    column->get_quantizer()
-                );
+                schema_set_column_quantizer(schema, index, column.quantizer);
             }
         }
         schema_core.set_storage_version(
@@ -1850,8 +1853,8 @@ void NetwMultiplayer::adopt_schema_declarations() {
         if (schema_seal(schema) != OK) {
             NETW_ERROR(
                 sys::TABLE,
-                "schema '%s' was redeclared with a different shape; peers "
-                "built from the two declarations cannot read each other",
+                "Schema '%s' was declared twice with different columns, so "
+                "peers cannot read each other. Declare each schema name once.",
                 String(declaration->get_schema_name())
             );
         }
@@ -1873,9 +1876,9 @@ void NetwMultiplayer::adopt_table_declarations() {
         if (!table.is_valid()) {
             NETW_ERROR(
                 sys::TABLE,
-                "schema '%s' asks for a table but declares a column of "
-                "varying width, which has no row budget. Send it through a "
-                "channel or drop replicated() from the schema",
+                "Schema '%s' is replicated but has a column whose size varies, "
+                "so it has no table. Send it through a NetwChannel, or remove "
+                "replicated from the schema.",
                 String(declaration->get_schema_name())
             );
             continue;
@@ -1927,7 +1930,7 @@ RID NetwMultiplayer::table_create(const RID &p_schema) {
         return *bound;
     }
     const RID minted = tables.rid_create();
-    if (table_core->declare(minted, record) != OK) {
+    if (store_world.arrays.declare(minted, record) != OK) {
         return RID();
     }
     table_by_name[record->name] = minted;
@@ -1958,7 +1961,7 @@ void NetwMultiplayer::table_set_param(
     const Variant &p_value
 ) {
     if (p_param == TABLE_PARAM_RELIABLE) {
-        table_core->set_reliable(p_table, bool(p_value));
+        store_world.arrays.set_reliable(p_table, bool(p_value));
     }
 }
 
@@ -1968,14 +1971,14 @@ RID NetwMultiplayer::table_find(const StringName &p_name) const {
 }
 
 int NetwMultiplayer::table_get_wire_hash(const RID &p_table) const {
-    return table_core->schema_hash(p_table);
+    return store_world.arrays.schema_hash(p_table);
 }
 
 Error NetwMultiplayer::table_write_routes(
     const RID &p_table,
     const PackedInt64Array &p_routes
 ) {
-    return table_core->write_routes(p_table, p_routes);
+    return store_world.arrays.write_routes(p_table, p_routes);
 }
 
 Error NetwMultiplayer::table_write_column(
@@ -1983,12 +1986,12 @@ Error NetwMultiplayer::table_write_column(
     int p_column,
     const Variant &p_data
 ) {
-    return table_core->write_column(p_table, p_column, p_data);
+    return store_world.arrays.write_column(p_table, p_column, p_data);
 }
 
 Error NetwMultiplayer::table_commit(const RID &p_table) {
     const int64_t tick = clock_engine().get_tick();
-    const Error verdict = table_core->commit(p_table, tick);
+    const Error verdict = store_world.arrays.commit(p_table, tick);
     if (plane.wants(EventPlane::TABLE_COMMIT, 0)) {
         EventPlane::Emission fact(
             EventPlane::TABLE_COMMIT,
@@ -2006,37 +2009,37 @@ Error NetwMultiplayer::table_commit(const RID &p_table) {
 }
 
 PackedInt64Array NetwMultiplayer::table_read_routes(const RID &p_table) const {
-    return table_core->read_routes(p_table);
+    return store_world.arrays.read_routes(p_table);
 }
 
 Variant NetwMultiplayer::table_read_column(
     const RID &p_table,
     int p_column
 ) const {
-    return table_core->read_column(p_table, p_column);
+    return store_world.arrays.read_column(p_table, p_column);
 }
 
 PackedInt64Array NetwMultiplayer::table_read_births(const RID &p_table) const {
-    return table_core->read_births(p_table);
+    return store_world.arrays.read_births(p_table);
 }
 
 PackedInt64Array NetwMultiplayer::table_read_deaths(const RID &p_table) const {
-    return table_core->read_deaths(p_table);
+    return store_world.arrays.read_deaths(p_table);
 }
 
 int NetwMultiplayer::table_get_row(const RID &p_table, int64_t p_route) const {
-    return table_core->row_of(p_table, p_route);
+    return store_world.arrays.row_of(p_table, p_route);
 }
 
 PackedInt32Array NetwMultiplayer::table_get_rows(
     const RID &p_table,
     const PackedInt64Array &p_routes
 ) const {
-    return table_core->rows_of(p_table, p_routes);
+    return store_world.arrays.rows_of(p_table, p_routes);
 }
 
 int64_t NetwMultiplayer::table_get_tick(const RID &p_table) const {
-    return table_core->tick_of(p_table);
+    return store_world.arrays.tick_of(p_table);
 }
 
 void NetwMultiplayer::lagcomp_effect_arm(
@@ -2058,8 +2061,8 @@ bool NetwMultiplayer::lagcomp_effect_watch(
     NETW_WARN_COND(
         !watching,
         sys::PREDICTION,
-        "an effect was watched before it was armed, so '%s' has no revert to "
-        "confirm or deny",
+        "Effect '%s' is not armed, so there is nothing to watch. Call "
+        "NetwMultiplayer.lagcomp_effect_arm before lagcomp_effect_watch.",
         p_key
     );
     return watching;
@@ -2091,17 +2094,10 @@ void NetwMultiplayer::write_display_param(
     int p_param,
     const Variant &p_value
 ) {
-    if (p_wrapper.is_null()) {
+    if (p_wrapper.is_null() || p_wrapper->get_record() == nullptr) {
         return;
     }
-    const Ref<NetwDisplayHandle> handle = p_wrapper->get_interpolation();
-    if (handle.is_null()) {
-        return;
-    }
-    display::Decl *fallback = handle->declaration();
-    if (fallback == nullptr) {
-        return;
-    }
+    display::Decl *fallback = &p_wrapper->get_record()->display_declaration();
     const RID rid = p_wrapper->get_rid_handle();
     display_book->write_param(rid, *fallback, p_param, p_value);
     const display::Decl *stored = display_book->decl_ptr(rid);
@@ -2171,7 +2167,7 @@ Error NetwMultiplayer::display_record_track(
     return OK;
 }
 
-Error NetwMultiplayer::display_write_default(
+Error NetwMultiplayer::display_write_track(
     const RID &p_entity,
     const StringName &p_track,
     const Variant &p_value
@@ -2203,24 +2199,147 @@ Error NetwMultiplayer::display_write_default(
     }
 }
 
+bool NetwMultiplayer::display_row_of(
+    const RID &p_entity,
+    const StringName &p_track,
+    RID &r_table,
+    int64_t &r_column,
+    int64_t &r_route
+) {
+    r_table = RID();
+    r_column = -1;
+    r_route = liveness_core->route_of(p_entity);
+    const display::Runtime *runtime = display_book->runtime_of(p_entity);
+    if (runtime == nullptr) {
+        return false;
+    }
+    r_route = runtime->get_route();
+    const int track = runtime->display_tracks().by_name(p_track);
+    if (track < 0 || track >= int(runtime->channels().size())) {
+        return false;
+    }
+    r_column = track;
+    uint64_t owner = 0;
+    uint32_t lane = 0;
+    uint32_t column = 0;
+    const display::History &history
+        = runtime->channels()[track]->display_history();
+    if (!history.follow_address(owner, lane, column)) {
+        return true;
+    }
+    const store::RowAddress at = store_world.row_of(owner, lane);
+    if (at.valid()) {
+        r_table = store_world.table(at.table).rid;
+        r_column = int64_t(column);
+    }
+    return true;
+}
+
+Error NetwMultiplayer::display_write_rows_default(
+    const RID &p_table,
+    int64_t p_column,
+    const PackedInt64Array &p_routes,
+    const Array &p_values
+) {
+    const uint32_t index
+        = p_table.is_valid() ? store_world.table_of(p_table) : 0;
+    if (p_table.is_valid() && index == store::Table::NO_SLOT) {
+        return ERR_DOES_NOT_EXIST;
+    }
+    Error verdict = OK;
+    for (int64_t at = 0; at < p_routes.size() && at < p_values.size(); ++at) {
+        const display::Runtime *runtime
+            = display_book->runtime_at(p_routes[at]);
+        if (runtime == nullptr) {
+            verdict = ERR_DOES_NOT_EXIST;
+            continue;
+        }
+        const display::Channel *channel = nullptr;
+        if (p_table.is_valid()) {
+            const store::Table &table = store_world.table(index);
+            const uint32_t lane
+                = table.family == store::Family::RETAINED ? 1 : 0;
+            for (uint32_t row = 0; row < table.row_count(); ++row) {
+                if (table.routes[row] == p_routes[at]) {
+                    channel = runtime->channel_following(
+                        table.owners[row],
+                        lane,
+                        uint32_t(p_column)
+                    );
+                    break;
+                }
+            }
+        } else if (p_column >= 0
+                   && p_column < int64_t(runtime->channels().size())) {
+            channel = runtime->channels()[uint32_t(p_column)];
+        }
+        if (channel == nullptr) {
+            verdict = ERR_DOES_NOT_EXIST;
+            continue;
+        }
+        verdict = display_write_track(
+            channel->get_entity(),
+            channel->get_target_prop(),
+            p_values[at]
+        );
+    }
+    return verdict;
+}
+
+Error NetwMultiplayer::run_display_write_rows(
+    const RID &p_table,
+    int64_t p_column,
+    const PackedInt64Array &p_routes,
+    const Array &p_values
+) {
+    ReplicationCore *replication = get_replication_plane();
+    Object *seam = replication != nullptr
+        ? replication->gate_seam(display_write_seam())
+        : nullptr;
+    if (seam != nullptr) {
+        return Error(int(seam->call(
+            display_write_seam(),
+            p_table,
+            p_column,
+            p_routes,
+            p_values
+        )));
+    }
+    Error answered = OK;
+    if (GDVIRTUAL_CALL(
+            _display_write_rows,
+            p_table,
+            p_column,
+            p_routes,
+            p_values,
+            answered
+        )) {
+        return answered;
+    }
+    return display_write_rows_default(p_table, p_column, p_routes, p_values);
+}
+
 Error NetwMultiplayer::display_write(
     const RID &p_entity,
     const StringName &p_track,
     const Variant &p_value
 ) {
-    Error answered = OK;
-    const bool overridden = overrides_seam(display_write_seam());
-    if (overridden
-        && GDVIRTUAL_CALL(
-            _display_write,
-            p_entity,
-            p_track,
-            p_value,
-            answered
-        )) {
-        return answered;
+    ReplicationCore *replication = get_replication_plane();
+    const bool by_seam = overrides_seam(display_write_seam())
+        || (replication != nullptr
+            && replication->gate_seam(display_write_seam()) != nullptr);
+    if (!by_seam) {
+        return display_write_track(p_entity, p_track, p_value);
     }
-    return display_write_default(p_entity, p_track, p_value);
+    RID table;
+    int64_t column = -1;
+    int64_t route = 0;
+    display_row_of(p_entity, p_track, table, column, route);
+    PackedInt64Array routes;
+    routes.push_back(route);
+    Array values;
+    values.push_back(p_value);
+    return run_display_write_rows(table, column, routes, values);
 }
 
 void NetwMultiplayer::display_set_param(
@@ -2322,6 +2441,7 @@ void NetwMultiplayer::display_reset(const RID &p_entity) {
         clock_engine().get_display_offset(),
         clock_engine().recommended_display_offset()
     );
+    display_book->wake(runtime);
 }
 
 void NetwMultiplayer::display_snap(
@@ -2337,6 +2457,7 @@ void NetwMultiplayer::display_snap(
     if (channel != nullptr) {
         channel->snap(p_value);
     }
+    display_book->wake(runtime);
 }
 
 Variant NetwMultiplayer::display_get_value(
@@ -2385,27 +2506,29 @@ bool NetwMultiplayer::sync_policy_admits(
     );
 }
 
-Ref<NetwPropertySet> NetwMultiplayer::property_set_record(
-    const RID &p_set
-) const {
-    const Ref<NetwPropertySet> *held
-        = property_set_records.getptr(p_set.get_id());
-    return held != nullptr ? *held : Ref<NetwPropertySet>();
+uint64_t NetwMultiplayer::property_set_id_of(const RID &p_set) const {
+    const uint64_t *held = minted_property_sets.getptr(p_set.get_id());
+    return held != nullptr ? *held : repl::SetBook::NONE;
 }
 
-Ref<NetwPropertySet> NetwMultiplayer::mutable_property_set(const RID &p_set) {
-    const Ref<NetwPropertySet> record = property_set_record(p_set);
+PropertySet *NetwMultiplayer::property_set_of(const RID &p_set) const {
+    return set_book.get(property_set_id_of(p_set));
+}
+
+PropertySet *NetwMultiplayer::mutable_property_set(const RID &p_set) {
+    PropertySet *record = property_set_of(p_set);
     NETW_ERR_COND_V(
-        record.is_null(),
-        Ref<NetwPropertySet>(),
+        record == nullptr,
+        nullptr,
         sys::TABLE,
-        "a property set was addressed by a handle that names none"
+        "The property set RID is not valid."
     );
     NETW_ERR_COND_V(
         record->get_sealed(),
-        Ref<NetwPropertySet>(),
+        nullptr,
         sys::TABLE,
-        "a sealed property set cannot be changed, so the write is refused"
+        "The property set is sealed, so it cannot be changed. Change it "
+        "before NetwMultiplayer.property_set_seal."
     );
 
     return record;
@@ -2424,32 +2547,31 @@ RID NetwMultiplayer::property_set_create(
         return RID();
     }
     const RID minted = property_sets.rid_create();
-    Ref<NetwPropertySet> record = property_set_builder::for_record(p_record);
-    record->set_schema(*declaration);
-    record->set_rid_handle(minted);
-    property_set_records.insert(minted.get_id(), record);
+    const uint64_t held = set_book.create();
+    PropertySet *record = set_book.get(held);
+    property_set_builder::for_record(*record, p_record);
+    record->schema = *declaration;
+    record->rid = minted;
+    minted_property_sets.insert(minted.get_id(), held);
     property_set_schema.insert(minted.get_id(), p_schema);
     return minted;
 }
 
 int NetwMultiplayer::property_set_add_column(const RID &p_set, int p_column) {
-    const Ref<NetwPropertySet> record = mutable_property_set(p_set);
-    if (record.is_null()) {
+    PropertySet *record = mutable_property_set(p_set);
+    if (record == nullptr) {
         return -1;
     }
     const SchemaColumn *shape
-        = SchemaCore::column_at(&record->get_schema(), p_column);
-    if (shape == nullptr || record->member(p_column).is_valid()) {
+        = SchemaCore::column_at(&record->schema, p_column);
+    if (shape == nullptr || record->member(p_column) != nullptr) {
         return -1;
     }
-    Ref<NetwPropertySetColumn> member;
-    member.instantiate();
-    member->shape = *shape;
-    member->set_schema_column(p_column);
-    TypedArray<NetwPropertySetColumn> held = record->get_columns();
-    held.push_back(member);
-    record->set_columns(held);
-    return int(held.size()) - 1;
+    PropertyColumn member;
+    member.shape = *shape;
+    member.schema_column = p_column;
+    record->columns.push_back(member);
+    return int(record->columns.size()) - 1;
 }
 
 void NetwMultiplayer::property_set_set_column_param(
@@ -2458,46 +2580,45 @@ void NetwMultiplayer::property_set_set_column_param(
     int p_param,
     const Variant &p_value
 ) {
-    const Ref<NetwPropertySet> record = mutable_property_set(p_set);
-    if (record.is_null()) {
+    PropertySet *record = mutable_property_set(p_set);
+    if (record == nullptr) {
         return;
     }
-    const TypedArray<NetwPropertySetColumn> held = record->get_columns();
-    if (p_field < 0 || p_field >= int(held.size())) {
+    if (p_field < 0 || p_field >= int(record->columns.size())) {
         return;
     }
-    Ref<NetwPropertySetColumn> target = held[p_field];
+    PropertyColumn &target = record->columns[uint32_t(p_field)];
     switch (p_param) {
         case COLUMN_PARAM_CLASS:
-            target->set_property_class(int64_t(p_value));
+            target.property_class = int64_t(p_value);
             return;
         case COLUMN_PARAM_EPSILON:
-            target->set_epsilon_override(double(p_value));
+            target.epsilon_override = double(p_value);
             return;
         case COLUMN_PARAM_TELEPORT_AT:
-            target->set_teleport_at_override(double(p_value));
+            target.teleport_at_override = double(p_value);
             return;
         case COLUMN_PARAM_CARRY_CHANNEL:
-            target->set_carry_channel(StringName(p_value));
+            target.carry_channel = StringName(p_value);
             return;
         case COLUMN_PARAM_TELEPORT_ONLY:
-            target->set_explicit_teleport_only(bool(p_value));
+            target.explicit_teleport_only = bool(p_value);
             return;
         case COLUMN_PARAM_RECONCILE_ONLY:
-            target->set_explicit_reconcile_only(bool(p_value));
+            target.explicit_reconcile_only = bool(p_value);
             return;
         case COLUMN_PARAM_LANE:
-            target->set_lane(int64_t(p_value));
-            target->set_watch(target->get_lane() == NetwPropertySet::RETAINED);
+            target.lane = int64_t(p_value);
+            target.watch = target.lane == PropertySet::RETAINED;
             record->reproject_lanes();
             return;
         case COLUMN_PARAM_CONVERGE_STIFFNESS:
-            target->set_converge_stiffness(double(p_value));
+            target.converge_stiffness = double(p_value);
             return;
         default:
             NETW_ERR(
                 sys::TABLE,
-                "column parameter {} names no column setting",
+                "Column setting %d does not exist.",
                 p_param
             );
     }
@@ -2508,50 +2629,49 @@ void NetwMultiplayer::property_set_set_param(
     int p_param,
     const Variant &p_value
 ) {
-    const Ref<NetwPropertySet> record = mutable_property_set(p_set);
-    if (record.is_null()) {
+    PropertySet *record = mutable_property_set(p_set);
+    if (record == nullptr) {
         return;
     }
     switch (p_param) {
         case SET_PARAM_MASKED:
-            record->set_masked(bool(p_value));
+            record->masked = bool(p_value);
             return;
         case SET_PARAM_WINDOW:
-            record->set_window(int64_t(p_value));
+            record->window = int64_t(p_value);
             return;
         case SET_PARAM_AUDIENCE:
-            record->set_audience(int64_t(p_value));
+            record->audience = int64_t(p_value);
             return;
         case SET_PARAM_POLICY:
-            record->set_policy(
-                static_cast<NetwMemberConfig::Policy>(int(p_value))
-            );
+            record->policy
+                = static_cast<NetwMemberConfig::Policy>(int(p_value));
             return;
         case SET_PARAM_TRIGGER:
-            record->set_trigger(int64_t(p_value));
+            record->trigger = int64_t(p_value);
             return;
         case SET_PARAM_CADENCE:
-            record->set_cadence(int64_t(p_value));
+            record->cadence = int64_t(p_value);
             return;
         case SET_PARAM_STAMP:
-            record->set_stamp(int64_t(p_value));
+            record->stamp = int64_t(p_value);
             return;
         case SET_PARAM_PROFILE:
-            record->set_profile(int64_t(p_value));
+            record->profile = int64_t(p_value);
             return;
         case SET_PARAM_CHANNEL:
-            record->set_channel(int64_t(p_value));
+            record->channel = int64_t(p_value);
             return;
         case SET_PARAM_RELIABLE:
-            record->set_reliable(bool(p_value));
+            record->reliable = bool(p_value);
             return;
         case SET_PARAM_HEARTBEAT:
-            record->set_heartbeat(int64_t(p_value));
+            record->heartbeat = int64_t(p_value);
             return;
         default:
             NETW_ERR(
                 sys::TABLE,
-                "set parameter {} names no property set setting",
+                "Property set setting %d does not exist.",
                 p_param
             );
     }
@@ -2560,7 +2680,8 @@ void NetwMultiplayer::property_set_set_param(
 void NetwMultiplayer::property_set_clear() {
     property_set_by_script.clear();
     entity_property_sets.clear();
-    property_set_records.clear();
+    minted_property_sets.clear();
+    set_book.clear();
     property_set_schema.clear();
     property_sets.clear();
 }
@@ -2588,7 +2709,7 @@ RID NetwMultiplayer::script_schema(const Ref<Script> &p_script, Node *p_node) {
             schema,
             property,
             static_cast<ColumnType>(
-                NetwPropertySet::column_type_for(p_script, p_node, property)
+                PropertySet::column_type_for(p_script, p_node, property)
             ),
             1
         );
@@ -2600,8 +2721,9 @@ RID NetwMultiplayer::script_schema(const Ref<Script> &p_script, Node *p_node) {
     if (schema_seal(schema) != OK) {
         NETW_ERROR(
             sys::TABLE,
-            "script '%s' recompiled its properties with a different shape, so "
-            "peers built from the two cannot read each other",
+            "Two nodes of script '%s' replicate properties with different "
+            "types, so peers cannot read each other. Give each replicated "
+            "property a static type.",
             String(name)
         );
     }
@@ -2626,12 +2748,9 @@ RID NetwMultiplayer::adopted_property_set(
 RID NetwMultiplayer::adopt_property_set(
     const Ref<Script> &p_script,
     RecordKind p_record_kind,
-    const Ref<NetwPropertySet> &p_source,
+    const PropertySet &p_source,
     Node *p_node
 ) {
-    if (p_source.is_null()) {
-        return RID();
-    }
     const RID adopted = adopted_property_set(p_script, p_record_kind);
     if (adopted.is_valid()) {
         return adopted;
@@ -2641,24 +2760,19 @@ RID NetwMultiplayer::adopt_property_set(
     if (!set.is_valid()) {
         return set;
     }
-    property_set_set_param(set, SET_PARAM_MASKED, p_source->get_masked());
-    property_set_set_param(set, SET_PARAM_WINDOW, p_source->get_window());
-    property_set_set_param(set, SET_PARAM_AUDIENCE, p_source->get_audience());
-    property_set_set_param(set, SET_PARAM_POLICY, p_source->get_policy());
-    property_set_set_param(set, SET_PARAM_TRIGGER, p_source->get_trigger());
-    property_set_set_param(set, SET_PARAM_CADENCE, p_source->get_cadence());
-    property_set_set_param(set, SET_PARAM_STAMP, p_source->get_stamp());
-    property_set_set_param(set, SET_PARAM_PROFILE, p_source->get_profile());
-    property_set_set_param(set, SET_PARAM_CHANNEL, p_source->get_channel());
-    property_set_set_param(set, SET_PARAM_RELIABLE, p_source->get_reliable());
-    property_set_set_param(set, SET_PARAM_HEARTBEAT, p_source->get_heartbeat());
-    const TypedArray<NetwPropertySetColumn> columns = p_source->get_columns();
-    for (int index = 0; index < columns.size(); ++index) {
-        const Ref<NetwPropertySetColumn> member = columns[index];
-        if (member.is_null()) {
-            continue;
-        }
-        const int column = schema_core.find_column(schema, member->get_key());
+    property_set_set_param(set, SET_PARAM_MASKED, p_source.get_masked());
+    property_set_set_param(set, SET_PARAM_WINDOW, p_source.get_window());
+    property_set_set_param(set, SET_PARAM_AUDIENCE, p_source.get_audience());
+    property_set_set_param(set, SET_PARAM_POLICY, p_source.get_policy());
+    property_set_set_param(set, SET_PARAM_TRIGGER, p_source.get_trigger());
+    property_set_set_param(set, SET_PARAM_CADENCE, p_source.get_cadence());
+    property_set_set_param(set, SET_PARAM_STAMP, p_source.get_stamp());
+    property_set_set_param(set, SET_PARAM_PROFILE, p_source.get_profile());
+    property_set_set_param(set, SET_PARAM_CHANNEL, p_source.get_channel());
+    property_set_set_param(set, SET_PARAM_RELIABLE, p_source.get_reliable());
+    property_set_set_param(set, SET_PARAM_HEARTBEAT, p_source.get_heartbeat());
+    for (const PropertyColumn &member : p_source.columns) {
+        const int column = schema_core.find_column(schema, member.get_key());
         const int at = property_set_add_column(set, column);
         if (at < 0) {
             continue;
@@ -2667,49 +2781,49 @@ RID NetwMultiplayer::adopt_property_set(
             set,
             at,
             COLUMN_PARAM_CLASS,
-            member->get_property_class()
+            member.property_class
         );
         property_set_set_column_param(
             set,
             at,
             COLUMN_PARAM_EPSILON,
-            member->get_epsilon_override()
+            member.epsilon_override
         );
         property_set_set_column_param(
             set,
             at,
             COLUMN_PARAM_TELEPORT_AT,
-            member->get_teleport_at_override()
+            member.teleport_at_override
         );
         property_set_set_column_param(
             set,
             at,
             COLUMN_PARAM_CARRY_CHANNEL,
-            member->get_carry_channel()
+            member.carry_channel
         );
         property_set_set_column_param(
             set,
             at,
             COLUMN_PARAM_TELEPORT_ONLY,
-            member->get_explicit_teleport_only()
+            member.explicit_teleport_only
         );
         property_set_set_column_param(
             set,
             at,
             COLUMN_PARAM_RECONCILE_ONLY,
-            member->get_explicit_reconcile_only()
+            member.explicit_reconcile_only
         );
         property_set_set_column_param(
             set,
             at,
             COLUMN_PARAM_LANE,
-            member->get_lane()
+            member.lane
         );
         property_set_set_column_param(
             set,
             at,
             COLUMN_PARAM_CONVERGE_STIFFNESS,
-            member->get_converge_stiffness()
+            member.converge_stiffness
         );
     }
     property_set_seal(set);
@@ -2721,8 +2835,8 @@ RID NetwMultiplayer::adopt_property_set(
 }
 
 Error NetwMultiplayer::property_set_seal(const RID &p_set) {
-    const Ref<NetwPropertySet> record = property_set_record(p_set);
-    if (record.is_null()) {
+    PropertySet *record = property_set_of(p_set);
+    if (record == nullptr) {
         return ERR_DOES_NOT_EXIST;
     }
     record->seal();
@@ -2730,8 +2844,8 @@ Error NetwMultiplayer::property_set_seal(const RID &p_set) {
 }
 
 int64_t NetwMultiplayer::property_set_get_wire_hash(const RID &p_set) const {
-    const Ref<NetwPropertySet> record = property_set_record(p_set);
-    return record.is_valid() ? record->wire_hash() : 0;
+    const PropertySet *record = property_set_of(p_set);
+    return record != nullptr ? record->wire_hash() : 0;
 }
 
 RID NetwMultiplayer::property_set_get_schema(const RID &p_set) const {
@@ -2857,7 +2971,7 @@ PackedByteArray NetwMultiplayer::run_sync_encode_stage(
     const PackedByteArray &p_stock,
     int64_t p_tick
 ) {
-    NETW_ZONE_NC("sync encode stage", colors::CODEC);
+    NETW_ZONE_NC("Sync encode stage", colors::CODEC);
     sync_encode_stock = p_stock;
     sync_encode_armed = true;
     int64_t stamped = p_tick;
@@ -2871,7 +2985,7 @@ PackedByteArray NetwMultiplayer::run_sync_encode_stage(
     sync_encode_stock = PackedByteArray();
     NETW_TRACE(
         sys::CODEC,
-        "encode stage answered %d bytes for peer %d at tick %d",
+        "Encoded %d bytes for peer %d at tick %d.",
         int(bytes.size()),
         int(p_peer),
         int(stamped)
@@ -2887,14 +3001,14 @@ Error NetwMultiplayer::run_sync_decode_stage(
     const PackedByteArray &p_payload,
     const Callable &p_decoder
 ) {
-    NETW_ZONE_NC("sync decode stage", colors::CODEC);
+    NETW_ZONE_NC("Sync decode stage", colors::CODEC);
     sync_decoder = p_decoder;
     const Error verdict
         = sync_decode(p_entity, p_comp, p_flags, p_tick, p_payload);
     sync_decoder = Callable();
     NETW_TRACE(
         sys::CODEC,
-        "decode stage answered %d for comp %d at tick %d",
+        "Decoding returned %d for component %d at tick %d.",
         int(verdict),
         int(p_comp),
         int(p_tick)

@@ -17,7 +17,6 @@
 #include "netw/api/netw_multiplayer.hpp"
 #include "netw/api/participant.hpp"
 #include "netw/api/property_config.hpp"
-#include "netw/api/property_set.hpp"
 #include "netw/api/scene_handle.hpp"
 #include "netw/api/sync_pipeline.hpp"
 #include "netw/call_args.hpp"
@@ -43,8 +42,8 @@ using netw::NetwInterpolate;
 using netw::NetwMultiplayer;
 using netw::NetwPlayer;
 using netw::NetwPropertyConfig;
-using netw::NetwPropertySet;
 using netw::NetwSceneHandle;
+using netw::repl::PropertySet;
 namespace property_set_builder = netw::property_set_builder;
 
 constexpr int COORDINATOR = 7;
@@ -151,16 +150,18 @@ void declare_state_stream(NetwMultiplayer *p_core, Node *p_node) {
     config->state();
     Dictionary configs;
     configs[StringName("position")] = config;
-    const Ref<NetwPropertySet> set
-        = property_set_builder::from_property_configs(
-            configs,
-            NetwPropertySet::RECORD_STATE
-        );
-    REQUIRE(set.is_valid());
+    netw::repl::SetBook &sets = p_core->property_set_book();
+    const uint64_t declared = sets.create();
+    PropertySet *set = sets.get(declared);
+    REQUIRE(property_set_builder::from_property_configs(
+        *set,
+        configs,
+        PropertySet::RECORD_STATE
+    ));
     set->compile_against(p_node);
     NETW_CHECK_EQ(int(set->get_sealed()), 1);
     NETW_CHECK_EQ(
-        int(p_core->sync_pipeline()->register_property_set(p_node, set)),
+        int(p_core->sync_pipeline()->register_property_set(p_node, declared)),
         int(OK)
     );
     p_core->display_mark_dirty(

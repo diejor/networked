@@ -34,7 +34,8 @@ Ref<NetwJoinConfig> NetwJoinConfig::quantize(const Array &p_quantizers) {
     if (p_quantizers.is_empty()) {
         NETW_ERROR(
             sys::SESSION,
-            "NetwJoinConfig.quantize: '%s' was given no quantizer.",
+            "NetwJoinConfig.quantize got no quantizer for '%s'. Pass one "
+            "quantizer for each join argument.",
             String(context_name)
         );
         return Ref<NetwJoinConfig>(this);

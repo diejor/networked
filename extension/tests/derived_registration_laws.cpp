@@ -9,17 +9,17 @@
 #include "godot/node.hpp"
 #include "godot/script.hpp"
 #include "netw/api/netw_multiplayer.hpp"
-#include "netw/api/property_set.hpp"
 #include "netw/api/replication_core.hpp"
 #include "netw/api/sync_pipeline.hpp"
+#include "netw/repl/property_set.hpp"
 
 namespace TestNetwDerivedRegistrationLaws {
 
 using namespace godot;
 using netw::NetwMultiplayer;
-using netw::NetwPropertySet;
 using netw::NetwSyncModel;
 using netw::SyncPipeline;
+using netw::repl::PropertySet;
 
 struct Stand {
     Ref<NetwMultiplayer> core;
@@ -62,10 +62,10 @@ TEST_CASE(
 
     stand.pipeline->register_derived(node);
     NETW_CHECK_EQ(stand.active(), int64_t(2));
-    CHECK(stand.pipeline->derived_binding(node, NetwPropertySet::RECORD_STATE)
-              .is_valid());
-    CHECK(stand.pipeline->derived_binding(node, NetwPropertySet::RECORD_INPUT)
-              .is_valid());
+    CHECK(stand.pipeline->derived_binding(node, PropertySet::RECORD_STATE)
+              != nullptr);
+    CHECK(stand.pipeline->derived_binding(node, PropertySet::RECORD_INPUT)
+              != nullptr);
 
     stand.pipeline->register_derived(node);
     NETW_CHECK_EQ(stand.active(), int64_t(2));
@@ -89,12 +89,12 @@ TEST_CASE(
     stand.pipeline->register_derived(node);
     NETW_CHECK_EQ(stand.active(), int64_t(1));
     CHECK(stand.pipeline
-              ->derived_binding(node, NetwPropertySet::RECORD_BROADCAST)
-              .is_valid());
-    CHECK(stand.pipeline->derived_binding(node, NetwPropertySet::RECORD_STATE)
-              .is_null());
-    CHECK(stand.pipeline->derived_binding(node, NetwPropertySet::RECORD_INPUT)
-              .is_null());
+              ->derived_binding(node, PropertySet::RECORD_BROADCAST)
+              != nullptr);
+    CHECK(stand.pipeline->derived_binding(node, PropertySet::RECORD_STATE)
+              == nullptr);
+    CHECK(stand.pipeline->derived_binding(node, PropertySet::RECORD_INPUT)
+              == nullptr);
 
     memdelete(node);
 }
@@ -108,8 +108,8 @@ TEST_CASE(
 
     stand.pipeline->register_derived(node);
     NETW_CHECK_EQ(stand.active(), int64_t(0));
-    CHECK(stand.pipeline->derived_binding(node, NetwPropertySet::RECORD_STATE)
-              .is_null());
+    CHECK(stand.pipeline->derived_binding(node, PropertySet::RECORD_STATE)
+              == nullptr);
 
     memdelete(node);
 }

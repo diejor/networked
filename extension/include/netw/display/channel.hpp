@@ -64,6 +64,10 @@ public:
         return history;
     }
 
+    int64_t held_bytes() const {
+        return int64_t(sizeof(Channel)) + history.held_bytes();
+    }
+
     Offset &render_offset() {
         return offset;
     }

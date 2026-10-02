@@ -55,8 +55,8 @@ Channel *Runtime::channel_named(const StringName &p_name) const {
     NETW_WARN_COND(
         tracks.is_ambiguous(p_name),
         sys::INTERPOLATION,
-        "'%s' names more than one channel on this entity, so a lookup by "
-        "name answers whichever declared first",
+        "More than one interpolation on this entity is named '%s', so the "
+        "first one declared is used. Give each a unique name.",
         String(p_name)
     );
     const int at = tracks.by_name(p_name);
@@ -64,6 +64,19 @@ Channel *Runtime::channel_named(const StringName &p_name) const {
         return nullptr;
     }
     return states[at];
+}
+
+Channel *Runtime::channel_following(
+    uint64_t p_owner,
+    uint32_t p_lane,
+    uint32_t p_column
+) const {
+    for (Channel *channel : states) {
+        if (channel->display_history().follows(p_owner, p_lane, p_column)) {
+            return channel;
+        }
+    }
+    return nullptr;
 }
 
 void Runtime::snap_named(const StringName &p_name, const Variant &p_value) {
@@ -84,7 +97,7 @@ void Runtime::reset(int p_display_offset, int p_recommended_display_offset) {
 }
 
 int64_t Runtime::authoring_tick() const {
-    if (authoring_binding.is_null() || playhead.get_display_tick() < 0) {
+    if (!authored_by_state || playhead.get_display_tick() < 0) {
         return -1;
     }
     for (Channel *channel : states) {
@@ -101,15 +114,12 @@ int64_t Runtime::authoring_tick() const {
     return -1;
 }
 
-Ref<NetwRingBuffer> Runtime::buffer_of(const StringName &p_track) const {
+const History *Runtime::history_of(const StringName &p_track) const {
     if (pump_mode == netw::display::PUMP_CHASE) {
-        return Ref<NetwRingBuffer>();
+        return nullptr;
     }
     const Channel *channel = channel_named(p_track);
-    if (channel == nullptr) {
-        return Ref<NetwRingBuffer>();
-    }
-    return channel->display_history().get_buffer();
+    return channel != nullptr ? &channel->display_history() : nullptr;
 }
 
 Variant Runtime::track_stat(
@@ -127,12 +137,13 @@ Variant Runtime::track_stat(
     if (p_stat == StringName("offset_held")) {
         return channel != nullptr && channel->render_offset().is_held();
     }
-    if (p_stat == StringName("buffer")) {
-        return buffer_of(p_track);
+    if (p_stat == StringName("newest_tick")) {
+        const History *history = history_of(p_track);
+        return history != nullptr ? history->newest_tick() : int64_t(-1);
     }
     if (p_stat == StringName("buffer_size")) {
-        const Ref<NetwRingBuffer> buffer = buffer_of(p_track);
-        return buffer.is_valid() ? buffer->size() : 0;
+        const History *history = history_of(p_track);
+        return history != nullptr ? history->size() : int64_t(0);
     }
     if (p_stat == StringName("channels")) {
         return int64_t(states.size());

@@ -71,15 +71,13 @@ Methods
 .. table::
    :widths: auto
 
-   +---------------------------------------------+------------------------------------------------------------------------------------------------------------+
-   | :godot:`int`                                | :ref:`displayed_authoring_tick<class_NetwDisplayHandle_method_displayed_authoring_tick>`\ (\ ) |const|     |
-   +---------------------------------------------+------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwEntity<class_NetwEntity>`         | :ref:`entity<class_NetwDisplayHandle_method_entity>`\ (\ ) |const|                                         |
-   +---------------------------------------------+------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwRingBuffer<class_NetwRingBuffer>` | :ref:`get_buffer<class_NetwDisplayHandle_method_get_buffer>`\ (\ property\: :godot:`StringName`\ ) |const| |
-   +---------------------------------------------+------------------------------------------------------------------------------------------------------------+
-   | |void|                                      | :ref:`reset<class_NetwDisplayHandle_method_reset>`\ (\ )                                                   |
-   +---------------------------------------------+------------------------------------------------------------------------------------------------------------+
+   +-------------------------------------+--------------------------------------------------------------------------------------------------------+
+   | :godot:`int`                        | :ref:`displayed_authoring_tick<class_NetwDisplayHandle_method_displayed_authoring_tick>`\ (\ ) |const| |
+   +-------------------------------------+--------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwEntity<class_NetwEntity>` | :ref:`entity<class_NetwDisplayHandle_method_entity>`\ (\ ) |const|                                     |
+   +-------------------------------------+--------------------------------------------------------------------------------------------------------+
+   | |void|                              | :ref:`reset<class_NetwDisplayHandle_method_reset>`\ (\ )                                               |
+   +-------------------------------------+--------------------------------------------------------------------------------------------------------+
 
 .. rst-class:: classref-section-separator
 
@@ -317,18 +315,6 @@ The tick the drawn state was written at, or ``-1``.
 :ref:`NetwEntity<class_NetwEntity>` **entity**\ (\ ) |const| :ref:`🔗<class_NetwDisplayHandle_method_entity>`
 
 The :ref:`NetwEntity<class_NetwEntity>` this handle belongs to, or ``null`` once that entity is gone.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwDisplayHandle_method_get_buffer:
-
-.. rst-class:: classref-method
-
-:ref:`NetwRingBuffer<class_NetwRingBuffer>` **get_buffer**\ (\ property\: :godot:`StringName`\ ) |const| :ref:`🔗<class_NetwDisplayHandle_method_get_buffer>`
-
-The :ref:`NetwRingBuffer<class_NetwRingBuffer>` of snapshots for ``property``, or ``null``.
 
 .. rst-class:: classref-item-separator
 

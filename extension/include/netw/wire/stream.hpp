@@ -33,6 +33,7 @@ public:
     bool bool1(bool &value);
     bool bytes_capped(godot::PackedByteArray &value, int cap);
     bool raw_bytes(godot::PackedByteArray &value, int64_t count);
+    bool raw_span(const uint8_t *value, int64_t count);
     bool align_verify();
 
     bool ok() const {
@@ -40,6 +41,15 @@ public:
     }
     int64_t bit_length() const;
     godot::PackedByteArray to_bytes() const;
+    void clear();
+
+    const uint8_t *data() const {
+        return output.ptr();
+    }
+
+    uint32_t byte_count() const {
+        return output.size();
+    }
 };
 
 class ReadStream {
@@ -68,6 +78,7 @@ public:
     bool bool1(bool &value);
     bool bytes_capped(godot::PackedByteArray &value, int cap);
     bool raw_bytes(godot::PackedByteArray &value, int64_t count);
+    bool raw_span(uint8_t *value, int64_t count);
     bool align_verify();
 
     bool ok() const {

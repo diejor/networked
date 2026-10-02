@@ -1,5 +1,7 @@
 #include "netw/predict/frame_records.hpp"
 
+#include <algorithm>
+
 #include "netw/wire/value_row.hpp"
 
 using namespace godot;
@@ -9,6 +11,13 @@ namespace netw::predict {
 namespace {
 
 const int FAMILY_COUNT = 3;
+
+void blank(StateRow &r_row) {
+    for (uint32_t field = 0; field < r_row.values.size(); ++field) {
+        r_row.values[field] = Variant();
+        r_row.present[field] = 0;
+    }
+}
 
 } // namespace
 
@@ -78,9 +87,30 @@ bool CommandFrameRecord::append_transition(
     return true;
 }
 
-bool CommandFrameRecord::append_payload(const Array &p_values) {
-    wire::CodeRow row;
-    if (!wire::encode_scalar_row(schema, p_values, row)) {
+bool CommandFrameRecord::append_values(const LocalVector<Variant> &p_values) {
+    if (!wire::is_scalar_schema(schema, plan)
+        || int(p_values.size()) != schema.column_count()) {
+        return false;
+    }
+    wire::CodeRow row = wire::CodeRow::for_plan(plan);
+    for (int at = 0; at < schema.column_count(); ++at) {
+        if (!wire::encode_scalar_column(
+                *schema.at(at),
+                plan.column(uint32_t(at)),
+                uint32_t(at),
+                p_values[uint32_t(at)],
+                row
+            )) {
+            return false;
+        }
+    }
+    frame.payloads.push_back(row);
+    return true;
+}
+
+bool CommandFrameRecord::append_codes(const uint64_t *p_words) {
+    wire::CodeRow row = wire::CodeRow::for_plan(plan);
+    if (!row.assign(plan, p_words, nullptr)) {
         return false;
     }
     frame.payloads.push_back(row);
@@ -120,13 +150,42 @@ bool CommandFrameRecord::append_evidence(
     return true;
 }
 
-Array CommandFrameRecord::payload_at(int p_index) const {
-    Array out;
-    if (p_index < 0 || p_index >= int(frame.payloads.size())) {
-        return out;
+bool CommandFrameRecord::read_payload(
+    int p_index,
+    const LocalVector<int> &p_fields,
+    StateRow &r_row
+) const {
+    blank(r_row);
+    if (p_index < 0 || p_index >= int(frame.payloads.size())
+        || !wire::is_scalar_schema(schema, plan)) {
+        return false;
     }
-    wire::decode_scalar_row(schema, frame.payloads[uint32_t(p_index)], out);
-    return out;
+    const wire::CodeRow &payload = frame.payloads[uint32_t(p_index)];
+    if (!payload.valid_for(plan)) {
+        return false;
+    }
+    const int columns
+        = std::min(schema.column_count(), int(p_fields.size()));
+    PackedInt64Array codes;
+    for (int at = 0; at < schema.column_count(); ++at) {
+        Variant value;
+        if (!wire::decode_scalar_column(
+                *schema.at(at),
+                plan.column(uint32_t(at)),
+                uint32_t(at),
+                payload,
+                codes,
+                value
+            )) {
+            blank(r_row);
+            return false;
+        }
+        const int field = at < columns ? p_fields[uint32_t(at)] : -1;
+        if (field >= 0 && field < int(r_row.values.size())) {
+            r_row.set(field, value);
+        }
+    }
+    return true;
 }
 
 PackedByteArray CommandFrameRecord::to_bytes() const {

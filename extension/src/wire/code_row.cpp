@@ -131,6 +131,26 @@ CodeRow CodeRow::from_bytes(
     return row;
 }
 
+bool CodeRow::assign(
+    const WirePlan &plan,
+    const uint64_t *p_words,
+    const Variant *p_values
+) {
+    if (p_words == nullptr || !plan.valid()) {
+        return false;
+    }
+    if (!valid_for(plan)) {
+        *this = for_plan(plan);
+    }
+    for (uint32_t index = 0; index < words.size(); ++index) {
+        words[index] = p_words[index];
+    }
+    for (uint32_t index = 0; index < values.size(); ++index) {
+        values[index] = p_values != nullptr ? p_values[index] : Variant();
+    }
+    return true;
+}
+
 bool CodeRow::valid_for(const WirePlan &plan) const {
     return plan.valid() && used_bits == plan.row_bits()
         && words.size() == uint32_t((used_bits + 63) / 64 + 1)
@@ -165,6 +185,10 @@ void CodeRow::clear() {
     for (uint32_t index = 0; index < words.size(); ++index) {
         words[index] = 0;
     }
+    clear_values();
+}
+
+void CodeRow::clear_values() {
     for (uint32_t index = 0; index < values.size(); ++index) {
         values[index] = Variant();
     }

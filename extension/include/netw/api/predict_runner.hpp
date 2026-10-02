@@ -20,6 +20,7 @@ class NetwPredictRunner {
     godot::LocalVector<NetwPredictSlotEngine *> engines;
     godot::LocalVector<NetwPredictSlotEngine *> sorted;
     godot::LocalVector<NetwPredictSlotEngine *> phase_roster;
+    godot::LocalVector<int64_t> phase_slots;
     godot::LocalVector<godot::RID> held_spaces;
     godot::HashMap<int64_t, NetwPredictSlotEngine *> by_slot;
     bool sort_dirty = true;

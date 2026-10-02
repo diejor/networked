@@ -60,7 +60,7 @@
 				[code]fields[/code] is keyed by property, and each row carries the following.
 				[codeblock lang=text]
 				Dictionary
-				┠╴class          which NetwPropertySet.PropertyClass it is
+				┠╴class          which NetwPropertyConfig.PropertyClass it is
 				┠╴triggers       whether it can force a correction on its own
 				┠╴tolerance      the epsilon in force, and who declared it
 				┠╴teleport_at    the teleport distance, and who declared it
@@ -139,13 +139,41 @@
 		<member name="missing_policy" type="int" setter="set_missing_policy" getter="get_missing_policy" enum="NetwPredict.MissingInput" default="0">
 			What the server does when an input never arrives.
 		</member>
-		<member name="predict_commands" type="Callable" setter="set_predict_commands" getter="get_predict_commands" default="Callable()">
-			Guesses the input of an entity this peer simulates but does not control, through [member NetwEntity.simulation]. The real input relayed from its controller replaces the guess.
-			It is called as [code](entity: NetwEntity, tick: int)[/code] and returns a [Dictionary] of input values. Missing values are zero.
-			[codeblock]
-			func _init() -&gt; void:
-			    entity.prediction.predict_commands = func(_e, _tick): return {&amp;"throttle": 1.0}
+		<member name="predict_input" type="Callable" setter="set_predict_input" getter="get_predict_input" default="Callable()">
+			Guesses input for an entity selected by [member NetwEntity.simulation] that this peer does not control. Relayed input replaces the guess. Unset callbacks and omitted fields supply zero input.
+			The returned [Dictionary] uses names declared with [method NetwPropertyConfig.input].
+			[codeblock lang=text]
+			Dictionary
+			┖╴property_name  Variant  guessed value of a declared input property
 			[/codeblock]
+			[codeblocks]
+			[gdscript]
+			func _init() -&gt; void:
+			    var entity := Netw.configure_entity(self)
+			    entity.prediction.predict_input = guess_input
+
+			func guess_input(entity: NetwEntity, tick: int) -&gt; Dictionary:
+			    return {&amp;"throttle": 1.0, &amp;"steering": 0.0}
+			[/gdscript]
+			[csharp]
+			public Car()
+			{
+			    var entity = Netw.ConfigureEntity(this);
+			    entity.Prediction.PredictInput = Callable.From&lt;
+			        GodotObject, long, Godot.Collections.Dictionary&gt;(GuessInput);
+			}
+
+			private Godot.Collections.Dictionary GuessInput(
+			    GodotObject entity, long tick)
+			{
+			    return new Godot.Collections.Dictionary
+			    {
+			        [new StringName("throttle")] = 1.0,
+			        [new StringName("steering")] = 0.0,
+			    };
+			}
+			[/csharp]
+			[/codeblocks]
 		</member>
 		<member name="reconcile_mode" type="int" setter="set_reconcile_mode" getter="get_reconcile_mode" enum="NetwPredict.Reconcile" default="0">
 			Whether this entity is corrected alone or together with the entities its [member NetwEntity.simulation] selects.
@@ -168,8 +196,69 @@
 		<member name="teleport_threshold" type="float" setter="set_teleport_threshold" getter="get_teleport_threshold" default="2.0">
 			How large an error may be before a correction teleports the body, restoring every field including [method NetwPropertyConfig.teleport_only] ones. It applies to fields declared with [method NetwPropertyConfig.carry_along], and [method NetwPropertyConfig.teleport_at] overrides it per field. An entity with no such field teleports on every correction.
 		</member>
-		<member name="transport_corridor" type="Callable" setter="set_transport_corridor" getter="get_transport_corridor" default="Callable()">
-			Returns whether the path to a proposed pose is clear, called as [code]corridor(current, proposed)[/code]. Set it to let a correction move the body straight to where it should be now, without going through a wall.
+		<member name="correction_path_clear" type="Callable" setter="set_correction_path_clear" getter="get_correction_path_clear" default="Callable()">
+			Checks whether an eligible correction can carry the body to its proposed present pose. Return [code]true[/code] only when the swept path is clear. The engine moves the body. An unset callback disables this correction.
+			Both [Dictionary] arguments contain state declared with [method NetwPropertyConfig.state]. This example sweeps an unscaled [RigidBody3D] with [member Node3D.position] and [member Node3D.quaternion] state. It refuses rotation changes because [method PhysicsServer3D.body_test_motion] sweeps translation only.
+			[codeblock lang=text]
+			Dictionary
+			┖╴property_name  Variant  current or proposed value of a state property
+			[/codeblock]
+			[codeblocks]
+			[gdscript]
+			var correction_motion := PhysicsTestMotionParameters3D.new()
+
+			func _init() -&gt; void:
+			    var entity := Netw.configure_entity(self)
+			    entity.prediction.correction_path_clear = correction_is_clear
+
+			func correction_is_clear(
+			    current: Dictionary, proposed: Dictionary
+			) -&gt; bool:
+			    if current[&amp;"quaternion"] != proposed[&amp;"quaternion"]:
+			        return false
+			    var parent_pose := global_transform * transform.affine_inverse()
+			    var start := Transform3D(
+			        Basis(current[&amp;"quaternion"]), current[&amp;"position"]
+			    )
+			    correction_motion.from = parent_pose * start
+			    var destination: Vector3 = parent_pose * proposed[&amp;"position"]
+			    correction_motion.motion = (
+			        destination - correction_motion.from.origin
+			    )
+			    correction_motion.recovery_as_collision = true
+			    return not PhysicsServer3D.body_test_motion(
+			        get_rid(), correction_motion
+			    )
+			[/gdscript]
+			[csharp]
+			private readonly PhysicsTestMotionParameters3D correctionMotion = new();
+
+			public Car()
+			{
+			    var entity = Netw.ConfigureEntity(this);
+			    entity.Prediction.CorrectionPathClear = Callable.From&lt;
+			        Godot.Collections.Dictionary,
+			        Godot.Collections.Dictionary, bool&gt;(CorrectionIsClear);
+			}
+
+			private bool CorrectionIsClear(
+			    Godot.Collections.Dictionary current,
+			    Godot.Collections.Dictionary proposed)
+			{
+			    var rotation = current["quaternion"].AsQuaternion();
+			    if (rotation != proposed["quaternion"].AsQuaternion())
+			        return false;
+			    var parentPose = GlobalTransform * Transform.AffineInverse();
+			    var start = new Transform3D(
+			        new Basis(rotation), current["position"].AsVector3());
+			    correctionMotion.From = parentPose * start;
+			    var destination = parentPose * proposed["position"].AsVector3();
+			    correctionMotion.Motion = destination - correctionMotion.From.Origin;
+			    correctionMotion.RecoveryAsCollision = true;
+			    return !PhysicsServer3D.BodyTestMotion(GetRid(), correctionMotion);
+			}
+			[/csharp]
+			[/codeblocks]
 		</member>
 		<member name="witness_contacts" type="Callable" setter="set_witness_contacts" getter="get_witness_contacts" default="Callable()">
 			Returns the colliders this peer's body touched in the step just solved. Set it so a misprediction can be blamed on a contact and [member breach_response] can take effect.

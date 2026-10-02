@@ -20,11 +20,11 @@ using netw::CarrierBatch;
 using netw::CarrierRow;
 using netw::NetwCarrierBuffers;
 using netw::SchemaCore;
-using netw::repl::RowOffer;
 using netw::repl::RowSend;
 using netw::repl::RowVerdict;
 using netw::repl::SessionResult;
-using netw::repl::SessionSend;
+using netw_test::RowOffer;
+using netw_test::SessionSend;
 using netw::table::SchemaRecord;
 using netw::wire::ChannelDecl;
 using netw::wire::Delivery;
@@ -69,7 +69,7 @@ RowOffer offer(int64_t p_route, int64_t p_value) {
     out.comp = 0;
     out.channel = CHANNEL;
     out.schema = &body();
-    out.values.push_back(p_value);
+    netw_test::offer_value(out, p_value);
     out.recipients.push_back(PEER);
     out.masked = true;
     return out;
@@ -181,21 +181,25 @@ public:
 
     void accept(int64_t p_route) {
         const netw::wire::StreamLane lane = lane_of(p_route);
-        netw::wire::StreamWriterBook &book = send.writer_book();
-        netw::wire::SnapshotSender *stream = book.sender(PEER, lane);
-        if (stream != nullptr) {
-            book.receipt(
+        const uint64_t token = send.world.token_of(PEER, lane);
+        if (token != 0) {
+            send.stream_receipt(
                 PEER,
-                book.token_of(PEER, lane),
-                stream->exposed_high_water()
+                token,
+                netw_test::row_exposed(send.world, lane, PEER)
             );
         }
     }
 
     bool still_staged(int64_t p_route, uint64_t p_revision) {
-        const netw::wire::SnapshotSender *stream
-            = send.writer_book().sender(PEER, lane_of(p_route));
-        return stream != nullptr && stream->holds(p_revision);
+        const uint32_t peer = send.world.peer_of(PEER);
+        const uint64_t token = send.world.token_of(PEER, lane_of(p_route));
+        return peer != netw::store::Table::NO_SLOT
+            && send.world.flight_of(peer, token, p_revision) != nullptr;
+    }
+
+    bool owed(int64_t p_route) {
+        return netw_test::row_owed(send.world, lane_of(p_route), PEER);
     }
 };
 
@@ -285,8 +289,7 @@ TEST_CASE(
     const bool nothing_was_confirmed = !link.promoted(1);
     CHECK(nothing_was_confirmed);
 
-    const netw::repl::RowExplain verdict = link.sender().explain(1, 0, PEER);
-    const bool the_row_is_owed_again = verdict.verdict == RowVerdict::REFUSED;
+    const bool the_row_is_owed_again = link.owed(1);
     CHECK(the_row_is_owed_again);
 
     link.up = true;

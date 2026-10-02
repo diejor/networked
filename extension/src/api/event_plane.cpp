@@ -227,14 +227,22 @@ int64_t EventPlane::watch(
 ) {
     NETW_ZONE_NC("EventPlane watch", colors::SESSION);
     if (p_events.is_empty()) {
-        NETW_ERROR(sys::EVENT, "a watch row names no events");
+        NETW_ERROR(
+            sys::EVENT,
+            "NetwMultiplayer.event_watch needs at least one event."
+        );
         return -1;
     }
     Watch row;
     for (int index = 0; index < p_events.size(); index++) {
         const int64_t event = p_events[index];
         if (!is_event(event)) {
-            NETW_ERROR(sys::EVENT, "watch refused, unknown event %d", event);
+            NETW_ERROR(
+                sys::EVENT,
+                "NetwMultiplayer.event_watch got event %d, which does not "
+                "exist. Use a NetwMultiplayer.Event value.",
+                event
+            );
             return -1;
         }
         row.events.push_back(event);
@@ -245,7 +253,8 @@ int64_t EventPlane::watch(
         if (!is_target_key(key)) {
             NETW_ERROR(
                 sys::EVENT,
-                "watch refused, unknown target key %s",
+                "NetwMultiplayer.event_watch got the target key '%s', which "
+                "it does not read. Use a key its documentation lists.",
                 String(key)
             );
             return -1;
@@ -257,7 +266,8 @@ int64_t EventPlane::watch(
         if (!is_predicate_key(key)) {
             NETW_ERROR(
                 sys::EVENT,
-                "watch refused, unknown predicate key %s",
+                "NetwMultiplayer.event_watch got the predicate key '%s', "
+                "which it does not read. Use a key its documentation lists.",
                 String(key)
             );
             return -1;
@@ -269,7 +279,8 @@ int64_t EventPlane::watch(
         if (!is_option_key(key)) {
             NETW_ERROR(
                 sys::EVENT,
-                "watch refused, unknown option key %s",
+                "NetwMultiplayer.event_watch got the option key '%s', which "
+                "it does not read. Use a key its documentation lists.",
                 String(key)
             );
             return -1;
@@ -350,7 +361,7 @@ void EventPlane::emit(const Emission &p_fact) {
     if (!is_event(p_fact.event)) {
         NETW_ERROR_ONCE(
             sys::EVENT,
-            "emit refused, unknown event %d",
+            "Event %d does not exist, so it was not emitted.",
             p_fact.event
         );
         return;
@@ -386,14 +397,14 @@ void EventPlane::emit(const Emission &p_fact) {
 }
 
 void EventPlane::stage(const Emission &p_fact) {
-    std::lock_guard<std::mutex> guard(staged_lock);
+    std::lock_guard guard(staged_lock);
     staged.push_back(p_fact);
 }
 
 void EventPlane::drain_staged() {
     LocalVector<Emission> batch;
     {
-        std::lock_guard<std::mutex> guard(staged_lock);
+        std::lock_guard guard(staged_lock);
         if (staged.is_empty()) {
             return;
         }
@@ -443,7 +454,7 @@ void EventPlane::clear() {
     snapshots.clear();
     identities.clear();
     {
-        std::lock_guard<std::mutex> guard(staged_lock);
+        std::lock_guard guard(staged_lock);
         staged.clear();
     }
     rebuild_hot();

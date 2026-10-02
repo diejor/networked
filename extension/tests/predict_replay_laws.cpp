@@ -12,6 +12,9 @@ const int SCHEDULES[] = {int(Schedule::TICK), int(Schedule::FRAME)};
 
 int64_t consuming_slot(NetwPredictionEngine *p_pool, int p_schedule) {
     const int64_t slot = p_pool->open();
+    LocalVector<FieldDecl> input;
+    input.push_back(field_decl(StringName("motion"), 0));
+    p_pool->rewire(slot, LocalVector<FieldDecl>(), input);
     p_pool->configure(
         slot,
         p_schedule,
@@ -22,6 +25,15 @@ int64_t consuming_slot(NetwPredictionEngine *p_pool, int p_schedule) {
         NetwPredictionEngine::ISLAND_NONE
     );
     return slot;
+}
+
+StateRow motion(const Variant &p_value) {
+    StateRow out;
+    out.resize(1);
+    if (p_value.get_type() != Variant::NIL) {
+        out.set(0, p_value);
+    }
+    return out;
 }
 
 TEST_CASE(
@@ -226,24 +238,23 @@ TEST_CASE(
     NetwPredictionEngine *const pool = &held_pool;
     const int64_t slot = consuming_slot(pool, int(Schedule::FRAME));
 
-    Dictionary first;
-    first["motion"] = 1;
-    Dictionary second;
-    second["motion"] = 2;
-
-    CHECK(pool->command_admit(slot, 4, 40, true, first));
+    CHECK(pool->command_admit(slot, 4, 40, true, motion(1)));
     CHECK(pool->command_has(slot, 4));
     NETW_CHECK_EQ(pool->command_label_of(slot, 4), 40);
     CHECK(pool->command_is_fresh(slot, 4));
-    NETW_CHECK_EQ(int(pool->command_payload_of(slot, 4)["motion"]), 1);
+    StateRow held;
+    REQUIRE(pool->read_command_at(slot, 4, held));
+    REQUIRE(held.has(0));
+    NETW_CHECK_EQ(int(held.values[0]), 1);
 
-    CHECK_FALSE(pool->command_admit(slot, 4, 99, false, second));
+    CHECK_FALSE(pool->command_admit(slot, 4, 99, false, motion(2)));
     NETW_CHECK_EQ(pool->command_label_of(slot, 4), 40);
-    NETW_CHECK_EQ(int(pool->command_payload_of(slot, 4)["motion"]), 1);
+    REQUIRE(pool->read_command_at(slot, 4, held));
+    NETW_CHECK_EQ(int(held.values[0]), 1);
 
     CHECK_FALSE(pool->command_has(slot, 5));
     NETW_CHECK_EQ(pool->command_label_of(slot, 5), -1);
-    CHECK(pool->command_payload_of(slot, 5).is_empty());
+    CHECK_FALSE(pool->read_command_at(slot, 5, held));
 }
 
 TEST_CASE(
@@ -256,9 +267,9 @@ TEST_CASE(
 
     NETW_CHECK_EQ(pool->command_depth_from(slot, 0), 0);
     for (int64_t at = 0; at < 3; ++at) {
-        CHECK(pool->command_admit(slot, at, at, true, Dictionary()));
+        CHECK(pool->command_admit(slot, at, at, true, StateRow()));
     }
-    CHECK(pool->command_admit(slot, 4, 4, true, Dictionary()));
+    CHECK(pool->command_admit(slot, 4, 4, true, StateRow()));
 
     NETW_CHECK_EQ(pool->command_depth_from(slot, 0), 3);
     NETW_CHECK_EQ(pool->command_depth_from(slot, 2), 1);
@@ -285,7 +296,7 @@ TEST_CASE(
 
     const int over = TAPE_HISTORY_LIMIT + 8;
     for (int64_t at = 0; at < over; ++at) {
-        CHECK(pool->command_admit(slot, at, at, true, Dictionary()));
+        CHECK(pool->command_admit(slot, at, at, true, StateRow()));
     }
 
     NETW_CHECK_EQ(
@@ -297,7 +308,7 @@ TEST_CASE(
     CHECK(pool->command_has(slot, over - 1));
     NETW_CHECK_EQ(pool->command_depth_from(slot, 8), TAPE_HISTORY_LIMIT);
 
-    CHECK_FALSE(pool->command_admit(slot + 9000, 0, 0, true, Dictionary()));
+    CHECK_FALSE(pool->command_admit(slot + 9000, 0, 0, true, StateRow()));
     CHECK_FALSE(pool->command_has(slot + 9000, 0));
     NETW_CHECK_EQ(pool->command_depth_from(slot + 9000, 0), 0);
 }
@@ -311,37 +322,37 @@ TEST_CASE(
     const int64_t slot = consuming_slot(pool, int(Schedule::TICK));
 
     NETW_CHECK_EQ(
-        pool->drive_stats(slot)[NetwPredictionEngine::STAT_MAX_REPLAY_DEPTH],
+        pool->drive_stat(slot, NetwPredictionEngine::STAT_MAX_REPLAY_DEPTH),
         int64_t(0)
     );
 
     pool->note_replay_depth(slot, 3);
     NETW_CHECK_EQ(
-        pool->drive_stats(slot)[NetwPredictionEngine::STAT_MAX_REPLAY_DEPTH],
+        pool->drive_stat(slot, NetwPredictionEngine::STAT_MAX_REPLAY_DEPTH),
         int64_t(3)
     );
 
     pool->note_replay_depth(slot, 11);
     NETW_CHECK_EQ(
-        pool->drive_stats(slot)[NetwPredictionEngine::STAT_MAX_REPLAY_DEPTH],
+        pool->drive_stat(slot, NetwPredictionEngine::STAT_MAX_REPLAY_DEPTH),
         int64_t(11)
     );
 
     pool->note_replay_depth(slot, 1);
     NETW_CHECK_EQ(
-        pool->drive_stats(slot)[NetwPredictionEngine::STAT_MAX_REPLAY_DEPTH],
+        pool->drive_stat(slot, NetwPredictionEngine::STAT_MAX_REPLAY_DEPTH),
         int64_t(11)
     );
 
     pool->note_replay_depth(slot, 0);
     NETW_CHECK_EQ(
-        pool->drive_stats(slot)[NetwPredictionEngine::STAT_MAX_REPLAY_DEPTH],
+        pool->drive_stat(slot, NetwPredictionEngine::STAT_MAX_REPLAY_DEPTH),
         int64_t(11)
     );
 
     pool->note_replay_depth(slot + 9000, 40);
     NETW_CHECK_EQ(
-        pool->drive_stats(slot)[NetwPredictionEngine::STAT_MAX_REPLAY_DEPTH],
+        pool->drive_stat(slot, NetwPredictionEngine::STAT_MAX_REPLAY_DEPTH),
         int64_t(11)
     );
 }
@@ -375,7 +386,7 @@ TEST_CASE(
     PackedInt64Array ledger = pool->compare_stats(slot);
     NETW_CHECK_EQ(ledger[NetwPredictionEngine::STAT_FP_VERIFIED], int64_t(1));
 
-    pool->reset_for_rewire(slot, true, true, false, Dictionary());
+    pool->reset_for_rewire(slot, true, true, false, StateRow());
 
     ledger = pool->compare_stats(slot);
     NETW_CHECK_EQ(ledger[NetwPredictionEngine::STAT_FP_VERIFIED], int64_t(0));

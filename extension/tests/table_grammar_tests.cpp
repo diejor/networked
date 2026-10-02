@@ -1,29 +1,19 @@
-/* The TABLE frame byte grammar, hand-built and pinned.
- *
- * This suite is the port's conformance gate. It builds frames byte by byte and
- * proves the decoder reads exactly those bytes, then proves the encoder emits
- * exactly those bytes. An encoder that passes both is byte-compatible with the
- * one these bytes were written against, which is the whole point of writing
- * them down before the fast implementation exists.
- *
- * These cases were run in GDScript against the native classes before they were
- * restated here, so the restatement describes a wire that was already proven
- * rather than one it was written to match.
- */
-
 #include "support/netw_test.h"
 
 #include "netw/handle_ledger.hpp"
-#include "netw/table/core.hpp"
+#include "netw/store/array.hpp"
 
 namespace TestTableGrammar {
 
 using namespace godot;
 using netw::NetwHandleLedger;
 using netw::SchemaCore;
-using netw::table::Core;
-using netw::table::SchemaColumn;
+using netw::store::ArrayFrameHead;
+using netw::store::ArrayLanding;
+using netw::store::Arrays;
 using netw::table::SchemaRecord;
+
+constexpr int PEER = 2;
 
 struct Spec {
     const char *key;
@@ -31,14 +21,8 @@ struct Spec {
     int stride;
 };
 
-Ref<Core> make_core() {
-    Ref<Core> core;
-    core.instantiate();
-    return core;
-}
-
 RID declare_table(
-    const Ref<Core> &core,
+    Arrays &r_book,
     NetwHandleLedger *ledger,
     const StringName &name,
     const Spec *specs,
@@ -56,7 +40,7 @@ RID declare_table(
     }
     SchemaCore::fix(&schema);
     const RID rid = ledger->rid_create();
-    core->declare(rid, &schema);
+    r_book.declare(rid, &schema);
     return rid;
 }
 
@@ -71,13 +55,10 @@ PackedByteArray bytes_of(const std::initializer_list<int> &values) {
     return out;
 }
 
-// The schema hash rides the wire as a little-endian u16.
 PackedByteArray u16_of(int value) {
     return bytes_of({value & 0xFF, (value >> 8) & 0xFF});
 }
 
-// Names the first differing byte, because a whole-frame mismatch says nothing
-// about which field moved.
 void check_bytes(
     const PackedByteArray &actual,
     const PackedByteArray &expected
@@ -95,59 +76,57 @@ void check_bytes(
 }
 
 TEST_CASE("[Networked][Table][Hosted] The header grammar is read in order") {
-    Ref<Core> core = make_core();
+    Arrays book;
     NetwHandleLedger held;
-    NetwHandleLedger *const ledger = &held;
     const Spec specs[] = {{"hp", SchemaCore::U16, 1}};
-    const RID table = declare_table(core, ledger, "GrammarHeader", specs, 1);
-    const int hash = core->schema_hash(table);
+    const RID table = declare_table(book, &held, "GrammarHeader", specs, 1);
+    const int hash = book.schema_hash(table);
 
     PackedByteArray frame = bytes_of({1});
     frame.append_array(u16_of(hash));
-    frame.append_array(bytes_of({5, Core::FLAG_SNAPSHOT, 2, 7, 9}));
+    frame.append_array(bytes_of({5, Arrays::FLAG_SNAPSHOT, 2, 7, 9}));
     frame.append_array(bytes_of({44, 1, 255, 255}));
 
-    const Dictionary header = Core::peek_header(frame);
-    NETW_CHECK_EQ(int64_t(header["table_id"]), 1);
-    NETW_CHECK_EQ(int64_t(header["schema_hash"]), hash);
-    NETW_CHECK_EQ(int64_t(header["tick"]), 5);
-    NETW_CHECK_EQ(int64_t(header["flags"]), Core::FLAG_SNAPSHOT);
-    NETW_CHECK_EQ(int64_t(header["rows"]), 2);
+    ArrayFrameHead header;
+    REQUIRE(Arrays::peek_header(frame, header));
+    NETW_CHECK_EQ(int64_t(header.table_id), 1);
+    NETW_CHECK_EQ(int64_t(header.schema_hash), hash);
+    NETW_CHECK_EQ(int64_t(header.tick), 5);
+    NETW_CHECK_EQ(int64_t(header.flags), Arrays::FLAG_SNAPSHOT);
+    NETW_CHECK_EQ(int64_t(header.rows), 2);
 }
 
 TEST_CASE("[Networked][Table][Hosted] A hand-built frame decodes") {
-    Ref<Core> core = make_core();
+    Arrays book;
     NetwHandleLedger held;
-    NetwHandleLedger *const ledger = &held;
     const Spec specs[] = {{"hp", SchemaCore::U16, 1}};
-    const RID table = declare_table(core, ledger, "GrammarHand", specs, 1);
+    const RID table = declare_table(book, &held, "GrammarHand", specs, 1);
 
     PackedByteArray frame = bytes_of({1});
-    frame.append_array(u16_of(core->schema_hash(table)));
+    frame.append_array(u16_of(book.schema_hash(table)));
     frame.append_array(bytes_of({5, 0, 2, 7, 9, 44, 1, 255, 255}));
 
-    NETW_CHECK_EQ(core->admit_header(Core::peek_header(frame)), OK);
-    const Dictionary result = core->apply_frame(frame);
+    NETW_CHECK_EQ(book.admit_header(frame), OK);
+    const ArrayLanding result = book.apply_frame(frame);
 
-    NETW_CHECK_EQ(int64_t(result["verdict"]), OK);
+    NETW_CHECK_EQ(int64_t(result.verdict), int64_t(OK));
     PackedInt64Array expected_routes;
     expected_routes.push_back(7);
     expected_routes.push_back(9);
-    CHECK(bool(core->read_routes(table) == expected_routes));
+    CHECK(bool(book.read_routes(table) == expected_routes));
     PackedInt32Array expected_hp;
     expected_hp.push_back(300);
     expected_hp.push_back(65535);
-    CHECK(bool(PackedInt32Array(core->read_column(table, 0)) == expected_hp));
-    NETW_CHECK_EQ(core->tick_of(table), 5);
-    CHECK(bool(PackedInt64Array(result["bound"]) == expected_routes));
+    CHECK(bool(PackedInt32Array(book.read_column(table, 0)) == expected_hp));
+    NETW_CHECK_EQ(book.tick_of(table), 5);
+    CHECK(bool(result.bound == expected_routes));
 }
 
 TEST_CASE("[Networked][Table][Hosted] The encoder emits the hand-built bytes") {
-    Ref<Core> core = make_core();
+    Arrays book;
     NetwHandleLedger held;
-    NetwHandleLedger *const ledger = &held;
     const Spec specs[] = {{"hp", SchemaCore::U16, 1}};
-    const RID table = declare_table(core, ledger, "GrammarHand", specs, 1);
+    const RID table = declare_table(book, &held, "GrammarHand", specs, 1);
 
     PackedInt64Array routes;
     routes.push_back(7);
@@ -155,16 +134,16 @@ TEST_CASE("[Networked][Table][Hosted] The encoder emits the hand-built bytes") {
     PackedInt32Array hp;
     hp.push_back(300);
     hp.push_back(65535);
-    core->write_routes(table, routes);
-    core->write_column(table, 0, hp);
-    core->commit(table, 5);
+    book.write_routes(table, routes);
+    book.write_column(table, 0, hp);
+    book.commit(table, 5);
 
     PackedByteArray expected = bytes_of({1});
-    expected.append_array(u16_of(core->schema_hash(table)));
+    expected.append_array(u16_of(book.schema_hash(table)));
     expected.append_array(bytes_of({5, 0, 2, 7, 9, 44, 1, 255, 255}));
 
     const TypedArray<PackedByteArray> frames
-        = core->encode_frames(table, 1200, false);
+        = book.encode_owed(table, PEER, 1200);
     NETW_CHECK_EQ(frames.size(), 1);
     check_bytes(frames[0], expected);
 }
@@ -172,37 +151,35 @@ TEST_CASE("[Networked][Table][Hosted] The encoder emits the hand-built bytes") {
 TEST_CASE(
     "[Networked][Table][Hosted] A vector column is a little-endian memcpy"
 ) {
-    Ref<Core> core = make_core();
+    Arrays book;
     NetwHandleLedger held;
-    NetwHandleLedger *const ledger = &held;
     const Spec specs[] = {{"pos", SchemaCore::VECTOR3, 1}};
-    const RID table = declare_table(core, ledger, "GrammarVector", specs, 1);
+    const RID table = declare_table(book, &held, "GrammarVector", specs, 1);
 
     PackedInt64Array routes;
     routes.push_back(1);
     PackedVector3Array pos;
     pos.push_back(Vector3(1.0, 0.0, -2.0));
-    core->write_routes(table, routes);
-    core->write_column(table, 0, pos);
-    core->commit(table, 0);
+    book.write_routes(table, routes);
+    book.write_column(table, 0, pos);
+    book.commit(table, 0);
 
     PackedByteArray expected = bytes_of({1});
-    expected.append_array(u16_of(core->schema_hash(table)));
+    expected.append_array(u16_of(book.schema_hash(table)));
     expected.append_array(bytes_of({0, 0, 1, 1}));
     expected.append_array(bytes_of({0, 0, 128, 63, 0, 0, 0, 0, 0, 0, 0, 192}));
 
-    check_bytes(core->encode_frames(table, 1200, false)[0], expected);
+    check_bytes(book.encode_owed(table, PEER, 1200)[0], expected);
 }
 
 TEST_CASE(
     "[Networked][Table][Hosted] Bit-packed and varint columns stay aligned"
 ) {
-    Ref<Core> core = make_core();
+    Arrays book;
     NetwHandleLedger held;
-    NetwHandleLedger *const ledger = &held;
     const Spec specs[]
         = {{"flag", SchemaCore::BOOL, 1}, {"link", SchemaCore::ENTITY, 1}};
-    const RID table = declare_table(core, ledger, "GrammarBits", specs, 2);
+    const RID table = declare_table(book, &held, "GrammarBits", specs, 2);
 
     PackedInt64Array routes;
     routes.push_back(1);
@@ -213,38 +190,35 @@ TEST_CASE(
     links.push_back(200);
     links.push_back(0);
     links.push_back(1);
-    core->write_routes(table, routes);
-    core->write_column(table, 0, flags);
-    core->write_column(table, 1, links);
-    core->commit(table, 1);
+    book.write_routes(table, routes);
+    book.write_column(table, 0, flags);
+    book.write_column(table, 1, links);
+    book.commit(table, 1);
 
     PackedByteArray expected = bytes_of({1});
-    expected.append_array(u16_of(core->schema_hash(table)));
+    expected.append_array(u16_of(book.schema_hash(table)));
     expected.append_array(bytes_of({1, 0, 3, 1, 2, 3}));
-    // The bools, packed from the low bit up, then the column after them starts
-    // byte aligned so it can never straddle.
     expected.append_array(bytes_of({5}));
     expected.append_array(bytes_of({200, 1, 0, 1}));
 
-    check_bytes(core->encode_frames(table, 1200, false)[0], expected);
+    check_bytes(book.encode_owed(table, PEER, 1200)[0], expected);
 }
 
 TEST_CASE("[Networked][Table][Hosted] A removal frame is routes only") {
-    Ref<Core> core = make_core();
+    Arrays book;
     NetwHandleLedger held;
-    NetwHandleLedger *const ledger = &held;
     const Spec specs[] = {{"hp", SchemaCore::U16, 1}};
-    const RID table = declare_table(core, ledger, "GrammarRemove", specs, 1);
+    const RID table = declare_table(book, &held, "GrammarRemove", specs, 1);
 
     PackedInt64Array routes;
     routes.push_back(7);
     routes.push_back(9);
     const TypedArray<PackedByteArray> frames
-        = core->encode_removal(table, routes, 4, 1200);
+        = book.encode_removal(table, routes, 4, 1200);
 
     PackedByteArray expected = bytes_of({1});
-    expected.append_array(u16_of(core->schema_hash(table)));
-    expected.append_array(bytes_of({4, Core::FLAG_REMOVE, 2, 7, 9}));
+    expected.append_array(u16_of(book.schema_hash(table)));
+    expected.append_array(bytes_of({4, Arrays::FLAG_REMOVE, 2, 7, 9}));
     NETW_CHECK_EQ(frames.size(), 1);
     check_bytes(frames[0], expected);
 }
@@ -253,45 +227,39 @@ TEST_CASE("[Networked][Table][Hosted] The lifecycle stream is table id zero") {
     PackedInt64Array routes;
     routes.push_back(12);
     const TypedArray<PackedByteArray> frames
-        = Core::encode_lifecycle(routes, 3, 1200);
+        = Arrays::encode_lifecycle(routes, 3, 1200);
 
     NETW_CHECK_EQ(frames.size(), 1);
-    // A zero hash, so it is parseable by a peer that shares no table with the
-    // sender at all.
-    check_bytes(frames[0], bytes_of({0, 0, 0, 3, Core::FLAG_REMOVE, 1, 12}));
+    check_bytes(frames[0], bytes_of({0, 0, 0, 3, Arrays::FLAG_REMOVE, 1, 12}));
 
-    const Dictionary header = Core::peek_header(frames[0]);
-    NETW_CHECK_EQ(int64_t(header["table_id"]), Core::LIFECYCLE_STREAM);
-    NETW_CHECK_EQ(int64_t(header["schema_hash"]), 0);
-    NETW_CHECK_EQ(make_core()->admit_header(header), OK);
+    ArrayFrameHead header;
+    REQUIRE(Arrays::peek_header(frames[0], header));
+    NETW_CHECK_EQ(int64_t(header.table_id), int64_t(Arrays::LIFECYCLE_STREAM));
+    NETW_CHECK_EQ(int64_t(header.schema_hash), int64_t(0));
+    Arrays bare;
+    NETW_CHECK_EQ(bare.admit_header(frames[0]), OK);
 }
 
 TEST_CASE("[Networked][Table][Hosted] The reserved flag bits stay reserved") {
-    Ref<Core> core = make_core();
+    Arrays book;
     NetwHandleLedger held;
-    NetwHandleLedger *const ledger = &held;
     const Spec specs[] = {{"hp", SchemaCore::U16, 1}};
-    const RID table = declare_table(core, ledger, "GrammarFlags", specs, 1);
+    const RID table = declare_table(book, &held, "GrammarFlags", specs, 1);
 
-    NETW_CHECK_EQ(Core::FLAG_SNAPSHOT, 1);
-    NETW_CHECK_EQ(Core::FLAG_REMOVE, 2);
-    NETW_CHECK_EQ(Core::FLAG_PAIR_KEY, 4);
-    NETW_CHECK_EQ(Core::FLAG_NO_KEY, 8);
-    NETW_CHECK_EQ(Core::FLAGS_IMPLEMENTED, 3);
+    NETW_CHECK_EQ(int(Arrays::FLAG_SNAPSHOT), 1);
+    NETW_CHECK_EQ(int(Arrays::FLAG_REMOVE), 2);
+    NETW_CHECK_EQ(int(Arrays::FLAG_PAIR_KEY), 4);
+    NETW_CHECK_EQ(int(Arrays::FLAG_NO_KEY), 8);
+    NETW_CHECK_EQ(int(Arrays::FLAGS_IMPLEMENTED), 3);
 
-    const int reserved[] = {Core::FLAG_PAIR_KEY, Core::FLAG_NO_KEY, 1 << 7};
+    const int reserved[] = {Arrays::FLAG_PAIR_KEY, Arrays::FLAG_NO_KEY, 1 << 7};
     for (const int bit : reserved) {
         PackedByteArray frame = bytes_of({1});
-        frame.append_array(u16_of(core->schema_hash(table)));
+        frame.append_array(u16_of(book.schema_hash(table)));
         frame.append_array(bytes_of({1, bit, 0}));
-        // A frame carrying a bit this peer cannot name is refused whole, since
-        // it cannot know what the rest of the payload means.
-        NETW_CHECK_EQ(
-            core->admit_header(Core::peek_header(frame)),
-            ERR_INVALID_DATA
-        );
+        NETW_CHECK_EQ(book.admit_header(frame), ERR_INVALID_DATA);
     }
-    NETW_CHECK_EQ(int64_t(core->counters()["drops_table_unknown_flag"]), 3);
+    NETW_CHECK_EQ(int64_t(book.counters()["drops_table_unknown_flag"]), 3);
 }
 
 } // namespace TestTableGrammar

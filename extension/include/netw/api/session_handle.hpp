@@ -68,6 +68,7 @@ public:
     godot::Ref<NetwSessionConfig> get_config() const;
     void set_server_info(const godot::Ref<NetwServerInfo> &p_info);
     godot::Dictionary get_stats() const;
+    void set_peer_bandwidth(int64_t p_peer, int64_t p_kbps);
 
     godot::Ref<NetwPromise> leave();
     godot::Ref<NetwPromise> save_entities();

@@ -239,7 +239,7 @@ TEST_CASE(
     NetwMultiplayer *host = rig.server();
     NetwMultiplayer *guest = rig.client(0);
     const RID table = host->table_find_or_adopt("FlowMob");
-    NETW_CHECK_EQ(int(host->get_table_core()->is_reliable(table)), 1);
+    NETW_CHECK_EQ(int(host->store_arrays().is_reliable(table)), 1);
 
     Ref<LocalLinkConditions> lossy = LocalLinkConditions::create(7);
     lossy->set_packet_loss(0.6);

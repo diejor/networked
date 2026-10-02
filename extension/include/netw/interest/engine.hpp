@@ -81,6 +81,7 @@ public:
     godot::HashMap<godot::StringName, godot::PackedInt64Array> layer_rows;
     godot::HashMap<int64_t, godot::LocalVector<godot::StringName>> memberships;
     godot::HashSet<int64_t> intents;
+    godot::LocalVector<int64_t> recomputed;
     int64_t commit_revision = 0;
 
     Delta();
@@ -133,6 +134,7 @@ private:
         int32_t leave_policy = 0;
         int32_t perception_policy = 0;
         godot::LocalVector<int64_t> members;
+        godot::HashSet<int64_t> member_set;
         int64_t transitions = 0;
     };
 
@@ -188,8 +190,20 @@ private:
     godot::PackedInt64Array live_peers;
     Stats last_stats;
     int64_t revision = 0;
+    godot::HashMap<int64_t, godot::LocalVector<int64_t>> children;
+    godot::HashMap<godot::StringName, godot::HashSet<int64_t>> layer_keys;
+    int64_t committed_edges = 0;
+    godot::LocalVector<int64_t> moved;
+    bool moved_overflow = false;
+
+    static constexpr uint32_t MOVED_KEPT = 4096;
 
     Record &record_for(int64_t key);
+    void note_moved(int64_t key);
+    void link_child(int64_t parent, int64_t key);
+    void unlink_child(int64_t parent, int64_t key);
+    void index_layer(const godot::StringName &id, int64_t key, bool member);
+    int committed_popcount(int64_t key) const;
     void ensure_layer(const godot::StringName &id);
     void mark_layer_members_dirty(const godot::StringName &id);
     void mark_entity_tree_dirty(int64_t root);
@@ -237,13 +251,14 @@ private:
     godot::LocalVector<int64_t> ordered_dirty_keys() const;
     godot::LocalVector<int64_t> ordered_removed_keys() const;
 
-    int edge_count_after(
-        const godot::HashMap<int64_t, godot::PackedInt64Array> &changed,
-        const godot::PackedInt64Array &removed_keys
-    ) const;
-
 public:
+#if defined(NETW_TESTS)
+    int64_t mark_visits = 0;
+#endif
+
     Engine();
+
+    bool take_moved(godot::LocalVector<int64_t> &r_keys);
 
     void set_layer(
         const godot::StringName &id,

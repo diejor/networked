@@ -333,6 +333,7 @@ void NetwMultiplayer::lifecycle_withdraw_author(
         Node *node = record != nullptr ? record->node() : nullptr;
         if (node != nullptr && (node == owner || owner->is_ancestor_of(node))) {
             record->remove_recipient(int(p_author));
+            store_world.stale_route(doomed[at]);
         }
     }
 }
@@ -816,7 +817,7 @@ void NetwMultiplayer::lifecycle_undo_ungranted_move(
     );
     NETW_WARN(
         sys::ENTITY,
-        "%s It moved before the grant reached this peer, so it is moved back.",
+        "%s It moved before the server allowed it, so it is moved back.",
         text
     );
     lifecycle_undo(

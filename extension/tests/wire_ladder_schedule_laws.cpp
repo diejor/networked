@@ -51,7 +51,7 @@ const int64_t NUDGED[] = {9, -9, 20, -20, 60, -60, 120, -120};
 
 const int64_t TELEPORTED[] = {600, -600, 4096, -4096, 20000};
 
-WirePlan laddered_plan(int p_columns) {
+SchemaRecord laddered_plan(int p_columns) {
     SchemaRecord record;
     record.name = godot::StringName("LadderSchedule");
     for (int at = 0; at < p_columns; ++at) {
@@ -64,7 +64,7 @@ WirePlan laddered_plan(int p_columns) {
         record.at(at)->delta = DeltaMode::LADDER;
     }
     SchemaCore::fix(&record);
-    return WirePlan::compile(record);
+    return record;
 }
 
 struct Roller {

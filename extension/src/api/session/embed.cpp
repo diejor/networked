@@ -50,7 +50,10 @@ void NetwMultiplayer::scene_adopt_bare_level(Node *p_level) {
     }
     Node *root = session_root();
     if (root == nullptr) {
-        NETW_TRACE(sys::SCENE, "a bare level was offered with no session root");
+        NETW_TRACE(
+            sys::SCENE,
+            "A level outside any scene was offered with no session root."
+        );
         return;
     }
     const SceneDecl decl = scene_decl_of(
@@ -72,9 +75,8 @@ void NetwMultiplayer::scene_adopt_bare_level(Node *p_level) {
     if (spawns_the_authority_scene && path.is_empty()) {
         NETW_ERR(
             sys::SCENE,
-            "'%s' declares a multiplayer scene and names no .tscn under "
-            "res:// to spawn it from, so adopting it would leave this "
-            "session with no world at all. Save the level as its own scene.",
+            "'%s' is a multiplayer scene with no .tscn file under res://, so "
+            "it cannot be spawned. Save the level as its own scene.",
             String(p_level->get_name())
         );
     }
@@ -86,16 +88,16 @@ void NetwMultiplayer::scene_adopt_bare_level(Node *p_level) {
     if (!spawns_the_authority_scene) {
         NETW_TRACE(
             sys::SCENE,
-            "a bare level was offered to a peer holding no scene authority, "
-            "which receives the authority's scene instead of spawning its own"
+            "A level outside any scene was offered to a peer without scene "
+            "authority, so it receives the authority's scene instead."
         );
         return;
     }
     if (scene_spawn(path, SceneIsolation(decl.isolation)) == nullptr) {
         NETW_ERROR(
             sys::SCENE,
-            "the declared level at '%s' loads no scene, so this session "
-            "presents nothing and its peers receive nothing.",
+            "The level at '%s' could not be loaded, so the session has no "
+            "scene to show or send.",
             path
         );
     }
@@ -116,7 +118,8 @@ Error NetwMultiplayer::embed_settle() {
     if (wired != OK) {
         NETW_TRACE(
             sys::SCENE,
-            "settle reached LIVE with an unhandled peer-scoped channel"
+            "The session went live with a built-in channel that has no "
+            "handler."
         );
     }
     embed_set_phase(EMBED_PHASE_LIVE);
@@ -124,11 +127,11 @@ Error NetwMultiplayer::embed_settle() {
 }
 
 Error NetwMultiplayer::embed_poll_transport() {
-    NETW_ZONE_NC("embed_poll_transport", colors::TRANSPORT);
+    NETW_ZONE_NC("Transport receive", colors::TRANSPORT);
     if (inner.is_null()) {
         NETW_TRACE(
             sys::TRANSPORT,
-            "a transport poll ran with no inner session"
+            "The transport was polled before the session existed."
         );
         return ERR_UNCONFIGURED;
     }

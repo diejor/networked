@@ -139,6 +139,16 @@ void WitnessDetailBook::record(
     }
 }
 
+void WitnessDetailBook::forget(int64_t p_transition, int p_limit) {
+    for (int at = keys.size() - 1; at >= 0; --at) {
+        const int64_t key = keys.at(at);
+        if (key == p_transition || key <= p_transition - p_limit) {
+            keys.remove_at(at);
+            details.remove_at(at);
+        }
+    }
+}
+
 godot::Dictionary WitnessDetailBook::rows() const {
     godot::Dictionary out;
     for (int at = 0; at < keys.size(); ++at) {
@@ -155,17 +165,17 @@ void WitnessDetailBook::clear() {
 void DeferredOperator::hold(
     int64_t p_basis,
     int64_t p_recv_tick,
-    const godot::Dictionary &p_payload
+    const StateRow &p_payload
 ) {
     basis = p_basis;
     recv_tick = p_recv_tick;
-    payload = p_payload.duplicate(true);
+    payload = p_payload;
 }
 
 void DeferredOperator::release() {
     basis = -1;
     recv_tick = -1;
-    payload = godot::Dictionary();
+    payload.resize(0);
 }
 
 int ContractionLedger::index_of(int p_field) const {

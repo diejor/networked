@@ -4,6 +4,7 @@
 
 #include "godot/local_vector.hpp"
 #include "godot/variant.hpp"
+#include "netw/predict/compare.hpp"
 #include "netw/predict/frames.hpp"
 
 namespace netw::predict {
@@ -63,6 +64,7 @@ public:
         const godot::Dictionary &p_detail,
         int p_limit
     );
+    void forget(int64_t p_transition, int p_limit);
     godot::Dictionary rows() const;
     void clear();
 
@@ -74,13 +76,9 @@ public:
 struct DeferredOperator {
     int64_t basis = -1;
     int64_t recv_tick = -1;
-    godot::Dictionary payload;
+    StateRow payload;
 
-    void hold(
-        int64_t p_basis,
-        int64_t p_recv_tick,
-        const godot::Dictionary &p_payload
-    );
+    void hold(int64_t p_basis, int64_t p_recv_tick, const StateRow &p_payload);
     void release();
 
     bool held() const {

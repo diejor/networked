@@ -2,6 +2,7 @@
 
 #include <cstdint>
 
+#include "godot/local_vector.hpp"
 #include "godot/ref_counted.hpp"
 #include "godot/templates.hpp"
 #include "godot/variant.hpp"
@@ -10,79 +11,20 @@
 
 namespace netw {
 
-class NetwSchema;
-
-class NetwColumnRef : public godot::RefCounted {
-    GDCLASS(NetwColumnRef, godot::RefCounted)
-
-    godot::Ref<NetwSchema> schema;
-    int index = -1;
-
-protected:
-    static void _bind_methods();
-
-public:
-    static godot::Ref<NetwColumnRef> make(
-        const godot::Ref<NetwSchema> &p_schema,
-        int p_index
-    );
-
-    godot::Ref<NetwSchema> get_schema() const {
-        return schema;
-    }
-    int get_index() const {
-        return index;
-    }
-    godot::StringName get_key() const;
-    bool is_valid() const;
-};
-
-class NetwSchemaColumn : public godot::RefCounted {
-    GDCLASS(NetwSchemaColumn, godot::RefCounted)
-
-    godot::StringName key;
-    NetwMultiplayer::ColumnType type = NetwMultiplayer::COLUMN_F32;
-    int stride = 1;
-    godot::Ref<NetwQuantize> quantizer;
-
-protected:
-    static void _bind_methods();
-
-public:
-    void set_key(const godot::StringName &p_key) {
-        key = p_key;
-    }
-    godot::StringName get_key() const {
-        return key;
-    }
-
-    void set_type(NetwMultiplayer::ColumnType p_type) {
-        type = p_type;
-    }
-    NetwMultiplayer::ColumnType get_type() const {
-        return type;
-    }
-
-    void set_stride(int p_stride) {
-        stride = p_stride;
-    }
-    int get_stride() const {
-        return stride;
-    }
-
-    void set_quantizer(const godot::Ref<NetwQuantize> &p_quantizer) {
-        quantizer = p_quantizer;
-    }
-    godot::Ref<NetwQuantize> get_quantizer() const {
-        return quantizer;
-    }
-};
-
 class NetwSchema : public godot::RefCounted {
     GDCLASS(NetwSchema, godot::RefCounted)
 
+public:
+    struct Column {
+        godot::StringName key;
+        NetwMultiplayer::ColumnType type = NetwMultiplayer::COLUMN_F32;
+        int stride = 1;
+        godot::Ref<NetwQuantize> quantizer;
+    };
+
+private:
     godot::StringName name;
-    godot::TypedArray<NetwSchemaColumn> columns;
+    godot::LocalVector<Column> columns;
     godot::Dictionary migrations;
     int version = 1;
     bool replicated_lane = true;
@@ -98,7 +40,7 @@ public:
     godot::StringName get_schema_name() const {
         return name;
     }
-    godot::TypedArray<NetwSchemaColumn> get_columns() const {
+    const godot::LocalVector<Column> &columns_of() const {
         return columns;
     }
     bool is_replicated() const {
@@ -166,8 +108,6 @@ public:
     int entity(const godot::StringName &p_key, int p_stride);
     int variant(const godot::StringName &p_key, int p_stride);
     int string(const godot::StringName &p_key, int p_stride);
-
-    godot::Ref<NetwColumnRef> column_ref(int p_index);
 
     godot::Ref<NetwSchema> register_declaration();
     godot::Ref<NetwSchema> replicated(bool p_value);

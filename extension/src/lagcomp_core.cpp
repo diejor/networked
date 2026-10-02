@@ -15,28 +15,83 @@ constexpr SubsystemName MODULE = sys::LAGCOMP;
 
 } // namespace
 
+NetwLagCompCore::~NetwLagCompCore() {
+    for (Row *row : rows) {
+        if (row != nullptr) {
+            memdelete(row);
+        }
+    }
+    rows.clear();
+}
+
 NetwLagCompCore::Row *NetwLagCompCore::mutable_row_of(int64_t p_slot) {
-    HashMap<int64_t, Row>::Iterator found = rows.find(p_slot);
-    return found != rows.end() ? &found->value : nullptr;
+    const int64_t seat = ids.seat(p_slot);
+    return seat >= 0 && seat < int64_t(rows.size()) ? rows[uint32_t(seat)]
+                                                    : nullptr;
 }
 
 const NetwLagCompCore::Row *NetwLagCompCore::row_of(int64_t p_slot) const {
-    HashMap<int64_t, Row>::ConstIterator found = rows.find(p_slot);
-    return found != rows.end() ? &found->value : nullptr;
+    const int64_t seat = ids.seat(p_slot);
+    return seat >= 0 && seat < int64_t(rows.size()) ? rows[uint32_t(seat)]
+                                                    : nullptr;
+}
+
+void NetwLagCompCore::bind_store(
+    int64_t p_slot,
+    const store::EntityRef &p_ref
+) {
+    Row *row = mutable_row_of(p_slot);
+    if (row == nullptr || world == nullptr) {
+        return;
+    }
+    if (row->store != p_ref) {
+        unbind_store(p_slot);
+    }
+    if (!world->holds(p_ref)) {
+        return;
+    }
+    row->store = p_ref;
+    world->bind_lagcomp(p_ref.slot, p_slot);
+}
+
+void NetwLagCompCore::unbind_store(int64_t p_slot) {
+    Row *row = mutable_row_of(p_slot);
+    if (row == nullptr) {
+        return;
+    }
+    const store::EntityRef held = row->store;
+    row->store = store::EntityRef();
+    if (world != nullptr && world->holds(held)
+        && world->lagcomp_of(held.slot) == p_slot) {
+        world->bind_lagcomp(held.slot, -1);
+    }
+}
+
+store::EntityRef NetwLagCompCore::store_ref_of(int64_t p_slot) const {
+    const Row *row = row_of(p_slot);
+    return row != nullptr ? row->store : store::EntityRef();
 }
 
 int64_t NetwLagCompCore::timeline_open(int64_t p_history_limit) {
-    const int64_t slot = next_slot;
-    next_slot += 1;
-    Row row;
-    row.history = NetwTimeline::create(p_history_limit);
-    rows.insert(slot, row);
+    const int64_t slot = ids.acquire();
+    const uint32_t seat = SlotIds::index_of(slot);
+    Row *row = memnew(Row);
+    row->book.set_window(p_history_limit);
+    while (rows.size() <= seat) {
+        rows.push_back(nullptr);
+    }
+    rows[seat] = row;
     return slot;
 }
 
-Ref<NetwTimeline> NetwLagCompCore::timeline_history(int64_t p_slot) const {
+const LagBook *NetwLagCompCore::book_of(int64_t p_slot) const {
     const Row *row = row_of(p_slot);
-    return row != nullptr ? row->history : Ref<NetwTimeline>();
+    return row != nullptr ? &row->book : nullptr;
+}
+
+Ref<RefCounted> NetwLagCompCore::entity_at(int64_t p_slot) const {
+    const Row *row = row_of(p_slot);
+    return row != nullptr ? row->entity : Ref<RefCounted>();
 }
 
 uint64_t NetwLagCompCore::entity_key(const Ref<RefCounted> &p_entity) {
@@ -50,13 +105,17 @@ int64_t NetwLagCompCore::timeline_register(
 ) {
     const uint64_t key = entity_key(p_entity);
     if (key == 0) {
-        NETW_ERR_V(-1, MODULE, "timeline_register refused a null entity");
+        NETW_ERR_V(
+            -1,
+            MODULE,
+            "Lag compensation was asked to track a null entity."
+        );
     }
     HashMap<uint64_t, int64_t>::ConstIterator seated = slot_by_entity.find(key);
     if (seated != slot_by_entity.end()) {
         NETW_TRACE(
             MODULE,
-            "timeline_register is idempotent for entity %d at slot %d",
+            "Entity %d already has lag compensation history %d.",
             int64_t(key),
             seated->value
         );
@@ -66,13 +125,9 @@ int64_t NetwLagCompCore::timeline_register(
     Row *row = mutable_row_of(slot);
     row->entity = p_entity;
     slot_by_entity.insert(key, slot);
-    NetwEntity *entity = Object::cast_to<NetwEntity>(p_entity.ptr());
-    if (entity != nullptr) {
-        entity->set_timeline(row->history);
-    }
     NETW_TRACE(
         MODULE,
-        "timeline_register seated entity %d at slot %d, %d registered",
+        "Entity %d got lag compensation history %d, %d in all.",
         int64_t(key),
         slot,
         int64_t(slot_by_entity.size())
@@ -95,7 +150,7 @@ void NetwLagCompCore::timeline_unregister(const Ref<RefCounted> &p_entity) {
     }
     NETW_TRACE(
         MODULE,
-        "timeline_unregister released slot %d, %d left registered",
+        "Lag compensation history %d was released, %d left.",
         slot,
         int64_t(slot_by_entity.size()) - 1
     );
@@ -106,17 +161,6 @@ int64_t NetwLagCompCore::timeline_registered() const {
     return int64_t(slot_by_entity.size());
 }
 
-Dictionary NetwLagCompCore::timeline_entities() const {
-    Dictionary out;
-    for (const KeyValue<uint64_t, int64_t> &seat : slot_by_entity) {
-        const Row *row = row_of(seat.value);
-        if (row != nullptr && row->entity.is_valid()) {
-            out[row->entity] = row->history;
-        }
-    }
-    return out;
-}
-
 Dictionary NetwLagCompCore::timeline_sample_entity(
     const Ref<RefCounted> &p_entity,
     int64_t p_tick
@@ -125,11 +169,17 @@ Dictionary NetwLagCompCore::timeline_sample_entity(
 }
 
 void NetwLagCompCore::timeline_close(int64_t p_slot) {
-    const Row *row = row_of(p_slot);
-    if (row != nullptr && row->entity.is_valid()) {
+    Row *row = mutable_row_of(p_slot);
+    if (row == nullptr) {
+        return;
+    }
+    if (row->entity.is_valid()) {
         slot_by_entity.erase(entity_key(row->entity));
     }
-    rows.erase(p_slot);
+    unbind_store(p_slot);
+    rows[SlotIds::index_of(p_slot)] = nullptr;
+    ids.release(p_slot);
+    memdelete(row);
 }
 
 bool NetwLagCompCore::timeline_is_open(int64_t p_slot) const {
@@ -162,6 +212,7 @@ void NetwLagCompCore::timeline_declare(int64_t p_slot, const Array &p_keys) {
     for (int at = 0; at < p_keys.size(); ++at) {
         row->declared.push_back(StringName(p_keys[at]));
     }
+    row->declared_changed = true;
 }
 
 Array NetwLagCompCore::timeline_declared(int64_t p_slot) const {
@@ -215,9 +266,35 @@ void NetwLagCompCore::timeline_record(
     const Dictionary &p_payload
 ) {
     Row *row = mutable_row_of(p_slot);
-    if (row != nullptr) {
-        row->history->record_state(p_tick, p_payload);
+    if (row == nullptr) {
+        return;
     }
+    if (!row->book.is_compiled() || row->declared_changed) {
+        Array keys;
+        for (const StringName &key : row->declared) {
+            keys.push_back(key);
+        }
+        row->book.compile_keys(keys.is_empty() ? p_payload.keys() : keys);
+        row->declared_changed = false;
+    }
+    row->book.record(p_tick, p_payload);
+}
+
+void NetwLagCompCore::timeline_record_coded(
+    int64_t p_slot,
+    int64_t p_tick,
+    const Dictionary &p_payload,
+    const predict::FieldCodec &p_source
+) {
+    Row *row = mutable_row_of(p_slot);
+    if (row == nullptr) {
+        return;
+    }
+    if (!row->book.is_compiled() || row->declared_changed) {
+        row->book.compile(p_source, row->declared);
+        row->declared_changed = false;
+    }
+    row->book.record(p_tick, p_payload);
 }
 
 int64_t NetwLagCompCore::timeline_sample_tick(
@@ -225,8 +302,7 @@ int64_t NetwLagCompCore::timeline_sample_tick(
     int64_t p_tick
 ) const {
     const Row *row = row_of(p_slot);
-    return row != nullptr ? row->history->latest_state_tick_at_or_before(p_tick)
-                          : -1;
+    return row != nullptr ? row->book.sample_tick(p_tick) : -1;
 }
 
 Dictionary NetwLagCompCore::timeline_sample(
@@ -234,14 +310,21 @@ Dictionary NetwLagCompCore::timeline_sample(
     int64_t p_tick
 ) const {
     const Row *row = row_of(p_slot);
-    return row != nullptr ? row->history->latest_state_at_or_before(p_tick)
-                          : Dictionary();
+    return row != nullptr ? row->book.sample(p_tick) : Dictionary();
+}
+
+bool NetwLagCompCore::timeline_recorded_at(
+    int64_t p_slot,
+    int64_t p_tick
+) const {
+    const Row *row = row_of(p_slot);
+    return row != nullptr && row->book.recorded_at(p_tick);
 }
 
 void NetwLagCompCore::timeline_trim_before(int64_t p_slot, int64_t p_tick) {
     Row *row = mutable_row_of(p_slot);
     if (row != nullptr) {
-        row->history->trim_before(p_tick);
+        row->book.trim_before(p_tick);
     }
 }
 

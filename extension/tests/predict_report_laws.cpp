@@ -1,4 +1,6 @@
+#include "support/books.h"
 #include "support/loopback_rig.h"
+#include "support/predict_rows.h"
 
 #if defined(NETW_TIER_HOSTED)
 
@@ -11,13 +13,11 @@
 #include "netw/api/netw_multiplayer.hpp"
 #include "netw/api/predict.hpp"
 #include "netw/api/prediction_handle.hpp"
-#include "netw/api/property_set.hpp"
-#include "netw/api/property_set_binding.hpp"
 #include "netw/api/schema_core.hpp"
-#include "netw/api/timeline.hpp"
 #include "netw/predict/engine.hpp"
 #include "netw/predict/journal.hpp"
 #include "netw/prediction_core.hpp"
+#include "netw/repl/property_binding.hpp"
 #include "netw/script/model.hpp"
 
 #include <godot_cpp/classes/node2d.hpp>
@@ -32,9 +32,11 @@ using netw::NetwPredict;
 using netw::NetwPredictionEngine;
 namespace predict = netw::predict;
 using netw::NetwPredictionHandle;
-using netw::NetwPropertySet;
-using netw::NetwPropertySetBinding;
-using netw::NetwPropertySetColumn;
+using netw::repl::PropertyBinding;
+using netw::repl::PropertyBindingPtr;
+using netw::repl::PropertyColumn;
+using netw::repl::PropertySet;
+using netw::repl::SetBook;
 
 const char *REPORTED_ID = "reported_player";
 
@@ -522,8 +524,8 @@ TEST_CASE(
     );
 }
 
-Ref<NetwPropertySetColumn> pose_column() {
-    return NetwPropertySetColumn::create(
+PropertyColumn pose_column() {
+    return PropertyColumn::create(
         StringName("position"),
         Ref<netw::NetwQuantize>(),
         false,
@@ -531,12 +533,10 @@ Ref<NetwPropertySetColumn> pose_column() {
     );
 }
 
-Ref<NetwPropertySet> one_column_set() {
-    Ref<NetwPropertySet> set;
-    set.instantiate();
-    set->record = NetwPropertySet::RECORD_STATE;
-    set->bind_column(pose_column());
-    return set;
+PropertySet *one_column_set(PropertySet &r_set) {
+    r_set.record = PropertySet::RECORD_STATE;
+    r_set.bind_column(pose_column());
+    return &r_set;
 }
 
 void nothing(const Variant &) {
@@ -549,7 +549,7 @@ TEST_CASE(
 ) {
     NetwPredictionEngine orphan;
     NETW_CHECK_EQ(orphan.current_tick(), -1);
-    NETW_CHECK_EQ(orphan.register_timeline(Ref<NetwEntity>()).is_null(), 1);
+    NETW_CHECK_EQ(orphan.register_rewind(Ref<NetwEntity>()), -1);
 
     LoopbackRig rig(1);
     rig.mount();
@@ -561,9 +561,9 @@ TEST_CASE(
     NetwPredictionEngine *const pool = core->get_prediction_engine();
     NETW_CHECK_EQ(pool->current_tick(), core->clock_get_tick());
 
-    const Ref<netw::NetwTimeline> first = pool->register_timeline(seated);
-    REQUIRE(first.is_valid());
-    NETW_CHECK_EQ(pool->register_timeline(seated) == first, 1);
+    const int64_t first = pool->register_rewind(seated);
+    REQUIRE(first >= 0);
+    NETW_CHECK_EQ(pool->register_rewind(seated), first);
 }
 
 TEST_CASE(
@@ -597,12 +597,12 @@ Variant carry_never(const Variant &, const Variant &, double) {
     return Variant();
 }
 
-Ref<NetwPropertySet> pose_and_momentum() {
-    Ref<NetwPropertySet> set;
-    set.instantiate();
-    set->record = NetwPropertySet::RECORD_STATE;
+uint64_t pose_and_momentum(SetBook &r_sets) {
+    const uint64_t declared = r_sets.create();
+    PropertySet *set = r_sets.get(declared);
+    set->record = PropertySet::RECORD_STATE;
     set->bind_column(
-        NetwPropertySetColumn::create(
+        PropertyColumn::create(
             StringName("position"),
             Ref<netw::NetwQuantize>(),
             false,
@@ -610,14 +610,25 @@ Ref<NetwPropertySet> pose_and_momentum() {
         )
     );
     set->bind_column(
-        NetwPropertySetColumn::create(
+        PropertyColumn::create(
             StringName("velocity"),
             Ref<netw::NetwQuantize>(),
             false,
             NetwMultiplayer::ColumnType(netw::SchemaCore::VARIANT)
         )
     );
-    return set;
+    return declared;
+}
+
+PropertyBindingPtr pose_binding(netw_test::Books &r_books, Node *p_node) {
+    return r_books.bindings.create(pose_and_momentum(r_books.sets), p_node);
+}
+
+PropertyBindingPtr pose_binding(NetwMultiplayer *p_core, Node *p_node) {
+    return p_core->property_binding_book().create(
+        pose_and_momentum(p_core->property_set_book()),
+        p_node
+    );
 }
 
 LocalVector<netw::predict::FieldDecl> declared_pose(bool p_channelled) {
@@ -625,17 +636,18 @@ LocalVector<netw::predict::FieldDecl> declared_pose(bool p_channelled) {
     out.push_back(
         netw::field_decl(
             StringName("position"),
-            int(NetwPropertySet::CAUSAL),
+            int(PropertySet::CAUSAL),
             p_channelled ? StringName("velocity") : StringName()
         )
     );
     out.push_back(
-        netw::field_decl(StringName("velocity"), int(NetwPropertySet::CAUSAL))
+        netw::field_decl(StringName("velocity"), int(PropertySet::CAUSAL))
     );
     return out;
 }
 
 int64_t carrying_slot(
+    netw_test::Books &r_books,
     NetwPredictionEngine *p_pool,
     Node *p_node,
     bool p_channelled
@@ -644,8 +656,8 @@ int64_t carrying_slot(
     REQUIRE(slot >= 0);
     p_pool->bind_property_sets(
         slot,
-        NetwPropertySetBinding::create(pose_and_momentum(), p_node),
-        Ref<NetwPropertySetBinding>()
+        pose_binding(r_books, p_node),
+        PropertyBindingPtr()
     );
     return slot;
 }
@@ -669,16 +681,17 @@ TEST_CASE(
     const int64_t slot = pool->slot_register(seated);
     REQUIRE(slot >= 0);
 
-    const Ref<NetwPropertySet> state = pose_and_momentum();
-    const Ref<NetwPropertySetColumn> pose = state->get_columns()[0];
-    pose->carry_channel = StringName("velocity");
-    pose->epsilon_override = 0.25;
+    SetBook &sets = core->property_set_book();
+    const uint64_t state = pose_and_momentum(sets);
+    PropertyColumn &pose = sets.get(state)->columns[0];
+    pose.carry_channel = StringName("velocity");
+    pose.epsilon_override = 0.25;
 
     NETW_CHECK_EQ(
         pool->adopt_declaration(
             seated,
-            NetwPropertySetBinding::create(state, owner),
-            NetwPropertySetBinding::create(pose_and_momentum(), owner),
+            core->property_binding_book().create(state, owner),
+            pose_binding(core, owner),
             int(netw::Schedule::TICK),
             int(netw::Role::PREDICT),
             int(netw::CorrectionMode::SNAP),
@@ -717,10 +730,11 @@ TEST_CASE(
     NetwPredictionEngine *const pool = core->get_prediction_engine();
     const int64_t slot = pool->slot_register(seated);
     REQUIRE(slot >= 0);
+    pool->rewire(slot, declared_pose(false));
     pool->bind_property_sets(
         slot,
-        NetwPropertySetBinding::create(pose_and_momentum(), owner),
-        Ref<NetwPropertySetBinding>()
+        pose_binding(core, owner),
+        PropertyBindingPtr()
     );
     pool->configure(
         slot,
@@ -759,10 +773,11 @@ TEST_CASE(
     NetwPredictionEngine *const pool = core->get_prediction_engine();
     const int64_t slot = pool->slot_register(seated);
     REQUIRE(slot >= 0);
+    pool->rewire(slot, declared_pose(false));
     pool->bind_property_sets(
         slot,
-        NetwPropertySetBinding::create(pose_and_momentum(), owner),
-        Ref<NetwPropertySetBinding>()
+        pose_binding(core, owner),
+        PropertyBindingPtr()
     );
 
     Dictionary written;
@@ -814,19 +829,23 @@ TEST_CASE(
     REQUIRE(slot >= 0);
     pool->bind_property_sets(
         slot,
-        NetwPropertySetBinding::create(pose_and_momentum(), owner),
-        Ref<NetwPropertySetBinding>()
+        pose_binding(core, owner),
+        PropertyBindingPtr()
     );
+    LocalVector<netw::predict::FieldDecl> declared;
+    declared.push_back(netw::field_decl(StringName("position"), 0));
+    declared.push_back(netw::field_decl(StringName("velocity"), 0));
+    pool->rewire(slot, declared);
 
-    const Ref<netw::NetwTimeline> history = pool->register_timeline(seated);
-    REQUIRE(history.is_valid());
-    pool->bind_timeline(slot, history);
+    pool->open_lane(slot);
 
     Dictionary held;
     held[StringName("position")] = Vector2(1.0, 0.0);
-    history->record_input(5, held);
-    history->record_input(6, held);
-    history->record_input(8, held);
+    const netw::predict::StateRow command
+        = netw_test::input_row(pool, slot, held);
+    pool->record_authored_command(slot, 5, 5, true, command);
+    pool->record_authored_command(slot, 6, 6, true, command);
+    pool->record_authored_command(slot, 8, 8, true, command);
 
     demotes_charged = 0;
     NETW_CHECK_EQ(
@@ -840,9 +859,9 @@ TEST_CASE(
         ),
         2
     );
-    NETW_CHECK_EQ(history->state_at(6).is_empty(), 0);
-    NETW_CHECK_EQ(history->state_at(7).is_empty(), 0);
-    NETW_CHECK_EQ(history->state_at(9).is_empty(), 1);
+    NETW_CHECK_EQ(netw_test::predicted_state(pool, slot, 6).is_empty(), 0);
+    NETW_CHECK_EQ(netw_test::predicted_state(pool, slot, 7).is_empty(), 0);
+    NETW_CHECK_EQ(netw_test::predicted_state(pool, slot, 9).is_empty(), 1);
 
     NETW_CHECK_EQ(
         pool->replay_tick_window(
@@ -874,13 +893,13 @@ TEST_CASE(
     NetwPredictionEngine *const pool = core->get_prediction_engine();
     const int64_t slot = pool->slot_register(seated);
     REQUIRE(slot >= 0);
-    const Ref<NetwPropertySet> declared = pose_and_momentum();
-    Ref<NetwPropertySetColumn>(declared->get_columns()[0])->carry_channel
-        = StringName("velocity");
+    SetBook &sets = core->property_set_book();
+    const uint64_t declared = pose_and_momentum(sets);
+    sets.get(declared)->columns[0].carry_channel = StringName("velocity");
     pool->adopt_declaration(
         seated,
-        NetwPropertySetBinding::create(declared, owner),
-        Ref<NetwPropertySetBinding>(),
+        core->property_binding_book().create(declared, owner),
+        PropertyBindingPtr(),
         int(netw::Schedule::TICK),
         int(netw::Role::PREDICT),
         int(netw::CorrectionMode::SNAP),
@@ -905,9 +924,6 @@ TEST_CASE(
     NETW_CHECK_EQ(measured.is_empty(), 0);
 }
 
-void frame_sink(const Dictionary &) {
-}
-
 TEST_CASE(
     "[Networked][Predict][Report] PR22 the role decides the whole "
     "feed, so a role that names no frame sink un-installs the previous "
@@ -915,53 +931,34 @@ TEST_CASE(
 ) {
     NetwPredictionEngine held_pool;
     NetwPredictionEngine *const pool = &held_pool;
-    const Callable sink = callable_mp_static(&frame_sink);
+    using netw::predict::Listener;
 
-    const netw::predict::Feed predicting = pool->role_feed(
-        int(netw::Role::PREDICT),
-        false,
-        sink,
-        sink,
-        sink,
-        sink
-    );
-    NETW_CHECK_EQ(predicting.state_on_applied == sink, 1);
+    const netw::predict::Feed predicting
+        = pool->role_feed(int(netw::Role::PREDICT), false);
+    NETW_CHECK_EQ(int(predicting.state_listener), int(Listener::STATE));
+    NETW_CHECK_EQ(int(predicting.input_listener), int(Listener::NONE));
     NETW_CHECK_EQ(predicting.state_write_gate, 0);
     NETW_CHECK_EQ(predicting.input_volatile_external, 1);
 
-    const netw::predict::Feed consuming = pool->role_feed(
-        int(netw::Role::CONSUME),
-        false,
-        sink,
-        sink,
-        sink,
-        sink
-    );
-    NETW_CHECK_EQ(consuming.input_on_applied == sink, 1);
-    NETW_CHECK_EQ(consuming.state_on_applied.is_valid(), 0);
+    const netw::predict::Feed consuming
+        = pool->role_feed(int(netw::Role::CONSUME), false);
+    NETW_CHECK_EQ(int(consuming.input_listener), int(Listener::INPUT));
+    NETW_CHECK_EQ(int(consuming.state_listener), int(Listener::NONE));
     NETW_CHECK_EQ(consuming.input_write_gate, 0);
 
-    const netw::predict::Feed remote = pool->role_feed(
-        int(netw::Role::REMOTE),
-        false,
-        sink,
-        sink,
-        sink,
-        sink
-    );
-    NETW_CHECK_EQ(remote.state_on_applied.is_valid(), 0);
-    NETW_CHECK_EQ(remote.input_on_applied.is_valid(), 0);
+    const netw::predict::Feed simulating
+        = pool->role_feed(int(netw::Role::SIMULATE), false);
+    NETW_CHECK_EQ(int(simulating.state_listener), int(Listener::SIMULATED));
+
+    const netw::predict::Feed remote
+        = pool->role_feed(int(netw::Role::REMOTE), false);
+    NETW_CHECK_EQ(int(remote.state_listener), int(Listener::NONE));
+    NETW_CHECK_EQ(int(remote.input_listener), int(Listener::NONE));
     NETW_CHECK_EQ(remote.state_write_gate, 1);
 
-    const netw::predict::Feed latched = pool->role_feed(
-        int(netw::Role::REMOTE),
-        true,
-        sink,
-        sink,
-        sink,
-        sink
-    );
-    NETW_CHECK_EQ(latched.state_on_applied == sink, 1);
+    const netw::predict::Feed latched
+        = pool->role_feed(int(netw::Role::REMOTE), true);
+    NETW_CHECK_EQ(int(latched.state_listener), int(Listener::QUARANTINE));
     NETW_CHECK_EQ(latched.state_write_gate, 1);
 }
 
@@ -981,13 +978,13 @@ TEST_CASE(
     NetwPredictionEngine *const pool = core->get_prediction_engine();
     const int64_t slot = pool->slot_register(seated);
     REQUIRE(slot >= 0);
-    const Ref<NetwPropertySet> declared = pose_and_momentum();
-    Ref<NetwPropertySetColumn>(declared->get_columns()[0])->carry_channel
-        = StringName("velocity");
+    SetBook &sets = core->property_set_book();
+    const uint64_t declared = pose_and_momentum(sets);
+    sets.get(declared)->columns[0].carry_channel = StringName("velocity");
     pool->adopt_declaration(
         seated,
-        NetwPropertySetBinding::create(declared, owner),
-        Ref<NetwPropertySetBinding>(),
+        core->property_binding_book().create(declared, owner),
+        PropertyBindingPtr(),
         int(netw::Schedule::TICK),
         int(netw::Role::PREDICT),
         int(netw::CorrectionMode::SNAP),
@@ -1000,13 +997,12 @@ TEST_CASE(
         netw::gd::live_object(seated->get_prediction())
     )
         ->set_ack_age_ticks(4);
-    const Ref<netw::NetwTimeline> history = pool->register_timeline(seated);
-    REQUIRE(history.is_valid());
-    pool->bind_timeline(slot, history);
+    pool->open_lane(slot);
 
-    Dictionary stated;
-    stated[StringName("position")] = Vector2(9.0, 0.0);
-    stated[StringName("velocity")] = Vector2(3.0, 0.0);
+    netw::predict::StateRow stated;
+    stated.resize(2);
+    stated.set(0, Vector2(9.0, 0.0));
+    stated.set(1, Vector2(3.0, 0.0));
 
     NetwPredictionHandle *handle = Object::cast_to<NetwPredictionHandle>(
         netw::gd::live_object(seated->get_prediction())
@@ -1026,13 +1022,10 @@ TEST_CASE(
         Callable()
     );
 
-    const Dictionary recorded = history->state_at(5);
-    NETW_CHECK_EQ(recorded.is_empty(), 0);
-    NETW_CHECK_EQ(
-        Vector2(recorded.get(StringName("position"), Vector2()))
-            == Vector2(9.0, 0.0),
-        1
-    );
+    netw::predict::StateRow recorded;
+    REQUIRE(pool->read_predicted(slot, 5, recorded));
+    REQUIRE(recorded.has(0));
+    NETW_CHECK_EQ(Vector2(recorded.values[0]) == Vector2(9.0, 0.0), 1);
     NETW_CHECK_EQ(judged.count(StringName("state_evaluated")), 1);
     const Array said = judged.args(StringName("state_evaluated"));
     REQUIRE(said.size() == 4);
@@ -1058,8 +1051,8 @@ TEST_CASE(
     REQUIRE(slot >= 0);
     pool->adopt_declaration(
         seated,
-        NetwPropertySetBinding::create(pose_and_momentum(), owner),
-        Ref<NetwPropertySetBinding>(),
+        pose_binding(core, owner),
+        PropertyBindingPtr(),
         int(netw::Schedule::TICK),
         int(netw::Role::PREDICT),
         int(netw::CorrectionMode::SNAP),
@@ -1072,23 +1065,25 @@ TEST_CASE(
 
     core->event_arm(true);
     core->event_ring(route);
-    const Dictionary drove = pool->record_drive(
+    const int64_t empty_hash
+        = pool->command_hash_row(slot, netw::predict::StateRow());
+    const netw::DriveOutcome drove = pool->record_drive_hashed(
         slot,
         0,
         0,
         int(netw::DriveKind::FRESH),
-        Dictionary(),
+        empty_hash,
         0,
         true,
         true,
         true
     );
-    const Dictionary refused = pool->record_drive(
+    const netw::DriveOutcome refused = pool->record_drive_hashed(
         slot,
         -1,
         1,
         int(netw::DriveKind::NONE),
-        Dictionary(),
+        empty_hash,
         -1,
         false,
         true,
@@ -1097,8 +1092,8 @@ TEST_CASE(
     const Array drained = core->event_ring(route);
     core->event_arm(false);
 
-    NETW_CHECK_EQ(drove.is_empty(), 0);
-    NETW_CHECK_EQ(refused.is_empty(), 1);
+    NETW_CHECK_EQ(drove.ran, 1);
+    NETW_CHECK_EQ(refused.ran, 0);
     NETW_CHECK_EQ(rows_of(drained, netw::EventPlane::PREDICT_DRIVE).size(), 1);
 }
 
@@ -1115,10 +1110,12 @@ TEST_CASE(
         callable_mp_static(&carry_never)
     );
 
+    netw_test::Books books;
     NetwPredictionEngine held_pool;
+    held_pool.attach_bindings(&books.bindings);
     NetwPredictionEngine *const pool = &held_pool;
-    const int64_t plain = carrying_slot(pool, owner, false);
-    const int64_t channelled = carrying_slot(pool, owner, true);
+    const int64_t plain = carrying_slot(books, pool, owner, false);
+    const int64_t channelled = carrying_slot(books, pool, owner, true);
 
     pool->push_carry_rules(plain);
     NETW_CHECK_EQ(pool->has_carry_rule(plain, StringName("position")), 1);
@@ -1188,7 +1185,8 @@ TEST_CASE(
     const int64_t slot = pool->slot_register(seated);
     REQUIRE(slot >= 0);
 
-    const Ref<NetwPropertySet> set = one_column_set();
+    PropertySet declared;
+    PropertySet *const set = one_column_set(declared);
     const Callable emits = callable_mp_static(&count_findings);
 
     findings_emitted = 0;
@@ -1198,8 +1196,7 @@ TEST_CASE(
     pool->validate_declaration(slot, set, emits);
     NETW_CHECK_EQ(findings_emitted, 1);
 
-    const Ref<NetwPropertySetColumn> column = set->get_columns()[0];
-    column->property_class = int64_t(NetwPropertySet::COSMETIC);
+    set->columns[0].property_class = int64_t(PropertySet::COSMETIC);
     pool->validate_declaration(slot, set, emits);
     NETW_CHECK_EQ(findings_emitted, 2);
 }
@@ -1214,31 +1211,32 @@ TEST_CASE(
     const int64_t slot = pool->open();
     REQUIRE(slot >= 0);
 
-    const Ref<NetwPropertySet> set = one_column_set();
+    PropertySet declared;
+    PropertySet *const set = one_column_set(declared);
     const int64_t stable = pool->property_class_report_hash(slot, set);
     NETW_CHECK_EQ(pool->property_class_report_hash(slot, set), stable);
 
-    const Ref<NetwPropertySetColumn> column = set->get_columns()[0];
+    PropertyColumn &column = set->columns[0];
 
-    column->property_class = int64_t(netw::NetwPropertySet::COSMETIC);
+    column.property_class = int64_t(PropertySet::COSMETIC);
     NETW_CHECK_EQ(pool->property_class_report_hash(slot, set) != stable, 1);
-    column->property_class = int64_t(netw::NetwPropertySet::CAUSAL);
+    column.property_class = int64_t(PropertySet::CAUSAL);
 
-    column->epsilon_override = 0.25;
+    column.epsilon_override = 0.25;
     NETW_CHECK_EQ(pool->property_class_report_hash(slot, set) != stable, 1);
-    column->epsilon_override = -1.0;
+    column.epsilon_override = -1.0;
 
-    column->explicit_teleport_only = true;
+    column.explicit_teleport_only = true;
     NETW_CHECK_EQ(pool->property_class_report_hash(slot, set) != stable, 1);
-    column->explicit_teleport_only = false;
+    column.explicit_teleport_only = false;
 
-    column->explicit_reconcile_only = true;
+    column.explicit_reconcile_only = true;
     NETW_CHECK_EQ(pool->property_class_report_hash(slot, set) != stable, 1);
-    column->explicit_reconcile_only = false;
+    column.explicit_reconcile_only = false;
 
-    column->carry_channel = StringName("aim");
+    column.carry_channel = StringName("aim");
     NETW_CHECK_EQ(pool->property_class_report_hash(slot, set) != stable, 1);
-    column->carry_channel = StringName();
+    column.carry_channel = StringName();
 
     set->masked = true;
     NETW_CHECK_EQ(pool->property_class_report_hash(slot, set) != stable, 1);
@@ -1257,7 +1255,8 @@ TEST_CASE(
     const int64_t slot = pool->open();
     REQUIRE(slot >= 0);
 
-    const Ref<NetwPropertySet> set = one_column_set();
+    PropertySet declared;
+    PropertySet *const set = one_column_set(declared);
     const int64_t before = pool->property_class_report_hash(slot, set);
 
     pool->set_carry(slot, StringName("position"), callable_mp_static(&nothing));
@@ -1362,21 +1361,29 @@ TEST_CASE(
     NetwPredictionEngine *const pool = core->get_prediction_engine();
     const int64_t slot = pool->slot_register(seated);
     REQUIRE(slot >= 0);
+    LocalVector<netw::predict::FieldDecl> input;
+    netw::predict::FieldDecl steer;
+    steer.key = StringName("steer");
+    steer.type = int(Variant::INT);
+    input.push_back(steer);
+    pool->rewire(slot, LocalVector<netw::predict::FieldDecl>(), input);
 
-    const Dictionary coasted = pool->predicted_command(slot, seated, 4);
-    NETW_CHECK_EQ(coasted.has(StringName("steer")), false);
+    REQUIRE(pool->predict_command(slot, seated, 4));
+    const netw::predict::StateRow &command = *pool->command_of(slot);
+    REQUIRE(command.has(0));
+    NETW_CHECK_EQ(int(command.values[0]), 0);
     NETW_CHECK_EQ(pool->invalid_command_predictor_reported_of(slot), false);
 
     const Ref<netw::NetwPredictionHandle> member = seated->get_prediction();
     REQUIRE(member.is_valid());
-    member->set_predict_commands(callable_mp_static(&predictor_overlay));
-    const Dictionary answered = pool->predicted_command(slot, seated, 4);
-    NETW_CHECK_EQ(int(answered[StringName("steer")]), 4);
+    member->set_predict_input(callable_mp_static(&predictor_overlay));
+    REQUIRE(pool->predict_command(slot, seated, 4));
+    NETW_CHECK_EQ(int(pool->command_of(slot)->values[0]), 4);
     NETW_CHECK_EQ(pool->invalid_command_predictor_reported_of(slot), false);
 
-    member->set_predict_commands(callable_mp_static(&predictor_broken));
-    const Dictionary refused = pool->predicted_command(slot, seated, 4);
-    NETW_CHECK_EQ(refused.has(StringName("steer")), false);
+    member->set_predict_input(callable_mp_static(&predictor_broken));
+    REQUIRE(pool->predict_command(slot, seated, 4));
+    NETW_CHECK_EQ(int(pool->command_of(slot)->values[0]), 0);
     NETW_CHECK_EQ(pool->invalid_command_predictor_reported_of(slot), true);
 }
 
@@ -1402,13 +1409,19 @@ int64_t judging_slot(LoopbackRig &p_rig, const Ref<NetwEntity> &p_seated) {
     NetwPredictionEngine *const pool = p_rig.server()->get_prediction_engine();
     const int64_t slot = pool->slot_register(p_seated);
     REQUIRE(slot >= 0);
+    LocalVector<predict::FieldDecl> declared;
+    predict::FieldDecl position;
+    position.key = StringName("position");
+    position.type = int(Variant::VECTOR2);
+    declared.push_back(position);
+    pool->rewire(slot, declared);
     pool->bind_property_sets(
         slot,
-        NetwPropertySetBinding::create(
-            pose_and_momentum(),
+        pose_binding(
+            p_rig.server(),
             p_seated->get_owner()
         ),
-        Ref<NetwPropertySetBinding>()
+        PropertyBindingPtr()
     );
     pool->configure(
         slot,
@@ -1437,12 +1450,24 @@ TEST_CASE(
 
     const Dictionary predicted = at_position(0.0);
     const Dictionary payload = at_position(5.0);
-    pool->judge_state(slot, 4, 0, 0, predicted, payload, Callable());
+    const predict::StateRow predicted_row
+        = netw_test::state_row(pool, slot, predicted);
+    const predict::StateRow payload_row
+        = netw_test::state_row(pool, slot, payload);
+    pool->judge_state(slot, 4, 0, 0, predicted_row, payload_row, Callable());
     pool->plan_recovery(slot, 4, 4, predicted, payload, false, 0, 1);
 
     const int64_t before = netw::prediction_core::records_minted();
     for (int at = 0; at < 8; ++at) {
-        pool->judge_state(slot, 5 + at, 0, 0, predicted, payload, Callable());
+        pool->judge_state(
+            slot,
+            5 + at,
+            0,
+            0,
+            predicted_row,
+            payload_row,
+            Callable()
+        );
         const int64_t ack = 5 + at;
         pool->plan_recovery(slot, ack, ack, predicted, payload, false, 0, 1);
     }
@@ -1488,20 +1513,21 @@ TEST_CASE(
     );
     REQUIRE(stock.corrected);
 
-    const Dictionary judged = pool->judge_state(
+    const predict::StateRow predicted_row
+        = netw_test::state_row(pool, slot, predicted);
+    const predict::StateRow payload_row
+        = netw_test::state_row(pool, slot, payload);
+    const predict::Judged judged = pool->judge_state(
         slot,
         4,
         0,
         0,
-        predicted,
-        payload,
+        predicted_row,
+        payload_row,
         callable_mp_static(&abstaining_seam)
     );
-    NETW_CHECK_EQ(
-        bool(judged[StringName("corrected")]) ? 1 : 0,
-        stock.corrected ? 1 : 0
-    );
-    CHECK(double(judged[StringName("divergence")]) == stock.divergence);
+    NETW_CHECK_EQ(judged.corrected ? 1 : 0, stock.corrected ? 1 : 0);
+    NETW_CHECK_CLOSE(judged.divergence, stock.divergence, 0.0);
 
     const Array refusals
         = rows_of(core->event_ring(route), netw::EventPlane::SEAM_MISUSE);
@@ -1615,14 +1641,15 @@ TEST_CASE(
     NETW_CHECK_EQ(unrepairable.has(String("position")) ? 1 : 0, 0);
 }
 
-Ref<NetwPropertySet> recovering_state() {
-    Ref<NetwPropertySet> set;
-    set.instantiate();
-    set->record = NetwPropertySet::RECORD_STATE;
+PropertyBindingPtr recovering_state(NetwMultiplayer *p_core, Node *p_node) {
+    SetBook &sets = p_core->property_set_book();
+    const uint64_t declared = sets.create();
+    PropertySet *set = sets.get(declared);
+    set->record = PropertySet::RECORD_STATE;
     const char *const names[] = {"position", "scale", "rotation"};
     for (const char *name : names) {
         set->bind_column(
-            NetwPropertySetColumn::create(
+            PropertyColumn::create(
                 StringName(name),
                 Ref<netw::NetwQuantize>(),
                 false,
@@ -1630,12 +1657,11 @@ Ref<NetwPropertySet> recovering_state() {
             )
         );
     }
-    const Ref<NetwPropertySetColumn> pose = set->get_columns()[0];
-    pose->carry_channel = StringName("scale");
-    pose->converge_stiffness = 0.5;
-    const Ref<NetwPropertySetColumn> held = set->get_columns()[2];
-    held->explicit_teleport_only = true;
-    return set;
+    PropertyColumn &pose = set->columns[0];
+    pose.carry_channel = StringName("scale");
+    pose.converge_stiffness = 0.5;
+    set->columns[2].explicit_teleport_only = true;
+    return p_core->property_binding_book().create(declared, p_node);
 }
 
 netw::RecoveryPlan check_parity(
@@ -1714,8 +1740,8 @@ TEST_CASE(
     REQUIRE(slot >= 0);
     pool->adopt_declaration(
         seated,
-        NetwPropertySetBinding::create(recovering_state(), owner),
-        Ref<NetwPropertySetBinding>(),
+        recovering_state(core, owner),
+        PropertyBindingPtr(),
         int(netw::Schedule::TICK),
         int(netw::Role::PREDICT),
         int(netw::CorrectionMode::SNAP),
@@ -1755,8 +1781,8 @@ TEST_CASE(
     seated->get_prediction()->set_ack_age_ticks(2);
     pool->adopt_declaration(
         seated,
-        NetwPropertySetBinding::create(recovering_state(), owner),
-        Ref<NetwPropertySetBinding>(),
+        recovering_state(core, owner),
+        PropertyBindingPtr(),
         int(netw::Schedule::TICK),
         int(netw::Role::PREDICT),
         int(netw::CorrectionMode::SNAP),

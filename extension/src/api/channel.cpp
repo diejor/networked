@@ -21,7 +21,8 @@ Ref<NetwChannel> NetwChannel::over(int64_t p_id, NetwMultiplayer *p_session) {
         || p_id > NetwMultiplayer::CHANNEL_USER_LAST) {
         NETW_ERROR(
             sys::LIVENESS,
-            "NetwChannel: id %d is outside the user range %d to %d",
+            "Channel id %d is not available to a game. Use an id from %d "
+            "to %d.",
             int(p_id),
             int(NetwMultiplayer::CHANNEL_USER_FIRST),
             int(NetwMultiplayer::CHANNEL_USER_LAST)
@@ -40,7 +41,8 @@ Ref<NetwChannel> NetwChannel::of(Node *p_node, int64_t p_id) {
     if (api == nullptr) {
         NETW_ERROR(
             sys::LIVENESS,
-            "NetwChannel.of: no session governs the given node"
+            "Netw.channel got a node that is not inside a session. Call it "
+            "from a node in the scene tree under a MultiplayerTree."
         );
         return Ref<NetwChannel>();
     }

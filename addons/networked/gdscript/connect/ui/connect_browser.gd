@@ -321,7 +321,7 @@ func _save_records() -> void:
 		err = config.save(path)
 	if err != OK:
 		push_warning(
-			"ConnectBrowser: could not write %s (%s)"
+			"ConnectBrowser could not save the server list to %s (%s)."
 			% [_list_path(), error_string(err)],
 		)
 
@@ -431,8 +431,9 @@ func _shaped(peer: MultiplayerPeer) -> MultiplayerPeer:
 	var config: NetwSessionConfig = _session.config
 	if config != null and config.link_conditions != null:
 		push_warning(
-			"ConnectBrowser: debug_link is ignored because the session "
-			+ "already consumed an authored impairment.",
+			"ConnectBrowser.debug_link was ignored, because the session "
+			+ "already sets NetwSessionConfig.link_conditions. Set only one "
+			+ "of them.",
 		)
 		return peer
 	return wrapped
@@ -964,7 +965,9 @@ func _join_with_preflight(
 
 func _show_banner(reason: String) -> void:
 	if _banner_label == null or _banner == null:
-		push_warning("ConnectBrowser: %s" % reason)
+		push_warning(
+			"ConnectBrowser has no banner to show this message (%s)." % reason,
+		)
 		return
 	_banner_label.text = reason
 	_banner.visible = true
@@ -1104,7 +1107,12 @@ static func value_from_control(control: Control, value_type: int) -> Variant:
 			var reader := JSON.new()
 			if reader.parse(text) == OK and reader.data is Array:
 				return reader.data
-			push_warning("A settings field is not a JSON array: %s" % [text])
+			push_warning(
+				(
+					"A settings field holds '%s', which is not a JSON array, "
+					+ "so it was ignored. Write it like [1, 2]."
+				) % [text],
+			)
 			return null
 		_:
 			return (control as LineEdit).text

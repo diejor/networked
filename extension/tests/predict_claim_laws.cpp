@@ -2,6 +2,7 @@
 
 #include "netw/api/predict.hpp"
 #include "netw/predict/engine.hpp"
+#include "support/predict_rows.h"
 
 using namespace godot;
 
@@ -78,6 +79,13 @@ PackedInt64Array one(int64_t p_transition) {
 
 int64_t driving_slot(NetwPredictionEngine *p_pool) {
     const int64_t slot = p_pool->open();
+    LocalVector<netw::predict::FieldDecl> input;
+    netw::predict::FieldDecl button;
+    button.key = StringName("button");
+    button.type = int(Variant::INT);
+    button.column_type = SchemaCore::U8;
+    input.push_back(button);
+    p_pool->rewire(slot, LocalVector<netw::predict::FieldDecl>(), input);
     p_pool->configure(
         slot,
         int(netw::Schedule::TICK),
@@ -209,6 +217,7 @@ TEST_CASE(
     NetwPredictionEngine held_pool;
     NetwPredictionEngine *const pool = &held_pool;
     const int64_t slot = driving_slot(pool);
+    pool->attach_journal_reader(slot, true);
     pool->record_input(slot, DRIVEN, 100);
     pool->replay_drive(
         slot,
@@ -665,6 +674,21 @@ godot::Dictionary detail_of(int p_contacts) {
     return out;
 }
 
+netw::predict::StateRow held_row(int p_contacts) {
+    netw::predict::StateRow out;
+    out.resize(1);
+    out.set(0, p_contacts);
+    return out;
+}
+
+int released(NetwPredictionEngine *p_pool, int64_t p_slot) {
+    netw::predict::StateRow taken;
+    if (!p_pool->release_deferred_operator(p_slot, taken) || !taken.has(0)) {
+        return -1;
+    }
+    return int(taken.values[0]);
+}
+
 godot::Dictionary details_in(NetwPredictionEngine *p_pool, int64_t p_slot) {
     netw::predict::JournalSnapshot snapshot;
     p_pool->journal_snapshot(p_slot, snapshot);
@@ -749,15 +773,14 @@ TEST_CASE(
     NETW_CHECK_EQ(pool->deferred_operator_basis(slot), -1);
     NETW_CHECK_EQ(pool->deferred_operator_recv_tick(slot), -1);
 
-    pool->hold_deferred_operator(slot, DRIVEN, 77, detail_of(3));
+    pool->hold_deferred_operator(slot, DRIVEN, 77, held_row(3));
 
     NETW_CHECK_EQ(pool->deferred_operator_basis(slot), DRIVEN);
     NETW_CHECK_EQ(pool->deferred_operator_recv_tick(slot), 77);
 
-    const godot::Dictionary taken = pool->release_deferred_operator(slot);
-    NETW_CHECK_EQ(int(taken[StringName("contacts")]), 3);
+    NETW_CHECK_EQ(released(pool, slot), 3);
     NETW_CHECK_EQ(pool->deferred_operator_basis(slot), -1);
-    CHECK(pool->release_deferred_operator(slot).is_empty());
+    NETW_CHECK_EQ(released(pool, slot), -1);
 }
 
 TEST_CASE(
@@ -768,12 +791,11 @@ TEST_CASE(
     NetwPredictionEngine *const pool = &held_pool;
     const int64_t slot = driving_slot(pool);
 
-    godot::Dictionary reused = detail_of(3);
+    netw::predict::StateRow reused = held_row(3);
     pool->hold_deferred_operator(slot, DRIVEN, 77, reused);
-    reused[StringName("contacts")] = 9;
+    reused.set(0, 9);
 
-    const godot::Dictionary taken = pool->release_deferred_operator(slot);
-    NETW_CHECK_EQ(int(taken[StringName("contacts")]), 3);
+    NETW_CHECK_EQ(released(pool, slot), 3);
 }
 
 TEST_CASE(
@@ -784,12 +806,11 @@ TEST_CASE(
     NetwPredictionEngine *const pool = &held_pool;
     const int64_t slot = driving_slot(pool);
 
-    pool->hold_deferred_operator(slot, DRIVEN, 77, detail_of(3));
-    pool->hold_deferred_operator(slot, DRIVEN + 1, 78, detail_of(5));
+    pool->hold_deferred_operator(slot, DRIVEN, 77, held_row(3));
+    pool->hold_deferred_operator(slot, DRIVEN + 1, 78, held_row(5));
 
     NETW_CHECK_EQ(pool->deferred_operator_basis(slot), DRIVEN + 1);
-    const godot::Dictionary taken = pool->release_deferred_operator(slot);
-    NETW_CHECK_EQ(int(taken[StringName("contacts")]), 5);
+    NETW_CHECK_EQ(released(pool, slot), 5);
     NETW_CHECK_EQ(pool->deferred_operator_basis(slot), -1);
 }
 
@@ -801,12 +822,12 @@ TEST_CASE(
     NetwPredictionEngine *const pool = &held_pool;
     const int64_t slot = driving_slot(pool);
 
-    pool->hold_deferred_operator(slot, DRIVEN, 77, detail_of(3));
+    pool->hold_deferred_operator(slot, DRIVEN, 77, held_row(3));
     pool->drop_deferred_operator(slot);
 
     NETW_CHECK_EQ(pool->deferred_operator_basis(slot), -1);
     NETW_CHECK_EQ(pool->deferred_operator_recv_tick(slot), -1);
-    CHECK(pool->release_deferred_operator(slot).is_empty());
+    NETW_CHECK_EQ(released(pool, slot), -1);
 }
 
 TEST_CASE(
@@ -817,10 +838,10 @@ TEST_CASE(
     NetwPredictionEngine *const pool = &held_pool;
     const int64_t slot = driving_slot(pool);
 
-    pool->hold_deferred_operator(slot, -1, 77, detail_of(3));
+    pool->hold_deferred_operator(slot, -1, 77, held_row(3));
 
     NETW_CHECK_EQ(pool->deferred_operator_basis(slot), -1);
-    CHECK(pool->release_deferred_operator(slot).is_empty());
+    NETW_CHECK_EQ(released(pool, slot), -1);
 }
 
 TEST_CASE(
@@ -832,8 +853,8 @@ TEST_CASE(
     const int64_t waiting = driving_slot(pool);
     const int64_t quiet = driving_slot(pool);
 
-    pool->hold_deferred_operator(waiting, DRIVEN, 77, detail_of(3));
-    pool->hold_deferred_operator(-1, DRIVEN, 77, detail_of(3));
+    pool->hold_deferred_operator(waiting, DRIVEN, 77, held_row(3));
+    pool->hold_deferred_operator(-1, DRIVEN, 77, held_row(3));
 
     NETW_CHECK_EQ(pool->deferred_operator_basis(quiet), -1);
     NETW_CHECK_EQ(pool->deferred_operator_basis(-1), -1);
@@ -951,18 +972,22 @@ TEST_CASE(
     NetwPredictionEngine held_pool;
     NetwPredictionEngine *const pool = &held_pool;
     const int64_t slot = driving_slot(pool);
-    Ref<netw::NetwTimeline> lane = netw::NetwTimeline::create(64);
-    pool->bind_timeline(slot, lane);
+    pool->open_lane(slot);
 
     Dictionary authored;
     authored[StringName("button")] = 7;
-    lane->record_input(DRIVEN, authored);
+    pool->record_authored_command(
+        slot,
+        DRIVEN,
+        DRIVEN,
+        true,
+        netw_test::input_row(pool, slot, authored)
+    );
 
     drive_one(pool, slot);
     CHECK(pool->seal_transition(
                   slot,
                   DRIVEN,
-                  godot::Dictionary(),
                   godot::Dictionary(),
                   PackedStringArray()
     )
@@ -972,17 +997,17 @@ TEST_CASE(
         pool->joint_provenance_at(slot, DRIVEN),
         int(netw::predict::CellProvenance::AUTHORED)
     );
-    const Dictionary filed = pool->joint_command_at(slot, DRIVEN);
-    NETW_CHECK_EQ(int64_t(filed[StringName("button")]), 7);
+    netw::predict::StateRow command;
+    REQUIRE(pool->read_command_at(slot, DRIVEN, command));
+    REQUIRE(command.has(0));
+    NETW_CHECK_EQ(int64_t(command.values[0]), 7);
 
     const int64_t quiet = driving_slot(pool);
-    Ref<netw::NetwTimeline> silent = netw::NetwTimeline::create(64);
-    pool->bind_timeline(quiet, silent);
+    pool->open_lane(quiet);
     drive_one(pool, quiet);
     pool->seal_transition(
         quiet,
         DRIVEN,
-        godot::Dictionary(),
         godot::Dictionary(),
         PackedStringArray()
     );
@@ -994,7 +1019,6 @@ TEST_CASE(
     CHECK(pool->seal_transition(
                   slot + 9000,
                   DRIVEN,
-                  godot::Dictionary(),
                   godot::Dictionary(),
                   PackedStringArray()
     )
@@ -1063,9 +1087,9 @@ TEST_CASE(
     REQUIRE(netw::predict::CommandFrameRecord::open(input_schema(), frame));
     frame.set_epoch(1);
     frame.append_transition(6, 6, true);
-    Array only;
-    only.append(3);
-    frame.append_payload(only);
+    LocalVector<Variant> only;
+    only.push_back(3);
+    frame.append_values(only);
 
     const PackedInt64Array first
         = pool->admit_relayed_frame(slot, frame, keys, false);
@@ -1077,6 +1101,10 @@ TEST_CASE(
     );
     NETW_CHECK_EQ(pool->newest_matrix_transition_of(slot), 6);
     NETW_CHECK_EQ(pool->relayed_epoch_of(slot), 1);
+    netw::predict::StateRow relayed;
+    REQUIRE(pool->read_command_at(slot, 6, relayed));
+    REQUIRE(relayed.has(0));
+    NETW_CHECK_EQ(int64_t(relayed.values[0]), 3);
 
     const PackedInt64Array again
         = pool->admit_relayed_frame(slot, frame, keys, false);
@@ -1086,7 +1114,7 @@ TEST_CASE(
     REQUIRE(netw::predict::CommandFrameRecord::open(input_schema(), stale));
     stale.set_epoch(1);
     stale.append_transition(6 - netw::predict::TAPE_HISTORY_LIMIT, 0, true);
-    stale.append_payload(only);
+    stale.append_values(only);
     const PackedInt64Array late
         = pool->admit_relayed_frame(slot, stale, keys, false);
     NETW_CHECK_EQ(late[NetwPredictionEngine::RELAY_DROPPED_LATE], 1);
@@ -1096,7 +1124,7 @@ TEST_CASE(
     REQUIRE(netw::predict::CommandFrameRecord::open(input_schema(), next));
     next.set_epoch(2);
     next.append_transition(6, 6, true);
-    next.append_payload(only);
+    next.append_values(only);
     const PackedInt64Array rekeyed
         = pool->admit_relayed_frame(slot, next, keys, true);
     NETW_CHECK_EQ(rekeyed[NetwPredictionEngine::RELAY_RECORDED], 1);
@@ -1137,8 +1165,7 @@ TEST_CASE(
     NetwPredictionEngine held_pool;
     NetwPredictionEngine *const pool = &held_pool;
     const int64_t slot = driving_slot(pool);
-    Ref<netw::NetwTimeline> lane = netw::NetwTimeline::create(64);
-    pool->bind_timeline(slot, lane);
+    pool->open_lane(slot);
 
     Array keys;
     keys.append(StringName("button"));
@@ -1148,7 +1175,13 @@ TEST_CASE(
     for (int64_t at = 0; at < 4; ++at) {
         Dictionary command;
         command[StringName("button")] = int(at + 1);
-        lane->record_input(at, command);
+        pool->record_authored_command(
+            slot,
+            at,
+            at,
+            true,
+            netw_test::input_row(pool, slot, command)
+        );
         pool->tape_author(slot, at, true);
     }
 
@@ -1245,8 +1278,7 @@ TEST_CASE(
     NetwPredictionEngine held_pool;
     NetwPredictionEngine *const pool = &held_pool;
     const int64_t slot = driving_slot(pool);
-    Ref<netw::NetwTimeline> lane = netw::NetwTimeline::create(64);
-    pool->bind_timeline(slot, lane);
+    pool->open_lane(slot);
 
     Array keys;
     keys.append(StringName("button"));
@@ -1257,12 +1289,12 @@ TEST_CASE(
     frame.set_ack_of_acks(11);
     frame.append_transition(4, 4, true);
     frame.append_transition(5, 5, true);
-    Array first;
-    first.append(7);
-    Array second;
-    second.append(9);
-    frame.append_payload(first);
-    frame.append_payload(second);
+    LocalVector<Variant> first;
+    first.push_back(7);
+    LocalVector<Variant> second;
+    second.push_back(9);
+    frame.append_values(first);
+    frame.append_values(second);
 
     const PackedInt64Array held = pool->admit_command_frame(slot, frame, keys);
     NETW_CHECK_EQ(int(held.size()), 2);
@@ -1270,8 +1302,8 @@ TEST_CASE(
     NETW_CHECK_EQ(pool->owner_ack_floor_of(slot), 11);
     NETW_CHECK_EQ(pool->replay_cursor_of(slot), held[0]);
     NETW_CHECK_EQ(pool->next_input_tick_of(slot), 4);
-    CHECK(lane->has_input_at(4));
-    CHECK(lane->has_input_at(5));
+    CHECK(pool->has_authored_input(slot, 4));
+    CHECK(pool->has_authored_input(slot, 5));
 
     pool->set_ack(slot, 99);
     netw::predict::CommandFrameRecord later;
@@ -1279,9 +1311,9 @@ TEST_CASE(
     later.set_epoch(4);
     later.set_ack_of_acks(2);
     later.append_transition(4, 40, true);
-    Array only;
-    only.append(1);
-    later.append_payload(only);
+    LocalVector<Variant> only;
+    only.push_back(1);
+    later.append_values(only);
 
     pool->admit_command_frame(slot, later, keys);
     NETW_CHECK_EQ(pool->command_epoch_of(slot), 4);

@@ -41,7 +41,26 @@ PackedByteArray write_snapshot_row(
     const wire::CodeRow &p_row,
     const wire::CodeRow *p_baseline
 ) {
-    NETW_ZONE_NC("Snapshot row write", colors::WIRE);
+    WriteStream stream;
+    return write_snapshot_row(
+        stream,
+        p_header,
+        p_base_tick,
+        p_plan,
+        p_row,
+        p_baseline
+    );
+}
+
+PackedByteArray write_snapshot_row(
+    WriteStream &r_stream,
+    const SnapshotHeader &p_header,
+    int64_t p_base_tick,
+    const wire::WirePlan &p_plan,
+    const wire::CodeRow &p_row,
+    const wire::CodeRow *p_baseline
+) {
+    NETW_ZONE_LEAF("Snapshot row write", colors::WIRE, profile::SUBSYSTEM_WIRE);
     PackedByteArray out;
     if (!p_plan.valid() || !p_row.valid_for(p_plan)
         || !naming_is_legal(p_header.revision, p_header.distance)) {
@@ -55,7 +74,8 @@ PackedByteArray write_snapshot_row(
     }
     const uint64_t mask = stepping ? p_header.mask : p_plan.full_mask();
 
-    WriteStream stream;
+    WriteStream &stream = r_stream;
+    stream.clear();
     uint64_t token = p_header.token;
     uint64_t revision = p_header.revision;
     uint64_t distance = p_header.distance;
@@ -108,7 +128,32 @@ bool read_snapshot_row(
     const wire::CodeRow *p_baseline,
     SnapshotRefusal *r_refusal
 ) {
-    NETW_ZONE_NC("Snapshot row read", colors::WIRE);
+    wire::CodeRow staged = wire::CodeRow::for_plan(p_plan);
+    if (!read_snapshot_row_into(
+            p_bytes,
+            p_base_tick,
+            p_plan,
+            r_header,
+            staged,
+            p_baseline,
+            r_refusal
+        )) {
+        return false;
+    }
+    r_row = staged;
+    return true;
+}
+
+bool read_snapshot_row_into(
+    const PackedByteArray &p_bytes,
+    int64_t p_base_tick,
+    const wire::WirePlan &p_plan,
+    SnapshotHeader &r_header,
+    wire::CodeRow &r_landing,
+    const wire::CodeRow *p_baseline,
+    SnapshotRefusal *r_refusal
+) {
+    NETW_ZONE_LEAF("Snapshot row read", colors::WIRE, profile::SUBSYSTEM_WIRE);
     if (r_refusal != nullptr) {
         *r_refusal = SnapshotRefusal::MALFORMED;
     }
@@ -163,14 +208,18 @@ bool read_snapshot_row(
         return false;
     }
 
-    wire::CodeRow staged = wire::CodeRow::for_plan(p_plan);
+    if (!r_landing.valid_for(p_plan)) {
+        r_landing = wire::CodeRow::for_plan(p_plan);
+    }
     if (stepping) {
-        staged.copy_from(*p_baseline);
+        r_landing.copy_from(*p_baseline);
+    } else {
+        r_landing.clear();
     }
     if (!read_row_columns(
             stream,
             p_plan,
-            staged,
+            r_landing,
             mask,
             stepping ? p_baseline : nullptr
         )) {
@@ -193,7 +242,6 @@ bool read_snapshot_row(
     r_header.tick = tick;
     r_header.reconcile_ack = ack;
     r_header.mask = mask;
-    r_row = staged;
     if (r_refusal != nullptr) {
         *r_refusal = SnapshotRefusal::NONE;
     }
@@ -219,7 +267,28 @@ PackedByteArray write_snapshot_window(
     const wire::WirePlan &p_plan,
     const LocalVector<WindowSample> &p_samples
 ) {
-    NETW_ZONE_NC("Snapshot window write", colors::WIRE);
+    WriteStream stream;
+    return write_snapshot_window(
+        stream,
+        p_header,
+        p_base_tick,
+        p_plan,
+        p_samples
+    );
+}
+
+PackedByteArray write_snapshot_window(
+    WriteStream &r_stream,
+    const SnapshotHeader &p_header,
+    int64_t p_base_tick,
+    const wire::WirePlan &p_plan,
+    const LocalVector<WindowSample> &p_samples
+) {
+    NETW_ZONE_LEAF(
+        "Snapshot window write",
+        colors::WIRE,
+        profile::SUBSYSTEM_WIRE
+    );
     PackedByteArray out;
     if (!p_plan.valid() || p_samples.is_empty() || p_samples.size() > 255
         || p_base_tick < 0 || p_header.revision < 1) {
@@ -233,7 +302,8 @@ PackedByteArray write_snapshot_window(
         return out;
     }
 
-    WriteStream stream;
+    WriteStream &stream = r_stream;
+    stream.clear();
     uint64_t token = p_header.token;
     uint64_t revision = p_header.revision;
     int64_t count = int64_t(p_samples.size());
@@ -290,7 +360,11 @@ bool read_snapshot_window(
     SnapshotHeader &r_header,
     LocalVector<WindowSample> &r_samples
 ) {
-    NETW_ZONE_NC("Snapshot window read", colors::WIRE);
+    NETW_ZONE_LEAF(
+        "Snapshot window read",
+        colors::WIRE,
+        profile::SUBSYSTEM_WIRE
+    );
     if (!p_plan.valid() || p_base_tick < 0) {
         NETW_DEBUG(
             sys::WIRE,

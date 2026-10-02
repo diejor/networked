@@ -33,10 +33,10 @@ void warn_self_feedback(Runtime *p_runtime) {
         Node *owner = p_runtime->owner();
         NETW_WARN(
             sys::INTERPOLATION,
-            "channel '%s' on '%s' interpolates a locally simulated property "
-            "in place, so its smoothed output is skipped to keep it out of "
-            "the control loop; redirect it with a .to() target or a "
-            "visual_root",
+            "'%s' on '%s' is simulated on this peer, so smoothing it in place "
+            "would feed back into the simulation and it is not smoothed. "
+            "Write it elsewhere with NetwInterpolate.to or "
+            "NetwDisplayHandle.visual_root.",
             String(state->get_target_prop()),
             owner != nullptr ? String(owner->get_name()) : String("?")
         );
@@ -88,10 +88,6 @@ void resolve_role(Runtime *p_runtime, const Hooks &p_hooks) {
     }
 
     p_runtime->set_pump_mode(pump);
-    {
-        NETW_ZONE_NC("display retarget drawn node", colors::INTERP);
-        retarget_drawn_node(p_runtime);
-    }
     if (previous == netw::display::PUMP_DISABLED) {
         for (int at = 0; at < int(states.size()); ++at) {
             Channel *state = states[at];

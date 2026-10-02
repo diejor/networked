@@ -17,12 +17,15 @@
 #include "netw/log.hpp"
 #include "netw/predict/axes.hpp"
 #include "netw/prediction_core.hpp"
+#include "netw/predict/tick_work.hpp"
 #include "netw/profile.hpp"
 #include "netw/subsystems.hpp"
 
 using namespace godot;
 
 namespace netw {
+
+using repl::PropertyBindingPtr;
 
 namespace {
 
@@ -53,6 +56,16 @@ const StringName &seam_predict_evaluate() {
 const StringName &seam_predict_recover() {
     static const StringName name("_predict_recover");
     return name;
+}
+
+const Dictionary &no_sample() {
+    static const Dictionary empty;
+    return empty;
+}
+
+const PackedStringArray &no_participants() {
+    static const PackedStringArray empty;
+    return empty;
 }
 
 const StringName &field_native_core() {
@@ -107,61 +120,6 @@ const StringName &key_whole() {
 
 const StringName &key_samples() {
     static const StringName name("samples");
-    return name;
-}
-
-const StringName &key_predicted() {
-    static const StringName name("predicted");
-    return name;
-}
-
-const StringName &key_domain() {
-    static const StringName name("domain");
-    return name;
-}
-
-const StringName &key_row_flags() {
-    static const StringName name("row_flags");
-    return name;
-}
-
-const StringName &key_episode_state() {
-    static const StringName name("episode_state");
-    return name;
-}
-
-const StringName &key_probation() {
-    static const StringName name("probation");
-    return name;
-}
-
-const StringName &key_reconstructed() {
-    static const StringName name("reconstructed");
-    return name;
-}
-
-const StringName &key_divergence() {
-    static const StringName name("divergence");
-    return name;
-}
-
-const StringName &key_corrected() {
-    static const StringName name("corrected");
-    return name;
-}
-
-const StringName &key_settled() {
-    static const StringName name("settled");
-    return name;
-}
-
-const StringName &key_meter() {
-    static const StringName name("meter");
-    return name;
-}
-
-const StringName &key_origin() {
-    static const StringName name("origin");
     return name;
 }
 
@@ -220,7 +178,7 @@ Ref<NetwEntity> NetwPredictSlotEngine::seated_entity() const {
 }
 
 int64_t NetwPredictSlotEngine::native_slot() const {
-    return pool != nullptr ? pool->slot_of(entity) : -1;
+    return pool != nullptr ? seat : -1;
 }
 
 NetwPredictSlotEngine *NetwPredictSlotEngine::sibling(
@@ -245,8 +203,10 @@ NetwPredictSlotEngine::Declaration NetwPredictSlotEngine::declaration_of(
     if (p_entity.is_null()) {
         return decided;
     }
-    decided.state = p_entity->get_state_binding();
-    decided.input = p_entity->get_input_binding();
+    const PropertyBindingPtr state = p_entity->get_state_binding();
+    const PropertyBindingPtr input = p_entity->get_input_binding();
+    decided.state = state != nullptr ? state->id : 0;
+    decided.input = input != nullptr ? input->id : 0;
     decided.authority = p_entity->get_is_session_authority();
     decided.controlled_locally = p_entity->get_is_controlled_locally()
         || (decided.authority && p_entity->get_controller() == 0);
@@ -283,25 +243,20 @@ void NetwPredictSlotEngine::set_correction_column(int p_correction) {
     }
 }
 
-Ref<NetwPropertySetBinding> NetwPredictSlotEngine::state_binding() const {
+PropertyBindingPtr NetwPredictSlotEngine::state_binding() const {
     return pool != nullptr ? pool->state_binding_of(native_slot())
-                           : Ref<NetwPropertySetBinding>();
+                           : PropertyBindingPtr();
 }
 
-Ref<NetwPropertySetBinding> NetwPredictSlotEngine::input_binding() const {
+PropertyBindingPtr NetwPredictSlotEngine::input_binding() const {
     return pool != nullptr ? pool->input_binding_of(native_slot())
-                           : Ref<NetwPropertySetBinding>();
+                           : PropertyBindingPtr();
 }
 
-Ref<NetwTimeline> NetwPredictSlotEngine::timeline() const {
-    return pool != nullptr ? pool->timeline_of(native_slot())
-                           : Ref<NetwTimeline>();
+bool NetwPredictSlotEngine::lane_open() const {
+    return pool != nullptr && pool->input_lane_open(native_slot());
 }
 
-Ref<NetwTimeline> NetwPredictSlotEngine::entry_history() const {
-    return pool != nullptr ? pool->entry_history(native_slot())
-                           : Ref<NetwTimeline>();
-}
 
 double NetwPredictSlotEngine::tick_delta() const {
     return pool != nullptr ? pool->tick_delta_of(native_slot()) : 1.0 / 60.0;
@@ -341,11 +296,11 @@ void NetwPredictSlotEngine::attach(
     Object *p_iface,
     const Ref<NetwEntity> &p_entity
 ) {
-    NETW_ZONE_NC("predict engine attach", colors::PREDICTION);
+    NETW_ZONE_NC("Predict attach", colors::PREDICTION);
     if (p_iface == nullptr || p_entity.is_null()) {
         NETW_TRACE(
             sys::PREDICTION,
-            "predict engine: attach declined, shell %d entity %d",
+            "Prediction did not attach engine %d to entity %d.",
             int(p_iface != nullptr),
             int(p_entity.is_valid())
         );
@@ -357,24 +312,27 @@ void NetwPredictSlotEngine::attach(
     if (seated == nullptr) {
         NETW_TRACE(
             sys::PREDICTION,
-            "predict engine: the shell seats no session, attach declined"
+            "Prediction did not attach, because the engine has no session."
         );
         return;
     }
     core_id = gd::instance_id(seated);
     pool = seated->get_prediction_engine();
+    seat = pool != nullptr ? pool->slot_of(p_entity) : -1;
     entity = p_entity;
     handle = p_entity->get_prediction();
     if (pool == nullptr || handle.is_null()) {
         NETW_TRACE(
             sys::PREDICTION,
-            "predict engine: attach found pool %d handle %d",
+            "Prediction attached to group %d with handle %d.",
             int(pool != nullptr),
             int(handle.is_valid())
         );
         return;
     }
-    handle->get_stats()->bind_slot(pool, p_entity);
+    handle->fact_book()->bind_slot(pool, p_entity);
+    fallback_at_sink
+        = callable_mp(handle.ptr(), &NetwPredictionHandle::seat_fallback_at);
     const Callable on_control = callable_mp(
         handle.ptr(),
         &NetwPredictionHandle::seat_control_changed
@@ -386,23 +344,27 @@ void NetwPredictSlotEngine::attach(
 }
 
 void NetwPredictSlotEngine::release() {
-    NETW_ZONE_NC("predict engine release", colors::PREDICTION);
+    NETW_ZONE_NC("Predict release", colors::PREDICTION);
     if (pool == nullptr) {
-        NETW_TRACE(sys::PREDICTION, "predict engine: release found no pool");
+        NETW_TRACE(
+            sys::PREDICTION,
+            "Prediction released an engine that has no group."
+        );
         return;
     }
     refresh_simulation_gate(true);
     clear_island_promotions();
     unregister_from_loop();
     const predict::Feed feed;
-    const Ref<NetwPropertySetBinding> state = state_binding();
-    if (state.is_valid()) {
+    const PropertyBindingPtr state = state_binding();
+    if (state != nullptr) {
         state->apply_state_feed(feed);
     }
-    const Ref<NetwPropertySetBinding> input = input_binding();
-    if (input.is_valid()) {
+    const PropertyBindingPtr input = input_binding();
+    if (input != nullptr) {
         input->apply_input_feed(feed);
     }
+    pool->seat_arrivals(native_slot(), feed, ObjectID());
     if (entity.is_null()) {
         return;
     }
@@ -428,7 +390,13 @@ void NetwPredictSlotEngine::publish_topology_roster() {
 }
 
 void NetwPredictSlotEngine::network_tick(const NetwPredictTiming &p_timing) {
-    NETW_ZONE_NC("predict engine network tick", colors::PREDICTION);
+    NETW_ZONE_LEAF_F(
+        "Predict slot tick",
+        colors::PREDICTION,
+        profile::SUBSYSTEM_PREDICTION,
+        "entity %lld",
+        static_cast<long long>(route())
+    );
     adopt_timing(p_timing);
     if (schedule() == NetwSimulationHandle::SCHEDULE_TICK) {
         simulate_tick(p_timing);
@@ -452,7 +420,6 @@ void NetwPredictSlotEngine::network_tick(const NetwPredictTiming &p_timing) {
 }
 
 void NetwPredictSlotEngine::simulate_tick(const NetwPredictTiming &p_timing) {
-    NETW_ZONE_NC("predict engine simulate tick", colors::PREDICTION);
     adopt_timing(p_timing);
     switch (role()) {
         case NetwPredict::ROLE_PREDICT:
@@ -478,7 +445,13 @@ void NetwPredictSlotEngine::simulate_tick(const NetwPredictTiming &p_timing) {
 }
 
 void NetwPredictSlotEngine::simulate_frame(const NetwPredictTiming &p_timing) {
-    NETW_ZONE_NC("predict engine simulate frame", colors::PREDICTION);
+    NETW_ZONE_LEAF_F(
+        "Predict slot frame",
+        colors::PREDICTION,
+        profile::SUBSYSTEM_PREDICTION,
+        "entity %lld",
+        static_cast<long long>(route())
+    );
     adopt_timing(p_timing);
     if (schedule() != NetwSimulationHandle::SCHEDULE_FRAME) {
         return;
@@ -489,7 +462,13 @@ void NetwPredictSlotEngine::simulate_frame(const NetwPredictTiming &p_timing) {
 void NetwPredictSlotEngine::simulate_stepped(
     const NetwPredictTiming &p_timing
 ) {
-    NETW_ZONE_NC("predict engine simulate stepped", colors::PREDICTION);
+    NETW_ZONE_LEAF_F(
+        "Predict slot stepped",
+        colors::PREDICTION,
+        profile::SUBSYSTEM_PREDICTION,
+        "entity %lld",
+        static_cast<long long>(route())
+    );
     adopt_timing(p_timing);
     if (schedule() != NetwSimulationHandle::SCHEDULE_STEPPED) {
         return;
@@ -558,7 +537,13 @@ void NetwPredictSlotEngine::adopt_timing(const NetwPredictTiming &p_timing) {
 }
 
 void NetwPredictSlotEngine::finalize_frame_state() {
-    NETW_ZONE_NC("predict finalize frame state", colors::PREDICTION);
+    NETW_ZONE_LEAF_F(
+        "Predict finalize frame state",
+        colors::PREDICTION,
+        profile::SUBSYSTEM_PREDICTION,
+        "entity %lld",
+        static_cast<long long>(route())
+    );
     if (schedule() != NetwSimulationHandle::SCHEDULE_FRAME
         || role() != NetwPredict::ROLE_PREDICT) {
         return;
@@ -567,7 +552,13 @@ void NetwPredictSlotEngine::finalize_frame_state() {
 }
 
 void NetwPredictSlotEngine::finalize_stepped_state() {
-    NETW_ZONE_NC("predict finalize stepped state", colors::PREDICTION);
+    NETW_ZONE_LEAF_F(
+        "Predict finalize stepped state",
+        colors::PREDICTION,
+        profile::SUBSYSTEM_PREDICTION,
+        "entity %lld",
+        static_cast<long long>(route())
+    );
     if (schedule() != NetwSimulationHandle::SCHEDULE_STEPPED
         || role() != NetwPredict::ROLE_PREDICT) {
         return;
@@ -577,33 +568,17 @@ void NetwPredictSlotEngine::finalize_stepped_state() {
 
 void NetwPredictSlotEngine::finalize_solver_state() {
     const int64_t slot = native_slot();
-    const Dictionary state = capture();
     const int64_t driven_entry = pool->last_driven_entry_index_of(slot);
-    if (driven_entry > pool->last_recorded_entry_index_of(slot)) {
-        const Ref<NetwTimeline> entries = entry_history();
-        if (entries.is_valid()) {
-            entries->record_state(driven_entry + 1, state);
-        } else {
-            NETW_TRACE(
-                sys::PREDICTION,
-                "predict engine: entry %d has no history to record into",
-                int(driven_entry)
-            );
-        }
-        close_journal_row(driven_entry, state);
+    const bool closes = driven_entry > pool->last_recorded_entry_index_of(slot);
+    if (closes) {
+        close_captured_row(driven_entry);
         pool->set_last_recorded_entry_index(slot, driven_entry);
     }
     const int64_t driven_tick = pool->last_driven_input_tick_of(slot);
     if (driven_tick > pool->last_recorded_input_tick_of(slot)) {
-        const Ref<NetwTimeline> held = timeline();
-        if (held.is_valid()) {
-            held->record_state(driven_tick + 1, state);
-        } else {
-            NETW_TRACE(
-                sys::PREDICTION,
-                "predict engine: tick %d has no timeline to record into",
-                int(driven_tick)
-            );
+        if (schedule() != NetwSimulationHandle::SCHEDULE_FRAME
+            && (!closes || driven_tick != driven_entry)) {
+            pool->capture_predicted(slot, driven_tick + 1);
         }
         pool->set_last_recorded_input_tick(slot, driven_tick);
     }
@@ -611,19 +586,6 @@ void NetwPredictSlotEngine::finalize_solver_state() {
 
 bool NetwPredictSlotEngine::uses_schedule(int p_schedule) const {
     return schedule() == p_schedule;
-}
-
-Dictionary NetwPredictSlotEngine::transition_state_at(
-    int64_t p_entry_index
-) const {
-    if (schedule() == NetwSimulationHandle::SCHEDULE_TICK) {
-        const Ref<NetwTimeline> held = timeline();
-        return held.is_valid() ? held->state_at(p_entry_index + 1)
-                               : Dictionary();
-    }
-    const Ref<NetwTimeline> entries = entry_history();
-    return entries.is_valid() ? entries->state_at(p_entry_index + 1)
-                              : Dictionary();
 }
 
 void NetwPredictSlotEngine::charge_speculation_hold() {
@@ -645,14 +607,14 @@ void NetwPredictSlotEngine::sync_episode() {
 bool NetwPredictSlotEngine::defer_operator_for_witness(
     int64_t p_recv_tick,
     int64_t p_basis,
-    const Dictionary &p_payload
+    const predict::StateRow &p_payload
 ) {
     const int verdict = pool->defer_operator_for_witness(
         native_slot(),
         p_recv_tick,
         p_basis,
         p_payload,
-        handle->get_transport_corridor().is_valid(),
+        handle->get_correction_path_clear().is_valid(),
         handle->resolved_recovery_policy()
             == NetwPredict::RECOVERY_POLICY_OBSERVE
     );
@@ -667,13 +629,15 @@ void NetwPredictSlotEngine::retry_deferred_operator(int64_t p_basis) {
     if (pool->deferred_operator_basis(slot) != p_basis) {
         NETW_TRACE(
             sys::PREDICTION,
-            "predict engine: basis %d holds no deferred operator",
+            "Tick %d holds no deferred step.",
             int(p_basis)
         );
         return;
     }
     const int64_t recv_tick = pool->deferred_operator_recv_tick(slot);
-    on_state(recv_tick, p_basis, pool->release_deferred_operator(slot));
+    predict::StateRow held;
+    pool->release_deferred_operator(slot, held);
+    on_state(recv_tick, p_basis, nullptr, &held);
 }
 
 void NetwPredictSlotEngine::enter_fallback_at(
@@ -688,7 +652,7 @@ void NetwPredictSlotEngine::enter_fallback(
     int p_attribution,
     bool p_demoted
 ) {
-    NETW_ZONE_NC("predict engine enter fallback", colors::PREDICTION);
+    NETW_ZONE_NC("Predict enter fallback", colors::PREDICTION);
     const int64_t slot = native_slot();
     const bool stream_was_reconstructed = pool->stream_reconstructed_of(slot);
     pool->set_fallback_latched(slot, true);
@@ -709,17 +673,20 @@ void NetwPredictSlotEngine::enter_fallback(
 }
 
 void NetwPredictSlotEngine::on_quarantine_state_frame(
-    const Dictionary &p_header
+    const predict::Arrival &p_arrival
 ) {
     if (!fallback_latched() || core_seated() == nullptr) {
         return;
     }
+    const int64_t slot = native_slot();
+    predict::StateRow payload;
+    pool->read_arrival(slot, p_arrival, payload);
     const predict::WritePlan plan = pool->quarantine_state(
-        native_slot(),
-        int64_t(p_header.get(key_tick(), -1)),
-        int64_t(p_header.get(key_ack(), -1)),
-        state_columns(p_header.get(key_payload(), Dictionary())),
-        bool(p_header.get(key_whole(), true))
+        slot,
+        p_arrival.tick,
+        p_arrival.ack,
+        payload,
+        p_arrival.whole
     );
     sync_episode();
     begin_reseed(plan);
@@ -765,7 +732,7 @@ void NetwPredictSlotEngine::begin_reseed(const predict::WritePlan &p_plan) {
 void NetwPredictSlotEngine::finish_reseed_alignment(
     int64_t p_recv_tick,
     int64_t p_ack,
-    const Dictionary &p_payload
+    const predict::StateRow &p_payload
 ) {
     pool->finish_reseed_alignment(
         native_slot(),
@@ -800,7 +767,7 @@ void NetwPredictSlotEngine::receive_command_frame(
 
 void NetwPredictSlotEngine::file_command_cell(
     int64_t p_transition,
-    const Dictionary &p_command,
+    const predict::StateRow &p_command,
     int p_origin
 ) {
     const int64_t slot = native_slot();
@@ -808,13 +775,14 @@ void NetwPredictSlotEngine::file_command_cell(
         slot,
         std::max(pool->newest_matrix_transition_of(slot), p_transition)
     );
-    if (core_seated() == nullptr || p_transition < 0) {
+    if (core_seated() == nullptr || p_transition < 0
+        || pool->command_of(slot) == nullptr) {
         return;
     }
     pool->joint_record(
         slot,
         p_transition,
-        Array(),
+        predict::StateRow(),
         p_command,
         false,
         p_origin == NetwPredict::COMMAND_ORIGIN_RELAYED,
@@ -822,21 +790,20 @@ void NetwPredictSlotEngine::file_command_cell(
     );
 }
 
-Dictionary NetwPredictSlotEngine::command_cell_at(int64_t p_transition) const {
-    if (core_seated() == nullptr) {
-        return Dictionary();
-    }
-    return pool->command_cell_at(native_slot(), p_transition);
-}
-
 void NetwPredictSlotEngine::receive_ack_frame(
     const PackedByteArray &p_payload
 ) {
-    NETW_ZONE_NC("predict engine receive ack frame", colors::PREDICTION);
+    NETW_ZONE_LEAF_F(
+        "Predict receive ack",
+        colors::PREDICTION,
+        profile::SUBSYSTEM_PREDICTION,
+        "entity %lld",
+        static_cast<long long>(route())
+    );
     if (role() != NetwPredict::ROLE_PREDICT && !fallback_latched()) {
         NETW_TRACE(
             sys::PREDICTION,
-            "predict engine: role %d takes no ack frame",
+            "Role %d does not take acknowledgements.",
             role()
         );
         return;
@@ -856,7 +823,7 @@ void NetwPredictSlotEngine::receive_ack_frame(
             &NetwPredictionHandle::seat_deferred_operator_retry
         )
     );
-    const Ref<NetwPredictStats> stats = handle->get_stats();
+    NetwPredictStats::Book *stats = handle->fact_book();
     const int64_t receipt = counts[NetwPredictionEngine::ACK_RUN_RECEIPT];
     if (receipt == NetwPredictionEngine::ACK_RECEIPT_UNDECODED) {
         stats->set_int_fact(
@@ -866,7 +833,7 @@ void NetwPredictSlotEngine::receive_ack_frame(
         );
         NETW_TRACE(
             sys::PREDICTION,
-            "predict engine: an ack frame of %d bytes did not decode",
+            "An acknowledgement of %d bytes did not decode.",
             int(p_payload.size())
         );
         return;
@@ -874,7 +841,7 @@ void NetwPredictSlotEngine::receive_ack_frame(
     if (receipt == NetwPredictionEngine::ACK_RECEIPT_FOREIGN_EPOCH) {
         NETW_TRACE(
             sys::PREDICTION,
-            "predict engine: an ack frame names a foreign tape epoch"
+            "An acknowledgement names input history from another epoch."
         );
         return;
     }
@@ -891,16 +858,24 @@ void NetwPredictSlotEngine::receive_ack_frame(
     publish_ack_age(counts[NetwPredictionEngine::ACK_RUN_AGE]);
 }
 
-void NetwPredictSlotEngine::finalize_recorded_state(
-    const Dictionary &p_payload
-) {
-    NETW_ZONE_NC("predict finalize recorded state", colors::PREDICTION);
+void NetwPredictSlotEngine::finalize_recorded_state() {
+    NETW_ZONE_LEAF_F(
+        "Predict finalize recorded state",
+        colors::PREDICTION,
+        profile::SUBSYSTEM_PREDICTION,
+        "entity %lld",
+        static_cast<long long>(route())
+    );
     if (role() == NetwPredict::ROLE_PREDICT) {
         return;
     }
+    const int64_t slot = native_slot();
     const int64_t transition = recorded_transition();
-    const int64_t fingerprint = state_fingerprint(p_payload);
-    close_journal_row(transition, p_payload);
+    if (transition >= 0) {
+        pool->capture_into_book(slot, transition + 1);
+    }
+    const int64_t fingerprint = pool->book_fingerprint(slot, transition + 1);
+    close_journal_row(transition);
     judge_owner_claim(transition, fingerprint);
 }
 
@@ -916,7 +891,7 @@ int64_t NetwPredictSlotEngine::recorded_transition() const {
         && role() == NetwPredict::ROLE_CONSUME) {
         return ack();
     }
-    return handle->get_stats()->get_int_fact(
+    return handle->fact_book()->get_int_fact(
         NetwPredictStats::FACT_LAST_DRIVE_LABEL
     );
 }
@@ -956,26 +931,6 @@ bool NetwPredictSlotEngine::has_consumed_state_tick(
     return predict::has_consumed_state_tick(cursors(), p_state_tick);
 }
 
-void NetwPredictSlotEngine::record_server_input(
-    int64_t p_tick,
-    const Dictionary &p_input
-) {
-    const Ref<NetwTimeline> held = timeline();
-    if (role() != NetwPredict::ROLE_CONSUME || held.is_null()) {
-        NETW_TRACE(
-            sys::PREDICTION,
-            "predict engine: tick %d has no consuming timeline to record on",
-            int(p_tick)
-        );
-        return;
-    }
-    held->record_input(p_tick, p_input);
-    const int64_t slot = native_slot();
-    if (pool->next_input_tick_of(slot) < 0) {
-        pool->set_next_input_tick(slot, p_tick);
-    }
-}
-
 int NetwPredictSlotEngine::declared_correction() const {
     return handle.is_valid()
         ? predict::correction_for_recovery_policy(handle->get_recovery_policy())
@@ -993,12 +948,6 @@ int NetwPredictSlotEngine::resolve_correction() const {
     return pool->settle_correction(slot, declared_correction());
 }
 
-void NetwPredictSlotEngine::record_input_to_pool(
-    int64_t p_tick,
-    const Dictionary &p_input
-) {
-    pool->record_input_bytes(native_slot(), p_tick, p_input);
-}
 
 void NetwPredictSlotEngine::on_control_changed(
     int64_t p_previous_peer,
@@ -1014,39 +963,39 @@ void NetwPredictSlotEngine::on_reparented() {
 }
 
 void NetwPredictSlotEngine::rewire_on(const Declaration &p_declaration) {
-    NETW_ZONE_NC("predict engine rewire", colors::PREDICTION);
+    NETW_ZONE_NC("Predict rewire", colors::PREDICTION);
     declaration = p_declaration;
     if (entity.is_null() || entity->get_owner() == nullptr) {
         NETW_TRACE(
             sys::PREDICTION,
-            "predict engine: rewire found no owning node, staying unwired"
+            "Prediction found no owning node, so it stays unbound."
         );
         return;
     }
-    const Ref<NetwPropertySetBinding> state = p_declaration.state;
-    const Ref<NetwPropertySetBinding> input = p_declaration.input;
-    if (state.is_null()) {
+    const PropertyBindingPtr state = pool->binding_by_id(p_declaration.state);
+    const PropertyBindingPtr input = pool->binding_by_id(p_declaration.input);
+    if (state == nullptr) {
         NETW_TRACE(
             sys::PREDICTION,
-            "predict engine: rewire found no state binding, staying unwired"
+            "Prediction found no state binding, so it stays unbound."
         );
         return;
     }
     const int64_t slot = native_slot();
-    const Ref<NetwPropertySetBinding> seated = state_binding();
-    const bool was_wired = seated.is_valid();
+    const PropertyBindingPtr seated = state_binding();
+    const bool was_wired = seated != nullptr;
     const bool same_stream = seated == state;
     pool->bind_property_sets(slot, state, input);
     pool->declare_axes(
         slot,
         p_declaration.authority,
         p_declaration.controlled_locally,
-        input.is_null()
+        input == nullptr
     );
     pool->set_declared_epoch(slot, handle->get_epoch());
 
     unregister_from_loop();
-    pool->bind_timeline(slot, Ref<NetwTimeline>());
+    pool->close_lane(slot);
     pool->reset_for_rewire(
         slot,
         was_wired,
@@ -1054,11 +1003,11 @@ void NetwPredictSlotEngine::rewire_on(const Declaration &p_declaration) {
         !OS::get_singleton()
              ->get_environment(env_raw_fingerprints())
              .is_empty(),
-        input.is_valid() ? input->snapshot_payload() : Dictionary()
+        pool->bound_input(slot)
     );
     sync_episode();
     publish_topology_roster();
-    const Ref<NetwPredictStats> stats = handle->get_stats();
+    NetwPredictStats::Book *stats = handle->fact_book();
     stats->set_int_fact(NetwPredictStats::FACT_COMMAND_QUEUE_DEPTH, 0);
     stats->set_int_fact(NetwPredictStats::FACT_ACK_CONFIRMED, -1);
     stats->set_int_fact(NetwPredictStats::FACT_TAPE_EPOCH, -1);
@@ -1109,32 +1058,16 @@ void NetwPredictSlotEngine::rewire_on(const Declaration &p_declaration) {
         pool->push_carry_rules(slot);
         reconfigure();
     }
-    const predict::Feed feed = pool->role_feed(
-        resolved_role,
-        fallback_latched(),
-        callable_mp(handle.ptr(), &NetwPredictionHandle::seat_state_frame),
-        callable_mp(handle.ptr(), &NetwPredictionHandle::seat_input_frame),
-        callable_mp(
-            handle.ptr(),
-            &NetwPredictionHandle::seat_simulated_state_frame
-        ),
-        callable_mp(
-            handle.ptr(),
-            &NetwPredictionHandle::seat_quarantine_state_frame
-        )
-    );
-    if (pool->wire_role_timeline(
-            slot,
-            resolved_role,
-            fallback_latched(),
-            declaration.timeline
-        )) {
+    const predict::Feed feed
+        = pool->role_feed(resolved_role, fallback_latched());
+    if (pool->wire_role_timeline(slot, resolved_role, fallback_latched())) {
         register_with_loop();
     }
     state->apply_state_feed(feed);
-    if (input.is_valid()) {
+    if (input != nullptr) {
         input->apply_input_feed(feed);
     }
+    pool->seat_arrivals(slot, feed, ObjectID(handle->get_instance_id()));
     if (session != nullptr) {
         session->display_mark_role_dirty(entity->get_rid_handle());
         session->sim_announce(entity->get_rid_handle());
@@ -1224,25 +1157,31 @@ void NetwPredictSlotEngine::predict_author_tick(int64_t p_tick) {
     const int64_t slot = native_slot();
     const int64_t latest = pool->latest_input_tick_of(slot);
     if (latest > pool->last_driven_input_tick_of(slot)) {
-        const Ref<NetwTimeline> held = timeline();
-        if (held.is_valid()) {
-            held->record_state(latest + 1, capture());
+        if (lane_open()) {
+            pool->capture_predicted(slot, latest + 1);
         } else {
             NETW_TRACE(
                 sys::PREDICTION,
-                "predict engine: tick %d authors with no timeline",
+                "Tick %d was authored with no input history.",
                 int(latest)
             );
         }
         pool->set_last_recorded_input_tick(slot, latest);
     }
-    pool->set_frame_input(slot, pool->author_input(slot, p_tick));
+    if (!pool->author_command(slot, p_tick)) {
+        return;
+    }
+    pool->hold_frame_command(slot);
 }
 
 void NetwPredictSlotEngine::predict_frame_step(
     const NetwPredictTiming &p_timing
 ) {
-    NETW_ZONE_NC("predict engine predict frame step", colors::PREDICTION);
+    NETW_ZONE_LEAF(
+        "Predict frame step",
+        colors::PREDICTION,
+        profile::SUBSYSTEM_PREDICTION
+    );
     const int64_t slot = native_slot();
     pool->set_last_frame_transition_tick(slot, p_timing.get_tick());
     if (speculation_horizon_full()) {
@@ -1250,7 +1189,7 @@ void NetwPredictSlotEngine::predict_frame_step(
         send_command_frame();
         NETW_TRACE(
             sys::PREDICTION,
-            "predict engine: tick %d is past the speculation horizon",
+            "Tick %d is further ahead than prediction may run.",
             int(p_timing.get_tick())
         );
         return;
@@ -1260,28 +1199,32 @@ void NetwPredictSlotEngine::predict_frame_step(
     if (overridden) {
         fold = drive_fold(p_timing.get_tick());
     }
-    const Dictionary drove = record_drive(
+    const DriveOutcome drove = pool->record_drive_hashed(
+        slot,
         pool->next_tape_entry_index_of(slot),
         overridden ? fold.label : -1,
         overridden ? int(fold.kind) : int(NetwPredict::DRIVE_KIND_NONE),
-        pool->frame_input_of(slot),
+        0,
         p_timing.get_tick(),
         overridden,
         true
     );
-    if (drove.is_empty()) {
+    if (!drove.ran) {
         send_command_frame();
         NETW_TRACE(
             sys::PREDICTION,
-            "predict engine: tick %d opened no transition",
+            "Tick %d started no step.",
             int(p_timing.get_tick())
         );
         return;
     }
-    const int64_t label = int64_t(drove[key_label()]);
-    const bool fresh = bool(drove[key_fresh()]);
-    adopt_tape_position(int64_t(drove[key_transition()]));
-    run(pool->frame_input_of(slot), p_timing.get_delta(), label, fresh);
+    const int64_t label = drove.label;
+    const bool fresh = drove.fresh;
+    const int64_t transition = drove.transition;
+    const predict::StateRow &command = *pool->frame_command_of(slot);
+    pool->record_authored_command(slot, transition, label, fresh, command);
+    adopt_tape_position(transition);
+    run_command(command, p_timing.get_delta(), label, fresh);
     if (fresh) {
         pool->set_last_driven_input_tick(slot, label);
     }
@@ -1331,6 +1274,16 @@ void NetwPredictSlotEngine::fallback_author_frame_step(
     pool->set_last_frame_transition_tick(slot, p_timing.get_tick());
     const Fold fold = drive_fold(p_timing.get_tick());
     author_command_entry(fold.label, fold.fresh);
+    const predict::StateRow *held = pool->frame_command_of(slot);
+    if (held != nullptr) {
+        pool->record_authored_command(
+            slot,
+            pool->last_driven_entry_index_of(slot),
+            fold.label,
+            fold.fresh,
+            *held
+        );
+    }
     if (fold.fresh) {
         pool->set_last_driven_input_tick(slot, fold.label);
     }
@@ -1339,7 +1292,9 @@ void NetwPredictSlotEngine::fallback_author_frame_step(
 
 void NetwPredictSlotEngine::fallback_author_step(int64_t p_tick) {
     const int64_t slot = native_slot();
-    pool->author_input(slot, p_tick);
+    if (!pool->author_command(slot, p_tick)) {
+        return;
+    }
     prepare_tick_tape(p_tick);
     author_command_entry(p_tick, true);
     pool->set_last_driven_input_tick(slot, p_tick);
@@ -1347,15 +1302,21 @@ void NetwPredictSlotEngine::fallback_author_step(int64_t p_tick) {
 }
 
 void NetwPredictSlotEngine::predict_step(double p_delta, int64_t p_tick) {
-    NETW_ZONE_NC("predict engine predict step", colors::PREDICTION);
+    NETW_ZONE_LEAF(
+        "Predict step",
+        colors::PREDICTION,
+        profile::SUBSYSTEM_PREDICTION
+    );
     const int64_t slot = native_slot();
-    const Dictionary input = pool->author_input(slot, p_tick);
+    if (!pool->author_command(slot, p_tick)) {
+        return;
+    }
     if (speculation_horizon_full()) {
         charge_speculation_hold();
         send_command_frame();
         NETW_TRACE(
             sys::PREDICTION,
-            "predict engine: tick %d is past the speculation horizon",
+            "Tick %d is further ahead than prediction may run.",
             int(p_tick)
         );
         return;
@@ -1363,59 +1324,55 @@ void NetwPredictSlotEngine::predict_step(double p_delta, int64_t p_tick) {
     prepare_tick_tape(p_tick);
     adopt_tape_position(p_tick);
     pool->set_last_driven_input_tick(slot, p_tick);
-    record_drive(
+    pool->record_drive_hashed(
+        slot,
         p_tick,
         p_tick,
         NetwPredict::DRIVE_KIND_FRESH,
-        input,
+        0,
         p_tick,
         true,
         true,
         true
     );
-    run(input, p_delta, p_tick, true);
-    const Dictionary state = capture();
-    const Ref<NetwTimeline> held = timeline();
-    if (held.is_valid()) {
-        held->record_state(p_tick + 1, state);
-    } else {
-        NETW_TRACE(
-            sys::PREDICTION,
-            "predict engine: tick %d drove with no timeline to record on",
-            int(p_tick)
-        );
-    }
-    close_journal_row(p_tick, state);
+    run_command(*pool->command_of(slot), p_delta, p_tick, true);
+    close_captured_row(p_tick);
     send_command_frame();
 }
 
 void NetwPredictSlotEngine::simulated_step(double p_delta, int64_t p_tick) {
-    const Dictionary input = predicted_command(p_tick);
+    const int64_t slot = native_slot();
+    if (!pool->predict_command(slot, entity, p_tick)) {
+        return;
+    }
     const bool joint
-        = pool->reconcile_of(native_slot()) == NetwPredict::RECONCILE_JOINT;
+        = pool->reconcile_of(slot) == NetwPredict::RECONCILE_JOINT;
     if (joint) {
-        record_drive(
+        pool->record_drive_hashed(
+            slot,
             p_tick,
             p_tick,
             NetwPredict::DRIVE_KIND_SUBSTITUTED,
-            input,
+            pool->command_hash_row(slot, *pool->command_of(slot)),
             p_tick,
             false
         );
-        const Dictionary existing = command_cell_at(p_tick);
-        if (int(existing.get(key_origin(), -1))
-            != NetwPredict::COMMAND_ORIGIN_RELAYED) {
+        if (pool->joint_provenance_at(slot, p_tick)
+            != int(predict::CellProvenance::RELAYED)) {
             file_command_cell(
                 p_tick,
-                input,
+                *pool->command_of(slot),
                 NetwPredict::COMMAND_ORIGIN_PREDICTED
             );
         }
     } else {
         mark_idle_drive(p_tick, NetwPredict::DRIVE_KIND_SUBSTITUTED);
     }
-    run(input, p_delta, p_tick, false);
-    const Ref<NetwPredictStats> stats = handle->get_stats();
+    if (pool->command_of(slot) == nullptr) {
+        return;
+    }
+    run_command(*pool->command_of(slot), p_delta, p_tick, false);
+    NetwPredictStats::Book *stats = handle->fact_book();
     stats->set_int_fact(
         NetwPredictStats::FACT_SUBSTITUTED,
         stats->get_int_fact(NetwPredictStats::FACT_SUBSTITUTED) + 1
@@ -1423,18 +1380,7 @@ void NetwPredictSlotEngine::simulated_step(double p_delta, int64_t p_tick) {
     if (!joint) {
         return;
     }
-    const Dictionary state = capture();
-    const Ref<NetwTimeline> held = timeline();
-    if (held.is_valid()) {
-        held->record_state(p_tick + 1, state);
-    } else {
-        NETW_TRACE(
-            sys::PREDICTION,
-            "predict engine: joint member has no timeline at tick %d",
-            int(p_tick)
-        );
-    }
-    close_journal_row(p_tick, state);
+    close_captured_row(p_tick);
 }
 
 void NetwPredictSlotEngine::simulated_frame_step(
@@ -1448,14 +1394,10 @@ void NetwPredictSlotEngine::simulated_frame_step(
     simulated_step(p_timing.get_delta(), p_timing.get_tick());
 }
 
-Dictionary NetwPredictSlotEngine::predicted_command(int64_t p_tick) {
-    return pool->predicted_command(native_slot(), entity, p_tick);
-}
-
 void NetwPredictSlotEngine::on_simulated_state_frame(
-    const Dictionary &p_header
+    const predict::Arrival &p_arrival
 ) {
-    pool->admit_simulated_state(native_slot(), p_header);
+    pool->admit_simulated_state(native_slot(), p_arrival);
 }
 
 void NetwPredictSlotEngine::prepare_tick_tape(int64_t p_tick) {
@@ -1472,61 +1414,69 @@ void NetwPredictSlotEngine::publish_ack_age(int64_t p_age) {
     }
 }
 
-void NetwPredictSlotEngine::on_state_frame(const Dictionary &p_header) {
+void NetwPredictSlotEngine::on_state_frame(const predict::Arrival &p_arrival) {
     const int64_t slot = native_slot();
     pool->set_stream_reconstructed(
         slot,
-        pool->stream_reconstructed_of(slot)
-            || bool(p_header.get(key_whole(), true))
+        pool->stream_reconstructed_of(slot) || p_arrival.whole
     );
-    on_state(
-        int64_t(p_header.get(key_tick(), -1)),
-        int64_t(p_header.get(key_ack(), -1)),
-        p_header.get(key_payload(), Dictionary())
-    );
+    on_state(p_arrival.tick, p_arrival.ack, &p_arrival, nullptr);
 }
 
 void NetwPredictSlotEngine::on_state(
     int64_t p_recv_tick,
     int64_t p_ack,
-    const Dictionary &p_payload
+    const predict::Arrival *p_arrival,
+    const predict::StateRow *p_held
 ) {
-    NETW_ZONE_NC("predict engine state comparison", colors::PREDICTION);
+    NETW_ZONE_LEAF(
+        "Predict state comparison",
+        colors::PREDICTION,
+        profile::SUBSYSTEM_PREDICTION
+    );
     const int64_t slot = native_slot();
-    const Dictionary opened = pool->open_state_comparison(
+    const OpenedComparison opened = pool->open_state_comparison(
         slot,
         p_recv_tick,
         p_ack,
-        p_payload,
-        callable_mp(handle.ptr(), &NetwPredictionHandle::seat_reseed_alignment)
+        p_arrival,
+        p_held
     );
-    if (opened.is_empty()) {
+    if (opened.realign) {
+        predict::StateRow payload;
+        if (p_arrival != nullptr) {
+            pool->read_arrival(slot, *p_arrival, payload);
+        } else if (p_held != nullptr) {
+            payload = *p_held;
+        }
+        finish_reseed_alignment(p_recv_tick, p_ack, payload);
+        return;
+    }
+    if (!opened.opened) {
         NETW_TRACE(
             sys::PREDICTION,
-            "predict engine: the pool opened no comparison at ack %d",
+            "The group made no comparison at acknowledgement %d.",
             int(p_ack)
         );
         return;
     }
-    const int64_t ack_label = int64_t(opened[key_label()]);
-    const Dictionary predicted = opened[key_predicted()];
-    const int domain = int(opened[key_domain()]);
-    const int64_t row_flags = int64_t(opened[key_row_flags()]);
-    const int64_t episode_state_before = int64_t(opened[key_episode_state()]);
-    const bool probation_before = bool(opened[key_probation()]);
-    const bool reconstructed = bool(opened[key_reconstructed()]);
+    const int64_t ack_label = opened.label;
+    const int domain = opened.domain;
+    const int64_t episode_state_before = opened.episode_state;
+    const bool probation_before = opened.probation;
+    const bool reconstructed = opened.reconstructed;
     double divergence = 0.0;
     bool corrected = false;
     bool settled = false;
     int meter = 0;
     if (reconstructed) {
-        const Dictionary judged = pool->judge_state(
+        const predict::Judged judged = pool->judge_state(
             slot,
             p_ack,
             domain,
-            row_flags,
-            predicted,
-            p_payload,
+            opened.row_flags,
+            pool->compared_row(slot),
+            pool->received_row(slot),
             overrides_seam(seam_predict_evaluate())
                 ? callable_mp(
                       handle.ptr(),
@@ -1534,10 +1484,10 @@ void NetwPredictSlotEngine::on_state(
                   )
                 : Callable()
         );
-        divergence = double(judged[key_divergence()]);
-        corrected = bool(judged[key_corrected()]);
-        settled = bool(judged[key_settled()]);
-        meter = int(judged[key_meter()]);
+        divergence = judged.divergence;
+        corrected = judged.corrected;
+        settled = judged.settled;
+        meter = judged.meter;
     }
     const int attribution = pool->attribution_for(slot, p_ack);
     if (pool->settle_comparison(
@@ -1550,13 +1500,26 @@ void NetwPredictSlotEngine::on_state(
             divergence,
             probation_before,
             episode_state_before,
-            callable_mp(handle.ptr(), &NetwPredictionHandle::seat_fallback_at)
+            fallback_at_sink
         )
         != NetwPredictionEngine::SETTLE_PROCEED) {
         return;
     }
-    if (corrected
-        && defer_operator_for_witness(p_recv_tick, p_ack, p_payload)) {
+    if (!corrected) {
+        if (core_seated() != nullptr) {
+            pool->trim_history(slot, p_ack);
+        }
+        handle->emit_signal(
+            signal_state_evaluated(),
+            p_recv_tick,
+            p_ack,
+            divergence,
+            corrected
+        );
+        return;
+    }
+    const predict::StateRow &payload = pool->received_row(slot);
+    if (defer_operator_for_witness(p_recv_tick, p_ack, payload)) {
         pool->note_verdict_reason(
             slot,
             predict::VERDICT_REASON_WITNESS_DEFERRED
@@ -1570,26 +1533,31 @@ void NetwPredictSlotEngine::on_state(
         );
         return;
     }
-    if (corrected && pool->reconcile_of(slot) == NetwPredict::RECONCILE_JOINT) {
+    if (pool->reconcile_of(slot) == NetwPredict::RECONCILE_JOINT) {
         pool->note_joint_basis(
             slot,
             p_ack,
-            p_payload,
+            payload,
             NetwPredictionEngine::JOINT_FLOOR_STATE
         );
-    } else if (corrected) {
+    } else {
+        const bool replays = pool->recovery_replays(slot);
         if (!pool->run_recovery_ladder(
                 slot,
                 p_ack,
                 ack_label,
-                predicted,
-                p_payload,
+                pool->compared_row(slot),
+                payload,
                 meter,
                 domain,
                 attribution,
-                witness_sample(),
-                island_participant_ids(),
-                callable_mp(handle.ptr(), &NetwPredictionHandle::seat_breach),
+                replays ? witness_sample() : no_sample(),
+                replays ? island_participant_ids() : no_participants(),
+                replays ? callable_mp(
+                              handle.ptr(),
+                              &NetwPredictionHandle::seat_breach
+                          )
+                        : Callable(),
                 overrides_seam(seam_predict_recover())
                     ? callable_mp(
                           handle.ptr(),
@@ -1667,21 +1635,10 @@ Ref<NetwPredictJudgement> NetwPredictSlotEngine::evaluate_through_seam(
     );
 }
 
-Dictionary NetwPredictSlotEngine::restore_payload(
-    const predict::JointPassPlan &p_plan,
-    int p_index
-) const {
-    return pool->restore_payload_of(native_slot(), p_plan, p_index);
-}
-
 RecoveryPlan NetwPredictSlotEngine::plan_of(
     const predict::WritePlan &p_plan
 ) const {
     return pool->recovery_of(native_slot(), p_plan);
-}
-
-Array NetwPredictSlotEngine::state_columns(const Dictionary &p_payload) const {
-    return pool->state_columns_of(native_slot(), p_payload);
 }
 
 void NetwPredictSlotEngine::close_replayed_entry(int64_t p_index) {
@@ -1707,7 +1664,11 @@ void NetwPredictSlotEngine::joint_pass(const NetwPredictTiming &p_timing) {
         || present < 0) {
         return;
     }
-    NETW_ZONE_NC("predict engine joint pass", colors::PREDICTION);
+    NETW_ZONE_LEAF(
+        "Predict slot joint pass",
+        colors::PREDICTION,
+        profile::SUBSYSTEM_PREDICTION
+    );
     const predict::JointPassPlan plan = pool_joint_pass(present);
     if (plan.floor >= 0) {
         core_seated()->sim_release_lingering(
@@ -1718,7 +1679,7 @@ void NetwPredictSlotEngine::joint_pass(const NetwPredictTiming &p_timing) {
     if (!plan.valid) {
         NETW_TRACE(
             sys::PREDICTION,
-            "predict engine: the joint pass at tick %d has no plan",
+            "The group replay at tick %d has no plan.",
             int(p_timing.get_tick())
         );
         return;
@@ -1778,7 +1739,7 @@ void NetwPredictSlotEngine::append_joint_member(
     if (member == nullptr || member == this || !member->is_steppable()) {
         NETW_TRACE(
             sys::PREDICTION,
-            "predict engine: an island member cannot be re-run here"
+            "A member of a touching group cannot be replayed here."
         );
         return;
     }
@@ -1814,7 +1775,7 @@ void NetwPredictSlotEngine::run_joint_pass(
     const LocalVector<NetwPredictSlotEngine *> &p_members,
     int64_t p_floor_transition
 ) {
-    NETW_ZONE_NC("predict engine joint replay", colors::PREDICTION);
+    NETW_ZONE_NC("Predict joint replay", colors::PREDICTION);
     HashMap<int64_t, NetwPredictSlotEngine *> by_slot;
     for (uint32_t at = 0; at < p_members.size(); ++at) {
         const int64_t seat = p_members[at]->native_slot();
@@ -1823,35 +1784,36 @@ void NetwPredictSlotEngine::run_joint_pass(
         }
     }
     LocalVector<NetwPredictSlotEngine *> stepped;
-    LocalVector<Dictionary> live;
     for (int at = 0; at < int(p_plan.restores.size()); ++at) {
         const int64_t restore_slot = p_plan.restores[uint32_t(at)].slot;
         NetwPredictSlotEngine **held = by_slot.getptr(restore_slot);
         if (held == nullptr) {
             NETW_TRACE(
                 sys::PREDICTION,
-                "predict engine: the plan restores slot %d nothing seats",
+                "The replay plan restores entry %d, which holds nothing.",
                 int(restore_slot)
             );
             continue;
         }
         NetwPredictSlotEngine *member = *held;
         stepped.push_back(member);
-        live.push_back(member->capture_input_raw());
-        member->restore(
-            member->restore_payload(p_plan, at),
+        pool->hold_live_input(member->native_slot());
+        member->restore_row(
+            p_plan.restores[uint32_t(at)].state,
             int(predict::Operator::JOINT_REBASE),
             p_floor_transition,
-            this
+            this,
+            p_plan.restores[uint32_t(at)].entry
         );
     }
     if (stepped.is_empty()) {
         return;
     }
-    LocalVector<Dictionary> before;
+    LocalVector<predict::StateRow> before;
     LocalVector<int> ran;
+    before.resize(stepped.size());
     for (uint32_t at = 0; at < stepped.size(); ++at) {
-        before.push_back(stepped[at]->capture());
+        pool->capture_canonical(stepped[at]->native_slot(), before[at]);
         ran.push_back(0);
     }
     const SteppedIsland island = stepped_island();
@@ -1871,7 +1833,7 @@ void NetwPredictSlotEngine::run_joint_pass(
         if (held == nullptr) {
             NETW_TRACE(
                 sys::PREDICTION,
-                "predict engine: the plan steps slot %d nothing seats",
+                "The replay plan steps entry %d, which holds nothing.",
                 int(step.slot)
             );
             continue;
@@ -1882,7 +1844,12 @@ void NetwPredictSlotEngine::run_joint_pass(
             step_island(island, open_transition);
         }
         open_transition = transition;
-        member->run(step.command, member->tick_delta(), transition, false);
+        member->run_command(
+            step.command,
+            member->tick_delta(),
+            transition,
+            false
+        );
         member->close_replayed_entry(transition);
         for (uint32_t seat = 0; seat < stepped.size(); ++seat) {
             if (stepped[seat] == member) {
@@ -1896,12 +1863,12 @@ void NetwPredictSlotEngine::run_joint_pass(
     sim::restore_poses(bystanders);
     const int64_t present = p_plan.present;
     for (uint32_t at = 0; at < stepped.size(); ++at) {
-        stepped[at]->apply_input_raw(live[at]);
+        pool->restore_live_input(stepped[at]->native_slot());
         pool->note_replay_depth(stepped[at]->native_slot(), ran[at]);
         stepped[at]->note_joint_writes(before[at]);
     }
     const int64_t depth = present - p_floor_transition;
-    const Ref<NetwPredictStats> stats = handle->get_stats();
+    NetwPredictStats::Book *stats = handle->fact_book();
     Dictionary joint_depth
         = stats->get_dict_fact(NetwPredictStats::FACT_JOINT_DEPTH);
     joint_depth[depth] = int64_t(joint_depth.get(depth, 0)) + 1;
@@ -1909,29 +1876,39 @@ void NetwPredictSlotEngine::run_joint_pass(
 }
 
 void NetwPredictSlotEngine::release_lingering(int64_t p_floor_transition) {
-    handle->get_stats()->set_int_fact(
+    handle->fact_book()->set_int_fact(
         NetwPredictStats::FACT_LINGER_HELD,
         pool->release_lingering(native_slot(), p_floor_transition)
     );
 }
 
 void NetwPredictSlotEngine::joint_heal() {
-    const Dictionary newest = transition_state_at(ledger_drive_frontier());
-    if (newest.is_empty()) {
+    const int64_t frontier = ledger_drive_frontier();
+    predict::StateRow newest;
+    if (!pool->read_predicted(native_slot(), frontier + 1, newest)
+        || !newest.any()) {
         NETW_TRACE(
             sys::PREDICTION,
-            "predict engine: a joint heal found no recorded state to snap to"
+            "A group repair found no recorded state to snap to."
         );
         return;
     }
-    restore(newest, int(predict::Operator::JOINT_REBASE), -1);
+    restore_row(
+        newest,
+        int(predict::Operator::JOINT_REBASE),
+        -1,
+        nullptr,
+        frontier + 1
+    );
 }
 
-void NetwPredictSlotEngine::note_joint_writes(const Dictionary &p_before) {
+void NetwPredictSlotEngine::note_joint_writes(
+    const predict::StateRow &p_before
+) {
     const int64_t slot = native_slot();
-    const Dictionary deltas = pool->write_deltas(slot, p_before, Dictionary());
-    if (!deltas.is_empty()) {
-        pool->ledger_note_writes(slot, deltas);
+    predict::StateRow deltas;
+    if (pool->write_deltas_rows(slot, p_before, predict::StateRow(), deltas)) {
+        pool->ledger_note_rows(slot, deltas);
     }
 }
 
@@ -1952,24 +1929,25 @@ predict::JointPassPlan NetwPredictSlotEngine::pool_joint_pass(
 
 void NetwPredictSlotEngine::host_local_author_tick(int64_t p_tick) {
     const int64_t slot = native_slot();
-    const Dictionary input = capture_input_raw();
-    const Ref<NetwTimeline> held = timeline();
-    if (held.is_valid()) {
-        held->record_input(p_tick, input);
+    pool->capture_command(slot);
+    const predict::StateRow *input = pool->command_of(slot);
+    if (input == nullptr) {
+        return;
     }
+    pool->record_authored_command(slot, p_tick, p_tick, true, *input);
     pool->set_latest_input_tick(slot, p_tick);
-    pool->set_frame_input(slot, input);
-    const Ref<NetwPropertySetBinding> input_set = input_binding();
-    if (input_set.is_valid()) {
+    pool->hold_frame_command(slot);
+    const PropertyBindingPtr input_set = input_binding();
+    if (input_set != nullptr) {
         input_set->set_authored_tick(p_tick);
     } else {
         NETW_TRACE(
             sys::PREDICTION,
-            "predict engine: tick %d authors with no input binding",
+            "Tick %d was authored with no input binding.",
             int(p_tick)
         );
     }
-    record_input_to_pool(p_tick, input);
+    pool->record_command_input(slot, p_tick, *pool->command_of(slot));
 }
 
 void NetwPredictSlotEngine::host_local_frame_step(
@@ -1985,29 +1963,35 @@ void NetwPredictSlotEngine::host_local_frame_step(
     const Fold fold = drive_fold(p_timing.get_tick());
     const int64_t label = fold.label;
     const bool fresh = fold.fresh;
-    record_drive(
+    const predict::StateRow *held = pool->frame_command_of(slot);
+    if (held == nullptr) {
+        return;
+    }
+    const predict::StateRow &command = *held;
+    pool->record_drive_hashed(
+        slot,
         label,
         label,
         int(fold.kind),
-        pool->frame_input_of(slot),
+        pool->command_hash_row(slot, command),
         p_timing.get_tick(),
         true,
         true
     );
-    run(pool->frame_input_of(slot), p_timing.get_delta(), label, fresh);
+    run_command(command, p_timing.get_delta(), label, fresh);
     pool->set_ack_advanced(slot, fresh);
     if (!fresh) {
         return;
     }
     pool->set_last_driven_input_tick(slot, label);
-    const Ref<NetwPropertySetBinding> state = state_binding();
-    if (state.is_valid()) {
+    const PropertyBindingPtr state = state_binding();
+    if (state != nullptr) {
         state->set_authored_tick(label);
         state->set_reconcile_ack(label);
     } else {
         NETW_TRACE(
             sys::PREDICTION,
-            "predict engine: label %d drove with no state binding",
+            "Step %d ran with no state binding.",
             int(label)
         );
     }
@@ -2017,36 +2001,20 @@ void NetwPredictSlotEngine::host_local_step(double p_delta, int64_t p_tick) {
     pool->host_local_step(native_slot(), p_delta, p_tick);
 }
 
-void NetwPredictSlotEngine::on_input_frame(const Dictionary &p_header) {
-    Array samples = p_header.get(key_samples(), Array());
-    if (samples.is_empty()) {
-        const int64_t tick = int64_t(p_header.get(key_tick(), -1));
-        if (tick >= 0) {
-            Dictionary one;
-            one[key_tick()] = tick;
-            one[key_payload()] = p_header.get(key_payload(), Dictionary());
-            samples.push_back(one);
-        }
-    }
-    const Ref<NetwTimeline> held = timeline();
-    if (held.is_null()) {
+void NetwPredictSlotEngine::on_input_frame(const predict::Arrival &p_arrival) {
+    if (!lane_open()) {
         NETW_TRACE(
             sys::PREDICTION,
-            "predict engine: an input frame arrived with no timeline"
+            "An input arrived with no input history."
         );
         return;
     }
-    int64_t oldest = -1;
-    for (int64_t at = 0; at < samples.size(); ++at) {
-        const Dictionary sample = samples[at];
-        const int64_t stick = int64_t(sample.get(key_tick(), -1));
-        if (stick < 0) {
-            continue;
-        }
-        held->record_input(stick, sample.get(key_payload(), Dictionary()));
-        oldest = oldest < 0 ? stick : std::min(oldest, stick);
-    }
     const int64_t slot = native_slot();
+    const int64_t oldest = pool->record_arrived_inputs(
+        slot,
+        p_arrival,
+        schedule() != NetwSimulationHandle::SCHEDULE_FRAME
+    );
     if (pool->next_input_tick_of(slot) < 0 && oldest >= 0) {
         pool->set_next_input_tick(slot, oldest);
     }
@@ -2056,10 +2024,14 @@ void NetwPredictSlotEngine::consume_step(
     double p_delta,
     int64_t p_server_tick
 ) {
-    NETW_ZONE_NC("predict engine consume step", colors::PREDICTION);
+    NETW_ZONE_LEAF(
+        "Predict consume step",
+        colors::PREDICTION,
+        profile::SUBSYSTEM_PREDICTION
+    );
     const int64_t slot = native_slot();
     const int64_t previous_ack = ack();
-    const Ref<NetwPredictStats> stats = handle->get_stats();
+    NetwPredictStats::Book *stats = handle->fact_book();
     if (pool->next_input_tick_of(slot) >= 0) {
         resync_if_stranded();
         const int depth = int(queued_span());
@@ -2078,7 +2050,7 @@ void NetwPredictSlotEngine::consume_step(
                 mark_idle_drive(ack(), NetwPredict::DRIVE_KIND_HOLD);
                 NETW_TRACE(
                     sys::PREDICTION,
-                    "predict engine: tick %d holds a queue of %d",
+                    "Tick %d has %d inputs queued.",
                     int(p_server_tick),
                     depth
                 );
@@ -2091,7 +2063,7 @@ void NetwPredictSlotEngine::consume_step(
                 mark_idle_drive(ack(), NetwPredict::DRIVE_KIND_STARVED);
                 NETW_TRACE(
                     sys::PREDICTION,
-                    "predict engine: tick %d starved on an empty queue",
+                    "Tick %d ran with no queued input.",
                     int(p_server_tick)
                 );
                 break;
@@ -2100,22 +2072,23 @@ void NetwPredictSlotEngine::consume_step(
         }
     }
     pool->set_ack_advanced(slot, ack() != previous_ack);
-    const Ref<NetwPropertySetBinding> state = state_binding();
-    if (state.is_valid()) {
+    const PropertyBindingPtr state = state_binding();
+    if (state != nullptr) {
         state->set_authored_tick(p_server_tick);
         state->set_reconcile_ack(ack_advanced() ? ack() : -1);
     } else {
         NETW_TRACE(
             sys::PREDICTION,
-            "predict engine: tick %d consumed with no state binding",
+            "Tick %d was used with no state binding.",
             int(p_server_tick)
         );
     }
-    const Ref<NetwTimeline> held = timeline();
     handle->set_ack_age_ticks(
-        held.is_valid()
-            ? int(std::max(int64_t(0), held->newest_input_tick() - ack()))
-            : 0
+        lane_open() ? int(std::max(
+                          int64_t(0),
+                          pool->newest_authored_input(slot) - ack()
+                      ))
+                    : 0
     );
     send_ack_frame();
 }
@@ -2123,12 +2096,16 @@ void NetwPredictSlotEngine::consume_step(
 void NetwPredictSlotEngine::consume_frame_step(
     const NetwPredictTiming &p_timing
 ) {
-    NETW_ZONE_NC("predict engine consume frame step", colors::PREDICTION);
+    NETW_ZONE_LEAF(
+        "Predict consume frame step",
+        colors::PREDICTION,
+        profile::SUBSYSTEM_PREDICTION
+    );
     const int64_t slot = native_slot();
     const int64_t previous_ack = ack();
     pool->set_last_replayed_fresh(slot, false);
     const int depth = replay_depth();
-    const Ref<NetwPredictStats> stats = handle->get_stats();
+    NetwPredictStats::Book *stats = handle->fact_book();
     const int64_t drove_before
         = stats->get_int_fact(NetwPredictStats::FACT_DRIVE_SEQ);
     record_consume_cadence(depth);
@@ -2151,7 +2128,7 @@ void NetwPredictSlotEngine::consume_frame_step(
             );
             NETW_TRACE(
                 sys::PREDICTION,
-                "predict engine: frame %d holds a tape depth of %d",
+                "Frame %d has %d inputs recorded.",
                 int(p_timing.get_tick()),
                 depth
             );
@@ -2167,7 +2144,7 @@ void NetwPredictSlotEngine::consume_frame_step(
             );
             NETW_TRACE(
                 sys::PREDICTION,
-                "predict engine: frame %d starved on an empty tape",
+                "Frame %d ran with no recorded input.",
                 int(p_timing.get_tick())
             );
             break;
@@ -2178,14 +2155,14 @@ void NetwPredictSlotEngine::consume_frame_step(
         stats->get_int_fact(NetwPredictStats::FACT_DRIVE_SEQ) - drove_before
     );
     pool->set_ack_advanced(slot, ack() != previous_ack);
-    const Ref<NetwPropertySetBinding> state = state_binding();
-    if (state.is_valid()) {
+    const PropertyBindingPtr state = state_binding();
+    if (state != nullptr) {
         state->set_authored_tick(p_timing.get_tick());
         state->set_reconcile_ack(ack_advanced() ? ack() : -1);
     } else {
         NETW_TRACE(
             sys::PREDICTION,
-            "predict engine: frame %d consumed with no state binding",
+            "Frame %d was used with no state binding.",
             int(p_timing.get_tick())
         );
     }
@@ -2199,7 +2176,7 @@ void NetwPredictSlotEngine::record_consume_cadence(int p_depth) {
     const int arrivals
         = std::min(pool->arrivals_this_frame_of(slot), ARRIVAL_BUCKET_MAX);
     pool->set_arrivals_this_frame(slot, 0);
-    const Ref<NetwPredictStats> stats = handle->get_stats();
+    NetwPredictStats::Book *stats = handle->fact_book();
     PackedInt32Array arrival_buckets
         = stats->get_buckets_fact(NetwPredictStats::FACT_ARRIVALS);
     if (arrivals >= 0 && arrivals < arrival_buckets.size()) {
@@ -2222,7 +2199,7 @@ void NetwPredictSlotEngine::record_consume_cadence(int p_depth) {
 }
 
 void NetwPredictSlotEngine::bump_consume_shape(int64_t p_consumed) {
-    const Ref<NetwPredictStats> stats = handle->get_stats();
+    NetwPredictStats::Book *stats = handle->fact_book();
     const String key
         = String::num_int64(p_consumed) + String(",")
         + String::num_int64(
@@ -2274,29 +2251,6 @@ void NetwPredictSlotEngine::consume_one(double p_delta) {
     pool->consume_one(native_slot(), p_delta);
 }
 
-Dictionary NetwPredictSlotEngine::record_drive(
-    int64_t p_transition,
-    int64_t p_label,
-    int p_kind,
-    const Dictionary &p_input,
-    int64_t p_drive_tick,
-    bool p_caller_selected,
-    bool p_input_recorded,
-    bool p_authoring
-) {
-    return pool->record_drive(
-        native_slot(),
-        p_transition,
-        p_label,
-        p_kind,
-        p_input,
-        p_drive_tick,
-        p_caller_selected,
-        p_input_recorded,
-        p_authoring
-    );
-}
-
 void NetwPredictSlotEngine::mark_idle_drive(int64_t p_label, int p_kind) {
     if (core_seated() != nullptr) {
         pool->record_idle_drive(native_slot(), p_label, p_kind);
@@ -2306,7 +2260,7 @@ void NetwPredictSlotEngine::mark_idle_drive(int64_t p_label, int p_kind) {
 void NetwPredictSlotEngine::adopt_tape_position(int64_t p_transition) {
     const int64_t slot = native_slot();
     pool->set_last_driven_entry_index(slot, p_transition);
-    const Ref<NetwPredictStats> stats = handle->get_stats();
+    NetwPredictStats::Book *stats = handle->fact_book();
     stats->set_int_fact(
         NetwPredictStats::FACT_TAPE_EPOCH,
         pool->tape_epoch_of(slot)
@@ -2320,35 +2274,36 @@ void NetwPredictSlotEngine::author_command_entry(
     bool p_fresh
 ) {
     const int64_t slot = native_slot();
+    const int64_t transition = pool->next_tape_entry_index_of(slot);
     if (core_seated() != nullptr) {
         pool->tape_author(slot, p_label, p_fresh);
     }
-    adopt_tape_position(pool->next_tape_entry_index_of(slot));
+    adopt_tape_position(transition);
 }
 
 void NetwPredictSlotEngine::refresh_tape_diagnostics() {
     pool->refresh_tape_diagnostics(native_slot());
 }
 
-void NetwPredictSlotEngine::run(
-    const Dictionary &p_input,
+void NetwPredictSlotEngine::run_command(
+    const predict::StateRow &p_command,
     double p_delta,
     int64_t p_tick,
     bool p_fresh
 ) {
     const int64_t slot = native_slot();
     if (core_seated() != nullptr && pool->owner_bound(slot)) {
-        pool->run_step(slot, p_input, p_delta, p_tick, p_fresh);
+        pool->run_command(slot, p_command, p_delta, p_tick, p_fresh);
         return;
     }
-    apply_input_raw(p_input);
+    pool->apply_command(slot, p_command);
     const Callable step = handle->get_simulate();
     if (step.is_valid()) {
         step.call(p_delta, p_tick, p_fresh);
     } else {
         NETW_TRACE(
             sys::PREDICTION,
-            "predict engine: tick %d has no step to run",
+            "Tick %d has no step to run.",
             int(p_tick)
         );
     }
@@ -2364,32 +2319,27 @@ Dictionary NetwPredictSlotEngine::capture() const {
     return pool->capture_canonical_state(native_slot());
 }
 
-Dictionary NetwPredictSlotEngine::capture_input_raw() const {
-    return pool->capture_input_raw(native_slot());
+void NetwPredictSlotEngine::close_captured_row(int64_t p_transition) {
+    NETW_PREDICT_TICK_SCOPE();
+    pool->capture_into_book(native_slot(), p_transition + 1);
+    close_journal_row(p_transition);
 }
 
-void NetwPredictSlotEngine::apply_input_raw(const Dictionary &p_payload) {
-    pool->apply_input_raw(native_slot(), p_payload);
-}
-
-int64_t NetwPredictSlotEngine::state_fingerprint(
-    const Dictionary &p_payload
-) const {
-    return pool->state_fingerprint(native_slot(), p_payload);
-}
-
-void NetwPredictSlotEngine::close_journal_row(
-    int64_t p_transition,
-    const Dictionary &p_state
-) {
-    NETW_ZONE_NC("predict close journal row", colors::PREDICTION);
-    const Dictionary solve = pool->seal_transition(
-        native_slot(),
-        p_transition,
-        p_state,
-        witness_sample(),
-        island_participant_ids()
-    );
+void NetwPredictSlotEngine::close_journal_row(int64_t p_transition) {
+    const bool witnessed = handle->get_witness_contacts().is_valid();
+    const Dictionary solve = witnessed
+        ? pool->seal_transition(
+              native_slot(),
+              p_transition,
+              witness_sample(),
+              island_participant_ids()
+          )
+        : pool->seal_transition(
+              native_slot(),
+              p_transition,
+              unsampled,
+              unparticipated
+          );
     if (solve.is_empty()) {
         return;
     }
@@ -2424,7 +2374,8 @@ void NetwPredictSlotEngine::restore(
     int64_t p_basis,
     NetwPredictSlotEngine *p_provenance_owner,
     bool p_evidence_free,
-    bool p_pool_planned
+    bool p_pool_planned,
+    int64_t p_entry
 ) {
     NetwPredictSlotEngine *episode_owner
         = p_provenance_owner != nullptr ? p_provenance_owner : this;
@@ -2438,12 +2389,49 @@ void NetwPredictSlotEngine::restore(
             handle->get_ack_age_ticks(),
             handle->get_divergence_epsilon(),
             p_evidence_free,
-            p_pool_planned
+            p_pool_planned,
+            p_entry
         )) {
-        NETW_ERROR(sys::PREDICTION, "prediction restore effect is invalid");
+        NETW_ERROR(
+            sys::PREDICTION,
+            "Prediction could not restore an entity to the server's state."
+        );
         return;
     }
     if (p_operator != int(predict::Operator::NONE) && !p_pool_planned) {
+        episode_owner->sync_episode();
+    }
+}
+
+void NetwPredictSlotEngine::restore_row(
+    const predict::StateRow &p_state,
+    int p_operator,
+    int64_t p_basis,
+    NetwPredictSlotEngine *p_provenance_owner,
+    int64_t p_entry
+) {
+    NetwPredictSlotEngine *episode_owner
+        = p_provenance_owner != nullptr ? p_provenance_owner : this;
+    if (!pool->apply_restore_row(
+            native_slot(),
+            p_state,
+            p_operator,
+            p_basis,
+            episode_owner->native_slot(),
+            entity.is_valid() ? entity->get_entity_id() : StringName(),
+            handle->get_ack_age_ticks(),
+            handle->get_divergence_epsilon(),
+            false,
+            false,
+            p_entry
+        )) {
+        NETW_ERROR(
+            sys::PREDICTION,
+            "Prediction could not restore an entity to the server's state."
+        );
+        return;
+    }
+    if (p_operator != int(predict::Operator::NONE)) {
         episode_owner->sync_episode();
     }
 }
@@ -2458,7 +2446,7 @@ void NetwPredictSlotEngine::register_with_loop() {
     } else {
         NETW_TRACE(
             sys::PREDICTION,
-            "predict engine: no runner seats this engine"
+            "No prediction runner holds this engine."
         );
     }
 }

@@ -22,7 +22,11 @@ Error LocalMultiplayerPeer::create_server(int p_unique_id) {
     unique_id = p_unique_id;
     server_side = true;
     status = CONNECTION_CONNECTED;
-    NETW_INFO(sys::TRANSPORT, "peer is the server id=%d", unique_id);
+    NETW_INFO(
+        sys::TRANSPORT,
+        "The local peer is the server, id %d.",
+        unique_id
+    );
     return Error::OK;
 }
 
@@ -31,7 +35,7 @@ Error LocalMultiplayerPeer::create_client(int p_client_id) {
     unique_id = p_client_id;
     server_side = false;
     status = CONNECTION_CONNECTING;
-    NETW_INFO(sys::TRANSPORT, "peer is a client id=%d", unique_id);
+    NETW_INFO(sys::TRANSPORT, "The local peer is a client, id %d.", unique_id);
     return Error::OK;
 }
 
@@ -44,7 +48,7 @@ void LocalMultiplayerPeer::force_connect_peer(
     }
 
     links.insert(p_peer_id, gd::instance_id(p_peer));
-    NETW_TRACE(sys::TRANSPORT, "linked to peer=%d", p_peer_id);
+    NETW_TRACE(sys::TRANSPORT, "Linked to peer %d.", p_peer_id);
 
     peers_to_emit_connected.push_back(p_peer_id);
 }
@@ -131,7 +135,11 @@ Error LocalMultiplayerPeer::send_to_peer(
         || !links.has(p_peer_id)) {
         links.erase(p_peer_id);
         ++refused_send_count;
-        NETW_TRACE(sys::TRANSPORT, "send refused, peer gone=%d", p_peer_id);
+        NETW_TRACE(
+            sys::TRANSPORT,
+            "A send was refused, because peer %d is gone.",
+            p_peer_id
+        );
         return Error::ERR_UNAVAILABLE;
     }
 
@@ -219,7 +227,7 @@ void LocalMultiplayerPeer::finalize_close() {
     transfer_mode = TRANSFER_MODE_RELIABLE;
     server_side = false;
 
-    NETW_TRACE(sys::TRANSPORT, "peer fully closed");
+    NETW_TRACE(sys::TRANSPORT, "The local peer is closed.");
 }
 
 void LocalMultiplayerPeer::reset_state() {

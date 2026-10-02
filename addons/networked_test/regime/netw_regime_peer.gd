@@ -172,16 +172,22 @@ func run() -> void:
 		add_child(_throttle)
 	var error: int = await connect_session.call(role, port)
 	if error != OK:
-		push_error("regime %s: connect failed with %s" % [role, error_string(error)])
+		push_error(
+			"The regime %s could not connect (%s)." % [role, error_string(error)],
+		)
 		_finish(EXIT_CONNECT, "connect_failed")
 		return
 	var ready: bool = await await_local_ready.call()
 	if not ready:
-		push_error("regime %s: local entity never became ready" % role)
+		push_error("The regime %s's local entity never became ready." % role)
 		_finish(EXIT_READY, "ready_timeout")
 		return
 	if not gestures.has(gesture):
-		push_error("regime %s: unknown gesture %s" % [role, gesture])
+		push_error(
+			"The regime %s got gesture '%s', which does not exist. Pass one of "
+			% [role, gesture]
+			+ "the gestures it declares.",
+		)
 		_finish(EXIT_GESTURE, "unknown_gesture")
 		return
 	print("[regime] %s ready on port %d, driving %s for %.1fs" % [
@@ -201,7 +207,7 @@ func run() -> void:
 		await get_tree().create_timer(quiesce).timeout
 	var unmet := _unmet_expectations()
 	if not unmet.is_empty():
-		push_error("regime %s: regime not reached, %s" % [role, unmet])
+		push_error("The regime %s never held its condition (%s)." % [role, unmet])
 		_finish(EXIT_CONDITION, "condition_unmet")
 		return
 	_finish(OK, "complete")
@@ -253,7 +259,7 @@ func _arm_watchdog() -> void:
 	await get_tree().create_timer(budget).timeout
 	if _completed:
 		return
-	push_error("regime %s: watchdog fired after %.1fs" % [role, budget])
+	push_error("The regime %s ran out of time after %.1fs." % [role, budget])
 	_finish(EXIT_WATCHDOG, "watchdog")
 
 
@@ -314,7 +320,7 @@ func _write_summary(exit_kind: String) -> void:
 		FileAccess.WRITE,
 	)
 	if file == null:
-		push_error("regime %s: could not write summary.json" % role)
+		push_error("The regime %s could not write summary.json." % role)
 		return
 	file.store_string(JSON.stringify(summary, "  "))
 	file.close()

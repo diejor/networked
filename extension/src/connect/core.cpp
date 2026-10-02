@@ -415,14 +415,15 @@ RID ConnectCore::create_peer(
         session == nullptr,
         RID(),
         sys::TRANSPORT,
-        "a peer creation needs a live session, and this one is disposed"
+        "NetwMultiplayer.transport_create_peer ran on a session that is "
+        "already closed."
     );
     NETW_ERR_COND_V(
         !p_completed.is_valid(),
         RID(),
         sys::TRANSPORT,
-        "a peer creation is answered through its completion callable, and "
-        "this one is not callable"
+        "NetwMultiplayer.transport_create_peer needs a valid completion "
+        "Callable."
     );
     Creation seed;
     seed.session = gd::instance_id(session);

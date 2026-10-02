@@ -2,6 +2,7 @@
 
 #include "godot/physics_body.hpp"
 #include "godot/physics_server.hpp"
+#include "netw/store/validate.hpp"
 
 using namespace godot;
 
@@ -50,6 +51,21 @@ void hold(Bodies &r_bodies, Node *p_body) {
 }
 
 } // namespace
+
+const store::NodeCell &resident_of(
+    const Bodies &p_bodies,
+    const AuthoredBody &p_held
+) {
+    if (p_bodies.residents == nullptr) {
+        p_held.cell = store::Residents::derive(uint64_t(p_held.node));
+        return p_held.cell;
+    }
+    return p_bodies.residents->resolve(
+        uint64_t(p_held.node),
+        p_held.cell,
+        store::validation_interval() > 0
+    );
+}
 
 bool is_solver_body(Node *p_node) {
     return p_node != nullptr

@@ -16,7 +16,7 @@ namespace TestDerivedValueFlowLaws {
 
 using namespace godot;
 using netw::EventPlane;
-using netw::NetwPropertySet;
+using netw::repl::PropertySet;
 using netw_test::authored_value;
 using netw_test::EventRing;
 using netw_test::FlowPair;
@@ -168,7 +168,7 @@ class FlowRun {
             p_pair.authored,
             StringName("position"),
             authored_value(next),
-            NetwPropertySet::RECORD_STATE,
+            PropertySet::RECORD_STATE,
             next
         );
         const int64_t controller_next = netw_test::clock_tick(p_rig, 0) + 1;
@@ -176,7 +176,7 @@ class FlowRun {
             p_pair.mirror(0),
             StringName("rotation"),
             double(controller_next) * 0.01,
-            NetwPropertySet::RECORD_INPUT,
+            PropertySet::RECORD_INPUT,
             controller_next
         );
         if (plant_is(PLANT_THE_RETAINED_FIELD_FLIPS_EVERY_TICK)) {
@@ -194,20 +194,20 @@ class FlowRun {
     }
 
     void record_bindings(const FlowPair &p_pair) {
-        const Ref<netw::NetwPropertySetBinding> state = netw_test::binding_of(
+        const netw::repl::PropertyBindingPtr state = netw_test::binding_of(
             p_pair.authored,
-            NetwPropertySet::RECORD_STATE
+            PropertySet::RECORD_STATE
         );
-        const Ref<netw::NetwPropertySetBinding> input = netw_test::binding_of(
+        const netw::repl::PropertyBindingPtr input = netw_test::binding_of(
             p_pair.authored,
-            NetwPropertySet::RECORD_INPUT
+            PropertySet::RECORD_INPUT
         );
-        if (state.is_valid() && state->set.is_valid()) {
-            seen.state_record = int64_t(state->set->get_record());
+        if (state != nullptr && state->get_set() != nullptr) {
+            seen.state_record = int64_t(state->get_set()->get_record());
             seen.state_over_body = state->node() == p_pair.authored;
         }
-        if (input.is_valid() && input->set.is_valid()) {
-            seen.input_record = int64_t(input->set->get_record());
+        if (input != nullptr && input->get_set() != nullptr) {
+            seen.input_record = int64_t(input->get_set()->get_record());
         }
     }
 
@@ -446,14 +446,14 @@ LawVerdict law_handles(const FlowRun &p_run) {
     if (!p_run.scenario().derived_sets) {
         return law_held();
     }
-    if (seen.state_record != int64_t(NetwPropertySet::RECORD_STATE)) {
+    if (seen.state_record != int64_t(PropertySet::RECORD_STATE)) {
         return law_broken(
             "the state binding carries record %d",
             int(seen.state_record)
         );
     }
     if (p_run.scenario().input_set
-        && seen.input_record != int64_t(NetwPropertySet::RECORD_INPUT)) {
+        && seen.input_record != int64_t(PropertySet::RECORD_INPUT)) {
         return law_broken(
             "the input binding carries record %d",
             int(seen.input_record)

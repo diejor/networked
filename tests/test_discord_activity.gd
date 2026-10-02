@@ -99,7 +99,7 @@ func test_nakama_auth_admits_only_the_attested_username() -> void:
 	var unbound := NakamaAuth.new()
 	auto_free(unbound)
 	assert_int(unbound.admit(2, &"Diego", [])).is_equal(ERR_UNAVAILABLE)
-	await _ERROR_SCRUBBER.erase_matching(["NakamaAuth: the relay presence"])
+	await _ERROR_SCRUBBER.erase_matching(["NakamaAuth refused a join"])
 
 
 func test_nakama_session_configure_flow() -> void:

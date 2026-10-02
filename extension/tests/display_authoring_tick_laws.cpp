@@ -2,23 +2,26 @@
 
 #if defined(NETW_TIER_HOSTED)
 
+#include "support/books.h"
 #include "support/display_stand.h"
 #include "support/loopback_rig.h"
 #include "support/netw_cells.h"
 
 #include "netw/api/netw_multiplayer.hpp"
 #include "netw/api/property_config.hpp"
-#include "netw/api/property_set.hpp"
-#include "netw/api/ring_buffer.hpp"
 #include "netw/api/sync_pipeline.hpp"
+#include "netw/api/tests.hpp"
 #include "netw/display/decl.hpp"
+#include "netw/display/history.hpp"
+#include "netw/display/runtime.hpp"
 #include "netw/property_set_builder.hpp"
+#include "netw/script/model.hpp"
+#include "netw/store/world.hpp"
 
 namespace TestNetwDisplayAuthoringTickLaws {
 
 using namespace godot;
 using netw::NetwMultiplayer;
-using netw::NetwRingBuffer;
 using netw_test::law_broken;
 using netw_test::law_held;
 using netw_test::LawRowFor;
@@ -89,13 +92,12 @@ class AuthoringRun {
                                               false
         )
                                               ->state();
-        const Ref<netw::NetwPropertySet> set
-            = netw::property_set_builder::from_property_configs(
-                configs,
-                netw::NetwPropertySet::RECORD_STATE
-            );
-        REQUIRE(set.is_valid());
-        set->set_sealed(true);
+        const uint64_t set = netw_test::sealed_set(
+            core->property_set_book(),
+            configs,
+            netw::repl::PropertySet::RECORD_STATE
+        );
+        REQUIRE(set != netw::repl::SetBook::NONE);
         NETW_CHECK_EQ(
             int(
                 core->sync_pipeline()->register_property_set(subject.body, set)
@@ -105,17 +107,42 @@ class AuthoringRun {
         core->display_mark_dirty(entity, netw::display::DIRT_RUNTIME);
         core->session_flush_deferred();
 
+        const StringName position("position");
+        uint64_t owner = 0;
+        uint32_t lane = 0;
+        uint32_t column = 0;
+        REQUIRE(
+            core->display_table_of(subject.body, position, owner, lane, column)
+        );
+        netw::store::World &world = core->store();
+        const netw::store::RowAddress at = world.row_of(owner, lane);
+        REQUIRE(at.valid());
+        netw::store::Table &table = world.table(at.table);
+        const Ref<netw::NetwInterpolate> spec
+            = netw::script::model::get_node_property_interpolator(
+                subject.body,
+                position
+            );
         for (int64_t authored = 0; authored < declared.authored_ticks;
              ++authored) {
             const int64_t received = authored + declared.delay_ticks;
             core->clock_engine().set_tick(int(received));
-            netw_test::record_sample(
-                core,
+            const int64_t keyed = plant_is(PLANT_THE_RECEIVE_TICK_IS_THE_KEY)
+                ? received
+                : authored;
+            table.scratch.clear();
+            REQUIRE(table.encode(column, authored_at(authored), table.scratch));
+            REQUIRE(table.land(at.row, table.scratch, keyed));
+            core->display_record(
                 subject.body,
+                position,
                 authored_at(authored),
-                plant_is(PLANT_THE_RECEIVE_TICK_IS_THE_KEY) ? received
-                                                            : authored,
-                true
+                keyed,
+                spec,
+                true,
+                owner,
+                lane,
+                column
             );
         }
 
@@ -123,17 +150,17 @@ class AuthoringRun {
         netw_test::pump_at(core, live, 2, 0.0);
         read.local_tick = live;
 
-        const Ref<NetwRingBuffer> buffer = core->display_get_track_stat(
-            entity,
-            StringName("position"),
-            StringName("buffer")
-        );
-        if (buffer.is_valid()) {
+        const netw::display::Runtime *runtime
+            = netw::NetwNativeTests::display_runtime_of(core.ptr(), entity);
+        const netw::display::History *buffer = runtime != nullptr
+            ? runtime->history_of(StringName("position"))
+            : nullptr;
+        if (buffer != nullptr) {
             read.newest_key = buffer->newest_tick();
             read.value_at_newest = buffer->get_at(read.newest_key);
         }
         read.displayed_tick = core->display_get_tick(entity);
-        if (buffer.is_valid() && read.displayed_tick >= 0) {
+        if (buffer != nullptr && read.displayed_tick >= 0) {
             const Variant held = buffer->get_at(read.displayed_tick);
             read.holds_displayed_key = held.get_type() != Variant::NIL;
             read.value_at_displayed = held;

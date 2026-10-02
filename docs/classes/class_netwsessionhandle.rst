@@ -85,6 +85,8 @@ Methods
    +-------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | :ref:`NetwPromise<class_NetwPromise>`                 | :ref:`save_entities<class_NetwSessionHandle_method_save_entities>`\ (\ )                                                                                           |
    +-------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | |void|                                                | :ref:`set_peer_bandwidth<class_NetwSessionHandle_method_set_peer_bandwidth>`\ (\ peer\: :godot:`int`, kbps\: :godot:`int`\ )                                       |
+   +-------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | |void|                                                | :ref:`set_server_info<class_NetwSessionHandle_method_set_server_info>`\ (\ info\: :ref:`NetwServerInfo<class_NetwServerInfo>`\ )                                   |
    +-------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 
@@ -498,6 +500,22 @@ Saves every entity row that changed since its last save, including rows of entit
     ┖╴a row's code      the first row still unsaved, see NetwPersistenceHandle.save
 
 \ **Server Only.**
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NetwSessionHandle_method_set_peer_bandwidth:
+
+.. rst-class:: classref-method
+
+|void| **set_peer_bandwidth**\ (\ peer\: :godot:`int`, kbps\: :godot:`int`\ ) :ref:`🔗<class_NetwSessionHandle_method_set_peer_bandwidth>`
+
+Gives ``peer`` its own budget in kbit/s, in place of :ref:`NetwSessionConfig.bandwidth_kbps<class_NetwSessionConfig_property_bandwidth_kbps>`, for what this peer sends it. ``0`` returns it to the session's budget, and a negative value is refused. The budget lasts until ``peer`` disconnects.
+
+::
+
+    Netw.session(self).set_peer_bandwidth(player.peer_id, 64)
 
 .. rst-class:: classref-item-separator
 

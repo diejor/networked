@@ -5,15 +5,17 @@
 #include "godot/local_vector.hpp"
 #include "godot/rid.hpp"
 #include "godot/variant.hpp"
+#include "netw/held_bytes.hpp"
 
 namespace netw::display {
 
 class Tracks {
 private:
-    godot::HashMap<godot::StringName, int32_t> key_index;
-    godot::HashMap<godot::StringName, int32_t> name_index;
-    godot::HashSet<godot::StringName> ambiguous;
-    int32_t channels = 0;
+    godot::LocalVector<godot::StringName> keys;
+    godot::LocalVector<godot::StringName> names;
+
+    int first_named(const godot::StringName &name) const;
+    int named_count(const godot::StringName &name) const;
 
 public:
     int declare(const godot::StringName &key, const godot::StringName &name);
@@ -23,6 +25,10 @@ public:
     int ambiguous_count() const;
     int size() const;
     void clear();
+
+    int64_t held_bytes() const {
+        return held::vector(keys) + held::vector(names);
+    }
 };
 
 } // namespace netw::display

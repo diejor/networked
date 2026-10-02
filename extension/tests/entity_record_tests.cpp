@@ -375,6 +375,40 @@ TEST_CASE(
 }
 
 TEST_CASE(
+    "[Networked][Entity][Hosted] R6b a record holds no interest facet, no "
+    "display declaration and no part until one is written, and the first "
+    "write starts from the defaults"
+) {
+    EntityFactories factories;
+    Record record;
+    const NetwEntityRecord *held = record.row;
+    const bool no_interest = held->find_interest_facet() == nullptr;
+    const bool no_display = held->find_display_declaration() == nullptr;
+    CHECK(no_interest);
+    CHECK(no_display);
+    NETW_CHECK_EQ(int(held->minted_part_count()), 0);
+    CHECK(
+        Ref<RefCounted>(held->minted_part(NetwEntityRecord::PART_SCENE))
+            .is_null()
+    );
+
+    netw::display::Decl &display = record->display_declaration();
+    const netw::display::Decl fresh;
+    NETW_CHECK_EQ(display.live_mode, fresh.live_mode);
+    NETW_CHECK_EQ(display.max_forecast_ticks, fresh.max_forecast_ticks);
+    NETW_CHECK_CLOSE(display.chase_glide_time, fresh.chase_glide_time, 1e-9);
+    const bool display_held = held->find_display_declaration() == &display;
+    CHECK(display_held);
+
+    netw::interest::Facet &interest = record->get_interest_facet();
+    NETW_CHECK_EQ(int(interest.layer_ids().size()), 0);
+    CHECK(interest.join(StringName("arena")));
+    const bool interest_held = held->find_interest_facet() == &interest;
+    CHECK(interest_held);
+    NETW_CHECK_EQ(int(interest.layer_ids().size()), 1);
+}
+
+TEST_CASE(
     "[Networked][Entity][Hosted] R7 a record's facets end with the record"
 ) {
     EntityFactories factories;

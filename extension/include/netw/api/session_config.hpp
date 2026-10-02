@@ -22,6 +22,7 @@ class NetwSessionConfig : public godot::Resource {
             = enums::NetwMultiplayer::Role(DEFAULT_DESIRED_ROLE);
         godot::Ref<NetwLinkConditions> link_conditions;
         godot::Ref<NetwServerInfo> server_info;
+        int64_t bandwidth_kbps = 0;
     };
 
     Values values;
@@ -65,6 +66,11 @@ public:
         return values.server_info;
     }
 
+    void set_bandwidth_kbps(int64_t p_kbps);
+    int64_t get_bandwidth_kbps() const {
+        return values.bandwidth_kbps;
+    }
+
     godot::Ref<NetwSessionConfig> app(const godot::StringName &p_app_id);
     godot::Ref<NetwSessionConfig> role(enums::NetwMultiplayer::Role p_role);
     godot::Ref<NetwSessionConfig> link(
@@ -73,6 +79,7 @@ public:
     godot::Ref<NetwSessionConfig> server(
         const godot::Ref<NetwServerInfo> &p_info
     );
+    godot::Ref<NetwSessionConfig> bandwidth(int64_t p_kbps);
 
     void seal(const godot::String &p_scope) {
         guard.seal(p_scope);

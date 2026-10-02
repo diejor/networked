@@ -4,12 +4,10 @@
 
 #include "godot/callable.hpp"
 #include "godot/local_vector.hpp"
-#include "netw/api/property_set_binding.hpp"
-#include "netw/api/timeline.hpp"
 #include "netw/object_port.hpp"
+#include "netw/predict/arrival.hpp"
 #include "netw/predict/books.hpp"
 #include "netw/predict/carry.hpp"
-#include "netw/predict/command_queue.hpp"
 #include "netw/predict/compare.hpp"
 #include "netw/predict/episode.hpp"
 #include "netw/predict/joint.hpp"
@@ -17,14 +15,26 @@
 #include "netw/predict/quarantine.hpp"
 #include "netw/predict/recovery.hpp"
 #include "netw/predict/sensors.hpp"
+#include "netw/predict/transition_book.hpp"
 #include "netw/predict/wiring.hpp"
 #include "netw/prediction_core.hpp"
+#include "netw/repl/property_binding.hpp"
+#include "netw/store/column.hpp"
+#include "netw/store/entity_ref.hpp"
 
 namespace netw::predict {
 
 constexpr int TAPE_HISTORY_LIMIT = 256;
 
 constexpr int ACK_AGE_MAX = 64;
+
+static_assert((ACK_AGE_MAX & (ACK_AGE_MAX - 1)) == 0);
+static_assert(TransitionBook::DEPTH == uint32_t(TAPE_HISTORY_LIMIT));
+
+constexpr uint32_t book_depth_for(int p_schedule) {
+    return p_schedule == int(Schedule::FRAME) ? TransitionBook::DEPTH
+                                              : uint32_t(ACK_AGE_MAX);
+}
 
 enum VerdictReason : int {
     VERDICT_REASON_NONE = 0,
@@ -55,6 +65,11 @@ public:
 
     int size() const {
         return count;
+    }
+
+    int64_t held_bytes() const {
+        return held::vector(indices) + held::vector(entry_labels)
+            + held::vector(fresh);
     }
 
     int64_t oldest_index() const;
@@ -93,7 +108,7 @@ struct DriveRecord {
 struct ReplayEntry {
     int64_t index = -1;
     int64_t label = -1;
-    godot::Dictionary input;
+    int64_t input_key = -1;
 };
 
 struct ConsumeInputPlan {
@@ -147,9 +162,6 @@ struct FieldReadings {
 };
 
 struct PassCursor {
-    double tick_delta = 1.0 / 60.0;
-    int64_t frame_index = 0;
-    int declared_quantum = 1;
     int64_t latest_input_tick = -1;
     int64_t last_driven_input_tick = -1;
     int64_t last_frame_transition_tick = -1;
@@ -158,9 +170,6 @@ struct PassCursor {
 };
 
 struct LaneCursor {
-    int64_t tape_epoch = 0;
-    int64_t next_tape_entry_index = 0;
-    int64_t last_driven_entry_index = -1;
     int64_t last_recorded_entry_index = -1;
     int64_t replay_cursor = -1;
     int64_t last_replayed_label = -1;
@@ -179,15 +188,36 @@ struct LaneCursor {
 };
 
 struct PayloadRows {
-    godot::Dictionary frame_input;
-    godot::Dictionary stall_input;
-    godot::Dictionary last_input;
     godot::Dictionary open_topology;
-    godot::Dictionary recovery_before;
-    godot::Dictionary recovery_write;
-    godot::Dictionary recovery_projection;
-    godot::Dictionary recovery_carried;
-    godot::Dictionary recovery_tier_errors;
+};
+
+struct RecoveryRows {
+    StateRow before;
+    StateRow write;
+    StateRow carried;
+    StateRow live;
+    StateRow deltas;
+    godot::LocalVector<int> projection;
+    godot::LocalVector<double> tier_errors;
+    RecoveryRequest request;
+    RecoveryRequest effective;
+    WritePlan answer;
+    WritePlan staged;
+    wire::CodeRow scratch;
+    godot::PackedInt64Array codes;
+    godot::LocalVector<godot::StringName> install_keys;
+    godot::LocalVector<godot::Variant> install_values;
+    godot::LocalVector<godot::Variant> install_target;
+    godot::LocalVector<godot::StringName> moved_keys;
+    godot::LocalVector<godot::Variant> moved;
+};
+
+struct PendingProvenance {
+    int64_t episode = 0;
+    int64_t write_id = 0;
+    int64_t op = 0;
+    int64_t basis = -1;
+    bool held = false;
 };
 
 struct EntityRoster {
@@ -264,6 +294,9 @@ struct Slot {
     int64_t order_key = -1;
     godot::LocalVector<uint8_t> owner_has_state;
     godot::LocalVector<uint8_t> owner_has_input;
+    godot::LocalVector<store::Column> state_ports;
+    godot::LocalVector<store::Column> input_ports;
+    StateRow pulled;
     bool owner_solves = false;
     godot::Callable simulate;
     godot::Callable witness;
@@ -272,7 +305,6 @@ struct Slot {
     godot::HashMap<godot::StringName, godot::Callable> carry_rules;
     Journal journal;
     Tape tape;
-    CommandQueue commands;
     ClaimBook owner_claims;
     WitnessClassBook authority_witness_classes;
     ContractionLedger contraction_ledger;
@@ -280,8 +312,10 @@ struct Slot {
     DeferredOperator deferred_operator;
     godot::PackedStringArray island_participants;
     int64_t episode_revision = 0;
-    godot::Ref<NetwTimeline> timeline;
-    godot::Ref<NetwTimeline> entry_history;
+    TransitionBook inputs;
+    int64_t input_floor = -1;
+    bool lane_open = false;
+    TransitionBook book;
     DriveStats stats;
     ComparisonReport report;
     RecoveryLedger recovery_ledger;
@@ -291,11 +325,37 @@ struct Slot {
     DeclaredAxes axes;
     EntityRoster rosters[4];
     PayloadRows rows;
-    godot::Ref<NetwPropertySetBinding> state_binding;
-    godot::Ref<NetwPropertySetBinding> input_binding;
+    RecoveryRows recovering;
+    uint64_t state_binding_id = 0;
+    uint64_t input_binding_id = 0;
+    store::EntityRef store;
+    Listener state_listener = Listener::NONE;
+    Listener input_listener = Listener::NONE;
+    godot::ObjectID arrival_seat;
     godot::StringName breach_source;
     CompareStats compare_stats;
     StateVerdict last_state_verdict;
+    StateRow compared;
+    StateRow received;
+    StateRow arrived;
+    StateRow command;
+    StateRow frame_command;
+    StateRow stall;
+    StateRow last;
+    StateRow live;
+    godot::Dictionary topology_fp_facts;
+    int topology_fp_quantum = -1;
+    int32_t topology_fp_value = 0;
+    int topology_schedule = -1;
+    int64_t topology_epoch = -1;
+    godot::PackedStringArray topology_participants;
+    bool topology_open = false;
+    wire::CodeRow command_scratch;
+    godot::PackedInt64Array command_codes;
+    godot::LocalVector<double> correction_tolerances;
+    godot::LocalVector<double> meter_tolerances;
+    godot::LocalVector<double> judged_errors;
+    wire::CodeRow fingerprint_scratch;
     StateRow state;
     Episode episode;
     sim::Selection joint_roster;
@@ -309,7 +369,7 @@ struct Slot {
     godot::LocalVector<CarryAttempt> carry_attempts;
     WitnessSummary last_witness;
     godot::Dictionary last_samples;
-    godot::Dictionary pending_provenance;
+    PendingProvenance pending_provenance;
     RecoveryState recovery;
     RecoveryStats recovery_stats;
     WritePlan last_write_plan;
@@ -318,9 +378,9 @@ struct Slot {
     int64_t next_tape_entry_index = 0;
     int64_t last_driven_entry_index = -1;
 
-    int64_t latest_input_tick = -1;
-    int64_t last_driven_input_tick = -1;
-    int64_t last_frame_transition_tick = -1;
+    int64_t recorded_input_tick = -1;
+    int64_t drive_input_tick = -1;
+    int64_t drive_frame_tick = -1;
     int64_t latest_authority_ack = -1;
     int64_t out_of_domain_until = -1;
     int64_t environment_epoch = -1;
@@ -338,13 +398,50 @@ struct Slot {
     bool quantum_declaration_warned = false;
 
     void adopt_timing(const Timing &p_timing);
-    void adopt_timeline(const godot::Ref<NetwTimeline> &p_timeline);
-    void reset_entry_history();
+    void open_lane();
+    void close_lane();
     void reset_tape(int64_t p_epoch);
 
     godot::LocalVector<ReplayEntry> replay_entries(int64_t p_basis) const;
 
-    godot::Dictionary state_before(int64_t p_transition) const;
+    int64_t label_for(int64_t p_key) const;
+    bool record_state_row(int64_t p_key, const StateRow &p_state);
+    bool joint_state(int64_t p_transition, StateRow &r_state) const;
+    int64_t joint_newest_state(int64_t p_transition) const;
+    int64_t joint_oldest_state() const;
+    void clear_joint_cells();
+
+    int32_t topology_fp(const godot::Dictionary &p_topology);
+    bool record_authored_row(
+        int64_t p_key,
+        int64_t p_label,
+        bool p_fresh,
+        const StateRow &p_input
+    );
+    void unacknowledged_row(int64_t p_key, StateRow &r_input) const;
+    void authored_row(int64_t p_key, StateRow &r_input) const;
+    bool holds_authored(int64_t p_key) const;
+    bool has_authored(int64_t p_key) const;
+    int64_t newest_authored() const;
+    void authored_ticks(
+        int64_t p_from,
+        int64_t p_to,
+        godot::LocalVector<int64_t> &r_ticks
+    ) const;
+    bool admit_command(
+        int64_t p_key,
+        int64_t p_label,
+        bool p_fresh,
+        const StateRow &p_command
+    );
+    bool record_joint_command(
+        int64_t p_key,
+        const StateRow &p_command,
+        CellProvenance p_provenance
+    );
+    bool holds_command(int64_t p_key) const;
+    int command_depth_from(int64_t p_cursor) const;
+    godot::PackedInt64Array command_keys() const;
 
     void mark_carry_dirty(int64_t p_transition);
     bool carry_judgeable(int64_t p_transition) const;
@@ -386,7 +483,7 @@ struct Slot {
         const EvidenceRow &p_peer,
         bool p_substituted
     );
-    StateVerdict compare(
+    const StateVerdict &compare(
         int64_t p_recv_tick,
         int64_t p_transition,
         const StateRow &p_predicted,
@@ -398,7 +495,7 @@ struct Slot {
         bool p_ack_domain_confirmed
     );
     void set_state(const StateRow &p_state);
-    WritePlan recover(const RecoveryRequest &p_request);
+    const WritePlan &recover(const RecoveryRequest &p_request);
     WritePlan quarantine_state(
         int64_t p_tick,
         int64_t p_basis,

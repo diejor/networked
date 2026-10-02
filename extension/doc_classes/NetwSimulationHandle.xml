@@ -99,7 +99,7 @@
 		</member>
 		<member name="claim_on_contact" type="bool" setter="set_claim_on_contact" getter="get_claim_on_contact" default="false">
 			When a body of this entity runs here as [constant MODE_AUTHORITY] and touches a free entity that also sets it, this peer claims that entity with [constant NetwEntity.HOLD_YIELDABLE]. A claimed entity claims what it touches in the same tick.
-			It turns on [member RigidBody3D.contact_monitor] for the bodies. It needs [constant NetwEntity.TRANSFER_IMMEDIATE] on an entity with no [method NetwPropertyConfig.state] property and no prediction, and does nothing otherwise.
+			It raises [member RigidBody3D.max_contacts_reported] on the bodies. [signal RigidBody3D.body_entered] and [signal RigidBody3D.body_exited] need the game's own [member RigidBody3D.contact_monitor]. It needs [constant NetwEntity.TRANSFER_IMMEDIATE] on an entity with no [method NetwPropertyConfig.state] property and no prediction, and does nothing otherwise.
 		</member>
 		<member name="max_restore_ticks" type="int" setter="set_max_restore_ticks" getter="get_max_restore_ticks" default="6">
 			The most ticks [constant RESTORE_EXTRAPOLATED] carries a sample forward.

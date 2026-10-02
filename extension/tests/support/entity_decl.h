@@ -27,8 +27,18 @@ class EntityDecl {
     double decl_teleport_at = 0.0;
     godot::Vector<godot::StringName> decl_synced;
     godot::Variant decl_initial_pose;
+    godot::StringName decl_projection;
 
 public:
+    EntityDecl &projected_by(const godot::StringName &p_channel) {
+        decl_projection = p_channel;
+        return *this;
+    }
+
+    const godot::StringName &projection() const {
+        return decl_projection;
+    }
+
     EntityDecl &named(const godot::StringName &p_name) {
         decl_name = p_name;
         return *this;

@@ -6,6 +6,7 @@
 #include "godot/node.hpp"
 #include "godot/object.hpp"
 #include "godot/variant.hpp"
+#include "netw/held_bytes.hpp"
 
 namespace netw {
 
@@ -68,6 +69,10 @@ public:
     }
     void set_wire_hash(int64_t p_hash) {
         wire_hash = p_hash;
+    }
+
+    int64_t held_bytes() const {
+        return held::vector(paths);
     }
 
 private:

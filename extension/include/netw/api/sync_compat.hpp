@@ -13,9 +13,10 @@
 #include "netw/api/entity.hpp"
 #include "netw/api/interpolate.hpp"
 #include "netw/api/sync_model.hpp"
+#include "netw/held_bytes.hpp"
 #include "netw/repl/watch_book.hpp"
 #include "netw/spawn/book.hpp"
-#include "netw/staged_writes.hpp"
+#include "netw/sync_kernel.hpp"
 
 namespace netw {
 
@@ -27,7 +28,32 @@ class SyncCompat {
 public:
     static const int WATCH_LIMIT = 64;
 
+    int64_t held_bytes() const {
+        int64_t bytes = held::vector(rows) + held::map(rows_by_sync)
+            + held::map_of_vectors(rows_by_root)
+            + held::map_of_vectors(rows_by_route) + held::map(config_holds)
+            + held::vector(pump_pass) + held::map(pending_schema)
+            + held::map(fields);
+        for (const Consumed *row : rows) {
+            bytes += int64_t(sizeof(Consumed)) + held::vector(row->sync_paths)
+                + held::vector(row->watch_paths)
+                + held::vector(row->sync_fields)
+                + held::vector(row->watch_fields)
+                + held::map(row->intent_by_peer)
+                + held::vector(row->feed_nodes)
+                + held::vector(row->feed_props)
+                + held::vector(row->feed_scripts)
+                + held::vector(row->feed_live);
+        }
+        return bytes;
+    }
+
 private:
+    struct Field {
+        godot::NodePath target;
+        godot::NodePath property;
+    };
+
     struct Consumed {
         int64_t id = 0;
         godot::ObjectID sync;
@@ -40,6 +66,8 @@ private:
         godot::StringName order_key;
         godot::LocalVector<godot::NodePath> sync_paths;
         godot::LocalVector<godot::NodePath> watch_paths;
+        godot::LocalVector<const Field *> sync_fields;
+        godot::LocalVector<const Field *> watch_fields;
         godot::HashMap<int64_t, bool> intent_by_peer;
         int64_t schema_hash = 0;
         bool poisoned = false;
@@ -50,6 +78,16 @@ private:
         godot::LocalVector<godot::ObjectID> feed_nodes;
         godot::LocalVector<godot::StringName> feed_props;
         bool feed_built = false;
+        godot::LocalVector<uint64_t> feed_scripts;
+        godot::LocalVector<uint8_t> feed_live;
+        uint64_t feed_epoch = UINT64_MAX;
+        bool feed_any = false;
+        godot::MultiplayerSynchronizer *sync_at = nullptr;
+        godot::Node *root_at = nullptr;
+        godot::Ref<NetwEntity> entity_at;
+        bool resident = false;
+        int64_t ordinal = -1;
+        uint64_t ordinal_revision = UINT64_MAX;
 
         godot::MultiplayerSynchronizer *sync_node() const;
         godot::Node *root_node() const;
@@ -66,18 +104,32 @@ private:
     int64_t channel_sync_delta = 0;
 
     godot::LocalVector<Consumed *> rows;
+    godot::HashMap<uint64_t, Consumed *> rows_by_sync;
+    godot::HashMap<uint64_t, godot::LocalVector<Consumed *>> rows_by_root;
+    godot::HashMap<int64_t, godot::LocalVector<Consumed *>> rows_by_route;
+    godot::HashMap<uint64_t, int> config_holds;
+    int64_t rows_examined = 0;
+    bool tree_watched = false;
+    int64_t pump_local_id = 0;
+    bool pump_server = false;
+    bool pump_encodes = false;
+    int64_t stage_calls = 0;
+    int64_t feed_lookups = 0;
+    godot::PackedInt32Array pump_peers;
+    godot::LocalVector<Consumed *> pump_pass;
     repl::WatchBook watch_book;
     godot::HashMap<int64_t, godot::Dictionary> pending_schema;
     int64_t next_row_id = 1;
 
-    godot::Node *stage_root = nullptr;
-    const godot::LocalVector<godot::NodePath> *stage_paths = nullptr;
-    bool stage_allow_missing = false;
-    godot::Array stage_readable;
+    godot::HashMap<godot::String, Field> fields;
+    int64_t fields_resolved = 0;
+    godot::Array gathered;
+    godot::Array gathered_readable;
     godot::PackedByteArray stage_payload;
-    godot::Array stage_keys;
+    int64_t stage_columns = 0;
     bool stage_retained = false;
-    StagedWrites stage_decoded;
+    bool stage_valid = false;
+    sync_kernel::DecodedRow stage_decoded;
 
     int64_t sync_frames_out = 0;
     int64_t sync_frames_in = 0;
@@ -89,16 +141,22 @@ private:
     int64_t drops_sync_unknown_flag = 0;
 
     NetwMultiplayer *core() const;
-    Consumed *row_of(godot::Object *p_sync) const;
-    Consumed *row_by_ordinal(int64_t p_route, int64_t p_ordinal) const;
-    void drop_row(uint32_t p_at);
+    Consumed *row_of(godot::Object *p_sync);
+    Consumed *row_by_ordinal(int64_t p_route, int64_t p_ordinal);
+    void index_row(Consumed *p_row);
+    void set_route(Consumed *p_row, int64_t p_route);
+    void rows_under(
+        godot::Node *p_owner,
+        godot::LocalVector<Consumed *> &r_rows
+    );
+    void drop_row(Consumed *p_row);
+    void watch_tree();
+    void forget_nodes(Consumed *p_row);
+    bool locate(Consumed *p_row);
+    godot::Ref<NetwEntity> entity_of(Consumed *p_row);
 
     void refresh_row(Consumed *p_row);
     void disconnect_config(Consumed *p_row);
-    bool config_still_held(
-        const godot::ObjectID &p_config,
-        Consumed *p_except
-    ) const;
     static int64_t schema_fingerprint(const Consumed *p_row);
     void poison(
         Consumed *p_row,
@@ -107,7 +165,7 @@ private:
     );
     void validate_schema(Consumed *p_row, int64_t p_route);
 
-    int64_t ordinal_of(const Consumed *p_row) const;
+    int64_t ordinal_of(Consumed *p_row);
     void capture_declaration(Consumed *p_row);
     void declare_model_row(const Consumed *p_row);
     void drop_declaration(Consumed *p_row);
@@ -141,26 +199,30 @@ private:
         const godot::PackedByteArray &p_payload
     );
 
-    godot::Array gather_stage();
-    godot::Error apply_stage(const godot::Array &p_staged);
     godot::Error decode_stage_body();
 
-    godot::Array gather_paths(
-        Consumed *p_row,
+    const Field *field_of(const godot::NodePath &p_path);
+    void resolve_fields(
         const godot::LocalVector<godot::NodePath> &p_paths,
-        bool p_allow_missing,
-        godot::Array &r_readable
+        godot::LocalVector<const Field *> &r_fields
     );
-    godot::Error apply_paths(
+    bool gather(
         Consumed *p_row,
-        const godot::LocalVector<godot::NodePath> &p_paths,
+        const godot::LocalVector<const Field *> &p_fields,
+        bool p_allow_missing
+    );
+    void apply(
+        Consumed *p_row,
+        const godot::LocalVector<const Field *> &p_fields,
         const godot::Array &p_values
     );
 
     void feed_interpolation(Consumed *p_row);
+    void refresh_feed(Consumed *p_row);
     void build_feed(Consumed *p_row, godot::MultiplayerSynchronizer *p_sync);
 
     void on_config_changed();
+    void on_node_removed(godot::Node *p_node);
     void on_sync_visibility_changed(int64_t p_peer, godot::Node *p_root);
     void on_entity_live(
         int64_t p_route,
@@ -212,6 +274,18 @@ public:
     void dispose();
 
     godot::Dictionary counters() const;
+    int64_t get_rows_examined() const {
+        return rows_examined;
+    }
+    int64_t get_fields_resolved() const {
+        return fields_resolved;
+    }
+    int64_t get_stage_calls() const {
+        return stage_calls;
+    }
+    int64_t get_feed_lookups() const {
+        return feed_lookups;
+    }
 };
 
 } // namespace netw

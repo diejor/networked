@@ -1629,7 +1629,7 @@ TEST_CASE(
         ERR_UNAUTHORIZED
     );
 
-    const Dictionary counters = core->get_table_core()->counters();
+    const Dictionary counters = core->store_arrays().counters();
     NETW_CHECK_EQ(int64_t(counters["drops_table_bad_sender"]), 1);
 }
 
@@ -3130,7 +3130,7 @@ TEST_CASE(
     ));
 
     SUBCASE("a session told of no replication plane resolves no binding") {
-        CHECK(core->entity_derived_binding(root, 0, 7).is_null());
+        CHECK(core->entity_derived_binding(root, 0, 7) == nullptr);
         NETW_CHECK_EQ(core->entity_derived_group(7).size(), 0);
     }
 

@@ -6,9 +6,9 @@
 #include "godot/variant.hpp"
 #include "netw/api/member_config.hpp"
 #include "netw/api/property_config.hpp"
-#include "netw/api/property_set.hpp"
 #include "netw/api/quantize.hpp"
 #include "netw/property_set_builder.hpp"
+#include "netw/repl/property_set.hpp"
 #include "netw/wire/registry.hpp"
 
 namespace TestNetwPropertySetDerivationLaws {
@@ -16,10 +16,10 @@ namespace TestNetwPropertySetDerivationLaws {
 using namespace godot;
 using netw::NetwMemberConfig;
 using netw::NetwPropertyConfig;
-using netw::NetwPropertySet;
+using netw::repl::PropertySet;
 namespace property_set_builder = netw::property_set_builder;
-using netw::NetwPropertySetColumn;
 using netw::NetwQuantizeScalar;
+using netw::repl::PropertyColumn;
 using netw_test::law_broken;
 using netw_test::law_held;
 using netw_test::LawRowFor;
@@ -53,10 +53,10 @@ struct FieldDecl {
     Policy policy = POLICY_UNDECLARED;
 
     bool marked_for(int64_t p_record) const {
-        if (p_record == NetwPropertySet::RECORD_INPUT) {
+        if (p_record == PropertySet::RECORD_INPUT) {
             return in_input;
         }
-        if (p_record == NetwPropertySet::RECORD_BROADCAST) {
+        if (p_record == PropertySet::RECORD_BROADCAST) {
             return in_broadcast && !in_state && !in_input;
         }
         return in_state;
@@ -65,7 +65,7 @@ struct FieldDecl {
 
 struct DerivationScenario {
     String label;
-    int64_t record = NetwPropertySet::RECORD_STATE;
+    int64_t record = PropertySet::RECORD_STATE;
     Vector<FieldDecl> fields;
 
     void add(const FieldDecl &p_field) {
@@ -113,7 +113,7 @@ DerivationScenario state_in_declaration_order() {
 DerivationScenario input_pair() {
     DerivationScenario scenario;
     scenario.label = "input-pair";
-    scenario.record = NetwPropertySet::RECORD_INPUT;
+    scenario.record = PropertySet::RECORD_INPUT;
     scenario.add(input_field("move"));
     scenario.add(input_field("aim"));
     return scenario;
@@ -122,7 +122,7 @@ DerivationScenario input_pair() {
 DerivationScenario broadcast_masked() {
     DerivationScenario scenario;
     scenario.label = "broadcast-masked";
-    scenario.record = NetwPropertySet::RECORD_BROADCAST;
+    scenario.record = PropertySet::RECORD_BROADCAST;
     FieldDecl aim = broadcast_field("aim_dir");
     aim.masked = true;
     scenario.add(aim);
@@ -132,7 +132,7 @@ DerivationScenario broadcast_masked() {
 DerivationScenario broadcast_asking_for_what_it_cannot_have() {
     DerivationScenario scenario;
     scenario.label = "broadcast-asking-for-what-it-cannot-have";
-    scenario.record = NetwPropertySet::RECORD_BROADCAST;
+    scenario.record = PropertySet::RECORD_BROADCAST;
     FieldDecl aim = broadcast_field("aim");
     aim.server_only = true;
     aim.window = 3;
@@ -143,7 +143,7 @@ DerivationScenario broadcast_asking_for_what_it_cannot_have() {
 DerivationScenario broadcast_yielding_to_a_recorded_mark() {
     DerivationScenario scenario;
     scenario.label = "broadcast-yielding-to-a-recorded-mark";
-    scenario.record = NetwPropertySet::RECORD_BROADCAST;
+    scenario.record = PropertySet::RECORD_BROADCAST;
     FieldDecl position = state_field("position");
     position.in_broadcast = true;
     scenario.add(position);
@@ -204,7 +204,7 @@ DerivationScenario a_member_narrowing_the_kind() {
 DerivationScenario two_members_naming_one_window() {
     DerivationScenario scenario;
     scenario.label = "two-members-naming-one-window";
-    scenario.record = NetwPropertySet::RECORD_INPUT;
+    scenario.record = PropertySet::RECORD_INPUT;
     FieldDecl move = input_field("move");
     move.window = 2;
     scenario.add(move);
@@ -217,7 +217,7 @@ DerivationScenario two_members_naming_one_window() {
 DerivationScenario masked_beside_a_window() {
     DerivationScenario scenario;
     scenario.label = "masked-beside-a-window";
-    scenario.record = NetwPropertySet::RECORD_INPUT;
+    scenario.record = PropertySet::RECORD_INPUT;
     FieldDecl move = input_field("move");
     move.masked = true;
     move.window = 3;
@@ -280,10 +280,7 @@ class DerivationRun {
             config->retained();
         }
         if (p_field.persisted) {
-            const Ref<netw::NetwSchema> schema
-                = netw::NetwSchema::create("derived_rows");
-            schema->f32("value", Ref<netw::NetwQuantize>(), 1);
-            config->persisted(schema->column_ref(0));
+            config->persisted(StringName("value"));
         }
         if (p_field.masked) {
             config->masked();
@@ -337,14 +334,15 @@ class DerivationRun {
             configs[declared.fields[at].key] = compile(declared.fields[at], at);
         }
 
-        const Ref<NetwPropertySet> set
-            = property_set_builder::from_property_configs(
+        PropertySet derived;
+        if (!property_set_builder::from_property_configs(
+                derived,
                 configs,
                 declared.record
-            );
-        if (set.is_null()) {
+            )) {
             return;
         }
+        const PropertySet *set = &derived;
         read.derived = true;
         read.record = set->get_record();
         read.profile = set->get_profile();
@@ -367,10 +365,9 @@ class DerivationRun {
                 Ref<netw::NetwQuantize>(quantizers[index]).is_valid()
             );
         }
-        for (int index = 0; index < set->columns.size(); ++index) {
-            const Ref<NetwPropertySetColumn> column = set->columns[index];
-            read.lanes.push_back(column->get_lane());
-            read.watches.push_back(column->get_watch());
+        for (const PropertyColumn &column : set->columns) {
+            read.lanes.push_back(column.lane);
+            read.watches.push_back(column.watch);
         }
     }
 
@@ -451,10 +448,10 @@ LawVerdict law_kind_presets(const DerivationRun &p_run) {
             int(record)
         );
     }
-    if (read.profile != NetwPropertySet::STAMPED) {
+    if (read.profile != PropertySet::STAMPED) {
         return law_broken("profile %d is not stamped", int(read.profile));
     }
-    if (read.cadence != NetwPropertySet::TICK) {
+    if (read.cadence != PropertySet::TICK) {
         return law_broken("cadence %d is not the tick", int(read.cadence));
     }
     if (read.channel != netw::wire::builtin_channel("SYNC")) {
@@ -463,9 +460,9 @@ LawVerdict law_kind_presets(const DerivationRun &p_run) {
             int(read.channel)
         );
     }
-    const int64_t owed_stamp = record == NetwPropertySet::RECORD_STATE
-        ? NetwPropertySet::STAMP_TICK_ACK
-        : NetwPropertySet::STAMP_TICK;
+    const int64_t owed_stamp = record == PropertySet::RECORD_STATE
+        ? PropertySet::STAMP_TICK_ACK
+        : PropertySet::STAMP_TICK;
     if (read.stamp != owed_stamp) {
         return law_broken(
             "stamp %d, kind %d is owed %d",
@@ -493,11 +490,11 @@ LawVerdict law_reach(const DerivationRun &p_run) {
             : asked_policy;
     }
 
-    int64_t owed_audience = record == NetwPropertySet::RECORD_INPUT
-        ? NetwPropertySet::AUDIENCE_SERVER_ONLY
-        : NetwPropertySet::AUDIENCE_PUBLIC;
-    if (asked_server_only && record == NetwPropertySet::RECORD_STATE) {
-        owed_audience = NetwPropertySet::AUDIENCE_SERVER_ONLY;
+    int64_t owed_audience = record == PropertySet::RECORD_INPUT
+        ? PropertySet::AUDIENCE_SERVER_ONLY
+        : PropertySet::AUDIENCE_PUBLIC;
+    if (asked_server_only && record == PropertySet::RECORD_STATE) {
+        owed_audience = PropertySet::AUDIENCE_SERVER_ONLY;
     }
     if (read.audience != owed_audience) {
         return law_broken(
@@ -508,7 +505,7 @@ LawVerdict law_reach(const DerivationRun &p_run) {
         );
     }
 
-    int64_t owed_policy = record == NetwPropertySet::RECORD_STATE
+    int64_t owed_policy = record == PropertySet::RECORD_STATE
         ? NetwMemberConfig::POLICY_AUTHORITY
         : NetwMemberConfig::POLICY_CONTROLLER;
     if (asked_policy == POLICY_ASKS_AUTHORITY) {
@@ -535,11 +532,11 @@ LawVerdict law_knobs(const DerivationRun &p_run) {
     const int64_t record = p_run.scenario().record;
     const Vector<FieldDecl> owed = p_run.collected();
 
-    int64_t owed_window = record == NetwPropertySet::RECORD_INPUT ? 2 : 0;
+    int64_t owed_window = record == PropertySet::RECORD_INPUT ? 2 : 0;
     bool owed_masked = false;
     for (int index = 0; index < owed.size(); ++index) {
         if (owed[index].window >= 0
-            && record != NetwPropertySet::RECORD_BROADCAST) {
+            && record != PropertySet::RECORD_BROADCAST) {
             owed_window = owed[index].window;
         }
         owed_masked = owed_masked || owed[index].masked;
@@ -579,8 +576,8 @@ LawVerdict law_lanes(const DerivationRun &p_run) {
         );
     }
     for (int index = 0; index < owed.size(); ++index) {
-        const int64_t lane = owed[index].retained ? NetwPropertySet::RETAINED
-                                                  : NetwPropertySet::VOLATILE;
+        const int64_t lane = owed[index].retained ? PropertySet::RETAINED
+                                                  : PropertySet::VOLATILE;
         if (read.lanes[index] != lane) {
             return law_broken(
                 "'%s' rides lane %d, declared %d",

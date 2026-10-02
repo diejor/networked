@@ -8,7 +8,6 @@
 #include "netw/api/display_handle.hpp"
 #include "netw/api/interest_layer.hpp"
 #include "netw/api/interpolate.hpp"
-#include "netw/api/ring_buffer.hpp"
 
 #include <godot_cpp/classes/multiplayer_synchronizer.hpp>
 #include <godot_cpp/classes/node2d.hpp>
@@ -117,14 +116,12 @@ class RevivalRun {
         if (entity.is_null()) {
             return -1;
         }
-        const Ref<netw::NetwDisplayHandle> display
-            = entity->get_interpolation();
-        if (display.is_null()) {
-            return -1;
-        }
-        const Ref<netw::NetwRingBuffer> buffer
-            = display->get_buffer(StringName("position"));
-        return buffer.is_null() ? -1 : buffer->newest_tick();
+        netw::NetwMultiplayer *core = netw_test::flow_core(p_rig.client(0));
+        return int64_t(core->display_get_track_stat(
+            entity->get_rid_handle(),
+            StringName("position"),
+            StringName("newest_tick")
+        ));
     }
 
     int64_t state_of(LoopbackRig &p_rig, int p_route) const {

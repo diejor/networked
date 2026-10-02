@@ -9,12 +9,10 @@ using namespace godot;
 
 namespace TestNetwReplLaneSet {
 
-using godot::Array;
 using netw::SchemaCore;
 using netw::repl::LaneSet;
 using netw::repl::RowLane;
 using netw::table::SchemaRecord;
-using netw::wire::CodeRow;
 
 const int64_t ROUTE = 3;
 
@@ -29,12 +27,6 @@ SchemaRecord body() {
     );
     SchemaCore::fix(&record);
     return record;
-}
-
-Array one(int64_t x) {
-    Array out;
-    out.push_back(x);
-    return out;
 }
 
 TEST_CASE(
@@ -61,10 +53,8 @@ TEST_CASE(
     NETW_CHECK_EQ(set.size(), 2);
     const bool the_components_are_separate_lanes = root != child;
     CHECK(the_components_are_separate_lanes);
-
-    CodeRow row;
-    CHECK(root->gather(one(10), row));
-    CHECK(child->gather(one(20), row));
+    CHECK(root->valid());
+    CHECK(child->valid());
 }
 
 TEST_CASE(

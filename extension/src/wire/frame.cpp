@@ -1,5 +1,7 @@
 #include "netw/wire/frame.hpp"
 
+#include <cstring>
+
 #include "netw/colors.hpp"
 #include "netw/log.hpp"
 #include "netw/profile.hpp"
@@ -57,7 +59,21 @@ bool split_path_body(const PackedByteArray &p_body, Frame &r_frame) {
     return true;
 }
 
+int64_t varuint_bytes(uint64_t p_value) {
+    int64_t bytes = 1;
+    while (p_value >= 0x80) {
+        p_value >>= 7;
+        bytes += 1;
+    }
+    return bytes;
+}
+
 } // namespace
+
+int64_t frame_size(int64_t p_route, int64_t p_payload_bytes) {
+    return varuint_bytes(uint64_t(p_route)) + 2
+        + varuint_bytes(uint64_t(p_payload_bytes)) + p_payload_bytes;
+}
 
 PackedByteArray frame_pack(
     int64_t p_route,
@@ -66,13 +82,25 @@ PackedByteArray frame_pack(
     const PackedByteArray &p_payload,
     const String &p_path
 ) {
-    NETW_ZONE_NC("wire frame pack", colors::WIRE);
+    WriteStream stream;
+    return frame_pack(stream, p_route, p_comp, p_channel, p_payload, p_path);
+}
+
+PackedByteArray frame_pack(
+    WriteStream &r_stream,
+    int64_t p_route,
+    uint8_t p_comp,
+    uint8_t p_channel,
+    const PackedByteArray &p_payload,
+    const String &p_path
+) {
+    NETW_ZONE_LEAF("Frame pack", colors::WIRE, profile::SUBSYSTEM_WIRE);
 
     if (p_route < 0) {
         NETW_TRACE(
             sys::WIRE,
-            "channel %d asked for a frame at route %d, which no varuint "
-            "spells",
+            "Channel %d asked for a frame at negative route %d, so none was "
+            "built.",
             int(p_channel),
             int(p_route)
         );
@@ -94,22 +122,28 @@ PackedByteArray frame_pack(
     header.channel = p_channel;
     header.length = uint64_t(body.size());
 
-    WriteStream stream;
-    if (!FrameHeader::wire.run(stream, header)) {
+    r_stream.clear();
+    if (!FrameHeader::wire.run(r_stream, header)) {
         return PackedByteArray();
     }
 
-    PackedByteArray out = stream.to_bytes();
-    out.append_array(body);
+    const int64_t head = int64_t(r_stream.byte_count());
+    PackedByteArray out;
+    out.resize(head + body.size());
+    uint8_t *written = out.ptrw();
+    memcpy(written, r_stream.data(), size_t(head));
+    if (!body.is_empty()) {
+        memcpy(written + head, body.ptr(), size_t(body.size()));
+    }
     return out;
 }
 
 bool frame_unpack_next(ReadStream &p_stream, Frame &r_frame) {
-    NETW_ZONE_NC("wire frame unpack next", colors::WIRE);
+    NETW_ZONE_LEAF("Frame unpack", colors::WIRE, profile::SUBSYSTEM_WIRE);
 
     FrameHeader header;
     if (!FrameHeader::wire.run(p_stream, header)) {
-        NETW_TRACE(sys::WIRE, "a frame opened with a header it cannot hold");
+        NETW_TRACE(sys::WIRE, "A frame is too short for its header.");
         return false;
     }
 
@@ -117,8 +151,8 @@ bool frame_unpack_next(ReadStream &p_stream, Frame &r_frame) {
     if (!p_stream.raw_bytes(body, int64_t(header.length))) {
         NETW_TRACE(
             sys::WIRE,
-            "route %d channel %d claimed %d payload bytes the datagram does "
-            "not hold",
+            "A frame for route %d on channel %d claims %d payload bytes the "
+            "packet does not hold.",
             int(header.route),
             int(header.channel),
             int(header.length)
@@ -138,7 +172,7 @@ bool frame_unpack_next(ReadStream &p_stream, Frame &r_frame) {
     if (!split_path_body(body, r_frame)) {
         NETW_TRACE(
             sys::WIRE,
-            "route %d carried a path its own body cannot hold",
+            "A frame for route %d is too short for the path it carries.",
             int(header.route)
         );
         return false;
@@ -147,14 +181,14 @@ bool frame_unpack_next(ReadStream &p_stream, Frame &r_frame) {
 }
 
 FrameWalk frame_unpack_all(const PackedByteArray &p_framed, int64_t p_from) {
-    NETW_ZONE_NC("wire frame unpack all", colors::WIRE);
+    NETW_ZONE_NC("Frame unpack all", colors::WIRE);
 
     FrameWalk walk;
     NETW_ERR_COND_V(
         p_from < 0 || p_from > p_framed.size(),
         walk,
         sys::WIRE,
-        "a frame walk started at %d of %d bytes",
+        "A packet read started at byte %d of a %d byte packet.",
         int(p_from),
         int(p_framed.size())
     );

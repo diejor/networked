@@ -417,7 +417,8 @@ Error SchemaCore::fix(SchemaRecord *record) {
         NETW_ERR_V(
             ERR_INVALID_DECLARATION,
             sys::TABLE,
-            "Schema %s declares %d columns and a row mask carries %d.",
+            "Schema '%s' declares %d columns, and a schema holds at most %d. "
+            "Split it into smaller schemas.",
             String(record->name).utf8().get_data(),
             record->column_count(),
             MAX_COLUMNS

@@ -44,15 +44,15 @@ void dilate_playhead(
     bool p_trace
 );
 
-void pump_history(
+bool pump_history(
     Runtime *p_runtime,
     const Timing &p_timing,
     PumpStats &p_stats
 );
 
-void pump_chase(Runtime *p_runtime, const Timing &p_timing);
+bool pump_chase(Runtime *p_runtime, const Timing &p_timing);
 
-void pump_runtime(
+bool pump_runtime(
     Runtime *p_runtime,
     const Timing &p_timing,
     PumpStats &p_stats,
@@ -63,6 +63,13 @@ void absorb_recovery(
     Runtime *p_runtime,
     const godot::Dictionary &p_deltas,
     bool p_teleported,
+    const Hooks &p_hooks
+);
+
+void absorb_moved(
+    Runtime *p_runtime,
+    const godot::LocalVector<godot::StringName> &p_keys,
+    const godot::LocalVector<godot::Variant> &p_deltas,
     const Hooks &p_hooks
 );
 

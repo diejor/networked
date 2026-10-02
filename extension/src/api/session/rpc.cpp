@@ -227,9 +227,10 @@ Callable NetwMultiplayer::relay_for(const StringName &p_signal, int p_arity) {
     NETW_ERR_V(
         Callable(),
         sys::SESSION,
-        "no relay for a %d argument signal, %s is not published",
-        p_arity,
-        String(p_signal)
+        "Signal '%s' has %d arguments, and only signals with up to 2 can be "
+        "relayed.",
+        String(p_signal),
+        p_arity
     );
 }
 
@@ -314,7 +315,7 @@ void NetwMultiplayer::relay_auth_failed(int64_t p_peer) {
     if (!probe_forget(p_peer)) {
         NETW_WARN(
             netw::sys::SESSION,
-            "authentication failed for peer %d",
+            "Peer %d failed authentication and was refused.",
             int(p_peer)
         );
     }
@@ -629,11 +630,9 @@ void NetwMultiplayer::rpc_warn_dropped_once(Node *p_target) {
     rpc_drop_warned.insert(held);
     NETW_WARN(
         sys::TRANSPORT,
-        "a call addressed to '%s' was dropped: it holds no live route, and "
-        "a call is not replayed the way a state frame is. If the entity was "
-        "despawned, stop calling it. If it has not spawned yet, wait for "
-        "entity_live. Later calls to this target are counted in "
-        "rpc_sends_dropped_not_live rather than reported.",
+        "An RPC to '%s' was dropped, because it is not spawned on the "
+        "network. Wait for the entity_live signal before calling it, and stop "
+        "calling it after despawn.",
         String(p_target->get_name()).utf8().get_data()
     );
 }
@@ -820,7 +819,7 @@ Dictionary NetwMultiplayer::lagcomp_metrics() const {
 }
 
 Dictionary NetwMultiplayer::stats_snapshot() {
-    NETW_ZONE_NC("session stats snapshot", colors::SESSION);
+    NETW_ZONE_NC("Stats snapshot", colors::SESSION);
     Dictionary out = relay_stats_snapshot();
     out[StringName("pending_live")] = liveness_pending_live_count();
 
@@ -830,9 +829,7 @@ Dictionary NetwMultiplayer::stats_snapshot() {
         const String counter = interest_keys[at];
         out[StringName("interest_" + counter)] = interest[counter];
     }
-    if (table_core.is_valid()) {
-        out.merge(table_core->counters());
-    }
+    out.merge(store_world.arrays.counters());
 
     const Dictionary predict = lagcomp_metrics();
     out[StringName("predict_entities")] = predict[StringName("entities")];
@@ -973,7 +970,8 @@ call_args::Slot NetwMultiplayer::rpc_encoded_arg(const Variant &p_arg) const {
         NETW_ERR_V(
             call_args::of_value(Variant()),
             sys::TRANSPORT,
-            "an rpc argument entity has no route"
+            "An RPC argument is a node that is not spawned on the network, so "
+            "it was sent as null."
         );
     }
     return call_args::of_node(
@@ -1010,7 +1008,8 @@ void NetwMultiplayer::rpc_call(
             || !Dictionary(script->get_rpc_config()).has(method))) {
         NETW_WARN(
             sys::TRANSPORT,
-            "method '%s' is not registered or annotated on '%s'",
+            "Method '%s' on '%s' is not an RPC. Declare it with "
+            "Netw.configure_rpc or @rpc.",
             String(method),
             String(node->get_name())
         );
@@ -1032,7 +1031,8 @@ void NetwMultiplayer::rpc_call(
         } else if (p_peer == local_id) {
             NETW_ERR(
                 sys::TRANSPORT,
-                "a call_remote method '%s' cannot be called locally",
+                "RPC '%s' is call_remote, so it cannot target this peer. Make "
+                "it call_local to call it here.",
                 String(method)
             );
             return;
@@ -1101,7 +1101,8 @@ bool NetwMultiplayer::rpc_request_prepare(
             || !Dictionary(script->get_rpc_config()).has(method))) {
         NETW_WARN(
             sys::TRANSPORT,
-            "method '%s' is not registered or annotated on '%s'",
+            "Method '%s' on '%s' is not an RPC. Declare it with "
+            "Netw.configure_rpc or @rpc.",
             String(method),
             String(node->get_name())
         );
@@ -1456,7 +1457,8 @@ void NetwMultiplayer::rpc_handle_call(
         && !Dictionary(script->get_rpc_config()).has(method)) {
         NETW_WARN(
             sys::TRANSPORT,
-            "method '%s' not registered or annotated on '%s'",
+            "A call for '%s' on '%s' was dropped, because it is not an RPC on "
+            "this peer. Declare it the same way on every peer.",
             String(method),
             String(p_comp_node->get_name())
         );
@@ -1473,7 +1475,8 @@ void NetwMultiplayer::rpc_handle_call(
     if (!decoded || !reader.align_verify() || reader.bits_remaining() != 0) {
         NETW_WARN(
             sys::TRANSPORT,
-            "a call frame for '%s' did not decode whole and calls nothing",
+            "A call for '%s' could not be read, so it was dropped. Declare the "
+            "RPC with the same arguments on every peer.",
             String(method)
         );
         return;
@@ -1489,7 +1492,7 @@ void NetwMultiplayer::rpc_handle_call(
         )) {
         NETW_WARN(
             sys::TRANSPORT,
-            "unauthorized rpc sender %d for '%s' on '%s'",
+            "Peer %d may not call '%s' on '%s', so the call was dropped.",
             p_sender,
             String(method),
             String(p_comp_node->get_name())
@@ -1504,7 +1507,8 @@ void NetwMultiplayer::rpc_handle_call(
         )) {
         NETW_WARN(
             sys::TRANSPORT,
-            "arity mismatch for '%s' on '%s'",
+            "A call for '%s' on '%s' had the wrong number of arguments, so it "
+            "was dropped.",
             String(method),
             String(p_comp_node->get_name())
         );
@@ -1536,7 +1540,8 @@ void NetwMultiplayer::rpc_handle_call(
             if (warn_verdict(ERR_UNAUTHORIZED, slot.node.route)) {
                 NETW_WARN(
                     sys::TRANSPORT,
-                    "sender %d interest view does not admit route %d",
+                    "Peer %d sent a call naming route %d, which it cannot see, "
+                    "so the call was dropped.",
                     p_sender,
                     slot.node.route
                 );
@@ -1563,7 +1568,8 @@ void NetwMultiplayer::rpc_handle_call(
     if (target_type != CALL_TARGET_EVERYONE && target_peer != get_unique_id()) {
         NETW_WARN(
             sys::TRANSPORT,
-            "a call for '%s' addressed peer %d and arrived at %d",
+            "A call for '%s' was meant for peer %d and reached peer %d, so it "
+            "was dropped.",
             String(method),
             int(target_peer),
             int(get_unique_id())
@@ -1619,7 +1625,8 @@ Error NetwMultiplayer::send_row_to(
         p_comp,
         String(),
         p_batched,
-        p_row
+        p_row,
+        true
     );
 }
 
@@ -1642,8 +1649,31 @@ Error NetwMultiplayer::send_to(
         p_comp,
         p_path,
         p_batched,
-        nullptr
+        nullptr,
+        false
     );
+}
+
+void NetwMultiplayer::charge_frame(
+    int64_t p_peer,
+    int64_t p_channel,
+    int64_t p_bytes
+) {
+    static const int64_t first_clock
+        = wire::builtin_channel(StringName("CLOCK_HANDSHAKE"));
+    static const int64_t last_clock
+        = wire::builtin_channel(StringName("CLOCK_PONG"));
+    if (p_peer <= 0 || (p_channel >= first_clock && p_channel <= last_clock)) {
+        return;
+    }
+    ReplicationCore *plane = get_replication_plane();
+    SyncPipeline *pipeline
+        = plane != nullptr ? plane->get_sync_pipeline() : nullptr;
+    ReplicationSend *send
+        = pipeline != nullptr ? pipeline->row_send() : nullptr;
+    if (send != nullptr) {
+        send->charge(p_peer, p_bytes);
+    }
 }
 
 Error NetwMultiplayer::send_frame(
@@ -1655,14 +1685,23 @@ Error NetwMultiplayer::send_frame(
     int64_t p_comp,
     const String &p_path,
     bool p_batched,
-    const CarrierRow *p_row
+    const CarrierRow *p_row,
+    bool p_charged
 ) {
-    NETW_ZONE_NC("session send frame", colors::TRANSPORT);
+    NETW_ZONE_LEAF_F(
+        "Send frame",
+        colors::TRANSPORT,
+        profile::SUBSYSTEM_WIRE,
+        "entity %lld peer %lld",
+        static_cast<long long>(p_route),
+        static_cast<long long>(p_peer)
+    );
     NETW_ERR_COND_V(
         p_route < 0,
         ERR_INVALID_PARAMETER,
         sys::TRANSPORT,
-        "channel %d addressed peer %d with no route",
+        "Channel %d cannot send to peer %d for an entity with a negative "
+        "route.",
         int(p_channel),
         int(p_peer)
     );
@@ -1679,12 +1718,13 @@ Error NetwMultiplayer::send_frame(
             plane == nullptr,
             ERR_UNCONFIGURED,
             sys::TRANSPORT,
-            "channel %d looped back before a dispatcher was installed",
+            "Channel %d could not deliver to this peer, because replication is "
+            "not running.",
             int(p_channel)
         );
         NETW_TRACE(
             sys::TRANSPORT,
-            "loopback route=%d channel=%d",
+            "Delivered locally for route %d on channel %d.",
             int(p_route),
             int(p_channel)
         );
@@ -1702,12 +1742,16 @@ Error NetwMultiplayer::send_frame(
     }
 
     const PackedByteArray framed = wire::frame_pack(
+        frame_stream,
         p_route,
         uint8_t(p_comp),
         uint8_t(p_channel),
         p_payload,
         p_path
     );
+    if (!p_charged) {
+        charge_frame(p_peer, p_channel, framed.size());
+    }
 
     wire::Attribution outgoing;
     outgoing.peer = p_peer;
@@ -1758,6 +1802,9 @@ int64_t NetwMultiplayer::send_datagram(
 
     const NetwCarrierDatagram datagram
         = frame_datagram(p_peer, p_payload, p_reliable, p_carrier);
+#if defined(NETW_TESTS)
+    const int64_t before_transport = store::allocations_seen();
+#endif
     const Error delivered = inner->send_bytes(
         datagram.bytes,
         int(p_peer),
@@ -1765,6 +1812,10 @@ int64_t NetwMultiplayer::send_datagram(
                    : MultiplayerPeer::TRANSFER_MODE_UNRELIABLE,
         0
     );
+#if defined(NETW_TESTS)
+    idle_work.transport_allocations
+        += store::allocations_seen() - before_transport;
+#endif
     if (delivered != OK && p_peer != 0) {
         if (session_link_is_connected()) {
             peer_mark_unreachable(p_peer);
@@ -1820,8 +1871,8 @@ int64_t NetwMultiplayer::carrier_dispose(
         return -1;
     }
     bool sent = false;
-    const int64_t seq
-        = send_datagram(p_peer, p_batch.bytes(), p_reliable, p_carrier, &sent);
+    int64_t seq = -1;
+    seq = send_datagram(p_peer, p_batch.bytes(), p_reliable, p_carrier, &sent);
     if (!sent) {
         carrier_cancel(p_peer, p_batch);
         return -1;
@@ -1874,17 +1925,27 @@ void NetwMultiplayer::carrier_cancel(
 }
 
 PackedInt64Array NetwMultiplayer::carrier_flush() {
+#if defined(NETW_TESTS)
+    store::AllocationTally flushing(idle_work.carrier_allocations);
+#endif
     PackedInt64Array staged;
     for (const int32_t peer : carrier.peers(false)) {
-        const int64_t seq
-            = carrier_dispose(peer, false, carrier.take(peer, false));
+        NETW_ZONE_NC("Flush unreliable datagram", colors::TRANSPORT);
+        NETW_ZONE_TEXT_F("peer %d", int(peer));
+        CarrierBatch batch = carrier.take(peer, false);
+        const int64_t seq = carrier_dispose(peer, false, batch);
+        carrier.recycle(peer, false, batch);
         if (seq >= 0) {
             staged.push_back(peer);
             staged.push_back(seq);
         }
     }
     for (const int32_t peer : carrier.peers(true)) {
-        carrier_dispose(peer, true, carrier.take(peer, true));
+        NETW_ZONE_NC("Flush reliable datagram", colors::TRANSPORT);
+        NETW_ZONE_TEXT_F("peer %d", int(peer));
+        CarrierBatch batch = carrier.take(peer, true);
+        carrier_dispose(peer, true, batch);
+        carrier.recycle(peer, true, batch);
     }
     attribution.settle_retired_routes();
     return staged;
@@ -1936,6 +1997,7 @@ NetwCarrierDatagram NetwMultiplayer::frame_datagram(
     }
     attribution.commit(p_peer, p_reliable, p_carrier, seq);
     out.bytes = NetwCarrierFrame::build(
+        frame_stream,
         p_payload,
         p_reliable,
         seq,
@@ -2028,13 +2090,18 @@ void NetwMultiplayer::sync_note_ack_default(
     if (plane == nullptr) {
         NETW_TRACE(
             sys::SESSION,
-            "a receive-side ack was recorded with no replication plane"
+            "A received acknowledgement was dropped, because replication is "
+            "not running."
         );
         return;
     }
     SyncPipeline *pipeline = plane->get_sync_pipeline();
     if (pipeline == nullptr) {
-        NETW_TRACE(sys::SESSION, "a receive-side ack found no sync pipeline");
+        NETW_TRACE(
+            sys::SESSION,
+            "A received acknowledgement was dropped, because sync is not "
+            "running."
+        );
         return;
     }
     pipeline->note_peer_ack(p_peer, p_sequence, peer_ack_history(p_peer));
@@ -2117,13 +2184,18 @@ void NetwMultiplayer::sync_note_sent_default(
     if (plane == nullptr) {
         NETW_TRACE(
             sys::SESSION,
-            "a send-side ack was recorded with no replication plane"
+            "A sent acknowledgement was not recorded, because replication is "
+            "not running."
         );
         return;
     }
     SyncPipeline *pipeline = plane->get_sync_pipeline();
     if (pipeline == nullptr) {
-        NETW_TRACE(sys::SESSION, "a send-side ack found no sync pipeline");
+        NETW_TRACE(
+            sys::SESSION,
+            "A sent acknowledgement was not recorded, because sync is not "
+            "running."
+        );
         return;
     }
     pipeline->commit_pending_masked(p_peer, p_sequence);

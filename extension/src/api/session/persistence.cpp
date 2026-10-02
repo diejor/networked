@@ -16,7 +16,6 @@
 #include "netw/persist/snapshot.hpp"
 #include "netw/schema_model.hpp"
 #include "netw/script/model.hpp"
-#include "netw/table/core.hpp"
 
 using namespace godot;
 
@@ -137,8 +136,8 @@ RID NetwMultiplayer::database_create(
             NETW_ERR_V(
                 RID(),
                 sys::TABLE,
-                "database '%s' is already declared in this session with a "
-                "different backend",
+                "Database '%s' is already declared with a different backend. "
+                "Declare each database name with one backend.",
                 String(p_name).utf8().get_data()
             );
         }
@@ -521,7 +520,7 @@ void NetwMultiplayer::persist_notify_failed(
 ) {
     NETW_ERROR(
         sys::TABLE,
-        "database '%s': %s",
+        "Database '%s' failed. %s",
         String(databases.name_of(p_database)).utf8().get_data(),
         p_detail.utf8().get_data()
     );
@@ -578,10 +577,7 @@ void NetwMultiplayer::persist_publish(const RID &p_binding) {
     const Ref<NetwEntity> entity = NetwEntity::resolve(root);
     if (entity.is_valid()) {
         sync_pipeline_recapture_entity(entity);
-        const Ref<NetwDisplayHandle> display = entity->get_interpolation();
-        if (display.is_valid()) {
-            display->reset();
-        }
+        display_reset(entity->get_rid_handle());
         if (gd::instance_id(root) != persist_enrolling) {
             predict_reconcile_declaration(entity);
         }
@@ -659,8 +655,8 @@ void NetwMultiplayer::persist_load_failed(
             held->database,
             p_error,
             vformat(
-                "loading record '%s' failed, so its entity is not published. "
-                "%s",
+                "Loading record '%s' failed, so its entity is not published "
+                "(%s).",
                 String(held->record_id),
                 p_detail
             )
@@ -964,13 +960,12 @@ void NetwMultiplayer::persist_batch_settled(
             first_error,
             unsaved == 1
                 ? vformat(
-                      "record '%s' was not saved. %s",
+                      "Record '%s' was not saved (%s).",
                       String(first_record),
                       first_failure
                   )
                 : vformat(
-                      "%d entity rows were not saved. Record '%s' was not "
-                      "saved. %s",
+                      "%d records were not saved, the first being '%s' (%s).",
                       unsaved,
                       String(first_record),
                       first_failure
@@ -1179,7 +1174,7 @@ Ref<NetwPromise> NetwMultiplayer::table_save(
     }
     const SchemaRecord *schema
         = schema_core.record_of(table_get_schema(p_table));
-    if (!table_core->is_valid(p_table) || schema == nullptr
+    if (!store_world.arrays.is_valid(p_table) || schema == nullptr
         || !schema->sealed) {
         return NetwPromise::rejected(
             ERR_DOES_NOT_EXIST,
@@ -1205,7 +1200,7 @@ Ref<NetwPromise> NetwMultiplayer::table_save(
             );
         }
     }
-    const PackedInt64Array routes = table_core->read_routes(p_table);
+    const PackedInt64Array routes = table_read_routes(p_table);
     String detail;
     const Error named = persist::validate_ids(p_ids, routes.size(), detail);
     if (named != OK) {
@@ -1214,7 +1209,7 @@ Ref<NetwPromise> NetwMultiplayer::table_save(
     LocalVector<Variant> columns;
     columns.reserve(uint32_t(schema->column_count()));
     for (int at = 0; at < schema->column_count(); ++at) {
-        columns.push_back(table_core->read_column(p_table, at));
+        columns.push_back(table_read_column(p_table, at));
     }
     Dictionary operation;
     operation["kind"] = "replace";
@@ -1265,7 +1260,7 @@ Ref<NetwPromise> NetwMultiplayer::table_load(
             "a peer holding no session authority loads no table"
         ));
     }
-    if (!table_core->is_valid(p_table)) {
+    if (!store_world.arrays.is_valid(p_table)) {
         return NetwPromise::resolved(table_load_failure(
             ERR_DOES_NOT_EXIST,
             "this handle names no table in this session"
@@ -1283,7 +1278,7 @@ Ref<NetwPromise> NetwMultiplayer::table_load(
     asked->when_settled(callable_mp(this, &NetwMultiplayer::persist_table_read)
                             .bind(
                                 p_table,
-                                table_core->revision(p_table),
+                                store_world.arrays.revision(p_table),
                                 asked,
                                 answer,
                                 tenure,
@@ -1343,7 +1338,7 @@ void NetwMultiplayer::persist_table_read(
         p_answer->resolve(table_load_failure(opened, detail));
         return;
     }
-    if (table_core->revision(p_table) != p_revision) {
+    if (store_world.arrays.revision(p_table) != p_revision) {
         p_answer->resolve(table_load_failure(
             ERR_BUSY,
             "the table committed new rows while its snapshot was read, "
@@ -1356,7 +1351,7 @@ void NetwMultiplayer::persist_table_read(
     for (int at = 0; at < ids.size(); ++at) {
         routes.set(at, liveness_reserve_route());
     }
-    const Error replaced = table_core->replace_rows(
+    const Error replaced = store_world.arrays.replace_rows(
         p_table,
         routes,
         columns,
@@ -1386,8 +1381,8 @@ void NetwMultiplayer::persist_table_retire(
 ) {
     PackedInt64Array retiring;
     for (int at = 0; at < p_routes.size(); ++at) {
-        if (table_core->row_of(p_table, p_routes[at]) < 0
-            && !table_core->holds_elsewhere(p_table, p_routes[at])) {
+        if (store_world.arrays.row_of(p_table, p_routes[at]) < 0
+            && !store_world.arrays.holds_elsewhere(p_table, p_routes[at])) {
             retiring.push_back(p_routes[at]);
         }
     }

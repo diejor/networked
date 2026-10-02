@@ -40,7 +40,7 @@ Ref<NetwSceneConfig> NetwSceneConfig::labeled(const StringName &p_stem) {
         p_stem == StringName(),
         Ref<NetwSceneConfig>(this),
         sys::SCENE,
-        "NetwSceneConfig.labeled: an empty stem names no scene"
+        "NetwSceneConfig.labeled needs a label, and it was empty."
     );
     SceneDecl decl = held();
     decl.label = p_stem;

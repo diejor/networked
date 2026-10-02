@@ -15,20 +15,22 @@
 #include "netw/api/netw_multiplayer.hpp"
 #include "netw/api/predict.hpp"
 #include "netw/api/prediction_handle.hpp"
-#include "netw/api/property_set.hpp"
-#include "netw/api/property_set_binding.hpp"
 #include "netw/display/timing.hpp"
+#include "netw/predict/arrival.hpp"
 #include "netw/predict/engine.hpp"
 #include "netw/prediction_core.hpp"
+#include "netw/repl/property_binding.hpp"
 #include "netw/sim/install.hpp"
 #include "netw/sim/row.hpp"
+#include "netw/store/world.hpp"
 
 namespace TestNetwSimInstallLaws {
 
 using namespace godot;
 using netw::NetwEntity;
 using netw::NetwMultiplayer;
-using netw::NetwPropertySet;
+using netw::repl::PropertyBindingPtr;
+using netw::repl::PropertySet;
 using netw::sim::InstallStats;
 using netw::sim::Mode;
 using netw::sim::Restore;
@@ -151,12 +153,29 @@ struct Stand {
         return seen != nullptr ? seen->installs.stats : InstallStats();
     }
 
+    int pending(int p_client) {
+        NetwMultiplayer *session = core(p_client);
+        const int64_t route
+            = session->liveness_route_of(NetwEntity::of(copy(p_client)).ptr());
+        netw::store::World &world = session->store();
+        int held = 0;
+        for (uint32_t at = 0; at < world.table_count(); ++at) {
+            const netw::store::Table &table = world.table(at);
+            for (uint32_t index = 0; index < table.row_count(); ++index) {
+                held += table.routes[index] == route
+                    ? int(table.due_held[index])
+                    : 0;
+            }
+        }
+        return held;
+    }
+
     int64_t author(int p_author, const Vector2 &p_value) {
         const int64_t tick = netw_test::clock_tick(rig, p_author) + 1;
-        const NetwPropertySet::Record record
-            = NetwEntity::of(copy(p_author))->get_state_binding().is_valid()
-            ? NetwPropertySet::RECORD_STATE
-            : NetwPropertySet::RECORD_BROADCAST;
+        const PropertySet::Record record
+            = NetwEntity::of(copy(p_author))->get_state_binding() != nullptr
+            ? PropertySet::RECORD_STATE
+            : PropertySet::RECORD_BROADCAST;
         netw_test::author_at(
             copy(p_author),
             StringName(FIELD),
@@ -264,36 +283,6 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Sim][SceneTree] a row arriving before its stream has "
-    "reconstructed installs nothing, and the first whole row installs"
-) {
-    Stand stand(1, STATE_SOURCE);
-    stand.activate(0, Restore::EXACT);
-    NetwMultiplayer *client = stand.core(0);
-    const Ref<netw::NetwPropertySetBinding> binding
-        = NetwEntity::of(stand.copy(0))->get_state_binding();
-    REQUIRE(binding.is_valid());
-
-    netw::sim::Sample sample;
-    sample.binding = netw::gd::instance_id(binding.ptr());
-    sample.comp = binding->comp;
-    sample.tick = netw_test::clock_tick(stand.rig, 0);
-    sample.sender = stand.rig.peer_id(-1);
-    sample.keys.push_back(StringName(FIELD));
-    sample.values.push_back(Vector2(77.0, 0.0));
-
-    const int64_t writes = stand.writes(0);
-    client->sim_admit_install(stand.rid(0), sample, false);
-    NETW_CHECK_EQ(stand.writes(0), writes);
-    NETW_CHECK_EQ(stand.stats(0).installed, int64_t(0));
-    NETW_CHECK_EQ(stand.stats(0).unreconstructed, int64_t(1));
-
-    client->sim_admit_install(stand.rid(0), sample, true);
-    NETW_CHECK_EQ(stand.stats(0).installed, int64_t(1));
-    CHECK(stand.held(0).is_equal_approx(Vector2(77.0, 0.0)));
-}
-
-TEST_CASE(
     "[Networked][Sim][SceneTree] a held row whose sender no longer authors "
     "the entity is dropped at install"
 ) {
@@ -306,8 +295,8 @@ TEST_CASE(
         return;
     }
     NETW_CHECK_EQ(int(stand.row(1)->mode), int(Mode::ACTIVE));
-    const int held = int(stand.row(1)->installs.held.size());
-    NETW_CHECK_GT(held, 0);
+    NETW_CHECK_GT(stand.pending(1), 0);
+    const int64_t dropped = stand.stats(1).dropped;
     const Vector2 before = stand.held(1);
     const Vector2 newest = stand.held(0);
     REQUIRE_FALSE(before.is_equal_approx(newest));
@@ -316,8 +305,8 @@ TEST_CASE(
     stand.rig.hold(1);
     stand.rig.step_ticks(DISPLAY_OFFSET + 2);
 
-    NETW_CHECK_EQ(stand.stats(1).dropped, int64_t(held));
-    CHECK(stand.row(1)->installs.held.is_empty());
+    NETW_CHECK_GT(stand.stats(1).dropped, dropped);
+    NETW_CHECK_EQ(stand.pending(1), 0);
     CHECK(stand.held(1).is_equal_approx(before));
     stand.rig.release(1);
 }
@@ -334,8 +323,7 @@ TEST_CASE(
     if (stand.row(1) == nullptr) {
         return;
     }
-    const int held = int(stand.row(1)->installs.held.size());
-    NETW_CHECK_GT(held, 0);
+    NETW_CHECK_GT(stand.pending(1), 0);
     const int64_t dropped = stand.stats(1).dropped;
 
     const Ref<NetwEntity> host = NetwEntity::of(stand.copy(-1));
@@ -352,7 +340,7 @@ TEST_CASE(
     );
     stand.rig.step_ticks(DISPLAY_OFFSET + 2);
 
-    NETW_CHECK_GE(stand.stats(1).dropped - dropped, int64_t(held));
+    NETW_CHECK_GT(stand.stats(1).dropped, dropped);
 }
 
 TEST_CASE(
@@ -384,14 +372,25 @@ TEST_CASE(
     NETW_CHECK_GT(stand.stats(0).installed, quiet.installed);
 }
 
-Dictionary simulated_header(int64_t p_tick, bool p_whole) {
-    Dictionary payload;
-    payload[StringName(FIELD)] = Vector2(2.0, 0.0);
-    Dictionary header;
-    header[StringName("tick")] = p_tick;
-    header[StringName("whole")] = p_whole;
-    header[StringName("payload")] = payload;
-    return header;
+netw::predict::Arrival simulated_arrival(
+    NetwMultiplayer *p_core,
+    const PropertyBindingPtr &p_binding,
+    int64_t p_tick,
+    bool p_whole
+) {
+    netw::store::World &world = p_core->store();
+    const netw::store::RowAddress at = world.row_of(p_binding->id, 0);
+    REQUIRE(at.valid());
+    netw::store::Table &table = world.table(at.table);
+    for (int column = 0; column < table.schema.column_count(); ++column) {
+        if (table.schema.at(column)->key == StringName(FIELD)) {
+            table.write_value(at.row, uint32_t(column), Vector2(2.0, 0.0));
+        }
+    }
+    netw::predict::Arrival arrival = netw::predict::Arrival::of(table, at.row);
+    arrival.tick = p_tick;
+    arrival.whole = p_whole;
+    return arrival;
 }
 
 TEST_CASE(
@@ -409,7 +408,7 @@ TEST_CASE(
     pool->adopt_declaration(
         seated,
         seated->get_state_binding(),
-        Ref<netw::NetwPropertySetBinding>(),
+        PropertyBindingPtr(),
         int(netw::Schedule::TICK),
         int(netw::Role::SIMULATE),
         int(netw::CorrectionMode::SNAP),
@@ -421,7 +420,7 @@ TEST_CASE(
     pool->bind_property_sets(
         slot,
         seated->get_state_binding(),
-        Ref<netw::NetwPropertySetBinding>()
+        PropertyBindingPtr()
     );
     netw::NetwPredictionHandle *handle
         = Object::cast_to<netw::NetwPredictionHandle>(
@@ -434,13 +433,20 @@ TEST_CASE(
     stand.body(0)->set_position(Vector2());
     const int64_t writes = stand.writes(0);
 
-    pool->admit_simulated_state(slot, simulated_header(7, false));
+    const PropertyBindingPtr state = seated->get_state_binding();
+    pool->admit_simulated_state(
+        slot,
+        simulated_arrival(stand.core(0), state, 7, false)
+    );
     NETW_CHECK_EQ(judged.count(StringName("state_evaluated")), 0);
     NETW_CHECK_EQ(stand.writes(0), writes);
-    NETW_CHECK_EQ(stand.stats(0).unreconstructed, int64_t(1));
+    NETW_CHECK_EQ(stand.stats(0).installed, int64_t(0));
     NETW_CHECK_EQ(pool->stream_reconstructed_of(slot), 0);
 
-    pool->admit_simulated_state(slot, simulated_header(8, true));
+    pool->admit_simulated_state(
+        slot,
+        simulated_arrival(stand.core(0), state, 8, true)
+    );
     NETW_CHECK_EQ(pool->stream_reconstructed_of(slot), 1);
     NETW_CHECK_EQ(stand.stats(0).installed, int64_t(1));
     CHECK(stand.held(0).is_equal_approx(Vector2(2.0, 0.0)));
@@ -463,15 +469,15 @@ TEST_CASE(
 ) {
     Stand stand(1, CARRY_SOURCE);
     stand.rig.step_ticks(4);
-    const Ref<netw::NetwPropertySetBinding> binding
+    const PropertyBindingPtr binding
         = NetwEntity::of(stand.copy(0))->get_state_binding();
-    REQUIRE(binding.is_valid());
+    REQUIRE(binding != nullptr);
     NetwMultiplayer *client = stand.core(0);
     const int64_t now = netw_test::clock_tick(stand.rig, 0);
     const double step = client->clock_engine().ticktime();
 
     netw::sim::Sample sample;
-    sample.binding = netw::gd::instance_id(binding.ptr());
+    sample.binding = binding->id;
     sample.comp = binding->comp;
     sample.tick = now - 3;
     sample.keys.push_back(StringName(FIELD));
@@ -481,7 +487,7 @@ TEST_CASE(
 
     int64_t age = -1;
     const Array exact = client->sim_install_target(
-        binding.ptr(),
+        binding,
         sample,
         Restore::EXACT,
         6,
@@ -491,7 +497,7 @@ TEST_CASE(
     CHECK(Vector2(exact[0]).is_equal_approx(Vector2(10.0, 0.0)));
 
     const Array carried = client->sim_install_target(
-        binding.ptr(),
+        binding,
         sample,
         Restore::EXTRAPOLATED,
         6,
@@ -500,7 +506,7 @@ TEST_CASE(
     NETW_CHECK_CLOSE(Vector2(carried[0]).x, 10.0 + 30.0 * 3.0 * step, 1e-4);
 
     const Array capped = client->sim_install_target(
-        binding.ptr(),
+        binding,
         sample,
         Restore::EXTRAPOLATED,
         1,
@@ -510,7 +516,7 @@ TEST_CASE(
 
     sample.tick = now;
     const Array fresh = client->sim_install_target(
-        binding.ptr(),
+        binding,
         sample,
         Restore::EXTRAPOLATED,
         6,

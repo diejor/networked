@@ -4,15 +4,43 @@
 
 #include "godot/variant.hpp"
 #include "netw/api/interpolate.hpp"
-#include "netw/api/ring_buffer.hpp"
+#include "netw/tick_ring.hpp"
+
+namespace netw::store {
+class World;
+class Table;
+} // namespace netw::store
 
 namespace netw::display {
 
 double angle_difference(double p_from, double p_to);
 
+#if defined(NETW_TESTS)
+struct SampleWork {
+    int64_t samples = 0;
+    int64_t allocations = 0;
+};
+
+SampleWork &sample_work();
+#endif
+
 class History {
 private:
-    godot::Ref<NetwRingBuffer> buffer;
+    struct Rows {
+        const store::Table *table = nullptr;
+        uint32_t row = 0;
+        int64_t count = 0;
+    };
+
+    TickRing ring;
+    const store::World *world = nullptr;
+    uint64_t owner = 0;
+    uint32_t lane = 0;
+    uint32_t column = 0;
+    uint32_t floor_append = 0;
+    uint32_t seen_append = 0;
+    bool floor_pending = false;
+
     int mode = 1;
     double snap_distance = 0.0;
     bool sleeping = false;
@@ -26,7 +54,17 @@ private:
     double project_age = 0.0;
     bool snap_taken = false;
 
-    godot::Variant finite_velocity(int64_t newest, double ticktime) const;
+    Rows rows() const;
+    int64_t tick_in(const Rows &p_rows, int64_t p_age) const;
+    godot::Variant value_in(const Rows &p_rows, int64_t p_age) const;
+    godot::Vector2i bracket_in(const Rows &p_rows, int64_t p_tick) const;
+    godot::Variant at_in(const Rows &p_rows, int64_t p_tick) const;
+
+    godot::Variant finite_velocity(
+        const Rows &p_rows,
+        int64_t newest,
+        double ticktime
+    ) const;
     bool velocity_negligible(const godot::Variant &velocity) const;
     godot::Variant lerp_bracketed(
         const godot::Variant &previous,
@@ -59,6 +97,10 @@ public:
     };
 
     History();
+
+    int64_t held_bytes() const {
+        return ring.held_bytes();
+    }
 
     int pass_verdict(
         const godot::Ref<NetwInterpolate> &p_spec,
@@ -103,13 +145,41 @@ public:
         return snap_taken;
     }
 
-    godot::Ref<NetwRingBuffer> get_buffer() const {
-        return buffer;
+    void follow(
+        const store::World *p_world,
+        uint64_t p_owner,
+        uint32_t p_lane,
+        uint32_t p_column
+    );
+    void unfollow();
+    bool follows_table() const {
+        return world != nullptr;
     }
+    bool holds_ring() const {
+        return ring.holds_storage();
+    }
+    bool follows(uint64_t p_owner, uint32_t p_lane, uint32_t p_column) const {
+        return world != nullptr && owner == p_owner && lane == p_lane
+            && column == p_column;
+    }
+    bool follow_address(
+        uint64_t &r_owner,
+        uint32_t &r_lane,
+        uint32_t &r_column
+    ) const {
+        r_owner = owner;
+        r_lane = lane;
+        r_column = column;
+        return world != nullptr;
+    }
+    bool table_pulls() const;
+    bool table_rests() const;
+    void notice();
 
     void record(int64_t tick, const godot::Variant &value, bool authoring_tick);
     void clear();
     bool is_empty() const;
+    int64_t size() const;
     int64_t newest_tick() const;
     bool has_tick_after(int64_t tick) const;
     godot::Vector2i bracketing_ticks(int64_t tick) const;

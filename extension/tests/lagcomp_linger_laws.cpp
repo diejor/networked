@@ -7,7 +7,7 @@
 #include "netw/api/entity.hpp"
 #include "netw/api/entity_options.hpp"
 #include "netw/api/record.hpp"
-#include "netw/api/timeline.hpp"
+#include "netw/lagcomp_core.hpp"
 
 #include <godot_cpp/classes/node2d.hpp>
 
@@ -17,7 +17,12 @@ using namespace godot;
 using namespace netw_test;
 using netw::NetwDespawnOpts;
 using netw::NetwEntity;
-using netw::NetwTimeline;
+
+int64_t rewind_slot(netw::NetwMultiplayer *p_api, const RID &p_entity) {
+    return p_api->get_lagcomp_core()->timeline_slot_of(
+        p_api->entity_get_view(p_entity)
+    );
+}
 
 constexpr double LINGER_SECONDS = 0.2;
 constexpr int LINGER_TICKS = 6;
@@ -56,9 +61,13 @@ TEST_CASE(
     const Ref<NetwEntity> wrapper = NetwEntity::of(body);
     REQUIRE(wrapper.is_valid());
 
-    const Ref<NetwTimeline> history = api->lagcomp_timeline_of(entity);
-    REQUIRE(history.is_valid());
-    history->record_state(SEEDED_TICK, at(SEEDED_X));
+    const int64_t history = rewind_slot(api, entity);
+    REQUIRE(history >= 0);
+    api->get_lagcomp_core()->timeline_record(
+        history,
+        SEEDED_TICK,
+        at(SEEDED_X)
+    );
 
     Ref<NetwDespawnOpts> opts;
     opts.instantiate();
@@ -70,7 +79,7 @@ TEST_CASE(
     rig.step_ticks(LINGER_TICKS - 1);
 
     CHECK_FALSE(body->is_queued_for_deletion());
-    CHECK(api->lagcomp_timeline_of(entity).is_valid());
+    CHECK(rewind_slot(api, entity) >= 0);
 
     const Ref<netw::DictionaryRecord> during
         = api->lagcomp_sample(entity, SEEDED_TICK);
@@ -112,13 +121,17 @@ TEST_CASE(
     Node *body = api->entity_get_node(entity);
     REQUIRE(body != nullptr);
     const Ref<NetwEntity> wrapper = NetwEntity::of(body);
-    const Ref<NetwTimeline> history = api->lagcomp_timeline_of(entity);
-    REQUIRE(history.is_valid());
-    history->record_state(SEEDED_TICK, at(SEEDED_X));
+    const int64_t history = rewind_slot(api, entity);
+    REQUIRE(history >= 0);
+    api->get_lagcomp_core()->timeline_record(
+        history,
+        SEEDED_TICK,
+        at(SEEDED_X)
+    );
 
     rig.server()->lagcomp_timeline_undeclare(entity);
 
-    CHECK(api->lagcomp_timeline_of(entity).is_null());
+    CHECK(rewind_slot(api, entity) < 0);
 
     const Ref<netw::DictionaryRecord> after
         = api->lagcomp_sample(entity, SEEDED_TICK);

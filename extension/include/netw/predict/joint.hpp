@@ -24,50 +24,30 @@ struct JointFloorDecision {
     bool heal = false;
 };
 
-struct JointStateRecord {
-    StateRow state;
-    int64_t transition = -1;
-};
-
-struct JointCommandRecord {
-    godot::Variant command;
-    int64_t transition = -1;
-    CellProvenance provenance = CellProvenance::COAST;
-};
-
 struct JointTrack {
-    godot::LocalVector<JointStateRecord> states;
-    godot::LocalVector<JointCommandRecord> commands;
     Tenure tenure;
     int64_t basis = -1;
     int64_t relay_floor = -1;
     int64_t epoch_floor = -1;
+    int64_t state_floor = -1;
 
-    void record(
-        int64_t p_transition,
-        const StateRow &p_state,
-        const godot::Variant &p_command,
-        CellProvenance p_provenance
-    );
-    void record_state(int64_t p_transition, const StateRow &p_state);
-    const StateRow *state_at(int64_t p_transition) const;
-    const JointStateRecord *newest_state_at_or_before(
-        int64_t p_transition
+    int64_t history_floor(
+        int64_t p_oldest_state,
+        int64_t p_oldest_command
     ) const;
-    const JointCommandRecord *command_at(int64_t p_transition) const;
-    int64_t history_floor() const;
     bool moved() const;
     void clear_floors();
-    void clear_cells();
+    void clear_cells(int64_t p_newest_state);
 };
 
 struct JointRestore {
     StateRow state;
     int64_t slot = 0;
+    int64_t entry = -1;
 };
 
 struct JointStep {
-    godot::Variant command;
+    StateRow command;
     int64_t slot = 0;
     int64_t transition = -1;
     CellProvenance provenance = CellProvenance::COAST;

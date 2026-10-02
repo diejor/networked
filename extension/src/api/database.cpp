@@ -71,7 +71,8 @@ Ref<NetwDatabase> NetwDatabase::of(Node *p_node, const StringName &p_name) {
     if (api == nullptr) {
         NETW_ERROR(
             sys::TABLE,
-            "Netw.database: no session governs the given node"
+            "Netw.database got a node that is not inside a session. Call it "
+            "from a node in the scene tree under a MultiplayerTree."
         );
         return Ref<NetwDatabase>();
     }
@@ -79,8 +80,8 @@ Ref<NetwDatabase> NetwDatabase::of(Node *p_node, const StringName &p_name) {
     if (!found.is_valid()) {
         NETW_ERROR(
             sys::TABLE,
-            "Netw.database: no database named '%s' is declared in this "
-            "session. Declare it with Netw.configure_database first",
+            "Netw.database found no database named '%s' in this session. "
+            "Declare it with Netw.configure_database first.",
             String(p_name).utf8().get_data()
         );
         return Ref<NetwDatabase>();
@@ -317,7 +318,8 @@ Error NetwWriteBatch::write(
     if (sealed) {
         NETW_ERROR(
             sys::TABLE,
-            "this batch was submitted already, so it takes no more work"
+            "NetwWriteBatch.write ran after the batch was submitted. Start "
+            "a new batch for more writes."
         );
         first_fault = first_fault == OK ? ERR_LOCKED : first_fault;
         return ERR_LOCKED;
@@ -346,7 +348,8 @@ Error NetwWriteBatch::erase(
     if (sealed) {
         NETW_ERROR(
             sys::TABLE,
-            "this batch was submitted already, so it takes no more work"
+            "NetwWriteBatch.erase ran after the batch was submitted. Start "
+            "a new batch for more changes."
         );
         first_fault = first_fault == OK ? ERR_LOCKED : first_fault;
         return ERR_LOCKED;

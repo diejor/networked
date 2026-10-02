@@ -46,7 +46,11 @@ bool WriteStream::bits(uint64_t &value, int count) {
     }
     if (!width_is_legal(count)) {
         healthy = false;
-        NETW_ERR_V(false, sys::WIRE, "Bit width is out of range.");
+        NETW_ERR_V(
+            false,
+            sys::WIRE,
+            "A packet field's bit width is outside 0 to 64."
+        );
     }
     if (count == 0) {
         return true;
@@ -56,7 +60,7 @@ bool WriteStream::bits(uint64_t &value, int count) {
         NETW_ERR_V(
             false,
             sys::WIRE,
-            "Value does not fit its declared bit width."
+            "A packet field value does not fit its bit width."
         );
     }
     int written = 0;
@@ -82,11 +86,19 @@ bool WriteStream::int_range(int64_t &value, int64_t low, int64_t high) {
     }
     if (low > high) {
         healthy = false;
-        NETW_ERR_V(false, sys::WIRE, "Integer range bounds are inverted.");
+        NETW_ERR_V(
+            false,
+            sys::WIRE,
+            "A packet field's low bound is above its high bound."
+        );
     }
     if (value < low || value > high) {
         healthy = false;
-        NETW_ERR_V(false, sys::WIRE, "Value is outside its declared range.");
+        NETW_ERR_V(
+            false,
+            sys::WIRE,
+            "A packet field value is outside its range."
+        );
     }
     uint64_t raw = uint64_t(value - low);
     return bits(raw, bits_required(uint64_t(high - low)));
@@ -98,7 +110,11 @@ bool WriteStream::varuint(uint64_t &value, int max_bytes) {
     }
     if (!byte_count_is_legal(max_bytes)) {
         healthy = false;
-        NETW_ERR_V(false, sys::WIRE, "Varint byte limit is out of range.");
+        NETW_ERR_V(
+            false,
+            sys::WIRE,
+            "A packet field's byte limit is outside 1 to 10."
+        );
     }
     if (!align_verify()) {
         return false;
@@ -118,7 +134,11 @@ bool WriteStream::varuint(uint64_t &value, int max_bytes) {
         }
     }
     healthy = false;
-    NETW_ERR_V(false, sys::WIRE, "Value exceeds its varint byte limit.");
+    NETW_ERR_V(
+        false,
+        sys::WIRE,
+        "A packet field value needs more bytes than its limit."
+    );
 }
 
 bool WriteStream::svarint(int64_t &value, int max_bytes) {
@@ -137,7 +157,11 @@ bool WriteStream::bytes_capped(PackedByteArray &value, int cap) {
     }
     if (cap < 0 || value.size() > cap) {
         healthy = false;
-        NETW_ERR_V(false, sys::WIRE, "Blob exceeds its declared cap.");
+        NETW_ERR_V(
+            false,
+            sys::WIRE,
+            "A byte array is longer than its packet field allows."
+        );
     }
     int64_t length = value.size();
     if (!int_range(length, 0, cap) || !align_verify()) {
@@ -160,7 +184,8 @@ bool WriteStream::raw_bytes(PackedByteArray &value, int64_t count) {
         NETW_ERR_V(
             false,
             sys::WIRE,
-            "Opaque run does not match the length already written."
+            "A raw byte run in a packet does not match the length already "
+            "written."
         );
     }
     if (!align_verify()) {
@@ -169,6 +194,30 @@ bool WriteStream::raw_bytes(PackedByteArray &value, int64_t count) {
     const uint8_t *source = value.ptr();
     for (int64_t index = 0; index < count; ++index) {
         output.push_back(source[index]);
+    }
+    bits_written += count * 8;
+    return true;
+}
+
+bool WriteStream::raw_span(const uint8_t *value, int64_t count) {
+    if (!healthy) {
+        return false;
+    }
+    if (count < 0) {
+        healthy = false;
+        NETW_ERR_V(
+            false,
+            sys::WIRE,
+            "A raw byte run in a packet has a negative length."
+        );
+    }
+    if (!align_verify()) {
+        return false;
+    }
+    const uint32_t at = output.size();
+    output.resize(at + uint32_t(count));
+    if (count > 0) {
+        memcpy(output.ptr() + at, value, size_t(count));
     }
     bits_written += count * 8;
     return true;
@@ -195,6 +244,12 @@ PackedByteArray WriteStream::to_bytes() const {
     return out;
 }
 
+void WriteStream::clear() {
+    output.clear();
+    bits_written = 0;
+    healthy = true;
+}
+
 ReadStream::ReadStream(const PackedByteArray &bytes) {
     seat(bytes);
 }
@@ -213,7 +268,11 @@ bool ReadStream::take(int count, uint64_t &out) {
     }
     if (!width_is_legal(count)) {
         healthy = false;
-        NETW_ERR_V(false, sys::WIRE, "Bit width is out of range.");
+        NETW_ERR_V(
+            false,
+            sys::WIRE,
+            "A packet field's bit width is outside 0 to 64."
+        );
     }
     if (count == 0) {
         out = 0;
@@ -256,7 +315,11 @@ bool ReadStream::int_range(int64_t &value, int64_t low, int64_t high) {
     }
     if (low > high) {
         healthy = false;
-        NETW_ERR_V(false, sys::WIRE, "Integer range bounds are inverted.");
+        NETW_ERR_V(
+            false,
+            sys::WIRE,
+            "A packet field's low bound is above its high bound."
+        );
     }
     uint64_t raw = 0;
     if (!take(bits_required(uint64_t(high - low)), raw)) {
@@ -277,7 +340,11 @@ bool ReadStream::varuint(uint64_t &value, int max_bytes) {
     }
     if (!byte_count_is_legal(max_bytes)) {
         healthy = false;
-        NETW_ERR_V(false, sys::WIRE, "Varint byte limit is out of range.");
+        NETW_ERR_V(
+            false,
+            sys::WIRE,
+            "A packet field's byte limit is outside 1 to 10."
+        );
     }
     if (!align_verify()) {
         return false;
@@ -330,7 +397,11 @@ bool ReadStream::bytes_capped(PackedByteArray &value, int cap) {
     }
     if (cap < 0) {
         healthy = false;
-        NETW_ERR_V(false, sys::WIRE, "Blob cap is negative.");
+        NETW_ERR_V(
+            false,
+            sys::WIRE,
+            "A byte array packet field has a negative size limit."
+        );
     }
     int64_t length = 0;
     if (!int_range(length, 0, cap) || !align_verify()) {
@@ -356,7 +427,11 @@ bool ReadStream::raw_bytes(PackedByteArray &value, int64_t count) {
     }
     if (count < 0) {
         healthy = false;
-        NETW_ERR_V(false, sys::WIRE, "Opaque run length is negative.");
+        NETW_ERR_V(
+            false,
+            sys::WIRE,
+            "A raw byte run in a packet has a negative length."
+        );
     }
     if (!align_verify()) {
         return false;
@@ -372,6 +447,32 @@ bool ReadStream::raw_bytes(PackedByteArray &value, int64_t count) {
     }
     bits_read += count * 8;
     value = staged;
+    return true;
+}
+
+bool ReadStream::raw_span(uint8_t *value, int64_t count) {
+    if (!healthy) {
+        return false;
+    }
+    if (count < 0) {
+        healthy = false;
+        NETW_ERR_V(
+            false,
+            sys::WIRE,
+            "A raw byte run in a packet has a negative length."
+        );
+    }
+    if (!align_verify()) {
+        return false;
+    }
+    if (count * 8 > bits_remaining()) {
+        healthy = false;
+        return false;
+    }
+    if (count > 0) {
+        memcpy(value, input + (bits_read / 8), size_t(count));
+    }
+    bits_read += count * 8;
     return true;
 }
 
@@ -393,7 +494,11 @@ bool ReadStream::align_verify() {
 bool MeasureStream::bits(uint64_t &value, int count) {
     (void)value;
     if (!width_is_legal(count)) {
-        NETW_ERR_V(false, sys::WIRE, "Bit width is out of range.");
+        NETW_ERR_V(
+            false,
+            sys::WIRE,
+            "A packet field's bit width is outside 0 to 64."
+        );
     }
     bits_described += count;
     return true;
@@ -402,7 +507,11 @@ bool MeasureStream::bits(uint64_t &value, int count) {
 bool MeasureStream::int_range(int64_t &value, int64_t low, int64_t high) {
     (void)value;
     if (low > high) {
-        NETW_ERR_V(false, sys::WIRE, "Integer range bounds are inverted.");
+        NETW_ERR_V(
+            false,
+            sys::WIRE,
+            "A packet field's low bound is above its high bound."
+        );
     }
     bits_described += bits_required(uint64_t(high - low));
     return true;
@@ -410,7 +519,11 @@ bool MeasureStream::int_range(int64_t &value, int64_t low, int64_t high) {
 
 bool MeasureStream::varuint(uint64_t &value, int max_bytes) {
     if (!byte_count_is_legal(max_bytes)) {
-        NETW_ERR_V(false, sys::WIRE, "Varint byte limit is out of range.");
+        NETW_ERR_V(
+            false,
+            sys::WIRE,
+            "A packet field's byte limit is outside 1 to 10."
+        );
     }
     bits_described += pad_to_byte(bits_described);
     uint64_t remaining = value;
@@ -421,7 +534,11 @@ bool MeasureStream::varuint(uint64_t &value, int max_bytes) {
             return true;
         }
     }
-    NETW_ERR_V(false, sys::WIRE, "Value exceeds its varint byte limit.");
+    NETW_ERR_V(
+        false,
+        sys::WIRE,
+        "A packet field value needs more bytes than its limit."
+    );
 }
 
 bool MeasureStream::svarint(int64_t &value, int max_bytes) {
@@ -437,7 +554,11 @@ bool MeasureStream::bool1(bool &value) {
 
 bool MeasureStream::bytes_capped(PackedByteArray &value, int cap) {
     if (cap < 0) {
-        NETW_ERR_V(false, sys::WIRE, "Blob cap is negative.");
+        NETW_ERR_V(
+            false,
+            sys::WIRE,
+            "A byte array packet field has a negative size limit."
+        );
     }
     bits_described += bits_required(uint64_t(cap));
     bits_described += pad_to_byte(bits_described);
@@ -448,7 +569,11 @@ bool MeasureStream::bytes_capped(PackedByteArray &value, int cap) {
 bool MeasureStream::raw_bytes(PackedByteArray &value, int64_t count) {
     (void)value;
     if (count < 0) {
-        NETW_ERR_V(false, sys::WIRE, "Opaque run length is negative.");
+        NETW_ERR_V(
+            false,
+            sys::WIRE,
+            "A raw byte run in a packet has a negative length."
+        );
     }
     bits_described += pad_to_byte(bits_described);
     bits_described += count * 8;

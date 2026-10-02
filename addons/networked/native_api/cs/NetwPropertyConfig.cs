@@ -26,13 +26,14 @@ namespace Networked;
 ///     # the next tick sends every changed property
 /// </code>
 /// <para>
-/// <see cref="NetwPropertySet.RecordEnum"/> compares the three kinds. A
+/// <see cref="NetwMultiplayer.RecordKind.State"/>,
+/// <see cref="NetwMultiplayer.RecordKind.Input"/> and
+/// <see cref="NetwMultiplayer.RecordKind.Broadcast"/> name the three kinds. A
 /// property with none of them is sent only when <see cref="Netw.SyncProperty"/>
 /// is called. <see cref="NetwPropertyConfig.Volatile"/>,
 /// <see cref="NetwPropertyConfig.Retained"/>,
 /// <see cref="NetwPropertyConfig.Epsilon"/> and
 /// <see cref="NetwPropertyConfig.Persisted"/> apply to one property.
-/// <see cref="NetwPropertyConfig.EveryTick"/>,
 /// <see cref="NetwPropertyConfig.OnChange"/>,
 /// <see cref="NetwPropertyConfig.Heartbeat"/>,
 /// <see cref="NetwPropertyConfig.Windowed"/>,
@@ -75,29 +76,85 @@ public sealed class NetwPropertyConfig : NetwMemberConfig
         return Adopt(NetwApi.Retained(NetwApi.ObjectOf(value)));
     }
 
+    public enum Trigger : long
+    {
+        /// <summary>
+        /// Sent every tick.
+        /// </summary>
+        Tick = 0,
+        /// <summary>
+        /// Sent when a value changed.
+        /// </summary>
+        OnChange = 1,
+        /// <summary>
+        /// Sent only by <see cref="Netw.SyncProperty"/>.
+        /// </summary>
+        OnDemand = 2,
+    }
+
+    public enum LaneEnum : long
+    {
+        /// <summary>
+        /// Sent unreliably. Only the newest value counts.
+        /// </summary>
+        Volatile = 0,
+        /// <summary>
+        /// Sent reliably, only when it changes.
+        /// </summary>
+        Retained = 1,
+    }
+
+    public enum PropertyClassEnum : long
+    {
+        /// <summary>
+        /// Affects the next step, so it is compared and corrected.
+        /// </summary>
+        Causal = 0,
+        /// <summary>
+        /// Computed from other properties each step, so it is not compared.
+        /// </summary>
+        Derived = 1,
+        /// <summary>
+        /// Only affects display, so it is not compared.
+        /// </summary>
+        Cosmetic = 2,
+    }
+
+    public enum AudienceEnum : long
+    {
+        /// <summary>
+        /// Sent to every peer that sees the entity.
+        /// </summary>
+        Public = 0,
+        /// <summary>
+        /// Sent to the server only.
+        /// </summary>
+        ServerOnly = 1,
+    }
+
     /// <summary>
     /// A setting no call has written yet.
     /// </summary>
     public const long Unset = -1;
 
     private static readonly IntPtr _bindGetLane =
-        NetwApi.MethodBind("NetwPropertyConfig", "get_lane", 3235490189UL);
+        NetwApi.MethodBind("NetwPropertyConfig", "get_lane", 2335322635UL);
 
     private static readonly IntPtr _bindSetLane =
-        NetwApi.MethodBind("NetwPropertyConfig", "set_lane", 298003126UL);
+        NetwApi.MethodBind("NetwPropertyConfig", "set_lane", 1732598550UL);
 
     /// <summary>
     /// Whether changes are sent unreliably or reliably. Set by
     /// <see cref="NetwPropertyConfig.Volatile"/> and
     /// <see cref="NetwPropertyConfig.Retained"/>.
     /// </summary>
-    public NetwPropertySet.Lane Lane
+    public NetwPropertyConfig.LaneEnum Lane
     {
         get
         {
             long answered = default;
             NetwThunks.Ptrcall0_Long(_bindGetLane, Checked, ref answered);
-            return (NetwPropertySet.Lane)answered;
+            return (NetwPropertyConfig.LaneEnum)answered;
         }
         set
         {
@@ -115,19 +172,19 @@ public sealed class NetwPropertyConfig : NetwMemberConfig
         NetwApi.MethodBind(
             "NetwPropertyConfig",
             "get_set_audience",
-            2118769895UL);
+            1467913867UL);
 
     private static readonly IntPtr _bindSetSetAudience =
         NetwApi.MethodBind(
             "NetwPropertyConfig",
             "set_set_audience",
-            1963165040UL);
+            755658960UL);
 
     /// <summary>
     /// Set by <see cref="NetwPropertyConfig.Audience"/> and
     /// <see cref="NetwPropertyConfig.Input"/>.
     /// </summary>
-    public NetwPropertySet.AudienceEnum SetAudience
+    public NetwPropertyConfig.AudienceEnum SetAudience
     {
         get
         {
@@ -136,7 +193,7 @@ public sealed class NetwPropertyConfig : NetwMemberConfig
                 _bindGetSetAudience,
                 Checked,
                 ref answered);
-            return (NetwPropertySet.AudienceEnum)answered;
+            return (NetwPropertyConfig.AudienceEnum)answered;
         }
         set
         {
@@ -154,13 +211,13 @@ public sealed class NetwPropertyConfig : NetwMemberConfig
         NetwApi.MethodBind(
             "NetwPropertyConfig",
             "get_property_class",
-            1912487024UL);
+            1973673595UL);
 
     private static readonly IntPtr _bindSetPropertyClass =
         NetwApi.MethodBind(
             "NetwPropertyConfig",
             "set_property_class",
-            3837869372UL);
+            1424893448UL);
 
     /// <summary>
     /// Whether a difference in the value causes a correction. Set by
@@ -168,7 +225,7 @@ public sealed class NetwPropertyConfig : NetwMemberConfig
     /// <see cref="NetwPropertyConfig.Derived"/> and
     /// <see cref="NetwPropertyConfig.Cosmetic"/>.
     /// </summary>
-    public NetwPropertySet.PropertyClass PropertyClass
+    public NetwPropertyConfig.PropertyClassEnum PropertyClass
     {
         get
         {
@@ -177,7 +234,7 @@ public sealed class NetwPropertyConfig : NetwMemberConfig
                 _bindGetPropertyClass,
                 Checked,
                 ref answered);
-            return (NetwPropertySet.PropertyClass)answered;
+            return (NetwPropertyConfig.PropertyClassEnum)answered;
         }
         set
         {
@@ -452,26 +509,25 @@ public sealed class NetwPropertyConfig : NetwMemberConfig
         NetwApi.MethodBind(
             "NetwPropertyConfig",
             "get_set_trigger",
-            1412047978UL);
+            2646279090UL);
 
     private static readonly IntPtr _bindSetSetTrigger =
         NetwApi.MethodBind(
             "NetwPropertyConfig",
             "set_set_trigger",
-            986570375UL);
+            2154726264UL);
 
     /// <summary>
-    /// Set by <see cref="NetwPropertyConfig.EveryTick"/> and
-    /// <see cref="NetwPropertyConfig.OnChange"/>, or
+    /// Set by <see cref="NetwPropertyConfig.OnChange"/>, or
     /// <see cref="NetwPropertyConfig.Unset"/>.
     /// </summary>
-    public NetwPropertySet.TriggerEnum SetTrigger
+    public NetwPropertyConfig.Trigger SetTrigger
     {
         get
         {
             long answered = default;
             NetwThunks.Ptrcall0_Long(_bindGetSetTrigger, Checked, ref answered);
-            return (NetwPropertySet.TriggerEnum)answered;
+            return (NetwPropertyConfig.Trigger)answered;
         }
         set
         {
@@ -479,44 +535,6 @@ public sealed class NetwPropertyConfig : NetwMemberConfig
             long discarded = default;
             NetwThunks.Ptrcall1_Long_Long(
                 _bindSetSetTrigger,
-                Checked,
-                in slot0,
-                ref discarded);
-        }
-    }
-
-    private static readonly IntPtr _bindGetSetEveryTickInterval =
-        NetwApi.MethodBind(
-            "NetwPropertyConfig",
-            "get_set_every_tick_interval",
-            1740695150UL);
-
-    private static readonly IntPtr _bindSetSetEveryTickInterval =
-        NetwApi.MethodBind(
-            "NetwPropertyConfig",
-            "set_set_every_tick_interval",
-            373806689UL);
-
-    /// <summary>
-    /// Set by <see cref="NetwPropertyConfig.EveryTick"/>. Negative when unset.
-    /// </summary>
-    public double SetEveryTickInterval
-    {
-        get
-        {
-            double answered = default;
-            NetwThunks.Ptrcall0_Double(
-                _bindGetSetEveryTickInterval,
-                Checked,
-                ref answered);
-            return answered;
-        }
-        set
-        {
-            double slot0 = value;
-            long discarded = default;
-            NetwThunks.Ptrcall1_Double_Long(
-                _bindSetSetEveryTickInterval,
                 Checked,
                 in slot0,
                 ref discarded);
@@ -1141,29 +1159,6 @@ public sealed class NetwPropertyConfig : NetwMemberConfig
         return NetwPropertyConfig.Adopt(answered);
     }
 
-    private static readonly IntPtr _bindEveryTick =
-        NetwApi.MethodBind("NetwPropertyConfig", "every_tick", 2969492179UL);
-
-    /// <summary>
-    /// Sends properties of this kind every tick even when nothing changed, at
-    /// most once per <paramref name="interval"/> seconds.
-    /// <code>
-    /// # position changes every tick anyway
-    /// Netw.configure_property(self, &amp;"position").state().every_tick()
-    /// </code>
-    /// </summary>
-    public NetwPropertyConfig EveryTick(double interval = 0.0)
-    {
-        double slot0 = interval;
-        IntPtr answered = default;
-        NetwThunks.Ptrcall1_Double_IntPtr(
-            _bindEveryTick,
-            Checked,
-            in slot0,
-            ref answered);
-        return NetwPropertyConfig.Adopt(answered);
-    }
-
     private static readonly IntPtr _bindOnChange =
         NetwApi.MethodBind("NetwPropertyConfig", "on_change", 1162647290UL);
 
@@ -1231,7 +1226,7 @@ public sealed class NetwPropertyConfig : NetwMemberConfig
     /// <summary>
     /// Sends properties of this kind to the server only, or to every peer when
     /// <paramref name="serverOnly"/> is <c>false</c>. Sets
-    /// <see cref="NetwPropertySet.Audience"/>.
+    /// <see cref="NetwPropertyConfig.SetAudience"/>.
     /// <see cref="NetwPropertyConfig.Input"/> already sends to the server only.
     /// </summary>
     public NetwPropertyConfig Audience(bool serverOnly = true)
@@ -1265,43 +1260,44 @@ public sealed class NetwPropertyConfig : NetwMemberConfig
     }
 
     private static readonly IntPtr _bindPersisted =
-        NetwApi.MethodBind("NetwPropertyConfig", "persisted", 1627830810UL);
+        NetwApi.MethodBind("NetwPropertyConfig", "persisted", 2664636520UL);
 
     /// <summary>
-    /// Saves the server's value of this property into <paramref name="column"/>
-    /// of the entity's saved row, whether or not it is also replicated.
-    /// <paramref name="column"/> must come from the <see cref="NetwSchema"/>
-    /// given to <see cref="NetwPersistenceConfig.Schema"/> and match the
-    /// property's type.
+    /// Saves the server's value of this property into the entity's record,
+    /// whether or not it is also replicated. The saved column is named after
+    /// the property, or <paramref name="savedColumnName"/> when given, so a
+    /// property renamed later keeps its stored records by passing its old name.
+    /// Two properties of one entity may not share a saved column name.
     /// <code>
-    /// var schema := game.save_schema
-    ///
     /// # never replicated, the server still saves it
-    /// Netw.configure_property(self, &amp;"gold").persisted(schema.column_ref(0))
+    /// Netw.configure_property(self, &amp;"gold", false).persisted()
     ///
-    /// # replicated and saved
+    /// # replicated and saved as "where"
     /// Netw.configure_property(self, &amp;"position") \
-    ///         .state().persisted(schema.column_ref(1))
+    ///         .state().persisted(&amp;"where")
     ///
     /// # sent by the client, saved by the server
-    /// Netw.configure_property(self, &amp;"loadout") \
-    ///         .input().persisted(schema.column_ref(2))
+    /// Netw.configure_property(self, &amp;"loadout").input().persisted()
     /// </code>
     /// <para>
     /// How often the row is saved is set with
     /// <see cref="NetwPersistenceConfig.Interval"/>.
     /// </para>
     /// </summary>
-    public NetwPropertyConfig Persisted(NetwColumnRef column)
+    public NetwPropertyConfig Persisted(StringName savedColumnName = null)
     {
-        IntPtr slot0 = column?.Native ?? IntPtr.Zero;
-        IntPtr answered = default;
-        NetwThunks.Ptrcall1_IntPtr_IntPtr(
-            _bindPersisted,
-            Checked,
-            in slot0,
-            ref answered);
-        return NetwPropertyConfig.Adopt(answered);
+        savedColumnName ??= new StringName("");
+        godot_variant slot0 =
+            VariantUtils.CreateFromStringName(savedColumnName);
+        godot_variant answered = default;
+        NetwThunks.Call1(_bindPersisted, Checked, in slot0, ref answered);
+        slot0.Dispose();
+        NetwPropertyConfig result =
+            NetwPropertyConfig.Adopt(
+                NetwApi.Retained(
+                    VariantUtils.ConvertToGodotObjectPtr(answered)));
+        answered.Dispose();
+        return result;
     }
 
     private static readonly IntPtr _bindOnSpawn =

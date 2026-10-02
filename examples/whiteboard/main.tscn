@@ -1,6 +1,9 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene format=3 uid="uid://cvvttju40xx1r"]
 
-[ext_resource type="Script" path="res://examples/whiteboard/main.gd" id="1_main"]
+[ext_resource type="Script" uid="uid://f8olprtexsin" path="res://examples/whiteboard/main.gd" id="1_main"]
+[ext_resource type="PackedScene" uid="uid://bb2nsfunxlw3a" path="res://addons/networked/gdscript/connect/ui/connect_browser.tscn" id="2_qdtp1"]
 
-[node name="Main" type="Node"]
+[node name="Main" type="Node" unique_id=1671022039]
 script = ExtResource("1_main")
+
+[node name="ConnectBrowser" parent="." unique_id=802878944 instance=ExtResource("2_qdtp1")]

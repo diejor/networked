@@ -24,7 +24,7 @@ void NetwEffectLedger::arm(
     entries[p_key] = entry;
     NETW_TRACE(
         sys::PREDICTION,
-        "effect armed key=%s deadline=%d",
+        "Effect '%s' waits for confirmation until tick %d.",
         String(p_key),
         p_deadline_tick
     );
@@ -39,7 +39,7 @@ bool NetwEffectLedger::watch(
     if (p_key.is_empty() || !entries.has(p_key)) {
         NETW_TRACE(
             sys::PREDICTION,
-            "effect watch refused, key not armed key=%s",
+            "Effect '%s' cannot be watched, because it is not waiting.",
             String(p_key)
         );
         return false;
@@ -78,7 +78,7 @@ void NetwEffectLedger::resolve(const StringName &p_key, bool p_keep) {
 
     NETW_TRACE(
         sys::PREDICTION,
-        "effect resolved key=%s keep=%d",
+        "Effect '%s' was settled (kept %d).",
         String(p_key),
         int(p_keep)
     );
@@ -99,7 +99,7 @@ int64_t NetwEffectLedger::count() const {
 }
 
 void NetwEffectLedger::sweep(int64_t p_tick) {
-    NETW_ZONE_NC("NetwEffectLedger sweep", colors::PREDICTION);
+    NETW_ZONE_NC("Effect ledger sweep", colors::PREDICTION);
     if (entries.is_empty()) {
         return;
     }

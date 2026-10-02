@@ -1,5 +1,8 @@
 #include "netw/predict/compare.hpp"
 
+#include "netw/wire/code_row.hpp"
+#include "netw/wire/value_row.hpp"
+
 #include <algorithm>
 #include <cmath>
 #include <limits>
@@ -59,30 +62,13 @@ double tolerance_at(
     return p_fallback;
 }
 
-int measure(
-    const LocalVector<double> &p_errors,
-    const LocalVector<double> &p_tolerances
-) {
-    int meter = 0;
-    for (int at = 0; at < int(p_tolerances.size()); ++at) {
-        const double tolerance = p_tolerances[uint32_t(at)];
-        if (tolerance < 0.0) {
-            continue;
-        }
-        const double error = at < int(p_errors.size())
-            ? p_errors[uint32_t(at)]
-            : std::numeric_limits<double>::infinity();
-        if (!std::isfinite(error) || error < 0.0) {
-            return METER_SATURATED;
-        }
-        if (tolerance <= 0.0) {
-            meter = std::max(meter, error > 0.0 ? 1 : 0);
-            continue;
-        }
-        const double over = std::max(error - tolerance, 0.0);
-        meter = std::max(meter, int(std::ceil(over / tolerance)));
+void fill(LocalVector<double> &r_values, uint32_t p_count, double p_value) {
+    if (r_values.size() != p_count) {
+        r_values.resize(p_count);
     }
-    return meter;
+    for (uint32_t at = 0; at < p_count; ++at) {
+        r_values[at] = p_value;
+    }
 }
 
 ExactVerdict exact_of(uint8_t p_flags) {
@@ -110,6 +96,189 @@ DifferingFamily differing_family(
 }
 
 } // namespace
+
+int measure(
+    const LocalVector<double> &p_errors,
+    const LocalVector<double> &p_tolerances
+) {
+    int meter = 0;
+    for (int at = 0; at < int(p_tolerances.size()); ++at) {
+        const double tolerance = p_tolerances[uint32_t(at)];
+        if (tolerance < 0.0) {
+            continue;
+        }
+        const double error = at < int(p_errors.size())
+            ? p_errors[uint32_t(at)]
+            : std::numeric_limits<double>::infinity();
+        if (!std::isfinite(error) || error < 0.0) {
+            return METER_SATURATED;
+        }
+        if (tolerance <= 0.0) {
+            meter = std::max(meter, error > 0.0 ? 1 : 0);
+            continue;
+        }
+        const double over = std::max(error - tolerance, 0.0);
+        meter = std::max(meter, int(std::ceil(over / tolerance)));
+    }
+    return meter;
+}
+
+void read_payload(
+    const Wiring &p_wiring,
+    const Dictionary &p_payload,
+    StateRow &r_row
+) {
+    const int count = p_wiring.count();
+    if (int(r_row.values.size()) != count) {
+        r_row.resize(count);
+    }
+    for (int at = 0; at < count; ++at) {
+        const StringName &key = p_wiring.codec.keys[uint32_t(at)];
+        if (p_payload.has(key)) {
+            r_row.set(at, p_payload[key]);
+            continue;
+        }
+        r_row.values[uint32_t(at)] = Variant();
+        r_row.present[uint32_t(at)] = 0;
+    }
+}
+
+#if defined(NETW_TESTS)
+namespace {
+int64_t script_dictionaries = 0;
+} // namespace
+
+int64_t script_dictionaries_built() {
+    return script_dictionaries;
+}
+
+void note_script_dictionary() {
+    ++script_dictionaries;
+}
+#endif
+
+void canonicalize_row(
+    const FieldCodec &p_codec,
+    StateRow &r_row,
+    wire::CodeRow &r_scratch,
+    PackedInt64Array &r_codes
+) {
+    if (!r_scratch.valid_for(p_codec.plan)) {
+        r_scratch = wire::CodeRow::for_plan(p_codec.plan);
+    }
+    const int count = std::min(p_codec.count(), int(r_row.values.size()));
+    for (int at = 0; at < count; ++at) {
+        if (!r_row.has(at)) {
+            continue;
+        }
+        Variant &value = r_row.values[uint32_t(at)];
+        if (!p_codec.holds(at, value)) {
+            continue;
+        }
+        const table::SchemaColumn &column = *p_codec.schema.at(at);
+        const wire::ColumnPlan &slot = p_codec.plan.column(uint32_t(at));
+        Variant decoded;
+        if (wire::encode_scalar_column(
+                column,
+                slot,
+                uint32_t(at),
+                value,
+                r_scratch
+            )
+            && wire::decode_scalar_column(
+                column,
+                slot,
+                uint32_t(at),
+                r_scratch,
+                r_codes,
+                decoded
+            )) {
+            value = decoded;
+        }
+    }
+}
+
+void read_payload(
+    const FieldCodec &p_codec,
+    const Dictionary &p_payload,
+    StateRow &r_row
+) {
+    const int count = p_codec.count();
+    if (int(r_row.values.size()) != count) {
+        r_row.resize(count);
+    }
+    for (int at = 0; at < count; ++at) {
+        const StringName &key = p_codec.keys[uint32_t(at)];
+        if (p_payload.has(key)) {
+            r_row.set(at, p_payload[key]);
+            continue;
+        }
+        r_row.values[uint32_t(at)] = Variant();
+        r_row.present[uint32_t(at)] = 0;
+    }
+}
+
+Dictionary payload_of(const FieldCodec &p_codec, const StateRow &p_row) {
+    NETW_NOTE_SCRIPT_DICTIONARY();
+    Dictionary out;
+    const int count = std::min(p_codec.count(), int(p_row.values.size()));
+    for (int at = 0; at < count; ++at) {
+        if (p_row.has(at)) {
+            out[p_codec.keys[uint32_t(at)]] = p_row.values[uint32_t(at)];
+        }
+    }
+    return out;
+}
+
+Dictionary payload_of(const Wiring &p_wiring, const StateRow &p_row) {
+    NETW_NOTE_SCRIPT_DICTIONARY();
+    Dictionary out;
+    const int count = std::min(p_wiring.count(), int(p_row.values.size()));
+    for (int at = 0; at < count; ++at) {
+        if (p_row.has(at)) {
+            out[p_wiring.codec.keys[uint32_t(at)]] = p_row.values[uint32_t(at)];
+        }
+    }
+    return out;
+}
+
+double judge_rows(
+    const Wiring &p_wiring,
+    const StateRow &p_predicted,
+    const StateRow &p_authority,
+    const LocalVector<double> &p_correction_tolerances,
+    LocalVector<double> &r_errors,
+    bool &r_diverged
+) {
+    fill(r_errors, uint32_t(p_wiring.count()), -1.0);
+    r_diverged = true;
+    if (!p_predicted.any()) {
+        return std::numeric_limits<double>::infinity();
+    }
+    r_diverged = false;
+    double worst = 0.0;
+    for (int at = 0; at < p_wiring.count(); ++at) {
+        if (!p_authority.has(at)) {
+            continue;
+        }
+        const double error = p_predicted.has(at)
+            ? value_error(
+                  p_predicted.values[uint32_t(at)],
+                  p_authority.values[uint32_t(at)],
+                  p_wiring.angle[uint32_t(at)] != 0
+              )
+            : std::numeric_limits<double>::infinity();
+        r_errors[uint32_t(at)] = error;
+        worst = std::max(worst, error);
+        const double tolerance = at < int(p_correction_tolerances.size())
+            ? p_correction_tolerances[uint32_t(at)]
+            : -1.0;
+        if (tolerance >= 0.0 && error > tolerance) {
+            r_diverged = true;
+        }
+    }
+    return worst;
+}
 
 void StateRow::resize(int p_count) {
     const uint32_t count = uint32_t(p_count < 0 ? 0 : p_count);
@@ -313,7 +482,7 @@ AckVerdict admit_ack(
     return out;
 }
 
-StateVerdict compare_state(
+void compare_state(
     const Wiring &p_wiring,
     Journal &p_journal,
     int64_t p_recv_tick,
@@ -323,22 +492,24 @@ StateVerdict compare_state(
     const LocalVector<double> &p_correction_tolerances,
     const LocalVector<double> &p_meter_tolerances,
     double p_fallback_epsilon,
-    bool p_stream_reconstructed
+    bool p_stream_reconstructed,
+    StateVerdict &r_out
 ) {
-    StateVerdict out;
+    StateVerdict &out = r_out;
     out.recv_tick = p_recv_tick;
     out.transition = p_transition;
     out.domain = p_journal.domain_of(p_transition);
     out.exact = exact_of(p_journal.flags_of(p_transition));
     out.attribution = p_journal.attribution_of(p_transition);
-    out.field_errors.resize(uint32_t(p_wiring.count()));
-    out.all_field_errors.resize(uint32_t(p_wiring.count()));
-    for (uint32_t at = 0; at < out.field_errors.size(); ++at) {
-        out.field_errors[at] = -1.0;
-        out.all_field_errors[at] = -1.0;
-    }
+    out.divergence = 0.0;
+    out.meter = 0;
+    out.compared = false;
+    out.corrected = false;
+    out.settled = false;
+    fill(out.field_errors, uint32_t(p_wiring.count()), -1.0);
+    fill(out.all_field_errors, uint32_t(p_wiring.count()), -1.0);
     if (!p_stream_reconstructed) {
-        return out;
+        return;
     }
 
     out.compared = true;
@@ -392,7 +563,6 @@ StateVerdict compare_state(
     if (out.settled) {
         p_journal.mark_aligned_error(p_transition, out.divergence);
     }
-    return out;
 }
 
 } // namespace netw::predict

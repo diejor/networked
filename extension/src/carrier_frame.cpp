@@ -61,6 +61,27 @@ PackedByteArray NetwCarrierFrame::build(
     uint32_t p_history,
     int64_t p_tick
 ) {
+    wire::WriteStream stream;
+    return build(
+        stream,
+        p_payload,
+        p_reliable,
+        p_seq,
+        p_ack,
+        p_history,
+        p_tick
+    );
+}
+
+PackedByteArray NetwCarrierFrame::build(
+    wire::WriteStream &r_stream,
+    const PackedByteArray &p_payload,
+    bool p_reliable,
+    int64_t p_seq,
+    int64_t p_ack,
+    uint32_t p_history,
+    int64_t p_tick
+) {
     DatagramHead head;
     head.base_tick = p_tick < 0 ? uint64_t(0) : uint64_t(p_tick) + 1;
 
@@ -79,12 +100,14 @@ PackedByteArray NetwCarrierFrame::build(
         }
     }
 
-    wire::WriteStream stream;
+    wire::WriteStream &stream = r_stream;
+    stream.clear();
     if (!run_head(stream, kind, head) || !stream.align_verify()
         || !stream.ok()) {
         NETW_WARN_ONCE(
             sys::TRANSPORT,
-            "a carrier datagram at tick %d could not write its own header",
+            "A packet header for tick %d could not be written, so the packet "
+            "was not sent.",
             int(p_tick)
         );
         return PackedByteArray();
@@ -111,8 +134,8 @@ NetwCarrierFrame NetwCarrierFrame::read(const PackedByteArray &p_packet) {
     } else if (magic_is_retired(magic)) {
         NETW_WARN_ONCE(
             sys::TRANSPORT,
-            "a carrier packet opens with the retired magic 0x%x, so it speaks "
-            "a format this build cannot read",
+            "A packet in an older Networked format (0x%x) was dropped. Run "
+            "the same Networked version on every peer.",
             int(magic)
         );
         out.kind = MALFORMED;
@@ -128,8 +151,8 @@ NetwCarrierFrame NetwCarrierFrame::read(const PackedByteArray &p_packet) {
         || !stream.ok()) {
         NETW_WARN_ONCE(
             sys::TRANSPORT,
-            "a carrier packet of %d bytes cannot carry the header its magic "
-            "0x%x claims",
+            "A packet of %d bytes was dropped, because it is too short for "
+            "its header (0x%x).",
             p_packet.size(),
             int(magic)
         );

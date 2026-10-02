@@ -405,6 +405,10 @@ public:
         const godot::Ref<NetwPlayer> &p_owner
     );
     godot::Ref<NetwEntity> adopt_in_place(godot::Node *p_root);
+    bool readmit(godot::Node *p_node, const Record &p_recipe);
+    const Record *spawned_record(int64_t p_route) const {
+        return spawn_book.spawned_of(p_route);
+    }
     godot::Ref<NetwEntity> arm_consumed_spawn(
         godot::Node *p_node,
         godot::Object *p_spawner,

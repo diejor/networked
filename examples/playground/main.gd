@@ -6,7 +6,7 @@ var playground: Node
 
 
 func _init() -> void:
-	Netw.configure_session(self).app(&"cube-playground")
+	Netw.configure_session(self).app(&"cube-playground").bandwidth(256)
 	Netw.configure_clock(self).ticks_per_second(60)
 	Netw.configure_spawn(spawn_playground)
 	Netw.configure_join(enter)

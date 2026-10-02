@@ -5,11 +5,13 @@
 #include "netw/api/entity.hpp"
 #include "netw/api/predict.hpp"
 #include "netw/api/prediction_handle.hpp"
-#include "netw/api/property_set_binding.hpp"
 #include "netw/predict/engine.hpp"
 #include "netw/predict/joint.hpp"
 #include "netw/prediction_core.hpp"
+#include "netw/repl/property_binding.hpp"
+#include "support/books.h"
 #include "support/carrier.h"
+#include "support/predict_rows.h"
 
 using namespace godot;
 
@@ -128,30 +130,26 @@ TEST_CASE(
 
     const godot::Dictionary raw = pool->capture_state(slot);
     const godot::Dictionary canonical = pool->canonicalize_state(slot, raw);
-    const int64_t expected_pre = pool->state_fingerprint(slot, canonical);
-    const godot::PackedInt32Array expected_families
-        = pool->state_family_fingerprints(slot, canonical);
+    REQUIRE(pool->record_predicted(
+        slot,
+        1,
+        netw_test::state_row(pool, slot, canonical)
+    ));
+    const int64_t expected_pre = pool->book_fingerprint(slot, 1);
+    const netw::predict::FamilyFingerprints expected_families
+        = pool->book_families(slot, 1);
 
-    const PackedInt64Array stamp = pool->open_state_stamp(slot, false);
+    netw::predict::StateStamp stamp;
+    CHECK(pool->open_state_stamp(slot, false, stamp));
 
-    NETW_CHECK_EQ(stamp.size(), NetwPredictionEngine::STAMP_COLUMN_COUNT);
-    NETW_CHECK_EQ(stamp[NetwPredictionEngine::STAMP_BOUND], 1);
-    NETW_CHECK_EQ(stamp[NetwPredictionEngine::STAMP_PRE_FP], expected_pre);
-    NETW_CHECK_EQ(
-        stamp[NetwPredictionEngine::STAMP_POSE_FP],
-        expected_families[0]
-    );
-    NETW_CHECK_EQ(
-        stamp[NetwPredictionEngine::STAMP_MOMENTUM_FP],
-        expected_families[1]
-    );
-    NETW_CHECK_EQ(
-        stamp[NetwPredictionEngine::STAMP_CONTROLLER_FP],
-        expected_families[2]
-    );
-    const bool three_apart = expected_families[0] != expected_families[1]
-        && expected_families[1] != expected_families[2]
-        && expected_families[0] != expected_families[2];
+    NETW_CHECK_EQ(int64_t(stamp.fp), expected_pre);
+    NETW_CHECK_EQ(stamp.families.pose, expected_families.pose);
+    NETW_CHECK_EQ(stamp.families.momentum, expected_families.momentum);
+    NETW_CHECK_EQ(stamp.families.controller, expected_families.controller);
+    const bool three_apart = expected_families.pose
+            != expected_families.momentum
+        && expected_families.momentum != expected_families.controller
+        && expected_families.pose != expected_families.controller;
     CHECK(three_apart);
 
     memdelete(body);
@@ -166,16 +164,15 @@ TEST_CASE(
     Carrier *body = carrier(4.5, 0.25);
     const int64_t slot = stamped_slot(pool, body);
 
-    const PackedInt64Array silent = pool->open_state_stamp(slot, false);
-    NETW_CHECK_EQ(silent[NetwPredictionEngine::STAMP_RAW_FP], 0);
-    NETW_CHECK_EQ(silent[NetwPredictionEngine::STAMP_EVIDENCE_MASK], 0);
+    netw::predict::StateStamp silent;
+    pool->open_state_stamp(slot, false, silent);
+    NETW_CHECK_EQ(silent.raw_fp, 0);
+    NETW_CHECK_EQ(int(silent.evidence_mask), 0);
 
-    const PackedInt64Array asked = pool->open_state_stamp(slot, true);
-    NETW_CHECK_EQ(
-        asked[NetwPredictionEngine::STAMP_EVIDENCE_MASK],
-        int(netw::predict::EVIDENCE_RAW)
-    );
-    const bool raw_taken = asked[NetwPredictionEngine::STAMP_RAW_FP] != 0;
+    netw::predict::StateStamp asked;
+    pool->open_state_stamp(slot, true, asked);
+    NETW_CHECK_EQ(int(asked.evidence_mask), int(netw::predict::EVIDENCE_RAW));
+    const bool raw_taken = asked.raw_fp != 0;
     CHECK(raw_taken);
 
     memdelete(body);
@@ -196,20 +193,26 @@ TEST_CASE(
         != double(raw[StringName("speed")]);
     CHECK(quantizer_moved_it);
 
+    REQUIRE(
+        pool->record_predicted(slot, 1, netw_test::state_row(pool, slot, raw))
+    );
+    REQUIRE(pool->record_predicted(
+        slot,
+        2,
+        netw_test::state_row(pool, slot, canonical)
+    ));
     NETW_CHECK_EQ(
-        pool->state_fingerprint(slot, raw),
-        pool->state_fingerprint(slot, canonical)
+        pool->book_fingerprint(slot, 1),
+        pool->book_fingerprint(slot, 2)
     );
     NETW_CHECK_EQ(
-        pool->state_family_fingerprints(slot, raw)[0],
-        pool->state_family_fingerprints(slot, canonical)[0]
+        pool->book_families(slot, 1).pose,
+        pool->book_families(slot, 2).pose
     );
 
-    const PackedInt64Array stamp = pool->open_state_stamp(slot, false);
-    NETW_CHECK_EQ(
-        stamp[NetwPredictionEngine::STAMP_PRE_FP],
-        pool->state_fingerprint(slot, canonical)
-    );
+    netw::predict::StateStamp stamp;
+    pool->open_state_stamp(slot, false, stamp);
+    NETW_CHECK_EQ(int64_t(stamp.fp), pool->book_fingerprint(slot, 2));
 
     memdelete(body);
 }
@@ -227,9 +230,10 @@ TEST_CASE(
     const int64_t expected
         = netw::prediction_core::raw_state_fingerprint(every_field_is_causal);
 
-    const PackedInt64Array stamp = pool->open_state_stamp(slot, true);
+    netw::predict::StateStamp stamp;
+    pool->open_state_stamp(slot, true, stamp);
 
-    NETW_CHECK_EQ(stamp[NetwPredictionEngine::STAMP_RAW_FP], expected);
+    NETW_CHECK_EQ(stamp.raw_fp, int32_t(expected));
 
     memdelete(body);
 }
@@ -243,17 +247,16 @@ TEST_CASE(
     Carrier *body = carrier(4.5, 0.25);
     const int64_t slot = stamped_slot(pool, body);
 
-    const PackedInt64Array first = pool->open_state_stamp(slot, true);
-    const PackedInt64Array again = pool->open_state_stamp(slot, true);
-    NETW_CHECK_EQ(
-        first[NetwPredictionEngine::STAMP_PRE_FP],
-        again[NetwPredictionEngine::STAMP_PRE_FP]
-    );
+    netw::predict::StateStamp first;
+    netw::predict::StateStamp again;
+    pool->open_state_stamp(slot, true, first);
+    pool->open_state_stamp(slot, true, again);
+    NETW_CHECK_EQ(first.fp, again.fp);
 
     body->define("speed", 9.5);
-    const PackedInt64Array moved = pool->open_state_stamp(slot, true);
-    const bool apart = first[NetwPredictionEngine::STAMP_PRE_FP]
-        != moved[NetwPredictionEngine::STAMP_PRE_FP];
+    netw::predict::StateStamp moved;
+    pool->open_state_stamp(slot, true, moved);
+    const bool apart = first.fp != moved.fp;
     CHECK(apart);
 
     memdelete(body);
@@ -267,15 +270,13 @@ TEST_CASE(
     NetwPredictionEngine *const pool = &held_pool;
     const int64_t slot = pool->open(every_family_populated());
 
-    const PackedInt64Array stamp = pool->open_state_stamp(slot, true);
+    netw::predict::StateStamp stamp;
+    CHECK_FALSE(pool->open_state_stamp(slot, true, stamp));
+    NETW_CHECK_EQ(stamp.fp, 0);
 
-    NETW_CHECK_EQ(stamp.size(), NetwPredictionEngine::STAMP_COLUMN_COUNT);
-    NETW_CHECK_EQ(stamp[NetwPredictionEngine::STAMP_BOUND], 0);
-    NETW_CHECK_EQ(stamp[NetwPredictionEngine::STAMP_PRE_FP], 0);
-
-    const PackedInt64Array closed = pool->open_state_stamp(-1, true);
-    NETW_CHECK_EQ(closed.size(), NetwPredictionEngine::STAMP_COLUMN_COUNT);
-    NETW_CHECK_EQ(closed[NetwPredictionEngine::STAMP_BOUND], 0);
+    netw::predict::StateStamp closed;
+    CHECK_FALSE(pool->open_state_stamp(-1, true, closed));
+    NETW_CHECK_EQ(closed.fp, 0);
 }
 
 namespace {
@@ -285,6 +286,15 @@ godot::Dictionary row_of(double p_speed, double p_throttle) {
     out[StringName("speed")] = p_speed;
     out[StringName("throttle")] = p_throttle;
     out[StringName("latch")] = 7.0;
+    return out;
+}
+
+netw::predict::StateRow state_row(double p_speed, double p_throttle) {
+    netw::predict::StateRow out;
+    out.resize(3);
+    out.set(0, p_speed);
+    out.set(1, p_throttle);
+    out.set(2, 7.0);
     return out;
 }
 
@@ -1235,7 +1245,7 @@ TEST_CASE(
             slot,
             9,
             3,
-            godot::Dictionary(),
+            netw::predict::StateRow(),
             true,
             false
         ),
@@ -1248,7 +1258,7 @@ TEST_CASE(
             slot,
             9,
             3,
-            godot::Dictionary(),
+            netw::predict::StateRow(),
             false,
             true
         ),
@@ -1260,7 +1270,7 @@ TEST_CASE(
             slot,
             9,
             3,
-            godot::Dictionary(),
+            netw::predict::StateRow(),
             true,
             false
         ),
@@ -1274,7 +1284,7 @@ TEST_CASE(
             slot,
             10,
             3,
-            godot::Dictionary(),
+            netw::predict::StateRow(),
             true,
             false
         ),
@@ -1287,7 +1297,7 @@ TEST_CASE(
             slot,
             11,
             4,
-            godot::Dictionary(),
+            netw::predict::StateRow(),
             true,
             false
         ),
@@ -1378,30 +1388,32 @@ TEST_CASE(
         pool->decode_command_frame(slot, godot::PackedByteArray(), undecodable)
     );
 
-    Ref<netw::NetwPropertySet> declared;
-    declared.instantiate();
-    const Ref<netw::NetwPropertySetColumn> volatile_field
-        = netw::NetwPropertySetColumn::create(
+    netw_test::Books books;
+    held_pool.attach_bindings(&books.bindings);
+    const uint64_t declared_id = books.sets.create();
+    netw::repl::PropertySet *declared = books.sets.get(declared_id);
+    const netw::repl::PropertyColumn volatile_field
+        = netw::repl::PropertyColumn::create(
             StringName("steer"),
             Ref<netw::NetwQuantize>(),
             false,
             netw::enums::NetwMultiplayer::ColumnType(godot::Variant::FLOAT)
         );
-    const Ref<netw::NetwPropertySetColumn> retained_field
-        = netw::NetwPropertySetColumn::create(
+    netw::repl::PropertyColumn retained_field
+        = netw::repl::PropertyColumn::create(
             StringName("name"),
             Ref<netw::NetwQuantize>(),
             false,
             netw::enums::NetwMultiplayer::ColumnType(godot::Variant::STRING)
         );
-    retained_field->set_lane(int64_t(netw::NetwPropertySet::RETAINED));
+    retained_field.lane = int64_t(netw::repl::PropertySet::RETAINED);
     declared->columns.push_back(volatile_field);
     declared->columns.push_back(retained_field);
 
     Node *host = memnew(Node);
-    const Ref<netw::NetwPropertySetBinding> bound
-        = netw::NetwPropertySetBinding::create(declared, host);
-    REQUIRE(bound.is_valid());
+    const netw::repl::PropertyBindingPtr bound
+        = books.bindings.create(declared_id, host);
+    REQUIRE(bound != nullptr);
     pool->bind_property_sets(slot, bound, bound);
 
     const godot::Array keys = pool->input_keys(slot);
@@ -1440,52 +1452,60 @@ TEST_CASE(
     )
                 .ran);
 
-    const godot::Dictionary seed = row_of(4.5, 0.25);
+    const netw::predict::StateRow seed = state_row(4.5, 0.25);
 
-    const godot::Dictionary exact = pool->advanced_seed(
+    netw::predict::StateRow exact;
+    CHECK_FALSE(pool->advanced_seed(
         slot,
         seed,
         4,
         int(netw::NetwSimulationHandle::RESTORE_EXACT),
         6,
         2.0,
-        0.01
-    );
-    NETW_CHECK_CLOSE(double(exact[StringName("speed")]), 4.5, 1e-9);
+        0.01,
+        exact
+    ));
+    NETW_CHECK_CLOSE(double(exact.values[0]), 4.5, 1e-9);
 
-    const godot::Dictionary advanced = pool->advanced_seed(
+    netw::predict::StateRow advanced;
+    CHECK(pool->advanced_seed(
         slot,
         seed,
         4,
         int(netw::NetwSimulationHandle::RESTORE_EXTRAPOLATED),
         6,
         2.0,
-        0.01
-    );
-    const bool seed_moved = double(advanced[StringName("speed")]) > 4.5;
+        0.01,
+        advanced
+    ));
+    const bool seed_moved = double(advanced.values[0]) > 4.5;
     CHECK(seed_moved);
 
-    const godot::Dictionary held = pool->advanced_seed(
+    netw::predict::StateRow held;
+    CHECK_FALSE(pool->advanced_seed(
         slot,
         seed,
         4,
         int(netw::NetwSimulationHandle::RESTORE_EXTRAPOLATED),
         0,
         2.0,
-        0.01
-    );
-    NETW_CHECK_CLOSE(double(held[StringName("speed")]), 4.5, 1e-9);
+        0.01,
+        held
+    ));
+    NETW_CHECK_CLOSE(double(held.values[0]), 4.5, 1e-9);
 
-    CHECK(pool->advanced_seed(
-                  slot,
-                  godot::Dictionary(),
-                  4,
-                  int(netw::NetwSimulationHandle::RESTORE_EXTRAPOLATED),
-                  6,
-                  2.0,
-                  0.01
-    )
-              .is_empty());
+    netw::predict::StateRow none;
+    CHECK_FALSE(pool->advanced_seed(
+        slot,
+        netw::predict::StateRow(),
+        4,
+        int(netw::NetwSimulationHandle::RESTORE_EXTRAPOLATED),
+        6,
+        2.0,
+        0.01,
+        none
+    ));
+    CHECK_FALSE(none.any());
 
     memdelete(body);
 }
@@ -1575,11 +1595,12 @@ TEST_CASE(
     NetwPredictionEngine *const pool = &held_pool;
     const int64_t slot = tolerance_slot(pool);
     Node *host = memnew(Node);
-    Ref<netw::NetwPropertySet> declared;
-    declared.instantiate();
-    const Ref<netw::NetwPropertySetBinding> bound
-        = netw::NetwPropertySetBinding::create(declared, host);
-    REQUIRE(bound.is_valid());
+    netw_test::Books books;
+    held_pool.attach_bindings(&books.bindings);
+    const uint64_t declared_id = books.sets.create();
+    const netw::repl::PropertyBindingPtr bound
+        = books.bindings.create(declared_id, host);
+    REQUIRE(bound != nullptr);
 
     NETW_CHECK_EQ(pool->ledger_fields(slot).size(), 0);
     pool->seed_recovery_ledger(slot);
@@ -1610,7 +1631,7 @@ TEST_CASE(
     Carrier *body = carrier(4.5, 0.25);
     const int64_t slot = stamped_slot(pool, body);
 
-    pool->author_input(slot, 7);
+    pool->author_command(slot, 7);
 
     NETW_CHECK_EQ(pool->latest_input_tick_of(slot), 7);
     NETW_CHECK_EQ(
@@ -1620,7 +1641,7 @@ TEST_CASE(
         7
     );
 
-    CHECK(pool->author_input(slot + 9000, 9).is_empty());
+    CHECK_FALSE(pool->author_command(slot + 9000, 9));
     NETW_CHECK_EQ(pool->latest_input_tick_of(slot), 7);
 
     memdelete(body);
@@ -1688,21 +1709,12 @@ TEST_CASE(
     NetwPredictionEngine *const pool = &held_pool;
     Carrier *body = carrier(4.5, 0.25);
     const int64_t slot = stamped_slot(pool, body);
-    const godot::PackedFloat64Array meter
-        = pool->meter_tolerances(slot, 0, 0.01);
+    const netw::predict::StateRow near
+        = netw_test::state_row(pool, slot, row_of(4.5, 0.25));
+    const netw::predict::StateRow far
+        = netw_test::state_row(pool, slot, row_of(6.5, 0.25));
 
-    CHECK(
-        pool->compare_state_for(
-                slot,
-                3,
-                row_of(4.5, 0.25),
-                row_of(6.5, 0.25),
-                meter,
-                0.01
-        )
-            .transition
-        < 0
-    );
+    CHECK(pool->compare_rows(slot, 3, near, far, 0, 0.01) == nullptr);
 
     pool->record_input(slot, 3, 3);
     REQUIRE(pool->replay_drive(
@@ -1722,26 +1734,16 @@ TEST_CASE(
     )
                 .ran);
 
-    const netw::predict::StateVerdict unarmed = pool->compare_state_for(
-        slot,
-        3,
-        row_of(4.5, 0.25),
-        row_of(6.5, 0.25),
-        meter,
-        0.01
-    );
-    CHECK_FALSE(unarmed.corrected);
+    const netw::predict::StateVerdict *unarmed
+        = pool->compare_rows(slot, 3, near, far, 0, 0.01);
+    REQUIRE(unarmed != nullptr);
+    CHECK_FALSE(unarmed->corrected);
 
     pool->set_stream_reconstructed(slot, true);
-    const netw::predict::StateVerdict judged = pool->compare_state_for(
-        slot,
-        3,
-        row_of(4.5, 0.25),
-        row_of(6.5, 0.25),
-        meter,
-        0.01
-    );
-    CHECK(judged.corrected);
+    const netw::predict::StateVerdict *judged
+        = pool->compare_rows(slot, 3, near, far, 0, 0.01);
+    REQUIRE(judged != nullptr);
+    CHECK(judged->corrected);
 
     memdelete(body);
 }
@@ -1773,9 +1775,7 @@ TEST_CASE(
     );
     REQUIRE(drive.ran);
 
-    const Ref<netw::NetwTimeline> entries = pool->entry_history(slot);
-    REQUIRE(entries.is_valid());
-    CHECK(entries->state_at(4).is_empty());
+    CHECK(netw_test::predicted_state(pool, slot, 4).is_empty());
 
     pool->close_replayed_entry(
         slot,
@@ -1784,8 +1784,8 @@ TEST_CASE(
         godot::PackedStringArray()
     );
 
-    CHECK_FALSE(entries->state_at(4).is_empty());
-    CHECK(entries->state_at(3).is_empty());
+    CHECK_FALSE(netw_test::predicted_state(pool, slot, 4).is_empty());
+    CHECK(netw_test::predicted_state(pool, slot, 3).is_empty());
 
     CHECK(pool->close_replayed_entry(
                   slot + 9000,
@@ -1796,6 +1796,193 @@ TEST_CASE(
               .is_empty());
 
     memdelete(body);
+}
+
+double replayed_speed(netw::Schedule p_schedule) {
+    NetwPredictionEngine held_pool;
+    NetwPredictionEngine *const pool = &held_pool;
+    Carrier *body = carrier(4.5, 0.25);
+    const int64_t slot = pool->open(every_family_populated());
+    pool->configure(
+        slot,
+        int(p_schedule),
+        int(netw::Role::PREDICT),
+        int(netw::CorrectionMode::REPLAY),
+        int(netw::RestoreMode::EXACT)
+    );
+    pool->bind_owner(slot, body);
+    pool->open_lane(slot);
+    for (int64_t label = 10; label <= 13; label += 1) {
+        pool->tape_author(slot, label, true);
+    }
+    godot::Dictionary stale;
+    stale[StringName("speed")] = 1.0;
+    stale[StringName("throttle")] = 0.25;
+    stale[StringName("latch")] = 7.0;
+    pool->record_predicted(slot, 4, netw_test::state_row(pool, slot, stale));
+
+    body->set(StringName("speed"), 9.0);
+    pool->close_replayed_entry(
+        slot,
+        3,
+        godot::Dictionary(),
+        godot::PackedStringArray()
+    );
+    const netw::ComparisonChoice chosen = pool->select_comparison(slot, 3);
+    const godot::Dictionary predicted
+        = netw_test::predicted_state(pool, slot, chosen.key);
+    memdelete(body);
+    return double(predicted.get(StringName("speed"), -1.0));
+}
+
+TEST_CASE(
+    "[Networked][Predict][Pose] PB2 after a replay rewrites a transition, "
+    "the next comparison reads the rewritten entry on every schedule"
+) {
+    NETW_CHECK_CLOSE(replayed_speed(netw::Schedule::TICK), 9.0, 1e-9);
+    NETW_CHECK_CLOSE(replayed_speed(netw::Schedule::STEPPED), 9.0, 1e-9);
+    NETW_CHECK_CLOSE(replayed_speed(netw::Schedule::FRAME), 9.0, 1e-9);
+}
+
+constexpr int64_t REPLAY_FIRST = 20;
+constexpr int64_t REPLAY_LAST = 27;
+constexpr int64_t REPLAY_ACK = 22;
+
+void declare_exact(
+    godot::LocalVector<netw::predict::FieldDecl> &r_out,
+    const char *p_key
+) {
+    r_out.push_back(
+        netw::field_decl(
+            StringName(p_key),
+            int(netw::predict::PropertyClass::CAUSAL),
+            StringName(),
+            0.0,
+            false,
+            false,
+            -1.0,
+            -1.0,
+            false,
+            Ref<netw::NetwQuantize>(),
+            int(godot::Variant::FLOAT)
+        )
+    );
+}
+
+struct Reproduction {
+    int64_t replayed = 0;
+    int64_t matched = 0;
+    double live_throttle = 0.0;
+};
+
+const double LIVE_THROTTLE = 9.0;
+
+Reproduction replay_reproduction(netw::Schedule p_schedule) {
+    NetwPredictionEngine held_pool;
+    NetwPredictionEngine *const pool = &held_pool;
+    Carrier *body = carrier(0.5, 0.0);
+    godot::LocalVector<netw::predict::FieldDecl> state;
+    declare_exact(state, "speed");
+    declare_exact(state, "latch");
+    godot::LocalVector<netw::predict::FieldDecl> input;
+    declare_exact(input, "throttle");
+    const int64_t slot = pool->open(state);
+    pool->rewire(slot, state, input);
+    pool->configure(
+        slot,
+        int(p_schedule),
+        int(netw::Role::PREDICT),
+        int(netw::CorrectionMode::REPLAY),
+        int(netw::RestoreMode::EXACT)
+    );
+    pool->bind_owner(slot, body);
+    pool->set_simulate(slot, Callable(body, "sum_into_speed"));
+    pool->open_lane(slot);
+    pool->set_next_tape_entry_index(slot, REPLAY_FIRST);
+    const bool framed = p_schedule == netw::Schedule::FRAME;
+
+    godot::HashMap<int64_t, int32_t> recorded;
+    for (int64_t at = REPLAY_FIRST; at <= REPLAY_LAST; ++at) {
+        netw::predict::StateRow command;
+        command.resize(1);
+        command.set(0, 0.25 * double(at - REPLAY_FIRST + 1));
+        if (framed) {
+            pool->tape_author(slot, at, true);
+        }
+        pool->record_authored_command(slot, at, at, true, command);
+        pool->set_latest_input_tick(slot, at);
+        pool->run_command(slot, command, 1.0 / 60.0, at, true);
+        pool->capture_predicted(slot, at + 1);
+        recorded.insert(at, pool->book_fingerprint(slot, at + 1));
+    }
+
+    Reproduction out;
+    body->set("throttle", LIVE_THROTTLE);
+    if (!pool->restore_predicted(slot, REPLAY_ACK + 1)) {
+        memdelete(body);
+        return out;
+    }
+    if (framed) {
+        pool->replay_authored_entries(
+            slot,
+            REPLAY_ACK,
+            godot::Dictionary(),
+            godot::PackedStringArray(),
+            Callable()
+        );
+    } else {
+        pool->replay_tick_window(
+            slot,
+            REPLAY_ACK + 1,
+            REPLAY_LAST,
+            godot::Dictionary(),
+            godot::PackedStringArray(),
+            Callable()
+        );
+    }
+    for (int64_t at = REPLAY_ACK + 1; at <= REPLAY_LAST; ++at) {
+        const godot::Dictionary post
+            = netw_test::predicted_state(pool, slot, at + 1);
+        out.replayed += post.is_empty() ? 0 : 1;
+        out.matched += pool->book_fingerprint(slot, at + 1) == recorded[at]
+            ? 1
+            : 0;
+    }
+    out.live_throttle = double(body->get("throttle"));
+    memdelete(body);
+    return out;
+}
+
+TEST_CASE(
+    "[Networked][Predict][Pose] RP1 a replayed transition reproduces the "
+    "post-state it recorded when it first ran, on every schedule"
+) {
+    const netw::Schedule schedules[] = {
+        netw::Schedule::TICK,
+        netw::Schedule::STEPPED,
+        netw::Schedule::FRAME,
+    };
+    for (const netw::Schedule schedule : schedules) {
+        const Reproduction reproduced = replay_reproduction(schedule);
+        NETW_CHECK_EQ(reproduced.replayed, REPLAY_LAST - REPLAY_ACK);
+        NETW_CHECK_EQ(reproduced.matched, REPLAY_LAST - REPLAY_ACK);
+    }
+}
+
+TEST_CASE(
+    "[Networked][Predict][Pose] RP2 a replay hands the node back the input "
+    "it held before the replay, on every schedule"
+) {
+    const netw::Schedule schedules[] = {
+        netw::Schedule::TICK,
+        netw::Schedule::STEPPED,
+        netw::Schedule::FRAME,
+    };
+    for (const netw::Schedule schedule : schedules) {
+        const Reproduction reproduced = replay_reproduction(schedule);
+        NETW_CHECK_EQ(reproduced.replayed, REPLAY_LAST - REPLAY_ACK);
+        NETW_CHECK_CLOSE(reproduced.live_throttle, LIVE_THROTTLE, 0.0);
+    }
 }
 
 TEST_CASE(
@@ -3079,19 +3266,29 @@ TEST_CASE(
     NetwPredictionEngine held_pool;
     NetwPredictionEngine *const pool = &held_pool;
     const int64_t slot = pool->open(every_family_populated());
+    godot::LocalVector<netw::predict::FieldDecl> input;
+    declare_exact(input, "throttle");
+    pool->rewire(slot, every_family_populated(), input);
 
-    NETW_CHECK_EQ(pool->frame_input_of(slot).size(), 0);
-    NETW_CHECK_EQ(pool->stall_input_of(slot).size(), 0);
-    NETW_CHECK_EQ(pool->last_input_of(slot).size(), 0);
+    const netw::predict::StateRow *frame = pool->frame_command_of(slot);
+    const netw::predict::StateRow *stall = pool->stall_row_of(slot);
+    const netw::predict::StateRow *last = pool->last_row_of(slot);
+    REQUIRE(frame != nullptr);
+    REQUIRE(stall != nullptr);
+    REQUIRE(last != nullptr);
+    CHECK_FALSE(frame->any());
+    CHECK_FALSE(stall->any());
+    CHECK_FALSE(last->any());
     NETW_CHECK_EQ(pool->open_topology_of(slot).size(), 0);
 
-    godot::Dictionary driven;
-    driven[StringName("throttle")] = 1.0;
-    pool->set_frame_input(slot, driven);
+    netw::predict::StateRow driven;
+    driven.resize(1);
+    driven.set(0, 1.0);
+    pool->reset_for_rewire(slot, false, true, false, driven);
 
-    NETW_CHECK_EQ(pool->frame_input_of(slot).size(), 1);
-    NETW_CHECK_EQ(pool->stall_input_of(slot).size(), 0);
-    NETW_CHECK_EQ(pool->last_input_of(slot).size(), 0);
+    CHECK(stall->has(0));
+    CHECK_FALSE(frame->any());
+    CHECK_FALSE(last->any());
     NETW_CHECK_EQ(pool->open_topology_of(slot).size(), 0);
 
     godot::Dictionary facts;
@@ -3099,36 +3296,44 @@ TEST_CASE(
     pool->set_open_topology(slot, facts);
     NETW_CHECK_EQ(pool->open_topology_of(slot).size(), 1);
     CHECK(pool->open_topology_of(slot).has(StringName("floor")));
-    NETW_CHECK_EQ(pool->frame_input_of(slot).size(), 1);
-    CHECK(pool->frame_input_of(slot).has(StringName("throttle")));
-    CHECK_FALSE(pool->frame_input_of(slot).has(StringName("floor")));
+    REQUIRE(stall->has(0));
+    NETW_CHECK_CLOSE(double(stall->values[0]), 1.0, 0.0);
+    CHECK_FALSE(frame->any());
 
-    pool->set_frame_input(slot, godot::Dictionary());
-    NETW_CHECK_EQ(pool->frame_input_of(slot).size(), 0);
+    pool->forget_last_input(slot);
+    CHECK(stall->has(0));
     NETW_CHECK_EQ(pool->open_topology_of(slot).size(), 1);
 
-    NETW_CHECK_EQ(pool->frame_input_of(slot + 9000).size(), 0);
-    pool->set_frame_input(slot + 9000, driven);
-    NETW_CHECK_EQ(pool->frame_input_of(slot).size(), 0);
+    CHECK(pool->stall_row_of(slot + 9000) == nullptr);
+    pool->forget_last_input(slot + 9000);
+    CHECK(stall->has(0));
 }
 
 TEST_CASE(
-    "[Networked][Predict][Rows] the timeline a slot is bound to is "
-    "readable back from it, so nothing needs a second reference"
+    "[Networked][Predict][Rows] the input lane a slot opens is readable "
+    "back from it, and closing it leaves the slot with none"
 ) {
     NetwPredictionEngine held_pool;
     NetwPredictionEngine *const pool = &held_pool;
     const int64_t slot = pool->open(every_family_populated());
 
-    CHECK(pool->timeline_of(slot).is_null());
-    CHECK(pool->timeline_of(slot + 9000).is_null());
+    CHECK_FALSE(pool->input_lane_open(slot));
+    CHECK_FALSE(pool->input_lane_open(slot + 9000));
 
-    const Ref<netw::NetwTimeline> lane = netw::NetwTimeline::create(64);
-    pool->bind_timeline(slot, lane);
-    CHECK(pool->timeline_of(slot) == lane);
+    pool->open_lane(slot);
+    REQUIRE(pool->input_lane_open(slot));
+    CHECK(pool->record_authored_command(
+        slot,
+        4,
+        4,
+        true,
+        netw::predict::StateRow()
+    ));
+    NETW_CHECK_EQ(pool->newest_authored_input(slot), 4);
 
-    pool->bind_timeline(slot, Ref<netw::NetwTimeline>());
-    CHECK(pool->timeline_of(slot).is_null());
+    pool->close_lane(slot);
+    CHECK_FALSE(pool->input_lane_open(slot));
+    NETW_CHECK_EQ(pool->newest_authored_input(slot), -1);
 }
 
 TEST_CASE(
@@ -3139,18 +3344,19 @@ TEST_CASE(
     NetwPredictionEngine *const pool = &held_pool;
     const int64_t slot = pool->open(every_family_populated());
 
-    CHECK(pool->state_binding_of(slot).is_null());
-    CHECK(pool->input_binding_of(slot).is_null());
-    CHECK(pool->state_binding_of(slot + 9000).is_null());
+    CHECK(pool->state_binding_of(slot) == nullptr);
+    CHECK(pool->input_binding_of(slot) == nullptr);
+    CHECK(pool->state_binding_of(slot + 9000) == nullptr);
 
-    Ref<netw::NetwPropertySet> declared;
-    declared.instantiate();
-    const Ref<netw::NetwPropertySetBinding> state
-        = netw::NetwPropertySetBinding::create(declared, nullptr);
-    const Ref<netw::NetwPropertySetBinding> input
-        = netw::NetwPropertySetBinding::create(declared, nullptr);
-    REQUIRE(state.is_valid());
-    REQUIRE(input.is_valid());
+    netw_test::Books books;
+    held_pool.attach_bindings(&books.bindings);
+    const uint64_t declared_id = books.sets.create();
+    const netw::repl::PropertyBindingPtr state
+        = books.bindings.create(declared_id, nullptr);
+    const netw::repl::PropertyBindingPtr input
+        = books.bindings.create(declared_id, nullptr);
+    REQUIRE(state != nullptr);
+    REQUIRE(input != nullptr);
     CHECK(state != input);
 
     pool->bind_property_sets(slot, state, input);
@@ -3159,11 +3365,11 @@ TEST_CASE(
 
     pool->bind_property_sets(
         slot,
-        Ref<netw::NetwPropertySetBinding>(),
-        Ref<netw::NetwPropertySetBinding>()
+        netw::repl::PropertyBindingPtr(),
+        netw::repl::PropertyBindingPtr()
     );
-    CHECK(pool->state_binding_of(slot).is_null());
-    CHECK(pool->input_binding_of(slot).is_null());
+    CHECK(pool->state_binding_of(slot) == nullptr);
+    CHECK(pool->input_binding_of(slot) == nullptr);
 }
 
 TEST_CASE(

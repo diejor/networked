@@ -507,27 +507,6 @@ public sealed class NetwDisplayHandle : NetwRefCounted
         return answered;
     }
 
-    private static readonly IntPtr _bindGetBuffer =
-        NetwApi.MethodBind("NetwDisplayHandle", "get_buffer", 3811683676UL);
-
-    /// <summary>
-    /// The <see cref="NetwRingBuffer"/> of snapshots for
-    /// <paramref name="property"/>, or <c>null</c>.
-    /// </summary>
-    public NetwRingBuffer GetBuffer(StringName property)
-    {
-        godot_variant slot0 = VariantUtils.CreateFromStringName(property);
-        godot_variant answered = default;
-        NetwThunks.Call1(_bindGetBuffer, Checked, in slot0, ref answered);
-        slot0.Dispose();
-        NetwRingBuffer result =
-            NetwRingBuffer.Adopt(
-                NetwApi.Retained(
-                    VariantUtils.ConvertToGodotObjectPtr(answered)));
-        answered.Dispose();
-        return result;
-    }
-
     private static readonly IntPtr _bindReset =
         NetwApi.MethodBind("NetwDisplayHandle", "reset", 3218959716UL);
 

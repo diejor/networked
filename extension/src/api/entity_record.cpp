@@ -7,6 +7,7 @@
 #include "netw/scene_decl.hpp"
 #include "netw/script/model.hpp"
 #include "netw/synchronizers.hpp"
+#include "netw/tree_hook.hpp"
 
 using namespace godot;
 
@@ -26,7 +27,36 @@ NetwEntityRecord::NetwEntityRecord() {
 }
 
 NetwEntityRecord::~NetwEntityRecord() {
+    if (interest_facet != nullptr) {
+        memdelete(interest_facet);
+    }
+    if (display_decl != nullptr) {
+        memdelete(display_decl);
+    }
     entity::release(handle);
+}
+
+interest::Facet &NetwEntityRecord::get_interest_facet() {
+    if (interest_facet == nullptr) {
+        interest_facet = memnew(interest::Facet);
+    }
+    return *interest_facet;
+}
+
+display::Decl &NetwEntityRecord::display_declaration() {
+    if (display_decl == nullptr) {
+        display_decl = memnew(display::Decl);
+    }
+    return *display_decl;
+}
+
+Variant NetwEntityRecord::minted_part(int64_t p_part) const {
+    for (const MintedPart &held : parts) {
+        if (held.part == p_part) {
+            return held.value;
+        }
+    }
+    return Variant();
 }
 
 bool NetwEntityRecord::adopt_handle(const RID &p_handle) {
@@ -46,17 +76,18 @@ Variant NetwEntityRecord::part(int64_t p_part, Object *p_wrapper) {
         p_part < 0 || p_part >= PART_MAX,
         Variant(),
         sys::ENTITY,
-        "part %d is not a facet a record carries",
+        "Entity part %d does not exist.",
         int(p_part)
     );
-    if (Ref<RefCounted>(parts[p_part]).is_valid()) {
-        return parts[p_part];
+    const Variant held = minted_part(p_part);
+    if (Ref<RefCounted>(held).is_valid()) {
+        return held;
     }
     const Callable &factory = part_factories()[p_part];
     if (!factory.is_valid()) {
         NETW_TRACE(
             sys::ENTITY,
-            "no factory is registered for entity part %d",
+            "No factory is registered for entity part %d.",
             int(p_part)
         );
         return Variant();
@@ -66,14 +97,23 @@ Variant NetwEntityRecord::part(int64_t p_part, Object *p_wrapper) {
     NETW_WARN_COND(
         minted.is_null(),
         sys::ENTITY,
-        "the factory for entity part %d answered nothing",
+        "The factory for entity part %d returned nothing.",
         int(p_part)
     );
     if (minted.is_null()) {
         return Variant();
     }
-    NETW_TRACE(sys::ENTITY, "minted entity part %d", int(p_part));
-    parts[p_part] = made;
+    NETW_TRACE(sys::ENTITY, "Made entity part %d.", int(p_part));
+    for (MintedPart &slot : parts) {
+        if (slot.part == p_part) {
+            slot.value = made;
+            return made;
+        }
+    }
+    MintedPart minted_now;
+    minted_now.part = p_part;
+    minted_now.value = made;
+    parts.push_back(minted_now);
     return made;
 }
 
@@ -84,7 +124,7 @@ void NetwEntityRecord::set_part_factory(
     NETW_ERR_COND(
         p_part < 0 || p_part >= PART_MAX,
         sys::ENTITY,
-        "part %d is not a facet a record carries",
+        "Entity part %d does not exist.",
         int(p_part)
     );
     part_factories()[p_part] = p_factory;
@@ -126,10 +166,10 @@ bool NetwEntityRecord::transition(int64_t p_stage, Node *p_owner) {
     Node *owner = p_owner;
     NETW_ERROR(
         sys::ENTITY,
-        "illegal stage transition %d -> %d on '%s'",
+        "Entity '%s' cannot move from stage %d to stage %d.",
+        owner ? godot::String(owner->get_name()) : godot::String("<no owner>"),
         int(from),
-        int(p_stage),
-        owner ? godot::String(owner->get_name()) : godot::String("<no owner>")
+        int(p_stage)
     );
     return false;
 }
@@ -222,9 +262,10 @@ void NetwEntityRecord::write_authority(
             : NodePath(String(p_node->get_name()));
         NETW_WARN(
             sys::ENTITY,
-            "%s has multiplayer authority %d written outside its entity. "
-            "The entity's control sets it to %d. Declare a node that stays "
-            "with the session authority with NetwEntity.follow_session.",
+            "%s had its multiplayer authority set to %d outside its entity, "
+            "and the entity sets it back to %d. Use "
+            "NetwEntity.follow_session to keep a node on the session "
+            "authority.",
             String(named).utf8().get_data(),
             int(now),
             int(p_to)
@@ -238,9 +279,9 @@ void NetwEntityRecord::project_node(
     Node *p_node,
     bool p_pinned,
     const Projection &p_projection,
-    const Callable &p_watch
+    uint64_t p_watch
 ) {
-    if (p_node != p_owner && p_node->has_meta(entity_meta())) {
+    if (p_node != p_owner && tree::is_entity_root(p_node)) {
         return;
     }
     const bool pinned = p_pinned || pinned_to_session(p_owner, p_node);
@@ -249,9 +290,10 @@ void NetwEntityRecord::project_node(
         pinned ? p_projection.session : p_projection.follower,
         pinned ? p_projection.prior_session : p_projection.prior_follower
     );
-    const StringName entered("child_entered_tree");
-    if (p_watch.is_valid() && !p_node->is_connected(entered, p_watch)) {
-        p_node->connect(entered, p_watch);
+    const bool watched = p_projection.follower != 1
+        || p_projection.session != 1;
+    if (watched && p_watch != 0) {
+        tree::watch(p_node, p_watch);
     }
     const int children = p_node->get_child_count(true);
     for (int at = 0; at < children; ++at) {
@@ -268,7 +310,7 @@ void NetwEntityRecord::project_node(
 void NetwEntityRecord::project_entered(
     Node *p_owner,
     Node *p_node,
-    const Callable &p_watch
+    uint64_t p_watch
 ) {
     if (p_owner == nullptr || p_node == nullptr || projected_follower == 0
         || !p_owner->is_ancestor_of(p_node)) {
@@ -284,7 +326,7 @@ void NetwEntityRecord::apply_control(
     Object *p_wrapper,
     Node *p_owner,
     int64_t p_coordinator,
-    const Callable &p_watch
+    uint64_t p_watch
 ) {
     Node *owner = p_owner;
     if (owner == nullptr) {
@@ -306,7 +348,7 @@ void NetwEntityRecord::apply_control(
     if (was != peer && p_wrapper != nullptr) {
         NETW_TRACE(
             sys::ENTITY,
-            "control moved from %d to %d",
+            "Control moved from peer %d to peer %d.",
             int(was),
             int(peer)
         );
@@ -379,7 +421,9 @@ int64_t NetwEntityRecord::admit_control_request(
     if (!control.admits_request()) {
         NETW_WARN(
             sys::ENTITY,
-            "rejecting a control request from peer %d, transfer is fixed",
+            "Peer %d asked for control, but NetwEntity.transfer is "
+            "TRANSFER_FIXED, so it was refused. Set it to "
+            "TRANSFER_REQUESTABLE to allow requests.",
             int(p_requester)
         );
         return 0;
@@ -396,9 +440,9 @@ int64_t NetwEntityRecord::admit_control_request(
         );
     }
     if (request->denied) {
-        NETW_WARN(
+        NETW_DEBUG(
             sys::ENTITY,
-            "the control request from peer %d was denied",
+            "The control_requested handler denied peer %d.",
             int(p_requester)
         );
         return 0;
@@ -420,8 +464,9 @@ bool NetwEntityRecord::begin_despawn(
     }
     despawning_opts = opts;
     transition(int64_t(entity::Stage::DESPAWNING), p_owner);
-    NETW_TRACE(sys::ENTITY, "despawning for '%s'", opts->get_reason());
+    NETW_TRACE(sys::ENTITY, "Despawning because of '%s'.", opts->get_reason());
     if (p_wrapper != nullptr) {
+        tree::despawning(p_wrapper, opts->get_reason());
         p_wrapper->emit_signal(StringName("despawning"), opts->get_reason());
     }
     despawning_opts = Ref<NetwDespawnOpts>();
@@ -447,6 +492,16 @@ bool NetwEntityRecord::complete_departure(Object *p_wrapper) {
         advance(int64_t(entity::Stage::DESPAWNING));
     }
     return finish_teardown(p_wrapper);
+}
+
+void NetwEntityRecord::readmit() {
+    stage = int64_t(entity::Stage::UNBOUND);
+    route = 0;
+    entity::release(handle);
+    handle = entity::mint();
+    despawning_opts = Ref<NetwDespawnOpts>();
+    projected_follower = 0;
+    projected_session = 0;
 }
 
 bool NetwEntityRecord::classify_activation(Node *p_owner) {

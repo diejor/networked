@@ -10,120 +10,6 @@ using namespace godot;
 
 namespace netw {
 
-Ref<NetwColumnRef> NetwColumnRef::make(
-    const Ref<NetwSchema> &p_schema,
-    int p_index
-) {
-    Ref<NetwColumnRef> made;
-    made.instantiate();
-    made->schema = p_schema;
-    made->index = p_index;
-    return made;
-}
-
-StringName NetwColumnRef::get_key() const {
-    if (!is_valid()) {
-        return StringName();
-    }
-    const Ref<NetwSchemaColumn> column = schema->get_columns()[index];
-    return column.is_valid() ? column->get_key() : StringName();
-}
-
-bool NetwColumnRef::is_valid() const {
-    return schema.is_valid() && index >= 0
-        && index < schema->get_columns().size();
-}
-
-void NetwColumnRef::_bind_methods() {
-    ClassDB::bind_method(D_METHOD("get_schema"), &NetwColumnRef::get_schema);
-    ADD_PROPERTY(
-        PropertyInfo(
-            Variant::OBJECT,
-            "schema",
-            PROPERTY_HINT_RESOURCE_TYPE,
-            "NetwSchema",
-            PROPERTY_USAGE_NONE
-        ),
-        "",
-        "get_schema"
-    );
-    ClassDB::bind_method(D_METHOD("get_index"), &NetwColumnRef::get_index);
-    ADD_PROPERTY(
-        PropertyInfo(
-            Variant::INT,
-            "index",
-            PROPERTY_HINT_NONE,
-            "",
-            PROPERTY_USAGE_NONE
-        ),
-        "",
-        "get_index"
-    );
-    ClassDB::bind_method(D_METHOD("get_key"), &NetwColumnRef::get_key);
-    ADD_PROPERTY(
-        PropertyInfo(
-            Variant::STRING_NAME,
-            "key",
-            PROPERTY_HINT_NONE,
-            "",
-            PROPERTY_USAGE_NONE
-        ),
-        "",
-        "get_key"
-    );
-    ClassDB::bind_method(D_METHOD("is_valid"), &NetwColumnRef::is_valid);
-}
-
-void NetwSchemaColumn::_bind_methods() {
-    ClassDB::bind_method(
-        D_METHOD("set_key", "key"),
-        &NetwSchemaColumn::set_key
-    );
-    ClassDB::bind_method(D_METHOD("get_key"), &NetwSchemaColumn::get_key);
-    ADD_PROPERTY(
-        PropertyInfo(Variant::STRING_NAME, "key"),
-        "set_key",
-        "get_key"
-    );
-
-    ClassDB::bind_method(
-        D_METHOD("set_type", "type"),
-        &NetwSchemaColumn::set_type
-    );
-    ClassDB::bind_method(D_METHOD("get_type"), &NetwSchemaColumn::get_type);
-    ADD_PROPERTY(PropertyInfo(Variant::INT, "type"), "set_type", "get_type");
-
-    ClassDB::bind_method(
-        D_METHOD("set_stride", "stride"),
-        &NetwSchemaColumn::set_stride
-    );
-    ClassDB::bind_method(D_METHOD("get_stride"), &NetwSchemaColumn::get_stride);
-    ADD_PROPERTY(
-        PropertyInfo(Variant::INT, "stride"),
-        "set_stride",
-        "get_stride"
-    );
-
-    ClassDB::bind_method(
-        D_METHOD("set_quantizer", "quantizer"),
-        &NetwSchemaColumn::set_quantizer
-    );
-    ClassDB::bind_method(
-        D_METHOD("get_quantizer"),
-        &NetwSchemaColumn::get_quantizer
-    );
-    ADD_PROPERTY(
-        PropertyInfo(
-            Variant::OBJECT,
-            "quantizer",
-            PROPERTY_HINT_RESOURCE_TYPE,
-            "NetwQuantize"
-        ),
-        "set_quantizer",
-        "get_quantizer"
-    );
-}
-
 Ref<NetwSchema> NetwSchema::create(const StringName &p_name) {
     Ref<NetwSchema> made;
     made.instantiate();
@@ -137,23 +23,21 @@ int NetwSchema::column(
     int p_stride,
     const Ref<NetwQuantize> &p_quantizer
 ) {
-    for (int at = 0; at < columns.size(); ++at) {
-        const Ref<NetwSchemaColumn> existing = columns[at];
-        if (existing.is_null() || existing->get_key() != p_key) {
+    for (uint32_t at = 0; at < columns.size(); ++at) {
+        const Column &existing = columns[at];
+        if (existing.key != p_key) {
             continue;
         }
-        if (existing->get_type() == p_type
-            && existing->get_stride() == p_stride) {
-            return at;
+        if (existing.type == p_type && existing.stride == p_stride) {
+            return int(at);
         }
         return -1;
     }
-    Ref<NetwSchemaColumn> fresh;
-    fresh.instantiate();
-    fresh->set_key(p_key);
-    fresh->set_type(p_type);
-    fresh->set_stride(p_stride);
-    fresh->set_quantizer(p_quantizer);
+    Column fresh;
+    fresh.key = p_key;
+    fresh.type = p_type;
+    fresh.stride = p_stride;
+    fresh.quantizer = p_quantizer;
     columns.push_back(fresh);
     return int(columns.size()) - 1;
 }
@@ -161,7 +45,10 @@ int NetwSchema::column(
 Ref<NetwSchema> NetwSchema::declare(const StringName &p_name) {
     const Ref<NetwSchema> declaration = schema_model::declare(p_name);
     if (declaration.is_null()) {
-        NETW_ERROR(sys::TABLE, "a schema name may not be empty");
+        NETW_ERROR(
+            sys::TABLE,
+            "NetwSchema.declare needs a name, and it was empty."
+        );
     }
     return declaration;
 }
@@ -332,26 +219,14 @@ int NetwSchema::string(const StringName &p_key, int p_stride) {
     );
 }
 
-Ref<NetwColumnRef> NetwSchema::column_ref(int p_index) {
-    if (p_index < 0 || p_index >= columns.size()) {
-        NETW_ERROR(
-            sys::TABLE,
-            "schema '%s' has no column %d to reference",
-            String(name),
-            p_index
-        );
-        return Ref<NetwColumnRef>();
-    }
-    return NetwColumnRef::make(Ref<NetwSchema>(this), p_index);
-}
-
 Ref<NetwSchema> NetwSchema::storage_version(int p_version) {
     if (p_version < 1) {
         NETW_ERROR(
             sys::TABLE,
-            "schema '%s' asks for storage version %d and the first is 1",
-            String(name),
-            p_version
+            "NetwSchema.storage_version got %d for '%s'. Versions start at "
+            "1.",
+            p_version,
+            String(name)
         );
         return Ref<NetwSchema>(this);
     }
@@ -366,7 +241,8 @@ Ref<NetwSchema> NetwSchema::migrate(
     if (p_from_version < 1 || p_step.is_null()) {
         NETW_ERROR(
             sys::TABLE,
-            "schema '%s' declares an unusable migration from version %d",
+            "NetwSchema.migrate on '%s' needs a version of 1 or more and a "
+            "valid step, and got version %d.",
             String(name),
             p_from_version
         );
@@ -501,10 +377,6 @@ void NetwSchema::_bind_methods() {
         DEFVAL(1)
     );
     ClassDB::bind_method(
-        D_METHOD("column_ref", "index"),
-        &NetwSchema::column_ref
-    );
-    ClassDB::bind_method(
         D_METHOD("storage_version", "version"),
         &NetwSchema::storage_version
     );
@@ -557,18 +429,6 @@ void NetwSchema::_bind_methods() {
         ),
         "",
         "get_schema_name"
-    );
-    ClassDB::bind_method(D_METHOD("get_columns"), &NetwSchema::get_columns);
-    ADD_PROPERTY(
-        PropertyInfo(
-            Variant::ARRAY,
-            "columns",
-            PROPERTY_HINT_ARRAY_TYPE,
-            "NetwSchemaColumn",
-            PROPERTY_USAGE_NONE
-        ),
-        "",
-        "get_columns"
     );
 }
 

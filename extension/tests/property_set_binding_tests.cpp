@@ -11,20 +11,27 @@
 #include "godot/node.hpp"
 #include "godot/script.hpp"
 #include "godot/spatial_node.hpp"
-#include "netw/api/property_set.hpp"
-#include "netw/api/property_set_binding.hpp"
+#include "netw/api/netw_multiplayer.hpp"
 #include "netw/api/schema_core.hpp"
+#include "netw/predict/arrival.hpp"
+#include "netw/predict/compare.hpp"
+#include "netw/repl/property_binding.hpp"
 #include "netw/replication_send.hpp"
+#include "support/books.h"
 #include "support/netw_call_log.h"
+#include "support/store_arrival.h"
 
-namespace TestNetwPropertySetBinding {
+namespace TestNetwPropertyBinding {
 
 using namespace godot;
-using netw::NetwPropertySet;
-using netw::NetwPropertySetBinding;
-using netw::NetwPropertySetColumn;
-using netw::ReplicationSend;
 using netw::SchemaCore;
+using netw::repl::PropertyBinding;
+using netw::repl::PropertyBindingPtr;
+using netw::repl::PropertyColumn;
+using netw::repl::PropertySet;
+using netw_test::Books;
+using netw_test::DeclaredSet;
+using netw_test::ReplicationSend;
 using netw::enums::NetwMultiplayer;
 
 const int64_t SYNC_ROW = 39;
@@ -33,64 +40,72 @@ const int64_t SYNC_ROW_WINDOW = 41;
 
 struct ColumnDecl {
     StringName key;
-    int64_t lane = NetwPropertySet::VOLATILE;
+    int64_t lane = PropertySet::VOLATILE;
     int64_t type = SchemaCore::VARIANT;
 };
 
-Ref<NetwPropertySet> make_set(const Vector<ColumnDecl> &p_decls) {
-    Ref<NetwPropertySet> set;
-    set.instantiate();
+void fill_set(PropertySet &r_set, const Vector<ColumnDecl> &p_decls) {
     for (int at = 0; at < p_decls.size(); at++) {
-        Ref<NetwPropertySetColumn> column = NetwPropertySetColumn::create(
+        PropertyColumn column = PropertyColumn::create(
             p_decls[at].key,
             Ref<netw::NetwQuantize>(),
             false,
             NetwMultiplayer::ColumnType(p_decls[at].type)
         );
-        column->lane = p_decls[at].lane;
-        set->bind_column(column);
+        column.lane = p_decls[at].lane;
+        r_set.bind_column(column);
     }
+}
+
+DeclaredSet make_set(Books &r_books, const Vector<ColumnDecl> &p_decls) {
+    const DeclaredSet set = netw_test::declare(r_books);
+    fill_set(*r_books.sets.get(set.id), p_decls);
     return set;
 }
 
-Ref<NetwPropertySet> one_column_set(int64_t p_type, const StringName &p_key) {
+Vector<ColumnDecl> one_column(int64_t p_type, const StringName &p_key) {
     Vector<ColumnDecl> decls;
-    decls.push_back({p_key, NetwPropertySet::VOLATILE, p_type});
-    return make_set(decls);
+    decls.push_back({p_key, PropertySet::VOLATILE, p_type});
+    return decls;
+}
+
+DeclaredSet one_column_set(
+    Books &r_books,
+    int64_t p_type,
+    const StringName &p_key
+) {
+    return make_set(r_books, one_column(p_type, p_key));
 }
 
 ReplicationSend send_on(int64_t, bool) {
     return ReplicationSend();
 }
 
-netw::repl::RowArrival arrival(int64_t p_tick) {
-    netw::repl::RowArrival out;
-    out.base_tick = p_tick;
-    return out;
-}
-
 PackedByteArray one_frame(
     ReplicationSend &p_send,
-    const Ref<NetwPropertySetBinding> &p_binding,
+    const PropertyBindingPtr &p_binding,
     int64_t p_channel,
     int64_t p_tick,
     int64_t p_ack
 ) {
-    netw::repl::RowOffer offer;
+    netw_test::RowOffer offer;
     offer.route = 1;
     offer.comp = 0;
     offer.channel = uint8_t(p_channel);
-    offer.schema = &p_binding->set->get_volatile_schema();
-    offer.values = p_binding->volatile_row();
+    offer.schema = &p_binding->get_set()->get_volatile_schema();
+    netw_test::offer_values(
+        offer,
+        netw_test::lane_values(p_binding, PropertySet::VOLATILE)
+    );
     offer.recipients.push_back(2);
     offer.tick = p_tick;
     offer.ack = p_ack;
     offer.priority = 1.0f;
     if (p_channel == SYNC_ROW_WINDOW) {
         offer.windowed = true;
-        offer.window = uint32_t(p_binding->set->window);
+        offer.window = uint32_t(p_binding->get_set()->window);
     }
-    LocalVector<netw::repl::RowOffer> offers;
+    LocalVector<netw_test::RowOffer> offers;
     offers.push_back(offer);
     netw_test::seat_streams(p_send, offers);
     const netw::repl::SessionResult result
@@ -103,7 +118,7 @@ PackedByteArray one_frame(
 
 PackedByteArray row_frame(
     ReplicationSend &p_send,
-    const Ref<NetwPropertySetBinding> &p_binding,
+    const PropertyBindingPtr &p_binding,
     int64_t p_tick,
     int64_t p_ack
 ) {
@@ -112,19 +127,31 @@ PackedByteArray row_frame(
 
 PackedByteArray window_frame(
     ReplicationSend &p_send,
-    const Ref<NetwPropertySetBinding> &p_binding,
+    const PropertyBindingPtr &p_binding,
     int64_t p_tick
 ) {
     return one_frame(p_send, p_binding, SYNC_ROW_WINDOW, p_tick, -1);
 }
 
+netw::predict::FieldCodec one_field_codec(
+    const StringName &p_key,
+    int p_variant,
+    int64_t p_column
+) {
+    netw::predict::FieldCodec codec;
+    codec.append(p_key, Ref<netw::NetwQuantize>(), p_variant, int(p_column));
+    codec.seal();
+    return codec;
+}
+
 TEST_CASE(
     "[Networked][Repl][Hosted] PB1 a volatile state row crosses to the "
-    "receiving node"
+    "receiving binding's store row"
 ) {
-    const Ref<NetwPropertySet> set
-        = one_column_set(SchemaCore::VECTOR2, StringName("position"));
-    set->stamp = NetwPropertySet::STAMP_TICK_ACK;
+    Books books;
+    const DeclaredSet set
+        = one_column_set(books, SchemaCore::VECTOR2, StringName("position"));
+    set->stamp = PropertySet::STAMP_TICK_ACK;
 
     Node2D *src = memnew(Node2D);
     Node2D *dst = memnew(Node2D);
@@ -132,13 +159,13 @@ TEST_CASE(
 
     ReplicationSend send = send_on(SYNC_ROW, false);
     const PackedByteArray bytes
-        = row_frame(send, NetwPropertySetBinding::create(set, src), 20, 17);
-    const Dictionary header = NetwPropertySetBinding::create(set, dst)
-                                  ->apply_row_frame(&send, bytes, arrival(20));
+        = row_frame(send, netw_test::bind(set, src), 20, 17);
+    netw_test::StoreArrival landed(netw_test::bind(set, dst));
+    REQUIRE(landed.settle(bytes, 20, false));
 
-    NETW_CHECK_EQ(int64_t(header["tick"]), 20);
-    NETW_CHECK_EQ(int64_t(header["ack"]), 17);
-    CHECK(dst->get_position() == Vector2(5.0, -6.0));
+    NETW_CHECK_EQ(landed.arrival().tick, int64_t(20));
+    NETW_CHECK_EQ(landed.arrival().ack, int64_t(17));
+    CHECK(Vector2(landed.value(StringName("position"))) == Vector2(5.0, -6.0));
 
     memdelete(dst);
     memdelete(src);
@@ -148,15 +175,16 @@ TEST_CASE(
     "[Networked][Repl][Hosted] PB2 a windowed frame displays its freshest "
     "sample"
 ) {
-    const Ref<NetwPropertySet> set
-        = one_column_set(SchemaCore::VECTOR2, StringName("position"));
-    set->stamp = NetwPropertySet::STAMP_TICK;
+    Books books;
+    const DeclaredSet set
+        = one_column_set(books, SchemaCore::VECTOR2, StringName("position"));
+    set->stamp = PropertySet::STAMP_TICK;
     set->window = 3;
 
     Node2D *src = memnew(Node2D);
     Node2D *dst = memnew(Node2D);
-    const Ref<NetwPropertySetBinding> src_binding
-        = NetwPropertySetBinding::create(set, src);
+    const PropertyBindingPtr src_binding
+        = netw_test::bind(set, src);
     ReplicationSend send = send_on(SYNC_ROW_WINDOW, true);
 
     src->set_position(Vector2(1.0, 0.0));
@@ -164,12 +192,11 @@ TEST_CASE(
     src->set_position(Vector2(2.0, 0.0));
     const PackedByteArray bytes = window_frame(send, src_binding, 11);
 
-    const Dictionary header
-        = NetwPropertySetBinding::create(set, dst)
-              ->apply_window_frame(&send, bytes, arrival(11));
+    netw_test::StoreArrival landed(netw_test::bind(set, dst));
+    REQUIRE(landed.settle(bytes, 11, true));
 
-    CHECK(dst->get_position() == Vector2(2.0, 0.0));
-    NETW_CHECK_EQ(int64_t(header["tick"]), 11);
+    CHECK(Vector2(landed.value(StringName("position"))) == Vector2(2.0, 0.0));
+    NETW_CHECK_EQ(landed.arrival().tick, int64_t(11));
 
     memdelete(dst);
     memdelete(src);
@@ -179,15 +206,16 @@ TEST_CASE(
     "[Networked][Repl][Hosted] PB3 a windowed apply answers every sample it "
     "carried"
 ) {
-    const Ref<NetwPropertySet> set
-        = one_column_set(SchemaCore::F32, StringName("rotation"));
-    set->stamp = NetwPropertySet::STAMP_TICK;
+    Books books;
+    const DeclaredSet set
+        = one_column_set(books, SchemaCore::F32, StringName("rotation"));
+    set->stamp = PropertySet::STAMP_TICK;
     set->window = 3;
 
     Node2D *src = memnew(Node2D);
     Node2D *dst = memnew(Node2D);
-    const Ref<NetwPropertySetBinding> src_binding
-        = NetwPropertySetBinding::create(set, src);
+    const PropertyBindingPtr src_binding
+        = netw_test::bind(set, src);
     ReplicationSend send = send_on(SYNC_ROW_WINDOW, true);
 
     src->set_rotation(0.1);
@@ -197,29 +225,91 @@ TEST_CASE(
     src->set_rotation(0.3);
     const PackedByteArray bytes = window_frame(send, src_binding, 12);
 
-    const Dictionary header
-        = NetwPropertySetBinding::create(set, dst)
-              ->apply_window_frame(&send, bytes, arrival(12));
-    const Array samples = header["samples"];
+    netw_test::StoreArrival landed(netw_test::bind(set, dst));
+    REQUIRE(landed.settle(bytes, 12, true));
+    const netw::predict::Arrival samples = landed.arrival();
+    const netw::predict::FieldCodec rotations = one_field_codec(
+        StringName("rotation"),
+        int(Variant::FLOAT),
+        SchemaCore::F32
+    );
 
-    NETW_CHECK_EQ(samples.size(), 3);
-    const Dictionary oldest = samples[0];
-    const Dictionary newest = samples[2];
-    NETW_CHECK_EQ(int64_t(oldest["tick"]), 10);
-    NETW_CHECK_EQ(int64_t(newest["tick"]), 12);
-    const Dictionary oldest_payload = oldest["payload"];
-    const Dictionary newest_payload = newest["payload"];
-    NETW_CHECK_CLOSE(
-        double(oldest_payload[StringName("rotation")]),
-        0.1,
-        0.0001
+    NETW_REQUIRE_EQ(int64_t(samples.sample_count()), int64_t(3));
+    NETW_CHECK_EQ(samples.sample_tick(0), int64_t(10));
+    NETW_CHECK_EQ(samples.sample_tick(2), int64_t(12));
+    netw::predict::StateRow read;
+    REQUIRE(samples.read_sample(rotations, 0, read));
+    NETW_CHECK_CLOSE(double(read.values[0]), 0.1, 0.0001);
+    REQUIRE(samples.read_sample(rotations, 2, read));
+    NETW_CHECK_CLOSE(double(read.values[0]), 0.3, 0.0001);
+
+    memdelete(dst);
+    memdelete(src);
+}
+
+TEST_CASE(
+    "[Networked][Repl][Hosted] AR1 the arrival prediction reads carries the "
+    "tick, ack, whole, row and every window sample the sender wrote"
+) {
+    Books books;
+    const DeclaredSet rows
+        = one_column_set(books, SchemaCore::VECTOR2, StringName("position"));
+    rows->stamp = PropertySet::STAMP_TICK_ACK;
+    Node2D *src = memnew(Node2D);
+    Node2D *dst = memnew(Node2D);
+    src->set_position(Vector2(5.0, -6.0));
+    ReplicationSend send = send_on(SYNC_ROW, false);
+    const PackedByteArray row_bytes
+        = row_frame(send, netw_test::bind(rows, src), 20, 17);
+    netw_test::StoreArrival landed(netw_test::bind(rows, dst));
+    REQUIRE(landed.settle(row_bytes, 20, false));
+    const netw::predict::Arrival arrival = landed.arrival();
+    NETW_CHECK_EQ(arrival.tick, int64_t(20));
+    NETW_CHECK_EQ(arrival.ack, int64_t(17));
+    CHECK(arrival.whole);
+    NETW_CHECK_EQ(int64_t(arrival.sample_count()), int64_t(0));
+    const netw::predict::FieldCodec positions = one_field_codec(
+        StringName("position"),
+        int(Variant::VECTOR2),
+        SchemaCore::VECTOR2
     );
-    NETW_CHECK_CLOSE(
-        double(newest_payload[StringName("rotation")]),
-        0.3,
-        0.0001
+    netw::predict::StateRow read;
+    REQUIRE(arrival.read(positions, read));
+    REQUIRE(read.has(0));
+    const Vector2 held = read.values[0];
+    NETW_CHECK_CLOSE(held.x, 5.0, 0.0);
+    NETW_CHECK_CLOSE(held.y, -6.0, 0.0);
+
+    const DeclaredSet window
+        = one_column_set(books, SchemaCore::F32, StringName("rotation"));
+    window->stamp = PropertySet::STAMP_TICK;
+    window->window = 3;
+    const PropertyBindingPtr spinning = netw_test::bind(window, src);
+    ReplicationSend windowed = send_on(SYNC_ROW_WINDOW, true);
+    src->set_rotation(0.1);
+    window_frame(windowed, spinning, 10);
+    src->set_rotation(0.2);
+    window_frame(windowed, spinning, 11);
+    src->set_rotation(0.3);
+    const PackedByteArray window_bytes = window_frame(windowed, spinning, 12);
+    netw_test::StoreArrival sampled(netw_test::bind(window, dst));
+    REQUIRE(sampled.settle(window_bytes, 12, true));
+    const netw::predict::Arrival samples = sampled.arrival();
+    NETW_CHECK_EQ(samples.tick, int64_t(12));
+    NETW_REQUIRE_EQ(int64_t(samples.sample_count()), int64_t(3));
+    const netw::predict::FieldCodec rotations = one_field_codec(
+        StringName("rotation"),
+        int(Variant::FLOAT),
+        SchemaCore::F32
     );
-    NETW_CHECK_CLOSE(double(dst->get_rotation()), 0.3, 0.0001);
+    const double sent[3] = {0.1, 0.2, 0.3};
+    for (uint32_t at_sample = 0; at_sample < samples.sample_count();
+         ++at_sample) {
+        NETW_CHECK_EQ(samples.sample_tick(at_sample), int64_t(10 + at_sample));
+        REQUIRE(samples.read_sample(rotations, at_sample, read));
+        REQUIRE(read.has(0));
+        NETW_CHECK_CLOSE(double(read.values[0]), sent[at_sample], 0.000001);
+    }
 
     memdelete(dst);
     memdelete(src);
@@ -230,9 +320,10 @@ TEST_CASE(
     "node"
 ) {
     Vector<ColumnDecl> decls;
-    decls.push_back({StringName("position"), NetwPropertySet::VOLATILE});
-    decls.push_back({StringName("rotation"), NetwPropertySet::VOLATILE});
-    const Ref<NetwPropertySet> set = make_set(decls);
+    decls.push_back({StringName("position"), PropertySet::VOLATILE});
+    decls.push_back({StringName("rotation"), PropertySet::VOLATILE});
+    Books books;
+    const DeclaredSet set = make_set(books, decls);
 
     Node2D *src = memnew(Node2D);
     Node2D *dst = memnew(Node2D);
@@ -240,8 +331,8 @@ TEST_CASE(
     src->set_rotation(2.0);
 
     const Dictionary snapshot
-        = NetwPropertySetBinding::create(set, src)->snapshot_payload();
-    NetwPropertySetBinding::create(set, dst)->apply_payload(snapshot);
+        = netw_test::bind(set, src)->snapshot_payload();
+    netw_test::bind(set, dst)->apply_payload(snapshot);
 
     CHECK(dst->get_position() == Vector2(-6.0, 2.0));
     NETW_CHECK_CLOSE(double(dst->get_rotation()), 2.0, 0.0001);
@@ -251,12 +342,12 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Repl][Hosted] PB5 the apply hook carries the decoded payload "
-    "and the node is snapped"
+    "[Networked][Repl][Hosted] PB5 the apply hook carries the decoded payload"
 ) {
-    const Ref<NetwPropertySet> set
-        = one_column_set(SchemaCore::VECTOR2, StringName("position"));
-    set->stamp = NetwPropertySet::STAMP_TICK_ACK;
+    Books books;
+    const DeclaredSet set
+        = one_column_set(books, SchemaCore::VECTOR2, StringName("position"));
+    set->stamp = PropertySet::STAMP_TICK_ACK;
 
     Node2D *src = memnew(Node2D);
     Node2D *dst = memnew(Node2D);
@@ -264,35 +355,32 @@ TEST_CASE(
 
     ReplicationSend send = send_on(SYNC_ROW, false);
     const PackedByteArray bytes
-        = row_frame(send, NetwPropertySetBinding::create(set, src), 12, 7);
+        = row_frame(send, netw_test::bind(set, src), 12, 7);
 
-    netw_test::CallLog log;
-    const Ref<NetwPropertySetBinding> dst_binding
-        = NetwPropertySetBinding::create(set, dst);
-    dst_binding->on_applied = log.callable(StringName("applied"));
-    dst_binding->apply_row_frame(&send, bytes, arrival(12));
+    netw_test::LandedLog log;
+    const PropertyBindingPtr dst_binding
+        = netw_test::bind(set, dst);
+    log.watch(dst_binding);
+    netw_test::StoreArrival landed(dst_binding);
+    REQUIRE(landed.settle(bytes, 12, false));
 
-    NETW_CHECK_EQ(log.count(StringName("applied")), 1);
-    const Array args = log.args(StringName("applied"));
-    NETW_CHECK_EQ(args.size(), 1);
-    const Dictionary header = args[0];
-    NETW_CHECK_EQ(int64_t(header["tick"]), 12);
-    NETW_CHECK_EQ(int64_t(header["ack"]), 7);
-    const Dictionary payload = header["payload"];
-    CHECK(Vector2(payload[StringName("position")]) == Vector2(4.0, 9.0));
-    CHECK(dst->get_position() == Vector2(4.0, 9.0));
+    NETW_CHECK_EQ(log.count, int64_t(1));
+    NETW_CHECK_EQ(log.tick, int64_t(12));
+    NETW_CHECK_EQ(log.ack, int64_t(7));
+    CHECK(Vector2(log.value(StringName("position"))) == Vector2(4.0, 9.0));
 
     memdelete(dst);
     memdelete(src);
 }
 
 TEST_CASE(
-    "[Networked][Repl][Hosted] PB6 a closed write gate decodes without "
-    "snapping the node"
+    "[Networked][Repl][Hosted] PB6 a closed write gate decodes and keeps the "
+    "row off the node"
 ) {
-    const Ref<NetwPropertySet> set
-        = one_column_set(SchemaCore::VECTOR2, StringName("position"));
-    set->stamp = NetwPropertySet::STAMP_TICK_ACK;
+    Books books;
+    const DeclaredSet set
+        = one_column_set(books, SchemaCore::VECTOR2, StringName("position"));
+    set->stamp = PropertySet::STAMP_TICK_ACK;
 
     Node2D *src = memnew(Node2D);
     Node2D *dst = memnew(Node2D);
@@ -301,23 +389,103 @@ TEST_CASE(
 
     ReplicationSend send = send_on(SYNC_ROW, false);
     const PackedByteArray bytes
-        = row_frame(send, NetwPropertySetBinding::create(set, src), 3, -1);
+        = row_frame(send, netw_test::bind(set, src), 3, -1);
 
-    netw_test::CallLog log;
-    const Ref<NetwPropertySetBinding> dst_binding
-        = NetwPropertySetBinding::create(set, dst);
+    netw_test::LandedLog log;
+    const PropertyBindingPtr dst_binding
+        = netw_test::bind(set, dst);
     dst_binding->write_gate = false;
-    dst_binding->on_applied = log.callable(StringName("applied"));
-    const Dictionary header
-        = dst_binding->apply_row_frame(&send, bytes, arrival(3));
+    log.watch(dst_binding);
+    netw_test::StoreArrival landed(dst_binding);
+    REQUIRE(landed.settle(bytes, 3, false));
 
-    CHECK(dst->get_position() == Vector2(-1.0, -1.0));
-    const Dictionary payload = header["payload"];
-    CHECK(Vector2(payload[StringName("position")]) == Vector2(5.0, 5.0));
-    NETW_CHECK_EQ(log.count(StringName("applied")), 1);
+    CHECK_FALSE(dst_binding->writes_node(false));
+    CHECK(Vector2(landed.value(StringName("position"))) == Vector2(5.0, 5.0));
+    NETW_CHECK_EQ(log.count, int64_t(1));
 
     memdelete(dst);
     memdelete(src);
+}
+
+struct OfferedRow {
+    int64_t route = 0;
+    int64_t comp = 0;
+    int64_t channel = 0;
+    int64_t tick = -1;
+    int64_t ack = -1;
+    bool windowed = false;
+    bool reliable = false;
+};
+
+struct Offered {
+    Ref<netw::NetwMultiplayer> session;
+    LocalVector<OfferedRow> offers;
+};
+
+struct OfferShape {
+    int64_t route = 0;
+    int64_t stamp = PropertySet::STAMP_NONE;
+    int64_t window = 0;
+    bool masked = false;
+    int64_t authored_tick = -1;
+    int64_t reconcile_ack = -1;
+    bool volatile_external = false;
+};
+
+Offered offered(
+    const Vector<ColumnDecl> &p_decls,
+    const OfferShape &p_shape,
+    Node *p_node,
+    int64_t p_ordinal,
+    int64_t p_tick
+) {
+    Offered out;
+    out.session.instantiate();
+    netw::repl::SetBook &sets = out.session->property_set_book();
+    const uint64_t declared = sets.create();
+    PropertySet *set = sets.get(declared);
+    fill_set(*set, p_decls);
+    set->stamp = p_shape.stamp;
+    set->window = p_shape.window;
+    set->masked = p_shape.masked;
+    PropertyBinding *p_binding
+        = out.session->property_binding_book().create(declared, p_node);
+    p_binding->route = p_shape.route;
+    p_binding->authored_tick = p_shape.authored_tick;
+    p_binding->reconcile_ack = p_shape.reconcile_ack;
+    p_binding->volatile_external = p_shape.volatile_external;
+    out.session->store_admit(p_binding);
+    netw::store::World &world = out.session->store();
+    for (uint32_t at = 0; at < world.table_count(); ++at) {
+        netw::store::Table &table = world.table(at);
+        for (uint32_t row = 0; row < table.row_count(); ++row) {
+            world.name_lane({at, row}, uint8_t(p_ordinal));
+            table.sources[row] = uint8_t(
+                out.session->store_source(table, row, p_binding, true)
+            );
+        }
+        table.stamp_tick = p_tick;
+        world.pull(at, p_tick, false);
+        for (uint32_t row = 0; row < table.row_count(); ++row) {
+            world.stamp(at, row);
+        }
+        for (uint32_t row = 0; row < table.row_count(); ++row) {
+            if (table.sources[row] != uint8_t(netw::store::Source::LOCAL)
+                || (table.flags[row] & netw::store::Table::UNGATHERED) != 0) {
+                continue;
+            }
+            OfferedRow made;
+            made.route = table.routes[row];
+            made.comp = table.ordinals[row];
+            made.channel = table.channel;
+            made.tick = table.frame_ticks[row];
+            made.ack = table.reconcile_acks[row];
+            made.windowed = table.family == netw::store::Family::WINDOW;
+            made.reliable = table.family == netw::store::Family::RETAINED;
+            out.offers.push_back(made);
+        }
+    }
+    return out;
 }
 
 TEST_CASE(
@@ -325,19 +493,20 @@ TEST_CASE(
     "SYNC_ROW, stamped with the pump's tick where nothing authored one"
 ) {
     Node2D *src = memnew(Node2D);
-    const Ref<NetwPropertySetBinding> binding = NetwPropertySetBinding::create(
-        one_column_set(SchemaCore::F32, StringName("rotation")),
-        src
-    );
-    binding->route = 5;
-    PackedInt32Array recipients;
-    recipients.push_back(2);
+    OfferShape shape;
+    shape.route = 5;
 
-    LocalVector<netw::repl::RowOffer> offers;
-    binding->offer_rows(3, recipients, 77, 0, offers);
+    const Offered made = offered(
+        one_column(SchemaCore::F32, StringName("rotation")),
+        shape,
+        src,
+        3,
+        77
+    );
+    const LocalVector<OfferedRow> &offers = made.offers;
 
     REQUIRE(offers.size() == 1);
-    const netw::repl::RowOffer &offer = offers[0];
+    const OfferedRow &offer = offers[0];
     NETW_CHECK_EQ(int64_t(offer.route), 5);
     NETW_CHECK_EQ(int64_t(offer.comp), 3);
     NETW_CHECK_EQ(int64_t(offer.channel), SYNC_ROW);
@@ -352,18 +521,21 @@ TEST_CASE(
     "because a prediction engine owns the frame it authored"
 ) {
     Node2D *src = memnew(Node2D);
-    const Ref<NetwPropertySetBinding> binding = NetwPropertySetBinding::create(
-        one_column_set(SchemaCore::F32, StringName("rotation")),
-        src
-    );
-    binding->authored_tick = 9;
-    binding->reconcile_ack = 4;
+    OfferShape shape;
+    shape.authored_tick = 9;
+    shape.reconcile_ack = 4;
 
-    LocalVector<netw::repl::RowOffer> offers;
-    binding->offer_rows(0, PackedInt32Array(), 77, 0, offers);
+    const Offered made = offered(
+        one_column(SchemaCore::F32, StringName("rotation")),
+        shape,
+        src,
+        0,
+        77
+    );
+    const LocalVector<OfferedRow> &offers = made.offers;
 
     REQUIRE(offers.size() == 1);
-    const netw::repl::RowOffer &offer = offers[0];
+    const OfferedRow &offer = offers[0];
     NETW_CHECK_EQ(int64_t(offer.tick), 9);
     NETW_CHECK_EQ(int64_t(offer.ack), 4);
     memdelete(src);
@@ -374,25 +546,24 @@ TEST_CASE(
     "and a masked one is never windowed"
 ) {
     Node2D *src = memnew(Node2D);
-    Ref<NetwPropertySet> set
-        = one_column_set(SchemaCore::F32, StringName("rotation"));
-    set->stamp = NetwPropertySet::STAMP_TICK;
-    set->window = 3;
-    const Ref<NetwPropertySetBinding> binding
-        = NetwPropertySetBinding::create(set, src);
+    const Vector<ColumnDecl> decls
+        = one_column(SchemaCore::F32, StringName("rotation"));
+    OfferShape shape;
+    shape.stamp = PropertySet::STAMP_TICK;
+    shape.window = 3;
 
-    LocalVector<netw::repl::RowOffer> windowed;
-    binding->offer_rows(0, PackedInt32Array(), 1, 0, windowed);
+    const Offered first = offered(decls, shape, src, 0, 1);
+    const LocalVector<OfferedRow> &windowed = first.offers;
+    REQUIRE(windowed.size() == 1);
     NETW_CHECK_EQ(int64_t(windowed[0].channel), SYNC_ROW_WINDOW);
     CHECK(windowed[0].windowed);
-    CHECK_FALSE(windowed[0].masked);
 
-    set->masked = true;
-    LocalVector<netw::repl::RowOffer> masked;
-    binding->offer_rows(0, PackedInt32Array(), 1, 0, masked);
+    shape.masked = true;
+    const Offered second = offered(decls, shape, src, 0, 1);
+    const LocalVector<OfferedRow> &masked = second.offers;
+    REQUIRE(masked.size() == 1);
     NETW_CHECK_EQ(int64_t(masked[0].channel), SYNC_ROW);
     CHECK_FALSE(masked[0].windowed);
-    CHECK(masked[0].masked);
     memdelete(src);
 }
 
@@ -403,23 +574,20 @@ TEST_CASE(
     Node2D *src = memnew(Node2D);
     Vector<ColumnDecl> decls;
     decls.push_back(
-        {StringName("rotation"), NetwPropertySet::VOLATILE, SchemaCore::F32}
+        {StringName("rotation"), PropertySet::VOLATILE, SchemaCore::F32}
     );
     decls.push_back(
-        {StringName("scale"), NetwPropertySet::RETAINED, SchemaCore::VARIANT}
+        {StringName("scale"), PropertySet::RETAINED, SchemaCore::VARIANT}
     );
-    const Ref<NetwPropertySetBinding> binding
-        = NetwPropertySetBinding::create(make_set(decls), src);
+    OfferShape shape;
+    const Offered first = offered(decls, shape, src, 0, 1);
+    NETW_CHECK_EQ(int64_t(first.offers.size()), 2);
 
-    LocalVector<netw::repl::RowOffer> both;
-    binding->offer_rows(0, PackedInt32Array(), 1, 0, both);
-    NETW_CHECK_EQ(int64_t(both.size()), 2);
-
-    binding->volatile_external = true;
-    LocalVector<netw::repl::RowOffer> offers;
-    binding->offer_rows(0, PackedInt32Array(), 1, 0, offers);
+    shape.volatile_external = true;
+    const Offered second = offered(decls, shape, src, 0, 1);
+    const LocalVector<OfferedRow> &offers = second.offers;
     REQUIRE(offers.size() == 1);
-    const netw::repl::RowOffer &offer = offers[0];
+    const OfferedRow &offer = offers[0];
     NETW_CHECK_EQ(int64_t(offer.channel), SYNC_ROW_DELTA);
     NETW_CHECK_EQ(int64_t(offer.tick), -1);
     CHECK(offer.reliable);
@@ -431,17 +599,23 @@ TEST_CASE(
 const char *HOLDS_VALUE = netw_test::gdsrc::PROPERTY_PRESENT;
 const char *DROPS_VALUE = netw_test::gdsrc::PROPERTY_ABSENT;
 
-bool gather_reads_field(const Ref<NetwPropertySetBinding> &p_binding) {
-    const Array row = p_binding->volatile_row();
-    return row.size() == 1 && int64_t(row[0]) == 7;
+bool pull_reads_field(netw::store::World &p_world, int64_t p_tick) {
+    netw::store::Table &table = p_world.table(0);
+    table.sources[0] = uint8_t(netw::store::Source::LOCAL);
+    p_world.pull(0, p_tick, false);
+    return (table.flags[0] & netw::store::Table::UNGATHERED) == 0
+        && int64_t(table.read_value(0, 0)) == 7;
 }
 
-bool gather_offers_nothing(const Ref<NetwPropertySetBinding> &p_binding) {
-    return p_binding->volatile_row().is_empty();
+bool pull_offers_nothing(netw::store::World &p_world, int64_t p_tick) {
+    netw::store::Table &table = p_world.table(0);
+    table.sources[0] = uint8_t(netw::store::Source::LOCAL);
+    p_world.pull(0, p_tick, false);
+    return (table.flags[0] & netw::store::Table::UNGATHERED) != 0;
 }
 
 TEST_CASE(
-    "[Networked][Sync][PropertySet] a gather re-reads the node's property "
+    "[Networked][Sync][PropertySet] a pull re-reads the node's property "
     "list after its script changes, because a field list cached from an "
     "earlier script names properties the node no longer has"
 ) {
@@ -452,20 +626,28 @@ TEST_CASE(
 
     Node *probe = memnew(Node);
     probe->set_script(holds);
-    const Ref<NetwPropertySetBinding> binding = NetwPropertySetBinding::create(
-        one_column_set(SchemaCore::VARIANT, StringName("replicated_value")),
-        probe
+    Ref<netw::NetwMultiplayer> session;
+    session.instantiate();
+    netw::repl::SetBook &sets = session->property_set_book();
+    const uint64_t declared = sets.create();
+    fill_set(
+        *sets.get(declared),
+        one_column(SchemaCore::VARIANT, StringName("replicated_value"))
     );
+    session->store_admit(
+        session->property_binding_book().create(declared, probe)
+    );
+    REQUIRE(session->store().table_count() == 1);
 
-    CHECK(gather_reads_field(binding));
+    CHECK(pull_reads_field(session->store(), 1));
 
     probe->set_script(drops);
 
-    CHECK(gather_offers_nothing(binding));
+    CHECK(pull_offers_nothing(session->store(), 2));
 
     memdelete(probe);
 }
 
 #endif
 
-} // namespace TestNetwPropertySetBinding
+} // namespace TestNetwPropertyBinding

@@ -25,7 +25,6 @@
 		- [code]endpoint_*[/code] and [code]embed_*[/code]: [NetwConnectHandle]
 		- [code]transport_*[/code]: [NetwTransport]
 		- [code]rpc_*[/code] and [code]sync_*[/code]: [NetwMemberConfig]
-		- [code]property_set_*[/code]: [NetwPropertySet]
 		- [code]service_*[/code]: [NetwService]
 		- [code]database_*[/code] and [code]persist_*[/code]: [NetwDatabase] and [NetwPersistenceHandle]
 		- [code]stats_*[/code] and [code]attribution_*[/code]: [NetwPredictStats]
@@ -44,13 +43,16 @@
 	<tutorials>
 	</tutorials>
 	<methods>
-		<method name="_display_write" qualifiers="virtual">
+		<method name="_display_write_rows" qualifiers="virtual">
 			<return type="int" enum="Error" />
-			<param index="0" name="entity" type="RID" />
-			<param index="1" name="track" type="StringName" />
-			<param index="2" name="value" type="Variant" />
+			<param index="0" name="table" type="RID" />
+			<param index="1" name="column" type="int" />
+			<param index="2" name="routes" type="PackedInt64Array" />
+			<param index="3" name="values" type="Array" />
 			<description>
-				Writes one display [param track] for [param entity]. With no override this returns [method display_write_default].
+				Draws the interpolated value of one property for every entity in [param routes], for the property declaration [param table] names. [param column] is the property's index in [param table], and [param values] holds one value per route. [method store_describe] lists the tables.
+				A value no table holds, such as an interpolated argument of a remote call, arrives with an invalid [param table], and [param column] is then the index of the value among the entity's interpolated values.
+				Return [constant @GlobalScope.ERR_DOES_NOT_EXIST] to let the display write the node itself. With no override this returns [method display_write_rows_default].
 			</description>
 		</method>
 		<method name="_persist_tick" qualifiers="virtual">
@@ -160,13 +162,19 @@
 				Accepts or rejects an incoming synchronization packet. Return [constant @GlobalScope.OK] to accept it. With no override this returns [method sync_admit_frame_default].
 			</description>
 		</method>
-		<method name="_sync_apply_set" qualifiers="virtual">
+		<method name="_sync_apply_rows" qualifiers="virtual">
 			<return type="int" enum="Error" />
-			<param index="0" name="entity" type="RID" />
-			<param index="1" name="comp" type="int" />
-			<param index="2" name="values" type="Array" />
+			<param index="0" name="table" type="RID" />
+			<param index="1" name="routes" type="PackedInt64Array" />
+			<param index="2" name="columns" type="Array" />
 			<description>
-				Writes received property [param values] into [param entity]. With no override this returns [method sync_apply_set_default].
+				Writes the received replicated property values of every entity in [param routes] into its node, for the property declaration [param table] names. [method store_describe] lists the tables.
+				[param routes] holds the entities whose received values are due now. A row that arrives is due at once, unless the entity's simulation runs a buffered replica copy, which takes it when the display tick reaches it.
+				[codeblock lang=text]
+				Array
+				┖╴column  Array  one per property in declaration order, one value per route
+				[/codeblock]
+				An override is the only writer of these properties on every peer, a remote proxy included. With no override this returns [method sync_apply_rows_default].
 			</description>
 		</method>
 		<method name="_sync_decode" qualifiers="virtual">
@@ -193,12 +201,18 @@
 				Returns the synchronization payload sent to [param peer] on [param tick]. An empty array sends nothing. [method _sync_decode] reads it on the other side, so override both together.
 			</description>
 		</method>
-		<method name="_sync_gather_set" qualifiers="virtual">
+		<method name="_sync_gather_rows" qualifiers="virtual">
 			<return type="Array" />
-			<param index="0" name="entity" type="RID" />
-			<param index="1" name="comp" type="int" />
+			<param index="0" name="table" type="RID" />
+			<param index="1" name="routes" type="PackedInt64Array" />
 			<description>
-				Reads the synchronized property values from [param entity]. With no override this returns [method sync_gather_set_default].
+				Reads the replicated property values of every entity in [param routes], once per tick for each property declaration [param table] names. Entities share a [param table] when their nodes declare the same replicated properties, and [method store_describe] lists them.
+				[param routes] holds only the entities whose values may have changed. An entity whose rigid body slept through this tick and the last one is left out.
+				[codeblock lang=text]
+				Array
+				┖╴row  Array  one per route in order, the values in declaration order
+				[/codeblock]
+				A row of the wrong size keeps that entity's previous values and sends nothing for it this tick. With no override this returns [method sync_gather_rows_default].
 			</description>
 		</method>
 		<method name="_sync_note_ack" qualifiers="virtual">
@@ -723,18 +737,19 @@
 				Sets [param track] on [param entity] to [param value] without interpolating.
 			</description>
 		</method>
-		<method name="display_write_default">
+		<method name="display_write_rows_default">
 			<return type="int" enum="Error" />
-			<param index="0" name="entity" type="RID" />
-			<param index="1" name="track" type="StringName" />
-			<param index="2" name="value" type="Variant" />
+			<param index="0" name="table" type="RID" />
+			<param index="1" name="column" type="int" />
+			<param index="2" name="routes" type="PackedInt64Array" />
+			<param index="3" name="values" type="Array" />
 			<description>
-				The default [method _display_write]. Writes [param value] to [param track] on [param entity].
+				The default [method _display_write_rows]. Hands each value to the callback of [method display_set_callback] or the item of [method display_set_target_item] that its entity holds.
 				[codeblock lang=text]
 				Error
-				┠╴OK                  the value was written
-				┠╴ERR_DOES_NOT_EXIST  the track resolves to no target
-				┖╴ERR_INVALID_DATA    value is neither a Transform2D nor a Transform3D
+				┠╴OK                  every value was written
+				┠╴ERR_DOES_NOT_EXIST  an entity holds no callback and no item, so the display writes its node
+				┖╴ERR_INVALID_DATA    a value is neither a Transform2D nor a Transform3D
 				[/codeblock]
 			</description>
 		</method>
@@ -1533,13 +1548,6 @@
 				[/codeblock]
 			</description>
 		</method>
-		<method name="lagcomp_timeline_of" qualifiers="const">
-			<return type="NetwTimeline" />
-			<param index="0" name="entity" type="RID" />
-			<description>
-				Returns the recorded history of [param entity] used for rewinding, or [code]null[/code]. This is the authority's history. [member NetwEntity.timeline] is what this peer predicted.
-			</description>
-		</method>
 		<method name="lagcomp_timeline_undeclare">
 			<return type="void" />
 			<param index="0" name="entity" type="RID" />
@@ -1720,18 +1728,22 @@
 			<return type="Dictionary" />
 			<param index="0" name="peer" type="int" />
 			<description>
-				Returns measured connection quality to [param peer].
+				Returns measured connection quality to [param peer], and what this peer's byte budget sends it.
 				[codeblock lang=text]
 				Dictionary
-				┠╴loss          float   share of the last 32 packets lost
-				┠╴rtt           float   round trip time, in seconds
-				┠╴jitter        float   round trip variation, in seconds
-				┠╴reorders      int     packets that arrived out of order
-				┠╴duplicates    int     packets that arrived twice
-				┠╴mode          String  "good" or "bad"
-				┖╴budget_bits   int     most bits one packet to this peer may use
+				┠╴loss           float   share of the last 32 packets lost
+				┠╴rtt            float   round trip time, in seconds
+				┠╴jitter         float   round trip variation, in seconds
+				┠╴reorders       int     packets that arrived out of order
+				┠╴duplicates     int     packets that arrived twice
+				┠╴mode           String  "good", or "bad" while its budget is cut
+				┠╴budget_bits    int     most bits one packet to this peer may use
+				┠╴budget_bytes   int     bytes it may be sent each tick
+				┠╴sent_bytes     int     bytes charged to it since it joined
+				┠╴debt_bytes     int     bytes it was sent past its budget
+				┖╴deferred_rows  int     rows left waiting by the last tick
 				[/codeblock]
-				On a [code]bad[/code] connection, [code]budget_bits[/code] is halved to send less.
+				Losing packets halves [code]budget_bytes[/code] and [code]budget_bits[/code]. Each round trip without loss adds back an eighth of the configured budget, stopping an eighth short of the rate that lost packets for the next minute. While [code]debt_bytes[/code] is above zero, volatile properties wait, and retained properties and RPCs still go.
 			</description>
 		</method>
 		<method name="peer_request_kick">
@@ -1941,20 +1953,20 @@
 				The default [method _predict_recover].
 			</description>
 		</method>
-		<method name="predict_set_commands_callback">
+		<method name="predict_set_input_callback">
 			<return type="void" />
 			<param index="0" name="entity" type="RID" />
 			<param index="1" name="callback" type="Callable" />
 			<description>
-				Sets [member NetwPredictionHandle.predict_commands] on [param entity].
+				Sets [member NetwPredictionHandle.predict_input] on [param entity].
 			</description>
 		</method>
-		<method name="predict_set_corridor_callback">
+		<method name="predict_set_correction_path_callback">
 			<return type="void" />
 			<param index="0" name="entity" type="RID" />
 			<param index="1" name="callback" type="Callable" />
 			<description>
-				Sets [member NetwPredictionHandle.transport_corridor] on [param entity].
+				Sets [member NetwPredictionHandle.correction_path_clear] on [param entity].
 			</description>
 		</method>
 		<method name="predict_set_param">
@@ -2020,7 +2032,7 @@
 			<param index="0" name="schema" type="RID" />
 			<param index="1" name="record" type="int" enum="NetwMultiplayer.RecordKind" />
 			<description>
-				Creates an empty [NetwPropertySet] for [param schema]. Add properties with [method property_set_add_column], then call [method property_set_seal]. Returns an invalid [RID] when [param schema] is unknown or has an array column.
+				Creates an empty set of synchronized properties for [param schema]. Add properties with [method property_set_add_column], then call [method property_set_seal]. Returns an invalid [RID] when [param schema] is unknown or has an array column.
 			</description>
 		</method>
 		<method name="property_set_get_wire_hash" qualifiers="const">
@@ -2028,13 +2040,6 @@
 			<param index="0" name="set" type="RID" />
 			<description>
 				A hash of the properties of [param set] and their order. Two peers with the same hash read each other's packets correctly. Returns [code]0[/code] for an unknown set.
-			</description>
-		</method>
-		<method name="property_set_record" qualifiers="const">
-			<return type="NetwPropertySet" />
-			<param index="0" name="set" type="RID" />
-			<description>
-				Returns [param set] as a [NetwPropertySet], or [code]null[/code].
 			</description>
 		</method>
 		<method name="property_set_seal">
@@ -2857,6 +2862,33 @@
 				Every [enum Stat] value, keyed by the lowercase constant name, such as [code]sent_bytes[/code].
 			</description>
 		</method>
+		<method name="store_describe" qualifiers="const">
+			<return type="Dictionary" />
+			<description>
+				Describes the property values this session keeps for replication. For debugging, not for every frame.
+				[codeblock lang=text]
+				Dictionary
+				┠╴tables          Array  one Dictionary per property declaration, below
+				┠╴slots           int    entities currently held
+				┠╴misses          int    changes the validation mode found unread
+				┖╴validate_every  int    the validation interval in ticks, 0 when off
+				[/codeblock]
+				Each entry of [code]tables[/code] covers every node that declares the same replicated properties. A declaration that mixes reliable and unreliable properties makes two entries.
+				[codeblock lang=text]
+				Array[Dictionary]
+				┖╴entry
+				  ┠╴table      RID     what _sync_gather_rows receives as table
+				  ┠╴family     String  "volatile", "retained" or "window"
+				  ┠╴columns    Array   per property, its name, type and port
+				  ┠╴rows       int     nodes that declare it
+				  ┠╴dirty      int     rows whose values changed at the latest read
+				  ┠╴bytes      int     memory the entry holds
+				  ┖╴retention  int     past values kept per row
+				[/codeblock]
+				A [code]port[/code] of [code]"body"[/code] reads a rigid body's position, rotation, velocities and sleeping state from the physics server, and skips a body that slept through this tick and the last one. [code]"engine"[/code] and [code]"script"[/code] read the node's property on every tick.
+				Set the environment variable [code]NETW_STORE_VALIDATE[/code] to a number of ticks to check the skipped bodies. Every that many ticks the session reads them again and warns about any value that changed, naming the entity's route, the property and the reason it was skipped.
+			</description>
+		</method>
 		<method name="sync_admit_frame_default" qualifiers="const">
 			<return type="int" enum="Error" />
 			<param index="0" name="sender" type="int" />
@@ -2878,13 +2910,13 @@
 				[/codeblock]
 			</description>
 		</method>
-		<method name="sync_apply_set_default">
+		<method name="sync_apply_rows_default">
 			<return type="int" enum="Error" />
-			<param index="0" name="entity" type="RID" />
-			<param index="1" name="comp" type="int" />
-			<param index="2" name="values" type="Array" />
+			<param index="0" name="table" type="RID" />
+			<param index="1" name="routes" type="PackedInt64Array" />
+			<param index="2" name="columns" type="Array" />
 			<description>
-				The default [method _sync_apply_set]. Returns [constant @GlobalScope.ERR_UNCONFIGURED] when called outside of receiving a packet.
+				The default [method _sync_apply_rows]. Writes each value into the node of its route, and on a rigid body writes position and rotation before the velocities and the velocities before whether it sleeps. Returns [constant @GlobalScope.ERR_DOES_NOT_EXIST] for a [param table] the session does not hold.
 			</description>
 		</method>
 		<method name="sync_explain" qualifiers="const">
@@ -2900,17 +2932,21 @@
 				┠╴tick          int     the tick of the last send
 				┠╴confirmed     int     the newest version the peer confirmed
 				┠╴exposed       int     the newest version sent
-				┖╴has_baseline  bool    whether only changes can be sent
+				┠╴has_baseline  bool    whether only changes can be sent
+				┠╴priority      float   how far up the queue it has climbed while waiting
+				┠╴class         String  what it climbs by each tick, see below
+				┖╴age_ticks     int     ticks since the last send, -1 before the first
 				[/codeblock]
-				[code]verdict[/code] is [code]"sent"[/code], [code]"deferred"[/code] when there was no bandwidth left, [code]"caught_up"[/code] when the peer already had everything, [code]"refused"[/code] when writing it failed, [code]"ungathered"[/code] when nothing was read, or [code]"unoffered"[/code] when never sent to this peer.
+				[code]class[/code] is [code]"player"[/code] for an entity bound to a player, [code]"interacting"[/code] while a claim is pending, its [member NetwEntity.hold] is set, or its controller changed in the last second, [code]"moving"[/code] when it changed in the last 8 ticks, and [code]"resting"[/code] otherwise and for every refresh. They climb by 10000, 1000, 100 and 1 each tick, times [member NetwEntity.replication_priority].
+				[code]verdict[/code] is [code]"sent"[/code] when the last pass carried it, [code]"deferred"[/code] while the peer is still owed a change, [code]"caught_up"[/code] when the peer already has everything, [code]"ungathered"[/code] when nothing was read, or [code]"unoffered"[/code] when it is not sent to this peer.
 			</description>
 		</method>
-		<method name="sync_gather_set_default">
+		<method name="sync_gather_rows_default">
 			<return type="Array" />
-			<param index="0" name="entity" type="RID" />
-			<param index="1" name="comp" type="int" />
+			<param index="0" name="table" type="RID" />
+			<param index="1" name="routes" type="PackedInt64Array" />
 			<description>
-				The default [method _sync_gather_set]. Returns an empty array when called outside of sending.
+				The default [method _sync_gather_rows]. Reads each entity's values from its node, and a rigid body's position, rotation, velocities and sleeping state from the physics server.
 			</description>
 		</method>
 		<method name="sync_note_ack_default">
@@ -3754,7 +3790,7 @@
 			Interpolation advanced. [code]detail[/code] has [code]tick[/code].
 		</constant>
 		<constant name="EVENT_DISPLAY_WRITE" value="73" enum="Event">
-			[method _display_write] ran. [code]detail[/code] has [code]track[/code], and [code]verdict[/code] is the result.
+			An interpolated value was drawn. [code]detail[/code] has [code]track[/code], and [code]verdict[/code] is the result of [method _display_write_rows].
 		</constant>
 		<constant name="EVENT_TABLE_COMMIT" value="74" enum="Event">
 			[method table_commit] ran. [code]detail[/code] has [code]rows[/code], and [code]verdict[/code] is the result.
@@ -4328,7 +4364,7 @@
 			Counter. Property packets [method _sync_encode] refused to write.
 		</constant>
 		<constant name="STAT_ROW_FRAMES_UNGATHERED" value="17" enum="Stat">
-			Counter. Times [method _sync_gather_set] returned nothing.
+			Counter. Property packets not sent because a value did not match its declared type.
 		</constant>
 		<constant name="STAT_RETAINED_FRAMES_OUT" value="18" enum="Stat">
 			Counter. Reliable property packets sent, counted per peer. Only rises when a reliable property changes.
@@ -4358,7 +4394,7 @@
 			Counter. Synchronization packets for a set this peer does not have.
 		</constant>
 		<constant name="STAT_DROPS_SYNC_BAD_SENDER" value="27" enum="Stat">
-			Counter. Synchronization packets from a peer [member NetwPropertySet.policy] does not allow.
+			Counter. Synchronization packets from a peer [member NetwMemberConfig.write_policy] does not allow.
 		</constant>
 		<constant name="STAT_DROPS_SYNC_POISONED" value="28" enum="Stat">
 			Counter. Packets dropped because a [MultiplayerSynchronizer] has a different replication config on each peer.

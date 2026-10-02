@@ -1,12 +1,13 @@
 #include "support/netw_test.h"
 
+#include "support/predict_rows.h"
 #include "support/scenario_run.h"
 
 #include "netw/api/entity.hpp"
 #include "netw/api/netw_multiplayer.hpp"
 #include "netw/api/prediction_handle.hpp"
-#include "netw/api/timeline.hpp"
 #include "netw/lagcomp_core.hpp"
+#include "netw/predict/engine.hpp"
 
 #if defined(NETW_TIER_HOSTED)
 
@@ -22,7 +23,6 @@ using godot::Vector2;
 using netw::NetwEntity;
 using netw::NetwLagCompCore;
 using netw::NetwMultiplayer;
-using netw::NetwTimeline;
 
 constexpr double TOLERANCE = 0.001;
 
@@ -77,10 +77,18 @@ TEST_CASE(
     const Ref<NetwEntity> owned
         = NetwEntity::of(rig.node_of(rig.entity_of(StringName("P"), 0), 0));
     REQUIRE(owned.is_valid());
-    const Ref<NetwTimeline> owner_history = owned->get_timeline();
-    REQUIRE(owner_history.is_valid());
-    const Dictionary predicted
-        = owner_history->latest_state_at_or_before(state_tick);
+    NetwMultiplayer *owner_session = rig.client(0);
+    const int64_t owner_slot = owner_session->native_prediction_slot(owned);
+    netw::NetwPredictionEngine *owner_pool
+        = owner_session->get_prediction_engine();
+    const netw::predict::TransitionBook *owner_book
+        = owner_pool->predicted_book(owner_slot);
+    REQUIRE(owner_book != nullptr);
+    const Dictionary predicted = netw_test::predicted_state(
+        owner_pool,
+        owner_slot,
+        owner_book->newest_at_or_before(state_tick)
+    );
     REQUIRE_MESSAGE(
         !predicted.is_empty(),
         "the owner kept no prediction at the tick it was acked for"

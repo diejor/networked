@@ -9,17 +9,18 @@ namespace Networked;
 /// Which record of which <see cref="NetwDatabase"/> an entity loads and saves.
 /// </summary>
 /// <remarks>
-/// Each column of <see cref="NetwPersistenceConfig.Schema"/> is filled by one
-/// property marked with <see cref="NetwPropertyConfig.Persisted"/>. A column
-/// with no property refuses the whole entity. Configure it from
-/// <c>Node._ready</c>, where the node is in the tree.
+/// The entity's record is one row of the table
+/// <see cref="NetwPersistenceConfig.Table"/> names, stored under the id
+/// <see cref="NetwPersistenceConfig.RecordId"/> answers. Its columns are the
+/// properties marked with <see cref="NetwPropertyConfig.Persisted"/> on the
+/// entity and on its child nodes, each under its saved column name. Configure
+/// it from <c>Node._ready</c>, where the node is in the tree.
 /// <code>
 /// func _ready() -&gt; void:
-///     Netw.configure_property(self, &amp;"position", false) \
-///             .persisted(game.save_schema.column_ref(0))
+///     Netw.configure_property(self, &amp;"position", false).persisted(&amp;"where")
 ///     Netw.configure_persistence(self) \
 ///             .database(&amp;"saves") \
-///             .schema(game.save_schema) \
+///             .table(&amp;"players") \
 ///             .record_id(account_name) \
 ///             .interval(5.0)
 ///
@@ -29,7 +30,26 @@ namespace Networked;
 /// <para>
 /// Use a <see cref="NetwPersistenceConfig.RecordId"/> that stays the same
 /// between sessions. A peer id changes every time the player joins. The record
-/// is reached through <see cref="NetwEntity.Persistence"/>.
+/// is reached through <see cref="NetwEntity.Persistence"/>. <b>Record
+/// layout</b> A column's type is the declared type of its property, so an
+/// untyped property stores any <see cref="Variant"/> a save can hold. A stored
+/// record whose columns, names or types differ from the declared ones loads
+/// only through a <see cref="NetwPersistenceConfig.Migrate"/> step. Renaming a
+/// property while keeping its saved column name needs no migration.
+/// <code>
+/// func _ready() -&gt; void:
+///     Netw.configure_property(self, &amp;"coins", false).persisted(&amp;"gold")
+///     Netw.configure_persistence(self) \
+///             .database(&amp;"saves") \
+///             .table(&amp;"players") \
+///             .storage_version(2) \
+///             .migrate(1, add_gold) \
+///             .record_id(account_name)
+///
+/// func add_gold(row: Dictionary) -&gt; Dictionary:
+///     row[&amp;"gold"] = 0
+///     return row
+/// </code>
 /// </para>
 /// </remarks>
 public sealed class NetwPersistenceConfig : NetwRefCounted
@@ -69,24 +89,82 @@ public sealed class NetwPersistenceConfig : NetwRefCounted
         return result;
     }
 
-    private static readonly IntPtr _bindSchema =
-        NetwApi.MethodBind("NetwPersistenceConfig", "schema", 2962147809UL);
+    private static readonly IntPtr _bindTable =
+        NetwApi.MethodBind("NetwPersistenceConfig", "table", 3751466617UL);
 
     /// <summary>
-    /// Sets the <see cref="NetwSchema"/> of this entity's record. Every
-    /// <see cref="NetwColumnRef"/> passed to
-    /// <see cref="NetwPropertyConfig.Persisted"/> must come from this schema.
+    /// Names the table this entity's record is stored in. Every entity saving
+    /// into one table declares the same saved columns, types and
+    /// <see cref="NetwPersistenceConfig.StorageVersion"/>.
     /// </summary>
-    public NetwPersistenceConfig Schema(NetwSchema schema)
+    public NetwPersistenceConfig Table(StringName name)
     {
-        IntPtr slot0 = schema?.Native ?? IntPtr.Zero;
+        godot_variant slot0 = VariantUtils.CreateFromStringName(name);
+        godot_variant answered = default;
+        NetwThunks.Call1(_bindTable, Checked, in slot0, ref answered);
+        slot0.Dispose();
+        NetwPersistenceConfig result =
+            NetwPersistenceConfig.Adopt(
+                NetwApi.Retained(
+                    VariantUtils.ConvertToGodotObjectPtr(answered)));
+        answered.Dispose();
+        return result;
+    }
+
+    private static readonly IntPtr _bindStorageVersion =
+        NetwApi.MethodBind(
+            "NetwPersistenceConfig",
+            "storage_version",
+            2562387623UL);
+
+    /// <summary>
+    /// Sets the version this entity's record is saved at, starting from
+    /// <c>1</c>. Raise it whenever a saved column is added, removed, renamed or
+    /// retyped, and add a <see cref="NetwPersistenceConfig.Migrate"/> step from
+    /// the previous version.
+    /// </summary>
+    public NetwPersistenceConfig StorageVersion(int version)
+    {
+        int slot0 = version;
         IntPtr answered = default;
-        NetwThunks.Ptrcall1_IntPtr_IntPtr(
-            _bindSchema,
+        NetwThunks.Ptrcall1_Int_IntPtr(
+            _bindStorageVersion,
             Checked,
             in slot0,
             ref answered);
         return NetwPersistenceConfig.Adopt(answered);
+    }
+
+    private static readonly IntPtr _bindMigrate =
+        NetwApi.MethodBind("NetwPersistenceConfig", "migrate", 2770629709UL);
+
+    /// <summary>
+    /// Adds the step that turns a record stored at
+    /// <paramref name="fromVersion"/> into the next version.
+    /// <paramref name="step"/> receives the stored row as a
+    /// <see cref="Godot.Collections.Dictionary"/> keyed by saved column name
+    /// and returns the upgraded one. A load runs every step between the stored
+    /// version and <see cref="NetwPersistenceConfig.StorageVersion"/>.
+    /// </summary>
+    public NetwPersistenceConfig Migrate(int fromVersion, Callable step)
+    {
+        godot_variant slot0 = VariantUtils.CreateFromInt((long)fromVersion);
+        godot_variant slot1 = VariantUtils.CreateFromCallable(step);
+        godot_variant answered = default;
+        NetwThunks.Call2(
+            _bindMigrate,
+            Checked,
+            in slot0,
+            in slot1,
+            ref answered);
+        slot0.Dispose();
+        slot1.Dispose();
+        NetwPersistenceConfig result =
+            NetwPersistenceConfig.Adopt(
+                NetwApi.Retained(
+                    VariantUtils.ConvertToGodotObjectPtr(answered)));
+        answered.Dispose();
+        return result;
     }
 
     private static readonly IntPtr _bindRecordId =
@@ -94,8 +172,8 @@ public sealed class NetwPersistenceConfig : NetwRefCounted
 
     /// <summary>
     /// Sets the function that returns the id this entity's record is stored
-    /// under. It is called once and must return a nonempty
-    /// <see cref="StringName"/>.
+    /// under. It is called once, when the entity's record is compiled, and must
+    /// return a nonempty <see cref="StringName"/>.
     /// </summary>
     public NetwPersistenceConfig RecordId(Callable provider)
     {

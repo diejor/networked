@@ -30,6 +30,11 @@ HashMap<uint64_t, NodeOverlay> &overlay_book() {
     return book;
 }
 
+uint64_t &epoch_of_interpolation() {
+    static uint64_t epoch = 1;
+    return epoch;
+}
+
 script::Cache *cache_for(const Ref<Script> &p_script) {
     if (p_script.is_null()) {
         return nullptr;
@@ -131,6 +136,7 @@ void declare_property_config(
         p_property,
         p_config
     );
+    advance_interpolation_epoch();
 }
 
 void declare_signal_config(
@@ -279,6 +285,7 @@ Ref<NetwPropertyConfig> configure_node_property(
     declared->set_context_type(1);
     declared->set_context_node_ref(gd::weak_ref(p_node));
     overlay->configs[p_property] = declared;
+    advance_interpolation_epoch();
     return declared;
 }
 
@@ -331,7 +338,17 @@ void clear_node_overlay(Node *p_node) {
     if (p_node == nullptr) {
         return;
     }
-    overlay_book().erase(uint64_t(gd::instance_id(p_node)));
+    if (overlay_book().erase(uint64_t(gd::instance_id(p_node)))) {
+        advance_interpolation_epoch();
+    }
+}
+
+uint64_t interpolation_epoch() {
+    return epoch_of_interpolation();
+}
+
+void advance_interpolation_epoch() {
+    epoch_of_interpolation() += 1;
 }
 
 void sweep_dead_overlays() {

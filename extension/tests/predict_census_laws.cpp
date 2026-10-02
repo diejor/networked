@@ -13,9 +13,8 @@
 #include "netw/api/predict.hpp"
 #include "netw/api/predict_stats.hpp"
 #include "netw/api/prediction_handle.hpp"
-#include "netw/api/property_set_binding.hpp"
-#include "netw/api/timeline.hpp"
 #include "netw/lagcomp_core.hpp"
+#include "netw/repl/property_binding.hpp"
 
 #if defined(NETW_TIER_HOSTED)
 
@@ -745,9 +744,8 @@ TEST_CASE(
     const int64_t slot = pool->slot_of(wrapper);
     REQUIRE(slot >= 0);
 
-    const Ref<netw::NetwTimeline> lane = pool->timeline_of(slot);
-    REQUIRE(lane.is_valid());
-    const int64_t newest = lane->newest_input_tick();
+    REQUIRE(pool->input_lane_open(slot));
+    const int64_t newest = pool->newest_authored_input(slot);
     REQUIRE(newest > 0);
 
     const int64_t standing = pool->next_input_tick_of(slot);
@@ -874,15 +872,17 @@ TEST_CASE(
     REQUIRE(slot >= 0);
     NETW_CHECK_EQ(pool->role_of(slot), int(netw::Role::HOST_LOCAL));
 
-    const Ref<netw::NetwPropertySetBinding> binding
+    const netw::repl::PropertyBindingPtr binding
         = pool->state_binding_of(slot);
-    REQUIRE(binding.is_valid());
+    REQUIRE(binding != nullptr);
     NETW_CHECK_GT(binding->get_authored_tick(), int64_t(0));
     NETW_CHECK_EQ(binding->get_reconcile_ack(), binding->get_authored_tick());
 
-    const Ref<netw::NetwTimeline> lane = pool->timeline_of(slot);
-    REQUIRE(lane.is_valid());
-    NETW_CHECK_EQ(lane->newest_input_tick(), binding->get_authored_tick());
+    REQUIRE(pool->input_lane_open(slot));
+    NETW_CHECK_EQ(
+        pool->newest_authored_input(slot),
+        binding->get_authored_tick()
+    );
     NETW_CHECK_GT(
         int64_t(counters_of(stepped[0]).get(StringName("drive_seq"), 0)),
         int64_t(0)

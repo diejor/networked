@@ -90,7 +90,7 @@ static func start_host(
 	)
 	if settled.error != OK:
 		push_error(
-			"NakamaTestSupport: host failed: %s %s" % [
+			"NakamaTestSupport could not host (%s, %s)." % [
 				error_string(settled.error),
 				settled.detail,
 			],
@@ -169,7 +169,7 @@ static func host_scene(
 	)
 	if settled.error != OK:
 		push_error(
-			"NakamaTestSupport: host scene failed: %s %s" % [
+			"NakamaTestSupport could not host the scene (%s, %s)." % [
 				error_string(settled.error),
 				settled.detail,
 			],
@@ -197,7 +197,9 @@ static func join_scene(
 
 	var err := await join_client(tree, room, username, _level_1_spawn())
 	if err != OK:
-		push_error("NakamaTestSupport: join scene failed: %s" % error_string(err))
+		push_error(
+			"NakamaTestSupport could not join the scene (%s)." % error_string(err),
+		)
 	return tree
 
 

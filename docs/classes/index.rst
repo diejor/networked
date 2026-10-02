@@ -105,7 +105,6 @@ Other classes
     class_netwchannel
     class_netwclockconfig
     class_netwclockhandle
-    class_netwcolumnref
     class_netwconnecthandle
     class_netwcontrolrequest
     class_netwdatabase
@@ -140,9 +139,6 @@ Other classes
     class_netwproberesult
     class_netwpromise
     class_netwpropertyconfig
-    class_netwpropertyset
-    class_netwpropertysetbinding
-    class_netwpropertysetcolumn
     class_netwquantize
     class_netwquantizeangle
     class_netwquantizequaternion
@@ -150,18 +146,15 @@ Other classes
     class_netwquantizetransform2d
     class_netwquantizetransform3d
     class_netwrecord
-    class_netwringbuffer
     class_netwsceneconfig
     class_netwscenehandle
     class_netwschema
-    class_netwschemacolumn
     class_netwserverinfo
     class_netwservice
     class_netwsessionconfig
     class_netwsessionhandle
     class_netwsimulationhandle
     class_netwtablehandle
-    class_netwtimeline
     class_netwtransport
     class_netwwebrtcsignaler
     class_netwwritebatch

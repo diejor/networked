@@ -4,6 +4,7 @@
 
 #include "godot/local_vector.hpp"
 #include "godot/variant.hpp"
+#include "netw/held_bytes.hpp"
 #include "netw/wire/plan.hpp"
 
 namespace netw::wire {
@@ -28,10 +29,29 @@ public:
         return words.is_empty();
     }
 
+    const uint64_t *word_data() const {
+        return words.ptr();
+    }
+
+    const godot::Variant *value_data() const {
+        return values.ptr();
+    }
+
+    int64_t held_bytes() const {
+        return held::vector(words) + held::vector(values);
+    }
+
+    bool assign(
+        const WirePlan &plan,
+        const uint64_t *p_words,
+        const godot::Variant *p_values
+    );
+
     bool valid_for(const WirePlan &plan) const;
     godot::PackedByteArray to_bytes() const;
 
     void clear();
+    void clear_values();
 
     void copy_from(const CodeRow &other);
 

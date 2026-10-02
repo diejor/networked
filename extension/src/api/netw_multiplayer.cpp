@@ -36,6 +36,7 @@
 #include "netw/api/prediction_handle.hpp"
 #include "netw/api/replication_core.hpp"
 #include "netw/api/schema_model.hpp"
+#include "netw/api/sync_compat.hpp"
 #include "netw/api/sync_pipeline.hpp"
 #include "netw/auth_protocol.hpp"
 #include "netw/colors.hpp"
@@ -43,6 +44,7 @@
 #include "netw/connect/browse_list.hpp"
 #include "netw/connect/creation.hpp"
 #include "netw/connect/directory_transport.hpp"
+#include "netw/held_bytes.hpp"
 #include "netw/log.hpp"
 #include "netw/prediction_core.hpp"
 #include "netw/profile.hpp"
@@ -117,11 +119,11 @@ NetwMultiplayer::NetwMultiplayer() {
     transport->set_root_path(NodePath("/root"));
     session_set_inner(transport);
     liveness_core.instantiate();
-    table_core.instantiate();
     clock.sink.bind(this);
     scene_core.instantiate();
     display_book.instantiate();
     prediction_engine.bind_session(this);
+    lagcomp_core.seat_world(&store_world);
     predict_runner.seat_core(this);
     sim_rows.seed_with(
         [](void *p_context, sim::Row &r_row) {
@@ -129,6 +131,7 @@ NetwMultiplayer::NetwMultiplayer() {
         },
         this
     );
+    store_world.stamp_with(&NetwMultiplayer::store_stamp_thunk, this);
     connect(
         StringName("clock_before_tick_loop"),
         callable_mp(this, &NetwMultiplayer::before_frame_step)
@@ -247,6 +250,7 @@ NetwMultiplayer::NetwMultiplayer() {
     ReplicationCore *plane = memnew(ReplicationCore);
     replication_owner = plane;
     plane->install(this);
+    plane->get_sync_model()->attach_book(&binding_book);
 
     scene_install();
     display_bind_session();
@@ -320,8 +324,12 @@ void NetwMultiplayer::embed_dispose() {
     if (plane != nullptr) {
         plane->dispose();
     }
+    if (SyncPipeline *pipeline = sync_pipeline()) {
+        pipeline->clear_bindings();
+    }
     rpc_dispose();
     property_set_clear();
+    binding_book.clear();
     clear_flat_family_state();
     service_clear();
     session_clear_roster();
@@ -399,7 +407,7 @@ Ref<NetwPlayer> NetwMultiplayer::player_ensure(
     minted->bind_to(this, p_accepted.peer_id, player_id, p_accepted.username);
     NETW_TRACE(
         sys::SESSION,
-        "minted player id %d for peer %d",
+        "Gave player id %d to peer %d.",
         int(player_id),
         int(p_accepted.peer_id)
     );
@@ -555,7 +563,7 @@ bool NetwMultiplayer::membership_destination_foreign(Node *p_owner) const {
         if (!held.is_valid()) {
             continue;
         }
-        return wrapper_records.getptr(held.get_id()) == nullptr;
+        return slot_record(held.get_id()) == nullptr;
     }
     return false;
 }
@@ -581,7 +589,7 @@ void NetwMultiplayer::membership_place_body(const Ref<NetwEntity> &p_entity) {
     if (membership_destination_foreign(owner)) {
         NETW_ERROR(
             sys::SCENE,
-            "entity %d was moved under another MultiplayerTree, which is not "
+            "Entity %d was moved under another MultiplayerTree, which is not "
             "supported. Despawn it here and spawn it in the other tree.",
             int(p_entity->get_route())
         );
@@ -590,8 +598,8 @@ void NetwMultiplayer::membership_place_body(const Ref<NetwEntity> &p_entity) {
     if (scene.is_valid() && !membership_member_active(peer)) {
         NETW_TRACE(
             sys::SCENE,
-            "route %d resides in a scene for peer %d, which holds no live "
-            "membership, so nothing subscribes",
+            "Route %d is in a scene that peer %d is not in, so nothing "
+            "watches it.",
             int(p_entity->get_route()),
             int(peer)
         );
@@ -678,11 +686,11 @@ void NetwMultiplayer::membership_settle() {
 #if defined(NETW_TESTS)
 
 RID NetwMultiplayer::membership_residency_of(int64_t p_body) const {
-    NetwEntityRecord *const *record = wrapper_records.getptr(p_body);
+    NetwEntityRecord *const record = slot_record(p_body);
     if (record == nullptr) {
         return RID();
     }
-    const RID handle = (*record)->get_handle();
+    const RID handle = record->get_handle();
     if (wrapper_owner(handle) == nullptr) {
         return RID();
     }
@@ -734,13 +742,19 @@ void NetwMultiplayer::membership_audit() {
     if (pipeline == nullptr) {
         return;
     }
-    for (const KeyValue<int64_t, NetwEntityRecord *> &row : wrapper_records) {
-        const int64_t peer = row.value->get_peer_id();
+    LocalVector<NetwEntityRecord *> held;
+    entity_slots.each([&held](uint64_t, const EntitySlot &p_slot) {
+        if (p_slot.record != nullptr) {
+            held.push_back(p_slot.record);
+        }
+    });
+    for (NetwEntityRecord *record : held) {
+        const int64_t peer = record->get_peer_id();
         if (peer == 0 || !membership_member_active(peer)
-            || !pipeline->is_booked(row.value->get_route())) {
+            || !pipeline->is_booked(record->get_route())) {
             continue;
         }
-        const int64_t body = membership_body_id(row.value->get_handle());
+        const int64_t body = membership_body_id(record->get_handle());
         const RID resides = membership_residency_of(body);
         if (!resides.is_valid()) {
             continue;
@@ -812,21 +826,21 @@ Error NetwMultiplayer::player_kick(
         !is_session_authority(),
         ERR_UNAUTHORIZED,
         sys::SESSION,
-        "session.kick: only server authority removes a player."
+        "NetwSessionHandle.kick runs only on the server."
     );
     NETW_ERR_COND_V(
         !player_holds(p_who),
         ERR_INVALID_PARAMETER,
         sys::SESSION,
-        "session.kick: this player already left."
+        "NetwSessionHandle.kick got a player who already left."
     );
     const int64_t peer = p_who->get_peer_id();
     NETW_ERR_COND_V(
         peer == get_unique_id(),
         ERR_INVALID_PARAMETER,
         sys::SESSION,
-        "session.kick: the local server player leaves through "
-        "session.leave, not through a kick."
+        "The server cannot kick its own player. Call "
+        "NetwSessionHandle.leave to end the session."
     );
     player_release_id(p_who);
     session_turn_peer_away(peer, p_reason);
@@ -882,12 +896,12 @@ Ref<MultiplayerAPI> NetwMultiplayer::get_session_api() const {
 bool NetwMultiplayer::session_is_active() const {
     SceneTree *loop = gd::scene_tree();
     if (loop == nullptr) {
-        NETW_TRACE(sys::SESSION, "no scene tree answers for a live session");
+        NETW_TRACE(sys::SESSION, "A live session has no SceneTree.");
         return false;
     }
     Ref<MultiplayerAPI> published = get_session_api();
     if (published.is_null()) {
-        NETW_TRACE(sys::SESSION, "the session publishes no multiplayer api");
+        NETW_TRACE(sys::SESSION, "The session has no MultiplayerAPI.");
         return false;
     }
     const Ref<MultiplayerAPI> live = loop->get_multiplayer(get_root_path());
@@ -904,7 +918,7 @@ TypedArray<MultiplayerAPI> NetwMultiplayer::session_get_all() {
         if (session == nullptr) {
             NETW_TRACE(
                 sys::SESSION,
-                "a disposed session leaves the live registry"
+                "A disposed session left the list of live sessions."
             );
             continue;
         }
@@ -919,12 +933,15 @@ TypedArray<MultiplayerAPI> NetwMultiplayer::session_get_all() {
 
 NetwMultiplayer *NetwMultiplayer::of(Node *p_node) {
     if (p_node == nullptr || !p_node->is_inside_tree()) {
-        NETW_TRACE(sys::SESSION, "an off-tree node resolves to no session");
+        NETW_TRACE(
+            sys::SESSION,
+            "A node outside the scene tree has no session."
+        );
         return nullptr;
     }
     const Ref<MultiplayerAPI> installed = p_node->get_multiplayer();
     if (installed.is_null()) {
-        NETW_TRACE(sys::SESSION, "a node's branch installs no multiplayer api");
+        NETW_TRACE(sys::SESSION, "A node's branch has no MultiplayerAPI.");
         return nullptr;
     }
     NetwMultiplayer *direct = Object::cast_to<NetwMultiplayer>(installed.ptr());
@@ -938,7 +955,10 @@ NetwMultiplayer *NetwMultiplayer::of(Node *p_node) {
             return session;
         }
     }
-    NETW_TRACE(sys::SESSION, "no live session publishes the installed api");
+    NETW_TRACE(
+        sys::SESSION,
+        "No live session owns the MultiplayerAPI on that branch."
+    );
     return nullptr;
 }
 
@@ -1034,7 +1054,9 @@ void NetwMultiplayer::service_register(Object *p_service, Object *p_type) {
         if (held != nullptr) {
             NETW_WARN(
                 sys::SESSION,
-                "Service %s already registered, overwriting.",
+                "A service of type %s was already registered, and the new "
+                "one replaces it. Call Netw.service_unregister first to "
+                "make the swap explicit.",
                 type->to_string()
             );
         }
@@ -1237,9 +1259,9 @@ bool NetwMultiplayer::session_preflight_join(
         && !join_arg_types(plan.handler).is_empty()) {
         NETW_WARN(
             sys::SESSION,
-            "join: peer %d sent no arguments and this server's declared "
-            "handler needs %d, so the join carries nothing to place the "
-            "player with",
+            "Peer %d joined with no arguments, but the Netw.configure_join "
+            "handler needs %d. Pass the arguments to Netw.prepare_join on "
+            "the client.",
             int(p_accepted.peer_id),
             int(join_arg_types(plan.handler).size())
         );
@@ -1284,8 +1306,9 @@ Error NetwMultiplayer::session_admits_join(
     if (!called) {
         NETW_ERROR(
             sys::SESSION,
-            "join: peer %d is refused because the Netw.configure_admission "
-            "handler could not be called.",
+            "Peer %d was refused, because the Netw.configure_admission "
+            "handler could not be called. It must take the peer id, the "
+            "username and then each join argument.",
             int(p_peer)
         );
         return ERR_UNAUTHORIZED;
@@ -1294,7 +1317,7 @@ Error NetwMultiplayer::session_admits_join(
     if (answered != Variant::INT && answered != Variant::FLOAT) {
         NETW_ERROR(
             sys::SESSION,
-            "join: peer %d is refused because the Netw.configure_admission "
+            "Peer %d was refused, because the Netw.configure_admission "
             "handler returned %s. Return OK to accept, or an Error to refuse.",
             int(p_peer),
             String(Variant::get_type_name(answered))
@@ -1393,9 +1416,9 @@ void NetwMultiplayer::session_run_join_handler(
     if (!called) {
         NETW_ERROR(
             sys::SESSION,
-            "join: peer %d joined, but its join arguments do not match the "
-            "Netw.configure_join handler's parameters. Fix the parameters. "
-            "To refuse a join, use Netw.configure_admission.",
+            "Peer %d joined, but its join arguments do not match the "
+            "Netw.configure_join handler. Make the handler's parameters "
+            "match what the client passes to Netw.prepare_join.",
             int(peer)
         );
     }
@@ -1536,7 +1559,7 @@ void NetwMultiplayer::session_transport_connected() {
     if (session_get_state() != SESSION_STATE_CONNECTING) {
         NETW_TRACE(
             sys::SESSION,
-            "a connected transport edge found session state %d",
+            "The transport connected while the session is in state %d.",
             session_get_state()
         );
         return;
@@ -1549,7 +1572,7 @@ void NetwMultiplayer::session_transport_failed() {
     if (session_get_state() != SESSION_STATE_CONNECTING) {
         NETW_TRACE(
             sys::SESSION,
-            "a failed transport edge found session state %d",
+            "The transport failed while the session is in state %d.",
             session_get_state()
         );
         return;
@@ -1561,14 +1584,14 @@ void NetwMultiplayer::session_transport_dropped() {
     if (embed_is_disposing()) {
         NETW_TRACE(
             sys::SESSION,
-            "a dropped transport edge found the session already disposing"
+            "The transport dropped while the session is already closing."
         );
         return;
     }
     if (session_get_state() != SESSION_STATE_ONLINE) {
         NETW_TRACE(
             sys::SESSION,
-            "a dropped transport edge found session state %d",
+            "The transport dropped while the session is in state %d.",
             session_get_state()
         );
         return;
@@ -1585,7 +1608,7 @@ void NetwMultiplayer::session_set_tree_paused(bool p_paused) {
     if (loop == nullptr) {
         NETW_TRACE(
             sys::SESSION,
-            "a session pause found no scene tree, so nothing pauses"
+            "The session has no SceneTree to pause."
         );
         return;
     }
@@ -1631,7 +1654,8 @@ void NetwMultiplayer::session_receive_join(
     if (!requested.deserialize(p_payload)) {
         NETW_WARN(
             sys::SESSION,
-            "join: unreadable request from peer %d",
+            "Peer %d sent a join request that could not be read, so it "
+            "was dropped.",
             int(p_sender)
         );
         return;
@@ -1641,7 +1665,8 @@ void NetwMultiplayer::session_receive_join(
     if (differs != nullptr) {
         NETW_WARN(
             sys::SESSION,
-            "join: peer %d is refused because its %s identity differs",
+            "Peer %d was refused, because its %s identity differs from "
+            "this server's. Run the same build on both peers.",
             int(p_sender),
             differs
         );
@@ -1705,7 +1730,7 @@ void NetwMultiplayer::session_receive_accept(
     if (!session::frame_read(p_payload, accepted)) {
         NETW_TRACE(
             sys::SESSION,
-            "an accept that did not decode whole seats nobody"
+            "A join acceptance that did not decode fully was ignored."
         );
         return;
     }
@@ -1723,7 +1748,7 @@ void NetwMultiplayer::session_receive_roster(
     if (!session::roster_read(p_payload, rows)) {
         NETW_TRACE(
             sys::SESSION,
-            "a roster that did not decode whole seats nobody"
+            "A roster that did not decode fully was ignored."
         );
         return;
     }
@@ -1854,7 +1879,8 @@ void NetwMultiplayer::peer_mark_unreachable(int64_t p_peer) {
     }
     NETW_WARN(
         sys::TRANSPORT,
-        "peer %d refused a send, so it is addressed no more until it returns",
+        "Peer %d refused a packet, so nothing more is sent to it until it "
+        "connects again.",
         int(p_peer)
     );
     session_settle_peer_loss(p_peer);
@@ -1970,9 +1996,9 @@ Error NetwMultiplayer::configuration_door_refuses_config(Object *p_config) {
     }
     NETW_ERROR(
         sys::SESSION,
-        "%s is declared with %s(scope) before startup and the session copies "
-        "it once. The engine's configuration door neither installs nor "
-        "uninstalls one.",
+        "%s cannot be passed to MultiplayerAPI.object_configuration_add or "
+        "object_configuration_remove. Declare it with %s before the "
+        "session starts.",
         p_config->get_class(),
         verb
     );
@@ -2064,8 +2090,9 @@ void NetwMultiplayer::auth_receive(
     }
     NETW_WARN(
         sys::SESSION,
-        "peer %d sent %d bytes of auth this session cannot name, so it is "
-        "dropped rather than admitted",
+        "Peer %d sent %d bytes of authentication this peer does not "
+        "understand, so it was disconnected. Run the same build on both "
+        "peers.",
         int(p_peer),
         p_data.size()
     );
@@ -2082,7 +2109,7 @@ void NetwMultiplayer::auth_send_hello(int64_t p_peer) {
     }
     NETW_DEBUG(
         sys::SESSION,
-        "auth sends a hello for peer %d with app tag %s",
+        "Sending a hello to peer %d with app tag %s.",
         int(p_peer),
         String::num_uint64(auth_app_tag, 16)
     );
@@ -2093,9 +2120,9 @@ void NetwMultiplayer::auth_send_hello(int64_t p_peer) {
     if (sent != OK) {
         NETW_WARN(
             sys::SESSION,
-            "auth could not send the hello for peer %d, error %d, so that "
-            "link stays unauthenticated until the engine's auth timeout "
-            "closes it",
+            "Authentication could not reach peer %d (error %d). The "
+            "connection stays unauthenticated until "
+            "SceneMultiplayer.auth_timeout closes it.",
             int(p_peer),
             int(sent)
         );
@@ -2105,7 +2132,8 @@ void NetwMultiplayer::auth_send_hello(int64_t p_peer) {
     if (completed != OK) {
         NETW_ERROR(
             sys::SESSION,
-            "auth could not complete locally for peer %d, error %d",
+            "Authentication with peer %d could not finish (error %d), so it "
+            "was disconnected.",
             int(p_peer),
             int(completed)
         );
@@ -2143,7 +2171,7 @@ void NetwMultiplayer::auth_receive_hello(
         = auth::decode_client_hello(p_data, uint64_t(auth_app_tag));
     NETW_DEBUG(
         sys::SESSION,
-        "auth read a hello from peer %d with app tag %s against %s",
+        "Read a hello from peer %d with app tag %s, expecting %s.",
         int(p_peer),
         String::num_uint64(int64_t(decoded.app_tag), 16),
         String::num_uint64(auth_app_tag, 16)
@@ -2152,8 +2180,9 @@ void NetwMultiplayer::auth_receive_hello(
         if (decoded.refusal == auth::Refusal::APP) {
             NETW_WARN(
                 sys::SESSION,
-                "peer %d hello carries app tag %s against %s, so it is "
-                "refused as an incompatible build",
+                "Peer %d was refused, because its app tag %s differs from "
+                "this server's %s. Set the same tag on both with "
+                "NetwMultiplayer.auth_set_app_tag.",
                 int(p_peer),
                 String::num_uint64(int64_t(decoded.app_tag), 16),
                 String::num_uint64(auth_app_tag, 16)
@@ -2162,7 +2191,9 @@ void NetwMultiplayer::auth_receive_hello(
         } else {
             NETW_WARN(
                 sys::SESSION,
-                "peer %d hello did not decode (%s), so it is dropped",
+                "Peer %d was disconnected, because its authentication could "
+                "not be read (%s). Run the same Networked version on both "
+                "peers.",
                 int(p_peer),
                 decoded.refusal == auth::Refusal::VERSION ? "version"
                                                           : "framing"
@@ -2173,7 +2204,7 @@ void NetwMultiplayer::auth_receive_hello(
     }
     NETW_TRACE(
         sys::SESSION,
-        "peer %d speaks this build, so its link completes on the hello",
+        "Peer %d runs this build, so the hello completes its connection.",
         int(p_peer)
     );
     auth_complete_link(p_peer);
@@ -2209,9 +2240,8 @@ PackedByteArray NetwMultiplayer::probe_reply_payload(bool &r_answered) {
     if (!called || info.is_null()) {
         NETW_ERROR(
             sys::TRANSPORT,
-            "a probe is refused: the provider declared through "
-            "Netw.configure_server_info answered %s, and a probe reply needs "
-            "a NetwServerInfo. Edit the record the provider is handed and "
+            "A probe got no reply, because the Netw.configure_server_info "
+            "handler returned %s. Edit the NetwServerInfo it is given and "
             "return it.",
             called ? String(Variant::get_type_name(answered.get_type()))
                    : String("nothing, because the call itself failed")
@@ -2231,7 +2261,8 @@ void NetwMultiplayer::session_answer_probe(int64_t p_peer) {
     if (!probe_guard.admit(p_peer, now)) {
         NETW_TRACE(
             sys::TRANSPORT,
-            "probe from peer %d answered busy (%d in the second, %d tracked)",
+            "A probe from peer %d got a busy answer (%d this second, %d "
+            "tracked).",
             int(p_peer),
             probe_guard.window_count(),
             probe_guard.active_count()
@@ -2294,7 +2325,8 @@ Variant NetwMultiplayer::peer_get_bucket(
         !session_has_accepted(p_peer),
         Variant(),
         sys::SESSION,
-        "the session holds no peer %d, so it mints no bucket for one",
+        "NetwSessionHandle.bucket_of got peer %d, which has not joined "
+        "this session.",
         int(p_peer)
     );
     Object *type = Object::cast_to<Object>(p_type);
@@ -2302,7 +2334,8 @@ Variant NetwMultiplayer::peer_get_bucket(
         type == nullptr,
         Variant(),
         sys::SESSION,
-        "a bucket type must be a script object that answers new()"
+        "NetwSessionHandle.bucket_of needs a script to build the bucket "
+        "from. Pass a script class that extends RefCounted."
     );
     if (!peer_buckets.has(p_peer)) {
         peer_buckets.insert(p_peer, Dictionary());
@@ -2317,7 +2350,8 @@ Variant NetwMultiplayer::peer_get_bucket(
         minted.is_null(),
         Variant(),
         sys::SESSION,
-        "a bucket type must extend RefCounted"
+        "NetwSessionHandle.bucket_of could not build the bucket. Its "
+        "script must extend RefCounted."
     );
     held[p_type] = minted;
     return minted;
@@ -2342,7 +2376,7 @@ String NetwMultiplayer::session_role_name(Role p_role) {
         case ROLE_LISTEN_SERVER:
             return "LISTEN_SERVER";
         default:
-            NETW_TRACE(sys::SESSION, "no role name for role %d", p_role);
+            NETW_TRACE(sys::SESSION, "Role %d has no name.", p_role);
             return "";
     }
 }
@@ -2420,7 +2454,7 @@ void NetwMultiplayer::session_pause(const String &p_reason) {
     NETW_ERR_COND(
         !session_core.is_server_role(),
         sys::SESSION,
-        "a pause is issued by server authority"
+        "NetwMultiplayer.session_pause runs only on the server."
     );
     session_broadcast_control(
         control_channels.pause,
@@ -2432,7 +2466,7 @@ void NetwMultiplayer::session_unpause() {
     NETW_ERR_COND(
         !session_core.is_server_role(),
         sys::SESSION,
-        "an unpause is issued by server authority"
+        "NetwMultiplayer.session_unpause runs only on the server."
     );
     session_broadcast_control(control_channels.unpause, PackedByteArray());
 }
@@ -2441,7 +2475,7 @@ void NetwMultiplayer::session_notify_shutdown(const String &p_reason) {
     NETW_ERR_COND(
         !session_core.is_server_role(),
         sys::SESSION,
-        "a shutdown notice is issued by server authority"
+        "NetwMultiplayer.session_notify_shutdown runs only on the server."
     );
     session_broadcast_control(
         control_channels.shutdown,
@@ -2476,7 +2510,7 @@ void NetwMultiplayer::peer_kick(int64_t p_peer_id, const String &p_reason) {
     NETW_ERR_COND(
         !is_session_authority(),
         sys::SESSION,
-        "a kick is issued by server authority"
+        "NetwMultiplayer.peer_kick runs only on the server."
     );
     if (!p_reason.is_empty()) {
         send_to(
@@ -2517,7 +2551,36 @@ void NetwMultiplayer::peer_request_kick(
     );
 }
 
+namespace {
+
+LocalVector<uint64_t> &sessions_tearing_down() {
+    static LocalVector<uint64_t> sessions;
+    return sessions;
+}
+
+void forget_torn_down_sessions() {
+    LocalVector<uint64_t> &sessions = sessions_tearing_down();
+    uint32_t at = 0;
+    while (at < sessions.size()) {
+        if (gd::object_registered(ObjectID(sessions[at]))) {
+            ++at;
+        } else {
+            sessions.remove_at_unordered(at);
+        }
+    }
+}
+
+} // namespace
+
+bool NetwMultiplayer::is_tearing_down(ObjectID p_session) {
+    forget_torn_down_sessions();
+    return sessions_tearing_down().has(uint64_t(p_session));
+}
+
 NetwMultiplayer::~NetwMultiplayer() {
+    forget_torn_down_sessions();
+    sessions_tearing_down().push_back(uint64_t(gd::instance_id(this)));
+    tree_forget_session(this);
     capture_close();
     clock_release();
     lagcomp_release();
@@ -2538,8 +2601,7 @@ NetwMultiplayer::~NetwMultiplayer() {
 }
 
 Error NetwMultiplayer::session_flush_tick(int64_t p_tick) {
-    NETW_ZONE_SYS(profile::SUBSYSTEM_SESSION);
-    NETW_ZONE_COLOR(colors::SESSION);
+    NETW_ZONE_NC("Session tick", colors::SESSION);
     if (layer_driver_count() > 0) {
         const Error admitted = interest_flush_now();
         if (admitted != OK) {
@@ -2559,20 +2621,75 @@ Error NetwMultiplayer::session_flush_tick(int64_t p_tick) {
 
 void NetwMultiplayer::session_on_clock_tick(double, int64_t p_tick) {
     sink_verdict(session_flush_tick(p_tick), 0);
+#if defined(NETW_PROFILING)
+    if (NETW_PROFILE_CONNECTED()) {
+        profile_book_bytes();
+    }
+#endif
 }
 
+#if defined(NETW_PROFILING)
+void NetwMultiplayer::profile_book_bytes() const {
+    NETW_ZONE_NC("Memory sample", colors::SESSION);
+    NETW_PLOT(profile::names::MEMORY_STORE_ROWS, store_world.row_bytes());
+    NETW_PLOT(profile::names::MEMORY_PEER_ROWS, store_world.peer_bytes());
+    NETW_PLOT(profile::names::MEMORY_PEER_FLIGHTS, store_world.flight_bytes());
+    int64_t transitions = 0;
+    int64_t inputs = 0;
+    int64_t journal = 0;
+    int64_t slots = 0;
+    prediction_engine.held_bytes(transitions, inputs, journal, slots);
+    NETW_PLOT(profile::names::MEMORY_PREDICT_TRANSITIONS, transitions);
+    NETW_PLOT(profile::names::MEMORY_PREDICT_INPUTS, inputs);
+    NETW_PLOT(profile::names::MEMORY_PREDICT_JOURNAL, journal);
+    NETW_PLOT(profile::names::MEMORY_PREDICT_SLOTS, slots);
+    NETW_PLOT(
+        profile::names::MEMORY_DISPLAY,
+        display_book.is_valid() ? display_book->held_bytes() : int64_t(0)
+    );
+    NETW_PLOT(profile::names::MEMORY_BINDINGS, binding_book.held_bytes());
+    NETW_PLOT(
+        profile::names::MEMORY_SETS,
+        set_book.held_bytes([](const repl::PropertySet &p_set) {
+            return held::vector(p_set.columns);
+        })
+    );
+    NETW_PLOT(
+        profile::names::MEMORY_ENTITIES,
+        held::map(entity_book)
+            + entity_slots.held_bytes([](const EntitySlot &p_slot) {
+                  const int64_t object = int64_t(sizeof(NetwEntity));
+                  int64_t bytes = p_slot.live.is_valid() ? object : 0;
+                  bytes += p_slot.retired.is_valid() ? object : 0;
+                  if (p_slot.record != nullptr) {
+                      bytes += p_slot.record->held_bytes();
+                  }
+                  return bytes;
+              })
+    );
+    const SyncCompat *compat = sync_adapter();
+    NETW_PLOT(
+        profile::names::MEMORY_COMPAT,
+        compat != nullptr ? compat->held_bytes() : int64_t(0)
+    );
+}
+#endif
+
 Error NetwMultiplayer::NETW_API_VIRTUAL(poll)() {
-    NETW_ZONE_SYS(profile::SUBSYSTEM_SESSION);
-    NETW_ZONE_COLOR(colors::SESSION);
+    NETW_FRAME(profile::names::POLL_FRAME);
+    NETW_ZONE_NC("Network poll", colors::SESSION);
     Engine *engine = Engine::get_singleton();
     if (engine != nullptr && engine->is_editor_hint()) {
         return OK;
     }
     embed_autosettle_tree_default();
-    if (inner.is_null() && effective_peer.is_valid()) {
-        effective_peer->poll();
+    {
+        NETW_ZONE_NC("Transport poll", colors::TRANSPORT);
+        if (inner.is_null() && effective_peer.is_valid()) {
+            effective_peer->poll();
+        }
+        peer_sweep_transport_state();
     }
-    peer_sweep_transport_state();
     const double frame_delta
         = poll_delta(Time::get_singleton()->get_ticks_usec());
     connect_core.on_poll(frame_delta);
@@ -2639,16 +2756,16 @@ void NetwMultiplayer::NETW_API_VIRTUAL(set_multiplayer_peer)(
         offered != nullptr && !offered->claimed
             && offered->session != gd::instance_id(this),
         sys::TRANSPORT,
-        "a created peer is offered to the session that asked for it, and this "
-        "one belongs to another session, so the standing assignment stands"
+        "This peer was created for another session, so the assignment was "
+        "ignored. Assign it to the session that created it."
     );
     NETW_ERR_COND(
         p_peer.is_valid()
             && p_peer->get_connection_status()
                 == MultiplayerPeer::CONNECTION_DISCONNECTED,
         sys::TRANSPORT,
-        "an assigned peer is connecting or connected, and this one is "
-        "disconnected, so the standing assignment stands"
+        "The assigned peer is disconnected, so the assignment was ignored. "
+        "Assign the peer after create_server or create_client succeeds."
     );
     const bool live
         = p_peer.is_valid() && !p_peer->is_class("OfflineMultiplayerPeer");
@@ -2657,9 +2774,9 @@ void NetwMultiplayer::NETW_API_VIRTUAL(set_multiplayer_peer)(
         NETW_ERR_COND(
             config_readiness(pending) != OK,
             sys::SESSION,
-            "assigning a peer refused: the Netw.configure_* settings are not "
-            "applied yet. Assign the peer after the first frame, or use "
-            "Netw.connection(node)."
+            "The peer was assigned before the Netw.configure_* settings "
+            "were applied. Assign it after the first frame, or connect "
+            "through Netw.connection."
         );
         session_apply_auth_config();
     }
@@ -2844,7 +2961,8 @@ RID NetwMultiplayer::transport_register(const Ref<Script> &p_type) {
     if (script.is_null()) {
         NETW_ERROR(
             sys::SESSION,
-            "transport_register: expected a Script extending NetwTransport"
+            "NetwMultiplayer.transport_register needs a script that extends "
+            "NetwTransport."
         );
         return RID();
     }
@@ -3359,7 +3477,7 @@ void NetwMultiplayer::clock_request_handshake() {
 }
 
 void NetwMultiplayer::clock_send_ping() {
-    NETW_ZONE_NC("NetwMultiplayer clock ping", colors::CLOCK);
+    NETW_ZONE_NC("Clock ping", colors::CLOCK);
     session::ClockPing ping;
     ping.origin = clock_wall_usec() & 0xFFFFFFFF;
     send_to(
@@ -3385,7 +3503,7 @@ void NetwMultiplayer::clock_receive_handshake(
     if (!session::frame_read(p_payload, asked)) {
         NETW_TRACE(
             sys::CLOCK,
-            "a clock handshake that did not decode whole is refused"
+            "A clock handshake that did not decode fully was refused."
         );
         return;
     }
@@ -3412,8 +3530,8 @@ void NetwMultiplayer::clock_receive_handshake_reply(
     if (!session::frame_read(p_payload, answered)) {
         NETW_ERROR(
             sys::CLOCK,
-            "a clock handshake reply carried no tickrate, so the local rate "
-            "stands uncalibrated"
+            "The server's clock reply could not be read, so this peer kept "
+            "its own tickrate. Run the same build on both peers."
         );
         return;
     }
@@ -3428,7 +3546,8 @@ void NetwMultiplayer::clock_receive_handshake_reply(
         } else {
             NETW_WARN(
                 sys::CLOCK,
-                "Clock tickrate mismatch, local %d server %d.",
+                "This peer runs at tickrate %d and the server at %d. Set the "
+                "same NetwClockConfig.tickrate on both.",
                 clock_engine().get_tickrate(),
                 server_tickrate
             );
@@ -3563,13 +3682,16 @@ bool NetwMultiplayer::is_structure_halted() const {
 
 int64_t NetwMultiplayer::structure_ops_outstanding() const {
     int64_t outstanding = 0;
-    for (const KeyValue<int64_t, ObjectID> &held : wrapper_owners) {
-        const Ref<NetwEntity> entity
-            = NetwEntity::of(Object::cast_to<Node>(gd::object_of(held.value)));
+    entity_slots.each([&outstanding](uint64_t, const EntitySlot &p_slot) {
+        if (p_slot.owner.is_null()) {
+            return;
+        }
+        Node *owner = Object::cast_to<Node>(gd::object_of(p_slot.owner));
+        const Ref<NetwEntity> entity = NetwEntity::of(owner);
         if (entity.is_valid()) {
             outstanding += int64_t(entity->structure_ops_outstanding());
         }
-    }
+    });
     return outstanding;
 }
 
@@ -3590,15 +3712,16 @@ void NetwMultiplayer::session_set_authority_peer(int64_t p_peer) {
     NETW_ERR_COND(
         p_peer <= 0,
         sys::SESSION,
-        "A coordinator is a real peer id, so %d cannot hold authority.",
+        "Peer id %d cannot be the session authority. Pass the id of a "
+        "connected peer.",
         int(p_peer)
     );
     NETW_ERR_COND(
         session_get_state() != SESSION_STATE_OFFLINE
             && session_get_state() != SESSION_STATE_CONNECTING,
         sys::SESSION,
-        "The coordinator is chosen before the session resolves, and peer %d "
-        "cannot take it from peer %d while the session is live.",
+        "Peer %d cannot become the session authority while peer %d holds "
+        "it in a live session. Choose the authority before connecting.",
         int(p_peer),
         int(session_authority_peer())
     );
@@ -3860,6 +3983,7 @@ Ref<NetwSessionConfig> NetwMultiplayer::session_get_config() const {
         info->copy_values_from(**session_settings.server_info);
         snapshot->set_server_info(info);
     }
+    snapshot->set_bandwidth_kbps(session_settings.bandwidth_kbps);
     return snapshot;
 }
 
@@ -3886,11 +4010,9 @@ Error NetwMultiplayer::session_initialize(
     if (config_consumption[slot].consumed) {
         NETW_WARN(
             sys::SESSION,
-            "Netw.configure_session: 'session configuration' on '%s' was "
-            "configured after this session consumed its configuration. The "
-            "running values are unchanged. Configure before startup and "
-            "finish the fluent chain without awaiting.",
-            String("this session")
+            "Netw.configure_session ran after the session started, so the "
+            "running values are unchanged. Call it before startup and "
+            "finish the chain without awaiting."
         );
         return ERR_ALREADY_IN_USE;
     }
@@ -3908,6 +4030,7 @@ Error NetwMultiplayer::session_initialize(
             session_settings.server_info.instantiate();
             session_settings.server_info->copy_values_from(**info);
         }
+        session_settings.bandwidth_kbps = p_from->get_bandwidth_kbps();
     }
     connect_core.bind_session(this);
     session_push_desired_role();
@@ -3924,9 +4047,8 @@ void NetwMultiplayer::session_offer_fallback(
         session_fallback.is_valid() && session_fallback_source != source
             && gd::object_of(session_fallback_source) != nullptr,
         sys::SESSION,
-        "two mounts export session settings for one session, so this session "
-        "has no single configuration. Keep one declaration on the session's "
-        "branch."
+        "Two nodes declare session settings for the same session. Keep one "
+        "Netw.configure_session declaration on the session's branch."
     );
     session_fallback = p_draft;
     session_fallback_source = source;
@@ -4054,14 +4176,14 @@ bool NetwMultiplayer::session_decode_join_args(JoinRequest &r_request) {
     if (!plan.available || !handler.is_valid()) {
         NETW_TRACE(
             sys::SESSION,
-            "a join carried encoded args with no handler to read them"
+            "A join carried arguments, but no handler reads them."
         );
         return false;
     }
     if (r_request.schema_hash != join_schema_hash(handler, quantizers)) {
         NETW_TRACE(
             sys::SESSION,
-            "a join's arg schema disagrees with this server's handler"
+            "A join's arguments do not match this server's handler."
         );
         return false;
     }
@@ -4074,7 +4196,7 @@ bool NetwMultiplayer::session_decode_join_args(JoinRequest &r_request) {
             values
         )
         || !stream.align_verify() || stream.bits_remaining() != 0) {
-        NETW_TRACE(sys::SESSION, "a join's encoded args did not decode whole");
+        NETW_TRACE(sys::SESSION, "A join's arguments did not decode fully.");
         return false;
     }
     r_request.arg_values = values;
@@ -4089,7 +4211,9 @@ bool NetwMultiplayer::session_resolve_inbound_join(
     if (!session_decode_join_args(r_request)) {
         NETW_WARN(
             sys::SESSION,
-            "join: rejected malformed or mismatched args from peer %d",
+            "Peer %d was refused, because its join arguments do not match "
+            "the Netw.configure_join handler. Pass matching arguments to "
+            "Netw.prepare_join.",
             int(p_sender)
         );
         return false;
@@ -4097,7 +4221,8 @@ bool NetwMultiplayer::session_resolve_inbound_join(
     if (String(r_request.username).is_empty()) {
         NETW_WARN(
             sys::SESSION,
-            "join: invalid payload from peer %d",
+            "Peer %d was refused, because its join request had no "
+            "username.",
             int(p_sender)
         );
         return false;
@@ -4110,8 +4235,7 @@ bool NetwMultiplayer::session_resolve_inbound_join(
     if (refusal != OK) {
         NETW_INFO(
             sys::SESSION,
-            "join: peer %d is turned down by this session's admission "
-            "handler with %s",
+            "Peer %d was refused by this session's admission handler (%s).",
             int(p_sender),
             gd::error_name(refusal)
         );
@@ -4150,7 +4274,7 @@ void NetwMultiplayer::session_submit_join(
     const std::optional<JoinRequest> request
         = connect::request_of(p_username, p_args);
     if (!request.has_value()) {
-        NETW_TRACE(sys::SESSION, "a join with no username submits nothing");
+        NETW_TRACE(sys::SESSION, "A join with no username sends nothing.");
         return;
     }
     session_submit_request(*request, session_authority_peer());
@@ -4219,9 +4343,9 @@ void NetwMultiplayer::session_leave_drained(
     if (drained != OK) {
         NETW_ERROR(
             sys::SESSION,
-            "the session stays online, because an entity row could not be "
-            "saved. Leave again to retry, or close the peer to disconnect "
-            "without saving"
+            "The session stayed online, because an entity could not be "
+            "saved. Call NetwSessionHandle.leave again to retry, or close "
+            "the peer to leave without saving."
         );
         p_left->resolve(int(drained));
         return;
@@ -4244,7 +4368,7 @@ Ref<NetwPromise> NetwMultiplayer::session_close_peer() {
     if (session_get_state() == SESSION_STATE_OFFLINE) {
         return NetwPromise::resolved(OK);
     }
-    NETW_TRACE(sys::SESSION, "Session: leave called.");
+    NETW_TRACE(sys::SESSION, "Leaving the session.");
     NETW_INFO(sys::SESSION, "Disconnecting player.");
     session_transition(SESSION_STATE_DISCONNECTING);
     if (effective_peer.is_valid()) {
@@ -4315,7 +4439,7 @@ void NetwMultiplayer::session_submit_prepared_join() {
     }
     NETW_TRACE(
         sys::SESSION,
-        "the join is held for one resend, peer %d is not yet seen",
+        "The join waits for one resend, because peer %d is not seen yet.",
         int(coordinator)
     );
     resubmit_join = request;
@@ -4354,7 +4478,10 @@ Ref<NetwPromise> NetwMultiplayer::session_prepare_join(
     NETW_ZONE_NC("netw::session_prepare_join", colors::SESSION);
     session_clear_prepared_join();
     if (String(p_username).is_empty()) {
-        NETW_ERROR(sys::SESSION, "username is empty.");
+        NETW_ERROR(
+            sys::SESSION,
+            "Netw.prepare_join needs a username, and it was empty."
+        );
         return NetwPromise::resolved(ERR_INVALID_PARAMETER);
     }
 
@@ -4416,7 +4543,8 @@ bool NetwMultiplayer::connect_once(
     count_verdict(ERR_UNAVAILABLE, 0);
     NETW_ERROR(
         sys::SESSION,
-        "connecting '%s' answered %d, so the edge is not wired",
+        "Connecting to the signal '%s' failed with error %d, so its "
+        "callback will not run.",
         String(p_signal.get_name()),
         int(verdict)
     );
@@ -4437,9 +4565,7 @@ bool NetwMultiplayer::disconnect_once(
 void NetwMultiplayer::clear_flat_family_state() {
     layer_forget_all();
     scene_clear_pending_facets();
-    if (table_core.is_valid()) {
-        table_core->clear_session();
-    }
+    store_world.arrays.clear_session();
     display_clear_declarations();
     sync_encode_armed = false;
     sync_encode_stock = PackedByteArray();
@@ -4461,25 +4587,19 @@ SchemaCore *NetwMultiplayer::get_schema_core() {
     return &schema_core;
 }
 
-Ref<table::Core> NetwMultiplayer::get_table_core() const {
-    return table_core;
-}
-
 void NetwMultiplayer::clear_roster() {
     session_clear_roster();
     player_clear();
 }
 
-Ref<NetwTimeline> NetwMultiplayer::register_timeline(
-    const Ref<NetwEntity> &p_entity
-) {
+int64_t NetwMultiplayer::register_rewind(const Ref<NetwEntity> &p_entity) {
     if (p_entity.is_null()) {
-        return Ref<NetwTimeline>();
+        return -1;
     }
     const int64_t slot
-        = lagcomp_core.timeline_register(p_entity, NetwTimeline::DEFAULT_LIMIT);
-    return slot >= 0 ? lagcomp_core.timeline_history(slot)
-                     : Ref<NetwTimeline>();
+        = lagcomp_core.timeline_register(p_entity, LagBook::DEFAULT_WINDOW);
+    store_bind_entity(p_entity);
+    return slot;
 }
 
 bool NetwMultiplayer::is_extension_script(const Ref<Script> &p_script) {
@@ -4514,7 +4634,8 @@ Ref<NetwMultiplayer> NetwMultiplayer::make(
         if (!is_extension_script(selected)) {
             NETW_ERROR(
                 sys::SESSION,
-                "a session implementation must extend NetwMultiplayer"
+                "NetwMultiplayer.make needs a script that extends "
+                "NetwMultiplayer."
             );
             return Ref<NetwMultiplayer>();
         }
@@ -4611,7 +4732,8 @@ Ref<Script> NetwMultiplayer::law_extension_script() {
         NETW_ERR_V(
             resolved,
             sys::SESSION,
-            "{} names '{}', which is not a script",
+            "%s names '%s', which is not a script. Point it at a script "
+            "that extends NetwMultiplayer.",
             LAW_EXTENSION_ENV,
             path
         );
@@ -4620,7 +4742,8 @@ Ref<Script> NetwMultiplayer::law_extension_script() {
         NETW_ERR_V(
             resolved,
             sys::SESSION,
-            "{} names '{}', which does not extend the session class",
+            "%s names '%s', which does not extend NetwMultiplayer. Point it "
+            "at a script that does.",
             LAW_EXTENSION_ENV,
             path
         );
@@ -4765,7 +4888,8 @@ void NetwMultiplayer::seam_refused(
         misused_seams.insert(p_seam);
         NETW_ERROR(
             sys::EVENT,
-            "the override of %s returned %s, so the default is used",
+            "The override of %s returned %s, so the default ran instead. "
+            "Return what its documentation asks for.",
             String(p_seam),
             p_reason
         );

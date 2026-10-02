@@ -2,6 +2,7 @@
 
 #include "godot/class_db.hpp"
 #include "netw/api/netw_multiplayer.hpp"
+#include "netw/log.hpp"
 
 using namespace godot;
 
@@ -94,6 +95,47 @@ void NetwSessionConfig::_bind_methods() {
         D_METHOD("server", "server_info"),
         &NetwSessionConfig::server
     );
+
+    ClassDB::bind_method(
+        D_METHOD("set_bandwidth_kbps", "bandwidth_kbps"),
+        &NetwSessionConfig::set_bandwidth_kbps
+    );
+    ClassDB::bind_method(
+        D_METHOD("get_bandwidth_kbps"),
+        &NetwSessionConfig::get_bandwidth_kbps
+    );
+    ADD_PROPERTY(
+        PropertyInfo(
+            Variant::INT,
+            "bandwidth_kbps",
+            PROPERTY_HINT_RANGE,
+            "0,100000,1,or_greater,suffix:kbit/s"
+        ),
+        "set_bandwidth_kbps",
+        "get_bandwidth_kbps"
+    );
+    ClassDB::bind_method(
+        D_METHOD("bandwidth", "kbps"),
+        &NetwSessionConfig::bandwidth
+    );
+}
+
+void NetwSessionConfig::set_bandwidth_kbps(int64_t p_kbps) {
+    NETW_ERR_COND(
+        p_kbps < 0,
+        sys::SESSION,
+        "NetwSessionConfig.bandwidth_kbps got %d, which is negative. Pass "
+        "kbit/s, or 0 for one packet a tick.",
+        p_kbps
+    );
+    if (guard.takes("bandwidth_kbps")) {
+        values.bandwidth_kbps = p_kbps;
+    }
+}
+
+Ref<NetwSessionConfig> NetwSessionConfig::bandwidth(int64_t p_kbps) {
+    set_bandwidth_kbps(p_kbps);
+    return Ref<NetwSessionConfig>(this);
 }
 
 void NetwSessionConfig::set_desired_role(NetwMultiplayer::Role p_role) {
@@ -141,6 +183,7 @@ void NetwSessionConfig::copy_values_from(const NetwSessionConfig &p_source) {
         values.server_info.instantiate();
         values.server_info->copy_values_from(**p_source.values.server_info);
     }
+    values.bandwidth_kbps = p_source.values.bandwidth_kbps;
 }
 
 bool NetwSessionConfig::matches_defaults() const {
@@ -170,6 +213,12 @@ String NetwSessionConfig::non_default_fields() const {
             named += ", ";
         }
         named += "server_info";
+    }
+    if (values.bandwidth_kbps != 0) {
+        if (!named.is_empty()) {
+            named += ", ";
+        }
+        named += "bandwidth_kbps";
     }
     return named;
 }

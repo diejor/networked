@@ -54,7 +54,7 @@
 			A kinematic or animated body.
 		</constant>
 		<constant name="COMMAND_ORIGIN_PREDICTED" value="0" enum="CommandOrigin">
-			This peer guessed the input with [member NetwPredictionHandle.predict_commands].
+			This peer guessed the input with [member NetwPredictionHandle.predict_input].
 		</constant>
 		<constant name="COMMAND_ORIGIN_RELAYED" value="1" enum="CommandOrigin">
 			The controlling peer's own input, relayed through the server.
@@ -213,7 +213,7 @@
 			A teleport restored every field.
 		</constant>
 		<constant name="OPERATOR_TRANSPORT_DELTA" value="4" enum="Operator">
-			The body was moved to where it should be now, along a path [member NetwPredictionHandle.transport_corridor] allowed.
+			The body was moved to where it should be now, along a path [member NetwPredictionHandle.correction_path_clear] allowed.
 		</constant>
 		<constant name="OPERATOR_RESEED" value="5" enum="Operator">
 			The body was reset to the server's state after a fallback.

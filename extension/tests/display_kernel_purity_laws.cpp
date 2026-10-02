@@ -154,7 +154,7 @@ TEST_CASE(
     "calculus and the fork-join can drive them with no scene"
 ) {
     const KernelScenario CORPUS[] = {
-        kernel("pump-history", "void pump_history(", "display_lag"),
+        kernel("pump-history", "bool pump_history(", "display_lag"),
         kernel("dilate-playhead", "void dilate_playhead(", "starving"),
         kernel(
             "chase-smooth-time",
@@ -163,7 +163,7 @@ TEST_CASE(
         ),
         kernel("glide", "double glide(", "chase_glide_time"),
         kernel("take-trace-frame", "bool take_trace_frame(", "trace_interval"),
-        kernel("pump-chase", "void pump_chase(", "get_source_prop"),
+        kernel("pump-chase", "bool pump_chase(", "get_source_prop"),
     };
     for (const KernelScenario &scenario : CORPUS) {
         const KernelBody body(scenario);

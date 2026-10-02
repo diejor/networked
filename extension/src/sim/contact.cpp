@@ -1,6 +1,8 @@
 #include "netw/sim/contact.hpp"
 
 #include "godot/node.hpp"
+#include "godot/physics_body.hpp"
+#include "godot/physics_server.hpp"
 #include "godot/variant.hpp"
 
 using namespace godot;
@@ -9,24 +11,28 @@ namespace netw::sim {
 
 namespace {
 
-const StringName &contact_monitor_name() {
-    static const StringName name("contact_monitor");
-    return name;
-}
-
 const StringName &max_contacts_name() {
     static const StringName name("max_contacts_reported");
-    return name;
-}
-
-const StringName &colliding_name() {
-    static const StringName name("get_colliding_bodies");
     return name;
 }
 
 const StringName &freeze_name() {
     static const StringName name("freeze");
     return name;
+}
+
+template <typename State>
+void note_colliders(const State *p_state, LocalVector<ObjectID> &r_colliders) {
+    if (p_state == nullptr) {
+        return;
+    }
+    const int count = p_state->get_contact_count();
+    for (int at = 0; at < count; ++at) {
+        const ObjectID id(uint64_t(p_state->get_contact_collider_id(at)));
+        if (r_colliders.find(id) < 0) {
+            r_colliders.push_back(id);
+        }
+    }
 }
 
 } // namespace
@@ -37,9 +43,6 @@ void monitor_contacts(const Bodies &p_bodies) {
         if (body == nullptr) {
             continue;
         }
-        if (!bool(body->get(contact_monitor_name()))) {
-            body->set(contact_monitor_name(), true);
-        }
         if (int(body->get(max_contacts_name())) < CLAIM_CONTACTS_REPORTED) {
             body->set(max_contacts_name(), CLAIM_CONTACTS_REPORTED);
         }
@@ -49,19 +52,19 @@ void monitor_contacts(const Bodies &p_bodies) {
 void touching(const Bodies &p_bodies, LocalVector<ObjectID> &r_colliders) {
     r_colliders.clear();
     for (const AuthoredBody &held : p_bodies.held) {
-        Object *body = gd::object_of(held.node);
-        if (body == nullptr || !bool(body->get(contact_monitor_name()))) {
-            continue;
-        }
-        const Array colliders = body->call(colliding_name());
-        for (int at = 0; at < colliders.size(); ++at) {
-            Object *other = colliders[at];
-            if (other == nullptr) {
-                continue;
+        const store::NodeCell &cell = resident_of(p_bodies, held);
+        if (cell.solid != nullptr) {
+            if (cell.solid->get_max_contacts_reported() > 0) {
+                note_colliders(cell.state_3d, r_colliders);
             }
-            const ObjectID id = gd::instance_id(other);
-            if (r_colliders.find(id) < 0) {
-                r_colliders.push_back(id);
+        } else if (cell.flat != nullptr) {
+            if (cell.flat->get_max_contacts_reported() > 0) {
+                note_colliders(
+                    PhysicsServer2D::get_singleton()->body_get_direct_state(
+                        cell.body
+                    ),
+                    r_colliders
+                );
             }
         }
     }
@@ -69,8 +72,13 @@ void touching(const Bodies &p_bodies, LocalVector<ObjectID> &r_colliders) {
 
 bool thawed(const Bodies &p_bodies) {
     for (const AuthoredBody &held : p_bodies.held) {
-        Object *body = gd::object_of(held.node);
-        if (body != nullptr && bool(body->get(freeze_name()))) {
+        const store::NodeCell &cell = resident_of(p_bodies, held);
+        const bool frozen = cell.solid != nullptr
+            ? cell.solid->is_freeze_enabled()
+            : cell.flat != nullptr
+            ? cell.flat->is_freeze_enabled()
+            : cell.object != nullptr && bool(cell.object->get(freeze_name()));
+        if (frozen) {
             return false;
         }
     }
@@ -82,12 +90,23 @@ bool moving(const Bodies &p_bodies) {
     static const StringName angular("angular_velocity");
     static const StringName sleeping("sleeping");
     for (const AuthoredBody &held : p_bodies.held) {
-        Object *body = gd::object_of(held.node);
-        if (body == nullptr || bool(body->get(sleeping))) {
-            continue;
+        const store::NodeCell &cell = resident_of(p_bodies, held);
+        Vector3 along;
+        Vector3 around;
+        if (RigidBody3D *solid = cell.solid) {
+            if (solid->is_sleeping()) {
+                continue;
+            }
+            along = solid->get_linear_velocity();
+            around = solid->get_angular_velocity();
+        } else {
+            Object *body = cell.object;
+            if (body == nullptr || bool(body->get(sleeping))) {
+                continue;
+            }
+            along = body->get(linear);
+            around = body->get(angular);
         }
-        const Vector3 along = body->get(linear);
-        const Vector3 around = body->get(angular);
         if (along.length() > CLAIM_MOVING_SPEED
             || around.length() > CLAIM_MOVING_SPEED) {
             return true;

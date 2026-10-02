@@ -662,7 +662,8 @@ Error Databases::stage_patch(
     if (opened != OK) {
         NETW_WARN(
             sys::TABLE,
-            "patch read a record it cannot open: %s",
+            "NetwDatabase.patch left a record unchanged, because the stored "
+            "record could not be read (%s).",
             detail.utf8().get_data()
         );
         return opened;
@@ -679,7 +680,9 @@ Error Databases::stage_patch(
     if (checked != OK) {
         NETW_WARN(
             sys::TABLE,
-            "patch refuses the row it would have written: %s",
+            "NetwDatabase.patch left a record unchanged, because the merged "
+            "values do not fit the table (%s). Pass values whose types match "
+            "its columns.",
             detail.utf8().get_data()
         );
         return checked;

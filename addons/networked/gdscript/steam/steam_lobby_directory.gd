@@ -66,8 +66,8 @@ func _service_entered(_api: NetwMultiplayer) -> void:
 	var existing: SteamLobbyDirectory = _instance.get_ref()
 	if existing and existing != self:
 		push_warning(
-			"SteamLobbyDirectory: only one instance is allowed. " +
-			"Queueing duplicate for deletion.",
+			"Only one SteamLobbyDirectory may exist, so this one is freed. "
+			+ "Remove the extra SteamLobbyDirectory.",
 		)
 		Netw.service_unregister(self, self)
 		queue_free()
@@ -77,7 +77,10 @@ func _service_entered(_api: NetwMultiplayer) -> void:
 	_wrapper = SteamWrapper.new()
 	if not _wrapper.is_available():
 		_init_ok = false
-		push_warning("SteamLobbyDirectory: GodotSteam singleton not found.")
+		push_warning(
+			"GodotSteam is not installed, so SteamLobbyDirectory is "
+			+ "unavailable. Install the GodotSteam addon.",
+		)
 		provider_unavailable.emit.call_deferred(
 			"GodotSteam singleton not found",
 		)
@@ -91,7 +94,7 @@ func _service_entered(_api: NetwMultiplayer) -> void:
 			var reason := _steam_app_id_required_message()
 			assert(false, "SteamLobbyDirectory: %s" % reason)
 			_init_ok = false
-			push_error("SteamLobbyDirectory: %s" % reason)
+			push_error(reason)
 			provider_unavailable.emit.call_deferred(reason)
 			Netw.service_unregister(self, self)
 			return
@@ -105,12 +108,10 @@ func _service_entered(_api: NetwMultiplayer) -> void:
 	if not _init_ok:
 		var status_str := SteamWrapper.init_result_to_string(status)
 		var verbal: String = init_res.get("verbal", "")
-		var reason := "Steam init failed (status %s)" % status_str
-		if not verbal.is_empty():
-			reason += ": " + verbal
-		else:
-			reason += ": " + SteamWrapper.init_result_to_reason(status)
-		push_warning("SteamLobbyDirectory: %s" % reason)
+		if verbal.is_empty():
+			verbal = SteamWrapper.init_result_to_reason(status)
+		var reason := "Steam did not start (%s, %s)" % [status_str, verbal]
+		push_warning("%s, so SteamLobbyDirectory is unavailable." % reason)
 		provider_unavailable.emit.call_deferred(reason)
 		Netw.service_unregister(self, self)
 		return
@@ -361,7 +362,10 @@ func _on_tree_server_disconnecting(_reason: String) -> void:
 func _guard_ready(op: String) -> bool:
 	if not _init_ok:
 		push_warning(
-			"SteamLobbyDirectory: %s called while Steam is unavailable." % [op],
+			(
+				"SteamLobbyDirectory.%s did nothing, because Steam is "
+				+ "unavailable. The earlier Steam warning names the cause."
+			) % [op],
 		)
 		return false
 	return true
@@ -378,29 +382,30 @@ func _has_steam_app_id() -> bool:
 func _apply_spacewar_fallback() -> void:
 	ProjectSettings.set_setting(STEAM_APP_ID_SETTING, SPACEWAR_APP_ID)
 	var reason := _steam_app_id_fallback_message()
-	push_warning("SteamLobbyDirectory: %s" % reason)
+	push_warning(reason)
 
 
 func _steam_app_id_required_message() -> String:
 	return (
-			"Project setting `%s` must not be empty or 0. Set it to " +
-			"your Steam app id, or use 480 for Spacewar while testing " +
-			"before you have one."
+			"Project setting %s is empty or 0. Set it to your Steam app " +
+			"id, or to 480 (Spacewar) while testing."
 	) % STEAM_APP_ID_SETTING
 
 
 func _steam_app_id_fallback_message() -> String:
 	return (
-			"Project setting `%s` is empty or 0. Using 480 (Spacewar) " +
-			"because `allow_spacewar_fallback` is enabled. Set this " +
-			"project setting to your Steam app id before publishing."
+			"Project setting %s is empty or 0, so 480 (Spacewar) is used " +
+			"because allow_spacewar_fallback is on. Set your Steam app id " +
+			"before publishing."
 	) % STEAM_APP_ID_SETTING
 
 
 func _on_lobby_created(connect_result: int, lobby_id: int) -> void:
 	if connect_result != 1:
-		var reason := "Lobby create failed (code %d)" % connect_result
-		push_error("SteamLobbyDirectory: %s" % [reason])
+		var reason := "Steam could not create the lobby (result %d)." % [
+			connect_result,
+		]
+		push_error(reason)
 		_pending_create_name = ""
 		_lobby_created_internal.emit(null)
 		return
@@ -428,7 +433,7 @@ func _on_lobby_created(connect_result: int, lobby_id: int) -> void:
 	var err: Error = peer.call(&"host_with_lobby", lobby_id)
 	if err != OK:
 		push_error(
-			"SteamLobbyDirectory: host_with_lobby failed: %s"
+			"SteamMultiplayerPeer could not host the lobby (%s)."
 			% [error_string(err)],
 		)
 		_lobby_created_internal.emit(null)
@@ -446,7 +451,7 @@ func _on_lobby_joined(
 ) -> void:
 	if response != 1:
 		var reason := SteamWrapper.chat_room_enter_response_to_string(response)
-		push_error("SteamLobbyDirectory: join failed: %s" % [reason])
+		push_error("Steam refused to join the lobby (%s)." % [reason])
 		_pending_join_lobby_id = 0
 		_lobby_joined_internal.emit(null)
 		return
@@ -467,7 +472,7 @@ func _on_lobby_joined(
 	var err: Error = peer.call(&"connect_to_lobby", lobby_id)
 	if err != OK:
 		push_error(
-			"SteamLobbyDirectory: connect_to_lobby failed: %s"
+			"SteamMultiplayerPeer could not connect to the lobby (%s)."
 			% [error_string(err)],
 		)
 		_pending_join_lobby_id = 0
@@ -493,8 +498,11 @@ func _on_lobby_match_list(lobbies: Array) -> void:
 		var id := int(raw_id)
 		if reject_own_lobbies and _is_own_lobby(id):
 			push_warning(
-				("SteamLobbyDirectory: ignoring own lobby %d in browse " +
-						"results. Steam local testing requires a second account.") % id,
+				(
+					"Lobby %d is this account's own, so it is left out of the "
+					+ "list. Test with a second Steam account, or turn off "
+					+ "reject_own_lobbies."
+				) % id,
 			)
 			continue
 
@@ -529,7 +537,8 @@ func _build_peer() -> MultiplayerPeer:
 	var peer := _wrapper.create_peer()
 	if peer == null:
 		push_error(
-			"SteamLobbyDirectory: SteamMultiplayerPeer class not available.",
+			"SteamMultiplayerPeer is not available. Install a GodotSteam "
+			+ "build that includes it.",
 		)
 		return null
 	_wrapper.configure_peer(peer, not disable_nagle, allow_p2p_relay)
@@ -551,7 +560,7 @@ func _is_own_lobby(lobby_id: int) -> bool:
 func _on_p2p_connect_fail(steam_id: int, error: int) -> void:
 	if _joining:
 		push_warning(
-			"SteamLobbyDirectory: P2P connect failed to %d (error %d)"
+			"The Steam connection to %d failed (error %d)."
 			% [steam_id, error],
 		)
 		_joining = false
@@ -564,7 +573,7 @@ func _on_network_connection_status_changed(info: Dictionary) -> void:
 	var state: int = info.get("connection_state", -1)
 	if state == 4 or state == 5: # ClosedByPeer or ProblemDetectedLocally
 		push_warning(
-			"SteamLobbyDirectory: connection status failed (%d)" % [state],
+			"The Steam connection closed while joining (state %d)." % [state],
 		)
 		_joining = false
 		peer_connect_failed.emit("Network connection status failed")

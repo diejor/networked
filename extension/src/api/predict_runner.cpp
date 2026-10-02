@@ -81,7 +81,7 @@ bool NetwPredictRunner::resolve_pool_order() {
         if (slot < 0) {
             NETW_TRACE(
                 sys::PREDICTION,
-                "predict runner: the pool cannot name engine %d of %d",
+                "Prediction cannot find engine %d of %d in its group.",
                 int(at),
                 int(engines.size())
             );
@@ -101,7 +101,7 @@ bool NetwPredictRunner::resolve_pool_order() {
 }
 
 void NetwPredictRunner::rebuild_sorted() {
-    NETW_ZONE_NC("predict runner rebuild order", colors::PREDICTION);
+    NETW_ZONE_NC("Predict rebuild order", colors::PREDICTION);
     by_slot.clear();
     sorted.clear();
     if (!resolve_pool_order()) {
@@ -140,7 +140,8 @@ const LocalVector<NetwPredictSlotEngine *> &NetwPredictRunner::phase(
     if (service == nullptr) {
         NETW_TRACE(
             sys::PREDICTION,
-            "predict runner: pass %d has no session, stepping %d in key order",
+            "Prediction pass %d has no session, so %d engines step in id "
+            "order.",
             p_phase,
             int(sorted.size())
         );
@@ -149,7 +150,7 @@ const LocalVector<NetwPredictSlotEngine *> &NetwPredictRunner::phase(
     if (by_slot.size() != engines.size()) {
         NETW_TRACE(
             sys::PREDICTION,
-            "predict runner: pass %d over %d of %d named, stepping every one",
+            "Prediction pass %d found %d of %d engines, so every one steps.",
             p_phase,
             int(by_slot.size()),
             int(engines.size())
@@ -160,16 +161,16 @@ const LocalVector<NetwPredictSlotEngine *> &NetwPredictRunner::phase(
     if (pool == nullptr) {
         NETW_TRACE(
             sys::PREDICTION,
-            "predict runner: pass %d has no pool, stepping %d in key order",
+            "Prediction pass %d has no group, so %d engines step in id order.",
             p_phase,
             int(sorted.size())
         );
         return sorted;
     }
     phase_roster.clear();
-    const PackedInt64Array slots = pool->pass_slots(p_phase);
-    for (int64_t at = 0; at < slots.size(); ++at) {
-        NetwPredictSlotEngine *const *held = by_slot.getptr(slots[at]);
+    pool->fill_pass_slots(p_phase, phase_slots);
+    for (const int64_t slot : phase_slots) {
+        NetwPredictSlotEngine *const *held = by_slot.getptr(slot);
         if (held != nullptr && *held != nullptr) {
             phase_roster.push_back(*held);
         }
@@ -178,7 +179,7 @@ const LocalVector<NetwPredictSlotEngine *> &NetwPredictRunner::phase(
 }
 
 void NetwPredictRunner::tick_step(const NetwPredictTiming &p_timing) {
-    NETW_ZONE_NC("predict runner tick step", colors::PREDICTION);
+    NETW_ZONE_NC("Predict tick", colors::PREDICTION);
     {
         const LocalVector<NetwPredictSlotEngine *> &roster
             = phase(NetwPredictionEngine::PASS_ISLAND_TICK);
@@ -235,7 +236,7 @@ void NetwPredictRunner::tick_step(const NetwPredictTiming &p_timing) {
 }
 
 void NetwPredictRunner::step_stepped_spaces(const NetwPredictTiming &p_timing) {
-    NETW_ZONE_NC("predict runner step spaces", colors::PREDICTION);
+    NETW_ZONE_NC("Predict step spaces", colors::PREDICTION);
     NetwMultiplayer *service = core();
     if (service == nullptr) {
         return;
@@ -273,7 +274,7 @@ void NetwPredictRunner::step_stepped_spaces(const NetwPredictTiming &p_timing) {
 }
 
 void NetwPredictRunner::frame_step(const NetwPredictTiming &p_timing) {
-    NETW_ZONE_NC("predict runner frame step", colors::PREDICTION);
+    NETW_ZONE_NC("Predict frame", colors::PREDICTION);
     {
         const LocalVector<NetwPredictSlotEngine *> &roster
             = phase(NetwPredictionEngine::PASS_ISLAND_FRAME);
@@ -299,7 +300,7 @@ void NetwPredictRunner::frame_step(const NetwPredictTiming &p_timing) {
 }
 
 void NetwPredictRunner::before_frame_step() {
-    NETW_ZONE_NC("predict runner finalize frame", colors::PREDICTION);
+    NETW_ZONE_NC("Predict finalize frame", colors::PREDICTION);
     const LocalVector<NetwPredictSlotEngine *> &roster
         = phase(NetwPredictionEngine::PASS_FINALIZE_FRAME);
     for (uint32_t at = 0; at < roster.size(); ++at) {

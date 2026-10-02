@@ -13,7 +13,6 @@
 #include "godot/utility.hpp"
 #include "netw/api/entity.hpp"
 #include "netw/api/netw_multiplayer.hpp"
-#include "netw/api/property_set.hpp"
 #include "netw/api/replication_core.hpp"
 #include "netw/api/simulation_handle.hpp"
 #include "netw/api/sync_pipeline.hpp"
@@ -23,7 +22,6 @@ namespace TestNetwPredictionContractSettleLaws {
 
 using namespace godot;
 using netw::NetwMultiplayer;
-using netw::NetwPropertySet;
 using netw::NetwSyncModel;
 using netw::SyncPipeline;
 

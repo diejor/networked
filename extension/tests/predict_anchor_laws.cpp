@@ -1,4 +1,5 @@
 #include "support/loopback_rig.h"
+#include "support/predict_rows.h"
 
 #if defined(NETW_TIER_HOSTED)
 
@@ -8,7 +9,6 @@
 #include "netw/api/netw_multiplayer.hpp"
 #include "netw/api/predict.hpp"
 #include "netw/api/prediction_handle.hpp"
-#include "netw/api/timeline.hpp"
 #include "netw/predict/engine.hpp"
 #include "netw/prediction_core.hpp"
 
@@ -24,7 +24,6 @@ using netw::NetwPredict;
 using netw::NetwPredictionEngine;
 using netw::NetwPredictionHandle;
 using netw::NetwPredictRecovery;
-using netw::NetwTimeline;
 
 const char *ANCHORED_ID = "anchored_player";
 
@@ -65,6 +64,16 @@ Dictionary authority_at(double p_x) {
     return out;
 }
 
+void declare_position(NetwPredictionEngine *p_pool, int64_t p_slot) {
+    LocalVector<netw::predict::FieldDecl> fields;
+    fields.push_back(netw::field_decl(StringName("position"), 0));
+    p_pool->rewire(p_slot, fields);
+}
+
+double position_x(const Dictionary &p_state) {
+    return double(Vector2(p_state.get(StringName("position"), Vector2())).x);
+}
+
 TEST_CASE(
     "[Networked][Predict][Law] AN1 a corrected tick lane anchors "
     "authority OVER the prediction it replaced, so a duplicate ack compares "
@@ -91,10 +100,13 @@ TEST_CASE(
         netw::NetwSimulationHandle::SCHEDULE_TICK
     );
 
-    const Ref<NetwTimeline> lane
-        = NetwTimeline::create(NetwTimeline::DEFAULT_LIMIT);
-    pool->bind_timeline(slot, lane);
-    lane->record_state(6, authority_at(1.0));
+    pool->open_lane(slot);
+    declare_position(pool, slot);
+    pool->record_predicted(
+        slot,
+        6,
+        netw_test::state_row(pool, slot, authority_at(1.0))
+    );
 
     const netw::RecoveryPlan declined;
     pool->close_state_recovery(
@@ -110,16 +122,15 @@ TEST_CASE(
         Callable()
     );
 
-    const Dictionary anchored = lane->state_at(6);
+    const Dictionary anchored = netw_test::predicted_state(pool, slot, 6);
     REQUIRE_MESSAGE(
         !anchored.is_empty(),
         "the corrected transition left no anchored state"
     );
-    NETW_CHECK_EQ(Vector2(anchored[StringName("position")]).x, real_t(9.0));
-    NETW_CHECK_EQ(
-        Vector2(lane->latest_state_at_or_before(6)[StringName("position")]).x,
-        real_t(9.0)
-    );
+    NETW_CHECK_CLOSE(position_x(anchored), 9.0, 0.0);
+    const netw::predict::TransitionBook *book = pool->predicted_book(slot);
+    REQUIRE(book != nullptr);
+    NETW_CHECK_EQ(book->newest_at_or_before(6), 6);
 }
 
 TEST_CASE(
@@ -146,9 +157,8 @@ TEST_CASE(
         netw::NetwSimulationHandle::SCHEDULE_FRAME
     );
 
-    const Ref<NetwTimeline> lane
-        = NetwTimeline::create(NetwTimeline::DEFAULT_LIMIT);
-    pool->bind_timeline(slot, lane);
+    pool->open_lane(slot);
+    declare_position(pool, slot);
 
     const netw::RecoveryPlan declined;
     pool->close_state_recovery(
@@ -164,7 +174,7 @@ TEST_CASE(
         Callable()
     );
 
-    CHECK(lane->state_at(6).is_empty());
+    CHECK(netw_test::predicted_state(pool, slot, 6).is_empty());
 }
 
 } // namespace TestNetwPredictAnchorLaws

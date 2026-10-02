@@ -374,8 +374,8 @@ RID TransportRegistry::register_script(
     if (named == StringName()) {
         NETW_ERROR(
             sys::SESSION,
-            "a transport script that names no peer class cannot be "
-            "registered"
+            "The transport could not be registered, because it names no "
+            "peer class. Override NetwTransport._peer_class."
         );
         return RID();
     }
@@ -386,9 +386,9 @@ RID TransportRegistry::register_script(
         }
         NETW_ERROR(
             sys::SESSION,
-            "this session already registers a transport for peer class "
-            "'%s', so the second registration is refused. Unregister the "
-            "standing one first",
+            "A transport for peer class '%s' is already registered, so this "
+            "one was refused. Call NetwMultiplayer.transport_unregister "
+            "first.",
             String(named)
         );
         return RID();

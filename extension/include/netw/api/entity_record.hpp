@@ -29,7 +29,16 @@ public:
         PART_MAX = 6,
     };
 
+    static constexpr int RECORD_SLOTS = 4;
+
+    struct HeldBinding {
+        uint64_t sequence = 0;
+        uint64_t binding = 0;
+    };
+
 private:
+    godot::LocalVector<HeldBinding> held_bindings;
+    uint64_t record_bindings[RECORD_SLOTS] = {};
     godot::RID handle;
     godot::StringName entity_id;
     int64_t peer_id = 0;
@@ -38,12 +47,16 @@ private:
     bool declares_scene = false;
     int64_t stage = int(entity::Stage::UNBOUND);
     entity::Control control;
-    godot::Variant parts[PART_MAX];
+    struct MintedPart {
+        int64_t part = 0;
+        godot::Variant value;
+    };
+    godot::LocalVector<MintedPart> parts;
     godot::Ref<NetwDespawnOpts> despawning_opts;
-    interest::Facet interest_facet;
+    interest::Facet *interest_facet = nullptr;
     NetwCompTable comp_table;
     godot::LocalVector<godot::ObjectID> comp_registered;
-    display::Decl display_decl;
+    display::Decl *display_decl = nullptr;
     godot::StringName scene_label;
     int64_t scene_isolation = -1;
     godot::LocalVector<godot::NodePath> session_paths;
@@ -65,7 +78,7 @@ private:
         godot::Node *p_node,
         bool p_pinned,
         const Projection &p_projection,
-        const godot::Callable &p_watch
+        uint64_t p_watch
     );
     void write_authority(godot::Node *p_node, int64_t p_to, int64_t p_prior);
 
@@ -155,18 +168,21 @@ public:
         godot::Object *p_wrapper,
         godot::Node *p_owner,
         int64_t p_coordinator,
-        const godot::Callable &p_watch = godot::Callable()
+        uint64_t p_watch = 0
     );
 
     void project_entered(
         godot::Node *p_owner,
         godot::Node *p_node,
-        const godot::Callable &p_watch
+        uint64_t p_watch
     );
 
     void follow_session(const godot::NodePath &p_path);
     const godot::LocalVector<godot::NodePath> &get_session_paths() const {
         return session_paths;
+    }
+    bool projects_to_server() const {
+        return projected_follower == 1 && projected_session == 1;
     }
     bool get_native_write_warned() const {
         return native_write_warned;
@@ -196,6 +212,7 @@ public:
 
     bool finish_teardown(godot::Object *p_wrapper);
     bool complete_departure(godot::Object *p_wrapper);
+    void readmit();
 
     bool classify_activation(godot::Node *p_owner);
 
@@ -203,15 +220,16 @@ public:
     static godot::StringName template_meta();
 
     godot::Variant part(int64_t p_part, godot::Object *p_wrapper);
-    godot::Variant minted_part(int64_t p_part) const {
-        return p_part >= 0 && p_part < PART_MAX ? parts[p_part]
-                                                : godot::Variant();
+    godot::Variant minted_part(int64_t p_part) const;
+    uint32_t minted_part_count() const {
+        return parts.size();
     }
 
-    interest::Facet &get_interest_facet() {
+    interest::Facet &get_interest_facet();
+    interest::Facet *find_interest_facet() {
         return interest_facet;
     }
-    const interest::Facet &get_interest_facet() const {
+    const interest::Facet *find_interest_facet() const {
         return interest_facet;
     }
 
@@ -229,7 +247,36 @@ public:
         return comp_registered;
     }
 
-    display::Decl &display_declaration() {
+    godot::LocalVector<HeldBinding> &get_held_bindings() {
+        return held_bindings;
+    }
+
+    int64_t held_bytes() const {
+        return int64_t(sizeof(NetwEntityRecord)) + held::vector(held_bindings)
+            + held::vector(parts) + comp_table.held_bytes()
+            + held::vector(comp_registered) + held::vector(session_paths)
+            + (interest_facet != nullptr ? int64_t(sizeof(interest::Facet)) : 0)
+            + (display_decl != nullptr ? int64_t(sizeof(display::Decl)) : 0);
+    }
+    uint64_t get_record_binding(int64_t p_record) const {
+        return p_record >= 0 && p_record < RECORD_SLOTS
+            ? record_bindings[p_record]
+            : 0;
+    }
+    void set_record_binding(int64_t p_record, uint64_t p_binding) {
+        if (p_record >= 0 && p_record < RECORD_SLOTS) {
+            record_bindings[p_record] = p_binding;
+        }
+    }
+    void forget_bindings() {
+        held_bindings.clear();
+        for (uint64_t &held : record_bindings) {
+            held = 0;
+        }
+    }
+
+    display::Decl &display_declaration();
+    const display::Decl *find_display_declaration() const {
         return display_decl;
     }
 

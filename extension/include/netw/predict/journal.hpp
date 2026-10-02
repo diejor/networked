@@ -3,6 +3,7 @@
 #include <cstdint>
 
 #include "godot/local_vector.hpp"
+#include "netw/held_bytes.hpp"
 
 namespace netw::predict {
 
@@ -151,7 +152,6 @@ class Journal {
     godot::LocalVector<uint8_t> witness_class_bits;
     godot::LocalVector<uint8_t> witness_realization_bits;
     godot::LocalVector<uint8_t> witness_states;
-    godot::LocalVector<float> aligned_errors;
     godot::LocalVector<int32_t> post_fps;
     godot::LocalVector<int32_t> pre_pose_fps;
     godot::LocalVector<int32_t> pre_momentum_fps;
@@ -159,21 +159,66 @@ class Journal {
     godot::LocalVector<int32_t> post_pose_fps;
     godot::LocalVector<int32_t> post_momentum_fps;
     godot::LocalVector<int32_t> post_controller_fps;
-    godot::LocalVector<int32_t> episode_ids;
-    godot::LocalVector<int32_t> write_ids;
-    godot::LocalVector<uint8_t> operators;
-    godot::LocalVector<int64_t> bases;
-    godot::LocalVector<uint8_t> differing_families;
     godot::LocalVector<uint8_t> evidence_masks;
-    godot::LocalVector<uint8_t> kinds;
     godot::LocalVector<uint8_t> domains;
     godot::LocalVector<uint8_t> attributions;
     godot::LocalVector<uint8_t> flags;
 
+    struct Diagnostics {
+        godot::LocalVector<float> aligned_errors;
+        godot::LocalVector<int32_t> episode_ids;
+        godot::LocalVector<int32_t> write_ids;
+        godot::LocalVector<uint8_t> operators;
+        godot::LocalVector<int64_t> bases;
+        godot::LocalVector<uint8_t> differing_families;
+        godot::LocalVector<uint8_t> kinds;
+
+        void size_to(uint32_t p_width);
+        void release();
+        bool held() const {
+            return !kinds.is_empty();
+        }
+    };
+
+    Diagnostics diagnostics;
+
     int next_slot();
+    void size_to(uint32_t p_width);
+    void release_columns();
+    void copy_row(const Journal &p_from, uint32_t p_at, uint32_t p_to);
 
 public:
     explicit Journal(int p_capacity = JOURNAL_CAPACITY_DEFAULT);
+
+    void set_capacity(int p_capacity);
+    void arm_diagnostics(bool p_armed);
+
+    bool diagnostics_armed() const {
+        return diagnostics.held();
+    }
+
+    int64_t held_bytes() const {
+        return held::vector(transitions) + held::vector(labels)
+            + held::vector(c_hashes) + held::vector(e_digests)
+            + held::vector(pre_fps) + held::vector(topo_fps)
+            + held::vector(raw_fps) + held::vector(witness_fps)
+            + held::vector(witness_class_bits)
+            + held::vector(witness_realization_bits)
+            + held::vector(witness_states) + held::vector(post_fps)
+            + held::vector(pre_pose_fps) + held::vector(pre_momentum_fps)
+            + held::vector(pre_controller_fps) + held::vector(post_pose_fps)
+            + held::vector(post_momentum_fps)
+            + held::vector(post_controller_fps)
+            + held::vector(evidence_masks) + held::vector(domains)
+            + held::vector(attributions) + held::vector(flags)
+            + held::vector(diagnostics.aligned_errors)
+            + held::vector(diagnostics.episode_ids)
+            + held::vector(diagnostics.write_ids)
+            + held::vector(diagnostics.operators)
+            + held::vector(diagnostics.bases)
+            + held::vector(diagnostics.differing_families)
+            + held::vector(diagnostics.kinds);
+    }
 
     int slot_of(int64_t p_transition) const;
 

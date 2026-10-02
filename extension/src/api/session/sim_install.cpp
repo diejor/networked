@@ -6,12 +6,12 @@
 #include "godot/object.hpp"
 #include "netw/api/entity.hpp"
 #include "netw/api/prediction_handle.hpp"
-#include "netw/api/property_set.hpp"
-#include "netw/api/property_set_binding.hpp"
 #include "netw/display/book.hpp"
 #include "netw/object_port.hpp"
 #include "netw/predict/compare.hpp"
 #include "netw/prediction_core.hpp"
+#include "netw/project.hpp"
+#include "netw/repl/property_binding.hpp"
 #include "netw/sim/install.hpp"
 #include "netw/sim/row.hpp"
 
@@ -19,13 +19,17 @@ using namespace godot;
 
 namespace netw {
 
+using repl::PropertyBinding;
+using repl::PropertyColumn;
+using repl::PropertySet;
+
 namespace {
 
 constexpr double UNQUANTIZED_EPSILON = 0.0001;
 constexpr double NEGLIGIBLE_DELTA = 0.000001;
 
 double epsilon_of(
-    const NetwPropertySetBinding *p_binding,
+    const PropertyBinding *p_binding,
     const StringName &p_key,
     const Variant &p_value
 ) {
@@ -33,9 +37,9 @@ double epsilon_of(
     if (declared >= 0.0) {
         return declared;
     }
-    const Ref<NetwPropertySetColumn> field = p_binding->field_of(p_key);
+    const PropertyColumn *field = p_binding->field_of(p_key);
     const Ref<NetwQuantize> quantizer
-        = field.is_valid() ? field->get_quantizer() : Ref<NetwQuantize>();
+        = field != nullptr ? field->get_quantizer() : Ref<NetwQuantize>();
     if (quantizer.is_null()) {
         return UNQUANTIZED_EPSILON;
     }
@@ -45,25 +49,8 @@ double epsilon_of(
     );
 }
 
-bool matches(
-    const NetwPropertySetBinding *p_binding,
-    Node *p_node,
-    const Array &p_keys,
-    const Array &p_values
-) {
-    for (int at = 0; at < p_keys.size(); ++at) {
-        const StringName key = p_keys[at];
-        const double error
-            = predict::value_error(port_get(p_node, key), p_values[at], false);
-        if (error > epsilon_of(p_binding, key, p_values[at])) {
-            return false;
-        }
-    }
-    return true;
-}
-
 Array projected(
-    const NetwPropertySetBinding *p_binding,
+    const PropertyBinding *p_binding,
     const Array &p_keys,
     const Array &p_values,
     double p_seconds
@@ -90,151 +77,21 @@ Array projected(
     return out;
 }
 
-Array gather(Node *p_node, const Array &p_keys) {
-    Array out;
-    for (int at = 0; at < p_keys.size(); ++at) {
-        out.push_back(port_get(p_node, StringName(p_keys[at])));
-    }
-    return out;
-}
-
 } // namespace
 
 bool NetwMultiplayer::sim_takes_install(
     const RID &p_entity,
-    const NetwPropertySetBinding *p_binding
+    const PropertyBinding *p_binding
 ) const {
     const sim::Row *row = sim_rows.row_of(p_entity);
     if (row == nullptr || row->facts.predicted || row->mode != sim::Mode::ACTIVE
-        || p_binding == nullptr || p_binding->get_set().is_null()) {
+        || p_binding == nullptr || p_binding->get_set() == nullptr) {
         return false;
     }
     const int64_t record = row->facts.state_rows
-        ? NetwPropertySet::RECORD_STATE
-        : NetwPropertySet::RECORD_BROADCAST;
+        ? PropertySet::RECORD_STATE
+        : PropertySet::RECORD_BROADCAST;
     return p_binding->get_set()->get_record() == record;
-}
-
-Error NetwMultiplayer::sim_admit_install(
-    const RID &p_entity,
-    const sim::Sample &p_sample,
-    bool p_whole
-) {
-    sim::Row *row = sim_rows.find(p_entity);
-    if (row == nullptr || !sim_reconstructs(p_entity, p_sample.comp, p_whole)) {
-        return OK;
-    }
-    sim::Sample arrived = p_sample;
-    arrived.tenure = sim_author_tenure(p_entity);
-    if (!sim::installs_on_arrival(
-            row->declaration.restore,
-            arrived.tick,
-            sim_display_tick()
-        )) {
-        sim::hold(row->installs, arrived);
-        return OK;
-    }
-    sim_install(p_entity, arrived);
-    return OK;
-}
-
-bool NetwMultiplayer::sim_install_image(
-    const RID &p_entity,
-    NetwPropertySetBinding *p_binding,
-    const sim::Sample &p_image
-) {
-    const sim::Row *row = sim_rows.row_of(p_entity);
-    if (row == nullptr || row->facts.predicted || row->facts.state_rows
-        || p_binding == nullptr || p_binding->get_set().is_null()
-        || p_binding->get_set()->get_record()
-            != NetwPropertySet::RECORD_BROADCAST) {
-        return false;
-    }
-    if (row->mode == sim::Mode::ACTIVE) {
-        sim::Sample image = p_image;
-        image.sender = sim_author_peer(p_entity);
-        sim_admit_install(p_entity, image, true);
-        return true;
-    }
-    if (row->mode != sim::Mode::AUTHORITY) {
-        return false;
-    }
-    int64_t age = -1;
-    const Array values = sim_install_target(
-        p_binding,
-        p_image,
-        row->declaration.restore,
-        int64_t(row->declaration.max_restore_ticks),
-        age
-    );
-    sim_write_install(p_entity, p_binding, p_image.keys, values, age);
-    return true;
-}
-
-void NetwMultiplayer::sim_drain_installs() {
-    const int64_t display = sim_display_tick();
-    if (display < 0) {
-        return;
-    }
-    const LocalVector<RID> holding = sim_rows.holding();
-    LocalVector<sim::Sample> due;
-    for (const RID &entity : holding) {
-        sim::Row *row = sim_rows.find(entity);
-        if (row == nullptr) {
-            continue;
-        }
-        sim::take_due(row->installs, display, due);
-        for (const sim::Sample &sample : due) {
-            sim_install(entity, sample);
-        }
-    }
-}
-
-void NetwMultiplayer::sim_install(
-    const RID &p_entity,
-    const sim::Sample &p_sample
-) {
-    sim::Row *row = sim_rows.find(p_entity);
-    if (row == nullptr) {
-        return;
-    }
-    NetwPropertySetBinding *binding = Object::cast_to<NetwPropertySetBinding>(
-        gd::object_of(p_sample.binding)
-    );
-    Node *node = binding != nullptr ? binding->node() : nullptr;
-    if (node == nullptr || row->mode != sim::Mode::ACTIVE
-        || p_sample.sender != sim_author_peer(p_entity)
-        || p_sample.tenure != sim_author_tenure(p_entity)) {
-        row->installs.stats.dropped += 1;
-        return;
-    }
-    if (sim_fenced(p_entity, p_sample.tick)) {
-        return;
-    }
-    int64_t age = -1;
-    const Array values = sim_install_target(
-        binding,
-        p_sample,
-        row->declaration.restore,
-        int64_t(row->declaration.max_restore_ticks),
-        age
-    );
-    sim_write_install(p_entity, binding, p_sample.keys, values, age);
-}
-
-bool NetwMultiplayer::sim_reconstructs(
-    const RID &p_entity,
-    int64_t p_comp,
-    bool p_whole
-) {
-    return sim::reconstructs(sim_row(p_entity).installs, p_comp, p_whole);
-}
-
-void NetwMultiplayer::sim_note_whole(const RID &p_entity, int64_t p_comp) {
-    sim::Row *row = sim_rows.find(p_entity);
-    if (row != nullptr) {
-        sim::reconstructs(row->installs, p_comp, true);
-    }
 }
 
 void NetwMultiplayer::sim_forget_reconstruction(const RID &p_entity) {
@@ -245,7 +102,7 @@ void NetwMultiplayer::sim_forget_reconstruction(const RID &p_entity) {
 }
 
 Array NetwMultiplayer::sim_install_target(
-    const NetwPropertySetBinding *p_binding,
+    const PropertyBinding *p_binding,
     const sim::Sample &p_sample,
     sim::Restore p_restore,
     int64_t p_max_restore_ticks,
@@ -269,47 +126,109 @@ Array NetwMultiplayer::sim_install_target(
     );
 }
 
-bool NetwMultiplayer::sim_write_install(
+void NetwMultiplayer::sim_install_target_row(
+    const PropertyBinding *p_binding,
+    int64_t p_tick,
+    const LocalVector<StringName> &p_keys,
+    const LocalVector<Variant> &p_values,
+    sim::Restore p_restore,
+    int64_t p_max_restore_ticks,
+    LocalVector<Variant> &r_target,
+    int64_t &r_age
+) const {
+    const ClockEngine &clock = clock_engine();
+    const int64_t now = clock.get_configured() ? clock.get_tick() : -1;
+    r_age = now >= 0 && p_tick >= 0 ? std::max(int64_t(0), now - p_tick) : -1;
+    const uint32_t count = p_values.size();
+    r_target.resize(count);
+    for (uint32_t at = 0; at < count; ++at) {
+        r_target[at] = p_values[at];
+    }
+    if (p_restore != sim::Restore::EXTRAPOLATED || r_age <= 0
+        || p_binding == nullptr) {
+        return;
+    }
+    const double seconds
+        = double(std::min(r_age, p_max_restore_ticks)) * clock.ticktime();
+    if (seconds <= 0.0) {
+        return;
+    }
+    for (uint32_t at = 0; at < count && at < p_keys.size(); ++at) {
+        const StringName carry = p_binding->carry_channel_of(p_keys[at]);
+        if (carry == StringName()) {
+            continue;
+        }
+        int channel = -1;
+        for (uint32_t other = 0; other < p_keys.size(); ++other) {
+            if (p_keys[other] == carry) {
+                channel = int(other);
+                break;
+            }
+        }
+        if (channel < 0 || uint32_t(channel) >= count
+            || !project::supports(int(p_values[at].get_type()))) {
+            continue;
+        }
+        r_target[at] = project::forward(
+            p_values[at],
+            p_values[uint32_t(channel)],
+            seconds
+        );
+    }
+}
+
+bool NetwMultiplayer::sim_write_install_row(
     const RID &p_entity,
-    NetwPropertySetBinding *p_binding,
-    const Array &p_keys,
-    const Array &p_values,
-    int64_t p_age
+    PropertyBinding *p_binding,
+    const LocalVector<StringName> &p_keys,
+    const LocalVector<Variant> &p_values,
+    int64_t p_age,
+    LocalVector<StringName> &r_moved_keys,
+    LocalVector<Variant> &r_moved
 ) {
     Node *node = p_binding != nullptr ? p_binding->node() : nullptr;
-    if (node == nullptr) {
+    if (node == nullptr || p_keys.size() != p_values.size()) {
         return false;
     }
     sim::Row *row = sim_rows.find(p_entity);
-    if (row != nullptr && sim::asleep(row->bodies)
-        && matches(p_binding, node, p_keys, p_values)) {
-        row->installs.stats.skipped += 1;
-        return false;
-    }
-    const Array before = gather(node, p_keys);
-    p_binding->install_values(p_keys, p_values);
-    const Array after = gather(node, p_keys);
-    Dictionary deltas;
-    for (int at = 0; at < p_keys.size(); ++at) {
-        const Variant delta
-            = prediction_core::pose_delta(after[at], before[at], false);
-        if (delta.get_type() != Variant::NIL
-            && predict::value_error(after[at], before[at], false)
-                > NEGLIGIBLE_DELTA) {
-            deltas[p_keys[at]] = delta;
+    if (row != nullptr && sim::asleep(row->bodies)) {
+        bool same = true;
+        for (uint32_t at = 0; at < p_keys.size() && same; ++at) {
+            const double error = predict::value_error(
+                port_get(node, p_keys[at]),
+                p_values[at],
+                false
+            );
+            same = error <= epsilon_of(p_binding, p_keys[at], p_values[at]);
+        }
+        if (same) {
+            row->installs.stats.skipped += 1;
+            return false;
         }
     }
-    if (!deltas.is_empty()) {
-        display_absorb_recovery(
+    r_moved_keys.clear();
+    r_moved.clear();
+    for (uint32_t at = 0; at < p_keys.size(); ++at) {
+        const StringName &key = p_keys[at];
+        const Variant before = port_get(node, key);
+        port_set(node, key, p_values[at]);
+        const Variant delta
+            = prediction_core::pose_delta(p_values[at], before, false);
+        if (delta.get_type() != Variant::NIL
+            && predict::value_error(p_values[at], before, false)
+                > NEGLIGIBLE_DELTA) {
+            r_moved_keys.push_back(key);
+            r_moved.push_back(delta);
+        }
+    }
+    if (!r_moved_keys.is_empty()) {
+        display_absorb_moved(
             display_book->runtime_of(p_entity),
-            deltas,
-            false
+            r_moved_keys,
+            r_moved
         );
     }
-    sim::Row *installed = sim_rows.find(p_entity);
-    if (installed != nullptr) {
-        sim::note_install(installed->installs.stats, p_age);
-    }
+    sim::note_install(sim_row(p_entity).installs.stats, p_age);
     return true;
 }
 

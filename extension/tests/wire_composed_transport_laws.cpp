@@ -30,13 +30,9 @@ using netw::wire::next_open_request;
 using netw::wire::OpenVerdict;
 using netw::wire::ReadyVerdict;
 using netw::wire::ReceiptVerdict;
-using netw::wire::RowAdmission;
-using netw::wire::SnapshotReceiver;
-using netw::wire::SnapshotSender;
 using netw::wire::StreamFamily;
 using netw::wire::StreamLane;
 using netw::wire::StreamReaderBook;
-using netw::wire::StreamWriterBook;
 using netw::wire::WirePlan;
 using netw_test::ComposedLink;
 using netw_test::Landing;
@@ -49,7 +45,7 @@ const uint64_t EPOCH = netw_test::COMPOSED_EPOCH;
 const uint32_t SCHEMA = netw_test::COMPOSED_SCHEMA;
 const int64_t BASE_TICK = netw_test::COMPOSED_BASE_TICK;
 
-WirePlan pair_plan() {
+SchemaRecord pair_plan() {
     SchemaRecord record;
     record.name = godot::StringName("ComposedRow");
     SchemaCore::append_column(
@@ -65,7 +61,7 @@ WirePlan pair_plan() {
         1
     );
     SchemaCore::fix(&record);
-    return WirePlan::compile(record);
+    return record;
 }
 
 StreamLane lane_of(int64_t p_route) {
@@ -81,12 +77,11 @@ TEST_CASE(
     "token, and the token the receiver minted is the one the row carries"
 ) {
     ComposedLink link;
-    link.plan = pair_plan();
-    const uint64_t request
-        = link.writers.open(WRITER, lane_of(link.route), EPOCH, SCHEMA);
+    link.declare(pair_plan());
+    const uint64_t request = link.send.stream_open(WRITER, lane_of(link.route));
     const bool the_request_was_minted = request != 0;
     CHECK(the_request_was_minted);
-    NETW_CHECK_EQ(link.writers.token_of(WRITER, lane_of(link.route)), 0);
+    NETW_CHECK_EQ(link.send.token_of(WRITER, lane_of(link.route)), 0);
     const bool no_row_can_leave_an_unseated_lane
         = link.publish(link.pair(1, 1)) == 0;
     CHECK(no_row_can_leave_an_unseated_lane);
@@ -105,7 +100,7 @@ TEST_CASE(
         int(OpenVerdict::MINTED)
     );
     NETW_CHECK_EQ(
-        int(link.writers.ready(WRITER, request, minted)),
+        int(link.send.stream_ready(WRITER, request, minted)),
         int(ReadyVerdict::SEATED)
     );
     link.token = minted;
@@ -210,12 +205,12 @@ TEST_CASE(
     link.receipts.push_back(link.receipts[0]);
 
     link.apply_all_receipts();
-    NETW_CHECK_EQ(link.sender()->confirmed_at(), 3);
+    NETW_CHECK_EQ(link.confirmed_at(), 3);
 
     link.apply_all_receipts();
-    NETW_CHECK_EQ(link.sender()->confirmed_at(), 3);
+    NETW_CHECK_EQ(link.confirmed_at(), 3);
 
-    const bool quiet = link.sender()->quiet();
+    const bool quiet = link.quiet();
     CHECK(quiet);
     NETW_CHECK_EQ(link.column(0), 3);
     const bool clean = link.oracle_is_clean();
@@ -240,7 +235,7 @@ TEST_CASE(
     NETW_CHECK_EQ(link.ring_count(), 1);
 
     link.apply_all_receipts();
-    NETW_CHECK_EQ(link.sender()->confirmed_at(), carried.revision);
+    NETW_CHECK_EQ(link.confirmed_at(), carried.revision);
     const RowImageLedger::Verdict verdict = link.ledger.audit();
     const bool clean = verdict.clean();
     CHECK(clean);
@@ -269,7 +264,7 @@ TEST_CASE(
     CHECK(the_receiver_invalidated);
     NETW_CHECK_EQ(reset_token, stale_token);
     const bool the_writer_took_the_reset
-        = link.writers.reset(WRITER, reset_request, reset_token);
+        = link.send.stream_reset(WRITER, reset_request, reset_token);
     CHECK(the_writer_took_the_reset);
 
     const bool a_reset_lane_carries_no_row = link.publish(link.pair(9, 9)) == 0;
@@ -304,7 +299,7 @@ TEST_CASE(
     link.apply_all_receipts();
     const uint64_t old_token = link.token;
 
-    link.writers.forget_peer(WRITER);
+    link.send.forget_peer(WRITER);
     link.readers.forget_peer(READER);
     link.seat(WRITER);
     const bool the_incarnation_minted_a_new_token = link.token != old_token;
@@ -312,11 +307,11 @@ TEST_CASE(
 
     NETW_CHECK_EQ(int(link.land(in_flight, true)), int(Landing::UNBOUND));
     NETW_CHECK_EQ(
-        int(link.writers.receipt(WRITER, old_token, 1)),
+        int(link.send.stream_receipt(WRITER, old_token, 1)),
         int(ReceiptVerdict::IGNORED)
     );
     const bool the_old_receipt_was_counted
-        = link.writers.unknown_receipt_count() > 0;
+        = link.send.world.receipts.unknown > 0;
     CHECK(the_old_receipt_was_counted);
 
     link.publish(link.pair(6, 6));

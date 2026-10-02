@@ -34,7 +34,6 @@ namespace Networked;
 /// - <c>endpoint_*</c> and <c>embed_*</c>: <see cref="NetwConnectHandle"/>
 /// - <c>transport_*</c>: <see cref="NetwTransport"/>
 /// - <c>rpc_*</c> and <c>sync_*</c>: <see cref="NetwMemberConfig"/>
-/// - <c>property_set_*</c>: <see cref="NetwPropertySet"/>
 /// - <c>service_*</c>: <see cref="NetwService"/>
 /// - <c>database_*</c> and <c>persist_*</c>: <see cref="NetwDatabase"/> and
 /// <see cref="NetwPersistenceHandle"/>
@@ -258,8 +257,8 @@ public sealed class NetwMultiplayer : NetwRefCounted
         /// </summary>
         DisplayPump = 72,
         /// <summary>
-        /// <c>_display_write</c> ran. <c>detail</c> has <c>track</c>, and
-        /// <c>verdict</c> is the result.
+        /// An interpolated value was drawn. <c>detail</c> has <c>track</c>, and
+        /// <c>verdict</c> is the result of <c>_display_write_rows</c>.
         /// </summary>
         DisplayWrite = 73,
         /// <summary>
@@ -1275,7 +1274,8 @@ public sealed class NetwMultiplayer : NetwRefCounted
         /// </summary>
         RowFramesStageRefused = 16,
         /// <summary>
-        /// Counter. Times <c>_sync_gather_set</c> returned nothing.
+        /// Counter. Property packets not sent because a value did not match its
+        /// declared type.
         /// </summary>
         RowFramesUngathered = 17,
         /// <summary>
@@ -1317,7 +1317,7 @@ public sealed class NetwMultiplayer : NetwRefCounted
         DropsSyncNoSet = 26,
         /// <summary>
         /// Counter. Synchronization packets from a peer
-        /// <see cref="NetwPropertySet.Policy"/> does not allow.
+        /// <see cref="NetwMemberConfig.WritePolicy"/> does not allow.
         /// </summary>
         DropsSyncBadSender = 27,
         /// <summary>
@@ -3011,23 +3011,63 @@ public sealed class NetwMultiplayer : NetwRefCounted
         return answered != 0;
     }
 
-    private static readonly IntPtr _bindSyncGatherSetDefault =
+    private static readonly IntPtr _bindSyncApplyRowsDefault =
         NetwApi.MethodBind(
             "NetwMultiplayer",
-            "sync_gather_set_default",
-            3564132747UL);
+            "sync_apply_rows_default",
+            2678502386UL);
 
     /// <summary>
-    /// The default <c>_sync_gather_set</c>. Returns an empty array when called
-    /// outside of sending.
+    /// The default <c>_sync_apply_rows</c>. Writes each value into the node of
+    /// its route, and on a rigid body writes position and rotation before the
+    /// velocities and the velocities before whether it sleeps. Returns
+    /// <c>@GlobalScope.ERR_DOES_NOT_EXIST</c> for a <paramref name="table"/>
+    /// the session does not hold.
     /// </summary>
-    public Godot.Collections.Array SyncGatherSetDefault(Rid entity, long comp)
+    public Error SyncApplyRowsDefault(
+        Rid table,
+        long[] routes,
+        Godot.Collections.Array columns)
     {
-        godot_variant slot0 = VariantUtils.CreateFromRid(entity);
-        godot_variant slot1 = VariantUtils.CreateFromInt((long)comp);
+        godot_variant slot0 = VariantUtils.CreateFromRid(table);
+        godot_variant slot1 = VariantUtils.CreateFromPackedInt64Array(routes);
+        godot_variant slot2 = VariantUtils.CreateFromArray(columns);
+        godot_variant answered = default;
+        NetwThunks.Call3(
+            _bindSyncApplyRowsDefault,
+            Checked,
+            in slot0,
+            in slot1,
+            in slot2,
+            ref answered);
+        slot0.Dispose();
+        slot1.Dispose();
+        slot2.Dispose();
+        Error result = (Error)VariantUtils.ConvertToInt64(answered);
+        answered.Dispose();
+        return result;
+    }
+
+    private static readonly IntPtr _bindSyncGatherRowsDefault =
+        NetwApi.MethodBind(
+            "NetwMultiplayer",
+            "sync_gather_rows_default",
+            4080095127UL);
+
+    /// <summary>
+    /// The default <c>_sync_gather_rows</c>. Reads each entity's values from
+    /// its node, and a rigid body's position, rotation, velocities and sleeping
+    /// state from the physics server.
+    /// </summary>
+    public Godot.Collections.Array SyncGatherRowsDefault(
+        Rid table,
+        long[] routes)
+    {
+        godot_variant slot0 = VariantUtils.CreateFromRid(table);
+        godot_variant slot1 = VariantUtils.CreateFromPackedInt64Array(routes);
         godot_variant answered = default;
         NetwThunks.Call2(
-            _bindSyncGatherSetDefault,
+            _bindSyncGatherRowsDefault,
             Checked,
             in slot0,
             in slot1,
@@ -3039,37 +3079,52 @@ public sealed class NetwMultiplayer : NetwRefCounted
         return result;
     }
 
-    private static readonly IntPtr _bindSyncApplySetDefault =
-        NetwApi.MethodBind(
-            "NetwMultiplayer",
-            "sync_apply_set_default",
-            1278755153UL);
+    private static readonly IntPtr _bindStoreDescribe =
+        NetwApi.MethodBind("NetwMultiplayer", "store_describe", 3102165223UL);
 
     /// <summary>
-    /// The default <c>_sync_apply_set</c>. Returns
-    /// <c>@GlobalScope.ERR_UNCONFIGURED</c> when called outside of receiving a
-    /// packet.
+    /// Describes the property values this session keeps for replication. For
+    /// debugging, not for every frame.
+    /// <code>
+    /// Dictionary
+    /// ┠╴tables          Array  one Dictionary per property declaration, below
+    /// ┠╴slots           int    entities currently held
+    /// ┠╴misses          int    changes the validation mode found unread
+    /// ┖╴validate_every  int    the validation interval in ticks, 0 when off
+    /// </code>
+    /// <para>
+    /// Each entry of <c>tables</c> covers every node that declares the same
+    /// replicated properties. A declaration that mixes reliable and unreliable
+    /// properties makes two entries.
+    /// <code>
+    /// Array[Dictionary]
+    /// ┖╴entry
+    ///   ┠╴table      RID     what _sync_gather_rows receives as table
+    ///   ┠╴family     String  "volatile", "retained" or "window"
+    ///   ┠╴columns    Array   per property, its name, type and port
+    ///   ┠╴rows       int     nodes that declare it
+    ///   ┠╴dirty      int     rows whose values changed at the latest read
+    ///   ┠╴bytes      int     memory the entry holds
+    ///   ┖╴retention  int     past values kept per row
+    /// </code>
+    /// </para>
+    /// <para>
+    /// A <c>port</c> of <c>"body"</c> reads a rigid body's position, rotation,
+    /// velocities and sleeping state from the physics server, and skips a body
+    /// that slept through this tick and the last one. <c>"engine"</c> and
+    /// <c>"script"</c> read the node's property on every tick. Set the
+    /// environment variable <c>NETW_STORE_VALIDATE</c> to a number of ticks to
+    /// check the skipped bodies. Every that many ticks the session reads them
+    /// again and warns about any value that changed, naming the entity's route,
+    /// the property and the reason it was skipped.
+    /// </para>
     /// </summary>
-    public Error SyncApplySetDefault(
-        Rid entity,
-        long comp,
-        Godot.Collections.Array values)
+    public Godot.Collections.Dictionary StoreDescribe()
     {
-        godot_variant slot0 = VariantUtils.CreateFromRid(entity);
-        godot_variant slot1 = VariantUtils.CreateFromInt((long)comp);
-        godot_variant slot2 = VariantUtils.CreateFromArray(values);
         godot_variant answered = default;
-        NetwThunks.Call3(
-            _bindSyncApplySetDefault,
-            Checked,
-            in slot0,
-            in slot1,
-            in slot2,
-            ref answered);
-        slot0.Dispose();
-        slot1.Dispose();
-        slot2.Dispose();
-        Error result = (Error)VariantUtils.ConvertToInt64(answered);
+        NetwThunks.Call0(_bindStoreDescribe, Checked, ref answered);
+        Godot.Collections.Dictionary result =
+            VariantUtils.ConvertToDictionary(answered);
         answered.Dispose();
         return result;
     }
@@ -5267,13 +5322,23 @@ public sealed class NetwMultiplayer : NetwRefCounted
     /// ┠╴tick          int     the tick of the last send
     /// ┠╴confirmed     int     the newest version the peer confirmed
     /// ┠╴exposed       int     the newest version sent
-    /// ┖╴has_baseline  bool    whether only changes can be sent
+    /// ┠╴has_baseline  bool    whether only changes can be sent
+    /// ┠╴priority      float   how far up the queue it has climbed while waiting
+    /// ┠╴class         String  what it climbs by each tick, see below
+    /// ┖╴age_ticks     int     ticks since the last send, -1 before the first
     /// </code>
     /// <para>
-    /// <c>verdict</c> is <c>"sent"</c>, <c>"deferred"</c> when there was no
-    /// bandwidth left, <c>"caught_up"</c> when the peer already had everything,
-    /// <c>"refused"</c> when writing it failed, <c>"ungathered"</c> when
-    /// nothing was read, or <c>"unoffered"</c> when never sent to this peer.
+    /// <c>class</c> is <c>"player"</c> for an entity bound to a player,
+    /// <c>"interacting"</c> while a claim is pending, its
+    /// <see cref="NetwEntity.Hold"/> is set, or its controller changed in the
+    /// last second, <c>"moving"</c> when it changed in the last 8 ticks, and
+    /// <c>"resting"</c> otherwise and for every refresh. They climb by 10000,
+    /// 1000, 100 and 1 each tick, times
+    /// <see cref="NetwEntity.ReplicationPriority"/>. <c>verdict</c> is
+    /// <c>"sent"</c> when the last pass carried it, <c>"deferred"</c> while the
+    /// peer is still owed a change, <c>"caught_up"</c> when the peer already
+    /// has everything, <c>"ungathered"</c> when nothing was read, or
+    /// <c>"unoffered"</c> when it is not sent to this peer.
     /// </para>
     /// </summary>
     public Godot.Collections.Dictionary SyncExplain(
@@ -5305,19 +5370,28 @@ public sealed class NetwMultiplayer : NetwRefCounted
         NetwApi.MethodBind("NetwMultiplayer", "peer_link_stats", 3485342025UL);
 
     /// <summary>
-    /// Returns measured connection quality to <paramref name="peer"/>.
+    /// Returns measured connection quality to <paramref name="peer"/>, and what
+    /// this peer's byte budget sends it.
     /// <code>
     /// Dictionary
-    /// ┠╴loss          float   share of the last 32 packets lost
-    /// ┠╴rtt           float   round trip time, in seconds
-    /// ┠╴jitter        float   round trip variation, in seconds
-    /// ┠╴reorders      int     packets that arrived out of order
-    /// ┠╴duplicates    int     packets that arrived twice
-    /// ┠╴mode          String  "good" or "bad"
-    /// ┖╴budget_bits   int     most bits one packet to this peer may use
+    /// ┠╴loss           float   share of the last 32 packets lost
+    /// ┠╴rtt            float   round trip time, in seconds
+    /// ┠╴jitter         float   round trip variation, in seconds
+    /// ┠╴reorders       int     packets that arrived out of order
+    /// ┠╴duplicates     int     packets that arrived twice
+    /// ┠╴mode           String  "good", or "bad" while its budget is cut
+    /// ┠╴budget_bits    int     most bits one packet to this peer may use
+    /// ┠╴budget_bytes   int     bytes it may be sent each tick
+    /// ┠╴sent_bytes     int     bytes charged to it since it joined
+    /// ┠╴debt_bytes     int     bytes it was sent past its budget
+    /// ┖╴deferred_rows  int     rows left waiting by the last tick
     /// </code>
     /// <para>
-    /// On a <c>bad</c> connection, <c>budget_bits</c> is halved to send less.
+    /// Losing packets halves <c>budget_bytes</c> and <c>budget_bits</c>. Each
+    /// round trip without loss adds back an eighth of the configured budget,
+    /// stopping an eighth short of the rate that lost packets for the next
+    /// minute. While <c>debt_bytes</c> is above zero, volatile properties wait,
+    /// and retained properties and RPCs still go.
     /// </para>
     /// </summary>
     public Godot.Collections.Dictionary PeerLinkStats(long peer)
@@ -7300,41 +7374,47 @@ public sealed class NetwMultiplayer : NetwRefCounted
         return answered != 0;
     }
 
-    private static readonly IntPtr _bindDisplayWriteDefault =
+    private static readonly IntPtr _bindDisplayWriteRowsDefault =
         NetwApi.MethodBind(
             "NetwMultiplayer",
-            "display_write_default",
-            1643645691UL);
+            "display_write_rows_default",
+            356799770UL);
 
     /// <summary>
-    /// The default <c>_display_write</c>. Writes <paramref name="value"/> to
-    /// <paramref name="track"/> on <paramref name="entity"/>.
+    /// The default <c>_display_write_rows</c>. Hands each value to the callback
+    /// of <see cref="NetwMultiplayer.DisplaySetCallback"/> or the item of
+    /// <see cref="NetwMultiplayer.DisplaySetTargetItem"/> that its entity
+    /// holds.
     /// <code>
     /// Error
-    /// ┠╴OK                  the value was written
-    /// ┠╴ERR_DOES_NOT_EXIST  the track resolves to no target
-    /// ┖╴ERR_INVALID_DATA    value is neither a Transform2D nor a Transform3D
+    /// ┠╴OK                  every value was written
+    /// ┠╴ERR_DOES_NOT_EXIST  an entity holds no callback and no item, so the display writes its node
+    /// ┖╴ERR_INVALID_DATA    a value is neither a Transform2D nor a Transform3D
     /// </code>
     /// </summary>
-    public Error DisplayWriteDefault(
-        Rid entity,
-        StringName track,
-        Variant value)
+    public Error DisplayWriteRowsDefault(
+        Rid table,
+        long column,
+        long[] routes,
+        Godot.Collections.Array values)
     {
-        godot_variant slot0 = VariantUtils.CreateFromRid(entity);
-        godot_variant slot1 = VariantUtils.CreateFromStringName(track);
-        godot_variant slot2 = value.CopyNativeVariant();
+        godot_variant slot0 = VariantUtils.CreateFromRid(table);
+        godot_variant slot1 = VariantUtils.CreateFromInt((long)column);
+        godot_variant slot2 = VariantUtils.CreateFromPackedInt64Array(routes);
+        godot_variant slot3 = VariantUtils.CreateFromArray(values);
         godot_variant answered = default;
-        NetwThunks.Call3(
-            _bindDisplayWriteDefault,
+        NetwThunks.Call4(
+            _bindDisplayWriteRowsDefault,
             Checked,
             in slot0,
             in slot1,
             in slot2,
+            in slot3,
             ref answered);
         slot0.Dispose();
         slot1.Dispose();
         slot2.Dispose();
+        slot3.Dispose();
         Error result = (Error)VariantUtils.ConvertToInt64(answered);
         answered.Dispose();
         return result;
@@ -8897,23 +8977,23 @@ public sealed class NetwMultiplayer : NetwRefCounted
         answered.Dispose();
     }
 
-    private static readonly IntPtr _bindPredictSetCorridorCallback =
+    private static readonly IntPtr _bindPredictSetCorrectionPathCallback =
         NetwApi.MethodBind(
             "NetwMultiplayer",
-            "predict_set_corridor_callback",
+            "predict_set_correction_path_callback",
             3379118538UL);
 
     /// <summary>
-    /// Sets <see cref="NetwPredictionHandle.TransportCorridor"/> on
+    /// Sets <see cref="NetwPredictionHandle.CorrectionPathClear"/> on
     /// <paramref name="entity"/>.
     /// </summary>
-    public void PredictSetCorridorCallback(Rid entity, Callable callback)
+    public void PredictSetCorrectionPathCallback(Rid entity, Callable callback)
     {
         godot_variant slot0 = VariantUtils.CreateFromRid(entity);
         godot_variant slot1 = VariantUtils.CreateFromCallable(callback);
         godot_variant answered = default;
         NetwThunks.Call2(
-            _bindPredictSetCorridorCallback,
+            _bindPredictSetCorrectionPathCallback,
             Checked,
             in slot0,
             in slot1,
@@ -8923,23 +9003,23 @@ public sealed class NetwMultiplayer : NetwRefCounted
         answered.Dispose();
     }
 
-    private static readonly IntPtr _bindPredictSetCommandsCallback =
+    private static readonly IntPtr _bindPredictSetInputCallback =
         NetwApi.MethodBind(
             "NetwMultiplayer",
-            "predict_set_commands_callback",
+            "predict_set_input_callback",
             3379118538UL);
 
     /// <summary>
-    /// Sets <see cref="NetwPredictionHandle.PredictCommands"/> on
+    /// Sets <see cref="NetwPredictionHandle.PredictInput"/> on
     /// <paramref name="entity"/>.
     /// </summary>
-    public void PredictSetCommandsCallback(Rid entity, Callable callback)
+    public void PredictSetInputCallback(Rid entity, Callable callback)
     {
         godot_variant slot0 = VariantUtils.CreateFromRid(entity);
         godot_variant slot1 = VariantUtils.CreateFromCallable(callback);
         godot_variant answered = default;
         NetwThunks.Call2(
-            _bindPredictSetCommandsCallback,
+            _bindPredictSetInputCallback,
             Checked,
             in slot0,
             in slot1,
@@ -9206,28 +9286,6 @@ public sealed class NetwMultiplayer : NetwRefCounted
         slot0.Dispose();
         slot1.Dispose();
         answered.Dispose();
-    }
-
-    private static readonly IntPtr _bindPropertySetRecord =
-        NetwApi.MethodBind(
-            "NetwMultiplayer",
-            "property_set_record",
-            2167133508UL);
-
-    /// <summary>
-    /// Returns <paramref name="set"/> as a <see cref="NetwPropertySet"/>, or
-    /// <c>null</c>.
-    /// </summary>
-    public NetwPropertySet PropertySetRecord(Rid set)
-    {
-        Rid slot0 = set;
-        IntPtr answered = default;
-        NetwThunks.Ptrcall1_Rid_IntPtr(
-            _bindPropertySetRecord,
-            Checked,
-            in slot0,
-            ref answered);
-        return NetwPropertySet.Adopt(answered);
     }
 
     private static readonly IntPtr _bindClockGetConfig =
@@ -10415,7 +10473,7 @@ public sealed class NetwMultiplayer : NetwRefCounted
             1271211370UL);
 
     /// <summary>
-    /// Creates an empty <see cref="NetwPropertySet"/> for
+    /// Creates an empty set of synchronized properties for
     /// <paramref name="schema"/>. Add properties with
     /// <see cref="NetwMultiplayer.PropertySetAddColumn"/>, then call
     /// <see cref="NetwMultiplayer.PropertySetSeal"/>. Returns an invalid
@@ -10585,29 +10643,6 @@ public sealed class NetwMultiplayer : NetwRefCounted
             Checked,
             in slot0,
             ref discarded);
-    }
-
-    private static readonly IntPtr _bindLagcompTimelineOf =
-        NetwApi.MethodBind(
-            "NetwMultiplayer",
-            "lagcomp_timeline_of",
-            232020124UL);
-
-    /// <summary>
-    /// Returns the recorded history of <paramref name="entity"/> used for
-    /// rewinding, or <c>null</c>. This is the authority's history.
-    /// <see cref="NetwEntity.Timeline"/> is what this peer predicted.
-    /// </summary>
-    public NetwTimeline LagcompTimelineOf(Rid entity)
-    {
-        Rid slot0 = entity;
-        IntPtr answered = default;
-        NetwThunks.Ptrcall1_Rid_IntPtr(
-            _bindLagcompTimelineOf,
-            Checked,
-            in slot0,
-            ref answered);
-        return NetwTimeline.Adopt(answered);
     }
 
     private static readonly IntPtr _bindEntityAdmit =

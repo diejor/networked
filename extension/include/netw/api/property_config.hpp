@@ -5,7 +5,7 @@
 #include "godot/callable.hpp"
 #include "godot/variant.hpp"
 #include "netw/api/member_config.hpp"
-#include "netw/api/property_set.hpp"
+#include "netw/repl/property_set.hpp"
 #include "netw/api/schema_model.hpp"
 
 namespace netw {
@@ -14,25 +14,46 @@ class NetwPropertyConfig : public NetwMemberConfig {
     GDCLASS(NetwPropertyConfig, NetwMemberConfig)
 
 public:
+    using Trigger = repl::PropertySet::Trigger;
+    using Lane = repl::PropertySet::Lane;
+    using PropertyClass = repl::PropertySet::PropertyClass;
+    using Audience = repl::PropertySet::Audience;
+
+    static constexpr Trigger TRIGGER_TICK = repl::PropertySet::TRIGGER_TICK;
+    static constexpr Trigger TRIGGER_ON_CHANGE
+        = repl::PropertySet::TRIGGER_ON_CHANGE;
+    static constexpr Trigger TRIGGER_ON_DEMAND
+        = repl::PropertySet::TRIGGER_ON_DEMAND;
+    static constexpr Lane VOLATILE = repl::PropertySet::VOLATILE;
+    static constexpr Lane RETAINED = repl::PropertySet::RETAINED;
+    static constexpr PropertyClass CAUSAL = repl::PropertySet::CAUSAL;
+    static constexpr PropertyClass DERIVED = repl::PropertySet::DERIVED;
+    static constexpr PropertyClass COSMETIC = repl::PropertySet::COSMETIC;
+    static constexpr Audience AUDIENCE_PUBLIC
+        = repl::PropertySet::AUDIENCE_PUBLIC;
+    static constexpr Audience AUDIENCE_SERVER_ONLY
+        = repl::PropertySet::AUDIENCE_SERVER_ONLY;
     static constexpr int64_t UNSET = -1;
 
 private:
     bool is_property = true;
     bool is_spawn_state = false;
-    NetwPropertySet::Lane lane = NetwPropertySet::VOLATILE;
+    repl::PropertySet::Lane lane = repl::PropertySet::VOLATILE;
     bool in_state_set = false;
     bool in_input_set = false;
     bool in_broadcast_set = false;
     double epsilon_override = -1.0;
     double teleport_at_override = -1.0;
     int64_t set_trigger = UNSET;
-    double set_every_tick_interval = -1.0;
     int64_t set_heartbeat_ticks = UNSET;
     int64_t set_window = UNSET;
-    NetwPropertySet::Audience set_audience = NetwPropertySet::AUDIENCE_PUBLIC;
+    repl::PropertySet::Audience set_audience
+        = repl::PropertySet::AUDIENCE_PUBLIC;
     bool set_masked = false;
-    godot::Ref<NetwColumnRef> persist_column;
-    NetwPropertySet::PropertyClass property_class = NetwPropertySet::CAUSAL;
+    godot::StringName saved_column;
+    bool persist = false;
+    repl::PropertySet::PropertyClass property_class
+        = repl::PropertySet::CAUSAL;
     double converge_stiffness = 0.0;
     godot::StringName carry_channel;
     bool explicit_teleport_only = false;
@@ -60,10 +81,10 @@ public:
         return is_spawn_state;
     }
 
-    void set_lane(NetwPropertySet::Lane p_lane) {
+    void set_lane(repl::PropertySet::Lane p_lane) {
         lane = p_lane;
     }
-    NetwPropertySet::Lane get_lane() const {
+    repl::PropertySet::Lane get_lane() const {
         return lane;
     }
 
@@ -102,18 +123,11 @@ public:
         return teleport_at_override;
     }
 
-    void set_set_trigger(NetwPropertySet::Trigger p_set_trigger) {
+    void set_set_trigger(repl::PropertySet::Trigger p_set_trigger) {
         set_trigger = int64_t(p_set_trigger);
     }
-    NetwPropertySet::Trigger get_set_trigger() const {
-        return NetwPropertySet::Trigger(set_trigger);
-    }
-
-    void set_set_every_tick_interval(double p_set_every_tick_interval) {
-        set_every_tick_interval = p_set_every_tick_interval;
-    }
-    double get_set_every_tick_interval() const {
-        return set_every_tick_interval;
+    repl::PropertySet::Trigger get_set_trigger() const {
+        return repl::PropertySet::Trigger(set_trigger);
     }
 
     void set_set_heartbeat_ticks(int64_t p_set_heartbeat_ticks) {
@@ -130,10 +144,10 @@ public:
         return set_window;
     }
 
-    void set_set_audience(NetwPropertySet::Audience p_set_audience) {
+    void set_set_audience(repl::PropertySet::Audience p_set_audience) {
         set_audience = p_set_audience;
     }
-    NetwPropertySet::Audience get_set_audience() const {
+    repl::PropertySet::Audience get_set_audience() const {
         return set_audience;
     }
 
@@ -144,17 +158,19 @@ public:
         return set_masked;
     }
 
-    void set_persist_column(const godot::Ref<NetwColumnRef> &p_column) {
-        persist_column = p_column;
+    bool is_persisted() const {
+        return persist;
     }
-    godot::Ref<NetwColumnRef> get_persist_column() const {
-        return persist_column;
+    godot::StringName get_saved_column() const {
+        return saved_column;
     }
 
-    void set_property_class(NetwPropertySet::PropertyClass p_property_class) {
+    void set_property_class(
+        repl::PropertySet::PropertyClass p_property_class
+    ) {
         property_class = p_property_class;
     }
-    NetwPropertySet::PropertyClass get_property_class() const {
+    repl::PropertySet::PropertyClass get_property_class() const {
         return property_class;
     }
 
@@ -203,16 +219,20 @@ public:
     godot::Ref<NetwPropertyConfig> epsilon(double p_threshold);
     godot::Ref<NetwPropertyConfig> teleport_at(double p_distance);
     godot::Ref<NetwPropertyConfig> reconcile_only();
-    godot::Ref<NetwPropertyConfig> every_tick(double p_interval);
     godot::Ref<NetwPropertyConfig> on_change();
     godot::Ref<NetwPropertyConfig> heartbeat(int64_t p_ticks);
     godot::Ref<NetwPropertyConfig> windowed(int64_t p_samples);
     godot::Ref<NetwPropertyConfig> audience(bool p_server_only);
     godot::Ref<NetwPropertyConfig> masked();
     godot::Ref<NetwPropertyConfig> persisted(
-        const godot::Ref<NetwColumnRef> &p_column
+        const godot::StringName &p_saved_column_name
     );
     godot::Ref<NetwPropertyConfig> on_spawn();
 };
 
 } // namespace netw
+
+VARIANT_ENUM_CAST(netw::NetwPropertyConfig::Trigger);
+VARIANT_ENUM_CAST(netw::NetwPropertyConfig::Lane);
+VARIANT_ENUM_CAST(netw::NetwPropertyConfig::PropertyClass);
+VARIANT_ENUM_CAST(netw::NetwPropertyConfig::Audience);

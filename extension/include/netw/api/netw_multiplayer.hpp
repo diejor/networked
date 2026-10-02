@@ -31,8 +31,6 @@
 #include "netw/api/predict_runner.hpp"
 #include "netw/api/predict_slot_engine.hpp"
 #include "netw/api/promise.hpp"
-#include "netw/api/property_set.hpp"
-#include "netw/api/property_set_binding.hpp"
 #include "netw/api/quantize.hpp"
 #include "netw/api/record.hpp"
 #include "netw/api/schema_core.hpp"
@@ -74,6 +72,8 @@
 #include "netw/property_set_builder.hpp"
 #include "netw/rate_window.hpp"
 #include "netw/reparent_guard.hpp"
+#include "netw/repl/property_binding.hpp"
+#include "netw/repl/property_set.hpp"
 #include "netw/replication_send.hpp"
 #include "netw/scene_core.hpp"
 #include "netw/scene_decl.hpp"
@@ -86,7 +86,7 @@
 #include "netw/spawn/pipeline.hpp"
 #include "netw/spawn/spawner_compat.hpp"
 #include "netw/spawn/spawner_roster.hpp"
-#include "netw/table/core.hpp"
+#include "netw/store/world.hpp"
 #include "netw/txn_book.hpp"
 #include "netw/wire/attribution.hpp"
 #include "netw/wire/capture.hpp"
@@ -120,9 +120,9 @@ class NetwMultiplayer : public MultiplayerApiBase,
 
 public:
     enum RecordKind {
-        RECORD_KIND_STATE = NetwPropertySet::RECORD_STATE,
-        RECORD_KIND_INPUT = NetwPropertySet::RECORD_INPUT,
-        RECORD_KIND_BROADCAST = NetwPropertySet::RECORD_BROADCAST,
+        RECORD_KIND_STATE = repl::PropertySet::RECORD_STATE,
+        RECORD_KIND_INPUT = repl::PropertySet::RECORD_INPUT,
+        RECORD_KIND_BROADCAST = repl::PropertySet::RECORD_BROADCAST,
     };
 
     static constexpr int64_t CHANNEL_USER_FIRST = 100;
@@ -132,6 +132,9 @@ public:
         = "networked/install_as_default";
 
 private:
+    repl::SetBook set_book;
+    repl::BindingBook binding_book{set_book};
+
     struct PendingAction {
         godot::NodePath target_path;
         godot::StringName method;
@@ -481,7 +484,7 @@ private:
     SettleQueue settle_queue;
     NetwHandleLedger schemas;
     NetwHandleLedger property_sets;
-    godot::HashMap<int64_t, godot::Ref<NetwPropertySet>> property_set_records;
+    godot::HashMap<int64_t, uint64_t> minted_property_sets;
     godot::HashMap<uint64_t, godot::HashMap<int, godot::RID>>
         property_set_by_script;
     godot::HashMap<int64_t, godot::RID> property_set_schema;
@@ -489,7 +492,6 @@ private:
         entity_property_sets;
     SchemaCore schema_core;
     NetwHandleLedger tables;
-    godot::Ref<table::Core> table_core;
     NetwEffectLedger effects;
     EventPlane plane;
     godot::HashSet<godot::StringName> misused_seams;
@@ -513,8 +515,22 @@ private:
     godot::LocalVector<ServiceRow> services;
     mutable godot::HashMap<uint64_t, godot::StringName> native_class_names;
 
-    godot::HashMap<int64_t, godot::Ref<NetwEntity>> live_wrappers;
-    godot::HashMap<int64_t, godot::Ref<NetwEntity>> retired_wrappers;
+    struct EntitySlot {
+        godot::Ref<NetwEntity> live;
+        godot::Ref<NetwEntity> retired;
+        NetwEntityRecord *record = nullptr;
+        godot::ObjectID owner;
+        godot::ObjectID indexed;
+
+        bool vacant() const {
+            return live.is_null() && retired.is_null() && record == nullptr
+                && owner.is_null() && indexed.is_null();
+        }
+    };
+    SlotRows<EntitySlot> entity_slots;
+    godot::HashMap<uint64_t, godot::Ref<NetwEntity>> entity_book;
+    NetwEntityRecord *slot_record(int64_t p_id) const;
+    void slot_settle(int64_t p_id);
 
     struct DepartedResidency {
         godot::RID scene;
@@ -548,16 +564,12 @@ private:
     bool rpc_disposed = false;
     void rpc_resolve_parked(int64_t p_id, const godot::Callable &p_callback);
 
-    godot::HashMap<int64_t, NetwEntityRecord *> wrapper_records;
     bool structure_halted = false;
 
-    godot::HashMap<int64_t, godot::ObjectID> wrapper_owners;
-    godot::HashMap<uint64_t, int64_t> handle_by_wrapper;
     ReplicationCore *replication_owner = nullptr;
+    store::World store_world;
     godot::ObjectID session_api_id;
     godot::Callable interest_flush;
-    godot::Callable staged_gatherer;
-    godot::Callable staged_applier;
     godot::Callable interest_compat_refresh;
     godot::Callable interest_awareness_send;
     interest::Delta interest_pending;
@@ -611,6 +623,7 @@ private:
         int64_t desired_role = 3;
         godot::Ref<NetwLinkConditions> link_conditions;
         godot::Ref<NetwServerInfo> server_info;
+        int64_t bandwidth_kbps = 0;
     };
     SessionSettings session_settings;
     godot::Ref<NetwSessionConfig> session_fallback;
@@ -725,6 +738,20 @@ private:
     godot::HashMap<int64_t, NetwPredictSlotEngine *> predict_engines;
     sim::Rows sim_rows;
     godot::LocalVector<godot::RID> sim_stepping;
+    godot::LocalVector<uint32_t> sim_walk;
+    godot::LocalVector<uint32_t> sim_noted;
+    godot::LocalVector<godot::RID> sim_sources;
+    godot::LocalVector<godot::ObjectID> sim_colliders;
+    godot::LocalVector<bool> sim_onsets;
+    godot::LocalVector<sim::Row *> sim_scan;
+    godot::LocalVector<uint64_t> sim_waking;
+    godot::LocalVector<int64_t> sim_waking_since;
+    godot::LocalVector<uint64_t> sim_still_waking;
+    godot::LocalVector<int64_t> sim_still_since;
+    godot::HashMap<uint64_t, godot::RID> sim_drowsy;
+    godot::HashMap<uint64_t, godot::RID> sim_bodies;
+    godot::LocalVector<uint64_t> sim_rousing;
+    wire::WriteStream frame_stream;
     NetwPredictRunner predict_runner;
     godot::HashMap<int64_t, bool> pending_scene_facets;
     int64_t physics_frame = 0;
@@ -1140,32 +1167,144 @@ public:
     void interest_commit();
     godot::Error interest_flush_tail();
     godot::Error interest_flush_immediate();
-    godot::Array gather_set(const godot::RID &p_entity, int64_t p_comp);
-    godot::Array sync_gather_set_default(
-        const godot::RID &p_entity,
-        int64_t p_comp
+    godot::Error sync_apply_rows_default(
+        const godot::RID &p_table,
+        const godot::PackedInt64Array &p_routes,
+        const godot::Array &p_columns
     );
-    godot::Error apply_set(
-        const godot::RID &p_entity,
-        int64_t p_comp,
-        const godot::Array &p_values
+    godot::Error run_apply_rows(
+        const godot::RID &p_table,
+        const godot::PackedInt64Array &p_routes,
+        const godot::Array &p_columns
     );
-    godot::Error sync_apply_set_default(
-        const godot::RID &p_entity,
-        int64_t p_comp,
-        const godot::Array &p_values
+    bool store_applies_by_seam();
+    void store_received(
+        repl::PropertyBinding *p_binding,
+        const store::RowAddress &p_at,
+        bool p_retained,
+        bool p_volatile,
+        int64_t p_sender
     );
-    godot::Array run_gather_set(
-        const godot::RID &p_entity,
-        int64_t p_comp,
-        const godot::Callable &p_gatherer
-    );
-    godot::Error run_apply_set(
-        const godot::RID &p_entity,
-        int64_t p_comp,
+    godot::PackedByteArray store_take_image(repl::PropertyBinding *p_binding);
+    void store_install_image(
+        repl::PropertyBinding *p_binding,
+        const godot::Array &p_keys,
         const godot::Array &p_values,
-        const godot::Callable &p_applier
+        int64_t p_tick
     );
+    void store_reinstall(repl::PropertyBinding *p_binding);
+    void store_retain(repl::PropertyBinding *p_binding);
+    godot::Error store_write_entity(
+        repl::PropertyBinding *p_binding,
+        const godot::StringName &p_key,
+        int64_t p_route
+    );
+    bool store_push(
+        const store::RowAddress &p_at,
+        int p_age,
+        uint64_t p_mask,
+        display::Runtime *p_absorb,
+        const godot::Array *p_values = nullptr
+    );
+    bool store_rests(
+        const store::RowAddress &p_at,
+        int p_age,
+        godot::Node *p_node,
+        const repl::PropertyBinding *p_binding
+    );
+    bool sim_push(
+        const godot::RID &p_entity,
+        const store::RowAddress &p_at,
+        int64_t p_stamp,
+        int64_t p_sender,
+        uint64_t p_tenure,
+        int p_age
+    );
+    godot::Array sync_gather_rows_default(
+        const godot::RID &p_table,
+        const godot::PackedInt64Array &p_routes
+    );
+    godot::Array run_gather_rows(
+        const godot::RID &p_table,
+        const godot::PackedInt64Array &p_routes
+    );
+    bool store_gathers_by_seam();
+    void store_admit(const repl::PropertyBindingPtr &p_binding);
+    void store_place(const repl::PropertyBindingPtr &p_binding);
+    void store_sources(
+        NetwSyncModel *p_model,
+        ReplicationSend *p_send,
+        uint32_t p_table,
+        const godot::Callable &p_bind,
+        int64_t p_tick
+    );
+    bool store_source_row(
+        NetwSyncModel *p_model,
+        ReplicationSend *p_send,
+        const store::RowAddress &p_at,
+        const godot::Callable &p_bind,
+        int64_t p_tick
+    );
+    void store_source_check(
+        NetwSyncModel *p_model,
+        ReplicationSend *p_send,
+        const store::RowAddress &p_at,
+        const godot::Callable &p_bind,
+        int64_t p_tick
+    );
+    bool store_mark(
+        uint32_t p_slot,
+        const godot::Ref<NetwEntity> &p_entity,
+        int64_t p_tick
+    );
+    static void store_stamp_thunk(
+        void *p_context,
+        uint32_t p_table,
+        uint32_t p_row
+    );
+    void store_stamp_row(uint32_t p_table, uint32_t p_row);
+    void store_resource_route(int64_t p_route);
+    void store_work_route(int64_t p_route);
+    void store_resource_entity(NetwEntity *p_entity);
+    bool store_admits_any(const store::RowAddress &p_at) const;
+    store::Source store_source(
+        const store::Table &p_table,
+        uint32_t p_row,
+        const repl::PropertyBinding *p_binding,
+        bool p_authors
+    ) const;
+    godot::LocalVector<uint32_t> store_walk;
+    godot::Callable store_tap;
+    const NetwSyncModel *store_model = nullptr;
+    uint64_t store_model_revision = 0;
+    godot::LocalVector<int32_t> store_roster;
+    godot::LocalVector<uint32_t> store_pending;
+    int64_t store_local = 0;
+    int64_t store_coordinator = 0;
+    bool store_host = false;
+    bool store_offline = true;
+    void store_refresh();
+    void store_note_interest();
+    void store_stale_key(int64_t p_key);
+    void store_stale_entity(const godot::Ref<NetwEntity> &p_entity);
+    void store_evaluate_slot(
+        uint32_t p_slot,
+        const godot::Ref<NetwEntity> &p_entity
+    );
+    void store_evaluate_nodeless(uint32_t p_slot);
+    uint32_t store_slot_of(const godot::Ref<NetwEntity> &p_entity) const;
+    void store_bind(const store::RowAddress &p_at);
+    void store_bind_entity(const godot::Ref<NetwEntity> &p_entity);
+    void store_admit_row(
+        ReplicationSend *p_send,
+        const store::RowAddress &p_at,
+        const godot::Ref<NetwEntity> &p_entity,
+        bool p_server_audience
+    );
+    void store_clear_row(const store::RowAddress &p_at);
+    godot::PackedInt32Array store_reach(uint32_t p_slot) const;
+    godot::PackedInt32Array store_roster_ids() const;
+    godot::Dictionary store_describe() const;
     void scene_watch_entity(const godot::Ref<NetwEntity> &p_entity);
     void scene_on_entity_live(
         int64_t p_route,
@@ -1245,17 +1384,18 @@ public:
     void repl_note_unknown_route();
     void repl_note_gate_verdict(int64_t p_verdict);
     godot::Dictionary repl_drop_stats() const;
-    godot::LocalVector<repl::RowOffer> sync_pump_offers(
+    void sync_pump_rows(
         NetwSyncModel *p_model,
         ReplicationSend *p_send,
-        const godot::Array &p_bindings,
         int64_t p_tick,
         const godot::Callable &p_bind,
         const godot::Callable &p_tap
     );
-    void sync_flush_offers(
+    static constexpr double KBPS_BYTES = 125.0;
+    void session_set_peer_bandwidth(int64_t p_peer, int64_t p_kbps);
+    void sync_note_backlog(ReplicationSend *p_send);
+    void sync_flush_rows(
         ReplicationSend *p_send,
-        const godot::LocalVector<repl::RowOffer> &p_offers,
         int64_t p_row_channel,
         int64_t p_window_channel,
         int64_t p_delta_channel
@@ -1278,7 +1418,11 @@ public:
         ReplicationSend *p_send,
         int64_t p_route
     );
-    void sync_note_columns(const repl::RowOffer &p_offer, uint64_t p_mask);
+    void sync_note_columns(
+        const table::SchemaRecord &p_schema,
+        const wire::WirePlan &p_plan,
+        uint64_t p_mask
+    );
     godot::Dictionary sync_flush_stats() const;
     godot::Dictionary sync_explain(
         int64_t p_route,
@@ -1494,24 +1638,49 @@ public:
         const godot::StringName &p_track,
         const godot::Variant &p_value
     );
-    godot::Error display_write_default(
+    godot::Error display_write_track(
         const godot::RID &p_entity,
         const godot::StringName &p_track,
         const godot::Variant &p_value
     );
-    GDVIRTUAL3R(
+    bool display_row_of(
+        const godot::RID &p_entity,
+        const godot::StringName &p_track,
+        godot::RID &r_table,
+        int64_t &r_column,
+        int64_t &r_route
+    );
+    godot::Error run_display_write_rows(
+        const godot::RID &p_table,
+        int64_t p_column,
+        const godot::PackedInt64Array &p_routes,
+        const godot::Array &p_values
+    );
+    godot::Error display_write_rows_default(
+        const godot::RID &p_table,
+        int64_t p_column,
+        const godot::PackedInt64Array &p_routes,
+        const godot::Array &p_values
+    );
+    GDVIRTUAL4R(
         godot::Error,
-        _display_write,
-        godot::RID,
-        godot::StringName,
-        godot::Variant
-    )
-    GDVIRTUAL2R(godot::Array, _sync_gather_set, godot::RID, int64_t)
-    GDVIRTUAL3R(
-        godot::Error,
-        _sync_apply_set,
+        _display_write_rows,
         godot::RID,
         int64_t,
+        godot::PackedInt64Array,
+        godot::Array
+    )
+    GDVIRTUAL2R(
+        godot::Array,
+        _sync_gather_rows,
+        godot::RID,
+        godot::PackedInt64Array
+    )
+    GDVIRTUAL3R(
+        godot::Error,
+        _sync_apply_rows,
+        godot::RID,
+        godot::PackedInt64Array,
         godot::Array
     )
     godot::Error display_lane(
@@ -1551,6 +1720,12 @@ public:
     void set_display_chase_hook(const godot::Callable &p_hook);
 
     void display_resolve_role(display::Runtime *p_runtime);
+    void display_follow_mode(const godot::RID &p_entity);
+    void display_hook_control(
+        display::Runtime *p_runtime,
+        const godot::Ref<NetwEntity> &p_entity,
+        int64_t p_route
+    );
 
     void display_bind_session();
     display::Decl display_config_for(const godot::Ref<NetwEntity> &p_entity);
@@ -1583,11 +1758,54 @@ public:
         const godot::Variant &p_value,
         int64_t p_tick,
         const godot::Ref<NetwInterpolate> &p_spec,
-        bool p_authoring_tick
+        bool p_authoring_tick,
+        uint64_t p_owner = 0,
+        uint32_t p_lane = 0,
+        uint32_t p_column = 0
+    );
+    bool display_record_followed(
+        int64_t p_route,
+        const godot::StringName &p_target_property,
+        int64_t p_tick,
+        bool p_authoring_tick,
+        uint64_t p_owner,
+        uint32_t p_lane,
+        uint32_t p_column
+    );
+    void display_land(
+        display::Runtime *p_runtime,
+        display::Channel *p_state,
+        int64_t p_route,
+        const godot::StringName &p_target_property,
+        const godot::Variant &p_value,
+        int64_t p_tick,
+        bool p_authoring_tick,
+        uint64_t p_owner,
+        uint32_t p_lane,
+        uint32_t p_column
     );
     void display_on_clock_tick(double p_delta, int64_t p_tick);
+    bool display_record_runtime(display::Runtime *p_runtime, int64_t p_tick);
     godot::Error display_pump(double p_delta);
+    bool display_pump_listed(
+        display::Runtime *p_runtime,
+        const display::Timing &p_timing,
+        display::PumpStats &p_stats
+    );
+    void display_wake_entity(const godot::RID &p_entity);
+    void display_drain_touched();
 
+    bool display_table_of(
+        godot::Node *p_node,
+        const godot::StringName &p_property,
+        uint64_t &r_owner,
+        uint32_t &r_lane,
+        uint32_t &r_column
+    );
+    void display_follow_tables(display::Runtime *p_runtime);
+    void display_follow_binding(
+        const repl::PropertyBindingPtr &p_binding
+    );
     bool display_wants_runtime(godot::Node *p_owner) const;
     void display_rebuild_runtime(display::Runtime *p_runtime);
     void display_seat_bodies(display::Runtime *p_runtime);
@@ -1616,6 +1834,11 @@ public:
         display::Runtime *p_runtime,
         const godot::Dictionary &p_deltas,
         bool p_teleported
+    );
+    void display_absorb_moved(
+        display::Runtime *p_runtime,
+        const godot::LocalVector<godot::StringName> &p_keys,
+        const godot::LocalVector<godot::Variant> &p_deltas
     );
 
     godot::Ref<NetwPromise> scene_request_send(
@@ -1737,12 +1960,17 @@ public:
     godot::Error interest_flush_now();
     godot::Error session_flush_tick(int64_t p_tick);
     void session_on_clock_tick(double p_delta, int64_t p_tick);
+#if defined(NETW_PROFILING)
+    void profile_book_bytes() const;
+#endif
     void predict_stepper_install(
         const godot::RID &p_space,
         const godot::Ref<NetwPhysicsStepper> &p_stepper
     );
     void predict_reresolve_space(const godot::RID &p_space);
+    void predict_rebind_replaced(uint64_t p_binding);
     void predict_reconcile_declaration(const godot::Ref<NetwEntity> &p_entity);
+    void predict_readmit(const godot::Ref<NetwEntity> &p_entity);
     bool predict_lacks_state_rows(const godot::Ref<NetwEntity> &p_entity) const;
     godot::Ref<NetwPhysicsStepper> predict_get_stepper(
         const godot::RID &p_space
@@ -1762,12 +1990,41 @@ public:
     godot::TypedArray<godot::Object> predict_engine_entities() const;
     sim::Row &sim_row(const godot::RID &p_entity);
     const sim::Row *sim_row_of(const godot::RID &p_entity) const;
+    store::World &store() {
+        return store_world;
+    }
+    const store::World &store() const {
+        return store_world;
+    }
 #if defined(NETW_TESTS)
     struct IdleWork {
         int64_t runs = 0;
         int64_t walked = 0;
         int64_t announced = 0;
         int64_t sampled = 0;
+        int64_t contacts = 0;
+        int64_t contacted = 0;
+        int64_t touched = 0;
+        int64_t contact_allocations = 0;
+        int64_t contact_peer_reads = 0;
+        int64_t drowsy = 0;
+        int64_t sources = 0;
+        int64_t sourced = 0;
+        int64_t staged = 0;
+        int64_t sends = 0;
+        int64_t sent_rows = 0;
+        int64_t pump_allocations = 0;
+        int64_t send_allocations = 0;
+        int64_t frame_allocations = 0;
+        int64_t carrier_allocations = 0;
+        int64_t transport_allocations = 0;
+        int64_t display_allocations = 0;
+        int64_t pumped = 0;
+        int64_t recorders = 0;
+        int64_t received_rows = 0;
+        int64_t decode_stages = 0;
+        int64_t receive_allocations = 0;
+        int64_t role_resolves = 0;
     };
     IdleWork idle_work;
     struct BookSizes {
@@ -1787,6 +2044,12 @@ public:
     void sim_settle_body(const godot::Ref<NetwEntity> &p_entity);
     void sim_settle_body_of(const godot::RID &p_entity);
     void sim_follow_claim(const godot::Ref<NetwEntity> &p_entity);
+    void sim_mark(const godot::RID &p_entity);
+    void sim_on_body_sleep(const godot::RID &p_entity);
+    void sim_watch_sleep(sim::Row &r_row, bool p_watch);
+    void sim_follow_sleep(const sim::Row &p_row);
+    void sim_rouse_drowsy();
+    void sim_note_push(godot::Object *p_node);
     void sim_on_body_control(
         int64_t p_previous,
         int64_t p_peer,
@@ -1799,59 +2062,59 @@ public:
         const godot::LocalVector<godot::RID> &p_members,
         godot::LocalVector<sim::HeldPose> &r_poses
     ) const;
-    bool sim_draws_column(
-        const godot::RID &p_entity,
-        godot::Node *p_node,
-        const godot::StringName &p_key
-    ) const;
     bool sim_takes_install(
         const godot::RID &p_entity,
-        const NetwPropertySetBinding *p_binding
+        const repl::PropertyBinding *p_binding
     ) const;
-    godot::Error sim_admit_install(
-        const godot::RID &p_entity,
-        const sim::Sample &p_sample,
-        bool p_whole
-    );
-    bool sim_install_image(
-        const godot::RID &p_entity,
-        NetwPropertySetBinding *p_binding,
-        const sim::Sample &p_image
-    );
     void sim_drain_installs();
-    void sim_install(const godot::RID &p_entity, const sim::Sample &p_sample);
     void sim_contact_pass(int64_t p_tick);
-    void sim_contact_arm(
-        sim::Row &r_row,
-        const godot::Ref<NetwEntity> &p_entity
-    );
-    void sim_note_contacts(sim::Row &r_row);
-    void sim_rest_pass(
-        sim::Row &r_row,
-        const godot::Ref<NetwEntity> &p_entity,
+    int64_t sim_local_peer();
+    static sim::Steering sim_steering_of(const NetwEntity &p_entity);
+    void sim_follow_steering(const NetwEntity *p_entity);
+    void sim_follow_view(const godot::RID &p_entity, NetwEntity *p_view);
+    godot::RID sim_contact_owner(const godot::ObjectID &p_collider) const;
+    void sim_contact_arm(sim::Row &r_row);
+    bool sim_contact_eligible(
+        const sim::Row &p_row,
+        const sim::Steering &p_steering
+    ) const;
+    void sim_note_contacts(sim::Row &r_row, int64_t p_tick);
+    void sim_note_touch(sim::Row &r_row, uint64_t p_other, int64_t p_tick);
+    void sim_settle_walk(int64_t p_local_peer, int64_t p_tick);
+    void sim_contact_validate(int64_t p_tick);
+    void sim_contact_fault(
+        const sim::Row &p_row,
+        const char *p_bit,
         int64_t p_tick
     );
+    void sim_rest_pass(sim::Row &r_row, int64_t p_local_peer, int64_t p_tick);
     bool sim_fenced(const godot::RID &p_entity, int64_t p_tick);
-    bool sim_reconstructs(
-        const godot::RID &p_entity,
-        int64_t p_comp,
-        bool p_whole
-    );
     void sim_forget_reconstruction(const godot::RID &p_entity);
-    void sim_note_whole(const godot::RID &p_entity, int64_t p_comp);
     godot::Array sim_install_target(
-        const NetwPropertySetBinding *p_binding,
+        const repl::PropertyBinding *p_binding,
         const sim::Sample &p_sample,
         sim::Restore p_restore,
         int64_t p_max_restore_ticks,
         int64_t &r_age
     ) const;
-    bool sim_write_install(
+    void sim_install_target_row(
+        const repl::PropertyBinding *p_binding,
+        int64_t p_tick,
+        const godot::LocalVector<godot::StringName> &p_keys,
+        const godot::LocalVector<godot::Variant> &p_values,
+        sim::Restore p_restore,
+        int64_t p_max_restore_ticks,
+        godot::LocalVector<godot::Variant> &r_target,
+        int64_t &r_age
+    ) const;
+    bool sim_write_install_row(
         const godot::RID &p_entity,
-        NetwPropertySetBinding *p_binding,
-        const godot::Array &p_keys,
-        const godot::Array &p_values,
-        int64_t p_age
+        repl::PropertyBinding *p_binding,
+        const godot::LocalVector<godot::StringName> &p_keys,
+        const godot::LocalVector<godot::Variant> &p_values,
+        int64_t p_age,
+        godot::LocalVector<godot::StringName> &r_moved_keys,
+        godot::LocalVector<godot::Variant> &r_moved
     );
     int64_t sim_author_peer(const godot::RID &p_entity) const;
     uint64_t sim_author_tenure(const godot::RID &p_entity) const;
@@ -2162,10 +2425,31 @@ public:
         const godot::PackedByteArray &p_bytes
     );
     godot::Error sync_pipeline_decode_stage_body();
-    godot::Array sync_pipeline_gather_stage();
-    godot::Error sync_pipeline_apply_one_value(const godot::Array &p_values);
-    void sync_pipeline_bind_declaration(
-        const godot::Ref<NetwPropertySetBinding> &p_binding
+    void sync_pipeline_bind_declaration(int64_t p_binding);
+    void sync_note_node_removed(godot::Node *p_node);
+    void entity_watch_authority_joins();
+    static void entity_note_node_added(godot::Node *p_node);
+    static void tree_hook_arm();
+    static void tree_watch_authority_joins();
+    static void tree_watch_removals(NetwMultiplayer *p_session);
+    static void tree_forget_session(NetwMultiplayer *p_session);
+    static void tree_node_added(godot::Node *p_node);
+    static void tree_node_removed(godot::Node *p_node);
+    static void tree_marked_entered(
+        godot::Node *p_node,
+        uint64_t p_id,
+        uint16_t p_marks
+    );
+    static godot::Ref<NetwEntity> tree_booked(uint64_t p_node);
+    static NetwMultiplayer *tree_adopt(
+        godot::Node *p_node,
+        const godot::Ref<NetwEntity> &p_entity,
+        NetwMultiplayer *p_session = nullptr
+    );
+    bool spawn_readmit(godot::Node *p_node, const spawn::Record &p_recipe);
+    static void tree_release(
+        godot::Node *p_node,
+        const godot::Ref<NetwEntity> &p_entity
     );
     void sync_pipeline_recapture_entity(const godot::Ref<NetwEntity> &p_entity);
     void sync_pipeline_report_missing_prediction_component(
@@ -2192,9 +2476,8 @@ public:
     );
     void sync_compat_visibility_changed(int64_t p_peer, godot::Node *p_root);
     void sync_compat_config_changed();
+    void sync_compat_node_removed(godot::Node *p_node);
     godot::Error sync_compat_decode_stage_body();
-    godot::Array sync_compat_gather_stage();
-    godot::Error sync_compat_apply_stage(const godot::Array &p_staged);
 
     spawn::SpawnerCompat *spawner_adapter() const;
     void spawner_session_entered();
@@ -2272,9 +2555,7 @@ public:
     void unregister_prediction(const godot::Ref<NetwEntity> &p_entity);
     godot::Error predict_declare(const godot::RID &p_entity);
     void predict_undeclare(const godot::RID &p_entity);
-    godot::Ref<NetwTimeline> register_timeline(
-        const godot::Ref<NetwEntity> &p_entity
-    );
+    int64_t register_rewind(const godot::Ref<NetwEntity> &p_entity);
     static bool is_extension_script(const godot::Ref<godot::Script> &p_script);
 
     godot::Ref<NetwPredictionHandle> prediction_handle(
@@ -2298,11 +2579,11 @@ public:
         const godot::RID &p_entity,
         const godot::Callable &p_callback
     );
-    void predict_set_corridor_callback(
+    void predict_set_correction_path_callback(
         const godot::RID &p_entity,
         const godot::Callable &p_callback
     );
-    void predict_set_commands_callback(
+    void predict_set_input_callback(
         const godot::RID &p_entity,
         const godot::Callable &p_callback
     );
@@ -2453,6 +2734,7 @@ public:
     static void install_default_interface();
     static void restore_default_interface();
     static NetwMultiplayer *of(godot::Node *p_node);
+    static bool is_tearing_down(godot::ObjectID p_session);
 
     godot::Error entity_add_property_set(
         const godot::RID &p_entity,
@@ -2486,7 +2768,7 @@ public:
     godot::RID adopt_property_set(
         const godot::Ref<godot::Script> &p_script,
         RecordKind p_record_kind,
-        const godot::Ref<NetwPropertySet> &p_source,
+        const repl::PropertySet &p_source,
         godot::Node *p_node
     );
     godot::RID adopted_property_set(
@@ -2500,10 +2782,21 @@ public:
     void property_set_clear();
     int64_t property_set_get_wire_hash(const godot::RID &p_set) const;
     godot::RID property_set_get_schema(const godot::RID &p_set) const;
-    godot::Ref<NetwPropertySet> property_set_record(
-        const godot::RID &p_set
-    ) const;
-    godot::Ref<NetwPropertySet> mutable_property_set(const godot::RID &p_set);
+    uint64_t property_set_id_of(const godot::RID &p_set) const;
+    repl::PropertySet *property_set_of(const godot::RID &p_set) const;
+    repl::PropertySet *mutable_property_set(const godot::RID &p_set);
+    repl::SetBook &property_set_book() {
+        return set_book;
+    }
+    const repl::SetBook &property_set_book() const {
+        return set_book;
+    }
+    repl::BindingBook &property_binding_book() {
+        return binding_book;
+    }
+    const repl::BindingBook &property_binding_book() const {
+        return binding_book;
+    }
 
     SessionState session_get_state() const;
     Role session_get_role() const;
@@ -2750,8 +3043,11 @@ public:
         int64_t p_comp,
         const godot::String &p_path,
         bool p_batched,
-        const CarrierRow *p_row
+        const CarrierRow *p_row,
+        bool p_charged
     );
+
+    void charge_frame(int64_t p_peer, int64_t p_channel, int64_t p_bytes);
 
     godot::Error send_row_to(
         int64_t p_peer,
@@ -3123,7 +3419,13 @@ public:
         int p_column
     ) const;
 
-    godot::Ref<table::Core> get_table_core() const;
+    store::Arrays &store_arrays() {
+        return store_world.arrays;
+    }
+
+    const store::Arrays &store_arrays() const {
+        return store_world.arrays;
+    }
 
     godot::RID table_create(const godot::RID &p_schema);
     godot::Ref<NetwTableHandle> get_table_handle(const godot::RID &p_table);
@@ -3327,6 +3629,9 @@ public:
     void auth_forget_link(int64_t p_peer);
 #if defined(NETW_TESTS)
     bool auth_link_is_completed(int64_t p_peer) const;
+    bool entity_book_holds_under_test(godot::Node *p_node) const {
+        return entity_book.has(uint64_t(p_node->get_instance_id()));
+    }
 #endif
     void discovery_probe_authenticating(int64_t p_peer_id);
     void discovery_probe_auth_received(
@@ -3590,9 +3895,6 @@ public:
     ) const;
     godot::Error lagcomp_timeline_declare(const godot::RID &p_entity);
     void lagcomp_timeline_undeclare(const godot::RID &p_entity);
-    godot::Ref<NetwTimeline> lagcomp_timeline_of(
-        const godot::RID &p_entity
-    ) const;
     void lagcomp_effect_adopt(const godot::StringName &p_key);
     void lagcomp_effect_discard(const godot::StringName &p_key);
     void observe_node_added(godot::Node *p_node);
@@ -3851,12 +4153,24 @@ public:
         int64_t p_base_tick
     );
 
-    godot::Ref<NetwPropertySetBinding> entity_derived_binding(
+    repl::PropertyBindingPtr entity_derived_binding(
         godot::Node *p_owner,
         int64_t p_record,
         int64_t p_route
     );
-    godot::Array entity_derived_group(int64_t p_route);
+    repl::PropertyBindingPtr entity_record_binding(
+        NetwEntityRecord *p_held,
+        godot::Node *p_owner,
+        int64_t p_record,
+        int64_t p_route
+    );
+    repl::PropertyBindingPtr entity_group_binding(
+        int64_t p_record,
+        int64_t p_route
+    );
+    godot::LocalVector<repl::PropertyBindingPtr> entity_derived_group(
+        int64_t p_route
+    );
 
     bool entity_governs_property(
         godot::Node *p_owner,
@@ -4359,7 +4673,6 @@ public:
 private:
     static NetwEntityRecord *record_of_wrapper(godot::Object *p_wrapper);
     static godot::Node *owner_of_wrapper(godot::Object *p_wrapper);
-    godot::Callable despawning_hook(godot::Object *p_wrapper);
 
     entity::Outcome entity_departure_outcome(
         const EntityDeparture &p_row

@@ -8,6 +8,7 @@
 #include "godot/templates.hpp"
 #include "godot/variant.hpp"
 #include "netw/sim/resolve.hpp"
+#include "netw/store/resident.hpp"
 
 namespace netw::sim {
 
@@ -15,15 +16,22 @@ struct AuthoredBody {
     godot::ObjectID node;
     godot::Variant freeze;
     godot::Variant freeze_mode;
+    mutable store::NodeCell cell;
 };
 
 struct Bodies {
     godot::LocalVector<AuthoredBody> held;
     godot::ObjectID visual;
     godot::Variant visual_transform;
+    store::Residents *residents = nullptr;
     bool recorded = false;
     Mode applied = Mode::NONE;
 };
+
+const store::NodeCell &resident_of(
+    const Bodies &p_bodies,
+    const AuthoredBody &p_held
+);
 
 struct HeldPose {
     godot::RID body;

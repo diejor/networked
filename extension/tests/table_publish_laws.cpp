@@ -3,14 +3,14 @@
 
 #include "netw/api/netw_multiplayer.hpp"
 #include "netw/schema_core.hpp"
-#include "netw/table/core.hpp"
+#include "netw/store/array.hpp"
 
 namespace TestTablePublish {
 
 using namespace godot;
 using netw::NetwMultiplayer;
 using netw::SchemaCore;
-using netw::table::Core;
+using netw::store::Arrays;
 using netw_test::Recorder;
 
 struct Stand {
@@ -215,15 +215,16 @@ TEST_CASE(
     "boundary, and several commits in one tick collapse to the last"
 ) {
     Stand stand;
-    NETW_CHECK_EQ(stand.core->get_table_core()->dirty_tables().size(), 0);
+    Arrays &plane = stand.core->store_arrays();
+    NETW_CHECK_EQ(plane.dirty_tables().size(), 0);
 
     NETW_CHECK_EQ(stand.publish(int64s({1}), points(1), int32s({1})), OK);
     NETW_CHECK_EQ(stand.publish(int64s({1}), points(1), int32s({2})), OK);
 
-    NETW_CHECK_EQ(stand.core->get_table_core()->dirty_tables().size(), 1);
+    NETW_CHECK_EQ(plane.dirty_tables().size(), 1);
 
-    stand.core->get_table_core()->clear_dirty(stand.table);
-    NETW_CHECK_EQ(stand.core->get_table_core()->dirty_tables().size(), 0);
+    plane.clear_dirty(stand.table);
+    NETW_CHECK_EQ(plane.dirty_tables().size(), 0);
     NETW_CHECK_EQ(
         PackedInt32Array(
             stand.core->table_read_column(stand.table, stand.hp)
@@ -242,18 +243,18 @@ TEST_CASE(
     const Recorder recorder(stand.core.ptr(), watched);
 
     NETW_CHECK_EQ(stand.publish(int64s({1}), points(1), int32s({4})), OK);
-    const Ref<Core> plane = stand.core->get_table_core();
+    Arrays &plane = stand.core->store_arrays();
     const TypedArray<PackedByteArray> frames
-        = plane->encode_frames(stand.table, 1200, false);
+        = plane.encode_owed(stand.table, 7, 1200);
     NETW_CHECK_ORDER(frames.size(), 0, >);
     if (frames.size() == 0) {
         return;
     }
-    plane->begin_intake();
+    plane.begin_intake();
     for (int at = 0; at < frames.size(); ++at) {
         const PackedByteArray frame = frames[at];
-        plane->admit_header(Core::peek_header(frame));
-        plane->apply_frame(frame);
+        plane.admit_header(frame);
+        plane.apply_frame(frame);
     }
 
     stand.core->table_announce_intake();

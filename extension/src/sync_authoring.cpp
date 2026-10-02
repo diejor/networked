@@ -75,6 +75,29 @@ double real(Object *p_sync, const char *p_key) {
     return double(p_sync->get_meta(StringName(p_key)));
 }
 
+const char *DISPLAY_KEYS[] = {
+    KEY_VISUAL_ROOT,
+    KEY_DISPLAY_ROLE,
+    KEY_LIVE_MODE,
+    KEY_LIVE_SMOOTH_TIME,
+    KEY_SMART_DILATION,
+    KEY_MAX_EXTRA_DILATION,
+    KEY_LAG_ADAPT_RATE,
+    KEY_STARVATION_GROWTH,
+    KEY_FLOOR_SMOOTHING,
+    KEY_STARVATION_GRACE,
+    KEY_TRACE_INTERVAL,
+};
+
+bool display_declared(Object *p_sync) {
+    for (const char *key : DISPLAY_KEYS) {
+        if (declared(p_sync, key)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 void apply_display(Object *p_sync, const Ref<NetwEntity> &p_entity) {
     const Ref<NetwDisplayHandle> display = p_entity->get_interpolation();
     if (display.is_null()) {
@@ -340,12 +363,17 @@ void apply(Node *p_root, Object *p_sync) {
     if (owner == nullptr) {
         return;
     }
-    apply_display(p_sync, entity);
+    if (display_declared(p_sync)) {
+        apply_display(p_sync, entity);
+    }
     apply_timeline(p_sync, owner, entity);
-    apply_prediction(p_sync, entity);
+    const bool predicts = prediction_declared(p_sync);
+    if (predicts) {
+        apply_prediction(p_sync, entity);
+    }
     apply_interpolators(p_sync, owner);
     const Ref<NetwMultiplayer> core = NetwMultiplayer::core_of(owner);
-    if (core.is_valid() && prediction_declared(p_sync)) {
+    if (core.is_valid() && predicts) {
         core->predict_declare(core->entity_of(owner));
     }
     if (core.is_valid()) {

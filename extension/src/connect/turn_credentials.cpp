@@ -255,7 +255,7 @@ void TurnCredentials::settle(const Array &p_servers) {
     client = Ref<RefCounted>();
     NETW_INFO(
         sys::TRANSPORT,
-        "the credential host answered %d ice server(s)",
+        "The TURN credential server returned %d ICE servers.",
         int(p_servers.size())
     );
 }
@@ -267,8 +267,8 @@ void TurnCredentials::refuse(const String &p_reason) {
     client = Ref<RefCounted>();
     NETW_WARN(
         sys::TRANSPORT,
-        "the turn credential fetch failed, so the configured ice servers "
-        "stand: %s",
+        "Fetching TURN credentials failed (%s), so only the configured ICE "
+        "servers are used.",
         p_reason
     );
 }

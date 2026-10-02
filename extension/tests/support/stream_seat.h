@@ -1,116 +1,114 @@
 #pragma once
 
+#include "send_rig.h"
+
 #include "godot/local_vector.hpp"
 #include "netw/repl/session_send.hpp"
 #include "netw/replication_send.hpp"
+#include "netw/store/world.hpp"
 #include "netw/wire/stream_book.hpp"
 
 namespace netw_test {
 
-inline netw::wire::StreamFamily family_of(const netw::repl::RowOffer &p_offer) {
-    if (p_offer.windowed) {
-        return netw::wire::StreamFamily::WINDOW;
-    }
-    if (p_offer.reliable) {
-        return netw::wire::StreamFamily::RETAINED;
-    }
-    return netw::wire::StreamFamily::VOLATILE;
+inline netw::wire::StreamFamily family_of(const RowOffer &p_offer) {
+    return p_offer.family();
 }
 
-inline void seat_stream(
-    netw::wire::StreamWriterBook &p_writer,
-    int p_peer,
-    const netw::repl::RowOffer &p_offer
-) {
-    netw::wire::StreamLane lane;
-    lane.route = p_offer.route;
-    lane.ordinal = p_offer.comp;
-    lane.family = family_of(p_offer);
-    if (p_writer.token_of(p_peer, lane) != 0) {
+template <typename Send>
+inline void seat_stream(Send &p_send, int p_peer, const RowOffer &p_offer) {
+    netw::store::World *world = p_send.store();
+    if (world == nullptr || world->token_of(p_peer, p_offer.lane()) != 0) {
         return;
     }
-    const uint64_t request = p_writer.open(
-        p_peer,
-        lane,
-        uint64_t(p_offer.life),
-        uint32_t(p_offer.declared().shape_hash),
-        p_offer.tenure
-    );
-    p_writer.ready(p_peer, request, netw::wire::next_stream_token());
+    const uint64_t request
+        = p_send.stream_open(p_peer, p_offer.lane(), p_offer.tenure);
+    p_send.stream_ready(p_peer, request, netw::wire::next_stream_token());
 }
 
-inline void seat_streams(
-    netw::wire::StreamWriterBook &p_writer,
-    const godot::LocalVector<netw::repl::RowOffer> &p_offers
+template <typename Send>
+inline void seat_sent(
+    Send &p_send,
+    const godot::LocalVector<RowOffer> &p_offers
 ) {
+    netw::store::World *world = p_send.store();
+    if (world == nullptr) {
+        return;
+    }
     for (uint32_t at = 0; at < p_offers.size(); ++at) {
-        const netw::repl::RowOffer &offer = p_offers[at];
+        stage_offer(*world, p_offers[at], p_offers[at].tick);
+    }
+    for (uint32_t at = 0; at < p_offers.size(); ++at) {
+        const RowOffer &offer = p_offers[at];
         for (uint32_t who = 0; who < offer.recipients.size(); ++who) {
-            seat_stream(p_writer, offer.recipients[who], offer);
+            seat_stream(p_send, offer.recipients[who], offer);
         }
     }
 }
 
-inline void accept_streams(
-    netw::wire::StreamWriterBook &p_writer,
-    const godot::LocalVector<netw::repl::RowOffer> &p_offers,
+inline void seat_streams(
+    SessionSend &p_send,
+    const godot::LocalVector<RowOffer> &p_offers
+) {
+    seat_sent(p_send, p_offers);
+}
+
+inline void seat_streams(
+    ReplicationSend &p_send,
+    const godot::LocalVector<RowOffer> &p_offers
+) {
+    seat_sent(p_send, p_offers);
+}
+
+template <typename Send>
+inline void accept_sent(
+    Send &p_send,
+    const godot::LocalVector<RowOffer> &p_offers,
     int p_peer
 ) {
+    netw::store::World *world = p_send.store();
+    if (world == nullptr) {
+        return;
+    }
     for (uint32_t at = 0; at < p_offers.size(); ++at) {
-        const netw::repl::RowOffer &offer = p_offers[at];
-        netw::wire::StreamLane lane;
-        lane.route = offer.route;
-        lane.ordinal = offer.comp;
-        lane.family = family_of(offer);
-        const uint64_t token = p_writer.token_of(p_peer, lane);
-        netw::wire::SnapshotSender *stream = p_writer.sender(p_peer, lane);
-        if (token != 0 && stream != nullptr) {
-            p_writer.receipt(p_peer, token, stream->exposed_high_water());
+        const netw::wire::StreamLane lane = p_offers[at].lane();
+        const uint64_t token = world->token_of(p_peer, lane);
+        const uint64_t exposed = row_exposed(*world, lane, p_peer);
+        if (token != 0 && exposed != 0) {
+            p_send.stream_receipt(p_peer, token, exposed);
         }
     }
 }
 
 inline void accept_streams(
-    netw::repl::SessionSend &p_send,
-    const godot::LocalVector<netw::repl::RowOffer> &p_offers,
+    SessionSend &p_send,
+    const godot::LocalVector<RowOffer> &p_offers,
     int p_peer
 ) {
-    accept_streams(p_send.writer_book(), p_offers, p_peer);
+    accept_sent(p_send, p_offers, p_peer);
 }
 
 inline void accept_streams(
-    netw::ReplicationSend &p_send,
-    const godot::LocalVector<netw::repl::RowOffer> &p_offers,
+    ReplicationSend &p_send,
+    const godot::LocalVector<RowOffer> &p_offers,
     int p_peer
 ) {
-    accept_streams(p_send.writer_book(), p_offers, p_peer);
+    accept_sent(p_send, p_offers, p_peer);
 }
 
-inline void seat_pending(netw::wire::StreamWriterBook &p_writer, int p_peer) {
-    const godot::LocalVector<netw::wire::StreamLane> waiting
-        = p_writer.unready(p_peer);
-    for (uint32_t at = 0; at < waiting.size(); ++at) {
-        const uint64_t request = p_writer.request_of(p_peer, waiting[at]);
-        p_writer.ready(p_peer, request, netw::wire::next_stream_token());
+template <typename Send> inline void seat_pending(Send &p_send, int p_peer) {
+    netw::store::World *world = p_send.store();
+    if (world == nullptr) {
+        return;
     }
-}
-
-inline void seat_pending(netw::ReplicationSend &p_send, int p_peer) {
-    seat_pending(p_send.writer_book(), p_peer);
-}
-
-inline void seat_streams(
-    netw::repl::SessionSend &p_send,
-    const godot::LocalVector<netw::repl::RowOffer> &p_offers
-) {
-    seat_streams(p_send.writer_book(), p_offers);
-}
-
-inline void seat_streams(
-    netw::ReplicationSend &p_send,
-    const godot::LocalVector<netw::repl::RowOffer> &p_offers
-) {
-    seat_streams(p_send.writer_book(), p_offers);
+    const godot::LocalVector<uint64_t> waiting
+        = world->opening_requests(p_peer);
+    for (uint32_t at = 0; at < waiting.size(); ++at) {
+        p_send.stream_ready(
+            p_peer,
+            waiting[at],
+            netw::wire::next_stream_token()
+        );
+    }
 }
 
 } // namespace netw_test

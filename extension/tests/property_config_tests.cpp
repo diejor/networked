@@ -6,8 +6,8 @@
 #include "netw/api/interpolate.hpp"
 #include "netw/api/member_config.hpp"
 #include "netw/api/property_config.hpp"
-#include "netw/api/property_set.hpp"
 #include "netw/api/quantize.hpp"
+#include "netw/repl/property_set.hpp"
 #include "support/netw_call_log.h"
 
 namespace TestNetwPropertyConfig {
@@ -16,9 +16,9 @@ using namespace godot;
 using netw::NetwInterpolate;
 using netw::NetwMemberConfig;
 using netw::NetwPropertyConfig;
-using netw::NetwPropertySet;
 using netw::NetwQuantize;
 using netw::NetwQuantizeScalar;
+using netw::repl::PropertySet;
 using netw_test::CallLog;
 
 Ref<NetwPropertyConfig> make_config() {
@@ -33,10 +33,8 @@ Ref<NetwQuantize> make_quantizer() {
     return packer;
 }
 
-Ref<netw::NetwColumnRef> a_column() {
-    const Ref<netw::NetwSchema> schema = netw::NetwSchema::create("carried");
-    schema->f32("gold", Ref<NetwQuantize>(), 1);
-    return schema->column_ref(0);
+StringName a_column() {
+    return StringName("gold");
 }
 
 Ref<NetwInterpolate> make_interpolator(double p_smoothing) {
@@ -73,16 +71,16 @@ TEST_CASE(
     CHECK_FALSE(config->get_in_input_set());
     CHECK_FALSE(config->get_in_broadcast_set());
     CHECK_FALSE(config->get_is_spawn_state());
-    CHECK(config->get_persist_column().is_null());
+    CHECK_FALSE(config->is_persisted());
     CHECK_FALSE(config->get_set_masked());
-    NETW_CHECK_EQ(int(config->get_lane()), int(NetwPropertySet::VOLATILE));
+    NETW_CHECK_EQ(int(config->get_lane()), int(PropertySet::VOLATILE));
     NETW_CHECK_EQ(
         int(config->get_property_class()),
-        int(NetwPropertySet::CAUSAL)
+        int(PropertySet::CAUSAL)
     );
     NETW_CHECK_EQ(
         int(config->get_set_audience()),
-        int(NetwPropertySet::AUDIENCE_PUBLIC)
+        int(PropertySet::AUDIENCE_PUBLIC)
     );
     CHECK(config->get_carry_channel().is_empty());
     CHECK_FALSE(config->get_explicit_teleport_only());
@@ -103,7 +101,6 @@ TEST_CASE(
     NETW_CHECK_EQ(config->get_set_window(), NetwPropertyConfig::UNSET);
     NETW_CHECK_ORDER(config->get_epsilon_override(), 0.0, <);
     NETW_CHECK_ORDER(config->get_teleport_at_override(), 0.0, <);
-    NETW_CHECK_ORDER(config->get_set_every_tick_interval(), 0.0, <);
 }
 
 TEST_CASE(
@@ -118,16 +115,16 @@ TEST_CASE(
     CHECK(config->get_in_state_set());
     CHECK_FALSE(config->get_in_input_set());
     CHECK_FALSE(config->get_in_broadcast_set());
-    NETW_CHECK_EQ(int(config->get_lane()), int(NetwPropertySet::VOLATILE));
+    NETW_CHECK_EQ(int(config->get_lane()), int(PropertySet::VOLATILE));
     NETW_CHECK_EQ(
         config->get_set_trigger(),
-        int64_t(NetwPropertySet::TRIGGER_ON_CHANGE)
+        int64_t(PropertySet::TRIGGER_ON_CHANGE)
     );
     NETW_CHECK_EQ(
         int(config->get_set_audience()),
-        int(NetwPropertySet::AUDIENCE_PUBLIC)
+        int(PropertySet::AUDIENCE_PUBLIC)
     );
-    CHECK(config->get_persist_column().is_null());
+    CHECK_FALSE(config->is_persisted());
 }
 
 TEST_CASE(
@@ -142,14 +139,14 @@ TEST_CASE(
     CHECK(config->get_in_input_set());
     CHECK_FALSE(config->get_in_state_set());
     CHECK_FALSE(config->get_in_broadcast_set());
-    NETW_CHECK_EQ(int(config->get_lane()), int(NetwPropertySet::VOLATILE));
+    NETW_CHECK_EQ(int(config->get_lane()), int(PropertySet::VOLATILE));
     NETW_CHECK_EQ(
         config->get_set_trigger(),
-        int64_t(NetwPropertySet::TRIGGER_ON_CHANGE)
+        int64_t(PropertySet::TRIGGER_ON_CHANGE)
     );
     NETW_CHECK_EQ(
         int(config->get_set_audience()),
-        int(NetwPropertySet::AUDIENCE_SERVER_ONLY)
+        int(PropertySet::AUDIENCE_SERVER_ONLY)
     );
 }
 
@@ -165,14 +162,14 @@ TEST_CASE(
     CHECK(config->get_in_broadcast_set());
     CHECK_FALSE(config->get_in_state_set());
     CHECK_FALSE(config->get_in_input_set());
-    NETW_CHECK_EQ(int(config->get_lane()), int(NetwPropertySet::VOLATILE));
+    NETW_CHECK_EQ(int(config->get_lane()), int(PropertySet::VOLATILE));
     NETW_CHECK_EQ(
         config->get_set_trigger(),
-        int64_t(NetwPropertySet::TRIGGER_ON_CHANGE)
+        int64_t(PropertySet::TRIGGER_ON_CHANGE)
     );
     NETW_CHECK_EQ(
         int(config->get_set_audience()),
-        int(NetwPropertySet::AUDIENCE_PUBLIC)
+        int(PropertySet::AUDIENCE_PUBLIC)
     );
 }
 
@@ -190,7 +187,7 @@ TEST_CASE(
     config->teleport_at(3.0);
     config->teleport_only();
     config->reconcile_only();
-    config->every_tick(0.25);
+    config->on_change();
     config->heartbeat(60);
     config->windowed(3);
     config->audience(true);
@@ -198,10 +195,10 @@ TEST_CASE(
     config->persisted(a_column());
     config->on_spawn();
 
-    NETW_CHECK_EQ(int(config->get_lane()), int(NetwPropertySet::RETAINED));
+    NETW_CHECK_EQ(int(config->get_lane()), int(PropertySet::RETAINED));
     NETW_CHECK_EQ(
         int(config->get_property_class()),
-        int(NetwPropertySet::DERIVED)
+        int(PropertySet::DERIVED)
     );
     NETW_CHECK_CLOSE(config->get_converge_stiffness(), 0.4, 1e-9);
     NETW_CHECK_CLOSE(config->get_epsilon_override(), 0.05, 1e-9);
@@ -210,17 +207,17 @@ TEST_CASE(
     CHECK(config->get_explicit_reconcile_only());
     NETW_CHECK_EQ(
         config->get_set_trigger(),
-        int64_t(NetwPropertySet::TRIGGER_TICK)
+        int64_t(PropertySet::TRIGGER_ON_CHANGE)
     );
-    NETW_CHECK_CLOSE(config->get_set_every_tick_interval(), 0.25, 1e-9);
     NETW_CHECK_EQ(config->get_set_heartbeat_ticks(), 60);
     NETW_CHECK_EQ(config->get_set_window(), 3);
     NETW_CHECK_EQ(
         int(config->get_set_audience()),
-        int(NetwPropertySet::AUDIENCE_SERVER_ONLY)
+        int(PropertySet::AUDIENCE_SERVER_ONLY)
     );
     CHECK(config->get_set_masked());
-    CHECK(config->get_persist_column().is_valid());
+    CHECK(config->is_persisted());
+    CHECK(bool(config->get_saved_column() == StringName("gold")));
     CHECK(config->get_is_spawn_state());
 }
 
@@ -358,7 +355,6 @@ TEST_CASE(
     CHECK(bool(config->epsilon(0.05) == config));
     CHECK(bool(config->teleport_at(3.0) == config));
     CHECK(bool(config->reconcile_only() == config));
-    CHECK(bool(config->every_tick(0.0) == config));
     CHECK(bool(config->on_change() == config));
     CHECK(bool(config->heartbeat(60) == config));
     CHECK(bool(config->windowed(3) == config));

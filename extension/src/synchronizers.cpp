@@ -124,7 +124,7 @@ TypedArray<MultiplayerSynchronizer> of_node(Object *p_target) {
         }
     }
 
-    if (in_editor()) {
+    if (in_editor() || found.is_empty()) {
         return found;
     }
     if (!target->is_inside_tree()) {

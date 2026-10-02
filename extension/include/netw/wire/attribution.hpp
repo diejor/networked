@@ -2,6 +2,7 @@
 
 #include <cstdint>
 
+#include "godot/local_vector.hpp"
 #include "godot/templates.hpp"
 #include "godot/variant.hpp"
 
@@ -38,7 +39,7 @@ class AttributionBook {
     godot::HashMap<uint64_t, int64_t> column_bits;
     godot::HashMap<uint64_t, int64_t> frames_by_peer_channel_in;
     godot::HashMap<uint64_t, int64_t> refusals;
-    godot::HashMap<uint64_t, godot::Vector<Attribution>> staged;
+    godot::HashMap<uint64_t, godot::LocalVector<Attribution>> staged;
     godot::LocalVector<int64_t> retiring_routes;
     godot::LocalVector<int64_t> routes_past_one_flush;
 

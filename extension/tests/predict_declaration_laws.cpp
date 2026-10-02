@@ -34,8 +34,8 @@ int32_t fingerprint(const char *p_text) {
 }
 
 TEST_CASE(
-    "[Networked][Predict][Hosted][Declaration] a slot is minted once and "
-    "never handed out again"
+    "[Networked][Predict][Hosted][Declaration] a closed slot's seat is "
+    "reused and its old id is never answered again"
 ) {
     NetwPredictionEngine held;
     NetwPredictionEngine *const engine = &held;
@@ -51,7 +51,12 @@ TEST_CASE(
     engine->close(first);
     CHECK_FALSE(engine->is_open(first));
     NETW_CHECK_EQ(engine->open_count(), 1);
-    CHECK(engine->open(declared) != first);
+    const int64_t reopened = engine->open(declared);
+    CHECK(reopened != first);
+    NETW_CHECK_EQ(SlotIds::index_of(reopened), SlotIds::index_of(first));
+    CHECK(engine->is_open(reopened));
+    CHECK_FALSE(engine->is_open(first));
+    NETW_CHECK_EQ(engine->field_count(first), 0);
 }
 
 TEST_CASE(
@@ -197,8 +202,8 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Predict][Hosted][Declaration] the bytes are the fields the "
-    "payload names, in declaration order"
+    "[Networked][Predict][Hosted][Declaration] a state fingerprint reads the "
+    "codes of the fields the payload names"
 ) {
     NetwPredictionEngine held;
     NetwPredictionEngine *const engine = &held;
@@ -208,12 +213,13 @@ TEST_CASE(
     live[StringName("speed")] = 1.3;
     const Dictionary same = engine->canonicalize_state(slot, live);
 
-    const PackedByteArray bytes = engine->canonical_state_bytes(slot, live);
+    const int32_t coded = engine->payload_fingerprint(slot, live);
 
-    CHECK_FALSE(bytes.is_empty());
-    CHECK(bytes == engine->canonical_state_bytes(slot, same));
-    CHECK(
-        engine->canonical_state_bytes(slot, Dictionary()) == PackedByteArray()
+    NETW_CHECK_EQ(coded, engine->payload_fingerprint(slot, same));
+    NETW_CHECK_ORDER(
+        coded,
+        engine->payload_fingerprint(slot, Dictionary()),
+        !=
     );
 }
 
@@ -242,8 +248,10 @@ TEST_CASE(
     Dictionary command;
     command[StringName("throttle")] = 1.3;
 
+    const netw::predict::FieldCodec *codec = engine->input_codec_of(slot);
+    REQUIRE(codec != nullptr);
     const double coded = double(
-        engine->canonicalize_input(slot, command)[StringName("throttle")]
+        netw::predict::canonicalize(*codec, command)[StringName("throttle")]
     );
     NETW_CHECK_ORDER(coded, 1.3, !=);
     NETW_CHECK_CLOSE(coded, 1.3, coarse()->max_error(Variant::FLOAT));
@@ -255,7 +263,10 @@ TEST_CASE(
         0.0
     );
     CHECK_FALSE(engine->canonical_input_bytes(slot, command).is_empty());
-    CHECK(engine->canonical_state_bytes(slot, command) == PackedByteArray());
+    NETW_CHECK_EQ(
+        engine->payload_fingerprint(slot, command),
+        engine->payload_fingerprint(slot, Dictionary())
+    );
 }
 
 TEST_CASE(
@@ -326,26 +337,24 @@ TEST_CASE(
     const int64_t slot = engine->open();
     engine->rewire(slot, declaration(keys()), typed_input());
 
-    const Dictionary coast = engine->coast_command(slot);
+    netw::predict::StateRow coasted;
+    REQUIRE(engine->coast_command(slot, coasted));
+    const Dictionary coast
+        = netw::predict::payload_of(*engine->input_codec_of(slot), coasted);
 
     NETW_CHECK_EQ(int(coast.size()), 3);
     CHECK(Vector2(coast[StringName("motion")]) == Vector2());
     CHECK_FALSE(bool(coast[StringName("bombing")]));
-    // A transparent alpha rather than Color's own default of opaque black, so
-    // a declared colour coasts to nothing the way every other type does.
     CHECK(Color(coast[StringName("tint")]) == Color(0.0, 0.0, 0.0, 0.0));
 
-    // A field whose declaration carries no type is omitted rather than
-    // guessed, and so is one whose type has no zero. The row commands nothing,
-    // and a value invented for either is a command like any other.
     CHECK_FALSE(coast.has(StringName("untyped")));
     CHECK_FALSE(coast.has(StringName("target")));
 
-    // The STATE declaration is a different codec, so a coast never names a
-    // field the owner does not author.
     CHECK_FALSE(coast.has(StringName("velocity")));
 
-    CHECK(engine->coast_command(slot + 9000).is_empty());
+    netw::predict::StateRow closed;
+    CHECK_FALSE(engine->coast_command(slot + 9000, closed));
+    CHECK_FALSE(closed.any());
 }
 
 TEST_CASE(
@@ -413,8 +422,6 @@ int64_t seated(
     int p_island = NetwPredictionEngine::ISLAND_NONE
 ) {
     const int64_t slot = p_pool->open(declaration(keys()));
-    // Checked, because a REFUSED configure leaves the slot on its defaults and
-    // a phase law would then read a roster nobody seated.
     REQUIRE(p_pool->configure(
         slot,
         p_schedule,
@@ -434,8 +441,6 @@ TEST_CASE(
 ) {
     NetwPredictionEngine held;
     NetwPredictionEngine *const engine = &held;
-    // A joint group shares one floor, so it can only be seated on a schedule
-    // whose replay is the same run twice.
     const int64_t joint = seated(
         engine,
         int(Schedule::TICK),
@@ -451,8 +456,6 @@ TEST_CASE(
         = seated(engine, int(Schedule::FRAME), int(Role::CONSUME), 20);
     const int64_t frame_remote
         = seated(engine, int(Schedule::FRAME), int(Role::REMOTE), 30);
-    // A promoted remote has no timeline of its own, so the pool refuses to
-    // seat one outside an island at all.
     const int64_t frame_simulate = seated(
         engine,
         int(Schedule::FRAME),
@@ -461,8 +464,6 @@ TEST_CASE(
         NetwPredictionEngine::ISLAND_DECLARED
     );
 
-    // The island phase is per schedule tier: a FRAME slot is not committed by
-    // the TICK tier's pass and the two never see each other's roster.
     const PackedInt64Array island_tick
         = engine->pass_slots(NetwPredictionEngine::PASS_ISLAND_TICK);
     NETW_CHECK_EQ(int(island_tick.size()), 2);
@@ -475,15 +476,11 @@ TEST_CASE(
     NETW_CHECK_EQ(island_frame[0], frame_predict);
     NETW_CHECK_EQ(island_frame[1], frame_consume);
 
-    // Only a group member is carried by the group's pass. Running it for a
-    // slot that declared no island would double-write the body the ladder
-    // already answers for.
     const PackedInt64Array joint_pass
         = engine->pass_slots(NetwPredictionEngine::PASS_JOINT);
     NETW_CHECK_EQ(int(joint_pass.size()), 1);
     NETW_CHECK_EQ(joint_pass[0], joint);
 
-    // A remote display never steps until it is authoring its own fallback.
     const PackedInt64Array frame
         = engine->pass_slots(NetwPredictionEngine::PASS_FRAME);
     NETW_CHECK_EQ(int(frame.size()), 3);
@@ -503,13 +500,11 @@ TEST_CASE(
     NETW_CHECK_EQ(int(latched.size()), 4);
     NETW_CHECK_EQ(latched[2], frame_remote);
 
-    // Only an owner records the frame it drove, and only under FRAME.
     const PackedInt64Array finalize
         = engine->pass_slots(NetwPredictionEngine::PASS_FINALIZE_FRAME);
     NETW_CHECK_EQ(int(finalize.size()), 1);
     NETW_CHECK_EQ(finalize[0], frame_predict);
 
-    // A closed slot leaves every phase with the order.
     engine->close(joint);
     NETW_CHECK_EQ(
         int(engine->pass_slots(NetwPredictionEngine::PASS_JOINT).size()),

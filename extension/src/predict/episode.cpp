@@ -200,8 +200,6 @@ void Episode::open(
     const int saved_flap_level = fallback_flap_level;
     const bool saved_closure_was_fallback = last_closure_was_fallback;
     const bool held = flap_suppress_once;
-    LocalVector<int> saved_chain;
-    copy_values(saved_chain, last_reopen_chain);
     clear_active();
     next_id = saved_next_id;
     last_closed_id = saved_closed_id;
@@ -210,7 +208,6 @@ void Episode::open(
     fallback_flap_level = saved_flap_level;
     last_closure_was_fallback = saved_closure_was_fallback;
     flap_suppress_once = false;
-    copy_values(last_reopen_chain, saved_chain);
 
     const bool reopened = last_closed_id > 0
         && p_transition >= last_closed_transition
@@ -235,6 +232,7 @@ void Episode::open(
     id = next_id;
     next_id += 1;
     reopen_chain.push_back(id);
+    trim(reopen_chain, evidence_dropped);
     copy_values(last_reopen_chain, reopen_chain);
     opened_transition = p_transition;
     attribution = p_attribution;

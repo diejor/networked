@@ -1,16 +1,17 @@
 #pragma once
 
+#include "godot/hash_map.hpp"
+#include "godot/local_vector.hpp"
 #include "godot/ref_counted.hpp"
 #include "godot/variant.hpp"
-#include "netw/api/property_set_binding.hpp"
+#include "netw/repl/property_binding.hpp"
 #include "netw/repl/set_model.hpp"
 
 namespace netw {
 
 class NetwSyncModel {
     repl::SetModel impl;
-    godot::HashMap<godot::StringName, godot::Ref<NetwPropertySetBinding>>
-        bindings;
+    const repl::BindingBook *book = nullptr;
     int64_t drops_no_set = 0;
     int64_t skips_not_author = 0;
     int64_t skips_no_recipients = 0;
@@ -18,15 +19,12 @@ class NetwSyncModel {
     int64_t drops_schema = 0;
     int64_t rows_in = 0;
 
-    static godot::StringName slot_of(
-        int64_t p_route,
-        int64_t p_kind,
-        const godot::StringName &p_key,
-        int64_t p_record
-    );
+    repl::PropertyBinding *live(uint64_t p_binding) const;
 
 public:
     enum Kind { KIND_CONSUMED = 0, KIND_DERIVED = 1 };
+
+    void attach_book(const repl::BindingBook *p_book);
 
     int64_t declare(
         int64_t p_route,
@@ -101,7 +99,7 @@ public:
         int64_t p_kind,
         const godot::StringName &p_key,
         int64_t p_record,
-        const godot::Ref<NetwPropertySetBinding> &p_binding
+        const repl::PropertyBindingPtr &p_binding
     );
 
     void detach(
@@ -111,12 +109,12 @@ public:
         int64_t p_record
     );
 
-    godot::Ref<NetwPropertySetBinding> binding_of(
+    repl::PropertyBindingPtr binding_of(
         int64_t p_route,
         int64_t p_ordinal
     ) const;
 
-    godot::Ref<NetwPropertySetBinding> admit_row(
+    repl::PropertyBindingPtr admit_row(
         int64_t p_route,
         int64_t p_ordinal,
         int64_t p_sender,
@@ -125,6 +123,12 @@ public:
     );
 
     void note_row_applied();
+
+    void note_offers(int64_t p_unauthored, int64_t p_unreached);
+
+    uint64_t revision() const {
+        return impl.revision;
+    }
 
     godot::PackedInt32Array offer_row(
         int64_t p_route,
@@ -138,7 +142,7 @@ public:
 
     godot::Dictionary stats() const;
 
-    godot::TypedArray<NetwPropertySetBinding> route_bindings(
+    godot::LocalVector<repl::PropertyBindingPtr> route_bindings(
         int64_t p_route,
         int64_t p_kind
     ) const;

@@ -3,6 +3,7 @@
 #include <algorithm>
 
 #include "godot/node.hpp"
+#include "godot/physics_body.hpp"
 
 using namespace godot;
 
@@ -34,28 +35,6 @@ bool installs_on_arrival(Restore p_restore, int64_t p_tick, int64_t p_display) {
         || p_tick <= p_display;
 }
 
-void hold(Installs &r_installs, const Sample &p_sample) {
-    r_installs.held.push_back(p_sample);
-    r_installs.stats.held += 1;
-}
-
-void take_due(
-    Installs &r_installs,
-    int64_t p_display,
-    LocalVector<Sample> &r_due
-) {
-    r_due.clear();
-    LocalVector<Sample> kept;
-    for (const Sample &sample : r_installs.held) {
-        if (sample.tick <= p_display) {
-            r_due.push_back(sample);
-        } else {
-            kept.push_back(sample);
-        }
-    }
-    r_installs.held = kept;
-}
-
 void note_install(InstallStats &r_stats, int64_t p_age) {
     r_stats.installed += 1;
     if (p_age < 0) {
@@ -73,8 +52,17 @@ bool asleep(const Bodies &p_bodies) {
         return false;
     }
     for (const AuthoredBody &held : p_bodies.held) {
-        Object *body = gd::object_of(held.node);
-        if (body == nullptr || !bool(body->get(sleeping_name()))) {
+        const store::NodeCell &cell = resident_of(p_bodies, held);
+        if (cell.solid != nullptr) {
+            if (!cell.solid->is_sleeping()) {
+                return false;
+            }
+        } else if (cell.flat != nullptr) {
+            if (!cell.flat->is_sleeping()) {
+                return false;
+            }
+        } else if (cell.object == nullptr
+                   || !bool(cell.object->get(sleeping_name()))) {
             return false;
         }
     }

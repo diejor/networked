@@ -1,13 +1,13 @@
 #include "support/netw_test.h"
+#include "support/books.h"
 
 #include <cstdint>
 
 #include "godot/node.hpp"
 #include "godot/variant.hpp"
-#include "netw/api/property_set.hpp"
-#include "netw/api/property_set_binding.hpp"
 #include "netw/api/schema_core.hpp"
 #include "netw/api/sync_model.hpp"
+#include "netw/repl/property_binding.hpp"
 #include "netw/repl/set_model.hpp"
 
 using namespace godot;
@@ -563,9 +563,11 @@ TEST_CASE(
     "[Networked][Repl][Hosted] a binding is found by the ordinal its "
     "row currently holds, not the one it was attached under"
 ) {
+    netw_test::Books books;
     netw::NetwSyncModel model;
-    godot::Ref<netw::NetwPropertySetBinding> zed;
-    zed.instantiate();
+    model.attach_book(&books.bindings);
+    netw::repl::PropertyBindingPtr zed;
+    zed = books.bindings.create(0, nullptr);
 
     model.declare(ROUTE, SET_DERIVED, StringName("Z"), 0, RID(), 0, 1, 0, 0);
     model.attach(ROUTE, SET_DERIVED, StringName("Z"), 0, zed);
@@ -574,22 +576,24 @@ TEST_CASE(
     model.declare(ROUTE, SET_DERIVED, StringName("A"), 0, RID(), 0, 1, 0, 0);
 
     CHECK(model.binding_of(ROUTE, 1) == zed);
-    CHECK(model.binding_of(ROUTE, 0).is_null());
+    CHECK(model.binding_of(ROUTE, 0) == nullptr);
 }
 
 TEST_CASE(
     "[Networked][Repl][Hosted] detaching a binding leaves its row, and "
     "attaching nothing detaches"
 ) {
+    netw_test::Books books;
     netw::NetwSyncModel model;
-    godot::Ref<netw::NetwPropertySetBinding> held;
-    held.instantiate();
+    model.attach_book(&books.bindings);
+    netw::repl::PropertyBindingPtr held;
+    held = books.bindings.create(0, nullptr);
     model.declare(ROUTE, SET_DERIVED, StringName("A"), 0, RID(), 0, 1, 0, 0);
     model.attach(ROUTE, SET_DERIVED, StringName("A"), 0, held);
 
     model.detach(ROUTE, SET_DERIVED, StringName("A"), 0);
 
-    CHECK(model.binding_of(ROUTE, 0).is_null());
+    CHECK(model.binding_of(ROUTE, 0) == nullptr);
     CHECK(model.row(ROUTE, 0) != nullptr);
 
     model.attach(ROUTE, SET_DERIVED, StringName("A"), 0, held);
@@ -599,22 +603,24 @@ TEST_CASE(
         SET_DERIVED,
         StringName("A"),
         0,
-        godot::Ref<netw::NetwPropertySetBinding>()
+        netw::repl::PropertyBindingPtr()
     );
-    CHECK(model.binding_of(ROUTE, 0).is_null());
+    CHECK(model.binding_of(ROUTE, 0) == nullptr);
 }
 
 TEST_CASE(
     "[Networked][Repl][Hosted] a route's bindings answer in ordinal "
     "order and only for the kind asked for"
 ) {
+    netw_test::Books books;
     netw::NetwSyncModel model;
-    godot::Ref<netw::NetwPropertySetBinding> first;
-    godot::Ref<netw::NetwPropertySetBinding> second;
-    godot::Ref<netw::NetwPropertySetBinding> consumed;
-    first.instantiate();
-    second.instantiate();
-    consumed.instantiate();
+    model.attach_book(&books.bindings);
+    netw::repl::PropertyBindingPtr first;
+    netw::repl::PropertyBindingPtr second;
+    netw::repl::PropertyBindingPtr consumed;
+    first = books.bindings.create(0, nullptr);
+    second = books.bindings.create(0, nullptr);
+    consumed = books.bindings.create(0, nullptr);
 
     model.declare(ROUTE, SET_DERIVED, StringName("B"), 0, RID(), 0, 1, 0, 0);
     model.declare(ROUTE, SET_DERIVED, StringName("A"), 0, RID(), 0, 1, 0, 0);
@@ -623,37 +629,41 @@ TEST_CASE(
     model.attach(ROUTE, SET_DERIVED, StringName("A"), 0, first);
     model.attach(ROUTE, SET_CONSUMED, StringName("C"), 0, consumed);
 
-    const godot::TypedArray<netw::NetwPropertySetBinding> derived
+    const godot::LocalVector<netw::repl::PropertyBindingPtr> derived
         = model.route_bindings(ROUTE, SET_DERIVED);
 
     NETW_CHECK_EQ(int(derived.size()), 2);
-    CHECK(godot::Ref<netw::NetwPropertySetBinding>(derived[0]) == first);
-    CHECK(godot::Ref<netw::NetwPropertySetBinding>(derived[1]) == second);
+    CHECK(derived[0] == first);
+    CHECK(derived[1] == second);
     NETW_CHECK_EQ(int(model.route_bindings(ROUTE, SET_CONSUMED).size()), 1);
 }
 
 TEST_CASE("[Networked][Repl][Hosted] a route's bindings die with the route") {
+    netw_test::Books books;
     netw::NetwSyncModel model;
-    godot::Ref<netw::NetwPropertySetBinding> held;
-    held.instantiate();
+    model.attach_book(&books.bindings);
+    netw::repl::PropertyBindingPtr held;
+    held = books.bindings.create(0, nullptr);
     model.declare(ROUTE, SET_DERIVED, StringName("A"), 0, RID(), 0, 1, 0, 0);
     model.attach(ROUTE, SET_DERIVED, StringName("A"), 0, held);
 
     model.clear_route(ROUTE);
     model.declare(ROUTE, SET_DERIVED, StringName("A"), 0, RID(), 0, 1, 0, 0);
 
-    CHECK(model.binding_of(ROUTE, 0).is_null());
+    CHECK(model.binding_of(ROUTE, 0) == nullptr);
 }
 
 TEST_CASE(
     "[Networked][Repl][Hosted] one key under two records keeps two "
     "bindings, because the record is part of a row's identity"
 ) {
+    netw_test::Books books;
     netw::NetwSyncModel model;
-    godot::Ref<netw::NetwPropertySetBinding> state;
-    godot::Ref<netw::NetwPropertySetBinding> input;
-    state.instantiate();
-    input.instantiate();
+    model.attach_book(&books.bindings);
+    netw::repl::PropertyBindingPtr state;
+    netw::repl::PropertyBindingPtr input;
+    state = books.bindings.create(0, nullptr);
+    input = books.bindings.create(0, nullptr);
 
     model.declare(ROUTE, SET_DERIVED, StringName("A"), 0, RID(), 1, 1, 0, 0);
     model.declare(ROUTE, SET_DERIVED, StringName("A"), 0, RID(), 2, 1, 0, 0);
@@ -665,27 +675,31 @@ TEST_CASE(
     CHECK(model.binding_of(ROUTE, 0) != model.binding_of(ROUTE, 1));
 }
 
-Ref<netw::NetwPropertySetBinding> binding_on(Node *p_node) {
-    Ref<netw::NetwPropertySet> set;
-    set.instantiate();
-    Ref<netw::NetwPropertySetColumn> column
-        = netw::NetwPropertySetColumn::create(
-            StringName("x"),
-            Ref<netw::NetwQuantize>(),
-            false,
-            netw::enums::NetwMultiplayer::ColumnType(netw::SchemaCore::VARIANT)
-        );
-    column->lane = netw::NetwPropertySet::VOLATILE;
+netw::repl::PropertyBindingPtr binding_on(
+    netw_test::Books &p_books,
+    Node *p_node
+) {
+    const uint64_t declared = p_books.sets.create();
+    netw::repl::PropertySet *set = p_books.sets.get(declared);
+    netw::repl::PropertyColumn column = netw::repl::PropertyColumn::create(
+        StringName("x"),
+        Ref<netw::NetwQuantize>(),
+        false,
+        netw::enums::NetwMultiplayer::ColumnType(netw::SchemaCore::VARIANT)
+    );
+    column.lane = netw::repl::PropertySet::VOLATILE;
     set->bind_column(column);
-    return netw::NetwPropertySetBinding::create(set, p_node);
+    return p_books.bindings.create(declared, p_node);
 }
 
 netw::NetwSyncModel model_with_binding(
+    netw_test::Books &p_books,
     Node *p_node,
     int64_t p_record,
     int64_t p_policy
 ) {
     netw::NetwSyncModel model;
+    model.attach_book(&p_books.bindings);
     model.declare(
         ROUTE,
         SET_DERIVED,
@@ -702,7 +716,7 @@ netw::NetwSyncModel model_with_binding(
         SET_DERIVED,
         StringName("A"),
         p_record,
-        binding_on(p_node)
+        binding_on(p_books, p_node)
     );
     return model;
 }
@@ -711,14 +725,16 @@ TEST_CASE(
     "[Networked][Repl][Hosted] a frame whose header could not be read names "
     "no set, and is counted as one"
 ) {
+    netw_test::Books books;
     Node *node = memnew(Node);
     netw::NetwSyncModel model = model_with_binding(
+        books,
         node,
         netw::repl::SET_RECORD_NONE,
         int64_t(WritePolicy::ANY_PEER)
     );
 
-    CHECK(model.admit_row(ROUTE, -1, 7, 7, 7).is_null());
+    CHECK(model.admit_row(ROUTE, -1, 7, 7, 7) == nullptr);
     NETW_CHECK_EQ(int64_t(model.stats()[StringName("drops_no_set")]), 1);
     memdelete(node);
 }
@@ -727,21 +743,23 @@ TEST_CASE(
     "[Networked][Repl][Hosted] an ordinal naming no binding is refused, and "
     "so is one whose node is gone"
 ) {
+    netw_test::Books books;
     Node *node = memnew(Node);
     netw::NetwSyncModel model = model_with_binding(
+        books,
         node,
         netw::repl::SET_RECORD_NONE,
         int64_t(WritePolicy::ANY_PEER)
     );
 
-    CHECK(model.admit_row(ROUTE, 1, 7, 7, 7).is_null());
-    CHECK(model.admit_row(ROUTE + 1, 0, 7, 7, 7).is_null());
+    CHECK(model.admit_row(ROUTE, 1, 7, 7, 7) == nullptr);
+    CHECK(model.admit_row(ROUTE + 1, 0, 7, 7, 7) == nullptr);
     NETW_CHECK_EQ(int64_t(model.stats()[StringName("drops_no_set")]), 2);
 
-    REQUIRE(model.admit_row(ROUTE, 0, 7, 7, 7).is_valid());
+    REQUIRE(model.admit_row(ROUTE, 0, 7, 7, 7) != nullptr);
 
     memdelete(node);
-    CHECK(model.admit_row(ROUTE, 0, 7, 7, 7).is_null());
+    CHECK(model.admit_row(ROUTE, 0, 7, 7, 7) == nullptr);
     NETW_CHECK_EQ(int64_t(model.stats()[StringName("drops_no_set")]), 3);
 }
 
@@ -749,20 +767,22 @@ TEST_CASE(
     "[Networked][Repl][Hosted] a state row admits its coordinator as sender "
     "and refuses everyone else, transport peer 1 included"
 ) {
+    netw_test::Books books;
     Node *node = memnew(Node);
     node->set_multiplayer_authority(1, false);
     netw::NetwSyncModel model = model_with_binding(
+        books,
         node,
         netw::repl::SET_RECORD_STATE,
         int64_t(WritePolicy::AUTHORITY)
     );
 
-    CHECK(model.admit_row(ROUTE, 0, 1, 7, 7).is_null());
+    CHECK(model.admit_row(ROUTE, 0, 1, 7, 7) == nullptr);
     const Dictionary stats = model.stats();
     NETW_CHECK_EQ(int64_t(stats[StringName("drops_bad_sender")]), 1);
     NETW_CHECK_EQ(int64_t(stats[StringName("drops_no_set")]), 0);
 
-    CHECK(model.admit_row(ROUTE, 0, 7, 7, 7).is_valid());
+    CHECK(model.admit_row(ROUTE, 0, 7, 7, 7) != nullptr);
     memdelete(node);
 }
 
@@ -770,8 +790,10 @@ TEST_CASE(
     "[Networked][Repl][Hosted] a schema the spawn descriptor disagrees with "
     "is refused after the sender is admitted"
 ) {
+    netw_test::Books books;
     Node *node = memnew(Node);
     netw::NetwSyncModel model = model_with_binding(
+        books,
         node,
         netw::repl::SET_RECORD_NONE,
         int64_t(WritePolicy::ANY_PEER)
@@ -780,7 +802,7 @@ TEST_CASE(
     noted[int64_t(0)] = int64_t(8);
     model.note_descriptors(ROUTE, noted);
 
-    CHECK(model.admit_row(ROUTE, 0, 7, 7, 7).is_null());
+    CHECK(model.admit_row(ROUTE, 0, 7, 7, 7) == nullptr);
     const Dictionary stats = model.stats();
     NETW_CHECK_EQ(int64_t(stats[StringName("drops_schema")]), 1);
     NETW_CHECK_EQ(int64_t(stats[StringName("drops_bad_sender")]), 0);
@@ -791,14 +813,16 @@ TEST_CASE(
     "[Networked][Repl][Hosted] an admitted row hands back the binding the "
     "model holds, and counts nothing until it applies"
 ) {
+    netw_test::Books books;
     Node *node = memnew(Node);
     netw::NetwSyncModel model = model_with_binding(
+        books,
         node,
         netw::repl::SET_RECORD_NONE,
         int64_t(WritePolicy::ANY_PEER)
     );
 
-    const Ref<netw::NetwPropertySetBinding> admitted
+    const netw::repl::PropertyBindingPtr admitted
         = model.admit_row(ROUTE, 0, 7, 7, 7);
     CHECK(admitted == model.binding_of(ROUTE, 0));
 

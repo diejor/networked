@@ -1,17 +1,9 @@
-/* Round-trip, framing, and verdict laws for the TABLE codec.
- *
- * Two Core instances stand in for two peers, with no session and no
- * carrier between them. What is proven is the property the wire design rests
- * on: every frame is a self-contained statement, so any subset of them, in any
- * order, leaves membership exact.
- */
-
 #include "support/netw_test.h"
 
 #include "godot/math.hpp"
 #include "netw/api/quantize.hpp"
 #include "netw/handle_ledger.hpp"
-#include "netw/table/core.hpp"
+#include "netw/store/array.hpp"
 
 namespace TestTableCodec {
 
@@ -21,7 +13,8 @@ using netw::NetwQuantize;
 using netw::NetwQuantizeQuaternion;
 using netw::NetwQuantizeScalar;
 using netw::SchemaCore;
-using netw::table::Core;
+using netw::store::ArrayFrameHead;
+using netw::store::Arrays;
 using netw::table::SchemaRecord;
 
 constexpr int BUDGET = 1200;
@@ -33,19 +26,14 @@ struct Spec {
     Ref<NetwQuantize> quantizer;
 };
 
-// Two peers and one handle mint, so a table's RID is the same shape on both.
 struct Peers {
-    Ref<Core> tx;
-    Ref<Core> rx;
+    Arrays tx;
+    Arrays rx;
     NetwHandleLedger ledger;
-
-    Peers() {
-        tx.instantiate();
-        rx.instantiate();
-    }
+    int next_reader = 100;
 
     RID declare_on(
-        const Ref<Core> &core,
+        Arrays &r_book,
         const StringName &name,
         const Vector<Spec> &specs
     ) {
@@ -68,12 +56,10 @@ struct Peers {
         }
         SchemaCore::fix(&schema);
         const RID rid = ledger.rid_create();
-        core->declare(rid, &schema);
+        r_book.declare(rid, &schema);
         return rid;
     }
 
-    // The same declaration on both peers, which is what a shared script gives
-    // two processes.
     void pair(
         const StringName &name,
         const Vector<Spec> &specs,
@@ -84,12 +70,17 @@ struct Peers {
         there = declare_on(rx, name, specs);
     }
 
+    TypedArray<PackedByteArray> every_row(const RID &p_table, int p_budget) {
+        next_reader += 1;
+        return tx.encode_owed(p_table, next_reader, p_budget);
+    }
+
     void deliver(const TypedArray<PackedByteArray> &frames) {
-        rx->begin_intake();
+        rx.begin_intake();
         for (int i = 0; i < frames.size(); i++) {
             const PackedByteArray frame = frames[i];
-            NETW_CHECK_EQ(rx->admit_header(Core::peek_header(frame)), OK);
-            NETW_CHECK_EQ(int64_t(rx->apply_frame(frame)["verdict"]), OK);
+            NETW_CHECK_EQ(rx.admit_header(frame), OK);
+            NETW_CHECK_EQ(int64_t(rx.apply_frame(frame).verdict), int64_t(OK));
         }
     }
 };
@@ -117,15 +108,20 @@ PackedInt32Array int32s(const std::initializer_list<int32_t> &values) {
 }
 
 void publish(
-    const Ref<Core> &tx,
+    Arrays &tx,
     const RID &table,
     const PackedInt64Array &routes,
     const PackedInt32Array &hp,
     int64_t tick
 ) {
-    tx->write_routes(table, routes);
-    tx->write_column(table, 0, hp);
-    tx->commit(table, tick);
+    tx.write_routes(table, routes);
+    tx.write_column(table, 0, hp);
+    tx.commit(table, tick);
+}
+
+int64_t flags_of(const PackedByteArray &p_frame) {
+    ArrayFrameHead head;
+    return Arrays::peek_header(p_frame, head) ? int64_t(head.flags) : -1;
 }
 
 TEST_CASE("[Networked][Table][Hosted] Every column type round trips") {
@@ -152,11 +148,11 @@ TEST_CASE("[Networked][Table][Hosted] Every column type round trips") {
     RID here;
     RID there;
     peers.pair("CodecAll", specs, here, there);
-    NETW_CHECK_EQ(peers.tx->schema_hash(here), peers.rx->schema_hash(there));
-    NETW_CHECK_EQ(peers.tx->wire_id(here), peers.rx->wire_id(there));
+    NETW_CHECK_EQ(peers.tx.schema_hash(here), peers.rx.schema_hash(there));
+    NETW_CHECK_EQ(peers.tx.wire_id(here), peers.rx.wire_id(there));
 
     const PackedInt64Array routes = int64s({11, 12});
-    peers.tx->write_routes(here, routes);
+    peers.tx.write_routes(here, routes);
 
     Array written;
     PackedFloat32Array f32;
@@ -205,19 +201,19 @@ TEST_CASE("[Networked][Table][Hosted] Every column type round trips") {
     written.push_back(cooldown);
 
     for (int c = 0; c < written.size(); c++) {
-        peers.tx->write_column(here, c, written[c]);
+        peers.tx.write_column(here, c, written[c]);
     }
-    NETW_CHECK_EQ(peers.tx->commit(here, 7), OK);
+    NETW_CHECK_EQ(peers.tx.commit(here, 7), OK);
 
-    peers.deliver(peers.tx->encode_frames(here, BUDGET, false));
+    peers.deliver(peers.every_row(here, BUDGET));
 
-    CHECK(bool(peers.rx->read_routes(there) == routes));
-    NETW_CHECK_EQ(peers.rx->tick_of(there), 7);
-    CHECK(bool(peers.rx->read_births(there) == routes));
+    CHECK(bool(peers.rx.read_routes(there) == routes));
+    NETW_CHECK_EQ(peers.rx.tick_of(there), 7);
+    CHECK(bool(peers.rx.read_births(there) == routes));
     for (int c = 0; c < written.size(); c++) {
         NETW_FORMAT_INT(column, c);
         CAPTURE(column);
-        CHECK(bool(peers.rx->read_column(there, c) == written[c]));
+        CHECK(bool(peers.rx.read_column(there, c) == written[c]));
     }
 }
 
@@ -230,28 +226,26 @@ TEST_CASE(
     for (int i = 0; i < count; i++) {
         peers.declare_on(peers.tx, names[i], one_u16());
     }
-    // Declared in the opposite order on the other peer, and they still agree.
     for (int i = count - 1; i >= 0; i--) {
         peers.declare_on(peers.rx, names[i], one_u16());
     }
 
     PackedStringArray seen;
     for (int id = 1; id <= count; id++) {
-        const RID here = peers.tx->table_from_wire_id(id);
-        const RID there = peers.rx->table_from_wire_id(id);
+        const RID here = peers.tx.table_from_wire_id(id);
+        const RID there = peers.rx.table_from_wire_id(id);
         CHECK(here.is_valid());
         NETW_FORMAT_INT(wire_id, id);
         CAPTURE(wire_id);
-        CHECK(bool(peers.tx->name_of(here) == peers.rx->name_of(there)));
-        seen.push_back(String(peers.tx->name_of(here)));
+        CHECK(bool(peers.tx.name_of(here) == peers.rx.name_of(there)));
+        seen.push_back(String(peers.tx.name_of(here)));
     }
 
     PackedStringArray sorted = seen.duplicate();
     sorted.sort();
-    // String order, not StringName pointer order, or two peers renumber.
     CHECK(bool(seen == sorted));
-    CHECK_FALSE(peers.tx->table_from_wire_id(0).is_valid());
-    CHECK_FALSE(peers.tx->table_from_wire_id(99).is_valid());
+    CHECK_FALSE(peers.tx.table_from_wire_id(0).is_valid());
+    CHECK_FALSE(peers.tx.table_from_wire_id(99).is_valid());
 }
 
 TEST_CASE(
@@ -281,26 +275,24 @@ TEST_CASE(
     rotations.push_back(Vector4(0, 0, 0, 1));
     rotations.push_back(Vector4(turn.x, turn.y, turn.z, turn.w));
 
-    peers.tx->write_routes(here, int64s({1, 2}));
-    peers.tx->write_column(here, 0, positions);
-    peers.tx->write_column(here, 1, rotations);
-    peers.tx->commit(here, 2);
+    peers.tx.write_routes(here, int64s({1, 2}));
+    peers.tx.write_column(here, 0, positions);
+    peers.tx.write_column(here, 1, rotations);
+    peers.tx.commit(here, 2);
 
-    const TypedArray<PackedByteArray> frames
-        = peers.tx->encode_frames(here, BUDGET, false);
+    const TypedArray<PackedByteArray> frames = peers.every_row(here, BUDGET);
     const PackedByteArray first = frames[0];
-    // Smaller than the raw column alone, which is the only reason to pack.
     NETW_CHECK_EQ(
         first.size() < positions.size() * int(sizeof(Vector3)) + 32,
         true
     );
     peers.deliver(frames);
 
-    const PackedVector3Array got = peers.rx->read_column(there, 0);
+    const PackedVector3Array got = peers.rx.read_column(there, 0);
     for (int i = 0; i < 2; i++) {
         NETW_CHECK_CLOSE(got[i].distance_to(positions[i]), 0.0, 0.05);
     }
-    const PackedVector4Array back = peers.rx->read_column(there, 1);
+    const PackedVector4Array back = peers.rx.read_column(there, 1);
     const Quaternion decoded(back[1].x, back[1].y, back[1].z, back[1].w);
     NETW_CHECK_CLOSE(Math::abs(decoded.dot(turn)), 1.0, 0.001);
 }
@@ -322,13 +314,12 @@ TEST_CASE("[Networked][Table][Hosted] Frames are sized to the budget") {
         pos.push_back(Vector3(i, 0, -i));
         hp.push_back(i % 65535);
     }
-    peers.tx->write_routes(here, routes);
-    peers.tx->write_column(here, 0, pos);
-    peers.tx->write_column(here, 1, hp);
-    peers.tx->commit(here, 3);
+    peers.tx.write_routes(here, routes);
+    peers.tx.write_column(here, 0, pos);
+    peers.tx.write_column(here, 1, hp);
+    peers.tx.commit(here, 3);
 
-    const TypedArray<PackedByteArray> frames
-        = peers.tx->encode_frames(here, BUDGET, false);
+    const TypedArray<PackedByteArray> frames = peers.every_row(here, BUDGET);
     CHECK(frames.size() > 1);
     for (int i = 0; i < frames.size(); i++) {
         const PackedByteArray frame = frames[i];
@@ -338,8 +329,8 @@ TEST_CASE("[Networked][Table][Hosted] Frames are sized to the budget") {
     }
 
     peers.deliver(frames);
-    NETW_CHECK_EQ(peers.rx->read_routes(there).size(), 500);
-    const PackedVector3Array arrived = peers.rx->read_column(there, 0);
+    NETW_CHECK_EQ(peers.rx.read_routes(there).size(), 500);
+    const PackedVector3Array arrived = peers.rx.read_column(there, 0);
     CHECK(bool(arrived[499] == Vector3(499, 0, -499)));
 }
 
@@ -357,8 +348,7 @@ TEST_CASE("[Networked][Table][Hosted] Frames apply in any order") {
     }
     publish(peers.tx, here, routes, hp, 9);
 
-    const TypedArray<PackedByteArray> frames
-        = peers.tx->encode_frames(here, 200, false);
+    const TypedArray<PackedByteArray> frames = peers.every_row(here, 200);
     CHECK(frames.size() >= 3);
     TypedArray<PackedByteArray> reversed;
     for (int i = frames.size() - 1; i >= 0; i--) {
@@ -366,10 +356,10 @@ TEST_CASE("[Networked][Table][Hosted] Frames apply in any order") {
     }
     peers.deliver(reversed);
 
-    NETW_CHECK_EQ(peers.rx->read_routes(there).size(), 200);
-    const PackedInt32Array arrived = peers.rx->read_column(there, 0);
+    NETW_CHECK_EQ(peers.rx.read_routes(there).size(), 200);
+    const PackedInt32Array arrived = peers.rx.read_column(there, 0);
     for (int i = 0; i < 200; i++) {
-        const int row = peers.rx->row_of(there, 500 + i);
+        const int row = peers.rx.row_of(there, 500 + i);
         CHECK(row >= 0);
         NETW_CHECK_EQ(arrived[row], i);
     }
@@ -391,8 +381,7 @@ TEST_CASE(
     }
     publish(peers.tx, here, routes, hp, 9);
 
-    const TypedArray<PackedByteArray> frames
-        = peers.tx->encode_frames(here, 200, false);
+    const TypedArray<PackedByteArray> frames = peers.every_row(here, 200);
     TypedArray<PackedByteArray> kept;
     for (int i = 0; i < frames.size(); i++) {
         if (i % 2 == 0) {
@@ -401,13 +390,13 @@ TEST_CASE(
     }
     peers.deliver(kept);
 
-    const PackedInt64Array arrived = peers.rx->read_routes(there);
+    const PackedInt64Array arrived = peers.rx.read_routes(there);
     CHECK(arrived.size() > 0);
     CHECK(arrived.size() < 200);
-    NETW_CHECK_EQ(peers.rx->read_births(there).size(), arrived.size());
-    const PackedInt32Array values = peers.rx->read_column(there, 0);
+    NETW_CHECK_EQ(peers.rx.read_births(there).size(), arrived.size());
+    const PackedInt32Array values = peers.rx.read_column(there, 0);
     for (int i = 0; i < arrived.size(); i++) {
-        const int row = peers.rx->row_of(there, arrived[i]);
+        const int row = peers.rx.row_of(there, arrived[i]);
         NETW_CHECK_EQ(values[row], arrived[i] - 500);
     }
 }
@@ -420,22 +409,21 @@ TEST_CASE(
     RID there;
     peers.pair("CodecRemove", one_u16(), here, there);
     publish(peers.tx, here, int64s({1, 2, 3}), int32s({10, 20, 30}), 1);
-    peers.deliver(peers.tx->encode_frames(here, BUDGET, false));
+    peers.deliver(peers.every_row(here, BUDGET));
 
-    peers.deliver(peers.tx->encode_removal(here, int64s({2}), 2, BUDGET));
+    peers.deliver(peers.tx.encode_removal(here, int64s({2}), 2, BUDGET));
 
-    NETW_CHECK_EQ(peers.rx->row_of(there, 2), -1);
-    CHECK(bool(peers.rx->read_deaths(there) == int64s({2})));
-    NETW_CHECK_EQ(peers.rx->read_routes(there).size(), 2);
-    const PackedInt32Array values = peers.rx->read_column(there, 0);
-    NETW_CHECK_EQ(values[peers.rx->row_of(there, 1)], 10);
-    NETW_CHECK_EQ(values[peers.rx->row_of(there, 3)], 30);
+    NETW_CHECK_EQ(peers.rx.row_of(there, 2), -1);
+    CHECK(bool(peers.rx.read_deaths(there) == int64s({2})));
+    NETW_CHECK_EQ(peers.rx.read_routes(there).size(), 2);
+    const PackedInt32Array values = peers.rx.read_column(there, 0);
+    NETW_CHECK_EQ(values[peers.rx.row_of(there, 1)], 10);
+    NETW_CHECK_EQ(values[peers.rx.row_of(there, 3)], 30);
 
-    // The upsert the reliable removal outran must not put the row back.
     publish(peers.tx, here, int64s({1, 2, 3}), int32s({10, 20, 30}), 1);
-    peers.deliver(peers.tx->encode_frames(here, BUDGET, false));
-    NETW_CHECK_EQ(peers.rx->row_of(there, 2), -1);
-    CHECK(int64_t(peers.rx->counters()["table_drops_stale_row"]) > 0);
+    peers.deliver(peers.every_row(here, BUDGET));
+    NETW_CHECK_EQ(peers.rx.row_of(there, 2), -1);
+    CHECK(int64_t(peers.rx.counters()["table_drops_stale_row"]) > 0);
 }
 
 TEST_CASE("[Networked][Table][Hosted] A snapshot clears then applies") {
@@ -444,28 +432,27 @@ TEST_CASE("[Networked][Table][Hosted] A snapshot clears then applies") {
     RID there;
     peers.pair("CodecSnap", one_u16(), here, there);
     publish(peers.tx, here, int64s({1, 2, 3}), int32s({1, 2, 3}), 1);
-    peers.deliver(peers.tx->encode_frames(here, BUDGET, false));
+    peers.deliver(peers.every_row(here, BUDGET));
 
     publish(peers.tx, here, int64s({4}), int32s({9}), 5);
     const TypedArray<PackedByteArray> frames
-        = peers.tx->encode_frames(here, BUDGET, true);
+        = peers.tx.encode_snapshot(here, 2, BUDGET);
     const PackedByteArray first = frames[0];
     NETW_CHECK_EQ(
-        int64_t(Core::peek_header(first)["flags"]) & Core::FLAG_SNAPSHOT,
-        Core::FLAG_SNAPSHOT
+        flags_of(first) & int64_t(Arrays::FLAG_SNAPSHOT),
+        int64_t(Arrays::FLAG_SNAPSHOT)
     );
     peers.deliver(frames);
 
-    CHECK(bool(peers.rx->read_routes(there) == int64s({4})));
-    CHECK(bool(peers.rx->read_births(there) == int64s({4})));
+    CHECK(bool(peers.rx.read_routes(there) == int64s({4})));
+    CHECK(bool(peers.rx.read_births(there) == int64s({4})));
 
-    // An empty table still owes a joiner the statement that it is empty.
     publish(peers.tx, here, PackedInt64Array(), PackedInt32Array(), 6);
     const TypedArray<PackedByteArray> empty
-        = peers.tx->encode_frames(here, BUDGET, true);
+        = peers.tx.encode_snapshot(here, 2, BUDGET);
     NETW_CHECK_EQ(empty.size(), 1);
     peers.deliver(empty);
-    CHECK(peers.rx->read_routes(there).is_empty());
+    CHECK(peers.rx.read_routes(there).is_empty());
 }
 
 TEST_CASE("[Networked][Table][Hosted] Only the first snapshot frame clears") {
@@ -483,13 +470,12 @@ TEST_CASE("[Networked][Table][Hosted] Only the first snapshot frame clears") {
     publish(peers.tx, here, routes, hp, 4);
 
     const TypedArray<PackedByteArray> frames
-        = peers.tx->encode_frames(here, 200, true);
+        = peers.tx.encode_snapshot(here, 2, 200);
     CHECK(frames.size() > 1);
-    // Ordered reliable delivery is the whole assembly protocol.
     const PackedByteArray second = frames[1];
-    NETW_CHECK_EQ(int64_t(Core::peek_header(second)["flags"]), 0);
+    NETW_CHECK_EQ(flags_of(second), int64_t(0));
     peers.deliver(frames);
-    NETW_CHECK_EQ(peers.rx->read_routes(there).size(), 200);
+    NETW_CHECK_EQ(peers.rx.read_routes(there).size(), 200);
 }
 
 TEST_CASE(
@@ -503,23 +489,22 @@ TEST_CASE(
     peers.pair("CodecLifeA", one_u16(), a_here, a_there);
     peers.pair("CodecLifeB", one_u16(), b_here, b_there);
     publish(peers.tx, a_here, int64s({1, 2}), int32s({5, 6}), 1);
-    peers.deliver(peers.tx->encode_frames(a_here, BUDGET, false));
+    peers.deliver(peers.every_row(a_here, BUDGET));
     publish(peers.tx, b_here, int64s({1, 2}), int32s({5, 6}), 1);
-    peers.deliver(peers.tx->encode_frames(b_here, BUDGET, false));
+    peers.deliver(peers.every_row(b_here, BUDGET));
 
-    peers.deliver(Core::encode_lifecycle(int64s({2}), 2, BUDGET));
+    peers.deliver(Arrays::encode_lifecycle(int64s({2}), 2, BUDGET));
 
-    NETW_CHECK_EQ(peers.rx->row_of(a_there, 2), -1);
-    NETW_CHECK_EQ(peers.rx->row_of(b_there, 2), -1);
-    CHECK(bool(peers.rx->read_deaths(a_there) == int64s({2})));
-    CHECK(bool(peers.rx->read_deaths(b_there) == int64s({2})));
-    CHECK(peers.rx->is_tombstoned(2));
+    NETW_CHECK_EQ(peers.rx.row_of(a_there, 2), -1);
+    NETW_CHECK_EQ(peers.rx.row_of(b_there, 2), -1);
+    CHECK(bool(peers.rx.read_deaths(a_there) == int64s({2})));
+    CHECK(bool(peers.rx.read_deaths(b_there) == int64s({2})));
+    CHECK(peers.rx.is_tombstoned(2));
 
-    // A tombstone is permanent without keeping the row it described.
     publish(peers.tx, a_here, int64s({1, 2}), int32s({5, 6}), 9);
-    peers.deliver(peers.tx->encode_frames(a_here, BUDGET, false));
-    NETW_CHECK_EQ(peers.rx->row_of(a_there, 2), -1);
-    CHECK(int64_t(peers.rx->counters()["table_drops_tombstone"]) > 0);
+    peers.deliver(peers.every_row(a_here, BUDGET));
+    NETW_CHECK_EQ(peers.rx.row_of(a_there, 2), -1);
+    CHECK(int64_t(peers.rx.counters()["table_drops_tombstone"]) > 0);
 }
 
 TEST_CASE("[Networked][Table][Hosted] Cohorts describe a wave, not a frame") {
@@ -535,16 +520,15 @@ TEST_CASE("[Networked][Table][Hosted] Cohorts describe a wave, not a frame") {
         hp.push_back(i);
     }
     publish(peers.tx, here, routes, hp, 1);
-    peers.deliver(peers.tx->encode_frames(here, 200, false));
+    peers.deliver(peers.every_row(here, 200));
 
-    NETW_CHECK_EQ(peers.rx->read_births(there).size(), 120);
-    CHECK(peers.rx->touched_tables().has(there));
+    NETW_CHECK_EQ(peers.rx.read_births(there).size(), 120);
+    CHECK(peers.rx.touched_tables().has(there));
 
-    // A wave that changes nothing reports nothing.
     publish(peers.tx, here, routes, hp, 2);
-    peers.deliver(peers.tx->encode_frames(here, 200, false));
-    CHECK(peers.rx->read_births(there).is_empty());
-    CHECK(peers.rx->read_deaths(there).is_empty());
+    peers.deliver(peers.every_row(here, 200));
+    CHECK(peers.rx.read_births(there).is_empty());
+    CHECK(peers.rx.read_deaths(there).is_empty());
 }
 
 TEST_CASE(
@@ -555,48 +539,37 @@ TEST_CASE(
     RID there;
     peers.pair("CodecVerdict", one_u16(), here, there);
     publish(peers.tx, here, int64s({1, 2}), int32s({7, 8}), 10);
-    const PackedByteArray good
-        = peers.tx->encode_frames(here, BUDGET, false)[0];
+    const PackedByteArray good = peers.every_row(here, BUDGET)[0];
 
     PackedByteArray unknown = good.duplicate();
     unknown.set(0, 99);
-    NETW_CHECK_EQ(
-        peers.rx->admit_header(Core::peek_header(unknown)),
-        ERR_DOES_NOT_EXIST
-    );
-    NETW_CHECK_EQ(int64_t(peers.rx->counters()["drops_table_unknown"]), 1);
+    NETW_CHECK_EQ(peers.rx.admit_header(unknown), ERR_DOES_NOT_EXIST);
+    NETW_CHECK_EQ(int64_t(peers.rx.counters()["drops_table_unknown"]), 1);
 
     PackedByteArray skewed = good.duplicate();
     skewed.set(1, (skewed[1] + 1) % 256);
     skewed.set(2, (skewed[2] + 1) % 256);
-    NETW_CHECK_EQ(
-        peers.rx->admit_header(Core::peek_header(skewed)),
-        ERR_INVALID_DATA
-    );
-    NETW_CHECK_EQ(int64_t(peers.rx->counters()["drops_table_schema"]), 1);
+    NETW_CHECK_EQ(peers.rx.admit_header(skewed), ERR_INVALID_DATA);
+    NETW_CHECK_EQ(int64_t(peers.rx.counters()["drops_table_schema"]), 1);
 
     PackedByteArray flagged = good.duplicate();
-    flagged.set(4, Core::FLAG_PAIR_KEY);
-    NETW_CHECK_EQ(
-        peers.rx->admit_header(Core::peek_header(flagged)),
-        ERR_INVALID_DATA
-    );
-    NETW_CHECK_EQ(int64_t(peers.rx->counters()["drops_table_unknown_flag"]), 1);
+    flagged.set(4, Arrays::FLAG_PAIR_KEY);
+    NETW_CHECK_EQ(peers.rx.admit_header(flagged), ERR_INVALID_DATA);
+    NETW_CHECK_EQ(int64_t(peers.rx.counters()["drops_table_unknown_flag"]), 1);
 
     const PackedByteArray truncated = good.slice(0, good.size() - 2);
-    NETW_CHECK_EQ(peers.rx->admit_header(Core::peek_header(truncated)), OK);
+    NETW_CHECK_EQ(peers.rx.admit_header(truncated), OK);
     NETW_CHECK_EQ(
-        int64_t(peers.rx->apply_frame(truncated)["verdict"]),
-        ERR_INVALID_DATA
+        int64_t(peers.rx.apply_frame(truncated).verdict),
+        int64_t(ERR_INVALID_DATA)
     );
-    CHECK(int64_t(peers.rx->counters()["drops_table_truncated"]) >= 1);
-    // A refused frame must leave the store exactly as it was.
-    CHECK(peers.rx->read_routes(there).is_empty());
+    CHECK(int64_t(peers.rx.counters()["drops_table_truncated"]) >= 1);
+    CHECK(peers.rx.read_routes(there).is_empty());
 
     TypedArray<PackedByteArray> only_good;
     only_good.push_back(good);
     peers.deliver(only_good);
-    CHECK(bool(peers.rx->read_routes(there) == int64s({1, 2})));
+    CHECK(bool(peers.rx.read_routes(there) == int64s({1, 2})));
 }
 
 TEST_CASE(
@@ -607,21 +580,21 @@ TEST_CASE(
     RID there;
     peers.pair("CodecStale", one_u16(), here, there);
     publish(peers.tx, here, int64s({1, 2}), int32s({1, 1}), 100);
-    peers.deliver(peers.tx->encode_frames(here, BUDGET, false));
+    peers.deliver(peers.every_row(here, BUDGET));
 
     publish(peers.tx, here, int64s({1, 2}), int32s({2, 2}), 3);
-    const PackedByteArray ancient
-        = peers.tx->encode_frames(here, BUDGET, false)[0];
-    NETW_CHECK_EQ(int64_t(peers.rx->apply_frame(ancient)["verdict"]), ERR_SKIP);
-    NETW_CHECK_EQ(int64_t(peers.rx->counters()["table_drops_stale"]), 1);
-    NETW_CHECK_EQ(PackedInt32Array(peers.rx->read_column(there, 0))[0], 1);
+    const PackedByteArray ancient = peers.every_row(here, BUDGET)[0];
+    NETW_CHECK_EQ(
+        int64_t(peers.rx.apply_frame(ancient).verdict),
+        int64_t(ERR_SKIP)
+    );
+    NETW_CHECK_EQ(int64_t(peers.rx.counters()["table_drops_stale"]), 1);
+    NETW_CHECK_EQ(PackedInt32Array(peers.rx.read_column(there, 0))[0], 1);
 
-    // Inside the reorder window the frame is admitted and refused per row,
-    // which is where freshness lives for a route-0 carrier.
     publish(peers.tx, here, int64s({1, 2}), int32s({3, 3}), 96);
-    peers.deliver(peers.tx->encode_frames(here, BUDGET, false));
-    NETW_CHECK_EQ(PackedInt32Array(peers.rx->read_column(there, 0))[0], 1);
-    CHECK(int64_t(peers.rx->counters()["table_drops_stale_row"]) >= 2);
+    peers.deliver(peers.every_row(here, BUDGET));
+    NETW_CHECK_EQ(PackedInt32Array(peers.rx.read_column(there, 0))[0], 1);
+    CHECK(int64_t(peers.rx.counters()["table_drops_stale_row"]) >= 2);
 }
 
 TEST_CASE("[Networked][Table][Hosted] A zero route is refused") {
@@ -630,20 +603,18 @@ TEST_CASE("[Networked][Table][Hosted] A zero route is refused") {
 
     PackedByteArray frame;
     frame.push_back(1);
-    frame.push_back(peers.tx->schema_hash(table) & 0xFF);
-    frame.push_back((peers.tx->schema_hash(table) >> 8) & 0xFF);
-    // Row two names route zero, which no sender could have issued, so the
-    // frame reads as truncation rather than as a row.
+    frame.push_back(peers.tx.schema_hash(table) & 0xFF);
+    frame.push_back((peers.tx.schema_hash(table) >> 8) & 0xFF);
     const uint8_t tail[] = {1, 0, 2, 7, 0, 1, 0, 1, 0};
     for (const uint8_t byte : tail) {
         frame.push_back(byte);
     }
 
     NETW_CHECK_EQ(
-        int64_t(peers.tx->apply_frame(frame)["verdict"]),
-        ERR_INVALID_DATA
+        int64_t(peers.tx.apply_frame(frame).verdict),
+        int64_t(ERR_INVALID_DATA)
     );
-    CHECK(peers.tx->read_routes(table).is_empty());
+    CHECK(peers.tx.read_routes(table).is_empty());
 }
 
 } // namespace TestTableCodec

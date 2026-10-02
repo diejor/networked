@@ -14,11 +14,10 @@
 #include "netw/api/entity_record.hpp"
 #include "netw/api/participant.hpp"
 #include "netw/api/promise.hpp"
-#include "netw/api/property_set_binding.hpp"
 #include "netw/api/scene_handle.hpp"
-#include "netw/api/timeline.hpp"
 #include "netw/comp_table.hpp"
 #include "netw/entity/stage.hpp"
+#include "netw/repl/property_binding.hpp"
 #include "netw/session/frames.hpp"
 
 namespace netw {
@@ -30,6 +29,10 @@ class NetwPersistenceHandle;
 class NetwPredictionHandle;
 class NetwSimulationHandle;
 class ReplicationCore;
+
+namespace spawn {
+class Record;
+} // namespace spawn
 
 class NetwEntity : public godot::RefCounted {
     GDCLASS(NetwEntity, godot::RefCounted)
@@ -112,12 +115,20 @@ private:
     godot::LocalVector<StructureOp> structure_ops;
     godot::ObjectID owner_id;
     godot::ObjectID session_id;
-    godot::ObjectID timeline_id;
     godot::TypedArray<godot::MultiplayerSynchronizer> synchronizers_cache;
     bool synchronizers_dirty = true;
+    bool synchronizers_absent = false;
     bool ready_once_fired = false;
     bool owner_exiting_tree = false;
+    bool despawning_watched = false;
+    godot::RID scene_subject;
+    spawn::Record *readmission = nullptr;
+    bool predicted_at_departure = false;
+
+    bool readmit();
+    void readmitted_ready();
     bool raw_move_warned = false;
+    double replication_priority = 1.0;
     int64_t action_spawn_tick = -1;
     int64_t action_requester = 0;
 
@@ -129,7 +140,6 @@ private:
     void announce_control(int64_t p_was, int64_t p_peer);
     int64_t resolve_initial_controller() const;
     void project_control(godot::Object *p_announcer);
-    void descendant_entered(godot::Node *p_node);
     void transfer_control(int64_t p_peer);
     void apply_control_change(int64_t p_peer);
     void decide_control(
@@ -154,7 +164,7 @@ private:
         const godot::PackedByteArray &p_final_state
     );
     bool holds_copy(int64_t p_peer);
-    godot::TypedArray<NetwPropertySetBinding> image_bindings();
+    godot::LocalVector<repl::PropertyBindingPtr> image_bindings();
     godot::PackedByteArray state_image(int64_t p_tick, int64_t &r_size);
     godot::PackedByteArray final_image(int64_t p_tick);
     int64_t install_final_image(
@@ -186,12 +196,13 @@ private:
         const entity::Control::Pending &p_taken,
         entity::Control::Outcome p_outcome
     );
-    godot::TypedArray<NetwPropertySetBinding> authored_bindings();
+    godot::LocalVector<repl::PropertyBindingPtr> authored_bindings();
     void follow_claim(bool p_was_ahead);
+    void control_moved();
     godot::Ref<NetwPromise> take_claim(uint64_t p_op);
     void transition(int64_t p_stage);
     void linger_then_free(const godot::Ref<NetwDespawnOpts> &p_opts);
-    godot::Ref<NetwPropertySetBinding> derived_binding(int64_t p_record) const;
+    repl::PropertyBindingPtr derived_binding(int64_t p_record) const;
 
 #if defined(NETW_TESTS)
 public:
@@ -320,6 +331,11 @@ public:
     bool expire_control(int64_t p_tick, int64_t p_deadline);
     void abandon_claims();
 
+    void set_replication_priority(double p_weight);
+    double get_replication_priority() const {
+        return replication_priority;
+    }
+
     bool get_is_session_authority() const;
     godot::Ref<NetwPlayer> get_player() const;
     Ownership get_ownership() const;
@@ -359,9 +375,9 @@ public:
         const godot::StringName &p_property,
         godot::Node *p_base
     ) const;
-    godot::Ref<NetwPropertySetBinding> get_state_binding() const;
-    godot::Ref<NetwPropertySetBinding> get_input_binding() const;
-    godot::Ref<NetwPropertySetBinding> get_broadcast_binding() const;
+    repl::PropertyBindingPtr get_state_binding() const;
+    repl::PropertyBindingPtr get_input_binding() const;
+    repl::PropertyBindingPtr get_broadcast_binding() const;
     godot::Ref<NetwInterestHandle> get_interest() const;
     godot::Ref<NetwSceneHandle> get_scene() const;
     godot::Ref<NetwPredictionHandle> get_prediction() const;
@@ -370,8 +386,6 @@ public:
     godot::Ref<NetwSimulationHandle> simulation_if_minted() const;
     godot::Ref<NetwPersistenceHandle> get_persistence() const;
     godot::Ref<NetwDisplayHandle> get_interpolation() const;
-    godot::Ref<NetwTimeline> get_timeline() const;
-    void set_timeline(const godot::Ref<NetwTimeline> &p_timeline);
 
     godot::TypedArray<godot::MultiplayerSynchronizer> synchronizers();
     bool governs_property(
@@ -379,6 +393,22 @@ public:
         godot::Node *p_exclude
     ) const;
     void invalidate_synchronizers_cache();
+    bool get_ready_fired() const {
+        return ready_once_fired;
+    }
+    void descendant_entered(godot::Node *p_node);
+    void tree_entered_edge();
+    void tree_exiting_edge();
+    bool belongs_to(NetwMultiplayer *p_branch) const;
+    void keep_readmission(const spawn::Record &p_recipe);
+    void note_departed_prediction(bool p_predicted) {
+        predicted_at_departure = p_predicted;
+    }
+    void watch_scene_edges(const godot::RID &p_subject);
+    void watch_despawning(bool p_watched);
+    bool watches_despawning() const {
+        return despawning_watched;
+    }
     godot::Ref<NetwEntity> parent_entity() const;
 
     godot::Ref<NetwSceneHandle> own_scene();

@@ -109,6 +109,14 @@ WritePlan stage_recovery(
     RecoveryState &r_state
 );
 
+void stage_recovery_into(
+    const Wiring &p_wiring,
+    const Config &p_config,
+    const RecoveryRequest &p_request,
+    RecoveryState &r_state,
+    WritePlan &r_out
+);
+
 TransportPlan transport(
     const Wiring &p_wiring,
     const StateRow &p_predicted,

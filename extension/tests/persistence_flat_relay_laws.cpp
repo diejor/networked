@@ -67,10 +67,10 @@ TEST_CASE(
     root->set_name("A");
     netw::Netw::configure_persistence(root)
         ->database(StringName("saves_one"))
-        ->schema(schema)
+        ->table(schema->get_schema_name())
         ->record_id(Callable(account, "get_name"));
     model::configure_node_property(root, "position")
-        ->persisted(schema->column_ref(0));
+        ->persisted(StringName("where"));
     const RID binding = session->persist_bind(root);
     REQUIRE(binding.is_valid());
 
@@ -115,16 +115,16 @@ TEST_CASE(
 
     netw::Netw::configure_persistence(root_a)
         ->database(StringName("saves"))
-        ->schema(schema)
+        ->table(schema->get_schema_name())
         ->record_id(Callable(account, "get_name"));
     netw::Netw::configure_persistence(root_b)
         ->database(StringName("saves"))
-        ->schema(schema)
+        ->table(schema->get_schema_name())
         ->record_id(Callable(account, "get_name"));
     model::configure_node_property(root_a, "position")
-        ->persisted(schema->column_ref(0));
+        ->persisted(StringName("where"));
     model::configure_node_property(root_b, "position")
-        ->persisted(schema->column_ref(0));
+        ->persisted(StringName("where"));
 
     const RID binding_a = session->persist_bind(root_a);
     const RID binding_b = session->persist_bind(root_b);

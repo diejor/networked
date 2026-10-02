@@ -10,7 +10,7 @@
 #include "netw/api/entity.hpp"
 #include "netw/api/entity_options.hpp"
 #include "netw/api/netw_multiplayer.hpp"
-#include "netw/api/timeline.hpp"
+#include "netw/lagcomp_core.hpp"
 
 #include <godot_cpp/classes/node2d.hpp>
 #include <godot_cpp/classes/node3d.hpp>
@@ -20,8 +20,8 @@ namespace TestEntityRelocationLaws {
 using namespace godot;
 using namespace netw_test;
 using netw::NetwEntity;
+using netw::NetwLagCompCore;
 using netw::NetwMultiplayer;
-using netw::NetwTimeline;
 using netw_test::Carrier;
 
 constexpr int64_t SAMPLED_TICK = 4;
@@ -64,8 +64,12 @@ struct Travelled {
         return flow_core(rig.server());
     }
 
-    Ref<NetwTimeline> timeline() const {
-        return core()->lagcomp_timeline_of(handle);
+    NetwLagCompCore *rewind() const {
+        return core()->get_lagcomp_core();
+    }
+
+    int64_t rewind_slot() const {
+        return rewind()->timeline_slot_of(entity);
     }
 
     void move() {
@@ -83,23 +87,25 @@ TEST_CASE(
     REQUIRE(
         int(stand.core()->lagcomp_timeline_declare(stand.handle)) == int(OK)
     );
-    const Ref<NetwTimeline> before = stand.timeline();
-    REQUIRE(before.is_valid());
+    const int64_t before = stand.rewind_slot();
+    REQUIRE(before >= 0);
 
     Dictionary sample;
     sample[StringName("position")] = Vector2(1, 2);
-    before->record_state(SAMPLED_TICK, sample);
-    CHECK_FALSE(before->latest_state_at_or_before(SAMPLED_TICK).is_empty());
+    stand.rewind()->timeline_record(before, SAMPLED_TICK, sample);
+    CHECK_FALSE(
+        stand.rewind()->timeline_sample(before, SAMPLED_TICK).is_empty()
+    );
 
     stand.rig.step_ticks(int(SAMPLED_TICK) + 2);
     stand.move();
 
-    const Ref<NetwTimeline> after = stand.timeline();
-    NETW_CHECK_EQ(int(after.is_valid()), 1);
-    NETW_CHECK_EQ(int(after == before), 1);
-    NETW_CHECK_EQ(int(before->floor() > SAMPLED_TICK), 1);
+    NETW_CHECK_EQ(stand.rewind_slot(), before);
+    const netw::LagBook *book = stand.rewind()->book_of(before);
+    REQUIRE(book != nullptr);
+    NETW_CHECK_EQ(int(book->floor() > SAMPLED_TICK), 1);
     NETW_CHECK_EQ(
-        int(before->latest_state_at_or_before(SAMPLED_TICK).is_empty()),
+        int(stand.rewind()->timeline_sample(before, SAMPLED_TICK).is_empty()),
         1
     );
 }

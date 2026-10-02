@@ -12,7 +12,7 @@
 namespace TestDerivedBroadcastFlowLaws {
 
 using namespace godot;
-using netw::NetwPropertySet;
+using netw::repl::PropertySet;
 using netw_test::authored_value;
 using netw_test::FlowCapture;
 using netw_test::FlowPair;
@@ -34,8 +34,12 @@ const char *STATE_BODY = "res://tests/support/chains/state_base.gd";
 
 FlowCapture CAPTURE;
 
-void on_broadcast_applied(Dictionary p_header) {
-    CAPTURE.note(p_header, StringName("aim_dir"));
+void on_broadcast_applied(
+    void *p_context,
+    const netw::store::Table &p_table,
+    uint32_t p_row
+) {
+    CAPTURE.note(p_table, p_row, StringName("aim_dir"));
 }
 
 enum Plant {
@@ -86,6 +90,20 @@ int64_t stat_of(godot::Object *p_core, const char *p_name) {
     );
 }
 
+int64_t source_of(godot::Object *p_core, godot::Node *p_node) {
+    const netw::store::World &world = netw_test::flow_core(p_core)->store();
+    const uint64_t node = uint64_t(p_node->get_instance_id());
+    for (uint32_t at = 0; at < world.table_count(); ++at) {
+        const netw::store::Table &table = world.table(at);
+        for (uint32_t row = 0; row < table.row_count(); ++row) {
+            if (table.nodes[row] == node && table.lanes[row] == 0) {
+                return int64_t(table.sources[row]);
+            }
+        }
+    }
+    return -1;
+}
+
 class BroadcastRun {
     BroadcastScenario declared;
     Plant planted = PLANT_NONE;
@@ -96,10 +114,10 @@ class BroadcastRun {
         return planted == p_plant;
     }
 
-    NetwPropertySet::Record record() const {
+    PropertySet::Record record() const {
         return plant_is(PLANT_THE_STREAM_IS_A_STATE_SET)
-            ? NetwPropertySet::RECORD_STATE
-            : NetwPropertySet::RECORD_BROADCAST;
+            ? PropertySet::RECORD_STATE
+            : PropertySet::RECORD_BROADCAST;
     }
 
     StringName field() const {
@@ -140,11 +158,11 @@ public:
             = netw_test::stand_flow_pair(rig, body, "BroadcastBody");
         netw_test::steer(pair, rig.peer_id(0));
 
-        const Ref<netw::NetwPropertySetBinding> observed
+        const netw::repl::PropertyBindingPtr observed
             = netw_test::binding_of(pair.authored, record());
-        REQUIRE_MESSAGE(observed.is_valid(), "the observer holds no set");
+        REQUIRE_MESSAGE(observed != nullptr, "the observer holds no set");
         CAPTURE.reset();
-        observed->on_applied = callable_mp_static(&on_broadcast_applied);
+        observed->on_landed = &on_broadcast_applied;
 
         if (plant_is(PLANT_THE_ECHO_NEVER_ARRIVES)) {
             rig.hold(0);
@@ -159,8 +177,11 @@ public:
         const Ref<netw::NetwEntity> observer
             = netw::NetwEntity::of(pair.authored);
         seen.observer_holds_broadcast
-            = observer->get_broadcast_binding().is_valid();
-        seen.observer_holds_timeline = observer->get_timeline().is_valid();
+            = observer->get_broadcast_binding() != nullptr;
+        netw::NetwMultiplayer *observing
+            = netw::NetwEntity::session_core_for(pair.authored);
+        seen.observer_holds_timeline = observing != nullptr
+            && observing->get_lagcomp_core()->timeline_slot_of(observer) >= 0;
 
         if (!plant_is(PLANT_THE_LINK_GOES_DARK)) {
             rig.conditions(
@@ -199,7 +220,7 @@ public:
         }
         seen.rows_after_quiet = stat_of(rig.client(0), "row_frames_out");
 
-        observed->on_applied = Callable();
+        observed->on_landed = nullptr;
         CAPTURE.reset();
     }
 
@@ -403,7 +424,7 @@ FanOut fan_out_to_a_peer_client() {
             pair.mirror(0),
             field,
             authored_value(authored),
-            NetwPropertySet::RECORD_BROADCAST,
+            PropertySet::RECORD_BROADCAST,
             authored
         );
         rig.step_ticks(1);
@@ -456,7 +477,7 @@ TEST_CASE(
             pair.authored,
             field,
             authored_value(authored),
-            NetwPropertySet::RECORD_BROADCAST,
+            PropertySet::RECORD_BROADCAST,
             authored
         );
         rig.step_ticks(1);
@@ -497,7 +518,7 @@ TEST_CASE(
             pair.mirror(0),
             field,
             authored_value(authored),
-            NetwPropertySet::RECORD_BROADCAST,
+            PropertySet::RECORD_BROADCAST,
             authored
         );
         rig.step_ticks(1);
@@ -509,6 +530,52 @@ TEST_CASE(
     const Vector2 at_peer = pair.mirror(1)->get(field);
     CHECK(at_server.is_equal_approx(authored_value(authored)));
     CHECK(at_peer.is_equal_approx(authored_value(authored)));
+}
+
+TEST_CASE(
+    "[Networked][Sync][SceneTree] A7 a node authority a game moves on a "
+    "settled row is seen by the next pull and re-sourced by the source pass "
+    "of the tick after, and the new holder's broadcast reaches the server"
+) {
+    LoopbackRig rig(1);
+    rig.mount();
+    netw_test::flow_clocks(rig, TICKRATE);
+    const FlowPair pair = netw_test::stand_flow_pair(
+        rig,
+        netw_test::gdsrc::BROADCAST_AUTHORITY_AIM,
+        "MovedAuthorityBody"
+    );
+    netw_test::steer(pair, 0);
+    rig.step_ticks(CLEAN_TICKS);
+    const int64_t local = int64_t(netw::store::Source::LOCAL);
+    const int64_t remote = int64_t(netw::store::Source::REMOTE);
+    NETW_CHECK_EQ(source_of(rig.server(), pair.authored), local);
+    NETW_CHECK_EQ(source_of(rig.client(0), pair.mirror(0)), remote);
+
+    const int holder = rig.peer_id(0);
+    pair.authored->set_multiplayer_authority(holder);
+    pair.mirror(0)->set_multiplayer_authority(holder);
+    rig.step_ticks(2);
+    NETW_CHECK_EQ(source_of(rig.server(), pair.authored), remote);
+    NETW_CHECK_EQ(source_of(rig.client(0), pair.mirror(0)), local);
+
+    const StringName field("aim_dir");
+    int64_t authored = 0;
+    for (int step = 0; step < CLEAN_TICKS; ++step) {
+        authored = netw_test::clock_tick(rig, 0) + 1;
+        netw_test::author_at(
+            pair.mirror(0),
+            field,
+            authored_value(authored),
+            PropertySet::RECORD_BROADCAST,
+            authored
+        );
+        rig.step_ticks(1);
+    }
+    rig.step_ticks(HEAL_TICKS);
+    const Vector2 at_server = pair.authored->get(field);
+    NETW_CHECK_GT(at_server.x, 0.0);
+    CHECK(at_server.is_equal_approx(authored_value(authored)));
 }
 
 TEST_CASE(
@@ -533,7 +600,7 @@ TEST_CASE(
         pair.authored,
         field,
         authored_value(authored),
-        NetwPropertySet::RECORD_BROADCAST,
+        PropertySet::RECORD_BROADCAST,
         authored
     );
     rig.step_ticks(BEAT_TICKS * 2);

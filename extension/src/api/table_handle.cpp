@@ -44,7 +44,8 @@ Ref<NetwTableHandle> NetwTableHandle::of(
     if (api == nullptr) {
         NETW_ERROR(
             sys::TABLE,
-            "NetwTableHandle.of: no session governs the given node"
+            "Netw.table got a node that is not inside a session. Call it "
+            "from a node in the scene tree under a MultiplayerTree."
         );
         return Ref<NetwTableHandle>();
     }
@@ -52,7 +53,8 @@ Ref<NetwTableHandle> NetwTableHandle::of(
     if (!table.is_valid()) {
         NETW_ERROR(
             sys::TABLE,
-            "NetwTableHandle.of: no schema named '%s' is declared",
+            "Netw.table found no schema named '%s'. Declare it with "
+            "Netw.configure_schema first.",
             String(p_name).utf8().get_data()
         );
         return Ref<NetwTableHandle>();
@@ -107,8 +109,7 @@ bool NetwTableHandle::get_reliable() const {
     if (api == nullptr) {
         return false;
     }
-    const Ref<table::Core> core = api->get_table_core();
-    return core.is_valid() && core->is_reliable(table);
+    return api->store_arrays().is_reliable(table);
 }
 
 Error NetwTableHandle::write_routes(const PackedInt64Array &p_routes) {

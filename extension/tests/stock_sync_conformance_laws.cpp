@@ -3,7 +3,10 @@
 #if defined(NETW_TIER_HOSTED)
 
 #include "netw/api/entity.hpp"
+#include "netw/api/replication_core.hpp"
+#include "netw/api/sync_compat.hpp"
 
+#include "support/minted_script.h"
 #include "support/netw_cells.h"
 #include "support/stock_probes.h"
 #include "support/stock_stand.h"
@@ -930,6 +933,279 @@ TEST_CASE(
 
     NETW_CHECK_EQ(server_side->get_multiplayer_authority(), client);
     NETW_CHECK_EQ(client_side->get_multiplayer_authority(), client);
+}
+
+netw::SyncCompat *compat_of(netw::NetwMultiplayer *p_api) {
+    return p_api->get_replication_plane()->get_sync_compat();
+}
+
+TEST_CASE(
+    "[Networked][Sync][SceneTree] a consumed property's path is resolved "
+    "once per config, however many frames read and write it"
+) {
+    LoopbackRig rig(1);
+    rig.mount();
+    netw_test::flow_clocks(rig, TICKRATE);
+    const Ref<PackedScene> scene = probe_scene();
+    PackedStringArray scenes;
+    scenes.push_back(scene->get_path());
+    StockWorld world = netw_test::mount_stock_world(rig, scenes);
+
+    Node *node = scene->instantiate();
+    node->set_name("PathProbe");
+    world.arena(-1)->add_child(node, true);
+    Node *mirror
+        = netw_test::pump_until_child(rig, world.arena(0), "PathProbe");
+    REQUIRE(mirror != nullptr);
+
+    netw::SyncCompat *host = compat_of(rig.server());
+    netw::SyncCompat *client = compat_of(rig.client(0));
+    const int64_t host_resolved = host->get_fields_resolved();
+    const int64_t client_resolved = client->get_fields_resolved();
+    for (int value = 1; value <= 6; ++value) {
+        node->set(StringName("synced_value"), value);
+        node->set(StringName("watched_value"), value);
+        netw_test::pump_until_value(
+            rig,
+            mirror,
+            StringName("watched_value"),
+            value
+        );
+        netw_test::pump_until_value(
+            rig,
+            mirror,
+            StringName("synced_value"),
+            value
+        );
+    }
+    NETW_CHECK_EQ(host->get_fields_resolved(), host_resolved);
+    NETW_CHECK_EQ(client->get_fields_resolved(), client_resolved);
+}
+
+Ref<PackedScene> single_sync_scene() {
+    Node *root = netw_test::scripted_root(PROBE_SCRIPT, "OrdinalProbe");
+    Vector<SyncProp> props;
+    props.push_back(prop_row(
+        ".:synced_value",
+        SceneReplicationConfig::REPLICATION_MODE_ALWAYS,
+        false
+    ));
+    netw_test::add_stock_sync(root, "Sync", props);
+    const Ref<PackedScene> packed = netw_test::pack_stock_scene(
+        root,
+        netw_test::mint_scene_path("OrdinalProbe")
+    );
+    memdelete(root);
+    return packed;
+}
+
+Ref<PackedScene> sibling_root_scene() {
+    Node *root = netw_test::scripted_root(PROBE_SCRIPT, "SiblingProbe");
+    Node2D *body = memnew(Node2D);
+    body->set_name("Body");
+    root->add_child(body);
+    body->set_owner(root);
+    Vector<SyncProp> props;
+    props.push_back(prop_row(
+        ".:position",
+        SceneReplicationConfig::REPLICATION_MODE_ALWAYS,
+        false
+    ));
+    MultiplayerSynchronizer *sync
+        = netw_test::add_stock_sync(root, "Sync", props);
+    sync->set_root_path(NodePath("../Body"));
+    const Ref<PackedScene> packed = netw_test::pack_stock_scene(
+        root,
+        netw_test::mint_scene_path("SiblingProbe")
+    );
+    memdelete(root);
+    return packed;
+}
+
+int64_t frames_out(netw::NetwMultiplayer *p_api) {
+    return int64_t(compat_of(p_api)->counters()[StringName("sync_frames_out")]);
+}
+
+TEST_CASE(
+    "[Networked][Sync][SceneTree] a synchronizer whose root leaves the tree "
+    "stops sending on the next frame, while the synchronizer stays"
+) {
+    LoopbackRig rig(1);
+    rig.mount();
+    netw_test::flow_clocks(rig, TICKRATE);
+    const Ref<PackedScene> scene = sibling_root_scene();
+    PackedStringArray scenes;
+    scenes.push_back(scene->get_path());
+    StockWorld world = netw_test::mount_stock_world(rig, scenes);
+
+    Node *node = scene->instantiate();
+    node->set_name("SiblingProbe");
+    world.arena(-1)->add_child(node, true);
+    Node *mirror
+        = netw_test::pump_until_child(rig, world.arena(0), "SiblingProbe");
+    REQUIRE(mirror != nullptr);
+    Node *body = node->get_node_or_null(NodePath("Body"));
+    Node *mirror_body = mirror->get_node_or_null(NodePath("Body"));
+    REQUIRE(body != nullptr);
+    REQUIRE(mirror_body != nullptr);
+    body->set(StringName("position"), Vector2(3, 4));
+    netw_test::pump_until_value(
+        rig,
+        mirror_body,
+        StringName("position"),
+        Vector2(3, 4)
+    );
+    const int64_t flowing = frames_out(rig.server());
+    rig.step_ticks(6);
+    NETW_CHECK_GT(frames_out(rig.server()), flowing);
+
+    node->remove_child(body);
+    memdelete(body);
+    rig.step_ticks(1);
+    const int64_t settled = frames_out(rig.server());
+    rig.step_ticks(6);
+    NETW_CHECK_EQ(frames_out(rig.server()), settled);
+}
+
+constexpr const char *DECODING_SESSION = R"(extends NetwMultiplayer
+
+var decoded := 0
+
+func _sync_decode(_entity: RID, _comp: int, _flags: int, _tick: int,
+		_payload: PackedByteArray) -> Error:
+	decoded += 1
+	return ERR_INVALID_DATA
+)";
+
+TEST_CASE(
+    "[Networked][Sync][SceneTree] a consumed synchronizer runs the encode "
+    "and decode seams only on a session whose script overrides them"
+) {
+    LoopbackRig rig(1);
+    rig.mount();
+    netw_test::flow_clocks(rig, TICKRATE);
+    const Ref<PackedScene> scene = probe_scene();
+    PackedStringArray scenes;
+    scenes.push_back(scene->get_path());
+    StockWorld world = netw_test::mount_stock_world(rig, scenes);
+
+    Node *node = scene->instantiate();
+    node->set_name("SeamProbe");
+    world.arena(-1)->add_child(node, true);
+    Node *mirror
+        = netw_test::pump_until_child(rig, world.arena(0), "SeamProbe");
+    REQUIRE(mirror != nullptr);
+    for (int value = 1; value <= 3; ++value) {
+        node->set(StringName("synced_value"), value);
+        node->set(StringName("watched_value"), value);
+        netw_test::pump_until_value(
+            rig,
+            mirror,
+            StringName("watched_value"),
+            value
+        );
+    }
+    NETW_CHECK_EQ(compat_of(rig.server())->get_stage_calls(), int64_t(0));
+    NETW_CHECK_EQ(compat_of(rig.client(0))->get_stage_calls(), int64_t(0));
+
+    const Ref<Script> decoding = netw_test::minted_script(DECODING_SESSION);
+    REQUIRE(decoding.is_valid());
+    rig.client(0)->set_script(decoding);
+    node->set(StringName("synced_value"), 9);
+    rig.step_ticks(6);
+    NETW_CHECK_GT(compat_of(rig.client(0))->get_stage_calls(), int64_t(0));
+    NETW_CHECK_GT(
+        int64_t(rig.client(0)->get(StringName("decoded"))),
+        int64_t(0)
+    );
+    NETW_CHECK_EQ(compat_of(rig.server())->get_stage_calls(), int64_t(0));
+}
+
+TEST_CASE(
+    "[Networked][Sync][SceneTree] a received row whose properties declare no "
+    "interpolator asks for one once, not on every frame"
+) {
+    LoopbackRig rig(1);
+    rig.mount();
+    netw_test::flow_clocks(rig, TICKRATE);
+    const Ref<PackedScene> scene = probe_scene();
+    PackedStringArray scenes;
+    scenes.push_back(scene->get_path());
+    StockWorld world = netw_test::mount_stock_world(rig, scenes);
+
+    Node *node = scene->instantiate();
+    node->set_name("FeedProbe");
+    world.arena(-1)->add_child(node, true);
+    Node *mirror
+        = netw_test::pump_until_child(rig, world.arena(0), "FeedProbe");
+    REQUIRE(mirror != nullptr);
+    node->set(StringName("synced_value"), 1);
+    netw_test::pump_until_value(rig, mirror, StringName("synced_value"), 1);
+    const int64_t asked = compat_of(rig.client(0))->get_feed_lookups();
+    for (int value = 2; value <= 6; ++value) {
+        node->set(StringName("synced_value"), value);
+        netw_test::pump_until_value(
+            rig,
+            mirror,
+            StringName("synced_value"),
+            value
+        );
+    }
+    NETW_CHECK_EQ(compat_of(rig.client(0))->get_feed_lookups(), asked);
+}
+
+void add_leading_sync(Node *p_root) {
+    Vector<SyncProp> props;
+    props.push_back(prop_row(
+        ".:watched_value",
+        SceneReplicationConfig::REPLICATION_MODE_ALWAYS,
+        false
+    ));
+    netw_test::add_stock_sync(p_root, "ASync", props);
+}
+
+TEST_CASE(
+    "[Networked][Sync][SceneTree] a synchronizer added beside a consumed one "
+    "reorders the set, and the next send carries the moved ordinal"
+) {
+    LoopbackRig rig(1);
+    rig.mount();
+    netw_test::flow_clocks(rig, TICKRATE);
+    const Ref<PackedScene> scene = single_sync_scene();
+    PackedStringArray scenes;
+    scenes.push_back(scene->get_path());
+    StockWorld world = netw_test::mount_stock_world(rig, scenes);
+
+    Node *node = scene->instantiate();
+    node->set_name("OrdinalProbe");
+    world.arena(-1)->add_child(node, true);
+    Node *mirror
+        = netw_test::pump_until_child(rig, world.arena(0), "OrdinalProbe");
+    REQUIRE(mirror != nullptr);
+    node->set(StringName("synced_value"), 1);
+    NETW_CHECK_EQ(
+        int64_t(netw_test::pump_until_value(
+            rig,
+            mirror,
+            StringName("synced_value"),
+            1
+        )),
+        int64_t(1)
+    );
+
+    add_leading_sync(node);
+    add_leading_sync(mirror);
+    rig.step_ticks(4);
+    node->set(StringName("synced_value"), 2);
+    NETW_CHECK_EQ(
+        int64_t(netw_test::pump_until_value(
+            rig,
+            mirror,
+            StringName("synced_value"),
+            2
+        )),
+        int64_t(2)
+    );
 }
 
 } // namespace TestStockSyncConformanceLaws

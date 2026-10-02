@@ -32,6 +32,7 @@
 #include "netw/script/model.hpp"
 #include "netw/spawn/pipeline.hpp"
 #include "netw/synchronizers.hpp"
+#include "netw/tree_hook.hpp"
 #include "netw/wire/frame.hpp"
 #include "netw/wire/registry.hpp"
 
@@ -318,7 +319,7 @@ void NetwMultiplayer::interest_receive_awareness(
     if (!interest::awareness_decode(p_payload, events)) {
         NETW_TRACE(
             sys::INTEREST,
-            "an awareness batch that did not decode whole is refused"
+            "An awareness update that did not decode fully was refused."
         );
         return;
     }
@@ -618,7 +619,7 @@ void NetwMultiplayer::perception_hide(int64_t p_slot, Node *p_owner) {
         const TypedArray<Node> children = node->get_children();
         for (int at = 0; at < children.size(); ++at) {
             Node *child = Object::cast_to<Node>(children[at]);
-            if (child != nullptr && !child->has_meta(wrapper_meta())) {
+            if (child != nullptr && !tree::is_entity_root(child)) {
                 stack.push_back(child);
             }
         }
@@ -663,7 +664,10 @@ void NetwMultiplayer::perception_dispatch_custom(
 interest::Decl *NetwMultiplayer::interest_decl_on(
     const Ref<NetwEntity> &p_entity
 ) {
-    interest::Facet *facet = interest_facet_on(p_entity);
+    if (p_entity.is_null() || p_entity->get_record() == nullptr) {
+        return nullptr;
+    }
+    interest::Facet *facet = p_entity->get_record()->find_interest_facet();
     return facet != nullptr ? facet->declaration() : nullptr;
 }
 
@@ -676,10 +680,9 @@ bool NetwMultiplayer::interest_player_sees(
     }
     const int64_t slot = p_entity->get_rid_handle().get_id();
     if (!is_host()) {
-        return interest_engine.projection_admits(
-            slot,
-            interest_decl_on(p_entity)
-        );
+        const interest::Decl *declared = interest_decl_on(p_entity);
+        return declared == nullptr
+            || interest_engine.projection_admits(slot, declared);
     }
     const int bit = interest_engine.peer_bit_of(p_peer_id);
     if (bit < 0) {
@@ -1054,6 +1057,7 @@ void NetwMultiplayer::interest_commit() {
     }
     interest_apply_delta(interest_pending);
     interest_engine.commit(interest_pending);
+    store_note_interest();
     wrapper_sweep_retired();
     interest_refresh_all_perception();
     interest_pending = interest::Delta();
@@ -1130,8 +1134,8 @@ Error NetwMultiplayer::interest_flush_immediate() {
         !interest_flush.is_valid(),
         ERR_UNCONFIGURED,
         sys::INTEREST,
-        "an immediate interest flush was asked for with none installed, so "
-        "the committed rows would stay stale"
+        "Interest could not be updated, because interest is not running on "
+        "this peer."
     );
     interest_flush.call();
     return OK;
@@ -1145,8 +1149,8 @@ void NetwMultiplayer::interest_request_flush() {
     if (!interest_flush.is_valid()) {
         NETW_ERROR(
             sys::INTEREST,
-            "an interest flush was requested with none installed, so the "
-            "committed rows would stay stale"
+            "Interest could not be updated, because interest is not running "
+            "on this peer."
         );
         return;
     }
@@ -1167,14 +1171,12 @@ void NetwMultiplayer::interest_awareness_queue_layer(
     NETW_ERR_COND(
         p_peer_id == 0,
         sys::INTEREST,
-        "an awareness edge was queued for peer 0, which names no peer, so the "
-        "edge would sit in the relay until a drain handed it to nobody"
+        "An interest change was dropped, because it was addressed to peer 0."
     );
     NETW_ERR_COND(
         p_route == 0,
         sys::INTEREST,
-        "an awareness edge was queued for no route, so no receiver could "
-        "resolve the entity it names"
+        "An interest change was dropped, because its entity has no route."
     );
     NETW_TRACE(
         sys::INTEREST,
@@ -1199,14 +1201,12 @@ void NetwMultiplayer::interest_awareness_queue_observer(
     NETW_ERR_COND(
         p_peer_id == 0,
         sys::INTEREST,
-        "an awareness edge was queued for peer 0, which names no peer, so the "
-        "edge would sit in the relay until a drain handed it to nobody"
+        "An interest change was dropped, because it was addressed to peer 0."
     );
     NETW_ERR_COND(
         p_route == 0,
         sys::INTEREST,
-        "an awareness edge was queued for no route, so no receiver could "
-        "resolve the entity it names"
+        "An interest change was dropped, because its entity has no route."
     );
     NETW_TRACE(
         sys::INTEREST,
@@ -1256,7 +1256,7 @@ RID NetwMultiplayer::layer_open(const StringName &p_name) {
         p_name.is_empty(),
         RID(),
         sys::INTEREST,
-        "an interest layer was opened with no name, so nothing could address it"
+        "An interest layer needs a name. Pass a non-empty name."
     );
     const RID *known = layer_by_name.getptr(p_name);
     if (known != nullptr) {
@@ -1369,7 +1369,8 @@ Error NetwMultiplayer::interest_layer_add_entity(
     if (!is_host()) {
         NETW_WARN(
             sys::INTEREST,
-            "an entity was added to a layer off server authority"
+            "NetwMultiplayer.interest_layer_add_entity runs only on the "
+            "server."
         );
         return ERR_UNAUTHORIZED;
     }
@@ -1416,7 +1417,7 @@ void NetwMultiplayer::interest_layer_set_param(
         default:
             NETW_ERR(
                 sys::INTEREST,
-                "layer parameter {} names no layer setting",
+                "Interest layer setting %d does not exist.",
                 p_param
             );
     }
@@ -1446,8 +1447,8 @@ Error NetwMultiplayer::run_layer_drivers() {
         if (answered.get_type() != Variant::ARRAY) {
             NETW_WARN(
                 sys::INTEREST,
-                "a layer driver for layer %d answered a non-array, "
-                "leaving its membership untouched",
+                "The driver callback of layer %d did not return an Array, so "
+                "the layer was not changed. Return an Array of entity RIDs.",
                 int(row.value.layer.get_id())
             );
             return ERR_INVALID_DATA;
@@ -1460,7 +1461,8 @@ Error NetwMultiplayer::run_layer_drivers() {
             if (wanted[at].get_type() != Variant::RID) {
                 NETW_WARN(
                     sys::INTEREST,
-                    "a layer driver for layer %d named a non-RID entity",
+                    "The driver callback of layer %d returned something that "
+                    "is not an RID. Return an Array of entity RIDs.",
                     int(row.value.layer.get_id())
                 );
                 return ERR_DOES_NOT_EXIST;
@@ -1469,7 +1471,8 @@ Error NetwMultiplayer::run_layer_drivers() {
             if (entity_get_view(entity).is_null()) {
                 NETW_WARN(
                     sys::INTEREST,
-                    "a layer driver for layer %d named an unknown entity",
+                    "The driver callback of layer %d returned an RID that is "
+                    "not an entity.",
                     int(row.value.layer.get_id())
                 );
                 return ERR_DOES_NOT_EXIST;
@@ -1555,8 +1558,8 @@ Ref<NetwInterestLayer> NetwMultiplayer::interest_layer_view(
     if (scene_owns_layer(layer_name_of(p_layer))) {
         NETW_ERROR(
             sys::INTEREST,
-            "this layer belongs to a multiplayer scene and cannot be changed "
-            "directly. Use Netw.scene(...) instead."
+            "This layer belongs to a multiplayer scene, so it cannot be "
+            "changed directly. Change it through Netw.scene."
         );
         return Ref<NetwInterestLayer>();
     }
@@ -1716,19 +1719,7 @@ interest::Facet *NetwMultiplayer::interest_facet_of(const RID &p_entity) {
 }
 
 interest::Decl *NetwMultiplayer::interest_decl_of(const RID &p_entity) {
-    interest::Facet *facet = interest_facet_of(p_entity);
-    if (facet == nullptr) {
-        return nullptr;
-    }
-    interest::Decl *decl = facet->declaration();
-    NETW_ERR_COND_V(
-        decl == nullptr,
-        nullptr,
-        sys::INTEREST,
-        "the interest facet of entity %d holds no declaration",
-        int64_t(p_entity.get_id())
-    );
-    return decl;
+    return interest_decl_on(entity_get_view(p_entity));
 }
 
 void NetwMultiplayer::interest_join(
@@ -1737,9 +1728,13 @@ void NetwMultiplayer::interest_join(
 ) {
     interest::Facet *facet = interest_facet_of(p_entity);
     const Ref<NetwEntity> entity = entity_get_view(p_entity);
+    if (entity.is_valid()) {
+        entity->get_interest();
+    }
     if (facet == nullptr || entity.is_null() || !facet->join(p_layer_id)) {
         return;
     }
+    store_stale_entity(entity);
     RID layer = interest_layer_find(p_layer_id);
     if (!layer.is_valid()) {
         layer = layer_open(p_layer_id);
@@ -1766,6 +1761,7 @@ void NetwMultiplayer::interest_leave(
     if (facet == nullptr || entity.is_null() || !facet->leave(p_layer_id)) {
         return;
     }
+    store_stale_entity(entity);
     if (is_host()) {
         const Ref<NetwInterestLayer> record
             = layer_record(interest_layer_find(p_layer_id));

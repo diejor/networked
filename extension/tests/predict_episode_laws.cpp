@@ -196,6 +196,40 @@ TEST_CASE(
 }
 
 TEST_CASE(
+    "[Networked][Predict][Hosted][Episode] RC1 an owner that keeps "
+    "reopening episodes holds a bounded reopen chain, so its memory is flat "
+    "over a long drive"
+) {
+    constexpr int CYCLES = 4 * EPISODE_EVIDENCE_LIMIT;
+    Journal journal;
+    Episode episode;
+    int64_t held_at_half = -1;
+    int reopened = 0;
+    for (int cycle = 0; cycle < CYCLES; ++cycle) {
+        const int64_t at = int64_t(cycle) * 5;
+        append_row(journal, at);
+        episode.open(journal, at, Attribution::PRE_STATE);
+        reopened += episode.reopened_from > 0 ? 1 : 0;
+        episode.record_comparison(at + 1, 0, true, 1);
+        episode.record_comparison(at + 2, 0, true, 1);
+        episode.record_comparison(at + 3, 0, true, 1);
+        if (cycle == CYCLES / 2) {
+            held_at_half = int64_t(episode.reopen_chain.size());
+        }
+    }
+
+    NETW_CHECK_EQ(reopened, CYCLES - 1);
+    NETW_CHECK_EQ(int64_t(episode.reopen_chain.size()), held_at_half);
+    NETW_CHECK_LE(episode.reopen_chain.size(), EPISODE_EVIDENCE_LIMIT);
+    NETW_CHECK_LE(episode.last_reopen_chain.size(), EPISODE_EVIDENCE_LIMIT);
+    REQUIRE_FALSE(episode.reopen_chain.is_empty());
+    NETW_CHECK_EQ(
+        episode.reopen_chain[episode.reopen_chain.size() - 1],
+        episode.id
+    );
+}
+
+TEST_CASE(
     "[Networked][Predict][Hosted][Episode] a REFUSED operator is retained "
     "with the evidence that refused it"
 ) {

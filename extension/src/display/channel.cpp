@@ -41,8 +41,8 @@ void Channel::write(const Variant &p_value) {
     NETW_WARN_COND(
         !refused_global,
         sys::INTERPOLATION,
-        "'%s' is a global-space channel with no global setter for %s, so it "
-        "is written locally and composes with the body",
+        "'%s' is interpolated in global space, but a %s has no global "
+        "setter, so it is written in local space and moves with the body.",
         String(port.get_target_prop()),
         String(Variant::get_type_name(p_value.get_type()))
     );

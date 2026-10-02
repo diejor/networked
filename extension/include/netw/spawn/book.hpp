@@ -25,6 +25,10 @@ private:
     godot::HashMap<int64_t, Record> armed;
     godot::HashMap<int64_t, Record> spawned;
     godot::HashMap<int64_t, godot::ObjectID> received;
+    godot::HashMap<uint64_t, int> node_holds;
+
+    void hold_node(const Record &record);
+    void release_node(const Record &record);
 
 public:
     void arm(const Record &record);

@@ -7,7 +7,6 @@
 #include "netw/api/netw_multiplayer.hpp"
 #include "netw/api/predict_slot_engine.hpp"
 #include "netw/api/replication_core.hpp"
-#include "netw/api/timeline.hpp"
 #include "netw/colors.hpp"
 #include "netw/log.hpp"
 #include "netw/profile.hpp"
@@ -59,10 +58,10 @@ int NetwMultiplayer::input_readiness(
         && !engine->has_consumed_state_tick(p_request.view_tick)) {
         return ACTION_NOT_READY;
     }
-    const Ref<NetwTimeline> history
-        = lagcomp_core.timeline_history(lagcomp_core.timeline_slot_of(entity));
-    if (history.is_null()
-        || history->state_at(p_request.view_tick).is_empty()) {
+    if (!lagcomp_core.timeline_recorded_at(
+            lagcomp_core.timeline_slot_of(entity),
+            p_request.view_tick
+        )) {
         return ACTION_NOT_READY;
     }
     return ACTION_READY;
@@ -98,7 +97,8 @@ void NetwMultiplayer::execute_ready_action(
         gate_fallbacks += 1;
         NETW_TRACE(
             sys::PREDICTION,
-            "action %s waited out its gate and resolves best effort",
+            "Action %s waited as long as allowed and now runs on what has "
+            "arrived.",
             String(p_request.key).utf8().get_data()
         );
         emit_signal(
@@ -196,7 +196,8 @@ void NetwMultiplayer::action_send_request(
     if (route <= 0) {
         NETW_WARN(
             sys::LAGCOMP,
-            "action target '%s' claims no route, so the request is denied",
+            "The action target '%s' is not a spawned entity, so the action "
+            "was denied. Target a node inside a replicated entity.",
             String(p_target_path)
         );
     }
@@ -216,7 +217,8 @@ void NetwMultiplayer::action_send_request(
     if (plane == nullptr) {
         NETW_TRACE(
             sys::LAGCOMP,
-            "a remote action request found no replication plane"
+            "A remote action request was dropped, because replication is not "
+            "running."
         );
         return;
     }
@@ -276,7 +278,7 @@ void NetwMultiplayer::submit_action(
     if (!can_resolve_action(request)) {
         NETW_TRACE(
             sys::PREDICTION,
-            "action %s names no method this session can reach",
+            "Action %s names a method this session cannot reach.",
             String(p_key).utf8().get_data()
         );
         lagcomp_deny_action(requester, p_key);
@@ -291,7 +293,7 @@ void NetwMultiplayer::submit_action(
     if (p_view_tick > now + max_future_action_ticks) {
         NETW_TRACE(
             sys::PREDICTION,
-            "action %s asks for tick %d, past the %d the session admits",
+            "Action %s asks for tick %d, later than the latest allowed %d.",
             String(p_key).utf8().get_data(),
             int(p_view_tick),
             int(now + max_future_action_ticks)
@@ -314,7 +316,7 @@ void NetwMultiplayer::drain_pending_actions(int64_t p_tick) {
         if (!can_resolve_action(request)) {
             NETW_TRACE(
                 sys::PREDICTION,
-                "queued action %s lost the method it named",
+                "Queued action %s lost the method it names.",
                 String(request.key).utf8().get_data()
             );
             lagcomp_deny_action(request.requester, request.key);

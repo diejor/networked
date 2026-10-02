@@ -106,20 +106,20 @@ TEST_CASE(
     Ref<NetwMultiplayer> session = hosting();
     const PackedInt64Array claimed = session->liveness_claim_routes(2);
 
-    NETW_CHECK_EQ(session->get_table_core()->lifecycle_removals().size(), 0);
+    NETW_CHECK_EQ(session->store_arrays().lifecycle_removals().size(), 0);
     NETW_CHECK_EQ(session->liveness_release_routes(claimed), OK);
 
     const PackedInt64Array queued
-        = session->get_table_core()->lifecycle_removals();
+        = session->store_arrays().lifecycle_removals();
     NETW_CHECK_EQ(queued.size(), claimed.size());
     NETW_CHECK_EQ(queued[0], claimed[0]);
     NETW_CHECK_EQ(queued[1], claimed[1]);
 
     SUBCASE("and a release of nothing queues nothing") {
-        session->get_table_core()->take_lifecycle_removals();
+        session->store_arrays().take_lifecycle_removals();
         NETW_CHECK_EQ(session->liveness_release_routes(PackedInt64Array()), OK);
         NETW_CHECK_EQ(
-            session->get_table_core()->lifecycle_removals().size(),
+            session->store_arrays().lifecycle_removals().size(),
             0
         );
     }
@@ -130,7 +130,7 @@ TEST_CASE(
         client->session_set_role(NetwMultiplayer::ROLE_CLIENT);
         const PackedInt64Array asked = session->liveness_claim_routes(1);
         NETW_CHECK_EQ(client->liveness_release_routes(asked), ERR_UNCONFIGURED);
-        NETW_CHECK_EQ(client->get_table_core()->lifecycle_removals().size(), 0);
+        NETW_CHECK_EQ(client->store_arrays().lifecycle_removals().size(), 0);
     }
 }
 

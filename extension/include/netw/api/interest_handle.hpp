@@ -77,7 +77,6 @@ public:
         const godot::StringName &p_layer_id
     ) const;
 
-    void client_join_label(const godot::StringName &p_layer_id);
     void dispatch_enter(const godot::StringName &p_layer_id, int64_t p_peer);
     void dispatch_leave(const godot::StringName &p_layer_id, int64_t p_peer);
 

@@ -21,6 +21,7 @@ public:
     void attach(const CarrierRow &p_row);
     void close_route(int64_t p_route);
     void release();
+    void swap(CarrierBatch &r_other);
 
     const godot::PackedByteArray &bytes() const {
         return held;
@@ -64,6 +65,7 @@ public:
     );
 
     CarrierBatch take(int64_t p_peer, bool p_reliable);
+    void recycle(int64_t p_peer, bool p_reliable, CarrierBatch &r_spent);
 
     void close_route(int64_t p_route);
 

@@ -23,6 +23,16 @@
 				Sets [member app_id] and returns this config.
 			</description>
 		</method>
+		<method name="bandwidth">
+			<return type="NetwSessionConfig" />
+			<param index="0" name="kbps" type="int" />
+			<description>
+				Sets [member bandwidth_kbps] and returns this config.
+				[codeblock]
+				Netw.configure_session(self).bandwidth(256)
+				[/codeblock]
+			</description>
+		</method>
 		<method name="link">
 			<return type="NetwSessionConfig" />
 			<param index="0" name="link_conditions" type="NetwLinkConditions" />
@@ -48,6 +58,10 @@
 	<members>
 		<member name="app_id" type="StringName" setter="set_app_id" getter="get_app_id" default="&amp;&quot;&quot;">
 			The game and build. Peers with a different [member app_id] cannot connect. Leave it empty to accept any. WebRTC room codes are also created per [member app_id].
+		</member>
+		<member name="bandwidth_kbps" type="int" setter="set_bandwidth_kbps" getter="get_bandwidth_kbps" default="0">
+			The budget each peer is sent, in kbit/s. [code]0[/code] allows each peer one datagram a tick of [member SceneMultiplayer.max_sync_packet_size], less 150 bytes of headroom. A negative value is refused.
+			While a peer loses packets its budget halves, and each round trip without loss adds back an eighth of it, up to this value. [method NetwSessionHandle.set_peer_bandwidth] gives one peer its own budget.
 		</member>
 		<member name="desired_role" type="int" setter="set_desired_role" getter="get_desired_role" enum="NetwMultiplayer.Role" default="3">
 			The role this peer takes when it hosts, which becomes [member NetwMultiplayer.role]. A server made with [method MultiplayerTree.raise_embedded_server] is always [constant NetwMultiplayer.ROLE_DEDICATED_SERVER].

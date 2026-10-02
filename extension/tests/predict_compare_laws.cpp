@@ -54,6 +54,31 @@ LocalVector<double> tolerances(double p_x, double p_derived = -1.0) {
     return out;
 }
 
+StateVerdict judged(
+    const Wiring &p_wiring,
+    Journal &p_journal,
+    const StateRow &p_predicted,
+    const StateRow &p_authority,
+    double p_tolerance,
+    bool p_reconstructed = true
+) {
+    StateVerdict out;
+    compare_state(
+        p_wiring,
+        p_journal,
+        8,
+        4,
+        p_predicted,
+        p_authority,
+        tolerances(p_tolerance),
+        tolerances(p_tolerance),
+        p_tolerance,
+        p_reconstructed,
+        out
+    );
+    return out;
+}
+
 TEST_CASE(
     "[Networked][Predict][Hosted][Compare] a derived field is absent from the "
     "causal field errors the vote reads and present in the unfiltered ones "
@@ -62,17 +87,12 @@ TEST_CASE(
     const Wiring declared = wiring();
     Journal unequal = journal_with(4, 99);
     unequal.mark_ack(4, false);
-    const StateVerdict verdict = compare_state(
+    const StateVerdict verdict = judged(
         declared,
         unequal,
-        8,
-        4,
         state(1.0, 10.0),
         state(5.0, 1000.0),
-        tolerances(1000.0),
-        tolerances(1000.0),
-        1000.0,
-        true
+        1000.0
     );
 
     NETW_CHECK_EQ(int(verdict.field_errors.size()), 2);
@@ -94,18 +114,8 @@ TEST_CASE(
     StateRow partial;
     partial.resize(2);
     partial.set(0, 5.0);
-    const StateVerdict verdict = compare_state(
-        declared,
-        unequal,
-        8,
-        4,
-        state(1.0, 10.0),
-        partial,
-        tolerances(1000.0),
-        tolerances(1000.0),
-        1000.0,
-        true
-    );
+    const StateVerdict verdict
+        = judged(declared, unequal, state(1.0, 10.0), partial, 1000.0);
 
     NETW_CHECK_CLOSE(verdict.all_field_errors[0], 4.0, 0.0001);
     NETW_CHECK_CLOSE(verdict.all_field_errors[1], -1.0, 0.0001);
@@ -117,17 +127,12 @@ TEST_CASE(
     const Wiring declared = wiring();
     Journal unequal = journal_with(4, 99);
     unequal.mark_ack(4, false);
-    StateVerdict verdict = compare_state(
+    StateVerdict verdict = judged(
         declared,
         unequal,
-        8,
-        4,
         state(1.0, 10.0),
         state(5.0, 1000.0),
-        tolerances(1000.0),
-        tolerances(1000.0),
-        1000.0,
-        true
+        1000.0
     );
     CHECK(verdict.compared);
     CHECK(verdict.corrected);
@@ -137,17 +142,12 @@ TEST_CASE(
 
     Journal equal = journal_with(4, 99);
     equal.mark_ack(4, true);
-    verdict = compare_state(
+    verdict = judged(
         declared,
         equal,
-        8,
-        4,
         state(1.0, 10.0),
         state(5.0, 1000.0),
-        tolerances(0.001),
-        tolerances(0.001),
-        0.001,
-        true
+        0.001
     );
     CHECK_FALSE(verdict.corrected);
     NETW_CHECK_EQ(verdict.meter, 0);
@@ -159,33 +159,23 @@ TEST_CASE(
 ) {
     const Wiring declared = wiring();
     Journal journal = journal_with(4, 99);
-    StateVerdict inside = compare_state(
+    StateVerdict inside = judged(
         declared,
         journal,
-        8,
-        4,
         state(1.0, 10.0),
         state(1.01, 1000.0),
-        tolerances(0.1),
-        tolerances(0.1),
-        0.1,
-        true
+        0.1
     );
     CHECK_FALSE(inside.corrected);
     CHECK_FALSE(inside.settled);
 
     journal.mark_domain(4, netw::predict::Domain::OUT_OF_DOMAIN);
-    StateVerdict outside = compare_state(
+    StateVerdict outside = judged(
         declared,
         journal,
-        8,
-        4,
         state(1.0, 10.0),
         state(1.2, 1000.0),
-        tolerances(0.1),
-        tolerances(0.1),
-        0.1,
-        true
+        0.1
     );
     CHECK(outside.corrected);
     CHECK(outside.settled);
@@ -196,17 +186,12 @@ TEST_CASE(
 ) {
     const Wiring declared = wiring();
     Journal journal = journal_with(4, 99);
-    StateVerdict verdict = compare_state(
+    StateVerdict verdict = judged(
         declared,
         journal,
-        8,
-        4,
         state(1.0, 10.0),
         state(1.0, 1000.0),
-        tolerances(0.0),
-        tolerances(0.0),
-        0.0,
-        true
+        0.0
     );
     CHECK_FALSE(verdict.corrected);
     NETW_CHECK_CLOSE(verdict.divergence, 0.0, 0.0001);
@@ -218,15 +203,11 @@ TEST_CASE(
 ) {
     const Wiring declared = wiring();
     Journal journal = journal_with(4, 99);
-    StateVerdict verdict = compare_state(
+    StateVerdict verdict = judged(
         declared,
         journal,
-        8,
-        4,
         state(1.0, 10.0),
         state(9.0, 10.0),
-        tolerances(0.0),
-        tolerances(0.0),
         0.0,
         false
     );

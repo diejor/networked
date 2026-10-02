@@ -15,28 +15,40 @@ public:
     static constexpr uint32_t MIN_SAMPLES = 8;
     static constexpr float LOSS_ENTER = 0.05f;
     static constexpr double RTT_EXCESS_MS = 250.0;
-    static constexpr int64_t CLEAN_TICKS = 64;
-    static constexpr int64_t CLEAN_CAP = 512;
-    static constexpr int64_t FLAP_TICKS = 3600;
     static constexpr int64_t FLOOR_BITS = 128 * 8;
+    static constexpr float STEP = 0.125f;
+    static constexpr float LEAST = 0.0625f;
+    static constexpr int64_t ROUND_FLOOR_MS = 16;
+    static constexpr int64_t CEILING_HOLD_MS = 60000;
+    static constexpr uint32_t BACKLOG_GROWTH = 2;
 
 private:
     struct Peer {
         uint32_t outcomes = 0;
         uint32_t filled = 0;
-        Mode mode = GOOD;
-        int64_t clean_since = -1;
-        int64_t clean_needed = CLEAN_TICKS;
-        int64_t left_bad_at = -1;
+        float share = 1.0f;
+        float ceiling = 1.0f;
+        bool decreased = false;
+        int64_t decreased_at_ms = 0;
+        int64_t stepped_at_ms = 0;
+        int64_t lost_at_ms = 0;
+        int64_t edge_at_ms = -1;
+        float edge_share = 1.0f;
         double rtt_floor_ms = -1.0;
         double rtt_ms = 0.0;
         double jitter_ms = 0.0;
+        int64_t backlog = 0;
+        uint32_t backlog_growth = 0;
     };
 
     godot::HashMap<int, Peer> peers;
 
     static void push(Peer &r_peer, bool p_lost);
-    static bool strained(const Peer &p_peer);
+    static bool slowed(const Peer &p_peer);
+    static bool lossy(const Peer &p_peer);
+    static int64_t round_ms(const Peer &p_peer);
+    static void decrease(Peer &r_peer, int64_t p_now_ms, bool p_lossy);
+    static void recover(Peer &r_peer, int64_t p_now_ms);
 
 public:
     void note_ack(
@@ -45,10 +57,13 @@ public:
         uint32_t p_lost,
         double p_rtt_ms,
         double p_jitter_ms,
-        int64_t p_tick
+        int64_t p_now_ms
     );
 
+    void note_backlog(int p_peer, int64_t p_buffered, int64_t p_now_ms);
+
     Mode mode(int p_peer) const;
+    float share(int p_peer) const;
     float loss(int p_peer) const;
     double rtt_ms(int p_peer) const;
     double jitter_ms(int p_peer) const;

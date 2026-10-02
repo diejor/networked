@@ -13,10 +13,11 @@
 #include "godot/variant.hpp"
 #include "netw/api/entity.hpp"
 #include "netw/api/member_config.hpp"
-#include "netw/api/property_set.hpp"
-#include "netw/api/property_set_binding.hpp"
 #include "netw/api/sync_model.hpp"
+#include "netw/repl/property_binding.hpp"
+#include "netw/repl/property_set.hpp"
 #include "netw/replication_send.hpp"
+#include "netw/store/world.hpp"
 #include "netw/sync_progress.hpp"
 
 namespace netw {
@@ -34,42 +35,45 @@ private:
     bool row_sender_armed = false;
     SyncProgress progress;
 
-    godot::LocalVector<godot::Ref<NetwPropertySetBinding>> bindings;
-    struct IndexedBinding {
-        uint64_t sequence = 0;
-        godot::Ref<NetwPropertySetBinding> binding;
-    };
-    godot::LocalVector<uint64_t> binding_entities;
-    godot::HashMap<uint64_t, godot::LocalVector<IndexedBinding>>
-        bindings_by_entity;
-    godot::LocalVector<uint64_t> binding_nodes;
-    godot::HashMap<uint64_t, godot::LocalVector<IndexedBinding>>
-        bindings_by_node;
-    uint64_t binding_sequence = 0;
+    using IndexedBinding = NetwEntityRecord::HeldBinding;
 
-    const godot::LocalVector<IndexedBinding> *node_bindings(
+    godot::LocalVector<uint64_t> bindings;
+    godot::LocalVector<uint64_t> binding_entities;
+    godot::LocalVector<IndexedBinding> loose_bindings;
+    godot::LocalVector<uint64_t> binding_nodes;
+    uint64_t binding_sequence = 0;
+    godot::LocalVector<uint64_t> prune_candidates;
+    bool tree_watched = false;
+
+    const godot::LocalVector<uint64_t> *node_bindings(
         const godot::Node *p_node
     ) const;
-    uint32_t binding_position(
-        const godot::Ref<NetwPropertySetBinding> &p_binding
-    ) const;
+    uint32_t binding_position(const repl::PropertyBinding *p_binding) const;
+    repl::PropertyBinding *live(uint64_t p_binding) const;
+    repl::BindingBook *binding_book() const;
+    godot::LocalVector<IndexedBinding> *held_by(uint64_t p_entity) const;
+    void seat_record(repl::PropertyBinding *p_binding);
+    void unseat_record(
+        uint64_t p_entity,
+        const repl::PropertyBinding *p_binding
+    );
     godot::LocalVector<godot::RID> state_binding_dropped;
 
-    void append_binding(const godot::Ref<NetwPropertySetBinding> &p_binding);
-    void replace_binding(
-        uint32_t p_at,
-        const godot::Ref<NetwPropertySetBinding> &p_binding
-    );
+    void append_binding(repl::PropertyBinding *p_binding);
+    void replace_binding(uint32_t p_at, repl::PropertyBinding *p_binding);
     void remove_binding(uint32_t p_at);
+    void retire(uint64_t p_binding);
     void clear_bindings();
-    godot::LocalVector<godot::Ref<NetwPropertySetBinding>> bindings_of_entity(
+    void store_admit(const repl::PropertyBindingPtr &p_binding);
+    void store_place(const repl::PropertyBindingPtr &p_binding);
+    godot::LocalVector<repl::PropertyBindingPtr> bindings_of_entity(
         const godot::Ref<NetwEntity> &p_entity
     ) const;
     bool binding_belongs_to(
-        const godot::Ref<NetwPropertySetBinding> &p_binding,
+        const repl::PropertyBindingPtr &p_binding,
         const godot::Ref<NetwEntity> &p_entity
     ) const;
-    godot::LocalVector<godot::Ref<NetwPropertySetBinding>>
+    godot::LocalVector<repl::PropertyBindingPtr>
     entity_bindings_checked(const godot::Ref<NetwEntity> &p_entity) const;
     godot::HashMap<int64_t, int64_t> contract_hashes;
 
@@ -92,17 +96,17 @@ private:
 
     godot::PackedByteArray stage_bytes;
     godot::Array stage_values;
-    godot::Ref<NetwPropertySetBinding> stage_binding;
     godot::PackedByteArray stage_payload;
+    store::RowAddress stage_at;
+    int64_t stage_sender = 0;
+    bool stage_windowed = false;
+    store::Landing stage_landing = store::Landing::MALFORMED;
     const godot::LocalVector<CarrierRow> *carrier_rows = nullptr;
     int64_t carrier_peer = 0;
     int64_t carrier_frames = 0;
     int64_t carrier_bits = 0;
-    repl::RowArrival stage_arrival;
     int64_t datagram_tick = -1;
     int64_t datagram_seq = -1;
-    int stage_lane = 0;
-    godot::Dictionary stage_decoded;
     godot::Node *stage_node = nullptr;
     godot::StringName stage_property;
 
@@ -140,10 +144,12 @@ private:
     godot::Error decode_stage_body();
     godot::Array gather_stage();
 
-    void capture_declaration_key(const godot::Ref<NetwPropertySetBinding> &p_b);
-    void bind_declaration(const godot::Ref<NetwPropertySetBinding> &p_b);
-    void drop_declaration(const godot::Ref<NetwPropertySetBinding> &p_b);
+    void capture_declaration_key(const repl::PropertyBindingPtr &p_b);
+    void bind_declaration(const repl::PropertyBindingPtr &p_b);
+    void drop_declaration(const repl::PropertyBindingPtr &p_b);
     void prune_derived();
+    void prune_node(uint64_t p_key);
+    void watch_tree();
     void recapture_entity(const godot::Ref<NetwEntity> &p_entity);
     void on_entity_live(
         int64_t p_route,
@@ -154,9 +160,10 @@ private:
 
     void queue_prediction_contract_check(
         godot::Node *p_node,
-        const godot::Ref<NetwPropertySet> &p_state,
-        const godot::Ref<NetwPropertySet> &p_input
+        const repl::PropertySet *p_state,
+        const repl::PropertySet *p_input
     );
+    repl::PropertySet *set_of(uint64_t p_set) const;
     void report_missing_prediction_component(
         godot::Node *p_node,
         int64_t p_config_hash
@@ -182,10 +189,10 @@ private:
         int p_lane
     );
     void feed_derived_interpolation(
-        const godot::Ref<NetwPropertySetBinding> &p_binding,
-        const godot::Dictionary &p_header
+        const repl::PropertyBindingPtr &p_binding,
+        const store::RowAddress &p_at
     );
-    void flush_row_offers(const godot::LocalVector<repl::RowOffer> &p_offers);
+    void flush_rows();
     void flush_row_control();
     void reset_stream_of(int p_peer, uint64_t p_token);
     void record_interpolated_signal_args(
@@ -197,6 +204,9 @@ private:
     int64_t receive_tick() const;
 
 public:
+    int64_t prune_visits = 0;
+
+    void note_node_removed(godot::Node *p_node);
     void set_core(godot::Object *p_core);
     void set_api(godot::Object *p_api);
     void set_sync_model(NetwSyncModel *p_model);
@@ -217,19 +227,21 @@ public:
     void register_derived(godot::Node *p_node);
     godot::Error register_property_set(
         godot::Node *p_node,
-        const godot::Ref<NetwPropertySet> &p_set
+        uint64_t p_set
     );
-    godot::Ref<NetwPropertySetBinding> derived_binding(
+    repl::PropertyBindingPtr derived_binding(
         godot::Node *p_node,
         int64_t p_record
     );
-    void note_schema_seal(const godot::Ref<NetwPropertySet> &p_set);
+    void note_schema_seal(const repl::PropertySet *p_set);
     int64_t sealed_schema_identity() const;
     bool owes_rows() const {
         return !bindings.is_empty();
     }
     void unregister_derived(godot::Node *p_node);
-    godot::TypedArray<NetwPropertySetBinding> derived_group(int64_t p_route);
+    godot::LocalVector<repl::PropertyBindingPtr> derived_group(
+        int64_t p_route
+    );
 #if defined(NETW_TESTS)
     void reconcile_state_timeline_for_test(godot::Node *p_node) {
         reconcile_state_timeline(p_node);
@@ -274,11 +286,11 @@ public:
 
     static godot::Dictionary gather_payload(
         godot::Node *p_node,
-        const godot::Ref<NetwPropertySet> &p_set
+        const repl::PropertySet *p_set
     );
     static void apply_payload(
         godot::Node *p_node,
-        const godot::Ref<NetwPropertySet> &p_set,
+        const repl::PropertySet *p_set,
         const godot::Dictionary &p_payload
     );
 

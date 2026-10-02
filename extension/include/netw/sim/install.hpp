@@ -17,7 +17,7 @@ enum class Restore : uint8_t {
 };
 
 struct Sample {
-    godot::ObjectID binding;
+    uint64_t binding = 0;
     int64_t comp = 0;
     int64_t tick = -1;
     int64_t sender = 0;
@@ -39,7 +39,6 @@ struct InstallStats {
 };
 
 struct Installs {
-    godot::LocalVector<Sample> held;
     godot::LocalVector<int64_t> reconstructed;
     InstallStats stats;
 };
@@ -47,14 +46,6 @@ struct Installs {
 bool reconstructs(Installs &r_installs, int64_t p_comp, bool p_whole);
 
 bool installs_on_arrival(Restore p_restore, int64_t p_tick, int64_t p_display);
-
-void hold(Installs &r_installs, const Sample &p_sample);
-
-void take_due(
-    Installs &r_installs,
-    int64_t p_display,
-    godot::LocalVector<Sample> &r_due
-);
 
 void note_install(InstallStats &r_stats, int64_t p_age);
 

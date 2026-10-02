@@ -50,7 +50,7 @@ void NetwMultiplayer::scene_player_display_settle() {
     scene_player_display_id = settled;
     NETW_TRACE(
         sys::SCENE,
-        "the player display resolved to %s",
+        "The player display is now %s.",
         resolved != nullptr ? "an isolated world" : "no viewport"
     );
     emit_signal(SIG_PARTICIPANT_VIEWPORT_CHANGED, resolved);

@@ -61,7 +61,11 @@ PackedInt64Array pool_book(LoopbackRig &p_rig) {
     REQUIRE(seated.is_valid());
     const int64_t slot = pool->slot_of(seated);
     REQUIRE(slot >= 0);
-    return pool->drive_stats(slot);
+    PackedInt64Array out;
+    for (int column = 0; column < NetwPredictionEngine::STAT_COUNT; ++column) {
+        out.push_back(pool->drive_stat(slot, column));
+    }
+    return out;
 }
 
 TEST_CASE(

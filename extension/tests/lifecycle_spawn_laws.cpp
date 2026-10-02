@@ -758,10 +758,10 @@ Node *build_block(
     const Ref<netw::NetwSchema> schema = p_schema;
     Object *account = p_account;
     netw::Netw::configure_property(made, StringName("hp"), true)
-        ->persisted(schema->column_ref(0));
+        ->persisted(StringName());
     netw::Netw::configure_persistence(made)
         ->database(StringName("saves"))
-        ->schema(schema)
+        ->table(schema->get_schema_name())
         ->record_id(Callable(account, "get_name"))
         ->load_on_spawn(bool(p_loads));
     built_blocks().push_back(netw::gd::instance_id(made));
@@ -804,7 +804,7 @@ TEST_CASE(
     Node *account = stored.account;
     const Ref<netw::NetwSchema> schema = netw::NetwSchema::create("blocks");
     schema->replicated(false);
-    schema->i32("hp", 1);
+    schema->i64("hp", 1);
     const RID database = session->get_databases()->create("saves");
     session->get_databases()->open(
         database,

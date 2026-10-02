@@ -14,6 +14,9 @@ using namespace godot;
 
 namespace netw {
 
+using repl::PropertyColumn;
+using repl::PropertySet;
+
 namespace {
 
 uint8_t declared_channel(const char *p_name) {
@@ -25,10 +28,10 @@ uint8_t declared_channel(const char *p_name) {
 }
 
 String record_kind_name(int64_t p_record) {
-    if (p_record == NetwPropertySet::RECORD_INPUT) {
+    if (p_record == PropertySet::RECORD_INPUT) {
         return String("input");
     }
-    if (p_record == NetwPropertySet::RECORD_BROADCAST) {
+    if (p_record == PropertySet::RECORD_BROADCAST) {
         return String("broadcast");
     }
     return String("state");
@@ -42,28 +45,30 @@ void warn_set_conflict(
 ) {
     NETW_WARN(
         sys::WIRE,
-        "NetwPropertySet: %s set-level %s set by both '%s' and '%s'",
-        String(record_kind_name(p_record)).utf8().get_data(),
-        p_axis,
+        "'%s' and '%s' declare different %s values for the same %s "
+        "properties, and the last one wins. Declare it on one of them.",
         String(p_first).utf8().get_data(),
-        String(p_second).utf8().get_data()
+        String(p_second).utf8().get_data(),
+        p_axis,
+        String(record_kind_name(p_record)).utf8().get_data()
     );
 }
 
 void warn_broadcast_ignored(const char *p_axis, const StringName &p_property) {
     NETW_WARN(
         sys::WIRE,
-        "NetwPropertySet: broadcast set forces %s; ignoring the ask on '%s'",
-        p_axis,
-        String(p_property).utf8().get_data()
+        "'%s' is a broadcast property, which ignores "
+        "NetwPropertyConfig.%s. Remove that call.",
+        String(p_property).utf8().get_data(),
+        p_axis
     );
 }
 
 void warn_broadcast_exclusivity(const StringName &p_property) {
     NETW_WARN(
         sys::WIRE,
-        "NetwPropertySet: '%s' marked broadcast() and state()/input(); "
-        "dropping the broadcast mark in favor of the recorded set",
+        "'%s' is declared broadcast and also state or input, so broadcast "
+        "was ignored. Keep only one of them.",
         String(p_property).utf8().get_data()
     );
 }
@@ -72,36 +77,34 @@ void warn_broadcast_exclusivity(const StringName &p_property) {
 
 namespace property_set_builder {
 
-Ref<NetwPropertySet> for_record(int64_t p_record) {
-    Ref<NetwPropertySet> set;
-    set.instantiate();
+void for_record(PropertySet &r_set, int64_t p_record) {
+    PropertySet *set = &r_set;
     set->record = p_record;
-    set->profile = NetwPropertySet::STAMPED;
-    set->stamp = p_record == NetwPropertySet::RECORD_STATE
-        ? NetwPropertySet::STAMP_TICK_ACK
-        : NetwPropertySet::STAMP_TICK;
-    set->cadence = NetwPropertySet::TICK;
+    set->profile = PropertySet::STAMPED;
+    set->stamp = p_record == PropertySet::RECORD_STATE
+        ? PropertySet::STAMP_TICK_ACK
+        : PropertySet::STAMP_TICK;
+    set->cadence = PropertySet::TICK;
     set->channel = declared_channel("SYNC");
-    set->policy = p_record == NetwPropertySet::RECORD_STATE
+    set->policy = p_record == PropertySet::RECORD_STATE
         ? NetwMemberConfig::POLICY_AUTHORITY
         : NetwMemberConfig::POLICY_CONTROLLER;
-    set->trigger = NetwPropertySet::TRIGGER_ON_CHANGE;
-    set->window = p_record == NetwPropertySet::RECORD_INPUT ? 2 : 0;
-    set->audience = p_record == NetwPropertySet::RECORD_INPUT
-        ? NetwPropertySet::AUDIENCE_SERVER_ONLY
-        : NetwPropertySet::AUDIENCE_PUBLIC;
-    return set;
+    set->trigger = PropertySet::TRIGGER_ON_CHANGE;
+    set->window = p_record == PropertySet::RECORD_INPUT ? 2 : 0;
+    set->audience = p_record == PropertySet::RECORD_INPUT
+        ? PropertySet::AUDIENCE_SERVER_ONLY
+        : PropertySet::AUDIENCE_PUBLIC;
 }
 
-Ref<NetwPropertySet> from_property_config(
+void from_property_config(
+    PropertySet &r_set,
     const StringName &p_property,
     const Ref<NetwMemberConfig> &p_config
 ) {
-    Ref<NetwPropertySet> set;
-    set.instantiate();
-    set->cadence = NetwPropertySet::ON_DEMAND;
-    set->trigger = NetwPropertySet::TRIGGER_ON_DEMAND;
-    set->profile = NetwPropertySet::PLAIN;
+    PropertySet *set = &r_set;
+    set->cadence = PropertySet::ON_DEMAND;
+    set->trigger = PropertySet::TRIGGER_ON_DEMAND;
+    set->profile = PropertySet::PLAIN;
     set->channel = declared_channel("PROPERTY_SYNC");
     Ref<NetwQuantize> quantizer;
     if (p_config.is_valid()) {
@@ -114,36 +117,37 @@ Ref<NetwPropertySet> from_property_config(
         }
     }
     set->bind_column(
-        NetwPropertySetColumn::create(
+        PropertyColumn::create(
             p_property,
             quantizer,
             false,
             NetwMultiplayer::ColumnType(SchemaCore::VARIANT)
         )
     );
-    return set;
 }
 
-Ref<NetwPropertySet> from_property_configs(
+bool from_property_configs(
+    PropertySet &r_set,
     const Dictionary &p_configs,
     int64_t p_record
 ) {
-    const bool want_input = p_record == NetwPropertySet::RECORD_INPUT;
-    const bool want_broadcast = p_record == NetwPropertySet::RECORD_BROADCAST;
-    const Ref<NetwPropertySet> set = for_record(p_record);
+    const bool want_input = p_record == PropertySet::RECORD_INPUT;
+    const bool want_broadcast = p_record == PropertySet::RECORD_BROADCAST;
+    for_record(r_set, p_record);
+    PropertySet *set = &r_set;
 
-    NetwMemberConfig::Policy policy = p_record == NetwPropertySet::RECORD_STATE
+    NetwMemberConfig::Policy policy = p_record == PropertySet::RECORD_STATE
         ? NetwMemberConfig::POLICY_AUTHORITY
         : NetwMemberConfig::POLICY_CONTROLLER;
     StringName policy_owner;
-    int64_t trigger = NetwPropertySet::TRIGGER_ON_CHANGE;
+    int64_t trigger = PropertySet::TRIGGER_ON_CHANGE;
     StringName trigger_owner;
     int64_t window = want_input ? 2 : 0;
     StringName window_owner;
     int64_t heartbeat = 0;
     StringName heartbeat_owner;
-    int64_t audience = want_input ? NetwPropertySet::AUDIENCE_SERVER_ONLY
-                                  : NetwPropertySet::AUDIENCE_PUBLIC;
+    int64_t audience = want_input ? PropertySet::AUDIENCE_SERVER_ONLY
+                                  : PropertySet::AUDIENCE_PUBLIC;
     bool masked = false;
 
     const Array declared = p_configs.keys();
@@ -171,19 +175,19 @@ Ref<NetwPropertySet> from_property_configs(
         if (!quantizers.is_empty()) {
             quantizer = Ref<NetwQuantize>(quantizers[0]);
         }
-        const Ref<NetwPropertySetColumn> column = NetwPropertySetColumn::create(
+        PropertyColumn column = PropertyColumn::create(
             property,
             quantizer,
-            config->get_lane() == NetwPropertySet::RETAINED,
+            config->get_lane() == PropertySet::RETAINED,
             NetwMultiplayer::ColumnType(SchemaCore::VARIANT)
         );
-        column->property_class = config->get_property_class();
-        column->converge_stiffness = config->get_converge_stiffness();
-        column->carry_channel = config->get_carry_channel();
-        column->explicit_teleport_only = config->get_explicit_teleport_only();
-        column->explicit_reconcile_only = config->get_explicit_reconcile_only();
-        column->epsilon_override = config->get_epsilon_override();
-        column->teleport_at_override = config->get_teleport_at_override();
+        column.property_class = config->get_property_class();
+        column.converge_stiffness = config->get_converge_stiffness();
+        column.carry_channel = config->get_carry_channel();
+        column.explicit_teleport_only = config->get_explicit_teleport_only();
+        column.explicit_reconcile_only = config->get_explicit_reconcile_only();
+        column.epsilon_override = config->get_epsilon_override();
+        column.teleport_at_override = config->get_teleport_at_override();
         set->bind_column(column);
 
         if (config->is_policy_declared()) {
@@ -233,11 +237,11 @@ Ref<NetwPropertySet> from_property_configs(
             }
         }
         if (config->get_set_audience()
-            == NetwPropertySet::AUDIENCE_SERVER_ONLY) {
+            == PropertySet::AUDIENCE_SERVER_ONLY) {
             if (want_broadcast) {
                 warn_broadcast_ignored("audience", property);
             } else if (!want_input) {
-                audience = NetwPropertySet::AUDIENCE_SERVER_ONLY;
+                audience = PropertySet::AUDIENCE_SERVER_ONLY;
             }
         }
         if (config->get_set_masked()) {
@@ -246,15 +250,15 @@ Ref<NetwPropertySet> from_property_configs(
     }
 
     if (set->columns.is_empty()) {
-        return Ref<NetwPropertySet>();
+        return false;
     }
 
     if (masked && window > 0) {
         NETW_WARN(
             sys::WIRE,
-            "NetwPropertySet: masked and windowed are mutually exclusive; "
-            "ignoring masked() since a redundant sample already defeats "
-            "masking"
+            "The %s properties are both masked and windowed, so masked was "
+            "ignored. Remove NetwPropertyConfig.masked from them.",
+            String(record_kind_name(p_record)).utf8().get_data()
         );
         masked = false;
     }
@@ -265,10 +269,37 @@ Ref<NetwPropertySet> from_property_configs(
     set->heartbeat = heartbeat;
     set->audience = audience;
     set->masked = masked;
-    return set;
+    return true;
 }
 
-Ref<NetwPropertySet> from_script(
+bool compile_script(
+    PropertySet &r_set,
+    const Ref<Script> &p_script,
+    int64_t p_record,
+    Node *p_node
+) {
+    {
+        NETW_ZONE_NC("PropertySet build columns", colors::WIRE);
+        if (!from_property_configs(
+                r_set,
+                netw::script::model::get_property_configs(p_script),
+                p_record
+            )) {
+            return false;
+        }
+    }
+    {
+        NETW_ZONE_NC("PropertySet stamp column types", colors::WIRE);
+        r_set.stamp_column_types(p_script, p_node);
+    }
+    {
+        NETW_ZONE_NC("PropertySet seal", colors::WIRE);
+        r_set.seal();
+    }
+    return true;
+}
+
+uint64_t from_script(
     const Ref<Script> &p_script,
     int64_t p_record,
     Object *p_api,
@@ -285,43 +316,26 @@ Ref<NetwPropertySet> from_script(
             );
         }
     }
-    if (core != nullptr) {
-        const RID adopted = core->adopted_property_set(
-            p_script,
-            NetwMultiplayer::RecordKind(p_record)
-        );
-        if (adopted.is_valid()) {
-            return core->property_set_record(adopted);
-        }
-    }
-    Ref<NetwPropertySet> set;
-    {
-        NETW_ZONE_NC("PropertySet build columns", colors::WIRE);
-        set = from_property_configs(
-            netw::script::model::get_property_configs(p_script),
-            p_record
-        );
-    }
-    if (set.is_null()) {
-        return set;
-    }
-    {
-        NETW_ZONE_NC("PropertySet stamp column types", colors::WIRE);
-        NetwPropertySet::stamp_column_types(set, p_script, p_node);
-    }
-    {
-        NETW_ZONE_NC("PropertySet seal", colors::WIRE);
-        set->seal();
-    }
     if (core == nullptr) {
-        return set;
+        return repl::SetBook::NONE;
+    }
+    const RID adopted = core->adopted_property_set(
+        p_script,
+        NetwMultiplayer::RecordKind(p_record)
+    );
+    if (adopted.is_valid()) {
+        return core->property_set_id_of(adopted);
+    }
+    PropertySet source;
+    if (!compile_script(source, p_script, p_record, p_node)) {
+        return repl::SetBook::NONE;
     }
     {
         NETW_ZONE_NC("PropertySet adopt", colors::WIRE);
-        return core->property_set_record(core->adopt_property_set(
+        return core->property_set_id_of(core->adopt_property_set(
             p_script,
             NetwMultiplayer::RecordKind(p_record),
-            set,
+            source,
             p_node
         ));
     }

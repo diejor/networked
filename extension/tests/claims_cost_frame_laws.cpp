@@ -255,10 +255,15 @@ class CostScenario final : public netw_test::FrameScenario {
                 if (index != PUSHER && entity->get_controller() != 0) {
                     seen.claimed += 1;
                 }
-                const netw::sim::Row *row
-                    = session->sim_row_of(entity->get_rid_handle());
-                if (row != nullptr) {
-                    seen.held_installs += int64_t(row->installs.held.size());
+                const int64_t route = session->liveness_route_of(entity.ptr());
+                netw::store::World &world = session->store();
+                for (uint32_t at = 0; at < world.table_count(); ++at) {
+                    const netw::store::Table &table = world.table(at);
+                    for (uint32_t row = 0; row < table.row_count(); ++row) {
+                        seen.held_installs += table.routes[row] == route
+                            ? int64_t(table.due_held[row])
+                            : 0;
+                    }
                 }
             }
         }

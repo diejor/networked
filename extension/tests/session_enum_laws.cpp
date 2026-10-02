@@ -2,18 +2,18 @@
 
 #include "netw/api/member_config.hpp"
 #include "netw/api/netw_multiplayer.hpp"
-#include "netw/api/property_set.hpp"
 #include "netw/api/schema_core.hpp"
 #include "netw/display/decl.hpp"
 #include "netw/liveness_core.hpp"
+#include "netw/repl/property_set.hpp"
 
 namespace TestNetwSessionEnums {
 
 using netw::NetwLivenessCore;
 using netw::NetwMemberConfig;
 using netw::NetwMultiplayer;
-using netw::NetwPropertySet;
 using netw::SchemaCore;
+using netw::repl::PropertySet;
 
 TEST_CASE(
     "[Networked][Session][Hosted] L1 every session enum that mirrors another "
@@ -22,11 +22,11 @@ TEST_CASE(
     SUBCASE("the record kinds are the property set's") {
         NETW_CHECK_EQ(
             NetwMultiplayer::RECORD_KIND_STATE,
-            NetwPropertySet::RECORD_STATE
+            PropertySet::RECORD_STATE
         );
         NETW_CHECK_EQ(
             NetwMultiplayer::RECORD_KIND_BROADCAST,
-            NetwPropertySet::RECORD_BROADCAST
+            PropertySet::RECORD_BROADCAST
         );
     }
 

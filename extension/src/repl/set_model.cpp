@@ -161,11 +161,12 @@ int64_t SetModel::declare(
     int64_t p_audience
 ) {
     NETW_ZONE_NC("Set declare", colors::WIRE);
+    revision += 1;
     if (p_route <= 0 || String(p_key).is_empty()) {
         NETW_WARN_ONCE(
             sys::WIRE,
-            "A property set declared on route %d under key '%s' is not "
-            "addressable, so nothing it holds will sync.",
+            "Properties declared on route %d under key '%s' have no valid "
+            "address, so they will not sync.",
             int(p_route),
             String(p_key).utf8().get_data()
         );
@@ -205,6 +206,7 @@ void SetModel::drop(
     const StringName &p_key,
     int64_t p_record
 ) {
+    revision += 1;
     HashMap<int64_t, LocalVector<SetRow>>::Iterator held = routes.find(p_route);
     if (held == routes.end()) {
         return;
@@ -222,6 +224,26 @@ void SetModel::drop(
         }
         return;
     }
+}
+
+bool SetModel::bind_row(
+    int64_t p_route,
+    int64_t p_kind,
+    const StringName &p_key,
+    int64_t p_record,
+    uint64_t p_binding
+) {
+    LocalVector<SetRow> *rows = routes.getptr(p_route);
+    if (rows == nullptr) {
+        return false;
+    }
+    for (SetRow &row : *rows) {
+        if (names(row, p_kind, p_key, p_record)) {
+            row.binding = p_binding;
+            return true;
+        }
+    }
+    return false;
 }
 
 const SetRow *SetModel::row(int64_t p_route, int64_t p_ordinal) const {
@@ -280,11 +302,13 @@ bool SetModel::admits_schema(int64_t p_route, int64_t p_ordinal) const {
 }
 
 void SetModel::clear_route(int64_t p_route) {
+    revision += 1;
     routes.erase(p_route);
     descriptors.erase(p_route);
 }
 
 void SetModel::clear() {
+    revision += 1;
     routes.clear();
     descriptors.clear();
 }

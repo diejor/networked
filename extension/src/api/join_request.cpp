@@ -25,7 +25,7 @@ bool JoinRequest::deserialize(const PackedByteArray &p_bytes) {
     if (!session::frame_read(p_bytes, frame)) {
         NETW_TRACE(
             sys::SESSION,
-            "a join request that did not decode whole is refused"
+            "A join request that did not decode fully was refused."
         );
         return false;
     }

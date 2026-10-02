@@ -79,7 +79,7 @@ Error NetwChannelBook::settle_protocol() const {
         if (!protocol_handler_of(id).is_valid()) {
             NETW_WARN(
                 sys::SESSION,
-                "channel %d (%s) is peer-scoped and has no handler",
+                "Built-in channel %d (%s) has no handler.",
                 id,
                 String(decl->name)
             );

@@ -13,14 +13,15 @@
 #include "godot/script.hpp"
 #include "godot/variant.hpp"
 #include "netw/api/netw_multiplayer.hpp"
-#include "netw/api/property_set.hpp"
 #include "netw/property_set_builder.hpp"
+#include "netw/repl/property_set.hpp"
 
 namespace TestNetwPropertySetCompileLaws {
 
 using namespace godot;
 using netw::NetwMultiplayer;
-using netw::NetwPropertySet;
+using netw::repl::PropertyColumn;
+using netw::repl::PropertySet;
 namespace property_set_builder = netw::property_set_builder;
 using netw_test::law_broken;
 using netw_test::law_held;
@@ -37,35 +38,32 @@ enum Plant {
 
 struct CompileScenario {
     String label;
-    int64_t record = NetwPropertySet::RECORD_STATE;
+    int64_t record = PropertySet::RECORD_STATE;
 };
 
 CompileScenario a_state_set() {
     CompileScenario scenario;
     scenario.label = "a-state-set";
-    scenario.record = NetwPropertySet::RECORD_STATE;
+    scenario.record = PropertySet::RECORD_STATE;
     return scenario;
 }
 
 CompileScenario an_input_set() {
     CompileScenario scenario;
     scenario.label = "an-input-set";
-    scenario.record = NetwPropertySet::RECORD_INPUT;
+    scenario.record = PropertySet::RECORD_INPUT;
     return scenario;
 }
 
-Array shape_of(const Ref<NetwPropertySet> &p_set) {
+Array shape_of(const PropertySet *p_set) {
     Array members;
-    const TypedArray<netw::NetwPropertySetColumn> columns
-        = p_set->get_columns();
-    for (int index = 0; index < columns.size(); index++) {
-        const Ref<netw::NetwPropertySetColumn> column = columns[index];
+    for (const PropertyColumn &column : p_set->columns) {
         Array row;
-        row.push_back(column->get_key());
-        row.push_back(column->get_type());
-        row.push_back(column->get_lane());
-        row.push_back(column->get_property_class());
-        row.push_back(column->get_carry_channel());
+        row.push_back(column.get_key());
+        row.push_back(column.get_type());
+        row.push_back(column.lane);
+        row.push_back(column.property_class);
+        row.push_back(column.carry_channel);
         members.push_back(row);
     }
     Array shape;
@@ -102,25 +100,26 @@ public:
         Ref<NetwMultiplayer> session;
         session.instantiate();
 
-        const Ref<NetwPropertySet> legacy = property_set_builder::from_script(
+        PropertySet legacy;
+        REQUIRE(property_set_builder::compile_script(
+            legacy,
             script,
             declared.record,
-            nullptr,
             node
-        );
-        const Ref<NetwPropertySet> flat = property_set_builder::from_script(
+        ));
+        const netw::repl::SetBook &sets = session->property_set_book();
+        const PropertySet *flat = sets.get(property_set_builder::from_script(
             script,
             declared.record,
             session.ptr(),
             node
-        );
-        REQUIRE(legacy.is_valid());
-        REQUIRE(flat.is_valid());
+        ));
+        REQUIRE(flat != nullptr);
 
         valid = flat->get_rid_handle().is_valid();
         sealed = flat->get_sealed();
-        distinct_objects = legacy != flat;
-        shapes_agree = shape_of(flat) == shape_of(legacy);
+        distinct_objects = &legacy != flat;
+        shapes_agree = shape_of(flat) == shape_of(&legacy);
         session_hash
             = session->property_set_get_wire_hash(flat->get_rid_handle());
         set_hash = flat->wire_hash();
@@ -128,14 +127,14 @@ public:
             session_hash = session->property_set_get_wire_hash(RID());
         }
 
-        const Ref<NetwPropertySet> again = property_set_builder::from_script(
+        const PropertySet *again = sets.get(property_set_builder::from_script(
             script,
             declared.record,
             planted == PLANT_A_COMPILE_THAT_NEVER_CACHES ? nullptr
                                                          : session.ptr(),
             node
-        );
-        cached = again.is_valid()
+        ));
+        cached = again != nullptr
             && again->get_rid_handle() == flat->get_rid_handle();
 
         memdelete(node);

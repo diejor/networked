@@ -58,7 +58,8 @@ bool CaptureWriter::open(const String &p_path, Dictionary p_header) {
     if (file.is_null()) {
         NETW_WARN_ONCE(
             sys::WIRE,
-            "a capture was armed at %s and the path refused to open",
+            "The packet capture file %s could not be opened, so nothing is "
+            "captured. Point NETW_CAPTURE at a writable path.",
             String(p_path).utf8().get_data()
         );
         return false;

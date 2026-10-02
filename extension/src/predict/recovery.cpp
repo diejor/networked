@@ -18,15 +18,15 @@ namespace {
 constexpr double TAU = 6.2831853071795864769252867666;
 constexpr int ESCALATE_NONSHRINK = 3;
 
-StateRow copy_row(const StateRow &p_source, int p_width) {
-    StateRow out;
-    out.resize(p_width);
+void copy_row_into(const StateRow &p_source, int p_width, StateRow &r_row) {
+    r_row.resize(p_width);
     for (int at = 0; at < p_width; ++at) {
         if (p_source.has(at)) {
-            out.set(at, p_source.values[uint32_t(at)]);
+            r_row.set(at, p_source.values[uint32_t(at)]);
+        } else {
+            r_row.values[uint32_t(at)] = Variant();
         }
     }
-    return out;
 }
 
 double epsilon_at(const Wiring &p_wiring, int p_field, double p_fallback) {
@@ -373,61 +373,77 @@ WritePlan stage_recovery(
     const RecoveryRequest &p_request,
     RecoveryState &r_state
 ) {
+    WritePlan out;
+    stage_recovery_into(p_wiring, p_config, p_request, r_state, out);
+    return out;
+}
+
+void stage_recovery_into(
+    const Wiring &p_wiring,
+    const Config &p_config,
+    const RecoveryRequest &p_request,
+    RecoveryState &r_state,
+    WritePlan &r_out
+) {
     NETW_ZONE_NC("NetwPredict stage recovery", colors::PREDICTION);
     NETW_ZONE_VALUE(p_wiring.count());
-    WritePlan out;
-    out.basis = p_request.basis;
-    out.restore.resize(p_wiring.count());
-    out.write.resize(p_wiring.count());
-    out.escalated = r_state.escalate_next;
+    const int width = p_wiring.count();
+    r_out.basis = p_request.basis;
+    r_out.replay_from = -1;
+    r_out.replay_through = -1;
+    r_out.op = Operator::NONE;
+    r_out.teleport = false;
+    r_out.skip = true;
+    r_out.restore.resize(width);
+    r_out.write.resize(width);
+    r_out.escalated = r_state.escalate_next;
     if (p_request.policy == int(RecoveryPolicy::OBSERVE)) {
-        return out;
+        return;
     }
 
-    out.restore = copy_row(p_request.authority, p_wiring.count());
+    copy_row_into(p_request.authority, width, r_out.restore);
     if (p_config.correction == int(CorrectionMode::REPLAY)) {
-        out.op = Operator::REBASE_EXACT;
-        out.skip = false;
-        track_recovery(p_wiring, p_config, p_request, out, r_state);
-        return out;
+        r_out.op = Operator::REBASE_EXACT;
+        r_out.skip = false;
+        track_recovery(p_wiring, p_config, p_request, r_out, r_state);
+        return;
     }
 
     bool projected = false;
     if (p_config.restore == int(RestoreMode::EXTRAPOLATED)) {
-        projected = project_restore(p_wiring, p_request, out.restore);
+        projected = project_restore(p_wiring, p_request, r_out.restore);
     }
-    if (out.escalated || p_request.pose_unmeasured
+    if (r_out.escalated || p_request.pose_unmeasured
         || teleport_reached(p_wiring, p_request)) {
-        out.write = copy_row(out.restore, p_wiring.count());
-        out.op = Operator::FULL_CLOSURE;
-        out.teleport = true;
-        out.skip = false;
-        track_recovery(p_wiring, p_config, p_request, out, r_state);
-        return out;
+        copy_row_into(r_out.restore, width, r_out.write);
+        r_out.op = Operator::FULL_CLOSURE;
+        r_out.teleport = true;
+        r_out.skip = false;
+        track_recovery(p_wiring, p_config, p_request, r_out, r_state);
+        return;
     }
 
     const bool full = p_request.domain == Domain::OUT_OF_DOMAIN
         || (p_request.attribution == Attribution::UNKNOWN
             && p_request.contact_window);
     if (full) {
-        out.write = copy_row(out.restore, p_wiring.count());
-        out.op
+        copy_row_into(r_out.restore, width, r_out.write);
+        r_out.op
             = projected ? Operator::REBASE_PROJECTED : Operator::REBASE_EXACT;
-        out.skip = false;
-        track_recovery(p_wiring, p_config, p_request, out, r_state);
-        return out;
+        r_out.skip = false;
+        track_recovery(p_wiring, p_config, p_request, r_out, r_state);
+        return;
     }
     if (p_request.suppressed) {
-        return out;
+        return;
     }
 
-    remove_withheld(p_wiring, out.restore);
-    converge(p_wiring, p_request.current, out.restore);
-    out.write = copy_row(out.restore, p_wiring.count());
-    out.op = projected ? Operator::REBASE_PROJECTED : Operator::REBASE_EXACT;
-    out.skip = false;
-    track_recovery(p_wiring, p_config, p_request, out, r_state);
-    return out;
+    remove_withheld(p_wiring, r_out.restore);
+    converge(p_wiring, p_request.current, r_out.restore);
+    copy_row_into(r_out.restore, width, r_out.write);
+    r_out.op = projected ? Operator::REBASE_PROJECTED : Operator::REBASE_EXACT;
+    r_out.skip = false;
+    track_recovery(p_wiring, p_config, p_request, r_out, r_state);
 }
 
 TransportPlan transport(
@@ -483,7 +499,8 @@ StateRow advance_seed(
     int p_transition_span,
     double p_tick_delta
 ) {
-    StateRow out = copy_row(p_payload, p_wiring.count());
+    StateRow out;
+    copy_row_into(p_payload, p_wiring.count(), out);
     if (p_config.restore != int(RestoreMode::EXTRAPOLATED)) {
         return out;
     }
@@ -521,8 +538,9 @@ bool transport_admissible(const TransportEvidence &p_evidence) {
         && p_evidence.snap_correction && !p_evidence.observing;
     NETW_TRACE(
         sys::PREDICTION,
-        "transport admissible=%d candidate=%d witness=%d/%d non_pose=%d "
-        "below=%d escalated=%d snap=%d observing=%d",
+        "Moving the correction allowed %d (candidate %d, contacts clean %d "
+        "and %d, other state agrees %d, below teleport %d, escalated %d, "
+        "snap %d, observing %d).",
         int(out),
         int(p_evidence.candidate),
         int(p_evidence.basis_witness_clean),
@@ -544,8 +562,9 @@ bool dissipate_admissible(const DissipateEvidence &p_evidence) {
         && !p_evidence.observing && p_evidence.meter > 0;
     NETW_TRACE(
         sys::PREDICTION,
-        "dissipate admissible=%d momentum=%d other=%d witness=%d/%d "
-        "escalated=%d snap=%d observing=%d meter=%d",
+        "Fading the correction allowed %d (momentum %d, other motion %d, "
+        "contacts clean %d and %d, escalated %d, snap %d, observing %d, "
+        "budget %d).",
         int(out),
         int(p_evidence.momentum_active),
         int(p_evidence.other_active),

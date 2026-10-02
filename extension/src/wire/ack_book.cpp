@@ -19,8 +19,8 @@ bool AckBook::record_send(uint16_t seq, uint16_t frames, int64_t bits) {
     if (active[slot] && ring[slot].seq != seq) {
         NETW_WARN_ONCE(
             sys::WIRE,
-            "Sequence %d finds its ack slot held by %d, so this send is "
-            "untracked.",
+            "Packet %d is not tracked for delivery, because packet %d still "
+            "waits for its ack. Too many packets to one peer are in flight.",
             int(seq),
             int(ring[slot].seq)
         );

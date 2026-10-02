@@ -9,7 +9,7 @@
 #include "netw/schema_core.hpp"
 #include "netw/schema_model.hpp"
 #include "netw/session_core.hpp"
-#include "netw/table/core.hpp"
+#include "netw/store/array.hpp"
 
 namespace TestTablePersistence {
 
@@ -87,8 +87,8 @@ struct World {
         return loaded->get_result();
     }
 
-    netw::table::Core *core() const {
-        return session->get_table_core().ptr();
+    netw::store::Arrays *core() const {
+        return &session->store_arrays();
     }
 };
 

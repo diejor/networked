@@ -238,13 +238,14 @@ void ClockEngine::announce(
 }
 
 void ClockEngine::emit_tick() {
-    NETW_ZONE_NC("ClockEngine tick", colors::CLOCK);
+    NETW_FRAME(profile::names::TICK_FRAME);
+    NETW_ZONE_NC("Tick", colors::CLOCK);
     NETW_ZONE_VALUE(tick);
-    NETW_TICK_MARK();
     const double step = ticktime();
     announce(SIG_CLOCK_BEFORE_TICK, step, tick);
     announce(SIG_CLOCK_ON_TICK, step, tick);
     announce(SIG_CLOCK_AFTER_TICK, step, tick);
+    NETW_TALLY_FLUSH();
     tick += 1;
     ticks_run += 1;
 }
@@ -261,7 +262,8 @@ void ClockEngine::force_step(int count) {
 }
 
 void ClockEngine::physics_step(double delta) {
-    NETW_ZONE_NC("ClockEngine physics step", colors::CLOCK);
+    NETW_FRAME(profile::names::PHYSICS_FRAME);
+    NETW_ZONE_NC("Physics frame", colors::CLOCK);
     physics_frames += 1;
     if (cadence_started_usec == 0) {
         cadence_started_usec = wall_usec();
@@ -270,7 +272,9 @@ void ClockEngine::physics_step(double delta) {
     NETW_WARN_COND_ONCE(
         delta > stall_threshold,
         sys::CLOCK,
-        "Physics step %.3f exceeded stall threshold %.3f.",
+        "A frame took %.3f s, longer than NetwClockConfig.stall_threshold "
+        "(%.3f s), so it was skipped as a hitch. Raise stall_threshold if "
+        "frames this long are expected.",
         delta,
         stall_threshold
     );

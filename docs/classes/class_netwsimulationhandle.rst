@@ -340,7 +340,7 @@ Set it in ``_init``. A later write warns and is ignored.
 
 When a body of this entity runs here as :ref:`MODE_AUTHORITY<class_NetwSimulationHandle_constant_MODE_AUTHORITY>` and touches a free entity that also sets it, this peer claims that entity with :ref:`NetwEntity.HOLD_YIELDABLE<class_NetwEntity_constant_HOLD_YIELDABLE>`. A claimed entity claims what it touches in the same tick.
 
-It turns on :godot:`RigidBody3D.contact_monitor <RigidBody3D#class_RigidBody3D_property_contact_monitor>` for the bodies. It needs :ref:`NetwEntity.TRANSFER_IMMEDIATE<class_NetwEntity_constant_TRANSFER_IMMEDIATE>` on an entity with no :ref:`NetwPropertyConfig.state()<class_NetwPropertyConfig_method_state>` property and no prediction, and does nothing otherwise.
+It raises :godot:`RigidBody3D.max_contacts_reported <RigidBody3D#class_RigidBody3D_property_max_contacts_reported>` on the bodies. :godot:`RigidBody3D.body_entered <RigidBody3D#class_RigidBody3D_signal_body_entered>` and :godot:`RigidBody3D.body_exited <RigidBody3D#class_RigidBody3D_signal_body_exited>` need the game's own :godot:`RigidBody3D.contact_monitor <RigidBody3D#class_RigidBody3D_property_contact_monitor>`. It needs :ref:`NetwEntity.TRANSFER_IMMEDIATE<class_NetwEntity_constant_TRANSFER_IMMEDIATE>` on an entity with no :ref:`NetwPropertyConfig.state()<class_NetwPropertyConfig_method_state>` property and no prediction, and does nothing otherwise.
 
 .. rst-class:: classref-item-separator
 

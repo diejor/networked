@@ -81,8 +81,8 @@ TEST_CASE(
 
     SUBCASE("the callback setters are no-ops rather than a null deref") {
         session->predict_set_witness_callback(entity, Callable());
-        session->predict_set_corridor_callback(entity, Callable());
-        session->predict_set_commands_callback(entity, Callable());
+        session->predict_set_correction_path_callback(entity, Callable());
+        session->predict_set_input_callback(entity, Callable());
         session->simulation_set_step_callback(entity, Callable());
         session->predict_set_sensor_callback(
             entity,

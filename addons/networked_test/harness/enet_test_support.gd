@@ -69,7 +69,10 @@ static func start_host(
 		return { tree = tree, port = candidate }
 
 	push_error(
-		"EnetTestSupport: could not bind any port in [%d, %d)" % [
+		(
+			"EnetTestSupport found no free port from %d up to %d. Free a "
+			+ "port in that range."
+		) % [
 			_PORT_RANGE_START,
 			_PORT_RANGE_START + _PORT_RANGE_SIZE,
 		],

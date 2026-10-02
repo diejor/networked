@@ -1,5 +1,7 @@
 #include "netw/interest/engine.hpp"
 
+#include <algorithm>
+
 #include "godot/utility.hpp"
 #include "netw/colors.hpp"
 #include "netw/log.hpp"
@@ -12,16 +14,11 @@ namespace netw::interest {
 namespace {
 
 template <typename T, typename Less>
-void insertion_sort(LocalVector<T> &values, Less less) {
-    for (uint32_t index = 1; index < values.size(); ++index) {
-        T pending = values[index];
-        uint32_t slot = index;
-        while (slot > 0 && less(pending, values[slot - 1])) {
-            values[slot] = values[slot - 1];
-            --slot;
-        }
-        values[slot] = pending;
+void stable_sort(LocalVector<T> &values, Less less) {
+    if (values.size() < 2) {
+        return;
     }
+    std::stable_sort(values.ptr(), values.ptr() + values.size(), less);
 }
 
 bool contains(const LocalVector<StringName> &names, const StringName &name) {
@@ -46,15 +43,6 @@ bool same_names(
         }
     }
     return true;
-}
-
-bool contains_key(const LocalVector<int64_t> &values, int64_t value) {
-    for (uint32_t index = 0; index < values.size(); ++index) {
-        if (values[index] == value) {
-            return true;
-        }
-    }
-    return false;
 }
 
 bool contains(const PackedInt64Array &values, int64_t value) {
@@ -123,7 +111,7 @@ PackedInt64Array BitSet::with_bit(
         bit < 0,
         row,
         sys::INTEREST,
-        "Peer bit must be non-negative."
+        "Interest was given a negative peer index."
     );
     const int word = bit / BITS_PER_WORD;
     PackedInt64Array out
@@ -295,8 +283,93 @@ Engine::Record &Engine::record_for(int64_t key) {
     if (found != entities.end()) {
         return found->value;
     }
-    dirty_entities.insert(key);
-    return entities.insert(key, Record())->value;
+    Record &made = entities.insert(key, Record())->value;
+    if (children.has(key)) {
+        mark_entity_tree_dirty(key);
+    } else {
+        dirty_entities.insert(key);
+    }
+    return made;
+}
+
+void Engine::note_moved(int64_t key) {
+    if (moved_overflow) {
+        return;
+    }
+    if (moved.size() >= MOVED_KEPT) {
+        moved.clear();
+        moved_overflow = true;
+        return;
+    }
+    moved.push_back(key);
+}
+
+bool Engine::take_moved(LocalVector<int64_t> &r_keys) {
+    r_keys.clear();
+    for (uint32_t at = 0; at < moved.size(); ++at) {
+        r_keys.push_back(moved[at]);
+    }
+    moved.clear();
+    const bool overflowed = moved_overflow;
+    moved_overflow = false;
+    return overflowed;
+}
+
+void Engine::link_child(int64_t parent, int64_t key) {
+    if (parent == 0) {
+        return;
+    }
+    HashMap<int64_t, LocalVector<int64_t>>::Iterator found
+        = children.find(parent);
+    if (found == children.end()) {
+        found = children.insert(parent, LocalVector<int64_t>());
+    }
+    found->value.push_back(key);
+}
+
+void Engine::unlink_child(int64_t parent, int64_t key) {
+    if (parent == 0) {
+        return;
+    }
+    HashMap<int64_t, LocalVector<int64_t>>::Iterator found
+        = children.find(parent);
+    if (found == children.end()) {
+        return;
+    }
+    LocalVector<int64_t> &held = found->value;
+    for (uint32_t at = 0; at < held.size(); ++at) {
+        if (held[at] == key) {
+            held.remove_at(at);
+            break;
+        }
+    }
+    if (held.is_empty()) {
+        children.remove(found);
+    }
+}
+
+void Engine::index_layer(const StringName &id, int64_t key, bool member) {
+    HashMap<StringName, HashSet<int64_t>>::Iterator found = layer_keys.find(id);
+    if (member) {
+        if (found == layer_keys.end()) {
+            found = layer_keys.insert(id, HashSet<int64_t>());
+        }
+        found->value.insert(key);
+        return;
+    }
+    if (found == layer_keys.end()) {
+        return;
+    }
+    found->value.erase(key);
+    if (found->value.is_empty()) {
+        layer_keys.remove(found);
+    }
+}
+
+int Engine::committed_popcount(int64_t key) const {
+    const HashMap<int64_t, PackedInt64Array>::ConstIterator found
+        = committed.find(key);
+    return found != committed.end() ? BitSet::popcount(found->value) : 0;
 }
 
 void Engine::ensure_layer(const StringName &id) {
@@ -308,14 +381,12 @@ void Engine::ensure_layer(const StringName &id) {
 }
 
 void Engine::mark_layer_members_dirty(const StringName &id) {
-    LocalVector<int64_t> members;
-    for (const KeyValue<int64_t, Record> &entry : entities) {
-        if (contains(entry.value.layers, id)) {
-            members.push_back(entry.key);
+    const HashMap<StringName, HashSet<int64_t>>::ConstIterator members
+        = layer_keys.find(id);
+    if (members != layer_keys.end()) {
+        for (const int64_t &key : members->value) {
+            mark_entity_tree_dirty(key);
         }
-    }
-    for (uint32_t index = 0; index < members.size(); ++index) {
-        mark_entity_tree_dirty(members[index]);
     }
     for (const KeyValue<int64_t, StringName> &root : scene_roots) {
         if (root.value != id) {
@@ -336,18 +407,26 @@ void Engine::mark_layer_members_dirty(const StringName &id) {
 
 void Engine::mark_entity_tree_dirty(int64_t root) {
     dirty_entities.insert(root);
-    bool changed = true;
-    while (changed) {
-        changed = false;
-        for (const KeyValue<int64_t, Record> &entry : entities) {
-            if (dirty_entities.has(entry.key)) {
+    LocalVector<int64_t> pending;
+    pending.push_back(root);
+    while (!pending.is_empty()) {
+        const int64_t key = pending[pending.size() - 1];
+        pending.resize(pending.size() - 1);
+#if defined(NETW_TESTS)
+        mark_visits += 1;
+#endif
+        const HashMap<int64_t, LocalVector<int64_t>>::ConstIterator below
+            = children.find(key);
+        if (below == children.end()) {
+            continue;
+        }
+        for (uint32_t at = 0; at < below->value.size(); ++at) {
+            const int64_t child = below->value[at];
+            if (!entities.has(child)) {
                 continue;
             }
-            if (entry.value.parent != 0
-                && dirty_entities.has(entry.value.parent)) {
-                dirty_entities.insert(entry.key);
-                changed = true;
-            }
+            dirty_entities.insert(child);
+            pending.push_back(child);
         }
     }
 }
@@ -377,11 +456,15 @@ void Engine::set_layer(
     const PackedInt64Array &viewers,
     int policy
 ) {
-    NETW_ERR_COND(id.is_empty(), sys::INTEREST, "Interest layer id is empty.");
+    NETW_ERR_COND(
+        id.is_empty(),
+        sys::INTEREST,
+        "An interest layer needs a name, and it was empty."
+    );
     NETW_ERR_COND(
         policy != HIDE_FROM_OUTSIDERS && policy != HIDE_FROM_INSIDERS,
         sys::INTEREST,
-        "Unknown interest policy %d.",
+        "Interest policy %d does not exist.",
         policy
     );
     const HashMap<StringName, Layer>::Iterator found = layers.find(id);
@@ -409,7 +492,11 @@ void Engine::remove_layer(const StringName &id) {
 }
 
 void Engine::declare_layer(const StringName &id) {
-    NETW_ERR_COND(id.is_empty(), sys::INTEREST, "Interest layer id is empty.");
+    NETW_ERR_COND(
+        id.is_empty(),
+        sys::INTEREST,
+        "An interest layer needs a name, and it was empty."
+    );
     ensure_layer(id);
 }
 
@@ -422,7 +509,7 @@ bool Engine::layer_add_viewer(const StringName &id, int64_t peer_id) {
         id.is_empty(),
         false,
         sys::INTEREST,
-        "Interest layer id is empty."
+        "An interest layer needs a name, and it was empty."
     );
     const int bit = peer_bit_for(peer_id);
     if (bit < 0) {
@@ -489,13 +576,13 @@ bool Engine::layer_set_policy(const StringName &id, int policy) {
         id.is_empty(),
         false,
         sys::INTEREST,
-        "Interest layer id is empty."
+        "An interest layer needs a name, and it was empty."
     );
     NETW_ERR_COND_V(
         policy != HIDE_FROM_OUTSIDERS && policy != HIDE_FROM_INSIDERS,
         false,
         sys::INTEREST,
-        "Unknown interest policy %d.",
+        "Interest policy %d does not exist.",
         policy
     );
     ensure_layer(id);
@@ -515,13 +602,13 @@ bool Engine::layer_set_leave_policy(const StringName &id, int policy) {
         id.is_empty(),
         false,
         sys::INTEREST,
-        "Interest layer id is empty."
+        "An interest layer needs a name, and it was empty."
     );
     NETW_ERR_COND_V(
         policy < 0 || policy > Decl::LEAVE_CUSTOM,
         false,
         sys::INTEREST,
-        "Unknown interest leave policy %d.",
+        "Interest leave policy %d does not exist.",
         policy
     );
     ensure_layer(id);
@@ -544,13 +631,13 @@ bool Engine::layer_set_perception_policy(const StringName &id, int policy) {
         id.is_empty(),
         false,
         sys::INTEREST,
-        "Interest layer id is empty."
+        "An interest layer needs a name, and it was empty."
     );
     NETW_ERR_COND_V(
         policy < 0 || policy > Decl::PERCEPTION_CUSTOM,
         false,
         sys::INTEREST,
-        "Unknown interest perception policy %d.",
+        "Interest perception policy %d does not exist.",
         policy
     );
     ensure_layer(id);
@@ -621,41 +708,45 @@ bool Engine::roster_add(const StringName &id, int64_t key) {
         id.is_empty(),
         false,
         sys::INTEREST,
-        "Interest layer id is empty."
+        "An interest layer needs a name, and it was empty."
     );
     NETW_ERR_COND_V(
         !is_key(key),
         false,
         sys::INTEREST,
-        "Interest entity key must be positive."
+        "Interest was given an entity with no valid key."
     );
     ensure_layer(id);
-    LocalVector<int64_t> &members = layers[id].members;
-    if (contains_key(members, key)) {
+    Layer &layer = layers[id];
+    if (layer.member_set.has(key)) {
         return false;
     }
-    members.push_back(key);
+    layer.member_set.insert(key);
+    layer.members.push_back(key);
+    note_moved(key);
     return true;
 }
 
 bool Engine::roster_remove(const StringName &id, int64_t key) {
     const HashMap<StringName, Layer>::Iterator found = layers.find(id);
-    if (found == layers.end()) {
+    if (found == layers.end() || !found->value.member_set.has(key)) {
         return false;
     }
+    found->value.member_set.erase(key);
     LocalVector<int64_t> &members = found->value.members;
     for (uint32_t index = 0; index < members.size(); ++index) {
         if (members[index] == key) {
             members.remove_at(index);
-            return true;
+            break;
         }
     }
-    return false;
+    note_moved(key);
+    return true;
 }
 
 bool Engine::roster_has(const StringName &id, int64_t key) const {
     const HashMap<StringName, Layer>::ConstIterator found = layers.find(id);
-    return found != layers.end() && contains_key(found->value.members, key);
+    return found != layers.end() && found->value.member_set.has(key);
 }
 
 bool Engine::set_exit_handler(int64_t key, const Callable &handler) {
@@ -806,8 +897,7 @@ bool Engine::projection_admits(int64_t key, const Decl *decl) const {
         decl == nullptr,
         false,
         sys::INTEREST,
-        "interest::Engine.projection_admits: entity %d declares nothing to "
-        "project from.",
+        "Interest has no declaration for entity %d, so it is not shown.",
         key
     );
     const Array labels = decl->labels();
@@ -867,7 +957,7 @@ void Engine::set_membership(int64_t key, const Array &layer_ids) {
     NETW_ERR_COND(
         !is_key(key),
         sys::INTEREST,
-        "Interest entity key must be positive."
+        "Interest was given an entity with no valid key."
     );
     LocalVector<StringName> normalized;
     for (int index = 0; index < layer_ids.size(); ++index) {
@@ -882,8 +972,15 @@ void Engine::set_membership(int64_t key, const Array &layer_ids) {
     if (same_names(record.layers, normalized)) {
         return;
     }
+    for (uint32_t index = 0; index < record.layers.size(); ++index) {
+        index_layer(record.layers[index], key, false);
+    }
     record.layers = normalized;
+    for (uint32_t index = 0; index < record.layers.size(); ++index) {
+        index_layer(record.layers[index], key, true);
+    }
     mark_entity_tree_dirty(key);
+    note_moved(key);
     ++revision;
 }
 
@@ -892,21 +989,23 @@ bool Engine::membership_add(int64_t key, const StringName &layer_id) {
         !is_key(key),
         false,
         sys::INTEREST,
-        "Interest entity key must be positive."
+        "Interest was given an entity with no valid key."
     );
     NETW_ERR_COND_V(
         layer_id.is_empty(),
         false,
         sys::INTEREST,
-        "Interest layer id is empty."
+        "An interest layer needs a name, and it was empty."
     );
     Record &record = record_for(key);
     if (contains(record.layers, layer_id)) {
         return false;
     }
     record.layers.push_back(layer_id);
+    index_layer(layer_id, key, true);
     ensure_layer(layer_id);
     mark_entity_tree_dirty(key);
+    note_moved(key);
     ++revision;
     return true;
 }
@@ -922,7 +1021,9 @@ bool Engine::membership_remove(int64_t key, const StringName &layer_id) {
             continue;
         }
         layers.remove_at(index);
+        index_layer(layer_id, key, false);
         mark_entity_tree_dirty(key);
+        note_moved(key);
         ++revision;
         return true;
     }
@@ -983,7 +1084,7 @@ void Engine::set_parent(int64_t key, int64_t parent_key) {
     NETW_ERR_COND(
         !is_key(key),
         sys::INTEREST,
-        "Interest entity key must be positive."
+        "Interest was given an entity with no valid key."
     );
     NETW_ERR_COND(
         key == parent_key,
@@ -1000,7 +1101,7 @@ void Engine::set_parent(int64_t key, int64_t parent_key) {
         NETW_ERR_COND(
             walk == key,
             sys::INTEREST,
-            "Interest parent link closes a cycle."
+            "An entity cannot be the parent of its own parent."
         );
         walk = found->value.parent;
     }
@@ -1008,7 +1109,9 @@ void Engine::set_parent(int64_t key, int64_t parent_key) {
     if (record.parent == parent_key) {
         return;
     }
+    unlink_child(record.parent, key);
     record.parent = parent_key;
+    link_child(parent_key, key);
     mark_entity_tree_dirty(key);
     ++revision;
 }
@@ -1017,7 +1120,7 @@ void Engine::set_intent(int64_t key, const PackedInt64Array &mask) {
     NETW_ERR_COND(
         !is_key(key),
         sys::INTEREST,
-        "Interest entity key must be positive."
+        "Interest was given an entity with no valid key."
     );
     Record &record = record_for(key);
     if (!record.intent_all && BitSet::equals(record.intent, mask)) {
@@ -1037,7 +1140,7 @@ void Engine::set_intent_for_peers(
     NETW_ERR_COND(
         !is_key(key),
         sys::INTEREST,
-        "Interest entity key must be positive."
+        "Interest was given an entity with no valid key."
     );
     PackedInt64Array mask;
     for (int at = 0; at < peer_ids.size(); ++at) {
@@ -1060,7 +1163,7 @@ void Engine::set_intent_all(int64_t key) {
     NETW_ERR_COND(
         !is_key(key),
         sys::INTEREST,
-        "Interest entity key must be positive."
+        "Interest was given an entity with no valid key."
     );
     Record &record = record_for(key);
     if (record.intent_all) {
@@ -1076,17 +1179,17 @@ void Engine::set_order_key(int64_t key, int depth, int route) {
     NETW_ERR_COND(
         !is_key(key),
         sys::INTEREST,
-        "Interest entity key must be positive."
+        "Interest was given an entity with no valid key."
     );
     NETW_ERR_COND(
         depth < 0,
         sys::INTEREST,
-        "Interest order depth is negative."
+        "Interest was given a negative tree depth."
     );
     NETW_ERR_COND(
         route < 0,
         sys::INTEREST,
-        "Interest order route is negative."
+        "Interest was given a negative route."
     );
     Record &record = record_for(key);
     if (record.depth == depth && record.route == route) {
@@ -1139,24 +1242,40 @@ void Engine::remove_entity(int64_t key) {
     NETW_ERR_COND(
         !is_key(key),
         sys::INTEREST,
-        "Interest entity key must be positive."
+        "Interest was given an entity with no valid key."
     );
     if (!entities.has(key) && !committed.has(key)) {
         return;
     }
     removed.insert(key, order_of(key));
-    entities.erase(key);
+    const HashMap<int64_t, Record>::Iterator leaving = entities.find(key);
+    if (leaving != entities.end()) {
+        unlink_child(leaving->value.parent, key);
+        for (uint32_t at = 0; at < leaving->value.layers.size(); ++at) {
+            index_layer(leaving->value.layers[at], key, false);
+        }
+        entities.remove(leaving);
+    }
     dirty_entities.erase(key);
     LocalVector<int64_t> orphans;
-    for (KeyValue<int64_t, Record> &entry : entities) {
-        if (entry.value.parent == key) {
-            entry.value.parent = 0;
-            orphans.push_back(entry.key);
+    const HashMap<int64_t, LocalVector<int64_t>>::Iterator below
+        = children.find(key);
+    if (below != children.end()) {
+        for (uint32_t at = 0; at < below->value.size(); ++at) {
+            orphans.push_back(below->value[at]);
         }
+        children.remove(below);
     }
     for (uint32_t index = 0; index < orphans.size(); ++index) {
+        const HashMap<int64_t, Record>::Iterator orphan
+            = entities.find(orphans[index]);
+        if (orphan == entities.end()) {
+            continue;
+        }
+        orphan->value.parent = 0;
         mark_entity_tree_dirty(orphans[index]);
     }
+    note_moved(key);
     ++revision;
 }
 
@@ -1170,7 +1289,7 @@ void Engine::recompute_layers(
     for (const StringName &id : dirty_layers) {
         ids.push_back(id);
     }
-    insertion_sort(ids, [](const StringName &left, const StringName &right) {
+    stable_sort(ids, [](const StringName &left, const StringName &right) {
         return String(left) < String(right);
     });
     for (uint32_t index = 0; index < ids.size(); ++index) {
@@ -1292,7 +1411,7 @@ LocalVector<int64_t> Engine::ordered_dirty_keys() const {
     for (const int64_t key : dirty_entities) {
         out.push_back(key);
     }
-    insertion_sort(out, [this](int64_t left, int64_t right) {
+    stable_sort(out, [this](int64_t left, int64_t right) {
         const Order left_order = order_of(left);
         const Order right_order = order_of(right);
         if (left_order == right_order) {
@@ -1308,7 +1427,7 @@ LocalVector<int64_t> Engine::ordered_removed_keys() const {
     for (const KeyValue<int64_t, Order> &entry : removed) {
         out.push_back(entry.key);
     }
-    insertion_sort(out, [this](int64_t left, int64_t right) {
+    stable_sort(out, [this](int64_t left, int64_t right) {
         const Order left_order = removed.find(left)->value;
         const Order right_order = removed.find(right)->value;
         if (left_order == right_order) {
@@ -1316,32 +1435,6 @@ LocalVector<int64_t> Engine::ordered_removed_keys() const {
         }
         return left_order.precedes(right_order, false);
     });
-    return out;
-}
-
-int Engine::edge_count_after(
-    const HashMap<int64_t, PackedInt64Array> &changed,
-    const PackedInt64Array &removed_keys
-) const {
-    HashSet<int64_t> seen;
-    int out = 0;
-    for (const KeyValue<int64_t, PackedInt64Array> &entry : committed) {
-        if (contains(removed_keys, entry.key)) {
-            continue;
-        }
-        const HashMap<int64_t, PackedInt64Array>::ConstIterator moved
-            = changed.find(entry.key);
-        out += BitSet::popcount(
-            moved != changed.end() ? moved->value : entry.value
-        );
-        seen.insert(entry.key);
-    }
-    for (const KeyValue<int64_t, PackedInt64Array> &entry : changed) {
-        if (seen.has(entry.key) || contains(removed_keys, entry.key)) {
-            continue;
-        }
-        out += BitSet::popcount(entry.value);
-    }
     return out;
 }
 
@@ -1374,6 +1467,7 @@ Delta Engine::recompute() {
                 = compute_entity_row(key, rows_by_layer, desired_rows);
             desired_rows[key] = desired;
             ++delta.stats.entities_recomputed;
+            delta.recomputed.push_back(key);
 
             const PackedInt64Array old_row = row_of(key);
             changed_rows[key] = desired;
@@ -1496,24 +1590,18 @@ Delta Engine::recompute() {
 
     {
         NETW_ZONE_NC("interest::Engine ordering", colors::INTEREST);
-        insertion_sort(
-            shows,
-            [](const Transition &left, const Transition &right) {
-                if (left.order == right.order) {
-                    return false;
-                }
-                return left.order.precedes(right.order, false);
+        stable_sort(shows, [](const Transition &left, const Transition &right) {
+            if (left.order == right.order) {
+                return false;
             }
-        );
-        insertion_sort(
-            hides,
-            [](const Transition &left, const Transition &right) {
-                if (left.order == right.order) {
-                    return false;
-                }
-                return left.order.precedes(right.order, true);
+            return left.order.precedes(right.order, false);
+        });
+        stable_sort(hides, [](const Transition &left, const Transition &right) {
+            if (left.order == right.order) {
+                return false;
             }
-        );
+            return left.order.precedes(right.order, true);
+        });
         for (uint32_t index = 0; index < shows.size(); ++index) {
             delta.shows.push_back(pair(shows[index].key, shows[index].bit));
         }
@@ -1532,8 +1620,8 @@ Delta Engine::recompute() {
                 return String(left.layer) < String(right.layer);
             };
         };
-        insertion_sort(layer_show_rows, layer_less(false));
-        insertion_sort(layer_hide_rows, layer_less(true));
+        stable_sort(layer_show_rows, layer_less(false));
+        stable_sort(layer_hide_rows, layer_less(true));
         for (uint32_t index = 0; index < layer_show_rows.size(); ++index) {
             Array row;
             row.push_back(layer_show_rows[index].layer);
@@ -1553,14 +1641,21 @@ Delta Engine::recompute() {
     {
         NETW_ZONE_NC("interest::Engine snapshot", colors::INTEREST);
         delta.layer_rows = rows_by_layer;
-        for (const KeyValue<int64_t, Record> &entry : entities) {
-            delta.memberships.insert(entry.key, entry.value.layers);
-            if (!entry.value.intent_all) {
-                delta.intents.insert(entry.key);
+        for (uint32_t at = 0; at < delta.recomputed.size(); ++at) {
+            const int64_t key = delta.recomputed[at];
+            const Record &record = entities.find(key)->value;
+            delta.memberships.insert(key, record.layers);
+            if (!record.intent_all) {
+                delta.intents.insert(key);
             }
         }
         delta.stats.words_per_row = live_peers.size();
-        delta.stats.edges = edge_count_after(changed_rows, delta.removed_keys);
+        int64_t edges = committed_edges;
+        for (const KeyValue<int64_t, PackedInt64Array> &entry : changed_rows) {
+            edges += BitSet::popcount(entry.value)
+                - committed_popcount(entry.key);
+        }
+        delta.stats.edges = int32_t(edges);
         delta.stats.shows = delta.shows.size();
         delta.stats.hides = delta.hides.size();
     }
@@ -1576,14 +1671,34 @@ Delta Engine::recompute() {
 void Engine::commit(const Delta &delta) {
     NETW_ZONE_NC("interest::Engine commit", colors::INTEREST);
     for (int index = 0; index < delta.keys.size(); ++index) {
-        committed[delta.keys[index]] = PackedInt64Array(delta.new_rows[index]);
+        const int64_t key = delta.keys[index];
+        const PackedInt64Array row(delta.new_rows[index]);
+        committed_edges += BitSet::popcount(row) - committed_popcount(key);
+        committed[key] = row;
+        note_moved(key);
     }
     for (int index = 0; index < delta.removed_keys.size(); ++index) {
-        committed.erase(delta.removed_keys[index]);
+        const int64_t key = delta.removed_keys[index];
+        committed_edges -= committed_popcount(key);
+        committed.erase(key);
+        committed_memberships.erase(key);
+        committed_intents.erase(key);
+        note_moved(key);
+    }
+    for (uint32_t at = 0; at < delta.recomputed.size(); ++at) {
+        const int64_t key = delta.recomputed[at];
+        const HashMap<int64_t, LocalVector<StringName>>::ConstIterator named
+            = delta.memberships.find(key);
+        if (named != delta.memberships.end()) {
+            committed_memberships[key] = named->value;
+        }
+        if (delta.intents.has(key)) {
+            committed_intents.insert(key);
+        } else {
+            committed_intents.erase(key);
+        }
     }
     layer_rows = delta.layer_rows;
-    committed_memberships = delta.memberships;
-    committed_intents = delta.intents;
     last_stats = delta.stats;
     if (revision == delta.commit_revision) {
         dirty_layers.clear();
@@ -1704,7 +1819,7 @@ int Engine::order_route_for(int64_t key) {
         !is_key(key),
         0,
         sys::INTEREST,
-        "Interest entity key must be positive."
+        "Interest was given an entity with no valid key."
     );
     const HashMap<int64_t, int32_t>::ConstIterator found
         = fallback_routes.find(key);
@@ -1721,7 +1836,7 @@ int Engine::peer_bit_for(int64_t peer_id) {
         peer_id == 0,
         -1,
         sys::INTEREST,
-        "Interest peer id must be non-zero."
+        "Interest was given peer 0, which is not a peer."
     );
     const HashMap<int64_t, int32_t>::ConstIterator found
         = peer_bits.find(peer_id);
@@ -1775,6 +1890,11 @@ void Engine::clear() {
     live_peers = PackedInt64Array();
     last_stats = Stats();
     revision = 0;
+    children.clear();
+    layer_keys.clear();
+    committed_edges = 0;
+    moved.clear();
+    moved_overflow = true;
 }
 
 } // namespace netw::interest

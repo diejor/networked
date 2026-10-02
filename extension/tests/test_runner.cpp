@@ -33,7 +33,6 @@
 #include "netw/session/frames.hpp"
 #include "netw/spawn/record.hpp"
 #include "netw/sync_kernel.hpp"
-#include "netw/table/core.hpp"
 #include "netw/wire/frame.hpp"
 #include "netw/wire/registry.hpp"
 #include "netw/wire/spec.hpp"
@@ -119,6 +118,8 @@ class NetwJunitReporter final : public doctest::IReporter {
     const doctest::ContextOptions &options;
     std::vector<Case> cases;
     std::vector<std::string> subcases;
+    int64_t store_faults_opened = 0;
+    int64_t store_faults_in_cases = 0;
 
     Case *current() {
         return cases.empty() ? nullptr : &cases.back();
@@ -177,9 +178,12 @@ public:
         }
         const residency_audit::Ledger &audited = residency_audit::ledger();
         const bool diverged = audited.divergences > 0;
-        const unsigned int reported
-            = stats.numTestCasesPassingFilters + (diverged ? 1u : 0u);
-        failures += diverged ? 1 : 0;
+        const netw::store::validation_audit::Ledger &validated
+            = netw::store::validation_audit::ledger();
+        const int64_t stray = validated.faults - store_faults_in_cases;
+        const unsigned int reported = stats.numTestCasesPassingFilters
+            + (diverged ? 1u : 0u) + (stray > 0 ? 1u : 0u);
+        failures += (diverged ? 1 : 0) + (stray > 0 ? 1 : 0);
         FILE *output = std::fopen(options.out.c_str(), "wb");
         if (output == nullptr) {
             return;
@@ -215,6 +219,19 @@ public:
                 (long long)audited.body_of_first
             );
         }
+        if (stray > 0) {
+            const std::string first = escape_xml(validated.first.c_str());
+            std::fprintf(
+                output,
+                "    <testcase classname=\"store_validation\" name=\"SV0 the "
+                "store misses no change outside a case\" time=\"0.0\">"
+                "<failure>%lld missed changes outside any case, of %lld "
+                "checks. first %s</failure></testcase>\n",
+                (long long)stray,
+                (long long)validated.checks,
+                first.c_str()
+            );
+        }
         for (const Case &test_case : cases) {
             const std::string file = escape_xml(test_case.file.c_str());
             const std::string name = escape_xml(test_case.name.c_str());
@@ -240,6 +257,7 @@ public:
     void test_case_start(const doctest::TestCaseData &data) override {
         cases.push_back({data.m_file.c_str(), data.m_name});
         subcases.clear();
+        store_faults_opened = netw::store::validation_audit::ledger().faults;
     }
 
     void test_case_reenter(const doctest::TestCaseData &) override {
@@ -254,6 +272,18 @@ public:
         test_case->seconds = stats.seconds;
         if (!stats.testCaseSuccess && !test_case->error) {
             test_case->failure = true;
+        }
+        const netw::store::validation_audit::Ledger &validated
+            = netw::store::validation_audit::ledger();
+        const int64_t missed = validated.faults - store_faults_opened;
+        if (missed > 0) {
+            store_faults_in_cases += missed;
+            test_case->failure = test_case->failure || !test_case->error;
+            append_detail(
+                "the store missed " + std::to_string(missed)
+                + " changes during this case. first of the run "
+                + validated.first
+            );
         }
     }
 
@@ -349,6 +379,16 @@ int run_native_tests(
         (long long)audited.member_of_first,
         (long long)audited.scene_of_first,
         (long long)audited.body_of_first
+    );
+    const netw::store::validation_audit::Ledger &validated
+        = netw::store::validation_audit::ledger();
+    std::printf(
+        "NETW_STORE_VALIDATION every %lld checks %lld faults %lld planted "
+        "%lld\n",
+        (long long)netw::store::validation_interval(),
+        (long long)validated.checks,
+        (long long)validated.faults,
+        (long long)validated.planted
     );
     if (!cells_path.is_empty()) {
         const CharString cells = ProjectSettings::get_singleton()
@@ -594,16 +634,16 @@ TypedArray<StringName> NetwNativeTests::property_set_keys_of_script(
     const Ref<Script> &p_script,
     int64_t p_record
 ) {
-    const Ref<NetwPropertySet> set = property_set_builder::from_script(
-        p_script,
-        p_record,
-        nullptr,
-        nullptr
-    );
-    if (set.is_null()) {
+    repl::PropertySet compiled;
+    if (!property_set_builder::compile_script(
+            compiled,
+            p_script,
+            p_record,
+            nullptr
+        )) {
         return TypedArray<StringName>();
     }
-    return set->keys();
+    return compiled.keys();
 }
 
 void NetwNativeTests::scene_enter(
@@ -979,13 +1019,13 @@ Dictionary NetwNativeTests::wire_spec() const {
 }
 
 void NetwNativeTests::instrumentation_probe(int64_t value) const {
+    NETW_FRAME(profile::names::TICK_FRAME);
     NETW_ZONE_NC("Networked instrumentation probe", colors::TICK);
     NETW_ZONE_VALUE(value);
 #if defined(NETW_PROFILING)
     const CharString text = String::num_int64(value).utf8();
     NETW_ZONE_TEXT(text.get_data(), text.length());
 #endif
-    NETW_TICK_MARK();
     NETW_TRACE(netw::sys::TEST, "Networked native trace probe");
     probe_default_zone(value);
     probe_named_zone();

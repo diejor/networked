@@ -174,7 +174,11 @@ void dilate_playhead(
     PumpStats &p_stats,
     bool p_trace
 ) {
-    NETW_ZONE_NC("Display dilate playhead", colors::INTERP);
+    NETW_ZONE_LEAF(
+        "Display dilate playhead",
+        colors::INTERP,
+        profile::SUBSYSTEM_INTERPOLATION
+    );
     Playhead &playhead = p_runtime->display_playhead();
     const int effective = playhead.effective_tick(p_timing.display_tick);
     const LocalVector<Channel *> &states = p_runtime->channels();
@@ -213,7 +217,7 @@ void dilate_playhead(
     if (p_trace) {
         NETW_TRACE(
             sys::INTERPOLATION,
-            "dilation dt=%d newest=%d starving=%d lag=%.2f",
+            "Display tick is %d (newest %d, starving %d, lag %.2f).",
             effective,
             int(newest),
             int(starving),
@@ -222,12 +226,12 @@ void dilate_playhead(
     }
 }
 
-void pump_history(
+bool pump_history(
     Runtime *p_runtime,
     const Timing &p_timing,
     PumpStats &p_stats
 ) {
-    NETW_ZONE_NC("Display pump history", colors::INTERP);
+    bool busy = false;
     Playhead &playhead = p_runtime->display_playhead();
     const Decl &config = p_runtime->get_config();
     const bool trace = take_trace_frame(p_runtime);
@@ -267,6 +271,7 @@ void pump_history(
             continue;
         }
         History &history = state->display_history();
+        history.notice();
         const Ref<NetwInterpolate> spec = state->get_spec();
         const int verdict = history.pass_verdict(spec, forecast);
         if (verdict == History::PASS_SKIP_SLEEPING) {
@@ -321,6 +326,9 @@ void pump_history(
         if (history.is_sleeping()) {
             p_stats.sleeping += 1;
         }
+        const Offset &held = state->render_offset();
+        busy = busy || !history.is_sleeping() || history.has_projected()
+            || held.is_held() || held.armed;
         const double weight = spec.is_valid()
             ? spec->smoothing_weight(p_timing.frame_delta)
             : 1.0;
@@ -332,7 +340,7 @@ void pump_history(
         if (trace) {
             NETW_TRACE(
                 sys::INTERPOLATION,
-                "interp %s dt=%d lag=%.2f val=%s",
+                "Interpolated %s at display tick %d (lag %.2f) to %s.",
                 String(state->get_name()),
                 int(dt),
                 playhead.get_display_lag(),
@@ -342,6 +350,7 @@ void pump_history(
         state->write(result);
         state->set_last_written(result);
     }
+    return busy;
 }
 
 static bool chase_holds_rest(Channel *p_state) {
@@ -351,8 +360,8 @@ static bool chase_holds_rest(Channel *p_state) {
         && p_state->get_last_written() == rest;
 }
 
-void pump_chase(Runtime *p_runtime, const Timing &p_timing) {
-    NETW_ZONE_NC("Display pump chase", colors::INTERP);
+bool pump_chase(Runtime *p_runtime, const Timing &p_timing) {
+    bool busy = false;
     const double weight = 1.0
         - std::exp(-p_timing.frame_delta
                    / chase_smooth_time(p_runtime, p_timing));
@@ -371,7 +380,10 @@ void pump_chase(Runtime *p_runtime, const Timing &p_timing) {
             continue;
         }
         const StringName prop = state->get_source_prop();
-        const bool rests = port_rests(source_obj, prop);
+        History &history = state->display_history();
+        const bool rests = history.follows_table()
+            ? history.table_rests() && port_rests(source_obj, prop)
+            : port_rests(source_obj, prop);
         Offset &offset = state->render_offset();
         if (rests && chase_holds_rest(state)) {
             continue;
@@ -386,7 +398,6 @@ void pump_chase(Runtime *p_runtime, const Timing &p_timing) {
             spec.is_valid() ? int64_t(spec->get_mode())
                             : int64_t(NetwInterpolate::MODE_LERP)
         );
-        History &history = state->display_history();
         Variant result
             = history.smooth_toward(state->get_last_written(), value, weight);
         const bool settles = rests && !offset.is_held() && !offset.armed
@@ -395,10 +406,11 @@ void pump_chase(Runtime *p_runtime, const Timing &p_timing) {
             result = value;
         }
         state->set_chase_rest(settles ? result : Variant());
+        busy = busy || !settles;
         if (trace) {
             NETW_TRACE(
                 sys::INTERPOLATION,
-                "chase %s target=%s val=%s",
+                "Moved %s toward %s, now %s.",
                 String(state->get_name()),
                 String(value),
                 String(result)
@@ -407,34 +419,39 @@ void pump_chase(Runtime *p_runtime, const Timing &p_timing) {
         state->write(result);
         state->set_last_written(result);
     }
+    return busy;
 }
 
-void pump_runtime(
+bool pump_runtime(
     Runtime *p_runtime,
     const Timing &p_timing,
     PumpStats &p_stats,
     const Hooks &p_hooks
 ) {
-    NETW_ZONE_NC("Display pump runtime", colors::INTERP);
+    NETW_ZONE_LEAF_F(
+        "Display pump entity",
+        colors::INTERP,
+        profile::SUBSYSTEM_INTERPOLATION,
+        "entity %lld",
+        static_cast<long long>(p_runtime->get_route())
+    );
     if (p_runtime->get_pump_mode() == netw::display::PUMP_UNRESOLVED) {
         if (p_runtime->owner() == nullptr) {
-            return;
+            return false;
         }
         p_hooks.resolve(p_runtime->entity_rid());
     }
     switch (p_runtime->get_pump_mode()) {
         case netw::display::PUMP_DISABLED:
-            return;
+            return false;
         case netw::display::PUMP_CHASE:
             p_runtime->set_pumped(p_runtime->get_pumped() + 1);
             p_stats.runtimes += 1;
-            pump_chase(p_runtime, p_timing);
-            return;
+            return pump_chase(p_runtime, p_timing);
         default:
             p_runtime->set_pumped(p_runtime->get_pumped() + 1);
             p_stats.runtimes += 1;
-            pump_history(p_runtime, p_timing, p_stats);
-            return;
+            return pump_history(p_runtime, p_timing, p_stats);
     }
 }
 
@@ -469,6 +486,34 @@ void absorb_recovery(
             p_deltas[state->get_source_prop()],
             limit
         );
+    }
+}
+
+void absorb_moved(
+    Runtime *p_runtime,
+    const LocalVector<StringName> &p_keys,
+    const LocalVector<Variant> &p_deltas,
+    const Hooks &p_hooks
+) {
+    if (p_runtime->get_pump_mode() != netw::display::PUMP_CHASE) {
+        return;
+    }
+    const LocalVector<Channel *> &states = p_runtime->channels();
+    const double limit = p_hooks.clamp_for(p_runtime->entity_rid());
+    p_runtime->set_display_offset_limit(limit);
+    for (int at = 0; at < int(states.size()); ++at) {
+        Channel *state = states[at];
+        if (state->get_self_feedback()) {
+            continue;
+        }
+        const StringName &source = state->get_source_prop();
+        for (uint32_t key = 0; key < p_keys.size() && key < p_deltas.size();
+             ++key) {
+            if (p_keys[key] == source) {
+                state->render_offset().absorb(p_deltas[key], limit);
+                break;
+            }
+        }
     }
 }
 

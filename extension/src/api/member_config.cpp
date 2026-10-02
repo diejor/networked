@@ -135,8 +135,8 @@ void NetwMemberConfig::set_write_policy(Policy p_write_policy) {
     if (policy_configured && write_policy != p_write_policy) {
         NETW_WARN(
             sys::SESSION,
-            "NetwMemberConfig: the write policy of '%s' was already declared "
-            "as %d and is now %d.",
+            "The write policy of '%s' was declared as %d and then as %d, and "
+            "the last one wins. Declare it once.",
             String(context_name),
             int(write_policy),
             int(p_write_policy)
@@ -151,8 +151,8 @@ void NetwMemberConfig::set_transfer_mode(TransferMode p_transfer_mode) {
     if (transfer_configured && transfer_mode != p_transfer_mode) {
         NETW_WARN(
             sys::SESSION,
-            "NetwMemberConfig: the transfer mode of '%s' was already declared "
-            "as %d and is now %d.",
+            "The transfer mode of '%s' was declared as %d and then as %d, "
+            "and the last one wins. Declare it once.",
             String(context_name),
             int(transfer_mode),
             int(p_transfer_mode)
@@ -166,17 +166,17 @@ void NetwMemberConfig::set_is_call_local(bool p_is_call_local) {
     if (context_type == 1) {
         NETW_WARN(
             sys::SESSION,
-            "NetwMemberConfig: call_local and call_remote have no effect on "
-            "the property '%s', because a property assignment is local "
-            "first.",
+            "NetwMemberConfig.call_local and call_remote do nothing on the "
+            "property '%s', because a property always changes locally "
+            "first. Remove the call.",
             String(context_name)
         );
     }
     if (local_configured && is_call_local != p_is_call_local) {
         NETW_WARN(
             sys::SESSION,
-            "NetwMemberConfig: call_local and call_remote both declared for "
-            "'%s'.",
+            "'%s' declares both NetwMemberConfig.call_local and "
+            "call_remote, and the last one wins. Keep one of them.",
             String(context_name)
         );
     }
@@ -223,8 +223,8 @@ Ref<NetwMemberConfig> NetwMemberConfig::defer_until(const Signal &p_signal) {
     if (!defer_signal_name.is_empty()) {
         NETW_WARN(
             sys::SESSION,
-            "NetwMemberConfig: the defer gate of '%s' was already declared as "
-            "'%s'.",
+            "NetwMemberConfig.defer_until was called twice on '%s', and "
+            "'%s' is replaced. Call it once.",
             String(context_name),
             String(defer_signal_name)
         );
@@ -242,7 +242,8 @@ Ref<NetwMemberConfig> NetwMemberConfig::quantize(const Array &p_quantizers) {
     if (p_quantizers.is_empty()) {
         NETW_ERROR(
             sys::SESSION,
-            "NetwMemberConfig.quantize: '%s' was given no quantizer.",
+            "NetwMemberConfig.quantize got no quantizer for '%s'. Pass one "
+            "quantizer for each value.",
             String(context_name)
         );
         return Ref<NetwMemberConfig>(this);
@@ -268,8 +269,8 @@ Ref<NetwMemberConfig> NetwMemberConfig::quantize(const Array &p_quantizers) {
         && !same_quantizer_layout(quantizers, p_quantizers)) {
         NETW_WARN(
             sys::SESSION,
-            "NetwMemberConfig.quantize: '%s' was already declared with a "
-            "different bit layout.",
+            "NetwMemberConfig.quantize changed the quantizers of '%s', and "
+            "the last call wins. Declare them once.",
             String(context_name)
         );
     }
@@ -278,13 +279,19 @@ Ref<NetwMemberConfig> NetwMemberConfig::quantize(const Array &p_quantizers) {
     return Ref<NetwMemberConfig>(this);
 }
 
+void NetwMemberConfig::set_interpolators(const Array &p_interpolators) {
+    interpolators = p_interpolators;
+    netw::script::model::advance_interpolation_epoch();
+}
+
 Ref<NetwMemberConfig> NetwMemberConfig::interpolate(
     const Array &p_interpolators
 ) {
     if (p_interpolators.is_empty()) {
         NETW_ERROR(
             sys::SESSION,
-            "NetwMemberConfig.interpolate: '%s' was given no interpolator.",
+            "NetwMemberConfig.interpolate got no interpolator for '%s'. Pass "
+            "one interpolator for each value.",
             String(context_name)
         );
         return Ref<NetwMemberConfig>(this);
@@ -312,12 +319,13 @@ Ref<NetwMemberConfig> NetwMemberConfig::interpolate(
     if (!interpolators.is_empty()) {
         NETW_WARN(
             sys::SESSION,
-            "NetwMemberConfig.interpolate: '%s' was already declared with a "
-            "different spec.",
+            "NetwMemberConfig.interpolate changed the interpolators of '%s', "
+            "and the last call wins. Declare them once.",
             String(context_name)
         );
     }
     interpolators = p_interpolators;
+    netw::script::model::advance_interpolation_epoch();
     interpolators_fit_types(
         interpolators,
         types,

@@ -313,8 +313,9 @@ class InstallScenario final : public netw_test::FrameScenario {
                 copy.installed
                     = row != nullptr ? row->installs.stats.installed : 0;
                 copy.frozen = sphere_at(kind, client)->is_freeze_enabled();
-                copy.plain_record = entity->get_input_binding().is_null()
-                    && (kind == CRATE || entity->get_state_binding().is_null());
+                copy.plain_record = entity->get_input_binding() == nullptr
+                    && (kind == CRATE
+                        || entity->get_state_binding() == nullptr);
             }
         }
     }

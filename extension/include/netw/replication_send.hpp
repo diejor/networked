@@ -23,12 +23,15 @@ public:
         bool p_fitted
     );
 
-    repl::SessionResult run(
-        const godot::LocalVector<repl::RowOffer> &p_offers,
+    const repl::SessionResult &run(
         int64_t p_max_bits,
         int64_t p_base_tick,
         int64_t p_now_ms = 0
     );
+
+    const wire::WireRegistry &channels() const {
+        return registry;
+    }
 
     bool describe(const repl::RowSend &p_send, CarrierRow &r_row);
 
@@ -55,14 +58,54 @@ public:
     void set_encode_stage(const godot::Callable &p_stage);
     bool has_encode_stage() const;
 
+    void want_encode_stage(bool p_wanted) {
+        impl.want_encode_stage(p_wanted);
+    }
+
+    void publish_tables(bool p_publishes) {
+        impl.publish_tables(p_publishes);
+    }
+
     repl::AckReport acknowledge(
         int64_t p_peer,
         int64_t p_acked_seq,
         uint32_t p_history,
         double p_rtt_ms,
         double p_jitter_ms,
-        int64_t p_tick
+        int64_t p_now_ms
     );
+
+    void set_rate(double p_bytes_per_second) {
+        impl.set_rate(p_bytes_per_second);
+    }
+
+    void set_peer_rate(int64_t p_peer, double p_bytes_per_second) {
+        impl.set_peer_rate(int(p_peer), p_bytes_per_second);
+    }
+
+    void set_tickrate(int64_t p_tickrate) {
+        impl.set_tickrate(p_tickrate);
+    }
+
+    void charge(int64_t p_peer, int64_t p_bytes) {
+        impl.charge(int(p_peer), p_bytes);
+    }
+
+    void note_backlog(int64_t p_peer, int64_t p_buffered, int64_t p_now_ms) {
+        impl.note_backlog(int(p_peer), p_buffered, p_now_ms);
+    }
+
+    const repl::PeerAccount *account(int64_t p_peer) const {
+        return impl.account(int(p_peer));
+    }
+
+    double configured_rate(int64_t p_peer, int64_t p_max_bits) const {
+        return impl.configured_rate(int(p_peer), p_max_bits);
+    }
+
+    double fill_of(int64_t p_peer, int64_t p_max_bits) const {
+        return impl.fill_of(int(p_peer), p_max_bits);
+    }
 
     repl::LinkGovernor::Mode link_mode(int64_t p_peer) const {
         return impl.link_mode(int(p_peer));
@@ -82,28 +125,13 @@ public:
     ) const {
         return impl.control_budget_bytes(int(p_peer), p_reserved_bytes);
     }
-    void retain(const godot::PackedInt32Array &p_recipients);
-    void retain_row(
-        int64_t p_route,
-        int64_t p_comp,
-        const godot::PackedInt32Array &p_recipients
-    );
+    void hide(int64_t p_peer, const wire::StreamLane &p_lane);
     void forget_peer(int64_t p_peer);
     void close_route(int64_t p_route);
 
-    godot::Dictionary stage_snapshot(
-        const SchemaRecord &p_schema,
-        const godot::PackedByteArray &p_frame,
-        int64_t p_base_tick,
-        const wire::CodeRow *p_baseline,
-        wire::CodeRow *r_staged
-    );
-
-    godot::Dictionary apply_snapshot_window(
-        const SchemaRecord &p_schema,
-        const godot::PackedByteArray &p_frame,
-        int64_t p_base_tick
-    );
+    void note_baseline_drop() {
+        drops_baseline_unknown += 1;
+    }
 
     int64_t baseline_drops() const {
         return drops_baseline_unknown;
@@ -113,12 +141,48 @@ public:
         return impl.reader_book();
     }
 
-    wire::StreamWriterBook &writer_book() {
-        return impl.writer_book();
-    }
-
     wire::ControlScheduler &control_scheduler() {
         return impl.control_scheduler();
+    }
+
+    void watch_store(store::World *p_world) {
+        impl.watch_store(p_world);
+    }
+
+    store::World *store() const {
+        return impl.store();
+    }
+
+    uint64_t stream_open(
+        int64_t p_peer,
+        const wire::StreamLane &p_lane,
+        const wire::StreamTenure &p_tenure = wire::StreamTenure()
+    ) {
+        return impl.stream_open(int(p_peer), p_lane, p_tenure);
+    }
+
+    uint64_t token_of(int64_t p_peer, const wire::StreamLane &p_lane) const {
+        return impl.token_of(int(p_peer), p_lane);
+    }
+
+    wire::ReadyVerdict stream_ready(
+        int64_t p_peer,
+        uint64_t p_request,
+        uint64_t p_token
+    ) {
+        return impl.stream_ready(int(p_peer), p_request, p_token);
+    }
+
+    wire::ReceiptVerdict stream_receipt(
+        int64_t p_peer,
+        uint64_t p_token,
+        uint64_t p_revision
+    ) {
+        return impl.stream_receipt(int(p_peer), p_token, p_revision);
+    }
+
+    bool stream_reset(int64_t p_peer, uint64_t p_request, uint64_t p_token) {
+        return impl.stream_reset(int(p_peer), p_request, p_token);
     }
 
     void close_tenures(int64_t p_route, uint64_t p_tenure) {
@@ -149,8 +213,6 @@ public:
         int64_t p_expected_life
     );
 
-    int64_t lane_count() const;
-    int64_t retained_lane_count() const;
     int64_t window_lane_count() const;
     int64_t outstanding() const;
 };

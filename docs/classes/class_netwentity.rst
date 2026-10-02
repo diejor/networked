@@ -202,6 +202,8 @@ Properties
    +-------------------------------------------------------------+-------------------------------------------------------------------------------------+----------------------+
    | :ref:`NetwPredictionHandle<class_NetwPredictionHandle>`     | :ref:`prediction<class_NetwEntity_property_prediction>`                             |                      |
    +-------------------------------------------------------------+-------------------------------------------------------------------------------------+----------------------+
+   | :godot:`float`                                              | :ref:`replication_priority<class_NetwEntity_property_replication_priority>`         | ``1.0``              |
+   +-------------------------------------------------------------+-------------------------------------------------------------------------------------+----------------------+
    | :godot:`RID`                                                | :ref:`rid<class_NetwEntity_property_rid>`                                           | ``RID(98784247808)`` |
    +-------------------------------------------------------------+-------------------------------------------------------------------------------------+----------------------+
    | :godot:`int`                                                | :ref:`route<class_NetwEntity_property_route>`                                       | ``0``                |
@@ -211,8 +213,6 @@ Properties
    | :ref:`NetwSimulationHandle<class_NetwSimulationHandle>`     | :ref:`simulation<class_NetwEntity_property_simulation>`                             |                      |
    +-------------------------------------------------------------+-------------------------------------------------------------------------------------+----------------------+
    | :ref:`Stage<enum_NetwEntity_Stage>`                         | :ref:`stage<class_NetwEntity_property_stage>`                                       |                      |
-   +-------------------------------------------------------------+-------------------------------------------------------------------------------------+----------------------+
-   | :ref:`NetwTimeline<class_NetwTimeline>`                     | :ref:`timeline<class_NetwEntity_property_timeline>`                                 |                      |
    +-------------------------------------------------------------+-------------------------------------------------------------------------------------+----------------------+
    | :ref:`Transfer<enum_NetwEntity_Transfer>`                   | :ref:`transfer<class_NetwEntity_property_transfer>`                                 | ``0``                |
    +-------------------------------------------------------------+-------------------------------------------------------------------------------------+----------------------+
@@ -1263,6 +1263,29 @@ The entity's :ref:`NetwPredictionHandle<class_NetwPredictionHandle>`, holding it
 
 ----
 
+.. _class_NetwEntity_property_replication_priority:
+
+.. rst-class:: classref-property
+
+:godot:`float` **replication_priority** = ``1.0`` :ref:`🔗<class_NetwEntity_property_replication_priority>`
+
+.. rst-class:: classref-property-setget
+
+- |void| **set_replication_priority**\ (\ value\: :godot:`float`\ )
+- :godot:`float` **get_replication_priority**\ (\ )
+
+How much this entity's properties matter next to others when a peer's budget cannot carry every change in one tick. The weight multiplies how fast a waiting row moves up the queue, so an entity at ``4.0`` is sent about four times as often as one at ``1.0`` when both keep changing. The weight is read from the author's copy each tick.
+
+::
+
+    NetwEntity.of(self).replication_priority = 4.0
+
+\ It must be above zero, and a value at or below zero is refused and leaves the weight unchanged. Which peers receive the entity at all is :ref:`interest<class_NetwEntity_property_interest>`.
+
+.. rst-class:: classref-item-separator
+
+----
+
 .. _class_NetwEntity_property_rid:
 
 .. rst-class:: classref-property
@@ -1349,22 +1372,6 @@ How this entity's body runs on each peer, and which other entities it runs here.
 - :ref:`Stage<enum_NetwEntity_Stage>` **get_stage**\ (\ )
 
 Where the entity is in its lifecycle.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwEntity_property_timeline:
-
-.. rst-class:: classref-property
-
-:ref:`NetwTimeline<class_NetwTimeline>` **timeline** :ref:`🔗<class_NetwEntity_property_timeline>`
-
-.. rst-class:: classref-property-setget
-
-- :ref:`NetwTimeline<class_NetwTimeline>` **get_timeline**\ (\ )
-
-The entity's :ref:`NetwTimeline<class_NetwTimeline>` of state and input snapshots, or ``null``. Moving the entity drops the snapshots taken before the move, so a rewind starts after it.
 
 .. rst-class:: classref-item-separator
 

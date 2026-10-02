@@ -17,38 +17,160 @@ int32_t fnv1a(const uint8_t *p_bytes, int p_size) {
     return int32_t(hash);
 }
 
+void Journal::Diagnostics::size_to(uint32_t p_width) {
+    aligned_errors.resize(p_width);
+    episode_ids.resize(p_width);
+    write_ids.resize(p_width);
+    operators.resize(p_width);
+    bases.resize(p_width);
+    differing_families.resize(p_width);
+    kinds.resize(p_width);
+    for (uint32_t at = 0; at < p_width; ++at) {
+        aligned_errors[at] = 0.0f;
+        episode_ids[at] = 0;
+        write_ids[at] = 0;
+        operators[at] = 0;
+        bases[at] = -1;
+        differing_families[at] = 0;
+        kinds[at] = 0;
+    }
+}
+
+void Journal::Diagnostics::release() {
+    aligned_errors.reset();
+    episode_ids.reset();
+    write_ids.reset();
+    operators.reset();
+    bases.reset();
+    differing_families.reset();
+    kinds.reset();
+}
+
 Journal::Journal(int p_capacity) {
     capacity = p_capacity < 1 ? 1 : p_capacity;
-    const uint32_t width = uint32_t(capacity);
-    transitions.resize(width);
-    labels.resize(width);
-    c_hashes.resize(width);
-    e_digests.resize(width);
-    pre_fps.resize(width);
-    topo_fps.resize(width);
-    raw_fps.resize(width);
-    witness_fps.resize(width);
-    witness_class_bits.resize(width);
-    witness_realization_bits.resize(width);
-    witness_states.resize(width);
-    aligned_errors.resize(width);
-    post_fps.resize(width);
-    pre_pose_fps.resize(width);
-    pre_momentum_fps.resize(width);
-    pre_controller_fps.resize(width);
-    post_pose_fps.resize(width);
-    post_momentum_fps.resize(width);
-    post_controller_fps.resize(width);
-    episode_ids.resize(width);
-    write_ids.resize(width);
-    operators.resize(width);
-    bases.resize(width);
-    differing_families.resize(width);
-    evidence_masks.resize(width);
-    kinds.resize(width);
-    domains.resize(width);
-    attributions.resize(width);
-    flags.resize(width);
+    size_to(uint32_t(capacity));
+}
+
+void Journal::size_to(uint32_t p_width) {
+    transitions.resize(p_width);
+    labels.resize(p_width);
+    c_hashes.resize(p_width);
+    e_digests.resize(p_width);
+    pre_fps.resize(p_width);
+    topo_fps.resize(p_width);
+    raw_fps.resize(p_width);
+    witness_fps.resize(p_width);
+    witness_class_bits.resize(p_width);
+    witness_realization_bits.resize(p_width);
+    witness_states.resize(p_width);
+    post_fps.resize(p_width);
+    pre_pose_fps.resize(p_width);
+    pre_momentum_fps.resize(p_width);
+    pre_controller_fps.resize(p_width);
+    post_pose_fps.resize(p_width);
+    post_momentum_fps.resize(p_width);
+    post_controller_fps.resize(p_width);
+    evidence_masks.resize(p_width);
+    domains.resize(p_width);
+    attributions.resize(p_width);
+    flags.resize(p_width);
+}
+
+void Journal::release_columns() {
+    transitions.reset();
+    labels.reset();
+    c_hashes.reset();
+    e_digests.reset();
+    pre_fps.reset();
+    topo_fps.reset();
+    raw_fps.reset();
+    witness_fps.reset();
+    witness_class_bits.reset();
+    witness_realization_bits.reset();
+    witness_states.reset();
+    post_fps.reset();
+    pre_pose_fps.reset();
+    pre_momentum_fps.reset();
+    pre_controller_fps.reset();
+    post_pose_fps.reset();
+    post_momentum_fps.reset();
+    post_controller_fps.reset();
+    evidence_masks.reset();
+    domains.reset();
+    attributions.reset();
+    flags.reset();
+}
+
+void Journal::copy_row(const Journal &p_from, uint32_t p_at, uint32_t p_to) {
+    transitions[p_to] = p_from.transitions[p_at];
+    labels[p_to] = p_from.labels[p_at];
+    c_hashes[p_to] = p_from.c_hashes[p_at];
+    e_digests[p_to] = p_from.e_digests[p_at];
+    pre_fps[p_to] = p_from.pre_fps[p_at];
+    topo_fps[p_to] = p_from.topo_fps[p_at];
+    raw_fps[p_to] = p_from.raw_fps[p_at];
+    witness_fps[p_to] = p_from.witness_fps[p_at];
+    witness_class_bits[p_to] = p_from.witness_class_bits[p_at];
+    witness_realization_bits[p_to] = p_from.witness_realization_bits[p_at];
+    witness_states[p_to] = p_from.witness_states[p_at];
+    post_fps[p_to] = p_from.post_fps[p_at];
+    pre_pose_fps[p_to] = p_from.pre_pose_fps[p_at];
+    pre_momentum_fps[p_to] = p_from.pre_momentum_fps[p_at];
+    pre_controller_fps[p_to] = p_from.pre_controller_fps[p_at];
+    post_pose_fps[p_to] = p_from.post_pose_fps[p_at];
+    post_momentum_fps[p_to] = p_from.post_momentum_fps[p_at];
+    post_controller_fps[p_to] = p_from.post_controller_fps[p_at];
+    evidence_masks[p_to] = p_from.evidence_masks[p_at];
+    domains[p_to] = p_from.domains[p_at];
+    attributions[p_to] = p_from.attributions[p_at];
+    flags[p_to] = p_from.flags[p_at];
+    if (!diagnostics.held() || !p_from.diagnostics.held()) {
+        return;
+    }
+    const Diagnostics &from = p_from.diagnostics;
+    diagnostics.aligned_errors[p_to] = from.aligned_errors[p_at];
+    diagnostics.episode_ids[p_to] = from.episode_ids[p_at];
+    diagnostics.write_ids[p_to] = from.write_ids[p_at];
+    diagnostics.operators[p_to] = from.operators[p_at];
+    diagnostics.bases[p_to] = from.bases[p_at];
+    diagnostics.differing_families[p_to] = from.differing_families[p_at];
+    diagnostics.kinds[p_to] = from.kinds[p_at];
+}
+
+void Journal::set_capacity(int p_capacity) {
+    const int wanted = p_capacity < 1 ? 1 : p_capacity;
+    if (wanted == capacity) {
+        return;
+    }
+    Journal old(1);
+    old = *this;
+    capacity = wanted;
+    release_columns();
+    size_to(uint32_t(capacity));
+    if (diagnostics.held()) {
+        diagnostics.release();
+        diagnostics.size_to(uint32_t(capacity));
+    }
+    const int kept = old.count < capacity ? old.count : capacity;
+    const int skipped = old.count - kept;
+    for (int index = 0; index < kept; ++index) {
+        const uint32_t from
+            = uint32_t((old.start + skipped + index) % old.capacity);
+        copy_row(old, from, uint32_t(index));
+    }
+    start = 0;
+    count = kept;
+}
+
+void Journal::arm_diagnostics(bool p_armed) {
+    if (p_armed == diagnostics.held()) {
+        return;
+    }
+    if (p_armed) {
+        diagnostics.size_to(uint32_t(capacity));
+    } else {
+        diagnostics.release();
+    }
 }
 
 int Journal::slot_of(int64_t p_transition) const {
@@ -98,7 +220,6 @@ void Journal::open(int64_t p_transition, const JournalOpen &p_row) {
     witness_class_bits[slot] = 0;
     witness_realization_bits[slot] = 0;
     witness_states[slot] = 0;
-    aligned_errors[slot] = 0.0f;
     post_fps[slot] = 0;
     pre_pose_fps[slot] = p_row.pre_families.pose;
     pre_momentum_fps[slot] = p_row.pre_families.momentum;
@@ -106,16 +227,20 @@ void Journal::open(int64_t p_transition, const JournalOpen &p_row) {
     post_pose_fps[slot] = 0;
     post_momentum_fps[slot] = 0;
     post_controller_fps[slot] = 0;
-    episode_ids[slot] = p_row.provenance.episode;
-    write_ids[slot] = p_row.provenance.write_id;
-    operators[slot] = uint8_t(p_row.provenance.op);
-    bases[slot] = p_row.provenance.basis;
-    differing_families[slot] = uint8_t(DifferingFamily::NONE);
     evidence_masks[slot] = p_row.evidence_mask;
-    kinds[slot] = p_row.kind;
     domains[slot] = uint8_t(Domain::IN_DOMAIN);
     attributions[slot] = uint8_t(Attribution::UNKNOWN);
     flags[slot] = 0;
+    if (!diagnostics.held()) {
+        return;
+    }
+    diagnostics.aligned_errors[slot] = 0.0f;
+    diagnostics.episode_ids[slot] = p_row.provenance.episode;
+    diagnostics.write_ids[slot] = p_row.provenance.write_id;
+    diagnostics.operators[slot] = uint8_t(p_row.provenance.op);
+    diagnostics.bases[slot] = p_row.provenance.basis;
+    diagnostics.differing_families[slot] = uint8_t(DifferingFamily::NONE);
+    diagnostics.kinds[slot] = p_row.kind;
 }
 
 void Journal::mark_solve(
@@ -255,17 +380,20 @@ void Journal::mark_provenance(
     if (slot < 0) {
         return;
     }
-    episode_ids[uint32_t(slot)] = p_episode_id;
-    write_ids[uint32_t(slot)] = p_write_id;
-    operators[uint32_t(slot)] = uint8_t(p_operator);
-    bases[uint32_t(slot)] = p_basis;
     flags[uint32_t(slot)] &= ~uint8_t(ROW_CHAIN_BROKEN);
+    if (!diagnostics.held()) {
+        return;
+    }
+    diagnostics.episode_ids[uint32_t(slot)] = p_episode_id;
+    diagnostics.write_ids[uint32_t(slot)] = p_write_id;
+    diagnostics.operators[uint32_t(slot)] = uint8_t(p_operator);
+    diagnostics.bases[uint32_t(slot)] = p_basis;
 }
 
 void Journal::mark_aligned_error(int64_t p_transition, double p_error) {
     const int slot = slot_of(p_transition);
-    if (slot >= 0) {
-        aligned_errors[uint32_t(slot)] = float(p_error);
+    if (slot >= 0 && diagnostics.held()) {
+        diagnostics.aligned_errors[uint32_t(slot)] = float(p_error);
     }
 }
 
@@ -274,8 +402,8 @@ void Journal::mark_differing_family(
     DifferingFamily p_family
 ) {
     const int slot = slot_of(p_transition);
-    if (slot >= 0) {
-        differing_families[uint32_t(slot)] = uint8_t(p_family);
+    if (slot >= 0 && diagnostics.held()) {
+        diagnostics.differing_families[uint32_t(slot)] = uint8_t(p_family);
     }
 }
 
@@ -325,9 +453,19 @@ void Journal::clear(int64_t p_epoch) {
         return m_type(m_column[uint32_t((start + p_index) % capacity)]); \
     }
 
+#define NETW_JOURNAL_DIAGNOSTIC_AT(m_name, m_column, m_type, m_absent) \
+    m_type Journal::m_name(int p_index) const { \
+        if (p_index < 0 || p_index >= count || !diagnostics.held()) { \
+            return m_absent; \
+        } \
+        return m_type( \
+            diagnostics.m_column[uint32_t((start + p_index) % capacity)] \
+        ); \
+    }
+
 NETW_JOURNAL_READ_AT(transition_at, transitions, int64_t, -1)
 NETW_JOURNAL_READ_AT(label_at, labels, int64_t, -1)
-NETW_JOURNAL_READ_AT(kind_at, kinds, uint8_t, 0)
+NETW_JOURNAL_DIAGNOSTIC_AT(kind_at, kinds, uint8_t, 0)
 NETW_JOURNAL_READ_AT(c_hash_at, c_hashes, int32_t, 0)
 NETW_JOURNAL_READ_AT(e_digest_at, e_digests, int32_t, 0)
 NETW_JOURNAL_READ_AT(pre_fp_at, pre_fps, int32_t, 0)
@@ -343,17 +481,23 @@ NETW_JOURNAL_READ_AT(
     0
 )
 NETW_JOURNAL_READ_AT(witness_state_at, witness_states, uint8_t, 0)
-NETW_JOURNAL_READ_AT(episode_id_at, episode_ids, int32_t, 0)
-NETW_JOURNAL_READ_AT(write_id_at, write_ids, int32_t, 0)
-NETW_JOURNAL_READ_AT(operator_at, operators, uint8_t, 0)
-NETW_JOURNAL_READ_AT(basis_at, bases, int64_t, -1)
+NETW_JOURNAL_DIAGNOSTIC_AT(episode_id_at, episode_ids, int32_t, 0)
+NETW_JOURNAL_DIAGNOSTIC_AT(write_id_at, write_ids, int32_t, 0)
+NETW_JOURNAL_DIAGNOSTIC_AT(operator_at, operators, uint8_t, 0)
+NETW_JOURNAL_DIAGNOSTIC_AT(basis_at, bases, int64_t, -1)
 NETW_JOURNAL_READ_AT(evidence_mask_at, evidence_masks, uint8_t, 0)
 NETW_JOURNAL_READ_AT(flags_at, flags, uint8_t, 0)
 NETW_JOURNAL_READ_AT(domain_at, domains, uint8_t, 0)
 NETW_JOURNAL_READ_AT(attribution_at, attributions, uint8_t, 0)
-NETW_JOURNAL_READ_AT(differing_family_at, differing_families, uint8_t, 0)
-NETW_JOURNAL_READ_AT(aligned_error_at, aligned_errors, float, 0.0f)
+NETW_JOURNAL_DIAGNOSTIC_AT(
+    differing_family_at,
+    differing_families,
+    uint8_t,
+    0
+)
+NETW_JOURNAL_DIAGNOSTIC_AT(aligned_error_at, aligned_errors, float, 0.0f)
 
+#undef NETW_JOURNAL_DIAGNOSTIC_AT
 #undef NETW_JOURNAL_READ_AT
 
 FamilyFingerprints Journal::pre_families_at(int p_index) const {

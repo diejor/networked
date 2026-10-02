@@ -6,18 +6,6 @@ namespace netw::lifecycle {
 
 namespace {
 
-const char *done_to(Kind p_kind) {
-    switch (p_kind) {
-        case Kind::SPAWN:
-            return "spawned";
-        case Kind::DESPAWN:
-            return "despawned";
-        case Kind::REPARENT:
-            break;
-    }
-    return "moved";
-}
-
 const char *does_to(Kind p_kind) {
     switch (p_kind) {
         case Kind::SPAWN:
@@ -53,22 +41,25 @@ const char *why_session_only(const Facts &p_facts) {
     if (p_facts.player_bound) {
         return "a player's body";
     }
-    return "loaded from its database at spawn (load_on_spawn)";
+    return "loaded from its database at spawn "
+           "(NetwPersistenceConfig.load_on_spawn)";
 }
 
 const char *where_it_fails(Destination p_destination) {
     switch (p_destination) {
         case Destination::OUTSIDE:
-            return "is outside the session root, so no peer can hold it there";
+            return "is outside the session root. Pick a parent under the "
+                   "session root.";
         case Destination::INSIDE_MOVER:
-            return "is inside the entity itself";
+            return "is inside the entity itself. Pick a parent outside it.";
         case Destination::DYING:
-            return "is being despawned";
+            return "is being despawned. Pick a parent that stays.";
         case Destination::UNRESOLVABLE:
         case Destination::OK:
             break;
     }
-    return "is not held by the session authority";
+    return "is not known to the session authority. Pick a parent every peer "
+           "has.";
 }
 
 godot::String unauthorized_text(
@@ -79,38 +70,36 @@ godot::String unauthorized_text(
 ) {
     if (p_ruling.verdict == Verdict::DYNAMIC) {
         return godot::vformat(
-            "%s: the session authority changed '%s' before this %s reached "
-            "it, so it holds the session's structure",
+            "%s on '%s' was refused, because the session authority changed "
+            "it first. Call it again once that change arrives.",
             p_verb,
-            p_root,
-            act(p_facts.kind)
+            p_root
         );
     }
     if (!p_facts.declared) {
         return godot::vformat(
-            "%s: '%s' is %s only by the session authority. Set "
-            "NetwEntity.lifecycle = LIFECYCLE_CONTROLLER in its root's _init "
-            "to let %s %s it.",
+            "%s on '%s' was refused, because only the session authority %s "
+            "it. Set NetwEntity.lifecycle to LIFECYCLE_CONTROLLER in its "
+            "root's _init to let %s %s it.",
             p_verb,
             p_root,
-            done_to(p_facts.kind),
+            does_to(p_facts.kind),
             p_facts.kind == Kind::SPAWN ? "any peer" : "its controller",
             act(p_facts.kind)
         );
     }
     if (p_facts.peer_claim == Claim::REQUESTABLE) {
         return godot::vformat(
-            "%s: '%s' declares NetwEntity.lifecycle = LIFECYCLE_CONTROLLER "
-            "and this peer's claim on it is not granted yet. Chain the %s on "
-            "the claim's promise.",
+            "%s on '%s' was refused, because this peer's claim on it is not "
+            "granted yet. Call it once the claim's promise resolves.",
             p_verb,
-            p_root,
-            act(p_facts.kind)
+            p_root
         );
     }
     return godot::vformat(
-        "%s: '%s' declares NetwEntity.lifecycle = LIFECYCLE_CONTROLLER, and "
-        "this peer is neither the session authority nor its controller.",
+        "%s on '%s' was refused, because this peer is neither the session "
+        "authority nor its controller. Call it from the peer that controls "
+        "it.",
         p_verb,
         p_root
     );
@@ -213,15 +202,14 @@ godot::String refusal_text(
             return unauthorized_text(p_verb, p_root, p_facts, p_ruling);
         case godot::ERR_BUSY:
             return godot::vformat(
-                "%s: '%s' is not %s during a prediction replay, whatever "
-                "NetwEntity.lifecycle declares. Call it on a fresh tick.",
+                "%s on '%s' was refused, because it ran during a prediction "
+                "replay. Call it outside the replay.",
                 p_verb,
-                p_root,
-                done_to(p_facts.kind)
+                p_root
             );
         case godot::ERR_INVALID_PARAMETER:
             return godot::vformat(
-                "%s: the new parent of '%s' %s.",
+                "%s on '%s' was refused, because the new parent %s",
                 p_verb,
                 p_root,
                 where_it_fails(p_facts.destination)
@@ -231,16 +219,16 @@ godot::String refusal_text(
     }
     if (p_facts.minting_halted) {
         return godot::vformat(
-            "%s: session authority is moving, so '%s' is not %s under "
-            "NetwEntity.lifecycle until it lands.",
+            "%s on '%s' was refused, because session authority is moving to "
+            "another peer. Call it again once the move completes.",
             p_verb,
-            p_root,
-            done_to(p_facts.kind)
+            p_root
         );
     }
     return godot::vformat(
-        "%s: '%s' is %s, so only the session authority %s it, whatever "
-        "NetwEntity.lifecycle declares.",
+        "%s on '%s' was refused, because it is %s, so only the session "
+        "authority %s it, whatever NetwEntity.lifecycle says. Call it on the "
+        "server.",
         p_verb,
         p_root,
         why_session_only(p_facts),
@@ -253,9 +241,9 @@ godot::String lease_empty_text(
     const godot::String &p_root
 ) {
     return godot::vformat(
-        "%s: '%s' declares NetwEntity.lifecycle = LIFECYCLE_CONTROLLER, and "
-        "this peer has no route left in its lease, so it is not spawned. The "
-        "session authority refills the lease as it admits this peer's spawns.",
+        "%s on '%s' was refused, because this peer used up the spawns the "
+        "session authority granted it. More are granted as its spawns are "
+        "admitted, so try again shortly.",
         p_verb,
         p_root
     );

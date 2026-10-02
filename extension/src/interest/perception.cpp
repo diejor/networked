@@ -89,10 +89,11 @@ Dictionary Perception::resolve(
             ? p_decl->custom_perception_for(layer_id)
             : Callable();
         if (!callback.is_valid()) {
-            NETW_ERROR(
+            NETW_ERROR_ONCE(
                 sys::INTEREST,
-                "Layer '%s' declares a CUSTOM perception whose callback is "
-                "gone, so the subtree is hidden.",
+                "The CUSTOM perception callback of layer '%s' was freed, so "
+                "what it covered is hidden. Keep the callback's object alive "
+                "while the layer uses it.",
                 godot::String(layer_id)
             );
             hide = true;

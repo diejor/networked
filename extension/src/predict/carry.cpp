@@ -57,7 +57,8 @@ CarryVerdict CarryTrack::judge(
         p_field < 0 || p_field >= int(fields.size()),
         CarryVerdict::DECLINED,
         sys::PREDICTION,
-        "Carry evidence names field %d outside width %d.",
+        "Prediction tried to carry property %d of an entity with %d "
+        "properties.",
         p_field,
         int(fields.size())
     );
@@ -69,9 +70,10 @@ CarryVerdict CarryTrack::judge(
     if (p_schedule != int(Schedule::FRAME)) {
         stats.declined += 1;
         stats.retired = true;
-        NETW_WARN(
+        NETW_DEBUG(
             sys::PREDICTION,
-            "carry_step field=%d retired because its schedule is not FRAME.",
+            "carry_step stopped for property %d, because its schedule is not "
+            "FRAME.",
             p_field
         );
         return CarryVerdict::RETIRED_SCHEDULE;
@@ -79,9 +81,10 @@ CarryVerdict CarryTrack::judge(
     if (!p_probe.pure) {
         stats.declined += 1;
         stats.retired = true;
-        NETW_WARN(
+        NETW_DEBUG(
             sys::PREDICTION,
-            "carry_step field=%d retired after writing live state.",
+            "carry_step stopped for property %d, because it changed live "
+            "state.",
             p_field
         );
         return CarryVerdict::RETIRED_IMPURE;
@@ -90,7 +93,8 @@ CarryVerdict CarryTrack::judge(
         stats.declined += 1;
         NETW_DEBUG(
             sys::PREDICTION,
-            "carry_step field=%d declined type=%d finite=%d envelope=%d",
+            "carry_step skipped property %d (same type %d, finite %d, in "
+            "range %d).",
             p_field,
             int(p_probe.same_type),
             int(p_probe.finite),
@@ -103,9 +107,10 @@ CarryVerdict CarryTrack::judge(
         stats.infidelity += 1;
         if (stats.infidelity >= CARRY_INFIDELITY_LIMIT) {
             stats.retired = true;
-            NETW_WARN(
+            NETW_DEBUG(
                 sys::PREDICTION,
-                "carry_step field=%d retired after %d failed replays.",
+                "carry_step stopped for property %d after %d replays that did "
+                "not match.",
                 p_field,
                 stats.infidelity
             );
@@ -113,7 +118,7 @@ CarryVerdict CarryTrack::judge(
         }
         NETW_DEBUG(
             sys::PREDICTION,
-            "carry_step field=%d replayed unfaithfully, run=%d",
+            "A carry_step replay of property %d did not match (%d in a row).",
             p_field,
             stats.infidelity
         );
@@ -128,7 +133,8 @@ CarryVerdict CarryTrack::decline(int p_field, int p_schedule) {
         p_field < 0 || p_field >= int(fields.size()),
         CarryVerdict::DECLINED,
         sys::PREDICTION,
-        "Carry refusal names field %d outside width %d.",
+        "Prediction declined to carry property %d of an entity with %d "
+        "properties.",
         p_field,
         int(fields.size())
     );
@@ -139,9 +145,10 @@ CarryVerdict CarryTrack::decline(int p_field, int p_schedule) {
     }
     if (p_schedule != int(Schedule::FRAME)) {
         stats.retired = true;
-        NETW_WARN(
+        NETW_DEBUG(
             sys::PREDICTION,
-            "carry_step field=%d retired because its schedule is not FRAME.",
+            "carry_step stopped for property %d, because its schedule is not "
+            "FRAME.",
             p_field
         );
         return CarryVerdict::RETIRED_SCHEDULE;

@@ -102,9 +102,7 @@ TEST_CASE(
 
     NETW_CHECK_EQ(runtime->authoring_tick(), int64_t(-1));
 
-    Ref<netw::NetwPropertySetBinding> binding;
-    binding.instantiate();
-    runtime->set_authoring_binding(binding);
+    runtime->set_authored_by_state(true);
 
     NETW_CHECK_EQ(runtime->authoring_tick(), int64_t(2));
 
@@ -157,7 +155,7 @@ TEST_CASE(
     );
 
     runtime->set_pump_mode(netw::display::PUMP_CHASE);
-    CHECK(runtime->buffer_of("position").is_null());
+    CHECK(runtime->history_of("position") == nullptr);
     NETW_CHECK_EQ(int64_t(runtime->track_stat("position", "buffer_size")), 0);
 }
 

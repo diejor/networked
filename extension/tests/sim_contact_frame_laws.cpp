@@ -6,6 +6,8 @@
 
 #include "support/sim_stand.h"
 
+#include <string>
+
 #include "godot/node.hpp"
 #include "godot/physics_body.hpp"
 #include "godot/spatial_node.hpp"
@@ -27,7 +29,7 @@ using Hold = netw::entity::Control::Hold;
 
 constexpr const char *CUBE_ID = "sim_contact_cube";
 
-constexpr const char *CUBE_SOURCE = R"(extends Node3D
+constexpr const char *CUBE_BODY = R"(extends Node3D
 
 var sphere: RigidBody3D
 
@@ -64,9 +66,24 @@ func _init() -> void:
 	e.transfer = NetwEntity.TRANSFER_IMMEDIATE
 	e.simulation.bodies = [^"Sphere"]
 	e.simulation.replicas = NetwSimulationHandle.REPLICAS_ACTIVE
-	Netw.configure_property(self, &"sphere_position").broadcast()
-	Netw.configure_property(self, &"sphere_linear_velocity").broadcast()
 )";
+
+const std::string CUBE_SOURCE = std::string(CUBE_BODY)
+    + "\tNetw.configure_property(self, &\"sphere_position\").broadcast()\n"
+      "\tNetw.configure_property(self, &\"sphere_linear_velocity\")"
+      ".broadcast()\n";
+
+constexpr int QUIET_BEAT_TICKS = 10;
+
+const std::string QUIET_BEAT = ".heartbeat("
+    + std::to_string(QUIET_BEAT_TICKS) + ")\n";
+
+const std::string QUIET_SOURCE = std::string(CUBE_BODY)
+    + "\tNetw.configure_property(self, &\"sphere_position\").broadcast()"
+    + QUIET_BEAT
+    + "\tNetw.configure_property(self, &\"sphere_linear_velocity\")"
+      ".broadcast()"
+    + QUIET_BEAT;
 
 enum class Kind {
     CHAIN,
@@ -78,7 +95,19 @@ enum class Kind {
     DOUBLE,
     AUTHORED,
     SETTLED,
+    QUIET,
+    MONITORED,
 };
+
+constexpr int KINDS = int(Kind::MONITORED) + 1;
+
+int entered_count = 0;
+
+void count_entered(Node *p_body) {
+    if (p_body != nullptr) {
+        ++entered_count;
+    }
+}
 
 constexpr const char *AUTHORED_ID = "sim_contact_authored";
 
@@ -181,11 +210,14 @@ struct ContactEvidence {
     int settled_frame = -1;
     bool slept = false;
     bool touching_asleep = false;
+    bool monitor_on = false;
+    int64_t contacts_reported = 0;
+    int entered = 0;
     Subject subjects[CUBES];
 };
 
 ContactEvidence &evidence_of(Kind p_kind) {
-    static ContactEvidence evidence[9];
+    static ContactEvidence evidence[KINDS];
     return evidence[int(p_kind)];
 }
 
@@ -257,6 +289,8 @@ class ContactScenario : public netw_test::FrameScenario {
             case Kind::DOUBLE:
             case Kind::AUTHORED:
             case Kind::SETTLED:
+            case Kind::QUIET:
+            case Kind::MONITORED:
                 return 2;
             case Kind::REST:
                 return CUBES;
@@ -271,11 +305,13 @@ class ContactScenario : public netw_test::FrameScenario {
             case Kind::CHAIN:
             case Kind::REFUSED:
             case Kind::AUTHORED:
+            case Kind::MONITORED:
                 return Vector3(0.95 * p_index, 0.0, 0.0);
             case Kind::FENCE:
             case Kind::PUSH:
             case Kind::DOUBLE:
             case Kind::SETTLED:
+            case Kind::QUIET:
                 return Vector3(0.0, 0.0, -5.0 * p_index);
             default:
                 return Vector3(3.0 * p_index, 0.0, 0.0);
@@ -315,17 +351,21 @@ class ContactScenario : public netw_test::FrameScenario {
                 if (sphere == nullptr) {
                     return false;
                 }
+                if (kind == Kind::MONITORED) {
+                    sphere->set_contact_monitor(true);
+                }
                 const Ref<netw::NetwSimulationHandle> handle
                     = entity_at(client, index)->get_simulation();
                 handle->set_claim_on_contact(
                     kind == Kind::CHAIN || kind == Kind::REFUSED
-                    || kind == Kind::AUTHORED
+                    || kind == Kind::AUTHORED || kind == Kind::MONITORED
                 );
                 if (kind == Kind::REST || kind == Kind::WAKE) {
                     handle->set_release_on_rest(REST_SECONDS);
                 }
                 if (kind == Kind::FENCE || kind == Kind::PUSH
-                    || kind == Kind::DOUBLE || kind == Kind::SETTLED) {
+                    || kind == Kind::DOUBLE || kind == Kind::SETTLED
+                    || kind == Kind::QUIET) {
                     sphere->set_contact_monitor(true);
                     sphere->set_max_contacts_reported(4);
                 }
@@ -337,7 +377,9 @@ class ContactScenario : public netw_test::FrameScenario {
     }
 
     bool open() {
-        script = netw_test::minted_script(CUBE_SOURCE);
+        script = netw_test::minted_script(
+            (kind == Kind::QUIET ? QUIET_SOURCE : CUBE_SOURCE).c_str()
+        );
         if (script.is_null()) {
             return false;
         }
@@ -361,6 +403,14 @@ class ContactScenario : public netw_test::FrameScenario {
         switch (kind) {
             case Kind::CHAIN:
                 entity_at(-1, 0)->set_controller(holder);
+                break;
+            case Kind::MONITORED:
+                entity_at(-1, 0)->set_controller(holder);
+                entered_count = 0;
+                sphere_at(A, 0)->connect(
+                    "body_entered",
+                    callable_mp_static(&count_entered)
+                );
                 break;
             case Kind::AUTHORED:
                 break;
@@ -386,6 +436,10 @@ class ContactScenario : public netw_test::FrameScenario {
             case Kind::SETTLED:
                 entity_at(-1, 1)->set_controller(holder);
                 break;
+            case Kind::QUIET:
+                entity_at(-1, 1)->set_controller(holder);
+                delay(A, -1, 56);
+                break;
         }
         stand->pump(4);
         evidence().seated = true;
@@ -406,6 +460,7 @@ class ContactScenario : public netw_test::FrameScenario {
         switch (kind) {
             case Kind::CHAIN:
             case Kind::AUTHORED:
+            case Kind::MONITORED:
                 for (int index = 0; index < cube_count(); ++index) {
                     collide(A, index);
                 }
@@ -443,7 +498,8 @@ class ContactScenario : public netw_test::FrameScenario {
             }
             case Kind::FENCE:
             case Kind::PUSH:
-            case Kind::DOUBLE: {
+            case Kind::DOUBLE:
+            case Kind::QUIET: {
                 collide(A, 0);
                 collide(A, 1);
                 const Vector3 at = sphere_at(A, 0)->get_position();
@@ -521,6 +577,15 @@ class ContactScenario : public netw_test::FrameScenario {
             subject.server_velocity
                 = sphere_at(-1, index)->get_linear_velocity();
             subject.server_position = sphere_at(-1, index)->get_position();
+        }
+        RigidBody3D *held = sphere_at(A, 0);
+        seen.monitor_on = held->is_contact_monitor_enabled();
+        seen.contacts_reported = held->get_max_contacts_reported();
+        seen.entered = entered_count;
+        const netw::sim::Row *row = row_at(A, 0);
+        if (kind == Kind::QUIET && row != nullptr) {
+            seen.first_fence = row->contact.fence_tick;
+            seen.fenced_total = row->installs.stats.fenced;
         }
     }
 
@@ -629,7 +694,8 @@ class ContactScenario : public netw_test::FrameScenario {
         if (kind == Kind::DOUBLE && p_step >= 0) {
             touch_twice(p_step);
         }
-        if (kind == Kind::FENCE && p_step == FENCE_READ_FRAMES) {
+        if ((kind == Kind::FENCE || kind == Kind::QUIET)
+            && p_step == FENCE_READ_FRAMES) {
             evidence().hit_velocity = sphere_at(A, 0)->get_linear_velocity();
             sphere_at(A, 1)->set_linear_velocity(Vector3(-6.0, 0.0, 0.0));
         }
@@ -727,6 +793,67 @@ public:
 };
 
 NETW_FRAME_SCENARIO(SettledScenario, contact_settled_scenario);
+
+class QuietScenario final : public ContactScenario {
+public:
+    QuietScenario() : ContactScenario(Kind::QUIET) {
+    }
+};
+
+NETW_FRAME_SCENARIO(QuietScenario, contact_quiet_scenario);
+
+class MonitoredScenario final : public ContactScenario {
+public:
+    MonitoredScenario() : ContactScenario(Kind::MONITORED) {
+    }
+};
+
+NETW_FRAME_SCENARIO(MonitoredScenario, contact_monitored_scenario);
+
+TEST_CASE(
+    "[Networked][Sim][Frame] claim_on_contact arms the server's contact "
+    "reports and leaves the node's contact_monitor off"
+) {
+    const ContactEvidence &evidence = evidence_of(Kind::CHAIN);
+    REQUIRE(evidence.driven);
+    REQUIRE(evidence.seated);
+    CHECK_FALSE(evidence.monitor_on);
+    NETW_CHECK_GE(
+        evidence.contacts_reported,
+        int64_t(netw::sim::CLAIM_CONTACTS_REPORTED)
+    );
+    NETW_CHECK_GE(evidence.subjects[1].claimed_frame, 0);
+}
+
+TEST_CASE(
+    "[Networked][Sim][Frame] a claim body whose game enables contact_monitor "
+    "keeps body_entered and claims what it touches"
+) {
+    const ContactEvidence &evidence = evidence_of(Kind::MONITORED);
+    REQUIRE(evidence.driven);
+    REQUIRE(evidence.seated);
+    CHECK(evidence.monitor_on);
+    NETW_CHECK_GT(evidence.entered, 0);
+    const Subject &touched = evidence.subjects[1];
+    NETW_CHECK_GE(touched.claimed_frame, 0);
+    NETW_CHECK_EQ(touched.server_controller, evidence.holder);
+}
+
+TEST_CASE(
+    "[Networked][Sim][Frame] an active copy hit by a body this peer runs, "
+    "whose author never moved, is corrected by the author's next heartbeat"
+) {
+    const ContactEvidence &evidence = evidence_of(Kind::QUIET);
+    REQUIRE(evidence.driven);
+    REQUIRE(evidence.seated);
+    NETW_CHECK_GT(evidence.hit_velocity.x, 1.0);
+    NETW_CHECK_GE(evidence.first_fence, int64_t(0));
+    const Subject &ball = evidence.subjects[0];
+    NETW_CHECK_EQ(ball.local_controller, int64_t(0));
+    NETW_CHECK_CLOSE(ball.server_position.x, 0.0, 0.01);
+    NETW_CHECK_CLOSE(ball.local_velocity.x, 0.0, 0.05);
+    NETW_CHECK_CLOSE(ball.local_position.x, ball.server_position.x, 0.05);
+}
 
 TEST_CASE(
     "[Networked][Sim][Frame] an active copy resting against a body this "

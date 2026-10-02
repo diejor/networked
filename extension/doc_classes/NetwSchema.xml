@@ -4,7 +4,7 @@
 		A named list of typed columns.
 	</brief_description>
 	<description>
-		Declare it in a [code]static var[/code] beside the code that writes it. Every peer built from the same scripts ends up with the same [member columns] in the same order.
+		Declare it in a [code]static var[/code] beside the code that writes it. Every peer built from the same scripts ends up with the same columns in the same order.
 		Each column method returns the column's index, which is how a writer and a reader name the column. [method Netw.table] opens the replicated table a session builds from the schema.
 		[codeblock]
 		class Mobs:
@@ -19,7 +19,7 @@
 		@onready var mobs := Netw.table(self, Mobs.schema.schema_name)
 		[/codeblock]
 		A column with no quantizer is sent as a raw copy of its buffer, which is the cheapest to encode and decode. Add a quantizer to the columns where bandwidth matters.
-		The same schema also types [NetwDatabase] records and [method NetwPropertyConfig.persisted] bindings. A schema used only for saves calls [method replicated] with [code]false[/code] so no table is created. [method string] and [method variant] columns work for saves but not for replicated tables.
+		The same schema also types the records a [NetwDatabase] reads and writes directly. A schema used only for those calls [method replicated] with [code]false[/code] so no table is created. [method string] and [method variant] columns work for saves but not for replicated tables. An entity's own record takes its columns from [method NetwPropertyConfig.persisted] and needs no schema.
 	</description>
 	<tutorials>
 	</tutorials>
@@ -50,13 +50,6 @@
 			<description>
 				Appends a column of [param type] and returns its index. The typed methods such as [method vector3] are this call with the type filled in.
 				Declaring a [param key] again with the same [param type] and [param stride] returns the index it already has, so a script reload is safe. Declaring it with a different shape returns [code]-1[/code] and appends nothing.
-			</description>
-		</method>
-		<method name="column_ref">
-			<return type="NetwColumnRef" />
-			<param index="0" name="index" type="int" />
-			<description>
-				Returns a [NetwColumnRef] for the column at [param index], or [code]null[/code] when this schema has no such column. Configuration calls such as [method NetwPropertyConfig.persisted] take the reference.
 			</description>
 		</method>
 		<method name="create" qualifiers="static">
@@ -264,9 +257,6 @@
 		</method>
 	</methods>
 	<members>
-		<member name="columns" type="NetwSchemaColumn[]" setter="" getter="get_columns">
-			The declared columns in index order.
-		</member>
 		<member name="schema_name" type="StringName" setter="" getter="get_schema_name">
 			The name this schema is registered under, which [method NetwMultiplayer.schema_find] takes.
 		</member>

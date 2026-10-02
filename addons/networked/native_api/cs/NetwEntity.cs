@@ -1059,6 +1059,56 @@ public sealed class NetwEntity : NetwRefCounted
         }
     }
 
+    private static readonly IntPtr _bindGetReplicationPriority =
+        NetwApi.MethodBind(
+            "NetwEntity",
+            "get_replication_priority",
+            1740695150UL);
+
+    private static readonly IntPtr _bindSetReplicationPriority =
+        NetwApi.MethodBind(
+            "NetwEntity",
+            "set_replication_priority",
+            373806689UL);
+
+    /// <summary>
+    /// How much this entity's properties matter next to others when a peer's
+    /// budget cannot carry every change in one tick. The weight multiplies how
+    /// fast a waiting row moves up the queue, so an entity at <c>4.0</c> is
+    /// sent about four times as often as one at <c>1.0</c> when both keep
+    /// changing. The weight is read from the author's copy each tick.
+    /// <code>
+    /// NetwEntity.of(self).replication_priority = 4.0
+    /// </code>
+    /// <para>
+    /// It must be above zero, and a value at or below zero is refused and
+    /// leaves the weight unchanged. Which peers receive the entity at all is
+    /// <see cref="NetwEntity.Interest"/>.
+    /// </para>
+    /// </summary>
+    public double ReplicationPriority
+    {
+        get
+        {
+            double answered = default;
+            NetwThunks.Ptrcall0_Double(
+                _bindGetReplicationPriority,
+                Checked,
+                ref answered);
+            return answered;
+        }
+        set
+        {
+            double slot0 = value;
+            long discarded = default;
+            NetwThunks.Ptrcall1_Double_Long(
+                _bindSetReplicationPriority,
+                Checked,
+                in slot0,
+                ref discarded);
+        }
+    }
+
     private static readonly IntPtr _bindGetPlayer =
         NetwApi.MethodBind("NetwEntity", "get_player", 1167648220UL);
 
@@ -1311,24 +1361,6 @@ public sealed class NetwEntity : NetwRefCounted
                 Checked,
                 ref answered);
             return NetwDisplayHandle.Adopt(answered);
-        }
-    }
-
-    private static readonly IntPtr _bindGetTimeline =
-        NetwApi.MethodBind("NetwEntity", "get_timeline", 2956180358UL);
-
-    /// <summary>
-    /// The entity's <see cref="NetwTimeline"/> of state and input snapshots, or
-    /// <c>null</c>. Moving the entity drops the snapshots taken before the
-    /// move, so a rewind starts after it.
-    /// </summary>
-    public NetwTimeline Timeline
-    {
-        get
-        {
-            IntPtr answered = default;
-            NetwThunks.Ptrcall0_IntPtr(_bindGetTimeline, Checked, ref answered);
-            return NetwTimeline.Adopt(answered);
         }
     }
 

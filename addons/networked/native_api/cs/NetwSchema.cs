@@ -10,11 +10,10 @@ namespace Networked;
 /// </summary>
 /// <remarks>
 /// Declare it in a <c>static var</c> beside the code that writes it. Every peer
-/// built from the same scripts ends up with the same
-/// <see cref="NetwSchema.Columns"/> in the same order. Each column method
-/// returns the column's index, which is how a writer and a reader name the
-/// column. <see cref="Netw.Table"/> opens the replicated table a session builds
-/// from the schema.
+/// built from the same scripts ends up with the same columns in the same order.
+/// Each column method returns the column's index, which is how a writer and a
+/// reader name the column. <see cref="Netw.Table"/> opens the replicated table
+/// a session builds from the schema.
 /// <code>
 /// class Mobs:
 ///     static var schema := Netw.configure_schema(&amp;"Mob")
@@ -30,12 +29,13 @@ namespace Networked;
 /// <para>
 /// A column with no quantizer is sent as a raw copy of its buffer, which is the
 /// cheapest to encode and decode. Add a quantizer to the columns where
-/// bandwidth matters. The same schema also types <see cref="NetwDatabase"/>
-/// records and <see cref="NetwPropertyConfig.Persisted"/> bindings. A schema
-/// used only for saves calls <see cref="NetwSchema.Replicated"/> with
-/// <c>false</c> so no table is created. <see cref="NetwSchema.String"/> and
+/// bandwidth matters. The same schema also types the records a
+/// <see cref="NetwDatabase"/> reads and writes directly. A schema used only for
+/// those calls <see cref="NetwSchema.Replicated"/> with <c>false</c> so no
+/// table is created. <see cref="NetwSchema.String"/> and
 /// <see cref="NetwSchema.Variant"/> columns work for saves but not for
-/// replicated tables.
+/// replicated tables. An entity's own record takes its columns from
+/// <see cref="NetwPropertyConfig.Persisted"/> and needs no schema.
 /// </para>
 /// </remarks>
 public sealed class NetwSchema : NetwRefCounted
@@ -87,25 +87,6 @@ public sealed class NetwSchema : NetwRefCounted
             godot_variant answered = default;
             NetwThunks.Call0(_bindGetSchemaName, Checked, ref answered);
             StringName result = VariantUtils.ConvertToStringName(answered);
-            answered.Dispose();
-            return result;
-        }
-    }
-
-    private static readonly IntPtr _bindGetColumns =
-        NetwApi.MethodBind("NetwSchema", "get_columns", 3995934104UL);
-
-    /// <summary>
-    /// The declared columns in index order.
-    /// </summary>
-    public Godot.Collections.Array Columns
-    {
-        get
-        {
-            godot_variant answered = default;
-            NetwThunks.Call0(_bindGetColumns, Checked, ref answered);
-            Godot.Collections.Array result =
-                VariantUtils.ConvertToArray(answered);
             answered.Dispose();
             return result;
         }
@@ -644,27 +625,6 @@ public sealed class NetwSchema : NetwRefCounted
         int result = VariantUtils.ConvertToInt32(answered);
         answered.Dispose();
         return result;
-    }
-
-    private static readonly IntPtr _bindColumnRef =
-        NetwApi.MethodBind("NetwSchema", "column_ref", 4233560099UL);
-
-    /// <summary>
-    /// Returns a <see cref="NetwColumnRef"/> for the column at
-    /// <paramref name="index"/>, or <c>null</c> when this schema has no such
-    /// column. Configuration calls such as
-    /// <see cref="NetwPropertyConfig.Persisted"/> take the reference.
-    /// </summary>
-    public NetwColumnRef ColumnRef(int index)
-    {
-        int slot0 = index;
-        IntPtr answered = default;
-        NetwThunks.Ptrcall1_Int_IntPtr(
-            _bindColumnRef,
-            Checked,
-            in slot0,
-            ref answered);
-        return NetwColumnRef.Adopt(answered);
     }
 
     private static readonly IntPtr _bindStorageVersion =

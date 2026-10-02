@@ -78,11 +78,11 @@ struct World {
         root_id = netw::gd::instance_id(root);
         netw::Netw::configure_persistence(root)
             ->database(StringName("saves"))
-            ->schema(schema)
+            ->table(schema->get_schema_name())
             ->record_id(Callable(account, "get_name"))
             ->interval(1.0);
         model::configure_node_property(root, "position")
-            ->persisted(schema->column_ref(0));
+            ->persisted(StringName("where"));
 
         row = netw::NetwEntity::resolve(root)->get_persistence();
         row->connect("saved", log.callable("saved"));

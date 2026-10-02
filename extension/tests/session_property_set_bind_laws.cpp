@@ -7,14 +7,14 @@
 #include "godot/variant.hpp"
 #include "netw/api/entity.hpp"
 #include "netw/api/netw_multiplayer.hpp"
-#include "netw/api/property_set.hpp"
+#include "netw/repl/property_set.hpp"
 
 namespace TestNetwSessionPropertySetBindLaws {
 
 using namespace godot;
 using netw::NetwEntity;
 using netw::NetwMultiplayer;
-using netw::NetwPropertySet;
+using netw::repl::PropertySet;
 using netw_test::law_broken;
 using netw_test::law_held;
 using netw_test::LawRowFor;
@@ -136,12 +136,11 @@ public:
             ? OK
             : session->property_set_seal(minted_set);
 
-        const Ref<NetwPropertySet> record
-            = session->property_set_record(minted_set);
-        if (record.is_valid()) {
-            bound_columns = record->get_columns().size();
+        const PropertySet *record = session->property_set_of(minted_set);
+        if (record != nullptr) {
+            bound_columns = int64_t(record->columns.size());
             record_keys = record->keys();
-            stored_column_has_a_member = record->member(stored).is_valid();
+            stored_column_has_a_member = record->member(stored) != nullptr;
         }
 
         bind_verdict

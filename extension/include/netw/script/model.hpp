@@ -97,6 +97,8 @@ godot::Callable get_node_property_carry(
 );
 void clear_node_overlay(godot::Node *p_node);
 void sweep_dead_overlays();
+uint64_t interpolation_epoch();
+void advance_interpolation_epoch();
 #if defined(NETW_TESTS)
 int64_t node_overlay_count();
 #endif

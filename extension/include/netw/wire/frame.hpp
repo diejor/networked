@@ -31,6 +31,17 @@ godot::PackedByteArray frame_pack(
     const godot::String &p_path
 );
 
+godot::PackedByteArray frame_pack(
+    WriteStream &r_stream,
+    int64_t p_route,
+    uint8_t p_comp,
+    uint8_t p_channel,
+    const godot::PackedByteArray &p_payload,
+    const godot::String &p_path
+);
+
+int64_t frame_size(int64_t p_route, int64_t p_payload_bytes);
+
 bool frame_unpack_next(ReadStream &p_stream, Frame &r_frame);
 
 FrameWalk frame_unpack_all(

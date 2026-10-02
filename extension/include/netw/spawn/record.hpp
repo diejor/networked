@@ -96,6 +96,9 @@ public:
     );
 
     godot::Node *node() const;
+    godot::ObjectID get_node_id() const {
+        return node_id;
+    }
     void bind_node(godot::Node *p_node);
 
     godot::Node *origin() const;
@@ -111,6 +114,9 @@ public:
     bool remove_recipient(int peer);
     bool has_recipient(int peer) const;
     godot::PackedInt32Array recipients() const;
+    const godot::LocalVector<int32_t> &recipient_list() const {
+        return recipient_peers;
+    }
     void set_recipients(const godot::PackedInt32Array &peers);
 
     void set_route(int64_t value) {

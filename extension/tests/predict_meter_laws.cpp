@@ -61,16 +61,16 @@ int meter_of_judgement(
     Domain p_domain,
     const Callable &p_seam
 ) {
-    const Dictionary judged = p_pool->judge_state(
+    const predict::Judged judged = p_pool->judge_state(
         p_slot,
         4,
         int64_t(p_domain),
         int64_t(ROW_ACKED),
-        Dictionary(),
-        Dictionary(),
+        predict::StateRow(),
+        predict::StateRow(),
         p_seam
     );
-    return int(judged[StringName("meter")]);
+    return judged.meter;
 }
 
 TEST_CASE(
@@ -90,21 +90,17 @@ TEST_CASE(
     NETW_CHECK_GE(measured, 1);
 
     SUBCASE("and the field it corrected sat INSIDE its declared epsilon") {
-        const Dictionary judged = pool->judge_state(
+        const predict::Judged judged = pool->judge_state(
             slot,
             4,
             int64_t(Domain::OUT_OF_DOMAIN),
             int64_t(ROW_ACKED),
-            Dictionary(),
-            Dictionary(),
+            predict::StateRow(),
+            predict::StateRow(),
             callable_mp_static(&seam_corrected)
         );
-        CHECK(bool(judged[StringName("corrected")]));
-        NETW_CHECK_CLOSE(
-            double(judged[StringName("divergence")]),
-            0.25,
-            0.0001
-        );
+        CHECK(judged.corrected);
+        NETW_CHECK_CLOSE(judged.divergence, 0.25, 0.0001);
     }
 }
 
@@ -116,18 +112,18 @@ TEST_CASE(
     NetwPredictionEngine *const pool = &held_pool;
     const int64_t slot = seated(held_pool, 0.5);
 
-    const Dictionary judged = pool->judge_state(
+    const predict::Judged judged = pool->judge_state(
         slot,
         4,
         int64_t(Domain::IN_DOMAIN),
         int64_t(ROW_ACKED),
-        Dictionary(),
-        Dictionary(),
+        predict::StateRow(),
+        predict::StateRow(),
         callable_mp_static(&seam_agreed)
     );
-    CHECK_FALSE(bool(judged[StringName("corrected")]));
-    NETW_CHECK_EQ(int(judged[StringName("meter")]), 0);
-    NETW_CHECK_CLOSE(double(judged[StringName("divergence")]), 12.0, 0.0001);
+    CHECK_FALSE(judged.corrected);
+    NETW_CHECK_EQ(judged.meter, 0);
+    NETW_CHECK_CLOSE(judged.divergence, 12.0, 0.0001);
 }
 
 } // namespace TestNetwPredictMeterLaws

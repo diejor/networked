@@ -14,12 +14,12 @@
 #include "netw/api/entity.hpp"
 #include "netw/api/interpolate.hpp"
 #include "netw/api/netw_multiplayer.hpp"
-#include "netw/api/property_set.hpp"
 #include "netw/api/tests.hpp"
 #include "netw/display/channel.hpp"
 #include "netw/display/decl.hpp"
 #include "netw/display/history.hpp"
 #include "netw/display/runtime.hpp"
+#include "netw/repl/property_set.hpp"
 #include "netw/sim/row.hpp"
 
 namespace TestNetwDisplayProxyBodyLaws {
@@ -28,7 +28,7 @@ using namespace godot;
 using netw::NetwEntity;
 using netw::NetwMultiplayer;
 using netw::NetwNativeTests;
-using netw::NetwPropertySet;
+using netw::repl::PropertySet;
 using netw_test::FlowPair;
 using netw_test::law_broken;
 using netw_test::law_held;
@@ -95,7 +95,7 @@ public:
                 pair.authored,
                 StringName("position"),
                 Vector2(100.0 + 10.0 * step, 0.0),
-                NetwPropertySet::RECORD_STATE,
+                PropertySet::RECORD_STATE,
                 tick
             );
             rig.step_ticks(1);
@@ -148,14 +148,14 @@ LawVerdict law_proxy_world(const WriterRun &p_run) {
     return law_held();
 }
 
-LawVerdict law_one_writer(const WriterRun &p_run) {
+LawVerdict law_pushed(const WriterRun &p_run) {
     const WriterEvidence &seen = p_run.evidence();
-    if (!Math::is_equal_approx(seen.after_rows_x, seen.held_x)) {
+    if (!Math::is_equal_approx(seen.after_rows_x, seen.newest_row_x)) {
         return law_broken(
-            "rows moved the frozen body from %.1f to %.1f while the display "
-            "was held",
-            seen.held_x,
-            seen.after_rows_x
+            "the frozen body holds %.1f while the display was held, not the "
+            "newest received row at %.1f",
+            seen.after_rows_x,
+            seen.newest_row_x
         );
     }
     return law_held();
@@ -183,11 +183,11 @@ const WriterLaw L_PROXY_WORLD = {
     &law_proxy_world,
 };
 
-const WriterLaw L_ONE_WRITER = {
-    "one-writer",
-    "an interpolated column on a proxy body feeds history only, so no row "
-    "arrival writes the body",
-    &law_one_writer,
+const WriterLaw L_PUSHED = {
+    "pushed",
+    "every received row reaches the proxy body through the push, so the "
+    "node holds the newest received value whatever the display draws",
+    &law_pushed,
 };
 
 const WriterLaw L_DRAWN_ON_BODY = {
@@ -197,11 +197,11 @@ const WriterLaw L_DRAWN_ON_BODY = {
     &law_drawn_on_body,
 };
 
-const WriterLaw WRITER_LAWS[] = {L_PROXY_WORLD, L_ONE_WRITER, L_DRAWN_ON_BODY};
+const WriterLaw WRITER_LAWS[] = {L_PROXY_WORLD, L_PUSHED, L_DRAWN_ON_BODY};
 
 TEST_CASE(
-    "[Networked][Display][SceneTree] a proxy rigid body has one writer per "
-    "interpolated column, and it is the pump"
+    "[Networked][Display][SceneTree] a proxy rigid body holds the newest "
+    "received row, and the pump draws the interpolated column onto it"
 ) {
     const WriterScenario scenario = a_proxy_rigid_body();
     const WriterRun run(scenario);

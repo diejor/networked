@@ -251,7 +251,7 @@ bool write(
     const Array &p_quantizers,
     const Array &p_types
 ) {
-    NETW_ZONE_NC("call args write", colors::CODEC);
+    NETW_ZONE_LEAF("Call args write", colors::CODEC, profile::SUBSYSTEM_WIRE);
     NETW_ZONE_VALUE(int64_t(p_slots.size()));
     uint64_t count = uint64_t(p_slots.size());
     if (!p_stream.varuint(count, COUNT_BYTES)) {
@@ -294,7 +294,7 @@ bool read(
     const Array &p_types,
     LocalVector<Slot> &r_slots
 ) {
-    NETW_ZONE_NC("call args read", colors::CODEC);
+    NETW_ZONE_LEAF("Call args read", colors::CODEC, profile::SUBSYSTEM_WIRE);
     uint64_t count = 0;
     if (!p_stream.varuint(count, COUNT_BYTES)) {
         return false;
@@ -344,11 +344,10 @@ bool values_write(
     for (int at = 0; at < p_values.size(); ++at) {
         const Variant value = p_values[at];
         if (value.get_type() == Variant::OBJECT) {
-            NETW_ERROR(
+            NETW_ERROR_ONCE(
                 sys::CODEC,
-                "a value row carries no Object, so value %d is dropped. A "
-                "node argument is addressed by the call argument path, not "
-                "by this carrier.",
+                "Value %d is an Object, which a synced value cannot carry, so "
+                "null was sent. Sync the object's data or its node path.",
                 int(at)
             );
             slots.push_back(of_value(Variant()));

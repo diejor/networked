@@ -128,10 +128,11 @@ Dictionary Leave::resolve(
             ? p_decl->custom_leave_for(layer_id)
             : Callable();
         if (!callback.is_valid()) {
-            NETW_ERROR(
+            NETW_ERROR_ONCE(
                 sys::INTEREST,
-                "Layer '%s' declares a CUSTOM leave whose callback is gone, "
-                "so the copy is hidden.",
+                "The CUSTOM leave callback of layer '%s' was freed, so the "
+                "copy is hidden. Keep the callback's object alive while the "
+                "layer uses it.",
                 godot::String(layer_id)
             );
             return verdict(true, Array());

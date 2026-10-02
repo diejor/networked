@@ -77,6 +77,11 @@ String line_for(Level level, const char *system, const String &message) {
 
 void profile_line(Level level, const String &line) {
 #if defined(NETW_PROFILING)
+#if defined(NETW_GDEXTENSION)
+    if (is_fault(level)) {
+        return;
+    }
+#endif
     const CharString utf8 = line.utf8();
     NETW_PROFILE_MESSAGE(utf8.get_data(), utf8.length(), color_for(level));
 #else

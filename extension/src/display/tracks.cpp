@@ -4,52 +4,67 @@ using namespace godot;
 
 namespace netw::display {
 
+int Tracks::first_named(const StringName &name) const {
+    for (uint32_t at = 0; at < names.size(); ++at) {
+        if (names[at] == name) {
+            return int(at);
+        }
+    }
+    return -1;
+}
+
+int Tracks::named_count(const StringName &name) const {
+    int count = 0;
+    for (const StringName &held : names) {
+        count += held == name ? 1 : 0;
+    }
+    return count;
+}
+
 int Tracks::declare(const StringName &key, const StringName &name) {
-    const HashMap<StringName, int32_t>::ConstIterator found
-        = key_index.find(key);
-    if (found != key_index.end()) {
-        return found->value;
+    const int found = by_key(key);
+    if (found >= 0) {
+        return found;
     }
-    const int32_t channel = channels;
-    channels += 1;
-    key_index[key] = channel;
-    if (name_index.has(name)) {
-        ambiguous.insert(name);
-    } else {
-        name_index[name] = channel;
-    }
-    return channel;
+    keys.push_back(key);
+    names.push_back(name);
+    return int(keys.size()) - 1;
 }
 
 int Tracks::by_key(const StringName &key) const {
-    const HashMap<StringName, int32_t>::ConstIterator found
-        = key_index.find(key);
-    return found != key_index.end() ? found->value : -1;
+    for (uint32_t at = 0; at < keys.size(); ++at) {
+        if (keys[at] == key) {
+            return int(at);
+        }
+    }
+    return -1;
 }
 
 int Tracks::by_name(const StringName &name) const {
-    const HashMap<StringName, int32_t>::ConstIterator found
-        = name_index.find(name);
-    return found != name_index.end() ? found->value : -1;
+    return first_named(name);
 }
 
 bool Tracks::is_ambiguous(const StringName &name) const {
-    return ambiguous.has(name);
+    return named_count(name) > 1;
 }
 
 int Tracks::ambiguous_count() const {
-    return int(ambiguous.size());
+    int count = 0;
+    for (uint32_t at = 0; at < names.size(); ++at) {
+        if (first_named(names[at]) == int(at) && named_count(names[at]) > 1) {
+            count += 1;
+        }
+    }
+    return count;
 }
 
 int Tracks::size() const {
-    return int(channels);
+    return int(keys.size());
 }
 
 void Tracks::clear() {
-    key_index.clear();
-    name_index.clear();
-    ambiguous.clear();
-    channels = 0;
+    keys.reset();
+    names.reset();
 }
 
 } // namespace netw::display

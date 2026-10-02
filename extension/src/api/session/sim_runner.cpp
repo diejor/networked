@@ -27,13 +27,24 @@ void NetwMultiplayer::sim_run(
     double p_delta,
     int64_t p_tick
 ) {
+    NETW_ZONE_NC("Entity steps", colors::PREDICTION);
     sim_select_unpredicted(p_tick, p_phase == sim::Schedule::TICK);
     sim_rows.stepping(sim_stepping);
+    NETW_ZONE_VALUE(sim_stepping.size());
 #if defined(NETW_TESTS)
     idle_work.runs += 1;
     idle_work.walked += sim_stepping.size();
 #endif
     for (const RID &entity : sim_stepping) {
+        NETW_ZONE_LEAF_F(
+            "Entity step",
+            colors::PREDICTION,
+            profile::SUBSYSTEM_ENTITY,
+            "entity %lld",
+            liveness_core.is_valid()
+                ? static_cast<long long>(liveness_core->route_of(entity))
+                : 0LL
+        );
         sim_step(entity, p_phase, p_delta, p_tick);
     }
 }
@@ -47,9 +58,9 @@ sim::Schedule NetwMultiplayer::sim_schedule_of(sim::Row &r_row, Node *p_owner) {
         r_row.stepped_refused = true;
         NETW_ERROR(
             sys::PREDICTION,
-            "%s declares SCHEDULE_STEPPED without prediction, and only a "
-            "predicted member drives a stepped space, so it steps as "
-            "SCHEDULE_FRAME",
+            "'%s' uses NetwSimulationHandle.SCHEDULE_STEPPED without "
+            "prediction, so it runs SCHEDULE_FRAME. Declare prediction on it, "
+            "or choose another schedule.",
             String(p_owner->get_name()).utf8().get_data()
         );
     }
@@ -71,7 +82,7 @@ void NetwMultiplayer::sim_step(
         return;
     }
     Node *owner = entity->get_owner();
-    sim::Row *row = sim_rows.find(p_entity);
+    sim::Row *row = sim_rows.peek(p_entity);
     if (row == nullptr || owner == nullptr || !owner->is_inside_tree()) {
         return;
     }

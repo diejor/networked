@@ -1,5 +1,7 @@
 #include "support/netw_test.h"
 
+#include "support/send_rig.h"
+
 #include <cstdint>
 
 #include "godot/local_vector.hpp"
@@ -15,10 +17,10 @@ using namespace godot;
 namespace TestRowStreamGate {
 
 using netw::SchemaCore;
-using netw::repl::RowOffer;
 using netw::repl::RowVerdict;
 using netw::repl::SessionResult;
-using netw::repl::SessionSend;
+using netw_test::RowOffer;
+using netw_test::SessionSend;
 using netw::table::SchemaRecord;
 using netw::wire::ChannelDecl;
 using netw::wire::ControlRecord;
@@ -71,7 +73,7 @@ RowOffer offer(int64_t p_value) {
     out.channel = CHANNEL;
     out.schema = &body();
     out.life = EPOCH;
-    out.values.push_back(p_value);
+    netw_test::offer_value(out, p_value);
     out.recipients.push_back(PEER);
     return out;
 }
@@ -133,8 +135,8 @@ TEST_CASE(
     REQUIRE(asked_once);
 
     const uint64_t token = next_stream_token();
-    send.writer_book().ready(PEER, asked[0].request, token);
-    NETW_CHECK_EQ(send.writer_book().token_of(PEER, volatile_lane()), token);
+    send.stream_ready(PEER, asked[0].request, token);
+    NETW_CHECK_EQ(send.token_of(PEER, volatile_lane()), token);
 
     const SessionResult after = send.run(registry(), one(10), WIDE, 0);
     NETW_CHECK_EQ(int(after.sends.size()), 1);
@@ -169,12 +171,12 @@ TEST_CASE(
     const bool asked_once = asked.size() == 1;
     REQUIRE(asked_once);
     const uint64_t request = asked[0].request;
-    send.writer_book().ready(PEER, request, next_stream_token());
+    send.stream_ready(PEER, request, next_stream_token());
     NETW_CHECK_EQ(int(send.run(registry(), one(11), WIDE, 0).sends.size()), 1);
 
-    const uint64_t token = send.writer_book().token_of(PEER, volatile_lane());
-    CHECK(send.writer_book().reset(PEER, request, token));
-    NETW_CHECK_EQ(send.writer_book().token_of(PEER, volatile_lane()), 0);
+    const uint64_t token = send.token_of(PEER, volatile_lane());
+    CHECK(send.stream_reset(PEER, request, token));
+    NETW_CHECK_EQ(send.token_of(PEER, volatile_lane()), 0);
 
     const SessionResult barred = send.run(registry(), one(12), WIDE, 0);
     NETW_CHECK_EQ(int(barred.sends.size()), 0);

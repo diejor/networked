@@ -8,13 +8,12 @@
 #include "godot/ref_counted.hpp"
 #include "godot/variant.hpp"
 #include "netw/api/entity.hpp"
-#include "netw/api/property_set_binding.hpp"
-#include "netw/api/ring_buffer.hpp"
 #include "netw/display/channel.hpp"
 #include "netw/display/decl.hpp"
 #include "netw/display/playhead.hpp"
 #include "netw/display/tracks.hpp"
 #include "netw/object_port.hpp"
+#include "netw/repl/property_binding.hpp"
 
 namespace netw::display {
 
@@ -32,7 +31,7 @@ private:
     int64_t role = 0;
     int64_t pumped = 0;
     bool rebuild_queued = false;
-    godot::Ref<NetwPropertySetBinding> authoring_binding;
+    bool authored_by_state = false;
     int64_t trace_frame = 0;
     godot::Array entity_hooks;
     godot::Array chase_hooks;
@@ -41,10 +40,21 @@ private:
     bool warned_self_feedback = false;
     double display_offset_limit = 0.0;
     godot::LocalVector<godot::ObjectID> bodies;
+    bool pump_listed = false;
+    bool record_listed = false;
 
 public:
     Runtime();
     ~Runtime();
+
+    int64_t held_bytes() const {
+        int64_t bytes = int64_t(sizeof(Runtime)) + held::vector(states)
+            + tracks.held_bytes() + held::vector(bodies);
+        for (const Channel *channel : states) {
+            bytes += channel->held_bytes();
+        }
+        return bytes;
+    }
 
     void bind(NetwEntity *p_entity, godot::Node *p_owner);
     godot::Ref<NetwEntity> entity();
@@ -58,15 +68,18 @@ public:
     void clear_channels();
 
     Channel *channel_named(const godot::StringName &p_name) const;
+    Channel *channel_following(
+        uint64_t p_owner,
+        uint32_t p_lane,
+        uint32_t p_column
+    ) const;
     void snap_named(
         const godot::StringName &p_name,
         const godot::Variant &p_value
     );
     void reset(int p_display_offset, int p_recommended_display_offset);
     int64_t authoring_tick() const;
-    godot::Ref<NetwRingBuffer> buffer_of(
-        const godot::StringName &p_track
-    ) const;
+    const History *history_of(const godot::StringName &p_track) const;
     godot::Variant track_stat(
         const godot::StringName &p_track,
         const godot::StringName &p_stat
@@ -128,13 +141,11 @@ public:
         return rebuild_queued;
     }
 
-    void set_authoring_binding(
-        const godot::Ref<NetwPropertySetBinding> &p_binding
-    ) {
-        authoring_binding = p_binding;
+    void set_authored_by_state(bool p_authored) {
+        authored_by_state = p_authored;
     }
-    godot::Ref<NetwPropertySetBinding> get_authoring_binding() const {
-        return authoring_binding;
+    bool get_authored_by_state() const {
+        return authored_by_state;
     }
 
     void set_trace_frame(int64_t p_frame) {
@@ -184,6 +195,20 @@ public:
     }
     double get_display_offset_limit() const {
         return display_offset_limit;
+    }
+
+    void set_pump_listed(bool p_listed) {
+        pump_listed = p_listed;
+    }
+    bool get_pump_listed() const {
+        return pump_listed;
+    }
+
+    void set_record_listed(bool p_listed) {
+        record_listed = p_listed;
+    }
+    bool get_record_listed() const {
+        return record_listed;
     }
 
     void set_bodies(const godot::LocalVector<godot::ObjectID> &p_bodies) {

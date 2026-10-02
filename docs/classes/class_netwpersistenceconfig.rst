@@ -19,16 +19,15 @@ Which record of which :ref:`NetwDatabase<class_NetwDatabase>` an entity loads an
 Description
 -----------
 
-Each column of :ref:`schema()<class_NetwPersistenceConfig_method_schema>` is filled by one property marked with :ref:`NetwPropertyConfig.persisted()<class_NetwPropertyConfig_method_persisted>`. A column with no property refuses the whole entity. Configure it from :godot:`Node._ready() <Node#class_Node_private_method__ready>`, where the node is in the tree.
+The entity's record is one row of the table :ref:`table()<class_NetwPersistenceConfig_method_table>` names, stored under the id :ref:`record_id()<class_NetwPersistenceConfig_method_record_id>` answers. Its columns are the properties marked with :ref:`NetwPropertyConfig.persisted()<class_NetwPropertyConfig_method_persisted>` on the entity and on its child nodes, each under its saved column name. Configure it from :godot:`Node._ready() <Node#class_Node_private_method__ready>`, where the node is in the tree.
 
 ::
 
     func _ready() -> void:
-        Netw.configure_property(self, &"position", false) \
-                .persisted(game.save_schema.column_ref(0))
+        Netw.configure_property(self, &"position", false).persisted(&"where")
         Netw.configure_persistence(self) \
                 .database(&"saves") \
-                .schema(game.save_schema) \
+                .table(&"players") \
                 .record_id(account_name) \
                 .interval(5.0)
 
@@ -36,6 +35,25 @@ Each column of :ref:`schema()<class_NetwPersistenceConfig_method_schema>` is fil
         return entity.entity_id
 
 \ Use a :ref:`record_id()<class_NetwPersistenceConfig_method_record_id>` that stays the same between sessions. A peer id changes every time the player joins. The record is reached through :ref:`NetwEntity.persistence<class_NetwEntity_property_persistence>`.
+
+\ **Record layout**\ 
+
+A column's type is the declared type of its property, so an untyped property stores any :godot:`Variant` a save can hold. A stored record whose columns, names or types differ from the declared ones loads only through a :ref:`migrate()<class_NetwPersistenceConfig_method_migrate>` step. Renaming a property while keeping its saved column name needs no migration.
+
+::
+
+    func _ready() -> void:
+        Netw.configure_property(self, &"coins", false).persisted(&"gold")
+        Netw.configure_persistence(self) \
+                .database(&"saves") \
+                .table(&"players") \
+                .storage_version(2) \
+                .migrate(1, add_gold) \
+                .record_id(account_name)
+
+    func add_gold(row: Dictionary) -> Dictionary:
+        row[&"gold"] = 0
+        return row
 
 .. rst-class:: classref-reftable-group
 
@@ -45,17 +63,21 @@ Methods
 .. table::
    :widths: auto
 
-   +-----------------------------------------------------------+--------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwPersistenceConfig<class_NetwPersistenceConfig>` | :ref:`database<class_NetwPersistenceConfig_method_database>`\ (\ name\: :godot:`StringName`\ )               |
-   +-----------------------------------------------------------+--------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwPersistenceConfig<class_NetwPersistenceConfig>` | :ref:`interval<class_NetwPersistenceConfig_method_interval>`\ (\ seconds\: :godot:`float`\ )                 |
-   +-----------------------------------------------------------+--------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwPersistenceConfig<class_NetwPersistenceConfig>` | :ref:`load_on_spawn<class_NetwPersistenceConfig_method_load_on_spawn>`\ (\ enabled\: :godot:`bool` = true\ ) |
-   +-----------------------------------------------------------+--------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwPersistenceConfig<class_NetwPersistenceConfig>` | :ref:`record_id<class_NetwPersistenceConfig_method_record_id>`\ (\ provider\: :godot:`Callable`\ )           |
-   +-----------------------------------------------------------+--------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwPersistenceConfig<class_NetwPersistenceConfig>` | :ref:`schema<class_NetwPersistenceConfig_method_schema>`\ (\ schema\: :ref:`NetwSchema<class_NetwSchema>`\ ) |
-   +-----------------------------------------------------------+--------------------------------------------------------------------------------------------------------------+
+   +-----------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwPersistenceConfig<class_NetwPersistenceConfig>` | :ref:`database<class_NetwPersistenceConfig_method_database>`\ (\ name\: :godot:`StringName`\ )                          |
+   +-----------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwPersistenceConfig<class_NetwPersistenceConfig>` | :ref:`interval<class_NetwPersistenceConfig_method_interval>`\ (\ seconds\: :godot:`float`\ )                            |
+   +-----------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwPersistenceConfig<class_NetwPersistenceConfig>` | :ref:`load_on_spawn<class_NetwPersistenceConfig_method_load_on_spawn>`\ (\ enabled\: :godot:`bool` = true\ )            |
+   +-----------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwPersistenceConfig<class_NetwPersistenceConfig>` | :ref:`migrate<class_NetwPersistenceConfig_method_migrate>`\ (\ from_version\: :godot:`int`, step\: :godot:`Callable`\ ) |
+   +-----------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwPersistenceConfig<class_NetwPersistenceConfig>` | :ref:`record_id<class_NetwPersistenceConfig_method_record_id>`\ (\ provider\: :godot:`Callable`\ )                      |
+   +-----------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwPersistenceConfig<class_NetwPersistenceConfig>` | :ref:`storage_version<class_NetwPersistenceConfig_method_storage_version>`\ (\ version\: :godot:`int`\ )                |
+   +-----------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwPersistenceConfig<class_NetwPersistenceConfig>` | :ref:`table<class_NetwPersistenceConfig_method_table>`\ (\ name\: :godot:`StringName`\ )                                |
+   +-----------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------+
 
 .. rst-class:: classref-section-separator
 
@@ -104,25 +126,49 @@ Whether the server loads the stored record when the entity's node is ready. Clie
 
 ----
 
+.. _class_NetwPersistenceConfig_method_migrate:
+
+.. rst-class:: classref-method
+
+:ref:`NetwPersistenceConfig<class_NetwPersistenceConfig>` **migrate**\ (\ from_version\: :godot:`int`, step\: :godot:`Callable`\ ) :ref:`🔗<class_NetwPersistenceConfig_method_migrate>`
+
+Adds the step that turns a record stored at ``from_version`` into the next version. ``step`` receives the stored row as a :godot:`Dictionary` keyed by saved column name and returns the upgraded one. A load runs every step between the stored version and :ref:`storage_version()<class_NetwPersistenceConfig_method_storage_version>`.
+
+.. rst-class:: classref-item-separator
+
+----
+
 .. _class_NetwPersistenceConfig_method_record_id:
 
 .. rst-class:: classref-method
 
 :ref:`NetwPersistenceConfig<class_NetwPersistenceConfig>` **record_id**\ (\ provider\: :godot:`Callable`\ ) :ref:`🔗<class_NetwPersistenceConfig_method_record_id>`
 
-Sets the function that returns the id this entity's record is stored under. It is called once and must return a nonempty :godot:`StringName`.
+Sets the function that returns the id this entity's record is stored under. It is called once, when the entity's record is compiled, and must return a nonempty :godot:`StringName`.
 
 .. rst-class:: classref-item-separator
 
 ----
 
-.. _class_NetwPersistenceConfig_method_schema:
+.. _class_NetwPersistenceConfig_method_storage_version:
 
 .. rst-class:: classref-method
 
-:ref:`NetwPersistenceConfig<class_NetwPersistenceConfig>` **schema**\ (\ schema\: :ref:`NetwSchema<class_NetwSchema>`\ ) :ref:`🔗<class_NetwPersistenceConfig_method_schema>`
+:ref:`NetwPersistenceConfig<class_NetwPersistenceConfig>` **storage_version**\ (\ version\: :godot:`int`\ ) :ref:`🔗<class_NetwPersistenceConfig_method_storage_version>`
 
-Sets the :ref:`NetwSchema<class_NetwSchema>` of this entity's record. Every :ref:`NetwColumnRef<class_NetwColumnRef>` passed to :ref:`NetwPropertyConfig.persisted()<class_NetwPropertyConfig_method_persisted>` must come from this schema.
+Sets the version this entity's record is saved at, starting from ``1``. Raise it whenever a saved column is added, removed, renamed or retyped, and add a :ref:`migrate()<class_NetwPersistenceConfig_method_migrate>` step from the previous version.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NetwPersistenceConfig_method_table:
+
+.. rst-class:: classref-method
+
+:ref:`NetwPersistenceConfig<class_NetwPersistenceConfig>` **table**\ (\ name\: :godot:`StringName`\ ) :ref:`🔗<class_NetwPersistenceConfig_method_table>`
+
+Names the table this entity's record is stored in. Every entity saving into one table declares the same saved columns, types and :ref:`storage_version()<class_NetwPersistenceConfig_method_storage_version>`.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

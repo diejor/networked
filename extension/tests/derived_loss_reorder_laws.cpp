@@ -14,7 +14,7 @@
 namespace TestDerivedLossReorderLaws {
 
 using namespace godot;
-using netw::NetwPropertySet;
+using netw::repl::PropertySet;
 using netw_test::authored_value;
 using netw_test::FlowCapture;
 using netw_test::FlowPair;
@@ -35,8 +35,12 @@ const char *SCORE_BODY = "res://tests/support/chains/state_leaf.gd";
 
 FlowCapture CAPTURE;
 
-void on_state_applied(Dictionary p_header) {
-    CAPTURE.note(p_header, StringName("position"));
+void on_state_applied(
+    void *p_context,
+    const netw::store::Table &p_table,
+    uint32_t p_row
+) {
+    CAPTURE.note(p_table, p_row, StringName("position"));
 }
 
 enum Plant {
@@ -153,7 +157,7 @@ class LossRun {
                 p_pair.authored,
                 StringName("position"),
                 authored_value(tick),
-                NetwPropertySet::RECORD_STATE,
+                PropertySet::RECORD_STATE,
                 tick
             );
             p_rig.step_ticks(1);
@@ -234,17 +238,17 @@ public:
                 ->unreliable();
         }
 
-        const Ref<netw::NetwPropertySetBinding> mirror_state
+        const netw::repl::PropertyBindingPtr mirror_state
             = netw_test::binding_of(
                 pair.mirror(0),
-                NetwPropertySet::RECORD_STATE
+                PropertySet::RECORD_STATE
             );
         REQUIRE_MESSAGE(
-            mirror_state.is_valid(),
+            mirror_state != nullptr,
             "the mirror holds no state set"
         );
         CAPTURE.reset();
-        mirror_state->on_applied = callable_mp_static(&on_state_applied);
+        mirror_state->on_landed = &on_state_applied;
         impair(rig);
 
         if (p_scenario.property_door) {
@@ -253,7 +257,7 @@ public:
             drive_state(rig, pair);
         }
 
-        mirror_state->on_applied = Callable();
+        mirror_state->on_landed = nullptr;
         seen.applied = CAPTURE.applied;
         seen.regressions = CAPTURE.regressions;
         seen.repeats = CAPTURE.repeats;

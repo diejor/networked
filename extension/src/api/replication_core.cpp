@@ -10,13 +10,16 @@
 #include "netw/log.hpp"
 #include "netw/session/frames.hpp"
 #include "netw/spawn/record.hpp"
+#include "netw/store/array.hpp"
 #include "netw/sync_kernel.hpp"
-#include "netw/table/core.hpp"
 #include "netw/wire/frame.hpp"
 
 using namespace godot;
 
 namespace netw {
+
+using repl::PropertyBindingPtr;
+using repl::PropertySet;
 
 namespace {
 
@@ -86,14 +89,6 @@ Object *ReplicationCore::gate_seam(const StringName &p_seam) const {
         return nullptr;
     }
     return seam;
-}
-
-Object *ReplicationCore::table_core() const {
-    NetwMultiplayer *plane = core();
-    if (plane == nullptr) {
-        return nullptr;
-    }
-    return plane->get_table_core().ptr();
 }
 
 void ReplicationCore::install(Object *p_api) {
@@ -245,14 +240,14 @@ Error ReplicationCore::settle_channels() {
     return channels != nullptr ? channels->settle_protocol() : ERR_UNCONFIGURED;
 }
 
-Ref<NetwPropertySetBinding> ReplicationCore::derived_binding(
+PropertyBindingPtr ReplicationCore::derived_binding(
     Node *p_node,
     int64_t p_record
 ) {
     return sync_pipeline.derived_binding(p_node, p_record);
 }
 
-TypedArray<NetwPropertySetBinding> ReplicationCore::derived_group(
+LocalVector<PropertyBindingPtr> ReplicationCore::derived_group(
     int64_t p_route
 ) {
     return sync_pipeline.derived_group(p_route);
@@ -370,20 +365,19 @@ bool ReplicationCore::lanes_stream_to(
         return true;
     }
     const int64_t live = plane->liveness_route_of(p_entity.ptr());
-    const TypedArray<NetwPropertySetBinding> group
+    const LocalVector<PropertyBindingPtr> group
         = derived_group(live > 0 ? live : p_entity->get_route());
-    for (int at = 0; at < group.size(); ++at) {
-        const Ref<NetwPropertySetBinding> binding = group[at];
-        if (binding.is_null() || binding->get_set().is_null()
+    for (const PropertyBindingPtr &binding : group) {
+        if (binding == nullptr || binding->get_set() == nullptr
             || binding->get_set()->get_record()
-                != NetwPropertySet::RECORD_BROADCAST) {
+                != PropertySet::RECORD_BROADCAST) {
             continue;
         }
         const repl::SetRow *row = sync_model.row_for(
             binding->get_route(),
             int64_t(NetwSyncModel::KIND_DERIVED),
             binding->get_order_key(),
-            NetwPropertySet::RECORD_BROADCAST
+            PropertySet::RECORD_BROADCAST
         );
         if (row == nullptr) {
             continue;
@@ -395,8 +389,7 @@ bool ReplicationCore::lanes_stream_to(
             lane.route = binding->get_route();
             lane.ordinal = uint8_t(row->ordinal);
             lane.family = wire::StreamFamily(family);
-            streams = streams
-                || send->writer_book().token_of(int(p_peer_id), lane) != 0;
+            streams = streams || send->token_of(p_peer_id, lane) != 0;
         }
         if (!streams) {
             return false;
@@ -1053,11 +1046,15 @@ Node *ReplicationCore::resolve_comp_node(
 
 void ReplicationCore::on_clock_tick(int64_t p_tick) {
     expire_control(p_tick);
+    send_table_removals(p_tick);
     sync_pipeline.pump(p_tick);
     send_claim_images(p_tick);
     sync_compat.pump();
     spawn_pipeline.retry_adopt_parked();
-    pump_tables(p_tick);
+    {
+        NETW_ZONE_NC("Table pump", colors::TABLE);
+        pump_tables(p_tick);
+    }
     flush_all_buffers();
     NetwMultiplayer *plane = core();
     if (plane != nullptr) {
@@ -1066,18 +1063,10 @@ void ReplicationCore::on_clock_tick(int64_t p_tick) {
 }
 
 void ReplicationCore::pump_tables(int64_t p_tick) {
+    (void)p_tick;
     NetwMultiplayer *plane = core();
     Object *shell = api();
-#if defined(NETW_MODULE)
-    Object *table_object = table_core();
-    netw::table::Core *table = nullptr;
-    if (table_object != nullptr) {
-        table = static_cast<netw::table::Core *>(table_object);
-    }
-#else
-    netw::table::Core *table = Object::cast_to<netw::table::Core>(table_core());
-#endif
-    if (plane == nullptr || shell == nullptr || table == nullptr) {
+    if (plane == nullptr || shell == nullptr) {
         return;
     }
     plane->table_announce_intake();
@@ -1086,30 +1075,45 @@ void ReplicationCore::pump_tables(int64_t p_tick) {
         || plane->session_get_inner()->get_multiplayer_peer().is_null()) {
         return;
     }
+    store::Arrays &arrays = plane->store_arrays();
+    const TypedArray<RID> dirty = arrays.dirty_tables();
+    for (int at = 0; at < dirty.size(); ++at) {
+        arrays.clear_dirty(dirty[at]);
+        plane->table_announce(dirty[at]);
+    }
+}
+
+void ReplicationCore::send_table_removals(int64_t p_tick) {
+    NetwMultiplayer *plane = core();
+    if (plane == nullptr || !plane->table_publishes()
+        || plane->session_get_inner().is_null()
+        || plane->session_get_inner()->get_multiplayer_peer().is_null()) {
+        return;
+    }
+    store::Arrays &arrays = plane->store_arrays();
     const int64_t budget = plane->datagram_budget();
-    const PackedInt64Array retired = table->take_lifecycle_removals();
+    const PackedInt64Array retired = arrays.take_lifecycle_removals();
     if (!retired.is_empty()) {
         broadcast_table_frames(
-            netw::table::Core::encode_lifecycle(retired, p_tick, budget),
+            store::Arrays::encode_lifecycle(retired, p_tick, budget),
             true
         );
     }
-    const TypedArray<RID> dirty = table->dirty_tables();
+    const TypedArray<RID> dirty = arrays.dirty_tables();
+    if (dirty.is_empty()) {
+        return;
+    }
+    const PackedInt32Array peers = gd::api_peer_ids(plane->session_get_inner());
+    arrays.forget_peers_except(peers);
     for (int at = 0; at < dirty.size(); ++at) {
         const RID id = dirty[at];
-        const PackedInt64Array gone = table->take_pending_removals(id);
+        const PackedInt64Array gone = arrays.take_pending_removals(id);
         if (!gone.is_empty()) {
             broadcast_table_frames(
-                table->encode_removal(id, gone, p_tick, budget),
+                arrays.encode_removal(id, gone, p_tick, budget),
                 true
             );
         }
-        broadcast_table_frames(
-            table->encode_frames(id, budget, false),
-            table->is_reliable(id)
-        );
-        table->clear_dirty(id);
-        plane->table_announce(id);
     }
 }
 
@@ -1143,16 +1147,7 @@ void ReplicationCore::handle_table_frame(
     int64_t p_sender
 ) {
     NetwMultiplayer *plane = core();
-#if defined(NETW_MODULE)
-    Object *table_object = table_core();
-    netw::table::Core *table = nullptr;
-    if (table_object != nullptr) {
-        table = static_cast<netw::table::Core *>(table_object);
-    }
-#else
-    netw::table::Core *table = Object::cast_to<netw::table::Core>(table_core());
-#endif
-    if (plane == nullptr || table == nullptr) {
+    if (plane == nullptr) {
         return;
     }
     Object *seam = gate_seam(StringName("_table_admit_frame"));
@@ -1167,38 +1162,32 @@ void ReplicationCore::handle_table_frame(
         != OK) {
         return;
     }
-    const Dictionary result = table->apply_frame(p_payload);
-    const PackedInt64Array bound = result[StringName("bound")];
-    if (!bound.is_empty()) {
-        plane->liveness_bind_routes_data(bound);
+    store::Arrays &arrays = plane->store_arrays();
+    const store::ArrayLanding landed = arrays.apply_frame(p_payload);
+    if (!landed.bound.is_empty()) {
+        plane->liveness_bind_routes_data(landed.bound);
     }
-    const PackedInt64Array retired = result[StringName("retired")];
-    if (!retired.is_empty()) {
-        plane->liveness_tombstone_routes_data(retired);
+    if (!landed.retired.is_empty()) {
+        plane->liveness_tombstone_routes_data(landed.retired);
     }
 }
 
 void ReplicationCore::replay_tables(int64_t p_peer_id) {
     NetwMultiplayer *plane = core();
-#if defined(NETW_MODULE)
-    Object *table_object = table_core();
-    netw::table::Core *table = nullptr;
-    if (table_object != nullptr) {
-        table = static_cast<netw::table::Core *>(table_object);
-    }
-#else
-    netw::table::Core *table = Object::cast_to<netw::table::Core>(table_core());
-#endif
-    if (plane == nullptr || table == nullptr || !plane->table_publishes()
+    if (plane == nullptr || !plane->table_publishes()
         || plane->session_get_inner().is_null()
         || plane->session_get_inner()->get_multiplayer_peer().is_null()) {
         return;
     }
+    store::Arrays &arrays = plane->store_arrays();
     const int64_t budget = plane->datagram_budget();
-    const TypedArray<RID> published = table->published_tables();
+    const TypedArray<RID> published = arrays.published_tables();
     for (int at = 0; at < published.size(); ++at) {
-        const TypedArray<PackedByteArray> frames
-            = table->encode_frames(published[at], budget, true);
+        const TypedArray<PackedByteArray> frames = arrays.encode_snapshot(
+            published[at],
+            int(p_peer_id),
+            budget
+        );
         for (int frame = 0; frame < frames.size(); ++frame) {
             send_to(
                 p_peer_id,

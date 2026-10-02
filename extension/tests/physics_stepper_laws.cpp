@@ -227,7 +227,7 @@ TEST_CASE(
     one.stepper->forget();
     rig.step_ticks(4);
 
-    NETW_CHECK_EQ(one.stepper->count_of(RecordingStepper::STEP), 4);
+    NETW_CHECK_EQ(one.stepper->advancing_steps(), 4);
     CHECK(one.stepper->every_step_is_snapshotted());
     one.release();
 }
@@ -359,8 +359,45 @@ TEST_CASE(
     one.stepper->forget();
     rig.step_ticks(4);
 
-    NETW_CHECK_EQ(one.stepper->count_of(RecordingStepper::STEP), 4);
+    NETW_CHECK_EQ(one.stepper->advancing_steps(), 4);
     NETW_CHECK_GE(pool->last_driven_input_tick_of(slot) - driven_before, 3);
+    one.release();
+}
+
+TEST_CASE(
+    "[Networked][Predict][Stepper] ST9 an INDEPENDENT replay of a stepped "
+    "slot restores its space at the replay basis and steps it once for every "
+    "tick it replays, so a replayed tick integrates the body it drove"
+) {
+    const Scenario scenario = independent_lane();
+    LoopbackRig rig(scenario.clients);
+    const ScenarioRun run = ScenarioRun::session(rig, scenario);
+    REQUIRE(run.regime_reached());
+
+    NetwMultiplayer *const predictor = rig.client(0);
+    REQUIRE(predictor != nullptr);
+    SteppedSpace one = step_one_space(predictor, 1);
+    const bool one_stands_in_it = one.members.size() == 1;
+    REQUIRE(one_stands_in_it);
+
+    rig.step_ticks(1);
+    one.stepper->forget();
+    rig.step_ticks(4);
+
+    const int restores = one.stepper->count_of(RecordingStepper::RESTORE);
+    NETW_CHECK_GT(restores, 0);
+    NETW_CHECK_GE(one.stepper->replayed_steps(), restores);
+    CHECK(one.stepper->every_step_is_snapshotted());
+    const godot::LocalVector<RecordingStepper::Row> &rows
+        = one.stepper->recorded();
+    for (uint32_t at = 0; at + 1 < rows.size(); ++at) {
+        if (rows[at].call != RecordingStepper::RESTORE) {
+            continue;
+        }
+        NETW_CHECK_EQ(int(rows[at + 1].call), int(RecordingStepper::STEP));
+        REQUIRE(at + 2 < rows.size());
+        NETW_CHECK_EQ(rows[at + 2].tick, rows[at].tick + 1);
+    }
     one.release();
 }
 

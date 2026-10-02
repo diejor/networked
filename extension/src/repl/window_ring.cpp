@@ -2,7 +2,6 @@
 
 #include "netw/colors.hpp"
 #include "netw/profile.hpp"
-#include "netw/wire/value_row.hpp"
 
 namespace netw::repl {
 
@@ -16,14 +15,8 @@ WindowRing WindowRing::open(uint32_t p_depth) {
 
 WindowRing WindowRing::declare(const SchemaRecord &p_schema, uint32_t p_depth) {
     WindowRing ring = open(p_depth);
-    ring.declaration = p_schema;
     ring.compiled = wire::WirePlan::compile(p_schema);
     return ring;
-}
-
-bool WindowRing::gather(const Array &p_values, wire::CodeRow &r_row) const {
-    NETW_ZONE_NC("Window ring gather", colors::WIRE);
-    return wire::gather_scalar_row(declaration, compiled, p_values, r_row);
 }
 
 bool WindowRing::record(int64_t p_tick, const wire::CodeRow &p_row) {

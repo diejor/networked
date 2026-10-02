@@ -88,7 +88,7 @@ int NetwSceneCore::dispatch(
         if (answer.get_type() == Variant::BOOL && bool(answer)) {
             NETW_TRACE(
                 sys::SCENE,
-                "observer of event %d retired itself",
+                "An observer of event %d asked to stop.",
                 event
             );
             continue;
@@ -160,7 +160,7 @@ void NetwSceneCore::scene_enter(
     row.owns_its_world = owns_its_world;
     live.push_back(row);
     named[stem] = scene;
-    NETW_TRACE(sys::SCENE, "scene %s entered as '%s'", scene, String(stem));
+    NETW_TRACE(sys::SCENE, "Scene %s entered as '%s'.", scene, String(stem));
 }
 
 void NetwSceneCore::scene_exit(const RID &scene) {
@@ -344,8 +344,8 @@ int NetwSceneCore::open_request() {
     if (next_request_id == INT32_MAX) {
         NETW_ERROR(
             sys::SCENE,
-            "this session has opened every scene request id it has, and "
-            "reusing one would let an old answer settle a new request"
+            "This session used up its scene request ids, so the request was "
+            "refused. Start a new session to make more requests."
         );
         pending_request_id = 0;
         return 0;
@@ -385,7 +385,7 @@ Ref<NetwPromise> NetwSceneCore::request_open(int64_t destination) {
     pending_request.instantiate();
     NETW_TRACE(
         sys::SCENE,
-        "opened scene request %d for peer %d",
+        "Opened scene request %d to peer %d.",
         pending_request_id,
         int(destination)
     );
@@ -404,7 +404,7 @@ bool NetwSceneCore::request_settle(int request_id, int code) {
     if (pending_request.is_null() || !is_current(request_id)) {
         NETW_TRACE(
             sys::SCENE,
-            "request %d answered while %d is in flight",
+            "Scene request %d was answered while request %d is open.",
             request_id,
             pending_request_id
         );
@@ -426,7 +426,8 @@ bool NetwSceneCore::receive_result_frame(
         && int64_t(sender) != pending_request_destination) {
         NETW_WARN(
             sys::SCENE,
-            "rejected a scene result from peer %d, because peer %d was asked",
+            "A scene result from peer %d was ignored, because the request "
+            "went to peer %d.",
             sender,
             int(pending_request_destination)
         );
@@ -445,7 +446,11 @@ String NetwSceneCore::verify_requested_path(const String &path) {
         && path.begins_with("res://");
     const String extension = bounded ? path.get_extension() : String();
     if (!bounded || (extension != "tscn" && extension != "scn")) {
-        NETW_TRACE(sys::SCENE, "refused a requested path: %s", path);
+        NETW_TRACE(
+            sys::SCENE,
+            "Refused requested path '%s', which is not a res:// scene.",
+            path
+        );
         return String();
     }
     return path;
@@ -465,7 +470,7 @@ Ref<PackedScene> NetwSceneCore::packed_at(const String &reference) {
     const Ref<PackedScene> packed
         = netw::gd::load_scene(netw::gd::ensure_path(reference));
     if (packed.is_null()) {
-        NETW_TRACE(sys::SCENE, "no packed scene at: %s", reference);
+        NETW_TRACE(sys::SCENE, "No packed scene loads from '%s'.", reference);
     }
     return packed;
 }
@@ -566,7 +571,7 @@ Error NetwSceneCore::decide_request(
     if (answered != Variant::INT && answered != Variant::FLOAT) {
         NETW_TRACE(
             sys::SCENE,
-            "a scene request handler answered type %d, which is no verdict",
+            "A scene request handler returned type %d, which is not an Error.",
             int(answered)
         );
         return ERR_INVALID_DATA;
@@ -575,7 +580,7 @@ Error NetwSceneCore::decide_request(
     if (refusal != OK) {
         NETW_TRACE(
             sys::SCENE,
-            "a scene request handler refused with %d",
+            "A scene request handler refused with error %d.",
             int(refusal)
         );
     }
@@ -618,7 +623,7 @@ bool NetwSceneCore::admission_park(const RID &p_scene, int64_t p_peer) {
         }
         NETW_TRACE(
             sys::SCENE,
-            "peer %d is parked against scene %s until its roster row lands",
+            "Peer %d waits for scene %s until it joins the roster.",
             int(p_peer),
             p_scene
         );
@@ -678,13 +683,12 @@ void NetwSceneCore::spawn_note(const StringName &p_stem) const {
         return;
     }
     const String subject = String(p_stem).is_empty()
-        ? String("another scene")
-        : vformat("scene '%s'", String(p_stem));
+        ? String("Another scene")
+        : vformat("Scene '%s'", String(p_stem));
     NETW_WARN(
         sys::SCENE,
-        "Activating %s while a shared-world scene is active. Both levels share "
-        "one physics space. Declare isolation with "
-        "Netw.configure_multiplayer_scene(self).isolated() if that is wrong.",
+        "%s now shares one physics space with the scene already active. Call "
+        "NetwSceneConfig.isolated on them if they should not touch.",
         subject
     );
 }

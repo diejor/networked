@@ -37,24 +37,23 @@ PackedByteArray encode_volatile(int64_t p_ordinal, const Array &p_values) {
     return row_write(head, p_values);
 }
 
-StagedWrites decode_volatile(
+bool decode_volatile(
     const PackedByteArray &p_payload,
-    const Array &p_keys
+    int64_t p_columns,
+    DecodedRow &r_row
 ) {
+    r_row = DecodedRow();
     VolatileHead head;
     Array values;
-    if (!row_read(p_payload, head, values) || head.flags != uint64_t(RESERVED)
-        || values.size() != p_keys.size()) {
-        return StagedWrites();
+    if (p_columns <= 0 || !row_read(p_payload, head, values)
+        || head.flags != uint64_t(RESERVED) || values.size() != p_columns) {
+        return false;
     }
-    StagedWrites staged;
-    staged.ordinal = int64_t(head.ordinal);
-    staged.keys = p_keys.duplicate();
-    staged.values = values;
-    for (int64_t i = 0; i < p_keys.size(); ++i) {
-        staged.row[p_keys[i]] = values[i];
-    }
-    return staged;
+    r_row.ordinal = int64_t(head.ordinal);
+    r_row.mask = p_columns >= 64 ? ~uint64_t(0)
+                                 : (uint64_t(1) << p_columns) - 1;
+    r_row.values = values;
+    return true;
 }
 
 PackedByteArray encode_retained(
@@ -68,32 +67,33 @@ PackedByteArray encode_retained(
     return row_write(head, p_values);
 }
 
-StagedWrites decode_retained(
+bool decode_retained(
     const PackedByteArray &p_payload,
-    const Array &p_keys
+    int64_t p_columns,
+    DecodedRow &r_row
 ) {
+    r_row = DecodedRow();
     RetainedHead head;
     Array values;
     if (!row_read(p_payload, head, values)) {
-        return StagedWrites();
+        return false;
     }
-    Array selected;
-    for (int64_t i = 0; i < p_keys.size(); ++i) {
-        if (head.mask & (uint64_t(1) << i)) {
-            selected.push_back(p_keys[i]);
+    uint64_t kept = 0;
+    int64_t selected = 0;
+    for (int64_t i = 0; i < p_columns && i < 64; ++i) {
+        const uint64_t bit = uint64_t(1) << i;
+        if ((head.mask & bit) != 0) {
+            kept |= bit;
+            selected += 1;
         }
     }
-    if (values.size() != selected.size()) {
-        return StagedWrites();
+    if (selected == 0 || values.size() != selected) {
+        return false;
     }
-    StagedWrites staged;
-    staged.ordinal = int64_t(head.ordinal);
-    staged.keys = selected;
-    staged.values = values;
-    for (int64_t i = 0; i < selected.size(); ++i) {
-        staged.row[selected[i]] = values[i];
-    }
-    return staged;
+    r_row.ordinal = int64_t(head.ordinal);
+    r_row.mask = kept;
+    r_row.values = values;
+    return true;
 }
 
 Dictionary frame_spec_records() {

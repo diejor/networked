@@ -74,41 +74,72 @@ public:
         int64_t fallback;
     };
 
+    class Book {
+        NetwPredictionEngine *pool = nullptr;
+        mutable int64_t seat = -1;
+        godot::Ref<NetwEntity> entity;
+
+        godot::LocalVector<int64_t> held;
+        godot::PackedInt32Array arrivals;
+        godot::PackedInt32Array replay_depth;
+        godot::Dictionary consume_shape;
+        godot::Dictionary joint_depth;
+        godot::PackedStringArray island_members;
+        godot::PackedStringArray simulated_members;
+
+        int64_t slot() const;
+        int64_t column(Source source, int index, int64_t fallback) const;
+        godot::Variant read(const Fact &fact) const;
+
+    public:
+        Book();
+
+        void set_int_fact(int index, int64_t value);
+        int64_t get_int_fact(int index) const;
+        void set_dict_fact(int index, const godot::Dictionary &value);
+        godot::Dictionary get_dict_fact(int index) const;
+        void set_buckets_fact(
+            int index,
+            const godot::PackedInt32Array &value
+        );
+        godot::PackedInt32Array get_buckets_fact(int index) const;
+        void set_names_fact(
+            int index,
+            const godot::PackedStringArray &value
+        );
+        godot::PackedStringArray get_names_fact(int index) const;
+
+        void bind_slot(
+            NetwPredictionEngine *p_pool,
+            const godot::Ref<NetwEntity> &p_entity
+        );
+
+        godot::Dictionary to_dictionary() const;
+    };
+
 private:
-    NetwPredictionEngine *pool = nullptr;
-    godot::Ref<NetwEntity> entity;
-
-    godot::LocalVector<int64_t> held;
-    godot::PackedInt32Array arrivals;
-    godot::PackedInt32Array replay_depth;
-    godot::Dictionary consume_shape;
-    godot::Dictionary joint_depth;
-    godot::PackedStringArray island_members;
-    godot::PackedStringArray simulated_members;
-
-    int64_t slot() const;
-    int64_t column(Source source, int index, int64_t fallback) const;
-    godot::Variant read(const Fact &fact) const;
+    Book own;
+    Book *book = &own;
 
 protected:
     static void _bind_methods();
 
 public:
-    void set_int_fact(int index, int64_t value);
-    int64_t get_int_fact(int index) const;
-    void set_dict_fact(int index, const godot::Dictionary &value);
-    godot::Dictionary get_dict_fact(int index) const;
-    void set_buckets_fact(int index, const godot::PackedInt32Array &value);
-    godot::PackedInt32Array get_buckets_fact(int index) const;
-    void set_names_fact(int index, const godot::PackedStringArray &value);
-    godot::PackedStringArray get_names_fact(int index) const;
+    void view(Book *p_book);
+    void keep(const Book &p_book);
 
-    NetwPredictStats();
-
-    void bind_slot(
-        NetwPredictionEngine *p_pool,
-        const godot::Ref<NetwEntity> &p_entity
-    );
+    int64_t get_int_fact(int index) const {
+        return book->get_int_fact(index);
+    }
+    godot::Dictionary get_dict_fact(int index) const {
+        return book->get_dict_fact(index);
+    }
+    godot::PackedInt32Array get_buckets_fact(int index) const {
+        return book->get_buckets_fact(index);
+    }
+    godot::PackedStringArray get_names_fact(int index) const {
+        return book->get_names_fact(index);
+    }
 
     int64_t get_corrections() const;
     godot::Dictionary to_dictionary() const;

@@ -7,8 +7,17 @@
 #include "netw/predict/journal.hpp"
 #include "netw/predict/wiring.hpp"
 #include "netw/prediction_core.hpp"
+#include "netw/wire/code_row.hpp"
 
 namespace netw::predict {
+
+#if defined(NETW_TESTS)
+int64_t script_dictionaries_built();
+void note_script_dictionary();
+#define NETW_NOTE_SCRIPT_DICTIONARY() ::netw::predict::note_script_dictionary()
+#else
+#define NETW_NOTE_SCRIPT_DICTIONARY() ((void)0)
+#endif
 
 constexpr int METER_SATURATED = 0x7FFFFFFF;
 
@@ -66,6 +75,13 @@ struct StateVerdict {
     bool settled = false;
 };
 
+struct Judged {
+    double divergence = 0.0;
+    int meter = 0;
+    bool corrected = false;
+    bool settled = false;
+};
+
 struct CompareStats {
     int comparisons_ran = 0;
     int comparisons_skipped = 0;
@@ -87,6 +103,42 @@ double divergence_by_field(
     const godot::Dictionary &p_angles
 );
 
+void read_payload(
+    const Wiring &p_wiring,
+    const godot::Dictionary &p_payload,
+    StateRow &r_row
+);
+
+godot::Dictionary payload_of(const Wiring &p_wiring, const StateRow &p_row);
+godot::Dictionary payload_of(const FieldCodec &p_codec, const StateRow &p_row);
+void read_payload(
+    const FieldCodec &p_codec,
+    const godot::Dictionary &p_payload,
+    StateRow &r_row
+);
+void zero_state_row(const FieldCodec &p_codec, StateRow &r_row);
+
+void canonicalize_row(
+    const FieldCodec &p_codec,
+    StateRow &r_row,
+    wire::CodeRow &r_scratch,
+    godot::PackedInt64Array &r_codes
+);
+
+int measure(
+    const godot::LocalVector<double> &p_errors,
+    const godot::LocalVector<double> &p_tolerances
+);
+
+double judge_rows(
+    const Wiring &p_wiring,
+    const StateRow &p_predicted,
+    const StateRow &p_authority,
+    const godot::LocalVector<double> &p_correction_tolerances,
+    godot::LocalVector<double> &r_errors,
+    bool &r_diverged
+);
+
 Attribution attribute(
     bool p_pre_equal,
     bool p_command_equal,
@@ -106,7 +158,7 @@ AckVerdict admit_ack(
     bool p_substituted
 );
 
-StateVerdict compare_state(
+void compare_state(
     const Wiring &p_wiring,
     Journal &p_journal,
     int64_t p_recv_tick,
@@ -116,7 +168,8 @@ StateVerdict compare_state(
     const godot::LocalVector<double> &p_correction_tolerances,
     const godot::LocalVector<double> &p_meter_tolerances,
     double p_fallback_epsilon,
-    bool p_stream_reconstructed
+    bool p_stream_reconstructed,
+    StateVerdict &r_out
 );
 
 } // namespace netw::predict

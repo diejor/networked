@@ -105,7 +105,8 @@ void MultiplayerTree::set_api_script(const Ref<Script> &p_value) {
     NETW_ERR_COND(
         is_inside_tree(),
         sys::SESSION,
-        "api_script is immutable after tree entry"
+        "MultiplayerTree.api_script cannot change once the tree is in the "
+        "scene tree. Set it before adding the MultiplayerTree."
     );
     if (api_script == p_value) {
         return;
@@ -139,10 +140,9 @@ bool MultiplayerTree::session_settings_are_immutable(
     }
     NETW_WARN(
         sys::SESSION,
-        "Netw.configure_session: '%s' on '%s' was configured after this "
-        "session consumed its configuration. The running values are "
-        "unchanged. Configure before startup and finish the fluent chain "
-        "without awaiting.",
+        "MultiplayerTree.%s on '%s' was set after its session read its "
+        "settings, so the change was ignored. Set it before adding the "
+        "MultiplayerTree to the scene tree.",
         p_field,
         String(get_name())
     );
@@ -311,7 +311,7 @@ void MultiplayerTree::on_peer_created(
     if (p_error != OK || p_peer.is_null()) {
         NETW_ERROR(
             sys::SESSION,
-            "%s answered no peer (%s)",
+            "The %s transport could not create a peer (%s).",
             String(peer_class),
             p_detail
         );
@@ -345,7 +345,12 @@ void MultiplayerTree::bring_up_here(
     NETW_ERR_COND(
         !ticket.is_valid(),
         sys::SESSION,
-        netw::log::format("no transport answers '%s'", String(peer_class))
+        netw::log::format(
+            "No transport is registered for MultiplayerTree.peer_class '%s'. "
+            "Use a registered peer class, or register one with "
+            "NetwMultiplayer.transport_register.",
+            String(peer_class)
+        )
     );
 }
 
@@ -393,7 +398,11 @@ void MultiplayerTree::debug_autoconnect() {
         return;
     }
     const StringName claiming = debug_join->submitted_username();
-    NETW_INFO(sys::SESSION, "debug auto-connect as '%s'", String(claiming));
+    NETW_INFO(
+        sys::SESSION,
+        "Debug join connects as '%s'.",
+        String(claiming)
+    );
     bring_up_here(
         NetwMultiplayer::TRANSPORT_MODE_HOST,
         String(),
@@ -420,10 +429,10 @@ MultiplayerTree *MultiplayerTree::raise_embedded_server() {
 }
 
 void MultiplayerTree::finalize_session() {
-    NETW_TRACE(sys::SESSION, "finalizing session");
+    NETW_TRACE(sys::SESSION, "Finishing the session setup.");
     NETW_DEBUG(
         sys::SESSION,
-        "session app_id='%s' app_tag=%s",
+        "The session has app id '%s' (tag %s).",
         String(app_id),
         String::num_uint64(app_tag_of(app_id), 16)
     );
@@ -454,7 +463,7 @@ void MultiplayerTree::release_peer() {
 }
 
 void MultiplayerTree::exiting() {
-    NETW_TRACE(sys::SESSION, "exiting");
+    NETW_TRACE(sys::SESSION, "The MultiplayerTree is leaving the tree.");
     if (!is_queued_for_deletion()) {
         unmount_api();
         return;
@@ -475,11 +484,11 @@ void MultiplayerTree::close_peer_on_delete() {
 }
 
 void MultiplayerTree::on_peer_connected(int64_t p_peer_id) {
-    NETW_INFO(sys::SESSION, "peer connected: %d", p_peer_id);
+    NETW_INFO(sys::SESSION, "Peer %d connected.", p_peer_id);
 }
 
 void MultiplayerTree::on_peer_disconnected(int64_t p_peer_id) {
-    NETW_INFO(sys::SESSION, "peer disconnected: %d", p_peer_id);
+    NETW_INFO(sys::SESSION, "Peer %d disconnected.", p_peer_id);
     if (api.is_null()) {
         return;
     }
@@ -488,12 +497,12 @@ void MultiplayerTree::on_peer_disconnected(int64_t p_peer_id) {
 
 void MultiplayerTree::on_connected_to_server() {
     const int64_t peer_id = api->get_multiplayer_peer()->get_unique_id();
-    NETW_INFO(sys::SESSION, "connected to server as peer %d", peer_id);
+    NETW_INFO(sys::SESSION, "Connected to the server as peer %d.", peer_id);
     set_multiplayer_authority(int(peer_id), false);
 }
 
 void MultiplayerTree::on_server_disconnected() {
-    NETW_INFO(sys::SESSION, "disconnected from server");
+    NETW_INFO(sys::SESSION, "Disconnected from the server.");
 }
 
 void MultiplayerTree::_notification(int p_what) {

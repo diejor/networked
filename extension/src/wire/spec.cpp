@@ -7,8 +7,8 @@
 #include "netw/schema_core.hpp"
 #include "netw/session/frames.hpp"
 #include "netw/spawn/record.hpp"
+#include "netw/store/array.hpp"
 #include "netw/sync_kernel.hpp"
-#include "netw/table/core.hpp"
 #include "netw/wire/capture.hpp"
 #include "netw/wire/control_record.hpp"
 #include "netw/wire/frame.hpp"
@@ -111,7 +111,7 @@ Dictionary spec_records() {
     out.merge(spawn::verb_spec_records());
     out.merge(session::frame_spec_records());
     out.merge(interest::awareness_spec_records());
-    out.merge(table::Core::frame_spec_records());
+    out.merge(store::Arrays::frame_spec_records());
     out.merge(sync_kernel::frame_spec_records());
     out.merge(NetwCarrierFrame::spec_records());
     out.merge(capture_spec_records());

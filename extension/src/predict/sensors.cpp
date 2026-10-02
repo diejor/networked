@@ -46,7 +46,8 @@ WitnessSummary summarize_witness(
             || contact.realization < 0 || contact.realization > 5) {
             NETW_ERROR(
                 sys::PREDICTION,
-                "Witness contact %d has an invalid identity or class.",
+                "Prediction ignored the contacts of one physics step, because "
+                "contact %d has no collider or an unknown class.",
                 int(at)
             );
             return out;
@@ -82,7 +83,7 @@ WitnessSummary summarize_witness(
     out.valid = true;
     NETW_TRACE(
         sys::PREDICTION,
-        "witness contacts=%d classes=%d breach=%d",
+        "Sampled %d contacts (classes %d, breach %d).",
         out.contact_count,
         int(out.class_bits),
         int(out.breach)
@@ -91,7 +92,11 @@ WitnessSummary summarize_witness(
 }
 
 int32_t environment_digest(int64_t p_epoch, const Dictionary &p_samples) {
-    NETW_ZONE_NC("NetwPredict sensors", colors::PREDICTION);
+    NETW_ZONE_LEAF(
+        "Predict environment digest",
+        colors::PREDICTION,
+        profile::SUBSYSTEM_PREDICTION
+    );
     if (p_epoch == -1 && p_samples.is_empty()) {
         return 0;
     }

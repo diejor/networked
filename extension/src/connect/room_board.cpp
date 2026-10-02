@@ -175,7 +175,7 @@ void RoomBoard::advertise(const RoomCard &p_card) {
     if (advertised.room_hash.is_empty()) {
         NETW_WARN(
             sys::TRANSPORT,
-            "the board refused to advertise an empty room"
+            "A room with no id cannot be advertised."
         );
         return;
     }
@@ -240,7 +240,7 @@ void RoomBoard::maintain(double p_delta) {
     if (tracker != nullptr) {
         NETW_DEBUG(
             sys::TRANSPORT,
-            "the board went idle and closed its trackers"
+            "The room list went idle and closed its trackers."
         );
         release_tracker();
     }
@@ -282,7 +282,7 @@ void RoomBoard::poll(double p_delta, int64_t p_now_usec, int64_t p_frame) {
             listing_ready = true;
             NETW_DEBUG(
                 sys::TRANSPORT,
-                "the board browse found %d room(s)",
+                "The room search found %d rooms.",
                 int64_t(collected.size())
             );
         }
@@ -337,7 +337,7 @@ void RoomBoard::collect(const RoomCard &p_card) {
     }
     NETW_DEBUG(
         sys::TRANSPORT,
-        "the board discovered room %s (%d/%d)",
+        "Found room %s with %d of %d players.",
         p_card.room_hash,
         p_card.players,
         p_card.max_players

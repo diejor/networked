@@ -71,6 +71,25 @@ public:
         return seen;
     }
 
+    int advancing_steps() const {
+        int seen = 0;
+        int64_t newest = INT64_MIN;
+        for (uint32_t at = 0; at + 1 < rows.size(); ++at) {
+            if (rows[at].call != STEP || rows[at + 1].call != SNAPSHOT) {
+                continue;
+            }
+            if (rows[at + 1].tick > newest) {
+                newest = rows[at + 1].tick;
+                seen += 1;
+            }
+        }
+        return seen;
+    }
+
+    int replayed_steps() const {
+        return count_of(STEP) - advancing_steps();
+    }
+
     int64_t first_tick_of(Call p_call) const {
         for (uint32_t at = 0; at < rows.size(); ++at) {
             if (rows[at].call == p_call) {

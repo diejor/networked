@@ -8,30 +8,6 @@ namespace netw::repl {
 
 using namespace godot;
 
-PassResult SendPass::run(
-    const wire::WireRegistry &p_registry,
-    int p_peer,
-    LocalVector<wire::FitCandidate> &p_offers,
-    int64_t p_max_bits
-) {
-    NETW_ZONE_NC("Send pass", colors::WIRE);
-    NETW_ZONE_VALUE(p_offers.size());
-    PassResult out;
-
-    const wire::FitResult fitted
-        = wire::WireFitter::fit(p_registry, p_offers, p_max_bits);
-
-    for (uint32_t at = 0; at < fitted.packed.size(); ++at) {
-        out.sent.push_back(fitted.packed[at]);
-        out.sent_bits += fitted.packed[at].payload_bits;
-    }
-    for (uint32_t at = 0; at < fitted.deferred.size(); ++at) {
-        out.deferred.push_back(fitted.deferred[at]);
-    }
-    books[p_peer];
-    return out;
-}
-
 bool SendPass::record_datagram(
     int p_peer,
     uint16_t p_seq,

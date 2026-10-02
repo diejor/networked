@@ -66,7 +66,7 @@ struct World {
         schema = NetwSchema::create("players");
         schema->replicated(false);
         schema->vector2("where", Ref<NetwQuantize>(), 1);
-        schema->f32("spin", Ref<NetwQuantize>(), 1);
+        schema->f64("spin", Ref<NetwQuantize>(), 1);
 
         database = session->get_databases()->create("saves");
         connection = MemoryConnection::opened(p_store, "slot1");
@@ -85,7 +85,7 @@ struct World {
 
         netw::Netw::configure_persistence(root)
             ->database(StringName("saves"))
-            ->schema(schema)
+            ->table(schema->get_schema_name())
             ->record_id(Callable(account, "get_name"));
     }
 
@@ -106,7 +106,7 @@ struct World {
 
     void bind(Node *p_node, const StringName &p_property, int p_column) {
         model::configure_node_property(p_node, p_property)
-            ->persisted(schema->column_ref(p_column));
+            ->persisted(StringName(p_column == 0 ? "where" : "spin"));
     }
 
     void bind_both() {
@@ -282,7 +282,7 @@ TEST_CASE(
     "does not compile is never published as loaded"
 ) {
     World world("sl6");
-    world.bind(world.root, "position", 0);
+    world.bind(world.root, "no_such_property", 0);
     world.spawned();
     CallLog log;
 

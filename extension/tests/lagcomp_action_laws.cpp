@@ -2,19 +2,20 @@
 
 #include "support/loopback_rig.h"
 #include "support/netw_call_log.h"
+#include "support/predict_rows.h"
 
 #if defined(NETW_TIER_HOSTED)
 
 #include "godot/variant.hpp"
 #include "netw/api/action.hpp"
 #include "netw/api/prediction_handle.hpp"
-#include "netw/api/timeline.hpp"
+#include "netw/lagcomp_core.hpp"
+#include "netw/predict/engine.hpp"
 
 namespace TestNetwLagCompActionLaws {
 
 using namespace godot;
 using namespace netw_test;
-using netw::NetwTimeline;
 
 constexpr int TICK_ALIGNED = 0;
 constexpr int STATE_READY = 1;
@@ -88,9 +89,18 @@ struct ActionRig {
         return int64_t(metrics.get(StringName("gate_fallbacks"), -1));
     }
 
-    Ref<NetwTimeline> authority_history() const {
+    int64_t authority_rewind_slot() const {
         netw::NetwMultiplayer *api = rig.server();
-        return api->lagcomp_timeline_of(rig.entity_of("P"));
+        return api->get_lagcomp_core()->timeline_slot_of(
+            api->entity_get_view(rig.entity_of("P"))
+        );
+    }
+
+    bool authority_recorded(int64_t p_tick) const {
+        return rig.server()->get_lagcomp_core()->timeline_recorded_at(
+            authority_rewind_slot(),
+            p_tick
+        );
     }
 
     netw::NetwPredictionHandle *authority_handle() const {
@@ -238,8 +248,7 @@ TEST_CASE(
     fixture.gate_deadline(24);
     fixture.uplink_delay(8);
     const int64_t fire_tick = fixture.authority_tick() + 3;
-    const Ref<NetwTimeline> history = fixture.authority_history();
-    REQUIRE(history.is_valid());
+    REQUIRE(fixture.authority_rewind_slot() >= 0);
 
     fixture.owner->fire(fire_tick, STATE_READY);
     fixture.rig.step_ticks(5);
@@ -249,7 +258,7 @@ TEST_CASE(
 
     NETW_CHECK_EQ(fixture.authority->requests(), 1);
     NETW_CHECK_EQ(fixture.authority->viewed_tick(), fire_tick);
-    CHECK_FALSE(history->state_at(fire_tick).is_empty());
+    CHECK(fixture.authority_recorded(fire_tick));
     NETW_CHECK_EQ(fixture.gate_fallbacks(), int64_t(0));
 }
 
@@ -288,10 +297,11 @@ TEST_CASE(
     fixture.gate_deadline(12);
     fixture.uplink_delay(60);
 
-    const Ref<NetwTimeline> history = fixture.authority_history();
-    REQUIRE(history.is_valid());
     netw::NetwPredictionHandle *handle = fixture.authority_handle();
     REQUIRE(handle != nullptr);
+    netw::NetwPredictionEngine *const pool = fixture.rig.prediction_pool();
+    const int64_t slot = fixture.rig.prediction_slot(StringName("P"));
+    REQUIRE(pool->input_lane_open(slot));
 
     fixture.rig.step_ticks(2);
     const int64_t first_input_tick = fixture.authority_tick();
@@ -302,13 +312,19 @@ TEST_CASE(
         0
     );
 
-    history->record_input(first_input_tick, rightward());
-    netw::NetwPredictionEngine *const pool = fixture.rig.prediction_pool();
-    const int64_t slot = fixture.rig.prediction_slot(StringName("P"));
+    const netw::predict::StateRow right
+        = netw_test::input_row(pool, slot, rightward());
+    pool->record_authored_command(
+        slot,
+        first_input_tick,
+        first_input_tick,
+        true,
+        right
+    );
     if (pool->next_input_tick_of(slot) < 0) {
         pool->set_next_input_tick(slot, first_input_tick);
     }
-    history->record_input(view_tick, rightward());
+    pool->record_authored_command(slot, view_tick, view_tick, true, right);
     fixture.rig.server()->action_send_request(
         fixture.rig.branch(-1)->get_path_to(fixture.authority),
         StringName("_server_action"),
@@ -321,7 +337,7 @@ TEST_CASE(
 
     NETW_CHECK_EQ(fixture.authority->requests(), 1);
     NETW_CHECK_EQ(fixture.authority->viewed_tick(), view_tick);
-    CHECK_FALSE(history->state_at(view_tick).is_empty());
+    CHECK(fixture.authority_recorded(view_tick));
     NETW_CHECK_GT(
         handle->get_stats()->get_int_fact(netw::NetwPredictStats::FACT_MISSING),
         int64_t(0)

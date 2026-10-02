@@ -16,7 +16,6 @@
 #include "netw/api/predict.hpp"
 #include "netw/api/prediction_handle.hpp"
 #include "netw/api/replication_core.hpp"
-#include "netw/api/ring_buffer.hpp"
 #include "netw/api/tests.hpp"
 #include "netw/display/channel.hpp"
 #include "netw/display/decl.hpp"
@@ -860,9 +859,12 @@ TEST_CASE(
     bench.core()->display_snap(subject.rid(), StringName("position"), p2());
 
     CHECK(near(subject.visual->get_global_position(), p2()));
-    CHECK(subject.entity->get_interpolation()
-              ->get_buffer(StringName("position"))
-              .is_null());
+    const netw::display::Runtime *runtime
+        = NetwNativeTests::display_runtime_of(bench.core(), subject.rid());
+    CHECK(runtime != nullptr);
+    const bool holds_no_history = runtime == nullptr
+        || runtime->history_of(StringName("position")) == nullptr;
+    CHECK(holds_no_history);
 }
 
 TEST_CASE(

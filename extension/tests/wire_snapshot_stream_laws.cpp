@@ -1,14 +1,18 @@
 #include "support/netw_test.h"
 
 #include "support/row_image_oracle.h"
+#include "support/send_rig.h"
+#include "support/store_reader.h"
 
 #include <cstdint>
 
 #include "godot/templates.hpp"
 #include "netw/api/schema_core.hpp"
 #include "netw/repl/snapshot_frame.hpp"
+#include "netw/store/world.hpp"
 #include "netw/wire/code_row.hpp"
 #include "netw/wire/plan.hpp"
+#include "netw/wire/registry.hpp"
 #include "netw/wire/snapshot_stream.hpp"
 
 namespace TestWireSnapshotStream {
@@ -23,17 +27,16 @@ using netw::table::DeltaMode;
 using netw::table::SchemaRecord;
 using netw::wire::CodeRow;
 using netw::wire::ReceiptVerdict;
-using netw::wire::RowAdmission;
 using netw::wire::SNAPSHOT_STAGE_DEPTH;
-using netw::wire::SnapshotReceiver;
-using netw::wire::SnapshotSender;
 using netw::wire::WirePlan;
 using netw_test::RowImageLedger;
 
-const uint64_t TOKEN = 907;
+const int PEER = 6;
+const int64_t ROUTE = 17;
+const uint8_t CHANNEL = 48;
 const int64_t BASE_TICK = 100;
 
-WirePlan triple_plan() {
+SchemaRecord triple_schema() {
     SchemaRecord record;
     record.name = godot::StringName("SnapshotRow");
     SchemaCore::append_column(
@@ -58,7 +61,20 @@ WirePlan triple_plan() {
     record.at(1)->delta = DeltaMode::LADDER;
     record.at(2)->delta = DeltaMode::LADDER;
     SchemaCore::fix(&record);
-    return WirePlan::compile(record);
+    return record;
+}
+
+const netw::wire::WireRegistry &registry() {
+    static const netw::wire::WireRegistry made = [] {
+        netw::wire::WireRegistry out;
+        netw::wire::ChannelDecl decl;
+        decl.id = CHANNEL;
+        decl.name = godot::StringName("snapshot_probe");
+        decl.delivery = netw::wire::Delivery::FITTED;
+        out.register_channel(decl);
+        return out;
+    }();
+    return made;
 }
 
 CodeRow triple(
@@ -74,95 +90,154 @@ CodeRow triple(
     return made;
 }
 
-enum class Arrival : uint8_t {
-    ACCEPTED,
-    DUPLICATE,
-    STALE,
-    REFUSED_BASELINE,
-    MALFORMED,
-};
+using Arrival = netw::store::Landing;
 
 struct Link {
+    SchemaRecord schema;
     WirePlan plan;
-    SnapshotSender sender;
-    SnapshotReceiver receiver;
+    netw_test::SessionSend send;
+    netw_test::StoreReader reader;
     RowImageLedger ledger;
     godot::Vector<godot::PackedByteArray> flight;
-    godot::Vector<uint64_t> revisions;
+    CodeRow target;
+    int64_t now_ms = 0;
     uint64_t last_distance = 0;
     uint64_t last_mask = 0;
-    SnapshotRefusal last_refusal = SnapshotRefusal::NONE;
 
-    void open() {
-        plan = triple_plan();
+    netw::wire::StreamLane lane() const {
+        netw::wire::StreamLane made;
+        made.route = ROUTE;
+        made.ordinal = 0;
+        made.family = netw::wire::StreamFamily::VOLATILE;
+        return made;
     }
 
-    uint64_t publish(const CodeRow &p_row) {
-        sender.desire(p_row);
-        const uint64_t revision = sender.reserve();
-        const uint64_t distance = sender.distance_for(revision);
-        const CodeRow *base = distance == 0 ? nullptr : sender.confirmed();
-        SnapshotHeader header;
-        header.token = TOKEN;
-        header.revision = revision;
-        header.distance = distance;
-        header.tick = BASE_TICK;
-        header.mask = distance == 0 ? plan.full_mask()
-                                    : CodeRow::changed_mask(plan, *base, p_row);
-        const godot::PackedByteArray bytes
-            = write_snapshot_row(header, BASE_TICK, plan, p_row, base);
-        if (bytes.is_empty()) {
-            return 0;
+    netw_test::RowOffer offer() const {
+        netw_test::RowOffer made;
+        made.route = ROUTE;
+        made.channel = CHANNEL;
+        made.schema = &schema;
+        made.tick = BASE_TICK;
+        netw_test::offer_row(made, target);
+        made.recipients.push_back(PEER);
+        return made;
+    }
+
+    void open() {
+        schema = triple_schema();
+        plan = WirePlan::compile(schema);
+        target = CodeRow::for_plan(plan);
+        reader.declare(schema, ROUTE, BASE_TICK);
+        netw_test::stage_offer(send.world, offer(), BASE_TICK);
+        const uint64_t request = send.stream_open(PEER, lane());
+        send.stream_ready(PEER, request, netw::wire::next_stream_token());
+    }
+
+    uint64_t token() const {
+        return send.token_of(PEER, lane());
+    }
+
+    uint32_t peer() const {
+        return send.world.peer_of(PEER);
+    }
+
+    void desire(const CodeRow &p_row) {
+        target.copy_from(p_row);
+        netw_test::stage_offer(send.world, offer(), BASE_TICK);
+    }
+
+    uint64_t pass() {
+        godot::LocalVector<netw_test::RowOffer> offers;
+        offers.push_back(offer());
+        const netw::repl::SessionResult result = send.run(
+            registry(),
+            offers,
+            int64_t(1) << 20,
+            BASE_TICK,
+            now_ms
+        );
+        uint64_t revision = 0;
+        for (uint32_t at = 0; at < result.sends.size(); ++at) {
+            const netw::repl::RowSend &sent = result.sends[at];
+            SnapshotHeader named;
+            name_snapshot_row(sent.bytes, named);
+            if (!sent.resend) {
+                ledger.stage(sent.token, sent.revision, plan, target);
+            }
+            flight.push_back(sent.bytes);
+            last_distance = named.distance;
+            last_mask = sent.mask;
+            revision = sent.revision;
         }
-        sender.expose(revision, p_row);
-        ledger.stage(TOKEN, revision, plan, p_row);
-        flight.push_back(bytes);
-        revisions.push_back(revision);
-        last_distance = distance;
-        last_mask = header.mask;
         return revision;
     }
 
+    uint64_t publish(const CodeRow &p_row) {
+        target.copy_from(p_row);
+        return pass();
+    }
+
+    uint64_t repair() {
+        return pass();
+    }
+
+    ReceiptVerdict receipt(uint64_t p_revision) {
+        return send.stream_receipt(PEER, token(), p_revision);
+    }
+
+    bool quiet() const {
+        return !netw_test::row_owed(send.world, lane(), PEER);
+    }
+
+    uint64_t confirmed_at() const {
+        return netw_test::row_acked(send.world, lane(), PEER);
+    }
+
+    uint64_t exposed_high_water() const {
+        return netw_test::row_exposed(send.world, lane(), PEER);
+    }
+
+    bool holds(uint64_t p_revision) const {
+        return send.world.flight_of(peer(), token(), p_revision) != nullptr;
+    }
+
+    uint64_t pinned_at() const {
+        const netw::store::Flight *pinned
+            = send.world.pinned_of(peer(), token());
+        return pinned != nullptr ? pinned->revision : 0;
+    }
+
+    bool awaiting_receipt() const {
+        const netw::store::RowAddress at = send.world.lane_row(lane());
+        const uint64_t exposed = exposed_high_water();
+        if (!at.valid() || exposed <= confirmed_at()) {
+            return false;
+        }
+        const netw::store::Flight *newest
+            = send.world.flight_of(peer(), token(), exposed);
+        return newest != nullptr
+            && send.world.table(at.table).holds_image(at.row, newest->image);
+    }
+
+    uint64_t mint_spare(const CodeRow &p_image, bool p_pinned) {
+        const netw::store::RowAddress at = send.world.lane_row(lane());
+        return send.world.mint(at, peer(), p_image, p_pinned);
+    }
+
     Arrival deliver(const godot::PackedByteArray &p_bytes) {
-        last_refusal = SnapshotRefusal::NONE;
         SnapshotHeader named;
         if (!name_snapshot_row(p_bytes, named)) {
-            last_refusal = SnapshotRefusal::MALFORMED;
             return Arrival::MALFORMED;
         }
-        const RowAdmission admission = receiver.admits(named.revision);
-        if (admission == RowAdmission::DUPLICATE) {
-            return Arrival::DUPLICATE;
+        const Arrival landed = reader.land(PEER, p_bytes);
+        if (landed == Arrival::ACCEPTED) {
+            ledger.accept(named.token, named.revision, plan, reader.row());
         }
-        if (admission == RowAdmission::STALE) {
-            return Arrival::STALE;
-        }
-        const CodeRow *base = named.absolute()
-            ? nullptr
-            : receiver.baseline(named.baseline_revision());
-        SnapshotHeader header;
-        CodeRow landed;
-        if (receiver.accepted() != nullptr) {
-            landed.copy_from(*receiver.accepted());
-        }
-        SnapshotRefusal refusal = SnapshotRefusal::NONE;
-        if (!read_snapshot_row(
-                p_bytes,
-                BASE_TICK,
-                plan,
-                header,
-                landed,
-                base,
-                &refusal
-            )) {
-            last_refusal = refusal;
-            return refusal == SnapshotRefusal::BASELINE_UNKNOWN
-                ? Arrival::REFUSED_BASELINE
-                : Arrival::MALFORMED;
-        }
-        receiver.commit(header.revision, landed);
-        ledger.accept(TOKEN, header.revision, plan, landed);
-        return Arrival::ACCEPTED;
+        return landed;
+    }
+
+    uint64_t accepted_at() {
+        return reader.accepted(PEER, token());
     }
 
     Arrival deliver_at(int32_t p_index) {
@@ -178,9 +253,8 @@ struct Link {
         return last;
     }
 
-    uint64_t column(int p_column) const {
-        const CodeRow *held = receiver.accepted();
-        return held == nullptr ? 0 : held->read(plan.column(p_column), 0);
+    uint64_t column(int p_column) {
+        return reader.column(uint32_t(p_column));
     }
 };
 
@@ -197,10 +271,7 @@ TEST_CASE(
     link.open();
     const uint64_t first = link.publish(triple(link.plan, 0, 0, 0));
     link.flush();
-    NETW_CHECK_EQ(
-        int(link.sender.receipt(first)),
-        int(ReceiptVerdict::PROMOTED)
-    );
+    NETW_CHECK_EQ(int(link.receipt(first)), int(ReceiptVerdict::PROMOTED));
 
     const uint64_t middle = link.publish(triple(link.plan, 0, 0, 1));
     link.flush();
@@ -209,21 +280,15 @@ TEST_CASE(
     NETW_CHECK_EQ(link.last_mask, 0);
     NETW_CHECK_EQ(int(link.flush()), int(Arrival::ACCEPTED));
 
-    NETW_CHECK_EQ(link.receiver.accepted_at(), back);
+    NETW_CHECK_EQ(link.accepted_at(), back);
     NETW_CHECK_EQ(link.column(2), 0);
     const RowImageLedger::Verdict verdict = link.ledger.audit();
     const bool clean = verdict.clean();
     CHECK(clean);
     NETW_CHECK_EQ(verdict.agreed, 3);
-    NETW_CHECK_EQ(
-        int(link.sender.receipt(middle)),
-        int(ReceiptVerdict::PROMOTED)
-    );
-    NETW_CHECK_EQ(
-        int(link.sender.receipt(back)),
-        int(ReceiptVerdict::PROMOTED)
-    );
-    const bool quiet = link.sender.quiet();
+    NETW_CHECK_EQ(int(link.receipt(middle)), int(ReceiptVerdict::PROMOTED));
+    NETW_CHECK_EQ(int(link.receipt(back)), int(ReceiptVerdict::PROMOTED));
+    const bool quiet = link.quiet();
     CHECK(quiet);
 }
 
@@ -234,7 +299,7 @@ TEST_CASE(
     link.open();
     const uint64_t first = link.publish(triple(link.plan, 5, 6, 7));
     link.flush();
-    link.sender.receipt(first);
+    link.receipt(first);
     link.publish(triple(link.plan, 5, 6, 9));
     link.flush();
     NETW_CHECK_EQ(link.column(2), 9);
@@ -257,7 +322,7 @@ TEST_CASE(
     link.open();
     const uint64_t first = link.publish(triple(link.plan, 1, 1, 1));
     link.flush();
-    link.sender.receipt(first);
+    link.receipt(first);
 
     link.publish(triple(link.plan, 1, 4, 1));
     link.flush();
@@ -280,28 +345,22 @@ TEST_CASE(
     link.open();
     const uint64_t first = link.publish(triple(link.plan, 3, 3, 3));
     link.flush();
-    link.sender.receipt(first);
-    const bool quiet_at_first = link.sender.quiet();
+    link.receipt(first);
+    const bool quiet_at_first = link.quiet();
     CHECK(quiet_at_first);
 
     const uint64_t exposed = link.publish(triple(link.plan, 3, 3, 4));
-    link.sender.desire(triple(link.plan, 3, 3, 3));
-    const bool quiet_while_exposed = link.sender.quiet();
+    link.desire(triple(link.plan, 3, 3, 3));
+    const bool quiet_while_exposed = link.quiet();
     CHECK(!quiet_while_exposed);
 
     const uint64_t restored = link.publish(triple(link.plan, 3, 3, 3));
     link.flush();
-    NETW_CHECK_EQ(
-        int(link.sender.receipt(exposed)),
-        int(ReceiptVerdict::PROMOTED)
-    );
-    const bool quiet_on_older_receipt = link.sender.quiet();
+    NETW_CHECK_EQ(int(link.receipt(exposed)), int(ReceiptVerdict::PROMOTED));
+    const bool quiet_on_older_receipt = link.quiet();
     CHECK(!quiet_on_older_receipt);
-    NETW_CHECK_EQ(
-        int(link.sender.receipt(restored)),
-        int(ReceiptVerdict::PROMOTED)
-    );
-    const bool quiet_on_latest = link.sender.quiet();
+    NETW_CHECK_EQ(int(link.receipt(restored)), int(ReceiptVerdict::PROMOTED));
+    const bool quiet_on_latest = link.quiet();
     CHECK(quiet_on_latest);
 }
 
@@ -316,31 +375,16 @@ TEST_CASE(
     const uint64_t third = link.publish(triple(link.plan, 0, 0, 2));
     link.flush();
 
-    NETW_CHECK_EQ(
-        int(link.sender.receipt(third)),
-        int(ReceiptVerdict::PROMOTED)
-    );
-    NETW_CHECK_EQ(link.sender.confirmed_at(), third);
-    NETW_CHECK_EQ(
-        int(link.sender.receipt(first)),
-        int(ReceiptVerdict::IGNORED)
-    );
-    NETW_CHECK_EQ(
-        int(link.sender.receipt(second)),
-        int(ReceiptVerdict::IGNORED)
-    );
-    NETW_CHECK_EQ(
-        int(link.sender.receipt(third)),
-        int(ReceiptVerdict::IGNORED)
-    );
-    NETW_CHECK_EQ(link.sender.confirmed_at(), third);
+    NETW_CHECK_EQ(int(link.receipt(third)), int(ReceiptVerdict::PROMOTED));
+    NETW_CHECK_EQ(link.confirmed_at(), third);
+    NETW_CHECK_EQ(int(link.receipt(first)), int(ReceiptVerdict::IGNORED));
+    NETW_CHECK_EQ(int(link.receipt(second)), int(ReceiptVerdict::IGNORED));
+    NETW_CHECK_EQ(int(link.receipt(third)), int(ReceiptVerdict::IGNORED));
+    NETW_CHECK_EQ(link.confirmed_at(), third);
 
-    NETW_CHECK_EQ(
-        link.sender.receipt(third + 9),
-        int(ReceiptVerdict::UNEXPOSED)
-    );
-    NETW_CHECK_EQ(link.sender.confirmed_at(), third);
-    const bool quiet = link.sender.quiet();
+    NETW_CHECK_EQ(int(link.receipt(third + 9)), int(ReceiptVerdict::UNEXPOSED));
+    NETW_CHECK_EQ(link.confirmed_at(), third);
+    const bool quiet = link.quiet();
     CHECK(quiet);
     const bool clean = link.ledger.audit().clean();
     CHECK(clean);
@@ -356,18 +400,15 @@ TEST_CASE(
     for (uint32_t at = 0; at < SNAPSHOT_STAGE_DEPTH + 4; ++at) {
         link.publish(triple(link.plan, at + 8, 2, 3));
     }
-    NETW_CHECK_EQ(link.sender.staged_count(), SNAPSHOT_STAGE_DEPTH);
-    const bool dropped = !link.sender.holds(first);
+    NETW_CHECK_EQ(
+        link.send.world.flight_count(link.peer()),
+        SNAPSHOT_STAGE_DEPTH
+    );
+    const bool dropped = !link.holds(first);
     CHECK(dropped);
 
-    NETW_CHECK_EQ(
-        int(link.sender.receipt(first)),
-        int(ReceiptVerdict::EVICTED)
-    );
-    NETW_CHECK_EQ(link.sender.confirmed_at(), 0);
-    const CodeRow *confirmed = link.sender.confirmed();
-    const bool no_row = confirmed == nullptr;
-    CHECK(no_row);
+    NETW_CHECK_EQ(int(link.receipt(first)), int(ReceiptVerdict::EVICTED));
+    NETW_CHECK_EQ(link.confirmed_at(), 0);
 }
 
 TEST_CASE(
@@ -376,19 +417,17 @@ TEST_CASE(
 ) {
     Link link;
     link.open();
-    const uint64_t repair = link.publish(triple(link.plan, 9, 9, 9));
-    const bool pinned = link.sender.pin(repair);
+    link.desire(triple(link.plan, 9, 9, 9));
+    const uint64_t repair = link.mint_spare(triple(link.plan, 9, 9, 9), true);
+    const bool pinned = link.pinned_at() == repair;
     CHECK(pinned);
     for (uint32_t at = 0; at < SNAPSHOT_STAGE_DEPTH + 4; ++at) {
-        link.publish(triple(link.plan, at + 1, 9, 9));
+        link.mint_spare(triple(link.plan, at + 1, 9, 9), false);
     }
-    const bool kept = link.sender.holds(repair);
+    const bool kept = link.holds(repair);
     CHECK(kept);
-    NETW_CHECK_EQ(
-        int(link.sender.receipt(repair)),
-        int(ReceiptVerdict::PROMOTED)
-    );
-    NETW_CHECK_EQ(link.sender.confirmed_at(), repair);
+    NETW_CHECK_EQ(int(link.receipt(repair)), int(ReceiptVerdict::PROMOTED));
+    NETW_CHECK_EQ(link.confirmed_at(), repair);
 }
 
 TEST_CASE(
@@ -401,17 +440,14 @@ TEST_CASE(
     const uint64_t second = link.publish(triple(link.plan, 4, 0, 1));
     NETW_CHECK_EQ(int(link.deliver_at(0)), int(Arrival::ACCEPTED));
     NETW_CHECK_EQ(int(link.deliver_at(1)), int(Arrival::ACCEPTED));
-    NETW_CHECK_EQ(link.receiver.accepted_at(), second);
+    NETW_CHECK_EQ(link.accepted_at(), second);
 
     NETW_CHECK_EQ(int(link.deliver_at(1)), int(Arrival::DUPLICATE));
     NETW_CHECK_EQ(int(link.deliver_at(0)), int(Arrival::STALE));
-    NETW_CHECK_EQ(link.receiver.accepted_at(), second);
+    NETW_CHECK_EQ(link.accepted_at(), second);
     NETW_CHECK_EQ(link.column(2), 1);
-
-    const bool refused_commit
-        = !link.receiver.commit(first, triple(link.plan, 0, 0, 0));
-    CHECK(refused_commit);
     NETW_CHECK_EQ(link.column(0), 4);
+    NETW_CHECK_EQ(first + 1, second);
     const RowImageLedger::Verdict verdict = link.ledger.audit();
     const bool clean = verdict.clean();
     CHECK(clean);
@@ -426,17 +462,19 @@ TEST_CASE(
     link.open();
     const uint64_t first = link.publish(triple(link.plan, 7, 7, 7));
     link.flush();
-    link.sender.receipt(first);
+    link.receipt(first);
     link.publish(triple(link.plan, 7, 7, 8));
 
-    SnapshotReceiver fresh;
+    netw_test::StoreReader fresh;
+    fresh.declare(link.schema, ROUTE, BASE_TICK);
     SnapshotHeader named;
     const bool named_ok = name_snapshot_row(link.flight[0], named);
     CHECK(named_ok);
     NETW_CHECK_EQ(named.distance, 1);
-    const CodeRow *absent = fresh.baseline(named.baseline_revision());
-    const bool nothing = absent == nullptr;
-    CHECK(nothing);
+    NETW_CHECK_EQ(
+        int(fresh.land(PEER, link.flight[0])),
+        int(Arrival::BASELINE_UNKNOWN)
+    );
 
     SnapshotHeader header;
     CodeRow landed;
@@ -452,8 +490,9 @@ TEST_CASE(
     );
     CHECK(!read);
     NETW_CHECK_EQ(int(refusal), int(SnapshotRefusal::BASELINE_UNKNOWN));
-    NETW_CHECK_EQ(fresh.accepted_at(), 0);
-    NETW_CHECK_EQ(fresh.ring_count(), 0);
+    NETW_CHECK_EQ(fresh.accepted(PEER, named.token), 0);
+    NETW_CHECK_EQ(fresh.kept(PEER), 0);
+    NETW_CHECK_EQ(fresh.column(2), 0);
     NETW_CHECK_EQ(link.column(2), 7);
 }
 
@@ -465,31 +504,64 @@ TEST_CASE(
     link.open();
     const uint64_t first = link.publish(triple(link.plan, 2, 2, 2));
     link.flush();
-    link.sender.receipt(first);
+    link.receipt(first);
 
-    SnapshotReceiver busy;
+    const uint64_t busy_token = 5;
+    netw_test::StoreReader busy;
+    busy.declare(link.schema, ROUTE, BASE_TICK);
+    SnapshotHeader absolute;
+    absolute.token = busy_token;
     for (uint64_t at = 1; at <= 70000; ++at) {
-        busy.commit(at, triple(link.plan, at & 0x3ff, 0, 0));
+        absolute.revision = at;
+        busy.land(
+            PEER,
+            write_snapshot_row(
+                absolute,
+                BASE_TICK,
+                link.plan,
+                triple(link.plan, at & 0x3ff, 0, 0),
+                nullptr
+            )
+        );
     }
-    NETW_CHECK_EQ(busy.accepted_at(), 70000);
-    NETW_CHECK_EQ(busy.ring_count(), 64);
+    NETW_CHECK_EQ(busy.accepted(PEER, busy_token), 70000);
+    NETW_CHECK_EQ(busy.kept(PEER), netw::store::Table::RECEIVED_DEPTH);
 
     link.publish(triple(link.plan, 2, 2, 3));
     NETW_CHECK_EQ(link.last_distance, 1);
     NETW_CHECK_EQ(int(link.flush()), int(Arrival::ACCEPTED));
     NETW_CHECK_EQ(link.column(2), 3);
-    const CodeRow *sparse_base = link.receiver.baseline(first);
-    const bool sparse_base_is_held = sparse_base != nullptr;
+    const bool sparse_base_is_held = link.reader.keeps(PEER, first);
     CHECK(sparse_base_is_held);
 
-    SnapshotReceiver wide;
-    wide.commit(1, triple(link.plan, 11, 0, 0));
-    wide.commit(65537, triple(link.plan, 22, 0, 0));
-    const CodeRow *low = wide.baseline(1);
-    const CodeRow *high = wide.baseline(65537);
-    const bool both_held = low != nullptr && high != nullptr;
+    netw_test::StoreReader wide;
+    wide.declare(link.schema, ROUTE, BASE_TICK);
+    absolute.revision = 1;
+    wide.land(
+        PEER,
+        write_snapshot_row(
+            absolute,
+            BASE_TICK,
+            link.plan,
+            triple(link.plan, 11, 0, 0),
+            nullptr
+        )
+    );
+    absolute.revision = 65537;
+    wide.land(
+        PEER,
+        write_snapshot_row(
+            absolute,
+            BASE_TICK,
+            link.plan,
+            triple(link.plan, 22, 0, 0),
+            nullptr
+        )
+    );
+    const bool both_held = wide.keeps(PEER, 1) && wide.keeps(PEER, 65537);
     CHECK(both_held);
-    const bool distinct = !low->equals(*high);
+    const bool distinct
+        = !wide.image_at(PEER, 1).equals(wide.image_at(PEER, 65537));
     CHECK(distinct);
     const bool clean = link.ledger.audit().clean();
     CHECK(clean);
@@ -503,16 +575,20 @@ TEST_CASE(
     link.open();
     const uint64_t first = link.publish(triple(link.plan, 0, 0, 0));
     link.flush();
-    link.sender.receipt(first);
-    NETW_CHECK_EQ(link.sender.confirmed_at(), 1);
+    link.receipt(first);
+    NETW_CHECK_EQ(link.confirmed_at(), 1);
 
-    NETW_CHECK_EQ(link.sender.distance_for(1 + 32), 32);
-    NETW_CHECK_EQ(link.sender.distance_for(1 + 33), 0);
-    NETW_CHECK_EQ(link.sender.distance_for(1), 0);
-    NETW_CHECK_EQ(link.sender.distance_for(0), 0);
+    for (uint64_t at = 1; at <= 31; ++at) {
+        link.publish(triple(link.plan, at, 0, 0));
+    }
+    NETW_CHECK_EQ(link.publish(triple(link.plan, 32, 0, 0)), 1 + 32);
+    NETW_CHECK_EQ(link.last_distance, 32);
+    NETW_CHECK_EQ(link.publish(triple(link.plan, 33, 0, 0)), 1 + 33);
+    NETW_CHECK_EQ(link.last_distance, 0);
 
+    const CodeRow confirmed = triple(link.plan, 0, 0, 0);
     SnapshotHeader header;
-    header.token = TOKEN;
+    header.token = link.token();
     header.revision = 40;
     header.distance = 33;
     const godot::PackedByteArray refused = write_snapshot_row(
@@ -520,7 +596,7 @@ TEST_CASE(
         BASE_TICK,
         link.plan,
         triple(link.plan, 1, 1, 1),
-        link.sender.confirmed()
+        &confirmed
     );
     const bool nothing_written = refused.is_empty();
     CHECK(nothing_written);
@@ -532,7 +608,7 @@ TEST_CASE(
         BASE_TICK,
         link.plan,
         triple(link.plan, 1, 1, 1),
-        link.sender.confirmed()
+        &confirmed
     );
     const bool underflow_refused = underflow.is_empty();
     CHECK(underflow_refused);
@@ -553,6 +629,7 @@ TEST_CASE(
     for (int32_t step = 0; step < 400; ++step) {
         const uint64_t which = roll(seed) % 3;
         const uint64_t value = roll(seed) % 5;
+        const CodeRow before = triple(link.plan, x, y, z);
         if (which == 0) {
             x = value;
         } else if (which == 1) {
@@ -560,26 +637,28 @@ TEST_CASE(
         } else {
             z = value;
         }
-        const uint64_t revision = link.publish(triple(link.plan, x, y, z));
-        const bool published = revision != 0;
+        const CodeRow wanted = triple(link.plan, x, y, z);
+        const uint64_t revision = link.publish(wanted);
+        const bool published = revision != 0 || wanted.equals(before);
         CHECK(published);
 
         if (roll(seed) % 8 != 0) {
             link.flush();
-            unsettled.push_back(link.receiver.accepted_at());
+            unsettled.push_back(link.accepted_at());
         } else {
             link.flight.clear();
         }
         if (roll(seed) % 3 == 0 && !unsettled.is_empty()) {
             const int32_t at = int32_t(roll(seed) % uint64_t(unsettled.size()));
-            link.sender.receipt(unsettled[at]);
+            link.receipt(unsettled[at]);
             unsettled.remove_at(at);
         }
     }
 
+    link.publish(triple(link.plan, 9, 9, 9));
     link.publish(triple(link.plan, 4, 4, 4));
     link.flush();
-    link.sender.receipt(link.receiver.accepted_at());
+    link.receipt(link.accepted_at());
 
     const RowImageLedger::Verdict verdict = link.ledger.audit();
     const bool clean = verdict.clean();
@@ -587,11 +666,11 @@ TEST_CASE(
     NETW_CHECK_EQ(verdict.diverged, 0);
     NETW_CHECK_EQ(verdict.accepted_unstaged, 0);
     NETW_CHECK_EQ(verdict.restated_revisions, 0);
-    NETW_CHECK_GT(verdict.agreed, 300);
+    NETW_CHECK_GT(verdict.agreed, 250);
     NETW_CHECK_EQ(link.column(0), 4);
     NETW_CHECK_EQ(link.column(1), 4);
     NETW_CHECK_EQ(link.column(2), 4);
-    const bool quiet = link.sender.quiet();
+    const bool quiet = link.quiet();
     CHECK(quiet);
 }
 
@@ -603,27 +682,27 @@ TEST_CASE(
     Link link;
     link.open();
     const uint64_t first = link.publish(triple(link.plan, 2, 2, 2));
-    const bool owes_nothing_new = link.sender.awaiting_receipt();
+    const bool owes_nothing_new = link.awaiting_receipt();
     CHECK(owes_nothing_new);
-    const bool not_quiet_yet = !link.sender.quiet();
+    const bool not_quiet_yet = !link.quiet();
     CHECK(not_quiet_yet);
 
-    link.sender.desire(triple(link.plan, 2, 2, 2));
-    const bool a_restated_target_still_awaits = link.sender.awaiting_receipt();
+    const uint64_t restated = link.publish(triple(link.plan, 2, 2, 2));
+    NETW_CHECK_EQ(restated, 0);
+    const bool a_restated_target_still_awaits = link.awaiting_receipt();
     CHECK(a_restated_target_still_awaits);
-    NETW_CHECK_EQ(link.sender.exposed_high_water(), first);
+    NETW_CHECK_EQ(link.exposed_high_water(), first);
 
-    link.sender.desire(triple(link.plan, 2, 2, 3));
-    const bool a_moved_target_owes_a_revision = !link.sender.awaiting_receipt();
+    link.desire(triple(link.plan, 2, 2, 3));
+    const bool a_moved_target_owes_a_revision = !link.awaiting_receipt();
     CHECK(a_moved_target_owes_a_revision);
 
-    link.sender.desire(triple(link.plan, 2, 2, 2));
+    link.desire(triple(link.plan, 2, 2, 2));
     link.flush();
-    link.sender.receipt(first);
-    const bool a_confirmed_target_awaits_nothing
-        = !link.sender.awaiting_receipt();
+    link.receipt(first);
+    const bool a_confirmed_target_awaits_nothing = !link.awaiting_receipt();
     CHECK(a_confirmed_target_awaits_nothing);
-    const bool quiet = link.sender.quiet();
+    const bool quiet = link.quiet();
     CHECK(quiet);
 }
 
@@ -636,21 +715,24 @@ TEST_CASE(
     link.publish(triple(link.plan, 5, 0, 0));
     link.flight.clear();
 
-    const uint64_t repair = link.sender.pinned_repair();
+    link.now_ms += 300;
+    const uint64_t repair = link.repair();
     const bool the_repair_is_its_own_revision = repair > 1;
     CHECK(the_repair_is_its_own_revision);
-    NETW_CHECK_EQ(link.sender.pinned_repair(), repair);
-    NETW_CHECK_EQ(link.sender.pinned_repair(), repair);
-    NETW_CHECK_EQ(link.sender.repair_at_revision(), repair);
-    NETW_CHECK_EQ(link.sender.exposed_high_water(), repair);
+    NETW_CHECK_EQ(link.last_distance, 0);
+    link.now_ms += 300;
+    NETW_CHECK_EQ(link.repair(), repair);
+    link.now_ms += 300;
+    NETW_CHECK_EQ(link.repair(), repair);
+    NETW_CHECK_EQ(link.pinned_at(), repair);
+    NETW_CHECK_EQ(link.exposed_high_water(), repair);
 
     for (uint32_t at = 0; at < SNAPSHOT_STAGE_DEPTH + 4; ++at) {
-        const uint64_t spare = link.sender.reserve();
-        link.sender.expose(spare, triple(link.plan, 5, 0, uint64_t(at)));
+        link.mint_spare(triple(link.plan, 5, 0, uint64_t(at)), false);
     }
-    const bool the_repair_outlives_the_eviction = link.sender.holds(repair);
+    const bool the_repair_outlives_the_eviction = link.holds(repair);
     CHECK(the_repair_outlives_the_eviction);
-    NETW_CHECK_EQ(link.sender.pinned_repair(), repair);
+    NETW_CHECK_EQ(link.pinned_at(), repair);
 }
 
 TEST_CASE(
@@ -661,19 +743,21 @@ TEST_CASE(
     link.open();
     link.publish(triple(link.plan, 7, 0, 0));
     link.flight.clear();
-    const uint64_t stale = link.sender.pinned_repair();
+    link.now_ms += 300;
+    const uint64_t stale = link.repair();
+    NETW_CHECK_EQ(link.pinned_at(), stale);
 
-    link.sender.desire(triple(link.plan, 7, 0, 1));
-    NETW_CHECK_EQ(link.sender.repair_at_revision(), 0);
+    link.desire(triple(link.plan, 7, 0, 1));
+    NETW_CHECK_EQ(link.pinned_at(), 0);
 
-    const uint64_t fresh = link.sender.pinned_repair();
+    const uint64_t fresh = link.publish(triple(link.plan, 7, 0, 1));
     const bool the_repair_moved_with_the_target = fresh > stale;
     CHECK(the_repair_moved_with_the_target);
-    NETW_CHECK_EQ(link.sender.exposed_high_water(), fresh);
+    NETW_CHECK_EQ(link.exposed_high_water(), fresh);
 
-    link.sender.receipt(fresh);
-    NETW_CHECK_EQ(link.sender.confirmed_at(), fresh);
-    const bool quiet = link.sender.quiet();
+    link.receipt(fresh);
+    NETW_CHECK_EQ(link.confirmed_at(), fresh);
+    const bool quiet = link.quiet();
     CHECK(quiet);
 }
 

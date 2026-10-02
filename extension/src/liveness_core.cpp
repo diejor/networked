@@ -31,30 +31,51 @@ int rank_of(NetwLivenessCore::State state) {
 } // namespace
 
 NetwLivenessCore::Record *NetwLivenessCore::record_of(const RID &entity) const {
-    HashMap<RID, Record>::Iterator found
-        = const_cast<HashMap<RID, Record> &>(records).find(entity);
-    return found ? &found->value : nullptr;
+    return const_cast<SlotRows<Record> &>(records).find(entity.get_id());
+}
+
+void NetwLivenessCore::note_moved(int32_t route) {
+    if (route <= 0 || moved_overflow) {
+        return;
+    }
+    if (moved.size() >= MOVED_KEPT) {
+        moved.clear();
+        moved_overflow = true;
+        return;
+    }
+    moved.push_back(route);
+}
+
+bool NetwLivenessCore::take_moved(LocalVector<int32_t> &r_routes) {
+    r_routes.clear();
+    for (uint32_t at = 0; at < moved.size(); ++at) {
+        r_routes.push_back(moved[at]);
+    }
+    moved.clear();
+    const bool overflowed = moved_overflow;
+    moved_overflow = false;
+    return overflowed;
 }
 
 RID NetwLivenessCore::entity_create() {
     const RID entity = netw::entity::mint();
-    records.insert(entity, Record());
+    records.ensure(entity.get_id()).entity = entity;
     return entity;
 }
 
 bool NetwLivenessCore::adopt(const RID &entity) {
-    if (records.has(entity)) {
+    if (records.has(entity.get_id())) {
         return true;
     }
     if (!netw::entity::retain(entity)) {
         return false;
     }
-    records.insert(entity, Record());
+    records.ensure(entity.get_id()).entity = entity;
     return true;
 }
 
 bool NetwLivenessCore::entity_is_valid(const RID &entity) const {
-    return records.has(entity);
+    return records.has(entity.get_id());
 }
 
 int NetwLivenessCore::reserve_route() {
@@ -206,6 +227,7 @@ bool NetwLivenessCore::bind_route(const RID &entity, int route) {
     record->route = route;
     record->state = STATE_LIVE;
     by_route[route] = entity;
+    note_moved(route);
     return true;
 }
 
@@ -294,6 +316,7 @@ bool NetwLivenessCore::set_state(const RID &entity, State state) {
         return false;
     }
     record->state = state;
+    note_moved(record->route);
     return true;
 }
 
@@ -303,15 +326,15 @@ bool NetwLivenessCore::hide_route(int route) {
         return false;
     }
     record->state = STATE_ABSENT;
+    note_moved(route);
     return true;
 }
 
 PackedInt32Array NetwLivenessCore::live_routes() const {
     PackedInt32Array out;
     for (const godot::KeyValue<int32_t, RID> &row : by_route) {
-        const HashMap<RID, Record>::ConstIterator record
-            = records.find(row.value);
-        if (record && record->value.state == STATE_LIVE) {
+        const Record *record = records.find(row.value.get_id());
+        if (record != nullptr && record->state == STATE_LIVE) {
             out.push_back(row.key);
         }
     }
@@ -413,7 +436,7 @@ int NetwLivenessCore::pending_live_count() const {
 }
 
 PackedInt32Array NetwLivenessCore::poll(int clock_tick) {
-    NETW_ZONE_NC("NetwLivenessCore poll", colors::LIVENESS);
+    NETW_ZONE_NC("Liveness promote pending", colors::LIVENESS);
     NETW_ZONE_VALUE(pending_live_count());
     frame_counter += 1;
     return sweep_pending(clock_tick);
@@ -460,9 +483,9 @@ PackedInt32Array NetwLivenessCore::sweep_pending(int clock_tick) {
 }
 
 void NetwLivenessCore::clear() {
-    for (const KeyValue<RID, Record> &row : records) {
-        netw::entity::release(row.key);
-    }
+    records.each([](uint64_t, const Record &p_row) {
+        netw::entity::release(p_row.entity);
+    });
     records.clear();
     by_route.clear();
     pending.clear();
@@ -472,6 +495,8 @@ void NetwLivenessCore::clear() {
     route_counter = 0;
     minted_high = 0;
     frame_counter = 0;
+    moved.clear();
+    moved_overflow = true;
 }
 
 NetwLivenessCore::NetwLivenessCore() {

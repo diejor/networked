@@ -68,7 +68,9 @@ struct RestEvidence {
     int asleep = 0;
     int64_t rest_written = -1;
     int64_t woken_before = -1;
+    int64_t woken_reported = -1;
     int64_t woken_after = -1;
+    bool reported_awake = false;
 };
 
 RestEvidence &rest_evidence() {
@@ -194,6 +196,10 @@ public:
             body_at(0)->set_linear_velocity(NUDGE);
         }
         if (frame == woken + 1) {
+            rest_evidence().reported_awake = !body_at(0)->is_sleeping();
+            rest_evidence().woken_reported = written_at(0);
+        }
+        if (frame == woken + 2) {
             rest_evidence().woken_after = written_at(0);
             close();
             done = true;
@@ -221,12 +227,13 @@ TEST_CASE(
 
 TEST_CASE(
     "[Networked][Display][Frame] a cube woken out of a resting active pile "
-    "writes its visual on the frame it wakes"
+    "writes its visual on the frame the engine reports it awake"
 ) {
     const RestEvidence &evidence = rest_evidence();
     REQUIRE(evidence.driven);
     REQUIRE(evidence.woken_before >= 0);
-    NETW_CHECK_GT(evidence.woken_after, evidence.woken_before);
+    REQUIRE(evidence.reported_awake);
+    NETW_CHECK_GT(evidence.woken_after, evidence.woken_reported);
 }
 
 } // namespace TestNetwDisplayChaseRestFrameLaws

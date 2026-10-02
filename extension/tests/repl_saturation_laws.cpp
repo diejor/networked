@@ -17,9 +17,9 @@ namespace TestNetwReplSaturation {
 using godot::Array;
 using godot::LocalVector;
 using netw::SchemaCore;
-using netw::repl::RowOffer;
 using netw::repl::SessionResult;
-using netw::repl::SessionSend;
+using netw_test::RowOffer;
+using netw_test::SessionSend;
 using netw::table::SchemaRecord;
 using netw::wire::ChannelDecl;
 using netw::wire::Delivery;
@@ -74,7 +74,7 @@ RowOffer offer(int64_t p_route, int64_t p_value, float p_priority) {
     Array values;
     values.push_back(p_value);
     values.push_back(p_value * 2);
-    out.values = values;
+    netw_test::offer_values(out, values);
     out.recipients.push_back(PEER);
     out.priority = p_priority;
     out.masked = true;
@@ -101,7 +101,7 @@ int64_t one_frame_bits() {
     offers.push_back(offer(1, 1, 1.0f));
     netw_test::seat_streams(probe, offers);
     const SessionResult out = probe.run(reg, offers, 1 << 20, 0);
-    return out.sends.is_empty() ? 0 : out.sends[0].bits;
+    return out.sends.is_empty() ? 0 : out.sends[0].framed * 8;
 }
 
 Saturation saturate(bool p_ranked) {

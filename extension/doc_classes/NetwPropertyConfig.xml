@@ -16,8 +16,8 @@
 		    aim_dir = (get_global_mouse_position() - position).normalized()
 		    # the next tick sends every changed property
 		[/codeblock]
-		[enum NetwPropertySet.Record] compares the three kinds. A property with none of them is sent only when [method Netw.sync_property] is called.
-		[method volatile], [method retained], [method epsilon] and [method persisted] apply to one property. [method every_tick], [method on_change], [method heartbeat], [method windowed], [method audience] and [method masked] apply to every property of the same kind on the script, so the last call wins.
+		[constant NetwMultiplayer.RECORD_KIND_STATE], [constant NetwMultiplayer.RECORD_KIND_INPUT] and [constant NetwMultiplayer.RECORD_KIND_BROADCAST] name the three kinds. A property with none of them is sent only when [method Netw.sync_property] is called.
+		[method volatile], [method retained], [method epsilon] and [method persisted] apply to one property. [method on_change], [method heartbeat], [method windowed], [method audience] and [method masked] apply to every property of the same kind on the script, so the last call wins.
 		[b]Rigid bodies[/b]
 		When the entity root is a [RigidBody3D] or a [RigidBody2D], [code]position[/code], [code]quaternion[/code] ([code]rotation[/code] in 2D), [code]linear_velocity[/code], [code]angular_velocity[/code] and [code]sleeping[/code] read and write the body's physics state. [code]position[/code] stays relative to the parent. While [member RigidBody3D.freeze] is on, position and rotation use the node transform.
 		[codeblock]
@@ -35,7 +35,7 @@
 			<return type="NetwPropertyConfig" />
 			<param index="0" name="server_only" type="bool" default="true" />
 			<description>
-				Sends properties of this kind to the server only, or to every peer when [param server_only] is [code]false[/code]. Sets [member NetwPropertySet.audience]. [method input] already sends to the server only.
+				Sends properties of this kind to the server only, or to every peer when [param server_only] is [code]false[/code]. Sets [member set_audience]. [method input] already sends to the server only.
 			</description>
 		</method>
 		<method name="broadcast">
@@ -129,17 +129,6 @@
 				Use [method reconcile_only] for a value that should never cause a correction.
 			</description>
 		</method>
-		<method name="every_tick">
-			<return type="NetwPropertyConfig" />
-			<param index="0" name="interval" type="float" default="0.0" />
-			<description>
-				Sends properties of this kind every tick even when nothing changed, at most once per [param interval] seconds.
-				[codeblock]
-				# position changes every tick anyway
-				Netw.configure_property(self, &amp;"position").state().every_tick()
-				[/codeblock]
-			</description>
-		</method>
 		<method name="heartbeat">
 			<return type="NetwPropertyConfig" />
 			<param index="0" name="ticks" type="int" />
@@ -196,22 +185,19 @@
 		</method>
 		<method name="persisted">
 			<return type="NetwPropertyConfig" />
-			<param index="0" name="column" type="NetwColumnRef" />
+			<param index="0" name="saved_column_name" type="StringName" default="&amp;&quot;&quot;" />
 			<description>
-				Saves the server's value of this property into [param column] of the entity's saved row, whether or not it is also replicated. [param column] must come from the [NetwSchema] given to [method NetwPersistenceConfig.schema] and match the property's type.
+				Saves the server's value of this property into the entity's record, whether or not it is also replicated. The saved column is named after the property, or [param saved_column_name] when given, so a property renamed later keeps its stored records by passing its old name. Two properties of one entity may not share a saved column name.
 				[codeblock]
-				var schema := game.save_schema
-
 				# never replicated, the server still saves it
-				Netw.configure_property(self, &amp;"gold").persisted(schema.column_ref(0))
+				Netw.configure_property(self, &amp;"gold", false).persisted()
 
-				# replicated and saved
+				# replicated and saved as "where"
 				Netw.configure_property(self, &amp;"position") \
-				        .state().persisted(schema.column_ref(1))
+				        .state().persisted(&amp;"where")
 
 				# sent by the client, saved by the server
-				Netw.configure_property(self, &amp;"loadout") \
-				        .input().persisted(schema.column_ref(2))
+				Netw.configure_property(self, &amp;"loadout").input().persisted()
 				[/codeblock]
 				How often the row is saved is set with [method NetwPersistenceConfig.interval].
 			</description>
@@ -320,17 +306,14 @@
 		<member name="is_spawn_state" type="bool" setter="set_is_spawn_state" getter="get_is_spawn_state" default="false">
 			Set by [method on_spawn].
 		</member>
-		<member name="lane" type="int" setter="set_lane" getter="get_lane" enum="NetwPropertySet.Lane" default="0">
+		<member name="lane" type="int" setter="set_lane" getter="get_lane" enum="NetwPropertyConfig.Lane" default="0">
 			Whether changes are sent unreliably or reliably. Set by [method volatile] and [method retained].
 		</member>
-		<member name="property_class" type="int" setter="set_property_class" getter="get_property_class" enum="NetwPropertySet.PropertyClass" default="0">
+		<member name="property_class" type="int" setter="set_property_class" getter="get_property_class" enum="NetwPropertyConfig.PropertyClass" default="0">
 			Whether a difference in the value causes a correction. Set by [method causal], [method derived] and [method cosmetic].
 		</member>
-		<member name="set_audience" type="int" setter="set_set_audience" getter="get_set_audience" enum="NetwPropertySet.Audience" default="0">
+		<member name="set_audience" type="int" setter="set_set_audience" getter="get_set_audience" enum="NetwPropertyConfig.Audience" default="0">
 			Set by [method audience] and [method input].
-		</member>
-		<member name="set_every_tick_interval" type="float" setter="set_set_every_tick_interval" getter="get_set_every_tick_interval" default="-1.0">
-			Set by [method every_tick]. Negative when unset.
 		</member>
 		<member name="set_heartbeat_ticks" type="int" setter="set_set_heartbeat_ticks" getter="get_set_heartbeat_ticks" default="-1">
 			Set by [method heartbeat], or [constant UNSET].
@@ -338,8 +321,8 @@
 		<member name="set_masked" type="bool" setter="set_set_masked" getter="get_set_masked" default="false">
 			Set by [method masked].
 		</member>
-		<member name="set_trigger" type="int" setter="set_set_trigger" getter="get_set_trigger" enum="NetwPropertySet.Trigger" default="-1">
-			Set by [method every_tick] and [method on_change], or [constant UNSET].
+		<member name="set_trigger" type="int" setter="set_set_trigger" getter="get_set_trigger" enum="NetwPropertyConfig.Trigger" default="-1">
+			Set by [method on_change], or [constant UNSET].
 		</member>
 		<member name="set_window" type="int" setter="set_set_window" getter="get_set_window" default="-1">
 			Set by [method windowed], or [constant UNSET].
@@ -351,6 +334,36 @@
 	<constants>
 		<constant name="UNSET" value="-1">
 			A setting no call has written yet.
+		</constant>
+		<constant name="TRIGGER_TICK" value="0" enum="Trigger">
+			Sent every tick.
+		</constant>
+		<constant name="TRIGGER_ON_CHANGE" value="1" enum="Trigger">
+			Sent when a value changed.
+		</constant>
+		<constant name="TRIGGER_ON_DEMAND" value="2" enum="Trigger">
+			Sent only by [method Netw.sync_property].
+		</constant>
+		<constant name="VOLATILE" value="0" enum="Lane">
+			Sent unreliably. Only the newest value counts.
+		</constant>
+		<constant name="RETAINED" value="1" enum="Lane">
+			Sent reliably, only when it changes.
+		</constant>
+		<constant name="CAUSAL" value="0" enum="PropertyClass">
+			Affects the next step, so it is compared and corrected.
+		</constant>
+		<constant name="DERIVED" value="1" enum="PropertyClass">
+			Computed from other properties each step, so it is not compared.
+		</constant>
+		<constant name="COSMETIC" value="2" enum="PropertyClass">
+			Only affects display, so it is not compared.
+		</constant>
+		<constant name="AUDIENCE_PUBLIC" value="0" enum="Audience">
+			Sent to every peer that sees the entity.
+		</constant>
+		<constant name="AUDIENCE_SERVER_ONLY" value="1" enum="Audience">
+			Sent to the server only.
 		</constant>
 	</constants>
 </class>

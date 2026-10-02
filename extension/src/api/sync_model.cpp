@@ -1,7 +1,6 @@
 #include "netw/api/sync_model.hpp"
 
 #include "godot/node.hpp"
-#include "netw/api/property_set_binding.hpp"
 #include "netw/colors.hpp"
 #include "netw/profile.hpp"
 
@@ -152,31 +151,28 @@ bool NetwSyncModel::admits_schema(int64_t p_route, int64_t p_ordinal) const {
     return impl.admits_schema(p_route, p_ordinal);
 }
 
-StringName NetwSyncModel::slot_of(
-    int64_t p_route,
-    int64_t p_kind,
-    const StringName &p_key,
-    int64_t p_record
-) {
-    return StringName(
-        String::num_int64(p_route) + "/" + String::num_int64(p_kind) + "/"
-        + String(p_key) + "/" + String::num_int64(p_record)
-    );
-}
-
 void NetwSyncModel::attach(
     int64_t p_route,
     int64_t p_kind,
     const StringName &p_key,
     int64_t p_record,
-    const Ref<NetwPropertySetBinding> &p_binding
+    const repl::PropertyBindingPtr &p_binding
 ) {
-    const StringName slot = slot_of(p_route, p_kind, p_key, p_record);
-    if (p_binding.is_null()) {
-        bindings.erase(slot);
-        return;
-    }
-    bindings[slot] = p_binding;
+    impl.bind_row(
+        p_route,
+        p_kind,
+        p_key,
+        p_record,
+        p_binding != nullptr ? p_binding->id : 0
+    );
+}
+
+void NetwSyncModel::attach_book(const repl::BindingBook *p_book) {
+    book = p_book;
+}
+
+repl::PropertyBinding *NetwSyncModel::live(uint64_t p_binding) const {
+    return book != nullptr ? book->live(p_binding) : nullptr;
 }
 
 void NetwSyncModel::detach(
@@ -185,29 +181,22 @@ void NetwSyncModel::detach(
     const StringName &p_key,
     int64_t p_record
 ) {
-    bindings.erase(slot_of(p_route, p_kind, p_key, p_record));
+    impl.bind_row(p_route, p_kind, p_key, p_record, 0);
 }
 
-Ref<NetwPropertySetBinding> NetwSyncModel::binding_of(
+repl::PropertyBindingPtr NetwSyncModel::binding_of(
     int64_t p_route,
     int64_t p_ordinal
 ) const {
     const repl::SetRow *found = impl.row(p_route, p_ordinal);
-    if (found == nullptr) {
-        return Ref<NetwPropertySetBinding>();
-    }
-    HashMap<StringName, Ref<NetwPropertySetBinding>>::ConstIterator held
-        = bindings.find(
-            slot_of(found->route, found->kind, found->key, found->record)
-        );
-    return held == bindings.end() ? Ref<NetwPropertySetBinding>() : held->value;
+    return found != nullptr ? live(found->binding) : nullptr;
 }
 
-TypedArray<NetwPropertySetBinding> NetwSyncModel::route_bindings(
+LocalVector<repl::PropertyBindingPtr> NetwSyncModel::route_bindings(
     int64_t p_route,
     int64_t p_kind
 ) const {
-    TypedArray<NetwPropertySetBinding> out;
+    LocalVector<repl::PropertyBindingPtr> out;
     const LocalVector<repl::SetRow> *rows = impl.route_rows(p_route);
     if (rows == nullptr) {
         return out;
@@ -216,36 +205,23 @@ TypedArray<NetwPropertySetBinding> NetwSyncModel::route_bindings(
         if (row.kind != p_kind) {
             continue;
         }
-        HashMap<StringName, Ref<NetwPropertySetBinding>>::ConstIterator held
-            = bindings.find(slot_of(row.route, row.kind, row.key, row.record));
-        if (held != bindings.end()) {
-            out.push_back(held->value);
+        repl::PropertyBinding *found = live(row.binding);
+        if (found != nullptr) {
+            out.push_back(found);
         }
     }
     return out;
 }
 
 void NetwSyncModel::clear_route(int64_t p_route) {
-    const String prefix = String::num_int64(p_route) + "/";
-    LocalVector<StringName> doomed;
-    for (const KeyValue<StringName, Ref<NetwPropertySetBinding>> &row :
-         bindings) {
-        if (String(row.key).begins_with(prefix)) {
-            doomed.push_back(row.key);
-        }
-    }
-    for (const StringName &slot : doomed) {
-        bindings.erase(slot);
-    }
     impl.clear_route(p_route);
 }
 
 void NetwSyncModel::clear() {
-    bindings.clear();
     impl.clear();
 }
 
-Ref<NetwPropertySetBinding> NetwSyncModel::admit_row(
+repl::PropertyBindingPtr NetwSyncModel::admit_row(
     int64_t p_route,
     int64_t p_ordinal,
     int64_t p_sender,
@@ -254,17 +230,17 @@ Ref<NetwPropertySetBinding> NetwSyncModel::admit_row(
 ) {
     if (p_ordinal < 0) {
         ++drops_no_set;
-        return Ref<NetwPropertySetBinding>();
+        return nullptr;
     }
-    const Ref<NetwPropertySetBinding> held = binding_of(p_route, p_ordinal);
-    if (held.is_null()) {
+    repl::PropertyBinding *const held = binding_of(p_route, p_ordinal);
+    if (held == nullptr) {
         ++drops_no_set;
-        return Ref<NetwPropertySetBinding>();
+        return nullptr;
     }
     Node *node = held->node();
     if (node == nullptr) {
         ++drops_no_set;
-        return Ref<NetwPropertySetBinding>();
+        return nullptr;
     }
     if (!admits_sender(
             p_route,
@@ -275,13 +251,18 @@ Ref<NetwPropertySetBinding> NetwSyncModel::admit_row(
             p_coordinator
         )) {
         ++drops_bad_sender;
-        return Ref<NetwPropertySetBinding>();
+        return nullptr;
     }
     if (!admits_schema(p_route, p_ordinal)) {
         ++drops_schema;
-        return Ref<NetwPropertySetBinding>();
+        return nullptr;
     }
     return held;
+}
+
+void NetwSyncModel::note_offers(int64_t p_unauthored, int64_t p_unreached) {
+    skips_not_author += p_unauthored;
+    skips_no_recipients += p_unreached;
 }
 
 PackedInt32Array NetwSyncModel::offer_row(

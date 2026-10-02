@@ -87,7 +87,11 @@ void TrackerClient::poll(int64_t p_now_usec, int64_t p_frame) {
         }
         if (state == gd::WEB_SOCKET_CLOSED) {
             if (socket.opened) {
-                NETW_INFO(sys::TRANSPORT, "tracker closed: %s", socket.url);
+                NETW_INFO(
+                    sys::TRANSPORT,
+                    "The signaling tracker %s closed.",
+                    socket.url
+                );
             } else {
                 note_failure(socket.url, "closed before opening");
             }
@@ -119,7 +123,11 @@ void TrackerClient::poll(int64_t p_now_usec, int64_t p_frame) {
             }
             const Dictionary data = parsed;
             if (data.has("warning") || data.has("failure reason")) {
-                NETW_TRACE(sys::TRANSPORT, "tracker notice %s", text);
+                NETW_TRACE(
+                    sys::TRANSPORT,
+                    "The signaling tracker sent a notice (%s).",
+                    text
+                );
                 continue;
             }
             TrackerEvent message;
@@ -140,7 +148,8 @@ void TrackerClient::poll(int64_t p_now_usec, int64_t p_frame) {
         reported_unreachable = true;
         NETW_WARN_ONCE(
             sys::TRANSPORT,
-            "WebRTC signaling has no tracker. Tried: %s",
+            "WebRTC could not reach any signaling tracker (%s). Check the "
+            "network, or pass your own NetwWebRTCSignaler.",
             String(", ").join(failures)
         );
         TrackerEvent none;
@@ -183,7 +192,7 @@ void TrackerClient::note_failure(const String &p_url, const char *p_reason) {
     if (warns_on_failure()) {
         NETW_WARN(
             sys::TRANSPORT,
-            "tracker unreachable: %s (%s)",
+            "The signaling tracker %s could not be reached (%s).",
             p_url,
             String(p_reason)
         );
@@ -191,7 +200,7 @@ void TrackerClient::note_failure(const String &p_url, const char *p_reason) {
     }
     NETW_INFO(
         sys::TRANSPORT,
-        "tracker unreachable: %s (%s)",
+        "The signaling tracker %s could not be reached (%s).",
         p_url,
         String(p_reason)
     );
