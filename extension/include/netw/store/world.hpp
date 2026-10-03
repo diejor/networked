@@ -106,6 +106,10 @@ class World {
     void owe_changed(Table &p_table, uint32_t p_row);
     void count_probe(const Table &p_table, uint32_t p_row, bool p_reads);
     void close_row(const RowAddress &p_at, uint32_t p_peer, Stream p_stream);
+    void evict_dormant(
+        uint32_t p_peer,
+        godot::LocalVector<wire::ClosedLane> &r_closed
+    );
     void close_life(const RowAddress &p_at);
     bool stream_row(
         int p_peer,
@@ -532,10 +536,18 @@ public:
 
     godot::LocalVector<uint64_t> opening_requests(int p_peer) const;
 
-    godot::LocalVector<wire::ClosedLane> close_tenures_other_than(
+    godot::LocalVector<wire::ClosedLane> park_tenures_other_than(
         int64_t p_route,
         uint64_t p_tenure
     );
+
+    bool stream_resume(
+        uint32_t p_peer,
+        const RowAddress &p_at,
+        const wire::StreamTenure &p_bound
+    );
+
+    uint32_t dormant_count(int p_peer) const;
 
     godot::LocalVector<wire::ClosedLane> close_anchors_other_than(
         int64_t p_route,

@@ -19,6 +19,7 @@ using netw::NetwMultiplayer;
 const char *BODY_ID = "departure_body";
 
 constexpr int SETTLE_PUMPS = 8;
+constexpr int REPAIR_PUMPS = 16;
 constexpr int WATCH_PUMPS = 30;
 
 Node *build_body(const Variant &p_name) {
@@ -156,7 +157,7 @@ TEST_CASE(
     REQUIRE(world.streams());
 
     world.rig.drop_client(0, true);
-    world.stream(2);
+    world.stream(REPAIR_PUMPS);
     world.rig.clear_refused_sends();
     world.stream(WATCH_PUMPS);
 

@@ -25,10 +25,13 @@ struct Contact {
     bool fence_met = true;
     bool eligible = false;
     bool monitored = false;
+    bool reports = false;
     bool warned = false;
 };
 
 void monitor_contacts(const Bodies &p_bodies);
+
+bool reports_contacts(const Bodies &p_bodies);
 
 void touching(
     const Bodies &p_bodies,

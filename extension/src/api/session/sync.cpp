@@ -994,66 +994,88 @@ void NetwMultiplayer::row_control_receive(
         return;
     }
     const int64_t channel = wire::builtin_channel(StringName("ROW_CONTROL"));
-    wire::ControlRecord record;
-    if (!wire::read_control_record(p_payload, record)) {
+    const int peer = int(p_sender);
+    LocalVector<wire::ControlRecord> records;
+    if (!send->control_scheduler().read(peer, p_payload, records)) {
         attribution_note_refusal(p_sender, channel, wire::Refusal::MALFORMED);
         return;
     }
-    const int peer = int(p_sender);
-    wire::StreamLane lane;
-    lane.route = record.route;
-    lane.ordinal = record.ordinal;
-    lane.family = record.family;
+    for (uint32_t at = 0; at < records.size(); ++at) {
+        row_control_apply(send, records[at], peer);
+    }
+}
 
-    switch (record.tag) {
+void NetwMultiplayer::row_control_apply(
+    ReplicationSend *p_send,
+    const wire::ControlRecord &p_record,
+    int p_peer
+) {
+    ReplicationCore *plane = get_replication_plane();
+    wire::StreamLane lane;
+    lane.route = p_record.route;
+    lane.ordinal = p_record.ordinal;
+    lane.family = p_record.family;
+
+    switch (p_record.tag) {
         case wire::ControlTag::OPEN: {
-            if (liveness_route_state(record.route)
+            if (!p_record.resolved) {
+                wire::ControlRecord answer;
+                answer.tag = wire::ControlTag::RESET;
+                answer.request = p_record.request;
+                p_send->control_scheduler().queue(p_peer, answer);
+                return;
+            }
+            if (liveness_route_state(p_record.route)
                 == NetwLivenessCore::STATE_UNKNOWN) {
                 return;
             }
-            if (uint64_t(liveness_route_epoch(record.route)) != record.epoch) {
+            if (uint64_t(liveness_route_epoch(p_record.route))
+                != p_record.epoch) {
                 return;
             }
             wire::ParkedOpen asked;
-            asked.peer = peer;
+            asked.peer = p_peer;
             asked.lane = lane;
-            asked.request = record.request;
-            asked.epoch = record.epoch;
-            asked.schema = record.schema;
-            asked.tenure = record.tenure;
-            asked.anchor = record.anchor;
-            asked.anchor_author = record.anchor_author;
+            asked.request = p_record.request;
+            asked.epoch = p_record.epoch;
+            asked.schema = p_record.schema;
+            asked.tenure = p_record.tenure;
+            asked.anchor = p_record.anchor;
+            asked.anchor_author = p_record.anchor_author;
             asked.parked_at_ms = session_elapsed_ms();
             seat_or_park(
-                send,
+                p_send,
                 plane->get_sync_model(),
-                wrapper_for_route(record.route),
+                wrapper_for_route(p_record.route),
                 asked,
-                anchor_tenure(anchor_installed(record.route)),
+                anchor_tenure(anchor_installed(p_record.route)),
                 session_authority_peer()
             );
             return;
         }
         case wire::ControlTag::READY: {
-            send->stream_ready(peer, record.request, record.token);
+            p_send->stream_ready(p_peer, p_record.request, p_record.token);
             return;
         }
         case wire::ControlTag::ACCEPT: {
-            for (uint32_t at = 0; at < record.receipts.size(); ++at) {
-                send->stream_receipt(
-                    peer,
-                    record.receipts[at].token,
-                    record.receipts[at].revision
+            for (uint32_t at = 0; at < p_record.receipts.size(); ++at) {
+                p_send->stream_receipt(
+                    p_peer,
+                    p_record.receipts[at].token,
+                    p_record.receipts[at].revision
                 );
             }
             return;
         }
         case wire::ControlTag::RESET: {
-            send->stream_reset(peer, record.request, record.token);
+            if (p_record.token == 0) {
+                p_send->control_scheduler().forget_sent_basis(p_peer);
+            }
+            p_send->stream_reset(p_peer, p_record.request, p_record.token);
             return;
         }
         case wire::ControlTag::CLOSE: {
-            send->reader_book().close(peer, record.token);
+            p_send->reader_book().close(p_peer, p_record.token);
             return;
         }
     }
@@ -1078,26 +1100,29 @@ void NetwMultiplayer::row_control_flush(
     }
     const LocalVector<int> ready = scheduler.ready_peers(now);
     for (uint32_t at = 0; at < ready.size(); ++at) {
-        const LocalVector<wire::ControlRecord> records = scheduler.flush(
+        PackedByteArray frame;
+        scheduler.flush(
             ready[at],
             now,
             p_send->control_budget_bytes(
                 ready[at],
                 wire::CONTROL_TICK_RESERVATION_BYTES
-            )
+            ),
+            &frame
         );
-        for (uint32_t which = 0; which < records.size(); ++which) {
-            send_to(
-                int64_t(ready[at]),
-                0,
-                p_channel,
-                wire::write_control_record(records[which]),
-                true,
-                0,
-                String(),
-                true
-            );
+        if (frame.is_empty()) {
+            continue;
         }
+        send_to(
+            int64_t(ready[at]),
+            0,
+            p_channel,
+            frame,
+            true,
+            0,
+            String(),
+            true
+        );
     }
 }
 
@@ -1116,9 +1141,50 @@ void NetwMultiplayer::row_streams_follow_tenure(
     if (send == nullptr || p_route <= 0) {
         return;
     }
-    send->close_tenures(p_route, p_tenure);
-    send->reader_book().close_tenures_before(p_route, p_tenure);
+    send->park_tenures(p_route, p_tenure);
+    row_streams_follow_readers(plane, send, p_route, p_tenure);
     row_streams_reseat_parks(plane, send, p_route);
+}
+
+void NetwMultiplayer::row_streams_follow_readers(
+    ReplicationCore *p_plane,
+    ReplicationSend *p_send,
+    int64_t p_route,
+    uint64_t p_tenure
+) {
+    wire::StreamReaderBook &book = p_send->reader_book();
+    const LocalVector<wire::BoundLane> moved
+        = book.lanes_bound_before(p_route, p_tenure);
+    if (moved.is_empty()) {
+        return;
+    }
+    const Ref<NetwEntity> entity = wrapper_for_route(p_route);
+    const wire::StreamTenure installed
+        = anchor_tenure(anchor_installed(p_route));
+    for (uint32_t at = 0; at < moved.size(); ++at) {
+        const wire::BoundLane &lane = moved[at];
+        wire::StreamTenure asked;
+        asked.anchor = lane.tenure.anchor;
+        asked.anchor_author = lane.tenure.anchor_author;
+        wire::StreamTenure seated;
+        const OpenSeat seat = open_seat(
+            p_plane->get_sync_model(),
+            entity,
+            int64_t(lane.peer),
+            lane.lane,
+            p_tenure,
+            asked,
+            installed,
+            session_authority_peer(),
+            seated
+        );
+        book.follow_tenure(
+            lane.peer,
+            lane.lane,
+            p_tenure,
+            seat == OpenSeat::SEAT
+        );
+    }
 }
 
 void NetwMultiplayer::row_streams_follow_anchor(

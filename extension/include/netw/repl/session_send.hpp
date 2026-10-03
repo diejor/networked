@@ -145,7 +145,12 @@ class SessionSend {
         uint64_t p_request
     );
 
-    bool stream_seated(uint32_t p_peer, uint32_t p_table, uint32_t p_row);
+    bool stream_seated(
+        uint32_t p_peer,
+        uint32_t p_table,
+        uint32_t p_row,
+        int64_t p_now_ms
+    );
 
     bool classify(
         uint32_t p_peer,
@@ -220,6 +225,8 @@ class SessionSend {
 public:
     static constexpr uint32_t MISSES_PER_TICK = 4;
     static constexpr double BANKED_TICKS = 2.0;
+    static constexpr double DEBT_TICKS = 2.0;
+    static constexpr double ROW_FLOOR_SHARE = 0.25;
 
     void set_rate(double p_bytes_per_second) {
         session_rate = p_bytes_per_second;
@@ -239,6 +246,8 @@ public:
     }
 
     void charge(int p_peer, int64_t p_bytes);
+
+    static void bound_debt(PeerAccount &r_account, double p_fill);
 
     void note_backlog(int p_peer, int64_t p_buffered, int64_t p_now_ms) {
         link.note_backlog(p_peer, p_buffered, p_now_ms);
@@ -360,7 +369,7 @@ public:
 
     void close_route(int64_t p_route);
 
-    void close_tenures(int64_t p_route, uint64_t p_tenure);
+    void park_tenures(int64_t p_route, uint64_t p_tenure);
 
     void close_anchors(int64_t p_route, uint64_t p_anchor, uint64_t p_author);
 

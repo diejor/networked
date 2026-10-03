@@ -234,6 +234,12 @@ LocalVector<int> peers(int a, int b = -1) {
     return out;
 }
 
+LocalVector<RowOffer> peers_offer(int64_t p_value) {
+    LocalVector<RowOffer> out;
+    out.push_back(offer(1, p_value, peers(PEER)));
+    return out;
+}
+
 TEST_CASE(
     "[Networked][Repl][Hosted] a first pass owes every recipient the whole row"
 ) {
@@ -870,6 +876,74 @@ TEST_CASE(
     SessionSend full;
     drive_send(full, reg, offers, one_frame_bits(offers), 1);
     NETW_CHECK_EQ(full.control_budget_bytes(PEER, reserved), reserved);
+}
+
+TEST_CASE(
+    "[Networked][Repl][Hosted] a burst of control charged to a peer still "
+    "leaves its rows a floor of the budget on every tick"
+) {
+    const WireRegistry reg = registry();
+    const int64_t budget = one_frame_bits(peers_offer(0)) * 8;
+    SessionSend session;
+    drive_send(session, reg, peers_offer(0), budget, 1, 0);
+
+    session.charge(PEER, budget * 64);
+
+    for (int64_t tick = 1; tick <= 4; ++tick) {
+        const SessionResult out = drive_send(
+            session,
+            reg,
+            peers_offer(tick),
+            budget,
+            uint16_t(tick + 1),
+            tick
+        );
+        NETW_CHECK_EQ(out.sends.size(), 1);
+    }
+}
+
+TEST_CASE(
+    "[Networked][Repl][Hosted] a peer whose whole budget is one row still "
+    "sends that row on every tick of a control burst"
+) {
+    const WireRegistry reg = registry();
+    const int64_t budget = one_frame_bits(peers_offer(0));
+    SessionSend session;
+    drive_send(session, reg, peers_offer(0), budget, 1, 0);
+
+    for (int64_t tick = 1; tick <= 4; ++tick) {
+        session.charge(PEER, budget);
+        const SessionResult out = drive_send(
+            session,
+            reg,
+            peers_offer(tick),
+            budget,
+            uint16_t(tick + 1),
+            tick
+        );
+        NETW_CHECK_EQ(out.sends.size(), 1);
+    }
+}
+
+TEST_CASE(
+    "[Networked][Repl][Hosted] the debt a control burst leaves is repaid "
+    "within a bounded number of ticks"
+) {
+    const WireRegistry reg = registry();
+    const int64_t budget = one_frame_bits(peers_offer(0)) * 8;
+    SessionSend session;
+    drive_send(session, reg, peers_offer(0), budget, 1, 0);
+
+    session.charge(PEER, budget * 64);
+    session.charge(PEER, budget * 64);
+
+    const double fill = session.fill_of(PEER, budget);
+    const netw::repl::PeerAccount *account = session.account(PEER);
+    REQUIRE(account != nullptr);
+    NETW_CHECK_GE(
+        account->balance,
+        -fill * netw::repl::SessionSend::DEBT_TICKS
+    );
 }
 
 } // namespace TestNetwReplSessionSend

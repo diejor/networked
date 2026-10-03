@@ -12,6 +12,9 @@ namespace netw::wire {
 uint64_t next_stream_token();
 uint64_t next_open_request();
 
+constexpr uint64_t STREAM_BINDING_SPAN = 256;
+constexpr uint32_t DORMANT_LANE_CAP = 1024;
+
 struct StreamLane {
     int64_t route = 0;
     uint8_t ordinal = 0;
@@ -58,6 +61,22 @@ typedef bool (*TenureDooms)(
     const StreamTenure &p_bar
 );
 
+bool binding_follows(
+    const StreamTenure &p_origin,
+    const StreamTenure &p_bound
+);
+
+uint64_t binding_floor(
+    const StreamTenure &p_origin,
+    const StreamTenure &p_bound
+);
+
+struct BoundLane {
+    int peer = 0;
+    StreamLane lane;
+    StreamTenure tenure;
+};
+
 struct ParkedOpen {
     int peer = 0;
     StreamLane lane;
@@ -82,7 +101,10 @@ class StreamReaderBook {
         uint64_t token = 0;
         uint64_t epoch = 0;
         uint32_t schema = 0;
+        StreamTenure origin;
         StreamTenure tenure;
+        uint64_t floor = 0;
+        bool held = false;
         bool invalidated = false;
     };
 
@@ -91,6 +113,7 @@ class StreamReaderBook {
         godot::HashMap<uint64_t, Lane> lanes;
         godot::HashMap<uint64_t, uint64_t> addresses;
         godot::HashMap<uint64_t, ParkedOpen> parks;
+        godot::HashMap<uint64_t, int64_t> strays;
     };
 
     godot::HashMap<int, Connection> connections;
@@ -98,6 +121,8 @@ class StreamReaderBook {
     uint64_t unknown_tokens = 0;
     uint64_t expired_parks = 0;
     uint64_t refused_opens = 0;
+    uint64_t held_rows = 0;
+    uint64_t fenced_rows = 0;
 
     Connection &connection(int p_peer);
     Lane *lane_at(int p_peer, uint64_t p_token);
@@ -136,7 +161,28 @@ public:
 
     godot::LocalVector<int> parked_peers() const;
 
-    uint32_t close_tenures_before(int64_t p_route, uint64_t p_tenure);
+    godot::LocalVector<BoundLane> lanes_bound_before(
+        int64_t p_route,
+        uint64_t p_tenure
+    ) const;
+
+    bool follow_tenure(
+        int p_peer,
+        const StreamLane &p_lane,
+        uint64_t p_tenure,
+        bool p_admitted
+    );
+
+    bool admits_row(int p_peer, uint64_t p_token, uint64_t p_revision);
+
+    bool holds(int p_peer, const StreamLane &p_lane) const;
+
+    bool answers_stray(
+        int p_peer,
+        uint64_t p_token,
+        int64_t p_now_ms,
+        int64_t p_interval_ms
+    );
 
     uint32_t close_anchors_before(
         int64_t p_route,
@@ -175,6 +221,14 @@ public:
 
     uint64_t refused_open_count() const {
         return refused_opens;
+    }
+
+    uint64_t held_row_count() const {
+        return held_rows;
+    }
+
+    uint64_t fenced_row_count() const {
+        return fenced_rows;
     }
 
     uint32_t parked_count() const;

@@ -285,6 +285,7 @@ void uninitialize_networked_module(ModuleInitializationLevel level) {
     netw::NetwMultiplayer::clear_wrapper_factory();
     netw::connect::TransportBook::shared().clear();
     netw::schema_model::clear();
+    netw::script::model::clear();
     netw::entity::shutdown();
     netw::profile::remove_logger();
     netw::profile::shutdown();

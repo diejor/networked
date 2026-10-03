@@ -210,6 +210,42 @@ TEST_CASE(
     NETW_CHECK_EQ(one_receipt ? out[0].receipts[0].token : 0, 8);
 }
 
+TEST_CASE(
+    "[Networked][Wire][Hosted] one flush is one frame, and the peer reads "
+    "back every record it carried"
+) {
+    ControlScheduler writer;
+    writer.queue(PEER, open_of(3, 0, 1));
+    writer.queue(PEER, open_of(4, 1, 2));
+    ControlRecord closing;
+    closing.tag = ControlTag::CLOSE;
+    closing.token = 70;
+    writer.queue(PEER, closing);
+    writer.accept(PEER, 9, 2);
+    writer.accept(PEER, 5, 1);
+
+    godot::PackedByteArray frame;
+    const godot::LocalVector<ControlRecord> out
+        = writer.flush(PEER, 0, CONTROL_TICK_RESERVATION_BYTES, &frame);
+    NETW_CHECK_EQ(out.size(), 4);
+    NETW_CHECK_ORDER(frame.size(), payload_bytes(out), <=);
+
+    ControlScheduler reader;
+    godot::LocalVector<ControlRecord> read;
+    const bool carried = reader.read(PEER, frame, read);
+    CHECK(carried);
+    NETW_CHECK_EQ(read.size(), out.size());
+    const bool whole = read.size() == 4;
+    NETW_CHECK_EQ(whole ? read[1].route : 0, 4);
+    NETW_CHECK_EQ(whole ? read[1].ordinal : 0, 1);
+    NETW_CHECK_EQ(whole ? read[1].request : 0, 2);
+    NETW_CHECK_EQ(whole ? read[2].token : 0, 70);
+    NETW_CHECK_EQ(whole ? read[3].receipts.size() : 0, 2);
+    const bool sorted = whole && read[3].receipts.size() == 2;
+    NETW_CHECK_EQ(sorted ? read[3].receipts[0].token : 0, 5);
+    NETW_CHECK_EQ(sorted ? read[3].receipts[1].token : 0, 9);
+}
+
 TEST_CASE("[Networked][Wire][Hosted] a forgotten peer owes no control at all") {
     ControlScheduler scheduler;
     scheduler.accept(PEER, 7, 4);

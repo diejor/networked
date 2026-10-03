@@ -1443,6 +1443,28 @@ void SyncPipeline::reset_stream_of(int p_peer, uint64_t p_token) {
     row_send()->control_scheduler().queue(p_peer, answer);
 }
 
+void SyncPipeline::reset_stray(int p_peer, uint64_t p_token) {
+    NetwMultiplayer *plane = core();
+    if (plane == nullptr) {
+        return;
+    }
+    const int64_t interval = wire::repair_interval_ms(
+        int64_t(plane->link_round_trip_ms(int64_t(p_peer)))
+    );
+    if (!row_send()->reader_book().answers_stray(
+            p_peer,
+            p_token,
+            plane->session_elapsed_ms(),
+            interval
+        )) {
+        return;
+    }
+    wire::ControlRecord answer;
+    answer.tag = wire::ControlTag::RESET;
+    answer.token = p_token;
+    row_send()->control_scheduler().queue(p_peer, answer);
+}
+
 void SyncPipeline::open_datagram(int64_t p_base_tick, int64_t p_seq) {
     datagram_tick = p_base_tick;
     datagram_seq = p_seq;
@@ -1528,17 +1550,28 @@ void SyncPipeline::apply_row(
         return;
     }
     wire::StreamLane addressed;
-    const bool names_this_lane
-        = book.names(int(p_sender), named.token, addressed)
-        && addressed.route == route && addressed.ordinal == uint8_t(p_ordinal);
+    const bool known = book.names(int(p_sender), named.token, addressed);
+    const bool names_this_lane = known && addressed.route == route
+        && addressed.ordinal == uint8_t(p_ordinal);
     store::World &world = plane->store();
     const store::RowAddress at
         = world.row_of(binding->id, p_lane == LANE_RETAINED ? 1 : 0);
     if (!names_this_lane || !at.valid()) {
+        if (!known) {
+            reset_stray(int(p_sender), named.token);
+        }
         plane->attribution_note_refusal(
             p_sender,
             p_channel,
             wire::Refusal::UNBOUND
+        );
+        return;
+    }
+    if (!book.admits_row(int(p_sender), named.token, named.revision)) {
+        plane->attribution_note_refusal(
+            p_sender,
+            p_channel,
+            wire::Refusal::STALE
         );
         return;
     }

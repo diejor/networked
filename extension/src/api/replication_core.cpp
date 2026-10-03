@@ -432,7 +432,14 @@ void ReplicationCore::send_claim_images(int64_t p_tick) {
         if (payload.is_empty()) {
             continue;
         }
+        ReplicationSend *send = NetwMultiplayer::row_send_of(this);
         for (int which = 0; which < owed.size(); ++which) {
+            const repl::PeerAccount *account
+                = send != nullptr ? send->account(owed[which]) : nullptr;
+            if (account != nullptr
+                && account->balance < double(payload.size())) {
+                continue;
+            }
             send_to(
                 owed[which],
                 entity->get_route(),

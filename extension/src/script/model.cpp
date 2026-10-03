@@ -363,6 +363,11 @@ void sweep_dead_overlays() {
     }
 }
 
+void clear() {
+    overlay_book().clear();
+    cache_book().clear();
+}
+
 #if defined(NETW_TESTS)
 int64_t node_overlay_count() {
     return int64_t(overlay_book().size());

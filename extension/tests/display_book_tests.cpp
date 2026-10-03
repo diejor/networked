@@ -243,4 +243,29 @@ TEST_CASE(
     NETW_CHECK_EQ(log.count("dirtied"), 2);
 }
 
+TEST_CASE(
+    "[Networked][Display][Hosted] B10 a woken runtime with no channels is "
+    "listed until its role is resolved, and never after"
+) {
+    Ref<Book> book = make_book();
+    const RID entity = minter()->entity_create();
+    book->enroll(entity, 7);
+    netw::display::Runtime *runtime = book->open_runtime(entity);
+    REQUIRE(runtime->channels().is_empty());
+
+    book->wake(runtime);
+    NETW_CHECK_EQ(int(book->pump_set().size()), 1);
+    NETW_CHECK_EQ(int(book->record_set().size()), 1);
+
+    book->pump_set().clear();
+    book->record_set().clear();
+    runtime->set_pump_listed(false);
+    runtime->set_record_listed(false);
+    runtime->set_pump_mode(netw::display::PUMP_CHASE);
+
+    book->wake(runtime);
+    NETW_CHECK_EQ(int(book->pump_set().size()), 0);
+    NETW_CHECK_EQ(int(book->record_set().size()), 0);
+}
+
 } // namespace TestDisplayBook

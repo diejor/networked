@@ -13,10 +13,9 @@ func enter(player: NetwPlayer) -> void:
 		stages["world spawn"] = spawned - started
 		stages["world mount"] = mounted - spawned
 	var before_player := Time.get_ticks_usec()
-	var root: Node = Netw.scene(playground).root
-	var players: Node = root.get_node(^"Players")
+	var players: Node = playground.get_node(^"Players")
 	players.add_child(
-		Netw.spawn_player(player, root.spawn_player, players.get_child_count())
+		Netw.spawn_player(player, playground.spawn_player, players.get_child_count())
 	)
 	var done := Time.get_ticks_usec()
 	stages["player spawn and mount"] = done - before_player

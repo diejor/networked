@@ -218,7 +218,8 @@ TEST_CASE(
 
 TEST_CASE(
     "[Networked][Control][SceneTree] TS5 a writer that loses authorship "
-    "closes its lanes for the entity and tells every receiver"
+    "parks its lanes and tells no one, the receiver holds them, and the "
+    "writer's next tenure resumes the same tokens with no OPEN"
 ) {
     LoopbackRig rig(2);
     rig.mount();
@@ -234,22 +235,40 @@ TEST_CASE(
     const netw::wire::StreamLane lane
         = broadcast_lane(rig.client(0), pair.mirror(0));
     netw::store::World &writers = *row_send_of(rig.client(0))->store();
-    const bool seated
-        = writers.token_of(1, lane) != 0 && writers.token_of(b, lane) != 0;
-    REQUIRE(seated);
-    const uint64_t unknown_before
-        = readers_of(rig.server()).unknown_token_count();
+    const uint64_t to_server = writers.token_of(1, lane);
+    const uint64_t to_b = writers.token_of(b, lane);
+    const uint64_t asked = writers.request_of(1, lane);
+    REQUIRE(bool(to_server != 0 && to_b != 0));
+    netw::wire::StreamReaderBook &server = readers_of(rig.server());
+    const uint64_t unknown_before = server.unknown_token_count();
 
-    NetwEntity::of(pair.authored)->set_controller(b);
+    const Ref<NetwEntity> host = NetwEntity::of(pair.authored);
+    host->set_controller(b);
     for (int step = 0; step < 4; ++step) {
         rig.step_ticks(1);
     }
-    const bool closed
-        = writers.request_of(1, lane) == 0 && writers.request_of(b, lane) == 0;
-    CHECK(closed);
-    const bool told
-        = readers_of(rig.server()).unknown_token_count() > unknown_before;
-    CHECK(told);
+    const bool parked = writers.token_of(1, lane) == 0
+        && writers.token_of(b, lane) == 0
+        && writers.request_of(1, lane) == asked
+        && writers.dormant_count(1) == 1 && writers.dormant_count(b) == 1;
+    CHECK(parked);
+    NETW_CHECK_EQ(server.unknown_token_count(), unknown_before);
+    CHECK(server.holds(a, lane));
+    NETW_CHECK_EQ(server.token_at(a, lane), to_server);
+
+    host->set_controller(a);
+    const double before = aim_x(pair.authored);
+    for (int step = 0; step < 12; ++step) {
+        author_if_steering(rig, pair, 0, 0.0);
+        rig.step_ticks(1);
+    }
+    NETW_CHECK_EQ(writers.token_of(1, lane), to_server);
+    NETW_CHECK_EQ(writers.token_of(b, lane), to_b);
+    NETW_CHECK_EQ(writers.request_of(1, lane), asked);
+    NETW_CHECK_EQ(writers.dormant_count(1), 0);
+    CHECK_FALSE(server.holds(a, lane));
+    const bool resumed = aim_x(pair.authored) > before;
+    CHECK(resumed);
 }
 
 Node *build_aimed(const Variant &p_name) {
@@ -363,13 +382,12 @@ struct Regrant {
         a = rig.peer_id(0);
         b = rig.peer_id(1);
         pair = stand_flow_pair(rig, BROADCAST_MASKED_AIM, "Crate");
-        steer(pair, a);
         host = NetwEntity::of(pair.authored);
-        for (int step = 0; step < 10; ++step) {
-            author_if_steering(rig, pair, 0, 0.0);
-            rig.step_ticks(1);
-        }
+        rig.step_ticks(10);
         lane = broadcast_lane(rig.client(0), pair.mirror(0));
+        REQUIRE(bool(
+            row_send_of(rig.client(0))->store()->request_of(b, lane) == 0
+        ));
         rig.conditions(1, latency_of(p_delay_to_b, 31), 1);
         rig.conditions(-1, latency_of(2, 32), a);
         host->set_controller(b);

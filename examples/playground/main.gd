@@ -20,8 +20,7 @@ func enter(player: NetwPlayer) -> void:
 	if not is_instance_valid(playground):
 		playground = Netw.spawn(spawn_playground)
 		add_child(playground)
-	var root: Node = Netw.scene(playground).root
-	var players: Node = root.get_node(^"Players")
+	var players: Node = playground.get_node(^"Players")
 	players.add_child(
-		Netw.spawn_player(player, root.spawn_player, players.get_child_count()),
+		Netw.spawn_player(player, playground.spawn_player, players.get_child_count()),
 	)

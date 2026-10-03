@@ -313,10 +313,16 @@ CONTROL_OPEN = {
     "name": "WIRE.md 10 OPEN for route 300 ordinal 2",
     "fields": [
         {"name": "tag", "kind": "bits", "width": 8},
-        {"name": "request", "kind": "varuint", "max_bytes": 10},
+        {"name": "request_step", "kind": "svarint", "max_bytes": 10},
         {"name": "route", "kind": "varuint", "max_bytes": 5},
+        {"name": "family", "kind": "bits", "width": 2},
+        {"name": "has_ordinal", "kind": "bool1"},
+        {"name": "has_epoch", "kind": "bool1"},
+        {"name": "has_tenure", "kind": "bool1"},
+        {"name": "has_anchor", "kind": "bool1"},
+        {"name": "has_anchor_author", "kind": "bool1"},
+        {"name": "has_schema", "kind": "bool1"},
         {"name": "ordinal", "kind": "bits", "width": 8},
-        {"name": "family", "kind": "bits", "width": 8},
         {"name": "epoch", "kind": "varuint", "max_bytes": 3},
         {"name": "tenure", "kind": "varuint", "max_bytes": 5},
         {"name": "anchor", "kind": "varuint", "max_bytes": 5},
@@ -326,11 +332,11 @@ CONTROL_OPEN = {
     "bytes": bytes(
         [
             0x00,
-            0x01,
+            0x02,
             0xAC,
             0x02,
+            0xFC,
             0x02,
-            0x00,
             0x05,
             0x03,
             0x04,
@@ -343,10 +349,16 @@ CONTROL_OPEN = {
     ),
     "values": {
         "tag": 0,
-        "request": 1,
+        "request_step": 1,
         "route": 300,
-        "ordinal": 2,
         "family": 0,
+        "has_ordinal": True,
+        "has_epoch": True,
+        "has_tenure": True,
+        "has_anchor": True,
+        "has_anchor_author": True,
+        "has_schema": True,
+        "ordinal": 2,
         "epoch": 5,
         "tenure": 3,
         "anchor": 4,
@@ -360,11 +372,11 @@ CONTROL_READY = {
     "name": "WIRE.md 10 READY for request 300",
     "fields": [
         {"name": "tag", "kind": "bits", "width": 8},
-        {"name": "request", "kind": "varuint", "max_bytes": 10},
-        {"name": "token", "kind": "varuint", "max_bytes": 10},
+        {"name": "request_step", "kind": "svarint", "max_bytes": 10},
+        {"name": "token_step", "kind": "svarint", "max_bytes": 10},
     ],
-    "bytes": bytes([0x01, 0xAC, 0x02, 0x07]),
-    "values": {"tag": 1, "request": 300, "token": 7},
+    "bytes": bytes([0x01, 0xD8, 0x04, 0x0E]),
+    "values": {"tag": 1, "request_step": 300, "token_step": 7},
 }
 
 
@@ -373,18 +385,18 @@ CONTROL_ACCEPT = {
     "fields": [
         {"name": "tag", "kind": "bits", "width": 8},
         {"name": "count", "kind": "int_range", "low": 1, "high": 32},
-        {"name": "token_a", "kind": "varuint", "max_bytes": 10},
+        {"name": "token_step_a", "kind": "svarint", "max_bytes": 10},
         {"name": "revision_a", "kind": "varuint", "max_bytes": 10},
-        {"name": "token_b", "kind": "varuint", "max_bytes": 10},
+        {"name": "token_step_b", "kind": "svarint", "max_bytes": 10},
         {"name": "revision_b", "kind": "varuint", "max_bytes": 10},
     ],
-    "bytes": bytes([0x02, 0x01, 0x07, 0x03, 0x09, 0x01]),
+    "bytes": bytes([0x02, 0x01, 0x0E, 0x03, 0x04, 0x01]),
     "values": {
         "tag": 2,
         "count": 2,
-        "token_a": 7,
+        "token_step_a": 7,
         "revision_a": 3,
-        "token_b": 9,
+        "token_step_b": 2,
         "revision_b": 1,
     },
 }
@@ -601,10 +613,21 @@ AGAINST_SPEC = [
         "why": "WIRE.md 16, the sixteen routes from 17 a joiner mints from",
     },
     {
-        "record": "RowControlOpen",
-        "bytes": CONTROL_OPEN["bytes"],
-        "values": CONTROL_OPEN["values"],
-        "why": "WIRE.md 10, an OPEN at epoch 5, tenure 3, anchor 4 by peer 6",
+        "record": "RowControlOpenHead",
+        "bytes": bytes([0x00, 0x02, 0xAC, 0x02, 0x00]),
+        "values": {
+            "tag": 0,
+            "request_step": 1,
+            "route": 300,
+            "family": 0,
+            "has_ordinal": False,
+            "has_epoch": False,
+            "has_tenure": False,
+            "has_anchor": False,
+            "has_anchor_author": False,
+            "has_schema": False,
+        },
+        "why": "WIRE.md 10, the head of an OPEN whose fields all match its basis",
     },
     {
         "record": "RowControlReady",
@@ -614,15 +637,15 @@ AGAINST_SPEC = [
     },
     {
         "record": "RowControlReset",
-        "bytes": bytes([0x03, 0xAC, 0x02, 0x07]),
-        "values": {"tag": 3, "request": 300, "token": 7},
-        "why": "WIRE.md 10, a RESET naming both the request and the token",
+        "bytes": bytes([0x03, 0xD8, 0x04, 0x07]),
+        "values": {"tag": 3, "request_step": 300, "token": 7},
+        "why": "WIRE.md 10, a RESET stepping its request and naming its token",
     },
     {
         "record": "RowControlClose",
-        "bytes": bytes([0x04, 0x07]),
-        "values": {"tag": 4, "token": 7},
-        "why": "WIRE.md 10, a writer closing token 7",
+        "bytes": bytes([0x04, 0x0E]),
+        "values": {"tag": 4, "token_step": 7},
+        "why": "WIRE.md 10, a writer closing token 7 as the frame's first",
     },
     {
         "record": "RowControlAcceptHead",
@@ -631,9 +654,9 @@ AGAINST_SPEC = [
         "why": "WIRE.md 10, two entries written as 1 in the range 1..32",
     },
     {
-        "record": "RowControlAcceptEntry",
-        "bytes": bytes([0x07, 0x03]),
-        "values": {"token": 7, "revision": 3},
+        "record": "RowControlAcceptStep",
+        "bytes": bytes([0x0E, 0x03]),
+        "values": {"token_step": 7, "revision": 3},
         "why": "WIRE.md 10, token 7 accepted at revision 3",
     },
     {
@@ -881,6 +904,27 @@ def self_test(spec_path=None):
         )
 
     check(
+        "a 10 frame of two CLOSEs steps 9000 to 9002",
+        read_control(bytes([0x04, 0xD0, 0x8C, 0x01, 0x04, 0x04])),
+        [("CLOSE", {"token": 9000}), ("CLOSE", {"token": 9002})],
+    )
+    check(
+        "a 10 OPEN that moved its tenure carries only the tenure and a check",
+        read_control(bytes([0x00, 0x04, 0xAC, 0x02, 0x14, 0x02, 0x08, 0x10])),
+        [
+            (
+                "OPEN",
+                {"request": 2, "route": 300, "family": 0, "ordinal": 2, "tenure": 8, "check": 0x10},
+            )
+        ],
+    )
+    rejects("a 10 frame refuses an empty payload", lambda: read_control(b""))
+    rejects(
+        "a 10 frame refuses a record cut short",
+        lambda: read_control(bytes([0x04, 0xD0, 0x8C, 0x01, 0x04])),
+    )
+
+    check(
         "the 10.2 delta names revision 4 minus distance 1 as its baseline",
         SNAPSHOT_DELTA["values"]["revision"] - SNAPSHOT_DELTA["values"]["distance"],
         3,
@@ -1030,25 +1074,77 @@ def read_row_head(payload):
     return token, revision, distance, token_bits, revision_bits
 
 
-def read_control(records, payload):
-    """One complete ROW_CONTROL record, from WIRE.md 10."""
+OPEN_FIELDS = (
+    ("epoch", "varuint", 3),
+    ("tenure", "varuint", 5),
+    ("anchor", "varuint", 5),
+    ("anchor_author", "varuint", 5),
+    ("schema", "bits", 32),
+)
+
+
+def read_control(payload):
+    """Every record of one ROW_CONTROL frame, from WIRE.md 10.
+
+    Ids are resolved from their steps, which never leave the frame. An OPEN
+    field its writer left to the basis is absent from the body, because the
+    basis lives in the two peers and a capture of one direction cannot rebuild
+    it.
+    """
+    if not payload:
+        raise Poisoned("a control frame carries no record")
     stream = ReadStream(payload)
-    tag = stream.bits(8)
-    if tag not in CONTROL_TAGS:
-        raise Poisoned("control tag %d is above 4" % tag)
-    name = CONTROL_TAGS[tag]
-    if name == "ACCEPT":
-        count = stream.int_range(1, 32)
-        entries = []
-        for _ in range(count):
-            entries.append((stream.varuint(10), stream.varuint(10)))
+    cursor = {"opened": 0, "answered": 0, "minted": 0, "closed": 0}
+
+    def step(kind):
+        cursor[kind] = (cursor[kind] + stream.svarint(10)) & ((1 << 64) - 1)
+        return cursor[kind]
+
+    out = []
+    while stream.remaining():
+        tag = stream.bits(8)
+        if tag not in CONTROL_TAGS:
+            raise Poisoned("control tag %d is above 4" % tag)
+        name = CONTROL_TAGS[tag]
+        body = {}
+        if name == "OPEN":
+            body["request"] = step("opened")
+            body["route"] = stream.varuint(5)
+            body["family"] = stream.bits(2)
+            if body["family"] > 2:
+                raise Poisoned("stream family %d is above 2" % body["family"])
+            has_ordinal = stream.bool1()
+            present = [stream.bool1() for _ in OPEN_FIELDS]
+            body["ordinal"] = stream.bits(8) if has_ordinal else 0
+            if has_ordinal and body["ordinal"] == 0:
+                raise Poisoned("a present ordinal is 0")
+            for (field, kind, width), carried in zip(OPEN_FIELDS, present):
+                if carried:
+                    body[field] = stream.varuint(width) if kind == "varuint" else stream.bits(width)
+            if not all(present):
+                body["check"] = stream.bits(8)
+        elif name == "READY":
+            body["request"] = step("answered")
+            body["token"] = step("minted")
+        elif name == "RESET":
+            body["request"] = step("answered")
+            body["token"] = stream.varuint(10)
+        elif name == "CLOSE":
+            body["token"] = step("closed")
+        else:
+            count = stream.int_range(1, 32)
+            entries = []
+            token = 0
+            for _ in range(count):
+                token = (token + stream.svarint(10)) & ((1 << 64) - 1)
+                revision = stream.varuint(10)
+                if token == 0 or revision == 0:
+                    raise Poisoned("an ACCEPT entry names token or revision 0")
+                entries.append((token, revision))
+            body["entries"] = entries
         stream.align_verify()
-        return name, {"entries": entries}
-    layout = records["RowControl" + name.capitalize()]
-    stream.read = 0
-    body = decode_into(layout, stream)
-    stream.align_verify()
-    return name, body
+        out.append((name, body))
+    return out
 
 
 def percentile(values, share):
@@ -1126,20 +1222,21 @@ def account(path, spec_path=None):
             elif channel == CONTROL_CHANNEL:
                 control_bytes[direction] += size
                 try:
-                    name, body = read_control(records, frame["payload"])
+                    carried = read_control(frame["payload"])
                 except Poisoned:
                     errors += 1
                     continue
-                control_records[name] = control_records.get(name, 0) + 1
-                if name == "READY":
-                    ready_at.setdefault(body["token"], wall)
-                if name == "ACCEPT" and direction == 1:
-                    for token, revision in body["entries"]:
-                        if revision > confirmed.get(token, 0):
-                            confirmed[token] = revision
-                        sent = exposed_at.get((token, revision))
-                        if sent is not None:
-                            receipt_latency.append(wall - sent)
+                for name, body in carried:
+                    control_records[name] = control_records.get(name, 0) + 1
+                    if name == "READY":
+                        ready_at.setdefault(body["token"], wall)
+                    if name == "ACCEPT" and direction == 1:
+                        for token, revision in body["entries"]:
+                            if revision > confirmed.get(token, 0):
+                                confirmed[token] = revision
+                            sent = exposed_at.get((token, revision))
+                            if sent is not None:
+                                receipt_latency.append(wall - sent)
         owing = sum(1 for token, high in exposed_high.items() if high > confirmed.get(token, 0))
         pending_series.append(owing)
 

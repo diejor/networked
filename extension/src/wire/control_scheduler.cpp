@@ -11,6 +11,15 @@ namespace {
 
 constexpr uint32_t ACCEPT_HEAD_BYTES = 2;
 
+struct ByToken {
+    bool operator()(
+        const ControlAcceptEntry &p_a,
+        const ControlAcceptEntry &p_b
+    ) const {
+        return p_a.token < p_b.token;
+    }
+};
+
 bool same_lifecycle_subject(
     const ControlRecord &p_held,
     const ControlRecord &p_fresh
@@ -26,6 +35,9 @@ bool same_lifecycle_subject(
     if (p_fresh.tag == ControlTag::CLOSE) {
         return p_held.token == p_fresh.token;
     }
+    if (p_fresh.tag == ControlTag::RESET && p_fresh.request == 0) {
+        return p_held.request == 0 && p_held.token == p_fresh.token;
+    }
     return p_held.request == p_fresh.request;
 }
 
@@ -40,23 +52,31 @@ uint32_t varuint_byte_span(uint64_t p_value) {
     return span;
 }
 
+uint32_t svarint_byte_span(int64_t p_value) {
+    return varuint_byte_span(
+        (uint64_t(p_value) << 1) ^ uint64_t(p_value >> 63)
+    );
+}
+
 void ControlScheduler::accept(
     int p_peer,
     uint64_t p_token,
     uint64_t p_revision
 ) {
     Peer &held = peers[p_peer];
-    for (uint32_t at = 0; at < held.tokens.size(); ++at) {
-        if (held.tokens[at] != p_token) {
+    for (uint32_t at = 0; at < held.receipts.size(); ++at) {
+        if (held.receipts[at].token != p_token) {
             continue;
         }
-        if (p_revision > held.revisions[at]) {
-            held.revisions[at] = p_revision;
+        if (p_revision > held.receipts[at].revision) {
+            held.receipts[at].revision = p_revision;
         }
         return;
     }
-    held.tokens.push_back(p_token);
-    held.revisions.push_back(p_revision);
+    ControlAcceptEntry entry;
+    entry.token = p_token;
+    entry.revision = p_revision;
+    held.receipts.push_back(entry);
 }
 
 void ControlScheduler::queue(int p_peer, const ControlRecord &p_record) {
@@ -75,13 +95,11 @@ void ControlScheduler::drop_token(int p_peer, uint64_t p_token) {
     if (held == nullptr) {
         return;
     }
-    for (uint32_t at = 0; at < held->tokens.size(); ++at) {
-        if (held->tokens[at] != p_token) {
-            continue;
+    for (uint32_t at = 0; at < held->receipts.size(); ++at) {
+        if (held->receipts[at].token == p_token) {
+            held->receipts.remove_at(at);
+            break;
         }
-        held->tokens.remove_at(at);
-        held->revisions.remove_at(at);
-        break;
     }
     for (uint32_t at = held->lifecycle.size(); at > 0; --at) {
         if (held->lifecycle[at - 1].token == p_token
@@ -94,7 +112,7 @@ void ControlScheduler::drop_token(int p_peer, uint64_t p_token) {
 bool ControlScheduler::due(int p_peer, int64_t p_now_ms) const {
     const Peer *held = peers.getptr(p_peer);
     if (held == nullptr
-        || (held->tokens.is_empty() && held->lifecycle.is_empty())) {
+        || (held->receipts.is_empty() && held->lifecycle.is_empty())) {
         return false;
     }
     if (!held->primed || !held->lifecycle.is_empty()) {
@@ -116,7 +134,8 @@ LocalVector<int> ControlScheduler::ready_peers(int64_t p_now_ms) const {
 LocalVector<ControlRecord> ControlScheduler::flush(
     int p_peer,
     int64_t p_now_ms,
-    int64_t p_budget_bytes
+    int64_t p_budget_bytes,
+    PackedByteArray *r_frame
 ) {
     NETW_ZONE_NC("Control flush", colors::WIRE);
     LocalVector<ControlRecord> out;
@@ -131,47 +150,51 @@ LocalVector<ControlRecord> ControlScheduler::flush(
         held.flushed_at_ms = p_now_ms;
     }
 
+    ControlFrameWriter frame(held.sent);
     int64_t left = p_budget_bytes;
     uint32_t sent_lifecycle = 0;
     while (sent_lifecycle < held.lifecycle.size()) {
         const ControlRecord &next = held.lifecycle[sent_lifecycle];
-        const int64_t cost = int64_t(write_control_record(next).size());
-        if (cost == 0) {
-            sent_lifecycle += 1;
-            continue;
-        }
+        const int64_t cost = frame.cost(next);
         if (cost > left) {
             break;
         }
-        left -= cost;
-        out.push_back(next);
+        if (cost > 0 && frame.append(next)) {
+            left -= cost;
+            out.push_back(next);
+        }
         sent_lifecycle += 1;
     }
     for (uint32_t at = 0; at < sent_lifecycle; ++at) {
         held.lifecycle.remove_at(0);
     }
 
+    if (receipts_due) {
+        held.receipts.sort_custom<ByToken>();
+    }
     uint32_t taken = 0;
-    while (receipts_due && taken < held.tokens.size()) {
+    while (receipts_due && taken < held.receipts.size()) {
         ControlRecord record;
         record.tag = ControlTag::ACCEPT;
         uint32_t span = ACCEPT_HEAD_BYTES;
         uint32_t reaching = taken;
-        while (reaching < held.tokens.size()
+        uint64_t previous = 0;
+        while (reaching < held.receipts.size()
                && record.receipts.size() < ACCEPT_MAX_ENTRIES) {
-            const uint32_t cost = varuint_byte_span(held.tokens[reaching])
-                + varuint_byte_span(held.revisions[reaching]);
+            const ControlAcceptEntry &entry = held.receipts[reaching];
+            const uint32_t cost
+                = svarint_byte_span(int64_t(entry.token - previous))
+                + varuint_byte_span(entry.revision);
             if (span + cost > ACCEPT_MAX_PAYLOAD_BYTES) {
                 break;
             }
-            ControlAcceptEntry entry;
-            entry.token = held.tokens[reaching];
-            entry.revision = held.revisions[reaching];
             record.receipts.push_back(entry);
+            previous = entry.token;
             span += cost;
             reaching += 1;
         }
-        if (record.receipts.is_empty() || int64_t(span) > left) {
+        if (record.receipts.is_empty() || int64_t(span) > left
+            || !frame.append(record)) {
             break;
         }
         left -= int64_t(span);
@@ -179,10 +202,27 @@ LocalVector<ControlRecord> ControlScheduler::flush(
         taken = reaching;
     }
     for (uint32_t at = 0; at < taken; ++at) {
-        held.tokens.remove_at(0);
-        held.revisions.remove_at(0);
+        held.receipts.remove_at(0);
+    }
+    if (r_frame != nullptr) {
+        *r_frame = frame.bytes();
     }
     return out;
+}
+
+bool ControlScheduler::read(
+    int p_peer,
+    const PackedByteArray &p_frame,
+    LocalVector<ControlRecord> &r_records
+) {
+    return read_control_frame(p_frame, peers[p_peer].heard, r_records);
+}
+
+void ControlScheduler::forget_sent_basis(int p_peer) {
+    Peer *held = peers.getptr(p_peer);
+    if (held != nullptr) {
+        held->sent.clear();
+    }
 }
 
 void ControlScheduler::forget_peer(int p_peer) {
@@ -195,7 +235,7 @@ void ControlScheduler::clear() {
 
 uint32_t ControlScheduler::pending_receipts(int p_peer) const {
     const Peer *held = peers.getptr(p_peer);
-    return held == nullptr ? 0 : held->tokens.size();
+    return held == nullptr ? 0 : held->receipts.size();
 }
 
 uint32_t ControlScheduler::pending_lifecycle(int p_peer) const {

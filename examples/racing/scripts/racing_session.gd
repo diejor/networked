@@ -27,7 +27,7 @@ func open_track() -> Node:
 	if not is_instance_valid(track):
 		track = Netw.spawn(spawn_track)
 		add_child(track)
-	return Netw.scene(track).root
+	return track
 
 
 func enter_race(player: NetwPlayer) -> void:

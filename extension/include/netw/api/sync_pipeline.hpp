@@ -196,6 +196,7 @@ private:
     void flush_rows();
     void flush_row_control();
     void reset_stream_of(int p_peer, uint64_t p_token);
+    void reset_stray(int p_peer, uint64_t p_token);
     void record_interpolated_signal_args(
         godot::Node *p_comp_node,
         const godot::Array &p_args,

@@ -32,6 +32,16 @@ bool contact_moded(const Row &p_row) {
     return p_row.mode == Mode::ACTIVE || leads(p_row.mode);
 }
 
+bool contact_walks(const Row &p_row) {
+    if (p_row.mode == Mode::ACTIVE) {
+        return true;
+    }
+    return leads(p_row.mode)
+        && (p_row.declaration.claim_on_contact
+            || p_row.declaration.release_on_rest > 0.0
+            || p_row.contact.reports);
+}
+
 void Rows::seed_with(Seed p_seed, void *p_context) {
     seed = p_seed;
     seed_context = p_context;
@@ -286,7 +296,7 @@ void Rows::contact_walk(LocalVector<uint32_t> &r_out) {
             if (row == nullptr) {
                 continue;
             }
-            if ((forced & bit) != 0 || contact_moded(*row)) {
+            if ((forced & bit) != 0 || contact_walks(*row)) {
                 gathered.push_back(index);
             }
         }

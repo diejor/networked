@@ -291,6 +291,8 @@ public:
     static constexpr const char *LAW_EXTENSION_ENV = "NETW_LAW_EXTENSION";
     static constexpr const char *INSTALL_AS_DEFAULT_SETTING
         = "networked/install_as_default";
+    static constexpr const char *SMOOTH_WHEN_HEADLESS_SETTING
+        = "networked/display/smooth_when_headless";
 
 private:
     repl::SetBook set_book;
@@ -823,6 +825,7 @@ private:
     display::Hooks display_hooks;
     int64_t display_last_frame = -1;
     bool display_session_bound = false;
+    bool display_renders = true;
 
     struct PerceptionSnapshot {
         godot::ObjectID node;
@@ -1588,6 +1591,11 @@ public:
         const godot::PackedByteArray &p_payload,
         int64_t p_sender
     );
+    void row_control_apply(
+        ReplicationSend *p_send,
+        const wire::ControlRecord &p_record,
+        int p_peer
+    );
     void row_control_flush(ReplicationSend *p_send, int64_t p_channel);
     void row_streams_follow_tenure(int64_t p_route, uint64_t p_tenure);
     void row_streams_follow_anchor(
@@ -1601,6 +1609,12 @@ public:
         ReplicationCore *p_plane,
         ReplicationSend *p_send,
         int64_t p_route
+    );
+    void row_streams_follow_readers(
+        ReplicationCore *p_plane,
+        ReplicationSend *p_send,
+        int64_t p_route,
+        uint64_t p_tenure
     );
     void sync_note_columns(
         const table::SchemaRecord &p_schema,

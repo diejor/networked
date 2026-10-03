@@ -112,6 +112,10 @@ void Book::wake(Runtime *p_runtime) {
     if (p_runtime == nullptr) {
         return;
     }
+    if (p_runtime->channels().is_empty()
+        && p_runtime->get_pump_mode() != netw::display::PUMP_UNRESOLVED) {
+        return;
+    }
     if (!p_runtime->get_pump_listed()) {
         p_runtime->set_pump_listed(true);
         pumping.push_back(p_runtime);

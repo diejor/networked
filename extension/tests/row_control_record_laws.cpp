@@ -8,9 +8,13 @@
 namespace TestRowControlRecord {
 
 using netw::wire::ACCEPT_MAX_ENTRIES;
+using netw::wire::CONTROL_BASIS_CAPACITY;
 using netw::wire::ControlAcceptEntry;
+using netw::wire::ControlBasis;
+using netw::wire::ControlFrameWriter;
 using netw::wire::ControlRecord;
 using netw::wire::ControlTag;
+using netw::wire::read_control_frame;
 using netw::wire::read_control_record;
 using netw::wire::StreamFamily;
 using netw::wire::write_control_record;
@@ -58,11 +62,11 @@ TEST_CASE(
         int(write_control_record(open_of(1))
             == blob(
                 {0x00,
-                 0x01,
+                 0x02,
                  0xAC,
                  0x02,
+                 0xFC,
                  0x02,
-                 0x00,
                  0x05,
                  0x03,
                  0x04,
@@ -80,7 +84,7 @@ TEST_CASE(
     ready.request = 300;
     ready.token = 7;
     NETW_CHECK_EQ(
-        int(write_control_record(ready) == blob({0x01, 0xAC, 0x02, 0x07})),
+        int(write_control_record(ready) == blob({0x01, 0xD8, 0x04, 0x0E})),
         1
     );
 
@@ -96,14 +100,129 @@ TEST_CASE(
     receipts.receipts.push_back(second);
     NETW_CHECK_EQ(
         int(write_control_record(receipts)
-            == blob({0x02, 0x01, 0x07, 0x03, 0x09, 0x01})),
+            == blob({0x02, 0x01, 0x0E, 0x03, 0x04, 0x01})),
         1
     );
 
     ControlRecord closing;
     closing.tag = ControlTag::CLOSE;
     closing.token = 7;
-    NETW_CHECK_EQ(int(write_control_record(closing) == blob({0x04, 0x07})), 1);
+    NETW_CHECK_EQ(int(write_control_record(closing) == blob({0x04, 0x0E})), 1);
+}
+
+TEST_CASE(
+    "[Networked][Wire][Hosted] a frame carries many records and steps each "
+    "id from the one before it"
+) {
+    ControlBasis sent;
+    ControlFrameWriter frame(sent);
+    ControlRecord first;
+    first.tag = ControlTag::CLOSE;
+    first.token = 9000;
+    ControlRecord second;
+    second.tag = ControlTag::CLOSE;
+    second.token = 9002;
+    CHECK(frame.append(first));
+    CHECK(frame.append(second));
+    NETW_CHECK_EQ(frame.count(), 2);
+    NETW_CHECK_EQ(
+        int(frame.bytes() == blob({0x04, 0xD0, 0x8C, 0x01, 0x04, 0x04})),
+        1
+    );
+
+    ControlBasis heard;
+    godot::LocalVector<ControlRecord> read;
+    const bool carried = read_control_frame(frame.bytes(), heard, read);
+    CHECK(carried);
+    NETW_CHECK_EQ(read.size(), 2);
+    NETW_CHECK_EQ(read.size() == 2 ? read[0].token : 0, 9000);
+    NETW_CHECK_EQ(read.size() == 2 ? read[1].token : 0, 9002);
+}
+
+TEST_CASE(
+    "[Networked][Wire][Hosted] a repeated OPEN carries only what changed "
+    "since the last OPEN its route sent"
+) {
+    ControlBasis sent;
+    ControlBasis heard;
+    godot::LocalVector<ControlRecord> read;
+    {
+        ControlFrameWriter frame(sent);
+        CHECK(frame.append(open_of(1)));
+        const bool seeded = read_control_frame(frame.bytes(), heard, read);
+        CHECK(seeded);
+    }
+
+    ControlRecord moved = open_of(2);
+    moved.tenure = 8;
+    ControlFrameWriter frame(sent);
+    CHECK(frame.append(moved));
+    NETW_CHECK_EQ(
+        int(frame.bytes()
+            == blob({0x00, 0x04, 0xAC, 0x02, 0x14, 0x02, 0x08, 0x10})),
+        1
+    );
+
+    const bool carried = read_control_frame(frame.bytes(), heard, read);
+    CHECK(carried);
+    const bool one = read.size() == 1;
+    NETW_CHECK_EQ(one ? read[0].request : 0, 2);
+    NETW_CHECK_EQ(one ? read[0].tenure : 0, 8);
+    NETW_CHECK_EQ(one ? read[0].epoch : 0, 5);
+    NETW_CHECK_EQ(one ? read[0].anchor : 0, 4);
+    NETW_CHECK_EQ(one ? read[0].anchor_author : 0, 6);
+    NETW_CHECK_EQ(one ? int64_t(read[0].schema) : 0, int64_t(0xDEADBEEF));
+
+    ControlBasis stranger;
+    read.clear();
+    const bool decoded = read_control_frame(frame.bytes(), stranger, read);
+    CHECK(decoded);
+    const bool unresolved = read.size() == 1 && !read[0].resolved;
+    CHECK(unresolved);
+    NETW_CHECK_EQ(stranger.size(), 0);
+
+    ControlBasis stale;
+    {
+        ControlRecord older = open_of(1);
+        older.epoch = 4;
+        ControlFrameWriter seeding(stale);
+        CHECK(seeding.append(older));
+    }
+    read.clear();
+    const bool misread = read_control_frame(frame.bytes(), stale, read);
+    CHECK(misread);
+    const bool caught = read.size() == 1 && !read[0].resolved;
+    CHECK(caught);
+}
+
+TEST_CASE(
+    "[Networked][Wire][Hosted] both ends of a connection forget the same "
+    "oldest route when their basis is full"
+) {
+    ControlBasis sent;
+    ControlBasis heard;
+    godot::LocalVector<ControlRecord> read;
+    for (uint32_t at = 0; at <= CONTROL_BASIS_CAPACITY; ++at) {
+        ControlRecord open = open_of(at + 1);
+        open.route = int64_t(at) + 1;
+        ControlFrameWriter frame(sent);
+        CHECK(frame.append(open));
+        const bool carried = read_control_frame(frame.bytes(), heard, read);
+        CHECK(carried);
+    }
+    NETW_CHECK_EQ(sent.size(), CONTROL_BASIS_CAPACITY);
+    NETW_CHECK_EQ(heard.size(), CONTROL_BASIS_CAPACITY);
+
+    ControlRecord oldest = open_of(1);
+    oldest.route = 1;
+    ControlFrameWriter frame(sent);
+    CHECK(frame.append(oldest));
+    const bool whole
+        = frame.bytes().size() == write_control_record(oldest).size();
+    CHECK(whole);
+    const bool carried = read_control_frame(frame.bytes(), heard, read);
+    CHECK(carried);
+    NETW_CHECK_EQ(read.size() == 1 ? read[0].tenure : 0, 3);
 }
 
 TEST_CASE(

@@ -12,12 +12,14 @@ constexpr int64_t CONTROL_FLUSH_PERIOD_MS = 50;
 constexpr int64_t CONTROL_TICK_RESERVATION_BYTES = 256;
 
 uint32_t varuint_byte_span(uint64_t p_value);
+uint32_t svarint_byte_span(int64_t p_value);
 
 class ControlScheduler {
     struct Peer {
-        godot::LocalVector<uint64_t> tokens;
-        godot::LocalVector<uint64_t> revisions;
+        godot::LocalVector<ControlAcceptEntry> receipts;
         godot::LocalVector<ControlRecord> lifecycle;
+        ControlBasis sent;
+        ControlBasis heard;
         int64_t flushed_at_ms = 0;
         bool primed = false;
     };
@@ -38,8 +40,17 @@ public:
     godot::LocalVector<ControlRecord> flush(
         int p_peer,
         int64_t p_now_ms,
-        int64_t p_budget_bytes
+        int64_t p_budget_bytes,
+        godot::PackedByteArray *r_frame = nullptr
     );
+
+    bool read(
+        int p_peer,
+        const godot::PackedByteArray &p_frame,
+        godot::LocalVector<ControlRecord> &r_records
+    );
+
+    void forget_sent_basis(int p_peer);
 
     void forget_peer(int p_peer);
 

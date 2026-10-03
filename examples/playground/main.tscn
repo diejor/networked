@@ -3,6 +3,12 @@
 [ext_resource type="Script" uid="uid://dgq2oebtioivg" path="res://examples/playground/main.gd" id="1_main"]
 [ext_resource type="PackedScene" uid="uid://bb2nsfunxlw3a" path="res://addons/networked/gdscript/connect/ui/connect_browser.tscn" id="2_brws"]
 
+[sub_resource type="NetwLinkConditions" id="NetwLinkConditions_evdyr"]
+simulate_lag = true
+one_way_delay_min = 100.0
+one_way_delay_max = 200.0
+lag_packet_loss_percent = 0.05
+
 [node name="Main" type="Node" unique_id=632683677]
 script = ExtResource("1_main")
 
@@ -11,6 +17,7 @@ script = ExtResource("1_main")
 [node name="ConnectBrowser" parent="UI" unique_id=1938257406 instance=ExtResource("2_brws")]
 unique_name_in_owner = true
 server_list_path = "user://playground/servers.cfg"
+debug_link = SubResource("NetwLinkConditions_evdyr")
 
 [node name="TitleLabel" parent="UI/ConnectBrowser/VBox/PanelContainer/HeaderBar" parent_id_path=PackedInt32Array(1938257406, 522198391) index="1" unique_id=1146132509]
 text = "Cube Playground"

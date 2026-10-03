@@ -6,8 +6,13 @@ var game: NetwGameHarness
 
 
 func before_test() -> void:
+	ProjectSettings.set_setting(&"networked/display/smooth_when_headless", true)
 	game = make_game_harness(MAIN)
 	await game.setup()
+
+
+func after_test() -> void:
+	ProjectSettings.set_setting(&"networked/display/smooth_when_headless", false)
 
 
 func test_a_controller_drives_its_own_car_forward() -> void:

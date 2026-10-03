@@ -49,9 +49,9 @@ void SessionSend::queue_closes(const LocalVector<wire::ClosedLane> &p_closed) {
     }
 }
 
-void SessionSend::close_tenures(int64_t p_route, uint64_t p_tenure) {
+void SessionSend::park_tenures(int64_t p_route, uint64_t p_tenure) {
     if (world != nullptr) {
-        queue_closes(world->close_tenures_other_than(p_route, p_tenure));
+        queue_closes(world->park_tenures_other_than(p_route, p_tenure));
     }
 }
 
@@ -166,14 +166,19 @@ PackedByteArray SessionSend::price(
 bool SessionSend::stream_seated(
     uint32_t p_peer,
     uint32_t p_table,
-    uint32_t p_row
+    uint32_t p_row,
+    int64_t p_now_ms
 ) {
     store::Table &table = world->table(p_table);
-    const store::PeerRows &rows = table.peers[p_peer];
+    store::PeerRows &rows = table.peers[p_peer];
     const int id = world->peer_id(p_peer);
     const wire::StreamLane lane = lane_at(table, p_row);
-    if (!stream_is(rows, p_row, store::Stream::NONE)
-        && !(rows.opened[p_row] == table.tenures[p_row])) {
+    const bool parked = stream_is(rows, p_row, store::Stream::DORMANT);
+    const bool moved = !stream_is(rows, p_row, store::Stream::NONE)
+        && !(rows.opened[p_row] == table.tenures[p_row]);
+    const store::RowAddress at{p_table, p_row};
+    if ((parked || moved)
+        && !world->stream_resume(p_peer, at, table.tenures[p_row])) {
         uint64_t token = 0;
         world->stream_close(id, lane, token);
         if (token != 0) {
@@ -183,10 +188,18 @@ bool SessionSend::stream_seated(
     if (stream_is(rows, p_row, store::Stream::READY)) {
         return true;
     }
+    const bool asked = stream_is(rows, p_row, store::Stream::OPENING)
+        && rows.request[p_row] != 0;
+    if (asked
+        && p_now_ms - rows.repair_at[p_row]
+            < wire::repair_interval_ms(int64_t(link.rtt_ms(id)))) {
+        return false;
+    }
     const uint64_t request
         = world->stream_open(id, lane, table.tenures[p_row]);
     if (request != 0) {
         queue_open(id, table, p_row, request);
+        rows.repair_at[p_row] = p_now_ms;
     }
     return false;
 }
@@ -212,7 +225,7 @@ bool SessionSend::classify(
         r_out.ungathered += 1;
         return false;
     }
-    if (!stream_seated(p_peer, p_table, p_row)) {
+    if (!stream_seated(p_peer, p_table, p_row, p_now_ms)) {
         r_out.deferred += 1;
         return false;
     }
@@ -583,8 +596,14 @@ void SessionSend::pass_peer(
             }
             store::Table &table = world->table(row.table);
             store::PeerRows &rows = table.peers[p_peer];
-            if (rows.refresh_at[row.row] < 0 || !rows.sendable.get(row.row)) {
+            const bool parked = rows.stream[row.row]
+                == uint8_t(store::Stream::DORMANT);
+            if (rows.refresh_at[row.row] < 0
+                || (!rows.sendable.get(row.row) && !parked)) {
                 rows.due.set(row.row, false);
+                continue;
+            }
+            if (!rows.sendable.get(row.row)) {
                 continue;
             }
             if (rows.owed.get(row.row)
@@ -595,34 +614,43 @@ void SessionSend::pass_peer(
         }
         offer_nodeless(p_peer, id, p_base_tick, order);
     }
+    const auto later = [](const Candidate &p_left, const Candidate &p_right) {
+        const bool left_refresh = p_left.form == RowForm::REFRESH;
+        const bool right_refresh = p_right.form == RowForm::REFRESH;
+        if (left_refresh != right_refresh) {
+            return left_refresh;
+        }
+        if (p_left.acc != p_right.acc) {
+            return p_left.acc < p_right.acc;
+        }
+        return p_left.order > p_right.order;
+    };
+    Candidate *first = candidates.ptr();
+    Candidate *last = first + candidates.size();
     {
-        NETW_ZONE_NC("Send sort", colors::WIRE);
-        std::stable_sort(
-            candidates.ptr(),
-            candidates.ptr() + candidates.size(),
-            [](const Candidate &p_left, const Candidate &p_right) {
-                const bool left_refresh = p_left.form == RowForm::REFRESH;
-                const bool right_refresh = p_right.form == RowForm::REFRESH;
-                if (left_refresh != right_refresh) {
-                    return right_refresh;
-                }
-                return p_left.acc > p_right.acc;
-            }
-        );
+        NETW_ZONE_NC("Send order", colors::WIRE);
+        std::make_heap(first, last, later);
     }
+    const double least_floor = std::min(
+        account.fill,
+        double(LinkGovernor::FLOOR_BITS) / 8.0
+    );
+    const double row_floor
+        = std::max(account.fill * ROW_FLOOR_SHARE, least_floor);
+    const double lent
+        = account.balance < row_floor ? row_floor - account.balance : 0.0;
+    account.balance += lent;
     {
         NETW_ZONE_NC("Send encode", colors::WIRE);
         account.deferred = 0;
         const int64_t datagram = p_max_bits / 8;
         int64_t room = datagram;
         uint32_t misses = 0;
-        for (uint32_t at = 0; at < candidates.size(); ++at) {
-            const Candidate &held = candidates[at];
-            if (account.balance <= 0.0 || misses >= MISSES_PER_TICK) {
-                r_out.deferred += 1;
-                account.deferred += 1;
-                continue;
-            }
+        while (last != first && account.balance > 0.0
+               && misses < MISSES_PER_TICK) {
+            std::pop_heap(first, last, later);
+            --last;
+            const Candidate held = *last;
             if (held.nodeless) {
                 if (!take_nodeless(held, id, account)) {
                     misses += 1;
@@ -671,8 +699,13 @@ void SessionSend::pass_peer(
             r_out.sent_bits += send.bits;
             r_out.sends.push_back(send);
         }
+        const uint32_t waiting = uint32_t(last - first);
+        r_out.deferred += waiting;
+        account.deferred += waiting;
         emit_nodeless(id, p_max_bits, account, r_out);
     }
+    account.balance -= lent;
+    bound_debt(account, account.fill);
     world->settle_due(p_peer);
     if (NETW_PROFILE_CONNECTED()) {
         NETW_PLOT(
@@ -860,6 +893,14 @@ void SessionSend::charge(int p_peer, int64_t p_bytes) {
     PeerAccount &held = accounts[p_peer];
     held.balance -= double(p_bytes);
     held.sent_bytes += p_bytes;
+    bound_debt(held, fill_of(p_peer, row_budget_bits));
+}
+
+void SessionSend::bound_debt(PeerAccount &r_account, double p_fill) {
+    const double least = -p_fill * DEBT_TICKS;
+    if (r_account.balance < least) {
+        r_account.balance = least;
+    }
 }
 
 const SessionResult &SessionSend::run(

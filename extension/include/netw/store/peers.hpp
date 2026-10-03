@@ -10,7 +10,7 @@
 
 namespace netw::store {
 
-enum class Stream : uint8_t { NONE, OPENING, READY };
+enum class Stream : uint8_t { NONE, OPENING, READY, DORMANT };
 
 struct Bits {
     godot::LocalVector<uint64_t> words;
@@ -55,6 +55,7 @@ struct PeerRows {
     godot::LocalVector<uint8_t> stream;
     godot::LocalVector<uint64_t> request;
     godot::LocalVector<uint64_t> token;
+    godot::LocalVector<wire::StreamTenure> origin;
     godot::LocalVector<wire::StreamTenure> opened;
     godot::LocalVector<uint64_t> next_rev;
     godot::LocalVector<uint64_t> acked_rev;
@@ -94,6 +95,7 @@ struct PeerSide {
     godot::HashMap<uint64_t, uint64_t> tokens;
     godot::LocalVector<Refresh> refreshes;
     godot::LocalVector<uint64_t> due;
+    godot::LocalVector<uint64_t> dormant;
 };
 
 struct ReceiptCounts {

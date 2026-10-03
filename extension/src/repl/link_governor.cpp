@@ -48,7 +48,8 @@ void LinkGovernor::decrease(Peer &r_peer, int64_t p_now_ms, bool p_lossy) {
     const float halved = r_peer.share * 0.5f;
     r_peer.share = halved > LEAST ? halved : LEAST;
     if (p_lossy) {
-        const bool edge_again = r_peer.edge_at_ms >= 0
+        const bool edge_again = r_peer.delivered_total >= WINDOW
+            && r_peer.edge_at_ms >= 0
             && p_now_ms - r_peer.edge_at_ms < CEILING_HOLD_MS
             && below + STEP > r_peer.edge_share;
         if (edge_again) {
@@ -96,6 +97,9 @@ void LinkGovernor::note_ack(
     }
     for (uint32_t at = 0; at < p_delivered; ++at) {
         push(book, false);
+    }
+    if (book.delivered_total < WINDOW) {
+        book.delivered_total += p_delivered;
     }
     if (p_lost > 0) {
         book.lost_at_ms = p_now_ms;

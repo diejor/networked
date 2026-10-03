@@ -39,6 +39,7 @@ private:
         double jitter_ms = 0.0;
         int64_t backlog = 0;
         uint32_t backlog_growth = 0;
+        uint32_t delivered_total = 0;
     };
 
     godot::HashMap<int, Peer> peers;

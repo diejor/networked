@@ -14,13 +14,13 @@
 		A preset passed to [method Netw.configure_session] is copied, so one [code].tres[/code] can be used by several scenes. When no node calls [method Netw.configure_session], the settings of the [MultiplayerTree] are used. When one does, the [MultiplayerTree] settings are ignored.
 
 		[b]Bandwidth[/b]
-		Each peer is sent at most [member bandwidth_kbps]. Changed rows that do not fit wait for a later tick, and the ones that waited longest and matter most go first.
+		[member bandwidth_kbps] is a target for each peer, not a hard limit. Changed rows that do not fit wait for a later tick, and the ones that waited longest and matter most go first.
 		[codeblock]
 		func _init() -&gt; void:
 		    Netw.configure_session(self).bandwidth(256)
 		    Netw.configure_entity(self).replication_priority = 4.0
 		[/codeblock]
-		RPCs, spawns and [method NetwPropertyConfig.retained] properties are always sent when due. A peer they push over its budget gets no more rows until later ticks make up the difference. See [method NetwMultiplayer.peer_link_stats].
+		A peer is sent more than its budget in two cases. RPCs, spawns, authority changes and [method NetwPropertyConfig.retained] properties are always sent when due. Rows also get at least a quarter of every tick's budget, even when that traffic already used it up. Later ticks pay back at most two ticks of the overspend. See [method NetwMultiplayer.peer_link_stats].
 	</description>
 	<tutorials>
 	</tutorials>

@@ -15,21 +15,12 @@ uint64_t request_counter = 0;
 
 constexpr int64_t REPAIR_FLOOR_MS = 250;
 constexpr int64_t REPAIR_CEILING_MS = 1000;
-
-bool tenure_before(const StreamTenure &p_lane, const StreamTenure &p_bar) {
-    return p_lane.bound && p_lane.tenure < p_bar.tenure;
-}
+constexpr uint32_t STRAY_MEMORY = 256;
 
 bool anchor_superseded(const StreamTenure &p_lane, const StreamTenure &p_bar) {
     return p_lane.anchor < p_bar.anchor
         || (p_lane.anchor == p_bar.anchor
             && p_lane.anchor_author != p_bar.anchor_author);
-}
-
-StreamTenure tenure_bar(uint64_t p_tenure) {
-    StreamTenure bar;
-    bar.tenure = p_tenure;
-    return bar;
 }
 
 StreamTenure anchor_bar(uint64_t p_anchor, uint64_t p_author) {
@@ -63,6 +54,22 @@ uint64_t next_open_request() {
         );
     }
     return ++request_counter;
+}
+
+bool binding_follows(
+    const StreamTenure &p_origin,
+    const StreamTenure &p_bound
+) {
+    return p_bound.bound == p_origin.bound && p_bound.tenure >= p_origin.tenure
+        && p_bound.anchor == p_origin.anchor
+        && p_bound.anchor_author == p_origin.anchor_author;
+}
+
+uint64_t binding_floor(
+    const StreamTenure &p_origin,
+    const StreamTenure &p_bound
+) {
+    return (p_bound.tenure - p_origin.tenure) * STREAM_BINDING_SPAN;
 }
 
 int64_t repair_interval_ms(int64_t p_smoothed_rtt_ms) {
@@ -148,6 +155,7 @@ OpenVerdict StreamReaderBook::open(
     fresh.token = token;
     fresh.epoch = p_epoch;
     fresh.schema = p_schema;
+    fresh.origin = p_tenure;
     fresh.tenure = p_tenure;
     live.lanes.insert(address, fresh);
     live.addresses[token] = address;
@@ -222,11 +230,95 @@ LocalVector<int> StreamReaderBook::parked_peers() const {
     return out;
 }
 
-uint32_t StreamReaderBook::close_tenures_before(
+LocalVector<BoundLane> StreamReaderBook::lanes_bound_before(
     int64_t p_route,
     uint64_t p_tenure
+) const {
+    LocalVector<BoundLane> out;
+    for (const KeyValue<int, Connection> &each : connections) {
+        for (const KeyValue<uint64_t, Lane> &lane : each.value.lanes) {
+            if (StreamLane::route_of(lane.key) != p_route
+                || !lane.value.tenure.bound
+                || lane.value.tenure.tenure >= p_tenure) {
+                continue;
+            }
+            BoundLane bound;
+            bound.peer = each.key;
+            bound.lane.route = p_route;
+            bound.lane.ordinal = uint8_t((lane.key >> 8) & 0xFF);
+            bound.lane.family = StreamFamily(uint8_t(lane.key & 0xFF));
+            bound.tenure = lane.value.tenure;
+            out.push_back(bound);
+        }
+    }
+    return out;
+}
+
+bool StreamReaderBook::follow_tenure(
+    int p_peer,
+    const StreamLane &p_lane,
+    uint64_t p_tenure,
+    bool p_admitted
 ) {
-    return close_where(p_route, &tenure_before, tenure_bar(p_tenure));
+    Connection *live = connections.getptr(p_peer);
+    Lane *held = live != nullptr ? live->lanes.getptr(p_lane.address())
+                                 : nullptr;
+    if (held == nullptr || !held->tenure.bound
+        || held->tenure.tenure > p_tenure) {
+        return false;
+    }
+    held->tenure.tenure = p_tenure;
+    held->floor = binding_floor(held->origin, held->tenure);
+    held->held = !p_admitted;
+    return true;
+}
+
+bool StreamReaderBook::admits_row(
+    int p_peer,
+    uint64_t p_token,
+    uint64_t p_revision
+) {
+    const Lane *held = lane_at(p_peer, p_token);
+    if (held == nullptr) {
+        return false;
+    }
+    if (held->held) {
+        held_rows += 1;
+        return false;
+    }
+    if (p_revision < held->floor) {
+        fenced_rows += 1;
+        return false;
+    }
+    return true;
+}
+
+bool StreamReaderBook::answers_stray(
+    int p_peer,
+    uint64_t p_token,
+    int64_t p_now_ms,
+    int64_t p_interval_ms
+) {
+    if (p_token == 0) {
+        return false;
+    }
+    Connection &live = connection(p_peer);
+    const int64_t *answered = live.strays.getptr(p_token);
+    if (answered != nullptr && p_now_ms - *answered < p_interval_ms) {
+        return false;
+    }
+    if (answered == nullptr && live.strays.size() >= STRAY_MEMORY) {
+        live.strays.clear();
+    }
+    live.strays[p_token] = p_now_ms;
+    return true;
+}
+
+bool StreamReaderBook::holds(int p_peer, const StreamLane &p_lane) const {
+    const Connection *live = connections.getptr(p_peer);
+    const Lane *held = live != nullptr ? live->lanes.getptr(p_lane.address())
+                                       : nullptr;
+    return held != nullptr && held->held;
 }
 
 uint32_t StreamReaderBook::close_anchors_before(

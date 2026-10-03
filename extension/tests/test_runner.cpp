@@ -610,6 +610,7 @@ Dictionary NetwNativeTests::run(
 }
 
 bool NetwNativeTests::frame_advance() {
+    netw_test::smooth_when_headless(true);
     return netw_test::frame_drive_advance();
 }
 

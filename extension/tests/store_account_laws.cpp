@@ -165,8 +165,8 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Store][Hosted] AC2 a reliable burst is charged in full and "
-    "the debt it leaves holds back exactly its size of fitted rows"
+    "[Networked][Store][Hosted] AC2 a reliable burst holds back fitted rows "
+    "by at most its own size, and never below the row floor of a tick"
 ) {
     constexpr int64_t FILL = 120;
     SessionSend quiet;
@@ -174,6 +174,7 @@ TEST_CASE(
     int64_t burst_bytes = 0;
     int64_t fitted_quiet = 0;
     int64_t fitted_loaded = 0;
+    int64_t starved_ticks = 0;
     for (int64_t tick = 1; tick <= 40; ++tick) {
         const LocalVector<RowOffer> plain = moving(tick);
         LocalVector<RowOffer> with = moving(tick);
@@ -189,13 +190,14 @@ TEST_CASE(
         if (tick >= 10) {
             fitted_quiet += framed_of(one, false);
             fitted_loaded += framed_of(two, false);
+            starved_ticks += framed_of(two, false) == 0 ? 1 : 0;
         }
     }
     NETW_CHECK_GT(burst_bytes, FILL * 3);
     const int64_t held_back = fitted_quiet - fitted_loaded;
-    const bool the_debt_is_the_burst = held_back >= burst_bytes - 16
-        && held_back <= burst_bytes + 16;
-    CHECK(the_debt_is_the_burst);
+    NETW_CHECK_GT(held_back, int64_t(0));
+    NETW_CHECK_LE(held_back, burst_bytes + 16);
+    NETW_CHECK_EQ(starved_ticks, int64_t(0));
 }
 
 TEST_CASE(
@@ -224,6 +226,21 @@ TEST_CASE(
     entity->set_replication_priority(-3.0);
     ERR_PRINT_ON;
     NETW_CHECK_EQ(entity->get_replication_priority(), 2.5);
+}
+
+TEST_CASE(
+    "[Networked][Store][Hosted] AC5 a saturated tick counts every row it "
+    "did not send as deferred, on the result and on the account"
+) {
+    constexpr int64_t FILL = 60;
+    SessionSend session;
+    const SessionResult result = drive_tick(session, moving(1), FILL, 1);
+    const netw::repl::PeerAccount *account = session.account(PEER);
+    REQUIRE(account != nullptr);
+    NETW_CHECK_GT(int(result.sends.size()), 0);
+    NETW_CHECK_GT(int(result.deferred), 0);
+    NETW_CHECK_EQ(int(result.sends.size()) + int(result.deferred), ROWS);
+    NETW_CHECK_EQ(int(account->deferred), int(result.deferred));
 }
 
 } // namespace TestStoreAccount

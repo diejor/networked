@@ -120,6 +120,8 @@ void NetwMultiplayer::sim_contact_arm(sim::Row &r_row) {
         sim::monitor_contacts(r_row.bodies);
         r_row.contact.monitored = true;
     }
+    r_row.contact.reports = !declares && r_row.mode != sim::Mode::ACTIVE
+        && sim::reports_contacts(r_row.bodies);
 }
 
 void NetwMultiplayer::sim_note_touch(
@@ -400,6 +402,13 @@ void NetwMultiplayer::sim_contact_validate(int64_t p_tick) {
         const sim::Steering steering = sim_steering_of(*view.ptr());
         if (sim_contact_eligible(*row, steering) != row->contact.eligible) {
             sim_contact_fault(*row, "eligible", p_tick);
+        }
+        const bool declares = row->declaration.claim_on_contact
+            || row->declaration.release_on_rest > 0.0;
+        const bool reports = !declares && row->mode != sim::Mode::ACTIVE
+            && sim::reports_contacts(row->bodies);
+        if (reports != row->contact.reports) {
+            sim_contact_fault(*row, "reports", p_tick);
         }
         if (!sim_rows.is_awake(at) && sim::contact_moded(*row)
             && !sim::asleep(row->bodies)) {

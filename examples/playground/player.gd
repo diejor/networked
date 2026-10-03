@@ -11,6 +11,7 @@ const STIFFNESS := 150.0
 const REPULSION := 3.0
 const ATTRACTION := 20.0
 const ATTRACTION_RADIUS := 1.0
+const RELEASE_RADIUS := 1.5
 const CAMERA_PITCH := 0.436
 const CAMERA_DISTANCE := 8.0
 const CAMERA_TARGET_HEIGHT := -0.6
@@ -122,7 +123,7 @@ func hover(direction: Vector3) -> void:
 	for cube in cubes_nearby():
 		if entity.is_controlled_locally:
 			cube.claim(NetwEntity.HOLD_YIELDABLE)
-		if not drives(cube):
+		if not drives(cube, NetwEntity.HOLD_YIELDABLE):
 			continue
 		var away := cube.global_position - global_position
 		away.y = 0.0
@@ -140,14 +141,32 @@ func attract() -> void:
 			cube.claim(NetwEntity.HOLD_EXCLUSIVE)
 			if cube.entity.is_controlled_locally and not held.has(cube):
 				held.append(cube)
-		if drives(cube):
+		if drives(cube, NetwEntity.HOLD_EXCLUSIVE):
 			cube.apply_central_force(pull.normalized() * ATTRACTION)
+	if entity.is_controlled_locally:
+		let_go_of_strays()
 
 
-func drives(cube: PlayCube) -> bool:
+func let_go_of_strays() -> void:
+	var kept: Array[PlayCube] = []
+	for cube in held:
+		if not is_instance_valid(cube):
+			continue
+		if global_position.distance_to(cube.global_position) < RELEASE_RADIUS:
+			kept.append(cube)
+		else:
+			cube.let_go()
+	held = kept
+
+
+func drives(cube: PlayCube, hold: NetwEntity.Hold) -> bool:
 	if entity.is_controlled_locally:
 		return cube.entity.is_controlled_locally
-	return cube.entity.controller == entity.controller
+	var holder := cube.entity.controller
+	if holder == entity.controller or holder == 0:
+		return true
+	return hold == NetwEntity.HOLD_EXCLUSIVE \
+			and cube.entity.hold != NetwEntity.HOLD_EXCLUSIVE
 
 
 func cubes_nearby() -> Array[PlayCube]:

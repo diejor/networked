@@ -22,6 +22,7 @@ void size_rows(
     r_peer.stream.resize(p_count);
     r_peer.request.resize(p_count);
     r_peer.token.resize(p_count);
+    r_peer.origin.resize(p_count);
     r_peer.opened.resize(p_count);
     r_peer.next_rev.resize(p_count);
     r_peer.acked_rev.resize(p_count);
@@ -100,6 +101,15 @@ bool anchor_other_than(
 ) {
     return p_lane.anchor != p_bar.anchor
         || p_lane.anchor_author != p_bar.anchor_author;
+}
+
+void wake(PeerSide &r_side, uint64_t p_lane) {
+    for (uint32_t at = 0; at < r_side.dormant.size(); ++at) {
+        if (r_side.dormant[at] == p_lane) {
+            r_side.dormant.remove_at(at);
+            return;
+        }
+    }
 }
 
 bool refresh_later(const Refresh &p_left, const Refresh &p_right) {
@@ -192,6 +202,7 @@ void Table::fresh_peer_row(PeerRows &r_peer, uint32_t p_row) {
     r_peer.stream[p_row] = uint8_t(Stream::NONE);
     r_peer.request[p_row] = 0;
     r_peer.token[p_row] = 0;
+    r_peer.origin[p_row] = wire::StreamTenure();
     r_peer.opened[p_row] = wire::StreamTenure();
     r_peer.next_rev[p_row] = wire::SNAPSHOT_FIRST_REVISION;
     r_peer.acked_rev[p_row] = 0;
@@ -227,6 +238,7 @@ void Table::move_peer_rows(uint32_t p_to, uint32_t p_from) {
         held.stream[p_to] = held.stream[p_from];
         held.request[p_to] = held.request[p_from];
         held.token[p_to] = held.token[p_from];
+        held.origin[p_to] = held.origin[p_from];
         held.opened[p_to] = held.opened[p_from];
         held.next_rev[p_to] = held.next_rev[p_from];
         held.acked_rev[p_to] = held.acked_rev[p_from];
@@ -278,6 +290,7 @@ void Table::reset_stream(uint32_t p_row, uint32_t p_peer, Stream p_stream) {
     held.stream[p_row] = uint8_t(p_stream);
     held.request[p_row] = 0;
     held.token[p_row] = 0;
+    held.origin[p_row] = wire::StreamTenure();
     held.opened[p_row] = wire::StreamTenure();
     held.next_rev[p_row] = wire::SNAPSHOT_FIRST_REVISION;
     held.acked_rev[p_row] = 0;
@@ -456,6 +469,7 @@ void World::forget_side(PeerSide &r_side) {
     r_side.tokens.clear();
     r_side.refreshes.clear();
     r_side.due.clear();
+    r_side.dormant.clear();
 }
 
 void World::peer_leave(int p_id) {
@@ -477,6 +491,7 @@ void World::peer_leave(int p_id) {
     side.tokens = HashMap<uint64_t, uint64_t>();
     side.refreshes.reset();
     side.due.reset();
+    side.dormant.reset();
     side.visible.clear();
     side.held.clear();
     free_peers.push_back(index);
@@ -594,6 +609,9 @@ void World::close_row(
     Table &held = *tables[p_at.table];
     PeerRows &peer = held.peers[p_peer];
     PeerSide &side = sides[p_peer];
+    if (peer.stream[p_at.row] == uint8_t(Stream::DORMANT)) {
+        wake(side, lane_key(held, p_at.row));
+    }
     const uint64_t token = peer.token[p_at.row];
     if (token != 0) {
         side.flights.erase(token);
@@ -637,6 +655,7 @@ uint64_t World::stream_open(
     }
     close_row(at, peer, Stream::OPENING);
     held.request[at.row] = request;
+    held.origin[at.row] = p_tenure;
     held.opened[at.row] = p_tenure;
     sides[peer].requests[request] = p_lane.address();
     return request;
@@ -684,8 +703,20 @@ wire::ReadyVerdict World::stream_ready(
 
 bool World::stream_reset(int p_peer, uint64_t p_request, uint64_t p_token) {
     const uint32_t peer = peer_of(p_peer);
-    if (peer == Table::NO_SLOT || p_request == 0) {
+    if (peer == Table::NO_SLOT) {
         return false;
+    }
+    if (p_request == 0) {
+        const uint64_t *named
+            = p_token != 0 ? sides[peer].tokens.getptr(p_token) : nullptr;
+        const RowAddress at
+            = named != nullptr ? lane_row(*named) : RowAddress();
+        if (!at.valid()
+            || tables[at.table]->peers[peer].token[at.row] != p_token) {
+            return false;
+        }
+        close_row(at, peer, Stream::NONE);
+        return true;
     }
     const uint64_t *address = sides[peer].requests.getptr(p_request);
     const RowAddress at
@@ -742,7 +773,9 @@ uint64_t World::token_of(int p_peer, const wire::StreamLane &p_lane) const {
     if (!stream_row(p_peer, p_lane, peer, at)) {
         return 0;
     }
-    return tables[at.table]->peers[peer].token[at.row];
+    const PeerRows &held = tables[at.table]->peers[peer];
+    return held.stream[at.row] == uint8_t(Stream::READY) ? held.token[at.row]
+                                                         : 0;
 }
 
 uint64_t World::request_of(int p_peer, const wire::StreamLane &p_lane) const {
@@ -821,13 +854,104 @@ LocalVector<wire::ClosedLane> World::close_where(
     return out;
 }
 
-LocalVector<wire::ClosedLane> World::close_tenures_other_than(
+LocalVector<wire::ClosedLane> World::park_tenures_other_than(
     int64_t p_route,
     uint64_t p_tenure
 ) {
+    LocalVector<wire::ClosedLane> out;
     wire::StreamTenure bar;
     bar.tenure = p_tenure;
-    return close_where(p_route, &tenure_other_than, bar);
+    for (uint32_t table = 0; table < tables.size(); ++table) {
+        Table &held = *tables[table];
+        for (uint32_t row = 0; row < held.row_count(); ++row) {
+            if (held.routes[row] != p_route) {
+                continue;
+            }
+            for (uint32_t peer = 0; peer < held.peers.size(); ++peer) {
+                PeerRows &rows = held.peers[peer];
+                if (!peer_joined(peer)
+                    || !tenure_other_than(rows.opened[row], bar)) {
+                    continue;
+                }
+                if (rows.stream[row] == uint8_t(Stream::OPENING)) {
+                    close_row({table, row}, peer, Stream::NONE);
+                    continue;
+                }
+                if (rows.stream[row] != uint8_t(Stream::READY)) {
+                    continue;
+                }
+                rows.stream[row] = uint8_t(Stream::DORMANT);
+                sides[peer].dormant.push_back(lane_key(held, row));
+                if (sides[peer].dormant.size() > wire::DORMANT_LANE_CAP) {
+                    evict_dormant(peer, out);
+                }
+            }
+        }
+    }
+    return out;
+}
+
+void World::evict_dormant(
+    uint32_t p_peer,
+    LocalVector<wire::ClosedLane> &r_closed
+) {
+    const RowAddress at = lane_row(sides[p_peer].dormant[0]);
+    if (!at.valid()) {
+        sides[p_peer].dormant.remove_at(0);
+        return;
+    }
+    wire::ClosedLane closed;
+    closed.peer = sides[p_peer].id;
+    closed.token = tables[at.table]->peers[p_peer].token[at.row];
+    closed.lane = lane_of(*tables[at.table], at.row);
+    r_closed.push_back(closed);
+    close_row(at, p_peer, Stream::NONE);
+}
+
+bool World::stream_resume(
+    uint32_t p_peer,
+    const RowAddress &p_at,
+    const wire::StreamTenure &p_bound
+) {
+    Table &table = *tables[p_at.table];
+    PeerRows &held = table.peers[p_peer];
+    const uint8_t stream = held.stream[p_at.row];
+    if ((stream != uint8_t(Stream::READY)
+         && stream != uint8_t(Stream::DORMANT))
+        || !wire::binding_follows(held.origin[p_at.row], p_bound)
+        || p_bound.tenure < held.opened[p_at.row].tenure) {
+        return false;
+    }
+    const uint64_t floor = wire::binding_floor(held.origin[p_at.row], p_bound);
+    if (held.next_rev[p_at.row] > floor && floor != 0
+        && !(held.opened[p_at.row] == p_bound)) {
+        return false;
+    }
+    PeerSide &side = sides[p_peer];
+    if (stream == uint8_t(Stream::DORMANT)) {
+        wake(side, lane_key(table, p_at.row));
+    }
+    if (!(held.opened[p_at.row] == p_bound)) {
+        LocalVector<Flight> *flights
+            = side.flights.getptr(held.token[p_at.row]);
+        if (flights != nullptr) {
+            for (uint32_t at = 0; at < flights->size(); ++at) {
+                spare(spare_images, (*flights)[at]);
+            }
+            flights->clear();
+        }
+        held.next_rev[p_at.row] = floor > held.next_rev[p_at.row]
+            ? floor
+            : held.next_rev[p_at.row];
+        held.opened[p_at.row] = p_bound;
+    }
+    held.stream[p_at.row] = uint8_t(Stream::READY);
+    return true;
+}
+
+uint32_t World::dormant_count(int p_peer) const {
+    const uint32_t peer = peer_of(p_peer);
+    return peer != Table::NO_SLOT ? sides[peer].dormant.size() : 0;
 }
 
 LocalVector<wire::ClosedLane> World::close_anchors_other_than(

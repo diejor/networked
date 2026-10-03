@@ -181,10 +181,11 @@ its author the header of section 11 carries and the origin its ADOPT body
 carries, DESPAWN declares 1 for the base a controller's DESPAWN carries,
 REPARENT declares 2 for its anchor revision and its author,
 CONTROL_REQUEST and CONTROL_APPLY declare 1 for the layouts of section 14,
-ROW_CONTROL declares 3 for the tenure, the anchor revision and its author its
-OPEN of section 10 carries, LIFECYCLE_DECISION declares 2 for the author of
-the revision it names and the denial string a refusal carries, and every
-other revision is 0.
+ROW_CONTROL declares 5 for the frame of records, the stepped ids, the omitted
+OPEN fields and the RESET that names only a token of section 10, and for the
+parked lanes and binding floors of section 7, LIFECYCLE_DECISION declares 2
+for the author of the revision it names and the denial string a refusal
+carries, and every other revision is 0.
 
 Ids 0, 1 and 7 were claimed by formats older than v8 and stay reserved, so an
 ancient frame is refused instead of decoding as a modern channel.
@@ -285,6 +286,30 @@ A token is looked up under the connection that sent it. Two peers may hold
 streams for the same route in opposite directions, and the lookup direction is
 what tells them apart.
 
+A stream is bound to the anchor revision it was opened under, and a stream for
+an input or broadcast record is also bound to a controller tenure (section 10).
+A tenure binding follows the installed decision and the stream survives it. An
+anchor binding does not, and a move ends the stream.
+
+**Parked lanes.** A writer that stops authoring a tenure bound lane parks it.
+A parked lane keeps its token, its revision counter and its confirmed
+baseline, and its writer sends no row and no CLOSE for it. When the writer
+authors the lane again under the same entity lifetime and anchor, it resumes
+on the same token and sends no OPEN. A writer holds at most 1024 parked lanes
+per peer. Parking one more closes the lane that parked first and sends CLOSE
+for it. A parked lane ends with its entity, with HIDE, with an epoch change
+and when its peer leaves. A receiver keeps its side until one of those, so it
+holds at most what the writer's limit allows, and a receiver that refuses to
+hold more than 1024 from one writer conforms.
+
+**Binding floors.** Each side remembers the tenure a lane was opened under. A
+lane bound to a later tenure has a floor, the difference between the two
+tenures times 256, and every revision the writer sends under that tenure is at
+or above it. A writer resumes only while its next revision is at or below the
+floor and then continues from the floor, so every revision of an earlier
+tenure lies below it. A writer whose earlier tenure has already counted past
+the floor closes the lane and opens it again.
+
 ---
 
 ## 8. The state row
@@ -358,29 +383,80 @@ a window against the other windows of its own stream and buys nothing else.
 
 ## 10. ROW_CONTROL, channel 43
 
-One complete record per frame, tagged by its first byte.
+A frame carries one or more complete records back to back until its payload
+ends, each tagged by its first byte. A peer sends at most one ROW_CONTROL
+frame per peer per flush.
 
 ```text
 [tag bits 8]
-0 OPEN    [request varuint 10][route varuint 5][ordinal bits 8]
-          [family bits 8][epoch varuint 3][tenure varuint 5]
-          [anchor varuint 5][anchor_author varuint 5][schema bits 32]
-1 READY   [request varuint 10][token varuint 10]
+0 OPEN    [request step][route varuint 5][family bits 2]
+          [has_ordinal bool1][has_epoch bool1][has_tenure bool1]
+          [has_anchor bool1][has_anchor_author bool1][has_schema bool1]
+          [ordinal bits 8]                 when has_ordinal
+          [epoch varuint 3]                when has_epoch
+          [tenure varuint 5]               when has_tenure
+          [anchor varuint 5]               when has_anchor
+          [anchor_author varuint 5]        when has_anchor_author
+          [schema bits 32]                 when has_schema
+          [check bits 8]                   when any has_ field above is 0
+1 READY   [request step][token step]
 2 ACCEPT  [count int_range 1..32]
-          then count entries of [token varuint 10][revision varuint 10]
-3 RESET   [request varuint 10][token varuint 10]
-4 CLOSE   [token varuint 10]
+          then count entries of [token step][revision varuint 10]
+3 RESET   [request step][token varuint 10]
+4 CLOSE   [token step]
 [align_verify]
 ```
 
 `route`, `ordinal` and `epoch` are spelled as section 3 and section 11 spell
 them, so `ordinal` is the envelope's `comp` width. `schema` is the compiled
-shape hash folded to 32 bits.
+shape hash folded to 32 bits. An absent ordinal is 0, and a present ordinal of
+0 refuses the frame.
+
+A step is `svarint 10` of the value minus the value before it, wrapping in
+64 bits, and each kind of id steps from its own predecessor in the same frame.
+
+```text
+OPEN request             the previous OPEN request in the frame
+READY, RESET request     the previous READY or RESET request in the frame
+READY token              the previous READY token in the frame
+CLOSE token              the previous CLOSE token in the frame
+ACCEPT token             the previous entry of the same ACCEPT
+```
+
+The first id of each kind steps from 0, so a frame decodes alone and a record
+never reaches back across a frame for its ids. The sender writes an ACCEPT's
+entries in ascending token order.
+
+**The OPEN basis.** Each direction of a connection keeps a basis, the epoch,
+tenure, anchor, anchor author and schema of the last OPEN that carried each
+`(route, ordinal)`. A field whose `has_` bit is 0 is equal to that field in the
+basis. The writer clears a bit only when its basis holds the key and the value
+is equal. The writer folds every OPEN it sends into its basis, and the
+receiver folds every OPEN it resolves, in frame order, so both ends hold the
+same basis over a reliable ordered link. A basis holds 4096 keys, and a new
+key past that evicts the key that entered first. An update leaves a key's
+place in that order alone, so both ends evict the same key.
+
+`check` is a 64 bit FNV-1a over epoch, tenure, anchor, anchor author and
+schema of the record as the writer meant it, folded to 8 bits by xoring the
+high halves down. A receiver whose basis lacks the key, or whose resolved
+fields check differently, has not resolved the OPEN. It installs nothing,
+folds nothing into its basis and answers RESET with that request and token 0.
+A writer that receives RESET with token 0 clears its whole basis for that
+peer, so the OPEN it sends again carries every field.
+
+RESET with request 0 names its stream by token alone. A receiver sends it when
+a row arrives on a token it does not hold from a writer its installed decision
+admits, at most once per stream repair interval for one token. The writer
+closes the lane that token names and opens it again, which is how a lane the
+receiver dropped while it was parked comes back.
 
 OPEN travels from the writer and carries the request id it minted. READY and
 RESET travel back from the receiver naming that same request id, so a
 cancellation arriving before READY strands nobody. CLOSE travels from the
-writer and names only the token.
+writer and names only the token. A writer sends an unanswered OPEN again under
+the same request no sooner than one stream repair interval after it last sent
+it, and the receiver answers the repeat as it answered the first.
 
 `tenure` is the control revision at which the entity's current controller
 began, as section 14 carries it. It binds a lane for an input or broadcast
@@ -389,9 +465,14 @@ tenure is equal and the sender authors the record under that decision. An OPEN
 for a newer tenure parks until the decision arrives, and a park older than the
 stream repair interval is answered with RESET and token 0 so the writer opens
 again. An OPEN for an older tenure is counted and dropped. Installing a
-decision that moves the tenure closes every lane of an older tenure for that
-route, and the writer that lost authorship closes its lanes and sends CLOSE.
-A state lane writes the tenure it has and the receiver ignores it.
+decision that moves the tenure moves every lane of an older tenure for that
+route onto the new one and raises its binding floor (section 7). A lane whose
+writer the new decision would not seat is held. A row on a held lane, and a
+row below its lane's floor, is counted and dropped. The first later decision
+that would seat the writer releases the lane, so a resumed lane needs no
+handshake beyond the decision itself. The writer that lost authorship parks
+its lanes and sends nothing. A state lane writes the tenure it has and the
+receiver ignores it.
 
 `anchor` and `anchor_author` are the anchor revision of section 11 and the
 peer that minted it, as the writer held them when it opened the lane, and they
@@ -407,10 +488,11 @@ a move closes its lanes and opens fresh ones under the new revision. A move
 therefore costs one CLOSE, OPEN and READY per lane per receiver and no bytes
 on any row.
 
-A tag above 4, a family above 2, a count outside 1..32, an entry that ends
-early and any residue refuse the record. A malformed record installs no stream
-and promotes no receipt. An unknown token is counted and ignored, never
-answered.
+An empty payload, a tag above 4, a family above 2, a present ordinal of 0, a
+count outside 1..32, a record that ends early and a token or revision of 0 in
+an ACCEPT entry each refuse the frame whole. A refused frame installs no
+stream, promotes no receipt and folds nothing into the basis. A record naming
+an unknown token is counted and ignored, never answered.
 
 ACCEPT means the complete row committed to the configured consumer under this
 token at this revision, and it is emitted after the commit. Receipts coalesce
@@ -1185,31 +1267,3 @@ field list transcribed from this page and from nothing else, and `--spec`
 holds the same strings against the build's own `describe()` dump.
 
 ---
-
-## 23. What the ladder is worth
-
-`[MEASURED 2026-09-15]` over 64 generated schedules of 40 events each, two
-peers driving one lane through the real stream books and row codec, seed
-`0x5CED017`. The pose is nine `I16` columns, all LADDER, moved by a source a
-solver integrates. 78 percent of steps land within 7 codes, 18 percent within
-120 and 4 percent are a jump.
-
-```text
-arm        rows  stepped   stepped B   forced B   saved
-healthy    2624     2560       36,506     56,320   35.2%
-loss       1469      791       14,333     17,417   17.7%
-reorder    1449      847       16,052     19,481   17.6%
-```
-
-A step is measured from the confirmed snapshot rather than from the row
-before, so the saving tracks receipt latency.
-
-A source that jumps over its whole range still writes each element whole
-behind a two-bit selector, so its worst case is 2 bits an element.
-
-The narrower the row, the smaller the share. The same schedules over a row of
-two `I16` columns save 11.9 percent where the nine-column pose saves 35.2,
-because the token and the revision are a fixed cost the ladder cannot reach. A
-two-column row on an impaired link is byte-neutral.
-
-`extension/tests/wire_ladder_schedule_laws.cpp` holds every number above.

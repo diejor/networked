@@ -443,4 +443,105 @@ TEST_CASE(
     );
 }
 
+StreamTenure tenure_at(uint64_t p_tenure) {
+    StreamTenure made;
+    made.bound = true;
+    made.tenure = p_tenure;
+    return made;
+}
+
+uint64_t seat_bound(World &r_world, const StreamLane &p_lane, int p_peer) {
+    const uint64_t request
+        = r_world.stream_open(p_peer, p_lane, tenure_at(1));
+    const uint64_t token = next_stream_token();
+    r_world.stream_ready(p_peer, request, token);
+    return token;
+}
+
+TEST_CASE(
+    "[Networked][Wire][Hosted] PL2 a parked lane ends with its entity "
+    "lifetime, so a row placed under a new epoch opens afresh and never "
+    "resumes the old token"
+) {
+    World writer;
+    const StreamLane lane = lane_of(5, 0, StreamFamily::VOLATILE);
+    const RowAddress at = declare(writer, lane, HOST);
+    seat_bound(writer, lane, HOST);
+    writer.park_tenures_other_than(lane.route, 2);
+    const bool parked = writer.dormant_count(HOST) == 1;
+    REQUIRE(parked);
+
+    writer.place(at, lane.route, int64_t(EPOCH) + 1);
+    writer.name_lane(at, lane.ordinal);
+    NETW_CHECK_EQ(writer.dormant_count(HOST), 0);
+    NETW_CHECK_EQ(writer.request_of(HOST, lane), 0);
+    const bool resumed
+        = writer.stream_resume(writer.peer_of(HOST), at, tenure_at(2));
+    CHECK_FALSE(resumed);
+}
+
+TEST_CASE(
+    "[Networked][Wire][Hosted] PL5 a parked lane resumes from its binding "
+    "floor, and one whose earlier tenure already counted past that floor "
+    "refuses to resume, so no earlier revision reaches the floor"
+) {
+    World writer;
+    const StreamLane short_lane = lane_of(6, 0, StreamFamily::VOLATILE);
+    const StreamLane long_lane = lane_of(7, 0, StreamFamily::VOLATILE);
+    const RowAddress short_at = declare(writer, short_lane, HOST);
+    const RowAddress long_at = declare(writer, long_lane, HOST);
+    const uint64_t short_token = seat_bound(writer, short_lane, HOST);
+    seat_bound(writer, long_lane, HOST);
+    mint_one(writer, short_at, HOST);
+    uint64_t last = 0;
+    for (uint32_t at = 0; at < netw::wire::STREAM_BINDING_SPAN + 8; ++at) {
+        last = mint_one(writer, long_at, HOST);
+    }
+    const bool counted_past = last > netw::wire::STREAM_BINDING_SPAN;
+    REQUIRE(counted_past);
+    writer.park_tenures_other_than(short_lane.route, 2);
+    writer.park_tenures_other_than(long_lane.route, 2);
+
+    const uint32_t peer = writer.peer_of(HOST);
+    CHECK(writer.stream_resume(peer, short_at, tenure_at(2)));
+    NETW_CHECK_EQ(writer.token_of(HOST, short_lane), short_token);
+    NETW_CHECK_EQ(
+        mint_one(writer, short_at, HOST),
+        netw::wire::STREAM_BINDING_SPAN
+    );
+    CHECK_FALSE(writer.stream_resume(peer, long_at, tenure_at(2)));
+}
+
+TEST_CASE(
+    "[Networked][Wire][Hosted] PL4 a writer holds at most the parked lane "
+    "limit for one peer, and parking one more closes the lane that parked "
+    "first and names its token for CLOSE"
+) {
+    World writer;
+    const uint32_t count = netw::wire::DORMANT_LANE_CAP + 1;
+    uint64_t first_token = 0;
+    for (uint32_t at = 0; at < count; ++at) {
+        const StreamLane lane
+            = lane_of(int64_t(100 + at), 0, StreamFamily::VOLATILE);
+        declare(writer, lane, HOST);
+        const uint64_t token = seat_bound(writer, lane, HOST);
+        first_token = at == 0 ? token : first_token;
+    }
+    uint32_t closed = 0;
+    uint64_t closed_token = 0;
+    for (uint32_t at = 0; at < count; ++at) {
+        const godot::LocalVector<netw::wire::ClosedLane> out
+            = writer.park_tenures_other_than(int64_t(100 + at), 2);
+        closed += out.size();
+        closed_token = out.is_empty() ? closed_token : out[0].token;
+    }
+    NETW_CHECK_EQ(writer.dormant_count(HOST), netw::wire::DORMANT_LANE_CAP);
+    NETW_CHECK_EQ(closed, 1);
+    NETW_CHECK_EQ(closed_token, first_token);
+    NETW_CHECK_EQ(
+        writer.request_of(HOST, lane_of(100, 0, StreamFamily::VOLATILE)),
+        0
+    );
+}
+
 } // namespace TestRowStreamLifetime

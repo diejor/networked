@@ -198,6 +198,7 @@ TEST_CASE(
 ) {
     LinkGovernor link;
     int64_t now_ms = 0;
+    climb(link, int(LinkGovernor::WINDOW), now_ms);
     lose_a_round(link, now_ms);
     climb(link, 4, now_ms);
     NETW_CHECK_CLOSE(link.share(PEER), 1.0, EXACT);
@@ -212,6 +213,21 @@ TEST_CASE(
 
     now_ms += LinkGovernor::CEILING_HOLD_MS;
     climb(link, 1, now_ms);
+    NETW_CHECK_CLOSE(link.share(PEER), 1.0, EXACT);
+    const bool it_came_back = link.mode(PEER) == LinkGovernor::GOOD;
+    CHECK(it_came_back);
+}
+
+TEST_CASE(
+    "[Networked][Repl][Hosted] a link that loses twice before it has carried "
+    "one window climbs back whole, because a new link sets no ceiling"
+) {
+    LinkGovernor link;
+    int64_t now_ms = 0;
+    lose_a_round(link, now_ms);
+    climb(link, 4, now_ms);
+    lose_a_round(link, now_ms);
+    climb(link, 16, now_ms);
     NETW_CHECK_CLOSE(link.share(PEER), 1.0, EXACT);
     const bool it_came_back = link.mode(PEER) == LinkGovernor::GOOD;
     CHECK(it_came_back);

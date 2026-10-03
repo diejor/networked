@@ -234,6 +234,7 @@
 #include "session_when_live_laws.cpp"
 #include "settle_queue_tests.cpp"
 #include "sim_body_laws.cpp"
+#include "sim_contact_walk_laws.cpp"
 #include "sim_resolve_laws.cpp"
 #include "sim_select_laws.cpp"
 #include "slot_book_laws.cpp"

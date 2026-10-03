@@ -71,7 +71,7 @@ TEST_CASE(
         {"CONTROL_APPLY", 1},
         {"SPAWN", 4},
         {"REPARENT", 2},
-        {"ROW_CONTROL", 3},
+        {"ROW_CONTROL", 5},
         {"LIFECYCLE_DECISION", 2},
     };
     for (const Revised &row : revised) {

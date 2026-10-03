@@ -96,6 +96,25 @@ LocalVector<ControlRecord> drain(SessionSend &p_send, int64_t p_now_ms) {
     return p_send.control_scheduler().flush(PEER, p_now_ms, 4096);
 }
 
+LocalVector<RowOffer> bound(int64_t p_value, uint64_t p_tenure) {
+    LocalVector<RowOffer> out;
+    out.push_back(offer(p_value));
+    out[0].tenure.bound = true;
+    out[0].tenure.tenure = p_tenure;
+    out[0].heartbeat = 30;
+    return out;
+}
+
+uint64_t seat(SessionSend &r_send, int64_t p_value, uint64_t p_tenure) {
+    r_send.run(registry(), bound(p_value, p_tenure), WIDE, 0, 0);
+    const LocalVector<ControlRecord> asked = drain(r_send, 0);
+    const bool asked_once = asked.size() == 1;
+    REQUIRE(asked_once);
+    const uint64_t token = next_stream_token();
+    r_send.stream_ready(PEER, asked[0].request, token);
+    return token;
+}
+
 TEST_CASE(
     "[Networked][Wire][Hosted] G1 a lane the receiver has not opened sends no "
     "row and asks once, so no state can precede the stream that names it"
@@ -188,6 +207,91 @@ TEST_CASE(
     const bool a_reset_lane_asks_under_a_fresh_request
         = again[0].request > request;
     CHECK(a_reset_lane_asks_under_a_fresh_request);
+}
+
+TEST_CASE(
+    "[Networked][Wire][Hosted] G5 an OPEN still waiting for its answer is "
+    "asked again only once the repair interval has passed, so a slow link "
+    "carries one OPEN per interval and not one per pass"
+) {
+    SessionSend send;
+    send.run(registry(), one(10), WIDE, 0, 0);
+    const LocalVector<ControlRecord> asked = drain(send, 0);
+    const bool asked_once = asked.size() == 1;
+    REQUIRE(asked_once);
+    const int64_t interval = netw::wire::repair_interval_ms(0);
+
+    int quiet = 0;
+    for (int64_t now = 33; now < interval; now += 33) {
+        send.run(registry(), one(10), WIDE, now / 33, now);
+        quiet += int(drain(send, now).size());
+    }
+    NETW_CHECK_EQ(quiet, 0);
+
+    send.run(registry(), one(10), WIDE, interval / 33 + 1, interval);
+    const LocalVector<ControlRecord> again = drain(send, interval);
+    NETW_CHECK_EQ(int(again.size()), 1);
+    const bool asked_again = again.size() == 1;
+    REQUIRE(asked_again);
+    NETW_CHECK_EQ(int(again[0].tag), int(ControlTag::OPEN));
+    NETW_CHECK_EQ(again[0].request, asked[0].request);
+}
+
+TEST_CASE(
+    "[Networked][Wire][Hosted] G6 a lane resumed under a later tenure sends "
+    "its next row from the binding floor on the same token, and never "
+    "repairs a row of the earlier tenure the receiver would drop"
+) {
+    SessionSend send;
+    const uint64_t token = seat(send, 10, 1);
+    const SessionResult first = send.run(registry(), bound(11, 1), WIDE, 1, 33);
+    const bool sent = first.sends.size() == 1;
+    REQUIRE(sent);
+    const SessionResult repaired
+        = send.run(registry(), bound(11, 1), WIDE, 12, 400);
+    const bool repairs = repaired.sends.size() == 1
+        && repaired.sends[0].form == netw::repl::RowForm::REPAIR;
+    REQUIRE(repairs);
+    NETW_CHECK_ORDER(repaired.sends[0].revision, uint64_t(256), <);
+
+    send.park_tenures(ROUTE, 3);
+    NETW_CHECK_EQ(send.token_of(PEER, volatile_lane()), 0);
+    send.run(registry(), LocalVector<RowOffer>(), WIDE, 2, 66);
+
+    const SessionResult resumed
+        = send.run(registry(), bound(11, 3), WIDE, 40, 2000);
+    NETW_CHECK_EQ(send.token_of(PEER, volatile_lane()), token);
+    NETW_CHECK_EQ(int(resumed.sends.size()), 1);
+    const bool from_floor = resumed.sends.size() == 1
+        && resumed.sends[0].token == token
+        && resumed.sends[0].revision >= 2 * netw::wire::STREAM_BINDING_SPAN;
+    CHECK(from_floor);
+    NETW_CHECK_EQ(int(drain(send, 2000).size()), 0);
+}
+
+TEST_CASE(
+    "[Networked][Wire][Hosted] G7 a heartbeat that comes due while its lane "
+    "is parked is kept, so the resumed lane refreshes the receiver although "
+    "nothing changed"
+) {
+    SessionSend send;
+    const uint64_t token = seat(send, 10, 1);
+    const SessionResult first = send.run(registry(), bound(10, 1), WIDE, 1, 33);
+    const bool sent = first.sends.size() == 1;
+    REQUIRE(sent);
+    send.stream_receipt(PEER, token, first.sends[0].revision);
+    REQUIRE_FALSE(netw_test::row_owed(send.world, volatile_lane(), PEER));
+
+    send.park_tenures(ROUTE, 3);
+    send.run(registry(), LocalVector<RowOffer>(), WIDE, 40, 1333);
+
+    const SessionResult resumed
+        = send.run(registry(), bound(10, 3), WIDE, 41, 1366);
+    NETW_CHECK_EQ(int(resumed.sends.size()), 1);
+    const bool refreshed = resumed.sends.size() == 1
+        && resumed.sends[0].token == token
+        && int(resumed.sends[0].form) == int(netw::repl::RowForm::REFRESH);
+    CHECK(refreshed);
 }
 
 } // namespace TestRowStreamGate

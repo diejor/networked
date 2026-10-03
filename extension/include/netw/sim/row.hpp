@@ -91,6 +91,8 @@ bool chooses(const Row &p_row);
 
 bool contact_moded(const Row &p_row);
 
+bool contact_walks(const Row &p_row);
+
 using Seed = void (*)(void *p_context, Row &r_row);
 
 class Rows {

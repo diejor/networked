@@ -1,6 +1,9 @@
 #include "godot/class_db.hpp"
+#include "godot/display_server.hpp"
 #include "godot/engine.hpp"
 #include "godot/object.hpp"
+#include "godot/os.hpp"
+#include "godot/project_settings.hpp"
 #include "netw/api/display.hpp"
 #include "netw/api/entity.hpp"
 #include "netw/api/entity_record.hpp"
@@ -21,6 +24,27 @@
 using namespace godot;
 
 namespace netw {
+
+namespace {
+
+bool display_renders_here() {
+    ProjectSettings *settings = ProjectSettings::get_singleton();
+    if (settings != nullptr
+        && bool(settings->get_setting(
+            NetwMultiplayer::SMOOTH_WHEN_HEADLESS_SETTING,
+            false
+        ))) {
+        return true;
+    }
+    OS *os = OS::get_singleton();
+    if (os != nullptr && os->has_feature("dedicated_server")) {
+        return false;
+    }
+    DisplayServer *display = DisplayServer::get_singleton();
+    return display != nullptr && display->get_name() != String("headless");
+}
+
+} // namespace
 
 display::Decl NetwMultiplayer::display_config_for(
     const Ref<NetwEntity> &p_entity
@@ -573,6 +597,15 @@ void NetwMultiplayer::display_on_clock_tick(double p_delta, int64_t p_tick) {
     store::AllocationTally recording(idle_work.display_allocations);
 #endif
     LocalVector<display::Runtime *> &listed = display_book->record_set();
+    if (!display_renders_here()) {
+        for (display::Runtime *runtime : listed) {
+            if (runtime != nullptr) {
+                runtime->set_record_listed(false);
+            }
+        }
+        listed.clear();
+        return;
+    }
     const uint32_t count = listed.size();
     NETW_ZONE_VALUE(count);
     uint32_t kept = 0;
@@ -630,6 +663,9 @@ bool NetwMultiplayer::display_pump_listed(
         p_runtime->set_disabled(false);
         p_runtime->set_disable_until_tick(-1);
     }
+    if (!display_renders) {
+        return false;
+    }
     const Ref<NetwEntity> entity = p_runtime->entity();
     if (entity.is_null()) {
         return false;
@@ -668,6 +704,7 @@ Error NetwMultiplayer::display_pump(double p_delta) {
     if (!clock_engine().get_configured()) {
         return OK;
     }
+    display_renders = display_renders_here();
 
     const display::Timing timing
         = display::capture_timing(&clock_engine(), p_delta);

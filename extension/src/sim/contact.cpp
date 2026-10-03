@@ -49,6 +49,20 @@ void monitor_contacts(const Bodies &p_bodies) {
     }
 }
 
+bool reports_contacts(const Bodies &p_bodies) {
+    for (const AuthoredBody &held : p_bodies.held) {
+        const store::NodeCell &cell = resident_of(p_bodies, held);
+        const int reported = cell.solid != nullptr
+            ? cell.solid->get_max_contacts_reported()
+            : cell.flat != nullptr ? cell.flat->get_max_contacts_reported()
+                                   : 0;
+        if (reported > 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
 void touching(const Bodies &p_bodies, LocalVector<ObjectID> &r_colliders) {
     r_colliders.clear();
     for (const AuthoredBody &held : p_bodies.held) {

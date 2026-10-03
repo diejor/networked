@@ -185,8 +185,8 @@ public:
         return impl.stream_reset(int(p_peer), p_request, p_token);
     }
 
-    void close_tenures(int64_t p_route, uint64_t p_tenure) {
-        impl.close_tenures(p_route, p_tenure);
+    void park_tenures(int64_t p_route, uint64_t p_tenure) {
+        impl.park_tenures(p_route, p_tenure);
     }
 
     void close_anchors(int64_t p_route, uint64_t p_anchor, uint64_t p_author) {

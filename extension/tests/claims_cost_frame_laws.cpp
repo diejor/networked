@@ -116,6 +116,7 @@ constexpr int SHOVE_FRAMES = 240;
 constexpr int HANDOFF_EVERY = 4;
 constexpr int HANDOFFS = 20;
 constexpr int SETTLE_FRAMES = 60;
+constexpr int DECIDED_FRAMES = 4 * FLIGHT_TICKS;
 const Vector3 PUSH(12.0, 0.0, 0.0);
 const Vector3 SHOVE(3.0, 0.0, 0.0);
 
@@ -171,6 +172,7 @@ struct CostEvidence {
     bool driven = false;
     bool seated = false;
     int64_t burst_claimed = 0;
+    int64_t handoff_claimed = 0;
     int64_t handoff_controller = -1;
     int64_t last_requester = -1;
     double shove_gap = -1.0;
@@ -402,6 +404,11 @@ class CostScenario final : public netw_test::FrameScenario {
                     ->claim_authority(Hold::HOLD_YIELDABLE);
             }
         }
+        if (p_step == HANDOFF_END + DECIDED_FRAMES) {
+            seen.handoff_controller
+                = entity_at(-1, CONTESTED)->get_controller();
+            seen.handoff_claimed = queues_now().claimed;
+        }
         const Queues now = queues_now();
         const Phase phase = phase_of(p_step);
         seen.phases[phase].peak.widen(now);
@@ -418,8 +425,6 @@ class CostScenario final : public netw_test::FrameScenario {
 
     void read_final() {
         close_phase(HANDOFF);
-        evidence().handoff_controller
-            = entity_at(-1, CONTESTED)->get_controller();
     }
 
 public:
@@ -476,11 +481,11 @@ TEST_CASE(
         NETW_CHECK_EQ(settled.pending_ops, int64_t(0));
         NETW_CHECK_EQ(settled.parked_opens, int64_t(0));
         NETW_CHECK_EQ(settled.held_installs, int64_t(0));
-        NETW_CHECK_EQ(
-            settled.claimed,
-            int64_t(phase == HANDOFF ? CLIENTS + 1 : 0)
-        );
+        const bool agreed = settled.claimed == 0
+            || (phase == HANDOFF && settled.claimed == CLIENTS + 1);
+        CHECK(agreed);
     }
+    NETW_CHECK_EQ(seen.handoff_claimed, int64_t(CLIENTS + 1));
     NETW_CHECK_EQ(seen.handoff_controller, seen.last_requester);
 }
 

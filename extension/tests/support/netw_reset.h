@@ -7,7 +7,9 @@
 #include <vector>
 
 #include "godot/performance.hpp"
+#include "godot/project_settings.hpp"
 #include "godot/utility.hpp"
+#include "netw/api/netw_multiplayer.hpp"
 
 namespace netw_test {
 
@@ -25,8 +27,19 @@ inline bool register_reset_hook(ResetHook p_hook) {
     return true;
 }
 
+inline void smooth_when_headless(bool p_smooth) {
+    godot::ProjectSettings *settings = godot::ProjectSettings::get_singleton();
+    if (settings != nullptr) {
+        settings->set_setting(
+            netw::NetwMultiplayer::SMOOTH_WHEN_HEADLESS_SETTING,
+            p_smooth
+        );
+    }
+}
+
 inline void reset_for_case() {
     netw::gd::seed(NETW_TEST_SEED);
+    smooth_when_headless(true);
     for (ResetHook hook : reset_hooks()) {
         hook();
     }
