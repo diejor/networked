@@ -4,8 +4,7 @@
 
 #include "netw/api/entity.hpp"
 #include "netw/api/netw_multiplayer.hpp"
-#include "netw/api/predict.hpp"
-#include "netw/api/prediction_handle.hpp"
+#include "netw/api/prediction.hpp"
 #include "netw/sim/row.hpp"
 
 namespace TestNetwSimSessionAuthority {
@@ -14,8 +13,7 @@ using namespace godot;
 using namespace netw_test;
 using netw::NetwEntity;
 using netw::NetwMultiplayer;
-using netw::NetwPredict;
-using netw::NetwPredictionHandle;
+using netw::NetwPrediction;
 using netw::sim::Mode;
 
 struct Read {
@@ -30,9 +28,9 @@ Read read_of(NetwMultiplayer *p_session, const RID &p_entity) {
         read.mode = row->mode;
     }
     const Ref<NetwEntity> seated = p_session->entity_get_view(p_entity);
-    const Ref<NetwPredictionHandle> handle = seated.is_valid()
+    const Ref<NetwPrediction> handle = seated.is_valid()
         ? seated->get_prediction()
-        : Ref<NetwPredictionHandle>();
+        : Ref<NetwPrediction>();
     if (handle.is_valid()) {
         read.role = netw::NetwPredictionEngine::role_for_axes(
             int(handle->get_input_source()),
@@ -66,19 +64,19 @@ TEST_CASE(
     REQUIRE(server->is_host());
     const Read before = read_of(server, entity);
     NETW_CHECK_EQ(int(before.mode), int(Mode::AUTHORITY));
-    NETW_CHECK_EQ(before.role, int(NetwPredict::ROLE_HOST_LOCAL));
+    NETW_CHECK_EQ(before.role, int(NetwPrediction::ROLE_HOST_LOCAL));
 
     server->session_set_role(NetwMultiplayer::ROLE_CLIENT);
     REQUIRE_FALSE(server->is_host());
     const Read demoted = read_of(server, entity);
     NETW_CHECK_EQ(int(demoted.mode), int(Mode::PROXY));
-    NETW_CHECK_EQ(demoted.role, int(NetwPredict::ROLE_REMOTE));
+    NETW_CHECK_EQ(demoted.role, int(NetwPrediction::ROLE_REMOTE));
 
     server->session_set_role(held);
     REQUIRE(server->is_host());
     const Read restored = read_of(server, entity);
     NETW_CHECK_EQ(int(restored.mode), int(Mode::AUTHORITY));
-    NETW_CHECK_EQ(restored.role, int(NetwPredict::ROLE_HOST_LOCAL));
+    NETW_CHECK_EQ(restored.role, int(NetwPrediction::ROLE_HOST_LOCAL));
 }
 
 } // namespace TestNetwSimSessionAuthority

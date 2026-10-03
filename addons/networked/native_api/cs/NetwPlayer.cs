@@ -41,6 +41,35 @@ public sealed class NetwPlayer : NetwRefCounted
         return Adopt(NetwApi.Retained(NetwApi.ObjectOf(value)));
     }
 
+    /// <summary>
+    /// Emitted when <see cref="NetwPlayer.Scene"/> changes. Either may be
+    /// <c>null</c>. Only <see cref="NetwSession.LocalPlayer"/> emits it.
+    /// <code>
+    /// func _ready() -&gt; void:
+    ///     Netw.session(self).local_joined.connect(on_local_joined)
+    ///
+    /// func on_local_joined(me: NetwPlayer) -&gt; void:
+    ///     me.scene_changed.connect(on_scene_changed)
+    ///
+    /// func on_scene_changed(_from: NetwScene, to: NetwScene) -&gt; void:
+    ///     lobby.visible = to == null
+    /// </code>
+    /// </summary>
+    public event Action<NetwScene, NetwScene> SceneChanged
+    {
+        add => ConnectBridge(
+            "scene_changed",
+            value,
+            Callable.From(
+                (Variant a0, Variant a1) =>
+                    value(
+                        Wrapped(a0, NetwScene.From),
+                        Wrapped(a1, NetwScene.From))
+            )
+        );
+        remove => DisconnectBridge("scene_changed", value);
+    }
+
     private static readonly IntPtr _bindGetPeerId =
         NetwApi.MethodBind("NetwPlayer", "get_peer_id", 3905245786UL);
 
@@ -103,16 +132,37 @@ public sealed class NetwPlayer : NetwRefCounted
     /// <see cref="Netw.SpawnPlayer"/>, in no particular order. Empty for a
     /// spectator.
     /// </summary>
-    public Godot.Collections.Array Bodies
+    public NetwEntity[] Bodies
     {
         get
         {
             godot_variant answered = default;
             NetwThunks.Call0(_bindGetBodies, Checked, ref answered);
-            Godot.Collections.Array result =
-                VariantUtils.ConvertToArray(answered);
+            NetwEntity[] result =
+                NetwApi.Elements(
+                    VariantUtils.ConvertToArray(answered),
+                    NetwEntity.From);
             answered.Dispose();
             return result;
+        }
+    }
+
+    private static readonly IntPtr _bindGetScene =
+        NetwApi.MethodBind("NetwPlayer", "get_scene", 3408356465UL);
+
+    /// <summary>
+    /// The scene this player is in, or <c>null</c>. It is the scene holding one
+    /// of its <see cref="NetwPlayer.Bodies"/>, or else the scene it watches
+    /// with <see cref="NetwScene.Watch"/>. It is <c>null</c> when there are
+    /// two. A client only knows about the scenes it receives.
+    /// </summary>
+    public NetwScene Scene
+    {
+        get
+        {
+            IntPtr answered = default;
+            NetwThunks.Ptrcall0_IntPtr(_bindGetScene, Checked, ref answered);
+            return NetwScene.Adopt(answered);
         }
     }
 }

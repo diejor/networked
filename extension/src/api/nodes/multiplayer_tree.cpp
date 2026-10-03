@@ -8,7 +8,7 @@
 #include "godot/os.hpp"
 #include "godot/random.hpp"
 #include "godot/scene_tree.hpp"
-#include "netw/api/connect_handle.hpp"
+#include "netw/api/connection.hpp"
 #include "netw/api/context.hpp"
 #include "netw/api/participant.hpp"
 #include "netw/log.hpp"
@@ -64,9 +64,7 @@ StringName MultiplayerTree::random_app_id() {
 }
 
 Ref<NetwMultiplayer> MultiplayerTree::make_api() const {
-    Ref<SceneMultiplayer> inner;
-    inner.instantiate();
-    return NetwMultiplayer::make(inner, api_script);
+    return NetwMultiplayer::create(api_script);
 }
 
 void MultiplayerTree::set_peer_class(const StringName &p_value) {
@@ -252,10 +250,6 @@ void MultiplayerTree::bind_api_signals() {
          callable_mp(this, &MultiplayerTree::on_connected_to_server)},
         {SIG_SERVER_DISCONNECTED,
          callable_mp(this, &MultiplayerTree::on_server_disconnected)},
-        {SIG_SESSION_ENTERED,
-         callable_mp(this, &MultiplayerTree::finalize_session)},
-        {SIG_SESSION_ENDED,
-         callable_mp(this, &MultiplayerTree::teardown_session)},
     };
     for (const Wiring &row : wiring) {
         const StringName name(row.signal);
@@ -263,6 +257,7 @@ void MultiplayerTree::bind_api_signals() {
             api->connect(name, row.target);
         }
     }
+    api->session_set_tree(this);
 }
 
 void MultiplayerTree::unbind_api_signals() {
@@ -274,17 +269,14 @@ void MultiplayerTree::unbind_api_signals() {
         callable_mp(this, &MultiplayerTree::on_peer_disconnected),
         callable_mp(this, &MultiplayerTree::on_connected_to_server),
         callable_mp(this, &MultiplayerTree::on_server_disconnected),
-        callable_mp(this, &MultiplayerTree::finalize_session),
-        callable_mp(this, &MultiplayerTree::teardown_session),
     };
     const char *names[]
         = {SIG_PEER_CONNECTED,
            SIG_PEER_DISCONNECTED,
            SIG_CONNECTED_TO_SERVER,
-           SIG_SERVER_DISCONNECTED,
-           SIG_SESSION_ENTERED,
-           SIG_SESSION_ENDED};
-    for (int at = 0; at < 6; ++at) {
+           SIG_SERVER_DISCONNECTED};
+    api->session_set_tree(nullptr);
+    for (int at = 0; at < 4; ++at) {
         const StringName name(names[at]);
         if (api->is_connected(name, targets[at])) {
             api->disconnect(name, targets[at]);
@@ -329,7 +321,9 @@ void MultiplayerTree::bring_up_here(
     const StringName &p_username,
     const Array &p_join_args
 ) {
-    const Ref<NetwConnectHandle> connection = Netw::connection(this);
+    const Ref<NetwMultiplayer> core = NetwMultiplayer::core_of(this);
+    const Ref<NetwConnection> connection
+        = core.is_valid() ? core->get_connection() : Ref<NetwConnection>();
     if (connection.is_null()) {
         return;
     }

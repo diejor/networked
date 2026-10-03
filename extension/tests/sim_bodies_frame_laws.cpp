@@ -12,7 +12,7 @@
 #include "godot/spatial_node.hpp"
 #include "netw/api/entity.hpp"
 #include "netw/api/netw_multiplayer.hpp"
-#include "netw/api/simulation_handle.hpp"
+#include "netw/api/simulation.hpp"
 #include "netw/sim/row.hpp"
 
 using namespace godot;
@@ -21,7 +21,7 @@ namespace TestNetwSimBodiesFrameLaws {
 
 using netw::NetwEntity;
 using netw::NetwMultiplayer;
-using netw::NetwSimulationHandle;
+using netw::NetwSimulation;
 using netw::sim::Mode;
 
 constexpr const char *ROOT_SOURCE = R"(extends RigidBody3D
@@ -144,7 +144,7 @@ func _init() -> void:
 )";
 
 constexpr const char *EXACT_LINE
-    = "\te.simulation.restore = NetwSimulationHandle.RESTORE_EXACT\n";
+    = "\te.simulation.restore = NetwSimulation.RESTORE_EXACT\n";
 
 enum Shape {
     ROOT,
@@ -408,7 +408,7 @@ class BodiesScenario final : public netw_test::FrameScenario {
             for (int at = 0; at < OBSERVERS; ++at) {
                 entity_at(kind, OBSERVER_AT[at])
                     ->get_simulation()
-                    ->set_replicas(NetwSimulationHandle::REPLICAS_ACTIVE);
+                    ->set_replicas(NetwSimulation::REPLICAS_ACTIVE);
             }
         }
     }

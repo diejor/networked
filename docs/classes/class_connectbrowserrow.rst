@@ -40,11 +40,11 @@ Methods
 .. table::
    :widths: auto
 
-   +--------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | |void| | :ref:`bind_endpoint<class_ConnectBrowserRow_method_bind_endpoint>`\ (\ handle\: :ref:`NetwConnectHandle<class_NetwConnectHandle>`, p_peer_class\: :godot:`StringName`, p_address\: :godot:`String`\ ) |
-   +--------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | |void| | :ref:`set_endpoint<class_ConnectBrowserRow_method_set_endpoint>`\ (\ p_endpoint\: :godot:`Dictionary`\ )                                                                                              |
-   +--------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   +--------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | |void| | :ref:`bind_endpoint<class_ConnectBrowserRow_method_bind_endpoint>`\ (\ handle\: :ref:`NetwConnection<class_NetwConnection>`, p_peer_class\: :godot:`StringName`, p_address\: :godot:`String`\ ) |
+   +--------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | |void| | :ref:`set_endpoint<class_ConnectBrowserRow_method_set_endpoint>`\ (\ p_endpoint\: :godot:`Dictionary`\ )                                                                                        |
+   +--------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 
 .. rst-class:: classref-section-separator
 
@@ -171,7 +171,7 @@ Method Descriptions
 
 .. rst-class:: classref-method
 
-|void| **bind_endpoint**\ (\ handle\: :ref:`NetwConnectHandle<class_NetwConnectHandle>`, p_peer_class\: :godot:`StringName`, p_address\: :godot:`String`\ ) :ref:`🔗<class_ConnectBrowserRow_method_bind_endpoint>`
+|void| **bind_endpoint**\ (\ handle\: :ref:`NetwConnection<class_NetwConnection>`, p_peer_class\: :godot:`StringName`, p_address\: :godot:`String`\ ) :ref:`🔗<class_ConnectBrowserRow_method_bind_endpoint>`
 
 .. container:: contribute
 

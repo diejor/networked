@@ -3,7 +3,7 @@
 #include "support/predict_rows.h"
 
 #include "godot/spatial_node.hpp"
-#include "netw/api/prediction_handle.hpp"
+#include "netw/api/prediction.hpp"
 #include "netw/api/schema_core.hpp"
 #include "netw/predict/engine.hpp"
 #include "netw/predict/joint.hpp"
@@ -504,7 +504,7 @@ struct SeatedEntity {
         owner = memnew(Node);
         entity = NetwEntity::ensure(owner);
         REQUIRE(entity.is_valid());
-        entity->set_entity_id(p_id);
+        entity->set_name(p_id);
         entity->set_peer_id(1);
     }
 
@@ -635,13 +635,13 @@ TEST_CASE(
         NetwPredictionEngine::ROSTER_ISLAND_MEMBERS,
         member_body.entity
     );
-    const Ref<NetwPredictionHandle> handle
+    const Ref<NetwPrediction> handle
         = member_body.entity->get_prediction();
     REQUIRE(handle.is_valid());
-    handle->set_sim_mode(NetwPredict::SIM_MODE_DISPLAY);
+    handle->set_sim_mode(NetwPrediction::SIM_MODE_DISPLAY);
     CHECK_FALSE(engine->contact_is_equivalent(owner, false));
 
-    handle->set_sim_mode(NetwPredict::SIM_MODE_SPECULATIVE);
+    handle->set_sim_mode(NetwPrediction::SIM_MODE_SPECULATIVE);
     CHECK(engine->contact_is_equivalent(owner, false));
 }
 
@@ -699,7 +699,7 @@ struct DeclaredBody {
         owner = memnew(Node3D);
         entity = NetwEntity::ensure(owner);
         REQUIRE(entity.is_valid());
-        entity->set_entity_id(p_id);
+        entity->set_name(p_id);
         entity->set_peer_id(1);
         slot = p_pool->slot_register(entity);
         REQUIRE(slot >= 0);

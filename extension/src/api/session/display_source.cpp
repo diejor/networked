@@ -11,12 +11,6 @@ using namespace netw;
 
 namespace netw {
 
-namespace {
-
-const char *SIG_PARTICIPANT_VIEWPORT_CHANGED = "participant_viewport_changed";
-
-} // namespace
-
 SubViewport *NetwMultiplayer::scene_resolve_player_viewport() {
     if (session_get_role() != ROLE_LISTEN_SERVER) {
         return nullptr;
@@ -53,7 +47,7 @@ void NetwMultiplayer::scene_player_display_settle() {
         "The player display is now %s.",
         resolved != nullptr ? "an isolated world" : "no viewport"
     );
-    emit_signal(SIG_PARTICIPANT_VIEWPORT_CHANGED, resolved);
+    notify(PARTICIPANT_VIEWPORT_CHANGED, resolved);
 }
 
 } // namespace netw

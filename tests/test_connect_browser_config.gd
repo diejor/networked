@@ -10,7 +10,7 @@ const BROWSER := preload(
 func test_typed_defaults_reach_every_form_without_mutating_resource() -> void:
 	var tree := MultiplayerTree.new()
 	add_child(tree)
-	var connection: NetwConnectHandle = Netw.connection(tree)
+	var connection: NetwConnection = Netw.session(tree).connection
 	var config := ConnectENetConfig.new()
 	config.port = 34567
 	config.max_players = 12
@@ -92,7 +92,7 @@ func test_webrtc_resource_round_trip_and_native_discovery_boundary() -> void:
 
 	var tree := MultiplayerTree.new()
 	add_child(tree)
-	var connection: NetwConnectHandle = Netw.connection(tree)
+	var connection: NetwConnection = Netw.session(tree).connection
 	assert_int(
 		connection.transport_set_browse_settings(
 			&"WebRTCMultiplayerPeer",

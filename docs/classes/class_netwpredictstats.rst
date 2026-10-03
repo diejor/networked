@@ -12,14 +12,14 @@ NetwPredictStats
 
 **Inherits:** :godot:`RefCounted`
 
-Prediction counters for one :ref:`NetwEntity<class_NetwEntity>`, reached by :ref:`NetwPredictionHandle.stats<class_NetwPredictionHandle_property_stats>`.
+Prediction counters for one :ref:`NetwEntity<class_NetwEntity>`, reached by :ref:`NetwPrediction.stats<class_NetwPrediction_property_stats>`.
 
 .. rst-class:: classref-introduction-group
 
 Description
 -----------
 
-Use these for debug overlays and charts. To react to a correction, connect to the :ref:`NetwPredictionHandle<class_NetwPredictionHandle>` signals.
+Use these for debug overlays and charts. To react to a correction, connect to the :ref:`NetwPrediction<class_NetwPrediction>` signals.
 
 ::
 

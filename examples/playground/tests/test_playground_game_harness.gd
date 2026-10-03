@@ -24,4 +24,4 @@ func test_a_host_and_a_client_share_the_playground() -> void:
 
 
 func playground(peer: NetwSceneRunner) -> Node:
-	return Netw.scene(peer.tree, &"Playground").root
+	return peer.session.find_scene(&"Playground").root

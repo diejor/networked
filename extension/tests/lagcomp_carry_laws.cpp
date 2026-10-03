@@ -2,7 +2,7 @@
 
 #include "support/scenario_run.h"
 
-#include "netw/api/prediction_handle.hpp"
+#include "netw/api/prediction.hpp"
 
 #if defined(NETW_TIER_HOSTED)
 

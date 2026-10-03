@@ -92,14 +92,7 @@ NetwMultiplayer *SyncCompat::core() const {
 void SyncCompat::set_core(Object *p_core) {
     NetwMultiplayer *plane = Object::cast_to<NetwMultiplayer>(p_core);
     core_id = gd::instance_id(plane);
-    if (plane == nullptr) {
-        return;
-    }
-    const Callable live
-        = callable_mp(plane, &NetwMultiplayer::sync_compat_entity_live);
-    if (!plane->is_connected(SIG_ENTITY_LIVE, live)) {
-        plane->connect(SIG_ENTITY_LIVE, live);
-    }
+    hears_entity_live = plane != nullptr;
 }
 
 SyncCompat *NetwMultiplayer::sync_adapter() const {
@@ -1543,12 +1536,8 @@ void SyncCompat::clear_peer(int64_t p_peer_id) {
 
 void SyncCompat::dispose() {
     NetwMultiplayer *plane = core();
+    hears_entity_live = false;
     if (plane != nullptr) {
-        const Callable live
-            = callable_mp(plane, &NetwMultiplayer::sync_compat_entity_live);
-        if (plane->is_connected(SIG_ENTITY_LIVE, live)) {
-            plane->disconnect(SIG_ENTITY_LIVE, live);
-        }
         const Callable heard
             = callable_mp(plane, &NetwMultiplayer::sync_compat_node_removed);
         SceneTree *tree = gd::scene_tree();

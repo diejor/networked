@@ -6,7 +6,7 @@ func test_active_ai_disconnects_mid_match() -> void:
 
 	await run_until(ais, 80)
 
-	var gamestate := Netw.service(game.host.tree, BomberGamestate) \
+	var gamestate := game.host.session.service(BomberGamestate) \
 			as BomberGamestate
 	var errored: Array[bool] = [false]
 	gamestate.game_error.connect(
@@ -44,7 +44,7 @@ func test_half_lobby_disconnects_during_active_play() -> void:
 
 	await run_until(ais, 60)
 
-	var gamestate := Netw.service(game.host.tree, BomberGamestate) \
+	var gamestate := game.host.session.service(BomberGamestate) \
 			as BomberGamestate
 	var errored: Array[bool] = [false]
 	gamestate.game_error.connect(

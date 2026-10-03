@@ -4,7 +4,7 @@
 #include "godot/resource_loader.hpp"
 #include "godot/script.hpp"
 #include "godot/variant.hpp"
-#include "netw/api/connect_handle.hpp"
+#include "netw/api/connection.hpp"
 #include "netw/api/loopback.hpp"
 #include "netw/api/netw_multiplayer.hpp"
 #include "netw/connect/transport.hpp"
@@ -16,7 +16,7 @@
 namespace TestNetwConnectRegistration {
 
 using namespace godot;
-using netw::NetwConnectHandle;
+using netw::NetwConnection;
 using netw::NetwMultiplayer;
 
 namespace {
@@ -266,7 +266,7 @@ TEST_CASE(
     "reports what the session actually took"
 ) {
     const Ref<NetwMultiplayer> core = lone_session();
-    const Ref<NetwConnectHandle> view = core->get_connection();
+    const Ref<NetwConnection> view = core->get_connection();
     const Ref<Script> held = script_at(HELD_SCRIPT);
     const Ref<Script> rival = script_at(RIVAL_SCRIPT);
     REQUIRE(view.is_valid());

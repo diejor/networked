@@ -91,8 +91,8 @@ class ClockLostPongScenario final : public netw_test::FrameScenario {
 
         client.instantiate();
         client_branch = mount("LostPongClient", client);
-        client->connect(
-            StringName("clock_pong_received"),
+        client->observe(
+            netw::NetwMultiplayer::CLOCK_PONG_RECEIVED,
             callable_mp_static(&count_client_pong)
         );
         client->session_prepare_join(StringName("joiner"), Array());

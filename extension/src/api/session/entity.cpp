@@ -1,9 +1,9 @@
-#include "netw/api/interest_handle.hpp"
+#include "netw/api/interest.hpp"
 
 #include <cstdlib>
 
 #include "netw/api/netw_multiplayer.hpp"
-#include "netw/api/scene_handle.hpp"
+#include "netw/api/scene.hpp"
 
 #include "netw/api/participant.hpp"
 
@@ -23,11 +23,12 @@
 #include "godot/world.hpp"
 #include "netw/api/entity.hpp"
 #include "netw/api/join_request.hpp"
-#include "netw/api/predict.hpp"
-#include "netw/api/prediction_handle.hpp"
+#include "netw/api/prediction.hpp"
 #include "netw/api/replication_core.hpp"
 #include "netw/api/schema_model.hpp"
+#include "netw/api/sync_compat.hpp"
 #include "netw/api/sync_pipeline.hpp"
+#include "netw/spawn/pipeline.hpp"
 #include "netw/colors.hpp"
 #include "netw/comp_table.hpp"
 #include "netw/lifecycle/rule.hpp"
@@ -51,11 +52,6 @@ using repl::PropertyColumn;
 using repl::PropertySet;
 
 namespace {
-
-const char *SIG_ENTITY_DEAD = "entity_dead";
-const char *SIG_ENTITY_HIDDEN = "entity_hidden";
-const char *SIG_ENTITY_LINGERING = "entity_lingering";
-const char *SIG_ENTITY_LIVE = "entity_live";
 
 Variant world_pose_of(Node *p_node) {
     if (p_node == nullptr || !p_node->is_inside_tree()) {
@@ -247,7 +243,7 @@ Object *NetwMultiplayer::wrapper_stamp_identity(
     node->set_name(String(p_entity_id));
     const Ref<NetwEntity> wrapper = wrapper_ensure(node);
     if (wrapper.is_valid()) {
-        wrapper->set_entity_id(p_entity_id);
+        wrapper->set_name(p_entity_id);
         wrapper->set_peer_id(p_peer_id);
     }
     return node;
@@ -265,17 +261,17 @@ RID NetwMultiplayer::entity_parent_of(const RID &p_entity) const {
     return entity_at_or_above(owner->get_parent());
 }
 
-Ref<NetwSceneHandle> NetwMultiplayer::entity_scene_facet(
+Ref<NetwScene> NetwMultiplayer::entity_scene_facet(
     NetwEntityRecord *p_record,
     NetwEntity *p_wrapper
 ) {
     if (p_record == nullptr) {
-        return Ref<NetwSceneHandle>();
+        return Ref<NetwScene>();
     }
     const RID own = p_record->get_handle();
     const RID resolved = scene_of(own);
     if (resolved.is_valid() && resolved != own) {
-        const Ref<NetwSceneHandle> host = scene_handle_of(resolved);
+        const Ref<NetwScene> host = scene_handle_of(resolved);
         if (host.is_valid()) {
             return host;
         }
@@ -950,8 +946,8 @@ void NetwMultiplayer::entity_settle_peer_departure(int64_t p_peer) {
     }
 }
 
-TypedArray<Object> NetwMultiplayer::wrapper_live() const {
-    TypedArray<Object> out;
+TypedArray<NetwEntity> NetwMultiplayer::wrapper_live() const {
+    TypedArray<NetwEntity> out;
     const PackedInt32Array routes = liveness_core->live_routes();
     for (int at = 0; at < routes.size(); at++) {
         const Ref<NetwEntity> wrapper = wrapper_for_route(routes[at]);
@@ -1121,7 +1117,29 @@ void NetwMultiplayer::liveness_publish_live(int64_t p_route) {
     }
     {
         NETW_ZONE_NC("liveness emit entity live", colors::LIVENESS);
-        emit_signal(SIG_ENTITY_LIVE, p_route, wrapper);
+        if (SyncPipeline *pipeline = sync_pipeline()) {
+            if (pipeline->hears_entity_live) {
+                sync_pipeline_on_entity_live(p_route, wrapper);
+            }
+        }
+        if (SyncCompat *adapter = sync_adapter()) {
+            if (adapter->hears_entity_live) {
+                sync_compat_entity_live(p_route, wrapper);
+            }
+        }
+        scene_on_entity_live(p_route, wrapper);
+        if (display_session_bound) {
+            display_on_entity_live(p_route, wrapper.ptr());
+        }
+        if (spawn::Pipeline *spawning = spawn_plane()) {
+            if (spawning->retries_scene_parks()) {
+                spawn_retry_scene_parked_spawns(p_route, wrapper);
+            }
+            if (spawning->applies_action_gate()) {
+                spawn_apply_action_gate(p_route, wrapper);
+            }
+        }
+        notify(ENTITY_LIVE, p_route, wrapper);
     }
 }
 
@@ -1130,11 +1148,9 @@ bool NetwMultiplayer::liveness_linger(const RID &p_entity) {
              ->set_state(p_entity, NetwLivenessCore::STATE_LINGERING)) {
         return false;
     }
-    emit_signal(
-        SIG_ENTITY_LINGERING,
-        int64_t(liveness_core->route_of(p_entity)),
-        entity_get_view(p_entity)
-    );
+    const int64_t route = int64_t(liveness_core->route_of(p_entity));
+    const Ref<NetwEntity> view = entity_get_view(p_entity);
+    notify(ENTITY_LINGERING, route, view);
     return true;
 }
 
@@ -1183,7 +1199,7 @@ void NetwMultiplayer::liveness_announce_dead(int64_t p_route) {
         OK,
         Dictionary()
     );
-    emit_signal(SIG_ENTITY_DEAD, p_route);
+    notify(ENTITY_DEAD, p_route);
     liveness_forget_wrapper(entity);
 }
 
@@ -1213,7 +1229,7 @@ bool NetwMultiplayer::liveness_hide(int64_t p_route) {
         OK,
         Dictionary()
     );
-    emit_signal(SIG_ENTITY_HIDDEN, p_route, wrapper);
+    notify(ENTITY_HIDDEN, p_route, wrapper);
     liveness_forget_wrapper(entity);
     return true;
 }
@@ -1446,7 +1462,7 @@ Node *NetwMultiplayer::liveness_node_of(int64_t p_route) const {
     return wrapper_owner(liveness_core->rid_from_route(int(p_route)));
 }
 
-TypedArray<Object> NetwMultiplayer::liveness_get_entities() const {
+TypedArray<NetwEntity> NetwMultiplayer::liveness_get_entities() const {
     return wrapper_live();
 }
 
@@ -1928,14 +1944,15 @@ int64_t NetwMultiplayer::entity_get_peer(const RID &p_entity) const {
     return wrapper.is_valid() ? wrapper->get_peer_id() : 0;
 }
 
-void NetwMultiplayer::entity_grant_control(
+Error NetwMultiplayer::entity_grant_control(
     const RID &p_entity,
     int64_t p_peer
 ) {
     const Ref<NetwEntity> wrapper = entity_get_view(p_entity);
-    if (wrapper.is_valid()) {
-        wrapper->set_controller(p_peer);
+    if (wrapper.is_null()) {
+        return ERR_DOES_NOT_EXIST;
     }
+    return wrapper->transfer_control(p_peer);
 }
 
 NetwMultiplayer::EntityState NetwMultiplayer::entity_get_state(
@@ -2122,7 +2139,7 @@ Ref<NetwEntity> NetwMultiplayer::spawn_arm_identity(
         return entity;
     }
     const int64_t held_route = entity->get_route();
-    const StringName held_id = entity->get_entity_id();
+    const StringName held_id = entity->get_name();
     const int64_t held_peer = entity->get_peer_id();
     const int64_t held_controller = entity->get_controller();
 
@@ -2134,11 +2151,11 @@ Ref<NetwEntity> NetwMultiplayer::spawn_arm_identity(
         route = liveness_reserve_route();
     }
     entity->set_route(route);
-    if (entity->get_entity_id() == StringName()) {
+    if (entity->get_name() == StringName()) {
         const StringName claimed
             = p_owner.is_valid() ? p_owner->get_username() : StringName();
         if (claimed != StringName()) {
-            entity->set_entity_id(claimed);
+            entity->set_name(claimed);
             if (!p_node->is_inside_tree()) {
                 p_node->set_name(String(claimed));
             }
@@ -2148,7 +2165,7 @@ Ref<NetwEntity> NetwMultiplayer::spawn_arm_identity(
                 p_node->get_scene_file_path(),
                 String(p_node->get_name())
             );
-            entity->set_entity_id(
+            entity->set_name(
                 StringName(stem + String("@") + String::num_int64(route))
             );
         }
@@ -2163,7 +2180,7 @@ Ref<NetwEntity> NetwMultiplayer::spawn_arm_identity(
     }
     p_record->set_route(route);
     p_record->bind_node(p_node);
-    p_record->set_entity_id(entity->get_entity_id());
+    p_record->set_entity_id(entity->get_name());
     p_record->set_peer_id(entity->get_peer_id());
     p_record->set_controller(entity->get_controller());
 
@@ -2176,7 +2193,7 @@ Ref<NetwEntity> NetwMultiplayer::spawn_arm_identity(
     if (p_declare.is_valid()
         && int64_t(p_declare.call(entity_of(p_node), facts)) != int64_t(OK)) {
         entity->set_route(held_route);
-        entity->set_entity_id(held_id);
+        entity->set_name(held_id);
         entity->set_peer_id(held_peer);
         entity->record_controller(held_controller);
         return Ref<NetwEntity>();
@@ -3339,8 +3356,8 @@ void NetwMultiplayer::observe_node_entity(Node *p_node) {
     if (entity.is_null()) {
         return;
     }
-    if (entity->get_entity_id() != StringName()) {
-        lagcomp_effect_adopt(entity->get_entity_id());
+    if (entity->get_name() != StringName()) {
+        lagcomp_effect_adopt(entity->get_name());
     }
     const Callable adopted
         = callable_mp(this, &NetwMultiplayer::observe_entity_spawned)
@@ -3355,10 +3372,10 @@ void NetwMultiplayer::observe_entity_spawned(int64_t p_wrapper_id) {
     NetwEntity *entity = Object::cast_to<NetwEntity>(
         gd::object_of(godot::ObjectID(uint64_t(p_wrapper_id)))
     );
-    if (entity == nullptr || entity->get_entity_id() == StringName()) {
+    if (entity == nullptr || entity->get_name() == StringName()) {
         return;
     }
-    lagcomp_effect_adopt(entity->get_entity_id());
+    lagcomp_effect_adopt(entity->get_name());
 }
 
 } // namespace netw

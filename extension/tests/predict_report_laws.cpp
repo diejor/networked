@@ -11,8 +11,7 @@
 #include "netw/api/entity.hpp"
 #include "netw/api/event_plane.hpp"
 #include "netw/api/netw_multiplayer.hpp"
-#include "netw/api/predict.hpp"
-#include "netw/api/prediction_handle.hpp"
+#include "netw/api/prediction.hpp"
 #include "netw/api/schema_core.hpp"
 #include "netw/predict/engine.hpp"
 #include "netw/predict/journal.hpp"
@@ -28,10 +27,9 @@ using namespace godot;
 using namespace netw_test;
 using netw::NetwEntity;
 using netw::NetwMultiplayer;
-using netw::NetwPredict;
 using netw::NetwPredictionEngine;
 namespace predict = netw::predict;
-using netw::NetwPredictionHandle;
+using netw::NetwPrediction;
 using netw::repl::PropertyBinding;
 using netw::repl::PropertyBindingPtr;
 using netw::repl::PropertyColumn;
@@ -125,7 +123,7 @@ TEST_CASE(
     REQUIRE(driven.size() == 1);
     const Dictionary row = driven[0];
     const StringName entity_id = row[netw::event_key::entity_id()];
-    CHECK(entity_id == seated->get_entity_id());
+    CHECK(entity_id == seated->get_name());
     NETW_CHECK_EQ(int64_t(row[netw::event_key::route()]), route);
     const Dictionary detail = row[netw::event_key::detail()];
     NETW_CHECK_EQ(
@@ -173,10 +171,24 @@ TEST_CASE(
 
 Vector<StringName> episode_edges() {
     Vector<StringName> names;
-    names.push_back(StringName("episode_opened"));
-    names.push_back(StringName("episode_closed"));
-    names.push_back(StringName("episode_fallback"));
+    names.push_back(StringName("episode_changed"));
     return names;
+}
+
+int changes_of(const Recorder &p_edges, int p_change) {
+    int seen = 0;
+    const StringName changed("episode_changed");
+    for (int at = 0; at < p_edges.count(changed); ++at) {
+        seen += int(p_edges.args(changed, at)[0]) == p_change ? 1 : 0;
+    }
+    return seen;
+}
+
+Dictionary last_report(const Recorder &p_edges) {
+    const StringName changed("episode_changed");
+    const int heard = p_edges.count(changed);
+    return heard > 0 ? Dictionary(p_edges.args(changed, heard - 1)[1])
+                     : Dictionary();
 }
 
 TEST_CASE(
@@ -213,9 +225,19 @@ TEST_CASE(
     const Array drained = core->event_ring(route);
     core->event_arm(false);
 
-    NETW_CHECK_EQ(edges.count(StringName("episode_opened")), 1);
-    NETW_CHECK_EQ(edges.count(StringName("episode_fallback")), 1);
-    NETW_CHECK_EQ(edges.count(StringName("episode_closed")), 0);
+    NETW_CHECK_EQ(edges.count(StringName("episode_changed")), 2);
+    NETW_CHECK_EQ(
+        changes_of(edges, netw::NetwPrediction::EPISODE_CHANGE_OPENED),
+        1
+    );
+    NETW_CHECK_EQ(
+        changes_of(edges, netw::NetwPrediction::EPISODE_CHANGE_FALLBACK),
+        1
+    );
+    NETW_CHECK_EQ(
+        changes_of(edges, netw::NetwPrediction::EPISODE_CHANGE_CLOSED),
+        0
+    );
     NETW_CHECK_EQ(rows_of(drained, netw::EventPlane::EPISODE_OPEN).size(), 1);
     NETW_CHECK_EQ(
         rows_of(drained, netw::EventPlane::EPISODE_FALLBACK).size(),
@@ -334,13 +356,21 @@ TEST_CASE(
     pool->record_episode_comparison(slot, -1);
     pool->record_episode_comparison(
         slot,
-        int64_t(netw::NetwPredict::EPISODE_STATE_OPEN)
+        int64_t(netw::NetwPrediction::EPISODE_STATE_OPEN)
     );
     const Array drained = core->event_ring(route);
     core->event_arm(false);
 
-    NETW_CHECK_EQ(edges.count(StringName("episode_opened")), 1);
+    NETW_CHECK_EQ(
+        changes_of(edges, netw::NetwPrediction::EPISODE_CHANGE_OPENED),
+        1
+    );
     NETW_CHECK_EQ(rows_of(drained, netw::EventPlane::EPISODE_OPEN).size(), 1);
+
+    const Dictionary carried = last_report(edges);
+    CHECK_FALSE(carried.is_empty());
+    const bool carries_the_record = carried == pool->episode_record(slot);
+    CHECK(carries_the_record);
 }
 
 int fallbacks_asked = 0;
@@ -448,7 +478,7 @@ TEST_CASE(
     NETW_CHECK_EQ(fallbacks_asked, 0);
     NETW_CHECK_EQ(
         pool->episode_state(slot),
-        int(netw::NetwPredict::EPISODE_STATE_OPEN)
+        int(netw::NetwPrediction::EPISODE_STATE_OPEN)
     );
 }
 
@@ -486,7 +516,7 @@ TEST_CASE(
         int(netw::RestoreMode::EXACT)
     );
 
-    NetwPredictionHandle *handle = Object::cast_to<NetwPredictionHandle>(
+    NetwPrediction *handle = Object::cast_to<NetwPrediction>(
         netw::gd::live_object(seated->get_prediction())
     );
     REQUIRE(handle != nullptr);
@@ -497,14 +527,16 @@ TEST_CASE(
 
     commands_sent = 0;
     fallbacks_asked = 0;
-    handle->set_breach_response(NetwPredict::BREACH_RESPONSE_PREDICT_THROUGH);
+    handle->set_breach_response(
+        NetwPrediction::BREACH_RESPONSE_PREDICT_THROUGH
+    );
     NETW_CHECK_EQ(
         pool->demote_for_breach(slot, 9, true, 77, sends, demotes),
         0
     );
     NETW_CHECK_EQ(commands_sent, 0);
 
-    handle->set_breach_response(NetwPredict::BREACH_RESPONSE_DEMOTE);
+    handle->set_breach_response(NetwPrediction::BREACH_RESPONSE_DEMOTE);
     NETW_CHECK_EQ(
         pool->demote_for_breach(slot, 9, false, 77, sends, demotes),
         0
@@ -520,7 +552,7 @@ TEST_CASE(
     NETW_CHECK_EQ(fallback_ack, 9);
     NETW_CHECK_EQ(
         pool->episode_state(slot),
-        int(NetwPredict::EPISODE_STATE_OPEN)
+        int(NetwPrediction::EPISODE_STATE_OPEN)
     );
 }
 
@@ -578,7 +610,7 @@ TEST_CASE(
     const Ref<NetwEntity> seated = seat_player(rig, arena);
     REQUIRE(seated.is_valid());
 
-    NetwPredictionHandle *handle = Object::cast_to<NetwPredictionHandle>(
+    NetwPrediction *handle = Object::cast_to<NetwPrediction>(
         netw::gd::live_object(seated->get_prediction())
     );
     REQUIRE(handle != nullptr);
@@ -993,7 +1025,7 @@ TEST_CASE(
         0,
         false
     );
-    Object::cast_to<NetwPredictionHandle>(
+    Object::cast_to<NetwPrediction>(
         netw::gd::live_object(seated->get_prediction())
     )
         ->set_ack_age_ticks(4);
@@ -1004,7 +1036,7 @@ TEST_CASE(
     stated.set(0, Vector2(9.0, 0.0));
     stated.set(1, Vector2(3.0, 0.0));
 
-    NetwPredictionHandle *handle = Object::cast_to<NetwPredictionHandle>(
+    NetwPrediction *handle = Object::cast_to<NetwPrediction>(
         netw::gd::live_object(seated->get_prediction())
     );
     REQUIRE(handle != nullptr);
@@ -1302,7 +1334,7 @@ TEST_CASE(
     const int64_t slot = pool->open();
     REQUIRE(slot >= 0);
 
-    Ref<NetwPredictionHandle> handle;
+    Ref<NetwPrediction> handle;
     handle.instantiate();
 
     NETW_CHECK_EQ(pool->witness_sample(slot, handle).size(), 0);
@@ -1328,7 +1360,7 @@ TEST_CASE(
     const int64_t slot = pool->open();
     REQUIRE(slot >= 0);
 
-    Ref<NetwPredictionHandle> handle;
+    Ref<NetwPrediction> handle;
     handle.instantiate();
     handle->set_witness_contacts(callable_mp_static(&witness_freed_collider));
 
@@ -1374,7 +1406,7 @@ TEST_CASE(
     NETW_CHECK_EQ(int(command.values[0]), 0);
     NETW_CHECK_EQ(pool->invalid_command_predictor_reported_of(slot), false);
 
-    const Ref<netw::NetwPredictionHandle> member = seated->get_prediction();
+    const Ref<netw::NetwPrediction> member = seated->get_prediction();
     REQUIRE(member.is_valid());
     member->set_predict_input(callable_mp_static(&predictor_overlay));
     REQUIRE(pool->predict_command(slot, seated, 4));
@@ -1505,7 +1537,7 @@ TEST_CASE(
     Dictionary sink;
     const netw::Judgement stock = netw::prediction_core::judge(
         0,
-        int(NetwPredict::EXACT_VERDICT_UNJUDGED),
+        int(NetwPrediction::EXACT_VERDICT_UNJUDGED),
         predicted,
         payload,
         pool->wiring_snapshot(slot),
@@ -1553,7 +1585,7 @@ Dictionary reachability_of(NetwPredictionEngine &p_pool, int64_t p_slot) {
         StringName("racer"),
         0.05,
         1.0,
-        int(NetwPredict::BREACH_RESPONSE_DEMOTE),
+        int(NetwPrediction::BREACH_RESPONSE_DEMOTE),
         StringName("code"),
         0,
         0,
@@ -1678,7 +1710,7 @@ netw::RecoveryPlan check_parity(
     authority[StringName("scale")] = Vector2(2.0, 1.0);
     authority[StringName("rotation")] = 1.0;
 
-    const Ref<NetwPredictionHandle> handle = p_seated->get_prediction();
+    const Ref<NetwPrediction> handle = p_seated->get_prediction();
     REQUIRE(handle.is_valid());
     p_pool->open_recovery(p_slot, p_ack, Dictionary(), authority, 1, 0);
     const bool escalated = p_pool->escalation_pending(p_slot);
@@ -1752,7 +1784,7 @@ TEST_CASE(
     );
     REQUIRE(pool->has_pose_fields(slot));
     seated->get_prediction()->set_recovery_policy(
-        NetwPredict::RECOVERY_POLICY_REBASE_RECOVER
+        NetwPrediction::RECOVERY_POLICY_REBASE_RECOVER
     );
 
     const int domains[] = {0, 1, 0, 0, 0};
@@ -1774,10 +1806,10 @@ TEST_CASE(
     NETW_CHECK_EQ(escalations, 1);
     NETW_CHECK_EQ(suppressed, 1);
 
-    const Ref<netw::NetwSimulationHandle> simulation
+    const Ref<netw::NetwSimulation> simulation
         = seated->get_prediction()->simulation();
     REQUIRE(simulation.is_valid());
-    simulation->set_restore(netw::NetwSimulationHandle::RESTORE_EXTRAPOLATED);
+    simulation->set_restore(netw::NetwSimulation::RESTORE_EXTRAPOLATED);
     seated->get_prediction()->set_ack_age_ticks(2);
     pool->adopt_declaration(
         seated,

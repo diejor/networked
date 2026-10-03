@@ -26,9 +26,23 @@ Set the values in :godot:`Object._init() <Object#class_Object_private_method__in
     func _init() -> void:
         Netw.configure_session(self) \
             .app(&"bomber-v2") \
-            .role(NetwMultiplayer.ROLE_LISTEN_SERVER)
+            .role(NetwSession.ROLE_LISTEN_SERVER)
 
 \ A preset passed to :ref:`Netw.configure_session()<class_Netw_method_configure_session>` is copied, so one ``.tres`` can be used by several scenes. When no node calls :ref:`Netw.configure_session()<class_Netw_method_configure_session>`, the settings of the :ref:`MultiplayerTree<class_MultiplayerTree>` are used. When one does, the :ref:`MultiplayerTree<class_MultiplayerTree>` settings are ignored.
+
+
+
+\ **Bandwidth**\ 
+
+Each peer is sent at most :ref:`bandwidth_kbps<class_NetwSessionConfig_property_bandwidth_kbps>`. Changed rows that do not fit wait for a later tick, and the ones that waited longest and matter most go first.
+
+::
+
+    func _init() -> void:
+        Netw.configure_session(self).bandwidth(256)
+        Netw.configure_entity(self).replication_priority = 4.0
+
+\ RPCs, spawns and :ref:`NetwPropertyConfig.retained()<class_NetwPropertyConfig_method_retained>` properties are always sent when due. A peer they push over its budget gets no more rows until later ticks make up the difference. See :ref:`NetwMultiplayer.peer_link_stats()<class_NetwMultiplayer_method_peer_link_stats>`.
 
 .. rst-class:: classref-reftable-group
 
@@ -43,7 +57,7 @@ Properties
    +-----------------------------------------------------+--------------------------------------------------------------------------+---------+
    | :godot:`int`                                        | :ref:`bandwidth_kbps<class_NetwSessionConfig_property_bandwidth_kbps>`   | ``0``   |
    +-----------------------------------------------------+--------------------------------------------------------------------------+---------+
-   | :ref:`Role<enum_NetwMultiplayer_Role>`              | :ref:`desired_role<class_NetwSessionConfig_property_desired_role>`       | ``3``   |
+   | :ref:`Role<enum_NetwSession_Role>`                  | :ref:`desired_role<class_NetwSessionConfig_property_desired_role>`       | ``3``   |
    +-----------------------------------------------------+--------------------------------------------------------------------------+---------+
    | :ref:`NetwLinkConditions<class_NetwLinkConditions>` | :ref:`link_conditions<class_NetwSessionConfig_property_link_conditions>` |         |
    +-----------------------------------------------------+--------------------------------------------------------------------------+---------+
@@ -65,7 +79,7 @@ Methods
    +---------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------+
    | :ref:`NetwSessionConfig<class_NetwSessionConfig>` | :ref:`link<class_NetwSessionConfig_method_link>`\ (\ link_conditions\: :ref:`NetwLinkConditions<class_NetwLinkConditions>`\ ) |
    +---------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwSessionConfig<class_NetwSessionConfig>` | :ref:`role<class_NetwSessionConfig_method_role>`\ (\ desired_role\: :ref:`Role<enum_NetwMultiplayer_Role>`\ )                 |
+   | :ref:`NetwSessionConfig<class_NetwSessionConfig>` | :ref:`role<class_NetwSessionConfig_method_role>`\ (\ desired_role\: :ref:`Role<enum_NetwSession_Role>`\ )                     |
    +---------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------+
    | :ref:`NetwSessionConfig<class_NetwSessionConfig>` | :ref:`server<class_NetwSessionConfig_method_server>`\ (\ server_info\: :ref:`NetwServerInfo<class_NetwServerInfo>`\ )         |
    +---------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------+
@@ -109,7 +123,7 @@ The game and build. Peers with a different :ref:`app_id<class_NetwSessionConfig_
 
 The budget each peer is sent, in kbit/s. ``0`` allows each peer one datagram a tick of :godot:`SceneMultiplayer.max_sync_packet_size <SceneMultiplayer#class_SceneMultiplayer_property_max_sync_packet_size>`, less 150 bytes of headroom. A negative value is refused.
 
-While a peer loses packets its budget halves, and each round trip without loss adds back an eighth of it, up to this value. :ref:`NetwSessionHandle.set_peer_bandwidth()<class_NetwSessionHandle_method_set_peer_bandwidth>` gives one peer its own budget.
+While a peer loses packets its budget halves, and each round trip without loss adds back an eighth of it, up to this value. :ref:`NetwSession.set_peer_bandwidth()<class_NetwSession_method_set_peer_bandwidth>` gives one peer its own budget.
 
 .. rst-class:: classref-item-separator
 
@@ -119,14 +133,14 @@ While a peer loses packets its budget halves, and each round trip without loss a
 
 .. rst-class:: classref-property
 
-:ref:`Role<enum_NetwMultiplayer_Role>` **desired_role** = ``3`` :ref:`🔗<class_NetwSessionConfig_property_desired_role>`
+:ref:`Role<enum_NetwSession_Role>` **desired_role** = ``3`` :ref:`🔗<class_NetwSessionConfig_property_desired_role>`
 
 .. rst-class:: classref-property-setget
 
-- |void| **set_desired_role**\ (\ value\: :ref:`Role<enum_NetwMultiplayer_Role>`\ )
-- :ref:`Role<enum_NetwMultiplayer_Role>` **get_desired_role**\ (\ )
+- |void| **set_desired_role**\ (\ value\: :ref:`Role<enum_NetwSession_Role>`\ )
+- :ref:`Role<enum_NetwSession_Role>` **get_desired_role**\ (\ )
 
-The role this peer takes when it hosts, which becomes :ref:`NetwMultiplayer.role<class_NetwMultiplayer_property_role>`. A server made with :ref:`MultiplayerTree.raise_embedded_server()<class_MultiplayerTree_method_raise_embedded_server>` is always :ref:`NetwMultiplayer.ROLE_DEDICATED_SERVER<class_NetwMultiplayer_constant_ROLE_DEDICATED_SERVER>`.
+The role this peer takes when it hosts, which becomes :ref:`NetwMultiplayer.role<class_NetwMultiplayer_property_role>`. A server made with :ref:`MultiplayerTree.raise_embedded_server()<class_MultiplayerTree_method_raise_embedded_server>` is always :ref:`NetwSession.ROLE_DEDICATED_SERVER<class_NetwSession_constant_ROLE_DEDICATED_SERVER>`.
 
 .. rst-class:: classref-item-separator
 
@@ -224,7 +238,7 @@ Sets :ref:`link_conditions<class_NetwSessionConfig_property_link_conditions>` an
 
 .. rst-class:: classref-method
 
-:ref:`NetwSessionConfig<class_NetwSessionConfig>` **role**\ (\ desired_role\: :ref:`Role<enum_NetwMultiplayer_Role>`\ ) :ref:`🔗<class_NetwSessionConfig_method_role>`
+:ref:`NetwSessionConfig<class_NetwSessionConfig>` **role**\ (\ desired_role\: :ref:`Role<enum_NetwSession_Role>`\ ) :ref:`🔗<class_NetwSessionConfig_method_role>`
 
 Sets :ref:`desired_role<class_NetwSessionConfig_property_desired_role>` and returns this config.
 

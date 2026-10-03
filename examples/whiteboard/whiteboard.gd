@@ -6,7 +6,7 @@ var strokes: Node2D
 
 
 func _init() -> void:
-	Netw.configure_entity(self).entity_id = &"whiteboard"
+	Netw.configure_entity(self).name = &"whiteboard"
 	Netw.configure_spawn(spawn_stroke)
 
 

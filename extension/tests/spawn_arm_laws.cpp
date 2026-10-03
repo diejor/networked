@@ -68,12 +68,12 @@ TEST_CASE(
     NETW_CHECK_EQ(record.node(), node);
     CHECK(
         bool(
-            String(entity->get_entity_id())
+            String(entity->get_name())
             == String("make_crate@") + String::num_int64(entity->get_route())
         )
     );
     CHECK(
-        bool(String(record.get_entity_id()) == String(entity->get_entity_id()))
+        bool(String(record.get_entity_id()) == String(entity->get_name()))
     );
     NETW_CHECK_EQ(log.count("declare"), 1);
 
@@ -90,7 +90,7 @@ TEST_CASE(
     Node *node = memnew(Node);
     node->set_name("Crate");
     const Ref<NetwEntity> pre = NetwEntity::ensure(node);
-    pre->set_entity_id(StringName("chosen"));
+    pre->set_name(StringName("chosen"));
     Record record;
 
     const Ref<NetwEntity> entity = core->spawn_arm_identity(
@@ -101,7 +101,7 @@ TEST_CASE(
     );
 
     REQUIRE(entity.is_valid());
-    CHECK(bool(String(entity->get_entity_id()) == String("chosen")));
+    CHECK(bool(String(entity->get_name()) == String("chosen")));
     NETW_CHECK_EQ(entity->get_peer_id(), int64_t(4));
     NETW_CHECK_EQ(entity->get_controller(), int64_t(4));
     NETW_CHECK_EQ(record.get_peer_id(), int64_t(4));
@@ -120,7 +120,7 @@ TEST_CASE(
     Node *node = memnew(Node);
     node->set_name("Crate");
     const Ref<NetwEntity> pre = NetwEntity::ensure(node);
-    pre->set_entity_id(StringName("held"));
+    pre->set_name(StringName("held"));
     pre->set_peer_id(2);
     pre->set_controller(3);
     const int64_t held_route = pre->get_route();
@@ -135,7 +135,7 @@ TEST_CASE(
 
     CHECK(refused.is_null());
     NETW_CHECK_EQ(log.count("declare"), 1);
-    CHECK(bool(String(pre->get_entity_id()) == String("held")));
+    CHECK(bool(String(pre->get_name()) == String("held")));
     NETW_CHECK_EQ(pre->get_peer_id(), int64_t(2));
     NETW_CHECK_EQ(pre->get_controller(), int64_t(3));
     NETW_CHECK_EQ(pre->get_route(), held_route);

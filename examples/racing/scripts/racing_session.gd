@@ -3,7 +3,7 @@ extends Node
 const TRACK := preload("res://examples/racing/scenes/track.tscn")
 
 @onready var browser: ConnectBrowser = %ConnectBrowser
-@onready var session: NetwSessionHandle = Netw.session(self)
+@onready var session: NetwSession = Netw.session(self)
 
 var track: Node
 
@@ -16,8 +16,7 @@ func _init() -> void:
 
 
 func _ready() -> void:
-	session.ended.connect(show_browser)
-	session.disconnected.connect(show_browser)
+	session.exited.connect(show_browser.unbind(2))
 
 
 func spawn_track() -> Node:

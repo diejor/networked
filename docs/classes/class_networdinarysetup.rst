@@ -19,13 +19,13 @@ Composes provider creation, player preparation and peer assignment for fixtures 
 Description
 -----------
 
-A test that already knows how to build its peer assigns it directly and needs nothing here. This exists for a provider-backed backend, where the peer arrives through :ref:`NetwConnectHandle.create_peer()<class_NetwConnectHandle_method_create_peer>` and the assignment window is the completion callback itself.
+A test that already knows how to build its peer assigns it directly and needs nothing here. This exists for a provider-backed backend, where the peer arrives through :ref:`NetwConnection.create_peer()<class_NetwConnection_method_create_peer>` and the assignment window is the completion callback itself.
 
 ::
 
     var settled := await NetwOrdinarySetup.connect_through(
             tree,
-            NetwMultiplayer.TRANSPORT_MODE_CLIENT,
+            NetwConnection.TRANSPORT_MODE_CLIENT,
             room,
             { },
             &"valeria",
@@ -42,9 +42,9 @@ Methods
 .. table::
    :widths: auto
 
-   +-------------------------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwOrdinarySetup.Outcome<class_NetwOrdinarySetup_Outcome>` | :ref:`connect_through<class_NetwOrdinarySetup_method_connect_through>`\ (\ tree\: :ref:`MultiplayerTree<class_MultiplayerTree>`, mode\: :ref:`TransportMode<enum_NetwMultiplayer_TransportMode>`, address\: :godot:`String`, settings\: :godot:`Dictionary`, username\: :godot:`StringName`, join_args\: :godot:`Array` = []\ ) |static| |
-   +-------------------------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   +-------------------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwOrdinarySetup.Outcome<class_NetwOrdinarySetup_Outcome>` | :ref:`connect_through<class_NetwOrdinarySetup_method_connect_through>`\ (\ tree\: :ref:`MultiplayerTree<class_MultiplayerTree>`, mode\: :ref:`TransportMode<enum_NetwConnection_TransportMode>`, address\: :godot:`String`, settings\: :godot:`Dictionary`, username\: :godot:`StringName`, join_args\: :godot:`Array` = []\ ) |static| |
+   +-------------------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 
 .. rst-class:: classref-section-separator
 
@@ -76,7 +76,7 @@ Method Descriptions
 
 .. rst-class:: classref-method
 
-:ref:`NetwOrdinarySetup.Outcome<class_NetwOrdinarySetup_Outcome>` **connect_through**\ (\ tree\: :ref:`MultiplayerTree<class_MultiplayerTree>`, mode\: :ref:`TransportMode<enum_NetwMultiplayer_TransportMode>`, address\: :godot:`String`, settings\: :godot:`Dictionary`, username\: :godot:`StringName`, join_args\: :godot:`Array` = []\ ) |static| :ref:`🔗<class_NetwOrdinarySetup_method_connect_through>`
+:ref:`NetwOrdinarySetup.Outcome<class_NetwOrdinarySetup_Outcome>` **connect_through**\ (\ tree\: :ref:`MultiplayerTree<class_MultiplayerTree>`, mode\: :ref:`TransportMode<enum_NetwConnection_TransportMode>`, address\: :godot:`String`, settings\: :godot:`Dictionary`, username\: :godot:`StringName`, join_args\: :godot:`Array` = []\ ) |static| :ref:`🔗<class_NetwOrdinarySetup_method_connect_through>`
 
 Builds a peer for ``tree`` through its provider, prepares ``username``, and assigns the peer.  Preparation and assignment both happen inside the creation callback, which is the only window the seam offers: returning from it without assigning declines the offer and closes the peer.
 

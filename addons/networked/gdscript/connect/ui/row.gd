@@ -14,7 +14,7 @@ signal activated(peer_class: StringName, address: String, row: ConnectBrowserRow
 var peer_class: StringName = &""
 var address: String = ""
 var endpoint: Dictionary = { }
-var _connection: NetwConnectHandle
+var _connection: NetwConnection
 
 @onready var _name_label: Label = %NameLabel
 @onready var _badge_label: Label = %BadgeLabel
@@ -38,7 +38,7 @@ func _ready() -> void:
 
 
 func bind_endpoint(
-		handle: NetwConnectHandle,
+		handle: NetwConnection,
 		p_peer_class: StringName,
 		p_address: String,
 ) -> void:

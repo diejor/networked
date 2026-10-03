@@ -9,19 +9,18 @@ namespace Networked;
 /// Makes a node a multiplayer scene.
 /// </summary>
 /// <remarks>
-/// Returned by <see cref="Netw.ConfigureMultiplayerScene"/>. Declare it once
-/// from the scene root's <c>Object._init</c>, the methods can be called in any
-/// order.
+/// Returned by <see cref="Netw.ConfigureScene"/>. Declare it once from the
+/// scene root's <c>Object._init</c>, the methods can be called in any order.
 /// <code>
 /// extends Node2D
 ///
 /// func _init() -&gt; void:
-///     Netw.configure_multiplayer_scene(self).labeled(&amp;"Level1").isolated()
+///     Netw.configure_scene(self).labeled(&amp;"Level1").isolated()
 /// </code>
 /// <para>
 /// Every entity below the root belongs to the scene through
-/// <see cref="NetwEntity.Scene"/>, and
-/// <see cref="NetwEntity.IsMultiplayerScene"/> is <c>true</c> on the root.
+/// <see cref="NetwEntity.Scene"/>, and <see cref="NetwEntity.IsScene"/> is
+/// <c>true</c> on the root.
 /// </para>
 /// </remarks>
 public sealed class NetwSceneConfig : NetwRefCounted
@@ -60,20 +59,20 @@ public sealed class NetwSceneConfig : NetwRefCounted
     }
 
     private static readonly IntPtr _bindGetIsolation =
-        NetwApi.MethodBind("NetwSceneConfig", "get_isolation", 2054601501UL);
+        NetwApi.MethodBind("NetwSceneConfig", "get_isolation", 1167637412UL);
 
     /// <summary>
-    /// <see cref="Netw.SceneIsolation.OwnWorld"/> after
+    /// <see cref="NetwScene.SceneIsolation.OwnWorld"/> after
     /// <see cref="NetwSceneConfig.Isolated"/>,
-    /// <see cref="Netw.SceneIsolation.None"/> otherwise.
+    /// <see cref="NetwScene.SceneIsolation.None"/> otherwise.
     /// </summary>
-    public Netw.SceneIsolation Isolation
+    public NetwScene.SceneIsolation Isolation
     {
         get
         {
             long answered = default;
             NetwThunks.Ptrcall0_Long(_bindGetIsolation, Checked, ref answered);
-            return (Netw.SceneIsolation)answered;
+            return (NetwScene.SceneIsolation)answered;
         }
     }
 
@@ -113,8 +112,8 @@ public sealed class NetwSceneConfig : NetwRefCounted
     /// worlds.add_child(mount)
     /// </code>
     /// <para>
-    /// On a listen server, <see cref="HostSceneView"/> draws it while it is
-    /// <see cref="NetwSessionHandle.PresentedScene"/>.
+    /// On a listen server, <see cref="HostSceneView"/> draws it while it is the
+    /// <see cref="NetwPlayer.Scene"/> of the host's player.
     /// </para>
     /// </summary>
     public NetwSceneConfig Isolated()

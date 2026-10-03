@@ -93,7 +93,7 @@ func reset() -> void:
 ## Applies local loopback defaults and names the loopback peer class.
 func adopt_tree(
 		tree: MultiplayerTree,
-		role: NetwMultiplayer.Role,
+		role: NetwSession.Role,
 ) -> void:
 	tree.desired_role = role
 	tree.auto_host_headless = false
@@ -157,7 +157,7 @@ func disconnect_tree(tree: MultiplayerTree) -> int:
 
 	var peer := tree.api.multiplayer_peer as LocalMultiplayerPeer
 	var peer_id := tree.api.multiplayer_peer.get_unique_id()
-	tree.api.session_set_state(NetwMultiplayer.SESSION_STATE_DISCONNECTING)
+	tree.api.session_set_state(NetwSession.SESSION_STATE_DISCONNECTING)
 	if peer:
 		_session.release_inbound_packets(peer)
 	tree.api.multiplayer_peer.close()

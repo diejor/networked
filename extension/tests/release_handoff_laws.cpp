@@ -3,6 +3,7 @@
 #if defined(NETW_TIER_HOSTED)
 
 #include "support/loopback_rig.h"
+#include "support/fault_log.h"
 #include "support/minted_script.h"
 #include "support/value_flow_stand.h"
 
@@ -283,6 +284,80 @@ TEST_CASE(
     NETW_CHECK_EQ(cube, int64_t(43));
     NETW_CHECK_EQ(car, int64_t(42));
     NETW_CHECK_LT(car * 16, int64_t(netw::session::CONTROL_FINAL_STATE_CAP));
+}
+
+void check_controller_everywhere(const Stand &p_stand, int64_t p_peer) {
+    for (int client = -1; client < 2; ++client) {
+        NETW_FORMAT_INT(peer_text, client);
+        CAPTURE(peer_text);
+        NETW_CHECK_EQ(p_stand.entity(client)->get_controller(), p_peer);
+        NETW_CHECK_EQ(
+            p_stand.node(client)->get_multiplayer_authority(),
+            int(p_peer == 0 ? 1 : p_peer)
+        );
+    }
+}
+
+TEST_CASE(
+    "[Networked][Control][SceneTree] RH5 the server transfers control to a "
+    "client and back, and every peer follows"
+) {
+    Stand stand(BOARD_SOURCE, BOARD_ID);
+    const int a = stand.rig.peer_id(0);
+
+    NETW_CHECK_EQ(int(stand.entity(-1)->transfer_control(a)), int(OK));
+    stand.rig.step_ticks(4);
+    check_controller_everywhere(stand, a);
+
+    NETW_CHECK_EQ(int(stand.entity(-1)->transfer_control(0)), int(OK));
+    stand.rig.step_ticks(4);
+    check_controller_everywhere(stand, 0);
+}
+
+TEST_CASE(
+    "[Networked][Control][SceneTree] RH6 a client that calls transfer_control "
+    "gets ERR_UNAUTHORIZED and moves control nowhere, even for itself"
+) {
+    Stand stand(BOARD_SOURCE, BOARD_ID);
+    const int a = stand.rig.peer_id(0);
+    const int b = stand.rig.peer_id(1);
+    stand.author_with(0, 3);
+
+    netw_test::FaultWatch faults;
+    NETW_CHECK_EQ(
+        int(stand.entity(1)->transfer_control(b)),
+        int(ERR_UNAUTHORIZED)
+    );
+    NETW_CHECK_EQ(
+        int(stand.entity(0)->transfer_control(0)),
+        int(ERR_UNAUTHORIZED)
+    );
+    NETW_CHECK_EQ(faults.errors(), int64_t(2));
+    stand.rig.step_ticks(6);
+    check_controller_everywhere(stand, a);
+}
+
+TEST_CASE(
+    "[Networked][Control][SceneTree] RH7 the flat entity_grant_control "
+    "answers what transfer_control answers, on the server and on a client"
+) {
+    Stand stand(BOARD_SOURCE, BOARD_ID);
+    const int a = stand.rig.peer_id(0);
+    const RID at_server = stand.rig.server()->entity_of(stand.node(-1));
+    const RID at_client = stand.rig.client(1)->entity_of(stand.node(1));
+
+    NETW_CHECK_EQ(
+        int(stand.rig.server()->entity_grant_control(at_server, a)),
+        int(OK)
+    );
+    netw_test::FaultWatch faults;
+    NETW_CHECK_EQ(
+        int(stand.rig.client(1)->entity_grant_control(at_client, 0)),
+        int(ERR_UNAUTHORIZED)
+    );
+    NETW_CHECK_EQ(faults.errors(), int64_t(1));
+    stand.rig.step_ticks(4);
+    check_controller_everywhere(stand, a);
 }
 
 } // namespace TestReleaseHandoff

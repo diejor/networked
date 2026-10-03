@@ -54,7 +54,7 @@ TEST_CASE(
 
     REQUIRE(entity.is_valid());
     NETW_CHECK_EQ(entity->get_route(), int64_t(12));
-    CHECK(bool(String(entity->get_entity_id()) == String("hero")));
+    CHECK(bool(String(entity->get_name()) == String("hero")));
     NETW_CHECK_EQ(entity->get_peer_id(), int64_t(3));
     NETW_CHECK_EQ(entity->get_controller(), int64_t(5));
     NETW_CHECK_EQ(entity->get_action_spawn_tick(), int64_t(41));

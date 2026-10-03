@@ -32,7 +32,7 @@ func connect_session(
 	tree.peer_class = &"WebSocketMultiplayerPeer"
 	return await bring_up(
 		tree,
-		NetwMultiplayer.TRANSPORT_MODE_CLIENT,
+		NetwConnection.TRANSPORT_MODE_CLIENT,
 		_address_for(instance_id),
 		username,
 		join_args,

@@ -209,4 +209,44 @@ public static class NetwApi
         held.Dispose();
         return found;
     }
+
+    /// <summary>
+    /// Every element of an array the addon answered, wrapped as
+    /// <typeparamref name="T"/>. A null element stays null.
+    /// </summary>
+    public static T[] Elements<T>(
+        Godot.Collections.Array values,
+        Func<Variant, T> wrap
+    ) where T : class
+    {
+        var wrapped = new T[values.Count];
+        for (int at = 0; at < values.Count; at++)
+        {
+            Variant element = values[at];
+            wrapped[at] = element.VariantType == Variant.Type.Nil
+                ? null
+                : wrap(element);
+        }
+        return wrapped;
+    }
+
+    /// <summary>
+    /// An array the addon accepts, holding the objects of
+    /// <paramref name="values"/>.
+    /// </summary>
+    public static Godot.Collections.Array ArrayOf(NetwObject[] values)
+    {
+        var held = new Godot.Collections.Array();
+        if (values == null)
+        {
+            return held;
+        }
+        foreach (NetwObject value in values)
+        {
+            held.Add(Variant.CreateTakingOwnershipOfDisposableValue(
+                VariantUtils.CreateFromGodotObjectPtr(
+                    value?.Native ?? IntPtr.Zero)));
+        }
+        return held;
+    }
 }

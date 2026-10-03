@@ -10,8 +10,7 @@
 #include "netw/api/entity.hpp"
 #include "netw/api/netw_multiplayer.hpp"
 #include "netw/api/physics_stepper.hpp"
-#include "netw/api/predict.hpp"
-#include "netw/api/prediction_handle.hpp"
+#include "netw/api/prediction.hpp"
 #include "netw/predict/engine.hpp"
 
 #if defined(NETW_TIER_HOSTED)
@@ -22,9 +21,8 @@ using namespace netw_test;
 using godot::Ref;
 using netw::NetwEntity;
 using netw::NetwMultiplayer;
-using netw::NetwPredict;
 using netw::NetwPredictionEngine;
-using netw::NetwPredictionHandle;
+using netw::NetwPrediction;
 
 EntityDecl island_player(const char *p_name, netw::Schedule p_schedule) {
     return EntityDecl()
@@ -75,7 +73,7 @@ JointOwner joint_owner(NetwMultiplayer *p_core) {
     if (pool == nullptr) {
         return out;
     }
-    const godot::TypedArray<godot::Object> held
+    const godot::TypedArray<NetwEntity> held
         = p_core->predict_stepped_entities();
     for (int at = 0; at < held.size(); ++at) {
         const Ref<NetwEntity> entity = held[at];
@@ -105,7 +103,7 @@ void step_onto(NetwMultiplayer *p_core, const JointOwner &p_owner) {
     REQUIRE(own.is_valid());
     p_core->predict_stepper_install(own, installable_stepper());
     p_owner.entity->get_simulation()->set_schedule(
-        netw::NetwSimulationHandle::SCHEDULE_STEPPED
+        netw::NetwSimulation::SCHEDULE_STEPPED
     );
 }
 
@@ -131,26 +129,26 @@ TEST_CASE(
     const JointOwner owner = joint_owner(server);
     REQUIRE_MESSAGE(owner.slot >= 0, "no member seated JOINT after the run");
 
-    const Ref<NetwPredictionHandle> handle = owner.entity->get_prediction();
+    const Ref<NetwPrediction> handle = owner.entity->get_prediction();
     REQUIRE(handle.is_valid());
     NETW_CHECK_EQ(
         handle->get_reconcile_mode(),
-        int(netw::NetwPredict::RECONCILE_JOINT)
+        int(netw::NetwPrediction::RECONCILE_JOINT)
     );
     NETW_CHECK_EQ(
         pool->reconcile_of(owner.slot),
-        int(netw::NetwPredict::RECONCILE_JOINT)
+        int(netw::NetwPrediction::RECONCILE_JOINT)
     );
 
     const auto clear = [&]() {
         pool->set_reconcile_own(
             owner.slot,
-            int(netw::NetwPredict::RECONCILE_INDEPENDENT)
+            int(netw::NetwPrediction::RECONCILE_INDEPENDENT)
         );
         pool->leave_joint(owner.slot);
         REQUIRE(
             pool->reconcile_of(owner.slot)
-            == int(netw::NetwPredict::RECONCILE_INDEPENDENT)
+            == int(netw::NetwPrediction::RECONCILE_INDEPENDENT)
         );
     };
 
@@ -159,7 +157,7 @@ TEST_CASE(
         rig.step_ticks(4);
         NETW_CHECK_EQ(
             pool->reconcile_of(owner.slot),
-            int(netw::NetwPredict::RECONCILE_JOINT)
+            int(netw::NetwPrediction::RECONCILE_JOINT)
         );
         NETW_CHECK_EQ(
             pool->island_of(owner.slot),
@@ -172,14 +170,14 @@ TEST_CASE(
         REQUIRE(pool->slot_is_steppable(owner.slot));
         NETW_CHECK_EQ(
             pool->admitted_reconcile_mode(owner.slot),
-            int(netw::NetwPredict::RECONCILE_JOINT)
+            int(netw::NetwPrediction::RECONCILE_JOINT)
         );
 
         clear();
         rig.step_ticks(4);
         NETW_CHECK_EQ(
             pool->reconcile_of(owner.slot),
-            int(netw::NetwPredict::RECONCILE_JOINT)
+            int(netw::NetwPrediction::RECONCILE_JOINT)
         );
         NETW_CHECK_EQ(
             pool->island_of(owner.slot),
@@ -248,23 +246,23 @@ TEST_CASE(
     REQUIRE_MESSAGE(owner.slot >= 0, "the predictor seated no JOINT owner");
     NETW_CHECK_EQ(
         pool->schedule_of(owner.slot),
-        int(netw::NetwSimulationHandle::SCHEDULE_TICK)
+        int(netw::NetwSimulation::SCHEDULE_TICK)
     );
 
     owner.entity->get_simulation()->set_schedule(
-        netw::NetwSimulationHandle::SCHEDULE_STEPPED
+        netw::NetwSimulation::SCHEDULE_STEPPED
     );
     rig.step_ticks(4);
 
     CHECK_FALSE(pool->slot_has_stepper(owner.slot));
     NETW_CHECK_EQ(
         pool->schedule_of(owner.slot),
-        int(netw::NetwSimulationHandle::SCHEDULE_FRAME)
+        int(netw::NetwSimulation::SCHEDULE_FRAME)
     );
     CHECK(pool->stepper_absence_reported_of(owner.slot));
     NETW_CHECK_EQ(
         owner.entity->get_simulation()->get_schedule(),
-        netw::NetwSimulationHandle::SCHEDULE_STEPPED
+        netw::NetwSimulation::SCHEDULE_STEPPED
     );
 
     const int64_t driven_before = pool->last_driven_input_tick_of(owner.slot);

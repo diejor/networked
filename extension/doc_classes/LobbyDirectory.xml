@@ -4,7 +4,7 @@
 		Extend it to host, join and list lobbies of an online service.
 	</brief_description>
 	<description>
-		A lobby directory is a [NetwService] that implements [method _host_lobby], [method _join_lobby], [method _list_lobbies] and [method _leave_lobby]. Its lobbies appear in [NetwConnectHandle] like any other server.
+		A lobby directory is a [NetwService] that implements [method _host_lobby], [method _join_lobby], [method _list_lobbies] and [method _leave_lobby]. Its lobbies appear in [NetwConnection] like any other server.
 		[codeblock]
 		extends LobbyDirectory
 

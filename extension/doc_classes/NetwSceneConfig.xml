@@ -4,14 +4,14 @@
 		Makes a node a multiplayer scene.
 	</brief_description>
 	<description>
-		Returned by [method Netw.configure_multiplayer_scene]. Declare it once from the scene root's [method Object._init], the methods can be called in any order.
+		Returned by [method Netw.configure_scene]. Declare it once from the scene root's [method Object._init], the methods can be called in any order.
 		[codeblock]
 		extends Node2D
 
 		func _init() -&gt; void:
-		    Netw.configure_multiplayer_scene(self).labeled(&amp;"Level1").isolated()
+		    Netw.configure_scene(self).labeled(&amp;"Level1").isolated()
 		[/codeblock]
-		Every entity below the root belongs to the scene through [member NetwEntity.scene], and [member NetwEntity.is_multiplayer_scene] is [code]true[/code] on the root.
+		Every entity below the root belongs to the scene through [member NetwEntity.scene], and [member NetwEntity.is_scene] is [code]true[/code] on the root.
 	</description>
 	<tutorials>
 	</tutorials>
@@ -25,7 +25,7 @@
 				var mount := Netw.spawn(spawn_level1)   # a SubViewport
 				worlds.add_child(mount)
 				[/codeblock]
-				On a listen server, [HostSceneView] draws it while it is [member NetwSessionHandle.presented_scene].
+				On a listen server, [HostSceneView] draws it while it is the [member NetwPlayer.scene] of the host's player.
 			</description>
 		</method>
 		<method name="labeled">
@@ -38,8 +38,8 @@
 		</method>
 	</methods>
 	<members>
-		<member name="isolation" type="int" setter="" getter="get_isolation" enum="Netw.SceneIsolation" default="0">
-			[constant Netw.SCENE_ISOLATION_OWN_WORLD] after [method isolated], [constant Netw.SCENE_ISOLATION_NONE] otherwise.
+		<member name="isolation" type="int" setter="" getter="get_isolation" enum="NetwScene.SceneIsolation" default="0">
+			[constant NetwScene.SCENE_ISOLATION_OWN_WORLD] after [method isolated], [constant NetwScene.SCENE_ISOLATION_NONE] otherwise.
 		</member>
 		<member name="label" type="StringName" setter="" getter="get_label" default="&amp;&quot;&quot;">
 			The name given to [method labeled], or the root node's name.

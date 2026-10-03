@@ -2,7 +2,7 @@
 
 #include "support/netw_recorder.h"
 
-#include "netw/api/clock_handle.hpp"
+#include "netw/api/clock.hpp"
 #include "netw/api/context.hpp"
 #include "netw/api/netw_multiplayer.hpp"
 
@@ -10,7 +10,7 @@ namespace TestNetwClockDoor {
 
 using namespace godot;
 using netw::Netw;
-using netw::NetwClockHandle;
+using netw::NetwClock;
 using netw::NetwMultiplayer;
 
 Ref<NetwMultiplayer> make_session() {
@@ -25,7 +25,7 @@ TEST_CASE(
 ) {
     Ref<NetwMultiplayer> session = make_session();
 
-    const Ref<NetwClockHandle> door = session->get_clock();
+    const Ref<NetwClock> door = session->get_clock();
     REQUIRE(door.is_valid());
     CHECK(door == session->get_clock());
     CHECK(make_session()->get_clock() != door);
@@ -36,7 +36,7 @@ TEST_CASE(
     "answers what the flat verb answers, settings and monitor included"
 ) {
     Ref<NetwMultiplayer> session = make_session();
-    const Ref<NetwClockHandle> door = session->get_clock();
+    const Ref<NetwClock> door = session->get_clock();
 
     NETW_CHECK_EQ(door->get_tick(), session->clock_get_tick());
     NETW_CHECK_EQ(
@@ -97,7 +97,7 @@ TEST_CASE(
     "is the same setting the flat verb reads back"
 ) {
     Ref<NetwMultiplayer> session = make_session();
-    const Ref<NetwClockHandle> door = session->get_clock();
+    const Ref<NetwClock> door = session->get_clock();
 
     door->set_display_offset(3);
     NETW_CHECK_EQ(
@@ -137,22 +137,31 @@ TEST_CASE(
     "which is the whole reason it is a class rather than three statics"
 ) {
     Ref<NetwMultiplayer> session = make_session();
-    const Ref<NetwClockHandle> door = session->get_clock();
+    const Ref<NetwClock> door = session->get_clock();
 
     netw_test::Recorder heard(
         door.ptr(),
-        {StringName("before_tick"), StringName("on_tick")}
+        {StringName("before_tick"),
+         StringName("ticked"),
+         StringName("synchronized")}
     );
 
-    session->emit_signal(StringName("clock_before_tick"), 0.25, int64_t(7));
-    session->emit_signal(StringName("clock_on_tick"), 0.25, int64_t(7));
+    const int64_t tick = session->clock_engine().get_tick();
+    session->clock_engine().force_step(1);
 
-    NETW_CHECK_EQ(heard.count(StringName("before_tick")), 1);
-    NETW_CHECK_EQ(heard.count(StringName("on_tick")), 1);
-    NETW_CHECK_EQ(int64_t(heard.args(StringName("on_tick"))[1]), 7);
+    NETW_REQUIRE_EQ(heard.count(StringName("before_tick")), 1);
+    NETW_REQUIRE_EQ(heard.count(StringName("ticked")), 1);
+    CHECK(
+        heard.order()
+        == Vector<StringName>({StringName("before_tick"), StringName("ticked")})
+    );
+    NETW_CHECK_EQ(int64_t(heard.args(StringName("ticked"))[1]), tick);
+
+    session->clock_event(netw::ClockEngine::EVENT_SYNCHRONIZED, 0, 0);
+    NETW_CHECK_EQ(heard.count(StringName("synchronized")), 1);
     NETW_CHECK_ORDER(
         double(heard.args(StringName("before_tick"))[0]),
-        0.25,
+        session->clock_engine().ticktime(),
         ==
     );
 }
@@ -161,7 +170,7 @@ TEST_CASE(
     "[Networked][Clock][Door][Hosted] C5 a clock door outliving its session "
     "answers a stopped clock rather than dereferencing what is gone"
 ) {
-    Ref<NetwClockHandle> door;
+    Ref<NetwClock> door;
     {
         Ref<NetwMultiplayer> session = make_session();
         door = session->get_clock();
@@ -185,14 +194,14 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Clock][Door][Hosted] C6 Netw.clock answers the clock of the "
-    "session the node reaches, and nothing when the node reaches none"
+    "[Networked][Clock][Door][Hosted] C6 a node that reaches no session "
+    "reaches no clock, because the clock is read off the session"
 ) {
     Node *orphan = memnew(Node);
-    CHECK(Netw::clock(orphan).is_null());
+    CHECK(Netw::session(orphan).is_null());
     memdelete(orphan);
 
-    CHECK(Netw::clock(nullptr).is_null());
+    CHECK(Netw::session(nullptr).is_null());
 }
 
 } // namespace TestNetwClockDoor

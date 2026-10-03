@@ -108,8 +108,8 @@ TEST_CASE(
     Ref<NetwMultiplayer> session = a_session();
     session->session_set_authority_peer(7);
     pong_accepted_count() = 0;
-    session->connect(
-        StringName("clock_pong_received"),
+    session->observe(
+        NetwMultiplayer::CLOCK_PONG_RECEIVED,
         callable_mp_static(&count_pong_accepted)
     );
 

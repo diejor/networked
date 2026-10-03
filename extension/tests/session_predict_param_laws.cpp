@@ -55,7 +55,7 @@ TEST_CASE(
         );
         NETW_CHECK_EQ(
             session->simulation_get_mode(entity),
-            netw::NetwSimulationHandle::MODE_NONE
+            netw::NetwSimulation::MODE_NONE
         );
     }
 

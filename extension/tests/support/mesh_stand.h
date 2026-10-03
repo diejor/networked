@@ -66,15 +66,14 @@ class MeshStand {
     godot::Ref<netw::NetwMultiplayer> make_session(
         const godot::Ref<netw::LocalMultiplayerPeer> &p_peer
     ) {
-        godot::Ref<godot::SceneMultiplayer> inner;
-        inner.instantiate();
-        inner->set_root_path(godot::NodePath("/"));
-        inner->set_server_relay_enabled(relays_through_hub);
-
         godot::Ref<netw::NetwMultiplayer> session
-            = netw::NetwMultiplayer::make(inner, godot::Ref<godot::Script>());
+            = netw::NetwMultiplayer::create(godot::Ref<godot::Script>());
         REQUIRE_MESSAGE(session.is_valid(), "the session did not instantiate");
         if (session.is_valid()) {
+            const godot::Ref<godot::SceneMultiplayer> inner
+                = session->session_get_inner();
+            inner->set_root_path(godot::NodePath("/"));
+            inner->set_server_relay_enabled(relays_through_hub);
             session->session_set_authority_peer(coordinator);
             session->set("multiplayer_peer", p_peer);
         }

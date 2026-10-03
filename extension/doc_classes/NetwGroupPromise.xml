@@ -5,7 +5,7 @@
 	</brief_description>
 	<description>
 		[method Netw.request_all] returns one. It waits for the peers connected when the request was sent. A peer that disconnects is no longer waited for.
-		[method then] runs once with every result, as a [code]peer_id -&gt; value[/code] [Dictionary]. [signal completed_single] reports each result as it arrives.
+		[method then] runs once with every result, as a [code]peer_id -&gt; value[/code] [Dictionary]. [signal peer_completed] reports each result as it arrives.
 		[codeblock]
 		Netw.request_all(player.ready_check) \
 		    .then(func(votes: Dictionary) -&gt; void:
@@ -42,7 +42,7 @@
 			<param index="0" name="err_code" type="int" enum="Error" />
 			<param index="1" name="err_detail" type="String" default="&quot;&quot;" />
 			<description>
-				Fails the group and emits [signal failed], then [signal settled]. Does nothing when already settled.
+				Fails the group. Emits [signal settled], then calls the [method catch_error] callbacks, then fires every [method wait] signal. Does nothing when already settled.
 			</description>
 		</method>
 		<method name="remove_peer">
@@ -55,7 +55,7 @@
 		<method name="resolve_all">
 			<return type="void" />
 			<description>
-				Completes the group with the current [member results], and emits [signal completed], then [signal settled].
+				Completes the group with the current [member results]. Emits [signal settled], then calls the [method then] callbacks, then fires every [method wait] signal.
 			</description>
 		</method>
 		<method name="resolve_peer">
@@ -63,7 +63,7 @@
 			<param index="0" name="peer_id" type="int" />
 			<param index="1" name="val" type="Variant" />
 			<description>
-				Records the result of [param peer_id] and emits [signal completed_single]. Completes the group if it was the last one. Ignored for a peer the group is not waiting for.
+				Records the result of [param peer_id] and emits [signal peer_completed]. Completes the group if it was the last one. Ignored for a peer the group is not waiting for.
 			</description>
 		</method>
 		<method name="then">
@@ -76,7 +76,7 @@
 		<method name="wait">
 			<return type="Signal" />
 			<description>
-				Returns a signal to [code]await[/code], which gives [method answer]. It works even when the group already settled.
+				Returns a new signal to [code]await[/code], which fires once with [method answer]. When the group already settled, it fires on the next frame.
 				[codeblock]
 				await destination.move_players(peers).wait()
 				[/codeblock]
@@ -107,35 +107,16 @@
 		</member>
 	</members>
 	<signals>
-		<signal name="completed">
-			<param index="0" name="results" type="Dictionary" />
-			<description>
-				Emitted when every peer answered.
-			</description>
-		</signal>
-		<signal name="completed_single">
+		<signal name="peer_completed">
 			<param index="0" name="peer_id" type="int" />
 			<param index="1" name="value" type="Variant" />
 			<description>
 				Emitted when one peer answers.
 			</description>
 		</signal>
-		<signal name="failed">
-			<param index="0" name="code" type="int" enum="Error" />
-			<param index="1" name="detail" type="String" />
-			<description>
-				Emitted when the group fails or times out.
-			</description>
-		</signal>
-		<signal name="ready">
-			<param index="0" name="answer" type="Variant" />
-			<description>
-				Used by [method wait]. Connect to [signal settled] instead, since this can be emitted more than once.
-			</description>
-		</signal>
 		<signal name="settled">
 			<description>
-				Emitted once after [signal completed] or [signal failed].
+				Emitted once when the group completes, fails or times out. Use [method wait] to [code]await[/code] the group.
 			</description>
 		</signal>
 	</signals>

@@ -69,7 +69,7 @@ at a time.
 .. code-block:: gdscript
 
     func _init() -> void:
-        Netw.configure_multiplayer_scene(self).labeled(&"Arena")
+        Netw.configure_scene(self).labeled(&"Arena")
 
 Everything under that root belongs to the world, nested spawns included. No
 per-synchronizer visibility filter, and no tree order to get right.

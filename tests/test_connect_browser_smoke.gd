@@ -27,7 +27,7 @@ func test_handle_reports_ok_for_probed_direct_target() -> void:
 
 	var tree := MultiplayerTree.new()
 	add_child(tree)
-	var connection := Netw.connection(tree)
+	var connection := Netw.session(tree).connection
 
 	var address := "127.0.0.1:%d" % host.port
 	connection.endpoint_add(&"ENetMultiplayerPeer", address, "Smoke Host")
@@ -64,7 +64,7 @@ func test_browser_renders_the_handle_it_resolved() -> void:
 	var tree := MultiplayerTree.new()
 	add_child(tree)
 
-	var connection := Netw.connection(tree)
+	var connection := Netw.session(tree).connection
 
 	var browser: ConnectBrowser = _BROWSER_SCENE.instantiate()
 	browser.server_list_path = temp_path
@@ -88,7 +88,7 @@ func test_browser_renders_the_handle_it_resolved() -> void:
 func test_a_join_form_offers_what_the_transport_lets_a_client_author() -> void:
 	var tree := MultiplayerTree.new()
 	add_child(tree)
-	var connection := Netw.connection(tree)
+	var connection := Netw.session(tree).connection
 
 	var enet := connection.transport(&"ENetMultiplayerPeer")
 	var client: Dictionary = enet.get("client_settings", { })
@@ -106,7 +106,7 @@ func test_a_bookmarked_setting_survives_the_file_it_is_saved_to() -> void:
 	var temp_path := temp_dir.path_join("servers.cfg")
 	var tree := MultiplayerTree.new()
 	add_child(tree)
-	var connection := Netw.connection(tree)
+	var connection := Netw.session(tree).connection
 
 	var browser: ConnectBrowser = _BROWSER_SCENE.instantiate()
 	browser.server_list_path = temp_path
@@ -129,7 +129,7 @@ func test_a_bookmarked_setting_survives_the_file_it_is_saved_to() -> void:
 	await get_tree().process_frame
 	tree = MultiplayerTree.new()
 	add_child(tree)
-	connection = Netw.connection(tree)
+	connection = Netw.session(tree).connection
 
 	var reopened: ConnectBrowser = _BROWSER_SCENE.instantiate()
 	reopened.server_list_path = temp_path
@@ -157,7 +157,7 @@ func test_direct_join_needs_no_endpoint_record() -> void:
 	var tree := MultiplayerTree.new()
 	add_child(tree)
 
-	var connection := Netw.connection(tree)
+	var connection := Netw.session(tree).connection
 
 	var browser: ConnectBrowser = _BROWSER_SCENE.instantiate()
 	browser.server_list_path = temp_path
@@ -193,7 +193,7 @@ func test_an_authored_impairment_lasts_one_setup() -> void:
 	var tree := MultiplayerTree.new()
 	add_child(tree)
 
-	var connection := Netw.connection(tree)
+	var connection := Netw.session(tree).connection
 	var conditions := NetwLinkConditions.new()
 	conditions.simulate_lag = true
 
@@ -237,7 +237,7 @@ func test_an_impairment_the_game_authored_wins() -> void:
 	tree.link_conditions = authored
 	add_child(tree)
 
-	var connection := Netw.connection(tree)
+	var connection := Netw.session(tree).connection
 
 	var browser: ConnectBrowser = _BROWSER_SCENE.instantiate()
 	browser.server_list_path = temp_path

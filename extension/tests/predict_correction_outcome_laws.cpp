@@ -5,8 +5,7 @@
 #include <cstdint>
 
 #include "godot/variant.hpp"
-#include "netw/api/predict.hpp"
-#include "netw/api/prediction_handle.hpp"
+#include "netw/api/prediction.hpp"
 
 #if defined(NETW_TIER_HOSTED)
 
@@ -72,7 +71,7 @@ void note(
 }
 
 int64_t corrections_of(LoopbackRig &p_rig, const StringName &p_name, int p_at) {
-    netw::NetwPredictionHandle *handle = p_rig.prediction_handle(p_name, p_at);
+    netw::NetwPrediction *handle = p_rig.prediction_handle(p_name, p_at);
     REQUIRE(handle != nullptr);
     return handle->get_stats()->get_int_fact(
         netw::NetwPredictStats::FACT_CORRECTIONS

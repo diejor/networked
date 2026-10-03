@@ -19,7 +19,7 @@ The client for persistent storage.
 Description
 -----------
 
-:ref:`NetwEntity<class_NetwEntity>`, :ref:`NetwTableHandle<class_NetwTableHandle>` and your own code save and load their state through a **NetwDatabase**. A :ref:`NetwDatabaseBackend<class_NetwDatabaseBackend>` does the actual storage.
+:ref:`NetwEntity<class_NetwEntity>`, :ref:`NetwTable<class_NetwTable>` and your own code save and load their state through a **NetwDatabase**. A :ref:`NetwDatabaseBackend<class_NetwDatabaseBackend>` does the actual storage.
 
 A record is a :godot:`Dictionary` stored under a :godot:`StringName` id. Its :ref:`NetwSchema<class_NetwSchema>` is the table definition and the record is a row in it.
 
@@ -31,7 +31,7 @@ Await :ref:`open()<class_NetwDatabase_method_open>` before reading or writing.
         Netw.configure_database(self, &"saves").backend(preload("res://filesystem_backend.tres"))
 
     func start_game(slot: StringName) -> void:
-        var db: NetwDatabase = Netw.database(self, &"saves")
+        var db: NetwDatabase = Netw.session(self).database(&"saves")
         var error: Error = await db.open(slot).wait()
         if error != OK:
             show_load_error(error)
@@ -103,12 +103,12 @@ Signals
 
 **failed**\ (\ error\: :godot:`Error <@GlobalScope#enum_@globalscope_Error>`, detail\: :godot:`String`\ ) :ref:`🔗<class_NetwDatabase_signal_failed>`
 
-Emitted when an entity fails to load or save its record. ``error`` is one of the codes :ref:`NetwPersistenceHandle.load()<class_NetwPersistenceHandle_method_load>` and :ref:`NetwPersistenceHandle.save()<class_NetwPersistenceHandle_method_save>` list, and ``detail`` names the record and what went wrong.
+Emitted when an entity fails to load or save its record. ``error`` is one of the codes :ref:`NetwPersistence.load()<class_NetwPersistence_method_load>` and :ref:`NetwPersistence.save()<class_NetwPersistence_method_save>` list, and ``detail`` names the record and what went wrong.
 
 ::
 
     func _ready() -> void:
-        Netw.database(self, &"saves").failed.connect(show_save_error)
+        Netw.session(self).database(&"saves").failed.connect(show_save_error)
 
     func show_save_error(_error: Error, detail: String) -> void:
         status.text = detail

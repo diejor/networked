@@ -45,7 +45,7 @@
 			<param index="0" name="err_code" type="int" enum="Error" />
 			<param index="1" name="err_detail" type="String" default="&quot;&quot;" />
 			<description>
-				Fails the promise with [param err_code] and emits [signal failed], then [signal settled]. Does nothing when already settled. Pushes a warning when nothing handles the failure.
+				Fails the promise with [param err_code]. Emits [signal settled], then calls the [method catch_error] callbacks, then fires every [method wait] signal. Does nothing when already settled. Pushes a warning when nothing handles the failure.
 			</description>
 		</method>
 		<method name="rejected" qualifiers="static">
@@ -60,7 +60,7 @@
 			<return type="void" />
 			<param index="0" name="val" type="Variant" />
 			<description>
-				Completes the promise with [param val] and emits [signal completed], then [signal settled]. Does nothing when already settled.
+				Completes the promise with [param val]. Emits [signal settled], then calls the [method then] callbacks, then fires every [method wait] signal. Does nothing when already settled.
 			</description>
 		</method>
 		<method name="resolved" qualifiers="static">
@@ -80,7 +80,7 @@
 		<method name="wait">
 			<return type="Signal" />
 			<description>
-				Returns a signal to [code]await[/code], which gives [method answer]. It works even when the promise already settled, which awaiting [signal settled] does not.
+				Returns a new signal to [code]await[/code], which fires once with [method answer]. When the promise already settled, it fires on the next frame.
 				[codeblock]
 				var err: Error = await engine.flush(keys).wait()
 				[/codeblock]
@@ -118,25 +118,6 @@
 		</member>
 	</members>
 	<signals>
-		<signal name="completed">
-			<param index="0" name="value" type="Variant" />
-			<description>
-				Emitted when the promise completes.
-			</description>
-		</signal>
-		<signal name="failed">
-			<param index="0" name="code" type="int" enum="Error" />
-			<param index="1" name="detail" type="String" />
-			<description>
-				Emitted when the promise fails.
-			</description>
-		</signal>
-		<signal name="ready">
-			<param index="0" name="answer" type="Variant" />
-			<description>
-				Used by [method wait]. Connect to [signal settled] instead, since this can be emitted more than once.
-			</description>
-		</signal>
 		<signal name="settled">
 			<description>
 				Emitted once when the promise completes or fails. Do not [code]await[/code] it, since it may already have fired. Use [method wait].

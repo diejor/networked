@@ -14,7 +14,7 @@ namespace Networked;
 /// <c>NetwMultiplayer._predict_drive</c>. A frame with no new input repeats the
 /// last one.
 /// <code>
-/// var fold := NetwPredictFold.of(tick, true, NetwPredict.DRIVE_KIND_FRESH)
+/// var fold := NetwPredictFold.of(tick, true, NetwPrediction.DRIVE_KIND_FRESH)
 /// </code>
 /// </remarks>
 public sealed class NetwPredictFold : NetwRefCounted
@@ -34,16 +34,16 @@ public sealed class NetwPredictFold : NetwRefCounted
     }
 
     private static readonly IntPtr _bindOf =
-        NetwApi.MethodBind("NetwPredictFold", "of", 513276283UL);
+        NetwApi.MethodBind("NetwPredictFold", "of", 1498981149UL);
 
     /// <summary>
     /// Creates a <see cref="NetwPredictFold"/>. <paramref name="kind"/> must be
-    /// a valid <see cref="NetwPredict.DriveKind"/>.
+    /// a valid <see cref="NetwPrediction.DriveKind"/>.
     /// </summary>
     public static NetwPredictFold Of(
         long label,
         bool fresh,
-        NetwPredict.DriveKind kind)
+        NetwPrediction.DriveKind kind)
     {
         long slot0 = label;
         byte slot1 = fresh ? (byte)1 : (byte)0;
@@ -87,15 +87,15 @@ public sealed class NetwPredictFold : NetwRefCounted
     }
 
     private static readonly IntPtr _bindKind =
-        NetwApi.MethodBind("NetwPredictFold", "kind", 1848337997UL);
+        NetwApi.MethodBind("NetwPredictFold", "kind", 4151201871UL);
 
     /// <summary>
     /// Which input was used.
     /// </summary>
-    public NetwPredict.DriveKind Kind()
+    public NetwPrediction.DriveKind Kind()
     {
         long answered = default;
         NetwThunks.Ptrcall0_Long(_bindKind, Checked, ref answered);
-        return (NetwPredict.DriveKind)answered;
+        return (NetwPrediction.DriveKind)answered;
     }
 }

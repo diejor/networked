@@ -58,7 +58,7 @@ TEST_CASE(
     rig.mount();
     netw_test::flow_clocks(rig, TICKRATE);
 
-    rig.server()->emit_signal(StringName("session_entered"));
+    rig.server()->spawner_session_entered();
 
     Node *arena = memnew(Node);
     arena->set_name("Arena");
@@ -91,7 +91,7 @@ TEST_CASE(
 
     netw::NetwMultiplayer *client = rig.shell_at(0);
     REQUIRE_FALSE(client->is_session_authority());
-    client->emit_signal(StringName("session_entered"));
+    client->spawner_session_entered();
 
     Node *arena = memnew(Node);
     arena->set_name("ClientArena");

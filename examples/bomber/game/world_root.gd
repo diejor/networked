@@ -4,15 +4,8 @@ const PLAYER_SCENE := preload("res://examples/bomber/game/player.tscn")
 
 
 func _init() -> void:
-	Netw.configure_multiplayer_scene(self).labeled(&"World")
+	Netw.configure_scene(self).labeled(&"World")
 	Netw.configure_spawn(spawn_player)
-
-
-func _ready() -> void:
-	if not multiplayer.is_server():
-		return
-	var gamestate := Netw.service(self, BomberGamestate) as BomberGamestate
-	gamestate.open_match(Netw.scene(self))
 
 
 func spawn_player(username: StringName, peer_id: int, slot: int) -> Node:

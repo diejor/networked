@@ -595,10 +595,12 @@ class Surface:
 
     def signal_type(self, argument: dict) -> str | None:
         """The delegate parameter type for one signal argument. A handle this
-        addon owns arrives as a Variant, because GodotSharp can marshal only
-        the types its own assembly knows."""
+        addon owns is declared as its wrapper class. It still arrives as a
+        Variant, so signal_of bridges it through the class's From."""
         type_name = argument.get("type", "")
-        if type_name in ("void", "Object") or type_name in self.classes:
+        if type_name in self.classes:
+            return type_name
+        if type_name in ("void", "Object"):
             return "Variant"
         boxed = self.box(argument)
         return None if boxed is None else boxed.declared
@@ -671,6 +673,14 @@ class Surface:
                 "VariantUtils.ConvertToFloat32({name})",
             )
         if type_name.startswith("typedarray::"):
+            element = type_name[len("typedarray::"):]
+            if element in self.classes:
+                return Boxed(
+                    "%s[]" % element,
+                    "VariantUtils.CreateFromArray(NetwApi.ArrayOf({name}))",
+                    "NetwApi.Elements(VariantUtils.ConvertToArray({name}), "
+                    "%s.From)" % element,
+                )
             return BUILTIN_BOXES["Array"]
         if type_name in BUILTIN_BOXES:
             return BUILTIN_BOXES[type_name]
@@ -857,12 +867,29 @@ class Emitter:
         if not self.claim(subject, spelled):
             return None
         handler = "Action" if not carried else "Action<%s>" % ", ".join(carried)
+        wrapped = [declared in self.surface.classes for declared in carried]
+        received = []
+        passed = []
+        for at, declared in enumerate(carried):
+            if wrapped[at]:
+                received.append("Variant a%d" % at)
+                passed.append("Wrapped(a%d, %s.From)" % (at, declared))
+            else:
+                received.append("%s a%d" % (declared, at))
+                passed.append("a%d" % at)
         return [
             *self.doc_of(class_name, "signals", signal["name"], "    "),
             "    public event %s %s" % (handler, spelled),
             "    {",
-            '        add => Connect("%s", Callable.From(value));' % signal["name"],
-            '        remove => Disconnect("%s", Callable.From(value));' % signal["name"],
+            "        add => ConnectBridge(",
+            '            "%s",' % signal["name"],
+            "            value,",
+            "            Callable.From(",
+            "                (%s) =>" % ", ".join(received),
+            "                    value(%s)" % ", ".join(passed),
+            "            )",
+            "        );",
+            '        remove => DisconnectBridge("%s", value);' % signal["name"],
             "    }",
         ]
 

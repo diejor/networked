@@ -12,7 +12,7 @@
 #include "netw/api/netw_multiplayer.hpp"
 #include "netw/display/book.hpp"
 #include "netw/display/runtime.hpp"
-#include "netw/api/simulation_handle.hpp"
+#include "netw/api/simulation.hpp"
 #include "netw/api/sync_pipeline.hpp"
 #include "netw/sim/row.hpp"
 
@@ -40,10 +40,10 @@ func _init() -> void:
 	add_child(visual)
 	var e := Netw.configure_entity(self)
 	e.transfer = NetwEntity.TRANSFER_IMMEDIATE
-	e.simulation.replicas = NetwSimulationHandle.REPLICAS_ACTIVE
+	e.simulation.replicas = NetwSimulation.REPLICAS_ACTIVE
 	e.simulation.claim_on_contact = true
 	e.simulation.release_on_rest = 1.0
-	e.interpolation.visual_root = ^"Visual"
+	e.display.visual_root = ^"Visual"
 	Netw.configure_property(self, &"position").broadcast() \
 			.interpolate(NetwInterpolate.new().lerp())
 )";
@@ -470,7 +470,7 @@ func _init() -> void:
 	var e := Netw.configure_entity(self)
 	e.transfer = NetwEntity.TRANSFER_IMMEDIATE
 	e.simulation.bodies = [^"Sphere"]
-	e.simulation.replicas = NetwSimulationHandle.REPLICAS_ACTIVE
+	e.simulation.replicas = NetwSimulation.REPLICAS_ACTIVE
 	e.simulation.claim_on_contact = true
 	Netw.configure_property(self, &"sphere_position").broadcast()
 )";

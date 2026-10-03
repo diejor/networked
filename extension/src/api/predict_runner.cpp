@@ -5,7 +5,7 @@
 #include "netw/api/entity.hpp"
 #include "netw/api/netw_multiplayer.hpp"
 #include "netw/api/physics_stepper.hpp"
-#include "netw/api/predict.hpp"
+#include "netw/api/prediction.hpp"
 #include "netw/api/predict_slot_engine.hpp"
 #include "netw/colors.hpp"
 #include "netw/log.hpp"
@@ -187,7 +187,7 @@ void NetwPredictRunner::tick_step(const NetwPredictTiming &p_timing) {
             NetwPredictSlotEngine *engine = roster[at];
             if (engine != nullptr) {
                 engine->prepare_island(
-                    int(NetwSimulationHandle::SCHEDULE_TICK)
+                    int(NetwSimulation::SCHEDULE_TICK)
                 );
             }
         }
@@ -245,7 +245,7 @@ void NetwPredictRunner::step_stepped_spaces(const NetwPredictTiming &p_timing) {
     for (uint32_t at = 0; at < engines.size(); ++at) {
         NetwPredictSlotEngine *engine = engines[at];
         if (engine == nullptr
-            || !engine->uses_schedule(NetwSimulationHandle::SCHEDULE_STEPPED)) {
+            || !engine->uses_schedule(NetwSimulation::SCHEDULE_STEPPED)) {
             continue;
         }
         const NetwMultiplayer::EntitySpace held
@@ -282,7 +282,7 @@ void NetwPredictRunner::frame_step(const NetwPredictTiming &p_timing) {
             NetwPredictSlotEngine *engine = roster[at];
             if (engine != nullptr) {
                 engine->prepare_island(
-                    int(NetwSimulationHandle::SCHEDULE_FRAME)
+                    int(NetwSimulation::SCHEDULE_FRAME)
                 );
             }
         }

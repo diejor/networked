@@ -10,9 +10,8 @@
 #include "godot/script.hpp"
 #include "netw/api/entity.hpp"
 #include "netw/api/netw_multiplayer.hpp"
-#include "netw/api/predict.hpp"
 #include "netw/api/predict_stats.hpp"
-#include "netw/api/prediction_handle.hpp"
+#include "netw/api/prediction.hpp"
 #include "netw/lagcomp_core.hpp"
 #include "netw/repl/property_binding.hpp"
 
@@ -29,7 +28,7 @@ using godot::Vector2;
 using netw::NetwEntity;
 using netw::NetwLagCompCore;
 using netw::NetwMultiplayer;
-using netw::NetwPredictionHandle;
+using netw::NetwPrediction;
 using netw::NetwPredictStats;
 
 EntityDecl census_player(const char *p_name) {
@@ -62,7 +61,7 @@ Dictionary counters_of(const godot::Variant &p_stepped) {
     if (wrapper == nullptr) {
         return Dictionary();
     }
-    const Ref<NetwPredictionHandle> handle = wrapper->get_prediction();
+    const Ref<NetwPrediction> handle = wrapper->get_prediction();
     if (handle.is_null() || handle->get_stats().is_null()) {
         return Dictionary();
     }
@@ -88,7 +87,7 @@ Scenario hosted_tick_lane() {
 
 Dictionary stats_of_slot(NetwMultiplayer *p_core, int64_t p_slot) {
     netw::NetwPredictionEngine *const pool = p_core->get_prediction_engine();
-    const TypedArray<godot::Object> stepped
+    const TypedArray<NetwEntity> stepped
         = p_core->predict_stepped_entities();
     for (int at = 0; at < stepped.size(); ++at) {
         const Ref<NetwEntity> wrapper = stepped[at];
@@ -122,7 +121,7 @@ TEST_CASE(
     NetwMultiplayer *server = rig.server();
     REQUIRE(server != nullptr);
 
-    const TypedArray<godot::Object> stepped
+    const TypedArray<NetwEntity> stepped
         = server->predict_stepped_entities();
     REQUIRE(stepped.size() == 2);
 
@@ -205,7 +204,7 @@ TEST_CASE(
     netw::NetwPredictionEngine *const pool = server->get_prediction_engine();
     REQUIRE(pool != nullptr);
 
-    const TypedArray<godot::Object> stepped
+    const TypedArray<NetwEntity> stepped
         = server->predict_stepped_entities();
     REQUIRE(stepped.size() == 2);
 
@@ -261,7 +260,7 @@ TEST_CASE(
     netw::NetwPredictionEngine *const pool = server->get_prediction_engine();
     REQUIRE(pool != nullptr);
 
-    const TypedArray<godot::Object> stepped
+    const TypedArray<NetwEntity> stepped
         = server->predict_stepped_entities();
     REQUIRE(stepped.size() == 2);
 
@@ -318,7 +317,7 @@ TEST_CASE(
     netw::NetwPredictionEngine *const pool = server->get_prediction_engine();
     REQUIRE(pool != nullptr);
 
-    const TypedArray<godot::Object> stepped
+    const TypedArray<NetwEntity> stepped
         = server->predict_stepped_entities();
     REQUIRE(stepped.size() == 2);
 
@@ -367,7 +366,7 @@ TEST_CASE(
     netw::NetwPredictionEngine *const pool = server->get_prediction_engine();
     REQUIRE(pool != nullptr);
 
-    const TypedArray<godot::Object> stepped
+    const TypedArray<NetwEntity> stepped
         = server->predict_stepped_entities();
     REQUIRE(stepped.size() == 2);
     const Ref<NetwEntity> wrapper = stepped[0];
@@ -425,7 +424,7 @@ TEST_CASE(
     netw::NetwPredictionEngine *const pool = server->get_prediction_engine();
     REQUIRE(pool != nullptr);
 
-    const TypedArray<godot::Object> stepped
+    const TypedArray<NetwEntity> stepped
         = server->predict_stepped_entities();
     REQUIRE(stepped.size() == 2);
 
@@ -473,7 +472,7 @@ TEST_CASE(
     REQUIRE(pool != nullptr);
     REQUIRE(authored != nullptr);
 
-    const TypedArray<godot::Object> mine = owner->predict_stepped_entities();
+    const TypedArray<NetwEntity> mine = owner->predict_stepped_entities();
     REQUIRE(mine.size() > 0);
     const Ref<NetwEntity> claimed = mine[0];
     REQUIRE(claimed.is_valid());
@@ -484,14 +483,14 @@ TEST_CASE(
         = authored->build_command_frame_for(author);
     REQUIRE(!shipped.is_empty());
 
-    const TypedArray<godot::Object> stepped
+    const TypedArray<NetwEntity> stepped
         = server->predict_stepped_entities();
     int64_t relayed_to = -1;
-    Ref<NetwPredictionHandle> mirrored;
+    Ref<NetwPrediction> mirrored;
     for (int at = 0; at < stepped.size(); ++at) {
         const Ref<NetwEntity> wrapper = stepped[at];
         if (wrapper.is_valid()
-            && wrapper->get_entity_id() == claimed->get_entity_id()) {
+            && wrapper->get_name() == claimed->get_name()) {
             relayed_to = pool->slot_of(wrapper);
             mirrored = wrapper->get_prediction();
             break;
@@ -528,12 +527,14 @@ TEST_CASE(
             )
         );
 
-        mirrored->set_reconcile_mode(netw::NetwPredict::RECONCILE_INDEPENDENT);
+        mirrored->set_reconcile_mode(
+            netw::NetwPrediction::RECONCILE_INDEPENDENT
+        );
         decoded.set_epoch(decoded.epoch() + 1);
         pool->admit_relayed_payload(relayed_to, decoded.to_bytes());
         const int64_t alone = pool->joint_epoch_floor_of(relayed_to);
 
-        mirrored->set_reconcile_mode(netw::NetwPredict::RECONCILE_JOINT);
+        mirrored->set_reconcile_mode(netw::NetwPrediction::RECONCILE_JOINT);
         decoded.set_epoch(decoded.epoch() + 1);
         pool->admit_relayed_payload(relayed_to, decoded.to_bytes());
         NETW_CHECK_GT(pool->joint_epoch_floor_of(relayed_to), alone);
@@ -568,7 +569,7 @@ TEST_CASE(
     netw::NetwPredictionEngine *const authored = owner->get_prediction_engine();
     REQUIRE(authored != nullptr);
 
-    const TypedArray<godot::Object> mine = owner->predict_stepped_entities();
+    const TypedArray<NetwEntity> mine = owner->predict_stepped_entities();
     REQUIRE(mine.size() > 0);
     const Ref<NetwEntity> claimed = mine[0];
     REQUIRE(claimed.is_valid());
@@ -616,7 +617,7 @@ TEST_CASE(
     netw::NetwPredictionEngine *const pool = server->get_prediction_engine();
     REQUIRE(pool != nullptr);
 
-    const TypedArray<godot::Object> stepped
+    const TypedArray<NetwEntity> stepped
         = server->predict_stepped_entities();
     REQUIRE(stepped.size() == 2);
     const Ref<NetwEntity> wrapper = stepped[0];
@@ -624,13 +625,13 @@ TEST_CASE(
     const int64_t slot = pool->slot_of(wrapper);
     REQUIRE(slot >= 0);
 
-    const Ref<NetwPredictionHandle> handle = wrapper->get_prediction();
+    const Ref<NetwPrediction> handle = wrapper->get_prediction();
     REQUIRE(handle.is_valid());
     REQUIRE(handle->get_simulate().is_valid());
     CHECK(pool->slot_is_steppable(slot));
 
     handle->simulation()->set_schedule(
-        netw::NetwSimulationHandle::SCHEDULE_STEPPED
+        netw::NetwSimulation::SCHEDULE_STEPPED
     );
     CHECK_FALSE(pool->slot_is_steppable(slot));
 
@@ -652,7 +653,7 @@ TEST_CASE(
     CHECK(pool->slot_is_steppable(slot));
 
     SUBCASE("and a member this peer only displays never steps at all") {
-        handle->set_sim_mode(netw::NetwPredict::SIM_MODE_DISPLAY);
+        handle->set_sim_mode(netw::NetwPrediction::SIM_MODE_DISPLAY);
         CHECK_FALSE(pool->slot_is_steppable(slot));
     }
 
@@ -675,7 +676,7 @@ TEST_CASE(
     netw::NetwPredictionEngine *const pool = server->get_prediction_engine();
     REQUIRE(pool != nullptr);
 
-    const TypedArray<godot::Object> stepped
+    const TypedArray<NetwEntity> stepped
         = server->predict_stepped_entities();
     REQUIRE(stepped.size() == 2);
 
@@ -736,7 +737,7 @@ TEST_CASE(
     netw::NetwPredictionEngine *const pool = server->get_prediction_engine();
     REQUIRE(pool != nullptr);
 
-    const TypedArray<godot::Object> stepped
+    const TypedArray<NetwEntity> stepped
         = server->predict_stepped_entities();
     REQUIRE(stepped.size() == 2);
     const Ref<NetwEntity> wrapper = stepped[0];
@@ -796,7 +797,7 @@ TEST_CASE(
     netw::NetwPredictionEngine *const pool = server->get_prediction_engine();
     REQUIRE(pool != nullptr);
 
-    const TypedArray<godot::Object> stepped
+    const TypedArray<NetwEntity> stepped
         = server->predict_stepped_entities();
     REQUIRE(stepped.size() == 2);
     const Ref<NetwEntity> wrapper = stepped[0];
@@ -804,29 +805,29 @@ TEST_CASE(
     const int64_t slot = pool->slot_of(wrapper);
     REQUIRE(slot >= 0);
 
-    const Ref<NetwPredictionHandle> handle = wrapper->get_prediction();
+    const Ref<NetwPrediction> handle = wrapper->get_prediction();
     REQUIRE(handle.is_valid());
 
-    handle->set_reconcile_mode(netw::NetwPredict::RECONCILE_INDEPENDENT);
+    handle->set_reconcile_mode(netw::NetwPrediction::RECONCILE_INDEPENDENT);
     NETW_CHECK_EQ(
         pool->admitted_reconcile_mode(slot),
-        int(netw::NetwPredict::RECONCILE_INDEPENDENT)
+        int(netw::NetwPrediction::RECONCILE_INDEPENDENT)
     );
 
-    handle->set_reconcile_mode(netw::NetwPredict::RECONCILE_JOINT);
+    handle->set_reconcile_mode(netw::NetwPrediction::RECONCILE_JOINT);
     NETW_CHECK_EQ(
         pool->admitted_reconcile_mode(slot),
-        int(netw::NetwPredict::RECONCILE_JOINT)
+        int(netw::NetwPrediction::RECONCILE_JOINT)
     );
     CHECK_FALSE(pool->joint_refusal_reported_of(slot));
 
     handle->simulation()->set_schedule(
-        netw::NetwSimulationHandle::SCHEDULE_STEPPED
+        netw::NetwSimulation::SCHEDULE_STEPPED
     );
     REQUIRE_FALSE(pool->slot_is_steppable(slot));
     NETW_CHECK_EQ(
         pool->admitted_reconcile_mode(slot),
-        int(netw::NetwPredict::RECONCILE_INDEPENDENT)
+        int(netw::NetwPrediction::RECONCILE_INDEPENDENT)
     );
     CHECK(pool->joint_refusal_reported_of(slot));
 
@@ -842,7 +843,7 @@ TEST_CASE(
         );
         NETW_CHECK_EQ(
             pool->admitted_reconcile_mode(slot),
-            int(netw::NetwPredict::RECONCILE_JOINT)
+            int(netw::NetwPrediction::RECONCILE_JOINT)
         );
         netw::gd::scene_root()->remove_child(body);
     }
@@ -863,7 +864,7 @@ TEST_CASE(
     netw::NetwPredictionEngine *const pool = server->get_prediction_engine();
     REQUIRE(pool != nullptr);
 
-    const TypedArray<godot::Object> stepped
+    const TypedArray<NetwEntity> stepped
         = server->predict_stepped_entities();
     REQUIRE(stepped.size() > 0);
     const Ref<NetwEntity> wrapper = stepped[0];
@@ -905,7 +906,7 @@ TEST_CASE(
     netw::NetwPredictionEngine *const pool = server->get_prediction_engine();
     REQUIRE(pool != nullptr);
 
-    const TypedArray<godot::Object> stepped
+    const TypedArray<NetwEntity> stepped
         = server->predict_stepped_entities();
     REQUIRE(stepped.size() == 2);
     const Ref<NetwEntity> wrapper = stepped[0];
@@ -913,10 +914,10 @@ TEST_CASE(
     const int64_t slot = pool->slot_of(wrapper);
     REQUIRE(slot >= 0);
 
-    const Ref<NetwPredictionHandle> handle = wrapper->get_prediction();
+    const Ref<NetwPrediction> handle = wrapper->get_prediction();
     REQUIRE(handle.is_valid());
 
-    handle->set_archetype(netw::NetwPredict::ARCHETYPE_SOLVER_BODY);
+    handle->set_archetype(netw::NetwPrediction::ARCHETYPE_SOLVER_BODY);
     pool->refresh_simulation_gate(slot, false);
     const int64_t armed = server->simulation_gate_count();
     NETW_CHECK_GT(armed, int64_t(0));
@@ -927,7 +928,7 @@ TEST_CASE(
     pool->refresh_simulation_gate(slot, false);
     NETW_CHECK_EQ(server->simulation_gate_count(), armed);
 
-    handle->set_archetype(netw::NetwPredict::ARCHETYPE_SCRIPTED);
+    handle->set_archetype(netw::NetwPrediction::ARCHETYPE_SCRIPTED);
     pool->refresh_simulation_gate(slot, false);
     NETW_CHECK_EQ(server->simulation_gate_count(), armed - 1);
 
@@ -936,25 +937,25 @@ TEST_CASE(
         REQUIRE(peer != nullptr);
         netw::NetwPredictionEngine *const lanes = peer->get_prediction_engine();
         REQUIRE(lanes != nullptr);
-        const TypedArray<godot::Object> seated
+        const TypedArray<NetwEntity> seated
             = peer->predict_engine_entities();
         REQUIRE(seated.size() == 1);
         const Ref<NetwEntity> lane = seated[0];
         REQUIRE(lane.is_valid());
-        const Ref<NetwPredictionHandle> own = lane->get_prediction();
+        const Ref<NetwPrediction> own = lane->get_prediction();
         REQUIRE(own.is_valid());
         const netw::sim::Row *row = peer->sim_row_of(lane->get_rid_handle());
         REQUIRE(row != nullptr);
 
-        own->set_archetype(netw::NetwPredict::ARCHETYPE_SOLVER_BODY);
+        own->set_archetype(netw::NetwPrediction::ARCHETYPE_SOLVER_BODY);
         lanes->refresh_simulation_gate(lanes->slot_of(lane), false);
         NETW_CHECK_EQ(int(row->mode), int(netw::sim::Mode::PREDICT));
         NETW_CHECK_EQ(peer->simulation_gate_count(), int64_t(1));
 
-        const netw::NetwPredict::RecoveryPolicy open
+        const netw::NetwPrediction::RecoveryPolicy open
             = own->get_recovery_policy();
         own->set_recovery_policy(
-            netw::NetwPredict::RECOVERY_POLICY_DELAY_CLOSED
+            netw::NetwPrediction::RECOVERY_POLICY_DELAY_CLOSED
         );
         NETW_CHECK_EQ(int(row->mode), int(netw::sim::Mode::PROXY));
         NETW_CHECK_EQ(peer->simulation_gate_count(), int64_t(0));

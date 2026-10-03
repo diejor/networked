@@ -19,7 +19,7 @@ A form to join a server.
 Description
 -----------
 
-Shows the fields of :ref:`NetwConnectHandle.join_schema()<class_NetwConnectHandle_method_join_schema>` and the client settings of the server's transport.
+Shows the fields of :ref:`NetwConnection.join_schema()<class_NetwConnection_method_join_schema>` and the client settings of the server's transport.
 
 .. rst-class:: classref-reftable-group
 
@@ -41,9 +41,9 @@ Methods
 .. table::
    :widths: auto
 
-   +--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | |void| | :ref:`open_join<class_JoinPopup_method_open_join>`\ (\ handle\: :ref:`NetwConnectHandle<class_NetwConnectHandle>`, default_username\: :godot:`String`, peer_class\: :godot:`StringName` = &"", authored\: :godot:`Dictionary` = {}\ ) |
-   +--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   +--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | |void| | :ref:`open_join<class_JoinPopup_method_open_join>`\ (\ handle\: :ref:`NetwConnection<class_NetwConnection>`, default_username\: :godot:`String`, peer_class\: :godot:`StringName` = &"", authored\: :godot:`Dictionary` = {}\ ) |
+   +--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 
 .. rst-class:: classref-section-separator
 
@@ -96,7 +96,7 @@ Method Descriptions
 
 .. rst-class:: classref-method
 
-|void| **open_join**\ (\ handle\: :ref:`NetwConnectHandle<class_NetwConnectHandle>`, default_username\: :godot:`String`, peer_class\: :godot:`StringName` = &"", authored\: :godot:`Dictionary` = {}\ ) :ref:`🔗<class_JoinPopup_method_open_join>`
+|void| **open_join**\ (\ handle\: :ref:`NetwConnection<class_NetwConnection>`, default_username\: :godot:`String`, peer_class\: :godot:`StringName` = &"", authored\: :godot:`Dictionary` = {}\ ) :ref:`🔗<class_JoinPopup_method_open_join>`
 
 Opens the form for the server on ``peer_class``, filled with its saved ``authored`` settings.
 

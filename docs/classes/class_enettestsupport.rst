@@ -19,7 +19,7 @@ Static helpers for ENet-based integration tests.
 Description
 -----------
 
-This helper covers integration tests that need real UDP sockets to exercise transport-specific behavior: the auth-phase handshake behind :ref:`NetwConnectHandle.endpoint_probe()<class_NetwConnectHandle_method_endpoint_probe>`, ENet-level disconnect/reconnect semantics, and so on.  Every session here comes up the ordinary Godot way: the caller builds an :godot:`ENetMultiplayerPeer`, prepares a local player when it wants one, and assigns the peer to the session.
+This helper covers integration tests that need real UDP sockets to exercise transport-specific behavior: the auth-phase handshake behind :ref:`NetwConnection.endpoint_probe()<class_NetwConnection_method_endpoint_probe>`, ENet-level disconnect/reconnect semantics, and so on.  Every session here comes up the ordinary Godot way: the caller builds an :godot:`ENetMultiplayerPeer`, prepares a local player when it wants one, and assigns the peer to the session.
 
 ::
 

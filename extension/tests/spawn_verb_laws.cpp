@@ -120,7 +120,7 @@ TEST_CASE(
     const StringName ENTER("enter_tree");
     NETW_CHECK_EQ(mirror->route_at(ENTER), int64_t(made.route));
     const bool named_at_entry
-        = mirror->entity_id_at(ENTER) == host->get_entity_id();
+        = mirror->entity_id_at(ENTER) == host->get_name();
     CHECK(named_at_entry);
     CHECK(mirror->entity_id_at(ENTER) != StringName());
     NETW_CHECK_EQ(mirror->route_at(StringName("ready")), int64_t(made.route));

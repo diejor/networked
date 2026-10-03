@@ -118,7 +118,7 @@ TEST_CASE(
     gun->set_name("Gun");
     owner->add_child(gun);
     const Ref<netw::NetwEntity> entity = netw::NetwEntity::ensure(owner);
-    entity->set_entity_id(StringName("gunner"));
+    entity->set_name(StringName("gunner"));
     gun->connect(
         StringName("tree_entered"),
         callable_mp(entity.ptr(), &netw::NetwEntity::register_component)
@@ -143,7 +143,7 @@ TEST_CASE(
     Node *owner = memnew(Node);
     owner->set_name("Owner");
     const Ref<netw::NetwEntity> entity = netw::NetwEntity::ensure(owner);
-    entity->set_entity_id(StringName("gunner"));
+    entity->set_name(StringName("gunner"));
     netw::gd::scene_root()->add_child(owner);
     const int64_t agreed = entity->comp_table().get_table_hash();
 

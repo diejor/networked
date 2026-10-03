@@ -23,7 +23,8 @@ func write() -> void:
 	if wrote != OK:
 		quit(4)
 		return
-	var mobs := Netw.table(holder, &"restart_mobs")
+	var session: NetwSession = Netw.session(holder)
+	var mobs := session.table(&"restart_mobs")
 	mobs.write_routes(PackedInt64Array([5, 6]))
 	mobs.write_column(rows.hp, PackedInt64Array(PersistenceRestartRows.MOB_HP))
 	if mobs.commit() != OK:

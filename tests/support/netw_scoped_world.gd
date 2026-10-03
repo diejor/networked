@@ -24,7 +24,7 @@ func host() -> NetwMultiplayer:
 	if _host_api != null:
 		return _host_api
 	_server_tree = _make_tree(&"ScopedWorldServer")
-	_server_tree.desired_role = NetwMultiplayer.ROLE_LISTEN_SERVER
+	_server_tree.desired_role = NetwSession.ROLE_LISTEN_SERVER
 	_anchor.add_child(_server_tree)
 
 	var loopback := LocalLoopbackSession.get_shared_session()
@@ -52,7 +52,7 @@ func add_client(username: String) -> NetwMultiplayer:
 	var tree := _make_tree(
 		StringName("ScopedWorldClient%d" % _client_trees.size()),
 	)
-	tree.desired_role = NetwMultiplayer.ROLE_CLIENT
+	tree.desired_role = NetwSession.ROLE_CLIENT
 	_anchor.add_child(tree)
 	_client_trees.append(tree)
 

@@ -7,7 +7,7 @@
 #include "godot/variant.hpp"
 #include "netw/api/entity.hpp"
 #include "netw/api/physics_stepper.hpp"
-#include "netw/api/predict.hpp"
+#include "netw/api/prediction.hpp"
 #include "netw/predict/engine.hpp"
 #include "netw/predict/slot_verdicts.hpp"
 #include "netw/repl/property_binding.hpp"
@@ -15,11 +15,11 @@
 namespace netw {
 
 class NetwMultiplayer;
-class NetwPredictionHandle;
+class NetwPrediction;
 
 class NetwPredictSlotEngine {
     friend class NetwMultiplayer;
-    friend class NetwPredictionHandle;
+    friend class NetwPrediction;
 
     struct Declaration {
         uint64_t state = 0;
@@ -32,7 +32,7 @@ class NetwPredictSlotEngine {
     NetwPredictionEngine *pool = nullptr;
     int64_t seat = -1;
     godot::Ref<NetwEntity> entity;
-    godot::Ref<NetwPredictionHandle> handle;
+    godot::Ref<NetwPrediction> handle;
     Declaration declaration;
     godot::Callable fallback_at_sink;
     godot::Dictionary unsampled;
@@ -214,8 +214,8 @@ class NetwPredictSlotEngine {
     );
     godot::Ref<NetwPredictRecovery> recover_through_seam(
         const godot::Dictionary &p_carried,
-        NetwPredict::RecoveryPolicy p_policy,
-        NetwSimulationHandle::Restore p_snap_restore,
+        NetwPrediction::RecoveryPolicy p_policy,
+        NetwSimulation::Restore p_snap_restore,
         const godot::Dictionary &p_projection,
         const godot::Dictionary &p_before,
         const godot::Dictionary &p_tier_errors,
@@ -223,8 +223,8 @@ class NetwPredictSlotEngine {
         double p_tick_delta
     );
     godot::Ref<NetwPredictJudgement> evaluate_through_seam(
-        NetwPredict::Domain p_domain,
-        NetwPredict::ExactVerdict p_exact_verdict,
+        NetwPrediction::Domain p_domain,
+        NetwPrediction::ExactVerdict p_exact_verdict,
         const godot::Dictionary &p_predicted,
         const godot::Dictionary &p_payload,
         const godot::Dictionary &p_field_sink

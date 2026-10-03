@@ -28,7 +28,7 @@ func before_test() -> void:
 	session = NetwHarnessSession.new()
 	tree = MultiplayerTree.new()
 	tree.name = "JoinVarargTree"
-	session.adopt_tree(tree, NetwMultiplayer.ROLE_LISTEN_SERVER)
+	session.adopt_tree(tree, NetwSession.ROLE_LISTEN_SERVER)
 	add_child(tree)
 	declarer = JoinDeclarer.new()
 	declarer.name = "Declarer"

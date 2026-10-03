@@ -49,7 +49,7 @@
 			<return type="NetwPersistenceConfig" />
 			<param index="0" name="seconds" type="float" />
 			<description>
-				Saves the record every [param seconds] when something changed. [code]0.0[/code] saves only when you call [method NetwPersistenceHandle.save].
+				Saves the record every [param seconds] when something changed. [code]0.0[/code] saves only when you call [method NetwPersistence.save].
 				[b]Server Only.[/b]
 			</description>
 		</method>
@@ -57,7 +57,7 @@
 			<return type="NetwPersistenceConfig" />
 			<param index="0" name="enabled" type="bool" default="true" />
 			<description>
-				Whether the server loads the stored record when the entity's node is ready. Clients do not receive the entity until the load succeeds or finds no record. Call [method NetwPersistenceHandle.load] to retry a failed load.
+				Whether the server loads the stored record when the entity's node is ready. Clients do not receive the entity until the load succeeds or finds no record. Call [method NetwPersistence.load] to retry a failed load.
 			</description>
 		</method>
 		<method name="migrate">

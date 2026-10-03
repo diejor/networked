@@ -16,13 +16,15 @@ namespace netw {
 
 namespace {
 
-const char *SIG_CLOCK_BEFORE_TICK = "clock_before_tick";
-const char *SIG_CLOCK_ON_TICK = "clock_on_tick";
-const char *SIG_CLOCK_AFTER_TICK = "clock_after_tick";
-const char *SIG_CLOCK_BEFORE_TICK_LOOP = "clock_before_tick_loop";
-const char *SIG_CLOCK_AFTER_TICK_LOOP = "clock_after_tick_loop";
-const char *SIG_CLOCK_SYNCHRONIZED = "clock_synchronized";
-const char *SIG_CLOCK_STABILITY_CHANGED = "clock_stability_changed";
+const char *const EVENT_SIGNALS[] = {
+    "clock_before_tick",
+    "clock_on_tick",
+    "clock_after_tick",
+    "clock_before_tick_loop",
+    "clock_after_tick_loop",
+    "clock_synchronized",
+    "clock_stability_changed",
+};
 
 int physics_ticks_per_second() {
     const Engine *engine = Engine::get_singleton();
@@ -212,28 +214,32 @@ int ClockEngine::get_simulation_behind_count() const {
     return simulation_behind_count;
 }
 
-void ClockEngine::announce(const StringName &p_signal) {
-    Object *owner = sink.resolve(sys::CLOCK);
-    if (owner != nullptr) {
-        owner->emit_signal(p_signal);
-    }
-}
-
-void ClockEngine::announce(const StringName &p_signal, const Variant &p_a) {
-    Object *owner = sink.resolve(sys::CLOCK);
-    if (owner != nullptr) {
-        owner->emit_signal(p_signal, p_a);
-    }
+void ClockEngine::hook_with(Hook p_hook, void *p_context) {
+    hook = p_hook;
+    hook_context = p_context;
 }
 
 void ClockEngine::announce(
-    const StringName &p_signal,
+    Event p_event,
+    int p_argc,
     const Variant &p_a,
     const Variant &p_b
 ) {
+    if (hook != nullptr) {
+        hook(hook_context, p_event, p_a, p_b);
+        return;
+    }
     Object *owner = sink.resolve(sys::CLOCK);
-    if (owner != nullptr) {
-        owner->emit_signal(p_signal, p_a, p_b);
+    if (owner == nullptr) {
+        return;
+    }
+    const StringName name(EVENT_SIGNALS[p_event]);
+    if (p_argc == 0) {
+        owner->emit_signal(name);
+    } else if (p_argc == 1) {
+        owner->emit_signal(name, p_a);
+    } else {
+        owner->emit_signal(name, p_a, p_b);
     }
 }
 
@@ -242,9 +248,9 @@ void ClockEngine::emit_tick() {
     NETW_ZONE_NC("Tick", colors::CLOCK);
     NETW_ZONE_VALUE(tick);
     const double step = ticktime();
-    announce(SIG_CLOCK_BEFORE_TICK, step, tick);
-    announce(SIG_CLOCK_ON_TICK, step, tick);
-    announce(SIG_CLOCK_AFTER_TICK, step, tick);
+    announce(EVENT_BEFORE_TICK, 2, step, tick);
+    announce(EVENT_ON_TICK, 2, step, tick);
+    announce(EVENT_AFTER_TICK, 2, step, tick);
     NETW_TALLY_FLUSH();
     tick += 1;
     ticks_run += 1;
@@ -347,11 +353,11 @@ Dictionary ClockEngine::cadence() const {
 }
 
 void ClockEngine::begin_tick_loop() {
-    announce(SIG_CLOCK_BEFORE_TICK_LOOP);
+    announce(EVENT_BEFORE_TICK_LOOP);
 }
 
 void ClockEngine::end_tick_loop() {
-    announce(SIG_CLOCK_AFTER_TICK_LOOP);
+    announce(EVENT_AFTER_TICK_LOOP);
 }
 
 void ClockEngine::resolve_simulation_gate(int ticks_this_frame) {
@@ -397,7 +403,7 @@ Dictionary ClockEngine::handle_pong(
     stats.record(sample, jitter_stability_threshold, jitter_window);
 
     if (stats.is_stable != was_stable) {
-        announce(SIG_CLOCK_STABILITY_CHANGED, stats.is_stable);
+        announce(EVENT_STABILITY_CHANGED, 1, stats.is_stable);
     }
 
     const double lead
@@ -429,7 +435,7 @@ void ClockEngine::calibrate(double target) {
         accumulator = (target - double(whole)) * ticktime();
         target_tick_estimate = target;
         is_synchronized = true;
-        announce(SIG_CLOCK_SYNCHRONIZED);
+        announce(EVENT_SYNCHRONIZED);
         return;
     }
 

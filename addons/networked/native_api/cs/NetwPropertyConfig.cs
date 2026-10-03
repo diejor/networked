@@ -441,7 +441,7 @@ public sealed class NetwPropertyConfig : NetwMemberConfig
 
     /// <summary>
     /// Set by <see cref="NetwPropertyConfig.Epsilon"/>. A negative value uses
-    /// <see cref="NetwPredictionHandle.DivergenceEpsilon"/>.
+    /// <see cref="NetwPrediction.DivergenceEpsilon"/>.
     /// </summary>
     public double EpsilonOverride
     {
@@ -480,7 +480,7 @@ public sealed class NetwPropertyConfig : NetwMemberConfig
 
     /// <summary>
     /// Set by <see cref="NetwPropertyConfig.TeleportAt"/>. A negative value
-    /// uses <see cref="NetwPredictionHandle.TeleportThreshold"/>.
+    /// uses <see cref="NetwPrediction.TeleportThreshold"/>.
     /// </summary>
     public double TeleportAtOverride
     {
@@ -1046,8 +1046,8 @@ public sealed class NetwPropertyConfig : NetwMemberConfig
     /// result that does not reproduce the recorded ticks is rejected, and the
     /// value is restored as the server had it. Declaring both this and
     /// <see cref="NetwPropertyConfig.CarryAlong"/> on one property is an error,
-    /// and neither is used. <see cref="NetwPredictionHandle.Reachability"/>
-    /// reports whether the rule is in use.
+    /// and neither is used. <see cref="NetwPrediction.Reachability"/> reports
+    /// whether the rule is in use.
     /// </para>
     /// </summary>
     public NetwPropertyConfig CarryStep(Callable step)
@@ -1090,8 +1090,8 @@ public sealed class NetwPropertyConfig : NetwMemberConfig
     /// <summary>
     /// How far this value may drift from the server's before it is corrected,
     /// in its own units. Without it, the value uses
-    /// <see cref="NetwPredictionHandle.DivergenceEpsilon"/>. <c>0.0</c>
-    /// corrects any error.
+    /// <see cref="NetwPrediction.DivergenceEpsilon"/>. <c>0.0</c> corrects any
+    /// error.
     /// <code>
     /// Netw.configure_property(self, &amp;"velocity").state().epsilon(0.05)
     /// </code>
@@ -1118,8 +1118,8 @@ public sealed class NetwPropertyConfig : NetwMemberConfig
     /// <summary>
     /// How large this value's error may be before a correction teleports the
     /// body, in its own units. Without it, the value uses
-    /// <see cref="NetwPredictionHandle.TeleportThreshold"/>. <c>0.0</c>
-    /// teleports on every correction this value causes.
+    /// <see cref="NetwPrediction.TeleportThreshold"/>. <c>0.0</c> teleports on
+    /// every correction this value causes.
     /// <code>
     /// Netw.configure_property(self, &amp;"position").state() \
     ///         .carry_along(&amp;"velocity").teleport_at(3.0)      # metres

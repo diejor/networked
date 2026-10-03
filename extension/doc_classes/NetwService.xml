@@ -4,7 +4,7 @@
 		A [Node] that registers itself as a service of its [member Node.multiplayer] while it is in the tree.
 	</brief_description>
 	<description>
-		Get it with [method Netw.service]. Override [method _service_entered] and [method _service_exiting] for setup and cleanup.
+		Get it with [method NetwSession.service]. Override [method _service_entered] and [method _service_exiting] for setup and cleanup.
 		[codeblock]
 		class_name MatchClock
 		extends NetwService
@@ -25,14 +25,14 @@
 	<methods>
 		<method name="_service_entered" qualifiers="virtual">
 			<return type="void" />
-			<param index="0" name="api" type="NetwMultiplayer" />
+			<param index="0" name="session" type="NetwSession" />
 			<description>
 				Called after the service registers, when it enters the tree. Not called in the editor, or when [method _should_register] returns [code]false[/code].
 			</description>
 		</method>
 		<method name="_service_exiting" qualifiers="virtual">
 			<return type="void" />
-			<param index="0" name="api" type="NetwMultiplayer" />
+			<param index="0" name="session" type="NetwSession" />
 			<description>
 				Called before the service unregisters, when it leaves the tree. Undo [method _service_entered] here.
 			</description>

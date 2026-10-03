@@ -9,9 +9,18 @@
 		func _init() -&gt; void:
 		    Netw.configure_session(self) \
 		        .app(&amp;"bomber-v2") \
-		        .role(NetwMultiplayer.ROLE_LISTEN_SERVER)
+		        .role(NetwSession.ROLE_LISTEN_SERVER)
 		[/codeblock]
 		A preset passed to [method Netw.configure_session] is copied, so one [code].tres[/code] can be used by several scenes. When no node calls [method Netw.configure_session], the settings of the [MultiplayerTree] are used. When one does, the [MultiplayerTree] settings are ignored.
+
+		[b]Bandwidth[/b]
+		Each peer is sent at most [member bandwidth_kbps]. Changed rows that do not fit wait for a later tick, and the ones that waited longest and matter most go first.
+		[codeblock]
+		func _init() -&gt; void:
+		    Netw.configure_session(self).bandwidth(256)
+		    Netw.configure_entity(self).replication_priority = 4.0
+		[/codeblock]
+		RPCs, spawns and [method NetwPropertyConfig.retained] properties are always sent when due. A peer they push over its budget gets no more rows until later ticks make up the difference. See [method NetwMultiplayer.peer_link_stats].
 	</description>
 	<tutorials>
 	</tutorials>
@@ -42,7 +51,7 @@
 		</method>
 		<method name="role">
 			<return type="NetwSessionConfig" />
-			<param index="0" name="desired_role" type="int" enum="NetwMultiplayer.Role" />
+			<param index="0" name="desired_role" type="int" enum="NetwSession.Role" />
 			<description>
 				Sets [member desired_role] and returns this config.
 			</description>
@@ -61,10 +70,10 @@
 		</member>
 		<member name="bandwidth_kbps" type="int" setter="set_bandwidth_kbps" getter="get_bandwidth_kbps" default="0">
 			The budget each peer is sent, in kbit/s. [code]0[/code] allows each peer one datagram a tick of [member SceneMultiplayer.max_sync_packet_size], less 150 bytes of headroom. A negative value is refused.
-			While a peer loses packets its budget halves, and each round trip without loss adds back an eighth of it, up to this value. [method NetwSessionHandle.set_peer_bandwidth] gives one peer its own budget.
+			While a peer loses packets its budget halves, and each round trip without loss adds back an eighth of it, up to this value. [method NetwSession.set_peer_bandwidth] gives one peer its own budget.
 		</member>
-		<member name="desired_role" type="int" setter="set_desired_role" getter="get_desired_role" enum="NetwMultiplayer.Role" default="3">
-			The role this peer takes when it hosts, which becomes [member NetwMultiplayer.role]. A server made with [method MultiplayerTree.raise_embedded_server] is always [constant NetwMultiplayer.ROLE_DEDICATED_SERVER].
+		<member name="desired_role" type="int" setter="set_desired_role" getter="get_desired_role" enum="NetwSession.Role" default="3">
+			The role this peer takes when it hosts, which becomes [member NetwMultiplayer.role]. A server made with [method MultiplayerTree.raise_embedded_server] is always [constant NetwSession.ROLE_DEDICATED_SERVER].
 		</member>
 		<member name="link_conditions" type="NetwLinkConditions" setter="set_link_conditions" getter="get_link_conditions">
 			Simulated latency and packet loss for testing. Copied when applied.

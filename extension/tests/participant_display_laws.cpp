@@ -200,8 +200,8 @@ TEST_CASE(
     Node *root = memnew(Node);
     const Placed arena = isolate(core, root, StringName("Arena"));
     const CallLog announced;
-    core->connect(
-        StringName("participant_viewport_changed"),
+    core->observe(
+        NetwMultiplayer::PARTICIPANT_VIEWPORT_CHANGED,
         announced.callable("changed")
     );
     const Placed pawn = stand(core, arena);

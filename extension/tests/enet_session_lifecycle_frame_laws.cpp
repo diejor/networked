@@ -1,10 +1,15 @@
 #include "support/frame_drive.h"
+#include "support/netw_call_log.h"
 #include "support/netw_test.h"
+
+#include <memory>
+#include <vector>
 
 #include "godot/class_db.hpp"
 #include "godot/scene_tree.hpp"
 #include "godot/time.hpp"
 #include "netw/api/netw_multiplayer.hpp"
+#include "netw/api/session.hpp"
 
 using namespace godot;
 
@@ -15,6 +20,11 @@ namespace {
 constexpr int PORT_RANGE_START = 30100;
 constexpr int PORT_RANGE_SIZE = 100;
 constexpr int64_t STEP_BUDGET_MSEC = 5000;
+
+struct Exit {
+    bool exited = false;
+    int reason = -1;
+};
 
 struct LifecycleEvidence {
     bool driven = false;
@@ -29,6 +39,39 @@ struct LifecycleEvidence {
     bool leaving_seated = false;
     bool leaving_offline = false;
     bool leaving_gone = false;
+    std::vector<Exit> kicked_exits;
+    std::vector<Exit> leaving_exits;
+    int host_players_left = 0;
+    int host_exits = -1;
+};
+
+struct ExitTrace {
+    netw_test::CallLog log;
+
+    void listen(const Ref<netw::NetwMultiplayer> &p_session) {
+        const Ref<netw::NetwSession> door = p_session->get_session();
+        door->connect(StringName("exiting"), log.callable("exiting"));
+        door->connect(StringName("exited"), log.callable("exited"));
+        door->connect(StringName("player_left"), log.callable("player_left"));
+    }
+
+    bool exited() const {
+        return log.count(StringName("exited")) > 0;
+    }
+
+    std::vector<Exit> exits() const {
+        std::vector<Exit> out;
+        int exiting_seen = 0;
+        int exited_seen = 0;
+        for (const StringName &tag : log.order()) {
+            if (tag == StringName("exiting")) {
+                out.push_back({false, int(log.args(tag, exiting_seen++)[0])});
+            } else if (tag == StringName("exited")) {
+                out.push_back({true, int(log.args(tag, exited_seen++)[0])});
+            }
+        }
+        return out;
+    }
 };
 
 LifecycleEvidence &lifecycle_evidence() {
@@ -52,6 +95,9 @@ class EnetLifecycleScenario final : public netw_test::FrameScenario {
     Ref<netw::NetwMultiplayer> host;
     Ref<netw::NetwMultiplayer> kicked;
     Ref<netw::NetwMultiplayer> leaving;
+    std::unique_ptr<ExitTrace> host_trace;
+    std::unique_ptr<ExitTrace> kicked_trace;
+    std::unique_ptr<ExitTrace> leaving_trace;
 
     static int64_t now_msec() {
         return int64_t(Time::get_singleton()->get_ticks_msec());
@@ -158,7 +204,13 @@ public:
                 if (host->is_online()) {
                     evidence.host_online = true;
                     evidence.host_scene_free = host->scene_list().is_empty();
+                    host_trace = std::make_unique<ExitTrace>();
+                    host_trace->listen(host);
                     kicked = open_client(StringName("kicked"), evidence.port);
+                    if (kicked.is_valid()) {
+                        kicked_trace = std::make_unique<ExitTrace>();
+                        kicked_trace->listen(kicked);
+                    }
                     enter(2);
                 } else if (over_budget()) {
                     enter(99);
@@ -174,10 +226,14 @@ public:
                     evidence.host_admitted_itself = true;
                 }
                 const int seated = kicked->NETW_API_VIRTUAL(get_unique_id)();
-                if (seated > 1 && seats(host, seated)) {
+                const Ref<netw::NetwSession> door = host->get_session();
+                const Ref<netw::NetwPlayer> player = seated > 1
+                    ? door->player_of(seated)
+                    : Ref<netw::NetwPlayer>();
+                if (player.is_valid() && seats(host, seated)) {
                     evidence.kicked_id = seated;
                     evidence.kicked_seated = true;
-                    host->peer_kick(seated, String("gate"));
+                    door->kick(player, String("gate"));
                     enter(3);
                 } else if (over_budget()) {
                     enter(99);
@@ -185,11 +241,16 @@ public:
                 return true;
             }
             case 3: {
-                if (!seats(host, evidence.kicked_id)) {
+                if (!seats(host, evidence.kicked_id)
+                    && kicked_trace->exited()) {
                     evidence.kicked_gone = true;
                     close(kicked);
                     kicked.unref();
                     leaving = open_client(StringName("leaving"), evidence.port);
+                    if (leaving.is_valid()) {
+                        leaving_trace = std::make_unique<ExitTrace>();
+                        leaving_trace->listen(leaving);
+                    }
                     enter(4);
                 } else if (over_budget()) {
                     enter(99);
@@ -218,15 +279,35 @@ public:
                 if (offline) {
                     evidence.leaving_offline = true;
                 }
-                if (offline && !seats(host, evidence.leaving_id)) {
+                if (offline && !seats(host, evidence.leaving_id)
+                    && leaving_trace->exited()) {
                     evidence.leaving_gone = true;
-                    enter(99);
+                    enter(6);
                 } else if (over_budget()) {
                     enter(99);
                 }
                 return true;
             }
+            case 6: {
+                close(leaving);
+                enter(99);
+                return true;
+            }
             default: {
+                if (kicked_trace) {
+                    evidence.kicked_exits = kicked_trace->exits();
+                }
+                if (leaving_trace) {
+                    evidence.leaving_exits = leaving_trace->exits();
+                }
+                if (host_trace) {
+                    evidence.host_players_left
+                        = host_trace->log.count(StringName("player_left"));
+                    evidence.host_exits = int(host_trace->exits().size());
+                }
+                host_trace.reset();
+                kicked_trace.reset();
+                leaving_trace.reset();
                 close(leaving);
                 close(kicked);
                 close(host);
@@ -308,6 +389,49 @@ TEST_CASE(
     REQUIRE(evidence.leaving_seated);
     CHECK(evidence.leaving_offline);
     CHECK(evidence.leaving_gone);
+}
+
+TEST_CASE(
+    "[Networked][Connect][Frame] EL7 a kicked peer's own session exits once "
+    "with KICKED, exiting before exited, and the host reports the departure "
+    "as player_left rather than as an exit of its own"
+) {
+    const LifecycleEvidence &evidence = lifecycle_evidence();
+    REQUIRE(evidence.driven);
+    REQUIRE(evidence.kicked_gone);
+    NETW_REQUIRE_EQ(int(evidence.kicked_exits.size()), 2);
+    CHECK_FALSE(evidence.kicked_exits[0].exited);
+    CHECK(evidence.kicked_exits[1].exited);
+    NETW_CHECK_EQ(
+        evidence.kicked_exits[0].reason,
+        int(netw::NetwSession::KICKED)
+    );
+    NETW_CHECK_EQ(
+        evidence.kicked_exits[1].reason,
+        int(netw::NetwSession::KICKED)
+    );
+    NETW_CHECK_GE(evidence.host_players_left, 1);
+    NETW_CHECK_EQ(evidence.host_exits, 0);
+}
+
+TEST_CASE(
+    "[Networked][Connect][Frame] EL8 a peer that leaves exits once with "
+    "LOCAL_LEAVE, and clearing its peer afterwards exits nothing more"
+) {
+    const LifecycleEvidence &evidence = lifecycle_evidence();
+    REQUIRE(evidence.driven);
+    REQUIRE(evidence.leaving_gone);
+    NETW_REQUIRE_EQ(int(evidence.leaving_exits.size()), 2);
+    CHECK_FALSE(evidence.leaving_exits[0].exited);
+    CHECK(evidence.leaving_exits[1].exited);
+    NETW_CHECK_EQ(
+        evidence.leaving_exits[0].reason,
+        int(netw::NetwSession::LOCAL_LEAVE)
+    );
+    NETW_CHECK_EQ(
+        evidence.leaving_exits[1].reason,
+        int(netw::NetwSession::LOCAL_LEAVE)
+    );
 }
 
 } // namespace NetwTests

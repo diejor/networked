@@ -20,7 +20,7 @@ def dump_of(*classes: dict) -> dict:
 
 def clock_class() -> dict:
     return {
-        "name": "NetwClockHandle",
+        "name": "NetwClock",
         "api_type": "extension",
         "is_refcounted": True,
         "inherits": "RefCounted",
@@ -343,7 +343,7 @@ class Emission(unittest.TestCase):
 
     def test_a_property_reads_through_its_getter_bind(self):
         self.assertIn("public long Tick", self.clock)
-        self.assertIn('MethodBind("NetwClockHandle", "get_tick", 111UL)', self.clock)
+        self.assertIn('MethodBind("NetwClock", "get_tick", 111UL)', self.clock)
 
     def test_an_accessor_is_not_also_emitted_as_a_method(self):
         self.assertNotIn("public long GetTick(", self.clock)
@@ -351,7 +351,7 @@ class Emission(unittest.TestCase):
     def test_a_variant_method_crosses_on_the_call_path(self):
         self.assertIn("public Variant Param(long param)", self.clock)
         self.assertIn("NetwThunks.Call1(_bindParam", self.clock)
-        self.assertNotIn("NetwClockHandle.param", self.emitter.skipped)
+        self.assertNotIn("NetwClock.param", self.emitter.skipped)
 
     def test_an_argument_is_handed_over_by_reference(self):
         self.assertIn("godot_variant slot0 = ", self.clock)
@@ -562,7 +562,7 @@ class Refusals(unittest.TestCase):
         with tempfile.TemporaryDirectory() as workspace:
             dump = Path(workspace) / "api.json"
             dump.write_text(
-                '{"classes": [%s]}' % '{"name": "NetwClockHandle", "api_type": "extension", '
+                '{"classes": [%s]}' % '{"name": "NetwClock", "api_type": "extension", '
                 '"is_refcounted": true, "methods": [], "properties": []}',
                 encoding="utf-8",
             )
@@ -637,10 +637,10 @@ class Documentation(unittest.TestCase):
     def setUp(self):
         self.prose = csharp_docs.Prose(
             exports={
-                "NetwClockHandle": {"tick": "Tick", "get_tick": "Tick", "SYNC_MODE_SNAP": "SyncMode.Snap"},
+                "NetwClock": {"tick": "Tick", "get_tick": "Tick", "SYNC_MODE_SNAP": "SyncMode.Snap"},
                 "Netw": {"clock": "Clock"},
             },
-            classes={"NetwClockHandle", "Netw"},
+            classes={"NetwClock", "Netw"},
             engine={"Node": "Node", "Object": "GodotObject", "MultiplayerPeer": "MultiplayerPeer"},
             builtins={
                 "Dictionary": "Godot.Collections.Dictionary",
@@ -650,21 +650,21 @@ class Documentation(unittest.TestCase):
             names=self.NAMES,
         )
 
-    def render(self, text, owner="NetwClockHandle", params=None):
+    def render(self, text, owner="NetwClock", params=None):
         return self.prose.render(owner, text, params)
 
     def test_a_type_becomes_a_cref(self):
         self.assertEqual(self.render("[Netw]"), '<see cref="Netw"/>')
 
     def test_a_member_resolves_through_the_emitters_own_naming(self):
-        self.assertEqual(self.render("[member tick]"), '<see cref="NetwClockHandle.Tick"/>')
+        self.assertEqual(self.render("[member tick]"), '<see cref="NetwClock.Tick"/>')
 
     def test_an_accessor_resolves_to_the_property_it_became(self):
         """C2 renamed these, so a guess at the C# spelling would drift."""
-        self.assertEqual(self.render("[method get_tick]"), '<see cref="NetwClockHandle.Tick"/>')
+        self.assertEqual(self.render("[method get_tick]"), '<see cref="NetwClock.Tick"/>')
 
     def test_an_enum_constant_carries_its_enum(self):
-        self.assertEqual(self.render("[constant SYNC_MODE_SNAP]"), '<see cref="NetwClockHandle.SyncMode.Snap"/>')
+        self.assertEqual(self.render("[constant SYNC_MODE_SNAP]"), '<see cref="NetwClock.SyncMode.Snap"/>')
 
     def test_an_engine_method_follows_godots_spelling(self):
         self.assertEqual(self.render("[method Node.get_parent]"), '<see cref="Node.GetParent"/>')
@@ -761,7 +761,7 @@ class Documentation(unittest.TestCase):
         self.assertEqual(csharp_docs.paragraphs(held), [held])
 
     def test_a_break_never_lands_inside_a_tag(self):
-        long = " ".join(["word"] * 12) + ' <see cref="NetwClockHandle.Tick"/>'
+        long = " ".join(["word"] * 12) + ' <see cref="NetwClock.Tick"/>'
         for line in csharp_docs.wrap(long, "    "):
             self.assertNotIn("<see\n", line)
             self.assertFalse(line.rstrip().endswith("<see"))

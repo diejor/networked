@@ -278,7 +278,7 @@ TEST_CASE(
     NETW_CHECK_EQ(stand.compat->get_roster().size(), 1);
     CHECK(stand.spawner->get_spawn_function().get_object() == stand.core.ptr());
 
-    stand.core->emit_signal(StringName("session_ended"));
+    stand.core->session_announce_ended();
 
     NETW_CHECK_EQ(stand.compat->get_roster().size(), 1);
 

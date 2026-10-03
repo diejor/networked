@@ -4,15 +4,14 @@
 #include "godot/object.hpp"
 #include "godot/variant.hpp"
 #include "netw/api/context.hpp"
-#include "netw/api/display_handle.hpp"
+#include "netw/api/display.hpp"
 #include "netw/api/entity.hpp"
 #include "netw/api/interpolate.hpp"
 #include "netw/api/member_config.hpp"
 #include "netw/api/netw_multiplayer.hpp"
-#include "netw/api/predict.hpp"
-#include "netw/api/prediction_handle.hpp"
+#include "netw/api/prediction.hpp"
 #include "netw/api/property_config.hpp"
-#include "netw/api/simulation_handle.hpp"
+#include "netw/api/simulation.hpp"
 #include "netw/display/decl.hpp"
 #include "netw/synchronizers.hpp"
 
@@ -99,7 +98,7 @@ bool display_declared(Object *p_sync) {
 }
 
 void apply_display(Object *p_sync, const Ref<NetwEntity> &p_entity) {
-    const Ref<NetwDisplayHandle> display = p_entity->get_interpolation();
+    const Ref<NetwDisplay> display = p_entity->get_display();
     if (display.is_null()) {
         return;
     }
@@ -193,7 +192,7 @@ bool prediction_declared(Object *p_sync) {
 }
 
 void apply_prediction(Object *p_sync, const Ref<NetwEntity> &p_entity) {
-    const Ref<NetwPredictionHandle> predict = p_entity->get_prediction();
+    const Ref<NetwPrediction> predict = p_entity->get_prediction();
     if (predict.is_null()) {
         return;
     }
@@ -219,32 +218,32 @@ void apply_prediction(Object *p_sync, const Ref<NetwEntity> &p_entity) {
     }
     if (declared(p_sync, KEY_ARCHETYPE)) {
         predict->set_archetype(
-            static_cast<NetwPredict::Archetype>(
+            static_cast<NetwPrediction::Archetype>(
                 int(whole(p_sync, KEY_ARCHETYPE))
             )
         );
     }
-    const Ref<NetwSimulationHandle> simulation = p_entity->get_simulation();
+    const Ref<NetwSimulation> simulation = p_entity->get_simulation();
     if (declared(p_sync, KEY_SCHEDULE) && simulation.is_valid()) {
         simulation->set_schedule(
-            NetwSimulationHandle::Schedule(whole(p_sync, KEY_SCHEDULE))
+            NetwSimulation::Schedule(whole(p_sync, KEY_SCHEDULE))
         );
     }
     if (declared(p_sync, KEY_RECOVERY_POLICY)) {
         predict->set_recovery_policy(
-            static_cast<NetwPredict::RecoveryPolicy>(
+            static_cast<NetwPrediction::RecoveryPolicy>(
                 int(whole(p_sync, KEY_RECOVERY_POLICY))
             )
         );
     }
     if (declared(p_sync, KEY_SNAP_RESTORE) && simulation.is_valid()) {
         simulation->set_restore(
-            NetwSimulationHandle::Restore(whole(p_sync, KEY_SNAP_RESTORE))
+            NetwSimulation::Restore(whole(p_sync, KEY_SNAP_RESTORE))
         );
     }
     if (declared(p_sync, KEY_MISSING_POLICY)) {
         predict->set_missing_policy(
-            static_cast<NetwPredict::MissingInput>(
+            static_cast<NetwPrediction::MissingInput>(
                 int(whole(p_sync, KEY_MISSING_POLICY))
             )
         );

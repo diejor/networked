@@ -5,9 +5,11 @@
 #include "netw/api/entity.hpp"
 #include "netw/api/entity_record.hpp"
 #include "netw/api/netw_multiplayer.hpp"
-#include "netw/api/scene_handle.hpp"
+#include "netw/api/participant.hpp"
+#include "netw/api/scene.hpp"
 #include "netw/scene_core.hpp"
 #include "netw/scene_membership.hpp"
+#include "support/joined_peer.h"
 #include "support/netw_call_log.h"
 
 namespace TestNetwScenePresentationLaws {
@@ -223,18 +225,21 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Scene][Hosted] SPR7 the presentation edge names the scene "
-    "left and the scene taken, and a settle that reaches what the last one "
-    "reached spends no edge at all"
+    "[Networked][Scene][Hosted] SPR7 the local player's scene_changed names "
+    "the scene left and the scene taken, and a settle that reaches what the "
+    "last one reached spends no edge at all"
 ) {
     const Ref<NetwMultiplayer> core = hosting();
+    const Ref<netw::NetwPlayer> player = netw_test::seated_peer(
+        core.ptr(),
+        int64_t(core->get_unique_id())
+    );
+    REQUIRE(player.is_valid());
+    REQUIRE(core->player_local() == player);
     Node *root = memnew(Node);
     const Mounted arena = mount(core, root, StringName("Arena"));
     const CallLog moved;
-    core->connect(
-        StringName("scene_presentation_changed"),
-        moved.callable("presented")
-    );
+    player->connect(StringName("scene_changed"), moved.callable("presented"));
 
     Node *body = stand(core, arena.root, int64_t(core->get_unique_id()));
     NETW_CHECK_EQ(moved.count(StringName("presented")), 1);
@@ -253,6 +258,29 @@ TEST_CASE(
     const Array cleared = moved.args(StringName("presented"), 1);
     CHECK(Object::cast_to<Object>(cleared[0]) != nullptr);
     CHECK(Object::cast_to<Object>(cleared[1]) == nullptr);
+
+    memdelete(root);
+}
+
+TEST_CASE(
+    "[Networked][Scene][Hosted] SPR8 another player's scene is the one "
+    "holding its body, or else the one it watches, and a body outranks a "
+    "watch exactly as it does for this peer"
+) {
+    const Ref<NetwMultiplayer> core = hosting();
+    Node *root = memnew(Node);
+    const Mounted arena = mount(core, root, StringName("Arena"));
+    const Mounted annex = mount(core, root, StringName("Annex"));
+    const int64_t other = 7;
+
+    CHECK_FALSE(core->scene_of_peer(other).is_valid());
+
+    watch(core, annex.scene, other);
+    CHECK(core->scene_of_peer(other) == annex.scene);
+
+    stand(core, arena.root, other);
+    CHECK(core->scene_of_peer(other) == arena.scene);
+    CHECK_FALSE(core->scene_presented().is_valid());
 
     memdelete(root);
 }

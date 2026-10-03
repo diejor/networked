@@ -9,8 +9,8 @@ namespace Networked;
 /// The client for persistent storage.
 /// </summary>
 /// <remarks>
-/// <see cref="NetwEntity"/>, <see cref="NetwTableHandle"/> and your own code
-/// save and load their state through a <see cref="NetwDatabase"/>. A
+/// <see cref="NetwEntity"/>, <see cref="NetwTable"/> and your own code save and
+/// load their state through a <see cref="NetwDatabase"/>. A
 /// <see cref="NetwDatabaseBackend"/> does the actual storage. A record is a
 /// <see cref="Godot.Collections.Dictionary"/> stored under a
 /// <see cref="StringName"/> id. Its <see cref="NetwSchema"/> is the table
@@ -21,7 +21,7 @@ namespace Networked;
 ///     Netw.configure_database(self, &amp;"saves").backend(preload("res://filesystem_backend.tres"))
 ///
 /// func start_game(slot: StringName) -&gt; void:
-///     var db: NetwDatabase = Netw.database(self, &amp;"saves")
+///     var db: NetwDatabase = Netw.session(self).database(&amp;"saves")
 ///     var error: Error = await db.open(slot).wait()
 ///     if error != OK:
 ///         show_load_error(error)
@@ -47,12 +47,12 @@ public sealed class NetwDatabase : NetwRefCounted
 
     /// <summary>
     /// Emitted when an entity fails to load or save its record. <c>error</c> is
-    /// one of the codes <see cref="NetwPersistenceHandle.Load"/> and
-    /// <see cref="NetwPersistenceHandle.Save"/> list, and <c>detail</c> names
-    /// the record and what went wrong.
+    /// one of the codes <see cref="NetwPersistence.Load"/> and
+    /// <see cref="NetwPersistence.Save"/> list, and <c>detail</c> names the
+    /// record and what went wrong.
     /// <code>
     /// func _ready() -&gt; void:
-    ///     Netw.database(self, &amp;"saves").failed.connect(show_save_error)
+    ///     Netw.session(self).database(&amp;"saves").failed.connect(show_save_error)
     ///
     /// func show_save_error(_error: Error, detail: String) -&gt; void:
     ///     status.text = detail
@@ -60,8 +60,15 @@ public sealed class NetwDatabase : NetwRefCounted
     /// </summary>
     public event Action<Error, string> Failed
     {
-        add => Connect("failed", Callable.From(value));
-        remove => Disconnect("failed", Callable.From(value));
+        add => ConnectBridge(
+            "failed",
+            value,
+            Callable.From(
+                (Error a0, string a1) =>
+                    value(a0, a1)
+            )
+        );
+        remove => DisconnectBridge("failed", value);
     }
 
     private static readonly IntPtr _bindGetDatabaseName =

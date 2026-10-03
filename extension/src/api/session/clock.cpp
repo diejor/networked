@@ -12,11 +12,7 @@ Error NetwMultiplayer::clock_configure(const Ref<NetwClockConfig> &p_config) {
     }
     clock_apply_config(p_config);
     clock_engine().set_configured(true);
-    const Callable sweeper
-        = callable_mp(this, &NetwMultiplayer::clock_sweep_effects);
-    if (!is_connected(StringName("clock_on_tick"), sweeper)) {
-        connect(StringName("clock_on_tick"), sweeper);
-    }
+    clock_sweeps_effects = true;
     wire_lagcomp_service();
     return OK;
 }

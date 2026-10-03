@@ -59,6 +59,15 @@ TypedArray<NetwEntity> NetwPlayer::get_bodies() const {
                            : held->player_bodies_held(peer_id, incarnation);
 }
 
+Ref<NetwScene> NetwPlayer::get_scene() const {
+    NETW_ZONE_NC("NetwPlayer scene", colors::SESSION);
+    NetwMultiplayer *held = core();
+    if (held == nullptr || !held->player_is_active(peer_id, incarnation)) {
+        return Ref<NetwScene>();
+    }
+    return held->scene_handle_of(held->scene_of_peer(peer_id));
+}
+
 void NetwPlayer::_bind_methods() {
     ClassDB::bind_method(D_METHOD("get_peer_id"), &NetwPlayer::get_peer_id);
     ADD_PROPERTY(PropertyInfo(Variant::INT, "peer_id"), "", "get_peer_id");
@@ -81,6 +90,33 @@ void NetwPlayer::_bind_methods() {
         "",
         "get_bodies"
     );
+    ClassDB::bind_method(D_METHOD("get_scene"), &NetwPlayer::get_scene);
+    ADD_PROPERTY(
+        PropertyInfo(
+            Variant::OBJECT,
+            "scene",
+            PROPERTY_HINT_RESOURCE_TYPE,
+            "NetwScene",
+            PROPERTY_USAGE_NONE
+        ),
+        "",
+        "get_scene"
+    );
+    ADD_SIGNAL(MethodInfo(
+        "scene_changed",
+        PropertyInfo(
+            Variant::OBJECT,
+            "from",
+            PROPERTY_HINT_RESOURCE_TYPE,
+            "NetwScene"
+        ),
+        PropertyInfo(
+            Variant::OBJECT,
+            "to",
+            PROPERTY_HINT_RESOURCE_TYPE,
+            "NetwScene"
+        )
+    ));
 }
 
 } // namespace netw

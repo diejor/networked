@@ -19,16 +19,16 @@ Makes a node a multiplayer scene.
 Description
 -----------
 
-Returned by :ref:`Netw.configure_multiplayer_scene()<class_Netw_method_configure_multiplayer_scene>`. Declare it once from the scene root's :godot:`Object._init() <Object#class_Object_private_method__init>`, the methods can be called in any order.
+Returned by :ref:`Netw.configure_scene()<class_Netw_method_configure_scene>`. Declare it once from the scene root's :godot:`Object._init() <Object#class_Object_private_method__init>`, the methods can be called in any order.
 
 ::
 
     extends Node2D
 
     func _init() -> void:
-        Netw.configure_multiplayer_scene(self).labeled(&"Level1").isolated()
+        Netw.configure_scene(self).labeled(&"Level1").isolated()
 
-\ Every entity below the root belongs to the scene through :ref:`NetwEntity.scene<class_NetwEntity_property_scene>`, and :ref:`NetwEntity.is_multiplayer_scene<class_NetwEntity_property_is_multiplayer_scene>` is ``true`` on the root.
+\ Every entity below the root belongs to the scene through :ref:`NetwEntity.scene<class_NetwEntity_property_scene>`, and :ref:`NetwEntity.is_scene<class_NetwEntity_property_is_scene>` is ``true`` on the root.
 
 .. rst-class:: classref-reftable-group
 
@@ -38,11 +38,11 @@ Properties
 .. table::
    :widths: auto
 
-   +-------------------------------------------------+------------------------------------------------------------+---------+
-   | :ref:`SceneIsolation<enum_Netw_SceneIsolation>` | :ref:`isolation<class_NetwSceneConfig_property_isolation>` | ``0``   |
-   +-------------------------------------------------+------------------------------------------------------------+---------+
-   | :godot:`StringName`                             | :ref:`label<class_NetwSceneConfig_property_label>`         | ``&""`` |
-   +-------------------------------------------------+------------------------------------------------------------+---------+
+   +------------------------------------------------------+------------------------------------------------------------+---------+
+   | :ref:`SceneIsolation<enum_NetwScene_SceneIsolation>` | :ref:`isolation<class_NetwSceneConfig_property_isolation>` | ``0``   |
+   +------------------------------------------------------+------------------------------------------------------------+---------+
+   | :godot:`StringName`                                  | :ref:`label<class_NetwSceneConfig_property_label>`         | ``&""`` |
+   +------------------------------------------------------+------------------------------------------------------------+---------+
 
 .. rst-class:: classref-reftable-group
 
@@ -71,13 +71,13 @@ Property Descriptions
 
 .. rst-class:: classref-property
 
-:ref:`SceneIsolation<enum_Netw_SceneIsolation>` **isolation** = ``0`` :ref:`🔗<class_NetwSceneConfig_property_isolation>`
+:ref:`SceneIsolation<enum_NetwScene_SceneIsolation>` **isolation** = ``0`` :ref:`🔗<class_NetwSceneConfig_property_isolation>`
 
 .. rst-class:: classref-property-setget
 
-- :ref:`SceneIsolation<enum_Netw_SceneIsolation>` **get_isolation**\ (\ )
+- :ref:`SceneIsolation<enum_NetwScene_SceneIsolation>` **get_isolation**\ (\ )
 
-:ref:`Netw.SCENE_ISOLATION_OWN_WORLD<class_Netw_constant_SCENE_ISOLATION_OWN_WORLD>` after :ref:`isolated()<class_NetwSceneConfig_method_isolated>`, :ref:`Netw.SCENE_ISOLATION_NONE<class_Netw_constant_SCENE_ISOLATION_NONE>` otherwise.
+:ref:`NetwScene.SCENE_ISOLATION_OWN_WORLD<class_NetwScene_constant_SCENE_ISOLATION_OWN_WORLD>` after :ref:`isolated()<class_NetwSceneConfig_method_isolated>`, :ref:`NetwScene.SCENE_ISOLATION_NONE<class_NetwScene_constant_SCENE_ISOLATION_NONE>` otherwise.
 
 .. rst-class:: classref-item-separator
 
@@ -119,7 +119,7 @@ Gives the scene its own physics and render world, so it does not collide with or
     var mount := Netw.spawn(spawn_level1)   # a SubViewport
     worlds.add_child(mount)
 
-\ On a listen server, :ref:`HostSceneView<class_HostSceneView>` draws it while it is :ref:`NetwSessionHandle.presented_scene<class_NetwSessionHandle_property_presented_scene>`.
+\ On a listen server, :ref:`HostSceneView<class_HostSceneView>` draws it while it is the :ref:`NetwPlayer.scene<class_NetwPlayer_property_scene>` of the host's player.
 
 .. rst-class:: classref-item-separator
 

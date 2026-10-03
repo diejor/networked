@@ -4,20 +4,7 @@
 		Static entry points for the Networked API.
 	</brief_description>
 	<description>
-		The interface provided by this class is optional and is supposed to work [u]with[/u] the default [SceneMultiplayer].
-		[b]Bandwidth[/b]
-		Every peer is sent at most its byte budget each tick. Changed rows that do not fit wait for a later tick, and the ones that have waited longest and matter most go first.
-		[codeblock]
-		func _init() -&gt; void:
-		    Netw.configure_session(self).bandwidth(256)
-
-		func _on_slow_player(player: NetwPlayer) -&gt; void:
-		    Netw.session(self).set_peer_bandwidth(player.peer_id, 64)
-
-		func _ready() -&gt; void:
-		    NetwEntity.of(self).replication_priority = 4.0
-		[/codeblock]
-		RPCs, spawns and [method NetwPropertyConfig.retained] properties always go when they are due, and a peer they pushed over its budget receives no more rows until the overdraft is repaid. [method NetwMultiplayer.peer_link_stats] shows the budget and the overdraft.
+		[method session] returns the [NetwSession] a node belongs to, which holds the players, scenes and clock.
 	</description>
 	<tutorials>
 	</tutorials>
@@ -46,23 +33,25 @@
 			<return type="NetwPromise" />
 			<param index="0" name="node" type="Node" />
 			<param index="1" name="path" type="String" />
-			<param index="2" name="scope" type="int" enum="Netw.SceneChange" default="0" />
+			<param index="2" name="scope" type="int" enum="NetwScene.SceneChange" default="0" />
 			<description>
-				Opens [param path] and moves players to it. No node moves with them, so spawn their nodes from [signal NetwSessionHandle.scene_changed]. [param scope] says who moves.
-				On a client this is a request that [method configure_scene_requests] decides, and it is rejected when there is none.
+				Opens [param path] and moves players to it. [param scope] says who moves. Their nodes do not move, so spawn them in the [NetwScene] the promise gives.
 				[codeblock]
-				var err: Error = await Netw.change_scene_to_file(
-				        self, "res://match.tscn").wait()
-				if err != OK:
-				    status.text = "Could not start the match."
+				func start_match() -&gt; void:
+				    Netw.change_scene_to_file(self, "res://match.tscn").then(spawn_players)
+
+				func spawn_players(arena: NetwScene) -&gt; void:
+				    for player: NetwPlayer in arena.viewers:
+				        arena.root.add_child(Netw.spawn_player(player, make_player))
 				[/codeblock]
+				On a client this is a request that [method configure_scene_requests] decides, and it is rejected when there is none. The promise then gives [constant @GlobalScope.OK].
 			</description>
 		</method>
 		<method name="change_scene_to_packed" qualifiers="static">
 			<return type="NetwPromise" />
 			<param index="0" name="node" type="Node" />
 			<param index="1" name="packed" type="PackedScene" />
-			<param index="2" name="scope" type="int" enum="Netw.SceneChange" default="0" />
+			<param index="2" name="scope" type="int" enum="NetwScene.SceneChange" default="0" />
 			<description>
 				The same change as [method change_scene_to_file], from a [PackedScene] that came from a file. A [PackedScene] built in memory is rejected.
 			</description>
@@ -78,34 +67,6 @@
 				var voice := Netw.channel(self, 100)
 				voice.broadcast(frame, false)
 				[/codeblock]
-			</description>
-		</method>
-		<method name="claim_authority" qualifiers="static">
-			<return type="NetwPromise" />
-			<param index="0" name="node" type="Node" />
-			<param index="1" name="hold" type="int" enum="NetwEntity.Hold" default="2" />
-			<description>
-				Asks the server to make this peer the [member NetwEntity.controller] of the entity [param node] belongs to. Same as [method NetwEntity.claim_authority].
-				[codeblock]
-				Netw.claim_authority(self, NetwEntity.HOLD_YIELDABLE).then(pick_up)
-				[/codeblock]
-				The promise fails with [constant @GlobalScope.ERR_DOES_NOT_EXIST] when [param node] has no entity.
-				[b]Player request.[/b]
-			</description>
-		</method>
-		<method name="clock" qualifiers="static">
-			<return type="NetwClockHandle" />
-			<param index="0" name="node" type="Node" />
-			<description>
-				Returns the clock for the [member Node.multiplayer] of [param node].
-				[codeblock]
-				@onready var clock := Netw.clock(self)
-
-				func _ready() -&gt; void:
-				    clock.before_tick.connect(_sample_input)
-				    clock.on_tick.connect(_simulate)
-				[/codeblock]
-				[method configure_clock] is where the clock is set up before [member MultiplayerAPI.multiplayer_peer] connects.
 			</description>
 		</method>
 		<method name="configure_admission" qualifiers="static">
@@ -153,7 +114,7 @@
 				func _ready() -&gt; void:
 				    Netw.configure_database(self, &amp;"saves").backend(preload("res://save_backend.tres"))
 				[/codeblock]
-				Get it later with [method database]. Pass an [annotation @GDScript.@export] [NetwDatabaseConfig] as [param preset] to set it from the inspector.
+				Get it later with [method NetwSession.database]. Pass an [annotation @GDScript.@export] [NetwDatabaseConfig] as [param preset] to set it from the inspector.
 				[codeblock]
 				@export var database_config: NetwDatabaseConfig
 
@@ -186,24 +147,6 @@
 				[/codeblock]
 			</description>
 		</method>
-		<method name="configure_interest" qualifiers="static">
-			<return type="NetwInterestHandle" />
-			<param index="0" name="node" type="Node" />
-			<description>
-				Declares which [NetwInterestLayer] layer [param node] belongs to, and returns the [NetwInterestHandle] that is also [member NetwEntity.interest] of that [param node].
-				[codeblock]
-				func _init() -&gt; void:
-				    Netw.configure_interest(self) \
-				            .join( \
-				                &amp;"team:red", \
-				                NetwMultiplayer.LEAVE_POLICY_RETAIN, \
-				                NetwMultiplayer.PERCEPTION_POLICY_HIDE, \
-				            ) \
-				            .join(&amp;"sight") \
-				            .on_enter(_on_interest_enter)
-				[/codeblock]
-			</description>
-		</method>
 		<method name="configure_join" qualifiers="static">
 			<return type="NetwJoinConfig" />
 			<param index="0" name="handler" type="Callable" />
@@ -233,17 +176,6 @@
 				[param preset] works as in [method configure_clock].
 			</description>
 		</method>
-		<method name="configure_multiplayer_scene" qualifiers="static">
-			<return type="NetwSceneConfig" />
-			<param index="0" name="node" type="Node" />
-			<description>
-				Makes [param node] a multiplayer scene. Players only see its children while they are in it.
-				[codeblock]
-				func _init() -&gt; void:
-				    Netw.configure_multiplayer_scene(self).labeled(&amp;"Arena")
-				[/codeblock]
-			</description>
-		</method>
 		<method name="configure_persistence" qualifiers="static">
 			<return type="NetwPersistenceConfig" />
 			<param index="0" name="node" type="Node" />
@@ -257,7 +189,7 @@
 				            .table(&amp;"players") \
 				            .record_id(account_name)
 				[/codeblock]
-				See [NetwPersistenceConfig], [NetwPersistenceHandle] and [NetwDatabase].
+				See [NetwPersistenceConfig], [NetwPersistence] and [NetwDatabase].
 			</description>
 		</method>
 		<method name="configure_property" qualifiers="static">
@@ -295,6 +227,17 @@
 				[/codeblock]
 			</description>
 		</method>
+		<method name="configure_scene" qualifiers="static">
+			<return type="NetwSceneConfig" />
+			<param index="0" name="node" type="Node" />
+			<description>
+				Makes [param node] a multiplayer scene. Players only see its children while they are in it.
+				[codeblock]
+				func _init() -&gt; void:
+				    Netw.configure_scene(self).labeled(&amp;"Arena")
+				[/codeblock]
+			</description>
+		</method>
 		<method name="configure_scene_requests" qualifiers="static">
 			<return type="int" enum="Error" />
 			<param index="0" name="handler" type="Callable" />
@@ -307,9 +250,9 @@
 				func authorize_scene_request(
 				    player: NetwPlayer,
 				    destination: String,
-				    scope: Netw.SceneChange
+				    scope: NetwScene.SceneChange
 				) -&gt; Error:
-				    if scope != Netw.SCENE_CHANGE_PLAYER:
+				    if scope != NetwScene.SCENE_CHANGE_PLAYER:
 				        return ERR_UNAUTHORIZED
 				    return OK if unlocked(player, destination) else ERR_UNAUTHORIZED
 				[/codeblock]
@@ -326,16 +269,16 @@
 				    static var pos    := schema.vector3(&amp;"pos")
 				    static var hp     := schema.u16(&amp;"hp")
 
-				@onready var mobs := Netw.table(self, &amp;"Mob")
+				@onready var mobs := Netw.session(self).table(&amp;"Mob")
 				[/codeblock]
-				Read and write the table with [method table].
+				Read and write the table with [method NetwSession.table].
 			</description>
 		</method>
 		<method name="configure_server_info" qualifiers="static">
 			<return type="int" enum="Error" />
 			<param index="0" name="provider" type="Callable" />
 			<description>
-				Declares what this server says about itself when another peer probes it with [method NetwConnectHandle.endpoint_probe].
+				Declares what this server says about itself when another peer probes it with [method NetwConnection.endpoint_probe].
 				[codeblock]
 				func _init() -&gt; void:
 				    Netw.configure_server_info(server_info)
@@ -357,7 +300,7 @@
 				func _init() -&gt; void:
 				    Netw.configure_session(self) \
 				            .app(&amp;"bomber-v2") \
-				            .role(NetwMultiplayer.ROLE_LISTEN_SERVER)
+				            .role(NetwSession.ROLE_LISTEN_SERVER)
 				[/codeblock]
 				See [NetwSessionConfig] for the settings.
 			</description>
@@ -397,36 +340,6 @@
 				[/codeblock]
 			</description>
 		</method>
-		<method name="connection" qualifiers="static">
-			<return type="NetwConnectHandle" />
-			<param index="0" name="node" type="Node" />
-			<description>
-				The [NetwConnectHandle] of the [member Node.multiplayer], used to connect to other peers and probe servers.
-				[codeblock]
-				var c := Netw.connection(self)
-				var ticket := c.create_peer(
-				        ENetMultiplayerPeer,
-				        NetwMultiplayer.TRANSPORT_MODE_HOST,
-				        "", {port = 21253}, _created)
-
-				func _created(peer: MultiplayerPeer, error: Error, detail: String):
-				    if error == OK:
-				        Netw.of(self).multiplayer_peer = peer
-				[/codeblock]
-				This is optional. Assigning a [MultiplayerPeer] to [member MultiplayerAPI.multiplayer_peer] works as usual.
-			</description>
-		</method>
-		<method name="database" qualifiers="static">
-			<return type="NetwDatabase" />
-			<param index="0" name="node" type="Node" />
-			<param index="1" name="name" type="StringName" />
-			<description>
-				Returns the [NetwDatabase] declared as [param name] with [method configure_database].
-				[codeblock]
-				var db: NetwDatabase = Netw.database(self, &amp;"saves")
-				[/codeblock]
-			</description>
-		</method>
 		<method name="despawn" qualifiers="static">
 			<return type="int" enum="Error" />
 			<param index="0" name="node" type="Node" />
@@ -462,12 +375,7 @@
 			<return type="NetwMultiplayer" />
 			<param index="0" name="node" type="Node" />
 			<description>
-				Returns the [member Node.multiplayer] of [param node] as a [NetwMultiplayer].
-				[codeblock]
-				var api := Netw.of(self)
-				api.entity_despawn(route)
-				[/codeblock]
-				A node that is in no tree returns [code]null[/code].
+				Returns the [member Node.multiplayer] of [param node] as a [NetwMultiplayer], for advanced use. A node that is in no tree returns [code]null[/code].
 			</description>
 		</method>
 		<method name="prepare_join" qualifiers="vararg static">
@@ -480,7 +388,7 @@
 				Netw.prepare_join(self, &amp;"Dev", &amp;"red")
 				multiplayer.multiplayer_peer = peer
 				[/codeblock]
-				Call it before or after assigning [member MultiplayerAPI.multiplayer_peer]. The join can still be refused later, which emits [signal NetwConnectHandle.join_failed].
+				Call it before or after assigning [member MultiplayerAPI.multiplayer_peer]. The join can still be refused later, which emits [signal NetwConnection.join_failed].
 				[codeblock lang=text]
 				Error
 				┠╴OK                     the join will be sent
@@ -491,19 +399,10 @@
 				[b]Player request.[/b]
 			</description>
 		</method>
-		<method name="release_authority" qualifiers="static">
-			<return type="NetwPromise" />
-			<param index="0" name="node" type="Node" />
-			<param index="1" name="successor" type="int" default="0" />
-			<description>
-				Gives control of the entity [param node] belongs to to [param successor], or to the server when [code]0[/code]. Same as [method NetwEntity.release_authority]. The promise fails with [constant @GlobalScope.ERR_DOES_NOT_EXIST] when [param node] has no entity.
-				[b]Player request.[/b]
-			</description>
-		</method>
 		<method name="reload_current_scene" qualifiers="static">
 			<return type="NetwPromise" />
 			<param index="0" name="node" type="Node" />
-			<param index="1" name="scope" type="int" enum="Netw.SceneChange" default="0" />
+			<param index="1" name="scope" type="int" enum="NetwScene.SceneChange" default="0" />
 			<description>
 				Reloads the scene this peer displays, like [method SceneTree.reload_current_scene].
 			</description>
@@ -624,61 +523,25 @@
 			</description>
 		</method>
 		<method name="scene" qualifiers="static">
-			<return type="NetwSceneHandle" />
+			<return type="NetwScene" />
 			<param index="0" name="node" type="Node" />
-			<param index="1" name="named" type="StringName" default="&amp;&quot;&quot;" />
 			<description>
-				Returns the multiplayer scene [param node] is in, or the one called [param named].
+				Returns the multiplayer scene [param node] is in. Use [method NetwSession.find_scene] to find one by name.
 				[codeblock]
-				var here := Netw.scene(self)              # the scene I am in
-				var arena := Netw.scene(spawned)         # the one I just spawned
-				var track := Netw.scene(self, &amp;"Track")  # the only live Track
+				var here := Netw.scene(self)
+				var track := Netw.session(self).find_scene(&amp;"Track")
 				[/codeblock]
-			</description>
-		</method>
-		<method name="service" qualifiers="static">
-			<return type="Variant" />
-			<param index="0" name="node" type="Node" />
-			<param index="1" name="type" type="Object" />
-			<description>
-				Returns the service registered as [param type], or [code]null[/code]. A service is like an autoload, but one per [MultiplayerAPI].
-				[codeblock]
-				var gamestate := Netw.service(self, MyGamestate) as MyGamestate
-				[/codeblock]
-			</description>
-		</method>
-		<method name="service_register" qualifiers="static">
-			<return type="void" />
-			<param index="0" name="node" type="Node" />
-			<param index="1" name="service" type="Object" />
-			<param index="2" name="type" type="Object" default="null" />
-			<description>
-				Registers [param service] so [method service] returns it.
-				[codeblock]
-				Netw.service_register(self, MyGamestate.new())
-				[/codeblock]
-				[param type] defaults to the class of [param service]. Registering another service with the same [param type] replaces it.
-			</description>
-		</method>
-		<method name="service_unregister" qualifiers="static">
-			<return type="void" />
-			<param index="0" name="node" type="Node" />
-			<param index="1" name="service" type="Object" />
-			<param index="2" name="type" type="Object" default="null" />
-			<description>
-				Reverses [method service_register].
 			</description>
 		</method>
 		<method name="session" qualifiers="static">
-			<return type="NetwSessionHandle" />
+			<return type="NetwSession" />
 			<param index="0" name="node" type="Node" />
 			<description>
-				The [NetwSessionHandle] of the [member Node.multiplayer]. Mostly useful for connecting signals.
+				The [NetwSession] of the [member Node.multiplayer]. Mostly useful for connecting signals.
 				[codeblock]
 				var s := Netw.session(self)
-				s.entered.connect(_on_entered)
-				s.disconnected.connect(_on_over)
-				s.ended.connect(_on_over)
+				s.entered.connect(on_entered)
+				s.exited.connect(on_exited)
 				[/codeblock]
 			</description>
 		</method>
@@ -723,36 +586,5 @@
 				Call [method configure_property] first.
 			</description>
 		</method>
-		<method name="table" qualifiers="static">
-			<return type="NetwTableHandle" />
-			<param index="0" name="node" type="Node" />
-			<param index="1" name="name" type="StringName" />
-			<description>
-				Returns the table of the schema [param name] from [method configure_schema].
-				[codeblock]
-				@onready var mobs := Netw.table(self, &amp;"Mob")
-
-				func _ready() -&gt; void:
-				    mobs.received.connect(_on_mobs)
-				[/codeblock]
-			</description>
-		</method>
 	</methods>
-	<constants>
-		<constant name="SCENE_CHANGE_SESSION" value="0" enum="SceneChange">
-			Every player moves to the new scene.
-		</constant>
-		<constant name="SCENE_CHANGE_PLAYER" value="1" enum="SceneChange">
-			Only the requesting player moves.
-		</constant>
-		<constant name="SCENE_CHANGE_SCENE" value="2" enum="SceneChange">
-			Every player in the requester's scene moves.
-		</constant>
-		<constant name="SCENE_ISOLATION_NONE" value="0" enum="SceneIsolation">
-			The multiplayer scene shares the physics and render world of whatever it is parented into.
-		</constant>
-		<constant name="SCENE_ISOLATION_OWN_WORLD" value="1" enum="SceneIsolation">
-			The multiplayer scene has its own world in a [SubViewport], so it never collides with another scene.
-		</constant>
-	</constants>
 </class>

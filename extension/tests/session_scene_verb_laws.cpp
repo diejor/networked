@@ -86,4 +86,24 @@ TEST_CASE(
     );
 }
 
+TEST_CASE(
+    "[Networked][Session][Hosted] L5 a scene recipe that is neither a path "
+    "nor null is refused before anything spawns"
+) {
+    Ref<NetwMultiplayer> session = hosting();
+    const int before = int(session->scene_list().size());
+
+    CHECK_FALSE(
+        session->scene_create(Variant(42), NetwMultiplayer::SCENE_ISOLATION_NONE)
+            .is_valid()
+    );
+    CHECK_FALSE(session
+                    ->scene_create(
+                        Variant(StringName("res://level.tscn")),
+                        NetwMultiplayer::SCENE_ISOLATION_NONE
+                    )
+                    .is_valid());
+    NETW_CHECK_EQ(int(session->scene_list().size()), before);
+}
+
 } // namespace TestNetwSessionSceneVerb

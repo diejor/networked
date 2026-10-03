@@ -9,6 +9,7 @@
 
 #include "godot/templates.hpp"
 #include "godot/variant.hpp"
+#include "netw/api/predict_fold.hpp"
 #include "netw/predict/drive.hpp"
 #include "netw/prediction_core.hpp"
 
@@ -818,9 +819,9 @@ inline ScenarioRun ScenarioRun::session(
     ScenarioRun::Track *tracks = run.tracks.ptrw();
     for (int index = 0; index < run.tracks.size(); ++index) {
         Track &track = tracks[index];
-        netw::NetwPredictionHandle *client_handle
+        netw::NetwPrediction *client_handle
             = p_rig.prediction_handle(track.name, track.client);
-        netw::NetwPredictionHandle *server_handle
+        netw::NetwPrediction *server_handle
             = p_rig.prediction_handle(track.name);
         const godot::Ref<netw::NetwPredictStats> client_stats
             = client_handle->get_stats();

@@ -441,7 +441,7 @@ TEST_CASE(
         REQUIRE(entity.is_valid());
         NETW_CHECK_EQ(entity->get_owner(), copy);
         NETW_CHECK_EQ(entity->get_peer_id(), 0);
-        NETW_CHECK_EQ(entity->get_entity_id() == godot::StringName(), true);
+        NETW_CHECK_EQ(entity->get_name() == godot::StringName(), true);
         NETW_CHECK_EQ(entity->get_is_player(), false);
         NETW_CHECK_EQ(entity->get_is_session_authority(), true);
         NETW_CHECK_EQ(copy->get_parent(), fixture_parent);
@@ -466,7 +466,7 @@ TEST_CASE(
         const godot::Ref<NetwEntity> entity = NetwEntity::of(copy);
         REQUIRE(entity.is_valid());
         NETW_CHECK_EQ(
-            entity->get_entity_id() == godot::StringName("courier"),
+            entity->get_name() == godot::StringName("courier"),
             true
         );
         NETW_CHECK_EQ(entity->get_peer_id(), 7);

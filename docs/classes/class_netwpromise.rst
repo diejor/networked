@@ -103,42 +103,6 @@ Methods
 Signals
 -------
 
-.. _class_NetwPromise_signal_completed:
-
-.. rst-class:: classref-signal
-
-**completed**\ (\ value\: :godot:`Variant`\ ) :ref:`🔗<class_NetwPromise_signal_completed>`
-
-Emitted when the promise completes.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwPromise_signal_failed:
-
-.. rst-class:: classref-signal
-
-**failed**\ (\ code\: :godot:`Error <@GlobalScope#enum_@globalscope_Error>`, detail\: :godot:`String`\ ) :ref:`🔗<class_NetwPromise_signal_failed>`
-
-Emitted when the promise fails.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwPromise_signal_ready:
-
-.. rst-class:: classref-signal
-
-**ready**\ (\ answer\: :godot:`Variant`\ ) :ref:`🔗<class_NetwPromise_signal_ready>`
-
-Used by :ref:`wait()<class_NetwPromise_method_wait>`. Connect to :ref:`settled<class_NetwPromise_signal_settled>` instead, since this can be emitted more than once.
-
-.. rst-class:: classref-item-separator
-
-----
-
 .. _class_NetwPromise_signal_settled:
 
 .. rst-class:: classref-signal
@@ -287,7 +251,7 @@ Calls ``cb`` as ``cb(code, detail)`` when the promise fails. Returns the promise
 
 |void| **reject**\ (\ err_code\: :godot:`Error <@GlobalScope#enum_@globalscope_Error>`, err_detail\: :godot:`String` = ""\ ) :ref:`🔗<class_NetwPromise_method_reject>`
 
-Fails the promise with ``err_code`` and emits :ref:`failed<class_NetwPromise_signal_failed>`, then :ref:`settled<class_NetwPromise_signal_settled>`. Does nothing when already settled. Pushes a warning when nothing handles the failure.
+Fails the promise with ``err_code``. Emits :ref:`settled<class_NetwPromise_signal_settled>`, then calls the :ref:`catch_error()<class_NetwPromise_method_catch_error>` callbacks, then fires every :ref:`wait()<class_NetwPromise_method_wait>` signal. Does nothing when already settled. Pushes a warning when nothing handles the failure.
 
 .. rst-class:: classref-item-separator
 
@@ -311,7 +275,7 @@ Returns a promise that already failed with ``code``.
 
 |void| **resolve**\ (\ val\: :godot:`Variant`\ ) :ref:`🔗<class_NetwPromise_method_resolve>`
 
-Completes the promise with ``val`` and emits :ref:`completed<class_NetwPromise_signal_completed>`, then :ref:`settled<class_NetwPromise_signal_settled>`. Does nothing when already settled.
+Completes the promise with ``val``. Emits :ref:`settled<class_NetwPromise_signal_settled>`, then calls the :ref:`then()<class_NetwPromise_method_then>` callbacks, then fires every :ref:`wait()<class_NetwPromise_method_wait>` signal. Does nothing when already settled.
 
 .. rst-class:: classref-item-separator
 
@@ -347,7 +311,7 @@ Calls ``cb`` with :ref:`result<class_NetwPromise_property_result>` when the prom
 
 :godot:`Signal` **wait**\ (\ ) :ref:`🔗<class_NetwPromise_method_wait>`
 
-Returns a signal to ``await``, which gives :ref:`answer()<class_NetwPromise_method_answer>`. It works even when the promise already settled, which awaiting :ref:`settled<class_NetwPromise_signal_settled>` does not.
+Returns a new signal to ``await``, which fires once with :ref:`answer()<class_NetwPromise_method_answer>`. When the promise already settled, it fires on the next frame.
 
 ::
 

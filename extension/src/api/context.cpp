@@ -369,51 +369,12 @@ Ref<NetwMultiplayer> Netw::of(Node *p_node) {
     return NetwMultiplayer::core_of(p_node);
 }
 
-Ref<NetwConnectHandle> Netw::connection(Node *p_node) {
+Ref<NetwSession> Netw::session(Node *p_node) {
     const Ref<NetwMultiplayer> api = NetwMultiplayer::core_of(p_node);
     if (api.is_null()) {
-        return Ref<NetwConnectHandle>();
-    }
-    return api->get_connection();
-}
-
-Ref<NetwSessionHandle> Netw::session(Node *p_node) {
-    const Ref<NetwMultiplayer> api = NetwMultiplayer::core_of(p_node);
-    if (api.is_null()) {
-        return Ref<NetwSessionHandle>();
+        return Ref<NetwSession>();
     }
     return api->get_session();
-}
-
-Ref<NetwClockHandle> Netw::clock(Node *p_node) {
-    const Ref<NetwMultiplayer> api = NetwMultiplayer::core_of(p_node);
-    if (api.is_null()) {
-        return Ref<NetwClockHandle>();
-    }
-    return api->get_clock();
-}
-
-Variant Netw::service(Node *p_node, Object *p_type) {
-    const Ref<NetwMultiplayer> api = NetwMultiplayer::core_of(p_node);
-    return api.is_valid() ? api->service_held(p_type) : Variant();
-}
-
-void Netw::service_register(Node *p_node, Object *p_service, Object *p_type) {
-    const Ref<NetwMultiplayer> api = NetwMultiplayer::core_of(p_node);
-    NETW_ERR_COND(
-        api.is_null(),
-        sys::SESSION,
-        "Netw.service_register got a node that is not inside a session. "
-        "Call it from a node in the scene tree under a MultiplayerTree."
-    );
-    api->service_register(p_service, p_type);
-}
-
-void Netw::service_unregister(Node *p_node, Object *p_service, Object *p_type) {
-    const Ref<NetwMultiplayer> api = NetwMultiplayer::core_of(p_node);
-    if (api.is_valid()) {
-        api->service_unregister(p_service, p_type);
-    }
 }
 
 Ref<NetwPromise> Netw::prepare_join(
@@ -442,28 +403,13 @@ Ref<NetwPromise> Netw::prepare_join(
     return NetwPromise::resolved(OK);
 }
 
-Ref<NetwSceneHandle> Netw::scene(Node *p_node, const StringName &p_named) {
+Ref<NetwScene> Netw::scene(Node *p_node) {
     Node *inner = NetwMultiplayer::scene_inner_of(p_node);
-    const Ref<NetwMultiplayer> api = NetwMultiplayer::core_of(inner);
-    if (api.is_null()) {
-        return Ref<NetwSceneHandle>();
+    if (NetwMultiplayer::core_of(inner).is_null()) {
+        return Ref<NetwScene>();
     }
-    if (p_named == StringName()) {
-        const Ref<NetwEntity> record = NetwEntity::of(inner);
-        return record.is_valid() ? record->get_scene() : Ref<NetwSceneHandle>();
-    }
-    const TypedArray<RID> matches = api->scene_find_all(p_named);
-    NETW_ERR_COND_V(
-        matches.size() > 1,
-        Ref<NetwSceneHandle>(),
-        sys::SCENE,
-        "Netw.scene found %d live scenes labeled %s and cannot choose one. "
-        "Keep the NetwSceneHandle the spawn returned.",
-        int(matches.size()),
-        String(p_named)
-    );
-    return matches.size() == 1 ? api->scene_handle_of(RID(matches[0]))
-                               : Ref<NetwSceneHandle>();
+    const Ref<NetwEntity> record = NetwEntity::of(inner);
+    return record.is_valid() ? record->get_scene() : Ref<NetwScene>();
 }
 
 Error Netw::configure_server_info(const Callable &p_provider) {
@@ -735,10 +681,6 @@ Ref<NetwPersistenceConfig> Netw::configure_persistence(Node *p_node) {
     return netw::script::model::configure_node_persistence(p_node);
 }
 
-Ref<NetwInterestHandle> Netw::configure_interest(Node *p_node) {
-    return NetwInterestHandle::of(p_node);
-}
-
 Ref<NetwSchema> Netw::configure_schema(const StringName &p_name) {
     return NetwSchema::declare(p_name);
 }
@@ -860,10 +802,6 @@ Ref<NetwChannel> Netw::channel(Node *p_node, int64_t p_channel_id) {
     return NetwChannel::of(p_node, p_channel_id);
 }
 
-Ref<NetwTableHandle> Netw::table(Node *p_node, const StringName &p_name) {
-    return NetwTableHandle::of(p_node, p_name);
-}
-
 Ref<NetwDatabaseConfig> Netw::configure_database(
     Node *p_node,
     const StringName &p_name,
@@ -893,10 +831,6 @@ Ref<NetwDatabaseConfig> Netw::configure_database(
         return Ref<NetwDatabaseConfig>();
     }
     return draft;
-}
-
-Ref<NetwDatabase> Netw::database(Node *p_node, const StringName &p_name) {
-    return NetwDatabase::of(p_node, p_name);
 }
 
 Ref<NetwEntity> Netw::replicate(Node *p_node, const Ref<NetwPlayer> &p_owner) {
@@ -991,47 +925,6 @@ Ref<NetwPromise> Netw::reparent(Node *p_node, Node *p_new_parent) {
         );
     }
     return api->entity_reparent(entity->get_rid_handle(), p_new_parent);
-}
-
-namespace {
-
-Ref<NetwEntity> entity_for_verb(Node *p_node, const char *p_verb) {
-    const Ref<NetwEntity> entity = NetwEntity::of(p_node);
-    if (entity.is_null()) {
-        NETW_ERROR(
-            sys::ENTITY,
-            "Netw.%s got '%s', which is not a NetwEntity. Call "
-            "Netw.configure_entity on it first.",
-            p_verb,
-            p_node != nullptr ? String(p_node->get_name()) : String("<null>")
-        );
-    }
-    return entity;
-}
-
-Ref<NetwPromise> rejected_for_no_entity(const char *p_verb) {
-    return NetwPromise::rejected(
-        ERR_DOES_NOT_EXIST,
-        vformat("Netw.%s: the node is no entity", p_verb)
-    );
-}
-
-} // namespace
-
-Ref<NetwPromise> Netw::claim_authority(Node *p_node, NetwEntity::Hold p_hold) {
-    const Ref<NetwEntity> entity = entity_for_verb(p_node, "claim_authority");
-    if (entity.is_null()) {
-        return rejected_for_no_entity("claim_authority");
-    }
-    return entity->claim_authority(p_hold);
-}
-
-Ref<NetwPromise> Netw::release_authority(Node *p_node, int64_t p_successor) {
-    const Ref<NetwEntity> entity = entity_for_verb(p_node, "release_authority");
-    if (entity.is_null()) {
-        return rejected_for_no_entity("release_authority");
-    }
-    return entity->release_authority(p_successor);
 }
 
 Ref<NetwAction> Netw::action(const Callable &p_authority) {
@@ -1179,20 +1072,19 @@ Error Netw::configure_scene_requests(const Callable &p_handler) {
     );
 }
 
-Ref<NetwSceneConfig> Netw::configure_multiplayer_scene(Node *p_node) {
+Ref<NetwSceneConfig> Netw::configure_scene(Node *p_node) {
     NETW_ERR_COND_V(
         p_node == nullptr,
         Ref<NetwSceneConfig>(),
         sys::SCENE,
-        "Netw.configure_multiplayer_scene needs the scene's root node, and "
-        "it was null."
+        "Netw.configure_scene needs the scene's root node, and it was null."
     );
     const Ref<Script> script = script_of(p_node);
     NETW_ERR_COND_V(
         script.is_null(),
         Ref<NetwSceneConfig>(),
         sys::SCENE,
-        "Netw.configure_multiplayer_scene needs '%s' to have a script. "
+        "Netw.configure_scene needs '%s' to have a script. "
         "Call it from the script on the scene's root.",
         String(p_node->get_name())
     );
@@ -1224,35 +1116,8 @@ void Netw::_bind_methods() {
     ClassDB::bind_static_method("Netw", D_METHOD("of", "node"), &Netw::of);
     ClassDB::bind_static_method(
         "Netw",
-        D_METHOD("connection", "node"),
-        &Netw::connection
-    );
-    ClassDB::bind_static_method(
-        "Netw",
         D_METHOD("session", "node"),
         &Netw::session
-    );
-    ClassDB::bind_static_method(
-        "Netw",
-        D_METHOD("clock", "node"),
-        &Netw::clock
-    );
-    ClassDB::bind_static_method(
-        "Netw",
-        D_METHOD("service", "node", "type"),
-        &Netw::service
-    );
-    ClassDB::bind_static_method(
-        "Netw",
-        D_METHOD("service_register", "node", "service", "type"),
-        &Netw::service_register,
-        DEFVAL(static_cast<Object *>(nullptr))
-    );
-    ClassDB::bind_static_method(
-        "Netw",
-        D_METHOD("service_unregister", "node", "service", "type"),
-        &Netw::service_unregister,
-        DEFVAL(static_cast<Object *>(nullptr))
     );
     gd::bind_static_vararg(
         "Netw",
@@ -1261,9 +1126,8 @@ void Netw::_bind_methods() {
     );
     ClassDB::bind_static_method(
         "Netw",
-        D_METHOD("scene", "node", "named"),
-        &Netw::scene,
-        DEFVAL(StringName())
+        D_METHOD("scene", "node"),
+        &Netw::scene
     );
 
     ClassDB::bind_static_method(
@@ -1338,11 +1202,6 @@ void Netw::_bind_methods() {
     );
     ClassDB::bind_static_method(
         "Netw",
-        D_METHOD("configure_interest", "node"),
-        &Netw::configure_interest
-    );
-    ClassDB::bind_static_method(
-        "Netw",
         D_METHOD("configure_schema", "name"),
         &Netw::configure_schema
     );
@@ -1395,19 +1254,9 @@ void Netw::_bind_methods() {
     );
     ClassDB::bind_static_method(
         "Netw",
-        D_METHOD("table", "node", "name"),
-        &Netw::table
-    );
-    ClassDB::bind_static_method(
-        "Netw",
         D_METHOD("configure_database", "node", "name", "preset"),
         &Netw::configure_database,
         DEFVAL(Ref<NetwDatabaseConfig>())
-    );
-    ClassDB::bind_static_method(
-        "Netw",
-        D_METHOD("database", "node", "name"),
-        &Netw::database
     );
 
     ClassDB::bind_static_method(
@@ -1433,18 +1282,6 @@ void Netw::_bind_methods() {
         D_METHOD("reparent", "node", "new_parent"),
         &Netw::reparent
     );
-    ClassDB::bind_static_method(
-        "Netw",
-        D_METHOD("claim_authority", "node", "hold"),
-        &Netw::claim_authority,
-        DEFVAL(entity::Control::HOLD_EXCLUSIVE)
-    );
-    ClassDB::bind_static_method(
-        "Netw",
-        D_METHOD("release_authority", "node", "successor"),
-        &Netw::release_authority,
-        DEFVAL(0)
-    );
 
     ClassDB::bind_static_method(
         "Netw",
@@ -1466,36 +1303,30 @@ void Netw::_bind_methods() {
         "Netw",
         D_METHOD("change_scene_to_file", "node", "path", "scope"),
         &Netw::change_scene_to_file,
-        DEFVAL(SCENE_CHANGE_SESSION)
+        DEFVAL(enums::NetwScene::SCENE_CHANGE_SESSION)
     );
     ClassDB::bind_static_method(
         "Netw",
         D_METHOD("change_scene_to_packed", "node", "packed", "scope"),
         &Netw::change_scene_to_packed,
-        DEFVAL(SCENE_CHANGE_SESSION)
+        DEFVAL(enums::NetwScene::SCENE_CHANGE_SESSION)
     );
     ClassDB::bind_static_method(
         "Netw",
         D_METHOD("reload_current_scene", "node", "scope"),
         &Netw::reload_current_scene,
-        DEFVAL(SCENE_CHANGE_SESSION)
+        DEFVAL(enums::NetwScene::SCENE_CHANGE_SESSION)
     );
     ClassDB::bind_static_method(
         "Netw",
-        D_METHOD("configure_multiplayer_scene", "node"),
-        &Netw::configure_multiplayer_scene
+        D_METHOD("configure_scene", "node"),
+        &Netw::configure_scene
     );
     ClassDB::bind_static_method(
         "Netw",
         D_METHOD("configure_scene_requests", "handler"),
         &Netw::configure_scene_requests
     );
-
-    BIND_ENUM_CONSTANT(SCENE_CHANGE_SESSION);
-    BIND_ENUM_CONSTANT(SCENE_CHANGE_PLAYER);
-    BIND_ENUM_CONSTANT(SCENE_CHANGE_SCENE);
-    BIND_ENUM_CONSTANT(SCENE_ISOLATION_NONE);
-    BIND_ENUM_CONSTANT(SCENE_ISOLATION_OWN_WORLD);
 }
 
 } // namespace netw

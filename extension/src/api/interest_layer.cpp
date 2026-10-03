@@ -1,5 +1,5 @@
 #include "netw/api/interest_layer.hpp"
-#include "netw/api/interest_handle.hpp"
+#include "netw/api/interest.hpp"
 
 #include "godot/class_db.hpp"
 #include "netw/api/entity_record.hpp"
@@ -12,10 +12,9 @@ namespace netw {
 
 namespace {
 
-constexpr const char *SIG_INTEREST_ENTER = "interest_enter";
-constexpr const char *SIG_INTEREST_EXIT = "interest_exit";
-constexpr const char *SIG_ENTITY_VISIBLE = "entity_visible";
-constexpr const char *SIG_ENTITY_HIDDEN = "entity_hidden";
+constexpr const char *SIG_INTEREST_ENTERED = "interest_entered";
+constexpr const char *SIG_INTEREST_EXITED = "interest_exited";
+constexpr const char *SIG_VISIBILITY_CHANGED = "visibility_changed";
 constexpr const char *SIG_VIEWER_ADDED = "viewer_added";
 constexpr const char *SIG_VIEWER_REMOVED = "viewer_removed";
 constexpr const char *SIG_ENTITY_ADDED = "entity_added";
@@ -167,11 +166,11 @@ void NetwInterestLayer::refresh_perception(const Ref<NetwEntity> &p_entity) {
     owner->interest_refresh_perception(p_entity, layers);
 }
 
-NetwMultiplayer::LayerPolicy NetwInterestLayer::get_policy() const {
-    return NetwMultiplayer::LayerPolicy(engine->layer_policy(layer_id));
+NetwInterestLayer::LayerPolicy NetwInterestLayer::get_policy() const {
+    return NetwInterestLayer::LayerPolicy(engine->layer_policy(layer_id));
 }
 
-bool NetwInterestLayer::set_policy(NetwMultiplayer::LayerPolicy p_policy) {
+bool NetwInterestLayer::set_policy(NetwInterestLayer::LayerPolicy p_policy) {
     if (!engine->layer_set_policy(layer_id, p_policy)) {
         return false;
     }
@@ -179,26 +178,26 @@ bool NetwInterestLayer::set_policy(NetwMultiplayer::LayerPolicy p_policy) {
     return true;
 }
 
-NetwMultiplayer::LeavePolicy NetwInterestLayer::
+NetwInterestLayer::LeavePolicy NetwInterestLayer::
     get_default_leave_policy() const {
-    return NetwMultiplayer::LeavePolicy(engine->layer_leave_policy(layer_id));
+    return NetwInterestLayer::LeavePolicy(engine->layer_leave_policy(layer_id));
 }
 
 void NetwInterestLayer::set_default_leave_policy(
-    NetwMultiplayer::LeavePolicy p_policy
+    NetwInterestLayer::LeavePolicy p_policy
 ) {
     engine->layer_set_leave_policy(layer_id, p_policy);
 }
 
-NetwMultiplayer::PerceptionPolicy NetwInterestLayer::
+NetwInterestLayer::PerceptionPolicy NetwInterestLayer::
     get_default_perception_policy() const {
-    return NetwMultiplayer::PerceptionPolicy(
+    return NetwInterestLayer::PerceptionPolicy(
         engine->layer_perception_policy(layer_id)
     );
 }
 
 void NetwInterestLayer::set_default_perception_policy(
-    NetwMultiplayer::PerceptionPolicy p_policy
+    NetwInterestLayer::PerceptionPolicy p_policy
 ) {
     if (!engine->layer_set_perception_policy(layer_id, p_policy)) {
         return;
@@ -332,7 +331,7 @@ void NetwInterestLayer::client_admit(const Ref<NetwEntity> &p_entity) {
     track_membership(p_entity, true);
     join_label(p_entity);
     dispatch_enter(p_entity, local_peer_id());
-    emit_signal(SIG_ENTITY_VISIBLE, p_entity);
+    emit_signal(SIG_VISIBILITY_CHANGED, p_entity, true);
     refresh_perception(p_entity);
 }
 
@@ -348,7 +347,7 @@ void NetwInterestLayer::client_revoke(const Ref<NetwEntity> &p_entity) {
         return;
     }
     dispatch_leave(p_entity, local_peer_id());
-    emit_signal(SIG_ENTITY_HIDDEN, p_entity);
+    emit_signal(SIG_VISIBILITY_CHANGED, p_entity, false);
     refresh_perception(p_entity);
 }
 
@@ -366,7 +365,7 @@ void NetwInterestLayer::client_untrack_entity(const Ref<NetwEntity> &p_entity) {
     emit_signal(SIG_ENTITY_REMOVED, p_entity);
     track_membership(p_entity, false);
     dispatch_leave(p_entity, local_peer_id());
-    emit_signal(SIG_ENTITY_HIDDEN, p_entity);
+    emit_signal(SIG_VISIBILITY_CHANGED, p_entity, false);
     refresh_perception(p_entity);
 }
 
@@ -376,17 +375,18 @@ void NetwInterestLayer::apply_server_transition(
     bool p_visible
 ) {
     engine->note_transition(layer_id);
+    const StringName edge
+        = p_visible ? SIG_INTEREST_ENTERED : SIG_INTEREST_EXITED;
+    emit_signal(edge, p_entity, p_peer_id);
+    const Ref<NetwInterest> facet = p_entity.is_valid()
+        ? p_entity->held_interest()
+        : Ref<NetwInterest>();
+    if (facet.is_valid()) {
+        facet->emit_signal(edge, p_peer_id);
+    }
     if (p_visible) {
-        emit_signal(SIG_INTEREST_ENTER, p_entity, p_peer_id);
-        if (p_entity.is_valid()) {
-            p_entity->emit_signal(SIG_INTEREST_ENTER, p_peer_id);
-        }
         dispatch_enter(p_entity, p_peer_id);
         return;
-    }
-    emit_signal(SIG_INTEREST_EXIT, p_entity, p_peer_id);
-    if (p_entity.is_valid()) {
-        p_entity->emit_signal(SIG_INTEREST_EXIT, p_peer_id);
     }
     dispatch_leave(p_entity, p_peer_id);
 }
@@ -415,6 +415,52 @@ Array NetwInterestLayer::viewer_ids() const {
     return out;
 }
 
+void NetwInterestLayer::set_driver(const Callable &p_driver) {
+    NetwMultiplayer *owner = host();
+    NETW_ERR_COND(
+        owner == nullptr,
+        sys::INTEREST,
+        "Layer '%s' is not in a session, so it cannot have a driver. Get "
+        "the layer with NetwMultiplayer.interest_layer.",
+        String(layer_id)
+    );
+    owner->layer_set_driver(
+        owner->interest_layer_find(layer_id),
+        p_driver,
+        true
+    );
+}
+
+Callable NetwInterestLayer::get_driver() {
+    NetwMultiplayer *owner = host();
+    return owner != nullptr
+        ? owner->layer_get_driver(owner->interest_layer_find(layer_id), true)
+        : Callable();
+}
+
+void NetwInterestLayer::set_monitor(const Callable &p_monitor) {
+    NetwMultiplayer *owner = host();
+    NETW_ERR_COND(
+        owner == nullptr,
+        sys::INTEREST,
+        "Layer '%s' is not in a session, so it cannot have a monitor. Get "
+        "the layer with NetwMultiplayer.interest_layer.",
+        String(layer_id)
+    );
+    owner->layer_set_monitor(
+        owner->interest_layer_find(layer_id),
+        p_monitor,
+        true
+    );
+}
+
+Callable NetwInterestLayer::get_monitor() {
+    NetwMultiplayer *owner = host();
+    return owner != nullptr
+        ? owner->layer_get_monitor(owner->interest_layer_find(layer_id), true)
+        : Callable();
+}
+
 Dictionary NetwInterestLayer::monitor_snapshot() const {
     Dictionary out;
     out[StringName("viewers")] = engine->layer_viewers(layer_id).size();
@@ -437,6 +483,14 @@ Dictionary NetwInterestLayer::debug_dump(int64_t p_peer_id) {
 }
 
 void NetwInterestLayer::_bind_methods() {
+    BIND_ENUM_CONSTANT(LAYER_POLICY_HIDE_FROM_OUTSIDERS);
+    BIND_ENUM_CONSTANT(LAYER_POLICY_HIDE_FROM_INSIDERS);
+    BIND_ENUM_CONSTANT(LEAVE_POLICY_HIDE);
+    BIND_ENUM_CONSTANT(LEAVE_POLICY_RETAIN);
+    BIND_ENUM_CONSTANT(LEAVE_POLICY_CUSTOM);
+    BIND_ENUM_CONSTANT(PERCEPTION_POLICY_HIDE);
+    BIND_ENUM_CONSTANT(PERCEPTION_POLICY_SHOW);
+    BIND_ENUM_CONSTANT(PERCEPTION_POLICY_CUSTOM);
     ClassDB::bind_method(
         D_METHOD("set_layer_id", "id"),
         &NetwInterestLayer::set_layer_id
@@ -466,7 +520,7 @@ void NetwInterestLayer::_bind_methods() {
             PROPERTY_HINT_ENUM,
             "Hide From Outsiders,Hide From Insiders",
             PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_CLASS_IS_ENUM,
-            "NetwMultiplayer.LayerPolicy"
+            "NetwInterestLayer.LayerPolicy"
         ),
         "set_policy",
         "get_policy"
@@ -487,7 +541,7 @@ void NetwInterestLayer::_bind_methods() {
             PROPERTY_HINT_NONE,
             "",
             PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_CLASS_IS_ENUM,
-            "NetwMultiplayer.LeavePolicy"
+            "NetwInterestLayer.LeavePolicy"
         ),
         "set_default_leave_policy",
         "get_default_leave_policy"
@@ -508,7 +562,7 @@ void NetwInterestLayer::_bind_methods() {
             PROPERTY_HINT_NONE,
             "",
             PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_CLASS_IS_ENUM,
-            "NetwMultiplayer.PerceptionPolicy"
+            "NetwInterestLayer.PerceptionPolicy"
         ),
         "set_default_perception_policy",
         "get_default_perception_policy"
@@ -591,23 +645,52 @@ void NetwInterestLayer::_bind_methods() {
         &NetwInterestLayer::monitor_snapshot
     );
     ClassDB::bind_method(
+        D_METHOD("set_driver", "driver"),
+        &NetwInterestLayer::set_driver
+    );
+    ClassDB::bind_method(
+        D_METHOD("get_driver"),
+        &NetwInterestLayer::get_driver
+    );
+    ADD_PROPERTY(
+        PropertyInfo(Variant::CALLABLE, "driver"),
+        "set_driver",
+        "get_driver"
+    );
+    ClassDB::bind_method(
+        D_METHOD("set_monitor", "monitor"),
+        &NetwInterestLayer::set_monitor
+    );
+    ClassDB::bind_method(
+        D_METHOD("get_monitor"),
+        &NetwInterestLayer::get_monitor
+    );
+    ADD_PROPERTY(
+        PropertyInfo(Variant::CALLABLE, "monitor"),
+        "set_monitor",
+        "get_monitor"
+    );
+    ClassDB::bind_method(
         D_METHOD("debug_dump", "peer_id"),
         &NetwInterestLayer::debug_dump,
         DEFVAL(0)
     );
 
     ADD_SIGNAL(MethodInfo(
-        SIG_INTEREST_ENTER,
+        SIG_INTEREST_ENTERED,
         entity_param(),
         PropertyInfo(Variant::INT, "peer_id")
     ));
     ADD_SIGNAL(MethodInfo(
-        SIG_INTEREST_EXIT,
+        SIG_INTEREST_EXITED,
         entity_param(),
         PropertyInfo(Variant::INT, "peer_id")
     ));
-    ADD_SIGNAL(MethodInfo(SIG_ENTITY_VISIBLE, entity_param()));
-    ADD_SIGNAL(MethodInfo(SIG_ENTITY_HIDDEN, entity_param()));
+    ADD_SIGNAL(MethodInfo(
+        SIG_VISIBILITY_CHANGED,
+        entity_param(),
+        PropertyInfo(Variant::BOOL, "visible")
+    ));
     ADD_SIGNAL(
         MethodInfo(SIG_VIEWER_ADDED, PropertyInfo(Variant::INT, "peer_id"))
     );

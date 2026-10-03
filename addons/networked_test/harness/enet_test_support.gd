@@ -2,7 +2,7 @@
 ##
 ## This helper covers integration tests that need real UDP
 ## sockets to exercise transport-specific behavior: the auth-phase
-## handshake behind [method NetwConnectHandle.endpoint_probe], ENet-level
+## handshake behind [method NetwConnection.endpoint_probe], ENet-level
 ## disconnect/reconnect semantics, and so on.
 ##
 ## Every session here comes up the ordinary Godot way: the caller builds an

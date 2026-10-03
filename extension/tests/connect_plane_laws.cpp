@@ -6,7 +6,7 @@
 #include "godot/os.hpp"
 #include "godot/script.hpp"
 #include "godot/variant.hpp"
-#include "netw/api/connect_handle.hpp"
+#include "netw/api/connection.hpp"
 #include "netw/api/link_conditions.hpp"
 #include "netw/api/loopback.hpp"
 #include "netw/api/netw_multiplayer.hpp"
@@ -25,7 +25,7 @@
 namespace TestNetwConnectPlane {
 
 using namespace godot;
-using netw::NetwConnectHandle;
+using netw::NetwConnection;
 using netw::NetwLinkConditions;
 using netw::NetwMultiplayer;
 using netw::NetwServerInfo;
@@ -95,8 +95,8 @@ TEST_CASE(
 ) {
     const Ref<NetwMultiplayer> core = lone_session();
 
-    const Ref<NetwConnectHandle> first = core->get_connection();
-    const Ref<NetwConnectHandle> second = core->get_connection();
+    const Ref<NetwConnection> first = core->get_connection();
+    const Ref<NetwConnection> second = core->get_connection();
 
     REQUIRE(first.is_valid());
     CHECK(first == second);
@@ -110,7 +110,7 @@ TEST_CASE(
     "as a string a rename would silently break"
 ) {
     const Ref<NetwMultiplayer> core = lone_session();
-    const Ref<NetwConnectHandle> handle = core->get_connection();
+    const Ref<NetwConnection> handle = core->get_connection();
 
     Ref<netw::LocalMultiplayerPeer> shape;
     shape.instantiate();
@@ -341,7 +341,7 @@ TEST_CASE(
     "a browser binds and renders before a person has chosen anything"
 ) {
     const Ref<NetwMultiplayer> core = lone_session();
-    const Ref<NetwConnectHandle> handle = core->get_connection();
+    const Ref<NetwConnection> handle = core->get_connection();
 
     CHECK(handle->get_join_address().is_empty());
     CHECK(handle->diagnostics(1).is_empty());
@@ -359,7 +359,7 @@ TEST_CASE(
     "the address hint the fields are drawn from"
 ) {
     const Ref<NetwMultiplayer> core = lone_session();
-    const Ref<NetwConnectHandle> handle = core->get_connection();
+    const Ref<NetwConnection> handle = core->get_connection();
 
     const Array known = handle->transports();
     REQUIRE(known.size() > 0);
@@ -514,7 +514,7 @@ TEST_CASE(
     "for what changed"
 ) {
     const Ref<NetwMultiplayer> core = lone_session();
-    const Ref<NetwConnectHandle> handle = core->get_connection();
+    const Ref<NetwConnection> handle = core->get_connection();
     CallLog announced;
     handle->connect(StringName("endpoint_added"), announced.callable("added"));
     handle->connect(
@@ -640,9 +640,9 @@ TEST_CASE(
 ) {
     const Ref<NetwMultiplayer> core = lone_session();
     CallLog announced;
-    core->connect(StringName("endpoint_added"), announced.callable("added"));
-    core->connect(
-        StringName("endpoint_removed"),
+    core->observe(NetwMultiplayer::ENDPOINT_ADDED, announced.callable("added"));
+    core->observe(
+        NetwMultiplayer::ENDPOINT_REMOVED,
         announced.callable("removed")
     );
 

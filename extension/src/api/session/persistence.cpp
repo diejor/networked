@@ -4,11 +4,11 @@
 #include "godot/utility.hpp"
 #include "netw/api/database.hpp"
 #include "netw/api/database_result.hpp"
-#include "netw/api/display_handle.hpp"
+#include "netw/api/display.hpp"
 #include "netw/api/entity.hpp"
 #include "netw/api/netw_multiplayer.hpp"
 #include "netw/api/persistence_config.hpp"
-#include "netw/api/persistence_handle.hpp"
+#include "netw/api/persistence.hpp"
 #include "netw/log.hpp"
 #include "netw/persist/binding.hpp"
 #include "netw/persist/database.hpp"
@@ -22,10 +22,6 @@ using namespace godot;
 namespace netw {
 
 namespace {
-
-constexpr const char *SIG_DATABASE_FAILED = "database_failed";
-constexpr const char *SIG_PERSIST_LOADED = "persist_loaded";
-constexpr const char *SIG_PERSIST_SAVED = "persist_saved";
 
 const char *STALE_LOAD
     = "the load was canceled, because the session authority or the database "
@@ -415,14 +411,7 @@ persist::Bindings *NetwMultiplayer::get_bindings() {
 }
 
 RID NetwMultiplayer::persist_bind(Node *p_root) {
-    const RID made = get_bindings()->compile(p_root);
-    if (made.is_valid()) {
-        const Ref<NetwEntity> wrapper = NetwEntity::resolve(p_root);
-        if (wrapper.is_valid()) {
-            wrapper->get_persistence()->bind_session(this);
-        }
-    }
-    return made;
+    return get_bindings()->compile(p_root);
 }
 
 RID NetwMultiplayer::persist_binding_of_entity(const RID &p_entity) const {
@@ -437,6 +426,23 @@ RID NetwMultiplayer::persist_entity_of_binding(const RID &p_binding) const {
         : nullptr;
     const Ref<NetwEntity> entity = NetwEntity::resolve(root);
     return entity.is_valid() ? entity->get_rid_handle() : RID();
+}
+
+Ref<NetwPersistence> NetwMultiplayer::persist_handle_of_binding(
+    const RID &p_binding
+) const {
+    const persist::Binding *held = bindings.at(p_binding);
+    Node *root = held != nullptr
+        ? Object::cast_to<Node>(gd::object_of(held->root))
+        : nullptr;
+    const Ref<NetwEntity> entity = NetwEntity::resolve(root);
+    const NetwEntityRecord *record
+        = entity.is_valid() ? entity->get_record() : nullptr;
+    return record != nullptr
+        ? Ref<NetwPersistence>(
+              record->minted_part(NetwEntityRecord::PART_PERSISTENCE)
+          )
+        : Ref<NetwPersistence>();
 }
 
 int64_t NetwMultiplayer::persist_tenure() const {
@@ -499,18 +505,23 @@ void NetwMultiplayer::persist_notify_loaded(
     const RID &p_binding,
     bool p_found
 ) {
-    emit_signal(
-        StringName(SIG_PERSIST_LOADED),
-        persist_entity_of_binding(p_binding),
-        p_found
-    );
+    const RID entity = persist_entity_of_binding(p_binding);
+    const Ref<NetwPersistence> handle
+        = persist_handle_of_binding(p_binding);
+    if (handle.is_valid()) {
+        handle->announce_loaded(entity, p_found);
+    }
+    notify(PERSIST_LOADED, entity, p_found);
 }
 
 void NetwMultiplayer::persist_notify_saved(const RID &p_binding) {
-    emit_signal(
-        StringName(SIG_PERSIST_SAVED),
-        persist_entity_of_binding(p_binding)
-    );
+    const RID entity = persist_entity_of_binding(p_binding);
+    const Ref<NetwPersistence> handle
+        = persist_handle_of_binding(p_binding);
+    if (handle.is_valid()) {
+        handle->announce_saved(entity);
+    }
+    notify(PERSIST_SAVED, entity);
 }
 
 void NetwMultiplayer::persist_notify_failed(
@@ -524,12 +535,13 @@ void NetwMultiplayer::persist_notify_failed(
         String(databases.name_of(p_database)).utf8().get_data(),
         p_detail.utf8().get_data()
     );
-    emit_signal(
-        StringName(SIG_DATABASE_FAILED),
-        p_database,
-        int(p_error),
-        p_detail
-    );
+    const HashMap<RID, Ref<RefCounted>>::Iterator held
+        = database_handles.find(p_database);
+    if (held != database_handles.end()) {
+        Object::cast_to<NetwDatabase>(held->value.ptr())
+            ->announce_failed(p_database, int(p_error), p_detail);
+    }
+    notify(DATABASE_FAILED, p_database, int(p_error), p_detail);
 }
 
 bool NetwMultiplayer::persist_enroll(Node *p_root) {

@@ -8,10 +8,10 @@
 #include "netw/api/entity.hpp"
 #include "netw/api/netw_multiplayer.hpp"
 #include "netw/api/persistence_config.hpp"
-#include "netw/api/persistence_handle.hpp"
+#include "netw/api/persistence.hpp"
 #include "netw/api/property_config.hpp"
 #include "netw/api/schema_model.hpp"
-#include "netw/api/session_handle.hpp"
+#include "netw/api/session.hpp"
 #include "netw/persist/binding.hpp"
 #include "netw/persist/memory_store.hpp"
 #include "netw/schema_model.hpp"
@@ -28,11 +28,11 @@ namespace TestPersistenceFailure {
 using namespace godot;
 using netw::NetwDatabase;
 using netw::NetwMultiplayer;
-using netw::NetwPersistenceHandle;
+using netw::NetwPersistence;
 using netw::NetwPromise;
 using netw::NetwQuantize;
 using netw::NetwSchema;
-using netw::NetwSessionHandle;
+using netw::NetwSession;
 using netw::SessionCore;
 using netw::persist::MemoryConnection;
 using netw_test::CallLog;
@@ -45,7 +45,7 @@ struct World {
     Ref<NetwSchema> schema;
     Ref<MemoryConnection> connection;
     Ref<NetwDatabase> database;
-    Ref<NetwPersistenceHandle> row;
+    Ref<NetwPersistence> row;
     Node2D *root = nullptr;
     Node *account = nullptr;
     ObjectID root_id;
@@ -227,7 +227,7 @@ TEST_CASE(
 ) {
     World world("pf3");
     const RID binding = world.enroll(false);
-    Ref<NetwSessionHandle> handle;
+    Ref<NetwSession> handle;
     handle.instantiate();
     handle->bind_session(world.session.ptr());
 

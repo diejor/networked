@@ -15,7 +15,7 @@ namespace Networked;
 /// func _init() -&gt; void:
 ///     Netw.configure_session(self) \
 ///         .app(&amp;"bomber-v2") \
-///         .role(NetwMultiplayer.ROLE_LISTEN_SERVER)
+///         .role(NetwSession.ROLE_LISTEN_SERVER)
 /// </code>
 /// <para>
 /// A preset passed to <see cref="Netw.ConfigureSession"/> is copied, so one
@@ -23,6 +23,23 @@ namespace Networked;
 /// <see cref="Netw.ConfigureSession"/>, the settings of the
 /// <see cref="MultiplayerTree"/> are used. When one does, the
 /// <see cref="MultiplayerTree"/> settings are ignored.
+/// </para>
+/// <para>
+/// <b>Bandwidth</b> Each peer is sent at most
+/// <see cref="NetwSessionConfig.BandwidthKbps"/>. Changed rows that do not fit
+/// wait for a later tick, and the ones that waited longest and matter most go
+/// first.
+/// <code>
+/// func _init() -&gt; void:
+///     Netw.configure_session(self).bandwidth(256)
+///     Netw.configure_entity(self).replication_priority = 4.0
+/// </code>
+/// </para>
+/// <para>
+/// RPCs, spawns and <see cref="NetwPropertyConfig.Retained"/> properties are
+/// always sent when due. A peer they push over its budget gets no more rows
+/// until later ticks make up the difference. See
+/// <see cref="NetwMultiplayer.PeerLinkStats"/>.
 /// </para>
 /// </remarks>
 public sealed class NetwSessionConfig : NetwRefCounted
@@ -77,21 +94,21 @@ public sealed class NetwSessionConfig : NetwRefCounted
         NetwApi.MethodBind(
             "NetwSessionConfig",
             "get_desired_role",
-            2901618068UL);
+            3770310992UL);
 
     private static readonly IntPtr _bindSetDesiredRole =
         NetwApi.MethodBind(
             "NetwSessionConfig",
             "set_desired_role",
-            3233627807UL);
+            3036761731UL);
 
     /// <summary>
     /// The role this peer takes when it hosts, which becomes
     /// <see cref="NetwMultiplayer.Role"/>. A server made with
     /// <see cref="MultiplayerTree.RaiseEmbeddedServer"/> is always
-    /// <see cref="NetwMultiplayer.RoleEnum.DedicatedServer"/>.
+    /// <see cref="NetwSession.RoleEnum.DedicatedServer"/>.
     /// </summary>
-    public NetwMultiplayer.RoleEnum DesiredRole
+    public NetwSession.RoleEnum DesiredRole
     {
         get
         {
@@ -100,7 +117,7 @@ public sealed class NetwSessionConfig : NetwRefCounted
                 _bindGetDesiredRole,
                 Checked,
                 ref answered);
-            return (NetwMultiplayer.RoleEnum)answered;
+            return (NetwSession.RoleEnum)answered;
         }
         set
         {
@@ -220,7 +237,7 @@ public sealed class NetwSessionConfig : NetwRefCounted
     /// 150 bytes of headroom. A negative value is refused. While a peer loses
     /// packets its budget halves, and each round trip without loss adds back an
     /// eighth of it, up to this value.
-    /// <see cref="NetwSessionHandle.SetPeerBandwidth"/> gives one peer its own
+    /// <see cref="NetwSession.SetPeerBandwidth"/> gives one peer its own
     /// budget.
     /// </summary>
     public long BandwidthKbps
@@ -267,13 +284,13 @@ public sealed class NetwSessionConfig : NetwRefCounted
     }
 
     private static readonly IntPtr _bindRole =
-        NetwApi.MethodBind("NetwSessionConfig", "role", 2580083280UL);
+        NetwApi.MethodBind("NetwSessionConfig", "role", 619985222UL);
 
     /// <summary>
     /// Sets <see cref="NetwSessionConfig.DesiredRole"/> and returns this
     /// config.
     /// </summary>
-    public NetwSessionConfig Role(NetwMultiplayer.RoleEnum desiredRole)
+    public NetwSessionConfig Role(NetwSession.RoleEnum desiredRole)
     {
         long slot0 = (long)desiredRole;
         IntPtr answered = default;

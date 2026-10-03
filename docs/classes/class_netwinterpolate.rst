@@ -29,7 +29,7 @@ Received values are interpolated into the property :ref:`target<class_NetwInterp
 
 \ It works the same with :ref:`Netw.configure_property()<class_Netw_method_configure_property>`, :ref:`Netw.configure_rpc()<class_Netw_method_configure_rpc>` and :ref:`Netw.configure_signal()<class_Netw_method_configure_signal>`.
 
-When :ref:`NetwDisplayHandle.visual_root<class_NetwDisplayHandle_property_visual_root>` is set, values are written in global space. Add a second **NetwInterpolate** to also smooth ``rotation``.
+When :ref:`NetwDisplay.visual_root<class_NetwDisplay_property_visual_root>` is set, values are written in global space. Add a second **NetwInterpolate** to also smooth ``rotation``.
 
 .. rst-class:: classref-reftable-group
 
@@ -178,7 +178,7 @@ Property Descriptions
 - |void| **set_forecast_tail**\ (\ value\: :ref:`Tail<enum_NetwInterpolate_Tail>`\ )
 - :ref:`Tail<enum_NetwInterpolate_Tail>` **get_forecast_tail**\ (\ )
 
-Whether the value is guessed ahead with :ref:`NetwMultiplayer.TIMELINE_MODE_FORECAST<class_NetwMultiplayer_constant_TIMELINE_MODE_FORECAST>`.
+Whether the value is guessed ahead with :ref:`NetwDisplay.TIMELINE_MODE_FORECAST<class_NetwDisplay_constant_TIMELINE_MODE_FORECAST>`.
 
 .. rst-class:: classref-item-separator
 

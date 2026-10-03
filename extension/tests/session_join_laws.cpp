@@ -311,7 +311,7 @@ TEST_CASE(
     const Ref<RefCounted> handler = script->call("new");
     REQUIRE(handler.is_valid());
     CallLog announced;
-    core->connect(StringName("player_joined"), announced.callable("joined"));
+    core->observe(NetwMultiplayer::PLAYER_JOINED, announced.callable("joined"));
 
     Array carried;
     carried.push_back(arena_node);
@@ -584,8 +584,8 @@ TEST_CASE(
     const Ref<NetwMultiplayer> api = branch_session(branch);
 
     CallLog log;
-    api->connect(
-        StringName("session_join_submitted"),
+    api->observe(
+        NetwMultiplayer::SESSION_JOIN_SUBMITTED,
         log.callable("submitted")
     );
 

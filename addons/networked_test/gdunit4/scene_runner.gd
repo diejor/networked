@@ -8,6 +8,13 @@ extends GdUnitSceneRunnerImpl
 ## Adopted [MultiplayerTree] inside [member scene].
 var tree: MultiplayerTree
 
+## The [NetwSession] of [member tree], or [code]null[/code] before it mounts.
+var session: NetwSession:
+	get:
+		if tree == null or not tree.is_inside_tree():
+			return null
+		return Netw.session(tree)
+
 ## Frame anchored waiter used by [method await_player] and [method await_scene].
 var waiter: NetwWaiter
 
@@ -113,14 +120,15 @@ func await_player(
 	return find_player(player_username)
 
 
-## Awaits an active scene named [param scene_name], as a RID.
+## Awaits an active scene named [param scene_name]. A timeout fails the test
+## and returns [code]null[/code].
 func await_scene(
 		scene_name: StringName,
 		timeout: float = 1.0,
-) -> RID:
+) -> NetwScene:
 	await _active_waiter().until(
 		func() -> bool:
-			return _find_active_scene(scene_name).is_valid(),
+			return _find_active_scene(scene_name) != null,
 		"scene '%s' in '%s'" % [scene_name, username],
 		timeout,
 	)
@@ -167,11 +175,9 @@ func _reset_input_to_default() -> void:
 	_last_input_event = null
 
 
-func _find_active_scene(scene_name: StringName) -> RID:
-	if not tree or not tree.api:
-		return RID()
-	var core := tree.api
-	return core.scene_find(scene_name)
+func _find_active_scene(scene_name: StringName) -> NetwScene:
+	var mounted := session
+	return mounted.find_scene(scene_name) if mounted != null else null
 
 
 func _active_waiter() -> NetwWaiter:
@@ -189,7 +195,7 @@ func _player_matches_username(
 		player_username: StringName,
 ) -> bool:
 	var entity := NetwEntity.of(player)
-	return entity != null and entity.entity_id == player_username
+	return entity != null and entity.name == player_username
 
 
 func _on_slot_child_exiting(child: Node) -> void:

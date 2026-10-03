@@ -8,7 +8,7 @@
 #include "netw/api/entity.hpp"
 #include "netw/api/entity_record.hpp"
 #include "netw/api/netw_multiplayer.hpp"
-#include "netw/api/simulation_handle.hpp"
+#include "netw/api/simulation.hpp"
 #include "support/minted_script.h"
 #include "support/netw_call_log.h"
 #include "support/value_flow_stand.h"
@@ -18,7 +18,7 @@ namespace TestNetwEntityHandleMintLaws {
 using namespace godot;
 using netw::NetwEntity;
 using netw::NetwEntityRecord;
-using netw::NetwSimulationHandle;
+using netw::NetwSimulation;
 using netw_test::LoopbackRig;
 
 constexpr int TICKRATE = 30;
@@ -36,7 +36,7 @@ const char *ACTIVE_CUBE_SOURCE = R"(extends RigidBody3D
 func _init() -> void:
 	var entity := Netw.configure_entity(self)
 	entity.transfer = NetwEntity.TRANSFER_IMMEDIATE
-	entity.simulation.replicas = NetwSimulationHandle.REPLICAS_ACTIVE
+	entity.simulation.replicas = NetwSimulation.REPLICAS_ACTIVE
 	entity.simulation.claim_on_contact = true
 	entity.simulation.release_on_rest = 1.0
 	Netw.configure_property(self, &"position").broadcast().heartbeat(60)
@@ -46,7 +46,7 @@ const char *BODY_SOURCE = R"(extends RigidBody3D
 
 
 func _init() -> void:
-	NetwEntity.ensure(self)
+	Netw.configure_entity(self)
 	Netw.configure_property(self, &"position").broadcast().heartbeat(60)
 )";
 
@@ -174,20 +174,20 @@ TEST_CASE(
     REQUIRE(body != nullptr);
     const Ref<NetwEntity> entity = NetwEntity::of(body);
     REQUIRE(entity.is_valid());
-    const Ref<NetwSimulationHandle> simulation = entity->get_simulation();
+    const Ref<NetwSimulation> simulation = entity->get_simulation();
     REQUIRE(simulation.is_valid());
     const int settled = int(simulation->get_mode());
-    REQUIRE(settled != int(NetwSimulationHandle::MODE_NONE));
-    REQUIRE(settled != int(NetwSimulationHandle::MODE_ACTIVE));
+    REQUIRE(settled != int(NetwSimulation::MODE_NONE));
+    REQUIRE(settled != int(NetwSimulation::MODE_ACTIVE));
 
     netw_test::CallLog log;
     simulation->connect(StringName("mode_changed"), log.callable("moved"));
-    simulation->set_replicas(NetwSimulationHandle::REPLICAS_ACTIVE);
+    simulation->set_replicas(NetwSimulation::REPLICAS_ACTIVE);
 
     NETW_REQUIRE_EQ(log.count(StringName("moved")), 1);
     const Array moved = log.args(StringName("moved"), 0);
     NETW_CHECK_EQ(int(moved[0]), settled);
-    NETW_CHECK_EQ(int(moved[1]), int(NetwSimulationHandle::MODE_ACTIVE));
+    NETW_CHECK_EQ(int(moved[1]), int(NetwSimulation::MODE_ACTIVE));
 }
 
 } // namespace TestNetwEntityHandleMintLaws

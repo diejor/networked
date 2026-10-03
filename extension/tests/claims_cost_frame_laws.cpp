@@ -13,7 +13,7 @@
 #include "netw/api/loopback.hpp"
 #include "netw/api/netw_multiplayer.hpp"
 #include "netw/api/replication_core.hpp"
-#include "netw/api/simulation_handle.hpp"
+#include "netw/api/simulation.hpp"
 #include "netw/sim/row.hpp"
 
 using namespace godot;
@@ -82,7 +82,7 @@ func _init() -> void:
 	var e := Netw.configure_entity(self)
 	e.transfer = NetwEntity.TRANSFER_IMMEDIATE
 	e.simulation.bodies = [^"Sphere"]
-	e.simulation.replicas = NetwSimulationHandle.REPLICAS_ACTIVE
+	e.simulation.replicas = NetwSimulation.REPLICAS_ACTIVE
 	e.simulation.claim_on_contact = true
 	e.simulation.release_on_rest = 0.3
 	Netw.configure_property(self, &"held_by").broadcast()

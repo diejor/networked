@@ -19,7 +19,7 @@ func _ready() -> void:
 ## Shows the connecting screen for the server at [param peer_class] and
 ## [param address]. An empty [param peer_class] means hosting.
 func open_connecting(
-		handle: NetwConnectHandle,
+		handle: NetwConnection,
 		peer_class: StringName,
 		address: String,
 ) -> void:

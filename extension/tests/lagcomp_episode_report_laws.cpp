@@ -7,7 +7,7 @@
 
 #include "netw/api/event_plane.hpp"
 #include "netw/api/netw_multiplayer.hpp"
-#include "netw/api/predict.hpp"
+#include "netw/api/prediction.hpp"
 
 namespace TestNetwLagCompEpisodeReportLaws {
 
@@ -21,7 +21,7 @@ using godot::Vector;
 using godot::Vector2;
 using netw::EventPlane;
 using netw::NetwMultiplayer;
-using netw::NetwPredict;
+using netw::NetwPrediction;
 
 const Vector2 OFFSET = Vector2(60.0, -40.0);
 
@@ -187,7 +187,7 @@ TEST_CASE(
     NETW_CHECK_EQ(detail_int(closed, "transition"), transition);
     NETW_CHECK_EQ(
         detail_int(closed, "state"),
-        int64_t(NetwPredict::EPISODE_STATE_CLOSED)
+        int64_t(NetwPrediction::EPISODE_STATE_CLOSED)
     );
     NETW_CHECK_GT(detail_int(closed, "closed_transition"), transition);
 }
@@ -225,7 +225,7 @@ TEST_CASE(
     int replayed = 0;
     for (int at = 0; at < consumes.size(); ++at) {
         replayed += detail_int(consumes[at], "action")
-                == int64_t(NetwPredict::CONSUME_ACTION_REPLAY)
+                == int64_t(NetwPrediction::CONSUME_ACTION_REPLAY)
             ? 1
             : 0;
     }

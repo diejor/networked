@@ -69,8 +69,15 @@ public sealed class NetwAction : NetwRefCounted
     /// </summary>
     public event Action Confirmed
     {
-        add => Connect("confirmed", Callable.From(value));
-        remove => Disconnect("confirmed", Callable.From(value));
+        add => ConnectBridge(
+            "confirmed",
+            value,
+            Callable.From(
+                () =>
+                    value()
+            )
+        );
+        remove => DisconnectBridge("confirmed", value);
     }
 
     /// <summary>
@@ -78,8 +85,15 @@ public sealed class NetwAction : NetwRefCounted
     /// </summary>
     public event Action Denied
     {
-        add => Connect("denied", Callable.From(value));
-        remove => Disconnect("denied", Callable.From(value));
+        add => ConnectBridge(
+            "denied",
+            value,
+            Callable.From(
+                () =>
+                    value()
+            )
+        );
+        remove => DisconnectBridge("denied", value);
     }
 
     private static readonly IntPtr _bindGetPredict =

@@ -1,0 +1,150 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwClock" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		The tick every peer in the session counts, reached by [member NetwSession.clock].
+	</brief_description>
+	<description>
+		A tick is a numbered step of the simulation. Every peer counts the same ticks, and a client keeps its count in step with the server's. [member tick] is the number every [NetwRecord] and lag compensation uses.
+		[codeblock]
+		@onready var clock: NetwClock = Netw.session(self).clock
+
+		func _ready() -&gt; void:
+		    clock.before_tick.connect(sample_input)
+		    clock.ticked.connect(show_tick)
+		[/codeblock]
+
+		[b]How a tick is produced[/b]
+		Each physics frame adds its delta to an accumulator, and every [code]1 / tickrate[/code] seconds in it runs one tick. A slow frame can run two ticks and a fast one none. At a [member tickrate] of 30 with 60 physics ticks per second, a tick runs every second frame, and [member physics_factor] is [code]2.0[/code].
+		At most [constant NetwMultiplayer.CLOCK_PARAM_MAX_TICKS_PER_FRAME] ticks run in one frame. [member behind_count] counts how often that limit was hit.
+
+		[b]How a client follows the server[/b]
+		The client pings the server every [member ping_interval] seconds. The server answers with its tick, and the client aims ahead of it by half the round trip plus [constant NetwMultiplayer.CLOCK_PARAM_LEAD_TICKS]. The first answer sets the tick directly. After that, [member sync_mode] decides.
+		[constant SYNC_MODE_SNAP] sets the tick directly every time, which can move it backwards. [constant SYNC_MODE_STRETCH], the default, runs the clock slightly faster or slower each frame by [constant NetwMultiplayer.CLOCK_PARAM_STRETCH_NUDGE_FACTOR] of the difference, so the tick never jumps. A difference larger than [constant NetwMultiplayer.CLOCK_PARAM_PANIC_SNAP_THRESHOLD] ticks is snapped.
+
+		[b]Showing remote state[/b]
+		State from other peers arrives late, so remote entities are shown [member display_offset] ticks in the past. [member recommended_display_offset] is the offset the current connection needs, the one-way latency plus the jitter times [constant NetwMultiplayer.CLOCK_PARAM_JITTER_MULTIPLIER], in ticks. It is not applied automatically. [method NetwMultiplayer.clock_auto_configure_offset] applies it.
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="monitor" qualifiers="const">
+			<return type="float" />
+			<param index="0" name="monitor" type="int" enum="NetwClock.ClockMonitor" />
+			<description>
+				Returns one clock diagnostic value.
+				[codeblock]
+				var rtt := clock.monitor(NetwClock.CLOCK_MONITOR_RTT_AVG)
+				[/codeblock]
+			</description>
+		</method>
+	</methods>
+	<members>
+		<member name="behind_count" type="int" setter="" getter="get_behind_count" default="0">
+			How many frames could not run every tick they needed. If it keeps growing, this machine is too slow for [member tickrate].
+		</member>
+		<member name="display_offset" type="int" setter="set_display_offset" getter="get_display_offset" default="0">
+			How many ticks in the past remote entities are shown. See [member recommended_display_offset].
+		</member>
+		<member name="is_configured" type="bool" setter="" getter="get_is_configured" default="false">
+			[code]true[/code] once the settings from [method Netw.configure_clock] are applied. [member tick] does not move before that.
+		</member>
+		<member name="is_synchronized" type="bool" setter="" getter="get_is_synchronized" default="false">
+			[code]true[/code] once the tick follows the server. Always [code]true[/code] on the server.
+		</member>
+		<member name="physics_factor" type="float" setter="" getter="get_physics_factor" default="1.0">
+			Physics frames per tick. Multiply a per-frame value by it to get a per-tick value.
+		</member>
+		<member name="ping_interval" type="float" setter="set_ping_interval" getter="get_ping_interval" default="0.0">
+			Seconds between pings. Shorter follows the connection more closely and sends more packets.
+		</member>
+		<member name="recommended_display_offset" type="int" setter="" getter="get_recommended_display_offset" default="0">
+			The [member display_offset] the current connection needs, in ticks. Not applied automatically.
+		</member>
+		<member name="sync_mode" type="int" setter="set_sync_mode" getter="get_sync_mode" enum="NetwClock.SyncMode" default="1">
+			How the tick is corrected toward the server's.
+		</member>
+		<member name="tick" type="int" setter="" getter="get_tick" default="0">
+			The current tick.
+		</member>
+		<member name="tick_factor" type="float" setter="" getter="get_tick_factor" default="0.0">
+			How far time has moved past the last tick, as a fraction of a tick. Use it to interpolate.
+		</member>
+		<member name="tick_phase" type="float" setter="" getter="get_tick_phase" default="0.0">
+			How far into the current tick the clock is, from [code]0.0[/code] to [code]1.0[/code].
+		</member>
+		<member name="tickrate" type="int" setter="" getter="get_tickrate" default="0">
+			Ticks per second, set by [method Netw.configure_clock]. The same on every peer.
+		</member>
+	</members>
+	<signals>
+		<signal name="before_tick">
+			<param index="0" name="delta" type="float" />
+			<param index="1" name="tick" type="int" />
+			<description>
+				Emitted before [param tick] runs. Read input here.
+			</description>
+		</signal>
+		<signal name="synchronized">
+			<description>
+				Emitted when [member is_synchronized] becomes [code]true[/code].
+			</description>
+		</signal>
+		<signal name="ticked">
+			<param index="0" name="delta" type="float" />
+			<param index="1" name="tick" type="int" />
+			<description>
+				Emitted after every entity ran [code]_network_tick[/code] for [param tick]. Read results here.
+			</description>
+		</signal>
+	</signals>
+	<constants>
+		<constant name="SYNC_MODE_SNAP" value="0" enum="SyncMode">
+			Correct the local tick to the server's in one step.
+		</constant>
+		<constant name="SYNC_MODE_STRETCH" value="1" enum="SyncMode">
+			Correct the local tick a little every frame, and in one step past [constant NetwMultiplayer.CLOCK_PARAM_PANIC_SNAP_THRESHOLD].
+		</constant>
+		<constant name="MISMATCH_ACTION_WARN" value="0" enum="MismatchAction">
+			Push a warning and continue. The default.
+		</constant>
+		<constant name="MISMATCH_ACTION_DISCONNECT" value="1" enum="MismatchAction">
+			Disconnect the peer.
+		</constant>
+		<constant name="MISMATCH_ACTION_SIGNAL" value="2" enum="MismatchAction">
+			Notify [constant NetwMultiplayer.CLOCK_TICKRATE_MISMATCH] and let the game decide.
+		</constant>
+		<constant name="CLOCK_MONITOR_RTT" value="0" enum="ClockMonitor">
+			The most recent round-trip time, in seconds.
+		</constant>
+		<constant name="CLOCK_MONITOR_RTT_AVG" value="1" enum="ClockMonitor">
+			The round-trip time averaged over [constant NetwMultiplayer.CLOCK_PARAM_JITTER_WINDOW] samples, in seconds.
+		</constant>
+		<constant name="CLOCK_MONITOR_RTT_JITTER" value="2" enum="ClockMonitor">
+			The round-trip variation, in seconds.
+		</constant>
+		<constant name="CLOCK_MONITOR_ONE_WAY_LATENCY" value="3" enum="ClockMonitor">
+			Half of [constant CLOCK_MONITOR_RTT_AVG], in seconds.
+		</constant>
+		<constant name="CLOCK_MONITOR_TICKTIME" value="4" enum="ClockMonitor">
+			Seconds per tick, one divided by [constant NetwMultiplayer.CLOCK_PARAM_TICKRATE].
+		</constant>
+		<constant name="CLOCK_MONITOR_TICK_ACCUMULATOR" value="5" enum="ClockMonitor">
+			Seconds collected toward the next tick.
+		</constant>
+		<constant name="CLOCK_MONITOR_PHYSICS_FRAMES" value="6" enum="ClockMonitor">
+			Physics frames run since the clock started.
+		</constant>
+		<constant name="CLOCK_MONITOR_POLLS" value="7" enum="ClockMonitor">
+			[method MultiplayerAPI.poll] calls since the clock started.
+		</constant>
+		<constant name="CLOCK_MONITOR_WALL_SECONDS" value="8" enum="ClockMonitor">
+			Real seconds since the clock started.
+		</constant>
+		<constant name="CLOCK_MONITOR_PHYSICS_HZ" value="9" enum="ClockMonitor">
+			Physics frames actually run per second. Lower than the physics tick rate means the machine is too slow.
+		</constant>
+		<constant name="CLOCK_MONITOR_POLL_HZ" value="10" enum="ClockMonitor">
+			[method MultiplayerAPI.poll] calls per second.
+		</constant>
+	</constants>
+</class>

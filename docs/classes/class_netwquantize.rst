@@ -137,7 +137,7 @@ Return integer number ``element`` of ``value``. It must fit in :ref:`_bit_width(
 
 :godot:`float` **_max_error**\ (\ type\: :godot:`Variant.Type <@GlobalScope#enum_@globalscope_Variant.Type>`\ ) |virtual| |const| :ref:`🔗<class_NetwQuantize_private_method__max_error>`
 
-Return the largest error compression can add to a ``type`` value. Keep :ref:`NetwPredictionHandle.divergence_epsilon<class_NetwPredictionHandle_property_divergence_epsilon>` above it, or compression alone causes corrections.
+Return the largest error compression can add to a ``type`` value. Keep :ref:`NetwPrediction.divergence_epsilon<class_NetwPrediction_property_divergence_epsilon>` above it, or compression alone causes corrections.
 
 .. rst-class:: classref-item-separator
 

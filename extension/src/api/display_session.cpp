@@ -1,7 +1,7 @@
 #include "godot/class_db.hpp"
 #include "godot/engine.hpp"
 #include "godot/object.hpp"
-#include "netw/api/display_handle.hpp"
+#include "netw/api/display.hpp"
 #include "netw/api/entity.hpp"
 #include "netw/api/entity_record.hpp"
 #include "netw/api/netw_multiplayer.hpp"
@@ -715,16 +715,8 @@ void NetwMultiplayer::display_bind_session() {
         return;
     }
     display_session_bound = true;
-    connect(
-        "entity_live",
-        callable_mp(this, &NetwMultiplayer::display_on_entity_live)
-    );
     display_book->set_went_dirty(
         callable_mp(this, &NetwMultiplayer::display_on_book_dirty)
-    );
-    connect(
-        "clock_after_tick",
-        callable_mp(this, &NetwMultiplayer::display_on_clock_tick)
     );
 }
 

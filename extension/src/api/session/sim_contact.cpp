@@ -112,7 +112,7 @@ void NetwMultiplayer::sim_contact_arm(sim::Row &r_row) {
             "'%s' sets claim_on_contact or release_on_rest, which do nothing "
             "here. They need NetwEntity.TRANSFER_IMMEDIATE on an entity with "
             "no prediction and no state properties.",
-            String(r_row.view->get_entity_id())
+            String(r_row.view->get_name())
         );
     }
     if (r_row.contact.eligible && r_row.declaration.claim_on_contact

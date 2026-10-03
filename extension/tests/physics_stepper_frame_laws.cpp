@@ -10,7 +10,7 @@
 #include "godot/scene_tree.hpp"
 #include "godot/spatial_node.hpp"
 #include "godot/world.hpp"
-#include "netw/api/predict.hpp"
+#include "netw/api/prediction.hpp"
 
 using namespace godot;
 
@@ -94,7 +94,7 @@ struct RewindEvidence {
     bool taken = false;
     bool contact = false;
     int contact_tick = -1;
-    int verdict = netw::NetwPredict::EXACT_VERDICT_UNJUDGED;
+    int verdict = netw::NetwPrediction::EXACT_VERDICT_UNJUDGED;
     double residual = 0.0;
     double turn = 0.0;
     PoseSample forward[2];
@@ -632,8 +632,8 @@ private:
             && into.forward[1].sleeping == into.replay[1].sleeping;
         into.verdict = into.residual <= REWIND_POSE_TOLERANCE
                 && into.turn <= FLOAT32_QUATERNION_TURN_FLOOR && sleeps_alike
-            ? netw::NetwPredict::EXACT_VERDICT_EQUAL
-            : netw::NetwPredict::EXACT_VERDICT_UNEQUAL;
+            ? netw::NetwPrediction::EXACT_VERDICT_EQUAL
+            : netw::NetwPrediction::EXACT_VERDICT_UNEQUAL;
         into.taken = true;
     }
 };
@@ -737,7 +737,7 @@ TEST_CASE(
     REQUIRE(rewind.taken);
     CHECK(rewind.contact);
     NETW_CHECK_GT(rewind.contact_tick, REWIND_TICKS);
-    CHECK(rewind.verdict != netw::NetwPredict::EXACT_VERDICT_UNJUDGED);
+    CHECK(rewind.verdict != netw::NetwPrediction::EXACT_VERDICT_UNJUDGED);
     NETW_CHECK_LE(rewind.residual, REWIND_POSE_TOLERANCE);
     NETW_CHECK_LE(rewind.turn, FLOAT32_QUATERNION_TURN_FLOOR);
 }
@@ -757,7 +757,7 @@ TEST_CASE(
     NETW_CHECK_GT(double(rewind.forward[1].linear.length()), 0.5);
     NETW_CHECK_LE(rewind.residual, REWIND_POSE_TOLERANCE);
     NETW_CHECK_LE(rewind.turn, FLOAT32_QUATERNION_TURN_FLOOR);
-    NETW_CHECK_EQ(rewind.verdict, netw::NetwPredict::EXACT_VERDICT_EQUAL);
+    NETW_CHECK_EQ(rewind.verdict, netw::NetwPrediction::EXACT_VERDICT_EQUAL);
 }
 
 TEST_CASE(

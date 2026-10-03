@@ -12,8 +12,8 @@ namespace Networked;
 /// Declare it in a <c>static var</c> beside the code that writes it. Every peer
 /// built from the same scripts ends up with the same columns in the same order.
 /// Each column method returns the column's index, which is how a writer and a
-/// reader name the column. <see cref="Netw.Table"/> opens the replicated table
-/// a session builds from the schema.
+/// reader name the column. <see cref="NetwSession.Table"/> opens the replicated
+/// table a session builds from the schema.
 /// <code>
 /// class Mobs:
 ///     static var schema := Netw.configure_schema(&amp;"Mob")
@@ -24,7 +24,7 @@ namespace Networked;
 ///     static var vel := schema.vector3(&amp;"vel")   # no quantizer, sent as raw bytes
 ///     static var hp  := schema.u16(&amp;"hp")
 ///
-/// @onready var mobs := Netw.table(self, Mobs.schema.schema_name)
+/// @onready var mobs := Netw.session(self).table(Mobs.schema.schema_name)
 /// </code>
 /// <para>
 /// A column with no quantizer is sent as a raw copy of its buffer, which is the

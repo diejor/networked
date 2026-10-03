@@ -223,9 +223,9 @@ int route_of(Node *p_node) {
 void configure_spawned_copy(Object *p_entity, Array p_seen) {
     NetwEntity *entity = Object::cast_to<NetwEntity>(p_entity);
     REQUIRE(entity != nullptr);
-    p_seen.push_back(entity->get_entity_id());
+    p_seen.push_back(entity->get_name());
     p_seen.push_back(entity->get_owner()->is_inside_tree());
-    entity->set_entity_id(StringName("Configured"));
+    entity->set_name(StringName("Configured"));
     entity->get_owner()->set(StringName("hp"), STAMPED);
 }
 
@@ -284,12 +284,12 @@ TEST_CASE(
     }
     const bool kept = stage.rig.route_node(route, 0) == made;
     CHECK(kept);
-    const StringName id = NetwEntity::of(made)->get_entity_id();
+    const StringName id = NetwEntity::of(made)->get_name();
     CHECK_FALSE(id.is_empty());
     for (int at = -1; at < 2; ++at) {
         Node *held = stage.rig.route_node(route, at);
         const bool same_id
-            = held != nullptr && NetwEntity::of(held)->get_entity_id() == id;
+            = held != nullptr && NetwEntity::of(held)->get_name() == id;
         CHECK(same_id);
     }
     Node *copy = stage.rig.route_node(route, -1);
@@ -327,7 +327,7 @@ TEST_CASE(
     CHECK(stage.under(route, late, late_arena));
     Node *joined = stage.rig.route_node(route, late);
     const bool joined_same_id
-        = joined != nullptr && NetwEntity::of(joined)->get_entity_id() == id;
+        = joined != nullptr && NetwEntity::of(joined)->get_name() == id;
     CHECK(joined_same_id);
 }
 
@@ -513,7 +513,7 @@ TEST_CASE(
             entity->get_owner()->set(StringName("hp"), STAMPED);
         }
     });
-    session->connect(StringName("entity_live"), stamp);
+    session->observe(NetwMultiplayer::ENTITY_LIVE, stamp);
 
     Node *made = stage.author_spawns(
         "authored_crate",
@@ -523,7 +523,7 @@ TEST_CASE(
     REQUIRE(made != nullptr);
     const int route = route_of(made);
     stage.rig.step_ticks(2);
-    session->disconnect(StringName("entity_live"), stamp);
+    session->unobserve(NetwMultiplayer::ENTITY_LIVE, stamp);
     stage.rig.step_ticks(SETTLE_TICKS);
 
     Node *observed = stage.rig.route_node(route, 1);
@@ -641,7 +641,7 @@ TEST_CASE(
             continue;
         }
         CHECK(
-            NetwEntity::of(held)->get_entity_id() == StringName("Configured")
+            NetwEntity::of(held)->get_name() == StringName("Configured")
         );
         NETW_CHECK_EQ(int64_t(held->get(StringName("hp"))), STAMPED);
     }

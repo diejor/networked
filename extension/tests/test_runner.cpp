@@ -12,10 +12,10 @@
 #include "godot/project_settings.hpp"
 #include "netw/api/context.hpp"
 #include "netw/api/entity.hpp"
-#include "netw/api/interest_handle.hpp"
+#include "netw/api/interest.hpp"
 #include "netw/api/interpolate.hpp"
 #include "netw/api/netw_multiplayer.hpp"
-#include "netw/api/prediction_handle.hpp"
+#include "netw/api/prediction.hpp"
 #include "netw/api/tests.hpp"
 #include "netw/colors.hpp"
 #include "netw/connect/tracker_client.hpp"
@@ -622,8 +622,8 @@ void NetwNativeTests::tracker_book_clear() {
 }
 
 Dictionary NetwNativeTests::prediction_stats(Object *p_handle) {
-    const NetwPredictionHandle *handle
-        = Object::cast_to<NetwPredictionHandle>(p_handle);
+    const NetwPrediction *handle
+        = Object::cast_to<NetwPrediction>(p_handle);
     if (handle == nullptr || handle->get_stats().is_null()) {
         return Dictionary();
     }

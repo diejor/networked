@@ -150,7 +150,7 @@ public sealed class NetwClockConfig : NetwRefCounted
             2586408642UL);
 
     /// <summary>
-    /// Whether <see cref="NetwClockHandle.TickFactor"/> follows
+    /// Whether <see cref="NetwClock.TickFactor"/> follows
     /// <c>Engine.get_physics_interpolation_fraction</c>.
     /// </summary>
     public bool UsePhysicsInterpolation
@@ -177,21 +177,21 @@ public sealed class NetwClockConfig : NetwRefCounted
     }
 
     private static readonly IntPtr _bindGetSyncMode =
-        NetwApi.MethodBind("NetwClockConfig", "get_sync_mode", 1957647188UL);
+        NetwApi.MethodBind("NetwClockConfig", "get_sync_mode", 1989617827UL);
 
     private static readonly IntPtr _bindSetSyncMode =
-        NetwApi.MethodBind("NetwClockConfig", "set_sync_mode", 2414319464UL);
+        NetwApi.MethodBind("NetwClockConfig", "set_sync_mode", 3781467571UL);
 
     /// <summary>
     /// How the clock is corrected toward the server's.
     /// </summary>
-    public NetwMultiplayer.SyncMode SyncMode
+    public NetwClock.SyncModeEnum SyncMode
     {
         get
         {
             long answered = default;
             NetwThunks.Ptrcall0_Long(_bindGetSyncMode, Checked, ref answered);
-            return (NetwMultiplayer.SyncMode)answered;
+            return (NetwClock.SyncModeEnum)answered;
         }
         set
         {
@@ -219,7 +219,7 @@ public sealed class NetwClockConfig : NetwRefCounted
 
     /// <summary>
     /// Ticks of difference from the server past which the clock snaps, even
-    /// with <see cref="NetwMultiplayer.SyncMode.Stretch"/>.
+    /// with <see cref="NetwClock.SyncModeEnum.Stretch"/>.
     /// </summary>
     public long PanicSnapThreshold
     {
@@ -257,8 +257,8 @@ public sealed class NetwClockConfig : NetwRefCounted
             373806689UL);
 
     /// <summary>
-    /// The share of the difference
-    /// <see cref="NetwMultiplayer.SyncMode.Stretch"/> corrects each frame.
+    /// The share of the difference <see cref="NetwClock.SyncModeEnum.Stretch"/>
+    /// corrects each frame.
     /// </summary>
     public double StretchNudgeFactor
     {
@@ -371,7 +371,7 @@ public sealed class NetwClockConfig : NetwRefCounted
 
     /// <summary>
     /// How much jitter adds to
-    /// <see cref="NetwClockHandle.RecommendedDisplayOffset"/>.
+    /// <see cref="NetwClock.RecommendedDisplayOffset"/>.
     /// </summary>
     public double JitterMultiplier
     {
@@ -514,19 +514,19 @@ public sealed class NetwClockConfig : NetwRefCounted
         NetwApi.MethodBind(
             "NetwClockConfig",
             "get_tickrate_mismatch_action",
-            3297432098UL);
+            4035356669UL);
 
     private static readonly IntPtr _bindSetTickrateMismatchAction =
         NetwApi.MethodBind(
             "NetwClockConfig",
             "set_tickrate_mismatch_action",
-            2041315952UL);
+            2609927834UL);
 
     /// <summary>
     /// What happens when a peer has a different
     /// <see cref="NetwClockConfig.Tickrate"/>.
     /// </summary>
-    public NetwMultiplayer.MismatchAction TickrateMismatchAction
+    public NetwClock.MismatchAction TickrateMismatchAction
     {
         get
         {
@@ -535,7 +535,7 @@ public sealed class NetwClockConfig : NetwRefCounted
                 _bindGetTickrateMismatchAction,
                 Checked,
                 ref answered);
-            return (NetwMultiplayer.MismatchAction)answered;
+            return (NetwClock.MismatchAction)answered;
         }
         set
         {
@@ -612,12 +612,12 @@ public sealed class NetwClockConfig : NetwRefCounted
     }
 
     private static readonly IntPtr _bindSync =
-        NetwApi.MethodBind("NetwClockConfig", "sync", 3241163647UL);
+        NetwApi.MethodBind("NetwClockConfig", "sync", 216226165UL);
 
     /// <summary>
     /// Sets <see cref="NetwClockConfig.SyncMode"/> and returns this config.
     /// </summary>
-    public NetwClockConfig Sync(NetwMultiplayer.SyncMode syncMode)
+    public NetwClockConfig Sync(NetwClock.SyncModeEnum syncMode)
     {
         long slot0 = (long)syncMode;
         IntPtr answered = default;

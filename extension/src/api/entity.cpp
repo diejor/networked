@@ -4,13 +4,13 @@
 #include "godot/multiplayer.hpp"
 #include "godot/object.hpp"
 #include "godot/utility.hpp"
-#include "netw/api/display_handle.hpp"
-#include "netw/api/interest_handle.hpp"
+#include "netw/api/display.hpp"
+#include "netw/api/interest.hpp"
 #include "netw/api/netw_multiplayer.hpp"
-#include "netw/api/persistence_handle.hpp"
-#include "netw/api/prediction_handle.hpp"
+#include "netw/api/persistence.hpp"
+#include "netw/api/prediction.hpp"
 #include "netw/api/replication_core.hpp"
-#include "netw/api/simulation_handle.hpp"
+#include "netw/api/simulation.hpp"
 #include "netw/colors.hpp"
 #include "netw/entity/control.hpp"
 #include "netw/entity/stage.hpp"
@@ -40,10 +40,6 @@ constexpr const char *SIG_SPAWNED = "spawned";
 constexpr const char *SIG_DESPAWNING = "despawning";
 constexpr const char *SIG_DESPAWNED = "despawned";
 constexpr const char *SIG_HIDDEN = "hidden";
-constexpr const char *SIG_INTEREST_ENTER = "interest_enter";
-constexpr const char *SIG_INTEREST_EXIT = "interest_exit";
-constexpr const char *SIG_OBSERVER_ENTERED = "observer_entered";
-constexpr const char *SIG_OBSERVER_LEFT = "observer_left";
 constexpr const char *SIG_CONTROL_CHANGED = "control_changed";
 constexpr const char *SIG_CONTROL_REQUESTED = "control_requested";
 constexpr const char *SIG_LIFECYCLE_REQUESTED = "lifecycle_requested";
@@ -210,7 +206,7 @@ void NetwEntity::tree_entered_edge() {
     if (hidden && ready_once_fired) {
         callable_mp(this, &NetwEntity::readmitted_ready).call_deferred();
     }
-    const Ref<NetwInterestHandle> interest
+    const Ref<NetwInterest> interest
         = record->minted_part(NetwEntityRecord::PART_INTEREST);
     if (interest.is_valid()) {
         interest->activate();
@@ -223,7 +219,7 @@ void NetwEntity::tree_entered_edge() {
 
 void NetwEntity::tree_exiting_edge() {
     _handle_tree_exiting();
-    const Ref<NetwInterestHandle> interest
+    const Ref<NetwInterest> interest
         = record->minted_part(NetwEntityRecord::PART_INTEREST);
     if (interest.is_valid()) {
         interest->deactivate();
@@ -279,12 +275,12 @@ void NetwEntity::stamp_multiplayer(const Ref<NetwMultiplayer> &p_api) {
     session_id = gd::instance_id(p_api.ptr());
 }
 
-StringName NetwEntity::get_entity_id() const {
+StringName NetwEntity::get_name() const {
     return record->get_entity_id();
 }
 
-void NetwEntity::set_entity_id(const StringName &p_entity_id) {
-    record->set_entity_id(p_entity_id);
+void NetwEntity::set_name(const StringName &p_name) {
+    record->set_entity_id(p_name);
 }
 
 int64_t NetwEntity::get_peer_id() const {
@@ -444,10 +440,7 @@ void NetwEntity::set_controller(int64_t p_value) {
         record_controller(p_value);
         return;
     }
-    if (!ensure_server_action(StringName("NetwEntity.controller"))) {
-        return;
-    }
-    apply_control_change(p_value);
+    transfer_control(p_value);
 }
 
 NetwEntity::ControlKind NetwEntity::get_control_kind() const {
@@ -501,17 +494,34 @@ int64_t NetwEntity::local_peer() const {
     return resolved->get_unique_id();
 }
 
-bool NetwEntity::ensure_server_action(const StringName &p_action) {
-    if (get_is_session_authority()) {
-        return true;
-    }
-    NETW_ERROR(
+Error NetwEntity::transfer_control(int64_t p_peer) {
+    NETW_ERR_COND_V(
+        get_stage() == int64_t(entity::Stage::UNBOUND),
+        ERR_UNCONFIGURED,
         sys::ENTITY,
-        "%s can be set only on the server. A client asks for authority "
-        "with NetwEntity.claim_authority.",
-        String(p_action)
+        "'%s' is not spawned yet. Set NetwEntity.controller to choose its "
+        "first controller.",
+        String(get_name())
     );
-    return false;
+    NETW_ERR_COND_V(
+        p_peer < 0,
+        ERR_INVALID_PARAMETER,
+        sys::ENTITY,
+        "'%s' cannot be given to peer %d. Pass a peer id, or 0 for the "
+        "server.",
+        String(get_name()),
+        p_peer
+    );
+    NETW_ERR_COND_V(
+        !get_is_session_authority(),
+        ERR_UNAUTHORIZED,
+        sys::ENTITY,
+        "Only the server can give '%s' to another peer. A client asks for "
+        "it with NetwEntity.claim_authority.",
+        String(get_name())
+    );
+    apply_control_change(p_peer);
+    return OK;
 }
 
 ReplicationCore *NetwEntity::get_replication_plane() const {
@@ -544,7 +554,7 @@ void NetwEntity::announce_control(int64_t p_was, int64_t p_peer) {
         EventPlane::CONTROL_CHANGED,
         get_route(),
         detail,
-        get_entity_id(),
+        get_name(),
         p_peer,
         OK,
         Dictionary()
@@ -601,7 +611,7 @@ void NetwEntity::follow_session(const NodePath &p_path) {
     }
 }
 
-void NetwEntity::transfer_control(int64_t p_peer) {
+void NetwEntity::adopt_controller(int64_t p_peer) {
     const int64_t was = control()->get_controller();
     if (!record->set_controller(nullptr, p_peer)) {
         apply_control();
@@ -686,7 +696,7 @@ String NetwEntity::refusal_detail(int64_t p_hold) const {
     return vformat(
         "control of '%s' with hold %d was refused, peer %d holds it with "
         "hold %d",
-        String(get_entity_id()),
+        String(get_name()),
         p_hold,
         get_controller(),
         control()->hold
@@ -727,7 +737,7 @@ Ref<NetwPromise> NetwEntity::claim_by_contact(const Ref<NetwEntity> &p_source) {
             vformat(
                 "a contact claim on '%s' names a source this peer does not "
                 "control",
-                String(get_entity_id())
+                String(get_name())
             )
         );
     }
@@ -762,7 +772,7 @@ Ref<NetwPromise> NetwEntity::issue_claim(Hold p_hold, int64_t p_source_route) {
             ERR_UNAVAILABLE,
             vformat(
                 "'%s' is in no session, so no peer can decide its control",
-                String(get_entity_id())
+                String(get_name())
             )
         );
     }
@@ -795,7 +805,7 @@ Ref<NetwPromise> NetwEntity::issue_claim(Hold p_hold, int64_t p_source_route) {
             ERR_UNAVAILABLE,
             vformat(
                 "'%s' has no session plane to carry a control request",
-                String(get_entity_id())
+                String(get_name())
             )
         );
     }
@@ -826,7 +836,7 @@ Ref<NetwPromise> NetwEntity::release_authority(int64_t p_successor) {
             vformat(
                 "'%s' is not controlled by peer %d, so it has nothing to "
                 "release",
-                String(get_entity_id()),
+                String(get_name()),
                 local
             )
         );
@@ -837,7 +847,7 @@ Ref<NetwPromise> NetwEntity::release_authority(int64_t p_successor) {
             vformat(
                 "peer %d holds no copy of '%s', so it cannot take it on",
                 p_successor,
-                String(get_entity_id())
+                String(get_name())
             )
         );
     }
@@ -868,7 +878,7 @@ Ref<NetwPromise> NetwEntity::release_authority(int64_t p_successor) {
             ERR_UNAVAILABLE,
             vformat(
                 "'%s' cannot carry another control request now",
-                String(get_entity_id())
+                String(get_name())
             )
         );
     }
@@ -917,7 +927,7 @@ PackedByteArray NetwEntity::final_image(int64_t p_tick) {
         "'%s' released authority with %d bytes of state, over the %d byte "
         "limit, so the next authority starts from its own copy. Replicate "
         "fewer or smaller properties on this entity.",
-        String(get_entity_id()),
+        String(get_name()),
         measured,
         session::CONTROL_FINAL_STATE_CAP
     );
@@ -1257,7 +1267,7 @@ bool NetwEntity::expire_control(int64_t p_tick, int64_t p_deadline) {
             ERR_TIMEOUT,
             vformat(
                 "no control decision on '%s' arrived within %d ticks",
-                String(get_entity_id()),
+                String(get_name()),
                 p_deadline
             )
         );
@@ -1351,7 +1361,7 @@ entity::Control::Outcome NetwEntity::decide_request(
                   "a MultiplayerSynchronizer. Set NetwEntity.transfer to "
                   "TRANSFER_REQUESTABLE.",
             int(p_requester),
-            String(get_entity_id())
+            String(get_name())
         );
         outcome = Outcome::UNAVAILABLE;
     } else if (ruling == Ruling::EXCLUDED) {
@@ -1373,7 +1383,7 @@ entity::Control::Outcome NetwEntity::decide_request(
             EventPlane::CONTROL_REQUESTED,
             get_route(),
             detail,
-            get_entity_id(),
+            get_name(),
             p_requester,
             outcome == Outcome::GRANTED           ? OK
                 : outcome == Outcome::UNAVAILABLE ? ERR_UNAVAILABLE
@@ -1441,7 +1451,7 @@ void NetwEntity::decide_control(
 ) {
     const bool tenure_changed = control()->decide(p_peer, p_hold);
     control_moved();
-    transfer_control(p_peer);
+    adopt_controller(p_peer);
     NetwMultiplayer *core = session_core();
     if (tenure_changed && core != nullptr) {
         core->row_streams_follow_tenure(get_route(), control()->tenure);
@@ -1474,7 +1484,7 @@ void NetwEntity::_handle_control_apply(const session::ControlApply &p_applied) {
             int64_t(p_applied.hold)
         )) {
         control_moved();
-        transfer_control(int64_t(p_applied.controller));
+        adopt_controller(int64_t(p_applied.controller));
         NetwMultiplayer *core = session_core();
         if (p_applied.tenure_changed && core != nullptr) {
             core->row_streams_follow_tenure(get_route(), control()->tenure);
@@ -1561,7 +1571,7 @@ void NetwEntity::abandon_claims() {
             ERR_UNAVAILABLE,
             vformat(
                 "'%s' was freed with a control request outstanding",
-                String(get_entity_id())
+                String(get_name())
             )
         );
     }
@@ -1596,7 +1606,7 @@ void NetwEntity::arm(const Ref<NetwMultiplayer> &p_api) {
     );
     stamp_multiplayer(p_api);
     if (!control()->get_configured()) {
-        transfer_control(resolve_initial_controller());
+        adopt_controller(resolve_initial_controller());
     } else {
         apply_control();
     }
@@ -1681,7 +1691,7 @@ void NetwEntity::hydrate_components() {
             "'%s' has different networked components here than on the "
             "server (%d against %d), so its components do not replicate. "
             "Build the entity with the same nodes on every peer.",
-            String(get_entity_id()),
+            String(get_name()),
             int(table.get_wire_hash()),
             int(table.get_table_hash())
         );
@@ -1759,7 +1769,7 @@ void NetwEntity::_on_owner_ready() {
             "state. Call NetwPropertyConfig.state on the properties it "
             "restores.",
             owner != nullptr ? String(owner->get_path()).utf8().get_data()
-                             : String(get_entity_id()).utf8().get_data()
+                             : String(get_name()).utf8().get_data()
         );
     }
     {
@@ -1989,18 +1999,22 @@ PropertyBindingPtr NetwEntity::get_broadcast_binding() const {
     return derived_binding(repl::SET_RECORD_BROADCAST);
 }
 
-Ref<NetwInterestHandle> NetwEntity::get_interest() const {
+Ref<NetwInterest> NetwEntity::get_interest() const {
     return const_cast<NetwEntity *>(this)->record->part(
         NetwEntityRecord::PART_INTEREST,
         const_cast<NetwEntity *>(this)
     );
 }
 
-Ref<NetwSceneHandle> NetwEntity::own_scene() {
+Ref<NetwInterest> NetwEntity::held_interest() const {
+    return record->minted_part(NetwEntityRecord::PART_INTEREST);
+}
+
+Ref<NetwScene> NetwEntity::own_scene() {
     return record->part(NetwEntityRecord::PART_SCENE, this);
 }
 
-Ref<NetwSceneHandle> NetwEntity::get_scene() const {
+Ref<NetwScene> NetwEntity::get_scene() const {
     NetwEntity *self = const_cast<NetwEntity *>(this);
     NetwMultiplayer *core = session_core();
     if (core == nullptr || get_owner() == nullptr) {
@@ -2009,36 +2023,36 @@ Ref<NetwSceneHandle> NetwEntity::get_scene() const {
     return core->entity_scene_facet(record, self);
 }
 
-Ref<NetwPredictionHandle> NetwEntity::get_prediction() const {
+Ref<NetwPrediction> NetwEntity::get_prediction() const {
     return const_cast<NetwEntity *>(this)->record->part(
         NetwEntityRecord::PART_PREDICTION,
         const_cast<NetwEntity *>(this)
     );
 }
 
-Ref<NetwSimulationHandle> NetwEntity::get_simulation() const {
+Ref<NetwSimulation> NetwEntity::get_simulation() const {
     return const_cast<NetwEntity *>(this)->record->part(
         NetwEntityRecord::PART_SIMULATION,
         const_cast<NetwEntity *>(this)
     );
 }
 
-Ref<NetwPredictionHandle> NetwEntity::prediction_if_minted() const {
+Ref<NetwPrediction> NetwEntity::prediction_if_minted() const {
     return record->minted_part(NetwEntityRecord::PART_PREDICTION);
 }
 
-Ref<NetwSimulationHandle> NetwEntity::simulation_if_minted() const {
+Ref<NetwSimulation> NetwEntity::simulation_if_minted() const {
     return record->minted_part(NetwEntityRecord::PART_SIMULATION);
 }
 
-Ref<NetwPersistenceHandle> NetwEntity::get_persistence() const {
+Ref<NetwPersistence> NetwEntity::get_persistence() const {
     return const_cast<NetwEntity *>(this)->record->part(
         NetwEntityRecord::PART_PERSISTENCE,
         const_cast<NetwEntity *>(this)
     );
 }
 
-Ref<NetwDisplayHandle> NetwEntity::get_interpolation() const {
+Ref<NetwDisplay> NetwEntity::get_display() const {
     return const_cast<NetwEntity *>(this)->record->part(
         NetwEntityRecord::PART_DISPLAY,
         const_cast<NetwEntity *>(this)
@@ -2106,11 +2120,6 @@ void NetwEntity::_bind_methods() {
         D_METHOD("of", "node"),
         &NetwEntity::of
     );
-    ClassDB::bind_static_method(
-        "NetwEntity",
-        D_METHOD("ensure", "root"),
-        &NetwEntity::ensure
-    );
 
     ClassDB::bind_method(D_METHOD("get_owner"), &NetwEntity::get_owner);
     ADD_PROPERTY(
@@ -2126,15 +2135,15 @@ void NetwEntity::_bind_methods() {
         "get_owner"
     );
 
-    ClassDB::bind_method(D_METHOD("get_entity_id"), &NetwEntity::get_entity_id);
+    ClassDB::bind_method(D_METHOD("get_name"), &NetwEntity::get_name);
     ClassDB::bind_method(
-        D_METHOD("set_entity_id", "entity_id"),
-        &NetwEntity::set_entity_id
+        D_METHOD("set_name", "name"),
+        &NetwEntity::set_name
     );
     ADD_PROPERTY(
-        PropertyInfo(Variant::STRING_NAME, "entity_id"),
-        "set_entity_id",
-        "get_entity_id"
+        PropertyInfo(Variant::STRING_NAME, "name"),
+        "set_name",
+        "get_name"
     );
 
     ClassDB::bind_method(D_METHOD("get_peer_id"), &NetwEntity::get_peer_id);
@@ -2147,9 +2156,6 @@ void NetwEntity::_bind_methods() {
         "set_peer_id",
         "get_peer_id"
     );
-
-    ClassDB::bind_method(D_METHOD("get_route"), &NetwEntity::get_route);
-    ADD_PROPERTY(PropertyInfo(Variant::INT, "route"), "", "get_route");
 
     ClassDB::bind_method(D_METHOD("get_rid"), &NetwEntity::get_rid_handle);
     ADD_PROPERTY(PropertyInfo(Variant::RID, "rid"), "", "get_rid");
@@ -2270,13 +2276,13 @@ void NetwEntity::_bind_methods() {
     );
 
     ClassDB::bind_method(
-        D_METHOD("get_is_multiplayer_scene"),
+        D_METHOD("get_is_scene"),
         &NetwEntity::get_declares_scene
     );
     ADD_PROPERTY(
-        PropertyInfo(Variant::BOOL, "is_multiplayer_scene"),
+        PropertyInfo(Variant::BOOL, "is_scene"),
         "",
-        "get_is_multiplayer_scene"
+        "get_is_scene"
     );
 
     ClassDB::bind_method(
@@ -2370,6 +2376,10 @@ void NetwEntity::_bind_methods() {
         D_METHOD("release_authority", "successor"),
         &NetwEntity::release_authority,
         DEFVAL(0)
+    );
+    ClassDB::bind_method(
+        D_METHOD("transfer_control", "peer_id"),
+        &NetwEntity::transfer_control
     );
     ClassDB::bind_method(D_METHOD("get_hold"), &NetwEntity::get_hold);
     ADD_PROPERTY(
@@ -2562,7 +2572,7 @@ void NetwEntity::_bind_methods() {
             Variant::OBJECT,
             "interest",
             PROPERTY_HINT_RESOURCE_TYPE,
-            "NetwInterestHandle",
+            "NetwInterest",
             PROPERTY_USAGE_NONE
         ),
         "",
@@ -2574,7 +2584,7 @@ void NetwEntity::_bind_methods() {
             Variant::OBJECT,
             "scene",
             PROPERTY_HINT_RESOURCE_TYPE,
-            "NetwSceneHandle",
+            "NetwScene",
             PROPERTY_USAGE_NONE
         ),
         "",
@@ -2589,7 +2599,7 @@ void NetwEntity::_bind_methods() {
             Variant::OBJECT,
             "prediction",
             PROPERTY_HINT_RESOURCE_TYPE,
-            "NetwPredictionHandle",
+            "NetwPrediction",
             PROPERTY_USAGE_NONE
         ),
         "",
@@ -2604,7 +2614,7 @@ void NetwEntity::_bind_methods() {
             Variant::OBJECT,
             "simulation",
             PROPERTY_HINT_RESOURCE_TYPE,
-            "NetwSimulationHandle",
+            "NetwSimulation",
             PROPERTY_USAGE_NONE
         ),
         "",
@@ -2619,26 +2629,26 @@ void NetwEntity::_bind_methods() {
             Variant::OBJECT,
             "persistence",
             PROPERTY_HINT_RESOURCE_TYPE,
-            "NetwPersistenceHandle",
+            "NetwPersistence",
             PROPERTY_USAGE_NONE
         ),
         "",
         "get_persistence"
     );
     ClassDB::bind_method(
-        D_METHOD("get_interpolation"),
-        &NetwEntity::get_interpolation
+        D_METHOD("get_display"),
+        &NetwEntity::get_display
     );
     ADD_PROPERTY(
         PropertyInfo(
             Variant::OBJECT,
-            "interpolation",
+            "display",
             PROPERTY_HINT_RESOURCE_TYPE,
-            "NetwDisplayHandle",
+            "NetwDisplay",
             PROPERTY_USAGE_NONE
         ),
         "",
-        "get_interpolation"
+        "get_display"
     );
 
     ClassDB::bind_method(D_METHOD("parent_entity"), &NetwEntity::parent_entity);
@@ -2650,22 +2660,6 @@ void NetwEntity::_bind_methods() {
     );
     ADD_SIGNAL(MethodInfo(SIG_DESPAWNED));
     ADD_SIGNAL(MethodInfo(SIG_HIDDEN));
-    ADD_SIGNAL(
-        MethodInfo(SIG_INTEREST_ENTER, PropertyInfo(Variant::INT, "peer_id"))
-    );
-    ADD_SIGNAL(
-        MethodInfo(SIG_INTEREST_EXIT, PropertyInfo(Variant::INT, "peer_id"))
-    );
-    ADD_SIGNAL(MethodInfo(
-        SIG_OBSERVER_ENTERED,
-        PropertyInfo(Variant::STRING_NAME, "layer_id"),
-        PropertyInfo(Variant::INT, "peer_id")
-    ));
-    ADD_SIGNAL(MethodInfo(
-        SIG_OBSERVER_LEFT,
-        PropertyInfo(Variant::STRING_NAME, "layer_id"),
-        PropertyInfo(Variant::INT, "peer_id")
-    ));
     ADD_SIGNAL(MethodInfo(
         SIG_CONTROL_CHANGED,
         PropertyInfo(Variant::INT, "previous_peer"),

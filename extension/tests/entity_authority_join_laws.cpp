@@ -24,7 +24,7 @@ const char *CRATE_SOURCE = R"(extends Node3D
 
 
 func _init() -> void:
-	NetwEntity.ensure(self)
+	Netw.configure_entity(self)
 	Netw.configure_property(self, &"position").broadcast().heartbeat(60)
 )";
 

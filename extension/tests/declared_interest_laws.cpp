@@ -1,4 +1,4 @@
-#include "netw/api/prediction_handle.hpp"
+#include "netw/api/prediction.hpp"
 #include "support/loopback_rig.h"
 
 #if defined(NETW_TIER_HOSTED)
@@ -27,7 +27,7 @@ TEST_CASE("[Networked][Interest] L-MIRROR binds and stamps a declared mirror") {
     Object *stamped = entity->get("multiplayer");
     REQUIRE(stamped != nullptr);
     CHECK(netw_test::LoopbackRig::core_of(stamped) == rig.client(0));
-    NETW_CHECK_EQ(int(entity->get("route")), 73);
+    NETW_CHECK_EQ(int(entity->get_route()), 73);
 }
 
 TEST_CASE(

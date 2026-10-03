@@ -17,7 +17,7 @@ func _init() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	var declared := Netw.configure_entity(self)
 	declared.initial_controller = NetwEntity.INITIAL_REPRESENTED_PEER
-	declared.interpolation.visual_root = ^"Icon"
+	declared.display.visual_root = ^"Icon"
 	declared.prediction.consume_buffer_ticks = 0
 
 	Netw.configure_property(self, &"position").on_spawn() \
@@ -34,7 +34,7 @@ func _ready() -> void:
 
 
 func account_name() -> StringName:
-	return entity.entity_id
+	return entity.name
 
 
 func _unhandled_input(event: InputEvent) -> void:

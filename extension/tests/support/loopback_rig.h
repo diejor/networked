@@ -19,7 +19,7 @@
 #include "netw/api/loopback.hpp"
 #include "netw/api/netw_multiplayer.hpp"
 #include "netw/api/participant.hpp"
-#include "netw/api/prediction_handle.hpp"
+#include "netw/api/prediction.hpp"
 #include "netw/api/promise.hpp"
 #include "netw/api/replication_core.hpp"
 #include "netw/api/schema_core.hpp"
@@ -65,14 +65,11 @@ class LoopbackRig {
         const godot::Ref<netw::LocalMultiplayerPeer> &p_peer,
         int p_coordinator = 1
     ) {
-        godot::Ref<godot::SceneMultiplayer> inner;
-        inner.instantiate();
-        inner->set_root_path(godot::NodePath("/"));
-
         godot::Ref<netw::NetwMultiplayer> api
-            = netw::NetwMultiplayer::make(inner, godot::Ref<godot::Script>());
+            = netw::NetwMultiplayer::create(godot::Ref<godot::Script>());
         REQUIRE_MESSAGE(api.is_valid(), "the session did not instantiate");
         if (api.is_valid()) {
+            api->session_get_inner()->set_root_path(godot::NodePath("/"));
             api->session_set_authority_peer(p_coordinator);
             api->set("multiplayer_peer", p_peer);
         }
@@ -1069,7 +1066,7 @@ public:
             }
         }
         const godot::RID owner = entity_of(p_row.owner, p_client);
-        const godot::Ref<netw::NetwSimulationHandle> selecting
+        const godot::Ref<netw::NetwSimulation> selecting
             = p_api->simulation_handle(owner);
         for (const godot::StringName &member : p_row.simulated) {
             selecting->simulate(
@@ -1077,7 +1074,7 @@ public:
             );
         }
         p_api->prediction_handle(owner)->set_reconcile_mode(
-            netw::NetwPredict::Reconcile(p_row.reconcile)
+            netw::NetwPrediction::Reconcile(p_row.reconcile)
         );
     }
 
@@ -1180,7 +1177,7 @@ public:
         }
     }
 
-    netw::NetwPredictionHandle *prediction_handle(
+    netw::NetwPrediction *prediction_handle(
         const godot::StringName &p_name,
         int p_client = -1
     ) const {
@@ -1189,8 +1186,8 @@ public:
         const godot::Ref<netw::NetwEntity> held = netw::NetwEntity::of(owner);
         godot::Object *wrapper = held.ptr();
         REQUIRE_MESSAGE(wrapper != nullptr, "the entity has no wrapper");
-        netw::NetwPredictionHandle *handle
-            = godot::Object::cast_to<netw::NetwPredictionHandle>(
+        netw::NetwPrediction *handle
+            = godot::Object::cast_to<netw::NetwPrediction>(
                 netw::gd::live_object(wrapper->get("prediction"))
             );
         REQUIRE_MESSAGE(handle != nullptr, "the entity has no prediction");

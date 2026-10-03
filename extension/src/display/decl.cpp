@@ -59,7 +59,7 @@ Dirt Decl::set_param(int param, const Variant &value) {
                     && type != Variant::STRING_NAME,
                 DIRT_NONE,
                 sys::INTERPOLATION,
-                "NetwDisplayHandle.visual_root must be a NodePath, not a %s.",
+                "NetwDisplay.visual_root must be a NodePath, not a %s.",
                 Variant::get_type_name(type)
             );
             visual_root = value.operator NodePath();

@@ -5,21 +5,19 @@
 #include "netw/api/entity.hpp"
 #include "netw/api/lag_compensation_config.hpp"
 #include "netw/api/netw_multiplayer.hpp"
-#include "netw/api/predict.hpp"
-#include "netw/api/prediction_handle.hpp"
+#include "netw/api/prediction.hpp"
 
 namespace TestNetwPredictServerSteered {
 
 using namespace godot;
 using namespace netw_test;
 using netw::NetwEntity;
-using netw::NetwPredict;
-using netw::NetwPredictionHandle;
+using netw::NetwPrediction;
 
 struct Axes {
-    NetwPredict::InputSource input_source;
-    NetwPredict::SimMode sim_mode;
-    NetwPredict::Role role;
+    NetwPrediction::InputSource input_source;
+    NetwPrediction::SimMode sim_mode;
+    NetwPrediction::Role role;
     int64_t controller;
 };
 
@@ -43,15 +41,15 @@ Axes axes_on_the_authority(LoopbackRig &p_rig, const EntityDecl &p_decl) {
 
     const Ref<NetwEntity> seated = p_rig.server()->entity_get_view(entity);
     REQUIRE_MESSAGE(seated.is_valid(), "the server holds no view of it");
-    const Ref<NetwPredictionHandle> prediction = seated->get_prediction();
+    const Ref<NetwPrediction> prediction = seated->get_prediction();
     REQUIRE_MESSAGE(prediction.is_valid(), "the entity carries no handle");
 
     Axes read;
     read.controller = seated->get_controller();
     read.input_source
-        = NetwPredict::InputSource(prediction->get_input_source());
-    read.sim_mode = NetwPredict::SimMode(prediction->get_sim_mode());
-    read.role = NetwPredict::Role(
+        = NetwPrediction::InputSource(prediction->get_input_source());
+    read.sim_mode = NetwPrediction::SimMode(prediction->get_sim_mode());
+    read.role = NetwPrediction::Role(
         netw::NetwPredictionEngine::role_for_axes(
             read.input_source,
             read.sim_mode
@@ -73,9 +71,15 @@ TEST_CASE(
     const Axes read = axes_on_the_authority(rig, a_predicted_body("Ball"));
 
     NETW_CHECK_EQ(read.controller, int64_t(0));
-    NETW_CHECK_EQ(int(read.input_source), int(NetwPredict::INPUT_SOURCE_LOCAL));
-    NETW_CHECK_EQ(int(read.sim_mode), int(NetwPredict::SIM_MODE_AUTHORITATIVE));
-    NETW_CHECK_EQ(int(read.role), int(NetwPredict::ROLE_HOST_LOCAL));
+    NETW_CHECK_EQ(
+        int(read.input_source),
+        int(NetwPrediction::INPUT_SOURCE_LOCAL)
+    );
+    NETW_CHECK_EQ(
+        int(read.sim_mode),
+        int(NetwPrediction::SIM_MODE_AUTHORITATIVE)
+    );
+    NETW_CHECK_EQ(int(read.role), int(NetwPrediction::ROLE_HOST_LOCAL));
 }
 
 TEST_CASE(
@@ -95,10 +99,13 @@ TEST_CASE(
     NETW_CHECK_EQ(read.controller, int64_t(rig.peer_id(0)));
     NETW_CHECK_EQ(
         int(read.input_source),
-        int(NetwPredict::INPUT_SOURCE_RECEIVED)
+        int(NetwPrediction::INPUT_SOURCE_RECEIVED)
     );
-    NETW_CHECK_EQ(int(read.sim_mode), int(NetwPredict::SIM_MODE_AUTHORITATIVE));
-    NETW_CHECK_EQ(int(read.role), int(NetwPredict::ROLE_CONSUME));
+    NETW_CHECK_EQ(
+        int(read.sim_mode),
+        int(NetwPrediction::SIM_MODE_AUTHORITATIVE)
+    );
+    NETW_CHECK_EQ(int(read.role), int(NetwPrediction::ROLE_CONSUME));
 }
 
 } // namespace TestNetwPredictServerSteered

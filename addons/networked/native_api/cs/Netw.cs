@@ -9,28 +9,8 @@ namespace Networked;
 /// Static entry points for the Networked API.
 /// </summary>
 /// <remarks>
-/// The interface provided by this class is optional and is supposed to work
-/// with the default <see cref="SceneMultiplayer"/>. <b>Bandwidth</b> Every peer
-/// is sent at most its byte budget each tick. Changed rows that do not fit wait
-/// for a later tick, and the ones that have waited longest and matter most go
-/// first.
-/// <code>
-/// func _init() -&gt; void:
-///     Netw.configure_session(self).bandwidth(256)
-///
-/// func _on_slow_player(player: NetwPlayer) -&gt; void:
-///     Netw.session(self).set_peer_bandwidth(player.peer_id, 64)
-///
-/// func _ready() -&gt; void:
-///     NetwEntity.of(self).replication_priority = 4.0
-/// </code>
-/// <para>
-/// RPCs, spawns and <see cref="NetwPropertyConfig.Retained"/> properties always
-/// go when they are due, and a peer they pushed over its budget receives no
-/// more rows until the overdraft is repaid.
-/// <see cref="NetwMultiplayer.PeerLinkStats"/> shows the budget and the
-/// overdraft.
-/// </para>
+/// <see cref="Netw.Session"/> returns the <see cref="NetwSession"/> a node
+/// belongs to, which holds the players, scenes and clock.
 /// </remarks>
 public sealed class Netw : NetwRefCounted
 {
@@ -48,49 +28,13 @@ public sealed class Netw : NetwRefCounted
         return Adopt(NetwApi.Retained(NetwApi.ObjectOf(value)));
     }
 
-    public enum SceneChange : long
-    {
-        /// <summary>
-        /// Every player moves to the new scene.
-        /// </summary>
-        Session = 0,
-        /// <summary>
-        /// Only the requesting player moves.
-        /// </summary>
-        Player = 1,
-        /// <summary>
-        /// Every player in the requester's scene moves.
-        /// </summary>
-        Scene = 2,
-    }
-
-    public enum SceneIsolation : long
-    {
-        /// <summary>
-        /// The multiplayer scene shares the physics and render world of
-        /// whatever it is parented into.
-        /// </summary>
-        None = 0,
-        /// <summary>
-        /// The multiplayer scene has its own world in a
-        /// <see cref="SubViewport"/>, so it never collides with another scene.
-        /// </summary>
-        OwnWorld = 1,
-    }
-
     private static readonly IntPtr _bindOf =
         NetwApi.MethodBind("Netw", "of", 850293890UL);
 
     /// <summary>
     /// Returns the <see cref="Node.Multiplayer"/> of <paramref name="node"/> as
-    /// a <see cref="NetwMultiplayer"/>.
-    /// <code>
-    /// var api := Netw.of(self)
-    /// api.entity_despawn(route)
-    /// </code>
-    /// <para>
-    /// A node that is in no tree returns <c>null</c>.
-    /// </para>
+    /// a <see cref="NetwMultiplayer"/>, for advanced use. A node that is in no
+    /// tree returns <c>null</c>.
     /// </summary>
     public static NetwMultiplayer Of(Node node)
     {
@@ -104,55 +48,19 @@ public sealed class Netw : NetwRefCounted
         return NetwMultiplayer.Adopt(answered);
     }
 
-    private static readonly IntPtr _bindConnection =
-        NetwApi.MethodBind("Netw", "connection", 1219668382UL);
-
-    /// <summary>
-    /// The <see cref="NetwConnectHandle"/> of the
-    /// <see cref="Node.Multiplayer"/>, used to connect to other peers and probe
-    /// servers.
-    /// <code>
-    /// var c := Netw.connection(self)
-    /// var ticket := c.create_peer(
-    ///         ENetMultiplayerPeer,
-    ///         NetwMultiplayer.TRANSPORT_MODE_HOST,
-    ///         "", {port = 21253}, _created)
-    ///
-    /// func _created(peer: MultiplayerPeer, error: Error, detail: String):
-    ///     if error == OK:
-    ///         Netw.of(self).multiplayer_peer = peer
-    /// </code>
-    /// <para>
-    /// This is optional. Assigning a <see cref="MultiplayerPeer"/> to
-    /// <see cref="MultiplayerApi.MultiplayerPeer"/> works as usual.
-    /// </para>
-    /// </summary>
-    public static NetwConnectHandle Connection(Node node)
-    {
-        IntPtr slot0 = node?.NativeInstance ?? IntPtr.Zero;
-        IntPtr answered = default;
-        NetwThunks.Ptrcall1_IntPtr_IntPtr(
-            _bindConnection,
-            IntPtr.Zero,
-            in slot0,
-            ref answered);
-        return NetwConnectHandle.Adopt(answered);
-    }
-
     private static readonly IntPtr _bindSession =
-        NetwApi.MethodBind("Netw", "session", 1978167305UL);
+        NetwApi.MethodBind("Netw", "session", 3534802101UL);
 
     /// <summary>
-    /// The <see cref="NetwSessionHandle"/> of the
-    /// <see cref="Node.Multiplayer"/>. Mostly useful for connecting signals.
+    /// The <see cref="NetwSession"/> of the <see cref="Node.Multiplayer"/>.
+    /// Mostly useful for connecting signals.
     /// <code>
     /// var s := Netw.session(self)
-    /// s.entered.connect(_on_entered)
-    /// s.disconnected.connect(_on_over)
-    /// s.ended.connect(_on_over)
+    /// s.entered.connect(on_entered)
+    /// s.exited.connect(on_exited)
     /// </code>
     /// </summary>
-    public static NetwSessionHandle Session(Node node)
+    public static NetwSession Session(Node node)
     {
         IntPtr slot0 = node?.NativeInstance ?? IntPtr.Zero;
         IntPtr answered = default;
@@ -161,123 +69,7 @@ public sealed class Netw : NetwRefCounted
             IntPtr.Zero,
             in slot0,
             ref answered);
-        return NetwSessionHandle.Adopt(answered);
-    }
-
-    private static readonly IntPtr _bindClock =
-        NetwApi.MethodBind("Netw", "clock", 358350475UL);
-
-    /// <summary>
-    /// Returns the clock for the <see cref="Node.Multiplayer"/> of
-    /// <paramref name="node"/>.
-    /// <code>
-    /// @onready var clock := Netw.clock(self)
-    ///
-    /// func _ready() -&gt; void:
-    ///     clock.before_tick.connect(_sample_input)
-    ///     clock.on_tick.connect(_simulate)
-    /// </code>
-    /// <para>
-    /// <see cref="Netw.ConfigureClock"/> is where the clock is set up before
-    /// <see cref="MultiplayerApi.MultiplayerPeer"/> connects.
-    /// </para>
-    /// </summary>
-    public static NetwClockHandle Clock(Node node)
-    {
-        IntPtr slot0 = node?.NativeInstance ?? IntPtr.Zero;
-        IntPtr answered = default;
-        NetwThunks.Ptrcall1_IntPtr_IntPtr(
-            _bindClock,
-            IntPtr.Zero,
-            in slot0,
-            ref answered);
-        return NetwClockHandle.Adopt(answered);
-    }
-
-    private static readonly IntPtr _bindService =
-        NetwApi.MethodBind("Netw", "service", 158477627UL);
-
-    /// <summary>
-    /// Returns the service registered as <paramref name="type"/>, or
-    /// <c>null</c>. A service is like an autoload, but one per
-    /// <see cref="MultiplayerApi"/>.
-    /// <code>
-    /// var gamestate := Netw.service(self, MyGamestate) as MyGamestate
-    /// </code>
-    /// </summary>
-    public static Variant Service(Node node, GodotObject type)
-    {
-        godot_variant slot0 = VariantUtils.CreateFromGodotObject(node);
-        godot_variant slot1 = VariantUtils.CreateFromGodotObject(type);
-        godot_variant answered = default;
-        NetwThunks.Call2(
-            _bindService,
-            IntPtr.Zero,
-            in slot0,
-            in slot1,
-            ref answered);
-        slot0.Dispose();
-        slot1.Dispose();
-        Variant result = Variant.CreateCopyingBorrowed(answered);
-        answered.Dispose();
-        return result;
-    }
-
-    private static readonly IntPtr _bindServiceRegister =
-        NetwApi.MethodBind("Netw", "service_register", 3274971611UL);
-
-    /// <summary>
-    /// Registers <paramref name="service"/> so <see cref="Netw.Service"/>
-    /// returns it.
-    /// <code>
-    /// Netw.service_register(self, MyGamestate.new())
-    /// </code>
-    /// <para>
-    /// <paramref name="type"/> defaults to the class of
-    /// <paramref name="service"/>. Registering another service with the same
-    /// <paramref name="type"/> replaces it.
-    /// </para>
-    /// </summary>
-    public static void ServiceRegister(
-        Node node,
-        GodotObject service,
-        GodotObject type = null)
-    {
-        IntPtr slot0 = node?.NativeInstance ?? IntPtr.Zero;
-        IntPtr slot1 = service?.NativeInstance ?? IntPtr.Zero;
-        IntPtr slot2 = type?.NativeInstance ?? IntPtr.Zero;
-        long discarded = default;
-        NetwThunks.Ptrcall3_IntPtr_IntPtr_IntPtr_Long(
-            _bindServiceRegister,
-            IntPtr.Zero,
-            in slot0,
-            in slot1,
-            in slot2,
-            ref discarded);
-    }
-
-    private static readonly IntPtr _bindServiceUnregister =
-        NetwApi.MethodBind("Netw", "service_unregister", 3274971611UL);
-
-    /// <summary>
-    /// Reverses <see cref="Netw.ServiceRegister"/>.
-    /// </summary>
-    public static void ServiceUnregister(
-        Node node,
-        GodotObject service,
-        GodotObject type = null)
-    {
-        IntPtr slot0 = node?.NativeInstance ?? IntPtr.Zero;
-        IntPtr slot1 = service?.NativeInstance ?? IntPtr.Zero;
-        IntPtr slot2 = type?.NativeInstance ?? IntPtr.Zero;
-        long discarded = default;
-        NetwThunks.Ptrcall3_IntPtr_IntPtr_IntPtr_Long(
-            _bindServiceUnregister,
-            IntPtr.Zero,
-            in slot0,
-            in slot1,
-            in slot2,
-            ref discarded);
+        return NetwSession.Adopt(answered);
     }
 
     private static readonly IntPtr _bindPrepareJoin =
@@ -294,7 +86,7 @@ public sealed class Netw : NetwRefCounted
     /// <para>
     /// Call it before or after assigning
     /// <see cref="MultiplayerApi.MultiplayerPeer"/>. The join can still be
-    /// refused later, which emits <see cref="NetwConnectHandle.JoinFailed"/>.
+    /// refused later, which emits <see cref="NetwConnection.JoinFailed"/>.
     /// <code>
     /// Error
     /// ┠╴OK                     the join will be sent
@@ -343,37 +135,26 @@ public sealed class Netw : NetwRefCounted
     }
 
     private static readonly IntPtr _bindScene =
-        NetwApi.MethodBind("Netw", "scene", 2326313168UL);
+        NetwApi.MethodBind("Netw", "scene", 867873299UL);
 
     /// <summary>
-    /// Returns the multiplayer scene <paramref name="node"/> is in, or the one
-    /// called <paramref name="named"/>.
+    /// Returns the multiplayer scene <paramref name="node"/> is in. Use
+    /// <see cref="NetwSession.FindScene"/> to find one by name.
     /// <code>
-    /// var here := Netw.scene(self)              # the scene I am in
-    /// var arena := Netw.scene(spawned)         # the one I just spawned
-    /// var track := Netw.scene(self, &amp;"Track")  # the only live Track
+    /// var here := Netw.scene(self)
+    /// var track := Netw.session(self).find_scene(&amp;"Track")
     /// </code>
     /// </summary>
-    public static NetwSceneHandle Scene(Node node, StringName named = null)
+    public static NetwScene Scene(Node node)
     {
-        named ??= new StringName("");
-        godot_variant slot0 = VariantUtils.CreateFromGodotObject(node);
-        godot_variant slot1 = VariantUtils.CreateFromStringName(named);
-        godot_variant answered = default;
-        NetwThunks.Call2(
+        IntPtr slot0 = node?.NativeInstance ?? IntPtr.Zero;
+        IntPtr answered = default;
+        NetwThunks.Ptrcall1_IntPtr_IntPtr(
             _bindScene,
             IntPtr.Zero,
             in slot0,
-            in slot1,
             ref answered);
-        slot0.Dispose();
-        slot1.Dispose();
-        NetwSceneHandle result =
-            NetwSceneHandle.Adopt(
-                NetwApi.Retained(
-                    VariantUtils.ConvertToGodotObjectPtr(answered)));
-        answered.Dispose();
-        return result;
+        return NetwScene.Adopt(answered);
     }
 
     private static readonly IntPtr _bindConfigureServerInfo =
@@ -381,7 +162,7 @@ public sealed class Netw : NetwRefCounted
 
     /// <summary>
     /// Declares what this server says about itself when another peer probes it
-    /// with <see cref="NetwConnectHandle.EndpointProbe"/>.
+    /// with <see cref="NetwConnection.EndpointProbe"/>.
     /// <code>
     /// func _init() -&gt; void:
     ///     Netw.configure_server_info(server_info)
@@ -493,7 +274,7 @@ public sealed class Netw : NetwRefCounted
     /// func _init() -&gt; void:
     ///     Netw.configure_session(self) \
     ///             .app(&amp;"bomber-v2") \
-    ///             .role(NetwMultiplayer.ROLE_LISTEN_SERVER)
+    ///             .role(NetwSession.ROLE_LISTEN_SERVER)
     /// </code>
     /// <para>
     /// See <see cref="NetwSessionConfig"/> for the settings.
@@ -796,8 +577,8 @@ public sealed class Netw : NetwRefCounted
     ///             .record_id(account_name)
     /// </code>
     /// <para>
-    /// See <see cref="NetwPersistenceConfig"/>,
-    /// <see cref="NetwPersistenceHandle"/> and <see cref="NetwDatabase"/>.
+    /// See <see cref="NetwPersistenceConfig"/>, <see cref="NetwPersistence"/>
+    /// and <see cref="NetwDatabase"/>.
     /// </para>
     /// </summary>
     public static NetwPersistenceConfig ConfigurePersistence(Node node)
@@ -812,38 +593,6 @@ public sealed class Netw : NetwRefCounted
         return NetwPersistenceConfig.Adopt(answered);
     }
 
-    private static readonly IntPtr _bindConfigureInterest =
-        NetwApi.MethodBind("Netw", "configure_interest", 3837747350UL);
-
-    /// <summary>
-    /// Declares which <see cref="NetwInterestLayer"/> layer
-    /// <paramref name="node"/> belongs to, and returns the
-    /// <see cref="NetwInterestHandle"/> that is also
-    /// <see cref="NetwEntity.Interest"/> of that <paramref name="node"/>.
-    /// <code>
-    /// func _init() -&gt; void:
-    ///     Netw.configure_interest(self) \
-    ///             .join( \
-    ///                 &amp;"team:red", \
-    ///                 NetwMultiplayer.LEAVE_POLICY_RETAIN, \
-    ///                 NetwMultiplayer.PERCEPTION_POLICY_HIDE, \
-    ///             ) \
-    ///             .join(&amp;"sight") \
-    ///             .on_enter(_on_interest_enter)
-    /// </code>
-    /// </summary>
-    public static NetwInterestHandle ConfigureInterest(Node node)
-    {
-        IntPtr slot0 = node?.NativeInstance ?? IntPtr.Zero;
-        IntPtr answered = default;
-        NetwThunks.Ptrcall1_IntPtr_IntPtr(
-            _bindConfigureInterest,
-            IntPtr.Zero,
-            in slot0,
-            ref answered);
-        return NetwInterestHandle.Adopt(answered);
-    }
-
     private static readonly IntPtr _bindConfigureSchema =
         NetwApi.MethodBind("Netw", "configure_schema", 261365823UL);
 
@@ -855,10 +604,10 @@ public sealed class Netw : NetwRefCounted
     ///     static var pos    := schema.vector3(&amp;"pos")
     ///     static var hp     := schema.u16(&amp;"hp")
     ///
-    /// @onready var mobs := Netw.table(self, &amp;"Mob")
+    /// @onready var mobs := Netw.session(self).table(&amp;"Mob")
     /// </code>
     /// <para>
-    /// Read and write the table with <see cref="Netw.Table"/>.
+    /// Read and write the table with <see cref="NetwSession.Table"/>.
     /// </para>
     /// </summary>
     public static NetwSchema ConfigureSchema(StringName name)
@@ -1231,40 +980,6 @@ public sealed class Netw : NetwRefCounted
         return NetwChannel.Adopt(answered);
     }
 
-    private static readonly IntPtr _bindTable =
-        NetwApi.MethodBind("Netw", "table", 482665393UL);
-
-    /// <summary>
-    /// Returns the table of the schema <paramref name="name"/> from
-    /// <see cref="Netw.ConfigureSchema"/>.
-    /// <code>
-    /// @onready var mobs := Netw.table(self, &amp;"Mob")
-    ///
-    /// func _ready() -&gt; void:
-    ///     mobs.received.connect(_on_mobs)
-    /// </code>
-    /// </summary>
-    public static NetwTableHandle Table(Node node, StringName name)
-    {
-        godot_variant slot0 = VariantUtils.CreateFromGodotObject(node);
-        godot_variant slot1 = VariantUtils.CreateFromStringName(name);
-        godot_variant answered = default;
-        NetwThunks.Call2(
-            _bindTable,
-            IntPtr.Zero,
-            in slot0,
-            in slot1,
-            ref answered);
-        slot0.Dispose();
-        slot1.Dispose();
-        NetwTableHandle result =
-            NetwTableHandle.Adopt(
-                NetwApi.Retained(
-                    VariantUtils.ConvertToGodotObjectPtr(answered)));
-        answered.Dispose();
-        return result;
-    }
-
     private static readonly IntPtr _bindConfigureDatabase =
         NetwApi.MethodBind("Netw", "configure_database", 429892123UL);
 
@@ -1276,8 +991,8 @@ public sealed class Netw : NetwRefCounted
     ///     Netw.configure_database(self, &amp;"saves").backend(preload("res://save_backend.tres"))
     /// </code>
     /// <para>
-    /// Get it later with <see cref="Netw.Database"/>. Pass an [annotation
-    /// @GDScript.@export] <see cref="NetwDatabaseConfig"/> as
+    /// Get it later with <see cref="NetwSession.Database"/>. Pass an
+    /// [annotation @GDScript.@export] <see cref="NetwDatabaseConfig"/> as
     /// <paramref name="preset"/> to set it from the inspector.
     /// <code>
     /// @export var database_config: NetwDatabaseConfig
@@ -1310,37 +1025,6 @@ public sealed class Netw : NetwRefCounted
         slot2.Dispose();
         NetwDatabaseConfig result =
             NetwDatabaseConfig.Adopt(
-                NetwApi.Retained(
-                    VariantUtils.ConvertToGodotObjectPtr(answered)));
-        answered.Dispose();
-        return result;
-    }
-
-    private static readonly IntPtr _bindDatabase =
-        NetwApi.MethodBind("Netw", "database", 927809139UL);
-
-    /// <summary>
-    /// Returns the <see cref="NetwDatabase"/> declared as
-    /// <paramref name="name"/> with <see cref="Netw.ConfigureDatabase"/>.
-    /// <code>
-    /// var db: NetwDatabase = Netw.database(self, &amp;"saves")
-    /// </code>
-    /// </summary>
-    public static NetwDatabase Database(Node node, StringName name)
-    {
-        godot_variant slot0 = VariantUtils.CreateFromGodotObject(node);
-        godot_variant slot1 = VariantUtils.CreateFromStringName(name);
-        godot_variant answered = default;
-        NetwThunks.Call2(
-            _bindDatabase,
-            IntPtr.Zero,
-            in slot0,
-            in slot1,
-            ref answered);
-        slot0.Dispose();
-        slot1.Dispose();
-        NetwDatabase result =
-            NetwDatabase.Adopt(
                 NetwApi.Retained(
                     VariantUtils.ConvertToGodotObjectPtr(answered)));
         answered.Dispose();
@@ -1543,61 +1227,6 @@ public sealed class Netw : NetwRefCounted
         return NetwPromise.Adopt(answered);
     }
 
-    private static readonly IntPtr _bindClaimAuthority =
-        NetwApi.MethodBind("Netw", "claim_authority", 1659447253UL);
-
-    /// <summary>
-    /// Asks the server to make this peer the
-    /// <see cref="NetwEntity.Controller"/> of the entity
-    /// <paramref name="node"/> belongs to. Same as
-    /// <see cref="NetwEntity.ClaimAuthority"/>.
-    /// <code>
-    /// Netw.claim_authority(self, NetwEntity.HOLD_YIELDABLE).then(pick_up)
-    /// </code>
-    /// <para>
-    /// The promise fails with <c>@GlobalScope.ERR_DOES_NOT_EXIST</c> when
-    /// <paramref name="node"/> has no entity. <b>Player request.</b>
-    /// </para>
-    /// </summary>
-    public static NetwPromise ClaimAuthority(Node node, NetwEntity.HoldEnum hold =
-        (NetwEntity.HoldEnum)2)
-    {
-        IntPtr slot0 = node?.NativeInstance ?? IntPtr.Zero;
-        long slot1 = (long)hold;
-        IntPtr answered = default;
-        NetwThunks.Ptrcall2_IntPtr_Long_IntPtr(
-            _bindClaimAuthority,
-            IntPtr.Zero,
-            in slot0,
-            in slot1,
-            ref answered);
-        return NetwPromise.Adopt(answered);
-    }
-
-    private static readonly IntPtr _bindReleaseAuthority =
-        NetwApi.MethodBind("Netw", "release_authority", 4095760114UL);
-
-    /// <summary>
-    /// Gives control of the entity <paramref name="node"/> belongs to to
-    /// <paramref name="successor"/>, or to the server when <c>0</c>. Same as
-    /// <see cref="NetwEntity.ReleaseAuthority"/>. The promise fails with
-    /// <c>@GlobalScope.ERR_DOES_NOT_EXIST</c> when <paramref name="node"/> has
-    /// no entity. <b>Player request.</b>
-    /// </summary>
-    public static NetwPromise ReleaseAuthority(Node node, long successor = 0)
-    {
-        IntPtr slot0 = node?.NativeInstance ?? IntPtr.Zero;
-        long slot1 = successor;
-        IntPtr answered = default;
-        NetwThunks.Ptrcall2_IntPtr_Long_IntPtr(
-            _bindReleaseAuthority,
-            IntPtr.Zero,
-            in slot0,
-            in slot1,
-            ref answered);
-        return NetwPromise.Adopt(answered);
-    }
-
     private static readonly IntPtr _bindAction =
         NetwApi.MethodBind("Netw", "action", 1326300923UL);
 
@@ -1676,12 +1305,10 @@ public sealed class Netw : NetwRefCounted
     ///     Netw.rewind(Netw.scene(self).entities, ctx.view_tick, _trace_shot)
     /// </code>
     /// </summary>
-    public static void Rewind(
-        Godot.Collections.Array entities,
-        long tick,
-        Callable body)
+    public static void Rewind(NetwEntity[] entities, long tick, Callable body)
     {
-        godot_variant slot0 = VariantUtils.CreateFromArray(entities);
+        godot_variant slot0 =
+            VariantUtils.CreateFromArray(NetwApi.ArrayOf(entities));
         godot_variant slot1 = VariantUtils.CreateFromInt((long)tick);
         godot_variant slot2 = VariantUtils.CreateFromCallable(body);
         godot_variant answered = default;
@@ -1699,24 +1326,28 @@ public sealed class Netw : NetwRefCounted
     }
 
     private static readonly IntPtr _bindChangeSceneToFile =
-        NetwApi.MethodBind("Netw", "change_scene_to_file", 1402832089UL);
+        NetwApi.MethodBind("Netw", "change_scene_to_file", 3945386541UL);
 
     /// <summary>
-    /// Opens <paramref name="path"/> and moves players to it. No node moves
-    /// with them, so spawn their nodes from
-    /// <see cref="NetwSessionHandle.SceneChanged"/>. <paramref name="scope"/>
-    /// says who moves. On a client this is a request that
-    /// <see cref="Netw.ConfigureSceneRequests"/> decides, and it is rejected
-    /// when there is none.
+    /// Opens <paramref name="path"/> and moves players to it.
+    /// <paramref name="scope"/> says who moves. Their nodes do not move, so
+    /// spawn them in the <see cref="NetwScene"/> the promise gives.
     /// <code>
-    /// var err: Error = await Netw.change_scene_to_file(
-    ///         self, "res://match.tscn").wait()
-    /// if err != OK:
-    ///     status.text = "Could not start the match."
+    /// func start_match() -&gt; void:
+    ///     Netw.change_scene_to_file(self, "res://match.tscn").then(spawn_players)
+    ///
+    /// func spawn_players(arena: NetwScene) -&gt; void:
+    ///     for player: NetwPlayer in arena.viewers:
+    ///         arena.root.add_child(Netw.spawn_player(player, make_player))
     /// </code>
+    /// <para>
+    /// On a client this is a request that
+    /// <see cref="Netw.ConfigureSceneRequests"/> decides, and it is rejected
+    /// when there is none. The promise then gives <c>@GlobalScope.OK</c>.
+    /// </para>
     /// </summary>
-    public static NetwPromise ChangeSceneToFile(Node node, string path, Netw.SceneChange scope =
-        (Netw.SceneChange)0)
+    public static NetwPromise ChangeSceneToFile(Node node, string path, NetwScene.SceneChange scope =
+        (NetwScene.SceneChange)0)
     {
         godot_variant slot0 = VariantUtils.CreateFromGodotObject(node);
         godot_variant slot1 = VariantUtils.CreateFromString(path);
@@ -1741,15 +1372,15 @@ public sealed class Netw : NetwRefCounted
     }
 
     private static readonly IntPtr _bindChangeSceneToPacked =
-        NetwApi.MethodBind("Netw", "change_scene_to_packed", 1459653292UL);
+        NetwApi.MethodBind("Netw", "change_scene_to_packed", 211625269UL);
 
     /// <summary>
     /// The same change as <see cref="Netw.ChangeSceneToFile"/>, from a
     /// <see cref="PackedScene"/> that came from a file. A
     /// <see cref="PackedScene"/> built in memory is rejected.
     /// </summary>
-    public static NetwPromise ChangeSceneToPacked(Node node, PackedScene packed, Netw.SceneChange scope =
-        (Netw.SceneChange)0)
+    public static NetwPromise ChangeSceneToPacked(Node node, PackedScene packed, NetwScene.SceneChange scope =
+        (NetwScene.SceneChange)0)
     {
         IntPtr slot0 = node?.NativeInstance ?? IntPtr.Zero;
         IntPtr slot1 = packed?.NativeInstance ?? IntPtr.Zero;
@@ -1766,14 +1397,14 @@ public sealed class Netw : NetwRefCounted
     }
 
     private static readonly IntPtr _bindReloadCurrentScene =
-        NetwApi.MethodBind("Netw", "reload_current_scene", 1539982598UL);
+        NetwApi.MethodBind("Netw", "reload_current_scene", 3203172577UL);
 
     /// <summary>
     /// Reloads the scene this peer displays, like
     /// <see cref="SceneTree.ReloadCurrentScene"/>.
     /// </summary>
-    public static NetwPromise ReloadCurrentScene(Node node, Netw.SceneChange scope =
-        (Netw.SceneChange)0)
+    public static NetwPromise ReloadCurrentScene(Node node, NetwScene.SceneChange scope =
+        (NetwScene.SceneChange)0)
     {
         IntPtr slot0 = node?.NativeInstance ?? IntPtr.Zero;
         long slot1 = (long)scope;
@@ -1787,23 +1418,23 @@ public sealed class Netw : NetwRefCounted
         return NetwPromise.Adopt(answered);
     }
 
-    private static readonly IntPtr _bindConfigureMultiplayerScene =
-        NetwApi.MethodBind("Netw", "configure_multiplayer_scene", 3354192785UL);
+    private static readonly IntPtr _bindConfigureScene =
+        NetwApi.MethodBind("Netw", "configure_scene", 3354192785UL);
 
     /// <summary>
     /// Makes <paramref name="node"/> a multiplayer scene. Players only see its
     /// children while they are in it.
     /// <code>
     /// func _init() -&gt; void:
-    ///     Netw.configure_multiplayer_scene(self).labeled(&amp;"Arena")
+    ///     Netw.configure_scene(self).labeled(&amp;"Arena")
     /// </code>
     /// </summary>
-    public static NetwSceneConfig ConfigureMultiplayerScene(Node node)
+    public static NetwSceneConfig ConfigureScene(Node node)
     {
         IntPtr slot0 = node?.NativeInstance ?? IntPtr.Zero;
         IntPtr answered = default;
         NetwThunks.Ptrcall1_IntPtr_IntPtr(
-            _bindConfigureMultiplayerScene,
+            _bindConfigureScene,
             IntPtr.Zero,
             in slot0,
             ref answered);
@@ -1824,9 +1455,9 @@ public sealed class Netw : NetwRefCounted
     /// func authorize_scene_request(
     ///     player: NetwPlayer,
     ///     destination: String,
-    ///     scope: Netw.SceneChange
+    ///     scope: NetwScene.SceneChange
     /// ) -&gt; Error:
-    ///     if scope != Netw.SCENE_CHANGE_PLAYER:
+    ///     if scope != NetwScene.SCENE_CHANGE_PLAYER:
     ///         return ERR_UNAUTHORIZED
     ///     return OK if unlocked(player, destination) else ERR_UNAUTHORIZED
     /// </code>

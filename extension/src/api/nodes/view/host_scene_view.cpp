@@ -36,16 +36,14 @@ void HostSceneView::attach() {
     session_id = gd::instance_id(api);
     api->service_register(this, nullptr);
 
-    const Callable display
-        = callable_mp(this, &HostSceneView::on_display_changed);
-    if (!api->is_connected(SIG_PARTICIPANT_VIEWPORT_CHANGED, display)) {
-        api->connect(SIG_PARTICIPANT_VIEWPORT_CHANGED, display);
-    }
-    const Callable roster
-        = callable_mp(this, &HostSceneView::on_roster_changed).unbind(2);
-    if (!api->is_connected(SIG_ENTITY_LIVE, roster)) {
-        api->connect(SIG_ENTITY_LIVE, roster);
-    }
+    api->observe(
+        NetwMultiplayer::PARTICIPANT_VIEWPORT_CHANGED,
+        callable_mp(this, &HostSceneView::on_display_changed)
+    );
+    api->observe(
+        NetwMultiplayer::ENTITY_LIVE,
+        callable_mp(this, &HostSceneView::on_roster_changed).unbind(2)
+    );
     on_display_changed(api->scene_player_viewport());
 }
 
@@ -55,16 +53,14 @@ void HostSceneView::detach() {
     if (api == nullptr) {
         return;
     }
-    const Callable display
-        = callable_mp(this, &HostSceneView::on_display_changed);
-    if (api->is_connected(SIG_PARTICIPANT_VIEWPORT_CHANGED, display)) {
-        api->disconnect(SIG_PARTICIPANT_VIEWPORT_CHANGED, display);
-    }
-    const Callable roster
-        = callable_mp(this, &HostSceneView::on_roster_changed).unbind(2);
-    if (api->is_connected(SIG_ENTITY_LIVE, roster)) {
-        api->disconnect(SIG_ENTITY_LIVE, roster);
-    }
+    api->unobserve(
+        NetwMultiplayer::PARTICIPANT_VIEWPORT_CHANGED,
+        callable_mp(this, &HostSceneView::on_display_changed)
+    );
+    api->unobserve(
+        NetwMultiplayer::ENTITY_LIVE,
+        callable_mp(this, &HostSceneView::on_roster_changed).unbind(2)
+    );
     api->service_unregister(this, nullptr);
 }
 
@@ -136,7 +132,7 @@ void HostSceneView::activate(
     bool p_adopts_camera
 ) {
     if (p_adopts_camera && !p_player->has_connections(SIG_VIEW_ACTIVATED)) {
-        const Ref<NetwSceneHandle> scene = p_player->get_scene();
+        const Ref<NetwScene> scene = p_player->get_scene();
         view::adopt_camera(
             p_player->get_owner(),
             scene.is_valid() ? scene->get_root() : nullptr

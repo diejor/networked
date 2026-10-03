@@ -74,7 +74,7 @@ void NetwSceneConfig::_bind_methods() {
             PROPERTY_HINT_NONE,
             "",
             PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_CLASS_IS_ENUM,
-            "Netw.SceneIsolation"
+            "NetwScene.SceneIsolation"
         ),
         "",
         "get_isolation"

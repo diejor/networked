@@ -48,19 +48,6 @@ Node *SpawnerCompat::session_root() const {
 void SpawnerCompat::set_core(Object *p_core) {
     NetwMultiplayer *plane = Object::cast_to<NetwMultiplayer>(p_core);
     core_id = gd::instance_id(plane);
-    if (plane == nullptr) {
-        return;
-    }
-    const Callable entered
-        = callable_mp(plane, &NetwMultiplayer::spawner_session_entered);
-    if (!plane->is_connected(SIG_SESSION_ENTERED, entered)) {
-        plane->connect(SIG_SESSION_ENTERED, entered);
-    }
-    const Callable ended
-        = callable_mp(plane, &NetwMultiplayer::spawner_session_ended);
-    if (!plane->is_connected(SIG_SESSION_ENDED, ended)) {
-        plane->connect(SIG_SESSION_ENDED, ended);
-    }
 }
 
 void SpawnerCompat::set_spawn_seams(

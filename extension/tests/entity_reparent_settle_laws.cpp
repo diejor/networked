@@ -37,7 +37,7 @@ struct Stand {
         body->set_name("Traveller");
         body->connect(StringName("ready"), seen.callable("ready"));
         entity = NetwEntity::ensure(body);
-        entity->set_entity_id(StringName("traveller"));
+        entity->set_name(StringName("traveller"));
         entity->arm(
             godot::Object::cast_to<netw::NetwMultiplayer>(rig.server())
         );

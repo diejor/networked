@@ -60,7 +60,7 @@ func _init() -> void:
 	var e := Netw.configure_entity(self)
 	e.transfer = NetwEntity.TRANSFER_IMMEDIATE
 	e.simulation.bodies = [^"Sphere"]
-	e.simulation.replicas = NetwSimulationHandle.REPLICAS_ACTIVE
+	e.simulation.replicas = NetwSimulation.REPLICAS_ACTIVE
 	e.simulation.mode_changed.connect(func(_was, _now): modes += 1)
 	e.control_changed.connect(func(_was, _now): changes += 1)
 	Netw.configure_property(self, &"sphere_position").broadcast() \

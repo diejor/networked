@@ -63,7 +63,7 @@ func add_host(
 	assert(host == null, "NetwGameHarness.add_host: host already exists.")
 	var runner := _create_runner(
 		username,
-		NetwMultiplayer.ROLE_LISTEN_SERVER,
+		NetwSession.ROLE_LISTEN_SERVER,
 	)
 	host = runner
 
@@ -92,7 +92,7 @@ func add_client(
 		spawn: Variant = null,
 ) -> NetwSceneRunner:
 	assert(host != null, "NetwGameHarness.add_client: add host first.")
-	var runner := _create_runner(username, NetwMultiplayer.ROLE_CLIENT)
+	var runner := _create_runner(username, NetwSession.ROLE_CLIENT)
 
 	var err: Error = await _loopback.connect_tree(
 		runner.tree,
@@ -325,7 +325,7 @@ func teardown() -> void:
 
 func _create_runner(
 		username: String,
-		role: NetwMultiplayer.Role,
+		role: NetwSession.Role,
 ) -> NetwSceneRunner:
 	var slot := ParticipantWindow.new()
 	slot.name = "Window_%s" % username
@@ -354,7 +354,7 @@ func _create_runner(
 	return runner
 
 
-func _adopt_tree(tree: MultiplayerTree, role: NetwMultiplayer.Role) -> void:
+func _adopt_tree(tree: MultiplayerTree, role: NetwSession.Role) -> void:
 	_loopback.adopt_tree(tree, role)
 
 

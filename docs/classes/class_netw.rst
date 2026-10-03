@@ -19,24 +19,7 @@ Static entry points for the Networked API.
 Description
 -----------
 
-The interface provided by this class is optional and is supposed to work with the default :godot:`SceneMultiplayer`.
-
-\ **Bandwidth**\ 
-
-Every peer is sent at most its byte budget each tick. Changed rows that do not fit wait for a later tick, and the ones that have waited longest and matter most go first.
-
-::
-
-    func _init() -> void:
-        Netw.configure_session(self).bandwidth(256)
-
-    func _on_slow_player(player: NetwPlayer) -> void:
-        Netw.session(self).set_peer_bandwidth(player.peer_id, 64)
-
-    func _ready() -> void:
-        NetwEntity.of(self).replication_priority = 4.0
-
-\ RPCs, spawns and :ref:`NetwPropertyConfig.retained()<class_NetwPropertyConfig_method_retained>` properties always go when they are due, and a peer they pushed over its budget receives no more rows until the overdraft is repaid. :ref:`NetwMultiplayer.peer_link_stats()<class_NetwMultiplayer_method_peer_link_stats>` shows the budget and the overdraft.
+:ref:`session()<class_Netw_method_session>` returns the :ref:`NetwSession<class_NetwSession>` a node belongs to, which holds the players, scenes and clock.
 
 .. rst-class:: classref-reftable-group
 
@@ -46,176 +29,91 @@ Methods
 .. table::
    :widths: auto
 
-   +-------------------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwAction<class_NetwAction>`                               | :ref:`action<class_Netw_method_action>`\ (\ authority\: :godot:`Callable`\ ) |static|                                                                                                                 |
-   +-------------------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwPromise<class_NetwPromise>`                             | :ref:`change_scene_to_file<class_Netw_method_change_scene_to_file>`\ (\ node\: :godot:`Node`, path\: :godot:`String`, scope\: :ref:`SceneChange<enum_Netw_SceneChange>` = 0\ ) |static|               |
-   +-------------------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwPromise<class_NetwPromise>`                             | :ref:`change_scene_to_packed<class_Netw_method_change_scene_to_packed>`\ (\ node\: :godot:`Node`, packed\: :godot:`PackedScene`, scope\: :ref:`SceneChange<enum_Netw_SceneChange>` = 0\ ) |static|    |
-   +-------------------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwChannel<class_NetwChannel>`                             | :ref:`channel<class_Netw_method_channel>`\ (\ node\: :godot:`Node`, channel_id\: :godot:`int`\ ) |static|                                                                                             |
-   +-------------------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwPromise<class_NetwPromise>`                             | :ref:`claim_authority<class_Netw_method_claim_authority>`\ (\ node\: :godot:`Node`, hold\: :ref:`Hold<enum_NetwEntity_Hold>` = 2\ ) |static|                                                          |
-   +-------------------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwClockHandle<class_NetwClockHandle>`                     | :ref:`clock<class_Netw_method_clock>`\ (\ node\: :godot:`Node`\ ) |static|                                                                                                                            |
-   +-------------------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`Error <@GlobalScope#enum_@globalscope_Error>`             | :ref:`configure_admission<class_Netw_method_configure_admission>`\ (\ handler\: :godot:`Callable`\ ) |static|                                                                                         |
-   +-------------------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwClockConfig<class_NetwClockConfig>`                     | :ref:`configure_clock<class_Netw_method_configure_clock>`\ (\ node\: :godot:`Node`, preset\: :ref:`NetwClockConfig<class_NetwClockConfig>` = null\ ) |static|                                         |
-   +-------------------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwDatabaseConfig<class_NetwDatabaseConfig>`               | :ref:`configure_database<class_Netw_method_configure_database>`\ (\ node\: :godot:`Node`, name\: :godot:`StringName`, preset\: :ref:`NetwDatabaseConfig<class_NetwDatabaseConfig>` = null\ ) |static| |
-   +-------------------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwDespawnConfig<class_NetwDespawnConfig>`                 | :ref:`configure_despawn<class_Netw_method_configure_despawn>`\ (\ node\: :godot:`Node`\ ) |static|                                                                                                    |
-   +-------------------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwEntity<class_NetwEntity>`                               | :ref:`configure_entity<class_Netw_method_configure_entity>`\ (\ node\: :godot:`Node`\ ) |static|                                                                                                      |
-   +-------------------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwInterestHandle<class_NetwInterestHandle>`               | :ref:`configure_interest<class_Netw_method_configure_interest>`\ (\ node\: :godot:`Node`\ ) |static|                                                                                                  |
-   +-------------------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwJoinConfig<class_NetwJoinConfig>`                       | :ref:`configure_join<class_Netw_method_configure_join>`\ (\ handler\: :godot:`Callable`\ ) |static|                                                                                                   |
-   +-------------------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwLagCompensationConfig<class_NetwLagCompensationConfig>` | :ref:`configure_lagcomp<class_Netw_method_configure_lagcomp>`\ (\ node\: :godot:`Node`, preset\: :ref:`NetwLagCompensationConfig<class_NetwLagCompensationConfig>` = null\ ) |static|                 |
-   +-------------------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwSceneConfig<class_NetwSceneConfig>`                     | :ref:`configure_multiplayer_scene<class_Netw_method_configure_multiplayer_scene>`\ (\ node\: :godot:`Node`\ ) |static|                                                                                |
-   +-------------------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwPersistenceConfig<class_NetwPersistenceConfig>`         | :ref:`configure_persistence<class_Netw_method_configure_persistence>`\ (\ node\: :godot:`Node`\ ) |static|                                                                                            |
-   +-------------------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwPropertyConfig<class_NetwPropertyConfig>`               | :ref:`configure_property<class_Netw_method_configure_property>`\ (\ node\: :godot:`Node`, property\: :godot:`StringName`, warn_late\: :godot:`bool` = true\ ) |static|                                |
-   +-------------------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwMemberConfig<class_NetwMemberConfig>`                   | :ref:`configure_rpc<class_Netw_method_configure_rpc>`\ (\ callable\: :godot:`Callable`\ ) |static|                                                                                                    |
-   +-------------------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`Error <@GlobalScope#enum_@globalscope_Error>`             | :ref:`configure_scene_requests<class_Netw_method_configure_scene_requests>`\ (\ handler\: :godot:`Callable`\ ) |static|                                                                               |
-   +-------------------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwSchema<class_NetwSchema>`                               | :ref:`configure_schema<class_Netw_method_configure_schema>`\ (\ name\: :godot:`StringName`\ ) |static|                                                                                                |
-   +-------------------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`Error <@GlobalScope#enum_@globalscope_Error>`             | :ref:`configure_server_info<class_Netw_method_configure_server_info>`\ (\ provider\: :godot:`Callable`\ ) |static|                                                                                    |
-   +-------------------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwSessionConfig<class_NetwSessionConfig>`                 | :ref:`configure_session<class_Netw_method_configure_session>`\ (\ node\: :godot:`Node`, preset\: :ref:`NetwSessionConfig<class_NetwSessionConfig>` = null\ ) |static|                                 |
-   +-------------------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwMemberConfig<class_NetwMemberConfig>`                   | :ref:`configure_signal<class_Netw_method_configure_signal>`\ (\ sig\: :godot:`Signal`\ ) |static|                                                                                                     |
-   +-------------------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwMemberConfig<class_NetwMemberConfig>`                   | :ref:`configure_spawn<class_Netw_method_configure_spawn>`\ (\ callable\: :godot:`Callable`\ ) |static|                                                                                                |
-   +-------------------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwConnectHandle<class_NetwConnectHandle>`                 | :ref:`connection<class_Netw_method_connection>`\ (\ node\: :godot:`Node`\ ) |static|                                                                                                                  |
-   +-------------------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwDatabase<class_NetwDatabase>`                           | :ref:`database<class_Netw_method_database>`\ (\ node\: :godot:`Node`, name\: :godot:`StringName`\ ) |static|                                                                                          |
-   +-------------------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`Error <@GlobalScope#enum_@globalscope_Error>`             | :ref:`despawn<class_Netw_method_despawn>`\ (\ node\: :godot:`Node`, opts\: :ref:`NetwDespawnOpts<class_NetwDespawnOpts>` = null\ ) |static|                                                           |
-   +-------------------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | |void|                                                            | :ref:`emit_entity_signal<class_Netw_method_emit_entity_signal>`\ (\ sig\: :godot:`Signal`, ...\ ) |vararg| |static|                                                                                   |
-   +-------------------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwMultiplayer<class_NetwMultiplayer>`                     | :ref:`of<class_Netw_method_of>`\ (\ node\: :godot:`Node`\ ) |static|                                                                                                                                  |
-   +-------------------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwPromise<class_NetwPromise>`                             | :ref:`prepare_join<class_Netw_method_prepare_join>`\ (\ node\: :godot:`Node`, username\: :godot:`StringName`, ...\ ) |vararg| |static|                                                                |
-   +-------------------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwPromise<class_NetwPromise>`                             | :ref:`release_authority<class_Netw_method_release_authority>`\ (\ node\: :godot:`Node`, successor\: :godot:`int` = 0\ ) |static|                                                                      |
-   +-------------------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwPromise<class_NetwPromise>`                             | :ref:`reload_current_scene<class_Netw_method_reload_current_scene>`\ (\ node\: :godot:`Node`, scope\: :ref:`SceneChange<enum_Netw_SceneChange>` = 0\ ) |static|                                       |
-   +-------------------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwPromise<class_NetwPromise>`                             | :ref:`reparent<class_Netw_method_reparent>`\ (\ node\: :godot:`Node`, new_parent\: :godot:`Node`\ ) |static|                                                                                          |
-   +-------------------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwEntity<class_NetwEntity>`                               | :ref:`replicate<class_Netw_method_replicate>`\ (\ node\: :godot:`Node`, owner\: :ref:`NetwPlayer<class_NetwPlayer>` = null\ ) |static|                                                                |
-   +-------------------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwPromise<class_NetwPromise>`                             | :ref:`request<class_Netw_method_request>`\ (\ callable\: :godot:`Callable`, ...\ ) |vararg| |static|                                                                                                  |
-   +-------------------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwGroupPromise<class_NetwGroupPromise>`                   | :ref:`request_all<class_Netw_method_request_all>`\ (\ callable\: :godot:`Callable`, ...\ ) |vararg| |static|                                                                                          |
-   +-------------------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwPromise<class_NetwPromise>`                             | :ref:`request_controller<class_Netw_method_request_controller>`\ (\ callable\: :godot:`Callable`, ...\ ) |vararg| |static|                                                                            |
-   +-------------------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwPromise<class_NetwPromise>`                             | :ref:`request_id<class_Netw_method_request_id>`\ (\ peer_id\: :godot:`int`, callable\: :godot:`Callable`, ...\ ) |vararg| |static|                                                                    |
-   +-------------------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | |void|                                                            | :ref:`rewind<class_Netw_method_rewind>`\ (\ entities\: :godot:`Array`\[:ref:`NetwEntity<class_NetwEntity>`\], tick\: :godot:`int`, body\: :godot:`Callable`\ ) |static|                               |
-   +-------------------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | |void|                                                            | :ref:`rpc<class_Netw_method_rpc>`\ (\ callable\: :godot:`Callable`, ...\ ) |vararg| |static|                                                                                                          |
-   +-------------------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | |void|                                                            | :ref:`rpc_controller<class_Netw_method_rpc_controller>`\ (\ callable\: :godot:`Callable`, ...\ ) |vararg| |static|                                                                                    |
-   +-------------------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | |void|                                                            | :ref:`rpc_id<class_Netw_method_rpc_id>`\ (\ peer_id\: :godot:`int`, callable\: :godot:`Callable`, ...\ ) |vararg| |static|                                                                            |
-   +-------------------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`DictionaryRecord<class_DictionaryRecord>`                   | :ref:`sample<class_Netw_method_sample>`\ (\ entity\: :ref:`NetwEntity<class_NetwEntity>`, tick\: :godot:`int`\ ) |static|                                                                             |
-   +-------------------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwSceneHandle<class_NetwSceneHandle>`                     | :ref:`scene<class_Netw_method_scene>`\ (\ node\: :godot:`Node`, named\: :godot:`StringName` = &""\ ) |static|                                                                                         |
-   +-------------------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`Variant`                                                  | :ref:`service<class_Netw_method_service>`\ (\ node\: :godot:`Node`, type\: :godot:`Object`\ ) |static|                                                                                                |
-   +-------------------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | |void|                                                            | :ref:`service_register<class_Netw_method_service_register>`\ (\ node\: :godot:`Node`, service\: :godot:`Object`, type\: :godot:`Object` = null\ ) |static|                                            |
-   +-------------------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | |void|                                                            | :ref:`service_unregister<class_Netw_method_service_unregister>`\ (\ node\: :godot:`Node`, service\: :godot:`Object`, type\: :godot:`Object` = null\ ) |static|                                        |
-   +-------------------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwSessionHandle<class_NetwSessionHandle>`                 | :ref:`session<class_Netw_method_session>`\ (\ node\: :godot:`Node`\ ) |static|                                                                                                                        |
-   +-------------------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`Node`                                                     | :ref:`spawn<class_Netw_method_spawn>`\ (\ fn\: :godot:`Callable`, ...\ ) |vararg| |static|                                                                                                            |
-   +-------------------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`Node`                                                     | :ref:`spawn_player<class_Netw_method_spawn_player>`\ (\ player\: :ref:`NetwPlayer<class_NetwPlayer>`, fn\: :godot:`Callable`, ...\ ) |vararg| |static|                                                |
-   +-------------------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | |void|                                                            | :ref:`sync_property<class_Netw_method_sync_property>`\ (\ node\: :godot:`Node`, property\: :godot:`StringName`\ ) |static|                                                                            |
-   +-------------------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwTableHandle<class_NetwTableHandle>`                     | :ref:`table<class_Netw_method_table>`\ (\ node\: :godot:`Node`, name\: :godot:`StringName`\ ) |static|                                                                                                |
-   +-------------------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-
-.. rst-class:: classref-section-separator
-
-----
-
-.. rst-class:: classref-descriptions-group
-
-Enumerations
-------------
-
-.. _enum_Netw_SceneChange:
-
-.. rst-class:: classref-enumeration
-
-enum **SceneChange**: :ref:`🔗<enum_Netw_SceneChange>`
-
-.. _class_Netw_constant_SCENE_CHANGE_SESSION:
-
-.. rst-class:: classref-enumeration-constant
-
-:ref:`SceneChange<enum_Netw_SceneChange>` **SCENE_CHANGE_SESSION** = ``0``
-
-Every player moves to the new scene.
-
-.. _class_Netw_constant_SCENE_CHANGE_PLAYER:
-
-.. rst-class:: classref-enumeration-constant
-
-:ref:`SceneChange<enum_Netw_SceneChange>` **SCENE_CHANGE_PLAYER** = ``1``
-
-Only the requesting player moves.
-
-.. _class_Netw_constant_SCENE_CHANGE_SCENE:
-
-.. rst-class:: classref-enumeration-constant
-
-:ref:`SceneChange<enum_Netw_SceneChange>` **SCENE_CHANGE_SCENE** = ``2``
-
-Every player in the requester's scene moves.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _enum_Netw_SceneIsolation:
-
-.. rst-class:: classref-enumeration
-
-enum **SceneIsolation**: :ref:`🔗<enum_Netw_SceneIsolation>`
-
-.. _class_Netw_constant_SCENE_ISOLATION_NONE:
-
-.. rst-class:: classref-enumeration-constant
-
-:ref:`SceneIsolation<enum_Netw_SceneIsolation>` **SCENE_ISOLATION_NONE** = ``0``
-
-The multiplayer scene shares the physics and render world of whatever it is parented into.
-
-.. _class_Netw_constant_SCENE_ISOLATION_OWN_WORLD:
-
-.. rst-class:: classref-enumeration-constant
-
-:ref:`SceneIsolation<enum_Netw_SceneIsolation>` **SCENE_ISOLATION_OWN_WORLD** = ``1``
-
-The multiplayer scene has its own world in a :godot:`SubViewport`, so it never collides with another scene.
+   +-------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwAction<class_NetwAction>`                               | :ref:`action<class_Netw_method_action>`\ (\ authority\: :godot:`Callable`\ ) |static|                                                                                                                   |
+   +-------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwPromise<class_NetwPromise>`                             | :ref:`change_scene_to_file<class_Netw_method_change_scene_to_file>`\ (\ node\: :godot:`Node`, path\: :godot:`String`, scope\: :ref:`SceneChange<enum_NetwScene_SceneChange>` = 0\ ) |static|            |
+   +-------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwPromise<class_NetwPromise>`                             | :ref:`change_scene_to_packed<class_Netw_method_change_scene_to_packed>`\ (\ node\: :godot:`Node`, packed\: :godot:`PackedScene`, scope\: :ref:`SceneChange<enum_NetwScene_SceneChange>` = 0\ ) |static| |
+   +-------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwChannel<class_NetwChannel>`                             | :ref:`channel<class_Netw_method_channel>`\ (\ node\: :godot:`Node`, channel_id\: :godot:`int`\ ) |static|                                                                                               |
+   +-------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`Error <@GlobalScope#enum_@globalscope_Error>`             | :ref:`configure_admission<class_Netw_method_configure_admission>`\ (\ handler\: :godot:`Callable`\ ) |static|                                                                                           |
+   +-------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwClockConfig<class_NetwClockConfig>`                     | :ref:`configure_clock<class_Netw_method_configure_clock>`\ (\ node\: :godot:`Node`, preset\: :ref:`NetwClockConfig<class_NetwClockConfig>` = null\ ) |static|                                           |
+   +-------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwDatabaseConfig<class_NetwDatabaseConfig>`               | :ref:`configure_database<class_Netw_method_configure_database>`\ (\ node\: :godot:`Node`, name\: :godot:`StringName`, preset\: :ref:`NetwDatabaseConfig<class_NetwDatabaseConfig>` = null\ ) |static|   |
+   +-------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwDespawnConfig<class_NetwDespawnConfig>`                 | :ref:`configure_despawn<class_Netw_method_configure_despawn>`\ (\ node\: :godot:`Node`\ ) |static|                                                                                                      |
+   +-------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwEntity<class_NetwEntity>`                               | :ref:`configure_entity<class_Netw_method_configure_entity>`\ (\ node\: :godot:`Node`\ ) |static|                                                                                                        |
+   +-------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwJoinConfig<class_NetwJoinConfig>`                       | :ref:`configure_join<class_Netw_method_configure_join>`\ (\ handler\: :godot:`Callable`\ ) |static|                                                                                                     |
+   +-------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwLagCompensationConfig<class_NetwLagCompensationConfig>` | :ref:`configure_lagcomp<class_Netw_method_configure_lagcomp>`\ (\ node\: :godot:`Node`, preset\: :ref:`NetwLagCompensationConfig<class_NetwLagCompensationConfig>` = null\ ) |static|                   |
+   +-------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwPersistenceConfig<class_NetwPersistenceConfig>`         | :ref:`configure_persistence<class_Netw_method_configure_persistence>`\ (\ node\: :godot:`Node`\ ) |static|                                                                                              |
+   +-------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwPropertyConfig<class_NetwPropertyConfig>`               | :ref:`configure_property<class_Netw_method_configure_property>`\ (\ node\: :godot:`Node`, property\: :godot:`StringName`, warn_late\: :godot:`bool` = true\ ) |static|                                  |
+   +-------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwMemberConfig<class_NetwMemberConfig>`                   | :ref:`configure_rpc<class_Netw_method_configure_rpc>`\ (\ callable\: :godot:`Callable`\ ) |static|                                                                                                      |
+   +-------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwSceneConfig<class_NetwSceneConfig>`                     | :ref:`configure_scene<class_Netw_method_configure_scene>`\ (\ node\: :godot:`Node`\ ) |static|                                                                                                          |
+   +-------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`Error <@GlobalScope#enum_@globalscope_Error>`             | :ref:`configure_scene_requests<class_Netw_method_configure_scene_requests>`\ (\ handler\: :godot:`Callable`\ ) |static|                                                                                 |
+   +-------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwSchema<class_NetwSchema>`                               | :ref:`configure_schema<class_Netw_method_configure_schema>`\ (\ name\: :godot:`StringName`\ ) |static|                                                                                                  |
+   +-------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`Error <@GlobalScope#enum_@globalscope_Error>`             | :ref:`configure_server_info<class_Netw_method_configure_server_info>`\ (\ provider\: :godot:`Callable`\ ) |static|                                                                                      |
+   +-------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwSessionConfig<class_NetwSessionConfig>`                 | :ref:`configure_session<class_Netw_method_configure_session>`\ (\ node\: :godot:`Node`, preset\: :ref:`NetwSessionConfig<class_NetwSessionConfig>` = null\ ) |static|                                   |
+   +-------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwMemberConfig<class_NetwMemberConfig>`                   | :ref:`configure_signal<class_Netw_method_configure_signal>`\ (\ sig\: :godot:`Signal`\ ) |static|                                                                                                       |
+   +-------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwMemberConfig<class_NetwMemberConfig>`                   | :ref:`configure_spawn<class_Netw_method_configure_spawn>`\ (\ callable\: :godot:`Callable`\ ) |static|                                                                                                  |
+   +-------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`Error <@GlobalScope#enum_@globalscope_Error>`             | :ref:`despawn<class_Netw_method_despawn>`\ (\ node\: :godot:`Node`, opts\: :ref:`NetwDespawnOpts<class_NetwDespawnOpts>` = null\ ) |static|                                                             |
+   +-------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | |void|                                                            | :ref:`emit_entity_signal<class_Netw_method_emit_entity_signal>`\ (\ sig\: :godot:`Signal`, ...\ ) |vararg| |static|                                                                                     |
+   +-------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwMultiplayer<class_NetwMultiplayer>`                     | :ref:`of<class_Netw_method_of>`\ (\ node\: :godot:`Node`\ ) |static|                                                                                                                                    |
+   +-------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwPromise<class_NetwPromise>`                             | :ref:`prepare_join<class_Netw_method_prepare_join>`\ (\ node\: :godot:`Node`, username\: :godot:`StringName`, ...\ ) |vararg| |static|                                                                  |
+   +-------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwPromise<class_NetwPromise>`                             | :ref:`reload_current_scene<class_Netw_method_reload_current_scene>`\ (\ node\: :godot:`Node`, scope\: :ref:`SceneChange<enum_NetwScene_SceneChange>` = 0\ ) |static|                                    |
+   +-------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwPromise<class_NetwPromise>`                             | :ref:`reparent<class_Netw_method_reparent>`\ (\ node\: :godot:`Node`, new_parent\: :godot:`Node`\ ) |static|                                                                                            |
+   +-------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwEntity<class_NetwEntity>`                               | :ref:`replicate<class_Netw_method_replicate>`\ (\ node\: :godot:`Node`, owner\: :ref:`NetwPlayer<class_NetwPlayer>` = null\ ) |static|                                                                  |
+   +-------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwPromise<class_NetwPromise>`                             | :ref:`request<class_Netw_method_request>`\ (\ callable\: :godot:`Callable`, ...\ ) |vararg| |static|                                                                                                    |
+   +-------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwGroupPromise<class_NetwGroupPromise>`                   | :ref:`request_all<class_Netw_method_request_all>`\ (\ callable\: :godot:`Callable`, ...\ ) |vararg| |static|                                                                                            |
+   +-------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwPromise<class_NetwPromise>`                             | :ref:`request_controller<class_Netw_method_request_controller>`\ (\ callable\: :godot:`Callable`, ...\ ) |vararg| |static|                                                                              |
+   +-------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwPromise<class_NetwPromise>`                             | :ref:`request_id<class_Netw_method_request_id>`\ (\ peer_id\: :godot:`int`, callable\: :godot:`Callable`, ...\ ) |vararg| |static|                                                                      |
+   +-------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | |void|                                                            | :ref:`rewind<class_Netw_method_rewind>`\ (\ entities\: :godot:`Array`\[:ref:`NetwEntity<class_NetwEntity>`\], tick\: :godot:`int`, body\: :godot:`Callable`\ ) |static|                                 |
+   +-------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | |void|                                                            | :ref:`rpc<class_Netw_method_rpc>`\ (\ callable\: :godot:`Callable`, ...\ ) |vararg| |static|                                                                                                            |
+   +-------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | |void|                                                            | :ref:`rpc_controller<class_Netw_method_rpc_controller>`\ (\ callable\: :godot:`Callable`, ...\ ) |vararg| |static|                                                                                      |
+   +-------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | |void|                                                            | :ref:`rpc_id<class_Netw_method_rpc_id>`\ (\ peer_id\: :godot:`int`, callable\: :godot:`Callable`, ...\ ) |vararg| |static|                                                                              |
+   +-------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`DictionaryRecord<class_DictionaryRecord>`                   | :ref:`sample<class_Netw_method_sample>`\ (\ entity\: :ref:`NetwEntity<class_NetwEntity>`, tick\: :godot:`int`\ ) |static|                                                                               |
+   +-------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwScene<class_NetwScene>`                                 | :ref:`scene<class_Netw_method_scene>`\ (\ node\: :godot:`Node`\ ) |static|                                                                                                                              |
+   +-------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwSession<class_NetwSession>`                             | :ref:`session<class_Netw_method_session>`\ (\ node\: :godot:`Node`\ ) |static|                                                                                                                          |
+   +-------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`Node`                                                     | :ref:`spawn<class_Netw_method_spawn>`\ (\ fn\: :godot:`Callable`, ...\ ) |vararg| |static|                                                                                                              |
+   +-------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`Node`                                                     | :ref:`spawn_player<class_Netw_method_spawn_player>`\ (\ player\: :ref:`NetwPlayer<class_NetwPlayer>`, fn\: :godot:`Callable`, ...\ ) |vararg| |static|                                                  |
+   +-------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | |void|                                                            | :ref:`sync_property<class_Netw_method_sync_property>`\ (\ node\: :godot:`Node`, property\: :godot:`StringName`\ ) |static|                                                                              |
+   +-------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 
 .. rst-class:: classref-section-separator
 
@@ -258,18 +156,20 @@ Repeated calls return the same :ref:`NetwAction<class_NetwAction>`.
 
 .. rst-class:: classref-method
 
-:ref:`NetwPromise<class_NetwPromise>` **change_scene_to_file**\ (\ node\: :godot:`Node`, path\: :godot:`String`, scope\: :ref:`SceneChange<enum_Netw_SceneChange>` = 0\ ) |static| :ref:`🔗<class_Netw_method_change_scene_to_file>`
+:ref:`NetwPromise<class_NetwPromise>` **change_scene_to_file**\ (\ node\: :godot:`Node`, path\: :godot:`String`, scope\: :ref:`SceneChange<enum_NetwScene_SceneChange>` = 0\ ) |static| :ref:`🔗<class_Netw_method_change_scene_to_file>`
 
-Opens ``path`` and moves players to it. No node moves with them, so spawn their nodes from :ref:`NetwSessionHandle.scene_changed<class_NetwSessionHandle_signal_scene_changed>`. ``scope`` says who moves.
-
-On a client this is a request that :ref:`configure_scene_requests()<class_Netw_method_configure_scene_requests>` decides, and it is rejected when there is none.
+Opens ``path`` and moves players to it. ``scope`` says who moves. Their nodes do not move, so spawn them in the :ref:`NetwScene<class_NetwScene>` the promise gives.
 
 ::
 
-    var err: Error = await Netw.change_scene_to_file(
-            self, "res://match.tscn").wait()
-    if err != OK:
-        status.text = "Could not start the match."
+    func start_match() -> void:
+        Netw.change_scene_to_file(self, "res://match.tscn").then(spawn_players)
+
+    func spawn_players(arena: NetwScene) -> void:
+        for player: NetwPlayer in arena.viewers:
+            arena.root.add_child(Netw.spawn_player(player, make_player))
+
+\ On a client this is a request that :ref:`configure_scene_requests()<class_Netw_method_configure_scene_requests>` decides, and it is rejected when there is none. The promise then gives :godot:`@GlobalScope.OK <@GlobalScope#class_@GlobalScope_constant_OK>`.
 
 .. rst-class:: classref-item-separator
 
@@ -279,7 +179,7 @@ On a client this is a request that :ref:`configure_scene_requests()<class_Netw_m
 
 .. rst-class:: classref-method
 
-:ref:`NetwPromise<class_NetwPromise>` **change_scene_to_packed**\ (\ node\: :godot:`Node`, packed\: :godot:`PackedScene`, scope\: :ref:`SceneChange<enum_Netw_SceneChange>` = 0\ ) |static| :ref:`🔗<class_Netw_method_change_scene_to_packed>`
+:ref:`NetwPromise<class_NetwPromise>` **change_scene_to_packed**\ (\ node\: :godot:`Node`, packed\: :godot:`PackedScene`, scope\: :ref:`SceneChange<enum_NetwScene_SceneChange>` = 0\ ) |static| :ref:`🔗<class_Netw_method_change_scene_to_packed>`
 
 The same change as :ref:`change_scene_to_file()<class_Netw_method_change_scene_to_file>`, from a :godot:`PackedScene` that came from a file. A :godot:`PackedScene` built in memory is rejected.
 
@@ -301,48 +201,6 @@ A :ref:`NetwChannel<class_NetwChannel>` for sending raw bytes in batches.
 
     var voice := Netw.channel(self, 100)
     voice.broadcast(frame, false)
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_Netw_method_claim_authority:
-
-.. rst-class:: classref-method
-
-:ref:`NetwPromise<class_NetwPromise>` **claim_authority**\ (\ node\: :godot:`Node`, hold\: :ref:`Hold<enum_NetwEntity_Hold>` = 2\ ) |static| :ref:`🔗<class_Netw_method_claim_authority>`
-
-Asks the server to make this peer the :ref:`NetwEntity.controller<class_NetwEntity_property_controller>` of the entity ``node`` belongs to. Same as :ref:`NetwEntity.claim_authority()<class_NetwEntity_method_claim_authority>`.
-
-::
-
-    Netw.claim_authority(self, NetwEntity.HOLD_YIELDABLE).then(pick_up)
-
-\ The promise fails with :godot:`@GlobalScope.ERR_DOES_NOT_EXIST <@GlobalScope#class_@GlobalScope_constant_ERR_DOES_NOT_EXIST>` when ``node`` has no entity.
-
-\ **Player request.**
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_Netw_method_clock:
-
-.. rst-class:: classref-method
-
-:ref:`NetwClockHandle<class_NetwClockHandle>` **clock**\ (\ node\: :godot:`Node`\ ) |static| :ref:`🔗<class_Netw_method_clock>`
-
-Returns the clock for the :godot:`Node.multiplayer <Node#class_Node_property_multiplayer>` of ``node``.
-
-::
-
-    @onready var clock := Netw.clock(self)
-
-    func _ready() -> void:
-        clock.before_tick.connect(_sample_input)
-        clock.on_tick.connect(_simulate)
-
-\ :ref:`configure_clock()<class_Netw_method_configure_clock>` is where the clock is set up before :godot:`MultiplayerAPI.multiplayer_peer <MultiplayerAPI#class_MultiplayerAPI_property_multiplayer_peer>` connects.
 
 .. rst-class:: classref-item-separator
 
@@ -409,7 +267,7 @@ Declares a :ref:`NetwDatabase<class_NetwDatabase>` named ``name`` on :godot:`Nod
     func _ready() -> void:
         Netw.configure_database(self, &"saves").backend(preload("res://save_backend.tres"))
 
-\ Get it later with :ref:`database()<class_Netw_method_database>`. Pass an :godot:`@GDScript.@export <@GDScript#class_@GDScript_annotation_@export>` :ref:`NetwDatabaseConfig<class_NetwDatabaseConfig>` as ``preset`` to set it from the inspector.
+\ Get it later with :ref:`NetwSession.database()<class_NetwSession_method_database>`. Pass an :godot:`@GDScript.@export <@GDScript#class_@GDScript_annotation_@export>` :ref:`NetwDatabaseConfig<class_NetwDatabaseConfig>` as ``preset`` to set it from the inspector.
 
 ::
 
@@ -458,30 +316,6 @@ Returns the :ref:`NetwEntity<class_NetwEntity>` that represents ``node`` in the 
 
 ----
 
-.. _class_Netw_method_configure_interest:
-
-.. rst-class:: classref-method
-
-:ref:`NetwInterestHandle<class_NetwInterestHandle>` **configure_interest**\ (\ node\: :godot:`Node`\ ) |static| :ref:`🔗<class_Netw_method_configure_interest>`
-
-Declares which :ref:`NetwInterestLayer<class_NetwInterestLayer>` layer ``node`` belongs to, and returns the :ref:`NetwInterestHandle<class_NetwInterestHandle>` that is also :ref:`NetwEntity.interest<class_NetwEntity_property_interest>` of that ``node``.
-
-::
-
-    func _init() -> void:
-        Netw.configure_interest(self) \
-                .join( \
-                    &"team:red", \
-                    NetwMultiplayer.LEAVE_POLICY_RETAIN, \
-                    NetwMultiplayer.PERCEPTION_POLICY_HIDE, \
-                ) \
-                .join(&"sight") \
-                .on_enter(_on_interest_enter)
-
-.. rst-class:: classref-item-separator
-
-----
-
 .. _class_Netw_method_configure_join:
 
 .. rst-class:: classref-method
@@ -525,23 +359,6 @@ Tunes how far back the :ref:`NetwMultiplayer<class_NetwMultiplayer>` records wha
 
 ----
 
-.. _class_Netw_method_configure_multiplayer_scene:
-
-.. rst-class:: classref-method
-
-:ref:`NetwSceneConfig<class_NetwSceneConfig>` **configure_multiplayer_scene**\ (\ node\: :godot:`Node`\ ) |static| :ref:`🔗<class_Netw_method_configure_multiplayer_scene>`
-
-Makes ``node`` a multiplayer scene. Players only see its children while they are in it.
-
-::
-
-    func _init() -> void:
-        Netw.configure_multiplayer_scene(self).labeled(&"Arena")
-
-.. rst-class:: classref-item-separator
-
-----
-
 .. _class_Netw_method_configure_persistence:
 
 .. rst-class:: classref-method
@@ -559,7 +376,7 @@ Declares which record of which :ref:`NetwDatabase<class_NetwDatabase>` ``node`` 
                 .table(&"players") \
                 .record_id(account_name)
 
-\ See :ref:`NetwPersistenceConfig<class_NetwPersistenceConfig>`, :ref:`NetwPersistenceHandle<class_NetwPersistenceHandle>` and :ref:`NetwDatabase<class_NetwDatabase>`.
+\ See :ref:`NetwPersistenceConfig<class_NetwPersistenceConfig>`, :ref:`NetwPersistence<class_NetwPersistence>` and :ref:`NetwDatabase<class_NetwDatabase>`.
 
 .. rst-class:: classref-item-separator
 
@@ -611,6 +428,23 @@ Declares extra configuration for ``callable`` that :godot:`@GDScript.@rpc <@GDSc
 
 ----
 
+.. _class_Netw_method_configure_scene:
+
+.. rst-class:: classref-method
+
+:ref:`NetwSceneConfig<class_NetwSceneConfig>` **configure_scene**\ (\ node\: :godot:`Node`\ ) |static| :ref:`🔗<class_Netw_method_configure_scene>`
+
+Makes ``node`` a multiplayer scene. Players only see its children while they are in it.
+
+::
+
+    func _init() -> void:
+        Netw.configure_scene(self).labeled(&"Arena")
+
+.. rst-class:: classref-item-separator
+
+----
+
 .. _class_Netw_method_configure_scene_requests:
 
 .. rst-class:: classref-method
@@ -627,9 +461,9 @@ Lets clients request a scene change. ``handler`` runs on the server for every re
     func authorize_scene_request(
         player: NetwPlayer,
         destination: String,
-        scope: Netw.SceneChange
+        scope: NetwScene.SceneChange
     ) -> Error:
-        if scope != Netw.SCENE_CHANGE_PLAYER:
+        if scope != NetwScene.SCENE_CHANGE_PLAYER:
             return ERR_UNAUTHORIZED
         return OK if unlocked(player, destination) else ERR_UNAUTHORIZED
 
@@ -652,9 +486,9 @@ Declares a schema for a table of records.
         static var pos    := schema.vector3(&"pos")
         static var hp     := schema.u16(&"hp")
 
-    @onready var mobs := Netw.table(self, &"Mob")
+    @onready var mobs := Netw.session(self).table(&"Mob")
 
-\ Read and write the table with :ref:`table()<class_Netw_method_table>`.
+\ Read and write the table with :ref:`NetwSession.table()<class_NetwSession_method_table>`.
 
 .. rst-class:: classref-item-separator
 
@@ -666,7 +500,7 @@ Declares a schema for a table of records.
 
 :godot:`Error <@GlobalScope#enum_@globalscope_Error>` **configure_server_info**\ (\ provider\: :godot:`Callable`\ ) |static| :ref:`🔗<class_Netw_method_configure_server_info>`
 
-Declares what this server says about itself when another peer probes it with :ref:`NetwConnectHandle.endpoint_probe()<class_NetwConnectHandle_method_endpoint_probe>`.
+Declares what this server says about itself when another peer probes it with :ref:`NetwConnection.endpoint_probe()<class_NetwConnection_method_endpoint_probe>`.
 
 ::
 
@@ -695,7 +529,7 @@ Configures the :godot:`Node.multiplayer <Node#class_Node_property_multiplayer>` 
     func _init() -> void:
         Netw.configure_session(self) \
                 .app(&"bomber-v2") \
-                .role(NetwMultiplayer.ROLE_LISTEN_SERVER)
+                .role(NetwSession.ROLE_LISTEN_SERVER)
 
 \ See :ref:`NetwSessionConfig<class_NetwSessionConfig>` for the settings.
 
@@ -746,48 +580,6 @@ Registers ``callable`` as a function :ref:`spawn()<class_Netw_method_spawn>` may
     muzzle.add_child(bullet)
 
     # clients build the same node with the same arguments, in the same place
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_Netw_method_connection:
-
-.. rst-class:: classref-method
-
-:ref:`NetwConnectHandle<class_NetwConnectHandle>` **connection**\ (\ node\: :godot:`Node`\ ) |static| :ref:`🔗<class_Netw_method_connection>`
-
-The :ref:`NetwConnectHandle<class_NetwConnectHandle>` of the :godot:`Node.multiplayer <Node#class_Node_property_multiplayer>`, used to connect to other peers and probe servers.
-
-::
-
-    var c := Netw.connection(self)
-    var ticket := c.create_peer(
-            ENetMultiplayerPeer,
-            NetwMultiplayer.TRANSPORT_MODE_HOST,
-            "", {port = 21253}, _created)
-
-    func _created(peer: MultiplayerPeer, error: Error, detail: String):
-        if error == OK:
-            Netw.of(self).multiplayer_peer = peer
-
-\ This is optional. Assigning a :godot:`MultiplayerPeer` to :godot:`MultiplayerAPI.multiplayer_peer <MultiplayerAPI#class_MultiplayerAPI_property_multiplayer_peer>` works as usual.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_Netw_method_database:
-
-.. rst-class:: classref-method
-
-:ref:`NetwDatabase<class_NetwDatabase>` **database**\ (\ node\: :godot:`Node`, name\: :godot:`StringName`\ ) |static| :ref:`🔗<class_Netw_method_database>`
-
-Returns the :ref:`NetwDatabase<class_NetwDatabase>` declared as ``name`` with :ref:`configure_database()<class_Netw_method_configure_database>`.
-
-::
-
-    var db: NetwDatabase = Netw.database(self, &"saves")
 
 .. rst-class:: classref-item-separator
 
@@ -844,14 +636,7 @@ Emits ``sig`` on every peer, including the local one, with the arguments that fo
 
 :ref:`NetwMultiplayer<class_NetwMultiplayer>` **of**\ (\ node\: :godot:`Node`\ ) |static| :ref:`🔗<class_Netw_method_of>`
 
-Returns the :godot:`Node.multiplayer <Node#class_Node_property_multiplayer>` of ``node`` as a :ref:`NetwMultiplayer<class_NetwMultiplayer>`.
-
-::
-
-    var api := Netw.of(self)
-    api.entity_despawn(route)
-
-\ A node that is in no tree returns ``null``.
+Returns the :godot:`Node.multiplayer <Node#class_Node_property_multiplayer>` of ``node`` as a :ref:`NetwMultiplayer<class_NetwMultiplayer>`, for advanced use. A node that is in no tree returns ``null``.
 
 .. rst-class:: classref-item-separator
 
@@ -870,7 +655,7 @@ Joins the game as ``username``. The arguments after ``username`` are passed to t
     Netw.prepare_join(self, &"Dev", &"red")
     multiplayer.multiplayer_peer = peer
 
-\ Call it before or after assigning :godot:`MultiplayerAPI.multiplayer_peer <MultiplayerAPI#class_MultiplayerAPI_property_multiplayer_peer>`. The join can still be refused later, which emits :ref:`NetwConnectHandle.join_failed<class_NetwConnectHandle_signal_join_failed>`.
+\ Call it before or after assigning :godot:`MultiplayerAPI.multiplayer_peer <MultiplayerAPI#class_MultiplayerAPI_property_multiplayer_peer>`. The join can still be refused later, which emits :ref:`NetwConnection.join_failed<class_NetwConnection_signal_join_failed>`.
 
 .. code:: text
 
@@ -886,25 +671,11 @@ Joins the game as ``username``. The arguments after ``username`` are passed to t
 
 ----
 
-.. _class_Netw_method_release_authority:
-
-.. rst-class:: classref-method
-
-:ref:`NetwPromise<class_NetwPromise>` **release_authority**\ (\ node\: :godot:`Node`, successor\: :godot:`int` = 0\ ) |static| :ref:`🔗<class_Netw_method_release_authority>`
-
-Gives control of the entity ``node`` belongs to to ``successor``, or to the server when ``0``. Same as :ref:`NetwEntity.release_authority()<class_NetwEntity_method_release_authority>`. The promise fails with :godot:`@GlobalScope.ERR_DOES_NOT_EXIST <@GlobalScope#class_@GlobalScope_constant_ERR_DOES_NOT_EXIST>` when ``node`` has no entity.
-
-\ **Player request.**
-
-.. rst-class:: classref-item-separator
-
-----
-
 .. _class_Netw_method_reload_current_scene:
 
 .. rst-class:: classref-method
 
-:ref:`NetwPromise<class_NetwPromise>` **reload_current_scene**\ (\ node\: :godot:`Node`, scope\: :ref:`SceneChange<enum_Netw_SceneChange>` = 0\ ) |static| :ref:`🔗<class_Netw_method_reload_current_scene>`
+:ref:`NetwPromise<class_NetwPromise>` **reload_current_scene**\ (\ node\: :godot:`Node`, scope\: :ref:`SceneChange<enum_NetwScene_SceneChange>` = 0\ ) |static| :ref:`🔗<class_Netw_method_reload_current_scene>`
 
 Reloads the scene this peer displays, like :godot:`SceneTree.reload_current_scene() <SceneTree#class_SceneTree_method_reload_current_scene>`.
 
@@ -1090,61 +861,14 @@ Returns a copy of the state of ``entity`` at ``tick``. It is empty when nothing 
 
 .. rst-class:: classref-method
 
-:ref:`NetwSceneHandle<class_NetwSceneHandle>` **scene**\ (\ node\: :godot:`Node`, named\: :godot:`StringName` = &""\ ) |static| :ref:`🔗<class_Netw_method_scene>`
+:ref:`NetwScene<class_NetwScene>` **scene**\ (\ node\: :godot:`Node`\ ) |static| :ref:`🔗<class_Netw_method_scene>`
 
-Returns the multiplayer scene ``node`` is in, or the one called ``named``.
-
-::
-
-    var here := Netw.scene(self)              # the scene I am in
-    var arena := Netw.scene(spawned)         # the one I just spawned
-    var track := Netw.scene(self, &"Track")  # the only live Track
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_Netw_method_service:
-
-.. rst-class:: classref-method
-
-:godot:`Variant` **service**\ (\ node\: :godot:`Node`, type\: :godot:`Object`\ ) |static| :ref:`🔗<class_Netw_method_service>`
-
-Returns the service registered as ``type``, or ``null``. A service is like an autoload, but one per :godot:`MultiplayerAPI`.
+Returns the multiplayer scene ``node`` is in. Use :ref:`NetwSession.find_scene()<class_NetwSession_method_find_scene>` to find one by name.
 
 ::
 
-    var gamestate := Netw.service(self, MyGamestate) as MyGamestate
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_Netw_method_service_register:
-
-.. rst-class:: classref-method
-
-|void| **service_register**\ (\ node\: :godot:`Node`, service\: :godot:`Object`, type\: :godot:`Object` = null\ ) |static| :ref:`🔗<class_Netw_method_service_register>`
-
-Registers ``service`` so :ref:`service()<class_Netw_method_service>` returns it.
-
-::
-
-    Netw.service_register(self, MyGamestate.new())
-
-\ ``type`` defaults to the class of ``service``. Registering another service with the same ``type`` replaces it.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_Netw_method_service_unregister:
-
-.. rst-class:: classref-method
-
-|void| **service_unregister**\ (\ node\: :godot:`Node`, service\: :godot:`Object`, type\: :godot:`Object` = null\ ) |static| :ref:`🔗<class_Netw_method_service_unregister>`
-
-Reverses :ref:`service_register()<class_Netw_method_service_register>`.
+    var here := Netw.scene(self)
+    var track := Netw.session(self).find_scene(&"Track")
 
 .. rst-class:: classref-item-separator
 
@@ -1154,16 +878,15 @@ Reverses :ref:`service_register()<class_Netw_method_service_register>`.
 
 .. rst-class:: classref-method
 
-:ref:`NetwSessionHandle<class_NetwSessionHandle>` **session**\ (\ node\: :godot:`Node`\ ) |static| :ref:`🔗<class_Netw_method_session>`
+:ref:`NetwSession<class_NetwSession>` **session**\ (\ node\: :godot:`Node`\ ) |static| :ref:`🔗<class_Netw_method_session>`
 
-The :ref:`NetwSessionHandle<class_NetwSessionHandle>` of the :godot:`Node.multiplayer <Node#class_Node_property_multiplayer>`. Mostly useful for connecting signals.
+The :ref:`NetwSession<class_NetwSession>` of the :godot:`Node.multiplayer <Node#class_Node_property_multiplayer>`. Mostly useful for connecting signals.
 
 ::
 
     var s := Netw.session(self)
-    s.entered.connect(_on_entered)
-    s.disconnected.connect(_on_over)
-    s.ended.connect(_on_over)
+    s.entered.connect(on_entered)
+    s.exited.connect(on_exited)
 
 .. rst-class:: classref-item-separator
 
@@ -1226,25 +949,6 @@ Sends the current value of ``property`` to the other peers. Use it for a propert
         Netw.sync_property(self, &"fuel")
 
 \ Call :ref:`configure_property()<class_Netw_method_configure_property>` first.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_Netw_method_table:
-
-.. rst-class:: classref-method
-
-:ref:`NetwTableHandle<class_NetwTableHandle>` **table**\ (\ node\: :godot:`Node`, name\: :godot:`StringName`\ ) |static| :ref:`🔗<class_Netw_method_table>`
-
-Returns the table of the schema ``name`` from :ref:`configure_schema()<class_Netw_method_configure_schema>`.
-
-::
-
-    @onready var mobs := Netw.table(self, &"Mob")
-
-    func _ready() -> void:
-        mobs.received.connect(_on_mobs)
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

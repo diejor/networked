@@ -6,8 +6,7 @@
 #include "netw/api/entity.hpp"
 #include "netw/api/lifecycle_request.hpp"
 #include "netw/api/persistence_config.hpp"
-#include "netw/api/predict.hpp"
-#include "netw/api/prediction_handle.hpp"
+#include "netw/api/prediction.hpp"
 #include "netw/entity/stage.hpp"
 #include "netw/lifecycle/rule.hpp"
 #include "netw/log.hpp"
@@ -74,10 +73,10 @@ lifecycle::Facts NetwMultiplayer::lifecycle_entity_facts(
     }
     facts.declared
         = p_entity->get_lifecycle() == NetwEntity::LIFECYCLE_CONTROLLER;
-    const Ref<NetwPredictionHandle> prediction
+    const Ref<NetwPrediction> prediction
         = p_entity->prediction_if_minted();
     facts.predicted = prediction.is_valid()
-        && prediction->get_archetype() != NetwPredict::ARCHETYPE_NONE;
+        && prediction->get_archetype() != NetwPrediction::ARCHETYPE_NONE;
     const int64_t route = liveness_route_of(p_entity);
     spawn::Pipeline *spawns = spawn_plane();
     facts.native = !p_entity->synchronizers().is_empty()

@@ -6,6 +6,7 @@
 #include "godot/local_vector.hpp"
 #include "godot/ref_counted.hpp"
 #include "godot/variant.hpp"
+#include "netw/api/promise.hpp"
 
 namespace netw {
 
@@ -21,6 +22,7 @@ private:
     godot::String detail;
     godot::LocalVector<godot::Callable> then_callbacks;
     godot::LocalVector<godot::Callable> catch_callbacks;
+    promise_wait::Waiting waiting;
 
     bool forget(int64_t p_peer);
 

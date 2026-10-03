@@ -14,10 +14,10 @@ var painted: StandardMaterial3D
 func _init() -> void:
 	entity = Netw.configure_entity(self)
 	entity.transfer = NetwEntity.TRANSFER_IMMEDIATE
-	entity.simulation.replicas = NetwSimulationHandle.REPLICAS_ACTIVE
+	entity.simulation.replicas = NetwSimulation.REPLICAS_ACTIVE
 	entity.simulation.claim_on_contact = true
 	entity.simulation.release_on_rest = 1.0
-	entity.interpolation.visual_root = ^"Visual"
+	entity.display.visual_root = ^"Visual"
 	Netw.configure_property(self, &"position").broadcast().heartbeat(60) \
 			.quantize(NetwQuantizeScalar.new().bits(20).limits(-LIMIT, LIMIT)) \
 			.interpolate(NetwInterpolate.new().lerp())
@@ -32,7 +32,7 @@ func _init() -> void:
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_PARENTED:
-		entity.entity_id = StringName(name)
+		entity.name = StringName(name)
 
 
 func _ready() -> void:

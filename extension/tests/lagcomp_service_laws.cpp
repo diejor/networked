@@ -64,23 +64,14 @@ Node *stamped_late(Node *p_tree, const char *p_name, const StringName &p_id) {
     p_tree->add_child(body);
     api->lagcomp_effect_arm(p_id, Callable(body, StringName("get_name")), 0);
     const Ref<NetwEntity> entity = NetwEntity::ensure(body);
-    entity->set_entity_id(p_id);
+    entity->set_name(p_id);
     return body;
-}
-
-bool drives_tick(netw::NetwMultiplayer *p_api) {
-    REQUIRE_MESSAGE(p_api != nullptr, "the session has no native core");
-    return p_api->is_connected(
-        StringName("clock_on_tick"),
-        callable_mp(p_api, &netw::NetwMultiplayer::tick_step)
-    );
 }
 
 TEST_CASE(
     "[Networked][LagComp][Service][SceneTree] LS1 rewind is a configuration "
     "the session holds rather than a node it watches, so installing one "
-    "leaves the session configured and driving the tick with nothing mounted "
-    "to keep it that way"
+    "leaves the session configured with nothing mounted to keep it that way"
 ) {
     Node *root = netw::gd::scene_root();
     REQUIRE(root != nullptr);
@@ -91,7 +82,6 @@ TEST_CASE(
         = LoopbackRig::core_of(tree->get(StringName("api")));
     REQUIRE(api != nullptr);
     CHECK(api->lagcomp_is_configured());
-    CHECK(drives_tick(api));
 
     Node *spare = memnew(Node);
     tree->add_child(spare);
@@ -99,7 +89,6 @@ TEST_CASE(
     memdelete(spare);
 
     CHECK(api->lagcomp_is_configured());
-    CHECK(drives_tick(api));
 
     root->remove_child(tree);
     memdelete(tree);
@@ -185,7 +174,7 @@ TEST_CASE(
         Callable(body, StringName("get_name")),
         0
     );
-    entity->set_entity_id(StringName("spawned-subject"));
+    entity->set_name(StringName("spawned-subject"));
     REQUIRE_MESSAGE(
         api->lagcomp_effect_pending(StringName("spawned-subject")),
         "the arm must outlive the stamp, or the adopt proves nothing"

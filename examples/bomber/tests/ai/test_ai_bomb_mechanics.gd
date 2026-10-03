@@ -24,7 +24,7 @@ func test_bomb_rate_limit_holds_with_four_bombers() -> void:
 	for r in runners:
 		assert_int(count_bombs(r)).is_equal(host_bombs)
 
-	var tickrate: int = Netw.clock(game.host.tree).tickrate
+	var tickrate: int = game.host.session.clock.tickrate
 	var seconds := float(ticks) / float(tickrate)
 	var max_bombs_per_player := 1 + ceili(seconds / PLAYER_SCRIPT.BOMB_RATE)
 	assert_int(host_bombs).is_less_equal(

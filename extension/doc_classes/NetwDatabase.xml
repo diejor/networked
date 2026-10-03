@@ -4,7 +4,7 @@
 		The client for persistent storage.
 	</brief_description>
 	<description>
-		[NetwEntity], [NetwTableHandle] and your own code save and load their state through a [NetwDatabase]. A [NetwDatabaseBackend] does the actual storage.
+		[NetwEntity], [NetwTable] and your own code save and load their state through a [NetwDatabase]. A [NetwDatabaseBackend] does the actual storage.
 		A record is a [Dictionary] stored under a [StringName] id. Its [NetwSchema] is the table definition and the record is a row in it.
 		Await [method open] before reading or writing.
 		[codeblock]
@@ -12,7 +12,7 @@
 		    Netw.configure_database(self, &amp;"saves").backend(preload("res://filesystem_backend.tres"))
 
 		func start_game(slot: StringName) -&gt; void:
-		    var db: NetwDatabase = Netw.database(self, &amp;"saves")
+		    var db: NetwDatabase = Netw.session(self).database(&amp;"saves")
 		    var error: Error = await db.open(slot).wait()
 		    if error != OK:
 		        show_load_error(error)
@@ -268,10 +268,10 @@
 			<param index="0" name="error" type="int" enum="Error" />
 			<param index="1" name="detail" type="String" />
 			<description>
-				Emitted when an entity fails to load or save its record. [param error] is one of the codes [method NetwPersistenceHandle.load] and [method NetwPersistenceHandle.save] list, and [param detail] names the record and what went wrong.
+				Emitted when an entity fails to load or save its record. [param error] is one of the codes [method NetwPersistence.load] and [method NetwPersistence.save] list, and [param detail] names the record and what went wrong.
 				[codeblock]
 				func _ready() -&gt; void:
-				    Netw.database(self, &amp;"saves").failed.connect(show_save_error)
+				    Netw.session(self).database(&amp;"saves").failed.connect(show_save_error)
 
 				func show_save_error(_error: Error, detail: String) -&gt; void:
 				    status.text = detail

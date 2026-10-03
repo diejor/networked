@@ -25,7 +25,6 @@ One networked entity is one root node holding one **NetwEntity**. Nodes under th
 
     NetwEntity.of(node)         # walks up to the entity, null when there is none
     Netw.configure_entity(self) # gets or creates it on a root, in _init
-    NetwEntity.ensure(root)     # gets or creates it on this exact node
 
 \ :ref:`controller<class_NetwEntity_property_controller>` is settled before the node enters the tree, so :godot:`Node.is_multiplayer_authority() <Node#class_Node_method_is_multiplayer_authority>` is already correct in :godot:`Node._enter_tree() <Node#class_Node_private_method__enter_tree>` and :godot:`Node._ready() <Node#class_Node_private_method__ready>` on every peer.
 
@@ -57,12 +56,12 @@ A root declares itself in ``_init``. A child marks its own spawn properties in i
     func _ready() -> void:
         NetwEntity.of(self).despawning.connect(_on_despawning)
 
-\ A node placed in a scene by hand sets its own :ref:`entity_id<class_NetwEntity_property_entity_id>`. A spawned copy receives it with the spawn.
+\ A node placed in a scene by hand sets its own :ref:`name<class_NetwEntity_property_name>`. A spawned copy receives it with the spawn.
 
 ::
 
     func _init() -> void:
-        Netw.configure_entity(self).entity_id = &"ball"
+        Netw.configure_entity(self).name = &"ball"
 
 
 
@@ -113,7 +112,7 @@ A root declares itself in ``_init``. A child marks its own spawn properties in i
 
 \ :ref:`transfer<class_NetwEntity_property_transfer>` decides whether a peer may ask, and the :ref:`Hold<enum_NetwEntity_Hold>` of the current controller decides whether the server refuses. Under :ref:`TRANSFER_IMMEDIATE<class_NetwEntity_constant_TRANSFER_IMMEDIATE>` the asking peer runs the entity before the decision arrives.
 
-\ :ref:`NetwSimulationHandle.claim_on_contact<class_NetwSimulationHandle_property_claim_on_contact>` and :ref:`NetwSimulationHandle.release_on_rest<class_NetwSimulationHandle_property_release_on_rest>` let a body take control of what it touches and hand it back once it rests.
+\ :ref:`NetwSimulation.claim_on_contact<class_NetwSimulation_property_claim_on_contact>` and :ref:`NetwSimulation.release_on_rest<class_NetwSimulation_property_release_on_rest>` let a body take control of what it touches and hand it back once it rests.
 
 
 
@@ -130,14 +129,14 @@ Only the server spawns, moves and despawns an entity by default. When :ref:`life
 
 \ **Simulation**\ 
 
-\ :ref:`simulation<class_NetwEntity_property_simulation>` says how the entity's body runs on each peer, :ref:`prediction<class_NetwEntity_property_prediction>` how a controller runs it ahead, and :ref:`interpolation<class_NetwEntity_property_interpolation>` how it is drawn.
+\ :ref:`simulation<class_NetwEntity_property_simulation>` says how the entity's body runs on each peer, :ref:`prediction<class_NetwEntity_property_prediction>` how a controller runs it ahead, and :ref:`display<class_NetwEntity_property_display>` how it is drawn.
 
 ::
 
     func _init() -> void:
         var entity := Netw.configure_entity(self)
-        entity.simulation.replicas = NetwSimulationHandle.REPLICAS_ACTIVE
-        entity.prediction.archetype = NetwPredict.ARCHETYPE_SOLVER_BODY
+        entity.simulation.replicas = NetwSimulation.REPLICAS_ACTIVE
+        entity.prediction.archetype = NetwPrediction.ARCHETYPE_SOLVER_BODY
 
 .. rst-class:: classref-reftable-group
 
@@ -160,23 +159,21 @@ Properties
    +-------------------------------------------------------------+-------------------------------------------------------------------------------------+----------------------+
    | :ref:`NetwPlayer<class_NetwPlayer>`                         | :ref:`controller_player<class_NetwEntity_property_controller_player>`               |                      |
    +-------------------------------------------------------------+-------------------------------------------------------------------------------------+----------------------+
-   | :godot:`StringName`                                         | :ref:`entity_id<class_NetwEntity_property_entity_id>`                               | ``&""``              |
+   | :ref:`NetwDisplay<class_NetwDisplay>`                       | :ref:`display<class_NetwEntity_property_display>`                                   |                      |
    +-------------------------------------------------------------+-------------------------------------------------------------------------------------+----------------------+
    | :ref:`Hold<enum_NetwEntity_Hold>`                           | :ref:`hold<class_NetwEntity_property_hold>`                                         |                      |
    +-------------------------------------------------------------+-------------------------------------------------------------------------------------+----------------------+
    | :ref:`InitialController<enum_NetwEntity_InitialController>` | :ref:`initial_controller<class_NetwEntity_property_initial_controller>`             | ``0``                |
    +-------------------------------------------------------------+-------------------------------------------------------------------------------------+----------------------+
-   | :ref:`NetwInterestHandle<class_NetwInterestHandle>`         | :ref:`interest<class_NetwEntity_property_interest>`                                 |                      |
-   +-------------------------------------------------------------+-------------------------------------------------------------------------------------+----------------------+
-   | :ref:`NetwDisplayHandle<class_NetwDisplayHandle>`           | :ref:`interpolation<class_NetwEntity_property_interpolation>`                       |                      |
+   | :ref:`NetwInterest<class_NetwInterest>`                     | :ref:`interest<class_NetwEntity_property_interest>`                                 |                      |
    +-------------------------------------------------------------+-------------------------------------------------------------------------------------+----------------------+
    | :godot:`bool`                                               | :ref:`is_control_pending<class_NetwEntity_property_is_control_pending>`             |                      |
    +-------------------------------------------------------------+-------------------------------------------------------------------------------------+----------------------+
    | :godot:`bool`                                               | :ref:`is_controlled_locally<class_NetwEntity_property_is_controlled_locally>`       |                      |
    +-------------------------------------------------------------+-------------------------------------------------------------------------------------+----------------------+
-   | :godot:`bool`                                               | :ref:`is_multiplayer_scene<class_NetwEntity_property_is_multiplayer_scene>`         | ``false``            |
-   +-------------------------------------------------------------+-------------------------------------------------------------------------------------+----------------------+
    | :godot:`bool`                                               | :ref:`is_player<class_NetwEntity_property_is_player>`                               |                      |
+   +-------------------------------------------------------------+-------------------------------------------------------------------------------------+----------------------+
+   | :godot:`bool`                                               | :ref:`is_scene<class_NetwEntity_property_is_scene>`                                 | ``false``            |
    +-------------------------------------------------------------+-------------------------------------------------------------------------------------+----------------------+
    | :godot:`bool`                                               | :ref:`is_session_authority<class_NetwEntity_property_is_session_authority>`         |                      |
    +-------------------------------------------------------------+-------------------------------------------------------------------------------------+----------------------+
@@ -185,6 +182,8 @@ Properties
    | :ref:`Lifecycle<enum_NetwEntity_Lifecycle>`                 | :ref:`lifecycle<class_NetwEntity_property_lifecycle>`                               | ``0``                |
    +-------------------------------------------------------------+-------------------------------------------------------------------------------------+----------------------+
    | :godot:`MultiplayerAPI`                                     | :ref:`multiplayer<class_NetwEntity_property_multiplayer>`                           |                      |
+   +-------------------------------------------------------------+-------------------------------------------------------------------------------------+----------------------+
+   | :godot:`StringName`                                         | :ref:`name<class_NetwEntity_property_name>`                                         | ``&""``              |
    +-------------------------------------------------------------+-------------------------------------------------------------------------------------+----------------------+
    | :ref:`DisconnectRule<enum_NetwEntity_DisconnectRule>`       | :ref:`on_controller_disconnect<class_NetwEntity_property_on_controller_disconnect>` | ``0``                |
    +-------------------------------------------------------------+-------------------------------------------------------------------------------------+----------------------+
@@ -196,21 +195,19 @@ Properties
    +-------------------------------------------------------------+-------------------------------------------------------------------------------------+----------------------+
    | :godot:`int`                                                | :ref:`peer_id<class_NetwEntity_property_peer_id>`                                   | ``0``                |
    +-------------------------------------------------------------+-------------------------------------------------------------------------------------+----------------------+
-   | :ref:`NetwPersistenceHandle<class_NetwPersistenceHandle>`   | :ref:`persistence<class_NetwEntity_property_persistence>`                           |                      |
+   | :ref:`NetwPersistence<class_NetwPersistence>`               | :ref:`persistence<class_NetwEntity_property_persistence>`                           |                      |
    +-------------------------------------------------------------+-------------------------------------------------------------------------------------+----------------------+
    | :ref:`NetwPlayer<class_NetwPlayer>`                         | :ref:`player<class_NetwEntity_property_player>`                                     |                      |
    +-------------------------------------------------------------+-------------------------------------------------------------------------------------+----------------------+
-   | :ref:`NetwPredictionHandle<class_NetwPredictionHandle>`     | :ref:`prediction<class_NetwEntity_property_prediction>`                             |                      |
+   | :ref:`NetwPrediction<class_NetwPrediction>`                 | :ref:`prediction<class_NetwEntity_property_prediction>`                             |                      |
    +-------------------------------------------------------------+-------------------------------------------------------------------------------------+----------------------+
    | :godot:`float`                                              | :ref:`replication_priority<class_NetwEntity_property_replication_priority>`         | ``1.0``              |
    +-------------------------------------------------------------+-------------------------------------------------------------------------------------+----------------------+
    | :godot:`RID`                                                | :ref:`rid<class_NetwEntity_property_rid>`                                           | ``RID(98784247808)`` |
    +-------------------------------------------------------------+-------------------------------------------------------------------------------------+----------------------+
-   | :godot:`int`                                                | :ref:`route<class_NetwEntity_property_route>`                                       | ``0``                |
+   | :ref:`NetwScene<class_NetwScene>`                           | :ref:`scene<class_NetwEntity_property_scene>`                                       |                      |
    +-------------------------------------------------------------+-------------------------------------------------------------------------------------+----------------------+
-   | :ref:`NetwSceneHandle<class_NetwSceneHandle>`               | :ref:`scene<class_NetwEntity_property_scene>`                                       |                      |
-   +-------------------------------------------------------------+-------------------------------------------------------------------------------------+----------------------+
-   | :ref:`NetwSimulationHandle<class_NetwSimulationHandle>`     | :ref:`simulation<class_NetwEntity_property_simulation>`                             |                      |
+   | :ref:`NetwSimulation<class_NetwSimulation>`                 | :ref:`simulation<class_NetwEntity_property_simulation>`                             |                      |
    +-------------------------------------------------------------+-------------------------------------------------------------------------------------+----------------------+
    | :ref:`Stage<enum_NetwEntity_Stage>`                         | :ref:`stage<class_NetwEntity_property_stage>`                                       |                      |
    +-------------------------------------------------------------+-------------------------------------------------------------------------------------+----------------------+
@@ -225,23 +222,23 @@ Methods
 .. table::
    :widths: auto
 
-   +---------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwPromise<class_NetwPromise>` | :ref:`claim_authority<class_NetwEntity_method_claim_authority>`\ (\ hold\: :ref:`Hold<enum_NetwEntity_Hold>` = 2\ )                                                      |
-   +---------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | |void|                                | :ref:`despawn<class_NetwEntity_method_despawn>`\ (\ opts\: :ref:`NetwDespawnOpts<class_NetwDespawnOpts>` = null\ )                                                       |
-   +---------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwEntity<class_NetwEntity>`   | :ref:`ensure<class_NetwEntity_method_ensure>`\ (\ root\: :godot:`Node`\ ) |static|                                                                                       |
-   +---------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | |void|                                | :ref:`follow_session<class_NetwEntity_method_follow_session>`\ (\ path\: :godot:`NodePath`\ )                                                                            |
-   +---------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwEntity<class_NetwEntity>`   | :ref:`of<class_NetwEntity_method_of>`\ (\ node\: :godot:`Node`\ ) |static|                                                                                               |
-   +---------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwEntity<class_NetwEntity>`   | :ref:`parent_entity<class_NetwEntity_method_parent_entity>`\ (\ ) |const|                                                                                                |
-   +---------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwPromise<class_NetwPromise>` | :ref:`release_authority<class_NetwEntity_method_release_authority>`\ (\ successor\: :godot:`int` = 0\ )                                                                  |
-   +---------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`Node`                         | :ref:`spawn_under<class_NetwEntity_method_spawn_under>`\ (\ parent\: :godot:`Node` = null, id\: :godot:`StringName` = &"", configure\: :godot:`Callable` = Callable()\ ) |
-   +---------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   +-------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwPromise<class_NetwPromise>`                 | :ref:`claim_authority<class_NetwEntity_method_claim_authority>`\ (\ hold\: :ref:`Hold<enum_NetwEntity_Hold>` = 2\ )                                                      |
+   +-------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | |void|                                                | :ref:`despawn<class_NetwEntity_method_despawn>`\ (\ opts\: :ref:`NetwDespawnOpts<class_NetwDespawnOpts>` = null\ )                                                       |
+   +-------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | |void|                                                | :ref:`follow_session<class_NetwEntity_method_follow_session>`\ (\ path\: :godot:`NodePath`\ )                                                                            |
+   +-------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwEntity<class_NetwEntity>`                   | :ref:`of<class_NetwEntity_method_of>`\ (\ node\: :godot:`Node`\ ) |static|                                                                                               |
+   +-------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwEntity<class_NetwEntity>`                   | :ref:`parent_entity<class_NetwEntity_method_parent_entity>`\ (\ ) |const|                                                                                                |
+   +-------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwPromise<class_NetwPromise>`                 | :ref:`release_authority<class_NetwEntity_method_release_authority>`\ (\ successor\: :godot:`int` = 0\ )                                                                  |
+   +-------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`Node`                                         | :ref:`spawn_under<class_NetwEntity_method_spawn_under>`\ (\ parent\: :godot:`Node` = null, id\: :godot:`StringName` = &"", configure\: :godot:`Callable` = Callable()\ ) |
+   +-------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`Error <@GlobalScope#enum_@globalscope_Error>` | :ref:`transfer_control<class_NetwEntity_method_transfer_control>`\ (\ peer_id\: :godot:`int`\ )                                                                          |
+   +-------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 
 .. rst-class:: classref-section-separator
 
@@ -308,33 +305,9 @@ Emitted right before :ref:`despawn()<class_NetwEntity_method_despawn>` frees the
 
 **hidden**\ (\ ) :ref:`🔗<class_NetwEntity_signal_hidden>`
 
-Emitted on a client that loses its copy of the entity without the entity being despawned, such as a hide under :ref:`NetwMultiplayer.LEAVE_POLICY_HIDE<class_NetwMultiplayer_constant_LEAVE_POLICY_HIDE>`. The entity may come back later with the same :ref:`rid<class_NetwEntity_property_rid>`.
+Emitted on a client that loses its copy of the entity without the entity being despawned, such as a hide under :ref:`NetwInterestLayer.LEAVE_POLICY_HIDE<class_NetwInterestLayer_constant_LEAVE_POLICY_HIDE>`. The entity may come back later with the same :ref:`rid<class_NetwEntity_property_rid>`.
 
 Neither :ref:`despawning<class_NetwEntity_signal_despawning>` nor :ref:`despawned<class_NetwEntity_signal_despawned>` is emitted, so anything tied to a body that may return connects here.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwEntity_signal_interest_enter:
-
-.. rst-class:: classref-signal
-
-**interest_enter**\ (\ peer_id\: :godot:`int`\ ) :ref:`🔗<class_NetwEntity_signal_interest_enter>`
-
-Emitted when ``peer_id`` starts seeing this entity. On a client ``peer_id`` is the local peer. :ref:`NetwInterestLayer.entity_visible<class_NetwInterestLayer_signal_entity_visible>` also names the layer.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwEntity_signal_interest_exit:
-
-.. rst-class:: classref-signal
-
-**interest_exit**\ (\ peer_id\: :godot:`int`\ ) :ref:`🔗<class_NetwEntity_signal_interest_exit>`
-
-Emitted when ``peer_id`` stops seeing this entity.
 
 .. rst-class:: classref-item-separator
 
@@ -390,30 +363,6 @@ Emitted on the server when the :ref:`controller<class_NetwEntity_property_contro
 \ 
 
 On a spawn the entity has not entered the tree yet, so :ref:`NetwLifecycleRequest.destination<class_NetwLifecycleRequest_property_destination>` is where it will go.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwEntity_signal_observer_entered:
-
-.. rst-class:: classref-signal
-
-**observer_entered**\ (\ layer_id\: :godot:`StringName`, peer_id\: :godot:`int`\ ) :ref:`🔗<class_NetwEntity_signal_observer_entered>`
-
-Emitted when ``peer_id`` starts seeing this entity through ``layer_id``.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwEntity_signal_observer_left:
-
-.. rst-class:: classref-signal
-
-**observer_left**\ (\ layer_id\: :godot:`StringName`, peer_id\: :godot:`int`\ ) :ref:`🔗<class_NetwEntity_signal_observer_left>`
-
-Emitted when ``peer_id`` stops seeing this entity through ``layer_id``.
 
 .. rst-class:: classref-item-separator
 
@@ -740,7 +689,7 @@ Identity is set and the node has not entered the tree yet.
 
 :ref:`Stage<enum_NetwEntity_Stage>` **STAGE_LIVE** = ``3``
 
-In the tree with a :ref:`route<class_NetwEntity_property_route>`.
+In the tree and replicating.
 
 .. _class_NetwEntity_constant_STAGE_DESPAWNING:
 
@@ -852,7 +801,7 @@ Whether a peer or the server controls this entity. See :ref:`ControlKind<enum_Ne
 
 The peer that steers this entity, ``0`` for the server.
 
-Written before the entity reaches :ref:`STAGE_ARMED<class_NetwEntity_constant_STAGE_ARMED>`, it sets the starting controller in place of :ref:`initial_controller<class_NetwEntity_property_initial_controller>`. Written on the server after that, it moves control on every peer and resets :ref:`hold<class_NetwEntity_property_hold>` to :ref:`HOLD_NONE<class_NetwEntity_constant_HOLD_NONE>`. A client asks with :ref:`claim_authority()<class_NetwEntity_method_claim_authority>`.
+Written before the entity reaches :ref:`STAGE_ARMED<class_NetwEntity_constant_STAGE_ARMED>`, it sets the starting controller in place of :ref:`initial_controller<class_NetwEntity_property_initial_controller>`. Written after that, it calls :ref:`transfer_control()<class_NetwEntity_method_transfer_control>`.
 
 ::
 
@@ -879,20 +828,17 @@ The player :ref:`controller<class_NetwEntity_property_controller>` names, or ``n
 
 ----
 
-.. _class_NetwEntity_property_entity_id:
+.. _class_NetwEntity_property_display:
 
 .. rst-class:: classref-property
 
-:godot:`StringName` **entity_id** = ``&""`` :ref:`🔗<class_NetwEntity_property_entity_id>`
+:ref:`NetwDisplay<class_NetwDisplay>` **display** :ref:`🔗<class_NetwEntity_property_display>`
 
 .. rst-class:: classref-property-setget
 
-- |void| **set_entity_id**\ (\ value\: :godot:`StringName`\ )
-- :godot:`StringName` **get_entity_id**\ (\ )
+- :ref:`NetwDisplay<class_NetwDisplay>` **get_display**\ (\ )
 
-The name that identifies this entity on every peer, and in saves and logs.
-
-A node placed in a scene sets it in :godot:`Object._init() <Object#class_Object_private_method__init>`, since an entity without one stays inactive. :ref:`Netw.spawn_player()<class_Netw_method_spawn_player>` sets it to the player's :ref:`NetwPlayer.username<class_NetwPlayer_property_username>`, so a game giving one player several bodies sets a distinct id on each.
+The entity's :ref:`NetwDisplay<class_NetwDisplay>`, which configures how the entity is drawn. A single value is smoothed with :ref:`NetwInterpolate<class_NetwInterpolate>`.
 
 .. rst-class:: classref-item-separator
 
@@ -941,29 +887,13 @@ Who controls the entity when it spawns. Set it in the root's ``_init``.
 
 .. rst-class:: classref-property
 
-:ref:`NetwInterestHandle<class_NetwInterestHandle>` **interest** :ref:`🔗<class_NetwEntity_property_interest>`
+:ref:`NetwInterest<class_NetwInterest>` **interest** :ref:`🔗<class_NetwEntity_property_interest>`
 
 .. rst-class:: classref-property-setget
 
-- :ref:`NetwInterestHandle<class_NetwInterestHandle>` **get_interest**\ (\ )
+- :ref:`NetwInterest<class_NetwInterest>` **get_interest**\ (\ )
 
-The entity's :ref:`NetwInterestHandle<class_NetwInterestHandle>`. Never ``null``, and what is declared on it survives leaving and re-entering the tree.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwEntity_property_interpolation:
-
-.. rst-class:: classref-property
-
-:ref:`NetwDisplayHandle<class_NetwDisplayHandle>` **interpolation** :ref:`🔗<class_NetwEntity_property_interpolation>`
-
-.. rst-class:: classref-property-setget
-
-- :ref:`NetwDisplayHandle<class_NetwDisplayHandle>` **get_interpolation**\ (\ )
-
-The entity's :ref:`NetwDisplayHandle<class_NetwDisplayHandle>`, which configures how the entity is drawn. A single value is smoothed with :ref:`NetwInterpolate<class_NetwInterpolate>`.
+The entity's :ref:`NetwInterest<class_NetwInterest>`. Never ``null``, and what is declared on it survives leaving and re-entering the tree.
 
 .. rst-class:: classref-item-separator
 
@@ -1001,27 +931,6 @@ The entity's :ref:`NetwDisplayHandle<class_NetwDisplayHandle>`, which configures
 
 ----
 
-.. _class_NetwEntity_property_is_multiplayer_scene:
-
-.. rst-class:: classref-property
-
-:godot:`bool` **is_multiplayer_scene** = ``false`` :ref:`🔗<class_NetwEntity_property_is_multiplayer_scene>`
-
-.. rst-class:: classref-property-setget
-
-- :godot:`bool` **get_is_multiplayer_scene**\ (\ )
-
-``true`` when this entity is a multiplayer scene, which :ref:`scene<class_NetwEntity_property_scene>` returns for it and every entity under it. Declared with :ref:`Netw.configure_multiplayer_scene()<class_Netw_method_configure_multiplayer_scene>` in ``_init``.
-
-::
-
-    func _init() -> void:
-        Netw.configure_multiplayer_scene(self).labeled(&"Arena")
-
-.. rst-class:: classref-item-separator
-
-----
-
 .. _class_NetwEntity_property_is_player:
 
 .. rst-class:: classref-property
@@ -1033,6 +942,27 @@ The entity's :ref:`NetwDisplayHandle<class_NetwDisplayHandle>`, which configures
 - :godot:`bool` **get_is_player**\ (\ )
 
 ``true`` when this entity represents a player, meaning :ref:`peer_id<class_NetwEntity_property_peer_id>` is not ``0``.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NetwEntity_property_is_scene:
+
+.. rst-class:: classref-property
+
+:godot:`bool` **is_scene** = ``false`` :ref:`🔗<class_NetwEntity_property_is_scene>`
+
+.. rst-class:: classref-property-setget
+
+- :godot:`bool` **get_is_scene**\ (\ )
+
+``true`` when this entity is a multiplayer scene, which :ref:`scene<class_NetwEntity_property_scene>` returns for it and every entity under it. Declared with :ref:`Netw.configure_scene()<class_Netw_method_configure_scene>` in ``_init``.
+
+::
+
+    func _init() -> void:
+        Netw.configure_scene(self).labeled(&"Arena")
 
 .. rst-class:: classref-item-separator
 
@@ -1067,12 +997,12 @@ Whether this peer is the server, which decides :ref:`controller<class_NetwEntity
 
 ``true`` when this entity is a hidden, inactive copy kept only to spawn others from with :ref:`spawn_under()<class_NetwEntity_method_spawn_under>`.
 
-A root placed inside another scene in the editor with no :ref:`entity_id<class_NetwEntity_property_entity_id>` is already a template. To make one in code, set this before it enters the tree, from outside its own script.
+A root placed inside another scene in the editor with no :ref:`name<class_NetwEntity_property_name>` is already a template. To make one in code, set this before it enters the tree, from outside its own script.
 
 ::
 
     var spawner := preload("res://mob.tscn").instantiate()
-    NetwEntity.ensure(spawner).is_template = true
+    Netw.configure_entity(spawner).is_template = true
     add_child(spawner)
 
 \ The mark cannot be undone.
@@ -1119,6 +1049,25 @@ During a prediction replay these calls return :godot:`@GlobalScope.ERR_BUSY <@Gl
 - :godot:`MultiplayerAPI` **get_multiplayer**\ (\ )
 
 The root's :godot:`Node.multiplayer <Node#class_Node_property_multiplayer>`, or ``null`` before the entity spawns.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NetwEntity_property_name:
+
+.. rst-class:: classref-property
+
+:godot:`StringName` **name** = ``&""`` :ref:`🔗<class_NetwEntity_property_name>`
+
+.. rst-class:: classref-property-setget
+
+- |void| **set_name**\ (\ value\: :godot:`StringName`\ )
+- :godot:`StringName` **get_name**\ (\ )
+
+The name that identifies this entity on every peer, and in saves and logs.
+
+A node placed in a scene sets it in :godot:`Object._init() <Object#class_Object_private_method__init>`, since an entity without one stays inactive. :ref:`Netw.spawn_player()<class_Netw_method_spawn_player>` sets it to the player's :ref:`NetwPlayer.username<class_NetwPlayer_property_username>`, so a game giving one player several bodies sets a distinct name on each.
 
 .. rst-class:: classref-item-separator
 
@@ -1219,11 +1168,11 @@ A player's entity is listed in :ref:`NetwPlayer.bodies<class_NetwPlayer_property
 
 .. rst-class:: classref-property
 
-:ref:`NetwPersistenceHandle<class_NetwPersistenceHandle>` **persistence** :ref:`🔗<class_NetwEntity_property_persistence>`
+:ref:`NetwPersistence<class_NetwPersistence>` **persistence** :ref:`🔗<class_NetwEntity_property_persistence>`
 
 .. rst-class:: classref-property-setget
 
-- :ref:`NetwPersistenceHandle<class_NetwPersistenceHandle>` **get_persistence**\ (\ )
+- :ref:`NetwPersistence<class_NetwPersistence>` **get_persistence**\ (\ )
 
 The entity's saved row, built from its :ref:`NetwPersistenceConfig<class_NetwPersistenceConfig>` and the :ref:`NetwPropertyConfig.persisted()<class_NetwPropertyConfig_method_persisted>` properties under it.
 
@@ -1251,13 +1200,13 @@ The player :ref:`peer_id<class_NetwEntity_property_peer_id>` represents, or ``nu
 
 .. rst-class:: classref-property
 
-:ref:`NetwPredictionHandle<class_NetwPredictionHandle>` **prediction** :ref:`🔗<class_NetwEntity_property_prediction>`
+:ref:`NetwPrediction<class_NetwPrediction>` **prediction** :ref:`🔗<class_NetwEntity_property_prediction>`
 
 .. rst-class:: classref-property-setget
 
-- :ref:`NetwPredictionHandle<class_NetwPredictionHandle>` **get_prediction**\ (\ )
+- :ref:`NetwPrediction<class_NetwPrediction>` **get_prediction**\ (\ )
 
-The entity's :ref:`NetwPredictionHandle<class_NetwPredictionHandle>`, holding its prediction settings and counters. Never ``null``. How the entity steps is on :ref:`simulation<class_NetwEntity_property_simulation>`.
+The entity's :ref:`NetwPrediction<class_NetwPrediction>`, holding its prediction settings and counters. Never ``null``. How the entity steps is on :ref:`simulation<class_NetwEntity_property_simulation>`.
 
 .. rst-class:: classref-item-separator
 
@@ -1306,33 +1255,17 @@ The :godot:`RID` that :ref:`NetwMultiplayer<class_NetwMultiplayer>` methods take
 
 ----
 
-.. _class_NetwEntity_property_route:
-
-.. rst-class:: classref-property
-
-:godot:`int` **route** = ``0`` :ref:`🔗<class_NetwEntity_property_route>`
-
-.. rst-class:: classref-property-setget
-
-- :godot:`int` **get_route**\ (\ )
-
-The number that addresses this entity in packets, or ``0`` when it has none. :ref:`NetwMultiplayer.entity_from_route()<class_NetwMultiplayer_method_entity_from_route>` maps it back to the entity.
-
-.. rst-class:: classref-item-separator
-
-----
-
 .. _class_NetwEntity_property_scene:
 
 .. rst-class:: classref-property
 
-:ref:`NetwSceneHandle<class_NetwSceneHandle>` **scene** :ref:`🔗<class_NetwEntity_property_scene>`
+:ref:`NetwScene<class_NetwScene>` **scene** :ref:`🔗<class_NetwEntity_property_scene>`
 
 .. rst-class:: classref-property-setget
 
-- :ref:`NetwSceneHandle<class_NetwSceneHandle>` **get_scene**\ (\ )
+- :ref:`NetwScene<class_NetwScene>` **get_scene**\ (\ )
 
-The scene this entity belongs to, which is itself when :ref:`is_multiplayer_scene<class_NetwEntity_property_is_multiplayer_scene>` is set and otherwise the nearest scene above it. Never ``null``, so read :ref:`NetwSceneHandle.is_declared<class_NetwSceneHandle_property_is_declared>` to know whether one was found.
+The scene this entity belongs to, which is itself when :ref:`is_scene<class_NetwEntity_property_is_scene>` is set and otherwise the nearest scene above it. Never ``null``, so read :ref:`NetwScene.is_declared<class_NetwScene_property_is_declared>` to know whether one was found.
 
 Two entities in the same scene return the same handle.
 
@@ -1349,11 +1282,11 @@ Two entities in the same scene return the same handle.
 
 .. rst-class:: classref-property
 
-:ref:`NetwSimulationHandle<class_NetwSimulationHandle>` **simulation** :ref:`🔗<class_NetwEntity_property_simulation>`
+:ref:`NetwSimulation<class_NetwSimulation>` **simulation** :ref:`🔗<class_NetwEntity_property_simulation>`
 
 .. rst-class:: classref-property-setget
 
-- :ref:`NetwSimulationHandle<class_NetwSimulationHandle>` **get_simulation**\ (\ )
+- :ref:`NetwSimulation<class_NetwSimulation>` **get_simulation**\ (\ )
 
 How this entity's body runs on each peer, and which other entities it runs here. Never ``null``.
 
@@ -1450,18 +1383,6 @@ Frees :ref:`owner<class_NetwEntity_property_owner>` after emitting :ref:`despawn
 
 ----
 
-.. _class_NetwEntity_method_ensure:
-
-.. rst-class:: classref-method
-
-:ref:`NetwEntity<class_NetwEntity>` **ensure**\ (\ root\: :godot:`Node`\ ) |static| :ref:`🔗<class_NetwEntity_method_ensure>`
-
-Gets or creates the record on ``root`` itself, without walking up to a parent entity.
-
-.. rst-class:: classref-item-separator
-
-----
-
 .. _class_NetwEntity_method_follow_session:
 
 .. rst-class:: classref-method
@@ -1526,7 +1447,7 @@ The request carries this peer's latest :ref:`NetwPropertyConfig.broadcast()<clas
 
 :godot:`Node` **spawn_under**\ (\ parent\: :godot:`Node` = null, id\: :godot:`StringName` = &"", configure\: :godot:`Callable` = Callable()\ ) :ref:`🔗<class_NetwEntity_method_spawn_under>`
 
-Spawns a copy of :ref:`owner<class_NetwEntity_property_owner>`'s scene under ``parent``, which defaults to the owner's own parent. ``id`` sets the copy's :ref:`entity_id<class_NetwEntity_property_entity_id>`.
+Spawns a copy of :ref:`owner<class_NetwEntity_property_owner>`'s scene under ``parent``, which defaults to the owner's own parent. ``id`` sets the copy's :ref:`name<class_NetwEntity_property_name>`.
 
 \ ``configure`` receives the copy's **NetwEntity** before it is sent, so what it sets reaches every peer with the spawn.
 
@@ -1539,6 +1460,27 @@ Spawns a copy of :ref:`owner<class_NetwEntity_property_owner>`'s scene under ``p
     )
 
 \ The server may call it, and so may a client when the copy's :ref:`lifecycle<class_NetwEntity_property_lifecycle>` is :ref:`LIFECYCLE_CONTROLLER<class_NetwEntity_constant_LIFECYCLE_CONTROLLER>`. That client becomes the copy's :ref:`controller<class_NetwEntity_property_controller>`.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NetwEntity_method_transfer_control:
+
+.. rst-class:: classref-method
+
+:godot:`Error <@GlobalScope#enum_@globalscope_Error>` **transfer_control**\ (\ peer_id\: :godot:`int`\ ) :ref:`🔗<class_NetwEntity_method_transfer_control>`
+
+Gives control of this entity to ``peer_id``, or to the server when it is ``0``. Every peer follows, and :ref:`hold<class_NetwEntity_property_hold>` resets to :ref:`HOLD_NONE<class_NetwEntity_constant_HOLD_NONE>`. A client asks with :ref:`claim_authority()<class_NetwEntity_method_claim_authority>`.
+
+.. code:: text
+
+    Error
+    ┠╴ERR_UNAUTHORIZED        called on a client
+    ┠╴ERR_UNCONFIGURED        the entity is not spawned yet
+    ┖╴ERR_INVALID_PARAMETER   peer_id is negative
+
+\ **Server Only.**
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

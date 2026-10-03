@@ -1,6 +1,6 @@
-#include "netw/api/interest_handle.hpp"
+#include "netw/api/interest.hpp"
 #include "netw/api/netw_multiplayer.hpp"
-#include "netw/api/scene_handle.hpp"
+#include "netw/api/scene.hpp"
 
 #include "netw/api/participant.hpp"
 
@@ -20,8 +20,7 @@
 #include "godot/world.hpp"
 #include "netw/api/entity.hpp"
 #include "netw/api/join_request.hpp"
-#include "netw/api/predict.hpp"
-#include "netw/api/prediction_handle.hpp"
+#include "netw/api/prediction.hpp"
 #include "netw/api/replication_core.hpp"
 #include "netw/api/schema_model.hpp"
 #include "netw/api/sync_pipeline.hpp"
@@ -39,58 +38,6 @@ using namespace godot;
 using namespace netw;
 
 namespace netw {
-
-namespace {
-
-const char *SIG_CLOCK_AFTER_TICK = "clock_after_tick";
-const char *SIG_CLOCK_AFTER_TICK_LOOP = "clock_after_tick_loop";
-const char *SIG_CLOCK_BEFORE_TICK = "clock_before_tick";
-const char *SIG_CLOCK_BEFORE_TICK_LOOP = "clock_before_tick_loop";
-const char *SIG_CLOCK_ON_TICK = "clock_on_tick";
-const char *SIG_CLOCK_PONG_RECEIVED = "clock_pong_received";
-const char *SIG_CLOCK_STABILITY_CHANGED = "clock_stability_changed";
-const char *SIG_CLOCK_SYNCHRONIZED = "clock_synchronized";
-const char *SIG_CLOCK_CONFIGURED = "clock_configured";
-const char *SIG_CLOCK_TICKRATE_MISMATCH = "clock_tickrate_mismatch";
-const char *SIG_DATABASE_FAILED = "database_failed";
-const char *SIG_ENTITY_DEAD = "entity_dead";
-const char *SIG_ENTITY_HIDDEN = "entity_hidden";
-const char *SIG_ENTITY_LINGERING = "entity_lingering";
-const char *SIG_ENTITY_LIVE = "entity_live";
-const char *SIG_PLAYER_JOINED = "player_joined";
-const char *SIG_PLAYER_LOCAL_JOINED = "player_local_joined";
-const char *SIG_PLAYER_LEFT = "player_left";
-const char *SIG_PARTICIPANT_VIEWPORT_CHANGED = "participant_viewport_changed";
-const char *SIG_PEER_AUTHENTICATING = "peer_authenticating";
-const char *SIG_PEER_AUTHENTICATION_FAILED = "peer_authentication_failed";
-const char *SIG_PEER_KICKED = "peer_kicked";
-const char *SIG_PEER_KICK_REQUESTED = "peer_kick_requested";
-const char *SIG_PEER_PACKET = "peer_packet";
-const char *SIG_PERSIST_LOADED = "persist_loaded";
-const char *SIG_PERSIST_SAVED = "persist_saved";
-const char *SIG_SCENE_ACTIVATED = "scene_activated";
-const char *SIG_SCENE_CHANGED = "scene_changed";
-const char *SIG_SCENE_DESPAWNED = "scene_despawned";
-const char *SIG_SCENE_ENTITY_MOVED = "scene_entity_moved";
-const char *SIG_SCENE_LIVE = "scene_live";
-const char *SIG_SCENE_PRESENTATION_CHANGED = "scene_presentation_changed";
-const char *SIG_SCENE_SPAWNED = "scene_spawned";
-const char *SIG_SCENE_STARTUP_SPAWNED = "scene_startup_spawned";
-const char *SIG_SERVICE_REGISTERED = "service_registered";
-const char *SIG_SERVICE_UNREGISTERED = "service_unregistered";
-const char *SIG_SESSION_DISCONNECT_REQUESTED = "session_disconnect_requested";
-const char *SIG_SESSION_ENDED = "session_ended";
-const char *SIG_SESSION_ENTERED = "session_entered";
-const char *SIG_SESSION_JOIN_FAILED = "session_join_failed";
-const char *SIG_SESSION_POLL_STARTED = "session_poll_started";
-const char *SIG_SESSION_RECLAIMED = "session_reclaimed";
-const char *SIG_SESSION_SERVER_DISCONNECTING = "session_server_disconnecting";
-const char *SIG_SESSION_STATE_CHANGED = "session_state_changed";
-const char *SIG_SESSION_TREE_PAUSED = "session_tree_paused";
-const char *SIG_SESSION_TREE_UNPAUSED = "session_tree_unpaused";
-const char *SIG_TABLE_RECEIVED = "table_received";
-
-} // namespace
 
 void NetwMultiplayer::_bind_methods() {
     ClassDB::bind_method(
@@ -803,220 +750,6 @@ void NetwMultiplayer::_bind_methods() {
         "",
         "get_is_local_client"
     );
-    ADD_SIGNAL(
-        MethodInfo("endpoint_added", PropertyInfo(Variant::RID, "endpoint"))
-    );
-    ADD_SIGNAL(
-        MethodInfo("endpoint_removed", PropertyInfo(Variant::RID, "endpoint"))
-    );
-    ADD_SIGNAL(
-        MethodInfo("endpoint_updated", PropertyInfo(Variant::RID, "endpoint"))
-    );
-    ADD_SIGNAL(MethodInfo(
-        SIG_CLOCK_BEFORE_TICK,
-        PropertyInfo(Variant::FLOAT, "delta"),
-        PropertyInfo(Variant::INT, "tick")
-    ));
-    ADD_SIGNAL(MethodInfo(
-        SIG_CLOCK_ON_TICK,
-        PropertyInfo(Variant::FLOAT, "delta"),
-        PropertyInfo(Variant::INT, "tick")
-    ));
-    ADD_SIGNAL(MethodInfo(
-        SIG_CLOCK_AFTER_TICK,
-        PropertyInfo(Variant::FLOAT, "delta"),
-        PropertyInfo(Variant::INT, "tick")
-    ));
-    ADD_SIGNAL(MethodInfo(
-        "predict_owner_divergence",
-        PropertyInfo(Variant::INT, "peer"),
-        PropertyInfo(Variant::INT, "entry"),
-        PropertyInfo(
-            Variant::INT,
-            "attribution",
-            PROPERTY_HINT_NONE,
-            "",
-            PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_CLASS_IS_ENUM,
-            "NetwPredict.Attribution"
-        )
-    ));
-    ADD_SIGNAL(MethodInfo(
-        "lagcomp_action_gate_fallback",
-        PropertyInfo(Variant::STRING_NAME, "key"),
-        PropertyInfo(Variant::INT, "view_tick")
-    ));
-    ADD_SIGNAL(
-        MethodInfo(SIG_SCENE_SPAWNED, PropertyInfo(Variant::OBJECT, "scene"))
-    );
-    ADD_SIGNAL(
-        MethodInfo(SIG_SCENE_ACTIVATED, PropertyInfo(Variant::OBJECT, "scene"))
-    );
-    ADD_SIGNAL(
-        MethodInfo(SIG_SCENE_DESPAWNED, PropertyInfo(Variant::OBJECT, "scene"))
-    );
-    ADD_SIGNAL(MethodInfo(
-        SIG_SCENE_ENTITY_MOVED,
-        PropertyInfo(Variant::OBJECT, "entity"),
-        PropertyInfo(Variant::OBJECT, "from"),
-        PropertyInfo(Variant::OBJECT, "to")
-    ));
-    ADD_SIGNAL(MethodInfo(SIG_SCENE_STARTUP_SPAWNED));
-    ADD_SIGNAL(MethodInfo(
-        SIG_PARTICIPANT_VIEWPORT_CHANGED,
-        PropertyInfo(Variant::OBJECT, "viewport")
-    ));
-
-    ADD_SIGNAL(MethodInfo(SIG_CLOCK_BEFORE_TICK_LOOP));
-    ADD_SIGNAL(MethodInfo(SIG_CLOCK_AFTER_TICK_LOOP));
-    ADD_SIGNAL(MethodInfo(SIG_CLOCK_SYNCHRONIZED));
-    ADD_SIGNAL(MethodInfo(SIG_CLOCK_CONFIGURED));
-    ADD_SIGNAL(MethodInfo(
-        SIG_CLOCK_TICKRATE_MISMATCH,
-        PropertyInfo(Variant::INT, "peer_id"),
-        PropertyInfo(Variant::INT, "their_tickrate")
-    ));
-    ADD_SIGNAL(MethodInfo(
-        SIG_CLOCK_PONG_RECEIVED,
-        PropertyInfo(Variant::DICTIONARY, "data")
-    ));
-    ADD_SIGNAL(MethodInfo(
-        SIG_CLOCK_STABILITY_CHANGED,
-        PropertyInfo(Variant::BOOL, "is_stable")
-    ));
-    ADD_SIGNAL(MethodInfo(
-        SIG_SESSION_STATE_CHANGED,
-        PropertyInfo(
-            Variant::INT,
-            "old_state",
-            PROPERTY_HINT_NONE,
-            "",
-            PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_CLASS_IS_ENUM,
-            "NetwMultiplayer.SessionState"
-        ),
-        PropertyInfo(
-            Variant::INT,
-            "new_state",
-            PROPERTY_HINT_NONE,
-            "",
-            PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_CLASS_IS_ENUM,
-            "NetwMultiplayer.SessionState"
-        )
-    ));
-    ADD_SIGNAL(MethodInfo(
-        "embed_phase_changed",
-        PropertyInfo(
-            Variant::INT,
-            "phase",
-            PROPERTY_HINT_NONE,
-            "",
-            PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_CLASS_IS_ENUM,
-            "NetwMultiplayer.EmbedPhase"
-        )
-    ));
-    ADD_SIGNAL(MethodInfo(
-        "session_join_submitted",
-        PropertyInfo(Variant::STRING_NAME, "username"),
-        PropertyInfo(Variant::ARRAY, "args")
-    ));
-    ADD_SIGNAL(MethodInfo(SIG_SESSION_ENTERED));
-    ADD_SIGNAL(MethodInfo(
-        SIG_SESSION_JOIN_FAILED,
-        PropertyInfo(
-            Variant::INT,
-            "error",
-            PROPERTY_HINT_NONE,
-            "",
-            PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_CLASS_IS_ENUM,
-            "Error"
-        ),
-        PropertyInfo(Variant::STRING, "reason")
-    ));
-    ADD_SIGNAL(MethodInfo(SIG_SESSION_ENDED));
-    ADD_SIGNAL(MethodInfo(SIG_SESSION_RECLAIMED));
-    ADD_SIGNAL(MethodInfo(
-        SIG_PEER_AUTHENTICATING,
-        PropertyInfo(Variant::INT, "peer_id")
-    ));
-    ADD_SIGNAL(MethodInfo(
-        SIG_PEER_AUTHENTICATION_FAILED,
-        PropertyInfo(Variant::INT, "peer_id")
-    ));
-    ADD_SIGNAL(MethodInfo(
-        SIG_SESSION_POLL_STARTED,
-        PropertyInfo(Variant::FLOAT, "delta")
-    ));
-    ADD_SIGNAL(MethodInfo(
-        SIG_TABLE_RECEIVED,
-        PropertyInfo(Variant::RID, "table"),
-        PropertyInfo(Variant::INT, "tick")
-    ));
-    ADD_SIGNAL(MethodInfo(
-        SIG_DATABASE_FAILED,
-        PropertyInfo(Variant::RID, "database"),
-        PropertyInfo(
-            Variant::INT,
-            "error",
-            PROPERTY_HINT_NONE,
-            "",
-            PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_CLASS_IS_ENUM,
-            "Error"
-        ),
-        PropertyInfo(Variant::STRING, "detail")
-    ));
-    ADD_SIGNAL(MethodInfo(
-        SIG_PERSIST_LOADED,
-        PropertyInfo(Variant::RID, "entity"),
-        PropertyInfo(Variant::BOOL, "found")
-    ));
-    ADD_SIGNAL(
-        MethodInfo(SIG_PERSIST_SAVED, PropertyInfo(Variant::RID, "entity"))
-    );
-    ADD_SIGNAL(MethodInfo(
-        SIG_PEER_PACKET,
-        PropertyInfo(Variant::INT, "id"),
-        PropertyInfo(Variant::PACKED_BYTE_ARRAY, "packet")
-    ));
-    ADD_SIGNAL(
-        MethodInfo(SIG_PEER_KICKED, PropertyInfo(Variant::STRING, "reason"))
-    );
-    ADD_SIGNAL(MethodInfo(
-        SIG_SESSION_SERVER_DISCONNECTING,
-        PropertyInfo(Variant::STRING, "reason")
-    ));
-    ADD_SIGNAL(MethodInfo(
-        SIG_PEER_KICK_REQUESTED,
-        PropertyInfo(Variant::INT, "requester_id"),
-        PropertyInfo(Variant::INT, "target_id"),
-        PropertyInfo(Variant::STRING, "reason")
-    ));
-    ADD_SIGNAL(MethodInfo(
-        SIG_SESSION_DISCONNECT_REQUESTED,
-        PropertyInfo(Variant::INT, "peer_id"),
-        PropertyInfo(Variant::STRING, "reason")
-    ));
-    ADD_SIGNAL(MethodInfo(
-        SIG_SESSION_TREE_PAUSED,
-        PropertyInfo(Variant::STRING, "reason")
-    ));
-    ADD_SIGNAL(MethodInfo(SIG_SESSION_TREE_UNPAUSED));
-    ADD_SIGNAL(MethodInfo(
-        SIG_SERVICE_REGISTERED,
-        PropertyInfo(
-            Variant::OBJECT,
-            "service",
-            PROPERTY_HINT_NODE_TYPE,
-            "Node"
-        )
-    ));
-    ADD_SIGNAL(MethodInfo(
-        SIG_SERVICE_UNREGISTERED,
-        PropertyInfo(
-            Variant::OBJECT,
-            "service",
-            PROPERTY_HINT_NODE_TYPE,
-            "Node"
-        )
-    ));
     ClassDB::bind_method(
         D_METHOD("service_register", "service", "type"),
         &NetwMultiplayer::service_register,
@@ -1043,47 +776,6 @@ void NetwMultiplayer::_bind_methods() {
         D_METHOD("service_clear"),
         &NetwMultiplayer::service_clear
     );
-    ADD_SIGNAL(MethodInfo(
-        SIG_ENTITY_LIVE,
-        PropertyInfo(Variant::INT, "route"),
-        PropertyInfo(Variant::OBJECT, "entity")
-    ));
-    ADD_SIGNAL(MethodInfo(
-        SIG_ENTITY_LINGERING,
-        PropertyInfo(Variant::INT, "route"),
-        PropertyInfo(Variant::OBJECT, "entity")
-    ));
-    ADD_SIGNAL(
-        MethodInfo(SIG_ENTITY_DEAD, PropertyInfo(Variant::INT, "route"))
-    );
-    ADD_SIGNAL(MethodInfo(
-        SIG_ENTITY_HIDDEN,
-        PropertyInfo(Variant::INT, "route"),
-        PropertyInfo(Variant::OBJECT, "entity")
-    ));
-    ADD_SIGNAL(
-        MethodInfo(SIG_PLAYER_JOINED, PropertyInfo(Variant::OBJECT, "player"))
-    );
-    ADD_SIGNAL(MethodInfo(
-        SIG_PLAYER_LOCAL_JOINED,
-        PropertyInfo(Variant::OBJECT, "player")
-    ));
-    ADD_SIGNAL(
-        MethodInfo(SIG_PLAYER_LEFT, PropertyInfo(Variant::OBJECT, "player"))
-    );
-    ADD_SIGNAL(MethodInfo(
-        SIG_SCENE_PRESENTATION_CHANGED,
-        PropertyInfo(Variant::OBJECT, "from"),
-        PropertyInfo(Variant::OBJECT, "to")
-    ));
-    ADD_SIGNAL(
-        MethodInfo(SIG_SCENE_LIVE, PropertyInfo(Variant::OBJECT, "scene"))
-    );
-    ADD_SIGNAL(MethodInfo(
-        SIG_SCENE_CHANGED,
-        PropertyInfo(Variant::OBJECT, "scene"),
-        PropertyInfo(Variant::ARRAY, "arrived")
-    ));
     ClassDB::bind_method(
         D_METHOD("session_is_active"),
         &NetwMultiplayer::session_is_active
@@ -1092,13 +784,6 @@ void NetwMultiplayer::_bind_methods() {
         "NetwMultiplayer",
         D_METHOD("session_get_all"),
         &NetwMultiplayer::session_get_all
-    );
-    ClassDB::bind_static_method(
-        "NetwMultiplayer",
-        D_METHOD("make", "inner", "implementation"),
-        &NetwMultiplayer::make,
-        DEFVAL(Ref<SceneMultiplayer>()),
-        DEFVAL(Ref<Script>())
     );
     ClassDB::bind_static_method(
         "NetwMultiplayer",
@@ -1190,36 +875,9 @@ void NetwMultiplayer::_bind_methods() {
     BIND_ENUM_CONSTANT(ENTITY_STATE_LINGERING);
     BIND_ENUM_CONSTANT(ENTITY_STATE_DEAD);
     BIND_ENUM_CONSTANT(ENTITY_STATE_ABSENT);
-    BIND_ENUM_CONSTANT(LAYER_POLICY_HIDE_FROM_OUTSIDERS);
-    BIND_ENUM_CONSTANT(LAYER_POLICY_HIDE_FROM_INSIDERS);
     BIND_ENUM_CONSTANT(EMBED_PHASE_DECLARING);
     BIND_ENUM_CONSTANT(EMBED_PHASE_SETTLING);
     BIND_ENUM_CONSTANT(EMBED_PHASE_LIVE);
-    BIND_ENUM_CONSTANT(LEAVE_POLICY_HIDE);
-    BIND_ENUM_CONSTANT(LEAVE_POLICY_RETAIN);
-    BIND_ENUM_CONSTANT(LEAVE_POLICY_CUSTOM);
-    BIND_ENUM_CONSTANT(PERCEPTION_POLICY_HIDE);
-    BIND_ENUM_CONSTANT(PERCEPTION_POLICY_SHOW);
-    BIND_ENUM_CONSTANT(PERCEPTION_POLICY_CUSTOM);
-    BIND_ENUM_CONSTANT(DISPLAY_ROLE_AUTO);
-    BIND_ENUM_CONSTANT(DISPLAY_ROLE_REMOTE);
-    BIND_ENUM_CONSTANT(DISPLAY_ROLE_PREDICTED);
-    BIND_ENUM_CONSTANT(DISPLAY_ROLE_DISABLED);
-    BIND_ENUM_CONSTANT(DISPLAY_ROLE_AUTHORITY);
-    BIND_ENUM_CONSTANT(DISPLAY_PUMP_UNRESOLVED);
-    BIND_ENUM_CONSTANT(DISPLAY_PUMP_DISABLED);
-    BIND_ENUM_CONSTANT(DISPLAY_PUMP_REMOTE);
-    BIND_ENUM_CONSTANT(DISPLAY_PUMP_BRACKETED);
-    BIND_ENUM_CONSTANT(DISPLAY_PUMP_CHASE);
-    BIND_ENUM_CONSTANT(LIVE_MODE_CHASE);
-    BIND_ENUM_CONSTANT(LIVE_MODE_BRACKETED);
-    BIND_ENUM_CONSTANT(TIMELINE_MODE_BUFFERED);
-    BIND_ENUM_CONSTANT(TIMELINE_MODE_FORECAST);
-    BIND_ENUM_CONSTANT(SYNC_MODE_SNAP);
-    BIND_ENUM_CONSTANT(SYNC_MODE_STRETCH);
-    BIND_ENUM_CONSTANT(MISMATCH_ACTION_WARN);
-    BIND_ENUM_CONSTANT(MISMATCH_ACTION_DISCONNECT);
-    BIND_ENUM_CONSTANT(MISMATCH_ACTION_SIGNAL);
     BIND_ENUM_CONSTANT(LAYER_PARAM_POLICY);
     BIND_ENUM_CONSTANT(LAYER_PARAM_LEAVE_POLICY);
     BIND_ENUM_CONSTANT(LAYER_PARAM_PERCEPTION_POLICY);
@@ -1231,34 +889,14 @@ void NetwMultiplayer::_bind_methods() {
     BIND_ENUM_CONSTANT(TRANSPORT_PARAM_CAPABILITIES);
     BIND_ENUM_CONSTANT(TRANSPORT_PARAM_HOST_SETTINGS);
     BIND_ENUM_CONSTANT(TRANSPORT_PARAM_CLIENT_SETTINGS);
-    BIND_ENUM_CONSTANT(TRANSPORT_AVAILABLE);
-    BIND_ENUM_CONSTANT(TRANSPORT_CAN_HOST);
-    BIND_ENUM_CONSTANT(TRANSPORT_CAN_PROBE);
-    BIND_ENUM_CONSTANT(TRANSPORT_CAN_BROWSE);
-    BIND_ENUM_CONSTANT(TRANSPORT_ACCEPTS_EMPTY_ADDRESS);
 
     BIND_ENUM_CONSTANT(ENDPOINT_PARAM_TRANSPORT);
     BIND_ENUM_CONSTANT(ENDPOINT_PARAM_ADDRESS);
     BIND_ENUM_CONSTANT(ENDPOINT_PARAM_DISPLAY_NAME);
 
-    BIND_ENUM_CONSTANT(ENDPOINT_STATE_FLAGS);
-    BIND_ENUM_CONSTANT(ENDPOINT_STATE_STATUS);
-    BIND_ENUM_CONSTANT(ENDPOINT_STATE_INFO);
-
-    BIND_ENUM_CONSTANT(ENDPOINT_FLAG_CALLER);
-    BIND_ENUM_CONSTANT(ENDPOINT_FLAG_AVAILABLE);
-    BIND_ENUM_CONSTANT(ENDPOINT_FLAG_OBSERVED);
     BIND_ENUM_CONSTANT(SCENE_PARAM_LABEL);
     BIND_ENUM_CONSTANT(SCENE_PARAM_ISOLATION);
     BIND_ENUM_CONSTANT(SCENE_PARAM_PROCESSING);
-    BIND_ENUM_CONSTANT(SCENE_EVENT_VIEWER);
-    BIND_ENUM_CONSTANT(SCENE_EVENT_BODY);
-    BIND_ENUM_CONSTANT(SCENE_EVENT_ENTITY);
-    BIND_ENUM_CONSTANT(SCENE_CHANGE_SESSION);
-    BIND_ENUM_CONSTANT(SCENE_CHANGE_PLAYER);
-    BIND_ENUM_CONSTANT(SCENE_CHANGE_SCENE);
-    BIND_ENUM_CONSTANT(SCENE_ISOLATION_NONE);
-    BIND_ENUM_CONSTANT(SCENE_ISOLATION_OWN_WORLD);
     BIND_ENUM_CONSTANT(CLOCK_PARAM_TICKRATE);
     BIND_ENUM_CONSTANT(CLOCK_PARAM_SYNC_MODE);
     BIND_ENUM_CONSTANT(CLOCK_PARAM_PING_INTERVAL);
@@ -1275,17 +913,6 @@ void NetwMultiplayer::_bind_methods() {
     BIND_ENUM_CONSTANT(CLOCK_PARAM_ENABLE_DRIFT_LOGGING);
     BIND_ENUM_CONSTANT(CLOCK_PARAM_MANUAL_TICK);
     BIND_ENUM_CONSTANT(CLOCK_PARAM_TICK_FACTOR_OVERRIDE);
-    BIND_ENUM_CONSTANT(CLOCK_MONITOR_RTT);
-    BIND_ENUM_CONSTANT(CLOCK_MONITOR_RTT_AVG);
-    BIND_ENUM_CONSTANT(CLOCK_MONITOR_RTT_JITTER);
-    BIND_ENUM_CONSTANT(CLOCK_MONITOR_ONE_WAY_LATENCY);
-    BIND_ENUM_CONSTANT(CLOCK_MONITOR_TICKTIME);
-    BIND_ENUM_CONSTANT(CLOCK_MONITOR_TICK_ACCUMULATOR);
-    BIND_ENUM_CONSTANT(CLOCK_MONITOR_PHYSICS_FRAMES);
-    BIND_ENUM_CONSTANT(CLOCK_MONITOR_POLLS);
-    BIND_ENUM_CONSTANT(CLOCK_MONITOR_WALL_SECONDS);
-    BIND_ENUM_CONSTANT(CLOCK_MONITOR_PHYSICS_HZ);
-    BIND_ENUM_CONSTANT(CLOCK_MONITOR_POLL_HZ);
     BIND_ENUM_CONSTANT(DISPLAY_PARAM_ROLE);
     BIND_ENUM_CONSTANT(DISPLAY_PARAM_LIVE_MODE);
     BIND_ENUM_CONSTANT(DISPLAY_PARAM_LIVE_SMOOTH_TIME);
@@ -1311,6 +938,10 @@ void NetwMultiplayer::_bind_methods() {
     BIND_ENUM_CONSTANT(PREDICT_PARAM_MAX_CONSUME_LAG_TICKS);
     BIND_ENUM_CONSTANT(PREDICT_PARAM_CONSUME_BUFFER_TICKS);
     BIND_ENUM_CONSTANT(PREDICT_PARAM_REPLAY_BUFFER_DEPTH);
+    BIND_ENUM_CONSTANT(PREDICT_PARAM_RECONCILE_MODE);
+    BIND_ENUM_CONSTANT(PREDICT_PARAM_ACK_AGE_TICKS);
+    BIND_ENUM_CONSTANT(PREDICT_PARAM_EPOCH);
+    BIND_ENUM_CONSTANT(PREDICT_PARAM_SLEEPING);
     BIND_ENUM_CONSTANT(SIMULATION_PARAM_BODIES);
     BIND_ENUM_CONSTANT(SIMULATION_PARAM_SCHEDULE);
     BIND_ENUM_CONSTANT(SIMULATION_PARAM_REPLICAS);
@@ -1341,6 +972,79 @@ void NetwMultiplayer::_bind_methods() {
 #define NETW_SESSION_STAT_BIND(m_name, m_key) BIND_ENUM_CONSTANT(STAT_##m_name);
     NETW_SESSION_STAT_TABLE(NETW_SESSION_STAT_BIND)
 #undef NETW_SESSION_STAT_BIND
+    BIND_ENUM_CONSTANT(ENDPOINT_ADDED);
+    BIND_ENUM_CONSTANT(ENDPOINT_REMOVED);
+    BIND_ENUM_CONSTANT(ENDPOINT_UPDATED);
+    BIND_ENUM_CONSTANT(CLOCK_BEFORE_TICK);
+    BIND_ENUM_CONSTANT(CLOCK_ON_TICK);
+    BIND_ENUM_CONSTANT(CLOCK_AFTER_TICK);
+    BIND_ENUM_CONSTANT(PREDICT_OWNER_DIVERGENCE);
+    BIND_ENUM_CONSTANT(LAGCOMP_ACTION_GATE_FALLBACK);
+    BIND_ENUM_CONSTANT(SCENE_SPAWNED);
+    BIND_ENUM_CONSTANT(SCENE_ACTIVATED);
+    BIND_ENUM_CONSTANT(SCENE_DESPAWNED);
+    BIND_ENUM_CONSTANT(SCENE_ENTITY_MOVED);
+    BIND_ENUM_CONSTANT(SCENE_STARTUP_SPAWNED);
+    BIND_ENUM_CONSTANT(PARTICIPANT_VIEWPORT_CHANGED);
+    BIND_ENUM_CONSTANT(CLOCK_BEFORE_TICK_LOOP);
+    BIND_ENUM_CONSTANT(CLOCK_AFTER_TICK_LOOP);
+    BIND_ENUM_CONSTANT(CLOCK_SYNCHRONIZED);
+    BIND_ENUM_CONSTANT(CLOCK_CONFIGURED);
+    BIND_ENUM_CONSTANT(CLOCK_TICKRATE_MISMATCH);
+    BIND_ENUM_CONSTANT(CLOCK_PONG_RECEIVED);
+    BIND_ENUM_CONSTANT(CLOCK_STABILITY_CHANGED);
+    BIND_ENUM_CONSTANT(SESSION_STATE_CHANGED);
+    BIND_ENUM_CONSTANT(EMBED_PHASE_CHANGED);
+    BIND_ENUM_CONSTANT(SESSION_JOIN_SUBMITTED);
+    BIND_ENUM_CONSTANT(SESSION_ENTERED);
+    BIND_ENUM_CONSTANT(SESSION_JOIN_FAILED);
+    BIND_ENUM_CONSTANT(SESSION_ENDED);
+    BIND_ENUM_CONSTANT(SESSION_RECLAIMED);
+    BIND_ENUM_CONSTANT(PEER_AUTHENTICATING);
+    BIND_ENUM_CONSTANT(PEER_AUTHENTICATION_FAILED);
+    BIND_ENUM_CONSTANT(SESSION_POLL_STARTED);
+    BIND_ENUM_CONSTANT(TABLE_RECEIVED);
+    BIND_ENUM_CONSTANT(DATABASE_FAILED);
+    BIND_ENUM_CONSTANT(PERSIST_LOADED);
+    BIND_ENUM_CONSTANT(PERSIST_SAVED);
+    BIND_ENUM_CONSTANT(PEER_PACKET);
+    BIND_ENUM_CONSTANT(PEER_KICKED);
+    BIND_ENUM_CONSTANT(SESSION_SERVER_DISCONNECTING);
+    BIND_ENUM_CONSTANT(PEER_KICK_REQUESTED);
+    BIND_ENUM_CONSTANT(SESSION_DISCONNECT_REQUESTED);
+    BIND_ENUM_CONSTANT(SESSION_TREE_PAUSED);
+    BIND_ENUM_CONSTANT(SESSION_TREE_UNPAUSED);
+    BIND_ENUM_CONSTANT(SERVICE_REGISTERED);
+    BIND_ENUM_CONSTANT(SERVICE_UNREGISTERED);
+    BIND_ENUM_CONSTANT(ENTITY_LIVE);
+    BIND_ENUM_CONSTANT(ENTITY_LINGERING);
+    BIND_ENUM_CONSTANT(ENTITY_DEAD);
+    BIND_ENUM_CONSTANT(ENTITY_HIDDEN);
+    BIND_ENUM_CONSTANT(PLAYER_JOINED);
+    BIND_ENUM_CONSTANT(PLAYER_LOCAL_JOINED);
+    BIND_ENUM_CONSTANT(PLAYER_LEFT);
+    BIND_ENUM_CONSTANT(SCENE_LIVE);
+    ClassDB::bind_method(
+        D_METHOD("observe", "event", "callback"),
+        &NetwMultiplayer::observe
+    );
+    ClassDB::bind_method(
+        D_METHOD("unobserve", "event", "callback"),
+        &NetwMultiplayer::unobserve
+    );
+    ADD_SIGNAL(MethodInfo(
+        "peer_authenticating",
+        PropertyInfo(Variant::INT, "peer_id")
+    ));
+    ADD_SIGNAL(MethodInfo(
+        "peer_authentication_failed",
+        PropertyInfo(Variant::INT, "peer_id")
+    ));
+    ADD_SIGNAL(MethodInfo(
+        "peer_packet",
+        PropertyInfo(Variant::INT, "id"),
+        PropertyInfo(Variant::PACKED_BYTE_ARRAY, "packet")
+    ));
     ClassDB::bind_method(
         D_METHOD("scene_change_to_file", "requester", "path", "scope"),
         &NetwMultiplayer::scene_change_to_file,
@@ -1520,6 +1224,10 @@ void NetwMultiplayer::_bind_methods() {
     ClassDB::bind_method(
         D_METHOD("interest_layer_add_entity", "layer", "entity"),
         &NetwMultiplayer::interest_layer_add_entity
+    );
+    ClassDB::bind_method(
+        D_METHOD("interest_layer_remove_entity", "layer", "entity"),
+        &NetwMultiplayer::interest_layer_remove_entity
     );
     ClassDB::bind_method(
         D_METHOD("interest_layer_set_param", "layer", "param", "value"),
@@ -1867,6 +1575,10 @@ void NetwMultiplayer::_bind_methods() {
     ClassDB::bind_method(
         D_METHOD("predict_get_param", "entity", "param"),
         &NetwMultiplayer::predict_get_param
+    );
+    ClassDB::bind_method(
+        D_METHOD("predict_get_stats", "entity"),
+        &NetwMultiplayer::predict_get_stats
     );
     ClassDB::bind_method(
         D_METHOD("predict_set_sensor_callback", "entity", "name", "callback"),
@@ -2287,17 +1999,6 @@ void NetwMultiplayer::_bind_methods() {
         D_METHOD("session_role_name", "role"),
         &NetwMultiplayer::session_role_name
     );
-    BIND_ENUM_CONSTANT(SESSION_STATE_OFFLINE);
-    BIND_ENUM_CONSTANT(SESSION_STATE_CONNECTING);
-    BIND_ENUM_CONSTANT(SESSION_STATE_ONLINE);
-    BIND_ENUM_CONSTANT(SESSION_STATE_DISCONNECTING);
-    BIND_ENUM_CONSTANT(ROLE_NONE);
-    BIND_ENUM_CONSTANT(ROLE_CLIENT);
-    BIND_ENUM_CONSTANT(ROLE_DEDICATED_SERVER);
-    BIND_ENUM_CONSTANT(ROLE_LISTEN_SERVER);
-
-    BIND_ENUM_CONSTANT(TRANSPORT_MODE_HOST);
-    BIND_ENUM_CONSTANT(TRANSPORT_MODE_CLIENT);
     ClassDB::bind_method(
         D_METHOD("session_set_state", "state"),
         &NetwMultiplayer::session_set_state

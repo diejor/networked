@@ -9,11 +9,10 @@
 #include "support/netw_cells.h"
 #include "support/value_flow_stand.h"
 
-#include "netw/api/display_handle.hpp"
+#include "netw/api/display.hpp"
 #include "netw/api/entity.hpp"
 #include "netw/api/netw_multiplayer.hpp"
-#include "netw/api/predict.hpp"
-#include "netw/api/prediction_handle.hpp"
+#include "netw/api/prediction.hpp"
 #include "netw/display/decl.hpp"
 #include "netw/sim/row.hpp"
 
@@ -22,8 +21,7 @@ namespace TestNetwDisplayPredictionRoleLaws {
 using namespace godot;
 using netw::NetwEntity;
 using netw::NetwMultiplayer;
-using netw::NetwPredict;
-using netw::NetwPredictionHandle;
+using netw::NetwPrediction;
 using netw::sim::Mode;
 using netw_test::FlowPair;
 using netw_test::law_broken;
@@ -138,7 +136,7 @@ public:
         const Ref<NetwEntity> on_client = NetwEntity::of(pair.mirror(0));
         REQUIRE(on_server.is_valid());
         REQUIRE(on_client.is_valid());
-        on_client->get_interpolation()->set_live_mode(declared.live_mode);
+        on_client->get_display()->set_live_mode(declared.live_mode);
         const RID rid = on_client->get_rid_handle();
 
         if (declared.replicas_active) {
@@ -148,12 +146,12 @@ public:
         if (!plant_is(PLANT_NOBODY_REGISTERED_THE_ENGINE)) {
             NETW_CHECK_EQ(int(client->predict_declare(rid)), int(OK));
         }
-        const Ref<NetwPredictionHandle> prediction
+        const Ref<NetwPrediction> prediction
             = on_client->get_prediction();
         REQUIRE(prediction.is_valid());
         if (declared.closed) {
             prediction->set_recovery_policy(
-                NetwPredict::RECOVERY_POLICY_DELAY_CLOSED
+                NetwPrediction::RECOVERY_POLICY_DELAY_CLOSED
             );
         }
         read.server_role = stat_of(server, on_server, "role");

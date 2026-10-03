@@ -172,8 +172,14 @@ TEST_CASE(
     Node *stage = memnew(Node);
     const std::shared_ptr<PhaseLog> log = std::make_shared<PhaseLog>();
     log->watched = netw::gd::instance_id(stage);
-    core->connect(ENDED, sink(log, "observe", ACT_OBSERVE, core.ptr()));
-    core->connect(RECLAIMED, sink(log, "free", ACT_FREE, core.ptr()));
+    core->observe(
+        NetwMultiplayer::SESSION_ENDED,
+        sink(log, "observe", ACT_OBSERVE, core.ptr())
+    );
+    core->observe(
+        NetwMultiplayer::SESSION_RECLAIMED,
+        sink(log, "free", ACT_FREE, core.ptr())
+    );
 
     core->session_plane().transition(SessionCore::STATE_DISCONNECTING);
 
@@ -194,8 +200,14 @@ TEST_CASE(
     Node *stage = memnew(Node);
     const std::shared_ptr<PhaseLog> log = std::make_shared<PhaseLog>();
     log->watched = netw::gd::instance_id(stage);
-    core->connect(ENDED, sink(log, "free", ACT_FREE, core.ptr()));
-    core->connect(ENDED, sink(log, "observe", ACT_OBSERVE, core.ptr()));
+    core->observe(
+        NetwMultiplayer::SESSION_ENDED,
+        sink(log, "free", ACT_FREE, core.ptr())
+    );
+    core->observe(
+        NetwMultiplayer::SESSION_ENDED,
+        sink(log, "observe", ACT_OBSERVE, core.ptr())
+    );
 
     core->session_plane().transition(SessionCore::STATE_DISCONNECTING);
 
@@ -246,8 +258,14 @@ TEST_CASE(
     Node *stage = memnew(Node);
     const std::shared_ptr<PhaseLog> log = std::make_shared<PhaseLog>();
     log->watched = netw::gd::instance_id(stage);
-    core->connect(ENDED, sink(log, "observe", ACT_OBSERVE, core.ptr()));
-    core->connect(RECLAIMED, sink(log, "free", ACT_FREE, core.ptr()));
+    core->observe(
+        NetwMultiplayer::SESSION_ENDED,
+        sink(log, "observe", ACT_OBSERVE, core.ptr())
+    );
+    core->observe(
+        NetwMultiplayer::SESSION_RECLAIMED,
+        sink(log, "free", ACT_FREE, core.ptr())
+    );
     const Recorder heard(core.ptr(), both_phases_reversed());
 
     machine.transition(SessionCore::STATE_DISCONNECTING);

@@ -65,7 +65,7 @@ bool Decl::join(const StringName &layer_id) {
         layer_id.is_empty(),
         false,
         sys::INTEREST,
-        "NetwInterestHandle.join needs a layer name, and it was empty."
+        "NetwInterest.join needs a layer name, and it was empty."
     );
     if (index_of(label_ids, layer_id) >= 0) {
         return false;
@@ -105,7 +105,7 @@ bool Decl::set_leave_policy(
             policy,
             LEAVE_CUSTOM,
             custom,
-            "NetwInterestHandle.on_leave_policy"
+            "NetwInterest.on_leave_policy"
         )) {
         return false;
     }
@@ -128,7 +128,7 @@ bool Decl::set_perception_policy(
             policy,
             PERCEPTION_CUSTOM,
             custom,
-            "NetwInterestHandle.on_perception_policy"
+            "NetwInterest.on_perception_policy"
         )) {
         return false;
     }
@@ -227,7 +227,7 @@ bool Facet::on_enter(const StringName &layer_id, const Callable &callback) {
         !callback.is_valid(),
         false,
         sys::INTEREST,
-        "NetwInterestHandle.on_enter needs a valid Callable."
+        "NetwInterest.on_enter needs a valid Callable."
     );
     remember(enter_callbacks, layer_id, callback);
     return true;
@@ -238,7 +238,7 @@ bool Facet::on_leave(const StringName &layer_id, const Callable &callback) {
         !callback.is_valid(),
         false,
         sys::INTEREST,
-        "NetwInterestHandle.on_leave needs a valid Callable."
+        "NetwInterest.on_leave needs a valid Callable."
     );
     remember(leave_callbacks, layer_id, callback);
     return true;

@@ -25,8 +25,31 @@
 		<member name="peer_id" type="int" setter="" getter="get_peer_id" default="0">
 			The peer this player is connected as. Another player may reuse it after this one leaves.
 		</member>
+		<member name="scene" type="NetwScene" setter="" getter="get_scene">
+			The scene this player is in, or [code]null[/code]. It is the scene holding one of its [member bodies], or else the scene it watches with [method NetwScene.watch]. It is [code]null[/code] when there are two.
+			A client only knows about the scenes it receives.
+		</member>
 		<member name="username" type="StringName" setter="" getter="get_username" default="&amp;&quot;&quot;">
 			The username from [method Netw.prepare_join]. It is kept after the player leaves. Two players may join with the same name, unless [method Netw.configure_admission] refuses it.
 		</member>
 	</members>
+	<signals>
+		<signal name="scene_changed">
+			<param index="0" name="from" type="NetwScene" />
+			<param index="1" name="to" type="NetwScene" />
+			<description>
+				Emitted when [member scene] changes. Either may be [code]null[/code]. Only [member NetwSession.local_player] emits it.
+				[codeblock]
+				func _ready() -&gt; void:
+				    Netw.session(self).local_joined.connect(on_local_joined)
+
+				func on_local_joined(me: NetwPlayer) -&gt; void:
+				    me.scene_changed.connect(on_scene_changed)
+
+				func on_scene_changed(_from: NetwScene, to: NetwScene) -&gt; void:
+				    lobby.visible = to == null
+				[/codeblock]
+			</description>
+		</signal>
+	</signals>
 </class>

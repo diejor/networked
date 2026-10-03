@@ -15,6 +15,8 @@
 
 namespace netw {
 
+class NetwScene;
+
 class NetwSceneCore : public godot::RefCounted {
 public:
     static constexpr int MAX_REQUESTED_PATH_LENGTH = 512;
@@ -157,7 +159,7 @@ public:
     int transition_scope() const;
     godot::PackedInt64Array transition_arrivals() const;
     void transition_fail(int code);
-    void transition_land();
+    void transition_land(const godot::Ref<NetwScene> &destination);
     void transition_close();
 
     int open_request();

@@ -53,7 +53,7 @@ func test_a_host_named_after_the_preplaced_player_keeps_a_readable_name() -> voi
 				% seated,
 			) \
 			.is_equal(seated.validate_node_name())
-	assert_that(NetwEntity.of(body).entity_id).is_equal(&"Player")
+	assert_that(NetwEntity.of(body).name).is_equal(&"Player")
 
 
 func test_client_input_reaches_local_player() -> void:
@@ -241,8 +241,8 @@ func test_client_round_trip_teleport_stays_functional() -> void:
 			.override_failure_message("jose never reached Level2") \
 			.is_not_null()
 	_assert_arrived_at_marker(jose, "Level2")
-	assert_that(Netw.session(jose.tree).presented_scene.label) \
-			.override_failure_message("jose presents no Level2 after moving into it") \
+	assert_that(Netw.session(jose.tree).local_player.scene.label) \
+			.override_failure_message("jose is not in Level2 after moving into it") \
 			.is_equal(&"Level2")
 
 	await _teleport_without_bridge(jose, maria, _LEVEL_1_PATH, &"Level1")
@@ -253,7 +253,7 @@ func test_client_round_trip_teleport_stays_functional() -> void:
 	assert_that(jose_local) \
 			.override_failure_message("jose has no local player after return") \
 			.is_not_null()
-	var jose_scene: NetwSceneHandle = NetwEntity.of(jose_local).scene
+	var jose_scene: NetwScene = NetwEntity.of(jose_local).scene
 	assert_bool(jose_scene.is_declared) \
 			.override_failure_message("jose's player belongs to no scene") \
 			.is_true()
@@ -267,8 +267,8 @@ func test_client_round_trip_teleport_stays_functional() -> void:
 	assert_that(StringName(jose_level.name)) \
 			.override_failure_message("jose's player did not return to Level1") \
 			.is_equal(&"Level1")
-	assert_that(Netw.session(jose.tree).presented_scene.label) \
-			.override_failure_message("jose presents no Level1 after returning") \
+	assert_that(Netw.session(jose.tree).local_player.scene.label) \
+			.override_failure_message("jose is not in Level1 after returning") \
 			.is_equal(&"Level1")
 
 	var maria_on_jose: Node2D = await jose.await_player(&"maria", 2.0)
@@ -459,7 +459,7 @@ func _teleport_without_bridge(
 				input_held = false
 		var remote := observer.find_player(participant.username) as Node2D
 		if remote:
-			var scene: NetwSceneHandle = NetwEntity.of(remote).scene
+			var scene: NetwScene = NetwEntity.of(remote).scene
 			if scene and StringName(scene.root.name) == scene_name:
 				var marker := scene.root.get_node(_TP_MARKER) as Node2D
 				var visual := remote.get_node("Icon") as Node2D
@@ -499,7 +499,7 @@ func _wait_for_body_in(
 
 
 func _wait_for_transition(participant: NetwSceneRunner) -> void:
-	var layer := Netw.service(participant.tree, TPLayer) as TPLayer
+	var layer := participant.session.service(TPLayer) as TPLayer
 	while layer and layer.transition_anim.is_playing():
 		await game.sync_ticks(1)
 
@@ -510,7 +510,7 @@ func _wait_for_transitions(participants: Array[NetwSceneRunner] = []) -> void:
 	while transitioning:
 		transitioning = false
 		for participant in list:
-			var layer := Netw.service(participant.tree, TPLayer) as TPLayer
+			var layer := participant.session.service(TPLayer) as TPLayer
 			if layer and layer.transition_anim.is_playing():
 				transitioning = true
 				break
@@ -555,7 +555,7 @@ func _tp_of(participant: NetwSceneRunner) -> TPComponent:
 
 
 func _layer_of(participant: NetwSceneRunner) -> TPLayer:
-	return Netw.service(participant.tree, TPLayer) as TPLayer
+	return participant.session.service(TPLayer) as TPLayer
 
 
 func _wait_for_tp(participant: NetwSceneRunner) -> TPComponent:

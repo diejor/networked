@@ -24,22 +24,27 @@ class NetwDatabase : public godot::RefCounted {
     godot::RID database;
 
     NetwMultiplayer *session() const;
-    void relay_failed(
-        const godot::RID &p_database,
-        int64_t p_error,
-        const godot::String &p_detail
-    );
 
 protected:
     static void _bind_methods();
 
 public:
+    void announce_failed(
+        const godot::RID &p_database,
+        int64_t p_error,
+        const godot::String &p_detail
+    );
+
     static godot::Ref<NetwDatabase> over(
         const godot::RID &p_database,
         NetwMultiplayer *p_session
     );
     static godot::Ref<NetwDatabase> of(
         godot::Node *p_node,
+        const godot::StringName &p_name
+    );
+    static godot::Ref<NetwDatabase> named(
+        NetwMultiplayer *p_session,
         const godot::StringName &p_name
     );
 

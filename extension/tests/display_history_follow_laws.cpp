@@ -36,7 +36,7 @@ func _init() -> void:
 	visual.name = &"Visual"
 	add_child(visual)
 	var e := Netw.configure_entity(self)
-	e.interpolation.visual_root = ^"Visual"
+	e.display.visual_root = ^"Visual"
 	var smoothing := NetwInterpolate.new().lerp().smooth(0.0).to(&"position")
 	Netw.configure_property(self, &"position").state().interpolate(smoothing)
 )";

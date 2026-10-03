@@ -89,7 +89,7 @@ var beat := 0
 
 func _init() -> void:
 	var e := Netw.configure_entity(self)
-	e.prediction.archetype = NetwPredict.ARCHETYPE_SCRIPTED
+	e.prediction.archetype = NetwPrediction.ARCHETYPE_SCRIPTED
 	Netw.configure_property(self, &"beat").state()
 
 func _network_tick(_delta: float, tick: int, is_fresh: bool) -> void:
@@ -108,7 +108,7 @@ func _init() -> void:
 	shape.shape = SphereShape3D.new()
 	add_child(shape)
 	var e := Netw.configure_entity(self)
-	e.prediction.archetype = NetwPredict.ARCHETYPE_SOLVER_BODY
+	e.prediction.archetype = NetwPrediction.ARCHETYPE_SOLVER_BODY
 	Netw.configure_property(self, &"position").state()
 )";
 

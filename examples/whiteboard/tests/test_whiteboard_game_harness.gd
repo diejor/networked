@@ -105,7 +105,7 @@ func stroke(drawers: Array[NetwSceneRunner], points: int) -> void:
 
 
 func board(peer: NetwSceneRunner) -> Whiteboard:
-	return Netw.scene(peer.tree, &"Room").root.get_node(^"Whiteboard")
+	return peer.session.find_scene(&"Room").root.get_node(^"Whiteboard")
 
 
 func lines(peer: NetwSceneRunner) -> Array[Node]:

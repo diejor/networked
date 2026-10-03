@@ -6,13 +6,13 @@ using Godot.NativeInterop;
 namespace Networked;
 
 /// <summary>
-/// Extend it so <see cref="NetwConnectHandle"/> can create, list and check
-/// servers for your own <see cref="MultiplayerPeer"/> class.
+/// Extend it so <see cref="NetwConnection"/> can create, list and check servers
+/// for your own <see cref="MultiplayerPeer"/> class.
 /// </summary>
 /// <remarks>
 /// A transport creates peers of one <see cref="MultiplayerPeer"/> class, lists
 /// servers, and checks a server without joining it. Register it with
-/// <see cref="NetwConnectHandle.RegisterTransport"/>. For WebRTC, see
+/// <see cref="NetwConnection.RegisterTransport"/>. For WebRTC, see
 /// <see cref="NetwWebRTCSignaler"/>.
 /// <code>
 /// class_name RelayTransport
@@ -25,7 +25,7 @@ namespace Networked;
 ///     return {region = "eu"}
 ///
 /// func _make_peer(
-///         ticket: RID, mode: NetwMultiplayer.TransportMode,
+///         ticket: RID, mode: NetwConnection.TransportMode,
 ///         address: String, settings: Dictionary) -&gt; void:
 ///     report(ticket, &amp;"handshake", "Reaching the relay...", 0.5)
 ///     var peer := RelayMultiplayerPeer.new()
@@ -41,7 +41,7 @@ namespace Networked;
 ///
 /// # somewhere in the game
 /// func _ready() -&gt; void:
-///     Netw.connection(self).register_transport(RelayTransport)
+///     Netw.session(self).connection.register_transport(RelayTransport)
 /// </code>
 /// <para>
 /// <c>_make_peer</c> and <c>_probe</c> may <c>await</c>. They report the result

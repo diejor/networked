@@ -32,6 +32,8 @@ Properties
    +-------------------------------------------------------+------------------------------------------------------------------+---------+
    | :ref:`MultiplayerTree<class_MultiplayerTree>`         | :ref:`tree<class_NetwSceneRunner_property_tree>`                 |         |
    +-------------------------------------------------------+------------------------------------------------------------------+---------+
+   | :ref:`NetwSession<class_NetwSession>`                 | :ref:`session<class_NetwSceneRunner_property_session>`           |         |
+   +-------------------------------------------------------+------------------------------------------------------------------+---------+
    | :ref:`NetwWaiter<class_NetwWaiter>`                   | :ref:`waiter<class_NetwSceneRunner_property_waiter>`             |         |
    +-------------------------------------------------------+------------------------------------------------------------------+---------+
    | :ref:`ParticipantWindow<class_ParticipantWindow>`     | :ref:`slot<class_NetwSceneRunner_property_slot>`                 |         |
@@ -53,19 +55,19 @@ Methods
 .. table::
    :widths: auto
 
-   +----------------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`Node`              | :ref:`find<class_NetwSceneRunner_method_find>`\ (\ path\: :godot:`NodePath`\ )                                                              |
-   +----------------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`Node`              | :ref:`find_player<class_NetwSceneRunner_method_find_player>`\ (\ player_username\: :godot:`StringName`\ )                                   |
-   +----------------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`Node`              | :ref:`await_player<class_NetwSceneRunner_method_await_player>`\ (\ player_username\: :godot:`StringName`, timeout\: :godot:`float` = 1.0\ ) |
-   +----------------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`RID`               | :ref:`await_scene<class_NetwSceneRunner_method_await_scene>`\ (\ scene_name\: :godot:`StringName`, timeout\: :godot:`float` = 1.0\ )        |
-   +----------------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`GdUnitSceneRunner` | :ref:`set_time_factor<class_NetwSceneRunner_method_set_time_factor>`\ (\ _time_factor\: :godot:`float` = 1.0\ )                             |
-   +----------------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`GdUnitSceneRunner` | :ref:`simulate_frames<class_NetwSceneRunner_method_simulate_frames>`\ (\ _frames\: :godot:`int`, _delta_milli\: :godot:`int` = -1\ )        |
-   +----------------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
+   +-----------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`Node`                     | :ref:`find<class_NetwSceneRunner_method_find>`\ (\ path\: :godot:`NodePath`\ )                                                              |
+   +-----------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`Node`                     | :ref:`find_player<class_NetwSceneRunner_method_find_player>`\ (\ player_username\: :godot:`StringName`\ )                                   |
+   +-----------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`Node`                     | :ref:`await_player<class_NetwSceneRunner_method_await_player>`\ (\ player_username\: :godot:`StringName`, timeout\: :godot:`float` = 1.0\ ) |
+   +-----------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwScene<class_NetwScene>` | :ref:`await_scene<class_NetwSceneRunner_method_await_scene>`\ (\ scene_name\: :godot:`StringName`, timeout\: :godot:`float` = 1.0\ )        |
+   +-----------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`GdUnitSceneRunner`        | :ref:`set_time_factor<class_NetwSceneRunner_method_set_time_factor>`\ (\ _time_factor\: :godot:`float` = 1.0\ )                             |
+   +-----------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`GdUnitSceneRunner`        | :ref:`simulate_frames<class_NetwSceneRunner_method_simulate_frames>`\ (\ _frames\: :godot:`int`, _delta_milli\: :godot:`int` = -1\ )        |
+   +-----------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
 
 .. rst-class:: classref-section-separator
 
@@ -83,6 +85,22 @@ Property Descriptions
 :ref:`MultiplayerTree<class_MultiplayerTree>` **tree** :ref:`🔗<class_NetwSceneRunner_property_tree>`
 
 Adopted :ref:`MultiplayerTree<class_MultiplayerTree>` inside :godot:`GdUnitSceneRunnerImpl.scene <GdUnitSceneRunnerImpl#class_GdUnitSceneRunnerImpl_property_scene>`.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NetwSceneRunner_property_session:
+
+.. rst-class:: classref-property
+
+:ref:`NetwSession<class_NetwSession>` **session** :ref:`🔗<class_NetwSceneRunner_property_session>`
+
+.. rst-class:: classref-property-setget
+
+- :ref:`NetwSession<class_NetwSession>` **@session_getter**\ (\ )
+
+The :ref:`NetwSession<class_NetwSession>` of :ref:`tree<class_NetwSceneRunner_property_tree>`, or ``null`` before it mounts.
 
 .. rst-class:: classref-item-separator
 
@@ -213,9 +231,9 @@ Awaits ``player_username`` in this peer's active scenes.
 
 .. rst-class:: classref-method
 
-:godot:`RID` **await_scene**\ (\ scene_name\: :godot:`StringName`, timeout\: :godot:`float` = 1.0\ ) :ref:`🔗<class_NetwSceneRunner_method_await_scene>`
+:ref:`NetwScene<class_NetwScene>` **await_scene**\ (\ scene_name\: :godot:`StringName`, timeout\: :godot:`float` = 1.0\ ) :ref:`🔗<class_NetwSceneRunner_method_await_scene>`
 
-Awaits an active scene named ``scene_name``, as a RID.
+Awaits an active scene named ``scene_name``. A timeout fails the test and returns ``null``.
 
 .. rst-class:: classref-item-separator
 

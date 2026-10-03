@@ -5,14 +5,14 @@
 #include "netw/api/context.hpp"
 #include "netw/api/netw_multiplayer.hpp"
 #include "netw/api/participant.hpp"
-#include "netw/api/session_handle.hpp"
+#include "netw/api/session.hpp"
 
 namespace TestNetwSessionDoor {
 
 using namespace godot;
 using netw::Netw;
 using netw::NetwMultiplayer;
-using netw::NetwSessionHandle;
+using netw::NetwSession;
 
 Ref<NetwMultiplayer> make_session() {
     Ref<NetwMultiplayer> session;
@@ -26,7 +26,7 @@ TEST_CASE(
 ) {
     Ref<NetwMultiplayer> session = make_session();
 
-    const Ref<NetwSessionHandle> door = session->get_session();
+    const Ref<NetwSession> door = session->get_session();
     REQUIRE(door.is_valid());
     CHECK(door == session->get_session());
 
@@ -41,7 +41,7 @@ TEST_CASE(
     "what the flat verb answers, because the flat verb is the spelling"
 ) {
     Ref<NetwMultiplayer> session = make_session();
-    const Ref<NetwSessionHandle> door = session->get_session();
+    const Ref<NetwSession> door = session->get_session();
 
     NETW_CHECK_EQ(door->get_role(), int64_t(session->session_get_role()));
     NETW_CHECK_EQ(door->get_is_online(), session->is_online());
@@ -57,10 +57,6 @@ TEST_CASE(
         session->player_joined_all().size()
     );
     CHECK(door->get_local_player() == session->player_local());
-    CHECK(
-        door->get_presented_scene()
-        == session->scene_handle_of(session->scene_presented())
-    );
     NETW_CHECK_EQ(door->get_stats().size(), session->stats_snapshot().size());
 }
 
@@ -69,9 +65,9 @@ TEST_CASE(
     "rather than the internal handles the scene book keys its rows by"
 ) {
     Ref<NetwMultiplayer> session = make_session();
-    const Ref<NetwSessionHandle> door = session->get_session();
+    const Ref<NetwSession> door = session->get_session();
 
-    const TypedArray<netw::NetwSceneHandle> scenes = door->get_scenes();
+    const TypedArray<netw::NetwScene> scenes = door->get_scenes();
     NETW_CHECK_EQ(scenes.size(), session->scene_list().size());
     for (int at = 0; at < scenes.size(); ++at) {
         NETW_CHECK_EQ(int(scenes[at].get_type()), int(Variant::OBJECT));
@@ -83,39 +79,33 @@ TEST_CASE(
     "own edges, so one object answers every cause a session has to announce"
 ) {
     Ref<NetwMultiplayer> session = make_session();
-    const Ref<NetwSessionHandle> door = session->get_session();
+    const Ref<NetwSession> door = session->get_session();
 
     netw_test::Recorder heard(
         door.ptr(),
         {
             StringName("entered"),
-            StringName("ended"),
-            StringName("disconnecting"),
+            StringName("exiting"),
             StringName("player_joined"),
             StringName("local_joined"),
         }
     );
 
-    session->emit_signal(StringName("session_entered"));
-    session->emit_signal(StringName("session_ended"));
-    session->emit_signal(
-        StringName("session_server_disconnecting"),
-        String("the host is going down")
-    );
+    session->session_announce_entered();
+    session->session_announce_ended();
 
     NETW_CHECK_EQ(heard.count(StringName("entered")), 1);
-    NETW_CHECK_EQ(heard.count(StringName("ended")), 1);
-    NETW_CHECK_EQ(heard.count(StringName("disconnecting")), 1);
-    CHECK(
-        String(heard.args(StringName("disconnecting"))[0])
-        == String("the host is going down")
+    NETW_CHECK_EQ(heard.count(StringName("exiting")), 1);
+    NETW_CHECK_EQ(
+        int(heard.args(StringName("exiting"))[0]),
+        int(netw::NetwSession::CONNECTION_LOST)
     );
 
     SUBCASE("a player edge carries the row it is about") {
         Ref<netw::NetwPlayer> who;
         who.instantiate();
-        session->emit_signal(StringName("player_joined"), who);
-        session->emit_signal(StringName("player_local_joined"), who);
+        door->announce_player_joined(who);
+        door->announce_local_joined(who);
 
         NETW_CHECK_EQ(heard.count(StringName("player_joined")), 1);
         NETW_CHECK_EQ(heard.count(StringName("local_joined")), 1);
@@ -127,23 +117,10 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Session][Door][Hosted] D5 the stock disconnect reaches the "
-    "door too, because a game pairing it with ended wants one listener"
-) {
-    Ref<NetwMultiplayer> session = make_session();
-    const Ref<NetwSessionHandle> door = session->get_session();
-
-    netw_test::Recorder heard(door.ptr(), {StringName("disconnected")});
-    session->emit_signal(StringName("server_disconnected"));
-
-    NETW_CHECK_EQ(heard.count(StringName("disconnected")), 1);
-}
-
-TEST_CASE(
     "[Networked][Session][Door][Hosted] D6 a door outliving its session "
     "answers empty rather than dereferencing what is gone"
 ) {
-    Ref<NetwSessionHandle> door;
+    Ref<NetwSession> door;
     {
         Ref<NetwMultiplayer> session = make_session();
         door = session->get_session();
@@ -155,7 +132,6 @@ TEST_CASE(
     CHECK(door->get_root() == nullptr);
     CHECK(door->get_config().is_null());
     CHECK(door->get_local_player().is_null());
-    CHECK(door->get_presented_scene().is_null());
     NETW_CHECK_EQ(door->get_players().size(), 0);
     NETW_CHECK_EQ(door->get_scenes().size(), 0);
     NETW_CHECK_EQ(door->get_stats().size(), 0);
@@ -184,6 +160,36 @@ TEST_CASE(
     memdelete(orphan);
 
     CHECK(Netw::session(nullptr).is_null());
+}
+
+TEST_CASE(
+    "[Networked][Session][Door][Hosted] D9 the session hands out the same "
+    "clock, connection, layer and service the session core holds, so the "
+    "two routes never answer with different objects"
+) {
+    Ref<NetwMultiplayer> session = make_session();
+    const Ref<NetwSession> door = session->get_session();
+    REQUIRE(door.is_valid());
+
+    const bool same_clock = door->get_clock() == session->get_clock();
+    const bool same_connection
+        = door->get_connection() == session->get_connection();
+    const bool same_layer = door->interest_layer(StringName("sight"))
+        == session->interest_layer(StringName("sight"));
+    CHECK(same_clock);
+    CHECK(same_connection);
+    CHECK(same_layer);
+    CHECK(door->get_clock().is_valid());
+
+    Ref<Resource> type;
+    type.instantiate();
+    Node *service = memnew(Node);
+    door->register_service(service, type.ptr());
+    const bool found = door->service(type.ptr()) == service;
+    CHECK(found);
+    door->unregister_service(service, type.ptr());
+    CHECK(door->service(type.ptr()) == nullptr);
+    memdelete(service);
 }
 
 } // namespace TestNetwSessionDoor

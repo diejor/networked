@@ -16,9 +16,9 @@
 		tree.api.multiplayer_peer = peer
 
 		# or let the transport create it
-		Netw.connection(tree).create_peer(
+		Netw.session(tree).connection.create_peer(
 		    tree.peer_class,
-		    NetwMultiplayer.TRANSPORT_MODE_CLIENT,
+		    NetwConnection.TRANSPORT_MODE_CLIENT,
 		    "127.0.0.1:21253",
 		    tree.transport_settings,
 		    func(peer: MultiplayerPeer, error: Error, _detail: String) -&gt; void:
@@ -40,7 +40,7 @@
 		<method name="raise_embedded_server">
 			<return type="MultiplayerTree" />
 			<description>
-				Duplicates this tree as a sibling named [code]Server[/code], with the role [constant NetwMultiplayer.ROLE_DEDICATED_SERVER].
+				Duplicates this tree as a sibling named [code]Server[/code], with the role [constant NetwSession.ROLE_DEDICATED_SERVER].
 				[codeblock]
 				var server := tree.raise_embedded_server()
 				var peer := ENetMultiplayerPeer.new()
@@ -66,7 +66,7 @@
 		<member name="debug_join" type="DebugJoinConfig" setter="set_debug_join" getter="get_debug_join">
 			Connects automatically when the game runs, in debug builds only.
 		</member>
-		<member name="desired_role" type="int" setter="set_desired_role" getter="get_desired_role" enum="NetwMultiplayer.Role" default="3">
+		<member name="desired_role" type="int" setter="set_desired_role" getter="get_desired_role" enum="NetwSession.Role" default="3">
 			The role this tree takes when it hosts.
 		</member>
 		<member name="link_conditions" type="NetwLinkConditions" setter="set_link_conditions" getter="get_link_conditions">

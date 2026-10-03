@@ -32,7 +32,7 @@ func _init() -> void:
 	add_child(shape)
 	var e := Netw.configure_entity(self)
 	e.transfer = NetwEntity.TRANSFER_IMMEDIATE
-	e.simulation.replicas = NetwSimulationHandle.REPLICAS_ACTIVE
+	e.simulation.replicas = NetwSimulation.REPLICAS_ACTIVE
 	e.simulation.claim_on_contact = true
 	e.simulation.release_on_rest = 1.0
 	Netw.configure_property(self, &"position").broadcast()

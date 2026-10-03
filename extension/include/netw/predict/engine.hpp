@@ -23,7 +23,7 @@ namespace netw {
 using table::SchemaRecord;
 
 class NetwMultiplayer;
-class NetwPredictionHandle;
+class NetwPrediction;
 class NetwPredictStats;
 
 predict::EvidenceRow evidence_row(
@@ -232,7 +232,7 @@ class NetwPredictionEngine {
 
     godot::Ref<NetwEntity> owner_entity(int64_t p_slot) const;
     godot::Object *handle_of(int64_t p_slot) const;
-    static godot::StringName episode_edge(int64_t p_event);
+    static int episode_change(int64_t p_event);
 
     void open_tenure(
         int64_t p_slot,
@@ -533,7 +533,7 @@ public:
     void set_invalid_witness_reported(int64_t p_slot, bool p_value);
     godot::Dictionary witness_sample(
         int64_t p_slot,
-        const godot::Ref<NetwPredictionHandle> &p_handle
+        const godot::Ref<NetwPrediction> &p_handle
     );
     godot::Dictionary normalize_witness_sample(
         int64_t p_slot,
@@ -741,7 +741,7 @@ public:
 
     bool reconfigure_from(
         int64_t p_slot,
-        const godot::Ref<NetwPredictionHandle> &p_handle
+        const godot::Ref<NetwPrediction> &p_handle
     );
     bool configure(
         int64_t p_slot,
@@ -928,16 +928,16 @@ public:
 
     sim::Facts resolution_facts(
         int64_t p_slot,
-        const godot::Ref<NetwPredictionHandle> &p_handle
+        const godot::Ref<NetwPrediction> &p_handle
     ) const;
     int apply_mode(
         int64_t p_slot,
-        const godot::Ref<NetwPredictionHandle> &p_handle,
+        const godot::Ref<NetwPrediction> &p_handle,
         sim::Mode p_mode
     );
     int resolve_axes(
         int64_t p_slot,
-        const godot::Ref<NetwPredictionHandle> &p_handle
+        const godot::Ref<NetwPrediction> &p_handle
     );
     int resolve_correction(int64_t p_slot, int p_declared) const;
     int settle_correction(int64_t p_slot, int p_declared);

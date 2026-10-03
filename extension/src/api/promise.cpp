@@ -11,12 +11,47 @@ namespace netw {
 
 namespace {
 
-const char *SIG_COMPLETED = "completed";
-const char *SIG_FAILED = "failed";
 const char *SIG_SETTLED = "settled";
-const char *SIG_READY = "ready";
+const char *SIG_ANSWERED = "answered";
+
+void answer_waiter(const Ref<RefCounted> &p_waiter, const Variant &p_answer) {
+    p_waiter->emit_signal(StringName(SIG_ANSWERED), p_answer);
+}
 
 } // namespace
+
+Signal promise_wait::open(
+    Waiting &p_waiting,
+    bool p_settled,
+    const Variant &p_answer
+) {
+    Ref<RefCounted> waiter;
+    waiter.instantiate();
+    Dictionary carried;
+    carried["name"] = String("answer");
+    carried["type"] = int(Variant::NIL);
+    Array arguments;
+    arguments.push_back(carried);
+    gd::add_user_signal(waiter.ptr(), StringName(SIG_ANSWERED), arguments);
+    const Signal answered(waiter.ptr(), StringName(SIG_ANSWERED));
+    if (p_settled) {
+        callable_mp_static(&answer_waiter)
+            .bind(waiter, p_answer)
+            .call_deferred();
+    } else {
+        p_waiting.push_back(waiter);
+    }
+    return answered;
+}
+
+void promise_wait::release(Waiting &p_waiting, const Variant &p_answer) {
+    Waiting released;
+    released = p_waiting;
+    p_waiting.clear();
+    for (uint32_t at = 0; at < released.size(); ++at) {
+        answer_waiter(released[at], p_answer);
+    }
+}
 
 Ref<NetwPromise> NetwPromise::resolved(const Variant &p_value) {
     Ref<NetwPromise> out;
@@ -75,12 +110,7 @@ Variant NetwPromise::answer() const {
 }
 
 Signal NetwPromise::wait() {
-    if (completed || failed) {
-        Callable(this, StringName("emit_signal"))
-            .bind(StringName(SIG_READY), answer())
-            .call_deferred();
-    }
-    return Signal(this, StringName(SIG_READY));
+    return promise_wait::open(waiting, completed || failed, answer());
 }
 
 void NetwPromise::resolve(const Variant &value) {
@@ -89,15 +119,14 @@ void NetwPromise::resolve(const Variant &value) {
     }
     completed = true;
     result = value;
-    emit_signal(StringName(SIG_COMPLETED), value);
     emit_signal(StringName(SIG_SETTLED));
-    emit_signal(StringName(SIG_READY), value);
     const LocalVector<Callable> chained(then_callbacks);
     Array args;
     args.push_back(value);
     for (uint32_t index = 0; index < chained.size(); ++index) {
         chained[index].callv(args);
     }
+    promise_wait::release(waiting, value);
 }
 
 void NetwPromise::reject(Error error_code, const String &error_detail) {
@@ -107,19 +136,17 @@ void NetwPromise::reject(Error error_code, const String &error_detail) {
     failed = true;
     code = error_code;
     detail = error_detail;
-    if (catch_callbacks.is_empty()
-        && !has_connections(StringName(SIG_FAILED))) {
+    if (catch_callbacks.is_empty() && waiting.is_empty()
+        && !has_connections(StringName(SIG_SETTLED))) {
         NETW_WARN(
             sys::SESSION,
             "A NetwPromise failed with error %d (%s) and nothing handled it. "
-            "Attach NetwPromise.catch_error or connect its failed signal.",
+            "Attach NetwPromise.catch_error or await NetwPromise.wait.",
             error_code,
             error_detail
         );
     }
-    emit_signal(StringName(SIG_FAILED), error_code, error_detail);
     emit_signal(StringName(SIG_SETTLED));
-    emit_signal(StringName(SIG_READY), error_code);
     const LocalVector<Callable> chained(catch_callbacks);
     Array args;
     args.push_back(error_code);
@@ -127,6 +154,7 @@ void NetwPromise::reject(Error error_code, const String &error_detail) {
     for (uint32_t index = 0; index < chained.size(); ++index) {
         chained[index].callv(args);
     }
+    promise_wait::release(waiting, Variant(error_code));
 }
 
 void NetwPromise::_bind_methods() {
@@ -199,21 +227,7 @@ void NetwPromise::_bind_methods() {
     ClassDB::bind_method(D_METHOD("get_detail"), &NetwPromise::get_detail);
     ADD_PROPERTY(PropertyInfo(Variant::STRING, "detail"), "", "get_detail");
 
-    ADD_SIGNAL(MethodInfo(SIG_COMPLETED, PropertyInfo(Variant::NIL, "value")));
-    ADD_SIGNAL(MethodInfo(
-        SIG_FAILED,
-        PropertyInfo(
-            Variant::INT,
-            "code",
-            PROPERTY_HINT_NONE,
-            "",
-            PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_CLASS_IS_ENUM,
-            "Error"
-        ),
-        PropertyInfo(Variant::STRING, "detail")
-    ));
     ADD_SIGNAL(MethodInfo(SIG_SETTLED));
-    ADD_SIGNAL(MethodInfo(SIG_READY, PropertyInfo(Variant::NIL, "answer")));
 }
 
 } // namespace netw

@@ -14,7 +14,7 @@
 #include "netw/api/entity.hpp"
 #include "netw/api/netw_multiplayer.hpp"
 #include "netw/api/replication_core.hpp"
-#include "netw/api/simulation_handle.hpp"
+#include "netw/api/simulation.hpp"
 #include "netw/api/sync_pipeline.hpp"
 #include "netw/sync_authoring.hpp"
 
@@ -167,25 +167,25 @@ TEST_CASE(
     MultiplayerSynchronizer *sync = predicting_child(root);
     sync->set_meta(
         StringName("netw_schedule"),
-        int(netw::NetwSimulationHandle::SCHEDULE_STEPPED)
+        int(netw::NetwSimulation::SCHEDULE_STEPPED)
     );
     sync->set_meta(
         StringName("netw_snap_restore"),
-        int(netw::NetwSimulationHandle::RESTORE_EXTRAPOLATED)
+        int(netw::NetwSimulation::RESTORE_EXTRAPOLATED)
     );
     sync->set_meta(StringName("netw_max_restore_ticks"), 4);
 
     netw::authoring::apply(root, sync);
 
-    const Ref<netw::NetwSimulationHandle> simulation = entity->get_simulation();
+    const Ref<netw::NetwSimulation> simulation = entity->get_simulation();
     REQUIRE(simulation.is_valid());
     NETW_CHECK_EQ(
         simulation->get_schedule(),
-        netw::NetwSimulationHandle::SCHEDULE_STEPPED
+        netw::NetwSimulation::SCHEDULE_STEPPED
     );
     NETW_CHECK_EQ(
         simulation->get_restore(),
-        netw::NetwSimulationHandle::RESTORE_EXTRAPOLATED
+        netw::NetwSimulation::RESTORE_EXTRAPOLATED
     );
     NETW_CHECK_EQ(simulation->get_max_restore_ticks(), 4);
 

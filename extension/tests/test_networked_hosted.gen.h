@@ -213,6 +213,7 @@
 #include "session_kernel_seam_laws.cpp"
 #include "session_layer_driver_laws.cpp"
 #include "session_layer_laws.cpp"
+#include "session_observe_laws.cpp"
 #include "session_predict_param_laws.cpp"
 #include "session_prepared_join_laws.cpp"
 #include "session_property_set_laws.cpp"

@@ -16,13 +16,13 @@
 #include "netw/api/database_result.hpp"
 #include "netw/api/debug_join_config.hpp"
 #include "netw/api/despawn_config.hpp"
-#include "netw/api/display_handle.hpp"
+#include "netw/api/display.hpp"
 #include "netw/api/entity.hpp"
 #include "netw/api/entity_options.hpp"
 #include "netw/api/entity_record.hpp"
 #include "netw/api/event_plane.hpp"
 #include "netw/api/group_promise.hpp"
-#include "netw/api/interest_handle.hpp"
+#include "netw/api/interest.hpp"
 #include "netw/api/interpolate.hpp"
 #include "netw/api/join_config.hpp"
 #include "netw/api/lag_compensation_config.hpp"
@@ -38,23 +38,22 @@
 #include "netw/api/nodes/view/participant_window.hpp"
 #include "netw/api/participant.hpp"
 #include "netw/api/persistence_config.hpp"
-#include "netw/api/persistence_handle.hpp"
+#include "netw/api/persistence.hpp"
 #include "netw/api/physics_stepper.hpp"
-#include "netw/api/predict.hpp"
 #include "netw/api/predict_slot_engine.hpp"
 #include "netw/api/predict_stats.hpp"
-#include "netw/api/prediction_handle.hpp"
+#include "netw/api/prediction.hpp"
 #include "netw/api/probe_result.hpp"
 #include "netw/api/promise.hpp"
 #include "netw/api/property_config.hpp"
 #include "netw/api/record.hpp"
 #include "netw/api/replication_core.hpp"
 #include "netw/api/scene_config.hpp"
-#include "netw/api/scene_handle.hpp"
+#include "netw/api/scene.hpp"
 #include "netw/api/schema_model.hpp"
 #include "netw/api/server_info.hpp"
 #include "netw/api/session_config.hpp"
-#include "netw/api/simulation_handle.hpp"
+#include "netw/api/simulation.hpp"
 #include "netw/api/sync_compat.hpp"
 #include "netw/api/sync_model.hpp"
 #include "netw/api/sync_pipeline.hpp"
@@ -99,14 +98,14 @@
 #include "netw/lagcomp_core.hpp"
 #include "netw/profile.hpp"
 
-#include "netw/api/clock_handle.hpp"
-#include "netw/api/connect_handle.hpp"
+#include "netw/api/clock.hpp"
+#include "netw/api/connection.hpp"
 #include "netw/api/link_conditions.hpp"
 #include "netw/api/loopback.hpp"
 #include "netw/api/netw_transport.hpp"
 #include "netw/api/quantize.hpp"
-#include "netw/api/session_handle.hpp"
-#include "netw/api/table_handle.hpp"
+#include "netw/api/session.hpp"
+#include "netw/api/table.hpp"
 #include "netw/api/tests.hpp"
 #include "netw/api/webrtc_signaler.hpp"
 #include "netw/connect/transports.hpp"
@@ -155,18 +154,18 @@ void initialize_networked_module(ModuleInitializationLevel level) {
     GDREGISTER_CLASS(netw::NetwPlayer);
     GDREGISTER_CLASS(netw::NetwPhysicsStepper);
     GDREGISTER_CLASS(netw::NetwServerInfo);
-    GDREGISTER_CLASS(netw::NetwConnectHandle);
-    GDREGISTER_CLASS(netw::NetwSessionHandle);
-    GDREGISTER_CLASS(netw::NetwClockHandle);
+    GDREGISTER_CLASS(netw::NetwConnection);
+    GDREGISTER_CLASS(netw::NetwSession);
+    GDREGISTER_CLASS(netw::NetwClock);
     GDREGISTER_CLASS(netw::NetwTransport);
     GDREGISTER_CLASS(netw::NetwWebRTCSignaler);
     GDREGISTER_CLASS(netw::NetwLinkConditions);
     GDREGISTER_CLASS(netw::NetwProbeResult);
     GDREGISTER_CLASS(netw::DebugJoinConfig);
-    GDREGISTER_CLASS(netw::NetwDisplayHandle);
-    GDREGISTER_CLASS(netw::NetwInterestHandle);
+    GDREGISTER_CLASS(netw::NetwDisplay);
+    GDREGISTER_CLASS(netw::NetwInterest);
     GDREGISTER_CLASS(netw::NetwSceneConfig);
-    GDREGISTER_CLASS(netw::NetwSceneHandle);
+    GDREGISTER_CLASS(netw::NetwScene);
     GDREGISTER_CLASS(netw::NetwChannel);
     GDREGISTER_ABSTRACT_CLASS(netw::NetwQuantize);
     GDREGISTER_CLASS(netw::NetwQuantizeScalar);
@@ -177,15 +176,14 @@ void initialize_networked_module(ModuleInitializationLevel level) {
     GDREGISTER_CLASS(netw::NetwPredictFold);
     GDREGISTER_CLASS(netw::NetwPredictJudgement);
     GDREGISTER_CLASS(netw::NetwPredictRecovery);
-    GDREGISTER_ABSTRACT_CLASS(netw::NetwPredict);
-    GDREGISTER_CLASS(netw::NetwSimulationHandle);
-    GDREGISTER_CLASS(netw::NetwPredictionHandle);
+    GDREGISTER_CLASS(netw::NetwSimulation);
+    GDREGISTER_CLASS(netw::NetwPrediction);
     GDREGISTER_CLASS(netw::NetwPredictCarryContext);
     GDREGISTER_CLASS(netw::NetwPredictStats);
     GDREGISTER_ABSTRACT_CLASS(netw::Serde);
     GDREGISTER_ABSTRACT_CLASS(netw::NetwRecord);
     GDREGISTER_CLASS(netw::DictionaryRecord);
-    GDREGISTER_CLASS(netw::NetwTableHandle);
+    GDREGISTER_CLASS(netw::NetwTable);
     GDREGISTER_CLASS(netw::NetwDatabaseBackend);
     GDREGISTER_CLASS(netw::MemoryDatabase);
     GDREGISTER_CLASS(netw::FileSystemDatabase);
@@ -205,7 +203,7 @@ void initialize_networked_module(ModuleInitializationLevel level) {
     GDREGISTER_CLASS(netw::NetwDespawnOpts);
     GDREGISTER_CLASS(netw::NetwDespawnConfig);
     GDREGISTER_CLASS(netw::NetwPersistenceConfig);
-    GDREGISTER_CLASS(netw::NetwPersistenceHandle);
+    GDREGISTER_CLASS(netw::NetwPersistence);
     GDREGISTER_CLASS(netw::NetwJoinConfig);
     GDREGISTER_CLASS(netw::NetwMemberConfig);
     GDREGISTER_CLASS(netw::NetwPropertyConfig);

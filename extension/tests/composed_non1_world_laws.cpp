@@ -17,7 +17,8 @@
 #include "netw/api/netw_multiplayer.hpp"
 #include "netw/api/participant.hpp"
 #include "netw/api/property_config.hpp"
-#include "netw/api/scene_handle.hpp"
+#include "netw/api/scene.hpp"
+#include "netw/api/session.hpp"
 #include "netw/api/sync_pipeline.hpp"
 #include "netw/call_args.hpp"
 #include "netw/display/decl.hpp"
@@ -42,7 +43,7 @@ using netw::NetwInterpolate;
 using netw::NetwMultiplayer;
 using netw::NetwPlayer;
 using netw::NetwPropertyConfig;
-using netw::NetwSceneHandle;
+using netw::NetwScene;
 using netw::repl::PropertySet;
 namespace property_set_builder = netw::property_set_builder;
 
@@ -229,7 +230,7 @@ struct ComposedWorld {
         REQUIRE(stand.join(MEMBER, StringName("nine")).is_valid());
 
         world = first_scene(host);
-        const Ref<NetwSceneHandle> handle = host->scene_handle_of(world);
+        const Ref<NetwScene> handle = host->scene_handle_of(world);
         REQUIRE(handle.is_valid());
         NETW_CHECK_EQ(
             int(handle->watch(host->player_of(TRANSPORT_SERVER))),
@@ -293,7 +294,7 @@ struct ComposedWorld {
         NETW_CHECK_EQ(int(late->embed_settle()), int(OK));
         teach_player(late);
         REQUIRE(stand.join(LATECOMER, StringName("eleven")).is_valid());
-        const Ref<NetwSceneHandle> handle = host->scene_handle_of(world);
+        const Ref<NetwScene> handle = host->scene_handle_of(world);
         REQUIRE(handle.is_valid());
         NETW_CHECK_EQ(int(handle->watch(host->player_of(LATECOMER))), int(OK));
         stand.step_ticks(10);
@@ -834,6 +835,74 @@ TEST_CASE(
         int64_t(at_nine->get_multiplayer_authority()),
         int64_t(MEMBER)
     );
+}
+
+TEST_CASE(
+    "[Networked][Session][SceneTree] CW10 coordinator 7 transfers control "
+    "to member 9, and transport server 1, which is not the session "
+    "authority, is refused"
+) {
+    ComposedWorld cw;
+    const RID seated = cw.spawn_for("Transferred", TRANSPORT_SERVER);
+    const int64_t route = cw.host->entity_get_route(seated);
+    REQUIRE(route > 0);
+    Node *at_host = cw.host->entity_get_node(seated);
+    Node *at_one = route_node_at(cw.one, route);
+    Node *at_nine = route_node_at(cw.nine, route);
+    REQUIRE(at_host != nullptr);
+    REQUIRE(at_one != nullptr);
+    REQUIRE(at_nine != nullptr);
+
+    NETW_CHECK_EQ(
+        int(NetwEntity::of(at_host)->transfer_control(MEMBER)),
+        int(OK)
+    );
+    cw.settle(12);
+    NETW_CHECK_EQ(
+        int(NetwEntity::of(at_one)->transfer_control(TRANSPORT_SERVER)),
+        int(ERR_UNAUTHORIZED)
+    );
+    cw.settle(12);
+
+    NETW_CHECK_EQ(NetwEntity::of(at_host)->get_controller(), int64_t(MEMBER));
+    NETW_CHECK_EQ(NetwEntity::of(at_one)->get_controller(), int64_t(MEMBER));
+    NETW_CHECK_EQ(NetwEntity::of(at_nine)->get_controller(), int64_t(MEMBER));
+    NETW_CHECK_EQ(
+        int64_t(at_nine->get_multiplayer_authority()),
+        int64_t(MEMBER)
+    );
+}
+
+TEST_CASE(
+    "[Networked][Session][SceneTree] CW11 coordinator 7 creates a scene "
+    "through its session and finds it by its root name, while transport "
+    "server 1 creates none"
+) {
+    ComposedWorld cw;
+    const Ref<PackedScene> packed = netw::gd::load_scene(String(LEVEL_PATH));
+    REQUIRE(packed.is_valid());
+    const Ref<netw::NetwSession> session = cw.host->get_session();
+    REQUIRE(session.is_valid());
+    const int before = int(cw.host->scene_list().size());
+
+    const Ref<NetwScene> made
+        = session->create_scene(packed, NetwMultiplayer::SCENE_ISOLATION_NONE);
+    REQUIRE(made.is_valid());
+    NETW_CHECK_EQ(int(cw.host->scene_list().size()), before + 1);
+
+    const Ref<NetwScene> found
+        = session->find_scene(StringName("DeclaredLevel"));
+    REQUIRE(found.is_valid());
+    const bool finds_the_new_one = found->get_rid() == made->get_rid();
+    CHECK(finds_the_new_one);
+    CHECK(session->find_scene(StringName("NoSuchLevel")).is_null());
+
+    const Ref<netw::NetwSession> member = cw.one->get_session();
+    REQUIRE(member.is_valid());
+    CHECK(member
+              ->create_scene(packed, NetwMultiplayer::SCENE_ISOLATION_NONE)
+              .is_null());
+    NETW_CHECK_EQ(int(cw.one->scene_list().size()), before);
 }
 
 } // namespace TestComposedNon1World

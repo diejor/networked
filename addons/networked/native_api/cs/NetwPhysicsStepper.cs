@@ -13,7 +13,7 @@ namespace Networked;
 /// Godot steps each physics space once per physics frame. Extend this class to
 /// step a space yourself, and install it with
 /// <see cref="NetwMultiplayer.PredictStepperInstall"/>. While an entity with
-/// <see cref="NetwSimulationHandle.ScheduleEnum.Stepped"/> is in that space,
+/// <see cref="NetwSimulation.ScheduleEnum.Stepped"/> is in that space,
 /// Networked stops the engine from stepping it and calls <c>_step</c> once per
 /// tick instead, and again for each tick it replays.
 /// <code>
@@ -30,12 +30,12 @@ namespace Networked;
 /// <para>
 /// Install <c>null</c> to uninstall, and read the installed stepper back with
 /// <see cref="NetwMultiplayer.PredictGetStepper"/>. Without a stepper, a
-/// <see cref="NetwSimulationHandle.ScheduleEnum.Stepped"/> entity runs as
-/// <see cref="NetwSimulationHandle.ScheduleEnum.Frame"/>. Once no such entity
-/// is left in the space, the engine steps it again as usual. Each tick, every
-/// entity in the space applies its input first, then <c>_step</c> and
-/// <c>_snapshot</c> run once for the whole space. Under
-/// <see cref="NetwPredict.Reconcile.Joint"/> a replay restores every entity,
+/// <see cref="NetwSimulation.ScheduleEnum.Stepped"/> entity runs as
+/// <see cref="NetwSimulation.ScheduleEnum.Frame"/>. Once no such entity is left
+/// in the space, the engine steps it again as usual. Each tick, every entity in
+/// the space applies its input first, then <c>_step</c> and <c>_snapshot</c>
+/// run once for the whole space. Under
+/// <see cref="NetwPrediction.Reconcile.Joint"/> a replay restores every entity,
 /// calls <c>_restore</c> once, then steps each replayed tick the same way.
 /// Implement <c>_snapshot</c> and <c>_restore</c> only when the space holds
 /// bodies that are not entities, such as loose debris. Entities are restored by

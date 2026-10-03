@@ -17,6 +17,8 @@ namespace netw {
 class MultiplayerTree : public godot::Node {
     GDCLASS(MultiplayerTree, godot::Node)
 
+    friend class NetwMultiplayer;
+
     godot::StringName peer_class;
     godot::Dictionary transport_settings;
     godot::Ref<NetwLinkConditions> link_conditions;

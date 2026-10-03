@@ -27,7 +27,7 @@ const char *CRATE_SOURCE = R"(extends Node2D
 
 
 func _init() -> void:
-	NetwEntity.ensure(self)
+	Netw.configure_entity(self)
 	Netw.configure_property(self, &"position").broadcast().heartbeat(60)
 )";
 
@@ -97,7 +97,7 @@ TEST_CASE(
 ) {
     CrateStand stand;
     const int64_t first = stand.entity->get_route();
-    const StringName id = stand.entity->get_entity_id();
+    const StringName id = stand.entity->get_name();
     Node *home = stand.crate->get_parent();
     home->remove_child(stand.crate);
     stand.rig.step_ticks(SETTLE);
@@ -111,7 +111,7 @@ TEST_CASE(
     const bool same = NetwEntity::of(stand.crate).ptr() == stand.entity.ptr();
     CHECK(same);
     NETW_CHECK_EQ(stand.entity->get_stage(), LIVE);
-    const bool same_id = stand.entity->get_entity_id() == id;
+    const bool same_id = stand.entity->get_name() == id;
     CHECK(same_id);
     NETW_CHECK_GT(second, int64_t(0));
     CHECK(stand.held_by_client(second));

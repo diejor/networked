@@ -18,8 +18,8 @@ class NetwSessionConfig : public godot::Resource {
 
     struct Values {
         godot::StringName app_id;
-        enums::NetwMultiplayer::Role desired_role
-            = enums::NetwMultiplayer::Role(DEFAULT_DESIRED_ROLE);
+        enums::NetwSession::Role desired_role
+            = enums::NetwSession::Role(DEFAULT_DESIRED_ROLE);
         godot::Ref<NetwLinkConditions> link_conditions;
         godot::Ref<NetwServerInfo> server_info;
         int64_t bandwidth_kbps = 0;
@@ -41,8 +41,8 @@ public:
         return values.app_id;
     }
 
-    void set_desired_role(enums::NetwMultiplayer::Role p_role);
-    enums::NetwMultiplayer::Role get_desired_role() const {
+    void set_desired_role(enums::NetwSession::Role p_role);
+    enums::NetwSession::Role get_desired_role() const {
         return values.desired_role;
     }
 
@@ -72,7 +72,7 @@ public:
     }
 
     godot::Ref<NetwSessionConfig> app(const godot::StringName &p_app_id);
-    godot::Ref<NetwSessionConfig> role(enums::NetwMultiplayer::Role p_role);
+    godot::Ref<NetwSessionConfig> role(enums::NetwSession::Role p_role);
     godot::Ref<NetwSessionConfig> link(
         const godot::Ref<NetwLinkConditions> &p_conditions
     );

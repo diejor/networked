@@ -12,14 +12,14 @@
 #include "netw/api/action.hpp"
 #include "netw/api/channel.hpp"
 #include "netw/api/clock_config.hpp"
-#include "netw/api/clock_handle.hpp"
-#include "netw/api/connect_handle.hpp"
+#include "netw/api/clock.hpp"
+#include "netw/api/connection.hpp"
 #include "netw/api/database.hpp"
 #include "netw/api/despawn_config.hpp"
 #include "netw/api/entity.hpp"
 #include "netw/api/entity_options.hpp"
 #include "netw/api/group_promise.hpp"
-#include "netw/api/interest_handle.hpp"
+#include "netw/api/interest.hpp"
 #include "netw/api/join_config.hpp"
 #include "netw/api/lag_compensation_config.hpp"
 #include "netw/api/member_config.hpp"
@@ -30,16 +30,18 @@
 #include "netw/api/property_config.hpp"
 #include "netw/api/record.hpp"
 #include "netw/api/scene_config.hpp"
-#include "netw/api/scene_handle.hpp"
+#include "netw/api/scene.hpp"
 #include "netw/api/schema_model.hpp"
-#include "netw/api/table_handle.hpp"
+#include "netw/api/table.hpp"
 #include "netw/scene_core.hpp"
 #include "netw/scene_decl.hpp"
 
 namespace netw {
 
-class Netw : public godot::RefCounted, public enums::Netw {
+class Netw : public godot::RefCounted {
     GDCLASS(Netw, godot::RefCounted)
+
+    using SceneChange = enums::NetwScene::SceneChange;
 
 protected:
     static void _bind_methods();
@@ -48,29 +50,13 @@ public:
     static godot::Dictionary native_api();
 
     static godot::Ref<NetwMultiplayer> of(godot::Node *p_node);
-    static godot::Ref<NetwConnectHandle> connection(godot::Node *p_node);
-    static godot::Ref<NetwSessionHandle> session(godot::Node *p_node);
-    static godot::Ref<NetwClockHandle> clock(godot::Node *p_node);
-    static godot::Variant service(godot::Node *p_node, godot::Object *p_type);
-    static void service_register(
-        godot::Node *p_node,
-        godot::Object *p_service,
-        godot::Object *p_type
-    );
-    static void service_unregister(
-        godot::Node *p_node,
-        godot::Object *p_service,
-        godot::Object *p_type
-    );
+    static godot::Ref<NetwSession> session(godot::Node *p_node);
     static godot::Ref<NetwPromise> prepare_join(
         godot::Node *p_node,
         const godot::StringName &p_username,
         const godot::Array &p_args
     );
-    static godot::Ref<NetwSceneHandle> scene(
-        godot::Node *p_node,
-        const godot::StringName &p_named
-    );
+    static godot::Ref<NetwScene> scene(godot::Node *p_node);
 
     static godot::Error configure_server_info(
         const godot::Callable &p_provider
@@ -112,9 +98,6 @@ public:
     static godot::Ref<NetwEntity> configure_entity(godot::Node *p_node);
     static godot::Ref<NetwDespawnConfig> configure_despawn(godot::Node *p_node);
     static godot::Ref<NetwPersistenceConfig> configure_persistence(
-        godot::Node *p_node
-    );
-    static godot::Ref<NetwInterestHandle> configure_interest(
         godot::Node *p_node
     );
     static godot::Ref<NetwSchema> configure_schema(
@@ -163,19 +146,11 @@ public:
         godot::Node *p_node,
         int64_t p_channel_id
     );
-    static godot::Ref<NetwTableHandle> table(
-        godot::Node *p_node,
-        const godot::StringName &p_name
-    );
     static godot::Ref<NetwDatabaseConfig> configure_database(
         godot::Node *p_node,
         const godot::StringName &p_name,
         const godot::Ref<NetwDatabaseConfig> &p_preset
         = godot::Ref<NetwDatabaseConfig>()
-    );
-    static godot::Ref<NetwDatabase> database(
-        godot::Node *p_node,
-        const godot::StringName &p_name
     );
 
     static godot::Ref<NetwEntity> replicate(
@@ -198,14 +173,6 @@ public:
     static godot::Ref<NetwPromise> reparent(
         godot::Node *p_node,
         godot::Node *p_new_parent
-    );
-    static godot::Ref<NetwPromise> claim_authority(
-        godot::Node *p_node,
-        NetwEntity::Hold p_hold
-    );
-    static godot::Ref<NetwPromise> release_authority(
-        godot::Node *p_node,
-        int64_t p_successor
     );
 
     static godot::Ref<NetwAction> action(const godot::Callable &p_authority);
@@ -233,9 +200,7 @@ public:
         godot::Node *p_node,
         SceneChange p_scope
     );
-    static godot::Ref<NetwSceneConfig> configure_multiplayer_scene(
-        godot::Node *p_node
-    );
+    static godot::Ref<NetwSceneConfig> configure_scene(godot::Node *p_node);
     static godot::Error configure_scene_requests(
         const godot::Callable &p_handler
     );

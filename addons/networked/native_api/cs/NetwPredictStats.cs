@@ -7,11 +7,11 @@ namespace Networked;
 
 /// <summary>
 /// Prediction counters for one <see cref="NetwEntity"/>, reached by
-/// <see cref="NetwPredictionHandle.Stats"/>.
+/// <see cref="NetwPrediction.Stats"/>.
 /// </summary>
 /// <remarks>
 /// Use these for debug overlays and charts. To react to a correction, connect
-/// to the <see cref="NetwPredictionHandle"/> signals.
+/// to the <see cref="NetwPrediction"/> signals.
 /// <code>
 /// var stats := NetwEntity.of(self).prediction.stats
 /// print("%d corrections" % stats.corrections)

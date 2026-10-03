@@ -34,17 +34,19 @@ var pressed := {
 
 @onready var entity := NetwEntity.of(self)
 @onready var bomb_action := Netw.action(_place_bomb)
+@onready var session: NetwSession = Netw.session(self)
+@onready var clock: NetwClock = session.clock
 @onready var gamestate: BomberGamestate = \
-		Netw.service(self, BomberGamestate)
+		session.service(BomberGamestate) as BomberGamestate
 
 
 func _init() -> void:
 	entity = Netw.configure_entity(self)
 	entity.initial_controller = NetwEntity.INITIAL_REPRESENTED_PEER
 	entity.on_controller_disconnect = NetwEntity.DISCONNECT_DESPAWN
-	entity.prediction.archetype = NetwPredict.ARCHETYPE_SCRIPTED
-	entity.interpolation.visual_root = ^"sprite"
-	entity.interpolation.live_mode = NetwMultiplayer.LIVE_MODE_BRACKETED
+	entity.prediction.archetype = NetwPrediction.ARCHETYPE_SCRIPTED
+	entity.display.visual_root = ^"sprite"
+	entity.display.live_mode = NetwDisplay.LIVE_MODE_BRACKETED
 	Netw.configure_property(self, &"motion").input().quantize(
 		NetwQuantizeScalar.new().bits(16),
 	)
@@ -67,7 +69,6 @@ func _init() -> void:
 
 
 func _ready() -> void:
-	var clock: NetwClockHandle = Netw.clock(self)
 	clock.before_tick.connect(gather_input)
 	stunned = false
 	bomb_action.timing_mode = NetwAction.TIMING_TICK_ALIGNED_STATE_READY
@@ -111,7 +112,7 @@ func _network_tick(delta: float, tick: int, is_fresh: bool) -> void:
 	else:
 		velocity = motion.clamp(Vector2(-1, -1), Vector2(1, 1)) * MOTION_SPEED
 
-	var factor: float = Netw.clock(self).physics_factor
+	var factor: float = clock.physics_factor
 	velocity *= factor
 	move_and_slide()
 	velocity /= factor

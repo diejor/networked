@@ -1,0 +1,171 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwScene" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		The scene an entity belongs to, reached as [member NetwEntity.scene].
+	</brief_description>
+	<description>
+		Tells who is in a multiplayer scene and which players it replicates to. Reach it with [method Netw.scene] or [member NetwEntity.scene]. An entity declared with [method Netw.configure_scene] resolves to itself, any other entity to its closest scene ancestor. Each scene has one handle, so [code]==[/code] compares scenes.
+		A scene replicates to a player while a body of theirs is in it, or while the player watches it with [method watch]. [method unwatch] does not remove a player whose body is still in the scene.
+		[codeblock]
+		lobby.watch(player)
+		arena.add_child(Netw.spawn_player(player, make_player))
+		lobby.unwatch(player)
+		[/codeblock]
+		Inside a scene, [NetwInterestLayer] still filters which entities a player receives.
+		A body is moved with [method Node.reparent] as you would normally do. Use [method Netw.reparent] when you need to await the server taking the move.
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="is_watching" qualifiers="const">
+			<return type="bool" />
+			<param index="0" name="player" type="NetwPlayer" />
+			<description>
+				Whether this scene replicates to [param player], either because a body of theirs is in it or because of [method watch].
+			</description>
+		</method>
+		<method name="observe">
+			<return type="void" />
+			<param index="0" name="event" type="int" enum="NetwScene.SceneEvent" />
+			<param index="1" name="callback" type="Callable" />
+			<description>
+				Calls [param callback] whenever this scene gains or loses a subject of [param event]. Registering the same [param callback] twice does nothing.
+				[codeblock]
+				arena.observe(SCENE_EVENT_BODY, on_car_edge)
+
+				func on_car_edge(present: bool, car: NetwEntity) -&gt; bool:
+				        reshuffle(car)
+				        return false        # true drops the subscription
+				[/codeblock]
+				[constant SCENE_EVENT_VIEWER] passes a [NetwPlayer]. [constant SCENE_EVENT_BODY] and [constant SCENE_EVENT_ENTITY] pass a [NetwEntity].
+			</description>
+		</method>
+		<method name="unobserve">
+			<return type="void" />
+			<param index="0" name="event" type="int" enum="NetwScene.SceneEvent" />
+			<param index="1" name="callback" type="Callable" />
+			<description>
+				Removes a [param callback] registered with [method observe]. It must be the same [Callable] that was passed to [method observe].
+			</description>
+		</method>
+		<method name="unwatch">
+			<return type="int" enum="Error" />
+			<param index="0" name="player" type="NetwPlayer" />
+			<description>
+				Undoes [method watch]. The scene keeps replicating to [param player] while a body of theirs is in it.
+				[codeblock lang=text]
+				Error
+				┠╴OK                      the watch is withdrawn
+				┠╴ERR_INVALID_PARAMETER   a null player, or one this session no longer holds
+				┖╴ERR_DOES_NOT_EXIST      this player was not watching
+				[/codeblock]
+				[b]Server Only.[/b]
+			</description>
+		</method>
+		<method name="watch">
+			<return type="int" enum="Error" />
+			<param index="0" name="player" type="NetwPlayer" />
+			<description>
+				Replicates this scene to [param player] without giving them a body in it, such as for a lobby or a spectator. A player can watch several scenes at once.
+				[codeblock]
+				Netw.scene(lobby).watch(who)
+				[/codeblock]
+				Watching a nested scene also sends the scene roots above it, but not their content.
+				[codeblock lang=text]
+				Error
+				┠╴OK                      the watch stands
+				┠╴ERR_UNAUTHORIZED        this peer is not the server
+				┠╴ERR_INVALID_PARAMETER   a null player, or one this session no longer holds
+				┖╴ERR_DOES_NOT_EXIST      this scene names no live node
+				[/codeblock]
+				[b]Server Only.[/b]
+			</description>
+		</method>
+	</methods>
+	<members>
+		<member name="bodies" type="NetwEntity[]" setter="" getter="get_bodies" default="[]">
+			Every body in this scene, in no particular order. A body is removed as soon as it is despawned, before its node is freed.
+		</member>
+		<member name="entities" type="NetwEntity[]" setter="" getter="get_entities" default="[]">
+			Every entity in this scene.
+		</member>
+		<member name="is_declared" type="bool" setter="" getter="get_is_declared" default="false">
+			Whether a scene was found. [code]false[/code] for an entity outside every scene or not in the tree, and every other member is empty.
+		</member>
+		<member name="label" type="StringName" setter="" getter="get_label" default="&amp;&quot;&quot;">
+			The name [method Netw.scene] finds this scene by. See [method NetwSceneConfig.labeled].
+		</member>
+		<member name="local_bodies" type="NetwEntity[]" setter="" getter="get_local_bodies" default="[]">
+			Every body in this scene that belongs to this peer.
+		</member>
+		<member name="rid" type="RID" setter="" getter="get_rid" default="RID()">
+			The [RID] of the scene's entity, invalid outside a session. The [code]scene_*[/code] methods of [NetwMultiplayer] take it.
+		</member>
+		<member name="root" type="Node" setter="" getter="get_root">
+			The node the scene was declared on, [code]null[/code] outside a session. When the scene is [method NetwSceneConfig.isolated], [method Netw.spawn] returns [member world] and this is the node inside it.
+		</member>
+		<member name="viewers" type="NetwPlayer[]" setter="" getter="get_viewers" default="[]">
+			Every player this scene replicates to, see [method is_watching].
+		</member>
+		<member name="world" type="Node" setter="" getter="get_world">
+			The [SubViewport] above [member root] that gives an [method NetwSceneConfig.isolated] scene its own [World2D] and [World3D], [code]null[/code] otherwise.
+		</member>
+	</members>
+	<signals>
+		<signal name="body_entered">
+			<param index="0" name="body" type="NetwEntity" />
+			<description>
+				Emitted when [param body] enters this scene.
+			</description>
+		</signal>
+		<signal name="body_left">
+			<param index="0" name="body" type="NetwEntity" />
+			<description>
+				Emitted when [param body] leaves this scene.
+			</description>
+		</signal>
+		<signal name="viewer_entered">
+			<param index="0" name="player" type="NetwPlayer" />
+			<description>
+				Emitted when this scene starts replicating to [param player]. [member viewers] already includes them. On the server, spawn arriving players here.
+				[codeblock]
+				func place(player: NetwPlayer, level: NetwScene) -&gt; void:
+				    if player.bodies.is_empty():
+				        level.root.add_child(Netw.spawn_player(player, make_player))
+				[/codeblock]
+			</description>
+		</signal>
+		<signal name="viewer_exited">
+			<param index="0" name="player" type="NetwPlayer" />
+			<description>
+				Emitted when this scene stops replicating to [param player].
+			</description>
+		</signal>
+	</signals>
+	<constants>
+		<constant name="SCENE_EVENT_VIEWER" value="0" enum="SceneEvent">
+			A player started or stopped seeing the scene. The [method NetwMultiplayer.scene_observe] callback receives [code](present, peer_id)[/code].
+		</constant>
+		<constant name="SCENE_EVENT_BODY" value="1" enum="SceneEvent">
+			A body entered or left. The callback receives [code](present, entity)[/code].
+		</constant>
+		<constant name="SCENE_EVENT_ENTITY" value="2" enum="SceneEvent">
+			Any entity, bodies included, entered or left. The callback receives [code](present, entity)[/code].
+		</constant>
+		<constant name="SCENE_CHANGE_SESSION" value="0" enum="SceneChange">
+			Every player moves to the new scene, and every other scene is removed with its entities.
+		</constant>
+		<constant name="SCENE_CHANGE_PLAYER" value="1" enum="SceneChange">
+			Only the requesting player moves. Their old bodies are despawned, and no scene is removed.
+		</constant>
+		<constant name="SCENE_CHANGE_SCENE" value="2" enum="SceneChange">
+			Everyone in the requester's scene moves, and that scene is removed with its entities.
+		</constant>
+		<constant name="SCENE_ISOLATION_NONE" value="0" enum="SceneIsolation">
+			The scene shares the physics and rendering world with the rest of the game.
+		</constant>
+		<constant name="SCENE_ISOLATION_OWN_WORLD" value="1" enum="SceneIsolation">
+			On the server, the scene gets a [SubViewport] with its own world, so two scenes never collide. Clients use a plain [Node].
+		</constant>
+	</constants>
+</class>

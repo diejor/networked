@@ -1,6 +1,6 @@
-#include "netw/api/interest_handle.hpp"
+#include "netw/api/interest.hpp"
 #include "netw/api/netw_multiplayer.hpp"
-#include "netw/api/scene_handle.hpp"
+#include "netw/api/scene.hpp"
 
 #include "netw/api/participant.hpp"
 
@@ -20,12 +20,11 @@
 #include "godot/utility.hpp"
 #include "godot/viewport.hpp"
 #include "godot/world.hpp"
-#include "netw/api/display_handle.hpp"
+#include "netw/api/display.hpp"
 #include "netw/api/entity.hpp"
 #include "netw/api/entity_record.hpp"
 #include "netw/api/join_request.hpp"
-#include "netw/api/predict.hpp"
-#include "netw/api/prediction_handle.hpp"
+#include "netw/api/prediction.hpp"
 #include "netw/api/replication_core.hpp"
 #include "netw/api/sync_pipeline.hpp"
 #include "netw/colors.hpp"
@@ -55,8 +54,6 @@ using repl::PropertyColumn;
 using repl::PropertySet;
 
 namespace {
-
-const char *SIG_TABLE_RECEIVED = "table_received";
 
 constexpr double SHUTDOWN_NOTIFY_DELAY = 0.5;
 
@@ -622,8 +619,8 @@ void NetwMultiplayer::table_announce_intake() {
 
 void NetwMultiplayer::table_announce(const RID &p_table) {
     const int64_t tick = store_world.arrays.tick_of(p_table);
-    emit_signal(SIG_TABLE_RECEIVED, p_table, tick);
-    if (const Ref<NetwTableHandle> *handle
+    notify(TABLE_RECEIVED, p_table, tick);
+    if (const Ref<NetwTable> *handle
         = table_handles.getptr(int64_t(p_table.get_id()))) {
         (*handle)->announce(tick);
     }
@@ -834,7 +831,7 @@ void NetwMultiplayer::session_set_peer_bandwidth(
     NETW_ERR_COND(
         p_kbps < 0,
         sys::SESSION,
-        "NetwSessionHandle.set_peer_bandwidth got %d kbit/s for peer %d, "
+        "NetwSession.set_peer_bandwidth got %d kbit/s for peer %d, "
         "which is negative. Pass a rate in kbit/s, or 0 for the session's "
         "rate.",
         p_kbps,
@@ -1367,11 +1364,11 @@ display::Channel *NetwMultiplayer::display_ensure_state(
     );
 }
 
-static Ref<NetwPredictionHandle> prediction_of(
+static Ref<NetwPrediction> prediction_of(
     const Ref<NetwEntity> &p_entity
 ) {
     if (p_entity.is_null()) {
-        return Ref<NetwPredictionHandle>();
+        return Ref<NetwPrediction>();
     }
     return p_entity->prediction_if_minted();
 }
@@ -1421,9 +1418,9 @@ double NetwMultiplayer::display_default_chase_clamp(const RID &p_entity) {
     if (entity.is_null()) {
         return INFINITY;
     }
-    const Ref<NetwPredictionHandle> handle = entity->prediction_if_minted();
+    const Ref<NetwPrediction> handle = entity->prediction_if_minted();
     if (handle.is_null()) {
-        return NetwPredictionHandle::DEFAULT_TELEPORT_THRESHOLD;
+        return NetwPrediction::DEFAULT_TELEPORT_THRESHOLD;
     }
     return MAX(handle->get_teleport_threshold(), 0.0);
 }
@@ -1452,7 +1449,7 @@ void NetwMultiplayer::display_default_chase_hook(
         return;
     }
     const Ref<NetwEntity> entity = p_runtime->entity();
-    const Ref<NetwPredictionHandle> handle = prediction_of(entity);
+    const Ref<NetwPrediction> handle = prediction_of(entity);
 
     Array hooks = p_runtime->get_chase_hooks();
     for (int at = 0; at < hooks.size(); at++) {
@@ -1938,12 +1935,12 @@ RID NetwMultiplayer::table_create(const RID &p_schema) {
     return minted;
 }
 
-Ref<NetwTableHandle> NetwMultiplayer::get_table_handle(const RID &p_table) {
+Ref<NetwTable> NetwMultiplayer::get_table_handle(const RID &p_table) {
     const int64_t key = int64_t(p_table.get_id());
-    if (const Ref<NetwTableHandle> *held = table_handles.getptr(key)) {
+    if (const Ref<NetwTable> *held = table_handles.getptr(key)) {
         return *held;
     }
-    const Ref<NetwTableHandle> minted = NetwTableHandle::over(p_table, this);
+    const Ref<NetwTable> minted = NetwTable::over(p_table, this);
     if (minted.is_valid()) {
         table_handles[key] = minted;
     }
@@ -2075,7 +2072,7 @@ StringName NetwMultiplayer::lagcomp_effect_key(
 ) const {
     const Ref<NetwEntity> wrapper = entity_get_view(p_entity);
     const StringName named
-        = wrapper.is_valid() ? wrapper->get_entity_id() : StringName();
+        = wrapper.is_valid() ? wrapper->get_name() : StringName();
     if (named.is_empty()) {
         Array act_args;
         act_args.push_back(p_tick);

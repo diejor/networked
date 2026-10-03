@@ -18,11 +18,11 @@ TEST_CASE(
 
     const Ref<NetwEntity> entity = NetwEntity::ensure(root);
     REQUIRE(entity.is_valid());
-    entity->set_entity_id("valeria");
+    entity->set_name("valeria");
     entity->set_peer_id(42);
 
     CHECK(root->get_name() == StringName("Player"));
-    CHECK(entity->get_entity_id() == StringName("valeria"));
+    CHECK(entity->get_name() == StringName("valeria"));
     NETW_CHECK_EQ(entity->get_peer_id(), 42);
 
     memdelete(root);

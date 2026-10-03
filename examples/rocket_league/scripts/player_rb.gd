@@ -42,6 +42,7 @@ var pressed := {
 	$Wheels/RL_Wheel,
 	$Wheels/RR_Wheel,
 ]
+@onready var session: NetwSession = Netw.session(self)
 @onready var entity := NetwEntity.of(self)
 @onready var state := PhysicsServer3D.body_get_direct_state(get_rid())
 @onready var level: Node = entity.scene.root
@@ -123,18 +124,18 @@ func _init() -> void:
 			.reconcile_only() \
 			.quantize(NetwQuantizeAngle.new().bits(12).centered())
 
-	Netw.configure_interest(self).join(&"arena")
+	e.interest.join(&"arena")
 
-	e.prediction.archetype = NetwPredict.ARCHETYPE_SOLVER_BODY
+	e.prediction.archetype = NetwPrediction.ARCHETYPE_SOLVER_BODY
 	e.simulation.schedule = RocketJoltStepper.schedule()
 	e.prediction.recovery_policy = RocketJoltStepper.recovery_policy()
 	e.prediction.reconcile_mode = RocketJoltStepper.reconcile_mode()
 	e.prediction.witness_contacts = sample_contacts
-	e.interpolation.visual_root = ^"Car_model"
+	e.display.visual_root = ^"Car_model"
 
 
 func _ready() -> void:
-	var clock: NetwClockHandle = Netw.clock(self)
+	var clock: NetwClock = session.clock
 	clock.before_tick.connect(gather_input)
 	contact_monitor = true
 	max_contacts_reported = 8

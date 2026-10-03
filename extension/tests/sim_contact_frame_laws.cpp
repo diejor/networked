@@ -15,7 +15,7 @@
 #include "netw/api/loopback.hpp"
 #include "netw/api/netw_multiplayer.hpp"
 #include "netw/api/promise.hpp"
-#include "netw/api/simulation_handle.hpp"
+#include "netw/api/simulation.hpp"
 #include "netw/sim/row.hpp"
 
 using namespace godot;
@@ -65,7 +65,7 @@ func _init() -> void:
 	var e := Netw.configure_entity(self)
 	e.transfer = NetwEntity.TRANSFER_IMMEDIATE
 	e.simulation.bodies = [^"Sphere"]
-	e.simulation.replicas = NetwSimulationHandle.REPLICAS_ACTIVE
+	e.simulation.replicas = NetwSimulation.REPLICAS_ACTIVE
 )";
 
 const std::string CUBE_SOURCE = std::string(CUBE_BODY)
@@ -354,7 +354,7 @@ class ContactScenario : public netw_test::FrameScenario {
                 if (kind == Kind::MONITORED) {
                     sphere->set_contact_monitor(true);
                 }
-                const Ref<netw::NetwSimulationHandle> handle
+                const Ref<netw::NetwSimulation> handle
                     = entity_at(client, index)->get_simulation();
                 handle->set_claim_on_contact(
                     kind == Kind::CHAIN || kind == Kind::REFUSED

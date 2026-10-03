@@ -17,18 +17,12 @@ using namespace netw;
 
 namespace netw {
 
-namespace {
-
-const char *SIG_EMBED_PHASE_CHANGED = "embed_phase_changed";
-
-} // namespace
-
 void NetwMultiplayer::embed_set_phase(EmbedPhase p_phase) {
     if (embed_phase_value == p_phase) {
         return;
     }
     embed_phase_value = p_phase;
-    emit_signal(SIG_EMBED_PHASE_CHANGED, int(embed_phase_value));
+    notify(EMBED_PHASE_CHANGED, int(embed_phase_value));
 }
 
 bool NetwMultiplayer::embed_claim_dispose() {

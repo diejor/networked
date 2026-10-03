@@ -165,7 +165,7 @@ private:
         if (entity.is_valid()) {
             reading["route"] = entity->get_route();
             reading["peer"] = entity->get_peer_id();
-            reading["entity_id"] = entity->get_entity_id();
+            reading["entity_id"] = entity->get_name();
             godot::Node *root = entity->get_owner();
             reading["authority"] = root != nullptr
                 ? int64_t(root->get_multiplayer_authority())

@@ -3,8 +3,7 @@
 #include <cstdint>
 
 #include "godot/variant.hpp"
-#include "netw/api/predict.hpp"
-#include "netw/api/prediction_handle.hpp"
+#include "netw/api/prediction.hpp"
 #include "netw/script/model.hpp"
 
 #if defined(NETW_TIER_HOSTED)
@@ -28,8 +27,8 @@ var evaluated := []
 
 func _predict_recover(
 		payload: Dictionary,
-		policy: NetwPredict.RecoveryPolicy,
-		snap_restore: NetwSimulationHandle.Restore,
+		policy: NetwPrediction.RecoveryPolicy,
+		snap_restore: NetwSimulation.Restore,
 		projection: Dictionary,
 		current: Dictionary,
 		pose_errors: Dictionary,
@@ -48,8 +47,8 @@ func _predict_recover(
 	)
 
 func _predict_evaluate(
-		domain: NetwPredict.Domain,
-		verdict: NetwPredict.ExactVerdict,
+		domain: NetwPrediction.Domain,
+		verdict: NetwPrediction.ExactVerdict,
 		predicted: Dictionary,
 		payload: Dictionary,
 		wiring: Dictionary,

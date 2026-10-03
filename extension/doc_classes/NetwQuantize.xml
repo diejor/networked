@@ -58,7 +58,7 @@
 			<return type="float" />
 			<param index="0" name="type" type="int" enum="Variant.Type" />
 			<description>
-				Return the largest error compression can add to a [param type] value. Keep [member NetwPredictionHandle.divergence_epsilon] above it, or compression alone causes corrections.
+				Return the largest error compression can add to a [param type] value. Keep [member NetwPrediction.divergence_epsilon] above it, or compression alone causes corrections.
 			</description>
 		</method>
 		<method name="_stride" qualifiers="virtual const">

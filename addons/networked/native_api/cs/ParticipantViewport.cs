@@ -141,11 +141,14 @@ public sealed class ParticipantViewport : NetwObject
     /// <summary>
     /// Returns the slots in grid order, from the top left, row by row.
     /// </summary>
-    public Godot.Collections.Array GetSlots()
+    public ParticipantWindow[] GetSlots()
     {
         godot_variant answered = default;
         NetwThunks.Call0(_bindGetSlots, Checked, ref answered);
-        Godot.Collections.Array result = VariantUtils.ConvertToArray(answered);
+        ParticipantWindow[] result =
+            NetwApi.Elements(
+                VariantUtils.ConvertToArray(answered),
+                ParticipantWindow.From);
         answered.Dispose();
         return result;
     }

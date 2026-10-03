@@ -49,6 +49,8 @@ public:
     }
 
 private:
+    bool hears_entity_live = false;
+
     struct Field {
         godot::NodePath target;
         godot::NodePath property;

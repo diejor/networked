@@ -90,7 +90,7 @@ TEST_CASE(
     Node *body = memnew(Node);
     body->set_name("PlayerBody");
     const Ref<NetwEntity> acting = NetwEntity::ensure(body);
-    acting->set_entity_id(StringName("player"));
+    acting->set_name(StringName("player"));
     acting->set_peer_id(7);
     const RID entity = session->entity_of(body);
     REQUIRE(entity.is_valid());
@@ -101,8 +101,8 @@ TEST_CASE(
     Node *spawned = memnew(Node);
     const Ref<NetwEntity> wrapper = NetwEntity::ensure(spawned);
     REQUIRE(wrapper.is_valid());
-    wrapper->set_entity_id(key);
-    CHECK(wrapper->get_entity_id() == key);
+    wrapper->set_name(key);
+    CHECK(wrapper->get_name() == key);
 
     memdelete(spawned);
     memdelete(body);

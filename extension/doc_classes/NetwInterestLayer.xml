@@ -7,17 +7,17 @@
 		The server adds [member entities] and [member viewers] to a layer, and [member policy] decides which peers see the entities. Two [NetwInterestLayer] objects with the same [member layer_id] are the same layer. Clients only learn what they can see.
 		[codeblock]
 		# server
-		var sight := Netw.of(self).interest_layer(&amp;"sight")
+		var sight := Netw.session(self).interest_layer(&amp;"sight")
 		sight.add_entity(target_entity)
 		sight.add_viewer(observer_peer_id)
 
 		# client
-		var sight := Netw.of(self).interest_layer(&amp;"sight")
-		sight.entity_visible.connect(func(entity):
-		    add_marker(entity.owner)
+		var sight := Netw.session(self).interest_layer(&amp;"sight")
+		sight.visibility_changed.connect(func(entity: NetwEntity, visible: bool):
+		    marker_of(entity.owner).visible = visible
 		)
 		[/codeblock]
-		Changes apply at the end of the frame, or at [method NetwMultiplayer.interest_flush_now]. On the server, use [signal interest_enter] and [signal interest_exit]. On a client, use [signal entity_visible] and [signal entity_hidden].
+		Changes apply at the end of the frame, or at [method NetwMultiplayer.interest_flush_now]. On the server, use [signal interest_entered] and [signal interest_exited]. On a client, use [signal visibility_changed].
 		An entity inside a multiplayer scene is only visible to peers in that scene, whatever other layers say.
 	</description>
 	<tutorials>
@@ -44,7 +44,7 @@
 			<param index="1" name="peer_id" type="int" />
 			<param index="2" name="visible" type="bool" />
 			<description>
-				Emits [signal interest_enter] or [signal interest_exit], then the entity's own signals and callbacks. The session calls it. Calling it yourself emits a change that did not happen.
+				Emits [signal interest_entered] or [signal interest_exited], then the entity's own signals and callbacks. The session calls it. Calling it yourself emits a change that did not happen.
 				[b]Server Only.[/b]
 			</description>
 		</method>
@@ -52,21 +52,21 @@
 			<return type="void" />
 			<param index="0" name="entity" type="NetwEntity" />
 			<description>
-				Marks [param entity] as visible to this client and emits [signal entity_visible]. The session calls it.
+				Marks [param entity] as visible to this client and emits [signal visibility_changed]. The session calls it.
 			</description>
 		</method>
 		<method name="client_revoke">
 			<return type="void" />
 			<param index="0" name="entity" type="NetwEntity" />
 			<description>
-				Marks [param entity] as no longer visible to this client and emits [signal entity_hidden]. The session calls it.
+				Marks [param entity] as no longer visible to this client and emits [signal visibility_changed]. The session calls it.
 			</description>
 		</method>
 		<method name="client_untrack_entity">
 			<return type="void" />
 			<param index="0" name="entity" type="NetwEntity" />
 			<description>
-				Removes [param entity] on a client when it leaves the tree, emitting [signal entity_removed] and then [signal entity_hidden]. The session calls it.
+				Removes [param entity] on a client when it leaves the tree, emitting [signal entity_removed] and then [signal visibility_changed]. The session calls it.
 			</description>
 		</method>
 		<method name="debug_dump">
@@ -97,7 +97,7 @@
 			<return type="bool" />
 			<param index="0" name="peer_id" type="int" />
 			<description>
-				Returns [code]true[/code] when [param peer_id] is in [member viewers]. With [constant NetwMultiplayer.LAYER_POLICY_HIDE_FROM_INSIDERS], viewers are the peers that cannot see.
+				Returns [code]true[/code] when [param peer_id] is in [member viewers]. With [constant LAYER_POLICY_HIDE_FROM_INSIDERS], viewers are the peers that cannot see.
 			</description>
 		</method>
 		<method name="is_visible_to">
@@ -138,7 +138,7 @@
 		</method>
 		<method name="set_policy">
 			<return type="bool" />
-			<param index="0" name="value" type="int" enum="NetwMultiplayer.LayerPolicy" />
+			<param index="0" name="value" type="int" enum="NetwInterestLayer.LayerPolicy" />
 			<description>
 				Sets [member policy]. Returns [code]false[/code] when it did not change.
 			</description>
@@ -158,11 +158,19 @@
 		</method>
 	</methods>
 	<members>
-		<member name="default_leave_policy" type="int" setter="set_default_leave_policy" getter="get_default_leave_policy" enum="NetwMultiplayer.LeavePolicy" default="0">
+		<member name="default_leave_policy" type="int" setter="set_default_leave_policy" getter="get_default_leave_policy" enum="NetwInterestLayer.LeavePolicy" default="0">
 			What happens to a peer's copy of an entity it stops seeing, unless the entity sets its own.
 		</member>
-		<member name="default_perception_policy" type="int" setter="set_default_perception_policy" getter="get_default_perception_policy" enum="NetwMultiplayer.PerceptionPolicy" default="0">
+		<member name="default_perception_policy" type="int" setter="set_default_perception_policy" getter="get_default_perception_policy" enum="NetwInterestLayer.PerceptionPolicy" default="0">
 			Whether a kept copy is still shown after the peer stops seeing it, unless the entity sets its own.
+		</member>
+		<member name="driver" type="Callable" setter="set_driver" getter="get_driver" default="Callable()">
+			Called on the server once per frame with this layer. It returns every entity that belongs in the layer.
+			[codeblock]
+			sight.driver = func(layer: NetwInterestLayer) -&gt; Array[NetwEntity]:
+			    return entities_near(beacon.position, 20.0)
+			[/codeblock]
+			If the result holds anything that is not an entity of this session, the layer does not change that frame.
 		</member>
 		<member name="entities" type="Dictionary" setter="" getter="get_entities" default="{}">
 			The entities in the layer, as keys. On a client, only the ones it sees. Returns a copy, so use [method add_entity] and [method remove_entity] to change it.
@@ -170,7 +178,14 @@
 		<member name="layer_id" type="StringName" setter="set_layer_id" getter="get_layer_id" default="&amp;&quot;&quot;">
 			The name of the layer.
 		</member>
-		<member name="policy" type="int" setter="set_policy" getter="get_policy" enum="NetwMultiplayer.LayerPolicy" default="0">
+		<member name="monitor" type="Callable" setter="set_monitor" getter="get_monitor" default="Callable()">
+			Called when a peer starts or stops seeing an entity through this layer. On a client, the peer is always this one.
+			[codeblock]
+			sight.monitor = func(entity: NetwEntity, peer_id: int, visible: bool) -&gt; void:
+			    print(entity.owner.name, " ", peer_id, " ", visible)
+			[/codeblock]
+		</member>
+		<member name="policy" type="int" setter="set_policy" getter="get_policy" enum="NetwInterestLayer.LayerPolicy" default="0">
 			Whether [member viewers] are the peers that see the entities, or the ones that do not.
 		</member>
 		<member name="viewers" type="Dictionary" setter="" getter="get_viewers" default="{}">
@@ -184,32 +199,20 @@
 				Emitted when [param entity] is added to the layer.
 			</description>
 		</signal>
-		<signal name="entity_hidden">
-			<param index="0" name="entity" type="NetwEntity" />
-			<description>
-				Emitted on a client when it stops seeing [param entity] through this layer.
-			</description>
-		</signal>
 		<signal name="entity_removed">
 			<param index="0" name="entity" type="NetwEntity" />
 			<description>
 				Emitted when [param entity] is removed from the layer.
 			</description>
 		</signal>
-		<signal name="entity_visible">
-			<param index="0" name="entity" type="NetwEntity" />
-			<description>
-				Emitted on a client when it starts seeing [param entity] through this layer.
-			</description>
-		</signal>
-		<signal name="interest_enter">
+		<signal name="interest_entered">
 			<param index="0" name="entity" type="NetwEntity" />
 			<param index="1" name="peer_id" type="int" />
 			<description>
 				Emitted on the server when [param peer_id] starts seeing [param entity] through this layer.
 			</description>
 		</signal>
-		<signal name="interest_exit">
+		<signal name="interest_exited">
 			<param index="0" name="entity" type="NetwEntity" />
 			<param index="1" name="peer_id" type="int" />
 			<description>
@@ -228,5 +231,38 @@
 				Emitted when [param peer_id] is removed from [member viewers].
 			</description>
 		</signal>
+		<signal name="visibility_changed">
+			<param index="0" name="entity" type="NetwEntity" />
+			<param index="1" name="visible" type="bool" />
+			<description>
+				Emitted on a client when it starts or stops seeing [param entity] through this layer. A hidden entity is not despawned, see [signal NetwEntity.hidden].
+			</description>
+		</signal>
 	</signals>
+	<constants>
+		<constant name="LAYER_POLICY_HIDE_FROM_OUTSIDERS" value="0" enum="LayerPolicy">
+			Only viewers of the layer see its entities, as for a team or a private room.
+		</constant>
+		<constant name="LAYER_POLICY_HIDE_FROM_INSIDERS" value="1" enum="LayerPolicy">
+			Only peers that are not viewers see its entities.
+		</constant>
+		<constant name="LEAVE_POLICY_HIDE" value="0" enum="LeavePolicy">
+			Free the peer's copy. The entity becomes [constant NetwMultiplayer.ENTITY_STATE_ABSENT] there and can be shown again later.
+		</constant>
+		<constant name="LEAVE_POLICY_RETAIN" value="1" enum="LeavePolicy">
+			Keep the peer's copy and stop updating it. Updates resume when it is visible again.
+		</constant>
+		<constant name="LEAVE_POLICY_CUSTOM" value="2" enum="LeavePolicy">
+			Call the custom callback given to [method NetwMultiplayer.interest_on_leave_policy].
+		</constant>
+		<constant name="PERCEPTION_POLICY_HIDE" value="0" enum="PerceptionPolicy">
+			Hide a copy kept by [constant LEAVE_POLICY_RETAIN].
+		</constant>
+		<constant name="PERCEPTION_POLICY_SHOW" value="1" enum="PerceptionPolicy">
+			Keep showing a copy kept by [constant LEAVE_POLICY_RETAIN] where it was last seen.
+		</constant>
+		<constant name="PERCEPTION_POLICY_CUSTOM" value="2" enum="PerceptionPolicy">
+			Call the custom callback given to [method NetwMultiplayer.interest_on_perception_policy].
+		</constant>
+	</constants>
 </class>

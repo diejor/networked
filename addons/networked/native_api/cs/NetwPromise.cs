@@ -54,42 +54,20 @@ public sealed class NetwPromise : NetwRefCounted
     }
 
     /// <summary>
-    /// Emitted when the promise completes.
-    /// </summary>
-    public event Action<Variant> Completed
-    {
-        add => Connect("completed", Callable.From(value));
-        remove => Disconnect("completed", Callable.From(value));
-    }
-
-    /// <summary>
-    /// Emitted when the promise fails.
-    /// </summary>
-    public event Action<Error, string> Failed
-    {
-        add => Connect("failed", Callable.From(value));
-        remove => Disconnect("failed", Callable.From(value));
-    }
-
-    /// <summary>
     /// Emitted once when the promise completes or fails. Do not <c>await</c>
     /// it, since it may already have fired. Use <see cref="NetwPromise.Wait"/>.
     /// </summary>
     public event Action Settled
     {
-        add => Connect("settled", Callable.From(value));
-        remove => Disconnect("settled", Callable.From(value));
-    }
-
-    /// <summary>
-    /// Used by <see cref="NetwPromise.Wait"/>. Connect to
-    /// <see cref="NetwPromise.Settled"/> instead, since this can be emitted
-    /// more than once.
-    /// </summary>
-    public event Action<Variant> Ready
-    {
-        add => Connect("ready", Callable.From(value));
-        remove => Disconnect("ready", Callable.From(value));
+        add => ConnectBridge(
+            "settled",
+            value,
+            Callable.From(
+                () =>
+                    value()
+            )
+        );
+        remove => DisconnectBridge("settled", value);
     }
 
     private static readonly IntPtr _bindGetIsCompleted =
@@ -314,9 +292,9 @@ public sealed class NetwPromise : NetwRefCounted
         NetwApi.MethodBind("NetwPromise", "wait", 4046169648UL);
 
     /// <summary>
-    /// Returns a signal to <c>await</c>, which gives
-    /// <see cref="NetwPromise.Answer"/>. It works even when the promise already
-    /// settled, which awaiting <see cref="NetwPromise.Settled"/> does not.
+    /// Returns a new signal to <c>await</c>, which fires once with
+    /// <see cref="NetwPromise.Answer"/>. When the promise already settled, it
+    /// fires on the next frame.
     /// <code>
     /// var err: Error = await engine.flush(keys).wait()
     /// </code>
@@ -350,9 +328,11 @@ public sealed class NetwPromise : NetwRefCounted
         NetwApi.MethodBind("NetwPromise", "resolve", 1114965689UL);
 
     /// <summary>
-    /// Completes the promise with <paramref name="val"/> and emits
-    /// <see cref="NetwPromise.Completed"/>, then
-    /// <see cref="NetwPromise.Settled"/>. Does nothing when already settled.
+    /// Completes the promise with <paramref name="val"/>. Emits
+    /// <see cref="NetwPromise.Settled"/>, then calls the
+    /// <see cref="NetwPromise.Then"/> callbacks, then fires every
+    /// <see cref="NetwPromise.Wait"/> signal. Does nothing when already
+    /// settled.
     /// </summary>
     public void Resolve(Variant val)
     {
@@ -367,10 +347,11 @@ public sealed class NetwPromise : NetwRefCounted
         NetwApi.MethodBind("NetwPromise", "reject", 399475586UL);
 
     /// <summary>
-    /// Fails the promise with <paramref name="errCode"/> and emits
-    /// <see cref="NetwPromise.Failed"/>, then
-    /// <see cref="NetwPromise.Settled"/>. Does nothing when already settled.
-    /// Pushes a warning when nothing handles the failure.
+    /// Fails the promise with <paramref name="errCode"/>. Emits
+    /// <see cref="NetwPromise.Settled"/>, then calls the
+    /// <see cref="NetwPromise.CatchError"/> callbacks, then fires every
+    /// <see cref="NetwPromise.Wait"/> signal. Does nothing when already
+    /// settled. Pushes a warning when nothing handles the failure.
     /// </summary>
     public void Reject(Error errCode, string errDetail = "")
     {

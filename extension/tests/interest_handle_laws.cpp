@@ -3,7 +3,7 @@
 #include "godot/node.hpp"
 #include "godot/scene_tree.hpp"
 #include "netw/api/entity.hpp"
-#include "netw/api/interest_handle.hpp"
+#include "netw/api/interest.hpp"
 #include "netw/api/interest_layer.hpp"
 #include "netw/api/netw_multiplayer.hpp"
 #include "support/netw_call_log.h"
@@ -12,7 +12,7 @@ namespace TestNetwInterestHandleLaws {
 
 using namespace godot;
 using netw::NetwEntity;
-using netw::NetwInterestHandle;
+using netw::NetwInterest;
 using netw::NetwInterestLayer;
 using netw::NetwMultiplayer;
 using netw_test::CallLog;
@@ -20,7 +20,7 @@ using netw_test::CallLog;
 struct Owned {
     Node *owner = nullptr;
     Ref<NetwEntity> entity;
-    Ref<NetwInterestHandle> interest;
+    Ref<NetwInterest> interest;
 };
 
 Owned an_entity(const char *p_name) {
@@ -94,10 +94,14 @@ TEST_CASE(
     made.interest->on_observed(heard.callable("entered"));
     made.interest->on_unobserved(heard.callable("left"));
 
-    made.entity
-        ->emit_signal(StringName("observer_entered"), StringName("sight"), 7);
-    made.entity
-        ->emit_signal(StringName("observer_left"), StringName("sight"), 7);
+    const CallLog relayed;
+    made.interest->connect(
+        StringName("observer_exited"),
+        relayed.callable("exited")
+    );
+    made.interest->announce_observer(StringName("sight"), 7, true);
+    made.interest->announce_observer(StringName("sight"), 7, false);
+    NETW_CHECK_EQ(relayed.count("exited"), 1);
 
     NETW_CHECK_EQ(heard.count("entered"), 1);
     NETW_CHECK_EQ(heard.count("left"), 1);

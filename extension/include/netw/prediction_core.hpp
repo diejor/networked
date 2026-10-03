@@ -2,7 +2,7 @@
 
 #include "godot/ref_counted.hpp"
 #include "godot/variant.hpp"
-#include "netw/api/predict.hpp"
+#include "netw/api/simulation.hpp"
 
 namespace netw {
 
@@ -185,34 +185,6 @@ public:
     }
 };
 
-class NetwPredictFold : public godot::RefCounted {
-    GDCLASS(NetwPredictFold, godot::RefCounted)
-
-    Fold decided;
-
-protected:
-    static void _bind_methods();
-
-public:
-    static godot::Ref<NetwPredictFold> of(
-        int64_t p_label,
-        bool p_fresh,
-        NetwPredict::DriveKind p_kind
-    );
-
-    int64_t label() const {
-        return decided.label;
-    }
-
-    bool fresh() const {
-        return decided.fresh;
-    }
-
-    NetwPredict::DriveKind kind() const {
-        return static_cast<NetwPredict::DriveKind>(int(decided.kind));
-    }
-};
-
 namespace prediction_core {
 
 #if defined(NETW_TESTS)
@@ -249,12 +221,6 @@ int domain_of(
 );
 
 Fold fold(
-    int64_t latest_input_tick,
-    int64_t last_driven_input_tick,
-    int64_t frame_tick
-);
-
-godot::Ref<NetwPredictFold> predict_fold(
     int64_t latest_input_tick,
     int64_t last_driven_input_tick,
     int64_t frame_tick

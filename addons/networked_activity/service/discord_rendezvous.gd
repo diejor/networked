@@ -44,7 +44,7 @@ func connect_session(
 ##
 ## The ordinary bring-up, composed here rather than on the session, because a
 ## session is entered by assigning a peer and publishes no verb that waits.
-## [method NetwConnectHandle.create_peer] offers the peer inside the
+## [method NetwConnection.create_peer] offers the peer inside the
 ## completion window, and returning from that window without assigning
 ## declines the offer, so the preparation and the assignment both happen
 ## inside it.
@@ -58,12 +58,13 @@ func connect_session(
 ## what a dedicated server wants, and skips the wait.
 func bring_up(
 		tree: MultiplayerTree,
-		mode: NetwMultiplayer.TransportMode,
+		mode: NetwConnection.TransportMode,
 		address: String,
 		username: StringName,
 		join_args: Array,
 ) -> Error:
 	var api := tree.api
+	var session: NetwSession = Netw.session(tree)
 	var settled: Array[bool] = [false]
 	var result: Array[Error] = [OK]
 
@@ -87,7 +88,7 @@ func bring_up(
 		if api.multiplayer_peer != peer:
 			result[0] = ERR_CANT_CONNECT
 
-	var ticket := Netw.connection(tree).create_peer(
+	var ticket := session.connection.create_peer(
 			tree.peer_class,
 			mode,
 			address,
@@ -105,7 +106,7 @@ func bring_up(
 	var deadline := Time.get_ticks_msec() + SETUP_TIMEOUT_MS
 	while not settled[0]:
 		if loop == null or Time.get_ticks_msec() > deadline:
-			Netw.connection(tree).cancel_peer_creation(ticket)
+			session.connection.cancel_peer_creation(ticket)
 			return ERR_TIMEOUT
 		await loop.process_frame
 
@@ -121,7 +122,7 @@ func _await_local_admission(tree: MultiplayerTree) -> Error:
 	if loop == null:
 		return ERR_UNCONFIGURED
 	var deadline := Time.get_ticks_msec() + ADMISSION_TIMEOUT_MS
-	var session: NetwSessionHandle = Netw.session(tree)
+	var session: NetwSession = Netw.session(tree)
 	while session.local_player == null:
 		if Time.get_ticks_msec() > deadline:
 			return ERR_TIMEOUT

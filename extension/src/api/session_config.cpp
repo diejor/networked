@@ -38,7 +38,7 @@ void NetwSessionConfig::_bind_methods() {
             PROPERTY_HINT_ENUM,
             "None,Client,Dedicated Server,Listen Server",
             PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_CLASS_IS_ENUM,
-            "NetwMultiplayer.Role"
+            "NetwSession.Role"
         ),
         "set_desired_role",
         "get_desired_role"

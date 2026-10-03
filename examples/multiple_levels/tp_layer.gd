@@ -13,7 +13,7 @@ var answered_code: Error = OK
 var answered_detail: String = ""
 var revealing := false
 var covering := false
-var presented: NetwSceneHandle
+var scene: NetwScene
 
 
 func _init() -> void:
@@ -24,7 +24,7 @@ func _enter_tree() -> void:
 	if Engine.is_editor_hint():
 		return
 	NetwService.register(self, TPLayer)
-	var session: NetwSessionHandle = Netw.session(self)
+	var session: NetwSession = Netw.session(self)
 	if session and not session.entered.is_connected(configured.emit):
 		session.entered.connect(configured.emit)
 
@@ -32,35 +32,32 @@ func _enter_tree() -> void:
 func _exit_tree() -> void:
 	if Engine.is_editor_hint():
 		return
-	var session: NetwSessionHandle = Netw.session(self)
+	var session: NetwSession = Netw.session(self)
 	if session and session.entered.is_connected(configured.emit):
 		session.entered.disconnect(configured.emit)
 	NetwService.unregister(self, TPLayer)
 
 
 func on_multiplayer_configured() -> void:
-	var session: NetwSessionHandle = Netw.session(self)
+	var session: NetwSession = Netw.session(self)
 	if session == null:
 		return
-	if session.role == NetwMultiplayer.ROLE_DEDICATED_SERVER:
+	if session.role == NetwSession.ROLE_DEDICATED_SERVER:
 		queue_free()
 		return
 	if not session.local_joined.is_connected(on_local_player_joined):
 		session.local_joined.connect(on_local_player_joined)
-	if not session.presentation_changed.is_connected(on_presentation_changed):
-		session.presentation_changed.connect(on_presentation_changed)
 
 
-func on_local_player_joined(_player: NetwPlayer) -> void:
+func on_local_player_joined(player: NetwPlayer) -> void:
+	scene = player.scene
+	player.scene_changed.connect(on_scene_changed)
 	await teleport_in()
 
 
-func on_presentation_changed(
-		_from: NetwSceneHandle,
-		to: NetwSceneHandle,
-) -> void:
-	presented = to
-	reveal_when_presented()
+func on_scene_changed(_from: NetwScene, to: NetwScene) -> void:
+	scene = to
+	reveal_when_arrived()
 
 
 func is_moving() -> bool:
@@ -80,22 +77,22 @@ func answer(code: Error, detail: String) -> void:
 	answered = true
 	answered_code = code
 	answered_detail = detail
-	reveal_when_presented()
+	reveal_when_arrived()
 
 
-func reveal_when_presented() -> void:
+func reveal_when_arrived() -> void:
 	if pending == null or revealing or not answered or covering:
 		return
-	if answered_code == OK and not presents(pending_scene):
+	if answered_code == OK and not is_in(pending_scene):
 		return
 	revealing = true
 	reveal.call_deferred()
 
 
-func presents(scene_path: String) -> bool:
-	if presented == null or not presented.is_declared:
+func is_in(scene_path: String) -> bool:
+	if scene == null or not scene.is_declared:
 		return false
-	return presented.root.scene_file_path == scene_path
+	return scene.root.scene_file_path == scene_path
 
 
 func reveal() -> void:
@@ -124,4 +121,4 @@ func teleport_out() -> void:
 	covering = true
 	await teleport_animation(transition_anim.play.bind("tp"))
 	covering = false
-	reveal_when_presented()
+	reveal_when_arrived()

@@ -7,7 +7,7 @@ const START_ANCHOR := Vector3(5., 0.5, 5.0)
 
 
 func _init() -> void:
-	Netw.configure_multiplayer_scene(self).labeled(&"Track")
+	Netw.configure_scene(self).labeled(&"Track")
 	Netw.configure_spawn(spawn_vehicle)
 
 

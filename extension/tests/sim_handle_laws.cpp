@@ -9,7 +9,7 @@
 #include "godot/spatial_node.hpp"
 #include "netw/api/entity.hpp"
 #include "netw/api/netw_multiplayer.hpp"
-#include "netw/api/simulation_handle.hpp"
+#include "netw/api/simulation.hpp"
 #include "netw/sim/row.hpp"
 
 namespace TestNetwSimHandleLaws {
@@ -18,7 +18,7 @@ using namespace godot;
 using namespace netw_test;
 using netw::NetwEntity;
 using netw::NetwMultiplayer;
-using netw::NetwSimulationHandle;
+using netw::NetwSimulation;
 
 const char *SEATED_ID = "simulation_handle_member";
 
@@ -73,35 +73,35 @@ TEST_CASE(
     const int route = seat_route(rig, arena, "Crate");
     const Ref<NetwEntity> copy = view(rig, route, 0);
     REQUIRE(copy.is_valid());
-    const Ref<NetwSimulationHandle> simulation = copy->get_simulation();
+    const Ref<NetwSimulation> simulation = copy->get_simulation();
     REQUIRE(simulation.is_valid());
     NETW_CHECK_EQ(
         int(simulation->get_mode()),
-        int(NetwSimulationHandle::MODE_NONE)
+        int(NetwSimulation::MODE_NONE)
     );
 
     CallLog log;
     simulation->connect(StringName("mode_changed"), log.callable("moved"));
 
-    simulation->set_replicas(NetwSimulationHandle::REPLICAS_ACTIVE);
+    simulation->set_replicas(NetwSimulation::REPLICAS_ACTIVE);
     NETW_CHECK_EQ(
         int(simulation->get_mode()),
-        int(NetwSimulationHandle::MODE_ACTIVE)
+        int(NetwSimulation::MODE_ACTIVE)
     );
-    simulation->set_replicas(NetwSimulationHandle::REPLICAS_PROXY);
+    simulation->set_replicas(NetwSimulation::REPLICAS_PROXY);
     NETW_CHECK_EQ(
         int(simulation->get_mode()),
-        int(NetwSimulationHandle::MODE_PROXY)
+        int(NetwSimulation::MODE_PROXY)
     );
-    simulation->set_replicas(NetwSimulationHandle::REPLICAS_PROXY);
+    simulation->set_replicas(NetwSimulation::REPLICAS_PROXY);
 
     NETW_REQUIRE_EQ(log.count(StringName("moved")), 2);
     const Array entered = log.args(StringName("moved"), 0);
     const Array left = log.args(StringName("moved"), 1);
-    NETW_CHECK_EQ(int(entered[0]), int(NetwSimulationHandle::MODE_NONE));
-    NETW_CHECK_EQ(int(entered[1]), int(NetwSimulationHandle::MODE_ACTIVE));
-    NETW_CHECK_EQ(int(left[0]), int(NetwSimulationHandle::MODE_ACTIVE));
-    NETW_CHECK_EQ(int(left[1]), int(NetwSimulationHandle::MODE_PROXY));
+    NETW_CHECK_EQ(int(entered[0]), int(NetwSimulation::MODE_NONE));
+    NETW_CHECK_EQ(int(entered[1]), int(NetwSimulation::MODE_ACTIVE));
+    NETW_CHECK_EQ(int(left[0]), int(NetwSimulation::MODE_ACTIVE));
+    NETW_CHECK_EQ(int(left[1]), int(NetwSimulation::MODE_PROXY));
 }
 
 TEST_CASE(
@@ -172,7 +172,7 @@ TEST_CASE(
         != core->scene_of(stranger->get_rid_handle())
     );
 
-    const Ref<NetwSimulationHandle> simulation = owner->get_simulation();
+    const Ref<NetwSimulation> simulation = owner->get_simulation();
     simulation->simulate(stranger);
     simulation->simulate(neighbour);
 

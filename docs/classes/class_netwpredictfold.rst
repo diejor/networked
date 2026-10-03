@@ -23,7 +23,7 @@ Create one with :ref:`of()<class_NetwPredictFold_method_of>` in an override of :
 
 ::
 
-    var fold := NetwPredictFold.of(tick, true, NetwPredict.DRIVE_KIND_FRESH)
+    var fold := NetwPredictFold.of(tick, true, NetwPrediction.DRIVE_KIND_FRESH)
 
 .. rst-class:: classref-reftable-group
 
@@ -33,15 +33,15 @@ Methods
 .. table::
    :widths: auto
 
-   +-----------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`bool`                                 | :ref:`fresh<class_NetwPredictFold_method_fresh>`\ (\ ) |const|                                                                                              |
-   +-----------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`DriveKind<enum_NetwPredict_DriveKind>`  | :ref:`kind<class_NetwPredictFold_method_kind>`\ (\ ) |const|                                                                                                |
-   +-----------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`int`                                  | :ref:`label<class_NetwPredictFold_method_label>`\ (\ ) |const|                                                                                              |
-   +-----------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwPredictFold<class_NetwPredictFold>` | :ref:`of<class_NetwPredictFold_method_of>`\ (\ label\: :godot:`int`, fresh\: :godot:`bool`, kind\: :ref:`DriveKind<enum_NetwPredict_DriveKind>`\ ) |static| |
-   +-----------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   +-------------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`bool`                                   | :ref:`fresh<class_NetwPredictFold_method_fresh>`\ (\ ) |const|                                                                                                 |
+   +-------------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`DriveKind<enum_NetwPrediction_DriveKind>` | :ref:`kind<class_NetwPredictFold_method_kind>`\ (\ ) |const|                                                                                                   |
+   +-------------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`int`                                    | :ref:`label<class_NetwPredictFold_method_label>`\ (\ ) |const|                                                                                                 |
+   +-------------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwPredictFold<class_NetwPredictFold>`   | :ref:`of<class_NetwPredictFold_method_of>`\ (\ label\: :godot:`int`, fresh\: :godot:`bool`, kind\: :ref:`DriveKind<enum_NetwPrediction_DriveKind>`\ ) |static| |
+   +-------------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------+
 
 .. rst-class:: classref-section-separator
 
@@ -68,7 +68,7 @@ Method Descriptions
 
 .. rst-class:: classref-method
 
-:ref:`DriveKind<enum_NetwPredict_DriveKind>` **kind**\ (\ ) |const| :ref:`🔗<class_NetwPredictFold_method_kind>`
+:ref:`DriveKind<enum_NetwPrediction_DriveKind>` **kind**\ (\ ) |const| :ref:`🔗<class_NetwPredictFold_method_kind>`
 
 Which input was used.
 
@@ -92,9 +92,9 @@ The tick of the input, or the current tick when there is no input.
 
 .. rst-class:: classref-method
 
-:ref:`NetwPredictFold<class_NetwPredictFold>` **of**\ (\ label\: :godot:`int`, fresh\: :godot:`bool`, kind\: :ref:`DriveKind<enum_NetwPredict_DriveKind>`\ ) |static| :ref:`🔗<class_NetwPredictFold_method_of>`
+:ref:`NetwPredictFold<class_NetwPredictFold>` **of**\ (\ label\: :godot:`int`, fresh\: :godot:`bool`, kind\: :ref:`DriveKind<enum_NetwPrediction_DriveKind>`\ ) |static| :ref:`🔗<class_NetwPredictFold_method_of>`
 
-Creates a **NetwPredictFold**. ``kind`` must be a valid :ref:`DriveKind<enum_NetwPredict_DriveKind>`.
+Creates a **NetwPredictFold**. ``kind`` must be a valid :ref:`DriveKind<enum_NetwPrediction_DriveKind>`.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

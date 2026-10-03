@@ -14,7 +14,7 @@
 #include "netw/api/entity_record.hpp"
 #include "netw/api/participant.hpp"
 #include "netw/api/promise.hpp"
-#include "netw/api/scene_handle.hpp"
+#include "netw/api/scene.hpp"
 #include "netw/comp_table.hpp"
 #include "netw/entity/stage.hpp"
 #include "netw/repl/property_binding.hpp"
@@ -22,12 +22,12 @@
 
 namespace netw {
 
-class NetwDisplayHandle;
-class NetwInterestHandle;
+class NetwDisplay;
+class NetwInterest;
 class NetwMultiplayer;
-class NetwPersistenceHandle;
-class NetwPredictionHandle;
-class NetwSimulationHandle;
+class NetwPersistence;
+class NetwPrediction;
+class NetwSimulation;
 class ReplicationCore;
 
 namespace spawn {
@@ -135,12 +135,11 @@ private:
     entity::Control *control() const;
     NetwMultiplayer *session_core() const;
     int64_t local_peer() const;
-    bool ensure_server_action(const godot::StringName &p_action);
     ReplicationCore *get_replication_plane() const;
     void announce_control(int64_t p_was, int64_t p_peer);
     int64_t resolve_initial_controller() const;
     void project_control(godot::Object *p_announcer);
-    void transfer_control(int64_t p_peer);
+    void adopt_controller(int64_t p_peer);
     void apply_control_change(int64_t p_peer);
     void decide_control(
         int64_t p_peer,
@@ -239,8 +238,8 @@ public:
     godot::Node *get_owner() const;
     void set_owner(godot::Node *p_owner);
 
-    godot::StringName get_entity_id() const;
-    void set_entity_id(const godot::StringName &p_entity_id);
+    godot::StringName get_name() const;
+    void set_name(const godot::StringName &p_name);
     int64_t get_peer_id() const;
     void set_peer_id(int64_t p_peer_id);
     int64_t get_player_id() const;
@@ -318,6 +317,7 @@ public:
         const godot::Ref<NetwEntity> &p_source
     );
     godot::Ref<NetwPromise> release_authority(int64_t p_successor = 0);
+    godot::Error transfer_control(int64_t p_peer);
     bool is_controller_here() const;
     bool is_claim_pending() const;
     bool is_claim_running_ahead() const;
@@ -378,14 +378,15 @@ public:
     repl::PropertyBindingPtr get_state_binding() const;
     repl::PropertyBindingPtr get_input_binding() const;
     repl::PropertyBindingPtr get_broadcast_binding() const;
-    godot::Ref<NetwInterestHandle> get_interest() const;
-    godot::Ref<NetwSceneHandle> get_scene() const;
-    godot::Ref<NetwPredictionHandle> get_prediction() const;
-    godot::Ref<NetwSimulationHandle> get_simulation() const;
-    godot::Ref<NetwPredictionHandle> prediction_if_minted() const;
-    godot::Ref<NetwSimulationHandle> simulation_if_minted() const;
-    godot::Ref<NetwPersistenceHandle> get_persistence() const;
-    godot::Ref<NetwDisplayHandle> get_interpolation() const;
+    godot::Ref<NetwInterest> get_interest() const;
+    godot::Ref<NetwInterest> held_interest() const;
+    godot::Ref<NetwScene> get_scene() const;
+    godot::Ref<NetwPrediction> get_prediction() const;
+    godot::Ref<NetwSimulation> get_simulation() const;
+    godot::Ref<NetwPrediction> prediction_if_minted() const;
+    godot::Ref<NetwSimulation> simulation_if_minted() const;
+    godot::Ref<NetwPersistence> get_persistence() const;
+    godot::Ref<NetwDisplay> get_display() const;
 
     godot::TypedArray<godot::MultiplayerSynchronizer> synchronizers();
     bool governs_property(
@@ -411,7 +412,7 @@ public:
     }
     godot::Ref<NetwEntity> parent_entity() const;
 
-    godot::Ref<NetwSceneHandle> own_scene();
+    godot::Ref<NetwScene> own_scene();
 
     void hydrate_components();
     int64_t comp_structure_hash(const godot::PackedStringArray &p_paths) const;

@@ -13,8 +13,7 @@
 #include "netw/api/entity.hpp"
 #include "netw/api/loopback.hpp"
 #include "netw/api/netw_multiplayer.hpp"
-#include "netw/api/predict.hpp"
-#include "netw/api/prediction_handle.hpp"
+#include "netw/api/prediction.hpp"
 #include "netw/display/timing.hpp"
 #include "netw/predict/arrival.hpp"
 #include "netw/predict/engine.hpp"
@@ -422,8 +421,8 @@ TEST_CASE(
         seated->get_state_binding(),
         PropertyBindingPtr()
     );
-    netw::NetwPredictionHandle *handle
-        = Object::cast_to<netw::NetwPredictionHandle>(
+    netw::NetwPrediction *handle
+        = Object::cast_to<netw::NetwPrediction>(
             netw::gd::live_object(seated->get_prediction())
         );
     REQUIRE(handle != nullptr);

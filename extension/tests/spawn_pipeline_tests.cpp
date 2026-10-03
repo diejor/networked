@@ -96,18 +96,14 @@ TEST_CASE(
     Ref<NetwMultiplayer> core;
     core.instantiate();
     Pipeline *pipeline = fresh(core);
-    const Callable retry = callable_mp(
-        core.ptr(),
-        &NetwMultiplayer::spawn_retry_scene_parked_spawns
-    );
 
-    CHECK_FALSE(core->is_connected("entity_live", retry));
+    CHECK_FALSE(pipeline->retries_scene_parks());
 
     PackedByteArray payload;
     payload.push_back(7);
     pipeline->park_spawn_for_scene(payload, 9001, 1);
 
-    CHECK(core->is_connected("entity_live", retry));
+    CHECK(pipeline->retries_scene_parks());
     CHECK(pipeline->get_park().has(9001));
     NETW_CHECK_EQ(
         int64_t(pipeline->counters()[StringName("spawn_deferrals")]),
@@ -117,7 +113,7 @@ TEST_CASE(
     pipeline->get_park().cancel(9001);
     pipeline->retry_scene_parked_spawns(0, Ref<netw::NetwEntity>());
 
-    CHECK_FALSE(core->is_connected("entity_live", retry));
+    CHECK_FALSE(pipeline->retries_scene_parks());
 }
 
 TEST_CASE(
@@ -127,19 +123,15 @@ TEST_CASE(
     Ref<NetwMultiplayer> core;
     core.instantiate();
     Pipeline *pipeline = fresh(core);
-    const Callable retry = callable_mp(
-        core.ptr(),
-        &NetwMultiplayer::spawn_retry_scene_parked_spawns
-    );
 
     PackedByteArray payload;
     payload.push_back(7);
     pipeline->park_spawn_for_scene(payload, 9002, 1);
-    CHECK(core->is_connected("entity_live", retry));
+    CHECK(pipeline->retries_scene_parks());
 
     pipeline->clear_session();
 
-    CHECK_FALSE(core->is_connected("entity_live", retry));
+    CHECK_FALSE(pipeline->retries_scene_parks());
     NETW_CHECK_EQ(pipeline->get_park().size(), 0);
 }
 

@@ -5,7 +5,7 @@
 
 #include "godot/node.hpp"
 #include "netw/api/entity.hpp"
-#include "netw/api/interest_handle.hpp"
+#include "netw/api/interest.hpp"
 #include "netw/api/interest_layer.hpp"
 #include "netw/api/netw_multiplayer.hpp"
 #include "netw/interest/perception.hpp"

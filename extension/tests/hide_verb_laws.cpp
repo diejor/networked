@@ -7,7 +7,7 @@
 #include "netw/api/interest_layer.hpp"
 #include "netw/api/lag_compensation_config.hpp"
 #include "netw/api/netw_multiplayer.hpp"
-#include "netw/api/prediction_handle.hpp"
+#include "netw/api/prediction.hpp"
 #include "netw/interest/decl.hpp"
 #include "netw/liveness_core.hpp"
 #include "support/netw_call_log.h"
@@ -83,8 +83,8 @@ TEST_CASE(
 
     NetwMultiplayer *held = rig.client(0);
     CallLog log;
-    held->connect(StringName("entity_hidden"), log.callable("hidden"));
-    held->connect(StringName("entity_dead"), log.callable("dead"));
+    held->observe(NetwMultiplayer::ENTITY_HIDDEN, log.callable("hidden"));
+    held->observe(NetwMultiplayer::ENTITY_DEAD, log.callable("dead"));
 
     const RID entity = held->entity_from_route(route);
     REQUIRE(entity.is_valid());
@@ -125,7 +125,7 @@ TEST_CASE(
 
     NetwMultiplayer *held = rig.client(0);
     CallLog log;
-    held->connect(StringName("entity_hidden"), log.callable("hidden"));
+    held->observe(NetwMultiplayer::ENTITY_HIDDEN, log.callable("hidden"));
 
     SUBCASE("a route this peer never heard of") {
         CHECK_FALSE(held->liveness_hide(route + 1000));
@@ -183,7 +183,7 @@ TEST_CASE(
         int(held->predict_declare(entity->get_rid_handle())),
         int(godot::OK)
     );
-    const Ref<netw::NetwPredictionHandle> handle = entity->get_prediction();
+    const Ref<netw::NetwPrediction> handle = entity->get_prediction();
     REQUIRE(handle.is_valid());
     REQUIRE(handle->is_registered());
 

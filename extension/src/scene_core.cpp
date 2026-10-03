@@ -1,6 +1,7 @@
 #include "netw/scene_core.hpp"
 
 #include "godot/resource.hpp"
+#include "netw/api/scene.hpp"
 #include "netw/colors.hpp"
 #include "netw/log.hpp"
 #include "netw/profile.hpp"
@@ -327,11 +328,13 @@ void NetwSceneCore::transition_fail(int p_code) {
     }
 }
 
-void NetwSceneCore::transition_land() {
+void NetwSceneCore::transition_land(
+    const Ref<NetwScene> &p_destination
+) {
     const Ref<NetwPromise> promise = transition.promise;
     transition_close();
     if (promise.is_valid()) {
-        promise->resolve(int(OK));
+        promise->resolve(p_destination);
     }
 }
 

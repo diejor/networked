@@ -98,7 +98,6 @@ class DoorRun {
     DoorScenario declared;
     Plant planted = PLANT_NONE;
     bool script_is_the_one_named = false;
-    bool inner_is_the_one_given = false;
     bool inner_is_the_one_adopted = false;
     int64_t calls = 0;
     Error answered = OK;
@@ -117,12 +116,9 @@ public:
             implementation = netw_test::script_from(CALLTHROUGH);
         }
 
-        Ref<SceneMultiplayer> inner;
-        inner.instantiate();
         const bool constructs_with_a_script = declared.implementation != nullptr
             || planted == PLANT_A_STOCK_SESSION_WEARING_THE_SCRIPT;
-        Ref<NetwMultiplayer> session = NetwMultiplayer::make(
-            inner,
+        Ref<NetwMultiplayer> session = NetwMultiplayer::create(
             constructs_with_a_script ? implementation : Ref<Script>()
         );
         REQUIRE(session.is_valid());
@@ -132,7 +128,6 @@ public:
         script_is_the_one_named = declared.implementation == nullptr
             ? worn.is_null()
             : worn == implementation;
-        inner_is_the_one_given = session->session_get_inner() == inner;
 
         Node3D *body = memnew(Node3D);
         netw::gd::scene_root()->add_child(body);
@@ -185,10 +180,6 @@ public:
         return script_is_the_one_named;
     }
 
-    bool holds_what_was_given() const {
-        return inner_is_the_one_given;
-    }
-
     bool holds_what_was_adopted() const {
         return inner_is_the_one_adopted;
     }
@@ -217,9 +208,6 @@ LawVerdict law_owned(const DoorRun &p_run) {
         return law_broken(
             "the session runs a script the caller did not name, or none"
         );
-    }
-    if (!p_run.holds_what_was_given()) {
-        return law_broken("the session holds a transport nobody handed it");
     }
     return law_held();
 }

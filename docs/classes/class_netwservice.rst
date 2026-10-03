@@ -21,7 +21,7 @@ A :godot:`Node` that registers itself as a service of its :godot:`Node.multiplay
 Description
 -----------
 
-Get it with :ref:`Netw.service()<class_Netw_method_service>`. Override :ref:`_service_entered()<class_NetwService_private_method__service_entered>` and :ref:`_service_exiting()<class_NetwService_private_method__service_exiting>` for setup and cleanup.
+Get it with :ref:`NetwSession.service()<class_NetwSession_method_service>`. Override :ref:`_service_entered()<class_NetwService_private_method__service_entered>` and :ref:`_service_exiting()<class_NetwService_private_method__service_exiting>` for setup and cleanup.
 
 ::
 
@@ -47,25 +47,25 @@ Methods
 .. table::
    :widths: auto
 
-   +-------------------+-------------------------------------------------------------------------------------------------------------------------------------------------+
-   | |void|            | :ref:`_service_entered<class_NetwService_private_method__service_entered>`\ (\ api\: :ref:`NetwMultiplayer<class_NetwMultiplayer>`\ ) |virtual| |
-   +-------------------+-------------------------------------------------------------------------------------------------------------------------------------------------+
-   | |void|            | :ref:`_service_exiting<class_NetwService_private_method__service_exiting>`\ (\ api\: :ref:`NetwMultiplayer<class_NetwMultiplayer>`\ ) |virtual| |
-   +-------------------+-------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`Script`   | :ref:`_service_type<class_NetwService_private_method__service_type>`\ (\ ) |virtual|                                                            |
-   +-------------------+-------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`bool`     | :ref:`_should_register<class_NetwService_private_method__should_register>`\ (\ ) |virtual|                                                      |
-   +-------------------+-------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`Callable` | :ref:`get_transport_restricted_probe<class_NetwService_method_get_transport_restricted_probe>`\ (\ ) |static|                                   |
-   +-------------------+-------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`bool`     | :ref:`is_transport_restricted<class_NetwService_method_is_transport_restricted>`\ (\ ) |static|                                                 |
-   +-------------------+-------------------------------------------------------------------------------------------------------------------------------------------------+
-   | |void|            | :ref:`register<class_NetwService_method_register>`\ (\ service\: :godot:`Node`, type\: :godot:`Script` = null\ ) |static|                       |
-   +-------------------+-------------------------------------------------------------------------------------------------------------------------------------------------+
-   | |void|            | :ref:`set_transport_restricted_probe<class_NetwService_method_set_transport_restricted_probe>`\ (\ probe\: :godot:`Callable`\ ) |static|        |
-   +-------------------+-------------------------------------------------------------------------------------------------------------------------------------------------+
-   | |void|            | :ref:`unregister<class_NetwService_method_unregister>`\ (\ service\: :godot:`Node`, type\: :godot:`Script` = null\ ) |static|                   |
-   +-------------------+-------------------------------------------------------------------------------------------------------------------------------------------------+
+   +-------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
+   | |void|            | :ref:`_service_entered<class_NetwService_private_method__service_entered>`\ (\ session\: :ref:`NetwSession<class_NetwSession>`\ ) |virtual| |
+   +-------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
+   | |void|            | :ref:`_service_exiting<class_NetwService_private_method__service_exiting>`\ (\ session\: :ref:`NetwSession<class_NetwSession>`\ ) |virtual| |
+   +-------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`Script`   | :ref:`_service_type<class_NetwService_private_method__service_type>`\ (\ ) |virtual|                                                        |
+   +-------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`bool`     | :ref:`_should_register<class_NetwService_private_method__should_register>`\ (\ ) |virtual|                                                  |
+   +-------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`Callable` | :ref:`get_transport_restricted_probe<class_NetwService_method_get_transport_restricted_probe>`\ (\ ) |static|                               |
+   +-------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`bool`     | :ref:`is_transport_restricted<class_NetwService_method_is_transport_restricted>`\ (\ ) |static|                                             |
+   +-------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
+   | |void|            | :ref:`register<class_NetwService_method_register>`\ (\ service\: :godot:`Node`, type\: :godot:`Script` = null\ ) |static|                   |
+   +-------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
+   | |void|            | :ref:`set_transport_restricted_probe<class_NetwService_method_set_transport_restricted_probe>`\ (\ probe\: :godot:`Callable`\ ) |static|    |
+   +-------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
+   | |void|            | :ref:`unregister<class_NetwService_method_unregister>`\ (\ service\: :godot:`Node`, type\: :godot:`Script` = null\ ) |static|               |
+   +-------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
 
 .. rst-class:: classref-section-separator
 
@@ -80,7 +80,7 @@ Method Descriptions
 
 .. rst-class:: classref-method
 
-|void| **_service_entered**\ (\ api\: :ref:`NetwMultiplayer<class_NetwMultiplayer>`\ ) |virtual| :ref:`🔗<class_NetwService_private_method__service_entered>`
+|void| **_service_entered**\ (\ session\: :ref:`NetwSession<class_NetwSession>`\ ) |virtual| :ref:`🔗<class_NetwService_private_method__service_entered>`
 
 Called after the service registers, when it enters the tree. Not called in the editor, or when :ref:`_should_register()<class_NetwService_private_method__should_register>` returns ``false``.
 
@@ -92,7 +92,7 @@ Called after the service registers, when it enters the tree. Not called in the e
 
 .. rst-class:: classref-method
 
-|void| **_service_exiting**\ (\ api\: :ref:`NetwMultiplayer<class_NetwMultiplayer>`\ ) |virtual| :ref:`🔗<class_NetwService_private_method__service_exiting>`
+|void| **_service_exiting**\ (\ session\: :ref:`NetwSession<class_NetwSession>`\ ) |virtual| :ref:`🔗<class_NetwService_private_method__service_exiting>`
 
 Called before the service unregisters, when it leaves the tree. Undo :ref:`_service_entered()<class_NetwService_private_method__service_entered>` here.
 

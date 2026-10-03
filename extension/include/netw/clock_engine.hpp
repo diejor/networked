@@ -69,13 +69,33 @@ private:
 
     Stats stats;
 
-    double seconds_into_frame() const;
-    void announce(const godot::StringName &p_signal);
-    void announce(const godot::StringName &p_signal, const godot::Variant &p_a);
-    void announce(
-        const godot::StringName &p_signal,
+public:
+    enum Event {
+        EVENT_BEFORE_TICK,
+        EVENT_ON_TICK,
+        EVENT_AFTER_TICK,
+        EVENT_BEFORE_TICK_LOOP,
+        EVENT_AFTER_TICK_LOOP,
+        EVENT_SYNCHRONIZED,
+        EVENT_STABILITY_CHANGED,
+    };
+    typedef void (*Hook)(
+        void *p_context,
+        Event p_event,
         const godot::Variant &p_a,
         const godot::Variant &p_b
+    );
+
+private:
+    Hook hook = nullptr;
+    void *hook_context = nullptr;
+
+    double seconds_into_frame() const;
+    void announce(
+        Event p_event,
+        int p_argc = 0,
+        const godot::Variant &p_a = godot::Variant(),
+        const godot::Variant &p_b = godot::Variant()
     );
     void emit_tick();
     void calibrate(double target);
@@ -84,6 +104,8 @@ private:
 
 public:
     ObjectPort sink;
+
+    void hook_with(Hook p_hook, void *p_context);
 
     void set_tickrate(int value);
     int get_tickrate() const;

@@ -101,8 +101,8 @@ void NetwMultiplayer::execute_ready_action(
             "arrived.",
             String(p_request.key).utf8().get_data()
         );
-        emit_signal(
-            StringName("lagcomp_action_gate_fallback"),
+        notify(
+            LAGCOMP_ACTION_GATE_FALLBACK,
             p_request.key,
             p_request.view_tick
         );
@@ -150,7 +150,7 @@ int64_t NetwMultiplayer::action_slot_of(const Callable &p_authority) {
     if (entity.is_null()) {
         return 0;
     }
-    const String route = String(entity->get_entity_id()) + ":"
+    const String route = String(entity->get_name()) + ":"
         + String(p_authority.get_method());
     const HashMap<String, int64_t>::ConstIterator found
         = action_slots.find(route);

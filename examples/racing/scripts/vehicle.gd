@@ -112,7 +112,7 @@ func _init() -> void:
 			.quantize(NetwQuantizeScalar.new().bits(16).limits(-16.0, 16.0))
 	Netw.configure_property(self, &"acceleration").broadcast().masked()
 
-	Netw.configure_interest(self).join(&"race")
+	e.interest.join(&"race")
 
 
 func _ready() -> void:

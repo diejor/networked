@@ -13,7 +13,7 @@ const PLAYERS := &"multiple_levels_players"
 var makers: Dictionary = { }
 var levels: Dictionary = { }
 
-@onready var session: NetwSessionHandle = Netw.session(self)
+@onready var session: NetwSession = Netw.session(self)
 
 
 func _init() -> void:
@@ -30,9 +30,8 @@ func _init() -> void:
 func _ready() -> void:
 	NetwService.register(self)
 	Netw.configure_database(self, SAVES).backend(MemoryDatabase.new())
-	Netw.database(self, SAVES).open(&"campaign")
-	session.scene_live.connect(remember_level)
-	session.scene_changed.connect(place_arrivals)
+	session.database(SAVES).open(&"campaign")
+	session.scene_ready.connect(remember_level)
 	get_tree().auto_accept_quit = false
 
 
@@ -59,26 +58,22 @@ func spawn_avatar() -> Node:
 	return PLAYER.instantiate()
 
 
-func remember_level(level: NetwSceneHandle) -> void:
+func remember_level(level: NetwScene) -> void:
 	levels[level.root.scene_file_path] = level.root
+	if multiplayer.is_server():
+		level.viewer_entered.connect(place_player.bind(level))
 
 
-func place_arrivals(
-		level: NetwSceneHandle,
-		arrived: Array[NetwPlayer],
-) -> void:
-	for player in arrived:
-		place_player(player, level)
-
-
-func place_player(player: NetwPlayer, level: NetwSceneHandle) -> void:
+func place_player(player: NetwPlayer, level: NetwScene) -> void:
+	if not player.bodies.is_empty():
+		return
 	var avatar := Netw.spawn_player(player, spawn_avatar)
 	var roster: Array[NetwPlayer] = session.players
 	(avatar as Node2D).position = START_POSE + START_STRIDE * roster.size()
 	level.root.add_child(avatar)
 
 
-func open_level(path: String) -> NetwSceneHandle:
+func open_level(path: String) -> NetwScene:
 	var world: Node = levels.get(path)
 	if not is_instance_valid(world):
 		world = Netw.spawn(makers[path])
@@ -90,7 +85,7 @@ func open_level(path: String) -> NetwSceneHandle:
 func authorize_scene_request(
 		_player: NetwPlayer,
 		destination: String,
-		_scope: Netw.SceneChange,
+		_scope: NetwScene.SceneChange,
 ) -> Error:
 	if (
 			destination == LEVEL_1.resource_path

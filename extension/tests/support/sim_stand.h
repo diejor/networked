@@ -29,12 +29,10 @@ class SimStand {
     static godot::Ref<netw::NetwMultiplayer> make(
         const godot::Ref<netw::LocalMultiplayerPeer> &p_peer
     ) {
-        godot::Ref<godot::SceneMultiplayer> inner;
-        inner.instantiate();
-        inner->set_root_path(godot::NodePath("/"));
         godot::Ref<netw::NetwMultiplayer> api
-            = netw::NetwMultiplayer::make(inner, godot::Ref<godot::Script>());
+            = netw::NetwMultiplayer::create(godot::Ref<godot::Script>());
         if (api.is_valid()) {
+            api->session_get_inner()->set_root_path(godot::NodePath("/"));
             api->session_set_authority_peer(1);
             api->set("multiplayer_peer", p_peer);
         }

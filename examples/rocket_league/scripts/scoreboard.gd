@@ -1,26 +1,23 @@
 extends RichTextLabel
 
 @onready var countdown: RichTextLabel = $"../CountDown"
+@onready var session: NetwSession = Netw.session(self)
 
 var game: RocketGame
 
 
 func _ready() -> void:
 	set_process(false)
-	var session: NetwSessionHandle = Netw.session(self)
-	session.scene_live.connect(on_scene_live)
-	session.ended.connect(on_session_ended)
-	session.disconnected.connect(on_session_ended)
+	session.scene_ready.connect(on_scene_ready)
 
 
-func on_scene_live(scene: NetwSceneHandle) -> void:
-	if scene.label != &"Arena":
-		return
-	game = scene.root.get_node(^"game")
+func on_scene_ready(arena: NetwScene) -> void:
+	game = arena.root.get_node(^"game")
+	arena.root.tree_exited.connect(on_arena_closed)
 	set_process(true)
 
 
-func on_session_ended() -> void:
+func on_arena_closed() -> void:
 	set_process(false)
 	text = ""
 	countdown.text = ""

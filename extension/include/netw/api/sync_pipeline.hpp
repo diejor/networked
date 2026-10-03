@@ -29,6 +29,7 @@ class SyncPipeline {
 
 private:
     godot::ObjectID core_id;
+    bool hears_entity_live = false;
     godot::ObjectID api_id;
     NetwSyncModel *sync_model = nullptr;
     ReplicationSend row_sender;

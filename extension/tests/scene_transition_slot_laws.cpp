@@ -1,5 +1,6 @@
 #include "support/netw_test.h"
 
+#include "netw/api/scene.hpp"
 #include "netw/scene_core.hpp"
 
 namespace TestSceneTransitionSlotLaws {
@@ -7,6 +8,7 @@ namespace TestSceneTransitionSlotLaws {
 using namespace godot;
 using netw::NetwPromise;
 using netw::NetwSceneCore;
+using netw::NetwScene;
 
 Array two_sources() {
     Array out;
@@ -45,7 +47,7 @@ TEST_CASE(
     const Ref<NetwSceneCore> core = armed(landed);
 
     CHECK_FALSE(core->transition_open());
-    core->transition_land();
+    core->transition_land(Ref<NetwScene>());
     CHECK(landed->get_is_completed());
 
     Ref<NetwPromise> refused;
@@ -98,17 +100,21 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Scene][Hosted] ST4 a landing answers once and drops the "
-    "record it read, target, sources and arrivals together"
+    "[Networked][Scene][Hosted] ST4 a landing answers once with the scene it "
+    "landed in and drops the record it read, target, sources and arrivals "
+    "together"
 ) {
     Ref<NetwPromise> promise;
     promise.instantiate();
     const Ref<NetwSceneCore> core = armed(promise);
+    Ref<NetwScene> destination;
+    destination.instantiate();
 
-    core->transition_land();
+    core->transition_land(destination);
 
     CHECK(promise->get_is_completed());
     NETW_CHECK_EQ(promise->get_code(), int(OK));
+    CHECK(Ref<NetwScene>(promise->get_result()) == destination);
     NETW_CHECK_EQ(int(core->transition_target().get_type()), int(Variant::NIL));
     NETW_CHECK_EQ(int(core->transition_sources().size()), 0);
     NETW_CHECK_EQ(int(core->transition_arrivals().size()), 0);

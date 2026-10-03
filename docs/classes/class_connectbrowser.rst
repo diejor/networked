@@ -19,13 +19,13 @@ A ready-made server browser, with a server list, Add, Host, Refresh and Join.
 Description
 -----------
 
-Add this scene under a :ref:`MultiplayerTree<class_MultiplayerTree>` and players can browse, host and join servers with no extra code. It uses :ref:`Netw.connection()<class_Netw_method_connection>` of its ancestors, or the :ref:`NetwConnectHandle<class_NetwConnectHandle>` passed to :ref:`bind()<class_ConnectBrowser_method_bind>`.
+Add this scene under a :ref:`MultiplayerTree<class_MultiplayerTree>` and players can browse, host and join servers with no extra code. It uses :ref:`NetwSession.connection<class_NetwSession_property_connection>` of its ancestors, or the :ref:`NetwConnection<class_NetwConnection>` passed to :ref:`bind()<class_ConnectBrowser_method_bind>`.
 
 ::
 
-    browser.bind(Netw.connection(other_node))
+    browser.bind(Netw.session(other_node).connection)
 
-\ Host and Join create a peer with :ref:`NetwConnectHandle.create_peer()<class_NetwConnectHandle_method_create_peer>`, call :ref:`Netw.prepare_join()<class_Netw_method_prepare_join>` with the form's values, and assign the peer. Closing the browser after that does not disconnect.  Saved servers are stored in :ref:`server_list_path<class_ConnectBrowser_property_server_list_path>`. Only those can be edited or removed here.
+\ Host and Join create a peer with :ref:`NetwConnection.create_peer()<class_NetwConnection_method_create_peer>`, call :ref:`Netw.prepare_join()<class_Netw_method_prepare_join>` with the form's values, and assign the peer. Closing the browser after that does not disconnect.  Saved servers are stored in :ref:`server_list_path<class_ConnectBrowser_property_server_list_path>`. Only those can be edited or removed here.
 
 .. rst-class:: classref-reftable-group
 
@@ -56,7 +56,7 @@ Methods
    :widths: auto
 
    +------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | |void|           | :ref:`bind<class_ConnectBrowser_method_bind>`\ (\ handle\: :ref:`NetwConnectHandle<class_NetwConnectHandle>`\ )                                            |
+   | |void|           | :ref:`bind<class_ConnectBrowser_method_bind>`\ (\ handle\: :ref:`NetwConnection<class_NetwConnection>`\ )                                                  |
    +------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | :godot:`String`  | :ref:`url_room<class_ConnectBrowser_method_url_room>`\ (\ )                                                                                                |
    +------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------+
@@ -176,7 +176,7 @@ Method Descriptions
 
 .. rst-class:: classref-method
 
-|void| **bind**\ (\ handle\: :ref:`NetwConnectHandle<class_NetwConnectHandle>`\ ) :ref:`🔗<class_ConnectBrowser_method_bind>`
+|void| **bind**\ (\ handle\: :ref:`NetwConnection<class_NetwConnection>`\ ) :ref:`🔗<class_ConnectBrowser_method_bind>`
 
 .. container:: contribute
 

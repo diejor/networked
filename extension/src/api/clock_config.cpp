@@ -93,7 +93,7 @@ void NetwClockConfig::_bind_methods() {
             PROPERTY_HINT_ENUM,
             "Snap,Stretch",
             PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_CLASS_IS_ENUM,
-            "NetwMultiplayer.SyncMode"
+            "NetwClock.SyncMode"
         ),
         "set_sync_mode",
         "get_sync_mode"
@@ -259,7 +259,7 @@ void NetwClockConfig::_bind_methods() {
             PROPERTY_HINT_ENUM,
             "Warn,Disconnect,Signal",
             PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_CLASS_IS_ENUM,
-            "NetwMultiplayer.MismatchAction"
+            "NetwClock.MismatchAction"
         ),
         "set_tickrate_mismatch_action",
         "get_tickrate_mismatch_action"
@@ -296,7 +296,7 @@ Ref<NetwClockConfig> NetwClockConfig::physics_interpolation(bool p_value) {
 }
 
 Ref<NetwClockConfig> NetwClockConfig::sync(
-    enums::NetwMultiplayer::SyncMode p_value
+    enums::NetwClock::SyncMode p_value
 ) {
     set_sync_mode(p_value);
     return Ref<NetwClockConfig>(this);

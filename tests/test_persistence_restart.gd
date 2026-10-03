@@ -57,7 +57,8 @@ func test_a_record_and_a_table_snapshot_survive_a_process_restart() -> void:
 	assert_bool(read.found).is_true()
 	assert_int(read.values[&"gold"]).is_equal(PersistenceRestartRows.GOLD)
 
-	var mobs := Netw.table(holder, &"restart_mobs")
+	var session: NetwSession = Netw.session(holder)
+	var mobs := session.table(&"restart_mobs")
 	var loaded: Dictionary = await mobs.load(
 		db,
 		PersistenceRestartRows.FOREST,

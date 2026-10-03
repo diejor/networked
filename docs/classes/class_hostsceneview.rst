@@ -19,7 +19,7 @@ Displays the scene of the host's own player.
 Description
 -----------
 
-A host creates one by itself when its player's scene uses :ref:`NetwMultiplayer.SCENE_ISOLATION_OWN_WORLD<class_NetwMultiplayer_constant_SCENE_ISOLATION_OWN_WORLD>`, since that scene is in a :godot:`SubViewport`. :ref:`NetwEntity.view_activated<class_NetwEntity_signal_view_activated>` is emitted when the displayed scene changes.
+A host creates one by itself when its player's scene uses :ref:`NetwScene.SCENE_ISOLATION_OWN_WORLD<class_NetwScene_constant_SCENE_ISOLATION_OWN_WORLD>`, since that scene is in a :godot:`SubViewport`. :ref:`NetwEntity.view_activated<class_NetwEntity_signal_view_activated>` is emitted when the displayed scene changes.
 
 ::
 

@@ -1,5 +1,8 @@
 #include "support/netw_test.h"
 
+#include "godot/scene_tree.hpp"
+#include "godot/spatial_node.hpp"
+#include "netw/api/entity.hpp"
 #include "netw/api/interest_layer.hpp"
 #include "netw/api/netw_multiplayer.hpp"
 
@@ -159,24 +162,6 @@ TEST_CASE(
     CHECK(sight.is_valid());
     NETW_CHECK_EQ(int(session->interest_layers().size()), 2);
 
-    int anchored = 0;
-#if defined(NETW_MODULE)
-    List<Object::Connection> wired;
-    session->get_signal_connection_list(StringName("session_ended"), &wired);
-    for (const Object::Connection &row : wired) {
-        anchored += row.callable.get_object() == session.ptr() ? 1 : 0;
-    }
-#else
-    const Array wired
-        = session->get_signal_connection_list(StringName("session_ended"));
-    for (int at = 0; at < wired.size(); ++at) {
-        const Dictionary row = wired[at];
-        const Callable listener = row[StringName("callable")];
-        anchored += listener.get_object() == session.ptr() ? 1 : 0;
-    }
-#endif
-    NETW_CHECK_EQ(int(anchored > 0), 1);
-
     session->interest_clear_session();
 
     NETW_CHECK_EQ(int(session->interest_layers().size()), 0);
@@ -186,6 +171,46 @@ TEST_CASE(
     );
 
     session->embed_dispose();
+}
+
+TEST_CASE(
+    "[Networked][Session][Hosted][SceneTree] L9 the flat removal takes an "
+    "entity out of a layer through the same record the typed layer uses, "
+    "and a client is refused"
+) {
+    Ref<NetwMultiplayer> host = make_session();
+    host->session_set_role(NetwMultiplayer::ROLE_LISTEN_SERVER);
+    const RID layer = host->interest_layer_create(StringName("sight"));
+    Node3D *body = memnew(Node3D);
+    netw::gd::scene_root()->add_child(body);
+    const Ref<netw::NetwEntity> wrapper = netw::NetwEntity::ensure(body);
+    const RID entity = host->entity_of(body);
+
+    NETW_CHECK_EQ(host->interest_layer_add_entity(layer, entity), OK);
+    CHECK(host->layer_record(layer)->has_entity(wrapper));
+    NETW_CHECK_EQ(host->interest_layer_remove_entity(layer, entity), OK);
+    CHECK_FALSE(host->layer_record(layer)->has_entity(wrapper));
+    NETW_CHECK_EQ(host->interest_layer_remove_entity(layer, entity), OK);
+    NETW_CHECK_EQ(
+        host->interest_layer_remove_entity(RID(), entity),
+        ERR_DOES_NOT_EXIST
+    );
+
+    Ref<NetwMultiplayer> client = make_session();
+    client->session_set_role(NetwMultiplayer::ROLE_CLIENT);
+    const RID seen = client->interest_layer_create(StringName("sight"));
+    Node3D *copy = memnew(Node3D);
+    netw::gd::scene_root()->add_child(copy);
+    netw::NetwEntity::ensure(copy);
+    NETW_CHECK_EQ(
+        client->interest_layer_remove_entity(seen, client->entity_of(copy)),
+        ERR_UNAUTHORIZED
+    );
+
+    host->clear_session_state();
+    client->clear_session_state();
+    body->queue_free();
+    copy->queue_free();
 }
 
 } // namespace TestNetwSessionLayer

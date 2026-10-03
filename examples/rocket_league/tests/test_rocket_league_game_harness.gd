@@ -51,7 +51,7 @@ func test_every_peer_holds_the_other_peers_car() -> void:
 	var mario_on_client := await client.await_player(&"mario", 2.0)
 	assert_that(client.local_player).is_equal(own)
 	assert_int(own.entity.prediction.archetype).is_equal(
-		NetwPredict.ARCHETYPE_SOLVER_BODY,
+		NetwPrediction.ARCHETYPE_SOLVER_BODY,
 	)
 
 	await await_kickoff(own)
@@ -143,21 +143,14 @@ func test_the_ball_holds_one_route_on_every_peer_and_keeps_its_own_body() -> voi
 	quiet_ai(client)
 	await game.sync_ticks(10)
 
-	var host_route: int = host_ball.entity.route
-	assert_int(host_route).override_failure_message(
-		"the ball is an entity of its own, so the host routes it",
-	).is_greater(0)
-	assert_int(client_ball.entity.route).override_failure_message(
-		"the client holds the ball under the route the host published, "
-		+ "and read %d against the host's %d"
-		% [client_ball.entity.route, host_route],
-	).is_equal(host_route)
+	assert_str(String(host_ball.entity.name)).is_equal("ball")
+	assert_str(String(client_ball.entity.name)).is_equal("ball")
 
 	assert_int(host_ball.entity.prediction.archetype).override_failure_message(
 		"the ball keeps its own prediction body on every peer",
-	).is_equal(NetwPredict.ARCHETYPE_SOLVER_BODY)
+	).is_equal(NetwPrediction.ARCHETYPE_SOLVER_BODY)
 	assert_int(client_ball.entity.prediction.archetype).is_equal(
-		NetwPredict.ARCHETYPE_SOLVER_BODY,
+		NetwPrediction.ARCHETYPE_SOLVER_BODY,
 	)
 	assert_that(client_ball.entity.scene.root).override_failure_message(
 		"the client's ball answers the arena its route was published under",
@@ -214,8 +207,8 @@ func test_a_clean_client_drive_opens_no_correction() -> void:
 func test_the_lobby_lists_every_waiting_player_before_the_match_opens() -> void:
 	var host := await game.add_host("mario", false)
 	var client := await game.add_client("luigi", false)
-	await host.await_scene(&"Lobby", 2.0)
-	await client.await_scene(&"Lobby", 2.0)
+	await await_lobby(host)
+	await await_lobby(client)
 	await game.sync_ticks(4)
 
 	var roster := in_lobby(host).member_list
@@ -226,10 +219,13 @@ func test_the_lobby_lists_every_waiting_player_before_the_match_opens() -> void:
 		"only the host starts the match",
 	).is_false()
 
-	in_lobby(host).on_start_pressed()
+	in_lobby(host).start_btn.pressed.emit()
 	await host.await_scene(&"Arena", 2.0)
 	await client.await_scene(&"Arena", 2.0)
 	assert_that(await client.await_player(&"luigi", 2.0)).is_not_null()
+	assert_bool(in_lobby(client).visible).override_failure_message(
+		"the lobby hides once the match is live",
+	).is_false()
 
 
 func test_a_clients_ball_responds_in_the_frame_its_car_touches_it() -> void:
@@ -247,7 +243,7 @@ func test_a_clients_ball_responds_in_the_frame_its_car_touches_it() -> void:
 	await game.sync_ticks(4)
 	assert_int(client_ball.entity.simulation.mode).override_failure_message(
 		"the client's car selects the ball, so the client runs it",
-	).is_equal(NetwSimulationHandle.MODE_ACTIVE)
+	).is_equal(NetwSimulation.MODE_ACTIVE)
 
 	var ahead: Vector3 = pose_of(own).origin + pose_of(own).basis.z * 5.0
 	ahead.y = RocketBall.STARTING_POSITION.y
@@ -300,7 +296,7 @@ func test_a_clients_hit_on_a_bouncing_ball_takes_effect_at_once() -> void:
 	await game.sync_ticks(4)
 	assert_int(client_ball.entity.simulation.mode).override_failure_message(
 		"the client's car selects the ball, so the client runs it",
-	).is_equal(NetwSimulationHandle.MODE_ACTIVE)
+	).is_equal(NetwSimulation.MODE_ACTIVE)
 
 	var ahead: Vector3 = pose_of(own).origin + pose_of(own).basis.z * 5.0
 	ahead.y = RocketBall.STARTING_POSITION.y
@@ -399,16 +395,21 @@ func place(ball: RocketBall, at: Vector3) -> void:
 
 
 func begin_match(host: NetwSceneRunner) -> void:
-	await host.await_scene(&"Lobby", 2.0)
-	in_lobby(host).on_start_pressed()
+	await await_lobby(host)
+	in_lobby(host).start_btn.pressed.emit()
 
 
 func in_lobby(peer: NetwSceneRunner) -> InLobby:
-	return Netw.scene(peer.tree, &"Lobby").root.find_child(
-		"InLobby",
-		true,
-		false,
-	) as InLobby
+	return peer.scene().find_child("InLobby", true, false) as InLobby
+
+
+func await_lobby(peer: NetwSceneRunner) -> InLobby:
+	var lobby := in_lobby(peer)
+	for _tick in 120:
+		if lobby.visible:
+			break
+		await game.sync_ticks(1)
+	return lobby
 
 
 func quiet_ai(peer: NetwSceneRunner) -> void:
@@ -419,14 +420,14 @@ func quiet_ai(peer: NetwSceneRunner) -> void:
 
 func await_kickoff(car: RocketCar) -> void:
 	for _tick in 400:
-		var tick: int = Netw.clock(car).tick
+		var tick: int = car.session.clock.tick
 		if car.game.kickoff_tick > 0 and tick >= car.game.kickoff_tick:
 			return
 		await game.sync_ticks(1)
 
 
 func arena_level(peer: NetwSceneRunner) -> Node:
-	return Netw.scene(peer.tree, &"Arena").root
+	return peer.session.find_scene(&"Arena").root
 
 
 func arena_ball(peer: NetwSceneRunner) -> RocketBall:

@@ -6,7 +6,7 @@
 	<description>
 		Create one with [method of] in an override of [method NetwMultiplayer._predict_drive]. A frame with no new input repeats the last one.
 		[codeblock]
-		var fold := NetwPredictFold.of(tick, true, NetwPredict.DRIVE_KIND_FRESH)
+		var fold := NetwPredictFold.of(tick, true, NetwPrediction.DRIVE_KIND_FRESH)
 		[/codeblock]
 	</description>
 	<tutorials>
@@ -19,7 +19,7 @@
 			</description>
 		</method>
 		<method name="kind" qualifiers="const">
-			<return type="int" enum="NetwPredict.DriveKind" />
+			<return type="int" enum="NetwPrediction.DriveKind" />
 			<description>
 				Which input was used.
 			</description>
@@ -34,9 +34,9 @@
 			<return type="NetwPredictFold" />
 			<param index="0" name="label" type="int" />
 			<param index="1" name="fresh" type="bool" />
-			<param index="2" name="kind" type="int" enum="NetwPredict.DriveKind" />
+			<param index="2" name="kind" type="int" enum="NetwPrediction.DriveKind" />
 			<description>
-				Creates a [NetwPredictFold]. [param kind] must be a valid [enum NetwPredict.DriveKind].
+				Creates a [NetwPredictFold]. [param kind] must be a valid [enum NetwPrediction.DriveKind].
 			</description>
 		</method>
 	</methods>

@@ -8,7 +8,7 @@
 #include "godot/templates.hpp"
 #include "godot/variant.hpp"
 #include "netw/api/promise.hpp"
-#include "netw/api/scene_handle.hpp"
+#include "netw/api/scene.hpp"
 
 namespace netw {
 
@@ -42,6 +42,7 @@ public:
     bool get_is_active() const;
     godot::StringName get_username() const;
     godot::TypedArray<NetwEntity> get_bodies() const;
+    godot::Ref<NetwScene> get_scene() const;
 };
 
 } // namespace netw

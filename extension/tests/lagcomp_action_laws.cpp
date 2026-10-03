@@ -8,7 +8,7 @@
 
 #include "godot/variant.hpp"
 #include "netw/api/action.hpp"
-#include "netw/api/prediction_handle.hpp"
+#include "netw/api/prediction.hpp"
 #include "netw/lagcomp_core.hpp"
 #include "netw/predict/engine.hpp"
 
@@ -103,7 +103,7 @@ struct ActionRig {
         );
     }
 
-    netw::NetwPredictionHandle *authority_handle() const {
+    netw::NetwPrediction *authority_handle() const {
         return rig.prediction_handle(StringName("P"));
     }
 
@@ -271,8 +271,8 @@ TEST_CASE(
     fixture.gate_deadline(2);
     const int64_t fire_tick = fixture.authority_tick() + 3;
     const CallLog log;
-    fixture.rig.server()->connect(
-        "lagcomp_action_gate_fallback",
+    fixture.rig.server()->observe(
+        netw::NetwMultiplayer::LAGCOMP_ACTION_GATE_FALLBACK,
         log.callable(StringName("fell_back"))
     );
 
@@ -297,7 +297,7 @@ TEST_CASE(
     fixture.gate_deadline(12);
     fixture.uplink_delay(60);
 
-    netw::NetwPredictionHandle *handle = fixture.authority_handle();
+    netw::NetwPrediction *handle = fixture.authority_handle();
     REQUIRE(handle != nullptr);
     netw::NetwPredictionEngine *const pool = fixture.rig.prediction_pool();
     const int64_t slot = fixture.rig.prediction_slot(StringName("P"));

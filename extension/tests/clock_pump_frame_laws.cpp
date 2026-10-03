@@ -131,8 +131,8 @@ class ClockPumpScenario final : public netw_test::FrameScenario {
             host_branch = mount("ClockPumpHost", host);
             declare_clock(host_branch);
             host->config_settle();
-            host->connect(
-                StringName("clock_pong_received"),
+            host->observe(
+                netw::NetwMultiplayer::CLOCK_PONG_RECEIVED,
                 callable_mp_static(&count_host_pong)
             );
             host->session_prepare_join(StringName("host"), Array());
@@ -162,8 +162,8 @@ class ClockPumpScenario final : public netw_test::FrameScenario {
         client_branch = mount("ClockPumpClient", client);
         declare_clock(client_branch);
         client->config_settle();
-        client->connect(
-            StringName("clock_pong_received"),
+        client->observe(
+            netw::NetwMultiplayer::CLOCK_PONG_RECEIVED,
             callable_mp_static(&count_client_pong)
         );
         client->session_prepare_join(StringName("joiner"), Array());

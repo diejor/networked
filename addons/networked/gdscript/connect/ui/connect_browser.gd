@@ -2,12 +2,12 @@
 ## Join.
 ##
 ## Add this scene under a [MultiplayerTree] and players can browse, host and
-## join servers with no extra code. It uses [method Netw.connection] of its
-## ancestors, or the [NetwConnectHandle] passed to [method bind].
+## join servers with no extra code. It uses [member NetwSession.connection] of
+## its ancestors, or the [NetwConnection] passed to [method bind].
 ## [codeblock]
-## browser.bind(Netw.connection(other_node))
+## browser.bind(Netw.session(other_node).connection)
 ## [/codeblock]
-## Host and Join create a peer with [method NetwConnectHandle.create_peer],
+## Host and Join create a peer with [method NetwConnection.create_peer],
 ## call [method Netw.prepare_join] with the form's values, and assign the
 ## peer. Closing the browser after that does not disconnect.
 ##
@@ -93,7 +93,7 @@ var _setup: int = 0
 var _assigned: MultiplayerPeer
 var _active_peer_class: StringName = &""
 
-var _bound_connection: NetwConnectHandle
+var _bound_connection: NetwConnection
 var _session_ready: bool = false
 
 @onready var _refresh_button: Button = %RefreshButton
@@ -118,9 +118,9 @@ var _session_ready: bool = false
 @onready var _room_code_edit: LineEdit = %RoomCodeEdit
 @onready var _room_copy_button: Button = %RoomCopyButton
 
-var _connection: NetwConnectHandle
+var _connection: NetwConnection
 var _api: NetwMultiplayer
-var _session: NetwSessionHandle
+var _session: NetwSession
 
 
 func _ready() -> void:
@@ -185,7 +185,7 @@ func _exit_tree() -> void:
 	_unbind_session_signals()
 
 
-func bind(handle: NetwConnectHandle) -> void:
+func bind(handle: NetwConnection) -> void:
 	_bound_connection = handle
 	if is_inside_tree():
 		_setup_session()
@@ -194,12 +194,12 @@ func bind(handle: NetwConnectHandle) -> void:
 func _setup_session() -> void:
 	if _session_ready:
 		return
+	_session = Netw.session(self)
 	if _bound_connection != null:
 		_connection = _bound_connection
-	else:
-		_connection = Netw.connection(self)
+	elif _session != null:
+		_connection = _session.connection
 	_api = Netw.of(self)
-	_session = Netw.session(self)
 	if _connection == null:
 		return
 	var configured: Dictionary = { }
@@ -243,10 +243,8 @@ func _bind_session_signals() -> void:
 		return
 	if not _session.entered.is_connected(_on_session_entered):
 		_session.entered.connect(_on_session_entered)
-	if not _session.ended.is_connected(_on_session_left):
-		_session.ended.connect(_on_session_left)
-	if not _session.disconnected.is_connected(_on_session_left):
-		_session.disconnected.connect(_on_session_left)
+	if not _session.exited.is_connected(_on_session_left):
+		_session.exited.connect(_on_session_left)
 
 
 func _unbind_session_signals() -> void:
@@ -261,10 +259,8 @@ func _unbind_session_signals() -> void:
 		return
 	if _session.entered.is_connected(_on_session_entered):
 		_session.entered.disconnect(_on_session_entered)
-	if _session.ended.is_connected(_on_session_left):
-		_session.ended.disconnect(_on_session_left)
-	if _session.disconnected.is_connected(_on_session_left):
-		_session.disconnected.disconnect(_on_session_left)
+	if _session.exited.is_connected(_on_session_left):
+		_session.exited.disconnect(_on_session_left)
 
 
 func _list_path() -> String:
@@ -353,7 +349,7 @@ func _forget_record(peer_class: StringName, address: String) -> void:
 
 func _begin_setup(
 		peer_class: StringName,
-		mode: NetwMultiplayer.TransportMode,
+		mode: NetwConnection.TransportMode,
 		address: String,
 		settings: Dictionary,
 		username: StringName,
@@ -365,7 +361,7 @@ func _begin_setup(
 	var mine := _setup
 	_show_connecting_overlay(
 		peer_class if mode ==
-		NetwMultiplayer.TRANSPORT_MODE_CLIENT else &"",
+		NetwConnection.TRANSPORT_MODE_CLIENT else &"",
 		address,
 	)
 	_ticket = _connection.create_peer(
@@ -485,7 +481,7 @@ func _transport_is_available(peer_class: StringName) -> bool:
 	if transport.is_empty():
 		return false
 	var caps := int(transport.get("capabilities", 0))
-	return (caps & NetwMultiplayer.TRANSPORT_AVAILABLE) != 0
+	return (caps & NetwConnection.TRANSPORT_AVAILABLE) != 0
 
 
 func _on_endpoint_added(peer_class: StringName, address: String) -> void:
@@ -770,7 +766,7 @@ func _on_host_submitted(
 		_session.set_server_info(info)
 	_begin_setup(
 		peer_class,
-		NetwMultiplayer.TRANSPORT_MODE_HOST,
+		NetwConnection.TRANSPORT_MODE_HOST,
 		"",
 		settings,
 		username,
@@ -818,7 +814,9 @@ func _on_session_entered() -> void:
 			hide()
 
 
-func _on_session_left() -> void:
+func _on_session_left(
+	_reason: NetwSession.ExitReason, _detail: String
+) -> void:
 	_hide_connecting_overlay()
 	_show_room("")
 	if hide_when_session_active:
@@ -955,7 +953,7 @@ func _join_with_preflight(
 		return
 	_begin_setup(
 		peer_class,
-		NetwMultiplayer.TRANSPORT_MODE_CLIENT,
+		NetwConnection.TRANSPORT_MODE_CLIENT,
 		address,
 		settings,
 		username,

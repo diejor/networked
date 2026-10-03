@@ -91,7 +91,7 @@ var gestures: Dictionary[String, Callable] = { }
 
 ## [code]() -> Dictionary[/code] of display id to prediction handle, the
 ## entities whose [member
-## NetwPredictionHandle.stats] the summary carries.
+## NetwPrediction.stats] the summary carries.
 var summary_handles: Callable
 
 ## Optional [code]() -> Dictionary[/code] merged into the summary's condition
@@ -358,13 +358,13 @@ func _condition_report() -> Dictionary:
 func _cadence() -> Dictionary:
 	return {
 		&"wall_seconds": api.clock_get_monitor(
-			NetwMultiplayer.CLOCK_MONITOR_WALL_SECONDS
+			NetwClock.CLOCK_MONITOR_WALL_SECONDS
 		),
 		&"physics_frames": int(api.clock_get_monitor(
-			NetwMultiplayer.CLOCK_MONITOR_PHYSICS_FRAMES
+			NetwClock.CLOCK_MONITOR_PHYSICS_FRAMES
 		)),
 		&"polls": int(api.clock_get_monitor(
-			NetwMultiplayer.CLOCK_MONITOR_POLLS
+			NetwClock.CLOCK_MONITOR_POLLS
 		)),
 	}
 
@@ -377,10 +377,10 @@ func _clock_report() -> Dictionary:
 		"synchronized": api.clock_is_synchronized(),
 		"behind": api.clock_get_simulation_behind_count(),
 		"rtt_avg": api.clock_get_monitor(
-			NetwMultiplayer.CLOCK_MONITOR_RTT_AVG
+			NetwClock.CLOCK_MONITOR_RTT_AVG
 		),
 		"rtt_jitter": api.clock_get_monitor(
-			NetwMultiplayer.CLOCK_MONITOR_RTT_JITTER
+			NetwClock.CLOCK_MONITOR_RTT_JITTER
 		),
 	}
 

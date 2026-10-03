@@ -13,7 +13,7 @@
 #include "godot/spatial_node.hpp"
 #include "godot/templates.hpp"
 #include "netw/api/context.hpp"
-#include "netw/api/display_handle.hpp"
+#include "netw/api/display.hpp"
 #include "netw/api/entity.hpp"
 #include "netw/api/interpolate.hpp"
 #include "netw/api/member_config.hpp"
@@ -29,7 +29,7 @@ namespace TestNetwDisplayAuthorshipLaws {
 
 using namespace godot;
 using netw::Netw;
-using netw::NetwDisplayHandle;
+using netw::NetwDisplay;
 using netw::NetwEntity;
 using netw::NetwInterpolate;
 using netw::NetwMultiplayer;

@@ -106,7 +106,7 @@ Names the :ref:`NetwDatabase<class_NetwDatabase>` this entity's record lives in,
 
 :ref:`NetwPersistenceConfig<class_NetwPersistenceConfig>` **interval**\ (\ seconds\: :godot:`float`\ ) :ref:`🔗<class_NetwPersistenceConfig_method_interval>`
 
-Saves the record every ``seconds`` when something changed. ``0.0`` saves only when you call :ref:`NetwPersistenceHandle.save()<class_NetwPersistenceHandle_method_save>`.
+Saves the record every ``seconds`` when something changed. ``0.0`` saves only when you call :ref:`NetwPersistence.save()<class_NetwPersistence_method_save>`.
 
 \ **Server Only.**
 
@@ -120,7 +120,7 @@ Saves the record every ``seconds`` when something changed. ``0.0`` saves only wh
 
 :ref:`NetwPersistenceConfig<class_NetwPersistenceConfig>` **load_on_spawn**\ (\ enabled\: :godot:`bool` = true\ ) :ref:`🔗<class_NetwPersistenceConfig_method_load_on_spawn>`
 
-Whether the server loads the stored record when the entity's node is ready. Clients do not receive the entity until the load succeeds or finds no record. Call :ref:`NetwPersistenceHandle.load()<class_NetwPersistenceHandle_method_load>` to retry a failed load.
+Whether the server loads the stored record when the entity's node is ready. Clients do not receive the entity until the load succeeds or finds no record. Call :ref:`NetwPersistence.load()<class_NetwPersistence_method_load>` to retry a failed load.
 
 .. rst-class:: classref-item-separator
 

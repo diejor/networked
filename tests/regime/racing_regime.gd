@@ -5,7 +5,7 @@ const TRAVEL_SAMPLE_SECONDS := 0.25
 
 var session: Node
 var api: NetwMultiplayer
-var session_handle: NetwSessionHandle
+var session_handle: NetwSession
 var regime: NetwRegimePeer
 var travel := 0.0
 var car_travel: Dictionary[String, float] = { }
@@ -70,7 +70,7 @@ func await_local_ready() -> bool:
 	if local_car() == null:
 		return false
 
-	var clock: NetwClockHandle = Netw.clock(session)
+	var clock: NetwClock = session_handle.clock
 	while not api.is_server() and not clock.is_synchronized \
 			and Time.get_ticks_msec() < deadline:
 		await session.get_tree().process_frame
@@ -112,7 +112,7 @@ func track_travel() -> void:
 
 func car_key(car: Vehicle) -> String:
 	var entity := NetwEntity.of(car)
-	return "car%d_%s" % [entity.controller, entity.entity_id] if entity else ""
+	return "car%d_%s" % [entity.controller, entity.name] if entity else ""
 
 
 func drive_laps(seconds: float) -> void:
@@ -176,7 +176,8 @@ func local_car() -> Vehicle:
 
 
 func race_level() -> Node:
-	var scene: NetwSceneHandle = session_handle.presented_scene
+	var here: NetwPlayer = session_handle.local_player
+	var scene: NetwScene = here.scene if here else null
 	return scene.root if scene else null
 
 

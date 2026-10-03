@@ -24,17 +24,17 @@ The server adds :ref:`entities<class_NetwInterestLayer_property_entities>` and :
 ::
 
     # server
-    var sight := Netw.of(self).interest_layer(&"sight")
+    var sight := Netw.session(self).interest_layer(&"sight")
     sight.add_entity(target_entity)
     sight.add_viewer(observer_peer_id)
 
     # client
-    var sight := Netw.of(self).interest_layer(&"sight")
-    sight.entity_visible.connect(func(entity):
-        add_marker(entity.owner)
+    var sight := Netw.session(self).interest_layer(&"sight")
+    sight.visibility_changed.connect(func(entity: NetwEntity, visible: bool):
+        marker_of(entity.owner).visible = visible
     )
 
-\ Changes apply at the end of the frame, or at :ref:`NetwMultiplayer.interest_flush_now()<class_NetwMultiplayer_method_interest_flush_now>`. On the server, use :ref:`interest_enter<class_NetwInterestLayer_signal_interest_enter>` and :ref:`interest_exit<class_NetwInterestLayer_signal_interest_exit>`. On a client, use :ref:`entity_visible<class_NetwInterestLayer_signal_entity_visible>` and :ref:`entity_hidden<class_NetwInterestLayer_signal_entity_hidden>`.
+\ Changes apply at the end of the frame, or at :ref:`NetwMultiplayer.interest_flush_now()<class_NetwMultiplayer_method_interest_flush_now>`. On the server, use :ref:`interest_entered<class_NetwInterestLayer_signal_interest_entered>` and :ref:`interest_exited<class_NetwInterestLayer_signal_interest_exited>`. On a client, use :ref:`visibility_changed<class_NetwInterestLayer_signal_visibility_changed>`.
 
 An entity inside a multiplayer scene is only visible to peers in that scene, whatever other layers say.
 
@@ -46,19 +46,23 @@ Properties
 .. table::
    :widths: auto
 
-   +----------------------------------------------------------------+----------------------------------------------------------------------------------------------+---------+
-   | :ref:`LeavePolicy<enum_NetwMultiplayer_LeavePolicy>`           | :ref:`default_leave_policy<class_NetwInterestLayer_property_default_leave_policy>`           | ``0``   |
-   +----------------------------------------------------------------+----------------------------------------------------------------------------------------------+---------+
-   | :ref:`PerceptionPolicy<enum_NetwMultiplayer_PerceptionPolicy>` | :ref:`default_perception_policy<class_NetwInterestLayer_property_default_perception_policy>` | ``0``   |
-   +----------------------------------------------------------------+----------------------------------------------------------------------------------------------+---------+
-   | :godot:`Dictionary`                                            | :ref:`entities<class_NetwInterestLayer_property_entities>`                                   | ``{}``  |
-   +----------------------------------------------------------------+----------------------------------------------------------------------------------------------+---------+
-   | :godot:`StringName`                                            | :ref:`layer_id<class_NetwInterestLayer_property_layer_id>`                                   | ``&""`` |
-   +----------------------------------------------------------------+----------------------------------------------------------------------------------------------+---------+
-   | :ref:`LayerPolicy<enum_NetwMultiplayer_LayerPolicy>`           | :ref:`policy<class_NetwInterestLayer_property_policy>`                                       | ``0``   |
-   +----------------------------------------------------------------+----------------------------------------------------------------------------------------------+---------+
-   | :godot:`Dictionary`                                            | :ref:`viewers<class_NetwInterestLayer_property_viewers>`                                     | ``{}``  |
-   +----------------------------------------------------------------+----------------------------------------------------------------------------------------------+---------+
+   +------------------------------------------------------------------+----------------------------------------------------------------------------------------------+----------------+
+   | :ref:`LeavePolicy<enum_NetwInterestLayer_LeavePolicy>`           | :ref:`default_leave_policy<class_NetwInterestLayer_property_default_leave_policy>`           | ``0``          |
+   +------------------------------------------------------------------+----------------------------------------------------------------------------------------------+----------------+
+   | :ref:`PerceptionPolicy<enum_NetwInterestLayer_PerceptionPolicy>` | :ref:`default_perception_policy<class_NetwInterestLayer_property_default_perception_policy>` | ``0``          |
+   +------------------------------------------------------------------+----------------------------------------------------------------------------------------------+----------------+
+   | :godot:`Callable`                                                | :ref:`driver<class_NetwInterestLayer_property_driver>`                                       | ``Callable()`` |
+   +------------------------------------------------------------------+----------------------------------------------------------------------------------------------+----------------+
+   | :godot:`Dictionary`                                              | :ref:`entities<class_NetwInterestLayer_property_entities>`                                   | ``{}``         |
+   +------------------------------------------------------------------+----------------------------------------------------------------------------------------------+----------------+
+   | :godot:`StringName`                                              | :ref:`layer_id<class_NetwInterestLayer_property_layer_id>`                                   | ``&""``        |
+   +------------------------------------------------------------------+----------------------------------------------------------------------------------------------+----------------+
+   | :godot:`Callable`                                                | :ref:`monitor<class_NetwInterestLayer_property_monitor>`                                     | ``Callable()`` |
+   +------------------------------------------------------------------+----------------------------------------------------------------------------------------------+----------------+
+   | :ref:`LayerPolicy<enum_NetwInterestLayer_LayerPolicy>`           | :ref:`policy<class_NetwInterestLayer_property_policy>`                                       | ``0``          |
+   +------------------------------------------------------------------+----------------------------------------------------------------------------------------------+----------------+
+   | :godot:`Dictionary`                                              | :ref:`viewers<class_NetwInterestLayer_property_viewers>`                                     | ``{}``         |
+   +------------------------------------------------------------------+----------------------------------------------------------------------------------------------+----------------+
 
 .. rst-class:: classref-reftable-group
 
@@ -95,7 +99,7 @@ Methods
    +---------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | :godot:`bool`       | :ref:`remove_viewer<class_NetwInterestLayer_method_remove_viewer>`\ (\ peer_id\: :godot:`int`\ )                                                                                            |
    +---------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`bool`       | :ref:`set_policy<class_NetwInterestLayer_method_set_policy>`\ (\ value\: :ref:`LayerPolicy<enum_NetwMultiplayer_LayerPolicy>`\ )                                                            |
+   | :godot:`bool`       | :ref:`set_policy<class_NetwInterestLayer_method_set_policy>`\ (\ value\: :ref:`LayerPolicy<enum_NetwInterestLayer_LayerPolicy>`\ )                                                          |
    +---------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | :godot:`bool`       | :ref:`verdict_for<class_NetwInterestLayer_method_verdict_for>`\ (\ peer_id\: :godot:`int`\ ) |const|                                                                                        |
    +---------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
@@ -123,18 +127,6 @@ Emitted when ``entity`` is added to the layer.
 
 ----
 
-.. _class_NetwInterestLayer_signal_entity_hidden:
-
-.. rst-class:: classref-signal
-
-**entity_hidden**\ (\ entity\: :ref:`NetwEntity<class_NetwEntity>`\ ) :ref:`🔗<class_NetwInterestLayer_signal_entity_hidden>`
-
-Emitted on a client when it stops seeing ``entity`` through this layer.
-
-.. rst-class:: classref-item-separator
-
-----
-
 .. _class_NetwInterestLayer_signal_entity_removed:
 
 .. rst-class:: classref-signal
@@ -147,23 +139,11 @@ Emitted when ``entity`` is removed from the layer.
 
 ----
 
-.. _class_NetwInterestLayer_signal_entity_visible:
+.. _class_NetwInterestLayer_signal_interest_entered:
 
 .. rst-class:: classref-signal
 
-**entity_visible**\ (\ entity\: :ref:`NetwEntity<class_NetwEntity>`\ ) :ref:`🔗<class_NetwInterestLayer_signal_entity_visible>`
-
-Emitted on a client when it starts seeing ``entity`` through this layer.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwInterestLayer_signal_interest_enter:
-
-.. rst-class:: classref-signal
-
-**interest_enter**\ (\ entity\: :ref:`NetwEntity<class_NetwEntity>`, peer_id\: :godot:`int`\ ) :ref:`🔗<class_NetwInterestLayer_signal_interest_enter>`
+**interest_entered**\ (\ entity\: :ref:`NetwEntity<class_NetwEntity>`, peer_id\: :godot:`int`\ ) :ref:`🔗<class_NetwInterestLayer_signal_interest_entered>`
 
 Emitted on the server when ``peer_id`` starts seeing ``entity`` through this layer.
 
@@ -171,11 +151,11 @@ Emitted on the server when ``peer_id`` starts seeing ``entity`` through this lay
 
 ----
 
-.. _class_NetwInterestLayer_signal_interest_exit:
+.. _class_NetwInterestLayer_signal_interest_exited:
 
 .. rst-class:: classref-signal
 
-**interest_exit**\ (\ entity\: :ref:`NetwEntity<class_NetwEntity>`, peer_id\: :godot:`int`\ ) :ref:`🔗<class_NetwInterestLayer_signal_interest_exit>`
+**interest_exited**\ (\ entity\: :ref:`NetwEntity<class_NetwEntity>`, peer_id\: :godot:`int`\ ) :ref:`🔗<class_NetwInterestLayer_signal_interest_exited>`
 
 Emitted on the server when ``peer_id`` stops seeing ``entity`` through this layer.
 
@@ -203,6 +183,117 @@ Emitted when ``peer_id`` is added to :ref:`viewers<class_NetwInterestLayer_prope
 
 Emitted when ``peer_id`` is removed from :ref:`viewers<class_NetwInterestLayer_property_viewers>`.
 
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NetwInterestLayer_signal_visibility_changed:
+
+.. rst-class:: classref-signal
+
+**visibility_changed**\ (\ entity\: :ref:`NetwEntity<class_NetwEntity>`, visible\: :godot:`bool`\ ) :ref:`🔗<class_NetwInterestLayer_signal_visibility_changed>`
+
+Emitted on a client when it starts or stops seeing ``entity`` through this layer. A hidden entity is not despawned, see :ref:`NetwEntity.hidden<class_NetwEntity_signal_hidden>`.
+
+.. rst-class:: classref-section-separator
+
+----
+
+.. rst-class:: classref-descriptions-group
+
+Enumerations
+------------
+
+.. _enum_NetwInterestLayer_LayerPolicy:
+
+.. rst-class:: classref-enumeration
+
+enum **LayerPolicy**: :ref:`🔗<enum_NetwInterestLayer_LayerPolicy>`
+
+.. _class_NetwInterestLayer_constant_LAYER_POLICY_HIDE_FROM_OUTSIDERS:
+
+.. rst-class:: classref-enumeration-constant
+
+:ref:`LayerPolicy<enum_NetwInterestLayer_LayerPolicy>` **LAYER_POLICY_HIDE_FROM_OUTSIDERS** = ``0``
+
+Only viewers of the layer see its entities, as for a team or a private room.
+
+.. _class_NetwInterestLayer_constant_LAYER_POLICY_HIDE_FROM_INSIDERS:
+
+.. rst-class:: classref-enumeration-constant
+
+:ref:`LayerPolicy<enum_NetwInterestLayer_LayerPolicy>` **LAYER_POLICY_HIDE_FROM_INSIDERS** = ``1``
+
+Only peers that are not viewers see its entities.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _enum_NetwInterestLayer_LeavePolicy:
+
+.. rst-class:: classref-enumeration
+
+enum **LeavePolicy**: :ref:`🔗<enum_NetwInterestLayer_LeavePolicy>`
+
+.. _class_NetwInterestLayer_constant_LEAVE_POLICY_HIDE:
+
+.. rst-class:: classref-enumeration-constant
+
+:ref:`LeavePolicy<enum_NetwInterestLayer_LeavePolicy>` **LEAVE_POLICY_HIDE** = ``0``
+
+Free the peer's copy. The entity becomes :ref:`NetwMultiplayer.ENTITY_STATE_ABSENT<class_NetwMultiplayer_constant_ENTITY_STATE_ABSENT>` there and can be shown again later.
+
+.. _class_NetwInterestLayer_constant_LEAVE_POLICY_RETAIN:
+
+.. rst-class:: classref-enumeration-constant
+
+:ref:`LeavePolicy<enum_NetwInterestLayer_LeavePolicy>` **LEAVE_POLICY_RETAIN** = ``1``
+
+Keep the peer's copy and stop updating it. Updates resume when it is visible again.
+
+.. _class_NetwInterestLayer_constant_LEAVE_POLICY_CUSTOM:
+
+.. rst-class:: classref-enumeration-constant
+
+:ref:`LeavePolicy<enum_NetwInterestLayer_LeavePolicy>` **LEAVE_POLICY_CUSTOM** = ``2``
+
+Call the custom callback given to :ref:`NetwMultiplayer.interest_on_leave_policy()<class_NetwMultiplayer_method_interest_on_leave_policy>`.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _enum_NetwInterestLayer_PerceptionPolicy:
+
+.. rst-class:: classref-enumeration
+
+enum **PerceptionPolicy**: :ref:`🔗<enum_NetwInterestLayer_PerceptionPolicy>`
+
+.. _class_NetwInterestLayer_constant_PERCEPTION_POLICY_HIDE:
+
+.. rst-class:: classref-enumeration-constant
+
+:ref:`PerceptionPolicy<enum_NetwInterestLayer_PerceptionPolicy>` **PERCEPTION_POLICY_HIDE** = ``0``
+
+Hide a copy kept by :ref:`LEAVE_POLICY_RETAIN<class_NetwInterestLayer_constant_LEAVE_POLICY_RETAIN>`.
+
+.. _class_NetwInterestLayer_constant_PERCEPTION_POLICY_SHOW:
+
+.. rst-class:: classref-enumeration-constant
+
+:ref:`PerceptionPolicy<enum_NetwInterestLayer_PerceptionPolicy>` **PERCEPTION_POLICY_SHOW** = ``1``
+
+Keep showing a copy kept by :ref:`LEAVE_POLICY_RETAIN<class_NetwInterestLayer_constant_LEAVE_POLICY_RETAIN>` where it was last seen.
+
+.. _class_NetwInterestLayer_constant_PERCEPTION_POLICY_CUSTOM:
+
+.. rst-class:: classref-enumeration-constant
+
+:ref:`PerceptionPolicy<enum_NetwInterestLayer_PerceptionPolicy>` **PERCEPTION_POLICY_CUSTOM** = ``2``
+
+Call the custom callback given to :ref:`NetwMultiplayer.interest_on_perception_policy()<class_NetwMultiplayer_method_interest_on_perception_policy>`.
+
 .. rst-class:: classref-section-separator
 
 ----
@@ -216,12 +307,12 @@ Property Descriptions
 
 .. rst-class:: classref-property
 
-:ref:`LeavePolicy<enum_NetwMultiplayer_LeavePolicy>` **default_leave_policy** = ``0`` :ref:`🔗<class_NetwInterestLayer_property_default_leave_policy>`
+:ref:`LeavePolicy<enum_NetwInterestLayer_LeavePolicy>` **default_leave_policy** = ``0`` :ref:`🔗<class_NetwInterestLayer_property_default_leave_policy>`
 
 .. rst-class:: classref-property-setget
 
-- |void| **set_default_leave_policy**\ (\ value\: :ref:`LeavePolicy<enum_NetwMultiplayer_LeavePolicy>`\ )
-- :ref:`LeavePolicy<enum_NetwMultiplayer_LeavePolicy>` **get_default_leave_policy**\ (\ )
+- |void| **set_default_leave_policy**\ (\ value\: :ref:`LeavePolicy<enum_NetwInterestLayer_LeavePolicy>`\ )
+- :ref:`LeavePolicy<enum_NetwInterestLayer_LeavePolicy>` **get_default_leave_policy**\ (\ )
 
 What happens to a peer's copy of an entity it stops seeing, unless the entity sets its own.
 
@@ -233,14 +324,38 @@ What happens to a peer's copy of an entity it stops seeing, unless the entity se
 
 .. rst-class:: classref-property
 
-:ref:`PerceptionPolicy<enum_NetwMultiplayer_PerceptionPolicy>` **default_perception_policy** = ``0`` :ref:`🔗<class_NetwInterestLayer_property_default_perception_policy>`
+:ref:`PerceptionPolicy<enum_NetwInterestLayer_PerceptionPolicy>` **default_perception_policy** = ``0`` :ref:`🔗<class_NetwInterestLayer_property_default_perception_policy>`
 
 .. rst-class:: classref-property-setget
 
-- |void| **set_default_perception_policy**\ (\ value\: :ref:`PerceptionPolicy<enum_NetwMultiplayer_PerceptionPolicy>`\ )
-- :ref:`PerceptionPolicy<enum_NetwMultiplayer_PerceptionPolicy>` **get_default_perception_policy**\ (\ )
+- |void| **set_default_perception_policy**\ (\ value\: :ref:`PerceptionPolicy<enum_NetwInterestLayer_PerceptionPolicy>`\ )
+- :ref:`PerceptionPolicy<enum_NetwInterestLayer_PerceptionPolicy>` **get_default_perception_policy**\ (\ )
 
 Whether a kept copy is still shown after the peer stops seeing it, unless the entity sets its own.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NetwInterestLayer_property_driver:
+
+.. rst-class:: classref-property
+
+:godot:`Callable` **driver** = ``Callable()`` :ref:`🔗<class_NetwInterestLayer_property_driver>`
+
+.. rst-class:: classref-property-setget
+
+- |void| **set_driver**\ (\ value\: :godot:`Callable`\ )
+- :godot:`Callable` **get_driver**\ (\ )
+
+Called on the server once per frame with this layer. It returns every entity that belongs in the layer.
+
+::
+
+    sight.driver = func(layer: NetwInterestLayer) -> Array[NetwEntity]:
+        return entities_near(beacon.position, 20.0)
+
+\ If the result holds anything that is not an entity of this session, the layer does not change that frame.
 
 .. rst-class:: classref-item-separator
 
@@ -279,16 +394,38 @@ The name of the layer.
 
 ----
 
+.. _class_NetwInterestLayer_property_monitor:
+
+.. rst-class:: classref-property
+
+:godot:`Callable` **monitor** = ``Callable()`` :ref:`🔗<class_NetwInterestLayer_property_monitor>`
+
+.. rst-class:: classref-property-setget
+
+- |void| **set_monitor**\ (\ value\: :godot:`Callable`\ )
+- :godot:`Callable` **get_monitor**\ (\ )
+
+Called when a peer starts or stops seeing an entity through this layer. On a client, the peer is always this one.
+
+::
+
+    sight.monitor = func(entity: NetwEntity, peer_id: int, visible: bool) -> void:
+        print(entity.owner.name, " ", peer_id, " ", visible)
+
+.. rst-class:: classref-item-separator
+
+----
+
 .. _class_NetwInterestLayer_property_policy:
 
 .. rst-class:: classref-property
 
-:ref:`LayerPolicy<enum_NetwMultiplayer_LayerPolicy>` **policy** = ``0`` :ref:`🔗<class_NetwInterestLayer_property_policy>`
+:ref:`LayerPolicy<enum_NetwInterestLayer_LayerPolicy>` **policy** = ``0`` :ref:`🔗<class_NetwInterestLayer_property_policy>`
 
 .. rst-class:: classref-property-setget
 
-- :godot:`bool` **set_policy**\ (\ value\: :ref:`LayerPolicy<enum_NetwMultiplayer_LayerPolicy>`\ )
-- :ref:`LayerPolicy<enum_NetwMultiplayer_LayerPolicy>` **get_policy**\ (\ )
+- :godot:`bool` **set_policy**\ (\ value\: :ref:`LayerPolicy<enum_NetwInterestLayer_LayerPolicy>`\ )
+- :ref:`LayerPolicy<enum_NetwInterestLayer_LayerPolicy>` **get_policy**\ (\ )
 
 Whether :ref:`viewers<class_NetwInterestLayer_property_viewers>` are the peers that see the entities, or the ones that do not.
 
@@ -349,7 +486,7 @@ Adds ``peer_id`` to :ref:`viewers<class_NetwInterestLayer_property_viewers>`. Re
 
 |void| **apply_server_transition**\ (\ entity\: :ref:`NetwEntity<class_NetwEntity>`, peer_id\: :godot:`int`, visible\: :godot:`bool`\ ) :ref:`🔗<class_NetwInterestLayer_method_apply_server_transition>`
 
-Emits :ref:`interest_enter<class_NetwInterestLayer_signal_interest_enter>` or :ref:`interest_exit<class_NetwInterestLayer_signal_interest_exit>`, then the entity's own signals and callbacks. The session calls it. Calling it yourself emits a change that did not happen.
+Emits :ref:`interest_entered<class_NetwInterestLayer_signal_interest_entered>` or :ref:`interest_exited<class_NetwInterestLayer_signal_interest_exited>`, then the entity's own signals and callbacks. The session calls it. Calling it yourself emits a change that did not happen.
 
 \ **Server Only.**
 
@@ -363,7 +500,7 @@ Emits :ref:`interest_enter<class_NetwInterestLayer_signal_interest_enter>` or :r
 
 |void| **client_admit**\ (\ entity\: :ref:`NetwEntity<class_NetwEntity>`\ ) :ref:`🔗<class_NetwInterestLayer_method_client_admit>`
 
-Marks ``entity`` as visible to this client and emits :ref:`entity_visible<class_NetwInterestLayer_signal_entity_visible>`. The session calls it.
+Marks ``entity`` as visible to this client and emits :ref:`visibility_changed<class_NetwInterestLayer_signal_visibility_changed>`. The session calls it.
 
 .. rst-class:: classref-item-separator
 
@@ -375,7 +512,7 @@ Marks ``entity`` as visible to this client and emits :ref:`entity_visible<class_
 
 |void| **client_revoke**\ (\ entity\: :ref:`NetwEntity<class_NetwEntity>`\ ) :ref:`🔗<class_NetwInterestLayer_method_client_revoke>`
 
-Marks ``entity`` as no longer visible to this client and emits :ref:`entity_hidden<class_NetwInterestLayer_signal_entity_hidden>`. The session calls it.
+Marks ``entity`` as no longer visible to this client and emits :ref:`visibility_changed<class_NetwInterestLayer_signal_visibility_changed>`. The session calls it.
 
 .. rst-class:: classref-item-separator
 
@@ -387,7 +524,7 @@ Marks ``entity`` as no longer visible to this client and emits :ref:`entity_hidd
 
 |void| **client_untrack_entity**\ (\ entity\: :ref:`NetwEntity<class_NetwEntity>`\ ) :ref:`🔗<class_NetwInterestLayer_method_client_untrack_entity>`
 
-Removes ``entity`` on a client when it leaves the tree, emitting :ref:`entity_removed<class_NetwInterestLayer_signal_entity_removed>` and then :ref:`entity_hidden<class_NetwInterestLayer_signal_entity_hidden>`. The session calls it.
+Removes ``entity`` on a client when it leaves the tree, emitting :ref:`entity_removed<class_NetwInterestLayer_signal_entity_removed>` and then :ref:`visibility_changed<class_NetwInterestLayer_signal_visibility_changed>`. The session calls it.
 
 .. rst-class:: classref-item-separator
 
@@ -434,7 +571,7 @@ Returns ``true`` when ``entity`` is in the layer. Use :ref:`is_visible_to()<clas
 
 :godot:`bool` **has_viewer**\ (\ peer_id\: :godot:`int`\ ) |const| :ref:`🔗<class_NetwInterestLayer_method_has_viewer>`
 
-Returns ``true`` when ``peer_id`` is in :ref:`viewers<class_NetwInterestLayer_property_viewers>`. With :ref:`NetwMultiplayer.LAYER_POLICY_HIDE_FROM_INSIDERS<class_NetwMultiplayer_constant_LAYER_POLICY_HIDE_FROM_INSIDERS>`, viewers are the peers that cannot see.
+Returns ``true`` when ``peer_id`` is in :ref:`viewers<class_NetwInterestLayer_property_viewers>`. With :ref:`LAYER_POLICY_HIDE_FROM_INSIDERS<class_NetwInterestLayer_constant_LAYER_POLICY_HIDE_FROM_INSIDERS>`, viewers are the peers that cannot see.
 
 .. rst-class:: classref-item-separator
 
@@ -502,7 +639,7 @@ Removes ``peer_id`` from :ref:`viewers<class_NetwInterestLayer_property_viewers>
 
 .. rst-class:: classref-method
 
-:godot:`bool` **set_policy**\ (\ value\: :ref:`LayerPolicy<enum_NetwMultiplayer_LayerPolicy>`\ ) :ref:`🔗<class_NetwInterestLayer_method_set_policy>`
+:godot:`bool` **set_policy**\ (\ value\: :ref:`LayerPolicy<enum_NetwInterestLayer_LayerPolicy>`\ ) :ref:`🔗<class_NetwInterestLayer_method_set_policy>`
 
 Sets :ref:`policy<class_NetwInterestLayer_property_policy>`. Returns ``false`` when it did not change.
 

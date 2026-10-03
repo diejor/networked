@@ -44,9 +44,9 @@ func _init() -> void:
 	entity.initial_controller = NetwEntity.INITIAL_REPRESENTED_PEER
 	entity.on_controller_disconnect = NetwEntity.DISCONNECT_DESPAWN
 	entity.transfer = NetwEntity.TRANSFER_IMMEDIATE
-	entity.simulation.replicas = NetwSimulationHandle.REPLICAS_ACTIVE
+	entity.simulation.replicas = NetwSimulation.REPLICAS_ACTIVE
 	entity.simulation.claim_on_contact = true
-	entity.interpolation.visual_root = ^"Visual"
+	entity.display.visual_root = ^"Visual"
 	Netw.configure_property(self, &"position").broadcast().on_spawn() \
 			.interpolate(NetwInterpolate.new().lerp())
 	Netw.configure_property(self, &"quaternion").broadcast().on_spawn()

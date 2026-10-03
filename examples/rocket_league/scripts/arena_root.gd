@@ -4,7 +4,7 @@ const CAR_SCENE := preload("res://examples/rocket_league/scenes/player_rb.tscn")
 
 
 func _init() -> void:
-	Netw.configure_multiplayer_scene(self).labeled(&"Arena")
+	Netw.configure_scene(self).labeled(&"Arena")
 	Netw.configure_spawn(spawn_car)
 
 

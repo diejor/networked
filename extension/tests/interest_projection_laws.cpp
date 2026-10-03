@@ -2,7 +2,7 @@
 
 #include "godot/node.hpp"
 #include "netw/api/entity.hpp"
-#include "netw/api/interest_handle.hpp"
+#include "netw/api/interest.hpp"
 #include "netw/api/interest_layer.hpp"
 #include "netw/api/netw_multiplayer.hpp"
 #include "support/entity_decl.h"
@@ -25,7 +25,7 @@ Array named_ids(const TypedArray<Object> &p_entities) {
         const Ref<NetwEntity> row
             = Ref<NetwEntity>(Object::cast_to<NetwEntity>(p_entities[at]));
         if (row.is_valid()) {
-            out.push_back(row->get_entity_id());
+            out.push_back(row->get_name());
         }
     }
     return out;
@@ -109,9 +109,9 @@ TEST_CASE(
     REQUIRE(core->entity_get_view(mine).is_valid());
     REQUIRE(core->entity_get_view(theirs).is_valid());
     REQUIRE(core->entity_get_view(elsewhere).is_valid());
-    core->entity_get_view(mine)->set_entity_id(StringName("own_car"));
-    core->entity_get_view(theirs)->set_entity_id(StringName("other_car"));
-    core->entity_get_view(elsewhere)->set_entity_id(StringName("spectator"));
+    core->entity_get_view(mine)->set_name(StringName("own_car"));
+    core->entity_get_view(theirs)->set_name(StringName("other_car"));
+    core->entity_get_view(elsewhere)->set_name(StringName("spectator"));
     core->interest_layer(StringName("arena"))
         ->add_entity(core->entity_get_view(mine));
     core->interest_layer(StringName("arena"))
@@ -132,9 +132,9 @@ TEST_CASE(
     REQUIRE(local_mine.is_valid());
     REQUIRE(local_theirs.is_valid());
     REQUIRE(local_elsewhere.is_valid());
-    local_mine->set_entity_id(StringName("own_car"));
-    local_theirs->set_entity_id(StringName("other_car"));
-    local_elsewhere->set_entity_id(StringName("spectator"));
+    local_mine->set_name(StringName("own_car"));
+    local_theirs->set_name(StringName("other_car"));
+    local_elsewhere->set_name(StringName("spectator"));
     local_mine->get_interest()->join(StringName("arena"));
     local_theirs->get_interest()->join(StringName("arena"));
     local_elsewhere->get_interest()->join(StringName("lobby"));
@@ -154,7 +154,7 @@ TEST_CASE(
     }
     CHECK(StringName(derived[0]) == StringName("other_car"));
 
-    const TypedArray<Object> live = owner->liveness_get_entities();
+    const TypedArray<NetwEntity> live = owner->liveness_get_entities();
     CHECK(live.has(Variant(local_theirs)));
 }
 

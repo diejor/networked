@@ -101,6 +101,9 @@ private:
     Park park;
     SpawnerCompat *spawner_compat = nullptr;
     SyncCompat *sync_compat = nullptr;
+    bool retrying_scene_parks = false;
+    bool applying_action_gate = false;
+    bool revealing_action_gates = false;
 
     godot::Callable encode_prop_val_seam;
     godot::Callable encode_derived_seam;
@@ -327,6 +330,16 @@ private:
 
 public:
     double park_timeout_seconds = 5.0;
+
+    bool retries_scene_parks() const {
+        return retrying_scene_parks;
+    }
+    bool applies_action_gate() const {
+        return applying_action_gate;
+    }
+    bool reveals_action_gates() const {
+        return revealing_action_gates;
+    }
     void set_park_timeout_seconds(double p_seconds) {
         park_timeout_seconds = p_seconds;
     }

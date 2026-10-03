@@ -72,8 +72,8 @@ public sealed class NetwDespawnOpts : NetwRefCounted
     /// <summary>
     /// When <c>true</c>, the entity's row is saved after the node leaves the
     /// tree. The despawn does not wait for the save, await
-    /// <see cref="NetwPersistenceHandle.Save"/> before despawning if you need
-    /// it stored.
+    /// <see cref="NetwPersistence.Save"/> before despawning if you need it
+    /// stored.
     /// </summary>
     public bool FlushSave
     {

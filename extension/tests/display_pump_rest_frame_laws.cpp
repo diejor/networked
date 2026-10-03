@@ -31,7 +31,7 @@ func _init() -> void:
 	visual.name = &"Visual"
 	add_child(visual)
 	var e := Netw.configure_entity(self)
-	e.interpolation.visual_root = ^"Visual"
+	e.display.visual_root = ^"Visual"
 	Netw.configure_property(self, &"position").broadcast() \
 			.interpolate(NetwInterpolate.new().lerp().smooth(0.0))
 )";
@@ -49,7 +49,7 @@ func _init() -> void:
 	visual.name = &"Visual"
 	add_child(visual)
 	var e := Netw.configure_entity(self)
-	e.interpolation.visual_root = ^"Visual"
+	e.display.visual_root = ^"Visual"
 	Netw.configure_property(self, &"position").broadcast() \
 			.interpolate(NetwInterpolate.new().lerp().smooth(0.0))
 )";

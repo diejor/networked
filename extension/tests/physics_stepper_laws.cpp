@@ -11,8 +11,8 @@
 #include "godot/scene_tree.hpp"
 #include "netw/api/entity.hpp"
 #include "netw/api/netw_multiplayer.hpp"
-#include "netw/api/predict.hpp"
-#include "netw/api/prediction_handle.hpp"
+#include "netw/api/prediction.hpp"
+#include "netw/api/session.hpp"
 #include "netw/predict/engine.hpp"
 
 #if defined(NETW_TIER_HOSTED)
@@ -23,9 +23,8 @@ using namespace netw_test;
 using godot::Ref;
 using netw::NetwEntity;
 using netw::NetwMultiplayer;
-using netw::NetwPredict;
 using netw::NetwPredictionEngine;
-using netw::NetwPredictionHandle;
+using netw::NetwPrediction;
 
 EntityDecl island_player(const char *p_name) {
     return EntityDecl()
@@ -115,7 +114,7 @@ SteppedSpace step_one_space(NetwMultiplayer *p_core, int p_members) {
     SteppedSpace out;
     NetwPredictionEngine *const pool = p_core->get_prediction_engine();
     REQUIRE(pool != nullptr);
-    const godot::TypedArray<godot::Object> seated
+    const godot::TypedArray<NetwEntity> seated
         = p_core->predict_stepped_entities();
     for (int at = 0; at < seated.size(); ++at) {
         const Ref<NetwEntity> entity = seated[at];
@@ -139,7 +138,7 @@ SteppedSpace step_one_space(NetwMultiplayer *p_core, int p_members) {
             continue;
         }
         entity->get_simulation()->set_schedule(
-            netw::NetwSimulationHandle::SCHEDULE_STEPPED
+            netw::NetwSimulation::SCHEDULE_STEPPED
         );
         out.members.push_back(entity);
         if (int(out.members.size()) >= p_members) {
@@ -153,7 +152,7 @@ SteppedOwner step_the_island(NetwMultiplayer *p_core) {
     SteppedOwner out;
     NetwPredictionEngine *const pool = p_core->get_prediction_engine();
     REQUIRE(pool != nullptr);
-    const godot::TypedArray<godot::Object> held
+    const godot::TypedArray<NetwEntity> held
         = p_core->predict_stepped_entities();
     for (int at = 0; at < held.size(); ++at) {
         const Ref<NetwEntity> entity = held[at];
@@ -177,7 +176,7 @@ SteppedOwner step_the_island(NetwMultiplayer *p_core) {
     out.stepper.instantiate();
     p_core->predict_stepper_install(out.space, out.stepper);
     out.entity->get_simulation()->set_schedule(
-        netw::NetwSimulationHandle::SCHEDULE_STEPPED
+        netw::NetwSimulation::SCHEDULE_STEPPED
     );
     return out;
 }
@@ -484,7 +483,7 @@ TEST_CASE(
     drifting->body = body->get_rid();
     predictor->predict_stepper_install(owner.space, drifting);
     owner.entity->get_simulation()->set_schedule(
-        netw::NetwSimulationHandle::SCHEDULE_STEPPED
+        netw::NetwSimulation::SCHEDULE_STEPPED
     );
 
     rig.step_ticks(2);
@@ -538,12 +537,12 @@ TEST_CASE(
     drifting->body = body->get_rid();
     predictor->predict_stepper_install(owner.space, drifting);
     owner.entity->get_simulation()->set_schedule(
-        netw::NetwSimulationHandle::SCHEDULE_STEPPED
+        netw::NetwSimulation::SCHEDULE_STEPPED
     );
     rig.step_ticks(2);
     REQUIRE_FALSE(space_is_active(owner.held));
     owner.entity->get_prediction()->set_recovery_policy(
-        NetwPredict::RECOVERY_POLICY_DELAY_CLOSED
+        NetwPrediction::RECOVERY_POLICY_DELAY_CLOSED
     );
     rig.step_ticks(1);
 
@@ -610,7 +609,7 @@ TEST_CASE(
     REQUIRE(two_stand_in_it);
     const Ref<NetwEntity> later = both.members[1];
     later->get_simulation()->set_schedule(
-        netw::NetwSimulationHandle::SCHEDULE_TICK
+        netw::NetwSimulation::SCHEDULE_TICK
     );
 
     rig.step_ticks(2);
@@ -620,7 +619,7 @@ TEST_CASE(
     REQUIRE(space_is_active(both.held));
 
     later->get_simulation()->set_schedule(
-        netw::NetwSimulationHandle::SCHEDULE_STEPPED
+        netw::NetwSimulation::SCHEDULE_STEPPED
     );
     rig.step_ticks(1);
     both.stepper->forget();
@@ -629,6 +628,55 @@ TEST_CASE(
     CHECK_FALSE(space_is_active(both.held));
     NETW_CHECK_EQ(both.stepper->count_of(RecordingStepper::STEP), 3);
     both.release();
+}
+
+TEST_CASE(
+    "[Networked][Predict][Stepper] ST9 a session installs a stepper on the "
+    "space of a World3D or a World2D, a null stepper uninstalls it, and a "
+    "missing world or space is refused before anything changes"
+) {
+    Ref<NetwMultiplayer> core;
+    core.instantiate();
+    const Ref<netw::NetwSession> session = core->get_session();
+    REQUIRE(session.is_valid());
+    Ref<RecordingStepper> stepper;
+    stepper.instantiate();
+
+    Ref<godot::World3D> world;
+    world.instantiate();
+    NETW_CHECK_EQ(
+        int(session->install_physics_stepper(world, stepper)),
+        int(godot::OK)
+    );
+    const bool installed
+        = core->predict_get_stepper(world->get_space()) == stepper;
+    CHECK(installed);
+    NETW_CHECK_EQ(
+        int(session->install_physics_stepper(Ref<godot::World3D>(), stepper)),
+        int(godot::ERR_INVALID_PARAMETER)
+    );
+    NETW_CHECK_EQ(
+        int(core->predict_stepper_install(godot::RID(), stepper)),
+        int(godot::ERR_INVALID_PARAMETER)
+    );
+    const bool kept = core->predict_get_stepper(world->get_space()) == stepper;
+    CHECK(kept);
+    NETW_CHECK_EQ(
+        int(session->install_physics_stepper(world, Ref<RecordingStepper>())),
+        int(godot::OK)
+    );
+    CHECK(core->predict_get_stepper(world->get_space()).is_null());
+
+    Ref<godot::World2D> plane;
+    plane.instantiate();
+    NETW_CHECK_EQ(
+        int(session->install_physics_stepper_2d(plane, stepper)),
+        int(godot::OK)
+    );
+    const bool installed_2d
+        = core->predict_get_stepper(plane->get_space()) == stepper;
+    CHECK(installed_2d);
+    session->install_physics_stepper_2d(plane, Ref<RecordingStepper>());
 }
 
 } // namespace TestNetwPhysicsStepperLaws

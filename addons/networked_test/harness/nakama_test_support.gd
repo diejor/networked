@@ -83,7 +83,7 @@ static func start_host(
 	var tree := _make_tree(parent, "NakamaHost", username)
 	var settled := await NetwOrdinarySetup.connect_through(
 			tree,
-			NetwMultiplayer.TRANSPORT_MODE_HOST,
+			NetwConnection.TRANSPORT_MODE_HOST,
 			"",
 			{ },
 			StringName(username),
@@ -99,7 +99,7 @@ static func start_host(
 		return { }
 	return {
 		tree = tree,
-		room = Netw.connection(tree).join_address,
+		room = Netw.session(tree).connection.join_address,
 	}
 
 
@@ -115,7 +115,7 @@ static func join_client(
 ) -> Error:
 	var settled := await NetwOrdinarySetup.connect_through(
 			client,
-			NetwMultiplayer.TRANSPORT_MODE_CLIENT,
+			NetwConnection.TRANSPORT_MODE_CLIENT,
 			room,
 			{ },
 			StringName(username),
@@ -161,7 +161,7 @@ static func host_scene(
 
 	var settled := await NetwOrdinarySetup.connect_through(
 			tree,
-			NetwMultiplayer.TRANSPORT_MODE_HOST,
+			NetwConnection.TRANSPORT_MODE_HOST,
 			"",
 			{ },
 			StringName(username),
@@ -178,7 +178,7 @@ static func host_scene(
 		return { }
 	return {
 		tree = tree,
-		room = Netw.connection(tree).join_address,
+		room = Netw.session(tree).connection.join_address,
 		scene = scene,
 	}
 
@@ -217,7 +217,7 @@ static func _make_tree(
 
 static func _configure_tree(tree: MultiplayerTree, username: String) -> void:
 	tree.auto_host_headless = false
-	tree.desired_role = NetwMultiplayer.ROLE_LISTEN_SERVER
+	tree.desired_role = NetwSession.ROLE_LISTEN_SERVER
 	_attach_directory(tree, username)
 	tree.peer_class = PEER_CLASS
 

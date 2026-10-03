@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwInterest" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		The [NetwInterestLayer] layers an entity is in, and callbacks for when peers start or stop seeing it.
+	</brief_description>
+	<description>
+		Get it from [member NetwEntity.interest]. Every method returns the handle, so calls can be chained. It is safe to call in [method Object._init], before the node is in a session. The server applies the layers, and clients keep them for their own callbacks.
+		[codeblock]
+		func _init() -&gt; void:
+		    Netw.configure_entity(self).interest \
+		            .join(&amp;"team:red", NetwInterestLayer.LEAVE_POLICY_RETAIN) \
+		            .join(&amp;"sight") \
+		            .on_enter(_on_interest_enter)
+
+		# later
+		Netw.configure_entity(self).interest.join(&amp;"team:blue")
+		[/codeblock]
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="entity" qualifiers="const">
+			<return type="NetwEntity" />
+			<description>
+				Returns the [NetwEntity], or [code]null[/code] once it is gone.
+			</description>
+		</method>
+		<method name="join">
+			<return type="NetwInterest" />
+			<param index="0" name="layer_id" type="StringName" />
+			<param index="1" name="leave_policy" type="int" enum="NetwInterestLayer.LeavePolicy" default="-1" />
+			<param index="2" name="perception_policy" type="int" enum="NetwInterestLayer.PerceptionPolicy" default="-1" />
+			<description>
+				Adds the entity to the layer [param layer_id]. [param leave_policy] and [param perception_policy] set what happens when a peer stops seeing it through this layer. [code]-1[/code] keeps the current setting. Use [method on_leave_policy] and [method on_perception_policy] for the custom policies.
+			</description>
+		</method>
+		<method name="layer_ids" qualifiers="const">
+			<return type="StringName[]" />
+			<description>
+				Returns a copy of the layer names the entity joined.
+			</description>
+		</method>
+		<method name="leave">
+			<return type="NetwInterest" />
+			<param index="0" name="layer_id" type="StringName" />
+			<description>
+				Removes the entity from the layer [param layer_id].
+			</description>
+		</method>
+		<method name="of" qualifiers="static">
+			<return type="NetwInterest" />
+			<param index="0" name="node" type="Node" />
+			<description>
+				Returns the [member NetwEntity.interest] of [param node]. Returns [code]null[/code] and pushes an error when [param node] is not an entity root.
+			</description>
+		</method>
+		<method name="on_enter">
+			<return type="NetwInterest" />
+			<param index="0" name="callback" type="Callable" />
+			<param index="1" name="layer_id" type="StringName" default="&amp;&quot;&quot;" />
+			<description>
+				Calls [param callback] as [code]callback(layer_id, peer_id)[/code] when a peer starts seeing the entity through [param layer_id]. An empty [param layer_id] means every layer joined so far.
+			</description>
+		</method>
+		<method name="on_leave">
+			<return type="NetwInterest" />
+			<param index="0" name="callback" type="Callable" />
+			<param index="1" name="layer_id" type="StringName" default="&amp;&quot;&quot;" />
+			<description>
+				Calls [param callback] as [code]callback(layer_id, peer_id)[/code] when a peer stops seeing the entity through [param layer_id]. An empty [param layer_id] means every layer joined so far.
+			</description>
+		</method>
+		<method name="on_leave_policy">
+			<return type="NetwInterest" />
+			<param index="0" name="layer_id" type="StringName" />
+			<param index="1" name="policy" type="int" enum="NetwInterestLayer.LeavePolicy" />
+			<param index="2" name="custom_callback" type="Callable" default="Callable()" />
+			<description>
+				Sets what happens to a peer's copy when it stops seeing the entity through [param layer_id]. [constant NetwInterestLayer.LEAVE_POLICY_CUSTOM] requires [param custom_callback], called on the server as [code]custom_callback(peer_id, layer_id)[/code].
+			</description>
+		</method>
+		<method name="on_perception_policy">
+			<return type="NetwInterest" />
+			<param index="0" name="layer_id" type="StringName" />
+			<param index="1" name="policy" type="int" enum="NetwInterestLayer.PerceptionPolicy" />
+			<param index="2" name="custom_callback" type="Callable" default="Callable()" />
+			<description>
+				Sets whether this peer keeps showing the entity when it stops seeing it through [param layer_id]. [constant NetwInterestLayer.PERCEPTION_POLICY_CUSTOM] requires [param custom_callback], called as [code]custom_callback(visible, peer_id, layer_id)[/code].
+			</description>
+		</method>
+	</methods>
+	<signals>
+		<signal name="interest_entered">
+			<param index="0" name="peer_id" type="int" />
+			<description>
+				Emitted on the server when [param peer_id] starts seeing this entity.
+			</description>
+		</signal>
+		<signal name="interest_exited">
+			<param index="0" name="peer_id" type="int" />
+			<description>
+				Emitted on the server when [param peer_id] stops seeing this entity.
+			</description>
+		</signal>
+		<signal name="observer_entered">
+			<param index="0" name="layer_id" type="StringName" />
+			<param index="1" name="peer_id" type="int" />
+			<description>
+				Emitted when [param peer_id] starts seeing this entity through [param layer_id].
+			</description>
+		</signal>
+		<signal name="observer_exited">
+			<param index="0" name="layer_id" type="StringName" />
+			<param index="1" name="peer_id" type="int" />
+			<description>
+				Emitted when [param peer_id] stops seeing this entity through [param layer_id].
+			</description>
+		</signal>
+	</signals>
+</class>

@@ -7,7 +7,7 @@
 #include "netw/api/entity.hpp"
 #include "netw/api/netw_multiplayer.hpp"
 #include "netw/api/persistence_config.hpp"
-#include "netw/api/persistence_handle.hpp"
+#include "netw/api/persistence.hpp"
 #include "netw/api/property_config.hpp"
 #include "netw/api/schema_model.hpp"
 #include "netw/persist/memory_store.hpp"
@@ -21,7 +21,7 @@ using namespace godot;
 using netw::NetwDatabase;
 using netw::NetwEntity;
 using netw::NetwMultiplayer;
-using netw::NetwPersistenceHandle;
+using netw::NetwPersistence;
 using netw::NetwPromise;
 using netw::NetwQuantize;
 using netw::NetwSchema;
@@ -56,8 +56,8 @@ TEST_CASE(
     session->get_databases()
         ->open(two, "slot1", NetwPromise::resolved(connection_two));
 
-    const Ref<NetwDatabase> handle_one = NetwDatabase::over(one, session.ptr());
-    const Ref<NetwDatabase> handle_two = NetwDatabase::over(two, session.ptr());
+    const Ref<NetwDatabase> handle_one = session->database_handle(one);
+    const Ref<NetwDatabase> handle_two = session->database_handle(two);
     CallLog log_one;
     CallLog log_two;
     handle_one->connect("failed", log_one.callable("failed"));
@@ -131,9 +131,9 @@ TEST_CASE(
     REQUIRE(binding_a.is_valid());
     REQUIRE(binding_b.is_valid());
 
-    const Ref<NetwPersistenceHandle> handle_a
+    const Ref<NetwPersistence> handle_a
         = NetwEntity::resolve(root_a)->get_persistence();
-    const Ref<NetwPersistenceHandle> handle_b
+    const Ref<NetwPersistence> handle_b
         = NetwEntity::resolve(root_b)->get_persistence();
     CallLog log_a;
     CallLog log_b;

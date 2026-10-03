@@ -31,7 +31,7 @@ var last_moved := -1
 
 func _init() -> void:
 	var e := Netw.configure_entity(self)
-	e.prediction.archetype = NetwPredict.ARCHETYPE_SCRIPTED
+	e.prediction.archetype = NetwPrediction.ARCHETYPE_SCRIPTED
 	Netw.configure_property(self, &"beat").state()
 	Netw.configure_property(self, &"motion").input()
 

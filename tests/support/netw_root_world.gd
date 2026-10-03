@@ -30,7 +30,7 @@ func declare_initial_scene(scene: PackedScene) -> void:
 func host() -> NetwMultiplayer:
 	if _host_api != null:
 		return _host_api
-	_host_api = NetwMultiplayer.make()
+	_host_api = NetwMultiplayer.new()
 	_host_node.get_tree().set_multiplayer(_host_api)
 	_host_api.embed_settle()
 	_host_api.session_prepare_join(&"host", [])
@@ -58,7 +58,7 @@ func add_client(username: String) -> NetwMultiplayer:
 	await host()
 	var tree := MultiplayerTree.new()
 	tree.name = "RootWorldClient%d" % _client_trees.size()
-	tree.desired_role = NetwMultiplayer.ROLE_CLIENT
+	tree.desired_role = NetwSession.ROLE_CLIENT
 	tree.auto_host_headless = false
 	tree.peer_class = &"LocalMultiplayerPeer"
 	_host_node.add_child(tree)

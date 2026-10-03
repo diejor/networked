@@ -3,7 +3,8 @@ extends Node
 
 const KICKOFF_DELAY := 3.5
 
-@onready var clock: NetwClockHandle = Netw.clock(self)
+@onready var session: NetwSession = Netw.session(self)
+@onready var clock: NetwClock = session.clock
 
 var score_red := 0
 var score_blue := 0
@@ -11,7 +12,7 @@ var kickoff_tick := 0
 
 
 func _init() -> void:
-	NetwEntity.ensure(self).entity_id = &"game"
+	Netw.configure_entity(self).name = &"game"
 	Netw.configure_property(self, &"score_red").state().on_spawn()
 	Netw.configure_property(self, &"score_blue").state().on_spawn()
 	Netw.configure_property(self, &"kickoff_tick").state().on_spawn()
@@ -20,7 +21,7 @@ func _init() -> void:
 func _ready() -> void:
 	if multiplayer.is_server():
 		queue_kickoff()
-		Netw.session(self).player_joined.connect(on_player_joined)
+		session.player_joined.connect(on_player_joined)
 
 
 func rule_goal(team: int, _tick: int) -> void:

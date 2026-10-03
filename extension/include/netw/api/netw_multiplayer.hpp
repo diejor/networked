@@ -16,8 +16,8 @@
 #include "netw/action_gate_book.hpp"
 #include "netw/api/action.hpp"
 #include "netw/api/clock_config.hpp"
-#include "netw/api/clock_handle.hpp"
-#include "netw/api/connect_handle.hpp"
+#include "netw/api/clock.hpp"
+#include "netw/api/connection.hpp"
 #include "netw/api/database_config.hpp"
 #include "netw/api/entity_record.hpp"
 #include "netw/api/enums.hpp"
@@ -28,18 +28,20 @@
 #include "netw/api/member_config.hpp"
 #include "netw/api/participant.hpp"
 #include "netw/api/physics_stepper.hpp"
+#include "netw/api/predict_fold.hpp"
 #include "netw/api/predict_runner.hpp"
 #include "netw/api/predict_slot_engine.hpp"
+#include "netw/api/prediction.hpp"
 #include "netw/api/promise.hpp"
 #include "netw/api/quantize.hpp"
 #include "netw/api/record.hpp"
 #include "netw/api/schema_core.hpp"
 #include "netw/api/session_config.hpp"
-#include "netw/api/session_handle.hpp"
+#include "netw/api/session.hpp"
 #include "netw/api/session_stats.hpp"
-#include "netw/api/simulation_handle.hpp"
+#include "netw/api/simulation.hpp"
 #include "netw/api/sync_model.hpp"
-#include "netw/api/table_handle.hpp"
+#include "netw/api/table.hpp"
 #include "netw/call_park.hpp"
 #include "netw/carrier_buffers.hpp"
 #include "netw/carrier_frame.hpp"
@@ -95,8 +97,11 @@
 
 namespace netw {
 
+class MultiplayerTree;
 class NetwDatabase;
-class NetwSceneHandle;
+class NetwPersistence;
+class NetwPredictStats;
+class NetwScene;
 class NetwSchema;
 class ParticipantView;
 class ReplicationCore;
@@ -112,13 +117,169 @@ class NetwMultiplayer : public MultiplayerApiBase,
                         public enums::NetwMultiplayer {
     GDCLASS(NetwMultiplayer, MultiplayerApiBase)
 
-    friend class NetwInterestHandle;
+    friend class NetwInterest;
     friend class NetwNativeTests;
     friend int64_t session_missing_local_join_warnings(
         const NetwMultiplayer *p_session
     );
 
 public:
+    using SessionState = enums::NetwSession::SessionState;
+    static constexpr SessionState SESSION_STATE_OFFLINE
+        = enums::NetwSession::SESSION_STATE_OFFLINE;
+    static constexpr SessionState SESSION_STATE_CONNECTING
+        = enums::NetwSession::SESSION_STATE_CONNECTING;
+    static constexpr SessionState SESSION_STATE_ONLINE
+        = enums::NetwSession::SESSION_STATE_ONLINE;
+    static constexpr SessionState SESSION_STATE_DISCONNECTING
+        = enums::NetwSession::SESSION_STATE_DISCONNECTING;
+    using Role = enums::NetwSession::Role;
+    static constexpr Role ROLE_NONE = enums::NetwSession::ROLE_NONE;
+    static constexpr Role ROLE_CLIENT = enums::NetwSession::ROLE_CLIENT;
+    static constexpr Role ROLE_DEDICATED_SERVER
+        = enums::NetwSession::ROLE_DEDICATED_SERVER;
+    static constexpr Role ROLE_LISTEN_SERVER
+        = enums::NetwSession::ROLE_LISTEN_SERVER;
+
+    using SyncMode = enums::NetwClock::SyncMode;
+    static constexpr SyncMode SYNC_MODE_SNAP = enums::NetwClock::SYNC_MODE_SNAP;
+    static constexpr SyncMode SYNC_MODE_STRETCH
+        = enums::NetwClock::SYNC_MODE_STRETCH;
+    using MismatchAction = enums::NetwClock::MismatchAction;
+    static constexpr MismatchAction MISMATCH_ACTION_WARN
+        = enums::NetwClock::MISMATCH_ACTION_WARN;
+    static constexpr MismatchAction MISMATCH_ACTION_DISCONNECT
+        = enums::NetwClock::MISMATCH_ACTION_DISCONNECT;
+    static constexpr MismatchAction MISMATCH_ACTION_SIGNAL
+        = enums::NetwClock::MISMATCH_ACTION_SIGNAL;
+    using ClockMonitor = enums::NetwClock::ClockMonitor;
+    static constexpr ClockMonitor CLOCK_MONITOR_RTT
+        = enums::NetwClock::CLOCK_MONITOR_RTT;
+    static constexpr ClockMonitor CLOCK_MONITOR_RTT_AVG
+        = enums::NetwClock::CLOCK_MONITOR_RTT_AVG;
+    static constexpr ClockMonitor CLOCK_MONITOR_RTT_JITTER
+        = enums::NetwClock::CLOCK_MONITOR_RTT_JITTER;
+    static constexpr ClockMonitor CLOCK_MONITOR_ONE_WAY_LATENCY
+        = enums::NetwClock::CLOCK_MONITOR_ONE_WAY_LATENCY;
+    static constexpr ClockMonitor CLOCK_MONITOR_TICKTIME
+        = enums::NetwClock::CLOCK_MONITOR_TICKTIME;
+    static constexpr ClockMonitor CLOCK_MONITOR_TICK_ACCUMULATOR
+        = enums::NetwClock::CLOCK_MONITOR_TICK_ACCUMULATOR;
+    static constexpr ClockMonitor CLOCK_MONITOR_PHYSICS_FRAMES
+        = enums::NetwClock::CLOCK_MONITOR_PHYSICS_FRAMES;
+    static constexpr ClockMonitor CLOCK_MONITOR_POLLS
+        = enums::NetwClock::CLOCK_MONITOR_POLLS;
+    static constexpr ClockMonitor CLOCK_MONITOR_WALL_SECONDS
+        = enums::NetwClock::CLOCK_MONITOR_WALL_SECONDS;
+    static constexpr ClockMonitor CLOCK_MONITOR_PHYSICS_HZ
+        = enums::NetwClock::CLOCK_MONITOR_PHYSICS_HZ;
+    static constexpr ClockMonitor CLOCK_MONITOR_POLL_HZ
+        = enums::NetwClock::CLOCK_MONITOR_POLL_HZ;
+
+    using TransportMode = enums::NetwConnection::TransportMode;
+    static constexpr TransportMode TRANSPORT_MODE_HOST
+        = enums::NetwConnection::TRANSPORT_MODE_HOST;
+    static constexpr TransportMode TRANSPORT_MODE_CLIENT
+        = enums::NetwConnection::TRANSPORT_MODE_CLIENT;
+    using TransportCapability = enums::NetwConnection::TransportCapability;
+    static constexpr TransportCapability TRANSPORT_AVAILABLE
+        = enums::NetwConnection::TRANSPORT_AVAILABLE;
+    static constexpr TransportCapability TRANSPORT_CAN_HOST
+        = enums::NetwConnection::TRANSPORT_CAN_HOST;
+    static constexpr TransportCapability TRANSPORT_CAN_PROBE
+        = enums::NetwConnection::TRANSPORT_CAN_PROBE;
+    static constexpr TransportCapability TRANSPORT_CAN_BROWSE
+        = enums::NetwConnection::TRANSPORT_CAN_BROWSE;
+    static constexpr TransportCapability TRANSPORT_ACCEPTS_EMPTY_ADDRESS
+        = enums::NetwConnection::TRANSPORT_ACCEPTS_EMPTY_ADDRESS;
+    using EndpointState = enums::NetwConnection::EndpointState;
+    static constexpr EndpointState ENDPOINT_STATE_FLAGS
+        = enums::NetwConnection::ENDPOINT_STATE_FLAGS;
+    static constexpr EndpointState ENDPOINT_STATE_STATUS
+        = enums::NetwConnection::ENDPOINT_STATE_STATUS;
+    static constexpr EndpointState ENDPOINT_STATE_INFO
+        = enums::NetwConnection::ENDPOINT_STATE_INFO;
+    using EndpointFlags = enums::NetwConnection::EndpointFlags;
+    static constexpr EndpointFlags ENDPOINT_FLAG_CALLER
+        = enums::NetwConnection::ENDPOINT_FLAG_CALLER;
+    static constexpr EndpointFlags ENDPOINT_FLAG_AVAILABLE
+        = enums::NetwConnection::ENDPOINT_FLAG_AVAILABLE;
+    static constexpr EndpointFlags ENDPOINT_FLAG_OBSERVED
+        = enums::NetwConnection::ENDPOINT_FLAG_OBSERVED;
+
+    using DisplayRole = enums::NetwDisplay::DisplayRole;
+    static constexpr DisplayRole DISPLAY_ROLE_AUTO
+        = enums::NetwDisplay::DISPLAY_ROLE_AUTO;
+    static constexpr DisplayRole DISPLAY_ROLE_REMOTE
+        = enums::NetwDisplay::DISPLAY_ROLE_REMOTE;
+    static constexpr DisplayRole DISPLAY_ROLE_PREDICTED
+        = enums::NetwDisplay::DISPLAY_ROLE_PREDICTED;
+    static constexpr DisplayRole DISPLAY_ROLE_DISABLED
+        = enums::NetwDisplay::DISPLAY_ROLE_DISABLED;
+    static constexpr DisplayRole DISPLAY_ROLE_AUTHORITY
+        = enums::NetwDisplay::DISPLAY_ROLE_AUTHORITY;
+    using DisplayPump = enums::NetwDisplay::DisplayPump;
+    static constexpr DisplayPump DISPLAY_PUMP_UNRESOLVED
+        = enums::NetwDisplay::DISPLAY_PUMP_UNRESOLVED;
+    static constexpr DisplayPump DISPLAY_PUMP_DISABLED
+        = enums::NetwDisplay::DISPLAY_PUMP_DISABLED;
+    static constexpr DisplayPump DISPLAY_PUMP_REMOTE
+        = enums::NetwDisplay::DISPLAY_PUMP_REMOTE;
+    static constexpr DisplayPump DISPLAY_PUMP_BRACKETED
+        = enums::NetwDisplay::DISPLAY_PUMP_BRACKETED;
+    static constexpr DisplayPump DISPLAY_PUMP_CHASE
+        = enums::NetwDisplay::DISPLAY_PUMP_CHASE;
+    using LiveMode = enums::NetwDisplay::LiveMode;
+    static constexpr LiveMode LIVE_MODE_CHASE
+        = enums::NetwDisplay::LIVE_MODE_CHASE;
+    static constexpr LiveMode LIVE_MODE_BRACKETED
+        = enums::NetwDisplay::LIVE_MODE_BRACKETED;
+    using TimelineMode = enums::NetwDisplay::TimelineMode;
+    static constexpr TimelineMode TIMELINE_MODE_BUFFERED
+        = enums::NetwDisplay::TIMELINE_MODE_BUFFERED;
+    static constexpr TimelineMode TIMELINE_MODE_FORECAST
+        = enums::NetwDisplay::TIMELINE_MODE_FORECAST;
+
+    using LayerPolicy = enums::NetwInterestLayer::LayerPolicy;
+    static constexpr LayerPolicy LAYER_POLICY_HIDE_FROM_OUTSIDERS
+        = enums::NetwInterestLayer::LAYER_POLICY_HIDE_FROM_OUTSIDERS;
+    static constexpr LayerPolicy LAYER_POLICY_HIDE_FROM_INSIDERS
+        = enums::NetwInterestLayer::LAYER_POLICY_HIDE_FROM_INSIDERS;
+    using LeavePolicy = enums::NetwInterestLayer::LeavePolicy;
+    static constexpr LeavePolicy LEAVE_POLICY_HIDE
+        = enums::NetwInterestLayer::LEAVE_POLICY_HIDE;
+    static constexpr LeavePolicy LEAVE_POLICY_RETAIN
+        = enums::NetwInterestLayer::LEAVE_POLICY_RETAIN;
+    static constexpr LeavePolicy LEAVE_POLICY_CUSTOM
+        = enums::NetwInterestLayer::LEAVE_POLICY_CUSTOM;
+    using PerceptionPolicy = enums::NetwInterestLayer::PerceptionPolicy;
+    static constexpr PerceptionPolicy PERCEPTION_POLICY_HIDE
+        = enums::NetwInterestLayer::PERCEPTION_POLICY_HIDE;
+    static constexpr PerceptionPolicy PERCEPTION_POLICY_SHOW
+        = enums::NetwInterestLayer::PERCEPTION_POLICY_SHOW;
+    static constexpr PerceptionPolicy PERCEPTION_POLICY_CUSTOM
+        = enums::NetwInterestLayer::PERCEPTION_POLICY_CUSTOM;
+
+    using SceneEvent = enums::NetwScene::SceneEvent;
+    static constexpr SceneEvent SCENE_EVENT_VIEWER
+        = enums::NetwScene::SCENE_EVENT_VIEWER;
+    static constexpr SceneEvent SCENE_EVENT_BODY
+        = enums::NetwScene::SCENE_EVENT_BODY;
+    static constexpr SceneEvent SCENE_EVENT_ENTITY
+        = enums::NetwScene::SCENE_EVENT_ENTITY;
+    using SceneChange = enums::NetwScene::SceneChange;
+    static constexpr SceneChange SCENE_CHANGE_SESSION
+        = enums::NetwScene::SCENE_CHANGE_SESSION;
+    static constexpr SceneChange SCENE_CHANGE_PLAYER
+        = enums::NetwScene::SCENE_CHANGE_PLAYER;
+    static constexpr SceneChange SCENE_CHANGE_SCENE
+        = enums::NetwScene::SCENE_CHANGE_SCENE;
+    using SceneIsolation = enums::NetwScene::SceneIsolation;
+    static constexpr SceneIsolation SCENE_ISOLATION_NONE
+        = enums::NetwScene::SCENE_ISOLATION_NONE;
+    static constexpr SceneIsolation SCENE_ISOLATION_OWN_WORLD
+        = enums::NetwScene::SCENE_ISOLATION_OWN_WORLD;
+
     enum RecordKind {
         RECORD_KIND_STATE = repl::PropertySet::RECORD_STATE,
         RECORD_KIND_INPUT = repl::PropertySet::RECORD_INPUT,
@@ -205,9 +366,9 @@ private:
     int64_t auth_app_tag = 0;
     SessionCore session_core;
     connect::ConnectCore connect_core;
-    godot::Ref<NetwConnectHandle> connection_handle;
-    godot::Ref<NetwSessionHandle> session_handle;
-    godot::Ref<NetwClockHandle> clock_handle;
+    godot::Ref<NetwConnection> connection_handle;
+    godot::Ref<NetwSession> session_handle;
+    godot::Ref<NetwClock> clock_handle;
     godot::HashMap<uint64_t, godot::RID> directory_slots;
     mutable ClockEngine clock;
     int64_t rpc_calls_deferred = 0;
@@ -340,6 +501,9 @@ private:
     );
     void persist_publish(const godot::RID &p_binding);
     godot::RID persist_entity_of_binding(const godot::RID &p_binding) const;
+    godot::Ref<NetwPersistence> persist_handle_of_binding(
+        const godot::RID &p_binding
+    ) const;
     void persist_notify_failed(
         const godot::RID &p_database,
         godot::Error p_error,
@@ -494,6 +658,17 @@ private:
     NetwHandleLedger tables;
     NetwEffectLedger effects;
     EventPlane plane;
+    godot::LocalVector<godot::Callable> observers[NOTIFICATION_COUNT];
+    bool clock_sweeps_effects = false;
+    bool clock_handshakes_on_enter = false;
+    bool host_join_waits_startup = false;
+    int session_exit_reason = -1;
+    godot::String session_exit_detail;
+    void session_announce_exited(int p_reason, const godot::String &p_detail);
+    bool scene_admits_on_join = false;
+    godot::ObjectID session_tree;
+    bool is_observing(Notification p_event, const godot::Callable &p_callback)
+        const;
     godot::HashSet<godot::StringName> misused_seams;
     godot::HashMap<godot::StringName, bool> seam_overrides;
     godot::ObjectID seam_script;
@@ -505,7 +680,7 @@ private:
     bool scene_constructor_registered = false;
     godot::HashMap<godot::StringName, godot::RID> table_by_name;
     godot::HashMap<int64_t, godot::RID> table_schema;
-    godot::HashMap<int64_t, godot::Ref<NetwTableHandle>> table_handles;
+    godot::HashMap<int64_t, godot::Ref<NetwTable>> table_handles;
 
     struct ServiceRow {
         godot::ObjectID type;
@@ -700,9 +875,15 @@ private:
     struct LayerDriverRow {
         godot::RID layer;
         godot::Callable drive;
+        bool typed = false;
     };
     godot::HashMap<int64_t, LayerDriverRow> layer_drivers;
-    godot::HashMap<int64_t, godot::Callable> layer_monitors;
+    struct LayerMonitorRow {
+        godot::Callable watch;
+        bool typed = false;
+    };
+    godot::HashMap<int64_t, LayerMonitorRow> layer_monitors;
+    godot::Error layer_drive(const LayerDriverRow &p_row);
     void layer_monitor_enter(
         const godot::Ref<NetwEntity> &p_entity,
         int64_t p_peer,
@@ -713,12 +894,9 @@ private:
         int64_t p_peer,
         godot::RID p_layer
     );
-    void layer_monitor_visible(
+    void layer_monitor_visibility(
         const godot::Ref<NetwEntity> &p_entity,
-        godot::RID p_layer
-    );
-    void layer_monitor_hidden(
-        const godot::Ref<NetwEntity> &p_entity,
+        bool p_visible,
         godot::RID p_layer
     );
     void layer_monitor_report(
@@ -899,6 +1077,7 @@ private:
         const godot::StringName &p_signal
     );
 
+    void auth_relay_authenticating(int64_t p_peer);
     void relay_auth_failed(int64_t p_peer);
 
     void session_broadcast_control(
@@ -949,19 +1128,19 @@ public:
         int64_t p_last_driven_input_tick,
         int64_t p_frame_tick
     );
-    NetwPredict::ConsumeAction predict_consume(int p_depth, int p_buffer);
+    NetwPrediction::ConsumeAction predict_consume(int p_depth, int p_buffer);
     godot::Ref<NetwPredictFold> predict_drive_default(
         int64_t p_latest_input_tick,
         int64_t p_last_driven_input_tick,
         int64_t p_frame_tick
     );
-    NetwPredict::ConsumeAction predict_consume_default(
+    NetwPrediction::ConsumeAction predict_consume_default(
         int p_depth,
         int p_buffer
     );
     godot::Ref<NetwPredictJudgement> predict_evaluate(
-        NetwPredict::Domain p_domain,
-        NetwPredict::ExactVerdict p_verdict,
+        NetwPrediction::Domain p_domain,
+        NetwPrediction::ExactVerdict p_verdict,
         const godot::Dictionary &p_predicted,
         const godot::Dictionary &p_payload,
         const godot::Dictionary &p_wiring,
@@ -969,8 +1148,8 @@ public:
     );
     godot::Ref<NetwPredictRecovery> predict_recover(
         const godot::Dictionary &p_payload,
-        NetwPredict::RecoveryPolicy p_policy,
-        NetwSimulationHandle::Restore p_snap_restore,
+        NetwPrediction::RecoveryPolicy p_policy,
+        NetwSimulation::Restore p_snap_restore,
         const godot::Dictionary &p_projection,
         const godot::Dictionary &p_current,
         const godot::Dictionary &p_pose_errors,
@@ -979,8 +1158,8 @@ public:
         double p_tick_delta
     );
     godot::Ref<NetwPredictJudgement> predict_evaluate_default(
-        NetwPredict::Domain p_domain,
-        NetwPredict::ExactVerdict p_verdict,
+        NetwPrediction::Domain p_domain,
+        NetwPrediction::ExactVerdict p_verdict,
         const godot::Dictionary &p_predicted,
         const godot::Dictionary &p_payload,
         const godot::Dictionary &p_wiring,
@@ -988,8 +1167,8 @@ public:
     );
     godot::Ref<NetwPredictRecovery> predict_recover_default(
         const godot::Dictionary &p_payload,
-        NetwPredict::RecoveryPolicy p_policy,
-        NetwSimulationHandle::Restore p_snap_restore,
+        NetwPrediction::RecoveryPolicy p_policy,
+        NetwSimulation::Restore p_snap_restore,
         const godot::Dictionary &p_projection,
         const godot::Dictionary &p_current,
         const godot::Dictionary &p_pose_errors,
@@ -1005,12 +1184,12 @@ public:
         int64_t,
         int64_t
     )
-    GDVIRTUAL2R(NetwPredict::ConsumeAction, _predict_consume, int, int)
+    GDVIRTUAL2R(NetwPrediction::ConsumeAction, _predict_consume, int, int)
     GDVIRTUAL6R(
         godot::Ref<NetwPredictJudgement>,
         _predict_evaluate,
-        NetwPredict::Domain,
-        NetwPredict::ExactVerdict,
+        NetwPrediction::Domain,
+        NetwPrediction::ExactVerdict,
         godot::Dictionary,
         godot::Dictionary,
         godot::Dictionary,
@@ -1020,8 +1199,8 @@ public:
         godot::Ref<NetwPredictRecovery>,
         _predict_recover,
         godot::Dictionary,
-        NetwPredict::RecoveryPolicy,
-        NetwSimulationHandle::Restore,
+        NetwPrediction::RecoveryPolicy,
+        NetwSimulation::Restore,
         godot::Dictionary,
         godot::Dictionary,
         godot::Dictionary,
@@ -1132,6 +1311,11 @@ public:
     JoinRoster &join_book();
     void session_announce_entered();
     void session_announce_ended();
+    void session_set_tree(MultiplayerTree *p_tree);
+    void session_note_exit(
+        enums::NetwSession::ExitReason p_reason,
+        const godot::String &p_detail
+    );
     void session_announce_edge(int p_old, int p_new);
     godot::Ref<display::Book> get_display_book() const;
     NetwLagCompCore *get_lagcomp_core();
@@ -1319,7 +1503,7 @@ public:
     godot::Array interest_resolved_layer_ids(
         const godot::Ref<NetwEntity> &p_entity
     );
-    godot::TypedArray<godot::Object> interest_shared_entities(
+    godot::TypedArray<NetwEntity> interest_shared_entities(
         const godot::Ref<NetwEntity> &p_entity,
         const godot::StringName &p_layer_id
     );
@@ -1701,12 +1885,9 @@ public:
     void scene_close_admission(godot::Object *p_container);
     void scene_report_local_viewer(const godot::RID &p_scene, bool p_present);
     void scene_on_player_joined(const godot::Ref<NetwPlayer> &p_player);
-    void scene_on_admission_visible(
+    void scene_on_admission_visibility(
         const godot::Ref<NetwEntity> &p_entity,
-        const godot::RID &p_scene
-    );
-    void scene_on_admission_hidden(
-        const godot::Ref<NetwEntity> &p_entity,
+        bool p_visible,
         const godot::RID &p_scene
     );
     void display_on_recovered(
@@ -1941,7 +2122,7 @@ public:
         const godot::RID &p_layer,
         const godot::RID &p_entity
     );
-    void layer_remove_entity(
+    godot::Error interest_layer_remove_entity(
         const godot::RID &p_layer,
         const godot::RID &p_entity
     );
@@ -1954,6 +2135,20 @@ public:
         const godot::RID &p_layer,
         const godot::Callable &p_callback
     );
+    void layer_set_driver(
+        const godot::RID &p_layer,
+        const godot::Callable &p_callback,
+        bool p_typed
+    );
+    godot::Callable layer_get_driver(const godot::RID &p_layer, bool p_typed)
+        const;
+    void layer_set_monitor(
+        const godot::RID &p_layer,
+        const godot::Callable &p_callback,
+        bool p_typed
+    );
+    godot::Callable layer_get_monitor(const godot::RID &p_layer, bool p_typed)
+        const;
 
     godot::Error run_layer_drivers();
     int64_t layer_driver_count() const;
@@ -1963,7 +2158,7 @@ public:
 #if defined(NETW_PROFILING)
     void profile_book_bytes() const;
 #endif
-    void predict_stepper_install(
+    godot::Error predict_stepper_install(
         const godot::RID &p_space,
         const godot::Ref<NetwPhysicsStepper> &p_stepper
     );
@@ -1987,7 +2182,7 @@ public:
     NetwPredictSlotEngine *predict_engine_release(const godot::RID &p_entity);
     NetwPredictSlotEngine *predict_engine_for(const godot::RID &p_entity) const;
     bool predict_engine_seated(const godot::RID &p_entity) const;
-    godot::TypedArray<godot::Object> predict_engine_entities() const;
+    godot::TypedArray<NetwEntity> predict_engine_entities() const;
     sim::Row &sim_row(const godot::RID &p_entity);
     const sim::Row *sim_row_of(const godot::RID &p_entity) const;
     store::World &store() {
@@ -2249,7 +2444,7 @@ public:
     void frame_step();
     int64_t pending_action_count() const;
     int64_t action_gate_fallbacks() const;
-    godot::TypedArray<godot::Object> predict_stepped_entities() const;
+    godot::TypedArray<NetwEntity> predict_stepped_entities() const;
     godot::Dictionary predict_metrics() const;
 
     bool interest_admits(const godot::RID &p_entity, int64_t p_peer);
@@ -2558,7 +2753,7 @@ public:
     int64_t register_rewind(const godot::Ref<NetwEntity> &p_entity);
     static bool is_extension_script(const godot::Ref<godot::Script> &p_script);
 
-    godot::Ref<NetwPredictionHandle> prediction_handle(
+    godot::Ref<NetwPrediction> prediction_handle(
         const godot::RID &p_entity
     ) const;
     void predict_set_param(
@@ -2570,6 +2765,7 @@ public:
         const godot::RID &p_entity,
         PredictParam p_param
     );
+    godot::Ref<NetwPredictStats> predict_get_stats(const godot::RID &p_entity);
     void predict_set_sensor_callback(
         const godot::RID &p_entity,
         const godot::StringName &p_name,
@@ -2592,7 +2788,7 @@ public:
         godot::Object *p_owner
     );
     void predict_unbind_owner(const godot::RID &p_entity);
-    godot::Ref<NetwSimulationHandle> simulation_handle(
+    godot::Ref<NetwSimulation> simulation_handle(
         const godot::RID &p_entity
     ) const;
     void simulation_set_param(
@@ -2608,7 +2804,7 @@ public:
         const godot::RID &p_entity,
         const godot::Callable &p_callback
     );
-    NetwSimulationHandle::Mode simulation_get_mode(const godot::RID &p_entity);
+    NetwSimulation::Mode simulation_get_mode(const godot::RID &p_entity);
     godot::Variant predict_sensor_sample(
         const godot::RID &p_entity,
         const godot::StringName &p_name,
@@ -2704,6 +2900,7 @@ public:
     );
     godot::RID scene_get_layer(const godot::RID &p_scene);
     godot::RID scene_presented() const;
+    godot::RID scene_of_peer(int64_t p_peer);
     godot::SubViewport *scene_player_viewport();
     bool scene_destroy(const godot::RID &p_scene);
     godot::TypedArray<NetwEntity> scene_bodies_all();
@@ -2727,8 +2924,7 @@ public:
     );
     static bool law_extension_named();
     static godot::Ref<godot::Script> law_extension_script();
-    static godot::Ref<NetwMultiplayer> make(
-        const godot::Ref<godot::SceneMultiplayer> &p_inner,
+    static godot::Ref<NetwMultiplayer> create(
         const godot::Ref<godot::Script> &p_implementation
     );
     static void install_default_interface();
@@ -3428,7 +3624,7 @@ public:
     }
 
     godot::RID table_create(const godot::RID &p_schema);
-    godot::Ref<NetwTableHandle> get_table_handle(const godot::RID &p_table);
+    godot::Ref<NetwTable> get_table_handle(const godot::RID &p_table);
     godot::RID table_get_schema(const godot::RID &p_table) const;
     void table_set_param(
         const godot::RID &p_table,
@@ -3541,7 +3737,7 @@ public:
     void set_max_future_action_ticks(int p_value);
     int get_input_gate_deadline_ticks() const;
     void set_input_gate_deadline_ticks(int p_value);
-    godot::TypedArray<godot::Object> get_connected_players() const;
+    godot::TypedArray<NetwPlayer> get_connected_players() const;
 
     godot::Error relay_subscribe(
         const godot::Ref<NetwEntity> &p_entity,
@@ -3604,7 +3800,10 @@ public:
     godot::Node *entity_get_node(const godot::RID &p_entity) const;
     godot::RID entity_get_parent(const godot::RID &p_entity);
     int64_t entity_get_peer(const godot::RID &p_entity) const;
-    void entity_grant_control(const godot::RID &p_entity, int64_t p_peer);
+    godot::Error entity_grant_control(
+        const godot::RID &p_entity,
+        int64_t p_peer
+    );
     EntityState entity_get_state(const godot::RID &p_entity) const;
     int entity_get_epoch(const godot::RID &p_entity) const;
     godot::RID entity_from_route(int p_route) const;
@@ -3722,9 +3921,9 @@ public:
     const connect::ConnectCore &connect_plane() const {
         return connect_core;
     }
-    godot::Ref<NetwConnectHandle> get_connection();
-    godot::Ref<NetwSessionHandle> get_session();
-    godot::Ref<NetwClockHandle> get_clock();
+    godot::Ref<NetwConnection> get_connection();
+    godot::Ref<NetwSession> get_session();
+    godot::Ref<NetwClock> get_clock();
 
     godot::RID endpoint_add(
         const godot::RID &p_transport,
@@ -3907,6 +4106,30 @@ public:
     int64_t lagcomp_effect_count() const;
     void lagcomp_effect_sweep(int64_t p_tick);
 
+    void clock_event(
+        ClockEngine::Event p_event,
+        const godot::Variant &p_a,
+        const godot::Variant &p_b
+    );
+    godot::Error observe(Notification p_event, const godot::Callable &p_callback);
+    void unobserve(Notification p_event, const godot::Callable &p_callback);
+    template <typename... Args>
+    void notify(Notification p_event, const Args &...p_args) {
+        if (observers[p_event].is_empty()) {
+            return;
+        }
+        godot::LocalVector<godot::Callable> snapshot;
+        snapshot.reserve(observers[p_event].size());
+        for (const godot::Callable &held : observers[p_event]) {
+            snapshot.push_back(held);
+        }
+        for (const godot::Callable &held : snapshot) {
+            if (held.is_valid() && is_observing(p_event, held)) {
+                held.call(godot::Variant(p_args)...);
+            }
+        }
+    }
+
     int64_t event_watch(
         const godot::PackedInt64Array &p_events,
         const godot::Dictionary &p_target,
@@ -4031,7 +4254,7 @@ public:
 
     godot::RID scene_of(const godot::RID &p_entity) const;
 
-    godot::Ref<NetwSceneHandle> scene_handle_of(const godot::RID &p_entity);
+    godot::Ref<NetwScene> scene_handle_of(const godot::RID &p_entity);
 
     godot::RID scene_report_entity_edge(
         const godot::RID &p_subject,
@@ -4039,7 +4262,7 @@ public:
         bool p_is_player
     );
 
-    godot::Ref<NetwSceneHandle> entity_scene_facet(
+    godot::Ref<NetwScene> entity_scene_facet(
         NetwEntityRecord *p_record,
         NetwEntity *p_wrapper
     );
@@ -4271,6 +4494,11 @@ public:
     godot::SubViewport *scene_resolve_player_viewport();
     void scene_player_display_invalidate();
     void scene_player_display_settle();
+    void scene_reached_by(
+        int64_t p_peer,
+        godot::LocalVector<godot::RID> &r_reached,
+        bool &r_stands
+    );
     godot::RID scene_presentation_derive();
     void scene_presentation_settle();
     void scene_register_constructor();
@@ -4285,7 +4513,7 @@ public:
     godot::Node *scene_activate(const godot::Variant &p_destination);
     godot::Node *announce_scene_activated(godot::Node *p_active);
     godot::Node *scene_resolve_destination(const godot::Variant &p_destination);
-    godot::Ref<NetwSceneHandle> scene_handle_for(godot::Node *p_container);
+    godot::Ref<NetwScene> scene_handle_for(godot::Node *p_container);
     static double scene_request_deadline();
     godot::Ref<NetwPromise> scene_replace_sources(
         const godot::Variant &p_destination,
@@ -4293,10 +4521,6 @@ public:
         int p_scope
     );
     void scene_land_transition();
-    void scene_announce_changed(
-        const godot::RID &p_destination,
-        const godot::PackedInt64Array &p_peers
-    );
     godot::PackedInt64Array scene_transition_every_member() const;
     godot::Array scene_sources_for_scope(int p_scope, godot::Node *p_source);
     godot::Ref<NetwPromise> scene_apply_change(
@@ -4405,7 +4629,7 @@ public:
 
     void entity_settle_peer_departure(int64_t p_peer);
 
-    godot::TypedArray<godot::Object> wrapper_live() const;
+    godot::TypedArray<NetwEntity> wrapper_live() const;
 
     void wrapper_sweep_retired();
     void wrapper_unindex_owner(int64_t p_id, const NetwEntity *p_wrapper);
@@ -4447,7 +4671,7 @@ public:
 
     bool player_admit(int64_t p_peer);
     godot::Ref<NetwPlayer> player_admitted_of(int64_t p_peer) const;
-    godot::TypedArray<godot::Object> player_admitted_all() const;
+    godot::TypedArray<NetwPlayer> player_admitted_all() const;
     godot::Ref<NetwPlayer> player_admitted_local();
     godot::Ref<NetwPlayer> scene_requester_player(godot::Node *p_requester);
     void player_publish_joined(int64_t p_peer);
@@ -4644,7 +4868,7 @@ public:
     godot::TypedArray<NetwEntity> scene_body_roots_of(int64_t p_peer);
     godot::Ref<NetwPromise> player_travel(
         const godot::Ref<NetwPlayer> &p_player,
-        const godot::Ref<NetwSceneHandle> &p_destination
+        const godot::Ref<NetwScene> &p_destination
     );
     void scene_leave_everything_but(
         int64_t p_peer,
@@ -4652,7 +4876,7 @@ public:
     );
 
     godot::Node *liveness_node_of(int64_t p_route) const;
-    godot::TypedArray<godot::Object> liveness_get_entities() const;
+    godot::TypedArray<NetwEntity> liveness_get_entities() const;
 
     void liveness_schedule_when_live(
         int64_t p_route,

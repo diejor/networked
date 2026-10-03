@@ -141,10 +141,10 @@ func _scan_world() -> WorldSnapshot:
 	return snap
 
 
-func _find_world() -> NetwSceneHandle:
+func _find_world() -> NetwScene:
 	if not _runner or not _runner.tree:
 		return null
-	return Netw.scene(_runner.tree, &"World")
+	return _runner.session.find_scene(&"World")
 
 
 func _to_cell(pos: Vector2) -> Vector2i:
@@ -164,7 +164,7 @@ func _cell_center(cell: Vector2i) -> Vector2:
 func _extract_player_name(node: Node) -> StringName:
 	var entity := NetwEntity.of(node)
 	assert(entity, "Node must have a valid NetwEntity record")
-	return entity.entity_id
+	return entity.name
 
 
 func _flee_target(snap: WorldSnapshot) -> Variant:

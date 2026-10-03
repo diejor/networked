@@ -41,11 +41,11 @@ Methods
 .. table::
    :widths: auto
 
-   +--------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | |void| | :ref:`open_add<class_AddPopup_method_open_add>`\ (\ handle\: :ref:`NetwConnectHandle<class_NetwConnectHandle>`\ )                                                                                                     |
-   +--------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | |void| | :ref:`open_edit<class_AddPopup_method_open_edit>`\ (\ handle\: :ref:`NetwConnectHandle<class_NetwConnectHandle>`, peer_class\: :godot:`StringName`, address\: :godot:`String`, authored\: :godot:`Dictionary` = {}\ ) |
-   +--------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   +--------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | |void| | :ref:`open_add<class_AddPopup_method_open_add>`\ (\ handle\: :ref:`NetwConnection<class_NetwConnection>`\ )                                                                                                     |
+   +--------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | |void| | :ref:`open_edit<class_AddPopup_method_open_edit>`\ (\ handle\: :ref:`NetwConnection<class_NetwConnection>`, peer_class\: :godot:`StringName`, address\: :godot:`String`, authored\: :godot:`Dictionary` = {}\ ) |
+   +--------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 
 .. rst-class:: classref-section-separator
 
@@ -98,7 +98,7 @@ Method Descriptions
 
 .. rst-class:: classref-method
 
-|void| **open_add**\ (\ handle\: :ref:`NetwConnectHandle<class_NetwConnectHandle>`\ ) :ref:`🔗<class_AddPopup_method_open_add>`
+|void| **open_add**\ (\ handle\: :ref:`NetwConnection<class_NetwConnection>`\ ) :ref:`🔗<class_AddPopup_method_open_add>`
 
 Opens an empty form to add a server.
 
@@ -110,7 +110,7 @@ Opens an empty form to add a server.
 
 .. rst-class:: classref-method
 
-|void| **open_edit**\ (\ handle\: :ref:`NetwConnectHandle<class_NetwConnectHandle>`, peer_class\: :godot:`StringName`, address\: :godot:`String`, authored\: :godot:`Dictionary` = {}\ ) :ref:`🔗<class_AddPopup_method_open_edit>`
+|void| **open_edit**\ (\ handle\: :ref:`NetwConnection<class_NetwConnection>`, peer_class\: :godot:`StringName`, address\: :godot:`String`, authored\: :godot:`Dictionary` = {}\ ) :ref:`🔗<class_AddPopup_method_open_edit>`
 
 Opens the form to edit the saved server at ``peer_class`` and ``address``, filled with its saved ``authored`` settings.
 

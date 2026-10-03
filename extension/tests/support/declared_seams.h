@@ -15,7 +15,7 @@ func _timeout_hint() -> float:
 
 func _make_peer(
 	_ticket: RID,
-	_mode: NetwMultiplayer.TransportMode,
+	_mode: NetwConnection.TransportMode,
 	_address: String,
 	_settings: Dictionary,
 ) -> void:
@@ -32,7 +32,7 @@ func _display_name() -> String:
 
 func _make_peer(
 	ticket: RID,
-	_mode: NetwMultiplayer.TransportMode,
+	_mode: NetwConnection.TransportMode,
 	_address: String,
 	_settings: Dictionary,
 ) -> void:
@@ -52,7 +52,7 @@ func _display_name() -> String:
 
 func _make_peer(
 	_ticket: RID,
-	_mode: NetwMultiplayer.TransportMode,
+	_mode: NetwConnection.TransportMode,
 	_address: String,
 	_settings: Dictionary,
 ) -> void:

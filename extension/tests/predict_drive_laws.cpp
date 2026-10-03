@@ -2,8 +2,7 @@
 
 #include "godot/physics_body.hpp"
 #include "godot/scene_tree.hpp"
-#include "netw/api/predict.hpp"
-#include "netw/api/prediction_handle.hpp"
+#include "netw/api/prediction.hpp"
 #include "netw/predict/engine.hpp"
 #include "netw/predict/frame_records.hpp"
 #include "support/netw_cells.h"
@@ -977,7 +976,7 @@ TEST_CASE(
         PackedInt32Array classes;
         classes.append(int(netw::predict::SENSOR_WITNESS_STATIC));
         PackedInt32Array realized;
-        realized.append(int(netw::NetwPredict::CONTACT_CLASS_OTHER_STATIC));
+        realized.append(int(netw::NetwPrediction::CONTACT_CLASS_OTHER_STATIC));
         PackedByteArray outside;
         outside.append(0);
         pool->record_evidence(
@@ -1036,7 +1035,7 @@ TEST_CASE(
     Node *own = memnew(Node);
     own->set_name("Own");
     const Ref<netw::NetwEntity> mine = netw::NetwEntity::ensure(own);
-    mine->set_entity_id(StringName("mine"));
+    mine->set_name(StringName("mine"));
     scene->add_child(own);
     const int64_t slot = pool->slot_register(mine);
 
@@ -1122,14 +1121,14 @@ TEST_CASE(
     Node *own = memnew(Node);
     own->set_name("Own");
     const Ref<netw::NetwEntity> mine = netw::NetwEntity::ensure(own);
-    mine->set_entity_id(StringName("mine"));
+    mine->set_name(StringName("mine"));
     scene->add_child(own);
     const int64_t slot = pool->slot_register(mine);
 
     Node *peer = memnew(Node);
     peer->set_name("Peer");
     const Ref<netw::NetwEntity> theirs = netw::NetwEntity::ensure(peer);
-    theirs->set_entity_id(StringName("theirs"));
+    theirs->set_name(StringName("theirs"));
     scene->add_child(peer);
 
     Node *ground = memnew(StaticBody3D);
@@ -1149,12 +1148,12 @@ TEST_CASE(
     CHECK(pool->contact_breaches_boundary(slot, bare, String(), none));
     CHECK(pool->contact_breaches_boundary(slot, peer, String(), none));
 
-    const Ref<netw::NetwPredictionHandle> declared = theirs->get_prediction();
+    const Ref<netw::NetwPrediction> declared = theirs->get_prediction();
     REQUIRE(declared.is_valid());
-    declared->set_sim_mode(netw::NetwPredict::SIM_MODE_SPECULATIVE);
+    declared->set_sim_mode(netw::NetwPrediction::SIM_MODE_SPECULATIVE);
     CHECK_FALSE(pool->contact_breaches_boundary(slot, peer, String(), joined));
 
-    declared->set_sim_mode(netw::NetwPredict::SIM_MODE_DISPLAY);
+    declared->set_sim_mode(netw::NetwPrediction::SIM_MODE_DISPLAY);
     CHECK(pool->contact_breaches_boundary(slot, peer, String(), joined));
 
     CHECK_FALSE(pool->contact_breaches_boundary(
@@ -1197,34 +1196,34 @@ TEST_CASE(
     Node *plain = memnew(Node);
     plain->set_name("Loose");
     const Ref<netw::NetwEntity> loose = netw::NetwEntity::ensure(plain);
-    loose->set_entity_id(StringName("loose"));
+    loose->set_name(StringName("loose"));
     scene->add_child(plain);
 
     NETW_CHECK_EQ(
         pool->classify_collider(plain, String()),
-        int(netw::NetwPredict::CONTACT_CLASS_UNPREDICTED_DYNAMIC)
+        int(netw::NetwPrediction::CONTACT_CLASS_UNPREDICTED_DYNAMIC)
     );
 
     pool->slot_register(loose);
     NETW_CHECK_EQ(
         pool->classify_collider(plain, String()),
-        int(netw::NetwPredict::CONTACT_CLASS_PREDICTED_DYNAMIC)
+        int(netw::NetwPrediction::CONTACT_CLASS_PREDICTED_DYNAMIC)
     );
 
     NETW_CHECK_EQ(
         pool->classify_collider(plain, pool->collider_identity(plain)),
-        int(netw::NetwPredict::CONTACT_CLASS_DECLARED_SUPPORT)
+        int(netw::NetwPrediction::CONTACT_CLASS_DECLARED_SUPPORT)
     );
 
     pool->slot_unregister(loose);
     NETW_CHECK_EQ(
         pool->classify_collider(plain, String()),
-        int(netw::NetwPredict::CONTACT_CLASS_UNPREDICTED_DYNAMIC)
+        int(netw::NetwPrediction::CONTACT_CLASS_UNPREDICTED_DYNAMIC)
     );
 
     NETW_CHECK_EQ(
         pool->classify_collider(nullptr, String()),
-        int(netw::NetwPredict::CONTACT_CLASS_UNPREDICTED_DYNAMIC)
+        int(netw::NetwPrediction::CONTACT_CLASS_UNPREDICTED_DYNAMIC)
     );
 
     Node *ground = memnew(StaticBody3D);
@@ -1232,11 +1231,11 @@ TEST_CASE(
     scene->add_child(ground);
     NETW_CHECK_EQ(
         pool->classify_collider(ground, String()),
-        int(netw::NetwPredict::CONTACT_CLASS_OTHER_STATIC)
+        int(netw::NetwPrediction::CONTACT_CLASS_OTHER_STATIC)
     );
     NETW_CHECK_EQ(
         pool->classify_collider(ground, pool->collider_identity(ground)),
-        int(netw::NetwPredict::CONTACT_CLASS_DECLARED_SUPPORT)
+        int(netw::NetwPrediction::CONTACT_CLASS_DECLARED_SUPPORT)
     );
 
     Node *lift = memnew(AnimatableBody3D);
@@ -1244,7 +1243,7 @@ TEST_CASE(
     scene->add_child(lift);
     NETW_CHECK_EQ(
         pool->classify_collider(lift, String()),
-        int(netw::NetwPredict::CONTACT_CLASS_KINEMATIC_PROXY)
+        int(netw::NetwPrediction::CONTACT_CLASS_KINEMATIC_PROXY)
     );
 
     RigidBody3D *crate = memnew(RigidBody3D);
@@ -1252,12 +1251,12 @@ TEST_CASE(
     scene->add_child(crate);
     NETW_CHECK_EQ(
         pool->classify_collider(crate, String()),
-        int(netw::NetwPredict::CONTACT_CLASS_UNPREDICTED_DYNAMIC)
+        int(netw::NetwPrediction::CONTACT_CLASS_UNPREDICTED_DYNAMIC)
     );
     crate->set("freeze", true);
     NETW_CHECK_EQ(
         pool->classify_collider(crate, String()),
-        int(netw::NetwPredict::CONTACT_CLASS_KINEMATIC_PROXY)
+        int(netw::NetwPrediction::CONTACT_CLASS_KINEMATIC_PROXY)
     );
 
     scene->remove_child(plain);
@@ -1287,13 +1286,13 @@ TEST_CASE(
     Node *body = memnew(Node);
     body->set_name("Body");
     const Ref<netw::NetwEntity> entity = netw::NetwEntity::ensure(body);
-    entity->set_entity_id(StringName("racer"));
+    entity->set_name(StringName("racer"));
     scene->add_child(body);
 
     Node *wrapper = memnew(Node);
     wrapper->set_name("Wrapper");
     const Ref<netw::NetwEntity> scenery = netw::NetwEntity::ensure(wrapper);
-    scenery->set_entity_id(StringName("level"));
+    scenery->set_name(StringName("level"));
     scenery->set_declares_scene(true);
     scene->add_child(wrapper);
 

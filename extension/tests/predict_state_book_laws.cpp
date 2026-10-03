@@ -309,7 +309,7 @@ SteadyCorrection steady_correction() {
     Node *owner = rig.node_of(rig.entity_of("P", 0), 0);
     REQUIRE(owner != nullptr);
     owner->set("motion", Vector2(1.0, 0.0));
-    netw::NetwPredictionHandle *handle = rig.prediction_handle("P", 0);
+    netw::NetwPrediction *handle = rig.prediction_handle("P", 0);
     REQUIRE(handle != nullptr);
     const auto step = [&]() {
         nudge_authority(rig, "P");

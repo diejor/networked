@@ -27,7 +27,7 @@
 			When [code]true[/code], [method Node.queue_free] is deferred so a [MultiplayerSynchronizer] does not push state from a node that is already freed.
 		</member>
 		<member name="flush_save" type="bool" setter="set_flush_save" getter="get_flush_save" default="true">
-			When [code]true[/code], the entity's row is saved after the node leaves the tree. The despawn does not wait for the save, await [method NetwPersistenceHandle.save] before despawning if you need it stored.
+			When [code]true[/code], the entity's row is saved after the node leaves the tree. The despawn does not wait for the save, await [method NetwPersistence.save] before despawning if you need it stored.
 		</member>
 		<member name="linger" type="bool" setter="set_linger" getter="get_linger" default="false">
 			When [code]true[/code], the entity is deactivated now but freed only after [member linger_seconds], so a late shot can still hit where it was.

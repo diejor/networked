@@ -71,13 +71,13 @@ public:
         return values.use_physics_interpolation;
     }
 
-    void set_sync_mode(enums::NetwMultiplayer::SyncMode p_value) {
+    void set_sync_mode(enums::NetwClock::SyncMode p_value) {
         if (guard.takes_enum("sync_mode", p_value, 2)) {
             values.sync_mode = p_value;
         }
     }
-    enums::NetwMultiplayer::SyncMode get_sync_mode() const {
-        return enums::NetwMultiplayer::SyncMode(values.sync_mode);
+    enums::NetwClock::SyncMode get_sync_mode() const {
+        return enums::NetwClock::SyncMode(values.sync_mode);
     }
 
     void set_panic_snap_threshold(int64_t p_value) {
@@ -153,15 +153,15 @@ public:
     }
 
     void set_tickrate_mismatch_action(
-        enums::NetwMultiplayer::MismatchAction p_value
+        enums::NetwClock::MismatchAction p_value
     ) {
         if (guard.takes_enum("tickrate_mismatch_action", p_value, 3)) {
             values.tickrate_mismatch_action = p_value;
         }
     }
-    enums::NetwMultiplayer::MismatchAction
+    enums::NetwClock::MismatchAction
     get_tickrate_mismatch_action() const {
-        return enums::NetwMultiplayer::MismatchAction(
+        return enums::NetwClock::MismatchAction(
             values.tickrate_mismatch_action
         );
     }
@@ -169,7 +169,7 @@ public:
     godot::Ref<NetwClockConfig> ticks_per_second(int64_t p_value);
     godot::Ref<NetwClockConfig> display_offset_ticks(int64_t p_value);
     godot::Ref<NetwClockConfig> physics_interpolation(bool p_value);
-    godot::Ref<NetwClockConfig> sync(enums::NetwMultiplayer::SyncMode p_value);
+    godot::Ref<NetwClockConfig> sync(enums::NetwClock::SyncMode p_value);
 
     void seal(const godot::String &p_scope) {
         guard.seal(p_scope);

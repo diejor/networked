@@ -123,9 +123,6 @@ var _started: bool = false
 # Join request from the last connect_activity, replayed by reconnect().
 var _last_username: StringName = &""
 var _last_join_args: Array = []
-# Reason from the most recent session_server_disconnecting, carried into
-# session_lost.
-var _disconnect_reason: String = ""
 
 # Last roster reported by Discord, newest wins. Backs participants().
 var _participants: Array = []
@@ -178,10 +175,10 @@ func _should_register() -> bool:
 	return in_discord()
 
 
-func _service_entered(_api: NetwMultiplayer) -> void:
+func _service_entered(_session: NetwSession) -> void:
 	# This embed service is scoped to a tree (rendezvous transport, SDK parenting,
 	# tree-only drop signal). A root install resolves no tree, so it stays dormant.
-	var session: NetwSessionHandle = Netw.session(self)
+	var session: NetwSession = Netw.session(self)
 	var mt := session.root as MultiplayerTree if session else null
 	if mt == null:
 		return
@@ -194,15 +191,8 @@ func _service_entered(_api: NetwMultiplayer) -> void:
 	_push_identity()
 	# Bridge a dropped connection into the activity lifecycle so a host that leaves
 	# (or any transport drop) surfaces as session_lost while connected, the
-	# transition a game hangs its rematch policy on. disconnected fires only on an
-	# involuntary drop, never on a graceful local leave, so it is the precise loss
-	# signal; disconnecting carries the announced reason.
-	var edges: NetwSessionHandle = Netw.session(mt)
-	edges.disconnecting.connect(
-		func(reason: String) -> void:
-			_disconnect_reason = reason
-	)
-	edges.disconnected.connect(_on_session_dropped)
+	# transition a game hangs its rematch policy on. A local leave is not a loss.
+	Netw.session(mt).exited.connect(_on_session_dropped)
 	# The SDK is parented in start(), not here: add_child during service setup
 	# fails ("parent busy"), and the SDK's _ready() must run (it sets up the JS
 	# bridge) before start() calls init(), or init() no-ops and ready() hangs.
@@ -309,7 +299,7 @@ func authenticate() -> bool:
 func connect_activity(username: StringName, join_args: Array = []) -> Error:
 	if not await start():
 		return ERR_UNAVAILABLE
-	var session: NetwSessionHandle = Netw.session(self)
+	var session: NetwSession = Netw.session(self)
 	var mt := session.root as MultiplayerTree if session else null
 	if mt == null:
 		return ERR_UNCONFIGURED
@@ -535,13 +525,11 @@ func _set_state(to: State) -> void:
 # Bridges an involuntary connection drop into the activity lifecycle. Only a drop
 # underneath a live (CONNECTED) session is a loss the game should react to; a drop
 # reported from any other state is noise from an ordinary connect/leave flow.
-func _on_session_dropped() -> void:
-	if state != State.CONNECTED:
+func _on_session_dropped(reason: NetwSession.ExitReason, detail: String) -> void:
+	if state != State.CONNECTED or reason == NetwSession.LOCAL_LEAVE:
 		return
 	_set_state(State.DISCONNECTED)
-	var reason := _disconnect_reason if not _disconnect_reason.is_empty() else "host left"
-	_disconnect_reason = ""
-	session_lost.emit(reason)
+	session_lost.emit(detail if not detail.is_empty() else "host left")
 
 
 # Resolves the instance id once through _resolve_instance. Memoized so

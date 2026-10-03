@@ -93,7 +93,7 @@ TEST_CASE(
     NETW_CHECK_EQ(host->get_route(), int64_t(route));
     NETW_CHECK_EQ(seat->get_route(), int64_t(route));
 
-    const bool ids_agree = host->get_entity_id() == seat->get_entity_id();
+    const bool ids_agree = host->get_name() == seat->get_name();
     CHECK(ids_agree);
 }
 

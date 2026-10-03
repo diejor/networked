@@ -32,8 +32,8 @@ public:
     godot::StringName get_label() const {
         return held().label;
     }
-    enums::Netw::SceneIsolation get_isolation() const {
-        return enums::Netw::SceneIsolation(held().isolation);
+    enums::NetwScene::SceneIsolation get_isolation() const {
+        return enums::NetwScene::SceneIsolation(held().isolation);
     }
 
     godot::Ref<NetwSceneConfig> labeled(const godot::StringName &p_stem);

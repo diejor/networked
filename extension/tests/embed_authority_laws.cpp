@@ -7,14 +7,14 @@
 #include "godot/packed_scene.hpp"
 #include "godot/scene_tree.hpp"
 #include "netw/api/netw_multiplayer.hpp"
-#include "netw/api/scene_handle.hpp"
+#include "netw/api/scene.hpp"
 
 namespace TestEmbedAuthority {
 
 using namespace godot;
 using namespace netw_test;
 using netw::NetwMultiplayer;
-using netw::NetwSceneHandle;
+using netw::NetwScene;
 
 constexpr int COORDINATOR = 7;
 constexpr int MEMBER = 9;
@@ -222,7 +222,7 @@ TEST_CASE(
 
     const RID opened = first_scene(host);
     NETW_CHECK_EQ(int(host->scene_list().size()), 1);
-    const Ref<NetwSceneHandle> world = host->scene_handle_of(opened);
+    const Ref<NetwScene> world = host->scene_handle_of(opened);
     NETW_CHECK_EQ(int(world.is_valid()), 1);
     NETW_CHECK_EQ(
         int(world.is_valid() ? world->watch(host->player_of(MEMBER))

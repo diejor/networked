@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <class name="NetwTransport" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
 	<brief_description>
-		Extend it so [NetwConnectHandle] can create, list and check servers for your own [MultiplayerPeer] class.
+		Extend it so [NetwConnection] can create, list and check servers for your own [MultiplayerPeer] class.
 	</brief_description>
 	<description>
-		A transport creates peers of one [MultiplayerPeer] class, lists servers, and checks a server without joining it. Register it with [method NetwConnectHandle.register_transport]. For WebRTC, see [NetwWebRTCSignaler].
+		A transport creates peers of one [MultiplayerPeer] class, lists servers, and checks a server without joining it. Register it with [method NetwConnection.register_transport]. For WebRTC, see [NetwWebRTCSignaler].
 		[codeblock]
 		class_name RelayTransport
 		extends NetwTransport
@@ -16,7 +16,7 @@
 		    return {region = "eu"}
 
 		func _make_peer(
-		        ticket: RID, mode: NetwMultiplayer.TransportMode,
+		        ticket: RID, mode: NetwConnection.TransportMode,
 		        address: String, settings: Dictionary) -&gt; void:
 		    report(ticket, &amp;"handshake", "Reaching the relay...", 0.5)
 		    var peer := RelayMultiplayerPeer.new()
@@ -32,7 +32,7 @@
 
 		# somewhere in the game
 		func _ready() -&gt; void:
-		    Netw.connection(self).register_transport(RelayTransport)
+		    Netw.session(self).connection.register_transport(RelayTransport)
 		[/codeblock]
 		[method _make_peer] and [method _probe] may [code]await[/code]. They report the result by calling [method deliver], [method deliver_probe] or [method fail] once, with the [code]ticket[/code] they received. Keep [code]ticket[/code] in a local variable, not a member, since another request may start while one awaits. With no report, the request fails after [method _timeout_hint] seconds.
 		Methods starting with an underscore are overridden. Each has a public method that calls it, and a [code]_default[/code] method with the default behavior.
@@ -105,7 +105,7 @@
 		<method name="_client_settings" qualifiers="virtual">
 			<return type="Dictionary" />
 			<description>
-				Return the fields a join form asks for, with their default values. They are passed to [method _make_peer] in [constant NetwMultiplayer.TRANSPORT_MODE_CLIENT].
+				Return the fields a join form asks for, with their default values. They are passed to [method _make_peer] in [constant NetwConnection.TRANSPORT_MODE_CLIENT].
 				[codeblock]
 				func _client_settings() -&gt; Dictionary:
 				    return {region = "eu"}
@@ -127,7 +127,7 @@
 			<return type="Dictionary" />
 			<param index="0" name="peer_id" type="int" />
 			<description>
-				Return any debugging information about [param peer_id], shown by [method NetwConnectHandle.diagnostics].
+				Return any debugging information about [param peer_id], shown by [method NetwConnection.diagnostics].
 			</description>
 		</method>
 		<method name="_display_name" qualifiers="virtual">
@@ -139,7 +139,7 @@
 		<method name="_host_settings" qualifiers="virtual">
 			<return type="Dictionary" />
 			<description>
-				Return the fields a host form asks for, with their default values. They are passed to [method _make_peer] in [constant NetwMultiplayer.TRANSPORT_MODE_HOST].
+				Return the fields a host form asks for, with their default values. They are passed to [method _make_peer] in [constant NetwConnection.TRANSPORT_MODE_HOST].
 			</description>
 		</method>
 		<method name="_is_available" qualifiers="virtual">
@@ -157,11 +157,11 @@
 		<method name="_make_peer" qualifiers="virtual">
 			<return type="void" />
 			<param index="0" name="ticket" type="RID" />
-			<param index="1" name="mode" type="int" enum="NetwMultiplayer.TransportMode" />
+			<param index="1" name="mode" type="int" enum="NetwConnection.TransportMode" />
 			<param index="2" name="address" type="String" />
 			<param index="3" name="settings" type="Dictionary" />
 			<description>
-				Create a peer, then call [method deliver] or [method fail] with [param ticket]. [constant NetwMultiplayer.TRANSPORT_MODE_HOST] creates a server from [param settings]. [constant NetwMultiplayer.TRANSPORT_MODE_CLIENT] creates a client that joins [param address].
+				Create a peer, then call [method deliver] or [method fail] with [param ticket]. [constant NetwConnection.TRANSPORT_MODE_HOST] creates a server from [param settings]. [constant NetwConnection.TRANSPORT_MODE_CLIENT] creates a client that joins [param address].
 				Deliver the peer while it is still connecting, without waiting for it to connect. When hosting fails because the port is taken, fail with [constant @GlobalScope.ERR_ALREADY_IN_USE]. The default fails with [constant @GlobalScope.ERR_UNCONFIGURED].
 			</description>
 		</method>

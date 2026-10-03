@@ -10,11 +10,8 @@ namespace netw {
 
 namespace {
 
-const char *SIG_COMPLETED = "completed";
-const char *SIG_COMPLETED_SINGLE = "completed_single";
-const char *SIG_FAILED = "failed";
+const char *SIG_PEER_COMPLETED = "peer_completed";
 const char *SIG_SETTLED = "settled";
-const char *SIG_READY = "ready";
 
 } // namespace
 
@@ -80,7 +77,7 @@ void NetwGroupPromise::resolve_peer(int64_t p_peer, const Variant &p_value) {
         return;
     }
     results[p_peer] = p_value;
-    emit_signal(StringName(SIG_COMPLETED_SINGLE), p_peer, p_value);
+    emit_signal(StringName(SIG_PEER_COMPLETED), p_peer, p_value);
     if (expected.is_empty()) {
         resolve_all();
     }
@@ -100,12 +97,7 @@ Variant NetwGroupPromise::answer() const {
 }
 
 Signal NetwGroupPromise::wait() {
-    if (completed || failed) {
-        Callable(this, StringName("emit_signal"))
-            .bind(StringName(SIG_READY), answer())
-            .call_deferred();
-    }
-    return Signal(this, StringName(SIG_READY));
+    return promise_wait::open(waiting, completed || failed, answer());
 }
 
 void NetwGroupPromise::resolve_all() {
@@ -113,15 +105,14 @@ void NetwGroupPromise::resolve_all() {
         return;
     }
     completed = true;
-    emit_signal(StringName(SIG_COMPLETED), results);
     emit_signal(StringName(SIG_SETTLED));
-    emit_signal(StringName(SIG_READY), results);
     const LocalVector<Callable> chained(then_callbacks);
     Array args;
     args.push_back(results);
     for (uint32_t at = 0; at < chained.size(); ++at) {
         chained[at].callv(args);
     }
+    promise_wait::release(waiting, results);
 }
 
 void NetwGroupPromise::reject(Error p_code, const String &p_detail) {
@@ -131,20 +122,18 @@ void NetwGroupPromise::reject(Error p_code, const String &p_detail) {
     failed = true;
     code = p_code;
     detail = p_detail;
-    if (catch_callbacks.is_empty()
-        && !has_connections(StringName(SIG_FAILED))) {
+    if (catch_callbacks.is_empty() && waiting.is_empty()
+        && !has_connections(StringName(SIG_SETTLED))) {
         NETW_WARN(
             sys::SESSION,
             "A NetwGroupPromise failed with error %d (%s) and nothing "
-            "handled it. Attach NetwGroupPromise.catch_error or connect its "
-            "failed signal.",
+            "handled it. Attach NetwGroupPromise.catch_error or await "
+            "NetwGroupPromise.wait.",
             p_code,
             p_detail
         );
     }
-    emit_signal(StringName(SIG_FAILED), p_code, p_detail);
     emit_signal(StringName(SIG_SETTLED));
-    emit_signal(StringName(SIG_READY), p_code);
     const LocalVector<Callable> chained(catch_callbacks);
     Array args;
     args.push_back(p_code);
@@ -152,6 +141,7 @@ void NetwGroupPromise::reject(Error p_code, const String &p_detail) {
     for (uint32_t at = 0; at < chained.size(); ++at) {
         chained[at].callv(args);
     }
+    promise_wait::release(waiting, Variant(p_code));
 }
 
 void NetwGroupPromise::_bind_methods() {
@@ -231,28 +221,18 @@ void NetwGroupPromise::_bind_methods() {
     ClassDB::bind_method(D_METHOD("get_detail"), &NetwGroupPromise::get_detail);
     ADD_PROPERTY(PropertyInfo(Variant::STRING, "detail"), "", "get_detail");
 
-    ADD_SIGNAL(
-        MethodInfo(SIG_COMPLETED, PropertyInfo(Variant::DICTIONARY, "results"))
-    );
     ADD_SIGNAL(MethodInfo(
-        SIG_COMPLETED_SINGLE,
+        SIG_PEER_COMPLETED,
         PropertyInfo(Variant::INT, "peer_id"),
-        PropertyInfo(Variant::NIL, "value")
-    ));
-    ADD_SIGNAL(MethodInfo(
-        SIG_FAILED,
         PropertyInfo(
-            Variant::INT,
-            "code",
+            Variant::NIL,
+            "value",
             PROPERTY_HINT_NONE,
             "",
-            PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_CLASS_IS_ENUM,
-            "Error"
-        ),
-        PropertyInfo(Variant::STRING, "detail")
+            PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_NIL_IS_VARIANT
+        )
     ));
     ADD_SIGNAL(MethodInfo(SIG_SETTLED));
-    ADD_SIGNAL(MethodInfo(SIG_READY, PropertyInfo(Variant::NIL, "answer")));
 }
 
 } // namespace netw

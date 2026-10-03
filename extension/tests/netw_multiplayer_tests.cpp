@@ -14,7 +14,7 @@
 #include "netw/api/netw_multiplayer.hpp"
 #include "netw/api/participant.hpp"
 #include "netw/api/replication_core.hpp"
-#include "netw/api/scene_handle.hpp"
+#include "netw/api/scene.hpp"
 #include "netw/api/session_config.hpp"
 #include "netw/carrier_frame.hpp"
 #include "netw/predict/frames.hpp"
@@ -1226,24 +1226,14 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Multiplayer][Hosted][SceneTree] a session announces a pause "
-    "once and writes the tree itself, and an ended session schedules its own "
-    "clear"
+    "[Networked][Multiplayer][Hosted] an ended session schedules its own clear"
 ) {
     Ref<NetwMultiplayer> session;
     session.instantiate();
-    SceneTree *loop = netw::gd::scene_tree();
-    REQUIRE(loop != nullptr);
-    REQUIRE(loop->is_paused() == false);
-
-    session->emit_signal("session_tree_paused", String("intermission"));
-    NETW_CHECK_EQ(loop->is_paused(), true);
-    session->emit_signal("session_tree_unpaused");
-    NETW_CHECK_EQ(loop->is_paused(), false);
 
     session->session_flush_deferred();
     NETW_CHECK_EQ(session->settle_pending(), 0);
-    session->emit_signal("session_ended");
+    session->session_announce_ended();
     NETW_CHECK_GT(session->settle_pending(), 0);
 }
 
@@ -1259,7 +1249,7 @@ TEST_CASE(
     );
     NETW_CHECK_EQ(session->settle_pending(), 1);
 
-    session->emit_signal("clock_after_tick", 0.0, 9);
+    session->clock_event(netw::ClockEngine::EVENT_AFTER_TICK, 0.0, 9);
     NETW_CHECK_EQ(session->settle_pending(), 0);
 }
 
@@ -1353,7 +1343,7 @@ TEST_CASE(
     local->bind_to(session.ptr(), 7);
     session->player_adopt(7, local);
 
-    session->emit_signal("session_reclaimed");
+    session->scene_on_session_reclaimed();
     CHECK_FALSE(session->scene_presented().is_valid());
 }
 
@@ -2095,6 +2085,23 @@ TEST_CASE(
 }
 
 TEST_CASE(
+    "[Networked][Multiplayer][Hosted][SceneTree] a pause the server announces "
+    "writes the tree itself, and its unpause writes it back"
+) {
+    Ref<NetwMultiplayer> core = session_at_peer_one();
+    SceneTree *loop = netw::gd::scene_tree();
+    REQUIRE(loop != nullptr);
+    REQUIRE(loop->is_paused() == false);
+    const int64_t pause = control_channel("SESSION_PAUSE");
+    const int64_t unpause = control_channel("SESSION_UNPAUSE");
+
+    core->session_publish_control(pause, SERVER, reason_frame("intermission"));
+    NETW_CHECK_EQ(loop->is_paused(), true);
+    core->session_publish_control(unpause, SERVER, PackedByteArray());
+    NETW_CHECK_EQ(loop->is_paused(), false);
+}
+
+TEST_CASE(
     "[Networked][Multiplayer][Hosted] a channel this band does not own is not "
     "consumed"
 ) {
@@ -2725,7 +2732,7 @@ TEST_CASE(
     Node *root = memnew(Node);
     const Bound container = bind_under(core, root, true, true);
     const Bound inside = bind_under(core, container.owner, true, false);
-    const Ref<netw::NetwSceneHandle> container_handle
+    const Ref<netw::NetwScene> container_handle
         = core->scene_handle_of(container.handle);
     Recorder session(core.ptr(), Vector<StringName>({"scene_live"}));
 
@@ -3037,7 +3044,7 @@ TEST_CASE(
     NetwMultiplayer::wrapper_stamp_identity(node, "valeria", 7);
 
     CHECK(node->get_name() == StringName("valeria"));
-    CHECK(wrapper->get_entity_id() == StringName("valeria"));
+    CHECK(wrapper->get_name() == StringName("valeria"));
     NETW_CHECK_EQ(wrapper->get_peer_id(), 7);
 
     SUBCASE(
@@ -3057,7 +3064,7 @@ TEST_CASE(
         ERR_PRINT_ON;
 
         CHECK(refused->get_name() == StringName("Standing"));
-        CHECK(untouched->get_entity_id() == StringName());
+        CHECK(untouched->get_name() == StringName());
         NETW_CHECK_EQ(untouched->get_peer_id(), 0);
         memdelete(refused);
     }

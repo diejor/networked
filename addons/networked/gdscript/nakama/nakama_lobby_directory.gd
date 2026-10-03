@@ -116,7 +116,7 @@ var _hosted_match_id: String = ""
 var _session_bound: bool = false
 
 
-func _service_entered(_api: NetwMultiplayer) -> void:
+func _service_entered(_session: NetwSession) -> void:
 	_wrapper = NakamaWrapper.new()
 	if not NakamaWrapper.is_addon_present():
 		push_warning(
@@ -129,7 +129,7 @@ func _service_entered(_api: NetwMultiplayer) -> void:
 	_wrapper.socket_closed.connect(_on_socket_closed)
 
 
-func _service_exiting(_api: NetwMultiplayer) -> void:
+func _service_exiting(_session: NetwSession) -> void:
 	if _wrapper != null:
 		if not _hosted_match_id.is_empty():
 			_wrapper.delete_lobby_card(_hosted_match_id)
@@ -291,7 +291,7 @@ func _local_member_name() -> String:
 
 
 func _local_app_id() -> String:
-	var session: NetwSessionHandle = Netw.session(self)
+	var session: NetwSession = Netw.session(self)
 	return String(session.config.app_id) if session else ""
 
 

@@ -11,7 +11,7 @@
 #include "netw/api/entity.hpp"
 #include "netw/api/netw_multiplayer.hpp"
 #include "netw/api/predict_stats.hpp"
-#include "netw/api/prediction_handle.hpp"
+#include "netw/api/prediction.hpp"
 #include "netw/predict/engine.hpp"
 #include "netw/sim/row.hpp"
 
@@ -22,7 +22,7 @@ using namespace netw_test;
 using netw::NetwEntity;
 using netw::NetwMultiplayer;
 using netw::NetwPredictionEngine;
-using netw::NetwPredictionHandle;
+using netw::NetwPrediction;
 
 const char *SEATED_ID = "selection_member";
 
@@ -143,7 +143,7 @@ TEST_CASE(
     REQUIRE(slot >= 0);
 
     const bool first_is_lower
-        = String(first->get_entity_id()) < String(second->get_entity_id());
+        = String(first->get_name()) < String(second->get_name());
     TypedArray<NetwEntity> descending;
     descending.push_back(first_is_lower ? second : first);
     descending.push_back(first_is_lower ? first : second);
@@ -155,7 +155,7 @@ TEST_CASE(
 
     pool->publish_island_roster(slot);
 
-    NetwPredictionHandle *handle = Object::cast_to<NetwPredictionHandle>(
+    NetwPrediction *handle = Object::cast_to<NetwPrediction>(
         netw::gd::live_object(owner->get_prediction())
     );
     REQUIRE(handle != nullptr);
@@ -211,7 +211,7 @@ TEST_CASE(
     const TypedArray<NetwEntity> candidates = core->sim_candidates(owner);
     REQUIRE(candidates.size() == 2);
     const bool alfa_first
-        = String(alfa->get_entity_id()) < String(zulu->get_entity_id());
+        = String(alfa->get_name()) < String(zulu->get_name());
     CHECK((Ref<NetwEntity>(candidates[0]) == (alfa_first ? alfa : zulu)));
     CHECK((Ref<NetwEntity>(candidates[1]) == (alfa_first ? zulu : alfa)));
 }

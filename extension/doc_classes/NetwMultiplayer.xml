@@ -4,41 +4,41 @@
 		The [MultiplayerAPI] implementation for a Networked session.
 	</brief_description>
 	<description>
-		Use [method Netw.of] to get the session for a node. Most game code should use [Netw] and the handle classes instead of calling this class directly.
+		Use [method Netw.of] to get it for a node. Its methods take the [RID] of an object such as a [NetwEntity] or a [NetwScene], and most game code uses those objects instead.
 		[codeblock]
 		var api := Netw.of(self)
-		api.entity_despawn(route)
-		api.scene_watch(scene, peer_id)
+		api.entity_despawn(NetwEntity.of(self).rid)
+		api.scene_watch(Netw.scene(self).rid, peer_id)
 		[/codeblock]
-		Each method prefix matches a class that wraps it.
-		- [code]scene_*[/code]: [NetwSceneHandle]
-		- [code]interest_*[/code]: [NetwInterestHandle]
-		- [code]session_*[/code]: [NetwSessionHandle]
-		- [code]clock_*[/code]: [NetwClockHandle]
-		- [code]predict_*[/code]: [NetwPredictionHandle]
+		Each method prefix matches the class that wraps it.
+		- [code]scene_*[/code]: [NetwScene]
+		- [code]interest_*[/code]: [NetwInterest]
+		- [code]session_*[/code]: [NetwSession]
+		- [code]clock_*[/code]: [NetwClock]
+		- [code]predict_*[/code]: [NetwPrediction]
 		- [code]entity_*[/code], [code]liveness_*[/code], and [code]spawn_*[/code]: [NetwEntity]
-		- [code]table_*[/code]: [NetwTableHandle]
+		- [code]table_*[/code]: [NetwTable]
 		- [code]schema_*[/code]: [NetwSchema]
 		- [code]lagcomp_*[/code]: [NetwAction]
 		- [code]peer_*[/code]: [NetwPlayer]
-		- [code]display_*[/code]: [NetwDisplayHandle]
-		- [code]endpoint_*[/code] and [code]embed_*[/code]: [NetwConnectHandle]
+		- [code]display_*[/code]: [NetwDisplay]
+		- [code]endpoint_*[/code] and [code]embed_*[/code]: [NetwConnection]
 		- [code]transport_*[/code]: [NetwTransport]
 		- [code]rpc_*[/code] and [code]sync_*[/code]: [NetwMemberConfig]
 		- [code]service_*[/code]: [NetwService]
-		- [code]database_*[/code] and [code]persist_*[/code]: [NetwDatabase] and [NetwPersistenceHandle]
+		- [code]database_*[/code] and [code]persist_*[/code]: [NetwDatabase] and [NetwPersistence]
 		- [code]stats_*[/code] and [code]attribution_*[/code]: [NetwPredictStats]
 		Methods beginning with an underscore are virtual. Override one in a script and call the matching [code]_default[/code] method to run the default behavior.
 		[codeblock]
 		extends NetwMultiplayer
 
 		func _predict_consume(
-		        depth: int, buffer: int) -&gt; NetwPredict.ConsumeAction:
+		        depth: int, buffer: int) -&gt; NetwPrediction.ConsumeAction:
 		    if depth &gt; 8:
-		        return NetwPredict.CONSUME_ACTION_REPLAY
+		        return NetwPrediction.CONSUME_ACTION_REPLAY
 		    return predict_consume_default(depth, buffer)
 		[/codeblock]
-		Install the subclass with [member MultiplayerTree.api_script]. [code]super[/code] does not work on these methods, so call the [code]_default[/code] method.
+		Install the subclass with [member MultiplayerTree.api_script], or create it with [code]new()[/code] and pass it to [method SceneTree.set_multiplayer]. [code]super[/code] does not work on these methods, so call the [code]_default[/code] method. Only a GDScript subclass can override them.
 	</description>
 	<tutorials>
 	</tutorials>
@@ -73,7 +73,7 @@
 			</description>
 		</method>
 		<method name="_predict_consume" qualifiers="virtual">
-			<return type="int" enum="NetwPredict.ConsumeAction" />
+			<return type="int" enum="NetwPrediction.ConsumeAction" />
 			<param index="0" name="depth" type="int" />
 			<param index="1" name="buffer" type="int" />
 			<description>
@@ -91,8 +91,8 @@
 		</method>
 		<method name="_predict_evaluate" qualifiers="virtual">
 			<return type="NetwPredictJudgement" />
-			<param index="0" name="domain" type="int" enum="NetwPredict.Domain" />
-			<param index="1" name="verdict" type="int" enum="NetwPredict.ExactVerdict" />
+			<param index="0" name="domain" type="int" enum="NetwPrediction.Domain" />
+			<param index="1" name="verdict" type="int" enum="NetwPrediction.ExactVerdict" />
 			<param index="2" name="predicted" type="Dictionary" />
 			<param index="3" name="payload" type="Dictionary" />
 			<param index="4" name="wiring" type="Dictionary" />
@@ -104,8 +104,8 @@
 		<method name="_predict_recover" qualifiers="virtual">
 			<return type="NetwPredictRecovery" />
 			<param index="0" name="payload" type="Dictionary" />
-			<param index="1" name="policy" type="int" enum="NetwPredict.RecoveryPolicy" />
-			<param index="2" name="restore" type="int" enum="NetwSimulationHandle.Restore" />
+			<param index="1" name="policy" type="int" enum="NetwPrediction.RecoveryPolicy" />
+			<param index="2" name="restore" type="int" enum="NetwSimulation.Restore" />
 			<param index="3" name="projection" type="Dictionary" />
 			<param index="4" name="current" type="Dictionary" />
 			<param index="5" name="pose_errors" type="Dictionary" />
@@ -113,7 +113,7 @@
 			<param index="7" name="verdict" type="Dictionary" />
 			<param index="8" name="tick_delta" type="float" />
 			<description>
-				Decides how a mispredicted entity is corrected to the authority's state. [param payload] is the authority's state, [param current] is the local one, and [param policy] is [method NetwPredictionHandle.resolved_recovery_policy]. With no override this returns [method predict_recover_default]. Returning [code]null[/code] emits [constant EVENT_SEAM_MISUSE] and the default is used.
+				Decides how a mispredicted entity is corrected to the authority's state. [param payload] is the authority's state, [param current] is the local one, and [param policy] is [method NetwPrediction.resolved_recovery_policy]. With no override this returns [method predict_recover_default]. Returning [code]null[/code] emits [constant EVENT_SEAM_MISUSE] and the default is used.
 			</description>
 		</method>
 		<method name="_spawn_admit_frame" qualifiers="virtual">
@@ -335,7 +335,7 @@
 		</method>
 		<method name="clock_get_monitor" qualifiers="const">
 			<return type="float" />
-			<param index="0" name="monitor" type="int" enum="NetwMultiplayer.ClockMonitor" />
+			<param index="0" name="monitor" type="int" enum="NetwClock.ClockMonitor" />
 			<description>
 				Returns one clock diagnostic value.
 			</description>
@@ -396,7 +396,7 @@
 			<param index="2" name="server_tick_phase" type="float" />
 			<param index="3" name="apply_lead" type="bool" />
 			<description>
-				Adjusts the local tick toward the server's using one round-trip [param sample], in seconds. [constant SYNC_MODE_SNAP] corrects at once, and [constant SYNC_MODE_STRETCH] corrects a little each frame until the difference passes [constant CLOCK_PARAM_PANIC_SNAP_THRESHOLD]. Returns the same [Dictionary] [signal clock_pong_received] carries.
+				Adjusts the local tick toward the server's using one round-trip [param sample], in seconds. [constant NetwClock.SYNC_MODE_SNAP] corrects at once, and [constant NetwClock.SYNC_MODE_STRETCH] corrects a little each frame until the difference passes [constant CLOCK_PARAM_PANIC_SNAP_THRESHOLD]. Returns the same [Dictionary] [constant CLOCK_PONG_RECEIVED] carries.
 				[codeblock lang=text]
 				Dictionary
 				┠╴rtt_raw                     float   this sample's round trip, in seconds
@@ -432,7 +432,7 @@
 		<method name="clock_is_stable" qualifiers="const">
 			<return type="bool" />
 			<description>
-				Returns [code]true[/code] when [constant CLOCK_MONITOR_RTT_JITTER] is below [constant CLOCK_PARAM_JITTER_STABILITY_THRESHOLD].
+				Returns [code]true[/code] when [constant NetwClock.CLOCK_MONITOR_RTT_JITTER] is below [constant CLOCK_PARAM_JITTER_STABILITY_THRESHOLD].
 			</description>
 		</method>
 		<method name="clock_is_synchronized" qualifiers="const">
@@ -457,7 +457,7 @@
 		<method name="clock_send_ping">
 			<return type="void" />
 			<description>
-				Sends an unreliable ping to the server. The reply emits [signal clock_pong_received].
+				Sends an unreliable ping to the server. The reply notifies [constant CLOCK_PONG_RECEIVED].
 			</description>
 		</method>
 		<method name="clock_set_gate">
@@ -469,9 +469,9 @@
 		</method>
 		<method name="clock_set_mismatch_action">
 			<return type="void" />
-			<param index="0" name="action" type="int" enum="NetwMultiplayer.MismatchAction" />
+			<param index="0" name="action" type="int" enum="NetwClock.MismatchAction" />
 			<description>
-				Sets what happens when the server's tickrate differs from this peer's. The default is [constant MISMATCH_ACTION_WARN].
+				Sets what happens when the server's tickrate differs from this peer's. The default is [constant NetwClock.MISMATCH_ACTION_WARN].
 			</description>
 		</method>
 		<method name="clock_set_param">
@@ -499,14 +499,14 @@
 			<return type="void" />
 			<param index="0" name="count" type="int" />
 			<description>
-				Runs [param count] ticks immediately. It does not emit [signal clock_before_tick_loop]. Wrap it in [method clock_tick_loop] when that is needed.
+				Runs [param count] ticks immediately. It does not notify [constant CLOCK_BEFORE_TICK_LOOP]. Wrap it in [method clock_tick_loop] when that is needed.
 			</description>
 		</method>
 		<method name="clock_tick_loop">
 			<return type="void" />
 			<param index="0" name="open" type="bool" />
 			<description>
-				Emits [signal clock_before_tick_loop] when [param open] is [code]true[/code], and [signal clock_after_tick_loop] otherwise. Predicted entities only run between the two.
+				Notifies [constant CLOCK_BEFORE_TICK_LOOP] when [param open] is [code]true[/code], and [constant CLOCK_AFTER_TICK_LOOP] otherwise. Predicted entities only run between the two.
 			</description>
 		</method>
 		<method name="complete_auth">
@@ -809,7 +809,7 @@
 			<param index="1" name="address" type="String" />
 			<param index="2" name="display_name" type="String" default="&quot;&quot;" />
 			<description>
-				Adds a server at [param address] reached through [param transport], and emits [signal endpoint_added]. Adding the same pair again returns the same [RID]. Returns an invalid [RID] when [param transport] is unknown.
+				Adds a server at [param address] reached through [param transport], and notifies [constant ENDPOINT_ADDED]. Adding the same pair again returns the same [RID]. Returns an invalid [RID] when [param transport] is unknown.
 				[codeblock]
 				var endpoint := api.endpoint_add(
 				        api.transport_find(&amp;"ENetMultiplayerPeer"),
@@ -836,9 +836,9 @@
 		<method name="endpoint_get_state">
 			<return type="Variant" />
 			<param index="0" name="endpoint" type="RID" />
-			<param index="1" name="state" type="int" enum="NetwMultiplayer.EndpointState" />
+			<param index="1" name="state" type="int" enum="NetwConnection.EndpointState" />
 			<description>
-				Returns what the last probe found for [param endpoint]. [constant ENDPOINT_STATE_STATUS] is [constant @GlobalScope.FAILED] until the first probe.
+				Returns what the last probe found for [param endpoint]. [constant NetwConnection.ENDPOINT_STATE_STATUS] is [constant @GlobalScope.FAILED] until the first probe.
 			</description>
 		</method>
 		<method name="endpoint_list">
@@ -851,20 +851,20 @@
 			<return type="void" />
 			<param index="0" name="endpoint" type="RID" />
 			<description>
-				Checks whether [param endpoint] is reachable without joining it, then emits [signal endpoint_updated]. Read the result with [method endpoint_get_state].
+				Checks whether [param endpoint] is reachable without joining it, then notifies [constant ENDPOINT_UPDATED]. Read the result with [method endpoint_get_state].
 			</description>
 		</method>
 		<method name="endpoint_refresh">
 			<return type="void" />
 			<description>
-				Re-probes every endpoint and emits [signal endpoint_updated] for each result. Probes run serially.
+				Re-probes every endpoint and notifies [constant ENDPOINT_UPDATED] for each result. Probes run serially.
 			</description>
 		</method>
 		<method name="endpoint_remove">
 			<return type="void" />
 			<param index="0" name="endpoint" type="RID" />
 			<description>
-				Removes [param endpoint] and emits [signal endpoint_removed].
+				Removes [param endpoint] and notifies [constant ENDPOINT_REMOVED].
 			</description>
 		</method>
 		<method name="endpoint_set_param">
@@ -873,7 +873,7 @@
 			<param index="1" name="param" type="int" enum="NetwMultiplayer.EndpointParam" />
 			<param index="2" name="value" type="Variant" />
 			<description>
-				Changes one field of [param endpoint] and emits [signal endpoint_updated]. Only [constant ENDPOINT_PARAM_DISPLAY_NAME] can be changed.
+				Changes one field of [param endpoint] and notifies [constant ENDPOINT_UPDATED]. Only [constant ENDPOINT_PARAM_DISPLAY_NAME] can be changed.
 				[codeblock lang=text]
 				Error
 				┠╴OK                     the field changed
@@ -1056,11 +1056,11 @@
 			</description>
 		</method>
 		<method name="entity_grant_control">
-			<return type="void" />
+			<return type="int" enum="Error" />
 			<param index="0" name="entity" type="RID" />
 			<param index="1" name="peer" type="int" />
 			<description>
-				Hands control of [param entity] to [param peer]. Does nothing on a client or for a handle with no bound node.
+				Calls [method NetwEntity.transfer_control] on [param entity]. Returns [constant @GlobalScope.ERR_DOES_NOT_EXIST] when [param entity] has no bound node.
 			</description>
 		</method>
 		<method name="entity_of">
@@ -1293,12 +1293,26 @@
 				Returns the layer called [param name], or [code]null[/code]. Does not create it. A layer that belongs to a scene returns [code]null[/code], so use [method Netw.scene] for it.
 			</description>
 		</method>
+		<method name="interest_layer_remove_entity">
+			<return type="int" enum="Error" />
+			<param index="0" name="layer" type="RID" />
+			<param index="1" name="entity" type="RID" />
+			<description>
+				Removes [param entity] from [param layer], so its viewers stop seeing it. Applies at the end of the frame, or at [method interest_flush_now].
+				[codeblock lang=text]
+				Error
+				┠╴OK                  the entity will be removed, or was not in the layer
+				┠╴ERR_DOES_NOT_EXIST  layer or entity does not exist
+				┖╴ERR_UNAUTHORIZED    called on a client
+				[/codeblock]
+			</description>
+		</method>
 		<method name="interest_layer_remove_viewer">
 			<return type="void" />
 			<param index="0" name="layer" type="RID" />
 			<param index="1" name="peer" type="int" />
 			<description>
-				Stops [param peer] from seeing [param layer]. Entities it still sees through another layer stay. The layer's [enum LeavePolicy] decides what happens to the rest.
+				Stops [param peer] from seeing [param layer]. Entities it still sees through another layer stay. The layer's [enum NetwInterestLayer.LeavePolicy] decides what happens to the rest.
 			</description>
 		</method>
 		<method name="interest_layer_set_driver_callback">
@@ -1306,7 +1320,7 @@
 			<param index="0" name="layer" type="RID" />
 			<param index="1" name="callback" type="Callable" />
 			<description>
-				Makes [param callback] decide which entities are in [param layer]. It runs once per frame and returns the full list, for example every entity within a radius. An empty [Callable] removes it.
+				Makes [param callback] decide which entities are in [param layer]. It runs once per frame with the layer's [RID] and returns the [RID] of every entity in it. An empty [Callable] removes it. [member NetwInterestLayer.driver] is the same with objects, and setting one replaces the other.
 			</description>
 		</method>
 		<method name="interest_layer_set_monitor_callback">
@@ -1314,7 +1328,7 @@
 			<param index="0" name="layer" type="RID" />
 			<param index="1" name="callback" type="Callable" />
 			<description>
-				Calls [param callback] when entities and viewers enter or leave [param layer].
+				Calls [param callback] as [code]callback(visible, entity, peer_id)[/code] when an entity enters or leaves [param layer] for a peer, where [code]entity[/code] is an [RID]. [member NetwInterestLayer.monitor] is the same with objects, and setting one replaces the other.
 			</description>
 		</method>
 		<method name="interest_layer_set_param">
@@ -1385,20 +1399,20 @@
 			<return type="void" />
 			<param index="0" name="entity" type="RID" />
 			<param index="1" name="layer_id" type="StringName" />
-			<param index="2" name="policy" type="int" enum="NetwMultiplayer.LeavePolicy" />
+			<param index="2" name="policy" type="int" enum="NetwInterestLayer.LeavePolicy" />
 			<param index="3" name="custom_callback" type="Callable" default="Callable()" />
 			<description>
-				Sets the [enum LeavePolicy] for [param entity] on [param layer_id]. [constant LEAVE_POLICY_CUSTOM] requires [param custom_callback], called with [code](peer_id, layer_id)[/code] on the server. Other policies reject a callback.
+				Sets the [enum NetwInterestLayer.LeavePolicy] for [param entity] on [param layer_id]. [constant NetwInterestLayer.LEAVE_POLICY_CUSTOM] requires [param custom_callback], called with [code](peer_id, layer_id)[/code] on the server. Other policies reject a callback.
 			</description>
 		</method>
 		<method name="interest_on_perception_policy">
 			<return type="void" />
 			<param index="0" name="entity" type="RID" />
 			<param index="1" name="layer_id" type="StringName" />
-			<param index="2" name="policy" type="int" enum="NetwMultiplayer.PerceptionPolicy" />
+			<param index="2" name="policy" type="int" enum="NetwInterestLayer.PerceptionPolicy" />
 			<param index="3" name="custom_callback" type="Callable" default="Callable()" />
 			<description>
-				Sets what this peer does with [param entity] when its visibility through [param layer_id] changes. [constant PERCEPTION_POLICY_CUSTOM] requires [param custom_callback], called as [code]custom_callback(visible, peer_id, layer_id)[/code].
+				Sets what this peer does with [param entity] when its visibility through [param layer_id] changes. [constant NetwInterestLayer.PERCEPTION_POLICY_CUSTOM] requires [param custom_callback], called as [code]custom_callback(visible, peer_id, layer_id)[/code].
 			</description>
 		</method>
 		<method name="interest_player_sees">
@@ -1417,11 +1431,11 @@
 			</description>
 		</method>
 		<method name="interest_shared_entities">
-			<return type="Object[]" />
+			<return type="NetwEntity[]" />
 			<param index="0" name="entity" type="NetwEntity" />
 			<param index="1" name="layer_id" type="StringName" default="&amp;&quot;&quot;" />
 			<description>
-				Returns every other entity that shares the layer [param layer_id] with [param entity], sorted by [member NetwEntity.entity_id]. An empty [param layer_id] checks every layer of [param entity].
+				Returns every other entity that shares the layer [param layer_id] with [param entity], sorted by [member NetwEntity.name]. An empty [param layer_id] checks every layer of [param entity].
 			</description>
 		</method>
 		<method name="interest_wire_admits">
@@ -1567,7 +1581,7 @@
 			<param index="0" name="route" type="int" />
 			<param index="1" name="wrapper" type="Object" />
 			<description>
-				Gives [param route] to [param wrapper] and emits [signal entity_live].
+				Gives [param route] to [param wrapper] and notifies [constant ENTITY_LIVE].
 			</description>
 		</method>
 		<method name="liveness_claim_routes">
@@ -1579,7 +1593,7 @@
 			</description>
 		</method>
 		<method name="liveness_get_entities" qualifiers="const">
-			<return type="Object[]" />
+			<return type="NetwEntity[]" />
 			<description>
 				Every live [NetwEntity] on this peer, sorted by route.
 			</description>
@@ -1651,12 +1665,18 @@
 				Calls [param callback] once [param route] has an entity. Calls [param on_timeout] instead after [param timeout_ticks]. [code]0[/code] waits one second.
 			</description>
 		</method>
-		<method name="make" qualifiers="static">
-			<return type="NetwMultiplayer" />
-			<param index="0" name="inner" type="SceneMultiplayer" default="null" />
-			<param index="1" name="implementation" type="Script" default="null" />
+		<method name="observe">
+			<return type="int" enum="Error" />
+			<param index="0" name="event" type="int" enum="NetwMultiplayer.Notification" />
+			<param index="1" name="callback" type="Callable" />
 			<description>
-				Creates a session wrapping [param inner], or a new [SceneMultiplayer] when [code]null[/code]. [param implementation] is an optional script that extends [NetwMultiplayer].
+				Calls [param callback] every time [param event] happens, with the arguments listed at that [enum Notification] value. Observing the same pair twice keeps one subscription.
+				[codeblock]
+				Netw.of(self).observe(NetwMultiplayer.PEER_KICKED, func(reason: String) -&gt; void:
+				    print("kicked: ", reason)
+				)
+				[/codeblock]
+				Most games use the signals of [NetwSession], [NetwClock] and [NetwEntity] instead.
 			</description>
 		</method>
 		<method name="of" qualifiers="static">
@@ -1721,7 +1741,7 @@
 			<param index="0" name="peer_id" type="int" />
 			<param index="1" name="reason" type="String" default="&quot;&quot;" />
 			<description>
-				Disconnects [param peer_id]. When [param reason] is not empty, that peer receives [signal peer_kicked] first. Does nothing on a client.
+				Disconnects [param peer_id]. When [param reason] is not empty, that peer receives [constant PEER_KICKED] first. Does nothing on a client.
 			</description>
 		</method>
 		<method name="peer_link_stats" qualifiers="const">
@@ -1751,14 +1771,14 @@
 			<param index="0" name="peer_id" type="int" />
 			<param index="1" name="reason" type="String" default="&quot;&quot;" />
 			<description>
-				Asks the server to kick [param peer_id]. The server receives [signal peer_kick_requested] and decides.
+				Asks the server to kick [param peer_id]. The server receives [constant PEER_KICK_REQUESTED] and decides.
 				[b]Player request.[/b]
 			</description>
 		</method>
 		<method name="persist_flush_all">
 			<return type="NetwPromise" />
 			<description>
-				Saves every persistent entity that changed. The promise resolves with [constant @GlobalScope.OK], or the first error. See [method NetwSessionHandle.save_entities] for the errors.
+				Saves every persistent entity that changed. The promise resolves with [constant @GlobalScope.OK], or the first error. See [method NetwSession.save_entities] for the errors.
 				[b]Server Only.[/b]
 			</description>
 		</method>
@@ -1780,7 +1800,7 @@
 			<return type="NetwPromise" />
 			<param index="0" name="entity" type="RID" />
 			<description>
-				Loads the saved properties of [param entity]. The promise resolves with [code]true[/code] when a save was found. See [method NetwPersistenceHandle.load] for the errors.
+				Loads the saved properties of [param entity]. The promise resolves with [code]true[/code] when a save was found. See [method NetwPersistence.load] for the errors.
 				[b]Server Only.[/b]
 			</description>
 		</method>
@@ -1788,7 +1808,7 @@
 			<return type="NetwPromise" />
 			<param index="0" name="entity" type="RID" />
 			<description>
-				Saves the persistent properties of [param entity]. The promise resolves with [code]false[/code] when nothing changed. See [method NetwPersistenceHandle.save] for the errors.
+				Saves the persistent properties of [param entity]. The promise resolves with [code]false[/code] when nothing changed. See [method NetwPersistence.save] for the errors.
 				[b]Server Only.[/b]
 			</description>
 		</method>
@@ -1818,7 +1838,7 @@
 			<param index="0" name="player" type="NetwPlayer" />
 			<param index="1" name="reason" type="String" default="&quot;&quot;" />
 			<description>
-				Removes [param player] from the session and disconnects their peer with [param reason]. Emits [signal player_left] first.
+				Removes [param player] from the session and disconnects their peer with [param reason]. Notifies [constant PLAYER_LEFT] first.
 				[codeblock lang=text]
 				Error
 				┠╴OK                      the player was kicked
@@ -1848,7 +1868,7 @@
 			</description>
 		</method>
 		<method name="predict_consume">
-			<return type="int" enum="NetwPredict.ConsumeAction" />
+			<return type="int" enum="NetwPrediction.ConsumeAction" />
 			<param index="0" name="depth" type="int" />
 			<param index="1" name="buffer" type="int" />
 			<description>
@@ -1856,11 +1876,11 @@
 			</description>
 		</method>
 		<method name="predict_consume_default">
-			<return type="int" enum="NetwPredict.ConsumeAction" />
+			<return type="int" enum="NetwPrediction.ConsumeAction" />
 			<param index="0" name="depth" type="int" />
 			<param index="1" name="buffer" type="int" />
 			<description>
-				The default [method _predict_consume]. Returns [constant NetwPredict.CONSUME_ACTION_REPLAY] when more than [param buffer] inputs are queued, [constant NetwPredict.CONSUME_ACTION_HOLD] when fewer, and [constant NetwPredict.CONSUME_ACTION_STARVED] when none.
+				The default [method _predict_consume]. Returns [constant NetwPrediction.CONSUME_ACTION_REPLAY] when more than [param buffer] inputs are queued, [constant NetwPrediction.CONSUME_ACTION_HOLD] when fewer, and [constant NetwPrediction.CONSUME_ACTION_STARVED] when none.
 			</description>
 		</method>
 		<method name="predict_declare">
@@ -1894,8 +1914,8 @@
 		</method>
 		<method name="predict_evaluate_default">
 			<return type="NetwPredictJudgement" />
-			<param index="0" name="domain" type="int" enum="NetwPredict.Domain" />
-			<param index="1" name="verdict" type="int" enum="NetwPredict.ExactVerdict" />
+			<param index="0" name="domain" type="int" enum="NetwPrediction.Domain" />
+			<param index="1" name="verdict" type="int" enum="NetwPrediction.ExactVerdict" />
 			<param index="2" name="predicted" type="Dictionary" />
 			<param index="3" name="payload" type="Dictionary" />
 			<param index="4" name="wiring" type="Dictionary" />
@@ -1918,11 +1938,18 @@
 				Returns one prediction setting of [param entity], or [code]null[/code].
 			</description>
 		</method>
+		<method name="predict_get_stats">
+			<return type="NetwPredictStats" />
+			<param index="0" name="entity" type="RID" />
+			<description>
+				Returns the [member NetwPrediction.stats] of [param entity], or [code]null[/code] when it does not predict.
+			</description>
+		</method>
 		<method name="predict_get_stepper" qualifiers="const">
 			<return type="NetwPhysicsStepper" />
 			<param index="0" name="space" type="RID" />
 			<description>
-				Returns the [NetwPhysicsStepper] installed on the physics [param space], or [code]null[/code]. Without one, [constant NetwSimulationHandle.SCHEDULE_STEPPED] runs as [constant NetwSimulationHandle.SCHEDULE_FRAME].
+				Returns the [NetwPhysicsStepper] installed on the physics [param space], or [code]null[/code]. Without one, [constant NetwSimulation.SCHEDULE_STEPPED] runs as [constant NetwSimulation.SCHEDULE_FRAME].
 			</description>
 		</method>
 		<method name="predict_get_tap_cost" qualifiers="const">
@@ -1941,8 +1968,8 @@
 		<method name="predict_recover_default">
 			<return type="NetwPredictRecovery" />
 			<param index="0" name="payload" type="Dictionary" />
-			<param index="1" name="policy" type="int" enum="NetwPredict.RecoveryPolicy" />
-			<param index="2" name="restore" type="int" enum="NetwSimulationHandle.Restore" />
+			<param index="1" name="policy" type="int" enum="NetwPrediction.RecoveryPolicy" />
+			<param index="2" name="restore" type="int" enum="NetwSimulation.Restore" />
 			<param index="3" name="projection" type="Dictionary" />
 			<param index="4" name="current" type="Dictionary" />
 			<param index="5" name="pose_errors" type="Dictionary" />
@@ -1953,20 +1980,20 @@
 				The default [method _predict_recover].
 			</description>
 		</method>
-		<method name="predict_set_input_callback">
-			<return type="void" />
-			<param index="0" name="entity" type="RID" />
-			<param index="1" name="callback" type="Callable" />
-			<description>
-				Sets [member NetwPredictionHandle.predict_input] on [param entity].
-			</description>
-		</method>
 		<method name="predict_set_correction_path_callback">
 			<return type="void" />
 			<param index="0" name="entity" type="RID" />
 			<param index="1" name="callback" type="Callable" />
 			<description>
-				Sets [member NetwPredictionHandle.correction_path_clear] on [param entity].
+				Sets [member NetwPrediction.correction_path_clear] on [param entity].
+			</description>
+		</method>
+		<method name="predict_set_input_callback">
+			<return type="void" />
+			<param index="0" name="entity" type="RID" />
+			<param index="1" name="callback" type="Callable" />
+			<description>
+				Sets [member NetwPrediction.predict_input] on [param entity].
 			</description>
 		</method>
 		<method name="predict_set_param">
@@ -1984,7 +2011,7 @@
 			<param index="1" name="name" type="StringName" />
 			<param index="2" name="callback" type="Callable" />
 			<description>
-				Adds [param callback] to [member NetwPredictionHandle.sensors] of [param entity] under [param name]. An empty [Callable] removes it.
+				Adds [param callback] to [member NetwPrediction.sensors] of [param entity] under [param name]. An empty [Callable] removes it.
 			</description>
 		</method>
 		<method name="predict_set_witness_callback">
@@ -1992,15 +2019,16 @@
 			<param index="0" name="entity" type="RID" />
 			<param index="1" name="callback" type="Callable" />
 			<description>
-				Sets [member NetwPredictionHandle.witness_contacts] on [param entity].
+				Sets [member NetwPrediction.witness_contacts] on [param entity].
 			</description>
 		</method>
 		<method name="predict_stepper_install">
-			<return type="void" />
+			<return type="int" enum="Error" />
 			<param index="0" name="space" type="RID" />
 			<param index="1" name="stepper" type="NetwPhysicsStepper" default="null" />
 			<description>
-				Lets [param stepper] step the physics [param space] several times in one frame, which rollback needs. A [param stepper] whose [method NetwPhysicsStepper._can_step] returns [code]false[/code] is rejected.
+				Lets [param stepper] step the physics [param space] several times in one frame, which rollback needs. A [code]null[/code] [param stepper], or one whose [method NetwPhysicsStepper._can_step] returns [code]false[/code], removes the stepper of [param space].
+				Returns [constant @GlobalScope.ERR_INVALID_PARAMETER] when [param space] is not valid. [method NetwSession.install_physics_stepper] does the same from a [World3D].
 			</description>
 		</method>
 		<method name="predict_undeclare">
@@ -2112,13 +2140,12 @@
 			<return type="NetwPromise" />
 			<param index="0" name="requester" type="Node" />
 			<param index="1" name="path" type="String" />
-			<param index="2" name="scope" type="int" enum="NetwMultiplayer.SceneChange" default="0" />
+			<param index="2" name="scope" type="int" enum="NetwScene.SceneChange" default="0" />
 			<description>
-				Opens the file-backed scene at [param path] and makes players watch it. No entity moves, so spawn the arrivals from [signal scene_changed].
-				[param scope] says who moves. [param requester] is the node asking, which picks the player for [constant SCENE_CHANGE_PLAYER] and the scene for [constant SCENE_CHANGE_SCENE]. On a client it sends a [method scene_request] to the server.
+				Opens the scene file at [param path] and makes players watch it. No entity moves, so spawn the arriving players in the [NetwScene] the promise gives.
+				[param scope] says who moves. [param requester] is the node asking, which picks the player for [constant NetwScene.SCENE_CHANGE_PLAYER] and the scene for [constant NetwScene.SCENE_CHANGE_SCENE]. On a client it sends a [method scene_request] to the server.
 				[codeblock]
-				var promise := session.scene_change_to_file(self, "res://arena.tscn")
-				await promise.wait()
+				session.scene_change_to_file(self, "res://arena.tscn").then(spawn_players)
 				[/codeblock]
 			</description>
 		</method>
@@ -2126,7 +2153,7 @@
 			<return type="NetwPromise" />
 			<param index="0" name="requester" type="Node" />
 			<param index="1" name="packed" type="PackedScene" />
-			<param index="2" name="scope" type="int" enum="NetwMultiplayer.SceneChange" default="0" />
+			<param index="2" name="scope" type="int" enum="NetwScene.SceneChange" default="0" />
 			<description>
 				Like [method scene_change_to_file], taking a [PackedScene] as [method SceneTree.change_scene_to_packed] does. [param packed] must be saved to a file, or the promise fails with [constant @GlobalScope.ERR_UNAVAILABLE].
 			</description>
@@ -2134,9 +2161,9 @@
 		<method name="scene_create">
 			<return type="RID" />
 			<param index="0" name="recipe" type="Variant" />
-			<param index="1" name="isolation" type="int" enum="NetwMultiplayer.SceneIsolation" default="0" />
+			<param index="1" name="isolation" type="int" enum="NetwScene.SceneIsolation" default="0" />
 			<description>
-				Spawns a multiplayer scene from [param recipe] and returns it, or an invalid [RID] on failure. [code]null[/code] creates an empty scene. [param isolation] decides whether it has its own physics and rendering world.
+				Spawns a multiplayer scene from the scene file path [param recipe] and returns it, or an invalid [RID] on failure. [code]null[/code] creates an empty scene. [param isolation] decides whether it has its own physics and rendering world.
 				[b]Server Only.[/b]
 			</description>
 		</method>
@@ -2253,7 +2280,7 @@
 		<method name="scene_observe">
 			<return type="void" />
 			<param index="0" name="scene" type="RID" />
-			<param index="1" name="event" type="int" enum="NetwMultiplayer.SceneEvent" />
+			<param index="1" name="event" type="int" enum="NetwScene.SceneEvent" />
 			<param index="2" name="callback" type="Callable" />
 			<description>
 				Calls [param callback] when [param event] happens on [param scene]. Adding the same callback twice has no effect. Return [code]true[/code] from [param callback] to stop receiving events. [method scene_unobserve] removes it.
@@ -2269,19 +2296,19 @@
 		<method name="scene_player_viewport">
 			<return type="SubViewport" />
 			<description>
-				On a host, returns the [SubViewport] of the scene from [method scene_presented], or [code]null[/code]. Only scenes with [constant SCENE_ISOLATION_OWN_WORLD] have one. [signal participant_viewport_changed] emits when it changes. [HostSceneView] displays it.
+				On a host, returns the [SubViewport] of the scene from [method scene_presented], or [code]null[/code]. Only scenes with [constant NetwScene.SCENE_ISOLATION_OWN_WORLD] have one. [constant PARTICIPANT_VIEWPORT_CHANGED] notifies when it changes. [HostSceneView] displays it.
 			</description>
 		</method>
 		<method name="scene_presented" qualifiers="const">
 			<return type="RID" />
 			<description>
-				Returns the scene this peer displays, or an invalid [RID]. See [member NetwSessionHandle.presented_scene].
+				Returns the scene this peer displays, or an invalid [RID]. See [member NetwPlayer.scene].
 			</description>
 		</method>
 		<method name="scene_reload_current">
 			<return type="NetwPromise" />
 			<param index="0" name="requester" type="Node" />
-			<param index="1" name="scope" type="int" enum="NetwMultiplayer.SceneChange" default="0" />
+			<param index="1" name="scope" type="int" enum="NetwScene.SceneChange" default="0" />
 			<description>
 				Reloads the displayed scene, like [method SceneTree.reload_current_scene]. Fails with [constant @GlobalScope.ERR_UNAVAILABLE] when there is no scene or it has no file.
 			</description>
@@ -2289,7 +2316,7 @@
 		<method name="scene_request">
 			<return type="NetwPromise" />
 			<param index="0" name="path" type="String" />
-			<param index="1" name="scope" type="int" enum="NetwMultiplayer.SceneChange" default="0" />
+			<param index="1" name="scope" type="int" enum="NetwScene.SceneChange" default="0" />
 			<description>
 				Asks the server to move the local player to the scene file at [param path].
 				[codeblock lang=text]
@@ -2349,7 +2376,7 @@
 		<method name="scene_unobserve">
 			<return type="void" />
 			<param index="0" name="scene" type="RID" />
-			<param index="1" name="event" type="int" enum="NetwMultiplayer.SceneEvent" />
+			<param index="1" name="event" type="int" enum="NetwScene.SceneEvent" />
 			<param index="2" name="callback" type="Callable" />
 			<description>
 				Removes a [param callback] added with [method scene_observe].
@@ -2560,7 +2587,7 @@
 			<param index="0" name="service" type="Object" />
 			<param index="1" name="type" type="Object" default="null" />
 			<description>
-				Registers [param service] as [param type], or as its own script when [code]null[/code], and emits [signal service_registered]. Registering it again has no effect.
+				Registers [param service] as [param type], or as its own script when [code]null[/code], and notifies [constant SERVICE_REGISTERED]. Registering it again has no effect.
 			</description>
 		</method>
 		<method name="service_unregister">
@@ -2605,7 +2632,7 @@
 			<return type="int" enum="Error" />
 			<param index="0" name="tick" type="int" />
 			<description>
-				Sends everything for [param tick]. The session calls it on [signal clock_after_tick], before any game listener. Call it only when driving ticks without the clock. Returns the error of [method interest_flush_now] when that fails.
+				Sends everything for [param tick]. The session calls it on [constant CLOCK_AFTER_TICK], before any game observer. Call it only when driving ticks without the clock. Returns the error of [method interest_flush_now] when that fails.
 			</description>
 		</method>
 		<method name="session_get_all" qualifiers="static">
@@ -2615,7 +2642,7 @@
 			</description>
 		</method>
 		<method name="session_get_authored_role" qualifiers="const">
-			<return type="int" enum="NetwMultiplayer.Role" />
+			<return type="int" enum="NetwSession.Role" />
 			<description>
 				The role the game asked for in [member NetwSessionConfig.desired_role]. [member role] is the role the session actually has.
 			</description>
@@ -2649,7 +2676,7 @@
 		<method name="session_leave">
 			<return type="NetwPromise" />
 			<description>
-				Disconnects and returns to [constant SESSION_STATE_OFFLINE]. On the server, it saves every persistent entity first, and a failed save keeps the session online. The promise resolves with an [enum @GlobalScope.Error] within three seconds.
+				Disconnects and returns to [constant NetwSession.SESSION_STATE_OFFLINE]. On the server, it saves every persistent entity first, and a failed save keeps the session online. The promise resolves with an [enum @GlobalScope.Error] within three seconds.
 				[codeblock]
 				var left := api.session_leave()
 				if not left.is_settled:
@@ -2663,14 +2690,14 @@
 			<return type="void" />
 			<param index="0" name="reason" type="String" default="&quot;&quot;" />
 			<description>
-				Emits [signal session_server_disconnecting] with [param reason] on every peer. It does not disconnect anyone.
+				Notifies [constant SESSION_SERVER_DISCONNECTING] with [param reason] on every peer. It does not disconnect anyone.
 			</description>
 		</method>
 		<method name="session_pause">
 			<return type="void" />
 			<param index="0" name="reason" type="String" default="&quot;&quot;" />
 			<description>
-				Pauses the game on every peer, which emits [signal session_tree_paused] with [param reason].
+				Pauses the game on every peer, which notifies [constant SESSION_TREE_PAUSED] with [param reason].
 			</description>
 		</method>
 		<method name="session_prepare_join">
@@ -2694,20 +2721,20 @@
 			<return type="void" />
 			<param index="0" name="reason" type="String" default="&quot;&quot;" />
 			<description>
-				Asks the server to leave. The server receives [signal session_disconnect_requested] with [param reason] and decides.
+				Asks the server to leave. The server receives [constant SESSION_DISCONNECT_REQUESTED] with [param reason] and decides.
 				[b]Player request.[/b]
 			</description>
 		</method>
 		<method name="session_role_name" qualifiers="static">
 			<return type="String" />
-			<param index="0" name="role" type="int" enum="NetwMultiplayer.Role" />
+			<param index="0" name="role" type="int" enum="NetwSession.Role" />
 			<description>
 				The name of [param role], such as [code]"LISTEN_SERVER"[/code], or empty for an unknown role.
 			</description>
 		</method>
 		<method name="session_set_role">
 			<return type="void" />
-			<param index="0" name="role" type="int" enum="NetwMultiplayer.Role" />
+			<param index="0" name="role" type="int" enum="NetwSession.Role" />
 			<description>
 				Sets [member role], which also sets [member is_host] and [member is_local_client]. The session sets it when a peer is assigned.
 			</description>
@@ -2728,9 +2755,9 @@
 		</method>
 		<method name="session_set_state">
 			<return type="void" />
-			<param index="0" name="state" type="int" enum="NetwMultiplayer.SessionState" />
+			<param index="0" name="state" type="int" enum="NetwSession.SessionState" />
 			<description>
-				Sets [member state] without checking the change is allowed, and emits [signal session_state_changed]. Prefer [method session_transition].
+				Sets [member state] without checking the change is allowed, and notifies [constant SESSION_STATE_CHANGED]. Prefer [method session_transition].
 			</description>
 		</method>
 		<method name="session_submit_join">
@@ -2744,22 +2771,22 @@
 		</method>
 		<method name="session_transition">
 			<return type="void" />
-			<param index="0" name="state" type="int" enum="NetwMultiplayer.SessionState" />
+			<param index="0" name="state" type="int" enum="NetwSession.SessionState" />
 			<description>
-				Changes [member state] and emits [signal session_state_changed]. A change that is not allowed pushes an error and does nothing.
+				Changes [member state] and notifies [constant SESSION_STATE_CHANGED]. A change that is not allowed pushes an error and does nothing.
 			</description>
 		</method>
 		<method name="session_unpause">
 			<return type="void" />
 			<description>
-				Unpauses the game on every peer, which emits [signal session_tree_unpaused].
+				Unpauses the game on every peer, which notifies [constant SESSION_TREE_UNPAUSED].
 			</description>
 		</method>
 		<method name="simulation_get_mode">
-			<return type="int" enum="NetwSimulationHandle.Mode" />
+			<return type="int" enum="NetwSimulation.Mode" />
 			<param index="0" name="entity" type="RID" />
 			<description>
-				Returns [member NetwSimulationHandle.mode] of [param entity] on this peer.
+				Returns [member NetwSimulation.mode] of [param entity] on this peer.
 			</description>
 		</method>
 		<method name="simulation_get_param">
@@ -2784,7 +2811,7 @@
 			<param index="0" name="entity" type="RID" />
 			<param index="1" name="callback" type="Callable" />
 			<description>
-				Sets [member NetwSimulationHandle.step] on [param entity].
+				Sets [member NetwSimulation.step] on [param entity].
 			</description>
 		</method>
 		<method name="spawn_admit_frame_default">
@@ -2985,7 +3012,7 @@
 			<return type="int" enum="Error" />
 			<param index="0" name="table" type="RID" />
 			<description>
-				Applies the routes and columns written to [param table] and emits [signal table_received]. On the server, it also sends them to every peer.
+				Applies the routes and columns written to [param table] and notifies [constant TABLE_RECEIVED]. On the server, it also sends them to every peer.
 				[codeblock lang=text]
 				Error
 				┠╴OK                  the rows were applied
@@ -3058,7 +3085,7 @@
 			<param index="1" name="database" type="RID" />
 			<param index="2" name="key" type="StringName" />
 			<description>
-				Replaces every row of [param table] with the snapshot stored under [param key] in [param database], see [method NetwTableHandle.load] for the result. Each loaded row gets a new route.
+				Replaces every row of [param table] with the snapshot stored under [param key] in [param database], see [method NetwTable.load] for the result. Each loaded row gets a new route.
 				[b]Server Only.[/b]
 			</description>
 		</method>
@@ -3098,7 +3125,7 @@
 			<param index="2" name="key" type="StringName" />
 			<param index="3" name="ids" type="PackedStringArray" />
 			<description>
-				Saves the rows of [param table] under [param key] in [param database]. [param ids] names each row, in the order of [method table_read_routes]. See [method NetwTableHandle.save] for the errors.
+				Saves the rows of [param table] under [param key] in [param database]. [param ids] names each row, in the order of [method table_read_routes]. See [method NetwTable.save] for the errors.
 				[b]Server Only.[/b]
 			</description>
 		</method>
@@ -3151,7 +3178,7 @@
 		<method name="transport_create_peer">
 			<return type="RID" />
 			<param index="0" name="transport" type="RID" />
-			<param index="1" name="mode" type="int" enum="NetwMultiplayer.TransportMode" />
+			<param index="1" name="mode" type="int" enum="NetwConnection.TransportMode" />
 			<param index="2" name="address" type="String" />
 			<param index="3" name="settings" type="Dictionary" />
 			<param index="4" name="completed" type="Callable" />
@@ -3162,7 +3189,7 @@
 				Returns an invalid [RID] when [param completed] is not valid.
 				[codeblock]
 				var ticket := api.transport_create_peer(
-				        relay, NetwMultiplayer.TRANSPORT_MODE_CLIENT,
+				        relay, NetwConnection.TRANSPORT_MODE_CLIENT,
 				        "eu-1.example.com", {}, _created)
 
 				func _created(peer: MultiplayerPeer, error: Error, _detail: String):
@@ -3180,7 +3207,7 @@
 				[codeblock]
 				var enet := api.transport_find(&amp;"ENetMultiplayerPeer")
 				api.transport_create_peer(
-				        enet, NetwMultiplayer.TRANSPORT_MODE_HOST, "",
+				        enet, NetwConnection.TRANSPORT_MODE_HOST, "",
 				        {port = 21253}, assign_it)
 				[/codeblock]
 			</description>
@@ -3190,11 +3217,11 @@
 			<param index="0" name="transport" type="RID" />
 			<param index="1" name="param" type="int" enum="NetwMultiplayer.TransportParam" />
 			<description>
-				Returns one field of [param transport], used to draw host and join forms, or [code]null[/code]. [constant TRANSPORT_PARAM_CAPABILITIES] returns a [enum TransportCapability] mask.
+				Returns one field of [param transport], used to draw host and join forms, or [code]null[/code]. [constant TRANSPORT_PARAM_CAPABILITIES] returns a [enum NetwConnection.TransportCapability] mask.
 				[codeblock]
 				var caps: int = api.transport_get_param(
 				        t, NetwMultiplayer.TRANSPORT_PARAM_CAPABILITIES)
-				if caps &amp; NetwMultiplayer.TRANSPORT_CAN_HOST:
+				if caps &amp; NetwConnection.TRANSPORT_CAN_HOST:
 				    show_host_button()
 				[/codeblock]
 			</description>
@@ -3255,6 +3282,14 @@
 				[/codeblock]
 			</description>
 		</method>
+		<method name="unobserve">
+			<return type="void" />
+			<param index="0" name="event" type="int" enum="NetwMultiplayer.Notification" />
+			<param index="1" name="callback" type="Callable" />
+			<description>
+				Stops [param callback] from hearing [param event]. A [param callback] that is removed while [param event] is being delivered is not called for it.
+			</description>
+		</method>
 	</methods>
 	<members>
 		<member name="allow_object_decoding" type="bool" setter="set_allow_object_decoding" getter="is_object_decoding_allowed" default="false">
@@ -3267,7 +3302,7 @@
 			Same as [member SceneMultiplayer.auth_timeout], applied to [member inner].
 		</member>
 		<member name="bodies" type="NetwEntity[]" setter="" getter="scene_bodies_all" default="[]">
-			Every body in every scene. Bodies in different scenes can share a [member NetwEntity.entity_id].
+			Every body in every scene. Bodies in different scenes can share a [member NetwEntity.name].
 		</member>
 		<member name="connected_players" type="NetwPlayer[]" setter="" getter="player_all" default="[]">
 			Every player, sorted by peer id. Same as [member players], except that a player who is leaving stays here a little longer.
@@ -3279,10 +3314,10 @@
 			[code]true[/code] on a server, and when not connected at all, as with [method MultiplayerAPI.is_server]. [code]false[/code] on a client, even before it connects. Use [member is_online] to also require a connection.
 		</member>
 		<member name="is_local_client" type="bool" setter="" getter="get_is_local_client" default="false">
-			[code]true[/code] when this peer has its own player, which is at [constant ROLE_CLIENT] and [constant ROLE_LISTEN_SERVER].
+			[code]true[/code] when this peer has its own player, which is at [constant NetwSession.ROLE_CLIENT] and [constant NetwSession.ROLE_LISTEN_SERVER].
 		</member>
 		<member name="is_online" type="bool" setter="" getter="get_is_online" default="false">
-			[code]true[/code] when [member state] is [constant SESSION_STATE_ONLINE].
+			[code]true[/code] when [member state] is [constant NetwSession.SESSION_STATE_ONLINE].
 		</member>
 		<member name="local_player" type="NetwPlayer" setter="" getter="player_local">
 			The accepted [NetwPlayer] for this peer, or [code]null[/code] before its join is accepted.
@@ -3302,12 +3337,12 @@
 		<member name="relay_sender" type="int" setter="" getter="rpc_get_relay_sender" default="0">
 			The peer that sent the RPC being run, like [method MultiplayerAPI.get_remote_sender_id].
 		</member>
-		<member name="role" type="int" setter="" getter="session_get_role" enum="NetwMultiplayer.Role" default="0">
+		<member name="role" type="int" setter="" getter="session_get_role" enum="NetwSession.Role" default="0">
 			What this peer is in the session. [member is_host] and [member is_local_client] are usually what a game wants.
-			- [constant ROLE_NONE] no session
-			- [constant ROLE_CLIENT] a client
-			- [constant ROLE_DEDICATED_SERVER] a server with no player
-			- [constant ROLE_LISTEN_SERVER] a server that also plays
+			- [constant NetwSession.ROLE_NONE] no session
+			- [constant NetwSession.ROLE_CLIENT] a client
+			- [constant NetwSession.ROLE_DEDICATED_SERVER] a server with no player
+			- [constant NetwSession.ROLE_LISTEN_SERVER] a server that also plays
 		</member>
 		<member name="root" type="Node" setter="" getter="session_root">
 			The node at [member root_path], usually the [MultiplayerTree]. [method session_set_root] can change how it is found.
@@ -3318,159 +3353,15 @@
 		<member name="server_relay" type="bool" setter="set_server_relay_enabled" getter="is_server_relay_enabled" default="true">
 			Same as [member SceneMultiplayer.server_relay], applied to [member inner].
 		</member>
-		<member name="state" type="int" setter="" getter="session_get_state" enum="NetwMultiplayer.SessionState" default="0">
+		<member name="state" type="int" setter="" getter="session_get_state" enum="NetwSession.SessionState" default="0">
 			Whether the session is connected.
-			- [constant SESSION_STATE_OFFLINE] not connected
-			- [constant SESSION_STATE_CONNECTING] connecting, may fail
-			- [constant SESSION_STATE_ONLINE] connected
-			- [constant SESSION_STATE_DISCONNECTING] disconnecting
+			- [constant NetwSession.SESSION_STATE_OFFLINE] not connected
+			- [constant NetwSession.SESSION_STATE_CONNECTING] connecting, may fail
+			- [constant NetwSession.SESSION_STATE_ONLINE] connected
+			- [constant NetwSession.SESSION_STATE_DISCONNECTING] disconnecting
 		</member>
 	</members>
 	<signals>
-		<signal name="clock_after_tick">
-			<param index="0" name="delta" type="float" />
-			<param index="1" name="tick" type="int" />
-			<description>
-				Emitted at the end of each tick, after [signal clock_on_tick].
-			</description>
-		</signal>
-		<signal name="clock_after_tick_loop">
-			<description>
-				Emitted once per physics frame, after that frame's ticks, even when there were none. [method clock_step] does not emit it.
-			</description>
-		</signal>
-		<signal name="clock_before_tick">
-			<param index="0" name="delta" type="float" />
-			<param index="1" name="tick" type="int" />
-			<description>
-				Emitted at the start of each tick, before [signal clock_on_tick].
-			</description>
-		</signal>
-		<signal name="clock_before_tick_loop">
-			<description>
-				Emitted once per physics frame, before that frame's ticks, even when there are none. [method clock_step] does not emit it.
-			</description>
-		</signal>
-		<signal name="clock_configured">
-			<description>
-				Emitted once when the clock settings are applied. Check [method clock_is_configured] in case it already happened.
-			</description>
-		</signal>
-		<signal name="clock_on_tick">
-			<param index="0" name="delta" type="float" />
-			<param index="1" name="tick" type="int" />
-			<description>
-				Emitted every tick. Run game logic here.
-			</description>
-		</signal>
-		<signal name="clock_pong_received">
-			<param index="0" name="data" type="Dictionary" />
-			<description>
-				Emitted when the server answers a [method clock_send_ping] and the clock has adjusted.
-				[codeblock lang=text]
-				Dictionary
-				┠╴rtt_raw                     float   this round trip, in seconds
-				┠╴rtt_avg                     float   average round trip, in seconds
-				┠╴rtt_jitter                  float   round trip variation, in seconds
-				┠╴diff                        int     ticks the clock moved
-				┠╴tick                        int     the tick after adjusting
-				┠╴display_offset              float   the current display offset
-				┠╴recommended_display_offset  float   the display offset this ping suggests
-				┠╴is_stable                   bool    clock_is_stable()
-				┖╴is_synchronized             bool    clock_is_synchronized()
-				[/codeblock]
-			</description>
-		</signal>
-		<signal name="clock_stability_changed">
-			<param index="0" name="is_stable" type="bool" />
-			<description>
-				Emitted when [method clock_is_stable] changes.
-			</description>
-		</signal>
-		<signal name="clock_synchronized">
-			<description>
-				Emitted once, the first time the clock synchronizes with the server.
-			</description>
-		</signal>
-		<signal name="clock_tickrate_mismatch">
-			<param index="0" name="peer_id" type="int" />
-			<param index="1" name="their_tickrate" type="int" />
-			<description>
-				Emitted when [param peer_id] runs [param their_tickrate], which differs from this peer's, and [method clock_set_mismatch_action] is [constant MISMATCH_ACTION_SIGNAL].
-			</description>
-		</signal>
-		<signal name="database_failed">
-			<param index="0" name="database" type="RID" />
-			<param index="1" name="error" type="int" enum="Error" />
-			<param index="2" name="detail" type="String" />
-			<description>
-				Emitted when an entity fails to load or save in [param database]. [param detail] names the record and the reason.
-			</description>
-		</signal>
-		<signal name="embed_phase_changed">
-			<param index="0" name="phase" type="int" enum="NetwMultiplayer.EmbedPhase" />
-			<description>
-				Emitted when [method embed_phase] changes.
-			</description>
-		</signal>
-		<signal name="endpoint_added">
-			<param index="0" name="endpoint" type="RID" />
-			<description>
-				Emitted when an endpoint is added to [method endpoint_list].
-			</description>
-		</signal>
-		<signal name="endpoint_removed">
-			<param index="0" name="endpoint" type="RID" />
-			<description>
-				Emitted when an endpoint is removed from [method endpoint_list].
-			</description>
-		</signal>
-		<signal name="endpoint_updated">
-			<param index="0" name="endpoint" type="RID" />
-			<description>
-				Emitted when a probe updates [param endpoint]. Read it with [method endpoint_get_param] and [method endpoint_get_state].
-			</description>
-		</signal>
-		<signal name="entity_dead">
-			<param index="0" name="route" type="int" />
-			<description>
-				Emitted once when the entity at [param route] is despawned, after [signal NetwEntity.despawned]. A peer that only stops seeing the entity emits [signal entity_hidden].
-			</description>
-		</signal>
-		<signal name="entity_hidden">
-			<param index="0" name="route" type="int" />
-			<param index="1" name="entity" type="Object" />
-			<description>
-				Emitted when this peer stops seeing [param entity], which still exists on the server. If it becomes visible again, the same route gets a new node. Emitted after [signal NetwEntity.hidden].
-			</description>
-		</signal>
-		<signal name="entity_lingering">
-			<param index="0" name="route" type="int" />
-			<param index="1" name="entity" type="Object" />
-			<description>
-				Emitted when an entity starts despawning and enters [constant ENTITY_STATE_LINGERING].
-			</description>
-		</signal>
-		<signal name="entity_live">
-			<param index="0" name="route" type="int" />
-			<param index="1" name="entity" type="Object" />
-			<description>
-				Emitted when [param entity] spawns on this peer at [param route].
-			</description>
-		</signal>
-		<signal name="lagcomp_action_gate_fallback">
-			<param index="0" name="key" type="StringName" />
-			<param index="1" name="view_tick" type="int" />
-			<description>
-				Emitted when a [constant NetwAction.TIMING_TICK_ALIGNED_STATE_READY] action runs without all its input, after waiting [member NetwLagCompensationConfig.input_gate_deadline_ticks]. [param view_tick] is the tick it was aimed at.
-			</description>
-		</signal>
-		<signal name="participant_viewport_changed">
-			<param index="0" name="viewport" type="Object" />
-			<description>
-				Emitted when [method scene_player_viewport] changes. [param viewport] may be [code]null[/code].
-			</description>
-		</signal>
 		<signal name="peer_authenticating">
 			<param index="0" name="peer_id" type="int" />
 			<description>
@@ -3483,200 +3374,11 @@
 				Same as [signal SceneMultiplayer.peer_authentication_failed], from [member inner].
 			</description>
 		</signal>
-		<signal name="peer_kick_requested">
-			<param index="0" name="requester_id" type="int" />
-			<param index="1" name="target_id" type="int" />
-			<param index="2" name="reason" type="String" />
-			<description>
-				Emitted on the server when [param requester_id] asks to kick [param target_id] with [method peer_request_kick].
-			</description>
-		</signal>
-		<signal name="peer_kicked">
-			<param index="0" name="reason" type="String" />
-			<description>
-				Emitted when the server kicks this peer, before the connection closes.
-			</description>
-		</signal>
 		<signal name="peer_packet">
 			<param index="0" name="id" type="int" />
 			<param index="1" name="packet" type="PackedByteArray" />
 			<description>
 				Same as [signal SceneMultiplayer.peer_packet], for packets sent with [method send_bytes].
-			</description>
-		</signal>
-		<signal name="persist_loaded">
-			<param index="0" name="entity" type="RID" />
-			<param index="1" name="found" type="bool" />
-			<description>
-				Emitted when [param entity] has loaded. [param found] is [code]false[/code] when there was no save. A failed load emits [signal database_failed].
-			</description>
-		</signal>
-		<signal name="persist_saved">
-			<param index="0" name="entity" type="RID" />
-			<description>
-				Emitted when [param entity] has saved. A failed save emits [signal database_failed].
-			</description>
-		</signal>
-		<signal name="player_joined">
-			<param index="0" name="player" type="Object" />
-			<description>
-				Emitted when a player's join is accepted, including this peer's own.
-			</description>
-		</signal>
-		<signal name="player_left">
-			<param index="0" name="player" type="Object" />
-			<description>
-				Emitted when a player leaves or is kicked. [member NetwPlayer.is_active] is already [code]false[/code].
-			</description>
-		</signal>
-		<signal name="player_local_joined">
-			<param index="0" name="player" type="Object" />
-			<description>
-				Emitted when this peer's own join is accepted, before [signal player_joined].
-			</description>
-		</signal>
-		<signal name="predict_owner_divergence">
-			<param index="0" name="peer" type="int" />
-			<param index="1" name="entry" type="int" />
-			<param index="2" name="attribution" type="int" enum="NetwPredict.Attribution" />
-			<description>
-				Emitted on the server when the state [param peer] predicted for input [param entry] differs from the server's. [param attribution] is the known cause.
-			</description>
-		</signal>
-		<signal name="scene_activated">
-			<param index="0" name="scene" type="Object" />
-			<description>
-				Emitted when [param scene] becomes the displayed scene.
-			</description>
-		</signal>
-		<signal name="scene_changed">
-			<param index="0" name="scene" type="Object" />
-			<param index="1" name="arrived" type="Array" />
-			<description>
-				Emitted on the server when a [method scene_change_to_file] finishes. [param arrived] holds the [NetwPlayer]s that moved to [param scene]. Spawn their bodies here.
-			</description>
-		</signal>
-		<signal name="scene_despawned">
-			<param index="0" name="scene" type="Object" />
-			<description>
-				Emitted after [param scene] is removed.
-			</description>
-		</signal>
-		<signal name="scene_entity_moved">
-			<param index="0" name="entity" type="Object" />
-			<param index="1" name="from" type="Object" />
-			<param index="2" name="to" type="Object" />
-			<description>
-				Emitted when [param entity] finishes moving from scene [param from] to scene [param to], before the move's [NetwPromise] resolves.
-			</description>
-		</signal>
-		<signal name="scene_live">
-			<param index="0" name="scene" type="Object" />
-			<description>
-				Emitted when [param scene] is ready on this peer. Every node in it is in the tree and ready.
-			</description>
-		</signal>
-		<signal name="scene_presentation_changed">
-			<param index="0" name="from" type="Object" />
-			<param index="1" name="to" type="Object" />
-			<description>
-				Emitted when the scene this peer displays changes. Either may be [code]null[/code]. See [signal NetwSessionHandle.presentation_changed].
-			</description>
-		</signal>
-		<signal name="scene_spawned">
-			<param index="0" name="scene" type="Object" />
-			<description>
-				Emitted once when [param scene] is spawned, before any player enters it.
-			</description>
-		</signal>
-		<signal name="scene_startup_spawned">
-			<description>
-				Emitted once on the server when startup finishes, even if nothing was spawned.
-			</description>
-		</signal>
-		<signal name="service_registered">
-			<param index="0" name="service" type="Object" />
-			<description>
-				Emitted when [param service] is registered.
-			</description>
-		</signal>
-		<signal name="service_unregistered">
-			<param index="0" name="service" type="Object" />
-			<description>
-				Emitted when [param service] is unregistered.
-			</description>
-		</signal>
-		<signal name="session_disconnect_requested">
-			<param index="0" name="peer_id" type="int" />
-			<param index="1" name="reason" type="String" />
-			<description>
-				Emitted on the server when [param peer_id] asks to leave with [method session_request_leave].
-			</description>
-		</signal>
-		<signal name="session_ended">
-			<description>
-				Emitted when the session stops being [constant SESSION_STATE_ONLINE].
-			</description>
-		</signal>
-		<signal name="session_entered">
-			<description>
-				Emitted when the session becomes [constant SESSION_STATE_ONLINE].
-			</description>
-		</signal>
-		<signal name="session_join_failed">
-			<param index="0" name="error" type="int" enum="Error" />
-			<param index="1" name="reason" type="String" />
-			<description>
-				Emitted when this peer's join is rejected. Games usually use [signal NetwConnectHandle.join_failed].
-			</description>
-		</signal>
-		<signal name="session_join_submitted">
-			<param index="0" name="username" type="StringName" />
-			<param index="1" name="args" type="Array" />
-			<description>
-				Emitted when this peer sends its join request. It does not mean the join was accepted.
-			</description>
-		</signal>
-		<signal name="session_poll_started">
-			<param index="0" name="delta" type="float" />
-			<description>
-				Emitted at the start of each [method MultiplayerAPI.poll]. [param delta] is the time since the previous one.
-			</description>
-		</signal>
-		<signal name="session_reclaimed">
-			<description>
-				Emitted right after [signal session_ended]. Free nodes the session owned here.
-			</description>
-		</signal>
-		<signal name="session_server_disconnecting">
-			<param index="0" name="reason" type="String" />
-			<description>
-				Emitted when the server calls [method session_notify_shutdown].
-			</description>
-		</signal>
-		<signal name="session_state_changed">
-			<param index="0" name="old_state" type="int" enum="NetwMultiplayer.SessionState" />
-			<param index="1" name="new_state" type="int" enum="NetwMultiplayer.SessionState" />
-			<description>
-				Emitted when [member state] changes.
-			</description>
-		</signal>
-		<signal name="session_tree_paused">
-			<param index="0" name="reason" type="String" />
-			<description>
-				Emitted when the server calls [method session_pause]. It does not pause the [SceneTree].
-			</description>
-		</signal>
-		<signal name="session_tree_unpaused">
-			<description>
-				Emitted when the server calls [method session_unpause].
-			</description>
-		</signal>
-		<signal name="table_received">
-			<param index="0" name="table" type="RID" />
-			<param index="1" name="tick" type="int" />
-			<description>
-				Emitted when [param table] changes, by [method table_commit] or by an update from the server.
 			</description>
 		</signal>
 	</signals>
@@ -3715,10 +3417,10 @@
 			A peer stopped seeing an entity through a layer. [code]detail[/code] has [code]layer[/code].
 		</constant>
 		<constant name="EVENT_OBSERVER_ENTERED" value="18" enum="Event">
-			A peer started seeing an entity, along with [signal NetwEntity.observer_entered]. [code]detail[/code] has [code]layer[/code].
+			A peer started seeing an entity, along with [signal NetwInterest.observer_entered]. [code]detail[/code] has [code]layer[/code].
 		</constant>
 		<constant name="EVENT_OBSERVER_LEFT" value="19" enum="Event">
-			A peer stopped seeing an entity, along with [signal NetwEntity.observer_left]. [code]detail[/code] has [code]layer[/code].
+			A peer stopped seeing an entity, along with [signal NetwInterest.observer_exited]. [code]detail[/code] has [code]layer[/code].
 		</constant>
 		<constant name="EVENT_INTEREST_COMMIT" value="20" enum="Event">
 			Pending layer changes were applied. [code]route[/code] is [code]0[/code].
@@ -3745,10 +3447,10 @@
 			A misprediction was corrected. [code]detail[/code] has [code]transition[/code], [code]skip[/code] and [code]teleport[/code].
 		</constant>
 		<constant name="EVENT_DIVERGENCE" value="39" enum="Event">
-			A prediction differed from the server's state by more than the tolerance, along with [signal NetwPredictionHandle.divergence_detected]. [code]detail[/code] has [code]transition[/code], [code]attribution[/code] and [code]divergence[/code].
+			A prediction differed from the server's state by more than the tolerance, along with [signal NetwPrediction.divergence_detected]. [code]detail[/code] has [code]transition[/code], [code]attribution[/code] and [code]divergence[/code].
 		</constant>
 		<constant name="EVENT_RECOVERY" value="40" enum="Event">
-			A predicted entity was corrected, along with [signal NetwPredictionHandle.recovered]. [code]detail[/code] has [code]transition[/code], [code]attribution[/code], [code]teleport[/code] and [code]moved[/code], the properties that changed.
+			A predicted entity was corrected, along with [signal NetwPrediction.recovered]. [code]detail[/code] has [code]transition[/code], [code]attribution[/code], [code]teleport[/code] and [code]moved[/code], the properties that changed.
 		</constant>
 		<constant name="EVENT_GATE_SYNC" value="48" enum="Event">
 			An incoming synchronization packet was accepted or rejected by [method _sync_admit_frame]. [code]verdict[/code] is the result.
@@ -3874,13 +3576,7 @@
 			The entity is despawned for good.
 		</constant>
 		<constant name="ENTITY_STATE_ABSENT" value="4" enum="EntityState">
-			The entity still exists, but this client does not see it. It can become visible again. See [signal entity_hidden].
-		</constant>
-		<constant name="LAYER_POLICY_HIDE_FROM_OUTSIDERS" value="0" enum="LayerPolicy">
-			Only viewers of the layer see its entities, as for a team or a private room.
-		</constant>
-		<constant name="LAYER_POLICY_HIDE_FROM_INSIDERS" value="1" enum="LayerPolicy">
-			Only peers that are not viewers see its entities.
+			The entity still exists, but this client does not see it. It can become visible again. See [constant ENTITY_HIDDEN].
 		</constant>
 		<constant name="EMBED_PHASE_DECLARING" value="0" enum="EmbedPhase">
 			[code]Netw.configure_*[/code] calls, [MultiplayerSpawner] and [MultiplayerSynchronizer] nodes are collected but not applied yet.
@@ -3891,89 +3587,14 @@
 		<constant name="EMBED_PHASE_LIVE" value="2" enum="EmbedPhase">
 			Settings are applied and the session can host or join.
 		</constant>
-		<constant name="LEAVE_POLICY_HIDE" value="0" enum="LeavePolicy">
-			Free the peer's copy. The entity becomes [constant ENTITY_STATE_ABSENT] there and can be shown again later.
-		</constant>
-		<constant name="LEAVE_POLICY_RETAIN" value="1" enum="LeavePolicy">
-			Keep the peer's copy and stop updating it. Updates resume when it is visible again.
-		</constant>
-		<constant name="LEAVE_POLICY_CUSTOM" value="2" enum="LeavePolicy">
-			Call the custom callback given to [method interest_on_leave_policy].
-		</constant>
-		<constant name="PERCEPTION_POLICY_HIDE" value="0" enum="PerceptionPolicy">
-			Hide a copy kept by [constant LEAVE_POLICY_RETAIN].
-		</constant>
-		<constant name="PERCEPTION_POLICY_SHOW" value="1" enum="PerceptionPolicy">
-			Keep showing a copy kept by [constant LEAVE_POLICY_RETAIN] where it was last seen.
-		</constant>
-		<constant name="PERCEPTION_POLICY_CUSTOM" value="2" enum="PerceptionPolicy">
-			Call the custom callback given to [method interest_on_perception_policy].
-		</constant>
-		<constant name="DISPLAY_ROLE_AUTO" value="0" enum="DisplayRole">
-			Picked from [member NetwSimulationHandle.mode]. The default. Predicted entities use [constant DISPLAY_ROLE_PREDICTED], received ones [constant DISPLAY_ROLE_REMOTE], ones this peer controls without prediction [constant DISPLAY_ROLE_DISABLED], and the server uses [constant DISPLAY_ROLE_AUTHORITY].
-		</constant>
-		<constant name="DISPLAY_ROLE_REMOTE" value="1" enum="DisplayRole">
-			Interpolate between received states. Used for other players' entities.
-		</constant>
-		<constant name="DISPLAY_ROLE_PREDICTED" value="2" enum="DisplayRole">
-			Follow the locally predicted body, as set by [member NetwDisplayHandle.live_mode]. Used for the player's own entity.
-		</constant>
-		<constant name="DISPLAY_ROLE_DISABLED" value="3" enum="DisplayRole">
-			No smoothing. The game moves the node itself.
-		</constant>
-		<constant name="DISPLAY_ROLE_AUTHORITY" value="4" enum="DisplayRole">
-			Record the server's own simulation every tick and interpolate it, so the host sees it as smooth as clients do.
-		</constant>
-		<constant name="DISPLAY_PUMP_UNRESOLVED" value="-1" enum="DisplayPump">
-			Not decided yet.
-		</constant>
-		<constant name="DISPLAY_PUMP_DISABLED" value="0" enum="DisplayPump">
-			No interpolation, as with [constant DISPLAY_ROLE_DISABLED].
-		</constant>
-		<constant name="DISPLAY_PUMP_REMOTE" value="1" enum="DisplayPump">
-			Interpolate received states, as with [constant DISPLAY_ROLE_REMOTE].
-		</constant>
-		<constant name="DISPLAY_PUMP_BRACKETED" value="2" enum="DisplayPump">
-			Interpolate between the previous and current tick, one tick behind. Used by [constant DISPLAY_ROLE_AUTHORITY] and [constant LIVE_MODE_BRACKETED].
-		</constant>
-		<constant name="DISPLAY_PUMP_CHASE" value="3" enum="DisplayPump">
-			Move the visual toward the body every frame. Used by [constant LIVE_MODE_CHASE].
-		</constant>
-		<constant name="LIVE_MODE_CHASE" value="0" enum="LiveMode">
-			Move the visual toward the body every frame. Most responsive, but corrections are visible.
-		</constant>
-		<constant name="LIVE_MODE_BRACKETED" value="1" enum="LiveMode">
-			Interpolate between the previous and current tick. Smoother, and one tick behind.
-		</constant>
-		<constant name="TIMELINE_MODE_BUFFERED" value="0" enum="TimelineMode">
-			Display slightly in the past, between received states. The default, and always used on the server.
-		</constant>
-		<constant name="TIMELINE_MODE_FORECAST" value="1" enum="TimelineMode">
-			Guess ahead from the last received velocity. Less delay, but it ignores collisions, so a body can move into a wall until the next update arrives.
-		</constant>
-		<constant name="SYNC_MODE_SNAP" value="0" enum="SyncMode">
-			Correct the local tick to the server's in one step.
-		</constant>
-		<constant name="SYNC_MODE_STRETCH" value="1" enum="SyncMode">
-			Correct the local tick a little every frame, and in one step past [constant CLOCK_PARAM_PANIC_SNAP_THRESHOLD].
-		</constant>
-		<constant name="MISMATCH_ACTION_WARN" value="0" enum="MismatchAction">
-			Push a warning and continue. The default.
-		</constant>
-		<constant name="MISMATCH_ACTION_DISCONNECT" value="1" enum="MismatchAction">
-			Disconnect the peer.
-		</constant>
-		<constant name="MISMATCH_ACTION_SIGNAL" value="2" enum="MismatchAction">
-			Emit [signal clock_tickrate_mismatch] and let the game decide.
-		</constant>
 		<constant name="LAYER_PARAM_POLICY" value="0" enum="LayerParam">
-			The layer's [enum LayerPolicy].
+			The layer's [enum NetwInterestLayer.LayerPolicy].
 		</constant>
 		<constant name="LAYER_PARAM_LEAVE_POLICY" value="1" enum="LayerParam">
-			The layer's [enum LeavePolicy].
+			The layer's [enum NetwInterestLayer.LeavePolicy].
 		</constant>
 		<constant name="LAYER_PARAM_PERCEPTION_POLICY" value="2" enum="LayerParam">
-			The layer's [enum PerceptionPolicy].
+			The layer's [enum NetwInterestLayer.PerceptionPolicy].
 		</constant>
 		<constant name="TRANSPORT_PARAM_PEER_CLASS" value="0" enum="TransportParam">
 			[StringName] class of the peer this transport creates, as passed to [method transport_find].
@@ -3991,28 +3612,13 @@
 			[String] sentence under the address field, empty when it needs none.
 		</constant>
 		<constant name="TRANSPORT_PARAM_CAPABILITIES" value="5" enum="TransportParam">
-			[int] mask of [enum TransportCapability], saying what this transport can do on this build and platform.
+			[int] mask of [enum NetwConnection.TransportCapability], saying what this transport can do on this build and platform.
 		</constant>
 		<constant name="TRANSPORT_PARAM_HOST_SETTINGS" value="6" enum="TransportParam">
 			[Dictionary] of the fields a host form asks for, with their default values. Pass the filled values to [method transport_create_peer].
 		</constant>
 		<constant name="TRANSPORT_PARAM_CLIENT_SETTINGS" value="7" enum="TransportParam">
 			Like [constant TRANSPORT_PARAM_HOST_SETTINGS], for the join form.
-		</constant>
-		<constant name="TRANSPORT_AVAILABLE" value="1" enum="TransportCapability">
-			The transport works on this build.
-		</constant>
-		<constant name="TRANSPORT_CAN_HOST" value="2" enum="TransportCapability">
-			The transport can host on this build. Web builds usually cannot.
-		</constant>
-		<constant name="TRANSPORT_CAN_PROBE" value="4" enum="TransportCapability">
-			The transport supports [method endpoint_probe].
-		</constant>
-		<constant name="TRANSPORT_CAN_BROWSE" value="8" enum="TransportCapability">
-			The transport can list servers for [method endpoint_refresh].
-		</constant>
-		<constant name="TRANSPORT_ACCEPTS_EMPTY_ADDRESS" value="16" enum="TransportCapability">
-			The transport accepts an empty address.
 		</constant>
 		<constant name="ENDPOINT_PARAM_TRANSPORT" value="0" enum="EndpointParam">
 			The transport of the endpoint, as an [RID]. Read-only.
@@ -4023,62 +3629,20 @@
 		<constant name="ENDPOINT_PARAM_DISPLAY_NAME" value="2" enum="EndpointParam">
 			The name shown in a server browser. The only field [method endpoint_set_param] can change.
 		</constant>
-		<constant name="ENDPOINT_STATE_FLAGS" value="0" enum="EndpointState">
-			A bitmask of [enum EndpointFlags].
-		</constant>
-		<constant name="ENDPOINT_STATE_STATUS" value="1" enum="EndpointState">
-			The [enum @GlobalScope.Error] of the last probe, or [constant @GlobalScope.FAILED] before the first one.
-		</constant>
-		<constant name="ENDPOINT_STATE_INFO" value="2" enum="EndpointState">
-			The [NetwServerInfo] from the last probe, or [code]null[/code].
-		</constant>
-		<constant name="ENDPOINT_FLAG_CALLER" value="1" enum="EndpointFlags">
-			Added with [method endpoint_add].
-		</constant>
-		<constant name="ENDPOINT_FLAG_AVAILABLE" value="2" enum="EndpointFlags">
-			The last probe reached the server.
-		</constant>
-		<constant name="ENDPOINT_FLAG_OBSERVED" value="4" enum="EndpointFlags">
-			Found by [method endpoint_refresh]. Can be set together with [constant ENDPOINT_FLAG_CALLER].
-		</constant>
 		<constant name="SCENE_PARAM_LABEL" value="0" enum="SceneParam">
-			[StringName] name of the scene. See [member NetwSceneHandle.label].
+			[StringName] name of the scene. See [member NetwScene.label].
 		</constant>
 		<constant name="SCENE_PARAM_ISOLATION" value="1" enum="SceneParam">
-			The scene's [enum SceneIsolation]. Can only be set before the scene has a node.
+			The scene's [enum NetwScene.SceneIsolation]. Can only be set before the scene has a node.
 		</constant>
 		<constant name="SCENE_PARAM_PROCESSING" value="2" enum="SceneParam">
 			[bool]. Whether the scene's nodes process. Set it to [code]false[/code] to freeze the scene.
-		</constant>
-		<constant name="SCENE_EVENT_VIEWER" value="0" enum="SceneEvent">
-			A player started or stopped seeing the scene. The [method scene_observe] callback receives [code](present, peer_id)[/code].
-		</constant>
-		<constant name="SCENE_EVENT_BODY" value="1" enum="SceneEvent">
-			A body entered or left. The callback receives [code](present, entity)[/code].
-		</constant>
-		<constant name="SCENE_EVENT_ENTITY" value="2" enum="SceneEvent">
-			Any entity, bodies included, entered or left. The callback receives [code](present, entity)[/code].
-		</constant>
-		<constant name="SCENE_CHANGE_SESSION" value="0" enum="SceneChange">
-			Every player moves to the new scene, and every other scene is removed with its entities.
-		</constant>
-		<constant name="SCENE_CHANGE_PLAYER" value="1" enum="SceneChange">
-			Only the requesting player moves. Their old bodies are despawned, and no scene is removed.
-		</constant>
-		<constant name="SCENE_CHANGE_SCENE" value="2" enum="SceneChange">
-			Everyone in the requester's scene moves, and that scene is removed with its entities.
-		</constant>
-		<constant name="SCENE_ISOLATION_NONE" value="0" enum="SceneIsolation">
-			The scene shares the physics and rendering world with the rest of the game.
-		</constant>
-		<constant name="SCENE_ISOLATION_OWN_WORLD" value="1" enum="SceneIsolation">
-			On the server, the scene gets a [SubViewport] with its own world, so two scenes never collide. Clients use a plain [Node].
 		</constant>
 		<constant name="CLOCK_PARAM_TICKRATE" value="0" enum="ClockParam">
 			[int] ticks per second. Must match on every peer, so it can only be set through [NetwClockConfig].
 		</constant>
 		<constant name="CLOCK_PARAM_SYNC_MODE" value="1" enum="ClockParam">
-			The [enum SyncMode].
+			The [enum NetwClock.SyncMode].
 		</constant>
 		<constant name="CLOCK_PARAM_PING_INTERVAL" value="2" enum="ClockParam">
 			[float] seconds between pings.
@@ -4090,10 +3654,10 @@
 			[float] seconds. A longer frame is treated as a hitch and skipped.
 		</constant>
 		<constant name="CLOCK_PARAM_PANIC_SNAP_THRESHOLD" value="5" enum="ClockParam">
-			[int] ticks. Past this difference, [constant SYNC_MODE_STRETCH] corrects in one step.
+			[int] ticks. Past this difference, [constant NetwClock.SYNC_MODE_STRETCH] corrects in one step.
 		</constant>
 		<constant name="CLOCK_PARAM_STRETCH_NUDGE_FACTOR" value="6" enum="ClockParam">
-			[float] share of the difference [constant SYNC_MODE_STRETCH] corrects each frame.
+			[float] share of the difference [constant NetwClock.SYNC_MODE_STRETCH] corrects each frame.
 		</constant>
 		<constant name="CLOCK_PARAM_DISPLAY_OFFSET" value="7" enum="ClockParam">
 			[int] ticks the display runs behind the simulation, which gives interpolation room.
@@ -4122,56 +3686,23 @@
 		<constant name="CLOCK_PARAM_TICK_FACTOR_OVERRIDE" value="15" enum="ClockParam">
 			[float]. A fixed value for [method clock_get_tick_factor]. Negative turns it off.
 		</constant>
-		<constant name="CLOCK_MONITOR_RTT" value="0" enum="ClockMonitor">
-			The most recent round-trip time, in seconds.
-		</constant>
-		<constant name="CLOCK_MONITOR_RTT_AVG" value="1" enum="ClockMonitor">
-			The round-trip time averaged over [constant CLOCK_PARAM_JITTER_WINDOW] samples, in seconds.
-		</constant>
-		<constant name="CLOCK_MONITOR_RTT_JITTER" value="2" enum="ClockMonitor">
-			The round-trip variation, in seconds.
-		</constant>
-		<constant name="CLOCK_MONITOR_ONE_WAY_LATENCY" value="3" enum="ClockMonitor">
-			Half of [constant CLOCK_MONITOR_RTT_AVG], in seconds.
-		</constant>
-		<constant name="CLOCK_MONITOR_TICKTIME" value="4" enum="ClockMonitor">
-			Seconds per tick, one divided by [constant CLOCK_PARAM_TICKRATE].
-		</constant>
-		<constant name="CLOCK_MONITOR_TICK_ACCUMULATOR" value="5" enum="ClockMonitor">
-			Seconds collected toward the next tick.
-		</constant>
-		<constant name="CLOCK_MONITOR_PHYSICS_FRAMES" value="6" enum="ClockMonitor">
-			Physics frames run since the clock started.
-		</constant>
-		<constant name="CLOCK_MONITOR_POLLS" value="7" enum="ClockMonitor">
-			[method MultiplayerAPI.poll] calls since the clock started.
-		</constant>
-		<constant name="CLOCK_MONITOR_WALL_SECONDS" value="8" enum="ClockMonitor">
-			Real seconds since the clock started.
-		</constant>
-		<constant name="CLOCK_MONITOR_PHYSICS_HZ" value="9" enum="ClockMonitor">
-			Physics frames actually run per second. Lower than the physics tick rate means the machine is too slow.
-		</constant>
-		<constant name="CLOCK_MONITOR_POLL_HZ" value="10" enum="ClockMonitor">
-			[method MultiplayerAPI.poll] calls per second.
-		</constant>
 		<constant name="DISPLAY_PARAM_ROLE" value="0" enum="DisplayParam">
-			[enum DisplayRole]. How the entity is displayed. Usually [constant DISPLAY_ROLE_AUTO].
+			[enum NetwDisplay.DisplayRole]. How the entity is displayed. Usually [constant NetwDisplay.DISPLAY_ROLE_AUTO].
 		</constant>
 		<constant name="DISPLAY_PARAM_LIVE_MODE" value="1" enum="DisplayParam">
-			[enum LiveMode]. How a predicted entity is displayed.
+			[enum NetwDisplay.LiveMode]. How a predicted entity is displayed.
 		</constant>
 		<constant name="DISPLAY_PARAM_LIVE_SMOOTH_TIME" value="2" enum="DisplayParam">
 			[float] seconds to smooth out a correction on a predicted entity.
 		</constant>
 		<constant name="DISPLAY_PARAM_CHASE_GLIDE_TIME" value="3" enum="DisplayParam">
-			[float] seconds [constant LIVE_MODE_CHASE] takes to smooth out a correction.
+			[float] seconds [constant NetwDisplay.LIVE_MODE_CHASE] takes to smooth out a correction.
 		</constant>
 		<constant name="DISPLAY_PARAM_TIMELINE_MODE" value="4" enum="DisplayParam">
-			[enum TimelineMode]. How a remote entity is displayed.
+			[enum NetwDisplay.TimelineMode]. How a remote entity is displayed.
 		</constant>
 		<constant name="DISPLAY_PARAM_MAX_FORECAST_TICKS" value="5" enum="DisplayParam">
-			[int] ticks [constant TIMELINE_MODE_FORECAST] may guess ahead before it stops.
+			[int] ticks [constant NetwDisplay.TIMELINE_MODE_FORECAST] may guess ahead before it stops.
 		</constant>
 		<constant name="DISPLAY_PARAM_SMART_DILATION" value="6" enum="DisplayParam">
 			[bool]. Whether playback may slow down to cover late packets.
@@ -4198,13 +3729,13 @@
 			[NodePath]. The node the interpolated transform is written to. It may be set before the node exists.
 		</constant>
 		<constant name="PREDICT_PARAM_ARCHETYPE" value="0" enum="PredictParam">
-			[enum NetwPredict.Archetype]. A preset, such as a character or a vehicle, that sets the other values. Set it first.
+			[enum NetwPrediction.Archetype]. A preset, such as a character or a vehicle, that sets the other values. Set it first.
 		</constant>
 		<constant name="PREDICT_PARAM_MISSING_POLICY" value="2" enum="PredictParam">
-			[enum NetwPredict.MissingInput]. What the server does when an input never arrives.
+			[enum NetwPrediction.MissingInput]. What the server does when an input never arrives.
 		</constant>
 		<constant name="PREDICT_PARAM_RECOVERY_POLICY" value="3" enum="PredictParam">
-			[enum NetwPredict.RecoveryPolicy]. How a misprediction is corrected.
+			[enum NetwPrediction.RecoveryPolicy]. How a misprediction is corrected.
 		</constant>
 		<constant name="PREDICT_PARAM_TELEPORT_THRESHOLD" value="6" enum="PredictParam">
 			[float]. An error larger than this teleports instead of smoothing. Used for properties with no threshold of their own.
@@ -4213,7 +3744,7 @@
 			[float]. How far a prediction may differ from the server before it counts as a misprediction.
 		</constant>
 		<constant name="PREDICT_PARAM_BREACH_RESPONSE" value="8" enum="PredictParam">
-			[enum NetwPredict.BreachResponse]. What happens when a client's state cannot be corrected.
+			[enum NetwPrediction.BreachResponse]. What happens when a client's state cannot be corrected.
 		</constant>
 		<constant name="PREDICT_PARAM_COLLISION_COOLDOWN_TICKS" value="10" enum="PredictParam">
 			[int] ticks after a collision during which corrections replace every property.
@@ -4230,20 +3761,32 @@
 		<constant name="PREDICT_PARAM_REPLAY_BUFFER_DEPTH" value="14" enum="PredictParam">
 			[int]. How many past inputs are kept for replaying after a correction.
 		</constant>
+		<constant name="PREDICT_PARAM_RECONCILE_MODE" value="15" enum="PredictParam">
+			[int]. See [member NetwPrediction.reconcile_mode].
+		</constant>
+		<constant name="PREDICT_PARAM_ACK_AGE_TICKS" value="16" enum="PredictParam">
+			[int]. See [member NetwPrediction.ack_age_ticks].
+		</constant>
+		<constant name="PREDICT_PARAM_EPOCH" value="17" enum="PredictParam">
+			[int]. See [member NetwPrediction.epoch].
+		</constant>
+		<constant name="PREDICT_PARAM_SLEEPING" value="18" enum="PredictParam">
+			[bool]. See [member NetwPrediction.sleeping].
+		</constant>
 		<constant name="SIMULATION_PARAM_BODIES" value="0" enum="SimulationParam">
-			[code]Array[NodePath][/code]. [member NetwSimulationHandle.bodies].
+			[code]Array[NodePath][/code]. [member NetwSimulation.bodies].
 		</constant>
 		<constant name="SIMULATION_PARAM_SCHEDULE" value="1" enum="SimulationParam">
-			[enum NetwSimulationHandle.Schedule]. [member NetwSimulationHandle.schedule].
+			[enum NetwSimulation.Schedule]. [member NetwSimulation.schedule].
 		</constant>
 		<constant name="SIMULATION_PARAM_REPLICAS" value="2" enum="SimulationParam">
-			[enum NetwSimulationHandle.Replicas]. [member NetwSimulationHandle.replicas].
+			[enum NetwSimulation.Replicas]. [member NetwSimulation.replicas].
 		</constant>
 		<constant name="SIMULATION_PARAM_RESTORE" value="3" enum="SimulationParam">
-			[enum NetwSimulationHandle.Restore]. [member NetwSimulationHandle.restore].
+			[enum NetwSimulation.Restore]. [member NetwSimulation.restore].
 		</constant>
 		<constant name="SIMULATION_PARAM_MAX_RESTORE_TICKS" value="4" enum="SimulationParam">
-			[int] ticks. [member NetwSimulationHandle.max_restore_ticks].
+			[int] ticks. [member NetwSimulation.max_restore_ticks].
 		</constant>
 		<constant name="COLUMN_F32" value="0" enum="ColumnType">
 			32-bit float.
@@ -4478,7 +4021,7 @@
 			Gauge. Effects waiting to be confirmed or denied.
 		</constant>
 		<constant name="STAT_PREDICT_GATE_FALLBACKS" value="55" enum="Stat">
-			Counter. Actions that ran without all their input. See [signal lagcomp_action_gate_fallback].
+			Counter. Actions that ran without all their input. See [constant LAGCOMP_ACTION_GATE_FALLBACK].
 		</constant>
 		<constant name="STAT_DISPLAY_RUNTIMES" value="56" enum="Stat">
 			Gauge. Interpolated entities.
@@ -4490,7 +4033,7 @@
 			Gauge. Interpolated entities that are not moving.
 		</constant>
 		<constant name="STAT_DISPLAY_PROJECTING" value="59" enum="Stat">
-			Gauge. Entities guessing ahead with [constant TIMELINE_MODE_FORECAST].
+			Gauge. Entities guessing ahead with [constant NetwDisplay.TIMELINE_MODE_FORECAST].
 		</constant>
 		<constant name="STAT_DISPLAY_SNAPS" value="60" enum="Stat">
 			Counter. Times an entity jumped instead of interpolating.
@@ -4606,35 +4149,174 @@
 		<constant name="STAT_ROW_FRAMES_DEFERRED" value="97" enum="Stat">
 			Counter. Property updates delayed because the bandwidth limit in [method peer_link_stats] was reached.
 		</constant>
-		<constant name="SESSION_STATE_OFFLINE" value="0" enum="SessionState">
-			Not connected.
+		<constant name="ENDPOINT_ADDED" value="0" enum="Notification">
+			An endpoint was added to [method endpoint_list]. The callback receives [code](endpoint: RID)[/code].
 		</constant>
-		<constant name="SESSION_STATE_CONNECTING" value="1" enum="SessionState">
-			Hosting or joining, and may still fail.
+		<constant name="ENDPOINT_REMOVED" value="1" enum="Notification">
+			An endpoint was removed from [method endpoint_list]. The callback receives [code](endpoint: RID)[/code].
 		</constant>
-		<constant name="SESSION_STATE_ONLINE" value="2" enum="SessionState">
-			Connected.
+		<constant name="ENDPOINT_UPDATED" value="2" enum="Notification">
+			A probe updated an endpoint. Read it with [method endpoint_get_param] and [method endpoint_get_state]. The callback receives [code](endpoint: RID)[/code].
 		</constant>
-		<constant name="SESSION_STATE_DISCONNECTING" value="3" enum="SessionState">
-			Disconnecting.
+		<constant name="CLOCK_BEFORE_TICK" value="3" enum="Notification">
+			A tick is starting, before [constant CLOCK_ON_TICK]. The callback receives [code](delta: float, tick: int)[/code].
 		</constant>
-		<constant name="ROLE_NONE" value="0" enum="Role">
-			No session.
+		<constant name="CLOCK_ON_TICK" value="4" enum="Notification">
+			A tick is running. The callback receives [code](delta: float, tick: int)[/code].
 		</constant>
-		<constant name="ROLE_CLIENT" value="1" enum="Role">
-			A client. A listen server also has a player, so check [member is_local_client] for that.
+		<constant name="CLOCK_AFTER_TICK" value="5" enum="Notification">
+			A tick has ended, after [constant CLOCK_ON_TICK]. The callback receives [code](delta: float, tick: int)[/code].
 		</constant>
-		<constant name="ROLE_DEDICATED_SERVER" value="2" enum="Role">
-			A server with no local player.
+		<constant name="PREDICT_OWNER_DIVERGENCE" value="6" enum="Notification">
+			On the server, the state a peer predicted for an input differs from the server's. [code]attribution[/code] is the known cause. The callback receives [code](peer: int, entry: int, attribution: int)[/code].
 		</constant>
-		<constant name="ROLE_LISTEN_SERVER" value="3" enum="Role">
-			A server that also has a player.
+		<constant name="LAGCOMP_ACTION_GATE_FALLBACK" value="7" enum="Notification">
+			A [constant NetwAction.TIMING_TICK_ALIGNED_STATE_READY] action ran without all its input, after waiting [member NetwLagCompensationConfig.input_gate_deadline_ticks]. [code]view_tick[/code] is the tick it was aimed at. The callback receives [code](key: StringName, view_tick: int)[/code].
 		</constant>
-		<constant name="TRANSPORT_MODE_HOST" value="0" enum="TransportMode">
-			Create a server peer from the settings. The address is ignored.
+		<constant name="SCENE_SPAWNED" value="8" enum="Notification">
+			A scene was spawned, before any player enters it. It happens once per scene. The callback receives [code](scene: Node)[/code].
 		</constant>
-		<constant name="TRANSPORT_MODE_CLIENT" value="1" enum="TransportMode">
-			Create a client peer that joins the address.
+		<constant name="SCENE_ACTIVATED" value="9" enum="Notification">
+			A scene became the displayed scene. The callback receives [code](scene: Node)[/code].
+		</constant>
+		<constant name="SCENE_DESPAWNED" value="10" enum="Notification">
+			A scene was removed. The callback receives [code](scene: Node)[/code].
+		</constant>
+		<constant name="SCENE_ENTITY_MOVED" value="11" enum="Notification">
+			An entity finished moving from one scene to another, before the move's [NetwPromise] resolves. The callback receives [code](entity: NetwEntity, from: Node, to: Node)[/code].
+		</constant>
+		<constant name="SCENE_STARTUP_SPAWNED" value="12" enum="Notification">
+			Startup finished on the server, even if nothing was spawned. It happens once. The callback receives no arguments.
+		</constant>
+		<constant name="PARTICIPANT_VIEWPORT_CHANGED" value="13" enum="Notification">
+			[method scene_player_viewport] changed. [code]viewport[/code] may be [code]null[/code]. The callback receives [code](viewport: SubViewport)[/code].
+		</constant>
+		<constant name="CLOCK_BEFORE_TICK_LOOP" value="14" enum="Notification">
+			A physics frame is about to run its ticks, even when there are none. [method clock_step] does not send it. The callback receives no arguments.
+		</constant>
+		<constant name="CLOCK_AFTER_TICK_LOOP" value="15" enum="Notification">
+			A physics frame has run its ticks, even when there were none. [method clock_step] does not send it. The callback receives no arguments.
+		</constant>
+		<constant name="CLOCK_SYNCHRONIZED" value="16" enum="Notification">
+			The clock synchronized with the server for the first time. It happens once. The callback receives no arguments.
+		</constant>
+		<constant name="CLOCK_CONFIGURED" value="17" enum="Notification">
+			The clock settings were applied. It happens once, so check [method clock_is_configured] in case it already happened. The callback receives no arguments.
+		</constant>
+		<constant name="CLOCK_TICKRATE_MISMATCH" value="18" enum="Notification">
+			A peer runs a tickrate that differs from this peer's, and [method clock_set_mismatch_action] is [constant NetwClock.MISMATCH_ACTION_SIGNAL]. The callback receives [code](peer_id: int, their_tickrate: int)[/code].
+		</constant>
+		<constant name="CLOCK_PONG_RECEIVED" value="19" enum="Notification">
+			The server answered a [method clock_send_ping] and the clock has adjusted.
+			[codeblock lang=text]
+			Dictionary
+			┠╴rtt_raw                     float   this round trip, in seconds
+			┠╴rtt_avg                     float   average round trip, in seconds
+			┠╴rtt_jitter                  float   round trip variation, in seconds
+			┠╴diff                        int     ticks the clock moved
+			┠╴tick                        int     the tick after adjusting
+			┠╴display_offset              float   the current display offset
+			┠╴recommended_display_offset  float   the display offset this ping suggests
+			┠╴is_stable                   bool    clock_is_stable()
+			┖╴is_synchronized             bool    clock_is_synchronized()
+			[/codeblock]
+			The callback receives [code](data: Dictionary)[/code].
+		</constant>
+		<constant name="CLOCK_STABILITY_CHANGED" value="20" enum="Notification">
+			[method clock_is_stable] changed. The callback receives [code](is_stable: bool)[/code].
+		</constant>
+		<constant name="SESSION_STATE_CHANGED" value="21" enum="Notification">
+			[member state] changed. The callback receives [code](old_state: int, new_state: int)[/code].
+		</constant>
+		<constant name="EMBED_PHASE_CHANGED" value="22" enum="Notification">
+			[method embed_phase] changed. The callback receives [code](phase: int)[/code].
+		</constant>
+		<constant name="SESSION_JOIN_SUBMITTED" value="23" enum="Notification">
+			This peer sent its join request. It does not mean the join was accepted. The callback receives [code](username: StringName, args: Array)[/code].
+		</constant>
+		<constant name="SESSION_ENTERED" value="24" enum="Notification">
+			The session became [constant NetwSession.SESSION_STATE_ONLINE]. The callback receives no arguments.
+		</constant>
+		<constant name="SESSION_JOIN_FAILED" value="25" enum="Notification">
+			This peer's join was rejected. Games usually use [signal NetwConnection.join_failed]. The callback receives [code](error: int, reason: String)[/code].
+		</constant>
+		<constant name="SESSION_ENDED" value="26" enum="Notification">
+			The session stopped being [constant NetwSession.SESSION_STATE_ONLINE]. The callback receives no arguments.
+		</constant>
+		<constant name="SESSION_RECLAIMED" value="27" enum="Notification">
+			Right after [constant SESSION_ENDED]. Free nodes the session owned here. The callback receives no arguments.
+		</constant>
+		<constant name="PEER_AUTHENTICATING" value="28" enum="Notification">
+			Same as [signal SceneMultiplayer.peer_authenticating], from [member inner]. The callback receives [code](peer_id: int)[/code].
+		</constant>
+		<constant name="PEER_AUTHENTICATION_FAILED" value="29" enum="Notification">
+			Same as [signal SceneMultiplayer.peer_authentication_failed], from [member inner]. The callback receives [code](peer_id: int)[/code].
+		</constant>
+		<constant name="SESSION_POLL_STARTED" value="30" enum="Notification">
+			A [method MultiplayerAPI.poll] is starting. [code]delta[/code] is the time since the previous one. The callback receives [code](delta: float)[/code].
+		</constant>
+		<constant name="TABLE_RECEIVED" value="31" enum="Notification">
+			A table changed, by [method table_commit] or by an update from the server. The callback receives [code](table: RID, tick: int)[/code].
+		</constant>
+		<constant name="DATABASE_FAILED" value="32" enum="Notification">
+			An entity failed to load or save in a database. [code]detail[/code] names the record and the reason. The callback receives [code](database: RID, error: int, detail: String)[/code].
+		</constant>
+		<constant name="PERSIST_LOADED" value="33" enum="Notification">
+			An entity finished loading. [code]found[/code] is [code]false[/code] when there was no save, and a failed load sends [constant DATABASE_FAILED]. The callback receives [code](entity: RID, found: bool)[/code].
+		</constant>
+		<constant name="PERSIST_SAVED" value="34" enum="Notification">
+			An entity finished saving, and a failed save sends [constant DATABASE_FAILED]. The callback receives [code](entity: RID)[/code].
+		</constant>
+		<constant name="PEER_PACKET" value="35" enum="Notification">
+			Same as [signal SceneMultiplayer.peer_packet], for packets sent with [method send_bytes]. The callback receives [code](id: int, packet: PackedByteArray)[/code].
+		</constant>
+		<constant name="PEER_KICKED" value="36" enum="Notification">
+			The server kicked this peer, before the connection closes. The callback receives [code](reason: String)[/code].
+		</constant>
+		<constant name="SESSION_SERVER_DISCONNECTING" value="37" enum="Notification">
+			The server called [method session_notify_shutdown]. The callback receives [code](reason: String)[/code].
+		</constant>
+		<constant name="PEER_KICK_REQUESTED" value="38" enum="Notification">
+			On the server, a peer asked to kick another with [method peer_request_kick]. The callback receives [code](requester_id: int, target_id: int, reason: String)[/code].
+		</constant>
+		<constant name="SESSION_DISCONNECT_REQUESTED" value="39" enum="Notification">
+			On the server, a peer asked to leave with [method session_request_leave]. The callback receives [code](peer_id: int, reason: String)[/code].
+		</constant>
+		<constant name="SESSION_TREE_PAUSED" value="40" enum="Notification">
+			The server called [method session_pause]. It does not pause the [SceneTree]. The callback receives [code](reason: String)[/code].
+		</constant>
+		<constant name="SESSION_TREE_UNPAUSED" value="41" enum="Notification">
+			The server called [method session_unpause]. The callback receives no arguments.
+		</constant>
+		<constant name="SERVICE_REGISTERED" value="42" enum="Notification">
+			A service was registered. The callback receives [code](service: Object)[/code].
+		</constant>
+		<constant name="SERVICE_UNREGISTERED" value="43" enum="Notification">
+			A service was unregistered. The callback receives [code](service: Object)[/code].
+		</constant>
+		<constant name="ENTITY_LIVE" value="44" enum="Notification">
+			An entity spawned on this peer at [code]route[/code]. The callback receives [code](route: int, entity: NetwEntity)[/code].
+		</constant>
+		<constant name="ENTITY_LINGERING" value="45" enum="Notification">
+			An entity started despawning and entered [constant ENTITY_STATE_LINGERING]. The callback receives [code](route: int, entity: NetwEntity)[/code].
+		</constant>
+		<constant name="ENTITY_DEAD" value="46" enum="Notification">
+			The entity at [code]route[/code] was despawned, after [signal NetwEntity.despawned]. It happens once, and a peer that only stops seeing the entity gets [constant ENTITY_HIDDEN]. The callback receives [code](route: int)[/code].
+		</constant>
+		<constant name="ENTITY_HIDDEN" value="47" enum="Notification">
+			This peer stopped seeing an entity that still exists on the server, after [signal NetwEntity.hidden]. If it becomes visible again, the same route gets a new node. The callback receives [code](route: int, entity: NetwEntity)[/code].
+		</constant>
+		<constant name="PLAYER_JOINED" value="48" enum="Notification">
+			A player's join was accepted, including this peer's own. The callback receives [code](player: NetwPlayer)[/code].
+		</constant>
+		<constant name="PLAYER_LOCAL_JOINED" value="49" enum="Notification">
+			This peer's own join was accepted, before [constant PLAYER_JOINED]. The callback receives [code](player: NetwPlayer)[/code].
+		</constant>
+		<constant name="PLAYER_LEFT" value="50" enum="Notification">
+			A player left or was kicked. [member NetwPlayer.is_active] is already [code]false[/code]. The callback receives [code](player: NetwPlayer)[/code].
+		</constant>
+		<constant name="SCENE_LIVE" value="51" enum="Notification">
+			A scene is ready on this peer, and every node in it is in the tree and ready. The callback receives [code](scene: NetwScene)[/code].
 		</constant>
 	</constants>
 </class>

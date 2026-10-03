@@ -76,7 +76,7 @@ Ref<NetwEntity> Record::stamp_header(
     if (entity.is_null()) {
         return entity;
     }
-    entity->set_entity_id(p_header.get(StringName("entity_id"), StringName()));
+    entity->set_name(p_header.get(StringName("entity_id"), StringName()));
     entity->set_peer_id(int64_t(p_header.get(StringName("peer_id"), 0)));
     if (NetwMultiplayer *session
         = Object::cast_to<NetwMultiplayer>(p_session)) {

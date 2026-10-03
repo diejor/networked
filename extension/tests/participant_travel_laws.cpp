@@ -7,7 +7,7 @@
 #include "netw/api/netw_multiplayer.hpp"
 #include "netw/api/participant.hpp"
 #include "netw/api/promise.hpp"
-#include "netw/api/scene_handle.hpp"
+#include "netw/api/scene.hpp"
 #include "support/joined_peer.h"
 
 namespace TestParticipantTravelLaws {
@@ -17,12 +17,12 @@ using namespace netw_test;
 using netw::NetwMultiplayer;
 using netw::NetwPlayer;
 using netw::NetwPromise;
-using netw::NetwSceneHandle;
+using netw::NetwScene;
 
 struct Destination {
     Node *root = nullptr;
     RID handle;
-    Ref<NetwSceneHandle> view;
+    Ref<NetwScene> view;
 };
 
 Destination a_scene(LoopbackRig &p_rig, const StringName &p_stem, bool p_live) {
@@ -88,7 +88,7 @@ TEST_CASE(
     REQUIRE(traveller.is_valid());
     NETW_CHECK_EQ(
         refusal_of(
-            rig.server()->player_travel(traveller, Ref<NetwSceneHandle>())
+            rig.server()->player_travel(traveller, Ref<NetwScene>())
         ),
         int(ERR_INVALID_PARAMETER)
     );

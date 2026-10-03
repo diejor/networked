@@ -3,12 +3,12 @@
 ##
 ## A test that already knows how to build its peer assigns it directly and
 ## needs nothing here. This exists for a provider-backed backend, where the
-## peer arrives through [method NetwConnectHandle.create_peer] and the
+## peer arrives through [method NetwConnection.create_peer] and the
 ## assignment window is the completion callback itself.
 ## [codeblock]
 ## var settled := await NetwOrdinarySetup.connect_through(
 ##         tree,
-##         NetwMultiplayer.TRANSPORT_MODE_CLIENT,
+##         NetwConnection.TRANSPORT_MODE_CLIENT,
 ##         room,
 ##         { },
 ##         &"valeria",
@@ -47,7 +47,7 @@ class Outcome:
 ## declines the offer and closes the peer.
 static func connect_through(
 		tree: MultiplayerTree,
-		mode: NetwMultiplayer.TransportMode,
+		mode: NetwConnection.TransportMode,
 		address: String,
 		settings: Dictionary,
 		username: StringName,
@@ -55,6 +55,7 @@ static func connect_through(
 ) -> Outcome:
 	var outcome := Outcome.new()
 	var api := tree.api
+	var session: NetwSession = Netw.session(tree)
 	var settled := [false]
 
 	var completed := func(
@@ -76,7 +77,7 @@ static func connect_through(
 			return
 		outcome.peer = peer
 
-	var ticket := Netw.connection(tree).create_peer(
+	var ticket := session.connection.create_peer(
 			tree.peer_class,
 			mode,
 			address,
@@ -92,7 +93,7 @@ static func connect_through(
 	var scene_tree := tree.get_tree()
 	while not settled[0]:
 		if Time.get_ticks_msec() > deadline or scene_tree == null:
-			Netw.connection(tree).cancel_peer_creation(ticket)
+			session.connection.cancel_peer_creation(ticket)
 			outcome.error = ERR_TIMEOUT
 			outcome.detail = "the provider never answered."
 			return outcome

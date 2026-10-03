@@ -26,7 +26,7 @@ func test_a_controller_drives_its_own_car_forward() -> void:
 	assert_float(absf(car.linear_speed)).is_greater(0.1)
 	assert_int(car.entity.simulation.mode).override_failure_message(
 		"the controller's car runs its step as the author",
-	).is_equal(NetwSimulationHandle.MODE_AUTHORITY)
+	).is_equal(NetwSimulation.MODE_AUTHORITY)
 
 
 func test_every_view_of_a_car_follows_its_controllers_relayed_pose() -> void:
@@ -104,7 +104,7 @@ func test_a_car_drives_on_after_the_host_takes_its_control() -> void:
 	assert_bool(own.sphere.freeze).is_false()
 	assert_bool(host_view.sphere.freeze).is_true()
 
-	host_view.entity.controller = host.peer_id
+	assert_int(host_view.entity.transfer_control(host.peer_id)).is_equal(OK)
 	await game.sync_ticks(10)
 	assert_bool(host_view.entity.is_controlled_locally).is_true()
 	assert_bool(host_view.sphere.freeze).override_failure_message(

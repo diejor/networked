@@ -1,6 +1,6 @@
 #include "support/netw_test.h"
 
-#include "netw/api/predict.hpp"
+#include "netw/api/prediction.hpp"
 #include "netw/predict/engine.hpp"
 #include "netw/predict/episode.hpp"
 

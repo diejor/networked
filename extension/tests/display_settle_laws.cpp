@@ -11,7 +11,7 @@
 #include "godot/templates.hpp"
 #include "netw/api/clock_config.hpp"
 #include "netw/api/context.hpp"
-#include "netw/api/display_handle.hpp"
+#include "netw/api/display.hpp"
 #include "netw/api/entity.hpp"
 #include "netw/api/event_plane.hpp"
 #include "netw/api/interpolate.hpp"
@@ -24,7 +24,7 @@ namespace TestNetwDisplaySettleLaws {
 
 using namespace godot;
 using netw::Netw;
-using netw::NetwDisplayHandle;
+using netw::NetwDisplay;
 using netw::NetwEntity;
 using netw::NetwInterpolate;
 using netw::NetwMultiplayer;
@@ -366,8 +366,83 @@ TEST_CASE(
         20
     );
     NETW_CHECK_EQ(
-        subject.entity->get_interpolation()->get_trace_interval(),
+        subject.entity->get_display()->get_trace_interval(),
         int64_t(20)
+    );
+
+    netw_test::retire_subject(subject);
+}
+
+TEST_CASE(
+    "[Networked][Display][SceneTree] the typed display and the flat params "
+    "of the entity's own session read and write one declaration"
+) {
+    const Ref<NetwMultiplayer> core = netw_test::clocked_session();
+    const netw_test::DisplaySubject subject = netw_test::stand_subject(core, 0);
+    NetwMultiplayer *home = netw::NetwEntity::session_core_for(subject.body);
+    REQUIRE(home != nullptr);
+    const RID entity = home->entity_of(subject.body);
+    const Ref<netw::NetwDisplay> typed
+        = subject.entity->get_display();
+
+    typed->set_chase_glide_time(0.25);
+    typed->set_timeline_mode(NetwMultiplayer::TIMELINE_MODE_FORECAST);
+    typed->set_max_forecast_ticks(7);
+    NETW_CHECK_EQ(
+        double(home->display_get_param(
+            entity,
+            NetwMultiplayer::DISPLAY_PARAM_CHASE_GLIDE_TIME
+        )),
+        0.25
+    );
+    NETW_CHECK_EQ(
+        int(home->display_get_param(
+            entity,
+            NetwMultiplayer::DISPLAY_PARAM_TIMELINE_MODE
+        )),
+        int(NetwMultiplayer::TIMELINE_MODE_FORECAST)
+    );
+    NETW_CHECK_EQ(
+        int64_t(home->display_get_param(
+            entity,
+            NetwMultiplayer::DISPLAY_PARAM_MAX_FORECAST_TICKS
+        )),
+        int64_t(7)
+    );
+
+    home->display_set_param(
+        entity,
+        NetwMultiplayer::DISPLAY_PARAM_CHASE_GLIDE_TIME,
+        0.5
+    );
+    home->display_set_param(
+        entity,
+        NetwMultiplayer::DISPLAY_PARAM_TIMELINE_MODE,
+        NetwMultiplayer::TIMELINE_MODE_BUFFERED
+    );
+    home->display_set_param(
+        entity,
+        NetwMultiplayer::DISPLAY_PARAM_MAX_FORECAST_TICKS,
+        3
+    );
+    NETW_CHECK_EQ(typed->get_chase_glide_time(), 0.5);
+    NETW_CHECK_EQ(
+        int(typed->get_timeline_mode()),
+        int(NetwMultiplayer::TIMELINE_MODE_BUFFERED)
+    );
+    NETW_CHECK_EQ(typed->get_max_forecast_ticks(), int64_t(3));
+
+    const Variant pump
+        = home->display_get_track_stat(entity, StringName(), "pump_mode");
+    NETW_CHECK_EQ(
+        int(typed->get_pump_mode()),
+        pump.get_type() == Variant::NIL
+            ? int(NetwMultiplayer::DISPLAY_PUMP_UNRESOLVED)
+            : int(pump)
+    );
+    NETW_CHECK_EQ(
+        int(typed->get_track_stat(StringName(), "channels")),
+        int(home->display_get_track_stat(entity, StringName(), "channels"))
     );
 
     netw_test::retire_subject(subject);

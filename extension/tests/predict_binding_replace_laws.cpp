@@ -4,7 +4,7 @@
 
 #include "godot/variant.hpp"
 #include "netw/api/predict_stats.hpp"
-#include "netw/api/prediction_handle.hpp"
+#include "netw/api/prediction.hpp"
 
 #if defined(NETW_TIER_HOSTED)
 

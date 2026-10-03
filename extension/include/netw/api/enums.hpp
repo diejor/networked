@@ -19,25 +19,6 @@ struct NetwMultiplayer {
         TABLE_PARAM_RELIABLE = 0,
     };
 
-    enum SessionState {
-        SESSION_STATE_OFFLINE = SessionCore::STATE_OFFLINE,
-        SESSION_STATE_CONNECTING = SessionCore::STATE_CONNECTING,
-        SESSION_STATE_ONLINE = SessionCore::STATE_ONLINE,
-        SESSION_STATE_DISCONNECTING = SessionCore::STATE_DISCONNECTING,
-    };
-
-    enum Role {
-        ROLE_NONE = SessionCore::ROLE_NONE,
-        ROLE_CLIENT = SessionCore::ROLE_CLIENT,
-        ROLE_DEDICATED_SERVER = SessionCore::ROLE_DEDICATED_SERVER,
-        ROLE_LISTEN_SERVER = SessionCore::ROLE_LISTEN_SERVER,
-    };
-
-    enum TransportMode {
-        TRANSPORT_MODE_HOST = connect::PEER_MODE_HOST,
-        TRANSPORT_MODE_CLIENT = connect::PEER_MODE_CLIENT,
-    };
-
     enum SceneMove {
         SCENE_MOVE_REFUSED = NetwSceneCore::MOVE_REFUSED,
         SCENE_MOVE_ALREADY_THERE = NetwSceneCore::MOVE_ALREADY_THERE,
@@ -61,17 +42,6 @@ struct NetwMultiplayer {
         ENTITY_STATE_ABSENT = NetwLivenessCore::STATE_ABSENT,
     };
 
-    enum SyncMode {
-        SYNC_MODE_SNAP = ClockEngine::SYNC_SNAP,
-        SYNC_MODE_STRETCH = ClockEngine::SYNC_STRETCH,
-    };
-
-    enum MismatchAction {
-        MISMATCH_ACTION_WARN = 0,
-        MISMATCH_ACTION_DISCONNECT = 1,
-        MISMATCH_ACTION_SIGNAL = 2,
-    };
-
     enum ClockParam {
         CLOCK_PARAM_TICKRATE = 0,
         CLOCK_PARAM_SYNC_MODE = 1,
@@ -91,48 +61,16 @@ struct NetwMultiplayer {
         CLOCK_PARAM_TICK_FACTOR_OVERRIDE = 15,
     };
 
-    enum ClockMonitor {
-        CLOCK_MONITOR_RTT = 0,
-        CLOCK_MONITOR_RTT_AVG = 1,
-        CLOCK_MONITOR_RTT_JITTER = 2,
-        CLOCK_MONITOR_ONE_WAY_LATENCY = 3,
-        CLOCK_MONITOR_TICKTIME = 4,
-        CLOCK_MONITOR_TICK_ACCUMULATOR = 5,
-        CLOCK_MONITOR_PHYSICS_FRAMES = 6,
-        CLOCK_MONITOR_POLLS = 7,
-        CLOCK_MONITOR_WALL_SECONDS = 8,
-        CLOCK_MONITOR_PHYSICS_HZ = 9,
-        CLOCK_MONITOR_POLL_HZ = 10,
-    };
-
     enum LayerParam {
         LAYER_PARAM_POLICY = 0,
         LAYER_PARAM_LEAVE_POLICY = 1,
         LAYER_PARAM_PERCEPTION_POLICY = 2,
     };
 
-    enum LayerPolicy {
-        LAYER_POLICY_HIDE_FROM_OUTSIDERS
-        = interest::Engine::HIDE_FROM_OUTSIDERS,
-        LAYER_POLICY_HIDE_FROM_INSIDERS = interest::Engine::HIDE_FROM_INSIDERS,
-    };
-
-    enum LeavePolicy : int64_t {
-        LEAVE_POLICY_HIDE = interest::Decl::LEAVE_HIDE,
-        LEAVE_POLICY_RETAIN = interest::Decl::LEAVE_RETAIN,
-        LEAVE_POLICY_CUSTOM = interest::Decl::LEAVE_CUSTOM,
-    };
-
     enum EmbedPhase {
         EMBED_PHASE_DECLARING = 0,
         EMBED_PHASE_SETTLING = 1,
         EMBED_PHASE_LIVE = 2,
-    };
-
-    enum PerceptionPolicy : int64_t {
-        PERCEPTION_POLICY_HIDE = interest::Decl::PERCEPTION_HIDE,
-        PERCEPTION_POLICY_SHOW = interest::Decl::PERCEPTION_SHOW,
-        PERCEPTION_POLICY_CUSTOM = interest::Decl::PERCEPTION_CUSTOM,
     };
 
     enum TransportParam {
@@ -146,53 +84,16 @@ struct NetwMultiplayer {
         TRANSPORT_PARAM_CLIENT_SETTINGS = 7,
     };
 
-    enum TransportCapability {
-        TRANSPORT_AVAILABLE = 1,
-        TRANSPORT_CAN_HOST = 2,
-        TRANSPORT_CAN_PROBE = 4,
-        TRANSPORT_CAN_BROWSE = 8,
-        TRANSPORT_ACCEPTS_EMPTY_ADDRESS = 16,
-    };
-
     enum EndpointParam {
         ENDPOINT_PARAM_TRANSPORT = 0,
         ENDPOINT_PARAM_ADDRESS = 1,
         ENDPOINT_PARAM_DISPLAY_NAME = 2,
     };
 
-    enum EndpointState {
-        ENDPOINT_STATE_FLAGS = 0,
-        ENDPOINT_STATE_STATUS = 1,
-        ENDPOINT_STATE_INFO = 2,
-    };
-
-    enum EndpointFlags {
-        ENDPOINT_FLAG_CALLER = 1,
-        ENDPOINT_FLAG_AVAILABLE = 2,
-        ENDPOINT_FLAG_OBSERVED = 4,
-    };
-
     enum SceneParam {
         SCENE_PARAM_LABEL = 0,
         SCENE_PARAM_ISOLATION = 1,
         SCENE_PARAM_PROCESSING = 2,
-    };
-
-    enum SceneEvent {
-        SCENE_EVENT_VIEWER = 0,
-        SCENE_EVENT_BODY = 1,
-        SCENE_EVENT_ENTITY = 2,
-    };
-
-    enum SceneChange {
-        SCENE_CHANGE_SESSION = NetwSceneCore::SCOPE_SESSION,
-        SCENE_CHANGE_PLAYER = NetwSceneCore::SCOPE_PLAYER,
-        SCENE_CHANGE_SCENE = NetwSceneCore::SCOPE_SCENE,
-    };
-
-    enum SceneIsolation {
-        SCENE_ISOLATION_NONE = 0,
-        SCENE_ISOLATION_OWN_WORLD = 1,
     };
 
     enum DisplayParam {
@@ -213,32 +114,6 @@ struct NetwMultiplayer {
         DISPLAY_PARAM_VISUAL_ROOT = display::PARAM_VISUAL_ROOT,
     };
 
-    enum DisplayRole {
-        DISPLAY_ROLE_AUTO = display::ROLE_AUTO,
-        DISPLAY_ROLE_REMOTE = display::ROLE_REMOTE,
-        DISPLAY_ROLE_PREDICTED = display::ROLE_PREDICTED,
-        DISPLAY_ROLE_DISABLED = display::ROLE_DISABLED,
-        DISPLAY_ROLE_AUTHORITY = display::ROLE_AUTHORITY,
-    };
-
-    enum DisplayPump {
-        DISPLAY_PUMP_UNRESOLVED = display::PUMP_UNRESOLVED,
-        DISPLAY_PUMP_DISABLED = display::PUMP_DISABLED,
-        DISPLAY_PUMP_REMOTE = display::PUMP_REMOTE,
-        DISPLAY_PUMP_BRACKETED = display::PUMP_BRACKETED,
-        DISPLAY_PUMP_CHASE = display::PUMP_CHASE,
-    };
-
-    enum LiveMode {
-        LIVE_MODE_CHASE = display::LIVE_CHASE,
-        LIVE_MODE_BRACKETED = display::LIVE_BRACKETED,
-    };
-
-    enum TimelineMode {
-        TIMELINE_MODE_BUFFERED = display::TIMELINE_BUFFERED,
-        TIMELINE_MODE_FORECAST = display::TIMELINE_FORECAST,
-    };
-
     enum PredictParam {
         PREDICT_PARAM_ARCHETYPE = 0,
         PREDICT_PARAM_MISSING_POLICY = 2,
@@ -251,6 +126,10 @@ struct NetwMultiplayer {
         PREDICT_PARAM_MAX_CONSUME_LAG_TICKS = 12,
         PREDICT_PARAM_CONSUME_BUFFER_TICKS = 13,
         PREDICT_PARAM_REPLAY_BUFFER_DEPTH = 14,
+        PREDICT_PARAM_RECONCILE_MODE = 15,
+        PREDICT_PARAM_ACK_AGE_TICKS = 16,
+        PREDICT_PARAM_EPOCH = 17,
+        PREDICT_PARAM_SLEEPING = 18,
     };
 
     enum SimulationParam {
@@ -326,9 +205,197 @@ struct NetwMultiplayer {
 #undef NETW_SESSION_STAT_ENUM
             STAT_COUNT,
     };
+
+    enum Notification {
+        ENDPOINT_ADDED,
+        ENDPOINT_REMOVED,
+        ENDPOINT_UPDATED,
+        CLOCK_BEFORE_TICK,
+        CLOCK_ON_TICK,
+        CLOCK_AFTER_TICK,
+        PREDICT_OWNER_DIVERGENCE,
+        LAGCOMP_ACTION_GATE_FALLBACK,
+        SCENE_SPAWNED,
+        SCENE_ACTIVATED,
+        SCENE_DESPAWNED,
+        SCENE_ENTITY_MOVED,
+        SCENE_STARTUP_SPAWNED,
+        PARTICIPANT_VIEWPORT_CHANGED,
+        CLOCK_BEFORE_TICK_LOOP,
+        CLOCK_AFTER_TICK_LOOP,
+        CLOCK_SYNCHRONIZED,
+        CLOCK_CONFIGURED,
+        CLOCK_TICKRATE_MISMATCH,
+        CLOCK_PONG_RECEIVED,
+        CLOCK_STABILITY_CHANGED,
+        SESSION_STATE_CHANGED,
+        EMBED_PHASE_CHANGED,
+        SESSION_JOIN_SUBMITTED,
+        SESSION_ENTERED,
+        SESSION_JOIN_FAILED,
+        SESSION_ENDED,
+        SESSION_RECLAIMED,
+        PEER_AUTHENTICATING,
+        PEER_AUTHENTICATION_FAILED,
+        SESSION_POLL_STARTED,
+        TABLE_RECEIVED,
+        DATABASE_FAILED,
+        PERSIST_LOADED,
+        PERSIST_SAVED,
+        PEER_PACKET,
+        PEER_KICKED,
+        SESSION_SERVER_DISCONNECTING,
+        PEER_KICK_REQUESTED,
+        SESSION_DISCONNECT_REQUESTED,
+        SESSION_TREE_PAUSED,
+        SESSION_TREE_UNPAUSED,
+        SERVICE_REGISTERED,
+        SERVICE_UNREGISTERED,
+        ENTITY_LIVE,
+        ENTITY_LINGERING,
+        ENTITY_DEAD,
+        ENTITY_HIDDEN,
+        PLAYER_JOINED,
+        PLAYER_LOCAL_JOINED,
+        PLAYER_LEFT,
+        SCENE_LIVE,
+        NOTIFICATION_COUNT,
+    };
 };
 
-struct Netw {
+struct NetwSession {
+    enum SessionState {
+        SESSION_STATE_OFFLINE = SessionCore::STATE_OFFLINE,
+        SESSION_STATE_CONNECTING = SessionCore::STATE_CONNECTING,
+        SESSION_STATE_ONLINE = SessionCore::STATE_ONLINE,
+        SESSION_STATE_DISCONNECTING = SessionCore::STATE_DISCONNECTING,
+    };
+
+    enum Role {
+        ROLE_NONE = SessionCore::ROLE_NONE,
+        ROLE_CLIENT = SessionCore::ROLE_CLIENT,
+        ROLE_DEDICATED_SERVER = SessionCore::ROLE_DEDICATED_SERVER,
+        ROLE_LISTEN_SERVER = SessionCore::ROLE_LISTEN_SERVER,
+    };
+
+    enum ExitReason {
+        LOCAL_LEAVE,
+        SERVER_SHUTDOWN,
+        CONNECTION_LOST,
+        KICKED,
+        REPLACED,
+    };
+};
+
+struct NetwClock {
+    enum SyncMode {
+        SYNC_MODE_SNAP = ClockEngine::SYNC_SNAP,
+        SYNC_MODE_STRETCH = ClockEngine::SYNC_STRETCH,
+    };
+
+    enum MismatchAction {
+        MISMATCH_ACTION_WARN = 0,
+        MISMATCH_ACTION_DISCONNECT = 1,
+        MISMATCH_ACTION_SIGNAL = 2,
+    };
+
+    enum ClockMonitor {
+        CLOCK_MONITOR_RTT = 0,
+        CLOCK_MONITOR_RTT_AVG = 1,
+        CLOCK_MONITOR_RTT_JITTER = 2,
+        CLOCK_MONITOR_ONE_WAY_LATENCY = 3,
+        CLOCK_MONITOR_TICKTIME = 4,
+        CLOCK_MONITOR_TICK_ACCUMULATOR = 5,
+        CLOCK_MONITOR_PHYSICS_FRAMES = 6,
+        CLOCK_MONITOR_POLLS = 7,
+        CLOCK_MONITOR_WALL_SECONDS = 8,
+        CLOCK_MONITOR_PHYSICS_HZ = 9,
+        CLOCK_MONITOR_POLL_HZ = 10,
+    };
+};
+
+struct NetwConnection {
+    enum TransportMode {
+        TRANSPORT_MODE_HOST = connect::PEER_MODE_HOST,
+        TRANSPORT_MODE_CLIENT = connect::PEER_MODE_CLIENT,
+    };
+
+    enum TransportCapability {
+        TRANSPORT_AVAILABLE = 1,
+        TRANSPORT_CAN_HOST = 2,
+        TRANSPORT_CAN_PROBE = 4,
+        TRANSPORT_CAN_BROWSE = 8,
+        TRANSPORT_ACCEPTS_EMPTY_ADDRESS = 16,
+    };
+
+    enum EndpointState {
+        ENDPOINT_STATE_FLAGS = 0,
+        ENDPOINT_STATE_STATUS = 1,
+        ENDPOINT_STATE_INFO = 2,
+    };
+
+    enum EndpointFlags {
+        ENDPOINT_FLAG_CALLER = 1,
+        ENDPOINT_FLAG_AVAILABLE = 2,
+        ENDPOINT_FLAG_OBSERVED = 4,
+    };
+};
+
+struct NetwDisplay {
+    enum DisplayRole {
+        DISPLAY_ROLE_AUTO = display::ROLE_AUTO,
+        DISPLAY_ROLE_REMOTE = display::ROLE_REMOTE,
+        DISPLAY_ROLE_PREDICTED = display::ROLE_PREDICTED,
+        DISPLAY_ROLE_DISABLED = display::ROLE_DISABLED,
+        DISPLAY_ROLE_AUTHORITY = display::ROLE_AUTHORITY,
+    };
+
+    enum DisplayPump {
+        DISPLAY_PUMP_UNRESOLVED = display::PUMP_UNRESOLVED,
+        DISPLAY_PUMP_DISABLED = display::PUMP_DISABLED,
+        DISPLAY_PUMP_REMOTE = display::PUMP_REMOTE,
+        DISPLAY_PUMP_BRACKETED = display::PUMP_BRACKETED,
+        DISPLAY_PUMP_CHASE = display::PUMP_CHASE,
+    };
+
+    enum LiveMode {
+        LIVE_MODE_CHASE = display::LIVE_CHASE,
+        LIVE_MODE_BRACKETED = display::LIVE_BRACKETED,
+    };
+
+    enum TimelineMode {
+        TIMELINE_MODE_BUFFERED = display::TIMELINE_BUFFERED,
+        TIMELINE_MODE_FORECAST = display::TIMELINE_FORECAST,
+    };
+};
+
+struct NetwInterestLayer {
+    enum LayerPolicy {
+        LAYER_POLICY_HIDE_FROM_OUTSIDERS
+        = interest::Engine::HIDE_FROM_OUTSIDERS,
+        LAYER_POLICY_HIDE_FROM_INSIDERS = interest::Engine::HIDE_FROM_INSIDERS,
+    };
+
+    enum LeavePolicy : int64_t {
+        LEAVE_POLICY_HIDE = interest::Decl::LEAVE_HIDE,
+        LEAVE_POLICY_RETAIN = interest::Decl::LEAVE_RETAIN,
+        LEAVE_POLICY_CUSTOM = interest::Decl::LEAVE_CUSTOM,
+    };
+
+    enum PerceptionPolicy : int64_t {
+        PERCEPTION_POLICY_HIDE = interest::Decl::PERCEPTION_HIDE,
+        PERCEPTION_POLICY_SHOW = interest::Decl::PERCEPTION_SHOW,
+        PERCEPTION_POLICY_CUSTOM = interest::Decl::PERCEPTION_CUSTOM,
+    };
+};
+
+struct NetwScene {
+    enum SceneEvent {
+        SCENE_EVENT_VIEWER = 0,
+        SCENE_EVENT_BODY = 1,
+        SCENE_EVENT_ENTITY = 2,
+    };
+
     enum SceneChange {
         SCENE_CHANGE_SESSION = NetwSceneCore::SCOPE_SESSION,
         SCENE_CHANGE_PLAYER = NetwSceneCore::SCOPE_PLAYER,
@@ -352,39 +419,38 @@ struct LobbyDirectory {
 
 } // namespace netw::enums
 
-VARIANT_ENUM_CAST(netw::enums::Netw::SceneChange);
-VARIANT_ENUM_CAST(netw::enums::Netw::SceneIsolation);
+VARIANT_ENUM_CAST(netw::enums::NetwScene::SceneChange);
+VARIANT_ENUM_CAST(netw::enums::NetwScene::SceneIsolation);
+VARIANT_ENUM_CAST(netw::enums::NetwScene::SceneEvent);
+VARIANT_ENUM_CAST(netw::enums::NetwSession::SessionState);
+VARIANT_ENUM_CAST(netw::enums::NetwSession::Role);
+VARIANT_ENUM_CAST(netw::enums::NetwSession::ExitReason);
+VARIANT_ENUM_CAST(netw::enums::NetwClock::SyncMode);
+VARIANT_ENUM_CAST(netw::enums::NetwClock::MismatchAction);
+VARIANT_ENUM_CAST(netw::enums::NetwClock::ClockMonitor);
+VARIANT_ENUM_CAST(netw::enums::NetwConnection::TransportMode);
+VARIANT_ENUM_CAST(netw::enums::NetwConnection::TransportCapability);
+VARIANT_ENUM_CAST(netw::enums::NetwConnection::EndpointState);
+VARIANT_ENUM_CAST(netw::enums::NetwConnection::EndpointFlags);
+VARIANT_ENUM_CAST(netw::enums::NetwDisplay::DisplayRole);
+VARIANT_ENUM_CAST(netw::enums::NetwDisplay::DisplayPump);
+VARIANT_ENUM_CAST(netw::enums::NetwDisplay::LiveMode);
+VARIANT_ENUM_CAST(netw::enums::NetwDisplay::TimelineMode);
+VARIANT_ENUM_CAST(netw::enums::NetwInterestLayer::LayerPolicy);
+VARIANT_ENUM_CAST(netw::enums::NetwInterestLayer::LeavePolicy);
+VARIANT_ENUM_CAST(netw::enums::NetwInterestLayer::PerceptionPolicy);
 VARIANT_ENUM_CAST(netw::enums::LobbyDirectory::Capability);
 VARIANT_ENUM_CAST(netw::enums::NetwMultiplayer::EmbedPhase);
 VARIANT_ENUM_CAST(netw::enums::NetwMultiplayer::TableParam);
-VARIANT_ENUM_CAST(netw::enums::NetwMultiplayer::TransportMode);
-VARIANT_ENUM_CAST(netw::enums::NetwMultiplayer::SessionState);
-VARIANT_ENUM_CAST(netw::enums::NetwMultiplayer::Role);
 VARIANT_ENUM_CAST(netw::enums::NetwMultiplayer::SceneMove);
 VARIANT_ENUM_CAST(netw::enums::NetwMultiplayer::SceneDestination);
 VARIANT_ENUM_CAST(netw::enums::NetwMultiplayer::EntityState);
-VARIANT_ENUM_CAST(netw::enums::NetwMultiplayer::SyncMode);
-VARIANT_ENUM_CAST(netw::enums::NetwMultiplayer::MismatchAction);
 VARIANT_ENUM_CAST(netw::enums::NetwMultiplayer::ClockParam);
-VARIANT_ENUM_CAST(netw::enums::NetwMultiplayer::ClockMonitor);
 VARIANT_ENUM_CAST(netw::enums::NetwMultiplayer::LayerParam);
-VARIANT_ENUM_CAST(netw::enums::NetwMultiplayer::LayerPolicy);
-VARIANT_ENUM_CAST(netw::enums::NetwMultiplayer::LeavePolicy);
-VARIANT_ENUM_CAST(netw::enums::NetwMultiplayer::PerceptionPolicy);
 VARIANT_ENUM_CAST(netw::enums::NetwMultiplayer::TransportParam);
-VARIANT_ENUM_CAST(netw::enums::NetwMultiplayer::TransportCapability);
 VARIANT_ENUM_CAST(netw::enums::NetwMultiplayer::EndpointParam);
-VARIANT_ENUM_CAST(netw::enums::NetwMultiplayer::EndpointState);
-VARIANT_ENUM_CAST(netw::enums::NetwMultiplayer::EndpointFlags);
 VARIANT_ENUM_CAST(netw::enums::NetwMultiplayer::SceneParam);
-VARIANT_ENUM_CAST(netw::enums::NetwMultiplayer::SceneEvent);
-VARIANT_ENUM_CAST(netw::enums::NetwMultiplayer::SceneChange);
-VARIANT_ENUM_CAST(netw::enums::NetwMultiplayer::SceneIsolation);
 VARIANT_ENUM_CAST(netw::enums::NetwMultiplayer::DisplayParam);
-VARIANT_ENUM_CAST(netw::enums::NetwMultiplayer::DisplayRole);
-VARIANT_ENUM_CAST(netw::enums::NetwMultiplayer::DisplayPump);
-VARIANT_ENUM_CAST(netw::enums::NetwMultiplayer::LiveMode);
-VARIANT_ENUM_CAST(netw::enums::NetwMultiplayer::TimelineMode);
 VARIANT_ENUM_CAST(netw::enums::NetwMultiplayer::PredictParam);
 VARIANT_ENUM_CAST(netw::enums::NetwMultiplayer::SimulationParam);
 VARIANT_ENUM_CAST(netw::enums::NetwMultiplayer::WritePolicy);
@@ -393,3 +459,4 @@ VARIANT_ENUM_CAST(netw::enums::NetwMultiplayer::PropertySetParam);
 VARIANT_ENUM_CAST(netw::enums::NetwMultiplayer::ColumnType);
 VARIANT_ENUM_CAST(netw::enums::NetwMultiplayer::DatabaseState);
 VARIANT_ENUM_CAST(netw::enums::NetwMultiplayer::Stat);
+VARIANT_ENUM_CAST(netw::enums::NetwMultiplayer::Notification);

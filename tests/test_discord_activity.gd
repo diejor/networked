@@ -26,7 +26,7 @@ func test_discord_instance_state_flow() -> void:
 	var service := DiscordActivityService.new()
 	auto_free(tree)
 	auto_free(service)
-	service._service_entered(tree.api)
+	service._service_entered(null)
 	assert_object(service.rendezvous).is_null()
 
 	tree = MultiplayerTree.new()
@@ -129,7 +129,7 @@ func _bound_nakama_auth(
 	auto_free(dir)
 	add_child(tree)
 	tree.add_child(dir)
-	Netw.service_register(tree, dir)
+	Netw.session(tree).register_service(dir)
 	dir._wrapper = wrapper
 	wrapper.attested_user_id = attested_uid
 	wrapper.attested_username = attested_username

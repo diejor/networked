@@ -4,7 +4,7 @@
 #include "godot/node.hpp"
 #include "godot/scene_tree.hpp"
 #include "netw/api/entity.hpp"
-#include "netw/api/interest_handle.hpp"
+#include "netw/api/interest.hpp"
 #include "netw/api/interest_layer.hpp"
 #include "netw/api/loopback.hpp"
 #include "netw/api/netw_multiplayer.hpp"
@@ -107,27 +107,34 @@ TEST_CASE(
         heard.callable("leave"),
         StringName("sight")
     );
-    layer->connect(StringName("entity_visible"), heard.callable("visible"));
-    layer->connect(StringName("entity_hidden"), heard.callable("hidden"));
+    layer->connect(
+        StringName("visibility_changed"),
+        heard.callable("visibility")
+    );
     layer->connect(StringName("entity_removed"), heard.callable("removed"));
 
     layer->client_admit(entity);
 
     CHECK(layer->has_entity(entity));
     CHECK_MESSAGE(
-        ordered_as(heard.order(), {"enter", "visible"}),
+        ordered_as(heard.order(), {"enter", "visibility"}),
         "admission announced ",
         spelled(heard.order())
     );
+    CHECK(bool(heard.args("visibility", 0)[1]));
 
     layer->client_revoke(entity);
 
     CHECK_FALSE(layer->has_entity(entity));
     CHECK_MESSAGE(
-        ordered_as(heard.order(), {"enter", "visible", "leave", "hidden"}),
+        ordered_as(
+            heard.order(),
+            {"enter", "visibility", "leave", "visibility"}
+        ),
         "revocation announced ",
         spelled(heard.order())
     );
+    CHECK_FALSE(bool(heard.args("visibility", 1)[1]));
 
     layer->client_admit(entity);
     heard.clear();
@@ -135,10 +142,11 @@ TEST_CASE(
 
     CHECK_FALSE(layer->has_entity(entity));
     CHECK_MESSAGE(
-        ordered_as(heard.order(), {"removed", "leave", "hidden"}),
+        ordered_as(heard.order(), {"removed", "leave", "visibility"}),
         "untracking announced ",
         spelled(heard.order())
     );
+    CHECK_FALSE(bool(heard.args("visibility", 0)[1]));
 }
 
 TEST_CASE(

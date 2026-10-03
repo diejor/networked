@@ -6,8 +6,8 @@ const SHOWN: Array[String] = [
 	"predict_corrections",
 ]
 
-@onready var clock: NetwClockHandle = Netw.clock(self)
-@onready var session: NetwSessionHandle = Netw.session(self)
+@onready var session: NetwSession = Netw.session(self)
+@onready var clock: NetwClock = session.clock
 
 
 func _process(_delta: float) -> void:

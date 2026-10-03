@@ -4,14 +4,14 @@
 
 #include "netw/api/context.hpp"
 #include "netw/api/netw_multiplayer.hpp"
-#include "netw/api/table_handle.hpp"
+#include "netw/api/table.hpp"
 
 namespace TestNetwTableDoor {
 
 using namespace godot;
 using netw::Netw;
 using netw::NetwMultiplayer;
-using netw::NetwTableHandle;
+using netw::NetwTable;
 using netw_test::Recorder;
 
 Ref<NetwMultiplayer> make_session() {
@@ -36,7 +36,7 @@ TEST_CASE(
     const RID table = make_table(core, "Mob");
     REQUIRE(table.is_valid());
 
-    const Ref<NetwTableHandle> door = core->get_table_handle(table);
+    const Ref<NetwTable> door = core->get_table_handle(table);
     REQUIRE(door.is_valid());
     CHECK(door == core->get_table_handle(table));
 
@@ -51,10 +51,10 @@ TEST_CASE(
 ) {
     const Ref<NetwMultiplayer> core = make_session();
     const RID table = make_table(core, "Mob");
-    const Ref<NetwTableHandle> door = core->get_table_handle(table);
+    const Ref<NetwTable> door = core->get_table_handle(table);
     REQUIRE(door.is_valid());
 
-    NETW_CHECK_EQ(int(door->get_table() == table), 1);
+    NETW_CHECK_EQ(int(door->get_rid() == table), 1);
     CHECK(door->get_schema_name() == StringName("Mob"));
     NETW_CHECK_EQ(int(door->get_is_valid()), 1);
     NETW_CHECK_EQ(door->get_wire_hash(), core->table_get_wire_hash(table));
@@ -76,7 +76,7 @@ TEST_CASE(
 ) {
     const Ref<NetwMultiplayer> core = make_session();
     const RID table = make_table(core, "Mob");
-    const Ref<NetwTableHandle> door = core->get_table_handle(table);
+    const Ref<NetwTable> door = core->get_table_handle(table);
     REQUIRE(door.is_valid());
 
     PackedInt64Array routes;
@@ -111,8 +111,8 @@ TEST_CASE(
     const Ref<NetwMultiplayer> core = make_session();
     const RID table = make_table(core, "Mob");
     const RID other = make_table(core, "Rock");
-    const Ref<NetwTableHandle> door = core->get_table_handle(table);
-    const Ref<NetwTableHandle> bystander = core->get_table_handle(other);
+    const Ref<NetwTable> door = core->get_table_handle(table);
+    const Ref<NetwTable> bystander = core->get_table_handle(other);
     REQUIRE(door.is_valid());
     REQUIRE(bystander.is_valid());
 
@@ -145,7 +145,7 @@ TEST_CASE(
     "[Networked][Table][Door][Hosted] TD5 a door outliving its session "
     "answers its empty value rather than reaching through a dead pointer"
 ) {
-    Ref<NetwTableHandle> door;
+    Ref<NetwTable> door;
     {
         const Ref<NetwMultiplayer> core = make_session();
         const RID table = make_table(core, "Mob");
@@ -166,8 +166,7 @@ TEST_CASE(
     "[Networked][Table][Door][Hosted] TD6 a node no session governs opens "
     "no door, because a door resolves through the tree"
 ) {
-    CHECK(Netw::table(nullptr, "Mob").is_null());
-    CHECK(NetwTableHandle::of(nullptr, "Mob").is_null());
+    CHECK(NetwTable::of(nullptr, "Mob").is_null());
 }
 
 } // namespace TestNetwTableDoor

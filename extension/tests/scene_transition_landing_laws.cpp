@@ -6,6 +6,7 @@
 #include "netw/api/loopback.hpp"
 #include "netw/api/netw_multiplayer.hpp"
 #include "netw/api/participant.hpp"
+#include "netw/api/scene.hpp"
 #include "netw/scene_core.hpp"
 #include "support/netw_call_log.h"
 
@@ -435,7 +436,7 @@ TEST_CASE(
 
     const CallLog seen;
     core->scene_handle_of(source.handle)
-        ->connect(StringName("viewer_left"), seen.callable("left"));
+        ->connect(StringName("viewer_exited"), seen.callable("left"));
     core->scene_handle_of(target.handle)
         ->connect(StringName("viewer_entered"), seen.callable("entered"));
 
@@ -454,9 +455,8 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Scene][Hosted] TL10 a landed change announces the players it "
-    "brought and no others, so a second change to a world they already watch "
-    "announces nobody and a game spawning from it spawns once"
+    "[Networked][Scene][Hosted] TL10 a landed change resolves with the scene "
+    "it landed in, and every player it moved watches that scene"
 ) {
     const Ref<NetwMultiplayer> core = peered_core();
     const CallLog flushed;
@@ -469,22 +469,19 @@ TEST_CASE(
     REQUIRE(core->scene_watch(source.handle, 7) == OK);
     REQUIRE(core->scene_watch(target.handle, 9) == OK);
 
-    const CallLog announced;
-    core->connect(StringName("scene_changed"), announced.callable("changed"));
-
-    core->scene_replace_sources(
+    const Ref<netw::NetwPromise> landed = core->scene_replace_sources(
         target.owner,
         one_source(source.owner),
         NetwMultiplayer::SCENE_CHANGE_SESSION
     );
 
-    NETW_CHECK_EQ(announced.count(StringName("changed")), 1);
-    const TypedArray<netw::NetwPlayer> arrived
-        = announced.args(StringName("changed"), 0)[1];
-    NETW_CHECK_EQ(int(arrived.size()), 1);
-    const Ref<netw::NetwPlayer> only = arrived[0];
-    REQUIRE(only.is_valid());
-    NETW_CHECK_EQ(int(only->get_peer_id()), 7);
+    REQUIRE(landed.is_valid());
+    CHECK(landed->get_is_completed());
+    const Ref<netw::NetwScene> scene = landed->get_result();
+    REQUIRE(scene.is_valid());
+    CHECK(scene == core->scene_handle_of(target.handle));
+    CHECK(core->scene_subscribes(target.handle, 7));
+    CHECK(core->scene_subscribes(target.handle, 9));
 
     memdelete(root);
 }

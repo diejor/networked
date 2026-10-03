@@ -59,35 +59,35 @@ Methods
 .. table::
    :widths: auto
 
-   +---------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NakamaSessionService<class_NakamaSessionService>` | :ref:`of<class_NakamaSessionService_method_of>`\ (\ node\: :godot:`Node`\ ) |static|                                                            |
-   +---------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`bool`                                           | :ref:`is_addon_present<class_NakamaSessionService_method_is_addon_present>`\ (\ ) |static|                                                      |
-   +---------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------+
-   | |void|                                                  | :ref:`configure<class_NakamaSessionService_method_configure>`\ (\ config\: :godot:`Dictionary`\ )                                               |
-   +---------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`bool`                                           | :ref:`is_authenticated<class_NakamaSessionService_method_is_authenticated>`\ (\ )                                                               |
-   +---------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`Dictionary`                                     | :ref:`connect_async<class_NakamaSessionService_method_connect_async>`\ (\ )                                                                     |
-   +---------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`Variant`                                        | :ref:`client<class_NakamaSessionService_method_client>`\ (\ )                                                                                   |
-   +---------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`Variant`                                        | :ref:`session<class_NakamaSessionService_method_session>`\ (\ )                                                                                 |
-   +---------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`String`                                         | :ref:`local_user_id<class_NakamaSessionService_method_local_user_id>`\ (\ )                                                                     |
-   +---------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`String`                                         | :ref:`local_username<class_NakamaSessionService_method_local_username>`\ (\ )                                                                   |
-   +---------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`Dictionary`                                     | :ref:`call_rpc_async<class_NakamaSessionService_method_call_rpc_async>`\ (\ rpc_id\: :godot:`String`, payload\: :godot:`String` = ""\ )         |
-   +---------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`Variant`                                        | :ref:`create_socket<class_NakamaSessionService_method_create_socket>`\ (\ )                                                                     |
-   +---------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`Script`                                         | :ref:`_service_type<class_NakamaSessionService_private_method__service_type>`\ (\ )                                                             |
-   +---------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------+
-   | |void|                                                  | :ref:`_service_exiting<class_NakamaSessionService_private_method__service_exiting>`\ (\ _api\: :ref:`NetwMultiplayer<class_NetwMultiplayer>`\ ) |
-   +---------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------+
-   | |void|                                                  | :ref:`leave<class_NakamaSessionService_method_leave>`\ (\ )                                                                                     |
-   +---------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------+
+   +---------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NakamaSessionService<class_NakamaSessionService>` | :ref:`of<class_NakamaSessionService_method_of>`\ (\ node\: :godot:`Node`\ ) |static|                                                        |
+   +---------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`bool`                                           | :ref:`is_addon_present<class_NakamaSessionService_method_is_addon_present>`\ (\ ) |static|                                                  |
+   +---------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
+   | |void|                                                  | :ref:`configure<class_NakamaSessionService_method_configure>`\ (\ config\: :godot:`Dictionary`\ )                                           |
+   +---------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`bool`                                           | :ref:`is_authenticated<class_NakamaSessionService_method_is_authenticated>`\ (\ )                                                           |
+   +---------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`Dictionary`                                     | :ref:`connect_async<class_NakamaSessionService_method_connect_async>`\ (\ )                                                                 |
+   +---------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`Variant`                                        | :ref:`client<class_NakamaSessionService_method_client>`\ (\ )                                                                               |
+   +---------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`Variant`                                        | :ref:`session<class_NakamaSessionService_method_session>`\ (\ )                                                                             |
+   +---------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`String`                                         | :ref:`local_user_id<class_NakamaSessionService_method_local_user_id>`\ (\ )                                                                 |
+   +---------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`String`                                         | :ref:`local_username<class_NakamaSessionService_method_local_username>`\ (\ )                                                               |
+   +---------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`Dictionary`                                     | :ref:`call_rpc_async<class_NakamaSessionService_method_call_rpc_async>`\ (\ rpc_id\: :godot:`String`, payload\: :godot:`String` = ""\ )     |
+   +---------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`Variant`                                        | :ref:`create_socket<class_NakamaSessionService_method_create_socket>`\ (\ )                                                                 |
+   +---------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`Script`                                         | :ref:`_service_type<class_NakamaSessionService_private_method__service_type>`\ (\ )                                                         |
+   +---------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
+   | |void|                                                  | :ref:`_service_exiting<class_NakamaSessionService_private_method__service_exiting>`\ (\ _session\: :ref:`NetwSession<class_NetwSession>`\ ) |
+   +---------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
+   | |void|                                                  | :ref:`leave<class_NakamaSessionService_method_leave>`\ (\ )                                                                                 |
+   +---------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
 
 .. rst-class:: classref-section-separator
 
@@ -229,7 +229,7 @@ Method Descriptions
 
 :ref:`NakamaSessionService<class_NakamaSessionService>` **of**\ (\ node\: :godot:`Node`\ ) |static| :ref:`🔗<class_NakamaSessionService_method_of>`
 
-Returns the **NakamaSessionService** of the session ``node`` is in, creating it under :ref:`NetwSessionHandle.root<class_NetwSessionHandle_property_root>` if needed. Returns ``null`` in the editor or outside a session.
+Returns the **NakamaSessionService** of the session ``node`` is in, creating it under :ref:`NetwSession.root<class_NetwSession_property_root>` if needed. Returns ``null`` in the editor or outside a session.
 
 .. rst-class:: classref-item-separator
 
@@ -398,7 +398,7 @@ Registers this node under the **NakamaSessionService** key.
 
 .. rst-class:: classref-method
 
-|void| **_service_exiting**\ (\ _api\: :ref:`NetwMultiplayer<class_NetwMultiplayer>`\ ) :ref:`🔗<class_NakamaSessionService_private_method__service_exiting>`
+|void| **_service_exiting**\ (\ _session\: :ref:`NetwSession<class_NetwSession>`\ ) :ref:`🔗<class_NakamaSessionService_private_method__service_exiting>`
 
 Calls :ref:`leave()<class_NakamaSessionService_method_leave>` when the service exits the tree.
 

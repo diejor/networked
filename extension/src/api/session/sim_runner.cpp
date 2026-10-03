@@ -58,7 +58,7 @@ sim::Schedule NetwMultiplayer::sim_schedule_of(sim::Row &r_row, Node *p_owner) {
         r_row.stepped_refused = true;
         NETW_ERROR(
             sys::PREDICTION,
-            "'%s' uses NetwSimulationHandle.SCHEDULE_STEPPED without "
+            "'%s' uses NetwSimulation.SCHEDULE_STEPPED without "
             "prediction, so it runs SCHEDULE_FRAME. Declare prediction on it, "
             "or choose another schedule.",
             String(p_owner->get_name()).utf8().get_data()

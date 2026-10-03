@@ -256,7 +256,7 @@ TEST_CASE(
     const Ref<MultiplayerAPI> original = loop->get_multiplayer();
 
     const Ref<NetwMultiplayer> installed
-        = NetwMultiplayer::make(Ref<SceneMultiplayer>(), Ref<Script>());
+        = NetwMultiplayer::create(Ref<Script>());
     NETW_CHECK_EQ(int(installed.is_valid()), 1);
     if (installed.is_null()) {
         return;

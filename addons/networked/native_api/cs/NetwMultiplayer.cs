@@ -9,34 +9,34 @@ namespace Networked;
 /// The <see cref="MultiplayerApi"/> implementation for a Networked session.
 /// </summary>
 /// <remarks>
-/// Use <see cref="Netw.Of"/> to get the session for a node. Most game code
-/// should use <see cref="Netw"/> and the handle classes instead of calling this
-/// class directly.
+/// Use <see cref="Netw.Of"/> to get it for a node. Its methods take the
+/// <see cref="Rid"/> of an object such as a <see cref="NetwEntity"/> or a
+/// <see cref="NetwScene"/>, and most game code uses those objects instead.
 /// <code>
 /// var api := Netw.of(self)
-/// api.entity_despawn(route)
-/// api.scene_watch(scene, peer_id)
+/// api.entity_despawn(NetwEntity.of(self).rid)
+/// api.scene_watch(Netw.scene(self).rid, peer_id)
 /// </code>
 /// <para>
-/// Each method prefix matches a class that wraps it.
-/// - <c>scene_*</c>: <see cref="NetwSceneHandle"/>
-/// - <c>interest_*</c>: <see cref="NetwInterestHandle"/>
-/// - <c>session_*</c>: <see cref="NetwSessionHandle"/>
-/// - <c>clock_*</c>: <see cref="NetwClockHandle"/>
-/// - <c>predict_*</c>: <see cref="NetwPredictionHandle"/>
+/// Each method prefix matches the class that wraps it.
+/// - <c>scene_*</c>: <see cref="NetwScene"/>
+/// - <c>interest_*</c>: <see cref="NetwInterest"/>
+/// - <c>session_*</c>: <see cref="NetwSession"/>
+/// - <c>clock_*</c>: <see cref="NetwClock"/>
+/// - <c>predict_*</c>: <see cref="NetwPrediction"/>
 /// - <c>entity_*</c>, <c>liveness_*</c>, and <c>spawn_*</c>:
 /// <see cref="NetwEntity"/>
-/// - <c>table_*</c>: <see cref="NetwTableHandle"/>
+/// - <c>table_*</c>: <see cref="NetwTable"/>
 /// - <c>schema_*</c>: <see cref="NetwSchema"/>
 /// - <c>lagcomp_*</c>: <see cref="NetwAction"/>
 /// - <c>peer_*</c>: <see cref="NetwPlayer"/>
-/// - <c>display_*</c>: <see cref="NetwDisplayHandle"/>
-/// - <c>endpoint_*</c> and <c>embed_*</c>: <see cref="NetwConnectHandle"/>
+/// - <c>display_*</c>: <see cref="NetwDisplay"/>
+/// - <c>endpoint_*</c> and <c>embed_*</c>: <see cref="NetwConnection"/>
 /// - <c>transport_*</c>: <see cref="NetwTransport"/>
 /// - <c>rpc_*</c> and <c>sync_*</c>: <see cref="NetwMemberConfig"/>
 /// - <c>service_*</c>: <see cref="NetwService"/>
 /// - <c>database_*</c> and <c>persist_*</c>: <see cref="NetwDatabase"/> and
-/// <see cref="NetwPersistenceHandle"/>
+/// <see cref="NetwPersistence"/>
 /// - <c>stats_*</c> and <c>attribution_*</c>: <see cref="NetwPredictStats"/>
 /// Methods beginning with an underscore are virtual. Override one in a script
 /// and call the matching <c>_default</c> method to run the default behavior.
@@ -44,16 +44,17 @@ namespace Networked;
 /// extends NetwMultiplayer
 ///
 /// func _predict_consume(
-///         depth: int, buffer: int) -&gt; NetwPredict.ConsumeAction:
+///         depth: int, buffer: int) -&gt; NetwPrediction.ConsumeAction:
 ///     if depth &gt; 8:
-///         return NetwPredict.CONSUME_ACTION_REPLAY
+///         return NetwPrediction.CONSUME_ACTION_REPLAY
 ///     return predict_consume_default(depth, buffer)
 /// </code>
 /// </para>
 /// <para>
-/// Install the subclass with <see cref="MultiplayerTree.ApiScript"/>.
+/// Install the subclass with <see cref="MultiplayerTree.ApiScript"/>, or create
+/// it with <c>new()</c> and pass it to <c>SceneTree.set_multiplayer</c>.
 /// <c>super</c> does not work on these methods, so call the <c>_default</c>
-/// method.
+/// method. Only a GDScript subclass can override them.
 /// </para>
 /// </remarks>
 public sealed class NetwMultiplayer : NetwRefCounted
@@ -130,13 +131,13 @@ public sealed class NetwMultiplayer : NetwRefCounted
         InterestExit = 17,
         /// <summary>
         /// A peer started seeing an entity, along with
-        /// <see cref="NetwEntity.ObserverEntered"/>. <c>detail</c> has
+        /// <see cref="NetwInterest.ObserverEntered"/>. <c>detail</c> has
         /// <c>layer</c>.
         /// </summary>
         ObserverEntered = 18,
         /// <summary>
         /// A peer stopped seeing an entity, along with
-        /// <see cref="NetwEntity.ObserverLeft"/>. <c>detail</c> has
+        /// <see cref="NetwInterest.ObserverExited"/>. <c>detail</c> has
         /// <c>layer</c>.
         /// </summary>
         ObserverLeft = 19,
@@ -183,13 +184,13 @@ public sealed class NetwMultiplayer : NetwRefCounted
         /// <summary>
         /// A prediction differed from the server's state by more than the
         /// tolerance, along with
-        /// <see cref="NetwPredictionHandle.DivergenceDetected"/>. <c>detail</c>
-        /// has <c>transition</c>, <c>attribution</c> and <c>divergence</c>.
+        /// <see cref="NetwPrediction.DivergenceDetected"/>. <c>detail</c> has
+        /// <c>transition</c>, <c>attribution</c> and <c>divergence</c>.
         /// </summary>
         Divergence = 39,
         /// <summary>
         /// A predicted entity was corrected, along with
-        /// <see cref="NetwPredictionHandle.Recovered"/>. <c>detail</c> has
+        /// <see cref="NetwPrediction.Recovered"/>. <c>detail</c> has
         /// <c>transition</c>, <c>attribution</c>, <c>teleport</c> and
         /// <c>moved</c>, the properties that changed.
         /// </summary>
@@ -398,22 +399,9 @@ public sealed class NetwMultiplayer : NetwRefCounted
         /// <summary>
         /// The entity still exists, but this client does not see it. It can
         /// become visible again. See
-        /// <see cref="NetwMultiplayer.EntityHidden"/>.
+        /// <see cref="NetwMultiplayer.Notification.EntityHidden"/>.
         /// </summary>
         Absent = 4,
-    }
-
-    public enum LayerPolicy : long
-    {
-        /// <summary>
-        /// Only viewers of the layer see its entities, as for a team or a
-        /// private room.
-        /// </summary>
-        Outsiders = 0,
-        /// <summary>
-        /// Only peers that are not viewers see its entities.
-        /// </summary>
-        Insiders = 1,
     }
 
     public enum EmbedPhaseEnum : long
@@ -434,180 +422,18 @@ public sealed class NetwMultiplayer : NetwRefCounted
         Live = 2,
     }
 
-    public enum LeavePolicy : long
-    {
-        /// <summary>
-        /// Free the peer's copy. The entity becomes
-        /// <see cref="NetwMultiplayer.EntityState.Absent"/> there and can be
-        /// shown again later.
-        /// </summary>
-        Hide = 0,
-        /// <summary>
-        /// Keep the peer's copy and stop updating it. Updates resume when it is
-        /// visible again.
-        /// </summary>
-        Retain = 1,
-        /// <summary>
-        /// Call the custom callback given to
-        /// <see cref="NetwMultiplayer.InterestOnLeavePolicy"/>.
-        /// </summary>
-        Custom = 2,
-    }
-
-    public enum PerceptionPolicy : long
-    {
-        /// <summary>
-        /// Hide a copy kept by
-        /// <see cref="NetwMultiplayer.LeavePolicy.Retain"/>.
-        /// </summary>
-        Hide = 0,
-        /// <summary>
-        /// Keep showing a copy kept by
-        /// <see cref="NetwMultiplayer.LeavePolicy.Retain"/> where it was last
-        /// seen.
-        /// </summary>
-        Show = 1,
-        /// <summary>
-        /// Call the custom callback given to
-        /// <see cref="NetwMultiplayer.InterestOnPerceptionPolicy"/>.
-        /// </summary>
-        Custom = 2,
-    }
-
-    public enum DisplayRole : long
-    {
-        /// <summary>
-        /// Picked from <see cref="NetwSimulationHandle.Mode"/>. The default.
-        /// Predicted entities use
-        /// <see cref="NetwMultiplayer.DisplayRole.Predicted"/>, received ones
-        /// <see cref="NetwMultiplayer.DisplayRole.Remote"/>, ones this peer
-        /// controls without prediction
-        /// <see cref="NetwMultiplayer.DisplayRole.Disabled"/>, and the server
-        /// uses <see cref="NetwMultiplayer.DisplayRole.Authority"/>.
-        /// </summary>
-        Auto = 0,
-        /// <summary>
-        /// Interpolate between received states. Used for other players'
-        /// entities.
-        /// </summary>
-        Remote = 1,
-        /// <summary>
-        /// Follow the locally predicted body, as set by
-        /// <see cref="NetwDisplayHandle.LiveMode"/>. Used for the player's own
-        /// entity.
-        /// </summary>
-        Predicted = 2,
-        /// <summary>
-        /// No smoothing. The game moves the node itself.
-        /// </summary>
-        Disabled = 3,
-        /// <summary>
-        /// Record the server's own simulation every tick and interpolate it, so
-        /// the host sees it as smooth as clients do.
-        /// </summary>
-        Authority = 4,
-    }
-
-    public enum DisplayPump : long
-    {
-        /// <summary>
-        /// Not decided yet.
-        /// </summary>
-        Unresolved = -1,
-        /// <summary>
-        /// No interpolation, as with
-        /// <see cref="NetwMultiplayer.DisplayRole.Disabled"/>.
-        /// </summary>
-        Disabled = 0,
-        /// <summary>
-        /// Interpolate received states, as with
-        /// <see cref="NetwMultiplayer.DisplayRole.Remote"/>.
-        /// </summary>
-        Remote = 1,
-        /// <summary>
-        /// Interpolate between the previous and current tick, one tick behind.
-        /// Used by <see cref="NetwMultiplayer.DisplayRole.Authority"/> and
-        /// <see cref="NetwMultiplayer.LiveMode.Bracketed"/>.
-        /// </summary>
-        Bracketed = 2,
-        /// <summary>
-        /// Move the visual toward the body every frame. Used by
-        /// <see cref="NetwMultiplayer.LiveMode.Chase"/>.
-        /// </summary>
-        Chase = 3,
-    }
-
-    public enum LiveMode : long
-    {
-        /// <summary>
-        /// Move the visual toward the body every frame. Most responsive, but
-        /// corrections are visible.
-        /// </summary>
-        Chase = 0,
-        /// <summary>
-        /// Interpolate between the previous and current tick. Smoother, and one
-        /// tick behind.
-        /// </summary>
-        Bracketed = 1,
-    }
-
-    public enum TimelineMode : long
-    {
-        /// <summary>
-        /// Display slightly in the past, between received states. The default,
-        /// and always used on the server.
-        /// </summary>
-        Buffered = 0,
-        /// <summary>
-        /// Guess ahead from the last received velocity. Less delay, but it
-        /// ignores collisions, so a body can move into a wall until the next
-        /// update arrives.
-        /// </summary>
-        Forecast = 1,
-    }
-
-    public enum SyncMode : long
-    {
-        /// <summary>
-        /// Correct the local tick to the server's in one step.
-        /// </summary>
-        Snap = 0,
-        /// <summary>
-        /// Correct the local tick a little every frame, and in one step past
-        /// <see cref="NetwMultiplayer.ClockParam.PanicSnapThreshold"/>.
-        /// </summary>
-        Stretch = 1,
-    }
-
-    public enum MismatchAction : long
-    {
-        /// <summary>
-        /// Push a warning and continue. The default.
-        /// </summary>
-        Warn = 0,
-        /// <summary>
-        /// Disconnect the peer.
-        /// </summary>
-        Disconnect = 1,
-        /// <summary>
-        /// Emit <see cref="NetwMultiplayer.ClockTickrateMismatch"/> and let the
-        /// game decide.
-        /// </summary>
-        Signal = 2,
-    }
-
     public enum LayerParam : long
     {
         /// <summary>
-        /// The layer's <see cref="NetwMultiplayer.LayerPolicy"/>.
+        /// The layer's <see cref="NetwInterestLayer.LayerPolicy"/>.
         /// </summary>
         Policy = 0,
         /// <summary>
-        /// The layer's <see cref="NetwMultiplayer.LeavePolicy"/>.
+        /// The layer's <see cref="NetwInterestLayer.LeavePolicy"/>.
         /// </summary>
         LeavePolicy = 1,
         /// <summary>
-        /// The layer's <see cref="NetwMultiplayer.PerceptionPolicy"/>.
+        /// The layer's <see cref="NetwInterestLayer.PerceptionPolicy"/>.
         /// </summary>
         PerceptionPolicy = 2,
     }
@@ -639,7 +465,7 @@ public sealed class NetwMultiplayer : NetwRefCounted
         /// </summary>
         AddressHelp = 4,
         /// <summary>
-        /// [int] mask of <see cref="NetwMultiplayer.TransportCapability"/>,
+        /// [int] mask of <see cref="NetwConnection.TransportCapability"/>,
         /// saying what this transport can do on this build and platform.
         /// </summary>
         Capabilities = 5,
@@ -654,31 +480,6 @@ public sealed class NetwMultiplayer : NetwRefCounted
         /// the join form.
         /// </summary>
         ClientSettings = 7,
-    }
-
-    public enum TransportCapability : long
-    {
-        /// <summary>
-        /// The transport works on this build.
-        /// </summary>
-        Available = 1,
-        /// <summary>
-        /// The transport can host on this build. Web builds usually cannot.
-        /// </summary>
-        CanHost = 2,
-        /// <summary>
-        /// The transport supports <see cref="NetwMultiplayer.EndpointProbe"/>.
-        /// </summary>
-        CanProbe = 4,
-        /// <summary>
-        /// The transport can list servers for
-        /// <see cref="NetwMultiplayer.EndpointRefresh"/>.
-        /// </summary>
-        CanBrowse = 8,
-        /// <summary>
-        /// The transport accepts an empty address.
-        /// </summary>
-        AcceptsEmptyAddress = 16,
     }
 
     public enum EndpointParam : long
@@ -698,51 +499,16 @@ public sealed class NetwMultiplayer : NetwRefCounted
         DisplayName = 2,
     }
 
-    public enum EndpointState : long
-    {
-        /// <summary>
-        /// A bitmask of <see cref="NetwMultiplayer.EndpointFlags"/>.
-        /// </summary>
-        Flags = 0,
-        /// <summary>
-        /// The <c>@GlobalScope.Error</c> of the last probe, or
-        /// <c>@GlobalScope.FAILED</c> before the first one.
-        /// </summary>
-        Status = 1,
-        /// <summary>
-        /// The <see cref="NetwServerInfo"/> from the last probe, or
-        /// <c>null</c>.
-        /// </summary>
-        Info = 2,
-    }
-
-    public enum EndpointFlags : long
-    {
-        /// <summary>
-        /// Added with <see cref="NetwMultiplayer.EndpointAdd"/>.
-        /// </summary>
-        Caller = 1,
-        /// <summary>
-        /// The last probe reached the server.
-        /// </summary>
-        Available = 2,
-        /// <summary>
-        /// Found by <see cref="NetwMultiplayer.EndpointRefresh"/>. Can be set
-        /// together with <see cref="NetwMultiplayer.EndpointFlags.Caller"/>.
-        /// </summary>
-        Observed = 4,
-    }
-
     public enum SceneParam : long
     {
         /// <summary>
         /// <see cref="StringName"/> name of the scene. See
-        /// <see cref="NetwSceneHandle.Label"/>.
+        /// <see cref="NetwScene.Label"/>.
         /// </summary>
         Label = 0,
         /// <summary>
-        /// The scene's <see cref="NetwMultiplayer.SceneIsolation"/>. Can only
-        /// be set before the scene has a node.
+        /// The scene's <see cref="NetwScene.SceneIsolation"/>. Can only be set
+        /// before the scene has a node.
         /// </summary>
         Isolation = 1,
         /// <summary>
@@ -750,60 +516,6 @@ public sealed class NetwMultiplayer : NetwRefCounted
         /// freeze the scene.
         /// </summary>
         Processing = 2,
-    }
-
-    public enum SceneEvent : long
-    {
-        /// <summary>
-        /// A player started or stopped seeing the scene. The
-        /// <see cref="NetwMultiplayer.SceneObserve"/> callback receives
-        /// <c>(present, peer_id)</c>.
-        /// </summary>
-        Viewer = 0,
-        /// <summary>
-        /// A body entered or left. The callback receives <c>(present,
-        /// entity)</c>.
-        /// </summary>
-        Body = 1,
-        /// <summary>
-        /// Any entity, bodies included, entered or left. The callback receives
-        /// <c>(present, entity)</c>.
-        /// </summary>
-        Entity = 2,
-    }
-
-    public enum SceneChange : long
-    {
-        /// <summary>
-        /// Every player moves to the new scene, and every other scene is
-        /// removed with its entities.
-        /// </summary>
-        Session = 0,
-        /// <summary>
-        /// Only the requesting player moves. Their old bodies are despawned,
-        /// and no scene is removed.
-        /// </summary>
-        Player = 1,
-        /// <summary>
-        /// Everyone in the requester's scene moves, and that scene is removed
-        /// with its entities.
-        /// </summary>
-        Scene = 2,
-    }
-
-    public enum SceneIsolation : long
-    {
-        /// <summary>
-        /// The scene shares the physics and rendering world with the rest of
-        /// the game.
-        /// </summary>
-        None = 0,
-        /// <summary>
-        /// On the server, the scene gets a <see cref="SubViewport"/> with its
-        /// own world, so two scenes never collide. Clients use a plain
-        /// <see cref="Node"/>.
-        /// </summary>
-        OwnWorld = 1,
     }
 
     public enum ClockParam : long
@@ -814,7 +526,7 @@ public sealed class NetwMultiplayer : NetwRefCounted
         /// </summary>
         Tickrate = 0,
         /// <summary>
-        /// The <see cref="NetwMultiplayer.SyncMode"/>.
+        /// The <see cref="NetwClock.SyncModeEnum"/>.
         /// </summary>
         SyncMode = 1,
         /// <summary>
@@ -832,12 +544,12 @@ public sealed class NetwMultiplayer : NetwRefCounted
         StallThreshold = 4,
         /// <summary>
         /// [int] ticks. Past this difference,
-        /// <see cref="NetwMultiplayer.SyncMode.Stretch"/> corrects in one step.
+        /// <see cref="NetwClock.SyncModeEnum.Stretch"/> corrects in one step.
         /// </summary>
         PanicSnapThreshold = 5,
         /// <summary>
         /// [float] share of the difference
-        /// <see cref="NetwMultiplayer.SyncMode.Stretch"/> corrects each frame.
+        /// <see cref="NetwClock.SyncModeEnum.Stretch"/> corrects each frame.
         /// </summary>
         StretchNudgeFactor = 6,
         /// <summary>
@@ -885,68 +597,15 @@ public sealed class NetwMultiplayer : NetwRefCounted
         TickFactorOverride = 15,
     }
 
-    public enum ClockMonitor : long
-    {
-        /// <summary>
-        /// The most recent round-trip time, in seconds.
-        /// </summary>
-        Rtt = 0,
-        /// <summary>
-        /// The round-trip time averaged over
-        /// <see cref="NetwMultiplayer.ClockParam.JitterWindow"/> samples, in
-        /// seconds.
-        /// </summary>
-        RttAvg = 1,
-        /// <summary>
-        /// The round-trip variation, in seconds.
-        /// </summary>
-        RttJitter = 2,
-        /// <summary>
-        /// Half of <see cref="NetwMultiplayer.ClockMonitor.RttAvg"/>, in
-        /// seconds.
-        /// </summary>
-        OneWayLatency = 3,
-        /// <summary>
-        /// Seconds per tick, one divided by
-        /// <see cref="NetwMultiplayer.ClockParam.Tickrate"/>.
-        /// </summary>
-        Ticktime = 4,
-        /// <summary>
-        /// Seconds collected toward the next tick.
-        /// </summary>
-        TickAccumulator = 5,
-        /// <summary>
-        /// Physics frames run since the clock started.
-        /// </summary>
-        PhysicsFrames = 6,
-        /// <summary>
-        /// <see cref="MultiplayerApi.Poll"/> calls since the clock started.
-        /// </summary>
-        Polls = 7,
-        /// <summary>
-        /// Real seconds since the clock started.
-        /// </summary>
-        WallSeconds = 8,
-        /// <summary>
-        /// Physics frames actually run per second. Lower than the physics tick
-        /// rate means the machine is too slow.
-        /// </summary>
-        PhysicsHz = 9,
-        /// <summary>
-        /// <see cref="MultiplayerApi.Poll"/> calls per second.
-        /// </summary>
-        PollHz = 10,
-    }
-
     public enum DisplayParam : long
     {
         /// <summary>
-        /// <see cref="NetwMultiplayer.DisplayRole"/>. How the entity is
-        /// displayed. Usually <see cref="NetwMultiplayer.DisplayRole.Auto"/>.
+        /// <see cref="NetwDisplay.DisplayRoleEnum"/>. How the entity is
+        /// displayed. Usually <see cref="NetwDisplay.DisplayRoleEnum.Auto"/>.
         /// </summary>
         Role = 0,
         /// <summary>
-        /// <see cref="NetwMultiplayer.LiveMode"/>. How a predicted entity is
+        /// <see cref="NetwDisplay.LiveModeEnum"/>. How a predicted entity is
         /// displayed.
         /// </summary>
         LiveMode = 1,
@@ -955,17 +614,17 @@ public sealed class NetwMultiplayer : NetwRefCounted
         /// </summary>
         LiveSmoothTime = 2,
         /// <summary>
-        /// [float] seconds <see cref="NetwMultiplayer.LiveMode.Chase"/> takes
+        /// [float] seconds <see cref="NetwDisplay.LiveModeEnum.Chase"/> takes
         /// to smooth out a correction.
         /// </summary>
         ChaseGlideTime = 3,
         /// <summary>
-        /// <see cref="NetwMultiplayer.TimelineMode"/>. How a remote entity is
+        /// <see cref="NetwDisplay.TimelineModeEnum"/>. How a remote entity is
         /// displayed.
         /// </summary>
         TimelineMode = 4,
         /// <summary>
-        /// [int] ticks <see cref="NetwMultiplayer.TimelineMode.Forecast"/> may
+        /// [int] ticks <see cref="NetwDisplay.TimelineModeEnum.Forecast"/> may
         /// guess ahead before it stops.
         /// </summary>
         MaxForecastTicks = 5,
@@ -1012,18 +671,18 @@ public sealed class NetwMultiplayer : NetwRefCounted
     public enum PredictParam : long
     {
         /// <summary>
-        /// <see cref="NetwPredict.Archetype"/>. A preset, such as a character
-        /// or a vehicle, that sets the other values. Set it first.
+        /// <see cref="NetwPrediction.ArchetypeEnum"/>. A preset, such as a
+        /// character or a vehicle, that sets the other values. Set it first.
         /// </summary>
         Archetype = 0,
         /// <summary>
-        /// <see cref="NetwPredict.MissingInput"/>. What the server does when an
-        /// input never arrives.
+        /// <see cref="NetwPrediction.MissingInput"/>. What the server does when
+        /// an input never arrives.
         /// </summary>
         MissingPolicy = 2,
         /// <summary>
-        /// <see cref="NetwPredict.RecoveryPolicy"/>. How a misprediction is
-        /// corrected.
+        /// <see cref="NetwPrediction.RecoveryPolicyEnum"/>. How a misprediction
+        /// is corrected.
         /// </summary>
         RecoveryPolicy = 3,
         /// <summary>
@@ -1037,7 +696,7 @@ public sealed class NetwMultiplayer : NetwRefCounted
         /// </summary>
         DivergenceEpsilon = 7,
         /// <summary>
-        /// <see cref="NetwPredict.BreachResponse"/>. What happens when a
+        /// <see cref="NetwPrediction.BreachResponseEnum"/>. What happens when a
         /// client's state cannot be corrected.
         /// </summary>
         BreachResponse = 8,
@@ -1066,31 +725,47 @@ public sealed class NetwMultiplayer : NetwRefCounted
         /// correction.
         /// </summary>
         ReplayBufferDepth = 14,
+        /// <summary>
+        /// [int]. See <see cref="NetwPrediction.ReconcileMode"/>.
+        /// </summary>
+        ReconcileMode = 15,
+        /// <summary>
+        /// [int]. See <see cref="NetwPrediction.AckAgeTicks"/>.
+        /// </summary>
+        AckAgeTicks = 16,
+        /// <summary>
+        /// [int]. See <see cref="NetwPrediction.Epoch"/>.
+        /// </summary>
+        Epoch = 17,
+        /// <summary>
+        /// [bool]. See <see cref="NetwPrediction.Sleeping"/>.
+        /// </summary>
+        Sleeping = 18,
     }
 
     public enum SimulationParam : long
     {
         /// <summary>
-        /// <c>Array[NodePath]</c>. <see cref="NetwSimulationHandle.Bodies"/>.
+        /// <c>Array[NodePath]</c>. <see cref="NetwSimulation.Bodies"/>.
         /// </summary>
         Bodies = 0,
         /// <summary>
-        /// <see cref="NetwSimulationHandle.ScheduleEnum"/>.
-        /// <see cref="NetwSimulationHandle.Schedule"/>.
+        /// <see cref="NetwSimulation.ScheduleEnum"/>.
+        /// <see cref="NetwSimulation.Schedule"/>.
         /// </summary>
         Schedule = 1,
         /// <summary>
-        /// <see cref="NetwSimulationHandle.ReplicasEnum"/>.
-        /// <see cref="NetwSimulationHandle.Replicas"/>.
+        /// <see cref="NetwSimulation.ReplicasEnum"/>.
+        /// <see cref="NetwSimulation.Replicas"/>.
         /// </summary>
         Replicas = 2,
         /// <summary>
-        /// <see cref="NetwSimulationHandle.RestoreEnum"/>.
-        /// <see cref="NetwSimulationHandle.Restore"/>.
+        /// <see cref="NetwSimulation.RestoreEnum"/>.
+        /// <see cref="NetwSimulation.Restore"/>.
         /// </summary>
         Restore = 3,
         /// <summary>
-        /// [int] ticks. <see cref="NetwSimulationHandle.MaxRestoreTicks"/>.
+        /// [int] ticks. <see cref="NetwSimulation.MaxRestoreTicks"/>.
         /// </summary>
         MaxRestoreTicks = 4,
     }
@@ -1436,7 +1111,7 @@ public sealed class NetwMultiplayer : NetwRefCounted
         PredictEffectsArmed = 54,
         /// <summary>
         /// Counter. Actions that ran without all their input. See
-        /// <see cref="NetwMultiplayer.LagcompActionGateFallback"/>.
+        /// <see cref="NetwMultiplayer.Notification.LagcompActionGateFallback"/>.
         /// </summary>
         PredictGateFallbacks = 55,
         /// <summary>
@@ -1455,7 +1130,7 @@ public sealed class NetwMultiplayer : NetwRefCounted
         DisplaySleeping = 58,
         /// <summary>
         /// Gauge. Entities guessing ahead with
-        /// <see cref="NetwMultiplayer.TimelineMode.Forecast"/>.
+        /// <see cref="NetwDisplay.TimelineModeEnum.Forecast"/>.
         /// </summary>
         DisplayProjecting = 59,
         /// <summary>
@@ -1632,57 +1307,323 @@ public sealed class NetwMultiplayer : NetwRefCounted
         RowFramesDeferred = 97,
     }
 
-    public enum SessionState : long
+    public enum Notification : long
     {
         /// <summary>
-        /// Not connected.
+        /// An endpoint was added to <see cref="NetwMultiplayer.EndpointList"/>.
+        /// The callback receives <c>(endpoint: RID)</c>.
         /// </summary>
-        Offline = 0,
+        EndpointAdded = 0,
         /// <summary>
-        /// Hosting or joining, and may still fail.
+        /// An endpoint was removed from
+        /// <see cref="NetwMultiplayer.EndpointList"/>. The callback receives
+        /// <c>(endpoint: RID)</c>.
         /// </summary>
-        Connecting = 1,
+        EndpointRemoved = 1,
         /// <summary>
-        /// Connected.
+        /// A probe updated an endpoint. Read it with
+        /// <see cref="NetwMultiplayer.EndpointGetParam"/> and
+        /// <see cref="NetwMultiplayer.EndpointGetState"/>. The callback
+        /// receives <c>(endpoint: RID)</c>.
         /// </summary>
-        Online = 2,
+        EndpointUpdated = 2,
         /// <summary>
-        /// Disconnecting.
+        /// A tick is starting, before
+        /// <see cref="NetwMultiplayer.Notification.ClockOnTick"/>. The callback
+        /// receives <c>(delta: float, tick: int)</c>.
         /// </summary>
-        Disconnecting = 3,
-    }
-
-    public enum RoleEnum : long
-    {
+        ClockBeforeTick = 3,
         /// <summary>
-        /// No session.
+        /// A tick is running. The callback receives <c>(delta: float, tick:
+        /// int)</c>.
         /// </summary>
-        None = 0,
+        ClockOnTick = 4,
         /// <summary>
-        /// A client. A listen server also has a player, so check
-        /// <see cref="NetwMultiplayer.IsLocalClient"/> for that.
+        /// A tick has ended, after
+        /// <see cref="NetwMultiplayer.Notification.ClockOnTick"/>. The callback
+        /// receives <c>(delta: float, tick: int)</c>.
         /// </summary>
-        Client = 1,
+        ClockAfterTick = 5,
         /// <summary>
-        /// A server with no local player.
+        /// On the server, the state a peer predicted for an input differs from
+        /// the server's. <c>attribution</c> is the known cause. The callback
+        /// receives <c>(peer: int, entry: int, attribution: int)</c>.
         /// </summary>
-        DedicatedServer = 2,
+        PredictOwnerDivergence = 6,
         /// <summary>
-        /// A server that also has a player.
+        /// A <see cref="NetwAction.TimingModeEnum.TickAlignedStateReady"/>
+        /// action ran without all its input, after waiting
+        /// <see cref="NetwLagCompensationConfig.InputGateDeadlineTicks"/>.
+        /// <c>view_tick</c> is the tick it was aimed at. The callback receives
+        /// <c>(key: StringName, view_tick: int)</c>.
         /// </summary>
-        ListenServer = 3,
-    }
-
-    public enum TransportMode : long
-    {
+        LagcompActionGateFallback = 7,
         /// <summary>
-        /// Create a server peer from the settings. The address is ignored.
+        /// A scene was spawned, before any player enters it. It happens once
+        /// per scene. The callback receives <c>(scene: Node)</c>.
         /// </summary>
-        Host = 0,
+        SceneSpawned = 8,
         /// <summary>
-        /// Create a client peer that joins the address.
+        /// A scene became the displayed scene. The callback receives <c>(scene:
+        /// Node)</c>.
         /// </summary>
-        Client = 1,
+        SceneActivated = 9,
+        /// <summary>
+        /// A scene was removed. The callback receives <c>(scene: Node)</c>.
+        /// </summary>
+        SceneDespawned = 10,
+        /// <summary>
+        /// An entity finished moving from one scene to another, before the
+        /// move's <see cref="NetwPromise"/> resolves. The callback receives
+        /// <c>(entity: NetwEntity, from: Node, to: Node)</c>.
+        /// </summary>
+        SceneEntityMoved = 11,
+        /// <summary>
+        /// Startup finished on the server, even if nothing was spawned. It
+        /// happens once. The callback receives no arguments.
+        /// </summary>
+        SceneStartupSpawned = 12,
+        /// <summary>
+        /// <see cref="NetwMultiplayer.ScenePlayerViewport"/> changed.
+        /// <c>viewport</c> may be <c>null</c>. The callback receives
+        /// <c>(viewport: SubViewport)</c>.
+        /// </summary>
+        ParticipantViewportChanged = 13,
+        /// <summary>
+        /// A physics frame is about to run its ticks, even when there are none.
+        /// <see cref="NetwMultiplayer.ClockStep"/> does not send it. The
+        /// callback receives no arguments.
+        /// </summary>
+        ClockBeforeTickLoop = 14,
+        /// <summary>
+        /// A physics frame has run its ticks, even when there were none.
+        /// <see cref="NetwMultiplayer.ClockStep"/> does not send it. The
+        /// callback receives no arguments.
+        /// </summary>
+        ClockAfterTickLoop = 15,
+        /// <summary>
+        /// The clock synchronized with the server for the first time. It
+        /// happens once. The callback receives no arguments.
+        /// </summary>
+        ClockSynchronized = 16,
+        /// <summary>
+        /// The clock settings were applied. It happens once, so check
+        /// <see cref="NetwMultiplayer.ClockIsConfigured"/> in case it already
+        /// happened. The callback receives no arguments.
+        /// </summary>
+        ClockConfigured = 17,
+        /// <summary>
+        /// A peer runs a tickrate that differs from this peer's, and
+        /// <see cref="NetwMultiplayer.ClockSetMismatchAction"/> is
+        /// <see cref="NetwClock.MismatchAction.Signal"/>. The callback receives
+        /// <c>(peer_id: int, their_tickrate: int)</c>.
+        /// </summary>
+        ClockTickrateMismatch = 18,
+        /// <summary>
+        /// The server answered a <see cref="NetwMultiplayer.ClockSendPing"/>
+        /// and the clock has adjusted.
+        /// <code>
+        /// Dictionary
+        /// ┠╴rtt_raw                     float   this round trip, in seconds
+        /// ┠╴rtt_avg                     float   average round trip, in seconds
+        /// ┠╴rtt_jitter                  float   round trip variation, in seconds
+        /// ┠╴diff                        int     ticks the clock moved
+        /// ┠╴tick                        int     the tick after adjusting
+        /// ┠╴display_offset              float   the current display offset
+        /// ┠╴recommended_display_offset  float   the display offset this ping suggests
+        /// ┠╴is_stable                   bool    clock_is_stable()
+        /// ┖╴is_synchronized             bool    clock_is_synchronized()
+        /// </code>
+        /// <para>
+        /// The callback receives <c>(data: Dictionary)</c>.
+        /// </para>
+        /// </summary>
+        ClockPongReceived = 19,
+        /// <summary>
+        /// <see cref="NetwMultiplayer.ClockIsStable"/> changed. The callback
+        /// receives <c>(is_stable: bool)</c>.
+        /// </summary>
+        ClockStabilityChanged = 20,
+        /// <summary>
+        /// <see cref="NetwMultiplayer.State"/> changed. The callback receives
+        /// <c>(old_state: int, new_state: int)</c>.
+        /// </summary>
+        SessionStateChanged = 21,
+        /// <summary>
+        /// <see cref="NetwMultiplayer.EmbedPhase"/> changed. The callback
+        /// receives <c>(phase: int)</c>.
+        /// </summary>
+        EmbedPhaseChanged = 22,
+        /// <summary>
+        /// This peer sent its join request. It does not mean the join was
+        /// accepted. The callback receives <c>(username: StringName, args:
+        /// Array)</c>.
+        /// </summary>
+        SessionJoinSubmitted = 23,
+        /// <summary>
+        /// The session became <see cref="NetwSession.SessionState.Online"/>.
+        /// The callback receives no arguments.
+        /// </summary>
+        SessionEntered = 24,
+        /// <summary>
+        /// This peer's join was rejected. Games usually use
+        /// <see cref="NetwConnection.JoinFailed"/>. The callback receives
+        /// <c>(error: int, reason: String)</c>.
+        /// </summary>
+        SessionJoinFailed = 25,
+        /// <summary>
+        /// The session stopped being
+        /// <see cref="NetwSession.SessionState.Online"/>. The callback receives
+        /// no arguments.
+        /// </summary>
+        SessionEnded = 26,
+        /// <summary>
+        /// Right after <see cref="NetwMultiplayer.Notification.SessionEnded"/>.
+        /// Free nodes the session owned here. The callback receives no
+        /// arguments.
+        /// </summary>
+        SessionReclaimed = 27,
+        /// <summary>
+        /// Same as <see cref="SceneMultiplayer.PeerAuthenticating"/>, from
+        /// <see cref="NetwMultiplayer.Inner"/>. The callback receives
+        /// <c>(peer_id: int)</c>.
+        /// </summary>
+        PeerAuthenticating = 28,
+        /// <summary>
+        /// Same as <see cref="SceneMultiplayer.PeerAuthenticationFailed"/>,
+        /// from <see cref="NetwMultiplayer.Inner"/>. The callback receives
+        /// <c>(peer_id: int)</c>.
+        /// </summary>
+        PeerAuthenticationFailed = 29,
+        /// <summary>
+        /// A <see cref="MultiplayerApi.Poll"/> is starting. <c>delta</c> is the
+        /// time since the previous one. The callback receives <c>(delta:
+        /// float)</c>.
+        /// </summary>
+        SessionPollStarted = 30,
+        /// <summary>
+        /// A table changed, by <see cref="NetwMultiplayer.TableCommit"/> or by
+        /// an update from the server. The callback receives <c>(table: RID,
+        /// tick: int)</c>.
+        /// </summary>
+        TableReceived = 31,
+        /// <summary>
+        /// An entity failed to load or save in a database. <c>detail</c> names
+        /// the record and the reason. The callback receives <c>(database: RID,
+        /// error: int, detail: String)</c>.
+        /// </summary>
+        DatabaseFailed = 32,
+        /// <summary>
+        /// An entity finished loading. <c>found</c> is <c>false</c> when there
+        /// was no save, and a failed load sends
+        /// <see cref="NetwMultiplayer.Notification.DatabaseFailed"/>. The
+        /// callback receives <c>(entity: RID, found: bool)</c>.
+        /// </summary>
+        PersistLoaded = 33,
+        /// <summary>
+        /// An entity finished saving, and a failed save sends
+        /// <see cref="NetwMultiplayer.Notification.DatabaseFailed"/>. The
+        /// callback receives <c>(entity: RID)</c>.
+        /// </summary>
+        PersistSaved = 34,
+        /// <summary>
+        /// Same as <c>SceneMultiplayer.peer_packet</c>, for packets sent with
+        /// <see cref="NetwMultiplayer.SendBytes"/>. The callback receives
+        /// <c>(id: int, packet: PackedByteArray)</c>.
+        /// </summary>
+        PeerPacket = 35,
+        /// <summary>
+        /// The server kicked this peer, before the connection closes. The
+        /// callback receives <c>(reason: String)</c>.
+        /// </summary>
+        PeerKicked = 36,
+        /// <summary>
+        /// The server called
+        /// <see cref="NetwMultiplayer.SessionNotifyShutdown"/>. The callback
+        /// receives <c>(reason: String)</c>.
+        /// </summary>
+        SessionServerDisconnecting = 37,
+        /// <summary>
+        /// On the server, a peer asked to kick another with
+        /// <see cref="NetwMultiplayer.PeerRequestKick"/>. The callback receives
+        /// <c>(requester_id: int, target_id: int, reason: String)</c>.
+        /// </summary>
+        PeerKickRequested = 38,
+        /// <summary>
+        /// On the server, a peer asked to leave with
+        /// <see cref="NetwMultiplayer.SessionRequestLeave"/>. The callback
+        /// receives <c>(peer_id: int, reason: String)</c>.
+        /// </summary>
+        SessionDisconnectRequested = 39,
+        /// <summary>
+        /// The server called <see cref="NetwMultiplayer.SessionPause"/>. It
+        /// does not pause the <see cref="SceneTree"/>. The callback receives
+        /// <c>(reason: String)</c>.
+        /// </summary>
+        SessionTreePaused = 40,
+        /// <summary>
+        /// The server called <see cref="NetwMultiplayer.SessionUnpause"/>. The
+        /// callback receives no arguments.
+        /// </summary>
+        SessionTreeUnpaused = 41,
+        /// <summary>
+        /// A service was registered. The callback receives <c>(service:
+        /// Object)</c>.
+        /// </summary>
+        ServiceRegistered = 42,
+        /// <summary>
+        /// A service was unregistered. The callback receives <c>(service:
+        /// Object)</c>.
+        /// </summary>
+        ServiceUnregistered = 43,
+        /// <summary>
+        /// An entity spawned on this peer at <c>route</c>. The callback
+        /// receives <c>(route: int, entity: NetwEntity)</c>.
+        /// </summary>
+        EntityLive = 44,
+        /// <summary>
+        /// An entity started despawning and entered
+        /// <see cref="NetwMultiplayer.EntityState.Lingering"/>. The callback
+        /// receives <c>(route: int, entity: NetwEntity)</c>.
+        /// </summary>
+        EntityLingering = 45,
+        /// <summary>
+        /// The entity at <c>route</c> was despawned, after
+        /// <see cref="NetwEntity.Despawned"/>. It happens once, and a peer that
+        /// only stops seeing the entity gets
+        /// <see cref="NetwMultiplayer.Notification.EntityHidden"/>. The
+        /// callback receives <c>(route: int)</c>.
+        /// </summary>
+        EntityDead = 46,
+        /// <summary>
+        /// This peer stopped seeing an entity that still exists on the server,
+        /// after <see cref="NetwEntity.Hidden"/>. If it becomes visible again,
+        /// the same route gets a new node. The callback receives <c>(route:
+        /// int, entity: NetwEntity)</c>.
+        /// </summary>
+        EntityHidden = 47,
+        /// <summary>
+        /// A player's join was accepted, including this peer's own. The
+        /// callback receives <c>(player: NetwPlayer)</c>.
+        /// </summary>
+        PlayerJoined = 48,
+        /// <summary>
+        /// This peer's own join was accepted, before
+        /// <see cref="NetwMultiplayer.Notification.PlayerJoined"/>. The
+        /// callback receives <c>(player: NetwPlayer)</c>.
+        /// </summary>
+        PlayerLocalJoined = 49,
+        /// <summary>
+        /// A player left or was kicked. <see cref="NetwPlayer.IsActive"/> is
+        /// already <c>false</c>. The callback receives <c>(player:
+        /// NetwPlayer)</c>.
+        /// </summary>
+        PlayerLeft = 50,
+        /// <summary>
+        /// A scene is ready on this peer, and every node in it is in the tree
+        /// and ready. The callback receives <c>(scene: NetwScene)</c>.
+        /// </summary>
+        SceneLive = 51,
     }
 
     /// <summary>
@@ -1705,318 +1646,20 @@ public sealed class NetwMultiplayer : NetwRefCounted
     public const long CarrierMagicUnreliableAcked = 152;
 
     /// <summary>
-    /// Emitted when an endpoint is added to
-    /// <see cref="NetwMultiplayer.EndpointList"/>.
-    /// </summary>
-    public event Action<Rid> EndpointAdded
-    {
-        add => Connect("endpoint_added", Callable.From(value));
-        remove => Disconnect("endpoint_added", Callable.From(value));
-    }
-
-    /// <summary>
-    /// Emitted when an endpoint is removed from
-    /// <see cref="NetwMultiplayer.EndpointList"/>.
-    /// </summary>
-    public event Action<Rid> EndpointRemoved
-    {
-        add => Connect("endpoint_removed", Callable.From(value));
-        remove => Disconnect("endpoint_removed", Callable.From(value));
-    }
-
-    /// <summary>
-    /// Emitted when a probe updates <c>endpoint</c>. Read it with
-    /// <see cref="NetwMultiplayer.EndpointGetParam"/> and
-    /// <see cref="NetwMultiplayer.EndpointGetState"/>.
-    /// </summary>
-    public event Action<Rid> EndpointUpdated
-    {
-        add => Connect("endpoint_updated", Callable.From(value));
-        remove => Disconnect("endpoint_updated", Callable.From(value));
-    }
-
-    /// <summary>
-    /// Emitted at the start of each tick, before
-    /// <see cref="NetwMultiplayer.ClockOnTick"/>.
-    /// </summary>
-    public event Action<double, long> ClockBeforeTick
-    {
-        add => Connect("clock_before_tick", Callable.From(value));
-        remove => Disconnect("clock_before_tick", Callable.From(value));
-    }
-
-    /// <summary>
-    /// Emitted every tick. Run game logic here.
-    /// </summary>
-    public event Action<double, long> ClockOnTick
-    {
-        add => Connect("clock_on_tick", Callable.From(value));
-        remove => Disconnect("clock_on_tick", Callable.From(value));
-    }
-
-    /// <summary>
-    /// Emitted at the end of each tick, after
-    /// <see cref="NetwMultiplayer.ClockOnTick"/>.
-    /// </summary>
-    public event Action<double, long> ClockAfterTick
-    {
-        add => Connect("clock_after_tick", Callable.From(value));
-        remove => Disconnect("clock_after_tick", Callable.From(value));
-    }
-
-    /// <summary>
-    /// Emitted on the server when the state <c>peer</c> predicted for input
-    /// <c>entry</c> differs from the server's. <c>attribution</c> is the known
-    /// cause.
-    /// </summary>
-    public event Action<
-        long,
-        long,
-        NetwPredict.Attribution> PredictOwnerDivergence
-    {
-        add => Connect("predict_owner_divergence", Callable.From(value));
-        remove => Disconnect("predict_owner_divergence", Callable.From(value));
-    }
-
-    /// <summary>
-    /// Emitted when a
-    /// <see cref="NetwAction.TimingModeEnum.TickAlignedStateReady"/> action
-    /// runs without all its input, after waiting
-    /// <see cref="NetwLagCompensationConfig.InputGateDeadlineTicks"/>.
-    /// <c>view_tick</c> is the tick it was aimed at.
-    /// </summary>
-    public event Action<StringName, long> LagcompActionGateFallback
-    {
-        add => Connect("lagcomp_action_gate_fallback", Callable.From(value));
-        remove => Disconnect(
-            "lagcomp_action_gate_fallback",
-            Callable.From(value));
-    }
-
-    /// <summary>
-    /// Emitted once when <c>scene</c> is spawned, before any player enters it.
-    /// </summary>
-    public event Action<Variant> SceneSpawned
-    {
-        add => Connect("scene_spawned", Callable.From(value));
-        remove => Disconnect("scene_spawned", Callable.From(value));
-    }
-
-    /// <summary>
-    /// Emitted when <c>scene</c> becomes the displayed scene.
-    /// </summary>
-    public event Action<Variant> SceneActivated
-    {
-        add => Connect("scene_activated", Callable.From(value));
-        remove => Disconnect("scene_activated", Callable.From(value));
-    }
-
-    /// <summary>
-    /// Emitted after <c>scene</c> is removed.
-    /// </summary>
-    public event Action<Variant> SceneDespawned
-    {
-        add => Connect("scene_despawned", Callable.From(value));
-        remove => Disconnect("scene_despawned", Callable.From(value));
-    }
-
-    /// <summary>
-    /// Emitted when <c>entity</c> finishes moving from scene <c>from</c> to
-    /// scene <c>to</c>, before the move's <see cref="NetwPromise"/> resolves.
-    /// </summary>
-    public event Action<Variant, Variant, Variant> SceneEntityMoved
-    {
-        add => Connect("scene_entity_moved", Callable.From(value));
-        remove => Disconnect("scene_entity_moved", Callable.From(value));
-    }
-
-    /// <summary>
-    /// Emitted once on the server when startup finishes, even if nothing was
-    /// spawned.
-    /// </summary>
-    public event Action SceneStartupSpawned
-    {
-        add => Connect("scene_startup_spawned", Callable.From(value));
-        remove => Disconnect("scene_startup_spawned", Callable.From(value));
-    }
-
-    /// <summary>
-    /// Emitted when <see cref="NetwMultiplayer.ScenePlayerViewport"/> changes.
-    /// <c>viewport</c> may be <c>null</c>.
-    /// </summary>
-    public event Action<Variant> ParticipantViewportChanged
-    {
-        add => Connect("participant_viewport_changed", Callable.From(value));
-        remove => Disconnect(
-            "participant_viewport_changed",
-            Callable.From(value));
-    }
-
-    /// <summary>
-    /// Emitted once per physics frame, before that frame's ticks, even when
-    /// there are none. <see cref="NetwMultiplayer.ClockStep"/> does not emit
-    /// it.
-    /// </summary>
-    public event Action ClockBeforeTickLoop
-    {
-        add => Connect("clock_before_tick_loop", Callable.From(value));
-        remove => Disconnect("clock_before_tick_loop", Callable.From(value));
-    }
-
-    /// <summary>
-    /// Emitted once per physics frame, after that frame's ticks, even when
-    /// there were none. <see cref="NetwMultiplayer.ClockStep"/> does not emit
-    /// it.
-    /// </summary>
-    public event Action ClockAfterTickLoop
-    {
-        add => Connect("clock_after_tick_loop", Callable.From(value));
-        remove => Disconnect("clock_after_tick_loop", Callable.From(value));
-    }
-
-    /// <summary>
-    /// Emitted once, the first time the clock synchronizes with the server.
-    /// </summary>
-    public event Action ClockSynchronized
-    {
-        add => Connect("clock_synchronized", Callable.From(value));
-        remove => Disconnect("clock_synchronized", Callable.From(value));
-    }
-
-    /// <summary>
-    /// Emitted once when the clock settings are applied. Check
-    /// <see cref="NetwMultiplayer.ClockIsConfigured"/> in case it already
-    /// happened.
-    /// </summary>
-    public event Action ClockConfigured
-    {
-        add => Connect("clock_configured", Callable.From(value));
-        remove => Disconnect("clock_configured", Callable.From(value));
-    }
-
-    /// <summary>
-    /// Emitted when <c>peer_id</c> runs <c>their_tickrate</c>, which differs
-    /// from this peer's, and
-    /// <see cref="NetwMultiplayer.ClockSetMismatchAction"/> is
-    /// <see cref="NetwMultiplayer.MismatchAction.Signal"/>.
-    /// </summary>
-    public event Action<long, long> ClockTickrateMismatch
-    {
-        add => Connect("clock_tickrate_mismatch", Callable.From(value));
-        remove => Disconnect("clock_tickrate_mismatch", Callable.From(value));
-    }
-
-    /// <summary>
-    /// Emitted when the server answers a
-    /// <see cref="NetwMultiplayer.ClockSendPing"/> and the clock has adjusted.
-    /// <code>
-    /// Dictionary
-    /// ┠╴rtt_raw                     float   this round trip, in seconds
-    /// ┠╴rtt_avg                     float   average round trip, in seconds
-    /// ┠╴rtt_jitter                  float   round trip variation, in seconds
-    /// ┠╴diff                        int     ticks the clock moved
-    /// ┠╴tick                        int     the tick after adjusting
-    /// ┠╴display_offset              float   the current display offset
-    /// ┠╴recommended_display_offset  float   the display offset this ping suggests
-    /// ┠╴is_stable                   bool    clock_is_stable()
-    /// ┖╴is_synchronized             bool    clock_is_synchronized()
-    /// </code>
-    /// </summary>
-    public event Action<Godot.Collections.Dictionary> ClockPongReceived
-    {
-        add => Connect("clock_pong_received", Callable.From(value));
-        remove => Disconnect("clock_pong_received", Callable.From(value));
-    }
-
-    /// <summary>
-    /// Emitted when <see cref="NetwMultiplayer.ClockIsStable"/> changes.
-    /// </summary>
-    public event Action<bool> ClockStabilityChanged
-    {
-        add => Connect("clock_stability_changed", Callable.From(value));
-        remove => Disconnect("clock_stability_changed", Callable.From(value));
-    }
-
-    /// <summary>
-    /// Emitted when <see cref="NetwMultiplayer.State"/> changes.
-    /// </summary>
-    public event Action<
-        NetwMultiplayer.SessionState,
-        NetwMultiplayer.SessionState> SessionStateChanged
-    {
-        add => Connect("session_state_changed", Callable.From(value));
-        remove => Disconnect("session_state_changed", Callable.From(value));
-    }
-
-    /// <summary>
-    /// Emitted when <see cref="NetwMultiplayer.EmbedPhase"/> changes.
-    /// </summary>
-    public event Action<NetwMultiplayer.EmbedPhaseEnum> EmbedPhaseChanged
-    {
-        add => Connect("embed_phase_changed", Callable.From(value));
-        remove => Disconnect("embed_phase_changed", Callable.From(value));
-    }
-
-    /// <summary>
-    /// Emitted when this peer sends its join request. It does not mean the join
-    /// was accepted.
-    /// </summary>
-    public event Action<
-        StringName,
-        Godot.Collections.Array> SessionJoinSubmitted
-    {
-        add => Connect("session_join_submitted", Callable.From(value));
-        remove => Disconnect("session_join_submitted", Callable.From(value));
-    }
-
-    /// <summary>
-    /// Emitted when the session becomes
-    /// <see cref="NetwMultiplayer.SessionState.Online"/>.
-    /// </summary>
-    public event Action SessionEntered
-    {
-        add => Connect("session_entered", Callable.From(value));
-        remove => Disconnect("session_entered", Callable.From(value));
-    }
-
-    /// <summary>
-    /// Emitted when this peer's join is rejected. Games usually use
-    /// <see cref="NetwConnectHandle.JoinFailed"/>.
-    /// </summary>
-    public event Action<Error, string> SessionJoinFailed
-    {
-        add => Connect("session_join_failed", Callable.From(value));
-        remove => Disconnect("session_join_failed", Callable.From(value));
-    }
-
-    /// <summary>
-    /// Emitted when the session stops being
-    /// <see cref="NetwMultiplayer.SessionState.Online"/>.
-    /// </summary>
-    public event Action SessionEnded
-    {
-        add => Connect("session_ended", Callable.From(value));
-        remove => Disconnect("session_ended", Callable.From(value));
-    }
-
-    /// <summary>
-    /// Emitted right after <see cref="NetwMultiplayer.SessionEnded"/>. Free
-    /// nodes the session owned here.
-    /// </summary>
-    public event Action SessionReclaimed
-    {
-        add => Connect("session_reclaimed", Callable.From(value));
-        remove => Disconnect("session_reclaimed", Callable.From(value));
-    }
-
-    /// <summary>
     /// Same as <see cref="SceneMultiplayer.PeerAuthenticating"/>, from
     /// <see cref="NetwMultiplayer.Inner"/>.
     /// </summary>
     public event Action<long> PeerAuthenticating
     {
-        add => Connect("peer_authenticating", Callable.From(value));
-        remove => Disconnect("peer_authenticating", Callable.From(value));
+        add => ConnectBridge(
+            "peer_authenticating",
+            value,
+            Callable.From(
+                (long a0) =>
+                    value(a0)
+            )
+        );
+        remove => DisconnectBridge("peer_authenticating", value);
     }
 
     /// <summary>
@@ -2025,62 +1668,15 @@ public sealed class NetwMultiplayer : NetwRefCounted
     /// </summary>
     public event Action<long> PeerAuthenticationFailed
     {
-        add => Connect("peer_authentication_failed", Callable.From(value));
-        remove => Disconnect(
+        add => ConnectBridge(
             "peer_authentication_failed",
-            Callable.From(value));
-    }
-
-    /// <summary>
-    /// Emitted at the start of each <see cref="MultiplayerApi.Poll"/>.
-    /// <c>delta</c> is the time since the previous one.
-    /// </summary>
-    public event Action<double> SessionPollStarted
-    {
-        add => Connect("session_poll_started", Callable.From(value));
-        remove => Disconnect("session_poll_started", Callable.From(value));
-    }
-
-    /// <summary>
-    /// Emitted when <c>table</c> changes, by
-    /// <see cref="NetwMultiplayer.TableCommit"/> or by an update from the
-    /// server.
-    /// </summary>
-    public event Action<Rid, long> TableReceived
-    {
-        add => Connect("table_received", Callable.From(value));
-        remove => Disconnect("table_received", Callable.From(value));
-    }
-
-    /// <summary>
-    /// Emitted when an entity fails to load or save in <c>database</c>.
-    /// <c>detail</c> names the record and the reason.
-    /// </summary>
-    public event Action<Rid, Error, string> DatabaseFailed
-    {
-        add => Connect("database_failed", Callable.From(value));
-        remove => Disconnect("database_failed", Callable.From(value));
-    }
-
-    /// <summary>
-    /// Emitted when <c>entity</c> has loaded. <c>found</c> is <c>false</c> when
-    /// there was no save. A failed load emits
-    /// <see cref="NetwMultiplayer.DatabaseFailed"/>.
-    /// </summary>
-    public event Action<Rid, bool> PersistLoaded
-    {
-        add => Connect("persist_loaded", Callable.From(value));
-        remove => Disconnect("persist_loaded", Callable.From(value));
-    }
-
-    /// <summary>
-    /// Emitted when <c>entity</c> has saved. A failed save emits
-    /// <see cref="NetwMultiplayer.DatabaseFailed"/>.
-    /// </summary>
-    public event Action<Rid> PersistSaved
-    {
-        add => Connect("persist_saved", Callable.From(value));
-        remove => Disconnect("persist_saved", Callable.From(value));
+            value,
+            Callable.From(
+                (long a0) =>
+                    value(a0)
+            )
+        );
+        remove => DisconnectBridge("peer_authentication_failed", value);
     }
 
     /// <summary>
@@ -2089,194 +1685,15 @@ public sealed class NetwMultiplayer : NetwRefCounted
     /// </summary>
     public event Action<long, byte[]> PeerPacket
     {
-        add => Connect("peer_packet", Callable.From(value));
-        remove => Disconnect("peer_packet", Callable.From(value));
-    }
-
-    /// <summary>
-    /// Emitted when the server kicks this peer, before the connection closes.
-    /// </summary>
-    public event Action<string> PeerKicked
-    {
-        add => Connect("peer_kicked", Callable.From(value));
-        remove => Disconnect("peer_kicked", Callable.From(value));
-    }
-
-    /// <summary>
-    /// Emitted when the server calls
-    /// <see cref="NetwMultiplayer.SessionNotifyShutdown"/>.
-    /// </summary>
-    public event Action<string> SessionServerDisconnecting
-    {
-        add => Connect("session_server_disconnecting", Callable.From(value));
-        remove => Disconnect(
-            "session_server_disconnecting",
-            Callable.From(value));
-    }
-
-    /// <summary>
-    /// Emitted on the server when <c>requester_id</c> asks to kick
-    /// <c>target_id</c> with <see cref="NetwMultiplayer.PeerRequestKick"/>.
-    /// </summary>
-    public event Action<long, long, string> PeerKickRequested
-    {
-        add => Connect("peer_kick_requested", Callable.From(value));
-        remove => Disconnect("peer_kick_requested", Callable.From(value));
-    }
-
-    /// <summary>
-    /// Emitted on the server when <c>peer_id</c> asks to leave with
-    /// <see cref="NetwMultiplayer.SessionRequestLeave"/>.
-    /// </summary>
-    public event Action<long, string> SessionDisconnectRequested
-    {
-        add => Connect("session_disconnect_requested", Callable.From(value));
-        remove => Disconnect(
-            "session_disconnect_requested",
-            Callable.From(value));
-    }
-
-    /// <summary>
-    /// Emitted when the server calls
-    /// <see cref="NetwMultiplayer.SessionPause"/>. It does not pause the
-    /// <see cref="SceneTree"/>.
-    /// </summary>
-    public event Action<string> SessionTreePaused
-    {
-        add => Connect("session_tree_paused", Callable.From(value));
-        remove => Disconnect("session_tree_paused", Callable.From(value));
-    }
-
-    /// <summary>
-    /// Emitted when the server calls
-    /// <see cref="NetwMultiplayer.SessionUnpause"/>.
-    /// </summary>
-    public event Action SessionTreeUnpaused
-    {
-        add => Connect("session_tree_unpaused", Callable.From(value));
-        remove => Disconnect("session_tree_unpaused", Callable.From(value));
-    }
-
-    /// <summary>
-    /// Emitted when <c>service</c> is registered.
-    /// </summary>
-    public event Action<Variant> ServiceRegistered
-    {
-        add => Connect("service_registered", Callable.From(value));
-        remove => Disconnect("service_registered", Callable.From(value));
-    }
-
-    /// <summary>
-    /// Emitted when <c>service</c> is unregistered.
-    /// </summary>
-    public event Action<Variant> ServiceUnregistered
-    {
-        add => Connect("service_unregistered", Callable.From(value));
-        remove => Disconnect("service_unregistered", Callable.From(value));
-    }
-
-    /// <summary>
-    /// Emitted when <c>entity</c> spawns on this peer at <c>route</c>.
-    /// </summary>
-    public event Action<long, Variant> EntityLive
-    {
-        add => Connect("entity_live", Callable.From(value));
-        remove => Disconnect("entity_live", Callable.From(value));
-    }
-
-    /// <summary>
-    /// Emitted when an entity starts despawning and enters
-    /// <see cref="NetwMultiplayer.EntityState.Lingering"/>.
-    /// </summary>
-    public event Action<long, Variant> EntityLingering
-    {
-        add => Connect("entity_lingering", Callable.From(value));
-        remove => Disconnect("entity_lingering", Callable.From(value));
-    }
-
-    /// <summary>
-    /// Emitted once when the entity at <c>route</c> is despawned, after
-    /// <see cref="NetwEntity.Despawned"/>. A peer that only stops seeing the
-    /// entity emits <see cref="NetwMultiplayer.EntityHidden"/>.
-    /// </summary>
-    public event Action<long> EntityDead
-    {
-        add => Connect("entity_dead", Callable.From(value));
-        remove => Disconnect("entity_dead", Callable.From(value));
-    }
-
-    /// <summary>
-    /// Emitted when this peer stops seeing <c>entity</c>, which still exists on
-    /// the server. If it becomes visible again, the same route gets a new node.
-    /// Emitted after <see cref="NetwEntity.Hidden"/>.
-    /// </summary>
-    public event Action<long, Variant> EntityHidden
-    {
-        add => Connect("entity_hidden", Callable.From(value));
-        remove => Disconnect("entity_hidden", Callable.From(value));
-    }
-
-    /// <summary>
-    /// Emitted when a player's join is accepted, including this peer's own.
-    /// </summary>
-    public event Action<Variant> PlayerJoined
-    {
-        add => Connect("player_joined", Callable.From(value));
-        remove => Disconnect("player_joined", Callable.From(value));
-    }
-
-    /// <summary>
-    /// Emitted when this peer's own join is accepted, before
-    /// <see cref="NetwMultiplayer.PlayerJoined"/>.
-    /// </summary>
-    public event Action<Variant> PlayerLocalJoined
-    {
-        add => Connect("player_local_joined", Callable.From(value));
-        remove => Disconnect("player_local_joined", Callable.From(value));
-    }
-
-    /// <summary>
-    /// Emitted when a player leaves or is kicked.
-    /// <see cref="NetwPlayer.IsActive"/> is already <c>false</c>.
-    /// </summary>
-    public event Action<Variant> PlayerLeft
-    {
-        add => Connect("player_left", Callable.From(value));
-        remove => Disconnect("player_left", Callable.From(value));
-    }
-
-    /// <summary>
-    /// Emitted when the scene this peer displays changes. Either may be
-    /// <c>null</c>. See <see cref="NetwSessionHandle.PresentationChanged"/>.
-    /// </summary>
-    public event Action<Variant, Variant> ScenePresentationChanged
-    {
-        add => Connect("scene_presentation_changed", Callable.From(value));
-        remove => Disconnect(
-            "scene_presentation_changed",
-            Callable.From(value));
-    }
-
-    /// <summary>
-    /// Emitted when <c>scene</c> is ready on this peer. Every node in it is in
-    /// the tree and ready.
-    /// </summary>
-    public event Action<Variant> SceneLive
-    {
-        add => Connect("scene_live", Callable.From(value));
-        remove => Disconnect("scene_live", Callable.From(value));
-    }
-
-    /// <summary>
-    /// Emitted on the server when a
-    /// <see cref="NetwMultiplayer.SceneChangeToFile"/> finishes. <c>arrived</c>
-    /// holds the <see cref="NetwPlayer"/>s that moved to <c>scene</c>. Spawn
-    /// their bodies here.
-    /// </summary>
-    public event Action<Variant, Godot.Collections.Array> SceneChanged
-    {
-        add => Connect("scene_changed", Callable.From(value));
-        remove => Disconnect("scene_changed", Callable.From(value));
+        add => ConnectBridge(
+            "peer_packet",
+            value,
+            Callable.From(
+                (long a0, byte[] a1) =>
+                    value(a0, a1)
+            )
+        );
+        remove => DisconnectBridge("peer_packet", value);
     }
 
     private static readonly IntPtr _bindRpcGetRelaySender =
@@ -2363,17 +1780,19 @@ public sealed class NetwMultiplayer : NetwRefCounted
     }
 
     private static readonly IntPtr _bindSessionGetState =
-        NetwApi.MethodBind("NetwMultiplayer", "session_get_state", 713910211UL);
+        NetwApi.MethodBind(
+            "NetwMultiplayer",
+            "session_get_state",
+            2693128761UL);
 
     /// <summary>
     /// Whether the session is connected.
-    /// - <see cref="NetwMultiplayer.SessionState.Offline"/> not connected
-    /// - <see cref="NetwMultiplayer.SessionState.Connecting"/> connecting, may
-    /// fail
-    /// - <see cref="NetwMultiplayer.SessionState.Online"/> connected
-    /// - <see cref="NetwMultiplayer.SessionState.Disconnecting"/> disconnecting
+    /// - <see cref="NetwSession.SessionState.Offline"/> not connected
+    /// - <see cref="NetwSession.SessionState.Connecting"/> connecting, may fail
+    /// - <see cref="NetwSession.SessionState.Online"/> connected
+    /// - <see cref="NetwSession.SessionState.Disconnecting"/> disconnecting
     /// </summary>
-    public NetwMultiplayer.SessionState State
+    public NetwSession.SessionState State
     {
         get
         {
@@ -2382,25 +1801,25 @@ public sealed class NetwMultiplayer : NetwRefCounted
                 _bindSessionGetState,
                 Checked,
                 ref answered);
-            return (NetwMultiplayer.SessionState)answered;
+            return (NetwSession.SessionState)answered;
         }
     }
 
     private static readonly IntPtr _bindSessionGetRole =
-        NetwApi.MethodBind("NetwMultiplayer", "session_get_role", 2901618068UL);
+        NetwApi.MethodBind("NetwMultiplayer", "session_get_role", 3770310992UL);
 
     /// <summary>
     /// What this peer is in the session. <see cref="NetwMultiplayer.IsHost"/>
     /// and <see cref="NetwMultiplayer.IsLocalClient"/> are usually what a game
     /// wants.
-    /// - <see cref="NetwMultiplayer.RoleEnum.None"/> no session
-    /// - <see cref="NetwMultiplayer.RoleEnum.Client"/> a client
-    /// - <see cref="NetwMultiplayer.RoleEnum.DedicatedServer"/> a server with
-    /// no player
-    /// - <see cref="NetwMultiplayer.RoleEnum.ListenServer"/> a server that also
+    /// - <see cref="NetwSession.RoleEnum.None"/> no session
+    /// - <see cref="NetwSession.RoleEnum.Client"/> a client
+    /// - <see cref="NetwSession.RoleEnum.DedicatedServer"/> a server with no
+    /// player
+    /// - <see cref="NetwSession.RoleEnum.ListenServer"/> a server that also
     /// plays
     /// </summary>
-    public NetwMultiplayer.RoleEnum Role
+    public NetwSession.RoleEnum Role
     {
         get
         {
@@ -2409,7 +1828,7 @@ public sealed class NetwMultiplayer : NetwRefCounted
                 _bindSessionGetRole,
                 Checked,
                 ref answered);
-            return (NetwMultiplayer.RoleEnum)answered;
+            return (NetwSession.RoleEnum)answered;
         }
     }
 
@@ -2418,7 +1837,7 @@ public sealed class NetwMultiplayer : NetwRefCounted
 
     /// <summary>
     /// <c>true</c> when <see cref="NetwMultiplayer.State"/> is
-    /// <see cref="NetwMultiplayer.SessionState.Online"/>.
+    /// <see cref="NetwSession.SessionState.Online"/>.
     /// </summary>
     public bool IsOnline
     {
@@ -2457,8 +1876,8 @@ public sealed class NetwMultiplayer : NetwRefCounted
 
     /// <summary>
     /// <c>true</c> when this peer has its own player, which is at
-    /// <see cref="NetwMultiplayer.RoleEnum.Client"/> and
-    /// <see cref="NetwMultiplayer.RoleEnum.ListenServer"/>.
+    /// <see cref="NetwSession.RoleEnum.Client"/> and
+    /// <see cref="NetwSession.RoleEnum.ListenServer"/>.
     /// </summary>
     public bool IsLocalClient
     {
@@ -2483,14 +1902,16 @@ public sealed class NetwMultiplayer : NetwRefCounted
     /// Every player whose join was accepted. A connected peer that has not
     /// joined is not here.
     /// </summary>
-    public Godot.Collections.Array Players
+    public NetwPlayer[] Players
     {
         get
         {
             godot_variant answered = default;
             NetwThunks.Call0(_bindPlayerJoinedAll, Checked, ref answered);
-            Godot.Collections.Array result =
-                VariantUtils.ConvertToArray(answered);
+            NetwPlayer[] result =
+                NetwApi.Elements(
+                    VariantUtils.ConvertToArray(answered),
+                    NetwPlayer.From);
             answered.Dispose();
             return result;
         }
@@ -2504,14 +1925,16 @@ public sealed class NetwMultiplayer : NetwRefCounted
     /// <see cref="NetwMultiplayer.Players"/>, except that a player who is
     /// leaving stays here a little longer.
     /// </summary>
-    public Godot.Collections.Array ConnectedPlayers
+    public NetwPlayer[] ConnectedPlayers
     {
         get
         {
             godot_variant answered = default;
             NetwThunks.Call0(_bindPlayerAll, Checked, ref answered);
-            Godot.Collections.Array result =
-                VariantUtils.ConvertToArray(answered);
+            NetwPlayer[] result =
+                NetwApi.Elements(
+                    VariantUtils.ConvertToArray(answered),
+                    NetwPlayer.From);
             answered.Dispose();
             return result;
         }
@@ -2798,16 +2221,18 @@ public sealed class NetwMultiplayer : NetwRefCounted
 
     /// <summary>
     /// Every body in every scene. Bodies in different scenes can share a
-    /// <see cref="NetwEntity.EntityId"/>.
+    /// <see cref="NetwEntity.Name"/>.
     /// </summary>
-    public Godot.Collections.Array Bodies
+    public NetwEntity[] Bodies
     {
         get
         {
             godot_variant answered = default;
             NetwThunks.Call0(_bindSceneBodiesAll, Checked, ref answered);
-            Godot.Collections.Array result =
-                VariantUtils.ConvertToArray(answered);
+            NetwEntity[] result =
+                NetwApi.Elements(
+                    VariantUtils.ConvertToArray(answered),
+                    NetwEntity.From);
             answered.Dispose();
             return result;
         }
@@ -3164,10 +2589,10 @@ public sealed class NetwMultiplayer : NetwRefCounted
     /// <summary>
     /// Returns every other entity that shares the layer
     /// <paramref name="layerId"/> with <paramref name="entity"/>, sorted by
-    /// <see cref="NetwEntity.EntityId"/>. An empty <paramref name="layerId"/>
+    /// <see cref="NetwEntity.Name"/>. An empty <paramref name="layerId"/>
     /// checks every layer of <paramref name="entity"/>.
     /// </summary>
-    public Godot.Collections.Array InterestSharedEntities(
+    public NetwEntity[] InterestSharedEntities(
         NetwEntity entity,
         StringName layerId = null)
     {
@@ -3185,7 +2610,10 @@ public sealed class NetwMultiplayer : NetwRefCounted
             ref answered);
         slot0.Dispose();
         slot1.Dispose();
-        Godot.Collections.Array result = VariantUtils.ConvertToArray(answered);
+        NetwEntity[] result =
+            NetwApi.Elements(
+                VariantUtils.ConvertToArray(answered),
+                NetwEntity.From);
         answered.Dispose();
         return result;
     }
@@ -3301,13 +2729,13 @@ public sealed class NetwMultiplayer : NetwRefCounted
         NetwApi.MethodBind(
             "NetwMultiplayer",
             "clock_set_mismatch_action",
-            2041315952UL);
+            2609927834UL);
 
     /// <summary>
     /// Sets what happens when the server's tickrate differs from this peer's.
-    /// The default is <see cref="NetwMultiplayer.MismatchAction.Warn"/>.
+    /// The default is <see cref="NetwClock.MismatchAction.Warn"/>.
     /// </summary>
-    public void ClockSetMismatchAction(NetwMultiplayer.MismatchAction action)
+    public void ClockSetMismatchAction(NetwClock.MismatchAction action)
     {
         long slot0 = (long)action;
         long discarded = default;
@@ -3364,8 +2792,8 @@ public sealed class NetwMultiplayer : NetwRefCounted
         NetwApi.MethodBind("NetwMultiplayer", "clock_send_ping", 3218959716UL);
 
     /// <summary>
-    /// Sends an unreliable ping to the server. The reply emits
-    /// <see cref="NetwMultiplayer.ClockPongReceived"/>.
+    /// Sends an unreliable ping to the server. The reply notifies
+    /// <see cref="NetwMultiplayer.Notification.ClockPongReceived"/>.
     /// </summary>
     public void ClockSendPing()
     {
@@ -3374,7 +2802,7 @@ public sealed class NetwMultiplayer : NetwRefCounted
     }
 
     private static readonly IntPtr _bindSceneRequest =
-        NetwApi.MethodBind("NetwMultiplayer", "scene_request", 4150322833UL);
+        NetwApi.MethodBind("NetwMultiplayer", "scene_request", 2302146027UL);
 
     /// <summary>
     /// Asks the server to move the local player to the scene file at
@@ -3389,8 +2817,8 @@ public sealed class NetwMultiplayer : NetwRefCounted
     /// <b>Player request.</b>
     /// </para>
     /// </summary>
-    public NetwPromise SceneRequest(string path, NetwMultiplayer.SceneChange scope =
-        (NetwMultiplayer.SceneChange)0)
+    public NetwPromise SceneRequest(string path, NetwScene.SceneChange scope =
+        (NetwScene.SceneChange)0)
     {
         godot_variant slot0 = VariantUtils.CreateFromString(path);
         godot_variant slot1 = VariantUtils.CreateFromInt((long)scope);
@@ -3732,9 +3160,9 @@ public sealed class NetwMultiplayer : NetwRefCounted
     /// <summary>
     /// On a host, returns the <see cref="SubViewport"/> of the scene from
     /// <see cref="NetwMultiplayer.ScenePresented"/>, or <c>null</c>. Only
-    /// scenes with <see cref="NetwMultiplayer.SceneIsolation.OwnWorld"/> have
-    /// one. <see cref="NetwMultiplayer.ParticipantViewportChanged"/> emits when
-    /// it changes. <see cref="HostSceneView"/> displays it.
+    /// scenes with <see cref="NetwScene.SceneIsolation.OwnWorld"/> have one.
+    /// <see cref="NetwMultiplayer.Notification.ParticipantViewportChanged"/>
+    /// notifies when it changes. <see cref="HostSceneView"/> displays it.
     /// </summary>
     public SubViewport ScenePlayerViewport()
     {
@@ -3747,7 +3175,7 @@ public sealed class NetwMultiplayer : NetwRefCounted
     }
 
     private static readonly IntPtr _bindSceneObserve =
-        NetwApi.MethodBind("NetwMultiplayer", "scene_observe", 3518082899UL);
+        NetwApi.MethodBind("NetwMultiplayer", "scene_observe", 798455615UL);
 
     /// <summary>
     /// Calls <paramref name="callback"/> when <paramref name="event"/> happens
@@ -3758,7 +3186,7 @@ public sealed class NetwMultiplayer : NetwRefCounted
     /// </summary>
     public void SceneObserve(
         Rid scene,
-        NetwMultiplayer.SceneEvent @event,
+        NetwScene.SceneEvent @event,
         Callable callback)
     {
         godot_variant slot0 = VariantUtils.CreateFromRid(scene);
@@ -3779,7 +3207,7 @@ public sealed class NetwMultiplayer : NetwRefCounted
     }
 
     private static readonly IntPtr _bindSceneUnobserve =
-        NetwApi.MethodBind("NetwMultiplayer", "scene_unobserve", 3518082899UL);
+        NetwApi.MethodBind("NetwMultiplayer", "scene_unobserve", 798455615UL);
 
     /// <summary>
     /// Removes a <paramref name="callback"/> added with
@@ -3787,7 +3215,7 @@ public sealed class NetwMultiplayer : NetwRefCounted
     /// </summary>
     public void SceneUnobserve(
         Rid scene,
-        NetwMultiplayer.SceneEvent @event,
+        NetwScene.SceneEvent @event,
         Callable callback)
     {
         godot_variant slot0 = VariantUtils.CreateFromRid(scene);
@@ -3862,8 +3290,11 @@ public sealed class NetwMultiplayer : NetwRefCounted
             3379118538UL);
 
     /// <summary>
-    /// Calls <paramref name="callback"/> when entities and viewers enter or
-    /// leave <paramref name="layer"/>.
+    /// Calls <paramref name="callback"/> as <c>callback(visible, entity,
+    /// peer_id)</c> when an entity enters or leaves <paramref name="layer"/>
+    /// for a peer, where <c>entity</c> is an <see cref="Rid"/>.
+    /// <see cref="NetwInterestLayer.Monitor"/> is the same with objects, and
+    /// setting one replaces the other.
     /// </summary>
     public void InterestLayerSetMonitorCallback(Rid layer, Callable callback)
     {
@@ -3939,10 +3370,10 @@ public sealed class NetwMultiplayer : NetwRefCounted
 
     /// <summary>
     /// Adds a server at <paramref name="address"/> reached through
-    /// <paramref name="transport"/>, and emits
-    /// <see cref="NetwMultiplayer.EndpointAdded"/>. Adding the same pair again
-    /// returns the same <see cref="Rid"/>. Returns an invalid <see cref="Rid"/>
-    /// when <paramref name="transport"/> is unknown.
+    /// <paramref name="transport"/>, and notifies
+    /// <see cref="NetwMultiplayer.Notification.EndpointAdded"/>. Adding the
+    /// same pair again returns the same <see cref="Rid"/>. Returns an invalid
+    /// <see cref="Rid"/> when <paramref name="transport"/> is unknown.
     /// <code>
     /// var endpoint := api.endpoint_add(
     ///         api.transport_find(&amp;"ENetMultiplayerPeer"),
@@ -3977,8 +3408,8 @@ public sealed class NetwMultiplayer : NetwRefCounted
         NetwApi.MethodBind("NetwMultiplayer", "endpoint_remove", 2722037293UL);
 
     /// <summary>
-    /// Removes <paramref name="endpoint"/> and emits
-    /// <see cref="NetwMultiplayer.EndpointRemoved"/>.
+    /// Removes <paramref name="endpoint"/> and notifies
+    /// <see cref="NetwMultiplayer.Notification.EndpointRemoved"/>.
     /// </summary>
     public void EndpointRemove(Rid endpoint)
     {
@@ -4069,8 +3500,8 @@ public sealed class NetwMultiplayer : NetwRefCounted
             931495360UL);
 
     /// <summary>
-    /// Changes one field of <paramref name="endpoint"/> and emits
-    /// <see cref="NetwMultiplayer.EndpointUpdated"/>. Only
+    /// Changes one field of <paramref name="endpoint"/> and notifies
+    /// <see cref="NetwMultiplayer.Notification.EndpointUpdated"/>. Only
     /// <see cref="NetwMultiplayer.EndpointParam.DisplayName"/> can be changed.
     /// <code>
     /// Error
@@ -4107,16 +3538,16 @@ public sealed class NetwMultiplayer : NetwRefCounted
         NetwApi.MethodBind(
             "NetwMultiplayer",
             "endpoint_get_state",
-            1505533818UL);
+            1389929484UL);
 
     /// <summary>
     /// Returns what the last probe found for <paramref name="endpoint"/>.
-    /// <see cref="NetwMultiplayer.EndpointState.Status"/> is
+    /// <see cref="NetwConnection.EndpointState.Status"/> is
     /// <c>@GlobalScope.FAILED</c> until the first probe.
     /// </summary>
     public Variant EndpointGetState(
         Rid endpoint,
-        NetwMultiplayer.EndpointState state)
+        NetwConnection.EndpointState state)
     {
         godot_variant slot0 = VariantUtils.CreateFromRid(endpoint);
         godot_variant slot1 = VariantUtils.CreateFromInt((long)state);
@@ -4139,7 +3570,8 @@ public sealed class NetwMultiplayer : NetwRefCounted
 
     /// <summary>
     /// Checks whether <paramref name="endpoint"/> is reachable without joining
-    /// it, then emits <see cref="NetwMultiplayer.EndpointUpdated"/>. Read the
+    /// it, then notifies
+    /// <see cref="NetwMultiplayer.Notification.EndpointUpdated"/>. Read the
     /// result with <see cref="NetwMultiplayer.EndpointGetState"/>.
     /// </summary>
     public void EndpointProbe(Rid endpoint)
@@ -4199,9 +3631,9 @@ public sealed class NetwMultiplayer : NetwRefCounted
         NetwApi.MethodBind("NetwMultiplayer", "endpoint_refresh", 3218959716UL);
 
     /// <summary>
-    /// Re-probes every endpoint and emits
-    /// <see cref="NetwMultiplayer.EndpointUpdated"/> for each result. Probes
-    /// run serially.
+    /// Re-probes every endpoint and notifies
+    /// <see cref="NetwMultiplayer.Notification.EndpointUpdated"/> for each
+    /// result. Probes run serially.
     /// </summary>
     public void EndpointRefresh()
     {
@@ -4213,7 +3645,7 @@ public sealed class NetwMultiplayer : NetwRefCounted
         NetwApi.MethodBind(
             "NetwMultiplayer",
             "transport_create_peer",
-            2878246993UL);
+            2430873470UL);
 
     /// <summary>
     /// Asks <paramref name="transport"/> to create a
@@ -4229,7 +3661,7 @@ public sealed class NetwMultiplayer : NetwRefCounted
     /// <see cref="Rid"/> when <paramref name="completed"/> is not valid.
     /// <code>
     /// var ticket := api.transport_create_peer(
-    ///         relay, NetwMultiplayer.TRANSPORT_MODE_CLIENT,
+    ///         relay, NetwConnection.TRANSPORT_MODE_CLIENT,
     ///         "eu-1.example.com", {}, _created)
     ///
     /// func _created(peer: MultiplayerPeer, error: Error, _detail: String):
@@ -4240,7 +3672,7 @@ public sealed class NetwMultiplayer : NetwRefCounted
     /// </summary>
     public Rid TransportCreatePeer(
         Rid transport,
-        NetwMultiplayer.TransportMode mode,
+        NetwConnection.TransportMode mode,
         string address,
         Godot.Collections.Dictionary settings,
         Callable completed,
@@ -4392,7 +3824,7 @@ public sealed class NetwMultiplayer : NetwRefCounted
     /// <code>
     /// var enet := api.transport_find(&amp;"ENetMultiplayerPeer")
     /// api.transport_create_peer(
-    ///         enet, NetwMultiplayer.TRANSPORT_MODE_HOST, "",
+    ///         enet, NetwConnection.TRANSPORT_MODE_HOST, "",
     ///         {port = 21253}, assign_it)
     /// </code>
     /// </summary>
@@ -4417,11 +3849,11 @@ public sealed class NetwMultiplayer : NetwRefCounted
     /// Returns one field of <paramref name="transport"/>, used to draw host and
     /// join forms, or <c>null</c>.
     /// <see cref="NetwMultiplayer.TransportParam.Capabilities"/> returns a
-    /// <see cref="NetwMultiplayer.TransportCapability"/> mask.
+    /// <see cref="NetwConnection.TransportCapability"/> mask.
     /// <code>
     /// var caps: int = api.transport_get_param(
     ///         t, NetwMultiplayer.TRANSPORT_PARAM_CAPABILITIES)
-    /// if caps &amp; NetwMultiplayer.TRANSPORT_CAN_HOST:
+    /// if caps &amp; NetwConnection.TRANSPORT_CAN_HOST:
     ///     show_host_button()
     /// </code>
     /// </summary>
@@ -4541,21 +3973,21 @@ public sealed class NetwMultiplayer : NetwRefCounted
         NetwApi.MethodBind(
             "NetwMultiplayer",
             "session_get_authored_role",
-            2901618068UL);
+            3770310992UL);
 
     /// <summary>
     /// The role the game asked for in
     /// <see cref="NetwSessionConfig.DesiredRole"/>.
     /// <see cref="NetwMultiplayer.Role"/> is the role the session actually has.
     /// </summary>
-    public NetwMultiplayer.RoleEnum SessionGetAuthoredRole()
+    public NetwSession.RoleEnum SessionGetAuthoredRole()
     {
         long answered = default;
         NetwThunks.Ptrcall0_Long(
             _bindSessionGetAuthoredRole,
             Checked,
             ref answered);
-        return (NetwMultiplayer.RoleEnum)answered;
+        return (NetwSession.RoleEnum)answered;
     }
 
     private static readonly IntPtr _bindSendTo =
@@ -5137,8 +4569,7 @@ public sealed class NetwMultiplayer : NetwRefCounted
     /// <summary>
     /// Loads the saved properties of <paramref name="entity"/>. The promise
     /// resolves with <c>true</c> when a save was found. See
-    /// <see cref="NetwPersistenceHandle.Load"/> for the errors. <b>Server
-    /// Only.</b>
+    /// <see cref="NetwPersistence.Load"/> for the errors. <b>Server Only.</b>
     /// </summary>
     public NetwPromise PersistLoad(Rid entity)
     {
@@ -5158,8 +4589,7 @@ public sealed class NetwMultiplayer : NetwRefCounted
     /// <summary>
     /// Saves the persistent properties of <paramref name="entity"/>. The
     /// promise resolves with <c>false</c> when nothing changed. See
-    /// <see cref="NetwPersistenceHandle.Save"/> for the errors. <b>Server
-    /// Only.</b>
+    /// <see cref="NetwPersistence.Save"/> for the errors. <b>Server Only.</b>
     /// </summary>
     public NetwPromise PersistSave(Rid entity)
     {
@@ -5226,7 +4656,7 @@ public sealed class NetwMultiplayer : NetwRefCounted
     /// <summary>
     /// Saves every persistent entity that changed. The promise resolves with
     /// <c>@GlobalScope.OK</c>, or the first error. See
-    /// <see cref="NetwSessionHandle.SaveEntities"/> for the errors. <b>Server
+    /// <see cref="NetwSession.SaveEntities"/> for the errors. <b>Server
     /// Only.</b>
     /// </summary>
     public NetwPromise PersistFlushAll()
@@ -5243,7 +4673,7 @@ public sealed class NetwMultiplayer : NetwRefCounted
     /// Saves the rows of <paramref name="table"/> under <paramref name="key"/>
     /// in <paramref name="database"/>. <paramref name="ids"/> names each row,
     /// in the order of <see cref="NetwMultiplayer.TableReadRoutes"/>. See
-    /// <see cref="NetwTableHandle.Save"/> for the errors. <b>Server Only.</b>
+    /// <see cref="NetwTable.Save"/> for the errors. <b>Server Only.</b>
     /// </summary>
     public NetwPromise TableSave(
         Rid table,
@@ -5282,8 +4712,8 @@ public sealed class NetwMultiplayer : NetwRefCounted
     /// <summary>
     /// Replaces every row of <paramref name="table"/> with the snapshot stored
     /// under <paramref name="key"/> in <paramref name="database"/>, see
-    /// <see cref="NetwTableHandle.Load"/> for the result. Each loaded row gets
-    /// a new route. <b>Server Only.</b>
+    /// <see cref="NetwTable.Load"/> for the result. Each loaded row gets a new
+    /// route. <b>Server Only.</b>
     /// </summary>
     public NetwPromise TableLoad(Rid table, Rid database, StringName key)
     {
@@ -5414,9 +4844,10 @@ public sealed class NetwMultiplayer : NetwRefCounted
 
     /// <summary>
     /// Sends everything for <paramref name="tick"/>. The session calls it on
-    /// <see cref="NetwMultiplayer.ClockAfterTick"/>, before any game listener.
-    /// Call it only when driving ticks without the clock. Returns the error of
-    /// <see cref="NetwMultiplayer.InterestFlushNow"/> when that fails.
+    /// <see cref="NetwMultiplayer.Notification.ClockAfterTick"/>, before any
+    /// game observer. Call it only when driving ticks without the clock.
+    /// Returns the error of <see cref="NetwMultiplayer.InterestFlushNow"/> when
+    /// that fails.
     /// </summary>
     public Error SessionFlushTick(long tick)
     {
@@ -6340,8 +5771,8 @@ public sealed class NetwMultiplayer : NetwRefCounted
 
     /// <summary>
     /// Applies the routes and columns written to <paramref name="table"/> and
-    /// emits <see cref="NetwMultiplayer.TableReceived"/>. On the server, it
-    /// also sends them to every peer.
+    /// notifies <see cref="NetwMultiplayer.Notification.TableReceived"/>. On
+    /// the server, it also sends them to every peer.
     /// <code>
     /// Error
     /// ┠╴OK                  the rows were applied
@@ -6514,9 +5945,9 @@ public sealed class NetwMultiplayer : NetwRefCounted
 
     /// <summary>
     /// Registers <paramref name="service"/> as <paramref name="type"/>, or as
-    /// its own script when <c>null</c>, and emits
-    /// <see cref="NetwMultiplayer.ServiceRegistered"/>. Registering it again
-    /// has no effect.
+    /// its own script when <c>null</c>, and notifies
+    /// <see cref="NetwMultiplayer.Notification.ServiceRegistered"/>.
+    /// Registering it again has no effect.
     /// </summary>
     public void ServiceRegister(GodotObject service, GodotObject type = null)
     {
@@ -6654,31 +6085,6 @@ public sealed class NetwMultiplayer : NetwRefCounted
         Godot.Collections.Array result = VariantUtils.ConvertToArray(answered);
         answered.Dispose();
         return result;
-    }
-
-    private static readonly IntPtr _bindMake =
-        NetwApi.MethodBind("NetwMultiplayer", "make", 1083467486UL);
-
-    /// <summary>
-    /// Creates a session wrapping <paramref name="inner"/>, or a new
-    /// <see cref="SceneMultiplayer"/> when <c>null</c>.
-    /// <paramref name="implementation"/> is an optional script that extends
-    /// <see cref="NetwMultiplayer"/>.
-    /// </summary>
-    public static NetwMultiplayer Make(
-        SceneMultiplayer inner = null,
-        Script implementation = null)
-    {
-        IntPtr slot0 = inner?.NativeInstance ?? IntPtr.Zero;
-        IntPtr slot1 = implementation?.NativeInstance ?? IntPtr.Zero;
-        IntPtr answered = default;
-        NetwThunks.Ptrcall2_IntPtr_IntPtr_IntPtr(
-            _bindMake,
-            IntPtr.Zero,
-            in slot0,
-            in slot1,
-            ref answered);
-        return NetwMultiplayer.Adopt(answered);
     }
 
     private static readonly IntPtr _bindOf =
@@ -6843,39 +6249,102 @@ public sealed class NetwMultiplayer : NetwRefCounted
     /// Every entity that belongs to the player of <paramref name="peer"/>, in
     /// no particular order.
     /// </summary>
-    public Godot.Collections.Array PlayerBodies(long peer)
+    public NetwEntity[] PlayerBodies(long peer)
     {
         godot_variant slot0 = VariantUtils.CreateFromInt((long)peer);
         godot_variant answered = default;
         NetwThunks.Call1(_bindPlayerBodies, Checked, in slot0, ref answered);
         slot0.Dispose();
-        Godot.Collections.Array result = VariantUtils.ConvertToArray(answered);
+        NetwEntity[] result =
+            NetwApi.Elements(
+                VariantUtils.ConvertToArray(answered),
+                NetwEntity.From);
         answered.Dispose();
         return result;
+    }
+
+    private static readonly IntPtr _bindObserve =
+        NetwApi.MethodBind("NetwMultiplayer", "observe", 3987253083UL);
+
+    /// <summary>
+    /// Calls <paramref name="callback"/> every time <paramref name="event"/>
+    /// happens, with the arguments listed at that
+    /// <see cref="NetwMultiplayer.Notification"/> value. Observing the same
+    /// pair twice keeps one subscription.
+    /// <code>
+    /// Netw.of(self).observe(NetwMultiplayer.PEER_KICKED, func(reason: String) -&gt; void:
+    ///     print("kicked: ", reason)
+    /// )
+    /// </code>
+    /// <para>
+    /// Most games use the signals of <see cref="NetwSession"/>,
+    /// <see cref="NetwClock"/> and <see cref="NetwEntity"/> instead.
+    /// </para>
+    /// </summary>
+    public Error Observe(NetwMultiplayer.Notification @event, Callable callback)
+    {
+        godot_variant slot0 = VariantUtils.CreateFromInt((long)@event);
+        godot_variant slot1 = VariantUtils.CreateFromCallable(callback);
+        godot_variant answered = default;
+        NetwThunks.Call2(
+            _bindObserve,
+            Checked,
+            in slot0,
+            in slot1,
+            ref answered);
+        slot0.Dispose();
+        slot1.Dispose();
+        Error result = (Error)VariantUtils.ConvertToInt64(answered);
+        answered.Dispose();
+        return result;
+    }
+
+    private static readonly IntPtr _bindUnobserve =
+        NetwApi.MethodBind("NetwMultiplayer", "unobserve", 3075679731UL);
+
+    /// <summary>
+    /// Stops <paramref name="callback"/> from hearing <paramref name="event"/>.
+    /// A <paramref name="callback"/> that is removed while
+    /// <paramref name="event"/> is being delivered is not called for it.
+    /// </summary>
+    public void Unobserve(
+        NetwMultiplayer.Notification @event,
+        Callable callback)
+    {
+        godot_variant slot0 = VariantUtils.CreateFromInt((long)@event);
+        godot_variant slot1 = VariantUtils.CreateFromCallable(callback);
+        godot_variant answered = default;
+        NetwThunks.Call2(
+            _bindUnobserve,
+            Checked,
+            in slot0,
+            in slot1,
+            ref answered);
+        slot0.Dispose();
+        slot1.Dispose();
+        answered.Dispose();
     }
 
     private static readonly IntPtr _bindSceneChangeToFile =
         NetwApi.MethodBind(
             "NetwMultiplayer",
             "scene_change_to_file",
-            1446861317UL);
+            3945386541UL);
 
     /// <summary>
-    /// Opens the file-backed scene at <paramref name="path"/> and makes players
-    /// watch it. No entity moves, so spawn the arrivals from
-    /// <see cref="NetwMultiplayer.SceneChanged"/>. <paramref name="scope"/>
-    /// says who moves. <paramref name="requester"/> is the node asking, which
-    /// picks the player for <see cref="NetwMultiplayer.SceneChange.Player"/>
-    /// and the scene for <see cref="NetwMultiplayer.SceneChange.Scene"/>. On a
-    /// client it sends a <see cref="NetwMultiplayer.SceneRequest"/> to the
-    /// server.
+    /// Opens the scene file at <paramref name="path"/> and makes players watch
+    /// it. No entity moves, so spawn the arriving players in the
+    /// <see cref="NetwScene"/> the promise gives. <paramref name="scope"/> says
+    /// who moves. <paramref name="requester"/> is the node asking, which picks
+    /// the player for <see cref="NetwScene.SceneChange.Player"/> and the scene
+    /// for <see cref="NetwScene.SceneChange.Scene"/>. On a client it sends a
+    /// <see cref="NetwMultiplayer.SceneRequest"/> to the server.
     /// <code>
-    /// var promise := session.scene_change_to_file(self, "res://arena.tscn")
-    /// await promise.wait()
+    /// session.scene_change_to_file(self, "res://arena.tscn").then(spawn_players)
     /// </code>
     /// </summary>
-    public NetwPromise SceneChangeToFile(Node requester, string path, NetwMultiplayer.SceneChange scope =
-        (NetwMultiplayer.SceneChange)0)
+    public NetwPromise SceneChangeToFile(Node requester, string path, NetwScene.SceneChange scope =
+        (NetwScene.SceneChange)0)
     {
         godot_variant slot0 = VariantUtils.CreateFromGodotObject(requester);
         godot_variant slot1 = VariantUtils.CreateFromString(path);
@@ -6903,7 +6372,7 @@ public sealed class NetwMultiplayer : NetwRefCounted
         NetwApi.MethodBind(
             "NetwMultiplayer",
             "scene_change_to_packed",
-            1603261839UL);
+            211625269UL);
 
     /// <summary>
     /// Like <see cref="NetwMultiplayer.SceneChangeToFile"/>, taking a
@@ -6911,8 +6380,8 @@ public sealed class NetwMultiplayer : NetwRefCounted
     /// does. <paramref name="packed"/> must be saved to a file, or the promise
     /// fails with <c>@GlobalScope.ERR_UNAVAILABLE</c>.
     /// </summary>
-    public NetwPromise SceneChangeToPacked(Node requester, PackedScene packed, NetwMultiplayer.SceneChange scope =
-        (NetwMultiplayer.SceneChange)0)
+    public NetwPromise SceneChangeToPacked(Node requester, PackedScene packed, NetwScene.SceneChange scope =
+        (NetwScene.SceneChange)0)
     {
         IntPtr slot0 = requester?.NativeInstance ?? IntPtr.Zero;
         IntPtr slot1 = packed?.NativeInstance ?? IntPtr.Zero;
@@ -6932,7 +6401,7 @@ public sealed class NetwMultiplayer : NetwRefCounted
         NetwApi.MethodBind(
             "NetwMultiplayer",
             "scene_reload_current",
-            1072104857UL);
+            3203172577UL);
 
     /// <summary>
     /// Reloads the displayed scene, like
@@ -6940,8 +6409,8 @@ public sealed class NetwMultiplayer : NetwRefCounted
     /// <c>@GlobalScope.ERR_UNAVAILABLE</c> when there is no scene or it has no
     /// file.
     /// </summary>
-    public NetwPromise SceneReloadCurrent(Node requester, NetwMultiplayer.SceneChange scope =
-        (NetwMultiplayer.SceneChange)0)
+    public NetwPromise SceneReloadCurrent(Node requester, NetwScene.SceneChange scope =
+        (NetwScene.SceneChange)0)
     {
         IntPtr slot0 = requester?.NativeInstance ?? IntPtr.Zero;
         long slot1 = (long)scope;
@@ -7056,8 +6525,8 @@ public sealed class NetwMultiplayer : NetwRefCounted
             1068914454UL);
 
     /// <summary>
-    /// Gives <paramref name="route"/> to <paramref name="wrapper"/> and emits
-    /// <see cref="NetwMultiplayer.EntityLive"/>.
+    /// Gives <paramref name="route"/> to <paramref name="wrapper"/> and
+    /// notifies <see cref="NetwMultiplayer.Notification.EntityLive"/>.
     /// </summary>
     public bool LivenessBindRoute(long route, GodotObject wrapper)
     {
@@ -7447,11 +6916,14 @@ public sealed class NetwMultiplayer : NetwRefCounted
     /// <summary>
     /// Every live <see cref="NetwEntity"/> on this peer, sorted by route.
     /// </summary>
-    public Godot.Collections.Array LivenessGetEntities()
+    public NetwEntity[] LivenessGetEntities()
     {
         godot_variant answered = default;
         NetwThunks.Call0(_bindLivenessGetEntities, Checked, ref answered);
-        Godot.Collections.Array result = VariantUtils.ConvertToArray(answered);
+        NetwEntity[] result =
+            NetwApi.Elements(
+                VariantUtils.ConvertToArray(answered),
+                NetwEntity.From);
         answered.Dispose();
         return result;
     }
@@ -7497,8 +6969,8 @@ public sealed class NetwMultiplayer : NetwRefCounted
 
     /// <summary>
     /// Removes <paramref name="player"/> from the session and disconnects their
-    /// peer with <paramref name="reason"/>. Emits
-    /// <see cref="NetwMultiplayer.PlayerLeft"/> first.
+    /// peer with <paramref name="reason"/>. Notifies
+    /// <see cref="NetwMultiplayer.Notification.PlayerLeft"/> first.
     /// <code>
     /// Error
     /// ┠╴OK                      the player was kicked
@@ -7581,8 +7053,8 @@ public sealed class NetwMultiplayer : NetwRefCounted
 
     /// <summary>
     /// Disconnects and returns to
-    /// <see cref="NetwMultiplayer.SessionState.Offline"/>. On the server, it
-    /// saves every persistent entity first, and a failed save keeps the session
+    /// <see cref="NetwSession.SessionState.Offline"/>. On the server, it saves
+    /// every persistent entity first, and a failed save keeps the session
     /// online. The promise resolves with an <c>@GlobalScope.Error</c> within
     /// three seconds.
     /// <code>
@@ -7819,7 +7291,7 @@ public sealed class NetwMultiplayer : NetwRefCounted
     /// <summary>
     /// Stops <paramref name="peer"/> from seeing <paramref name="layer"/>.
     /// Entities it still sees through another layer stay. The layer's
-    /// <see cref="NetwMultiplayer.LeavePolicy"/> decides what happens to the
+    /// <see cref="NetwInterestLayer.LeavePolicy"/> decides what happens to the
     /// rest.
     /// </summary>
     public void InterestLayerRemoveViewer(Rid layer, long peer)
@@ -7867,6 +7339,37 @@ public sealed class NetwMultiplayer : NetwRefCounted
         return (Error)answered;
     }
 
+    private static readonly IntPtr _bindInterestLayerRemoveEntity =
+        NetwApi.MethodBind(
+            "NetwMultiplayer",
+            "interest_layer_remove_entity",
+            3181288260UL);
+
+    /// <summary>
+    /// Removes <paramref name="entity"/> from <paramref name="layer"/>, so its
+    /// viewers stop seeing it. Applies at the end of the frame, or at
+    /// <see cref="NetwMultiplayer.InterestFlushNow"/>.
+    /// <code>
+    /// Error
+    /// ┠╴OK                  the entity will be removed, or was not in the layer
+    /// ┠╴ERR_DOES_NOT_EXIST  layer or entity does not exist
+    /// ┖╴ERR_UNAUTHORIZED    called on a client
+    /// </code>
+    /// </summary>
+    public Error InterestLayerRemoveEntity(Rid layer, Rid entity)
+    {
+        Rid slot0 = layer;
+        Rid slot1 = entity;
+        long answered = default;
+        NetwThunks.Ptrcall2_Rid_Rid_Long(
+            _bindInterestLayerRemoveEntity,
+            Checked,
+            in slot0,
+            in slot1,
+            ref answered);
+        return (Error)answered;
+    }
+
     private static readonly IntPtr _bindInterestLayerSetParam =
         NetwApi.MethodBind(
             "NetwMultiplayer",
@@ -7906,9 +7409,11 @@ public sealed class NetwMultiplayer : NetwRefCounted
 
     /// <summary>
     /// Makes <paramref name="callback"/> decide which entities are in
-    /// <paramref name="layer"/>. It runs once per frame and returns the full
-    /// list, for example every entity within a radius. An empty
-    /// <see cref="Callable"/> removes it.
+    /// <paramref name="layer"/>. It runs once per frame with the layer's
+    /// <see cref="Rid"/> and returns the <see cref="Rid"/> of every entity in
+    /// it. An empty <see cref="Callable"/> removes it.
+    /// <see cref="NetwInterestLayer.Driver"/> is the same with objects, and
+    /// setting one replaces the other.
     /// </summary>
     public void InterestLayerSetDriverCallback(Rid layer, Callable callback)
     {
@@ -7927,13 +7432,13 @@ public sealed class NetwMultiplayer : NetwRefCounted
     }
 
     private static readonly IntPtr _bindPredictConsume =
-        NetwApi.MethodBind("NetwMultiplayer", "predict_consume", 2224220256UL);
+        NetwApi.MethodBind("NetwMultiplayer", "predict_consume", 2847599299UL);
 
     /// <summary>
     /// Calls <c>_predict_consume</c> when overridden, and
     /// <see cref="NetwMultiplayer.PredictConsumeDefault"/> otherwise.
     /// </summary>
-    public NetwPredict.ConsumeAction PredictConsume(int depth, int buffer)
+    public NetwPrediction.ConsumeAction PredictConsume(int depth, int buffer)
     {
         int slot0 = depth;
         int slot1 = buffer;
@@ -7944,7 +7449,7 @@ public sealed class NetwMultiplayer : NetwRefCounted
             in slot0,
             in slot1,
             ref answered);
-        return (NetwPredict.ConsumeAction)answered;
+        return (NetwPrediction.ConsumeAction)answered;
     }
 
     private static readonly IntPtr _bindPredictDriveDefault =
@@ -7979,16 +7484,16 @@ public sealed class NetwMultiplayer : NetwRefCounted
         NetwApi.MethodBind(
             "NetwMultiplayer",
             "predict_consume_default",
-            2224220256UL);
+            2847599299UL);
 
     /// <summary>
     /// The default <c>_predict_consume</c>. Returns
-    /// <see cref="NetwPredict.ConsumeAction.Replay"/> when more than
+    /// <see cref="NetwPrediction.ConsumeAction.Replay"/> when more than
     /// <paramref name="buffer"/> inputs are queued,
-    /// <see cref="NetwPredict.ConsumeAction.Hold"/> when fewer, and
-    /// <see cref="NetwPredict.ConsumeAction.Starved"/> when none.
+    /// <see cref="NetwPrediction.ConsumeAction.Hold"/> when fewer, and
+    /// <see cref="NetwPrediction.ConsumeAction.Starved"/> when none.
     /// </summary>
-    public NetwPredict.ConsumeAction PredictConsumeDefault(
+    public NetwPrediction.ConsumeAction PredictConsumeDefault(
         int depth,
         int buffer)
     {
@@ -8001,21 +7506,21 @@ public sealed class NetwMultiplayer : NetwRefCounted
             in slot0,
             in slot1,
             ref answered);
-        return (NetwPredict.ConsumeAction)answered;
+        return (NetwPrediction.ConsumeAction)answered;
     }
 
     private static readonly IntPtr _bindPredictEvaluateDefault =
         NetwApi.MethodBind(
             "NetwMultiplayer",
             "predict_evaluate_default",
-            2603247046UL);
+            1350575802UL);
 
     /// <summary>
     /// The default <c>_predict_evaluate</c>.
     /// </summary>
     public NetwPredictJudgement PredictEvaluateDefault(
-        NetwPredict.Domain domain,
-        NetwPredict.ExactVerdict verdict,
+        NetwPrediction.Domain domain,
+        NetwPrediction.ExactVerdict verdict,
         Godot.Collections.Dictionary predicted,
         Godot.Collections.Dictionary payload,
         Godot.Collections.Dictionary wiring,
@@ -8060,15 +7565,15 @@ public sealed class NetwMultiplayer : NetwRefCounted
         NetwApi.MethodBind(
             "NetwMultiplayer",
             "predict_recover_default",
-            1616435610UL);
+            4082172394UL);
 
     /// <summary>
     /// The default <c>_predict_recover</c>.
     /// </summary>
     public NetwPredictRecovery PredictRecoverDefault(
         Godot.Collections.Dictionary payload,
-        NetwPredict.RecoveryPolicy policy,
-        NetwSimulationHandle.RestoreEnum restore,
+        NetwPrediction.RecoveryPolicyEnum policy,
+        NetwSimulation.RestoreEnum restore,
         Godot.Collections.Dictionary projection,
         Godot.Collections.Dictionary current,
         Godot.Collections.Dictionary poseErrors,
@@ -8289,19 +7794,19 @@ public sealed class NetwMultiplayer : NetwRefCounted
         NetwApi.MethodBind(
             "NetwMultiplayer",
             "interest_on_leave_policy",
-            3149248441UL);
+            884919661UL);
 
     /// <summary>
-    /// Sets the <see cref="NetwMultiplayer.LeavePolicy"/> for
+    /// Sets the <see cref="NetwInterestLayer.LeavePolicy"/> for
     /// <paramref name="entity"/> on <paramref name="layerId"/>.
-    /// <see cref="NetwMultiplayer.LeavePolicy.Custom"/> requires
+    /// <see cref="NetwInterestLayer.LeavePolicy.Custom"/> requires
     /// <paramref name="customCallback"/>, called with <c>(peer_id,
     /// layer_id)</c> on the server. Other policies reject a callback.
     /// </summary>
     public void InterestOnLeavePolicy(
         Rid entity,
         StringName layerId,
-        NetwMultiplayer.LeavePolicy policy,
+        NetwInterestLayer.LeavePolicy policy,
         Callable customCallback = default)
     {
         godot_variant slot0 = VariantUtils.CreateFromRid(entity);
@@ -8328,19 +7833,19 @@ public sealed class NetwMultiplayer : NetwRefCounted
         NetwApi.MethodBind(
             "NetwMultiplayer",
             "interest_on_perception_policy",
-            1055388609UL);
+            557506269UL);
 
     /// <summary>
     /// Sets what this peer does with <paramref name="entity"/> when its
     /// visibility through <paramref name="layerId"/> changes.
-    /// <see cref="NetwMultiplayer.PerceptionPolicy.Custom"/> requires
+    /// <see cref="NetwInterestLayer.PerceptionPolicy.Custom"/> requires
     /// <paramref name="customCallback"/>, called as <c>custom_callback(visible,
     /// peer_id, layer_id)</c>.
     /// </summary>
     public void InterestOnPerceptionPolicy(
         Rid entity,
         StringName layerId,
-        NetwMultiplayer.PerceptionPolicy policy,
+        NetwInterestLayer.PerceptionPolicy policy,
         Callable customCallback = default)
     {
         godot_variant slot0 = VariantUtils.CreateFromRid(entity);
@@ -8367,27 +7872,32 @@ public sealed class NetwMultiplayer : NetwRefCounted
         NetwApi.MethodBind(
             "NetwMultiplayer",
             "predict_stepper_install",
-            1883264476UL);
+            2151916802UL);
 
     /// <summary>
     /// Lets <paramref name="stepper"/> step the physics
     /// <paramref name="space"/> several times in one frame, which rollback
-    /// needs. A <paramref name="stepper"/> whose
-    /// <c>NetwPhysicsStepper._can_step</c> returns <c>false</c> is rejected.
+    /// needs. A <c>null</c> <paramref name="stepper"/>, or one whose
+    /// <c>NetwPhysicsStepper._can_step</c> returns <c>false</c>, removes the
+    /// stepper of <paramref name="space"/>. Returns
+    /// <c>@GlobalScope.ERR_INVALID_PARAMETER</c> when <paramref name="space"/>
+    /// is not valid. <see cref="NetwSession.InstallPhysicsStepper"/> does the
+    /// same from a <see cref="World3D"/>.
     /// </summary>
-    public void PredictStepperInstall(
+    public Error PredictStepperInstall(
         Rid space,
         NetwPhysicsStepper stepper = null)
     {
         Rid slot0 = space;
         IntPtr slot1 = stepper?.Native ?? IntPtr.Zero;
-        long discarded = default;
+        long answered = default;
         NetwThunks.Ptrcall2_Rid_IntPtr_Long(
             _bindPredictStepperInstall,
             Checked,
             in slot0,
             in slot1,
-            ref discarded);
+            ref answered);
+        return (Error)answered;
     }
 
     private static readonly IntPtr _bindInterestAdmits =
@@ -8917,6 +8427,28 @@ public sealed class NetwMultiplayer : NetwRefCounted
         return result;
     }
 
+    private static readonly IntPtr _bindPredictGetStats =
+        NetwApi.MethodBind(
+            "NetwMultiplayer",
+            "predict_get_stats",
+            4032930066UL);
+
+    /// <summary>
+    /// Returns the <see cref="NetwPrediction.Stats"/> of
+    /// <paramref name="entity"/>, or <c>null</c> when it does not predict.
+    /// </summary>
+    public NetwPredictStats PredictGetStats(Rid entity)
+    {
+        Rid slot0 = entity;
+        IntPtr answered = default;
+        NetwThunks.Ptrcall1_Rid_IntPtr(
+            _bindPredictGetStats,
+            Checked,
+            in slot0,
+            ref answered);
+        return NetwPredictStats.Adopt(answered);
+    }
+
     private static readonly IntPtr _bindPredictSetSensorCallback =
         NetwApi.MethodBind(
             "NetwMultiplayer",
@@ -8924,10 +8456,9 @@ public sealed class NetwMultiplayer : NetwRefCounted
             2720850369UL);
 
     /// <summary>
-    /// Adds <paramref name="callback"/> to
-    /// <see cref="NetwPredictionHandle.Sensors"/> of <paramref name="entity"/>
-    /// under <paramref name="name"/>. An empty <see cref="Callable"/> removes
-    /// it.
+    /// Adds <paramref name="callback"/> to <see cref="NetwPrediction.Sensors"/>
+    /// of <paramref name="entity"/> under <paramref name="name"/>. An empty
+    /// <see cref="Callable"/> removes it.
     /// </summary>
     public void PredictSetSensorCallback(
         Rid entity,
@@ -8958,7 +8489,7 @@ public sealed class NetwMultiplayer : NetwRefCounted
             3379118538UL);
 
     /// <summary>
-    /// Sets <see cref="NetwPredictionHandle.WitnessContacts"/> on
+    /// Sets <see cref="NetwPrediction.WitnessContacts"/> on
     /// <paramref name="entity"/>.
     /// </summary>
     public void PredictSetWitnessCallback(Rid entity, Callable callback)
@@ -8984,7 +8515,7 @@ public sealed class NetwMultiplayer : NetwRefCounted
             3379118538UL);
 
     /// <summary>
-    /// Sets <see cref="NetwPredictionHandle.CorrectionPathClear"/> on
+    /// Sets <see cref="NetwPrediction.CorrectionPathClear"/> on
     /// <paramref name="entity"/>.
     /// </summary>
     public void PredictSetCorrectionPathCallback(Rid entity, Callable callback)
@@ -9010,7 +8541,7 @@ public sealed class NetwMultiplayer : NetwRefCounted
             3379118538UL);
 
     /// <summary>
-    /// Sets <see cref="NetwPredictionHandle.PredictInput"/> on
+    /// Sets <see cref="NetwPrediction.PredictInput"/> on
     /// <paramref name="entity"/>.
     /// </summary>
     public void PredictSetInputCallback(Rid entity, Callable callback)
@@ -9097,8 +8628,7 @@ public sealed class NetwMultiplayer : NetwRefCounted
             3379118538UL);
 
     /// <summary>
-    /// Sets <see cref="NetwSimulationHandle.Step"/> on
-    /// <paramref name="entity"/>.
+    /// Sets <see cref="NetwSimulation.Step"/> on <paramref name="entity"/>.
     /// </summary>
     public void SimulationSetStepCallback(Rid entity, Callable callback)
     {
@@ -9120,13 +8650,13 @@ public sealed class NetwMultiplayer : NetwRefCounted
         NetwApi.MethodBind(
             "NetwMultiplayer",
             "simulation_get_mode",
-            3353509014UL);
+            1760169204UL);
 
     /// <summary>
-    /// Returns <see cref="NetwSimulationHandle.Mode"/> of
-    /// <paramref name="entity"/> on this peer.
+    /// Returns <see cref="NetwSimulation.Mode"/> of <paramref name="entity"/>
+    /// on this peer.
     /// </summary>
-    public NetwSimulationHandle.ModeEnum SimulationGetMode(Rid entity)
+    public NetwSimulation.ModeEnum SimulationGetMode(Rid entity)
     {
         Rid slot0 = entity;
         long answered = default;
@@ -9135,7 +8665,7 @@ public sealed class NetwMultiplayer : NetwRefCounted
             Checked,
             in slot0,
             ref answered);
-        return (NetwSimulationHandle.ModeEnum)answered;
+        return (NetwSimulation.ModeEnum)answered;
     }
 
     private static readonly IntPtr _bindPeerForget =
@@ -9225,8 +8755,8 @@ public sealed class NetwMultiplayer : NetwRefCounted
     /// <summary>
     /// Returns the <see cref="NetwPhysicsStepper"/> installed on the physics
     /// <paramref name="space"/>, or <c>null</c>. Without one,
-    /// <see cref="NetwSimulationHandle.ScheduleEnum.Stepped"/> runs as
-    /// <see cref="NetwSimulationHandle.ScheduleEnum.Frame"/>.
+    /// <see cref="NetwSimulation.ScheduleEnum.Stepped"/> runs as
+    /// <see cref="NetwSimulation.ScheduleEnum.Frame"/>.
     /// </summary>
     public NetwPhysicsStepper PredictGetStepper(Rid space)
     {
@@ -9352,15 +8882,12 @@ public sealed class NetwMultiplayer : NetwRefCounted
     }
 
     private static readonly IntPtr _bindClockGetMonitor =
-        NetwApi.MethodBind(
-            "NetwMultiplayer",
-            "clock_get_monitor",
-            1000684075UL);
+        NetwApi.MethodBind("NetwMultiplayer", "clock_get_monitor", 153418504UL);
 
     /// <summary>
     /// Returns one clock diagnostic value.
     /// </summary>
-    public double ClockGetMonitor(NetwMultiplayer.ClockMonitor monitor)
+    public double ClockGetMonitor(NetwClock.ClockMonitor monitor)
     {
         long slot0 = (long)monitor;
         double answered = default;
@@ -9591,8 +9118,8 @@ public sealed class NetwMultiplayer : NetwRefCounted
         NetwApi.MethodBind("NetwMultiplayer", "clock_is_stable", 36873697UL);
 
     /// <summary>
-    /// Returns <c>true</c> when
-    /// <see cref="NetwMultiplayer.ClockMonitor.RttJitter"/> is below
+    /// Returns <c>true</c> when <see cref="NetwClock.ClockMonitor.RttJitter"/>
+    /// is below
     /// <see cref="NetwMultiplayer.ClockParam.JitterStabilityThreshold"/>.
     /// </summary>
     public bool ClockIsStable()
@@ -9620,9 +9147,9 @@ public sealed class NetwMultiplayer : NetwRefCounted
         NetwApi.MethodBind("NetwMultiplayer", "clock_step", 1286410249UL);
 
     /// <summary>
-    /// Runs <paramref name="count"/> ticks immediately. It does not emit
-    /// <see cref="NetwMultiplayer.ClockBeforeTickLoop"/>. Wrap it in
-    /// <see cref="NetwMultiplayer.ClockTickLoop"/> when that is needed.
+    /// Runs <paramref name="count"/> ticks immediately. It does not notify
+    /// <see cref="NetwMultiplayer.Notification.ClockBeforeTickLoop"/>. Wrap it
+    /// in <see cref="NetwMultiplayer.ClockTickLoop"/> when that is needed.
     /// </summary>
     public void ClockStep(long count)
     {
@@ -9664,10 +9191,10 @@ public sealed class NetwMultiplayer : NetwRefCounted
         NetwApi.MethodBind("NetwMultiplayer", "clock_tick_loop", 2586408642UL);
 
     /// <summary>
-    /// Emits <see cref="NetwMultiplayer.ClockBeforeTickLoop"/> when
-    /// <paramref name="open"/> is <c>true</c>, and
-    /// <see cref="NetwMultiplayer.ClockAfterTickLoop"/> otherwise. Predicted
-    /// entities only run between the two.
+    /// Notifies <see cref="NetwMultiplayer.Notification.ClockBeforeTickLoop"/>
+    /// when <paramref name="open"/> is <c>true</c>, and
+    /// <see cref="NetwMultiplayer.Notification.ClockAfterTickLoop"/> otherwise.
+    /// Predicted entities only run between the two.
     /// </summary>
     public void ClockTickLoop(bool open)
     {
@@ -9731,12 +9258,12 @@ public sealed class NetwMultiplayer : NetwRefCounted
     /// <summary>
     /// Adjusts the local tick toward the server's using one round-trip
     /// <paramref name="sample"/>, in seconds.
-    /// <see cref="NetwMultiplayer.SyncMode.Snap"/> corrects at once, and
-    /// <see cref="NetwMultiplayer.SyncMode.Stretch"/> corrects a little each
+    /// <see cref="NetwClock.SyncModeEnum.Snap"/> corrects at once, and
+    /// <see cref="NetwClock.SyncModeEnum.Stretch"/> corrects a little each
     /// frame until the difference passes
     /// <see cref="NetwMultiplayer.ClockParam.PanicSnapThreshold"/>. Returns the
     /// same <see cref="Godot.Collections.Dictionary"/>
-    /// <see cref="NetwMultiplayer.ClockPongReceived"/> carries.
+    /// <see cref="NetwMultiplayer.Notification.ClockPongReceived"/> carries.
     /// <code>
     /// Dictionary
     /// ┠╴rtt_raw                     float   this sample's round trip, in seconds
@@ -10245,13 +9772,16 @@ public sealed class NetwMultiplayer : NetwRefCounted
     /// <see cref="NetwMultiplayer.Bodies"/> contains the bodies from every live
     /// scene.
     /// </summary>
-    public Godot.Collections.Array SceneGetBodies(Rid scene)
+    public NetwEntity[] SceneGetBodies(Rid scene)
     {
         godot_variant slot0 = VariantUtils.CreateFromRid(scene);
         godot_variant answered = default;
         NetwThunks.Call1(_bindSceneGetBodies, Checked, in slot0, ref answered);
         slot0.Dispose();
-        Godot.Collections.Array result = VariantUtils.ConvertToArray(answered);
+        NetwEntity[] result =
+            NetwApi.Elements(
+                VariantUtils.ConvertToArray(answered),
+                NetwEntity.From);
         answered.Dispose();
         return result;
     }
@@ -10265,13 +9795,16 @@ public sealed class NetwMultiplayer : NetwRefCounted
     /// <summary>
     /// Returns the players who see <paramref name="scene"/>.
     /// </summary>
-    public Godot.Collections.Array SceneGetViewers(Rid scene)
+    public NetwPlayer[] SceneGetViewers(Rid scene)
     {
         godot_variant slot0 = VariantUtils.CreateFromRid(scene);
         godot_variant answered = default;
         NetwThunks.Call1(_bindSceneGetViewers, Checked, in slot0, ref answered);
         slot0.Dispose();
-        Godot.Collections.Array result = VariantUtils.ConvertToArray(answered);
+        NetwPlayer[] result =
+            NetwApi.Elements(
+                VariantUtils.ConvertToArray(answered),
+                NetwPlayer.From);
         answered.Dispose();
         return result;
     }
@@ -10285,7 +9818,7 @@ public sealed class NetwMultiplayer : NetwRefCounted
     /// <summary>
     /// Returns the bodies in <paramref name="scene"/> that belong to this peer.
     /// </summary>
-    public Godot.Collections.Array SceneGetLocalBodies(Rid scene)
+    public NetwEntity[] SceneGetLocalBodies(Rid scene)
     {
         godot_variant slot0 = VariantUtils.CreateFromRid(scene);
         godot_variant answered = default;
@@ -10295,7 +9828,10 @@ public sealed class NetwMultiplayer : NetwRefCounted
             in slot0,
             ref answered);
         slot0.Dispose();
-        Godot.Collections.Array result = VariantUtils.ConvertToArray(answered);
+        NetwEntity[] result =
+            NetwApi.Elements(
+                VariantUtils.ConvertToArray(answered),
+                NetwEntity.From);
         answered.Dispose();
         return result;
     }
@@ -10324,7 +9860,7 @@ public sealed class NetwMultiplayer : NetwRefCounted
 
     /// <summary>
     /// Returns the scene this peer displays, or an invalid <see cref="Rid"/>.
-    /// See <see cref="NetwSessionHandle.PresentedScene"/>.
+    /// See <see cref="NetwPlayer.Scene"/>.
     /// </summary>
     public Rid ScenePresented()
     {
@@ -10353,16 +9889,17 @@ public sealed class NetwMultiplayer : NetwRefCounted
     }
 
     private static readonly IntPtr _bindSceneCreate =
-        NetwApi.MethodBind("NetwMultiplayer", "scene_create", 651621533UL);
+        NetwApi.MethodBind("NetwMultiplayer", "scene_create", 4235721721UL);
 
     /// <summary>
-    /// Spawns a multiplayer scene from <paramref name="recipe"/> and returns
-    /// it, or an invalid <see cref="Rid"/> on failure. <c>null</c> creates an
-    /// empty scene. <paramref name="isolation"/> decides whether it has its own
-    /// physics and rendering world. <b>Server Only.</b>
+    /// Spawns a multiplayer scene from the scene file path
+    /// <paramref name="recipe"/> and returns it, or an invalid
+    /// <see cref="Rid"/> on failure. <c>null</c> creates an empty scene.
+    /// <paramref name="isolation"/> decides whether it has its own physics and
+    /// rendering world. <b>Server Only.</b>
     /// </summary>
-    public Rid SceneCreate(Variant recipe, NetwMultiplayer.SceneIsolation isolation =
-        (NetwMultiplayer.SceneIsolation)0)
+    public Rid SceneCreate(Variant recipe, NetwScene.SceneIsolation isolation =
+        (NetwScene.SceneIsolation)0)
     {
         godot_variant slot0 = recipe.CopyNativeVariant();
         godot_variant slot1 = VariantUtils.CreateFromInt((long)isolation);
@@ -10820,23 +10357,26 @@ public sealed class NetwMultiplayer : NetwRefCounted
         NetwApi.MethodBind(
             "NetwMultiplayer",
             "entity_grant_control",
-            3411492887UL);
+            3804025326UL);
 
     /// <summary>
-    /// Hands control of <paramref name="entity"/> to <paramref name="peer"/>.
-    /// Does nothing on a client or for a handle with no bound node.
+    /// Calls <see cref="NetwEntity.TransferControl"/> on
+    /// <paramref name="entity"/>. Returns
+    /// <c>@GlobalScope.ERR_DOES_NOT_EXIST</c> when <paramref name="entity"/>
+    /// has no bound node.
     /// </summary>
-    public void EntityGrantControl(Rid entity, long peer)
+    public Error EntityGrantControl(Rid entity, long peer)
     {
         Rid slot0 = entity;
         long slot1 = peer;
-        long discarded = default;
+        long answered = default;
         NetwThunks.Ptrcall2_Rid_Long_Long(
             _bindEntityGrantControl,
             Checked,
             in slot0,
             in slot1,
-            ref discarded);
+            ref answered);
+        return (Error)answered;
     }
 
     private static readonly IntPtr _bindEntityGetState =
@@ -11103,13 +10643,16 @@ public sealed class NetwMultiplayer : NetwRefCounted
     }
 
     private static readonly IntPtr _bindSessionRoleName =
-        NetwApi.MethodBind("NetwMultiplayer", "session_role_name", 375593583UL);
+        NetwApi.MethodBind(
+            "NetwMultiplayer",
+            "session_role_name",
+            3576166603UL);
 
     /// <summary>
     /// The name of <paramref name="role"/>, such as <c>"LISTEN_SERVER"</c>, or
     /// empty for an unknown role.
     /// </summary>
-    public static string SessionRoleName(NetwMultiplayer.RoleEnum role)
+    public static string SessionRoleName(NetwSession.RoleEnum role)
     {
         godot_variant slot0 = VariantUtils.CreateFromInt((long)role);
         godot_variant answered = default;
@@ -11128,14 +10671,15 @@ public sealed class NetwMultiplayer : NetwRefCounted
         NetwApi.MethodBind(
             "NetwMultiplayer",
             "session_set_state",
-            2638837843UL);
+            2816520180UL);
 
     /// <summary>
     /// Sets <see cref="NetwMultiplayer.State"/> without checking the change is
-    /// allowed, and emits <see cref="NetwMultiplayer.SessionStateChanged"/>.
-    /// Prefer <see cref="NetwMultiplayer.SessionTransition"/>.
+    /// allowed, and notifies
+    /// <see cref="NetwMultiplayer.Notification.SessionStateChanged"/>. Prefer
+    /// <see cref="NetwMultiplayer.SessionTransition"/>.
     /// </summary>
-    public void SessionSetState(NetwMultiplayer.SessionState state)
+    public void SessionSetState(NetwSession.SessionState state)
     {
         long slot0 = (long)state;
         long discarded = default;
@@ -11147,7 +10691,7 @@ public sealed class NetwMultiplayer : NetwRefCounted
     }
 
     private static readonly IntPtr _bindSessionSetRole =
-        NetwApi.MethodBind("NetwMultiplayer", "session_set_role", 3233627807UL);
+        NetwApi.MethodBind("NetwMultiplayer", "session_set_role", 3036761731UL);
 
     /// <summary>
     /// Sets <see cref="NetwMultiplayer.Role"/>, which also sets
@@ -11155,7 +10699,7 @@ public sealed class NetwMultiplayer : NetwRefCounted
     /// <see cref="NetwMultiplayer.IsLocalClient"/>. The session sets it when a
     /// peer is assigned.
     /// </summary>
-    public void SessionSetRole(NetwMultiplayer.RoleEnum role)
+    public void SessionSetRole(NetwSession.RoleEnum role)
     {
         long slot0 = (long)role;
         long discarded = default;
@@ -11200,14 +10744,14 @@ public sealed class NetwMultiplayer : NetwRefCounted
         NetwApi.MethodBind(
             "NetwMultiplayer",
             "session_transition",
-            2638837843UL);
+            2816520180UL);
 
     /// <summary>
-    /// Changes <see cref="NetwMultiplayer.State"/> and emits
-    /// <see cref="NetwMultiplayer.SessionStateChanged"/>. A change that is not
-    /// allowed pushes an error and does nothing.
+    /// Changes <see cref="NetwMultiplayer.State"/> and notifies
+    /// <see cref="NetwMultiplayer.Notification.SessionStateChanged"/>. A change
+    /// that is not allowed pushes an error and does nothing.
     /// </summary>
-    public void SessionTransition(NetwMultiplayer.SessionState state)
+    public void SessionTransition(NetwSession.SessionState state)
     {
         long slot0 = (long)state;
         long discarded = default;
@@ -11222,8 +10766,8 @@ public sealed class NetwMultiplayer : NetwRefCounted
         NetwApi.MethodBind("NetwMultiplayer", "session_pause", 3005725572UL);
 
     /// <summary>
-    /// Pauses the game on every peer, which emits
-    /// <see cref="NetwMultiplayer.SessionTreePaused"/> with
+    /// Pauses the game on every peer, which notifies
+    /// <see cref="NetwMultiplayer.Notification.SessionTreePaused"/> with
     /// <paramref name="reason"/>.
     /// </summary>
     public void SessionPause(string reason = "")
@@ -11239,8 +10783,8 @@ public sealed class NetwMultiplayer : NetwRefCounted
         NetwApi.MethodBind("NetwMultiplayer", "session_unpause", 3218959716UL);
 
     /// <summary>
-    /// Unpauses the game on every peer, which emits
-    /// <see cref="NetwMultiplayer.SessionTreeUnpaused"/>.
+    /// Unpauses the game on every peer, which notifies
+    /// <see cref="NetwMultiplayer.Notification.SessionTreeUnpaused"/>.
     /// </summary>
     public void SessionUnpause()
     {
@@ -11255,8 +10799,10 @@ public sealed class NetwMultiplayer : NetwRefCounted
             3005725572UL);
 
     /// <summary>
-    /// Emits <see cref="NetwMultiplayer.SessionServerDisconnecting"/> with
-    /// <paramref name="reason"/> on every peer. It does not disconnect anyone.
+    /// Notifies
+    /// <see cref="NetwMultiplayer.Notification.SessionServerDisconnecting"/>
+    /// with <paramref name="reason"/> on every peer. It does not disconnect
+    /// anyone.
     /// </summary>
     public void SessionNotifyShutdown(string reason = "")
     {
@@ -11279,8 +10825,8 @@ public sealed class NetwMultiplayer : NetwRefCounted
 
     /// <summary>
     /// Asks the server to leave. The server receives
-    /// <see cref="NetwMultiplayer.SessionDisconnectRequested"/> with
-    /// <paramref name="reason"/> and decides. <b>Player request.</b>
+    /// <see cref="NetwMultiplayer.Notification.SessionDisconnectRequested"/>
+    /// with <paramref name="reason"/> and decides. <b>Player request.</b>
     /// </summary>
     public void SessionRequestLeave(string reason = "")
     {
@@ -11300,8 +10846,9 @@ public sealed class NetwMultiplayer : NetwRefCounted
 
     /// <summary>
     /// Disconnects <paramref name="peerId"/>. When <paramref name="reason"/> is
-    /// not empty, that peer receives <see cref="NetwMultiplayer.PeerKicked"/>
-    /// first. Does nothing on a client.
+    /// not empty, that peer receives
+    /// <see cref="NetwMultiplayer.Notification.PeerKicked"/> first. Does
+    /// nothing on a client.
     /// </summary>
     public void PeerKick(long peerId, string reason = "")
     {
@@ -11327,8 +10874,8 @@ public sealed class NetwMultiplayer : NetwRefCounted
 
     /// <summary>
     /// Asks the server to kick <paramref name="peerId"/>. The server receives
-    /// <see cref="NetwMultiplayer.PeerKickRequested"/> and decides. <b>Player
-    /// request.</b>
+    /// <see cref="NetwMultiplayer.Notification.PeerKickRequested"/> and
+    /// decides. <b>Player request.</b>
     /// </summary>
     public void PeerRequestKick(long peerId, string reason = "")
     {

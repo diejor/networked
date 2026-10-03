@@ -15,7 +15,8 @@ namespace netw {
 
 class NetwMultiplayer;
 
-class NetwInterestLayer : public godot::RefCounted {
+class NetwInterestLayer : public godot::RefCounted,
+                          public enums::NetwInterestLayer {
     GDCLASS(NetwInterestLayer, godot::RefCounted)
 
 private:
@@ -58,16 +59,16 @@ public:
         return layer_id;
     }
 
-    bool set_policy(enums::NetwMultiplayer::LayerPolicy p_policy);
-    enums::NetwMultiplayer::LayerPolicy get_policy() const;
+    bool set_policy(enums::NetwInterestLayer::LayerPolicy p_policy);
+    enums::NetwInterestLayer::LayerPolicy get_policy() const;
 
-    void set_default_leave_policy(enums::NetwMultiplayer::LeavePolicy p_policy);
-    enums::NetwMultiplayer::LeavePolicy get_default_leave_policy() const;
+    void set_default_leave_policy(enums::NetwInterestLayer::LeavePolicy p_policy);
+    enums::NetwInterestLayer::LeavePolicy get_default_leave_policy() const;
 
     void set_default_perception_policy(
-        enums::NetwMultiplayer::PerceptionPolicy p_policy
+        enums::NetwInterestLayer::PerceptionPolicy p_policy
     );
-    enums::NetwMultiplayer::PerceptionPolicy
+    enums::NetwInterestLayer::PerceptionPolicy
     get_default_perception_policy() const;
 
     godot::Dictionary get_viewers() const;
@@ -100,6 +101,10 @@ public:
     godot::Array viewer_ids() const;
     godot::Dictionary monitor_snapshot() const;
     godot::Dictionary debug_dump(int64_t p_peer_id = 0);
+    void set_driver(const godot::Callable &p_driver);
+    godot::Callable get_driver();
+    void set_monitor(const godot::Callable &p_monitor);
+    godot::Callable get_monitor();
 };
 
 } // namespace netw

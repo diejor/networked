@@ -2,6 +2,7 @@
 
 #include <cmath>
 
+#include "netw/api/predict_fold.hpp"
 #include "netw/prediction_core.hpp"
 
 namespace TestPredictionCore {
@@ -136,7 +137,7 @@ TEST_CASE("[Networked][Predict] A fold naming no drive kind mints nothing") {
         NetwPredictFold::of(
             7,
             true,
-            static_cast<netw::NetwPredict::DriveKind>(DRIVE_FRESH)
+            static_cast<netw::NetwPrediction::DriveKind>(DRIVE_FRESH)
         )
             .is_valid()
     );
@@ -144,7 +145,7 @@ TEST_CASE("[Networked][Predict] A fold naming no drive kind mints nothing") {
         NetwPredictFold::of(
             7,
             true,
-            static_cast<netw::NetwPredict::DriveKind>(99)
+            static_cast<netw::NetwPrediction::DriveKind>(99)
         )
             .is_null()
     );
@@ -152,7 +153,7 @@ TEST_CASE("[Networked][Predict] A fold naming no drive kind mints nothing") {
         NetwPredictFold::of(
             7,
             true,
-            static_cast<netw::NetwPredict::DriveKind>(-1)
+            static_cast<netw::NetwPrediction::DriveKind>(-1)
         )
             .is_null()
     );

@@ -10,8 +10,7 @@
 #include "godot/spatial_node.hpp"
 #include "netw/api/entity.hpp"
 #include "netw/api/netw_multiplayer.hpp"
-#include "netw/api/predict.hpp"
-#include "netw/api/prediction_handle.hpp"
+#include "netw/api/prediction.hpp"
 #include "netw/api/promise.hpp"
 #include "netw/lifecycle/rule.hpp"
 #include "support/minted_script.h"
@@ -226,7 +225,7 @@ void take_standing(
     }
     if (p_scenario.standing == STANDING_PREDICTED) {
         here->get_prediction()->set_archetype(
-            netw::NetwPredict::ARCHETYPE_SCRIPTED
+            netw::NetwPrediction::ARCHETYPE_SCRIPTED
         );
     }
     if (p_scenario.standing == STANDING_NATIVE) {

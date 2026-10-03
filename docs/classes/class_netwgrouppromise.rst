@@ -21,7 +21,7 @@ Description
 
 :ref:`Netw.request_all()<class_Netw_method_request_all>` returns one. It waits for the peers connected when the request was sent. A peer that disconnects is no longer waited for.
 
-\ :ref:`then()<class_NetwGroupPromise_method_then>` runs once with every result, as a ``peer_id -> value`` :godot:`Dictionary`. :ref:`completed_single<class_NetwGroupPromise_signal_completed_single>` reports each result as it arrives.
+\ :ref:`then()<class_NetwGroupPromise_method_then>` runs once with every result, as a ``peer_id -> value`` :godot:`Dictionary`. :ref:`peer_completed<class_NetwGroupPromise_signal_peer_completed>` reports each result as it arrives.
 
 ::
 
@@ -93,49 +93,13 @@ Methods
 Signals
 -------
 
-.. _class_NetwGroupPromise_signal_completed:
+.. _class_NetwGroupPromise_signal_peer_completed:
 
 .. rst-class:: classref-signal
 
-**completed**\ (\ results\: :godot:`Dictionary`\ ) :ref:`🔗<class_NetwGroupPromise_signal_completed>`
-
-Emitted when every peer answered.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwGroupPromise_signal_completed_single:
-
-.. rst-class:: classref-signal
-
-**completed_single**\ (\ peer_id\: :godot:`int`, value\: :godot:`Variant`\ ) :ref:`🔗<class_NetwGroupPromise_signal_completed_single>`
+**peer_completed**\ (\ peer_id\: :godot:`int`, value\: :godot:`Variant`\ ) :ref:`🔗<class_NetwGroupPromise_signal_peer_completed>`
 
 Emitted when one peer answers.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwGroupPromise_signal_failed:
-
-.. rst-class:: classref-signal
-
-**failed**\ (\ code\: :godot:`Error <@GlobalScope#enum_@globalscope_Error>`, detail\: :godot:`String`\ ) :ref:`🔗<class_NetwGroupPromise_signal_failed>`
-
-Emitted when the group fails or times out.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwGroupPromise_signal_ready:
-
-.. rst-class:: classref-signal
-
-**ready**\ (\ answer\: :godot:`Variant`\ ) :ref:`🔗<class_NetwGroupPromise_signal_ready>`
-
-Used by :ref:`wait()<class_NetwGroupPromise_method_wait>`. Connect to :ref:`settled<class_NetwGroupPromise_signal_settled>` instead, since this can be emitted more than once.
 
 .. rst-class:: classref-item-separator
 
@@ -147,7 +111,7 @@ Used by :ref:`wait()<class_NetwGroupPromise_method_wait>`. Connect to :ref:`sett
 
 **settled**\ (\ ) :ref:`🔗<class_NetwGroupPromise_signal_settled>`
 
-Emitted once after :ref:`completed<class_NetwGroupPromise_signal_completed>` or :ref:`failed<class_NetwGroupPromise_signal_failed>`.
+Emitted once when the group completes, fails or times out. Use :ref:`wait()<class_NetwGroupPromise_method_wait>` to ``await`` the group.
 
 .. rst-class:: classref-section-separator
 
@@ -319,7 +283,7 @@ Creates a group waiting for ``peers``. An empty group does not complete by itsel
 
 |void| **reject**\ (\ err_code\: :godot:`Error <@GlobalScope#enum_@globalscope_Error>`, err_detail\: :godot:`String` = ""\ ) :ref:`🔗<class_NetwGroupPromise_method_reject>`
 
-Fails the group and emits :ref:`failed<class_NetwGroupPromise_signal_failed>`, then :ref:`settled<class_NetwGroupPromise_signal_settled>`. Does nothing when already settled.
+Fails the group. Emits :ref:`settled<class_NetwGroupPromise_signal_settled>`, then calls the :ref:`catch_error()<class_NetwGroupPromise_method_catch_error>` callbacks, then fires every :ref:`wait()<class_NetwGroupPromise_method_wait>` signal. Does nothing when already settled.
 
 .. rst-class:: classref-item-separator
 
@@ -343,7 +307,7 @@ Stops waiting for ``peer_id``, as when it disconnects. Completes the group if it
 
 |void| **resolve_all**\ (\ ) :ref:`🔗<class_NetwGroupPromise_method_resolve_all>`
 
-Completes the group with the current :ref:`results<class_NetwGroupPromise_property_results>`, and emits :ref:`completed<class_NetwGroupPromise_signal_completed>`, then :ref:`settled<class_NetwGroupPromise_signal_settled>`.
+Completes the group with the current :ref:`results<class_NetwGroupPromise_property_results>`. Emits :ref:`settled<class_NetwGroupPromise_signal_settled>`, then calls the :ref:`then()<class_NetwGroupPromise_method_then>` callbacks, then fires every :ref:`wait()<class_NetwGroupPromise_method_wait>` signal.
 
 .. rst-class:: classref-item-separator
 
@@ -355,7 +319,7 @@ Completes the group with the current :ref:`results<class_NetwGroupPromise_proper
 
 |void| **resolve_peer**\ (\ peer_id\: :godot:`int`, val\: :godot:`Variant`\ ) :ref:`🔗<class_NetwGroupPromise_method_resolve_peer>`
 
-Records the result of ``peer_id`` and emits :ref:`completed_single<class_NetwGroupPromise_signal_completed_single>`. Completes the group if it was the last one. Ignored for a peer the group is not waiting for.
+Records the result of ``peer_id`` and emits :ref:`peer_completed<class_NetwGroupPromise_signal_peer_completed>`. Completes the group if it was the last one. Ignored for a peer the group is not waiting for.
 
 .. rst-class:: classref-item-separator
 
@@ -379,7 +343,7 @@ Calls ``cb`` with :ref:`results<class_NetwGroupPromise_property_results>` when e
 
 :godot:`Signal` **wait**\ (\ ) :ref:`🔗<class_NetwGroupPromise_method_wait>`
 
-Returns a signal to ``await``, which gives :ref:`answer()<class_NetwGroupPromise_method_answer>`. It works even when the group already settled.
+Returns a new signal to ``await``, which fires once with :ref:`answer()<class_NetwGroupPromise_method_answer>`. When the group already settled, it fires on the next frame.
 
 ::
 

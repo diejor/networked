@@ -11,8 +11,8 @@ namespace Networked;
 /// <remarks>
 /// A lobby directory is a <see cref="NetwService"/> that implements
 /// <c>_host_lobby</c>, <c>_join_lobby</c>, <c>_list_lobbies</c> and
-/// <c>_leave_lobby</c>. Its lobbies appear in <see cref="NetwConnectHandle"/>
-/// like any other server.
+/// <c>_leave_lobby</c>. Its lobbies appear in <see cref="NetwConnection"/> like
+/// any other server.
 /// <code>
 /// extends LobbyDirectory
 ///
@@ -85,8 +85,15 @@ public sealed class LobbyDirectory : NetwService
     /// </summary>
     public event Action<MultiplayerPeer> LobbyPeerReady
     {
-        add => Connect("lobby_peer_ready", Callable.From(value));
-        remove => Disconnect("lobby_peer_ready", Callable.From(value));
+        add => ConnectBridge(
+            "lobby_peer_ready",
+            value,
+            Callable.From(
+                (MultiplayerPeer a0) =>
+                    value(a0)
+            )
+        );
+        remove => DisconnectBridge("lobby_peer_ready", value);
     }
 
     /// <summary>
@@ -94,8 +101,15 @@ public sealed class LobbyDirectory : NetwService
     /// </summary>
     public event Action<Error, string> LobbyFailed
     {
-        add => Connect("lobby_failed", Callable.From(value));
-        remove => Disconnect("lobby_failed", Callable.From(value));
+        add => ConnectBridge(
+            "lobby_failed",
+            value,
+            Callable.From(
+                (Error a0, string a1) =>
+                    value(a0, a1)
+            )
+        );
+        remove => DisconnectBridge("lobby_failed", value);
     }
 
     /// <summary>
@@ -106,8 +120,15 @@ public sealed class LobbyDirectory : NetwService
         string[],
         Godot.Collections.Array> LobbyListPublished
     {
-        add => Connect("lobby_list_published", Callable.From(value));
-        remove => Disconnect("lobby_list_published", Callable.From(value));
+        add => ConnectBridge(
+            "lobby_list_published",
+            value,
+            Callable.From(
+                (string[] a0, string[] a1, Godot.Collections.Array a2) =>
+                    value(a0, a1, a2)
+            )
+        );
+        remove => DisconnectBridge("lobby_list_published", value);
     }
 
     /// <summary>
@@ -116,8 +137,15 @@ public sealed class LobbyDirectory : NetwService
     /// </summary>
     public event Action<long, long> InviteReceived
     {
-        add => Connect("invite_received", Callable.From(value));
-        remove => Disconnect("invite_received", Callable.From(value));
+        add => ConnectBridge(
+            "invite_received",
+            value,
+            Callable.From(
+                (long a0, long a1) =>
+                    value(a0, a1)
+            )
+        );
+        remove => DisconnectBridge("invite_received", value);
     }
 
     /// <summary>
@@ -125,8 +153,15 @@ public sealed class LobbyDirectory : NetwService
     /// </summary>
     public event Action<string> ProviderUnavailable
     {
-        add => Connect("provider_unavailable", Callable.From(value));
-        remove => Disconnect("provider_unavailable", Callable.From(value));
+        add => ConnectBridge(
+            "provider_unavailable",
+            value,
+            Callable.From(
+                (string a0) =>
+                    value(a0)
+            )
+        );
+        remove => DisconnectBridge("provider_unavailable", value);
     }
 
     private static readonly IntPtr _bindDeliver =
@@ -176,12 +211,13 @@ public sealed class LobbyDirectory : NetwService
     public void PublishLobbies(
         string[] addresses,
         string[] names,
-        Godot.Collections.Array infos)
+        NetwServerInfo[] infos)
     {
         godot_variant slot0 =
             VariantUtils.CreateFromPackedStringArray(addresses);
         godot_variant slot1 = VariantUtils.CreateFromPackedStringArray(names);
-        godot_variant slot2 = VariantUtils.CreateFromArray(infos);
+        godot_variant slot2 =
+            VariantUtils.CreateFromArray(NetwApi.ArrayOf(infos));
         godot_variant answered = default;
         NetwThunks.Call3(
             _bindPublishLobbies,

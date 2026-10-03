@@ -42,8 +42,8 @@ func _init() -> void:
 	visual.name = &"Visual"
 	add_child(visual)
 	var e := Netw.configure_entity(self)
-	e.simulation.replicas = NetwSimulationHandle.REPLICAS_ACTIVE
-	e.interpolation.visual_root = ^"Visual"
+	e.simulation.replicas = NetwSimulation.REPLICAS_ACTIVE
+	e.display.visual_root = ^"Visual"
 	Netw.configure_property(self, &"position").state().heartbeat(30) \
 			.interpolate(NetwInterpolate.new().lerp())
 	Netw.configure_property(self, &"quaternion").state() \

@@ -5,7 +5,8 @@
 #include "netw/api/context.hpp"
 #include "netw/api/netw_multiplayer.hpp"
 #include "netw/api/promise.hpp"
-#include "netw/api/scene_handle.hpp"
+#include "netw/api/scene.hpp"
+#include "netw/api/session.hpp"
 
 namespace TestSceneFrontDoorRigLaws {
 
@@ -39,18 +40,18 @@ void retire(Node *p_root) {
 }
 
 TEST_CASE(
-    "[Networked][Scene] FDR1 a label names ONE live scene, so a second scene "
-    "under the same label makes the label answer nothing rather than "
-    "whichever instance the book happens to walk first"
+    "[Networked][Scene] FDR1 a label answers the newest live scene under it, "
+    "and a node always answers the scene that contains it, so two scenes "
+    "under one label stay reachable through their own nodes"
 ) {
     LoopbackRig rig(0);
     rig.mount();
+    const Ref<netw::NetwSession> session = rig.server()->get_session();
 
     Node *first = live_scene_named(rig, StringName("Arena"));
 
     NETW_CHECK_EQ(rig.server()->scene_find_all(StringName("Arena")).size(), 1);
-    const Ref<netw::NetwSceneHandle> one
-        = Netw::scene(first, StringName("Arena"));
+    const Ref<netw::NetwScene> one = session->find_scene(StringName("Arena"));
     REQUIRE(one.is_valid());
     NETW_CHECK_EQ(one->get_root(), first);
 
@@ -58,12 +59,13 @@ TEST_CASE(
     REQUIRE(second != first);
 
     NETW_CHECK_EQ(rig.server()->scene_find_all(StringName("Arena")).size(), 2);
-    CHECK(Netw::scene(first, StringName("Arena")).is_null());
+    const Ref<netw::NetwScene> newest
+        = session->find_scene(StringName("Arena"));
+    REQUIRE(newest.is_valid());
+    NETW_CHECK_EQ(newest->get_root(), second);
 
-    const Ref<netw::NetwSceneHandle> held_first
-        = Netw::scene(first, StringName());
-    const Ref<netw::NetwSceneHandle> held_second
-        = Netw::scene(second, StringName());
+    const Ref<netw::NetwScene> held_first = Netw::scene(first);
+    const Ref<netw::NetwScene> held_second = Netw::scene(second);
     REQUIRE(held_first.is_valid());
     REQUIRE(held_second.is_valid());
     NETW_CHECK_EQ(held_first->get_root(), first);

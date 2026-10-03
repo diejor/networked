@@ -21,7 +21,7 @@ Extend it to host, join and list lobbies of an online service.
 Description
 -----------
 
-A lobby directory is a :ref:`NetwService<class_NetwService>` that implements :ref:`_host_lobby()<class_LobbyDirectory_private_method__host_lobby>`, :ref:`_join_lobby()<class_LobbyDirectory_private_method__join_lobby>`, :ref:`_list_lobbies()<class_LobbyDirectory_private_method__list_lobbies>` and :ref:`_leave_lobby()<class_LobbyDirectory_private_method__leave_lobby>`. Its lobbies appear in :ref:`NetwConnectHandle<class_NetwConnectHandle>` like any other server.
+A lobby directory is a :ref:`NetwService<class_NetwService>` that implements :ref:`_host_lobby()<class_LobbyDirectory_private_method__host_lobby>`, :ref:`_join_lobby()<class_LobbyDirectory_private_method__join_lobby>`, :ref:`_list_lobbies()<class_LobbyDirectory_private_method__list_lobbies>` and :ref:`_leave_lobby()<class_LobbyDirectory_private_method__leave_lobby>`. Its lobbies appear in :ref:`NetwConnection<class_NetwConnection>` like any other server.
 
 ::
 

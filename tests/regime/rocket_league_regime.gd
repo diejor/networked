@@ -5,7 +5,7 @@ const TRAVEL_SAMPLE_SECONDS := 0.25
 
 var session: Node
 var api: NetwMultiplayer
-var session_handle: NetwSessionHandle
+var session_handle: NetwSession
 var regime: NetwRegimePeer
 var travel := 0.0
 var ball_travel := 0.0
@@ -84,7 +84,7 @@ func await_local_ready() -> bool:
 	if local_car() == null:
 		return false
 
-	var clock: NetwClockHandle = Netw.clock(session)
+	var clock: NetwClock = session_handle.clock
 	while not api.is_server() and not clock.is_synchronized \
 			and Time.get_ticks_msec() < deadline:
 		await session.get_tree().process_frame
@@ -162,7 +162,7 @@ func wheel_gap(car: RocketCar) -> float:
 
 func car_key(car: RocketCar) -> String:
 	var entity := NetwEntity.of(car)
-	return "car%d_%s" % [entity.controller, entity.entity_id] if entity else ""
+	return "car%d_%s" % [entity.controller, entity.name] if entity else ""
 
 
 func drive_chase(seconds: float) -> void:
@@ -221,12 +221,9 @@ func summary_handles() -> Dictionary:
 
 
 func start_match() -> void:
-	var lobby: NetwSceneHandle = Netw.scene(session, &"Lobby")
-	if lobby == null:
-		return
-	var panel: InLobby = lobby.root.get_node_or_null(^"UI/InLobby")
+	var panel: InLobby = session.get_node_or_null(^"UI/InLobby")
 	if panel:
-		panel.on_start_pressed()
+		panel.start_btn.pressed.emit()
 
 
 func local_car() -> RocketCar:
@@ -236,7 +233,7 @@ func local_car() -> RocketCar:
 
 
 func arena_level() -> Node:
-	var arena: NetwSceneHandle = Netw.scene(session, &"Arena")
+	var arena: NetwScene = session_handle.find_scene(&"Arena")
 	return arena.root if arena else null
 
 

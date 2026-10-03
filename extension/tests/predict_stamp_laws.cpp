@@ -3,8 +3,7 @@
 #include <limits>
 
 #include "netw/api/entity.hpp"
-#include "netw/api/predict.hpp"
-#include "netw/api/prediction_handle.hpp"
+#include "netw/api/prediction.hpp"
 #include "netw/predict/engine.hpp"
 #include "netw/predict/joint.hpp"
 #include "netw/prediction_core.hpp"
@@ -1316,11 +1315,11 @@ TEST_CASE(
     NetwPredictionEngine *const pool = &held_pool;
     Carrier *body = carrier(4.5, 0.25);
     const int64_t slot = stamped_slot(pool, body);
-    Ref<netw::NetwPredictionHandle> handle;
+    Ref<netw::NetwPrediction> handle;
     handle.instantiate();
 
     CHECK_FALSE(
-        pool->reconfigure_from(slot, Ref<netw::NetwPredictionHandle>())
+        pool->reconfigure_from(slot, Ref<netw::NetwPrediction>())
     );
     CHECK_FALSE(pool->reconfigure_from(slot + 9000, handle));
 
@@ -1459,7 +1458,7 @@ TEST_CASE(
         slot,
         seed,
         4,
-        int(netw::NetwSimulationHandle::RESTORE_EXACT),
+        int(netw::NetwSimulation::RESTORE_EXACT),
         6,
         2.0,
         0.01,
@@ -1472,7 +1471,7 @@ TEST_CASE(
         slot,
         seed,
         4,
-        int(netw::NetwSimulationHandle::RESTORE_EXTRAPOLATED),
+        int(netw::NetwSimulation::RESTORE_EXTRAPOLATED),
         6,
         2.0,
         0.01,
@@ -1486,7 +1485,7 @@ TEST_CASE(
         slot,
         seed,
         4,
-        int(netw::NetwSimulationHandle::RESTORE_EXTRAPOLATED),
+        int(netw::NetwSimulation::RESTORE_EXTRAPOLATED),
         0,
         2.0,
         0.01,
@@ -1499,7 +1498,7 @@ TEST_CASE(
         slot,
         netw::predict::StateRow(),
         4,
-        int(netw::NetwSimulationHandle::RESTORE_EXTRAPOLATED),
+        int(netw::NetwSimulation::RESTORE_EXTRAPOLATED),
         6,
         2.0,
         0.01,
@@ -1664,7 +1663,7 @@ TEST_CASE(
         row_of(9.5, 0.25),
         row_of(4.5, 0.25),
         godot::Dictionary(),
-        int(netw::NetwPredict::RECOVERY_POLICY_REBASE_REPLAY),
+        int(netw::NetwPrediction::RECOVERY_POLICY_REBASE_REPLAY),
         0.01,
         2.0,
         6,
@@ -1685,7 +1684,7 @@ TEST_CASE(
         row_of(9.5, 0.25),
         row_of(4.5, 0.25),
         godot::Dictionary(),
-        int(netw::NetwPredict::RECOVERY_POLICY_REBASE_REPLAY),
+        int(netw::NetwPrediction::RECOVERY_POLICY_REBASE_REPLAY),
         0.01,
         2.0,
         6,

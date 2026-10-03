@@ -16,11 +16,9 @@ namespace netw {
 namespace {
 
 constexpr const char *SIG_PHYSICS_FRAME = "physics_frame";
-constexpr const char *SIG_CLOCK_CONFIGURED = "clock_configured";
 constexpr const char *SIG_SERVER_DISCONNECTED = "server_disconnected";
 constexpr const char *SIG_CONNECTION_FAILED = "connection_failed";
 constexpr const char *SIG_CONNECTED_TO_SERVER = "connected_to_server";
-constexpr const char *SIG_SESSION_ENTERED = "session_entered";
 
 constexpr double AUTO_CONFIG_SECONDS = 5.0;
 
@@ -66,16 +64,13 @@ Error NetwMultiplayer::clock_initialize(const Ref<NetwClockConfig> &p_from) {
         Signal(this, SIG_CONNECTION_FAILED),
         callable_mp(this, &NetwMultiplayer::clock_drop_synchronization)
     );
-    connect_once(
-        Signal(this, SIG_SESSION_ENTERED),
-        callable_mp(this, &NetwMultiplayer::clock_start_handshake)
-    );
+    clock_handshakes_on_enter = true;
     connect_once(
         Signal(this, SIG_CONNECTED_TO_SERVER),
         callable_mp(this, &NetwMultiplayer::clock_start_handshake)
     );
     clock_attach_pump();
-    emit_signal(StringName(SIG_CLOCK_CONFIGURED));
+    notify(CLOCK_CONFIGURED);
     clock_start_handshake();
     return OK;
 }

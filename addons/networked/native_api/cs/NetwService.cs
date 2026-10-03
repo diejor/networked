@@ -10,8 +10,8 @@ namespace Networked;
 /// <see cref="Node.Multiplayer"/> while it is in the tree.
 /// </summary>
 /// <remarks>
-/// Get it with <see cref="Netw.Service"/>. Override <c>_service_entered</c> and
-/// <c>_service_exiting</c> for setup and cleanup.
+/// Get it with <see cref="NetwSession.Service"/>. Override
+/// <c>_service_entered</c> and <c>_service_exiting</c> for setup and cleanup.
 /// <code>
 /// class_name MatchClock
 /// extends NetwService

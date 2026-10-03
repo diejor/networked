@@ -22,13 +22,13 @@ Methods
 .. table::
    :widths: auto
 
-   +--------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | |void| | :ref:`open_connecting<class_ConnectingPopup_method_open_connecting>`\ (\ handle\: :ref:`NetwConnectHandle<class_NetwConnectHandle>`, peer_class\: :godot:`StringName`, address\: :godot:`String`\ ) |
-   +--------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | |void| | :ref:`update_progress<class_ConnectingPopup_method_update_progress>`\ (\ message\: :godot:`String`, ratio\: :godot:`float`\ )                                                                       |
-   +--------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | |void| | :ref:`show_failed<class_ConnectingPopup_method_show_failed>`\ (\ message\: :godot:`String`, detail\: :godot:`String` = ""\ )                                                                        |
-   +--------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   +--------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | |void| | :ref:`open_connecting<class_ConnectingPopup_method_open_connecting>`\ (\ handle\: :ref:`NetwConnection<class_NetwConnection>`, peer_class\: :godot:`StringName`, address\: :godot:`String`\ ) |
+   +--------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | |void| | :ref:`update_progress<class_ConnectingPopup_method_update_progress>`\ (\ message\: :godot:`String`, ratio\: :godot:`float`\ )                                                                 |
+   +--------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | |void| | :ref:`show_failed<class_ConnectingPopup_method_show_failed>`\ (\ message\: :godot:`String`, detail\: :godot:`String` = ""\ )                                                                  |
+   +--------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 
 .. rst-class:: classref-section-separator
 
@@ -62,7 +62,7 @@ Method Descriptions
 
 .. rst-class:: classref-method
 
-|void| **open_connecting**\ (\ handle\: :ref:`NetwConnectHandle<class_NetwConnectHandle>`, peer_class\: :godot:`StringName`, address\: :godot:`String`\ ) :ref:`🔗<class_ConnectingPopup_method_open_connecting>`
+|void| **open_connecting**\ (\ handle\: :ref:`NetwConnection<class_NetwConnection>`, peer_class\: :godot:`StringName`, address\: :godot:`String`\ ) :ref:`🔗<class_ConnectingPopup_method_open_connecting>`
 
 Shows the connecting screen for the server at ``peer_class`` and ``address``. An empty ``peer_class`` means hosting.
 

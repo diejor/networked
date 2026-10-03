@@ -19,8 +19,8 @@ namespace Networked;
 /// <para>
 /// It works the same with <see cref="Netw.ConfigureProperty"/>,
 /// <see cref="Netw.ConfigureRpc"/> and <see cref="Netw.ConfigureSignal"/>. When
-/// <see cref="NetwDisplayHandle.VisualRoot"/> is set, values are written in
-/// global space. Add a second <see cref="NetwInterpolate"/> to also smooth
+/// <see cref="NetwDisplay.VisualRoot"/> is set, values are written in global
+/// space. Add a second <see cref="NetwInterpolate"/> to also smooth
 /// <c>rotation</c>.
 /// </para>
 /// </remarks>
@@ -215,7 +215,7 @@ public sealed class NetwInterpolate : NetwRefCounted
 
     /// <summary>
     /// Whether the value is guessed ahead with
-    /// <see cref="NetwMultiplayer.TimelineMode.Forecast"/>.
+    /// <see cref="NetwDisplay.TimelineModeEnum.Forecast"/>.
     /// </summary>
     public NetwInterpolate.Tail ForecastTail
     {

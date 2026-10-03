@@ -15,7 +15,7 @@ signal submitted(
 )
 
 var transport_defaults: Array[ConnectTransportConfig] = []
-var _connection: NetwConnectHandle
+var _connection: NetwConnection
 var _transports: Array[Dictionary] = []
 var _editing_peer_class: StringName = &""
 var _editing_address: String = ""
@@ -42,7 +42,7 @@ func _ready() -> void:
 
 
 ## Opens an empty form to add a server.
-func open_add(handle: NetwConnectHandle) -> void:
+func open_add(handle: NetwConnection) -> void:
 	_connection = handle
 	_editing_peer_class = &""
 	_editing_address = ""
@@ -58,7 +58,7 @@ func open_add(handle: NetwConnectHandle) -> void:
 ## Opens the form to edit the saved server at [param peer_class] and
 ## [param address], filled with its saved [param authored] settings.
 func open_edit(
-		handle: NetwConnectHandle,
+		handle: NetwConnection,
 		peer_class: StringName,
 		address: String,
 		authored: Dictionary = { },
@@ -85,7 +85,7 @@ func _populate_backend_picker() -> void:
 	if _connection != null:
 		for transport: Dictionary in _connection.transports():
 			var caps := int(transport.get("capabilities", 0))
-			if caps & NetwMultiplayer.TRANSPORT_AVAILABLE == 0:
+			if caps & NetwConnection.TRANSPORT_AVAILABLE == 0:
 				continue
 			_transports.append(transport)
 			_backend_picker.add_item(String(transport.get("display_name", "")))

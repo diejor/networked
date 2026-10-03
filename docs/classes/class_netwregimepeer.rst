@@ -300,7 +300,7 @@ Gesture name to async ``(seconds: float) -> void``. The gesture named by :ref:`g
 
 :godot:`Callable` **summary_handles** :ref:`🔗<class_NetwRegimePeer_property_summary_handles>`
 
-``() -> Dictionary`` of display id to prediction handle, the entities whose :ref:`NetwPredictionHandle.stats<class_NetwPredictionHandle_property_stats>` the summary carries.
+``() -> Dictionary`` of display id to prediction handle, the entities whose :ref:`NetwPrediction.stats<class_NetwPrediction_property_stats>` the summary carries.
 
 .. rst-class:: classref-item-separator
 

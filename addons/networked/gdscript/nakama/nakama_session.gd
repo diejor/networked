@@ -6,14 +6,14 @@ class_name NakamaSessionService
 extends NetwService
 
 ## Returns the [NakamaSessionService] of the session [param node] is in,
-## creating it under [member NetwSessionHandle.root] if needed. Returns
+## creating it under [member NetwSession.root] if needed. Returns
 ## [code]null[/code] in the editor or outside a session.
 static func of(node: Node) -> NakamaSessionService:
-	var session: NetwSessionHandle = Netw.session(node)
+	var session: NetwSession = Netw.session(node)
 	if session == null or Engine.is_editor_hint():
 		return null
 
-	var registered := Netw.service(node, NakamaSessionService) \
+	var registered := session.service(NakamaSessionService) \
 			as NakamaSessionService
 	if is_instance_valid(registered):
 		return registered
@@ -25,13 +25,13 @@ static func of(node: Node) -> NakamaSessionService:
 	for child in root.find_children("*", "NakamaSessionService", true):
 		var existing := child as NakamaSessionService
 		if existing != null:
-			Netw.service_register(node, existing)
+			session.register_service(existing)
 			return existing
 
 	var made := NakamaSessionService.new()
 	made.name = &"NakamaSession"
 	root.add_child(made)
-	Netw.service_register(node, made)
+	session.register_service(made)
 	return made
 
 # The facade has no class_name and is not an autoload, so it is reached by path.
@@ -255,7 +255,7 @@ func _service_type() -> Script:
 
 
 ## Calls [method leave] when the service exits the tree.
-func _service_exiting(_api: NetwMultiplayer) -> void:
+func _service_exiting(_session: NetwSession) -> void:
 	leave()
 
 

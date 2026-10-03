@@ -346,7 +346,7 @@ Set by :ref:`converge()<class_NetwPropertyConfig_method_converge>`.
 - |void| **set_epsilon_override**\ (\ value\: :godot:`float`\ )
 - :godot:`float` **get_epsilon_override**\ (\ )
 
-Set by :ref:`epsilon()<class_NetwPropertyConfig_method_epsilon>`. A negative value uses :ref:`NetwPredictionHandle.divergence_epsilon<class_NetwPredictionHandle_property_divergence_epsilon>`.
+Set by :ref:`epsilon()<class_NetwPropertyConfig_method_epsilon>`. A negative value uses :ref:`NetwPrediction.divergence_epsilon<class_NetwPrediction_property_divergence_epsilon>`.
 
 .. rst-class:: classref-item-separator
 
@@ -601,7 +601,7 @@ Set by :ref:`windowed()<class_NetwPropertyConfig_method_windowed>`, or :ref:`UNS
 - |void| **set_teleport_at_override**\ (\ value\: :godot:`float`\ )
 - :godot:`float` **get_teleport_at_override**\ (\ )
 
-Set by :ref:`teleport_at()<class_NetwPropertyConfig_method_teleport_at>`. A negative value uses :ref:`NetwPredictionHandle.teleport_threshold<class_NetwPredictionHandle_property_teleport_threshold>`.
+Set by :ref:`teleport_at()<class_NetwPropertyConfig_method_teleport_at>`. A negative value uses :ref:`NetwPrediction.teleport_threshold<class_NetwPrediction_property_teleport_threshold>`.
 
 .. rst-class:: classref-section-separator
 
@@ -682,7 +682,7 @@ When a correction restores this value, advances it to the present by calling ``s
     func _carry_spin(value: Vector3, ctx: NetwPredictCarryContext) -> Vector3:
         return value + _drive_axis(ctx.state) * ctx.state[&"speed"] * ctx.delta
 
-\ ``step`` must be a method or lambda of a :godot:`Node`, may read only its :ref:`NetwPredictCarryContext<class_NetwPredictCarryContext>`, and must not write anything. A result that does not reproduce the recorded ticks is rejected, and the value is restored as the server had it. Declaring both this and :ref:`carry_along()<class_NetwPropertyConfig_method_carry_along>` on one property is an error, and neither is used. :ref:`NetwPredictionHandle.reachability()<class_NetwPredictionHandle_method_reachability>` reports whether the rule is in use.
+\ ``step`` must be a method or lambda of a :godot:`Node`, may read only its :ref:`NetwPredictCarryContext<class_NetwPredictCarryContext>`, and must not write anything. A result that does not reproduce the recorded ticks is rejected, and the value is restored as the server had it. Declaring both this and :ref:`carry_along()<class_NetwPropertyConfig_method_carry_along>` on one property is an error, and neither is used. :ref:`NetwPrediction.reachability()<class_NetwPrediction_method_reachability>` reports whether the rule is in use.
 
 .. rst-class:: classref-item-separator
 
@@ -759,7 +759,7 @@ Marks the value as one the body recomputes each step from other properties, so a
 
 :ref:`NetwPropertyConfig<class_NetwPropertyConfig>` **epsilon**\ (\ threshold\: :godot:`float`\ ) :ref:`🔗<class_NetwPropertyConfig_method_epsilon>`
 
-How far this value may drift from the server's before it is corrected, in its own units. Without it, the value uses :ref:`NetwPredictionHandle.divergence_epsilon<class_NetwPredictionHandle_property_divergence_epsilon>`. ``0.0`` corrects any error.
+How far this value may drift from the server's before it is corrected, in its own units. Without it, the value uses :ref:`NetwPrediction.divergence_epsilon<class_NetwPrediction_property_divergence_epsilon>`. ``0.0`` corrects any error.
 
 ::
 
@@ -945,7 +945,7 @@ The server owns the value, every peer sees it, and lag compensation can rewind i
 
 :ref:`NetwPropertyConfig<class_NetwPropertyConfig>` **teleport_at**\ (\ distance\: :godot:`float`\ ) :ref:`🔗<class_NetwPropertyConfig_method_teleport_at>`
 
-How large this value's error may be before a correction teleports the body, in its own units. Without it, the value uses :ref:`NetwPredictionHandle.teleport_threshold<class_NetwPredictionHandle_property_teleport_threshold>`. ``0.0`` teleports on every correction this value causes.
+How large this value's error may be before a correction teleports the body, in its own units. Without it, the value uses :ref:`NetwPrediction.teleport_threshold<class_NetwPrediction_property_teleport_threshold>`. ``0.0`` teleports on every correction this value causes.
 
 ::
 

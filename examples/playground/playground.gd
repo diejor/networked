@@ -25,7 +25,7 @@ var cubes := Node3D.new()
 
 
 func _init() -> void:
-	Netw.configure_multiplayer_scene(self).labeled(&"Playground")
+	Netw.configure_scene(self).labeled(&"Playground")
 	Netw.configure_spawn(spawn_player)
 	free_material.albedo_color = Color(0.6, 0.6, 0.6)
 	cubes.name = &"Cubes"

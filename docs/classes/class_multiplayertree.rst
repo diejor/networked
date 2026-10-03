@@ -33,9 +33,9 @@ Every child's :godot:`Node.multiplayer <Node#class_Node_property_multiplayer>` i
     tree.api.multiplayer_peer = peer
 
     # or let the transport create it
-    Netw.connection(tree).create_peer(
+    Netw.session(tree).connection.create_peer(
         tree.peer_class,
-        NetwMultiplayer.TRANSPORT_MODE_CLIENT,
+        NetwConnection.TRANSPORT_MODE_CLIENT,
         "127.0.0.1:21253",
         tree.transport_settings,
         func(peer: MultiplayerPeer, error: Error, _detail: String) -> void:
@@ -63,7 +63,7 @@ Properties
    +-----------------------------------------------------+------------------------------------------------------------------------------+----------+
    | :ref:`DebugJoinConfig<class_DebugJoinConfig>`       | :ref:`debug_join<class_MultiplayerTree_property_debug_join>`                 |          |
    +-----------------------------------------------------+------------------------------------------------------------------------------+----------+
-   | :ref:`Role<enum_NetwMultiplayer_Role>`              | :ref:`desired_role<class_MultiplayerTree_property_desired_role>`             | ``3``    |
+   | :ref:`Role<enum_NetwSession_Role>`                  | :ref:`desired_role<class_MultiplayerTree_property_desired_role>`             | ``3``    |
    +-----------------------------------------------------+------------------------------------------------------------------------------+----------+
    | :ref:`NetwLinkConditions<class_NetwLinkConditions>` | :ref:`link_conditions<class_MultiplayerTree_property_link_conditions>`       |          |
    +-----------------------------------------------------+------------------------------------------------------------------------------+----------+
@@ -183,12 +183,12 @@ Connects automatically when the game runs, in debug builds only.
 
 .. rst-class:: classref-property
 
-:ref:`Role<enum_NetwMultiplayer_Role>` **desired_role** = ``3`` :ref:`🔗<class_MultiplayerTree_property_desired_role>`
+:ref:`Role<enum_NetwSession_Role>` **desired_role** = ``3`` :ref:`🔗<class_MultiplayerTree_property_desired_role>`
 
 .. rst-class:: classref-property-setget
 
-- |void| **set_desired_role**\ (\ value\: :ref:`Role<enum_NetwMultiplayer_Role>`\ )
-- :ref:`Role<enum_NetwMultiplayer_Role>` **get_desired_role**\ (\ )
+- |void| **set_desired_role**\ (\ value\: :ref:`Role<enum_NetwSession_Role>`\ )
+- :ref:`Role<enum_NetwSession_Role>` **get_desired_role**\ (\ )
 
 The role this tree takes when it hosts.
 
@@ -270,7 +270,7 @@ Removes every service and forgets every player.
 
 :ref:`MultiplayerTree<class_MultiplayerTree>` **raise_embedded_server**\ (\ ) :ref:`🔗<class_MultiplayerTree_method_raise_embedded_server>`
 
-Duplicates this tree as a sibling named ``Server``, with the role :ref:`NetwMultiplayer.ROLE_DEDICATED_SERVER<class_NetwMultiplayer_constant_ROLE_DEDICATED_SERVER>`.
+Duplicates this tree as a sibling named ``Server``, with the role :ref:`NetwSession.ROLE_DEDICATED_SERVER<class_NetwSession_constant_ROLE_DEDICATED_SERVER>`.
 
 ::
 

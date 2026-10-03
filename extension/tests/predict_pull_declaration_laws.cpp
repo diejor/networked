@@ -5,16 +5,14 @@
 #include "godot/scene_tree.hpp"
 #include "netw/api/entity.hpp"
 #include "netw/api/netw_multiplayer.hpp"
-#include "netw/api/predict.hpp"
-#include "netw/api/prediction_handle.hpp"
+#include "netw/api/prediction.hpp"
 
 namespace TestNetwPredictPullDeclaration {
 
 using namespace godot;
 using netw::NetwEntity;
 using netw::NetwMultiplayer;
-using netw::NetwPredict;
-using netw::NetwPredictionHandle;
+using netw::NetwPrediction;
 
 namespace {
 
@@ -47,13 +45,13 @@ struct Branch {
 Ref<NetwEntity> mount(
     Branch &p_branch,
     const char *p_id,
-    NetwPredict::Archetype p_archetype
+    NetwPrediction::Archetype p_archetype
 ) {
     Node *owner = memnew(Node);
     owner->set_name(StringName(p_id));
     const Ref<NetwEntity> entity = NetwEntity::ensure(owner);
     REQUIRE(entity.is_valid());
-    entity->set_entity_id(p_id);
+    entity->set_name(p_id);
     entity->set_peer_id(1);
     entity->get_prediction()->set_archetype(p_archetype);
     p_branch.node->add_child(owner);
@@ -73,7 +71,7 @@ TEST_CASE(
     }
     Branch branch("pull_declared");
     const Ref<NetwEntity> entity
-        = mount(branch, "declared", NetwPredict::ARCHETYPE_SCRIPTED);
+        = mount(branch, "declared", NetwPrediction::ARCHETYPE_SCRIPTED);
 
     CHECK(branch.api->predict_lacks_state_rows(entity));
     CHECK_FALSE(branch.api->predict_engine_seated(entity->get_rid_handle()));
@@ -89,7 +87,7 @@ TEST_CASE(
     }
     Branch branch("pull_undeclared");
     const Ref<NetwEntity> entity
-        = mount(branch, "undeclared", NetwPredict::ARCHETYPE_NONE);
+        = mount(branch, "undeclared", NetwPrediction::ARCHETYPE_NONE);
 
     CHECK_FALSE(branch.api->predict_engine_seated(entity->get_rid_handle()));
 }

@@ -6,7 +6,7 @@
 #include "godot/object.hpp"
 #include "godot/spatial_node.hpp"
 #include "netw/api/entity.hpp"
-#include "netw/api/simulation_handle.hpp"
+#include "netw/api/simulation.hpp"
 #include "netw/colors.hpp"
 #include "netw/log.hpp"
 #include "netw/profile.hpp"
@@ -22,7 +22,7 @@ namespace netw {
 namespace {
 
 String order_name(const Ref<NetwEntity> &p_entity) {
-    const String named = String(p_entity->get_entity_id());
+    const String named = String(p_entity->get_name());
     if (!named.is_empty()) {
         return named;
     }
@@ -120,17 +120,17 @@ Error NetwMultiplayer::sim_simulate(
         subject.is_null() || p_entity.is_null(),
         ERR_INVALID_PARAMETER,
         sys::PREDICTION,
-        "NetwSimulationHandle.simulate needs two live entities, and one of "
+        "NetwSimulation.simulate needs two live entities, and one of "
         "them is gone."
     );
     NETW_ERR_COND_V(
         !same_scene(*this, subject, p_entity),
         ERR_INVALID_PARAMETER,
         sys::PREDICTION,
-        "NetwSimulationHandle.simulate refused '%s', because it is in another "
+        "NetwSimulation.simulate refused '%s', because it is in another "
         "scene than '%s'. Select entities in the same scene.",
-        String(p_entity->get_entity_id()).utf8().get_data(),
-        String(subject->get_entity_id()).utf8().get_data()
+        String(p_entity->get_name()).utf8().get_data(),
+        String(subject->get_name()).utf8().get_data()
     );
     sim::choose(
         sim_rows.ensure(p_subject).choice,
@@ -243,15 +243,11 @@ TypedArray<NetwEntity> NetwMultiplayer::sim_candidates(
         take(*this, p_subject, entity_get_view(named.entity), found);
     }
     for (const StringName &layer : row->choice.layers) {
-        const TypedArray<Object> shared
+        const TypedArray<NetwEntity> shared
             = interest_shared_entities(p_subject, layer);
         for (int at = 0; at < shared.size(); ++at) {
-            take(
-                *this,
-                p_subject,
-                Ref<NetwEntity>(Object::cast_to<NetwEntity>(shared[at])),
-                found
-            );
+            const Ref<NetwEntity> member = shared[at];
+            take(*this, p_subject, member, found);
         }
     }
     std::sort(found.ptr(), found.ptr() + found.size(), order_less);
@@ -445,7 +441,7 @@ void NetwMultiplayer::sim_seed(sim::Row &r_row) {
     }
     r_row.view = entity.ptr();
     r_row.steering = sim_steering_of(*entity.ptr());
-    const Ref<NetwSimulationHandle> handle = entity->simulation_if_minted();
+    const Ref<NetwSimulation> handle = entity->simulation_if_minted();
     const sim::Declaration undeclared;
     const sim::Declaration &held
         = handle.is_valid() ? handle->declaration() : undeclared;
@@ -473,7 +469,7 @@ void NetwMultiplayer::sim_declare(const Ref<NetwEntity> &p_entity) {
         return;
     }
     sim::Row *standing = sim_rows.find(entity);
-    const Ref<NetwSimulationHandle> handle = p_entity->simulation_if_minted();
+    const Ref<NetwSimulation> handle = p_entity->simulation_if_minted();
     if (standing == nullptr && (handle.is_null() || !handle->is_declared())) {
         return;
     }
@@ -501,9 +497,9 @@ void NetwMultiplayer::sim_announce(const RID &p_entity) {
 #if defined(NETW_TESTS)
     idle_work.announced += 1;
 #endif
-    const Ref<NetwSimulationHandle> handle = entity->simulation_if_minted();
+    const Ref<NetwSimulation> handle = entity->simulation_if_minted();
     if (handle.is_valid()) {
-        handle->announce(NetwSimulationHandle::Mode(int(mode)));
+        handle->announce(NetwSimulation::Mode(int(mode)));
     }
 }
 

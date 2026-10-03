@@ -34,7 +34,8 @@ static func open(holder: Node, root: String) -> NetwDatabase:
 	var backend := FileSystemDatabase.new()
 	backend.root = root
 	Netw.configure_database(holder, DATABASE).backend(backend)
-	var db := Netw.database(holder, DATABASE)
+	var session: NetwSession = Netw.session(holder)
+	var db := session.database(DATABASE)
 	var opened: Error = await db.open(SLOT).wait()
 	if opened != OK:
 		push_error("opening %s answered %s" % [root, error_string(opened)])

@@ -89,6 +89,107 @@ public abstract class NetwObject : IDisposable
         Reach(BindDisconnect, signal, handler);
     }
 
+    private static readonly IntPtr BindInstanceId =
+        NetwApi.MethodBind("Object", "get_instance_id", 3905245786UL);
+
+    private static readonly System.Collections.Generic.Dictionary<
+        (ulong Instance, string Signal),
+        System.Collections.Generic.List<(Delegate Handler, Callable Bridge)>
+    > Bridges = new();
+
+    /// <summary>The engine's instance id for this object.</summary>
+    public ulong InstanceId
+    {
+        get
+        {
+            godot_variant answered = default;
+            NetwThunks.Call0(BindInstanceId, Checked, ref answered);
+            ulong id = (ulong)VariantUtils.ConvertToInt64(answered);
+            answered.Dispose();
+            return id;
+        }
+    }
+
+    /// <summary>
+    /// Connects a typed event handler through a <paramref name="bridge"/>
+    /// that converts the signal's Variant arguments. The bridge is kept per
+    /// engine object, so removing the handler through any wrapper of the same
+    /// object disconnects it.
+    /// </summary>
+    protected void ConnectBridge(string signal, Delegate handler, Callable bridge)
+    {
+        var key = (InstanceId, signal);
+        lock (Bridges)
+        {
+            Prune();
+            if (!Bridges.TryGetValue(key, out var held))
+            {
+                held = new System.Collections.Generic.List<(Delegate, Callable)>();
+                Bridges[key] = held;
+            }
+            held.Add((handler, bridge));
+        }
+        Connect(signal, bridge);
+    }
+
+    /// <summary>
+    /// Disconnects the bridge the most recent matching
+    /// <see cref="ConnectBridge"/> made for <paramref name="handler"/>.
+    /// </summary>
+    protected void DisconnectBridge(string signal, Delegate handler)
+    {
+        var key = (InstanceId, signal);
+        Callable bridge;
+        lock (Bridges)
+        {
+            if (!Bridges.TryGetValue(key, out var held))
+            {
+                return;
+            }
+            int at = held.FindLastIndex(entry => entry.Handler == handler);
+            if (at < 0)
+            {
+                return;
+            }
+            bridge = held[at].Bridge;
+            held.RemoveAt(at);
+            if (held.Count == 0)
+            {
+                Bridges.Remove(key);
+            }
+        }
+        if (IsConnected(signal, bridge))
+        {
+            Disconnect(signal, bridge);
+        }
+    }
+
+    private static void Prune()
+    {
+        var gone = new System.Collections.Generic.List<(ulong, string)>();
+        foreach (var key in Bridges.Keys)
+        {
+            if (!GodotObject.IsInstanceIdValid(key.Instance))
+            {
+                gone.Add(key);
+            }
+        }
+        foreach (var key in gone)
+        {
+            Bridges.Remove(key);
+        }
+    }
+
+    /// <summary>
+    /// The wrapper of the addon object a signal argument carries, or
+    /// <see langword="null"/> when it carries none.
+    /// </summary>
+    protected static T Wrapped<T>(Variant value, Func<Variant, T> wrap)
+        where T : class
+    {
+        return value.VariantType == Variant.Type.Nil ? null : wrap(value);
+    }
+
     public bool IsConnected(StringName signal, Callable handler)
     {
         return Reach(BindIsConnected, signal, handler);

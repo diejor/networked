@@ -8,8 +8,76 @@
 #include "godot/object.hpp"
 #include "godot/templates.hpp"
 #include "godot/variant.hpp"
+#include "netw/api/netw_multiplayer.hpp"
 
 namespace netw_test {
+
+inline int notification_named(const godot::StringName &p_name) {
+    static const char *const NAMES[] = {
+        "endpoint_added",
+        "endpoint_removed",
+        "endpoint_updated",
+        "clock_before_tick",
+        "clock_on_tick",
+        "clock_after_tick",
+        "predict_owner_divergence",
+        "lagcomp_action_gate_fallback",
+        "scene_spawned",
+        "scene_activated",
+        "scene_despawned",
+        "scene_entity_moved",
+        "scene_startup_spawned",
+        "participant_viewport_changed",
+        "clock_before_tick_loop",
+        "clock_after_tick_loop",
+        "clock_synchronized",
+        "clock_configured",
+        "clock_tickrate_mismatch",
+        "clock_pong_received",
+        "clock_stability_changed",
+        "session_state_changed",
+        "embed_phase_changed",
+        "session_join_submitted",
+        "session_entered",
+        "session_join_failed",
+        "session_ended",
+        "session_reclaimed",
+        "peer_authenticating",
+        "peer_authentication_failed",
+        "session_poll_started",
+        "table_received",
+        "database_failed",
+        "persist_loaded",
+        "persist_saved",
+        "peer_packet",
+        "peer_kicked",
+        "session_server_disconnecting",
+        "peer_kick_requested",
+        "session_disconnect_requested",
+        "session_tree_paused",
+        "session_tree_unpaused",
+        "service_registered",
+        "service_unregistered",
+        "entity_live",
+        "entity_lingering",
+        "entity_dead",
+        "entity_hidden",
+        "player_joined",
+        "player_local_joined",
+        "player_left",
+        "scene_live",
+    };
+    static_assert(
+        sizeof(NAMES) / sizeof(NAMES[0])
+        == netw::NetwMultiplayer::NOTIFICATION_COUNT
+    );
+    for (int at = 0; at < netw::NetwMultiplayer::NOTIFICATION_COUNT; ++at) {
+        if (p_name == godot::StringName(NAMES[at])) {
+            return at;
+        }
+    }
+    return -1;
+}
 
 struct RecorderLog {
     struct Emission {
@@ -90,6 +158,8 @@ class Recorder {
     std::shared_ptr<RecorderLog> log;
     godot::Vector<godot::StringName> signals;
     godot::Vector<godot::Callable> callables;
+    godot::Vector<int> observed;
+    godot::Vector<godot::Callable> observers;
 
 public:
     Recorder(
@@ -98,7 +168,23 @@ public:
     )
         : source(p_object), log(std::make_shared<RecorderLog>()) {
         REQUIRE(p_object != nullptr);
+        netw::NetwMultiplayer *session
+            = godot::Object::cast_to<netw::NetwMultiplayer>(p_object);
         for (const godot::StringName &name : p_signals) {
+            const int event
+                = session != nullptr ? notification_named(name) : -1;
+            if (event >= 0) {
+                const godot::Callable callable(
+                    memnew(RecorderSink(log, name, p_object))
+                );
+                session->observe(
+                    netw::NetwMultiplayer::Notification(event),
+                    callable
+                );
+                observed.push_back(event);
+                observers.push_back(callable);
+                continue;
+            }
             REQUIRE_MESSAGE(
                 p_object->has_signal(name),
                 "no such signal on the recorded object"
@@ -123,6 +209,17 @@ public:
             if (source->is_connected(signals[index], callables[index])) {
                 source->disconnect(signals[index], callables[index]);
             }
+        }
+        netw::NetwMultiplayer *session
+            = godot::Object::cast_to<netw::NetwMultiplayer>(source);
+        if (session == nullptr) {
+            return;
+        }
+        for (int index = 0; index < observed.size(); ++index) {
+            session->unobserve(
+                netw::NetwMultiplayer::Notification(observed[index]),
+                observers[index]
+            );
         }
     }
 

@@ -17,24 +17,24 @@ namespace Networked;
 /// learn what they can see.
 /// <code>
 /// # server
-/// var sight := Netw.of(self).interest_layer(&amp;"sight")
+/// var sight := Netw.session(self).interest_layer(&amp;"sight")
 /// sight.add_entity(target_entity)
 /// sight.add_viewer(observer_peer_id)
 ///
 /// # client
-/// var sight := Netw.of(self).interest_layer(&amp;"sight")
-/// sight.entity_visible.connect(func(entity):
-///     add_marker(entity.owner)
+/// var sight := Netw.session(self).interest_layer(&amp;"sight")
+/// sight.visibility_changed.connect(func(entity: NetwEntity, visible: bool):
+///     marker_of(entity.owner).visible = visible
 /// )
 /// </code>
 /// <para>
 /// Changes apply at the end of the frame, or at
 /// <see cref="NetwMultiplayer.InterestFlushNow"/>. On the server, use
-/// <see cref="NetwInterestLayer.InterestEnter"/> and
-/// <see cref="NetwInterestLayer.InterestExit"/>. On a client, use
-/// <see cref="NetwInterestLayer.EntityVisible"/> and
-/// <see cref="NetwInterestLayer.EntityHidden"/>. An entity inside a multiplayer
-/// scene is only visible to peers in that scene, whatever other layers say.
+/// <see cref="NetwInterestLayer.InterestEntered"/> and
+/// <see cref="NetwInterestLayer.InterestExited"/>. On a client, use
+/// <see cref="NetwInterestLayer.VisibilityChanged"/>. An entity inside a
+/// multiplayer scene is only visible to peers in that scene, whatever other
+/// layers say.
 /// </para>
 /// </remarks>
 public sealed class NetwInterestLayer : NetwRefCounted
@@ -53,44 +53,109 @@ public sealed class NetwInterestLayer : NetwRefCounted
         return Adopt(NetwApi.Retained(NetwApi.ObjectOf(value)));
     }
 
+    public enum LayerPolicy : long
+    {
+        /// <summary>
+        /// Only viewers of the layer see its entities, as for a team or a
+        /// private room.
+        /// </summary>
+        Outsiders = 0,
+        /// <summary>
+        /// Only peers that are not viewers see its entities.
+        /// </summary>
+        Insiders = 1,
+    }
+
+    public enum LeavePolicy : long
+    {
+        /// <summary>
+        /// Free the peer's copy. The entity becomes
+        /// <see cref="NetwMultiplayer.EntityState.Absent"/> there and can be
+        /// shown again later.
+        /// </summary>
+        Hide = 0,
+        /// <summary>
+        /// Keep the peer's copy and stop updating it. Updates resume when it is
+        /// visible again.
+        /// </summary>
+        Retain = 1,
+        /// <summary>
+        /// Call the custom callback given to
+        /// <see cref="NetwMultiplayer.InterestOnLeavePolicy"/>.
+        /// </summary>
+        Custom = 2,
+    }
+
+    public enum PerceptionPolicy : long
+    {
+        /// <summary>
+        /// Hide a copy kept by
+        /// <see cref="NetwInterestLayer.LeavePolicy.Retain"/>.
+        /// </summary>
+        Hide = 0,
+        /// <summary>
+        /// Keep showing a copy kept by
+        /// <see cref="NetwInterestLayer.LeavePolicy.Retain"/> where it was last
+        /// seen.
+        /// </summary>
+        Show = 1,
+        /// <summary>
+        /// Call the custom callback given to
+        /// <see cref="NetwMultiplayer.InterestOnPerceptionPolicy"/>.
+        /// </summary>
+        Custom = 2,
+    }
+
     /// <summary>
     /// Emitted on the server when <c>peer_id</c> starts seeing <c>entity</c>
     /// through this layer.
     /// </summary>
-    public event Action<Variant, long> InterestEnter
+    public event Action<NetwEntity, long> InterestEntered
     {
-        add => Connect("interest_enter", Callable.From(value));
-        remove => Disconnect("interest_enter", Callable.From(value));
+        add => ConnectBridge(
+            "interest_entered",
+            value,
+            Callable.From(
+                (Variant a0, long a1) =>
+                    value(Wrapped(a0, NetwEntity.From), a1)
+            )
+        );
+        remove => DisconnectBridge("interest_entered", value);
     }
 
     /// <summary>
     /// Emitted on the server when <c>peer_id</c> stops seeing <c>entity</c>
     /// through this layer.
     /// </summary>
-    public event Action<Variant, long> InterestExit
+    public event Action<NetwEntity, long> InterestExited
     {
-        add => Connect("interest_exit", Callable.From(value));
-        remove => Disconnect("interest_exit", Callable.From(value));
+        add => ConnectBridge(
+            "interest_exited",
+            value,
+            Callable.From(
+                (Variant a0, long a1) =>
+                    value(Wrapped(a0, NetwEntity.From), a1)
+            )
+        );
+        remove => DisconnectBridge("interest_exited", value);
     }
 
     /// <summary>
-    /// Emitted on a client when it starts seeing <c>entity</c> through this
-    /// layer.
+    /// Emitted on a client when it starts or stops seeing <c>entity</c> through
+    /// this layer. A hidden entity is not despawned, see
+    /// <see cref="NetwEntity.Hidden"/>.
     /// </summary>
-    public event Action<Variant> EntityVisible
+    public event Action<NetwEntity, bool> VisibilityChanged
     {
-        add => Connect("entity_visible", Callable.From(value));
-        remove => Disconnect("entity_visible", Callable.From(value));
-    }
-
-    /// <summary>
-    /// Emitted on a client when it stops seeing <c>entity</c> through this
-    /// layer.
-    /// </summary>
-    public event Action<Variant> EntityHidden
-    {
-        add => Connect("entity_hidden", Callable.From(value));
-        remove => Disconnect("entity_hidden", Callable.From(value));
+        add => ConnectBridge(
+            "visibility_changed",
+            value,
+            Callable.From(
+                (Variant a0, bool a1) =>
+                    value(Wrapped(a0, NetwEntity.From), a1)
+            )
+        );
+        remove => DisconnectBridge("visibility_changed", value);
     }
 
     /// <summary>
@@ -99,8 +164,15 @@ public sealed class NetwInterestLayer : NetwRefCounted
     /// </summary>
     public event Action<long> ViewerAdded
     {
-        add => Connect("viewer_added", Callable.From(value));
-        remove => Disconnect("viewer_added", Callable.From(value));
+        add => ConnectBridge(
+            "viewer_added",
+            value,
+            Callable.From(
+                (long a0) =>
+                    value(a0)
+            )
+        );
+        remove => DisconnectBridge("viewer_added", value);
     }
 
     /// <summary>
@@ -109,26 +181,47 @@ public sealed class NetwInterestLayer : NetwRefCounted
     /// </summary>
     public event Action<long> ViewerRemoved
     {
-        add => Connect("viewer_removed", Callable.From(value));
-        remove => Disconnect("viewer_removed", Callable.From(value));
+        add => ConnectBridge(
+            "viewer_removed",
+            value,
+            Callable.From(
+                (long a0) =>
+                    value(a0)
+            )
+        );
+        remove => DisconnectBridge("viewer_removed", value);
     }
 
     /// <summary>
     /// Emitted when <c>entity</c> is added to the layer.
     /// </summary>
-    public event Action<Variant> EntityAdded
+    public event Action<NetwEntity> EntityAdded
     {
-        add => Connect("entity_added", Callable.From(value));
-        remove => Disconnect("entity_added", Callable.From(value));
+        add => ConnectBridge(
+            "entity_added",
+            value,
+            Callable.From(
+                (Variant a0) =>
+                    value(Wrapped(a0, NetwEntity.From))
+            )
+        );
+        remove => DisconnectBridge("entity_added", value);
     }
 
     /// <summary>
     /// Emitted when <c>entity</c> is removed from the layer.
     /// </summary>
-    public event Action<Variant> EntityRemoved
+    public event Action<NetwEntity> EntityRemoved
     {
-        add => Connect("entity_removed", Callable.From(value));
-        remove => Disconnect("entity_removed", Callable.From(value));
+        add => ConnectBridge(
+            "entity_removed",
+            value,
+            Callable.From(
+                (Variant a0) =>
+                    value(Wrapped(a0, NetwEntity.From))
+            )
+        );
+        remove => DisconnectBridge("entity_removed", value);
     }
 
     private static readonly IntPtr _bindGetLayerId =
@@ -161,22 +254,22 @@ public sealed class NetwInterestLayer : NetwRefCounted
     }
 
     private static readonly IntPtr _bindGetPolicy =
-        NetwApi.MethodBind("NetwInterestLayer", "get_policy", 1167841778UL);
+        NetwApi.MethodBind("NetwInterestLayer", "get_policy", 2319213990UL);
 
     private static readonly IntPtr _bindSetPolicy =
-        NetwApi.MethodBind("NetwInterestLayer", "set_policy", 1329736265UL);
+        NetwApi.MethodBind("NetwInterestLayer", "set_policy", 1154107697UL);
 
     /// <summary>
     /// Whether <see cref="NetwInterestLayer.Viewers"/> are the peers that see
     /// the entities, or the ones that do not.
     /// </summary>
-    public NetwMultiplayer.LayerPolicy Policy
+    public NetwInterestLayer.LayerPolicy Policy
     {
         get
         {
             long answered = default;
             NetwThunks.Ptrcall0_Long(_bindGetPolicy, Checked, ref answered);
-            return (NetwMultiplayer.LayerPolicy)answered;
+            return (NetwInterestLayer.LayerPolicy)answered;
         }
         set
         {
@@ -194,19 +287,19 @@ public sealed class NetwInterestLayer : NetwRefCounted
         NetwApi.MethodBind(
             "NetwInterestLayer",
             "get_default_leave_policy",
-            463072139UL);
+            1160916413UL);
 
     private static readonly IntPtr _bindSetDefaultLeavePolicy =
         NetwApi.MethodBind(
             "NetwInterestLayer",
             "set_default_leave_policy",
-            1981949676UL);
+            3645790946UL);
 
     /// <summary>
     /// What happens to a peer's copy of an entity it stops seeing, unless the
     /// entity sets its own.
     /// </summary>
-    public NetwMultiplayer.LeavePolicy DefaultLeavePolicy
+    public NetwInterestLayer.LeavePolicy DefaultLeavePolicy
     {
         get
         {
@@ -215,7 +308,7 @@ public sealed class NetwInterestLayer : NetwRefCounted
                 _bindGetDefaultLeavePolicy,
                 Checked,
                 ref answered);
-            return (NetwMultiplayer.LeavePolicy)answered;
+            return (NetwInterestLayer.LeavePolicy)answered;
         }
         set
         {
@@ -233,19 +326,19 @@ public sealed class NetwInterestLayer : NetwRefCounted
         NetwApi.MethodBind(
             "NetwInterestLayer",
             "get_default_perception_policy",
-            1681383475UL);
+            2381245676UL);
 
     private static readonly IntPtr _bindSetDefaultPerceptionPolicy =
         NetwApi.MethodBind(
             "NetwInterestLayer",
             "set_default_perception_policy",
-            1645775617UL);
+            1040024212UL);
 
     /// <summary>
     /// Whether a kept copy is still shown after the peer stops seeing it,
     /// unless the entity sets its own.
     /// </summary>
-    public NetwMultiplayer.PerceptionPolicy DefaultPerceptionPolicy
+    public NetwInterestLayer.PerceptionPolicy DefaultPerceptionPolicy
     {
         get
         {
@@ -254,7 +347,7 @@ public sealed class NetwInterestLayer : NetwRefCounted
                 _bindGetDefaultPerceptionPolicy,
                 Checked,
                 ref answered);
-            return (NetwMultiplayer.PerceptionPolicy)answered;
+            return (NetwInterestLayer.PerceptionPolicy)answered;
         }
         set
         {
@@ -310,6 +403,78 @@ public sealed class NetwInterestLayer : NetwRefCounted
         }
     }
 
+    private static readonly IntPtr _bindGetDriver =
+        NetwApi.MethodBind("NetwInterestLayer", "get_driver", 2136241257UL);
+
+    private static readonly IntPtr _bindSetDriver =
+        NetwApi.MethodBind("NetwInterestLayer", "set_driver", 1611583062UL);
+
+    /// <summary>
+    /// Called on the server once per frame with this layer. It returns every
+    /// entity that belongs in the layer.
+    /// <code>
+    /// sight.driver = func(layer: NetwInterestLayer) -&gt; Array[NetwEntity]:
+    ///     return entities_near(beacon.position, 20.0)
+    /// </code>
+    /// <para>
+    /// If the result holds anything that is not an entity of this session, the
+    /// layer does not change that frame.
+    /// </para>
+    /// </summary>
+    public Callable Driver
+    {
+        get
+        {
+            godot_variant answered = default;
+            NetwThunks.Call0(_bindGetDriver, Checked, ref answered);
+            Callable result = VariantUtils.ConvertToCallable(answered);
+            answered.Dispose();
+            return result;
+        }
+        set
+        {
+            godot_variant slot0 = VariantUtils.CreateFromCallable(value);
+            godot_variant answered = default;
+            NetwThunks.Call1(_bindSetDriver, Checked, in slot0, ref answered);
+            slot0.Dispose();
+            answered.Dispose();
+        }
+    }
+
+    private static readonly IntPtr _bindGetMonitor =
+        NetwApi.MethodBind("NetwInterestLayer", "get_monitor", 2136241257UL);
+
+    private static readonly IntPtr _bindSetMonitor =
+        NetwApi.MethodBind("NetwInterestLayer", "set_monitor", 1611583062UL);
+
+    /// <summary>
+    /// Called when a peer starts or stops seeing an entity through this layer.
+    /// On a client, the peer is always this one.
+    /// <code>
+    /// sight.monitor = func(entity: NetwEntity, peer_id: int, visible: bool) -&gt; void:
+    ///     print(entity.owner.name, " ", peer_id, " ", visible)
+    /// </code>
+    /// </summary>
+    public Callable Monitor
+    {
+        get
+        {
+            godot_variant answered = default;
+            NetwThunks.Call0(_bindGetMonitor, Checked, ref answered);
+            Callable result = VariantUtils.ConvertToCallable(answered);
+            answered.Dispose();
+            return result;
+        }
+        set
+        {
+            godot_variant slot0 = VariantUtils.CreateFromCallable(value);
+            godot_variant answered = default;
+            NetwThunks.Call1(_bindSetMonitor, Checked, in slot0, ref answered);
+            slot0.Dispose();
+            answered.Dispose();
+        }
+    }
+
     private static readonly IntPtr _bindAddViewer =
         NetwApi.MethodBind("NetwInterestLayer", "add_viewer", 3067735520UL);
 
@@ -356,7 +521,7 @@ public sealed class NetwInterestLayer : NetwRefCounted
     /// <summary>
     /// Returns <c>true</c> when <paramref name="peerId"/> is in
     /// <see cref="NetwInterestLayer.Viewers"/>. With
-    /// <see cref="NetwMultiplayer.LayerPolicy.Insiders"/>, viewers are the
+    /// <see cref="NetwInterestLayer.LayerPolicy.Insiders"/>, viewers are the
     /// peers that cannot see.
     /// </summary>
     public bool HasViewer(long peerId)
@@ -433,7 +598,7 @@ public sealed class NetwInterestLayer : NetwRefCounted
 
     /// <summary>
     /// Marks <paramref name="entity"/> as visible to this client and emits
-    /// <see cref="NetwInterestLayer.EntityVisible"/>. The session calls it.
+    /// <see cref="NetwInterestLayer.VisibilityChanged"/>. The session calls it.
     /// </summary>
     public void ClientAdmit(NetwEntity entity)
     {
@@ -451,8 +616,8 @@ public sealed class NetwInterestLayer : NetwRefCounted
 
     /// <summary>
     /// Marks <paramref name="entity"/> as no longer visible to this client and
-    /// emits <see cref="NetwInterestLayer.EntityHidden"/>. The session calls
-    /// it.
+    /// emits <see cref="NetwInterestLayer.VisibilityChanged"/>. The session
+    /// calls it.
     /// </summary>
     public void ClientRevoke(NetwEntity entity)
     {
@@ -474,7 +639,7 @@ public sealed class NetwInterestLayer : NetwRefCounted
     /// <summary>
     /// Removes <paramref name="entity"/> on a client when it leaves the tree,
     /// emitting <see cref="NetwInterestLayer.EntityRemoved"/> and then
-    /// <see cref="NetwInterestLayer.EntityHidden"/>. The session calls it.
+    /// <see cref="NetwInterestLayer.VisibilityChanged"/>. The session calls it.
     /// </summary>
     public void ClientUntrackEntity(NetwEntity entity)
     {
@@ -494,8 +659,8 @@ public sealed class NetwInterestLayer : NetwRefCounted
             1449035650UL);
 
     /// <summary>
-    /// Emits <see cref="NetwInterestLayer.InterestEnter"/> or
-    /// <see cref="NetwInterestLayer.InterestExit"/>, then the entity's own
+    /// Emits <see cref="NetwInterestLayer.InterestEntered"/> or
+    /// <see cref="NetwInterestLayer.InterestExited"/>, then the entity's own
     /// signals and callbacks. The session calls it. Calling it yourself emits a
     /// change that did not happen. <b>Server Only.</b>
     /// </summary>

@@ -485,8 +485,8 @@ TEST_CASE(
     core.instantiate();
     core->session_set_authority_peer(MESH_COORDINATOR);
     const CallLog seen;
-    core->connect(
-        StringName("session_tree_unpaused"),
+    core->observe(
+        NetwMultiplayer::SESSION_TREE_UNPAUSED,
         seen.callable(StringName("unpaused"))
     );
 

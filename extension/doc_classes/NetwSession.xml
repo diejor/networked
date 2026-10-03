@@ -1,0 +1,316 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwSession" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		The players, scenes and signals of a [member Node.multiplayer] session.
+	</brief_description>
+	<description>
+		Reached with [method Netw.session] from any [Node]. Mostly useful for connecting signals.
+		[codeblock]
+		var s := Netw.session(self)
+		s.entered.connect(on_entered)
+		s.exited.connect(on_exited)
+		for player: NetwPlayer in s.players:
+		    scoreboard.add(player)
+
+		func on_exited(reason: NetwSession.ExitReason, detail: String) -&gt; void:
+		    if reason == NetwSession.KICKED:
+		        show_message("Kicked: %s" % detail)
+		[/codeblock]
+		There is one handle per session, so it is safe to keep it across an await.
+		Connecting is done as you would normally do with [SceneMultiplayer], by assigning [member MultiplayerAPI.multiplayer_peer]. See [NetwConnection] to manage endpoints and [method Netw.prepare_join] to join as a player.
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="bucket_of" qualifiers="const">
+			<return type="Variant" />
+			<param index="0" name="peer" type="int" />
+			<param index="1" name="type" type="Variant" />
+			<description>
+				The per-peer game data of [param type] stored for [param peer], created on first use. See [method NetwMultiplayer.peer_get_bucket].
+			</description>
+		</method>
+		<method name="create_scene">
+			<return type="NetwScene" />
+			<param index="0" name="scene" type="PackedScene" />
+			<param index="1" name="isolation" type="int" enum="NetwScene.SceneIsolation" default="0" />
+			<description>
+				Spawns [param scene] as a new scene with no players in it. [param isolation] decides whether it has its own physics and rendering world.
+				[b]Server Only.[/b]
+			</description>
+		</method>
+		<method name="database" qualifiers="const">
+			<return type="NetwDatabase" />
+			<param index="0" name="name" type="StringName" />
+			<description>
+				The database declared as [param name] with [method Netw.configure_database], or [code]null[/code] when there is none.
+			</description>
+		</method>
+		<method name="find_scene">
+			<return type="NetwScene" />
+			<param index="0" name="label" type="StringName" />
+			<description>
+				Returns the newest scene whose root node is named [param label], or [code]null[/code].
+			</description>
+		</method>
+		<method name="install_physics_stepper">
+			<return type="int" enum="Error" />
+			<param index="0" name="world" type="World3D" />
+			<param index="1" name="stepper" type="NetwPhysicsStepper" />
+			<description>
+				Lets [param stepper] step the physics of [param world] several times in one frame, which rollback needs. Pass [code]null[/code] as [param stepper] to remove it.
+				[codeblock]
+				func _ready() -&gt; void:
+				    session.install_physics_stepper(get_world_3d(), MyStepper.new())
+				[/codeblock]
+			</description>
+		</method>
+		<method name="install_physics_stepper_2d">
+			<return type="int" enum="Error" />
+			<param index="0" name="world" type="World2D" />
+			<param index="1" name="stepper" type="NetwPhysicsStepper" />
+			<description>
+				The [World2D] version of [method install_physics_stepper].
+			</description>
+		</method>
+		<method name="interest_layer" qualifiers="const">
+			<return type="NetwInterestLayer" />
+			<param index="0" name="name" type="StringName" />
+			<description>
+				The [NetwInterestLayer] called [param name], created on first use.
+			</description>
+		</method>
+		<method name="kick">
+			<return type="int" enum="Error" />
+			<param index="0" name="player" type="NetwPlayer" />
+			<param index="1" name="reason" type="String" default="&quot;&quot;" />
+			<description>
+				Removes [param player] from the session and disconnects their peer with [param reason]. The server's own player cannot be kicked, use [method leave] instead.
+				[b]Server Only.[/b]
+			</description>
+		</method>
+		<method name="leave">
+			<return type="NetwPromise" />
+			<description>
+				Leaves the session. The server saves its entity rows first, and stays online if the database refuses a row. The promise resolves with an [enum @GlobalScope.Error] once the peer is down or the save failed.
+			</description>
+		</method>
+		<method name="player_of" qualifiers="const">
+			<return type="NetwPlayer" />
+			<param index="0" name="peer" type="int" />
+			<description>
+				The [NetwPlayer] of [param peer], [code]null[/code] when there is none.
+			</description>
+		</method>
+		<method name="register_service">
+			<return type="void" />
+			<param index="0" name="service" type="Object" />
+			<param index="1" name="type" type="Object" default="null" />
+			<description>
+				Registers [param service] so [method service] returns it. [param type] defaults to the script of [param service]. A [NetwService] registers itself.
+			</description>
+		</method>
+		<method name="request_scene">
+			<return type="NetwPromise" />
+			<param index="0" name="path" type="String" />
+			<param index="1" name="scope" type="int" enum="NetwScene.SceneChange" default="0" />
+			<description>
+				Asks the server for the scene at [param path] over [param scope]. The promise resolves when the scene is live, or is rejected when the server declines.
+				[b]Player request.[/b]
+			</description>
+		</method>
+		<method name="save_entities">
+			<return type="NetwPromise" />
+			<description>
+				Saves every entity row that changed since its last save, including rows of entities that already left. Call it again to retry a row the database refused. [method leave] runs the same save.
+				[codeblock lang=text]
+				Error
+				┠╴OK                every changed row is stored
+				┠╴ERR_UNAUTHORIZED  this peer is not the server
+				┠╴ERR_UNCONFIGURED  this handle outlived its session
+				┖╴a row's code      the first row still unsaved, see NetwPersistence.save
+				[/codeblock]
+				[b]Server Only.[/b]
+			</description>
+		</method>
+		<method name="service" qualifiers="const">
+			<return type="Node" />
+			<param index="0" name="type" type="Object" />
+			<description>
+				The service registered for [param type], or [code]null[/code].
+				[codeblock]
+				@onready var session: NetwSession = Netw.session(self)
+
+				func _ready() -&gt; void:
+				    var game := session.service(MyGame) as MyGame
+				[/codeblock]
+			</description>
+		</method>
+		<method name="set_peer_bandwidth">
+			<return type="void" />
+			<param index="0" name="peer" type="int" />
+			<param index="1" name="kbps" type="int" />
+			<description>
+				Gives [param peer] its own budget in kbit/s, in place of [member NetwSessionConfig.bandwidth_kbps], for what this peer sends it. [code]0[/code] returns it to the session's budget, and a negative value is refused. The budget lasts until [param peer] disconnects.
+				[codeblock]
+				Netw.session(self).set_peer_bandwidth(player.peer_id, 64)
+				[/codeblock]
+			</description>
+		</method>
+		<method name="set_server_info">
+			<return type="void" />
+			<param index="0" name="info" type="NetwServerInfo" />
+			<description>
+				Replaces what this session advertises about itself, such as the name shown in a server list.
+				[b]Server Only.[/b]
+			</description>
+		</method>
+		<method name="table" qualifiers="const">
+			<return type="NetwTable" />
+			<param index="0" name="name" type="StringName" />
+			<description>
+				The table of the schema declared as [param name] with [method Netw.configure_schema], or [code]null[/code] when there is none.
+			</description>
+		</method>
+		<method name="unregister_service">
+			<return type="void" />
+			<param index="0" name="service" type="Object" />
+			<param index="1" name="type" type="Object" default="null" />
+			<description>
+				Undoes [method register_service].
+			</description>
+		</method>
+	</methods>
+	<members>
+		<member name="clock" type="NetwClock" setter="" getter="get_clock">
+			The [NetwClock] of this session.
+		</member>
+		<member name="config" type="NetwSessionConfig" setter="" getter="get_config">
+			A copy of the [NetwSessionConfig] this session was configured with. Writing to it changes nothing, use [method Netw.configure_session] before connecting and [method set_server_info] after.
+		</member>
+		<member name="connection" type="NetwConnection" setter="" getter="get_connection">
+			The [NetwConnection] of this session, to find servers and create peers.
+		</member>
+		<member name="is_local_client" type="bool" setter="" getter="get_is_local_client" default="false">
+			[code]true[/code] when this peer has its own player, at [constant ROLE_CLIENT] and [constant ROLE_LISTEN_SERVER].
+		</member>
+		<member name="is_online" type="bool" setter="" getter="get_is_online" default="false">
+			Whether a peer is assigned and connected.
+		</member>
+		<member name="local_player" type="NetwPlayer" setter="" getter="get_local_player">
+			The [NetwPlayer] of this peer, [code]null[/code] until [signal local_joined].
+		</member>
+		<member name="players" type="NetwPlayer[]" setter="" getter="get_players" default="[]">
+			Every [NetwPlayer] that has joined, including those whose peer has since disconnected. See [member NetwMultiplayer.connected_players] for only the connected ones.
+		</member>
+		<member name="role" type="int" setter="" getter="get_role" enum="NetwSession.Role" default="0">
+			What this peer is in the session.
+		</member>
+		<member name="root" type="Node" setter="" getter="get_root">
+			The [Node] replicated nodes are under, [code]null[/code] when the session is not in the tree.
+		</member>
+		<member name="scenes" type="NetwScene[]" setter="" getter="get_scenes" default="[]">
+			Every live scene. Use [method find_scene] to find one by name.
+		</member>
+		<member name="stats" type="Dictionary" setter="" getter="get_stats" default="{}">
+			Every counter this session keeps, keyed by [enum NetwMultiplayer.Stat].
+		</member>
+	</members>
+	<signals>
+		<signal name="entered">
+			<description>
+				Emitted when this peer is online.
+			</description>
+		</signal>
+		<signal name="exited">
+			<param index="0" name="reason" type="int" enum="NetwSession.ExitReason" />
+			<param index="1" name="detail" type="String" />
+			<description>
+				Emitted after the session is cleaned up, with the same [param reason] and [param detail] as [signal exiting].
+			</description>
+		</signal>
+		<signal name="exiting">
+			<param index="0" name="reason" type="int" enum="NetwSession.ExitReason" />
+			<param index="1" name="detail" type="String" />
+			<description>
+				Emitted before the session is cleaned up, so [member players] and [member scenes] can still be read. [param detail] is the message the server gave, if any.
+			</description>
+		</signal>
+		<signal name="join_failed">
+			<param index="0" name="code" type="int" enum="Error" />
+			<param index="1" name="reason" type="String" />
+			<description>
+				This peer's join was rejected with [param code] and the [param reason] the server gave. [member local_player] stays [code]null[/code].
+			</description>
+		</signal>
+		<signal name="local_joined">
+			<param index="0" name="player" type="NetwPlayer" />
+			<description>
+				The [NetwPlayer] of this peer has joined. [member local_player] is set from here on.
+			</description>
+		</signal>
+		<signal name="player_joined">
+			<param index="0" name="player" type="NetwPlayer" />
+			<description>
+				A [NetwPlayer] has joined, including this peer's own.
+			</description>
+		</signal>
+		<signal name="player_left">
+			<param index="0" name="player" type="NetwPlayer" />
+			<description>
+				A [NetwPlayer] has left, either because their peer disconnected or because of [method kick]. [member NetwPlayer.is_active] is already [code]false[/code].
+			</description>
+		</signal>
+		<signal name="scene_ready">
+			<param index="0" name="scene" type="NetwScene" />
+			<description>
+				Emitted after the root of [param scene] is ready, so the whole scene can be accessed.
+				[codeblock]
+				func on_scene_ready(arena: NetwScene) -&gt; void:
+				    arena.root.get_node(^"Spawns").arrange()
+				[/codeblock]
+			</description>
+		</signal>
+	</signals>
+	<constants>
+		<constant name="SESSION_STATE_OFFLINE" value="0" enum="SessionState">
+			Not connected.
+		</constant>
+		<constant name="SESSION_STATE_CONNECTING" value="1" enum="SessionState">
+			Hosting or joining, and may still fail.
+		</constant>
+		<constant name="SESSION_STATE_ONLINE" value="2" enum="SessionState">
+			Connected.
+		</constant>
+		<constant name="SESSION_STATE_DISCONNECTING" value="3" enum="SessionState">
+			Disconnecting.
+		</constant>
+		<constant name="ROLE_NONE" value="0" enum="Role">
+			No session.
+		</constant>
+		<constant name="ROLE_CLIENT" value="1" enum="Role">
+			A client. A listen server also has a player, so check [member is_local_client] for that.
+		</constant>
+		<constant name="ROLE_DEDICATED_SERVER" value="2" enum="Role">
+			A server with no local player.
+		</constant>
+		<constant name="ROLE_LISTEN_SERVER" value="3" enum="Role">
+			A server that also has a player.
+		</constant>
+		<constant name="LOCAL_LEAVE" value="0" enum="ExitReason">
+			This peer left with [method leave] or cleared its peer.
+		</constant>
+		<constant name="SERVER_SHUTDOWN" value="1" enum="ExitReason">
+			The server announced it was shutting down.
+		</constant>
+		<constant name="CONNECTION_LOST" value="2" enum="ExitReason">
+			The connection dropped with no warning.
+		</constant>
+		<constant name="KICKED" value="3" enum="ExitReason">
+			The server kicked this peer with [method kick].
+		</constant>
+		<constant name="REPLACED" value="4" enum="ExitReason">
+			Another peer was assigned to [member MultiplayerAPI.multiplayer_peer].
+		</constant>
+	</constants>
+</class>

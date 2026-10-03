@@ -14,7 +14,7 @@ signal submitted(
 )
 
 var transport_defaults: Array[ConnectTransportConfig] = []
-var _connection: NetwConnectHandle
+var _connection: NetwConnection
 var _transports: Array[Dictionary] = []
 var _settings := ConnectFieldList.new()
 var _join_args := ConnectFieldList.new()
@@ -39,7 +39,7 @@ func _ready() -> void:
 
 ## Opens the direct join popup for [param handle].
 func open_join_direct(
-		handle: NetwConnectHandle,
+		handle: NetwConnection,
 		default_username: String,
 ) -> void:
 	_connection = handle
@@ -69,7 +69,7 @@ func _populate_backend_picker() -> void:
 	if _connection != null:
 		for transport: Dictionary in _connection.transports():
 			var caps := int(transport.get("capabilities", 0))
-			if caps & NetwMultiplayer.TRANSPORT_AVAILABLE == 0:
+			if caps & NetwConnection.TRANSPORT_AVAILABLE == 0:
 				continue
 			_transports.append(transport)
 			_backend_picker.add_item(String(transport.get("display_name", "")))

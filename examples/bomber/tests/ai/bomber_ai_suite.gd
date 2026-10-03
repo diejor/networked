@@ -131,13 +131,13 @@ func settle_network(
 
 
 func _begin_game(host: NetwSceneRunner) -> void:
-	var gamestate := Netw.service(host.tree, BomberGamestate) \
+	var gamestate := host.session.service(BomberGamestate) \
 			as BomberGamestate
 	assert_that(gamestate).is_not_null()
 	gamestate.begin_game()
 
 
-func _get_world(runner: NetwSceneRunner) -> NetwSceneHandle:
+func _get_world(runner: NetwSceneRunner) -> NetwScene:
 	if not runner or not runner.tree:
 		return null
-	return Netw.scene(runner.tree, &"World")
+	return runner.session.find_scene(&"World")

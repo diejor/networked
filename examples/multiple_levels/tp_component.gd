@@ -13,7 +13,9 @@ var is_moving: bool:
 		return layer != null and layer.is_moving()
 
 @onready var entity := NetwEntity.of(owner)
-@onready var game: MultipleLevelsSession = Netw.service(self, MultipleLevelsSession)
+@onready var session: NetwSession = Netw.session(self)
+@onready var game: MultipleLevelsSession = \
+		session.service(MultipleLevelsSession) as MultipleLevelsSession
 
 
 func _init() -> void:
@@ -29,7 +31,7 @@ func _ready() -> void:
 	Netw.configure_property(self, &"current_scene_path", false) \
 			.persisted(&"level")
 	entity.reparented.connect(apply_arrival_marker)
-	layer = Netw.service(self, TPLayer)
+	layer = session.service(TPLayer) as TPLayer
 
 
 func teleport(target_scene: String, target_marker: NodePath) -> NetwPromise:
@@ -106,7 +108,7 @@ func complete_teleport(code: Error = OK, detail: String = "") -> void:
 
 @rpc("authority", "call_local", "reliable")
 func finish_teleport() -> void:
-	entity.interpolation.reset()
+	entity.display.reset()
 	owner.reset_physics_interpolation()
 	arrival_marker = NodePath()
 	if multiplayer.is_server():

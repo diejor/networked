@@ -13,7 +13,7 @@ namespace Networked;
 /// when the request was sent. A peer that disconnects is no longer waited for.
 /// <see cref="NetwGroupPromise.Then"/> runs once with every result, as a
 /// <c>peer_id -&gt; value</c> <see cref="Godot.Collections.Dictionary"/>.
-/// <see cref="NetwGroupPromise.CompletedSingle"/> reports each result as it
+/// <see cref="NetwGroupPromise.PeerCompleted"/> reports each result as it
 /// arrives.
 /// <code>
 /// Netw.request_all(player.ready_check) \
@@ -45,51 +45,36 @@ public sealed class NetwGroupPromise : NetwRefCounted
     }
 
     /// <summary>
-    /// Emitted when every peer answered.
-    /// </summary>
-    public event Action<Godot.Collections.Dictionary> Completed
-    {
-        add => Connect("completed", Callable.From(value));
-        remove => Disconnect("completed", Callable.From(value));
-    }
-
-    /// <summary>
     /// Emitted when one peer answers.
     /// </summary>
-    public event Action<long, Variant> CompletedSingle
+    public event Action<long, Variant> PeerCompleted
     {
-        add => Connect("completed_single", Callable.From(value));
-        remove => Disconnect("completed_single", Callable.From(value));
+        add => ConnectBridge(
+            "peer_completed",
+            value,
+            Callable.From(
+                (long a0, Variant a1) =>
+                    value(a0, a1)
+            )
+        );
+        remove => DisconnectBridge("peer_completed", value);
     }
 
     /// <summary>
-    /// Emitted when the group fails or times out.
-    /// </summary>
-    public event Action<Error, string> Failed
-    {
-        add => Connect("failed", Callable.From(value));
-        remove => Disconnect("failed", Callable.From(value));
-    }
-
-    /// <summary>
-    /// Emitted once after <see cref="NetwGroupPromise.Completed"/> or
-    /// <see cref="NetwGroupPromise.Failed"/>.
+    /// Emitted once when the group completes, fails or times out. Use
+    /// <see cref="NetwGroupPromise.Wait"/> to <c>await</c> the group.
     /// </summary>
     public event Action Settled
     {
-        add => Connect("settled", Callable.From(value));
-        remove => Disconnect("settled", Callable.From(value));
-    }
-
-    /// <summary>
-    /// Used by <see cref="NetwGroupPromise.Wait"/>. Connect to
-    /// <see cref="NetwGroupPromise.Settled"/> instead, since this can be
-    /// emitted more than once.
-    /// </summary>
-    public event Action<Variant> Ready
-    {
-        add => Connect("ready", Callable.From(value));
-        remove => Disconnect("ready", Callable.From(value));
+        add => ConnectBridge(
+            "settled",
+            value,
+            Callable.From(
+                () =>
+                    value()
+            )
+        );
+        remove => DisconnectBridge("settled", value);
     }
 
     private static readonly IntPtr _bindGetIsCompleted =
@@ -246,9 +231,9 @@ public sealed class NetwGroupPromise : NetwRefCounted
         NetwApi.MethodBind("NetwGroupPromise", "wait", 4046169648UL);
 
     /// <summary>
-    /// Returns a signal to <c>await</c>, which gives
-    /// <see cref="NetwGroupPromise.Answer"/>. It works even when the group
-    /// already settled.
+    /// Returns a new signal to <c>await</c>, which fires once with
+    /// <see cref="NetwGroupPromise.Answer"/>. When the group already settled,
+    /// it fires on the next frame.
     /// <code>
     /// await destination.move_players(peers).wait()
     /// </code>
@@ -325,8 +310,8 @@ public sealed class NetwGroupPromise : NetwRefCounted
 
     /// <summary>
     /// Records the result of <paramref name="peerId"/> and emits
-    /// <see cref="NetwGroupPromise.CompletedSingle"/>. Completes the group if
-    /// it was the last one. Ignored for a peer the group is not waiting for.
+    /// <see cref="NetwGroupPromise.PeerCompleted"/>. Completes the group if it
+    /// was the last one. Ignored for a peer the group is not waiting for.
     /// </summary>
     public void ResolvePeer(long peerId, Variant val)
     {
@@ -367,9 +352,10 @@ public sealed class NetwGroupPromise : NetwRefCounted
 
     /// <summary>
     /// Completes the group with the current
-    /// <see cref="NetwGroupPromise.Results"/>, and emits
-    /// <see cref="NetwGroupPromise.Completed"/>, then
-    /// <see cref="NetwGroupPromise.Settled"/>.
+    /// <see cref="NetwGroupPromise.Results"/>. Emits
+    /// <see cref="NetwGroupPromise.Settled"/>, then calls the
+    /// <see cref="NetwGroupPromise.Then"/> callbacks, then fires every
+    /// <see cref="NetwGroupPromise.Wait"/> signal.
     /// </summary>
     public void ResolveAll()
     {
@@ -381,9 +367,10 @@ public sealed class NetwGroupPromise : NetwRefCounted
         NetwApi.MethodBind("NetwGroupPromise", "reject", 399475586UL);
 
     /// <summary>
-    /// Fails the group and emits <see cref="NetwGroupPromise.Failed"/>, then
-    /// <see cref="NetwGroupPromise.Settled"/>. Does nothing when already
-    /// settled.
+    /// Fails the group. Emits <see cref="NetwGroupPromise.Settled"/>, then
+    /// calls the <see cref="NetwGroupPromise.CatchError"/> callbacks, then
+    /// fires every <see cref="NetwGroupPromise.Wait"/> signal. Does nothing
+    /// when already settled.
     /// </summary>
     public void Reject(Error errCode, string errDetail = "")
     {

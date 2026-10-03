@@ -24,9 +24,9 @@ namespace Networked;
 /// tree.api.multiplayer_peer = peer
 ///
 /// # or let the transport create it
-/// Netw.connection(tree).create_peer(
+/// Netw.session(tree).connection.create_peer(
 ///     tree.peer_class,
-///     NetwMultiplayer.TRANSPORT_MODE_CLIENT,
+///     NetwConnection.TRANSPORT_MODE_CLIENT,
 ///     "127.0.0.1:21253",
 ///     tree.transport_settings,
 ///     func(peer: MultiplayerPeer, error: Error, _detail: String) -&gt; void:
@@ -206,15 +206,15 @@ public sealed class MultiplayerTree : NetwObject
     }
 
     private static readonly IntPtr _bindGetDesiredRole =
-        NetwApi.MethodBind("MultiplayerTree", "get_desired_role", 2901618068UL);
+        NetwApi.MethodBind("MultiplayerTree", "get_desired_role", 3770310992UL);
 
     private static readonly IntPtr _bindSetDesiredRole =
-        NetwApi.MethodBind("MultiplayerTree", "set_desired_role", 3233627807UL);
+        NetwApi.MethodBind("MultiplayerTree", "set_desired_role", 3036761731UL);
 
     /// <summary>
     /// The role this tree takes when it hosts.
     /// </summary>
-    public NetwMultiplayer.RoleEnum DesiredRole
+    public NetwSession.RoleEnum DesiredRole
     {
         get
         {
@@ -223,7 +223,7 @@ public sealed class MultiplayerTree : NetwObject
                 _bindGetDesiredRole,
                 Checked,
                 ref answered);
-            return (NetwMultiplayer.RoleEnum)answered;
+            return (NetwSession.RoleEnum)answered;
         }
         set
         {
@@ -356,7 +356,7 @@ public sealed class MultiplayerTree : NetwObject
 
     /// <summary>
     /// Duplicates this tree as a sibling named <c>Server</c>, with the role
-    /// <see cref="NetwMultiplayer.RoleEnum.DedicatedServer"/>.
+    /// <see cref="NetwSession.RoleEnum.DedicatedServer"/>.
     /// <code>
     /// var server := tree.raise_embedded_server()
     /// var peer := ENetMultiplayerPeer.new()

@@ -45,8 +45,38 @@ Properties
    +-------------------------------------------------------+-------------------------------------------------------+-----------+
    | :godot:`int`                                          | :ref:`peer_id<class_NetwPlayer_property_peer_id>`     | ``0``     |
    +-------------------------------------------------------+-------------------------------------------------------+-----------+
+   | :ref:`NetwScene<class_NetwScene>`                     | :ref:`scene<class_NetwPlayer_property_scene>`         |           |
+   +-------------------------------------------------------+-------------------------------------------------------+-----------+
    | :godot:`StringName`                                   | :ref:`username<class_NetwPlayer_property_username>`   | ``&""``   |
    +-------------------------------------------------------+-------------------------------------------------------+-----------+
+
+.. rst-class:: classref-section-separator
+
+----
+
+.. rst-class:: classref-descriptions-group
+
+Signals
+-------
+
+.. _class_NetwPlayer_signal_scene_changed:
+
+.. rst-class:: classref-signal
+
+**scene_changed**\ (\ from\: :ref:`NetwScene<class_NetwScene>`, to\: :ref:`NetwScene<class_NetwScene>`\ ) :ref:`🔗<class_NetwPlayer_signal_scene_changed>`
+
+Emitted when :ref:`scene<class_NetwPlayer_property_scene>` changes. Either may be ``null``. Only :ref:`NetwSession.local_player<class_NetwSession_property_local_player>` emits it.
+
+::
+
+    func _ready() -> void:
+        Netw.session(self).local_joined.connect(on_local_joined)
+
+    func on_local_joined(me: NetwPlayer) -> void:
+        me.scene_changed.connect(on_scene_changed)
+
+    func on_scene_changed(_from: NetwScene, to: NetwScene) -> void:
+        lobby.visible = to == null
 
 .. rst-class:: classref-section-separator
 
@@ -100,6 +130,24 @@ The entities spawned for this player with :ref:`Netw.spawn_player()<class_Netw_m
 - :godot:`int` **get_peer_id**\ (\ )
 
 The peer this player is connected as. Another player may reuse it after this one leaves.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NetwPlayer_property_scene:
+
+.. rst-class:: classref-property
+
+:ref:`NetwScene<class_NetwScene>` **scene** :ref:`🔗<class_NetwPlayer_property_scene>`
+
+.. rst-class:: classref-property-setget
+
+- :ref:`NetwScene<class_NetwScene>` **get_scene**\ (\ )
+
+The scene this player is in, or ``null``. It is the scene holding one of its :ref:`bodies<class_NetwPlayer_property_bodies>`, or else the scene it watches with :ref:`NetwScene.watch()<class_NetwScene_method_watch>`. It is ``null`` when there are two.
+
+A client only knows about the scenes it receives.
 
 .. rst-class:: classref-item-separator
 

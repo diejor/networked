@@ -37,8 +37,8 @@ TEST_CASE(
     CHECK(session->session_prepared_join()->username == StringName("ana"));
 
     CallLog log;
-    session->connect(
-        StringName("session_join_submitted"),
+    session->observe(
+        NetwMultiplayer::SESSION_JOIN_SUBMITTED,
         log.callable("submitted")
     );
 
@@ -63,8 +63,8 @@ TEST_CASE(
     session->session_prepare_join(StringName("ana"), Array());
 
     CallLog log;
-    session->connect(
-        StringName("session_join_submitted"),
+    session->observe(
+        NetwMultiplayer::SESSION_JOIN_SUBMITTED,
         log.callable("submitted")
     );
 
@@ -75,12 +75,12 @@ TEST_CASE(
     REQUIRE(session->session_prepared_join().has_value());
     CHECK(session->session_prepared_join()->username == StringName("ana"));
 
-    session->emit_signal(StringName("scene_startup_spawned"));
+    session->scene_announce_startup();
 
     NETW_CHECK_EQ(log.count("submitted"), 1);
     CHECK_FALSE(session->session_prepared_join().has_value());
 
-    session->emit_signal(StringName("scene_startup_spawned"));
+    session->scene_announce_startup();
     NETW_CHECK_EQ(log.count("submitted"), 1);
 
     session->embed_dispose();
@@ -101,8 +101,8 @@ TEST_CASE(
     CHECK_FALSE(session->session_prepared_join().has_value());
 
     CallLog log;
-    session->connect(
-        StringName("session_join_submitted"),
+    session->observe(
+        NetwMultiplayer::SESSION_JOIN_SUBMITTED,
         log.callable("submitted")
     );
     session->session_set_role(NetwMultiplayer::ROLE_CLIENT);
@@ -149,8 +149,8 @@ TEST_CASE(
     REQUIRE(session->session_prepared_join().has_value());
 
     CallLog log;
-    session->connect(
-        StringName("session_join_submitted"),
+    session->observe(
+        NetwMultiplayer::SESSION_JOIN_SUBMITTED,
         log.callable("submitted")
     );
     session->session_announce_entered();
@@ -177,8 +177,8 @@ TEST_CASE(
     session->session_prepare_join(StringName("ana"), Array());
 
     CallLog log;
-    session->connect(
-        StringName("session_join_submitted"),
+    session->observe(
+        NetwMultiplayer::SESSION_JOIN_SUBMITTED,
         log.callable("submitted")
     );
     session->session_announce_entered();

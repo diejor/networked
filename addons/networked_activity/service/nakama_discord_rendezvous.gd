@@ -120,7 +120,7 @@ func _host_and_commit(
 	Netw.session(tree).set_server_info(info)
 	var host_err := await bring_up(
 		tree,
-		NetwMultiplayer.TRANSPORT_MODE_HOST,
+		NetwConnection.TRANSPORT_MODE_HOST,
 		"",
 		username,
 		join_args,
@@ -140,7 +140,8 @@ func _commit_host(
 		tree: MultiplayerTree,
 		wrapper: NakamaWrapper,
 ) -> String:
-	var dir := Netw.service(tree, NakamaLobbyDirectory) as NakamaLobbyDirectory
+	var session: NetwSession = Netw.session(tree)
+	var dir := session.service(NakamaLobbyDirectory) as NakamaLobbyDirectory
 	if dir == null:
 		return ""
 	var my_match := dir._join_address()
@@ -230,7 +231,7 @@ func _join_match(
 	tree.peer_class = &"NakamaRelayPeer"
 	return await bring_up(
 		tree,
-		NetwMultiplayer.TRANSPORT_MODE_CLIENT,
+		NetwConnection.TRANSPORT_MODE_CLIENT,
 		match_id,
 		username,
 		join_args,

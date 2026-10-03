@@ -113,22 +113,26 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Session][Hosted] GW2 a pending batch emits ready once on "
-    "its settle edge and every waiter is listening to that one emission"
+    "[Networked][Session][Hosted] GW2 a pending batch answers every waiter "
+    "once on its settle edge, and reports each peer as it arrives"
 ) {
     const CallLog answer;
 
     const Ref<NetwGroupPromise> batch = NetwGroupPromise::create(peers(1, 2));
-    batch->wait();
-    batch->connect(StringName("ready"), answer.callable("first"));
-    batch->connect(StringName("ready"), answer.callable("second"));
+    batch->wait().connect(answer.callable("first"));
+    batch->wait().connect(answer.callable("second"));
+    batch->connect(StringName("peer_completed"), answer.callable("peer"));
 
     batch->resolve_peer(1, Variant(7));
     NETW_CHECK_EQ(answer.count("first"), 0);
+    NETW_CHECK_EQ(answer.count("peer"), 1);
+    NETW_CHECK_EQ(int(answer.args("peer")[0]), 1);
 
-    batch->resolve_peer(2, Variant(7));
+    batch->resolve_peer(2, Variant(8));
     NETW_CHECK_EQ(answer.count("first"), 1);
     NETW_CHECK_EQ(answer.count("second"), 1);
+    NETW_CHECK_EQ(answer.count("peer"), 2);
+    NETW_CHECK_EQ(int(Dictionary(answer.args("first")[0])[2]), 8);
 }
 
 TEST_CASE(
@@ -143,10 +147,11 @@ TEST_CASE(
     batch->resolve_peer(1, Variant(7));
     NETW_CHECK_EQ(answer.count("settled"), 1);
 
-    batch->wait();
-    batch->wait();
+    batch->wait().connect(answer.callable("late"));
+    batch->wait().connect(answer.callable("later"));
 
     NETW_CHECK_EQ(answer.count("settled"), 1);
+    NETW_CHECK_EQ(answer.count("late"), 0);
 }
 
 } // namespace TestNetwGroupPromise

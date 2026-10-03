@@ -131,7 +131,8 @@ TEST_CASE(
     core->player_admit(9);
     core->player_admit(2);
 
-    const TypedArray<Object> admitted = core->player_admitted_all();
+    const TypedArray<netw::NetwPlayer> admitted
+        = core->player_admitted_all();
 
     REQUIRE(admitted.size() == 2);
     NETW_CHECK_EQ(Object::cast_to<Object>(admitted[0]), low.ptr());

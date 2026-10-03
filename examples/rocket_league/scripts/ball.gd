@@ -6,7 +6,8 @@ const CONFETTI := preload("res://examples/rocket_league/scenes/confetti.tscn")
 
 var goal_team := -1
 
-@onready var clock: NetwClockHandle = Netw.clock(self)
+@onready var session: NetwSession = Netw.session(self)
+@onready var clock: NetwClock = session.clock
 @onready var entity := NetwEntity.of(self)
 @onready var state := PhysicsServer3D.body_get_direct_state(get_rid())
 @onready var level: Node = entity.scene.root
@@ -36,14 +37,14 @@ func _init() -> void:
 			.quantize(NetwQuantizeScalar.new().bits(2).limits(-1.0, 1.0))
 
 	Netw.configure_rpc(announce_goal).authority().reliable()
-	var e := NetwEntity.ensure(self)
-	e.entity_id = &"ball"
-	e.prediction.archetype = NetwPredict.ARCHETYPE_SOLVER_BODY
+	var e := Netw.configure_entity(self)
+	e.name = &"ball"
+	e.prediction.archetype = NetwPrediction.ARCHETYPE_SOLVER_BODY
 	e.simulation.schedule = RocketJoltStepper.schedule()
 	e.prediction.recovery_policy = RocketJoltStepper.recovery_policy()
 	e.prediction.sensors[&"goal"] = sample_goal
 	e.prediction.witness_contacts = sample_contacts
-	e.interpolation.visual_root = ^"MeshInstance3D"
+	e.display.visual_root = ^"MeshInstance3D"
 
 
 func _ready() -> void:

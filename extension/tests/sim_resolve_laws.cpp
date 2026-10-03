@@ -1,7 +1,6 @@
 #include "support/netw_test.h"
 
-#include "netw/api/predict.hpp"
-#include "netw/api/prediction_handle.hpp"
+#include "netw/api/prediction.hpp"
 #include "netw/display/decl.hpp"
 #include "netw/display/role_facts.hpp"
 #include "netw/predict/engine.hpp"
@@ -11,9 +10,8 @@
 namespace TestNetwSimResolveLaws {
 
 using namespace godot;
-using netw::NetwPredict;
 using netw::NetwPredictionEngine;
-using netw::NetwPredictionHandle;
+using netw::NetwPrediction;
 using netw::sim::Facts;
 using netw::sim::Mode;
 using netw::sim::Replicas;
@@ -67,8 +65,8 @@ struct Cell {
     Closure closure;
     Selection selection;
     Mode mode;
-    NetwPredict::InputSource source;
-    NetwPredict::Role role;
+    NetwPrediction::InputSource source;
+    NetwPrediction::Role role;
     netw::display::Role display_role;
 };
 
@@ -79,8 +77,8 @@ const Cell PARITY[] = {
      ANY_CLOSURE,
      ANY_SELECTION,
      Mode::AUTHORITY,
-     NetwPredict::INPUT_SOURCE_LOCAL,
-     NetwPredict::ROLE_HOST_LOCAL,
+     NetwPrediction::INPUT_SOURCE_LOCAL,
+     NetwPrediction::ROLE_HOST_LOCAL,
      netw::display::ROLE_AUTHORITY},
     {"an inputless controller-0 entity on the server",
      SERVER_STEERS,
@@ -88,8 +86,8 @@ const Cell PARITY[] = {
      ANY_CLOSURE,
      ANY_SELECTION,
      Mode::AUTHORITY,
-     NetwPredict::INPUT_SOURCE_NONE,
-     NetwPredict::ROLE_HOST_LOCAL,
+     NetwPrediction::INPUT_SOURCE_NONE,
+     NetwPrediction::ROLE_HOST_LOCAL,
      netw::display::ROLE_AUTHORITY},
     {"the server consumes a client's commands",
      SERVER_HOSTS_A_CLIENT,
@@ -97,8 +95,8 @@ const Cell PARITY[] = {
      ANY_CLOSURE,
      ANY_SELECTION,
      Mode::AUTHORITY,
-     NetwPredict::INPUT_SOURCE_RECEIVED,
-     NetwPredict::ROLE_CONSUME,
+     NetwPrediction::INPUT_SOURCE_RECEIVED,
+     NetwPrediction::ROLE_CONSUME,
      netw::display::ROLE_AUTHORITY},
     {"the server runs an inputless client-controlled entity",
      SERVER_HOSTS_A_CLIENT,
@@ -106,8 +104,8 @@ const Cell PARITY[] = {
      ANY_CLOSURE,
      ANY_SELECTION,
      Mode::AUTHORITY,
-     NetwPredict::INPUT_SOURCE_NONE,
-     NetwPredict::ROLE_HOST_LOCAL,
+     NetwPrediction::INPUT_SOURCE_NONE,
+     NetwPrediction::ROLE_HOST_LOCAL,
      netw::display::ROLE_AUTHORITY},
     {"a client predicts what it controls",
      CLIENT_STEERS,
@@ -115,8 +113,8 @@ const Cell PARITY[] = {
      OPEN,
      ANY_SELECTION,
      Mode::PREDICT,
-     NetwPredict::INPUT_SOURCE_LOCAL,
-     NetwPredict::ROLE_PREDICT,
+     NetwPrediction::INPUT_SOURCE_LOCAL,
+     NetwPrediction::ROLE_PREDICT,
      netw::display::ROLE_PREDICTED},
     {"a closed controller stops predicting and keeps its local commands",
      CLIENT_STEERS,
@@ -124,8 +122,8 @@ const Cell PARITY[] = {
      CLOSED,
      ANY_SELECTION,
      Mode::PROXY,
-     NetwPredict::INPUT_SOURCE_LOCAL,
-     NetwPredict::ROLE_REMOTE,
+     NetwPrediction::INPUT_SOURCE_LOCAL,
+     NetwPrediction::ROLE_REMOTE,
      netw::display::ROLE_REMOTE},
     {"an inputless entity is a proxy on its controller",
      CLIENT_STEERS,
@@ -133,8 +131,8 @@ const Cell PARITY[] = {
      OPEN,
      UNSELECTED,
      Mode::PROXY,
-     NetwPredict::INPUT_SOURCE_NONE,
-     NetwPredict::ROLE_REMOTE,
+     NetwPrediction::INPUT_SOURCE_NONE,
+     NetwPrediction::ROLE_REMOTE,
      netw::display::ROLE_REMOTE},
     {"an inputless entity is active on its controller when selected",
      CLIENT_STEERS,
@@ -142,8 +140,8 @@ const Cell PARITY[] = {
      OPEN,
      SELECTED,
      Mode::ACTIVE,
-     NetwPredict::INPUT_SOURCE_NONE,
-     NetwPredict::ROLE_SIMULATE,
+     NetwPrediction::INPUT_SOURCE_NONE,
+     NetwPrediction::ROLE_SIMULATE,
      netw::display::ROLE_PREDICTED},
     {"a closed inputless entity on its controller",
      CLIENT_STEERS,
@@ -151,8 +149,8 @@ const Cell PARITY[] = {
      CLOSED,
      ANY_SELECTION,
      Mode::PROXY,
-     NetwPredict::INPUT_SOURCE_NONE,
-     NetwPredict::ROLE_REMOTE,
+     NetwPrediction::INPUT_SOURCE_NONE,
+     NetwPrediction::ROLE_REMOTE,
      netw::display::ROLE_REMOTE},
     {"an unselected copy of the server's entity",
      CLIENT_WATCHES_THE_SERVER,
@@ -160,8 +158,8 @@ const Cell PARITY[] = {
      ANY_CLOSURE,
      UNSELECTED,
      Mode::PROXY,
-     NetwPredict::INPUT_SOURCE_NONE,
-     NetwPredict::ROLE_REMOTE,
+     NetwPrediction::INPUT_SOURCE_NONE,
+     NetwPrediction::ROLE_REMOTE,
      netw::display::ROLE_REMOTE},
     {"a selected copy of the server's entity",
      CLIENT_WATCHES_THE_SERVER,
@@ -169,8 +167,8 @@ const Cell PARITY[] = {
      OPEN,
      SELECTED,
      Mode::ACTIVE,
-     NetwPredict::INPUT_SOURCE_PREDICTED,
-     NetwPredict::ROLE_SIMULATE,
+     NetwPrediction::INPUT_SOURCE_PREDICTED,
+     NetwPrediction::ROLE_SIMULATE,
      netw::display::ROLE_PREDICTED},
     {"a closed selected copy of the server's entity stays a proxy",
      CLIENT_WATCHES_THE_SERVER,
@@ -178,8 +176,8 @@ const Cell PARITY[] = {
      CLOSED,
      SELECTED,
      Mode::PROXY,
-     NetwPredict::INPUT_SOURCE_NONE,
-     NetwPredict::ROLE_REMOTE,
+     NetwPrediction::INPUT_SOURCE_NONE,
+     NetwPrediction::ROLE_REMOTE,
      netw::display::ROLE_REMOTE},
     {"an unselected inputless copy of the server's entity",
      CLIENT_WATCHES_THE_SERVER,
@@ -187,8 +185,8 @@ const Cell PARITY[] = {
      OPEN,
      UNSELECTED,
      Mode::PROXY,
-     NetwPredict::INPUT_SOURCE_NONE,
-     NetwPredict::ROLE_REMOTE,
+     NetwPrediction::INPUT_SOURCE_NONE,
+     NetwPrediction::ROLE_REMOTE,
      netw::display::ROLE_REMOTE},
     {"a selected inputless copy of the server's entity runs live",
      CLIENT_WATCHES_THE_SERVER,
@@ -196,8 +194,8 @@ const Cell PARITY[] = {
      OPEN,
      SELECTED,
      Mode::ACTIVE,
-     NetwPredict::INPUT_SOURCE_NONE,
-     NetwPredict::ROLE_SIMULATE,
+     NetwPrediction::INPUT_SOURCE_NONE,
+     NetwPrediction::ROLE_SIMULATE,
      netw::display::ROLE_PREDICTED},
     {"a closed inputless copy of the server's entity",
      CLIENT_WATCHES_THE_SERVER,
@@ -205,8 +203,8 @@ const Cell PARITY[] = {
      CLOSED,
      ANY_SELECTION,
      Mode::PROXY,
-     NetwPredict::INPUT_SOURCE_NONE,
-     NetwPredict::ROLE_REMOTE,
+     NetwPrediction::INPUT_SOURCE_NONE,
+     NetwPrediction::ROLE_REMOTE,
      netw::display::ROLE_REMOTE},
     {"an unselected copy of another client's entity",
      CLIENT_WATCHES_A_CLIENT,
@@ -214,8 +212,8 @@ const Cell PARITY[] = {
      ANY_CLOSURE,
      UNSELECTED,
      Mode::PROXY,
-     NetwPredict::INPUT_SOURCE_NONE,
-     NetwPredict::ROLE_REMOTE,
+     NetwPrediction::INPUT_SOURCE_NONE,
+     NetwPrediction::ROLE_REMOTE,
      netw::display::ROLE_REMOTE},
     {"a selected copy of another client's entity",
      CLIENT_WATCHES_A_CLIENT,
@@ -223,8 +221,8 @@ const Cell PARITY[] = {
      OPEN,
      SELECTED,
      Mode::ACTIVE,
-     NetwPredict::INPUT_SOURCE_PREDICTED,
-     NetwPredict::ROLE_SIMULATE,
+     NetwPrediction::INPUT_SOURCE_PREDICTED,
+     NetwPrediction::ROLE_SIMULATE,
      netw::display::ROLE_PREDICTED},
     {"a closed selected copy of another client's entity stays a proxy",
      CLIENT_WATCHES_A_CLIENT,
@@ -232,8 +230,8 @@ const Cell PARITY[] = {
      CLOSED,
      SELECTED,
      Mode::PROXY,
-     NetwPredict::INPUT_SOURCE_NONE,
-     NetwPredict::ROLE_REMOTE,
+     NetwPrediction::INPUT_SOURCE_NONE,
+     NetwPrediction::ROLE_REMOTE,
      netw::display::ROLE_REMOTE},
     {"an unselected inputless copy of another client's entity",
      CLIENT_WATCHES_A_CLIENT,
@@ -241,8 +239,8 @@ const Cell PARITY[] = {
      OPEN,
      UNSELECTED,
      Mode::PROXY,
-     NetwPredict::INPUT_SOURCE_NONE,
-     NetwPredict::ROLE_REMOTE,
+     NetwPrediction::INPUT_SOURCE_NONE,
+     NetwPrediction::ROLE_REMOTE,
      netw::display::ROLE_REMOTE},
     {"a selected inputless copy of another client's entity runs live",
      CLIENT_WATCHES_A_CLIENT,
@@ -250,8 +248,8 @@ const Cell PARITY[] = {
      OPEN,
      SELECTED,
      Mode::ACTIVE,
-     NetwPredict::INPUT_SOURCE_NONE,
-     NetwPredict::ROLE_SIMULATE,
+     NetwPrediction::INPUT_SOURCE_NONE,
+     NetwPrediction::ROLE_SIMULATE,
      netw::display::ROLE_PREDICTED},
     {"a closed inputless copy of another client's entity",
      CLIENT_WATCHES_A_CLIENT,
@@ -259,8 +257,8 @@ const Cell PARITY[] = {
      CLOSED,
      ANY_SELECTION,
      Mode::PROXY,
-     NetwPredict::INPUT_SOURCE_NONE,
-     NetwPredict::ROLE_REMOTE,
+     NetwPrediction::INPUT_SOURCE_NONE,
+     NetwPrediction::ROLE_REMOTE,
      netw::display::ROLE_REMOTE},
 };
 
@@ -313,7 +311,7 @@ Resolved resolve_through_prediction(const Concrete &p_point) {
 
     NetwPredictionEngine pool;
     const int64_t slot = pool.open();
-    Ref<NetwPredictionHandle> handle;
+    Ref<NetwPrediction> handle;
     handle.instantiate();
     pool.declare_axes(
         slot,
@@ -323,7 +321,9 @@ Resolved resolve_through_prediction(const Concrete &p_point) {
     );
     pool.set_fallback_latched(slot, p_point.closure == FALLBACK);
     if (p_point.closure == DELAY_CLOSED) {
-        handle->set_recovery_policy(NetwPredict::RECOVERY_POLICY_DELAY_CLOSED);
+        handle->set_recovery_policy(
+            NetwPrediction::RECOVERY_POLICY_DELAY_CLOSED
+        );
     }
     Facts facts = pool.resolution_facts(slot, handle);
     facts.selection_count = p_point.selection == SELECTED ? 1 : 0;
@@ -394,7 +394,7 @@ TEST_CASE(
         = {CLIENT_WATCHES_THE_SERVER, INPUT_ROWS, DELAY_CLOSED, SELECTED};
     const Resolved read = resolve_through_prediction(point);
     NETW_CHECK_EQ(int(read.mode), int(Mode::PROXY));
-    NETW_CHECK_EQ(read.role, int(NetwPredict::ROLE_REMOTE));
+    NETW_CHECK_EQ(read.role, int(NetwPrediction::ROLE_REMOTE));
     NETW_CHECK_EQ(read.display_role, int(netw::display::ROLE_REMOTE));
 }
 

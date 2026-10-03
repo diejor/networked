@@ -19,10 +19,10 @@ Ref<NetwPromise> fresh() {
 
 TEST_CASE("[Networked][Promise][Hosted] P1 a promise settles exactly once") {
     Ref<NetwPromise> promise = fresh();
-    Recorder settles(
-        promise.ptr(),
-        Vector<StringName>({"completed", "failed", "settled"})
-    );
+    Recorder settles(promise.ptr(), Vector<StringName>({"settled"}));
+    CallLog outcome;
+    promise->then(outcome.callable("completed"));
+    promise->catch_error(outcome.callable("failed"));
 
     CHECK_FALSE(promise->get_is_settled());
     NETW_CHECK_EQ(promise->get_code(), int(OK));
@@ -40,11 +40,11 @@ TEST_CASE("[Networked][Promise][Hosted] P1 a promise settles exactly once") {
     NETW_CHECK_EQ(int(promise->get_result()), 7);
     NETW_CHECK_EQ(promise->get_code(), int(OK));
     CHECK_FALSE(promise->get_is_failed());
-    NETW_CHECK_EQ(settles.count("completed"), 1);
-    NETW_CHECK_EQ(settles.count("failed"), 0);
+    NETW_CHECK_EQ(outcome.count("completed"), 1);
+    NETW_CHECK_EQ(outcome.count("failed"), 0);
     NETW_CHECK_EQ(settles.count("settled"), 1);
-    REQUIRE(settles.args("completed").size() == 1);
-    NETW_CHECK_EQ(int(settles.args("completed")[0]), 7);
+    NETW_REQUIRE_EQ(int(outcome.args("completed").size()), 1);
+    NETW_CHECK_EQ(int(outcome.args("completed")[0]), 7);
 }
 
 TEST_CASE(
@@ -101,38 +101,30 @@ TEST_CASE(
 
 TEST_CASE(
     "[Networked][Promise][Hosted] P4 settled fires once on either outcome, "
-    "after the outcome's own signal"
+    "before the outcome's own callback and before any waiter resumes"
 ) {
-    Ref<NetwPromise> kept = fresh();
-    Recorder on_kept(
-        kept.ptr(),
-        Vector<StringName>({"completed", "failed", "settled"})
-    );
+    for (const bool keeps : {true, false}) {
+        Ref<NetwPromise> promise = fresh();
+        CallLog heard;
+        promise->wait().connect(heard.callable("waited"));
+        promise->connect(StringName("settled"), heard.callable("settled"));
+        promise->then(heard.callable("outcome"));
+        promise->catch_error(heard.callable("outcome"));
 
-    kept->resolve(3);
-    kept->resolve(4);
+        if (keeps) {
+            promise->resolve(3);
+            promise->resolve(4);
+        } else {
+            promise->reject(ERR_TIMEOUT, "gone");
+            promise->reject(ERR_BUSY, "again");
+        }
 
-    NETW_CHECK_EQ(on_kept.count("completed"), 1);
-    NETW_CHECK_EQ(on_kept.count("settled"), 1);
-    NETW_CHECK_EQ(on_kept.count("failed"), 0);
-    REQUIRE(on_kept.order().size() == 2);
-    CHECK(bool(on_kept.order()[0] == StringName("completed")));
-    CHECK(bool(on_kept.order()[1] == StringName("settled")));
-
-    Ref<NetwPromise> broken = fresh();
-    Recorder on_broken(
-        broken.ptr(),
-        Vector<StringName>({"completed", "failed", "settled"})
-    );
-
-    broken->reject(ERR_TIMEOUT, "gone");
-
-    NETW_CHECK_EQ(on_broken.count("failed"), 1);
-    NETW_CHECK_EQ(on_broken.count("settled"), 1);
-    NETW_CHECK_EQ(on_broken.count("completed"), 0);
-    REQUIRE(on_broken.order().size() == 2);
-    CHECK(bool(on_broken.order()[0] == StringName("failed")));
-    CHECK(bool(on_broken.order()[1] == StringName("settled")));
+        const Vector<StringName> order = heard.order();
+        NETW_REQUIRE_EQ(int(order.size()), 3);
+        CHECK(bool(order[0] == StringName("settled")));
+        CHECK(bool(order[1] == StringName("outcome")));
+        CHECK(bool(order[2] == StringName("waited")));
+    }
 }
 
 TEST_CASE(

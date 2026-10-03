@@ -2610,12 +2610,7 @@ void Pipeline::park_spawn_for_scene(
         now + int64_t(park_timeout_seconds * 1000.0),
         p_sender
     );
-    connect_once(
-        plane,
-        SIG_ENTITY_LIVE,
-        callable_mp(plane, &NetwMultiplayer::spawn_retry_scene_parked_spawns),
-        0
-    );
+    retrying_scene_parks = true;
 }
 
 void Pipeline::retry_scene_parked_spawns(int64_t, const Ref<NetwEntity> &) {
@@ -2699,15 +2694,7 @@ void Pipeline::retry_adopt_parked() {
 }
 
 void Pipeline::drop_scene_park_retry() {
-    NetwMultiplayer *plane = core();
-    if (plane == nullptr) {
-        return;
-    }
-    const Callable retry
-        = callable_mp(plane, &NetwMultiplayer::spawn_retry_scene_parked_spawns);
-    if (plane->is_connected(SIG_ENTITY_LIVE, retry)) {
-        plane->disconnect(SIG_ENTITY_LIVE, retry);
-    }
+    retrying_scene_parks = false;
 }
 
 int64_t Pipeline::gate_display_tick() const {
@@ -2735,12 +2722,7 @@ void Pipeline::apply_action_gate(
         return;
     }
     if (plane->action_gate_arm(p_route, p_entity, display_tick)) {
-        connect_once(
-            plane,
-            SIG_CLOCK_ON_TICK,
-            callable_mp(plane, &NetwMultiplayer::spawn_on_action_reveal_tick),
-            0
-        );
+        revealing_action_gates = true;
     }
 }
 
@@ -2764,24 +2746,11 @@ void Pipeline::disconnect_action_reveal_if_idle() {
     if (plane == nullptr || plane->action_gate_count() > 0) {
         return;
     }
-    const Callable ticked
-        = callable_mp(plane, &NetwMultiplayer::spawn_on_action_reveal_tick);
-    if (plane->is_connected(SIG_CLOCK_ON_TICK, ticked)) {
-        plane->disconnect(SIG_CLOCK_ON_TICK, ticked);
-    }
+    revealing_action_gates = false;
 }
 
 void Pipeline::ensure_action_gate_connection() {
-    NetwMultiplayer *plane = core();
-    if (plane == nullptr) {
-        return;
-    }
-    connect_once(
-        plane,
-        SIG_ENTITY_LIVE,
-        callable_mp(plane, &NetwMultiplayer::spawn_apply_action_gate),
-        0
-    );
+    applying_action_gate = core() != nullptr;
 }
 
 void Pipeline::clear_action_gates() {
@@ -2791,11 +2760,7 @@ void Pipeline::clear_action_gates() {
     }
     plane->action_gate_clear();
     disconnect_action_reveal_if_idle();
-    const Callable gate
-        = callable_mp(plane, &NetwMultiplayer::spawn_apply_action_gate);
-    if (plane->is_connected(SIG_ENTITY_LIVE, gate)) {
-        plane->disconnect(SIG_ENTITY_LIVE, gate);
-    }
+    applying_action_gate = false;
 }
 
 void Pipeline::clear_session() {

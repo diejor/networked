@@ -6,6 +6,7 @@
 
 #include "godot/class_db.hpp"
 #include "godot/utility.hpp"
+#include "netw/api/predict_fold.hpp"
 #include "netw/log.hpp"
 #include "netw/predict/axes.hpp"
 #include "netw/predict/compare.hpp"
@@ -316,14 +317,14 @@ Ref<NetwPredictFold> prediction_core::predict_fold(
     return NetwPredictFold::of(
         decided.label,
         decided.fresh,
-        static_cast<NetwPredict::DriveKind>(int(decided.kind))
+        static_cast<NetwPrediction::DriveKind>(int(decided.kind))
     );
 }
 
 Ref<NetwPredictFold> NetwPredictFold::of(
     int64_t p_label,
     bool p_fresh,
-    NetwPredict::DriveKind p_kind
+    NetwPrediction::DriveKind p_kind
 ) {
     const int kind = int(p_kind);
     NETW_ERR_COND_V(
@@ -331,7 +332,7 @@ Ref<NetwPredictFold> NetwPredictFold::of(
         Ref<NetwPredictFold>(),
         sys::PREDICTION,
         "NetwPredictFold.of got kind %d, which is not a "
-        "NetwPredict.DriveKind value. Pass one of its constants.",
+        "NetwPrediction.DriveKind value. Pass one of its constants.",
         kind
     );
     NETW_NOTE_RECORD_MINT();

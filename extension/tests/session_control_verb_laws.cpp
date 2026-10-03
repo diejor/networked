@@ -25,9 +25,12 @@ TEST_CASE(
 ) {
     const Ref<NetwMultiplayer> core = authority();
     const CallLog seen;
-    core->connect(StringName("session_tree_paused"), seen.callable("paused"));
-    core->connect(
-        StringName("session_tree_unpaused"),
+    core->observe(
+        NetwMultiplayer::SESSION_TREE_PAUSED,
+        seen.callable("paused")
+    );
+    core->observe(
+        NetwMultiplayer::SESSION_TREE_UNPAUSED,
         seen.callable("unpaused")
     );
 
@@ -54,7 +57,10 @@ TEST_CASE(
 ) {
     const Ref<NetwMultiplayer> core = authority();
     const CallLog seen;
-    core->connect(StringName("peer_kick_requested"), seen.callable("kick"));
+    core->observe(
+        NetwMultiplayer::PEER_KICK_REQUESTED,
+        seen.callable("kick")
+    );
 
     core->peer_request_kick(9, String("griefing"));
 

@@ -11,9 +11,8 @@
 #include "netw/api/entity.hpp"
 #include "netw/api/lag_compensation_config.hpp"
 #include "netw/api/netw_multiplayer.hpp"
-#include "netw/api/predict.hpp"
-#include "netw/api/prediction_handle.hpp"
-#include "netw/api/simulation_handle.hpp"
+#include "netw/api/prediction.hpp"
+#include "netw/api/simulation.hpp"
 #include "netw/predict/engine.hpp"
 
 namespace TestNetwSessionPredictDeclareLaws {
@@ -21,9 +20,8 @@ namespace TestNetwSessionPredictDeclareLaws {
 using namespace godot;
 using netw::NetwEntity;
 using netw::NetwMultiplayer;
-using netw::NetwPredict;
-using netw::NetwPredictionHandle;
-using netw::NetwSimulationHandle;
+using netw::NetwPrediction;
+using netw::NetwSimulation;
 using netw_test::CallLog;
 using netw_test::law_broken;
 using netw_test::law_held;
@@ -42,7 +40,7 @@ enum Plant {
 
 struct PredictScenario {
     String label;
-    int64_t schedule = NetwSimulationHandle::SCHEDULE_FRAME;
+    int64_t schedule = NetwSimulation::SCHEDULE_FRAME;
     bool selects_another = false;
     bool installs_callbacks = false;
 };
@@ -133,14 +131,14 @@ public:
             session->simulation_set_step_callback(entity, step);
         }
 
-        const Ref<NetwSimulationHandle> simulation
+        const Ref<NetwSimulation> simulation
             = session->simulation_handle(entity);
         if (declared.selects_another
             && planted != PLANT_A_MEMBER_THE_SELECTION_NEVER_TOOK) {
             simulation->simulate(other);
         }
 
-        const Ref<NetwPredictionHandle> handle
+        const Ref<NetwPrediction> handle
             = session->prediction_handle(entity);
         if (handle.is_valid()) {
             sensor_is_the_one_installed = Variant(handle->get_sensors().get(
@@ -353,7 +351,7 @@ TEST_CASE(
 struct ReplayScenario {
     String label;
     bool rigid = false;
-    int64_t schedule = NetwSimulationHandle::SCHEDULE_FRAME;
+    int64_t schedule = NetwSimulation::SCHEDULE_FRAME;
     bool integrates = true;
 };
 
@@ -361,7 +359,7 @@ ReplayScenario a_frame_solver_body() {
     return {
         "a-frame-solver-body",
         true,
-        NetwSimulationHandle::SCHEDULE_FRAME,
+        NetwSimulation::SCHEDULE_FRAME,
         false,
     };
 }
@@ -370,7 +368,7 @@ ReplayScenario a_stepped_solver_body() {
     return {
         "a-stepped-solver-body",
         true,
-        NetwSimulationHandle::SCHEDULE_STEPPED,
+        NetwSimulation::SCHEDULE_STEPPED,
         true,
     };
 }
@@ -379,7 +377,7 @@ ReplayScenario a_frame_plain_body() {
     return {
         "a-frame-plain-body",
         false,
-        NetwSimulationHandle::SCHEDULE_FRAME,
+        NetwSimulation::SCHEDULE_FRAME,
         true,
     };
 }
@@ -388,14 +386,15 @@ ReplayScenario a_tick_solver_body() {
     return {
         "a-tick-solver-body",
         true,
-        NetwSimulationHandle::SCHEDULE_TICK,
+        NetwSimulation::SCHEDULE_TICK,
         true,
     };
 }
 
 class ReplayRun {
     ReplayScenario declared;
-    NetwPredict::RecoveryPolicy policy = NetwPredict::RECOVERY_POLICY_OBSERVE;
+    NetwPrediction::RecoveryPolicy policy
+        = NetwPrediction::RECOVERY_POLICY_OBSERVE;
     int correction = int(netw::CorrectionMode::AUTO);
 
 public:
@@ -413,7 +412,7 @@ public:
         session->predict_set_param(
             entity,
             NetwMultiplayer::PREDICT_PARAM_ARCHETYPE,
-            NetwPredict::ARCHETYPE_SOLVER_BODY
+            NetwPrediction::ARCHETYPE_SOLVER_BODY
         );
         session->simulation_set_param(
             entity,
@@ -423,10 +422,10 @@ public:
         session->predict_set_param(
             entity,
             NetwMultiplayer::PREDICT_PARAM_RECOVERY_POLICY,
-            NetwPredict::RECOVERY_POLICY_REBASE_REPLAY
+            NetwPrediction::RECOVERY_POLICY_REBASE_REPLAY
         );
 
-        const Ref<NetwPredictionHandle> handle
+        const Ref<NetwPrediction> handle
             = session->prediction_handle(entity);
         REQUIRE(handle.is_valid());
         policy = handle->resolved_recovery_policy();
@@ -450,7 +449,7 @@ public:
         return declared;
     }
 
-    NetwPredict::RecoveryPolicy recovery() const {
+    NetwPrediction::RecoveryPolicy recovery() const {
         return policy;
     }
 
@@ -463,7 +462,7 @@ typedef LawRowFor<ReplayRun> ReplayLaw;
 
 LawVerdict law_integrated(const ReplayRun &p_run) {
     const bool replays
-        = p_run.recovery() == NetwPredict::RECOVERY_POLICY_REBASE_REPLAY;
+        = p_run.recovery() == NetwPrediction::RECOVERY_POLICY_REBASE_REPLAY;
     const bool corrects_by_replay
         = p_run.mode() == int(netw::CorrectionMode::REPLAY);
     if (replays != corrects_by_replay) {
@@ -480,7 +479,7 @@ LawVerdict law_integrated(const ReplayRun &p_run) {
         );
     }
     if (!p_run.scenario().integrates
-        && p_run.recovery() != NetwPredict::RECOVERY_POLICY_REBASE_RECOVER) {
+        && p_run.recovery() != NetwPrediction::RECOVERY_POLICY_REBASE_RECOVER) {
         return law_broken(
             "a FRAME solver body declaring REPLAY resolves %d",
             int(p_run.recovery())
@@ -523,16 +522,17 @@ void check_auto_resolution(bool p_rigid) {
     const Ref<NetwEntity> wrapper = NetwEntity::ensure(body);
     const RID entity = session->entity_of(body);
     REQUIRE(session->predict_declare(entity) == OK);
-    const Ref<NetwPredictionHandle> handle = session->prediction_handle(entity);
+    const Ref<NetwPrediction> handle = session->prediction_handle(entity);
     REQUIRE(handle.is_valid());
 
-    const int expected = p_rigid ? NetwPredict::RECOVERY_POLICY_REBASE_RECOVER
-                                 : NetwPredict::RECOVERY_POLICY_REBASE_REPLAY;
+    const int expected = p_rigid
+        ? NetwPrediction::RECOVERY_POLICY_REBASE_RECOVER
+        : NetwPrediction::RECOVERY_POLICY_REBASE_REPLAY;
     const int expected_correction
         = netw::NetwPredictionEngine::correction_for_recovery_policy(expected);
     NETW_CHECK_EQ(
         int(handle->get_recovery_policy()),
-        int(NetwPredict::RECOVERY_POLICY_AUTO)
+        int(NetwPrediction::RECOVERY_POLICY_AUTO)
     );
     NETW_CHECK_EQ(int(handle->resolved_recovery_policy()), expected);
 
@@ -565,6 +565,80 @@ TEST_CASE(
 ) {
     check_auto_resolution(true);
     check_auto_resolution(false);
+}
+
+TEST_CASE(
+    "[Networked][Session][SceneTree] the typed prediction and the flat "
+    "params read and write one declaration, so neither side holds a copy"
+) {
+    Ref<NetwMultiplayer> session;
+    session.instantiate();
+    Node3D *body = memnew(Node3D);
+    netw::gd::scene_root()->add_child(body);
+    NetwEntity::ensure(body);
+    const RID entity = session->entity_of(body);
+    REQUIRE(session->predict_declare(entity) == OK);
+    const Ref<NetwPrediction> typed = session->prediction_handle(entity);
+    REQUIRE(typed.is_valid());
+
+    typed->set_reconcile_mode(NetwPrediction::RECONCILE_JOINT);
+    typed->set_ack_age_ticks(5);
+    typed->set_epoch(3);
+    typed->set_sleeping(true);
+    NETW_CHECK_EQ(
+        int(session->predict_get_param(
+            entity,
+            NetwMultiplayer::PREDICT_PARAM_RECONCILE_MODE
+        )),
+        int(NetwPrediction::RECONCILE_JOINT)
+    );
+    NETW_CHECK_EQ(
+        int(session->predict_get_param(
+            entity,
+            NetwMultiplayer::PREDICT_PARAM_ACK_AGE_TICKS
+        )),
+        5
+    );
+    NETW_CHECK_EQ(
+        int(session->predict_get_param(
+            entity,
+            NetwMultiplayer::PREDICT_PARAM_EPOCH
+        )),
+        3
+    );
+    CHECK(bool(
+        session->predict_get_param(entity, NetwMultiplayer::PREDICT_PARAM_SLEEPING)
+    ));
+
+    session->predict_set_param(
+        entity,
+        NetwMultiplayer::PREDICT_PARAM_RECONCILE_MODE,
+        int(NetwPrediction::RECONCILE_INDEPENDENT)
+    );
+    session->predict_set_param(
+        entity,
+        NetwMultiplayer::PREDICT_PARAM_ACK_AGE_TICKS,
+        9
+    );
+    session->predict_set_param(entity, NetwMultiplayer::PREDICT_PARAM_EPOCH, 4);
+    session->predict_set_param(
+        entity,
+        NetwMultiplayer::PREDICT_PARAM_SLEEPING,
+        false
+    );
+    NETW_CHECK_EQ(
+        int(typed->get_reconcile_mode()),
+        int(NetwPrediction::RECONCILE_INDEPENDENT)
+    );
+    NETW_CHECK_EQ(typed->get_ack_age_ticks(), 9);
+    NETW_CHECK_EQ(typed->get_epoch(), int64_t(4));
+    CHECK_FALSE(typed->get_sleeping());
+
+    CHECK(session->predict_get_stats(entity) == typed->get_stats());
+
+    session->predict_undeclare(entity);
+    session->clear_session_state();
+    body->queue_free();
 }
 
 } // namespace TestNetwSessionPredictDeclareLaws

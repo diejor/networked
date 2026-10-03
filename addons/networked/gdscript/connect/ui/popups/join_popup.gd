@@ -1,6 +1,6 @@
 ## A form to join a server.
 ##
-## Shows the fields of [method NetwConnectHandle.join_schema] and the client
+## Shows the fields of [method NetwConnection.join_schema] and the client
 ## settings of the server's transport.
 class_name JoinPopup
 extends PopupPanel
@@ -12,7 +12,7 @@ signal submitted(
 )
 
 var transport_defaults: Array[ConnectTransportConfig] = []
-var _connection: NetwConnectHandle
+var _connection: NetwConnection
 var _authored: Dictionary = { }
 var _settings := ConnectFieldList.new()
 var _join_args := ConnectFieldList.new()
@@ -35,7 +35,7 @@ func _ready() -> void:
 ## Opens the form for the server on [param peer_class], filled with its saved
 ## [param authored] settings.
 func open_join(
-		handle: NetwConnectHandle,
+		handle: NetwConnection,
 		default_username: String,
 		peer_class: StringName = &"",
 		authored: Dictionary = { },

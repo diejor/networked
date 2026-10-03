@@ -9,7 +9,7 @@
 #include "netw/api/interpolate.hpp"
 #include "netw/api/member_config.hpp"
 #include "netw/api/netw_multiplayer.hpp"
-#include "netw/api/prediction_handle.hpp"
+#include "netw/api/prediction.hpp"
 #include "netw/api/property_config.hpp"
 #include "netw/colors.hpp"
 #include "netw/entity/control.hpp"
@@ -111,14 +111,7 @@ Object *SyncPipeline::api() const {
 void SyncPipeline::set_core(Object *p_core) {
     NetwMultiplayer *plane = Object::cast_to<NetwMultiplayer>(p_core);
     core_id = gd::instance_id(plane);
-    if (plane == nullptr) {
-        return;
-    }
-    const Callable live
-        = callable_mp(plane, &NetwMultiplayer::sync_pipeline_on_entity_live);
-    if (!plane->is_connected(SIG_ENTITY_LIVE, live)) {
-        plane->connect(SIG_ENTITY_LIVE, live);
-    }
+    hears_entity_live = plane != nullptr;
 }
 
 void SyncPipeline::set_api(Object *p_api) {
@@ -450,7 +443,7 @@ void SyncPipeline::report_missing_prediction_component(
     }
     const Ref<NetwEntity> entity = NetwEntity::of(node);
     if (entity.is_valid()) {
-        const Ref<NetwPredictionHandle> prediction
+        const Ref<NetwPrediction> prediction
             = entity->prediction_if_minted();
         if (prediction.is_valid() && prediction->is_registered()) {
             return;
@@ -460,7 +453,7 @@ void SyncPipeline::report_missing_prediction_component(
         return;
     }
     const String entity_name = entity.is_valid()
-        ? String(entity->get_entity_id())
+        ? String(entity->get_name())
         : String(node->get_name());
     NETW_WARN(
         sys::PREDICTION,
@@ -993,7 +986,7 @@ LocalVector<PropertyBindingPtr> SyncPipeline::entity_bindings_checked(
             sys::WIRE,
             "The property index of '%s' holds %d entries and a full scan "
             "finds %d.",
-            String(p_entity->get_entity_id()),
+            String(p_entity->get_name()),
             int(matched.size()),
             int(scanned.size())
         );
@@ -1846,15 +1839,7 @@ void SyncPipeline::clear_peer(int64_t p_peer_id) {
 }
 
 void SyncPipeline::dispose() {
-    NetwMultiplayer *plane = core();
-    if (plane == nullptr) {
-        return;
-    }
-    const Callable live
-        = callable_mp(plane, &NetwMultiplayer::sync_pipeline_on_entity_live);
-    if (plane->is_connected(SIG_ENTITY_LIVE, live)) {
-        plane->disconnect(SIG_ENTITY_LIVE, live);
-    }
+    hears_entity_live = false;
 }
 
 Dictionary SyncPipeline::counters() const {

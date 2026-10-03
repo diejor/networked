@@ -5,7 +5,7 @@
 #include "godot/node.hpp"
 #include "godot/object.hpp"
 #include "netw/api/entity.hpp"
-#include "netw/api/prediction_handle.hpp"
+#include "netw/api/prediction.hpp"
 #include "netw/display/book.hpp"
 #include "netw/object_port.hpp"
 #include "netw/predict/compare.hpp"

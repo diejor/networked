@@ -5,6 +5,8 @@ const MONTSERRAT = preload("uid://bqb7l2e05u3j0")
 var player_labels := { }
 var gamestate: BomberGamestate
 
+@onready var session: NetwSession = Netw.session(self)
+
 
 func _process(_delta: float) -> void:
 	var rocks_left := $"../Rocks".get_child_count()
@@ -61,7 +63,7 @@ func add_player(id: int, new_player_name: String) -> void:
 
 func _ready() -> void:
 	$"../Winner".hide()
-	gamestate = Netw.service(self, BomberGamestate) as BomberGamestate
+	gamestate = session.service(BomberGamestate) as BomberGamestate
 
 
 func _on_exit_game_pressed() -> void:

@@ -21,7 +21,7 @@ Description
 
 Declare it in a ``static var`` beside the code that writes it. Every peer built from the same scripts ends up with the same columns in the same order.
 
-Each column method returns the column's index, which is how a writer and a reader name the column. :ref:`Netw.table()<class_Netw_method_table>` opens the replicated table a session builds from the schema.
+Each column method returns the column's index, which is how a writer and a reader name the column. :ref:`NetwSession.table()<class_NetwSession_method_table>` opens the replicated table a session builds from the schema.
 
 ::
 
@@ -34,7 +34,7 @@ Each column method returns the column's index, which is how a writer and a reade
         static var vel := schema.vector3(&"vel")   # no quantizer, sent as raw bytes
         static var hp  := schema.u16(&"hp")
 
-    @onready var mobs := Netw.table(self, Mobs.schema.schema_name)
+    @onready var mobs := Netw.session(self).table(Mobs.schema.schema_name)
 
 \ A column with no quantizer is sent as a raw copy of its buffer, which is the cheapest to encode and decode. Add a quantizer to the columns where bandwidth matters.
 

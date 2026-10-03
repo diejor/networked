@@ -5,7 +5,7 @@
 
 #include "netw/api/entity.hpp"
 #include "netw/api/netw_multiplayer.hpp"
-#include "netw/api/prediction_handle.hpp"
+#include "netw/api/prediction.hpp"
 #include "netw/lagcomp_core.hpp"
 #include "netw/predict/engine.hpp"
 
@@ -64,7 +64,7 @@ TEST_CASE(
     const ScenarioRun run = ScenarioRun::session(rig, scenario);
     REQUIRE(run.regime_reached());
 
-    netw::NetwPredictionHandle *owner_handle
+    netw::NetwPrediction *owner_handle
         = rig.prediction_handle(StringName("P"), 0);
     REQUIRE(owner_handle != nullptr);
     const int64_t ack = owner_handle->get_stats()->get_int_fact(

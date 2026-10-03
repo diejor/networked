@@ -844,7 +844,7 @@ bool Slot::record_evidence(
         false,
         sys::PREDICTION,
         "Prediction got contacts for an entity with no "
-        "NetwPredictionHandle.witness_contacts, so it ignored them."
+        "NetwPrediction.witness_contacts, so it ignored them."
     );
     WitnessSummary witness;
     if (config.witness) {

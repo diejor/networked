@@ -34,7 +34,7 @@ func spawn_probe(name: String) -> int:
 	node.name = name
 	host_api.entity_replicate(node)
 	host_api.root.add_child(node)
-	return NetwEntity.of(node).route
+	return host_api.entity_get_route(NetwEntity.of(node).rid)
 
 
 func dispose() -> void:

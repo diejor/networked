@@ -11,7 +11,7 @@
 		)
 		[/codeblock]
 		It works the same with [method Netw.configure_property], [method Netw.configure_rpc] and [method Netw.configure_signal].
-		When [member NetwDisplayHandle.visual_root] is set, values are written in global space. Add a second [NetwInterpolate] to also smooth [code]rotation[/code].
+		When [member NetwDisplay.visual_root] is set, values are written in global space. Add a second [NetwInterpolate] to also smooth [code]rotation[/code].
 	</description>
 	<tutorials>
 	</tutorials>
@@ -91,7 +91,7 @@
 	</methods>
 	<members>
 		<member name="forecast_tail" type="int" setter="set_forecast_tail" getter="get_forecast_tail" enum="NetwInterpolate.Tail" default="0">
-			Whether the value is guessed ahead with [constant NetwMultiplayer.TIMELINE_MODE_FORECAST].
+			Whether the value is guessed ahead with [constant NetwDisplay.TIMELINE_MODE_FORECAST].
 		</member>
 		<member name="mode" type="int" setter="set_mode" getter="get_mode" enum="NetwInterpolate.Mode" default="1">
 			How the value is interpolated.

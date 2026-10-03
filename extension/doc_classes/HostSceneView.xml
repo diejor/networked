@@ -4,7 +4,7 @@
 		Displays the scene of the host's own player.
 	</brief_description>
 	<description>
-		A host creates one by itself when its player's scene uses [constant NetwMultiplayer.SCENE_ISOLATION_OWN_WORLD], since that scene is in a [SubViewport]. [signal NetwEntity.view_activated] is emitted when the displayed scene changes.
+		A host creates one by itself when its player's scene uses [constant NetwScene.SCENE_ISOLATION_OWN_WORLD], since that scene is in a [SubViewport]. [signal NetwEntity.view_activated] is emitted when the displayed scene changes.
 		[codeblock]
 		func _ready() -&gt; void:
 		    var entity := NetwEntity.of(self)

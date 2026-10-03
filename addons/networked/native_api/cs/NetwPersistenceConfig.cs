@@ -195,7 +195,7 @@ public sealed class NetwPersistenceConfig : NetwRefCounted
     /// <summary>
     /// Saves the record every <paramref name="seconds"/> when something
     /// changed. <c>0.0</c> saves only when you call
-    /// <see cref="NetwPersistenceHandle.Save"/>. <b>Server Only.</b>
+    /// <see cref="NetwPersistence.Save"/>. <b>Server Only.</b>
     /// </summary>
     public NetwPersistenceConfig Interval(double seconds)
     {
@@ -218,8 +218,8 @@ public sealed class NetwPersistenceConfig : NetwRefCounted
     /// <summary>
     /// Whether the server loads the stored record when the entity's node is
     /// ready. Clients do not receive the entity until the load succeeds or
-    /// finds no record. Call <see cref="NetwPersistenceHandle.Load"/> to retry
-    /// a failed load.
+    /// finds no record. Call <see cref="NetwPersistence.Load"/> to retry a
+    /// failed load.
     /// </summary>
     public NetwPersistenceConfig LoadOnSpawn(bool enabled = true)
     {

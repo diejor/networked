@@ -96,7 +96,7 @@ When ``true``, :godot:`Node.queue_free() <Node#class_Node_method_queue_free>` is
 - |void| **set_flush_save**\ (\ value\: :godot:`bool`\ )
 - :godot:`bool` **get_flush_save**\ (\ )
 
-When ``true``, the entity's row is saved after the node leaves the tree. The despawn does not wait for the save, await :ref:`NetwPersistenceHandle.save()<class_NetwPersistenceHandle_method_save>` before despawning if you need it stored.
+When ``true``, the entity's row is saved after the node leaves the tree. The despawn does not wait for the save, await :ref:`NetwPersistence.save()<class_NetwPersistence_method_save>` before despawning if you need it stored.
 
 .. rst-class:: classref-item-separator
 

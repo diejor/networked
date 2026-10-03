@@ -25,7 +25,7 @@ func after_test() -> void:
 
 
 func _install_and_host() -> bool:
-	_host_api = NetwMultiplayer.make()
+	_host_api = NetwMultiplayer.new()
 	get_tree().set_multiplayer(_host_api)
 	var loopback := LocalLoopbackSession.get_shared_session()
 	if not loopback.has_live_server():
@@ -38,7 +38,7 @@ func _install_and_host() -> bool:
 func _mount_client() -> NetwMultiplayer:
 	_client_tree = MultiplayerTree.new()
 	_client_tree.name = "SpikeClient"
-	_client_tree.desired_role = NetwMultiplayer.ROLE_CLIENT
+	_client_tree.desired_role = NetwSession.ROLE_CLIENT
 	_client_tree.auto_host_headless = false
 	_client_tree.peer_class = &"LocalMultiplayerPeer"
 	add_child(_client_tree)
@@ -67,7 +67,7 @@ func _pump_until(cond: Callable, timeout_ms: int = 3000) -> bool:
 
 
 func test_root_and_subpath_mounts_coexist_as_live_sessions() -> void:
-	_host_api = NetwMultiplayer.make()
+	_host_api = NetwMultiplayer.new()
 	get_tree().set_multiplayer(_host_api)
 	var client_api := _mount_client()
 

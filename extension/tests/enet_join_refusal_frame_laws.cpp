@@ -167,8 +167,8 @@ class EnetJoinRefusalScenario final : public netw_test::FrameScenario {
             return false;
         }
         client.instantiate();
-        client->connect(
-            StringName("session_join_failed"),
+        client->observe(
+            netw::NetwMultiplayer::SESSION_JOIN_FAILED,
             p_second ? callable_mp_static(&record_second_join_failed)
                      : callable_mp_static(&record_join_failed)
         );

@@ -77,7 +77,7 @@
 				func _carry_spin(value: Vector3, ctx: NetwPredictCarryContext) -&gt; Vector3:
 				    return value + _drive_axis(ctx.state) * ctx.state[&amp;"speed"] * ctx.delta
 				[/codeblock]
-				[param step] must be a method or lambda of a [Node], may read only its [NetwPredictCarryContext], and must not write anything. A result that does not reproduce the recorded ticks is rejected, and the value is restored as the server had it. Declaring both this and [method carry_along] on one property is an error, and neither is used. [method NetwPredictionHandle.reachability] reports whether the rule is in use.
+				[param step] must be a method or lambda of a [Node], may read only its [NetwPredictCarryContext], and must not write anything. A result that does not reproduce the recorded ticks is rejected, and the value is restored as the server had it. Declaring both this and [method carry_along] on one property is an error, and neither is used. [method NetwPrediction.reachability] reports whether the rule is in use.
 			</description>
 		</method>
 		<method name="causal">
@@ -122,7 +122,7 @@
 			<return type="NetwPropertyConfig" />
 			<param index="0" name="threshold" type="float" />
 			<description>
-				How far this value may drift from the server's before it is corrected, in its own units. Without it, the value uses [member NetwPredictionHandle.divergence_epsilon]. [code]0.0[/code] corrects any error.
+				How far this value may drift from the server's before it is corrected, in its own units. Without it, the value uses [member NetwPrediction.divergence_epsilon]. [code]0.0[/code] corrects any error.
 				[codeblock]
 				Netw.configure_property(self, &amp;"velocity").state().epsilon(0.05)
 				[/codeblock]
@@ -239,7 +239,7 @@
 			<return type="NetwPropertyConfig" />
 			<param index="0" name="distance" type="float" />
 			<description>
-				How large this value's error may be before a correction teleports the body, in its own units. Without it, the value uses [member NetwPredictionHandle.teleport_threshold]. [code]0.0[/code] teleports on every correction this value causes.
+				How large this value's error may be before a correction teleports the body, in its own units. Without it, the value uses [member NetwPrediction.teleport_threshold]. [code]0.0[/code] teleports on every correction this value causes.
 				[codeblock]
 				Netw.configure_property(self, &amp;"position").state() \
 				        .carry_along(&amp;"velocity").teleport_at(3.0)      # metres
@@ -283,7 +283,7 @@
 			Set by [method converge].
 		</member>
 		<member name="epsilon_override" type="float" setter="set_epsilon_override" getter="get_epsilon_override" default="-1.0">
-			Set by [method epsilon]. A negative value uses [member NetwPredictionHandle.divergence_epsilon].
+			Set by [method epsilon]. A negative value uses [member NetwPrediction.divergence_epsilon].
 		</member>
 		<member name="explicit_reconcile_only" type="bool" setter="set_explicit_reconcile_only" getter="get_explicit_reconcile_only" default="false">
 			Set by [method reconcile_only].
@@ -328,13 +328,10 @@
 			Set by [method windowed], or [constant UNSET].
 		</member>
 		<member name="teleport_at_override" type="float" setter="set_teleport_at_override" getter="get_teleport_at_override" default="-1.0">
-			Set by [method teleport_at]. A negative value uses [member NetwPredictionHandle.teleport_threshold].
+			Set by [method teleport_at]. A negative value uses [member NetwPrediction.teleport_threshold].
 		</member>
 	</members>
 	<constants>
-		<constant name="UNSET" value="-1">
-			A setting no call has written yet.
-		</constant>
 		<constant name="TRIGGER_TICK" value="0" enum="Trigger">
 			Sent every tick.
 		</constant>
@@ -364,6 +361,9 @@
 		</constant>
 		<constant name="AUDIENCE_SERVER_ONLY" value="1" enum="Audience">
 			Sent to the server only.
+		</constant>
+		<constant name="UNSET" value="-1">
+			A setting no call has written yet.
 		</constant>
 	</constants>
 </class>

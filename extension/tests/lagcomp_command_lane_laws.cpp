@@ -5,7 +5,7 @@
 #if defined(NETW_TIER_HOSTED)
 
 #include "godot/templates.hpp"
-#include "netw/api/prediction_handle.hpp"
+#include "netw/api/prediction.hpp"
 
 namespace TestNetwLagCompCommandLaneLaws {
 

@@ -13,7 +13,7 @@ var _tree: MultiplayerTree
 
 
 func _ready() -> void:
-	var session: NetwSessionHandle = Netw.session(self)
+	var session: NetwSession = Netw.session(self)
 	if session != null:
 		_tree = session.root as MultiplayerTree
 	Netw.configure_admission(admit)
@@ -46,5 +46,6 @@ func admit(peer_id: int, username: StringName, _args: Array = []) -> Error:
 func _active_wrapper() -> NakamaWrapper:
 	if _tree == null:
 		return null
-	var dir := Netw.service(_tree, NakamaLobbyDirectory) as NakamaLobbyDirectory
+	var session: NetwSession = Netw.session(_tree)
+	var dir := session.service(NakamaLobbyDirectory) as NakamaLobbyDirectory
 	return dir.wrapper() if dir != null else null

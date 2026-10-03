@@ -128,7 +128,10 @@ TEST_CASE(
     const CallLog flushed;
     core->set_interest_flush(flushed.callable("flush"));
     const CallLog moved;
-    core->connect(StringName("scene_entity_moved"), moved.callable("moved"));
+    core->observe(
+        NetwMultiplayer::SCENE_ENTITY_MOVED,
+        moved.callable("moved")
+    );
     Node *root = memnew(Node);
     const Placed source = place(core, root, true, StringName("Source"));
     const Placed destination = place(core, root, true, StringName("Dest"));

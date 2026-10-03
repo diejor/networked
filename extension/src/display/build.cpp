@@ -95,7 +95,7 @@ Channel *ensure_state(
             has_source && visual == nullptr,
             nullptr,
             sys::INTERPOLATION,
-            "NetwDisplayHandle.visual_root '%s' is not a node under '%s', so "
+            "NetwDisplay.visual_root '%s' is not a node under '%s', so "
             "'%s' is not interpolated, to keep it off the simulated node "
             "'%s'. Point visual_root at a child node.",
             String(config.visual_root),
@@ -112,7 +112,7 @@ Channel *ensure_state(
         sys::INTERPOLATION,
         "'%s' on '%s' is not interpolated, because it follows '%s' but "
         "writes '%s' on the simulated body itself. Set "
-        "NetwDisplayHandle.visual_root to draw it on a child node.",
+        "NetwDisplay.visual_root to draw it on a child node.",
         String(p_target_prop),
         String(p_node->get_name()),
         String(p_source_prop),

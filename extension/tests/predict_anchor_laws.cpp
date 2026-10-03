@@ -7,8 +7,7 @@
 
 #include "netw/api/entity.hpp"
 #include "netw/api/netw_multiplayer.hpp"
-#include "netw/api/predict.hpp"
-#include "netw/api/prediction_handle.hpp"
+#include "netw/api/prediction.hpp"
 #include "netw/predict/engine.hpp"
 #include "netw/prediction_core.hpp"
 
@@ -20,9 +19,8 @@ using namespace godot;
 using namespace netw_test;
 using netw::NetwEntity;
 using netw::NetwMultiplayer;
-using netw::NetwPredict;
 using netw::NetwPredictionEngine;
-using netw::NetwPredictionHandle;
+using netw::NetwPrediction;
 using netw::NetwPredictRecovery;
 
 const char *ANCHORED_ID = "anchored_player";
@@ -92,12 +90,12 @@ TEST_CASE(
     const int64_t slot = pool->slot_register(seated);
     REQUIRE(slot >= 0);
 
-    NetwPredictionHandle *handle = Object::cast_to<NetwPredictionHandle>(
+    NetwPrediction *handle = Object::cast_to<NetwPrediction>(
         netw::gd::live_object(seated->get_prediction())
     );
     REQUIRE_MESSAGE(handle != nullptr, "the entity minted no handle");
     handle->simulation()->set_schedule(
-        netw::NetwSimulationHandle::SCHEDULE_TICK
+        netw::NetwSimulation::SCHEDULE_TICK
     );
 
     pool->open_lane(slot);
@@ -149,12 +147,12 @@ TEST_CASE(
     const int64_t slot = pool->slot_register(seated);
     REQUIRE(slot >= 0);
 
-    NetwPredictionHandle *handle = Object::cast_to<NetwPredictionHandle>(
+    NetwPrediction *handle = Object::cast_to<NetwPrediction>(
         netw::gd::live_object(seated->get_prediction())
     );
     REQUIRE(handle != nullptr);
     handle->simulation()->set_schedule(
-        netw::NetwSimulationHandle::SCHEDULE_FRAME
+        netw::NetwSimulation::SCHEDULE_FRAME
     );
 
     pool->open_lane(slot);

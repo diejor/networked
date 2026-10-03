@@ -30,6 +30,9 @@ struct DeferredEvidence {
     int batch_after = 0;
     int pending_before = 0;
     int pending_after = 0;
+    int early_after = 0;
+    int late_after = 0;
+    int later_after = 0;
 };
 
 DeferredEvidence &deferred_evidence() {
@@ -51,7 +54,16 @@ class DeferredWaitScenario final : public netw_test::FrameScenario {
     Ref<NetwPromise> resolved;
     Ref<NetwPromise> rejected;
     Ref<NetwPromise> pending;
+    Ref<NetwPromise> shared;
     Ref<NetwGroupPromise> batch;
+
+    void open_shared() {
+        shared.instantiate();
+        shared->wait().connect(answers->callable("early"));
+        shared->resolve(Variant(5));
+        shared->wait().connect(answers->callable("late"));
+        shared->wait().connect(answers->callable("later"));
+    }
 
     void open() {
         answers = std::make_unique<CallLog>();
@@ -65,6 +77,7 @@ class DeferredWaitScenario final : public netw_test::FrameScenario {
         rejected->wait().connect(answers->callable("rejected"));
         batch->wait().connect(answers->callable("batch"));
         pending->wait().connect(answers->callable("pending"));
+        open_shared();
 
         DeferredEvidence &evidence = deferred_evidence();
         evidence.resolved_before = answers->count("resolved");
@@ -79,6 +92,9 @@ class DeferredWaitScenario final : public netw_test::FrameScenario {
         evidence.rejected_after = answers->count("rejected");
         evidence.batch_after = answers->count("batch");
         evidence.pending_after = answers->count("pending");
+        evidence.early_after = answers->count("early");
+        evidence.late_after = answers->count("late");
+        evidence.later_after = answers->count("later");
         if (evidence.resolved_after > 0) {
             evidence.resolved_answer = answers->args("resolved")[0];
         }
@@ -90,6 +106,7 @@ class DeferredWaitScenario final : public netw_test::FrameScenario {
         resolved.unref();
         rejected.unref();
         pending.unref();
+        shared.unref();
         batch.unref();
         answers.reset();
     }
@@ -161,6 +178,19 @@ TEST_CASE(
 
     NETW_CHECK_EQ(evidence.pending_before, 0);
     NETW_CHECK_EQ(evidence.pending_after, 0);
+}
+
+TEST_CASE(
+    "[Networked][Session][Frame] W13 two waits after a promise settled are "
+    "each answered once, and the waiter that heard the settle is not woken "
+    "again"
+) {
+    const DeferredEvidence &evidence = deferred_evidence();
+    REQUIRE(evidence.driven);
+
+    NETW_CHECK_EQ(evidence.early_after, 1);
+    NETW_CHECK_EQ(evidence.late_after, 1);
+    NETW_CHECK_EQ(evidence.later_after, 1);
 }
 
 } // namespace NetwTests

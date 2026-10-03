@@ -41,11 +41,11 @@ Methods
 .. table::
    :widths: auto
 
-   +--------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | |void| | :ref:`open_join_direct<class_JoinDirectPopup_method_open_join_direct>`\ (\ handle\: :ref:`NetwConnectHandle<class_NetwConnectHandle>`, default_username\: :godot:`String`\ ) |
-   +--------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | |void| | :ref:`preset<class_JoinDirectPopup_method_preset>`\ (\ peer_class\: :godot:`StringName`, address\: :godot:`String`\ )                                                        |
-   +--------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   +--------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | |void| | :ref:`open_join_direct<class_JoinDirectPopup_method_open_join_direct>`\ (\ handle\: :ref:`NetwConnection<class_NetwConnection>`, default_username\: :godot:`String`\ ) |
+   +--------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | |void| | :ref:`preset<class_JoinDirectPopup_method_preset>`\ (\ peer_class\: :godot:`StringName`, address\: :godot:`String`\ )                                                  |
+   +--------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 
 .. rst-class:: classref-section-separator
 
@@ -98,7 +98,7 @@ Method Descriptions
 
 .. rst-class:: classref-method
 
-|void| **open_join_direct**\ (\ handle\: :ref:`NetwConnectHandle<class_NetwConnectHandle>`, default_username\: :godot:`String`\ ) :ref:`🔗<class_JoinDirectPopup_method_open_join_direct>`
+|void| **open_join_direct**\ (\ handle\: :ref:`NetwConnection<class_NetwConnection>`, default_username\: :godot:`String`\ ) :ref:`🔗<class_JoinDirectPopup_method_open_join_direct>`
 
 Opens the direct join popup for ``handle``.
 

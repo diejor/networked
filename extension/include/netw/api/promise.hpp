@@ -9,6 +9,19 @@
 
 namespace netw {
 
+namespace promise_wait {
+
+using Waiting = godot::LocalVector<godot::Ref<godot::RefCounted>>;
+
+godot::Signal open(
+    Waiting &p_waiting,
+    bool p_settled,
+    const godot::Variant &p_answer
+);
+void release(Waiting &p_waiting, const godot::Variant &p_answer);
+
+} // namespace promise_wait
+
 class NetwPromise : public godot::RefCounted {
     GDCLASS(NetwPromise, godot::RefCounted)
 
@@ -20,6 +33,7 @@ private:
     godot::String detail;
     godot::LocalVector<godot::Callable> then_callbacks;
     godot::LocalVector<godot::Callable> catch_callbacks;
+    promise_wait::Waiting waiting;
 
 protected:
     static void _bind_methods();

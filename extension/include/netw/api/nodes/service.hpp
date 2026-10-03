@@ -1,6 +1,7 @@
 #pragma once
 
 #include "netw/api/netw_multiplayer.hpp"
+#include "netw/api/session.hpp"
 
 #include "godot/callable.hpp"
 #include "godot/gdvirtual.hpp"
@@ -25,8 +26,8 @@ protected:
 
     GDVIRTUAL0R(godot::Ref<godot::Script>, _service_type)
     GDVIRTUAL0R(bool, _should_register)
-    GDVIRTUAL1(_service_entered, godot::Ref<NetwMultiplayer>)
-    GDVIRTUAL1(_service_exiting, godot::Ref<NetwMultiplayer>)
+    GDVIRTUAL1(_service_entered, godot::Ref<NetwSession>)
+    GDVIRTUAL1(_service_exiting, godot::Ref<NetwSession>)
 
 public:
     virtual void service_entered(NetwMultiplayer *p_api);

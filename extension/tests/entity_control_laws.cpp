@@ -24,7 +24,7 @@ struct ArmedNode {
         owner = memnew(Node);
         entity = NetwEntity::ensure(owner);
         REQUIRE(entity.is_valid());
-        entity->set_entity_id(p_id);
+        entity->set_name(p_id);
         entity->set_peer_id(p_peer);
         entity->set_initial_controller(
             NetwEntity::InitialController(p_initial)
@@ -223,7 +223,7 @@ TEST_CASE(
     Node *owner = memnew(Node);
     Ref<NetwEntity> entity = NetwEntity::ensure(owner);
     REQUIRE(entity.is_valid());
-    entity->set_entity_id("valeria");
+    entity->set_name("valeria");
     entity->set_peer_id(0);
     entity->set_initial_controller(NetwEntity::INITIAL_SERVER);
     entity->arm(session);
@@ -245,7 +245,7 @@ TEST_CASE(
     Node *owner = memnew(Node);
     Ref<NetwEntity> entity = NetwEntity::ensure(owner);
     REQUIRE(entity.is_valid());
-    entity->set_entity_id("driftwood");
+    entity->set_name("driftwood");
     entity->set_peer_id(42);
     entity->set_initial_controller(NetwEntity::INITIAL_REPRESENTED_PEER);
     entity->arm(session);

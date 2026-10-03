@@ -62,14 +62,14 @@ func _should_register() -> bool:
 
 
 # Steam allows one initialization per process.
-func _service_entered(_api: NetwMultiplayer) -> void:
+func _service_entered(session: NetwSession) -> void:
 	var existing: SteamLobbyDirectory = _instance.get_ref()
 	if existing and existing != self:
 		push_warning(
 			"Only one SteamLobbyDirectory may exist, so this one is freed. "
 			+ "Remove the extra SteamLobbyDirectory.",
 		)
-		Netw.service_unregister(self, self)
+		session.unregister_service(self, self)
 		queue_free()
 		return
 	_instance = weakref(self)
@@ -84,7 +84,7 @@ func _service_entered(_api: NetwMultiplayer) -> void:
 		provider_unavailable.emit.call_deferred(
 			"GodotSteam singleton not found",
 		)
-		Netw.service_unregister(self, self)
+		session.unregister_service(self, self)
 		return
 
 	if not _has_steam_app_id():
@@ -96,7 +96,7 @@ func _service_entered(_api: NetwMultiplayer) -> void:
 			_init_ok = false
 			push_error(reason)
 			provider_unavailable.emit.call_deferred(reason)
-			Netw.service_unregister(self, self)
+			session.unregister_service(self, self)
 			return
 
 	var init_res: Dictionary = _wrapper.steam_init_ex()
@@ -113,7 +113,7 @@ func _service_entered(_api: NetwMultiplayer) -> void:
 		var reason := "Steam did not start (%s, %s)" % [status_str, verbal]
 		push_warning("%s, so SteamLobbyDirectory is unavailable." % reason)
 		provider_unavailable.emit.call_deferred(reason)
-		Netw.service_unregister(self, self)
+		session.unregister_service(self, self)
 		return
 
 	_wrapper.connect_signal("lobby_created", _on_lobby_created)
@@ -128,7 +128,7 @@ func _service_entered(_api: NetwMultiplayer) -> void:
 		_bind_tree_signals(mt)
 
 
-func _service_exiting(_api: NetwMultiplayer) -> void:
+func _service_exiting(_session: NetwSession) -> void:
 	var existing: SteamLobbyDirectory = _instance.get_ref()
 	if existing == self:
 		_instance = weakref(null)
@@ -341,9 +341,9 @@ func _bind_tree_signals(mt: MultiplayerTree) -> void:
 		mt.api.peer_connected.connect(_on_tree_peer_changed)
 	if not mt.api.peer_disconnected.is_connected(_on_tree_peer_changed):
 		mt.api.peer_disconnected.connect(_on_tree_peer_changed)
-	var session: NetwSessionHandle = Netw.session(mt)
-	if not session.disconnecting.is_connected(_on_tree_server_disconnecting):
-		session.disconnecting.connect(_on_tree_server_disconnecting)
+	var session: NetwSession = Netw.session(mt)
+	if not session.exiting.is_connected(_on_tree_session_exiting):
+		session.exiting.connect(_on_tree_session_exiting)
 
 
 func _on_tree_peer_changed(_peer_id: int) -> void:
@@ -355,8 +355,11 @@ func _on_tree_peer_changed(_peer_id: int) -> void:
 	_wrapper.set_lobby_data(_lobby_id, "players", str(count))
 
 
-func _on_tree_server_disconnecting(_reason: String) -> void:
-	_leave_lobby()
+func _on_tree_session_exiting(
+	reason: NetwSession.ExitReason, _detail: String
+) -> void:
+	if reason == NetwSession.SERVER_SHUTDOWN:
+		_leave_lobby()
 
 
 func _guard_ready(op: String) -> bool:
@@ -546,7 +549,7 @@ func _build_peer() -> MultiplayerPeer:
 
 
 func _local_app_id() -> String:
-	var session: NetwSessionHandle = Netw.session(self)
+	var session: NetwSession = Netw.session(self)
 	return String(session.config.app_id) if session else ""
 
 

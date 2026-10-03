@@ -41,9 +41,9 @@ Methods
 .. table::
    :widths: auto
 
-   +--------+----------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | |void| | :ref:`open_host<class_HostPopup_method_open_host>`\ (\ handle\: :ref:`NetwConnectHandle<class_NetwConnectHandle>`, default_username\: :godot:`String`\ ) |
-   +--------+----------------------------------------------------------------------------------------------------------------------------------------------------------+
+   +--------+----------------------------------------------------------------------------------------------------------------------------------------------------+
+   | |void| | :ref:`open_host<class_HostPopup_method_open_host>`\ (\ handle\: :ref:`NetwConnection<class_NetwConnection>`, default_username\: :godot:`String`\ ) |
+   +--------+----------------------------------------------------------------------------------------------------------------------------------------------------+
 
 .. rst-class:: classref-section-separator
 
@@ -96,7 +96,7 @@ Method Descriptions
 
 .. rst-class:: classref-method
 
-|void| **open_host**\ (\ handle\: :ref:`NetwConnectHandle<class_NetwConnectHandle>`, default_username\: :godot:`String`\ ) :ref:`🔗<class_HostPopup_method_open_host>`
+|void| **open_host**\ (\ handle\: :ref:`NetwConnection<class_NetwConnection>`, default_username\: :godot:`String`\ ) :ref:`🔗<class_HostPopup_method_open_host>`
 
 Opens the form, listing the transports that can host on this build.
 

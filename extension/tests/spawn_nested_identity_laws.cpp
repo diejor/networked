@@ -33,9 +33,9 @@ Node *build_nested_arena(const Variant &) {
     Node2D *ball = rooted(arena, BALL, arena);
     netw::script::model::configure_node_property(ball, StringName("position"))
         ->on_spawn();
-    NetwEntity::ensure(ball)->set_entity_id(StringName(BALL));
+    NetwEntity::ensure(ball)->set_name(StringName(BALL));
     Node2D *spin = rooted(ball, SPIN, arena);
-    NetwEntity::ensure(spin)->set_entity_id(StringName(SPIN));
+    NetwEntity::ensure(spin)->set_name(StringName(SPIN));
     return arena;
 }
 

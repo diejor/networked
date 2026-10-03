@@ -75,12 +75,11 @@ public:
 };
 
 Ref<NetwMultiplayer> rooted_session(const Ref<LocalMultiplayerPeer> &p_peer) {
-    Ref<SceneMultiplayer> inner;
-    inner.instantiate();
-    inner->set_root_path(netw::gd::scene_root()->get_path());
-    const Ref<NetwMultiplayer> session
-        = NetwMultiplayer::make(inner, Ref<Script>());
+    const Ref<NetwMultiplayer> session = NetwMultiplayer::create(Ref<Script>());
     if (session.is_valid()) {
+        session->session_get_inner()->set_root_path(
+            netw::gd::scene_root()->get_path()
+        );
         session->set("multiplayer_peer", p_peer);
     }
     return session;
@@ -123,8 +122,8 @@ TEST_CASE(
     anchor.instantiate();
     const std::shared_ptr<Vector<int>> samples
         = std::make_shared<Vector<int>>();
-    host->connect(
-        StringName("session_poll_started"),
+    host->observe(
+        NetwMultiplayer::SESSION_POLL_STARTED,
         Callable(memnew(QueueProbe(samples, server_peer, anchor.ptr())))
     );
 

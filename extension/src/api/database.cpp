@@ -13,8 +13,6 @@ namespace netw {
 
 namespace {
 
-constexpr const char *SIG_DATABASE_FAILED = "database_failed";
-
 Ref<NetwPromise> no_session() {
     return NetwPromise::rejected(
         ERR_UNAVAILABLE,
@@ -38,7 +36,7 @@ NetwMultiplayer *NetwDatabase::session() const {
     return Object::cast_to<NetwMultiplayer>(gd::object_of(session_id));
 }
 
-void NetwDatabase::relay_failed(
+void NetwDatabase::announce_failed(
     const RID &p_database,
     int64_t p_error,
     const String &p_detail
@@ -59,10 +57,6 @@ Ref<NetwDatabase> NetwDatabase::over(
     handle.instantiate();
     handle->database = p_database;
     handle->session_id = gd::instance_id(p_session);
-    p_session->connect(
-        StringName(SIG_DATABASE_FAILED),
-        callable_mp(handle.ptr(), &NetwDatabase::relay_failed)
-    );
     return handle;
 }
 
@@ -76,17 +70,24 @@ Ref<NetwDatabase> NetwDatabase::of(Node *p_node, const StringName &p_name) {
         );
         return Ref<NetwDatabase>();
     }
-    const RID found = api->database_find(p_name);
+    return named(api, p_name);
+}
+
+Ref<NetwDatabase> NetwDatabase::named(
+    NetwMultiplayer *p_session,
+    const StringName &p_name
+) {
+    const RID found = p_session->database_find(p_name);
     if (!found.is_valid()) {
         NETW_ERROR(
             sys::TABLE,
-            "Netw.database found no database named '%s' in this session. "
-            "Declare it with Netw.configure_database first.",
+            "There is no database named '%s' in this session. Declare it with "
+            "Netw.configure_database first.",
             String(p_name).utf8().get_data()
         );
         return Ref<NetwDatabase>();
     }
-    return api->database_handle(found);
+    return p_session->database_handle(found);
 }
 
 Ref<NetwPromise> NetwDatabase::open(const StringName &p_slot) {

@@ -6,7 +6,7 @@
 #include "netw/api/context.hpp"
 #include "netw/api/entity.hpp"
 #include "netw/api/participant.hpp"
-#include "netw/api/scene_handle.hpp"
+#include "netw/api/scene.hpp"
 #include "support/joined_peer.h"
 #include "support/netw_call_log.h"
 
@@ -29,13 +29,13 @@ TEST_CASE(
     rig.branch(-1)->add_child(container);
     rig.enter_scene(StringName("Arena"));
 
-    const Ref<netw::NetwSceneHandle> named = api->scene_handle_of(scene);
+    const Ref<netw::NetwScene> named = api->scene_handle_of(scene);
     REQUIRE(named.is_valid());
     CHECK(named->get_is_declared());
-    CHECK(named->get_entity() == scene);
+    CHECK(named->get_rid() == scene);
     CHECK(named->get_label() == StringName("Arena"));
 
-    const Ref<netw::NetwSceneHandle> again = api->scene_handle_of(scene);
+    const Ref<netw::NetwScene> again = api->scene_handle_of(scene);
     CHECK(again == named);
 
     rig.branch(-1)->remove_child(container);
@@ -54,7 +54,7 @@ TEST_CASE(
     rig.branch(-1)->add_child(container);
     rig.enter_scene(StringName("Arena"));
 
-    const Ref<netw::NetwSceneHandle> view = api->scene_handle_of(scene);
+    const Ref<netw::NetwScene> view = api->scene_handle_of(scene);
     REQUIRE(view.is_valid());
 
     netw_test::seated_peer(api, 7);
@@ -90,12 +90,12 @@ TEST_CASE(
     rig.branch(-1)->add_child(container);
     rig.enter_scene(StringName("Arena"));
 
-    const Ref<netw::NetwSceneHandle> view = api->scene_handle_of(scene);
+    const Ref<netw::NetwScene> view = api->scene_handle_of(scene);
     REQUIRE(view.is_valid());
 
     const CallLog heard;
     view->connect(StringName("viewer_entered"), heard.callable("entered"));
-    view->connect(StringName("viewer_left"), heard.callable("left"));
+    view->connect(StringName("viewer_exited"), heard.callable("left"));
 
     netw_test::seated_peer(api, 7);
     CHECK(api->player_has(7));
@@ -127,7 +127,7 @@ TEST_CASE(
     rig.branch(-1)->add_child(container);
     rig.enter_scene(StringName("Arena"));
 
-    const Ref<netw::NetwSceneHandle> view = api->scene_handle_of(scene);
+    const Ref<netw::NetwScene> view = api->scene_handle_of(scene);
     REQUIRE(view.is_valid());
 
     const TypedArray<netw::NetwEntity> inside = view->get_entities();
@@ -154,7 +154,7 @@ TEST_CASE(
     rig.branch(-1)->add_child(container);
     rig.enter_scene(StringName("Arena"));
 
-    const Ref<netw::NetwSceneHandle> view = api->scene_handle_of(scene);
+    const Ref<netw::NetwScene> view = api->scene_handle_of(scene);
     REQUIRE(view.is_valid());
 
     const CallLog heard;
@@ -190,8 +190,7 @@ TEST_CASE(
 ) {
     LoopbackRig rig(1);
     Node *orphan = memnew(Node);
-    const Ref<netw::NetwSceneHandle> view
-        = netw::Netw::scene(orphan, StringName());
+    const Ref<netw::NetwScene> view = netw::Netw::scene(orphan);
     CHECK(view.is_null());
     memdelete(orphan);
 }

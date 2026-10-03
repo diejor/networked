@@ -15,10 +15,10 @@ namespace TestNetwSessionLifetime {
 using namespace godot;
 
 Ref<RefCounted> bare_api() {
-    Ref<SceneMultiplayer> inner;
-    inner.instantiate();
-    inner->set_root_path(NodePath("/"));
-    return netw::NetwMultiplayer::make(inner, Ref<Script>());
+    const Ref<netw::NetwMultiplayer> api
+        = netw::NetwMultiplayer::create(Ref<Script>());
+    api->session_get_inner()->set_root_path(NodePath("/"));
+    return api;
 }
 
 TEST_CASE(

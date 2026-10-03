@@ -110,7 +110,7 @@ void NetwService::enter_registry() {
     const Ref<Script> declared = service_type();
     api->service_register(this, declared.ptr());
     service_entered(api);
-    GDVIRTUAL_CALL(_service_entered, Ref<NetwMultiplayer>(api));
+    GDVIRTUAL_CALL(_service_entered, api->get_session());
 }
 
 void NetwService::exit_registry() {
@@ -121,7 +121,7 @@ void NetwService::exit_registry() {
     if (api == nullptr) {
         return;
     }
-    GDVIRTUAL_CALL(_service_exiting, Ref<NetwMultiplayer>(api));
+    GDVIRTUAL_CALL(_service_exiting, api->get_session());
     service_exiting(api);
     const Ref<Script> declared = service_type();
     api->service_unregister(this, declared.ptr());
@@ -171,8 +171,8 @@ void NetwService::_bind_methods() {
 
     GDVIRTUAL_BIND(_service_type);
     GDVIRTUAL_BIND(_should_register);
-    GDVIRTUAL_BIND(_service_entered, "api");
-    GDVIRTUAL_BIND(_service_exiting, "api");
+    GDVIRTUAL_BIND(_service_entered, "session");
+    GDVIRTUAL_BIND(_service_exiting, "session");
 }
 
 } // namespace netw

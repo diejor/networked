@@ -7,8 +7,7 @@
 
 #include "netw/api/entity.hpp"
 #include "netw/api/netw_multiplayer.hpp"
-#include "netw/api/predict.hpp"
-#include "netw/api/prediction_handle.hpp"
+#include "netw/api/prediction.hpp"
 #include "netw/lagcomp_core.hpp"
 #include "netw/predict/engine.hpp"
 #include "support/value_flow_stand.h"
@@ -24,7 +23,7 @@ using namespace netw_test;
 using netw::NetwEntity;
 using netw::NetwLagCompCore;
 using netw::NetwMultiplayer;
-using netw::NetwPredict;
+using netw::NetwPrediction;
 using netw::NetwPredictionEngine;
 
 const char *WIRED_ID = "wired_player";
@@ -86,7 +85,7 @@ TEST_CASE(
     NETW_CHECK_EQ(rewind_slot(core, seated), int64_t(-1));
 
     CHECK(
-        pool->wire_role_timeline(slot, int(NetwPredict::ROLE_CONSUME), false)
+        pool->wire_role_timeline(slot, int(NetwPrediction::ROLE_CONSUME), false)
     );
     const int64_t enrolled = rewind_slot(core, seated);
     CHECK(enrolled >= 0);
@@ -108,7 +107,7 @@ TEST_CASE(
     SUBCASE("a host-local role keeps the same enrollment") {
         CHECK(pool->wire_role_timeline(
             slot,
-            int(NetwPredict::ROLE_HOST_LOCAL),
+            int(NetwPrediction::ROLE_HOST_LOCAL),
             false
         ));
         NETW_CHECK_EQ(rewind_slot(core, seated), enrolled);
@@ -118,7 +117,7 @@ TEST_CASE(
     SUBCASE("and a predicting role takes a fresh private lane instead") {
         CHECK(pool->wire_role_timeline(
             slot,
-            int(NetwPredict::ROLE_PREDICT),
+            int(NetwPrediction::ROLE_PREDICT),
             false
         ));
         REQUIRE(pool->input_lane_open(slot));
@@ -143,13 +142,17 @@ TEST_CASE(
     REQUIRE(slot >= 0);
 
     CHECK_FALSE(
-        pool->wire_role_timeline(slot, int(NetwPredict::ROLE_REMOTE), false)
+        pool->wire_role_timeline(slot, int(NetwPrediction::ROLE_REMOTE), false)
     );
     CHECK_FALSE(pool->input_lane_open(slot));
 
     SUBCASE("but a latched remote speculates, so it does take one") {
         CHECK(
-            pool->wire_role_timeline(slot, int(NetwPredict::ROLE_REMOTE), true)
+            pool->wire_role_timeline(
+                slot,
+                int(NetwPrediction::ROLE_REMOTE),
+                true
+            )
         );
         CHECK(pool->input_lane_open(slot));
         NETW_CHECK_EQ(rewind_slot(core, seated), int64_t(-1));
@@ -186,19 +189,19 @@ TEST_CASE(
         int(OK)
     );
 
-    const Ref<netw::NetwPredictionHandle> handle = seated->get_prediction();
+    const Ref<netw::NetwPrediction> handle = seated->get_prediction();
     REQUIRE(handle.is_valid());
     NETW_CHECK_EQ(
         handle->get_input_source(),
-        int(NetwPredict::INPUT_SOURCE_NONE)
+        int(NetwPrediction::INPUT_SOURCE_NONE)
     );
     NETW_CHECK_EQ(
         handle->get_sim_mode(),
-        int(NetwPredict::SIM_MODE_AUTHORITATIVE)
+        int(NetwPrediction::SIM_MODE_AUTHORITATIVE)
     );
     NETW_CHECK_EQ(
         int(pool->role_of(pool->slot_register(seated))),
-        int(NetwPredict::ROLE_HOST_LOCAL)
+        int(NetwPrediction::ROLE_HOST_LOCAL)
     );
 }
 

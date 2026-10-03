@@ -36,7 +36,7 @@ void warn_self_feedback(Runtime *p_runtime) {
             "'%s' on '%s' is simulated on this peer, so smoothing it in place "
             "would feed back into the simulation and it is not smoothed. "
             "Write it elsewhere with NetwInterpolate.to or "
-            "NetwDisplayHandle.visual_root.",
+            "NetwDisplay.visual_root.",
             String(state->get_target_prop()),
             owner != nullptr ? String(owner->get_name()) : String("?")
         );

@@ -543,9 +543,9 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Entity] CA9c Netw.claim_authority and "
-    "Netw.release_authority act on the entity a node belongs to, and a node "
-    "under no entity is rejected"
+    "[Networked][Entity] CA9c claim_authority and release_authority on the "
+    "entity a node belongs to move its controller, and a node under no "
+    "entity has no entity to ask"
 ) {
     LoopbackRig rig(1);
     rig.mount();
@@ -555,8 +555,10 @@ TEST_CASE(
     Node *held = rig.route_node(route, 0);
     REQUIRE(held != nullptr);
 
+    const Ref<NetwEntity> entity = NetwEntity::of(held);
+    REQUIRE(entity.is_valid());
     const Ref<NetwPromise> claimed
-        = netw::Netw::claim_authority(held, Control::HOLD_EXCLUSIVE);
+        = entity->claim_authority(Control::HOLD_EXCLUSIVE);
     rig.pump(10);
     CHECK(claimed->get_is_settled());
     NETW_CHECK_EQ(
@@ -564,17 +566,13 @@ TEST_CASE(
         int64_t(rig.peer_id(0))
     );
 
-    const Ref<NetwPromise> released = netw::Netw::release_authority(held, 0);
+    const Ref<NetwPromise> released = entity->release_authority(0);
     rig.pump(10);
     CHECK(released->get_is_settled());
     NETW_CHECK_EQ(entity_at(rig, route, -1)->get_controller(), 0);
 
     Node *loose = memnew(Node);
-    ERR_PRINT_OFF;
-    const Ref<NetwPromise> refused
-        = netw::Netw::claim_authority(loose, Control::HOLD_EXCLUSIVE);
-    ERR_PRINT_ON;
-    CHECK(refused->get_is_settled());
+    CHECK(NetwEntity::of(loose).is_null());
     memdelete(loose);
 }
 

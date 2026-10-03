@@ -46,7 +46,7 @@ TEST_CASE(
         int64_t(NetwMultiplayer::ENTITY_STATE_LIVE)
     );
 
-    core->emit_signal(StringName("session_ended"));
+    core->session_announce_ended();
     core->settle_drain();
 
     NETW_CHECK_EQ(

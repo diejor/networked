@@ -6,7 +6,7 @@
 #include "godot/resource_loader.hpp"
 #include "godot/script.hpp"
 #include "godot/variant.hpp"
-#include "netw/api/connect_handle.hpp"
+#include "netw/api/connection.hpp"
 #include "netw/api/link_conditions.hpp"
 #include "netw/api/loopback.hpp"
 #include "netw/api/netw_multiplayer.hpp"
@@ -24,7 +24,7 @@ namespace TestNetwConnectCreation {
 
 using namespace godot;
 using netw::LocalMultiplayerPeer;
-using netw::NetwConnectHandle;
+using netw::NetwConnection;
 using netw::NetwMultiplayer;
 using netw::connect::Transport;
 using netw::connect::TransportBook;

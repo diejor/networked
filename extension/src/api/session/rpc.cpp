@@ -1,5 +1,5 @@
 #include "netw/api/netw_multiplayer.hpp"
-#include "netw/api/scene_handle.hpp"
+#include "netw/api/scene.hpp"
 
 #include "netw/api/participant.hpp"
 
@@ -19,8 +19,7 @@
 #include "godot/world.hpp"
 #include "netw/api/entity.hpp"
 #include "netw/api/join_request.hpp"
-#include "netw/api/predict.hpp"
-#include "netw/api/prediction_handle.hpp"
+#include "netw/api/prediction.hpp"
 #include "netw/api/replication_core.hpp"
 #include "netw/api/schema_model.hpp"
 #include "netw/api/sync_pipeline.hpp"
@@ -173,6 +172,7 @@ NetwCarrierFrame NetwMultiplayer::receive_header(
     const NetwCarrierFrame header = NetwCarrierFrame::read(p_packet);
     if (header.kind == NetwCarrierFrame::FOREIGN) {
         emit_signal(SIG_PEER_PACKET, p_peer, p_packet);
+        notify(PEER_PACKET, p_peer, p_packet);
         return header;
     }
     if (header.kind == NetwCarrierFrame::MALFORMED) {
@@ -312,6 +312,7 @@ void NetwMultiplayer::relay_auth_failed(int64_t p_peer) {
         Dictionary()
     );
     emit_signal(SIG_PEER_AUTHENTICATION_FAILED, p_peer);
+    notify(PEER_AUTHENTICATION_FAILED, p_peer);
     if (!probe_forget(p_peer)) {
         NETW_WARN(
             netw::sys::SESSION,

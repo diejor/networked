@@ -10,9 +10,9 @@ namespace Networked;
 /// </summary>
 /// <remarks>
 /// A host creates one by itself when its player's scene uses
-/// <see cref="NetwMultiplayer.SceneIsolation.OwnWorld"/>, since that scene is
-/// in a <see cref="SubViewport"/>. <see cref="NetwEntity.ViewActivated"/> is
-/// emitted when the displayed scene changes.
+/// <see cref="NetwScene.SceneIsolation.OwnWorld"/>, since that scene is in a
+/// <see cref="SubViewport"/>. <see cref="NetwEntity.ViewActivated"/> is emitted
+/// when the displayed scene changes.
 /// <code>
 /// func _ready() -&gt; void:
 ///     var entity := NetwEntity.of(self)

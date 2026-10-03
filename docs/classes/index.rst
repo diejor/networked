@@ -103,9 +103,9 @@ Other classes
     class_netwauthprotocol
     class_netwbitstream
     class_netwchannel
+    class_netwclock
     class_netwclockconfig
-    class_netwclockhandle
-    class_netwconnecthandle
+    class_netwconnection
     class_netwcontrolrequest
     class_netwdatabase
     class_netwdatabasebackend
@@ -113,10 +113,10 @@ Other classes
     class_netwdatabaseconnection
     class_netwdespawnconfig
     class_netwdespawnopts
-    class_netwdisplayhandle
+    class_netwdisplay
     class_netwentity
     class_netwgrouppromise
-    class_netwinteresthandle
+    class_netwinterest
     class_netwinterestlayer
     class_netwinterpolate
     class_netwjoinconfig
@@ -125,14 +125,13 @@ Other classes
     class_netwlinkconditions
     class_netwmemberconfig
     class_netwmultiplayer
+    class_netwpersistence
     class_netwpersistenceconfig
-    class_netwpersistencehandle
     class_netwphysicsstepper
     class_netwplayer
-    class_netwpredict
     class_netwpredictcarrycontext
     class_netwpredictfold
-    class_netwpredictionhandle
+    class_netwprediction
     class_netwpredictjudgement
     class_netwpredictrecovery
     class_netwpredictstats
@@ -146,15 +145,15 @@ Other classes
     class_netwquantizetransform2d
     class_netwquantizetransform3d
     class_netwrecord
+    class_netwscene
     class_netwsceneconfig
-    class_netwscenehandle
     class_netwschema
     class_netwserverinfo
     class_netwservice
+    class_netwsession
     class_netwsessionconfig
-    class_netwsessionhandle
-    class_netwsimulationhandle
-    class_netwtablehandle
+    class_netwsimulation
+    class_netwtable
     class_netwtransport
     class_netwwebrtcsignaler
     class_netwwritebatch
