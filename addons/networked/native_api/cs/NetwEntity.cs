@@ -98,12 +98,9 @@ namespace Networked;
 /// the asking peer runs the entity before the decision arrives.
 /// <see cref="NetwSimulation.ClaimOnContact"/> and
 /// <see cref="NetwSimulation.ReleaseOnRest"/> let a body take control of what
-/// it touches and hand it back once it rests.
-/// </para>
-/// <para>
-/// <b>Letting the controller spawn and despawn</b> Only the server spawns,
-/// moves and despawns an entity by default. When
-/// <see cref="NetwEntity.Lifecycle"/> is
+/// it touches and hand it back once it rests. <b>Letting the controller spawn
+/// and despawn</b> Only the server spawns, moves and despawns an entity by
+/// default. When <see cref="NetwEntity.Lifecycle"/> is
 /// <see cref="NetwEntity.LifecycleEnum.Controller"/> the
 /// <see cref="NetwEntity.Controller"/> may too, and the change shows on its
 /// screen at once. The server can refuse it in

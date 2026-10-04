@@ -74,10 +74,7 @@ TEST_CASE(
     CHECK_FALSE(config->is_persisted());
     CHECK_FALSE(config->get_set_masked());
     NETW_CHECK_EQ(int(config->get_lane()), int(PropertySet::VOLATILE));
-    NETW_CHECK_EQ(
-        int(config->get_property_class()),
-        int(PropertySet::CAUSAL)
-    );
+    NETW_CHECK_EQ(int(config->get_property_class()), int(PropertySet::CAUSAL));
     NETW_CHECK_EQ(
         int(config->get_set_audience()),
         int(PropertySet::AUDIENCE_PUBLIC)
@@ -196,10 +193,7 @@ TEST_CASE(
     config->on_spawn();
 
     NETW_CHECK_EQ(int(config->get_lane()), int(PropertySet::RETAINED));
-    NETW_CHECK_EQ(
-        int(config->get_property_class()),
-        int(PropertySet::DERIVED)
-    );
+    NETW_CHECK_EQ(int(config->get_property_class()), int(PropertySet::DERIVED));
     NETW_CHECK_CLOSE(config->get_converge_stiffness(), 0.4, 1e-9);
     NETW_CHECK_CLOSE(config->get_epsilon_override(), 0.05, 1e-9);
     NETW_CHECK_CLOSE(config->get_teleport_at_override(), 3.0, 1e-9);

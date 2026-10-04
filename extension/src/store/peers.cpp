@@ -37,8 +37,7 @@ void size_rows(
 
 constexpr uint32_t SPARE_IMAGES = 256;
 
-template <typename T>
-void append_moved(LocalVector<T> &r_into, T &r_value) {
+template <typename T> void append_moved(LocalVector<T> &r_into, T &r_value) {
     const uint32_t at = r_into.size();
     r_into.resize(at + 1);
     r_into[at] = std::move(r_value);
@@ -916,8 +915,7 @@ bool World::stream_resume(
     Table &table = *tables[p_at.table];
     PeerRows &held = table.peers[p_peer];
     const uint8_t stream = held.stream[p_at.row];
-    if ((stream != uint8_t(Stream::READY)
-         && stream != uint8_t(Stream::DORMANT))
+    if ((stream != uint8_t(Stream::READY) && stream != uint8_t(Stream::DORMANT))
         || !wire::binding_follows(held.origin[p_at.row], p_bound)
         || p_bound.tenure < held.opened[p_at.row].tenure) {
         return false;
@@ -940,9 +938,8 @@ bool World::stream_resume(
             }
             flights->clear();
         }
-        held.next_rev[p_at.row] = floor > held.next_rev[p_at.row]
-            ? floor
-            : held.next_rev[p_at.row];
+        held.next_rev[p_at.row]
+            = floor > held.next_rev[p_at.row] ? floor : held.next_rev[p_at.row];
         held.opened[p_at.row] = p_bound;
     }
     held.stream[p_at.row] = uint8_t(Stream::READY);

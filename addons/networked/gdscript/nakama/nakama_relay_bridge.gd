@@ -420,8 +420,8 @@ func _on_nakama_socket_received_match_state(data) -> void:
 			if _users.has(session_id) and _users[session_id].peer_id != 0:
 				push_error(
 					(
-						"The host gave peer id %s to Nakama user %s, who "
-						+ "already has peer id %s, so it was ignored."
+							"The host gave peer id %s to Nakama user %s, who "
+							+ "already has peer id %s, so it was ignored."
 					) % [
 						peer_id,
 						session_id,

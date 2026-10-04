@@ -320,8 +320,7 @@ void NetwMultiplayer::sim_contact_pass(int64_t p_tick) {
                 );
             }
             row->contact.claim_touching = sim_colliders;
-            for (uint32_t which = 0; which < sim_colliders.size();
-                 ++which) {
+            for (uint32_t which = 0; which < sim_colliders.size(); ++which) {
                 const RID target = sim_contact_owner(sim_colliders[which]);
                 const sim::Row *other = sim_rows.row_of(target);
                 if (other == nullptr || other->view == nullptr

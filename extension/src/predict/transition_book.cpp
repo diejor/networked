@@ -346,11 +346,11 @@ bool TransitionBook::code_field(
 ) {
     return p_codec.holds(p_field, p_value)
         && wire::encode_scalar_column(
-            *p_codec.schema.at(p_field),
-            p_codec.plan.column(uint32_t(p_field)),
-            uint32_t(p_field),
-            p_value,
-            scratch
+               *p_codec.schema.at(p_field),
+               p_codec.plan.column(uint32_t(p_field)),
+               uint32_t(p_field),
+               p_value,
+               scratch
         );
 }
 

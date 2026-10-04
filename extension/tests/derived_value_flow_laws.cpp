@@ -194,14 +194,10 @@ class FlowRun {
     }
 
     void record_bindings(const FlowPair &p_pair) {
-        const netw::repl::PropertyBindingPtr state = netw_test::binding_of(
-            p_pair.authored,
-            PropertySet::RECORD_STATE
-        );
-        const netw::repl::PropertyBindingPtr input = netw_test::binding_of(
-            p_pair.authored,
-            PropertySet::RECORD_INPUT
-        );
+        const netw::repl::PropertyBindingPtr state
+            = netw_test::binding_of(p_pair.authored, PropertySet::RECORD_STATE);
+        const netw::repl::PropertyBindingPtr input
+            = netw_test::binding_of(p_pair.authored, PropertySet::RECORD_INPUT);
         if (state != nullptr && state->get_set() != nullptr) {
             seen.state_record = int64_t(state->get_set()->get_record());
             seen.state_over_body = state->node() == p_pair.authored;

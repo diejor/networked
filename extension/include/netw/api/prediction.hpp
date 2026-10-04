@@ -393,9 +393,7 @@ public:
     void restate_declaration();
 };
 
-godot::Ref<NetwPrediction> build_prediction_handle(
-    godot::Object *p_entity
-);
+godot::Ref<NetwPrediction> build_prediction_handle(godot::Object *p_entity);
 
 } // namespace netw
 

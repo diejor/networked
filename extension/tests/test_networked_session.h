@@ -465,10 +465,7 @@ TEST_CASE(
 
         const godot::Ref<NetwEntity> entity = NetwEntity::of(copy);
         REQUIRE(entity.is_valid());
-        NETW_CHECK_EQ(
-            entity->get_name() == godot::StringName("courier"),
-            true
-        );
+        NETW_CHECK_EQ(entity->get_name() == godot::StringName("courier"), true);
         NETW_CHECK_EQ(entity->get_peer_id(), 7);
         NETW_CHECK_EQ(entity->get_is_player(), true);
         NETW_CHECK_EQ(

@@ -19,8 +19,6 @@ namespace TestRowStreamGate {
 using netw::SchemaCore;
 using netw::repl::RowVerdict;
 using netw::repl::SessionResult;
-using netw_test::RowOffer;
-using netw_test::SessionSend;
 using netw::table::SchemaRecord;
 using netw::wire::ChannelDecl;
 using netw::wire::ControlRecord;
@@ -30,6 +28,8 @@ using netw::wire::next_stream_token;
 using netw::wire::StreamFamily;
 using netw::wire::StreamLane;
 using netw::wire::WireRegistry;
+using netw_test::RowOffer;
+using netw_test::SessionSend;
 
 constexpr uint8_t CHANNEL = 45;
 constexpr int PEER = 7;

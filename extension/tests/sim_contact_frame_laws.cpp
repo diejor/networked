@@ -75,8 +75,8 @@ const std::string CUBE_SOURCE = std::string(CUBE_BODY)
 
 constexpr int QUIET_BEAT_TICKS = 10;
 
-const std::string QUIET_BEAT = ".heartbeat("
-    + std::to_string(QUIET_BEAT_TICKS) + ")\n";
+const std::string QUIET_BEAT
+    = ".heartbeat(" + std::to_string(QUIET_BEAT_TICKS) + ")\n";
 
 const std::string QUIET_SOURCE = std::string(CUBE_BODY)
     + "\tNetw.configure_property(self, &\"sphere_position\").broadcast()"

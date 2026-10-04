@@ -88,9 +88,8 @@ EntityDecl leaning_player(
 }
 
 void nudge(LoopbackRig &p_rig) {
-    Node2D *authority = Object::cast_to<Node2D>(
-        p_rig.node_of(p_rig.entity_of("P"))
-    );
+    Node2D *authority
+        = Object::cast_to<Node2D>(p_rig.node_of(p_rig.entity_of("P")));
     REQUIRE(authority != nullptr);
     authority->set_position(authority->get_position() + Vector2(0.0, 0.05));
     authority->set(
@@ -135,13 +134,15 @@ SeamRun seam_run() {
     const Ref<Script> session = netw_test::minted_script(LISTENING_SESSION);
     REQUIRE(session.is_valid());
     rig.client(0)->set_script(session);
-    rig.declare_world(WorldDecl().clocked(30, 3).lag_compensated().player(
-        leaning_player(
-            netw::Schedule::FRAME,
-            netw::RecoveryPolicy::REBASE_RECOVER
-        ),
-        0
-    ));
+    rig.declare_world(
+        WorldDecl().clocked(30, 3).lag_compensated().player(
+            leaning_player(
+                netw::Schedule::FRAME,
+                netw::RecoveryPolicy::REBASE_RECOVER
+            ),
+            0
+        )
+    );
     rig.node_of(rig.entity_of("P", 0), 0)->set("motion", Vector2(1.0, 0.0));
     for (int at = 0; at < 30; ++at) {
         step(rig, netw::Schedule::FRAME);
@@ -154,17 +155,19 @@ SeamRun seam_run() {
 
 Heard carry_run() {
     LoopbackRig rig(1);
-    rig.declare_world(WorldDecl().clocked(30, 3).lag_compensated().player(
-        EntityDecl()
-            .named("P")
-            .on_schema("CarriedPose")
-            .synced("position")
-            .placed_at(Vector2())
-            .predicted(0.01)
-            .scheduled(netw::Schedule::FRAME)
-            .carried(1.0, 200.0),
-        0
-    ));
+    rig.declare_world(
+        WorldDecl().clocked(30, 3).lag_compensated().player(
+            EntityDecl()
+                .named("P")
+                .on_schema("CarriedPose")
+                .synced("position")
+                .placed_at(Vector2())
+                .predicted(0.01)
+                .scheduled(netw::Schedule::FRAME)
+                .carried(1.0, 200.0),
+            0
+        )
+    );
     rig.conditions(0, netw::LocalLinkConditions::polls(4));
     rig.conditions(-1, netw::LocalLinkConditions::polls(4));
     const Ref<Script> rule_script = netw_test::minted_script(LISTENING_RULE);
@@ -180,9 +183,8 @@ Heard carry_run() {
     rig.node_of(rig.entity_of("P", 0), 0)->set("motion", Vector2(1.0, 0.0));
     for (int at = 0; at < 70; ++at) {
         if (at == 31) {
-            Node2D *authority = Object::cast_to<Node2D>(
-                rig.node_of(rig.entity_of("P"))
-            );
+            Node2D *authority
+                = Object::cast_to<Node2D>(rig.node_of(rig.entity_of("P")));
             authority->set_position(
                 authority->get_position() + Vector2(60.0, -40.0)
             );

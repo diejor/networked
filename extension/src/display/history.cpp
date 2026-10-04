@@ -91,8 +91,7 @@ History::Rows History::rows() const {
         return out;
     }
     int64_t visible = int64_t(table.history_appends[at.row] - floor_append);
-    if (visible < 1
-        && table.sources[at.row] == uint8_t(store::Source::LOCAL)) {
+    if (visible < 1 && table.sources[at.row] == uint8_t(store::Source::LOCAL)) {
         visible = 1;
     }
     out.count = std::min(int64_t(table.history_count(at.row)), visible);

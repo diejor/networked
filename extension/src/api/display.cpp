@@ -121,9 +121,7 @@ NetwDisplay::TimelineMode NetwDisplay::get_timeline_mode() const {
     );
 }
 
-void NetwDisplay::set_timeline_mode(
-    NetwDisplay::TimelineMode p_value
-) {
+void NetwDisplay::set_timeline_mode(NetwDisplay::TimelineMode p_value) {
     write(NetwMultiplayer::DISPLAY_PARAM_TIMELINE_MODE, int64_t(p_value));
 }
 

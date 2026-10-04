@@ -129,10 +129,8 @@ class BudgetScenario final : public netw_test::FrameScenario {
         static const int64_t channel
             = netw::wire::builtin_channel(StringName("CLAIM_IMAGE"));
         const Dictionary snapshot = stand->session(-1)->attribution_snapshot();
-        const Dictionary by_peer = snapshot.get(
-            StringName("frames_in_by_channel"),
-            Dictionary()
-        );
+        const Dictionary by_peer
+            = snapshot.get(StringName("frames_in_by_channel"), Dictionary());
         const Dictionary by_channel
             = by_peer.get(int64_t(stand->peer_id(0)), Dictionary());
         return int64_t(by_channel.get(channel, int64_t(0)));
@@ -140,9 +138,8 @@ class BudgetScenario final : public netw_test::FrameScenario {
 
     void indebt_claimant() {
         NetwMultiplayer *claimant = stand->session(0);
-        netw::ReplicationSend *send = NetwMultiplayer::row_send_of(
-            claimant->get_replication_plane()
-        );
+        netw::ReplicationSend *send
+            = NetwMultiplayer::row_send_of(claimant->get_replication_plane());
         if (send != nullptr) {
             send->charge(stand->peer_id(-1), DEBT_BYTES);
         }

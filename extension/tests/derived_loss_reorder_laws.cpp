@@ -239,10 +239,7 @@ public:
         }
 
         const netw::repl::PropertyBindingPtr mirror_state
-            = netw_test::binding_of(
-                pair.mirror(0),
-                PropertySet::RECORD_STATE
-            );
+            = netw_test::binding_of(pair.mirror(0), PropertySet::RECORD_STATE);
         REQUIRE_MESSAGE(
             mirror_state != nullptr,
             "the mirror holds no state set"

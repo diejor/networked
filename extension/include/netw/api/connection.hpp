@@ -17,8 +17,7 @@ namespace netw {
 
 class NetwMultiplayer;
 
-class NetwConnection : public godot::RefCounted,
-                       public enums::NetwConnection {
+class NetwConnection : public godot::RefCounted, public enums::NetwConnection {
     GDCLASS(NetwConnection, godot::RefCounted)
 
     struct EndpointKey {

@@ -21,8 +21,8 @@ using namespace godot;
 using namespace netw_test;
 using netw::NetwEntity;
 using netw::NetwMultiplayer;
-using netw::NetwPredictionEngine;
 using netw::NetwPrediction;
+using netw::NetwPredictionEngine;
 
 const char *SEATED_ID = "selection_member";
 
@@ -210,8 +210,7 @@ TEST_CASE(
 
     const TypedArray<NetwEntity> candidates = core->sim_candidates(owner);
     REQUIRE(candidates.size() == 2);
-    const bool alfa_first
-        = String(alfa->get_name()) < String(zulu->get_name());
+    const bool alfa_first = String(alfa->get_name()) < String(zulu->get_name());
     CHECK((Ref<NetwEntity>(candidates[0]) == (alfa_first ? alfa : zulu)));
     CHECK((Ref<NetwEntity>(candidates[1]) == (alfa_first ? zulu : alfa)));
 }

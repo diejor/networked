@@ -378,9 +378,8 @@ void NetwInterestLayer::apply_server_transition(
     const StringName edge
         = p_visible ? SIG_INTEREST_ENTERED : SIG_INTEREST_EXITED;
     emit_signal(edge, p_entity, p_peer_id);
-    const Ref<NetwInterest> facet = p_entity.is_valid()
-        ? p_entity->held_interest()
-        : Ref<NetwInterest>();
+    const Ref<NetwInterest> facet
+        = p_entity.is_valid() ? p_entity->held_interest() : Ref<NetwInterest>();
     if (facet.is_valid()) {
         facet->emit_signal(edge, p_peer_id);
     }

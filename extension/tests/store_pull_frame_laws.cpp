@@ -620,10 +620,8 @@ class SendAllocScenario final : public netw_test::FrameScenario {
         SendAllocEvidence &seen = send_alloc_evidence(arm);
         const NetwMultiplayer::IdleWork &now = server()->idle_work;
         seen.in_frames = now.frame_allocations - opened.frame_allocations;
-        seen.in_carrier
-            = now.carrier_allocations - opened.carrier_allocations;
-        seen.in_display
-            = now.display_allocations - opened.display_allocations;
+        seen.in_carrier = now.carrier_allocations - opened.carrier_allocations;
+        seen.in_display = now.display_allocations - opened.display_allocations;
         seen.in_transport
             = now.transport_allocations - opened.transport_allocations;
         seen.sends = now.sends - opened.sends;
@@ -650,8 +648,8 @@ class SendAllocScenario final : public netw_test::FrameScenario {
     }
 
 public:
-    explicit SendAllocScenario(SendArm p_arm) :
-            arm(p_arm), overridden(p_arm == ENCODED) {
+    explicit SendAllocScenario(SendArm p_arm)
+        : arm(p_arm), overridden(p_arm == ENCODED) {
     }
 
     bool advance() override {

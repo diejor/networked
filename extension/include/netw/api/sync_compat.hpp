@@ -39,8 +39,7 @@ public:
                 + held::vector(row->watch_paths)
                 + held::vector(row->sync_fields)
                 + held::vector(row->watch_fields)
-                + held::map(row->intent_by_peer)
-                + held::vector(row->feed_nodes)
+                + held::map(row->intent_by_peer) + held::vector(row->feed_nodes)
                 + held::vector(row->feed_props)
                 + held::vector(row->feed_scripts)
                 + held::vector(row->feed_live);

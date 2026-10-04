@@ -22,8 +22,6 @@ using netw::NetwQuantizeScalar;
 using netw::SchemaCore;
 using netw::repl::read_snapshot_row;
 using netw::repl::SessionResult;
-using netw_test::RowOffer;
-using netw_test::SessionSend;
 using netw::repl::SnapshotHeader;
 using netw::table::SchemaRecord;
 using netw::wire::ChannelDecl;
@@ -33,6 +31,8 @@ using netw::wire::Delivery;
 using netw::wire::WirePlan;
 using netw::wire::WireRegistry;
 using netw_test::drive_send;
+using netw_test::RowOffer;
+using netw_test::SessionSend;
 
 const uint8_t CHANNEL = 45;
 const int PEER = 7;

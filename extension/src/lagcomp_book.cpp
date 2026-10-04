@@ -309,8 +309,8 @@ Dictionary LagBook::sample(int64_t p_tick) const {
         }
         Variant value;
         if ((coded[at] & bit_of(field)) == 0) {
-            value = carried.is_empty() ? Variant()
-                                       : carried[at * fields + field];
+            value
+                = carried.is_empty() ? Variant() : carried[at * fields + field];
         } else if (!wire::decode_scalar_column(
                        *codec.schema.at(int(field)),
                        codec.plan.column(field),

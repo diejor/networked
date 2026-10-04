@@ -45,7 +45,10 @@ void NetwSession::announce_entered() {
     emit_signal(StringName(SIG_ENTERED));
 }
 
-void NetwSession::announce_exiting(ExitReason p_reason, const String &p_detail) {
+void NetwSession::announce_exiting(
+    ExitReason p_reason,
+    const String &p_detail
+) {
     emit_signal(StringName(SIG_EXITING), p_reason, p_detail);
 }
 
@@ -65,17 +68,11 @@ void NetwSession::announce_player_left(const Ref<NetwPlayer> &p_who) {
     emit_signal(StringName(SIG_PLAYER_LEFT), p_who);
 }
 
-void NetwSession::announce_join_failed(
-    int64_t p_code,
-    const String &p_reason
-) {
+void NetwSession::announce_join_failed(int64_t p_code, const String &p_reason) {
     emit_signal(StringName(SIG_JOIN_FAILED), p_code, p_reason);
 }
 
-Error NetwSession::kick(
-    const Ref<NetwPlayer> &p_who,
-    const String &p_reason
-) {
+Error NetwSession::kick(const Ref<NetwPlayer> &p_who, const String &p_reason) {
     NetwMultiplayer *api = session();
     return api != nullptr ? api->player_kick(p_who, p_reason)
                           : ERR_UNCONFIGURED;
@@ -100,18 +97,14 @@ Ref<NetwPlayer> NetwSession::player_of(int64_t p_peer) const {
     return api != nullptr ? api->peer_get_player(p_peer) : Ref<NetwPlayer>();
 }
 
-Variant NetwSession::bucket_of(
-    int64_t p_peer,
-    const Variant &p_type
-) const {
+Variant NetwSession::bucket_of(int64_t p_peer, const Variant &p_type) const {
     NetwMultiplayer *api = session();
     return api != nullptr ? api->peer_get_bucket(p_peer, p_type) : Variant();
 }
 
 NetwSession::Role NetwSession::get_role() const {
     NetwMultiplayer *api = session();
-    return api != nullptr ? api->session_get_role()
-                          : NetwSession::ROLE_NONE;
+    return api != nullptr ? api->session_get_role() : NetwSession::ROLE_NONE;
 }
 
 bool NetwSession::get_is_online() const {
@@ -313,10 +306,7 @@ void NetwSession::_bind_methods() {
     BIND_ENUM_CONSTANT(ROLE_CLIENT);
     BIND_ENUM_CONSTANT(ROLE_DEDICATED_SERVER);
     BIND_ENUM_CONSTANT(ROLE_LISTEN_SERVER);
-    ClassDB::bind_method(
-        D_METHOD("get_players"),
-        &NetwSession::get_players
-    );
+    ClassDB::bind_method(D_METHOD("get_players"), &NetwSession::get_players);
     ADD_PROPERTY(
         PropertyInfo(
             Variant::ARRAY,
@@ -391,10 +381,7 @@ void NetwSession::_bind_methods() {
         "",
         "get_root"
     );
-    ClassDB::bind_method(
-        D_METHOD("get_scenes"),
-        &NetwSession::get_scenes
-    );
+    ClassDB::bind_method(D_METHOD("get_scenes"), &NetwSession::get_scenes);
     ADD_PROPERTY(
         PropertyInfo(
             Variant::ARRAY,
@@ -406,10 +393,7 @@ void NetwSession::_bind_methods() {
         "get_scenes"
     );
 
-    ClassDB::bind_method(
-        D_METHOD("get_config"),
-        &NetwSession::get_config
-    );
+    ClassDB::bind_method(D_METHOD("get_config"), &NetwSession::get_config);
     ADD_PROPERTY(
         PropertyInfo(
             Variant::OBJECT,

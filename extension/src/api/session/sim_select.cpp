@@ -456,8 +456,8 @@ void NetwMultiplayer::sim_seed(sim::Row &r_row) {
     r_row.declaration.claim_on_contact = held.claim_on_contact;
     r_row.declaration.release_on_rest = held.release_on_rest;
     r_row.facts.replicas = held.replicas;
-    r_row.choice = handle.is_valid() ? handle->selection_choice()
-                                     : sim::Choice();
+    r_row.choice
+        = handle.is_valid() ? handle->selection_choice() : sim::Choice();
 }
 
 void NetwMultiplayer::sim_declare(const Ref<NetwEntity> &p_entity) {

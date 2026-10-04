@@ -34,8 +34,6 @@ One networked entity is one root node holding one **NetwEntity**. Nodes under th
     if entity and entity.is_player:
         eliminate(entity.peer_id)
 
-
-
 \ **Declaring an entity**\ 
 
 A root declares itself in ``_init``. A child marks its own spawn properties in its ``_init`` and connects to the entity in :godot:`Node._ready() <Node#class_Node_private_method__ready>`, once it has a parent to walk up to.
@@ -62,8 +60,6 @@ A root declares itself in ``_init``. A child marks its own spawn properties in i
 
     func _init() -> void:
         Netw.configure_entity(self).name = &"ball"
-
-
 
 \ **Control**\ 
 
@@ -114,8 +110,6 @@ A root declares itself in ``_init``. A child marks its own spawn properties in i
 
 \ :ref:`NetwSimulation.claim_on_contact<class_NetwSimulation_property_claim_on_contact>` and :ref:`NetwSimulation.release_on_rest<class_NetwSimulation_property_release_on_rest>` let a body take control of what it touches and hand it back once it rests.
 
-
-
 \ **Letting the controller spawn and despawn**\ 
 
 Only the server spawns, moves and despawns an entity by default. When :ref:`lifecycle<class_NetwEntity_property_lifecycle>` is :ref:`LIFECYCLE_CONTROLLER<class_NetwEntity_constant_LIFECYCLE_CONTROLLER>` the :ref:`controller<class_NetwEntity_property_controller>` may too, and the change shows on its screen at once. The server can refuse it in :ref:`lifecycle_requested<class_NetwEntity_signal_lifecycle_requested>`, and the change is then undone on the controller.
@@ -124,8 +118,6 @@ Only the server spawns, moves and despawns an entity by default. When :ref:`life
 
     func _init() -> void:
         Netw.configure_entity(self).lifecycle = NetwEntity.LIFECYCLE_CONTROLLER
-
-
 
 \ **Simulation**\ 
 

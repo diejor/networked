@@ -103,11 +103,8 @@ template <typename Send> inline void seat_pending(Send &p_send, int p_peer) {
     const godot::LocalVector<uint64_t> waiting
         = world->opening_requests(p_peer);
     for (uint32_t at = 0; at < waiting.size(); ++at) {
-        p_send.stream_ready(
-            p_peer,
-            waiting[at],
-            netw::wire::next_stream_token()
-        );
+        p_send
+            .stream_ready(p_peer, waiting[at], netw::wire::next_stream_token());
     }
 }
 

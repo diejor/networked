@@ -87,8 +87,7 @@ Scenario hosted_tick_lane() {
 
 Dictionary stats_of_slot(NetwMultiplayer *p_core, int64_t p_slot) {
     netw::NetwPredictionEngine *const pool = p_core->get_prediction_engine();
-    const TypedArray<NetwEntity> stepped
-        = p_core->predict_stepped_entities();
+    const TypedArray<NetwEntity> stepped = p_core->predict_stepped_entities();
     for (int at = 0; at < stepped.size(); ++at) {
         const Ref<NetwEntity> wrapper = stepped[at];
         if (wrapper.is_valid() && pool->slot_of(wrapper) == p_slot) {
@@ -121,8 +120,7 @@ TEST_CASE(
     NetwMultiplayer *server = rig.server();
     REQUIRE(server != nullptr);
 
-    const TypedArray<NetwEntity> stepped
-        = server->predict_stepped_entities();
+    const TypedArray<NetwEntity> stepped = server->predict_stepped_entities();
     REQUIRE(stepped.size() == 2);
 
     const Dictionary census = server->predict_metrics();
@@ -204,8 +202,7 @@ TEST_CASE(
     netw::NetwPredictionEngine *const pool = server->get_prediction_engine();
     REQUIRE(pool != nullptr);
 
-    const TypedArray<NetwEntity> stepped
-        = server->predict_stepped_entities();
+    const TypedArray<NetwEntity> stepped = server->predict_stepped_entities();
     REQUIRE(stepped.size() == 2);
 
     int published = 0;
@@ -260,8 +257,7 @@ TEST_CASE(
     netw::NetwPredictionEngine *const pool = server->get_prediction_engine();
     REQUIRE(pool != nullptr);
 
-    const TypedArray<NetwEntity> stepped
-        = server->predict_stepped_entities();
+    const TypedArray<NetwEntity> stepped = server->predict_stepped_entities();
     REQUIRE(stepped.size() == 2);
 
     int held_lanes = 0;
@@ -317,8 +313,7 @@ TEST_CASE(
     netw::NetwPredictionEngine *const pool = server->get_prediction_engine();
     REQUIRE(pool != nullptr);
 
-    const TypedArray<NetwEntity> stepped
-        = server->predict_stepped_entities();
+    const TypedArray<NetwEntity> stepped = server->predict_stepped_entities();
     REQUIRE(stepped.size() == 2);
 
     const Ref<NetwEntity> wrapper = stepped[0];
@@ -366,8 +361,7 @@ TEST_CASE(
     netw::NetwPredictionEngine *const pool = server->get_prediction_engine();
     REQUIRE(pool != nullptr);
 
-    const TypedArray<NetwEntity> stepped
-        = server->predict_stepped_entities();
+    const TypedArray<NetwEntity> stepped = server->predict_stepped_entities();
     REQUIRE(stepped.size() == 2);
     const Ref<NetwEntity> wrapper = stepped[0];
     REQUIRE(wrapper.is_valid());
@@ -424,8 +418,7 @@ TEST_CASE(
     netw::NetwPredictionEngine *const pool = server->get_prediction_engine();
     REQUIRE(pool != nullptr);
 
-    const TypedArray<NetwEntity> stepped
-        = server->predict_stepped_entities();
+    const TypedArray<NetwEntity> stepped = server->predict_stepped_entities();
     REQUIRE(stepped.size() == 2);
 
     int declared = 0;
@@ -483,14 +476,12 @@ TEST_CASE(
         = authored->build_command_frame_for(author);
     REQUIRE(!shipped.is_empty());
 
-    const TypedArray<NetwEntity> stepped
-        = server->predict_stepped_entities();
+    const TypedArray<NetwEntity> stepped = server->predict_stepped_entities();
     int64_t relayed_to = -1;
     Ref<NetwPrediction> mirrored;
     for (int at = 0; at < stepped.size(); ++at) {
         const Ref<NetwEntity> wrapper = stepped[at];
-        if (wrapper.is_valid()
-            && wrapper->get_name() == claimed->get_name()) {
+        if (wrapper.is_valid() && wrapper->get_name() == claimed->get_name()) {
             relayed_to = pool->slot_of(wrapper);
             mirrored = wrapper->get_prediction();
             break;
@@ -617,8 +608,7 @@ TEST_CASE(
     netw::NetwPredictionEngine *const pool = server->get_prediction_engine();
     REQUIRE(pool != nullptr);
 
-    const TypedArray<NetwEntity> stepped
-        = server->predict_stepped_entities();
+    const TypedArray<NetwEntity> stepped = server->predict_stepped_entities();
     REQUIRE(stepped.size() == 2);
     const Ref<NetwEntity> wrapper = stepped[0];
     REQUIRE(wrapper.is_valid());
@@ -630,9 +620,7 @@ TEST_CASE(
     REQUIRE(handle->get_simulate().is_valid());
     CHECK(pool->slot_is_steppable(slot));
 
-    handle->simulation()->set_schedule(
-        netw::NetwSimulation::SCHEDULE_STEPPED
-    );
+    handle->simulation()->set_schedule(netw::NetwSimulation::SCHEDULE_STEPPED);
     CHECK_FALSE(pool->slot_is_steppable(slot));
 
     const Ref<netw::NetwPhysicsStepper> stepper = installable_stepper();
@@ -676,8 +664,7 @@ TEST_CASE(
     netw::NetwPredictionEngine *const pool = server->get_prediction_engine();
     REQUIRE(pool != nullptr);
 
-    const TypedArray<NetwEntity> stepped
-        = server->predict_stepped_entities();
+    const TypedArray<NetwEntity> stepped = server->predict_stepped_entities();
     REQUIRE(stepped.size() == 2);
 
     int replayed = 0;
@@ -737,8 +724,7 @@ TEST_CASE(
     netw::NetwPredictionEngine *const pool = server->get_prediction_engine();
     REQUIRE(pool != nullptr);
 
-    const TypedArray<NetwEntity> stepped
-        = server->predict_stepped_entities();
+    const TypedArray<NetwEntity> stepped = server->predict_stepped_entities();
     REQUIRE(stepped.size() == 2);
     const Ref<NetwEntity> wrapper = stepped[0];
     REQUIRE(wrapper.is_valid());
@@ -797,8 +783,7 @@ TEST_CASE(
     netw::NetwPredictionEngine *const pool = server->get_prediction_engine();
     REQUIRE(pool != nullptr);
 
-    const TypedArray<NetwEntity> stepped
-        = server->predict_stepped_entities();
+    const TypedArray<NetwEntity> stepped = server->predict_stepped_entities();
     REQUIRE(stepped.size() == 2);
     const Ref<NetwEntity> wrapper = stepped[0];
     REQUIRE(wrapper.is_valid());
@@ -821,9 +806,7 @@ TEST_CASE(
     );
     CHECK_FALSE(pool->joint_refusal_reported_of(slot));
 
-    handle->simulation()->set_schedule(
-        netw::NetwSimulation::SCHEDULE_STEPPED
-    );
+    handle->simulation()->set_schedule(netw::NetwSimulation::SCHEDULE_STEPPED);
     REQUIRE_FALSE(pool->slot_is_steppable(slot));
     NETW_CHECK_EQ(
         pool->admitted_reconcile_mode(slot),
@@ -864,8 +847,7 @@ TEST_CASE(
     netw::NetwPredictionEngine *const pool = server->get_prediction_engine();
     REQUIRE(pool != nullptr);
 
-    const TypedArray<NetwEntity> stepped
-        = server->predict_stepped_entities();
+    const TypedArray<NetwEntity> stepped = server->predict_stepped_entities();
     REQUIRE(stepped.size() > 0);
     const Ref<NetwEntity> wrapper = stepped[0];
     REQUIRE(wrapper.is_valid());
@@ -873,8 +855,7 @@ TEST_CASE(
     REQUIRE(slot >= 0);
     NETW_CHECK_EQ(pool->role_of(slot), int(netw::Role::HOST_LOCAL));
 
-    const netw::repl::PropertyBindingPtr binding
-        = pool->state_binding_of(slot);
+    const netw::repl::PropertyBindingPtr binding = pool->state_binding_of(slot);
     REQUIRE(binding != nullptr);
     NETW_CHECK_GT(binding->get_authored_tick(), int64_t(0));
     NETW_CHECK_EQ(binding->get_reconcile_ack(), binding->get_authored_tick());
@@ -906,8 +887,7 @@ TEST_CASE(
     netw::NetwPredictionEngine *const pool = server->get_prediction_engine();
     REQUIRE(pool != nullptr);
 
-    const TypedArray<NetwEntity> stepped
-        = server->predict_stepped_entities();
+    const TypedArray<NetwEntity> stepped = server->predict_stepped_entities();
     REQUIRE(stepped.size() == 2);
     const Ref<NetwEntity> wrapper = stepped[0];
     REQUIRE(wrapper.is_valid());
@@ -937,8 +917,7 @@ TEST_CASE(
         REQUIRE(peer != nullptr);
         netw::NetwPredictionEngine *const lanes = peer->get_prediction_engine();
         REQUIRE(lanes != nullptr);
-        const TypedArray<NetwEntity> seated
-            = peer->predict_engine_entities();
+        const TypedArray<NetwEntity> seated = peer->predict_engine_entities();
         REQUIRE(seated.size() == 1);
         const Ref<NetwEntity> lane = seated[0];
         REQUIRE(lane.is_valid());

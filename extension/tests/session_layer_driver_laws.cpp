@@ -179,7 +179,10 @@ TEST_CASE(
     NETW_CHECK_EQ(int64_t(watched.args(StringName("seen"))[1]), int64_t(9));
     CHECK(bool(watched.args(StringName("seen"))[2]));
 
-    session->interest_layer_set_monitor_callback(layer, watched.callable("raw"));
+    session->interest_layer_set_monitor_callback(
+        layer,
+        watched.callable("raw")
+    );
     CHECK_FALSE(view->get_monitor().is_valid());
     view->emit_signal(StringName("interest_exited"), subject, 9);
     NETW_CHECK_EQ(watched.count(StringName("seen")), 1);
@@ -190,7 +193,8 @@ Ref<netw::NetwEntity> typed_answer;
 Ref<NetwInterestLayer> typed_saw;
 
 Variant drive_typed(const Variant &p_layer) {
-    typed_saw = Ref<NetwInterestLayer>(Object::cast_to<NetwInterestLayer>(p_layer));
+    typed_saw
+        = Ref<NetwInterestLayer>(Object::cast_to<NetwInterestLayer>(p_layer));
     Array out;
     out.push_back(typed_answer);
     return out;

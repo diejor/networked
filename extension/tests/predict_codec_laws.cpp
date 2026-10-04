@@ -90,9 +90,12 @@ TEST_CASE(
     const Vector3 binned = decoded[1];
     CHECK(bool(landed == binned));
     CHECK_FALSE(bool(landed == at));
-    CHECK(bool(
-        String(canonical.get(StringName("label"), String())) == String("left")
-    ));
+    CHECK(
+        bool(
+            String(canonical.get(StringName("label"), String()))
+            == String("left")
+        )
+    );
 }
 
 } // namespace TestNetwPredictCodec

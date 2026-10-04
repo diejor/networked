@@ -62,10 +62,8 @@ bool corrects(const Column &p_column, const Variant &p_predicted) {
     predicted[key] = p_predicted;
     Dictionary authority;
     authority[key] = p_column.authority;
-    const StateRow predicted_row
-        = netw_test::state_row(&pool, slot, predicted);
-    const StateRow authority_row
-        = netw_test::state_row(&pool, slot, authority);
+    const StateRow predicted_row = netw_test::state_row(&pool, slot, predicted);
+    const StateRow authority_row = netw_test::state_row(&pool, slot, authority);
     const StateVerdict *verdict = pool.compare_rows(
         slot,
         drive.transition,

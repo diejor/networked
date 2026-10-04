@@ -18,9 +18,8 @@ constexpr uint32_t SET_LABEL_COLUMNS = 3;
 String set_label(const repl::PropertyBinding *p_binding, int64_t p_record) {
     const String role = p_record == repl::PropertySet::RECORD_INPUT
         ? String(" input")
-        : p_record == repl::PropertySet::RECORD_BROADCAST
-        ? String(" broadcast")
-        : String();
+        : p_record == repl::PropertySet::RECORD_BROADCAST ? String(" broadcast")
+                                                          : String();
     const repl::PropertySet *set
         = p_binding != nullptr ? p_binding->get_set() : nullptr;
     if (set == nullptr || set->columns.is_empty()) {
@@ -35,8 +34,7 @@ String set_label(const repl::PropertyBinding *p_binding, int64_t p_record) {
         names += String(set->columns[at].get_key());
     }
     if (set->columns.size() > shown) {
-        names += String(" +")
-            + String::num_int64(set->columns.size() - shown);
+        names += String(" +") + String::num_int64(set->columns.size() - shown);
     }
     return String(":") + names + role;
 }
@@ -158,7 +156,8 @@ uint32_t NetwMultiplayer::profiler_member(
     const wire::ChannelDecl *channel
         = channels.find_channel(uint8_t(p_channel));
     return network_profiler.admit(
-        key, member_label(profiler_path(p_node), channel, p_member)
+        key,
+        member_label(profiler_path(p_node), channel, p_member)
     );
 }
 
@@ -244,8 +243,12 @@ uint32_t NetwMultiplayer::profiler_synchronizer(
         || !network_profiler.records_sync()) {
         return subject;
     }
-    return profiler_frame_subject(p_route, 0, wire::builtin_channel("SYNC"),
-                                  String());
+    return profiler_frame_subject(
+        p_route,
+        0,
+        wire::builtin_channel("SYNC"),
+        String()
+    );
 }
 
 } // namespace netw

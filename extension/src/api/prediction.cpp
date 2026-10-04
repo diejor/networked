@@ -126,10 +126,7 @@ void NetwPrediction::seat_deferred_operator_retry(int64_t p_basis) {
     }
 }
 
-void NetwPrediction::seat_fallback_at(
-    int64_t p_transition,
-    int p_attribution
-) {
+void NetwPrediction::seat_fallback_at(int64_t p_transition, int p_attribution) {
     if (engine_seat != nullptr) {
         engine_seat->enter_fallback_at(p_transition, p_attribution);
     }
@@ -224,8 +221,7 @@ bool NetwPrediction::is_registered() const {
 
 Ref<NetwSimulation> NetwPrediction::simulation() const {
     const Ref<NetwEntity> bound = get_entity();
-    return bound.is_valid() ? bound->get_simulation()
-                            : Ref<NetwSimulation>();
+    return bound.is_valid() ? bound->get_simulation() : Ref<NetwSimulation>();
 }
 
 void NetwPrediction::step_changed() {
@@ -332,9 +328,7 @@ void NetwPrediction::set_sleeping(bool p_value) {
     sleeping_value = p_value;
 }
 
-void NetwPrediction::set_missing_policy(
-    NetwPrediction::MissingInput p_value
-) {
+void NetwPrediction::set_missing_policy(NetwPrediction::MissingInput p_value) {
     missing_policy_value = p_value;
 }
 
@@ -577,10 +571,7 @@ void NetwPrediction::_bind_methods() {
         "set_breach_response",
         "get_breach_response"
     );
-    ClassDB::bind_method(
-        D_METHOD("get_sensors"),
-        &NetwPrediction::get_sensors
-    );
+    ClassDB::bind_method(D_METHOD("get_sensors"), &NetwPrediction::get_sensors);
     ClassDB::bind_method(
         D_METHOD("set_sensors", "value"),
         &NetwPrediction::set_sensors
@@ -590,10 +581,7 @@ void NetwPrediction::_bind_methods() {
         "set_sensors",
         "get_sensors"
     );
-    ClassDB::bind_method(
-        D_METHOD("get_epoch"),
-        &NetwPrediction::get_epoch
-    );
+    ClassDB::bind_method(D_METHOD("get_epoch"), &NetwPrediction::get_epoch);
     ClassDB::bind_method(
         D_METHOD("set_epoch", "value"),
         &NetwPrediction::set_epoch
@@ -803,10 +791,7 @@ void NetwPrediction::_bind_methods() {
         "get_archetype"
     );
 
-    ClassDB::bind_method(
-        D_METHOD("get_stats"),
-        &NetwPrediction::get_stats
-    );
+    ClassDB::bind_method(D_METHOD("get_stats"), &NetwPrediction::get_stats);
     ADD_PROPERTY(
         PropertyInfo(
             Variant::OBJECT,

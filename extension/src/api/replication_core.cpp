@@ -580,8 +580,11 @@ Error ReplicationCore::receive_carrier(
             : handler_names_arrival(frame.channel)
             ? plane->profiler().aggregate(frame.channel)
             : plane->profiler_frame_subject(
-                frame.route, frame.comp, frame.channel, frame.path
-            );
+                  frame.route,
+                  frame.comp,
+                  frame.channel,
+                  frame.path
+              );
         wire::ProfileArrivalScope observation(
             plane != nullptr ? &plane->profiler() : nullptr,
             !loopback,
@@ -1224,11 +1227,8 @@ void ReplicationCore::replay_tables(int64_t p_peer_id) {
     const int64_t budget = plane->datagram_budget();
     const TypedArray<RID> published = arrays.published_tables();
     for (int at = 0; at < published.size(); ++at) {
-        const TypedArray<PackedByteArray> frames = arrays.encode_snapshot(
-            published[at],
-            int(p_peer_id),
-            budget
-        );
+        const TypedArray<PackedByteArray> frames
+            = arrays.encode_snapshot(published[at], int(p_peer_id), budget);
         for (int frame = 0; frame < frames.size(); ++frame) {
             send_to(
                 p_peer_id,

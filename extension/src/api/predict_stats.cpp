@@ -359,10 +359,7 @@ Dictionary NetwPredictStats::Book::get_dict_fact(int index) const {
     return read(FACTS[index]);
 }
 
-void NetwPredictStats::Book::set_dict_fact(
-    int index,
-    const Dictionary &value
-) {
+void NetwPredictStats::Book::set_dict_fact(int index, const Dictionary &value) {
     if (index < 0 || index >= FACT_COUNT) {
         return;
     }

@@ -265,9 +265,8 @@ void NetwMultiplayer::tree_node_added(Node *p_node) {
             ? hook.watched.getptr(uint64_t(parent->get_instance_id()))
             : nullptr;
         if (entity != nullptr) {
-            NetwEntity *watcher = Object::cast_to<NetwEntity>(
-                gd::object_of(ObjectID(*entity))
-            );
+            NetwEntity *watcher
+                = Object::cast_to<NetwEntity>(gd::object_of(ObjectID(*entity)));
             if (watcher != nullptr) {
                 watcher->descendant_entered(p_node);
             }
@@ -393,8 +392,7 @@ void unwatch(Node *p_node) {
 
 Object *entity_object_at(Node *p_node) {
     if (may_be_marked(p_node)
-        && (marks_of(uint64_t(p_node->get_instance_id())) & MARK_BOOKED)
-            != 0) {
+        && (marks_of(uint64_t(p_node->get_instance_id())) & MARK_BOOKED) != 0) {
         const Ref<NetwEntity> booked
             = NetwMultiplayer::tree_booked(uint64_t(p_node->get_instance_id()));
         if (booked.is_valid()) {
@@ -412,8 +410,7 @@ Object *entity_object_at(Node *p_node) {
 
 bool is_entity_root(Node *p_node) {
     if (may_be_marked(p_node)
-        && (marks_of(uint64_t(p_node->get_instance_id())) & MARK_BOOKED)
-            != 0) {
+        && (marks_of(uint64_t(p_node->get_instance_id())) & MARK_BOOKED) != 0) {
         return true;
     }
     return p_node->has_meta(NetwMultiplayer::wrapper_meta());

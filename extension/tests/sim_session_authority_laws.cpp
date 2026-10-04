@@ -28,9 +28,8 @@ Read read_of(NetwMultiplayer *p_session, const RID &p_entity) {
         read.mode = row->mode;
     }
     const Ref<NetwEntity> seated = p_session->entity_get_view(p_entity);
-    const Ref<NetwPrediction> handle = seated.is_valid()
-        ? seated->get_prediction()
-        : Ref<NetwPrediction>();
+    const Ref<NetwPrediction> handle
+        = seated.is_valid() ? seated->get_prediction() : Ref<NetwPrediction>();
     if (handle.is_valid()) {
         read.role = netw::NetwPredictionEngine::role_for_axes(
             int(handle->get_input_source()),

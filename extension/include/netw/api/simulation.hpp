@@ -118,9 +118,7 @@ public:
     Schedule resolved_schedule() const;
 };
 
-godot::Ref<NetwSimulation> build_simulation_handle(
-    godot::Object *p_entity
-);
+godot::Ref<NetwSimulation> build_simulation_handle(godot::Object *p_entity);
 
 } // namespace netw
 

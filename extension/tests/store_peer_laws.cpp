@@ -404,8 +404,7 @@ TEST_CASE(
     world.admit(at, peer, true);
     seat(world, 5, 100);
     expose(world, at, 2);
-    const netw::wire::CodeRow sent
-        = image_of(world.table(at.table), at.row);
+    const netw::wire::CodeRow sent = image_of(world.table(at.table), at.row);
     REQUIRE(bool(String(sent.read_value(1)) == String("carried")));
     world.stream_receipt(PEER, 100, 2);
 
@@ -475,10 +474,7 @@ TEST_CASE(
 
     world.stream_receipt(PEER, 100, 1);
 
-    NETW_CHECK_EQ(
-        world.receipts.stale + world.receipts.unknown,
-        refused + 1
-    );
+    NETW_CHECK_EQ(world.receipts.stale + world.receipts.unknown, refused + 1);
     const PeerRows &rows = world.table(table).peers[peer];
     NETW_CHECK_EQ(rows.acked_rev[new_life.row], 0);
     CHECK(rows.owed.get(new_life.row));

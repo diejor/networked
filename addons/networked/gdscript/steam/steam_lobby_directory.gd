@@ -356,7 +356,8 @@ func _on_tree_peer_changed(_peer_id: int) -> void:
 
 
 func _on_tree_session_exiting(
-	reason: NetwSession.ExitReason, _detail: String
+		reason: NetwSession.ExitReason,
+		_detail: String,
 ) -> void:
 	if reason == NetwSession.SERVER_SHUTDOWN:
 		_leave_lobby()
@@ -366,8 +367,8 @@ func _guard_ready(op: String) -> bool:
 	if not _init_ok:
 		push_warning(
 			(
-				"SteamLobbyDirectory.%s did nothing, because Steam is "
-				+ "unavailable. The earlier Steam warning names the cause."
+					"SteamLobbyDirectory.%s did nothing, because Steam is "
+					+ "unavailable. The earlier Steam warning names the cause."
 			) % [op],
 		)
 		return false
@@ -502,9 +503,9 @@ func _on_lobby_match_list(lobbies: Array) -> void:
 		if reject_own_lobbies and _is_own_lobby(id):
 			push_warning(
 				(
-					"Lobby %d is this account's own, so it is left out of the "
-					+ "list. Test with a second Steam account, or turn off "
-					+ "reject_own_lobbies."
+						"Lobby %d is this account's own, so it is left out of the "
+						+ "list. Test with a second Steam account, or turn off "
+						+ "reject_own_lobbies."
 				) % id,
 			)
 			continue

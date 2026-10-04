@@ -164,9 +164,7 @@ public:
         godot::Node *p_node,
         int64_t p_record
     );
-    godot::LocalVector<repl::PropertyBindingPtr> derived_group(
-        int64_t p_route
-    );
+    godot::LocalVector<repl::PropertyBindingPtr> derived_group(int64_t p_route);
     void note_peer_ack(
         int64_t p_peer_id,
         int64_t p_acked_seq,

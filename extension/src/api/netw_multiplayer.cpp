@@ -5,8 +5,8 @@
 #include "netw/api/join_config.hpp"
 #include "netw/api/lag_compensation_config.hpp"
 #include "netw/api/nodes/multiplayer_tree.hpp"
-#include "netw/spawn/pipeline.hpp"
 #include "netw/api/scene.hpp"
+#include "netw/spawn/pipeline.hpp"
 
 #include "netw/api/participant.hpp"
 #include "netw/api/server_info.hpp"
@@ -1124,8 +1124,8 @@ void NetwMultiplayer::service_register(Object *p_service, Object *p_type) {
             NETW_WARN(
                 sys::SESSION,
                 "A service of type %s was already registered, and the new "
-                "one replaces it. Call Netw.service_unregister first to "
-                "make the swap explicit.",
+                "one replaces it. Call NetwSession.unregister_service "
+                "first.",
                 type->to_string()
             );
         }
@@ -1669,10 +1669,7 @@ void NetwMultiplayer::session_settle_clear_state() {
 void NetwMultiplayer::session_set_tree_paused(bool p_paused) {
     SceneTree *loop = gd::scene_tree();
     if (loop == nullptr) {
-        NETW_TRACE(
-            sys::SESSION,
-            "The session has no SceneTree to pause."
-        );
+        NETW_TRACE(sys::SESSION, "The session has no SceneTree to pause.");
         return;
     }
     loop->set_pause(p_paused);
@@ -1897,7 +1894,8 @@ void NetwMultiplayer::session_note_exit(
     enums::NetwSession::ExitReason p_reason,
     const String &p_detail
 ) {
-    if (session_exit_reason >= 0 || session_get_state() != SESSION_STATE_ONLINE) {
+    if (session_exit_reason >= 0
+        || session_get_state() != SESSION_STATE_ONLINE) {
         return;
     }
     session_exit_reason = int(p_reason);
@@ -2890,7 +2888,7 @@ void NetwMultiplayer::NETW_API_VIRTUAL(set_multiplayer_peer)(
             sys::SESSION,
             "The peer was assigned before the Netw.configure_* settings "
             "were applied. Assign it after the first frame, or connect "
-            "through Netw.connection."
+            "through NetwSession.connection."
         );
         session_apply_auth_config();
     }

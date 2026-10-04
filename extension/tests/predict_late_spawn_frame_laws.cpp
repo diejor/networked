@@ -103,10 +103,9 @@ class LateSpawnScenario final : public netw_test::FrameScenario {
         if (node == nullptr) {
             return moved;
         }
-        moved.slot
-            = stand->session(p_side)->get_prediction_engine()->slot_of(
-                NetwEntity::of(node)
-            );
+        moved.slot = stand->session(p_side)->get_prediction_engine()->slot_of(
+            NetwEntity::of(node)
+        );
         moved.beat = int64_t(node->get("beat"));
         moved.first = int64_t(node->get("first_moved"));
         moved.last = int64_t(node->get("last_moved"));

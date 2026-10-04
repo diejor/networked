@@ -5,8 +5,8 @@
 #include "netw/api/entity.hpp"
 #include "netw/api/netw_multiplayer.hpp"
 #include "netw/api/physics_stepper.hpp"
-#include "netw/api/prediction.hpp"
 #include "netw/api/predict_slot_engine.hpp"
+#include "netw/api/prediction.hpp"
 #include "netw/colors.hpp"
 #include "netw/log.hpp"
 #include "netw/predict/engine.hpp"
@@ -186,9 +186,7 @@ void NetwPredictRunner::tick_step(const NetwPredictTiming &p_timing) {
         for (uint32_t at = 0; at < roster.size(); ++at) {
             NetwPredictSlotEngine *engine = roster[at];
             if (engine != nullptr) {
-                engine->prepare_island(
-                    int(NetwSimulation::SCHEDULE_TICK)
-                );
+                engine->prepare_island(int(NetwSimulation::SCHEDULE_TICK));
             }
         }
     }
@@ -281,9 +279,7 @@ void NetwPredictRunner::frame_step(const NetwPredictTiming &p_timing) {
         for (uint32_t at = 0; at < roster.size(); ++at) {
             NetwPredictSlotEngine *engine = roster[at];
             if (engine != nullptr) {
-                engine->prepare_island(
-                    int(NetwSimulation::SCHEDULE_FRAME)
-                );
+                engine->prepare_island(int(NetwSimulation::SCHEDULE_FRAME));
             }
         }
     }

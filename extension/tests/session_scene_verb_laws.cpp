@@ -94,7 +94,8 @@ TEST_CASE(
     const int before = int(session->scene_list().size());
 
     CHECK_FALSE(
-        session->scene_create(Variant(42), NetwMultiplayer::SCENE_ISOLATION_NONE)
+        session
+            ->scene_create(Variant(42), NetwMultiplayer::SCENE_ISOLATION_NONE)
             .is_valid()
     );
     CHECK_FALSE(session

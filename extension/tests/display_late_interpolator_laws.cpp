@@ -38,7 +38,11 @@ void author_ticks(LoopbackRig &p_rig, const FlowPair &p_pair, int p_ticks) {
     }
 }
 
-int64_t stat_of(NetwMultiplayer *p_core, const RID &p_entity, const char *p_stat) {
+int64_t stat_of(
+    NetwMultiplayer *p_core,
+    const RID &p_entity,
+    const char *p_stat
+) {
     const Variant read = p_core->display_get_track_stat(
         p_entity,
         StringName("position"),
@@ -71,7 +75,11 @@ TEST_CASE(
 
     Ref<netw::NetwInterpolate> spec;
     spec.instantiate();
-    netw::Netw::configure_property(pair.mirror(0), StringName("position"), false)
+    netw::Netw::configure_property(
+        pair.mirror(0),
+        StringName("position"),
+        false
+    )
         ->interpolate(netw::gd::array_of(spec->lerp()->smooth(0.0)));
     const int64_t declared_at = netw_test::clock_tick(rig, 0);
     author_ticks(rig, pair, TICKS);

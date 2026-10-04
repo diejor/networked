@@ -421,10 +421,9 @@ TEST_CASE(
         seated->get_state_binding(),
         PropertyBindingPtr()
     );
-    netw::NetwPrediction *handle
-        = Object::cast_to<netw::NetwPrediction>(
-            netw::gd::live_object(seated->get_prediction())
-        );
+    netw::NetwPrediction *handle = Object::cast_to<netw::NetwPrediction>(
+        netw::gd::live_object(seated->get_prediction())
+    );
     REQUIRE(handle != nullptr);
     Vector<StringName> watched;
     watched.push_back(StringName("state_evaluated"));
@@ -485,13 +484,8 @@ TEST_CASE(
     sample.values.push_back(Vector2(30.0, 0.0));
 
     int64_t age = -1;
-    const Array exact = client->sim_install_target(
-        binding,
-        sample,
-        Restore::EXACT,
-        6,
-        age
-    );
+    const Array exact
+        = client->sim_install_target(binding, sample, Restore::EXACT, 6, age);
     NETW_CHECK_EQ(age, int64_t(3));
     CHECK(Vector2(exact[0]).is_equal_approx(Vector2(10.0, 0.0)));
 

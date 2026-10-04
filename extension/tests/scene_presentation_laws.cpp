@@ -230,10 +230,8 @@ TEST_CASE(
     "last one reached spends no edge at all"
 ) {
     const Ref<NetwMultiplayer> core = hosting();
-    const Ref<netw::NetwPlayer> player = netw_test::seated_peer(
-        core.ptr(),
-        int64_t(core->get_unique_id())
-    );
+    const Ref<netw::NetwPlayer> player
+        = netw_test::seated_peer(core.ptr(), int64_t(core->get_unique_id()));
     REQUIRE(player.is_valid());
     REQUIRE(core->player_local() == player);
     Node *root = memnew(Node);

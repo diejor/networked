@@ -63,11 +63,8 @@ TEST_CASE(
 
     const int64_t history = rewind_slot(api, entity);
     REQUIRE(history >= 0);
-    api->get_lagcomp_core()->timeline_record(
-        history,
-        SEEDED_TICK,
-        at(SEEDED_X)
-    );
+    api->get_lagcomp_core()
+        ->timeline_record(history, SEEDED_TICK, at(SEEDED_X));
 
     Ref<NetwDespawnOpts> opts;
     opts.instantiate();
@@ -123,11 +120,8 @@ TEST_CASE(
     const Ref<NetwEntity> wrapper = NetwEntity::of(body);
     const int64_t history = rewind_slot(api, entity);
     REQUIRE(history >= 0);
-    api->get_lagcomp_core()->timeline_record(
-        history,
-        SEEDED_TICK,
-        at(SEEDED_X)
-    );
+    api->get_lagcomp_core()
+        ->timeline_record(history, SEEDED_TICK, at(SEEDED_X));
 
     rig.server()->lagcomp_timeline_undeclare(entity);
 

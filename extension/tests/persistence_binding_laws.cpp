@@ -93,11 +93,13 @@ struct World {
     void store_record(const Dictionary &p_envelope) {
         netw::persist::store_named(store).replace(
             "slot1",
-            netw::persist::address_text(netw::persist::address_of(
-                netw::persist::Kind::RECORD,
-                StringName("players"),
-                "hero"
-            )),
+            netw::persist::address_text(
+                netw::persist::address_of(
+                    netw::persist::Kind::RECORD,
+                    StringName("players"),
+                    "hero"
+                )
+            ),
             p_envelope
         );
     }
@@ -222,12 +224,12 @@ TEST_CASE(
 ) {
     World world("pb19");
     world.declare();
-    world.property(world.root, "position")->state()->persisted(
-        StringName("where")
-    );
-    world.property(world.limb, "rotation")->input()->persisted(
-        StringName("spin")
-    );
+    world.property(world.root, "position")
+        ->state()
+        ->persisted(StringName("where"));
+    world.property(world.limb, "rotation")
+        ->input()
+        ->persisted(StringName("spin"));
     world.property(world.limb, "editor_description")
         ->persisted(StringName("note"));
     const RID binding = world.compile();

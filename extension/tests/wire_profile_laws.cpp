@@ -1,7 +1,7 @@
 #include "support/netw_test.h"
 
-#include "netw/wire/profiler.hpp"
 #include "netw/store/validate.hpp"
+#include "netw/wire/profiler.hpp"
 
 #if defined(NETW_TIER_HOSTED)
 #include "support/alloc_probe.h"

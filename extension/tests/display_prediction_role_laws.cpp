@@ -146,8 +146,7 @@ public:
         if (!plant_is(PLANT_NOBODY_REGISTERED_THE_ENGINE)) {
             NETW_CHECK_EQ(int(client->predict_declare(rid)), int(OK));
         }
-        const Ref<NetwPrediction> prediction
-            = on_client->get_prediction();
+        const Ref<NetwPrediction> prediction = on_client->get_prediction();
         REQUIRE(prediction.is_valid());
         if (declared.closed) {
             prediction->set_recovery_policy(

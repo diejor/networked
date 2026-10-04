@@ -21,16 +21,11 @@ namespace Networked;
 /// </code>
 /// <para>
 /// There is one <see cref="NetwTable"/> per table. Connect
-/// <see cref="NetwTable.Received"/> once and keep the handle in a field.
-/// </para>
-/// <para>
-/// Each row is identified by a route. Row indices change when rows are added or
-/// removed, and routes do not.
-/// </para>
-/// <para>
-/// <b>Writing</b> Write the routes and every column, then call
-/// <see cref="NetwTable.Commit"/> to apply them with the current tick and send
-/// them.
+/// <see cref="NetwTable.Received"/> once and keep the handle in a field. Each
+/// row is identified by a route. Row indices change when rows are added or
+/// removed, and routes do not. <b>Writing</b> Write the routes and every
+/// column, then call <see cref="NetwTable.Commit"/> to apply them with the
+/// current tick and send them.
 /// <code>
 /// func _on_tick() -&gt; void:
 ///     mobs.write_routes(routes)

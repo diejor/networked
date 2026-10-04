@@ -55,13 +55,9 @@ Reached through :ref:`NetwEntity.simulation<class_NetwEntity_property_simulation
 
 An entity is simulated once it sets or calls anything here, declares :ref:`NetwPrediction.archetype<class_NetwPrediction_property_archetype>`, or has a :godot:`RigidBody2D` or :godot:`RigidBody3D` root drawn by :ref:`NetwEntity.display<class_NetwEntity_property_display>`. Other entities stay :ref:`MODE_NONE<class_NetwSimulation_constant_MODE_NONE>`.
 
-
-
 \ **Modes**\ 
 
 The peer with authority over the entity runs it as :ref:`MODE_AUTHORITY<class_NetwSimulation_constant_MODE_AUTHORITY>`, and a client predicting it runs it as :ref:`MODE_PREDICT<class_NetwSimulation_constant_MODE_PREDICT>`. Every other copy is a frozen :ref:`MODE_PROXY<class_NetwSimulation_constant_MODE_PROXY>`, unless :ref:`replicas<class_NetwSimulation_property_replicas>` or a selection makes it :ref:`MODE_ACTIVE<class_NetwSimulation_constant_MODE_ACTIVE>`.
-
-
 
 \ **Selection**\ 
 

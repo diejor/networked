@@ -365,8 +365,8 @@ func _await_match(op: String) -> MultiplayerPeer:
 	if outcome.result != "success":
 		push_error(
 			(
-				"NakamaLobbyDirectory.%s did not join a match (%s). Check the "
-				+ "server, or raise connect_timeout."
+					"NakamaLobbyDirectory.%s did not join a match (%s). Check the "
+					+ "server, or raise connect_timeout."
 			) % [op, outcome.result],
 		)
 		_wrapper.leave()

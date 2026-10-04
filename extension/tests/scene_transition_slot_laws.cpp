@@ -7,8 +7,8 @@ namespace TestSceneTransitionSlotLaws {
 
 using namespace godot;
 using netw::NetwPromise;
-using netw::NetwSceneCore;
 using netw::NetwScene;
+using netw::NetwSceneCore;
 
 Array two_sources() {
     Array out;

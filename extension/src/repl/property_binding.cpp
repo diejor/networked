@@ -149,8 +149,7 @@ void BindingBook::pin(uint64_t p_id, Pin p_as) {
     if (found == nullptr) {
         return;
     }
-    uint8_t &pins
-        = p_as == Pin::STATE ? found->state_pins : found->input_pins;
+    uint8_t &pins = p_as == Pin::STATE ? found->state_pins : found->input_pins;
     pins += 1;
 }
 
@@ -159,8 +158,7 @@ void BindingBook::unpin(uint64_t p_id, Pin p_as) {
     if (found == nullptr) {
         return;
     }
-    uint8_t &pins
-        = p_as == Pin::STATE ? found->state_pins : found->input_pins;
+    uint8_t &pins = p_as == Pin::STATE ? found->state_pins : found->input_pins;
     if (pins > 0) {
         pins -= 1;
     }

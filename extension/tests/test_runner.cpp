@@ -623,8 +623,7 @@ void NetwNativeTests::tracker_book_clear() {
 }
 
 Dictionary NetwNativeTests::prediction_stats(Object *p_handle) {
-    const NetwPrediction *handle
-        = Object::cast_to<NetwPrediction>(p_handle);
+    const NetwPrediction *handle = Object::cast_to<NetwPrediction>(p_handle);
     if (handle == nullptr || handle->get_stats().is_null()) {
         return Dictionary();
     }

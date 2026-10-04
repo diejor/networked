@@ -142,13 +142,8 @@ TEST_CASE(
 
     Journal equal = journal_with(4, 99);
     equal.mark_ack(4, true);
-    verdict = judged(
-        declared,
-        equal,
-        state(1.0, 10.0),
-        state(5.0, 1000.0),
-        0.001
-    );
+    verdict
+        = judged(declared, equal, state(1.0, 10.0), state(5.0, 1000.0), 0.001);
     CHECK_FALSE(verdict.corrected);
     NETW_CHECK_EQ(verdict.meter, 0);
 }
@@ -159,24 +154,14 @@ TEST_CASE(
 ) {
     const Wiring declared = wiring();
     Journal journal = journal_with(4, 99);
-    StateVerdict inside = judged(
-        declared,
-        journal,
-        state(1.0, 10.0),
-        state(1.01, 1000.0),
-        0.1
-    );
+    StateVerdict inside
+        = judged(declared, journal, state(1.0, 10.0), state(1.01, 1000.0), 0.1);
     CHECK_FALSE(inside.corrected);
     CHECK_FALSE(inside.settled);
 
     journal.mark_domain(4, netw::predict::Domain::OUT_OF_DOMAIN);
-    StateVerdict outside = judged(
-        declared,
-        journal,
-        state(1.0, 10.0),
-        state(1.2, 1000.0),
-        0.1
-    );
+    StateVerdict outside
+        = judged(declared, journal, state(1.0, 10.0), state(1.2, 1000.0), 0.1);
     CHECK(outside.corrected);
     CHECK(outside.settled);
 }
@@ -186,13 +171,8 @@ TEST_CASE(
 ) {
     const Wiring declared = wiring();
     Journal journal = journal_with(4, 99);
-    StateVerdict verdict = judged(
-        declared,
-        journal,
-        state(1.0, 10.0),
-        state(1.0, 1000.0),
-        0.0
-    );
+    StateVerdict verdict
+        = judged(declared, journal, state(1.0, 10.0), state(1.0, 1000.0), 0.0);
     CHECK_FALSE(verdict.corrected);
     NETW_CHECK_CLOSE(verdict.divergence, 0.0, 0.0001);
     CHECK(verdict.field_errors[1] < 0.0);

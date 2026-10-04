@@ -22,13 +22,10 @@ namespace Networked;
 /// <c>.tres</c> can be used by several scenes. When no node calls
 /// <see cref="Netw.ConfigureSession"/>, the settings of the
 /// <see cref="MultiplayerTree"/> are used. When one does, the
-/// <see cref="MultiplayerTree"/> settings are ignored.
-/// </para>
-/// <para>
-/// <b>Bandwidth</b> Each peer is sent at most
-/// <see cref="NetwSessionConfig.BandwidthKbps"/>. Changed rows that do not fit
-/// wait for a later tick, and the ones that waited longest and matter most go
-/// first.
+/// <see cref="MultiplayerTree"/> settings are ignored. <b>Bandwidth</b>
+/// <see cref="NetwSessionConfig.BandwidthKbps"/> is a target for each peer, not
+/// a hard limit. Changed rows that do not fit wait for a later tick, and the
+/// ones that waited longest and matter most go first.
 /// <code>
 /// func _init() -&gt; void:
 ///     Netw.configure_session(self).bandwidth(256)
@@ -36,10 +33,11 @@ namespace Networked;
 /// </code>
 /// </para>
 /// <para>
-/// RPCs, spawns and <see cref="NetwPropertyConfig.Retained"/> properties are
-/// always sent when due. A peer they push over its budget gets no more rows
-/// until later ticks make up the difference. See
-/// <see cref="NetwMultiplayer.PeerLinkStats"/>.
+/// A peer is sent more than its budget in two cases. RPCs, spawns, authority
+/// changes and <see cref="NetwPropertyConfig.Retained"/> properties are always
+/// sent when due. Rows also get at least a quarter of every tick's budget, even
+/// when that traffic already used it up. Later ticks pay back at most two ticks
+/// of the overspend. See <see cref="NetwMultiplayer.PeerLinkStats"/>.
 /// </para>
 /// </remarks>
 public sealed class NetwSessionConfig : NetwRefCounted

@@ -1056,8 +1056,7 @@ PackedByteArray Arrays::encode_frame(
         return PackedByteArray();
     }
     for (int at = 0; at < p_count; ++at) {
-        uint64_t route
-            = uint64_t(MAX(p_table.routes[p_rows[at]], int64_t(0)));
+        uint64_t route = uint64_t(MAX(p_table.routes[p_rows[at]], int64_t(0)));
         if (!stream.varuint(route, 5)) {
             return PackedByteArray();
         }
@@ -1287,9 +1286,9 @@ bool Arrays::decode_column(
     uint8_t *write = r_column.landing.ptr();
     const uint32_t step = r_column.element_bytes;
     if (r_column.quantizer.is_valid()) {
-        const Variant::Type element
-            = static_cast<Variant::Type>(SchemaCore::element_type(r_column.type)
-            );
+        const Variant::Type element = static_cast<Variant::Type>(
+            SchemaCore::element_type(r_column.type)
+        );
         const int width = r_column.quantizer->bit_width(element);
         const int parts = r_column.quantizer->stride(element);
         PackedInt64Array codes;

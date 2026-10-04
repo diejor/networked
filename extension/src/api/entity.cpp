@@ -1506,7 +1506,7 @@ void NetwEntity::set_replication_priority(double p_weight) {
         sys::WIRE,
         "NetwEntity.replication_priority must be above 0, so %f was "
         "ignored. To hide an entity from peers, use "
-        "Netw.configure_interest.",
+        "NetwEntity.interest.",
         p_weight
     );
     replication_priority = p_weight;
@@ -2074,8 +2074,8 @@ TypedArray<MultiplayerSynchronizer> NetwEntity::synchronizers() {
         synchronizers_cache = found;
     }
     synchronizers_dirty = owner_exiting_tree && synchronizers_cache.is_empty();
-    synchronizers_absent = synchronizers_cache.is_empty()
-        && !owner_exiting_tree && owner->is_inside_tree();
+    synchronizers_absent = synchronizers_cache.is_empty() && !owner_exiting_tree
+        && owner->is_inside_tree();
     return synchronizers_cache;
 }
 
@@ -2136,10 +2136,7 @@ void NetwEntity::_bind_methods() {
     );
 
     ClassDB::bind_method(D_METHOD("get_name"), &NetwEntity::get_name);
-    ClassDB::bind_method(
-        D_METHOD("set_name", "name"),
-        &NetwEntity::set_name
-    );
+    ClassDB::bind_method(D_METHOD("set_name", "name"), &NetwEntity::set_name);
     ADD_PROPERTY(
         PropertyInfo(Variant::STRING_NAME, "name"),
         "set_name",
@@ -2279,11 +2276,7 @@ void NetwEntity::_bind_methods() {
         D_METHOD("get_is_scene"),
         &NetwEntity::get_declares_scene
     );
-    ADD_PROPERTY(
-        PropertyInfo(Variant::BOOL, "is_scene"),
-        "",
-        "get_is_scene"
-    );
+    ADD_PROPERTY(PropertyInfo(Variant::BOOL, "is_scene"), "", "get_is_scene");
 
     ClassDB::bind_method(
         D_METHOD("get_controller"),
@@ -2635,10 +2628,7 @@ void NetwEntity::_bind_methods() {
         "",
         "get_persistence"
     );
-    ClassDB::bind_method(
-        D_METHOD("get_display"),
-        &NetwEntity::get_display
-    );
+    ClassDB::bind_method(D_METHOD("get_display"), &NetwEntity::get_display);
     ADD_PROPERTY(
         PropertyInfo(
             Variant::OBJECT,

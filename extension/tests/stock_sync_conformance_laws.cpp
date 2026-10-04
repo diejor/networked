@@ -1184,12 +1184,14 @@ TEST_CASE(
     REQUIRE(mirror != nullptr);
     node->set(StringName("synced_value"), 1);
     NETW_CHECK_EQ(
-        int64_t(netw_test::pump_until_value(
-            rig,
-            mirror,
-            StringName("synced_value"),
-            1
-        )),
+        int64_t(
+            netw_test::pump_until_value(
+                rig,
+                mirror,
+                StringName("synced_value"),
+                1
+            )
+        ),
         int64_t(1)
     );
 
@@ -1198,12 +1200,14 @@ TEST_CASE(
     rig.step_ticks(4);
     node->set(StringName("synced_value"), 2);
     NETW_CHECK_EQ(
-        int64_t(netw_test::pump_until_value(
-            rig,
-            mirror,
-            StringName("synced_value"),
-            2
-        )),
+        int64_t(
+            netw_test::pump_until_value(
+                rig,
+                mirror,
+                StringName("synced_value"),
+                2
+            )
+        ),
         int64_t(2)
     );
 }

@@ -23,8 +23,8 @@ using namespace netw_test;
 using godot::Ref;
 using netw::NetwEntity;
 using netw::NetwMultiplayer;
-using netw::NetwPredictionEngine;
 using netw::NetwPrediction;
+using netw::NetwPredictionEngine;
 
 EntityDecl island_player(const char *p_name) {
     return EntityDecl()
@@ -608,9 +608,7 @@ TEST_CASE(
     const bool two_stand_in_it = both.members.size() == 2;
     REQUIRE(two_stand_in_it);
     const Ref<NetwEntity> later = both.members[1];
-    later->get_simulation()->set_schedule(
-        netw::NetwSimulation::SCHEDULE_TICK
-    );
+    later->get_simulation()->set_schedule(netw::NetwSimulation::SCHEDULE_TICK);
 
     rig.step_ticks(2);
     REQUIRE_FALSE(space_is_active(both.held));

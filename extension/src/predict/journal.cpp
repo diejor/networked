@@ -489,12 +489,7 @@ NETW_JOURNAL_READ_AT(evidence_mask_at, evidence_masks, uint8_t, 0)
 NETW_JOURNAL_READ_AT(flags_at, flags, uint8_t, 0)
 NETW_JOURNAL_READ_AT(domain_at, domains, uint8_t, 0)
 NETW_JOURNAL_READ_AT(attribution_at, attributions, uint8_t, 0)
-NETW_JOURNAL_DIAGNOSTIC_AT(
-    differing_family_at,
-    differing_families,
-    uint8_t,
-    0
-)
+NETW_JOURNAL_DIAGNOSTIC_AT(differing_family_at, differing_families, uint8_t, 0)
 NETW_JOURNAL_DIAGNOSTIC_AT(aligned_error_at, aligned_errors, float, 0.0f)
 
 #undef NETW_JOURNAL_DIAGNOSTIC_AT

@@ -631,9 +631,8 @@ int64_t Table::held_bytes() const {
     int64_t bytes = int64_t(sizeof(Table)) + held::vector(columns)
         + held::vector(slots) + held::vector(routes) + held::vector(owners)
         + held::vector(nodes) + held::vector(cells) + held::vector(scripts)
-        + held::vector(authorities) + held::vector(comps)
-        + held::vector(lanes) + held::vector(ordinals)
-        + held::vector(sources) + held::vector(flags)
+        + held::vector(authorities) + held::vector(comps) + held::vector(lanes)
+        + held::vector(ordinals) + held::vector(sources) + held::vector(flags)
         + held::vector(changed_ticks) + held::vector(frame_ticks)
         + held::vector(received_ticks) + held::vector(reconcile_acks)
         + held::vector(tenures) + held::vector(admit_stamps)
@@ -674,12 +673,11 @@ int64_t Table::peer_bytes() const {
             + held::vector(peer.queued.words) + held::vector(peer.due.words)
             + held::vector(peer.stream) + held::vector(peer.request)
             + held::vector(peer.token) + held::vector(peer.origin)
-            + held::vector(peer.opened)
-            + held::vector(peer.next_rev) + held::vector(peer.acked_rev)
-            + held::vector(peer.exposed_rev) + held::vector(peer.baseline)
-            + held::vector(peer.baseline_carried) + held::vector(peer.acc)
-            + held::vector(peer.last_sent) + held::vector(peer.refresh_at)
-            + held::vector(peer.repair_at);
+            + held::vector(peer.opened) + held::vector(peer.next_rev)
+            + held::vector(peer.acked_rev) + held::vector(peer.exposed_rev)
+            + held::vector(peer.baseline) + held::vector(peer.baseline_carried)
+            + held::vector(peer.acc) + held::vector(peer.last_sent)
+            + held::vector(peer.refresh_at) + held::vector(peer.repair_at);
     }
     return bytes;
 }

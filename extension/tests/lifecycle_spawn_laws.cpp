@@ -640,9 +640,7 @@ TEST_CASE(
         if (!arrived) {
             continue;
         }
-        CHECK(
-            NetwEntity::of(held)->get_name() == StringName("Configured")
-        );
+        CHECK(NetwEntity::of(held)->get_name() == StringName("Configured"));
         NETW_CHECK_EQ(int64_t(held->get(StringName("hp"))), STAMPED);
     }
 }

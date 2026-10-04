@@ -154,11 +154,13 @@ void declare_state_stream(NetwMultiplayer *p_core, Node *p_node) {
     netw::repl::SetBook &sets = p_core->property_set_book();
     const uint64_t declared = sets.create();
     PropertySet *set = sets.get(declared);
-    REQUIRE(property_set_builder::from_property_configs(
-        *set,
-        configs,
-        PropertySet::RECORD_STATE
-    ));
+    REQUIRE(
+        property_set_builder::from_property_configs(
+            *set,
+            configs,
+            PropertySet::RECORD_STATE
+        )
+    );
     set->compile_against(p_node);
     NETW_CHECK_EQ(int(set->get_sealed()), 1);
     NETW_CHECK_EQ(
@@ -899,8 +901,7 @@ TEST_CASE(
 
     const Ref<netw::NetwSession> member = cw.one->get_session();
     REQUIRE(member.is_valid());
-    CHECK(member
-              ->create_scene(packed, NetwMultiplayer::SCENE_ISOLATION_NONE)
+    CHECK(member->create_scene(packed, NetwMultiplayer::SCENE_ISOLATION_NONE)
               .is_null());
     NETW_CHECK_EQ(int(cw.one->scene_list().size()), before);
 }

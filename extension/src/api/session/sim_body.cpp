@@ -69,8 +69,8 @@ void NetwMultiplayer::sim_settle_body(const Ref<NetwEntity> &p_entity) {
         return;
     }
     const bool seated = standing != nullptr && standing->facts.predicted;
-    const sim::Mode settled = standing != nullptr ? standing->mode
-                                                  : sim::Mode::NONE;
+    const sim::Mode settled
+        = standing != nullptr ? standing->mode : sim::Mode::NONE;
     sim::Mode mode = sim::Mode::NONE;
     if (seated) {
         mode = standing->mode;

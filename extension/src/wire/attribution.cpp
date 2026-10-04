@@ -68,7 +68,8 @@ int64_t AttributionBook::commit(
     bool p_carrier,
     int64_t p_seq
 #if defined(DEBUG_ENABLED)
-    , LocalVector<Attribution> *r_frames
+    ,
+    LocalVector<Attribution> *r_frames
 #endif
 ) {
     const uint64_t key = lane_key(p_peer, p_reliable, p_carrier);

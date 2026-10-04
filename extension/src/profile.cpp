@@ -50,7 +50,8 @@ public:
         const godot::TypedArray<godot::Ref<godot::ScriptBacktrace>>
             &p_script_backtraces
     ) override {
-        const godot::String text = p_rationale.is_empty() ? p_code : p_rationale;
+        const godot::String text
+            = p_rationale.is_empty() ? p_code : p_rationale;
         const bool warning = p_error_type == ERROR_TYPE_WARNING;
         godot::String where = p_file;
         int64_t at = p_line;
@@ -66,8 +67,8 @@ public:
         }
         godot::String line = text;
         if (!text.begins_with("[")) {
-            line = godot::String(warning ? "[warn][" : "[error][") + from
-                + "] " + text;
+            line = godot::String(warning ? "[warn][" : "[error][") + from + "] "
+                + text;
         }
         line += " (" + where + ":" + godot::String::num_int64(at) + ")";
         send(line, warning ? colors::WARN : colors::ERROR);

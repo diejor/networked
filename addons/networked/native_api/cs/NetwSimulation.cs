@@ -32,19 +32,14 @@ namespace Networked;
 /// An entity is simulated once it sets or calls anything here, declares
 /// <see cref="NetwPrediction.Archetype"/>, or has a <see cref="RigidBody2D"/>
 /// or <see cref="RigidBody3D"/> root drawn by <see cref="NetwEntity.Display"/>.
-/// Other entities stay <see cref="NetwSimulation.ModeEnum.None"/>.
-/// </para>
-/// <para>
-/// <b>Modes</b> The peer with authority over the entity runs it as
+/// Other entities stay <see cref="NetwSimulation.ModeEnum.None"/>. <b>Modes</b>
+/// The peer with authority over the entity runs it as
 /// <see cref="NetwSimulation.ModeEnum.Authority"/>, and a client predicting it
 /// runs it as <see cref="NetwSimulation.ModeEnum.Predict"/>. Every other copy
 /// is a frozen <see cref="NetwSimulation.ModeEnum.Proxy"/>, unless
 /// <see cref="NetwSimulation.Replicas"/> or a selection makes it
-/// <see cref="NetwSimulation.ModeEnum.Active"/>.
-/// </para>
-/// <para>
-/// <b>Selection</b> While this entity runs here as
-/// <see cref="NetwSimulation.ModeEnum.Authority"/> or
+/// <see cref="NetwSimulation.ModeEnum.Active"/>. <b>Selection</b> While this
+/// entity runs here as <see cref="NetwSimulation.ModeEnum.Authority"/> or
 /// <see cref="NetwSimulation.ModeEnum.Predict"/>, it can pick other entities to
 /// run here as <see cref="NetwSimulation.ModeEnum.Active"/>.
 /// <see cref="NetwSimulation.Simulate"/> names one.

@@ -191,9 +191,7 @@ Subject stand_target(
         subject.visual = memnew(Node2D);
         subject.visual->set_name("Visual");
         subject.body->add_child(subject.visual);
-        subject.entity->get_display()->set_visual_root(
-            NodePath("Visual")
-        );
+        subject.entity->get_display()->set_visual_root(NodePath("Visual"));
     }
     p_bench.seat(subject.body);
     return subject;
@@ -358,9 +356,7 @@ public:
             declared
         );
         if (plant_is(PLANT_THE_VISUAL_ROOT_NAMES_NOTHING)) {
-            subject.entity->get_display()->set_visual_root(
-                NodePath("Visual")
-            );
+            subject.entity->get_display()->set_visual_root(NodePath("Visual"));
         }
         if (p_scenario.shape == WORLD_REBUILT
             || plant_is(PLANT_THE_VISUAL_ROOT_NAMES_NOTHING)) {

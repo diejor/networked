@@ -25,6 +25,7 @@ namespace TestNetwPropertyBinding {
 
 using namespace godot;
 using netw::SchemaCore;
+using netw::enums::NetwMultiplayer;
 using netw::repl::PropertyBinding;
 using netw::repl::PropertyBindingPtr;
 using netw::repl::PropertyColumn;
@@ -32,7 +33,6 @@ using netw::repl::PropertySet;
 using netw_test::Books;
 using netw_test::DeclaredSet;
 using netw_test::ReplicationSend;
-using netw::enums::NetwMultiplayer;
 
 const int64_t SYNC_ROW = 39;
 const int64_t SYNC_ROW_DELTA = 40;
@@ -183,8 +183,7 @@ TEST_CASE(
 
     Node2D *src = memnew(Node2D);
     Node2D *dst = memnew(Node2D);
-    const PropertyBindingPtr src_binding
-        = netw_test::bind(set, src);
+    const PropertyBindingPtr src_binding = netw_test::bind(set, src);
     ReplicationSend send = send_on(SYNC_ROW_WINDOW, true);
 
     src->set_position(Vector2(1.0, 0.0));
@@ -214,8 +213,7 @@ TEST_CASE(
 
     Node2D *src = memnew(Node2D);
     Node2D *dst = memnew(Node2D);
-    const PropertyBindingPtr src_binding
-        = netw_test::bind(set, src);
+    const PropertyBindingPtr src_binding = netw_test::bind(set, src);
     ReplicationSend send = send_on(SYNC_ROW_WINDOW, true);
 
     src->set_rotation(0.1);
@@ -330,8 +328,7 @@ TEST_CASE(
     src->set_position(Vector2(-6.0, 2.0));
     src->set_rotation(2.0);
 
-    const Dictionary snapshot
-        = netw_test::bind(set, src)->snapshot_payload();
+    const Dictionary snapshot = netw_test::bind(set, src)->snapshot_payload();
     netw_test::bind(set, dst)->apply_payload(snapshot);
 
     CHECK(dst->get_position() == Vector2(-6.0, 2.0));
@@ -358,8 +355,7 @@ TEST_CASE(
         = row_frame(send, netw_test::bind(set, src), 12, 7);
 
     netw_test::LandedLog log;
-    const PropertyBindingPtr dst_binding
-        = netw_test::bind(set, dst);
+    const PropertyBindingPtr dst_binding = netw_test::bind(set, dst);
     log.watch(dst_binding);
     netw_test::StoreArrival landed(dst_binding);
     REQUIRE(landed.settle(bytes, 12, false));
@@ -392,8 +388,7 @@ TEST_CASE(
         = row_frame(send, netw_test::bind(set, src), 3, -1);
 
     netw_test::LandedLog log;
-    const PropertyBindingPtr dst_binding
-        = netw_test::bind(set, dst);
+    const PropertyBindingPtr dst_binding = netw_test::bind(set, dst);
     dst_binding->write_gate = false;
     log.watch(dst_binding);
     netw_test::StoreArrival landed(dst_binding);

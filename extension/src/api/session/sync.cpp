@@ -789,8 +789,7 @@ void NetwMultiplayer::sync_pump_rows(
     const int64_t allocated = store::allocations_seen();
 #endif
     const bool by_seam = store_gathers_by_seam();
-    if (store_model != p_model
-        || store_model_revision != p_model->revision()) {
+    if (store_model != p_model || store_model_revision != p_model->revision()) {
         store_model = p_model;
         store_model_revision = p_model->revision();
         store_world.unsource_all();
@@ -1430,9 +1429,7 @@ display::Channel *NetwMultiplayer::display_ensure_state(
     );
 }
 
-static Ref<NetwPrediction> prediction_of(
-    const Ref<NetwEntity> &p_entity
-) {
+static Ref<NetwPrediction> prediction_of(const Ref<NetwEntity> &p_entity) {
     if (p_entity.is_null()) {
         return Ref<NetwPrediction>();
     }
@@ -2332,8 +2329,9 @@ Error NetwMultiplayer::display_write_rows_default(
                     break;
                 }
             }
-        } else if (p_column >= 0
-                   && p_column < int64_t(runtime->channels().size())) {
+        } else if (
+            p_column >= 0 && p_column < int64_t(runtime->channels().size())
+        ) {
             channel = runtime->channels()[uint32_t(p_column)];
         }
         if (channel == nullptr) {
@@ -2360,13 +2358,15 @@ Error NetwMultiplayer::run_display_write_rows(
         ? replication->gate_seam(display_write_seam())
         : nullptr;
     if (seam != nullptr) {
-        return Error(int(seam->call(
-            display_write_seam(),
-            p_table,
-            p_column,
-            p_routes,
-            p_values
-        )));
+        return Error(
+            int(seam->call(
+                display_write_seam(),
+                p_table,
+                p_column,
+                p_routes,
+                p_values
+            ))
+        );
     }
     Error answered = OK;
     if (GDVIRTUAL_CALL(
@@ -2679,11 +2679,7 @@ void NetwMultiplayer::property_set_set_column_param(
             target.converge_stiffness = double(p_value);
             return;
         default:
-            NETW_ERR(
-                sys::TABLE,
-                "Column setting %d does not exist.",
-                p_param
-            );
+            NETW_ERR(sys::TABLE, "Column setting %d does not exist.", p_param);
     }
 }
 
@@ -2876,12 +2872,7 @@ RID NetwMultiplayer::adopt_property_set(
             COLUMN_PARAM_RECONCILE_ONLY,
             member.explicit_reconcile_only
         );
-        property_set_set_column_param(
-            set,
-            at,
-            COLUMN_PARAM_LANE,
-            member.lane
-        );
+        property_set_set_column_param(set, at, COLUMN_PARAM_LANE, member.lane);
         property_set_set_column_param(
             set,
             at,

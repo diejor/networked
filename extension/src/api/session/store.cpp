@@ -8,9 +8,9 @@
 #include "netw/repl/property_binding.hpp"
 #include "netw/repl/set_model.hpp"
 #include "netw/spawn/book.hpp"
+#include "netw/spawn/pipeline.hpp"
 #include "netw/store/schedule.hpp"
 #include "netw/store/validate.hpp"
-#include "netw/spawn/pipeline.hpp"
 #include "netw/wire/registry.hpp"
 
 using namespace godot;
@@ -315,13 +315,11 @@ void NetwMultiplayer::store_source_check(
     store::validation_audit::ledger().checks += 1;
 #endif
     const SourceImage was = source_image(store_world, table, p_at.row);
-    const Node *node = Object::cast_to<Node>(
-        gd::object_of(ObjectID(table.nodes[p_at.row]))
-    );
+    const Node *node
+        = Object::cast_to<Node>(gd::object_of(ObjectID(table.nodes[p_at.row])));
     const bool unpulled = node != nullptr
         && node->get_multiplayer_authority() != table.authorities[p_at.row];
-    const bool stays
-        = store_source_row(p_model, p_send, p_at, p_bind, p_tick);
+    const bool stays = store_source_row(p_model, p_send, p_at, p_bind, p_tick);
     const char *drift = stays
         ? "quiet"
         : source_drift(was, source_image(store_world, table, p_at.row));
@@ -427,9 +425,9 @@ bool NetwMultiplayer::store_source_row(
     const bool admitted = store_admits_any(p_at);
     uint8_t offer = store::Table::OFFER_NONE;
     if (primary) {
-        offer = !authors  ? store::Table::OFFER_UNAUTHORED
-            : !admitted   ? store::Table::OFFER_UNREACHED
-                          : store::Table::OFFER_MADE;
+        offer = !authors ? store::Table::OFFER_UNAUTHORED
+            : !admitted  ? store::Table::OFFER_UNREACHED
+                         : store::Table::OFFER_MADE;
     }
     table.set_offer(row, offer);
     if (!authors || !admitted) {
@@ -455,8 +453,7 @@ void NetwMultiplayer::store_stamp_thunk(
 void NetwMultiplayer::store_stamp_row(uint32_t p_table, uint32_t p_row) {
     store::Table &table = store_world.table(p_table);
     PropertyBinding *binding = binding_book.live(table.owners[p_row]);
-    const PropertySet *set
-        = binding != nullptr ? binding->get_set() : nullptr;
+    const PropertySet *set = binding != nullptr ? binding->get_set() : nullptr;
     if (set == nullptr) {
         return;
     }

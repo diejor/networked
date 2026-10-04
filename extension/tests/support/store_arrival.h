@@ -28,8 +28,7 @@ struct LandedLog {
         log->ack = p_table.arrived_ack;
         log->keys.clear();
         log->values.clear();
-        for (int column = 0; column < p_table.schema.column_count();
-             ++column) {
+        for (int column = 0; column < p_table.schema.column_count(); ++column) {
             log->keys.push_back(p_table.schema.at(column)->key);
             log->values.push_back(p_table.read_value(p_row, uint32_t(column)));
         }
@@ -112,10 +111,7 @@ struct StoreArrival {
         return netw::predict::Arrival::of(world().table(row.table), row.row);
     }
 
-    godot::Variant value(
-        const godot::StringName &p_key,
-        uint32_t p_lane = 0
-    ) {
+    godot::Variant value(const godot::StringName &p_key, uint32_t p_lane = 0) {
         const netw::store::RowAddress row = at(p_lane);
         const netw::store::Table &table = world().table(row.table);
         for (int column = 0; column < table.schema.column_count(); ++column) {

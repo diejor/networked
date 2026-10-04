@@ -16,8 +16,8 @@
 #include "netw/colors.hpp"
 #include "netw/log.hpp"
 #include "netw/predict/axes.hpp"
-#include "netw/prediction_core.hpp"
 #include "netw/predict/tick_work.hpp"
+#include "netw/prediction_core.hpp"
 #include "netw/profile.hpp"
 #include "netw/subsystems.hpp"
 
@@ -257,7 +257,6 @@ bool NetwPredictSlotEngine::lane_open() const {
     return pool != nullptr && pool->input_lane_open(native_slot());
 }
 
-
 double NetwPredictSlotEngine::tick_delta() const {
     return pool != nullptr ? pool->tick_delta_of(native_slot()) : 1.0 / 60.0;
 }
@@ -333,10 +332,8 @@ void NetwPredictSlotEngine::attach(
     handle->fact_book()->bind_slot(pool, p_entity);
     fallback_at_sink
         = callable_mp(handle.ptr(), &NetwPrediction::seat_fallback_at);
-    const Callable on_control = callable_mp(
-        handle.ptr(),
-        &NetwPrediction::seat_control_changed
-    );
+    const Callable on_control
+        = callable_mp(handle.ptr(), &NetwPrediction::seat_control_changed);
     if (!p_entity->is_connected(signal_control_changed(), on_control)) {
         p_entity->connect(signal_control_changed(), on_control);
     }
@@ -368,10 +365,8 @@ void NetwPredictSlotEngine::release() {
     if (entity.is_null()) {
         return;
     }
-    const Callable on_control = callable_mp(
-        handle.ptr(),
-        &NetwPrediction::seat_control_changed
-    );
+    const Callable on_control
+        = callable_mp(handle.ptr(), &NetwPrediction::seat_control_changed);
     if (entity->is_connected(signal_control_changed(), on_control)) {
         entity->disconnect(signal_control_changed(), on_control);
     }
@@ -814,14 +809,8 @@ void NetwPredictSlotEngine::receive_ack_frame(
         p_payload,
         pool->tape_epoch_of(slot),
         core_seated() != nullptr,
-        callable_mp(
-            handle.ptr(),
-            &NetwPrediction::seat_quarantine_witness
-        ),
-        callable_mp(
-            handle.ptr(),
-            &NetwPrediction::seat_deferred_operator_retry
-        )
+        callable_mp(handle.ptr(), &NetwPrediction::seat_quarantine_witness),
+        callable_mp(handle.ptr(), &NetwPrediction::seat_deferred_operator_retry)
     );
     NetwPredictStats::Book *stats = handle->fact_book();
     const int64_t receipt = counts[NetwPredictionEngine::ACK_RUN_RECEIPT];
@@ -948,7 +937,6 @@ int NetwPredictSlotEngine::resolve_correction() const {
     return pool->settle_correction(slot, declared_correction());
 }
 
-
 void NetwPredictSlotEngine::on_control_changed(
     int64_t p_previous_peer,
     int64_t p_peer
@@ -1033,10 +1021,7 @@ void NetwPredictSlotEngine::rewire_on(const Declaration &p_declaration) {
     pool->validate_declaration(
         slot,
         state->get_set(),
-        callable_mp(
-            handle.ptr(),
-            &NetwPrediction::seat_reachability_findings
-        )
+        callable_mp(handle.ptr(), &NetwPrediction::seat_reachability_findings)
     );
     if (session != nullptr) {
         const int resolved = pool->adopt_declaration(
@@ -1478,10 +1463,7 @@ void NetwPredictSlotEngine::on_state(
             pool->compared_row(slot),
             pool->received_row(slot),
             overrides_seam(seam_predict_evaluate())
-                ? callable_mp(
-                      handle.ptr(),
-                      &NetwPrediction::seat_evaluate_seam
-                  )
+                ? callable_mp(handle.ptr(), &NetwPrediction::seat_evaluate_seam)
                 : Callable()
         );
         divergence = judged.divergence;
@@ -1553,11 +1535,9 @@ void NetwPredictSlotEngine::on_state(
                 attribution,
                 replays ? witness_sample() : no_sample(),
                 replays ? island_participant_ids() : no_participants(),
-                replays ? callable_mp(
-                              handle.ptr(),
-                              &NetwPrediction::seat_breach
-                          )
-                        : Callable(),
+                replays
+                    ? callable_mp(handle.ptr(), &NetwPrediction::seat_breach)
+                    : Callable(),
                 overrides_seam(seam_predict_recover())
                     ? callable_mp(
                           handle.ptr(),
@@ -1750,8 +1730,7 @@ NetwPredictSlotEngine::SteppedIsland NetwPredictSlotEngine::
     stepped_island() const {
     SteppedIsland out;
     NetwMultiplayer *host = core_seated();
-    if (host == nullptr
-        || schedule() != NetwSimulation::SCHEDULE_STEPPED) {
+    if (host == nullptr || schedule() != NetwSimulation::SCHEDULE_STEPPED) {
         return out;
     }
     out.space = host->entity_space_of(seated_entity()).space;
@@ -2003,10 +1982,7 @@ void NetwPredictSlotEngine::host_local_step(double p_delta, int64_t p_tick) {
 
 void NetwPredictSlotEngine::on_input_frame(const predict::Arrival &p_arrival) {
     if (!lane_open()) {
-        NETW_TRACE(
-            sys::PREDICTION,
-            "An input arrived with no input history."
-        );
+        NETW_TRACE(sys::PREDICTION, "An input arrived with no input history.");
         return;
     }
     const int64_t slot = native_slot();
@@ -2301,11 +2277,7 @@ void NetwPredictSlotEngine::run_command(
     if (step.is_valid()) {
         step.call(p_delta, p_tick, p_fresh);
     } else {
-        NETW_TRACE(
-            sys::PREDICTION,
-            "Tick %d has no step to run.",
-            int(p_tick)
-        );
+        NETW_TRACE(sys::PREDICTION, "Tick %d has no step to run.", int(p_tick));
     }
 }
 
@@ -2327,19 +2299,18 @@ void NetwPredictSlotEngine::close_captured_row(int64_t p_transition) {
 
 void NetwPredictSlotEngine::close_journal_row(int64_t p_transition) {
     const bool witnessed = handle->get_witness_contacts().is_valid();
-    const Dictionary solve = witnessed
-        ? pool->seal_transition(
-              native_slot(),
-              p_transition,
-              witness_sample(),
-              island_participant_ids()
-          )
-        : pool->seal_transition(
-              native_slot(),
-              p_transition,
-              unsampled,
-              unparticipated
-          );
+    const Dictionary solve = witnessed ? pool->seal_transition(
+                                             native_slot(),
+                                             p_transition,
+                                             witness_sample(),
+                                             island_participant_ids()
+                                         )
+                                       : pool->seal_transition(
+                                             native_slot(),
+                                             p_transition,
+                                             unsampled,
+                                             unparticipated
+                                         );
     if (solve.is_empty()) {
         return;
     }
@@ -2444,10 +2415,7 @@ void NetwPredictSlotEngine::register_with_loop() {
         runner->register_engine(this);
         pool->set_registered(native_slot(), true);
     } else {
-        NETW_TRACE(
-            sys::PREDICTION,
-            "No prediction runner holds this engine."
-        );
+        NETW_TRACE(sys::PREDICTION, "No prediction runner holds this engine.");
     }
 }
 

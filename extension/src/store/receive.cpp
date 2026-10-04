@@ -253,8 +253,7 @@ uint32_t Table::owe_push(
 ) {
     uint32_t dropped = 0;
     if (due_held[p_row] > 0
-        && (due_senders[p_row] != p_sender
-            || due_tenures[p_row] != p_tenure)) {
+        && (due_senders[p_row] != p_sender || due_tenures[p_row] != p_tenure)) {
         dropped = due_held[p_row];
         due_held[p_row] = 0;
     }
@@ -381,14 +380,8 @@ Landing World::land_frame(
     const uint32_t row = p_at.row;
     uint64_t accepted = 0;
     const wire::CodeRow *baseline = nullptr;
-    const Landing admitted = admits(
-        p_at,
-        p_sender,
-        p_frame,
-        p_windowed,
-        accepted,
-        baseline
-    );
+    const Landing admitted
+        = admits(p_at, p_sender, p_frame, p_windowed, accepted, baseline);
     if (admitted != Landing::ACCEPTED) {
         return admitted;
     }

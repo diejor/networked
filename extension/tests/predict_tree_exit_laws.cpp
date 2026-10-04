@@ -58,8 +58,8 @@ struct ExitRig {
     int64_t slot(int p_side) const {
         Node *held = owner(p_side);
         return held != nullptr ? api(p_side)->get_prediction_engine()->slot_of(
-                   netw::NetwEntity::of(held)
-               )
+                                     netw::NetwEntity::of(held)
+                                 )
                                : int64_t(-1);
     }
 
@@ -69,8 +69,9 @@ struct ExitRig {
         sizes.slots_open = session->get_prediction_engine()->open_count();
         sizes.store_slots = int64_t(session->store().live_slot_count());
         sizes.bindings = int64_t(session->property_binding_book().count());
-        sizes.derived_sets = int64_t(session->sync_pipeline()->counters()
-                                         [StringName("derived_sets_active")]);
+        sizes.derived_sets
+            = int64_t(session->sync_pipeline()
+                          ->counters()[StringName("derived_sets_active")]);
         return sizes;
     }
 

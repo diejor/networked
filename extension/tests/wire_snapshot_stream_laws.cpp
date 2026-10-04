@@ -149,13 +149,8 @@ struct Link {
     uint64_t pass() {
         godot::LocalVector<netw_test::RowOffer> offers;
         offers.push_back(offer());
-        const netw::repl::SessionResult result = send.run(
-            registry(),
-            offers,
-            int64_t(1) << 20,
-            BASE_TICK,
-            now_ms
-        );
+        const netw::repl::SessionResult result
+            = send.run(registry(), offers, int64_t(1) << 20, BASE_TICK, now_ms);
         uint64_t revision = 0;
         for (uint32_t at = 0; at < result.sends.size(); ++at) {
             const netw::repl::RowSend &sent = result.sends[at];

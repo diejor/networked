@@ -186,7 +186,8 @@ class ControlFrameWriter {
     bool healthy = true;
 
 public:
-    explicit ControlFrameWriter(ControlBasis &p_basis) : basis(p_basis) {}
+    explicit ControlFrameWriter(ControlBasis &p_basis) : basis(p_basis) {
+    }
 
     int64_t cost(const ControlRecord &p_record) const;
 

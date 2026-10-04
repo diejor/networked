@@ -238,7 +238,6 @@ bool Slot::record_authored_row(
     );
 }
 
-
 void Slot::unacknowledged_row(int64_t p_key, StateRow &r_input) const {
     if (!lane_open || inputs.origin_of(p_key) != int(CellProvenance::AUTHORED)
         || !inputs.read_row(input_codec, p_key, r_input)) {
@@ -331,7 +330,6 @@ bool Slot::record_joint_command(
     );
 }
 
-
 int Slot::command_depth_from(int64_t p_cursor) const {
     if (p_cursor < 0) {
         return 0;
@@ -409,7 +407,6 @@ bool Slot::record_state_row(int64_t p_key, const StateRow &p_state) {
         p_state
     );
 }
-
 
 bool Slot::joint_state(int64_t p_transition, StateRow &r_state) const {
     return p_transition > joint.state_floor
@@ -739,8 +736,7 @@ DriveRecord Slot::open_drive(
 
     const bool framed = config.schedule == int(Schedule::FRAME);
     if (framed) {
-        if (!p_timing.simulating
-            || p_timing.tick <= drive_frame_tick) {
+        if (!p_timing.simulating || p_timing.tick <= drive_frame_tick) {
             stats.authoring_clamped += 1;
             out.clamped = true;
             return out;

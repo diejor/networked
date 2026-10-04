@@ -120,11 +120,8 @@ bool agrees(const Spec &p_spec, const Variant &p_value) {
     );
     uint8_t exact[32] = {};
     uint64_t typed[4] = {0, 0, 0, 0};
-    const bool typed_encoded = netw::store::typed_from_variant(
-                                   coder,
-                                   p_value,
-                                   exact
-                               )
+    const bool typed_encoded
+        = netw::store::typed_from_variant(coder, p_value, exact)
         && netw::store::code_value(coder, exact, typed);
     if (encoded != typed_encoded) {
         return false;
@@ -197,11 +194,7 @@ using netw::store::Source;
 using netw::store::Table;
 using netw::store::World;
 
-bool holds_codes_of(
-    const Table &p_table,
-    uint32_t p_row,
-    const Vector3 &p_at
-) {
+bool holds_codes_of(const Table &p_table, uint32_t p_row, const Vector3 &p_at) {
     CodeRow expected = CodeRow::for_plan(p_table.plan);
     if (!netw::wire::encode_scalar_column(
             *p_table.schema.at(0),

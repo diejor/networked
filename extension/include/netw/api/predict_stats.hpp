@@ -98,15 +98,9 @@ public:
         int64_t get_int_fact(int index) const;
         void set_dict_fact(int index, const godot::Dictionary &value);
         godot::Dictionary get_dict_fact(int index) const;
-        void set_buckets_fact(
-            int index,
-            const godot::PackedInt32Array &value
-        );
+        void set_buckets_fact(int index, const godot::PackedInt32Array &value);
         godot::PackedInt32Array get_buckets_fact(int index) const;
-        void set_names_fact(
-            int index,
-            const godot::PackedStringArray &value
-        );
+        void set_names_fact(int index, const godot::PackedStringArray &value);
         godot::PackedStringArray get_names_fact(int index) const;
 
         void bind_slot(

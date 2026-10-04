@@ -1449,10 +1449,7 @@ int64_t judging_slot(LoopbackRig &p_rig, const Ref<NetwEntity> &p_seated) {
     pool->rewire(slot, declared);
     pool->bind_property_sets(
         slot,
-        pose_binding(
-            p_rig.server(),
-            p_seated->get_owner()
-        ),
+        pose_binding(p_rig.server(), p_seated->get_owner()),
         PropertyBindingPtr()
     );
     pool->configure(

@@ -61,10 +61,7 @@ typedef bool (*TenureDooms)(
     const StreamTenure &p_bar
 );
 
-bool binding_follows(
-    const StreamTenure &p_origin,
-    const StreamTenure &p_bound
-);
+bool binding_follows(const StreamTenure &p_origin, const StreamTenure &p_bound);
 
 uint64_t binding_floor(
     const StreamTenure &p_origin,

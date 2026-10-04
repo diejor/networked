@@ -815,7 +815,8 @@ func _on_session_entered() -> void:
 
 
 func _on_session_left(
-	_reason: NetwSession.ExitReason, _detail: String
+		_reason: NetwSession.ExitReason,
+		_detail: String,
 ) -> void:
 	_hide_connecting_overlay()
 	_show_room("")
@@ -1107,8 +1108,8 @@ static func value_from_control(control: Control, value_type: int) -> Variant:
 				return reader.data
 			push_warning(
 				(
-					"A settings field holds '%s', which is not a JSON array, "
-					+ "so it was ignored. Write it like [1, 2]."
+						"A settings field holds '%s', which is not a JSON array, "
+						+ "so it was ignored. Write it like [1, 2]."
 				) % [text],
 			)
 			return null

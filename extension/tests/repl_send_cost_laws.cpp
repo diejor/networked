@@ -17,13 +17,13 @@ using godot::Array;
 using godot::LocalVector;
 using netw::SchemaCore;
 using netw::repl::SessionResult;
-using netw_test::RowOffer;
-using netw_test::SessionSend;
 using netw::table::SchemaRecord;
 using netw::wire::ChannelDecl;
 using netw::wire::Delivery;
 using netw::wire::WireRegistry;
 using netw_test::drive_send;
+using netw_test::RowOffer;
+using netw_test::SessionSend;
 
 const uint8_t CHANNEL = 45;
 const int ENTITIES = 50;

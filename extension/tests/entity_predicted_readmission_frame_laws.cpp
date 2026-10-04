@@ -212,22 +212,30 @@ class ReadmissionScenario final : public netw_test::FrameScenario {
         declare_on_every_peer(declared_client);
         stand->pump(2);
         ReadmissionEvidence &evidence = readmission_evidence();
-        return seat(ARCHETYPE_CLIENT,
-                    A,
-                    archetype_client,
-                    evidence.archetype_client)
-            && seat(DECLARED_SERVER,
-                    SERVER,
-                    declared_server,
-                    evidence.declared_server)
-            && seat(DECLARED_CLIENT,
-                    A,
-                    declared_client,
-                    evidence.declared_client)
-            && seat(ARCHETYPE_SERVER,
-                    SERVER,
-                    archetype_server,
-                    evidence.archetype_server);
+        return seat(
+                   ARCHETYPE_CLIENT,
+                   A,
+                   archetype_client,
+                   evidence.archetype_client
+               )
+            && seat(
+                   DECLARED_SERVER,
+                   SERVER,
+                   declared_server,
+                   evidence.declared_server
+            )
+            && seat(
+                   DECLARED_CLIENT,
+                   A,
+                   declared_client,
+                   evidence.declared_client
+            )
+            && seat(
+                   ARCHETYPE_SERVER,
+                   SERVER,
+                   archetype_server,
+                   evidence.archetype_server
+            );
     }
 
     void depart() {

@@ -18,12 +18,12 @@ using namespace godot;
 using netw::NetwEntity;
 using netw::NetwMultiplayer;
 using netw::NetwSyncModel;
+using netw::ReplicationSend;
+using netw::SchemaCore;
 using netw::repl::PropertyBinding;
 using netw::repl::PropertyBindingPtr;
 using netw::repl::PropertyColumn;
 using netw::repl::PropertySet;
-using netw::ReplicationSend;
-using netw::SchemaCore;
 using netw_test::CallLog;
 
 const int64_t SYNC_ROW = 39;

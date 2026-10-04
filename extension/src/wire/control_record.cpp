@@ -33,8 +33,10 @@ ControlOpenBasis basis_of(const ControlRecord &p_record) {
 }
 
 bool omits_any(const ControlOpenHead &p_head) {
-    return !(p_head.has_epoch && p_head.has_tenure && p_head.has_anchor
-             && p_head.has_anchor_author && p_head.has_schema);
+    return !(
+        p_head.has_epoch && p_head.has_tenure && p_head.has_anchor
+        && p_head.has_anchor_author && p_head.has_schema
+    );
 }
 
 template <class Stream>
@@ -342,8 +344,8 @@ bool ControlFrameWriter::append(const ControlRecord &p_record) {
     NETW_ZONE_NC("Control record write", colors::WIRE);
     WriteStream piece;
     ControlCursor advanced = cursor;
-    if (!write_record(piece, p_record, advanced, basis)
-        || !piece.align_verify() || !piece.ok()) {
+    if (!write_record(piece, p_record, advanced, basis) || !piece.align_verify()
+        || !piece.ok()) {
         return false;
     }
     if (!stream.raw_span(piece.data(), int64_t(piece.byte_count()))) {

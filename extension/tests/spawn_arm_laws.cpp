@@ -72,9 +72,7 @@ TEST_CASE(
             == String("make_crate@") + String::num_int64(entity->get_route())
         )
     );
-    CHECK(
-        bool(String(record.get_entity_id()) == String(entity->get_name()))
-    );
+    CHECK(bool(String(record.get_entity_id()) == String(entity->get_name())));
     NETW_CHECK_EQ(log.count("declare"), 1);
 
     memdelete(node);

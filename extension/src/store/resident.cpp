@@ -40,10 +40,9 @@ NodeCell Residents::derive_object(Object *p_object) {
         cell.solid = solid;
         cell.body = solid->get_rid();
         cell.frame_3d = Object::cast_to<Node3D>(solid->get_parent());
-        cell.state_3d
-            = PhysicsServer3D::get_singleton()->body_get_direct_state(
-                cell.body
-            );
+        cell.state_3d = PhysicsServer3D::get_singleton()->body_get_direct_state(
+            cell.body
+        );
         cell.root = tree::is_entity_root(node);
     } else if (RigidBody2D *flat = Object::cast_to<RigidBody2D>(node)) {
         cell.flat = flat;

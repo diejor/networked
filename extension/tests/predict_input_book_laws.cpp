@@ -111,11 +111,13 @@ TEST_CASE(
     Array keys;
     keys.append(StringName("button"));
     netw::predict::CommandFrameRecord shipped;
-    REQUIRE(netw::predict::CommandFrameRecord::decode(
-        button_schema(),
-        owner->build_command_frame(authored, button_schema(), keys, 8),
-        shipped
-    ));
+    REQUIRE(
+        netw::predict::CommandFrameRecord::decode(
+            button_schema(),
+            owner->build_command_frame(authored, button_schema(), keys, 8),
+            shipped
+        )
+    );
     NETW_CHECK_EQ(shipped.transition_count(), 3);
     authority->admit_command_frame(consumed, shipped, keys);
 
@@ -150,11 +152,13 @@ TEST_CASE(
     Array keys;
     keys.append(StringName("button"));
     netw::predict::CommandFrameRecord shipped;
-    REQUIRE(netw::predict::CommandFrameRecord::decode(
-        wide_button_schema(),
-        owner->build_command_frame(authored, wide_button_schema(), keys, 8),
-        shipped
-    ));
+    REQUIRE(
+        netw::predict::CommandFrameRecord::decode(
+            wide_button_schema(),
+            owner->build_command_frame(authored, wide_button_schema(), keys, 8),
+            shipped
+        )
+    );
     NETW_CHECK_EQ(shipped.transition_count(), 2);
     NETW_CHECK_EQ(shipped.payload_count(), 2);
     authority->admit_command_frame(consumed, shipped, keys);

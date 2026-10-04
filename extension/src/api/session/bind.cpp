@@ -1032,10 +1032,9 @@ void NetwMultiplayer::_bind_methods() {
         D_METHOD("unobserve", "event", "callback"),
         &NetwMultiplayer::unobserve
     );
-    ADD_SIGNAL(MethodInfo(
-        "peer_authenticating",
-        PropertyInfo(Variant::INT, "peer_id")
-    ));
+    ADD_SIGNAL(
+        MethodInfo("peer_authenticating", PropertyInfo(Variant::INT, "peer_id"))
+    );
     ADD_SIGNAL(MethodInfo(
         "peer_authentication_failed",
         PropertyInfo(Variant::INT, "peer_id")

@@ -21,8 +21,8 @@ using namespace netw_test;
 using godot::Ref;
 using netw::NetwEntity;
 using netw::NetwMultiplayer;
-using netw::NetwPredictionEngine;
 using netw::NetwPrediction;
+using netw::NetwPredictionEngine;
 
 EntityDecl island_player(const char *p_name, netw::Schedule p_schedule) {
     return EntityDecl()

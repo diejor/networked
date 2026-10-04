@@ -36,11 +36,11 @@ using netw::NetwMultiplayer;
 using netw::NetwPropertyConfig;
 using netw::repl::PropertySet;
 using netw::repl::SetBook;
-using netw_test::MeshStand;
 using netw_test::law_broken;
 using netw_test::law_held;
 using netw_test::LawRowFor;
 using netw_test::LawVerdict;
+using netw_test::MeshStand;
 
 enum Plant {
     PLANT_NONE,
@@ -134,8 +134,7 @@ class AuthorshipRun {
         p_branch->add_child(body);
 
         const Ref<NetwEntity> entity = NetwEntity::ensure(body);
-        const uint64_t set
-            = declare_stream(p_core->property_set_book(), body);
+        const uint64_t set = declare_stream(p_core->property_set_book(), body);
         NETW_CHECK_EQ(
             int(p_core->sync_pipeline()->register_property_set(body, set)),
             int(OK)

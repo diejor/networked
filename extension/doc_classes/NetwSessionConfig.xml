@@ -12,7 +12,6 @@
 		        .role(NetwSession.ROLE_LISTEN_SERVER)
 		[/codeblock]
 		A preset passed to [method Netw.configure_session] is copied, so one [code].tres[/code] can be used by several scenes. When no node calls [method Netw.configure_session], the settings of the [MultiplayerTree] are used. When one does, the [MultiplayerTree] settings are ignored.
-
 		[b]Bandwidth[/b]
 		[member bandwidth_kbps] is a target for each peer, not a hard limit. Changed rows that do not fit wait for a later tick, and the ones that waited longest and matter most go first.
 		[codeblock]

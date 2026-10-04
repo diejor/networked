@@ -264,8 +264,13 @@ class Boxes(unittest.TestCase):
         for refused in ("String", "StringName", "Dictionary", "Variant"):
             self.assertIsNotNone(self.surface.box({"type": refused}))
 
-    def test_a_typed_array_boxes_as_an_untyped_one(self):
+    def test_a_typed_array_of_an_own_class_boxes_as_a_wrapper_array(self):
         boxed = self.surface.box({"type": "typedarray::NetwEntity"})
+        self.assertEqual(boxed.declared, "NetwEntity[]")
+        self.assertIn("NetwEntity.From", boxed.from_variant)
+
+    def test_a_typed_array_of_a_foreign_class_boxes_as_an_untyped_one(self):
+        boxed = self.surface.box({"type": "typedarray::Node"})
         self.assertEqual(boxed.declared, "Godot.Collections.Array")
 
     def test_an_int_box_casts_before_it_widens(self):
@@ -452,10 +457,20 @@ class Vocabulary(unittest.TestCase):
 
     def test_a_signal_becomes_an_event_naming_its_godot_signal(self):
         self.assertIn("public event Action Spawned", self.entity)
-        self.assertIn('add => Connect("spawned", Callable.From(value));', self.entity)
+        self.assertIn('"spawned"', self.entity)
 
-    def test_a_signal_carrying_a_handle_arrives_as_a_variant(self):
-        self.assertIn("public event Action<long, Variant> InterestEnter", self.entity)
+    def test_a_signal_argument_of_an_own_class_is_its_wrapper(self):
+        self.assertEqual(self.surface.signal_type({"type": "NetwEntity"}), "NetwEntity")
+
+    def test_a_signal_argument_of_a_foreign_object_stays_a_variant(self):
+        self.assertEqual(self.surface.signal_type({"type": "Object"}), "Variant")
+
+    def test_a_signal_argument_of_a_builtin_takes_its_box(self):
+        self.assertEqual(self.surface.signal_type({"type": "int"}), "long")
+
+    def test_a_wrapped_signal_argument_still_arrives_as_a_variant(self):
+        self.assertIn("public event Action<long, NetwEntity> InterestEnter", self.entity)
+        self.assertIn("Wrapped(a1, NetwEntity.From)", self.entity)
 
     def test_a_refcounted_handle_is_retained_when_it_comes_from_a_variant(self):
         self.assertIn("return Adopt(NetwApi.Retained(NetwApi.ObjectOf(value)));", self.entity)

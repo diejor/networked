@@ -328,9 +328,7 @@ void NetwSceneCore::transition_fail(int p_code) {
     }
 }
 
-void NetwSceneCore::transition_land(
-    const Ref<NetwScene> &p_destination
-) {
+void NetwSceneCore::transition_land(const Ref<NetwScene> &p_destination) {
     const Ref<NetwPromise> promise = transition.promise;
     transition_close();
     if (promise.is_valid()) {

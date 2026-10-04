@@ -27,12 +27,14 @@ uint64_t sealed_pose(SetBook &r_sets) {
     const uint64_t declared = r_sets.create();
     PropertySet *set = r_sets.get(declared);
     set->record = PropertySet::RECORD_STATE;
-    set->bind_column(PropertyColumn::create(
-        StringName("position"),
-        Ref<netw::NetwQuantize>(),
-        false,
-        netw::enums::NetwMultiplayer::ColumnType(netw::SchemaCore::VECTOR2)
-    ));
+    set->bind_column(
+        PropertyColumn::create(
+            StringName("position"),
+            Ref<netw::NetwQuantize>(),
+            false,
+            netw::enums::NetwMultiplayer::ColumnType(netw::SchemaCore::VECTOR2)
+        )
+    );
     set->sealed = true;
     return declared;
 }
@@ -104,8 +106,7 @@ TEST_CASE(
     const bool off_the_store = !session->store().row_of(id, 0).valid();
     CHECK(off_the_store);
     const bool off_the_pipeline
-        = pipeline->derived_binding(node, PropertySet::RECORD_STATE)
-        == nullptr;
+        = pipeline->derived_binding(node, PropertySet::RECORD_STATE) == nullptr;
     CHECK(off_the_pipeline);
     const bool not_live = book.live(id) == nullptr;
     CHECK(not_live);

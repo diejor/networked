@@ -23,7 +23,8 @@ class FaultLog : public godot::Logger {
     std::atomic<int64_t> errors{0};
 
 protected:
-    static void _bind_methods() {}
+    static void _bind_methods() {
+    }
 
 public:
     void _log_error(
@@ -42,7 +43,8 @@ public:
         }
     }
 
-    void _log_message(const godot::String &p_message, bool p_error) override {}
+    void _log_message(const godot::String &p_message, bool p_error) override {
+    }
 
     int64_t error_count() const {
         return errors.load();

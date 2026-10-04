@@ -748,8 +748,7 @@ TEST_CASE(
     const int64_t framed = framed_slot(pool);
 
     pool->open_lane(framed);
-    const netw::predict::TransitionBook *entries
-        = pool->predicted_book(framed);
+    const netw::predict::TransitionBook *entries = pool->predicted_book(framed);
     REQUIRE(entries != nullptr);
 
     for (int64_t index = 0; index < 3; index += 1) {
@@ -1929,13 +1928,7 @@ TEST_CASE(
     CHECK(pool->stream_reconstructed_of(slot));
     CHECK(pool->ack_domain_confirmed_of(slot));
 
-    pool->reset_for_rewire(
-        slot,
-        true,
-        false,
-        false,
-        netw::predict::StateRow()
-    );
+    pool->reset_for_rewire(slot, true, false, false, netw::predict::StateRow());
     CHECK_FALSE(pool->stream_reconstructed_of(slot));
     CHECK_FALSE(pool->ack_domain_confirmed_of(slot));
     CHECK_FALSE(pool->raw_fingerprints_of(slot));

@@ -382,8 +382,7 @@ TEST_CASE(
     NetwMultiplayer *home = netw::NetwEntity::session_core_for(subject.body);
     REQUIRE(home != nullptr);
     const RID entity = home->entity_of(subject.body);
-    const Ref<netw::NetwDisplay> typed
-        = subject.entity->get_display();
+    const Ref<netw::NetwDisplay> typed = subject.entity->get_display();
 
     typed->set_chase_glide_time(0.25);
     typed->set_timeline_mode(NetwMultiplayer::TIMELINE_MODE_FORECAST);

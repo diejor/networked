@@ -185,9 +185,8 @@ class CostScenario final : public netw_test::FrameScenario {
         for (int index = 0; index < CUBES; ++index) {
             const double along = index % 2 == 0 ? sign : -sign;
             for (int client = -1; client < CLIENTS; ++client) {
-                cube_at(client, index)->set_linear_velocity(
-                    Vector3(JIGGLE * along, 0.0, 0.0)
-                );
+                cube_at(client, index)
+                    ->set_linear_velocity(Vector3(JIGGLE * along, 0.0, 0.0));
             }
         }
     }

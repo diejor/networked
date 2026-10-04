@@ -26,12 +26,14 @@ uint64_t one_column(
 ) {
     const uint64_t declared = r_sets.create();
     PropertySet *set = r_sets.get(declared);
-    set->columns.push_back(PropertyColumn::create(
-        p_key,
-        Ref<netw::NetwQuantize>(),
-        false,
-        NetwMultiplayer::ColumnType(Variant::NIL)
-    ));
+    set->columns.push_back(
+        PropertyColumn::create(
+            p_key,
+            Ref<netw::NetwQuantize>(),
+            false,
+            NetwMultiplayer::ColumnType(Variant::NIL)
+        )
+    );
     set->record = p_record;
     return declared;
 }
@@ -232,12 +234,14 @@ TEST_CASE(
     SetBook sets;
     PropertySet *set
         = sets.get(one_column(sets, "name", PropertySet::RECORD_STATE));
-    set->columns.push_back(PropertyColumn::create(
-        StringName("nowhere"),
-        Ref<netw::NetwQuantize>(),
-        false,
-        NetwMultiplayer::ColumnType(Variant::NIL)
-    ));
+    set->columns.push_back(
+        PropertyColumn::create(
+            StringName("nowhere"),
+            Ref<netw::NetwQuantize>(),
+            false,
+            NetwMultiplayer::ColumnType(Variant::NIL)
+        )
+    );
 
     const Dictionary gathered = SyncPipeline::gather_payload(node, set);
     NETW_CHECK_EQ(gathered.size(), 1);

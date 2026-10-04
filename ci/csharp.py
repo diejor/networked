@@ -673,13 +673,12 @@ class Surface:
                 "VariantUtils.ConvertToFloat32({name})",
             )
         if type_name.startswith("typedarray::"):
-            element = type_name[len("typedarray::"):]
+            element = type_name[len("typedarray::") :]
             if element in self.classes:
                 return Boxed(
                     "%s[]" % element,
                     "VariantUtils.CreateFromArray(NetwApi.ArrayOf({name}))",
-                    "NetwApi.Elements(VariantUtils.ConvertToArray({name}), "
-                    "%s.From)" % element,
+                    "NetwApi.Elements(VariantUtils.ConvertToArray({name}), %s.From)" % element,
                 )
             return BUILTIN_BOXES["Array"]
         if type_name in BUILTIN_BOXES:

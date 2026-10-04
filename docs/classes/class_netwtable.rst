@@ -32,11 +32,7 @@ Data travels as columns in one message. :ref:`NetwSchema<class_NetwSchema>` decl
 
 \ There is one **NetwTable** per table. Connect :ref:`received<class_NetwTable_signal_received>` once and keep the handle in a field.
 
-
-
 Each row is identified by a route. Row indices change when rows are added or removed, and routes do not.
-
-
 
 \ **Writing**\ 
 
@@ -49,8 +45,6 @@ Write the routes and every column, then call :ref:`commit()<class_NetwTable_meth
         mobs.write_column(Mobs.pos, positions)
         mobs.write_column(Mobs.hp, health)
         mobs.commit()
-
-
 
 \ **Reading**\ 
 

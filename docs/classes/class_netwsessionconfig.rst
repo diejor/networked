@@ -30,11 +30,9 @@ Set the values in :godot:`Object._init() <Object#class_Object_private_method__in
 
 \ A preset passed to :ref:`Netw.configure_session()<class_Netw_method_configure_session>` is copied, so one ``.tres`` can be used by several scenes. When no node calls :ref:`Netw.configure_session()<class_Netw_method_configure_session>`, the settings of the :ref:`MultiplayerTree<class_MultiplayerTree>` are used. When one does, the :ref:`MultiplayerTree<class_MultiplayerTree>` settings are ignored.
 
-
-
 \ **Bandwidth**\ 
 
-Each peer is sent at most :ref:`bandwidth_kbps<class_NetwSessionConfig_property_bandwidth_kbps>`. Changed rows that do not fit wait for a later tick, and the ones that waited longest and matter most go first.
+\ :ref:`bandwidth_kbps<class_NetwSessionConfig_property_bandwidth_kbps>` is a target for each peer, not a hard limit. Changed rows that do not fit wait for a later tick, and the ones that waited longest and matter most go first.
 
 ::
 
@@ -42,7 +40,7 @@ Each peer is sent at most :ref:`bandwidth_kbps<class_NetwSessionConfig_property_
         Netw.configure_session(self).bandwidth(256)
         Netw.configure_entity(self).replication_priority = 4.0
 
-\ RPCs, spawns and :ref:`NetwPropertyConfig.retained()<class_NetwPropertyConfig_method_retained>` properties are always sent when due. A peer they push over its budget gets no more rows until later ticks make up the difference. See :ref:`NetwMultiplayer.peer_link_stats()<class_NetwMultiplayer_method_peer_link_stats>`.
+\ A peer is sent more than its budget in two cases. RPCs, spawns, authority changes and :ref:`NetwPropertyConfig.retained()<class_NetwPropertyConfig_method_retained>` properties are always sent when due. Rows also get at least a quarter of every tick's budget, even when that traffic already used it up. Later ticks pay back at most two ticks of the overspend. See :ref:`NetwMultiplayer.peer_link_stats()<class_NetwMultiplayer_method_peer_link_stats>`.
 
 .. rst-class:: classref-reftable-group
 

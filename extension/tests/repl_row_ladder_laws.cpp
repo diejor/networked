@@ -19,8 +19,6 @@ using netw::repl::mask_ladders;
 using netw::repl::read_snapshot_row;
 using netw::repl::RowFrameHeader;
 using netw::repl::SessionResult;
-using netw_test::RowOffer;
-using netw_test::SessionSend;
 using netw::repl::SnapshotHeader;
 using netw::repl::SnapshotRefusal;
 using netw::repl::write_snapshot_row;
@@ -33,6 +31,8 @@ using netw::wire::WirePlan;
 using netw::wire::WireRegistry;
 using netw_test::accept_streams;
 using netw_test::drive_send;
+using netw_test::RowOffer;
+using netw_test::SessionSend;
 
 constexpr int64_t BASE_TICK = 41;
 constexpr int64_t ANY_LIFE = -1;

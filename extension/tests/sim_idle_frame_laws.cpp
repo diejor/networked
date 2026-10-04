@@ -10,10 +10,10 @@
 #include "godot/physics_body.hpp"
 #include "netw/api/entity.hpp"
 #include "netw/api/netw_multiplayer.hpp"
-#include "netw/display/book.hpp"
-#include "netw/display/runtime.hpp"
 #include "netw/api/simulation.hpp"
 #include "netw/api/sync_pipeline.hpp"
+#include "netw/display/book.hpp"
+#include "netw/display/runtime.hpp"
 #include "netw/sim/row.hpp"
 
 using namespace godot;
@@ -584,10 +584,10 @@ public:
         WakeEvidence p_evidence,
         const char *p_source,
         const char *p_body_path
-    ) :
-            script_wake_evidence(p_evidence),
-            source(p_source),
-            body_path(p_body_path) {}
+    )
+        : script_wake_evidence(p_evidence), source(p_source),
+          body_path(p_body_path) {
+    }
 
     bool advance() override {
         if (netw::gd::scene_root() == nullptr || done) {

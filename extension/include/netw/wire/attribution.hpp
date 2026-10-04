@@ -77,7 +77,8 @@ public:
         bool p_carrier,
         int64_t p_seq
 #if defined(DEBUG_ENABLED)
-        , godot::LocalVector<Attribution> *r_frames = nullptr
+        ,
+        godot::LocalVector<Attribution> *r_frames = nullptr
 #endif
     );
 #if defined(DEBUG_ENABLED)

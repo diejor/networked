@@ -53,26 +53,15 @@ struct Bench {
         session.instantiate();
         netw::gd::scene_tree()->connect(
             StringName("node_removed"),
-            callable_mp(
-                session.ptr(),
-                &NetwMultiplayer::sync_note_node_removed
-            )
+            callable_mp(session.ptr(), &NetwMultiplayer::sync_note_node_removed)
         );
         World &world = session->store();
         world.residents.watch(true);
-        table = world.table_for(
-            1,
-            netw::store::Family::VOLATILE,
-            pose_schema()
-        );
+        table
+            = world.table_for(1, netw::store::Family::VOLATILE, pose_schema());
         world.table(table).resolve_ports(p_body);
-        at = world.add_row(
-            table,
-            10,
-            0,
-            uint64_t(p_body->get_instance_id()),
-            0
-        );
+        at = world
+                 .add_row(table, 10, 0, uint64_t(p_body->get_instance_id()), 0);
         world.place(at, 5, 1);
         world.set_source(at, Source::LOCAL);
     }

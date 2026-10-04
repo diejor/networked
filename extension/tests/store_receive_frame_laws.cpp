@@ -123,8 +123,11 @@ class ReceiveScenario final : public netw_test::FrameScenario {
         for (int index = 0; index < PILE; ++index) {
             Array args;
             args.push_back(String("received") + String::num_int64(index));
-            const RID made
-                = server()->spawn_registered(StringName(CUBE_ID), args, nullptr);
+            const RID made = server()->spawn_registered(
+                StringName(CUBE_ID),
+                args,
+                nullptr
+            );
             Node *built = server()->entity_get_node(made);
             if (built == nullptr) {
                 return false;
@@ -140,8 +143,7 @@ class ReceiveScenario final : public netw_test::FrameScenario {
         const NetwMultiplayer::IdleWork &now = client()->idle_work;
         seen.received = now.received_rows - opened.received_rows;
         seen.staged = now.decode_stages - opened.decode_stages;
-        seen.allocations
-            = now.receive_allocations - opened.receive_allocations;
+        seen.allocations = now.receive_allocations - opened.receive_allocations;
         seen.decoded = decoded_now() - decoded;
     }
 

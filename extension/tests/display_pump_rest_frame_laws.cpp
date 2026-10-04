@@ -292,10 +292,7 @@ TEST_CASE(
     REQUIRE(evidence.seated);
     REQUIRE(evidence.marker_settled);
     NETW_CHECK_GT(evidence.arrived_frame, SETTLE_FRAMES);
-    NETW_CHECK_GT(
-        evidence.pumped_at_arrival,
-        evidence.pumped_before_arrival
-    );
+    NETW_CHECK_GT(evidence.pumped_at_arrival, evidence.pumped_before_arrival);
 }
 
 TEST_CASE(

@@ -135,10 +135,7 @@ public:
         return path_changes;
     }
     uint32_t find(const ProfileKey &p_key) const;
-    uint32_t admit(
-        const ProfileKey &p_key,
-        const godot::String &p_label
-    );
+    uint32_t admit(const ProfileKey &p_key, const godot::String &p_label);
     uint32_t synchronizer(
         int64_t p_route,
         godot::ObjectID p_sync,
@@ -166,11 +163,7 @@ public:
         bool p_sending,
         uint32_t p_call
     );
-    uint32_t take_reply(
-        int64_t p_peer,
-        int64_t p_transaction,
-        bool p_sending
-    );
+    uint32_t take_reply(int64_t p_peer, int64_t p_transaction, bool p_sending);
     void forget_transaction(int64_t p_transaction);
     void forget_peer(int64_t p_peer);
     void collect(godot::Array &r_rpc, godot::Array &r_sync);
@@ -201,11 +194,12 @@ public:
         int64_t p_peer,
         int64_t p_bytes,
         uint32_t p_subject
-    ) : profiler(p_profiler) {
+    )
+        : profiler(p_profiler) {
         if (profiler != nullptr) {
-            previous = profiler->begin_arrival(
-                p_counted, p_peer, p_bytes, p_subject
-            );
+            previous
+                = profiler
+                      ->begin_arrival(p_counted, p_peer, p_bytes, p_subject);
         }
     }
     ProfileArrivalScope(
@@ -214,9 +208,14 @@ public:
         int64_t p_peer,
         int64_t p_bytes,
         uint32_t p_subject
-    ) : ProfileArrivalScope(
-            &p_profiler, p_counted, p_peer, p_bytes, p_subject
-        ) {
+    )
+        : ProfileArrivalScope(
+              &p_profiler,
+              p_counted,
+              p_peer,
+              p_bytes,
+              p_subject
+          ) {
     }
     ~ProfileArrivalScope() {
         if (profiler != nullptr) {

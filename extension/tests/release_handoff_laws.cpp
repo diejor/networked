@@ -2,8 +2,8 @@
 
 #if defined(NETW_TIER_HOSTED)
 
-#include "support/loopback_rig.h"
 #include "support/fault_log.h"
+#include "support/loopback_rig.h"
 #include "support/minted_script.h"
 #include "support/value_flow_stand.h"
 

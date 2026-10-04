@@ -35,17 +35,15 @@ int64_t per_tick(int64_t p_kbps) {
 
 netw::ReplicationSend *row_send_of(NetwMultiplayer *p_core) {
     netw::ReplicationCore *plane = p_core->get_replication_plane();
-    return plane != nullptr
-        ? plane->get_sync_pipeline()->row_send_under_test()
-        : nullptr;
+    return plane != nullptr ? plane->get_sync_pipeline()->row_send_under_test()
+                            : nullptr;
 }
 
 int64_t rows_to(NetwMultiplayer *p_core, int64_t p_peer) {
     static const int64_t row
         = netw::wire::builtin_channel(StringName("SYNC_ROW"));
-    const Dictionary out = p_core->attribution_snapshot()[StringName(
-        "bytes_out"
-    )];
+    const Dictionary out
+        = p_core->attribution_snapshot()[StringName("bytes_out")];
     const Dictionary peer = out.get(p_peer, Dictionary());
     return int64_t(peer.get(row, 0));
 }

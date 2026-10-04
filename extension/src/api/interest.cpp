@@ -119,7 +119,7 @@ Ref<NetwInterest> NetwInterest::of(Node *p_node) {
     if (entity.is_null()) {
         NETW_ERROR(
             sys::INTEREST,
-            "Netw.configure_interest got a node that is not an entity root. "
+            "NetwInterest.of got a node that is not an entity root. "
             "Pass the entity's root node."
         );
         return Ref<NetwInterest>();
@@ -149,9 +149,7 @@ Ref<NetwInterest> NetwInterest::join(
     return Ref<NetwInterest>(this);
 }
 
-Ref<NetwInterest> NetwInterest::leave(
-    const StringName &p_layer_id
-) {
+Ref<NetwInterest> NetwInterest::leave(const StringName &p_layer_id) {
     NetwMultiplayer *session = attached_core();
     const Ref<NetwEntity> bound = entity();
     interest::Facet *held = facet();
@@ -241,9 +239,7 @@ Ref<NetwInterest> NetwInterest::on_leave(
     return Ref<NetwInterest>(this);
 }
 
-Ref<NetwInterest> NetwInterest::on_observed(
-    const Callable &p_callback
-) {
+Ref<NetwInterest> NetwInterest::on_observed(const Callable &p_callback) {
     interest::Facet *held = facet();
     if (held != nullptr) {
         held->on_observed(p_callback);
@@ -251,9 +247,7 @@ Ref<NetwInterest> NetwInterest::on_observed(
     return Ref<NetwInterest>(this);
 }
 
-Ref<NetwInterest> NetwInterest::on_unobserved(
-    const Callable &p_callback
-) {
+Ref<NetwInterest> NetwInterest::on_unobserved(const Callable &p_callback) {
     interest::Facet *held = facet();
     if (held != nullptr) {
         held->on_unobserved(p_callback);
@@ -325,9 +319,7 @@ int64_t NetwInterest::leave_policy_for(
         : p_fallback;
 }
 
-Callable NetwInterest::custom_leave_for(
-    const StringName &p_layer_id
-) const {
+Callable NetwInterest::custom_leave_for(const StringName &p_layer_id) const {
     interest::Facet *held = facet();
     return held != nullptr ? held->declaration()->custom_leave_for(p_layer_id)
                            : Callable();
@@ -433,10 +425,7 @@ void NetwInterest::_bind_methods() {
         DEFVAL(-1),
         DEFVAL(-1)
     );
-    ClassDB::bind_method(
-        D_METHOD("leave", "layer_id"),
-        &NetwInterest::leave
-    );
+    ClassDB::bind_method(D_METHOD("leave", "layer_id"), &NetwInterest::leave);
     ClassDB::bind_method(D_METHOD("layer_ids"), &NetwInterest::layer_ids);
     ClassDB::bind_method(
         D_METHOD("on_enter", "callback", "layer_id"),
@@ -465,10 +454,9 @@ void NetwInterest::_bind_methods() {
     );
     ClassDB::bind_method(D_METHOD("entity"), &NetwInterest::entity);
 
-    ADD_SIGNAL(MethodInfo(
-        "interest_entered",
-        PropertyInfo(Variant::INT, "peer_id")
-    ));
+    ADD_SIGNAL(
+        MethodInfo("interest_entered", PropertyInfo(Variant::INT, "peer_id"))
+    );
     ADD_SIGNAL(
         MethodInfo("interest_exited", PropertyInfo(Variant::INT, "peer_id"))
     );

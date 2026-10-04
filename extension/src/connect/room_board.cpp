@@ -173,10 +173,7 @@ void RoomBoard::advertise(const RoomCard &p_card) {
     advertised = p_card;
     advertised.filter_uid = filter_uid;
     if (advertised.room_hash.is_empty()) {
-        NETW_WARN(
-            sys::TRANSPORT,
-            "A room with no id cannot be advertised."
-        );
+        NETW_WARN(sys::TRANSPORT, "A room with no id cannot be advertised.");
         return;
     }
     advertising = true;

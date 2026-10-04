@@ -392,11 +392,7 @@ void MultiplayerTree::debug_autoconnect() {
         return;
     }
     const StringName claiming = debug_join->submitted_username();
-    NETW_INFO(
-        sys::SESSION,
-        "Debug join connects as '%s'.",
-        String(claiming)
-    );
+    NETW_INFO(sys::SESSION, "Debug join connects as '%s'.", String(claiming));
     bring_up_here(
         NetwMultiplayer::TRANSPORT_MODE_HOST,
         String(),

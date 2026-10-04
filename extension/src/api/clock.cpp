@@ -193,10 +193,7 @@ void NetwClock::_bind_methods() {
         "get_behind_count"
     );
 
-    ClassDB::bind_method(
-        D_METHOD("get_tickrate"),
-        &NetwClock::get_tickrate
-    );
+    ClassDB::bind_method(D_METHOD("get_tickrate"), &NetwClock::get_tickrate);
     ADD_PROPERTY(PropertyInfo(Variant::INT, "tickrate"), "", "get_tickrate");
     ClassDB::bind_method(
         D_METHOD("get_physics_factor"),
@@ -248,10 +245,7 @@ void NetwClock::_bind_methods() {
         "set_display_offset",
         "get_display_offset"
     );
-    ClassDB::bind_method(
-        D_METHOD("get_sync_mode"),
-        &NetwClock::get_sync_mode
-    );
+    ClassDB::bind_method(D_METHOD("get_sync_mode"), &NetwClock::get_sync_mode);
     ClassDB::bind_method(
         D_METHOD("set_sync_mode", "mode"),
         &NetwClock::set_sync_mode
@@ -280,10 +274,7 @@ void NetwClock::_bind_methods() {
         "get_ping_interval"
     );
 
-    ClassDB::bind_method(
-        D_METHOD("monitor", "monitor"),
-        &NetwClock::monitor
-    );
+    ClassDB::bind_method(D_METHOD("monitor", "monitor"), &NetwClock::monitor);
 
     ADD_SIGNAL(MethodInfo(
         SIG_BEFORE_TICK,

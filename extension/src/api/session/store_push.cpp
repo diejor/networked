@@ -31,8 +31,8 @@ constexpr double UNQUANTIZED_EPSILON = 0.0001;
 constexpr double NEGLIGIBLE_DELTA = 0.000001;
 constexpr uint64_t EVERY_COLUMN = ~uint64_t(0);
 
-using store::PUSH_RANKS;
 using store::push_rank;
+using store::PUSH_RANKS;
 
 const StringName &apply_rows_seam() {
     static const StringName name("_sync_apply_rows");
@@ -109,8 +109,7 @@ Error NetwMultiplayer::sync_apply_rows_default(
             continue;
         }
         for (int rank = 0; rank < PUSH_RANKS; ++rank) {
-            for (uint32_t column = 0; column < table.columns.size();
-                 ++column) {
+            for (uint32_t column = 0; column < table.columns.size(); ++column) {
                 const Array values = p_columns[column];
                 if (push_rank(table.columns[column]) != rank
                     || at >= values.size()) {
@@ -133,9 +132,9 @@ Error NetwMultiplayer::run_apply_rows(
     Object *seam
         = plane != nullptr ? plane->gate_seam(apply_rows_seam()) : nullptr;
     if (seam != nullptr) {
-        return Error(int(
-            seam->call(apply_rows_seam(), p_table, p_routes, p_columns)
-        ));
+        return Error(
+            int(seam->call(apply_rows_seam(), p_table, p_routes, p_columns))
+        );
     }
     Error answered = OK;
     if (GDVIRTUAL_CALL(
@@ -280,9 +279,8 @@ bool NetwMultiplayer::sim_push(
         return false;
     }
     store::Table &table = store_world.table(p_at.table);
-    Node *node = Object::cast_to<Node>(
-        gd::object_of(ObjectID(table.nodes[p_at.row]))
-    );
+    Node *node
+        = Object::cast_to<Node>(gd::object_of(ObjectID(table.nodes[p_at.row])));
     if (node == nullptr || row->mode != sim::Mode::ACTIVE
         || p_sender != sim_author_peer(p_entity)
         || p_tenure != sim_author_tenure(p_entity)) {
@@ -301,9 +299,8 @@ bool NetwMultiplayer::sim_push(
     const int64_t reach = int64_t(row->declaration.max_restore_ticks);
     const ClockEngine &clock = clock_engine();
     const int64_t now = clock.get_configured() ? clock.get_tick() : -1;
-    const int64_t age = now >= 0 && p_stamp >= 0
-        ? (now > p_stamp ? now - p_stamp : 0)
-        : -1;
+    const int64_t age
+        = now >= 0 && p_stamp >= 0 ? (now > p_stamp ? now - p_stamp : 0) : -1;
     display::Runtime *runtime = display_book->runtime_of(p_entity);
     if (restore == sim::Restore::EXTRAPOLATED && age > 0
         && binding != nullptr) {
@@ -465,11 +462,8 @@ void NetwMultiplayer::store_install_image(
         }
         store::Table &table = store_world.table(lanes[lane].table);
         const uint32_t row = lanes[lane].row;
-        table.landing.assign(
-            table.plan,
-            table.codes_of(row),
-            table.carried_of(row)
-        );
+        table.landing
+            .assign(table.plan, table.codes_of(row), table.carried_of(row));
         for (uint32_t column = 0; column < table.columns.size(); ++column) {
             const StringName &key = table.schema.at(int(column))->key;
             for (int at = 0; at < p_keys.size(); ++at) {
@@ -488,8 +482,7 @@ void NetwMultiplayer::store_install_image(
     const RID rid = entity.is_valid() ? entity->get_rid_handle() : RID();
     const sim::Row *row = rid.is_valid() ? sim_rows.row_of(rid) : nullptr;
     const bool broadcast = p_binding->get_set() != nullptr
-        && p_binding->get_set()->get_record()
-            == PropertySet::RECORD_BROADCAST;
+        && p_binding->get_set()->get_record() == PropertySet::RECORD_BROADCAST;
     const bool simulated = row != nullptr && !row->facts.predicted
         && !row->facts.state_rows && broadcast;
     if (simulated && row->mode == sim::Mode::ACTIVE && lanes[0].valid()) {

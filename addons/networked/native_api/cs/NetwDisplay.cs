@@ -20,7 +20,12 @@ namespace Networked;
 /// </code>
 /// <para>
 /// Settings written before the entity is spawned are applied once it is, and
-/// they are kept if the entity respawns.
+/// they are kept if the entity respawns. A peer that draws nothing smooths
+/// nothing. Under the headless display server, or in an export with the
+/// <c>dedicated_server</c> feature, no smoothed value is written and the visual
+/// stays where its parent puts it. Enable
+/// <c>networked/display/smooth_when_headless</c> in the project settings to
+/// smooth there as well.
 /// </para>
 /// </remarks>
 public sealed class NetwDisplay : NetwRefCounted

@@ -5,8 +5,8 @@
 #include "godot/callable.hpp"
 #include "godot/variant.hpp"
 #include "netw/api/member_config.hpp"
-#include "netw/repl/property_set.hpp"
 #include "netw/api/schema_model.hpp"
+#include "netw/repl/property_set.hpp"
 
 namespace netw {
 
@@ -52,8 +52,7 @@ private:
     bool set_masked = false;
     godot::StringName saved_column;
     bool persist = false;
-    repl::PropertySet::PropertyClass property_class
-        = repl::PropertySet::CAUSAL;
+    repl::PropertySet::PropertyClass property_class = repl::PropertySet::CAUSAL;
     double converge_stiffness = 0.0;
     godot::StringName carry_channel;
     bool explicit_teleport_only = false;
@@ -165,9 +164,7 @@ public:
         return saved_column;
     }
 
-    void set_property_class(
-        repl::PropertySet::PropertyClass p_property_class
-    ) {
+    void set_property_class(repl::PropertySet::PropertyClass p_property_class) {
         property_class = p_property_class;
     }
     repl::PropertySet::PropertyClass get_property_class() const {

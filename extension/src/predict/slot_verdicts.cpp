@@ -13,8 +13,7 @@ int64_t history_record_tick(
     int64_t p_fallback_tick
 ) {
     const bool consuming = p_cursors.role == NetwPrediction::ROLE_CONSUME;
-    const bool framed
-        = p_cursors.schedule == NetwSimulation::SCHEDULE_FRAME;
+    const bool framed = p_cursors.schedule == NetwSimulation::SCHEDULE_FRAME;
     if (consuming && framed) {
         return p_cursors.ack_advanced && p_cursors.last_replayed_fresh
             ? p_cursors.last_replayed_label + 1

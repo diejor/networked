@@ -61,8 +61,9 @@ bool asleep(const Bodies &p_bodies) {
             if (!cell.flat->is_sleeping()) {
                 return false;
             }
-        } else if (cell.object == nullptr
-                   || !bool(cell.object->get(sleeping_name()))) {
+        } else if (
+            cell.object == nullptr || !bool(cell.object->get(sleeping_name()))
+        ) {
             return false;
         }
     }

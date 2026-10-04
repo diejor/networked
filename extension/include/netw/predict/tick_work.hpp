@@ -26,7 +26,7 @@ public:
     TickScope &operator=(const TickScope &) = delete;
 };
 
-#define NETW_PREDICT_TICK_SCOPE()                                              \
+#define NETW_PREDICT_TICK_SCOPE() \
     const ::netw::predict::TickScope netw_predict_tick_scope
 
 #else

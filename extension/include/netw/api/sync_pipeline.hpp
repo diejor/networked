@@ -74,8 +74,9 @@ private:
         const repl::PropertyBindingPtr &p_binding,
         const godot::Ref<NetwEntity> &p_entity
     ) const;
-    godot::LocalVector<repl::PropertyBindingPtr>
-    entity_bindings_checked(const godot::Ref<NetwEntity> &p_entity) const;
+    godot::LocalVector<repl::PropertyBindingPtr> entity_bindings_checked(
+        const godot::Ref<NetwEntity> &p_entity
+    ) const;
     godot::HashMap<int64_t, int64_t> contract_hashes;
 
     godot::Callable encode_stage_seam;
@@ -227,10 +228,7 @@ public:
     void set_tap_seam(const godot::Callable &p_tap);
 
     void register_derived(godot::Node *p_node);
-    godot::Error register_property_set(
-        godot::Node *p_node,
-        uint64_t p_set
-    );
+    godot::Error register_property_set(godot::Node *p_node, uint64_t p_set);
     repl::PropertyBindingPtr derived_binding(
         godot::Node *p_node,
         int64_t p_record
@@ -241,9 +239,7 @@ public:
         return !bindings.is_empty();
     }
     void unregister_derived(godot::Node *p_node);
-    godot::LocalVector<repl::PropertyBindingPtr> derived_group(
-        int64_t p_route
-    );
+    godot::LocalVector<repl::PropertyBindingPtr> derived_group(int64_t p_route);
 #if defined(NETW_TESTS)
     void reconcile_state_timeline_for_test(godot::Node *p_node) {
         reconcile_state_timeline(p_node);

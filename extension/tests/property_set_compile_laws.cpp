@@ -101,19 +101,23 @@ public:
         session.instantiate();
 
         PropertySet legacy;
-        REQUIRE(property_set_builder::compile_script(
-            legacy,
-            script,
-            declared.record,
-            node
-        ));
+        REQUIRE(
+            property_set_builder::compile_script(
+                legacy,
+                script,
+                declared.record,
+                node
+            )
+        );
         const netw::repl::SetBook &sets = session->property_set_book();
-        const PropertySet *flat = sets.get(property_set_builder::from_script(
-            script,
-            declared.record,
-            session.ptr(),
-            node
-        ));
+        const PropertySet *flat = sets.get(
+            property_set_builder::from_script(
+                script,
+                declared.record,
+                session.ptr(),
+                node
+            )
+        );
         REQUIRE(flat != nullptr);
 
         valid = flat->get_rid_handle().is_valid();
@@ -127,13 +131,15 @@ public:
             session_hash = session->property_set_get_wire_hash(RID());
         }
 
-        const PropertySet *again = sets.get(property_set_builder::from_script(
-            script,
-            declared.record,
-            planted == PLANT_A_COMPILE_THAT_NEVER_CACHES ? nullptr
-                                                         : session.ptr(),
-            node
-        ));
+        const PropertySet *again = sets.get(
+            property_set_builder::from_script(
+                script,
+                declared.record,
+                planted == PLANT_A_COMPILE_THAT_NEVER_CACHES ? nullptr
+                                                             : session.ptr(),
+                node
+            )
+        );
         cached = again != nullptr
             && again->get_rid_handle() == flat->get_rid_handle();
 

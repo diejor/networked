@@ -29,6 +29,8 @@ A :ref:`NetwInterpolate<class_NetwInterpolate>` configures one property. This ha
 
 \ Settings written before the entity is spawned are applied once it is, and they are kept if the entity respawns.
 
+A peer that draws nothing smooths nothing. Under the headless display server, or in an export with the ``dedicated_server`` feature, no smoothed value is written and the visual stays where its parent puts it. Enable ``networked/display/smooth_when_headless`` in the project settings to smooth there as well.
+
 .. rst-class:: classref-reftable-group
 
 Properties

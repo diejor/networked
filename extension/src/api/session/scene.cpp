@@ -1,7 +1,7 @@
+#include "netw/api/scene.hpp"
 #include "godot/scene_tree.hpp"
 #include "netw/api/netw_multiplayer.hpp"
 #include "netw/api/nodes/view/host_scene_view.hpp"
-#include "netw/api/scene.hpp"
 
 #include "netw/api/participant.hpp"
 

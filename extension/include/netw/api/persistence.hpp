@@ -35,8 +35,6 @@ public:
     godot::StringName get_database();
 };
 
-godot::Ref<NetwPersistence> build_persistence_handle(
-    godot::Object *p_entity
-);
+godot::Ref<NetwPersistence> build_persistence_handle(godot::Object *p_entity);
 
 } // namespace netw

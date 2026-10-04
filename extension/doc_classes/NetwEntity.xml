@@ -15,7 +15,6 @@
 		if entity and entity.is_player:
 		    eliminate(entity.peer_id)
 		[/codeblock]
-
 		[b]Declaring an entity[/b]
 		A root declares itself in [code]_init[/code]. A child marks its own spawn properties in its [code]_init[/code] and connects to the entity in [method Node._ready], once it has a parent to walk up to.
 		[codeblock]
@@ -38,7 +37,6 @@
 		func _init() -&gt; void:
 		    Netw.configure_entity(self).name = &amp;"ball"
 		[/codeblock]
-
 		[b]Control[/b]
 		[member controller] is the peer that steers the entity, and [code]0[/code] means the server. The root and every node under it take the controller as their multiplayer authority, as if [method Node.set_multiplayer_authority] was called on each. [method follow_session] keeps a subtree with the server, which is where a [MultiplayerSynchronizer] the server writes belongs.
 		[codeblock]
@@ -77,14 +75,12 @@
 		[/codeblocks]
 		[member transfer] decides whether a peer may ask, and the [enum Hold] of the current controller decides whether the server refuses. Under [constant TRANSFER_IMMEDIATE] the asking peer runs the entity before the decision arrives.
 		[member NetwSimulation.claim_on_contact] and [member NetwSimulation.release_on_rest] let a body take control of what it touches and hand it back once it rests.
-
 		[b]Letting the controller spawn and despawn[/b]
 		Only the server spawns, moves and despawns an entity by default. When [member lifecycle] is [constant LIFECYCLE_CONTROLLER] the [member controller] may too, and the change shows on its screen at once. The server can refuse it in [signal lifecycle_requested], and the change is then undone on the controller.
 		[codeblock]
 		func _init() -&gt; void:
 		    Netw.configure_entity(self).lifecycle = NetwEntity.LIFECYCLE_CONTROLLER
 		[/codeblock]
-
 		[b]Simulation[/b]
 		[member simulation] says how the entity's body runs on each peer, [member prediction] how a controller runs it ahead, and [member display] how it is drawn.
 		[codeblock]

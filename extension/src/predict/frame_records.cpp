@@ -164,8 +164,7 @@ bool CommandFrameRecord::read_payload(
     if (!payload.valid_for(plan)) {
         return false;
     }
-    const int columns
-        = std::min(schema.column_count(), int(p_fields.size()));
+    const int columns = std::min(schema.column_count(), int(p_fields.size()));
     PackedInt64Array codes;
     for (int at = 0; at < schema.column_count(); ++at) {
         Variant value;

@@ -43,8 +43,8 @@ class AllocationTally {
     const int64_t from;
 
 public:
-    explicit AllocationTally(int64_t &r_into) :
-            into(r_into), from(allocations_seen()) {
+    explicit AllocationTally(int64_t &r_into)
+        : into(r_into), from(allocations_seen()) {
     }
 
     ~AllocationTally() {

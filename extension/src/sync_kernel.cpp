@@ -50,8 +50,8 @@ bool decode_volatile(
         return false;
     }
     r_row.ordinal = int64_t(head.ordinal);
-    r_row.mask = p_columns >= 64 ? ~uint64_t(0)
-                                 : (uint64_t(1) << p_columns) - 1;
+    r_row.mask
+        = p_columns >= 64 ? ~uint64_t(0) : (uint64_t(1) << p_columns) - 1;
     r_row.values = values;
     return true;
 }

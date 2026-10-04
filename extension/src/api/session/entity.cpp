@@ -28,7 +28,6 @@
 #include "netw/api/schema_model.hpp"
 #include "netw/api/sync_compat.hpp"
 #include "netw/api/sync_pipeline.hpp"
-#include "netw/spawn/pipeline.hpp"
 #include "netw/colors.hpp"
 #include "netw/comp_table.hpp"
 #include "netw/lifecycle/rule.hpp"
@@ -38,6 +37,7 @@
 #include "netw/profile.hpp"
 #include "netw/script/model.hpp"
 #include "netw/session/frames.hpp"
+#include "netw/spawn/pipeline.hpp"
 #include "netw/synchronizers.hpp"
 #include "netw/tree_hook.hpp"
 #include "netw/wire/frame.hpp"
@@ -428,11 +428,8 @@ void NetwMultiplayer::entity_enter_tree(
         const Callable ready(p_wrapper, StringName("_on_owner_ready"));
         if ((readied == nullptr || !readied->get_ready_fired())
             && !owner->is_connected(StringName("ready"), ready)) {
-            owner->connect(
-                StringName("ready"),
-                ready,
-                Object::CONNECT_ONE_SHOT
-            );
+            owner
+                ->connect(StringName("ready"), ready, Object::CONNECT_ONE_SHOT);
         }
     }
 
@@ -635,8 +632,7 @@ PropertyBindingPtr NetwMultiplayer::entity_group_binding(
         return PropertyBindingPtr();
     }
     NETW_ZONE_NC("entity derived group fallback", colors::WIRE);
-    const LocalVector<PropertyBindingPtr> group
-        = entity_derived_group(p_route);
+    const LocalVector<PropertyBindingPtr> group = entity_derived_group(p_route);
     for (const PropertyBindingPtr &candidate : group) {
         if (candidate == nullptr || candidate->get_set() == nullptr) {
             continue;
@@ -688,8 +684,7 @@ bool NetwMultiplayer::entity_governs_property(
             }
         }
     }
-    const LocalVector<PropertyBindingPtr> group
-        = entity_derived_group(p_route);
+    const LocalVector<PropertyBindingPtr> group = entity_derived_group(p_route);
     for (const PropertyBindingPtr &binding : group) {
         if (binding == nullptr || binding->node() != target.object) {
             continue;

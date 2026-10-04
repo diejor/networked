@@ -70,9 +70,8 @@ NodeOverlay *overlay_for(Node *p_node, bool p_create) {
     if (overlay_book().size() >= overlay_sweep_at()) {
         sweep_dead_overlays();
         const uint32_t doubled = overlay_book().size() * 2;
-        overlay_sweep_at() = doubled > OVERLAY_SWEEP_FLOOR
-            ? doubled
-            : OVERLAY_SWEEP_FLOOR;
+        overlay_sweep_at()
+            = doubled > OVERLAY_SWEEP_FLOOR ? doubled : OVERLAY_SWEEP_FLOOR;
     }
     overlay_book().insert(key, NodeOverlay());
     return &overlay_book().find(key)->value;

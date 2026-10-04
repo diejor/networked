@@ -187,10 +187,7 @@ void TrackerSignaler::poll(
                 flush_pending();
             } break;
             case TrackerEvent::CLOSED: {
-                NETW_INFO(
-                    sys::TRANSPORT,
-                    "Every signaling tracker was lost."
-                );
+                NETW_INFO(sys::TRANSPORT, "Every signaling tracker was lost.");
                 SignalerEvent down;
                 down.kind = SignalerEvent::LOST;
                 publish(down);

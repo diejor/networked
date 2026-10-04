@@ -22,10 +22,7 @@ NetwMultiplayer *NetwTable::session() const {
     return Object::cast_to<NetwMultiplayer>(gd::object_of(session_id));
 }
 
-Ref<NetwTable> NetwTable::over(
-    const RID &p_table,
-    NetwMultiplayer *p_session
-) {
+Ref<NetwTable> NetwTable::over(const RID &p_table, NetwMultiplayer *p_session) {
     if (p_session == nullptr || !p_table.is_valid()) {
         return Ref<NetwTable>();
     }
@@ -36,15 +33,12 @@ Ref<NetwTable> NetwTable::over(
     return handle;
 }
 
-Ref<NetwTable> NetwTable::of(
-    Node *p_node,
-    const StringName &p_name
-) {
+Ref<NetwTable> NetwTable::of(Node *p_node, const StringName &p_name) {
     NetwMultiplayer *api = NetwMultiplayer::of(p_node);
     if (api == nullptr) {
         NETW_ERROR(
             sys::TABLE,
-            "Netw.table got a node that is not inside a session. Call it "
+            "NetwTable.of got a node that is not inside a session. Call it "
             "from a node in the scene tree under a MultiplayerTree."
         );
         return Ref<NetwTable>();
@@ -168,9 +162,7 @@ int NetwTable::row_of(int64_t p_route) const {
     return api != nullptr ? api->table_get_row(table, p_route) : -1;
 }
 
-PackedInt32Array NetwTable::rows_of(
-    const PackedInt64Array &p_routes
-) const {
+PackedInt32Array NetwTable::rows_of(const PackedInt64Array &p_routes) const {
     NetwMultiplayer *api = session();
     return api != nullptr ? api->table_get_rows(table, p_routes)
                           : PackedInt32Array();
@@ -217,24 +209,15 @@ void NetwTable::_bind_methods() {
         D_METHOD("get_schema_name"),
         &NetwTable::get_schema_name
     );
-    ClassDB::bind_method(
-        D_METHOD("get_is_valid"),
-        &NetwTable::get_is_valid
-    );
-    ClassDB::bind_method(
-        D_METHOD("get_wire_hash"),
-        &NetwTable::get_wire_hash
-    );
+    ClassDB::bind_method(D_METHOD("get_is_valid"), &NetwTable::get_is_valid);
+    ClassDB::bind_method(D_METHOD("get_wire_hash"), &NetwTable::get_wire_hash);
     ClassDB::bind_method(D_METHOD("get_tick"), &NetwTable::get_tick);
 
     ClassDB::bind_method(
         D_METHOD("set_reliable", "reliable"),
         &NetwTable::set_reliable
     );
-    ClassDB::bind_method(
-        D_METHOD("get_reliable"),
-        &NetwTable::get_reliable
-    );
+    ClassDB::bind_method(D_METHOD("get_reliable"), &NetwTable::get_reliable);
 
     ClassDB::bind_method(
         D_METHOD("write_routes", "routes"),
@@ -246,35 +229,20 @@ void NetwTable::_bind_methods() {
     );
     ClassDB::bind_method(D_METHOD("commit"), &NetwTable::commit);
 
-    ClassDB::bind_method(
-        D_METHOD("read_routes"),
-        &NetwTable::read_routes
-    );
+    ClassDB::bind_method(D_METHOD("read_routes"), &NetwTable::read_routes);
     ClassDB::bind_method(
         D_METHOD("read_column", "column"),
         &NetwTable::read_column
     );
-    ClassDB::bind_method(
-        D_METHOD("read_births"),
-        &NetwTable::read_births
-    );
-    ClassDB::bind_method(
-        D_METHOD("read_deaths"),
-        &NetwTable::read_deaths
-    );
+    ClassDB::bind_method(D_METHOD("read_births"), &NetwTable::read_births);
+    ClassDB::bind_method(D_METHOD("read_deaths"), &NetwTable::read_deaths);
     ClassDB::bind_method(D_METHOD("row_of", "route"), &NetwTable::row_of);
-    ClassDB::bind_method(
-        D_METHOD("rows_of", "routes"),
-        &NetwTable::rows_of
-    );
+    ClassDB::bind_method(D_METHOD("rows_of", "routes"), &NetwTable::rows_of);
     ClassDB::bind_method(
         D_METHOD("save", "database", "key", "ids"),
         &NetwTable::save
     );
-    ClassDB::bind_method(
-        D_METHOD("load", "database", "key"),
-        &NetwTable::load
-    );
+    ClassDB::bind_method(D_METHOD("load", "database", "key"), &NetwTable::load);
 
     ADD_PROPERTY(PropertyInfo(Variant::RID, "rid"), "", "get_rid");
     ADD_PROPERTY(

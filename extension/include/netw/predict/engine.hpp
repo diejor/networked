@@ -287,14 +287,8 @@ class NetwPredictionEngine {
     );
     static bool pull_state(predict::Slot &p_row);
     static bool push_state(predict::Slot &p_row);
-    bool pull_command(
-        predict::Slot &p_row,
-        predict::StateRow &r_command
-    );
-    bool push_command(
-        predict::Slot &p_row,
-        const predict::StateRow &p_command
-    );
+    bool pull_command(predict::Slot &p_row, predict::StateRow &r_command);
+    bool push_command(predict::Slot &p_row, const predict::StateRow &p_command);
     static int32_t command_hash_of(
         predict::Slot &p_row,
         const predict::StateRow &p_command

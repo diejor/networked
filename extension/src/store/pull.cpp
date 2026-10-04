@@ -572,11 +572,7 @@ void World::absorb(uint32_t p_table, const Array &p_rows, int64_t p_tick) {
     }
 }
 
-void World::note_rest(
-    Table &p_table,
-    uint32_t p_row,
-    const NodeCell &p_cell
-) {
+void World::note_rest(Table &p_table, uint32_t p_row, const NodeCell &p_cell) {
     BodyState body;
     if (p_cell.object != nullptr) {
         body_probe(p_cell, body);

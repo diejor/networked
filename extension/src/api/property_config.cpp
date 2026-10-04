@@ -145,8 +145,7 @@ Ref<NetwPropertyConfig> NetwPropertyConfig::reconcile_only() {
 
 Ref<NetwPropertyConfig> NetwPropertyConfig::on_change() {
     warn_double_set(
-        set_trigger != UNSET
-            && set_trigger != PropertySet::TRIGGER_ON_CHANGE,
+        set_trigger != UNSET && set_trigger != PropertySet::TRIGGER_ON_CHANGE,
         "trigger"
     );
     set_trigger = PropertySet::TRIGGER_ON_CHANGE;

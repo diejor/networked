@@ -29,23 +29,17 @@ A tick is a numbered step of the simulation. Every peer counts the same ticks, a
         clock.before_tick.connect(sample_input)
         clock.ticked.connect(show_tick)
 
-
-
 \ **How a tick is produced**\ 
 
 Each physics frame adds its delta to an accumulator, and every ``1 / tickrate`` seconds in it runs one tick. A slow frame can run two ticks and a fast one none. At a :ref:`tickrate<class_NetwClock_property_tickrate>` of 30 with 60 physics ticks per second, a tick runs every second frame, and :ref:`physics_factor<class_NetwClock_property_physics_factor>` is ``2.0``.
 
 At most :ref:`NetwMultiplayer.CLOCK_PARAM_MAX_TICKS_PER_FRAME<class_NetwMultiplayer_constant_CLOCK_PARAM_MAX_TICKS_PER_FRAME>` ticks run in one frame. :ref:`behind_count<class_NetwClock_property_behind_count>` counts how often that limit was hit.
 
-
-
 \ **How a client follows the server**\ 
 
 The client pings the server every :ref:`ping_interval<class_NetwClock_property_ping_interval>` seconds. The server answers with its tick, and the client aims ahead of it by half the round trip plus :ref:`NetwMultiplayer.CLOCK_PARAM_LEAD_TICKS<class_NetwMultiplayer_constant_CLOCK_PARAM_LEAD_TICKS>`. The first answer sets the tick directly. After that, :ref:`sync_mode<class_NetwClock_property_sync_mode>` decides.
 
 \ :ref:`SYNC_MODE_SNAP<class_NetwClock_constant_SYNC_MODE_SNAP>` sets the tick directly every time, which can move it backwards. :ref:`SYNC_MODE_STRETCH<class_NetwClock_constant_SYNC_MODE_STRETCH>`, the default, runs the clock slightly faster or slower each frame by :ref:`NetwMultiplayer.CLOCK_PARAM_STRETCH_NUDGE_FACTOR<class_NetwMultiplayer_constant_CLOCK_PARAM_STRETCH_NUDGE_FACTOR>` of the difference, so the tick never jumps. A difference larger than :ref:`NetwMultiplayer.CLOCK_PARAM_PANIC_SNAP_THRESHOLD<class_NetwMultiplayer_constant_CLOCK_PARAM_PANIC_SNAP_THRESHOLD>` ticks is snapped.
-
-
 
 \ **Showing remote state**\ 
 

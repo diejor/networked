@@ -25,15 +25,13 @@ namespace Networked;
 /// c.endpoint_add(ENetMultiplayerPeer, "203.0.113.42:21253")
 /// var ticket := c.create_peer(
 ///         ENetMultiplayerPeer,
-///         TRANSPORT_MODE_CLIENT,
+///         NetwConnection.TRANSPORT_MODE_CLIENT,
 ///         "203.0.113.42:21253", {}, take_the_peer)
 /// </code>
 /// </para>
 /// <para>
 /// The peer <c>take_the_peer</c> receives is ready to assign to
 /// <see cref="MultiplayerApi.MultiplayerPeer"/>, and connects at once.
-/// </para>
-/// <para>
 /// Endpoints are pairs of <c>(transport, address)</c> that can be probed by
 /// <see cref="NetwConnection"/> to determine if they are reachable.
 /// </para>
@@ -260,11 +258,9 @@ public sealed class NetwConnection : NetwRefCounted
     /// <paramref name="completed"/> runs once in a later frame as
     /// <c>completed(peer, error, detail)</c>, the peer has to be assigned
     /// inside this <see cref="Callable"/>, otherwise, returning without
-    /// assigning declines the offer.
-    /// <para>
-    /// The result is a <see cref="Rid"/> handle that can be passed to
-    /// <see cref="NetwConnection.CancelPeerCreation"/> to cancel the request
-    /// before it completes.
+    /// assigning declines the offer. The result is a <see cref="Rid"/> handle
+    /// that can be passed to <see cref="NetwConnection.CancelPeerCreation"/> to
+    /// cancel the request before it completes.
     /// <code>
     /// var _ticket := RID() # at this point the ticket is empty
     ///
@@ -272,7 +268,7 @@ public sealed class NetwConnection : NetwRefCounted
     ///     abort_join()
     ///     _ticket = _c.create_peer(
     ///             MyRelayTransport,
-    ///             TRANSPORT_MODE_CLIENT,
+    ///             NetwConnection.TRANSPORT_MODE_CLIENT,
     ///             address, {}, _created, _progressed)
     ///
     /// func abort_join() -&gt; void:
@@ -286,7 +282,6 @@ public sealed class NetwConnection : NetwRefCounted
     ///     elif error != ERR_SKIP:
     ///         _say(detail)
     /// </code>
-    /// </para>
     /// <para>
     /// The returned peer is ready to be assigned to
     /// <see cref="Node.Multiplayer"/> and will connect immediately.
@@ -444,7 +439,7 @@ public sealed class NetwConnection : NetwRefCounted
     ///     if c.register_transport(MyRelayTransport):
     ///         c.create_peer(
     ///                 MyRelayTransport,
-    ///                 TRANSPORT_MODE_HOST,
+    ///                 NetwConnection.TRANSPORT_MODE_HOST,
     ///                 "", {region = "eu"}, take_the_peer)
     /// </code>
     /// </summary>
@@ -491,10 +486,8 @@ public sealed class NetwConnection : NetwRefCounted
         NetwApi.MethodBind("NetwConnection", "join_schema", 3995934104UL);
 
     /// <summary>
-    /// The parameters a join form asks for.
-    /// <para>
-    /// A join is a transport, an address, and a dictionary of settings. The
-    /// schema is the list of those settings.
+    /// The parameters a join form asks for. A join is a transport, an address,
+    /// and a dictionary of settings. The schema is the list of those settings.
     /// <code>
     /// Array[Dictionary]
     /// ┖╴entry
@@ -503,7 +496,6 @@ public sealed class NetwConnection : NetwRefCounted
     ///   ┠╴class_name  StringName  empty for every type this build resolves
     ///   ┖╴default     Variant     the value a Join form pre-fills, or null
     /// </code>
-    /// </para>
     /// </summary>
     public Godot.Collections.Array JoinSchema()
     {

@@ -7,8 +7,7 @@
 
 namespace netw {
 
-template <typename T>
-class SlotRows {
+template <typename T> class SlotRows {
     struct Row {
         uint64_t id = 0;
         T value;
@@ -82,8 +81,7 @@ public:
         held = 0;
     }
 
-    template <typename F>
-    void each(F &&p_visit) {
+    template <typename F> void each(F &&p_visit) {
         for (uint32_t at = 0; at < rows.size(); ++at) {
             if (rows[at].id != 0) {
                 p_visit(rows[at].id, rows[at].value);
@@ -91,8 +89,7 @@ public:
         }
     }
 
-    template <typename F>
-    void each(F &&p_visit) const {
+    template <typename F> void each(F &&p_visit) const {
         for (uint32_t at = 0; at < rows.size(); ++at) {
             if (rows[at].id != 0) {
                 p_visit(rows[at].id, rows[at].value);
@@ -100,8 +97,7 @@ public:
         }
     }
 
-    template <typename F>
-    int64_t held_bytes(F p_each) const {
+    template <typename F> int64_t held_bytes(F p_each) const {
         int64_t bytes = netw::held::vector(rows);
         each([&](uint64_t, const T &p_value) { bytes += p_each(p_value); });
         return bytes;

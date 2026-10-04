@@ -1,5 +1,5 @@
-#include "support/netw_test.h"
 #include "support/books.h"
+#include "support/netw_test.h"
 #include "support/predict_rows.h"
 
 #include "godot/spatial_node.hpp"
@@ -248,13 +248,20 @@ TEST_CASE(
     NetwPredictionEngine *const engine = &held;
     const int64_t slot = commanded(engine);
     engine->joint_record(slot, 4, state(70), command(7), false, false, true);
-    engine
-        ->joint_record(slot, 4, predict::StateRow(), command(9), false, true, false);
+    engine->joint_record(
+        slot,
+        4,
+        predict::StateRow(),
+        command(9),
+        false,
+        true,
+        false
+    );
 
     const Dictionary kept = netw_test::predicted_state(engine, slot, 5);
     REQUIRE(kept.has(StringName("value")));
     NETW_CHECK_EQ(int(kept[StringName("value")]), 70);
-    NETW_CHECK_EQ(command_of(held_command(engine,slot, 4)), 9);
+    NETW_CHECK_EQ(command_of(held_command(engine, slot, 4)), 9);
 }
 
 TEST_CASE("[Networked][Predict][Hosted][Joint] a slot with no island records") {
@@ -272,19 +279,33 @@ TEST_CASE("[Networked][Predict][Hosted][Joint] a slot with no island records") {
     ));
 
     engine->joint_record(slot, 3, state(30), command(7), false, false, true);
-    NETW_CHECK_EQ(command_of(held_command(engine,slot, 3)), 7);
+    NETW_CHECK_EQ(command_of(held_command(engine, slot, 3)), 7);
     NETW_CHECK_EQ(
         engine->joint_provenance_at(slot, 3),
         int(CellProvenance::SUBSTITUTED)
     );
 
-    engine
-        ->joint_record(slot, 3, predict::StateRow(), command(9), false, true, false);
-    NETW_CHECK_EQ(command_of(held_command(engine,slot, 3)), 9);
-    engine
-        ->joint_record(slot, 3, predict::StateRow(), command(11), false, false, true);
-    NETW_CHECK_EQ(command_of(held_command(engine,slot, 3)), 9);
-    NETW_CHECK_EQ(command_of(held_command(engine,slot, 4)), 0);
+    engine->joint_record(
+        slot,
+        3,
+        predict::StateRow(),
+        command(9),
+        false,
+        true,
+        false
+    );
+    NETW_CHECK_EQ(command_of(held_command(engine, slot, 3)), 9);
+    engine->joint_record(
+        slot,
+        3,
+        predict::StateRow(),
+        command(11),
+        false,
+        false,
+        true
+    );
+    NETW_CHECK_EQ(command_of(held_command(engine, slot, 3)), 9);
+    NETW_CHECK_EQ(command_of(held_command(engine, slot, 4)), 0);
     NETW_CHECK_EQ(engine->joint_provenance_at(slot, 4), -1);
 }
 
@@ -292,18 +313,39 @@ TEST_CASE("[Networked][Predict][Hosted][Joint] command provenance improves") {
     NetwPredictionEngine held;
     NetwPredictionEngine *const engine = &held;
     const int64_t slot = commanded(engine);
-    engine
-        ->joint_record(slot, 4, predict::StateRow(), command(10), false, false, true);
-    engine
-        ->joint_record(slot, 4, predict::StateRow(), command(20), false, true, false);
-    engine
-        ->joint_record(slot, 4, predict::StateRow(), command(30), false, false, false);
+    engine->joint_record(
+        slot,
+        4,
+        predict::StateRow(),
+        command(10),
+        false,
+        false,
+        true
+    );
+    engine->joint_record(
+        slot,
+        4,
+        predict::StateRow(),
+        command(20),
+        false,
+        true,
+        false
+    );
+    engine->joint_record(
+        slot,
+        4,
+        predict::StateRow(),
+        command(30),
+        false,
+        false,
+        false
+    );
     NETW_CHECK_EQ(int(engine->input_book(slot)->count()), 1);
     NETW_CHECK_EQ(
         engine->joint_provenance_at(slot, 4),
         int(CellProvenance::RELAYED)
     );
-    NETW_CHECK_EQ(command_of(held_command(engine,slot, 4)), 20);
+    NETW_CHECK_EQ(command_of(held_command(engine, slot, 4)), 20);
 }
 
 TEST_CASE("[Networked][Predict][Hosted][Joint] support admits declared axes") {
@@ -635,8 +677,7 @@ TEST_CASE(
         NetwPredictionEngine::ROSTER_ISLAND_MEMBERS,
         member_body.entity
     );
-    const Ref<NetwPrediction> handle
-        = member_body.entity->get_prediction();
+    const Ref<NetwPrediction> handle = member_body.entity->get_prediction();
     REQUIRE(handle.is_valid());
     handle->set_sim_mode(NetwPrediction::SIM_MODE_DISPLAY);
     CHECK_FALSE(engine->contact_is_equivalent(owner, false));

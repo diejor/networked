@@ -92,7 +92,7 @@ TEST_CASE(
 
 LocalVector<FieldDecl> float_fields(const char *p_first, const char *p_second) {
     LocalVector<FieldDecl> out;
-    const char *keys[] = { p_first, p_second };
+    const char *keys[] = {p_first, p_second};
     for (const char *key : keys) {
         if (key == nullptr) {
             continue;
@@ -134,13 +134,9 @@ TEST_CASE(
     const auto tick = [&](int64_t p_key) {
         moved += engine->capture_predicted(slot, p_key) ? 1 : 0;
         moved += engine->restore_predicted(slot, p_key) ? 1 : 0;
-        const bool authored = engine->record_authored_command(
-            slot,
-            p_key,
-            p_key,
-            true,
-            command
-        );
+        const bool authored
+            = engine
+                  ->record_authored_command(slot, p_key, p_key, true, command);
         moved += authored ? 1 : 0;
         const TransitionBook *book = engine->input_book(slot);
         moved += book->read_row(commands.codec, p_key, read) ? 1 : 0;
@@ -152,8 +148,7 @@ TEST_CASE(
         const int32_t post = engine->book_fingerprint(slot, p_key);
         const netw::predict::FamilyFingerprints families
             = engine->book_families(slot, p_key);
-        agreed += pre == post && live.controller == families.controller ? 1
-                                                                         : 0;
+        agreed += pre == post && live.controller == families.controller ? 1 : 0;
         const netw::predict::Judged judged = engine->judge_state(
             slot,
             p_key - 1,
@@ -235,10 +230,9 @@ SteadyTick steady_session(netw::Schedule p_schedule) {
     SteadyTick out;
     out.scopes = closed.scopes - opened.scopes;
     out.allocations = closed.allocations - opened.allocations;
-    out.dictionary_writes = closed.dictionary_writes
-        - opened.dictionary_writes;
-    out.script_dictionaries = netw::predict::script_dictionaries_built()
-        - built;
+    out.dictionary_writes = closed.dictionary_writes - opened.dictionary_writes;
+    out.script_dictionaries
+        = netw::predict::script_dictionaries_built() - built;
     return out;
 }
 
@@ -247,7 +241,7 @@ TEST_CASE(
     "included, allocates nothing and builds no Dictionary"
 ) {
     const netw::Schedule schedules[]
-        = { netw::Schedule::TICK, netw::Schedule::FRAME };
+        = {netw::Schedule::TICK, netw::Schedule::FRAME};
     for (const netw::Schedule schedule : schedules) {
         const SteadyTick steady = steady_session(schedule);
         NETW_CHECK_GT(steady.scopes, int64_t(60));
@@ -271,9 +265,8 @@ netw_test::EntityDecl recovering_body(const char *p_name) {
 }
 
 void nudge_authority(netw_test::LoopbackRig &p_rig, const StringName &p_name) {
-    Node2D *authority = Object::cast_to<Node2D>(
-        p_rig.node_of(p_rig.entity_of(p_name))
-    );
+    Node2D *authority
+        = Object::cast_to<Node2D>(p_rig.node_of(p_rig.entity_of(p_name)));
     REQUIRE(authority != nullptr);
     authority->set_position(authority->get_position() + Vector2(0.0, 0.05));
     authority->set(
@@ -299,11 +292,7 @@ SteadyCorrection steady_correction() {
             .lag_compensated()
             .player(recovering_body("P"), 0)
             .hosted(recovering_body("B"))
-            .island(
-                StringName("P"),
-                members,
-                netw_test::WorldDecl::INDEPENDENT
-            )
+            .island(StringName("P"), members, netw_test::WorldDecl::INDEPENDENT)
             .simulating(StringName("B"))
     );
     Node *owner = rig.node_of(rig.entity_of("P", 0), 0);
@@ -334,10 +323,10 @@ SteadyCorrection steady_correction() {
     SteadyCorrection out;
     out.tick.scopes = closed.scopes - opened.scopes;
     out.tick.allocations = closed.allocations - opened.allocations;
-    out.tick.dictionary_writes = closed.dictionary_writes
-        - opened.dictionary_writes;
-    out.tick.script_dictionaries = netw::predict::script_dictionaries_built()
-        - built;
+    out.tick.dictionary_writes
+        = closed.dictionary_writes - opened.dictionary_writes;
+    out.tick.script_dictionaries
+        = netw::predict::script_dictionaries_built() - built;
     out.corrections = handle->get_stats()->get_int_fact(
                           netw::NetwPredictStats::FACT_CORRECTIONS
                       )

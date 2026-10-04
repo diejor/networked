@@ -93,8 +93,7 @@ uint64_t SessionSend::stream_open(
     const wire::StreamLane &p_lane,
     const wire::StreamTenure &p_tenure
 ) {
-    return world != nullptr ? world->stream_open(p_peer, p_lane, p_tenure)
-                            : 0;
+    return world != nullptr ? world->stream_open(p_peer, p_lane, p_tenure) : 0;
 }
 
 wire::ReadyVerdict SessionSend::stream_ready(
@@ -111,9 +110,8 @@ wire::ReceiptVerdict SessionSend::stream_receipt(
     uint64_t p_token,
     uint64_t p_revision
 ) {
-    return world != nullptr
-        ? world->stream_receipt(p_peer, p_token, p_revision)
-        : wire::ReceiptVerdict::IGNORED;
+    return world != nullptr ? world->stream_receipt(p_peer, p_token, p_revision)
+                            : wire::ReceiptVerdict::IGNORED;
 }
 
 bool SessionSend::stream_reset(
@@ -195,8 +193,7 @@ bool SessionSend::stream_seated(
             < wire::repair_interval_ms(int64_t(link.rtt_ms(id)))) {
         return false;
     }
-    const uint64_t request
-        = world->stream_open(id, lane, table.tenures[p_row]);
+    const uint64_t request = world->stream_open(id, lane, table.tenures[p_row]);
     if (request != 0) {
         queue_open(id, table, p_row, request);
         rows.repair_at[p_row] = p_now_ms;
@@ -384,16 +381,15 @@ bool SessionSend::encode(
         const store::Flight *pinned = p_form == RowForm::REPAIR
             ? world->pinned_of(p_peer, rows.token[p_row])
             : nullptr;
-        r_send.resend = pinned != nullptr
-            && table.holds_image(p_row, pinned->image);
+        r_send.resend
+            = pinned != nullptr && table.holds_image(p_row, pinned->image);
         header.revision
             = r_send.resend ? pinned->revision : rows.next_rev[p_row];
         const uint64_t acked = rows.acked_rev[p_row];
         const uint64_t span = header.revision - acked;
         const bool deltas
             = p_form == RowForm::FRESH || p_form == RowForm::REFRESH;
-        header.distance = deltas && acked != 0
-                && header.revision > acked
+        header.distance = deltas && acked != 0 && header.revision > acked
                 && span <= wire::SNAPSHOT_DELTA_SPAN
             ? span
             : 0;
@@ -513,64 +509,63 @@ void SessionSend::pass_peer(
     {
         NETW_ZONE_NC("Send gather", colors::WIRE);
         world->come_due(p_peer, p_base_tick);
-        const auto consider = [&](uint32_t p_table,
-                                  uint32_t p_row,
-                                  bool p_due) {
-            NETW_ZONE_LEAF_F(
-                "Send consider row",
-                colors::WIRE,
-                profile::SUBSYSTEM_WIRE,
-                "entity %lld",
-                static_cast<long long>(world->table(p_table).routes[p_row])
-            );
-            RowForm form = RowForm::FRESH;
-            if (!classify(
-                    p_peer,
-                    p_table,
-                    p_row,
-                    p_due,
-                    p_now_ms,
-                    form,
-                    r_out
-                )) {
-                return;
-            }
-            store::Table &table = world->table(p_table);
-            if (unfitted(p_registry, table)) {
-                RowSend send;
-                if (!encode(
+        const auto consider =
+            [&](uint32_t p_table, uint32_t p_row, bool p_due) {
+                NETW_ZONE_LEAF_F(
+                    "Send consider row",
+                    colors::WIRE,
+                    profile::SUBSYSTEM_WIRE,
+                    "entity %lld",
+                    static_cast<long long>(world->table(p_table).routes[p_row])
+                );
+                RowForm form = RowForm::FRESH;
+                if (!classify(
                         p_peer,
                         p_table,
                         p_row,
+                        p_due,
+                        p_now_ms,
                         form,
-                        p_base_tick,
-                        send,
                         r_out
                     )) {
                     return;
                 }
-                commit_send(p_peer, send, p_base_tick, p_now_ms);
-                account.balance -= double(send.framed);
-                account.sent_bytes += send.framed;
-                r_out.sends.push_back(send);
-                return;
-            }
-            store::PeerRows &rows = table.peers[p_peer];
-            rows.acc[p_row] += store::importance(
-                *world,
-                table,
-                p_row,
-                p_base_tick,
-                form == RowForm::REFRESH
-            );
-            Candidate made;
-            made.table = p_table;
-            made.row = p_row;
-            made.order = order++;
-            made.acc = rows.acc[p_row];
-            made.form = form;
-            candidates.push_back(made);
-        };
+                store::Table &table = world->table(p_table);
+                if (unfitted(p_registry, table)) {
+                    RowSend send;
+                    if (!encode(
+                            p_peer,
+                            p_table,
+                            p_row,
+                            form,
+                            p_base_tick,
+                            send,
+                            r_out
+                        )) {
+                        return;
+                    }
+                    commit_send(p_peer, send, p_base_tick, p_now_ms);
+                    account.balance -= double(send.framed);
+                    account.sent_bytes += send.framed;
+                    r_out.sends.push_back(send);
+                    return;
+                }
+                store::PeerRows &rows = table.peers[p_peer];
+                rows.acc[p_row] += store::importance(
+                    *world,
+                    table,
+                    p_row,
+                    p_base_tick,
+                    form == RowForm::REFRESH
+                );
+                Candidate made;
+                made.table = p_table;
+                made.row = p_row;
+                made.order = order++;
+                made.acc = rows.acc[p_row];
+                made.form = form;
+                candidates.push_back(made);
+            };
         for (uint32_t index = 0; index < world->table_count(); ++index) {
             store::Table &table = world->table(index);
             if (p_peer >= table.peers.size()) {
@@ -596,8 +591,8 @@ void SessionSend::pass_peer(
             }
             store::Table &table = world->table(row.table);
             store::PeerRows &rows = table.peers[p_peer];
-            const bool parked = rows.stream[row.row]
-                == uint8_t(store::Stream::DORMANT);
+            const bool parked
+                = rows.stream[row.row] == uint8_t(store::Stream::DORMANT);
             if (rows.refresh_at[row.row] < 0
                 || (!rows.sendable.get(row.row) && !parked)) {
                 rows.due.set(row.row, false);
@@ -631,10 +626,8 @@ void SessionSend::pass_peer(
         NETW_ZONE_NC("Send order", colors::WIRE);
         std::make_heap(first, last, later);
     }
-    const double least_floor = std::min(
-        account.fill,
-        double(LinkGovernor::FLOOR_BITS) / 8.0
-    );
+    const double least_floor
+        = std::min(account.fill, double(LinkGovernor::FLOOR_BITS) / 8.0);
     const double row_floor
         = std::max(account.fill * ROW_FLOOR_SHARE, least_floor);
     const double lent
@@ -925,14 +918,7 @@ const SessionResult &SessionSend::run(
     record_windows(p_base_tick);
     for (uint32_t peer = 0; peer < world->peer_capacity(); ++peer) {
         if (world->peer_joined(peer)) {
-            pass_peer(
-                p_registry,
-                peer,
-                p_max_bits,
-                p_base_tick,
-                p_now_ms,
-                out
-            );
+            pass_peer(p_registry, peer, p_max_bits, p_base_tick, p_now_ms, out);
         }
     }
     return out;
@@ -1022,13 +1008,15 @@ RowExplain SessionSend::explain(
         out.exposed = rows.exposed_rev[at.row];
         out.has_baseline = rows.acked_rev[at.row] != 0;
         out.priority = rows.acc[at.row];
-        out.row_class = store::class_name(store::row_class(
-            *world,
-            table,
-            at.row,
-            pass_tick,
-            rows.due.get(at.row) && !rows.owed.get(at.row)
-        ));
+        out.row_class = store::class_name(
+            store::row_class(
+                *world,
+                table,
+                at.row,
+                pass_tick,
+                rows.due.get(at.row) && !rows.owed.get(at.row)
+            )
+        );
         out.age_ticks = rows.last_sent[at.row] >= 0 && pass_tick >= 0
             ? pass_tick - rows.last_sent[at.row]
             : -1;
@@ -1036,8 +1024,10 @@ RowExplain SessionSend::explain(
             out.verdict = RowVerdict::UNOFFERED;
         } else if ((table.flags[at.row] & store::Table::UNENCODED) != 0) {
             out.verdict = RowVerdict::UNGATHERED;
-        } else if (pass_tick >= 0 && rows.last_sent[at.row] == pass_tick
-                   && rows.owed.get(at.row) && rows.acc[at.row] == 0.0f) {
+        } else if (
+            pass_tick >= 0 && rows.last_sent[at.row] == pass_tick
+            && rows.owed.get(at.row) && rows.acc[at.row] == 0.0f
+        ) {
             out.verdict = RowVerdict::SENT;
         } else if (rows.owed.get(at.row) || rows.due.get(at.row)) {
             out.verdict = RowVerdict::DEFERRED;

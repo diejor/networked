@@ -249,8 +249,8 @@ TEST_CASE(
     }
     const bool parked = writers.token_of(1, lane) == 0
         && writers.token_of(b, lane) == 0
-        && writers.request_of(1, lane) == asked
-        && writers.dormant_count(1) == 1 && writers.dormant_count(b) == 1;
+        && writers.request_of(1, lane) == asked && writers.dormant_count(1) == 1
+        && writers.dormant_count(b) == 1;
     CHECK(parked);
     NETW_CHECK_EQ(server.unknown_token_count(), unknown_before);
     CHECK(server.holds(a, lane));
@@ -385,9 +385,9 @@ struct Regrant {
         host = NetwEntity::of(pair.authored);
         rig.step_ticks(10);
         lane = broadcast_lane(rig.client(0), pair.mirror(0));
-        REQUIRE(bool(
-            row_send_of(rig.client(0))->store()->request_of(b, lane) == 0
-        ));
+        REQUIRE(
+            bool(row_send_of(rig.client(0))->store()->request_of(b, lane) == 0)
+        );
         rig.conditions(1, latency_of(p_delay_to_b, 31), 1);
         rig.conditions(-1, latency_of(2, 32), a);
         host->set_controller(b);
@@ -486,8 +486,8 @@ TEST_CASE(
                                   ->request_of(stand.b, stand.lane);
     const bool opened_again = reopened > stand.request;
     CHECK(opened_again);
-    const uint64_t seated = row_send_of(stand.rig.client(0))
-                                ->token_of(stand.b, stand.lane);
+    const uint64_t seated
+        = row_send_of(stand.rig.client(0))->token_of(stand.b, stand.lane);
     const bool reseated
         = seated != 0 && readers.token_at(stand.a, stand.lane) == seated;
     CHECK(reseated);

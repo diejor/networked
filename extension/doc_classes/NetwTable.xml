@@ -15,7 +15,6 @@
 		[/codeblock]
 		There is one [NetwTable] per table. Connect [signal received] once and keep the handle in a field.
 		Each row is identified by a route. Row indices change when rows are added or removed, and routes do not.
-
 		[b]Writing[/b]
 		Write the routes and every column, then call [method commit] to apply them with the current tick and send them.
 		[codeblock]
@@ -25,7 +24,6 @@
 		    mobs.write_column(Mobs.hp, health)
 		    mobs.commit()
 		[/codeblock]
-
 		[b]Reading[/b]
 		A column comes back as the packed array it was written as, in row order.
 		[codeblock]
@@ -39,7 +37,6 @@
 		        multimesh.set_instance_transform(row, Transform3D(Basis(), pos[row]))
 		[/codeblock]
 		[method read_births] and [method read_deaths] name the routes the latest commit added and removed, which is useful to keep one node per row.
-
 		[b]Saving[/b]
 		[method save] stores the committed rows in a [NetwDatabase] under a key, and [method load] replaces the table with them. Routes change between sessions, so give each row a stable id when saving.
 		[codeblock]

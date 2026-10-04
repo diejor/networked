@@ -262,8 +262,7 @@ TEST_CASE(
 
     writer.place(at, lane.route, int64_t(EPOCH) + 1);
     writer.name_lane(at, lane.ordinal);
-    const uint64_t successor
-        = writer.stream_open(HOST, lane, StreamTenure());
+    const uint64_t successor = writer.stream_open(HOST, lane, StreamTenure());
     NETW_CHECK_ORDER(successor, request, >);
     NETW_CHECK_EQ(writer.token_of(HOST, lane), 0);
     NETW_CHECK_EQ(
@@ -451,8 +450,7 @@ StreamTenure tenure_at(uint64_t p_tenure) {
 }
 
 uint64_t seat_bound(World &r_world, const StreamLane &p_lane, int p_peer) {
-    const uint64_t request
-        = r_world.stream_open(p_peer, p_lane, tenure_at(1));
+    const uint64_t request = r_world.stream_open(p_peer, p_lane, tenure_at(1));
     const uint64_t token = next_stream_token();
     r_world.stream_ready(p_peer, request, token);
     return token;

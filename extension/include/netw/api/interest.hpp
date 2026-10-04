@@ -50,12 +50,8 @@ public:
         const godot::Callable &p_callback,
         const godot::StringName &p_layer_id
     );
-    godot::Ref<NetwInterest> on_observed(
-        const godot::Callable &p_callback
-    );
-    godot::Ref<NetwInterest> on_unobserved(
-        const godot::Callable &p_callback
-    );
+    godot::Ref<NetwInterest> on_observed(const godot::Callable &p_callback);
+    godot::Ref<NetwInterest> on_unobserved(const godot::Callable &p_callback);
     godot::Ref<NetwInterest> on_leave_policy(
         const godot::StringName &p_layer_id,
         NetwMultiplayer::LeavePolicy p_policy,

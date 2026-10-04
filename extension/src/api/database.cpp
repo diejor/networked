@@ -65,8 +65,8 @@ Ref<NetwDatabase> NetwDatabase::of(Node *p_node, const StringName &p_name) {
     if (api == nullptr) {
         NETW_ERROR(
             sys::TABLE,
-            "Netw.database got a node that is not inside a session. Call it "
-            "from a node in the scene tree under a MultiplayerTree."
+            "A database was requested from a node outside a session. Request "
+            "it from a node in the scene tree under a MultiplayerTree."
         );
         return Ref<NetwDatabase>();
     }

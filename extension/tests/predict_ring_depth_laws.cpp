@@ -27,7 +27,8 @@ int64_t consuming(NetwPredictionEngine *p_pool, netw::Schedule p_schedule) {
 
 void drive(NetwPredictionEngine *p_pool, int64_t p_slot, int p_transition) {
     p_pool->record_input(p_slot, p_transition, p_transition + 100);
-    REQUIRE(p_pool->replay_drive(
+    REQUIRE(p_pool
+                ->replay_drive(
                     p_slot,
                     godot::Dictionary(),
                     p_transition,
@@ -41,16 +42,12 @@ void drive(NetwPredictionEngine *p_pool, int64_t p_slot, int p_transition) {
                     0,
                     0,
                     0
-    )
+                )
                 .ran);
     p_pool->close_drive(p_slot, p_transition, p_transition, 0, 0, 0);
 }
 
-void drive_through(
-    NetwPredictionEngine *p_pool,
-    int64_t p_slot,
-    int p_count
-) {
+void drive_through(NetwPredictionEngine *p_pool, int64_t p_slot, int p_count) {
     for (int transition = 0; transition < p_count; ++transition) {
         drive(p_pool, p_slot, transition);
     }

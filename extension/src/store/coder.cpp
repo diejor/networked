@@ -159,8 +159,7 @@ void raw_canonical(
             *r_value = p_codes[0] != 0 ? 1 : 0;
             return;
         case SchemaCore::VECTOR2:
-            put(r_value,
-                Vector2(f32_value(p_codes[0]), f32_value(p_codes[1])));
+            put(r_value, Vector2(f32_value(p_codes[0]), f32_value(p_codes[1])));
             return;
         case SchemaCore::VECTOR3:
             put(r_value,

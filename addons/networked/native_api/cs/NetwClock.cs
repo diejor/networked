@@ -30,12 +30,9 @@ namespace Networked;
 /// <c>2.0</c>. At most
 /// <see cref="NetwMultiplayer.ClockParam.MaxTicksPerFrame"/> ticks run in one
 /// frame. <see cref="NetwClock.BehindCount"/> counts how often that limit was
-/// hit.
-/// </para>
-/// <para>
-/// <b>How a client follows the server</b> The client pings the server every
-/// <see cref="NetwClock.PingInterval"/> seconds. The server answers with its
-/// tick, and the client aims ahead of it by half the round trip plus
+/// hit. <b>How a client follows the server</b> The client pings the server
+/// every <see cref="NetwClock.PingInterval"/> seconds. The server answers with
+/// its tick, and the client aims ahead of it by half the round trip plus
 /// <see cref="NetwMultiplayer.ClockParam.LeadTicks"/>. The first answer sets
 /// the tick directly. After that, <see cref="NetwClock.SyncMode"/> decides.
 /// <see cref="NetwClock.SyncModeEnum.Snap"/> sets the tick directly every time,
@@ -44,13 +41,10 @@ namespace Networked;
 /// <see cref="NetwMultiplayer.ClockParam.StretchNudgeFactor"/> of the
 /// difference, so the tick never jumps. A difference larger than
 /// <see cref="NetwMultiplayer.ClockParam.PanicSnapThreshold"/> ticks is
-/// snapped.
-/// </para>
-/// <para>
-/// <b>Showing remote state</b> State from other peers arrives late, so remote
-/// entities are shown <see cref="NetwClock.DisplayOffset"/> ticks in the past.
-/// <see cref="NetwClock.RecommendedDisplayOffset"/> is the offset the current
-/// connection needs, the one-way latency plus the jitter times
+/// snapped. <b>Showing remote state</b> State from other peers arrives late, so
+/// remote entities are shown <see cref="NetwClock.DisplayOffset"/> ticks in the
+/// past. <see cref="NetwClock.RecommendedDisplayOffset"/> is the offset the
+/// current connection needs, the one-way latency plus the jitter times
 /// <see cref="NetwMultiplayer.ClockParam.JitterMultiplier"/>, in ticks. It is
 /// not applied automatically.
 /// <see cref="NetwMultiplayer.ClockAutoConfigureOffset"/> applies it.

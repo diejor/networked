@@ -150,8 +150,8 @@ int64_t NetwMultiplayer::action_slot_of(const Callable &p_authority) {
     if (entity.is_null()) {
         return 0;
     }
-    const String route = String(entity->get_name()) + ":"
-        + String(p_authority.get_method());
+    const String route
+        = String(entity->get_name()) + ":" + String(p_authority.get_method());
     const HashMap<String, int64_t>::ConstIterator found
         = action_slots.find(route);
     if (found) {
@@ -228,11 +228,17 @@ void NetwMultiplayer::action_send_request(
     body.data = gd::var_to_bytes(p_args);
     body.key = p_key;
     body.timing = p_timing_mode;
-    NETW_NETWORK_PROFILE(wire::ProfileSubjectScope observation(
-        profiler_outgoing,
-        profiler_member(route, wire::builtin_channel("ACTION"),
-                        node_from_tree_path(p_target_path), p_method)
-    ));
+    NETW_NETWORK_PROFILE(
+        wire::ProfileSubjectScope observation(
+            profiler_outgoing,
+            profiler_member(
+                route,
+                wire::builtin_channel("ACTION"),
+                node_from_tree_path(p_target_path),
+                p_method
+            )
+        )
+    );
     plane->send_to(
         destination,
         route,

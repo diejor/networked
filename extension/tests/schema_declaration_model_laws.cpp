@@ -148,10 +148,7 @@ TEST_CASE(
 
     NETW_CHECK_EQ(schema->vector2("pos", none, 1), -1);
     NETW_CHECK_EQ(schema->vector3("pos", none, 4), -1);
-    NETW_CHECK_EQ(
-        int(schema_model::find("ModelSkew")->columns_of().size()),
-        1
-    );
+    NETW_CHECK_EQ(int(schema_model::find("ModelSkew")->columns_of().size()), 1);
 }
 
 TEST_CASE(
@@ -298,7 +295,6 @@ TEST_CASE(
         here->table_get_wire_hash(mine)
     );
 }
-
 
 TEST_CASE(
     "[Networked][Table][Hosted] A declared storage version and its migrations "

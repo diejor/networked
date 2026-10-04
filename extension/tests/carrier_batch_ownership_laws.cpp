@@ -23,12 +23,12 @@ using netw::SchemaCore;
 using netw::repl::RowSend;
 using netw::repl::RowVerdict;
 using netw::repl::SessionResult;
-using netw_test::RowOffer;
-using netw_test::SessionSend;
 using netw::table::SchemaRecord;
 using netw::wire::ChannelDecl;
 using netw::wire::Delivery;
 using netw::wire::WireRegistry;
+using netw_test::RowOffer;
+using netw_test::SessionSend;
 
 constexpr uint8_t CHANNEL = 43;
 constexpr int PEER = 7;

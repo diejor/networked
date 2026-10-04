@@ -84,8 +84,7 @@ void NetwSimulation::restate() {
     }
     const Ref<NetwEntity> bound = entity();
     if (bound.is_valid()) {
-        const Ref<NetwPrediction> prediction
-            = bound->prediction_if_minted();
+        const Ref<NetwPrediction> prediction = bound->prediction_if_minted();
         if (prediction.is_valid()) {
             prediction->restate_declaration();
         }
@@ -199,8 +198,7 @@ void NetwSimulation::adopt_step(const Callable &p_value) {
     declared.step = p_value;
     const Ref<NetwEntity> bound = entity();
     if (bound.is_valid()) {
-        const Ref<NetwPrediction> prediction
-            = bound->prediction_if_minted();
+        const Ref<NetwPrediction> prediction = bound->prediction_if_minted();
         if (prediction.is_valid()) {
             prediction->step_changed();
         }
@@ -262,10 +260,7 @@ void NetwSimulation::forget(const Ref<NetwEntity> &p_entity) {
     declare();
 }
 
-void NetwSimulation::simulate_nearest(
-    int p_count,
-    const StringName &p_layer
-) {
+void NetwSimulation::simulate_nearest(int p_count, const StringName &p_layer) {
     sim::simulate_nearest(choice, p_count, p_layer);
     declare();
 }
@@ -300,10 +295,7 @@ NetwSimulation::Schedule NetwSimulation::resolved_schedule() const {
 }
 
 void NetwSimulation::_bind_methods() {
-    ClassDB::bind_method(
-        D_METHOD("get_bodies"),
-        &NetwSimulation::get_bodies
-    );
+    ClassDB::bind_method(D_METHOD("get_bodies"), &NetwSimulation::get_bodies);
     ClassDB::bind_method(
         D_METHOD("set_bodies", "value"),
         &NetwSimulation::set_bodies
@@ -358,10 +350,7 @@ void NetwSimulation::_bind_methods() {
         "set_replicas",
         "get_replicas"
     );
-    ClassDB::bind_method(
-        D_METHOD("get_restore"),
-        &NetwSimulation::get_restore
-    );
+    ClassDB::bind_method(D_METHOD("get_restore"), &NetwSimulation::get_restore);
     ClassDB::bind_method(
         D_METHOD("set_restore", "value"),
         &NetwSimulation::set_restore
@@ -459,10 +448,7 @@ void NetwSimulation::_bind_methods() {
         D_METHOD("simulate", "entity"),
         &NetwSimulation::simulate
     );
-    ClassDB::bind_method(
-        D_METHOD("forget", "entity"),
-        &NetwSimulation::forget
-    );
+    ClassDB::bind_method(D_METHOD("forget", "entity"), &NetwSimulation::forget);
     ClassDB::bind_method(
         D_METHOD("simulate_nearest", "count", "layer"),
         &NetwSimulation::simulate_nearest,

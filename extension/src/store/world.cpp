@@ -111,11 +111,7 @@ void World::leave_slot(uint32_t p_slot) {
     }
 }
 
-int64_t World::note_tenure(
-    uint32_t p_slot,
-    uint64_t p_tenure,
-    int64_t p_tick
-) {
+int64_t World::note_tenure(uint32_t p_slot, uint64_t p_tenure, int64_t p_tick) {
     if (p_slot >= slot_tenure.size()) {
         return -1;
     }
@@ -366,9 +362,9 @@ int64_t World::row_bytes() const {
         + held::map(owner_rows) + held::map(body_rows) + held::map(lane_rows)
         + held::vector(live.words) + held::vector(stale.words)
         + held::vector(stale_slots) + held::vector(slot_stamps)
-        + probe.held_bytes() + held::vector(visiting)
-        + residents.held_bytes() + held::vector(misses) + held::set(dozing)
-        + held::vector(woken) + held::vector(reprobed) + held::set(watched);
+        + probe.held_bytes() + held::vector(visiting) + residents.held_bytes()
+        + held::vector(misses) + held::set(dozing) + held::vector(woken)
+        + held::vector(reprobed) + held::set(watched);
     for (const Table *table : tables) {
         bytes += table->held_bytes();
     }

@@ -27,13 +27,9 @@ Description
     peer.create_client("203.0.113.42", 21253)
     multiplayer.multiplayer_peer = peer
 
-
-
 \ After :godot:`MultiplayerAPI.multiplayer_peer <MultiplayerAPI#class_MultiplayerAPI_property_multiplayer_peer>` has been assigned, the :godot:`MultiplayerAPI` is initialized and the peer connects.
 
 \ **NetwConnection** declares several endpoints that a UI can choose from.
-
-
 
 ::
 
@@ -41,12 +37,10 @@ Description
     c.endpoint_add(ENetMultiplayerPeer, "203.0.113.42:21253")
     var ticket := c.create_peer(
             ENetMultiplayerPeer,
-            TRANSPORT_MODE_CLIENT,
+            NetwConnection.TRANSPORT_MODE_CLIENT,
             "203.0.113.42:21253", {}, take_the_peer)
 
 \ The peer ``take_the_peer`` receives is ready to assign to :godot:`MultiplayerAPI.multiplayer_peer <MultiplayerAPI#class_MultiplayerAPI_property_multiplayer_peer>`, and connects at once.
-
-
 
 Endpoints are pairs of ``(transport, address)`` that can be probed by **NetwConnection** to determine if they are reachable.
 
@@ -390,11 +384,7 @@ Pass a ``transport`` that can be any of the following:
 
 \ ``completed`` runs once in a later frame as ``completed(peer, error, detail)``, the peer has to be assigned inside this :godot:`Callable`, otherwise, returning without assigning declines the offer.
 
-
-
 The result is a :godot:`RID` handle that can be passed to :ref:`cancel_peer_creation()<class_NetwConnection_method_cancel_peer_creation>` to cancel the request before it completes.
-
-
 
 ::
 
@@ -404,7 +394,7 @@ The result is a :godot:`RID` handle that can be passed to :ref:`cancel_peer_crea
         abort_join()
         _ticket = _c.create_peer(
                 MyRelayTransport,
-                TRANSPORT_MODE_CLIENT,
+                NetwConnection.TRANSPORT_MODE_CLIENT,
                 address, {}, _created, _progressed)
 
     func abort_join() -> void:
@@ -417,8 +407,6 @@ The result is a :godot:`RID` handle that can be passed to :ref:`cancel_peer_crea
             multiplayer.multiplayer_peer = peer
         elif error != ERR_SKIP:
             _say(detail)
-
-
 
 \ The returned peer is ready to be assigned to :godot:`Node.multiplayer <Node#class_Node_property_multiplayer>` and will connect immediately.
 
@@ -541,8 +529,6 @@ Renames the endpoint ``transport`` and ``address`` name.
 
 The parameters a join form asks for. 
 
-
-
 A join is a transport, an address, and a dictionary of settings. The schema is the list of those settings.
 
 .. code:: text
@@ -573,7 +559,7 @@ Registers a :ref:`NetwTransport<class_NetwTransport>` subclass. A transport adds
         if c.register_transport(MyRelayTransport):
             c.create_peer(
                     MyRelayTransport,
-                    TRANSPORT_MODE_HOST,
+                    NetwConnection.TRANSPORT_MODE_HOST,
                     "", {region = "eu"}, take_the_peer)
 
 .. rst-class:: classref-item-separator

@@ -89,11 +89,11 @@ PackedByteArray canonical_bytes(
         const Variant value = p_payload[p_codec.keys[at]];
         bool coded = p_codec.holds(at, value)
             && wire::encode_scalar_column(
-                *p_codec.schema.at(at),
-                p_codec.plan.column(uint32_t(at)),
-                uint32_t(at),
-                value,
-                row
+                         *p_codec.schema.at(at),
+                         p_codec.plan.column(uint32_t(at)),
+                         uint32_t(at),
+                         value,
+                         row
             );
         if (!stream.bool1(coded)) {
             return PackedByteArray();
@@ -174,7 +174,6 @@ bool zero_of(int p_type, Variant &r_zero) {
 
 } // namespace
 
-
 void zero_state_row(const FieldCodec &p_codec, StateRow &r_row) {
     r_row.resize(int(p_codec.keys.size()));
     for (uint32_t at = 0; at < p_codec.keys.size(); ++at) {
@@ -194,8 +193,8 @@ bool codes_agree(
     const uint32_t count = p_codec.keys.size();
     if (!p_codec.plan.valid() || !p_plan.valid()
         || p_codec.plan.column_count() != count
-        || p_plan.column_count() != count
-        || p_schema.columns.size() != count || uint32_t(p_keys.size()) != count
+        || p_plan.column_count() != count || p_schema.columns.size() != count
+        || uint32_t(p_keys.size()) != count
         || p_codec.plan.row_bits() != p_plan.row_bits()) {
         return false;
     }

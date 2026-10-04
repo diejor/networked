@@ -64,8 +64,7 @@ inline DisplaySubject stand_subject(
     subject.body->add_child(subject.second);
 
     subject.entity = netw::NetwEntity::ensure(subject.body);
-    const godot::Ref<netw::NetwDisplay> handle
-        = subject.entity->get_display();
+    const godot::Ref<netw::NetwDisplay> handle = subject.entity->get_display();
     handle->set_enable_smart_dilation(false);
     handle->set_display_role(netw::NetwMultiplayer::DISPLAY_ROLE_REMOTE);
     handle->set_visual_root(godot::NodePath("First"));

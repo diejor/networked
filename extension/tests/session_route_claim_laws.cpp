@@ -118,10 +118,7 @@ TEST_CASE(
     SUBCASE("and a release of nothing queues nothing") {
         session->store_arrays().take_lifecycle_removals();
         NETW_CHECK_EQ(session->liveness_release_routes(PackedInt64Array()), OK);
-        NETW_CHECK_EQ(
-            session->store_arrays().lifecycle_removals().size(),
-            0
-        );
+        NETW_CHECK_EQ(session->store_arrays().lifecycle_removals().size(), 0);
     }
 
     SUBCASE("and a client's refused release queues nothing") {

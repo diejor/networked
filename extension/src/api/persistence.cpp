@@ -88,10 +88,7 @@ void NetwPersistence::_bind_methods() {
     ClassDB::bind_method(D_METHOD("load"), &NetwPersistence::load);
     ClassDB::bind_method(D_METHOD("save"), &NetwPersistence::save);
 
-    ClassDB::bind_method(
-        D_METHOD("get_dirty"),
-        &NetwPersistence::get_dirty
-    );
+    ClassDB::bind_method(D_METHOD("get_dirty"), &NetwPersistence::get_dirty);
     ADD_PROPERTY(
         PropertyInfo(
             Variant::BOOL,

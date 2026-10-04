@@ -12,15 +12,12 @@
 		    clock.before_tick.connect(sample_input)
 		    clock.ticked.connect(show_tick)
 		[/codeblock]
-
 		[b]How a tick is produced[/b]
 		Each physics frame adds its delta to an accumulator, and every [code]1 / tickrate[/code] seconds in it runs one tick. A slow frame can run two ticks and a fast one none. At a [member tickrate] of 30 with 60 physics ticks per second, a tick runs every second frame, and [member physics_factor] is [code]2.0[/code].
 		At most [constant NetwMultiplayer.CLOCK_PARAM_MAX_TICKS_PER_FRAME] ticks run in one frame. [member behind_count] counts how often that limit was hit.
-
 		[b]How a client follows the server[/b]
 		The client pings the server every [member ping_interval] seconds. The server answers with its tick, and the client aims ahead of it by half the round trip plus [constant NetwMultiplayer.CLOCK_PARAM_LEAD_TICKS]. The first answer sets the tick directly. After that, [member sync_mode] decides.
 		[constant SYNC_MODE_SNAP] sets the tick directly every time, which can move it backwards. [constant SYNC_MODE_STRETCH], the default, runs the clock slightly faster or slower each frame by [constant NetwMultiplayer.CLOCK_PARAM_STRETCH_NUDGE_FACTOR] of the difference, so the tick never jumps. A difference larger than [constant NetwMultiplayer.CLOCK_PARAM_PANIC_SNAP_THRESHOLD] ticks is snapped.
-
 		[b]Showing remote state[/b]
 		State from other peers arrives late, so remote entities are shown [member display_offset] ticks in the past. [member recommended_display_offset] is the offset the current connection needs, the one-way latency plus the jitter times [constant NetwMultiplayer.CLOCK_PARAM_JITTER_MULTIPLIER], in ticks. It is not applied automatically. [method NetwMultiplayer.clock_auto_configure_offset] applies it.
 	</description>

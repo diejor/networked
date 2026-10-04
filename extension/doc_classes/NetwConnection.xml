@@ -10,20 +10,17 @@
 		peer.create_client("203.0.113.42", 21253)
 		multiplayer.multiplayer_peer = peer
 		[/codeblock]
-
 		After [member MultiplayerAPI.multiplayer_peer] has been assigned, the [MultiplayerAPI] is initialized and the peer connects.
 		[NetwConnection] declares several [u]endpoints[/u] that a UI can choose from.
-
 		[codeblock]
 		var c := Netw.session(self).connection
 		c.endpoint_add(ENetMultiplayerPeer, "203.0.113.42:21253")
 		var ticket := c.create_peer(
 		        ENetMultiplayerPeer,
-		        TRANSPORT_MODE_CLIENT,
+		        NetwConnection.TRANSPORT_MODE_CLIENT,
 		        "203.0.113.42:21253", {}, take_the_peer)
 		[/codeblock]
 		The peer [code]take_the_peer[/code] receives is ready to assign to [member MultiplayerAPI.multiplayer_peer], and connects at once.
-
 		Endpoints are pairs of [code](transport, address)[/code] that can be probed by [NetwConnection] to determine if they are reachable.
 	</description>
 	<tutorials>
@@ -51,9 +48,7 @@
 				- A [StringName] of the type.
 				- A live peer of that class.
 				[param completed] runs once in a later frame as [code]completed(peer, error, detail)[/code], the peer has to be assigned inside this [Callable], otherwise, returning without assigning declines the offer.
-
 				The result is a [RID] handle that can be passed to [method cancel_peer_creation] to cancel the request before it completes.
-
 				[codeblock]
 				var _ticket := RID() # at this point the ticket is empty
 
@@ -61,7 +56,7 @@
 				    abort_join()
 				    _ticket = _c.create_peer(
 				            MyRelayTransport,
-				            TRANSPORT_MODE_CLIENT,
+				            NetwConnection.TRANSPORT_MODE_CLIENT,
 				            address, {}, _created, _progressed)
 
 				func abort_join() -&gt; void:
@@ -75,7 +70,6 @@
 				    elif error != ERR_SKIP:
 				        _say(detail)
 				[/codeblock]
-
 				The returned peer is ready to be assigned to [member Node.multiplayer] and will connect immediately.
 			</description>
 		</method>
@@ -158,7 +152,6 @@
 			<return type="Array" />
 			<description>
 				The parameters a join form asks for. 
-
 				A join is a transport, an address, and a dictionary of settings. The schema is the list of those settings.
 				[codeblock lang=text]
 				Array[Dictionary]
@@ -181,7 +174,7 @@
 				    if c.register_transport(MyRelayTransport):
 				        c.create_peer(
 				                MyRelayTransport,
-				                TRANSPORT_MODE_HOST,
+				                NetwConnection.TRANSPORT_MODE_HOST,
 				                "", {region = "eu"}, take_the_peer)
 				[/codeblock]
 			</description>

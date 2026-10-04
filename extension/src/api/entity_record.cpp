@@ -290,8 +290,8 @@ void NetwEntityRecord::project_node(
         pinned ? p_projection.session : p_projection.follower,
         pinned ? p_projection.prior_session : p_projection.prior_follower
     );
-    const bool watched = p_projection.follower != 1
-        || p_projection.session != 1;
+    const bool watched
+        = p_projection.follower != 1 || p_projection.session != 1;
     if (watched && p_watch != 0) {
         tree::watch(p_node, p_watch);
     }

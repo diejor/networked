@@ -1,3 +1,4 @@
+#include "netw/api/persistence.hpp"
 #include "godot/callable.hpp"
 #include "godot/node.hpp"
 #include "godot/object.hpp"
@@ -8,7 +9,6 @@
 #include "netw/api/entity.hpp"
 #include "netw/api/netw_multiplayer.hpp"
 #include "netw/api/persistence_config.hpp"
-#include "netw/api/persistence.hpp"
 #include "netw/log.hpp"
 #include "netw/persist/binding.hpp"
 #include "netw/persist/database.hpp"
@@ -506,8 +506,7 @@ void NetwMultiplayer::persist_notify_loaded(
     bool p_found
 ) {
     const RID entity = persist_entity_of_binding(p_binding);
-    const Ref<NetwPersistence> handle
-        = persist_handle_of_binding(p_binding);
+    const Ref<NetwPersistence> handle = persist_handle_of_binding(p_binding);
     if (handle.is_valid()) {
         handle->announce_loaded(entity, p_found);
     }
@@ -516,8 +515,7 @@ void NetwMultiplayer::persist_notify_loaded(
 
 void NetwMultiplayer::persist_notify_saved(const RID &p_binding) {
     const RID entity = persist_entity_of_binding(p_binding);
-    const Ref<NetwPersistence> handle
-        = persist_handle_of_binding(p_binding);
+    const Ref<NetwPersistence> handle = persist_handle_of_binding(p_binding);
     if (handle.is_valid()) {
         handle->announce_saved(entity);
     }

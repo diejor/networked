@@ -145,8 +145,8 @@ TEST_CASE(
     NETW_CHECK_EQ(stamp.families.pose, expected_families.pose);
     NETW_CHECK_EQ(stamp.families.momentum, expected_families.momentum);
     NETW_CHECK_EQ(stamp.families.controller, expected_families.controller);
-    const bool three_apart = expected_families.pose
-            != expected_families.momentum
+    const bool three_apart
+        = expected_families.pose != expected_families.momentum
         && expected_families.momentum != expected_families.controller
         && expected_families.pose != expected_families.controller;
     CHECK(three_apart);
@@ -1318,9 +1318,7 @@ TEST_CASE(
     Ref<netw::NetwPrediction> handle;
     handle.instantiate();
 
-    CHECK_FALSE(
-        pool->reconfigure_from(slot, Ref<netw::NetwPrediction>())
-    );
+    CHECK_FALSE(pool->reconfigure_from(slot, Ref<netw::NetwPrediction>()));
     CHECK_FALSE(pool->reconfigure_from(slot + 9000, handle));
 
     handle->set_divergence_epsilon(0.75);
@@ -1943,9 +1941,8 @@ Reproduction replay_reproduction(netw::Schedule p_schedule) {
         const godot::Dictionary post
             = netw_test::predicted_state(pool, slot, at + 1);
         out.replayed += post.is_empty() ? 0 : 1;
-        out.matched += pool->book_fingerprint(slot, at + 1) == recorded[at]
-            ? 1
-            : 0;
+        out.matched
+            += pool->book_fingerprint(slot, at + 1) == recorded[at] ? 1 : 0;
     }
     out.live_throttle = double(body->get("throttle"));
     memdelete(body);

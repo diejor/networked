@@ -261,8 +261,8 @@ bool StreamReaderBook::follow_tenure(
     bool p_admitted
 ) {
     Connection *live = connections.getptr(p_peer);
-    Lane *held = live != nullptr ? live->lanes.getptr(p_lane.address())
-                                 : nullptr;
+    Lane *held
+        = live != nullptr ? live->lanes.getptr(p_lane.address()) : nullptr;
     if (held == nullptr || !held->tenure.bound
         || held->tenure.tenure > p_tenure) {
         return false;
@@ -316,8 +316,8 @@ bool StreamReaderBook::answers_stray(
 
 bool StreamReaderBook::holds(int p_peer, const StreamLane &p_lane) const {
     const Connection *live = connections.getptr(p_peer);
-    const Lane *held = live != nullptr ? live->lanes.getptr(p_lane.address())
-                                       : nullptr;
+    const Lane *held
+        = live != nullptr ? live->lanes.getptr(p_lane.address()) : nullptr;
     return held != nullptr && held->held;
 }
 

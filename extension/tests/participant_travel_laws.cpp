@@ -87,9 +87,7 @@ TEST_CASE(
     const Ref<NetwPlayer> traveller = netw_test::seated_peer(rig.server(), 7);
     REQUIRE(traveller.is_valid());
     NETW_CHECK_EQ(
-        refusal_of(
-            rig.server()->player_travel(traveller, Ref<NetwScene>())
-        ),
+        refusal_of(rig.server()->player_travel(traveller, Ref<NetwScene>())),
         int(ERR_INVALID_PARAMETER)
     );
 

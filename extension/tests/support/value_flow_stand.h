@@ -149,8 +149,7 @@ inline void author_at(
     int64_t p_tick
 ) {
     netw::port_set(p_node, p_property, p_value);
-    const netw::repl::PropertyBindingPtr binding
-        = binding_of(p_node, p_record);
+    const netw::repl::PropertyBindingPtr binding = binding_of(p_node, p_record);
     if (binding != nullptr) {
         binding->authored_tick = p_tick;
     }
@@ -216,8 +215,7 @@ struct FlowCapture {
         }
         last_tick = tick;
         godot::Vector2 held;
-        for (int column = 0; column < p_table.schema.column_count();
-             ++column) {
+        for (int column = 0; column < p_table.schema.column_count(); ++column) {
             if (p_table.schema.at(column)->key == p_field) {
                 held = p_table.read_value(p_row, uint32_t(column));
             }

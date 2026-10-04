@@ -33,10 +33,8 @@
 		[/csharp]
 		[/codeblocks]
 		An entity is simulated once it sets or calls anything here, declares [member NetwPrediction.archetype], or has a [RigidBody2D] or [RigidBody3D] root drawn by [member NetwEntity.display]. Other entities stay [constant MODE_NONE].
-
 		[b]Modes[/b]
 		The peer with authority over the entity runs it as [constant MODE_AUTHORITY], and a client predicting it runs it as [constant MODE_PREDICT]. Every other copy is a frozen [constant MODE_PROXY], unless [member replicas] or a selection makes it [constant MODE_ACTIVE].
-
 		[b]Selection[/b]
 		While this entity runs here as [constant MODE_AUTHORITY] or [constant MODE_PREDICT], it can pick other entities to run here as [constant MODE_ACTIVE]. [method simulate] names one. [method simulate_nearest], [method simulate_within] and [method simulate_all] set a policy, and each call replaces the last.
 		[codeblock]

@@ -37,14 +37,8 @@ struct ArrayFrameHead {
             "tick",
             netw::wire::varuint(5)
         ),
-        netw::wire::field<&ArrayFrameHead::flags>(
-            "flags",
-            netw::wire::bits(8)
-        ),
-        netw::wire::field<&ArrayFrameHead::rows>(
-            "rows",
-            netw::wire::varuint(2)
-        )
+        netw::wire::field<&ArrayFrameHead::flags>("flags", netw::wire::bits(8)),
+        netw::wire::field<&ArrayFrameHead::rows>("rows", netw::wire::varuint(2))
     );
 };
 
@@ -162,8 +156,7 @@ private:
 
     ArrayTable *table_of(const godot::RID &p_table);
     const ArrayTable *table_of(const godot::RID &p_table) const;
-    const ArrayColumn *column_at(const godot::RID &p_table, int p_column)
-        const;
+    const ArrayColumn *column_at(const godot::RID &p_table, int p_column) const;
 
     void rebuild_wire_order();
     void clear_rows(ArrayTable &r_table);

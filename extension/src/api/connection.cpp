@@ -445,10 +445,7 @@ void NetwConnection::_bind_methods() {
         D_METHOD("diagnostics", "peer_id"),
         &NetwConnection::diagnostics
     );
-    ClassDB::bind_method(
-        D_METHOD("transports"),
-        &NetwConnection::transports
-    );
+    ClassDB::bind_method(D_METHOD("transports"), &NetwConnection::transports);
     ClassDB::bind_method(
         D_METHOD("transport", "of"),
         &NetwConnection::transport
@@ -461,15 +458,9 @@ void NetwConnection::_bind_methods() {
         D_METHOD("unregister_transport", "of"),
         &NetwConnection::unregister_transport
     );
-    ClassDB::bind_method(
-        D_METHOD("join_schema"),
-        &NetwConnection::join_schema
-    );
+    ClassDB::bind_method(D_METHOD("join_schema"), &NetwConnection::join_schema);
 
-    ClassDB::bind_method(
-        D_METHOD("get_endpoints"),
-        &NetwConnection::endpoints
-    );
+    ClassDB::bind_method(D_METHOD("get_endpoints"), &NetwConnection::endpoints);
     ClassDB::bind_method(
         D_METHOD("endpoint", "transport", "address"),
         &NetwConnection::endpoint

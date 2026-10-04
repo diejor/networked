@@ -19,8 +19,8 @@ using namespace godot;
 using namespace netw_test;
 using netw::NetwEntity;
 using netw::NetwMultiplayer;
-using netw::NetwPredictionEngine;
 using netw::NetwPrediction;
+using netw::NetwPredictionEngine;
 using netw::NetwPredictRecovery;
 
 const char *ANCHORED_ID = "anchored_player";
@@ -94,9 +94,7 @@ TEST_CASE(
         netw::gd::live_object(seated->get_prediction())
     );
     REQUIRE_MESSAGE(handle != nullptr, "the entity minted no handle");
-    handle->simulation()->set_schedule(
-        netw::NetwSimulation::SCHEDULE_TICK
-    );
+    handle->simulation()->set_schedule(netw::NetwSimulation::SCHEDULE_TICK);
 
     pool->open_lane(slot);
     declare_position(pool, slot);
@@ -151,9 +149,7 @@ TEST_CASE(
         netw::gd::live_object(seated->get_prediction())
     );
     REQUIRE(handle != nullptr);
-    handle->simulation()->set_schedule(
-        netw::NetwSimulation::SCHEDULE_FRAME
-    );
+    handle->simulation()->set_schedule(netw::NetwSimulation::SCHEDULE_FRAME);
 
     pool->open_lane(slot);
     declare_position(pool, slot);

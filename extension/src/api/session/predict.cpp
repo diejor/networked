@@ -677,11 +677,9 @@ bool NetwMultiplayer::predict_space_has_stepped_member(
         if (member.is_null()) {
             continue;
         }
-        const Ref<NetwSimulation> simulation
-            = member->simulation_if_minted();
+        const Ref<NetwSimulation> simulation = member->simulation_if_minted();
         if (simulation.is_valid()
-            && simulation->get_schedule()
-                == NetwSimulation::SCHEDULE_STEPPED
+            && simulation->get_schedule() == NetwSimulation::SCHEDULE_STEPPED
             && entity_space_of(member).space == p_space) {
             return true;
         }
@@ -1067,10 +1065,12 @@ void NetwMultiplayer::action_receive_carrier(
         );
         return;
     }
-    NETW_NETWORK_PROFILE(network_profiler.name_arrival(
-        profiler_member(p_entity->get_route(), wire::builtin_channel("ACTION"),
-                        p_entity->get_owner(), body.method)
-    ));
+    NETW_NETWORK_PROFILE(network_profiler.name_arrival(profiler_member(
+        p_entity->get_route(),
+        wire::builtin_channel("ACTION"),
+        p_entity->get_owner(),
+        body.method
+    )));
     const Variant carried = gd::bytes_to_var(body.data);
     if (carried.get_type() != Variant::ARRAY) {
         NETW_TRACE(
@@ -1423,10 +1423,9 @@ void NetwMultiplayer::predict_readmit(const Ref<NetwEntity> &p_entity) {
         return;
     }
     Node *owner = p_entity->get_owner();
-    const CharString named
-        = (owner != nullptr ? String(owner->get_path())
-                            : String(p_entity->get_name()))
-              .utf8();
+    const CharString named = (owner != nullptr ? String(owner->get_path())
+                                               : String(p_entity->get_name()))
+                                 .utf8();
     if (p_entity->get_state_binding() == nullptr) {
         NETW_ERROR(
             sys::PREDICTION,
@@ -1490,8 +1489,7 @@ void NetwMultiplayer::unregister_prediction(const Ref<NetwEntity> &p_entity) {
     engine->release();
     sim_release_body(entity, true);
     sim_release_row(entity);
-    const Ref<NetwSimulation> simulation
-        = p_entity->simulation_if_minted();
+    const Ref<NetwSimulation> simulation = p_entity->simulation_if_minted();
     if (simulation.is_valid()) {
         simulation->announce(NetwSimulation::MODE_NONE);
     }
@@ -1552,9 +1550,8 @@ Ref<NetwPrediction> NetwMultiplayer::prediction_handle(
     const RID &p_entity
 ) const {
     const Ref<NetwEntity> wrapper = entity_get_view(p_entity);
-    return wrapper.is_valid()
-        ? Ref<NetwPrediction>(wrapper->get_prediction())
-        : Ref<NetwPrediction>();
+    return wrapper.is_valid() ? Ref<NetwPrediction>(wrapper->get_prediction())
+                              : Ref<NetwPrediction>();
 }
 
 void NetwMultiplayer::predict_set_param(
@@ -1746,9 +1743,8 @@ Ref<NetwSimulation> NetwMultiplayer::simulation_handle(
     const RID &p_entity
 ) const {
     const Ref<NetwEntity> wrapper = entity_get_view(p_entity);
-    return wrapper.is_valid()
-        ? Ref<NetwSimulation>(wrapper->get_simulation())
-        : Ref<NetwSimulation>();
+    return wrapper.is_valid() ? Ref<NetwSimulation>(wrapper->get_simulation())
+                              : Ref<NetwSimulation>();
 }
 
 void NetwMultiplayer::simulation_set_param(
@@ -1764,17 +1760,11 @@ void NetwMultiplayer::simulation_set_param(
         case SIMULATION_PARAM_BODIES:
             return handle->set_bodies(TypedArray<NodePath>(p_value));
         case SIMULATION_PARAM_SCHEDULE:
-            return handle->set_schedule(
-                NetwSimulation::Schedule(int(p_value))
-            );
+            return handle->set_schedule(NetwSimulation::Schedule(int(p_value)));
         case SIMULATION_PARAM_REPLICAS:
-            return handle->set_replicas(
-                NetwSimulation::Replicas(int(p_value))
-            );
+            return handle->set_replicas(NetwSimulation::Replicas(int(p_value)));
         case SIMULATION_PARAM_RESTORE:
-            return handle->set_restore(
-                NetwSimulation::Restore(int(p_value))
-            );
+            return handle->set_restore(NetwSimulation::Restore(int(p_value)));
         case SIMULATION_PARAM_MAX_RESTORE_TICKS:
             return handle->set_max_restore_ticks(int(p_value));
         default:
@@ -1820,9 +1810,7 @@ void NetwMultiplayer::simulation_set_step_callback(
     }
 }
 
-NetwSimulation::Mode NetwMultiplayer::simulation_get_mode(
-    const RID &p_entity
-) {
+NetwSimulation::Mode NetwMultiplayer::simulation_get_mode(const RID &p_entity) {
     const sim::Row *row = sim_rows.row_of(p_entity);
     return row != nullptr ? NetwSimulation::Mode(int(row->mode))
                           : NetwSimulation::MODE_NONE;

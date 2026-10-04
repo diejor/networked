@@ -263,8 +263,8 @@ void schedule_derived_registration(Node *p_node) {
 }
 
 bool is_persist_only(const Ref<NetwPropertyConfig> &p_config) {
-    return p_config->is_persisted()
-        && !p_config->is_policy_declared() && !p_config->is_transfer_declared()
+    return p_config->is_persisted() && !p_config->is_policy_declared()
+        && !p_config->is_transfer_declared()
         && p_config->get_quantizers().is_empty();
 }
 

@@ -28,8 +28,7 @@ TEST_CASE(
     CHECK_FALSE(freed_twice);
 
     const uint64_t second = sets.create();
-    const bool same_slot
-        = (second & 0xffffffffu) == (first & 0xffffffffu);
+    const bool same_slot = (second & 0xffffffffu) == (first & 0xffffffffu);
     CHECK(same_slot);
     const bool new_id = second != first;
     CHECK(new_id);

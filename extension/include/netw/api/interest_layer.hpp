@@ -62,7 +62,9 @@ public:
     bool set_policy(enums::NetwInterestLayer::LayerPolicy p_policy);
     enums::NetwInterestLayer::LayerPolicy get_policy() const;
 
-    void set_default_leave_policy(enums::NetwInterestLayer::LeavePolicy p_policy);
+    void set_default_leave_policy(
+        enums::NetwInterestLayer::LeavePolicy p_policy
+    );
     enums::NetwInterestLayer::LeavePolicy get_default_leave_policy() const;
 
     void set_default_perception_policy(

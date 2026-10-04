@@ -7,8 +7,7 @@
 
 namespace netw {
 
-template <typename T>
-class SlotBook {
+template <typename T> class SlotBook {
     struct Slot {
         T *held = nullptr;
         uint32_t gen = 0;
@@ -68,8 +67,7 @@ public:
         return slots.size() - vacant.size();
     }
 
-    template <typename F>
-    int64_t held_bytes(F p_each) const {
+    template <typename F> int64_t held_bytes(F p_each) const {
         int64_t bytes = netw::held::vector(slots) + netw::held::vector(vacant);
         for (const Slot &slot : slots) {
             if (slot.held != nullptr) {

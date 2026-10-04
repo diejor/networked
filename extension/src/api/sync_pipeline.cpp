@@ -56,7 +56,8 @@ uint64_t interpolated_mask(
     const store::Table &p_table,
     uint32_t p_lane
 ) {
-    PropertyBinding::InterpolatedColumns &held = p_binding->interpolated[p_lane];
+    PropertyBinding::InterpolatedColumns &held
+        = p_binding->interpolated[p_lane];
     const uint64_t epoch = script::model::interpolation_epoch();
     const uint64_t script = PropertyBinding::script_generation_of(p_node);
     if (held.epoch == epoch && held.script == script
@@ -85,8 +86,8 @@ struct ReceiveAllocations {
     NetwMultiplayer *plane;
     const int64_t opened;
 
-    explicit ReceiveAllocations(NetwMultiplayer *p_plane) :
-            plane(p_plane), opened(store::allocations_seen()) {
+    explicit ReceiveAllocations(NetwMultiplayer *p_plane)
+        : plane(p_plane), opened(store::allocations_seen()) {
     }
 
     ~ReceiveAllocations() {
@@ -344,10 +345,7 @@ int64_t SyncPipeline::sealed_schema_identity() const {
     return int64_t(fold);
 }
 
-Error SyncPipeline::register_property_set(
-    Node *p_node,
-    uint64_t p_set
-) {
+Error SyncPipeline::register_property_set(Node *p_node, uint64_t p_set) {
     const PropertySet *declared = set_of(p_set);
     if (p_node == nullptr || declared == nullptr || !declared->get_sealed()) {
         return ERR_INVALID_DATA;
@@ -443,8 +441,7 @@ void SyncPipeline::report_missing_prediction_component(
     }
     const Ref<NetwEntity> entity = NetwEntity::of(node);
     if (entity.is_valid()) {
-        const Ref<NetwPrediction> prediction
-            = entity->prediction_if_minted();
+        const Ref<NetwPrediction> prediction = entity->prediction_if_minted();
         if (prediction.is_valid() && prediction->is_registered()) {
             return;
         }
@@ -452,9 +449,8 @@ void SyncPipeline::report_missing_prediction_component(
     if (authoring::declares_prediction(node)) {
         return;
     }
-    const String entity_name = entity.is_valid()
-        ? String(entity->get_name())
-        : String(node->get_name());
+    const String entity_name = entity.is_valid() ? String(entity->get_name())
+                                                 : String(node->get_name());
     NETW_WARN(
         sys::PREDICTION,
         "%s",
@@ -846,9 +842,7 @@ void SyncPipeline::capture_declaration_key(
     p_binding->comp = entity->comp_of(node);
 }
 
-void SyncPipeline::bind_declaration(
-    const PropertyBindingPtr &p_binding
-) {
+void SyncPipeline::bind_declaration(const PropertyBindingPtr &p_binding) {
     NetwMultiplayer *plane = core();
     Node *node = p_binding->node();
     if (plane == nullptr || node == nullptr || sync_model == nullptr) {
@@ -905,9 +899,7 @@ void SyncPipeline::store_place(const PropertyBindingPtr &p_binding) {
     }
 }
 
-void SyncPipeline::drop_declaration(
-    const PropertyBindingPtr &p_binding
-) {
+void SyncPipeline::drop_declaration(const PropertyBindingPtr &p_binding) {
     if (sync_model != nullptr && p_binding->route > 0
         && !String(p_binding->order_key).is_empty()) {
         sync_model->detach(
@@ -1284,11 +1276,17 @@ void SyncPipeline::send_property(Node *p_node, const StringName &p_property) {
         return;
     }
 
-    NETW_NETWORK_PROFILE(wire::ProfileSubjectScope observation(
-        plane->profiler_outgoing_subject(),
-        plane->profiler_member(int64_t(frame[StringName("route")]),
-                               set->get_channel(), p_node, p_property)
-    ));
+    NETW_NETWORK_PROFILE(
+        wire::ProfileSubjectScope observation(
+            plane->profiler_outgoing_subject(),
+            plane->profiler_member(
+                int64_t(frame[StringName("route")]),
+                set->get_channel(),
+                p_node,
+                p_property
+            )
+        )
+    );
     send_entity_event(
         frame,
         set->get_channel(),
@@ -1378,11 +1376,17 @@ void SyncPipeline::send_signal(
         return;
     }
 
-    NETW_NETWORK_PROFILE(wire::ProfileSubjectScope observation(
-        plane->profiler_outgoing_subject(),
-        plane->profiler_member(int64_t(frame[StringName("route")]),
-                               channel_signal, p_node, p_signal)
-    ));
+    NETW_NETWORK_PROFILE(
+        wire::ProfileSubjectScope observation(
+            plane->profiler_outgoing_subject(),
+            plane->profiler_member(
+                int64_t(frame[StringName("route")]),
+                channel_signal,
+                p_node,
+                p_signal
+            )
+        )
+    );
     send_entity_event(frame, channel_signal, stream.to_bytes(), reliable);
 }
 
@@ -1665,13 +1669,8 @@ void SyncPipeline::apply_row(
         );
         return;
     }
-    binding->resolve_entity_row(
-        row_send(),
-        p_ordinal,
-        table,
-        at.row,
-        !windowed
-    );
+    binding
+        ->resolve_entity_row(row_send(), p_ordinal, table, at.row, !windowed);
     binding->settle_arrival();
     const uint32_t slot = table.slots[at.row];
     const int64_t predicted = retained ? -1 : world.predict_of(slot);
@@ -1680,13 +1679,7 @@ void SyncPipeline::apply_row(
         ? predict::Listener::NONE
         : predictor->listener_for(predicted, world.ref_of(slot), binding);
     const predict::Arrival arrival = predict::Arrival::of(table, at.row);
-    plane->store_received(
-        binding,
-        at,
-        retained,
-        p_lane == LANE_ROW,
-        p_sender
-    );
+    plane->store_received(binding, at, retained, p_lane == LANE_ROW, p_sender);
     if (!retained) {
         binding->notify_landed(table, at.row);
     }
@@ -1773,8 +1766,7 @@ void SyncPipeline::feed_derived_interpolation(
     const uint64_t owner = p_binding->id;
     const uint32_t lane = table.family == store::Family::RETAINED ? 1 : 0;
     const int columns = table.schema.column_count();
-    const uint64_t mask
-        = interpolated_mask(p_binding, node, p_at, table, lane);
+    const uint64_t mask = interpolated_mask(p_binding, node, p_at, table, lane);
     const int64_t route = p_binding->get_route();
     for (int column = 0; column < columns; ++column) {
         if (column < INTERPOLATED_LIMIT && (mask >> column & 1) == 0) {
@@ -1967,10 +1959,12 @@ void SyncPipeline::handle_property_sync(
         return;
     }
 
-    NETW_NETWORK_PROFILE(plane->profiler().name_arrival(
-        plane->profiler_member(plane->liveness_route_of(p_entity.ptr()),
-                               channel_property, p_comp_node, prop)
-    ));
+    NETW_NETWORK_PROFILE(plane->profiler().name_arrival(plane->profiler_member(
+        plane->liveness_route_of(p_entity.ptr()),
+        channel_property,
+        p_comp_node,
+        prop
+    )));
     const Ref<NetwPropertyConfig> opt = script.is_valid()
         ? netw::script::model::get_property_config(script, prop)
         : Ref<NetwPropertyConfig>();
@@ -2097,10 +2091,12 @@ void SyncPipeline::handle_signal(
         return;
     }
 
-    NETW_NETWORK_PROFILE(plane->profiler().name_arrival(
-        plane->profiler_member(plane->liveness_route_of(p_entity.ptr()),
-                               channel_signal, p_comp_node, signal_name)
-    ));
+    NETW_NETWORK_PROFILE(plane->profiler().name_arrival(plane->profiler_member(
+        plane->liveness_route_of(p_entity.ptr()),
+        channel_signal,
+        p_comp_node,
+        signal_name
+    )));
     const Ref<NetwMemberConfig> opt = script.is_valid()
         ? netw::script::model::get_signal_config(script, signal_name)
         : Ref<NetwMemberConfig>();

@@ -62,10 +62,14 @@ TEST_CASE(
 
     stand.pipeline->register_derived(node);
     NETW_CHECK_EQ(stand.active(), int64_t(2));
-    CHECK(stand.pipeline->derived_binding(node, PropertySet::RECORD_STATE)
-              != nullptr);
-    CHECK(stand.pipeline->derived_binding(node, PropertySet::RECORD_INPUT)
-              != nullptr);
+    CHECK(
+        stand.pipeline->derived_binding(node, PropertySet::RECORD_STATE)
+        != nullptr
+    );
+    CHECK(
+        stand.pipeline->derived_binding(node, PropertySet::RECORD_INPUT)
+        != nullptr
+    );
 
     stand.pipeline->register_derived(node);
     NETW_CHECK_EQ(stand.active(), int64_t(2));
@@ -88,13 +92,18 @@ TEST_CASE(
 
     stand.pipeline->register_derived(node);
     NETW_CHECK_EQ(stand.active(), int64_t(1));
-    CHECK(stand.pipeline
-              ->derived_binding(node, PropertySet::RECORD_BROADCAST)
-              != nullptr);
-    CHECK(stand.pipeline->derived_binding(node, PropertySet::RECORD_STATE)
-              == nullptr);
-    CHECK(stand.pipeline->derived_binding(node, PropertySet::RECORD_INPUT)
-              == nullptr);
+    CHECK(
+        stand.pipeline->derived_binding(node, PropertySet::RECORD_BROADCAST)
+        != nullptr
+    );
+    CHECK(
+        stand.pipeline->derived_binding(node, PropertySet::RECORD_STATE)
+        == nullptr
+    );
+    CHECK(
+        stand.pipeline->derived_binding(node, PropertySet::RECORD_INPUT)
+        == nullptr
+    );
 
     memdelete(node);
 }
@@ -108,8 +117,10 @@ TEST_CASE(
 
     stand.pipeline->register_derived(node);
     NETW_CHECK_EQ(stand.active(), int64_t(0));
-    CHECK(stand.pipeline->derived_binding(node, PropertySet::RECORD_STATE)
-              == nullptr);
+    CHECK(
+        stand.pipeline->derived_binding(node, PropertySet::RECORD_STATE)
+        == nullptr
+    );
 
     memdelete(node);
 }

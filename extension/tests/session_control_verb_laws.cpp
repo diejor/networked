@@ -57,10 +57,7 @@ TEST_CASE(
 ) {
     const Ref<NetwMultiplayer> core = authority();
     const CallLog seen;
-    core->observe(
-        NetwMultiplayer::PEER_KICK_REQUESTED,
-        seen.callable("kick")
-    );
+    core->observe(NetwMultiplayer::PEER_KICK_REQUESTED, seen.callable("kick"));
 
     core->peer_request_kick(9, String("griefing"));
 

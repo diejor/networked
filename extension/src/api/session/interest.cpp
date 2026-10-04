@@ -1453,8 +1453,10 @@ void NetwMultiplayer::layer_set_driver(
     }
 }
 
-Callable NetwMultiplayer::layer_get_driver(const RID &p_layer, bool p_typed)
-    const {
+Callable NetwMultiplayer::layer_get_driver(
+    const RID &p_layer,
+    bool p_typed
+) const {
     const LayerDriverRow *row = layer_drivers.getptr(p_layer.get_id());
     return row != nullptr && row->typed == p_typed ? row->drive : Callable();
 }
@@ -1671,8 +1673,10 @@ void NetwMultiplayer::interest_layer_set_monitor_callback(
     layer_set_monitor(p_layer, p_callback, false);
 }
 
-Callable NetwMultiplayer::layer_get_monitor(const RID &p_layer, bool p_typed)
-    const {
+Callable NetwMultiplayer::layer_get_monitor(
+    const RID &p_layer,
+    bool p_typed
+) const {
     const LayerMonitorRow *row = layer_monitors.getptr(p_layer.get_id());
     return row != nullptr && row->typed == p_typed ? row->watch : Callable();
 }

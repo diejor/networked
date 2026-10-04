@@ -236,8 +236,7 @@ bool from_property_configs(
                 window_owner = property;
             }
         }
-        if (config->get_set_audience()
-            == PropertySet::AUDIENCE_SERVER_ONLY) {
+        if (config->get_set_audience() == PropertySet::AUDIENCE_SERVER_ONLY) {
             if (want_broadcast) {
                 warn_broadcast_ignored("audience", property);
             } else if (!want_input) {

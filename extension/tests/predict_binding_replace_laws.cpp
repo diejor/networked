@@ -34,10 +34,7 @@ EntityDecl leaning_player() {
 
 void open_world(LoopbackRig &r_rig) {
     r_rig.declare_world(
-        WorldDecl().clocked(30, 3).lag_compensated().player(
-            leaning_player(),
-            0
-        )
+        WorldDecl().clocked(30, 3).lag_compensated().player(leaning_player(), 0)
     );
 }
 

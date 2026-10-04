@@ -10,8 +10,8 @@
 namespace TestNetwSimResolveLaws {
 
 using namespace godot;
-using netw::NetwPredictionEngine;
 using netw::NetwPrediction;
+using netw::NetwPredictionEngine;
 using netw::sim::Facts;
 using netw::sim::Mode;
 using netw::sim::Replicas;

@@ -159,8 +159,7 @@ public:
             values.tickrate_mismatch_action = p_value;
         }
     }
-    enums::NetwClock::MismatchAction
-    get_tickrate_mismatch_action() const {
+    enums::NetwClock::MismatchAction get_tickrate_mismatch_action() const {
         return enums::NetwClock::MismatchAction(
             values.tickrate_mismatch_action
         );

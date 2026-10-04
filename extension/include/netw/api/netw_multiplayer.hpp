@@ -15,8 +15,8 @@
 #include "godot/viewport.hpp"
 #include "netw/action_gate_book.hpp"
 #include "netw/api/action.hpp"
-#include "netw/api/clock_config.hpp"
 #include "netw/api/clock.hpp"
+#include "netw/api/clock_config.hpp"
 #include "netw/api/connection.hpp"
 #include "netw/api/database_config.hpp"
 #include "netw/api/entity_record.hpp"
@@ -36,8 +36,8 @@
 #include "netw/api/quantize.hpp"
 #include "netw/api/record.hpp"
 #include "netw/api/schema_core.hpp"
-#include "netw/api/session_config.hpp"
 #include "netw/api/session.hpp"
+#include "netw/api/session_config.hpp"
 #include "netw/api/session_stats.hpp"
 #include "netw/api/simulation.hpp"
 #include "netw/api/sync_model.hpp"
@@ -676,8 +676,10 @@ private:
     void session_announce_exited(int p_reason, const godot::String &p_detail);
     bool scene_admits_on_join = false;
     godot::ObjectID session_tree;
-    bool is_observing(Notification p_event, const godot::Callable &p_callback)
-        const;
+    bool is_observing(
+        Notification p_event,
+        const godot::Callable &p_callback
+    ) const;
     godot::HashSet<godot::StringName> misused_seams;
     godot::HashMap<godot::StringName, bool> seam_overrides;
     godot::ObjectID seam_script;
@@ -2005,9 +2007,7 @@ public:
         uint32_t &r_column
     );
     void display_follow_tables(display::Runtime *p_runtime);
-    void display_follow_binding(
-        const repl::PropertyBindingPtr &p_binding
-    );
+    void display_follow_binding(const repl::PropertyBindingPtr &p_binding);
     bool display_wants_runtime(godot::Node *p_owner) const;
     void display_rebuild_runtime(display::Runtime *p_runtime);
     void display_seat_bodies(display::Runtime *p_runtime);
@@ -2161,15 +2161,19 @@ public:
         const godot::Callable &p_callback,
         bool p_typed
     );
-    godot::Callable layer_get_driver(const godot::RID &p_layer, bool p_typed)
-        const;
+    godot::Callable layer_get_driver(
+        const godot::RID &p_layer,
+        bool p_typed
+    ) const;
     void layer_set_monitor(
         const godot::RID &p_layer,
         const godot::Callable &p_callback,
         bool p_typed
     );
-    godot::Callable layer_get_monitor(const godot::RID &p_layer, bool p_typed)
-        const;
+    godot::Callable layer_get_monitor(
+        const godot::RID &p_layer,
+        bool p_typed
+    ) const;
 
     godot::Error run_layer_drivers();
     int64_t layer_driver_count() const;
@@ -4160,7 +4164,10 @@ public:
         const godot::Variant &p_a,
         const godot::Variant &p_b
     );
-    godot::Error observe(Notification p_event, const godot::Callable &p_callback);
+    godot::Error observe(
+        Notification p_event,
+        const godot::Callable &p_callback
+    );
     void unobserve(Notification p_event, const godot::Callable &p_callback);
     template <typename... Args>
     void notify(Notification p_event, const Args &...p_args) {

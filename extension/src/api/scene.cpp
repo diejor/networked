@@ -204,10 +204,7 @@ bool NetwScene::is_watching(const Ref<NetwPlayer> &p_player) const {
         && session->scene_subscribes(get_rid(), p_player->get_peer_id());
 }
 
-void NetwScene::announce_body(
-    const Ref<NetwEntity> &p_body,
-    bool p_present
-) {
+void NetwScene::announce_body(const Ref<NetwEntity> &p_body, bool p_present) {
     emit_signal(p_present ? SNAME_BODY_ENTERED : SNAME_BODY_LEFT, p_body);
 }
 
@@ -280,10 +277,7 @@ void NetwScene::_bind_methods() {
         "",
         "get_bodies"
     );
-    ClassDB::bind_method(
-        D_METHOD("get_viewers"),
-        &NetwScene::get_viewers
-    );
+    ClassDB::bind_method(D_METHOD("get_viewers"), &NetwScene::get_viewers);
     ADD_PROPERTY(
         PropertyInfo(
             Variant::ARRAY,
@@ -308,10 +302,7 @@ void NetwScene::_bind_methods() {
         "",
         "get_local_bodies"
     );
-    ClassDB::bind_method(
-        D_METHOD("get_entities"),
-        &NetwScene::get_entities
-    );
+    ClassDB::bind_method(D_METHOD("get_entities"), &NetwScene::get_entities);
     ADD_PROPERTY(
         PropertyInfo(
             Variant::ARRAY,
@@ -331,10 +322,7 @@ void NetwScene::_bind_methods() {
         &NetwScene::unobserve
     );
     ClassDB::bind_method(D_METHOD("watch", "player"), &NetwScene::watch);
-    ClassDB::bind_method(
-        D_METHOD("unwatch", "player"),
-        &NetwScene::unwatch
-    );
+    ClassDB::bind_method(D_METHOD("unwatch", "player"), &NetwScene::unwatch);
     ClassDB::bind_method(
         D_METHOD("is_watching", "player"),
         &NetwScene::is_watching

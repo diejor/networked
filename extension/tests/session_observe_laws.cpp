@@ -132,9 +132,9 @@ TEST_CASE(
 
     CHECK(
         heard.order()
-        == Vector<StringName>({StringName("before"),
-                               StringName("on"),
-                               StringName("after")})
+        == Vector<StringName>(
+            {StringName("before"), StringName("on"), StringName("after")}
+        )
     );
     NETW_CHECK_EQ(int64_t(heard.args(StringName("on"))[1]), tick);
     CHECK(double(heard.args(StringName("on"))[0]) > 0.0);
@@ -169,11 +169,13 @@ TEST_CASE(
     clock.physics_step(clock.ticktime());
     CHECK(
         heard.order()
-        == Vector<StringName>({StringName("loop_in"),
-                               StringName("before"),
-                               StringName("on"),
-                               StringName("after"),
-                               StringName("loop_out")})
+        == Vector<StringName>(
+            {StringName("loop_in"),
+             StringName("before"),
+             StringName("on"),
+             StringName("after"),
+             StringName("loop_out")}
+        )
     );
 
     heard.clear();
@@ -187,9 +189,9 @@ TEST_CASE(
     clock.force_step(1);
     CHECK(
         heard.order()
-        == Vector<StringName>({StringName("before"),
-                               StringName("on"),
-                               StringName("after")})
+        == Vector<StringName>(
+            {StringName("before"), StringName("on"), StringName("after")}
+        )
     );
 }
 

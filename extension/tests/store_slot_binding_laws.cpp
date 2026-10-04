@@ -57,8 +57,7 @@ TEST_CASE(
     World &world = session->store();
     NetwPredictionEngine *pool = session->get_prediction_engine();
     NetwLagCompCore *rewind = session->get_lagcomp_core();
-    const uint32_t table
-        = world.table_for(1, Family::VOLATILE, pose_schema());
+    const uint32_t table = world.table_for(1, Family::VOLATILE, pose_schema());
 
     RowAddress old_row;
     const EntityRef old_life = placed(world, table, 10, 5, 1, old_row);

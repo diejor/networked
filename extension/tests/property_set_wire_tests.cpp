@@ -17,15 +17,15 @@ namespace TestNetwPropertySetWire {
 
 using namespace godot;
 using netw::NetwQuantizeScalar;
+using netw::SchemaCore;
+using netw::enums::NetwMultiplayer;
 using netw::repl::PropertyBinding;
 using netw::repl::PropertyBindingPtr;
 using netw::repl::PropertyColumn;
 using netw::repl::PropertySet;
-using netw::SchemaCore;
 using netw_test::Books;
 using netw_test::DeclaredSet;
 using netw_test::ReplicationSend;
-using netw::enums::NetwMultiplayer;
 
 const int64_t SYNC_ROW_DELTA = 40;
 
@@ -64,9 +64,7 @@ ReplicationSend retained_send() {
     return ReplicationSend();
 }
 
-netw_test::RowOffer retained_offer(
-    const PropertyBindingPtr &p_binding
-) {
+netw_test::RowOffer retained_offer(const PropertyBindingPtr &p_binding) {
     netw_test::RowOffer offer;
     offer.route = 1;
     offer.comp = 0;
@@ -84,19 +82,13 @@ netw_test::RowOffer retained_offer(
     return offer;
 }
 
-void accept_pass(
-    ReplicationSend &p_send,
-    const PropertyBindingPtr &p_binding
-) {
+void accept_pass(ReplicationSend &p_send, const PropertyBindingPtr &p_binding) {
     LocalVector<netw_test::RowOffer> owed;
     owed.push_back(retained_offer(p_binding));
     netw_test::accept_streams(p_send, owed, 2);
 }
 
-Array one_pass(
-    ReplicationSend &p_send,
-    const PropertyBindingPtr &p_binding
-) {
+Array one_pass(ReplicationSend &p_send, const PropertyBindingPtr &p_binding) {
     LocalVector<netw_test::RowOffer> offers;
     offers.push_back(retained_offer(p_binding));
     netw_test::seat_streams(p_send, offers);
@@ -395,8 +387,7 @@ TEST_CASE(
     "and moves the identity"
 ) {
     Books books;
-    const DeclaredSet input
-        = integrated_set(books, PropertySet::RECORD_INPUT);
+    const DeclaredSet input = integrated_set(books, PropertySet::RECORD_INPUT);
     const int64_t derived_identity = input->identity_hash();
 
     input->columns[0].delta_mode = PropertyColumn::DELTA_LADDER;
@@ -407,8 +398,7 @@ TEST_CASE(
     const bool identity_moved = input->identity_hash() != derived_identity;
     CHECK(identity_moved);
 
-    const DeclaredSet state
-        = integrated_set(books, PropertySet::RECORD_STATE);
+    const DeclaredSet state = integrated_set(books, PropertySet::RECORD_STATE);
     state->columns[0].delta_mode = PropertyColumn::DELTA_FULL;
     state->reproject_lanes();
     const bool override_refuses

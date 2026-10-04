@@ -128,10 +128,8 @@ TEST_CASE(
     StoreArrival arrival(books.bindings.create(pose, dst));
 
     const CodeRow first = pose_row(set, Vector2(1.0, 1.0), 1.0);
-    const bool committed = settle(
-        arrival,
-        pose_frame(set, Vector2(1.0, 1.0), 1.0, COLUMN_BOTH)
-    );
+    const bool committed
+        = settle(arrival, pose_frame(set, Vector2(1.0, 1.0), 1.0, COLUMN_BOTH));
     CHECK(committed);
     CHECK(row_position(arrival) == Vector2(1.0, 1.0));
 
@@ -175,20 +173,14 @@ TEST_CASE(
 
     PackedByteArray torn = delta;
     torn.resize(delta.size() - 1);
-    NETW_CHECK_EQ(
-        int(arrival.land(torn, -1, false)),
-        int(Landing::MALFORMED)
-    );
+    NETW_CHECK_EQ(int(arrival.land(torn, -1, false)), int(Landing::MALFORMED));
     const bool the_refusal_left_the_row_alone
         = row_position(arrival) == Vector2(1.0, 2.0);
     CHECK(the_refusal_left_the_row_alone);
 
-    NETW_CHECK_EQ(
-        int(arrival.land(delta, -1, false)),
-        int(Landing::ACCEPTED)
-    );
-    const bool the_baseline_still_composed = row_position(arrival)
-        == Vector2(4.0, 5.0);
+    NETW_CHECK_EQ(int(arrival.land(delta, -1, false)), int(Landing::ACCEPTED));
+    const bool the_baseline_still_composed
+        = row_position(arrival) == Vector2(4.0, 5.0);
     CHECK(the_baseline_still_composed);
 
     memdelete(dst);
@@ -203,8 +195,7 @@ TEST_CASE(
     PropertySet *const set = books.sets.get(pose);
     Node *bare = memnew(Node);
     netw_test::LandedLog log;
-    const PropertyBindingPtr binding
-        = books.bindings.create(pose, bare);
+    const PropertyBindingPtr binding = books.bindings.create(pose, bare);
     log.watch(binding);
     StoreArrival arrival(binding);
 
@@ -238,14 +229,11 @@ TEST_CASE(
     );
     REQUIRE(dst != nullptr);
     const Ref<Script> script = dst->get_script();
-    const PropertyBindingPtr binding
-        = books.bindings.create(pose, dst);
+    const PropertyBindingPtr binding = books.bindings.create(pose, dst);
     StoreArrival arrival(binding);
 
-    const bool committed = settle(
-        arrival,
-        pose_frame(set, Vector2(5.0, 5.0), 1.0, COLUMN_BOTH)
-    );
+    const bool committed
+        = settle(arrival, pose_frame(set, Vector2(5.0, 5.0), 1.0, COLUMN_BOTH));
     CHECK(committed);
     CHECK(row_position(arrival) == Vector2(5.0, 5.0));
 
@@ -284,8 +272,7 @@ TEST_CASE(
     Node2D *dst = memnew(Node2D);
     dst->set_position(Vector2(-1.0, -1.0));
     netw_test::LandedLog log;
-    const PropertyBindingPtr binding
-        = books.bindings.create(pose, dst);
+    const PropertyBindingPtr binding = books.bindings.create(pose, dst);
     binding->write_gate = false;
     log.watch(binding);
     StoreArrival arrival(binding);
@@ -317,8 +304,7 @@ TEST_CASE(
     PropertySet *const set = books.sets.get(pose);
     Node2D *dst = memnew(Node2D);
     netw_test::LandedLog log;
-    const PropertyBindingPtr binding
-        = books.bindings.create(pose, dst);
+    const PropertyBindingPtr binding = books.bindings.create(pose, dst);
     log.watch(binding);
     StoreArrival arrival(binding);
 

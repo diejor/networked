@@ -138,8 +138,7 @@ public:
             simulation->simulate(other);
         }
 
-        const Ref<NetwPrediction> handle
-            = session->prediction_handle(entity);
+        const Ref<NetwPrediction> handle = session->prediction_handle(entity);
         if (handle.is_valid()) {
             sensor_is_the_one_installed = Variant(handle->get_sensors().get(
                                               StringName(SENSOR_KEY),
@@ -425,8 +424,7 @@ public:
             NetwPrediction::RECOVERY_POLICY_REBASE_REPLAY
         );
 
-        const Ref<NetwPrediction> handle
-            = session->prediction_handle(entity);
+        const Ref<NetwPrediction> handle = session->prediction_handle(entity);
         REQUIRE(handle.is_valid());
         policy = handle->resolved_recovery_policy();
         netw::NetwPredictionEngine *pool = session->get_prediction_engine();
@@ -606,9 +604,12 @@ TEST_CASE(
         )),
         3
     );
-    CHECK(bool(
-        session->predict_get_param(entity, NetwMultiplayer::PREDICT_PARAM_SLEEPING)
-    ));
+    CHECK(
+        bool(session->predict_get_param(
+            entity,
+            NetwMultiplayer::PREDICT_PARAM_SLEEPING
+        ))
+    );
 
     session->predict_set_param(
         entity,

@@ -144,10 +144,12 @@ TEST_CASE(
         PackedByteArray frame;
         bool split = false;
         for (uint32_t at = 0; at < result.sends.size(); ++at) {
-            frame.resize(netw::wire::frame_size(
-                result.sends[at].route,
-                result.sends[at].bytes.size()
-            ));
+            frame.resize(
+                netw::wire::frame_size(
+                    result.sends[at].route,
+                    result.sends[at].bytes.size()
+                )
+            );
             const netw::CarrierBatch early
                 = carrier.append(PEER, frame, false, DATAGRAM);
             if (early.is_empty()) {

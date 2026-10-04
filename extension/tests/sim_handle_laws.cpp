@@ -75,10 +75,7 @@ TEST_CASE(
     REQUIRE(copy.is_valid());
     const Ref<NetwSimulation> simulation = copy->get_simulation();
     REQUIRE(simulation.is_valid());
-    NETW_CHECK_EQ(
-        int(simulation->get_mode()),
-        int(NetwSimulation::MODE_NONE)
-    );
+    NETW_CHECK_EQ(int(simulation->get_mode()), int(NetwSimulation::MODE_NONE));
 
     CallLog log;
     simulation->connect(StringName("mode_changed"), log.callable("moved"));
@@ -89,10 +86,7 @@ TEST_CASE(
         int(NetwSimulation::MODE_ACTIVE)
     );
     simulation->set_replicas(NetwSimulation::REPLICAS_PROXY);
-    NETW_CHECK_EQ(
-        int(simulation->get_mode()),
-        int(NetwSimulation::MODE_PROXY)
-    );
+    NETW_CHECK_EQ(int(simulation->get_mode()), int(NetwSimulation::MODE_PROXY));
     simulation->set_replicas(NetwSimulation::REPLICAS_PROXY);
 
     NETW_REQUIRE_EQ(log.count(StringName("moved")), 2);

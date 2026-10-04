@@ -147,13 +147,11 @@ TEST_CASE(
     CHECK_FALSE(pool->input_lane_open(slot));
 
     SUBCASE("but a latched remote speculates, so it does take one") {
-        CHECK(
-            pool->wire_role_timeline(
-                slot,
-                int(NetwPrediction::ROLE_REMOTE),
-                true
-            )
-        );
+        CHECK(pool->wire_role_timeline(
+            slot,
+            int(NetwPrediction::ROLE_REMOTE),
+            true
+        ));
         CHECK(pool->input_lane_open(slot));
         NETW_CHECK_EQ(rewind_slot(core, seated), int64_t(-1));
     }
