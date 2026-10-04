@@ -194,6 +194,13 @@ NetwCarrierFrame NetwMultiplayer::receive_header(
     count_received(p_packet.size() - header.payload_offset);
     attribution.note_datagram(true, int64_t(p_packet.size()));
     capture_note(wire::CaptureDirection::IN, p_peer, p_packet);
+#if defined(DEBUG_ENABLED)
+    const uint32_t subject = header.payload_offset == p_packet.size()
+        ? network_profiler.ack_subject()
+        : network_profiler.overhead_subject();
+    network_profiler.observe(subject, network_profiler.epoch(), p_peer,
+                             true, header.payload_offset);
+#endif
     if (plane.wants(EventPlane::DATAGRAM_RECEIVED, 0)) {
         EventPlane::Emission fact(
             EventPlane::DATAGRAM_RECEIVED,
@@ -523,31 +530,6 @@ void NetwMultiplayer::capture_close() {
     capture.close();
 }
 
-const StringName &NetwMultiplayer::attribution_feed_message() {
-    static const StringName message("netw:attribution");
-    return message;
-}
-
-Array NetwMultiplayer::attribution_feed_payload() {
-    Array payload;
-    if (!attribution.is_armed()) {
-        return payload;
-    }
-    payload.push_back(attribution.snapshot());
-    return payload;
-}
-
-void NetwMultiplayer::attribution_feed_push() {
-    if (!gd::debugger_active()) {
-        return;
-    }
-    const Array payload = attribution_feed_payload();
-    if (payload.is_empty()) {
-        return;
-    }
-    gd::debugger_send(attribution_feed_message(), payload);
-}
-
 void NetwMultiplayer::count_received(int64_t p_bytes) {
     received_packets += 1;
     received_bytes += p_bytes;
@@ -688,6 +670,7 @@ void NetwMultiplayer::rpc_sweep_transactions(int64_t p_current) {
     const PackedInt64Array expired = rpc_txns.expire(p_current);
     for (int at = 0; at < expired.size(); ++at) {
         const int64_t txn = expired[at];
+        NETW_NETWORK_PROFILE(network_profiler.forget_transaction(txn));
         const RpcSettle settle = rpc_settle_of(txn);
         rpc_settles.erase(txn);
         if (settle.single.is_valid()) {
@@ -701,6 +684,7 @@ void NetwMultiplayer::rpc_sweep_transactions(int64_t p_current) {
 }
 
 void NetwMultiplayer::rpc_handle_disconnect(int64_t p_peer) {
+    NETW_NETWORK_PROFILE(network_profiler.forget_peer(p_peer));
     if (rpc_disposed) {
         return;
     }
@@ -1060,6 +1044,10 @@ void NetwMultiplayer::rpc_call(
     }
     const int64_t comp = entity->comp_of(node);
     const String comp_path = entity->comp_path_of(node);
+    NETW_NETWORK_PROFILE(wire::ProfileSubjectScope observation(
+        profiler_outgoing,
+        profiler_member(route, wire::builtin_channel("CALL"), node, method)
+    ));
     for (int at = 0; at < recipients.size(); ++at) {
         send_to(
             recipients[at],
@@ -1168,6 +1156,16 @@ Ref<NetwPromise> NetwMultiplayer::rpc_request_call(
         request.arg_types
     );
 
+    NETW_NETWORK_PROFILE(const uint32_t subject = profiler_member(
+        request.route, wire::builtin_channel("CALL"),
+        request.node, request.method
+    ));
+    NETW_NETWORK_PROFILE(wire::ProfileSubjectScope observation(
+        profiler_outgoing, subject
+    ));
+    NETW_NETWORK_PROFILE(network_profiler.remember_reply(
+        p_peer, txn, false, subject
+    ));
     send_to(
         p_peer,
         request.route,
@@ -1217,7 +1215,17 @@ Ref<NetwGroupPromise> NetwMultiplayer::rpc_request_call_group(
         request.arg_types
     );
 
+    NETW_NETWORK_PROFILE(const uint32_t subject = profiler_member(
+        request.route, wire::builtin_channel("CALL"),
+        request.node, request.method
+    ));
+    NETW_NETWORK_PROFILE(wire::ProfileSubjectScope observation(
+        profiler_outgoing, subject
+    ));
     for (int at = 0; at < peers.size(); ++at) {
+        NETW_NETWORK_PROFILE(network_profiler.remember_reply(
+            peers[at], txn, false, subject
+        ));
         send_to(
             peers[at],
             request.route,
@@ -1247,6 +1255,10 @@ void NetwMultiplayer::rpc_send_reply(
         || !stream.align_verify()) {
         return;
     }
+    NETW_NETWORK_PROFILE(wire::ProfileSubjectScope observation(
+        profiler_outgoing,
+        network_profiler.take_reply(p_peer, p_txn, true)
+    ));
     send_to(
         p_peer,
         p_route,
@@ -1451,6 +1463,15 @@ void NetwMultiplayer::rpc_handle_call(
     if (String(method).is_empty()) {
         return;
     }
+
+    NETW_NETWORK_PROFILE(const uint32_t subject = profiler_member(
+        liveness_route_of(p_entity.ptr()), wire::builtin_channel("CALL"),
+        p_comp_node, method
+    ));
+    NETW_NETWORK_PROFILE(network_profiler.name_arrival(subject));
+    NETW_NETWORK_PROFILE(network_profiler.remember_reply(
+        p_sender, txn, true, subject
+    ));
 
     const Ref<NetwMemberConfig> options
         = netw::script::model::get_rpc_options(script, method);
@@ -1760,6 +1781,18 @@ Error NetwMultiplayer::send_frame(
     outgoing.route = subject_route;
     outgoing.comp = p_comp;
     outgoing.bits = int64_t(framed.size()) * 8;
+#if defined(DEBUG_ENABLED)
+    if (network_profiler.active()) {
+        outgoing.subject = profiler_outgoing != wire::NetworkProfiler::NONE
+            ? profiler_outgoing
+            : profiler_frame_subject(subject_route, p_comp, p_channel,
+                                     p_path);
+        if (outgoing.subject == wire::NetworkProfiler::SKIP) {
+            outgoing.subject = wire::NetworkProfiler::NONE;
+        }
+        outgoing.epoch = network_profiler.epoch();
+    }
+#endif
 
     const bool aggregating = channel_aggregates(p_channel, p_batched);
     if (!aggregating) {
@@ -1801,7 +1834,7 @@ int64_t NetwMultiplayer::send_datagram(
         return -1;
     }
 
-    const NetwCarrierDatagram datagram
+    NetwCarrierDatagram datagram
         = frame_datagram(p_peer, p_payload, p_reliable, p_carrier);
 #if defined(NETW_TESTS)
     const int64_t before_transport = store::allocations_seen();
@@ -1816,6 +1849,22 @@ int64_t NetwMultiplayer::send_datagram(
 #if defined(NETW_TESTS)
     idle_work.transport_allocations
         += store::allocations_seen() - before_transport;
+#endif
+#if defined(DEBUG_ENABLED)
+    if (delivered == OK) {
+        for (const wire::Attribution &frame : datagram.observations) {
+            network_profiler.observe(frame.subject, frame.epoch, p_peer,
+                                     false, frame.bits / 8);
+        }
+        network_profiler.observe(
+            network_profiler.overhead_subject(), network_profiler.epoch(),
+            p_peer, false, datagram.bytes.size() - p_payload.size()
+        );
+    }
+    if (!datagram.observations.is_empty()) {
+        attribution.recycle(p_peer, p_reliable, p_carrier,
+                            std::move(datagram.observations));
+    }
 #endif
     if (delivered != OK && p_peer != 0) {
         if (session_link_is_connected()) {
@@ -1996,7 +2045,12 @@ NetwCarrierDatagram NetwMultiplayer::frame_datagram(
             note_echoed_seq(p_peer, ack);
         }
     }
-    attribution.commit(p_peer, p_reliable, p_carrier, seq);
+    attribution.commit(
+        p_peer, p_reliable, p_carrier, seq
+#if defined(DEBUG_ENABLED)
+        , network_profiler.active() ? &out.observations : nullptr
+#endif
+    );
     out.bytes = NetwCarrierFrame::build(
         frame_stream,
         p_payload,
@@ -2255,6 +2309,13 @@ void NetwMultiplayer::send_standalone_ack(int64_t p_peer, int64_t p_ack) {
         MultiplayerPeer::TRANSFER_MODE_UNRELIABLE,
         0
     );
+#if defined(DEBUG_ENABLED)
+    if (delivered == OK) {
+        network_profiler.observe(network_profiler.ack_subject(),
+                                 network_profiler.epoch(), p_peer, false,
+                                 framed.size());
+    }
+#endif
     if (delivered != OK && session_link_is_connected()) {
         peer_mark_unreachable(p_peer);
     }

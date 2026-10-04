@@ -1067,6 +1067,10 @@ void NetwMultiplayer::action_receive_carrier(
         );
         return;
     }
+    NETW_NETWORK_PROFILE(network_profiler.name_arrival(
+        profiler_member(p_entity->get_route(), wire::builtin_channel("ACTION"),
+                        p_entity->get_owner(), body.method)
+    ));
     const Variant carried = gd::bytes_to_var(body.data);
     if (carried.get_type() != Variant::ARRAY) {
         NETW_TRACE(
@@ -1296,7 +1300,7 @@ Dictionary NetwMultiplayer::predict_metrics() const {
 
 void NetwMultiplayer::advance_frame() {
     frame_counter += 1;
-    attribution_feed_push();
+    NETW_NETWORK_PROFILE(profiler_publish());
 }
 
 void NetwMultiplayer::session_defer(

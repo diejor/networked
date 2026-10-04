@@ -22,4 +22,11 @@ void debugger_send(const String &p_message, const Array &p_data) {
     EngineDebugger::get_singleton()->send_message(p_message, p_data);
 }
 
+#if defined(DEBUG_ENABLED)
+bool debugger_profiling(const StringName &p_name) {
+    return debugger_active()
+        && EngineDebugger::get_singleton()->is_profiling(p_name);
+}
+#endif
+
 } // namespace netw::gd

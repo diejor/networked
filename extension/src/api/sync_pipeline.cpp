@@ -1284,6 +1284,11 @@ void SyncPipeline::send_property(Node *p_node, const StringName &p_property) {
         return;
     }
 
+    NETW_NETWORK_PROFILE(wire::ProfileSubjectScope observation(
+        plane->profiler_outgoing_subject(),
+        plane->profiler_member(int64_t(frame[StringName("route")]),
+                               set->get_channel(), p_node, p_property)
+    ));
     send_entity_event(
         frame,
         set->get_channel(),
@@ -1373,6 +1378,11 @@ void SyncPipeline::send_signal(
         return;
     }
 
+    NETW_NETWORK_PROFILE(wire::ProfileSubjectScope observation(
+        plane->profiler_outgoing_subject(),
+        plane->profiler_member(int64_t(frame[StringName("route")]),
+                               channel_signal, p_node, p_signal)
+    ));
     send_entity_event(frame, channel_signal, stream.to_bytes(), reliable);
 }
 
@@ -1957,6 +1967,10 @@ void SyncPipeline::handle_property_sync(
         return;
     }
 
+    NETW_NETWORK_PROFILE(plane->profiler().name_arrival(
+        plane->profiler_member(plane->liveness_route_of(p_entity.ptr()),
+                               channel_property, p_comp_node, prop)
+    ));
     const Ref<NetwPropertyConfig> opt = script.is_valid()
         ? netw::script::model::get_property_config(script, prop)
         : Ref<NetwPropertyConfig>();
@@ -2083,6 +2097,10 @@ void SyncPipeline::handle_signal(
         return;
     }
 
+    NETW_NETWORK_PROFILE(plane->profiler().name_arrival(
+        plane->profiler_member(plane->liveness_route_of(p_entity.ptr()),
+                               channel_signal, p_comp_node, signal_name)
+    ));
     const Ref<NetwMemberConfig> opt = script.is_valid()
         ? netw::script::model::get_signal_config(script, signal_name)
         : Ref<NetwMemberConfig>();

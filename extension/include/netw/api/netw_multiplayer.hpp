@@ -593,6 +593,13 @@ private:
     DatagramSeqBook seq_book;
     NetwCarrierBuffers carrier;
     wire::AttributionBook attribution;
+#if defined(DEBUG_ENABLED)
+    wire::NetworkProfiler network_profiler;
+    uint32_t profiler_outgoing = wire::NetworkProfiler::NONE;
+    uint64_t profiler_last_publish = 0;
+    godot::Array profiler_rpc_payload;
+    godot::Array profiler_sync_payload;
+#endif
     wire::CaptureWriter capture;
     bool capture_decided = false;
     int64_t attribution_subject_route = 0;
@@ -3064,9 +3071,37 @@ public:
     }
     godot::Dictionary capture_header();
 
-    godot::Array attribution_feed_payload();
-    void attribution_feed_push();
-    static const godot::StringName &attribution_feed_message();
+#if defined(DEBUG_ENABLED)
+    void profiler_poll();
+    void profiler_publish();
+    void profiler_node_changed(int64_t p_node);
+    void profiler_watch_node(godot::Node *p_node);
+    godot::String profiler_path(godot::Node *p_node) const;
+    uint32_t &profiler_outgoing_subject() {
+        return profiler_outgoing;
+    }
+    uint32_t profiler_member(
+        int64_t p_route,
+        int64_t p_channel,
+        godot::Node *p_node,
+        const godot::StringName &p_member
+    );
+    uint32_t profiler_frame_subject(
+        int64_t p_route,
+        int64_t p_comp,
+        int64_t p_channel,
+        const godot::String &p_path
+    );
+    uint32_t profiler_synchronizer(
+        int64_t p_route,
+        godot::ObjectID p_sync,
+        godot::ObjectID p_root,
+        godot::ObjectID p_config
+    );
+    wire::NetworkProfiler &profiler() {
+        return network_profiler;
+    }
+#endif
 
     int64_t get_sent_packets() const;
     int64_t get_sent_bytes() const;

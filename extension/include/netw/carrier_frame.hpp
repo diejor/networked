@@ -4,6 +4,9 @@
 
 #include "godot/variant.hpp"
 #include "netw/wire/describe.hpp"
+#if defined(DEBUG_ENABLED)
+#include "netw/wire/attribution.hpp"
+#endif
 
 namespace netw {
 
@@ -85,6 +88,9 @@ struct NetwCarrierFrame {
 struct NetwCarrierDatagram {
     godot::PackedByteArray bytes;
     int64_t seq = -1;
+#if defined(DEBUG_ENABLED)
+    godot::LocalVector<wire::Attribution> observations;
+#endif
 };
 
 } // namespace netw

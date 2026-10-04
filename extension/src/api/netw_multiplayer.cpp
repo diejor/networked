@@ -2795,6 +2795,7 @@ Error NetwMultiplayer::NETW_API_VIRTUAL(poll)() {
     if (engine != nullptr && engine->is_editor_hint()) {
         return OK;
     }
+    NETW_NETWORK_PROFILE(profiler_poll());
     embed_autosettle_tree_default();
     {
         NETW_ZONE_NC("Transport poll", colors::TRANSPORT);

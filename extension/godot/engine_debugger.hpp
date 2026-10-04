@@ -18,6 +18,10 @@ namespace netw::gd {
 
 bool debugger_active();
 
+#if defined(DEBUG_ENABLED)
+bool debugger_profiling(const godot::StringName &p_name);
+#endif
+
 void debugger_send(const godot::String &p_message, const godot::Array &p_data);
 
 } // namespace netw::gd

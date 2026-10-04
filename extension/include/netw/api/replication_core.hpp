@@ -105,6 +105,9 @@ private:
     );
     bool defers_unknown_route(int64_t p_channel, bool p_reliable) const;
     bool channel_addresses_a_set(int64_t p_channel) const;
+#if defined(DEBUG_ENABLED)
+    bool handler_names_arrival(int64_t p_channel) const;
+#endif
     godot::Error admit_entity_frame(
         int64_t p_sender,
         int64_t p_route,

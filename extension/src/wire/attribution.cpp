@@ -67,6 +67,9 @@ int64_t AttributionBook::commit(
     bool p_reliable,
     bool p_carrier,
     int64_t p_seq
+#if defined(DEBUG_ENABLED)
+    , LocalVector<Attribution> *r_frames
+#endif
 ) {
     const uint64_t key = lane_key(p_peer, p_reliable, p_carrier);
     LocalVector<Attribution> *run = staged.getptr(key);
@@ -84,9 +87,33 @@ int64_t AttributionBook::commit(
         bytes_out[peer_channel_key(frame.peer, frame.channel)] += bytes;
         route_out[frame.route] += bytes;
     }
+#if defined(DEBUG_ENABLED)
+    if (r_frames != nullptr) {
+        *r_frames = std::move(*run);
+    } else {
+        run->clear();
+    }
+#else
     run->clear();
+#endif
     return bits / 8;
 }
+
+#if defined(DEBUG_ENABLED)
+void AttributionBook::recycle(
+    int64_t p_peer,
+    bool p_reliable,
+    bool p_carrier,
+    LocalVector<Attribution> &&p_frames
+) {
+    LocalVector<Attribution> *run
+        = staged.getptr(lane_key(p_peer, p_reliable, p_carrier));
+    if (run != nullptr && run->is_empty()) {
+        *run = std::move(p_frames);
+        run->clear();
+    }
+}
+#endif
 
 void AttributionBook::discard(int64_t p_peer, bool p_reliable, bool p_carrier) {
     const uint64_t key = lane_key(p_peer, p_reliable, p_carrier);

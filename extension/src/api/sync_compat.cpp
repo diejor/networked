@@ -947,6 +947,12 @@ void SyncCompat::pump() {
             const PackedByteArray stock = encode_sync_frame(row, route);
             if (!stock.is_empty()) {
                 row->last_sync_usec = now;
+                NETW_NETWORK_PROFILE(wire::ProfileSubjectScope observation(
+                    plane->profiler_outgoing_subject(),
+                    plane->profiler_synchronizer(
+                        route, row->sync, row->root, row->config
+                    )
+                ));
                 for (int peer = 0; peer < recipients.size(); ++peer) {
                     const PackedByteArray payload
                         = run_encode_stage(recipients[peer], stock);
@@ -1014,6 +1020,12 @@ void SyncCompat::send_deltas(
         return;
     }
     const int64_t ordinal = ordinal_of(p_row);
+    NETW_NETWORK_PROFILE(wire::ProfileSubjectScope observation(
+        plane->profiler_outgoing_subject(),
+        plane->profiler_synchronizer(
+            p_route, p_row->sync, p_row->root, p_row->config
+        )
+    ));
     for (int at = 0; at < p_recipients.size(); ++at) {
         const int64_t peer_id = p_recipients[at];
         uint64_t mask = 0;
@@ -1225,6 +1237,11 @@ void SyncCompat::handle_sync(
         return;
     }
     refresh_row(row);
+    NETW_NETWORK_PROFILE(plane->profiler().name_arrival(
+        plane->profiler_synchronizer(
+            route, row->sync, row->root, row->config
+        )
+    ));
     validate_schema(row, route);
     if (row->poisoned) {
         drops_sync_poisoned += 1;
@@ -1310,6 +1327,11 @@ void SyncCompat::handle_sync_delta(
         return;
     }
     refresh_row(row);
+    NETW_NETWORK_PROFILE(plane->profiler().name_arrival(
+        plane->profiler_synchronizer(
+            route, row->sync, row->root, row->config
+        )
+    ));
     validate_schema(row, route);
     if (row->poisoned) {
         drops_sync_poisoned += 1;

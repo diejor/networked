@@ -228,6 +228,11 @@ void NetwMultiplayer::action_send_request(
     body.data = gd::var_to_bytes(p_args);
     body.key = p_key;
     body.timing = p_timing_mode;
+    NETW_NETWORK_PROFILE(wire::ProfileSubjectScope observation(
+        profiler_outgoing,
+        profiler_member(route, wire::builtin_channel("ACTION"),
+                        node_from_tree_path(p_target_path), p_method)
+    ));
     plane->send_to(
         destination,
         route,

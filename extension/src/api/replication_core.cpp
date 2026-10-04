@@ -563,11 +563,33 @@ Error ReplicationCore::receive_carrier(
     Error result = OK;
     int64_t frames = 0;
     while (reader.bits_remaining() > 0) {
+#if defined(DEBUG_ENABLED)
+        const int64_t before = reader.bit_length();
+#endif
         wire::Frame frame;
         if (!wire::frame_unpack_next(reader, frame)) {
             return finish_receive_pass(frames, ERR_INVALID_DATA, p_sender);
         }
         frames += 1;
+#if defined(DEBUG_ENABLED)
+        NetwMultiplayer *plane = core();
+        const bool loopback
+            = plane != nullptr && p_sender == plane->get_unique_id();
+        const uint32_t provisional = plane == nullptr
+            ? wire::NetworkProfiler::NONE
+            : handler_names_arrival(frame.channel)
+            ? plane->profiler().aggregate(frame.channel)
+            : plane->profiler_frame_subject(
+                frame.route, frame.comp, frame.channel, frame.path
+            );
+        wire::ProfileArrivalScope observation(
+            plane != nullptr ? &plane->profiler() : nullptr,
+            !loopback,
+            p_sender,
+            (reader.bit_length() - before) / 8,
+            provisional
+        );
+#endif
         const Error verdict = dispatch(
             frame.route,
             int64_t(frame.comp),
@@ -700,6 +722,9 @@ void ReplicationCore::dispatch_reply(
         return;
     }
     const int64_t txn = int64_t(staged);
+    NETW_NETWORK_PROFILE(plane->profiler().name_arrival(
+        plane->profiler().take_reply(p_sender, txn, false)
+    ));
     if (slots.is_empty() || !slots[0].addresses_node) {
         plane->rpc_handle_reply(
             txn,
@@ -893,6 +918,15 @@ bool ReplicationCore::channel_addresses_a_set(int64_t p_channel) const {
     return p_channel == ids.sync_row || p_channel == ids.sync_row_delta
         || p_channel == ids.sync_row_window;
 }
+
+#if defined(DEBUG_ENABLED)
+bool ReplicationCore::handler_names_arrival(int64_t p_channel) const {
+    return p_channel == ids.call || p_channel == ids.reply
+        || p_channel == ids.signal || p_channel == ids.property_sync
+        || p_channel == ids.sync || p_channel == ids.sync_delta
+        || p_channel == ids.action;
+}
+#endif
 
 bool ReplicationCore::defers_unknown_route(
     int64_t p_channel,

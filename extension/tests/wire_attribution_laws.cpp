@@ -272,8 +272,7 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Wire][SceneTree] A6 the profiler feed reads the book and "
-    "never spends it, so arming an instrument cannot change what it measures"
+    "[Networked][Wire][SceneTree] A6 snapshot reads never spend the book"
 ) {
     Declared declared;
     Declared::mobs();
@@ -281,17 +280,14 @@ TEST_CASE(
     drive(rig);
 
     NetwMultiplayer *host = rig.server();
-    const bool silent_unarmed = host->attribution_feed_payload().is_empty();
-    CHECK(silent_unarmed);
-
     host->attribution_set_armed(true);
     const int64_t before = host->attribution_book().get_attributed_out();
     const bool spent = before > 0;
     CHECK(spent);
 
-    const Array first = host->attribution_feed_payload();
-    const Array second = host->attribution_feed_payload();
-    const bool carried = first.size() == 1 && second.size() == 1;
+    const Dictionary first = host->attribution_snapshot();
+    const Dictionary second = host->attribution_snapshot();
+    const bool carried = first == second;
     CHECK(carried);
 
     NETW_CHECK_EQ(host->attribution_book().get_attributed_out(), before);

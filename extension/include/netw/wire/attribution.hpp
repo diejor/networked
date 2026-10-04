@@ -5,6 +5,7 @@
 #include "godot/local_vector.hpp"
 #include "godot/templates.hpp"
 #include "godot/variant.hpp"
+#include "netw/wire/profiler.hpp"
 
 namespace netw::wire {
 
@@ -16,6 +17,10 @@ struct Attribution {
     int64_t comp = 0;
     int64_t bits = 0;
     int64_t column = -1;
+#if defined(DEBUG_ENABLED)
+    uint32_t subject = NetworkProfiler::NONE;
+    uint32_t epoch = 0;
+#endif
 };
 
 enum class Refusal : uint8_t {
@@ -71,7 +76,18 @@ public:
         bool p_reliable,
         bool p_carrier,
         int64_t p_seq
+#if defined(DEBUG_ENABLED)
+        , godot::LocalVector<Attribution> *r_frames = nullptr
+#endif
     );
+#if defined(DEBUG_ENABLED)
+    void recycle(
+        int64_t p_peer,
+        bool p_reliable,
+        bool p_carrier,
+        godot::LocalVector<Attribution> &&p_frames
+    );
+#endif
     void discard(int64_t p_peer, bool p_reliable, bool p_carrier);
     void discard_peer(int64_t p_peer);
     void retire_route(int64_t p_route);

@@ -296,6 +296,7 @@
 #include "wire_identity_coverage_tests.cpp"
 #include "wire_ladder_schedule_laws.cpp"
 #include "wire_plan_tests.cpp"
+#include "wire_profile_laws.cpp"
 #include "wire_refusal_laws.cpp"
 #include "wire_registry_ids_laws.cpp"
 #include "wire_registry_tests.cpp"
