@@ -30,6 +30,13 @@ HashMap<uint64_t, NodeOverlay> &overlay_book() {
     return book;
 }
 
+constexpr uint32_t OVERLAY_SWEEP_FLOOR = 64;
+
+uint32_t &overlay_sweep_at() {
+    static uint32_t at = OVERLAY_SWEEP_FLOOR;
+    return at;
+}
+
 uint64_t &epoch_of_interpolation() {
     static uint64_t epoch = 1;
     return epoch;
@@ -59,6 +66,13 @@ NodeOverlay *overlay_for(Node *p_node, bool p_create) {
     }
     if (!p_create) {
         return nullptr;
+    }
+    if (overlay_book().size() >= overlay_sweep_at()) {
+        sweep_dead_overlays();
+        const uint32_t doubled = overlay_book().size() * 2;
+        overlay_sweep_at() = doubled > OVERLAY_SWEEP_FLOOR
+            ? doubled
+            : OVERLAY_SWEEP_FLOOR;
     }
     overlay_book().insert(key, NodeOverlay());
     return &overlay_book().find(key)->value;
@@ -365,6 +379,7 @@ void sweep_dead_overlays() {
 
 void clear() {
     overlay_book().clear();
+    overlay_sweep_at() = OVERLAY_SWEEP_FLOOR;
     cache_book().clear();
 }
 

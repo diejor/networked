@@ -93,14 +93,14 @@ void check_bounded(
     NETW_CHECK_EQ(p_after.wrapper_owners, p_before.wrapper_owners);
     NETW_CHECK_EQ(p_after.handle_by_wrapper, p_before.handle_by_wrapper);
     NETW_CHECK_EQ(p_after.attributed_routes, p_before.attributed_routes);
-    NETW_CHECK_EQ(p_after.node_overlays, p_before.node_overlays);
+    NETW_CHECK_ORDER(p_after.node_overlays, p_before.node_overlays, <=);
 }
 
 TEST_CASE(
     "[Networked][Lifecycle][SceneTree] a thousand entities spawned and "
-    "despawned leave the wrapper owner index, the wrapper handle index, the "
-    "per-route byte rows and the per-node property overlays at their size "
-    "before the first spawn, on the server and on the client"
+    "despawned leave the wrapper owner index, the wrapper handle index and "
+    "the per-route byte rows at their size before the first spawn, and the "
+    "per-node property overlays no larger, on the server and on the client"
 ) {
     BookStage stage;
     for (int side = -1; side < 1; ++side) {

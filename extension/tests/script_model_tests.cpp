@@ -191,6 +191,22 @@ TEST_CASE(
 }
 
 TEST_CASE(
+    "[Networked][Session][Declared] SCM8 freed bodies do not pile up in the "
+    "overlay book, so a game that configures and frees nodes all session "
+    "holds a bounded book with no sweep of its own"
+) {
+    const int64_t churned = 2000;
+    const int64_t before = script_model::node_overlay_count();
+    for (int64_t at = 0; at < churned; ++at) {
+        Node *body = a_body(Ref<Script>());
+        script_model::configure_node_property(body, StringName("scm8_field"));
+        memdelete(body);
+    }
+    const int64_t grown = script_model::node_overlay_count() - before;
+    NETW_CHECK_ORDER(grown, churned / 2, <);
+}
+
+TEST_CASE(
     "[Networked][Session][Declared] SCM5 a 1-byte member id round-trips to the "
     "same name in TEXT order, which is the only order two peers that never "
     "exchange the name table both derive"
