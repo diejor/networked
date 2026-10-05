@@ -264,6 +264,41 @@ public sealed class Netw : NetwRefCounted
         return result;
     }
 
+    private static readonly IntPtr _bindConfigureTransfer =
+        NetwApi.MethodBind("Netw", "configure_transfer", 2275419960UL);
+
+    /// <summary>
+    /// Picks which entities outlive a server transfer in
+    /// <see cref="NetwSession.TransferMode.Rejoin"/>. The new server calls
+    /// <paramref name="keep"/> with the root node of each entity it took over,
+    /// and despawns the ones it answers <c>false</c> for before any client gets
+    /// the world again.
+    /// <code>
+    /// func _init() -&gt; void:
+    ///     Netw.configure_transfer(keeps)
+    ///
+    /// func keeps(node: Node) -&gt; bool:
+    ///     return not node.is_in_group(&amp;"loot")
+    /// </code>
+    /// <para>
+    /// Declare it on every peer, since any of them can become the server.
+    /// </para>
+    /// </summary>
+    public static Error ConfigureTransfer(Callable keep)
+    {
+        godot_variant slot0 = VariantUtils.CreateFromCallable(keep);
+        godot_variant answered = default;
+        NetwThunks.Call1(
+            _bindConfigureTransfer,
+            IntPtr.Zero,
+            in slot0,
+            ref answered);
+        slot0.Dispose();
+        Error result = (Error)VariantUtils.ConvertToInt64(answered);
+        answered.Dispose();
+        return result;
+    }
+
     private static readonly IntPtr _bindConfigureSession =
         NetwApi.MethodBind("Netw", "configure_session", 3986669177UL);
 

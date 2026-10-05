@@ -76,6 +76,22 @@ bool Databases::is_valid(const RID &p_database) const {
     return instances.owns(p_database);
 }
 
+bool Databases::holds_writes() const {
+    for (const KeyValue<StringName, RID> &named : by_name) {
+        const Instance *instance = at(named.value);
+        if (instance == nullptr) {
+            continue;
+        }
+        for (const Pending &pending : instance->queue) {
+            if (pending.op != Op::READ && pending.op != Op::SCAN
+                && pending.op != Op::SNAPSHOT) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 void Databases::clear() {
     LocalVector<RID> held;
     held.resize(instances.get_rid_count());

@@ -52,6 +52,7 @@ private:
     int32_t tick = 0;
     bool is_synchronized = false;
     bool simulating = true;
+    bool held = false;
     int32_t simulation_behind_count = 0;
 
     double accumulator = 0.0;
@@ -181,6 +182,9 @@ public:
     void release_gate();
     bool is_gated() const;
 
+    void set_held(bool p_held);
+    bool is_held() const;
+
     godot::Dictionary handle_pong(
         double sample,
         int server_tick_at_pong,
@@ -190,6 +194,7 @@ public:
 
     bool consume_ping_due(double delta);
 
+    void forget_rtt();
     void clear();
 };
 

@@ -413,8 +413,7 @@ bool NetwMultiplayer::store_source_row(
         ordinal,
         int64_t(get_unique_id()),
         authority,
-        entity->get_controller(),
-        session_authority_peer()
+        entity->steering()
     );
     const store::Source source = store_source(table, row, binding, authors);
     store_world.set_source(p_at, source);
@@ -576,13 +575,11 @@ void NetwMultiplayer::store_refresh() {
     const bool offline
         = peer.is_null() || peer->is_class("OfflineMultiplayerPeer");
     const int64_t local = int64_t(get_unique_id());
-    const int64_t coordinator = session_authority_peer();
     const bool host = is_host();
     bool all = false;
-    if (local != store_local || coordinator != store_coordinator
-        || host != store_host || offline != store_offline) {
+    if (local != store_local || host != store_host
+        || offline != store_offline) {
         store_local = local;
-        store_coordinator = coordinator;
         store_host = host;
         store_offline = offline;
         all = true;
@@ -595,10 +592,10 @@ void NetwMultiplayer::store_refresh() {
                 store_roster.push_back(known[at]);
             }
         }
-        if (coordinator > 0 && coordinator != local) {
-            all = store_world.peer_of(int(coordinator)) == store::Table::NO_SLOT
+        if (local != SERVER_PEER) {
+            all = store_world.peer_of(int(SERVER_PEER)) == store::Table::NO_SLOT
                 || all;
-            store_world.peer_join(int(coordinator));
+            store_world.peer_join(int(SERVER_PEER));
         }
     }
     for (uint32_t at = 0; at < store_roster.size(); ++at) {
@@ -702,14 +699,13 @@ void NetwMultiplayer::store_evaluate_slot(
     const spawn::Record *record = book != nullptr
         ? book->spawned_of(store_world.route_of(p_slot))
         : nullptr;
-    const int64_t coordinator = session_authority_peer();
     for (uint32_t peer = 0; peer < store_world.peer_capacity(); ++peer) {
         if (!store_world.peer_joined(peer)) {
             continue;
         }
         const int64_t id = int64_t(store_world.peer_id(peer));
         const bool visible = p_entity.is_valid()
-            && (id == coordinator || !filtered
+            && (id == SERVER_PEER || !filtered
                 || interest_player_sees(id, p_entity));
         store_world.see(p_slot, peer, visible);
         store_world.hold(
@@ -764,7 +760,6 @@ void NetwMultiplayer::store_admit_row(
     table.admit_stamps[p_at.row] = stamp;
     flags = uint8_t((flags & ~store::Table::SERVER_AUDIENCE) | audience);
     const int64_t local = int64_t(get_unique_id());
-    const int64_t coordinator = session_authority_peer();
     wire::StreamLane lane;
     lane.route = table.routes[p_at.row];
     lane.ordinal = table.ordinals[p_at.row];
@@ -775,7 +770,7 @@ void NetwMultiplayer::store_admit_row(
         }
         const int64_t id = int64_t(store_world.peer_id(peer));
         const bool admitted = p_server_audience
-            ? id == coordinator && local != coordinator
+            ? id == SERVER_PEER && local != SERVER_PEER
             : id != local && store_world.reaches(slot, peer)
                 && store_world.holds_copy(slot, peer);
         const bool was = table.peers[peer].admitted.get(p_at.row);

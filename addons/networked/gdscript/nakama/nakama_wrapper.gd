@@ -70,6 +70,21 @@ signal match_join_error(message: String)
 ## Emitted when the connection to Nakama closes.
 signal socket_closed()
 
+## When the host leaves, the peers left elect a new server and keep the match.
+var migrate_on_host_loss := false:
+	set(value):
+		migrate_on_host_loss = value
+		if _bridge != null:
+			_bridge.migrate_on_host_loss = value
+
+## Picks the new server from the surviving peer ids, and must answer the same
+## on every peer. When empty, the lowest id takes over.
+var migration_policy := Callable():
+	set(value):
+		migration_policy = value
+		if _bridge != null:
+			_bridge.migration_policy = value
+
 var _facade
 var _client
 var _session
@@ -190,6 +205,8 @@ func _perform_connect(host: Node, config: Dictionary) -> Dictionary:
 
 func _build_bridge() -> void:
 	_bridge = NakamaRelayBridge.new(_socket)
+	_bridge.migrate_on_host_loss = migrate_on_host_loss
+	_bridge.migration_policy = migration_policy
 	_bridge.match_joined.connect(func() -> void: match_joined.emit())
 	_bridge.match_join_error.connect(_on_bridge_join_error)
 	_socket.closed.connect(func() -> void: socket_closed.emit())

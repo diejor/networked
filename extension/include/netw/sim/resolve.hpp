@@ -22,7 +22,7 @@ struct Facts {
     bool predicted = false;
     bool state_rows = false;
     bool input_rows = false;
-    bool session_authority_here = false;
+    bool server_here = false;
     bool controller_here = false;
     bool controller_is_nobody = false;
     bool pending_claim_here = false;
@@ -34,7 +34,7 @@ struct Facts {
 
 bool controller_authored(const Facts &p_facts);
 
-bool session_authors(const Facts &p_facts);
+bool server_authors(const Facts &p_facts);
 
 bool authors_here(const Facts &p_facts);
 

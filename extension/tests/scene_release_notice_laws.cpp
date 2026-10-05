@@ -129,28 +129,4 @@ TEST_CASE(
     memdelete(root);
 }
 
-TEST_CASE(
-    "[Networked][Scene][Hosted] SL4 a session whose coordinator is 7 releases "
-    "a seat on 7's notice and holds it against the same notice from transport "
-    "peer 1, so the peer that runs the socket cannot evict a watcher"
-) {
-    Node *root = memnew(Node);
-    Ref<NetwMultiplayer> core;
-    core.instantiate();
-    core->session_set_authority_peer(7);
-    const RID seat = mount(core, root);
-    Ref<netw::NetwPlayer> row;
-    row.instantiate();
-    core->player_adopt(core->get_unique_id(), row);
-    REQUIRE(core->player_admit(core->get_unique_id()));
-    REQUIRE(core->scene_admit_peer(seat, core->get_unique_id()));
-
-    const PackedByteArray honest = notice(route_of(core, seat));
-
-    CHECK_FALSE(core->scene_released_scene(honest, 1).is_valid());
-    CHECK(core->scene_released_scene(honest, 7) == seat);
-
-    memdelete(root);
-}
-
 } // namespace TestNetwSceneReleaseNoticeLaws

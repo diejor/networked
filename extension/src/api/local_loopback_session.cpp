@@ -6,6 +6,7 @@
 #include "godot/class_db.hpp"
 #include "godot/engine.hpp"
 #include "godot/math.hpp"
+#include "godot/object.hpp"
 #include "godot/project_settings.hpp"
 #include "godot/utility.hpp"
 #include "netw/colors.hpp"
@@ -43,6 +44,23 @@ String channel_key(int p_sender_id, int p_channel) {
 
 String sender_prefix(int p_sender_id) {
     return String::num_int64(p_sender_id) + String(":");
+}
+
+void declare_relabel(LocalMultiplayerPeer *p_peer) {
+#if defined(NETW_TESTS)
+    const StringName relabelled("server_relabelled");
+    if (p_peer == nullptr || p_peer->has_signal(relabelled)) {
+        return;
+    }
+    Array arguments;
+    for (const char *name : {"successor_was", "former_now"}) {
+        Dictionary argument;
+        argument["name"] = String(name);
+        argument["type"] = int(Variant::INT);
+        arguments.push_back(argument);
+    }
+    gd::add_user_signal(p_peer, relabelled, arguments);
+#endif
 }
 
 uint64_t peer_key(const LocalMultiplayerPeer *p_peer) {
@@ -102,6 +120,13 @@ void LocalLoopbackSession::init_server_side() {
             "LocalLoopbackSession could not create its server peer."
         );
     }
+    server_peer->term = transfer_term;
+    server_peer->label = 1;
+    server_peer->relays = !transfer_enabled;
+    used_ids.insert(1);
+    if (transfer_enabled) {
+        declare_relabel(server_peer.ptr());
+    }
 }
 
 Ref<LocalMultiplayerPeer> LocalLoopbackSession::create_client_peer() {
@@ -110,7 +135,9 @@ Ref<LocalMultiplayerPeer> LocalLoopbackSession::create_client_peer() {
     Ref<LocalMultiplayerPeer> client;
     client.instantiate();
     client->set_loopback_session(this);
-    const int client_id = int(gd::randi_range(2, 2147483647));
+    const int client_id = transfer_enabled
+        ? draw_fresh_id()
+        : int(gd::randi_range(2, 2147483647));
     if (client->create_client(client_id) != Error::OK) {
         NETW_WARN(
             sys::TRANSPORT,
@@ -118,9 +145,17 @@ Ref<LocalMultiplayerPeer> LocalLoopbackSession::create_client_peer() {
         );
         return client;
     }
+    used_ids.insert(client_id);
+    client->term = transfer_term;
+    client->label = client_id;
+    client->relays = !transfer_enabled;
 
     server_peer->force_connect_peer(client_id, client.ptr());
     client->force_connect_peer(1, server_peer.ptr());
+    if (transfer_enabled) {
+        declare_relabel(client.ptr());
+        link_to_clients(client.ptr());
+    }
     client_peers.push_back(client);
     NETW_INFO(
         sys::TRANSPORT,
@@ -356,6 +391,158 @@ bool LocalLoopbackSession::is_holding_inbound(
     return state != nullptr && state->held;
 }
 
+int LocalLoopbackSession::draw_fresh_id() {
+    int id = int(gd::randi_range(2, 2147483647));
+    while (used_ids.has(id)) {
+        id = int(gd::randi_range(2, 2147483647));
+    }
+    used_ids.insert(id);
+    return id;
+}
+
+void LocalLoopbackSession::link_to_clients(LocalMultiplayerPeer *p_client) {
+    for (const Ref<LocalMultiplayerPeer> &other : client_peers) {
+        if (other.is_null() || other.ptr() == p_client || other->closed
+            || other->closing) {
+            continue;
+        }
+        other->force_connect_peer(p_client->label, p_client);
+        p_client->force_connect_peer(other->label, other.ptr());
+    }
+}
+
+LocalMultiplayerPeer *LocalLoopbackSession::live_client_labelled(
+    int p_label
+) const {
+    for (const Ref<LocalMultiplayerPeer> &client : client_peers) {
+        if (client.is_valid() && !client->closed && !client->closing
+            && client->label == p_label) {
+            return client.ptr();
+        }
+    }
+    return nullptr;
+}
+
+void LocalLoopbackSession::enable_server_transfer() {
+    if (transfer_enabled) {
+        return;
+    }
+    transfer_enabled = true;
+    if (server_peer.is_valid()) {
+        server_peer->relays = false;
+        declare_relabel(server_peer.ptr());
+    }
+    Vector<Ref<LocalMultiplayerPeer>> linked;
+    for (const Ref<LocalMultiplayerPeer> &client : client_peers) {
+        if (client.is_null() || client->closed || client->closing) {
+            continue;
+        }
+        client->relays = false;
+        declare_relabel(client.ptr());
+        for (const Ref<LocalMultiplayerPeer> &earlier : linked) {
+            earlier->force_connect_peer(client->label, client.ptr());
+            client->force_connect_peer(earlier->label, earlier.ptr());
+        }
+        linked.push_back(client);
+    }
+}
+
+Error LocalLoopbackSession::transfer_server(
+    int p_successor,
+    bool p_keep_former
+) {
+    if (!transfer_enabled || !has_live_server()) {
+        return ERR_UNAVAILABLE;
+    }
+    LocalMultiplayerPeer *successor = live_client_labelled(p_successor);
+    if (successor == nullptr) {
+        return ERR_INVALID_PARAMETER;
+    }
+    const int former_now = p_keep_former ? draw_fresh_id() : 0;
+    if (!p_keep_former) {
+        server_peer->vanish();
+    }
+    return hand_over(successor, former_now);
+}
+
+Error LocalLoopbackSession::lose_server() {
+    if (!transfer_enabled || !has_live_server()) {
+        return ERR_UNAVAILABLE;
+    }
+    server_peer->vanish();
+    LocalMultiplayerPeer *lowest = nullptr;
+    for (const Ref<LocalMultiplayerPeer> &client : client_peers) {
+        if (client.is_null() || client->closed || client->closing) {
+            continue;
+        }
+        if (lowest == nullptr || client->label < lowest->label) {
+            lowest = client.ptr();
+        }
+    }
+    if (lowest == nullptr) {
+        return ERR_UNAVAILABLE;
+    }
+    return hand_over(lowest, 0);
+}
+
+Error LocalLoopbackSession::hand_over(
+    LocalMultiplayerPeer *p_successor,
+    int p_former_now
+) {
+    transfer_term += 1;
+    LocalMultiplayerPeer::Install install;
+    install.term = transfer_term;
+    install.successor_was = p_successor->label;
+    install.former_now = p_former_now;
+
+    Vector<Ref<LocalMultiplayerPeer>> survivors;
+    if (server_peer.is_valid() && !server_peer->closed) {
+        survivors.push_back(server_peer);
+    }
+    for (const Ref<LocalMultiplayerPeer> &client : client_peers) {
+        if (client.is_valid() && !client->closed && !client->closing) {
+            survivors.push_back(client);
+        }
+    }
+
+    Ref<LocalMultiplayerPeer> successor;
+    Vector<Ref<LocalMultiplayerPeer>> clients;
+    for (const Ref<LocalMultiplayerPeer> &survivor : survivors) {
+        survivor->pending_installs.push_back(install);
+        survivor->label = install.relabelled(survivor->label);
+        if (survivor.ptr() == p_successor) {
+            successor = survivor;
+        } else {
+            clients.push_back(survivor);
+        }
+    }
+    server_peer = successor;
+    client_peers = clients;
+    return OK;
+}
+
+void LocalLoopbackSession::relabel_link(
+    const LocalMultiplayerPeer *p_peer,
+    const LocalMultiplayerPeer::Install &p_install
+) {
+    LinkState *state = link_of(p_peer);
+    if (state == nullptr) {
+        return;
+    }
+    HashMap<int, Ref<LocalLinkConditions>> relabelled;
+    for (const KeyValue<int, Ref<LocalLinkConditions>> &entry :
+         state->conditions_by_sender) {
+        const int sender
+            = entry.key == 0 ? 0 : p_install.relabelled(entry.key);
+        if (entry.key == 0 || sender != 0) {
+            relabelled.insert(sender, entry.value);
+        }
+    }
+    state->conditions_by_sender = relabelled;
+    clear_sender_streams(*state, p_install.successor_was);
+    clear_sender_streams(*state, 1);
+}
+
 void LocalLoopbackSession::reset() {
     if (server_peer.is_valid()) {
         server_peer->set_loopback_session(nullptr);
@@ -373,6 +560,9 @@ void LocalLoopbackSession::reset() {
     clock_ms = 0.0;
     last_scoped_poll_frame = -1;
     links.clear();
+    used_ids.clear();
+    transfer_term = 0;
+    transfer_enabled = false;
 }
 
 LocalLoopbackSession::LinkState &LocalLoopbackSession::ensure_link(
@@ -501,7 +691,10 @@ void LocalLoopbackSession::release_due(
     }
 
     for (const InFlight &entry : due) {
-        if (entry.packet.peer == 0 || p_peer->is_linked_to(entry.packet.peer)) {
+        if (entry.packet.term != p_peer->term) {
+            p_peer->admit_packet(entry.packet);
+        } else if (entry.packet.peer == 0
+                   || p_peer->is_linked_to(entry.packet.peer)) {
             p_peer->packet_queue.push_back(entry.packet);
         }
     }

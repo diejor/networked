@@ -130,6 +130,9 @@ Error NetwMultiplayer::embed_poll_transport() {
         return ERR_UNCONFIGURED;
     }
     const Error err = inner->poll();
+    session_announce_transfer();
+    transfer_send_resync();
+    transfer_watch_resync();
     liveness_poll_now();
     rpc_sweep_deferred_calls();
     rpc_sweep_transactions(receive_tick());

@@ -196,7 +196,7 @@ RID NetwMultiplayer::scene_released_scene(
     const PackedByteArray &p_payload,
     int p_sender
 ) {
-    if (int64_t(p_sender) != session_authority_peer()
+    if (int64_t(p_sender) != SERVER_PEER
         || player_admitted_local().is_null()) {
         return RID();
     }
@@ -691,6 +691,8 @@ void NetwMultiplayer::scene_dispose() {
 }
 
 void NetwMultiplayer::scene_on_session_entered() {
+    scene_viewers_server_generation = 0;
+    scene_viewers_parked.clear();
     if (is_host()) {
         callable_mp(this, &NetwMultiplayer::scene_announce_startup)
             .call_deferred();
@@ -1365,7 +1367,7 @@ session::SceneViewersHead NetwMultiplayer::scene_viewers_head(
 
 void NetwMultiplayer::scene_publish_viewers(const RID &p_scene) {
     const int64_t route = scene_route_of(p_scene);
-    if (!is_session_authority() || route <= 0) {
+    if (!is_host() || route <= 0) {
         return;
     }
     uint64_t *held = scene_viewers_revision.getptr(route);
@@ -1410,7 +1412,7 @@ void NetwMultiplayer::scene_publish_viewers(const RID &p_scene) {
 
 void NetwMultiplayer::scene_send_viewers(const RID &p_scene, int64_t p_target) {
     const int64_t route = scene_route_of(p_scene);
-    if (!is_session_authority() || route <= 0
+    if (!is_host() || route <= 0
         || p_target == int64_t(get_unique_id())) {
         return;
     }
@@ -1442,13 +1444,18 @@ void NetwMultiplayer::scene_apply_viewers(
     const session::SceneViewersHead &p_head,
     const LocalVector<uint64_t> &p_members
 ) {
-    if (p_head.generation != session_core.get_generation()) {
+    if (!is_host() && scene_viewers_server_generation == 0) {
+        scene_viewers_server_generation = p_head.generation;
+    }
+    const uint64_t expected = is_host() ? session_core.get_generation()
+                                        : scene_viewers_server_generation;
+    if (p_head.generation != expected) {
         NETW_TRACE(
             sys::SCENE,
             "A viewer list from session generation %d arrived in generation "
             "%d, so it was ignored.",
             int(p_head.generation),
-            int(session_core.get_generation())
+            int(expected)
         );
         return;
     }
@@ -1504,7 +1511,7 @@ void NetwMultiplayer::scene_receive_viewers_frame(
     const PackedByteArray &p_payload,
     int p_sender
 ) {
-    if (p_sender != session_authority_peer() || is_session_authority()) {
+    if (p_sender != SERVER_PEER || is_host()) {
         return;
     }
     session::SceneViewersHead head;
@@ -1625,7 +1632,7 @@ Ref<NetwPromise> NetwMultiplayer::scene_move_entity(
     promise.instantiate();
     lifecycle::Facts facts;
     facts.kind = lifecycle::Kind::REPARENT;
-    facts.peer_is_session = is_session_authority();
+    facts.peer_is_server = is_host();
     facts.minting_halted = structure_halted;
     const lifecycle::Ruling ruling = lifecycle::rule(facts);
     if (!ruling.admitted()) {
@@ -1700,7 +1707,7 @@ Ref<NetwPromise> NetwMultiplayer::entity_reparent(
     Node *body = wrapper_owner(p_entity);
     lifecycle::Facts facts
         = lifecycle_local_facts(mover.ptr(), lifecycle::Kind::REPARENT);
-    if (!facts.peer_is_session) {
+    if (!facts.peer_is_server) {
         facts.destination = lifecycle_destination(body, p_parent);
     }
     String refusal;
@@ -1738,7 +1745,7 @@ Ref<NetwPromise> NetwMultiplayer::entity_reparent(
         int(p_entity.get_id()),
         String(p_parent->get_name())
     );
-    const bool awaits_session = !facts.peer_is_session;
+    const bool awaits_session = !facts.peer_is_server;
     if (awaits_session) {
         lifecycle_promises[liveness_route_of(mover.ptr())] = promise;
     }
@@ -2246,7 +2253,7 @@ Ref<NetwPromise> NetwMultiplayer::scene_request_send(
     int p_scope,
     const RID &p_source
 ) {
-    const int64_t destination = session_authority_peer();
+    const int64_t destination = SERVER_PEER;
     const Ref<NetwPromise> promise = scene_core->request_open(destination);
     session::SceneRequest frame;
     frame.request_id = uint64_t(scene_core->get_pending_request_id());

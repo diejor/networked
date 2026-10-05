@@ -9,6 +9,8 @@
 
 namespace netw {
 
+struct PeerRename;
+
 class JoinRoster {
     godot::HashMap<int64_t, session::AcceptFrame> accepted;
     godot::HashMap<int64_t, godot::String> refusals;
@@ -27,6 +29,7 @@ public:
     godot::String refusal(int64_t p_peer) const;
 
     void forget(int64_t p_peer);
+    void rename(const PeerRename &p_rename);
     void clear();
     int size() const;
 };

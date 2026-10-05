@@ -586,33 +586,24 @@ TEST_CASE(
     Node *owner = memnew(Node);
 
     record->get_control()->set_controller(7);
-    record->apply_control(wrapper.ptr(), owner, 1);
+    record->apply_control(wrapper.ptr(), owner);
 
     NETW_CHECK_EQ(owner->get_multiplayer_authority(), 7);
     NETW_CHECK_EQ(log.count("moved"), 1);
     REQUIRE(log.args("moved").size() == 2);
-    NETW_CHECK_EQ(int(log.args("moved")[0]), 0);
+    NETW_CHECK_EQ(int(log.args("moved")[0]), 1);
     NETW_CHECK_EQ(int(log.args("moved")[1]), 7);
 
     SUBCASE("the server takes the engine's own name for itself") {
         record->get_control()->set_controller(0);
-        record->apply_control(wrapper.ptr(), owner, 1);
+        record->apply_control(wrapper.ptr(), owner);
         NETW_CHECK_EQ(owner->get_multiplayer_authority(), 1);
         NETW_CHECK_EQ(log.count("moved"), 2);
     }
 
     SUBCASE("a re-apply that moves nothing announces nothing") {
-        record->apply_control(wrapper.ptr(), owner, 1);
+        record->apply_control(wrapper.ptr(), owner);
         NETW_CHECK_EQ(log.count("moved"), 1);
-    }
-
-    SUBCASE(
-        "the controller-zero fallback names the session coordinator, "
-        "not the literal peer 1"
-    ) {
-        record->get_control()->set_controller(0);
-        record->apply_control(wrapper.ptr(), owner, 7);
-        NETW_CHECK_EQ(owner->get_multiplayer_authority(), 7);
     }
 
     memdelete(owner);
@@ -620,7 +611,7 @@ TEST_CASE(
 
 TEST_CASE(
     "[Networked][Entity][Hosted] R14 every descendant follows the controller, "
-    "a followed path stays with the session, and a nested entity is its own"
+    "a followed path stays with the server, and a nested entity is its own"
 ) {
     Record record;
     Node *owner = memnew(Node);
@@ -639,14 +630,14 @@ TEST_CASE(
     nested->set_meta(NetwEntityRecord::entity_meta(), make_wrapper());
     nested->set_multiplayer_authority(9);
 
-    record->follow_session(NodePath("ServerSync"));
-    record->apply_control(nullptr, owner, 1);
+    record->follow_server(NodePath("ServerSync"));
+    record->apply_control(nullptr, owner);
     NETW_CHECK_EQ(owner->get_multiplayer_authority(), 1);
     NETW_CHECK_EQ(server_sync->get_multiplayer_authority(), 1);
     NETW_CHECK_EQ(input_sync->get_multiplayer_authority(), 1);
 
     record->get_control()->set_controller(4);
-    record->apply_control(nullptr, owner, 1);
+    record->apply_control(nullptr, owner);
     NETW_CHECK_EQ(owner->get_multiplayer_authority(), 4);
     NETW_CHECK_EQ(server_sync->get_multiplayer_authority(), 1);
     NETW_CHECK_EQ(server_leaf->get_multiplayer_authority(), 1);
@@ -658,17 +649,17 @@ TEST_CASE(
     SUBCASE("a native write the next projection replaces warns once") {
         input_sync->set_multiplayer_authority(6, false);
         record->get_control()->set_controller(5);
-        record->apply_control(nullptr, owner, 1);
+        record->apply_control(nullptr, owner);
         NETW_CHECK_EQ(input_sync->get_multiplayer_authority(), 5);
         CHECK(record->get_native_write_warned());
     }
 
-    SUBCASE("the session authority is the coordinator, not peer 1") {
+    SUBCASE("a revoke returns every followed node to the server") {
         record->get_control()->set_controller(0);
-        record->apply_control(nullptr, owner, 7);
-        NETW_CHECK_EQ(owner->get_multiplayer_authority(), 7);
-        NETW_CHECK_EQ(server_sync->get_multiplayer_authority(), 7);
-        NETW_CHECK_EQ(input_sync->get_multiplayer_authority(), 7);
+        record->apply_control(nullptr, owner);
+        NETW_CHECK_EQ(owner->get_multiplayer_authority(), 1);
+        NETW_CHECK_EQ(server_sync->get_multiplayer_authority(), 1);
+        NETW_CHECK_EQ(input_sync->get_multiplayer_authority(), 1);
         CHECK_FALSE(record->get_native_write_warned());
     }
 
@@ -685,7 +676,7 @@ TEST_CASE(
     owner->add_child(child);
 
     record->get_control()->set_controller(4);
-    record->apply_control(nullptr, owner, 1);
+    record->apply_control(nullptr, owner);
 
     NETW_CHECK_EQ(owner->get_multiplayer_authority(), 4);
     NETW_CHECK_EQ(child->get_multiplayer_authority(), 4);

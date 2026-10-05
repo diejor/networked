@@ -56,15 +56,15 @@ namespace Networked;
 /// </para>
 /// <para>
 /// <b>Control</b> <see cref="NetwEntity.Controller"/> is the peer that steers
-/// the entity, and <c>0</c> means the server. The root and every node under it
-/// take the controller as their multiplayer authority, as if
+/// the entity, and <c>1</c> is the server, as everywhere in
+/// <see cref="MultiplayerApi"/>. The root and every node under it take the
+/// controller as their multiplayer authority, as if
 /// <c>Node.set_multiplayer_authority</c> was called on each.
-/// <see cref="NetwEntity.FollowSession"/> keeps a subtree with the server,
-/// which is where a <see cref="MultiplayerSynchronizer"/> the server writes
-/// belongs.
+/// <see cref="NetwEntity.FollowServer"/> keeps a subtree with the server, which
+/// is where a <see cref="MultiplayerSynchronizer"/> the server writes belongs.
 /// <code>
 /// func _init() -&gt; void:
-///     Netw.configure_entity(self).follow_session(^"ServerSync")
+///     Netw.configure_entity(self).follow_server(^"ServerSync")
 ///
 /// func _physics_process(_delta: float) -&gt; void:
 ///     if entity.is_controlled_locally:
@@ -155,13 +155,14 @@ public sealed class NetwEntity : NetwRefCounted
     public enum ControlKindEnum : long
     {
         /// <summary>
-        /// A peer controls the entity. <see cref="NetwEntity.Controller"/> is
-        /// not <c>0</c>.
+        /// A player controls the entity, and
+        /// <see cref="NetwEntity.ControllerPlayer"/> names it. On a listen
+        /// server that player can be the host, at peer <c>1</c>.
         /// </summary>
         PeerControlled = 0,
         /// <summary>
-        /// The server controls the entity. <see cref="NetwEntity.Controller"/>
-        /// is <c>0</c>.
+        /// The server controls the entity, and
+        /// <see cref="NetwEntity.Controller"/> is <c>1</c>.
         /// </summary>
         ServerControlled = 1,
     }
@@ -868,14 +869,16 @@ public sealed class NetwEntity : NetwRefCounted
         NetwApi.MethodBind("NetwEntity", "set_controller", 1286410249UL);
 
     /// <summary>
-    /// The peer that steers this entity, <c>0</c> for the server. Written
-    /// before the entity reaches <see cref="NetwEntity.StageEnum.Armed"/>, it
-    /// sets the starting controller in place of
+    /// The peer that steers this entity, <c>1</c> for the server. A listen
+    /// server's own body also reads <c>1</c>, and
+    /// <see cref="NetwEntity.ControlKind"/> tells the two apart. Written before
+    /// the entity reaches <see cref="NetwEntity.StageEnum.Armed"/>, it sets the
+    /// starting controller in place of
     /// <see cref="NetwEntity.InitialController"/>. Written after that, it calls
     /// <see cref="NetwEntity.TransferControl"/>.
     /// <code>
     /// entity.controller = peer_id   # hand it to a peer
-    /// entity.controller = 0         # take it back to the server
+    /// entity.controller = 1         # take it back to the server
     /// </code>
     /// </summary>
     public long Controller
@@ -925,8 +928,11 @@ public sealed class NetwEntity : NetwRefCounted
             36873697UL);
 
     /// <summary>
-    /// <c>true</c> when this peer controls the entity, or is claiming a
-    /// <see cref="NetwEntity.TransferEnum.Immediate"/> entity.
+    /// <c>true</c> when a player on this peer controls the entity, or is
+    /// claiming a <see cref="NetwEntity.TransferEnum.Immediate"/> entity. An
+    /// entity the server controls reads <c>false</c> everywhere, the server
+    /// included, and <see cref="Node.IsMultiplayerAuthority"/> answers who
+    /// writes it.
     /// </summary>
     public bool IsControlledLocally
     {
@@ -944,10 +950,23 @@ public sealed class NetwEntity : NetwRefCounted
     private static readonly IntPtr _bindGetControllerPlayer =
         NetwApi.MethodBind("NetwEntity", "get_controller_player", 1167648220UL);
 
+    private static readonly IntPtr _bindSetControllerPlayer =
+        NetwApi.MethodBind("NetwEntity", "set_controller_player", 1391237480UL);
+
     /// <summary>
-    /// The player <see cref="NetwEntity.Controller"/> names, or <c>null</c>. It
-    /// can differ from <see cref="NetwEntity.Player"/>, since a player can
-    /// steer a server-owned entity.
+    /// The player that steers this entity, or <c>null</c> when the server
+    /// controls it. It can differ from <see cref="NetwEntity.Player"/>, since a
+    /// player can steer a server-owned entity. Writing a player hands the
+    /// entity to that player, and writing <c>null</c> hands it to the server.
+    /// It is how a listen server gives an entity to its own player, because
+    /// writing <c>1</c> to <see cref="NetwEntity.Controller"/> gives it to the
+    /// server.
+    /// <code>
+    /// car.entity.controller_player = Netw.session(self).local_player
+    /// </code>
+    /// <para>
+    /// <b>Server Only.</b>
+    /// </para>
     /// </summary>
     public NetwPlayer ControllerPlayer
     {
@@ -959,6 +978,16 @@ public sealed class NetwEntity : NetwRefCounted
                 Checked,
                 ref answered);
             return NetwPlayer.Adopt(answered);
+        }
+        set
+        {
+            IntPtr slot0 = value?.Native ?? IntPtr.Zero;
+            long discarded = default;
+            NetwThunks.Ptrcall1_IntPtr_Long(
+                _bindSetControllerPlayer,
+                Checked,
+                in slot0,
+                ref discarded);
         }
     }
 
@@ -1034,30 +1063,6 @@ public sealed class NetwEntity : NetwRefCounted
             byte answered = default;
             NetwThunks.Ptrcall0_Byte(
                 _bindGetIsControlPending,
-                Checked,
-                ref answered);
-            return answered != 0;
-        }
-    }
-
-    private static readonly IntPtr _bindGetIsSessionAuthority =
-        NetwApi.MethodBind(
-            "NetwEntity",
-            "get_is_session_authority",
-            36873697UL);
-
-    /// <summary>
-    /// Whether this peer is the server, which decides
-    /// <see cref="NetwEntity.Controller"/> and every
-    /// <see cref="NetwEntity.ClaimAuthority"/>. Also <c>true</c> offline.
-    /// </summary>
-    public bool IsSessionAuthority
-    {
-        get
-        {
-            byte answered = default;
-            NetwThunks.Ptrcall0_Byte(
-                _bindGetIsSessionAuthority,
                 Checked,
                 ref answered);
             return answered != 0;
@@ -1430,18 +1435,18 @@ public sealed class NetwEntity : NetwRefCounted
         NetwApi.MethodBind("NetwEntity", "release_authority", 339970911UL);
 
     /// <summary>
-    /// Hands control of this entity to <paramref name="successor"/>, or to the
-    /// server when it is <c>0</c>. The returned <see cref="NetwPromise"/>
-    /// resolves with this entity once the decision reaches this peer. The
-    /// request carries this peer's latest
-    /// <see cref="NetwPropertyConfig.Broadcast"/> values, and
-    /// <paramref name="successor"/> starts from them. Values larger than 1024
-    /// bytes are not sent, and <paramref name="successor"/> starts from its own
-    /// copy.
+    /// Hands control of this entity to <paramref name="successor"/>, which is
+    /// the server by default. The returned <see cref="NetwPromise"/> resolves
+    /// with this entity once the decision reaches this peer. The request
+    /// carries this peer's latest <see cref="NetwPropertyConfig.Broadcast"/>
+    /// values, and <paramref name="successor"/> starts from them. Values larger
+    /// than 1024 bytes are not sent, and <paramref name="successor"/> starts
+    /// from its own copy.
     /// <code>
     /// Error
-    /// ┠╴ERR_UNAUTHORIZED   this peer neither controls the entity nor is claiming it
-    /// ┖╴ERR_UNAVAILABLE    successor holds no copy of the entity
+    /// ┠╴ERR_INVALID_PARAMETER   successor is not a peer id
+    /// ┠╴ERR_UNAUTHORIZED        this peer neither controls the entity nor is claiming it
+    /// ┖╴ERR_UNAVAILABLE         successor holds no copy of the entity
     /// </code>
     /// <para>
     /// <b>Player request.</b>
@@ -1463,8 +1468,8 @@ public sealed class NetwEntity : NetwRefCounted
         NetwApi.MethodBind("NetwEntity", "transfer_control", 844576869UL);
 
     /// <summary>
-    /// Gives control of this entity to <paramref name="peerId"/>, or to the
-    /// server when it is <c>0</c>. Every peer follows, and
+    /// Gives control of this entity to <paramref name="peerId"/>, where
+    /// <c>1</c> is the server. Every peer follows, and
     /// <see cref="NetwEntity.Hold"/> resets to
     /// <see cref="NetwEntity.HoldEnum.None"/>. A client asks with
     /// <see cref="NetwEntity.ClaimAuthority"/>.
@@ -1472,7 +1477,7 @@ public sealed class NetwEntity : NetwRefCounted
     /// Error
     /// ┠╴ERR_UNAUTHORIZED        called on a client
     /// ┠╴ERR_UNCONFIGURED        the entity is not spawned yet
-    /// ┖╴ERR_INVALID_PARAMETER   peer_id is negative
+    /// ┖╴ERR_INVALID_PARAMETER   peer_id is not a peer id
     /// </code>
     /// <para>
     /// <b>Server Only.</b>
@@ -1490,8 +1495,8 @@ public sealed class NetwEntity : NetwRefCounted
         return (Error)answered;
     }
 
-    private static readonly IntPtr _bindFollowSession =
-        NetwApi.MethodBind("NetwEntity", "follow_session", 1348162250UL);
+    private static readonly IntPtr _bindFollowServer =
+        NetwApi.MethodBind("NetwEntity", "follow_server", 1348162250UL);
 
     /// <summary>
     /// Keeps the node at <paramref name="path"/>, and every node under it, with
@@ -1500,11 +1505,11 @@ public sealed class NetwEntity : NetwRefCounted
     /// relative to the entity root. Call it in <c>_init</c> so every peer
     /// applies the same rule.
     /// </summary>
-    public void FollowSession(NodePath path)
+    public void FollowServer(NodePath path)
     {
         godot_variant slot0 = VariantUtils.CreateFromNodePath(path);
         godot_variant answered = default;
-        NetwThunks.Call1(_bindFollowSession, Checked, in slot0, ref answered);
+        NetwThunks.Call1(_bindFollowServer, Checked, in slot0, ref answered);
         slot0.Dispose();
         answered.Dispose();
     }

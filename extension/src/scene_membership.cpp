@@ -1,8 +1,19 @@
 #include "netw/scene_membership.hpp"
 
+#include "netw/peer_rename.hpp"
+
 using namespace godot;
 
 namespace netw {
+
+void SceneMembership::rename_members(const PeerRename &p_rename) {
+    for (Reason &reason : reasons) {
+        reason.member = p_rename.of(reason.member);
+    }
+    for (Edge &edge : edges) {
+        edge.member = p_rename.of(edge.member);
+    }
+}
 
 int SceneMembership::reason_at(
     int64_t p_member,

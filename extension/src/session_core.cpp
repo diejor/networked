@@ -68,14 +68,6 @@ SessionCore::Role SessionCore::get_desired_role() const {
     return desired_role;
 }
 
-void SessionCore::set_authority_coordinator(int64_t value) {
-    authority.coordinator = value;
-}
-
-int64_t SessionCore::get_authority_coordinator() const {
-    return authority.coordinator;
-}
-
 void SessionCore::transition(State next) {
     NETW_ZONE_NC("SessionCore transition", colors::SESSION);
     if (state == next) {
@@ -128,11 +120,7 @@ void SessionCore::end_tenure() {
     tenure += 1;
 }
 
-void SessionCore::on_peer_assigned(
-    bool has_live_peer,
-    bool connected,
-    int unique_id
-) {
+void SessionCore::on_peer_assigned(bool has_live_peer, int unique_id) {
     if (!has_live_peer) {
         if (state == STATE_CONNECTING) {
             transition(STATE_OFFLINE);
@@ -145,13 +133,13 @@ void SessionCore::on_peer_assigned(
     if (state != STATE_CONNECTING) {
         return;
     }
-    if (connected || unique_id == authority.coordinator) {
+    if (unique_id == SERVER_PEER) {
         resolve_online(unique_id);
     }
 }
 
 void SessionCore::resolve_online(int unique_id) {
-    if (unique_id == authority.coordinator) {
+    if (unique_id == SERVER_PEER) {
         set_role(
             desired_role == ROLE_LISTEN_SERVER ? ROLE_LISTEN_SERVER
                                                : ROLE_DEDICATED_SERVER

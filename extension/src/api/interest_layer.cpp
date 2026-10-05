@@ -81,11 +81,8 @@ bool NetwInterestLayer::holds_authority() {
 
 int64_t NetwInterestLayer::local_peer_id() {
     NetwMultiplayer *owner = host();
-    if (owner == nullptr) {
-        return 1;
-    }
-    if (!owner->has_multiplayer_peer()) {
-        return owner->session_authority_peer();
+    if (owner == nullptr || !owner->has_multiplayer_peer()) {
+        return SERVER_PEER;
     }
     return owner->get_unique_id();
 }

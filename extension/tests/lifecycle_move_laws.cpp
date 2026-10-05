@@ -636,7 +636,7 @@ TEST_CASE(
     CHECK(stage.under(1, stage.named_on(1, "Shelf")));
     NETW_CHECK_EQ(
         NetwEntity::of(stage.cube_on(-1))->get_controller(),
-        int64_t(0)
+        int64_t(1)
     );
     NETW_CHECK_EQ(
         counter_of(stage.rig.server(), "lifecycle_ops_admitted"),
@@ -663,7 +663,7 @@ TEST_CASE(
     REQUIRE(released->get_is_settled());
     NETW_REQUIRE_EQ(
         NetwEntity::of(stage.cube_on(-1))->get_controller(),
-        int64_t(0)
+        int64_t(1)
     );
 
     Node *held = stage.cube_on(1);

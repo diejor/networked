@@ -65,6 +65,7 @@ public:
         const godot::Callable &p_handler
     );
     static godot::Error configure_admission(const godot::Callable &p_handler);
+    static godot::Error configure_transfer(const godot::Callable &p_keep);
     static godot::Ref<NetwSessionConfig> configure_session(
         godot::Node *p_node,
         const godot::Ref<NetwSessionConfig> &p_preset

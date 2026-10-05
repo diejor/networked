@@ -83,16 +83,30 @@ class LocalMultiplayerPeer : public MultiplayerPeerBase {
         int peer = 0;
         int channel = 0;
         TransferMode mode = TRANSFER_MODE_RELIABLE;
+        uint32_t term = 0;
+    };
+
+    struct Install {
+        uint32_t term = 0;
+        int successor_was = 0;
+        int former_now = 0;
+
+        int relabelled(int p_id) const;
     };
 
     godot::HashMap<int, godot::ObjectID> links;
     godot::ObjectID session;
 
     godot::Vector<Packet> packet_queue;
+    godot::Vector<Packet> packets_ahead;
     Packet retained_packet;
     godot::Vector<int> peers_to_emit_connected;
     godot::Vector<int> peers_to_emit_disconnected;
+    godot::Vector<Install> pending_installs;
 
+    uint32_t term = 0;
+    int label = 0;
+    bool relays = true;
     int unique_id = 0;
     int target_peer = 0;
     int transfer_channel = 0;
@@ -110,8 +124,12 @@ class LocalMultiplayerPeer : public MultiplayerPeerBase {
         const godot::PackedByteArray &p_buffer
     );
     void receive_packet(const Packet &p_packet);
+    void admit_packet(const Packet &p_packet);
+    bool reads_any_term() const;
+    void install(const Install &p_install);
     void purge_packets_from(int p_sender_id);
     void remote_closed(int p_remote_id, bool p_remote_was_server);
+    void vanish();
     void finalize_close();
     void reset_state();
 
@@ -133,6 +151,9 @@ public:
     void set_loopback_session(LocalLoopbackSession *p_session);
     LocalLoopbackSession *loopback_session() const;
     godot::Ref<LocalLoopbackSession> get_loopback_session() const;
+#if defined(NETW_TESTS)
+    godot::Error transfer_server(int p_peer_id);
+#endif
 
     void NETW_PEER_VIRTUAL(set_transfer_channel)(int p_channel) override;
     int NETW_PEER_VIRTUAL(get_transfer_channel)() const override;
@@ -228,6 +249,18 @@ class LocalLoopbackSession : public godot::Resource {
     double clock_ms = 0.0;
     int64_t last_scoped_poll_frame = -1;
     godot::HashMap<uint64_t, LinkState> links;
+    godot::HashSet<int> used_ids;
+    uint32_t transfer_term = 0;
+    bool transfer_enabled = false;
+
+    int draw_fresh_id();
+    void link_to_clients(LocalMultiplayerPeer *p_client);
+    LocalMultiplayerPeer *live_client_labelled(int p_label) const;
+    godot::Error hand_over(LocalMultiplayerPeer *p_successor, int p_former_now);
+    void relabel_link(
+        const LocalMultiplayerPeer *p_peer,
+        const LocalMultiplayerPeer::Install &p_install
+    );
 
     LinkState &ensure_link(const LocalMultiplayerPeer *p_peer);
     LinkState *link_of(const LocalMultiplayerPeer *p_peer);
@@ -330,6 +363,12 @@ public:
 
     int in_flight_count(const LocalMultiplayerPeer *p_peer) const;
     bool is_holding_inbound(const LocalMultiplayerPeer *p_peer) const;
+
+    void enable_server_transfer();
+    godot::Error transfer_server(int p_successor, bool p_keep_former);
+    godot::Error lose_server();
+
+    bool checks_terms = true;
 
     void reset();
 };

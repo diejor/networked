@@ -61,7 +61,7 @@ struct SiteReading {
 SiteReading read_sites(MeshStand &p_mesh, int p_at, int p_member) {
     SiteReading reading;
     NetwMultiplayer *core = p_mesh.session_of(p_at);
-    reading.authority = core->is_session_authority();
+    reading.authority = core->is_host();
     reading.sends_to_member = core->interest_can_send_to(p_member);
 
     Node *root = memnew(Node);
@@ -84,34 +84,34 @@ SiteReading read_sites(MeshStand &p_mesh, int p_at, int p_member) {
 }
 
 TEST_CASE(
-    "[Networked][Session] SA1 under coordinator 7 the session authority "
-    "publishes scene viewers, places membership bodies, may send interest "
-    "and kicks, while transport peer 1 does none of them"
+    "[Networked][Session] SA1 the server publishes scene viewers, places "
+    "membership bodies, may send interest and kicks, while a member does "
+    "none of them"
 ) {
     MeshStand mesh;
-    mesh.seat_coordinator(7);
-    mesh.seat_member(1);
+    mesh.seat_server();
+    mesh.seat_member(7);
     mesh.seat_member(9);
-    mesh.wire(7, 1);
-    mesh.wire(7, 9);
+    mesh.wire(1, 7);
+    mesh.wire(1, 9);
     mesh.pump(4);
-    REQUIRE(mesh.join(7, StringName("seven")).is_valid());
     REQUIRE(mesh.join(1, StringName("one")).is_valid());
+    REQUIRE(mesh.join(7, StringName("seven")).is_valid());
     REQUIRE(mesh.join(9, StringName("nine")).is_valid());
 
-    const SiteReading one = read_sites(mesh, 1, 7);
-    CHECK_FALSE(one.authority);
-    CHECK_FALSE(one.sends_to_member);
-    CHECK_FALSE(one.subscribes_body);
-    NETW_CHECK_EQ(one.viewer_frames, 0);
-    NETW_CHECK_EQ(int(one.kick), int(ERR_UNAUTHORIZED));
-
     const SiteReading seven = read_sites(mesh, 7, 1);
-    CHECK(seven.authority);
-    CHECK(seven.sends_to_member);
-    CHECK(seven.subscribes_body);
-    CHECK(seven.viewer_frames > 0);
-    NETW_CHECK_EQ(int(seven.kick), int(OK));
+    CHECK_FALSE(seven.authority);
+    CHECK_FALSE(seven.sends_to_member);
+    CHECK_FALSE(seven.subscribes_body);
+    NETW_CHECK_EQ(seven.viewer_frames, 0);
+    NETW_CHECK_EQ(int(seven.kick), int(ERR_UNAUTHORIZED));
+
+    const SiteReading one = read_sites(mesh, 1, 7);
+    CHECK(one.authority);
+    CHECK(one.sends_to_member);
+    CHECK(one.subscribes_body);
+    CHECK(one.viewer_frames > 0);
+    NETW_CHECK_EQ(int(one.kick), int(OK));
 }
 
 #endif

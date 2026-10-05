@@ -34,7 +34,7 @@ enum class Verdict : uint8_t {
 
 struct Facts {
     Kind kind = Kind::SPAWN;
-    bool peer_is_session = false;
+    bool peer_is_server = false;
     bool peer_is_controller = false;
     Claim peer_claim = Claim::NONE;
     bool declared = false;
@@ -64,7 +64,7 @@ bool may_author(const Facts &p_facts);
 
 Ruling rule(const Facts &p_facts);
 
-Ruling rule(Kind p_kind, bool p_peer_is_session);
+Ruling rule(Kind p_kind, bool p_peer_is_server);
 
 godot::String refusal_text(
     const godot::String &p_verb,

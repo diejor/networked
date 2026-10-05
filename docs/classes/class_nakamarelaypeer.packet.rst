@@ -29,6 +29,8 @@ Properties
    +--------------------------+---------------------------------------------------------+
    | :godot:`int`             | :ref:`from<class_NakamaRelayPeer_Packet_property_from>` |
    +--------------------------+---------------------------------------------------------+
+   | :godot:`int`             | :ref:`term<class_NakamaRelayPeer_Packet_property_term>` |
+   +--------------------------+---------------------------------------------------------+
 
 .. rst-class:: classref-section-separator
 
@@ -60,6 +62,20 @@ Property Descriptions
 .. rst-class:: classref-property
 
 :godot:`int` **from** :ref:`🔗<class_NakamaRelayPeer_Packet_property_from>`
+
+.. container:: contribute
+
+	There is currently no description for this property. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NakamaRelayPeer_Packet_property_term:
+
+.. rst-class:: classref-property
+
+:godot:`int` **term** :ref:`🔗<class_NakamaRelayPeer_Packet_property_term>`
 
 .. container:: contribute
 

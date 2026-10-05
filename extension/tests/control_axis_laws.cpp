@@ -271,7 +271,7 @@ TEST_CASE(
     host->_on_peer_disconnected(controller);
     rig.pump(4);
 
-    NETW_CHECK_EQ(host->get_controller(), int64_t(0));
+    NETW_CHECK_EQ(host->get_controller(), int64_t(1));
     NETW_CHECK_EQ(host->get_stage(), int64_t(netw::entity::Stage::LIVE));
     NETW_CHECK_EQ(
         rig.route_node(route, -1)->get_multiplayer_authority(),
@@ -363,8 +363,8 @@ Error deliver_apply(
 
 TEST_CASE(
     "[Networked][Entity] CA6 a request the confirmed decision already "
-    "excludes is refused before anything is sent, so the coordinator never "
-    "hears of it"
+    "excludes is refused before anything is sent, so the server never hears "
+    "of it"
 ) {
     LoopbackRig rig(2);
     rig.mount();
@@ -513,7 +513,7 @@ TEST_CASE(
 
 TEST_CASE(
     "[Networked][Entity] CA9b a controller write off the session authority "
-    "is refused and moves nothing, and a write of 0 takes control back"
+    "is refused and moves nothing, and a write of 1 takes control back"
 ) {
     LoopbackRig rig(2);
     rig.mount();
@@ -535,10 +535,10 @@ TEST_CASE(
         );
     }
 
-    entity_at(rig, route, -1)->set_controller(0);
+    entity_at(rig, route, -1)->set_controller(1);
     rig.pump(10);
     for (int client = -1; client < 2; ++client) {
-        NETW_CHECK_EQ(entity_at(rig, route, client)->get_controller(), 0);
+        NETW_CHECK_EQ(entity_at(rig, route, client)->get_controller(), 1);
     }
 }
 
@@ -566,10 +566,10 @@ TEST_CASE(
         int64_t(rig.peer_id(0))
     );
 
-    const Ref<NetwPromise> released = entity->release_authority(0);
+    const Ref<NetwPromise> released = entity->release_authority(1);
     rig.pump(10);
     CHECK(released->get_is_settled());
-    NETW_CHECK_EQ(entity_at(rig, route, -1)->get_controller(), 0);
+    NETW_CHECK_EQ(entity_at(rig, route, -1)->get_controller(), 1);
 
     Node *loose = memnew(Node);
     CHECK(NetwEntity::of(loose).is_null());
@@ -728,13 +728,13 @@ TEST_CASE(
     rig.pump(12);
 
     NETW_CHECK_EQ(log.count("changed"), 2);
-    NETW_CHECK_EQ(entity_at(rig, route, -1)->get_controller(), int64_t(0));
-    NETW_CHECK_EQ(issuer->get_controller(), int64_t(0));
+    NETW_CHECK_EQ(entity_at(rig, route, -1)->get_controller(), int64_t(1));
+    NETW_CHECK_EQ(issuer->get_controller(), int64_t(1));
     NETW_CHECK_EQ(int(asked->get_code()), int(ERR_TIMEOUT));
 }
 
 TEST_CASE(
-    "[Networked][Entity] CA14 a peer's requests reach the coordinator in the "
+    "[Networked][Entity] CA14 a peer's requests reach the server in the "
     "order it issued them across entities, however the link shuffles its "
     "datagrams"
 ) {

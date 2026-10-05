@@ -41,7 +41,7 @@ constexpr bool record_follows_tenure(int64_t p_record) {
 bool record_authors(
     int64_t p_record,
     int64_t p_policy,
-    bool p_holds_session_authority,
+    bool p_is_server,
     int64_t p_local_id,
     int64_t p_node_authority,
     int64_t p_controller
@@ -51,31 +51,27 @@ bool row_authors(
     const SetRow &p_row,
     int64_t p_local_id,
     int64_t p_node_authority,
-    int64_t p_controller,
-    int64_t p_coordinator
+    int64_t p_controller
 );
 
 godot::PackedInt32Array row_recipients(
     const SetRow &p_row,
     int64_t p_local_id,
-    const godot::PackedInt32Array &p_live,
-    int64_t p_coordinator
+    const godot::PackedInt32Array &p_live
 );
 
 godot::PackedInt32Array event_recipients(
     bool p_is_host,
     int64_t p_local_id,
     int64_t p_exclude,
-    const godot::PackedInt32Array &p_live,
-    int64_t p_coordinator
+    const godot::PackedInt32Array &p_live
 );
 
 bool row_admits_sender(
     const SetRow &p_row,
     int64_t p_sender,
     int64_t p_node_authority,
-    int64_t p_controller,
-    int64_t p_coordinator
+    int64_t p_controller
 );
 
 class SetModel {

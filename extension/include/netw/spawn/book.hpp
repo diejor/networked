@@ -21,10 +21,20 @@ public:
         RECIPE_FN_REGISTRY = 4,
     };
 
+    struct Received {
+        godot::ObjectID node;
+        godot::ObjectID source;
+        godot::StringName fn;
+        godot::Variant payload;
+        int32_t recipe = RECIPE_ADOPT;
+        int32_t scene_index = -1;
+        bool authored = false;
+    };
+
 private:
     godot::HashMap<int64_t, Record> armed;
     godot::HashMap<int64_t, Record> spawned;
-    godot::HashMap<int64_t, godot::ObjectID> received;
+    godot::HashMap<int64_t, Received> received;
     godot::HashMap<uint64_t, int> node_holds;
 
     void hold_node(const Record &record);
@@ -64,10 +74,15 @@ public:
         const godot::String &fallback_name
     );
 
-    void enroll_recv(int64_t route, godot::Node *node);
+    static Received received_of(const Record &record);
+    void enroll_recv(int64_t route, const Received &recipe);
     bool is_recv(int64_t route) const;
     bool drop_recv(int64_t route);
+    bool take_recv(int64_t route, Record &out);
+    godot::PackedInt64Array recv_routes() const;
+    godot::PackedInt64Array authored_routes() const;
     int recv_count() const;
+    int64_t held_bytes() const;
 
     void clear();
 };

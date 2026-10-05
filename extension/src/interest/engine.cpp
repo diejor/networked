@@ -5,6 +5,7 @@
 #include "godot/utility.hpp"
 #include "netw/colors.hpp"
 #include "netw/log.hpp"
+#include "netw/peer_rename.hpp"
 #include "netw/profile.hpp"
 
 using namespace godot;
@@ -560,6 +561,14 @@ bool Engine::forget_peer(int64_t peer_id) {
         ++revision;
     }
     return changed;
+}
+
+void Engine::rename_peers(const PeerRename &p_rename) {
+    p_rename.rekey(peer_bits);
+    for (int64_t &peer : bit_peers) {
+        peer = p_rename.of(peer);
+    }
+    ++revision;
 }
 
 bool Engine::layer_has_viewer(const StringName &id, int64_t peer_id) const {

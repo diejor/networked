@@ -497,7 +497,7 @@ bool ReplicationCore::policy_admits(
         p_policy,
         p_sender,
         p_node != nullptr ? p_node->get_multiplayer_authority() : 0,
-        resolved.is_valid() ? resolved->get_controller() : 0
+        resolved.is_valid() ? resolved->steering() : 0
     );
 }
 
@@ -516,7 +516,7 @@ void ReplicationCore::request_control(
         return;
     }
     send_to(
-        plane->session_authority_peer(),
+        SERVER_PEER,
         p_entity->get_route(),
         ids.control_request,
         session::frame_write(p_request),
@@ -881,7 +881,7 @@ void ReplicationCore::dispatch_frame(
         }
     } else if (p_channel == ids.control_apply) {
         session::ControlApply applied;
-        if (entity.is_valid() && p_sender == plane->session_authority_peer()
+        if (entity.is_valid() && p_sender == SERVER_PEER
             && session::frame_read(p_payload, applied)) {
             entity->_handle_control_apply(applied);
         }

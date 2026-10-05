@@ -181,7 +181,7 @@ private:
     int cooldown_value = 6;
     bool sleeping_value = false;
     int missing_policy_value = NetwPrediction::MISSING_INPUT_STALL;
-    int max_consume_per_tick_value = 1;
+    int max_consume_per_tick_value = 2;
     int consume_buffer_value = 0;
     int replay_buffer_value = 0;
     int max_consume_lag_value = 60;

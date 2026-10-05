@@ -29,6 +29,7 @@ class NetwPersistence;
 class NetwPrediction;
 class NetwSimulation;
 class ReplicationCore;
+struct PeerRename;
 
 namespace spawn {
 class Record;
@@ -292,11 +293,13 @@ public:
     void set_scene_isolation(int64_t p_value);
 
     int64_t get_controller() const;
+    int64_t steering() const;
     void set_controller(int64_t p_value);
     void record_controller(int64_t p_value);
     ControlKind get_control_kind() const;
     bool get_is_controlled_locally() const;
     godot::Ref<NetwPlayer> get_controller_player() const;
+    void set_controller_player(const godot::Ref<NetwPlayer> &p_player);
     int64_t get_action_spawn_tick() const {
         return action_spawn_tick;
     }
@@ -316,12 +319,15 @@ public:
     godot::Ref<NetwPromise> claim_by_contact(
         const godot::Ref<NetwEntity> &p_source
     );
-    godot::Ref<NetwPromise> release_authority(int64_t p_successor = 0);
+    godot::Ref<NetwPromise> release_authority(
+        int64_t p_successor = SERVER_PEER
+    );
     godot::Error transfer_control(int64_t p_peer);
+    godot::Error transfer_steering(int64_t p_steering);
     bool is_controller_here() const;
     bool is_claim_pending() const;
     bool is_claim_running_ahead() const;
-    void follow_session(const godot::NodePath &p_path);
+    void follow_server(const godot::NodePath &p_path);
     void apply_control();
     Hold get_hold() const;
     bool get_is_control_pending() const;
@@ -330,13 +336,14 @@ public:
     void seed_control(uint64_t p_revision, uint64_t p_tenure, int64_t p_hold);
     bool expire_control(int64_t p_tick, int64_t p_deadline);
     void abandon_claims();
+    void reject_claims(const char *p_detail);
 
     void set_replication_priority(double p_weight);
     double get_replication_priority() const {
         return replication_priority;
     }
 
-    bool get_is_session_authority() const;
+    bool is_on_server() const;
     godot::Ref<NetwPlayer> get_player() const;
     Ownership get_ownership() const;
     bool get_is_player() const;
@@ -437,6 +444,10 @@ public:
     void _handle_tree_exiting();
     void _on_owner_ready();
     void _on_peer_disconnected(int64_t p_peer_id);
+    bool rename_peers(const PeerRename &p_rename);
+    void follow_rename();
+    void forget_server_claims();
+    void raise_control(uint64_t p_floor);
 };
 
 } // namespace netw

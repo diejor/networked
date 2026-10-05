@@ -90,7 +90,7 @@ TEST_CASE(
     netw_test::flow_clocks(rig, TICKRATE);
 
     netw::NetwMultiplayer *client = rig.shell_at(0);
-    REQUIRE_FALSE(client->is_session_authority());
+    REQUIRE_FALSE(client->is_host());
     client->spawner_session_entered();
 
     Node *arena = memnew(Node);

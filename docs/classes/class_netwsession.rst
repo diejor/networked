@@ -37,6 +37,19 @@ Reached with :ref:`Netw.session()<class_Netw_method_session>` from any :godot:`N
 
 Connecting is done as you would normally do with :godot:`SceneMultiplayer`, by assigning :godot:`MultiplayerAPI.multiplayer_peer <MultiplayerAPI#class_MultiplayerAPI_property_multiplayer_peer>`. See :ref:`NetwConnection<class_NetwConnection>` to manage endpoints and :ref:`Netw.prepare_join()<class_Netw_method_prepare_join>` to join as a player.
 
+\ **Moving the server**\ 
+
+The session survives the server leaving when its :godot:`MultiplayerPeer` can hand the server role to another peer. Such a peer declares this signal, and :ref:`transfer_server()<class_NetwSession_method_transfer_server>` works when it also has the method.
+
+::
+
+    signal server_relabelled(successor_was: int, former_now: int)
+
+    func transfer_server(peer_id: int) -> Error:
+        pass
+
+\ The peer emits the signal from its own :godot:`MultiplayerPeer.poll() <MultiplayerPeer#class_MultiplayerPeer_method_poll>`, once it already answers the new ids. :ref:`NakamaWrapper<class_NakamaWrapper>` does this when :ref:`NakamaWrapper.migrate_on_host_loss<class_NakamaWrapper_property_migrate_on_host_loss>` is on. ENet, WebRTC, Steam and :godot:`OfflineMultiplayerPeer` do not, so losing the server ends the session.
+
 .. rst-class:: classref-reftable-group
 
 Properties
@@ -111,6 +124,8 @@ Methods
    | |void|                                                | :ref:`set_server_info<class_NetwSession_method_set_server_info>`\ (\ info\: :ref:`NetwServerInfo<class_NetwServerInfo>`\ )                                                            |
    +-------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | :ref:`NetwTable<class_NetwTable>`                     | :ref:`table<class_NetwSession_method_table>`\ (\ name\: :godot:`StringName`\ ) |const|                                                                                                |
+   +-------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`Error <@GlobalScope#enum_@globalscope_Error>` | :ref:`transfer_server<class_NetwSession_method_transfer_server>`\ (\ peer_id\: :godot:`int`\ )                                                                                        |
    +-------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | |void|                                                | :ref:`unregister_service<class_NetwSession_method_unregister_service>`\ (\ service\: :godot:`Object`, type\: :godot:`Object` = null\ )                                                |
    +-------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
@@ -220,6 +235,51 @@ Emitted after the root of ``scene`` is ready, so the whole scene can be accessed
 
     func on_scene_ready(arena: NetwScene) -> void:
         arena.root.get_node(^"Spawns").arrange()
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NetwSession_signal_server_transferred:
+
+.. rst-class:: classref-signal
+
+**server_transferred**\ (\ successor_was\: :godot:`int`, former_now\: :godot:`int`\ ) :ref:`🔗<class_NetwSession_signal_server_transferred>`
+
+Emitted on every peer once the peer that was ``successor_was`` has become the server at id ``1``, and the old server, if it stayed, has become ``former_now``.
+
+\ ``former_now`` is ``0`` when the old server is gone, and its player leaves after this signal.
+
+
+.. tabs::
+
+ .. code-tab:: gdscript
+
+    func _ready() -> void:
+        Netw.session(self).server_transferred.connect(on_server_transferred)
+
+    func on_server_transferred(successor_was: int, former_now: int) -> void:
+        scoreboard.rename(successor_was, 1)
+        if former_now != 0:
+            scoreboard.rename(1, former_now)
+
+ .. code-tab:: csharp
+
+    public override void _Ready()
+    {
+        Netw.Session(this).ServerTransferred += OnServerTransferred;
+    }
+
+    private void OnServerTransferred(long successorWas, long formerNow)
+    {
+        scoreboard.Rename(successorWas, 1);
+        if (formerNow != 0)
+            scoreboard.Rename(1, formerNow);
+    }
+
+\ 
+
+What each client keeps of its world follows its own :ref:`NetwSessionConfig.transfer_mode<class_NetwSessionConfig_property_transfer_mode>`.
 
 .. rst-class:: classref-section-separator
 
@@ -359,6 +419,32 @@ The server kicked this peer with :ref:`kick()<class_NetwSession_method_kick>`.
 :ref:`ExitReason<enum_NetwSession_ExitReason>` **REPLACED** = ``4``
 
 Another peer was assigned to :godot:`MultiplayerAPI.multiplayer_peer <MultiplayerAPI#class_MultiplayerAPI_property_multiplayer_peer>`.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _enum_NetwSession_TransferMode:
+
+.. rst-class:: classref-enumeration
+
+enum **TransferMode**: :ref:`🔗<enum_NetwSession_TransferMode>`
+
+.. _class_NetwSession_constant_TRANSFER_REJOIN:
+
+.. rst-class:: classref-enumeration-constant
+
+:ref:`TransferMode<enum_NetwSession_TransferMode>` **TRANSFER_REJOIN** = ``0``
+
+When the server moves, each client frees the entities it received and gets the new server's world again as new nodes, and the entities a client spawned itself are despawned. The :ref:`NetwClock<class_NetwClock>` of each peer holds until that peer has the world back. :ref:`Netw.configure_transfer()<class_Netw_method_configure_transfer>` picks what the new server keeps.
+
+.. _class_NetwSession_constant_TRANSFER_CONTINUE:
+
+.. rst-class:: classref-enumeration-constant
+
+:ref:`TransferMode<enum_NetwSession_TransferMode>` **TRANSFER_CONTINUE** = ``1``
+
+Each client keeps its world and its nodes.
 
 .. rst-class:: classref-section-separator
 
@@ -783,6 +869,28 @@ Replaces what this session advertises about itself, such as the name shown in a 
 :ref:`NetwTable<class_NetwTable>` **table**\ (\ name\: :godot:`StringName`\ ) |const| :ref:`🔗<class_NetwSession_method_table>`
 
 The table of the schema declared as ``name`` with :ref:`Netw.configure_schema()<class_Netw_method_configure_schema>`, or ``null`` when there is none.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NetwSession_method_transfer_server:
+
+.. rst-class:: classref-method
+
+:godot:`Error <@GlobalScope#enum_@globalscope_Error>` **transfer_server**\ (\ peer_id\: :godot:`int`\ ) :ref:`🔗<class_NetwSession_method_transfer_server>`
+
+Asks the transport to make ``peer_id`` the server and this peer a client under a new id. :ref:`server_transferred<class_NetwSession_signal_server_transferred>` follows on every peer. Whether a transport can is stated in the class description.
+
+.. code:: text
+
+    Error
+    ┠╴ERR_UNAUTHORIZED        called on a client
+    ┠╴ERR_UNAVAILABLE         the transport cannot move the server
+    ┠╴ERR_INVALID_PARAMETER   peer_id is not a connected client
+    ┖╴ERR_BUSY                a database still has writes to settle
+
+\ **Server Only.**
 
 .. rst-class:: classref-item-separator
 

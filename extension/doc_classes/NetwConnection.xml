@@ -22,7 +22,7 @@
 		[/codeblock]
 		The peer [code]take_the_peer[/code] receives is ready to assign to [member MultiplayerAPI.multiplayer_peer], and connects at once.
 		Endpoints are pairs of [code](transport, address)[/code] that can be probed by [NetwConnection] to determine if they are reachable.
-	</description>
+		In a mesh, exactly one peer has id 1. It is the server, and every other peer is online once it is linked to peer 1.	</description>
 	<tutorials>
 	</tutorials>
 	<methods>

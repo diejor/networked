@@ -142,7 +142,7 @@ bool builds_on_a_stale_base(const Facts &p_facts) {
 } // namespace
 
 bool may_author(const Facts &p_facts) {
-    if (p_facts.peer_is_session) {
+    if (p_facts.peer_is_server) {
         return true;
     }
     if (!p_facts.declared) {
@@ -164,13 +164,13 @@ Ruling rule(const Facts &p_facts) {
     if (!may_author(p_facts)) {
         return refuse(Verdict::STATIC, godot::ERR_UNAUTHORIZED);
     }
-    if (!p_facts.peer_is_session && unavailable_to_a_controller(p_facts)) {
+    if (!p_facts.peer_is_server && unavailable_to_a_controller(p_facts)) {
         return refuse(Verdict::STATIC, godot::ERR_UNAVAILABLE);
     }
     if (misplaced_by_the_caller(p_facts)) {
         return refuse(Verdict::STATIC, godot::ERR_INVALID_PARAMETER);
     }
-    if (p_facts.peer_is_session) {
+    if (p_facts.peer_is_server) {
         return Ruling();
     }
     if (misplaced_in_flight(p_facts)) {
@@ -182,10 +182,10 @@ Ruling rule(const Facts &p_facts) {
     return Ruling();
 }
 
-Ruling rule(Kind p_kind, bool p_peer_is_session) {
+Ruling rule(Kind p_kind, bool p_peer_is_server) {
     Facts facts;
     facts.kind = p_kind;
-    facts.peer_is_session = p_peer_is_session;
+    facts.peer_is_server = p_peer_is_server;
     return rule(facts);
 }
 

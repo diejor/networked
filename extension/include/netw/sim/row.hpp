@@ -144,7 +144,7 @@ public:
         godot::LocalVector<HeldPose> &r_poses
     ) const;
 
-    godot::LocalVector<godot::RID> follow_session_authority(bool p_here);
+    godot::LocalVector<godot::RID> follow_server(bool p_here);
     void stepping(godot::LocalVector<godot::RID> &r_out);
 
     void settle();

@@ -261,6 +261,10 @@ int64_t ClockEngine::get_ticks_run() const {
 }
 
 void ClockEngine::force_step(int count) {
+    if (held) {
+        resolve_simulation_gate(0);
+        return;
+    }
     for (int index = 0; index < count; ++index) {
         emit_tick();
     }
@@ -287,6 +291,11 @@ void ClockEngine::physics_step(double delta) {
     if (delta > stall_threshold) {
         accumulator = 0.0;
         simulation_credit = 0;
+    }
+    if (held) {
+        accumulator = 0.0;
+        resolve_simulation_gate(0);
+        return;
     }
 
     begin_tick_loop();
@@ -392,6 +401,15 @@ bool ClockEngine::is_gated() const {
     return simulation_gates > 0;
 }
 
+void ClockEngine::set_held(bool p_held) {
+    held = p_held;
+    accumulator = 0.0;
+}
+
+bool ClockEngine::is_held() const {
+    return held;
+}
+
 Dictionary ClockEngine::handle_pong(
     double sample,
     int server_tick_at_pong,
@@ -474,6 +492,7 @@ void ClockEngine::clear() {
     tick = 0;
     is_synchronized = false;
     simulating = true;
+    held = false;
     simulation_behind_count = 0;
     accumulator = 0.0;
     target_tick_estimate = 0.0;
@@ -484,6 +503,10 @@ void ClockEngine::clear() {
     physics_frames = 0;
     polls = 0;
     cadence_started_usec = 0;
+    stats.clear();
+}
+
+void ClockEngine::forget_rtt() {
     stats.clear();
 }
 

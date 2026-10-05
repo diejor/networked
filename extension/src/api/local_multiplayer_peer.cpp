@@ -150,6 +150,7 @@ Error LocalMultiplayerPeer::send_to_peer(
     packet.peer = unique_id;
     packet.channel = transfer_channel;
     packet.mode = transfer_mode;
+    packet.term = term;
     target->receive_packet(packet);
     return Error::OK;
 }
@@ -166,7 +167,87 @@ void LocalMultiplayerPeer::receive_packet(const Packet &p_packet) {
         return;
     }
 
-    packet_queue.push_back(p_packet);
+    admit_packet(p_packet);
+}
+
+void LocalMultiplayerPeer::admit_packet(const Packet &p_packet) {
+    if (p_packet.term == term || reads_any_term()) {
+        packet_queue.push_back(p_packet);
+    } else if (p_packet.term > term) {
+        packets_ahead.push_back(p_packet);
+    }
+}
+
+bool LocalMultiplayerPeer::reads_any_term() const {
+    const LocalLoopbackSession *owner = loopback_session();
+    return owner != nullptr && !owner->checks_terms;
+}
+
+int LocalMultiplayerPeer::Install::relabelled(int p_id) const {
+    if (p_id == successor_was) {
+        return 1;
+    }
+    return p_id == 1 ? former_now : p_id;
+}
+
+void LocalMultiplayerPeer::install(const Install &p_install) {
+    term = p_install.term;
+    unique_id = p_install.relabelled(unique_id);
+    server_side = unique_id == 1;
+
+    HashMap<int, ObjectID> relinked;
+    for (const KeyValue<int, ObjectID> &link : links) {
+        const int id = p_install.relabelled(link.key);
+        if (id != 0) {
+            relinked.insert(id, link.value);
+        }
+    }
+    links = relinked;
+
+    Vector<Packet> current;
+    for (const Packet &packet : packet_queue) {
+        if (packet.term >= term || reads_any_term()) {
+            current.push_back(packet);
+        }
+    }
+    Vector<Packet> later;
+    for (const Packet &packet : packets_ahead) {
+        if (packet.term == term) {
+            current.push_back(packet);
+        } else if (packet.term > term) {
+            later.push_back(packet);
+        }
+    }
+    packet_queue = current;
+    packets_ahead = later;
+    retained_packet = Packet();
+
+    Vector<int> connected;
+    for (const int id : peers_to_emit_connected) {
+        if (p_install.relabelled(id) != 0) {
+            connected.push_back(p_install.relabelled(id));
+        }
+    }
+    peers_to_emit_connected = connected;
+    Vector<int> disconnected;
+    for (const int id : peers_to_emit_disconnected) {
+        if (p_install.relabelled(id) != 0) {
+            disconnected.push_back(p_install.relabelled(id));
+        }
+    }
+    peers_to_emit_disconnected = disconnected;
+
+    LocalLoopbackSession *owner = loopback_session();
+    if (owner != nullptr) {
+        owner->relabel_link(this, p_install);
+    }
+#if defined(NETW_TESTS)
+    emit_signal(
+        "server_relabelled",
+        p_install.successor_was,
+        p_install.former_now
+    );
+#endif
 }
 
 PackedByteArray LocalMultiplayerPeer::take_packet() {
@@ -183,6 +264,11 @@ void LocalMultiplayerPeer::purge_packets_from(int p_sender_id) {
     for (int index = packet_queue.size() - 1; index >= 0; --index) {
         if (packet_queue[index].peer == p_sender_id) {
             packet_queue.remove_at(index);
+        }
+    }
+    for (int index = packets_ahead.size() - 1; index >= 0; --index) {
+        if (packets_ahead[index].peer == p_sender_id) {
+            packets_ahead.remove_at(index);
         }
     }
 
@@ -209,6 +295,11 @@ void LocalMultiplayerPeer::remote_closed(
     }
 }
 
+void LocalMultiplayerPeer::vanish() {
+    status = CONNECTION_DISCONNECTED;
+    finalize_close();
+}
+
 void LocalMultiplayerPeer::finalize_close() {
     closing = false;
     closed = true;
@@ -216,9 +307,11 @@ void LocalMultiplayerPeer::finalize_close() {
 
     peers_to_emit_connected.clear();
     peers_to_emit_disconnected.clear();
+    pending_installs.clear();
 
     links.clear();
     packet_queue.clear();
+    packets_ahead.clear();
     retained_packet = Packet();
 
     unique_id = 0;
@@ -233,9 +326,12 @@ void LocalMultiplayerPeer::finalize_close() {
 void LocalMultiplayerPeer::reset_state() {
     links.clear();
     packet_queue.clear();
+    packets_ahead.clear();
     retained_packet = Packet();
     peers_to_emit_connected.clear();
     peers_to_emit_disconnected.clear();
+    pending_installs.clear();
+    term = 0;
 
     closing = false;
     closed = false;
@@ -250,6 +346,11 @@ void LocalMultiplayerPeer::reset_state() {
 
 void LocalMultiplayerPeer::NETW_PEER_VIRTUAL(poll)() {
     NETW_ZONE_NC("LocalMultiplayerPeer poll", colors::TRANSPORT);
+    while (!pending_installs.is_empty() && !closed && !closing) {
+        const Install next = pending_installs[0];
+        pending_installs.remove_at(0);
+        install(next);
+    }
     if (!server_side && status == CONNECTION_CONNECTING) {
         status = CONNECTION_CONNECTED;
     }
@@ -352,7 +453,7 @@ bool LocalMultiplayerPeer::NETW_PEER_VIRTUAL(is_server)() const {
 
 bool LocalMultiplayerPeer::
     NETW_PEER_VIRTUAL(is_server_relay_supported)() const {
-    return true;
+    return relays;
 }
 
 bool LocalMultiplayerPeer::
@@ -494,6 +595,22 @@ void LocalMultiplayerPeer::_bind_methods() {
         "set_loopback_session",
         "get_loopback_session"
     );
+#if defined(NETW_TESTS)
+    ClassDB::bind_method(
+        D_METHOD("transfer_server", "peer_id"),
+        &LocalMultiplayerPeer::transfer_server
+    );
+#endif
 }
+
+#if defined(NETW_TESTS)
+Error LocalMultiplayerPeer::transfer_server(int p_peer_id) {
+    LocalLoopbackSession *owner = loopback_session();
+    if (owner == nullptr || !server_side) {
+        return ERR_UNAVAILABLE;
+    }
+    return owner->transfer_server(p_peer_id, true);
+}
+#endif
 
 } // namespace netw

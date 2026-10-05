@@ -70,7 +70,7 @@ TEST_CASE(
 
     const Axes read = axes_on_the_authority(rig, a_predicted_body("Ball"));
 
-    NETW_CHECK_EQ(read.controller, int64_t(0));
+    NETW_CHECK_EQ(read.controller, int64_t(1));
     NETW_CHECK_EQ(
         int(read.input_source),
         int(NetwPrediction::INPUT_SOURCE_LOCAL)

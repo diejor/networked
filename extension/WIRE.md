@@ -156,6 +156,7 @@ id   name                    kind    rel fresh del agg direction  payload
 44   ROUTE_LEASE             session R   -     fit -   srv -> cli planned
 45   LIFECYCLE_DECISION      session R   -     fit -   srv -> own planned
 46   CLAIM_IMAGE             routed  U   fresh fit yes either     planned
+47   SESSION_RESYNC          session R   -     fit -   cli -> srv planned
 100+ user channels           routed  -   -     -   -   either     raw
 ```
 
@@ -882,6 +883,29 @@ The server advances its one route counter by `count` and hands the block
 a lease mints its routes from it in order and from nothing else, so every
 route in the session stays distinct. A block arriving while the last one still
 holds routes queues behind it. A lease of a peer that leaves is abandoned.
+
+```text
+SESSION_RESYNC   what a client holds when the server moves to another peer
+[route_floor varuint 5][player_high varuint 5][leases varuint 1]
+[routes varuint 3][last bool1]
+[ROUTE_LEASE body] x leases
+[route_delta varuint 5][anchor varuint 5][anchor_author varuint 5]
+[control_revision varuint 5][epoch varuint 3] x routes
+[align_verify]
+```
+
+Each client sends it once the server has moved, in `TRANSFER_CONTINUE`.
+Routes ascend, each a delta from the one before and the first from zero, so
+every frame decodes alone. A report too large for one message splits into
+frames, and `last` marks the final one. Only the first carries leases.
+
+The new server mints above every `route_floor`, honours the leases, and
+issues player ids above every `player_high`. It sends DESPAWN for a route it
+does not hold and treats the client as holding every other route, so the
+client gets SPAWN only for what it lacks. A route reported with a newer
+anchor or control revision is moved past it once every report is in. Joins
+and lease grants wait until then. A report after that, or from a peer that
+was not a client at the move, is dropped.
 
 ```text
 SESSION_PAUSE          [reason string]

@@ -9,6 +9,8 @@ namespace netw {
 
 class NetwMultiplayer;
 
+inline constexpr int64_t SERVER_PEER = 1;
+
 class SessionCore {
 public:
     enum State {
@@ -25,11 +27,6 @@ public:
         ROLE_LISTEN_SERVER = 3,
     };
 
-    struct AuthorityState {
-        int64_t coordinator = 1;
-        bool available = true;
-    };
-
 private:
     State state = STATE_OFFLINE;
     Role role = ROLE_NONE;
@@ -37,7 +34,6 @@ private:
     NetwMultiplayer *host = nullptr;
     uint64_t generation = 1;
     uint64_t tenure = 1;
-    AuthorityState authority;
 
     RateWindow join_window;
 
@@ -55,8 +51,6 @@ public:
     Role get_role() const;
     void set_desired_role(Role value);
     Role get_desired_role() const;
-    void set_authority_coordinator(int64_t value);
-    int64_t get_authority_coordinator() const;
 
     void transition(State next);
 
@@ -64,7 +58,7 @@ public:
     uint64_t get_tenure() const;
     void end_tenure();
 
-    void on_peer_assigned(bool has_live_peer, bool connected, int unique_id);
+    void on_peer_assigned(bool has_live_peer, int unique_id);
 
     void resolve_online(int unique_id);
 

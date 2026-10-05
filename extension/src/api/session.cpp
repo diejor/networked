@@ -30,6 +30,7 @@ const char *SIG_LOCAL_JOINED = "local_joined";
 const char *SIG_SCENE_READY = "scene_ready";
 const char *SIG_PLAYER_LEFT = "player_left";
 const char *SIG_JOIN_FAILED = "join_failed";
+const char *SIG_SERVER_TRANSFERRED = "server_transferred";
 
 } // namespace
 
@@ -78,8 +79,25 @@ Error NetwSession::kick(const Ref<NetwPlayer> &p_who, const String &p_reason) {
                           : ERR_UNCONFIGURED;
 }
 
+Error NetwSession::transfer_server(int64_t p_peer) {
+    NetwMultiplayer *api = session();
+    return api != nullptr ? api->session_transfer_server(p_peer)
+                          : ERR_UNCONFIGURED;
+}
+
 void NetwSession::announce_scene_ready(const Ref<NetwScene> &p_scene) {
     emit_signal(StringName(SIG_SCENE_READY), p_scene);
+}
+
+void NetwSession::announce_server_transferred(
+    int64_t p_successor_was,
+    int64_t p_former_now
+) {
+    emit_signal(
+        StringName(SIG_SERVER_TRANSFERRED),
+        p_successor_was,
+        p_former_now
+    );
 }
 
 TypedArray<NetwPlayer> NetwSession::get_players() const {
@@ -416,6 +434,10 @@ void NetwSession::_bind_methods() {
         D_METHOD("set_peer_bandwidth", "peer", "kbps"),
         &NetwSession::set_peer_bandwidth
     );
+    ClassDB::bind_method(
+        D_METHOD("transfer_server", "peer_id"),
+        &NetwSession::transfer_server
+    );
 
     ClassDB::bind_method(D_METHOD("leave"), &NetwSession::leave);
     ClassDB::bind_method(
@@ -499,6 +521,8 @@ void NetwSession::_bind_methods() {
     BIND_ENUM_CONSTANT(CONNECTION_LOST);
     BIND_ENUM_CONSTANT(KICKED);
     BIND_ENUM_CONSTANT(REPLACED);
+    BIND_ENUM_CONSTANT(TRANSFER_REJOIN);
+    BIND_ENUM_CONSTANT(TRANSFER_CONTINUE);
 
     const PropertyInfo exit_reason(
         Variant::INT,
@@ -566,6 +590,11 @@ void NetwSession::_bind_methods() {
             PROPERTY_HINT_RESOURCE_TYPE,
             "NetwScene"
         )
+    ));
+    ADD_SIGNAL(MethodInfo(
+        SIG_SERVER_TRANSFERRED,
+        PropertyInfo(Variant::INT, "successor_was"),
+        PropertyInfo(Variant::INT, "former_now")
     ));
 }
 

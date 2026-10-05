@@ -59,6 +59,7 @@ const Declared TRANSCRIBED[] = {
     {"ROUTE_LEASE", 44},
     {"LIFECYCLE_DECISION", 45},
     {"CLAIM_IMAGE", 46},
+    {"SESSION_RESYNC", 47},
 };
 
 constexpr int TRANSCRIBED_COUNT

@@ -25,6 +25,7 @@
 #include "netw/api/sync_pipeline.hpp"
 #include "netw/colors.hpp"
 #include "netw/comp_table.hpp"
+#include "netw/entity/stage.hpp"
 #include "netw/log.hpp"
 #include "netw/prediction_core.hpp"
 #include "netw/profile.hpp"
@@ -311,7 +312,7 @@ void NetwMultiplayer::interest_receive_awareness(
     const PackedByteArray &p_payload,
     int64_t p_sender
 ) {
-    if (p_sender != session_authority_peer()) {
+    if (p_sender != SERVER_PEER) {
         return;
     }
     LocalVector<interest::Awareness> events;
@@ -422,7 +423,7 @@ void NetwMultiplayer::interest_report_edge(
 }
 
 bool NetwMultiplayer::interest_can_send_to(int64_t p_peer_id) {
-    if (p_peer_id == 0 || p_peer_id == session_authority_peer()) {
+    if (p_peer_id == 0 || p_peer_id == SERVER_PEER) {
         return false;
     }
     if (!has_multiplayer_peer()) {
@@ -436,7 +437,7 @@ bool NetwMultiplayer::interest_can_send_to(int64_t p_peer_id) {
         != MultiplayerPeer::CONNECTION_CONNECTED) {
         return false;
     }
-    if (is_session_authority()) {
+    if (is_host()) {
         return NETW_API_VIRTUAL(get_peer_ids)().has(int32_t(p_peer_id));
     }
     return false;
@@ -567,8 +568,7 @@ int64_t NetwMultiplayer::interest_local_player() {
     if (has_multiplayer_peer()) {
         return get_unique_id();
     }
-    return session_get_role() == ROLE_LISTEN_SERVER ? session_authority_peer()
-                                                    : 0;
+    return session_get_role() == ROLE_LISTEN_SERVER ? SERVER_PEER : 0;
 }
 
 Array NetwMultiplayer::perception_layers_for(
@@ -818,7 +818,7 @@ bool NetwMultiplayer::interest_wire_admits(
     int64_t p_peer_id,
     const Ref<NetwEntity> &p_entity
 ) {
-    if (p_peer_id == session_authority_peer()) {
+    if (p_peer_id == SERVER_PEER) {
         return true;
     }
     return interest_player_sees(p_peer_id, p_entity);
@@ -1096,6 +1096,16 @@ void NetwMultiplayer::interest_send_awareness(
     );
 }
 
+namespace {
+
+bool route_stays(NetwMultiplayer *p_plane, int64_t p_route) {
+    const Ref<NetwEntity> entity = p_plane->wrapper_for_route(p_route);
+    return entity.is_null()
+        || entity->get_stage() < int64_t(entity::Stage::DESPAWNING);
+}
+
+} // namespace
+
 void NetwMultiplayer::interest_relay_awareness() {
     const Array drained = interest_awareness_drain();
     if (!is_host() || !interest_awareness_send.is_valid()) {
@@ -1107,7 +1117,21 @@ void NetwMultiplayer::interest_relay_awareness() {
         if (!interest_can_send_to(target)) {
             continue;
         }
-        interest_awareness_send.call(target, row[1]);
+        const Array wire = row[1];
+        Array sent;
+        for (int edge_at = 0; edge_at < wire.size(); ++edge_at) {
+            interest::Awareness edge;
+            if (!interest::Awareness::from_array(wire[edge_at], edge)) {
+                continue;
+            }
+            if (edge.kind != interest::Awareness::ENTER
+                || route_stays(this, edge.route)) {
+                sent.push_back(wire[edge_at]);
+            }
+        }
+        if (!sent.is_empty()) {
+            interest_awareness_send.call(target, sent);
+        }
     }
 }
 

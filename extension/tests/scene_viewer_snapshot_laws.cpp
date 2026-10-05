@@ -252,6 +252,102 @@ TEST_CASE(
     CHECK(held.has(late));
 }
 
+void cycle_online(NetwMultiplayer *p_api) {
+    netw::SessionCore &core = p_api->session_plane();
+    core.transition(netw::SessionCore::STATE_DISCONNECTING);
+    core.transition(netw::SessionCore::STATE_OFFLINE);
+    core.transition(netw::SessionCore::STATE_CONNECTING);
+    core.transition(netw::SessionCore::STATE_ONLINE);
+}
+
+uint64_t cycle_server(LoopbackRig &p_rig) {
+    NetwMultiplayer *host = p_rig.server();
+    const uint64_t first = host->session_plane().get_generation();
+    cycle_online(host);
+    REQUIRE(
+        host->session_get_state() == NetwMultiplayer::SESSION_STATE_ONLINE
+    );
+    REQUIRE(host->session_plane().get_generation() > first);
+    return first;
+}
+
+RID seat_fresh_client(LoopbackRig &p_rig) {
+    const int fresh = p_rig.add_client();
+    p_rig.pump(4);
+    p_rig.declare_scene(StringName("Arena"));
+    p_rig.pump(4);
+    p_rig.enter_scene(StringName("Arena"));
+    p_rig.join(fresh, StringName("alice"));
+    const RID mirror = p_rig.mirror_scene(fresh, StringName("Arena"));
+    p_rig.pump(4);
+    REQUIRE(p_rig.server()->scene_admit_peer(
+        p_rig.entity_of(StringName("Arena")),
+        p_rig.peer_id(fresh)
+    ));
+    p_rig.pump(8);
+    return mirror;
+}
+
+TEST_CASE(
+    "[Networked][Scene] SV8 a server whose session went online, offline and "
+    "online again publishes a roster that a fresh client applies, because "
+    "the client checks the list against the server it joined and not "
+    "against how often it went online itself"
+) {
+    LoopbackRig rig(0);
+    cycle_server(rig);
+    const RID mirror = seat_fresh_client(rig);
+
+    CHECK(rig.client(0)->scene_watches(mirror, rig.peer_id(0)));
+}
+
+TEST_CASE(
+    "[Networked][Scene] SV9 a roster the server minted in its previous "
+    "session is refused by a client of the current one, even when it "
+    "arrives late carrying a newer revision"
+) {
+    LoopbackRig rig(0);
+    const uint64_t previous = cycle_server(rig);
+    const RID mirror = seat_fresh_client(rig);
+    NetwMultiplayer *client = rig.client(0);
+    const int peer = rig.peer_id(0);
+    REQUIRE(client->scene_watches(mirror, peer));
+
+    SceneViewersHead stale = rig.server()->scene_viewers_head(
+        rig.entity_of(StringName("Arena")),
+        64
+    );
+    stale.generation = previous;
+    client->scene_apply_viewers(stale, roster({}));
+
+    CHECK(client->scene_watches(mirror, peer));
+}
+
+TEST_CASE(
+    "[Networked][Scene] SV10 a roster parked before a client's session ended "
+    "seats nobody when its scene arrives in the next session"
+) {
+    LoopbackRig rig(0);
+    const int fresh = rig.add_client();
+    rig.pump(4);
+    const RID arena = rig.declare_scene(StringName("Arena"));
+    rig.pump(4);
+    rig.enter_scene(StringName("Arena"));
+    rig.join(fresh, StringName("alice"));
+    NetwMultiplayer *host = rig.server();
+    NetwMultiplayer *client = rig.client(fresh);
+    const int peer = rig.peer_id(fresh);
+
+    client->scene_park_viewers_for_test(
+        host->scene_viewers_head(arena, 1),
+        roster({uint64_t(host->player_incarnation(peer))})
+    );
+    cycle_online(client);
+    const RID mirror = rig.mirror_scene(fresh, StringName("Arena"));
+
+    CHECK_FALSE(client->scene_watches(mirror, peer));
+}
+
 } // namespace TestSceneViewerSnapshotLaws
 
 #endif

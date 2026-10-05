@@ -29,7 +29,7 @@ bool Record::encode_header(
     NetwEntity *entity = Object::cast_to<NetwEntity>(p_entity);
     String id = String(entity_id);
     uint64_t peer = uint64_t(peer_id > 0 ? peer_id : 0);
-    int64_t control = entity != nullptr ? entity->get_controller() : controller;
+    int64_t control = entity != nullptr ? entity->steering() : controller;
     uint64_t revision
         = entity != nullptr ? entity->get_control_revision() : uint64_t(0);
     uint64_t tenure
@@ -102,7 +102,7 @@ Ref<NetwEntity> Record::stamp_header(
         int64_t(p_header.get(StringName("wire_hash"), 0))
     );
     if (entity->comp_table().get_table_hash() != 0) {
-        entity->comp_table().reconcile(entity->get_is_session_authority());
+        entity->comp_table().reconcile(entity->is_on_server());
     }
     entity->set_declares_scene(
         bool(p_header.get(StringName("declares_scene"), false))

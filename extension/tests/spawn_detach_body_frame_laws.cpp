@@ -132,7 +132,6 @@ Ref<netw::NetwMultiplayer> pair_session(
     Ref<netw::NetwMultiplayer> api
         = netw::NetwMultiplayer::create(Ref<Script>());
     api->session_get_inner()->set_root_path(NodePath("/"));
-    api->session_set_authority_peer(1);
     api->set("multiplayer_peer", p_peer);
     return api;
 }

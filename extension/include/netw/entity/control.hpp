@@ -5,11 +5,14 @@
 #include "godot/local_vector.hpp"
 #include "godot/object.hpp"
 #include "godot/variant.hpp"
+#include "netw/session_core.hpp"
 
 namespace netw::entity {
 
 class Control {
 public:
+    static constexpr int64_t SERVER = 0;
+
     enum class InitialController : int {
         SERVER = 0,
         REPRESENTED_PEER = 1,
@@ -145,9 +148,16 @@ public:
         const godot::StringName &p_name,
         bool p_is_signal,
         int64_t p_sender,
-        int64_t p_controller,
-        int64_t p_coordinator
+        int64_t p_controller
     );
+
+    static int64_t public_peer(int64_t p_controller) {
+        return p_controller == SERVER ? SERVER_PEER : p_controller;
+    }
+
+    static int64_t from_public(int64_t p_peer) {
+        return p_peer == SERVER_PEER ? SERVER : p_peer;
+    }
 
     bool set_controller(int64_t p_controller);
 

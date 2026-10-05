@@ -261,6 +261,87 @@ public sealed class NetwSessionConfig : NetwRefCounted
         }
     }
 
+    private static readonly IntPtr _bindGetTransferMode =
+        NetwApi.MethodBind(
+            "NetwSessionConfig",
+            "get_transfer_mode",
+            2923618952UL);
+
+    private static readonly IntPtr _bindSetTransferMode =
+        NetwApi.MethodBind(
+            "NetwSessionConfig",
+            "set_transfer_mode",
+            799864364UL);
+
+    /// <summary>
+    /// What this peer does with its world when the server moves. Each peer
+    /// follows its own value, and a new server runs
+    /// <see cref="Netw.ConfigureTransfer"/> only when its value is
+    /// <see cref="NetwSession.TransferMode.Rejoin"/>.
+    /// </summary>
+    public NetwSession.TransferMode TransferMode
+    {
+        get
+        {
+            long answered = default;
+            NetwThunks.Ptrcall0_Long(
+                _bindGetTransferMode,
+                Checked,
+                ref answered);
+            return (NetwSession.TransferMode)answered;
+        }
+        set
+        {
+            long slot0 = (long)value;
+            long discarded = default;
+            NetwThunks.Ptrcall1_Long_Long(
+                _bindSetTransferMode,
+                Checked,
+                in slot0,
+                ref discarded);
+        }
+    }
+
+    private static readonly IntPtr _bindGetTransferDeadlineTicks =
+        NetwApi.MethodBind(
+            "NetwSessionConfig",
+            "get_transfer_deadline_ticks",
+            3905245786UL);
+
+    private static readonly IntPtr _bindSetTransferDeadlineTicks =
+        NetwApi.MethodBind(
+            "NetwSessionConfig",
+            "set_transfer_deadline_ticks",
+            1286410249UL);
+
+    /// <summary>
+    /// How many ticks a new server waits for each client to report its world
+    /// after the server moves. A client still reporting when it runs out is
+    /// disconnected, and <c>0</c> waits without a limit.
+    /// </summary>
+    public long TransferDeadlineTicks
+    {
+        get
+        {
+            long answered = default;
+            NetwThunks.Ptrcall0_Long(
+                _bindGetTransferDeadlineTicks,
+                Checked,
+                ref answered);
+            return answered;
+        }
+        set
+        {
+            long slot0 = value;
+            long discarded = default;
+            NetwThunks.Ptrcall1_Long_Long(
+                _bindSetTransferDeadlineTicks,
+                Checked,
+                in slot0,
+                ref discarded);
+        }
+    }
+
     private static readonly IntPtr _bindApp =
         NetwApi.MethodBind("NetwSessionConfig", "app", 243073128UL);
 
@@ -353,6 +434,47 @@ public sealed class NetwSessionConfig : NetwRefCounted
         IntPtr answered = default;
         NetwThunks.Ptrcall1_Long_IntPtr(
             _bindBandwidth,
+            Checked,
+            in slot0,
+            ref answered);
+        return NetwSessionConfig.Adopt(answered);
+    }
+
+    private static readonly IntPtr _bindTransfer =
+        NetwApi.MethodBind("NetwSessionConfig", "transfer", 299431885UL);
+
+    /// <summary>
+    /// Sets <see cref="NetwSessionConfig.TransferMode"/> and returns this
+    /// config.
+    /// </summary>
+    public NetwSessionConfig Transfer(NetwSession.TransferMode transferMode)
+    {
+        long slot0 = (long)transferMode;
+        IntPtr answered = default;
+        NetwThunks.Ptrcall1_Long_IntPtr(
+            _bindTransfer,
+            Checked,
+            in slot0,
+            ref answered);
+        return NetwSessionConfig.Adopt(answered);
+    }
+
+    private static readonly IntPtr _bindTransferDeadline =
+        NetwApi.MethodBind(
+            "NetwSessionConfig",
+            "transfer_deadline",
+            3031268209UL);
+
+    /// <summary>
+    /// Sets <see cref="NetwSessionConfig.TransferDeadlineTicks"/> and returns
+    /// this config.
+    /// </summary>
+    public NetwSessionConfig TransferDeadline(long ticks)
+    {
+        long slot0 = ticks;
+        IntPtr answered = default;
+        NetwThunks.Ptrcall1_Long_IntPtr(
+            _bindTransferDeadline,
             Checked,
             in slot0,
             ref answered);

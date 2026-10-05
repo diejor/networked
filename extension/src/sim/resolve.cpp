@@ -6,12 +6,12 @@ bool controller_authored(const Facts &p_facts) {
     return !p_facts.predicted && !p_facts.state_rows;
 }
 
-bool session_authors(const Facts &p_facts) {
+bool server_authors(const Facts &p_facts) {
     return !controller_authored(p_facts) || p_facts.controller_is_nobody;
 }
 
 bool authors_here(const Facts &p_facts) {
-    return session_authors(p_facts) ? p_facts.session_authority_here
+    return server_authors(p_facts) ? p_facts.server_here
                                     : p_facts.controller_here;
 }
 

@@ -3866,7 +3866,7 @@ sim::Facts NetwPredictionEngine::resolution_facts(
     facts.declared = true;
     facts.predicted = true;
     facts.input_rows = !row->axes.inputless;
-    facts.session_authority_here = row->axes.authority;
+    facts.server_here = row->axes.authority;
     facts.controller_here = row->axes.controlled_locally;
     facts.fallback_latched = row->latches.fallback_latched;
     facts.delay_closed = p_handle->get_recovery_policy()
@@ -4775,7 +4775,7 @@ void NetwPredictionEngine::send_ack_frame(int64_t p_slot) {
         return;
     }
     send_lane(
-        seated->get_controller(),
+        seated->steering(),
         route,
         wire::builtin_channel("PREDICT_ACK"),
         publish_ack_frame(p_slot)
@@ -10413,7 +10413,7 @@ int64_t NetwPredictionEngine::property_class_report_hash(
     }
     parts.push_back(vformat(
         "controller:%d",
-        seated.is_valid() && seated->get_controller() > 0 ? 1 : 0
+        seated.is_valid() && seated->steering() > 0 ? 1 : 0
     ));
     return int64_t(String("\n").join(parts).hash());
 }

@@ -243,15 +243,15 @@ void Rows::choosers(LocalVector<RID> &r_out) {
     gather(chooser_bits, r_out);
 }
 
-LocalVector<RID> Rows::follow_session_authority(bool p_here) {
+LocalVector<RID> Rows::follow_server(bool p_here) {
     LocalVector<RID> moved;
     for (KeyValue<uint64_t, Row> &held : rows) {
         Row &row = held.value;
-        if (row.facts.session_authority_here == p_here) {
+        if (row.facts.server_here == p_here) {
             continue;
         }
         mark(row);
-        row.facts.session_authority_here = p_here;
+        row.facts.server_here = p_here;
         if (sim::resolve(row.facts) != row.mode) {
             moved.push_back(row.entity);
         }

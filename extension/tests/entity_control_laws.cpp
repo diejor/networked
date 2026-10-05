@@ -69,7 +69,7 @@ TEST_CASE(
         int(netw::entity::Control::InitialController::SERVER)
     );
 
-    NETW_CHECK_EQ(armed.entity->get_controller(), 0);
+    NETW_CHECK_EQ(armed.entity->get_controller(), 1);
     NETW_CHECK_EQ(armed.authority(), 1);
     NETW_CHECK_EQ(
         armed.entity->get_control_kind(),
@@ -87,7 +87,7 @@ TEST_CASE(
         int(netw::entity::Control::InitialController::REPRESENTED_PEER)
     );
 
-    NETW_CHECK_EQ(armed.entity->get_controller(), 0);
+    NETW_CHECK_EQ(armed.entity->get_controller(), 1);
     NETW_CHECK_EQ(armed.authority(), 1);
 }
 
@@ -110,9 +110,9 @@ TEST_CASE(
         int64_t(NetwEntity::CONTROL_PEER_CONTROLLED)
     );
 
-    armed.entity->set_controller(0);
+    armed.entity->set_controller(1);
 
-    NETW_CHECK_EQ(armed.entity->get_controller(), 0);
+    NETW_CHECK_EQ(armed.entity->get_controller(), 1);
     NETW_CHECK_EQ(armed.authority(), 1);
     NETW_CHECK_EQ(
         armed.entity->get_control_kind(),
@@ -196,28 +196,26 @@ TEST_CASE(
     NETW_CHECK_EQ(seen.peer_named[0], 42);
     NETW_CHECK_EQ(seen.authority_seen[0], 42);
 
-    armed.entity->set_controller(0);
+    armed.entity->set_controller(1);
 
     NETW_REQUIRE_EQ(int(seen.authority_seen.size()), 2);
-    NETW_CHECK_EQ(seen.peer_named[1], 0);
+    NETW_CHECK_EQ(seen.peer_named[1], 1);
     NETW_CHECK_EQ(seen.authority_seen[1], 1);
 }
 
-Ref<NetwMultiplayer> a_coordinated_session(int64_t p_coordinator) {
+Ref<NetwMultiplayer> a_server_session() {
     Ref<NetwMultiplayer> session;
     session.instantiate();
-    session->session_set_authority_peer(p_coordinator);
-    session->session_peer_assigned(true, false, p_coordinator);
+    session->session_peer_assigned(true, 1);
     return session;
 }
 
 TEST_CASE(
-    "[Networked][Entity][Hosted] EC5 existence authority asks is_host, not "
-    "the literal peer 1, so a session with coordinator 7 answers its own "
-    "entity's is_session_authority true and falls a server-controlled node's "
-    "authority to peer 7 rather than 1"
+    "[Networked][Entity][Hosted] EC5 existence authority asks is_host, so "
+    "the server answers its own entity is on the server and falls a "
+    "server-controlled node's authority to peer 1"
 ) {
-    Ref<NetwMultiplayer> session = a_coordinated_session(7);
+    Ref<NetwMultiplayer> session = a_server_session();
     REQUIRE(session->is_host());
 
     Node *owner = memnew(Node);
@@ -228,19 +226,19 @@ TEST_CASE(
     entity->set_initial_controller(NetwEntity::INITIAL_SERVER);
     entity->arm(session);
 
-    CHECK(entity->get_is_session_authority());
-    NETW_CHECK_EQ(entity->get_controller(), 0);
-    NETW_CHECK_EQ(owner->get_multiplayer_authority(), 7);
+    CHECK(entity->is_on_server());
+    NETW_CHECK_EQ(entity->get_controller(), 1);
+    NETW_CHECK_EQ(owner->get_multiplayer_authority(), 1);
 
     memdelete(owner);
 }
 
 TEST_CASE(
     "[Networked][Entity][Hosted] EC6 an explicit remote controller survives "
-    "a coordinator that is not peer 1, and the represented peer it names "
-    "stays its own id rather than being rewritten to the coordinator"
+    "arming on the server, and the represented peer it names stays its own "
+    "id rather than being rewritten to the server"
 ) {
-    Ref<NetwMultiplayer> session = a_coordinated_session(7);
+    Ref<NetwMultiplayer> session = a_server_session();
 
     Node *owner = memnew(Node);
     Ref<NetwEntity> entity = NetwEntity::ensure(owner);
@@ -268,9 +266,8 @@ Ref<Script> a_script() {
 }
 
 TEST_CASE(
-    "[Networked][Entity] the receive gate trusts the coordinator before it "
-    "looks at anything, whatever peer that coordinator names, and refuses a "
-    "scriptless node to everyone else, transport peer 1 included"
+    "[Networked][Entity] the receive gate trusts the server before it looks "
+    "at anything, and refuses a scriptless node to everyone else"
 ) {
     Node *node = memnew(Node);
     node->set_multiplayer_authority(9, false);
@@ -280,9 +277,8 @@ TEST_CASE(
             node,
             StringName("hp"),
             false,
-            7,
-            0,
-            7
+            1,
+            0
         )
     );
     CHECK(
@@ -290,9 +286,8 @@ TEST_CASE(
             nullptr,
             StringName("hp"),
             false,
-            7,
-            0,
-            7
+            1,
+            0
         )
     );
 
@@ -301,9 +296,8 @@ TEST_CASE(
             node,
             StringName("hp"),
             false,
-            1,
-            0,
-            7
+            7,
+            0
         )
     );
     CHECK_FALSE(
@@ -311,9 +305,8 @@ TEST_CASE(
             nullptr,
             StringName("hp"),
             false,
-            1,
-            0,
-            7
+            7,
+            0
         )
     );
     memdelete(node);
@@ -334,7 +327,6 @@ TEST_CASE(
             StringName("netw_undeclared_name"),
             false,
             7,
-            0,
             0
         )
     );
@@ -344,7 +336,6 @@ TEST_CASE(
             StringName("netw_undeclared_name"),
             false,
             9,
-            0,
             0
         )
     );
@@ -373,7 +364,6 @@ TEST_CASE(
             StringName("netw_open_field"),
             false,
             9,
-            0,
             0
         )
     );
@@ -384,7 +374,6 @@ TEST_CASE(
             StringName("netw_open_field"),
             true,
             9,
-            0,
             0
         )
     );
@@ -395,7 +384,6 @@ TEST_CASE(
             StringName("netw_sibling_field"),
             false,
             9,
-            0,
             0
         )
     );
@@ -405,7 +393,6 @@ TEST_CASE(
             StringName("netw_sibling_field"),
             false,
             7,
-            0,
             0
         )
     );
@@ -434,8 +421,7 @@ TEST_CASE(
             StringName("netw_steer"),
             false,
             9,
-            9,
-            0
+            9
         )
     );
     CHECK_FALSE(
@@ -444,8 +430,7 @@ TEST_CASE(
             StringName("netw_steer"),
             false,
             9,
-            4,
-            0
+            4
         )
     );
 
@@ -462,8 +447,7 @@ TEST_CASE(
             StringName("netw_steer"),
             false,
             9,
-            9,
-            0
+            9
         )
     );
     CHECK(
@@ -472,8 +456,7 @@ TEST_CASE(
             StringName("netw_steer"),
             false,
             7,
-            9,
-            0
+            9
         )
     );
     memdelete(node);

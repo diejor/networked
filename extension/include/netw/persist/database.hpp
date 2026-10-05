@@ -125,6 +125,7 @@ public:
     godot::RID create(const godot::StringName &p_name);
     godot::RID find(const godot::StringName &p_name) const;
     bool is_valid(const godot::RID &p_database) const;
+    bool holds_writes() const;
     void clear();
 
     godot::StringName name_of(const godot::RID &p_database) const;

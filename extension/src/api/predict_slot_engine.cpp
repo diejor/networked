@@ -202,9 +202,10 @@ NetwPredictSlotEngine::Declaration NetwPredictSlotEngine::declaration_of(
     const PropertyBindingPtr input = p_entity->get_input_binding();
     decided.state = state != nullptr ? state->id : 0;
     decided.input = input != nullptr ? input->id : 0;
-    decided.authority = p_entity->get_is_session_authority();
+    decided.authority = p_entity->is_on_server();
     decided.controlled_locally = p_entity->get_is_controlled_locally()
-        || (decided.authority && p_entity->get_controller() == 0);
+        || (decided.authority
+            && p_entity->steering() == entity::Control::SERVER);
     return decided;
 }
 
@@ -1998,6 +1999,7 @@ void NetwPredictSlotEngine::consume_step(
         switch (action) {
             case NetwPrediction::CONSUME_ACTION_REPLAY:
                 consume_one(p_delta);
+                consume_backlog(p_delta, buffer);
                 break;
             case NetwPrediction::CONSUME_ACTION_HOLD:
                 stats->set_int_fact(
@@ -2206,6 +2208,18 @@ int64_t NetwPredictSlotEngine::queued_span() const {
 
 void NetwPredictSlotEngine::consume_one(double p_delta) {
     pool->consume_one(native_slot(), p_delta);
+}
+
+void NetwPredictSlotEngine::consume_backlog(double p_delta, int p_buffer) {
+    const int ceiling = handle->get_max_consume_per_tick();
+    for (int ran = 1; ran < ceiling; ++ran) {
+        const int depth = int(queued_span());
+        if (consume_action(depth, p_buffer)
+            != NetwPrediction::CONSUME_ACTION_REPLAY) {
+            return;
+        }
+        consume_one(p_delta);
+    }
 }
 
 void NetwPredictSlotEngine::mark_idle_drive(int64_t p_label, int p_kind) {

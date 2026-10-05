@@ -8,6 +8,8 @@
 
 namespace netw {
 
+struct PeerRename;
+
 class SceneMembership {
 public:
     enum Removal {
@@ -93,6 +95,7 @@ public:
     int size() const;
 
     void forget_member(int64_t p_member);
+    void rename_members(const PeerRename &p_rename);
     void retire_scene(const godot::RID &p_scene);
     void clear();
 

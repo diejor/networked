@@ -473,6 +473,20 @@ Error Netw::configure_admission(const Callable &p_handler) {
     );
 }
 
+Error Netw::configure_transfer(const Callable &p_keep) {
+    Node *scope = handler_scope(p_keep, "configure_transfer");
+    if (scope == nullptr) {
+        return ERR_INVALID_PARAMETER;
+    }
+    return session_decl::declare(
+        scope,
+        session_decl::KIND_TRANSFER,
+        p_keep,
+        Variant(),
+        "configure_transfer"
+    );
+}
+
 Ref<NetwSessionConfig> Netw::configure_session(
     Node *p_node,
     const Ref<NetwSessionConfig> &p_preset
@@ -738,10 +752,7 @@ Ref<NetwPromise> Netw::request(
     const Callable &p_callable,
     const Array &p_args
 ) {
-    NetwMultiplayer *api = rpc_interface(p_callable);
-    const int64_t coordinator
-        = api != nullptr ? api->session_authority_peer() : 1;
-    return request_id(coordinator, p_callable, p_args);
+    return request_id(SERVER_PEER, p_callable, p_args);
 }
 
 Ref<NetwGroupPromise> Netw::request_all(
@@ -1144,6 +1155,11 @@ void Netw::_bind_methods() {
         "Netw",
         D_METHOD("configure_admission", "handler"),
         &Netw::configure_admission
+    );
+    ClassDB::bind_static_method(
+        "Netw",
+        D_METHOD("configure_transfer", "keep"),
+        &Netw::configure_transfer
     );
     ClassDB::bind_static_method(
         "Netw",

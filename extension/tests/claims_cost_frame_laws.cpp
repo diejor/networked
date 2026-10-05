@@ -254,7 +254,7 @@ class CostScenario final : public netw_test::FrameScenario {
             for (int index = 0; index < CUBES; ++index) {
                 const Ref<NetwEntity> entity = entity_at(client, index);
                 seen.pending_ops += entity->pending_ops_under_test();
-                if (index != PUSHER && entity->get_controller() != 0) {
+                if (index != PUSHER && entity->steering() != 0) {
                     seen.claimed += 1;
                 }
                 const int64_t route = session->liveness_route_of(entity.ptr());
@@ -275,7 +275,7 @@ class CostScenario final : public netw_test::FrameScenario {
     void count_changes() {
         CostEvidence &seen = evidence();
         for (int index = 0; index < CUBES; ++index) {
-            const int64_t now = entity_at(-1, index)->get_controller();
+            const int64_t now = entity_at(-1, index)->steering();
             if (now != seen.last_controller[index]) {
                 seen.controller_changes[index] += 1;
                 seen.last_controller[index] = now;

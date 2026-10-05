@@ -6709,7 +6709,7 @@ public sealed class NetwMultiplayer : NetwRefCounted
     /// ┠╴entity_id    StringName       the durable label
     /// ┠╴peer_id      int              the peer this entity represents, 0 for a server-owned one
     /// ┠╴stage        int              the entity's Stage
-    /// ┠╴controller   int              the peer that steers it, 0 for the server
+    /// ┠╴controller   int              the peer that steers it, 1 for the server
     /// ┠╴liveness     int              the entity's EntityState
     /// ┖╴layers       Array            the interest layers it belongs to, in join order
     /// </code>

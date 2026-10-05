@@ -258,7 +258,7 @@ struct Precedence {
 
 Facts authored_here() {
     Facts facts = proxy_copy();
-    facts.session_authority_here = true;
+    facts.server_here = true;
     return facts;
 }
 

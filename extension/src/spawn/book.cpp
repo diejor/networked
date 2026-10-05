@@ -1,6 +1,7 @@
 #include "netw/spawn/book.hpp"
 
 #include "godot/callable.hpp"
+#include "netw/held_bytes.hpp"
 #include "netw/liveness_core.hpp"
 #include "netw/log.hpp"
 #include "netw/spawn/planner.hpp"
@@ -224,8 +225,36 @@ String Book::recipe_base(
     return fallback_name;
 }
 
-void Book::enroll_recv(int64_t route, Node *node) {
-    received[route] = gd::instance_id(node);
+Book::Received Book::received_of(const Record &record) {
+    Received out;
+    out.node = record.get_node_id();
+    out.recipe = int32_t(record.get_recipe());
+    out.scene_index = int32_t(record.get_scene_index());
+    switch (Recipe(record.get_recipe())) {
+        case RECIPE_FN:
+            out.source = gd::instance_id(record.fn_host());
+            out.fn = record.get_fn_method();
+            out.payload = record.get_fn_args();
+            break;
+        case RECIPE_FN_REGISTRY:
+            out.fn = record.get_fn_registry_id();
+            out.payload = record.get_fn_args();
+            break;
+        case RECIPE_SPAWNER:
+            out.source = gd::instance_id(record.spawner());
+            out.payload = record.get_custom_data();
+            break;
+        case RECIPE_ADOPT:
+            out.source = gd::instance_id(record.origin());
+            break;
+        case RECIPE_SCENE:
+            break;
+    }
+    return out;
+}
+
+void Book::enroll_recv(int64_t route, const Received &recipe) {
+    received[route] = recipe;
 }
 
 bool Book::is_recv(int64_t route) const {
@@ -236,8 +265,77 @@ bool Book::drop_recv(int64_t route) {
     return received.erase(route);
 }
 
+bool Book::take_recv(int64_t route, Record &out) {
+    const HashMap<int64_t, Received>::Iterator found = received.find(route);
+    if (!found) {
+        return false;
+    }
+    const Received recipe = found->value;
+    received.remove(found);
+    Node *node = Object::cast_to<Node>(gd::instance_from_id(recipe.node));
+    Node *source = Object::cast_to<Node>(gd::instance_from_id(recipe.source));
+    out.set_route(route);
+    out.set_recipe(recipe.recipe);
+    out.set_scene_index(recipe.scene_index);
+    out.bind_node(node);
+    switch (Recipe(recipe.recipe)) {
+        case RECIPE_SCENE:
+            if (node != nullptr) {
+                out.set_scene_path(node->get_scene_file_path());
+            }
+            break;
+        case RECIPE_FN:
+            out.bind_fn_host(source);
+            out.set_fn_method(recipe.fn);
+            out.set_fn_args(recipe.payload);
+            break;
+        case RECIPE_FN_REGISTRY:
+            out.set_fn_registry_id(recipe.fn);
+            out.set_fn_args(recipe.payload);
+            break;
+        case RECIPE_SPAWNER:
+            out.bind_spawner(Object::cast_to<MultiplayerSpawner>(source));
+            out.set_custom_data(recipe.payload);
+            break;
+        case RECIPE_ADOPT:
+            out.bind_origin(source);
+            break;
+    }
+    return true;
+}
+
+PackedInt64Array Book::recv_routes() const {
+    PackedInt64Array out;
+    for (const KeyValue<int64_t, Received> &row : received) {
+        out.push_back(row.key);
+    }
+    return out;
+}
+
+PackedInt64Array Book::authored_routes() const {
+    PackedInt64Array out;
+    for (const KeyValue<int64_t, Received> &row : received) {
+        if (row.value.authored) {
+            out.push_back(row.key);
+        }
+    }
+    return out;
+}
+
 int Book::recv_count() const {
     return int(received.size());
+}
+
+int64_t Book::held_bytes() const {
+    int64_t bytes = held::map(armed) + held::map(spawned) + held::map(received)
+        + held::map(node_holds);
+    for (const KeyValue<int64_t, Received> &row : received) {
+        if (row.value.payload.get_type() == Variant::ARRAY) {
+            const Array args = row.value.payload;
+            bytes += int64_t(args.size()) * int64_t(sizeof(Variant));
+        }
+    }
+    return bytes;
 }
 
 void Book::clear() {

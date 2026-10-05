@@ -260,7 +260,7 @@ TEST_CASE(
     for (int client = -1; client < 2; ++client) {
         NETW_FORMAT_INT(peer_text, client);
         CAPTURE(peer_text);
-        NETW_CHECK_EQ(stand.entity(client)->get_controller(), int64_t(0));
+        NETW_CHECK_EQ(stand.entity(client)->get_controller(), int64_t(1));
     }
     NETW_CHECK_EQ(stand.strokes(-1), 3);
     NETW_CHECK_EQ(stand.strokes(1), 3);
@@ -293,7 +293,7 @@ void check_controller_everywhere(const Stand &p_stand, int64_t p_peer) {
         NETW_CHECK_EQ(p_stand.entity(client)->get_controller(), p_peer);
         NETW_CHECK_EQ(
             p_stand.node(client)->get_multiplayer_authority(),
-            int(p_peer == 0 ? 1 : p_peer)
+            int(p_peer)
         );
     }
 }
@@ -309,9 +309,9 @@ TEST_CASE(
     stand.rig.step_ticks(4);
     check_controller_everywhere(stand, a);
 
-    NETW_CHECK_EQ(int(stand.entity(-1)->transfer_control(0)), int(OK));
+    NETW_CHECK_EQ(int(stand.entity(-1)->transfer_control(1)), int(OK));
     stand.rig.step_ticks(4);
-    check_controller_everywhere(stand, 0);
+    check_controller_everywhere(stand, 1);
 }
 
 TEST_CASE(
@@ -329,7 +329,7 @@ TEST_CASE(
         int(ERR_UNAUTHORIZED)
     );
     NETW_CHECK_EQ(
-        int(stand.entity(0)->transfer_control(0)),
+        int(stand.entity(0)->transfer_control(1)),
         int(ERR_UNAUTHORIZED)
     );
     NETW_CHECK_EQ(faults.errors(), int64_t(2));
@@ -352,7 +352,7 @@ TEST_CASE(
     );
     netw_test::FaultWatch faults;
     NETW_CHECK_EQ(
-        int(stand.rig.client(1)->entity_grant_control(at_client, 0)),
+        int(stand.rig.client(1)->entity_grant_control(at_client, 1)),
         int(ERR_UNAUTHORIZED)
     );
     NETW_CHECK_EQ(faults.errors(), int64_t(1));

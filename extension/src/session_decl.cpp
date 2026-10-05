@@ -57,6 +57,11 @@ const KindRow &row_of(Kind p_kind) {
          "_netw_d_lag_g",
          "configure_lagcomp",
          FORM_CONFIG},
+        {"_netw_d_xfer",
+         "_netw_d_xfer_x",
+         "_netw_d_xfer_g",
+         "configure_transfer",
+         FORM_CALLABLE},
     };
     return table[int(p_kind)];
 }

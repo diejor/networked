@@ -797,7 +797,7 @@ Node *NetwMultiplayer::entity_spawn_under(
         p_parent,
         p_id,
         p_configure,
-        is_session_authority() ? nullptr : spawn_plane()
+        is_host() ? nullptr : spawn_plane()
     );
 }
 
@@ -834,7 +834,9 @@ Dictionary NetwMultiplayer::entity_describe(int64_t p_route) const {
     out["entity_id"] = record->get_entity_id();
     out["peer_id"] = record->get_peer_id();
     out["stage"] = record->get_stage();
-    out["controller"] = record->get_control()->resolve(record->get_peer_id());
+    out["controller"] = entity::Control::public_peer(
+        record->get_control()->resolve(record->get_peer_id())
+    );
     out["liveness"] = liveness_route_state(p_route);
     out["layers"] = interest_engine.memberships(entity.get_id());
     return out;
@@ -934,11 +936,14 @@ void NetwMultiplayer::entity_settle_peer_departure(int64_t p_peer) {
             settling.push_back(p_slot.live);
         }
     });
+    const bool admitted = halt_admits_despawn;
+    halt_admits_despawn = true;
     for (uint32_t at = 0; at < settling.size(); at++) {
         if (settling[at].is_valid()) {
             settling[at]->_on_peer_disconnected(p_peer);
         }
     }
+    halt_admits_despawn = admitted;
 }
 
 TypedArray<NetwEntity> NetwMultiplayer::wrapper_live() const {
@@ -1251,6 +1256,12 @@ int64_t NetwMultiplayer::liveness_lease_remaining() const {
 }
 
 void NetwMultiplayer::liveness_grant_lease(int64_t p_peer) {
+    if (structure_halted) {
+        if (!halt_leases.has(p_peer)) {
+            halt_leases.push_back(p_peer);
+        }
+        return;
+    }
     const int base = liveness_core->grant_lease(int(p_peer), ROUTE_LEASE_BLOCK);
     if (base == 0) {
         return;
@@ -1271,7 +1282,7 @@ void NetwMultiplayer::liveness_grant_lease(int64_t p_peer) {
 }
 
 Error NetwMultiplayer::liveness_spend_lease(int64_t p_peer, int64_t p_route) {
-    if (!is_session_authority()) {
+    if (!is_host()) {
         return ERR_UNAUTHORIZED;
     }
     if (!liveness_core->spend_lease(int(p_peer), int(p_route))) {
@@ -1288,7 +1299,7 @@ void NetwMultiplayer::liveness_receive_lease(
     const PackedByteArray &p_payload,
     int64_t p_sender
 ) {
-    if (p_sender != session_authority_peer()) {
+    if (p_sender != SERVER_PEER) {
         return;
     }
     session::RouteLease granted;
@@ -1417,6 +1428,10 @@ bool NetwMultiplayer::liveness_epoch_admits(
 
 bool NetwMultiplayer::liveness_adopt_epoch(int64_t p_route, int64_t p_epoch) {
     return liveness_core->adopt_epoch(int(p_route), int(p_epoch));
+}
+
+void NetwMultiplayer::liveness_raise_epoch_to_wire(int64_t p_route) {
+    liveness_core->raise_epoch_to_wire(int(p_route));
 }
 
 Error NetwMultiplayer::entity_frame_verdict(int64_t p_route) const {
@@ -1682,7 +1697,7 @@ void NetwMultiplayer::entity_release_residencies(
 }
 
 void NetwMultiplayer::entity_commit_move(const EntityDeparture &p_row) {
-    if (p_row.route > 0 && !is_session_authority()) {
+    if (p_row.route > 0 && !is_host()) {
         entity_settle_foreign_move(p_row);
     } else if (p_row.route > 0) {
         if (ReplicationCore *plane = get_replication_plane()) {
@@ -1975,8 +1990,8 @@ Error NetwMultiplayer::spawn_admit_frame_default(
     const PackedByteArray &p_payload
 ) {
     lifecycle::Kind kind = lifecycle::Kind::SPAWN;
-    if (p_channel == gate_channels.spawn && is_session_authority()
-        && p_sender != session_authority_peer()) {
+    if (p_channel == gate_channels.spawn && is_host()
+        && p_sender != SERVER_PEER) {
         return liveness_core->lease_holds(int(p_sender), int(p_route))
             ? OK
             : ERR_UNAUTHORIZED;
@@ -2081,7 +2096,7 @@ bool NetwMultiplayer::spawn_locally_desired(int64_t p_peer_id, Node *p_node) {
     }
     const Ref<NetwEntity> entity = NetwEntity::of(p_node);
     if (entity.is_valid()) {
-        if (entity->get_controller() == p_peer_id) {
+        if (entity->steering() == p_peer_id) {
             return true;
         }
         if (interest_has_committed_intent(entity)) {
@@ -2136,7 +2151,7 @@ Ref<NetwEntity> NetwMultiplayer::spawn_arm_identity(
     const int64_t held_route = entity->get_route();
     const StringName held_id = entity->get_name();
     const int64_t held_peer = entity->get_peer_id();
-    const int64_t held_controller = entity->get_controller();
+    const int64_t held_controller = entity->steering();
 
     int64_t route = liveness_route_of(entity.ptr());
     if (route <= 0) {
@@ -2170,21 +2185,21 @@ Ref<NetwEntity> NetwMultiplayer::spawn_arm_identity(
         entity->set_player_id(p_owner->player_id());
         entity->record_controller(p_owner->get_peer_id());
     }
-    if (!is_session_authority()) {
+    if (!is_host()) {
         lifecycle_seed_controller(entity.ptr(), get_unique_id());
     }
     p_record->set_route(route);
     p_record->bind_node(p_node);
     p_record->set_entity_id(entity->get_name());
     p_record->set_peer_id(entity->get_peer_id());
-    p_record->set_controller(entity->get_controller());
+    p_record->set_controller(entity->steering());
 
     Dictionary facts;
     facts[StringName("recipe")] = p_record->get_recipe();
     facts[StringName("route")] = route;
     facts[StringName("entity_id")] = p_record->get_entity_id();
     facts[StringName("peer")] = p_record->get_peer_id();
-    facts[StringName("controller")] = p_record->get_controller();
+    facts[StringName("controller")] = entity->get_controller();
     if (p_declare.is_valid()
         && int64_t(p_declare.call(entity_of(p_node), facts)) != int64_t(OK)) {
         entity->set_route(held_route);

@@ -27,7 +27,8 @@ using netw::NetwMultiplayer;
 using netw::NetwPromise;
 namespace script_model = netw::script::model;
 
-constexpr int MESH_COORDINATOR = 7;
+constexpr int MESH_SERVER = 1;
+constexpr int MESH_OTHER = 7;
 constexpr int MESH_MEMBER = 9;
 
 Node *a_sink() {
@@ -237,35 +238,35 @@ void drop_branch(Node *p_branch) {
 
 TEST_CASE(
     "[Networked][Rpc][SceneTree] RA5 a call over a directly wired mesh runs "
-    "at the coordinator under the member's own id, because no hub stands "
+    "at the server under the member's own id, because no hub stands "
     "between them to be mistaken for the caller"
 ) {
     MeshStand stand;
-    stand.seat_coordinator(MESH_COORDINATOR);
+    stand.seat_server();
     stand.seat_member(MESH_MEMBER);
-    stand.wire(MESH_COORDINATOR, MESH_MEMBER);
+    stand.wire(MESH_SERVER, MESH_MEMBER);
     stand.pump(4);
 
-    NetwMultiplayer *at_coordinator = stand.session_of(MESH_COORDINATOR);
+    NetwMultiplayer *at_server = stand.session_of(MESH_SERVER);
     NetwMultiplayer *at_member = stand.session_of(MESH_MEMBER);
-    REQUIRE(at_coordinator != nullptr);
+    REQUIRE(at_server != nullptr);
     REQUIRE(at_member != nullptr);
 
-    Node *coordinator_branch = a_branch("RA5Coordinator");
+    Node *server_branch = a_branch("RA5Server");
     Node *member_branch = a_branch("RA5Member");
-    stand.mount(MESH_COORDINATOR, coordinator_branch);
+    stand.mount(MESH_SERVER, server_branch);
     stand.mount(MESH_MEMBER, member_branch);
 
-    Node *coordinator_sink = a_sink();
+    Node *server_sink = a_sink();
     Node *member_sink = a_sink();
-    coordinator_branch->add_child(coordinator_sink);
+    server_branch->add_child(server_sink);
     member_branch->add_child(member_sink);
 
-    const RID seat = at_coordinator->entity_create();
-    const int64_t route = at_coordinator->entity_admit(seat);
+    const RID seat = at_server->entity_create();
+    const int64_t route = at_server->entity_admit(seat);
     NETW_CHECK_GT(route, 0);
     NETW_CHECK_EQ(
-        int(at_coordinator->entity_bind_node(seat, coordinator_sink)),
+        int(at_server->entity_bind_node(seat, server_sink)),
         int(OK)
     );
     const RID mirror = at_member->entity_create();
@@ -281,109 +282,27 @@ TEST_CASE(
     at_member->rpc_call(
         Callable(member_sink, StringName("note_call")),
         args,
-        MESH_COORDINATOR
+        MESH_SERVER
     );
     stand.pump(6);
 
-    NETW_CHECK_EQ(int(coordinator_sink->get(StringName("calls"))), 1);
-    NETW_CHECK_EQ(int(coordinator_sink->get(StringName("last_tag"))), 33);
+    NETW_CHECK_EQ(int(server_sink->get(StringName("calls"))), 1);
+    NETW_CHECK_EQ(int(server_sink->get(StringName("last_tag"))), 33);
     NETW_CHECK_EQ(
-        int(coordinator_sink->get(StringName("last_sender"))),
+        int(server_sink->get(StringName("last_sender"))),
         MESH_MEMBER
     );
 
     drop_branch(member_branch);
-    drop_branch(coordinator_branch);
+    drop_branch(server_branch);
 }
 
 TEST_CASE(
-    "[Networked][Rpc][SceneTree] RA9 caller 9 addressing coordinator 7 over "
-    "a star whose hub is transport peer 1 arrives at 7 named 9, and the hub "
-    "that carried the packet runs nothing of its own"
-) {
-    MeshStand stand;
-    stand.relay_through_hub();
-    stand.declare_coordinator(MESH_COORDINATOR);
-    stand.seat_transport_server(1);
-    stand.seat_member(MESH_COORDINATOR);
-    stand.seat_member(MESH_MEMBER);
-    stand.wire(1, MESH_COORDINATOR);
-    stand.wire(1, MESH_MEMBER);
-    stand.pump(6);
-
-    NetwMultiplayer *at_hub = stand.session_of(1);
-    NetwMultiplayer *at_coordinator = stand.session_of(MESH_COORDINATOR);
-    NetwMultiplayer *at_member = stand.session_of(MESH_MEMBER);
-    REQUIRE(at_hub != nullptr);
-    REQUIRE(at_coordinator != nullptr);
-    REQUIRE(at_member != nullptr);
-    NETW_CHECK_EQ(int(at_hub->is_server()), 1);
-    NETW_CHECK_EQ(int(at_hub->is_host()), 0);
-    NETW_CHECK_EQ(int(at_coordinator->is_server()), 0);
-    NETW_CHECK_EQ(int(at_coordinator->is_host()), 1);
-
-    Node *hub_branch = a_branch("RA9Hub");
-    Node *coordinator_branch = a_branch("RA9Coordinator");
-    Node *member_branch = a_branch("RA9Member");
-    stand.mount(1, hub_branch);
-    stand.mount(MESH_COORDINATOR, coordinator_branch);
-    stand.mount(MESH_MEMBER, member_branch);
-
-    Node *hub_sink = a_sink();
-    Node *coordinator_sink = a_sink();
-    Node *member_sink = a_sink();
-    hub_branch->add_child(hub_sink);
-    coordinator_branch->add_child(coordinator_sink);
-    member_branch->add_child(member_sink);
-
-    const RID seat = at_coordinator->entity_create();
-    const int64_t route = at_coordinator->entity_admit(seat);
-    NETW_CHECK_GT(route, 0);
-    NETW_CHECK_EQ(
-        int(at_coordinator->entity_bind_node(seat, coordinator_sink)),
-        int(OK)
-    );
-    const RID hub_mirror = at_hub->entity_create();
-    NETW_CHECK_EQ(int(at_hub->entity_bind_route(hub_mirror, route)), int(OK));
-    NETW_CHECK_EQ(int(at_hub->entity_bind_node(hub_mirror, hub_sink)), int(OK));
-    const RID mirror = at_member->entity_create();
-    NETW_CHECK_EQ(int(at_member->entity_bind_route(mirror, route)), int(OK));
-    NETW_CHECK_EQ(
-        int(at_member->entity_bind_node(mirror, member_sink)),
-        int(OK)
-    );
-    stand.pump(4);
-
-    Array args;
-    args.push_back(79);
-    at_member->rpc_call(
-        Callable(member_sink, StringName("note_call")),
-        args,
-        MESH_COORDINATOR
-    );
-    stand.pump(10);
-
-    NETW_CHECK_EQ(int(coordinator_sink->get(StringName("calls"))), 1);
-    NETW_CHECK_EQ(int(coordinator_sink->get(StringName("last_tag"))), 79);
-    NETW_CHECK_EQ(
-        int(coordinator_sink->get(StringName("last_sender"))),
-        MESH_MEMBER
-    );
-    NETW_CHECK_EQ(int(hub_sink->get(StringName("calls"))), 0);
-
-    drop_branch(member_branch);
-    drop_branch(coordinator_branch);
-    drop_branch(hub_branch);
-}
-
-TEST_CASE(
-    "[Networked][Rpc] RA6 a session whose coordinator is not peer 1 shows a "
-    "filtered entity to that coordinator alone, so holding the transport "
-    "server id buys no view of what the session hides"
+    "[Networked][Rpc] RA6 a session shows a filtered entity to the server "
+    "alone, so no member buys a view of what the session hides"
 ) {
     Ref<NetwMultiplayer> core;
     core.instantiate();
-    core->session_set_authority_peer(MESH_COORDINATOR);
 
     Node *passenger = memnew(Node);
     passenger->set_name("Passenger");
@@ -398,36 +317,36 @@ TEST_CASE(
     REQUIRE(hidden.is_valid());
     curtain->add_entity(hidden);
 
-    CHECK(core->interest_wire_admits(MESH_COORDINATOR, hidden));
-    CHECK_FALSE(core->interest_wire_admits(1, hidden));
+    CHECK(core->interest_wire_admits(MESH_SERVER, hidden));
+    CHECK_FALSE(core->interest_wire_admits(MESH_OTHER, hidden));
     CHECK_FALSE(core->interest_wire_admits(MESH_MEMBER, hidden));
 
-    CHECK(core->send_admits(MESH_COORDINATOR, hidden));
-    CHECK_FALSE(core->send_admits(1, hidden));
+    CHECK(core->send_admits(MESH_SERVER, hidden));
+    CHECK_FALSE(core->send_admits(MESH_OTHER, hidden));
     CHECK_FALSE(core->send_admits(MESH_MEMBER, hidden));
 
     memdelete(passenger);
 }
 
 TEST_CASE(
-    "[Networked][Sync][SceneTree] RA8 the peer holding session authority may "
-    "emit an unregistered signal on a node another peer holds, and a peer "
-    "holding neither may not, because the permission is the session's own"
+    "[Networked][Sync][SceneTree] RA8 the server may emit an unregistered "
+    "signal on a node another peer holds, and a peer holding neither may "
+    "not, because the permission is the session's own"
 ) {
     MeshStand stand;
-    stand.seat_coordinator(MESH_COORDINATOR);
+    stand.seat_server();
     stand.seat_member(MESH_MEMBER);
-    stand.wire(MESH_COORDINATOR, MESH_MEMBER);
+    stand.wire(MESH_SERVER, MESH_MEMBER);
     stand.pump(4);
 
-    NetwMultiplayer *at_coordinator = stand.session_of(MESH_COORDINATOR);
+    NetwMultiplayer *at_server = stand.session_of(MESH_SERVER);
     NetwMultiplayer *at_member = stand.session_of(MESH_MEMBER);
-    REQUIRE(at_coordinator != nullptr);
+    REQUIRE(at_server != nullptr);
     REQUIRE(at_member != nullptr);
 
-    Node *coordinator_branch = a_branch("RA8Coordinator");
+    Node *server_branch = a_branch("RA8Server");
     Node *member_branch = a_branch("RA8Member");
-    stand.mount(MESH_COORDINATOR, coordinator_branch);
+    stand.mount(MESH_SERVER, server_branch);
     stand.mount(MESH_MEMBER, member_branch);
 
     const Ref<Script> plain = script_from(gdsrc::A_PLAIN_SCRIPT);
@@ -438,15 +357,15 @@ TEST_CASE(
     REQUIRE(elsewhere != nullptr);
     held->set_name("Held");
     elsewhere->set_name("Held");
-    coordinator_branch->add_child(held);
+    server_branch->add_child(held);
     member_branch->add_child(elsewhere);
     held->set_multiplayer_authority(11, false);
     elsewhere->set_multiplayer_authority(11, false);
 
-    const RID seat = at_coordinator->entity_create();
-    const int64_t route = at_coordinator->entity_admit(seat);
+    const RID seat = at_server->entity_create();
+    const int64_t route = at_server->entity_admit(seat);
     NETW_CHECK_GT(route, 0);
-    NETW_CHECK_EQ(int(at_coordinator->entity_bind_node(seat, held)), int(OK));
+    NETW_CHECK_EQ(int(at_server->entity_bind_node(seat, held)), int(OK));
     const RID mirror = at_member->entity_create();
     NETW_CHECK_EQ(int(at_member->entity_bind_route(mirror, route)), int(OK));
     NETW_CHECK_EQ(int(at_member->entity_bind_node(mirror, elsewhere)), int(OK));
@@ -461,29 +380,28 @@ TEST_CASE(
 
     Array args;
     args.push_back(5);
-    at_coordinator->sync_send_signal(seat, 0, StringName("changed"), args);
+    at_server->sync_send_signal(seat, 0, StringName("changed"), args);
     at_member->sync_send_signal(mirror, 0, StringName("changed"), args);
 
     NETW_CHECK_EQ(seen.count(StringName("host")), 1);
     NETW_CHECK_EQ(seen.count(StringName("guest")), 0);
 
     held->set(StringName("value"), 5);
-    at_coordinator->sync_send_property(seat, 0, StringName("value"));
+    at_server->sync_send_property(seat, 0, StringName("value"));
     stand.pump(6);
     NETW_CHECK_EQ(int(elsewhere->get(StringName("value"))), 5);
 
     drop_branch(member_branch);
-    drop_branch(coordinator_branch);
+    drop_branch(server_branch);
 }
 
 TEST_CASE(
     "[Networked][Session] RA7 an administrative control frame is honoured "
-    "from the peer holding session authority and from nobody else, so the "
-    "transport server cannot unpause a session it does not run"
+    "from the server and from nobody else, so a member cannot unpause a "
+    "session it does not run"
 ) {
     Ref<NetwMultiplayer> core;
     core.instantiate();
-    core->session_set_authority_peer(MESH_COORDINATOR);
     const CallLog seen;
     core->observe(
         NetwMultiplayer::SESSION_TREE_UNPAUSED,
@@ -491,10 +409,10 @@ TEST_CASE(
     );
 
     const int64_t channel = netw::wire::builtin_channel("SESSION_UNPAUSE");
-    core->session_publish_control(channel, 1, PackedByteArray());
+    core->session_publish_control(channel, MESH_OTHER, PackedByteArray());
     NETW_CHECK_EQ(seen.count(StringName("unpaused")), 0);
 
-    core->session_publish_control(channel, MESH_COORDINATOR, PackedByteArray());
+    core->session_publish_control(channel, MESH_SERVER, PackedByteArray());
     NETW_CHECK_EQ(seen.count(StringName("unpaused")), 1);
 }
 

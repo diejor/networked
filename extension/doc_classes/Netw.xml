@@ -340,6 +340,21 @@
 				[/codeblock]
 			</description>
 		</method>
+		<method name="configure_transfer" qualifiers="static">
+			<return type="int" enum="Error" />
+			<param index="0" name="keep" type="Callable" />
+			<description>
+				Picks which entities outlive a server transfer in [constant NetwSession.TRANSFER_REJOIN]. The new server calls [param keep] with the root node of each entity it took over, and despawns the ones it answers [code]false[/code] for before any client gets the world again.
+				[codeblock]
+				func _init() -&gt; void:
+				    Netw.configure_transfer(keeps)
+
+				func keeps(node: Node) -&gt; bool:
+				    return not node.is_in_group(&amp;"loot")
+				[/codeblock]
+				Declare it on every peer, since any of them can become the server.
+			</description>
+		</method>
 		<method name="despawn" qualifiers="static">
 			<return type="int" enum="Error" />
 			<param index="0" name="node" type="Node" />

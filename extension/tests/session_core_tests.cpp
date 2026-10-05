@@ -166,21 +166,21 @@ TEST_CASE(
     "facts alone"
 ) {
     SessionCore server = fresh();
-    server.on_peer_assigned(true, false, 1);
+    server.on_peer_assigned(true, 1);
     NETW_CHECK_EQ(int(server.get_state()), int(SessionCore::STATE_ONLINE));
 
     SessionCore client = fresh();
-    client.on_peer_assigned(true, false, 7);
+    client.on_peer_assigned(true, 7);
     NETW_CHECK_EQ(int(client.get_state()), int(SessionCore::STATE_CONNECTING));
-    client.on_peer_assigned(true, true, 7);
+    client.resolve_online(7);
     NETW_CHECK_EQ(int(client.get_state()), int(SessionCore::STATE_ONLINE));
     NETW_CHECK_EQ(int(client.get_role()), int(SessionCore::ROLE_CLIENT));
 
     SessionCore cancelled = fresh();
-    cancelled.on_peer_assigned(true, false, 7);
-    cancelled.on_peer_assigned(false, false, 0);
+    cancelled.on_peer_assigned(true, 7);
+    cancelled.on_peer_assigned(false, 0);
     NETW_CHECK_EQ(int(cancelled.get_state()), int(SessionCore::STATE_OFFLINE));
-    client.on_peer_assigned(false, false, 0);
+    client.on_peer_assigned(false, 0);
     NETW_CHECK_EQ(int(client.get_state()), int(SessionCore::STATE_ONLINE));
 }
 
@@ -223,7 +223,7 @@ TEST_CASE(
     Ref<NetwMultiplayer> host;
     host.instantiate();
     SessionCore &core = host->session_plane();
-    core.on_peer_assigned(true, false, 1);
+    core.on_peer_assigned(true, 1);
     CHECK(spend_budget(core, 7, NOW));
 
     Recorder recorder(

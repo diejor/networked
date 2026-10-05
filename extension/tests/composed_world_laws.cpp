@@ -32,7 +32,7 @@
 #include "support/declared_nodes.h"
 #include "support/minted_script.h"
 
-namespace TestComposedNon1World {
+namespace TestComposedWorld {
 
 using namespace godot;
 using namespace netw_test;
@@ -47,8 +47,8 @@ using netw::NetwScene;
 using netw::repl::PropertySet;
 namespace property_set_builder = netw::property_set_builder;
 
-constexpr int COORDINATOR = 7;
-constexpr int TRANSPORT_SERVER = 1;
+constexpr int SERVER = 1;
+constexpr int OTHER = 7;
 constexpr int MEMBER = 9;
 constexpr int LATECOMER = 11;
 
@@ -185,40 +185,40 @@ int64_t display_role_of(NetwMultiplayer *p_core, Node *p_node) {
 struct ComposedWorld {
     MeshStand stand;
     Node *held = nullptr;
-    Node *at_one = nullptr;
+    Node *at_seven = nullptr;
     Node *at_nine = nullptr;
     Node *at_late = nullptr;
     NetwMultiplayer *host = nullptr;
-    NetwMultiplayer *one = nullptr;
+    NetwMultiplayer *seven = nullptr;
     NetwMultiplayer *nine = nullptr;
     NetwMultiplayer *late = nullptr;
     RID world;
 
     ComposedWorld() {
-        stand.seat_coordinator(COORDINATOR);
-        stand.seat_member(TRANSPORT_SERVER);
+        stand.seat_server();
+        stand.seat_member(OTHER);
         stand.seat_member(MEMBER);
-        stand.wire(COORDINATOR, TRANSPORT_SERVER);
-        stand.wire(COORDINATOR, MEMBER);
+        stand.wire(SERVER, OTHER);
+        stand.wire(SERVER, MEMBER);
         stand.pump(4);
 
-        host = stand.session_of(COORDINATOR);
-        one = stand.session_of(TRANSPORT_SERVER);
+        host = stand.session_of(SERVER);
+        seven = stand.session_of(OTHER);
         nine = stand.session_of(MEMBER);
         REQUIRE(host != nullptr);
-        REQUIRE(one != nullptr);
+        REQUIRE(seven != nullptr);
         REQUIRE(nine != nullptr);
         arm_clock(host);
-        arm_clock(one);
+        arm_clock(seven);
         arm_clock(nine);
 
         held = mount_under_root("CWHost");
-        at_one = mount_under_root("CWOne");
+        at_seven = mount_under_root("CWSeven");
         at_nine = mount_under_root("CWNine");
-        stand.mount(COORDINATOR, held);
-        stand.mount(TRANSPORT_SERVER, at_one);
+        stand.mount(SERVER, held);
+        stand.mount(OTHER, at_seven);
         stand.mount(MEMBER, at_nine);
-        NETW_CHECK_EQ(int(one->embed_settle()), int(OK));
+        NETW_CHECK_EQ(int(seven->embed_settle()), int(OK));
         NETW_CHECK_EQ(int(nine->embed_settle()), int(OK));
 
         Node *level = a_declared_level();
@@ -227,22 +227,22 @@ struct ComposedWorld {
         NETW_CHECK_EQ(int(host->embed_settle()), int(OK));
         stand.step_ticks(6);
 
-        REQUIRE(stand.join(COORDINATOR, StringName("seven")).is_valid());
-        REQUIRE(stand.join(TRANSPORT_SERVER, StringName("one")).is_valid());
+        REQUIRE(stand.join(SERVER, StringName("one")).is_valid());
+        REQUIRE(stand.join(OTHER, StringName("seven")).is_valid());
         REQUIRE(stand.join(MEMBER, StringName("nine")).is_valid());
 
         world = first_scene(host);
         const Ref<NetwScene> handle = host->scene_handle_of(world);
         REQUIRE(handle.is_valid());
         NETW_CHECK_EQ(
-            int(handle->watch(host->player_of(TRANSPORT_SERVER))),
+            int(handle->watch(host->player_of(OTHER))),
             int(OK)
         );
         NETW_CHECK_EQ(int(handle->watch(host->player_of(MEMBER))), int(OK));
         stand.step_ticks(6);
 
         teach_player(host);
-        teach_player(one);
+        teach_player(seven);
         teach_player(nine);
     }
 
@@ -254,7 +254,7 @@ struct ComposedWorld {
             drop(at_late);
         }
         drop(at_nine);
-        drop(at_one);
+        drop(at_seven);
         drop(held);
     }
 
@@ -286,7 +286,7 @@ struct ComposedWorld {
 
     void admit_latecomer() {
         stand.seat_member(LATECOMER);
-        stand.wire(COORDINATOR, LATECOMER);
+        stand.wire(SERVER, LATECOMER);
         stand.pump(4);
         late = stand.session_of(LATECOMER);
         REQUIRE(late != nullptr);
@@ -322,7 +322,7 @@ struct ComposedWorld {
         for (int round = 0; round < p_rounds; ++round) {
             stand.step_ticks(1);
             host->carrier_flush();
-            one->carrier_flush();
+            seven->carrier_flush();
             nine->carrier_flush();
             stand.pump(2);
         }
@@ -351,33 +351,33 @@ Node *route_node_at(NetwMultiplayer *p_session, int64_t p_route) {
 }
 
 TEST_CASE(
-    "[Networked][Session][SceneTree] CW1 a coordinator that is not transport "
-    "peer 1 admits two members, adopts one world and publishes it to both, "
-    "so the world every peer presents is the one peer 7 holds"
+    "[Networked][Session][SceneTree] CW1 the server admits two members, "
+    "adopts one world and publishes it to both, so the world every peer "
+    "presents is the one the server holds"
 ) {
     ComposedWorld cw;
 
     NETW_CHECK_EQ(int(cw.host->is_host()), 1);
-    NETW_CHECK_EQ(int(cw.host->is_server()), 0);
-    NETW_CHECK_EQ(int(cw.one->is_host()), 0);
-    NETW_CHECK_EQ(int(cw.one->is_server()), 1);
+    NETW_CHECK_EQ(int(cw.host->is_server()), 1);
+    NETW_CHECK_EQ(int(cw.seven->is_host()), 0);
+    NETW_CHECK_EQ(int(cw.seven->is_server()), 0);
     NETW_CHECK_EQ(int(cw.nine->is_host()), 0);
     NETW_CHECK_EQ(int(cw.nine->is_server()), 0);
 
     NETW_CHECK_EQ(int(cw.host->get_connected_players().size()), 3);
     NETW_CHECK_EQ(int(cw.host->scene_list().size()), 1);
-    NETW_CHECK_EQ(int(cw.one->scene_list().size()), 1);
+    NETW_CHECK_EQ(int(cw.seven->scene_list().size()), 1);
     NETW_CHECK_EQ(int(cw.nine->scene_list().size()), 1);
     NETW_CHECK_EQ(int(cw.host->scene_get_viewers(cw.world).size()), 2);
 
-    NETW_CHECK_EQ(int(cw.at_one->get_child_count()), 1);
+    NETW_CHECK_EQ(int(cw.at_seven->get_child_count()), 1);
     NETW_CHECK_EQ(int(cw.at_nine->get_child_count()), 1);
 }
 
 TEST_CASE(
-    "[Networked][Session][SceneTree] CW2 a player coordinator 7 seats for "
-    "the player at 9 reaches both members under one route, and each "
-    "member displays it as the remote body while 7 displays its own"
+    "[Networked][Session][SceneTree] CW2 a player the server seats for the "
+    "player at 9 reaches both members under one route, and each member "
+    "displays it as the remote body while the server displays its own"
 ) {
     ComposedWorld cw;
     const RID seated = cw.spawn_for("NinePlayer", MEMBER);
@@ -385,20 +385,20 @@ TEST_CASE(
     REQUIRE(route > 0);
 
     Node *at_host = cw.host->entity_get_node(seated);
-    Node *at_one = route_node_at(cw.one, route);
+    Node *at_seven = route_node_at(cw.seven, route);
     Node *at_nine = route_node_at(cw.nine, route);
     REQUIRE(at_host != nullptr);
-    REQUIRE(at_one != nullptr);
+    REQUIRE(at_seven != nullptr);
     REQUIRE(at_nine != nullptr);
 
     NETW_CHECK_EQ(int(cw.host->entity_get_peer(seated)), MEMBER);
-    NETW_CHECK_EQ(int(NetwEntity::of(at_one)->get_route()), int(route));
+    NETW_CHECK_EQ(int(NetwEntity::of(at_seven)->get_route()), int(route));
     NETW_CHECK_EQ(int(NetwEntity::of(at_nine)->get_route()), int(route));
-    NETW_CHECK_EQ(int(NetwEntity::of(at_one)->get_controller()), MEMBER);
+    NETW_CHECK_EQ(int(NetwEntity::of(at_seven)->get_controller()), MEMBER);
     NETW_CHECK_EQ(int(NetwEntity::of(at_nine)->get_controller()), MEMBER);
 
     declare_state_stream(cw.host, at_host);
-    declare_state_stream(cw.one, at_one);
+    declare_state_stream(cw.seven, at_seven);
 
     NETW_CHECK_EQ(
         int(cw.host->display_default_authors_streams(
@@ -407,8 +407,8 @@ TEST_CASE(
         1
     );
     NETW_CHECK_EQ(
-        int(cw.one->display_default_authors_streams(
-            NetwEntity::of(at_one)->get_rid_handle()
+        int(cw.seven->display_default_authors_streams(
+            NetwEntity::of(at_seven)->get_rid_handle()
         )),
         0
     );
@@ -417,72 +417,62 @@ TEST_CASE(
         int(NetwMultiplayer::DISPLAY_ROLE_AUTHORITY)
     );
     NETW_CHECK_EQ(
-        int(display_role_of(cw.one, at_one)),
+        int(display_role_of(cw.seven, at_seven)),
         int(NetwMultiplayer::DISPLAY_ROLE_REMOTE)
     );
 }
 
 TEST_CASE(
-    "[Networked][Session][SceneTree] CW4 coordinator 7 computes the audience "
-    "of each entity from the layer that entity is in, so an entity only 9 "
-    "views is withheld from transport peer 1 while the player every viewer "
-    "of the world can see reaches both members"
+    "[Networked][Session][SceneTree] CW4 the server computes the audience of "
+    "each entity from the layer that entity is in, so an entity only 9 views "
+    "is withheld from member 7 while the player every viewer of the world "
+    "can see reaches both members"
 ) {
     ComposedWorld cw;
     const RID open = cw.spawn_for("OpenPlayer", MEMBER);
     const int64_t open_route = cw.host->entity_get_route(open);
     REQUIRE(open_route > 0);
 
-    const RID for_one = cw.hide_behind("OneOnly", TRANSPORT_SERVER);
+    const RID for_seven = cw.hide_behind("SevenOnly", OTHER);
     const RID for_nine = cw.hide_behind("NineOnly", MEMBER);
-    const int64_t one_route = cw.host->entity_get_route(for_one);
+    const int64_t seven_route = cw.host->entity_get_route(for_seven);
     const int64_t nine_route = cw.host->entity_get_route(for_nine);
-    REQUIRE(one_route > 0);
+    REQUIRE(seven_route > 0);
     REQUIRE(nine_route > 0);
 
-    const Ref<NetwEntity> only_one
-        = NetwEntity::of(cw.host->entity_get_node(for_one));
+    const Ref<NetwEntity> only_seven
+        = NetwEntity::of(cw.host->entity_get_node(for_seven));
     const Ref<NetwEntity> only_nine
         = NetwEntity::of(cw.host->entity_get_node(for_nine));
-    NETW_CHECK_EQ(int(cw.host->interest_membership_ids(for_one).size()), 1);
+    NETW_CHECK_EQ(int(cw.host->interest_membership_ids(for_seven).size()), 1);
     NETW_CHECK_EQ(int(cw.host->interest_membership_ids(for_nine).size()), 1);
 
-    NETW_CHECK_EQ(
-        int(cw.host->interest_wire_admits(TRANSPORT_SERVER, only_one)),
-        1
-    );
-    NETW_CHECK_EQ(int(cw.host->interest_wire_admits(MEMBER, only_one)), 0);
-    NETW_CHECK_EQ(
-        int(cw.host->interest_wire_admits(TRANSPORT_SERVER, only_nine)),
-        0
-    );
+    NETW_CHECK_EQ(int(cw.host->interest_wire_admits(OTHER, only_seven)), 1);
+    NETW_CHECK_EQ(int(cw.host->interest_wire_admits(MEMBER, only_seven)), 0);
+    NETW_CHECK_EQ(int(cw.host->interest_wire_admits(OTHER, only_nine)), 0);
     NETW_CHECK_EQ(int(cw.host->interest_wire_admits(MEMBER, only_nine)), 1);
-    NETW_CHECK_EQ(
-        int(cw.host->interest_wire_admits(COORDINATOR, only_nine)),
-        1
-    );
+    NETW_CHECK_EQ(int(cw.host->interest_wire_admits(SERVER, only_nine)), 1);
 
-    NETW_CHECK_EQ(int(route_node_at(cw.one, one_route) != nullptr), 1);
-    NETW_CHECK_EQ(int(route_node_at(cw.nine, one_route) != nullptr), 0);
-    NETW_CHECK_EQ(int(route_node_at(cw.one, nine_route) != nullptr), 0);
+    NETW_CHECK_EQ(int(route_node_at(cw.seven, seven_route) != nullptr), 1);
+    NETW_CHECK_EQ(int(route_node_at(cw.nine, seven_route) != nullptr), 0);
+    NETW_CHECK_EQ(int(route_node_at(cw.seven, nine_route) != nullptr), 0);
     NETW_CHECK_EQ(int(route_node_at(cw.nine, nine_route) != nullptr), 1);
 
-    NETW_CHECK_EQ(int(route_node_at(cw.one, open_route) != nullptr), 1);
+    NETW_CHECK_EQ(int(route_node_at(cw.seven, open_route) != nullptr), 1);
     NETW_CHECK_EQ(int(route_node_at(cw.nine, open_route) != nullptr), 1);
 }
 
 TEST_CASE(
-    "[Networked][Session][SceneTree] CW5 a call from 9 reaches coordinator 7 "
+    "[Networked][Session][SceneTree] CW5 a call from 9 reaches the server "
     "carrying a node argument 9 holds, and an argument naming an entity 9 "
-    "was never given arrives as nothing rather than as the coordinator's "
-    "own node"
+    "was never given arrives as nothing rather than as the server's own node"
 ) {
     ComposedWorld cw;
-    const RID for_one = cw.hide_behind("OneOnly", TRANSPORT_SERVER);
+    const RID for_seven = cw.hide_behind("SevenOnly", OTHER);
     const RID for_nine = cw.hide_behind("NineOnly", MEMBER);
-    const int64_t one_route = cw.host->entity_get_route(for_one);
+    const int64_t seven_route = cw.host->entity_get_route(for_seven);
     const int64_t nine_route = cw.host->entity_get_route(for_nine);
-    REQUIRE(one_route > 0);
+    REQUIRE(seven_route > 0);
     REQUIRE(nine_route > 0);
 
     Node *at_host = minted_node(netw_test::gdsrc::NODE_ARG_RPC_SINK);
@@ -509,7 +499,7 @@ TEST_CASE(
     cw.nine->rpc_call(
         Callable(at_member, StringName("receive_node")),
         withheld,
-        COORDINATOR
+        SERVER
     );
     cw.stand.pump(8);
     NETW_CHECK_EQ(int(at_host->get(StringName("last_value"))), 51);
@@ -520,12 +510,12 @@ TEST_CASE(
     );
 
     Array forbidden;
-    forbidden.push_back(cw.host->entity_get_node(for_one));
+    forbidden.push_back(cw.host->entity_get_node(for_seven));
     forbidden.push_back(77);
     cw.nine->rpc_call(
         Callable(at_member, StringName("receive_node")),
         forbidden,
-        COORDINATOR
+        SERVER
     );
     cw.stand.pump(8);
     NETW_CHECK_EQ(int(at_host->get(StringName("last_value"))), 77);
@@ -580,22 +570,22 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Session][SceneTree] CW6 a position coordinator 7 authors on "
-    "a routed body it owns and controls reaches member 1 as that value, and "
+    "[Networked][Session][SceneTree] CW6 a position the server authors on a "
+    "routed body it owns and controls reaches member 7 as that value, and "
     "the member freezes that body kinematically for the display to drive "
-    "while 7 leaves its own body unfrozen with no display over it"
+    "while the server leaves its own body unfrozen with no display over it"
 ) {
     ComposedWorld cw;
-    const RID seated = cw.spawn_body_for("SevenBody", COORDINATOR);
+    const RID seated = cw.spawn_body_for("ServerBody", SERVER);
     const int64_t route = cw.host->entity_get_route(seated);
     REQUIRE(route > 0);
 
     RigidBody2D *at_host
         = Object::cast_to<RigidBody2D>(cw.host->entity_get_node(seated));
-    RigidBody2D *at_one
-        = Object::cast_to<RigidBody2D>(route_node_at(cw.one, route));
+    RigidBody2D *at_seven
+        = Object::cast_to<RigidBody2D>(route_node_at(cw.seven, route));
     REQUIRE(at_host != nullptr);
-    REQUIRE(at_one != nullptr);
+    REQUIRE(at_seven != nullptr);
 
     NETW_CHECK_EQ(
         int(cw.host->display_default_authors_streams(
@@ -604,31 +594,31 @@ TEST_CASE(
         1
     );
     NETW_CHECK_EQ(
-        int(cw.one->display_default_authors_streams(
-            NetwEntity::of(at_one)->get_rid_handle()
+        int(cw.seven->display_default_authors_streams(
+            NetwEntity::of(at_seven)->get_rid_handle()
         )),
         0
     );
 
     netw::port_set(at_host, StringName("position"), Vector2(12.0, 34.0));
     cw.settle(8);
-    cw.one->display_pump(0.0);
+    cw.seven->display_pump(0.0);
 
-    NETW_CHECK_CLOSE(double(at_one->get_position().x), 12.0, 0.001);
-    NETW_CHECK_CLOSE(double(at_one->get_position().y), 34.0, 0.001);
+    NETW_CHECK_CLOSE(double(at_seven->get_position().x), 12.0, 0.001);
+    NETW_CHECK_CLOSE(double(at_seven->get_position().y), 34.0, 0.001);
 
     NETW_CHECK_EQ(
         int(display_role_of(cw.host, at_host)),
         int(NetwMultiplayer::DISPLAY_ROLE_DISABLED)
     );
     NETW_CHECK_EQ(
-        int(display_role_of(cw.one, at_one)),
+        int(display_role_of(cw.seven, at_seven)),
         int(NetwMultiplayer::DISPLAY_ROLE_REMOTE)
     );
     NETW_CHECK_EQ(int(at_host->is_freeze_enabled()), 0);
-    NETW_CHECK_EQ(int(at_one->is_freeze_enabled()), 1);
+    NETW_CHECK_EQ(int(at_seven->is_freeze_enabled()), 1);
     NETW_CHECK_EQ(
-        int(at_one->get_freeze_mode()),
+        int(at_seven->get_freeze_mode()),
         int(RigidBody2D::FREEZE_MODE_KINEMATIC)
     );
 }
@@ -680,9 +670,9 @@ struct ForgedCall {
 
         netw::wire::WriteStream writer;
         uint64_t addresses_a_peer = 2;
-        uint64_t arrives_at_seven = uint64_t(COORDINATOR);
+        uint64_t arrives_at_server = uint64_t(SERVER);
         REQUIRE(writer.bits(addresses_a_peer, 8));
-        REQUIRE(writer.bits(arrives_at_seven, 32));
+        REQUIRE(writer.bits(arrives_at_server, 32));
         REQUIRE(
             netw::script::model::write_call_body(
                 writer,
@@ -720,15 +710,15 @@ struct ForgedCall {
 
 TEST_CASE(
     "[Networked][Session][SceneTree] CW7 a forged call frame from 9 naming a "
-    "route only 1 may view leaves coordinator 7's node untouched, while the "
+    "route only 7 may view leaves the server's node untouched, while the "
     "same frame naming a route 9 holds runs and resolves its argument"
 ) {
     ComposedWorld cw;
-    const RID for_one = cw.hide_behind("OneOnly", TRANSPORT_SERVER);
+    const RID for_seven = cw.hide_behind("SevenOnly", OTHER);
     const RID for_nine = cw.hide_behind("NineOnly", MEMBER);
-    Node *only_one_views = cw.host->entity_get_node(for_one);
+    Node *only_seven_views = cw.host->entity_get_node(for_seven);
     Node *nine_views = cw.host->entity_get_node(for_nine);
-    REQUIRE(only_one_views != nullptr);
+    REQUIRE(only_seven_views != nullptr);
     REQUIRE(nine_views != nullptr);
 
     ForgedCall forged(cw, "CW7Sink");
@@ -741,7 +731,7 @@ TEST_CASE(
         1
     );
 
-    forged.deliver_naming(cw, only_one_views, 77, MEMBER);
+    forged.deliver_naming(cw, only_seven_views, 77, MEMBER);
     NETW_CHECK_EQ(int(forged.sink->get(StringName("last_value"))), 51);
     NETW_CHECK_EQ(
         int(Object::cast_to<Node>(forged.sink->get(StringName("last_node")))
@@ -777,53 +767,56 @@ Error deliver_control_apply(
 
 TEST_CASE(
     "[Networked][Session][SceneTree] CW8 a control frame forged by member 9 "
-    "moves nothing at coordinator 7 or at member 1, and the same frame from "
-    "coordinator 7 moves member 1's copy"
+    "moves nothing at the server or at member 7, and the same frame from the "
+    "server moves member 7's copy"
 ) {
     ComposedWorld cw;
-    const RID seated = cw.spawn_for("Contested", TRANSPORT_SERVER);
+    const RID seated = cw.spawn_for("Contested", OTHER);
     const int64_t route = cw.host->entity_get_route(seated);
     REQUIRE(route > 0);
     Node *at_host = cw.host->entity_get_node(seated);
-    Node *at_one = route_node_at(cw.one, route);
+    Node *at_seven = route_node_at(cw.seven, route);
     REQUIRE(at_host != nullptr);
-    REQUIRE(at_one != nullptr);
+    REQUIRE(at_seven != nullptr);
     const int64_t held_controller = NetwEntity::of(at_host)->get_controller();
     const int64_t held_authority = at_host->get_multiplayer_authority();
-    NETW_REQUIRE_EQ(NetwEntity::of(at_one)->get_controller(), held_controller);
+    NETW_REQUIRE_EQ(
+        NetwEntity::of(at_seven)->get_controller(),
+        held_controller
+    );
 
     deliver_control_apply(cw.host, route, MEMBER, MEMBER);
-    deliver_control_apply(cw.one, route, MEMBER, MEMBER);
+    deliver_control_apply(cw.seven, route, MEMBER, MEMBER);
 
     NETW_CHECK_EQ(NetwEntity::of(at_host)->get_controller(), held_controller);
     NETW_CHECK_EQ(
         int64_t(at_host->get_multiplayer_authority()),
         held_authority
     );
-    NETW_CHECK_EQ(NetwEntity::of(at_one)->get_controller(), held_controller);
+    NETW_CHECK_EQ(NetwEntity::of(at_seven)->get_controller(), held_controller);
 
-    deliver_control_apply(cw.one, route, MEMBER, COORDINATOR);
+    deliver_control_apply(cw.seven, route, MEMBER, SERVER);
 
-    NETW_CHECK_EQ(NetwEntity::of(at_one)->get_controller(), int64_t(MEMBER));
+    NETW_CHECK_EQ(NetwEntity::of(at_seven)->get_controller(), int64_t(MEMBER));
     NETW_CHECK_EQ(
-        int64_t(at_one->get_multiplayer_authority()),
+        int64_t(at_seven->get_multiplayer_authority()),
         int64_t(MEMBER)
     );
 }
 
 TEST_CASE(
     "[Networked][Session][SceneTree] CW9 a control request from member 9 "
-    "reaches coordinator 7, which grants it to every peer"
+    "reaches the server, which grants it to every peer"
 ) {
     ComposedWorld cw;
-    const RID seated = cw.spawn_for("Requested", TRANSPORT_SERVER);
+    const RID seated = cw.spawn_for("Requested", OTHER);
     const int64_t route = cw.host->entity_get_route(seated);
     REQUIRE(route > 0);
     Node *at_host = cw.host->entity_get_node(seated);
-    Node *at_one = route_node_at(cw.one, route);
+    Node *at_seven = route_node_at(cw.seven, route);
     Node *at_nine = route_node_at(cw.nine, route);
     REQUIRE(at_host != nullptr);
-    REQUIRE(at_one != nullptr);
+    REQUIRE(at_seven != nullptr);
     REQUIRE(at_nine != nullptr);
     NetwEntity::of(at_host)->set_transfer(NetwEntity::TRANSFER_REQUESTABLE);
 
@@ -831,7 +824,7 @@ TEST_CASE(
     cw.settle(12);
 
     NETW_CHECK_EQ(NetwEntity::of(at_host)->get_controller(), int64_t(MEMBER));
-    NETW_CHECK_EQ(NetwEntity::of(at_one)->get_controller(), int64_t(MEMBER));
+    NETW_CHECK_EQ(NetwEntity::of(at_seven)->get_controller(), int64_t(MEMBER));
     NETW_CHECK_EQ(NetwEntity::of(at_nine)->get_controller(), int64_t(MEMBER));
     NETW_CHECK_EQ(
         int64_t(at_nine->get_multiplayer_authority()),
@@ -840,19 +833,18 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Session][SceneTree] CW10 coordinator 7 transfers control "
-    "to member 9, and transport server 1, which is not the session "
-    "authority, is refused"
+    "[Networked][Session][SceneTree] CW10 the server transfers control to "
+    "member 9, and member 7, which is not the server, is refused"
 ) {
     ComposedWorld cw;
-    const RID seated = cw.spawn_for("Transferred", TRANSPORT_SERVER);
+    const RID seated = cw.spawn_for("Transferred", OTHER);
     const int64_t route = cw.host->entity_get_route(seated);
     REQUIRE(route > 0);
     Node *at_host = cw.host->entity_get_node(seated);
-    Node *at_one = route_node_at(cw.one, route);
+    Node *at_seven = route_node_at(cw.seven, route);
     Node *at_nine = route_node_at(cw.nine, route);
     REQUIRE(at_host != nullptr);
-    REQUIRE(at_one != nullptr);
+    REQUIRE(at_seven != nullptr);
     REQUIRE(at_nine != nullptr);
 
     NETW_CHECK_EQ(
@@ -861,13 +853,13 @@ TEST_CASE(
     );
     cw.settle(12);
     NETW_CHECK_EQ(
-        int(NetwEntity::of(at_one)->transfer_control(TRANSPORT_SERVER)),
+        int(NetwEntity::of(at_seven)->transfer_control(OTHER)),
         int(ERR_UNAUTHORIZED)
     );
     cw.settle(12);
 
     NETW_CHECK_EQ(NetwEntity::of(at_host)->get_controller(), int64_t(MEMBER));
-    NETW_CHECK_EQ(NetwEntity::of(at_one)->get_controller(), int64_t(MEMBER));
+    NETW_CHECK_EQ(NetwEntity::of(at_seven)->get_controller(), int64_t(MEMBER));
     NETW_CHECK_EQ(NetwEntity::of(at_nine)->get_controller(), int64_t(MEMBER));
     NETW_CHECK_EQ(
         int64_t(at_nine->get_multiplayer_authority()),
@@ -876,9 +868,8 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Session][SceneTree] CW11 coordinator 7 creates a scene "
-    "through its session and finds it by its root name, while transport "
-    "server 1 creates none"
+    "[Networked][Session][SceneTree] CW11 the server creates a scene through "
+    "its session and finds it by its root name, while member 7 creates none"
 ) {
     ComposedWorld cw;
     const Ref<PackedScene> packed = netw::gd::load_scene(String(LEVEL_PATH));
@@ -899,13 +890,13 @@ TEST_CASE(
     CHECK(finds_the_new_one);
     CHECK(session->find_scene(StringName("NoSuchLevel")).is_null());
 
-    const Ref<netw::NetwSession> member = cw.one->get_session();
+    const Ref<netw::NetwSession> member = cw.seven->get_session();
     REQUIRE(member.is_valid());
     CHECK(member->create_scene(packed, NetwMultiplayer::SCENE_ISOLATION_NONE)
               .is_null());
-    NETW_CHECK_EQ(int(cw.one->scene_list().size()), before);
+    NETW_CHECK_EQ(int(cw.seven->scene_list().size()), before);
 }
 
-} // namespace TestComposedNon1World
+} // namespace TestComposedWorld
 
 #endif

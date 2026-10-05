@@ -347,7 +347,7 @@ TEST_CASE(
         int64_t(watcher->entity_get_state(watcher->entity_from_route(route))),
         int64_t(NetwMultiplayer::ENTITY_STATE_ABSENT)
     );
-    host->set_controller(0);
+    host->set_controller(1);
     rig.step_ticks(2);
     host->set_controller(a);
     author_at_a(4);

@@ -112,6 +112,7 @@ class SyncPipeline;
 class SyncCompat;
 class ReplicationCore;
 class NetwMultiplayer;
+struct PeerRename;
 
 int64_t session_missing_local_join_warnings(const NetwMultiplayer *p_session);
 
@@ -462,20 +463,30 @@ private:
         const godot::StringName &p_method,
         const godot::Array &p_args,
         int64_t p_txn,
-        int64_t p_sender
+        int64_t p_sender,
+        uint64_t p_generation
+    );
+    void rpc_handle_parked_call(
+        const godot::Ref<NetwEntity> &p_entity,
+        godot::Node *p_comp_node,
+        const godot::PackedByteArray &p_payload,
+        int64_t p_sender,
+        uint64_t p_generation
     );
     void rpc_reply_resolved(
         const godot::Variant &p_value,
         int64_t p_peer,
         int64_t p_route,
-        int64_t p_txn
+        int64_t p_txn,
+        uint64_t p_generation
     );
     void rpc_reply_rejected(
         int64_t p_code,
         const godot::String &p_detail,
         int64_t p_peer,
         int64_t p_route,
-        int64_t p_txn
+        int64_t p_txn,
+        uint64_t p_generation
     );
     void rpc_reply_when_settled(
         const godot::Ref<NetwPromise> &p_promise,
@@ -635,6 +646,7 @@ private:
     uint8_t session_join_channel = 0;
     uint8_t session_accept_channel = 0;
     uint8_t session_roster_channel = 0;
+    uint8_t session_resync_channel = 0;
     uint8_t route_lease_channel = 0;
     uint8_t lifecycle_decision_channel = 0;
     godot::HashMap<int64_t, godot::Ref<NetwPromise>> lifecycle_promises;
@@ -642,7 +654,7 @@ private:
         int64_t route = 0;
         godot::NodePath from_owner;
         uint64_t session_revision = 0;
-        uint64_t session_author = 0;
+        uint64_t server_author = 0;
     };
     godot::HashMap<int64_t, godot::LocalVector<DetachedAhead>>
         lifecycle_detached_ahead;
@@ -658,6 +670,7 @@ private:
     godot::HashMap<int64_t, ParkedViewers> scene_viewers_parked;
     godot::HashMap<int64_t, uint64_t> scene_viewers_revision;
     godot::HashMap<int64_t, uint64_t> scene_viewers_applied;
+    uint64_t scene_viewers_server_generation = 0;
     GateVerdictBook verdict_book;
     SettleQueue settle_queue;
     NetwHandleLedger schemas;
@@ -753,9 +766,14 @@ private:
     NetwTxnBook rpc_txns;
     godot::HashMap<int64_t, RpcSettle> rpc_settles;
     bool rpc_disposed = false;
-    void rpc_resolve_parked(int64_t p_id, const godot::Callable &p_callback);
+    void rpc_resolve_parked(
+        int64_t p_id,
+        const godot::Callable &p_callback,
+        uint64_t p_generation
+    );
 
     bool structure_halted = false;
+    bool halt_admits_despawn = false;
 
     ReplicationCore *replication_owner = nullptr;
     store::World store_world;
@@ -815,6 +833,10 @@ private:
         godot::Ref<NetwLinkConditions> link_conditions;
         godot::Ref<NetwServerInfo> server_info;
         int64_t bandwidth_kbps = 0;
+        enums::NetwSession::TransferMode transfer_mode
+            = enums::NetwSession::TRANSFER_REJOIN;
+        int64_t transfer_deadline_ticks
+            = NetwSessionConfig::DEFAULT_TRANSFER_DEADLINE_TICKS;
     };
     SessionSettings session_settings;
     godot::Ref<NetwSessionConfig> session_fallback;
@@ -833,7 +855,7 @@ private:
     };
     godot::HashMap<int64_t, LinkHandshake> link_handshakes;
     std::optional<JoinRequest> resubmit_join;
-    int64_t resubmit_authority = 0;
+    std::optional<JoinRequest> submitted_join;
     bool join_awaiting_admission = false;
     int64_t missing_local_join_warnings = 0;
     display::Hooks display_hooks;
@@ -1481,7 +1503,6 @@ public:
     godot::LocalVector<int32_t> store_roster;
     godot::LocalVector<uint32_t> store_pending;
     int64_t store_local = 0;
-    int64_t store_coordinator = 0;
     bool store_host = false;
     bool store_offline = true;
     void store_refresh();
@@ -2264,7 +2285,7 @@ public:
         const godot::RID &p_entity,
         const sim::Facts &p_facts
     );
-    void sim_follow_session_authority();
+    void sim_follow_server();
     sim::Facts sim_body_facts(const godot::Ref<NetwEntity> &p_entity) const;
     void sim_settle_body(const godot::Ref<NetwEntity> &p_entity);
     void sim_settle_body_of(const godot::RID &p_entity);
@@ -3028,15 +3049,18 @@ public:
     Role session_get_role() const;
     bool is_online() const;
     bool is_host() const;
-    bool is_session_authority() const;
     void structure_halt_enter();
     void structure_halt_leave();
     bool is_structure_halted() const;
+    void halt_park_join(
+        const godot::PackedByteArray &p_payload,
+        int64_t p_sender
+    );
+    void halt_forget_peer(int64_t p_peer);
+    void halt_release();
     int64_t structure_ops_outstanding() const;
     int64_t route_floor() const;
     bool has_server_role() const;
-    int64_t session_authority_peer() const;
-    void session_set_authority_peer(int64_t p_peer);
     bool is_local_client() const;
 
     void count_sent(int64_t p_bytes);
@@ -3228,11 +3252,122 @@ public:
 
     godot::HashSet<int64_t> unreachable_peers;
     godot::HashSet<int64_t> settled_peer_departures;
+    static constexpr int SERVERLESS_MESH_WARN_POLLS = 300;
+    int serverless_mesh_polls = 0;
+
+    struct TransferInstall {
+        int64_t successor_was = 0;
+        int64_t former_now = 0;
+        bool pending = false;
+        godot::PackedInt64Array promoted;
+    };
+    godot::Ref<godot::MultiplayerPeer> relabel_source;
+    TransferInstall transfer_installed;
+    uint64_t transfer_generation = 0;
+    int64_t transfer_label = 0;
+    bool installing_transfer = false;
+    bool transfer_violated = false;
+    bool transfer_awaits_roster = false;
+    godot::PackedInt64Array transfer_authored;
+    mutable bool relabel_shaping_warned = false;
+
+    struct ResyncRaise {
+        uint64_t anchor = 0;
+        uint64_t revision = 0;
+    };
+    struct HaltJoin {
+        godot::PackedByteArray payload;
+        int64_t sender = 0;
+    };
+    struct ResyncIntake {
+        uint64_t routes = 0;
+        uint64_t chunks = 0;
+        uint64_t bytes = 0;
+        uint64_t route_high = 0;
+        uint64_t route_floor = 0;
+        uint64_t lease_high = 0;
+        uint64_t player_high = 0;
+    };
+    static constexpr uint32_t RESYNC_CHUNKS_PER_POLL = 4;
+    static constexpr uint64_t RESYNC_RAISE_REACH = 1 << 16;
+    static constexpr uint64_t RESYNC_ROUTES_PER_HELD = 4;
+    static constexpr uint64_t RESYNC_ROUTES_HELD_MIN = 64;
+    godot::HashSet<int64_t> resync_awaited;
+    godot::HashMap<int64_t, ResyncIntake> resync_intake;
+    int64_t resync_ticks_waited = 0;
+    int64_t resync_tick_seen = 0;
+    godot::HashMap<int64_t, ResyncRaise> resync_raises;
+    uint64_t resync_generation = 0;
+    bool resync_holds_halt = false;
+    godot::LocalVector<godot::PackedByteArray> resync_outbox;
+    uint32_t resync_sent = 0;
+    godot::LocalVector<HaltJoin> halt_joins;
+    godot::LocalVector<int64_t> halt_leases;
+    godot::LocalVector<HaltJoin> resync_before_announce;
+
+    static bool peer_relabels(const godot::Ref<godot::MultiplayerPeer> &p_peer);
+    void relabel_follow(const godot::Ref<godot::MultiplayerPeer> &p_peer);
+    void session_follow_relabel(int64_t p_successor_was, int64_t p_former_now);
+    void session_refuse_relabel(int64_t p_successor_was);
+    void session_reset_links(const godot::PackedInt32Array &p_links);
+    void session_reset_inner(
+        const godot::PackedInt32Array &p_links,
+        int64_t p_successor_was,
+        int64_t p_former_now
+    );
+    void session_rename_peers(
+        const PeerRename &p_rename,
+        godot::LocalVector<godot::Ref<NetwEntity>> &r_renamed
+    );
+    void transfer_live_entities(
+        godot::LocalVector<godot::Ref<NetwEntity>> &r_live
+    );
+    void transfer_follow_scenes(bool p_succeeds);
+    void transfer_follow_interest(bool p_succeeds);
+    void transfer_follow_prediction();
+    void transfer_follow_players(bool p_succeeds);
+    void transfer_resubmit_join();
+    void transfer_follow_persistence(bool p_succeeds);
+    bool transfer_rejoins() const;
+    void transfer_release_world();
+    void transfer_run_keep(const godot::PackedInt64Array &p_promoted);
+    void transfer_readmit(int64_t p_survivor);
+    void transfer_readmitted();
+    void transfer_reset_resync();
+    void transfer_await_resync(const godot::PackedInt32Array &p_survivors);
+    void transfer_queue_resync();
+    void transfer_send_resync();
+    void transfer_settle_resync();
+    void transfer_receive_held_resync();
+    void transfer_raise_reported();
+    void transfer_watch_resync();
+    const char *transfer_check_report(
+        const session::Resync &p_chunk,
+        int64_t p_bytes,
+        ResyncIntake &r_intake
+    );
+    void transfer_drop_reporter(int64_t p_sender);
+    void session_receive_resync(
+        const godot::PackedByteArray &p_payload,
+        int64_t p_sender
+    );
+    void session_announce_transfer();
+#if defined(NETW_TESTS)
+    void transfer_set_mode(enums::NetwSession::TransferMode p_mode) {
+        session_settings.transfer_mode = p_mode;
+    }
+    void (*resync_tamper)(
+        godot::LocalVector<godot::PackedByteArray> &r_outbox,
+        int64_t p_budget
+    ) = nullptr;
+#endif
+    godot::Error session_transfer_server(int64_t p_peer);
 
     godot::Node *session_root() const;
     int64_t linger_pumps(double p_seconds) const;
     void session_relay_peer_connected(int64_t p_peer);
     void session_relay_peer_disconnected(int64_t p_peer);
+    void session_clear_link_delivery(int64_t p_peer);
     void session_clear_disconnected_peer(int64_t p_peer);
     void session_teardown_online();
     void session_settle_peer_loss(int64_t p_peer);
@@ -3762,6 +3897,10 @@ public:
         const godot::PackedByteArray &p_payload,
         int64_t p_sender
     );
+    void session_accept_join(
+        const godot::PackedByteArray &p_payload,
+        int64_t p_sender
+    );
     void session_receive_accept(
         const godot::PackedByteArray &p_payload,
         int64_t p_sender
@@ -3953,8 +4092,11 @@ public:
     void session_forget_peer(int64_t p_peer);
     void session_clear_roster();
     godot::PackedInt32Array reachable_peer_ids() const;
+    godot::PackedInt32Array spawn_peer_ids() const;
     bool session_link_is_connected() const;
     void peer_sweep_transport_state();
+    bool session_links_peers_but_not_server() const;
+    void session_watch_serverless_mesh();
     void peer_mark_unreachable(int64_t p_peer);
     void peer_mark_reachable(int64_t p_peer);
     void session_refuse(int64_t p_peer, const godot::String &p_reason);
@@ -3965,7 +4107,7 @@ public:
     void session_set_role(Role p_role);
     void session_set_desired_role(Role p_role);
     void session_transition(SessionState p_state);
-    void session_peer_assigned(bool p_live, bool p_connected, int p_unique_id);
+    void session_peer_assigned(bool p_live, int p_unique_id);
     void session_resolve_online(int p_unique_id);
     void session_set_join_override(
         const godot::Callable &p_handler,
@@ -4114,10 +4256,7 @@ public:
         const godot::StringName &p_username,
         const godot::Array &p_args
     );
-    void session_submit_request(
-        const JoinRequest &p_request,
-        int64_t p_coordinator
-    );
+    void session_submit_request(const JoinRequest &p_request);
 
     godot::Ref<NetwPromise> session_leave();
     void session_settle_leave(const godot::Ref<NetwPromise> &p_left);
@@ -4800,6 +4939,7 @@ public:
     );
     bool liveness_epoch_admits(int64_t p_route, int64_t p_epoch) const;
     bool liveness_adopt_epoch(int64_t p_route, int64_t p_epoch);
+    void liveness_raise_epoch_to_wire(int64_t p_route);
     int64_t liveness_route_wire_life(int64_t p_route) const;
     godot::Error entity_frame_verdict(int64_t p_route) const;
     godot::Error sync_admit_frame_default(

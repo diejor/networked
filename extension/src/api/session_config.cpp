@@ -118,6 +118,87 @@ void NetwSessionConfig::_bind_methods() {
         D_METHOD("bandwidth", "kbps"),
         &NetwSessionConfig::bandwidth
     );
+
+    ClassDB::bind_method(
+        D_METHOD("set_transfer_mode", "transfer_mode"),
+        &NetwSessionConfig::set_transfer_mode
+    );
+    ClassDB::bind_method(
+        D_METHOD("get_transfer_mode"),
+        &NetwSessionConfig::get_transfer_mode
+    );
+    ADD_PROPERTY(
+        PropertyInfo(
+            Variant::INT,
+            "transfer_mode",
+            PROPERTY_HINT_ENUM,
+            "Rejoin,Continue",
+            PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_CLASS_IS_ENUM,
+            "NetwSession.TransferMode"
+        ),
+        "set_transfer_mode",
+        "get_transfer_mode"
+    );
+    ClassDB::bind_method(
+        D_METHOD("transfer", "transfer_mode"),
+        &NetwSessionConfig::transfer
+    );
+
+    ClassDB::bind_method(
+        D_METHOD("set_transfer_deadline_ticks", "transfer_deadline_ticks"),
+        &NetwSessionConfig::set_transfer_deadline_ticks
+    );
+    ClassDB::bind_method(
+        D_METHOD("get_transfer_deadline_ticks"),
+        &NetwSessionConfig::get_transfer_deadline_ticks
+    );
+    ADD_PROPERTY(
+        PropertyInfo(
+            Variant::INT,
+            "transfer_deadline_ticks",
+            PROPERTY_HINT_RANGE,
+            "0,3000,1,or_greater,suffix:ticks"
+        ),
+        "set_transfer_deadline_ticks",
+        "get_transfer_deadline_ticks"
+    );
+    ClassDB::bind_method(
+        D_METHOD("transfer_deadline", "ticks"),
+        &NetwSessionConfig::transfer_deadline
+    );
+}
+
+void NetwSessionConfig::set_transfer_deadline_ticks(int64_t p_ticks) {
+    NETW_ERR_COND(
+        p_ticks < 0,
+        sys::SESSION,
+        "NetwSessionConfig.transfer_deadline_ticks got %d, which is "
+        "negative. Pass ticks, or 0 to wait without a limit.",
+        p_ticks
+    );
+    if (guard.takes("transfer_deadline_ticks")) {
+        values.transfer_deadline_ticks = p_ticks;
+    }
+}
+
+Ref<NetwSessionConfig> NetwSessionConfig::transfer_deadline(int64_t p_ticks) {
+    set_transfer_deadline_ticks(p_ticks);
+    return Ref<NetwSessionConfig>(this);
+}
+
+void NetwSessionConfig::set_transfer_mode(
+    enums::NetwSession::TransferMode p_mode
+) {
+    if (guard.takes_enum("transfer_mode", int64_t(p_mode), 2)) {
+        values.transfer_mode = p_mode;
+    }
+}
+
+Ref<NetwSessionConfig> NetwSessionConfig::transfer(
+    enums::NetwSession::TransferMode p_mode
+) {
+    set_transfer_mode(p_mode);
+    return Ref<NetwSessionConfig>(this);
 }
 
 void NetwSessionConfig::set_bandwidth_kbps(int64_t p_kbps) {
@@ -184,6 +265,8 @@ void NetwSessionConfig::copy_values_from(const NetwSessionConfig &p_source) {
         values.server_info->copy_values_from(**p_source.values.server_info);
     }
     values.bandwidth_kbps = p_source.values.bandwidth_kbps;
+    values.transfer_mode = p_source.values.transfer_mode;
+    values.transfer_deadline_ticks = p_source.values.transfer_deadline_ticks;
 }
 
 bool NetwSessionConfig::matches_defaults() const {
@@ -219,6 +302,18 @@ String NetwSessionConfig::non_default_fields() const {
             named += ", ";
         }
         named += "bandwidth_kbps";
+    }
+    if (values.transfer_mode != enums::NetwSession::TRANSFER_REJOIN) {
+        if (!named.is_empty()) {
+            named += ", ";
+        }
+        named += "transfer_mode";
+    }
+    if (values.transfer_deadline_ticks != DEFAULT_TRANSFER_DEADLINE_TICKS) {
+        if (!named.is_empty()) {
+            named += ", ";
+        }
+        named += "transfer_deadline_ticks";
     }
     return named;
 }

@@ -15,7 +15,7 @@
 #include <godot_cpp/classes/packed_scene.hpp>
 #include <godot_cpp/classes/scene_replication_config.hpp>
 
-namespace TestFollowSession {
+namespace TestFollowServer {
 
 using namespace godot;
 using namespace netw_test;
@@ -29,7 +29,7 @@ var synced_value := 0
 var watched_value := 0
 
 func _init() -> void:
-	Netw.configure_entity(self).follow_session(^"ServerSync")
+	Netw.configure_entity(self).follow_server(^"ServerSync")
 )";
 
 SyncProp prop_row(const char *p_path) {
@@ -122,7 +122,7 @@ struct SplitStand {
     }
 
     void revoke() {
-        entity(-1)->set_controller(0);
+        entity(-1)->set_controller(1);
         rig.pump(10);
     }
 
@@ -166,7 +166,7 @@ void acceptance(bool p_input_first) {
 
 TEST_CASE(
     "[Networked][Control][SceneTree] FS1 a followed synchronizer stays with "
-    "the session while the rest of the entity follows each grant"
+    "the server while the rest of the entity follows each grant"
 ) {
     SUBCASE("ServerSync declared first") {
         acceptance(false);
@@ -178,7 +178,7 @@ TEST_CASE(
 
 TEST_CASE(
     "[Networked][Control][SceneTree] FS2 a child added after a grant takes "
-    "the controller, and one added under a followed node takes the session"
+    "the controller, and one added under a followed node takes the server"
 ) {
     SplitStand stand(false);
     const int a = stand.rig.peer_id(0);
@@ -229,6 +229,6 @@ TEST_CASE(
     CHECK_FALSE(stand.entity(0)->get_record()->get_native_write_warned());
 }
 
-} // namespace TestFollowSession
+} // namespace TestFollowServer
 
 #endif

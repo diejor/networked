@@ -84,47 +84,23 @@ Array rows_of(const Array &p_drained, int64_t p_event) {
 }
 
 TEST_CASE(
-    "[Networked][Session][SceneTree] L1 a coordinator that leaves takes the "
-    "session down even though transport peer 1 stays connected, because the "
-    "relay staying up answers nothing about who was deciding"
+    "[Networked][Session][SceneTree] L1 a server that leaves takes a "
+    "client's session down"
 ) {
-    LoopbackRig rig(1, 7);
+    LoopbackRig rig(1);
     rig.mount();
     REQUIRE(
-        rig.server()->session_get_state()
+        rig.client(0)->session_get_state()
         == NetwMultiplayer::SESSION_STATE_ONLINE
     );
 
-    Recorder seen(rig.server(), {"session_ended"});
-    rig.server()->session_relay_peer_disconnected(7);
+    Recorder seen(rig.client(0), {"session_ended"});
+    rig.client(0)->session_relay_peer_disconnected(1);
 
     NETW_CHECK_EQ(seen.count("session_ended"), 1);
     CHECK(
-        rig.server()->session_get_state()
+        rig.client(0)->session_get_state()
         == NetwMultiplayer::SESSION_STATE_OFFLINE
-    );
-}
-
-TEST_CASE(
-    "[Networked][Session][SceneTree] L2 transport peer 1 leaving under a "
-    "coordinator of 7 is an ordinary departure settled once, because peer 1 "
-    "is not the peer this session asks for authority"
-) {
-    LoopbackRig rig(1, 7);
-    rig.mount();
-    REQUIRE(
-        rig.server()->session_get_state()
-        == NetwMultiplayer::SESSION_STATE_ONLINE
-    );
-
-    Recorder seen(rig.server(), {"session_ended", "peer_disconnected"});
-    rig.server()->session_relay_peer_disconnected(1);
-
-    NETW_CHECK_EQ(seen.count("session_ended"), 0);
-    NETW_CHECK_EQ(seen.count("peer_disconnected"), 1);
-    CHECK(
-        rig.server()->session_get_state()
-        == NetwMultiplayer::SESSION_STATE_ONLINE
     );
 }
 
@@ -153,27 +129,27 @@ TEST_CASE(
     const Array settled = rig.server()->event_ring(route);
     const Array reverted = rows_of(settled, netw::EventPlane::CONTROL_CHANGED);
     NETW_CHECK_EQ(reverted.size(), 1);
-    NETW_CHECK_EQ(host->get_controller(), int64_t(0));
+    NETW_CHECK_EQ(host->get_controller(), int64_t(1));
     rig.server()->event_arm(false);
 }
 
 TEST_CASE(
-    "[Networked][Session][SceneTree] L4 a coordinator's loss settles once "
-    "even when the same departure reaches settlement twice through two "
-    "different entries, because a duplicate report and a reentrant terminal "
-    "leave describe one session ending and not two"
+    "[Networked][Session][SceneTree] L4 a server's loss settles once even "
+    "when the same departure reaches settlement twice through two different "
+    "entries, because a duplicate report and a reentrant terminal leave "
+    "describe one session ending and not two"
 ) {
-    LoopbackRig rig(1, 7);
+    LoopbackRig rig(1);
     rig.mount();
 
-    Recorder seen(rig.server(), {"session_ended"});
-    rig.server()->session_relay_peer_disconnected(7);
-    rig.server()->session_relay_peer_disconnected(7);
-    rig.server()->peer_mark_unreachable(7);
+    Recorder seen(rig.client(0), {"session_ended"});
+    rig.client(0)->session_relay_peer_disconnected(1);
+    rig.client(0)->session_relay_peer_disconnected(1);
+    rig.client(0)->peer_mark_unreachable(1);
 
     NETW_CHECK_EQ(seen.count("session_ended"), 1);
     CHECK(
-        rig.server()->session_get_state()
+        rig.client(0)->session_get_state()
         == NetwMultiplayer::SESSION_STATE_OFFLINE
     );
 }
@@ -192,28 +168,28 @@ void leave_on_departure(int64_t) {
 
 TEST_CASE(
     "[Networked][Session][SceneTree] L5 a departure handler that starts "
-    "leaving cannot cancel the coordinator's terminal settlement, because "
-    "the loss edge classifies the departure before any world consequence "
-    "runs rather than re-reading the state the handler just moved"
+    "leaving cannot cancel the server's terminal settlement, because the "
+    "loss edge classifies the departure before any world consequence runs "
+    "rather than re-reading the state the handler just moved"
 ) {
-    LoopbackRig rig(1, 7);
+    LoopbackRig rig(1);
     rig.mount();
     REQUIRE(
-        rig.server()->session_get_state()
+        rig.client(0)->session_get_state()
         == NetwMultiplayer::SESSION_STATE_ONLINE
     );
 
-    leaving_session() = rig.server();
-    rig.server()->connect(
+    leaving_session() = rig.client(0);
+    rig.client(0)->connect(
         StringName("peer_disconnected"),
         callable_mp_static(&leave_on_departure)
     );
 
-    rig.server()->session_relay_peer_disconnected(7);
+    rig.client(0)->session_relay_peer_disconnected(1);
     leaving_session() = nullptr;
 
     CHECK(
-        rig.server()->session_get_state()
+        rig.client(0)->session_get_state()
         == NetwMultiplayer::SESSION_STATE_OFFLINE
     );
 }

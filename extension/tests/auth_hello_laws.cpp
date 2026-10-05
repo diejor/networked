@@ -125,9 +125,8 @@ TEST_CASE(
     "join each other still have to agree about the build they speak"
 ) {
     const Ref<NetwMultiplayer> session = tagged_session();
-    session->session_set_authority_peer(7);
     session->session_set_desired_role(NetwMultiplayer::ROLE_CLIENT);
-    session->session_peer_assigned(true, true, 9);
+    session->session_peer_assigned(true, 9);
     REQUIRE_FALSE(session->is_host());
 
     session->auth_receive_hello(PEER, auth::encode_client_hello(APP_TAG, 0));

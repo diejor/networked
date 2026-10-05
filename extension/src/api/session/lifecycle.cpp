@@ -101,8 +101,9 @@ lifecycle::Facts NetwMultiplayer::lifecycle_local_facts(
     lifecycle::Kind p_kind
 ) {
     lifecycle::Facts facts = lifecycle_entity_facts(p_entity, p_kind);
-    facts.peer_is_session = is_session_authority();
-    facts.minting_halted = structure_halted;
+    facts.peer_is_server = is_host();
+    facts.minting_halted = structure_halted
+        && !(halt_admits_despawn && p_kind == lifecycle::Kind::DESPAWN);
     const NetwPredictionEngine *engine = get_prediction_engine();
     facts.replaying = engine != nullptr && engine->is_replaying();
     if (p_entity == nullptr) {
@@ -124,10 +125,11 @@ lifecycle::Facts NetwMultiplayer::lifecycle_sender_facts(
     int64_t p_sender
 ) {
     lifecycle::Facts facts = lifecycle_entity_facts(p_entity, p_kind);
-    facts.peer_is_session = p_sender == session_authority_peer();
+    facts.peer_is_server = p_sender == SERVER_PEER;
     if (p_entity != nullptr) {
-        const int64_t steering = p_entity->get_controller();
-        facts.peer_is_controller = steering != 0 && steering == p_sender;
+        const int64_t steering = p_entity->steering();
+        facts.peer_is_controller
+            = steering != entity::Control::SERVER && steering == p_sender;
     }
     return facts;
 }
@@ -179,7 +181,7 @@ lifecycle::Ruling NetwMultiplayer::lifecycle_judge_verb(
 }
 
 bool NetwMultiplayer::lifecycle_authors_move(NetwEntity *p_entity) {
-    if (p_entity == nullptr || is_session_authority()) {
+    if (p_entity == nullptr || is_host()) {
         return false;
     }
     return lifecycle::rule(
@@ -272,8 +274,8 @@ lifecycle::Facts NetwMultiplayer::lifecycle_frame_facts(
 ) {
     lifecycle::Facts facts;
     facts.kind = p_kind;
-    facts.peer_is_session = p_sender == session_authority_peer();
-    if (facts.peer_is_session || !is_session_authority()
+    facts.peer_is_server = p_sender == SERVER_PEER;
+    if (facts.peer_is_server || !is_host()
         || p_kind == lifecycle::Kind::SPAWN) {
         return facts;
     }
@@ -436,7 +438,7 @@ bool NetwMultiplayer::lifecycle_admit_despawn(
 void NetwMultiplayer::lifecycle_send_despawn(NetwEntity *p_entity) {
     const int64_t route = liveness_route_of(p_entity);
     spawn::Pipeline *spawns = spawn_plane();
-    if (route <= 0 || is_session_authority() || spawns == nullptr
+    if (route <= 0 || is_host() || spawns == nullptr
         || !spawns->holds_received_route(route)) {
         return;
     }
@@ -455,7 +457,7 @@ void NetwMultiplayer::lifecycle_send_to_session(
     int64_t p_channel,
     const PackedByteArray &p_payload
 ) {
-    lifecycle_send_to(session_authority_peer(), p_route, p_channel, p_payload);
+    lifecycle_send_to(SERVER_PEER, p_route, p_channel, p_payload);
 }
 
 void NetwMultiplayer::lifecycle_send_to(
@@ -544,7 +546,7 @@ void NetwMultiplayer::lifecycle_restore_detached(int64_t p_route) {
             entity_install_anchor(
                 row.route,
                 row.session_revision,
-                row.session_author
+                row.server_author
             );
         }
     }
@@ -562,7 +564,7 @@ bool NetwMultiplayer::lifecycle_note_detached_anchor(
         for (DetachedAhead &row : dying.value) {
             if (row.route == p_route && p_revision > row.session_revision) {
                 row.session_revision = p_revision;
-                row.session_author = p_author;
+                row.server_author = p_author;
                 noted = true;
             }
         }
@@ -686,7 +688,7 @@ void NetwMultiplayer::lifecycle_receive_decision(
     const PackedByteArray &p_payload,
     int64_t p_sender
 ) {
-    if (p_sender != session_authority_peer() || is_session_authority()) {
+    if (p_sender != SERVER_PEER || is_host()) {
         return;
     }
     wire::ReadStream reader(p_payload);

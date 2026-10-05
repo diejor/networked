@@ -285,6 +285,11 @@ struct NetwSession {
         KICKED,
         REPLACED,
     };
+
+    enum TransferMode {
+        TRANSFER_REJOIN,
+        TRANSFER_CONTINUE,
+    };
 };
 
 struct NetwClock {
@@ -425,6 +430,7 @@ VARIANT_ENUM_CAST(netw::enums::NetwScene::SceneEvent);
 VARIANT_ENUM_CAST(netw::enums::NetwSession::SessionState);
 VARIANT_ENUM_CAST(netw::enums::NetwSession::Role);
 VARIANT_ENUM_CAST(netw::enums::NetwSession::ExitReason);
+VARIANT_ENUM_CAST(netw::enums::NetwSession::TransferMode);
 VARIANT_ENUM_CAST(netw::enums::NetwClock::SyncMode);
 VARIANT_ENUM_CAST(netw::enums::NetwClock::MismatchAction);
 VARIANT_ENUM_CAST(netw::enums::NetwClock::ClockMonitor);

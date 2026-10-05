@@ -5,6 +5,7 @@
 #include "netw/colors.hpp"
 #include "netw/log.hpp"
 #include "netw/profile.hpp"
+#include "netw/session_core.hpp"
 
 namespace netw::repl {
 
@@ -27,15 +28,15 @@ bool names(
 bool record_authors(
     int64_t p_record,
     int64_t p_policy,
-    bool p_holds_session_authority,
+    bool p_is_server,
     int64_t p_local_id,
     int64_t p_node_authority,
     int64_t p_controller
 ) {
     if (p_record == SET_RECORD_STATE) {
-        return p_holds_session_authority;
+        return p_is_server;
     }
-    const int64_t steering = p_controller == 0 && p_holds_session_authority
+    const int64_t steering = p_controller == 0 && p_is_server
         ? p_local_id
         : p_controller;
     return entity::Control::policy_admits(
@@ -50,13 +51,12 @@ bool row_authors(
     const SetRow &p_row,
     int64_t p_local_id,
     int64_t p_node_authority,
-    int64_t p_controller,
-    int64_t p_coordinator
+    int64_t p_controller
 ) {
     return record_authors(
         p_row.record,
         p_row.policy,
-        p_local_id == p_coordinator,
+        p_local_id == SERVER_PEER,
         p_local_id,
         p_node_authority,
         p_controller
@@ -66,13 +66,12 @@ bool row_authors(
 PackedInt32Array row_recipients(
     const SetRow &p_row,
     int64_t p_local_id,
-    const PackedInt32Array &p_live,
-    int64_t p_coordinator
+    const PackedInt32Array &p_live
 ) {
     PackedInt32Array out;
     if (p_row.audience == SET_AUDIENCE_SERVER_ONLY) {
-        if (p_local_id != p_coordinator) {
-            out.push_back(int32_t(p_coordinator));
+        if (p_local_id != SERVER_PEER) {
+            out.push_back(int32_t(SERVER_PEER));
         }
         return out;
     }
@@ -89,13 +88,12 @@ PackedInt32Array event_recipients(
     bool p_is_host,
     int64_t p_local_id,
     int64_t p_exclude,
-    const PackedInt32Array &p_live,
-    int64_t p_coordinator
+    const PackedInt32Array &p_live
 ) {
     PackedInt32Array out;
     if (!p_is_host) {
-        if (p_local_id != p_coordinator && p_exclude != p_coordinator) {
-            out.push_back(int32_t(p_coordinator));
+        if (p_local_id != SERVER_PEER && p_exclude != SERVER_PEER) {
+            out.push_back(int32_t(SERVER_PEER));
         }
         return out;
     }
@@ -112,13 +110,12 @@ bool row_admits_sender(
     const SetRow &p_row,
     int64_t p_sender,
     int64_t p_node_authority,
-    int64_t p_controller,
-    int64_t p_coordinator
+    int64_t p_controller
 ) {
     if (p_row.record == SET_RECORD_STATE) {
-        return p_sender == p_coordinator;
+        return p_sender == SERVER_PEER;
     }
-    if (p_sender == p_coordinator
+    if (p_sender == SERVER_PEER
         && (p_controller == 0 || !record_follows_tenure(p_row.record))) {
         return true;
     }

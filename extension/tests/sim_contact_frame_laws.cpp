@@ -849,7 +849,7 @@ TEST_CASE(
     NETW_CHECK_GT(evidence.hit_velocity.x, 1.0);
     NETW_CHECK_GE(evidence.first_fence, int64_t(0));
     const Subject &ball = evidence.subjects[0];
-    NETW_CHECK_EQ(ball.local_controller, int64_t(0));
+    NETW_CHECK_EQ(ball.local_controller, int64_t(1));
     NETW_CHECK_CLOSE(ball.server_position.x, 0.0, 0.01);
     NETW_CHECK_CLOSE(ball.local_velocity.x, 0.0, 0.05);
     NETW_CHECK_CLOSE(ball.local_position.x, ball.server_position.x, 0.05);
@@ -912,8 +912,8 @@ TEST_CASE(
     REQUIRE(evidence.subjects[1].ran_ahead);
     CHECK(evidence.grab_failed);
     NETW_CHECK_EQ(evidence.subjects[0].server_controller, evidence.rival);
-    NETW_CHECK_EQ(evidence.subjects[1].server_controller, int64_t(0));
-    NETW_CHECK_EQ(evidence.subjects[1].local_controller, int64_t(0));
+    NETW_CHECK_EQ(evidence.subjects[1].server_controller, int64_t(1));
+    NETW_CHECK_EQ(evidence.subjects[1].local_controller, int64_t(1));
 }
 
 TEST_CASE(
@@ -926,8 +926,8 @@ TEST_CASE(
     REQUIRE(subject.granted_frame >= 0);
     REQUIRE(subject.releasing_frame >= 0);
     NETW_CHECK_GE(subject.releasing_frame - subject.granted_frame, REST_TICKS);
-    NETW_CHECK_EQ(subject.server_controller, int64_t(0));
-    NETW_CHECK_EQ(subject.local_controller, int64_t(0));
+    NETW_CHECK_EQ(subject.server_controller, int64_t(1));
+    NETW_CHECK_EQ(subject.local_controller, int64_t(1));
 }
 
 TEST_CASE(
@@ -973,7 +973,7 @@ TEST_CASE(
     REQUIRE(evidence.seated);
     NETW_CHECK_GT(evidence.hit_velocity.x, 1.0);
     const Subject &ball = evidence.subjects[0];
-    NETW_CHECK_EQ(ball.local_controller, int64_t(0));
+    NETW_CHECK_EQ(ball.local_controller, int64_t(1));
     NETW_CHECK_CLOSE(ball.server_velocity.z, DRIFT.z, 0.01);
     NETW_CHECK_CLOSE(ball.local_velocity.x, 0.0, 0.05);
     NETW_CHECK_CLOSE(ball.local_position.x, ball.server_position.x, 0.05);

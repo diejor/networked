@@ -214,29 +214,27 @@ StringName NetwEntityRecord::entity_meta() {
     return StringName("netw_entity");
 }
 
-void NetwEntityRecord::follow_session(const NodePath &p_path) {
-    for (const NodePath &path : session_paths) {
+void NetwEntityRecord::follow_server(const NodePath &p_path) {
+    for (const NodePath &path : server_paths) {
         if (path == p_path) {
             return;
         }
     }
-    session_paths.push_back(p_path);
+    server_paths.push_back(p_path);
 }
 
 NetwEntityRecord::Projection NetwEntityRecord::projection_to(
-    int64_t p_follower,
-    int64_t p_session
+    int64_t p_follower
 ) const {
     Projection made;
     made.follower = p_follower;
-    made.session = p_session;
-    made.prior_follower = projected_follower != 0 ? projected_follower : 1;
-    made.prior_session = projected_session != 0 ? projected_session : 1;
+    made.prior_follower
+        = projected_follower != 0 ? projected_follower : SERVER_PEER;
     return made;
 }
 
-bool NetwEntityRecord::pinned_to_session(Node *p_owner, Node *p_node) const {
-    for (const NodePath &path : session_paths) {
+bool NetwEntityRecord::pinned_to_server(Node *p_owner, Node *p_node) const {
+    for (const NodePath &path : server_paths) {
         Node *pinned = p_owner->get_node_or_null(path);
         if (pinned != nullptr && pinned != p_owner
             && (pinned == p_node || pinned->is_ancestor_of(p_node))) {
@@ -264,8 +262,7 @@ void NetwEntityRecord::write_authority(
             sys::ENTITY,
             "%s had its multiplayer authority set to %d outside its entity, "
             "and the entity sets it back to %d. Use "
-            "NetwEntity.follow_session to keep a node on the session "
-            "authority.",
+            "NetwEntity.follow_server to keep a node with the server.",
             String(named).utf8().get_data(),
             int(now),
             int(p_to)
@@ -284,14 +281,13 @@ void NetwEntityRecord::project_node(
     if (p_node != p_owner && tree::is_entity_root(p_node)) {
         return;
     }
-    const bool pinned = p_pinned || pinned_to_session(p_owner, p_node);
+    const bool pinned = p_pinned || pinned_to_server(p_owner, p_node);
     write_authority(
         p_node,
-        pinned ? p_projection.session : p_projection.follower,
-        pinned ? p_projection.prior_session : p_projection.prior_follower
+        pinned ? SERVER_PEER : p_projection.follower,
+        pinned ? SERVER_PEER : p_projection.prior_follower
     );
-    const bool watched
-        = p_projection.follower != 1 || p_projection.session != 1;
+    const bool watched = p_projection.follower != SERVER_PEER;
     if (watched && p_watch != 0) {
         tree::watch(p_node, p_watch);
     }
@@ -318,14 +314,12 @@ void NetwEntityRecord::project_entered(
     }
     Projection entered;
     entered.follower = projected_follower;
-    entered.session = projected_session;
     project_node(p_owner, p_node, false, entered, p_watch);
 }
 
 void NetwEntityRecord::apply_control(
     Object *p_wrapper,
     Node *p_owner,
-    int64_t p_coordinator,
     uint64_t p_watch
 ) {
     Node *owner = p_owner;
@@ -334,25 +328,23 @@ void NetwEntityRecord::apply_control(
     }
     const int64_t previous = owner->get_multiplayer_authority();
     const int64_t peer = control.get_controller();
-    const int64_t authority = peer != 0 ? peer : p_coordinator;
-    project_node(
-        owner,
-        owner,
-        false,
-        projection_to(authority, p_coordinator),
-        p_watch
-    );
+    const int64_t authority = entity::Control::public_peer(peer);
+    project_node(owner, owner, false, projection_to(authority), p_watch);
     projected_follower = authority;
-    projected_session = p_coordinator;
-    const int64_t was = previous == p_coordinator ? 0 : previous;
+    const int64_t was
+        = previous == SERVER_PEER ? entity::Control::SERVER : previous;
     if (was != peer && p_wrapper != nullptr) {
         NETW_TRACE(
             sys::ENTITY,
             "Control moved from peer %d to peer %d.",
-            int(was),
-            int(peer)
+            int(entity::Control::public_peer(was)),
+            int(authority)
         );
-        p_wrapper->emit_signal(StringName("control_changed"), was, peer);
+        p_wrapper->emit_signal(
+            StringName("control_changed"),
+            entity::Control::public_peer(was),
+            authority
+        );
     }
 }
 
@@ -501,7 +493,6 @@ void NetwEntityRecord::readmit() {
     handle = entity::mint();
     despawning_opts = Ref<NetwDespawnOpts>();
     projected_follower = 0;
-    projected_session = 0;
 }
 
 bool NetwEntityRecord::classify_activation(Node *p_owner) {

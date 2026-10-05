@@ -35,8 +35,9 @@ sim::Facts NetwMultiplayer::sim_body_facts(
     sim::Facts facts;
     facts.declared = true;
     facts.state_rows = p_entity->get_state_binding() != nullptr;
-    facts.session_authority_here = is_host();
-    facts.controller_is_nobody = p_entity->get_controller() == 0;
+    facts.server_here = is_host();
+    facts.controller_is_nobody
+        = p_entity->steering() == entity::Control::SERVER;
     facts.controller_here
         = !facts.controller_is_nobody && p_entity->is_controller_here();
     facts.pending_claim_here = p_entity->is_claim_running_ahead();

@@ -223,8 +223,8 @@
 		<member name="max_consume_lag_ticks" type="int" setter="set_max_consume_lag_ticks" getter="get_max_consume_lag_ticks" default="60">
 			How far the server may fall behind the newest input before it skips ahead to it. Without this, a client that joins a running session can leave the server behind for good. [code]0[/code] disables skipping.
 		</member>
-		<member name="max_consume_per_tick" type="int" setter="set_max_consume_per_tick" getter="get_max_consume_per_tick" default="1">
-			How many queued inputs the server may skip in one frame to catch up, for an entity at [constant NetwSimulation.SCHEDULE_FRAME]. An entity at [constant NetwSimulation.SCHEDULE_TICK] ignores it.
+		<member name="max_consume_per_tick" type="int" setter="set_max_consume_per_tick" getter="get_max_consume_per_tick" default="2">
+			How many queued inputs the server may run in one tick to catch up to [member consume_buffer_ticks] behind the newest input. Extra inputs run as extra steps and are never skipped. It applies to [constant NetwSimulation.SCHEDULE_TICK], and an entity at [constant NetwSimulation.SCHEDULE_FRAME] catches up by running one input per physics frame.
 		</member>
 		<member name="missing_policy" type="int" setter="set_missing_policy" getter="get_missing_policy" enum="NetwPrediction.MissingInput" default="0">
 			What the server does when an input never arrives.

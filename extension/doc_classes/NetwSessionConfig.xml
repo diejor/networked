@@ -62,6 +62,20 @@
 				Sets [member server_info] and returns this config.
 			</description>
 		</method>
+		<method name="transfer">
+			<return type="NetwSessionConfig" />
+			<param index="0" name="transfer_mode" type="int" enum="NetwSession.TransferMode" />
+			<description>
+				Sets [member transfer_mode] and returns this config.
+			</description>
+		</method>
+		<method name="transfer_deadline">
+			<return type="NetwSessionConfig" />
+			<param index="0" name="ticks" type="int" />
+			<description>
+				Sets [member transfer_deadline_ticks] and returns this config.
+			</description>
+		</method>
 	</methods>
 	<members>
 		<member name="app_id" type="StringName" setter="set_app_id" getter="get_app_id" default="&amp;&quot;&quot;">
@@ -86,6 +100,12 @@
 			Netw.configure_session(self).server(info)
 			[/codeblock]
 			To change it for each request, use [method Netw.configure_server_info].
+		</member>
+		<member name="transfer_deadline_ticks" type="int" setter="set_transfer_deadline_ticks" getter="get_transfer_deadline_ticks" default="300">
+			How many ticks a new server waits for each client to report its world after the server moves. A client still reporting when it runs out is disconnected, and [code]0[/code] waits without a limit.
+		</member>
+		<member name="transfer_mode" type="int" setter="set_transfer_mode" getter="get_transfer_mode" enum="NetwSession.TransferMode" default="0">
+			What this peer does with its world when the server moves. Each peer follows its own value, and a new server runs [method Netw.configure_transfer] only when its value is [constant NetwSession.TRANSFER_REJOIN].
 		</member>
 	</members>
 </class>

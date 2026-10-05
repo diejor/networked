@@ -1,10 +1,22 @@
 #include "netw/join_roster.hpp"
 
+#include "netw/peer_rename.hpp"
 #include "netw/session/frames.hpp"
 
 using namespace godot;
 
 namespace netw {
+
+void JoinRoster::rename(const PeerRename &p_rename) {
+    p_rename.rekey(refusals);
+    HashMap<int64_t, session::AcceptFrame> renamed;
+    for (const KeyValue<int64_t, session::AcceptFrame> &entry : accepted) {
+        session::AcceptFrame moved = entry.value;
+        moved.peer_id = p_rename.of(entry.key);
+        renamed[moved.peer_id] = moved;
+    }
+    accepted = renamed;
+}
 
 LocalVector<int64_t> JoinRoster::peers_in_order() const {
     LocalVector<int64_t> out;

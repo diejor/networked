@@ -29,17 +29,23 @@ Methods
 .. table::
    :widths: auto
 
-   +--------+--------------------------------------------------------------------------------------------------------------------------------------------+
-   | |void| | :ref:`initialize<class_NakamaRelayPeer_method_initialize>`\ (\ p_self_id\: :godot:`int`\ )                                                 |
-   +--------+--------------------------------------------------------------------------------------------------------------------------------------------+
-   | |void| | :ref:`set_connection_status<class_NakamaRelayPeer_method_set_connection_status>`\ (\ p_connection_status\: :godot:`int`\ )                 |
-   +--------+--------------------------------------------------------------------------------------------------------------------------------------------+
-   | |void| | :ref:`register_peer<class_NakamaRelayPeer_method_register_peer>`\ (\ p_peer_id\: :godot:`int`\ )                                           |
-   +--------+--------------------------------------------------------------------------------------------------------------------------------------------+
-   | |void| | :ref:`unregister_peer<class_NakamaRelayPeer_method_unregister_peer>`\ (\ p_peer_id\: :godot:`int`\ )                                       |
-   +--------+--------------------------------------------------------------------------------------------------------------------------------------------+
-   | |void| | :ref:`deliver_packet<class_NakamaRelayPeer_method_deliver_packet>`\ (\ p_data\: :godot:`PackedByteArray`, p_from_peer_id\: :godot:`int`\ ) |
-   +--------+--------------------------------------------------------------------------------------------------------------------------------------------+
+   +-------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | |void|                                                | :ref:`initialize<class_NakamaRelayPeer_method_initialize>`\ (\ p_self_id\: :godot:`int`\ )                                                                            |
+   +-------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | |void|                                                | :ref:`set_connection_status<class_NakamaRelayPeer_method_set_connection_status>`\ (\ p_connection_status\: :godot:`int`\ )                                            |
+   +-------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | |void|                                                | :ref:`register_peer<class_NakamaRelayPeer_method_register_peer>`\ (\ p_peer_id\: :godot:`int`\ )                                                                      |
+   +-------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | |void|                                                | :ref:`unregister_peer<class_NakamaRelayPeer_method_unregister_peer>`\ (\ p_peer_id\: :godot:`int`\ )                                                                  |
+   +-------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | |void|                                                | :ref:`deliver_packet<class_NakamaRelayPeer_method_deliver_packet>`\ (\ p_data\: :godot:`PackedByteArray`, p_from_peer_id\: :godot:`int`, p_term\: :godot:`int` = 0\ ) |
+   +-------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`Error <@GlobalScope#enum_@globalscope_Error>` | :ref:`transfer_server<class_NakamaRelayPeer_method_transfer_server>`\ (\ peer_id\: :godot:`int`\ )                                                                    |
+   +-------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | |void|                                                | :ref:`schedule_relabel<class_NakamaRelayPeer_method_schedule_relabel>`\ (\ install\: :godot:`Callable`\ )                                                             |
+   +-------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | |void|                                                | :ref:`relabel<class_NakamaRelayPeer_method_relabel>`\ (\ p_self_id\: :godot:`int`, p_peers\: :godot:`Array`\[:godot:`int`\], p_term\: :godot:`int`\ )                 |
+   +-------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 
 .. rst-class:: classref-section-separator
 
@@ -57,6 +63,18 @@ Signals
 **packet_generated**\ (\ peer_id\: :godot:`Variant`, buffer\: :godot:`Variant`\ ) :ref:`🔗<class_NakamaRelayPeer_signal_packet_generated>`
 
 Emitted when Godot writes a packet for the bridge to send to Nakama.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NakamaRelayPeer_signal_server_relabelled:
+
+.. rst-class:: classref-signal
+
+**server_relabelled**\ (\ successor_was\: :godot:`int`, former_now\: :godot:`int`\ ) :ref:`🔗<class_NakamaRelayPeer_signal_server_relabelled>`
+
+Emitted from :godot:`MultiplayerPeer.poll() <MultiplayerPeer#class_MultiplayerPeer_method_poll>` once the peer that was ``successor_was`` answers as ``1``, and the old server, if it stayed, as ``former_now``.
 
 .. rst-class:: classref-section-separator
 
@@ -140,9 +158,47 @@ Unregisters ``p_peer_id`` and schedules :godot:`MultiplayerPeerExtension.peer_di
 
 .. rst-class:: classref-method
 
-|void| **deliver_packet**\ (\ p_data\: :godot:`PackedByteArray`, p_from_peer_id\: :godot:`int`\ ) :ref:`🔗<class_NakamaRelayPeer_method_deliver_packet>`
+|void| **deliver_packet**\ (\ p_data\: :godot:`PackedByteArray`, p_from_peer_id\: :godot:`int`, p_term\: :godot:`int` = 0\ ) :ref:`🔗<class_NakamaRelayPeer_method_deliver_packet>`
 
-Queues a packet received from Nakama for Godot to poll.
+Queues a packet its sender wrote under transfer ``p_term`` for Godot to poll.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NakamaRelayPeer_method_transfer_server:
+
+.. rst-class:: classref-method
+
+:godot:`Error <@GlobalScope#enum_@globalscope_Error>` **transfer_server**\ (\ peer_id\: :godot:`int`\ ) :ref:`🔗<class_NakamaRelayPeer_method_transfer_server>`
+
+Hands the server role to ``peer_id`` and makes this peer a client. 
+
+\ **Server Only.**
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NakamaRelayPeer_method_schedule_relabel:
+
+.. rst-class:: classref-method
+
+|void| **schedule_relabel**\ (\ install\: :godot:`Callable`\ ) :ref:`🔗<class_NakamaRelayPeer_method_schedule_relabel>`
+
+Runs ``install`` at the start of the next poll, then emits :ref:`server_relabelled<class_NakamaRelayPeer_signal_server_relabelled>` with the two ids it answers.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NakamaRelayPeer_method_relabel:
+
+.. rst-class:: classref-method
+
+|void| **relabel**\ (\ p_self_id\: :godot:`int`, p_peers\: :godot:`Array`\[:godot:`int`\], p_term\: :godot:`int`\ ) :ref:`🔗<class_NakamaRelayPeer_method_relabel>`
+
+Adopts ``p_self_id`` and ``p_peers`` as the ids of transfer ``p_term``.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

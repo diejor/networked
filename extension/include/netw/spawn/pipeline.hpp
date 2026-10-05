@@ -82,9 +82,11 @@ struct SpawnBuild {
     godot::Node *node = nullptr;
     godot::Node *parent = nullptr;
     godot::Node *host = nullptr;
+    godot::Node *origin = nullptr;
     godot::Ref<NetwEntity> entity;
     godot::MultiplayerSpawner *spawner = nullptr;
     godot::Array args;
+    godot::Variant data;
     bool strict = false;
     bool names_a_freed_node = false;
     bool adopted = false;
@@ -306,6 +308,7 @@ private:
     void apply_kept_reparent(int64_t p_route);
     void free_despawned(int64_t p_route);
     void free_route_node(int64_t p_route, godot::Node *p_node);
+    static double run_despawn_hook(godot::Node *p_node);
 
     int64_t park_timeout_ticks() const;
     void park_spawn(
@@ -481,6 +484,10 @@ public:
     );
 
     void clear_session();
+    void clear_parks();
+    godot::PackedInt64Array promote_received();
+    void demote_spawned();
+    void release_received();
     void clear_route(int64_t p_route);
 
     godot::Dictionary counters() const;

@@ -16,6 +16,7 @@
 #include "netw/entity/stage.hpp"
 #include "netw/lifecycle/rule.hpp"
 #include "netw/log.hpp"
+#include "netw/peer_rename.hpp"
 #include "netw/profile.hpp"
 #include "netw/repl/set_model.hpp"
 #include "netw/spawn/record.hpp"
@@ -163,7 +164,7 @@ bool NetwEntity::readmit() {
         const spawn::Record recipe = *readmission;
         memdelete(readmission);
         readmission = nullptr;
-        if (core != nullptr && owner != nullptr && core->is_session_authority()
+        if (core != nullptr && owner != nullptr && core->is_host()
             && core->spawn_readmit(owner, recipe)) {
             return true;
         }
@@ -432,20 +433,32 @@ void NetwEntity::set_scene_isolation(int64_t p_value) {
 }
 
 int64_t NetwEntity::get_controller() const {
+    return entity::Control::public_peer(steering());
+}
+
+int64_t NetwEntity::steering() const {
     return control()->resolve(get_peer_id());
 }
 
 void NetwEntity::set_controller(int64_t p_value) {
-    if (get_stage() == int64_t(entity::Stage::UNBOUND)) {
-        record_controller(p_value);
+    if (get_stage() != int64_t(entity::Stage::UNBOUND)) {
+        transfer_control(p_value);
         return;
     }
-    transfer_control(p_value);
+    NETW_ERR_COND(
+        p_value <= 0,
+        sys::ENTITY,
+        "'%s' cannot be controlled by peer %d. Write a peer id, or 1 for the "
+        "server.",
+        String(get_name()),
+        p_value
+    );
+    record_controller(entity::Control::from_public(p_value));
 }
 
 NetwEntity::ControlKind NetwEntity::get_control_kind() const {
-    return get_controller() != 0 ? CONTROL_PEER_CONTROLLED
-                                 : CONTROL_SERVER_CONTROLLED;
+    return steering() != entity::Control::SERVER ? CONTROL_PEER_CONTROLLED
+                                                 : CONTROL_SERVER_CONTROLLED;
 }
 
 bool NetwEntity::get_is_controlled_locally() const {
@@ -466,11 +479,11 @@ bool NetwEntity::is_claim_pending() const {
 
 Ref<NetwPlayer> NetwEntity::get_controller_player() const {
     NetwMultiplayer *core = session_core();
-    const int64_t steering = get_controller();
-    if (core == nullptr || steering == 0) {
+    const int64_t steered = steering();
+    if (core == nullptr || steered == entity::Control::SERVER) {
         return Ref<NetwPlayer>();
     }
-    return core->player_of(steering);
+    return core->player_of(steered);
 }
 
 int64_t NetwEntity::local_peer() const {
@@ -494,7 +507,37 @@ int64_t NetwEntity::local_peer() const {
     return resolved->get_unique_id();
 }
 
+void NetwEntity::set_controller_player(const Ref<NetwPlayer> &p_player) {
+    const int64_t peer = p_player.is_valid() ? p_player->get_peer_id() : 0;
+    NETW_ERR_COND(
+        p_player.is_valid() && peer <= 0,
+        sys::ENTITY,
+        "'%s' cannot be given to a player that has left. Pass a seated "
+        "player, or null for the server.",
+        String(get_name())
+    );
+    const int64_t steered = p_player.is_valid() ? peer : entity::Control::SERVER;
+    if (get_stage() == int64_t(entity::Stage::UNBOUND)) {
+        record_controller(steered);
+        return;
+    }
+    transfer_steering(steered);
+}
+
 Error NetwEntity::transfer_control(int64_t p_peer) {
+    NETW_ERR_COND_V(
+        p_peer <= 0,
+        ERR_INVALID_PARAMETER,
+        sys::ENTITY,
+        "'%s' cannot be given to peer %d. Pass a peer id, or 1 for the "
+        "server.",
+        String(get_name()),
+        p_peer
+    );
+    return transfer_steering(entity::Control::from_public(p_peer));
+}
+
+Error NetwEntity::transfer_steering(int64_t p_steering) {
     NETW_ERR_COND_V(
         get_stage() == int64_t(entity::Stage::UNBOUND),
         ERR_UNCONFIGURED,
@@ -504,23 +547,14 @@ Error NetwEntity::transfer_control(int64_t p_peer) {
         String(get_name())
     );
     NETW_ERR_COND_V(
-        p_peer < 0,
-        ERR_INVALID_PARAMETER,
-        sys::ENTITY,
-        "'%s' cannot be given to peer %d. Pass a peer id, or 0 for the "
-        "server.",
-        String(get_name()),
-        p_peer
-    );
-    NETW_ERR_COND_V(
-        !get_is_session_authority(),
+        !is_on_server(),
         ERR_UNAUTHORIZED,
         sys::ENTITY,
         "Only the server can give '%s' to another peer. A client asks for "
         "it with NetwEntity.claim_authority.",
         String(get_name())
     );
-    apply_control_change(p_peer);
+    apply_control_change(p_steering);
     return OK;
 }
 
@@ -542,20 +576,22 @@ void NetwEntity::record_controller(int64_t p_value) {
 
 void NetwEntity::announce_control(int64_t p_was, int64_t p_peer) {
     control_moved();
-    emit_signal(StringName(SIG_CONTROL_CHANGED), p_was, p_peer);
+    const int64_t was = entity::Control::public_peer(p_was);
+    const int64_t peer = entity::Control::public_peer(p_peer);
+    emit_signal(StringName(SIG_CONTROL_CHANGED), was, peer);
     NetwMultiplayer *core = session_core();
     if (core == nullptr) {
         return;
     }
     Dictionary detail;
-    detail["from"] = p_was;
-    detail["to"] = p_peer;
+    detail["from"] = was;
+    detail["to"] = peer;
     core->event_emit(
         EventPlane::CONTROL_CHANGED,
         get_route(),
         detail,
         get_name(),
-        p_peer,
+        peer,
         OK,
         Dictionary()
     );
@@ -567,14 +603,7 @@ void NetwEntity::apply_control() {
 
 void NetwEntity::project_control(Object *p_announcer) {
     NetwMultiplayer *api = session_core();
-    const int64_t coordinator
-        = api != nullptr ? api->session_authority_peer() : 1;
-    record->apply_control(
-        p_announcer,
-        get_owner(),
-        coordinator,
-        uint64_t(get_instance_id())
-    );
+    record->apply_control(p_announcer, get_owner(), uint64_t(get_instance_id()));
     if (api != nullptr && record->projects_to_server()) {
         api->entity_watch_authority_joins();
     }
@@ -595,15 +624,15 @@ void NetwEntity::descendant_entered(Node *p_node) {
     control_moved();
 }
 
-void NetwEntity::follow_session(const NodePath &p_path) {
+void NetwEntity::follow_server(const NodePath &p_path) {
     NETW_ERR_COND(
         p_path.is_empty() || p_path.is_absolute() || p_path == NodePath("."),
         sys::ENTITY,
-        "NetwEntity.follow_session got '%s'. Pass a path to a child, "
+        "NetwEntity.follow_server got '%s'. Pass a path to a child, "
         "relative to the entity root.",
         String(p_path).utf8().get_data()
     );
-    record->follow_session(p_path);
+    record->follow_server(p_path);
     const int64_t stage = get_stage();
     if (stage == int64_t(entity::Stage::ARMED)
         || stage == int64_t(entity::Stage::LIVE)) {
@@ -623,23 +652,19 @@ void NetwEntity::adopt_controller(int64_t p_peer) {
 
 int64_t NetwEntity::resolve_initial_controller() const {
     const int64_t resolved = control()->resolve(get_peer_id());
-    if (resolved != 0) {
+    if (resolved != entity::Control::SERVER) {
         return resolved;
     }
     Node *owner = get_owner();
-    NetwMultiplayer *api = session_core();
-    const int64_t coordinator
-        = api != nullptr ? api->session_authority_peer() : 1;
     const int64_t claimed = owner != nullptr
         ? int64_t(owner->get_multiplayer_authority())
-        : coordinator;
-    return claimed != 1 && claimed != coordinator ? claimed : 0;
+        : SERVER_PEER;
+    return entity::Control::from_public(claimed);
 }
 
 void NetwEntity::_on_peer_disconnected(int64_t p_peer_id) {
     Node *owner = get_owner();
-    if (owner == nullptr || !owner->is_inside_tree()
-        || !get_is_session_authority()) {
+    if (owner == nullptr || !owner->is_inside_tree() || !is_on_server()) {
         return;
     }
     switch (control()->disconnect_verdict(p_peer_id, get_peer_id())) {
@@ -653,7 +678,7 @@ void NetwEntity::_on_peer_disconnected(int64_t p_peer_id) {
             despawn(NetwDespawnOpts::create(StringName("peer_disconnected")));
         } break;
         case entity::Control::REVERT_TO_SERVER:
-            apply_control_change(0);
+            apply_control_change(entity::Control::SERVER);
             break;
         case entity::Control::DESPAWN_CONTROLLER:
             despawn(
@@ -665,6 +690,30 @@ void NetwEntity::_on_peer_disconnected(int64_t p_peer_id) {
     }
 }
 
+bool NetwEntity::rename_peers(const PeerRename &p_rename) {
+    entity::Control *held = control();
+    const int64_t peer = record->get_peer_id();
+    const int64_t controller = held->controller;
+    record->set_peer_id(p_rename.of(peer));
+    held->controller = p_rename.of(controller);
+    return record->get_peer_id() != peer || held->controller != controller;
+}
+
+void NetwEntity::follow_rename() {
+    const int64_t stage = get_stage();
+    if (stage == int64_t(entity::Stage::ARMED)
+        || stage == int64_t(entity::Stage::LIVE)) {
+        project_control(nullptr);
+    }
+}
+
+void NetwEntity::forget_server_claims() {
+    if (!control_claims.is_empty() || control()->has_pending()) {
+        reject_claims("the server moved while '%s' waited for control");
+    }
+    held_claim_image = HeldClaimImage();
+}
+
 bool NetwEntity::deciding_locally() const {
     Node *owner = get_owner();
     if (owner == nullptr || !owner->is_inside_tree()) {
@@ -674,7 +723,7 @@ bool NetwEntity::deciding_locally() const {
     if (api.is_valid() && api->get_multiplayer_peer().is_null()) {
         return true;
     }
-    return get_is_session_authority();
+    return is_on_server();
 }
 
 bool NetwEntity::immediate_unavailable() {
@@ -716,7 +765,7 @@ Error NetwEntity::local_refusal(int64_t p_local, int64_t p_hold) {
     if (entity::Control::excludes(
             p_local,
             p_hold,
-            get_controller(),
+            steering(),
             control()->hold
         )) {
         return ERR_UNAUTHORIZED;
@@ -759,7 +808,7 @@ bool NetwEntity::controls_source(
     const Ref<NetwEntity> source = core != nullptr
         ? core->wrapper_for_route(p_source_route)
         : Ref<NetwEntity>();
-    return source.is_valid() && source->get_controller() == p_requester;
+    return source.is_valid() && source->steering() == p_requester;
 }
 
 Ref<NetwPromise> NetwEntity::issue_claim(Hold p_hold, int64_t p_source_route) {
@@ -782,7 +831,7 @@ Ref<NetwPromise> NetwEntity::issue_claim(Hold p_hold, int64_t p_source_route) {
     if (refused != OK) {
         return NetwPromise::rejected(refused, refusal_detail(hold));
     }
-    if (!control()->has_pending() && get_controller() == local
+    if (!control()->has_pending() && steering() == local
         && control()->hold == hold) {
         return NetwPromise::resolved(Ref<NetwEntity>(this));
     }
@@ -829,8 +878,20 @@ Ref<NetwPromise> NetwEntity::issue_claim(Hold p_hold, int64_t p_source_route) {
 }
 
 Ref<NetwPromise> NetwEntity::release_authority(int64_t p_successor) {
+    if (p_successor <= 0) {
+        return NetwPromise::rejected(
+            ERR_INVALID_PARAMETER,
+            vformat(
+                "'%s' cannot be released to peer %d. Pass a peer id, or 1 "
+                "for the server",
+                String(get_name()),
+                p_successor
+            )
+        );
+    }
+    const int64_t successor = entity::Control::from_public(p_successor);
     const int64_t local = local_peer();
-    if (!control()->claims_pending() && get_controller() != local) {
+    if (!control()->claims_pending() && steering() != local) {
         return NetwPromise::rejected(
             ERR_UNAUTHORIZED,
             vformat(
@@ -841,7 +902,7 @@ Ref<NetwPromise> NetwEntity::release_authority(int64_t p_successor) {
             )
         );
     }
-    if (!holds_copy(p_successor)) {
+    if (!holds_copy(successor)) {
         return NetwPromise::rejected(
             ERR_UNAVAILABLE,
             vformat(
@@ -856,7 +917,7 @@ Ref<NetwPromise> NetwEntity::release_authority(int64_t p_successor) {
         = final_image(core != nullptr ? core->clock_get_tick() : 0);
     if (deciding_locally()) {
         const entity::Control::Outcome outcome
-            = decide_release(local, 0, p_successor, image);
+            = decide_release(local, 0, successor, image);
         if (outcome == entity::Control::Outcome::GRANTED) {
             return NetwPromise::resolved(Ref<NetwEntity>(this));
         }
@@ -887,19 +948,19 @@ Ref<NetwPromise> NetwEntity::release_authority(int64_t p_successor) {
     claim.promise.instantiate();
     control_claims.push_back(claim);
     control_moved();
-    send_control_op(*issued, p_successor, image);
+    send_control_op(*issued, successor, image);
     return claim.promise;
 }
 
 bool NetwEntity::holds_copy(int64_t p_peer) {
-    if (p_peer == 0) {
+    if (p_peer == entity::Control::SERVER || p_peer == SERVER_PEER) {
         return true;
     }
     NetwMultiplayer *core = session_core();
     if (core == nullptr) {
         return false;
     }
-    if (p_peer == local_peer() || p_peer == core->session_authority_peer()) {
+    if (p_peer == local_peer()) {
         return true;
     }
     return core->rpc_get_recipients(Ref<NetwEntity>(this)).has(int32_t(p_peer));
@@ -1042,7 +1103,7 @@ bool NetwEntity::claim_image_admits(
     int64_t p_sender,
     uint64_t p_observed
 ) const {
-    return p_sender != 0 && p_sender == get_controller()
+    return p_sender != 0 && p_sender == steering()
         && p_sender != local_peer() && p_observed + 1 >= control()->tenure;
 }
 
@@ -1057,7 +1118,7 @@ void NetwEntity::install_held_claim_image(bool p_tenure_changed) {
     if (p_tenure_changed) {
         claim_image_tick = -1;
     }
-    if (get_controller() == local_peer()) {
+    if (steering() == local_peer()) {
         held_claim_image = HeldClaimImage();
         if (p_tenure_changed) {
             start_claim_images();
@@ -1091,7 +1152,7 @@ void NetwEntity::_handle_claim_image(
         install_claim_image(p_image.state);
         return;
     }
-    if (get_controller() == p_sender) {
+    if (steering() == p_sender) {
         return;
     }
     NetwMultiplayer *core = session_core();
@@ -1203,7 +1264,7 @@ void NetwEntity::settle_control(
     }
     if (control()->take_abandoned(p_op)
         && p_outcome == entity::Control::Outcome::GRANTED
-        && get_controller() == local_peer()) {
+        && steering() == local_peer()) {
         release_authority();
     }
 }
@@ -1219,7 +1280,7 @@ void NetwEntity::settle_claim(
     const bool nothing_to_release
         = p_taken.kind == entity::Control::OpKind::RELEASE
         && p_outcome == entity::Control::Outcome::UNAUTHORIZED
-        && get_controller() != local_peer();
+        && steering() != local_peer();
     if (p_outcome == entity::Control::Outcome::GRANTED || nothing_to_release) {
         p_promise->resolve(Ref<NetwEntity>(this));
         return;
@@ -1305,8 +1366,7 @@ void NetwEntity::_handle_control_request(
     const session::ControlRequest &p_request
 ) {
     Node *owner = get_owner();
-    if (owner == nullptr || !owner->is_inside_tree()
-        || !get_is_session_authority()) {
+    if (owner == nullptr || !owner->is_inside_tree() || !is_on_server()) {
         NETW_WARN(
             sys::ENTITY,
             "A control request for '%s' reached a peer that is not the "
@@ -1347,7 +1407,7 @@ entity::Control::Outcome NetwEntity::decide_request(
     using Outcome = entity::Control::Outcome;
     using Ruling = entity::Control::Ruling;
     const Ruling ruling
-        = control()->rule(p_requester, p_hold, get_controller());
+        = control()->rule(p_requester, p_hold, steering());
     Outcome outcome = Outcome::GRANTED;
     if (ruling == Ruling::UNAVAILABLE || immediate_unavailable()) {
         NETW_WARN(
@@ -1406,7 +1466,7 @@ entity::Control::Outcome NetwEntity::decide_release(
     const PackedByteArray &p_final_state
 ) {
     using Outcome = entity::Control::Outcome;
-    if (get_controller() != p_requester) {
+    if (steering() != p_requester) {
         refuse_control(p_requester, p_op, Outcome::UNAUTHORIZED);
         return Outcome::UNAUTHORIZED;
     }
@@ -1434,7 +1494,7 @@ void NetwEntity::refuse_control(
         return;
     }
     session::ControlApply reply;
-    reply.controller = uint64_t(MAX(get_controller(), int64_t(0)));
+    reply.controller = uint64_t(MAX(steering(), int64_t(0)));
     reply.revision = control()->revision;
     reply.hold = uint8_t(control()->hold);
     reply.op = p_op;
@@ -1477,6 +1537,27 @@ void NetwEntity::apply_control_change(int64_t p_peer) {
     decide_control(p_peer, entity::Control::HOLD_NONE, 0, 0);
 }
 
+void NetwEntity::raise_control(uint64_t p_floor) {
+    entity::Control *held = control();
+    held->revision = MAX(held->revision, p_floor) + 1;
+    held->tenure = held->revision;
+    control_moved();
+    NetwMultiplayer *core = session_core();
+    if (core != nullptr) {
+        core->row_streams_follow_tenure(get_route(), held->tenure);
+    }
+    ReplicationCore *plane = get_replication_plane();
+    if (plane == nullptr) {
+        return;
+    }
+    session::ControlApply decision;
+    decision.controller = uint64_t(MAX(steering(), int64_t(0)));
+    decision.revision = held->revision;
+    decision.tenure_changed = true;
+    decision.hold = uint8_t(held->hold);
+    plane->broadcast_control(this, decision, 0);
+}
+
 void NetwEntity::_handle_control_apply(const session::ControlApply &p_applied) {
     if (control()->install(
             p_applied.revision,
@@ -1513,12 +1594,12 @@ void NetwEntity::set_replication_priority(double p_weight) {
     control_moved();
 }
 
-bool NetwEntity::get_is_session_authority() const {
+bool NetwEntity::is_on_server() const {
     NetwMultiplayer *api = session_core();
     if (api == nullptr) {
         return true;
     }
-    return api->is_session_authority();
+    return api->is_host();
 }
 
 Ref<NetwPlayer> NetwEntity::get_player() const {
@@ -1558,6 +1639,10 @@ void NetwEntity::note_stage(int64_t p_from) {
 }
 
 void NetwEntity::abandon_claims() {
+    reject_claims("'%s' was freed with a control request outstanding");
+}
+
+void NetwEntity::reject_claims(const char *p_detail) {
     LocalVector<ControlClaim> held;
     held.reserve(control_claims.size());
     for (uint32_t at = 0; at < control_claims.size(); ++at) {
@@ -1569,10 +1654,7 @@ void NetwEntity::abandon_claims() {
     for (uint32_t at = 0; at < held.size(); ++at) {
         held[at].promise->reject(
             ERR_UNAVAILABLE,
-            vformat(
-                "'%s' was freed with a control request outstanding",
-                String(get_name())
-            )
+            vformat(p_detail, String(get_name()))
         );
     }
 }
@@ -1658,7 +1740,7 @@ void NetwEntity::_handle_tree_entered() {
         owner,
         record,
         session_core_for(owner),
-        get_is_session_authority()
+        is_on_server()
     );
 }
 
@@ -1685,7 +1767,7 @@ void NetwEntity::hydrate_components() {
         structure = comp_structure_hash(table.sorted_paths());
     }
     table.set_table_hash(structure);
-    if (table.reconcile(get_is_session_authority())) {
+    if (table.reconcile(is_on_server())) {
         NETW_WARN(
             sys::ENTITY,
             "'%s' has different networked components here than on the "
@@ -1753,7 +1835,7 @@ void NetwEntity::_on_owner_ready() {
     }
     ready_once_fired = true;
     NETW_ZONE_NC("NetwEntity owner ready", colors::LIVENESS);
-    if (get_controller() != 0) {
+    if (steering() != entity::Control::SERVER) {
         apply_control();
     }
     {
@@ -1840,7 +1922,7 @@ void NetwEntity::despawn(const Ref<NetwDespawnOpts> &p_opts) {
         opts.instantiate();
     }
     NetwMultiplayer *api = session_core();
-    if (api != nullptr && !api->is_session_authority()) {
+    if (api != nullptr && !api->is_host()) {
         api->entity_settle_captured(this);
     }
     Node *owner = get_owner();
@@ -2329,14 +2411,19 @@ void NetwEntity::_bind_methods() {
         D_METHOD("get_controller_player"),
         &NetwEntity::get_controller_player
     );
+    ClassDB::bind_method(
+        D_METHOD("set_controller_player", "player"),
+        &NetwEntity::set_controller_player
+    );
     ADD_PROPERTY(
         PropertyInfo(
             Variant::OBJECT,
             "controller_player",
             PROPERTY_HINT_RESOURCE_TYPE,
-            "NetwPlayer"
+            "NetwPlayer",
+            PROPERTY_USAGE_NONE
         ),
-        "",
+        "set_controller_player",
         "get_controller_player"
     );
 
@@ -2403,24 +2490,8 @@ void NetwEntity::_bind_methods() {
         "get_is_control_pending"
     );
     ClassDB::bind_method(
-        D_METHOD("follow_session", "path"),
-        &NetwEntity::follow_session
-    );
-
-    ClassDB::bind_method(
-        D_METHOD("get_is_session_authority"),
-        &NetwEntity::get_is_session_authority
-    );
-    ADD_PROPERTY(
-        PropertyInfo(
-            Variant::BOOL,
-            "is_session_authority",
-            PROPERTY_HINT_NONE,
-            "",
-            PROPERTY_USAGE_NONE
-        ),
-        "",
-        "get_is_session_authority"
+        D_METHOD("follow_server", "path"),
+        &NetwEntity::follow_server
     );
 
     ClassDB::bind_method(

@@ -47,6 +47,10 @@ public:
     void announce_player_left(const godot::Ref<NetwPlayer> &p_who);
     void announce_join_failed(int64_t p_code, const godot::String &p_reason);
     void announce_scene_ready(const godot::Ref<NetwScene> &p_scene);
+    void announce_server_transferred(
+        int64_t p_successor_was,
+        int64_t p_former_now
+    );
 
     godot::TypedArray<NetwPlayer> get_players() const;
     godot::Ref<NetwPlayer> get_local_player() const;
@@ -73,6 +77,7 @@ public:
         const godot::Ref<NetwPlayer> &p_who,
         const godot::String &p_reason
     );
+    godot::Error transfer_server(int64_t p_peer);
     godot::Ref<NetwPromise> request_scene(
         const godot::String &p_path,
         enums::NetwScene::SceneChange p_scope

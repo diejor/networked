@@ -12,7 +12,8 @@ int64_t Control::resolve(int64_t p_peer_id) const {
     if (configured) {
         return controller;
     }
-    return initial == int(InitialController::REPRESENTED_PEER) ? p_peer_id : 0;
+    return initial == int(InitialController::REPRESENTED_PEER) ? p_peer_id
+                                                               : SERVER;
 }
 
 StringName Control::write_book_key() {
@@ -45,10 +46,9 @@ bool Control::script_admits(
     const StringName &p_name,
     bool p_is_signal,
     int64_t p_sender,
-    int64_t p_controller,
-    int64_t p_coordinator
+    int64_t p_controller
 ) {
-    if (p_sender == p_coordinator) {
+    if (p_sender == SERVER_PEER) {
         return true;
     }
     Node *node = Object::cast_to<Node>(p_node);
@@ -106,7 +106,7 @@ bool Control::decide(int64_t p_controller, int64_t p_hold) {
     if (moved) {
         tenure = revision;
     }
-    hold = p_controller == 0 ? int64_t(HOLD_NONE) : p_hold;
+    hold = p_controller == SERVER ? int64_t(HOLD_NONE) : p_hold;
     return moved;
 }
 
@@ -138,7 +138,7 @@ bool Control::excludes(
     int64_t p_current,
     int64_t p_current_hold
 ) {
-    if (p_current == 0 || p_current == p_requester) {
+    if (p_current == SERVER || p_current == p_requester) {
         return false;
     }
     return p_current_hold == HOLD_EXCLUSIVE || p_hold == HOLD_YIELDABLE;
@@ -152,7 +152,7 @@ Control::Ruling Control::rule(
     if (!admits_request()) {
         return Ruling::UNAVAILABLE;
     }
-    if (p_current != 0 && p_current == p_requester) {
+    if (p_current != SERVER && p_current == p_requester) {
         return Ruling::HOLD_CHANGE;
     }
     if (excludes(p_requester, p_hold, p_current, hold)) {
@@ -221,7 +221,7 @@ bool Control::controlled_by(int64_t p_local_peer, int64_t p_peer_id) const {
         return false;
     }
     const int64_t steering = resolve(p_peer_id);
-    return steering != 0 && steering == p_local_peer;
+    return steering != SERVER && steering == p_local_peer;
 }
 
 Control::Verdict Control::disconnect_verdict(

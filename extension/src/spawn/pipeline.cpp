@@ -39,8 +39,8 @@ const char *KEY_FLUSH = "spawn-carrier-flush";
 const double CLOCKLESS_TICKRATE = 30.0;
 constexpr int BLOB_CAP = 4095;
 
-bool authors(lifecycle::Kind p_kind, bool p_session_authority) {
-    return lifecycle::rule(p_kind, p_session_authority).admitted();
+bool authors(lifecycle::Kind p_kind, bool p_is_server) {
+    return lifecycle::rule(p_kind, p_is_server).admitted();
 }
 
 int64_t route_named_by(const PackedByteArray &p_payload) {
@@ -59,6 +59,34 @@ bool reparent_is_newer(
     uint64_t p_revision
 ) {
     return p_revision > p_plane->anchor_standing(p_route).revision;
+}
+
+Book::Received received_of(const SpawnBuild &p_built) {
+    Book::Received out;
+    out.node = gd::instance_id(p_built.node);
+    out.recipe = int32_t(p_built.frame.recipe);
+    switch (Book::Recipe(p_built.frame.recipe)) {
+        case Book::RECIPE_FN:
+            out.source = gd::instance_id(p_built.host);
+            out.fn = StringName(p_built.frame.method);
+            out.payload = p_built.args;
+            break;
+        case Book::RECIPE_FN_REGISTRY:
+            out.fn = StringName(p_built.frame.fn_id);
+            out.payload = p_built.args;
+            break;
+        case Book::RECIPE_SPAWNER:
+            out.source = gd::instance_id(p_built.spawner);
+            out.scene_index = int32_t(p_built.frame.scene_index);
+            out.payload = p_built.data;
+            break;
+        case Book::RECIPE_ADOPT:
+            out.source = gd::instance_id(p_built.origin);
+            break;
+        case Book::RECIPE_SCENE:
+            break;
+    }
+    return out;
 }
 
 } // namespace
@@ -135,7 +163,7 @@ void Pipeline::set_repl_seams(
 
 bool Pipeline::is_server_authority() const {
     NetwMultiplayer *plane = core();
-    return plane != nullptr ? plane->is_session_authority() : true;
+    return plane != nullptr ? plane->is_host() : true;
 }
 
 bool Pipeline::has_peer() const {
@@ -146,7 +174,7 @@ bool Pipeline::has_peer() const {
 
 PackedInt32Array Pipeline::connected_peers() const {
     NetwMultiplayer *plane = core();
-    return plane != nullptr ? plane->reachable_peer_ids() : PackedInt32Array();
+    return plane != nullptr ? plane->spawn_peer_ids() : PackedInt32Array();
 }
 
 Error Pipeline::stage_verdict(
@@ -382,7 +410,7 @@ bool Pipeline::spawn_admitted(
              .admitted()) {
         return false;
     }
-    if (facts.peer_is_session || plane->liveness_lease_remaining() > 0) {
+    if (facts.peer_is_server || plane->liveness_lease_remaining() > 0) {
         return true;
     }
     NETW_ERROR(
@@ -782,7 +810,9 @@ void Pipeline::send_authored_spawn(int64_t p_route) {
     if (payload.is_empty()) {
         return;
     }
-    spawn_book.enroll_recv(p_route, node);
+    Book::Received recipe = Book::received_of(armed);
+    recipe.authored = true;
+    spawn_book.enroll_recv(p_route, recipe);
     plane->lifecycle_send_to_session(p_route, channel_spawn, payload);
     schedule_carrier_flush();
 }
@@ -1639,9 +1669,7 @@ Error Pipeline::admission(
     }
     const Error staged = stage_verdict(EventPlane::GATE_SPAWN, verdict, 0);
     if (staged != OK) {
-        const int64_t coordinator
-            = plane != nullptr ? plane->session_authority_peer() : 0;
-        if (p_sender != coordinator) {
+        if (plane != nullptr && p_sender != SERVER_PEER) {
             drops_spawn_bad_sender += 1;
         }
         return verdict != OK ? verdict : staged;
@@ -1657,8 +1685,8 @@ void Pipeline::handle_spawn_frame(
         return;
     }
     NetwMultiplayer *plane = core();
-    if (plane != nullptr && plane->is_session_authority()
-        && p_sender != plane->session_authority_peer()) {
+    if (plane != nullptr && plane->is_host()
+        && p_sender != SERVER_PEER) {
         admit_controller_spawn(p_payload, p_sender);
         return;
     }
@@ -1929,6 +1957,7 @@ SpawnBuild::Outcome Pipeline::build_spawn(
             r_built.wait = SpawnBuild::WAIT_ADOPT;
             return SpawnBuild::WAITS;
         }
+        r_built.origin = adopt_parent;
         adopted = true;
     } else if (recipe == Book::RECIPE_SCENE) {
         const String scene_path = frame.scene_path;
@@ -1968,9 +1997,8 @@ SpawnBuild::Outcome Pipeline::build_spawn(
             return SpawnBuild::WAITS;
         }
         const int64_t scene_index = frame.scene_index;
-        Variant data;
         if (scene_index < 0) {
-            data = gd::bytes_to_var(frame.custom);
+            r_built.data = gd::bytes_to_var(frame.custom);
         }
         if (frame.parent_is_spawn_target) {
             elided_parent = recv_spawner->get_node_or_null(
@@ -1990,7 +2018,7 @@ SpawnBuild::Outcome Pipeline::build_spawn(
         }
         node = run_construct_stage(
             callable_mp(plane, &NetwMultiplayer::spawn_build_spawner)
-                .bind(recv_spawner, scene_index, data)
+                .bind(recv_spawner, scene_index, r_built.data)
         );
         if (node == nullptr) {
             NETW_WARN(
@@ -2235,7 +2263,7 @@ void Pipeline::place_received(const SpawnBuild &p_built) {
         = uint64_t(int64_t(frame.header.get(StringName("anchor_author"), 0)));
 
     if (p_built.adopted) {
-        spawn_book.enroll_recv(route, node);
+        spawn_book.enroll_recv(route, received_of(p_built));
         plane->liveness_bind_route(route, entity.ptr());
         plane->liveness_adopt_epoch(route, frame.epoch);
         if (frame.moved_from_origin) {
@@ -2256,7 +2284,7 @@ void Pipeline::place_received(const SpawnBuild &p_built) {
         return;
     }
 
-    spawn_book.enroll_recv(route, node);
+    spawn_book.enroll_recv(route, received_of(p_built));
     plane->liveness_adopt_epoch(route, frame.epoch);
     if (recv_spawner != nullptr && spawner_compat != nullptr) {
         spawner_compat->note_recv(route, recv_spawner);
@@ -2283,8 +2311,8 @@ void Pipeline::handle_despawn_frame(
 ) {
     NetwMultiplayer *plane = core();
     const bool from_a_controller = plane != nullptr
-        && plane->is_session_authority()
-        && p_sender != plane->session_authority_peer();
+        && plane->is_host()
+        && p_sender != SERVER_PEER;
     const Error admitted = admission(p_sender, channel_despawn, p_payload);
     if (admitted != OK) {
         if (from_a_controller) {
@@ -2337,18 +2365,7 @@ void Pipeline::handle_despawn_frame(
         drops_despawn_unknown += 1;
         return;
     }
-    Node *node = entity->get_owner();
-
-    const Ref<NetwDespawnConfig> cfg
-        = netw::script::model::get_despawn_config(node->get_script());
-    double linger = 0.0;
-    if (cfg.is_valid()) {
-        const StringName hook = cfg->get_hook_method();
-        if (!String(hook).is_empty() && node->has_method(hook)) {
-            node->call(hook);
-        }
-        linger = cfg->get_linger_seconds();
-    }
+    const double linger = run_despawn_hook(entity->get_owner());
     entity->_remote_despawn(StringName("despawn"), linger);
     if (linger > 0.0) {
         double rate = CLOCKLESS_TICKRATE;
@@ -2365,6 +2382,38 @@ void Pipeline::handle_despawn_frame(
         return;
     }
     free_despawned(route);
+}
+
+double Pipeline::run_despawn_hook(Node *p_node) {
+    const Ref<NetwDespawnConfig> cfg
+        = netw::script::model::get_despawn_config(p_node->get_script());
+    if (cfg.is_null()) {
+        return 0.0;
+    }
+    const StringName hook = cfg->get_hook_method();
+    if (!String(hook).is_empty() && p_node->has_method(hook)) {
+        p_node->call(hook);
+    }
+    return cfg->get_linger_seconds();
+}
+
+void Pipeline::release_received() {
+    NetwMultiplayer *plane = core();
+    if (plane == nullptr) {
+        return;
+    }
+    const PackedInt64Array routes = spawn_book.recv_routes();
+    for (int at = 0; at < routes.size(); ++at) {
+        const int64_t route = routes[at];
+        spawn_book.drop_recv(route);
+        const Ref<NetwEntity> entity = plane->wrapper_for_route(route);
+        if (entity.is_null() || entity->get_owner() == nullptr) {
+            continue;
+        }
+        run_despawn_hook(entity->get_owner());
+        entity->_remote_despawn(StringName("despawn"), 0.0);
+        free_despawned(route);
+    }
 }
 
 void Pipeline::handle_hide_frame(
@@ -2419,8 +2468,8 @@ void Pipeline::handle_reparent_frame(
 ) {
     NetwMultiplayer *plane = core();
     const bool from_a_controller = plane != nullptr
-        && plane->is_session_authority()
-        && p_sender != plane->session_authority_peer();
+        && plane->is_host()
+        && p_sender != SERVER_PEER;
     const Error admitted = admission(p_sender, channel_reparent, p_payload);
     if (admitted != OK) {
         if (from_a_controller) {
@@ -2764,10 +2813,57 @@ void Pipeline::clear_action_gates() {
 }
 
 void Pipeline::clear_session() {
-    drop_scene_park_retry();
-    park.clear();
+    clear_parks();
     spawn_book.clear();
     clear_action_gates();
+}
+
+void Pipeline::clear_parks() {
+    drop_scene_park_retry();
+    park.clear();
+}
+
+PackedInt64Array Pipeline::promote_received() {
+    PackedInt64Array promoted;
+    NetwMultiplayer *plane = core();
+    if (plane == nullptr) {
+        return promoted;
+    }
+    const PackedInt64Array routes = spawn_book.recv_routes();
+    for (int at = 0; at < routes.size(); ++at) {
+        const int64_t route = routes[at];
+        Record record;
+        if (!spawn_book.take_recv(route, record)) {
+            continue;
+        }
+        Node *node = record.node();
+        const Ref<NetwEntity> entity = NetwEntity::of(node);
+        if (entity.is_null()) {
+            continue;
+        }
+        const Ref<NetwEntity> above = NetwEntity::of(node->get_parent());
+        record.set_node_name(String(node->get_name()));
+        record.set_parent_route(
+            above.is_valid() ? plane->liveness_route_of(above.ptr()) : 0
+        );
+        record.set_entity_id(entity->get_name());
+        record.set_peer_id(entity->get_peer_id());
+        record.set_controller(entity->steering());
+        spawn_book.issue(record);
+        plane->liveness_raise_epoch_to_wire(route);
+        promoted.push_back(route);
+    }
+    return promoted;
+}
+
+void Pipeline::demote_spawned() {
+    const PackedInt64Array routes = spawn_book.spawned_routes();
+    for (int at = 0; at < routes.size(); ++at) {
+        const Record *record = spawn_book.spawned_of(routes[at]);
+        const Book::Received recipe = Book::received_of(*record);
+        spawn_book.drop_spawned(routes[at]);
+        spawn_book.enroll_recv(routes[at], recipe);
+    }
 }
 
 void Pipeline::clear_route(int64_t p_route) {

@@ -59,8 +59,8 @@ Error NetwMultiplayer::predict_admit_frame_default(
         prediction_core::admit_frame(
             int(p_channel),
             int(p_sender),
-            entity.is_valid() ? int(entity->get_controller()) : 0,
-            session_authority_peer(),
+            entity.is_valid() ? int(entity->steering()) : 0,
+            SERVER_PEER,
             is_host(),
             p_payload.is_empty(),
             int(entity_frame_verdict(p_route))
@@ -764,8 +764,8 @@ sim::Mode NetwMultiplayer::sim_resolve(
     return sim_rows.resolve(p_entity, p_facts);
 }
 
-void NetwMultiplayer::sim_follow_session_authority() {
-    const LocalVector<RID> moved = sim_rows.follow_session_authority(is_host());
+void NetwMultiplayer::sim_follow_server() {
+    const LocalVector<RID> moved = sim_rows.follow_server(is_host());
     for (const RID &entity : moved) {
         if (NetwPredictSlotEngine *engine = predict_engine_for(entity)) {
             engine->rewire();

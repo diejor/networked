@@ -16,6 +16,10 @@ class NetwSessionConfig : public godot::Resource {
 
     static constexpr int64_t DEFAULT_DESIRED_ROLE = 3;
 
+public:
+    static constexpr int64_t DEFAULT_TRANSFER_DEADLINE_TICKS = 300;
+
+private:
     struct Values {
         godot::StringName app_id;
         enums::NetwSession::Role desired_role
@@ -23,6 +27,9 @@ class NetwSessionConfig : public godot::Resource {
         godot::Ref<NetwLinkConditions> link_conditions;
         godot::Ref<NetwServerInfo> server_info;
         int64_t bandwidth_kbps = 0;
+        enums::NetwSession::TransferMode transfer_mode
+            = enums::NetwSession::TRANSFER_REJOIN;
+        int64_t transfer_deadline_ticks = DEFAULT_TRANSFER_DEADLINE_TICKS;
     };
 
     Values values;
@@ -71,6 +78,16 @@ public:
         return values.bandwidth_kbps;
     }
 
+    void set_transfer_mode(enums::NetwSession::TransferMode p_mode);
+    enums::NetwSession::TransferMode get_transfer_mode() const {
+        return values.transfer_mode;
+    }
+
+    void set_transfer_deadline_ticks(int64_t p_ticks);
+    int64_t get_transfer_deadline_ticks() const {
+        return values.transfer_deadline_ticks;
+    }
+
     godot::Ref<NetwSessionConfig> app(const godot::StringName &p_app_id);
     godot::Ref<NetwSessionConfig> role(enums::NetwSession::Role p_role);
     godot::Ref<NetwSessionConfig> link(
@@ -80,6 +97,10 @@ public:
         const godot::Ref<NetwServerInfo> &p_info
     );
     godot::Ref<NetwSessionConfig> bandwidth(int64_t p_kbps);
+    godot::Ref<NetwSessionConfig> transfer(
+        enums::NetwSession::TransferMode p_mode
+    );
+    godot::Ref<NetwSessionConfig> transfer_deadline(int64_t p_ticks);
 
     void seal(const godot::String &p_scope) {
         guard.seal(p_scope);

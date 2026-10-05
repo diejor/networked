@@ -16,7 +16,12 @@ enum MatchState {
 enum MetaMessageType {
 	CLAIM_HOST,
 	ASSIGN_PEER_ID,
+	TRANSFER,
 }
+
+const _TERM_STRIDE := 1000
+
+const _SERVER_MARK := 1
 
 # Read-only variables.
 var _nakama_socket
@@ -48,12 +53,25 @@ var multiplayer_peer: NakamaRelayPeer:
 var meta_op_code: int = 9001
 var rpc_op_code: int = 9002
 
+## When the host leaves, the peers left elect a new server and keep the match.
+var migrate_on_host_loss := false
+
+## Picks the new server from the surviving peer ids, and must answer the same
+## on every peer. When empty, the lowest id takes over.
+var migration_policy := Callable()
+
 # Internal variables.
 var _my_session_id: String
 var _my_peer_id: int = 0
 var _id_map := { }
 var _users := { }
 var _matchmaker_ticket := ''
+var _term := 0
+var _scheduled_term := 0
+var _held: Array = []
+var _deferred_leaves: Array = []
+var _used_ids := { }
+var _warned_term := 0
 
 
 class User extends RefCounted:
@@ -86,6 +104,7 @@ func _init(p_nakama_socket) -> void:
 
 	_multiplayer_peer.packet_generated.connect(self._on_multiplayer_peer_packet_generated)
 	_multiplayer_peer.set_connection_status(MultiplayerPeer.CONNECTION_CONNECTING)
+	_multiplayer_peer._transfer_handler = _transfer_server
 
 
 ## Creates a new relay match and claims host peer id [code]1[/code].
@@ -210,7 +229,7 @@ func _on_nakama_socket_received_matchmaker_matched(matchmaker_matched) -> void:
 
 
 func _on_nakama_socket_closed() -> void:
-	match_state = MatchState.SOCKET_CLOSED
+	_match_state = MatchState.SOCKET_CLOSED
 	_cleanup()
 
 
@@ -244,6 +263,12 @@ func _cleanup() -> void:
 	_my_peer_id = 0
 	_id_map.clear()
 	_users.clear()
+	_term = 0
+	_scheduled_term = 0
+	_held.clear()
+	_deferred_leaves.clear()
+	_used_ids.clear()
+	_warned_term = 0
 
 	_multiplayer_peer.set_connection_status(MultiplayerPeer.CONNECTION_DISCONNECTED)
 
@@ -273,11 +298,19 @@ func _generate_id(session_id: String) -> int:
 	var peer_id: int = session_id.hash() & 0x7FFFFFFF
 
 	# If this peer id is already taken, try to find another.
-	while peer_id <= 1 or _id_map.has(peer_id):
+	while peer_id <= 1 or _used_ids.has(peer_id):
 		peer_id += 1
 		if peer_id > 0x7FFFFFFF or peer_id <= 0:
 			peer_id = randi() & 0x7FFFFFFF
 
+	return peer_id
+
+
+func _fresh_id() -> int:
+	var peer_id: int = randi() & 0x7FFFFFFF
+	while peer_id <= 1 or _used_ids.has(peer_id):
+		peer_id = randi() & 0x7FFFFFFF
+	_used_ids[peer_id] = true
 	return peer_id
 
 
@@ -286,6 +319,7 @@ func _map_id_to_session(peer_id: int, session_id: String) -> void:
 		_users[session_id] = User.new(null)
 	_id_map[peer_id] = session_id
 	_users[session_id].peer_id = peer_id
+	_used_ids[peer_id] = true
 
 
 func _host_add_peer(presence) -> void:
@@ -299,6 +333,7 @@ func _host_add_peer(presence) -> void:
 		JSON.stringify(
 			{
 				type = MetaMessageType.CLAIM_HOST,
+				term = _term,
 			},
 		),
 		[presence],
@@ -315,6 +350,7 @@ func _host_add_peer(presence) -> void:
 			JSON.stringify(
 				{
 					type = MetaMessageType.ASSIGN_PEER_ID,
+					term = _term,
 					session_id = other_session_id,
 					peer_id = other_peer_id,
 				},
@@ -329,6 +365,7 @@ func _host_add_peer(presence) -> void:
 		JSON.stringify(
 			{
 				type = MetaMessageType.ASSIGN_PEER_ID,
+				term = _term,
 				session_id = presence.session_id,
 				peer_id = peer_id,
 			},
@@ -358,15 +395,156 @@ func _on_nakama_socket_received_match_presence(event) -> void:
 			_host_add_peer(presence)
 
 	for presence in event.leaves:
-		if not _users.has(presence.session_id):
-			continue
+		if _scheduled_term > _term:
+			_deferred_leaves.append(presence)
+		else:
+			_on_presence_left(presence)
 
-		var peer_id = _users[presence.session_id].peer_id
 
-		_multiplayer_peer.unregister_peer(peer_id)
+func _on_presence_left(presence) -> void:
+	if not _users.has(presence.session_id):
+		return
+	if presence.session_id == _id_map.get(1, "") and _migrates():
+		_elect_successor()
+		return
 
-		_users.erase(presence.session_id)
-		_id_map.erase(peer_id)
+	var peer_id = _users[presence.session_id].peer_id
+
+	_multiplayer_peer.unregister_peer(peer_id)
+
+	_users.erase(presence.session_id)
+	_id_map.erase(peer_id)
+
+
+func _migrates() -> bool:
+	return migrate_on_host_loss and _my_peer_id > 1
+
+
+func _elect_successor() -> void:
+	var survivors: Array[int] = []
+	for peer_id: int in _id_map:
+		if peer_id != 1:
+			survivors.append(peer_id)
+	survivors.sort()
+	var successor := _pick_successor(survivors)
+	_schedule_install(_id_map[successor], 0, _term + 1)
+
+
+func _pick_successor(survivors: Array[int]) -> int:
+	if not migration_policy.is_valid():
+		return survivors[0]
+	var picked: int = migration_policy.call(survivors.duplicate())
+	if survivors.has(picked):
+		return picked
+	push_warning(
+		(
+				"NakamaRelayBridge.migration_policy answered %d, which is not a "
+				+ "surviving peer. Return one of the ids it is given."
+		) % picked,
+	)
+	return survivors[0]
+
+
+func _transfer_server(peer_id: int) -> Error:
+	if _match_state != MatchState.CONNECTED or _my_peer_id != 1:
+		return ERR_UNAUTHORIZED
+	if peer_id == 1 or not _id_map.has(peer_id):
+		return ERR_INVALID_PARAMETER
+	if _scheduled_term > _term:
+		return ERR_BUSY
+	var successor_session: String = _id_map[peer_id]
+	var former := _fresh_id()
+	var term := _term + 1
+	_nakama_socket.send_match_state_async(
+		_match_id,
+		meta_op_code,
+		JSON.stringify(
+			{
+				type = MetaMessageType.TRANSFER,
+				term = term,
+				successor_session = successor_session,
+				former = former,
+			},
+		),
+	)
+	_schedule_install(successor_session, former, term)
+	return OK
+
+
+func _receive_transfer(data, content: Dictionary) -> void:
+	if data.presence.session_id != _id_map.get(1, ""):
+		push_error(
+			"Nakama user %s sent a server transfer but is not the host, so it "
+			% data.presence.session_id
+			+ "was ignored.",
+		)
+		return
+	var term := int(content.get("term", 0))
+	if term <= maxi(_term, _scheduled_term):
+		return
+	_schedule_install(
+		String(content.get("successor_session", "")),
+		int(content.get("former", 0)),
+		term,
+	)
+
+
+func _schedule_install(successor_session: String, former: int, term: int) -> void:
+	_scheduled_term = term
+	_multiplayer_peer.schedule_relabel(
+		_install.bind(successor_session, former, term),
+	)
+
+
+func _install(successor_session: String, former: int, term: int) -> Array:
+	if term <= _term:
+		return []
+	if not _users.has(successor_session) or not _id_map.has(1):
+		_term = term
+		_multiplayer_peer.set_connection_status(MultiplayerPeer.CONNECTION_DISCONNECTED)
+		return []
+	var host_session: String = _id_map[1]
+	var successor_was: int = _users[successor_session].peer_id
+	_id_map.erase(successor_was)
+	_id_map.erase(1)
+	if former == 0:
+		_users.erase(host_session)
+	else:
+		_map_id_to_session(former, host_session)
+	_map_id_to_session(1, successor_session)
+	_my_peer_id = _users[_my_session_id].peer_id
+	_term = term
+	var peers: Array[int] = []
+	for peer_id: int in _id_map:
+		if peer_id != _my_peer_id:
+			peers.append(peer_id)
+	_multiplayer_peer.relabel(_my_peer_id, peers, term)
+	if _my_peer_id == 1:
+		_host_unassigned_presences()
+	_release_held()
+	_release_deferred_leaves()
+	return [successor_was, former]
+
+
+func _host_unassigned_presences() -> void:
+	for session_id: String in _users:
+		var user: User = _users[session_id]
+		if user.peer_id == 0 and user.presence != null:
+			_host_add_peer(user.presence)
+
+
+func _release_held() -> void:
+	var held := _held
+	_held = []
+	for data in held:
+		_on_nakama_socket_received_match_state(data)
+
+
+func _release_deferred_leaves() -> void:
+	var leaves := _deferred_leaves
+	_deferred_leaves = []
+	for presence in leaves:
+		_on_presence_left(presence)
 
 
 func _parse_json(data: String):
@@ -390,7 +568,11 @@ func _on_nakama_socket_received_match_state(data) -> void:
 		if content == null:
 			return
 		var type = content['type']
-		#print ("RECEIVED: ", content)
+		var term := int(content.get("term", 0))
+
+		if type == MetaMessageType.TRANSFER:
+			_receive_transfer(data, content)
+			return
 
 		if type == MetaMessageType.CLAIM_HOST:
 			if _id_map.has(1):
@@ -402,10 +584,19 @@ func _on_nakama_socket_received_match_state(data) -> void:
 				)
 			else:
 				_map_id_to_session(1, data.presence.session_id)
+				_term = term
+				_scheduled_term = term
+				_release_held()
+			return
+
+		if term < _term:
+			return
+		if term > _term:
+			_held.append(data)
 			return
 
 		# Ensure that any meta messages are coming from the host!
-		if data.presence.session_id != _id_map[1]:
+		if data.presence.session_id != _id_map.get(1, ""):
 			push_error(
 				"Nakama user %s sent a host message but is not the host, so it "
 				% [data.presence.session_id]
@@ -434,6 +625,7 @@ func _on_nakama_socket_received_match_state(data) -> void:
 
 			if _my_session_id == session_id:
 				_match_state = MatchState.CONNECTED
+				_my_peer_id = peer_id
 				_multiplayer_peer.initialize(peer_id)
 				_multiplayer_peer.set_connection_status(MultiplayerPeer.CONNECTION_CONNECTED)
 				_multiplayer_peer.register_peer(1)
@@ -442,17 +634,50 @@ func _on_nakama_socket_received_match_state(data) -> void:
 				_multiplayer_peer.register_peer(peer_id)
 		else:
 			_nakama_socket.logger.error("Received meta message with unknown type: %s" % type)
-	elif data.op_code == rpc_op_code:
-		var from_session_id: String = data.presence.session_id
-		if not _users.has(from_session_id) or _users[from_session_id].peer_id == 0:
-			push_error(
-				"A packet from Nakama user %s arrived before it had a peer id, "
-				% data.presence.session_id
-				+ "so it was dropped.",
-			)
-			return
-		var from_peer_id = _users[from_session_id].peer_id
-		_multiplayer_peer.deliver_packet(data.binary_data, from_peer_id)
+	elif _is_rpc_op(data.op_code):
+		_receive_rpc(data)
+
+
+func _is_rpc_op(op_code: int) -> bool:
+	return (
+			op_code >= rpc_op_code
+			and (op_code - rpc_op_code) % _TERM_STRIDE <= _SERVER_MARK
+	)
+
+
+func _receive_rpc(data) -> void:
+	var term: int = (data.op_code - rpc_op_code) / _TERM_STRIDE
+	if term < _term:
+		return
+	if term > _term:
+		_held.append(data)
+		return
+	var from_session_id: String = data.presence.session_id
+	if not _users.has(from_session_id) or _users[from_session_id].peer_id == 0:
+		push_error(
+			"A packet from Nakama user %s arrived before it had a peer id, "
+			% data.presence.session_id
+			+ "so it was dropped.",
+		)
+		return
+	var from_peer_id: int = _users[from_session_id].peer_id
+	if (data.op_code - rpc_op_code) % _TERM_STRIDE == _SERVER_MARK:
+		_check_server(from_session_id, from_peer_id)
+	_multiplayer_peer.deliver_packet(data.binary_data, from_peer_id, term)
+
+
+func _check_server(from_session_id: String, from_peer_id: int) -> void:
+	if _term == 0 or _warned_term == _term:
+		return
+	if from_session_id == _id_map.get(1, ""):
+		return
+	_warned_term = _term
+	push_warning(
+		(
+				"Peer %d sends as the server, but this peer elected another. "
+				+ "Make migration_policy answer the same on every peer."
+		) % from_peer_id,
+	)
 
 
 func _on_multiplayer_peer_packet_generated(peer_id: int, buffer: PackedByteArray) -> void:
@@ -460,10 +685,14 @@ func _on_multiplayer_peer_packet_generated(peer_id: int, buffer: PackedByteArray
 		var target_presences = null
 		if peer_id > 0:
 			if not _id_map.has(peer_id):
-				push_error("A packet for unknown peer %s was dropped." % peer_id)
+				if not _used_ids.has(peer_id):
+					push_error("A packet for unknown peer %s was dropped." % peer_id)
 				return
 			target_presences = [_users[_id_map[peer_id]].presence]
-		_nakama_socket.send_match_state_raw_async(_match_id, rpc_op_code, buffer, target_presences)
+		var op_code := rpc_op_code + _term * _TERM_STRIDE
+		if _my_peer_id == 1:
+			op_code += _SERVER_MARK
+		_nakama_socket.send_match_state_raw_async(_match_id, op_code, buffer, target_presences)
 	else:
 		push_error(
 			"A packet was sent before NakamaRelayBridge connected, so it was "

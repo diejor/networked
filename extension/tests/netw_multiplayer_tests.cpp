@@ -1741,23 +1741,21 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Multiplayer][Hosted] the spawn gate answers the "
-    "coordinator, not the literal peer 1, so a transport peer 1 present "
-    "under a coordinator of 7 is refused on every gated channel while the "
-    "coordinator itself is admitted"
+    "[Networked][Multiplayer][Hosted] the spawn gate answers the server, so "
+    "any other peer is refused on every gated channel while the server is "
+    "admitted"
 ) {
     Ref<NetwMultiplayer> core;
     core.instantiate();
-    core->session_set_authority_peer(7);
     const GateIds ids = gate_ids();
 
     NETW_CHECK_EQ(
-        core->spawn_admit_frame_default(1, PRE_ADMIT_ROUTE, ids.spawn, body(4)),
+        core->spawn_admit_frame_default(7, PRE_ADMIT_ROUTE, ids.spawn, body(4)),
         ERR_UNAUTHORIZED
     );
     NETW_CHECK_EQ(
         core->spawn_admit_frame_default(
-            1,
+            7,
             PRE_ADMIT_ROUTE,
             ids.reparent,
             body(4)
@@ -1766,12 +1764,12 @@ TEST_CASE(
     );
 
     NETW_CHECK_EQ(
-        core->spawn_admit_frame_default(7, PRE_ADMIT_ROUTE, ids.spawn, body(4)),
+        core->spawn_admit_frame_default(1, PRE_ADMIT_ROUTE, ids.spawn, body(4)),
         OK
     );
     NETW_CHECK_EQ(
         core->spawn_admit_frame_default(
-            7,
+            1,
             PRE_ADMIT_ROUTE,
             ids.reparent,
             body(4)
@@ -1782,13 +1780,11 @@ TEST_CASE(
 
 TEST_CASE(
     "[Networked][Multiplayer][Hosted][SceneTree] the predict gate answers "
-    "the coordinator, not the literal peer 1, so an owner's command is "
-    "admitted, an ack from the coordinator settles, and the same ack from "
-    "transport peer 1 present under a coordinator of 7 is refused"
+    "the server, so an owner's command is admitted, an ack from the server "
+    "settles, and the same ack from any other peer is refused"
 ) {
     Ref<NetwMultiplayer> core;
     core.instantiate();
-    core->session_set_authority_peer(7);
 
     Node *owner = memnew(Node);
     netw::gd::scene_root()->add_child(owner);
@@ -1808,7 +1804,7 @@ TEST_CASE(
     );
     NETW_CHECK_EQ(
         core->predict_admit_frame_default(
-            7,
+            1,
             51,
             netw::predict::CHANNEL_ACK,
             body(4)
@@ -1817,7 +1813,7 @@ TEST_CASE(
     );
     NETW_CHECK_EQ(
         core->predict_admit_frame_default(
-            1,
+            7,
             51,
             netw::predict::CHANNEL_ACK,
             body(4)

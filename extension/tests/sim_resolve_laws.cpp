@@ -420,10 +420,10 @@ Facts steered_elsewhere() {
     return declared();
 }
 
-Facts steered_by_nobody_on_the_session_authority() {
+Facts steered_by_nobody_on_the_server() {
     Facts facts = declared();
     facts.controller_is_nobody = true;
-    facts.session_authority_here = true;
+    facts.server_here = true;
     return facts;
 }
 
@@ -433,10 +433,10 @@ Facts state_rows_steered_here() {
     return facts;
 }
 
-Facts state_rows_on_the_session_authority() {
+Facts state_rows_on_the_server() {
     Facts facts = declared();
     facts.state_rows = true;
-    facts.session_authority_here = true;
+    facts.server_here = true;
     return facts;
 }
 
@@ -446,7 +446,7 @@ Facts claimed_here() {
     return facts;
 }
 
-Facts claimed_on_a_session_authored_entity() {
+Facts claimed_on_a_server_authored_entity() {
     Facts facts = claimed_here();
     facts.state_rows = true;
     return facts;
@@ -473,7 +473,7 @@ Facts active_replicas_closed() {
 Facts undeclared_but_steered_here() {
     Facts facts;
     facts.controller_here = true;
-    facts.session_authority_here = true;
+    facts.server_here = true;
     return facts;
 }
 
@@ -490,19 +490,19 @@ TEST_CASE(
          Mode::AUTHORITY},
         {"and is a proxy elsewhere", steered_elsewhere(), Mode::PROXY},
         {"controller 0 hands authorship to the session authority",
-         steered_by_nobody_on_the_session_authority(),
+         steered_by_nobody_on_the_server(),
          Mode::AUTHORITY},
         {"a state row takes authorship from the controller",
          state_rows_steered_here(),
          Mode::PROXY},
         {"and gives it to the session authority",
-         state_rows_on_the_session_authority(),
+         state_rows_on_the_server(),
          Mode::AUTHORITY},
         {"a pending claim runs a controller-authored entity",
          claimed_here(),
          Mode::AUTHORITY},
         {"a pending claim never runs a session-authored entity",
-         claimed_on_a_session_authored_entity(),
+         claimed_on_a_server_authored_entity(),
          Mode::PROXY},
         {"a pending claim runs a free body the session was authoring",
          claimed_on_a_free_body(),
@@ -532,28 +532,28 @@ TEST_CASE(
     Facts server_body = declared();
     server_body.predicted = true;
     server_body.input_rows = true;
-    server_body.session_authority_here = true;
+    server_body.server_here = true;
     NETW_CHECK_EQ(
         int(rows.resolve(steered, server_body)),
         int(Mode::AUTHORITY)
     );
 
     Facts client_copy = server_body;
-    client_copy.session_authority_here = false;
+    client_copy.server_here = false;
     NETW_CHECK_EQ(int(rows.resolve(watched, client_copy)), int(Mode::PROXY));
 
     Facts driven = steered_here();
-    driven.session_authority_here = true;
+    driven.server_here = true;
     NETW_CHECK_EQ(
         int(rows.resolve(controller_authored, driven)),
         int(Mode::AUTHORITY)
     );
 
-    const LocalVector<RID> moved = rows.follow_session_authority(false);
+    const LocalVector<RID> moved = rows.follow_server(false);
     NETW_REQUIRE_EQ(moved.size(), 1);
     CHECK(moved[0] == steered);
 
-    const LocalVector<RID> again = rows.follow_session_authority(false);
+    const LocalVector<RID> again = rows.follow_server(false);
     NETW_CHECK_EQ(again.size(), 0);
 
     owner.free(steered);

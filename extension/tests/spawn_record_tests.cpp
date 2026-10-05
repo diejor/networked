@@ -215,7 +215,7 @@ TEST_CASE(
 
     NETW_CHECK_EQ(
         int64_t(header[StringName("controller")]),
-        entity->get_controller()
+        entity->steering()
     );
     NETW_CHECK_EQ(int64_t(header[StringName("action_spawn_tick")]), 42);
     NETW_CHECK_EQ(int64_t(header[StringName("action_requester")]), 9);

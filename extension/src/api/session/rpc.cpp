@@ -293,6 +293,9 @@ void NetwMultiplayer::stop_relay_from(
 }
 
 void NetwMultiplayer::relay_bare(const StringName &p_signal) {
+    if (installing_transfer) {
+        return;
+    }
     emit_signal(p_signal);
 }
 
@@ -391,7 +394,7 @@ bool NetwMultiplayer::send_admits(
         != int64_t(NetwLivenessCore::STATE_LIVE)) {
         return false;
     }
-    if (p_peer_id == session_authority_peer()) {
+    if (p_peer_id == SERVER_PEER) {
         return true;
     }
     if (!interest_entity_has_filter(p_entity)) {
@@ -635,8 +638,12 @@ int64_t NetwMultiplayer::rpc_sends_dropped_not_live() const {
 
 void NetwMultiplayer::rpc_resolve_parked(
     int64_t p_id,
-    const Callable &p_callback
+    const Callable &p_callback,
+    uint64_t p_generation
 ) {
+    if (p_generation != transfer_generation) {
+        return;
+    }
     if (rpc_park.resolve(p_id) && p_callback.is_valid()) {
         p_callback.call();
     }
@@ -658,7 +665,7 @@ void NetwMultiplayer::rpc_defer_call(
     liveness_when_live(
         p_route,
         callable_mp(this, &NetwMultiplayer::rpc_resolve_parked)
-            .bind(id, p_callback),
+            .bind(id, p_callback, transfer_generation),
         0,
         Callable()
     );
@@ -1314,8 +1321,12 @@ void NetwMultiplayer::rpc_reply_resolved(
     const Variant &p_value,
     int64_t p_peer,
     int64_t p_route,
-    int64_t p_txn
+    int64_t p_txn,
+    uint64_t p_generation
 ) {
+    if (p_generation != transfer_generation) {
+        return;
+    }
     rpc_send_reply(p_peer, p_route, p_txn, p_value);
 }
 
@@ -1324,8 +1335,12 @@ void NetwMultiplayer::rpc_reply_rejected(
     const String &p_detail,
     int64_t p_peer,
     int64_t p_route,
-    int64_t p_txn
+    int64_t p_txn,
+    uint64_t p_generation
 ) {
+    if (p_generation != transfer_generation) {
+        return;
+    }
     rpc_send_reply(p_peer, p_route, p_txn, Variant());
 }
 
@@ -1336,10 +1351,10 @@ void NetwMultiplayer::rpc_reply_when_settled(
     int64_t p_txn
 ) {
     p_promise->then(callable_mp(this, &NetwMultiplayer::rpc_reply_resolved)
-                        .bind(p_peer, p_route, p_txn));
+                        .bind(p_peer, p_route, p_txn, transfer_generation));
     p_promise->catch_error(
         callable_mp(this, &NetwMultiplayer::rpc_reply_rejected)
-            .bind(p_peer, p_route, p_txn)
+            .bind(p_peer, p_route, p_txn, transfer_generation)
     );
 }
 
@@ -1368,7 +1383,7 @@ bool NetwMultiplayer::rpc_sender_allowed(
     Node *p_node,
     int64_t p_sender
 ) const {
-    if (p_sender == session_authority_peer()) {
+    if (p_sender == SERVER_PEER) {
         return true;
     }
     if (p_options.is_valid() && p_options->get_is_controller_only()) {
@@ -1416,8 +1431,12 @@ void NetwMultiplayer::rpc_execute_call(
     const StringName &p_method,
     const Array &p_args,
     int64_t p_txn,
-    int64_t p_sender
+    int64_t p_sender,
+    uint64_t p_generation
 ) {
+    if (p_generation != transfer_generation) {
+        return;
+    }
     const Variant result = p_comp_node->callv(p_method, p_args);
     if (p_txn <= 0) {
         return;
@@ -1429,6 +1448,19 @@ void NetwMultiplayer::rpc_execute_call(
         return;
     }
     rpc_send_reply(p_sender, route, p_txn, result);
+}
+
+void NetwMultiplayer::rpc_handle_parked_call(
+    const Ref<NetwEntity> &p_entity,
+    Node *p_comp_node,
+    const PackedByteArray &p_payload,
+    int64_t p_sender,
+    uint64_t p_generation
+) {
+    if (p_generation != transfer_generation) {
+        return;
+    }
+    rpc_handle_call(p_entity, p_comp_node, p_payload, p_sender);
 }
 
 void NetwMultiplayer::rpc_handle_call(
@@ -1571,8 +1603,14 @@ void NetwMultiplayer::rpc_handle_call(
                 == NetwLivenessCore::STATE_UNKNOWN) {
             liveness_when_live(
                 slot.node.route,
-                callable_mp(this, &NetwMultiplayer::rpc_handle_call)
-                    .bind(p_entity, p_comp_node, p_payload, p_sender),
+                callable_mp(this, &NetwMultiplayer::rpc_handle_parked_call)
+                    .bind(
+                        p_entity,
+                        p_comp_node,
+                        p_payload,
+                        p_sender,
+                        transfer_generation
+                    ),
                 0,
                 Callable()
             );
@@ -1639,14 +1677,30 @@ void NetwMultiplayer::rpc_handle_call(
             p_comp_node->connect(
                 gate,
                 callable_mp(this, &NetwMultiplayer::rpc_execute_call)
-                    .bind(p_entity, p_comp_node, method, args, txn, p_sender),
+                    .bind(
+                        p_entity,
+                        p_comp_node,
+                        method,
+                        args,
+                        txn,
+                        p_sender,
+                        transfer_generation
+                    ),
                 Object::CONNECT_ONE_SHOT
             );
             return;
         }
     }
 
-    rpc_execute_call(p_entity, p_comp_node, method, args, txn, p_sender);
+    rpc_execute_call(
+        p_entity,
+        p_comp_node,
+        method,
+        args,
+        txn,
+        p_sender,
+        transfer_generation
+    );
 }
 
 Error NetwMultiplayer::send_row_to(

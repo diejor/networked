@@ -17,6 +17,12 @@ Record at(int64_t route, int64_t parent_route = 0) {
     return record;
 }
 
+Book::Received received(Node *p_node) {
+    Book::Received recipe;
+    recipe.node = netw::gd::instance_id(p_node);
+    return recipe;
+}
+
 TEST_CASE(
     "[Networked][Spawn][Hosted] a record is armed under its own route and "
     "taken exactly once"
@@ -134,7 +140,7 @@ TEST_CASE(
     Node *node = memnew(Node);
 
     CHECK_FALSE(book.is_recv(3));
-    book.enroll_recv(3, node);
+    book.enroll_recv(3, received(node));
     CHECK(book.is_recv(3));
     NETW_CHECK_EQ(book.recv_count(), 1);
 
@@ -153,7 +159,7 @@ TEST_CASE(
     Node *node = memnew(Node);
     book.arm(at(1));
     book.issue(at(2));
-    book.enroll_recv(3, node);
+    book.enroll_recv(3, received(node));
 
     CHECK_FALSE(book.has_spawned(1));
     CHECK_FALSE(book.has_armed(2));
@@ -306,7 +312,7 @@ TEST_CASE(
 ) {
     Book book;
     Node *node = memnew(Node);
-    book.enroll_recv(5, node);
+    book.enroll_recv(5, received(node));
 
     CHECK(book.spawn_is_duplicate(5, netw::NetwLivenessCore::STATE_DEAD));
     CHECK(book.spawn_is_duplicate(5, netw::NetwLivenessCore::STATE_UNKNOWN));

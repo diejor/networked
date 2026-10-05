@@ -72,7 +72,7 @@ Error SpawnerCompat::consume(Node *p_node, Object *p_spawner) {
         return OK;
     }
     NetwMultiplayer *plane = core();
-    if (plane != nullptr && !plane->is_session_authority()) {
+    if (plane != nullptr && !plane->is_host()) {
         NETW_ERROR(
             sys::SPAWN,
             "'%s' was added under a MultiplayerSpawner on a client, and only "

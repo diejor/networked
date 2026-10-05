@@ -340,8 +340,8 @@ TEST_CASE(
     NETW_LAW_BREAKS(L_AUTHORSHIP, run);
 }
 
-constexpr int COORDINATOR = 7;
-constexpr int TRANSPORT_SERVER = 1;
+constexpr int SERVER = 1;
+constexpr int MEMBER = 7;
 
 Node *mount_under_root(const char *p_name) {
     Node *mount = memnew(Node);
@@ -361,7 +361,7 @@ RigidBody2D *a_state_body(NetwMultiplayer *p_core, Node *p_branch, double p_x) {
     body->set_freeze_enabled(false);
     body->set_freeze_mode(RigidBody2D::FREEZE_MODE_STATIC);
     body->set_position(Vector2(real_t(p_x), 0.0));
-    body->set_multiplayer_authority(COORDINATOR);
+    body->set_multiplayer_authority(SERVER);
     const Ref<NetwEntity> entity = NetwEntity::ensure(body);
     p_branch->add_child(body);
 
@@ -405,29 +405,28 @@ int64_t display_role_of(NetwMultiplayer *p_core, Node *p_body) {
 }
 
 TEST_CASE(
-    "[Networked][Display][SceneTree] DA1 the peer holding session authority "
-    "writes a state stream and the peer receiving it draws it, so a "
-    "coordinator of 7 keeps its own solver running while transport peer 1 "
-    "freezes its body kinematically for the display to drive"
+    "[Networked][Display][SceneTree] DA1 the server writes a state stream and "
+    "the peer receiving it draws it, so the server keeps its own solver "
+    "running while a member freezes its body kinematically for the display "
+    "to drive"
 ) {
     MeshStand stand;
-    stand.seat_coordinator(COORDINATOR);
-    stand.seat_member(TRANSPORT_SERVER);
-    stand.wire(COORDINATOR, TRANSPORT_SERVER);
+    stand.seat_server();
+    stand.seat_member(MEMBER);
+    stand.wire(SERVER, MEMBER);
     stand.pump(4);
 
-    NetwMultiplayer *host = stand.session_of(COORDINATOR);
-    NetwMultiplayer *guest = stand.session_of(TRANSPORT_SERVER);
+    NetwMultiplayer *host = stand.session_of(SERVER);
+    NetwMultiplayer *guest = stand.session_of(MEMBER);
     REQUIRE(host != nullptr);
     REQUIRE(guest != nullptr);
     NETW_CHECK_EQ(int(host->is_host()), 1);
     NETW_CHECK_EQ(int(guest->is_host()), 0);
-    NETW_CHECK_EQ(int(guest->is_server()), 1);
 
     Node *held = mount_under_root("DA1Host");
     Node *seen = mount_under_root("DA1Member");
-    stand.mount(COORDINATOR, held);
-    stand.mount(TRANSPORT_SERVER, seen);
+    stand.mount(SERVER, held);
+    stand.mount(MEMBER, seen);
 
     RigidBody2D *authored = a_state_body(host, held, 12.0);
     RigidBody2D *received = a_state_body(guest, seen, 12.0);

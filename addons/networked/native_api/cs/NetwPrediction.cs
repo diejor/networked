@@ -1101,9 +1101,12 @@ public sealed class NetwPrediction : NetwRefCounted
             1286410249UL);
 
     /// <summary>
-    /// How many queued inputs the server may skip in one frame to catch up, for
-    /// an entity at <see cref="NetwSimulation.ScheduleEnum.Frame"/>. An entity
-    /// at <see cref="NetwSimulation.ScheduleEnum.Tick"/> ignores it.
+    /// How many queued inputs the server may run in one tick to catch up to
+    /// <see cref="NetwPrediction.ConsumeBufferTicks"/> behind the newest input.
+    /// Extra inputs run as extra steps and are never skipped. It applies to
+    /// <see cref="NetwSimulation.ScheduleEnum.Tick"/>, and an entity at
+    /// <see cref="NetwSimulation.ScheduleEnum.Frame"/> catches up by running
+    /// one input per physics frame.
     /// </summary>
     public int MaxConsumePerTick
     {

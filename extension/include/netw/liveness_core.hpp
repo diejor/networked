@@ -11,6 +11,8 @@
 
 namespace netw {
 
+struct PeerRename;
+
 class NetwLivenessCore : public godot::RefCounted {
 public:
     enum State {
@@ -78,10 +80,14 @@ public:
     int route_floor() const;
 
     void install_lease(int base, int count);
+    void leave_lease();
     bool is_leased() const;
     int lease_remaining() const;
+    godot::PackedInt32Array lease_spans() const;
+    void mint_above(int floor);
 
     int grant_lease(int peer, int count);
+    void restore_grant(int peer, int base, int count);
     int64_t lease_block_holding(int peer, int route) const;
     bool lease_holds(int peer, int route) const;
     bool spend_lease(int peer, int route);
@@ -97,10 +103,13 @@ public:
     int route_wire_epoch(int route) const;
     bool epoch_admits(int route, int epoch) const;
     bool adopt_epoch(int route, int epoch);
+    void raise_epoch_to_wire(int route);
+    void follow_wire_epoch(int route);
 
     uint64_t route_anchor(int route) const;
     uint64_t route_anchor_author(int route) const;
     bool set_route_anchor(int route, uint64_t anchor, uint64_t author);
+    void rename_authors(const PeerRename &p_rename);
 
     State state_of(const godot::RID &entity) const;
     State route_state(int route) const;

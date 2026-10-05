@@ -16,9 +16,8 @@ using namespace netw_test;
 using netw::NetwMultiplayer;
 using netw::NetwScene;
 
-constexpr int COORDINATOR = 7;
+constexpr int SERVER = 1;
 constexpr int MEMBER = 9;
-constexpr int TRANSPORT_SERVER = 1;
 
 const char *LEVEL_PATH = "res://tests/support/declared_level.tscn";
 
@@ -48,30 +47,28 @@ void drop(Node *p_mount) {
 }
 
 TEST_CASE(
-    "[Networked][Session][SceneTree] EA1 a coordinator that is not transport "
-    "peer 1 adopts its declared level and transport peer 1 receives that "
-    "world, so the bare copy is replaced rather than presented"
+    "[Networked][Session][SceneTree] EA1 the server adopts its declared level "
+    "and a member receives that world, so the bare copy is replaced rather "
+    "than presented"
 ) {
     MeshStand stand;
-    stand.seat_coordinator(COORDINATOR);
-    stand.seat_member(TRANSPORT_SERVER);
-    stand.wire(COORDINATOR, TRANSPORT_SERVER);
+    stand.seat_server();
+    stand.seat_member(MEMBER);
+    stand.wire(SERVER, MEMBER);
     stand.pump(4);
 
-    NetwMultiplayer *host = stand.session_of(COORDINATOR);
+    NetwMultiplayer *host = stand.session_of(SERVER);
     REQUIRE(host != nullptr);
-    NETW_CHECK_EQ(int(host->is_server()), 0);
     NETW_CHECK_EQ(int(host->is_host()), 1);
 
-    NetwMultiplayer *guest = stand.session_of(TRANSPORT_SERVER);
+    NetwMultiplayer *guest = stand.session_of(MEMBER);
     REQUIRE(guest != nullptr);
-    NETW_CHECK_EQ(int(guest->is_server()), 1);
     NETW_CHECK_EQ(int(guest->is_host()), 0);
 
     Node *mount = mount_under_root("EA1Host");
     Node *seen = mount_under_root("EA1Member");
-    stand.mount(COORDINATOR, mount);
-    stand.mount(TRANSPORT_SERVER, seen);
+    stand.mount(SERVER, mount);
+    stand.mount(MEMBER, seen);
     NETW_CHECK_EQ(int(guest->embed_settle()), int(OK));
 
     Node *level = a_declared_level();
@@ -87,7 +84,7 @@ TEST_CASE(
 
     NETW_CHECK_EQ(int(host->scene_list().size()), 1);
     NETW_CHECK_EQ(
-        int(host->scene_watch(first_scene(host), TRANSPORT_SERVER)),
+        int(host->scene_watch(first_scene(host), MEMBER)),
         int(OK)
     );
     stand.step_ticks(4);
@@ -100,12 +97,12 @@ TEST_CASE(
 TEST_CASE(
     "[Networked][Session][SceneTree] EA2 a peer holding no scene authority "
     "drops its declared level and spawns nothing, because the world it "
-    "presents is the one the coordinator sends"
+    "presents is the one the server sends"
 ) {
     MeshStand stand;
-    stand.seat_coordinator(COORDINATOR);
+    stand.seat_server();
     stand.seat_member(MEMBER);
-    stand.wire(COORDINATOR, MEMBER);
+    stand.wire(SERVER, MEMBER);
     stand.pump(4);
 
     NetwMultiplayer *guest = stand.session_of(MEMBER);
@@ -128,19 +125,19 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Session][SceneTree] EA3 a declared level the coordinator "
+    "[Networked][Session][SceneTree] EA3 a declared level the server "
     "cannot respawn is kept and reported, because deleting it would leave "
     "the session presenting nothing at all"
 ) {
     MeshStand stand;
-    stand.seat_coordinator(COORDINATOR);
+    stand.seat_server();
     stand.pump(2);
 
-    NetwMultiplayer *host = stand.session_of(COORDINATOR);
+    NetwMultiplayer *host = stand.session_of(SERVER);
     REQUIRE(host != nullptr);
 
     Node *mount = mount_under_root("EA3Host");
-    stand.mount(COORDINATOR, mount);
+    stand.mount(SERVER, mount);
     Node *level = a_declared_level();
     const ObjectID bare = netw::gd::instance_id(level);
     level->set_scene_file_path(String());
@@ -188,24 +185,24 @@ void teach_player(NetwMultiplayer *p_session) {
 }
 
 TEST_CASE(
-    "[Networked][Session][SceneTree] EA4 coordinator 7 startup gives its "
+    "[Networked][Session][SceneTree] EA4 the server's startup gives its "
     "joined member at 9 one scene and the one body seated for that "
     "player, so the authoritative world arrives whole"
 ) {
     MeshStand stand;
-    stand.seat_coordinator(COORDINATOR);
+    stand.seat_server();
     stand.seat_member(MEMBER);
-    stand.wire(COORDINATOR, MEMBER);
+    stand.wire(SERVER, MEMBER);
     stand.pump(4);
 
-    NetwMultiplayer *host = stand.session_of(COORDINATOR);
+    NetwMultiplayer *host = stand.session_of(SERVER);
     NetwMultiplayer *guest = stand.session_of(MEMBER);
     REQUIRE(host != nullptr);
     REQUIRE(guest != nullptr);
 
     Node *mount = mount_under_root("EA4Host");
     Node *seen = mount_under_root("EA4Member");
-    stand.mount(COORDINATOR, mount);
+    stand.mount(SERVER, mount);
     stand.mount(MEMBER, seen);
     NETW_CHECK_EQ(int(guest->embed_settle()), int(OK));
 
@@ -217,7 +214,7 @@ TEST_CASE(
 
     NETW_CHECK_EQ(mount->get_child_count(), 1);
 
-    REQUIRE(stand.join(COORDINATOR, StringName("seven")).is_valid());
+    REQUIRE(stand.join(SERVER, StringName("one")).is_valid());
     REQUIRE(stand.join(MEMBER, StringName("nine")).is_valid());
 
     const RID opened = first_scene(host);

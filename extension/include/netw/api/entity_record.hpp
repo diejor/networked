@@ -59,20 +59,17 @@ private:
     display::Decl *display_decl = nullptr;
     godot::StringName scene_label;
     int64_t scene_isolation = -1;
-    godot::LocalVector<godot::NodePath> session_paths;
+    godot::LocalVector<godot::NodePath> server_paths;
     int64_t projected_follower = 0;
-    int64_t projected_session = 0;
     bool native_write_warned = false;
 
     struct Projection {
-        int64_t follower = 1;
-        int64_t session = 1;
-        int64_t prior_follower = 1;
-        int64_t prior_session = 1;
+        int64_t follower = SERVER_PEER;
+        int64_t prior_follower = SERVER_PEER;
     };
 
-    Projection projection_to(int64_t p_follower, int64_t p_session) const;
-    bool pinned_to_session(godot::Node *p_owner, godot::Node *p_node) const;
+    Projection projection_to(int64_t p_follower) const;
+    bool pinned_to_server(godot::Node *p_owner, godot::Node *p_node) const;
     void project_node(
         godot::Node *p_owner,
         godot::Node *p_node,
@@ -167,7 +164,6 @@ public:
     void apply_control(
         godot::Object *p_wrapper,
         godot::Node *p_owner,
-        int64_t p_coordinator,
         uint64_t p_watch = 0
     );
 
@@ -177,12 +173,12 @@ public:
         uint64_t p_watch
     );
 
-    void follow_session(const godot::NodePath &p_path);
-    const godot::LocalVector<godot::NodePath> &get_session_paths() const {
-        return session_paths;
+    void follow_server(const godot::NodePath &p_path);
+    const godot::LocalVector<godot::NodePath> &get_server_paths() const {
+        return server_paths;
     }
     bool projects_to_server() const {
-        return projected_follower == 1 && projected_session == 1;
+        return projected_follower == SERVER_PEER;
     }
     bool get_native_write_warned() const {
         return native_write_warned;
@@ -254,7 +250,7 @@ public:
     int64_t held_bytes() const {
         return int64_t(sizeof(NetwEntityRecord)) + held::vector(held_bindings)
             + held::vector(parts) + comp_table.held_bytes()
-            + held::vector(comp_registered) + held::vector(session_paths)
+            + held::vector(comp_registered) + held::vector(server_paths)
             + (interest_facet != nullptr ? int64_t(sizeof(interest::Facet)) : 0)
             + (display_decl != nullptr ? int64_t(sizeof(display::Decl)) : 0);
     }

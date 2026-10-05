@@ -146,7 +146,7 @@ TEST_CASE(
     NETW_CHECK_EQ(watches_on(crate, entity), 1);
     NETW_CHECK_EQ(watches_on(child, entity), 1);
 
-    entity->set_controller(0);
+    entity->set_controller(1);
     NETW_CHECK_EQ(crate->get_multiplayer_authority(), 1);
     NETW_CHECK_EQ(child->get_multiplayer_authority(), 1);
     Node *late = a_node("Late", FOREIGN);

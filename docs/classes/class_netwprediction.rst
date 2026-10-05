@@ -111,7 +111,7 @@ Properties
    +-----------------------------------------------------------+-----------------------------------------------------------------------------------------+----------------+
    | :godot:`int`                                              | :ref:`max_consume_lag_ticks<class_NetwPrediction_property_max_consume_lag_ticks>`       | ``60``         |
    +-----------------------------------------------------------+-----------------------------------------------------------------------------------------+----------------+
-   | :godot:`int`                                              | :ref:`max_consume_per_tick<class_NetwPrediction_property_max_consume_per_tick>`         | ``1``          |
+   | :godot:`int`                                              | :ref:`max_consume_per_tick<class_NetwPrediction_property_max_consume_per_tick>`         | ``2``          |
    +-----------------------------------------------------------+-----------------------------------------------------------------------------------------+----------------+
    | :ref:`MissingInput<enum_NetwPrediction_MissingInput>`     | :ref:`missing_policy<class_NetwPrediction_property_missing_policy>`                     | ``0``          |
    +-----------------------------------------------------------+-----------------------------------------------------------------------------------------+----------------+
@@ -1262,14 +1262,14 @@ How far the server may fall behind the newest input before it skips ahead to it.
 
 .. rst-class:: classref-property
 
-:godot:`int` **max_consume_per_tick** = ``1`` :ref:`🔗<class_NetwPrediction_property_max_consume_per_tick>`
+:godot:`int` **max_consume_per_tick** = ``2`` :ref:`🔗<class_NetwPrediction_property_max_consume_per_tick>`
 
 .. rst-class:: classref-property-setget
 
 - |void| **set_max_consume_per_tick**\ (\ value\: :godot:`int`\ )
 - :godot:`int` **get_max_consume_per_tick**\ (\ )
 
-How many queued inputs the server may skip in one frame to catch up, for an entity at :ref:`NetwSimulation.SCHEDULE_FRAME<class_NetwSimulation_constant_SCHEDULE_FRAME>`. An entity at :ref:`NetwSimulation.SCHEDULE_TICK<class_NetwSimulation_constant_SCHEDULE_TICK>` ignores it.
+How many queued inputs the server may run in one tick to catch up to :ref:`consume_buffer_ticks<class_NetwPrediction_property_consume_buffer_ticks>` behind the newest input. Extra inputs run as extra steps and are never skipped. It applies to :ref:`NetwSimulation.SCHEDULE_TICK<class_NetwSimulation_constant_SCHEDULE_TICK>`, and an entity at :ref:`NetwSimulation.SCHEDULE_FRAME<class_NetwSimulation_constant_SCHEDULE_FRAME>` catches up by running one input per physics frame.
 
 .. rst-class:: classref-item-separator
 

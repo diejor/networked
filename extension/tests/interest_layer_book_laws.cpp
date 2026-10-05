@@ -213,20 +213,18 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Interest][SceneTree] IB5 a listen host at peer 7 joins the "
-    "layer its own entity declared, because a live join asks whether this "
-    "session holds authority rather than whether it holds the socket"
+    "[Networked][Interest][SceneTree] IB5 a listen host joins the layer its "
+    "own entity declared, because a live join asks whether this session is "
+    "the server"
 ) {
     Ref<NetwMultiplayer> core;
     core.instantiate();
-    core->session_set_authority_peer(7);
     core->session_set_desired_role(NetwMultiplayer::ROLE_LISTEN_SERVER);
     Ref<netw::LocalMultiplayerPeer> peer;
     peer.instantiate();
-    REQUIRE(peer->create_server(7) == OK);
+    REQUIRE(peer->create_server(1) == OK);
     core->set("multiplayer_peer", peer);
     REQUIRE(core->is_host());
-    CHECK_FALSE(core->is_server());
 
     SceneTree *tree = netw::gd::scene_tree();
     Node *root = netw::gd::scene_root();

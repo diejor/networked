@@ -362,7 +362,7 @@ TEST_CASE(
         NETW_FORMAT_INT(client_text, client);
         CAPTURE(client_text);
         const Peer &peer = evidence.at(client);
-        NETW_CHECK_EQ(peer.controller, int64_t(0));
+        NETW_CHECK_EQ(peer.controller, int64_t(1));
         NETW_CHECK_CLOSE(peer.position.x, REST_X, 0.05);
         NETW_CHECK_CLOSE(peer.velocity.length(), 0.0, 0.01);
     }

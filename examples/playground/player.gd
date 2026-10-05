@@ -162,8 +162,9 @@ func let_go_of_strays() -> void:
 func drives(cube: PlayCube, hold: NetwEntity.Hold) -> bool:
 	if entity.is_controlled_locally:
 		return cube.entity.is_controlled_locally
-	var holder := cube.entity.controller
-	if holder == entity.controller or holder == 0:
+	if cube.entity.control_kind == NetwEntity.CONTROL_SERVER_CONTROLLED:
+		return true
+	if cube.entity.controller == entity.controller:
 		return true
 	return hold == NetwEntity.HOLD_EXCLUSIVE \
 			and cube.entity.hold != NetwEntity.HOLD_EXCLUSIVE

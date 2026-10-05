@@ -59,18 +59,15 @@ class LoopbackRig {
     godot::Vector<godot::HashMap<godot::StringName, godot::RID>>
         client_state_sets;
     double tick_period_ms = 1000.0 / 30.0;
-    int coordinator = 1;
 
     static godot::Ref<netw::NetwMultiplayer> make_api(
-        const godot::Ref<netw::LocalMultiplayerPeer> &p_peer,
-        int p_coordinator = 1
+        const godot::Ref<netw::LocalMultiplayerPeer> &p_peer
     ) {
         godot::Ref<netw::NetwMultiplayer> api
             = netw::NetwMultiplayer::create(godot::Ref<godot::Script>());
         REQUIRE_MESSAGE(api.is_valid(), "the session did not instantiate");
         if (api.is_valid()) {
             api->session_get_inner()->set_root_path(godot::NodePath("/"));
-            api->session_set_authority_peer(p_coordinator);
             api->set("multiplayer_peer", p_peer);
         }
         return api;
@@ -351,10 +348,12 @@ class LoopbackRig {
     }
 
 public:
-    explicit LoopbackRig(int p_clients = 1, int p_coordinator = 1) {
-        coordinator = p_coordinator;
+    explicit LoopbackRig(int p_clients = 1, bool p_migrates = false) {
         link.instantiate();
-        server_api = make_api(link->get_server_peer(), coordinator);
+        if (p_migrates) {
+            link->enable_server_transfer();
+        }
+        server_api = make_api(link->get_server_peer());
         for (int index = 0; index < p_clients; ++index) {
             add_client();
         }
@@ -672,7 +671,7 @@ public:
         godot::Ref<netw::LocalMultiplayerPeer> peer
             = link->create_client_peer();
         client_peers.push_back(peer);
-        client_apis.push_back(make_api(peer, coordinator));
+        client_apis.push_back(make_api(peer));
         client_declared.push_back({});
         client_state_sets.push_back({});
         return client_apis.size() - 1;

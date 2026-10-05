@@ -687,7 +687,7 @@ TEST_CASE(
     core.instantiate();
     netw::lifecycle::Facts replayed;
     replayed.kind = netw::lifecycle::Kind::SPAWN;
-    replayed.peer_is_session = true;
+    replayed.peer_is_server = true;
     replayed.replaying = true;
     netw::lifecycle::Facts undeclared;
     undeclared.kind = netw::lifecycle::Kind::SPAWN;

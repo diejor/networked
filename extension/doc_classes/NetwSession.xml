@@ -18,6 +18,15 @@
 		[/codeblock]
 		There is one handle per session, so it is safe to keep it across an await.
 		Connecting is done as you would normally do with [SceneMultiplayer], by assigning [member MultiplayerAPI.multiplayer_peer]. See [NetwConnection] to manage endpoints and [method Netw.prepare_join] to join as a player.
+		[b]Moving the server[/b]
+		The session survives the server leaving when its [MultiplayerPeer] can hand the server role to another peer. Such a peer declares this signal, and [method transfer_server] works when it also has the method.
+		[codeblock]
+		signal server_relabelled(successor_was: int, former_now: int)
+
+		func transfer_server(peer_id: int) -&gt; Error:
+		    pass
+		[/codeblock]
+		The peer emits the signal from its own [method MultiplayerPeer.poll], once it already answers the new ids. [NakamaWrapper] does this when [member NakamaWrapper.migrate_on_host_loss] is on. ENet, WebRTC, Steam and [OfflineMultiplayerPeer] do not, so losing the server ends the session.
 	</description>
 	<tutorials>
 	</tutorials>
@@ -172,6 +181,21 @@
 				The table of the schema declared as [param name] with [method Netw.configure_schema], or [code]null[/code] when there is none.
 			</description>
 		</method>
+		<method name="transfer_server">
+			<return type="int" enum="Error" />
+			<param index="0" name="peer_id" type="int" />
+			<description>
+				Asks the transport to make [param peer_id] the server and this peer a client under a new id. [signal server_transferred] follows on every peer. Whether a transport can is stated in the class description.
+				[codeblock lang=text]
+				Error
+				┠╴ERR_UNAUTHORIZED        called on a client
+				┠╴ERR_UNAVAILABLE         the transport cannot move the server
+				┠╴ERR_INVALID_PARAMETER   peer_id is not a connected client
+				┖╴ERR_BUSY                a database still has writes to settle
+				[/codeblock]
+				[b]Server Only.[/b]
+			</description>
+		</method>
 		<method name="unregister_service">
 			<return type="void" />
 			<param index="0" name="service" type="Object" />
@@ -271,6 +295,39 @@
 				[/codeblock]
 			</description>
 		</signal>
+		<signal name="server_transferred">
+			<param index="0" name="successor_was" type="int" />
+			<param index="1" name="former_now" type="int" />
+			<description>
+				Emitted on every peer once the peer that was [param successor_was] has become the server at id [code]1[/code], and the old server, if it stayed, has become [param former_now].
+				[param former_now] is [code]0[/code] when the old server is gone, and its player leaves after this signal.
+				[codeblocks]
+				[gdscript]
+				func _ready() -&gt; void:
+				    Netw.session(self).server_transferred.connect(on_server_transferred)
+
+				func on_server_transferred(successor_was: int, former_now: int) -&gt; void:
+				    scoreboard.rename(successor_was, 1)
+				    if former_now != 0:
+				        scoreboard.rename(1, former_now)
+				[/gdscript]
+				[csharp]
+				public override void _Ready()
+				{
+				    Netw.Session(this).ServerTransferred += OnServerTransferred;
+				}
+
+				private void OnServerTransferred(long successorWas, long formerNow)
+				{
+				    scoreboard.Rename(successorWas, 1);
+				    if (formerNow != 0)
+				        scoreboard.Rename(1, formerNow);
+				}
+				[/csharp]
+				[/codeblocks]
+				What each client keeps of its world follows its own [member NetwSessionConfig.transfer_mode].
+			</description>
+		</signal>
 	</signals>
 	<constants>
 		<constant name="SESSION_STATE_OFFLINE" value="0" enum="SessionState">
@@ -311,6 +368,12 @@
 		</constant>
 		<constant name="REPLACED" value="4" enum="ExitReason">
 			Another peer was assigned to [member MultiplayerAPI.multiplayer_peer].
+		</constant>
+		<constant name="TRANSFER_REJOIN" value="0" enum="TransferMode">
+			When the server moves, each client frees the entities it received and gets the new server's world again as new nodes, and the entities a client spawned itself are despawned. The [NetwClock] of each peer holds until that peer has the world back. [method Netw.configure_transfer] picks what the new server keeps.
+		</constant>
+		<constant name="TRANSFER_CONTINUE" value="1" enum="TransferMode">
+			Each client keeps its world and its nodes.
 		</constant>
 	</constants>
 </class>

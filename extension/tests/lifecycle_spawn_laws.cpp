@@ -719,11 +719,11 @@ TEST_CASE(
     }
     NETW_CHECK_EQ(
         NetwEntity::of(stage.rig.route_node(route, -1))->get_controller(),
-        int64_t(0)
+        int64_t(1)
     );
     NETW_CHECK_EQ(
         NetwEntity::of(stage.rig.route_node(route, 1))->get_controller(),
-        int64_t(0)
+        int64_t(1)
     );
     const int64_t despawns = frames_in(observer, session_peer, "DESPAWN");
     Node *freed = stage.rig.route_node(route, -1);
@@ -864,13 +864,13 @@ TEST_CASE(
 
     const int again = route_of(back);
     NETW_CHECK_EQ(int64_t(back->get(StringName("hp"))), int64_t(7));
-    NETW_CHECK_EQ(NetwEntity::of(back)->get_controller(), int64_t(0));
+    NETW_CHECK_EQ(NetwEntity::of(back)->get_controller(), int64_t(1));
     Node *seen = stage.rig.route_node(again, 1);
     const bool observed = seen != nullptr;
     CHECK(observed);
     if (observed) {
         NETW_CHECK_EQ(int64_t(seen->get(StringName("hp"))), int64_t(7));
-        NETW_CHECK_EQ(NetwEntity::of(seen)->get_controller(), int64_t(0));
+        NETW_CHECK_EQ(NetwEntity::of(seen)->get_controller(), int64_t(1));
     }
 }
 

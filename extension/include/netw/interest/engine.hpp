@@ -9,6 +9,10 @@
 #include "godot/variant.hpp"
 #include "netw/interest/decl.hpp"
 
+namespace netw {
+struct PeerRename;
+} // namespace netw
+
 namespace netw::interest {
 
 class BitSet {
@@ -279,6 +283,7 @@ public:
     bool layer_remove_viewer(const godot::StringName &id, int64_t peer_id);
     bool layer_has_viewer(const godot::StringName &id, int64_t peer_id) const;
     bool forget_peer(int64_t peer_id);
+    void rename_peers(const PeerRename &p_rename);
     bool layer_set_policy(const godot::StringName &id, int policy);
     int layer_policy(const godot::StringName &id) const;
 

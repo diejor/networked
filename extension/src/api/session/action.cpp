@@ -183,7 +183,7 @@ void NetwMultiplayer::action_send_request(
         return;
     }
     const bool is_remote = has_multiplayer_peer() && !is_host();
-    const int64_t destination = session_authority_peer();
+    const int64_t destination = SERVER_PEER;
     const Ref<NetwEntity> entity
         = NetwEntity::of(node_from_tree_path(p_target_path));
     int64_t route = 0;

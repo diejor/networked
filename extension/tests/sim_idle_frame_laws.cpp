@@ -649,7 +649,7 @@ TEST_CASE(
     REQUIRE(evidence.driven);
     REQUIRE(evidence.seated);
     REQUIRE(evidence.slept);
-    NETW_CHECK_EQ(evidence.target_before, int64_t(0));
+    NETW_CHECK_EQ(evidence.target_before, int64_t(1));
     NETW_CHECK_GE(evidence.walked_frame, 1);
     NETW_CHECK_LE(
         evidence.walked_frame,
@@ -668,7 +668,7 @@ TEST_CASE(
     REQUIRE(evidence.driven);
     REQUIRE(evidence.seated);
     REQUIRE(evidence.slept);
-    NETW_CHECK_EQ(evidence.target_before, int64_t(0));
+    NETW_CHECK_EQ(evidence.target_before, int64_t(1));
     NETW_CHECK_GE(evidence.walked_frame, 1);
     NETW_CHECK_LE(evidence.walked_frame, 2);
     NETW_CHECK_GE(evidence.claimed_frame, 1);

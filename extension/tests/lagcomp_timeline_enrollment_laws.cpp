@@ -28,7 +28,7 @@ using netw::NetwMultiplayer;
 using netw::NetwPropertyConfig;
 using netw::repl::PropertySet;
 
-constexpr int COORDINATOR = 7;
+constexpr int SERVER = 1;
 constexpr int MEMBER = 9;
 constexpr int TICKRATE = 30;
 
@@ -124,28 +124,25 @@ double sampled_x(
 }
 
 TEST_CASE(
-    "[Networked][LagComp][Timeline] TE1 the peer holding session authority "
-    "enrolls a non-predicted state binding in the rewind registry, and a "
-    "member enrolls nothing, whichever transport peer id either of them "
-    "happens to carry"
+    "[Networked][LagComp][Timeline] TE1 the server enrolls a non-predicted "
+    "state binding in the rewind registry, and a member enrolls nothing"
 ) {
     MeshStand stand;
-    stand.seat_coordinator(COORDINATOR);
+    stand.seat_server();
     stand.seat_member(MEMBER);
-    stand.wire(COORDINATOR, MEMBER);
+    stand.wire(SERVER, MEMBER);
     stand.pump(4);
 
-    NetwMultiplayer *host = stand.session_of(COORDINATOR);
+    NetwMultiplayer *host = stand.session_of(SERVER);
     NetwMultiplayer *guest = stand.session_of(MEMBER);
     REQUIRE(host != nullptr);
     REQUIRE(guest != nullptr);
-    NETW_CHECK_EQ(int(host->is_server()), 0);
     NETW_CHECK_EQ(int(host->is_host()), 1);
     NETW_CHECK_EQ(int(guest->is_host()), 0);
 
     Node *held = mount_under_root("TE1Host");
     Node *seen = mount_under_root("TE1Member");
-    stand.mount(COORDINATOR, held);
+    stand.mount(SERVER, held);
     stand.mount(MEMBER, seen);
     arm_simulation(host);
     arm_simulation(guest);
@@ -161,21 +158,21 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][LagComp][Timeline] TE2 the timeline a coordinator of 7 "
-    "enrolled records the body as it moves, so a sample reads where it stood "
+    "[Networked][LagComp][Timeline] TE2 the timeline the server enrolled "
+    "records the body as it moves, so a sample reads where it stood "
     "at a past tick and a rewind stands it there and puts it back"
 ) {
     MeshStand stand;
-    stand.seat_coordinator(COORDINATOR);
+    stand.seat_server();
     stand.seat_member(MEMBER);
-    stand.wire(COORDINATOR, MEMBER);
+    stand.wire(SERVER, MEMBER);
     stand.pump(4);
 
-    NetwMultiplayer *host = stand.session_of(COORDINATOR);
+    NetwMultiplayer *host = stand.session_of(SERVER);
     REQUIRE(host != nullptr);
 
     Node *held = mount_under_root("TE2Host");
-    stand.mount(COORDINATOR, held);
+    stand.mount(SERVER, held);
     arm_simulation(host);
 
     Carrier *body = a_state_body(host, held, "Target", 10.0);
@@ -211,20 +208,20 @@ TEST_CASE(
 
 TEST_CASE(
     "[Networked][LagComp][Timeline] TE3 removing a state binding at a "
-    "coordinator of 7 takes that entity's timeline and no other, through the "
+    "server takes that entity's timeline and no other, through the "
     "reconcile the entity book runs and through the dropped-binding sweep"
 ) {
     MeshStand stand;
-    stand.seat_coordinator(COORDINATOR);
+    stand.seat_server();
     stand.seat_member(MEMBER);
-    stand.wire(COORDINATOR, MEMBER);
+    stand.wire(SERVER, MEMBER);
     stand.pump(4);
 
-    NetwMultiplayer *host = stand.session_of(COORDINATOR);
+    NetwMultiplayer *host = stand.session_of(SERVER);
     REQUIRE(host != nullptr);
 
     Node *held = mount_under_root("TE3Host");
-    stand.mount(COORDINATOR, held);
+    stand.mount(SERVER, held);
     arm_simulation(host);
 
     Carrier *leaving = a_state_body(host, held, "Leaving", 10.0);

@@ -592,7 +592,7 @@ public:
             = p_scenario.rung == RUNG_STEERED || p_scenario.rung == RUNG_AVATAR;
         if (steered
             && p_plant != PLANT_THE_LADDER_READS_A_STEERED_ENTITY_AS_OWNED) {
-            entity->set_controller(1);
+            entity->record_controller(netw::SERVER_PEER);
         }
         bench.record(node, StringName("position"), p0(), 0);
         NetwNativeTests::display_mark_role_dirty(

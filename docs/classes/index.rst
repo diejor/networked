@@ -37,6 +37,8 @@ Testing
     class_netwtestdiscordservice
     class_netwtestsessionhook
     class_netwtestsuite
+    class_netwtransfercontract
+    class_netwtransferdriver
     class_netwwaiter
     class_webrtctestsupport
 

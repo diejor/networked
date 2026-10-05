@@ -56,7 +56,7 @@ int64_t NetwMultiplayer::sim_local_peer() {
 
 sim::Steering NetwMultiplayer::sim_steering_of(const NetwEntity &p_entity) {
     sim::Steering steering;
-    steering.controller = p_entity.get_controller();
+    steering.controller = p_entity.steering();
     steering.hold = int64_t(p_entity.get_hold());
     steering.pending = p_entity.get_is_control_pending();
     steering.claiming = p_entity.is_claim_pending();
@@ -199,7 +199,7 @@ void NetwMultiplayer::sim_rest_pass(
     }
     rest.asleep_since = -1;
     rest.releasing = true;
-    r_row.view->release_authority(0);
+    r_row.view->release_authority(SERVER_PEER);
 }
 
 void NetwMultiplayer::sim_settle_walk(int64_t p_local_peer, int64_t p_tick) {

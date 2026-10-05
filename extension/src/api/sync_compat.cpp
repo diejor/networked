@@ -296,7 +296,7 @@ void SyncCompat::refresh_interest_intents() {
 
 void SyncCompat::refresh_interest_intent(Node *p_root) {
     NetwMultiplayer *plane = core();
-    if (plane == nullptr || !plane->is_session_authority()
+    if (plane == nullptr || !plane->is_host()
         || p_root == nullptr) {
         return;
     }
@@ -329,7 +329,7 @@ void SyncCompat::refresh_row_intent(Consumed *p_row) {
         return;
     }
     PackedInt64Array peer_ids;
-    if (plane->is_session_authority()) {
+    if (plane->is_host()) {
         peer_ids = plane->interest_known_peers();
     } else if (
         plane->session_get_inner().is_valid()

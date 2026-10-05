@@ -127,13 +127,12 @@ TEST_CASE(
     session->embed_dispose();
 }
 
-Ref<NetwMultiplayer> a_client_of_coordinator(int p_local, int p_coordinator) {
+Ref<NetwMultiplayer> a_client(int p_local) {
     Ref<LocalMultiplayerPeer> peer;
     peer.instantiate();
     NETW_CHECK_EQ(int(peer->create_client(p_local)), int(OK));
 
     const Ref<NetwMultiplayer> session = a_session();
-    session->session_set_authority_peer(p_coordinator);
     session->NETW_API_VIRTUAL(set_multiplayer_peer)(peer);
     session->session_set_role(NetwMultiplayer::ROLE_CLIENT);
     return session;
@@ -141,10 +140,10 @@ Ref<NetwMultiplayer> a_client_of_coordinator(int p_local, int p_coordinator) {
 
 TEST_CASE(
     "[Networked][Session][Hosted] PJ5 a join held for one resend waits for "
-    "the coordinator it was addressed to, so transport peer 1 arriving first "
-    "leaves the retry armed and peer 7 spends it"
+    "the server it was addressed to, so another peer arriving first leaves "
+    "the retry armed and the server spends it"
 ) {
-    const Ref<NetwMultiplayer> session = a_client_of_coordinator(9, 7);
+    const Ref<NetwMultiplayer> session = a_client(9);
     session->session_prepare_join(StringName("ana"), Array());
     REQUIRE(session->session_prepared_join().has_value());
 
@@ -156,13 +155,13 @@ TEST_CASE(
     session->session_announce_entered();
     NETW_CHECK_EQ(log.count("submitted"), 1);
 
-    session->emit_signal(StringName("peer_connected"), int64_t(1));
+    session->emit_signal(StringName("peer_connected"), int64_t(7));
     NETW_CHECK_EQ(log.count("submitted"), 1);
 
-    session->emit_signal(StringName("peer_connected"), int64_t(7));
+    session->emit_signal(StringName("peer_connected"), int64_t(1));
     NETW_CHECK_EQ(log.count("submitted"), 2);
 
-    session->emit_signal(StringName("peer_connected"), int64_t(7));
+    session->emit_signal(StringName("peer_connected"), int64_t(1));
     NETW_CHECK_EQ(log.count("submitted"), 2);
 
     session->embed_dispose();
@@ -170,10 +169,10 @@ TEST_CASE(
 
 TEST_CASE(
     "[Networked][Session][Hosted] PJ6 a preparation that is replaced or "
-    "cleared takes its held resend with it, so the coordinator arriving "
+    "cleared takes its held resend with it, so the server arriving "
     "afterwards cannot seat the request nobody is waiting on any more"
 ) {
-    const Ref<NetwMultiplayer> session = a_client_of_coordinator(9, 7);
+    const Ref<NetwMultiplayer> session = a_client(9);
     session->session_prepare_join(StringName("ana"), Array());
 
     CallLog log;
@@ -185,14 +184,14 @@ TEST_CASE(
     NETW_CHECK_EQ(log.count("submitted"), 1);
 
     session->session_prepare_join(StringName("bo"), Array());
-    session->emit_signal(StringName("peer_connected"), int64_t(7));
+    session->emit_signal(StringName("peer_connected"), int64_t(1));
     NETW_CHECK_EQ(log.count("submitted"), 1);
 
     session->session_announce_entered();
     NETW_CHECK_EQ(log.count("submitted"), 2);
 
     session->session_clear_prepared_join();
-    session->emit_signal(StringName("peer_connected"), int64_t(7));
+    session->emit_signal(StringName("peer_connected"), int64_t(1));
     NETW_CHECK_EQ(log.count("submitted"), 2);
 
     session->embed_dispose();

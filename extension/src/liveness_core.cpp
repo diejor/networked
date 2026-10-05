@@ -4,6 +4,7 @@
 
 #include "netw/colors.hpp"
 #include "netw/entity/ids.hpp"
+#include "netw/peer_rename.hpp"
 #include "netw/profile.hpp"
 
 using namespace godot;
@@ -116,6 +117,12 @@ void NetwLivenessCore::install_lease(int base, int count) {
     lease.push_back(block);
 }
 
+void NetwLivenessCore::leave_lease() {
+    route_counter = route_floor();
+    leased = false;
+    lease.clear();
+}
+
 bool NetwLivenessCore::is_leased() const {
     return leased;
 }
@@ -140,6 +147,32 @@ int NetwLivenessCore::lease_remaining() const {
         remaining += block.end - block.next;
     }
     return remaining;
+}
+
+PackedInt32Array NetwLivenessCore::lease_spans() const {
+    PackedInt32Array spans;
+    for (const LeaseBlock &block : lease) {
+        if (block.next < block.end) {
+            spans.push_back(block.next);
+            spans.push_back(block.end - block.next);
+        }
+    }
+    return spans;
+}
+
+void NetwLivenessCore::mint_above(int floor) {
+    route_counter = MAX(route_counter, floor);
+}
+
+void NetwLivenessCore::restore_grant(int peer, int base, int count) {
+    if (base <= 0 || count <= 0) {
+        return;
+    }
+    LeaseBlock block;
+    block.peer = peer;
+    block.next = base;
+    block.end = base + count;
+    grants.push_back(block);
 }
 
 int NetwLivenessCore::grant_lease(int peer, int count) {
@@ -260,6 +293,20 @@ bool NetwLivenessCore::adopt_epoch(int route, int epoch) {
     return true;
 }
 
+void NetwLivenessCore::raise_epoch_to_wire(int route) {
+    Record *record = record_of(rid_from_route(route));
+    if (record != nullptr && record->wire_epoch > record->epoch) {
+        record->epoch = record->wire_epoch;
+    }
+}
+
+void NetwLivenessCore::follow_wire_epoch(int route) {
+    Record *record = record_of(rid_from_route(route));
+    if (record != nullptr && record->wire_epoch >= 0) {
+        record->epoch = record->wire_epoch;
+    }
+}
+
 uint64_t NetwLivenessCore::route_anchor(int route) const {
     const Record *record = record_of(rid_from_route(route));
     return record != nullptr ? record->anchor : 0;
@@ -282,6 +329,15 @@ bool NetwLivenessCore::set_route_anchor(
     record->anchor = anchor;
     record->anchor_author = author;
     return true;
+}
+
+void NetwLivenessCore::rename_authors(const PeerRename &p_rename) {
+    records.each([&p_rename](uint64_t, Record &r_record) {
+        if (r_record.anchor_author != 0) {
+            r_record.anchor_author
+                = uint64_t(p_rename.of(int64_t(r_record.anchor_author)));
+        }
+    });
 }
 
 int NetwLivenessCore::route_of(const RID &entity) const {

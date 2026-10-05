@@ -251,9 +251,8 @@ TEST_CASE(
 ) {
     Ref<NetwMultiplayer> core;
     core.instantiate();
-    core->session_set_authority_peer(7);
-    core->session_peer_assigned(true, false, 1);
-    REQUIRE_FALSE(core->is_session_authority());
+    core->session_peer_assigned(true, 9);
+    REQUIRE_FALSE(core->is_host());
     const CallLog seen;
     core->scene_set_carry_move(seen.callable("carry"));
     Node *root = memnew(Node);

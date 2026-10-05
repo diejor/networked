@@ -147,7 +147,7 @@ TEST_CASE(
     memdelete(root);
 }
 
-constexpr int64_t COORDINATOR = 7;
+constexpr int64_t SERVER = 1;
 constexpr uint64_t FIRST_MOVE = 2;
 
 PackedByteArray reparent_frame(
@@ -161,7 +161,7 @@ PackedByteArray reparent_frame(
     bool entity_relative = true;
     uint64_t anchor = uint64_t(p_anchor);
     uint64_t revision = p_revision;
-    uint64_t author = uint64_t(COORDINATOR);
+    uint64_t author = uint64_t(SERVER);
     String subpath(".");
     REQUIRE(writer.bool1(entity_relative));
     REQUIRE(writer.varuint(anchor, 5));
@@ -182,7 +182,6 @@ struct DeferredMove {
 
     DeferredMove() {
         core.instantiate();
-        core->session_set_authority_peer(COORDINATOR);
         root = named("session-root");
         netw::gd::scene_root()->add_child(root);
         core->session_set_root(Callable(root, "get_node").bind(NodePath(".")));
@@ -218,14 +217,14 @@ struct DeferredMove {
 
 TEST_CASE(
     "[Networked][Spawn][Hosted][SceneTree] SP4 a reparent that waits for its "
-    "anchor is released under the peer that sent it, so coordinator 7's move "
+    "anchor is released under the peer that sent it, so the server's move "
     "applies once when the anchor arrives"
 ) {
     DeferredMove world;
     const PackedByteArray frame
         = reparent_frame(world.core.ptr(), world.route, world.anchor);
 
-    world.core->spawn_handle_reparent_frame(frame, COORDINATOR);
+    world.core->spawn_handle_reparent_frame(frame, SERVER);
     NETW_CHECK_EQ(
         int64_t(
             world.core->spawn_plane()->counters()[StringName("spawn_deferrals")]
@@ -242,14 +241,14 @@ TEST_CASE(
 
 TEST_CASE(
     "[Networked][Spawn][Hosted][SceneTree] SP5 a reparent from a peer holding "
-    "no authority never waits on an anchor at all, so transport peer 1 cannot "
-    "move a node on a session whose coordinator is 7"
+    "no authority never waits on an anchor at all, so a member cannot move a "
+    "node"
 ) {
     DeferredMove world;
     const PackedByteArray frame
         = reparent_frame(world.core.ptr(), world.route, world.anchor);
 
-    world.core->spawn_handle_reparent_frame(frame, 1);
+    world.core->spawn_handle_reparent_frame(frame, 7);
     NETW_CHECK_EQ(world.mover->get_parent(), world.origin);
 
     world.release_anchor();
@@ -286,8 +285,8 @@ TEST_CASE(
         FIRST_MOVE
     );
 
-    world.core->spawn_handle_reparent_frame(newest, COORDINATOR);
-    world.core->spawn_handle_reparent_frame(older, COORDINATOR);
+    world.core->spawn_handle_reparent_frame(newest, SERVER);
+    world.core->spawn_handle_reparent_frame(older, SERVER);
 
     NETW_CHECK_EQ(world.mover->get_parent(), elsewhere);
     NETW_CHECK_EQ(world.destination->get_child_count(), 0);

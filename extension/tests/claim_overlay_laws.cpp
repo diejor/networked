@@ -227,7 +227,7 @@ TEST_CASE(
     NETW_CHECK_EQ(int(claim->get_is_failed()), int(refused));
     CHECK_FALSE(claimant->get_is_control_pending());
     CHECK_FALSE(claimant->get_is_controlled_locally());
-    const int64_t holder = refused ? int64_t(b) : int64_t(0);
+    const int64_t holder = refused ? int64_t(b) : int64_t(1);
     NETW_CHECK_EQ(stand.entity(-1)->get_controller(), holder);
     NETW_CHECK_EQ(claimant->get_controller(), holder);
     if (refused) {
@@ -308,7 +308,7 @@ TEST_CASE(
     for (int client = -1; client < 2; ++client) {
         NETW_FORMAT_INT(peer_text, client);
         CAPTURE(peer_text);
-        NETW_CHECK_EQ(stand.entity(client)->get_controller(), int64_t(0));
+        NETW_CHECK_EQ(stand.entity(client)->get_controller(), int64_t(1));
         NETW_CHECK_EQ(stand.strokes(client), 7);
     }
 }

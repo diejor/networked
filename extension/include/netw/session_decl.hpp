@@ -22,7 +22,8 @@ enum Kind {
     KIND_SESSION_CONFIG = 4,
     KIND_CLOCK_CONFIG = 5,
     KIND_LAGCOMP_CONFIG = 6,
-    KIND_COUNT = 7,
+    KIND_TRANSFER = 7,
+    KIND_COUNT = 8,
 };
 
 enum Form {

@@ -85,7 +85,6 @@ OpenSeat open_seat(
     uint64_t p_tenure,
     const wire::StreamTenure &p_asked,
     const wire::StreamTenure &p_installed,
-    int64_t p_coordinator,
     wire::StreamTenure &r_tenure
 ) {
     r_tenure = wire::StreamTenure();
@@ -121,8 +120,7 @@ OpenSeat open_seat(
             int64_t(p_lane.ordinal),
             p_sender,
             int64_t(node->get_multiplayer_authority()),
-            p_entity->get_controller(),
-            p_coordinator
+            p_entity->steering()
         )) {
         return OpenSeat::REFUSE;
     }
@@ -164,8 +162,7 @@ void seat_or_park(
     NetwSyncModel *p_model,
     const Ref<NetwEntity> &p_entity,
     const wire::ParkedOpen &p_open,
-    const wire::StreamTenure &p_installed,
-    int64_t p_coordinator
+    const wire::StreamTenure &p_installed
 ) {
     wire::StreamTenure asked;
     asked.anchor = p_open.anchor;
@@ -179,7 +176,6 @@ void seat_or_park(
         p_open.tenure,
         asked,
         p_installed,
-        p_coordinator,
         tenure
     )) {
         case OpenSeat::SEAT:
@@ -638,7 +634,7 @@ Error NetwMultiplayer::table_admit_frame_default(
     if (p_channel != gate_channels.table) {
         return ERR_INVALID_DATA;
     }
-    if (p_sender != session_authority_peer()) {
+    if (p_sender != SERVER_PEER) {
         store_world.arrays.count_bad_sender();
         return ERR_UNAUTHORIZED;
     }
@@ -1047,8 +1043,7 @@ void NetwMultiplayer::row_control_apply(
                 plane->get_sync_model(),
                 wrapper_for_route(p_record.route),
                 asked,
-                anchor_tenure(anchor_installed(p_record.route)),
-                session_authority_peer()
+                anchor_tenure(anchor_installed(p_record.route))
             );
             return;
         }
@@ -1174,7 +1169,6 @@ void NetwMultiplayer::row_streams_follow_readers(
             p_tenure,
             asked,
             installed,
-            session_authority_peer(),
             seated
         );
         book.follow_tenure(
@@ -1227,8 +1221,7 @@ void NetwMultiplayer::row_streams_reseat_parks(
             p_plane->get_sync_model(),
             entity,
             parked[at],
-            installed,
-            session_authority_peer()
+            installed
         );
     }
 }
@@ -1670,7 +1663,7 @@ bool NetwMultiplayer::display_default_authors_streams(const RID &p_entity) {
             is_host(),
             get_unique_id(),
             node->get_multiplayer_authority(),
-            entity->get_controller()
+            entity->steering()
         );
         if (!authored) {
             return false;
@@ -2565,7 +2558,7 @@ bool NetwMultiplayer::sync_policy_admits(
         p_policy,
         p_sender,
         node->get_multiplayer_authority(),
-        wrapper->get_controller()
+        wrapper->steering()
     );
 }
 

@@ -234,8 +234,8 @@ bool NetwMultiplayer::sim_write_install_row(
 
 int64_t NetwMultiplayer::sim_author_peer(const RID &p_entity) const {
     const sim::Row *row = sim_rows.row_of(p_entity);
-    if (row != nullptr && sim::session_authors(row->facts)) {
-        return session_authority_peer();
+    if (row != nullptr && sim::server_authors(row->facts)) {
+        return SERVER_PEER;
     }
     const Ref<NetwEntity> entity = entity_get_view(p_entity);
     return entity.is_valid() ? entity->get_controller() : 0;
@@ -243,7 +243,7 @@ int64_t NetwMultiplayer::sim_author_peer(const RID &p_entity) const {
 
 uint64_t NetwMultiplayer::sim_author_tenure(const RID &p_entity) const {
     const sim::Row *row = sim_rows.row_of(p_entity);
-    if (row != nullptr && sim::session_authors(row->facts)) {
+    if (row != nullptr && sim::server_authors(row->facts)) {
         return 0;
     }
     const Ref<NetwEntity> entity = entity_get_view(p_entity);

@@ -44,6 +44,8 @@ Description
 
 Endpoints are pairs of ``(transport, address)`` that can be probed by **NetwConnection** to determine if they are reachable.
 
+In a mesh, exactly one peer has id 1. It is the server, and every other peer is online once it is linked to peer 1.
+
 .. rst-class:: classref-reftable-group
 
 Properties

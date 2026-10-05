@@ -14,10 +14,10 @@ using netw::NetwMultiplayer;
 using netw::NetwSchema;
 namespace schema_model = netw::schema_model;
 
-constexpr int COORDINATOR = 7;
+constexpr int SERVER = 1;
 constexpr int MEMBER = 9;
 constexpr int LATE = 11;
-constexpr int TRANSPORT_SERVER = 1;
+constexpr int OTHER = 7;
 
 struct Declared {
     Declared() {
@@ -85,18 +85,18 @@ PackedByteArray body(int p_size) {
 }
 
 TEST_CASE(
-    "[Networked][Table][Authority] TA1 a wave committed at a coordinator that "
-    "is not transport peer 1 reaches a member, and the member follows the "
-    "next wave and the release that retires the rows"
+    "[Networked][Table][Authority] TA1 a wave committed at the server "
+    "reaches a member, and the member follows the next wave and the release "
+    "that retires the rows"
 ) {
     Declared declared;
     MeshStand stand;
-    stand.seat_coordinator(COORDINATOR);
+    stand.seat_server();
     stand.seat_member(MEMBER);
-    stand.wire(COORDINATOR, MEMBER);
+    stand.wire(SERVER, MEMBER);
     stand.pump(4);
 
-    NetwMultiplayer *host = stand.session_of(COORDINATOR);
+    NetwMultiplayer *host = stand.session_of(SERVER);
     NetwMultiplayer *guest = stand.session_of(MEMBER);
     REQUIRE(host != nullptr);
     REQUIRE(guest != nullptr);
@@ -140,18 +140,18 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Table][Authority] TA2 a peer that reaches a non-1 "
-    "coordinator after the wave is healed by the coordinator's snapshot "
-    "rather than by the next change"
+    "[Networked][Table][Authority] TA2 a peer that reaches the server after "
+    "the wave is healed by the server's snapshot rather than by the next "
+    "change"
 ) {
     Declared declared;
     MeshStand stand;
-    stand.seat_coordinator(COORDINATOR);
+    stand.seat_server();
     stand.seat_member(MEMBER);
-    stand.wire(COORDINATOR, MEMBER);
+    stand.wire(SERVER, MEMBER);
     stand.pump(4);
 
-    NetwMultiplayer *host = stand.session_of(COORDINATOR);
+    NetwMultiplayer *host = stand.session_of(SERVER);
     REQUIRE(host != nullptr);
     const RID table = host->table_find_or_adopt("AuthMob");
     NETW_CHECK_EQ(int(table.is_valid()), 1);
@@ -163,7 +163,7 @@ TEST_CASE(
     stand.step_ticks(4);
 
     stand.seat_member(LATE);
-    stand.wire(COORDINATOR, LATE);
+    stand.wire(SERVER, LATE);
     stand.step_ticks(8);
 
     NetwMultiplayer *joined = stand.session_of(LATE);
@@ -182,34 +182,32 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Table][Authority] TA3 transport peer 1 publishes no table "
-    "under another coordinator, so being the numeric server is not "
-    "permission to author rows"
+    "[Networked][Table][Authority] TA3 a member publishes no table, so "
+    "adopting one is not permission to author rows"
 ) {
     Declared declared;
     MeshStand stand;
-    stand.seat_coordinator(COORDINATOR);
-    stand.seat_member(TRANSPORT_SERVER);
+    stand.seat_server();
+    stand.seat_member(OTHER);
     stand.seat_member(MEMBER);
-    stand.wire(COORDINATOR, TRANSPORT_SERVER);
-    stand.wire(COORDINATOR, MEMBER);
-    stand.wire(TRANSPORT_SERVER, MEMBER);
+    stand.wire(SERVER, OTHER);
+    stand.wire(SERVER, MEMBER);
+    stand.wire(OTHER, MEMBER);
     stand.pump(4);
 
-    NetwMultiplayer *numeric = stand.session_of(TRANSPORT_SERVER);
+    NetwMultiplayer *other = stand.session_of(OTHER);
     NetwMultiplayer *guest = stand.session_of(MEMBER);
-    REQUIRE(numeric != nullptr);
+    REQUIRE(other != nullptr);
     REQUIRE(guest != nullptr);
-    NETW_CHECK_EQ(int(numeric->is_server()), 1);
-    NETW_CHECK_EQ(int(numeric->table_publishes()), 0);
+    NETW_CHECK_EQ(int(other->table_publishes()), 0);
 
-    const RID table = numeric->table_find_or_adopt("AuthMob");
+    const RID table = other->table_find_or_adopt("AuthMob");
     NETW_CHECK_EQ(int(table.is_valid()), 1);
     if (!table.is_valid()) {
         return;
     }
     NETW_CHECK_EQ(
-        publish(numeric, table, int64s({901, 902}), int32s({7, 8})),
+        publish(other, table, int64s({901, 902}), int32s({7, 8})),
         OK
     );
     stand.step_ticks(6);
@@ -224,25 +222,24 @@ TEST_CASE(
 
 TEST_CASE(
     "[Networked][Table][Authority] TA4 a member admits a table frame from the "
-    "coordinator it follows and refuses the same frame from transport peer 1"
+    "server and refuses the same frame from another member"
 ) {
     Declared declared;
     MeshStand stand;
-    stand.seat_coordinator(COORDINATOR);
+    stand.seat_server();
     stand.seat_member(MEMBER);
-    stand.wire(COORDINATOR, MEMBER);
+    stand.wire(SERVER, MEMBER);
     stand.pump(4);
 
     NetwMultiplayer *guest = stand.session_of(MEMBER);
     REQUIRE(guest != nullptr);
-    NETW_CHECK_EQ(int(guest->session_authority_peer()), COORDINATOR);
 
     const int64_t channel = table_channel();
     const int refused = int(
-        guest->table_admit_frame_default(TRANSPORT_SERVER, channel, body(4))
+        guest->table_admit_frame_default(OTHER, channel, body(4))
     );
     const int admitted
-        = int(guest->table_admit_frame_default(COORDINATOR, channel, body(4)));
+        = int(guest->table_admit_frame_default(SERVER, channel, body(4)));
     NETW_CHECK_EQ(refused, int(ERR_UNAUTHORIZED));
     NETW_CHECK_EQ(int(admitted == int(ERR_UNAUTHORIZED)), 0);
 }

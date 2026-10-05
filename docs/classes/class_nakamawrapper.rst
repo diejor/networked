@@ -44,9 +44,13 @@ Properties
 .. table::
    :widths: auto
 
-   +-------------------+------------------------------------------------------------------------------+
-   | :godot:`Callable` | :ref:`proxy_base_resolver<class_NakamaWrapper_property_proxy_base_resolver>` |
-   +-------------------+------------------------------------------------------------------------------+
+   +-------------------+--------------------------------------------------------------------------------+----------------+
+   | :godot:`Callable` | :ref:`proxy_base_resolver<class_NakamaWrapper_property_proxy_base_resolver>`   |                |
+   +-------------------+--------------------------------------------------------------------------------+----------------+
+   | :godot:`bool`     | :ref:`migrate_on_host_loss<class_NakamaWrapper_property_migrate_on_host_loss>` | ``false``      |
+   +-------------------+--------------------------------------------------------------------------------+----------------+
+   | :godot:`Callable` | :ref:`migration_policy<class_NakamaWrapper_property_migration_policy>`         | ``Callable()`` |
+   +-------------------+--------------------------------------------------------------------------------+----------------+
 
 .. rst-class:: classref-reftable-group
 
@@ -186,6 +190,38 @@ Property Descriptions
 :godot:`Callable` **proxy_base_resolver** :ref:`🔗<class_NakamaWrapper_property_proxy_base_resolver>`
 
 Optional :godot:`Callable` that sends Nakama traffic through a proxy, such as a Discord activity proxy. It is called as ``proxy_base_resolver(host_node, config_host)`` and returns the proxy address, such as ``"app.discordsays.com/.proxy/nakama"``, or ``""`` to connect directly.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NakamaWrapper_property_migrate_on_host_loss:
+
+.. rst-class:: classref-property
+
+:godot:`bool` **migrate_on_host_loss** = ``false`` :ref:`🔗<class_NakamaWrapper_property_migrate_on_host_loss>`
+
+.. rst-class:: classref-property-setget
+
+- |void| **@migrate_on_host_loss_setter**\ (\ value\: :godot:`bool`\ )
+
+When the host leaves, the peers left elect a new server and keep the match.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NakamaWrapper_property_migration_policy:
+
+.. rst-class:: classref-property
+
+:godot:`Callable` **migration_policy** = ``Callable()`` :ref:`🔗<class_NakamaWrapper_property_migration_policy>`
+
+.. rst-class:: classref-property-setget
+
+- |void| **@migration_policy_setter**\ (\ value\: :godot:`Callable`\ )
+
+Picks the new server from the surviving peer ids, and must answer the same on every peer. When empty, the lowest id takes over.
 
 .. rst-class:: classref-section-separator
 

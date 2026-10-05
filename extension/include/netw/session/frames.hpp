@@ -304,6 +304,71 @@ struct RouteLease {
     );
 };
 
+struct ResyncHead {
+    uint64_t route_floor = 0;
+    uint64_t player_high = 0;
+    uint64_t leases = 0;
+    uint64_t routes = 0;
+    bool last = false;
+
+    static constexpr auto wire = netw::wire::describe(
+        netw::wire::field<&ResyncHead::route_floor>(
+            "route_floor",
+            netw::wire::varuint(5)
+        ),
+        netw::wire::field<&ResyncHead::player_high>(
+            "player_high",
+            netw::wire::varuint(5)
+        ),
+        netw::wire::field<&ResyncHead::leases>(
+            "leases",
+            netw::wire::varuint(1)
+        ),
+        netw::wire::field<&ResyncHead::routes>(
+            "routes",
+            netw::wire::varuint(3)
+        ),
+        netw::wire::field<&ResyncHead::last>("last", netw::wire::bool1())
+    );
+};
+
+struct ResyncRoute {
+    uint64_t route_delta = 0;
+    uint64_t anchor = 0;
+    uint64_t anchor_author = 0;
+    uint64_t control_revision = 0;
+    uint64_t epoch = 0;
+
+    static constexpr auto wire = netw::wire::describe(
+        netw::wire::field<&ResyncRoute::route_delta>(
+            "route_delta",
+            netw::wire::varuint(5)
+        ),
+        netw::wire::field<&ResyncRoute::anchor>(
+            "anchor",
+            netw::wire::varuint(5)
+        ),
+        netw::wire::field<&ResyncRoute::anchor_author>(
+            "anchor_author",
+            netw::wire::varuint(5)
+        ),
+        netw::wire::field<&ResyncRoute::control_revision>(
+            "control_revision",
+            netw::wire::varuint(5)
+        ),
+        netw::wire::field<&ResyncRoute::epoch>(
+            "epoch",
+            netw::wire::varuint(3)
+        )
+    );
+};
+
+struct Resync {
+    ResyncHead head;
+    godot::LocalVector<RouteLease> leases;
+    godot::LocalVector<ResyncRoute> routes;
+};
+
 struct DenyKey {
     godot::StringName key;
 
@@ -338,6 +403,20 @@ godot::PackedByteArray roster_write(
 bool roster_read(
     const godot::PackedByteArray &bytes,
     godot::LocalVector<AcceptFrame> &r_rows
+);
+
+constexpr uint64_t RESYNC_LEASES_MAX = 127;
+
+godot::PackedByteArray resync_write(const Resync &resync);
+
+bool resync_read(const godot::PackedByteArray &bytes, Resync &r_resync);
+
+void resync_chunks(
+    const ResyncHead &head,
+    const godot::LocalVector<RouteLease> &leases,
+    const godot::LocalVector<ResyncRoute> &rows,
+    int64_t budget,
+    godot::LocalVector<godot::PackedByteArray> &r_frames
 );
 
 constexpr uint64_t VIEWERS_MAX = 1023;

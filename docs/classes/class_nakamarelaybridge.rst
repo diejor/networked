@@ -29,19 +29,23 @@ Properties
 .. table::
    :widths: auto
 
-   +------------------------------------------------------+----------------------------------------------------------------------------+----------+
-   | :godot:`Variant`                                     | :ref:`nakama_socket<class_NakamaRelayBridge_property_nakama_socket>`       |          |
-   +------------------------------------------------------+----------------------------------------------------------------------------+----------+
-   | :ref:`MatchState<enum_NakamaRelayBridge_MatchState>` | :ref:`match_state<class_NakamaRelayBridge_property_match_state>`           |          |
-   +------------------------------------------------------+----------------------------------------------------------------------------+----------+
-   | :godot:`String`                                      | :ref:`match_id<class_NakamaRelayBridge_property_match_id>`                 |          |
-   +------------------------------------------------------+----------------------------------------------------------------------------+----------+
-   | :ref:`NakamaRelayPeer<class_NakamaRelayPeer>`        | :ref:`multiplayer_peer<class_NakamaRelayBridge_property_multiplayer_peer>` |          |
-   +------------------------------------------------------+----------------------------------------------------------------------------+----------+
-   | :godot:`int`                                         | :ref:`meta_op_code<class_NakamaRelayBridge_property_meta_op_code>`         | ``9001`` |
-   +------------------------------------------------------+----------------------------------------------------------------------------+----------+
-   | :godot:`int`                                         | :ref:`rpc_op_code<class_NakamaRelayBridge_property_rpc_op_code>`           | ``9002`` |
-   +------------------------------------------------------+----------------------------------------------------------------------------+----------+
+   +------------------------------------------------------+------------------------------------------------------------------------------------+----------------+
+   | :godot:`Variant`                                     | :ref:`nakama_socket<class_NakamaRelayBridge_property_nakama_socket>`               |                |
+   +------------------------------------------------------+------------------------------------------------------------------------------------+----------------+
+   | :ref:`MatchState<enum_NakamaRelayBridge_MatchState>` | :ref:`match_state<class_NakamaRelayBridge_property_match_state>`                   |                |
+   +------------------------------------------------------+------------------------------------------------------------------------------------+----------------+
+   | :godot:`String`                                      | :ref:`match_id<class_NakamaRelayBridge_property_match_id>`                         |                |
+   +------------------------------------------------------+------------------------------------------------------------------------------------+----------------+
+   | :ref:`NakamaRelayPeer<class_NakamaRelayPeer>`        | :ref:`multiplayer_peer<class_NakamaRelayBridge_property_multiplayer_peer>`         |                |
+   +------------------------------------------------------+------------------------------------------------------------------------------------+----------------+
+   | :godot:`int`                                         | :ref:`meta_op_code<class_NakamaRelayBridge_property_meta_op_code>`                 | ``9001``       |
+   +------------------------------------------------------+------------------------------------------------------------------------------------+----------------+
+   | :godot:`int`                                         | :ref:`rpc_op_code<class_NakamaRelayBridge_property_rpc_op_code>`                   | ``9002``       |
+   +------------------------------------------------------+------------------------------------------------------------------------------------+----------------+
+   | :godot:`bool`                                        | :ref:`migrate_on_host_loss<class_NakamaRelayBridge_property_migrate_on_host_loss>` | ``false``      |
+   +------------------------------------------------------+------------------------------------------------------------------------------------+----------------+
+   | :godot:`Callable`                                    | :ref:`migration_policy<class_NakamaRelayBridge_property_migration_policy>`         | ``Callable()`` |
+   +------------------------------------------------------+------------------------------------------------------------------------------------+----------------+
 
 .. rst-class:: classref-reftable-group
 
@@ -191,6 +195,18 @@ enum **MetaMessageType**: :ref:`🔗<enum_NakamaRelayBridge_MetaMessageType>`
 
 
 
+.. _class_NakamaRelayBridge_constant_TRANSFER:
+
+.. rst-class:: classref-enumeration-constant
+
+:ref:`MetaMessageType<enum_NakamaRelayBridge_MetaMessageType>` **TRANSFER** = ``2``
+
+.. container:: contribute
+
+	There is currently no description for this enum. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+
+
+
 .. rst-class:: classref-section-separator
 
 ----
@@ -299,6 +315,30 @@ Property Descriptions
 .. container:: contribute
 
 	There is currently no description for this property. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NakamaRelayBridge_property_migrate_on_host_loss:
+
+.. rst-class:: classref-property
+
+:godot:`bool` **migrate_on_host_loss** = ``false`` :ref:`🔗<class_NakamaRelayBridge_property_migrate_on_host_loss>`
+
+When the host leaves, the peers left elect a new server and keep the match.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NakamaRelayBridge_property_migration_policy:
+
+.. rst-class:: classref-property
+
+:godot:`Callable` **migration_policy** = ``Callable()`` :ref:`🔗<class_NakamaRelayBridge_property_migration_policy>`
+
+Picks the new server from the surviving peer ids, and must answer the same on every peer. When empty, the lowest id takes over.
 
 .. rst-class:: classref-section-separator
 

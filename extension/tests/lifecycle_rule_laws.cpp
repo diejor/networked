@@ -85,7 +85,7 @@ struct RuleCell {
     Facts facts() const {
         Facts out;
         out.kind = KINDS[kind];
-        out.peer_is_session = peer == SESSION;
+        out.peer_is_server = peer == SESSION;
         out.peer_is_controller = peer == CONFIRMED_CONTROLLER;
         out.peer_claim = peer == IMMEDIATE_CLAIMANT ? Claim::IMMEDIATE
             : peer == REQUESTABLE_CLAIMANT          ? Claim::REQUESTABLE

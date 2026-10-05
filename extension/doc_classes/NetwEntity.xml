@@ -38,10 +38,10 @@
 		    Netw.configure_entity(self).name = &amp;"ball"
 		[/codeblock]
 		[b]Control[/b]
-		[member controller] is the peer that steers the entity, and [code]0[/code] means the server. The root and every node under it take the controller as their multiplayer authority, as if [method Node.set_multiplayer_authority] was called on each. [method follow_session] keeps a subtree with the server, which is where a [MultiplayerSynchronizer] the server writes belongs.
+		[member controller] is the peer that steers the entity, and [code]1[/code] is the server, as everywhere in [MultiplayerAPI]. The root and every node under it take the controller as their multiplayer authority, as if [method Node.set_multiplayer_authority] was called on each. [method follow_server] keeps a subtree with the server, which is where a [MultiplayerSynchronizer] the server writes belongs.
 		[codeblock]
 		func _init() -&gt; void:
-		    Netw.configure_entity(self).follow_session(^"ServerSync")
+		    Netw.configure_entity(self).follow_server(^"ServerSync")
 
 		func _physics_process(_delta: float) -&gt; void:
 		    if entity.is_controlled_locally:
@@ -128,7 +128,7 @@
 				The server may call it, and so may the [member controller] of a [constant LIFECYCLE_CONTROLLER] entity.
 			</description>
 		</method>
-		<method name="follow_session">
+		<method name="follow_server">
 			<return type="void" />
 			<param index="0" name="path" type="NodePath" />
 			<description>
@@ -150,14 +150,15 @@
 		</method>
 		<method name="release_authority">
 			<return type="NetwPromise" />
-			<param index="0" name="successor" type="int" default="0" />
+			<param index="0" name="successor" type="int" default="1" />
 			<description>
-				Hands control of this entity to [param successor], or to the server when it is [code]0[/code]. The returned [NetwPromise] resolves with this entity once the decision reaches this peer.
+				Hands control of this entity to [param successor], which is the server by default. The returned [NetwPromise] resolves with this entity once the decision reaches this peer.
 				The request carries this peer's latest [method NetwPropertyConfig.broadcast] values, and [param successor] starts from them. Values larger than 1024 bytes are not sent, and [param successor] starts from its own copy.
 				[codeblock lang=text]
 				Error
-				┠╴ERR_UNAUTHORIZED   this peer neither controls the entity nor is claiming it
-				┖╴ERR_UNAVAILABLE    successor holds no copy of the entity
+				┠╴ERR_INVALID_PARAMETER   successor is not a peer id
+				┠╴ERR_UNAUTHORIZED        this peer neither controls the entity nor is claiming it
+				┖╴ERR_UNAVAILABLE         successor holds no copy of the entity
 				[/codeblock]
 				[b]Player request.[/b]
 			</description>
@@ -184,12 +185,12 @@
 			<return type="int" enum="Error" />
 			<param index="0" name="peer_id" type="int" />
 			<description>
-				Gives control of this entity to [param peer_id], or to the server when it is [code]0[/code]. Every peer follows, and [member hold] resets to [constant HOLD_NONE]. A client asks with [method claim_authority].
+				Gives control of this entity to [param peer_id], where [code]1[/code] is the server. Every peer follows, and [member hold] resets to [constant HOLD_NONE]. A client asks with [method claim_authority].
 				[codeblock lang=text]
 				Error
 				┠╴ERR_UNAUTHORIZED        called on a client
 				┠╴ERR_UNCONFIGURED        the entity is not spawned yet
-				┖╴ERR_INVALID_PARAMETER   peer_id is negative
+				┖╴ERR_INVALID_PARAMETER   peer_id is not a peer id
 				[/codeblock]
 				[b]Server Only.[/b]
 			</description>
@@ -208,16 +209,21 @@
 		<member name="control_kind" type="int" setter="" getter="get_control_kind" enum="NetwEntity.ControlKind">
 			Whether a peer or the server controls this entity. See [enum ControlKind].
 		</member>
-		<member name="controller" type="int" setter="set_controller" getter="get_controller" default="0">
-			The peer that steers this entity, [code]0[/code] for the server.
+		<member name="controller" type="int" setter="set_controller" getter="get_controller" default="1">
+			The peer that steers this entity, [code]1[/code] for the server. A listen server's own body also reads [code]1[/code], and [member control_kind] tells the two apart.
 			Written before the entity reaches [constant STAGE_ARMED], it sets the starting controller in place of [member initial_controller]. Written after that, it calls [method transfer_control].
 			[codeblock]
 			entity.controller = peer_id   # hand it to a peer
-			entity.controller = 0         # take it back to the server
+			entity.controller = 1         # take it back to the server
 			[/codeblock]
 		</member>
-		<member name="controller_player" type="NetwPlayer" setter="" getter="get_controller_player">
-			The player [member controller] names, or [code]null[/code]. It can differ from [member player], since a player can steer a server-owned entity.
+		<member name="controller_player" type="NetwPlayer" setter="set_controller_player" getter="get_controller_player">
+			The player that steers this entity, or [code]null[/code] when the server controls it. It can differ from [member player], since a player can steer a server-owned entity.
+			Writing a player hands the entity to that player, and writing [code]null[/code] hands it to the server. It is how a listen server gives an entity to its own player, because writing [code]1[/code] to [member controller] gives it to the server.
+			[codeblock]
+			car.entity.controller_player = Netw.session(self).local_player
+			[/codeblock]
+			[b]Server Only.[/b]
 		</member>
 		<member name="display" type="NetwDisplay" setter="" getter="get_display">
 			The entity's [NetwDisplay], which configures how the entity is drawn. A single value is smoothed with [NetwInterpolate].
@@ -240,7 +246,7 @@
 			[code]true[/code] while a [method claim_authority] from this peer is waiting for its decision.
 		</member>
 		<member name="is_controlled_locally" type="bool" setter="" getter="get_is_controlled_locally">
-			[code]true[/code] when this peer controls the entity, or is claiming a [constant TRANSFER_IMMEDIATE] entity.
+			[code]true[/code] when a player on this peer controls the entity, or is claiming a [constant TRANSFER_IMMEDIATE] entity. An entity the server controls reads [code]false[/code] everywhere, the server included, and [method Node.is_multiplayer_authority] answers who writes it.
 		</member>
 		<member name="is_player" type="bool" setter="" getter="get_is_player">
 			[code]true[/code] when this entity represents a player, meaning [member peer_id] is not [code]0[/code].
@@ -251,9 +257,6 @@
 			func _init() -&gt; void:
 			    Netw.configure_scene(self).labeled(&amp;"Arena")
 			[/codeblock]
-		</member>
-		<member name="is_session_authority" type="bool" setter="" getter="get_is_session_authority">
-			Whether this peer is the server, which decides [member controller] and every [method claim_authority]. Also [code]true[/code] offline.
 		</member>
 		<member name="is_template" type="bool" setter="set_is_template" getter="get_is_template">
 			[code]true[/code] when this entity is a hidden, inactive copy kept only to spawn others from with [method spawn_under].
@@ -447,10 +450,10 @@
 			A server-owned entity such as an NPC or world object. [member peer_id] is [code]0[/code].
 		</constant>
 		<constant name="CONTROL_PEER_CONTROLLED" value="0" enum="ControlKind">
-			A peer controls the entity. [member controller] is not [code]0[/code].
+			A player controls the entity, and [member controller_player] names it. On a listen server that player can be the host, at peer [code]1[/code].
 		</constant>
 		<constant name="CONTROL_SERVER_CONTROLLED" value="1" enum="ControlKind">
-			The server controls the entity. [member controller] is [code]0[/code].
+			The server controls the entity, and [member controller] is [code]1[/code].
 		</constant>
 		<constant name="INITIAL_SERVER" value="0" enum="InitialController">
 			The server controls the entity at spawn.

@@ -160,6 +160,7 @@ class NetwPredictSlotEngine {
     void resync_if_stranded();
     int64_t queued_span() const;
     void consume_one(double p_delta);
+    void consume_backlog(double p_delta, int p_buffer);
 
     void mark_idle_drive(int64_t p_label, int p_kind);
     void adopt_tape_position(int64_t p_transition);

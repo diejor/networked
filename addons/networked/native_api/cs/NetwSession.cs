@@ -24,8 +24,10 @@ namespace Networked;
 /// </code>
 /// <para>
 /// There is one handle per session, so it is safe to keep it across an await.
-/// Connecting is done as you would normally do with
-/// <see cref="SceneMultiplayer"/>, by assigning
+/// When the server leaves, a transport that can move the server hands it to
+/// another peer and the session goes on. See
+/// <see cref="NetwSession.TransferServer"/>. Connecting is done as you would
+/// normally do with <see cref="SceneMultiplayer"/>, by assigning
 /// <see cref="MultiplayerApi.MultiplayerPeer"/>. See
 /// <see cref="NetwConnection"/> to manage endpoints and
 /// <see cref="Netw.PrepareJoin"/> to join as a player.
@@ -112,6 +114,23 @@ public sealed class NetwSession : NetwRefCounted
         /// <see cref="MultiplayerApi.MultiplayerPeer"/>.
         /// </summary>
         Replaced = 4,
+    }
+
+    public enum TransferMode : long
+    {
+        /// <summary>
+        /// When the server moves, each client frees the entities it received
+        /// and gets the new server's world again as new nodes, and the entities
+        /// a client spawned itself are despawned. The <see cref="NetwClock"/>
+        /// of each peer holds until that peer has the world back.
+        /// <see cref="Netw.ConfigureTransfer"/> picks what the new server
+        /// keeps.
+        /// </summary>
+        Rejoin = 0,
+        /// <summary>
+        /// Each client keeps its world and its nodes.
+        /// </summary>
+        Continue = 1,
     }
 
     /// <summary>
@@ -252,6 +271,42 @@ public sealed class NetwSession : NetwRefCounted
             )
         );
         remove => DisconnectBridge("scene_ready", value);
+    }
+
+    /// <summary>
+    /// Emitted on every peer once the peer that was <c>successor_was</c> has
+    /// become the server at id <c>1</c>, and the old server, if it stayed, has
+    /// become <c>former_now</c>. <c>former_now</c> is <c>0</c> when the old
+    /// server is gone, and its player leaves after this signal.
+    /// <code>
+    /// public override void _Ready()
+    /// {
+    ///     Netw.Session(this).ServerTransferred += OnServerTransferred;
+    /// }
+    ///
+    /// private void OnServerTransferred(long successorWas, long formerNow)
+    /// {
+    ///     scoreboard.Rename(successorWas, 1);
+    ///     if (formerNow != 0)
+    ///         scoreboard.Rename(1, formerNow);
+    /// }
+    /// </code>
+    /// <para>
+    /// What each client keeps of its world follows its own
+    /// <see cref="NetwSessionConfig.TransferMode"/>.
+    /// </para>
+    /// </summary>
+    public event Action<long, long> ServerTransferred
+    {
+        add => ConnectBridge(
+            "server_transferred",
+            value,
+            Callable.From(
+                (long a0, long a1) =>
+                    value(a0, a1)
+            )
+        );
+        remove => DisconnectBridge("server_transferred", value);
     }
 
     private static readonly IntPtr _bindGetPlayers =
@@ -553,6 +608,36 @@ public sealed class NetwSession : NetwRefCounted
             in slot0,
             in slot1,
             ref discarded);
+    }
+
+    private static readonly IntPtr _bindTransferServer =
+        NetwApi.MethodBind("NetwSession", "transfer_server", 844576869UL);
+
+    /// <summary>
+    /// Asks the transport to make <paramref name="peerId"/> the server and this
+    /// peer a client under a new id.
+    /// <see cref="NetwSession.ServerTransferred"/> follows on every peer.
+    /// <code>
+    /// Error
+    /// ┠╴ERR_UNAUTHORIZED        called on a client
+    /// ┠╴ERR_UNAVAILABLE         the transport cannot move the server
+    /// ┠╴ERR_INVALID_PARAMETER   peer_id is not a connected client
+    /// ┖╴ERR_BUSY                a database still has writes to settle
+    /// </code>
+    /// <para>
+    /// Moving the server names the transports that can. <b>Server Only.</b>
+    /// </para>
+    /// </summary>
+    public Error TransferServer(long peerId)
+    {
+        long slot0 = peerId;
+        long answered = default;
+        NetwThunks.Ptrcall1_Long_Long(
+            _bindTransferServer,
+            Checked,
+            in slot0,
+            ref answered);
+        return (Error)answered;
     }
 
     private static readonly IntPtr _bindLeave =

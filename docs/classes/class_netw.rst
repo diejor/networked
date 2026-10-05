@@ -72,6 +72,8 @@ Methods
    +-------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | :ref:`NetwMemberConfig<class_NetwMemberConfig>`                   | :ref:`configure_spawn<class_Netw_method_configure_spawn>`\ (\ callable\: :godot:`Callable`\ ) |static|                                                                                                  |
    +-------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`Error <@GlobalScope#enum_@globalscope_Error>`             | :ref:`configure_transfer<class_Netw_method_configure_transfer>`\ (\ keep\: :godot:`Callable`\ ) |static|                                                                                                |
+   +-------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | :godot:`Error <@GlobalScope#enum_@globalscope_Error>`             | :ref:`despawn<class_Netw_method_despawn>`\ (\ node\: :godot:`Node`, opts\: :ref:`NetwDespawnOpts<class_NetwDespawnOpts>` = null\ ) |static|                                                             |
    +-------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | |void|                                                            | :ref:`emit_entity_signal<class_Netw_method_emit_entity_signal>`\ (\ sig\: :godot:`Signal`, ...\ ) |vararg| |static|                                                                                     |
@@ -580,6 +582,28 @@ Registers ``callable`` as a function :ref:`spawn()<class_Netw_method_spawn>` may
     muzzle.add_child(bullet)
 
     # clients build the same node with the same arguments, in the same place
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_Netw_method_configure_transfer:
+
+.. rst-class:: classref-method
+
+:godot:`Error <@GlobalScope#enum_@globalscope_Error>` **configure_transfer**\ (\ keep\: :godot:`Callable`\ ) |static| :ref:`🔗<class_Netw_method_configure_transfer>`
+
+Picks which entities outlive a server transfer in :ref:`NetwSession.TRANSFER_REJOIN<class_NetwSession_constant_TRANSFER_REJOIN>`. The new server calls ``keep`` with the root node of each entity it took over, and despawns the ones it answers ``false`` for before any client gets the world again.
+
+::
+
+    func _init() -> void:
+        Netw.configure_transfer(keeps)
+
+    func keeps(node: Node) -> bool:
+        return not node.is_in_group(&"loot")
+
+\ Declare it on every peer, since any of them can become the server.
 
 .. rst-class:: classref-item-separator
 

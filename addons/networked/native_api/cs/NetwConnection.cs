@@ -33,7 +33,10 @@ namespace Networked;
 /// The peer <c>take_the_peer</c> receives is ready to assign to
 /// <see cref="MultiplayerApi.MultiplayerPeer"/>, and connects at once.
 /// Endpoints are pairs of <c>(transport, address)</c> that can be probed by
-/// <see cref="NetwConnection"/> to determine if they are reachable.
+/// <see cref="NetwConnection"/> to determine if they are reachable. In a mesh,
+/// exactly one peer has id 1. It is the server, and every other peer is online
+/// once it is linked to peer 1. A transport can support moving the server to
+/// another peer, as Moving the server describes.
 /// </para>
 /// </remarks>
 public sealed class NetwConnection : NetwRefCounted
