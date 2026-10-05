@@ -284,6 +284,42 @@ TEST_CASE(
     }
 }
 
+TEST_CASE(
+    "[Networked][Display][SceneTree] a bracketed channel holds its rest value "
+    "until the tick before it moves again"
+) {
+    LoopbackRig rig(1);
+    rig.declare_world(WorldDecl().clocked(30));
+    rig.mount();
+    NetwMultiplayer *server = netw_test::flow_core(rig.server());
+    const FlowPair pair
+        = netw_test::stand_flow_pair(rig, DRAWN_ON_A_VISUAL, "Resting");
+    const auto move_to = [&](double p_x) {
+        netw_test::author_at(
+            pair.authored,
+            StringName("position"),
+            Vector2(p_x, 0.0),
+            PropertySet::RECORD_STATE,
+            netw_test::clock_tick(rig, -1)
+        );
+        rig.step_ticks(1);
+    };
+    rig.step_ticks(4);
+    move_to(106.0);
+    move_to(112.0);
+    rig.step_ticks(10);
+    move_to(118.0);
+
+    const RID rid = NetwEntity::of(pair.authored)->get_rid_handle();
+    netw::display::Channel *channel
+        = NetwNativeTests::display_runtime_of(server, rid)
+              ->channel_named(StringName("position"));
+    const netw::display::History &history = channel->display_history();
+    const int64_t moved = history.newest_tick();
+    NETW_CHECK_EQ(int64_t(history.bracketing_ticks(moved - 1).x), moved - 1);
+    NETW_CHECK_CLOSE(Vector2(history.get_at(moved - 1)).x, 112.0, 0.001);
+}
+
 } // namespace TestNetwDisplayHistoryFollowLaws
 
 #endif

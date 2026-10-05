@@ -37,6 +37,7 @@ class NetwPredictSlotEngine {
     godot::Callable fallback_at_sink;
     godot::Dictionary unsampled;
     godot::PackedStringArray unparticipated;
+    bool consume_primed = false;
 
     NetwMultiplayer *core_seated() const;
     NetwPredictSlotEngine *sibling(

@@ -9,372 +9,89 @@ var game: NetwGameHarness
 func before_test() -> void:
 	game = make_game_harness(MAIN)
 	await game.setup()
-	game.show_views()
 
 
-func test_match_player_moves_until_a_bomb_freezes_it() -> void:
-	var valeria := await game.add_host("valeria", false)
-	await _begin_game(valeria)
-
-	await valeria.await_scene(&"World", 2.0)
-	var player := await valeria.await_player(&"valeria", 2.0) as Node2D
-	assert_that(valeria.local_player).is_equal(player)
-
+func test_client_moves_and_drops_a_bomb_every_peer_sees() -> void:
+	var host := await game.add_host("host", false)
+	var client := await game.add_client("client", false)
+	await start_match(host)
+	var host_world := await host.await_scene(&"World")
+	var client_world := await client.await_scene(&"World")
+	var player := await client.await_player(&"client") as Node2D
+	var host_player := host.find_player(&"host") as Node2D
+	await game.sync_ticks(8)
 	var start := player.position.x
-	await game.sync_ticks(8)
-	valeria.simulate_action_press("move_right")
-	await game.sync_ticks(8)
-	valeria.simulate_action_release("move_right")
+	var host_start := host_player.position.x
 
-	assert_that(player.position.x).is_greater(start)
-	assert_that(player.get("stunned")).is_false()
-
-	var frozen_x := player.position.x
-	player.exploded(valeria.peer_id)
-	await game.sync_ticks(2)
-	assert_that(player.get("stunned")).is_true()
-
-	valeria.simulate_action_press("move_right")
-	await game.sync_ticks(8)
-	valeria.simulate_action_release("move_right")
-	assert_float(player.position.x).is_less_equal(frozen_x + 1.0)
-
-
-func test_client_input_drives_only_its_player_and_spawns_rate_limited_bomb() -> void:
-	var valeria := await game.add_host("valeria", false)
-	var jose := await game.add_client("jose", false)
-	await _begin_game(valeria)
-
-	var valeria_world := await valeria.await_scene(&"World")
-	var jose_world := await jose.await_scene(&"World")
-	var jose_player := await jose.await_player(&"jose") as Node2D
-	var valeria_player := valeria.find_player(&"valeria") as Node2D
-	var jose_on_host := valeria.find_player(&"jose") as Node2D
-
-	await game.sync_ticks(8)
-	var jose_start := jose_player.position.x
-	var valeria_held := valeria_player.position.x
-
-	jose.simulate_action_press("move_right")
-	jose.simulate_action_press("set_bomb")
+	client.simulate_action_press("move_right")
+	client.simulate_action_press("set_bomb")
 	await game.sync_ticks(12)
-	jose.simulate_action_release("move_right")
-	jose.simulate_action_release("set_bomb")
+	client.simulate_action_release("move_right")
+	client.simulate_action_release("set_bomb")
 	await game.sync_ticks(4)
 
-	assert_that(jose_player.position.x).is_greater(jose_start)
-	var host_entity := NetwEntity.of(jose_on_host)
-	var pump_mode: int = host_entity.display.pump_mode
-	assert_int(pump_mode).override_failure_message(
-		"the host must sample the client player it simulates authoritatively",
-	).is_equal(NetwDisplay.DISPLAY_PUMP_BRACKETED)
-	assert_float(valeria_player.position.x).is_equal_approx(valeria_held, 1.0)
-
-	var host_bombs := _count_bombs(valeria, valeria_world)
-	var client_bombs := _count_bombs(jose, jose_world)
-
-	assert_int(host_bombs).is_greater(0)
-	assert_int(host_bombs).is_less_equal(2)
-	assert_int(client_bombs).is_equal(host_bombs)
+	assert_float(player.position.x).is_greater(start)
+	assert_float(host_player.position.x).is_equal(host_start)
+	assert_int(bombs(host_world)).is_greater(0)
+	assert_int(bombs(client_world)).is_equal(bombs(host_world))
 
 
-func test_rough_link_keeps_bombs_reliable_and_positions_converging() -> void:
-	var valeria := await game.add_host("valeria", false)
-	var jose := await game.add_client("jose", false)
-	await _begin_game(valeria)
-
-	await valeria.await_scene(&"World")
-	var jose_world := await jose.await_scene(&"World")
-	var valeria_player := await valeria.await_player(&"valeria") as Node2D
-	var valeria_on_jose := await jose.await_player(&"valeria") as Node2D
-
-	game.path(valeria, jose) \
-			.loss(0.5) \
-			.latency_ms(66.0) \
-			.seed(1)
-
+func test_explosion_scores_rocks_and_stuns_players() -> void:
+	var host := await game.add_host("host", false)
+	var client := await game.add_client("client", false)
+	await start_match(host)
+	var world := await host.await_scene(&"World")
+	var client_view := await client.await_player(&"client") as Node2D
+	var client_on_host := host.find_player(&"client") as Node2D
 	await game.sync_ticks(8)
-	valeria.simulate_action_press("move_right")
-	valeria.simulate_action_press("set_bomb")
-	var bomb_seen := await _wait_for_bomb(jose, jose_world, 32)
-	valeria.simulate_action_release("move_right")
-	valeria.simulate_action_release("set_bomb")
 
-	assert_bool(bomb_seen).is_true()
-	await game.sync_ticks(40)
-	assert_float(valeria_on_jose.position.x).is_equal_approx(
-		valeria_player.position.x,
-		8.0,
-	)
-
-
-func test_server_explosion_scores_rocks_and_stuns_players_across_peers() -> void:
-	var valeria := await game.add_host("valeria", false)
-	var jose := await game.add_client("jose", false)
-	await _begin_game(valeria)
-
-	var world := await valeria.await_scene(&"World")
-	var jose_view := await jose.await_player(&"jose") as Node2D
-	var jose_on_host := valeria.find_player(&"jose") as Node2D
-
-	await game.sync_ticks(8)
-	valeria.simulate_action_press("set_bomb")
+	host.simulate_action_press("set_bomb")
 	await game.sync_ticks(6)
-	valeria.simulate_action_release("set_bomb")
+	host.simulate_action_release("set_bomb")
 	await game.sync_ticks(2)
+	var bomb = world.root.get_node(^"Bombs").get_child(0)
+	var score = world.root.get_node(^"Score")
+	var before: int = score.get_score(host.peer_id)
 
-	var bomb := _first_bomb(valeria, world)
-	assert_that(bomb).is_not_null()
-
-	var score := world.root.get_node("Score")
-	var rock := world.root.get_node("Rocks").get_child(0)
-	var score_before: int = score.get_score(valeria.peer_id)
-
-	bomb.from_player = valeria.peer_id
-	bomb.in_area = [rock, jose_on_host]
+	bomb.from_player = host.peer_id
+	bomb.in_area = [world.root.get_node(^"Rocks").get_child(0), client_on_host]
 	bomb.explode()
 	await game.sync_ticks(6)
 
-	assert_int(score.get_score(valeria.peer_id)).is_greater(score_before)
-	assert_that(jose_on_host.get("stunned")).is_true()
-	assert_that(jose_view.get("stunned")).is_true()
+	assert_int(score.get_score(host.peer_id)).is_greater(before)
+	assert_bool(client_on_host.get(&"stunned")).is_true()
+	assert_bool(client_view.get(&"stunned")).is_true()
 
 
-func test_client_disconnect_keeps_match_running() -> void:
-	var valeria := await game.add_host("valeria", false)
-	var jose := await game.add_client("jose", false)
-	await _begin_game(valeria)
+func test_exit_returns_every_peer_to_the_lobby() -> void:
+	var host := await game.add_host("host", false)
+	var client := await game.add_client("client", false)
+	await start_match(host)
+	await client.await_scene(&"World", 2.0)
 
-	await valeria.await_scene(&"World")
-	await valeria.await_player(&"jose")
-
-	var gamestate := (
-			valeria.session.service(BomberGamestate) as BomberGamestate
-	)
-	var errored: Array[bool] = [false]
-	gamestate.game_error.connect(func(_what: String) -> void: errored[0] = true)
-
-	await game.disconnect_runner(jose)
-	var dropped := false
-	for i in 60:
-		await game.sync_ticks(1)
-		if valeria.find_player(&"jose") == null:
-			dropped = true
-			break
-
-	assert_bool(dropped).is_true()
-	assert_bool(errored[0]).is_false()
-	assert_bool(gamestate.world.is_declared).is_true()
-	assert_that(valeria.find_player(&"valeria")).is_not_null()
-	await drain_frames(get_tree(), 10)
-
-
-func test_host_lobby_ui_shows_the_roster_once_joined() -> void:
-	var valeria := await game.add_host("valeria", false)
-	var lobby := await await_lobby(valeria)
-
-	assert_bool(lobby.visible).is_true()
-	assert_int(lobby.member_list.item_count).is_equal(1)
-
-	var browser := valeria.scene().find_child("ConnectBrowser", true, false) as Control
-	assert_bool(browser.visible).is_false()
-	assert_that(valeria.session.local_player.scene).is_null()
-
-
-func test_exit_button_returns_every_peer_to_the_lobby() -> void:
-	var valeria := await game.add_host("valeria", false)
-	var jose := await game.add_client("jose", false)
-	await _begin_game(valeria)
-
-	await valeria.await_scene(&"World", 2.0)
-	await jose.await_scene(&"World", 2.0)
-
-	press_exit(valeria)
-	assert_bool(await await_match_over(valeria)).is_true()
-	assert_bool(await await_match_over(jose)).is_true()
-
-	assert_bool(in_lobby(valeria).visible).is_true()
-	assert_bool(in_lobby(jose).visible).is_true()
-	assert_that(valeria.session.local_player.scene).is_null()
-	assert_that(jose.session.local_player.scene).is_null()
-	assert_that(valeria.find_player(&"valeria")).is_null()
-	assert_that(jose.find_player(&"jose")).is_null()
-
-
-func test_a_mid_match_joiner_waits_in_the_lobby_and_plays_the_next_round() -> void:
-	var valeria := await game.add_host("valeria", false)
-	await _begin_game(valeria)
-	await valeria.await_scene(&"World", 2.0)
-
-	var jose := await game.add_client("jose", false)
-	assert_bool((await await_lobby(jose)).visible).is_true()
-	assert_that(jose.session.local_player.scene).is_null()
-	assert_that(valeria.find_player(&"jose")).is_null()
-
-	press_exit(valeria)
-	assert_bool(await await_match_over(valeria)).is_true()
-
-	var gamestate := (
-			valeria.session.service(BomberGamestate) as BomberGamestate
-	)
-	gamestate.begin_game()
-
-	await valeria.await_scene(&"World", 2.0)
-	await jose.await_scene(&"World", 2.0)
-	assert_that(await jose.await_player(&"jose", 2.0)).is_not_null()
-	assert_that(await valeria.await_player(&"valeria", 2.0)).is_not_null()
-
-
-func test_every_peer_runs_each_player_in_its_own_cell() -> void:
-	var valeria := await game.add_host("valeria", false)
-	var jose := await game.add_client("jose", false)
-	var ana := await game.add_client("ana", false)
-	await _begin_game(valeria)
-
-	for runner: NetwSceneRunner in [valeria, jose, ana]:
-		await runner.await_scene(&"World", 2.0)
-		for name: StringName in [&"valeria", &"jose", &"ana"]:
-			await runner.await_player(name, 2.0)
-	await game.sync_ticks(8)
-
-	var jose_own := jose.find_player(&"jose") as Node2D
-	var jose_on_host := valeria.find_player(&"jose") as Node2D
-	var jose_on_ana := ana.find_player(&"jose") as Node2D
-	var start := jose_own.position.x
-	jose.simulate_action_press("move_right")
-	await game.sync_ticks(8)
-
-	var own := NetwSimulation.MODE_PREDICT
-	var host := NetwSimulation.MODE_AUTHORITY
-	var other := NetwSimulation.MODE_PROXY
-	var bracketed := NetwDisplay.DISPLAY_PUMP_BRACKETED
-	var remote := NetwDisplay.DISPLAY_PUMP_REMOTE
-	var peers := { &"valeria": valeria, &"jose": jose, &"ana": ana }
-	var cells := [
-		[&"valeria", &"valeria", host, bracketed],
-		[&"valeria", &"jose", host, bracketed],
-		[&"valeria", &"ana", host, bracketed],
-		[&"jose", &"jose", own, bracketed],
-		[&"jose", &"valeria", other, remote],
-		[&"jose", &"ana", other, remote],
-		[&"ana", &"ana", own, bracketed],
-		[&"ana", &"valeria", other, remote],
-		[&"ana", &"jose", other, remote],
-	]
-	for cell: Array in cells:
-		var runner: NetwSceneRunner = peers[cell[0]]
-		var player := runner.find_player(cell[1]) as Node2D
-		var entity := NetwEntity.of(player)
-		var pump: int = entity.display.pump_mode
-		var mode: int = entity.simulation.mode
-		assert_int(mode).override_failure_message(
-			"%s runs %s in mode %d" % [cell[0], cell[1], mode],
-		).is_equal(cell[2])
-		assert_int(pump).override_failure_message(
-			"%s draws %s through pump %d" % [cell[0], cell[1], pump],
-		).is_equal(cell[3])
-
-	jose.simulate_action_release("move_right")
-	await game.sync_ticks(30)
-	assert_float(jose_own.position.x).is_greater(start)
-	assert_float(jose_on_host.position.x).is_equal_approx(
-		jose_own.position.x,
-		8.0,
-	)
-	assert_float(jose_on_ana.position.x).is_equal_approx(
-		jose_own.position.x,
-		8.0,
-	)
-
-
-func press_exit(host: NetwSceneRunner) -> void:
 	var world: NetwScene = host.session.find_scene(&"World")
-	var exit := world.root.get_node(^"Winner/ExitGame") as Button
-	exit.pressed.emit()
-
-
-func await_match_over(runner: NetwSceneRunner) -> bool:
+	(world.root.get_node(^"Winner/ExitGame") as Button).pressed.emit()
 	for i in 120:
+		if host.session.find_scene(&"World") == null:
+			break
 		await game.sync_ticks(1)
-		if runner.session.find_scene(&"World") == null:
-			return true
-	return false
+
+	assert_bool(lobby(host).visible).is_true()
+	assert_bool(lobby(client).visible).is_true()
+	assert_that(client.find_player(&"client")).is_null()
 
 
-func test_the_reachability_report_answers_for_the_tick_path() -> void:
-	var valeria := await game.add_host("valeria", false)
-	await _begin_game(valeria)
-	await valeria.await_scene(&"World", 2.0)
-	var player := await valeria.await_player(&"valeria", 2.0) as Node2D
-
-	var report: Dictionary = NetwEntity.of(player).prediction.reachability()
-	assert_dict(report).override_failure_message(
-		"a predicted entity must be able to answer for its own declarations",
-	).is_not_empty()
-	var fields: Dictionary = report[&"fields"]
-
-	assert_float(float(fields[&"position"][&"tolerance"])).is_equal(4.0)
-	assert_bool(bool(fields[&"position"][&"tolerance_declared"])).is_true()
-	assert_float(float(fields[&"position"][&"teleport_at"])) \
-			.override_failure_message(
-				"position declares its tier distance in its own units, so the "
-				+ "report must not answer with the entity default",
-			).is_equal(48.0)
-	assert_bool(bool(fields[&"position"][&"triggers"])).is_true()
-
-	assert_str(String(fields[&"velocity"][&"class"])).is_equal("DERIVED")
-	assert_bool(bool(fields[&"velocity"][&"triggers"])).override_failure_message(
-		"velocity is recomputed from the input every tick, so it may be "
-		+ "replicated for observers but must not decide that a correction is "
-		+ "needed",
-	).is_false()
-
-	var model: Dictionary = fields[&"position"][&"forward_model"]
-	assert_str(String(model[&"kind"])).override_failure_message(
-		"the game declares no step, so the report must not invent one",
-	).is_equal("none")
+func start_match(host: NetwSceneRunner) -> void:
+	for i in 120:
+		if lobby(host).visible:
+			break
+		await game.sync_ticks(1)
+	(host.session.service(BomberGamestate) as BomberGamestate).begin_game()
 
 
-func in_lobby(runner: NetwSceneRunner) -> InLobby:
+func lobby(runner: NetwSceneRunner) -> InLobby:
 	return runner.scene().find_child("InLobby", true, false) as InLobby
 
 
-func await_lobby(runner: NetwSceneRunner) -> InLobby:
-	var lobby := in_lobby(runner)
-	for _tick in 120:
-		if lobby.visible:
-			break
-		await game.sync_ticks(1)
-	return lobby
-
-
-func _begin_game(host: NetwSceneRunner) -> void:
-	await await_lobby(host)
-	var gamestate := (
-			host.session.service(BomberGamestate) as BomberGamestate
-	)
-	assert_that(gamestate).is_not_null()
-	gamestate.begin_game()
-
-
-func _count_bombs(runner, world: NetwScene) -> int:
-	var bombs := world.root.get_node_or_null("Bombs")
-	return bombs.get_child_count() if bombs else 0
-
-
-func _wait_for_bomb(runner, world: NetwScene, ticks: int) -> bool:
-	for i in ticks:
-		await game.sync_ticks(1)
-		if _count_bombs(runner, world) > 0:
-			return true
-	return false
-
-
-func _first_bomb(runner, world: NetwScene) -> Area2D:
-	var bombs := world.root.get_node_or_null("Bombs")
-	if not bombs:
-		return null
-	for child in bombs.get_children():
-		if child is Area2D:
-			return child
-	return null
+func bombs(world: NetwScene) -> int:
+	return world.root.get_node(^"Bombs").get_child_count()

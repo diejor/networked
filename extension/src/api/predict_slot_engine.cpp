@@ -1994,7 +1994,16 @@ void NetwPredictSlotEngine::consume_step(
         resync_if_stranded();
         const int depth = int(queued_span());
         const int buffer = std::max(0, handle->get_consume_buffer_ticks());
-        const int action = consume_action(depth, buffer);
+        int action = consume_action(depth, buffer);
+        if (!overrides_seam(seam_predict_consume())) {
+            if (action == NetwPrediction::CONSUME_ACTION_REPLAY) {
+                consume_primed = true;
+            } else if (action == NetwPrediction::CONSUME_ACTION_STARVED) {
+                consume_primed = false;
+            } else if (consume_primed) {
+                action = NetwPrediction::CONSUME_ACTION_REPLAY;
+            }
+        }
         pool->report_consume(slot, depth, buffer, action);
         switch (action) {
             case NetwPrediction::CONSUME_ACTION_REPLAY:
@@ -2218,6 +2227,7 @@ void NetwPredictSlotEngine::consume_backlog(double p_delta, int p_buffer) {
             != NetwPrediction::CONSUME_ACTION_REPLAY) {
             return;
         }
+        finalize_recorded_state();
         consume_one(p_delta);
     }
 }

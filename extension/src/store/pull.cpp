@@ -156,6 +156,7 @@ bool World::pull_exact(
 #if defined(NETW_TESTS)
         work.changed += 1;
 #endif
+        p_table.record_rest(p_row, p_tick);
         p_table.record_held(p_row, p_tick);
         owe_changed(p_table, p_row);
     } else if (p_table.history_count(p_row) == 0) {
@@ -426,6 +427,7 @@ void World::pull_row(
 #if defined(NETW_TESTS)
         work.changed += 1;
 #endif
+        table.record_rest(row, p_tick);
         table.record_codes(row, table.scratch, p_tick);
         owe_changed(table, row);
     } else if (table.history_count(row) == 0) {
@@ -564,6 +566,7 @@ void World::absorb(uint32_t p_table, const Array &p_rows, int64_t p_tick) {
             continue;
         }
         if (table.settle(row, table.scratch, p_tick)) {
+            table.record_rest(row, p_tick);
             table.record_codes(row, table.scratch, p_tick);
             owe_changed(table, row);
         } else if (table.history_count(row) == 0) {

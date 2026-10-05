@@ -193,7 +193,8 @@ void History::unfollow() {
 
 bool History::table_pulls() const {
     const Rows held = rows();
-    return held.table != nullptr && held.table->scalar;
+    return held.table != nullptr && held.table->scalar
+        && held.table->sources[held.row] != uint8_t(store::Source::REMOTE);
 }
 
 bool History::table_rests() const {
@@ -265,6 +266,14 @@ void History::record(int64_t tick, const Variant &value, bool authoring_tick) {
     last_recorded = value;
     has_recorded = true;
     sleeping = false;
+}
+
+void History::record_every_tick(int64_t tick, const Variant &value) {
+    if (world == nullptr && has_recorded && value != last_recorded
+        && ring.size() > 0 && ring.tick_of_age(0) < tick - 1) {
+        ring.record(tick - 1, last_recorded);
+    }
+    record(tick, value, false);
 }
 
 void History::clear() {

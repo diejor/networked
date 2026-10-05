@@ -192,6 +192,33 @@ void Table::record(uint32_t p_row, int64_t p_tick, const uint8_t *p_image) {
     touch(p_row);
 }
 
+void Table::record_rest(uint32_t p_row, int64_t p_tick) {
+    if (history_count(p_row) == 0) {
+        return;
+    }
+    const uint32_t newest = history_slot(p_row, 0);
+    if (history_ticks[newest] >= p_tick - 1) {
+        return;
+    }
+    const uint32_t at = history_next[p_row];
+    const uint64_t sample = uint64_t(p_row) * HISTORY_DEPTH + at;
+    history_ticks[sample] = p_tick - 1;
+    memcpy(
+        history_values.ptr() + sample * row_bytes,
+        history_values.ptr() + uint64_t(newest) * row_bytes,
+        row_bytes
+    );
+    for (uint32_t column = 0; column < carried; ++column) {
+        history_carried[sample * carried + column]
+            = history_carried[uint64_t(newest) * carried + column];
+    }
+    history_next[p_row] = uint8_t((at + 1) % HISTORY_DEPTH);
+    if (history_held[p_row] < HISTORY_DEPTH) {
+        history_held[p_row] += 1;
+    }
+    history_appends[p_row] += 1;
+}
+
 void Table::touch(uint32_t p_row) {
     if (touched_routes.size() >= row_count() * 2 + 64) {
         touched_overflow = true;

@@ -257,6 +257,8 @@ public:
 
     void record_held(uint32_t p_row, int64_t p_tick);
 
+    void record_rest(uint32_t p_row, int64_t p_tick);
+
     uint32_t history_count(uint32_t p_row) const {
         return p_row < history_held.size() ? history_held[p_row] : 0;
     }

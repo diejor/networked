@@ -11663,8 +11663,10 @@ PackedByteArray NetwPredictionEngine::build_ack_frame(
     if (frontier < 0) {
         return PackedByteArray();
     }
-    const int64_t base
-        = std::max(p_owner_ack_floor + 1, frontier - ACK_WINDOW_MAX + 1);
+    const int64_t base = std::max(
+        std::max(p_owner_ack_floor + 1, frontier - ACK_WINDOW_MAX + 1),
+        journal.transition_at(0)
+    );
     if (base > frontier) {
         return PackedByteArray();
     }

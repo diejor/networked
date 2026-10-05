@@ -583,7 +583,7 @@ bool NetwMultiplayer::display_record_runtime(
 #if defined(NETW_TESTS)
         idle_work.sampled += 1;
 #endif
-        history.record(p_tick, port_get(from, prop), false);
+        history.record_every_tick(p_tick, port_get(from, prop));
         history.set_source_rested(rests);
         display_book->wake(p_runtime);
         busy = busy || !rests;

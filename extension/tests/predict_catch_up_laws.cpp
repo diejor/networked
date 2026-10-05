@@ -52,7 +52,7 @@ struct Walk {
     Ref<Script> script;
     int route = 0;
 
-    Walk() : rig(1) {
+    explicit Walk(int p_lobby_ticks = 0) : rig(1) {
         script = netw_test::minted_script(WALKER_SOURCE);
         rig.mount();
         Node *arena = rig.mirror_child("Arena");
@@ -70,6 +70,7 @@ struct Walk {
         rig.join(-1, StringName("host"));
         rig.join(0, StringName("guest"));
         rig.pump(6);
+        rig.step_ticks(p_lobby_ticks);
         NetwMultiplayer *server = rig.server();
         Array args;
         args.push_back(String("Walker"));
@@ -84,6 +85,19 @@ struct Walk {
             route = int(server->entity_get_route(entity));
         }
         rig.pump(6);
+        NETW_REQUIRE_EQ(int(route > 0), 1);
+        NETW_REQUIRE_EQ(int(walker(0) != nullptr), 1);
+        NETW_REQUIRE_EQ(int(walker(-1) != nullptr), 1);
+    }
+
+    int64_t beat(int p_at) const {
+        return int64_t(walker(p_at)->get(StringName("beat")));
+    }
+
+    void buffer(int p_ticks) const {
+        netw::NetwEntity::of(walker(-1))
+            ->get_prediction()
+            ->set_consume_buffer_ticks(p_ticks);
     }
 
     NetwMultiplayer *seat(int p_at) const {
@@ -109,13 +123,41 @@ struct Walk {
     }
 
     int64_t lead() const {
-        return int64_t(walker(0)->get(StringName("beat")))
-            - int64_t(walker(-1)->get(StringName("beat")));
+        return beat(0) - beat(-1);
     }
 
     void walk() {
         walker(0)->set(StringName("motion"), 1);
         rig.step_ticks(1);
+    }
+
+    void idle() {
+        walker(0)->set(StringName("motion"), 0);
+        rig.step_ticks(1);
+    }
+
+    int ack_age() const {
+        return netw::NetwEntity::of(walker(0))
+            ->get_prediction()
+            ->get_ack_age_ticks();
+    }
+
+    void hold_server(bool p_hold) {
+        netw::LocalMultiplayerPeer *server_peer
+            = rig.session()->get_server_peer().ptr();
+        if (p_hold) {
+            rig.session()->hold_inbound_packets(server_peer);
+        } else {
+            rig.session()->release_inbound_packets(server_peer);
+        }
+    }
+
+    void burst() {
+        hold_server(true);
+        for (int tick = 0; tick < HELD_TICKS; ++tick) {
+            walk();
+        }
+        hold_server(false);
     }
 };
 
@@ -125,9 +167,6 @@ TEST_CASE(
     "within the ticks max_consume_per_tick allows, skipping nothing"
 ) {
     Walk walk;
-    NETW_REQUIRE_EQ(int(walk.route > 0), 1);
-    NETW_REQUIRE_EQ(int(walk.walker(0) != nullptr), 1);
-    NETW_REQUIRE_EQ(int(walk.walker(-1) != nullptr), 1);
     const Ref<netw::NetwPrediction> handle
         = netw::NetwEntity::of(walk.walker(-1))->get_prediction();
     NETW_REQUIRE_EQ(int(handle.is_valid()), 1);
@@ -142,13 +181,7 @@ TEST_CASE(
     const int64_t corrections_before
         = walk.fact(0, NetwPredictStats::FACT_CORRECTIONS);
 
-    netw::LocalMultiplayerPeer *server_peer
-        = walk.rig.session()->get_server_peer().ptr();
-    walk.rig.session()->hold_inbound_packets(server_peer);
-    for (int tick = 0; tick < HELD_TICKS; ++tick) {
-        walk.walk();
-    }
-    walk.rig.session()->release_inbound_packets(server_peer);
+    walk.burst();
 
     for (int tick = 0; tick < SETTLE_TICKS; ++tick) {
         walk.walk();
@@ -165,6 +198,49 @@ TEST_CASE(
     );
     NETW_CHECK_EQ(walk.fact(-1, NetwPredictStats::FACT_SKIPPED), int64_t(0));
     NETW_CHECK_EQ(walk.fact(-1, NetwPredictStats::FACT_MISSING), int64_t(0));
+}
+
+TEST_CASE(
+    "[Networked][Predict][SceneTree] PCU2 an idle client keeps getting "
+    "acknowledged after the server runs a backlog"
+) {
+    Walk walk;
+    for (int tick = 0; tick < WARM_TICKS; ++tick) {
+        walk.walk();
+    }
+    walk.burst();
+    for (int tick = 0; tick < netw::NetwPrediction::ACK_AGE_MAX + 16; ++tick) {
+        walk.idle();
+    }
+    NETW_CHECK_EQ(int(walk.ack_age() < SETTLE_TICKS), 1);
+}
+
+TEST_CASE(
+    "[Networked][Predict][SceneTree] PCU3 an entity spawned late still moves"
+) {
+    Walk walk(netw::NetwPrediction::ACK_AGE_MAX + 16);
+    walk.buffer(2);
+    for (int tick = 0; tick < SETTLE_TICKS; ++tick) {
+        walk.walk();
+    }
+    NETW_CHECK_EQ(int(walk.beat(-1) > 0), 1);
+}
+
+TEST_CASE(
+    "[Networked][Predict][SceneTree] PCU4 a filled input buffer runs every "
+    "tick while an input is late"
+) {
+    Walk walk;
+    walk.buffer(2);
+    for (int tick = 0; tick < WARM_TICKS; ++tick) {
+        walk.walk();
+    }
+    walk.hold_server(true);
+    const int64_t before = walk.beat(-1);
+    walk.walk();
+    walk.walk();
+    walk.hold_server(false);
+    NETW_CHECK_EQ(walk.beat(-1), before + 2);
 }
 
 } // namespace TestPredictCatchUpLaws

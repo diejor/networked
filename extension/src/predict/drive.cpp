@@ -188,7 +188,7 @@ void Slot::record_input(int64_t p_tick, int32_t p_c_hash) {
 void Slot::refresh_ack_age() {
     const int64_t age = config.schedule == int(Schedule::FRAME)
         ? next_tape_entry_index - latest_authority_ack - 1
-        : drive_input_tick - latest_authority_ack;
+        : drive_input_tick - std::max(latest_authority_ack, ack_origin);
     stats.ack_age_ticks = age > 0 ? age : 0;
 }
 
@@ -468,6 +468,7 @@ void Slot::reset_tape(int64_t p_epoch) {
     drive_input_tick = -1;
     drive_frame_tick = -1;
     latest_authority_ack = -1;
+    ack_origin = -1;
     pending_c_hash = 0;
     stats.tape_epoch = p_epoch;
     stats.tape_index = -1;
@@ -764,6 +765,9 @@ DriveRecord Slot::open_drive(
     if (!framed || decided.fresh) {
         drive_input_tick = framed ? decided.label : p_timing.tick;
     }
+    if (!framed && ack_origin < 0) {
+        ack_origin = p_timing.tick - 1;
+    }
     record_drive(transition, decided, p_topology, p_pre);
 
     out.transition = transition;
@@ -801,6 +805,9 @@ DriveRecord Slot::replay_drive(
         transition = next_tape_entry_index;
         author_tape_entry(p_label, true);
         drive_input_tick = p_timing.tick;
+        if (ack_origin < 0) {
+            ack_origin = p_timing.tick - 1;
+        }
     }
     record_drive(transition, replayed, p_topology, p_pre);
 

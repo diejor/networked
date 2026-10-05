@@ -40,7 +40,7 @@ text = "Status Label"
 horizontal_alignment = 1
 vertical_alignment = 1
 
-[node name="InLobby" parent="." instance=ExtResource("11_lobby")]
+[node name="InLobby" parent="." unique_id=321425260 instance=ExtResource("11_lobby")]
 unique_name_in_owner = true
 
 [editable path="ConnectBrowser"]

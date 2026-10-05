@@ -260,24 +260,22 @@ TEST_CASE(
     NETW_CHECK_EQ(journal.size(), 0);
 }
 
-TEST_CASE(
-    "[Networked][PredictWire][Hosted] pool builds the authority ACK prefix "
-    "from its journal"
+int64_t journal_through(
+    netw::NetwPredictionEngine *p_pool,
+    int64_t p_first,
+    int64_t p_last
 ) {
-    netw::NetwPredictionEngine held_pool;
-    netw::NetwPredictionEngine *const pool = &held_pool;
-    const int64_t slot = pool->open();
-    REQUIRE(pool->configure(
+    const int64_t slot = p_pool->open();
+    REQUIRE(p_pool->configure(
         slot,
         int(netw::Schedule::TICK),
         int(netw::Role::CONSUME),
         int(netw::CorrectionMode::SNAP),
         int(netw::RestoreMode::EXACT)
     ));
-
-    for (int64_t transition = 0; transition < 3; ++transition) {
-        pool->record_input(slot, transition, 100 + transition);
-        const netw::predict::DriveRecord drive = pool->replay_drive(
+    for (int64_t transition = p_first; transition <= p_last; ++transition) {
+        p_pool->record_input(slot, transition, 100 + transition);
+        const netw::predict::DriveRecord drive = p_pool->replay_drive(
             slot,
             godot::Dictionary(),
             transition,
@@ -293,7 +291,7 @@ TEST_CASE(
             230 + transition
         );
         REQUIRE(drive.ran);
-        pool->close_drive(
+        p_pool->close_drive(
             slot,
             transition,
             300 + transition,
@@ -302,6 +300,16 @@ TEST_CASE(
             330 + transition
         );
     }
+    return slot;
+}
+
+TEST_CASE(
+    "[Networked][PredictWire][Hosted] pool builds the authority ACK prefix "
+    "from its journal"
+) {
+    netw::NetwPredictionEngine held_pool;
+    netw::NetwPredictionEngine *const pool = &held_pool;
+    const int64_t slot = journal_through(pool, 0, 2);
 
     const PackedByteArray bytes = pool->build_ack_frame(slot, 9, 2, 0);
     REQUIRE_FALSE(bytes.is_empty());
@@ -335,6 +343,23 @@ TEST_CASE(
     AckFrame sentinel;
     REQUIRE(netw::predict::decode_ack(unconfirmed, sentinel));
     NETW_CHECK_EQ(sentinel.epoch, UINT8_MAX);
+}
+
+TEST_CASE(
+    "[Networked][PredictWire][Hosted] an ACK frame starts at its journal's "
+    "oldest transition when the owner has confirmed nothing yet"
+) {
+    netw::NetwPredictionEngine held_pool;
+    netw::NetwPredictionEngine *const pool = &held_pool;
+    const int64_t slot = journal_through(pool, 31, 33);
+
+    const PackedByteArray bytes = pool->build_ack_frame(slot, 9, 33, -1);
+    REQUIRE_FALSE(bytes.is_empty());
+    AckFrame received;
+    REQUIRE(netw::predict::decode_ack(bytes, received));
+    NETW_CHECK_EQ(int64_t(received.base), int64_t(31));
+    NETW_CHECK_EQ(received.records.size(), 3);
+    NETW_CHECK_EQ(received.records[0].c_hash, 131);
 }
 
 TEST_CASE(

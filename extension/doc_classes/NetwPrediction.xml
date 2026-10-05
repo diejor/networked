@@ -148,7 +148,7 @@
 			How many ticks [method notify_contact] holds off corrections. An error past [member teleport_threshold] still corrects.
 		</member>
 		<member name="consume_buffer_ticks" type="int" setter="set_consume_buffer_ticks" getter="get_consume_buffer_ticks" default="0">
-			How many ticks of input the server keeps queued before running them. A small buffer absorbs jitter so the entity steps every tick, and each tick of buffer adds a tick of input latency. [code]0[/code] runs inputs as they arrive.
+			How many ticks of input the server waits for before it starts running them. It then runs one every tick, so late inputs do not stall the entity. Each tick adds a tick of input latency.
 		</member>
 		<member name="correction_path_clear" type="Callable" setter="set_correction_path_clear" getter="get_correction_path_clear" default="Callable()">
 			Checks whether an eligible correction can carry the body to its proposed present pose. Return [code]true[/code] only when the swept path is clear. The engine moves the body. An unset callback disables this correction.

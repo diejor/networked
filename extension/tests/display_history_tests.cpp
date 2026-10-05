@@ -58,6 +58,24 @@ TEST_CASE(
 }
 
 TEST_CASE(
+    "[Networked][Display][Hosted] a value sampled every tick resumes from a "
+    "rest at the tick before it moved"
+) {
+    History history = make_history();
+    history.record_every_tick(10, Vector2(0.0, 0.0));
+    history.record_every_tick(11, Vector2(6.0, 0.0));
+    for (int64_t tick = 12; tick < 20; ++tick) {
+        history.record_every_tick(tick, Vector2(6.0, 0.0));
+    }
+    history.record_every_tick(20, Vector2(12.0, 0.0));
+
+    CHECK(history.bracketing_ticks(19) == Vector2i(19, 20));
+    check_planar(history.get_at(19), 6.0, 0.0);
+    check_planar(hold(history, 18, 0.5, Vector2(), 3), 6.0, 0.0);
+    check_planar(hold(history, 19, 0.5, Vector2(), 3), 9.0, 0.0);
+}
+
+TEST_CASE(
     "[Networked][Display][Hosted] clearing empties the history and frees the "
     "tick domain"
 ) {

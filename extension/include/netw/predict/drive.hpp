@@ -394,6 +394,7 @@ struct Slot {
     int64_t drive_input_tick = -1;
     int64_t drive_frame_tick = -1;
     int64_t latest_authority_ack = -1;
+    int64_t ack_origin = -1;
     int64_t out_of_domain_until = -1;
     int64_t environment_epoch = -1;
 
