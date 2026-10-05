@@ -1,5 +1,6 @@
 #pragma once
 
+#include <memory>
 #include <optional>
 
 #include "godot/callable.hpp"
@@ -49,6 +50,7 @@
 #include "netw/clock_engine.hpp"
 #include "netw/connect/core.hpp"
 #include "netw/datagram_seq_book.hpp"
+#include "netw/diag/prediction_rings.hpp"
 #include "netw/display/book.hpp"
 #include "netw/display/build.hpp"
 #include "netw/display/pump.hpp"
@@ -599,6 +601,9 @@ private:
     uint64_t profiler_last_publish = 0;
     godot::Array profiler_rpc_payload;
     godot::Array profiler_sync_payload;
+    std::unique_ptr<diag::PredictionRings> prediction_rings;
+    bool prediction_rings_decided = false;
+    uint64_t diag_polled_frame = UINT64_MAX;
 #endif
     wire::CaptureWriter capture;
     bool capture_decided = false;
@@ -3105,6 +3110,8 @@ public:
     wire::NetworkProfiler &profiler() {
         return network_profiler;
     }
+    void diag_poll();
+    void diag_gather(godot::LocalVector<diag::RingSource> &r_sources) const;
 #endif
 
     int64_t get_sent_packets() const;

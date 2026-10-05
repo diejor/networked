@@ -1,14 +1,36 @@
 ## Main editor plugin for the Networked addon.
 ##
-## Registers the addon's project settings.
+## Registers the addon's project settings and its Debug menu items.
 @tool
 extends EditorPlugin
+
+const _DebugMenu := preload("gdscript/editor/debug_menu.gd")
+
+var _debug_menu: _DebugMenu
+
 
 func _enter_tree() -> void:
 	if DisplayServer.get_name() == "headless":
 		return
 
 	_register_settings()
+	_debug_menu = _DebugMenu.new(self)
+	_debug_menu.attach()
+
+
+func _exit_tree() -> void:
+	if _debug_menu != null:
+		_debug_menu.detach()
+		_debug_menu = null
+
+
+func _run_scene(
+		_scene: String,
+		args: PackedStringArray,
+) -> PackedStringArray:
+	if _debug_menu == null:
+		return args
+	return _debug_menu.run_args(args)
 
 
 func _get_plugin_icon() -> Texture2D:

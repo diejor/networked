@@ -35,6 +35,7 @@
 #include "declared_world_tests.cpp"
 #include "deny_frame_wire_laws.cpp"
 #include "despawn_config_tests.cpp"
+#include "diag_hint_laws.cpp"
 #include "display_book_tests.cpp"
 #include "display_channel_tests.cpp"
 #include "display_decl_value_tests.cpp"

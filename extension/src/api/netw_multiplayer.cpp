@@ -3,6 +3,7 @@
 #include "godot/transport_state.hpp"
 #include "netw/api/interest.hpp"
 #include "netw/api/join_config.hpp"
+#include "netw/diag/hints.hpp"
 #include "netw/api/lag_compensation_config.hpp"
 #include "netw/api/nodes/multiplayer_tree.hpp"
 #include "netw/api/scene.hpp"
@@ -2830,6 +2831,7 @@ Error NetwMultiplayer::NETW_API_VIRTUAL(poll)() {
         plane->on_poll();
     }
     sink_verdict(display_pump(frame_delta), 0);
+    NETW_HINTS(diag_poll());
     return err;
 }
 

@@ -31,6 +31,14 @@
 		- [enum Operator] how a correction wrote the body
 		- [enum OperatorOutcome] whether a correction helped
 		- [enum EpisodeState] whether a misprediction is still being corrected
+		[b]Seeing prediction[/b]
+		Debug &gt; Networked &gt; Prediction Rings draws rings around every entity the client predicts.
+		- [b]cyan[/b] where the entity is drawn
+		- [b]green[/b] where it is simulated
+		- [b]orange[/b] where the server says it was, at the last tick it confirmed
+		- [b]dashed magenta[/b] where this client predicted it would be at that tick
+		- [b]white line[/b] the gap between orange and magenta, when it exceeds the tolerance
+		Text beside the entity names its [enum EpisodeState], its last [enum Operator] and the [enum OperatorOutcome]. A replica the client only simulates shows how old the server's state is instead.
 	</description>
 	<tutorials>
 	</tutorials>

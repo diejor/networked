@@ -78,11 +78,6 @@ const StringName &signal_control_changed() {
     return name;
 }
 
-const StringName &signal_state_evaluated() {
-    static const StringName name("state_evaluated");
-    return name;
-}
-
 const StringName &key_label() {
     static const StringName name("label");
     return name;
@@ -1454,6 +1449,16 @@ void NetwPredictSlotEngine::on_state(
     bool corrected = false;
     bool settled = false;
     int meter = 0;
+    const auto announce = [&]() {
+        pool->announce_evaluation(
+            handle.ptr(),
+            slot,
+            p_recv_tick,
+            p_ack,
+            divergence,
+            corrected
+        );
+    };
     if (reconstructed) {
         const predict::Judged judged = pool->judge_state(
             slot,
@@ -1491,13 +1496,7 @@ void NetwPredictSlotEngine::on_state(
         if (core_seated() != nullptr) {
             pool->trim_history(slot, p_ack);
         }
-        handle->emit_signal(
-            signal_state_evaluated(),
-            p_recv_tick,
-            p_ack,
-            divergence,
-            corrected
-        );
+        announce();
         return;
     }
     const predict::StateRow &payload = pool->received_row(slot);
@@ -1506,13 +1505,7 @@ void NetwPredictSlotEngine::on_state(
             slot,
             predict::VERDICT_REASON_WITNESS_DEFERRED
         );
-        handle->emit_signal(
-            signal_state_evaluated(),
-            p_recv_tick,
-            p_ack,
-            divergence,
-            corrected
-        );
+        announce();
         return;
     }
     if (pool->reconcile_of(slot) == NetwPrediction::RECONCILE_JOINT) {
@@ -1545,26 +1538,14 @@ void NetwPredictSlotEngine::on_state(
                       )
                     : Callable()
             )) {
-            handle->emit_signal(
-                signal_state_evaluated(),
-                p_recv_tick,
-                p_ack,
-                divergence,
-                corrected
-            );
+            announce();
             return;
         }
     }
     if (core_seated() != nullptr) {
         pool->trim_history(slot, p_ack);
     }
-    handle->emit_signal(
-        signal_state_evaluated(),
-        p_recv_tick,
-        p_ack,
-        divergence,
-        corrected
-    );
+    announce();
 }
 
 Ref<NetwPredictRecovery> NetwPredictSlotEngine::recover_through_seam(

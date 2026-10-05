@@ -1474,6 +1474,18 @@ public:
     );
     const predict::StateRow &compared_row(int64_t p_slot) const;
     const predict::StateRow &received_row(int64_t p_slot) const;
+    void announce_evaluation(
+        NetwPrediction *p_handle,
+        int64_t p_slot,
+        int64_t p_recv_tick,
+        int64_t p_ack,
+        double p_divergence,
+        bool p_corrected
+    );
+#if defined(DEBUG_ENABLED)
+    const predict::EvaluationRecord *last_evaluation_of(int64_t p_slot) const;
+    const predict::Slot *diag_row_of(int64_t p_slot) const;
+#endif
 
     bool state_has(int64_t p_slot, int p_field) const;
     godot::Variant state_at(int64_t p_slot, int p_field) const;

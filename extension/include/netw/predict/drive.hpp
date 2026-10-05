@@ -286,6 +286,15 @@ struct ComparisonReport {
     FieldReadings tier_error;
 };
 
+#if defined(DEBUG_ENABLED)
+struct EvaluationRecord {
+    int64_t recv_tick = -1;
+    double divergence = 0.0;
+    bool corrected = false;
+    uint64_t serial = 0;
+};
+#endif
+
 struct Slot {
     Config config;
     Wiring wiring;
@@ -373,6 +382,9 @@ struct Slot {
     RecoveryState recovery;
     RecoveryStats recovery_stats;
     WritePlan last_write_plan;
+#if defined(DEBUG_ENABLED)
+    EvaluationRecord last_evaluation;
+#endif
 
     int64_t tape_epoch = 0;
     int64_t next_tape_entry_index = 0;

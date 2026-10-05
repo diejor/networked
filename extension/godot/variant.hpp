@@ -10,6 +10,7 @@
 
 namespace godot {
 using ::Array;
+using ::Color;
 using ::Dictionary;
 using ::ERR_ALREADY_EXISTS;
 using ::ERR_ALREADY_IN_USE;
@@ -63,12 +64,14 @@ using ::FAILED;
 using ::NodePath;
 using ::OK;
 using ::PackedByteArray;
+using ::PackedColorArray;
 using ::PackedFloat32Array;
 using ::PackedFloat64Array;
 using ::PackedInt32Array;
 using ::PackedInt64Array;
 using ::PackedStringArray;
 using ::PackedVector2Array;
+using ::PackedVector3Array;
 using ::PROPERTY_HINT_RESOURCE_TYPE;
 using ::Quaternion;
 using ::real_t;

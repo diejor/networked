@@ -19,7 +19,7 @@ Main editor plugin for the Networked addon.
 Description
 -----------
 
-Registers the addon's project settings.
+Registers the addon's project settings and its Debug menu items.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

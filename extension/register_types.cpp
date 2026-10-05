@@ -62,6 +62,7 @@
 #include "netw/carrier_frame.hpp"
 #include "netw/channel_book.hpp"
 #include "netw/clock_engine.hpp"
+#include "netw/diag/hints.hpp"
 #include "netw/display/channel.hpp"
 #include "netw/display/history.hpp"
 #include "netw/display/playhead.hpp"
@@ -137,6 +138,7 @@ void initialize_networked_module(ModuleInitializationLevel level) {
     netw::profile::startup();
     netw::profile::configure_plots();
     netw::log::configure();
+    NETW_HINTS(netw::diag::configure_hints());
     netw::store::configure();
 #if defined(NETW_TESTS) && defined(NETW_GDEXTENSION)
     const PackedStringArray before_registration

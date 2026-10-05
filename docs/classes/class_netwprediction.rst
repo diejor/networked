@@ -68,6 +68,22 @@ Values set on a :godot:`MultiplayerSynchronizer` in the scene act as defaults, a
 
 - :ref:`EpisodeState<enum_NetwPrediction_EpisodeState>` whether a misprediction is still being corrected
 
+\ **Seeing prediction**\ 
+
+Debug > Networked > Prediction Rings draws rings around every entity the client predicts.
+
+- **cyan** where the entity is drawn
+
+- **green** where it is simulated
+
+- **orange** where the server says it was, at the last tick it confirmed
+
+- **dashed magenta** where this client predicted it would be at that tick
+
+- **white line** the gap between orange and magenta, when it exceeds the tolerance
+
+Text beside the entity names its :ref:`EpisodeState<enum_NetwPrediction_EpisodeState>`, its last :ref:`Operator<enum_NetwPrediction_Operator>` and the :ref:`OperatorOutcome<enum_NetwPrediction_OperatorOutcome>`. A replica the client only simulates shows how old the server's state is instead.
+
 .. rst-class:: classref-reftable-group
 
 Properties

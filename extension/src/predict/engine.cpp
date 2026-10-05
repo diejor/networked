@@ -5850,13 +5850,7 @@ void NetwPredictionEngine::admit_simulated_rows(
     }
     note_reconciling(p_slot, false);
     note_verdict_reason(p_slot, predict::VERDICT_REASON_NONE);
-    handle->emit_signal(
-        StringName("state_evaluated"),
-        recv_tick,
-        int64_t(-1),
-        divergence,
-        true
-    );
+    announce_evaluation(handle, p_slot, recv_tick, -1, divergence, true);
 }
 
 int NetwPredictionEngine::replay_reseed_horizon(
@@ -5983,13 +5977,7 @@ void NetwPredictionEngine::finish_reseed_alignment(
             : latest_input_tick_of(p_slot)
     );
     sync_episode(p_slot);
-    handle->emit_signal(
-        StringName("state_evaluated"),
-        p_recv_tick,
-        p_ack,
-        0.0,
-        false
-    );
+    announce_evaluation(handle, p_slot, p_recv_tick, p_ack, 0.0, false);
 }
 
 void NetwPredictionEngine::run_input(
@@ -8128,6 +8116,47 @@ const predict::StateRow &NetwPredictionEngine::received_row(
     const predict::Slot *row = row_of(p_slot);
     return row != nullptr ? row->received : NONE;
 }
+
+void NetwPredictionEngine::announce_evaluation(
+    NetwPrediction *p_handle,
+    int64_t p_slot,
+    int64_t p_recv_tick,
+    int64_t p_ack,
+    double p_divergence,
+    bool p_corrected
+) {
+#if defined(DEBUG_ENABLED)
+    if (predict::Slot *row = mutable_row_of(p_slot)) {
+        predict::EvaluationRecord &record = row->last_evaluation;
+        record.recv_tick = p_recv_tick;
+        record.divergence = p_divergence;
+        record.corrected = p_corrected;
+        ++record.serial;
+    }
+#endif
+    if (p_handle != nullptr) {
+        p_handle->emit_signal(
+            StringName("state_evaluated"),
+            p_recv_tick,
+            p_ack,
+            p_divergence,
+            p_corrected
+        );
+    }
+}
+
+#if defined(DEBUG_ENABLED)
+const predict::EvaluationRecord *NetwPredictionEngine::last_evaluation_of(
+    int64_t p_slot
+) const {
+    const predict::Slot *row = row_of(p_slot);
+    return row != nullptr ? &row->last_evaluation : nullptr;
+}
+
+const predict::Slot *NetwPredictionEngine::diag_row_of(int64_t p_slot) const {
+    return row_of(p_slot);
+}
+#endif
 
 bool NetwPredictionEngine::state_has(int64_t p_slot, int p_field) const {
     const predict::Slot *row = row_of(p_slot);
@@ -10760,15 +10789,14 @@ int NetwPredictionEngine::settle_comparison(
         );
         announce_divergence(p_slot, p_ack, attribution, p_divergence);
         p_enter_fallback.call(p_ack, attribution);
-        if (handle != nullptr) {
-            handle->emit_signal(
-                StringName("state_evaluated"),
-                p_recv_tick,
-                p_ack,
-                p_divergence,
-                true
-            );
-        }
+        announce_evaluation(
+            handle,
+            p_slot,
+            p_recv_tick,
+            p_ack,
+            p_divergence,
+            true
+        );
         return SETTLE_REQUARANTINED;
     }
 
@@ -10793,15 +10821,14 @@ int NetwPredictionEngine::settle_comparison(
     if (refusal == predict::VERDICT_REASON_EVIDENCE_EXHAUSTED) {
         p_enter_fallback.call(p_ack, attribution);
     }
-    if (handle != nullptr) {
-        handle->emit_signal(
-            StringName("state_evaluated"),
-            p_recv_tick,
-            p_ack,
-            p_divergence,
-            p_corrected
-        );
-    }
+    announce_evaluation(
+        handle,
+        p_slot,
+        p_recv_tick,
+        p_ack,
+        p_divergence,
+        p_corrected
+    );
     return SETTLE_REFUSED;
 }
 
@@ -12061,15 +12088,7 @@ OpenedComparison NetwPredictionEngine::open_state_comparison(
     }
     if (admission == ADMIT_REALIGN_PENDING
         || admission == ADMIT_RESEED_IGNORED) {
-        if (handle != nullptr) {
-            handle->emit_signal(
-                StringName("state_evaluated"),
-                p_recv_tick,
-                p_ack,
-                0.0,
-                false
-            );
-        }
+        announce_evaluation(handle, p_slot, p_recv_tick, p_ack, 0.0, false);
         return opened;
     }
     if (admission == ADMIT_CLOSED) {

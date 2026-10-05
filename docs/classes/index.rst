@@ -50,6 +50,7 @@ Gdscript
     class_addons--networked--gdscript--async.gd
     class_addons--networked--gdscript--connect--ui--ice_servers_edit.gd
     class_addons--networked--gdscript--connect--ui--string_list_edit.gd
+    class_addons--networked--gdscript--editor--debug_menu.gd
     class_addpopup
     class_connectbrowser
     class_connectbrowserrow
