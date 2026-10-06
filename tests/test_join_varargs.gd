@@ -2,6 +2,9 @@ class_name TestNetwJoinVarargs
 extends NetwTestSuite
 
 const PUMP_TIMEOUT_MS := 5000
+const ERROR_SCRUBBER := preload(
+	"res://addons/networked_test/gdunit4/gdunit_error_scrubber.gd"
+)
 
 var session: NetwHarnessSession
 var tree: MultiplayerTree
@@ -64,6 +67,9 @@ func test_a_username_alone_passes_no_arguments() -> void:
 	await _pump_until(func() -> bool: return tree.api.is_online)
 
 	assert_int(declarer.calls).is_equal(0)
+	assert_int(
+		await ERROR_SCRUBBER.erase_matching(["joined with no arguments"])
+	).is_equal(1)
 
 
 func test_a_collected_list_submits_through_a_callable() -> void:

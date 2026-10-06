@@ -126,6 +126,7 @@
 #include "predict_ring_depth_laws.cpp"
 #include "predict_sensor_laws.cpp"
 #include "predict_slot_verdict_laws.cpp"
+#include "predict_stats_lifetime_laws.cpp"
 #include "predict_tap_laws.cpp"
 #include "prelude_tests.cpp"
 #include "probe_guard_laws.cpp"

@@ -80,10 +80,10 @@ Carrier *a_state_body(
     body->set_position(Vector2(real_t(p_x), 0.0));
     const Ref<NetwEntity> entity = NetwEntity::ensure(body);
     REQUIRE(entity.is_valid());
+    const uint64_t set = a_state_stream(p_session, body);
     p_branch->add_child(body);
     NETW_CHECK_EQ(
-        int(p_session->sync_pipeline()
-                ->register_property_set(body, a_state_stream(p_session, body))),
+        int(p_session->sync_pipeline()->register_property_set(body, set)),
         int(OK)
     );
     return body;

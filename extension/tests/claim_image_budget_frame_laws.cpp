@@ -28,6 +28,7 @@ constexpr const char *BALL_ID = "claim_image_budget_ball";
 constexpr const char *BALL_SOURCE = R"(extends Node3D
 
 var sphere: RigidBody3D
+var shown_position := Vector3()
 
 var sphere_position: Vector3:
 	get:
@@ -59,7 +60,7 @@ func _init() -> void:
 	e.simulation.bodies = [^"Sphere"]
 	e.simulation.replicas = NetwSimulation.REPLICAS_ACTIVE
 	Netw.configure_property(self, &"sphere_position").broadcast() \
-			.interpolate(NetwInterpolate.new().lerp())
+			.interpolate(NetwInterpolate.new().lerp().to(&"shown_position"))
 	Netw.configure_property(self, &"sphere_linear_velocity").broadcast()
 )";
 

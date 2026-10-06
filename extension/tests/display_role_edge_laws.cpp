@@ -21,8 +21,11 @@ using netw_test::WorldDecl;
 
 constexpr const char *STEERED_SOURCE = R"(extends Node2D
 
+var shown_position := Vector2()
+
 func _init() -> void:
-	var smoothing := NetwInterpolate.new().lerp().smooth(0.0)
+	var smoothing := NetwInterpolate.new().lerp().smooth(0.0) \
+			.to(&"shown_position")
 	Netw.configure_property(self, &"position").broadcast() \
 			.interpolate(smoothing)
 )";

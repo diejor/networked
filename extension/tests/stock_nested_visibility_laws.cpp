@@ -3,6 +3,7 @@
 #if defined(NETW_TIER_HOSTED)
 
 #include "support/netw_cells.h"
+#include "support/netw_reset.h"
 #include "support/stock_probes.h"
 #include "support/stock_stand.h"
 #include "support/value_flow_stand.h"
@@ -21,11 +22,25 @@ using netw_test::SyncProp;
 constexpr int TICKRATE = 30;
 const char *PROBE_SOURCE = netw_test::gdsrc::STOCK_NESTED_VISIBILITY_PROBE;
 
-Ref<Script> probe_script() {
-    static Ref<Script> *held
-        = new Ref<Script>(netw_test::minted_script(PROBE_SOURCE));
-    REQUIRE_MESSAGE(held->is_valid(), "the nested probe script did not load");
+Ref<Script> &held_probe_script() {
+    static Ref<Script> *held = new Ref<Script>();
     return *held;
+}
+
+void forget_probe_script() {
+    held_probe_script().unref();
+}
+
+const bool probe_script_forgotten_per_case
+    = netw_test::register_reset_hook(&forget_probe_script);
+
+Ref<Script> probe_script() {
+    Ref<Script> &held = held_probe_script();
+    if (held.is_null()) {
+        held = netw_test::minted_script(PROBE_SOURCE);
+    }
+    REQUIRE_MESSAGE(held.is_valid(), "the nested probe script did not load");
+    return held;
 }
 
 Vector<SyncProp> synced_value_row() {

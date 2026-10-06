@@ -14,21 +14,26 @@ extends RefCounted
 
 
 ## Returns an eraser as a [Callable] matching
-## [code]func(Array[String]) -> void[/code].
+## [code]func(Array[String]) -> int[/code].
 static func get_eraser() -> Callable:
 	return erase_matching
 
 
-## Erases every recorded error whose message contains all of [param markers].
+## Erases every recorded error or warning whose message contains all of
+## [param markers], and returns how many it erased.
 ##
 ## Every marker must match, so a caller narrows by adding one rather than by
-## writing a pattern. Erasing is deliberately all-or-nothing per entry: an error
-## that matched is one the caller has already argued is benign.
-static func erase_matching(markers: Array) -> void:
+## writing a pattern. A case that provokes a fault on purpose asserts the count,
+## so the fault is checked rather than hidden.
+## [codeblock]
+## assert_int(await erase_matching(["joined with no arguments"])).is_equal(1)
+## [/codeblock]
+static func erase_matching(markers: Array) -> int:
 	var monitor := (
 		GdUnitThreadManager.get_current_context().get_execution_context().error_monitor
 	)
 	var entries: Array[ErrorLogEntry] = await monitor.scan(true)
+	var erased := 0
 	for entry: ErrorLogEntry in entries.duplicate():
 		var message: String = entry._message
 		var matched := true
@@ -38,3 +43,5 @@ static func erase_matching(markers: Array) -> void:
 				break
 		if matched:
 			monitor.erase_log_entry(entry)
+			erased += 1
+	return erased

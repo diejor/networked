@@ -68,9 +68,6 @@ inline DisplaySubject stand_subject(
     handle->set_enable_smart_dilation(false);
     handle->set_display_role(netw::NetwMultiplayer::DISPLAY_ROLE_REMOTE);
     handle->set_visual_root(godot::NodePath("First"));
-    godot::Node *parent
-        = p_parent != nullptr ? p_parent : netw::gd::scene_root();
-    parent->add_child(subject.body);
 
     godot::Ref<netw::NetwInterpolate> spec;
     spec.instantiate();
@@ -84,6 +81,9 @@ inline DisplaySubject stand_subject(
                 spec->lerp()->smooth(0.0)->to(godot::StringName("position"))
             )
         );
+    godot::Node *parent
+        = p_parent != nullptr ? p_parent : netw::gd::scene_root();
+    parent->add_child(subject.body);
     p_core->liveness_bind_route(subject.route, subject.entity.ptr());
     return subject;
 }

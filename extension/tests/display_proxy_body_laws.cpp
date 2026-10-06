@@ -6,6 +6,7 @@
 
 #if defined(NETW_TIER_HOSTED)
 
+#include "support/fault_log.h"
 #include "support/netw_cells.h"
 #include "support/value_flow_stand.h"
 
@@ -229,6 +230,7 @@ TEST_CASE(
     rig.mount();
     NetwMultiplayer *server = netw_test::flow_core(rig.server());
 
+    const netw_test::FaultWatch faults;
     const FlowPair aliased
         = netw_test::stand_flow_pair(rig, ALIASED_BODY, "AliasedBody");
     const FlowPair in_place = netw_test::stand_flow_pair(
@@ -250,6 +252,7 @@ TEST_CASE(
     REQUIRE(kept != nullptr);
     NETW_CHECK_EQ(int(refused->channels().size()), 0);
     NETW_CHECK_EQ(int(kept->channels().size()), 1);
+    NETW_CHECK_EQ(faults.warnings_containing("is simulated on this peer"), 1);
 }
 
 } // namespace TestNetwDisplayProxyBodyLaws

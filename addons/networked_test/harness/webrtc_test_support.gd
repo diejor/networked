@@ -22,7 +22,8 @@ const SCTP_RESET_MARKERS: Array[String] = [
 ]
 
 ## Erases a recorded error the running framework would otherwise report as a
-## failure, as [code]func(Array[String]) -> void[/code].
+## failure, as [code]func(Array[String]) -> int[/code] answering how many it
+## erased.
 ##
 ## Injected the way [member NetwGameHarness.reporter] is, because reaching into
 ## a framework's error monitor is the framework adapter's business and this file

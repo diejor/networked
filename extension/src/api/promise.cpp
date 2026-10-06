@@ -82,6 +82,7 @@ Ref<NetwPromise> NetwPromise::then(const Callable &callback) {
 }
 
 Ref<NetwPromise> NetwPromise::catch_error(const Callable &callback) {
+    failure_read = true;
     if (failed) {
         Array args;
         args.push_back(code);
@@ -97,6 +98,7 @@ Ref<NetwPromise> NetwPromise::when_settled(const Callable &callback) {
     if (!callback.is_valid()) {
         return Ref<NetwPromise>(this);
     }
+    failure_read = true;
     if (completed || failed) {
         callback.callv(Array());
         return Ref<NetwPromise>(this);
@@ -106,11 +108,26 @@ Ref<NetwPromise> NetwPromise::when_settled(const Callable &callback) {
 }
 
 Variant NetwPromise::answer() const {
+    failure_read = true;
     return completed ? result : Variant(code);
 }
 
 Signal NetwPromise::wait() {
     return promise_wait::open(waiting, completed || failed, answer());
+}
+
+void NetwPromise::_notification(int p_what) {
+    if (p_what != NOTIFICATION_PREDELETE || !failed || failure_read
+        || code == ERR_SKIP) {
+        return;
+    }
+    NETW_WARN(
+        sys::SESSION,
+        "A NetwPromise failed with error %d (%s) and nothing handled it. "
+        "Attach NetwPromise.catch_error or await NetwPromise.wait.",
+        code,
+        detail
+    );
 }
 
 void NetwPromise::resolve(const Variant &value) {
@@ -136,15 +153,8 @@ void NetwPromise::reject(Error error_code, const String &error_detail) {
     failed = true;
     code = error_code;
     detail = error_detail;
-    if (catch_callbacks.is_empty() && waiting.is_empty()
-        && !has_connections(StringName(SIG_SETTLED))) {
-        NETW_WARN(
-            sys::SESSION,
-            "A NetwPromise failed with error %d (%s) and nothing handled it. "
-            "Attach NetwPromise.catch_error or await NetwPromise.wait.",
-            error_code,
-            error_detail
-        );
+    if (has_connections(StringName(SIG_SETTLED))) {
+        failure_read = true;
     }
     emit_signal(StringName(SIG_SETTLED));
     const LocalVector<Callable> chained(catch_callbacks);

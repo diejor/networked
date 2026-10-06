@@ -23,7 +23,7 @@ using netw_test::LawVerdict;
 using netw_test::LoopbackRig;
 
 constexpr int TICKRATE = 30;
-const char *DERIVED_BODY = netw_test::gdsrc::STATE_AND_INPUT;
+const char *DERIVED_BODY = netw_test::gdsrc::STATE_ONLY;
 
 FlowCapture CAPTURE;
 

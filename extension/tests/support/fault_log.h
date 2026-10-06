@@ -82,6 +82,13 @@ public:
         const std::lock_guard<std::mutex> held(warned_lock);
         return count_containing(errored, p_text);
     }
+
+    godot::PackedStringArray faults() {
+        const std::lock_guard<std::mutex> held(warned_lock);
+        godot::PackedStringArray both = warned;
+        both.append_array(errored);
+        return both;
+    }
 };
 
 struct FaultWatch {

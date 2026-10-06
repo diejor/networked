@@ -229,6 +229,10 @@ const TransportSlot *transport_slot(const RID &p_slot) {
     return slot_owner().get_or_null(p_slot);
 }
 
+TransportBook::~TransportBook() {
+    clear();
+}
+
 TransportBook &TransportBook::shared() {
     static TransportBook book;
     return book;

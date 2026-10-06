@@ -11,8 +11,11 @@ func _init() -> void:
 
 constexpr const char *INTERPOLATED_STATE_AND_INPUT = R"(extends Node2D
 
+var shown_position := Vector2()
+
 func _init() -> void:
-	var smoothing := NetwInterpolate.new().lerp().smooth(0.0).to(&"position")
+	var smoothing := NetwInterpolate.new().lerp().smooth(0.0) \
+			.to(&"shown_position")
 	Netw.configure_property(self, &"position").state().interpolate(smoothing)
 	Netw.configure_property(self, &"rotation").input()
 )";

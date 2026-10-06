@@ -67,6 +67,12 @@ StringName &displaced_default_interface() {
     return held;
 }
 
+const StringName &installed_default_interface() {
+    static StringName *installed
+        = memnew(StringName(NetwMultiplayer::get_class_static()));
+    return *installed;
+}
+
 godot::LocalVector<godot::ObjectID> live_registry;
 
 constexpr double POLL_PUMP_RATE = 60.0;
@@ -4935,7 +4941,7 @@ void NetwMultiplayer::install_default_interface() {
         return;
     }
     displaced_default_interface() = MultiplayerAPI::get_default_interface();
-    MultiplayerAPI::set_default_interface(get_class_static());
+    MultiplayerAPI::set_default_interface(installed_default_interface());
 }
 
 void NetwMultiplayer::restore_default_interface() {

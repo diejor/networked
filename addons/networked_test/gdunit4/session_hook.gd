@@ -13,6 +13,7 @@ static var game_harness_used_in_test: bool = false
 const _GdUnitErrorScrubber := preload(
 		"res://addons/networked_test/gdunit4/gdunit_error_scrubber.gd"
 )
+const _NATIVE_TESTS := &"NetwNativeTests"
 
 var _baseline_child_count: int = 0
 var _baseline_resource_count: int = 0
@@ -49,6 +50,12 @@ func startup(session: GdUnitTestSession) -> GdUnitResult:
 	_baseline_time_scale = Engine.time_scale
 	_baseline_physics_ticks = Engine.get_physics_ticks_per_second()
 
+	if not ClassDB.class_exists(_NATIVE_TESTS):
+		return GdUnitResult.error(
+			"The Networked library was built without its test classes, so "
+			+ "state leaks between tests. Rebuild it with "
+			+ "scons -C extension netw_tests=yes.",
+		)
 	return GdUnitResult.success()
 
 
@@ -87,7 +94,7 @@ func _reset_global_test_state() -> void:
 	# later suite a table it never asked for. A table's wire id is its
 	# name-sorted position among the bound tables, so one leaked declaration
 	# renumbers another suite's frames and the failure names the wrong cause.
-	NetwNativeTests.schema_model_clear()
+	_call_native_tests(&"schema_model_clear")
 
 	# NetwGameHarness scales engine timing 10x under headless and restores it only
 	# in its own teardown. Force the clean baseline back between tests so a skipped
@@ -106,7 +113,12 @@ func _reset_global_test_state() -> void:
 		LocalLoopbackSession.get_shared_session().reset()
 		LocalLoopbackSession.set_shared_session(null)
 
-	NetwNativeTests.tracker_book_clear()
+	_call_native_tests(&"tracker_book_clear")
+
+
+func _call_native_tests(method: StringName) -> void:
+	if ClassDB.class_exists(_NATIVE_TESTS):
+		ClassDB.class_call_static(_NATIVE_TESTS, method)
 
 
 func _assert_clean_state(event: GdUnitEvent) -> void:

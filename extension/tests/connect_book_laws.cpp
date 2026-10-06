@@ -58,6 +58,23 @@ struct BookScope {
 };
 
 TEST_CASE(
+    "[Networked][Connect][Hosted] a book's transport slots are released with "
+    "the book, so a scoped book leaves no slot behind"
+) {
+    RID slot;
+    {
+        BookScope scope;
+        scope.book
+            .install_native(StringName("RedPeer"), make_red, String("Red"));
+        slot = scope.book.slot_of(StringName("RedPeer"));
+        const bool held = netw::connect::transport_slot(slot) != nullptr;
+        REQUIRE(held);
+    }
+    const bool released = netw::connect::transport_slot(slot) == nullptr;
+    CHECK(released);
+}
+
+TEST_CASE(
     "[Networked][Connect][Hosted] a transport is minted per caller rather "
     "than shared, because one transport belongs to one session and a second "
     "session asking for the same peer class must not be handed the first "

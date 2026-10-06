@@ -10,6 +10,7 @@
 #include "godot/script.hpp"
 #include "godot/variant.hpp"
 #include "netw/api/loopback.hpp"
+#include "support/fault_log.h"
 #include "support/minted_script.h"
 
 namespace TestTransferKitLaws {
@@ -226,10 +227,20 @@ TEST_CASE(
     Kit kit(false);
     NETW_REQUIRE_EQ(int(kit.open()), 1);
 
+    const netw_test::FaultWatch faults;
     kit.ask("run");
 
     const PackedStringArray failed = kit.ask("failed_laws");
     CHECK(failed.has(String("C4")));
+    const int64_t uncached = faults.errors_containing("not found in cache");
+    const int64_t unfound
+        = faults.errors_containing("Requested node was not found");
+    const int64_t stranger
+        = faults.errors_containing("connected_peers.has(sender)");
+    NETW_CHECK_GT(uncached, 0);
+    NETW_CHECK_GT(unfound, 0);
+    NETW_CHECK_GT(stranger, 0);
+    NETW_CHECK_EQ(faults.errors(), uncached + unfound + stranger);
 }
 
 } // namespace TestTransferKitLaws

@@ -300,4 +300,20 @@ TEST_CASE(
     CHECK(message.contains("MultiplayerSynchronizer"));
 }
 
+TEST_CASE(
+    "[Networked][Sync][Hosted] the contract warning names the node when its "
+    "entity carries no id yet, so the line never names nobody"
+) {
+    Node *node = memnew(Node);
+    node->set_name("Racer");
+    const Ref<NetwEntity> entity = NetwEntity::ensure(node);
+    REQUIRE(entity.is_valid());
+
+    const bool named_by_node
+        = SyncPipeline::contract_subject_name(node) == String("Racer");
+    CHECK(named_by_node);
+
+    memdelete(node);
+}
+
 } // namespace TestSyncPipeline

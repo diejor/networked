@@ -29,6 +29,7 @@ constexpr const char *BALL_ID = "sim_claim_ball";
 constexpr const char *BALL_SOURCE = R"(extends Node3D
 
 var sphere: RigidBody3D
+var shown_position := Vector3()
 var modes := 0
 var changes := 0
 
@@ -64,7 +65,7 @@ func _init() -> void:
 	e.simulation.mode_changed.connect(func(_was, _now): modes += 1)
 	e.control_changed.connect(func(_was, _now): changes += 1)
 	Netw.configure_property(self, &"sphere_position").broadcast() \
-			.interpolate(NetwInterpolate.new().lerp())
+			.interpolate(NetwInterpolate.new().lerp().to(&"shown_position"))
 	Netw.configure_property(self, &"sphere_linear_velocity").broadcast()
 )";
 

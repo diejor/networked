@@ -449,13 +449,18 @@ void SyncPipeline::report_missing_prediction_component(
     if (authoring::declares_prediction(node)) {
         return;
     }
-    const String entity_name = entity.is_valid() ? String(entity->get_name())
-                                                 : String(node->get_name());
     NETW_WARN(
         sys::PREDICTION,
         "%s",
-        missing_prediction_component_message(entity_name)
+        missing_prediction_component_message(contract_subject_name(node))
     );
+}
+
+String SyncPipeline::contract_subject_name(Node *p_node) {
+    const Ref<NetwEntity> entity = NetwEntity::of(p_node);
+    const String entity_id
+        = entity.is_valid() ? String(entity->get_name()) : String();
+    return entity_id.is_empty() ? String(p_node->get_name()) : entity_id;
 }
 
 String SyncPipeline::missing_prediction_component_message(

@@ -77,7 +77,7 @@ public:
     class Book {
         NetwPredictionEngine *pool = nullptr;
         mutable int64_t seat = -1;
-        godot::Ref<NetwEntity> entity;
+        godot::ObjectID entity;
 
         godot::LocalVector<int64_t> held;
         godot::PackedInt32Array arrivals;

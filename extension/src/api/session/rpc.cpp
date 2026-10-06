@@ -1898,7 +1898,7 @@ int64_t NetwMultiplayer::send_datagram(
     if (r_sent != nullptr) {
         *r_sent = false;
     }
-    if (p_payload.is_empty() || inner.is_null()) {
+    if (p_payload.is_empty() || !session_link_is_connected()) {
         attribution.discard(p_peer, p_reliable, p_carrier);
         return -1;
     }
@@ -2416,7 +2416,7 @@ void NetwMultiplayer::send_standalone_ack(int64_t p_peer, int64_t p_ack) {
 }
 
 void NetwMultiplayer::flush_standalone_acks() {
-    if (inner.is_null() || inner->get_multiplayer_peer().is_null()) {
+    if (!session_link_is_connected()) {
         return;
     }
     const PackedInt32Array live = reachable_peer_ids();

@@ -61,10 +61,25 @@ struct Census {
     }
 };
 
+struct CensusRow {
+    int64_t objects = 0;
+    int64_t resources = 0;
+    std::string name;
+};
+
+struct CensusLedger {
+    std::vector<CensusRow> rows;
+    bool read_by_runner = false;
+};
+
+inline CensusLedger &census_ledger() {
+    static CensusLedger ledger;
+    return ledger;
+}
+
 class ResetListener final : public doctest::IReporter {
     Census opened;
     std::string current;
-    std::vector<std::string> drifted;
 
 public:
     explicit ResetListener(const doctest::ContextOptions &) {
@@ -94,35 +109,36 @@ public:
         if (objects == 0 && resources == 0) {
             return;
         }
-        char line[240];
-        std::snprintf(
-            line,
-            sizeof(line),
-            "  objects %+lld resources %+lld  %s",
-            (long long)objects,
-            (long long)resources,
-            current.c_str()
-        );
-        drifted.push_back(std::string(line));
+        census_ledger().rows.push_back({objects, resources, current});
     }
 
     void test_run_end(const doctest::TestRunStats &) override {
-        if (drifted.empty()) {
+        for (ResetHook hook : reset_hooks()) {
+            hook();
+        }
+        const CensusLedger &ledger = census_ledger();
+        if (ledger.read_by_runner || ledger.rows.empty()) {
             return;
         }
         std::printf(
             "NETW_CENSUS %d case(s) ended holding more than they opened "
             "with\n",
-            int(drifted.size())
+            int(ledger.rows.size())
         );
-        for (const std::string &line : drifted) {
-            std::printf("%s\n", line.c_str());
+        for (const CensusRow &row : ledger.rows) {
+            std::printf(
+                "  objects %+lld resources %+lld  %s\n",
+                (long long)row.objects,
+                (long long)row.resources,
+                row.name.c_str()
+            );
         }
     }
 
     void report_query(const doctest::QueryData &) override {
     }
     void test_run_start() override {
+        census_ledger().rows.clear();
     }
     void test_case_exception(const doctest::TestCaseException &) override {
     }

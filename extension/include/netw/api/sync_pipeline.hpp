@@ -348,6 +348,7 @@ public:
     static godot::String missing_prediction_component_message(
         const godot::String &p_entity_name
     );
+    static godot::String contract_subject_name(godot::Node *p_node);
 
     void clear_session();
     void clear_route(int64_t p_route);

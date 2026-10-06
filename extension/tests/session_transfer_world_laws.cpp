@@ -384,6 +384,7 @@ struct Evidence {
     int repeated = -1;
     int held_elsewhere = -1;
     int64_t unwritten = -1;
+    int64_t sends_refused = -1;
 };
 
 enum Viewer {
@@ -701,8 +702,14 @@ public:
         evidence.continues = p_scenario.mode == NetwSession::TRANSFER_CONTINUE;
         stand_world();
         check_world();
-        hand_on(p_scenario.exit);
-        settle(p_scenario.exit);
+        {
+            const netw_test::FaultWatch faults;
+            hand_on(p_scenario.exit);
+            settle(p_scenario.exit);
+            evidence.sends_refused = faults.errors_containing(
+                "via a multiplayer peer which is not connected"
+            );
+        }
         play_on();
         judge_survivors(p_scenario.exit);
         spawn_many();
@@ -877,6 +884,16 @@ LawVerdict law_reconciles(const Evidence &p_run) {
     return law_held();
 }
 
+LawVerdict law_closes_quietly(const Evidence &p_run) {
+    if (p_run.sends_refused != 0) {
+        return law_broken(
+            "the engine refused %d sends on a link that had closed",
+            int(p_run.sends_refused)
+        );
+    }
+    return law_held();
+}
+
 const WorldLaw L_SPAWNS = {
     "spawns",
     "a body the new server spawns reaches every survivor",
@@ -915,7 +932,15 @@ const WorldLaw L_RECONCILES = {
     &law_reconciles,
 };
 
+const WorldLaw L_CLOSES = {
+    "closes",
+    "a server that hands on sends nothing over its link once the link has "
+    "closed, so the engine refuses no send",
+    &law_closes_quietly,
+};
+
 const WorldLaw *const EVERY_LAW[] = {
+    &L_CLOSES,
     &L_SPAWNS,
     &L_MINTS,
     &L_TABLES,

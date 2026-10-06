@@ -187,6 +187,8 @@ struct TransportRow {
 
 class TransportBook {
 public:
+    ~TransportBook();
+
     static TransportBook &shared();
 
     void install_native(

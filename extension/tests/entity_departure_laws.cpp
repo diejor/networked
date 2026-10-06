@@ -27,7 +27,7 @@ using netw::NetwEntity;
 using netw::NetwInterestLayer;
 using netw::NetwMultiplayer;
 
-constexpr const char *MOVING_BODY = netw_test::gdsrc::STATE_AND_INPUT;
+constexpr const char *MOVING_BODY = netw_test::gdsrc::STATE_ONLY;
 
 struct Travelling {
     LoopbackRig rig;

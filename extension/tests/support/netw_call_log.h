@@ -100,6 +100,13 @@ public:
         anchor.instantiate();
     }
 
+    CallLog(const CallLog &) = delete;
+    CallLog &operator=(const CallLog &) = delete;
+
+    ~CallLog() {
+        entries->args.clear();
+    }
+
     godot::Callable callable(const godot::StringName &p_tag) const {
         return godot::Callable(
             memnew(CallLogSink(entries, p_tag, anchor.ptr()))

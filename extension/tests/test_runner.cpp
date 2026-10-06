@@ -1,8 +1,11 @@
 #define DOCTEST_CONFIG_IMPLEMENT
 #include "support/netw_test.h"
 
+#include <algorithm>
+#include <chrono>
 #include <cstdio>
 #include <filesystem>
+#include <map>
 #include <mutex>
 #include <sstream>
 #include <string>
@@ -36,6 +39,7 @@
 #include "netw/wire/frame.hpp"
 #include "netw/wire/registry.hpp"
 #include "netw/wire/spec.hpp"
+#include "support/fault_log.h"
 #include "support/frame_drive.h"
 #include "support/netw_cells.h"
 #include "support/netw_reset.h"
@@ -103,6 +107,151 @@ std::string escape_xml(const char *text) {
         }
     }
     return escaped;
+}
+
+constexpr int FAILING_SHOWN = 10;
+constexpr int CENSUS_SHOWN = 10;
+constexpr int FAMILIES_SHOWN = 5;
+
+struct Failing {
+    std::string name;
+    std::string detail;
+};
+
+struct RunSummary {
+    int64_t cases = 0;
+    int64_t failed = 0;
+    std::vector<Failing> failing;
+};
+
+RunSummary &run_summary() {
+    static RunSummary summary;
+    return summary;
+}
+
+std::string first_line(const std::string &p_text) {
+    return p_text.substr(0, p_text.find('\n'));
+}
+
+Ref<netw_test::FaultLog> &run_faults() {
+    static Ref<netw_test::FaultLog> log;
+    return log;
+}
+
+void open_run_faults() {
+    if (run_faults().is_valid()) {
+        return;
+    }
+    run_faults().instantiate();
+    OS::get_singleton()->add_logger(run_faults());
+}
+
+PackedStringArray close_run_faults() {
+    if (run_faults().is_null()) {
+        return PackedStringArray();
+    }
+    const PackedStringArray faults = run_faults()->faults();
+    OS::get_singleton()->remove_logger(run_faults());
+    run_faults().unref();
+    return faults;
+}
+
+std::string fault_family(const String &p_line) {
+    const CharString text = p_line.strip_edges().utf8();
+    std::string folded;
+    bool quoted = false;
+    bool in_number = false;
+    for (const char *cursor = text.get_data(); *cursor != '\0'; ++cursor) {
+        const char each = *cursor;
+        if (each == '\'') {
+            folded += quoted ? "...'" : "'";
+            quoted = !quoted;
+            in_number = false;
+            continue;
+        }
+        if (quoted) {
+            continue;
+        }
+        const bool digit = each >= '0' && each <= '9';
+        if (digit && !in_number) {
+            folded += 'N';
+        } else if (!digit) {
+            folded += each;
+        }
+        in_number = digit;
+    }
+    return folded;
+}
+
+Array top_fault_families(const PackedStringArray &p_faults, int64_t &r_count) {
+    std::map<std::string, int64_t> counted;
+    for (const String &line : p_faults) {
+        counted[fault_family(line)] += 1;
+    }
+    r_count = int64_t(counted.size());
+    std::vector<std::pair<std::string, int64_t>> ranked(
+        counted.begin(),
+        counted.end()
+    );
+    std::stable_sort(
+        ranked.begin(),
+        ranked.end(),
+        [](const auto &p_a, const auto &p_b) { return p_a.second > p_b.second; }
+    );
+    Array top;
+    for (int at = 0; at < int(ranked.size()) && at < FAMILIES_SHOWN; ++at) {
+        Dictionary family;
+        family[StringName("count")] = ranked[at].second;
+        family[StringName("line")] = String::utf8(ranked[at].first.c_str());
+        top.push_back(family);
+    }
+    return top;
+}
+
+String write_census(const String &p_report_path) {
+    const String census_path = p_report_path.get_base_dir().path_join(
+        "census.txt"
+    );
+    const CharString global
+        = ProjectSettings::get_singleton()->globalize_path(census_path).utf8();
+    FILE *output = std::fopen(global.get_data(), "wb");
+    if (output == nullptr) {
+        return String();
+    }
+    for (const netw_test::CensusRow &row : netw_test::census_ledger().rows) {
+        std::fprintf(
+            output,
+            "objects %+lld resources %+lld  %s\n",
+            (long long)row.objects,
+            (long long)row.resources,
+            row.name.c_str()
+        );
+    }
+    std::fclose(output);
+    return census_path;
+}
+
+PackedStringArray top_census_rows() {
+    std::vector<netw_test::CensusRow> ranked = netw_test::census_ledger().rows;
+    std::stable_sort(
+        ranked.begin(),
+        ranked.end(),
+        [](const netw_test::CensusRow &p_a, const netw_test::CensusRow &p_b) {
+            return p_a.objects > p_b.objects;
+        }
+    );
+    PackedStringArray top;
+    for (int at = 0; at < int(ranked.size()) && at < CENSUS_SHOWN; ++at) {
+        top.push_back(
+            vformat(
+                "objects %+d resources %+d  %s",
+                ranked[at].objects,
+                ranked[at].resources,
+                String::utf8(ranked[at].name.c_str())
+            )
+        );
+    }
+    return top;
 }
 
 class NetwJunitReporter final : public doctest::IReporter {
@@ -184,6 +333,27 @@ public:
         const unsigned int reported = stats.numTestCasesPassingFilters
             + (diverged ? 1u : 0u) + (stray > 0 ? 1u : 0u);
         failures += (diverged ? 1 : 0) + (stray > 0 ? 1 : 0);
+        RunSummary &summary = run_summary();
+        summary.cases = int64_t(reported);
+        summary.failed = int64_t(failures + errors);
+        summary.failing.clear();
+        if (diverged) {
+            summary.failing.push_back(
+                {"JR0 scene residency", "a body reason disagreed"}
+            );
+        }
+        if (stray > 0) {
+            summary.failing.push_back(
+                {"SV0 store validation", validated.first.c_str()}
+            );
+        }
+        for (const Case &test_case : cases) {
+            if (test_case.failure || test_case.error) {
+                summary.failing.push_back(
+                    {test_case.name, first_line(test_case.detail)}
+                );
+            }
+        }
         FILE *output = std::fopen(options.out.c_str(), "wb");
         if (output == nullptr) {
             return;
@@ -603,13 +773,50 @@ Dictionary NetwNativeTests::run(
     result[StringName("filter")] = filter;
     result[StringName("report_path")] = report_path;
     result[StringName("cells_path")] = cells_path;
+    open_run_faults();
+    netw_test::census_ledger().read_by_runner = true;
+    const std::chrono::steady_clock::time_point started
+        = std::chrono::steady_clock::now();
     result[StringName("exit_code")]
         = run_native_tests(filter, report_path, cells_path);
+    result[StringName("seconds")] = std::chrono::duration<double>(
+                                        std::chrono::steady_clock::now()
+                                        - started
+    )
+                                        .count();
     result[StringName("cells")] = netw_test::Cells::count();
+
+    const RunSummary &summary = run_summary();
+    result[StringName("cases")] = summary.cases;
+    result[StringName("failed")] = summary.failed;
+    Array failing;
+    for (int at = 0; at < int(summary.failing.size()) && at < FAILING_SHOWN;
+         ++at) {
+        Dictionary row;
+        row[StringName("name")]
+            = String::utf8(summary.failing[at].name.c_str());
+        row[StringName("detail")]
+            = String::utf8(summary.failing[at].detail.c_str());
+        failing.push_back(row);
+    }
+    result[StringName("failing")] = failing;
+
+    result[StringName("census_cases")]
+        = int64_t(netw_test::census_ledger().rows.size());
+    result[StringName("census_top")] = top_census_rows();
+    result[StringName("census_path")] = write_census(report_path);
+
+    const PackedStringArray faults = close_run_faults();
+    int64_t family_count = 0;
+    result[StringName("faults")] = int64_t(faults.size());
+    result[StringName("fault_families")]
+        = top_fault_families(faults, family_count);
+    result[StringName("fault_family_count")] = family_count;
     return result;
 }
 
 bool NetwNativeTests::frame_advance() {
+    open_run_faults();
     netw_test::smooth_when_headless(true);
     return netw_test::frame_drive_advance();
 }

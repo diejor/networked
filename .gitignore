@@ -1,4 +1,5 @@
 .godot/
+/override.cfg
 /android/
 /reports*
 *.tmp

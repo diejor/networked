@@ -28,11 +28,55 @@ func _physics_process(_delta: float) -> bool:
 		cells_path,
 	)
 	_write_wire_spec(_runner)
-	print("NATIVE_JUNIT ", result[&"report_path"])
 	if not cells_path.is_empty():
 		print("NATIVE_CELLS ", cells_path, " ", result[&"cells"])
+	print_summary(result)
 	quit(result[&"exit_code"])
 	return true
+
+
+func print_summary(result: Dictionary) -> void:
+	var lines: Array[String] = [""]
+	lines.append(
+		"NATIVE  %d cases  %d failed  %.1f s   %s" % [
+			result[&"cases"],
+			result[&"failed"],
+			result[&"seconds"],
+			String(result[&"report_path"]).trim_prefix("res://"),
+		],
+	)
+	var failing: Array = result[&"failing"]
+	if not failing.is_empty():
+		lines.append(
+			"FAILED  first %d of %d" % [failing.size(), result[&"failed"]],
+		)
+		for row: Dictionary in failing:
+			lines.append("  %s" % row[&"name"])
+			lines.append("    %s" % row[&"detail"])
+	if result[&"census_cases"] > 0:
+		var top: PackedStringArray = result[&"census_top"]
+		lines.append(
+			"CENSUS  %d cases ended holding objects. top %d, all in %s" % [
+				result[&"census_cases"],
+				top.size(),
+				String(result[&"census_path"]).trim_prefix("res://"),
+			],
+		)
+		for row in top:
+			lines.append("  %s" % row)
+	var families: Array = result[&"fault_families"]
+	lines.append(
+		"FAULTS  %d warnings and errors in %d families. top %d" % [
+			result[&"faults"],
+			result[&"fault_family_count"],
+			families.size(),
+		],
+	)
+	for family: Dictionary in families:
+		var line := String(family[&"line"])
+		lines.append("  %4d  %s" % [family[&"count"], line.left(120)])
+	lines.append("The engine prints its own exit leak lines after this block.")
+	print("\n".join(lines))
 
 
 func _write_wire_spec(runner: Object) -> void:

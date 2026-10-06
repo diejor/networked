@@ -29,14 +29,42 @@ Put personal SCons defaults in `extension/custom.py`.
 
 ## Tests
 
-Build the native tests, then run them through Godot.
+Build the library with its tests, then run them through Godot. The GdUnit
+suites under `tests/` need this build too.
 
 ```sh
 scons -C extension netw_tests=yes
-godot --headless --script tests/native/run_native_tests.gd
+godot --headless --fixed-fps 60 --script tests/native/run_native_tests.gd
 ```
 
-Test results are written to `reports/native/results.xml`.
+Arguments after `--` pick cases and raise the log level.
+
+```sh
+godot --headless --fixed-fps 60 --script tests/native/run_native_tests.gd \
+  -- --native-filter="*Promise*" --netw-log=trace
+```
+
+The run ends with a summary of the case count, the failing cases, the cases
+that ended holding objects and the most common warnings. Every case is in
+`reports/native/results.xml` and every held-object row is in
+`reports/native/census.txt`.
+
+Run the GdUnit suites from the editor's GdUnit panel, or from a shell.
+
+```sh
+godot --path . -s res://addons/gdUnit4/bin/GdUnitCmdTool.gd --headless \
+  --ignoreHeadlessMode --ignore-error-breaks -rc 1 -rd res://reports \
+  -a res://tests
+```
+
+GdUnit reads errors from the Godot log file, so run one Godot process per
+checkout while it runs. A second checkout of this repository gets its own log
+from an `override.cfg` in its root.
+
+```ini
+[debug]
+file_logging/log_path="/absolute/path/to/checkout/tmp/logs/godot.log"
+```
 
 ## Engine module
 

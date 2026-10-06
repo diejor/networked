@@ -131,10 +131,9 @@ class AuthorshipRun {
     ) {
         Node2D *body = memnew(Node2D);
         body->set_name("DerivedPlayer");
-        p_branch->add_child(body);
-
         const Ref<NetwEntity> entity = NetwEntity::ensure(body);
         const uint64_t set = declare_stream(p_core->property_set_book(), body);
+        p_branch->add_child(body);
         NETW_CHECK_EQ(
             int(p_core->sync_pipeline()->register_property_set(body, set)),
             int(OK)
@@ -363,7 +362,6 @@ RigidBody2D *a_state_body(NetwMultiplayer *p_core, Node *p_branch, double p_x) {
     body->set_position(Vector2(real_t(p_x), 0.0));
     body->set_multiplayer_authority(SERVER);
     const Ref<NetwEntity> entity = NetwEntity::ensure(body);
-    p_branch->add_child(body);
 
     Ref<NetwPropertyConfig> config
         = Netw::configure_property(body, StringName("position"), true);
@@ -383,6 +381,7 @@ RigidBody2D *a_state_body(NetwMultiplayer *p_core, Node *p_branch, double p_x) {
         PropertySet::RECORD_STATE
     );
     REQUIRE(set != SetBook::NONE);
+    p_branch->add_child(body);
     NETW_CHECK_EQ(
         int(p_core->sync_pipeline()->register_property_set(body, set)),
         int(OK)

@@ -1,6 +1,7 @@
 #include "support/netw_test.h"
 
 #include "netw/scene_core.hpp"
+#include "support/minted_rids.h"
 #include "support/netw_call_log.h"
 
 #include "godot/rid.hpp"
@@ -18,8 +19,8 @@ TEST_CASE(
 ) {
     Ref<NetwSceneCore> scenes;
     scenes.instantiate();
-    RID_Owner<int> owner;
-    const RID arena = owner.make_rid(0);
+    netw_test::MintedRids owner;
+    const RID arena = owner.mint();
     const CallLog heard;
     scenes->observe(
         arena,
@@ -46,8 +47,8 @@ TEST_CASE(
 ) {
     Ref<NetwSceneCore> scenes;
     scenes.instantiate();
-    RID_Owner<int> owner;
-    const RID arena = owner.make_rid(0);
+    netw_test::MintedRids owner;
+    const RID arena = owner.mint();
     const CallLog heard;
     scenes->observe(arena, NetwSceneCore::EVENT_BODY, heard.callable("edge"));
     scenes->observe(
@@ -77,8 +78,8 @@ TEST_CASE(
 ) {
     Ref<NetwSceneCore> scenes;
     scenes.instantiate();
-    RID_Owner<int> owner;
-    const RID arena = owner.make_rid(0);
+    netw_test::MintedRids owner;
+    const RID arena = owner.mint();
     const CallLog heard;
     scenes->observe(
         arena,
@@ -108,8 +109,8 @@ TEST_CASE(
 ) {
     Ref<NetwSceneCore> scenes;
     scenes.instantiate();
-    RID_Owner<int> owner;
-    const RID arena = owner.make_rid(0);
+    netw_test::MintedRids owner;
+    const RID arena = owner.mint();
     const CallLog surviving;
     {
         const CallLog dying;

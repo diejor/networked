@@ -689,7 +689,32 @@ const RoleLaw L_IN_PLACE = {
     &law_in_place,
 };
 
-const RoleLaw ROLE_LAWS[] = {L_LADDER, L_STEERING, L_IN_PLACE};
+LawVerdict law_self_feedback(const RoleRun &p_run) {
+    if (p_run.scenario().rung != RUNG_STEERED) {
+        return law_held();
+    }
+    if (!p_run.warned()) {
+        return law_broken(
+            "a predicted body written in place by its own simulation raised "
+            "no self-feedback warning"
+        );
+    }
+    return law_held();
+}
+
+const RoleLaw L_SELF_FEEDBACK = {
+    "self-feedback",
+    "a channel a predicting peer interpolates in place on the body it "
+    "simulates raises the self-feedback warning",
+    &law_self_feedback,
+};
+
+const RoleLaw ROLE_LAWS[] = {
+    L_LADDER,
+    L_STEERING,
+    L_IN_PLACE,
+    L_SELF_FEEDBACK,
+};
 
 TEST_CASE("[Networked][Display][SceneTree] the auto display role laws hold") {
     const RoleScenario CORPUS[] = {

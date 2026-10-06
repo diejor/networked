@@ -2,6 +2,7 @@
 
 #include "netw/scene_core.hpp"
 #include "netw/session/frames.hpp"
+#include "support/minted_rids.h"
 #include "support/netw_call_log.h"
 
 #include <memory>
@@ -26,13 +27,13 @@ Ref<NetwSceneCore> fresh() {
 }
 
 class Scenes {
-    RID_Owner<int> owner;
+    netw_test::MintedRids owner;
     LocalVector<RID> minted;
 
 public:
     Scenes() {
         for (int index = 0; index < 4; ++index) {
-            minted.push_back(owner.make_rid(index));
+            minted.push_back(owner.mint(index));
         }
     }
 

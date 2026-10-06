@@ -1,6 +1,7 @@
 #include "netw/api/predict_stats.hpp"
 
 #include "godot/class_db.hpp"
+#include "godot/object.hpp"
 
 using namespace godot;
 
@@ -241,16 +242,22 @@ void NetwPredictStats::Book::bind_slot(
     const Ref<NetwEntity> &p_entity
 ) {
     pool = p_pool;
-    entity = p_entity;
-    seat = pool != nullptr && entity.is_valid() ? pool->slot_of(entity) : -1;
+    entity = p_entity.is_valid() ? p_entity->get_instance_id() : ObjectID();
+    seat
+        = pool != nullptr && p_entity.is_valid() ? pool->slot_of(p_entity) : -1;
 }
 
 int64_t NetwPredictStats::Book::slot() const {
-    if (pool == nullptr || entity.is_null()) {
+    if (pool == nullptr) {
+        return -1;
+    }
+    const Ref<RefCounted> live
+        = Object::cast_to<RefCounted>(gd::object_of(entity));
+    if (live.is_null()) {
         return -1;
     }
     if (seat < 0 || !pool->is_open(seat)) {
-        seat = pool->slot_of(entity);
+        seat = pool->slot_of(live);
     }
     return seat;
 }

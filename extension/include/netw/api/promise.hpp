@@ -34,9 +34,11 @@ private:
     godot::LocalVector<godot::Callable> then_callbacks;
     godot::LocalVector<godot::Callable> catch_callbacks;
     promise_wait::Waiting waiting;
+    mutable bool failure_read = false;
 
 protected:
     static void _bind_methods();
+    void _notification(int p_what);
 
 public:
     static godot::Ref<NetwPromise> resolved(const godot::Variant &p_value);
@@ -49,6 +51,7 @@ public:
         return completed;
     }
     bool get_is_failed() const {
+        failure_read = true;
         return failed;
     }
     bool get_is_settled() const {
@@ -58,9 +61,11 @@ public:
         return result;
     }
     godot::Error get_code() const {
+        failure_read = true;
         return code;
     }
     godot::String get_detail() const {
+        failure_read = true;
         return detail;
     }
 
