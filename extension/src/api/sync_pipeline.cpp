@@ -810,10 +810,11 @@ LocalVector<PropertyBindingPtr> SyncPipeline::bindings_of_entity(
         const bool take_left = at_right >= right.size()
             || (at_left < left.size()
                 && left[at_left].sequence < right[at_right].sequence);
-        if (take_left) {
-            out.push_back(live(left[at_left++].binding));
-        } else {
-            out.push_back(live(right[at_right++].binding));
+        PropertyBinding *const held = take_left
+            ? live(left[at_left++].binding)
+            : live(right[at_right++].binding);
+        if (held != nullptr) {
+            out.push_back(held);
         }
     }
     return out;

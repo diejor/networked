@@ -19,7 +19,6 @@ sky_material = SubResource("ProceduralSkyMaterial_arena")
 background_mode = 2
 sky = SubResource("Sky_arena")
 tonemap_mode = 1
-ssr_enabled = true
 glow_enabled = true
 
 [sub_resource type="BoxMesh" id="BoxMesh_goalbox"]

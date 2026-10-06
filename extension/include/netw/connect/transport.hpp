@@ -149,6 +149,7 @@ struct TransportFacts {
     godot::String address_help;
     godot::Dictionary host_settings;
     godot::Dictionary client_settings;
+    double timeout_hint = 0.0;
     bool is_available = false;
     bool can_host_here = false;
     bool can_probe = false;

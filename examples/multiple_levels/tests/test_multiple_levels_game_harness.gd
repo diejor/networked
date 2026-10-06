@@ -1,12 +1,12 @@
 class_name TestMultipleLevelsGameHarness
 extends NetwTestSuite
 
-const MAIN := preload("res://examples/multiple_levels/Main.tscn")
-const LEVEL_1 := preload("res://examples/multiple_levels/Level1.tscn")
-const LEVEL_2 := preload("res://examples/multiple_levels/Level2.tscn")
-const PLAYER := preload("res://examples/multiple_levels/Player.tscn")
-const _LEVEL_1_PATH := "res://examples/multiple_levels/Level1.tscn"
-const _LEVEL_2_PATH := "res://examples/multiple_levels/Level2.tscn"
+const MAIN := preload("res://examples/multiple_levels/main.tscn")
+const LEVEL_1 := preload("res://examples/multiple_levels/game/level1.tscn")
+const LEVEL_2 := preload("res://examples/multiple_levels/game/level2.tscn")
+const PLAYER := preload("res://examples/multiple_levels/game/player.tscn")
+const _LEVEL_1_PATH := "res://examples/multiple_levels/game/level1.tscn"
+const _LEVEL_2_PATH := "res://examples/multiple_levels/game/level2.tscn"
 const _TP_MARKER := ^"%Teleporter/Marker2D"
 
 var game: NetwGameHarness

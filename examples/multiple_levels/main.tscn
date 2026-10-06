@@ -1,8 +1,8 @@
 [gd_scene format=3 uid="uid://bi445hl7e416b"]
 
 [ext_resource type="PackedScene" uid="uid://bb2nsfunxlw3a" path="res://addons/networked/gdscript/connect/ui/connect_browser.tscn" id="8_7ue45"]
-[ext_resource type="PackedScene" uid="uid://vj1s4e7rbmsn" path="res://examples/multiple_levels/TPLayer.tscn" id="9_k3bnk"]
-[ext_resource type="Script" uid="uid://b61sxpbmgca8q" path="res://examples/multiple_levels/multiple_levels_session.gd" id="16_session"]
+[ext_resource type="PackedScene" uid="uid://vj1s4e7rbmsn" path="res://examples/multiple_levels/game/tp_layer.tscn" id="9_k3bnk"]
+[ext_resource type="Script" uid="uid://b61sxpbmgca8q" path="res://examples/multiple_levels/game/multiple_levels_session.gd" id="16_session"]
 
 [node name="Main" type="Node2D" unique_id=1724093845]
 script = ExtResource("16_session")

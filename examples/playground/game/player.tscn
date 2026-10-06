@@ -1,7 +1,7 @@
 [gd_scene format=3]
 
-[ext_resource type="Script" path="res://examples/playground/player.gd" id="1_player"]
-[ext_resource type="PhysicsMaterial" path="res://examples/playground/surface.tres" id="2_surface"]
+[ext_resource type="Script" path="res://examples/playground/game/player.gd" id="1_player"]
+[ext_resource type="PhysicsMaterial" path="res://examples/playground/game/surface.tres" id="2_surface"]
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_player"]
 

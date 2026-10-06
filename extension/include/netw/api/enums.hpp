@@ -82,6 +82,7 @@ struct NetwMultiplayer {
         TRANSPORT_PARAM_CAPABILITIES = 5,
         TRANSPORT_PARAM_HOST_SETTINGS = 6,
         TRANSPORT_PARAM_CLIENT_SETTINGS = 7,
+        TRANSPORT_PARAM_TIMEOUT_HINT = 8,
     };
 
     enum EndpointParam {

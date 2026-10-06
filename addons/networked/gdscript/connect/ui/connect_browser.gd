@@ -92,6 +92,9 @@ var _ticket: RID
 var _setup: int = 0
 var _assigned: MultiplayerPeer
 var _active_peer_class: StringName = &""
+var _deadline_started_msec: int = 0
+var _deadline_seconds: float = 0.0
+var _creation_reports_progress: bool = false
 
 var _bound_connection: NetwConnection
 var _session_ready: bool = false
@@ -147,6 +150,7 @@ func _ready() -> void:
 	_connecting_popup = _CONNECTING_POPUP_SCENE.instantiate()
 	add_child(_connecting_popup)
 	_connecting_popup.cancelled.connect(_on_popup_cancelled)
+	_connecting_popup.popup_hide.connect(_on_connecting_popup_hidden)
 
 	_row_menu = _MENU_SCENE.instantiate() as Menu
 	add_child(_row_menu)
@@ -171,6 +175,7 @@ func _ready() -> void:
 		popup.set("transport_defaults", transport_defaults)
 
 	_clear_selection()
+	set_process(false)
 
 	_setup_session.call_deferred()
 
@@ -364,6 +369,7 @@ func _begin_setup(
 		NetwConnection.TRANSPORT_MODE_CLIENT else &"",
 		address,
 	)
+	_start_deadline(peer_class)
 	_ticket = _connection.create_peer(
 		peer_class,
 		mode,
@@ -399,6 +405,7 @@ func _on_peer_created(
 		_fail_setup(ERR_CANT_CONNECT, "the session refused the peer.")
 		return
 	_assigned = shaped
+	_creation_reports_progress = false
 
 
 func _on_creation_progress(
@@ -409,10 +416,50 @@ func _on_creation_progress(
 ) -> void:
 	if mine != _setup:
 		return
+	if ratio >= 0.0:
+		_creation_reports_progress = true
 	_connecting_popup.update_progress(message, ratio)
 
 
+func _start_deadline(peer_class: StringName) -> void:
+	var transport := _connection.transport(peer_class)
+	_deadline_seconds = float(transport.get("timeout_hint", 0.0))
+	_deadline_started_msec = Time.get_ticks_msec()
+	_creation_reports_progress = false
+	set_process(true)
+
+
+func _stop_deadline() -> void:
+	_deadline_seconds = 0.0
+	set_process(false)
+
+
+func _process(_delta: float) -> void:
+	if not _ticket.is_valid() and _assigned == null:
+		_stop_deadline()
+		return
+	if (
+			_assigned != null
+			and _assigned.get_connection_status()
+			== MultiplayerPeer.CONNECTION_DISCONNECTED
+	):
+		_cancel_setup()
+		_fail_setup(ERR_CANT_CONNECT, "The server did not answer.")
+		return
+	if _deadline_seconds <= 0.0:
+		return
+	var elapsed := (Time.get_ticks_msec() - _deadline_started_msec) / 1000.0
+	if elapsed >= _deadline_seconds:
+		var waited := ceili(_deadline_seconds)
+		_cancel_setup()
+		_fail_setup(ERR_TIMEOUT, "No answer after %d seconds." % waited)
+		return
+	if not _creation_reports_progress:
+		_connecting_popup.update_progress("", elapsed / _deadline_seconds)
+
+
 func _fail_setup(error: Error, detail: String) -> void:
+	_stop_deadline()
 	var reason := error_string(error)
 	_show_banner(reason)
 	_connecting_popup.show_failed(reason, detail)
@@ -436,6 +483,7 @@ func _shaped(peer: MultiplayerPeer) -> MultiplayerPeer:
 
 
 func _cancel_setup() -> void:
+	_stop_deadline()
 	_setup += 1
 	if _ticket.is_valid():
 		if _connection != null:
@@ -802,6 +850,7 @@ func _on_join_direct_submitted(
 
 
 func _on_session_entered() -> void:
+	_stop_deadline()
 	_ticket = RID()
 	_assigned = null
 	_hide_connecting_overlay()
@@ -929,6 +978,10 @@ func _show_connecting_overlay(peer_class: StringName, address: String) -> void:
 
 func _hide_connecting_overlay() -> void:
 	_connecting_popup.hide()
+	$VBox.modulate.a = 1.0
+
+
+func _on_connecting_popup_hidden() -> void:
 	$VBox.modulate.a = 1.0
 
 

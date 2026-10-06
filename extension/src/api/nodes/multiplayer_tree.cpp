@@ -429,10 +429,6 @@ void MultiplayerTree::finalize_session() {
 }
 
 void MultiplayerTree::teardown_session() {
-    if (api.is_valid()) {
-        api->clear_roster();
-        api->session_set_role(NetwMultiplayer::ROLE_NONE);
-    }
     Node *parent = get_parent();
     if (parent == nullptr) {
         return;
@@ -479,10 +475,6 @@ void MultiplayerTree::on_peer_connected(int64_t p_peer_id) {
 
 void MultiplayerTree::on_peer_disconnected(int64_t p_peer_id) {
     NETW_INFO(sys::SESSION, "Peer %d disconnected.", p_peer_id);
-    if (api.is_null()) {
-        return;
-    }
-    api->peer_forget(p_peer_id);
 }
 
 void MultiplayerTree::on_connected_to_server() {

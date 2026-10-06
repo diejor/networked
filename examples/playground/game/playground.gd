@@ -1,7 +1,7 @@
 extends Node3D
 
-const PLAYER := preload("res://examples/playground/player.tscn")
-const CUBE := preload("res://examples/playground/cube.tscn")
+const PLAYER := preload("res://examples/playground/game/player.tscn")
+const CUBE := preload("res://examples/playground/game/cube.tscn")
 const ROWS := 30
 const CUBE_SIDE := 0.25
 const CUBE_GAP := 0.4

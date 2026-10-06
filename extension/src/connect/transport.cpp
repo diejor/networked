@@ -177,6 +177,7 @@ TransportFacts facts_of(const Transport &p_transport) {
     facts.address_help = p_transport.address_help();
     facts.host_settings = p_transport.host_settings();
     facts.client_settings = p_transport.client_settings();
+    facts.timeout_hint = p_transport.timeout_hint();
     facts.is_available = p_transport.is_available();
     facts.can_host_here = p_transport.can_host_here();
     facts.can_probe = p_transport.can_probe();

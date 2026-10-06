@@ -4,7 +4,6 @@
 		Static entry points for the Networked API.
 	</brief_description>
 	<description>
-		[method session] returns the [NetwSession] a node belongs to, which holds the players, scenes and clock.
 	</description>
 	<tutorials>
 	</tutorials>

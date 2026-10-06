@@ -1,6 +1,6 @@
 extends Node
 
-const PLAYGROUND := preload("res://examples/playground/playground.tscn")
+const PLAYGROUND := preload("res://examples/playground/game/playground.tscn")
 
 var playground: Node
 

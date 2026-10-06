@@ -1,7 +1,7 @@
 [gd_scene format=3 uid="uid://bwm2twrgy4h0r"]
 
-[ext_resource type="Script" uid="uid://dnh3p1oo5ib2n" path="res://examples/playground/cube.gd" id="1_cube"]
-[ext_resource type="PhysicsMaterial" path="res://examples/playground/surface.tres" id="2_surface"]
+[ext_resource type="Script" uid="uid://dnh3p1oo5ib2n" path="res://examples/playground/game/cube.gd" id="1_cube"]
+[ext_resource type="PhysicsMaterial" path="res://examples/playground/game/surface.tres" id="2_surface"]
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_cube"]
 size = Vector3(0.25, 0.25, 0.25)

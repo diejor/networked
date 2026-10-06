@@ -2,10 +2,13 @@
 
 [ext_resource type="Script" uid="uid://dkbxtbmxegbkx" path="res://examples/bomber/game/bomber_session.gd" id="1_sess"]
 [ext_resource type="Script" uid="uid://nfi8rw8sbvir" path="res://examples/bomber/game/gamestate.gd" id="5_gbknk"]
-[ext_resource type="PackedScene" uid="uid://ca6gwo0u2m4y2" path="res://examples/bomber/game/lobby.tscn" id="9_gbknk"]
 [ext_resource type="Script" uid="uid://beasv4qgrdwtn" path="res://addons/networked/gdscript/steam/steam_lobby_directory.gd" id="9_p4o8j"]
 [ext_resource type="Script" uid="uid://d0u2yowat1s3u" path="res://addons/networked/gdscript/nakama/nakama_lobby_directory.gd" id="10_ej8d4"]
 [ext_resource type="Script" uid="uid://certc8teajoaj" path="res://addons/networked_activity/service/discord_activity_service.gd" id="11_disc"]
+[ext_resource type="Script" uid="uid://d16jtw60ivwir" path="res://examples/bomber/game/lobby.gd" id="12_lobby"]
+[ext_resource type="Texture2D" uid="uid://c5btj6x06q0lr" path="res://examples/bomber/game/icon.webp" id="13_icon"]
+[ext_resource type="PackedScene" uid="uid://bb2nsfunxlw3a" path="res://addons/networked/gdscript/connect/ui/connect_browser.tscn" id="14_brws"]
+[ext_resource type="PackedScene" uid="uid://d3oi0cvp3b3i0" path="res://examples/shared/in_lobby.tscn" id="15_inlb"]
 
 [node name="Main" type="Node" unique_id=68306203]
 script = ExtResource("1_sess")
@@ -32,4 +35,42 @@ metadata/_custom_type_script = "uid://d0u2yowat1s3u"
 script = ExtResource("11_disc")
 metadata/_custom_type_script = "uid://certc8teajoaj"
 
-[node name="Lobby" parent="." unique_id=125506540 instance=ExtResource("9_gbknk")]
+[node name="UI" type="CanvasLayer" parent="." unique_id=125506540]
+script = ExtResource("12_lobby")
+
+[node name="ConnectBrowser" parent="UI" unique_id=341697971 instance=ExtResource("14_brws")]
+unique_name_in_owner = true
+server_list_path = "user://bomber/servers.cfg"
+
+[node name="TextureRect" type="TextureRect" parent="UI/ConnectBrowser/VBox/PanelContainer/HeaderBar" parent_id_path=PackedInt32Array(341697971, 522198391) index="1" unique_id=422029099]
+layout_mode = 2
+texture = ExtResource("13_icon")
+expand_mode = 2
+
+[node name="TitleLabel" parent="UI/ConnectBrowser/VBox/PanelContainer/HeaderBar" parent_id_path=PackedInt32Array(341697971, 522198391) index="2" unique_id=1146132509]
+text = "Bomber Demo"
+
+[node name="StatusLabel" type="Label" parent="UI" unique_id=1887354777]
+unique_name_in_owner = true
+anchors_preset = 7
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -298.0
+offset_top = -105.0
+offset_right = 302.0
+offset_bottom = -17.0
+grow_horizontal = 2
+grow_vertical = 0
+mouse_filter = 0
+theme_override_colors/font_color = Color(0.82, 0.29, 0.29, 1)
+theme_override_font_sizes/font_size = 16
+text = "Status Label"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="InLobby" parent="UI" unique_id=321425260 instance=ExtResource("15_inlb")]
+unique_name_in_owner = true
+
+[editable path="UI/ConnectBrowser"]

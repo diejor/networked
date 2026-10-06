@@ -195,9 +195,11 @@
 				┃                                   flag combination
 				┠╴host_settings         Dictionary  the fields a host form asks for, named
 				┃                                   by this transport alone
-				┖╴client_settings       Dictionary  the fields a join form asks for, which
-				                                    overlap the host ones by however much
-				                                    the two modes share
+				┠╴client_settings       Dictionary  the fields a join form asks for, which
+				┃                                   overlap the host ones by however much
+				┃                                   the two modes share
+				┖╴timeout_hint          float       seconds a connection may take before a
+				                                    caller gives up on it
 				[/codeblock]
 				[codeblock]
 				var c := Netw.session(self).connection

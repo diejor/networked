@@ -278,7 +278,7 @@ TEST_CASE(
     descriptor.push_back(level);
     descriptor.push_back(where);
     Dictionary payload;
-    payload["level"] = String("res://examples/multiple_levels/Level2.tscn");
+    payload["level"] = String("res://examples/multiple_levels/game/level2.tscn");
     payload["where"] = Vector2(120, 48);
     Dictionary envelope;
     envelope["format_version"] = 1;
@@ -294,7 +294,7 @@ TEST_CASE(
     CHECK(
         bool(
             world.limb->get_editor_description()
-            == String("res://examples/multiple_levels/Level2.tscn")
+            == String("res://examples/multiple_levels/game/level2.tscn")
         )
     );
 }

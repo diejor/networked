@@ -1,7 +1,7 @@
 [gd_scene format=3]
 
-[ext_resource type="Script" uid="uid://c3hcv4qijg6re" path="res://examples/playground/playground.gd" id="1_root"]
-[ext_resource type="PhysicsMaterial" path="res://examples/playground/surface.tres" id="2_surface"]
+[ext_resource type="Script" uid="uid://c3hcv4qijg6re" path="res://examples/playground/game/playground.gd" id="1_root"]
+[ext_resource type="PhysicsMaterial" path="res://examples/playground/game/surface.tres" id="2_surface"]
 
 [sub_resource type="Environment" id="Environment_world"]
 background_mode = 1

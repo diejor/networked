@@ -1,9 +1,9 @@
 class_name MultipleLevelsSession
 extends Node2D
 
-const LEVEL_1 := preload("res://examples/multiple_levels/Level1.tscn")
-const LEVEL_2 := preload("res://examples/multiple_levels/Level2.tscn")
-const PLAYER := preload("res://examples/multiple_levels/Player.tscn")
+const LEVEL_1 := preload("res://examples/multiple_levels/game/level1.tscn")
+const LEVEL_2 := preload("res://examples/multiple_levels/game/level2.tscn")
+const PLAYER := preload("res://examples/multiple_levels/game/player.tscn")
 const START_POSE := Vector2(359, 70)
 const START_STRIDE := Vector2(48, 0)
 

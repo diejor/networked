@@ -3620,6 +3620,9 @@
 		<constant name="TRANSPORT_PARAM_CLIENT_SETTINGS" value="7" enum="TransportParam">
 			Like [constant TRANSPORT_PARAM_HOST_SETTINGS], for the join form.
 		</constant>
+		<constant name="TRANSPORT_PARAM_TIMEOUT_HINT" value="8" enum="TransportParam">
+			[float] seconds a connection through this transport may take before a caller gives up on it, from [method NetwTransport.timeout_hint].
+		</constant>
 		<constant name="ENDPOINT_PARAM_TRANSPORT" value="0" enum="EndpointParam">
 			The transport of the endpoint, as an [RID]. Read-only.
 		</constant>

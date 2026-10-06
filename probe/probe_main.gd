@@ -1,4 +1,4 @@
-extends "res://examples/playground/main.gd"
+extends "res://examples/playground/game/main.gd"
 
 var stages := {}
 

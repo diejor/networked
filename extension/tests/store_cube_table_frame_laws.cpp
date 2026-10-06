@@ -25,7 +25,7 @@ using netw::store::Table;
 using netw::store::World;
 
 constexpr const char *CUBE_ID = "store_cube";
-constexpr const char *CUBE_SCENE = "res://examples/playground/cube.tscn";
+constexpr const char *CUBE_SCENE = "res://examples/playground/game/cube.tscn";
 constexpr int TICKRATE = 30;
 constexpr int FRAMES = 4;
 

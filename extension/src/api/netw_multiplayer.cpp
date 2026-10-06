@@ -1635,6 +1635,7 @@ void NetwMultiplayer::session_settle_peer_loss(int64_t p_peer) {
         0
     );
     emit_signal(StringName("peer_disconnected"), p_peer);
+    peer_forget(p_peer);
 
     if (terminates_session) {
         session_teardown_online();
@@ -1908,6 +1909,8 @@ void NetwMultiplayer::session_announce_ended() {
     liveness_settle_clear_session();
     interest_session_ended();
     session_settle_clear_state();
+    clear_roster();
+    session_set_role(ROLE_NONE);
     if (MultiplayerTree *tree
         = Object::cast_to<MultiplayerTree>(gd::object_of(session_tree))) {
         tree->teardown_session();
@@ -3269,6 +3272,8 @@ Variant NetwMultiplayer::transport_get_param(
             return facts.host_settings;
         case TRANSPORT_PARAM_CLIENT_SETTINGS:
             return facts.client_settings;
+        case TRANSPORT_PARAM_TIMEOUT_HINT:
+            return facts.timeout_hint;
         case TRANSPORT_PARAM_CAPABILITIES: {
             int64_t flags = 0;
             flags |= facts.is_available ? TRANSPORT_AVAILABLE : 0;

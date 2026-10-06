@@ -95,7 +95,8 @@ func adopt_tree(
 		tree: MultiplayerTree,
 		role: NetwSession.Role,
 ) -> void:
-	tree.desired_role = role
+	if role != NetwSession.ROLE_CLIENT:
+		tree.desired_role = role
 	tree.auto_host_headless = false
 	tree.debug_join = null
 	tree.peer_class = &"LocalMultiplayerPeer"

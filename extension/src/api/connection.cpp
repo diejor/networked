@@ -213,6 +213,10 @@ Dictionary NetwConnection::transport_snapshot(const RID &p_transport) const {
         p_transport,
         NetwMultiplayer::TRANSPORT_PARAM_CLIENT_SETTINGS
     );
+    snapshot["timeout_hint"] = api->transport_get_param(
+        p_transport,
+        NetwMultiplayer::TRANSPORT_PARAM_TIMEOUT_HINT
+    );
     return snapshot;
 }
 

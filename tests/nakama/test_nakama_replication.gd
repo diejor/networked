@@ -1,7 +1,7 @@
 class_name TestNakamaReplication
 extends NetwTestSuite
 
-const MAIN := preload("res://examples/multiple_levels/Main.tscn")
+const MAIN := preload("res://examples/multiple_levels/main.tscn")
 const _TIMEOUT := 10.0
 
 var _trees: Array = []

@@ -172,7 +172,10 @@ void ENetTransport::adopt(const Ref<MultiplayerPeer> &p_peer) {
 }
 
 String ENetTransport::join_address() const {
-    if (live.is_null() || live->get_unique_id() != 1) {
+    if (live.is_null()
+        || live->get_connection_status()
+            != MultiplayerPeer::CONNECTION_CONNECTED
+        || live->get_unique_id() != 1) {
         return String();
     }
     const int64_t port = gd::enet_local_port(live);
@@ -279,7 +282,10 @@ void WebSocketTransport::adopt(const Ref<MultiplayerPeer> &p_peer) {
 }
 
 String WebSocketTransport::join_address() const {
-    if (live.is_null() || live->get_unique_id() != 1 || bound_port <= 0) {
+    if (live.is_null()
+        || live->get_connection_status()
+            != MultiplayerPeer::CONNECTION_CONNECTED
+        || live->get_unique_id() != 1 || bound_port <= 0) {
         return String();
     }
     return vformat("ws://%s:%d", lan_address(), bound_port);

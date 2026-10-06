@@ -257,19 +257,10 @@ else:
     )
 
 
-def deploy_manifest(target, source, env):
-    """Copy the manifest, turning reloading off for an instrumented build."""
-    text = Path(str(source[0])).read_text(encoding="utf-8")
-    if netw_profiling:
-        text = text.replace("reloadable = true", "reloadable = false")
-    Path(str(target[0])).write_text(text, encoding="utf-8")
-
-
 library = env.SharedLibrary(str(library_path), source=build_sources)
-manifest = env.Command(
+manifest = env.InstallAs(
     str(bin_dir / "networked.gdextension"),
-    [str(ROOT / "networked.gdextension"), env.Value(netw_profiling)],
-    deploy_manifest,
+    str(ROOT / "networked.gdextension"),
 )
 env.NoCache(library)
 Default([library, manifest])

@@ -88,7 +88,7 @@ void cycle_online(NetwMultiplayer *p_api) {
     core.transition(netw::SessionCore::STATE_DISCONNECTING);
     core.transition(netw::SessionCore::STATE_OFFLINE);
     core.transition(netw::SessionCore::STATE_CONNECTING);
-    core.transition(netw::SessionCore::STATE_ONLINE);
+    core.resolve_online(p_api->get_unique_id());
 }
 
 struct Table {
