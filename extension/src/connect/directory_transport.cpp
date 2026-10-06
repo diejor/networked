@@ -105,6 +105,12 @@ void DirectoryTransport::make_peer(
     found->host_lobby(p_settings);
 }
 
+Error DirectoryTransport::set_browse_settings(const Dictionary &p_settings) {
+    netw::LobbyDirectory *found = reached();
+    return found == nullptr ? ERR_UNAVAILABLE
+                            : found->set_browse_settings(p_settings);
+}
+
 void DirectoryTransport::browse() {
     netw::LobbyDirectory *found = reached();
     if (found != nullptr) {

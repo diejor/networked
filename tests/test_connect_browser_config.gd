@@ -92,6 +92,7 @@ func test_webrtc_resource_round_trip_and_native_discovery_boundary() -> void:
 
 	var tree := MultiplayerTree.new()
 	add_child(tree)
+	tree.add_child(WebTorrentLobbyDirectory.new())
 	var connection: NetwConnection = Netw.session(tree).connection
 	assert_int(
 		connection.transport_set_browse_settings(

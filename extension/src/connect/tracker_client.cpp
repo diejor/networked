@@ -1,6 +1,8 @@
 #include "netw/connect/tracker_client.hpp"
 
+#include "godot/engine.hpp"
 #include "godot/json.hpp"
+#include "godot/os.hpp"
 #include "godot/project_settings.hpp"
 #include "godot/variant.hpp"
 #include "godot/web_socket.hpp"
@@ -19,6 +21,19 @@ bool TrackerClient::warns_on_failure() {
         return false;
     }
     return bool(settings->get_setting(WARN_SETTING, false));
+}
+
+bool under_test_runner() {
+    static int cached = -1;
+    if (cached >= 0) {
+        return cached == 1;
+    }
+    cached = gd::engine_has_meta(StringName("GdUnitRunner")) ? 1 : 0;
+    const PackedStringArray args = gd::cmdline_args();
+    for (int at = 0; cached == 0 && at < args.size(); ++at) {
+        cached = args[at].contains("GdUnit") ? 1 : 0;
+    }
+    return cached == 1;
 }
 
 String tracker_key(const PackedStringArray &p_urls) {

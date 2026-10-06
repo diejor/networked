@@ -1,7 +1,7 @@
 ## A [LobbyDirectory] that hosts, joins and lists Steam lobbies.
 ##
-## Add it under a [MultiplayerTree] to use Steam lobbies with
-## [code]SteamMultiplayerPeer[/code]. A lobby's address is its Steam lobby id.
+## Its lobbies connect through [code]SteamMultiplayerPeer[/code]. A lobby's
+## address is its Steam lobby id.
 ##
 ## Steam allows one instance per process, so a second one frees itself.
 class_name SteamLobbyDirectory

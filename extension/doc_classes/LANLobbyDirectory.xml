@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="LANLobbyDirectory" inherits="LobbyDirectory" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		Finds ENet games on the local network without typing an address.
+	</brief_description>
+	<description>
+		A host is listed while its session is the server of an [ENetMultiplayerPeer] and its [NetwServerInfo] is [constant NetwServerInfo.VISIBILITY_PUBLIC]. Each host answers with its own gameplay port, so a listed game is joined with nothing else.
+		Discovery uses UDP broadcast, so it does nothing on web and reaches one network interface.
+	</description>
+	<tutorials>
+	</tutorials>
+	<members>
+		<member name="port" type="int" setter="set_port" getter="get_port" default="24750">
+			The first discovery port. Hosts on one machine take the next free one.
+		</member>
+		<member name="port_count" type="int" setter="set_port_count" getter="get_port_count" default="8">
+			How many ports from [member port] a host may take and a browser asks.
+		</member>
+	</members>
+</class>

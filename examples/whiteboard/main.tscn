@@ -6,4 +6,10 @@
 [node name="Main" type="Node" unique_id=1671022039]
 script = ExtResource("1_main")
 
+[node name="LobbyProviders" type="Node" parent="."]
+
+[node name="WebTorrentLobbyDirectory" type="WebTorrentLobbyDirectory" parent="LobbyProviders"]
+
+[node name="LANLobbyDirectory" type="LANLobbyDirectory" parent="LobbyProviders"]
+
 [node name="ConnectBrowser" parent="." unique_id=802878944 instance=ExtResource("2_qdtp1")]

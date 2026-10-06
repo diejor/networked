@@ -7,6 +7,12 @@
 [node name="Main" type="Node2D" unique_id=1724093845]
 script = ExtResource("16_session")
 
+[node name="LobbyProviders" type="Node" parent="."]
+
+[node name="WebTorrentLobbyDirectory" type="WebTorrentLobbyDirectory" parent="LobbyProviders"]
+
+[node name="LANLobbyDirectory" type="LANLobbyDirectory" parent="LobbyProviders"]
+
 [node name="TPLayer" parent="." unique_id=1002194750 instance=ExtResource("9_k3bnk")]
 
 [node name="CanvasLayer" type="CanvasLayer" parent="." unique_id=830099896]

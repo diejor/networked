@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="WebTorrentLobbyDirectory" inherits="LobbyDirectory" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		Lists WebRTC rooms on WebTorrent trackers.
+	</brief_description>
+	<description>
+		A host is listed while its session is the server of a WebRTC room and its [NetwServerInfo] is [constant NetwServerInfo.VISIBILITY_PUBLIC]. Joining a listed room goes through the WebRTC transport.
+		Without this node nothing is listed or browsed, and a room is still joined by its code. A room signaled through a game's own [NetwWebRTCSignaler] is never listed.
+	</description>
+	<tutorials>
+	</tutorials>
+	<members>
+		<member name="trackers" type="PackedStringArray" setter="set_trackers" getter="get_trackers" default="PackedStringArray()">
+			The tracker URLs to browse and announce on. Empty uses the public defaults.
+		</member>
+	</members>
+</class>

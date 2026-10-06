@@ -4,7 +4,6 @@
 
 #include "godot/local_vector.hpp"
 #include "godot/variant.hpp"
-#include "netw/connect/room_board.hpp"
 #include "netw/connect/signaler.hpp"
 #include "netw/connect/transport.hpp"
 #include "netw/connect/turn_credentials.hpp"
@@ -35,11 +34,6 @@ public:
         const godot::Dictionary &p_settings
     ) override;
 
-    bool can_browse() const override;
-    godot::Error set_browse_settings(
-        const godot::Dictionary &p_settings
-    ) override;
-    void browse() override;
     void poll(double p_delta) override;
     godot::String join_address() const override;
     godot::Dictionary diagnostics(int64_t p_peer_id) const override;
@@ -58,8 +52,11 @@ public:
 
     godot::Array effective_ice_servers() const;
 
-    RoomBoard &board() {
-        return rooms;
+    bool tracker_signaled() const {
+        return signaler != nullptr && !signaler_authored;
+    }
+    const godot::String &namespace_of_signaling() const {
+        return signaling_namespace;
     }
 
 private:
@@ -73,8 +70,7 @@ private:
     double topup_interval = 0.25;
     bool filter_unsupported_turn = true;
 
-    RoomBoard rooms;
-    bool board_backed = false;
+    bool signaler_authored = false;
     WebRTCSession *session_core = nullptr;
     Signaler *signaler = nullptr;
     bool hosting = false;
@@ -96,7 +92,6 @@ private:
     void apply_settings(const godot::Dictionary &p_settings);
     void build(const godot::Dictionary &p_settings);
     void teardown();
-    void publish_listing();
     void pump_signals();
     void pump_outcomes();
     void pump_inbound();

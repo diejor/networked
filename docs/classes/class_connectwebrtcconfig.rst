@@ -35,8 +35,6 @@ Properties
    +-------------------------------------------------------------------------------+--------------------------------------------------------------------------------------+-----------+
    | :godot:`float`                                                                | :ref:`gather_timeout<class_ConnectWebRTCConfig_property_gather_timeout>`             | ``6.0``   |
    +-------------------------------------------------------------------------------+--------------------------------------------------------------------------------------+-----------+
-   | :godot:`String`                                                               | :ref:`room_name<class_ConnectWebRTCConfig_property_room_name>`                       | ``""``    |
-   +-------------------------------------------------------------------------------+--------------------------------------------------------------------------------------+-----------+
    | :godot:`int`                                                                  | :ref:`max_players<class_ConnectWebRTCConfig_property_max_players>`                   | ``0``     |
    +-------------------------------------------------------------------------------+--------------------------------------------------------------------------------------+-----------+
 
@@ -144,20 +142,6 @@ Property Descriptions
 .. rst-class:: classref-property
 
 :godot:`float` **gather_timeout** = ``6.0`` :ref:`🔗<class_ConnectWebRTCConfig_property_gather_timeout>`
-
-.. container:: contribute
-
-	There is currently no description for this property. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_ConnectWebRTCConfig_property_room_name:
-
-.. rst-class:: classref-property
-
-:godot:`String` **room_name** = ``""`` :ref:`🔗<class_ConnectWebRTCConfig_property_room_name>`
 
 .. container:: contribute
 

@@ -15,7 +15,6 @@ extends ConnectTransportConfig
 @export_range(1, 100) var max_connect_attempts: int = 3
 @export_range(0.01, 60.0, 0.01) var gather_timeout: float = 6.0
 @export_group("Host")
-@export var room_name: String = ""
 @export_range(0, 4095) var max_players: int = 0
 
 
@@ -45,6 +44,5 @@ func client_settings() -> Dictionary:
 
 func host_settings() -> Dictionary:
 	var result := client_settings()
-	result.room_name = room_name
 	result.max_players = max_players
 	return result

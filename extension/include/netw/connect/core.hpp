@@ -71,10 +71,12 @@ public:
     );
     void publish_targets(
         const godot::StringName &p_peer_class,
+        godot::ObjectID p_source,
         const godot::PackedStringArray &p_addresses,
         const godot::PackedStringArray &p_names,
         const godot::Array &p_infos
     );
+    void forget_directory(godot::ObjectID p_directory);
 
     godot::String join_address() const;
     godot::Dictionary diagnostics(int64_t p_peer_id) const;
@@ -109,6 +111,9 @@ public:
     ProbeClient *probe_client() const {
         return prober;
     }
+    const Transport *live_transport() const {
+        return live;
+    }
 
 private:
     NetwMultiplayer *session = nullptr;
@@ -141,6 +146,10 @@ private:
     bool claim_offer(const godot::Ref<godot::MultiplayerPeer> &p_peer);
     Transport *make_transport(const godot::StringName &p_peer_class);
     Transport *make_transport(const TransportSlot &p_slot) const;
+    Transport *make_creator(const godot::StringName &p_peer_class) const;
+    godot::LocalVector<godot::ObjectID> directories_of(
+        const godot::StringName &p_peer_class
+    ) const;
     Transport *transport_of_directory(int64_t p_directory) const;
     ProbeHooks probe_hooks() const;
     godot::Ref<NetwPromise> probe_row(const godot::RID &p_target);
@@ -151,6 +160,7 @@ private:
     ) const;
     void adopt_live(Transport *p_transport);
     void drop_live();
+    void open_browser(Transport *p_made);
     void open_browsers();
     void drop_browsers();
 };

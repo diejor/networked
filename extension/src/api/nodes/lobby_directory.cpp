@@ -1,6 +1,8 @@
 #include "netw/api/nodes/lobby_directory.hpp"
 
 #include "godot/class_db.hpp"
+#include "netw/api/netw_multiplayer.hpp"
+#include "netw/log.hpp"
 
 using namespace godot;
 
@@ -186,6 +188,42 @@ void LobbyDirectory::join_lobby(const String &p_address) {
     GDVIRTUAL_CALL(_join_lobby, p_address);
 }
 
+Ref<NetwServerInfo> LobbyDirectory::listed_info(NetwMultiplayer *p_session) {
+    if (p_session == nullptr || !p_session->is_online()
+        || !p_session->has_server_role()) {
+        return Ref<NetwServerInfo>();
+    }
+    bool answered = false;
+    const Ref<NetwServerInfo> info = NetwServerInfo::from_payload(
+        p_session->probe_reply_payload(answered)
+    );
+    if (!answered || info.is_null()) {
+        return Ref<NetwServerInfo>();
+    }
+    const int64_t visibility = info->get_visibility();
+    if (visibility == NetwServerInfo::VISIBILITY_FRIENDS_ONLY
+        && !warned_friends) {
+        warned_friends = true;
+        NETW_WARN(
+            sys::TRANSPORT,
+            "%s has no friends list, so this game is private. Use "
+            "VISIBILITY_PRIVATE or VISIBILITY_PUBLIC.",
+            get_class()
+        );
+    }
+    return visibility == NetwServerInfo::VISIBILITY_PUBLIC
+        ? info
+        : Ref<NetwServerInfo>();
+}
+
+Error LobbyDirectory::set_browse_settings(const Dictionary &p_settings) {
+    Error answered = OK;
+    if (GDVIRTUAL_CALL(_set_browse_settings, p_settings, answered)) {
+        return answered;
+    }
+    return p_settings.is_empty() ? OK : ERR_INVALID_PARAMETER;
+}
+
 void LobbyDirectory::_bind_methods() {
     ClassDB::bind_method(D_METHOD("deliver", "peer"), &LobbyDirectory::deliver);
     ClassDB::bind_method(
@@ -231,6 +269,7 @@ void LobbyDirectory::_bind_methods() {
     GDVIRTUAL_BIND(_leave_lobby);
     GDVIRTUAL_BIND(_host_lobby, "settings");
     GDVIRTUAL_BIND(_join_lobby, "address");
+    GDVIRTUAL_BIND(_set_browse_settings, "settings");
 
     ADD_SIGNAL(MethodInfo(
         SIG_PEER_READY,

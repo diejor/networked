@@ -140,7 +140,7 @@ TEST_CASE(
 
 TEST_CASE(
     "[Networked][Connect][Hosted] a client is offered every key join_peer "
-    "reads and none of the three a host alone acts on, because a client "
+    "reads and none of the two a host alone acts on, because a client "
     "that cannot name the tracker the host announced on never finds the room"
 ) {
     WebRTCTransport transport;
@@ -154,16 +154,15 @@ TEST_CASE(
     CHECK(client.has("gather_timeout"));
 
     CHECK_FALSE(client.has("signaler"));
-    CHECK_FALSE(client.has("room_name"));
     CHECK_FALSE(client.has("max_players"));
 
-    SUBCASE("and a host is offered those same keys and three more") {
+    SUBCASE("and a host is offered those same keys and two more") {
         const Dictionary host = transport.host_settings();
         const Array offered = client.keys();
         for (int64_t at = 0; at < offered.size(); at++) {
             CHECK(host.has(offered[at]));
         }
-        NETW_CHECK_EQ(host.size(), client.size() + 3);
+        NETW_CHECK_EQ(host.size(), client.size() + 2);
     }
 }
 

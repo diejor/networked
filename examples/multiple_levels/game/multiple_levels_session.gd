@@ -19,6 +19,7 @@ var levels: Dictionary = { }
 func _init() -> void:
 	makers[LEVEL_1.resource_path] = spawn_level1
 	makers[LEVEL_2.resource_path] = spawn_level2
+	Netw.configure_session(self).app(&"netw-example-multiple-levels")
 	Netw.configure_clock(self)
 	Netw.configure_spawn(spawn_level1)
 	Netw.configure_spawn(spawn_level2)

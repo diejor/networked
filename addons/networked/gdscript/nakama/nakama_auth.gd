@@ -1,11 +1,7 @@
 ## Accepts a join only when its username is the peer's Nakama username.
 ##
 ## The username is checked against the Nakama server, so a player cannot use
-## someone else's name. Add it under the [MultiplayerTree].
-## [codeblock]
-## var gate := NakamaAuth.new()
-## tree.add_child(gate)
-## [/codeblock]
+## someone else's name.
 class_name NakamaAuth
 extends Node
 

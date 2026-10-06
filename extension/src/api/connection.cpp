@@ -253,6 +253,7 @@ Dictionary NetwConnection::endpoint_snapshot(const RID &p_target) const {
     );
     snapshot["status"]
         = status.get_type() == Variant::NIL ? Variant(int64_t(FAILED)) : status;
+    snapshot["source"] = api->endpoint_source(p_target);
     snapshot["info"] = api->endpoint_get_state(
         p_target,
         NetwConnection::ENDPOINT_STATE_INFO

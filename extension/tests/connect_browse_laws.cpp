@@ -13,6 +13,8 @@ using netw::NetwServerInfo;
 using netw::connect::BrowseList;
 using netw::connect::TargetRow;
 
+const ObjectID STEAM = ObjectID(uint64_t(7));
+
 struct TransportScope {
     RID slot;
 
@@ -59,6 +61,7 @@ Publication publish(
     Publication out;
     p_list.publish_directory(
         StringName("steam"),
+        STEAM,
         p_transport,
         p_addresses,
         p_names,
@@ -159,7 +162,7 @@ TEST_CASE(
         = list.add(enet.slot, String("kept.example:21253"), String("Kept"));
 
     LocalVector<RID> forgotten;
-    list.forget_directory(StringName("steam"), forgotten);
+    list.forget_source(STEAM, forgotten);
 
     NETW_CHECK_EQ(int(forgotten.size()), 1);
     const Array left = list.list();

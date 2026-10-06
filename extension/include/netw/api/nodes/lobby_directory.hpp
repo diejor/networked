@@ -15,8 +15,12 @@ namespace netw {
 class LobbyDirectory : public NetwService, public enums::LobbyDirectory {
     GDCLASS(LobbyDirectory, NetwService)
 
+    bool warned_friends = false;
+
 protected:
     static void _bind_methods();
+
+    godot::Ref<NetwServerInfo> listed_info(NetwMultiplayer *p_session);
 
     GDVIRTUAL0R(Capability, _capabilities)
     GDVIRTUAL0R(godot::StringName, _peer_class)
@@ -38,6 +42,7 @@ protected:
     GDVIRTUAL0(_leave_lobby)
     GDVIRTUAL1(_host_lobby, const godot::Dictionary &)
     GDVIRTUAL1(_join_lobby, const godot::String &)
+    GDVIRTUAL1R(godot::Error, _set_browse_settings, godot::Dictionary)
 
 public:
     void deliver(const godot::Ref<godot::MultiplayerPeer> &p_peer);
@@ -72,6 +77,7 @@ public:
     virtual void leave_lobby();
     virtual void host_lobby(const godot::Dictionary &p_settings);
     virtual void join_lobby(const godot::String &p_address);
+    virtual godot::Error set_browse_settings(const godot::Dictionary &p_settings);
 };
 
 } // namespace netw

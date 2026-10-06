@@ -4142,6 +4142,7 @@ public:
         const godot::RID &p_endpoint,
         EndpointParam p_param
     );
+    godot::String endpoint_source(const godot::RID &p_endpoint) const;
     godot::Error endpoint_set_param(
         const godot::RID &p_endpoint,
         EndpointParam p_param,
@@ -4197,7 +4198,7 @@ public:
     godot::Object *discovery_find_directory(
         const godot::StringName &p_peer_class
     ) const;
-    godot::Array discovery_directory_peer_classes() const;
+    godot::LocalVector<godot::ObjectID> discovery_directories() const;
     void discovery_watch_directory(godot::Object *p_directory);
     void discovery_unwatch_directory(godot::Object *p_directory);
 

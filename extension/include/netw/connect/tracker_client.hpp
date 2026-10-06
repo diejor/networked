@@ -104,5 +104,6 @@ private:
 };
 
 godot::String tracker_key(const godot::PackedStringArray &p_urls);
+bool under_test_runner();
 
 } // namespace netw::connect

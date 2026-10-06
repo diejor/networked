@@ -29,8 +29,10 @@
 #include "netw/api/lifecycle_request.hpp"
 #include "netw/api/member_config.hpp"
 #include "netw/api/netw_multiplayer.hpp"
+#include "netw/api/nodes/lan_lobby_directory.hpp"
 #include "netw/api/nodes/lobby_directory.hpp"
 #include "netw/api/nodes/multiplayer_tree.hpp"
+#include "netw/api/nodes/webtorrent_lobby_directory.hpp"
 #include "netw/api/nodes/service.hpp"
 #include "netw/api/nodes/view/host_scene_view.hpp"
 #include "netw/api/nodes/view/participant_view.hpp"
@@ -197,6 +199,8 @@ void initialize_networked_module(ModuleInitializationLevel level) {
     GDREGISTER_CLASS(netw::NetwService);
     GDREGISTER_CLASS(netw::MultiplayerTree);
     GDREGISTER_CLASS(netw::LobbyDirectory);
+    GDREGISTER_CLASS(netw::WebTorrentLobbyDirectory);
+    GDREGISTER_CLASS(netw::LANLobbyDirectory);
     GDREGISTER_CLASS(netw::ParticipantView);
     GDREGISTER_CLASS(netw::HostSceneView);
     GDREGISTER_CLASS(netw::ParticipantWindow);

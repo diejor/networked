@@ -43,6 +43,9 @@ public:
         const godot::String &p_address,
         const godot::Dictionary &p_settings
     ) override;
+    godot::Error set_browse_settings(
+        const godot::Dictionary &p_settings
+    ) override;
     void browse() override;
 
     godot::String join_address() const override;

@@ -35,6 +35,7 @@
 		func _leave_lobby() -&gt; void:
 		    Rooms.leave()
 		[/codeblock]
+		A directory whose peer class already has a transport only lists lobbies, and joining one goes through that transport. [WebTorrentLobbyDirectory] and [LANLobbyDirectory] work this way.
 	</description>
 	<tutorials>
 	</tutorials>
@@ -153,7 +154,14 @@
 		<method name="_peer_class" qualifiers="virtual">
 			<return type="StringName" />
 			<description>
-				Return the class name of the [MultiplayerPeer] this service uses, such as [code]&amp;"SteamMultiplayerPeer"[/code]. Two directories in one session must return different classes.
+				Return the class name of the [MultiplayerPeer] this service uses, such as [code]&amp;"SteamMultiplayerPeer"[/code]. A session holds one directory per class.
+			</description>
+		</method>
+		<method name="_set_browse_settings" qualifiers="virtual">
+			<return type="int" enum="Error" />
+			<param index="0" name="settings" type="Dictionary" />
+			<description>
+				Receives what [method NetwConnection.transport_set_browse_settings] passes for this class. Return [constant ERR_INVALID_PARAMETER] for a key it does not know.
 			</description>
 		</method>
 		<method name="_timeout_hint" qualifiers="virtual">

@@ -132,6 +132,7 @@ int BrowseList::size() const {
 
 void BrowseList::publish_directory(
     const StringName &p_directory,
+    ObjectID p_source,
     const RID &p_transport,
     const PackedStringArray &p_addresses,
     const PackedStringArray &p_names,
@@ -165,6 +166,7 @@ void BrowseList::publish_directory(
         }
         seat->display_name = named;
         seat->directory = p_directory;
+        seat->source = p_source;
         seat->advertised = advertised;
         if (advertised.is_valid()) {
             seat->status = classify(advertised, OK);
@@ -181,7 +183,8 @@ void BrowseList::publish_directory(
     for (int32_t at = int32_t(directory_rows.size()) - 1; at >= 0; at--) {
         const RID held = directory_rows[uint32_t(at)];
         const TargetRow *seat = row(held);
-        if (seat == nullptr || seat->directory != p_directory) {
+        if (seat == nullptr || seat->directory != p_directory
+            || seat->source != p_source) {
             continue;
         }
         if (index_of(standing, held) >= 0) {
@@ -193,14 +196,11 @@ void BrowseList::publish_directory(
     }
 }
 
-void BrowseList::forget_directory(
-    const StringName &p_directory,
-    LocalVector<RID> &r_dropped
-) {
+void BrowseList::forget_source(ObjectID p_source, LocalVector<RID> &r_dropped) {
     for (int32_t at = int32_t(directory_rows.size()) - 1; at >= 0; at--) {
         const RID held = directory_rows[uint32_t(at)];
         const TargetRow *seat = row(held);
-        if (seat != nullptr && seat->directory != p_directory) {
+        if (seat != nullptr && seat->source != p_source) {
             continue;
         }
         r_dropped.push_back(held);

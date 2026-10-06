@@ -94,6 +94,7 @@ Other classes
     class_dictionaryrecord
     class_filesystemdatabase
     class_hostsceneview
+    class_lanlobbydirectory
     class_lobbydirectory
     class_locallinkconditions
     class_localloopbacksession
@@ -164,4 +165,5 @@ Other classes
     class_participantviewport
     class_participantwindow
     class_serde
+    class_webtorrentlobbydirectory
 

@@ -58,7 +58,7 @@ class LobbyCard:
 	## Host display name.
 	@export var host: String = ""
 
-	## The host's [member MultiplayerTree.app_id].
+	## The host's [member NetwSessionConfig.app_id].
 	@export var app_id: String = ""
 
 	## Game tag, matching [member NakamaLobbyDirectory.browser_filter_uid].

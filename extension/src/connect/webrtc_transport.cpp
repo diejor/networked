@@ -10,6 +10,7 @@
 #include "netw/api/netw_multiplayer.hpp"
 #include "netw/api/webrtc_signaler.hpp"
 #include "netw/connect/creation.hpp"
+#include "netw/connect/tracker_client.hpp"
 #include "netw/connect/transports.hpp"
 #include "netw/log.hpp"
 
@@ -18,28 +19,6 @@ using namespace godot;
 namespace netw::connect {
 
 const char *WebRTCTransport::LOCAL_ROOMS_PATH = "user://local_webrtc_rooms.txt";
-
-namespace {
-
-bool may_reach_public_trackers() {
-    static int cached = -1;
-    if (cached >= 0) {
-        return cached == 1;
-    }
-    cached = gd::engine_has_meta(StringName("GdUnitRunner")) ? 0 : 1;
-    if (cached == 1) {
-        const PackedStringArray args = gd::cmdline_args();
-        for (int at = 0; at < args.size(); ++at) {
-            if (args[at].contains("GdUnit")) {
-                cached = 0;
-                break;
-            }
-        }
-    }
-    return cached == 1;
-}
-
-} // namespace
 
 Array WebRTCTransport::default_ice_servers() {
     Array servers;
@@ -205,7 +184,6 @@ Dictionary WebRTCTransport::client_settings() const {
 Dictionary WebRTCTransport::host_settings() const {
     Dictionary settings = client_settings();
     settings["signaler"] = Variant();
-    settings["room_name"] = String();
     settings["max_players"] = int64_t(0);
     return settings;
 }
@@ -257,13 +235,12 @@ void WebRTCTransport::build(const Dictionary &p_settings) {
     Ref<NetwWebRTCSignaler> authored = p_settings.get("signaler", Variant());
     if (authored.is_valid()) {
         signaler = memnew(ScriptSignaler(authored));
-        board_backed = false;
     } else {
         signaler = memnew(
             TrackerSignaler(trackers, signaling_namespace, room_characters)
         );
-        board_backed = !trackers.is_empty() && may_reach_public_trackers();
     }
+    signaler_authored = authored.is_valid();
 
     session_core = memnew(WebRTCSession);
     session_core->ice_servers.clear();
@@ -322,7 +299,7 @@ bool WebRTCTransport::arm_credential_fetch(
     const String &p_address,
     const Dictionary &p_settings
 ) {
-    if (TurnCredentials::attempted() || !may_reach_public_trackers()) {
+    if (TurnCredentials::attempted() || under_test_runner()) {
         return false;
     }
     if (p_settings.has("ice_servers")
@@ -401,28 +378,6 @@ void WebRTCTransport::host_peer(const Dictionary &p_settings) {
     const String room = signaler->room_id();
     NETW_INFO(sys::TRANSPORT, "The WebRTC room %s is ready.", room);
     register_local_room(room);
-    if (!board_backed) {
-        deliver(session_core->peer());
-        return;
-    }
-    rooms.set_trackers(trackers);
-
-    RoomCard card;
-    card.room_hash = room;
-    card.signaling_namespace = signaling_namespace;
-    card.room_name
-        = setting_string(p_settings, StringName("room_name"), String());
-    card.players = 1;
-    card.max_players = setting_int(p_settings, StringName("max_players"), 0);
-    NetwMultiplayer *held = bound_session();
-    if (held != nullptr) {
-        card.app_id = held->session_get_app_id();
-        if (card.max_players == 0) {
-            card.max_players
-                = NetwServerInfo::from_session(held)->get_max_players();
-        }
-    }
-    rooms.advertise(card);
     deliver(session_core->peer());
 }
 
@@ -580,10 +535,6 @@ void WebRTCTransport::poll(double p_delta) {
         drive_credential_fetch(now_msec);
         return;
     }
-    if (board_backed) {
-        rooms.poll(p_delta, now_usec, frame);
-        publish_listing();
-    }
     if (session_core == nullptr || signaler == nullptr) {
         return;
     }
@@ -606,70 +557,7 @@ Dictionary WebRTCTransport::diagnostics(int64_t p_peer_id) const {
     return session_core->connection_diagnostics(p_peer_id);
 }
 
-bool WebRTCTransport::can_browse() const {
-    return !trackers.is_empty() && may_reach_public_trackers();
-}
-
-Error WebRTCTransport::set_browse_settings(const Dictionary &p_settings) {
-    const Array keys = p_settings.keys();
-    for (int64_t at = 0; at < keys.size(); at++) {
-        if (keys[at].get_type() != Variant::STRING
-            && keys[at].get_type() != Variant::STRING_NAME) {
-            return ERR_INVALID_PARAMETER;
-        }
-        const String key = keys[at];
-        const Variant value = p_settings[key];
-        if (key == "signaling_namespace") {
-            if (value.get_type() != Variant::STRING) {
-                return ERR_INVALID_PARAMETER;
-            }
-        } else if (key == "trackers") {
-            if (value.get_type() != Variant::PACKED_STRING_ARRAY) {
-                return ERR_INVALID_PARAMETER;
-            }
-            const PackedStringArray urls = value;
-            for (int64_t url = 0; url < urls.size(); url++) {
-                if (!urls[url].begins_with("wss://")
-                    && !urls[url].begins_with("ws://")) {
-                    return ERR_INVALID_PARAMETER;
-                }
-            }
-        } else {
-            return ERR_INVALID_PARAMETER;
-        }
-    }
-    apply_settings(p_settings);
-    return OK;
-}
-
-void WebRTCTransport::browse() {
-    board_backed = can_browse();
-    if (!board_backed) {
-        return;
-    }
-    rooms.set_trackers(trackers);
-    rooms.signaling_namespace = signaling_namespace;
-    rooms.browse();
-}
-
-void WebRTCTransport::publish_listing() {
-    LocalVector<TargetRow> listed;
-    if (!rooms.take_listing(listed)) {
-        return;
-    }
-    PackedStringArray addresses;
-    PackedStringArray names;
-    Array infos;
-    for (uint32_t at = 0; at < listed.size(); at++) {
-        addresses.push_back(listed[at].address);
-        names.push_back(listed[at].display_name);
-        infos.push_back(listed[at].advertised);
-    }
-    publish_targets(addresses, names, infos);
-}
-
 void WebRTCTransport::close() {
-    rooms.close();
     if (signaler != nullptr) {
         unregister_local_room(signaler->room_id());
     }

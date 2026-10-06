@@ -737,10 +737,7 @@ void ConnectCore::on_poll(double p_delta) {
 }
 
 Transport *ConnectCore::make_transport(const StringName &p_peer_class) {
-    Transport *made = registrations.make(p_peer_class);
-    if (made == nullptr) {
-        made = TransportBook::shared().make(p_peer_class);
-    }
+    Transport *made = make_creator(p_peer_class);
     if (made != nullptr) {
         return made;
     }
@@ -866,12 +863,35 @@ void ConnectCore::on_directory_listed(
 ) {
     Transport *reached = transport_of_directory(p_directory);
     if (reached != nullptr) {
-        reached->publish_targets(p_addresses, p_names, p_infos);
+        publish_targets(
+            reached->peer_class(),
+            ObjectID(uint64_t(p_directory)),
+            p_addresses,
+            p_names,
+            p_infos
+        );
+    }
+}
+
+void ConnectCore::forget_directory(ObjectID p_directory) {
+    for (int32_t at = int32_t(browsers.size()) - 1; at >= 0; at--) {
+        DirectoryTransport *held
+            = dynamic_cast<DirectoryTransport *>(browsers[uint32_t(at)]);
+        if (held != nullptr && held->directory_id() == p_directory) {
+            delete held;
+            browsers.remove_at(uint32_t(at));
+        }
+    }
+    LocalVector<RID> dropped;
+    rows.forget_source(p_directory, dropped);
+    for (uint32_t at = 0; session != nullptr && at < dropped.size(); at++) {
+        session->endpoint_emit_removed(dropped[at]);
     }
 }
 
 void ConnectCore::publish_targets(
     const StringName &p_peer_class,
+    ObjectID p_source,
     const PackedStringArray &p_addresses,
     const PackedStringArray &p_names,
     const Array &p_infos
@@ -885,6 +905,7 @@ void ConnectCore::publish_targets(
     LocalVector<RID> updated;
     rows.publish_directory(
         p_peer_class,
+        p_source,
         transport,
         p_addresses,
         p_names,
@@ -917,17 +938,57 @@ Error ConnectCore::set_browse_settings(
     if (browsing_started) {
         return previous == p_settings ? OK : ERR_ALREADY_IN_USE;
     }
-    Transport *made = make_transport(*slot);
-    if (made == nullptr) {
-        return ERR_UNAVAILABLE;
+    Transport *creator = make_creator(named);
+    Error error = OK;
+    if (creator != nullptr && creator->can_browse()) {
+        error = creator->set_browse_settings(p_settings);
     }
-    const Error error = made->set_browse_settings(p_settings);
-    delete made;
+    delete creator;
+    const LocalVector<ObjectID> directories = directories_of(named);
+    for (uint32_t at = 0; error == OK && at < directories.size(); at++) {
+        DirectoryTransport reached(gd::object_of(directories[at]));
+        error = reached.set_browse_settings(p_settings);
+    }
     if (error != OK) {
         return error;
     }
     browse_settings[named] = p_settings.duplicate(true);
     return OK;
+}
+
+Transport *ConnectCore::make_creator(const StringName &p_peer_class) const {
+    Transport *made = registrations.make(p_peer_class);
+    return made != nullptr ? made : TransportBook::shared().make(p_peer_class);
+}
+
+LocalVector<ObjectID> ConnectCore::directories_of(
+    const StringName &p_peer_class
+) const {
+    LocalVector<ObjectID> found;
+    if (session == nullptr) {
+        return found;
+    }
+    const LocalVector<ObjectID> watched = session->discovery_directories();
+    for (uint32_t at = 0; at < watched.size(); at++) {
+        if (p_peer_class == StringName()
+            || DirectoryTransport::peer_class_of_directory(
+                   gd::object_of(watched[at])
+               ) == p_peer_class) {
+            found.push_back(watched[at]);
+        }
+    }
+    return found;
+}
+
+void ConnectCore::open_browser(Transport *p_made) {
+    const Dictionary settings
+        = browse_settings.get(p_made->peer_class(), Dictionary());
+    if (p_made->set_browse_settings(settings) != OK || !p_made->can_browse()) {
+        delete p_made;
+        return;
+    }
+    p_made->bind_session(session);
+    browsers.push_back(p_made);
 }
 
 void ConnectCore::open_browsers() {
@@ -938,34 +999,33 @@ void ConnectCore::open_browsers() {
             classes.push_back(stock[at]);
         }
     }
-    if (session != nullptr) {
-        const Array directed = session->discovery_directory_peer_classes();
-        for (int64_t at = 0; at < directed.size(); at++) {
-            if (!classes.has(directed[at])) {
-                classes.push_back(directed[at]);
-            }
-        }
-    }
     for (int64_t at = 0; at < classes.size(); at++) {
         const StringName named(classes[at]);
         bool held = false;
         for (uint32_t seen = 0; seen < browsers.size(); seen++) {
-            held = held || browsers[seen]->peer_class() == named;
+            held = held
+                || (dynamic_cast<DirectoryTransport *>(browsers[seen])
+                        == nullptr
+                    && browsers[seen]->peer_class() == named);
         }
-        if (held) {
-            continue;
+        Transport *made = held ? nullptr : make_creator(named);
+        if (made != nullptr) {
+            open_browser(made);
         }
-        Transport *made = make_transport(named);
-        if (made == nullptr) {
-            continue;
+    }
+    const LocalVector<ObjectID> directories = directories_of(StringName());
+    for (uint32_t at = 0; at < directories.size(); at++) {
+        bool held = false;
+        for (uint32_t seen = 0; seen < browsers.size(); seen++) {
+            const DirectoryTransport *browsing
+                = dynamic_cast<DirectoryTransport *>(browsers[seen]);
+            held = held
+                || (browsing != nullptr
+                    && browsing->directory_id() == directories[at]);
         }
-        const Dictionary settings = browse_settings.get(named, Dictionary());
-        if (made->set_browse_settings(settings) != OK || !made->can_browse()) {
-            delete made;
-            continue;
+        if (!held) {
+            open_browser(new DirectoryTransport(gd::object_of(directories[at])));
         }
-        made->bind_session(session);
-        browsers.push_back(made);
     }
     for (uint32_t at = 0; at < browsers.size(); at++) {
         browsers[at]->browse();

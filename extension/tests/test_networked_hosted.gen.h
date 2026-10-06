@@ -78,6 +78,7 @@
 #include "interpolate_tests.cpp"
 #include "join_config_tests.cpp"
 #include "join_roster_tests.cpp"
+#include "lan_query_laws.cpp"
 #include "lifecycle_rule_laws.cpp"
 #include "liveness_core_tests.cpp"
 #include "liveness_lease_laws.cpp"

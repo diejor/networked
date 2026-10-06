@@ -97,7 +97,11 @@ func _refresh() -> void:
 
 	_name_label.text = _display_name()
 	_address_label.text = ConnectBrowser.format_address(endpoint)
-	_badge_label.text = ConnectBrowser.format_peer_class_label(peer_class)
+	var source := String(endpoint.get("source", ""))
+	_badge_label.text = (
+			source if not source.is_empty()
+			else ConnectBrowser.format_peer_class_label(peer_class)
+	)
 	_render_metrics()
 
 

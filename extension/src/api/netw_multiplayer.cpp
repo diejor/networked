@@ -3073,6 +3073,16 @@ Variant NetwMultiplayer::endpoint_get_param(
     }
 }
 
+String NetwMultiplayer::endpoint_source(const RID &p_endpoint) const {
+    const connect::TargetRow *held = connect_core.list().row(p_endpoint);
+    if (held == nullptr) {
+        return String();
+    }
+    LobbyDirectory *found
+        = Object::cast_to<LobbyDirectory>(gd::object_of(held->source));
+    return found == nullptr ? String() : found->display_name();
+}
+
 Error NetwMultiplayer::endpoint_set_param(
     const RID &p_endpoint,
     EndpointParam p_param,
@@ -3388,7 +3398,13 @@ void NetwMultiplayer::discovery_publish(
     const PackedStringArray &p_names,
     const Array &p_infos
 ) {
-    connect_core.publish_targets(p_peer_class, p_addresses, p_names, p_infos);
+    connect_core.publish_targets(
+        p_peer_class,
+        ObjectID(),
+        p_addresses,
+        p_names,
+        p_infos
+    );
 }
 
 void NetwMultiplayer::endpoint_emit_added(const RID &p_endpoint) {
@@ -3433,17 +3449,15 @@ Object *NetwMultiplayer::discovery_find_directory(
     return nullptr;
 }
 
-Array NetwMultiplayer::discovery_directory_peer_classes() const {
-    Array classes;
+LocalVector<ObjectID> NetwMultiplayer::discovery_directories() const {
+    LocalVector<ObjectID> found;
     for (uint32_t at = 0; at < services.size(); at++) {
         Object *service = gd::instance_from_id(services[at].service);
-        const StringName named
-            = connect::DirectoryTransport::peer_class_of_directory(service);
-        if (named != StringName() && !classes.has(named)) {
-            classes.push_back(named);
+        if (connect::DirectoryTransport::is_directory(service)) {
+            found.push_back(services[at].service);
         }
     }
-    return classes;
+    return found;
 }
 
 void NetwMultiplayer::discovery_watch_directory(Object *p_directory) {
@@ -3493,6 +3507,7 @@ void NetwMultiplayer::discovery_unwatch_directory(Object *p_directory) {
     if (p_directory == nullptr) {
         return;
     }
+    connect_core.forget_directory(gd::instance_id(p_directory));
     const HashMap<uint64_t, RID>::Iterator held
         = directory_slots.find(uint64_t(gd::instance_id(p_directory)));
     if (held == directory_slots.end()) {

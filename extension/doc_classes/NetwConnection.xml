@@ -94,6 +94,8 @@
 				┠╴display_name     String          what a server browser draws in the row
 				┠╴status           int             a MultiplayerPeer.ConnectionStatus value
 				┠╴info             NetwServerInfo  what this row last advertised, or null
+				┠╴source           String          the display name of the LobbyDirectory
+				┃                                  that listed it, "" otherwise
 				┠╴is_caller_added  bool            true when this session's own endpoint_add
 				┃                                  added the row
 				┠╴is_available     bool            false while a probe is outstanding

@@ -1,5 +1,6 @@
 #include "support/netw_test.h"
 
+#include "netw/api/nodes/webtorrent_lobby_directory.hpp"
 #include "netw/connect/core.hpp"
 #include "netw/connect/webrtc_transport.hpp"
 
@@ -9,20 +10,22 @@ using namespace godot;
 using namespace netw::connect;
 
 TEST_CASE("[Networked][Connect][Hosted] discovery validates before applying") {
-    WebRTCTransport transport;
+    netw::WebTorrentLobbyDirectory *board
+        = memnew(netw::WebTorrentLobbyDirectory);
+    PackedStringArray urls;
+    urls.push_back(String("ws://127.0.0.1:1"));
     Dictionary settings;
-    settings["trackers"] = PackedStringArray();
+    settings["trackers"] = urls;
     settings["signaling_namespace"] = String("private-game");
-    CHECK(transport.set_browse_settings(settings) == OK);
-    CHECK(!transport.can_browse());
-    const Dictionary accepted = transport.client_settings();
+    CHECK(board->set_browse_settings(settings) == OK);
     settings["trackers"] = int64_t(42);
-    CHECK(transport.set_browse_settings(settings) == ERR_INVALID_PARAMETER);
-    CHECK(transport.client_settings() == accepted);
+    CHECK(board->set_browse_settings(settings) == ERR_INVALID_PARAMETER);
+    CHECK(board->get_trackers() == urls);
     settings["trackers"] = PackedStringArray();
     settings["unknown"] = true;
-    CHECK(transport.set_browse_settings(settings) == ERR_INVALID_PARAMETER);
-    CHECK(transport.client_settings() == accepted);
+    CHECK(board->set_browse_settings(settings) == ERR_INVALID_PARAMETER);
+    CHECK(board->get_trackers() == urls);
+    memdelete(board);
 }
 
 TEST_CASE(

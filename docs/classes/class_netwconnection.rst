@@ -445,6 +445,8 @@ The snapshot for the endpoint ``transport`` and ``address`` name, empty when thi
     ┠╴display_name     String          what a server browser draws in the row
     ┠╴status           int             a MultiplayerPeer.ConnectionStatus value
     ┠╴info             NetwServerInfo  what this row last advertised, or null
+    ┠╴source           String          the display name of the LobbyDirectory
+    ┃                                  that listed it, "" otherwise
     ┠╴is_caller_added  bool            true when this session's own endpoint_add
     ┃                                  added the row
     ┠╴is_available     bool            false while a probe is outstanding
@@ -588,9 +590,11 @@ The representation of a transport in this session, empty when this session holds
     ┃                                   flag combination
     ┠╴host_settings         Dictionary  the fields a host form asks for, named
     ┃                                   by this transport alone
-    ┖╴client_settings       Dictionary  the fields a join form asks for, which
-                                        overlap the host ones by however much
-                                        the two modes share
+    ┠╴client_settings       Dictionary  the fields a join form asks for, which
+    ┃                                   overlap the host ones by however much
+    ┃                                   the two modes share
+    ┖╴timeout_hint          float       seconds a connection may take before a
+                                        caller gives up on it
 
 ::
 

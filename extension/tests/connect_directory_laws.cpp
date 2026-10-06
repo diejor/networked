@@ -211,6 +211,58 @@ TEST_CASE(
     CHECK(listed);
 }
 
+class EnetListing : public netw_test::StubDirectory {
+public:
+    StringName peer_class() override {
+        return StringName("ENetMultiplayerPeer");
+    }
+};
+
+TEST_CASE(
+    "[Networked][Connect][Directory] a directory for a class that already has "
+    "a creator is still browsed, and its rows join through that creator"
+) {
+    Ref<NetwMultiplayer> core;
+    core.instantiate();
+    EnetListing *listing = memnew(EnetListing);
+    listing->rows.push_back(String("10.0.0.5:7000"));
+    core->service_register(listing, nullptr);
+
+    core->endpoint_refresh();
+
+    NETW_CHECK_EQ(listing->browse_calls, 1);
+    const Array targets = core->endpoint_list();
+    NETW_CHECK_EQ(int(targets.size()), 1);
+    if (targets.size() == 1) {
+        const RID through = core->endpoint_get_param(
+            targets[0],
+            NetwMultiplayer::ENDPOINT_PARAM_TRANSPORT
+        );
+        CHECK(
+            through == core->transport_find(StringName("ENetMultiplayerPeer"))
+        );
+    }
+
+    core->service_unregister(listing, nullptr);
+    memdelete(listing);
+    core->embed_dispose();
+}
+
+TEST_CASE(
+    "[Networked][Connect][Directory] a directory that leaves the session "
+    "takes its rows with it"
+) {
+    Bench bench;
+    REQUIRE(bench.directory != nullptr);
+    bench.directory->rows.push_back(String("42"));
+    bench.core->endpoint_refresh();
+    NETW_CHECK_EQ(int(bench.core->endpoint_list().size()), 1);
+
+    bench.core->service_unregister(bench.directory, nullptr);
+
+    NETW_CHECK_EQ(int(bench.core->endpoint_list().size()), 0);
+}
+
 } // namespace TestNetwConnectDirectory
 
 #endif

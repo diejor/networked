@@ -3,6 +3,7 @@
 #include <cstdint>
 
 #include "godot/local_vector.hpp"
+#include "godot/object.hpp"
 #include "godot/rid.hpp"
 #include "godot/variant.hpp"
 #include "netw/api/server_info.hpp"
@@ -16,6 +17,7 @@ struct TargetRow {
     godot::Dictionary metadata;
     godot::Ref<NetwServerInfo> advertised;
     godot::StringName directory;
+    godot::ObjectID source;
     int64_t status = 0;
     godot::Ref<NetwServerInfo> info;
     bool observed = false;
@@ -52,6 +54,7 @@ public:
 
     void publish_directory(
         const godot::StringName &p_directory,
+        godot::ObjectID p_source,
         const godot::RID &p_transport,
         const godot::PackedStringArray &p_addresses,
         const godot::PackedStringArray &p_names,
@@ -60,8 +63,8 @@ public:
         godot::LocalVector<godot::RID> &r_added,
         godot::LocalVector<godot::RID> &r_updated
     );
-    void forget_directory(
-        const godot::StringName &p_directory,
+    void forget_source(
+        godot::ObjectID p_source,
         godot::LocalVector<godot::RID> &r_dropped
     );
 
