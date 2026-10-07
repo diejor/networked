@@ -25,6 +25,8 @@ struct RefusalEvidence {
     bool host_seated_itself = false;
     bool client_reached = false;
     bool client_told = false;
+    bool session_told = false;
+    int connection_failures = 0;
     int64_t client_error = OK;
     String client_reason;
     bool host_forgot_client = false;
@@ -49,6 +51,14 @@ void record_join_failed(int64_t p_error, const String &p_reason) {
 
 void record_second_join_failed(int64_t, const String &) {
     refusal_evidence().second_told = true;
+}
+
+void record_session_join_failed(int64_t, const String &) {
+    refusal_evidence().session_told = true;
+}
+
+void record_connection_failed(int64_t, const String &) {
+    refusal_evidence().connection_failures += 1;
 }
 
 bool seats(const Ref<netw::NetwMultiplayer> &p_session, int p_peer) {
@@ -172,6 +182,16 @@ class EnetJoinRefusalScenario final : public netw_test::FrameScenario {
             p_second ? callable_mp_static(&record_second_join_failed)
                      : callable_mp_static(&record_join_failed)
         );
+        if (!p_second) {
+            client->get_session()->connect(
+                StringName("join_failed"),
+                callable_mp_static(&record_session_join_failed)
+            );
+            client->observe(
+                netw::NetwMultiplayer::CONNECTION_FAILED,
+                callable_mp_static(&record_connection_failed)
+            );
+        }
         client->session_prepare_join(StringName("turned_away"), Array());
         client->NETW_API_VIRTUAL(set_multiplayer_peer)(peer);
         return true;
@@ -327,6 +347,8 @@ TEST_CASE(
     CHECK(evidence.host_online);
     CHECK(evidence.client_reached);
     CHECK(evidence.client_told);
+    CHECK(evidence.session_told);
+    NETW_CHECK_EQ(evidence.connection_failures, 0);
     CHECK_FALSE(evidence.client_reason.is_empty());
     NETW_CHECK_EQ(evidence.client_error, int64_t(ERR_UNAUTHORIZED));
 }

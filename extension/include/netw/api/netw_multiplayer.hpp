@@ -195,20 +195,6 @@ public:
         = enums::NetwConnection::TRANSPORT_CAN_BROWSE;
     static constexpr TransportCapability TRANSPORT_ACCEPTS_EMPTY_ADDRESS
         = enums::NetwConnection::TRANSPORT_ACCEPTS_EMPTY_ADDRESS;
-    using EndpointState = enums::NetwConnection::EndpointState;
-    static constexpr EndpointState ENDPOINT_STATE_FLAGS
-        = enums::NetwConnection::ENDPOINT_STATE_FLAGS;
-    static constexpr EndpointState ENDPOINT_STATE_STATUS
-        = enums::NetwConnection::ENDPOINT_STATE_STATUS;
-    static constexpr EndpointState ENDPOINT_STATE_INFO
-        = enums::NetwConnection::ENDPOINT_STATE_INFO;
-    using EndpointFlags = enums::NetwConnection::EndpointFlags;
-    static constexpr EndpointFlags ENDPOINT_FLAG_CALLER
-        = enums::NetwConnection::ENDPOINT_FLAG_CALLER;
-    static constexpr EndpointFlags ENDPOINT_FLAG_AVAILABLE
-        = enums::NetwConnection::ENDPOINT_FLAG_AVAILABLE;
-    static constexpr EndpointFlags ENDPOINT_FLAG_OBSERVED
-        = enums::NetwConnection::ENDPOINT_FLAG_OBSERVED;
 
     using DisplayRole = enums::NetwDisplay::DisplayRole;
     static constexpr DisplayRole DISPLAY_ROLE_AUTO
@@ -4051,6 +4037,11 @@ public:
         const godot::Array &p_infos,
         int64_t p_directory
     );
+    void discovery_directory_invited(
+        godot::Object *p_directory,
+        const godot::String &p_address,
+        const godot::String &p_from_name
+    );
     void discovery_probe_connection_failed();
     void discovery_probe_authentication_failed(int64_t p_peer_id);
     void auth_receive_hello(
@@ -4153,20 +4144,52 @@ public:
         EndpointState p_state
     );
     void endpoint_probe(const godot::RID &p_endpoint);
-    godot::Error transport_set_browse_settings(
-        const godot::RID &p_transport,
-        const godot::Dictionary &p_settings
-    );
-    void endpoint_refresh();
+    void endpoint_set_browsing(bool p_enabled);
+    bool endpoint_is_browsing() const;
+    void endpoint_set_probe_interval(double p_seconds);
+    double endpoint_get_probe_interval() const;
     godot::RID transport_create_peer(
         const godot::RID &p_transport,
         TransportMode p_mode,
         const godot::String &p_address,
         const godot::Dictionary &p_settings,
-        const godot::Callable &p_completed,
-        const godot::Callable &p_progress
+        const godot::Callable &p_completed
     );
     void transport_cancel_peer_creation(const godot::RID &p_ticket);
+    godot::Ref<NetwPromise> transport_join(
+        const godot::RID &p_transport,
+        const godot::String &p_address,
+        const godot::Dictionary &p_settings
+    );
+    godot::Ref<NetwPromise> endpoint_join(
+        const godot::RID &p_endpoint,
+        const godot::Dictionary &p_settings
+    );
+    godot::Ref<NetwPromise> transport_host(
+        const godot::RID &p_transport,
+        const godot::Dictionary &p_settings
+    );
+    void transport_cancel_attempt();
+    int64_t transport_get_attempt_state() const;
+    godot::Error transport_set_defaults(
+        const godot::RID &p_transport,
+        const godot::Dictionary &p_settings
+    );
+    godot::Dictionary transport_get_defaults(const godot::RID &p_transport);
+    void connection_emit_state_changed(int64_t p_state);
+    void connection_emit_progressed(
+        const godot::String &p_message,
+        double p_ratio
+    );
+    bool connection_emit_failed(
+        godot::Error p_error,
+        const godot::String &p_reason
+    );
+    void connection_emit_join_address_changed(const godot::String &p_address);
+    void connection_emit_invited(
+        const godot::RID &p_endpoint,
+        const godot::String &p_from_name
+    );
     godot::RID transport_register(const godot::Ref<godot::Script> &p_type);
     godot::Error transport_unregister(const godot::RID &p_transport);
     godot::RID transport_find_script(

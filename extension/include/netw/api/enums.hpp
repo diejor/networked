@@ -89,6 +89,19 @@ struct NetwMultiplayer {
         ENDPOINT_PARAM_TRANSPORT = 0,
         ENDPOINT_PARAM_ADDRESS = 1,
         ENDPOINT_PARAM_DISPLAY_NAME = 2,
+        ENDPOINT_PARAM_SOURCE = 3,
+    };
+
+    enum EndpointState {
+        ENDPOINT_STATE_FLAGS = 0,
+        ENDPOINT_STATE_STATUS = 1,
+        ENDPOINT_STATE_INFO = 2,
+    };
+
+    enum EndpointFlags {
+        ENDPOINT_FLAG_CALLER = 1,
+        ENDPOINT_FLAG_AVAILABLE = 2,
+        ENDPOINT_FLAG_OBSERVED = 4,
     };
 
     enum SceneParam {
@@ -260,6 +273,11 @@ struct NetwMultiplayer {
         PLAYER_LOCAL_JOINED,
         PLAYER_LEFT,
         SCENE_LIVE,
+        CONNECTION_STATE_CHANGED,
+        CONNECTION_PROGRESSED,
+        CONNECTION_FAILED,
+        CONNECTION_JOIN_ADDRESS_CHANGED,
+        CONNECTION_INVITED,
         NOTIFICATION_COUNT,
     };
 };
@@ -321,6 +339,13 @@ struct NetwClock {
 };
 
 struct NetwConnection {
+    enum State {
+        STATE_OFFLINE = connect::ATTEMPT_OFFLINE,
+        STATE_CREATING = connect::ATTEMPT_CREATING,
+        STATE_CONNECTING = connect::ATTEMPT_CONNECTING,
+        STATE_ONLINE = connect::ATTEMPT_ONLINE,
+    };
+
     enum TransportMode {
         TRANSPORT_MODE_HOST = connect::PEER_MODE_HOST,
         TRANSPORT_MODE_CLIENT = connect::PEER_MODE_CLIENT,
@@ -333,17 +358,16 @@ struct NetwConnection {
         TRANSPORT_CAN_BROWSE = 8,
         TRANSPORT_ACCEPTS_EMPTY_ADDRESS = 16,
     };
+};
 
-    enum EndpointState {
-        ENDPOINT_STATE_FLAGS = 0,
-        ENDPOINT_STATE_STATUS = 1,
-        ENDPOINT_STATE_INFO = 2,
-    };
-
-    enum EndpointFlags {
-        ENDPOINT_FLAG_CALLER = 1,
-        ENDPOINT_FLAG_AVAILABLE = 2,
-        ENDPOINT_FLAG_OBSERVED = 4,
+struct NetwEndpoint {
+    enum Status {
+        STATUS_UNKNOWN = 0,
+        STATUS_ONLINE = 1,
+        STATUS_FULL = 2,
+        STATUS_UNREACHABLE = 3,
+        STATUS_INCOMPATIBLE = 4,
+        STATUS_UNSUPPORTED = 5,
     };
 };
 
@@ -435,10 +459,10 @@ VARIANT_ENUM_CAST(netw::enums::NetwSession::TransferMode);
 VARIANT_ENUM_CAST(netw::enums::NetwClock::SyncMode);
 VARIANT_ENUM_CAST(netw::enums::NetwClock::MismatchAction);
 VARIANT_ENUM_CAST(netw::enums::NetwClock::ClockMonitor);
+VARIANT_ENUM_CAST(netw::enums::NetwConnection::State);
 VARIANT_ENUM_CAST(netw::enums::NetwConnection::TransportMode);
 VARIANT_ENUM_CAST(netw::enums::NetwConnection::TransportCapability);
-VARIANT_ENUM_CAST(netw::enums::NetwConnection::EndpointState);
-VARIANT_ENUM_CAST(netw::enums::NetwConnection::EndpointFlags);
+VARIANT_ENUM_CAST(netw::enums::NetwEndpoint::Status);
 VARIANT_ENUM_CAST(netw::enums::NetwDisplay::DisplayRole);
 VARIANT_ENUM_CAST(netw::enums::NetwDisplay::DisplayPump);
 VARIANT_ENUM_CAST(netw::enums::NetwDisplay::LiveMode);
@@ -456,6 +480,8 @@ VARIANT_ENUM_CAST(netw::enums::NetwMultiplayer::ClockParam);
 VARIANT_ENUM_CAST(netw::enums::NetwMultiplayer::LayerParam);
 VARIANT_ENUM_CAST(netw::enums::NetwMultiplayer::TransportParam);
 VARIANT_ENUM_CAST(netw::enums::NetwMultiplayer::EndpointParam);
+VARIANT_ENUM_CAST(netw::enums::NetwMultiplayer::EndpointState);
+VARIANT_ENUM_CAST(netw::enums::NetwMultiplayer::EndpointFlags);
 VARIANT_ENUM_CAST(netw::enums::NetwMultiplayer::SceneParam);
 VARIANT_ENUM_CAST(netw::enums::NetwMultiplayer::DisplayParam);
 VARIANT_ENUM_CAST(netw::enums::NetwMultiplayer::PredictParam);

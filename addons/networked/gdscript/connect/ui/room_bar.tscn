@@ -1,0 +1,47 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://addons/networked/gdscript/connect/ui/room_bar.gd" id="1_room"]
+[ext_resource type="Theme" uid="uid://ccui2theme888" path="res://addons/networked/gdscript/connect/ui/connect_theme.tres" id="2_theme"]
+
+[node name="RoomBar" type="Control"]
+layout_mode = 3
+anchors_preset = 5
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -160.0
+offset_top = 8.0
+offset_right = 160.0
+offset_bottom = 48.0
+grow_horizontal = 2
+mouse_filter = 2
+theme = ExtResource("2_theme")
+script = ExtResource("1_room")
+
+[node name="Panel" type="PanelContainer" parent="."]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_type_variation = &"HeaderPanelContainer"
+
+[node name="Row" type="HBoxContainer" parent="Panel"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Label" type="Label" parent="Panel/Row"]
+layout_mode = 2
+text = "Room"
+
+[node name="CodeEdit" type="LineEdit" parent="Panel/Row"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+editable = false
+
+[node name="CopyButton" type="Button" parent="Panel/Row"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Copy"

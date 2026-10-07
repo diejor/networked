@@ -79,7 +79,8 @@ TEST_CASE(
     Ref<NetwMultiplayer> core;
     core.instantiate();
     core->service_register(directory, nullptr);
-    core->connect_plane().refresh();
+    core->connect_plane().set_browsing(true);
+    core->connect_plane().on_poll(0.1);
 
     REQUIRE(listings_of(directory) > 0);
 

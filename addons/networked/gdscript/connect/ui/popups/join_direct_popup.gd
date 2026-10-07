@@ -1,147 +1,72 @@
 ## A form to join a server by its address.
-##
-## Shows the client settings of the chosen transport.
 class_name JoinDirectPopup
 extends PopupPanel
 
 signal submitted(
-		peer_class: StringName,
+		transport: StringName,
 		address: String,
-		display_name: String,
 		settings: Dictionary,
-		username: StringName,
+		username: String,
 		join_args: Array,
 )
 
-var transport_defaults: Array[ConnectTransportConfig] = []
-var _connection: NetwConnection
-var _transports: Array[Dictionary] = []
-var _settings := ConnectFieldList.new()
-var _join_args := ConnectFieldList.new()
+var transports: Array[Dictionary] = []
+var settings := ConnectFieldList.new()
+var join_args := ConnectFieldList.new()
 
-@onready var _backend_picker: OptionButton = %BackendPicker
-@onready var _address_edit: LineEdit = %AddressEdit
-@onready var _username_edit: LineEdit = %UsernameEdit
-@onready var _settings_container: VBoxContainer = %SettingsContainer
-@onready var _args_container: VBoxContainer = %ArgsContainer
-@onready var _confirm_button: Button = %ConfirmButton
-@onready var _cancel_button: Button = %CancelButton
+@onready var transport_picker: OptionButton = %BackendPicker
+@onready var address_edit: LineEdit = %AddressEdit
+@onready var username_edit: LineEdit = %UsernameEdit
+@onready var settings_container: VBoxContainer = %SettingsContainer
+@onready var args_container: VBoxContainer = %ArgsContainer
+@onready var confirm_button: Button = %ConfirmButton
+@onready var cancel_button: Button = %CancelButton
 
 
 func _ready() -> void:
-	visible = false
-	popup_window = false
-	exclusive = true
-	_confirm_button.pressed.connect(_on_confirm)
-	_cancel_button.pressed.connect(hide)
-	_backend_picker.item_selected.connect(_on_backend_changed)
+	hide()
+	transport_picker.item_selected.connect(on_transport_selected)
+	confirm_button.pressed.connect(on_confirm_pressed)
+	cancel_button.pressed.connect(hide)
 
 
-## Opens the direct join popup for [param handle].
-func open_join_direct(
-		handle: NetwConnection,
-		default_username: String,
+func open(
+		connection: NetwConnection,
+		username: String,
+		peer_class := &"",
+		address := "",
 ) -> void:
-	_connection = handle
-	_address_edit.text = ""
-	_username_edit.text = default_username
-	_populate_backend_picker()
-	_populate_join_args()
+	transports.clear()
+	transport_picker.clear()
+	for transport in connection.transports():
+		if transport.capabilities & NetwConnection.TRANSPORT_AVAILABLE:
+			transports.append(transport)
+			transport_picker.add_item(transport.display_name)
+	var peer_classes := transports.map(func(entry): return entry.peer_class)
+	transport_picker.selected = maxi(0, peer_classes.find(peer_class))
+	address_edit.text = address
+	username_edit.text = username
+	join_args.render_schema(args_container, connection.join_schema())
+	on_transport_selected(transport_picker.selected)
 	popup_centered()
 
 
-## Selects [param peer_class] and fills in [param address], as when opening a
-## shared link.
-func preset(peer_class: StringName, address: String) -> void:
-	for at in _transports.size():
-		if StringName(_transports[at].get("peer_class", &"")) != peer_class:
-			continue
-		_backend_picker.selected = at
-		_refresh_address_hint()
-		_populate_settings()
-		break
-	_address_edit.text = address
+func on_transport_selected(index: int) -> void:
+	var transport := transports[index]
+	address_edit.placeholder_text = transport.address_placeholder
+	address_edit.tooltip_text = transport.address_help
+	settings.render_settings(settings_container, transport.client_settings)
 
 
-func _populate_backend_picker() -> void:
-	_backend_picker.clear()
-	_transports.clear()
-	if _connection != null:
-		for transport: Dictionary in _connection.transports():
-			var caps := int(transport.get("capabilities", 0))
-			if caps & NetwConnection.TRANSPORT_AVAILABLE == 0:
-				continue
-			_transports.append(transport)
-			_backend_picker.add_item(String(transport.get("display_name", "")))
-	if _backend_picker.item_count > 0:
-		_backend_picker.selected = 0
-	_refresh_address_hint()
-	_populate_settings()
-
-
-func _selected_transport() -> Dictionary:
-	if _transports.is_empty():
-		return { }
-	var idx := maxi(0, _backend_picker.selected)
-	if idx >= _transports.size():
-		return { }
-	return ConnectTransportConfig.apply_to(
-		_transports[idx],
-		transport_defaults,
-	)
-
-
-func _on_backend_changed(_index: int) -> void:
-	_refresh_address_hint()
-	_populate_settings()
-
-
-func _populate_settings() -> void:
-	var transport := _selected_transport()
-	_settings.render_settings(
-		_settings_container,
-		transport.get("client_settings", { }),
-	)
-
-
-func _refresh_address_hint() -> void:
-	var transport := _selected_transport()
-	if _connection == null or transport.is_empty():
-		_address_edit.placeholder_text = ""
-		_address_edit.tooltip_text = ""
-		return
-	_address_edit.placeholder_text = String(
-		transport.get("address_placeholder", ""),
-	)
-	_address_edit.tooltip_text = String(transport.get("address_help", ""))
-
-
-func _populate_join_args() -> void:
-	if _connection == null:
-		_join_args.render_schema(_args_container, [])
-		return
-	_join_args.render_schema(_args_container, _connection.join_schema())
-
-
-func _on_confirm() -> void:
-	var transport := _selected_transport()
-	if transport.is_empty():
-		return
-	var peer_class: StringName = transport.get("peer_class")
-	var address := _address_edit.text
-	var display_name := address.strip_edges()
-	if display_name.is_empty():
-		display_name = "-"
-
-	var typed := _username_edit.text.strip_edges()
-	var username := StringName(typed) if not typed.is_empty() else &"Player"
-
+func on_confirm_pressed() -> void:
 	hide()
 	submitted.emit(
-		peer_class,
-		address,
-		display_name,
-		_settings.as_dictionary(),
-		username,
-		_join_args.as_array(),
+		transports[transport_picker.selected].peer_class,
+		address_edit.text.strip_edges(),
+		settings.as_dictionary(),
+		(
+				username_edit.text if not username_edit.text.is_empty()
+				else username_edit.placeholder_text
+		),
+		join_args.as_array(),
 	)

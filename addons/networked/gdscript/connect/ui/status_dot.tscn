@@ -2,6 +2,16 @@
 
 [ext_resource type="Script" path="res://addons/networked/gdscript/connect/ui/status_dot.gd" id="1_dot"]
 
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_dot"]
+bg_color = Color(1, 1, 1, 1)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+
 [node name="StatusDot" type="Panel"]
+self_modulate = Color(0.6, 0.6, 0.6, 1)
 custom_minimum_size = Vector2(8, 8)
+tooltip_text = "No answer yet"
+theme_override_styles/panel = SubResource("StyleBoxFlat_dot")
 script = ExtResource("1_dot")

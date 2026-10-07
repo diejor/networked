@@ -8,10 +8,6 @@ namespace Networked;
 /// <summary>
 /// Static entry points for the Networked API.
 /// </summary>
-/// <remarks>
-/// <see cref="Netw.Session"/> returns the <see cref="NetwSession"/> a node
-/// belongs to, which holds the players, scenes and clock.
-/// </remarks>
 public sealed class Netw : NetwRefCounted
 {
     public Netw(IntPtr native) : base(native)
@@ -52,8 +48,9 @@ public sealed class Netw : NetwRefCounted
         NetwApi.MethodBind("Netw", "session", 3534802101UL);
 
     /// <summary>
-    /// The <see cref="NetwSession"/> of the <see cref="Node.Multiplayer"/>.
-    /// Mostly useful for connecting signals.
+    /// The <see cref="NetwSession"/> of the <see cref="Node.Multiplayer"/>. It
+    /// holds the players, the signals and <see cref="NetwSession.Connection"/>,
+    /// which finds servers and joins or hosts one.
     /// <code>
     /// var s := Netw.session(self)
     /// s.entered.connect(on_entered)
@@ -86,7 +83,7 @@ public sealed class Netw : NetwRefCounted
     /// <para>
     /// Call it before or after assigning
     /// <see cref="MultiplayerApi.MultiplayerPeer"/>. The join can still be
-    /// refused later, which emits <see cref="NetwConnection.JoinFailed"/>.
+    /// refused later, which emits <see cref="NetwSession.JoinFailed"/>.
     /// <code>
     /// Error
     /// ┠╴OK                     the join will be sent
@@ -162,7 +159,7 @@ public sealed class Netw : NetwRefCounted
 
     /// <summary>
     /// Declares what this server says about itself when another peer probes it
-    /// with <see cref="NetwConnection.EndpointProbe"/>.
+    /// with <see cref="NetwEndpoint.Probe"/>.
     /// <code>
     /// func _init() -&gt; void:
     ///     Netw.configure_server_info(server_info)

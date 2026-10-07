@@ -52,6 +52,9 @@ public:
     virtual bool accepts_empty_address() const {
         return false;
     }
+    virtual godot::String default_address() const {
+        return godot::String();
+    }
     virtual godot::Dictionary host_settings() const;
     virtual godot::Dictionary client_settings() const;
 
@@ -63,12 +66,10 @@ public:
     virtual void cancel_peer_creation() {
     }
     virtual void probe(const godot::String &p_address);
-    virtual godot::Error set_browse_settings(
-        const godot::Dictionary &p_settings
-    ) {
-        return p_settings.is_empty() ? godot::OK : godot::ERR_UNAVAILABLE;
-    }
     virtual void browse() {
+    }
+    virtual double list_interval() const {
+        return 0.0;
     }
     virtual godot::Ref<godot::MultiplayerPeer> make_probe_peer(
         const godot::String &p_address

@@ -33,16 +33,9 @@ Every child's :godot:`Node.multiplayer <Node#class_Node_property_multiplayer>` i
     tree.api.multiplayer_peer = peer
 
     # or let the transport create it
-    Netw.session(tree).connection.create_peer(
-        tree.peer_class,
-        NetwConnection.TRANSPORT_MODE_CLIENT,
-        "127.0.0.1:21253",
-        tree.transport_settings,
-        func(peer: MultiplayerPeer, error: Error, _detail: String) -> void:
-            if error == OK:
-                tree.api.session_prepare_join(&"PlayerOne", [])
-                tree.api.multiplayer_peer = peer,
-    )
+    var connection := Netw.session(tree).connection
+    tree.api.session_prepare_join(&"PlayerOne", [])
+    connection.join(connection.add(tree.peer_class, "127.0.0.1:21253"))
 
 .. rst-class:: classref-reftable-group
 

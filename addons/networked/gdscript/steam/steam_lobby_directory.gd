@@ -123,9 +123,12 @@ func _service_entered(session: NetwSession) -> void:
 	_wrapper.connect_signal("p2p_session_connect_fail", _on_p2p_connect_fail)
 	_wrapper.connect_signal("network_connection_status_changed", _on_network_connection_status_changed)
 
-	var mt := Netw.session(self).root as MultiplayerTree
-	if mt:
-		_bind_tree_signals(mt)
+	if not multiplayer.peer_connected.is_connected(on_peer_changed):
+		multiplayer.peer_connected.connect(on_peer_changed)
+	if not multiplayer.peer_disconnected.is_connected(on_peer_changed):
+		multiplayer.peer_disconnected.connect(on_peer_changed)
+	if not session.exiting.is_connected(on_session_exiting):
+		session.exiting.connect(on_session_exiting)
 
 
 func _service_exiting(_session: NetwSession) -> void:
@@ -336,18 +339,8 @@ func _join_lobby(address: String) -> void:
 	deliver(_peer)
 
 
-func _bind_tree_signals(mt: MultiplayerTree) -> void:
-	if not mt.api.peer_connected.is_connected(_on_tree_peer_changed):
-		mt.api.peer_connected.connect(_on_tree_peer_changed)
-	if not mt.api.peer_disconnected.is_connected(_on_tree_peer_changed):
-		mt.api.peer_disconnected.connect(_on_tree_peer_changed)
-	var session: NetwSession = Netw.session(mt)
-	if not session.exiting.is_connected(_on_tree_session_exiting):
-		session.exiting.connect(_on_tree_session_exiting)
-
-
-func _on_tree_peer_changed(_peer_id: int) -> void:
-	if _peer_id == 1:
+func on_peer_changed(peer_id: int) -> void:
+	if peer_id == 1:
 		_joining = false
 	if _lobby_id == 0 or not _wrapper:
 		return
@@ -355,7 +348,7 @@ func _on_tree_peer_changed(_peer_id: int) -> void:
 	_wrapper.set_lobby_data(_lobby_id, "players", str(count))
 
 
-func _on_tree_session_exiting(
+func on_session_exiting(
 		reason: NetwSession.ExitReason,
 		_detail: String,
 ) -> void:
@@ -534,7 +527,7 @@ func _on_lobby_match_list(lobbies: Array) -> void:
 
 
 func _on_join_requested(lobby_id: int, friend_id: int) -> void:
-	invite_received.emit(lobby_id, friend_id)
+	invite(str(lobby_id), _wrapper.get_friend_persona_name(friend_id))
 
 
 func _build_peer() -> MultiplayerPeer:

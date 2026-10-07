@@ -24,7 +24,6 @@ offset_top = -230.0
 offset_bottom = 230.0
 size_flags_horizontal = 0
 size_flags_vertical = 0
-server_list_path = "user://rocket_league/servers.cfg"
 
 [node name="TitleLabel" parent="UI/ConnectBrowser/VBox/PanelContainer/HeaderBar" parent_id_path=PackedInt32Array(2055595574, 522198391) index="1" unique_id=1146132509]
 text = "Rocket League Demo WIP!"

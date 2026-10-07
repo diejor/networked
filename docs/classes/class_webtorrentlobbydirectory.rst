@@ -23,6 +23,8 @@ A host is listed while its session is the server of a WebRTC room and its :ref:`
 
 Without this node nothing is listed or browsed, and a room is still joined by its code. A room signaled through a game's own :ref:`NetwWebRTCSignaler<class_NetwWebRTCSignaler>` is never listed.
 
+Rooms are searched in the ``signaling_namespace`` of those same defaults, or in :ref:`NetwSessionConfig.app_id<class_NetwSessionConfig_property_app_id>` when it is empty.
+
 .. rst-class:: classref-reftable-group
 
 Properties
@@ -31,9 +33,11 @@ Properties
 .. table::
    :widths: auto
 
-   +----------------------------+-------------------------------------------------------------------+-------------------------+
-   | :godot:`PackedStringArray` | :ref:`trackers<class_WebTorrentLobbyDirectory_property_trackers>` | ``PackedStringArray()`` |
-   +----------------------------+-------------------------------------------------------------------+-------------------------+
+   +----------------------------+-----------------------------------------------------------------------------+-------------------------+
+   | :godot:`float`             | :ref:`list_interval<class_WebTorrentLobbyDirectory_property_list_interval>` | ``10.0``                |
+   +----------------------------+-----------------------------------------------------------------------------+-------------------------+
+   | :godot:`PackedStringArray` | :ref:`trackers<class_WebTorrentLobbyDirectory_property_trackers>`           | ``PackedStringArray()`` |
+   +----------------------------+-----------------------------------------------------------------------------+-------------------------+
 
 .. rst-class:: classref-section-separator
 
@@ -43,6 +47,23 @@ Properties
 
 Property Descriptions
 ---------------------
+
+.. _class_WebTorrentLobbyDirectory_property_list_interval:
+
+.. rst-class:: classref-property
+
+:godot:`float` **list_interval** = ``10.0`` :ref:`🔗<class_WebTorrentLobbyDirectory_property_list_interval>`
+
+.. rst-class:: classref-property-setget
+
+- |void| **set_list_interval**\ (\ value\: :godot:`float`\ )
+- :godot:`float` **get_list_interval**\ (\ )
+
+Seconds between searches while :ref:`NetwConnection.browsing<class_NetwConnection_property_browsing>` is ``true``.
+
+.. rst-class:: classref-item-separator
+
+----
 
 .. _class_WebTorrentLobbyDirectory_property_trackers:
 
@@ -55,7 +76,7 @@ Property Descriptions
 - |void| **set_trackers**\ (\ value\: :godot:`PackedStringArray`\ )
 - :godot:`PackedStringArray` **get_trackers**\ (\ )
 
-The tracker URLs to browse and announce on. Empty uses the public defaults.
+The ``ws://`` or ``wss://`` tracker URLs to browse and announce on. Empty reads ``trackers`` from :ref:`NetwConnection.defaults()<class_NetwConnection_method_defaults>` for ``WebRTCMultiplayerPeer``, then the public trackers.
 
 **Note:** The returned array is copied and any changes to it will not update the original property value. See :godot:`PackedStringArray` for more details.
 

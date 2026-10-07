@@ -45,7 +45,7 @@ Property Descriptions
 
 :godot:`Error <@GlobalScope#enum_@globalscope_Error>` **error** = ``0`` :ref:`🔗<class_NetwOrdinarySetup_Outcome_property_error>`
 
-The provider's error, or :godot:`@GlobalScope.ERR_CANT_CONNECT <@GlobalScope#class_@GlobalScope_constant_ERR_CANT_CONNECT>` when the session refused the peer it built.
+:godot:`@GlobalScope.OK <@GlobalScope#class_@GlobalScope_constant_OK>` once the session is online, otherwise the error :ref:`NetwConnection.failed<class_NetwConnection_signal_failed>` reported.
 
 .. rst-class:: classref-item-separator
 
@@ -57,7 +57,7 @@ The provider's error, or :godot:`@GlobalScope.ERR_CANT_CONNECT <@GlobalScope#cla
 
 :godot:`String` **detail** = ``""`` :ref:`🔗<class_NetwOrdinarySetup_Outcome_property_detail>`
 
-The provider's own explanation of :ref:`error<class_NetwOrdinarySetup_Outcome_property_error>`.
+The reason that came with :ref:`error<class_NetwOrdinarySetup_Outcome_property_error>`.
 
 .. rst-class:: classref-item-separator
 
@@ -69,7 +69,7 @@ The provider's own explanation of :ref:`error<class_NetwOrdinarySetup_Outcome_pr
 
 :godot:`MultiplayerPeer` **peer** :ref:`🔗<class_NetwOrdinarySetup_Outcome_property_peer>`
 
-The peer that was assigned, or ``null`` when none was.
+The peer the session went online with, or ``null``.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

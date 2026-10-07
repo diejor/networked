@@ -16,6 +16,7 @@ class LobbyDirectory : public NetwService, public enums::LobbyDirectory {
     GDCLASS(LobbyDirectory, NetwService)
 
     bool warned_friends = false;
+    godot::ObjectID watcher;
 
 protected:
     static void _bind_methods();
@@ -39,10 +40,11 @@ protected:
     GDVIRTUAL1R(godot::String, _member_name, int64_t)
     GDVIRTUAL0R(godot::String, _local_member_name)
     GDVIRTUAL0(_list_lobbies)
+    GDVIRTUAL0R(double, _list_interval)
+    GDVIRTUAL0(_stop_listing)
     GDVIRTUAL0(_leave_lobby)
     GDVIRTUAL1(_host_lobby, const godot::Dictionary &)
     GDVIRTUAL1(_join_lobby, const godot::String &)
-    GDVIRTUAL1R(godot::Error, _set_browse_settings, godot::Dictionary)
 
 public:
     void deliver(const godot::Ref<godot::MultiplayerPeer> &p_peer);
@@ -52,7 +54,14 @@ public:
         const godot::PackedStringArray &p_names,
         const godot::TypedArray<NetwServerInfo> &p_infos
     );
+    void invite(
+        const godot::String &p_address,
+        const godot::String &p_from_name
+    );
     bool supports(Capability p_capability);
+
+    void watched_by(NetwMultiplayer *p_session);
+    void unwatched_by(NetwMultiplayer *p_session);
 
     virtual Capability capabilities();
     virtual godot::StringName peer_class();
@@ -74,10 +83,11 @@ public:
     static godot::String member_name_default(int64_t p_peer_id);
     static godot::String local_member_name_default();
     virtual void list_lobbies();
+    virtual double list_interval();
+    virtual void stop_listing();
     virtual void leave_lobby();
     virtual void host_lobby(const godot::Dictionary &p_settings);
     virtual void join_lobby(const godot::String &p_address);
-    virtual godot::Error set_browse_settings(const godot::Dictionary &p_settings);
 };
 
 } // namespace netw

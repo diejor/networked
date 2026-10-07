@@ -33,7 +33,7 @@ func enter_discord_activity(discord: DiscordActivityService) -> void:
 	browser.visible = false
 	set_status("Connecting to Discord Activity...")
 
-	discord.session_lost.connect(on_activity_session_lost)
+	session.exited.connect(on_session_exited)
 
 	if not await discord.start():
 		set_status("Discord handshake failed.")
@@ -54,9 +54,13 @@ func discord_username(discord: DiscordActivityService) -> String:
 	return did if not did.is_empty() else "Player"
 
 
-func on_activity_session_lost(reason: String) -> void:
-	set_status("Host left (%s). Reconnecting..." % reason)
-	var err := await activity.reconnect()
+func on_session_exited(reason: NetwSession.ExitReason, detail: String) -> void:
+	if reason == NetwSession.LOCAL_LEAVE:
+		return
+	set_status("Host left (%s). Reconnecting..." % detail)
+	var err := await activity.connect_activity(
+		StringName(discord_username(activity)),
+	)
 	if err != OK:
 		set_status("Reconnect failed: %s" % error_string(err))
 

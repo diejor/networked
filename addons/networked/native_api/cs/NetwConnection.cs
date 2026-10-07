@@ -6,37 +6,55 @@ using Godot.NativeInterop;
 namespace Networked;
 
 /// <summary>
-/// A connection model that builds on top of <see cref="MultiplayerApi"/>.
+/// Finds servers, and joins or hosts one for its session.
 /// </summary>
 /// <remarks>
-/// <see cref="MultiplayerApi"/> normally connects when a peer is assigned.
+/// One attempt runs at a time, and <see cref="NetwConnection.State"/> follows
+/// any peer the session is given, including one a game assigns itself.
 /// <code>
-/// var peer := ENetMultiplayerPeer.new()
-/// peer.create_client("203.0.113.42", 21253)
-/// multiplayer.multiplayer_peer = peer
+/// @onready var connection: NetwConnection = Netw.session(self).connection
+///
+/// func _ready() -&gt; void:
+///     connection.endpoint_added.connect(on_endpoint_added)
+///     connection.endpoint_removed.connect(on_endpoint_removed)
+///     connection.state_changed.connect(on_state_changed)
+///     connection.failed.connect(on_failed)
+///     visibility_changed.connect(on_visibility_changed)
+///     connection.browsing = visible
+///
+/// func on_visibility_changed() -&gt; void:
+///     connection.browsing = visible
+///
+/// func on_endpoint_added(endpoint: NetwEndpoint) -&gt; void:
+///     var row := ROW.instantiate()
+///     row.endpoint = endpoint
+///     rows[endpoint] = row
+///     list.add_child(row)
+///     row.pressed.connect(join.bind(endpoint))
+///
+/// func join(endpoint: NetwEndpoint) -&gt; void:
+///     Netw.prepare_join(self, name_edit.text)
+///     connection.join(endpoint)
 /// </code>
 /// <para>
-/// After <see cref="MultiplayerApi.MultiplayerPeer"/> has been assigned, the
-/// <see cref="MultiplayerApi"/> is initialized and the peer connects.
-/// <see cref="NetwConnection"/> declares several endpoints that a UI can choose
-/// from.
+/// <b>Rows</b> Each row of <see cref="NetwConnection.Endpoints"/> is a
+/// <see cref="NetwEndpoint"/>. A <see cref="LobbyDirectory"/> lists its rows
+/// while <see cref="NetwConnection.Browsing"/> is <c>true</c>, and
+/// <see cref="NetwConnection.Add"/> lists a server the game already knows.
+/// <b>Connecting</b> <see cref="NetwConnection.Join"/> and
+/// <see cref="NetwConnection.Host"/> create the peer, assign it, and settle
+/// their <see cref="NetwPromise"/> once the session is online. A failure
+/// arrives once through <see cref="NetwConnection.Failed"/>, and a player the
+/// server refuses arrives through <see cref="NetwSession.JoinFailed"/> instead.
+/// <b>Hosting</b> <see cref="NetwConnection.JoinAddress"/> is what another
+/// player types to reach this session, and
+/// <see cref="NetwConnection.JoinAddressChanged"/> reports each change.
+/// <b>Defaults</b> <see cref="NetwConnection.SetDefaults"/> fills settings once
+/// for every connection through a transport, and the settings a call passes win
+/// over them.
 /// <code>
-/// var c := Netw.session(self).connection
-/// c.endpoint_add(ENetMultiplayerPeer, "203.0.113.42:21253")
-/// var ticket := c.create_peer(
-///         ENetMultiplayerPeer,
-///         NetwConnection.TRANSPORT_MODE_CLIENT,
-///         "203.0.113.42:21253", {}, take_the_peer)
+/// connection.set_defaults(WebRTCMultiplayerPeer, {ice_servers = my_servers})
 /// </code>
-/// </para>
-/// <para>
-/// The peer <c>take_the_peer</c> receives is ready to assign to
-/// <see cref="MultiplayerApi.MultiplayerPeer"/>, and connects at once.
-/// Endpoints are pairs of <c>(transport, address)</c> that can be probed by
-/// <see cref="NetwConnection"/> to determine if they are reachable. In a mesh,
-/// exactly one peer has id 1. It is the server, and every other peer is online
-/// once it is linked to peer 1. A transport can support moving the server to
-/// another peer, as Moving the server describes.
 /// </para>
 /// </remarks>
 public sealed class NetwConnection : NetwRefCounted
@@ -55,167 +73,168 @@ public sealed class NetwConnection : NetwRefCounted
         return Adopt(NetwApi.Retained(NetwApi.ObjectOf(value)));
     }
 
+    public enum StateEnum : long
+    {
+        Offline = 0,
+        Creating = 1,
+        Connecting = 2,
+        Online = 3,
+    }
+
     public enum TransportMode : long
     {
         /// <summary>
-        /// Create a server peer from the settings. The address is ignored.
+        /// The address is ignored.
         /// </summary>
         Host = 0,
-        /// <summary>
-        /// Create a client peer that joins the address.
-        /// </summary>
         Client = 1,
     }
 
     public enum TransportCapability : long
     {
-        /// <summary>
-        /// The transport works on this build.
-        /// </summary>
         Available = 1,
         /// <summary>
-        /// The transport can host on this build. Web builds usually cannot.
+        /// Web builds usually cannot.
         /// </summary>
         CanHost = 2,
-        /// <summary>
-        /// The transport supports <see cref="NetwMultiplayer.EndpointProbe"/>.
-        /// </summary>
         CanProbe = 4,
-        /// <summary>
-        /// The transport can list servers for
-        /// <see cref="NetwMultiplayer.EndpointRefresh"/>.
-        /// </summary>
         CanBrowse = 8,
-        /// <summary>
-        /// The transport accepts an empty address.
-        /// </summary>
         AcceptsEmptyAddress = 16,
     }
 
-    public enum EndpointState : long
+    /// <summary>
+    /// Emitted when <see cref="NetwConnection.State"/> moves between
+    /// <see cref="NetwConnection.StateEnum.Offline"/>,
+    /// <see cref="NetwConnection.StateEnum.Creating"/>,
+    /// <see cref="NetwConnection.StateEnum.Connecting"/> and
+    /// <see cref="NetwConnection.StateEnum.Online"/>.
+    /// </summary>
+    public event Action<NetwConnection.StateEnum> StateChanged
     {
-        /// <summary>
-        /// A bitmask of <see cref="NetwConnection.EndpointFlags"/>.
-        /// </summary>
-        Flags = 0,
-        /// <summary>
-        /// The <c>@GlobalScope.Error</c> of the last probe, or
-        /// <c>@GlobalScope.FAILED</c> before the first one.
-        /// </summary>
-        Status = 1,
-        /// <summary>
-        /// The <see cref="NetwServerInfo"/> from the last probe, or
-        /// <c>null</c>.
-        /// </summary>
-        Info = 2,
-    }
-
-    public enum EndpointFlags : long
-    {
-        /// <summary>
-        /// Added with <see cref="NetwMultiplayer.EndpointAdd"/>.
-        /// </summary>
-        Caller = 1,
-        /// <summary>
-        /// The last probe reached the server.
-        /// </summary>
-        Available = 2,
-        /// <summary>
-        /// Found by <see cref="NetwMultiplayer.EndpointRefresh"/>. Can be set
-        /// together with <see cref="NetwConnection.EndpointFlags.Caller"/>.
-        /// </summary>
-        Observed = 4,
+        add => ConnectBridge(
+            "state_changed",
+            value,
+            Callable.From(
+                (NetwConnection.StateEnum a0) =>
+                    value(a0)
+            )
+        );
+        remove => DisconnectBridge("state_changed", value);
     }
 
     /// <summary>
-    /// Emits when a join request is rejected by
-    /// <see cref="Netw.ConfigureAdmission"/>, the <see cref="MultiplayerApi"/>
-    /// failed to establish the underlying connection, or
-    /// <see cref="NetwConnection.CreatePeer"/> was canceled.
-    /// <code>
-    /// func _ready() -&gt; void:
-    ///     Netw.session(self).connection.join_failed.connect(show_refusal)
-    ///
-    /// func show_refusal(_error: Error, reason: String) -&gt; void:
-    ///     status.text = reason
-    /// </code>
+    /// <c>ratio</c> runs from 0 to 1, and is negative when the transport only
+    /// has a <c>message</c>.
     /// </summary>
-    public event Action<Error, string> JoinFailed
+    public event Action<string, double> Progressed
     {
         add => ConnectBridge(
-            "join_failed",
+            "progressed",
+            value,
+            Callable.From(
+                (string a0, double a1) =>
+                    value(a0, a1)
+            )
+        );
+        remove => DisconnectBridge("progressed", value);
+    }
+
+    /// <summary>
+    /// Emitted once when an attempt fails, and never for
+    /// <see cref="NetwConnection.Cancel"/>. A connection to it reads the
+    /// failure of the <see cref="NetwPromise"/> that started the attempt, so a
+    /// caller may drop that promise.
+    /// </summary>
+    public event Action<Error, string> Failed
+    {
+        add => ConnectBridge(
+            "failed",
             value,
             Callable.From(
                 (Error a0, string a1) =>
                     value(a0, a1)
             )
         );
-        remove => DisconnectBridge("join_failed", value);
+        remove => DisconnectBridge("failed", value);
+    }
+
+    public event Action<string> JoinAddressChanged
+    {
+        add => ConnectBridge(
+            "join_address_changed",
+            value,
+            Callable.From(
+                (string a0) =>
+                    value(a0)
+            )
+        );
+        remove => DisconnectBridge("join_address_changed", value);
     }
 
     /// <summary>
-    /// Fired when a new endpoint is added to the session, either by
-    /// <see cref="NetwConnection.EndpointAdd"/> or by a probe that discovered a
-    /// new row. The row can be read back through
-    /// <see cref="NetwConnection.Endpoint"/>.
+    /// Emitted when <c>from_name</c> invites the player to <c>endpoint</c>,
+    /// which joins only when the game calls <see cref="NetwConnection.Join"/>.
     /// </summary>
-    public event Action<StringName, string> EndpointAdded
+    public event Action<NetwEndpoint, string> Invited
+    {
+        add => ConnectBridge(
+            "invited",
+            value,
+            Callable.From(
+                (Variant a0, string a1) =>
+                    value(Wrapped(a0, NetwEndpoint.From), a1)
+            )
+        );
+        remove => DisconnectBridge("invited", value);
+    }
+
+    public event Action<NetwEndpoint> EndpointAdded
     {
         add => ConnectBridge(
             "endpoint_added",
             value,
             Callable.From(
-                (StringName a0, string a1) =>
-                    value(a0, a1)
+                (Variant a0) =>
+                    value(Wrapped(a0, NetwEndpoint.From))
             )
         );
         remove => DisconnectBridge("endpoint_added", value);
     }
 
     /// <summary>
-    /// Fireswhen an endpoint is removed from the session, either by
-    /// <see cref="NetwConnection.EndpointRemove"/> or by a probe that lost a
-    /// row. The row can be read back through
-    /// <see cref="NetwConnection.Endpoint"/>.
+    /// Its <see cref="NetwEndpoint.IsListed"/> is already <c>false</c>.
     /// </summary>
-    public event Action<StringName, string> EndpointRemoved
+    public event Action<NetwEndpoint> EndpointRemoved
     {
         add => ConnectBridge(
             "endpoint_removed",
             value,
             Callable.From(
-                (StringName a0, string a1) =>
-                    value(a0, a1)
+                (Variant a0) =>
+                    value(Wrapped(a0, NetwEndpoint.From))
             )
         );
         remove => DisconnectBridge("endpoint_removed", value);
     }
 
-    /// <summary>
-    /// Fires when an endpoint is updated in the session, either by
-    /// <c>endpoint_update</c> or by a probe that detected a change. What
-    /// changed is read back through <see cref="NetwConnection.Endpoint"/>.
-    /// </summary>
-    public event Action<StringName, string> EndpointUpdated
+    private static readonly IntPtr _bindGetState =
+        NetwApi.MethodBind("NetwConnection", "get_state", 3870163413UL);
+
+    public NetwConnection.StateEnum State
     {
-        add => ConnectBridge(
-            "endpoint_updated",
-            value,
-            Callable.From(
-                (StringName a0, string a1) =>
-                    value(a0, a1)
-            )
-        );
-        remove => DisconnectBridge("endpoint_updated", value);
+        get
+        {
+            long answered = default;
+            NetwThunks.Ptrcall0_Long(_bindGetState, Checked, ref answered);
+            return (NetwConnection.StateEnum)answered;
+        }
     }
 
     private static readonly IntPtr _bindGetJoinAddress =
         NetwApi.MethodBind("NetwConnection", "get_join_address", 201670096UL);
 
     /// <summary>
-    /// The possible addresses another peer would use to reach this session. The
-    /// list is empty when no transport has been registered, or when the session
-    /// is not hosting.
+    /// Empty while the session is not hosting.
     /// </summary>
     public string JoinAddress
     {
@@ -230,75 +249,112 @@ public sealed class NetwConnection : NetwRefCounted
     }
 
     private static readonly IntPtr _bindGetEndpoints =
-        NetwApi.MethodBind("NetwConnection", "get_endpoints", 3995934104UL);
+        NetwApi.MethodBind("NetwConnection", "get_endpoints", 2915620761UL);
 
     /// <summary>
-    /// Every row this session knows how to reach, as endpoint snapshots. See
-    /// <see cref="NetwConnection.Endpoint"/> for the shape of each row.
+    /// The rows from <see cref="NetwConnection.Add"/> come first.
     /// </summary>
-    public Godot.Collections.Array Endpoints
+    public NetwEndpoint[] Endpoints
     {
         get
         {
             godot_variant answered = default;
             NetwThunks.Call0(_bindGetEndpoints, Checked, ref answered);
-            Godot.Collections.Array result =
-                VariantUtils.ConvertToArray(answered);
+            NetwEndpoint[] result =
+                NetwApi.Elements(
+                    VariantUtils.ConvertToArray(answered),
+                    NetwEndpoint.From);
             answered.Dispose();
             return result;
         }
     }
 
-    private static readonly IntPtr _bindCreatePeer =
-        NetwApi.MethodBind("NetwConnection", "create_peer", 1114616706UL);
+    private static readonly IntPtr _bindIsBrowsing =
+        NetwApi.MethodBind("NetwConnection", "is_browsing", 36873697UL);
+
+    private static readonly IntPtr _bindSetBrowsing =
+        NetwApi.MethodBind("NetwConnection", "set_browsing", 2586408642UL);
 
     /// <summary>
-    /// Pass a <paramref name="transport"/> that can be any of the following:
-    /// - The peer class itself.
-    /// - A game transport's <see cref="Script"/>.
-    /// - A <see cref="StringName"/> of the type.
-    /// - A live peer of that class.
+    /// While <c>true</c>, every <see cref="LobbyDirectory"/> keeps listing and
+    /// every row from <see cref="NetwConnection.Add"/> is probed every
+    /// <see cref="NetwConnection.ProbeInterval"/>, which costs network traffic.
+    /// </summary>
+    public bool Browsing
+    {
+        get
+        {
+            byte answered = default;
+            NetwThunks.Ptrcall0_Byte(_bindIsBrowsing, Checked, ref answered);
+            return answered != 0;
+        }
+        set
+        {
+            byte slot0 = value ? (byte)1 : (byte)0;
+            long discarded = default;
+            NetwThunks.Ptrcall1_Byte_Long(
+                _bindSetBrowsing,
+                Checked,
+                in slot0,
+                ref discarded);
+        }
+    }
+
+    private static readonly IntPtr _bindGetProbeInterval =
+        NetwApi.MethodBind(
+            "NetwConnection",
+            "get_probe_interval",
+            1740695150UL);
+
+    private static readonly IntPtr _bindSetProbeInterval =
+        NetwApi.MethodBind("NetwConnection", "set_probe_interval", 373806689UL);
+
+    /// <summary>
+    /// Seconds between probes of a row from <see cref="NetwConnection.Add"/>
+    /// while <see cref="NetwConnection.Browsing"/>. <c>0</c> probes it once
+    /// each time browsing starts.
+    /// </summary>
+    public double ProbeInterval
+    {
+        get
+        {
+            double answered = default;
+            NetwThunks.Ptrcall0_Double(
+                _bindGetProbeInterval,
+                Checked,
+                ref answered);
+            return answered;
+        }
+        set
+        {
+            double slot0 = value;
+            long discarded = default;
+            NetwThunks.Ptrcall1_Double_Long(
+                _bindSetProbeInterval,
+                Checked,
+                in slot0,
+                ref discarded);
+        }
+    }
+
+    private static readonly IntPtr _bindCreatePeer =
+        NetwApi.MethodBind("NetwConnection", "create_peer", 1868599280UL);
+
+    /// <summary>
+    /// Creates a peer for a game that assigns it itself.
     /// <paramref name="completed"/> runs once in a later frame as
-    /// <c>completed(peer, error, detail)</c>, the peer has to be assigned
-    /// inside this <see cref="Callable"/>, otherwise, returning without
-    /// assigning declines the offer. The result is a <see cref="Rid"/> handle
-    /// that can be passed to <see cref="NetwConnection.CancelPeerCreation"/> to
-    /// cancel the request before it completes.
-    /// <code>
-    /// var _ticket := RID() # at this point the ticket is empty
-    ///
-    /// func join(address: String) -&gt; void:
-    ///     abort_join()
-    ///     _ticket = _c.create_peer(
-    ///             MyRelayTransport,
-    ///             NetwConnection.TRANSPORT_MODE_CLIENT,
-    ///             address, {}, _created, _progressed)
-    ///
-    /// func abort_join() -&gt; void:
-    ///     _c.cancel_peer_creation(_ticket)
-    ///     _ticket = RID()
-    ///
-    /// func _created(peer: MultiplayerPeer, error: Error, detail: String):
-    ///     _ticket = RID()
-    ///     if error == OK:
-    ///         multiplayer.multiplayer_peer = peer
-    ///     elif error != ERR_SKIP:
-    ///         _say(detail)
-    /// </code>
-    /// <para>
-    /// The returned peer is ready to be assigned to
-    /// <see cref="Node.Multiplayer"/> and will connect immediately.
-    /// </para>
+    /// <c>completed(peer, error, detail)</c>, and a peer it leaves unassigned
+    /// is closed. Returns a ticket for
+    /// <see cref="NetwConnection.CancelPeerCreation"/>.
     /// </summary>
     public Rid CreatePeer(
         Variant transport,
         NetwConnection.TransportMode mode,
         string address,
         Godot.Collections.Dictionary settings,
-        Callable completed,
-        Callable progress = default)
+        Callable completed)
     {
-        IntPtr pack = NetwThunks.ArgsNew(6);
+        IntPtr pack = NetwThunks.ArgsNew(5);
         godot_variant slot0 = transport.CopyNativeVariant();
         NetwThunks.ArgsSet(pack, 0, in slot0);
         slot0.Dispose();
@@ -314,11 +370,8 @@ public sealed class NetwConnection : NetwRefCounted
         godot_variant slot4 = VariantUtils.CreateFromCallable(completed);
         NetwThunks.ArgsSet(pack, 4, in slot4);
         slot4.Dispose();
-        godot_variant slot5 = VariantUtils.CreateFromCallable(progress);
-        NetwThunks.ArgsSet(pack, 5, in slot5);
-        slot5.Dispose();
         godot_variant answered = default;
-        NetwThunks.CallPack(_bindCreatePeer, Checked, pack, 6, ref answered);
+        NetwThunks.CallPack(_bindCreatePeer, Checked, pack, 5, ref answered);
         NetwThunks.ArgsFree(pack);
         Rid result = VariantUtils.ConvertToRid(answered);
         answered.Dispose();
@@ -332,11 +385,8 @@ public sealed class NetwConnection : NetwRefCounted
             2722037293UL);
 
     /// <summary>
-    /// Cancel the peer creation request named by <paramref name="ticket"/>. The
-    /// request settles with one <c>(null, ERR_SKIP, "")</c> callback and no
-    /// peer is offered. A ticket that already completed, or one this
-    /// <see cref="Node.Multiplayer"/> never created, is a no-op, so a view may
-    /// cancel unconditionally before starting the next creation.
+    /// The callback of <paramref name="ticket"/> then runs once with
+    /// <c>@GlobalScope.ERR_SKIP</c>.
     /// </summary>
     public void CancelPeerCreation(Rid ticket)
     {
@@ -349,13 +399,119 @@ public sealed class NetwConnection : NetwRefCounted
             ref discarded);
     }
 
+    private static readonly IntPtr _bindJoin =
+        NetwApi.MethodBind("NetwConnection", "join", 1032361325UL);
+
+    /// <summary>
+    /// Settles with <c>@GlobalScope.ERR_ALREADY_IN_USE</c> while the session is
+    /// online.
+    /// </summary>
+    public NetwPromise Join(
+        NetwEndpoint endpoint,
+        Godot.Collections.Dictionary settings = null)
+    {
+        settings ??= new Godot.Collections.Dictionary();
+        godot_variant slot0 =
+            VariantUtils.CreateFromGodotObjectPtr(
+                endpoint?.Native ?? IntPtr.Zero);
+        godot_variant slot1 = VariantUtils.CreateFromDictionary(settings);
+        godot_variant answered = default;
+        NetwThunks.Call2(_bindJoin, Checked, in slot0, in slot1, ref answered);
+        slot0.Dispose();
+        slot1.Dispose();
+        NetwPromise result =
+            NetwPromise.Adopt(
+                NetwApi.Retained(
+                    VariantUtils.ConvertToGodotObjectPtr(answered)));
+        answered.Dispose();
+        return result;
+    }
+
+    private static readonly IntPtr _bindHost =
+        NetwApi.MethodBind("NetwConnection", "host", 1013412083UL);
+
+    /// <summary>
+    /// Settles with <c>@GlobalScope.ERR_ALREADY_IN_USE</c> while the session is
+    /// online.
+    /// </summary>
+    public NetwPromise Host(
+        Variant transport,
+        Godot.Collections.Dictionary settings = null)
+    {
+        settings ??= new Godot.Collections.Dictionary();
+        godot_variant slot0 = transport.CopyNativeVariant();
+        godot_variant slot1 = VariantUtils.CreateFromDictionary(settings);
+        godot_variant answered = default;
+        NetwThunks.Call2(_bindHost, Checked, in slot0, in slot1, ref answered);
+        slot0.Dispose();
+        slot1.Dispose();
+        NetwPromise result =
+            NetwPromise.Adopt(
+                NetwApi.Retained(
+                    VariantUtils.ConvertToGodotObjectPtr(answered)));
+        answered.Dispose();
+        return result;
+    }
+
+    private static readonly IntPtr _bindCancel =
+        NetwApi.MethodBind("NetwConnection", "cancel", 3218959716UL);
+
+    /// <summary>
+    /// <see cref="NetwConnection.Failed"/> stays silent and the promise settles
+    /// with <c>@GlobalScope.ERR_SKIP</c>.
+    /// </summary>
+    public void Cancel()
+    {
+        long discarded = default;
+        NetwThunks.Ptrcall0_Long(_bindCancel, Checked, ref discarded);
+    }
+
+    private static readonly IntPtr _bindSetDefaults =
+        NetwApi.MethodBind("NetwConnection", "set_defaults", 3729260449UL);
+
+    /// <summary>
+    /// Stores <paramref name="settings"/> for every connection through
+    /// <paramref name="transport"/>, above the transport's own settings and
+    /// below a listed row's and a call's.
+    /// </summary>
+    public Error SetDefaults(
+        Variant transport,
+        Godot.Collections.Dictionary settings)
+    {
+        godot_variant slot0 = transport.CopyNativeVariant();
+        godot_variant slot1 = VariantUtils.CreateFromDictionary(settings);
+        godot_variant answered = default;
+        NetwThunks.Call2(
+            _bindSetDefaults,
+            Checked,
+            in slot0,
+            in slot1,
+            ref answered);
+        slot0.Dispose();
+        slot1.Dispose();
+        Error result = (Error)VariantUtils.ConvertToInt64(answered);
+        answered.Dispose();
+        return result;
+    }
+
+    private static readonly IntPtr _bindDefaults =
+        NetwApi.MethodBind("NetwConnection", "defaults", 2321877293UL);
+
+    public Godot.Collections.Dictionary Defaults(Variant transport)
+    {
+        godot_variant slot0 = transport.CopyNativeVariant();
+        godot_variant answered = default;
+        NetwThunks.Call1(_bindDefaults, Checked, in slot0, ref answered);
+        slot0.Dispose();
+        Godot.Collections.Dictionary result =
+            VariantUtils.ConvertToDictionary(answered);
+        answered.Dispose();
+        return result;
+    }
+
     private static readonly IntPtr _bindDiagnostics =
         NetwApi.MethodBind("NetwConnection", "diagnostics", 3485342025UL);
 
-    /// <summary>
-    /// What the session knows about its connection to
-    /// <paramref name="peerId"/>, empty when it holds nothing for that peer.
-    /// </summary>
     public Godot.Collections.Dictionary Diagnostics(long peerId)
     {
         godot_variant slot0 = VariantUtils.CreateFromInt((long)peerId);
@@ -372,8 +528,7 @@ public sealed class NetwConnection : NetwRefCounted
         NetwApi.MethodBind("NetwConnection", "transports", 3995934104UL);
 
     /// <summary>
-    /// Every transport this session can reach, as transport snapshots shaped
-    /// like <see cref="NetwConnection.Transport"/> returns.
+    /// Each shaped as <see cref="NetwConnection.Transport"/> returns it.
     /// </summary>
     public Godot.Collections.Array Transports()
     {
@@ -388,29 +543,20 @@ public sealed class NetwConnection : NetwRefCounted
         NetwApi.MethodBind("NetwConnection", "transport", 2321877293UL);
 
     /// <summary>
-    /// The representation of a transport in this session, empty when this
-    /// session holds no such transport. See
-    /// <see cref="NetwConnection.CreatePeer"/> for the ways to name a
-    /// transport.
+    /// A transport named by its peer class, its <see cref="Script"/>, a
+    /// <see cref="StringName"/> or a live peer, empty when this session holds
+    /// no such transport.
     /// <code>
     /// Dictionary
-    /// ┠╴peer_class            StringName  the key this transport is registered under
-    /// ┠╴display_name          String      what a Host or Add form's picker names it
+    /// ┠╴peer_class            StringName  the key the transport is registered under
+    /// ┠╴display_name          String      what a picker names it
     /// ┠╴address_label         String      what the address field is titled
     /// ┠╴address_placeholder   String      what the empty address field shows
     /// ┠╴address_help          String      the sentence under the address field
-    /// ┠╴capabilities          int         a NetwConnection.TransportCapability
-    /// ┃                                   flag combination
-    /// ┠╴host_settings         Dictionary  the fields a host form asks for, named
-    /// ┃                                   by this transport alone
-    /// ┖╴client_settings       Dictionary  the fields a join form asks for, which
-    ///                                     overlap the host ones by however much
-    ///                                     the two modes share
-    /// </code>
-    /// <code>
-    /// var c := Netw.session(self).connection
-    /// var enet := c.transport(ENetMultiplayerPeer)
-    /// prints(enet["display_name"], enet["address_placeholder"])
+    /// ┠╴capabilities          int         NetwConnection.TransportCapability flags
+    /// ┠╴host_settings         Dictionary  a host form's fields, defaults included
+    /// ┠╴client_settings       Dictionary  a join form's fields, defaults included
+    /// ┖╴timeout_hint          float       seconds an attempt waits before it fails
     /// </code>
     /// </summary>
     public Godot.Collections.Dictionary Transport(Variant of)
@@ -431,21 +577,6 @@ public sealed class NetwConnection : NetwRefCounted
             "register_transport",
             1164469251UL);
 
-    /// <summary>
-    /// Registers a <see cref="NetwTransport"/> subclass. A transport adds
-    /// meaning to the <see cref="MultiplayerPeer"/> class it wraps.
-    /// <c>false</c> when this session already registered a transport of that
-    /// class, <c>true</c> otherwise.
-    /// <code>
-    /// func _ready() -&gt; void:
-    ///     var c := Netw.session(self).connection
-    ///     if c.register_transport(MyRelayTransport):
-    ///         c.create_peer(
-    ///                 MyRelayTransport,
-    ///                 NetwConnection.TRANSPORT_MODE_HOST,
-    ///                 "", {region = "eu"}, take_the_peer)
-    /// </code>
-    /// </summary>
     public bool RegisterTransport(Script type)
     {
         IntPtr slot0 = type?.NativeInstance ?? IntPtr.Zero;
@@ -464,12 +595,6 @@ public sealed class NetwConnection : NetwRefCounted
             "unregister_transport",
             4100417191UL);
 
-    /// <summary>
-    /// Unregisters a transport. <c>false</c> when this session never registered
-    /// a transport of that class, <c>true</c> otherwise. See
-    /// <see cref="NetwConnection.CreatePeer"/> for the ways to name a
-    /// transport.
-    /// </summary>
     public bool UnregisterTransport(Variant of)
     {
         godot_variant slot0 = of.CopyNativeVariant();
@@ -489,16 +614,7 @@ public sealed class NetwConnection : NetwRefCounted
         NetwApi.MethodBind("NetwConnection", "join_schema", 3995934104UL);
 
     /// <summary>
-    /// The parameters a join form asks for. A join is a transport, an address,
-    /// and a dictionary of settings. The schema is the list of those settings.
-    /// <code>
-    /// Array[Dictionary]
-    /// ┖╴entry
-    ///   ┠╴name        String      the argument's name
-    ///   ┠╴type        int         a Variant.Type value
-    ///   ┠╴class_name  StringName  empty for every type this build resolves
-    ///   ┖╴default     Variant     the value a Join form pre-fills, or null
-    /// </code>
+    /// The <see cref="NetwMultiplayer.SessionGetJoinSchema"/> of this session.
     /// </summary>
     public Godot.Collections.Array JoinSchema()
     {
@@ -509,58 +625,16 @@ public sealed class NetwConnection : NetwRefCounted
         return result;
     }
 
-    private static readonly IntPtr _bindEndpoint =
-        NetwApi.MethodBind("NetwConnection", "endpoint", 765731476UL);
+    private static readonly IntPtr _bindAdd =
+        NetwApi.MethodBind("NetwConnection", "add", 3138012286UL);
 
     /// <summary>
-    /// The snapshot for the endpoint <paramref name="transport"/> and
-    /// <paramref name="address"/> name, empty when this session holds no such
-    /// row.
-    /// <code>
-    /// Dictionary
-    /// ┠╴peer_class       StringName      ENetMultiplayerPeer, or a game's own
-    /// ┃                                  transport
-    /// ┠╴address          String          "203.0.113.42:21253"
-    /// ┠╴display_name     String          what a server browser draws in the row
-    /// ┠╴status           int             a MultiplayerPeer.ConnectionStatus value
-    /// ┠╴info             NetwServerInfo  what this row last advertised, or null
-    /// ┠╴is_caller_added  bool            true when this session's own endpoint_add
-    /// ┃                                  added the row
-    /// ┠╴is_available     bool            false while a probe is outstanding
-    /// ┖╴is_observed      bool            true once a probe has reported back
-    /// </code>
+    /// Returns the row already listed for that pair, or <c>null</c> when
+    /// <paramref name="transport"/> names nothing this build carries. An empty
+    /// <paramref name="address"/> is listed as the address a join with it
+    /// reaches, so an ENet row reads <c>localhost</c>.
     /// </summary>
-    public Godot.Collections.Dictionary Endpoint(
-        Variant transport,
-        string address)
-    {
-        godot_variant slot0 = transport.CopyNativeVariant();
-        godot_variant slot1 = VariantUtils.CreateFromString(address);
-        godot_variant answered = default;
-        NetwThunks.Call2(
-            _bindEndpoint,
-            Checked,
-            in slot0,
-            in slot1,
-            ref answered);
-        slot0.Dispose();
-        slot1.Dispose();
-        Godot.Collections.Dictionary result =
-            VariantUtils.ConvertToDictionary(answered);
-        answered.Dispose();
-        return result;
-    }
-
-    private static readonly IntPtr _bindEndpointAdd =
-        NetwApi.MethodBind("NetwConnection", "endpoint_add", 2832336870UL);
-
-    /// <summary>
-    /// Adds the endpoint <paramref name="transport"/> and
-    /// <paramref name="address"/> name. Returns <c>true</c> once the row
-    /// exists, <c>false</c> when <paramref name="transport"/> names nothing
-    /// this build carries.
-    /// </summary>
-    public bool EndpointAdd(
+    public NetwEndpoint Add(
         Variant transport,
         string address,
         string displayName = "")
@@ -570,7 +644,7 @@ public sealed class NetwConnection : NetwRefCounted
         godot_variant slot2 = VariantUtils.CreateFromString(displayName);
         godot_variant answered = default;
         NetwThunks.Call3(
-            _bindEndpointAdd,
+            _bindAdd,
             Checked,
             in slot0,
             in slot1,
@@ -579,147 +653,52 @@ public sealed class NetwConnection : NetwRefCounted
         slot0.Dispose();
         slot1.Dispose();
         slot2.Dispose();
-        bool result = VariantUtils.ConvertToBool(answered);
+        NetwEndpoint result =
+            NetwEndpoint.Adopt(
+                NetwApi.Retained(
+                    VariantUtils.ConvertToGodotObjectPtr(answered)));
         answered.Dispose();
         return result;
     }
 
-    private static readonly IntPtr _bindEndpointRemove =
-        NetwApi.MethodBind("NetwConnection", "endpoint_remove", 3068562873UL);
+    private static readonly IntPtr _bindFind =
+        NetwApi.MethodBind("NetwConnection", "find", 1121123991UL);
 
-    /// <summary>
-    /// Removes the endpoint <paramref name="transport"/> and
-    /// <paramref name="address"/> name.
-    /// </summary>
-    public void EndpointRemove(Variant transport, string address)
+    public NetwEndpoint Find(Variant transport, string address)
     {
         godot_variant slot0 = transport.CopyNativeVariant();
         godot_variant slot1 = VariantUtils.CreateFromString(address);
         godot_variant answered = default;
-        NetwThunks.Call2(
-            _bindEndpointRemove,
-            Checked,
-            in slot0,
-            in slot1,
-            ref answered);
+        NetwThunks.Call2(_bindFind, Checked, in slot0, in slot1, ref answered);
         slot0.Dispose();
         slot1.Dispose();
-        answered.Dispose();
-    }
-
-    private static readonly IntPtr _bindEndpointSetDisplayName =
-        NetwApi.MethodBind(
-            "NetwConnection",
-            "endpoint_set_display_name",
-            2595847883UL);
-
-    /// <summary>
-    /// Renames the endpoint <paramref name="transport"/> and
-    /// <paramref name="address"/> name.
-    /// <code>
-    /// Error
-    /// ┠╴OK                   written
-    /// ┠╴ERR_UNCONFIGURED     this view has no session
-    /// ┖╴ERR_DOES_NOT_EXIST   no such row exists
-    /// </code>
-    /// </summary>
-    public Error EndpointSetDisplayName(
-        Variant transport,
-        string address,
-        string displayName)
-    {
-        godot_variant slot0 = transport.CopyNativeVariant();
-        godot_variant slot1 = VariantUtils.CreateFromString(address);
-        godot_variant slot2 = VariantUtils.CreateFromString(displayName);
-        godot_variant answered = default;
-        NetwThunks.Call3(
-            _bindEndpointSetDisplayName,
-            Checked,
-            in slot0,
-            in slot1,
-            in slot2,
-            ref answered);
-        slot0.Dispose();
-        slot1.Dispose();
-        slot2.Dispose();
-        Error result = (Error)VariantUtils.ConvertToInt64(answered);
+        NetwEndpoint result =
+            NetwEndpoint.Adopt(
+                NetwApi.Retained(
+                    VariantUtils.ConvertToGodotObjectPtr(answered)));
         answered.Dispose();
         return result;
     }
 
-    private static readonly IntPtr _bindEndpointProbe =
-        NetwApi.MethodBind("NetwConnection", "endpoint_probe", 3068562873UL);
+    private static readonly IntPtr _bindRemove =
+        NetwApi.MethodBind("NetwConnection", "remove", 1273303807UL);
 
     /// <summary>
-    /// Probes the endpoint <paramref name="transport"/> and
-    /// <paramref name="address"/> name, returning through
-    /// <see cref="NetwConnection.EndpointUpdated"/>.
+    /// Removes a row from <see cref="NetwConnection.Add"/> or from
+    /// <see cref="NetwConnection.Invited"/>. An invited row stays listed until
+    /// this removes it or its <see cref="LobbyDirectory"/> leaves the session.
+    /// Returns <c>@GlobalScope.ERR_INVALID_PARAMETER</c> for any other row a
+    /// <see cref="LobbyDirectory"/> listed.
     /// </summary>
-    public void EndpointProbe(Variant transport, string address)
+    public Error Remove(NetwEndpoint endpoint)
     {
-        godot_variant slot0 = transport.CopyNativeVariant();
-        godot_variant slot1 = VariantUtils.CreateFromString(address);
-        godot_variant answered = default;
-        NetwThunks.Call2(
-            _bindEndpointProbe,
+        IntPtr slot0 = endpoint?.Native ?? IntPtr.Zero;
+        long answered = default;
+        NetwThunks.Ptrcall1_IntPtr_Long(
+            _bindRemove,
             Checked,
             in slot0,
-            in slot1,
             ref answered);
-        slot0.Dispose();
-        slot1.Dispose();
-        answered.Dispose();
-    }
-
-    private static readonly IntPtr _bindTransportSetBrowseSettings =
-        NetwApi.MethodBind(
-            "NetwConnection",
-            "transport_set_browse_settings",
-            3729260449UL);
-
-    /// <summary>
-    /// Sets discovery settings for <paramref name="transport"/> before
-    /// <see cref="NetwConnection.EndpointRefresh"/>. Invalid settings return
-    /// <c>@GlobalScope.ERR_INVALID_PARAMETER</c>. After discovery starts,
-    /// identical settings return <c>@GlobalScope.OK</c> and changed settings
-    /// return <c>@GlobalScope.ERR_ALREADY_IN_USE</c>. Peer creation settings
-    /// are independent. The WebRTC transport accepts the following settings.
-    /// <code>
-    /// Dictionary
-    /// ┠╴trackers             PackedStringArray  WebSocket tracker URLs
-    /// ┖╴signaling_namespace  String             namespace of listed rooms
-    /// </code>
-    /// </summary>
-    public Error TransportSetBrowseSettings(
-        Variant transport,
-        Godot.Collections.Dictionary settings)
-    {
-        godot_variant slot0 = transport.CopyNativeVariant();
-        godot_variant slot1 = VariantUtils.CreateFromDictionary(settings);
-        godot_variant answered = default;
-        NetwThunks.Call2(
-            _bindTransportSetBrowseSettings,
-            Checked,
-            in slot0,
-            in slot1,
-            ref answered);
-        slot0.Dispose();
-        slot1.Dispose();
-        Error result = (Error)VariantUtils.ConvertToInt64(answered);
-        answered.Dispose();
-        return result;
-    }
-
-    private static readonly IntPtr _bindEndpointRefresh =
-        NetwApi.MethodBind("NetwConnection", "endpoint_refresh", 3218959716UL);
-
-    /// <summary>
-    /// Re-probes every known endpoint and reports each result through
-    /// <see cref="NetwConnection.EndpointUpdated"/>.
-    /// </summary>
-    public void EndpointRefresh()
-    {
-        long discarded = default;
-        NetwThunks.Ptrcall0_Long(_bindEndpointRefresh, Checked, ref discarded);
+        return (Error)answered;
     }
 }

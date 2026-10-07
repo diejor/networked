@@ -36,6 +36,15 @@ int64_t now_usec() {
 } // namespace
 
 void LANLobbyDirectory::set_port(int64_t p_port) {
+    if (p_port < 1 || p_port > 65535) {
+        NETW_WARN(
+            sys::TRANSPORT,
+            "LANLobbyDirectory.port was set to %d, so it was ignored. Set a "
+            "port from 1 to 65535.",
+            p_port
+        );
+        return;
+    }
     port = p_port;
 }
 
@@ -44,11 +53,36 @@ int64_t LANLobbyDirectory::get_port() const {
 }
 
 void LANLobbyDirectory::set_port_count(int64_t p_count) {
+    if (p_count < 1 || p_count > 64) {
+        NETW_WARN(
+            sys::TRANSPORT,
+            "LANLobbyDirectory.port_count was set to %d, so it was ignored. "
+            "Set a count from 1 to 64.",
+            p_count
+        );
+        return;
+    }
     port_count = p_count;
 }
 
 int64_t LANLobbyDirectory::get_port_count() const {
     return port_count;
+}
+
+void LANLobbyDirectory::set_list_interval(double p_seconds) {
+    listing_interval = p_seconds;
+}
+
+double LANLobbyDirectory::get_list_interval() const {
+    return listing_interval;
+}
+
+double LANLobbyDirectory::list_interval() {
+    return listing_interval;
+}
+
+void LANLobbyDirectory::stop_listing() {
+    close_browse();
 }
 
 StringName LANLobbyDirectory::peer_class() {
@@ -67,26 +101,6 @@ bool LANLobbyDirectory::is_available() {
     return !OS::get_singleton()->has_feature("web");
 }
 
-Error LANLobbyDirectory::set_browse_settings(const Dictionary &p_settings) {
-    const Variant first = p_settings.get("lan_port", port);
-    const Variant count = p_settings.get("lan_port_count", port_count);
-    if (first.get_type() != Variant::INT || count.get_type() != Variant::INT
-        || int64_t(first) < 1 || int64_t(first) > 65535
-        || int64_t(count) < 1 || int64_t(count) > 64) {
-        return ERR_INVALID_PARAMETER;
-    }
-    const Array keys = p_settings.keys();
-    for (int64_t at = 0; at < keys.size(); at++) {
-        if (String(keys[at]) != "lan_port"
-            && String(keys[at]) != "lan_port_count") {
-            return ERR_INVALID_PARAMETER;
-        }
-    }
-    port = first;
-    port_count = count;
-    return OK;
-}
-
 uint64_t LANLobbyDirectory::app_tag() const {
     return session == nullptr
         ? 0
@@ -99,7 +113,10 @@ int64_t LANLobbyDirectory::gameplay_port() const {
     }
     const Ref<MultiplayerPeer> peer
         = session->NETW_API_VIRTUAL(get_multiplayer_peer)();
-    if (connect::peer_class_of(peer) != StringName("ENetMultiplayerPeer")) {
+    if (connect::peer_class_of(peer) != StringName("ENetMultiplayerPeer")
+        || peer->get_connection_status()
+            != MultiplayerPeer::CONNECTION_CONNECTED
+        || peer->get_unique_id() != 1) {
         return 0;
     }
     return gd::enet_local_port(peer);
@@ -271,6 +288,24 @@ void LANLobbyDirectory::_bind_methods() {
         PropertyInfo(Variant::INT, "port_count", PROPERTY_HINT_RANGE, "1,64"),
         "set_port_count",
         "get_port_count"
+    );
+    ClassDB::bind_method(
+        D_METHOD("set_list_interval", "seconds"),
+        &LANLobbyDirectory::set_list_interval
+    );
+    ClassDB::bind_method(
+        D_METHOD("get_list_interval"),
+        &LANLobbyDirectory::get_list_interval
+    );
+    ADD_PROPERTY(
+        PropertyInfo(
+            Variant::FLOAT,
+            "list_interval",
+            PROPERTY_HINT_RANGE,
+            "0,60,0.1,or_greater,suffix:s"
+        ),
+        "set_list_interval",
+        "get_list_interval"
     );
 }
 

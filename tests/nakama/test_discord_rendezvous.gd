@@ -2,6 +2,9 @@ class_name TestDiscordRendezvous
 extends NetwTestSuite
 
 const _TIMEOUT := 10.0
+const _ERROR_SCRUBBER := preload(
+	"res://addons/networked_test/gdunit4/gdunit_error_scrubber.gd"
+)
 
 var _trees: Array = []
 var _services: Array = []
@@ -58,21 +61,96 @@ func test_two_participants_rendezvous_into_one_match() -> void:
 	var join_err: Error = await join_service.connect_activity(&"bruno")
 	assert_int(join_err).is_equal(OK)
 
-	var host_tree := Netw.of(host_service).root as MultiplayerTree
-	var join_tree := Netw.of(join_service).root as MultiplayerTree
+	var host: NetwSession = Netw.session(host_service)
+	var joined: NetwSession = Netw.session(join_service)
 
 	await _await(
 		func() -> bool:
-			return _both_connected(host_tree, join_tree),
+			return _both_connected(host, joined),
 		"both Discord participants to connect",
 	)
 
-	for tree in [host_tree, join_tree]:
-		assert_int(tree.multiplayer.get_peers().size()).is_equal(1)
-		assert_int(tree.api.players.size()).is_equal(2)
+	for session in [host, joined]:
+		assert_int(session.root.multiplayer.get_peers().size()).is_equal(1)
+		assert_int(session.players.size()).is_equal(2)
 
-	assert_int(host_tree.multiplayer.get_unique_id()).is_equal(1)
-	assert_int(join_tree.multiplayer.get_unique_id()).is_not_equal(1)
+	assert_int(host.root.multiplayer.get_unique_id()).is_equal(1)
+	assert_int(joined.root.multiplayer.get_unique_id()).is_not_equal(1)
+
+
+func test_find_answers_null_until_a_host_records_itself() -> void:
+	var instance_id := "disc-%d-%d" % [Time.get_unix_time_from_system(), randi()]
+	_instance_id = instance_id
+	var service := _build_participant("alice", instance_id)
+	var rendezvous := service.rendezvous as NakamaDiscordRendezvous
+	var connection: NetwConnection = Netw.session(service).connection
+	assert_object(await rendezvous.find(instance_id, connection)).is_null()
+
+	var wrapper := await rendezvous.authenticated_wrapper()
+	await wrapper.write_public_storage(
+		rendezvous.collection,
+		instance_id,
+		{ "match_id": "recorded.node", "ts": Time.get_unix_time_from_system() },
+	)
+
+	var found := await rendezvous.find(instance_id, connection)
+
+	assert_str(found.peer_class).is_equal("NakamaRelayPeer")
+	assert_str(found.address).is_equal("recorded.node")
+
+
+func test_a_record_with_no_match_behind_it_falls_back_to_hosting() -> void:
+	var instance_id := "disc-%d-%d" % [Time.get_unix_time_from_system(), randi()]
+	_instance_id = instance_id
+	var service := _build_participant("alice", instance_id)
+	var rendezvous := service.rendezvous as NakamaDiscordRendezvous
+	var wrapper := await rendezvous.authenticated_wrapper()
+	await wrapper.write_public_storage(
+		rendezvous.collection,
+		instance_id,
+		{ "match_id": "gone.node", "ts": Time.get_unix_time_from_system() },
+	)
+
+	var err: Error = await service.connect_activity(&"alice")
+
+	assert_int(err).is_equal(OK)
+	assert_int(Netw.session(service).role).is_not_equal(NetwSession.ROLE_CLIENT)
+	await _ERROR_SCRUBBER.erase_matching(["_join_lobby did not join a match"])
+	await _ERROR_SCRUBBER.erase_matching(["Joining the Nakama match failed"])
+
+
+func test_claim_hands_the_race_to_the_freshest_host() -> void:
+	var instance_id := "disc-%d-%d" % [Time.get_unix_time_from_system(), randi()]
+	_instance_id = instance_id
+	var first := _build_participant("alice", instance_id)
+	var second := _build_participant("bruno", instance_id)
+	var connections: Array[NetwConnection] = []
+	for service in [first, second]:
+		var connection: NetwConnection = Netw.session(service).connection
+		var rendezvous := service.rendezvous as NakamaDiscordRendezvous
+		await rendezvous.authenticated_wrapper()
+		await connection.host(
+			rendezvous.host_transport(),
+			rendezvous.host_settings(),
+		).wait()
+		connections.append(connection)
+	var first_rendezvous := first.rendezvous as NakamaDiscordRendezvous
+	var second_rendezvous := second.rendezvous as NakamaDiscordRendezvous
+
+	var alone := await first_rendezvous.claim(instance_id, connections[0])
+	var wrapper := await second_rendezvous.authenticated_wrapper()
+	await wrapper.write_public_storage(
+		second_rendezvous.collection,
+		instance_id,
+		{
+			"match_id": connections[1].join_address,
+			"ts": Time.get_unix_time_from_system() + 60.0,
+		},
+	)
+	var winner := await first_rendezvous.claim(instance_id, connections[0])
+
+	assert_object(alone).is_null()
+	assert_str(winner.address).is_equal(connections[1].join_address)
 
 
 func _build_participant(
@@ -115,12 +193,12 @@ func _build_participant(
 	return service
 
 
-func _both_connected(a: MultiplayerTree, b: MultiplayerTree) -> bool:
-	return a.api.is_online and b.api.is_online \
-			and a.multiplayer.get_peers().size() == 1 \
-			and b.multiplayer.get_peers().size() == 1 \
-			and a.api.players.size() == 2 \
-			and b.api.players.size() == 2
+func _both_connected(a: NetwSession, b: NetwSession) -> bool:
+	return a.is_online and b.is_online \
+			and a.root.multiplayer.get_peers().size() == 1 \
+			and b.root.multiplayer.get_peers().size() == 1 \
+			and a.players.size() == 2 \
+			and b.players.size() == 2
 
 
 func _await(

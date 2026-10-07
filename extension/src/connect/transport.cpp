@@ -16,17 +16,12 @@ using namespace godot;
 namespace netw::connect {
 
 void Transport::report(
-    const StringName &p_step,
+    const StringName &,
     const String &p_message,
     double p_ratio
 ) {
-    const Creation *asked = creation_of(armed_ticket);
-    if (asked != nullptr && !asked->published && asked->progress.is_valid()) {
-        Array carried;
-        carried.push_back(p_step);
-        carried.push_back(p_message);
-        carried.push_back(p_ratio);
-        asked->progress.callv(carried);
+    if (session != nullptr) {
+        session->connect_plane().on_progress(armed_ticket, p_message, p_ratio);
     }
 }
 

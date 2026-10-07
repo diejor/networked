@@ -1,91 +1,131 @@
-## A list of labelled form fields, built from a settings [Dictionary] or a
-## join schema [Array].
+## Labelled form fields built from a settings [Dictionary] or a join schema.
 class_name ConnectFieldList
 extends RefCounted
 
 const LABEL_WIDTH := 90.0
+const STRING_LIST_EDIT := preload(
+	"res://addons/networked/gdscript/connect/ui/string_list_edit.tscn"
+)
+const ICE_SERVERS_EDIT := preload(
+	"res://addons/networked/gdscript/connect/ui/ice_servers_edit.tscn"
+)
 
-var _keys: Array[StringName] = []
-var _controls: Array[Control] = []
-var _types: Array[int] = []
-
-
-## Replaces the contents of [param container] with one field per entry of
-## [param defaults]. Entries that cannot be edited in a field are skipped.
-func render_settings(container: Container, defaults: Dictionary) -> void:
-	_clear(container)
-	for key: Variant in defaults.keys():
-		var default_value: Variant = defaults[key]
-		if not ConnectBrowser.can_author_value(default_value):
-			continue
-		var control := ConnectBrowser.make_value_control(
-			default_value,
-			StringName(key),
-		)
-		_add(container, String(key).capitalize(), control)
-		_keys.append(StringName(key))
-		_types.append(typeof(default_value))
+var keys: Array[StringName] = []
+var controls: Array[Control] = []
+var types: Array[int] = []
 
 
-## Replaces the contents of [param container] with one empty field per entry
-## of [param schema], in order.
-func render_schema(container: Container, schema: Array) -> void:
-	_clear(container)
-	for entry: Dictionary in schema:
-		var value_type := int(entry.get("type", TYPE_STRING))
-		var control := ConnectBrowser.make_value_control(
-			ConnectBrowser.zero_value(value_type),
-		)
-		_add(container, String(entry.get("name", "")).capitalize(), control)
-		_keys.append(StringName(entry.get("name", "")))
-		_types.append(value_type)
-
-
-## Returns [code]true[/code] when there are no fields.
-func is_empty() -> bool:
-	return _controls.is_empty()
-
-
-## Returns the field values, keyed by name.
-func as_dictionary() -> Dictionary:
-	var values: Dictionary = { }
-	for at in _controls.size():
-		values[_keys[at]] = ConnectBrowser.value_from_control(
-			_controls[at],
-			_types[at],
-		)
-	return values
-
-
-## Returns the field values in order, as join arguments.
-func as_array() -> Array:
-	var values: Array = []
-	for at in _controls.size():
-		values.append(
-			ConnectBrowser.value_from_control(
-				_controls[at],
-				_types[at],
-			),
-		)
-	return values
-
-
-func _clear(container: Container) -> void:
+func render_settings(container: Container, settings: Dictionary) -> void:
 	for child in container.get_children():
 		child.queue_free()
-	_keys.clear()
-	_controls.clear()
-	_types.clear()
+	keys.clear()
+	controls.clear()
+	types.clear()
+	for key in settings:
+		var value: Variant = settings[key]
+		if not can_author_value(value):
+			continue
+		var label := Label.new()
+		label.text = String(key).capitalize()
+		label.custom_minimum_size.x = LABEL_WIDTH
+		label.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+		var control := make_value_control(value, key)
+		control.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		var row := HBoxContainer.new()
+		row.add_child(label)
+		row.add_child(control)
+		container.add_child(row)
+		keys.append(StringName(key))
+		controls.append(control)
+		types.append(typeof(value))
 
 
-func _add(container: Container, title: String, control: Control) -> void:
-	var row := HBoxContainer.new()
-	var label := Label.new()
-	label.custom_minimum_size = Vector2(LABEL_WIDTH, 0)
-	label.text = title
-	label.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
-	row.add_child(label)
-	control.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	row.add_child(control)
-	container.add_child(row)
-	_controls.append(control)
+func render_schema(container: Container, schema: Array) -> void:
+	var fields := { }
+	for entry: Dictionary in schema:
+		fields[entry.name] = type_convert("", entry.get("type", TYPE_STRING))
+	render_settings(container, fields)
+
+
+func as_dictionary() -> Dictionary:
+	var values := { }
+	for at in controls.size():
+		values[keys[at]] = value_from_control(controls[at], types[at])
+	return values
+
+
+func as_array() -> Array:
+	var values := []
+	for at in controls.size():
+		values.append(value_from_control(controls[at], types[at]))
+	return values
+
+
+static func make_value_control(
+		value: Variant,
+		field_name: StringName = &"",
+) -> Control:
+	match typeof(value):
+		TYPE_BOOL:
+			var box := CheckBox.new()
+			box.button_pressed = value
+			return box
+		TYPE_INT, TYPE_FLOAT:
+			var spin := SpinBox.new()
+			spin.allow_greater = true
+			spin.allow_lesser = true
+			spin.step = 1.0 if value is int else 0.01
+			spin.value = value
+			return spin
+		TYPE_PACKED_STRING_ARRAY:
+			var entries := STRING_LIST_EDIT.instantiate()
+			entries.set_value(value)
+			return entries
+		TYPE_ARRAY when field_name == &"ice_servers":
+			var servers := ICE_SERVERS_EDIT.instantiate()
+			servers.set_value(value)
+			return servers
+		TYPE_ARRAY:
+			var structured := LineEdit.new()
+			structured.text = JSON.stringify(value)
+			return structured
+		_:
+			var edit := LineEdit.new()
+			edit.text = str(value)
+			return edit
+
+
+static func value_from_control(control: Control, value_type: int) -> Variant:
+	match value_type:
+		TYPE_BOOL:
+			return (control as CheckBox).button_pressed
+		TYPE_INT, TYPE_FLOAT:
+			return type_convert((control as SpinBox).value, value_type)
+		TYPE_PACKED_STRING_ARRAY:
+			return control.call(&"get_value")
+		TYPE_ARRAY when control.has_method(&"get_value"):
+			return control.call(&"get_value")
+		TYPE_ARRAY:
+			var text := (control as LineEdit).text
+			var reader := JSON.new()
+			if reader.parse(text) == OK and reader.data is Array:
+				return reader.data
+			push_warning(
+				(
+						"The field holding '%s' is not a JSON array, so it was "
+						+ "ignored. Write it like [1, 2]."
+				) % text,
+			)
+			return null
+		_:
+			return type_convert((control as LineEdit).text, value_type)
+
+
+static func can_author_value(value: Variant) -> bool:
+	return typeof(value) not in [
+		TYPE_NIL,
+		TYPE_OBJECT,
+		TYPE_CALLABLE,
+		TYPE_SIGNAL,
+		TYPE_RID,
+	]

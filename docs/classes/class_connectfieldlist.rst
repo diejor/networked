@@ -12,7 +12,23 @@ ConnectFieldList
 
 **Inherits:** :godot:`RefCounted`
 
-A list of labelled form fields, built from a settings :godot:`Dictionary` or a join schema :godot:`Array`.
+Labelled form fields built from a settings :godot:`Dictionary` or a join schema.
+
+.. rst-class:: classref-reftable-group
+
+Properties
+----------
+
+.. table::
+   :widths: auto
+
+   +---------------------------------------+-----------------------------------------------------------+--------+
+   | :godot:`Array`\[:godot:`StringName`\] | :ref:`keys<class_ConnectFieldList_property_keys>`         | ``[]`` |
+   +---------------------------------------+-----------------------------------------------------------+--------+
+   | :godot:`Array`\[:godot:`Control`\]    | :ref:`controls<class_ConnectFieldList_property_controls>` | ``[]`` |
+   +---------------------------------------+-----------------------------------------------------------+--------+
+   | :godot:`Array`\[:godot:`int`\]        | :ref:`types<class_ConnectFieldList_property_types>`       | ``[]`` |
+   +---------------------------------------+-----------------------------------------------------------+--------+
 
 .. rst-class:: classref-reftable-group
 
@@ -22,17 +38,21 @@ Methods
 .. table::
    :widths: auto
 
-   +---------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
-   | |void|              | :ref:`render_settings<class_ConnectFieldList_method_render_settings>`\ (\ container\: :godot:`Container`, defaults\: :godot:`Dictionary`\ ) |
-   +---------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
-   | |void|              | :ref:`render_schema<class_ConnectFieldList_method_render_schema>`\ (\ container\: :godot:`Container`, schema\: :godot:`Array`\ )            |
-   +---------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`bool`       | :ref:`is_empty<class_ConnectFieldList_method_is_empty>`\ (\ )                                                                               |
-   +---------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`Dictionary` | :ref:`as_dictionary<class_ConnectFieldList_method_as_dictionary>`\ (\ )                                                                     |
-   +---------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`Array`      | :ref:`as_array<class_ConnectFieldList_method_as_array>`\ (\ )                                                                               |
-   +---------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
+   +---------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | |void|              | :ref:`render_settings<class_ConnectFieldList_method_render_settings>`\ (\ container\: :godot:`Container`, settings\: :godot:`Dictionary`\ )                  |
+   +---------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | |void|              | :ref:`render_schema<class_ConnectFieldList_method_render_schema>`\ (\ container\: :godot:`Container`, schema\: :godot:`Array`\ )                             |
+   +---------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`Dictionary` | :ref:`as_dictionary<class_ConnectFieldList_method_as_dictionary>`\ (\ )                                                                                      |
+   +---------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`Array`      | :ref:`as_array<class_ConnectFieldList_method_as_array>`\ (\ )                                                                                                |
+   +---------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`Control`    | :ref:`make_value_control<class_ConnectFieldList_method_make_value_control>`\ (\ value\: :godot:`Variant`, field_name\: :godot:`StringName` = &""\ ) |static| |
+   +---------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`Variant`    | :ref:`value_from_control<class_ConnectFieldList_method_value_from_control>`\ (\ control\: :godot:`Control`, value_type\: :godot:`int`\ ) |static|            |
+   +---------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`bool`       | :ref:`can_author_value<class_ConnectFieldList_method_can_author_value>`\ (\ value\: :godot:`Variant`\ ) |static|                                             |
+   +---------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------+
 
 .. rst-class:: classref-section-separator
 
@@ -55,6 +75,77 @@ Constants
 
 
 
+.. _class_ConnectFieldList_constant_STRING_LIST_EDIT:
+
+.. rst-class:: classref-constant
+
+**STRING_LIST_EDIT** = ``<Object>`` :ref:`🔗<class_ConnectFieldList_constant_STRING_LIST_EDIT>`
+
+.. container:: contribute
+
+	There is currently no description for this constant. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+
+
+
+.. _class_ConnectFieldList_constant_ICE_SERVERS_EDIT:
+
+.. rst-class:: classref-constant
+
+**ICE_SERVERS_EDIT** = ``<Object>`` :ref:`🔗<class_ConnectFieldList_constant_ICE_SERVERS_EDIT>`
+
+.. container:: contribute
+
+	There is currently no description for this constant. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+
+
+
+.. rst-class:: classref-section-separator
+
+----
+
+.. rst-class:: classref-descriptions-group
+
+Property Descriptions
+---------------------
+
+.. _class_ConnectFieldList_property_keys:
+
+.. rst-class:: classref-property
+
+:godot:`Array`\[:godot:`StringName`\] **keys** = ``[]`` :ref:`🔗<class_ConnectFieldList_property_keys>`
+
+.. container:: contribute
+
+	There is currently no description for this property. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_ConnectFieldList_property_controls:
+
+.. rst-class:: classref-property
+
+:godot:`Array`\[:godot:`Control`\] **controls** = ``[]`` :ref:`🔗<class_ConnectFieldList_property_controls>`
+
+.. container:: contribute
+
+	There is currently no description for this property. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_ConnectFieldList_property_types:
+
+.. rst-class:: classref-property
+
+:godot:`Array`\[:godot:`int`\] **types** = ``[]`` :ref:`🔗<class_ConnectFieldList_property_types>`
+
+.. container:: contribute
+
+	There is currently no description for this property. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+
 .. rst-class:: classref-section-separator
 
 ----
@@ -68,9 +159,11 @@ Method Descriptions
 
 .. rst-class:: classref-method
 
-|void| **render_settings**\ (\ container\: :godot:`Container`, defaults\: :godot:`Dictionary`\ ) :ref:`🔗<class_ConnectFieldList_method_render_settings>`
+|void| **render_settings**\ (\ container\: :godot:`Container`, settings\: :godot:`Dictionary`\ ) :ref:`🔗<class_ConnectFieldList_method_render_settings>`
 
-Replaces the contents of ``container`` with one field per entry of ``defaults``. Entries that cannot be edited in a field are skipped.
+.. container:: contribute
+
+	There is currently no description for this method. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
 
 .. rst-class:: classref-item-separator
 
@@ -82,19 +175,9 @@ Replaces the contents of ``container`` with one field per entry of ``defaults``.
 
 |void| **render_schema**\ (\ container\: :godot:`Container`, schema\: :godot:`Array`\ ) :ref:`🔗<class_ConnectFieldList_method_render_schema>`
 
-Replaces the contents of ``container`` with one empty field per entry of ``schema``, in order.
+.. container:: contribute
 
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_ConnectFieldList_method_is_empty:
-
-.. rst-class:: classref-method
-
-:godot:`bool` **is_empty**\ (\ ) :ref:`🔗<class_ConnectFieldList_method_is_empty>`
-
-Returns ``true`` when there are no fields.
+	There is currently no description for this method. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
 
 .. rst-class:: classref-item-separator
 
@@ -106,7 +189,9 @@ Returns ``true`` when there are no fields.
 
 :godot:`Dictionary` **as_dictionary**\ (\ ) :ref:`🔗<class_ConnectFieldList_method_as_dictionary>`
 
-Returns the field values, keyed by name.
+.. container:: contribute
+
+	There is currently no description for this method. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
 
 .. rst-class:: classref-item-separator
 
@@ -118,7 +203,51 @@ Returns the field values, keyed by name.
 
 :godot:`Array` **as_array**\ (\ ) :ref:`🔗<class_ConnectFieldList_method_as_array>`
 
-Returns the field values in order, as join arguments.
+.. container:: contribute
+
+	There is currently no description for this method. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_ConnectFieldList_method_make_value_control:
+
+.. rst-class:: classref-method
+
+:godot:`Control` **make_value_control**\ (\ value\: :godot:`Variant`, field_name\: :godot:`StringName` = &""\ ) |static| :ref:`🔗<class_ConnectFieldList_method_make_value_control>`
+
+.. container:: contribute
+
+	There is currently no description for this method. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_ConnectFieldList_method_value_from_control:
+
+.. rst-class:: classref-method
+
+:godot:`Variant` **value_from_control**\ (\ control\: :godot:`Control`, value_type\: :godot:`int`\ ) |static| :ref:`🔗<class_ConnectFieldList_method_value_from_control>`
+
+.. container:: contribute
+
+	There is currently no description for this method. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_ConnectFieldList_method_can_author_value:
+
+.. rst-class:: classref-method
+
+:godot:`bool` **can_author_value**\ (\ value\: :godot:`Variant`\ ) |static| :ref:`🔗<class_ConnectFieldList_method_can_author_value>`
+
+.. container:: contribute
+
+	There is currently no description for this method. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

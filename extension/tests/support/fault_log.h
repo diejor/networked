@@ -89,6 +89,16 @@ public:
         both.append_array(errored);
         return both;
     }
+
+    godot::PackedStringArray error_lines() {
+        const std::lock_guard<std::mutex> held(warned_lock);
+        return errored;
+    }
+
+    godot::PackedStringArray warning_lines() {
+        const std::lock_guard<std::mutex> held(warned_lock);
+        return warned;
+    }
 };
 
 struct FaultWatch {
@@ -113,6 +123,14 @@ struct FaultWatch {
 
     int64_t errors_containing(const godot::String &p_text) const {
         return log->error_count_containing(p_text);
+    }
+
+    godot::PackedStringArray error_lines() const {
+        return log->error_lines();
+    }
+
+    godot::PackedStringArray warning_lines() const {
+        return log->warning_lines();
     }
 };
 

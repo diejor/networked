@@ -12,14 +12,7 @@ HostPopup
 
 **Inherits:** :godot:`PopupPanel`
 
-A form to host a game.
-
-.. rst-class:: classref-introduction-group
-
-Description
------------
-
-Shows the host settings of the chosen transport.
+A form to host a game through one of the session's transports.
 
 .. rst-class:: classref-reftable-group
 
@@ -29,9 +22,27 @@ Properties
 .. table::
    :widths: auto
 
-   +-------------------------------------------------------------------------------+------------------------------------------------------------------------+--------+
-   | :godot:`Array`\[:ref:`ConnectTransportConfig<class_ConnectTransportConfig>`\] | :ref:`transport_defaults<class_HostPopup_property_transport_defaults>` | ``[]`` |
-   +-------------------------------------------------------------------------------+------------------------------------------------------------------------+--------+
+   +-------------------------------------------------+------------------------------------------------------------------------+---------------+
+   | :godot:`Array`\[:godot:`Dictionary`\]           | :ref:`transports<class_HostPopup_property_transports>`                 | ``[]``        |
+   +-------------------------------------------------+------------------------------------------------------------------------+---------------+
+   | :ref:`ConnectFieldList<class_ConnectFieldList>` | :ref:`settings<class_HostPopup_property_settings>`                     | ``<unknown>`` |
+   +-------------------------------------------------+------------------------------------------------------------------------+---------------+
+   | :ref:`ConnectFieldList<class_ConnectFieldList>` | :ref:`join_args<class_HostPopup_property_join_args>`                   | ``<unknown>`` |
+   +-------------------------------------------------+------------------------------------------------------------------------+---------------+
+   | :godot:`OptionButton`                           | :ref:`transport_picker<class_HostPopup_property_transport_picker>`     | ``<unknown>`` |
+   +-------------------------------------------------+------------------------------------------------------------------------+---------------+
+   | :godot:`VBoxContainer`                          | :ref:`settings_container<class_HostPopup_property_settings_container>` | ``<unknown>`` |
+   +-------------------------------------------------+------------------------------------------------------------------------+---------------+
+   | :godot:`VBoxContainer`                          | :ref:`args_container<class_HostPopup_property_args_container>`         | ``<unknown>`` |
+   +-------------------------------------------------+------------------------------------------------------------------------+---------------+
+   | :godot:`LineEdit`                               | :ref:`name_edit<class_HostPopup_property_name_edit>`                   | ``<unknown>`` |
+   +-------------------------------------------------+------------------------------------------------------------------------+---------------+
+   | :godot:`LineEdit`                               | :ref:`username_edit<class_HostPopup_property_username_edit>`           | ``<unknown>`` |
+   +-------------------------------------------------+------------------------------------------------------------------------+---------------+
+   | :godot:`Button`                                 | :ref:`confirm_button<class_HostPopup_property_confirm_button>`         | ``<unknown>`` |
+   +-------------------------------------------------+------------------------------------------------------------------------+---------------+
+   | :godot:`Button`                                 | :ref:`cancel_button<class_HostPopup_property_cancel_button>`           | ``<unknown>`` |
+   +-------------------------------------------------+------------------------------------------------------------------------+---------------+
 
 .. rst-class:: classref-reftable-group
 
@@ -41,9 +52,13 @@ Methods
 .. table::
    :widths: auto
 
-   +--------+----------------------------------------------------------------------------------------------------------------------------------------------------+
-   | |void| | :ref:`open_host<class_HostPopup_method_open_host>`\ (\ handle\: :ref:`NetwConnection<class_NetwConnection>`, default_username\: :godot:`String`\ ) |
-   +--------+----------------------------------------------------------------------------------------------------------------------------------------------------+
+   +--------+--------------------------------------------------------------------------------------------------------------------------------------+
+   | |void| | :ref:`open<class_HostPopup_method_open>`\ (\ connection\: :ref:`NetwConnection<class_NetwConnection>`, username\: :godot:`String`\ ) |
+   +--------+--------------------------------------------------------------------------------------------------------------------------------------+
+   | |void| | :ref:`on_transport_selected<class_HostPopup_method_on_transport_selected>`\ (\ index\: :godot:`int`\ )                               |
+   +--------+--------------------------------------------------------------------------------------------------------------------------------------+
+   | |void| | :ref:`on_confirm_pressed<class_HostPopup_method_on_confirm_pressed>`\ (\ )                                                           |
+   +--------+--------------------------------------------------------------------------------------------------------------------------------------+
 
 .. rst-class:: classref-section-separator
 
@@ -58,7 +73,7 @@ Signals
 
 .. rst-class:: classref-signal
 
-**submitted**\ (\ peer_class\: :godot:`StringName`, settings\: :godot:`Dictionary`, info\: :ref:`NetwServerInfo<class_NetwServerInfo>`, username\: :godot:`StringName`, join_args\: :godot:`Array`\ ) :ref:`🔗<class_HostPopup_signal_submitted>`
+**submitted**\ (\ transport\: :godot:`StringName`, settings\: :godot:`Dictionary`, info\: :ref:`NetwServerInfo<class_NetwServerInfo>`, username\: :godot:`String`, join_args\: :godot:`Array`\ ) :ref:`🔗<class_HostPopup_signal_submitted>`
 
 .. container:: contribute
 
@@ -73,11 +88,137 @@ Signals
 Property Descriptions
 ---------------------
 
-.. _class_HostPopup_property_transport_defaults:
+.. _class_HostPopup_property_transports:
 
 .. rst-class:: classref-property
 
-:godot:`Array`\[:ref:`ConnectTransportConfig<class_ConnectTransportConfig>`\] **transport_defaults** = ``[]`` :ref:`🔗<class_HostPopup_property_transport_defaults>`
+:godot:`Array`\[:godot:`Dictionary`\] **transports** = ``[]`` :ref:`🔗<class_HostPopup_property_transports>`
+
+.. container:: contribute
+
+	There is currently no description for this property. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_HostPopup_property_settings:
+
+.. rst-class:: classref-property
+
+:ref:`ConnectFieldList<class_ConnectFieldList>` **settings** = ``<unknown>`` :ref:`🔗<class_HostPopup_property_settings>`
+
+.. container:: contribute
+
+	There is currently no description for this property. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_HostPopup_property_join_args:
+
+.. rst-class:: classref-property
+
+:ref:`ConnectFieldList<class_ConnectFieldList>` **join_args** = ``<unknown>`` :ref:`🔗<class_HostPopup_property_join_args>`
+
+.. container:: contribute
+
+	There is currently no description for this property. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_HostPopup_property_transport_picker:
+
+.. rst-class:: classref-property
+
+:godot:`OptionButton` **transport_picker** = ``<unknown>`` :ref:`🔗<class_HostPopup_property_transport_picker>`
+
+.. container:: contribute
+
+	There is currently no description for this property. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_HostPopup_property_settings_container:
+
+.. rst-class:: classref-property
+
+:godot:`VBoxContainer` **settings_container** = ``<unknown>`` :ref:`🔗<class_HostPopup_property_settings_container>`
+
+.. container:: contribute
+
+	There is currently no description for this property. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_HostPopup_property_args_container:
+
+.. rst-class:: classref-property
+
+:godot:`VBoxContainer` **args_container** = ``<unknown>`` :ref:`🔗<class_HostPopup_property_args_container>`
+
+.. container:: contribute
+
+	There is currently no description for this property. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_HostPopup_property_name_edit:
+
+.. rst-class:: classref-property
+
+:godot:`LineEdit` **name_edit** = ``<unknown>`` :ref:`🔗<class_HostPopup_property_name_edit>`
+
+.. container:: contribute
+
+	There is currently no description for this property. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_HostPopup_property_username_edit:
+
+.. rst-class:: classref-property
+
+:godot:`LineEdit` **username_edit** = ``<unknown>`` :ref:`🔗<class_HostPopup_property_username_edit>`
+
+.. container:: contribute
+
+	There is currently no description for this property. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_HostPopup_property_confirm_button:
+
+.. rst-class:: classref-property
+
+:godot:`Button` **confirm_button** = ``<unknown>`` :ref:`🔗<class_HostPopup_property_confirm_button>`
+
+.. container:: contribute
+
+	There is currently no description for this property. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_HostPopup_property_cancel_button:
+
+.. rst-class:: classref-property
+
+:godot:`Button` **cancel_button** = ``<unknown>`` :ref:`🔗<class_HostPopup_property_cancel_button>`
 
 .. container:: contribute
 
@@ -92,13 +233,43 @@ Property Descriptions
 Method Descriptions
 -------------------
 
-.. _class_HostPopup_method_open_host:
+.. _class_HostPopup_method_open:
 
 .. rst-class:: classref-method
 
-|void| **open_host**\ (\ handle\: :ref:`NetwConnection<class_NetwConnection>`, default_username\: :godot:`String`\ ) :ref:`🔗<class_HostPopup_method_open_host>`
+|void| **open**\ (\ connection\: :ref:`NetwConnection<class_NetwConnection>`, username\: :godot:`String`\ ) :ref:`🔗<class_HostPopup_method_open>`
 
-Opens the form, listing the transports that can host on this build.
+.. container:: contribute
+
+	There is currently no description for this method. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_HostPopup_method_on_transport_selected:
+
+.. rst-class:: classref-method
+
+|void| **on_transport_selected**\ (\ index\: :godot:`int`\ ) :ref:`🔗<class_HostPopup_method_on_transport_selected>`
+
+.. container:: contribute
+
+	There is currently no description for this method. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_HostPopup_method_on_confirm_pressed:
+
+.. rst-class:: classref-method
+
+|void| **on_confirm_pressed**\ (\ ) :ref:`🔗<class_HostPopup_method_on_confirm_pressed>`
+
+.. container:: contribute
+
+	There is currently no description for this method. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

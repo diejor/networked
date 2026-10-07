@@ -24,16 +24,9 @@ namespace Networked;
 /// tree.api.multiplayer_peer = peer
 ///
 /// # or let the transport create it
-/// Netw.session(tree).connection.create_peer(
-///     tree.peer_class,
-///     NetwConnection.TRANSPORT_MODE_CLIENT,
-///     "127.0.0.1:21253",
-///     tree.transport_settings,
-///     func(peer: MultiplayerPeer, error: Error, _detail: String) -&gt; void:
-///         if error == OK:
-///             tree.api.session_prepare_join(&amp;"PlayerOne", [])
-///             tree.api.multiplayer_peer = peer,
-/// )
+/// var connection := Netw.session(tree).connection
+/// tree.api.session_prepare_join(&amp;"PlayerOne", [])
+/// connection.join(connection.add(tree.peer_class, "127.0.0.1:21253"))
 /// </code>
 /// </remarks>
 public sealed class MultiplayerTree : NetwObject

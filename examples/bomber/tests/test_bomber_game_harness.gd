@@ -81,6 +81,23 @@ func test_exit_returns_every_peer_to_the_lobby() -> void:
 	assert_that(client.find_player(&"client")).is_null()
 
 
+func test_a_host_leaving_mid_match_hides_the_client_lobby() -> void:
+	var host := await game.add_host("host", false)
+	var client := await game.add_client("client", false)
+	await start_match(host)
+	await client.await_scene(&"World", 2.0)
+
+	host.session.leave()
+	for i in 120:
+		if not client.session.is_online:
+			break
+		await game.sync_ticks(1)
+	await game.sync_ticks(4)
+
+	assert_bool(client.session.is_online).is_false()
+	assert_bool(lobby(client).visible).is_false()
+
+
 func start_match(host: NetwSceneRunner) -> void:
 	for i in 120:
 		if lobby(host).visible:

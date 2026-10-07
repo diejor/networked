@@ -66,6 +66,11 @@ inline int notification_named(const godot::StringName &p_name) {
         "player_local_joined",
         "player_left",
         "scene_live",
+        "connection_state_changed",
+        "connection_progressed",
+        "connection_failed",
+        "connection_join_address_changed",
+        "connection_invited",
     };
     static_assert(
         sizeof(NAMES) / sizeof(NAMES[0])

@@ -24,7 +24,7 @@ func before_test() -> void:
 			"use_ssl": false,
 			"server_key": "defaultkey",
 			"device_id": "netw-db-%d-%d" % [Time.get_ticks_usec(), randi()],
-			"username": "netwdb%d" % (randi() % 100000),
+			"username": "netwdb%d%d" % [Time.get_ticks_usec(), randi()],
 		},
 	)
 	var auth: Dictionary = await _service.connect_async()

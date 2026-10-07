@@ -14,7 +14,7 @@ ConnectTransportConfig
 
 **Inherited By:** :ref:`ConnectENetConfig<class_ConnectENetConfig>`, :ref:`ConnectWebRTCConfig<class_ConnectWebRTCConfig>`
 
-Authored transport settings for :ref:`ConnectBrowser<class_ConnectBrowser>`.
+Settings a :ref:`ConnectBrowser<class_ConnectBrowser>` hands to :ref:`NetwConnection.set_defaults()<class_NetwConnection_method_set_defaults>`.
 
 .. rst-class:: classref-reftable-group
 
@@ -24,17 +24,11 @@ Methods
 .. table::
    :widths: auto
 
-   +---------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`StringName` | :ref:`peer_class<class_ConnectTransportConfig_method_peer_class>`\ (\ )                                                                                                                               |
-   +---------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`Dictionary` | :ref:`client_settings<class_ConnectTransportConfig_method_client_settings>`\ (\ )                                                                                                                     |
-   +---------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`Dictionary` | :ref:`host_settings<class_ConnectTransportConfig_method_host_settings>`\ (\ )                                                                                                                         |
-   +---------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`Dictionary` | :ref:`browse_settings<class_ConnectTransportConfig_method_browse_settings>`\ (\ )                                                                                                                     |
-   +---------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`Dictionary` | :ref:`apply_to<class_ConnectTransportConfig_method_apply_to>`\ (\ snapshot\: :godot:`Dictionary`, configs\: :godot:`Array`\[:ref:`ConnectTransportConfig<class_ConnectTransportConfig>`\]\ ) |static| |
-   +---------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   +---------------------+-------------------------------------------------------------------------+
+   | :godot:`StringName` | :ref:`peer_class<class_ConnectTransportConfig_method_peer_class>`\ (\ ) |
+   +---------------------+-------------------------------------------------------------------------+
+   | :godot:`Dictionary` | :ref:`settings<class_ConnectTransportConfig_method_settings>`\ (\ )     |
+   +---------------------+-------------------------------------------------------------------------+
 
 .. rst-class:: classref-section-separator
 
@@ -59,53 +53,11 @@ Method Descriptions
 
 ----
 
-.. _class_ConnectTransportConfig_method_client_settings:
+.. _class_ConnectTransportConfig_method_settings:
 
 .. rst-class:: classref-method
 
-:godot:`Dictionary` **client_settings**\ (\ ) :ref:`🔗<class_ConnectTransportConfig_method_client_settings>`
-
-.. container:: contribute
-
-	There is currently no description for this method. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_ConnectTransportConfig_method_host_settings:
-
-.. rst-class:: classref-method
-
-:godot:`Dictionary` **host_settings**\ (\ ) :ref:`🔗<class_ConnectTransportConfig_method_host_settings>`
-
-.. container:: contribute
-
-	There is currently no description for this method. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_ConnectTransportConfig_method_browse_settings:
-
-.. rst-class:: classref-method
-
-:godot:`Dictionary` **browse_settings**\ (\ ) :ref:`🔗<class_ConnectTransportConfig_method_browse_settings>`
-
-.. container:: contribute
-
-	There is currently no description for this method. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_ConnectTransportConfig_method_apply_to:
-
-.. rst-class:: classref-method
-
-:godot:`Dictionary` **apply_to**\ (\ snapshot\: :godot:`Dictionary`, configs\: :godot:`Array`\[:ref:`ConnectTransportConfig<class_ConnectTransportConfig>`\]\ ) |static| :ref:`🔗<class_ConnectTransportConfig_method_apply_to>`
+:godot:`Dictionary` **settings**\ (\ ) :ref:`🔗<class_ConnectTransportConfig_method_settings>`
 
 .. container:: contribute
 

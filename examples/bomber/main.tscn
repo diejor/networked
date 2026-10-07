@@ -44,7 +44,6 @@ script = ExtResource("12_lobby")
 
 [node name="ConnectBrowser" parent="UI" unique_id=341697971 instance=ExtResource("14_brws")]
 unique_name_in_owner = true
-server_list_path = "user://bomber/servers.cfg"
 
 [node name="TextureRect" type="TextureRect" parent="UI/ConnectBrowser/VBox/PanelContainer/HeaderBar" parent_id_path=PackedInt32Array(341697971, 522198391) index="1" unique_id=422029099]
 layout_mode = 2

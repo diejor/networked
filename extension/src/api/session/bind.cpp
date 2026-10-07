@@ -309,12 +309,20 @@ void NetwMultiplayer::_bind_methods() {
         &NetwMultiplayer::endpoint_probe
     );
     ClassDB::bind_method(
-        D_METHOD("transport_set_browse_settings", "transport", "settings"),
-        &NetwMultiplayer::transport_set_browse_settings
+        D_METHOD("endpoint_set_browsing", "enabled"),
+        &NetwMultiplayer::endpoint_set_browsing
     );
     ClassDB::bind_method(
-        D_METHOD("endpoint_refresh"),
-        &NetwMultiplayer::endpoint_refresh
+        D_METHOD("endpoint_is_browsing"),
+        &NetwMultiplayer::endpoint_is_browsing
+    );
+    ClassDB::bind_method(
+        D_METHOD("endpoint_set_probe_interval", "seconds"),
+        &NetwMultiplayer::endpoint_set_probe_interval
+    );
+    ClassDB::bind_method(
+        D_METHOD("endpoint_get_probe_interval"),
+        &NetwMultiplayer::endpoint_get_probe_interval
     );
     ClassDB::bind_method(
         D_METHOD(
@@ -323,15 +331,44 @@ void NetwMultiplayer::_bind_methods() {
             "mode",
             "address",
             "settings",
-            "completed",
-            "progress"
+            "completed"
         ),
-        &NetwMultiplayer::transport_create_peer,
-        DEFVAL(Callable())
+        &NetwMultiplayer::transport_create_peer
     );
     ClassDB::bind_method(
         D_METHOD("transport_cancel_peer_creation", "ticket"),
         &NetwMultiplayer::transport_cancel_peer_creation
+    );
+    ClassDB::bind_method(
+        D_METHOD("transport_join", "transport", "address", "settings"),
+        &NetwMultiplayer::transport_join,
+        DEFVAL(Dictionary())
+    );
+    ClassDB::bind_method(
+        D_METHOD("endpoint_join", "endpoint", "settings"),
+        &NetwMultiplayer::endpoint_join,
+        DEFVAL(Dictionary())
+    );
+    ClassDB::bind_method(
+        D_METHOD("transport_host", "transport", "settings"),
+        &NetwMultiplayer::transport_host,
+        DEFVAL(Dictionary())
+    );
+    ClassDB::bind_method(
+        D_METHOD("transport_cancel_attempt"),
+        &NetwMultiplayer::transport_cancel_attempt
+    );
+    ClassDB::bind_method(
+        D_METHOD("transport_get_attempt_state"),
+        &NetwMultiplayer::transport_get_attempt_state
+    );
+    ClassDB::bind_method(
+        D_METHOD("transport_set_defaults", "transport", "settings"),
+        &NetwMultiplayer::transport_set_defaults
+    );
+    ClassDB::bind_method(
+        D_METHOD("transport_get_defaults", "transport"),
+        &NetwMultiplayer::transport_get_defaults
     );
     ClassDB::bind_method(
         D_METHOD("transport_register", "type"),
@@ -894,6 +931,13 @@ void NetwMultiplayer::_bind_methods() {
     BIND_ENUM_CONSTANT(ENDPOINT_PARAM_TRANSPORT);
     BIND_ENUM_CONSTANT(ENDPOINT_PARAM_ADDRESS);
     BIND_ENUM_CONSTANT(ENDPOINT_PARAM_DISPLAY_NAME);
+    BIND_ENUM_CONSTANT(ENDPOINT_PARAM_SOURCE);
+    BIND_ENUM_CONSTANT(ENDPOINT_STATE_FLAGS);
+    BIND_ENUM_CONSTANT(ENDPOINT_STATE_STATUS);
+    BIND_ENUM_CONSTANT(ENDPOINT_STATE_INFO);
+    BIND_ENUM_CONSTANT(ENDPOINT_FLAG_CALLER);
+    BIND_ENUM_CONSTANT(ENDPOINT_FLAG_AVAILABLE);
+    BIND_ENUM_CONSTANT(ENDPOINT_FLAG_OBSERVED);
 
     BIND_ENUM_CONSTANT(SCENE_PARAM_LABEL);
     BIND_ENUM_CONSTANT(SCENE_PARAM_ISOLATION);
@@ -1025,6 +1069,11 @@ void NetwMultiplayer::_bind_methods() {
     BIND_ENUM_CONSTANT(PLAYER_LOCAL_JOINED);
     BIND_ENUM_CONSTANT(PLAYER_LEFT);
     BIND_ENUM_CONSTANT(SCENE_LIVE);
+    BIND_ENUM_CONSTANT(CONNECTION_STATE_CHANGED);
+    BIND_ENUM_CONSTANT(CONNECTION_PROGRESSED);
+    BIND_ENUM_CONSTANT(CONNECTION_FAILED);
+    BIND_ENUM_CONSTANT(CONNECTION_JOIN_ADDRESS_CHANGED);
+    BIND_ENUM_CONSTANT(CONNECTION_INVITED);
     ClassDB::bind_method(
         D_METHOD("observe", "event", "callback"),
         &NetwMultiplayer::observe

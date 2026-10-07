@@ -26,6 +26,7 @@ namespace TestNetwConnectPlane {
 
 using namespace godot;
 using netw::NetwConnection;
+using netw::NetwEndpoint;
 using netw::NetwLinkConditions;
 using netw::NetwMultiplayer;
 using netw::NetwServerInfo;
@@ -114,17 +115,19 @@ TEST_CASE(
 
     Ref<netw::LocalMultiplayerPeer> shape;
     shape.instantiate();
-    const bool added
-        = handle->endpoint_add(shape, String("somewhere"), String("Friday"));
+    const Ref<NetwEndpoint> added
+        = handle->add(shape, String("somewhere"), String("Friday"));
 
-    CHECK(added);
-    const Dictionary snapshot = handle->endpoint(shape, String("somewhere"));
-    CHECK_FALSE(snapshot.is_empty());
-    CHECK(
-        StringName(snapshot["peer_class"]) == StringName("LocalMultiplayerPeer")
-    );
-    CHECK(String(snapshot["address"]) == String("somewhere"));
-    CHECK(String(snapshot["display_name"]) == String("Friday"));
+    REQUIRE(added.is_valid());
+    const bool found = handle->find(shape, String("somewhere")) == added;
+    const bool named
+        = added->get_peer_class() == StringName("LocalMultiplayerPeer");
+    const bool addressed = added->get_address() == String("somewhere");
+    const bool titled = added->get_display_name() == String("Friday");
+    CHECK(found);
+    CHECK(named);
+    CHECK(addressed);
+    CHECK(titled);
 
     SUBCASE("and the same pair answers the same handle, spelled not minted") {
         const RID transport
@@ -346,8 +349,8 @@ TEST_CASE(
     CHECK(handle->get_join_address().is_empty());
     CHECK(handle->diagnostics(1).is_empty());
     CHECK(handle->endpoints().is_empty());
-    CHECK(handle->endpoint(StringName("ENetMultiplayerPeer"), String("nowhere"))
-              .is_empty());
+    CHECK(handle->find(StringName("ENetMultiplayerPeer"), String("nowhere"))
+              .is_null());
     NETW_CHECK_GT(int(handle->transports().size()), 0);
 
     core->embed_dispose();
@@ -528,8 +531,9 @@ TEST_CASE(
 
     NETW_CHECK_EQ(announced.count("added"), 1);
     NETW_CHECK_EQ(int(handle->endpoints().size()), 1);
-    const Dictionary snapshot = handle->endpoint(peer_class, address);
-    CHECK(bool(snapshot["is_caller_added"]));
+    const Ref<NetwEndpoint> endpoint = handle->find(peer_class, address);
+    REQUIRE(endpoint.is_valid());
+    CHECK(endpoint->get_source().is_empty());
 
     SUBCASE("and adding the same target twice announces once") {
         const RID again = local_target(core, "first");
@@ -540,7 +544,7 @@ TEST_CASE(
     }
 
     SUBCASE("and removing it announces and empties the list") {
-        handle->endpoint_remove(peer_class, address);
+        NETW_CHECK_EQ(int(handle->remove(endpoint)), int(OK));
 
         NETW_CHECK_EQ(announced.count("removed"), 1);
         CHECK(handle->endpoints().is_empty());

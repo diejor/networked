@@ -5,6 +5,8 @@
 #include "godot/resource_loader.hpp"
 #include "godot/script.hpp"
 #include "godot/variant.hpp"
+#include "netw/api/connection.hpp"
+#include "netw/api/endpoint.hpp"
 #include "netw/api/netw_multiplayer.hpp"
 #include "netw/connect/core.hpp"
 #include "support/directory_stubs.h"
@@ -79,8 +81,7 @@ struct Bench {
             p_mode,
             p_address,
             p_settings,
-            callable_mp_static(&on_created),
-            Callable()
+            callable_mp_static(&on_created)
         );
     }
 
@@ -185,7 +186,7 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Connect][Directory] a refresh reaches the directory's browse "
+    "[Networked][Connect][Directory] browsing reaches the directory's list "
     "seam and the rows it publishes become this session's targets at the "
     "addresses it published, so a listing is joinable without a second lookup"
 ) {
@@ -196,7 +197,8 @@ TEST_CASE(
     offered.push_back(String("43"));
     bench.directory->rows = offered;
 
-    bench.core->endpoint_refresh();
+    bench.core->endpoint_set_browsing(true);
+    bench.core->connect_plane().on_poll(0.1);
 
     NETW_CHECK_EQ(bench.directory->browse_calls, 1);
     const Array targets = bench.core->endpoint_list();
@@ -228,7 +230,8 @@ TEST_CASE(
     listing->rows.push_back(String("10.0.0.5:7000"));
     core->service_register(listing, nullptr);
 
-    core->endpoint_refresh();
+    core->endpoint_set_browsing(true);
+    core->connect_plane().on_poll(0.1);
 
     NETW_CHECK_EQ(listing->browse_calls, 1);
     const Array targets = core->endpoint_list();
@@ -249,18 +252,132 @@ TEST_CASE(
 }
 
 TEST_CASE(
+    "[Networked][Connect][Directory] DF1 a transport's defaults fill only "
+    "the settings each side declares, so a host default stays out of the "
+    "join form"
+) {
+    Bench bench;
+    REQUIRE(bench.directory != nullptr);
+    const Ref<netw::NetwConnection> connection = bench.core->get_connection();
+    Dictionary preset;
+    preset["region"] = String("us");
+    preset["max_players"] = int64_t(16);
+    NETW_REQUIRE_EQ(
+        int64_t(connection->set_defaults(StringName(STUB_PEER_CLASS), preset)),
+        int64_t(OK)
+    );
+
+    const Dictionary described
+        = connection->transport(StringName(STUB_PEER_CLASS));
+    const Dictionary client = described["client_settings"];
+    const Dictionary host = described["host_settings"];
+
+    CHECK(String(client.get("region", String())) == String("us"));
+    CHECK_FALSE(client.has("max_players"));
+    CHECK(String(host.get("region", String())) == String("us"));
+    NETW_CHECK_EQ(int64_t(host.get("max_players", 0)), int64_t(16));
+}
+
+TEST_CASE(
     "[Networked][Connect][Directory] a directory that leaves the session "
     "takes its rows with it"
 ) {
     Bench bench;
     REQUIRE(bench.directory != nullptr);
     bench.directory->rows.push_back(String("42"));
-    bench.core->endpoint_refresh();
+    bench.core->endpoint_set_browsing(true);
+    bench.core->connect_plane().on_poll(0.1);
     NETW_CHECK_EQ(int(bench.core->endpoint_list().size()), 1);
 
     bench.core->service_unregister(bench.directory, nullptr);
 
     NETW_CHECK_EQ(int(bench.core->endpoint_list().size()), 0);
+}
+
+struct InviteLog {
+    int calls = 0;
+    Ref<netw::NetwEndpoint> endpoint;
+    String from_name;
+};
+
+InviteLog &invites() {
+    static InviteLog instance;
+    return instance;
+}
+
+void on_invited(Ref<netw::NetwEndpoint> p_endpoint, String p_from_name) {
+    invites().calls++;
+    invites().endpoint = p_endpoint;
+    invites().from_name = p_from_name;
+}
+
+TEST_CASE(
+    "[Networked][Connect][Directory] INV1 an invite becomes an endpoint "
+    "carrying the directory as its source and the sender's name, and joining "
+    "it reaches the directory's join seam at the invited address"
+) {
+    Bench bench;
+    REQUIRE(bench.directory != nullptr);
+    invites() = InviteLog();
+    bench.directory->answering = netw_test::StubDirectory::ANSWER_NOTHING;
+    const Ref<netw::NetwConnection> connection = bench.core->get_connection();
+    connection->connect(
+        StringName("invited"),
+        callable_mp_static(&on_invited)
+    );
+
+    bench.directory->invite(String("77"), String("Ada"));
+
+    NETW_CHECK_EQ(invites().calls, 1);
+    REQUIRE(invites().endpoint.is_valid());
+    CHECK(invites().from_name == String("Ada"));
+    CHECK(invites().endpoint->get_address() == String("77"));
+    CHECK(invites().endpoint->get_source() == String("Stub Lobbies"));
+
+    connection->join(invites().endpoint, Dictionary());
+    bench.drive();
+
+    NETW_CHECK_EQ(bench.directory->join_calls, 1);
+    CHECK(bench.directory->joined_address == String("77"));
+    invites() = InviteLog();
+}
+
+TEST_CASE(
+    "[Networked][Connect][Directory] INV2 an invited endpoint stays listed "
+    "through a listing that leaves it out, and still joins at its address"
+) {
+    Bench bench;
+    REQUIRE(bench.directory != nullptr);
+    invites() = InviteLog();
+    bench.directory->answering = netw_test::StubDirectory::ANSWER_NOTHING;
+    const Ref<netw::NetwConnection> connection = bench.core->get_connection();
+    connection->connect(
+        StringName("invited"),
+        callable_mp_static(&on_invited)
+    );
+    bench.directory->invite(String("77"), String("Ada"));
+    REQUIRE(invites().endpoint.is_valid());
+
+    bench.directory->rows.push_back(String("42"));
+    bench.core->endpoint_set_browsing(true);
+    bench.core->connect_plane().on_poll(0.1);
+
+    NETW_CHECK_EQ(bench.directory->browse_calls, 1);
+    NETW_CHECK_EQ(int(bench.core->endpoint_list().size()), 2);
+    CHECK(invites().endpoint->get_is_listed());
+    CHECK(
+        connection->find(StringName(STUB_PEER_CLASS), String("77"))
+        == invites().endpoint
+    );
+    connection->join(invites().endpoint, Dictionary());
+    bench.drive();
+
+    NETW_CHECK_EQ(bench.directory->join_calls, 1);
+    CHECK(bench.directory->joined_address == String("77"));
+
+    NETW_CHECK_EQ(int(connection->remove(invites().endpoint)), int(OK));
+    CHECK_FALSE(invites().endpoint->get_is_listed());
+    invites() = InviteLog();
 }
 
 } // namespace TestNetwConnectDirectory

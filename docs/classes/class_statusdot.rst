@@ -12,21 +12,19 @@ StatusDot
 
 **Inherits:** :godot:`Panel`
 
-A colored dot showing whether a server can be reached.
+A coloured dot showing a :ref:`NetwEndpoint.status<class_NetwEndpoint_property_status>`.
 
 .. rst-class:: classref-reftable-group
 
-Methods
--------
+Properties
+----------
 
 .. table::
    :widths: auto
 
-   +--------+--------------------------------------------------------------------------------------------+
-   | |void| | :ref:`bind_result<class_StatusDot_method_bind_result>`\ (\ result\: :godot:`Dictionary`\ ) |
-   +--------+--------------------------------------------------------------------------------------------+
-   | |void| | :ref:`bind_unavailable<class_StatusDot_method_bind_unavailable>`\ (\ )                     |
-   +--------+--------------------------------------------------------------------------------------------+
+   +-----------------------------------------+------------------------------------------------+-------+
+   | :ref:`Status<enum_NetwEndpoint_Status>` | :ref:`status<class_StatusDot_property_status>` | ``0`` |
+   +-----------------------------------------+------------------------------------------------+-------+
 
 .. rst-class:: classref-section-separator
 
@@ -34,28 +32,55 @@ Methods
 
 .. rst-class:: classref-descriptions-group
 
-Method Descriptions
--------------------
+Constants
+---------
 
-.. _class_StatusDot_method_bind_result:
+.. _class_StatusDot_constant_WORDS:
 
-.. rst-class:: classref-method
+.. rst-class:: classref-constant
 
-|void| **bind_result**\ (\ result\: :godot:`Dictionary`\ ) :ref:`🔗<class_StatusDot_method_bind_result>`
+**WORDS** = ``{0: "Checking", 1: "Online", 2: "Full", 3: "Unreachable", 4: "Incompatible", 5: "Unsupported"}`` :ref:`🔗<class_StatusDot_constant_WORDS>`
 
-Shows the probe ``result``, a :godot:`Dictionary` with ``error`` and ``info``. An empty ``result`` shows as checking.
+.. container:: contribute
 
-.. rst-class:: classref-item-separator
+	There is currently no description for this constant. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+
+
+
+.. _class_StatusDot_constant_COLORS:
+
+.. rst-class:: classref-constant
+
+**COLORS** = ``{0: Color(0.6, 0.6, 0.6, 1), 1: Color(0.24, 0.81, 0.44, 1), 2: Color(0.95, 0.77, 0.06, 1), 3: Color(0.91, 0.3, 0.24, 1), 4: Color(0.6, 0.35, 0.85, 1), 5: Color(0.45, 0.45, 0.5, 1)}`` :ref:`🔗<class_StatusDot_constant_COLORS>`
+
+.. container:: contribute
+
+	There is currently no description for this constant. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+
+
+
+.. rst-class:: classref-section-separator
 
 ----
 
-.. _class_StatusDot_method_bind_unavailable:
+.. rst-class:: classref-descriptions-group
 
-.. rst-class:: classref-method
+Property Descriptions
+---------------------
 
-|void| **bind_unavailable**\ (\ ) :ref:`🔗<class_StatusDot_method_bind_unavailable>`
+.. _class_StatusDot_property_status:
 
-Shows that the transport does not work on this platform.
+.. rst-class:: classref-property
+
+:ref:`Status<enum_NetwEndpoint_Status>` **status** = ``0`` :ref:`🔗<class_StatusDot_property_status>`
+
+.. rst-class:: classref-property-setget
+
+- |void| **@status_setter**\ (\ value\: :ref:`Status<enum_NetwEndpoint_Status>`\ )
+
+.. container:: contribute
+
+	There is currently no description for this property. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

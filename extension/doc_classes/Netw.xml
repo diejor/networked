@@ -277,7 +277,7 @@
 			<return type="int" enum="Error" />
 			<param index="0" name="provider" type="Callable" />
 			<description>
-				Declares what this server says about itself when another peer probes it with [method NetwConnection.endpoint_probe].
+				Declares what this server says about itself when another peer probes it with [method NetwEndpoint.probe].
 				[codeblock]
 				func _init() -&gt; void:
 				    Netw.configure_server_info(server_info)
@@ -402,7 +402,7 @@
 				Netw.prepare_join(self, &amp;"Dev", &amp;"red")
 				multiplayer.multiplayer_peer = peer
 				[/codeblock]
-				Call it before or after assigning [member MultiplayerAPI.multiplayer_peer]. The join can still be refused later, which emits [signal NetwConnection.join_failed].
+				Call it before or after assigning [member MultiplayerAPI.multiplayer_peer]. The join can still be refused later, which emits [signal NetwSession.join_failed].
 				[codeblock lang=text]
 				Error
 				┠╴OK                     the join will be sent
@@ -551,7 +551,7 @@
 			<return type="NetwSession" />
 			<param index="0" name="node" type="Node" />
 			<description>
-				The [NetwSession] of the [member Node.multiplayer]. Mostly useful for connecting signals.
+				The [NetwSession] of the [member Node.multiplayer]. It holds the players, the signals and [member NetwSession.connection], which finds servers and joins or hosts one.
 				[codeblock]
 				var s := Netw.session(self)
 				s.entered.connect(on_entered)

@@ -810,6 +810,7 @@
 			<param index="2" name="display_name" type="String" default="&quot;&quot;" />
 			<description>
 				Adds a server at [param address] reached through [param transport], and notifies [constant ENDPOINT_ADDED]. Adding the same pair again returns the same [RID]. Returns an invalid [RID] when [param transport] is unknown.
+				An empty [param address] is stored as the address a join with it reaches, so an ENet row reads [code]localhost[/code] and [method endpoint_find] finds it by either spelling.
 				[codeblock]
 				var endpoint := api.endpoint_add(
 				        api.transport_find(&amp;"ENetMultiplayerPeer"),
@@ -833,12 +834,32 @@
 				Returns one field of [param endpoint], or [code]null[/code] when it does not exist.
 			</description>
 		</method>
+		<method name="endpoint_get_probe_interval" qualifiers="const">
+			<return type="float" />
+			<description>
+				The flat form of [member NetwConnection.probe_interval].
+			</description>
+		</method>
 		<method name="endpoint_get_state">
 			<return type="Variant" />
 			<param index="0" name="endpoint" type="RID" />
-			<param index="1" name="state" type="int" enum="NetwConnection.EndpointState" />
+			<param index="1" name="state" type="int" enum="NetwMultiplayer.EndpointState" />
 			<description>
-				Returns what the last probe found for [param endpoint]. [constant NetwConnection.ENDPOINT_STATE_STATUS] is [constant @GlobalScope.FAILED] until the first probe.
+				Returns what the last probe found for [param endpoint]. [constant ENDPOINT_STATE_STATUS] is [constant @GlobalScope.FAILED] until the first probe.
+			</description>
+		</method>
+		<method name="endpoint_is_browsing" qualifiers="const">
+			<return type="bool" />
+			<description>
+				The flat form of [member NetwConnection.browsing].
+			</description>
+		</method>
+		<method name="endpoint_join">
+			<return type="NetwPromise" />
+			<param index="0" name="endpoint" type="RID" />
+			<param index="1" name="settings" type="Dictionary" default="{}" />
+			<description>
+				The flat form of [method NetwConnection.join].
 			</description>
 		</method>
 		<method name="endpoint_list">
@@ -854,17 +875,18 @@
 				Checks whether [param endpoint] is reachable without joining it, then notifies [constant ENDPOINT_UPDATED]. Read the result with [method endpoint_get_state].
 			</description>
 		</method>
-		<method name="endpoint_refresh">
-			<return type="void" />
-			<description>
-				Re-probes every endpoint and notifies [constant ENDPOINT_UPDATED] for each result. Probes run serially.
-			</description>
-		</method>
 		<method name="endpoint_remove">
 			<return type="void" />
 			<param index="0" name="endpoint" type="RID" />
 			<description>
 				Removes [param endpoint] and notifies [constant ENDPOINT_REMOVED].
+			</description>
+		</method>
+		<method name="endpoint_set_browsing">
+			<return type="void" />
+			<param index="0" name="enabled" type="bool" />
+			<description>
+				The flat form of [member NetwConnection.browsing].
 			</description>
 		</method>
 		<method name="endpoint_set_param">
@@ -880,6 +902,13 @@
 				┠╴ERR_DOES_NOT_EXIST     the endpoint does not exist
 				┖╴ERR_INVALID_PARAMETER  param names anything but ENDPOINT_PARAM_DISPLAY_NAME
 				[/codeblock]
+			</description>
+		</method>
+		<method name="endpoint_set_probe_interval">
+			<return type="void" />
+			<param index="0" name="seconds" type="float" />
+			<description>
+				The flat form of [member NetwConnection.probe_interval].
 			</description>
 		</method>
 		<method name="entity_add_property_set">
@@ -3168,6 +3197,12 @@
 				[/codeblock]
 			</description>
 		</method>
+		<method name="transport_cancel_attempt">
+			<return type="void" />
+			<description>
+				The flat form of [method NetwConnection.cancel].
+			</description>
+		</method>
 		<method name="transport_cancel_peer_creation">
 			<return type="void" />
 			<param index="0" name="ticket" type="RID" />
@@ -3182,10 +3217,9 @@
 			<param index="2" name="address" type="String" />
 			<param index="3" name="settings" type="Dictionary" />
 			<param index="4" name="completed" type="Callable" />
-			<param index="5" name="progress" type="Callable" default="Callable()" />
 			<description>
 				Asks [param transport] to create a [MultiplayerPeer] and returns a ticket for [method transport_cancel_peer_creation]. [param address] is used by clients and [param settings] by hosts.
-				[param completed] is called once, in a later frame, as [code]completed(peer, error, detail)[/code]. Assign the peer to [member MultiplayerAPI.multiplayer_peer] inside this callback, before any [code]await[/code]. Returning without assigning it closes the peer. [param progress] is called as [code]progress(step, message, ratio)[/code] while it works.
+				[param completed] is called once, in a later frame, as [code]completed(peer, error, detail)[/code]. Assign the peer to [member MultiplayerAPI.multiplayer_peer] inside this callback, before any [code]await[/code]. Returning without assigning it closes the peer.
 				Returns an invalid [RID] when [param completed] is not valid.
 				[codeblock]
 				var ticket := api.transport_create_peer(
@@ -3206,10 +3240,21 @@
 				Returns the transport that creates [param peer_class] peers, or an invalid [RID].
 				[codeblock]
 				var enet := api.transport_find(&amp;"ENetMultiplayerPeer")
-				api.transport_create_peer(
-				        enet, NetwConnection.TRANSPORT_MODE_HOST, "",
-				        {port = 21253}, assign_it)
+				api.transport_host(enet, {port = 21253})
 				[/codeblock]
+			</description>
+		</method>
+		<method name="transport_get_attempt_state" qualifiers="const">
+			<return type="int" />
+			<description>
+				The flat form of [member NetwConnection.state].
+			</description>
+		</method>
+		<method name="transport_get_defaults">
+			<return type="Dictionary" />
+			<param index="0" name="transport" type="RID" />
+			<description>
+				The flat form of [method NetwConnection.defaults].
 			</description>
 		</method>
 		<method name="transport_get_param">
@@ -3224,6 +3269,23 @@
 				if caps &amp; NetwConnection.TRANSPORT_CAN_HOST:
 				    show_host_button()
 				[/codeblock]
+			</description>
+		</method>
+		<method name="transport_host">
+			<return type="NetwPromise" />
+			<param index="0" name="transport" type="RID" />
+			<param index="1" name="settings" type="Dictionary" default="{}" />
+			<description>
+				The flat form of [method NetwConnection.host].
+			</description>
+		</method>
+		<method name="transport_join">
+			<return type="NetwPromise" />
+			<param index="0" name="transport" type="RID" />
+			<param index="1" name="address" type="String" />
+			<param index="2" name="settings" type="Dictionary" default="{}" />
+			<description>
+				Joins [param address] through [param transport], as [method NetwConnection.join] joins a listed row.
 			</description>
 		</method>
 		<method name="transport_list">
@@ -3246,23 +3308,12 @@
 				[/codeblock]
 			</description>
 		</method>
-		<method name="transport_set_browse_settings">
+		<method name="transport_set_defaults">
 			<return type="int" enum="Error" />
 			<param index="0" name="transport" type="RID" />
 			<param index="1" name="settings" type="Dictionary" />
 			<description>
-				Sets how [param transport] looks for servers. Call it before [method endpoint_refresh]. The WebRTC transport accepts these settings.
-				[codeblock lang=text]
-				Dictionary
-				┠╴trackers             PackedStringArray  WebSocket tracker URLs
-				┖╴signaling_namespace  String             namespace of listed rooms
-				[/codeblock]
-				[codeblock lang=text]
-				Error
-				┠╴OK                     the settings are set
-				┠╴ERR_INVALID_PARAMETER  invalid settings
-				┖╴ERR_ALREADY_IN_USE     different settings after searching started
-				[/codeblock]
+				The flat form of [method NetwConnection.set_defaults].
 			</description>
 		</method>
 		<method name="transport_unregister">
@@ -3631,6 +3682,27 @@
 		</constant>
 		<constant name="ENDPOINT_PARAM_DISPLAY_NAME" value="2" enum="EndpointParam">
 			The name shown in a server browser. The only field [method endpoint_set_param] can change.
+		</constant>
+		<constant name="ENDPOINT_PARAM_SOURCE" value="3" enum="EndpointParam">
+			The display name of the [LobbyDirectory] that listed the endpoint, or [code]""[/code] when the game added it. Read-only.
+		</constant>
+		<constant name="ENDPOINT_STATE_FLAGS" value="0" enum="EndpointState">
+			A bitmask of [enum EndpointFlags].
+		</constant>
+		<constant name="ENDPOINT_STATE_STATUS" value="1" enum="EndpointState">
+			The [enum @GlobalScope.Error] of the last probe, or [constant @GlobalScope.FAILED] before the first one.
+		</constant>
+		<constant name="ENDPOINT_STATE_INFO" value="2" enum="EndpointState">
+			The [NetwServerInfo] from the last probe, or [code]null[/code].
+		</constant>
+		<constant name="ENDPOINT_FLAG_CALLER" value="1" enum="EndpointFlags">
+			Added with [method endpoint_add] or invited with [method LobbyDirectory.invite], so [method endpoint_remove] can remove it.
+		</constant>
+		<constant name="ENDPOINT_FLAG_AVAILABLE" value="2" enum="EndpointFlags">
+			The transport works on this platform.
+		</constant>
+		<constant name="ENDPOINT_FLAG_OBSERVED" value="4" enum="EndpointFlags">
+			The row has an answer, from a probe or from its [LobbyDirectory]. Can be set together with [constant ENDPOINT_FLAG_CALLER].
 		</constant>
 		<constant name="SCENE_PARAM_LABEL" value="0" enum="SceneParam">
 			[StringName] name of the scene. See [member NetwScene.label].
@@ -4241,7 +4313,7 @@
 			The session became [constant NetwSession.SESSION_STATE_ONLINE]. The callback receives no arguments.
 		</constant>
 		<constant name="SESSION_JOIN_FAILED" value="25" enum="Notification">
-			This peer's join was rejected. Games usually use [signal NetwConnection.join_failed]. The callback receives [code](error: int, reason: String)[/code].
+			This peer's join was rejected. Games usually use [signal NetwSession.join_failed]. The callback receives [code](error: int, reason: String)[/code].
 		</constant>
 		<constant name="SESSION_ENDED" value="26" enum="Notification">
 			The session stopped being [constant NetwSession.SESSION_STATE_ONLINE]. The callback receives no arguments.
@@ -4320,6 +4392,21 @@
 		</constant>
 		<constant name="SCENE_LIVE" value="51" enum="Notification">
 			A scene is ready on this peer, and every node in it is in the tree and ready. The callback receives [code](scene: NetwScene)[/code].
+		</constant>
+		<constant name="CONNECTION_STATE_CHANGED" value="52" enum="Notification">
+			The notification form of [signal NetwConnection.state_changed].
+		</constant>
+		<constant name="CONNECTION_PROGRESSED" value="53" enum="Notification">
+			The notification form of [signal NetwConnection.progressed].
+		</constant>
+		<constant name="CONNECTION_FAILED" value="54" enum="Notification">
+			The notification form of [signal NetwConnection.failed].
+		</constant>
+		<constant name="CONNECTION_JOIN_ADDRESS_CHANGED" value="55" enum="Notification">
+			The notification form of [signal NetwConnection.join_address_changed].
+		</constant>
+		<constant name="CONNECTION_INVITED" value="56" enum="Notification">
+			The notification form of [signal NetwConnection.invited]. The callback receives [code](endpoint: RID, from_name: String)[/code].
 		</constant>
 	</constants>
 </class>

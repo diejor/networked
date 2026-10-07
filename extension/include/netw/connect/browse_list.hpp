@@ -21,6 +21,9 @@ struct TargetRow {
     int64_t status = 0;
     godot::Ref<NetwServerInfo> info;
     bool observed = false;
+    bool invited = false;
+    double next_probe = 0.0;
+    bool probing = false;
 };
 
 class BrowseList {
@@ -41,7 +44,7 @@ public:
         const godot::RID &p_transport,
         const godot::String &p_address
     ) const;
-    bool is_caller_row(const godot::RID &p_target) const;
+    bool is_removable(const godot::RID &p_target) const;
 
     TargetRow *row(const godot::RID &p_target);
     const TargetRow *row(const godot::RID &p_target) const;
@@ -63,14 +66,24 @@ public:
         godot::LocalVector<godot::RID> &r_added,
         godot::LocalVector<godot::RID> &r_updated
     );
+    godot::RID invite(
+        const godot::StringName &p_directory,
+        godot::ObjectID p_source,
+        const godot::RID &p_transport,
+        const godot::String &p_address,
+        bool &r_minted
+    );
     void forget_source(
         godot::ObjectID p_source,
         godot::LocalVector<godot::RID> &r_dropped
     );
 
     void enqueue(const godot::RID &p_target);
-    void enqueue_caller_rows();
+    void arm_caller_rows();
+    void enqueue_due(double p_elapsed, double p_interval);
+    void drop_probes();
     bool next_to_probe(godot::RID &r_target);
+    bool begin_probe(const godot::RID &p_target);
     void probe_settled(
         const godot::RID &p_target,
         int64_t p_error,

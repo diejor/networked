@@ -10,6 +10,9 @@
 	<tutorials>
 	</tutorials>
 	<members>
+		<member name="list_interval" type="float" setter="set_list_interval" getter="get_list_interval" default="3.0">
+			Seconds between searches while [member NetwConnection.browsing] is [code]true[/code].
+		</member>
 		<member name="port" type="int" setter="set_port" getter="get_port" default="24750">
 			The first discovery port. Hosts on one machine take the next free one.
 		</member>

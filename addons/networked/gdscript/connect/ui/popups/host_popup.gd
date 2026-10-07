@@ -1,123 +1,78 @@
-## A form to host a game.
-##
-## Shows the host settings of the chosen transport.
+## A form to host a game through one of the session's transports.
 class_name HostPopup
 extends PopupPanel
 
 signal submitted(
-		peer_class: StringName,
+		transport: StringName,
 		settings: Dictionary,
 		info: NetwServerInfo,
-		username: StringName,
+		username: String,
 		join_args: Array,
 )
 
-var transport_defaults: Array[ConnectTransportConfig] = []
-var _connection: NetwConnection
-var _transports: Array[Dictionary] = []
-var _settings := ConnectFieldList.new()
-var _join_args := ConnectFieldList.new()
+var transports: Array[Dictionary] = []
+var settings := ConnectFieldList.new()
+var join_args := ConnectFieldList.new()
 
-@onready var _backend_picker: OptionButton = %BackendPicker
-@onready var _settings_container: VBoxContainer = %SettingsContainer
-@onready var _name_edit: LineEdit = %NameEdit
-@onready var _username_edit: LineEdit = %UsernameEdit
-@onready var _args_container: VBoxContainer = %ArgsContainer
-@onready var _confirm_button: Button = %ConfirmButton
-@onready var _cancel_button: Button = %CancelButton
+@onready var transport_picker: OptionButton = %BackendPicker
+@onready var settings_container: VBoxContainer = %SettingsContainer
+@onready var args_container: VBoxContainer = %ArgsContainer
+@onready var name_edit: LineEdit = %NameEdit
+@onready var username_edit: LineEdit = %UsernameEdit
+@onready var confirm_button: Button = %ConfirmButton
+@onready var cancel_button: Button = %CancelButton
 
 
 func _ready() -> void:
-	visible = false
-	popup_window = false
-	exclusive = true
-	_confirm_button.pressed.connect(_on_confirm)
-	_cancel_button.pressed.connect(hide)
-	_backend_picker.item_selected.connect(_on_backend_changed)
+	hide()
+	transport_picker.item_selected.connect(on_transport_selected)
+	confirm_button.pressed.connect(on_confirm_pressed)
+	cancel_button.pressed.connect(hide)
 
 
-## Opens the form, listing the transports that can host on this build.
-func open_host(
-		handle: NetwConnection,
-		default_username: String,
-) -> void:
-	_connection = handle
-	_name_edit.text = ""
-	_username_edit.text = default_username
-	_populate_backend_picker()
-	_populate_join_args()
+func open(connection: NetwConnection, username: String) -> void:
+	var hostable := (
+			NetwConnection.TRANSPORT_AVAILABLE
+			| NetwConnection.TRANSPORT_CAN_HOST
+	)
+	transports.clear()
+	transport_picker.clear()
+	for transport in connection.transports():
+		if transport.capabilities & hostable == hostable:
+			transports.append(transport)
+			transport_picker.add_item(transport.display_name)
+	name_edit.text = ""
+	username_edit.text = username
+	join_args.render_schema(args_container, connection.join_schema())
+	confirm_button.disabled = transports.is_empty()
+	if not transports.is_empty():
+		on_transport_selected(0)
 	popup_centered()
 
 
-func _populate_backend_picker() -> void:
-	_backend_picker.clear()
-	_transports.clear()
-	if _connection != null:
-		var hostable := (
-				NetwConnection.TRANSPORT_AVAILABLE
-				| NetwConnection.TRANSPORT_CAN_HOST
-		)
-		for transport: Dictionary in _connection.transports():
-			var caps := int(transport.get("capabilities", 0))
-			if caps & hostable != hostable:
-				continue
-			_transports.append(transport)
-			_backend_picker.add_item(String(transport.get("display_name", "")))
-	if _backend_picker.item_count > 0:
-		_backend_picker.selected = 0
-	_populate_settings()
-
-
-func _selected_transport() -> Dictionary:
-	if _transports.is_empty():
-		return { }
-	var idx := maxi(0, _backend_picker.selected)
-	if idx >= _transports.size():
-		return { }
-	return ConnectTransportConfig.apply_to(
-		_transports[idx],
-		transport_defaults,
+func on_transport_selected(index: int) -> void:
+	settings.render_settings(
+		settings_container,
+		transports[index].host_settings,
 	)
 
 
-func _on_backend_changed(_index: int) -> void:
-	_populate_settings()
-
-
-func _populate_settings() -> void:
-	var transport := _selected_transport()
-	if _connection == null or transport.is_empty():
-		_settings.render_settings(_settings_container, { })
-		return
-	_settings.render_settings(
-		_settings_container,
-		transport.get("host_settings", { }),
-	)
-
-
-func _populate_join_args() -> void:
-	if _connection == null:
-		_join_args.render_schema(_args_container, [])
-		return
-	_join_args.render_schema(_args_container, _connection.join_schema())
-
-
-func _on_confirm() -> void:
-	var transport := _selected_transport()
-	if transport.is_empty():
-		return
-	var peer_class: StringName = transport.get("peer_class")
-	var settings := _settings.as_dictionary()
-	var typed_name := _name_edit.text.strip_edges()
+func on_confirm_pressed() -> void:
+	var chosen := settings.as_dictionary()
 	var info := NetwServerInfo.new()
 	info.motd = (
-			typed_name if not typed_name.is_empty()
-			else ConnectBrowser.PLACEHOLDER_SERVER_NAME
+			name_edit.text if not name_edit.text.is_empty()
+			else name_edit.placeholder_text
 	)
-	info.max_players = int(settings.get("max_players", 0))
-
-	var typed := _username_edit.text.strip_edges()
-	var username := StringName(typed) if not typed.is_empty() else &"Player"
-
+	info.max_players = chosen.get("max_players", 0)
 	hide()
-	submitted.emit(peer_class, settings, info, username, _join_args.as_array())
+	submitted.emit(
+		transports[transport_picker.selected].peer_class,
+		chosen,
+		info,
+		(
+				username_edit.text if not username_edit.text.is_empty()
+				else username_edit.placeholder_text
+		),
+		join_args.as_array(),
+	)

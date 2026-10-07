@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwEndpoint" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		A server a player can join, listed in [member NetwConnection.endpoints].
+	</brief_description>
+	<description>
+		The same row is always the same [NetwEndpoint], so it can be compared with [code]==[/code] and used as a [Dictionary] key.
+		[codeblock]
+		var endpoint: NetwEndpoint
+
+		func bind(row: NetwEndpoint) -&gt; void:
+		    endpoint = row
+		    endpoint.changed.connect(on_changed)
+		    on_changed()
+
+		func on_changed() -&gt; void:
+		    name_label.text = endpoint.display_name
+		    players_label.text = str(endpoint.info.players)
+		    dot.modulate = STATUS_COLORS[endpoint.status]
+		[/codeblock]
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="probe">
+			<return type="void" />
+			<description>
+				Asks the server for its [member status] and [member info] again. Does nothing once [member is_listed] is [code]false[/code].
+			</description>
+		</method>
+	</methods>
+	<members>
+		<member name="address" type="String" setter="" getter="get_address" default="&quot;&quot;">
+		</member>
+		<member name="display_name" type="String" setter="" getter="get_display_name" default="&quot;&quot;">
+		</member>
+		<member name="info" type="NetwServerInfo" setter="" getter="get_info">
+			What the server last advertised, or a default [NetwServerInfo] before it answers.
+		</member>
+		<member name="is_listed" type="bool" setter="" getter="get_is_listed" default="false">
+			[code]false[/code] once the row is removed. Only [member peer_class] and [member address] keep their values after that.
+		</member>
+		<member name="peer_class" type="StringName" setter="" getter="get_peer_class" default="&amp;&quot;&quot;">
+		</member>
+		<member name="source" type="String" setter="" getter="get_source" default="&quot;&quot;">
+			The name of the [LobbyDirectory] that listed this row, or [code]""[/code] when the game added it with [method NetwConnection.add].
+		</member>
+		<member name="status" type="int" setter="" getter="get_status" enum="NetwEndpoint.Status" default="0">
+			What the last probe answered.
+		</member>
+	</members>
+	<signals>
+		<signal name="changed">
+			<description>
+				Emitted after the row is probed or listed again.
+			</description>
+		</signal>
+	</signals>
+	<constants>
+		<constant name="STATUS_UNKNOWN" value="0" enum="Status">
+			No answer yet, or the server does not answer probes.
+		</constant>
+		<constant name="STATUS_ONLINE" value="1" enum="Status">
+			The server answered.
+		</constant>
+		<constant name="STATUS_FULL" value="2" enum="Status">
+			The server answered that it is full.
+		</constant>
+		<constant name="STATUS_UNREACHABLE" value="3" enum="Status">
+			No answer arrived, or the probe failed.
+		</constant>
+		<constant name="STATUS_INCOMPATIBLE" value="4" enum="Status">
+			Another game or another build of this game answered.
+		</constant>
+		<constant name="STATUS_UNSUPPORTED" value="5" enum="Status">
+			The transport does not work on this platform.
+		</constant>
+	</constants>
+</class>

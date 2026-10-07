@@ -5,6 +5,8 @@
 
 [node name="HostPopup" type="PopupPanel"]
 size = Vector2i(560, 640)
+popup_window = false
+exclusive = true
 theme = ExtResource("2_theme")
 script = ExtResource("1_host")
 
@@ -85,6 +87,7 @@ text = "Username"
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
+placeholder_text = "Player"
 
 [node name="Spacer" type="Control" parent="Margin/VBox"]
 layout_mode = 2

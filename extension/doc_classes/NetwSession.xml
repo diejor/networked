@@ -17,7 +17,7 @@
 		        show_message("Kicked: %s" % detail)
 		[/codeblock]
 		There is one handle per session, so it is safe to keep it across an await.
-		Connecting is done as you would normally do with [SceneMultiplayer], by assigning [member MultiplayerAPI.multiplayer_peer]. See [NetwConnection] to manage endpoints and [method Netw.prepare_join] to join as a player.
+		Connecting is done as you would normally do with [SceneMultiplayer], by assigning [member MultiplayerAPI.multiplayer_peer]. [member connection] finds servers and joins or hosts one, and [method Netw.prepare_join] names the player who joins.
 		[b]Moving the server[/b]
 		The session survives the server leaving when its [MultiplayerPeer] can hand the server role to another peer. Such a peer declares this signal, and [method transfer_server] works when it also has the method.
 		[codeblock]
@@ -219,7 +219,7 @@
 			[code]true[/code] when this peer has its own player, at [constant ROLE_CLIENT] and [constant ROLE_LISTEN_SERVER].
 		</member>
 		<member name="is_online" type="bool" setter="" getter="get_is_online" default="false">
-			Whether a peer is assigned and connected.
+			Whether a peer is assigned and connected. It stays [code]true[/code] until [signal exited], so it is still [code]true[/code] while [signal exiting] runs and the session's scenes are freed.
 		</member>
 		<member name="local_player" type="NetwPlayer" setter="" getter="get_local_player">
 			The [NetwPlayer] of this peer, [code]null[/code] until [signal local_joined].

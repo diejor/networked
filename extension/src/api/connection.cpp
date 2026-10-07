@@ -13,9 +13,13 @@ namespace netw {
 namespace {
 
 const char *SIG_ENDPOINT_ADDED = "endpoint_added";
-const char *SIG_JOIN_FAILED = "join_failed";
 const char *SIG_ENDPOINT_REMOVED = "endpoint_removed";
-const char *SIG_ENDPOINT_UPDATED = "endpoint_updated";
+const char *SIG_ENDPOINT_CHANGED = "changed";
+const char *SIG_STATE_CHANGED = "state_changed";
+const char *SIG_PROGRESSED = "progressed";
+const char *SIG_FAILED = "failed";
+const char *SIG_JOIN_ADDRESS_CHANGED = "join_address_changed";
+const char *SIG_INVITED = "invited";
 
 } // namespace
 
@@ -33,20 +37,36 @@ void NetwConnection::bind_session(NetwMultiplayer *p_session) {
     }
 }
 
-void NetwConnection::announce_join_failed(
-    int64_t p_error,
-    const String &p_reason
-) {
-    emit_signal(StringName(SIG_JOIN_FAILED), p_error, p_reason);
+void NetwConnection::announce_state_changed(int64_t p_state) {
+    emit_signal(StringName(SIG_STATE_CHANGED), p_state);
 }
 
-void NetwConnection::remember_endpoint(const RID &p_target) {
-    if (endpoint_keys.has(p_target)) {
-        return;
+void NetwConnection::announce_progressed(
+    const String &p_message,
+    double p_ratio
+) {
+    emit_signal(StringName(SIG_PROGRESSED), p_message, p_ratio);
+}
+
+bool NetwConnection::announce_failed(int64_t p_error, const String &p_reason) {
+    const bool heard = has_connections(StringName(SIG_FAILED));
+    emit_signal(StringName(SIG_FAILED), p_error, p_reason);
+    return heard;
+}
+
+void NetwConnection::announce_join_address_changed(const String &p_address) {
+    emit_signal(StringName(SIG_JOIN_ADDRESS_CHANGED), p_address);
+}
+
+Ref<NetwEndpoint> NetwConnection::remember_endpoint(const RID &p_target) {
+    const HashMap<RID, Ref<NetwEndpoint>>::ConstIterator found
+        = endpoints_by_row.find(p_target);
+    if (found != endpoints_by_row.end()) {
+        return found->value;
     }
     NetwMultiplayer *api = session();
-    if (api == nullptr) {
-        return;
+    if (api == nullptr || !p_target.is_valid()) {
+        return Ref<NetwEndpoint>();
     }
     const RID transport_rid = api->endpoint_get_param(
         p_target,
@@ -54,52 +74,53 @@ void NetwConnection::remember_endpoint(const RID &p_target) {
     );
     const StringName peer_class = api->transport_class_of(transport_rid);
     if (peer_class.is_empty()) {
-        return;
+        return Ref<NetwEndpoint>();
     }
     const String address = api->endpoint_get_param(
         p_target,
         NetwMultiplayer::ENDPOINT_PARAM_ADDRESS
     );
-    endpoint_keys[p_target] = EndpointKey{peer_class, address};
+    Ref<NetwEndpoint> made;
+    made.instantiate();
+    made->bind_to(api, p_target, peer_class, address);
+    endpoints_by_row.insert(p_target, made);
+    return made;
 }
 
 void NetwConnection::announce_endpoint_added(const RID &p_target) {
-    remember_endpoint(p_target);
-    const HashMap<RID, EndpointKey>::ConstIterator found
-        = endpoint_keys.find(p_target);
-    if (found == endpoint_keys.end()) {
-        return;
+    const Ref<NetwEndpoint> held = remember_endpoint(p_target);
+    if (held.is_valid()) {
+        emit_signal(StringName(SIG_ENDPOINT_ADDED), held);
     }
-    emit_signal(
-        StringName(SIG_ENDPOINT_ADDED),
-        found->value.peer_class,
-        found->value.address
-    );
 }
 
 void NetwConnection::announce_endpoint_removed(const RID &p_target) {
-    const HashMap<RID, EndpointKey>::ConstIterator found
-        = endpoint_keys.find(p_target);
-    if (found == endpoint_keys.end()) {
+    const HashMap<RID, Ref<NetwEndpoint>>::ConstIterator found
+        = endpoints_by_row.find(p_target);
+    if (found == endpoints_by_row.end()) {
         return;
     }
-    const EndpointKey key = found->value;
-    endpoint_keys.erase(p_target);
-    emit_signal(StringName(SIG_ENDPOINT_REMOVED), key.peer_class, key.address);
+    const Ref<NetwEndpoint> held = found->value;
+    endpoints_by_row.erase(p_target);
+    held->unlist();
+    emit_signal(StringName(SIG_ENDPOINT_REMOVED), held);
+}
+
+void NetwConnection::announce_invited(
+    const RID &p_target,
+    const String &p_from_name
+) {
+    const Ref<NetwEndpoint> held = remember_endpoint(p_target);
+    if (held.is_valid()) {
+        emit_signal(StringName(SIG_INVITED), held, p_from_name);
+    }
 }
 
 void NetwConnection::announce_endpoint_updated(const RID &p_target) {
-    remember_endpoint(p_target);
-    const HashMap<RID, EndpointKey>::ConstIterator found
-        = endpoint_keys.find(p_target);
-    if (found == endpoint_keys.end()) {
-        return;
+    const Ref<NetwEndpoint> held = remember_endpoint(p_target);
+    if (held.is_valid()) {
+        held->emit_signal(StringName(SIG_ENDPOINT_CHANGED));
     }
-    emit_signal(
-        StringName(SIG_ENDPOINT_UPDATED),
-        found->value.peer_class,
-        found->value.address
-    );
 }
 
 RID NetwConnection::create_peer(
@@ -107,8 +128,7 @@ RID NetwConnection::create_peer(
     NetwConnection::TransportMode p_mode,
     const String &p_address,
     const Dictionary &p_settings,
-    const Callable &p_completed,
-    const Callable &p_progress
+    const Callable &p_completed
 ) {
     NetwMultiplayer *api = session();
     if (api == nullptr) {
@@ -119,8 +139,7 @@ RID NetwConnection::create_peer(
         p_mode,
         p_address,
         p_settings,
-        p_completed,
-        p_progress
+        p_completed
     );
 }
 
@@ -129,6 +148,69 @@ void NetwConnection::cancel_peer_creation(const RID &p_ticket) {
     if (api != nullptr) {
         api->transport_cancel_peer_creation(p_ticket);
     }
+}
+
+NetwConnection::State NetwConnection::get_state() const {
+    NetwMultiplayer *api = session();
+    return api != nullptr ? State(api->transport_get_attempt_state())
+                          : STATE_OFFLINE;
+}
+
+Ref<NetwPromise> NetwConnection::join(
+    const Ref<NetwEndpoint> &p_endpoint,
+    const Dictionary &p_settings
+) {
+    NetwMultiplayer *api = session();
+    if (api == nullptr) {
+        return NetwPromise::rejected(ERR_UNCONFIGURED, "The session closed.");
+    }
+    if (p_endpoint.is_null()) {
+        return NetwPromise::rejected(
+            ERR_INVALID_PARAMETER,
+            "NetwConnection.join needs an endpoint."
+        );
+    }
+    return api->endpoint_join(p_endpoint->get_row(), p_settings);
+}
+
+Ref<NetwPromise> NetwConnection::host(
+    const Variant &p_transport,
+    const Dictionary &p_settings
+) {
+    NetwMultiplayer *api = session();
+    if (api == nullptr) {
+        return NetwPromise::rejected(ERR_UNCONFIGURED, "The session closed.");
+    }
+    return api->transport_host(resolve_transport(p_transport), p_settings);
+}
+
+void NetwConnection::cancel() {
+    NetwMultiplayer *api = session();
+    if (api != nullptr) {
+        api->transport_cancel_attempt();
+    }
+}
+
+Error NetwConnection::set_defaults(
+    const Variant &p_transport,
+    const Dictionary &p_settings
+) {
+    NetwMultiplayer *api = session();
+    if (api == nullptr) {
+        return ERR_UNCONFIGURED;
+    }
+    return api->transport_set_defaults(
+        resolve_transport(p_transport),
+        p_settings
+    );
+}
+
+Dictionary NetwConnection::defaults(const Variant &p_transport) const {
+    NetwMultiplayer *api = session();
+    if (api == nullptr) {
+        return Dictionary();
+    }
+    return api->transport_get_defaults(resolve_transport(p_transport));
 }
 
 String NetwConnection::get_join_address() const {
@@ -220,53 +302,6 @@ Dictionary NetwConnection::transport_snapshot(const RID &p_transport) const {
     return snapshot;
 }
 
-Dictionary NetwConnection::endpoint_snapshot(const RID &p_target) const {
-    Dictionary snapshot;
-    NetwMultiplayer *api = session();
-    if (api == nullptr || !p_target.is_valid()) {
-        return snapshot;
-    }
-    const RID transport_rid = api->endpoint_get_param(
-        p_target,
-        NetwMultiplayer::ENDPOINT_PARAM_TRANSPORT
-    );
-    const StringName peer_class = api->transport_class_of(transport_rid);
-    if (peer_class.is_empty()) {
-        return snapshot;
-    }
-    const int64_t flags = api->endpoint_get_state(
-        p_target,
-        NetwConnection::ENDPOINT_STATE_FLAGS
-    );
-    snapshot["peer_class"] = peer_class;
-    snapshot["address"] = api->endpoint_get_param(
-        p_target,
-        NetwMultiplayer::ENDPOINT_PARAM_ADDRESS
-    );
-    snapshot["display_name"] = api->endpoint_get_param(
-        p_target,
-        NetwMultiplayer::ENDPOINT_PARAM_DISPLAY_NAME
-    );
-    const Variant status = api->endpoint_get_state(
-        p_target,
-        NetwConnection::ENDPOINT_STATE_STATUS
-    );
-    snapshot["status"]
-        = status.get_type() == Variant::NIL ? Variant(int64_t(FAILED)) : status;
-    snapshot["source"] = api->endpoint_source(p_target);
-    snapshot["info"] = api->endpoint_get_state(
-        p_target,
-        NetwConnection::ENDPOINT_STATE_INFO
-    );
-    snapshot["is_caller_added"]
-        = (flags & NetwConnection::ENDPOINT_FLAG_CALLER) != 0;
-    snapshot["is_available"]
-        = (flags & NetwConnection::ENDPOINT_FLAG_AVAILABLE) != 0;
-    snapshot["is_observed"]
-        = (flags & NetwConnection::ENDPOINT_FLAG_OBSERVED) != 0;
-    return snapshot;
-}
-
 Array NetwConnection::transports() const {
     NetwMultiplayer *api = session();
     Array snapshots;
@@ -301,116 +336,101 @@ Array NetwConnection::join_schema() const {
     return api != nullptr ? api->session_get_join_schema() : Array();
 }
 
-Array NetwConnection::endpoints() const {
+TypedArray<NetwEndpoint> NetwConnection::endpoints() {
     NetwMultiplayer *api = session();
-    Array snapshots;
+    TypedArray<NetwEndpoint> listed;
     if (api == nullptr) {
-        return snapshots;
+        return listed;
     }
     for (const Variant &entry : api->endpoint_list()) {
-        snapshots.push_back(endpoint_snapshot(entry));
+        const Ref<NetwEndpoint> held = remember_endpoint(entry);
+        if (held.is_valid()) {
+            listed.push_back(held);
+        }
     }
-    return snapshots;
+    return listed;
 }
 
-Dictionary NetwConnection::endpoint(
-    const Variant &p_transport,
-    const String &p_address
-) const {
-    return endpoint_snapshot(resolve_endpoint(p_transport, p_address));
-}
-
-bool NetwConnection::endpoint_add(
+Ref<NetwEndpoint> NetwConnection::add(
     const Variant &p_transport,
     const String &p_address,
     const String &p_display_name
 ) {
     NetwMultiplayer *api = session();
     if (api == nullptr) {
-        return false;
+        return Ref<NetwEndpoint>();
     }
     const RID transport_rid = resolve_transport(p_transport);
     if (!transport_rid.is_valid()) {
-        return false;
+        return Ref<NetwEndpoint>();
     }
-    const RID target
-        = api->endpoint_add(transport_rid, p_address, p_display_name);
-    if (target.is_valid()) {
-        remember_endpoint(target);
-    }
-    return target.is_valid();
+    return remember_endpoint(
+        api->endpoint_add(transport_rid, p_address, p_display_name)
+    );
 }
 
-void NetwConnection::endpoint_remove(
+Ref<NetwEndpoint> NetwConnection::find(
     const Variant &p_transport,
     const String &p_address
 ) {
-    NetwMultiplayer *api = session();
-    if (api == nullptr) {
-        return;
-    }
-    const RID target = resolve_endpoint(p_transport, p_address);
-    if (target.is_valid()) {
-        api->endpoint_remove(target);
-    }
+    return remember_endpoint(resolve_endpoint(p_transport, p_address));
 }
 
-Error NetwConnection::endpoint_set_display_name(
-    const Variant &p_transport,
-    const String &p_address,
-    const String &p_display_name
-) {
+Error NetwConnection::remove(const Ref<NetwEndpoint> &p_endpoint) {
     NetwMultiplayer *api = session();
     if (api == nullptr) {
         return ERR_UNCONFIGURED;
     }
-    const RID target = resolve_endpoint(p_transport, p_address);
-    if (!target.is_valid()) {
+    if (p_endpoint.is_null()) {
+        return ERR_INVALID_PARAMETER;
+    }
+    const RID target = p_endpoint->get_row();
+    const HashMap<RID, Ref<NetwEndpoint>>::ConstIterator found
+        = endpoints_by_row.find(target);
+    if (found == endpoints_by_row.end()
+        || found->value.ptr() != p_endpoint.ptr()) {
         return ERR_DOES_NOT_EXIST;
     }
-    return api->endpoint_set_param(
+    const int64_t flags = api->endpoint_get_state(
         target,
-        NetwMultiplayer::ENDPOINT_PARAM_DISPLAY_NAME,
-        p_display_name
+        NetwMultiplayer::ENDPOINT_STATE_FLAGS
     );
+    if ((flags & NetwMultiplayer::ENDPOINT_FLAG_CALLER) == 0) {
+        return ERR_INVALID_PARAMETER;
+    }
+    api->endpoint_remove(target);
+    return OK;
 }
 
-void NetwConnection::endpoint_probe(
-    const Variant &p_transport,
-    const String &p_address
-) {
-    NetwMultiplayer *api = session();
-    if (api == nullptr) {
-        return;
-    }
-    const RID target = resolve_endpoint(p_transport, p_address);
-    if (target.is_valid()) {
-        api->endpoint_probe(target);
-    }
-}
-
-Error NetwConnection::transport_set_browse_settings(
-    const Variant &p_transport,
-    const Dictionary &p_settings
-) {
-    NetwMultiplayer *api = session();
-    if (api == nullptr) {
-        return ERR_UNCONFIGURED;
-    }
-    return api->transport_set_browse_settings(
-        resolve_transport(p_transport),
-        p_settings
-    );
-}
-
-void NetwConnection::endpoint_refresh() {
+void NetwConnection::set_browsing(bool p_browsing) {
     NetwMultiplayer *api = session();
     if (api != nullptr) {
-        api->endpoint_refresh();
+        api->endpoint_set_browsing(p_browsing);
     }
+}
+
+bool NetwConnection::is_browsing() const {
+    NetwMultiplayer *api = session();
+    return api != nullptr && api->endpoint_is_browsing();
+}
+
+void NetwConnection::set_probe_interval(double p_seconds) {
+    NetwMultiplayer *api = session();
+    if (api != nullptr) {
+        api->endpoint_set_probe_interval(p_seconds);
+    }
+}
+
+double NetwConnection::get_probe_interval() const {
+    NetwMultiplayer *api = session();
+    return api != nullptr ? api->endpoint_get_probe_interval() : 10.0;
 }
 
 void NetwConnection::_bind_methods() {
+    BIND_ENUM_CONSTANT(STATE_OFFLINE);
+    BIND_ENUM_CONSTANT(STATE_CREATING);
+    BIND_ENUM_CONSTANT(STATE_CONNECTING);
+    BIND_ENUM_CONSTANT(STATE_ONLINE);
     BIND_ENUM_CONSTANT(TRANSPORT_MODE_HOST);
     BIND_ENUM_CONSTANT(TRANSPORT_MODE_CLIENT);
     BIND_ENUM_CONSTANT(TRANSPORT_AVAILABLE);
@@ -418,12 +438,6 @@ void NetwConnection::_bind_methods() {
     BIND_ENUM_CONSTANT(TRANSPORT_CAN_PROBE);
     BIND_ENUM_CONSTANT(TRANSPORT_CAN_BROWSE);
     BIND_ENUM_CONSTANT(TRANSPORT_ACCEPTS_EMPTY_ADDRESS);
-    BIND_ENUM_CONSTANT(ENDPOINT_STATE_FLAGS);
-    BIND_ENUM_CONSTANT(ENDPOINT_STATE_STATUS);
-    BIND_ENUM_CONSTANT(ENDPOINT_STATE_INFO);
-    BIND_ENUM_CONSTANT(ENDPOINT_FLAG_CALLER);
-    BIND_ENUM_CONSTANT(ENDPOINT_FLAG_AVAILABLE);
-    BIND_ENUM_CONSTANT(ENDPOINT_FLAG_OBSERVED);
     ClassDB::bind_method(
         D_METHOD(
             "create_peer",
@@ -431,15 +445,33 @@ void NetwConnection::_bind_methods() {
             "mode",
             "address",
             "settings",
-            "completed",
-            "progress"
+            "completed"
         ),
-        &NetwConnection::create_peer,
-        DEFVAL(Callable())
+        &NetwConnection::create_peer
     );
     ClassDB::bind_method(
         D_METHOD("cancel_peer_creation", "ticket"),
         &NetwConnection::cancel_peer_creation
+    );
+    ClassDB::bind_method(D_METHOD("get_state"), &NetwConnection::get_state);
+    ClassDB::bind_method(
+        D_METHOD("join", "endpoint", "settings"),
+        &NetwConnection::join,
+        DEFVAL(Dictionary())
+    );
+    ClassDB::bind_method(
+        D_METHOD("host", "transport", "settings"),
+        &NetwConnection::host,
+        DEFVAL(Dictionary())
+    );
+    ClassDB::bind_method(D_METHOD("cancel"), &NetwConnection::cancel);
+    ClassDB::bind_method(
+        D_METHOD("set_defaults", "transport", "settings"),
+        &NetwConnection::set_defaults
+    );
+    ClassDB::bind_method(
+        D_METHOD("defaults", "transport"),
+        &NetwConnection::defaults
     );
 
     ClassDB::bind_method(
@@ -467,42 +499,53 @@ void NetwConnection::_bind_methods() {
 
     ClassDB::bind_method(D_METHOD("get_endpoints"), &NetwConnection::endpoints);
     ClassDB::bind_method(
-        D_METHOD("endpoint", "transport", "address"),
-        &NetwConnection::endpoint
-    );
-    ClassDB::bind_method(
-        D_METHOD("endpoint_add", "transport", "address", "display_name"),
-        &NetwConnection::endpoint_add,
+        D_METHOD("add", "transport", "address", "display_name"),
+        &NetwConnection::add,
         DEFVAL(String())
     );
     ClassDB::bind_method(
-        D_METHOD("endpoint_remove", "transport", "address"),
-        &NetwConnection::endpoint_remove
+        D_METHOD("find", "transport", "address"),
+        &NetwConnection::find
     );
     ClassDB::bind_method(
-        D_METHOD(
-            "endpoint_set_display_name",
-            "transport",
-            "address",
-            "display_name"
-        ),
-        &NetwConnection::endpoint_set_display_name
+        D_METHOD("remove", "endpoint"),
+        &NetwConnection::remove
     );
     ClassDB::bind_method(
-        D_METHOD("endpoint_probe", "transport", "address"),
-        &NetwConnection::endpoint_probe
+        D_METHOD("set_browsing", "browsing"),
+        &NetwConnection::set_browsing
     );
     ClassDB::bind_method(
-        D_METHOD("transport_set_browse_settings", "transport", "settings"),
-        &NetwConnection::transport_set_browse_settings
+        D_METHOD("is_browsing"),
+        &NetwConnection::is_browsing
     );
     ClassDB::bind_method(
-        D_METHOD("endpoint_refresh"),
-        &NetwConnection::endpoint_refresh
+        D_METHOD("set_probe_interval", "seconds"),
+        &NetwConnection::set_probe_interval
+    );
+    ClassDB::bind_method(
+        D_METHOD("get_probe_interval"),
+        &NetwConnection::get_probe_interval
     );
 
     ADD_SIGNAL(MethodInfo(
-        SIG_JOIN_FAILED,
+        SIG_STATE_CHANGED,
+        PropertyInfo(
+            Variant::INT,
+            "state",
+            PROPERTY_HINT_NONE,
+            "",
+            PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_CLASS_IS_ENUM,
+            "NetwConnection.State"
+        )
+    ));
+    ADD_SIGNAL(MethodInfo(
+        SIG_PROGRESSED,
+        PropertyInfo(Variant::STRING, "message"),
+        PropertyInfo(Variant::FLOAT, "ratio")
+    ));
+    ADD_SIGNAL(MethodInfo(
+        SIG_FAILED,
         PropertyInfo(
             Variant::INT,
             "error",
@@ -514,19 +557,48 @@ void NetwConnection::_bind_methods() {
         PropertyInfo(Variant::STRING, "reason")
     ));
     ADD_SIGNAL(MethodInfo(
-        SIG_ENDPOINT_ADDED,
-        PropertyInfo(Variant::STRING_NAME, "peer_class"),
+        SIG_JOIN_ADDRESS_CHANGED,
         PropertyInfo(Variant::STRING, "address")
+    ));
+    ADD_SIGNAL(MethodInfo(
+        SIG_INVITED,
+        PropertyInfo(
+            Variant::OBJECT,
+            "endpoint",
+            PROPERTY_HINT_RESOURCE_TYPE,
+            "NetwEndpoint"
+        ),
+        PropertyInfo(Variant::STRING, "from_name")
+    ));
+    ADD_PROPERTY(
+        PropertyInfo(
+            Variant::INT,
+            "state",
+            PROPERTY_HINT_NONE,
+            "",
+            PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_CLASS_IS_ENUM,
+            "NetwConnection.State"
+        ),
+        "",
+        "get_state"
+    );
+    ADD_SIGNAL(MethodInfo(
+        SIG_ENDPOINT_ADDED,
+        PropertyInfo(
+            Variant::OBJECT,
+            "endpoint",
+            PROPERTY_HINT_RESOURCE_TYPE,
+            "NetwEndpoint"
+        )
     ));
     ADD_SIGNAL(MethodInfo(
         SIG_ENDPOINT_REMOVED,
-        PropertyInfo(Variant::STRING_NAME, "peer_class"),
-        PropertyInfo(Variant::STRING, "address")
-    ));
-    ADD_SIGNAL(MethodInfo(
-        SIG_ENDPOINT_UPDATED,
-        PropertyInfo(Variant::STRING_NAME, "peer_class"),
-        PropertyInfo(Variant::STRING, "address")
+        PropertyInfo(
+            Variant::OBJECT,
+            "endpoint",
+            PROPERTY_HINT_RESOURCE_TYPE,
+            "NetwEndpoint"
+        )
     ));
 
     ADD_PROPERTY(
@@ -535,9 +607,29 @@ void NetwConnection::_bind_methods() {
         "get_join_address"
     );
     ADD_PROPERTY(
-        PropertyInfo(Variant::ARRAY, "endpoints"),
+        PropertyInfo(
+            Variant::ARRAY,
+            "endpoints",
+            PROPERTY_HINT_ARRAY_TYPE,
+            "NetwEndpoint"
+        ),
         "",
         "get_endpoints"
+    );
+    ADD_PROPERTY(
+        PropertyInfo(Variant::BOOL, "browsing"),
+        "set_browsing",
+        "is_browsing"
+    );
+    ADD_PROPERTY(
+        PropertyInfo(
+            Variant::FLOAT,
+            "probe_interval",
+            PROPERTY_HINT_RANGE,
+            "0,60,0.1,or_greater,suffix:s"
+        ),
+        "set_probe_interval",
+        "get_probe_interval"
     );
 }
 

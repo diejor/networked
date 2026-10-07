@@ -303,7 +303,7 @@ Called with ``peer`` once it is assigned to the session. Keep anything needed to
 
 |void| **_browse**\ (\ ) |virtual| :ref:`🔗<class_NetwTransport_private_method__browse>`
 
-Called by :ref:`NetwMultiplayer.endpoint_refresh()<class_NetwMultiplayer_method_endpoint_refresh>` when :ref:`_can_browse()<class_NetwTransport_private_method__can_browse>` is ``true``. Report the servers found with :ref:`publish_targets()<class_NetwTransport_method_publish_targets>`. Call it again whenever the list changes, for example from :ref:`_poll()<class_NetwTransport_private_method__poll>`.
+Called when :ref:`NetwConnection.browsing<class_NetwConnection_property_browsing>` turns ``true`` and :ref:`_can_browse()<class_NetwTransport_private_method__can_browse>` is ``true``. Report the servers found with :ref:`publish_targets()<class_NetwTransport_method_publish_targets>`. Call it again whenever the list changes, for example from :ref:`_poll()<class_NetwTransport_private_method__poll>`.
 
 .. rst-class:: classref-item-separator
 
@@ -1012,7 +1012,7 @@ Returns ``true`` when :ref:`peer_class_of()<class_NetwTransport_method_peer_clas
 
 |void| **report**\ (\ ticket\: :godot:`RID`, step\: :godot:`StringName`, message\: :godot:`String`, ratio\: :godot:`float`\ ) :ref:`🔗<class_NetwTransport_method_report>`
 
-Reports progress on ``ticket`` to the ``progress`` callback of :ref:`NetwMultiplayer.transport_create_peer()<class_NetwMultiplayer_method_transport_create_peer>`.
+Reports progress on ``ticket`` through :ref:`NetwConnection.progressed<class_NetwConnection_signal_progressed>`.
 
 .. rst-class:: classref-item-separator
 

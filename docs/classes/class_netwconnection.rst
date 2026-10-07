@@ -12,39 +12,60 @@ NetwConnection
 
 **Inherits:** :godot:`RefCounted`
 
-A connection model that builds on top of :godot:`MultiplayerAPI`.
+Finds servers, and joins or hosts one for its session.
 
 .. rst-class:: classref-introduction-group
 
 Description
 -----------
 
-:godot:`MultiplayerAPI` normally connects when a peer is assigned.
+One attempt runs at a time, and :ref:`state<class_NetwConnection_property_state>` follows any peer the session is given, including one a game assigns itself.
 
 ::
 
-    var peer := ENetMultiplayerPeer.new()
-    peer.create_client("203.0.113.42", 21253)
-    multiplayer.multiplayer_peer = peer
+    @onready var connection: NetwConnection = Netw.session(self).connection
 
-\ After :godot:`MultiplayerAPI.multiplayer_peer <MultiplayerAPI#class_MultiplayerAPI_property_multiplayer_peer>` has been assigned, the :godot:`MultiplayerAPI` is initialized and the peer connects.
+    func _ready() -> void:
+        connection.endpoint_added.connect(on_endpoint_added)
+        connection.endpoint_removed.connect(on_endpoint_removed)
+        connection.state_changed.connect(on_state_changed)
+        connection.failed.connect(on_failed)
+        visibility_changed.connect(on_visibility_changed)
+        connection.browsing = visible
 
-\ **NetwConnection** declares several endpoints that a UI can choose from.
+    func on_visibility_changed() -> void:
+        connection.browsing = visible
+
+    func on_endpoint_added(endpoint: NetwEndpoint) -> void:
+        var row := ROW.instantiate()
+        row.endpoint = endpoint
+        rows[endpoint] = row
+        list.add_child(row)
+        row.pressed.connect(join.bind(endpoint))
+
+    func join(endpoint: NetwEndpoint) -> void:
+        Netw.prepare_join(self, name_edit.text)
+        connection.join(endpoint)
+
+\ **Rows**\ 
+
+Each row of :ref:`endpoints<class_NetwConnection_property_endpoints>` is a :ref:`NetwEndpoint<class_NetwEndpoint>`. A :ref:`LobbyDirectory<class_LobbyDirectory>` lists its rows while :ref:`browsing<class_NetwConnection_property_browsing>` is ``true``, and :ref:`add()<class_NetwConnection_method_add>` lists a server the game already knows.
+
+\ **Connecting**\ 
+
+\ :ref:`join()<class_NetwConnection_method_join>` and :ref:`host()<class_NetwConnection_method_host>` create the peer, assign it, and settle their :ref:`NetwPromise<class_NetwPromise>` once the session is online. A failure arrives once through :ref:`failed<class_NetwConnection_signal_failed>`, and a player the server refuses arrives through :ref:`NetwSession.join_failed<class_NetwSession_signal_join_failed>` instead.
+
+\ **Hosting**\ 
+
+\ :ref:`join_address<class_NetwConnection_property_join_address>` is what another player types to reach this session, and :ref:`join_address_changed<class_NetwConnection_signal_join_address_changed>` reports each change.
+
+\ **Defaults**\ 
+
+\ :ref:`set_defaults()<class_NetwConnection_method_set_defaults>` fills settings once for every connection through a transport, and the settings a call passes win over them.
 
 ::
 
-    var c := Netw.session(self).connection
-    c.endpoint_add(ENetMultiplayerPeer, "203.0.113.42:21253")
-    var ticket := c.create_peer(
-            ENetMultiplayerPeer,
-            NetwConnection.TRANSPORT_MODE_CLIENT,
-            "203.0.113.42:21253", {}, take_the_peer)
-
-\ The peer ``take_the_peer`` receives is ready to assign to :godot:`MultiplayerAPI.multiplayer_peer <MultiplayerAPI#class_MultiplayerAPI_property_multiplayer_peer>`, and connects at once.
-
-Endpoints are pairs of ``(transport, address)`` that can be probed by **NetwConnection** to determine if they are reachable.
-
-In a mesh, exactly one peer has id 1. It is the server, and every other peer is online once it is linked to peer 1.
+    connection.set_defaults(WebRTCMultiplayerPeer, {ice_servers = my_servers})
 
 .. rst-class:: classref-reftable-group
 
@@ -54,11 +75,17 @@ Properties
 .. table::
    :widths: auto
 
-   +-----------------+-----------------------------------------------------------------+--------+
-   | :godot:`Array`  | :ref:`endpoints<class_NetwConnection_property_endpoints>`       | ``[]`` |
-   +-----------------+-----------------------------------------------------------------+--------+
-   | :godot:`String` | :ref:`join_address<class_NetwConnection_property_join_address>` | ``""`` |
-   +-----------------+-----------------------------------------------------------------+--------+
+   +-----------------------------------------------------------+---------------------------------------------------------------------+-----------+
+   | :godot:`bool`                                             | :ref:`browsing<class_NetwConnection_property_browsing>`             | ``false`` |
+   +-----------------------------------------------------------+---------------------------------------------------------------------+-----------+
+   | :godot:`Array`\[:ref:`NetwEndpoint<class_NetwEndpoint>`\] | :ref:`endpoints<class_NetwConnection_property_endpoints>`           | ``[]``    |
+   +-----------------------------------------------------------+---------------------------------------------------------------------+-----------+
+   | :godot:`String`                                           | :ref:`join_address<class_NetwConnection_property_join_address>`     | ``""``    |
+   +-----------------------------------------------------------+---------------------------------------------------------------------+-----------+
+   | :godot:`float`                                            | :ref:`probe_interval<class_NetwConnection_property_probe_interval>` | ``10.0``  |
+   +-----------------------------------------------------------+---------------------------------------------------------------------+-----------+
+   | :ref:`State<enum_NetwConnection_State>`                   | :ref:`state<class_NetwConnection_property_state>`                   | ``0``     |
+   +-----------------------------------------------------------+---------------------------------------------------------------------+-----------+
 
 .. rst-class:: classref-reftable-group
 
@@ -68,37 +95,39 @@ Methods
 .. table::
    :widths: auto
 
-   +-------------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | |void|                                                | :ref:`cancel_peer_creation<class_NetwConnection_method_cancel_peer_creation>`\ (\ ticket\: :godot:`RID`\ )                                                                                                                                                                                           |
-   +-------------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`RID`                                          | :ref:`create_peer<class_NetwConnection_method_create_peer>`\ (\ transport\: :godot:`Variant`, mode\: :ref:`TransportMode<enum_NetwConnection_TransportMode>`, address\: :godot:`String`, settings\: :godot:`Dictionary`, completed\: :godot:`Callable`, progress\: :godot:`Callable` = Callable()\ ) |
-   +-------------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`Dictionary`                                   | :ref:`diagnostics<class_NetwConnection_method_diagnostics>`\ (\ peer_id\: :godot:`int`\ ) |const|                                                                                                                                                                                                    |
-   +-------------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`Dictionary`                                   | :ref:`endpoint<class_NetwConnection_method_endpoint>`\ (\ transport\: :godot:`Variant`, address\: :godot:`String`\ ) |const|                                                                                                                                                                         |
-   +-------------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`bool`                                         | :ref:`endpoint_add<class_NetwConnection_method_endpoint_add>`\ (\ transport\: :godot:`Variant`, address\: :godot:`String`, display_name\: :godot:`String` = ""\ )                                                                                                                                    |
-   +-------------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | |void|                                                | :ref:`endpoint_probe<class_NetwConnection_method_endpoint_probe>`\ (\ transport\: :godot:`Variant`, address\: :godot:`String`\ )                                                                                                                                                                     |
-   +-------------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | |void|                                                | :ref:`endpoint_refresh<class_NetwConnection_method_endpoint_refresh>`\ (\ )                                                                                                                                                                                                                          |
-   +-------------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | |void|                                                | :ref:`endpoint_remove<class_NetwConnection_method_endpoint_remove>`\ (\ transport\: :godot:`Variant`, address\: :godot:`String`\ )                                                                                                                                                                   |
-   +-------------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`Error <@GlobalScope#enum_@globalscope_Error>` | :ref:`endpoint_set_display_name<class_NetwConnection_method_endpoint_set_display_name>`\ (\ transport\: :godot:`Variant`, address\: :godot:`String`, display_name\: :godot:`String`\ )                                                                                                               |
-   +-------------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`Array`                                        | :ref:`join_schema<class_NetwConnection_method_join_schema>`\ (\ ) |const|                                                                                                                                                                                                                            |
-   +-------------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`bool`                                         | :ref:`register_transport<class_NetwConnection_method_register_transport>`\ (\ type\: :godot:`Script`\ )                                                                                                                                                                                              |
-   +-------------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`Dictionary`                                   | :ref:`transport<class_NetwConnection_method_transport>`\ (\ of\: :godot:`Variant`\ ) |const|                                                                                                                                                                                                         |
-   +-------------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`Error <@GlobalScope#enum_@globalscope_Error>` | :ref:`transport_set_browse_settings<class_NetwConnection_method_transport_set_browse_settings>`\ (\ transport\: :godot:`Variant`, settings\: :godot:`Dictionary`\ )                                                                                                                                  |
-   +-------------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`Array`                                        | :ref:`transports<class_NetwConnection_method_transports>`\ (\ ) |const|                                                                                                                                                                                                                              |
-   +-------------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`bool`                                         | :ref:`unregister_transport<class_NetwConnection_method_unregister_transport>`\ (\ of\: :godot:`Variant`\ )                                                                                                                                                                                           |
-   +-------------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   +-------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwEndpoint<class_NetwEndpoint>`               | :ref:`add<class_NetwConnection_method_add>`\ (\ transport\: :godot:`Variant`, address\: :godot:`String`, display_name\: :godot:`String` = ""\ )                                                                                                           |
+   +-------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | |void|                                                | :ref:`cancel<class_NetwConnection_method_cancel>`\ (\ )                                                                                                                                                                                                   |
+   +-------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | |void|                                                | :ref:`cancel_peer_creation<class_NetwConnection_method_cancel_peer_creation>`\ (\ ticket\: :godot:`RID`\ )                                                                                                                                                |
+   +-------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`RID`                                          | :ref:`create_peer<class_NetwConnection_method_create_peer>`\ (\ transport\: :godot:`Variant`, mode\: :ref:`TransportMode<enum_NetwConnection_TransportMode>`, address\: :godot:`String`, settings\: :godot:`Dictionary`, completed\: :godot:`Callable`\ ) |
+   +-------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`Dictionary`                                   | :ref:`defaults<class_NetwConnection_method_defaults>`\ (\ transport\: :godot:`Variant`\ ) |const|                                                                                                                                                         |
+   +-------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`Dictionary`                                   | :ref:`diagnostics<class_NetwConnection_method_diagnostics>`\ (\ peer_id\: :godot:`int`\ ) |const|                                                                                                                                                         |
+   +-------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwEndpoint<class_NetwEndpoint>`               | :ref:`find<class_NetwConnection_method_find>`\ (\ transport\: :godot:`Variant`, address\: :godot:`String`\ )                                                                                                                                              |
+   +-------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwPromise<class_NetwPromise>`                 | :ref:`host<class_NetwConnection_method_host>`\ (\ transport\: :godot:`Variant`, settings\: :godot:`Dictionary` = {}\ )                                                                                                                                    |
+   +-------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwPromise<class_NetwPromise>`                 | :ref:`join<class_NetwConnection_method_join>`\ (\ endpoint\: :ref:`NetwEndpoint<class_NetwEndpoint>`, settings\: :godot:`Dictionary` = {}\ )                                                                                                              |
+   +-------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`Array`                                        | :ref:`join_schema<class_NetwConnection_method_join_schema>`\ (\ ) |const|                                                                                                                                                                                 |
+   +-------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`bool`                                         | :ref:`register_transport<class_NetwConnection_method_register_transport>`\ (\ type\: :godot:`Script`\ )                                                                                                                                                   |
+   +-------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`Error <@GlobalScope#enum_@globalscope_Error>` | :ref:`remove<class_NetwConnection_method_remove>`\ (\ endpoint\: :ref:`NetwEndpoint<class_NetwEndpoint>`\ )                                                                                                                                               |
+   +-------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`Error <@GlobalScope#enum_@globalscope_Error>` | :ref:`set_defaults<class_NetwConnection_method_set_defaults>`\ (\ transport\: :godot:`Variant`, settings\: :godot:`Dictionary`\ )                                                                                                                         |
+   +-------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`Dictionary`                                   | :ref:`transport<class_NetwConnection_method_transport>`\ (\ of\: :godot:`Variant`\ ) |const|                                                                                                                                                              |
+   +-------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`Array`                                        | :ref:`transports<class_NetwConnection_method_transports>`\ (\ ) |const|                                                                                                                                                                                   |
+   +-------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`bool`                                         | :ref:`unregister_transport<class_NetwConnection_method_unregister_transport>`\ (\ of\: :godot:`Variant`\ )                                                                                                                                                |
+   +-------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 
 .. rst-class:: classref-section-separator
 
@@ -113,9 +142,11 @@ Signals
 
 .. rst-class:: classref-signal
 
-**endpoint_added**\ (\ peer_class\: :godot:`StringName`, address\: :godot:`String`\ ) :ref:`🔗<class_NetwConnection_signal_endpoint_added>`
+**endpoint_added**\ (\ endpoint\: :ref:`NetwEndpoint<class_NetwEndpoint>`\ ) :ref:`🔗<class_NetwConnection_signal_endpoint_added>`
 
-Fired when a new endpoint is added to the session, either by :ref:`endpoint_add()<class_NetwConnection_method_endpoint_add>` or by a probe that discovered a new row. The row can be read back through :ref:`endpoint()<class_NetwConnection_method_endpoint>`.
+.. container:: contribute
+
+	There is currently no description for this signal. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
 
 .. rst-class:: classref-item-separator
 
@@ -125,41 +156,71 @@ Fired when a new endpoint is added to the session, either by :ref:`endpoint_add(
 
 .. rst-class:: classref-signal
 
-**endpoint_removed**\ (\ peer_class\: :godot:`StringName`, address\: :godot:`String`\ ) :ref:`🔗<class_NetwConnection_signal_endpoint_removed>`
+**endpoint_removed**\ (\ endpoint\: :ref:`NetwEndpoint<class_NetwEndpoint>`\ ) :ref:`🔗<class_NetwConnection_signal_endpoint_removed>`
 
-Fireswhen an endpoint is removed from the session, either by :ref:`endpoint_remove()<class_NetwConnection_method_endpoint_remove>` or by a probe that lost a row. The row can be read back through :ref:`endpoint()<class_NetwConnection_method_endpoint>`.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwConnection_signal_endpoint_updated:
-
-.. rst-class:: classref-signal
-
-**endpoint_updated**\ (\ peer_class\: :godot:`StringName`, address\: :godot:`String`\ ) :ref:`🔗<class_NetwConnection_signal_endpoint_updated>`
-
-Fires when an endpoint is updated in the session, either by :godot:`RefCounted.endpoint_update() <RefCounted#class_RefCounted_method_endpoint_update>` or by a probe that detected a change. What changed is read back through :ref:`endpoint()<class_NetwConnection_method_endpoint>`.
+Its :ref:`NetwEndpoint.is_listed<class_NetwEndpoint_property_is_listed>` is already ``false``.
 
 .. rst-class:: classref-item-separator
 
 ----
 
-.. _class_NetwConnection_signal_join_failed:
+.. _class_NetwConnection_signal_failed:
 
 .. rst-class:: classref-signal
 
-**join_failed**\ (\ error\: :godot:`Error <@GlobalScope#enum_@globalscope_Error>`, reason\: :godot:`String`\ ) :ref:`🔗<class_NetwConnection_signal_join_failed>`
+**failed**\ (\ error\: :godot:`Error <@GlobalScope#enum_@globalscope_Error>`, reason\: :godot:`String`\ ) :ref:`🔗<class_NetwConnection_signal_failed>`
 
-Emits when a join request is rejected by :ref:`Netw.configure_admission()<class_Netw_method_configure_admission>`, the :godot:`MultiplayerAPI` failed to establish the underlying connection, or :ref:`create_peer()<class_NetwConnection_method_create_peer>` was canceled.
+Emitted once when an attempt fails, and never for :ref:`cancel()<class_NetwConnection_method_cancel>`. A connection to it reads the failure of the :ref:`NetwPromise<class_NetwPromise>` that started the attempt, so a caller may drop that promise.
 
-::
+.. rst-class:: classref-item-separator
 
-    func _ready() -> void:
-        Netw.session(self).connection.join_failed.connect(show_refusal)
+----
 
-    func show_refusal(_error: Error, reason: String) -> void:
-        status.text = reason
+.. _class_NetwConnection_signal_invited:
+
+.. rst-class:: classref-signal
+
+**invited**\ (\ endpoint\: :ref:`NetwEndpoint<class_NetwEndpoint>`, from_name\: :godot:`String`\ ) :ref:`🔗<class_NetwConnection_signal_invited>`
+
+Emitted when ``from_name`` invites the player to ``endpoint``, which joins only when the game calls :ref:`join()<class_NetwConnection_method_join>`.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NetwConnection_signal_join_address_changed:
+
+.. rst-class:: classref-signal
+
+**join_address_changed**\ (\ address\: :godot:`String`\ ) :ref:`🔗<class_NetwConnection_signal_join_address_changed>`
+
+.. container:: contribute
+
+	There is currently no description for this signal. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NetwConnection_signal_progressed:
+
+.. rst-class:: classref-signal
+
+**progressed**\ (\ message\: :godot:`String`, ratio\: :godot:`float`\ ) :ref:`🔗<class_NetwConnection_signal_progressed>`
+
+``ratio`` runs from 0 to 1, and is negative when the transport only has a ``message``.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NetwConnection_signal_state_changed:
+
+.. rst-class:: classref-signal
+
+**state_changed**\ (\ state\: :ref:`State<enum_NetwConnection_State>`\ ) :ref:`🔗<class_NetwConnection_signal_state_changed>`
+
+Emitted when :ref:`state<class_NetwConnection_property_state>` moves between :ref:`STATE_OFFLINE<class_NetwConnection_constant_STATE_OFFLINE>`, :ref:`STATE_CREATING<class_NetwConnection_constant_STATE_CREATING>`, :ref:`STATE_CONNECTING<class_NetwConnection_constant_STATE_CONNECTING>` and :ref:`STATE_ONLINE<class_NetwConnection_constant_STATE_ONLINE>`.
 
 .. rst-class:: classref-section-separator
 
@@ -169,6 +230,64 @@ Emits when a join request is rejected by :ref:`Netw.configure_admission()<class_
 
 Enumerations
 ------------
+
+.. _enum_NetwConnection_State:
+
+.. rst-class:: classref-enumeration
+
+enum **State**: :ref:`🔗<enum_NetwConnection_State>`
+
+.. _class_NetwConnection_constant_STATE_OFFLINE:
+
+.. rst-class:: classref-enumeration-constant
+
+:ref:`State<enum_NetwConnection_State>` **STATE_OFFLINE** = ``0``
+
+.. container:: contribute
+
+	There is currently no description for this enum. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+
+
+
+.. _class_NetwConnection_constant_STATE_CREATING:
+
+.. rst-class:: classref-enumeration-constant
+
+:ref:`State<enum_NetwConnection_State>` **STATE_CREATING** = ``1``
+
+.. container:: contribute
+
+	There is currently no description for this enum. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+
+
+
+.. _class_NetwConnection_constant_STATE_CONNECTING:
+
+.. rst-class:: classref-enumeration-constant
+
+:ref:`State<enum_NetwConnection_State>` **STATE_CONNECTING** = ``2``
+
+.. container:: contribute
+
+	There is currently no description for this enum. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+
+
+
+.. _class_NetwConnection_constant_STATE_ONLINE:
+
+.. rst-class:: classref-enumeration-constant
+
+:ref:`State<enum_NetwConnection_State>` **STATE_ONLINE** = ``3``
+
+.. container:: contribute
+
+	There is currently no description for this enum. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+
+
+
+.. rst-class:: classref-item-separator
+
+----
 
 .. _enum_NetwConnection_TransportMode:
 
@@ -182,7 +301,7 @@ enum **TransportMode**: :ref:`🔗<enum_NetwConnection_TransportMode>`
 
 :ref:`TransportMode<enum_NetwConnection_TransportMode>` **TRANSPORT_MODE_HOST** = ``0``
 
-Create a server peer from the settings. The address is ignored.
+The address is ignored.
 
 .. _class_NetwConnection_constant_TRANSPORT_MODE_CLIENT:
 
@@ -190,7 +309,11 @@ Create a server peer from the settings. The address is ignored.
 
 :ref:`TransportMode<enum_NetwConnection_TransportMode>` **TRANSPORT_MODE_CLIENT** = ``1``
 
-Create a client peer that joins the address.
+.. container:: contribute
+
+	There is currently no description for this enum. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+
+
 
 .. rst-class:: classref-item-separator
 
@@ -208,7 +331,11 @@ enum **TransportCapability**: :ref:`🔗<enum_NetwConnection_TransportCapability
 
 :ref:`TransportCapability<enum_NetwConnection_TransportCapability>` **TRANSPORT_AVAILABLE** = ``1``
 
-The transport works on this build.
+.. container:: contribute
+
+	There is currently no description for this enum. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+
+
 
 .. _class_NetwConnection_constant_TRANSPORT_CAN_HOST:
 
@@ -216,7 +343,7 @@ The transport works on this build.
 
 :ref:`TransportCapability<enum_NetwConnection_TransportCapability>` **TRANSPORT_CAN_HOST** = ``2``
 
-The transport can host on this build. Web builds usually cannot.
+Web builds usually cannot.
 
 .. _class_NetwConnection_constant_TRANSPORT_CAN_PROBE:
 
@@ -224,7 +351,11 @@ The transport can host on this build. Web builds usually cannot.
 
 :ref:`TransportCapability<enum_NetwConnection_TransportCapability>` **TRANSPORT_CAN_PROBE** = ``4``
 
-The transport supports :ref:`NetwMultiplayer.endpoint_probe()<class_NetwMultiplayer_method_endpoint_probe>`.
+.. container:: contribute
+
+	There is currently no description for this enum. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+
+
 
 .. _class_NetwConnection_constant_TRANSPORT_CAN_BROWSE:
 
@@ -232,7 +363,11 @@ The transport supports :ref:`NetwMultiplayer.endpoint_probe()<class_NetwMultipla
 
 :ref:`TransportCapability<enum_NetwConnection_TransportCapability>` **TRANSPORT_CAN_BROWSE** = ``8``
 
-The transport can list servers for :ref:`NetwMultiplayer.endpoint_refresh()<class_NetwMultiplayer_method_endpoint_refresh>`.
+.. container:: contribute
+
+	There is currently no description for this enum. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+
+
 
 .. _class_NetwConnection_constant_TRANSPORT_ACCEPTS_EMPTY_ADDRESS:
 
@@ -240,75 +375,11 @@ The transport can list servers for :ref:`NetwMultiplayer.endpoint_refresh()<clas
 
 :ref:`TransportCapability<enum_NetwConnection_TransportCapability>` **TRANSPORT_ACCEPTS_EMPTY_ADDRESS** = ``16``
 
-The transport accepts an empty address.
+.. container:: contribute
 
-.. rst-class:: classref-item-separator
+	There is currently no description for this enum. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
 
-----
 
-.. _enum_NetwConnection_EndpointState:
-
-.. rst-class:: classref-enumeration
-
-enum **EndpointState**: :ref:`🔗<enum_NetwConnection_EndpointState>`
-
-.. _class_NetwConnection_constant_ENDPOINT_STATE_FLAGS:
-
-.. rst-class:: classref-enumeration-constant
-
-:ref:`EndpointState<enum_NetwConnection_EndpointState>` **ENDPOINT_STATE_FLAGS** = ``0``
-
-A bitmask of :ref:`EndpointFlags<enum_NetwConnection_EndpointFlags>`.
-
-.. _class_NetwConnection_constant_ENDPOINT_STATE_STATUS:
-
-.. rst-class:: classref-enumeration-constant
-
-:ref:`EndpointState<enum_NetwConnection_EndpointState>` **ENDPOINT_STATE_STATUS** = ``1``
-
-The :godot:`@GlobalScope.Error <@GlobalScope#enum_@globalscope_Error>` of the last probe, or :godot:`@GlobalScope.FAILED <@GlobalScope#class_@GlobalScope_constant_FAILED>` before the first one.
-
-.. _class_NetwConnection_constant_ENDPOINT_STATE_INFO:
-
-.. rst-class:: classref-enumeration-constant
-
-:ref:`EndpointState<enum_NetwConnection_EndpointState>` **ENDPOINT_STATE_INFO** = ``2``
-
-The :ref:`NetwServerInfo<class_NetwServerInfo>` from the last probe, or ``null``.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _enum_NetwConnection_EndpointFlags:
-
-.. rst-class:: classref-enumeration
-
-enum **EndpointFlags**: :ref:`🔗<enum_NetwConnection_EndpointFlags>`
-
-.. _class_NetwConnection_constant_ENDPOINT_FLAG_CALLER:
-
-.. rst-class:: classref-enumeration-constant
-
-:ref:`EndpointFlags<enum_NetwConnection_EndpointFlags>` **ENDPOINT_FLAG_CALLER** = ``1``
-
-Added with :ref:`NetwMultiplayer.endpoint_add()<class_NetwMultiplayer_method_endpoint_add>`.
-
-.. _class_NetwConnection_constant_ENDPOINT_FLAG_AVAILABLE:
-
-.. rst-class:: classref-enumeration-constant
-
-:ref:`EndpointFlags<enum_NetwConnection_EndpointFlags>` **ENDPOINT_FLAG_AVAILABLE** = ``2``
-
-The last probe reached the server.
-
-.. _class_NetwConnection_constant_ENDPOINT_FLAG_OBSERVED:
-
-.. rst-class:: classref-enumeration-constant
-
-:ref:`EndpointFlags<enum_NetwConnection_EndpointFlags>` **ENDPOINT_FLAG_OBSERVED** = ``4``
-
-Found by :ref:`NetwMultiplayer.endpoint_refresh()<class_NetwMultiplayer_method_endpoint_refresh>`. Can be set together with :ref:`ENDPOINT_FLAG_CALLER<class_NetwConnection_constant_ENDPOINT_FLAG_CALLER>`.
 
 .. rst-class:: classref-section-separator
 
@@ -319,17 +390,34 @@ Found by :ref:`NetwMultiplayer.endpoint_refresh()<class_NetwMultiplayer_method_e
 Property Descriptions
 ---------------------
 
+.. _class_NetwConnection_property_browsing:
+
+.. rst-class:: classref-property
+
+:godot:`bool` **browsing** = ``false`` :ref:`🔗<class_NetwConnection_property_browsing>`
+
+.. rst-class:: classref-property-setget
+
+- |void| **set_browsing**\ (\ value\: :godot:`bool`\ )
+- :godot:`bool` **is_browsing**\ (\ )
+
+While ``true``, every :ref:`LobbyDirectory<class_LobbyDirectory>` keeps listing and every row from :ref:`add()<class_NetwConnection_method_add>` is probed every :ref:`probe_interval<class_NetwConnection_property_probe_interval>`, which costs network traffic.
+
+.. rst-class:: classref-item-separator
+
+----
+
 .. _class_NetwConnection_property_endpoints:
 
 .. rst-class:: classref-property
 
-:godot:`Array` **endpoints** = ``[]`` :ref:`🔗<class_NetwConnection_property_endpoints>`
+:godot:`Array`\[:ref:`NetwEndpoint<class_NetwEndpoint>`\] **endpoints** = ``[]`` :ref:`🔗<class_NetwConnection_property_endpoints>`
 
 .. rst-class:: classref-property-setget
 
-- :godot:`Array` **get_endpoints**\ (\ )
+- :godot:`Array`\[:ref:`NetwEndpoint<class_NetwEndpoint>`\] **get_endpoints**\ (\ )
 
-Every row this session knows how to reach, as endpoint snapshots. See :ref:`endpoint()<class_NetwConnection_method_endpoint>` for the shape of each row.
+The rows from :ref:`add()<class_NetwConnection_method_add>` come first.
 
 .. rst-class:: classref-item-separator
 
@@ -345,7 +433,42 @@ Every row this session knows how to reach, as endpoint snapshots. See :ref:`endp
 
 - :godot:`String` **get_join_address**\ (\ )
 
-The possible addresses another peer would use to reach this session. The list is empty when no transport has been registered, or when the session is not hosting.
+Empty while the session is not hosting.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NetwConnection_property_probe_interval:
+
+.. rst-class:: classref-property
+
+:godot:`float` **probe_interval** = ``10.0`` :ref:`🔗<class_NetwConnection_property_probe_interval>`
+
+.. rst-class:: classref-property-setget
+
+- |void| **set_probe_interval**\ (\ value\: :godot:`float`\ )
+- :godot:`float` **get_probe_interval**\ (\ )
+
+Seconds between probes of a row from :ref:`add()<class_NetwConnection_method_add>` while :ref:`browsing<class_NetwConnection_property_browsing>`. ``0`` probes it once each time browsing starts.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NetwConnection_property_state:
+
+.. rst-class:: classref-property
+
+:ref:`State<enum_NetwConnection_State>` **state** = ``0`` :ref:`🔗<class_NetwConnection_property_state>`
+
+.. rst-class:: classref-property-setget
+
+- :ref:`State<enum_NetwConnection_State>` **get_state**\ (\ )
+
+.. container:: contribute
+
+	There is currently no description for this property. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
 
 .. rst-class:: classref-section-separator
 
@@ -356,13 +479,39 @@ The possible addresses another peer would use to reach this session. The list is
 Method Descriptions
 -------------------
 
+.. _class_NetwConnection_method_add:
+
+.. rst-class:: classref-method
+
+:ref:`NetwEndpoint<class_NetwEndpoint>` **add**\ (\ transport\: :godot:`Variant`, address\: :godot:`String`, display_name\: :godot:`String` = ""\ ) :ref:`🔗<class_NetwConnection_method_add>`
+
+Returns the row already listed for that pair, or ``null`` when ``transport`` names nothing this build carries.
+
+An empty ``address`` is listed as the address a join with it reaches, so an ENet row reads ``localhost``.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NetwConnection_method_cancel:
+
+.. rst-class:: classref-method
+
+|void| **cancel**\ (\ ) :ref:`🔗<class_NetwConnection_method_cancel>`
+
+:ref:`failed<class_NetwConnection_signal_failed>` stays silent and the promise settles with :godot:`@GlobalScope.ERR_SKIP <@GlobalScope#class_@GlobalScope_constant_ERR_SKIP>`.
+
+.. rst-class:: classref-item-separator
+
+----
+
 .. _class_NetwConnection_method_cancel_peer_creation:
 
 .. rst-class:: classref-method
 
 |void| **cancel_peer_creation**\ (\ ticket\: :godot:`RID`\ ) :ref:`🔗<class_NetwConnection_method_cancel_peer_creation>`
 
-Cancel the peer creation request named by ``ticket``. The request settles with one ``(null, ERR_SKIP, "")`` callback and no peer is offered. A ticket that already completed, or one this :godot:`Node.multiplayer <Node#class_Node_property_multiplayer>` never created, is a no-op, so a view may cancel unconditionally before starting the next creation.
+The callback of ``ticket`` then runs once with :godot:`@GlobalScope.ERR_SKIP <@GlobalScope#class_@GlobalScope_constant_ERR_SKIP>`.
 
 .. rst-class:: classref-item-separator
 
@@ -372,45 +521,23 @@ Cancel the peer creation request named by ``ticket``. The request settles with o
 
 .. rst-class:: classref-method
 
-:godot:`RID` **create_peer**\ (\ transport\: :godot:`Variant`, mode\: :ref:`TransportMode<enum_NetwConnection_TransportMode>`, address\: :godot:`String`, settings\: :godot:`Dictionary`, completed\: :godot:`Callable`, progress\: :godot:`Callable` = Callable()\ ) :ref:`🔗<class_NetwConnection_method_create_peer>`
+:godot:`RID` **create_peer**\ (\ transport\: :godot:`Variant`, mode\: :ref:`TransportMode<enum_NetwConnection_TransportMode>`, address\: :godot:`String`, settings\: :godot:`Dictionary`, completed\: :godot:`Callable`\ ) :ref:`🔗<class_NetwConnection_method_create_peer>`
 
-Pass a ``transport`` that can be any of the following:
+Creates a peer for a game that assigns it itself. ``completed`` runs once in a later frame as ``completed(peer, error, detail)``, and a peer it leaves unassigned is closed. Returns a ticket for :ref:`cancel_peer_creation()<class_NetwConnection_method_cancel_peer_creation>`.
 
-- The peer class itself.
+.. rst-class:: classref-item-separator
 
-- A game transport's :godot:`Script`.
+----
 
-- A :godot:`StringName` of the type.
+.. _class_NetwConnection_method_defaults:
 
-- A live peer of that class.
+.. rst-class:: classref-method
 
-\ ``completed`` runs once in a later frame as ``completed(peer, error, detail)``, the peer has to be assigned inside this :godot:`Callable`, otherwise, returning without assigning declines the offer.
+:godot:`Dictionary` **defaults**\ (\ transport\: :godot:`Variant`\ ) |const| :ref:`🔗<class_NetwConnection_method_defaults>`
 
-The result is a :godot:`RID` handle that can be passed to :ref:`cancel_peer_creation()<class_NetwConnection_method_cancel_peer_creation>` to cancel the request before it completes.
+.. container:: contribute
 
-::
-
-    var _ticket := RID() # at this point the ticket is empty
-
-    func join(address: String) -> void:
-        abort_join()
-        _ticket = _c.create_peer(
-                MyRelayTransport,
-                NetwConnection.TRANSPORT_MODE_CLIENT,
-                address, {}, _created, _progressed)
-
-    func abort_join() -> void:
-        _c.cancel_peer_creation(_ticket)
-        _ticket = RID()
-
-    func _created(peer: MultiplayerPeer, error: Error, detail: String):
-        _ticket = RID()
-        if error == OK:
-            multiplayer.multiplayer_peer = peer
-        elif error != ERR_SKIP:
-            _say(detail)
-
-\ The returned peer is ready to be assigned to :godot:`Node.multiplayer <Node#class_Node_property_multiplayer>` and will connect immediately.
+	There is currently no description for this method. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
 
 .. rst-class:: classref-item-separator
 
@@ -422,104 +549,47 @@ The result is a :godot:`RID` handle that can be passed to :ref:`cancel_peer_crea
 
 :godot:`Dictionary` **diagnostics**\ (\ peer_id\: :godot:`int`\ ) |const| :ref:`🔗<class_NetwConnection_method_diagnostics>`
 
-What the session knows about its connection to ``peer_id``, empty when it holds nothing for that peer.
+.. container:: contribute
+
+	There is currently no description for this method. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
 
 .. rst-class:: classref-item-separator
 
 ----
 
-.. _class_NetwConnection_method_endpoint:
+.. _class_NetwConnection_method_find:
 
 .. rst-class:: classref-method
 
-:godot:`Dictionary` **endpoint**\ (\ transport\: :godot:`Variant`, address\: :godot:`String`\ ) |const| :ref:`🔗<class_NetwConnection_method_endpoint>`
+:ref:`NetwEndpoint<class_NetwEndpoint>` **find**\ (\ transport\: :godot:`Variant`, address\: :godot:`String`\ ) :ref:`🔗<class_NetwConnection_method_find>`
 
-The snapshot for the endpoint ``transport`` and ``address`` name, empty when this session holds no such row.
+.. container:: contribute
 
-.. code:: text
-
-    Dictionary
-    ┠╴peer_class       StringName      ENetMultiplayerPeer, or a game's own
-    ┃                                  transport
-    ┠╴address          String          "203.0.113.42:21253"
-    ┠╴display_name     String          what a server browser draws in the row
-    ┠╴status           int             a MultiplayerPeer.ConnectionStatus value
-    ┠╴info             NetwServerInfo  what this row last advertised, or null
-    ┠╴source           String          the display name of the LobbyDirectory
-    ┃                                  that listed it, "" otherwise
-    ┠╴is_caller_added  bool            true when this session's own endpoint_add
-    ┃                                  added the row
-    ┠╴is_available     bool            false while a probe is outstanding
-    ┖╴is_observed      bool            true once a probe has reported back
+	There is currently no description for this method. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
 
 .. rst-class:: classref-item-separator
 
 ----
 
-.. _class_NetwConnection_method_endpoint_add:
+.. _class_NetwConnection_method_host:
 
 .. rst-class:: classref-method
 
-:godot:`bool` **endpoint_add**\ (\ transport\: :godot:`Variant`, address\: :godot:`String`, display_name\: :godot:`String` = ""\ ) :ref:`🔗<class_NetwConnection_method_endpoint_add>`
+:ref:`NetwPromise<class_NetwPromise>` **host**\ (\ transport\: :godot:`Variant`, settings\: :godot:`Dictionary` = {}\ ) :ref:`🔗<class_NetwConnection_method_host>`
 
-Adds the endpoint ``transport`` and ``address`` name.
-
-Returns ``true`` once the row exists, ``false`` when ``transport`` names nothing this build carries.
+Settles with :godot:`@GlobalScope.ERR_ALREADY_IN_USE <@GlobalScope#class_@GlobalScope_constant_ERR_ALREADY_IN_USE>` while the session is online.
 
 .. rst-class:: classref-item-separator
 
 ----
 
-.. _class_NetwConnection_method_endpoint_probe:
+.. _class_NetwConnection_method_join:
 
 .. rst-class:: classref-method
 
-|void| **endpoint_probe**\ (\ transport\: :godot:`Variant`, address\: :godot:`String`\ ) :ref:`🔗<class_NetwConnection_method_endpoint_probe>`
+:ref:`NetwPromise<class_NetwPromise>` **join**\ (\ endpoint\: :ref:`NetwEndpoint<class_NetwEndpoint>`, settings\: :godot:`Dictionary` = {}\ ) :ref:`🔗<class_NetwConnection_method_join>`
 
-Probes the endpoint ``transport`` and ``address`` name, returning through :ref:`endpoint_updated<class_NetwConnection_signal_endpoint_updated>`.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwConnection_method_endpoint_refresh:
-
-.. rst-class:: classref-method
-
-|void| **endpoint_refresh**\ (\ ) :ref:`🔗<class_NetwConnection_method_endpoint_refresh>`
-
-Re-probes every known endpoint and reports each result through :ref:`endpoint_updated<class_NetwConnection_signal_endpoint_updated>`.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwConnection_method_endpoint_remove:
-
-.. rst-class:: classref-method
-
-|void| **endpoint_remove**\ (\ transport\: :godot:`Variant`, address\: :godot:`String`\ ) :ref:`🔗<class_NetwConnection_method_endpoint_remove>`
-
-Removes the endpoint ``transport`` and ``address`` name.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwConnection_method_endpoint_set_display_name:
-
-.. rst-class:: classref-method
-
-:godot:`Error <@GlobalScope#enum_@globalscope_Error>` **endpoint_set_display_name**\ (\ transport\: :godot:`Variant`, address\: :godot:`String`, display_name\: :godot:`String`\ ) :ref:`🔗<class_NetwConnection_method_endpoint_set_display_name>`
-
-Renames the endpoint ``transport`` and ``address`` name.
-
-.. code:: text
-
-    Error
-    ┠╴OK                   written
-    ┠╴ERR_UNCONFIGURED     this view has no session
-    ┖╴ERR_DOES_NOT_EXIST   no such row exists
+Settles with :godot:`@GlobalScope.ERR_ALREADY_IN_USE <@GlobalScope#class_@GlobalScope_constant_ERR_ALREADY_IN_USE>` while the session is online.
 
 .. rst-class:: classref-item-separator
 
@@ -531,18 +601,7 @@ Renames the endpoint ``transport`` and ``address`` name.
 
 :godot:`Array` **join_schema**\ (\ ) |const| :ref:`🔗<class_NetwConnection_method_join_schema>`
 
-The parameters a join form asks for. 
-
-A join is a transport, an address, and a dictionary of settings. The schema is the list of those settings.
-
-.. code:: text
-
-    Array[Dictionary]
-    ┖╴entry
-      ┠╴name        String      the argument's name
-      ┠╴type        int         a Variant.Type value
-      ┠╴class_name  StringName  empty for every type this build resolves
-      ┖╴default     Variant     the value a Join form pre-fills, or null
+The :ref:`NetwMultiplayer.session_get_join_schema()<class_NetwMultiplayer_method_session_get_join_schema>` of this session.
 
 .. rst-class:: classref-item-separator
 
@@ -554,17 +613,35 @@ A join is a transport, an address, and a dictionary of settings. The schema is t
 
 :godot:`bool` **register_transport**\ (\ type\: :godot:`Script`\ ) :ref:`🔗<class_NetwConnection_method_register_transport>`
 
-Registers a :ref:`NetwTransport<class_NetwTransport>` subclass. A transport adds meaning to the :godot:`MultiplayerPeer` class it wraps. ``false`` when this session already registered a transport of that class, ``true`` otherwise.
+.. container:: contribute
 
-::
+	There is currently no description for this method. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
 
-    func _ready() -> void:
-        var c := Netw.session(self).connection
-        if c.register_transport(MyRelayTransport):
-            c.create_peer(
-                    MyRelayTransport,
-                    NetwConnection.TRANSPORT_MODE_HOST,
-                    "", {region = "eu"}, take_the_peer)
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NetwConnection_method_remove:
+
+.. rst-class:: classref-method
+
+:godot:`Error <@GlobalScope#enum_@globalscope_Error>` **remove**\ (\ endpoint\: :ref:`NetwEndpoint<class_NetwEndpoint>`\ ) :ref:`🔗<class_NetwConnection_method_remove>`
+
+Removes a row from :ref:`add()<class_NetwConnection_method_add>` or from :ref:`invited<class_NetwConnection_signal_invited>`. An invited row stays listed until this removes it or its :ref:`LobbyDirectory<class_LobbyDirectory>` leaves the session.
+
+Returns :godot:`@GlobalScope.ERR_INVALID_PARAMETER <@GlobalScope#class_@GlobalScope_constant_ERR_INVALID_PARAMETER>` for any other row a :ref:`LobbyDirectory<class_LobbyDirectory>` listed.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NetwConnection_method_set_defaults:
+
+.. rst-class:: classref-method
+
+:godot:`Error <@GlobalScope#enum_@globalscope_Error>` **set_defaults**\ (\ transport\: :godot:`Variant`, settings\: :godot:`Dictionary`\ ) :ref:`🔗<class_NetwConnection_method_set_defaults>`
+
+Stores ``settings`` for every connection through ``transport``, above the transport's own settings and below a listed row's and a call's.
 
 .. rst-class:: classref-item-separator
 
@@ -576,63 +653,20 @@ Registers a :ref:`NetwTransport<class_NetwTransport>` subclass. A transport adds
 
 :godot:`Dictionary` **transport**\ (\ of\: :godot:`Variant`\ ) |const| :ref:`🔗<class_NetwConnection_method_transport>`
 
-The representation of a transport in this session, empty when this session holds no such transport. See :ref:`create_peer()<class_NetwConnection_method_create_peer>` for the ways to name a transport.
+A transport named by its peer class, its :godot:`Script`, a :godot:`StringName` or a live peer, empty when this session holds no such transport.
 
 .. code:: text
 
     Dictionary
-    ┠╴peer_class            StringName  the key this transport is registered under
-    ┠╴display_name          String      what a Host or Add form's picker names it
+    ┠╴peer_class            StringName  the key the transport is registered under
+    ┠╴display_name          String      what a picker names it
     ┠╴address_label         String      what the address field is titled
     ┠╴address_placeholder   String      what the empty address field shows
     ┠╴address_help          String      the sentence under the address field
-    ┠╴capabilities          int         a NetwConnection.TransportCapability
-    ┃                                   flag combination
-    ┠╴host_settings         Dictionary  the fields a host form asks for, named
-    ┃                                   by this transport alone
-    ┠╴client_settings       Dictionary  the fields a join form asks for, which
-    ┃                                   overlap the host ones by however much
-    ┃                                   the two modes share
-    ┖╴timeout_hint          float       seconds a connection may take before a
-                                        caller gives up on it
-
-::
-
-    var c := Netw.session(self).connection
-    var enet := c.transport(ENetMultiplayerPeer)
-    prints(enet["display_name"], enet["address_placeholder"])
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwConnection_method_transport_set_browse_settings:
-
-.. rst-class:: classref-method
-
-:godot:`Error <@GlobalScope#enum_@globalscope_Error>` **transport_set_browse_settings**\ (\ transport\: :godot:`Variant`, settings\: :godot:`Dictionary`\ ) :ref:`🔗<class_NetwConnection_method_transport_set_browse_settings>`
-
-Sets discovery settings for ``transport`` before
-
-\ :ref:`endpoint_refresh()<class_NetwConnection_method_endpoint_refresh>`. Invalid settings return
-
-\ :godot:`@GlobalScope.ERR_INVALID_PARAMETER <@GlobalScope#class_@GlobalScope_constant_ERR_INVALID_PARAMETER>`. After discovery
-
-starts, identical settings return :godot:`@GlobalScope.OK <@GlobalScope#class_@GlobalScope_constant_OK>`\ 
-
-and changed settings return
-
-\ :godot:`@GlobalScope.ERR_ALREADY_IN_USE <@GlobalScope#class_@GlobalScope_constant_ERR_ALREADY_IN_USE>`. Peer creation
-
-settings are independent. The WebRTC transport accepts the
-
-following settings.
-
-.. code:: text
-
-    Dictionary
-    ┠╴trackers             PackedStringArray  WebSocket tracker URLs
-    ┖╴signaling_namespace  String             namespace of listed rooms
+    ┠╴capabilities          int         NetwConnection.TransportCapability flags
+    ┠╴host_settings         Dictionary  a host form's fields, defaults included
+    ┠╴client_settings       Dictionary  a join form's fields, defaults included
+    ┖╴timeout_hint          float       seconds an attempt waits before it fails
 
 .. rst-class:: classref-item-separator
 
@@ -644,7 +678,7 @@ following settings.
 
 :godot:`Array` **transports**\ (\ ) |const| :ref:`🔗<class_NetwConnection_method_transports>`
 
-Every transport this session can reach, as transport snapshots shaped like :ref:`transport()<class_NetwConnection_method_transport>` returns.
+Each shaped as :ref:`transport()<class_NetwConnection_method_transport>` returns it.
 
 .. rst-class:: classref-item-separator
 
@@ -656,7 +690,9 @@ Every transport this session can reach, as transport snapshots shaped like :ref:
 
 :godot:`bool` **unregister_transport**\ (\ of\: :godot:`Variant`\ ) :ref:`🔗<class_NetwConnection_method_unregister_transport>`
 
-Unregisters a transport. ``false`` when this session never registered a transport of that class, ``true`` otherwise. See :ref:`create_peer()<class_NetwConnection_method_create_peer>` for the ways to name a transport.
+.. container:: contribute
+
+	There is currently no description for this method. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

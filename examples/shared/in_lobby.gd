@@ -28,7 +28,7 @@ func on_local_joined(_player: NetwPlayer) -> void:
 
 func on_scene_ready(scene: NetwScene) -> void:
 	hide()
-	scene.root.tree_exited.connect(on_scene_closed)
+	scene.root.tree_exited.connect(on_scene_closed, CONNECT_DEFERRED)
 
 
 func on_scene_closed() -> void:

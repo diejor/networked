@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <optional>
 
+#include "godot/hash_map.hpp"
 #include "godot/local_vector.hpp"
 #include "godot/multiplayer.hpp"
 #include "godot/object.hpp"
@@ -41,16 +42,56 @@ public:
         int p_mode,
         const godot::String &p_address,
         const godot::Dictionary &p_settings,
-        const godot::Callable &p_completed,
-        const godot::Callable &p_progress
+        const godot::Callable &p_completed
     );
     void cancel_peer_creation(const godot::RID &p_ticket);
+
+    godot::Ref<NetwPromise> join(
+        const godot::RID &p_transport,
+        const godot::String &p_address,
+        const godot::Dictionary &p_settings
+    );
+    godot::Ref<NetwPromise> join_target(
+        const godot::RID &p_target,
+        const godot::Dictionary &p_settings
+    );
+    godot::Ref<NetwPromise> host(
+        const godot::RID &p_transport,
+        const godot::Dictionary &p_settings
+    );
+    void cancel_attempt();
+    int attempt_state() const {
+        return attempt.state;
+    }
+    bool answers_attempt() const;
+    void on_progress(
+        const godot::RID &p_ticket,
+        const godot::String &p_message,
+        double p_ratio
+    );
+    void on_session_edge(int p_old, int p_new);
+    void on_session_online();
+    void on_transport_failed();
+
+    godot::Error set_defaults(
+        const godot::RID &p_transport,
+        const godot::Dictionary &p_settings
+    );
+    godot::Dictionary defaults_of(const godot::RID &p_transport) const;
 
     godot::RID target_add(
         const godot::RID &p_transport,
         const godot::String &p_address,
         const godot::String &p_display_name
     );
+    godot::RID target_find(
+        const godot::RID &p_transport,
+        const godot::String &p_address
+    ) const;
+    godot::String target_address(
+        const godot::RID &p_transport,
+        const godot::String &p_address
+    ) const;
     void target_remove(const godot::RID &p_target);
     bool target_is_available(const godot::RID &p_target) const;
     void probe_target(const godot::RID &p_target);
@@ -69,6 +110,11 @@ public:
         const godot::Array &p_infos,
         int64_t p_directory
     );
+    void on_directory_invited(
+        godot::Object *p_directory,
+        const godot::String &p_address,
+        const godot::String &p_from_name
+    );
     void publish_targets(
         const godot::StringName &p_peer_class,
         godot::ObjectID p_source,
@@ -77,6 +123,7 @@ public:
         const godot::Array &p_infos
     );
     void forget_directory(godot::ObjectID p_directory);
+    void watch_directory(godot::Object *p_directory);
 
     godot::String join_address() const;
     godot::Dictionary diagnostics(int64_t p_peer_id) const;
@@ -102,11 +149,14 @@ public:
     }
     godot::RID register_transport(const godot::Ref<godot::Script> &p_type);
     godot::Error unregister_transport(const godot::RID &p_transport);
-    godot::Error set_browse_settings(
-        const godot::RID &p_transport,
-        const godot::Dictionary &p_settings
-    );
-    void refresh();
+    void set_browsing(bool p_browsing);
+    bool is_browsing() const {
+        return browsing;
+    }
+    void set_probe_interval(double p_seconds);
+    double get_probe_interval() const {
+        return probe_interval;
+    }
 
     ProbeClient *probe_client() const {
         return prober;
@@ -116,18 +166,74 @@ public:
     }
 
 private:
+    struct Browser {
+        Transport *transport = nullptr;
+        double next_list = 0.0;
+        bool listed = false;
+    };
+
+    struct Attempt {
+        int state = ATTEMPT_OFFLINE;
+        godot::RID ticket;
+        int mode = PEER_MODE_CLIENT;
+        double elapsed = 0.0;
+        double deadline = 0.0;
+        bool reported = false;
+        godot::Ref<NetwPromise> promise;
+    };
+
     NetwMultiplayer *session = nullptr;
     Transport *live = nullptr;
     BrowseList rows;
     TransportRegistry registrations;
-    godot::LocalVector<Transport *> browsers;
+    godot::LocalVector<Browser> browsers;
     ProbeClient *prober = nullptr;
-    godot::Dictionary browse_settings;
-    bool browsing_started = false;
+    bool browsing = false;
+    double probe_interval = 10.0;
 
     godot::LocalVector<godot::RID> creations;
     godot::LocalVector<godot::RID> starts;
     godot::RID answering_offer;
+    Attempt attempt;
+    godot::HashMap<godot::StringName, godot::Dictionary> defaults;
+    godot::String announced_address;
+
+    godot::RID open_creation(
+        const godot::RID &p_transport,
+        int p_mode,
+        const godot::String &p_address,
+        const godot::Dictionary &p_metadata,
+        const godot::Dictionary &p_settings,
+        const godot::Callable &p_completed
+    );
+    godot::Dictionary layered_settings(
+        const godot::RID &p_transport,
+        const godot::Dictionary &p_metadata,
+        const godot::Dictionary &p_settings
+    ) const;
+    godot::Ref<NetwPromise> start_attempt(
+        const godot::RID &p_transport,
+        int p_mode,
+        const godot::String &p_address,
+        const godot::Dictionary &p_metadata,
+        const godot::Dictionary &p_settings
+    );
+    void begin_attempt(
+        const godot::RID &p_ticket,
+        int p_mode,
+        const godot::Ref<NetwPromise> &p_promise
+    );
+    void move_attempt(int p_state);
+    void end_attempt(godot::Error p_error, const godot::String &p_reason);
+    void release_attempt(const Attempt &p_ended);
+    void announce_end(
+        const Attempt &p_ended,
+        godot::Error p_error,
+        const godot::String &p_reason
+    );
+    void tick_attempt(double p_delta);
+    void announce_join_address();
+    void release_live();
 
     godot::RID mint_ticket_for(
         Transport *p_made,
@@ -147,9 +253,6 @@ private:
     Transport *make_transport(const godot::StringName &p_peer_class);
     Transport *make_transport(const TransportSlot &p_slot) const;
     Transport *make_creator(const godot::StringName &p_peer_class) const;
-    godot::LocalVector<godot::ObjectID> directories_of(
-        const godot::StringName &p_peer_class
-    ) const;
     Transport *transport_of_directory(int64_t p_directory) const;
     ProbeHooks probe_hooks() const;
     godot::Ref<NetwPromise> probe_row(const godot::RID &p_target);
@@ -160,9 +263,12 @@ private:
     ) const;
     void adopt_live(Transport *p_transport);
     void drop_live();
-    void open_browser(Transport *p_made);
+    bool open_browser(Transport *p_made);
     void open_browsers();
     void drop_browsers();
+    void tick_browsing(double p_delta);
+    void start_due_probes();
+    void drop_row_probes();
 };
 
 } // namespace netw::connect

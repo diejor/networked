@@ -93,8 +93,8 @@ TEST_CASE(
     CHECK(list.row(RID(shown[2]))->address == String("lobby-a"));
     CHECK(list.row(RID(shown[3]))->address == String("lobby-b"));
     NETW_CHECK_EQ(int(list.caller_targets().size()), 2);
-    CHECK(list.is_caller_row(RID(shown[0])));
-    CHECK_FALSE(list.is_caller_row(RID(shown[2])));
+    CHECK(list.is_removable(RID(shown[0])));
+    CHECK_FALSE(list.is_removable(RID(shown[2])));
 }
 
 TEST_CASE(
@@ -269,7 +269,7 @@ TEST_CASE(
     for (int at = 0; at < 40; at++) {
         list.add(enet.slot, vformat("host-%d", at), String());
     }
-    list.enqueue_caller_rows();
+    list.enqueue_due(0.0, 10.0);
 
     RID taken;
     int started = 0;
@@ -346,7 +346,7 @@ TEST_CASE(
     const RID second
         = list.add(enet.slot, String("second.example:21253"), String());
 
-    list.enqueue_caller_rows();
+    list.enqueue_due(0.0, 10.0);
     CHECK(list.remove(first));
 
     RID taken;

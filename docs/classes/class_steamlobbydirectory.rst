@@ -19,7 +19,7 @@ A :ref:`LobbyDirectory<class_LobbyDirectory>` that hosts, joins and lists Steam 
 Description
 -----------
 
-Add it under a :ref:`MultiplayerTree<class_MultiplayerTree>` to use Steam lobbies with ``SteamMultiplayerPeer``. A lobby's address is its Steam lobby id.  Steam allows one instance per process, so a second one frees itself.
+Its lobbies connect through ``SteamMultiplayerPeer``. A lobby's address is its Steam lobby id.  Steam allows one instance per process, so a second one frees itself.
 
 .. rst-class:: classref-reftable-group
 
@@ -51,13 +51,17 @@ Methods
 .. table::
    :widths: auto
 
-   +-----------------+----------------------------------------------------------------------------------+
-   | :godot:`bool`   | :ref:`is_ready<class_SteamLobbyDirectory_method_is_ready>`\ (\ )                 |
-   +-----------------+----------------------------------------------------------------------------------+
-   | :godot:`int`    | :ref:`get_lobby_id<class_SteamLobbyDirectory_method_get_lobby_id>`\ (\ )         |
-   +-----------------+----------------------------------------------------------------------------------+
-   | :godot:`String` | :ref:`get_persona_name<class_SteamLobbyDirectory_method_get_persona_name>`\ (\ ) |
-   +-----------------+----------------------------------------------------------------------------------+
+   +-----------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`bool`   | :ref:`is_ready<class_SteamLobbyDirectory_method_is_ready>`\ (\ )                                                                                                         |
+   +-----------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`int`    | :ref:`get_lobby_id<class_SteamLobbyDirectory_method_get_lobby_id>`\ (\ )                                                                                                 |
+   +-----------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`String` | :ref:`get_persona_name<class_SteamLobbyDirectory_method_get_persona_name>`\ (\ )                                                                                         |
+   +-----------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | |void|          | :ref:`on_peer_changed<class_SteamLobbyDirectory_method_on_peer_changed>`\ (\ peer_id\: :godot:`int`\ )                                                                   |
+   +-----------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | |void|          | :ref:`on_session_exiting<class_SteamLobbyDirectory_method_on_session_exiting>`\ (\ reason\: :ref:`ExitReason<enum_NetwSession_ExitReason>`, _detail\: :godot:`String`\ ) |
+   +-----------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 
 .. rst-class:: classref-section-separator
 
@@ -238,6 +242,34 @@ Returns the active lobby ID, or ``0`` when no lobby is joined.
 :godot:`String` **get_persona_name**\ (\ ) :ref:`🔗<class_SteamLobbyDirectory_method_get_persona_name>`
 
 Returns the local user's display name.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_SteamLobbyDirectory_method_on_peer_changed:
+
+.. rst-class:: classref-method
+
+|void| **on_peer_changed**\ (\ peer_id\: :godot:`int`\ ) :ref:`🔗<class_SteamLobbyDirectory_method_on_peer_changed>`
+
+.. container:: contribute
+
+	There is currently no description for this method. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_SteamLobbyDirectory_method_on_session_exiting:
+
+.. rst-class:: classref-method
+
+|void| **on_session_exiting**\ (\ reason\: :ref:`ExitReason<enum_NetwSession_ExitReason>`, _detail\: :godot:`String`\ ) :ref:`🔗<class_SteamLobbyDirectory_method_on_session_exiting>`
+
+.. container:: contribute
+
+	There is currently no description for this method. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

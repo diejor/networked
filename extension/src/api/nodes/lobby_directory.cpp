@@ -13,7 +13,6 @@ namespace {
 const char *SIG_PEER_READY = "lobby_peer_ready";
 const char *SIG_FAILED = "lobby_failed";
 const char *SIG_LIST_PUBLISHED = "lobby_list_published";
-const char *SIG_INVITE_RECEIVED = "invite_received";
 const char *SIG_PROVIDER_UNAVAILABLE = "provider_unavailable";
 
 } // namespace
@@ -32,6 +31,34 @@ void LobbyDirectory::publish_lobbies(
     const TypedArray<NetwServerInfo> &p_infos
 ) {
     emit_signal(StringName(SIG_LIST_PUBLISHED), p_addresses, p_names, p_infos);
+}
+
+void LobbyDirectory::invite(
+    const String &p_address,
+    const String &p_from_name
+) {
+    NetwMultiplayer *session
+        = Object::cast_to<NetwMultiplayer>(gd::object_of(watcher));
+    if (session == nullptr) {
+        NETW_WARN(
+            sys::TRANSPORT,
+            "'%s' got an invite before it joined a session, so the invite was "
+            "dropped. Place the directory under a MultiplayerTree.",
+            String(get_name())
+        );
+        return;
+    }
+    session->discovery_directory_invited(this, p_address, p_from_name);
+}
+
+void LobbyDirectory::watched_by(NetwMultiplayer *p_session) {
+    watcher = gd::instance_id(p_session);
+}
+
+void LobbyDirectory::unwatched_by(NetwMultiplayer *p_session) {
+    if (watcher == gd::instance_id(p_session)) {
+        watcher = ObjectID();
+    }
 }
 
 bool LobbyDirectory::supports(Capability p_capability) {
@@ -176,6 +203,18 @@ void LobbyDirectory::list_lobbies() {
     GDVIRTUAL_CALL(_list_lobbies);
 }
 
+double LobbyDirectory::list_interval() {
+    double answered = 0.0;
+    if (GDVIRTUAL_CALL(_list_interval, answered)) {
+        return answered;
+    }
+    return 0.0;
+}
+
+void LobbyDirectory::stop_listing() {
+    GDVIRTUAL_CALL(_stop_listing);
+}
+
 void LobbyDirectory::leave_lobby() {
     GDVIRTUAL_CALL(_leave_lobby);
 }
@@ -216,14 +255,6 @@ Ref<NetwServerInfo> LobbyDirectory::listed_info(NetwMultiplayer *p_session) {
         : Ref<NetwServerInfo>();
 }
 
-Error LobbyDirectory::set_browse_settings(const Dictionary &p_settings) {
-    Error answered = OK;
-    if (GDVIRTUAL_CALL(_set_browse_settings, p_settings, answered)) {
-        return answered;
-    }
-    return p_settings.is_empty() ? OK : ERR_INVALID_PARAMETER;
-}
-
 void LobbyDirectory::_bind_methods() {
     ClassDB::bind_method(D_METHOD("deliver", "peer"), &LobbyDirectory::deliver);
     ClassDB::bind_method(
@@ -233,6 +264,10 @@ void LobbyDirectory::_bind_methods() {
     ClassDB::bind_method(
         D_METHOD("publish_lobbies", "addresses", "names", "infos"),
         &LobbyDirectory::publish_lobbies
+    );
+    ClassDB::bind_method(
+        D_METHOD("invite", "address", "from_name"),
+        &LobbyDirectory::invite
     );
     ClassDB::bind_method(
         D_METHOD("supports", "capability"),
@@ -266,10 +301,11 @@ void LobbyDirectory::_bind_methods() {
     GDVIRTUAL_BIND(_member_name, "peer_id");
     GDVIRTUAL_BIND(_local_member_name);
     GDVIRTUAL_BIND(_list_lobbies);
+    GDVIRTUAL_BIND(_list_interval);
+    GDVIRTUAL_BIND(_stop_listing);
     GDVIRTUAL_BIND(_leave_lobby);
     GDVIRTUAL_BIND(_host_lobby, "settings");
     GDVIRTUAL_BIND(_join_lobby, "address");
-    GDVIRTUAL_BIND(_set_browse_settings, "settings");
 
     ADD_SIGNAL(MethodInfo(
         SIG_PEER_READY,
@@ -297,11 +333,6 @@ void LobbyDirectory::_bind_methods() {
         PropertyInfo(Variant::PACKED_STRING_ARRAY, "addresses"),
         PropertyInfo(Variant::PACKED_STRING_ARRAY, "names"),
         PropertyInfo(Variant::ARRAY, "infos")
-    ));
-    ADD_SIGNAL(MethodInfo(
-        SIG_INVITE_RECEIVED,
-        PropertyInfo(Variant::INT, "lobby_id"),
-        PropertyInfo(Variant::INT, "sender_id")
     ));
     ADD_SIGNAL(MethodInfo(
         SIG_PROVIDER_UNAVAILABLE,

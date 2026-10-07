@@ -51,6 +51,7 @@ public:
     void advertise(const RoomCard &p_card);
     void stop_advertising();
     void browse();
+    void stop_browsing();
     bool take_listing(godot::LocalVector<TargetRow> &r_rows);
 
     void close();

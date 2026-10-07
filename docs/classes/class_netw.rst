@@ -14,13 +14,6 @@ Netw
 
 Static entry points for the Networked API.
 
-.. rst-class:: classref-introduction-group
-
-Description
------------
-
-:ref:`session()<class_Netw_method_session>` returns the :ref:`NetwSession<class_NetwSession>` a node belongs to, which holds the players, scenes and clock.
-
 .. rst-class:: classref-reftable-group
 
 Methods
@@ -502,7 +495,7 @@ Declares a schema for a table of records.
 
 :godot:`Error <@GlobalScope#enum_@globalscope_Error>` **configure_server_info**\ (\ provider\: :godot:`Callable`\ ) |static| :ref:`🔗<class_Netw_method_configure_server_info>`
 
-Declares what this server says about itself when another peer probes it with :ref:`NetwConnection.endpoint_probe()<class_NetwConnection_method_endpoint_probe>`.
+Declares what this server says about itself when another peer probes it with :ref:`NetwEndpoint.probe()<class_NetwEndpoint_method_probe>`.
 
 ::
 
@@ -679,7 +672,7 @@ Joins the game as ``username``. The arguments after ``username`` are passed to t
     Netw.prepare_join(self, &"Dev", &"red")
     multiplayer.multiplayer_peer = peer
 
-\ Call it before or after assigning :godot:`MultiplayerAPI.multiplayer_peer <MultiplayerAPI#class_MultiplayerAPI_property_multiplayer_peer>`. The join can still be refused later, which emits :ref:`NetwConnection.join_failed<class_NetwConnection_signal_join_failed>`.
+\ Call it before or after assigning :godot:`MultiplayerAPI.multiplayer_peer <MultiplayerAPI#class_MultiplayerAPI_property_multiplayer_peer>`. The join can still be refused later, which emits :ref:`NetwSession.join_failed<class_NetwSession_signal_join_failed>`.
 
 .. code:: text
 
@@ -904,7 +897,7 @@ Returns the multiplayer scene ``node`` is in. Use :ref:`NetwSession.find_scene()
 
 :ref:`NetwSession<class_NetwSession>` **session**\ (\ node\: :godot:`Node`\ ) |static| :ref:`🔗<class_Netw_method_session>`
 
-The :ref:`NetwSession<class_NetwSession>` of the :godot:`Node.multiplayer <Node#class_Node_property_multiplayer>`. Mostly useful for connecting signals.
+The :ref:`NetwSession<class_NetwSession>` of the :godot:`Node.multiplayer <Node#class_Node_property_multiplayer>`. It holds the players, the signals and :ref:`NetwSession.connection<class_NetwSession_property_connection>`, which finds servers and joins or hosts one.
 
 ::
 

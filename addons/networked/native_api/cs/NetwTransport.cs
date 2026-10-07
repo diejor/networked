@@ -659,8 +659,8 @@ public sealed class NetwTransport : NetwRefCounted
         NetwApi.MethodBind("NetwTransport", "report", 3791181477UL);
 
     /// <summary>
-    /// Reports progress on <paramref name="ticket"/> to the <c>progress</c>
-    /// callback of <see cref="NetwMultiplayer.TransportCreatePeer"/>.
+    /// Reports progress on <paramref name="ticket"/> through
+    /// <see cref="NetwConnection.Progressed"/>.
     /// </summary>
     public void Report(
         Rid ticket,

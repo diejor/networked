@@ -1,4 +1,5 @@
 #include "support/frame_drive.h"
+#include "support/lan_directory_probe.h"
 #include "support/netw_call_log.h"
 #include "support/netw_test.h"
 
@@ -10,19 +11,6 @@
 #include "netw/api/nodes/lan_lobby_directory.hpp"
 
 using namespace godot;
-
-namespace netw {
-
-struct LANLobbyDirectoryProbe {
-    static void tick(LANLobbyDirectory *p_directory, double p_delta) {
-        p_directory->tick(p_delta);
-    }
-    static void query_loopback(LANLobbyDirectory *p_directory) {
-        p_directory->query_address = String("127.0.0.1");
-    }
-};
-
-} // namespace netw
 
 namespace NetwTests {
 
@@ -37,6 +25,7 @@ struct DiscoveryEvidence {
     bool driven = false;
     PackedInt32Array hosted_ports;
     PackedStringArray found;
+    int rows = 0;
     bool joined = false;
 };
 
@@ -118,6 +107,7 @@ class LanDiscoveryScenario final : public netw_test::FrameScenario {
             }
         }
         if (finder != nullptr) {
+            browser->connect_plane().on_poll(FRAME);
             netw::LANLobbyDirectoryProbe::tick(finder, FRAME);
         }
         if (joiner.is_valid()) {
@@ -149,6 +139,8 @@ class LanDiscoveryScenario final : public netw_test::FrameScenario {
             }
         }
         if (finder != nullptr) {
+            evidence.rows = int(browser->endpoint_list().size());
+            browser->service_unregister(finder, nullptr);
             finder->service_exiting(browser.ptr());
             memdelete(finder);
             finder = nullptr;
@@ -182,6 +174,7 @@ public:
                     && hosts[1].session->is_online()) {
                     browser.instantiate();
                     finder = directory_for(browser);
+                    browser->service_register(finder, nullptr);
                     listed = std::make_unique<netw_test::CallLog>();
                     finder->connect(
                         StringName("lobby_list_published"),
@@ -197,7 +190,7 @@ public:
                 if (over_budget()) {
                     enter(99);
                 } else if (now_msec() - step_opened > 1200) {
-                    finder->list_lobbies();
+                    browser->endpoint_set_browsing(true);
                     enter(3);
                 }
                 return true;
@@ -252,13 +245,14 @@ NETW_FRAME_SCENARIO(LanDiscoveryScenario, lan_discovery_scenario);
 
 TEST_CASE(
     "[Networked][Connect][Frame] two ENet hosts on one machine are found by "
-    "LAN discovery at their own gameplay ports, and a peer joins one of them "
-    "by the address it found"
+    "a session browsing over LAN discovery at their own gameplay ports, and a "
+    "peer joins one of them by the address it found"
 ) {
     const DiscoveryEvidence &evidence = discovery_evidence();
     REQUIRE(evidence.driven);
     NETW_REQUIRE_EQ(int(evidence.hosted_ports.size()), 2);
     NETW_CHECK_EQ(int(evidence.found.size()), 2);
+    NETW_CHECK_EQ(evidence.rows, 2);
     for (int at = 0; at < evidence.hosted_ports.size(); at++) {
         CHECK(evidence.found.has(
             String("127.0.0.1:") + itos(evidence.hosted_ports[at])

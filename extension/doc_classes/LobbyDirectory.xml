@@ -132,6 +132,12 @@
 				Leave the current lobby, if any. Called when the match ends.
 			</description>
 		</method>
+		<method name="_list_interval" qualifiers="virtual">
+			<return type="float" />
+			<description>
+				Return the seconds between [method _list_lobbies] calls while [member NetwConnection.browsing] is [code]true[/code]. [code]0[/code], the default, lists once each time browsing starts.
+			</description>
+		</method>
 		<method name="_list_lobbies" qualifiers="virtual">
 			<return type="void" />
 			<description>
@@ -157,11 +163,10 @@
 				Return the class name of the [MultiplayerPeer] this service uses, such as [code]&amp;"SteamMultiplayerPeer"[/code]. A session holds one directory per class.
 			</description>
 		</method>
-		<method name="_set_browse_settings" qualifiers="virtual">
-			<return type="int" enum="Error" />
-			<param index="0" name="settings" type="Dictionary" />
+		<method name="_stop_listing" qualifiers="virtual">
+			<return type="void" />
 			<description>
-				Receives what [method NetwConnection.transport_set_browse_settings] passes for this class. Return [constant ERR_INVALID_PARAMETER] for a key it does not know.
+				Close whatever a listing keeps open. Called when [member NetwConnection.browsing] turns [code]false[/code]. Does nothing by default.
 			</description>
 		</method>
 		<method name="_timeout_hint" qualifiers="virtual">
@@ -183,6 +188,14 @@
 			<param index="1" name="message" type="String" />
 			<description>
 				Reports that the current request failed. [param message] is shown to the player.
+			</description>
+		</method>
+		<method name="invite">
+			<return type="void" />
+			<param index="0" name="address" type="String" />
+			<param index="1" name="from_name" type="String" />
+			<description>
+				Reports that [param from_name] invited the player to the lobby at [param address], which arrives as [signal NetwConnection.invited].
 			</description>
 		</method>
 		<method name="local_member_name_default" qualifiers="static">
@@ -216,13 +229,6 @@
 		</method>
 	</methods>
 	<signals>
-		<signal name="invite_received">
-			<param index="0" name="lobby_id" type="int" />
-			<param index="1" name="sender_id" type="int" />
-			<description>
-				Emitted when the player receives an invite. Needs [constant CAPABILITY_INVITES].
-			</description>
-		</signal>
 		<signal name="lobby_failed">
 			<param index="0" name="error" type="int" enum="Error" />
 			<param index="1" name="message" type="String" />
@@ -259,7 +265,7 @@
 			[constant NetwServerInfo.VISIBILITY_FRIENDS_ONLY] works.
 		</constant>
 		<constant name="CAPABILITY_INVITES" value="4" enum="Capability">
-			[signal invite_received] is emitted.
+			The directory calls [method invite] when the player is invited.
 		</constant>
 		<constant name="CAPABILITY_FRIEND_NAMES" value="8" enum="Capability">
 			[method _member_name] returns real player names.

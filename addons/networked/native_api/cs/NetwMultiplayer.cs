@@ -480,6 +480,12 @@ public sealed class NetwMultiplayer : NetwRefCounted
         /// the join form.
         /// </summary>
         ClientSettings = 7,
+        /// <summary>
+        /// [float] seconds a connection through this transport may take before
+        /// a caller gives up on it, from
+        /// <see cref="NetwTransport.TimeoutHint"/>.
+        /// </summary>
+        TimeoutHint = 8,
     }
 
     public enum EndpointParam : long
@@ -497,6 +503,49 @@ public sealed class NetwMultiplayer : NetwRefCounted
         /// <see cref="NetwMultiplayer.EndpointSetParam"/> can change.
         /// </summary>
         DisplayName = 2,
+        /// <summary>
+        /// The display name of the <see cref="LobbyDirectory"/> that listed the
+        /// endpoint, or <c>""</c> when the game added it. Read-only.
+        /// </summary>
+        Source = 3,
+    }
+
+    public enum EndpointState : long
+    {
+        /// <summary>
+        /// A bitmask of <see cref="NetwMultiplayer.EndpointFlags"/>.
+        /// </summary>
+        Flags = 0,
+        /// <summary>
+        /// The <c>@GlobalScope.Error</c> of the last probe, or
+        /// <c>@GlobalScope.FAILED</c> before the first one.
+        /// </summary>
+        Status = 1,
+        /// <summary>
+        /// The <see cref="NetwServerInfo"/> from the last probe, or
+        /// <c>null</c>.
+        /// </summary>
+        Info = 2,
+    }
+
+    public enum EndpointFlags : long
+    {
+        /// <summary>
+        /// Added with <see cref="NetwMultiplayer.EndpointAdd"/> or invited with
+        /// <see cref="LobbyDirectory.Invite"/>, so
+        /// <see cref="NetwMultiplayer.EndpointRemove"/> can remove it.
+        /// </summary>
+        Caller = 1,
+        /// <summary>
+        /// The transport works on this platform.
+        /// </summary>
+        Available = 2,
+        /// <summary>
+        /// The row has an answer, from a probe or from its
+        /// <see cref="LobbyDirectory"/>. Can be set together with
+        /// <see cref="NetwMultiplayer.EndpointFlags.Caller"/>.
+        /// </summary>
+        Observed = 4,
     }
 
     public enum SceneParam : long
@@ -1467,7 +1516,7 @@ public sealed class NetwMultiplayer : NetwRefCounted
         SessionEntered = 24,
         /// <summary>
         /// This peer's join was rejected. Games usually use
-        /// <see cref="NetwConnection.JoinFailed"/>. The callback receives
+        /// <see cref="NetwSession.JoinFailed"/>. The callback receives
         /// <c>(error: int, reason: String)</c>.
         /// </summary>
         SessionJoinFailed = 25,
@@ -1624,6 +1673,28 @@ public sealed class NetwMultiplayer : NetwRefCounted
         /// and ready. The callback receives <c>(scene: NetwScene)</c>.
         /// </summary>
         SceneLive = 51,
+        /// <summary>
+        /// The notification form of <see cref="NetwConnection.StateChanged"/>.
+        /// </summary>
+        ConnectionStateChanged = 52,
+        /// <summary>
+        /// The notification form of <see cref="NetwConnection.Progressed"/>.
+        /// </summary>
+        ConnectionProgressed = 53,
+        /// <summary>
+        /// The notification form of <see cref="NetwConnection.Failed"/>.
+        /// </summary>
+        ConnectionFailed = 54,
+        /// <summary>
+        /// The notification form of
+        /// <see cref="NetwConnection.JoinAddressChanged"/>.
+        /// </summary>
+        ConnectionJoinAddressChanged = 55,
+        /// <summary>
+        /// The notification form of <see cref="NetwConnection.Invited"/>. The
+        /// callback receives <c>(endpoint: RID, from_name: String)</c>.
+        /// </summary>
+        ConnectionInvited = 56,
     }
 
     /// <summary>
@@ -3373,7 +3444,10 @@ public sealed class NetwMultiplayer : NetwRefCounted
     /// <paramref name="transport"/>, and notifies
     /// <see cref="NetwMultiplayer.Notification.EndpointAdded"/>. Adding the
     /// same pair again returns the same <see cref="Rid"/>. Returns an invalid
-    /// <see cref="Rid"/> when <paramref name="transport"/> is unknown.
+    /// <see cref="Rid"/> when <paramref name="transport"/> is unknown. An empty
+    /// <paramref name="address"/> is stored as the address a join with it
+    /// reaches, so an ENet row reads <c>localhost</c> and
+    /// <see cref="NetwMultiplayer.EndpointFind"/> finds it by either spelling.
     /// <code>
     /// var endpoint := api.endpoint_add(
     ///         api.transport_find(&amp;"ENetMultiplayerPeer"),
@@ -3538,16 +3612,16 @@ public sealed class NetwMultiplayer : NetwRefCounted
         NetwApi.MethodBind(
             "NetwMultiplayer",
             "endpoint_get_state",
-            1389929484UL);
+            1505533818UL);
 
     /// <summary>
     /// Returns what the last probe found for <paramref name="endpoint"/>.
-    /// <see cref="NetwConnection.EndpointState.Status"/> is
+    /// <see cref="NetwMultiplayer.EndpointState.Status"/> is
     /// <c>@GlobalScope.FAILED</c> until the first probe.
     /// </summary>
     public Variant EndpointGetState(
         Rid endpoint,
-        NetwConnection.EndpointState state)
+        NetwMultiplayer.EndpointState state)
     {
         godot_variant slot0 = VariantUtils.CreateFromRid(endpoint);
         godot_variant slot1 = VariantUtils.CreateFromInt((long)state);
@@ -3585,67 +3659,89 @@ public sealed class NetwMultiplayer : NetwRefCounted
             ref discarded);
     }
 
-    private static readonly IntPtr _bindTransportSetBrowseSettings =
+    private static readonly IntPtr _bindEndpointSetBrowsing =
         NetwApi.MethodBind(
             "NetwMultiplayer",
-            "transport_set_browse_settings",
-            707650125UL);
+            "endpoint_set_browsing",
+            2586408642UL);
 
     /// <summary>
-    /// Sets how <paramref name="transport"/> looks for servers. Call it before
-    /// <see cref="NetwMultiplayer.EndpointRefresh"/>. The WebRTC transport
-    /// accepts these settings.
-    /// <code>
-    /// Dictionary
-    /// ┠╴trackers             PackedStringArray  WebSocket tracker URLs
-    /// ┖╴signaling_namespace  String             namespace of listed rooms
-    /// </code>
-    /// <code>
-    /// Error
-    /// ┠╴OK                     the settings are set
-    /// ┠╴ERR_INVALID_PARAMETER  invalid settings
-    /// ┖╴ERR_ALREADY_IN_USE     different settings after searching started
-    /// </code>
+    /// The flat form of <see cref="NetwConnection.Browsing"/>.
     /// </summary>
-    public Error TransportSetBrowseSettings(
-        Rid transport,
-        Godot.Collections.Dictionary settings)
+    public void EndpointSetBrowsing(bool enabled)
     {
-        godot_variant slot0 = VariantUtils.CreateFromRid(transport);
-        godot_variant slot1 = VariantUtils.CreateFromDictionary(settings);
-        godot_variant answered = default;
-        NetwThunks.Call2(
-            _bindTransportSetBrowseSettings,
+        byte slot0 = enabled ? (byte)1 : (byte)0;
+        long discarded = default;
+        NetwThunks.Ptrcall1_Byte_Long(
+            _bindEndpointSetBrowsing,
             Checked,
             in slot0,
-            in slot1,
-            ref answered);
-        slot0.Dispose();
-        slot1.Dispose();
-        Error result = (Error)VariantUtils.ConvertToInt64(answered);
-        answered.Dispose();
-        return result;
+            ref discarded);
     }
 
-    private static readonly IntPtr _bindEndpointRefresh =
-        NetwApi.MethodBind("NetwMultiplayer", "endpoint_refresh", 3218959716UL);
+    private static readonly IntPtr _bindEndpointIsBrowsing =
+        NetwApi.MethodBind(
+            "NetwMultiplayer",
+            "endpoint_is_browsing",
+            36873697UL);
 
     /// <summary>
-    /// Re-probes every endpoint and notifies
-    /// <see cref="NetwMultiplayer.Notification.EndpointUpdated"/> for each
-    /// result. Probes run serially.
+    /// The flat form of <see cref="NetwConnection.Browsing"/>.
     /// </summary>
-    public void EndpointRefresh()
+    public bool EndpointIsBrowsing()
     {
+        byte answered = default;
+        NetwThunks.Ptrcall0_Byte(
+            _bindEndpointIsBrowsing,
+            Checked,
+            ref answered);
+        return answered != 0;
+    }
+
+    private static readonly IntPtr _bindEndpointSetProbeInterval =
+        NetwApi.MethodBind(
+            "NetwMultiplayer",
+            "endpoint_set_probe_interval",
+            373806689UL);
+
+    /// <summary>
+    /// The flat form of <see cref="NetwConnection.ProbeInterval"/>.
+    /// </summary>
+    public void EndpointSetProbeInterval(double seconds)
+    {
+        double slot0 = seconds;
         long discarded = default;
-        NetwThunks.Ptrcall0_Long(_bindEndpointRefresh, Checked, ref discarded);
+        NetwThunks.Ptrcall1_Double_Long(
+            _bindEndpointSetProbeInterval,
+            Checked,
+            in slot0,
+            ref discarded);
+    }
+
+    private static readonly IntPtr _bindEndpointGetProbeInterval =
+        NetwApi.MethodBind(
+            "NetwMultiplayer",
+            "endpoint_get_probe_interval",
+            1740695150UL);
+
+    /// <summary>
+    /// The flat form of <see cref="NetwConnection.ProbeInterval"/>.
+    /// </summary>
+    public double EndpointGetProbeInterval()
+    {
+        double answered = default;
+        NetwThunks.Ptrcall0_Double(
+            _bindEndpointGetProbeInterval,
+            Checked,
+            ref answered);
+        return answered;
     }
 
     private static readonly IntPtr _bindTransportCreatePeer =
         NetwApi.MethodBind(
             "NetwMultiplayer",
             "transport_create_peer",
-            2430873470UL);
+            2154314417UL);
 
     /// <summary>
     /// Asks <paramref name="transport"/> to create a
@@ -3656,9 +3752,8 @@ public sealed class NetwMultiplayer : NetwRefCounted
     /// called once, in a later frame, as <c>completed(peer, error, detail)</c>.
     /// Assign the peer to <see cref="MultiplayerApi.MultiplayerPeer"/> inside
     /// this callback, before any <c>await</c>. Returning without assigning it
-    /// closes the peer. <paramref name="progress"/> is called as
-    /// <c>progress(step, message, ratio)</c> while it works. Returns an invalid
-    /// <see cref="Rid"/> when <paramref name="completed"/> is not valid.
+    /// closes the peer. Returns an invalid <see cref="Rid"/> when
+    /// <paramref name="completed"/> is not valid.
     /// <code>
     /// var ticket := api.transport_create_peer(
     ///         relay, NetwConnection.TRANSPORT_MODE_CLIENT,
@@ -3675,10 +3770,9 @@ public sealed class NetwMultiplayer : NetwRefCounted
         NetwConnection.TransportMode mode,
         string address,
         Godot.Collections.Dictionary settings,
-        Callable completed,
-        Callable progress = default)
+        Callable completed)
     {
-        IntPtr pack = NetwThunks.ArgsNew(6);
+        IntPtr pack = NetwThunks.ArgsNew(5);
         godot_variant slot0 = VariantUtils.CreateFromRid(transport);
         NetwThunks.ArgsSet(pack, 0, in slot0);
         slot0.Dispose();
@@ -3694,15 +3788,12 @@ public sealed class NetwMultiplayer : NetwRefCounted
         godot_variant slot4 = VariantUtils.CreateFromCallable(completed);
         NetwThunks.ArgsSet(pack, 4, in slot4);
         slot4.Dispose();
-        godot_variant slot5 = VariantUtils.CreateFromCallable(progress);
-        NetwThunks.ArgsSet(pack, 5, in slot5);
-        slot5.Dispose();
         godot_variant answered = default;
         NetwThunks.CallPack(
             _bindTransportCreatePeer,
             Checked,
             pack,
-            6,
+            5,
             ref answered);
         NetwThunks.ArgsFree(pack);
         Rid result = VariantUtils.ConvertToRid(answered);
@@ -3730,6 +3821,192 @@ public sealed class NetwMultiplayer : NetwRefCounted
             Checked,
             in slot0,
             ref discarded);
+    }
+
+    private static readonly IntPtr _bindTransportJoin =
+        NetwApi.MethodBind("NetwMultiplayer", "transport_join", 2399309796UL);
+
+    /// <summary>
+    /// Joins <paramref name="address"/> through <paramref name="transport"/>,
+    /// as <see cref="NetwConnection.Join"/> joins a listed row.
+    /// </summary>
+    public NetwPromise TransportJoin(
+        Rid transport,
+        string address,
+        Godot.Collections.Dictionary settings = null)
+    {
+        settings ??= new Godot.Collections.Dictionary();
+        godot_variant slot0 = VariantUtils.CreateFromRid(transport);
+        godot_variant slot1 = VariantUtils.CreateFromString(address);
+        godot_variant slot2 = VariantUtils.CreateFromDictionary(settings);
+        godot_variant answered = default;
+        NetwThunks.Call3(
+            _bindTransportJoin,
+            Checked,
+            in slot0,
+            in slot1,
+            in slot2,
+            ref answered);
+        slot0.Dispose();
+        slot1.Dispose();
+        slot2.Dispose();
+        NetwPromise result =
+            NetwPromise.Adopt(
+                NetwApi.Retained(
+                    VariantUtils.ConvertToGodotObjectPtr(answered)));
+        answered.Dispose();
+        return result;
+    }
+
+    private static readonly IntPtr _bindEndpointJoin =
+        NetwApi.MethodBind("NetwMultiplayer", "endpoint_join", 2226175958UL);
+
+    /// <summary>
+    /// The flat form of <see cref="NetwConnection.Join"/>.
+    /// </summary>
+    public NetwPromise EndpointJoin(
+        Rid endpoint,
+        Godot.Collections.Dictionary settings = null)
+    {
+        settings ??= new Godot.Collections.Dictionary();
+        godot_variant slot0 = VariantUtils.CreateFromRid(endpoint);
+        godot_variant slot1 = VariantUtils.CreateFromDictionary(settings);
+        godot_variant answered = default;
+        NetwThunks.Call2(
+            _bindEndpointJoin,
+            Checked,
+            in slot0,
+            in slot1,
+            ref answered);
+        slot0.Dispose();
+        slot1.Dispose();
+        NetwPromise result =
+            NetwPromise.Adopt(
+                NetwApi.Retained(
+                    VariantUtils.ConvertToGodotObjectPtr(answered)));
+        answered.Dispose();
+        return result;
+    }
+
+    private static readonly IntPtr _bindTransportHost =
+        NetwApi.MethodBind("NetwMultiplayer", "transport_host", 2226175958UL);
+
+    /// <summary>
+    /// The flat form of <see cref="NetwConnection.Host"/>.
+    /// </summary>
+    public NetwPromise TransportHost(
+        Rid transport,
+        Godot.Collections.Dictionary settings = null)
+    {
+        settings ??= new Godot.Collections.Dictionary();
+        godot_variant slot0 = VariantUtils.CreateFromRid(transport);
+        godot_variant slot1 = VariantUtils.CreateFromDictionary(settings);
+        godot_variant answered = default;
+        NetwThunks.Call2(
+            _bindTransportHost,
+            Checked,
+            in slot0,
+            in slot1,
+            ref answered);
+        slot0.Dispose();
+        slot1.Dispose();
+        NetwPromise result =
+            NetwPromise.Adopt(
+                NetwApi.Retained(
+                    VariantUtils.ConvertToGodotObjectPtr(answered)));
+        answered.Dispose();
+        return result;
+    }
+
+    private static readonly IntPtr _bindTransportCancelAttempt =
+        NetwApi.MethodBind(
+            "NetwMultiplayer",
+            "transport_cancel_attempt",
+            3218959716UL);
+
+    /// <summary>
+    /// The flat form of <see cref="NetwConnection.Cancel"/>.
+    /// </summary>
+    public void TransportCancelAttempt()
+    {
+        long discarded = default;
+        NetwThunks.Ptrcall0_Long(
+            _bindTransportCancelAttempt,
+            Checked,
+            ref discarded);
+    }
+
+    private static readonly IntPtr _bindTransportGetAttemptState =
+        NetwApi.MethodBind(
+            "NetwMultiplayer",
+            "transport_get_attempt_state",
+            3905245786UL);
+
+    /// <summary>
+    /// The flat form of <see cref="NetwConnection.State"/>.
+    /// </summary>
+    public long TransportGetAttemptState()
+    {
+        long answered = default;
+        NetwThunks.Ptrcall0_Long(
+            _bindTransportGetAttemptState,
+            Checked,
+            ref answered);
+        return answered;
+    }
+
+    private static readonly IntPtr _bindTransportSetDefaults =
+        NetwApi.MethodBind(
+            "NetwMultiplayer",
+            "transport_set_defaults",
+            707650125UL);
+
+    /// <summary>
+    /// The flat form of <see cref="NetwConnection.SetDefaults"/>.
+    /// </summary>
+    public Error TransportSetDefaults(
+        Rid transport,
+        Godot.Collections.Dictionary settings)
+    {
+        godot_variant slot0 = VariantUtils.CreateFromRid(transport);
+        godot_variant slot1 = VariantUtils.CreateFromDictionary(settings);
+        godot_variant answered = default;
+        NetwThunks.Call2(
+            _bindTransportSetDefaults,
+            Checked,
+            in slot0,
+            in slot1,
+            ref answered);
+        slot0.Dispose();
+        slot1.Dispose();
+        Error result = (Error)VariantUtils.ConvertToInt64(answered);
+        answered.Dispose();
+        return result;
+    }
+
+    private static readonly IntPtr _bindTransportGetDefaults =
+        NetwApi.MethodBind(
+            "NetwMultiplayer",
+            "transport_get_defaults",
+            3192676292UL);
+
+    /// <summary>
+    /// The flat form of <see cref="NetwConnection.Defaults"/>.
+    /// </summary>
+    public Godot.Collections.Dictionary TransportGetDefaults(Rid transport)
+    {
+        godot_variant slot0 = VariantUtils.CreateFromRid(transport);
+        godot_variant answered = default;
+        NetwThunks.Call1(
+            _bindTransportGetDefaults,
+            Checked,
+            in slot0,
+            ref answered);
+        slot0.Dispose();
+        Godot.Collections.Dictionary result =
+            VariantUtils.ConvertToDictionary(answered);
+        answered.Dispose();
+        return result;
     }
 
     private static readonly IntPtr _bindTransportRegister =
@@ -3823,9 +4100,7 @@ public sealed class NetwMultiplayer : NetwRefCounted
     /// or an invalid <see cref="Rid"/>.
     /// <code>
     /// var enet := api.transport_find(&amp;"ENetMultiplayerPeer")
-    /// api.transport_create_peer(
-    ///         enet, NetwConnection.TRANSPORT_MODE_HOST, "",
-    ///         {port = 21253}, assign_it)
+    /// api.transport_host(enet, {port = 21253})
     /// </code>
     /// </summary>
     public Rid TransportFind(StringName peerClass)
@@ -9964,6 +10239,37 @@ public sealed class NetwMultiplayer : NetwRefCounted
             ref answered);
         slot0.Dispose();
         answered.Dispose();
+    }
+
+    private static readonly IntPtr _bindLawExtensionNamed =
+        NetwApi.MethodBind(
+            "NetwMultiplayer",
+            "law_extension_named",
+            2240911060UL);
+
+    public static bool LawExtensionNamed()
+    {
+        byte answered = default;
+        NetwThunks.Ptrcall0_Byte(
+            _bindLawExtensionNamed,
+            IntPtr.Zero,
+            ref answered);
+        return answered != 0;
+    }
+
+    private static readonly IntPtr _bindLawExtensionScript =
+        NetwApi.MethodBind(
+            "NetwMultiplayer",
+            "law_extension_script",
+            2146468882UL);
+
+    public static Script LawExtensionScript()
+    {
+        godot_variant answered = default;
+        NetwThunks.Call0(_bindLawExtensionScript, IntPtr.Zero, ref answered);
+        Script result = (Script)VariantUtils.ConvertToGodotObject(answered);
+        answered.Dispose();
+        return result;
     }
 
     private static readonly IntPtr _bindEntityAddPropertySet =

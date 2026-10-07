@@ -96,6 +96,10 @@ bool ENetTransport::accepts_empty_address() const {
     return true;
 }
 
+String ENetTransport::default_address() const {
+    return String("localhost");
+}
+
 Dictionary ENetTransport::client_settings() const {
     Dictionary settings;
     settings["port"] = DEFAULT_PORT;
@@ -220,6 +224,10 @@ bool WebSocketTransport::accepts_empty_address() const {
     return true;
 }
 
+String WebSocketTransport::default_address() const {
+    return build_url(String());
+}
+
 Dictionary WebSocketTransport::host_settings() const {
     Dictionary settings;
     settings["port"] = DEFAULT_PORT;
@@ -317,6 +325,10 @@ String LocalTransport::address_label() const {
 
 bool LocalTransport::accepts_empty_address() const {
     return true;
+}
+
+String LocalTransport::default_address() const {
+    return String("local");
 }
 
 void LocalTransport::make_peer(

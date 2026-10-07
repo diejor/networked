@@ -12,20 +12,14 @@ ConnectBrowser
 
 **Inherits:** :godot:`Control`
 
-A ready-made server browser, with a server list, Add, Host, Refresh and Join.
+A server browser that lists, joins and hosts games for its session.
 
 .. rst-class:: classref-introduction-group
 
 Description
 -----------
 
-Add this scene under a :ref:`MultiplayerTree<class_MultiplayerTree>` and players can browse, host and join servers with no extra code. It uses :ref:`NetwSession.connection<class_NetwSession_property_connection>` of its ancestors, or the :ref:`NetwConnection<class_NetwConnection>` passed to :ref:`bind()<class_ConnectBrowser_method_bind>`.
-
-::
-
-    browser.bind(Netw.session(other_node).connection)
-
-\ Host and Join create a peer with :ref:`NetwConnection.create_peer()<class_NetwConnection_method_create_peer>`, call :ref:`Netw.prepare_join()<class_Netw_method_prepare_join>` with the form's values, and assign the peer. Closing the browser after that does not disconnect.  Saved servers are stored in :ref:`server_list_path<class_ConnectBrowser_property_server_list_path>`. Only those can be edited or removed here.
+:godot:`Control._ready() <Control#class_Control_private_method__ready>` is the whole wiring, and a game's own connect screen starts by copying it.
 
 .. rst-class:: classref-reftable-group
 
@@ -35,17 +29,59 @@ Properties
 .. table::
    :widths: auto
 
-   +-------------------------------------------------------------------------------+-----------------------------------------------------------------------------------------+----------+
-   | :godot:`bool`                                                                 | :ref:`hide_when_session_active<class_ConnectBrowser_property_hide_when_session_active>` | ``true`` |
-   +-------------------------------------------------------------------------------+-----------------------------------------------------------------------------------------+----------+
-   | :godot:`String`                                                               | :ref:`server_list_path<class_ConnectBrowser_property_server_list_path>`                 | ``""``   |
-   +-------------------------------------------------------------------------------+-----------------------------------------------------------------------------------------+----------+
-   | :godot:`Array`\[:ref:`ConnectTransportConfig<class_ConnectTransportConfig>`\] | :ref:`transport_defaults<class_ConnectBrowser_property_transport_defaults>`             | ``[]``   |
-   +-------------------------------------------------------------------------------+-----------------------------------------------------------------------------------------+----------+
-   | :godot:`bool`                                                                 | :ref:`use_url_fragment<class_ConnectBrowser_property_use_url_fragment>`                 | ``true`` |
-   +-------------------------------------------------------------------------------+-----------------------------------------------------------------------------------------+----------+
-   | :ref:`NetwLinkConditions<class_NetwLinkConditions>`                           | :ref:`debug_link<class_ConnectBrowser_property_debug_link>`                             |          |
-   +-------------------------------------------------------------------------------+-----------------------------------------------------------------------------------------+----------+
+   +-------------------------------------------------------------------------------------------------------------------+-----------------------------------------------------------------------------------------+---------------+
+   | :godot:`bool`                                                                                                     | :ref:`hide_when_session_active<class_ConnectBrowser_property_hide_when_session_active>` | ``true``      |
+   +-------------------------------------------------------------------------------------------------------------------+-----------------------------------------------------------------------------------------+---------------+
+   | :godot:`Array`\[:ref:`ConnectTransportConfig<class_ConnectTransportConfig>`\]                                     | :ref:`transport_defaults<class_ConnectBrowser_property_transport_defaults>`             | ``[]``        |
+   +-------------------------------------------------------------------------------------------------------------------+-----------------------------------------------------------------------------------------+---------------+
+   | :godot:`bool`                                                                                                     | :ref:`use_url_fragment<class_ConnectBrowser_property_use_url_fragment>`                 | ``true``      |
+   +-------------------------------------------------------------------------------------------------------------------+-----------------------------------------------------------------------------------------+---------------+
+   | :godot:`Dictionary`\[:ref:`NetwEndpoint<class_NetwEndpoint>`, :ref:`ConnectBrowserRow<class_ConnectBrowserRow>`\] | :ref:`rows<class_ConnectBrowser_property_rows>`                                         | ``{}``        |
+   +-------------------------------------------------------------------------------------------------------------------+-----------------------------------------------------------------------------------------+---------------+
+   | :ref:`NetwEndpoint<class_NetwEndpoint>`                                                                           | :ref:`selected<class_ConnectBrowser_property_selected>`                                 |               |
+   +-------------------------------------------------------------------------------------------------------------------+-----------------------------------------------------------------------------------------+---------------+
+   | :godot:`String`                                                                                                   | :ref:`username<class_ConnectBrowser_property_username>`                                 | ``"Player"``  |
+   +-------------------------------------------------------------------------------------------------------------------+-----------------------------------------------------------------------------------------+---------------+
+   | :ref:`NetwSession<class_NetwSession>`                                                                             | :ref:`session<class_ConnectBrowser_property_session>`                                   | ``<unknown>`` |
+   +-------------------------------------------------------------------------------------------------------------------+-----------------------------------------------------------------------------------------+---------------+
+   | :ref:`NetwConnection<class_NetwConnection>`                                                                       | :ref:`connection<class_ConnectBrowser_property_connection>`                             | ``<unknown>`` |
+   +-------------------------------------------------------------------------------------------------------------------+-----------------------------------------------------------------------------------------+---------------+
+   | :godot:`VBoxContainer`                                                                                            | :ref:`server_list<class_ConnectBrowser_property_server_list>`                           | ``<unknown>`` |
+   +-------------------------------------------------------------------------------------------------------------------+-----------------------------------------------------------------------------------------+---------------+
+   | :godot:`VBoxContainer`                                                                                            | :ref:`list_box<class_ConnectBrowser_property_list_box>`                                 | ``<unknown>`` |
+   +-------------------------------------------------------------------------------------------------------------------+-----------------------------------------------------------------------------------------+---------------+
+   | :godot:`Control`                                                                                                  | :ref:`empty_state<class_ConnectBrowser_property_empty_state>`                           | ``<unknown>`` |
+   +-------------------------------------------------------------------------------------------------------------------+-----------------------------------------------------------------------------------------+---------------+
+   | :godot:`Control`                                                                                                  | :ref:`banner<class_ConnectBrowser_property_banner>`                                     | ``<unknown>`` |
+   +-------------------------------------------------------------------------------------------------------------------+-----------------------------------------------------------------------------------------+---------------+
+   | :godot:`Label`                                                                                                    | :ref:`banner_label<class_ConnectBrowser_property_banner_label>`                         | ``<unknown>`` |
+   +-------------------------------------------------------------------------------------------------------------------+-----------------------------------------------------------------------------------------+---------------+
+   | :godot:`Control`                                                                                                  | :ref:`details<class_ConnectBrowser_property_details>`                                   | ``<unknown>`` |
+   +-------------------------------------------------------------------------------------------------------------------+-----------------------------------------------------------------------------------------+---------------+
+   | :ref:`StatusDot<class_StatusDot>`                                                                                 | :ref:`details_status_dot<class_ConnectBrowser_property_details_status_dot>`             | ``<unknown>`` |
+   +-------------------------------------------------------------------------------------------------------------------+-----------------------------------------------------------------------------------------+---------------+
+   | :godot:`Label`                                                                                                    | :ref:`details_name_label<class_ConnectBrowser_property_details_name_label>`             | ``<unknown>`` |
+   +-------------------------------------------------------------------------------------------------------------------+-----------------------------------------------------------------------------------------+---------------+
+   | :godot:`Label`                                                                                                    | :ref:`details_source_label<class_ConnectBrowser_property_details_source_label>`         | ``<unknown>`` |
+   +-------------------------------------------------------------------------------------------------------------------+-----------------------------------------------------------------------------------------+---------------+
+   | :godot:`Label`                                                                                                    | :ref:`details_address_label<class_ConnectBrowser_property_details_address_label>`       | ``<unknown>`` |
+   +-------------------------------------------------------------------------------------------------------------------+-----------------------------------------------------------------------------------------+---------------+
+   | :godot:`Label`                                                                                                    | :ref:`details_status_label<class_ConnectBrowser_property_details_status_label>`         | ``<unknown>`` |
+   +-------------------------------------------------------------------------------------------------------------------+-----------------------------------------------------------------------------------------+---------------+
+   | :godot:`Label`                                                                                                    | :ref:`details_ping_label<class_ConnectBrowser_property_details_ping_label>`             | ``<unknown>`` |
+   +-------------------------------------------------------------------------------------------------------------------+-----------------------------------------------------------------------------------------+---------------+
+   | :godot:`Label`                                                                                                    | :ref:`details_players_label<class_ConnectBrowser_property_details_players_label>`       | ``<unknown>`` |
+   +-------------------------------------------------------------------------------------------------------------------+-----------------------------------------------------------------------------------------+---------------+
+   | :godot:`Button`                                                                                                   | :ref:`join_button<class_ConnectBrowser_property_join_button>`                           | ``<unknown>`` |
+   +-------------------------------------------------------------------------------------------------------------------+-----------------------------------------------------------------------------------------+---------------+
+   | :ref:`HostPopup<class_HostPopup>`                                                                                 | :ref:`host_popup<class_ConnectBrowser_property_host_popup>`                             | ``<unknown>`` |
+   +-------------------------------------------------------------------------------------------------------------------+-----------------------------------------------------------------------------------------+---------------+
+   | :ref:`JoinPopup<class_JoinPopup>`                                                                                 | :ref:`join_popup<class_ConnectBrowser_property_join_popup>`                             | ``<unknown>`` |
+   +-------------------------------------------------------------------------------------------------------------------+-----------------------------------------------------------------------------------------+---------------+
+   | :ref:`JoinDirectPopup<class_JoinDirectPopup>`                                                                     | :ref:`join_direct_popup<class_ConnectBrowser_property_join_direct_popup>`               | ``<unknown>`` |
+   +-------------------------------------------------------------------------------------------------------------------+-----------------------------------------------------------------------------------------+---------------+
+   | :ref:`ConnectingPopup<class_ConnectingPopup>`                                                                     | :ref:`connecting_popup<class_ConnectBrowser_property_connecting_popup>`                 | ``<unknown>`` |
+   +-------------------------------------------------------------------------------------------------------------------+-----------------------------------------------------------------------------------------+---------------+
 
 .. rst-class:: classref-reftable-group
 
@@ -55,23 +91,43 @@ Methods
 .. table::
    :widths: auto
 
-   +------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | |void|           | :ref:`bind<class_ConnectBrowser_method_bind>`\ (\ handle\: :ref:`NetwConnection<class_NetwConnection>`\ )                                                  |
-   +------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`String`  | :ref:`url_room<class_ConnectBrowser_method_url_room>`\ (\ )                                                                                                |
-   +------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`String`  | :ref:`format_peer_class_label<class_ConnectBrowser_method_format_peer_class_label>`\ (\ peer_class\: :godot:`StringName`\ ) |static|                       |
-   +------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`String`  | :ref:`format_address<class_ConnectBrowser_method_format_address>`\ (\ endpoint\: :godot:`Dictionary`\ ) |static|                                           |
-   +------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`Control` | :ref:`make_value_control<class_ConnectBrowser_method_make_value_control>`\ (\ value\: :godot:`Variant`, field_name\: :godot:`StringName` = &""\ ) |static| |
-   +------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`Variant` | :ref:`value_from_control<class_ConnectBrowser_method_value_from_control>`\ (\ control\: :godot:`Control`, value_type\: :godot:`int`\ ) |static|            |
-   +------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`bool`    | :ref:`can_author_value<class_ConnectBrowser_method_can_author_value>`\ (\ value\: :godot:`Variant`\ ) |static|                                             |
-   +------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`Variant` | :ref:`zero_value<class_ConnectBrowser_method_zero_value>`\ (\ value_type\: :godot:`int`\ ) |static|                                                        |
-   +------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   +--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | |void| | :ref:`on_endpoint_added<class_ConnectBrowser_method_on_endpoint_added>`\ (\ endpoint\: :ref:`NetwEndpoint<class_NetwEndpoint>`\ )                                                                                                                                         |
+   +--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | |void| | :ref:`on_endpoint_removed<class_ConnectBrowser_method_on_endpoint_removed>`\ (\ endpoint\: :ref:`NetwEndpoint<class_NetwEndpoint>`\ )                                                                                                                                     |
+   +--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | |void| | :ref:`on_state_changed<class_ConnectBrowser_method_on_state_changed>`\ (\ state\: :ref:`State<enum_NetwConnection_State>`\ )                                                                                                                                              |
+   +--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | |void| | :ref:`on_progressed<class_ConnectBrowser_method_on_progressed>`\ (\ message\: :godot:`String`, ratio\: :godot:`float`\ )                                                                                                                                                  |
+   +--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | |void| | :ref:`on_failed<class_ConnectBrowser_method_on_failed>`\ (\ _error\: :godot:`Error <@GlobalScope#enum_@globalscope_Error>`, reason\: :godot:`String`\ )                                                                                                                   |
+   +--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | |void| | :ref:`on_join_address_changed<class_ConnectBrowser_method_on_join_address_changed>`\ (\ address\: :godot:`String`\ )                                                                                                                                                      |
+   +--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | |void| | :ref:`on_server_list_visibility_changed<class_ConnectBrowser_method_on_server_list_visibility_changed>`\ (\ )                                                                                                                                                             |
+   +--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | |void| | :ref:`join<class_ConnectBrowser_method_join>`\ (\ endpoint\: :ref:`NetwEndpoint<class_NetwEndpoint>`, settings\: :godot:`Dictionary`, join_args\: :godot:`Array`\ )                                                                                                       |
+   +--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | |void| | :ref:`host<class_ConnectBrowser_method_host>`\ (\ transport\: :godot:`StringName`, settings\: :godot:`Dictionary`, info\: :ref:`NetwServerInfo<class_NetwServerInfo>`, join_args\: :godot:`Array`\ )                                                                      |
+   +--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | |void| | :ref:`on_row_selected<class_ConnectBrowser_method_on_row_selected>`\ (\ endpoint\: :ref:`NetwEndpoint<class_NetwEndpoint>`\ )                                                                                                                                             |
+   +--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | |void| | :ref:`on_row_activated<class_ConnectBrowser_method_on_row_activated>`\ (\ endpoint\: :ref:`NetwEndpoint<class_NetwEndpoint>`\ )                                                                                                                                           |
+   +--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | |void| | :ref:`on_endpoint_changed<class_ConnectBrowser_method_on_endpoint_changed>`\ (\ )                                                                                                                                                                                         |
+   +--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | |void| | :ref:`on_join_pressed<class_ConnectBrowser_method_on_join_pressed>`\ (\ )                                                                                                                                                                                                 |
+   +--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | |void| | :ref:`on_join_direct_pressed<class_ConnectBrowser_method_on_join_direct_pressed>`\ (\ )                                                                                                                                                                                   |
+   +--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | |void| | :ref:`on_host_pressed<class_ConnectBrowser_method_on_host_pressed>`\ (\ )                                                                                                                                                                                                 |
+   +--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | |void| | :ref:`on_join_popup_submitted<class_ConnectBrowser_method_on_join_popup_submitted>`\ (\ settings\: :godot:`Dictionary`, player_name\: :godot:`String`, join_args\: :godot:`Array`\ )                                                                                      |
+   +--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | |void| | :ref:`on_join_direct_popup_submitted<class_ConnectBrowser_method_on_join_direct_popup_submitted>`\ (\ transport\: :godot:`StringName`, address\: :godot:`String`, settings\: :godot:`Dictionary`, player_name\: :godot:`String`, join_args\: :godot:`Array`\ )            |
+   +--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | |void| | :ref:`on_host_popup_submitted<class_ConnectBrowser_method_on_host_popup_submitted>`\ (\ transport\: :godot:`StringName`, settings\: :godot:`Dictionary`, info\: :ref:`NetwServerInfo<class_NetwServerInfo>`, player_name\: :godot:`String`, join_args\: :godot:`Array`\ ) |
+   +--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 
 .. rst-class:: classref-section-separator
 
@@ -82,21 +138,17 @@ Methods
 Constants
 ---------
 
-.. _class_ConnectBrowser_constant_PLACEHOLDER_SERVER_NAME:
+.. _class_ConnectBrowser_constant_ROW:
 
 .. rst-class:: classref-constant
 
-**PLACEHOLDER_SERVER_NAME** = ``"My Server"`` :ref:`🔗<class_ConnectBrowser_constant_PLACEHOLDER_SERVER_NAME>`
+**ROW** = ``<Object>`` :ref:`🔗<class_ConnectBrowser_constant_ROW>`
 
-The server name used when the player enters none.
+.. container:: contribute
 
-.. _class_ConnectBrowser_constant_DEFAULT_SERVER_LIST_PATH:
+	There is currently no description for this constant. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
 
-.. rst-class:: classref-constant
 
-**DEFAULT_SERVER_LIST_PATH** = ``"user://netw_servers.cfg"`` :ref:`🔗<class_ConnectBrowser_constant_DEFAULT_SERVER_LIST_PATH>`
-
-The saved server file used when :ref:`server_list_path<class_ConnectBrowser_property_server_list_path>` is empty.
 
 .. rst-class:: classref-section-separator
 
@@ -113,19 +165,7 @@ Property Descriptions
 
 :godot:`bool` **hide_when_session_active** = ``true`` :ref:`🔗<class_ConnectBrowser_property_hide_when_session_active>`
 
-Hides the browser while connected.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_ConnectBrowser_property_server_list_path:
-
-.. rst-class:: classref-property
-
-:godot:`String` **server_list_path** = ``""`` :ref:`🔗<class_ConnectBrowser_property_server_list_path>`
-
-The :godot:`ConfigFile` path where saved servers are stored.
+Hides the server list while the session is online.
 
 .. rst-class:: classref-item-separator
 
@@ -137,7 +177,7 @@ The :godot:`ConfigFile` path where saved servers are stored.
 
 :godot:`Array`\[:ref:`ConnectTransportConfig<class_ConnectTransportConfig>`\] **transport_defaults** = ``[]`` :ref:`🔗<class_ConnectBrowser_property_transport_defaults>`
 
-Default form values for each transport.
+Settings every connection through a transport starts from.
 
 .. rst-class:: classref-item-separator
 
@@ -149,19 +189,329 @@ Default form values for each transport.
 
 :godot:`bool` **use_url_fragment** = ``true`` :ref:`🔗<class_ConnectBrowser_property_use_url_fragment>`
 
-On the web, puts the hosted room code in the page URL after ``#``, and joins the room such a URL names.
+On the web, keeps the hosted room after ``#`` in the page URL.
 
 .. rst-class:: classref-item-separator
 
 ----
 
-.. _class_ConnectBrowser_property_debug_link:
+.. _class_ConnectBrowser_property_rows:
 
 .. rst-class:: classref-property
 
-:ref:`NetwLinkConditions<class_NetwLinkConditions>` **debug_link** :ref:`🔗<class_ConnectBrowser_property_debug_link>`
+:godot:`Dictionary`\[:ref:`NetwEndpoint<class_NetwEndpoint>`, :ref:`ConnectBrowserRow<class_ConnectBrowserRow>`\] **rows** = ``{}`` :ref:`🔗<class_ConnectBrowser_property_rows>`
 
-Simulated latency and packet loss for connections made from this browser.
+.. container:: contribute
+
+	There is currently no description for this property. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_ConnectBrowser_property_selected:
+
+.. rst-class:: classref-property
+
+:ref:`NetwEndpoint<class_NetwEndpoint>` **selected** :ref:`🔗<class_ConnectBrowser_property_selected>`
+
+.. container:: contribute
+
+	There is currently no description for this property. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_ConnectBrowser_property_username:
+
+.. rst-class:: classref-property
+
+:godot:`String` **username** = ``"Player"`` :ref:`🔗<class_ConnectBrowser_property_username>`
+
+.. container:: contribute
+
+	There is currently no description for this property. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_ConnectBrowser_property_session:
+
+.. rst-class:: classref-property
+
+:ref:`NetwSession<class_NetwSession>` **session** = ``<unknown>`` :ref:`🔗<class_ConnectBrowser_property_session>`
+
+.. container:: contribute
+
+	There is currently no description for this property. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_ConnectBrowser_property_connection:
+
+.. rst-class:: classref-property
+
+:ref:`NetwConnection<class_NetwConnection>` **connection** = ``<unknown>`` :ref:`🔗<class_ConnectBrowser_property_connection>`
+
+.. container:: contribute
+
+	There is currently no description for this property. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_ConnectBrowser_property_server_list:
+
+.. rst-class:: classref-property
+
+:godot:`VBoxContainer` **server_list** = ``<unknown>`` :ref:`🔗<class_ConnectBrowser_property_server_list>`
+
+.. container:: contribute
+
+	There is currently no description for this property. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_ConnectBrowser_property_list_box:
+
+.. rst-class:: classref-property
+
+:godot:`VBoxContainer` **list_box** = ``<unknown>`` :ref:`🔗<class_ConnectBrowser_property_list_box>`
+
+.. container:: contribute
+
+	There is currently no description for this property. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_ConnectBrowser_property_empty_state:
+
+.. rst-class:: classref-property
+
+:godot:`Control` **empty_state** = ``<unknown>`` :ref:`🔗<class_ConnectBrowser_property_empty_state>`
+
+.. container:: contribute
+
+	There is currently no description for this property. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_ConnectBrowser_property_banner:
+
+.. rst-class:: classref-property
+
+:godot:`Control` **banner** = ``<unknown>`` :ref:`🔗<class_ConnectBrowser_property_banner>`
+
+.. container:: contribute
+
+	There is currently no description for this property. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_ConnectBrowser_property_banner_label:
+
+.. rst-class:: classref-property
+
+:godot:`Label` **banner_label** = ``<unknown>`` :ref:`🔗<class_ConnectBrowser_property_banner_label>`
+
+.. container:: contribute
+
+	There is currently no description for this property. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_ConnectBrowser_property_details:
+
+.. rst-class:: classref-property
+
+:godot:`Control` **details** = ``<unknown>`` :ref:`🔗<class_ConnectBrowser_property_details>`
+
+.. container:: contribute
+
+	There is currently no description for this property. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_ConnectBrowser_property_details_status_dot:
+
+.. rst-class:: classref-property
+
+:ref:`StatusDot<class_StatusDot>` **details_status_dot** = ``<unknown>`` :ref:`🔗<class_ConnectBrowser_property_details_status_dot>`
+
+.. container:: contribute
+
+	There is currently no description for this property. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_ConnectBrowser_property_details_name_label:
+
+.. rst-class:: classref-property
+
+:godot:`Label` **details_name_label** = ``<unknown>`` :ref:`🔗<class_ConnectBrowser_property_details_name_label>`
+
+.. container:: contribute
+
+	There is currently no description for this property. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_ConnectBrowser_property_details_source_label:
+
+.. rst-class:: classref-property
+
+:godot:`Label` **details_source_label** = ``<unknown>`` :ref:`🔗<class_ConnectBrowser_property_details_source_label>`
+
+.. container:: contribute
+
+	There is currently no description for this property. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_ConnectBrowser_property_details_address_label:
+
+.. rst-class:: classref-property
+
+:godot:`Label` **details_address_label** = ``<unknown>`` :ref:`🔗<class_ConnectBrowser_property_details_address_label>`
+
+.. container:: contribute
+
+	There is currently no description for this property. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_ConnectBrowser_property_details_status_label:
+
+.. rst-class:: classref-property
+
+:godot:`Label` **details_status_label** = ``<unknown>`` :ref:`🔗<class_ConnectBrowser_property_details_status_label>`
+
+.. container:: contribute
+
+	There is currently no description for this property. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_ConnectBrowser_property_details_ping_label:
+
+.. rst-class:: classref-property
+
+:godot:`Label` **details_ping_label** = ``<unknown>`` :ref:`🔗<class_ConnectBrowser_property_details_ping_label>`
+
+.. container:: contribute
+
+	There is currently no description for this property. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_ConnectBrowser_property_details_players_label:
+
+.. rst-class:: classref-property
+
+:godot:`Label` **details_players_label** = ``<unknown>`` :ref:`🔗<class_ConnectBrowser_property_details_players_label>`
+
+.. container:: contribute
+
+	There is currently no description for this property. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_ConnectBrowser_property_join_button:
+
+.. rst-class:: classref-property
+
+:godot:`Button` **join_button** = ``<unknown>`` :ref:`🔗<class_ConnectBrowser_property_join_button>`
+
+.. container:: contribute
+
+	There is currently no description for this property. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_ConnectBrowser_property_host_popup:
+
+.. rst-class:: classref-property
+
+:ref:`HostPopup<class_HostPopup>` **host_popup** = ``<unknown>`` :ref:`🔗<class_ConnectBrowser_property_host_popup>`
+
+.. container:: contribute
+
+	There is currently no description for this property. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_ConnectBrowser_property_join_popup:
+
+.. rst-class:: classref-property
+
+:ref:`JoinPopup<class_JoinPopup>` **join_popup** = ``<unknown>`` :ref:`🔗<class_ConnectBrowser_property_join_popup>`
+
+.. container:: contribute
+
+	There is currently no description for this property. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_ConnectBrowser_property_join_direct_popup:
+
+.. rst-class:: classref-property
+
+:ref:`JoinDirectPopup<class_JoinDirectPopup>` **join_direct_popup** = ``<unknown>`` :ref:`🔗<class_ConnectBrowser_property_join_direct_popup>`
+
+.. container:: contribute
+
+	There is currently no description for this property. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_ConnectBrowser_property_connecting_popup:
+
+.. rst-class:: classref-property
+
+:ref:`ConnectingPopup<class_ConnectingPopup>` **connecting_popup** = ``<unknown>`` :ref:`🔗<class_ConnectBrowser_property_connecting_popup>`
+
+.. container:: contribute
+
+	There is currently no description for this property. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
 
 .. rst-class:: classref-section-separator
 
@@ -172,11 +522,11 @@ Simulated latency and packet loss for connections made from this browser.
 Method Descriptions
 -------------------
 
-.. _class_ConnectBrowser_method_bind:
+.. _class_ConnectBrowser_method_on_endpoint_added:
 
 .. rst-class:: classref-method
 
-|void| **bind**\ (\ handle\: :ref:`NetwConnection<class_NetwConnection>`\ ) :ref:`🔗<class_ConnectBrowser_method_bind>`
+|void| **on_endpoint_added**\ (\ endpoint\: :ref:`NetwEndpoint<class_NetwEndpoint>`\ ) :ref:`🔗<class_ConnectBrowser_method_on_endpoint_added>`
 
 .. container:: contribute
 
@@ -186,85 +536,239 @@ Method Descriptions
 
 ----
 
-.. _class_ConnectBrowser_method_url_room:
+.. _class_ConnectBrowser_method_on_endpoint_removed:
 
 .. rst-class:: classref-method
 
-:godot:`String` **url_room**\ (\ ) :ref:`🔗<class_ConnectBrowser_method_url_room>`
+|void| **on_endpoint_removed**\ (\ endpoint\: :ref:`NetwEndpoint<class_NetwEndpoint>`\ ) :ref:`🔗<class_ConnectBrowser_method_on_endpoint_removed>`
 
-The room code after ``#`` in the page URL, or empty.
+.. container:: contribute
+
+	There is currently no description for this method. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
 
 .. rst-class:: classref-item-separator
 
 ----
 
-.. _class_ConnectBrowser_method_format_peer_class_label:
+.. _class_ConnectBrowser_method_on_state_changed:
 
 .. rst-class:: classref-method
 
-:godot:`String` **format_peer_class_label**\ (\ peer_class\: :godot:`StringName`\ ) |static| :ref:`🔗<class_ConnectBrowser_method_format_peer_class_label>`
+|void| **on_state_changed**\ (\ state\: :ref:`State<enum_NetwConnection_State>`\ ) :ref:`🔗<class_ConnectBrowser_method_on_state_changed>`
 
-A short name for ``peer_class``, such as ``"ENet"`` for ``&"ENetMultiplayerPeer"``, or ``"-"`` when empty.
+.. container:: contribute
+
+	There is currently no description for this method. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
 
 .. rst-class:: classref-item-separator
 
 ----
 
-.. _class_ConnectBrowser_method_format_address:
+.. _class_ConnectBrowser_method_on_progressed:
 
 .. rst-class:: classref-method
 
-:godot:`String` **format_address**\ (\ endpoint\: :godot:`Dictionary`\ ) |static| :ref:`🔗<class_ConnectBrowser_method_format_address>`
+|void| **on_progressed**\ (\ message\: :godot:`String`, ratio\: :godot:`float`\ ) :ref:`🔗<class_ConnectBrowser_method_on_progressed>`
 
-The address of ``endpoint`` to display, or ``"-"`` when it has none.
+.. container:: contribute
+
+	There is currently no description for this method. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
 
 .. rst-class:: classref-item-separator
 
 ----
 
-.. _class_ConnectBrowser_method_make_value_control:
+.. _class_ConnectBrowser_method_on_failed:
 
 .. rst-class:: classref-method
 
-:godot:`Control` **make_value_control**\ (\ value\: :godot:`Variant`, field_name\: :godot:`StringName` = &""\ ) |static| :ref:`🔗<class_ConnectBrowser_method_make_value_control>`
+|void| **on_failed**\ (\ _error\: :godot:`Error <@GlobalScope#enum_@globalscope_Error>`, reason\: :godot:`String`\ ) :ref:`🔗<class_ConnectBrowser_method_on_failed>`
 
-Creates a form field for the type of ``value``, filled with it. Some ``field_name`` values get a special editor.
+.. container:: contribute
+
+	There is currently no description for this method. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
 
 .. rst-class:: classref-item-separator
 
 ----
 
-.. _class_ConnectBrowser_method_value_from_control:
+.. _class_ConnectBrowser_method_on_join_address_changed:
 
 .. rst-class:: classref-method
 
-:godot:`Variant` **value_from_control**\ (\ control\: :godot:`Control`, value_type\: :godot:`int`\ ) |static| :ref:`🔗<class_ConnectBrowser_method_value_from_control>`
+|void| **on_join_address_changed**\ (\ address\: :godot:`String`\ ) :ref:`🔗<class_ConnectBrowser_method_on_join_address_changed>`
 
-Returns the value of ``control`` as ``value_type``.
+.. container:: contribute
+
+	There is currently no description for this method. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
 
 .. rst-class:: classref-item-separator
 
 ----
 
-.. _class_ConnectBrowser_method_can_author_value:
+.. _class_ConnectBrowser_method_on_server_list_visibility_changed:
 
 .. rst-class:: classref-method
 
-:godot:`bool` **can_author_value**\ (\ value\: :godot:`Variant`\ ) |static| :ref:`🔗<class_ConnectBrowser_method_can_author_value>`
+|void| **on_server_list_visibility_changed**\ (\ ) :ref:`🔗<class_ConnectBrowser_method_on_server_list_visibility_changed>`
 
-Returns ``true`` when ``value`` can be edited in a form field.
+.. container:: contribute
+
+	There is currently no description for this method. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
 
 .. rst-class:: classref-item-separator
 
 ----
 
-.. _class_ConnectBrowser_method_zero_value:
+.. _class_ConnectBrowser_method_join:
 
 .. rst-class:: classref-method
 
-:godot:`Variant` **zero_value**\ (\ value_type\: :godot:`int`\ ) |static| :ref:`🔗<class_ConnectBrowser_method_zero_value>`
+|void| **join**\ (\ endpoint\: :ref:`NetwEndpoint<class_NetwEndpoint>`, settings\: :godot:`Dictionary`, join_args\: :godot:`Array`\ ) :ref:`🔗<class_ConnectBrowser_method_join>`
 
-The empty value of ``value_type``, such as ``0`` or ``""``.
+.. container:: contribute
+
+	There is currently no description for this method. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_ConnectBrowser_method_host:
+
+.. rst-class:: classref-method
+
+|void| **host**\ (\ transport\: :godot:`StringName`, settings\: :godot:`Dictionary`, info\: :ref:`NetwServerInfo<class_NetwServerInfo>`, join_args\: :godot:`Array`\ ) :ref:`🔗<class_ConnectBrowser_method_host>`
+
+.. container:: contribute
+
+	There is currently no description for this method. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_ConnectBrowser_method_on_row_selected:
+
+.. rst-class:: classref-method
+
+|void| **on_row_selected**\ (\ endpoint\: :ref:`NetwEndpoint<class_NetwEndpoint>`\ ) :ref:`🔗<class_ConnectBrowser_method_on_row_selected>`
+
+.. container:: contribute
+
+	There is currently no description for this method. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_ConnectBrowser_method_on_row_activated:
+
+.. rst-class:: classref-method
+
+|void| **on_row_activated**\ (\ endpoint\: :ref:`NetwEndpoint<class_NetwEndpoint>`\ ) :ref:`🔗<class_ConnectBrowser_method_on_row_activated>`
+
+.. container:: contribute
+
+	There is currently no description for this method. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_ConnectBrowser_method_on_endpoint_changed:
+
+.. rst-class:: classref-method
+
+|void| **on_endpoint_changed**\ (\ ) :ref:`🔗<class_ConnectBrowser_method_on_endpoint_changed>`
+
+.. container:: contribute
+
+	There is currently no description for this method. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_ConnectBrowser_method_on_join_pressed:
+
+.. rst-class:: classref-method
+
+|void| **on_join_pressed**\ (\ ) :ref:`🔗<class_ConnectBrowser_method_on_join_pressed>`
+
+.. container:: contribute
+
+	There is currently no description for this method. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_ConnectBrowser_method_on_join_direct_pressed:
+
+.. rst-class:: classref-method
+
+|void| **on_join_direct_pressed**\ (\ ) :ref:`🔗<class_ConnectBrowser_method_on_join_direct_pressed>`
+
+.. container:: contribute
+
+	There is currently no description for this method. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_ConnectBrowser_method_on_host_pressed:
+
+.. rst-class:: classref-method
+
+|void| **on_host_pressed**\ (\ ) :ref:`🔗<class_ConnectBrowser_method_on_host_pressed>`
+
+.. container:: contribute
+
+	There is currently no description for this method. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_ConnectBrowser_method_on_join_popup_submitted:
+
+.. rst-class:: classref-method
+
+|void| **on_join_popup_submitted**\ (\ settings\: :godot:`Dictionary`, player_name\: :godot:`String`, join_args\: :godot:`Array`\ ) :ref:`🔗<class_ConnectBrowser_method_on_join_popup_submitted>`
+
+.. container:: contribute
+
+	There is currently no description for this method. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_ConnectBrowser_method_on_join_direct_popup_submitted:
+
+.. rst-class:: classref-method
+
+|void| **on_join_direct_popup_submitted**\ (\ transport\: :godot:`StringName`, address\: :godot:`String`, settings\: :godot:`Dictionary`, player_name\: :godot:`String`, join_args\: :godot:`Array`\ ) :ref:`🔗<class_ConnectBrowser_method_on_join_direct_popup_submitted>`
+
+.. container:: contribute
+
+	There is currently no description for this method. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_ConnectBrowser_method_on_host_popup_submitted:
+
+.. rst-class:: classref-method
+
+|void| **on_host_popup_submitted**\ (\ transport\: :godot:`StringName`, settings\: :godot:`Dictionary`, info\: :ref:`NetwServerInfo<class_NetwServerInfo>`, player_name\: :godot:`String`, join_args\: :godot:`Array`\ ) :ref:`🔗<class_ConnectBrowser_method_on_host_popup_submitted>`
+
+.. container:: contribute
+
+	There is currently no description for this method. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

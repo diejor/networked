@@ -12,7 +12,7 @@ ConnectENetConfig
 
 **Inherits:** :ref:`ConnectTransportConfig<class_ConnectTransportConfig>` **<** :godot:`Resource`
 
-ENet defaults authored on :ref:`ConnectBrowser<class_ConnectBrowser>`.
+ENet defaults for a :ref:`ConnectBrowser<class_ConnectBrowser>`.
 
 .. rst-class:: classref-reftable-group
 
@@ -22,15 +22,11 @@ Properties
 .. table::
    :widths: auto
 
-   +--------------+------------------------------------------------------------------------+-----------+
-   | :godot:`int` | :ref:`port<class_ConnectENetConfig_property_port>`                     | ``21253`` |
-   +--------------+------------------------------------------------------------------------+-----------+
-   | :godot:`int` | :ref:`max_players<class_ConnectENetConfig_property_max_players>`       | ``32``    |
-   +--------------+------------------------------------------------------------------------+-----------+
-   | :godot:`int` | :ref:`lan_port<class_ConnectENetConfig_property_lan_port>`             | ``24750`` |
-   +--------------+------------------------------------------------------------------------+-----------+
-   | :godot:`int` | :ref:`lan_port_count<class_ConnectENetConfig_property_lan_port_count>` | ``8``     |
-   +--------------+------------------------------------------------------------------------+-----------+
+   +--------------+------------------------------------------------------------------+-----------+
+   | :godot:`int` | :ref:`port<class_ConnectENetConfig_property_port>`               | ``21253`` |
+   +--------------+------------------------------------------------------------------+-----------+
+   | :godot:`int` | :ref:`max_players<class_ConnectENetConfig_property_max_players>` | ``32``    |
+   +--------------+------------------------------------------------------------------+-----------+
 
 .. rst-class:: classref-reftable-group
 
@@ -40,15 +36,11 @@ Methods
 .. table::
    :widths: auto
 
-   +---------------------+------------------------------------------------------------------------------+
-   | :godot:`StringName` | :ref:`peer_class<class_ConnectENetConfig_method_peer_class>`\ (\ )           |
-   +---------------------+------------------------------------------------------------------------------+
-   | :godot:`Dictionary` | :ref:`client_settings<class_ConnectENetConfig_method_client_settings>`\ (\ ) |
-   +---------------------+------------------------------------------------------------------------------+
-   | :godot:`Dictionary` | :ref:`host_settings<class_ConnectENetConfig_method_host_settings>`\ (\ )     |
-   +---------------------+------------------------------------------------------------------------------+
-   | :godot:`Dictionary` | :ref:`browse_settings<class_ConnectENetConfig_method_browse_settings>`\ (\ ) |
-   +---------------------+------------------------------------------------------------------------------+
+   +---------------------+--------------------------------------------------------------------+
+   | :godot:`StringName` | :ref:`peer_class<class_ConnectENetConfig_method_peer_class>`\ (\ ) |
+   +---------------------+--------------------------------------------------------------------+
+   | :godot:`Dictionary` | :ref:`settings<class_ConnectENetConfig_method_settings>`\ (\ )     |
+   +---------------------+--------------------------------------------------------------------+
 
 .. rst-class:: classref-section-separator
 
@@ -83,34 +75,6 @@ Property Descriptions
 
 	There is currently no description for this property. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
 
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_ConnectENetConfig_property_lan_port:
-
-.. rst-class:: classref-property
-
-:godot:`int` **lan_port** = ``24750`` :ref:`🔗<class_ConnectENetConfig_property_lan_port>`
-
-.. container:: contribute
-
-	There is currently no description for this property. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_ConnectENetConfig_property_lan_port_count:
-
-.. rst-class:: classref-property
-
-:godot:`int` **lan_port_count** = ``8`` :ref:`🔗<class_ConnectENetConfig_property_lan_port_count>`
-
-.. container:: contribute
-
-	There is currently no description for this property. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
-
 .. rst-class:: classref-section-separator
 
 ----
@@ -134,39 +98,11 @@ Method Descriptions
 
 ----
 
-.. _class_ConnectENetConfig_method_client_settings:
+.. _class_ConnectENetConfig_method_settings:
 
 .. rst-class:: classref-method
 
-:godot:`Dictionary` **client_settings**\ (\ ) :ref:`🔗<class_ConnectENetConfig_method_client_settings>`
-
-.. container:: contribute
-
-	There is currently no description for this method. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_ConnectENetConfig_method_host_settings:
-
-.. rst-class:: classref-method
-
-:godot:`Dictionary` **host_settings**\ (\ ) :ref:`🔗<class_ConnectENetConfig_method_host_settings>`
-
-.. container:: contribute
-
-	There is currently no description for this method. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_ConnectENetConfig_method_browse_settings:
-
-.. rst-class:: classref-method
-
-:godot:`Dictionary` **browse_settings**\ (\ ) :ref:`🔗<class_ConnectENetConfig_method_browse_settings>`
+:godot:`Dictionary` **settings**\ (\ ) :ref:`🔗<class_ConnectENetConfig_method_settings>`
 
 .. container:: contribute
 

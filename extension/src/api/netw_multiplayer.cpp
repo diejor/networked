@@ -1452,6 +1452,7 @@ void NetwMultiplayer::session_drop_turned_away_peer(int64_t p_peer) {
     if (effective_peer.is_valid()) {
         effective_peer->disconnect_peer(int32_t(p_peer));
     }
+    session_settle_peer_loss(p_peer);
 }
 
 void NetwMultiplayer::session_report_join_failure(
@@ -1463,9 +1464,6 @@ void NetwMultiplayer::session_report_join_failure(
     submitted_join.reset();
     if (session_handle.is_valid()) {
         session_handle->announce_join_failed(int64_t(p_error), p_reason);
-    }
-    if (connection_handle.is_valid()) {
-        connection_handle->announce_join_failed(int64_t(p_error), p_reason);
     }
     notify(SESSION_JOIN_FAILED, int64_t(p_error), p_reason);
 }
@@ -1673,6 +1671,7 @@ void NetwMultiplayer::session_transport_failed() {
         );
         return;
     }
+    connect_core.on_transport_failed();
     session_transition(SESSION_STATE_OFFLINE);
 }
 
@@ -1682,6 +1681,10 @@ void NetwMultiplayer::session_transport_dropped() {
             sys::SESSION,
             "The transport dropped while the session is already closing."
         );
+        return;
+    }
+    if (session_get_state() == SESSION_STATE_CONNECTING) {
+        session_transport_failed();
         return;
     }
     if (session_get_state() != SESSION_STATE_ONLINE) {
@@ -1896,6 +1899,7 @@ void NetwMultiplayer::session_announce_entered() {
     notify(SESSION_ENTERED);
     scene_player_display_invalidate();
     session_after_entered();
+    connect_core.on_session_online();
 }
 
 void NetwMultiplayer::session_announce_ended() {
@@ -1961,6 +1965,7 @@ void NetwMultiplayer::session_announce_edge(int p_old, int p_new) {
     sim_follow_server();
     notify(SESSION_STATE_CHANGED, p_old, p_new);
     session_after_edge(p_old, p_new);
+    connect_core.on_session_edge(p_old, p_new);
 }
 
 session::AcceptFrame NetwMultiplayer::session_accepted_join(
@@ -3029,8 +3034,8 @@ void NetwMultiplayer::NETW_API_VIRTUAL(set_multiplayer_peer)(
     }
     relabel_follow(live ? p_peer : Ref<MultiplayerPeer>());
     session_push_desired_role();
-    session_peer_assigned(live, live ? p_peer->get_unique_id() : 0);
     connect_core.on_peer_assigned(p_peer);
+    session_peer_assigned(live, live ? p_peer->get_unique_id() : 0);
 }
 
 RID NetwMultiplayer::endpoint_add(
@@ -3052,7 +3057,7 @@ RID NetwMultiplayer::endpoint_find(
     const RID &p_transport,
     const String &p_address
 ) {
-    return connect_core.list().find(p_transport, p_address);
+    return connect_core.target_find(p_transport, p_address);
 }
 
 Array NetwMultiplayer::endpoint_list() {
@@ -3074,6 +3079,8 @@ Variant NetwMultiplayer::endpoint_get_param(
             return held->address;
         case ENDPOINT_PARAM_DISPLAY_NAME:
             return held->display_name;
+        case ENDPOINT_PARAM_SOURCE:
+            return endpoint_source(p_endpoint);
         default:
             return Variant();
     }
@@ -3117,7 +3124,7 @@ Variant NetwMultiplayer::endpoint_get_state(
     switch (p_state) {
         case ENDPOINT_STATE_FLAGS: {
             int64_t flags = 0;
-            if (connect_core.list().is_caller_row(p_endpoint)) {
+            if (connect_core.list().is_removable(p_endpoint)) {
                 flags |= ENDPOINT_FLAG_CALLER;
             }
             if (connect_core.target_is_available(p_endpoint)) {
@@ -3141,18 +3148,20 @@ void NetwMultiplayer::endpoint_probe(const RID &p_endpoint) {
     connect_core.probe_target(p_endpoint);
 }
 
-Error NetwMultiplayer::transport_set_browse_settings(
-    const RID &p_transport,
-    const Dictionary &p_settings
-) {
-    if (transport_held(p_transport) == nullptr) {
-        return ERR_DOES_NOT_EXIST;
-    }
-    return connect_core.set_browse_settings(p_transport, p_settings);
+void NetwMultiplayer::endpoint_set_browsing(bool p_enabled) {
+    connect_core.set_browsing(p_enabled);
 }
 
-void NetwMultiplayer::endpoint_refresh() {
-    connect_core.refresh();
+bool NetwMultiplayer::endpoint_is_browsing() const {
+    return connect_core.is_browsing();
+}
+
+void NetwMultiplayer::endpoint_set_probe_interval(double p_seconds) {
+    connect_core.set_probe_interval(p_seconds);
+}
+
+double NetwMultiplayer::endpoint_get_probe_interval() const {
+    return connect_core.get_probe_interval();
 }
 
 const connect::TransportSlot *NetwMultiplayer::transport_held(
@@ -3178,21 +3187,115 @@ RID NetwMultiplayer::transport_create_peer(
     TransportMode p_mode,
     const String &p_address,
     const Dictionary &p_settings,
-    const Callable &p_completed,
-    const Callable &p_progress
+    const Callable &p_completed
 ) {
     return connect_core.create_peer(
         p_transport,
         int(p_mode),
         p_address,
         p_settings,
-        p_completed,
-        p_progress
+        p_completed
     );
 }
 
 void NetwMultiplayer::transport_cancel_peer_creation(const RID &p_ticket) {
     connect_core.cancel_peer_creation(p_ticket);
+}
+
+Ref<NetwPromise> NetwMultiplayer::transport_join(
+    const RID &p_transport,
+    const String &p_address,
+    const Dictionary &p_settings
+) {
+    return connect_core.join(p_transport, p_address, p_settings);
+}
+
+Ref<NetwPromise> NetwMultiplayer::endpoint_join(
+    const RID &p_endpoint,
+    const Dictionary &p_settings
+) {
+    return connect_core.join_target(p_endpoint, p_settings);
+}
+
+Ref<NetwPromise> NetwMultiplayer::transport_host(
+    const RID &p_transport,
+    const Dictionary &p_settings
+) {
+    return connect_core.host(p_transport, p_settings);
+}
+
+void NetwMultiplayer::transport_cancel_attempt() {
+    connect_core.cancel_attempt();
+}
+
+int64_t NetwMultiplayer::transport_get_attempt_state() const {
+    return connect_core.attempt_state();
+}
+
+Error NetwMultiplayer::transport_set_defaults(
+    const RID &p_transport,
+    const Dictionary &p_settings
+) {
+    if (transport_held(p_transport) == nullptr) {
+        return ERR_DOES_NOT_EXIST;
+    }
+    return connect_core.set_defaults(p_transport, p_settings);
+}
+
+Dictionary NetwMultiplayer::transport_get_defaults(const RID &p_transport) {
+    if (transport_held(p_transport) == nullptr) {
+        return Dictionary();
+    }
+    return connect_core.defaults_of(p_transport);
+}
+
+void NetwMultiplayer::connection_emit_state_changed(int64_t p_state) {
+    if (connection_handle.is_valid()) {
+        connection_handle->announce_state_changed(p_state);
+    }
+    notify(CONNECTION_STATE_CHANGED, p_state);
+}
+
+void NetwMultiplayer::connection_emit_progressed(
+    const String &p_message,
+    double p_ratio
+) {
+    if (connection_handle.is_valid()) {
+        connection_handle->announce_progressed(p_message, p_ratio);
+    }
+    notify(CONNECTION_PROGRESSED, p_message, p_ratio);
+}
+
+bool NetwMultiplayer::connection_emit_failed(
+    Error p_error,
+    const String &p_reason
+) {
+    bool heard = !observers[CONNECTION_FAILED].is_empty();
+    if (connection_handle.is_valid()
+        && connection_handle->announce_failed(int64_t(p_error), p_reason)) {
+        heard = true;
+    }
+    notify(CONNECTION_FAILED, int64_t(p_error), p_reason);
+    return heard;
+}
+
+void NetwMultiplayer::connection_emit_join_address_changed(
+    const String &p_address
+) {
+    if (connection_handle.is_valid()) {
+        connection_handle->announce_join_address_changed(p_address);
+    }
+    notify(CONNECTION_JOIN_ADDRESS_CHANGED, p_address);
+}
+
+void NetwMultiplayer::connection_emit_invited(
+    const RID &p_endpoint,
+    const String &p_from_name
+) {
+    if (connection_handle.is_valid()) {
+        connection_handle->announce_invited(p_endpoint, p_from_name);
+    }
+    notify(CONNECTION_INVITED, p_endpoint, p_from_name);
 }
 
 RID NetwMultiplayer::transport_register(const Ref<Script> &p_type) {
@@ -3507,11 +3610,17 @@ void NetwMultiplayer::discovery_watch_directory(Object *p_directory) {
             )
         );
     }
+    Object::cast_to<LobbyDirectory>(p_directory)->watched_by(this);
+    connect_core.watch_directory(p_directory);
 }
 
 void NetwMultiplayer::discovery_unwatch_directory(Object *p_directory) {
     if (p_directory == nullptr) {
         return;
+    }
+    LobbyDirectory *directory = Object::cast_to<LobbyDirectory>(p_directory);
+    if (directory != nullptr) {
+        directory->unwatched_by(this);
     }
     connect_core.forget_directory(gd::instance_id(p_directory));
     const HashMap<uint64_t, RID>::Iterator held
@@ -3546,6 +3655,14 @@ void NetwMultiplayer::discovery_directory_listed(
 ) {
     connect_core
         .on_directory_listed(p_addresses, p_names, p_infos, p_directory);
+}
+
+void NetwMultiplayer::discovery_directory_invited(
+    Object *p_directory,
+    const String &p_address,
+    const String &p_from_name
+) {
+    connect_core.on_directory_invited(p_directory, p_address, p_from_name);
 }
 
 Ref<NetwConnection> NetwMultiplayer::get_connection() {

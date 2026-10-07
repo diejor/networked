@@ -1,82 +1,46 @@
-## A form to join a server.
-##
-## Shows the fields of [method NetwConnection.join_schema] and the client
-## settings of the server's transport.
+## A form to join a listed server.
 class_name JoinPopup
 extends PopupPanel
 
-signal submitted(
-		settings: Dictionary,
-		username: StringName,
-		join_args: Array,
-)
+signal submitted(settings: Dictionary, username: String, join_args: Array)
 
-var transport_defaults: Array[ConnectTransportConfig] = []
-var _connection: NetwConnection
-var _authored: Dictionary = { }
-var _settings := ConnectFieldList.new()
-var _join_args := ConnectFieldList.new()
+var settings := ConnectFieldList.new()
+var join_args := ConnectFieldList.new()
 
-@onready var _username_edit: LineEdit = %UsernameEdit
-@onready var _settings_container: VBoxContainer = %SettingsContainer
-@onready var _args_container: VBoxContainer = %ArgsContainer
-@onready var _confirm_button: Button = %ConfirmButton
-@onready var _cancel_button: Button = %CancelButton
+@onready var username_edit: LineEdit = %UsernameEdit
+@onready var settings_container: VBoxContainer = %SettingsContainer
+@onready var args_container: VBoxContainer = %ArgsContainer
+@onready var confirm_button: Button = %ConfirmButton
+@onready var cancel_button: Button = %CancelButton
 
 
 func _ready() -> void:
-	visible = false
-	popup_window = false
-	exclusive = true
-	_confirm_button.pressed.connect(_on_confirm)
-	_cancel_button.pressed.connect(hide)
+	hide()
+	confirm_button.pressed.connect(on_confirm_pressed)
+	cancel_button.pressed.connect(hide)
 
 
-## Opens the form for the server on [param peer_class], filled with its saved
-## [param authored] settings.
-func open_join(
-		handle: NetwConnection,
-		default_username: String,
-		peer_class: StringName = &"",
-		authored: Dictionary = { },
+func open(
+		connection: NetwConnection,
+		endpoint: NetwEndpoint,
+		username: String,
 ) -> void:
-	_connection = handle
-	_authored = authored.duplicate(true)
-	_username_edit.text = default_username
-	_populate_settings(peer_class)
-	_populate_join_args()
+	username_edit.text = username
+	settings.render_settings(
+		settings_container,
+		connection.transport(endpoint.peer_class).client_settings,
+	)
+	join_args.render_schema(args_container, connection.join_schema())
 	popup_centered()
 
 
-func _populate_settings(peer_class: StringName) -> void:
-	var defaults: Dictionary = { }
-	if _connection != null and not peer_class.is_empty():
-		var transport := ConnectTransportConfig.apply_to(
-			_connection.transport(peer_class),
-			transport_defaults,
-		)
-		defaults = transport.get("client_settings", { })
-	var seeded: Dictionary = defaults.duplicate(true)
-	for key: Variant in _authored.keys():
-		if seeded.has(key):
-			seeded[key] = _authored[key]
-	_settings.render_settings(_settings_container, seeded)
-
-
-func _populate_join_args() -> void:
-	if _connection == null:
-		_join_args.render_schema(_args_container, [])
-		return
-	_join_args.render_schema(_args_container, _connection.join_schema())
-
-
-func _on_confirm() -> void:
-	var typed := _username_edit.text.strip_edges()
-	var username := StringName(typed) if not typed.is_empty() else &"Player"
-
+func on_confirm_pressed() -> void:
 	hide()
 	submitted.emit(
-		_settings.as_dictionary(),
-		username,
-		_join_args.as_array(),
+		settings.as_dictionary(),
+		(
+				username_edit.text if not username_edit.text.is_empty()
+				else username_edit.placeholder_text
+		),
+		join_args.as_array(),
 	)

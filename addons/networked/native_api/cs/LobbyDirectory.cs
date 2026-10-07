@@ -43,8 +43,14 @@ namespace Networked;
 /// func _leave_lobby() -&gt; void:
 ///     Rooms.leave()
 /// </code>
+/// <para>
+/// A directory whose peer class already has a transport only lists lobbies, and
+/// joining one goes through that transport.
+/// <see cref="WebTorrentLobbyDirectory"/> and <see cref="LANLobbyDirectory"/>
+/// work this way.
+/// </para>
 /// </remarks>
-public sealed class LobbyDirectory : NetwService
+public class LobbyDirectory : NetwService
 {
     public LobbyDirectory(IntPtr native) : base(native)
     {
@@ -71,7 +77,8 @@ public sealed class LobbyDirectory : NetwService
         /// </summary>
         FriendsOnlySupport = 2,
         /// <summary>
-        /// <see cref="LobbyDirectory.InviteReceived"/> is emitted.
+        /// The directory calls <see cref="LobbyDirectory.Invite"/> when the
+        /// player is invited.
         /// </summary>
         Invites = 4,
         /// <summary>
@@ -129,23 +136,6 @@ public sealed class LobbyDirectory : NetwService
             )
         );
         remove => DisconnectBridge("lobby_list_published", value);
-    }
-
-    /// <summary>
-    /// Emitted when the player receives an invite. Needs
-    /// <see cref="LobbyDirectory.Capability.Invites"/>.
-    /// </summary>
-    public event Action<long, long> InviteReceived
-    {
-        add => ConnectBridge(
-            "invite_received",
-            value,
-            Callable.From(
-                (long a0, long a1) =>
-                    value(a0, a1)
-            )
-        );
-        remove => DisconnectBridge("invite_received", value);
     }
 
     /// <summary>
@@ -229,6 +219,30 @@ public sealed class LobbyDirectory : NetwService
         slot0.Dispose();
         slot1.Dispose();
         slot2.Dispose();
+        answered.Dispose();
+    }
+
+    private static readonly IntPtr _bindInvite =
+        NetwApi.MethodBind("LobbyDirectory", "invite", 3186203200UL);
+
+    /// <summary>
+    /// Reports that <paramref name="fromName"/> invited the player to the lobby
+    /// at <paramref name="address"/>, which arrives as
+    /// <see cref="NetwConnection.Invited"/>.
+    /// </summary>
+    public void Invite(string address, string fromName)
+    {
+        godot_variant slot0 = VariantUtils.CreateFromString(address);
+        godot_variant slot1 = VariantUtils.CreateFromString(fromName);
+        godot_variant answered = default;
+        NetwThunks.Call2(
+            _bindInvite,
+            Checked,
+            in slot0,
+            in slot1,
+            ref answered);
+        slot0.Dispose();
+        slot1.Dispose();
         answered.Dispose();
     }
 

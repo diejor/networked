@@ -2,424 +2,217 @@
 class_name TestConnectBrowserSmoke
 extends NetwTestSuite
 
-const _BROWSER_SCENE := preload(
+const BROWSER := preload(
 	"res://addons/networked/gdscript/connect/ui/connect_browser.tscn"
 )
 
+var tree: MultiplayerTree
+var connection: NetwConnection
+var browser: ConnectBrowser
 
-class SmokeInfoSource:
+
+class AnotherGame:
 	extends Node
 
 	func _init() -> void:
-		Netw.configure_server_info(smoke_info)
+		Netw.configure_server_info(answer)
 
 
-	func smoke_info(info: NetwServerInfo) -> NetwServerInfo:
-		info.players = 1
-		info.max_players = 8
-		info.is_local_listener = true
+	func answer(info: NetwServerInfo) -> NetwServerInfo:
+		info.app_id = &"another-game"
 		return info
 
 
-func test_handle_reports_ok_for_probed_direct_target() -> void:
-	var host := await EnetTestSupport.start_host(self, SmokeInfoSource.new())
-	assert_that(host).is_not_empty()
+class SmallServer:
+	extends Node
 
-	var tree := MultiplayerTree.new()
+	var max_players := 8
+
+	func _init() -> void:
+		Netw.configure_server_info(answer)
+
+
+	func answer(info: NetwServerInfo) -> NetwServerInfo:
+		info.max_players = max_players
+		return info
+
+
+func before_test() -> void:
+	tree = MultiplayerTree.new()
+	tree.auto_host_headless = false
 	add_child(tree)
-	var connection := Netw.session(tree).connection
+	connection = Netw.session(tree).connection
+	browser = BROWSER.instantiate()
+	tree.add_child(browser)
 
-	var address := "127.0.0.1:%d" % host.port
-	connection.endpoint_add(&"ENetMultiplayerPeer", address, "Smoke Host")
-	connection.endpoint_refresh()
 
-	var guard := 0
-	while (
-			int(
-				connection.endpoint(&"ENetMultiplayerPeer", address).get(
-					"status",
-					FAILED,
-				),
-			) != OK
-			and guard < 180
-	):
-		await get_tree().process_frame
-		guard += 1
-
-	var snapshot := connection.endpoint(&"ENetMultiplayerPeer", address)
-	assert_int(int(snapshot.get("status", FAILED))) \
-			.override_failure_message("the direct endpoint was never probed.") \
-			.is_equal(OK)
-	var info: NetwServerInfo = snapshot.get("info", null)
-	assert_int(info.players).is_equal(1)
-
+func after_test() -> void:
 	tree.queue_free()
+	await get_tree().process_frame
+
+
+func test_rows_follow_added_and_removed_endpoints() -> void:
+	var endpoint := connection.add(
+		&"ENetMultiplayerPeer",
+		"203.0.113.1",
+		"Alpha",
+	)
+
+	assert_int(browser.list_box.get_child_count()).is_equal(1)
+	assert_str(browser.rows[endpoint].name_label.text).is_equal("Alpha")
+	assert_bool(browser.empty_state.visible).is_false()
+
+	connection.remove(endpoint)
+	await get_tree().process_frame
+
+	assert_int(browser.list_box.get_child_count()).is_equal(0)
+	assert_bool(browser.empty_state.visible).is_true()
+
+
+func test_a_probe_answer_reaches_the_row_and_the_join_button() -> void:
+	var host := await EnetTestSupport.start_host(self, AnotherGame.new())
+	var endpoint := connection.add(
+		&"ENetMultiplayerPeer",
+		"127.0.0.1:%d" % host.port,
+	)
+	browser.rows[endpoint].selected.emit()
+
+	assert_bool(browser.details.visible).is_true()
+	assert_bool(browser.join_button.disabled).is_false()
+
+	await EnetTestSupport.await_until(
+		self,
+		func() -> bool: return endpoint.status != NetwEndpoint.STATUS_UNKNOWN,
+	)
+
+	assert_int(endpoint.status).is_equal(NetwEndpoint.STATUS_INCOMPATIBLE)
+	assert_str(browser.rows[endpoint].status_dot.tooltip_text) \
+			.is_equal("Incompatible")
+	assert_bool(browser.join_button.disabled).is_true()
 	await EnetTestSupport.stop_tree(host.tree)
 
 
-func test_browser_renders_the_handle_it_resolved() -> void:
-	var temp_path := "user://_test_connect_browser_%d.cfg" % (
-			Time.get_ticks_usec()
+func test_the_details_panel_follows_the_selected_endpoint() -> void:
+	var server := SmallServer.new()
+	var host := await EnetTestSupport.start_host(self, server)
+	var endpoint := connection.add(
+		&"ENetMultiplayerPeer",
+		"127.0.0.1:%d" % host.port,
 	)
-	var tree := MultiplayerTree.new()
-	add_child(tree)
+	await EnetTestSupport.await_until(
+		self,
+		func() -> bool: return endpoint.status == NetwEndpoint.STATUS_ONLINE,
+	)
+	browser.rows[endpoint].selected.emit()
 
-	var connection := Netw.session(tree).connection
+	assert_str(browser.details_status_label.text).is_equal("Online")
+	assert_str(browser.details_ping_label.text).ends_with(" ms")
+	assert_str(browser.details_players_label.text).is_equal("0/8")
 
-	var browser: ConnectBrowser = _BROWSER_SCENE.instantiate()
-	browser.server_list_path = temp_path
-	browser.bind(connection)
-	tree.add_child(browser)
+	server.max_players = 4
+	endpoint.probe()
+	await EnetTestSupport.await_until(
+		self,
+		func() -> bool: return endpoint.info.max_players == 4,
+	)
+
+	assert_str(browser.details_players_label.text).is_equal("0/4")
+	await EnetTestSupport.stop_tree(host.tree)
+
+
+func test_browsing_follows_the_server_list_visibility() -> void:
+	assert_bool(connection.browsing).is_true()
+
+	browser.hide()
+	assert_bool(connection.browsing).is_false()
+
+	browser.show()
+	assert_bool(connection.browsing).is_true()
+
+	connection.state_changed.emit(NetwConnection.STATE_ONLINE)
+	assert_bool(browser.visible).is_true()
+	assert_bool(connection.browsing).is_false()
+
+	connection.state_changed.emit(NetwConnection.STATE_OFFLINE)
+	assert_bool(connection.browsing).is_true()
+
+
+func test_the_connecting_popup_follows_state_and_progress() -> void:
+	connection.state_changed.emit(NetwConnection.STATE_CREATING)
+	assert_bool(browser.connecting_popup.visible).is_true()
+
+	connection.progressed.emit("Asking the tracker", 0.5)
+	assert_str(browser.connecting_popup.title_label.text) \
+			.is_equal("Asking the tracker")
+	assert_float(browser.connecting_popup.progress_bar.value).is_equal(0.5)
+
+	connection.state_changed.emit(NetwConnection.STATE_ONLINE)
+	assert_bool(browser.connecting_popup.visible).is_false()
+
+
+func test_a_failure_reaches_the_banner_and_the_popup() -> void:
+	connection.state_changed.emit(NetwConnection.STATE_CONNECTING)
+	connection.failed.emit(ERR_CANT_CONNECT, "The server could not be reached.")
+	connection.state_changed.emit(NetwConnection.STATE_OFFLINE)
 	await get_tree().process_frame
 
-	var list_box := browser.get_node("%ListBox") as VBoxContainer
-	assert_int(list_box.get_child_count()).is_equal(0)
+	assert_bool(browser.banner.visible).is_true()
+	assert_str(browser.banner_label.text) \
+			.is_equal("The server could not be reached.")
+	assert_bool(browser.connecting_popup.visible).is_true()
+	assert_str(browser.connecting_popup.cancel_button.text).is_equal("Close")
 
-	connection.endpoint_add(&"ENetMultiplayerPeer", "203.0.113.1")
-	await get_tree().process_frame
-
-	assert_int(list_box.get_child_count()).is_equal(1)
-
-	browser.queue_free()
-	tree.queue_free()
-	DirAccess.remove_absolute(ProjectSettings.globalize_path(temp_path))
+	connection.state_changed.emit(NetwConnection.STATE_CREATING)
+	assert_bool(browser.banner.visible).is_false()
 
 
-func test_a_join_form_offers_what_the_transport_lets_a_client_author() -> void:
-	var tree := MultiplayerTree.new()
-	add_child(tree)
-	var connection := Netw.session(tree).connection
+func test_the_room_bar_shows_the_code_while_hosting() -> void:
+	var room_bar := browser.get_node(^"RoomBar")
+	assert_bool(room_bar.panel.visible).is_false()
+
+	browser.host(&"LocalMultiplayerPeer", { }, NetwServerInfo.new(), [])
+
+	assert_int(await EnetTestSupport.await_online(tree)).is_equal(OK)
+	assert_bool(room_bar.panel.visible).is_true()
+	assert_str(room_bar.code_edit.text).is_equal("local")
+
+
+func test_a_hidden_room_bar_stays_hidden_while_hosting() -> void:
+	var room_bar: Control = browser.get_node(^"RoomBar")
+	room_bar.hide()
+
+	browser.host(&"LocalMultiplayerPeer", { }, NetwServerInfo.new(), [])
+
+	assert_int(await EnetTestSupport.await_online(tree)).is_equal(OK)
+	assert_bool(room_bar.visible).is_false()
+
+
+func test_transport_defaults_reach_the_connection() -> void:
+	var config := ConnectENetConfig.new()
+	config.port = 34567
+	config.max_players = 12
+	var configured: ConnectBrowser = BROWSER.instantiate()
+	configured.transport_defaults = [config]
+	tree.add_child(configured)
 
 	var enet := connection.transport(&"ENetMultiplayerPeer")
-	var client: Dictionary = enet.get("client_settings", { })
-
-	assert_bool(client.has("port")).is_true()
-	assert_bool(client.has("max_players")).is_false()
-
-	tree.queue_free()
+	assert_int(enet.client_settings.port).is_equal(34567)
+	assert_bool(enet.client_settings.has("max_players")).is_false()
+	assert_int(enet.host_settings.port).is_equal(34567)
+	assert_int(enet.host_settings.max_players).is_equal(12)
 
 
-func test_a_bookmarked_setting_survives_the_file_it_is_saved_to() -> void:
-	var temp_dir := "user://_test_connect_browser_saved_%d" % (
-			Time.get_ticks_usec()
-	)
-	var temp_path := temp_dir.path_join("servers.cfg")
-	var tree := MultiplayerTree.new()
-	add_child(tree)
-	var connection := Netw.session(tree).connection
-
-	var browser: ConnectBrowser = _BROWSER_SCENE.instantiate()
-	browser.server_list_path = temp_path
-	browser.bind(connection)
-	tree.add_child(browser)
-	await get_tree().process_frame
-
-	browser._on_endpoint_submitted(
+func test_a_join_through_the_browser_goes_online_and_hides_the_list() -> void:
+	var host := await EnetTestSupport.start_host(self)
+	var endpoint := connection.add(
 		&"ENetMultiplayerPeer",
-		"203.0.113.7",
-		"Saved Host",
-		{ "port": 40000 },
-		&"",
-		"",
-	)
-	await get_tree().process_frame
-
-	browser.queue_free()
-	tree.queue_free()
-	await get_tree().process_frame
-	tree = MultiplayerTree.new()
-	add_child(tree)
-	connection = Netw.session(tree).connection
-
-	var reopened: ConnectBrowser = _BROWSER_SCENE.instantiate()
-	reopened.server_list_path = temp_path
-	reopened.bind(connection)
-	tree.add_child(reopened)
-	await get_tree().process_frame
-
-	assert_that(
-		reopened._authored_settings(
-			&"ENetMultiplayerPeer",
-			"203.0.113.7",
-		),
-	).is_equal({ "port": 40000 })
-
-	reopened.queue_free()
-	tree.queue_free()
-	DirAccess.remove_absolute(ProjectSettings.globalize_path(temp_path))
-	DirAccess.remove_absolute(ProjectSettings.globalize_path(temp_dir))
-
-
-func test_direct_join_needs_no_endpoint_record() -> void:
-	var temp_path := "user://_test_connect_browser_direct_%d.cfg" % (
-			Time.get_ticks_usec()
-	)
-	var tree := MultiplayerTree.new()
-	add_child(tree)
-
-	var connection := Netw.session(tree).connection
-
-	var browser: ConnectBrowser = _BROWSER_SCENE.instantiate()
-	browser.server_list_path = temp_path
-	browser.bind(connection)
-	tree.add_child(browser)
-	await get_tree().process_frame
-
-	var address := "127.0.0.1:37515"
-	assert_dict(connection.endpoint(&"ENetMultiplayerPeer", address)).is_empty()
-
-	browser._on_join_direct_submitted(
-		&"ENetMultiplayerPeer",
-		address,
-		"",
-		{ },
-		&"direct_player",
-		[],
+		"127.0.0.1:%d" % host.port,
 	)
 
-	var banner := browser.get_node("%Banner") as HBoxContainer
-	assert_bool(banner.visible).is_false()
+	browser.join(endpoint, { }, [])
 
-	browser._cancel_setup()
-	browser.queue_free()
-	tree.queue_free()
-	DirAccess.remove_absolute(ProjectSettings.globalize_path(temp_path))
-
-
-func test_an_authored_impairment_lasts_one_setup() -> void:
-	var temp_path := "user://_test_connect_browser_link_%d.cfg" % (
-			Time.get_ticks_usec()
-	)
-	var tree := MultiplayerTree.new()
-	add_child(tree)
-
-	var connection := Netw.session(tree).connection
-	var conditions := NetwLinkConditions.new()
-	conditions.simulate_lag = true
-
-	var browser: ConnectBrowser = _BROWSER_SCENE.instantiate()
-	browser.server_list_path = temp_path
-	browser.debug_link = conditions
-	browser.bind(connection)
-	tree.add_child(browser)
-	await get_tree().process_frame
-
-	var api := Netw.of(tree)
-	assert_that(api.session_get_config().link_conditions).is_null()
-
-	var peer := ENetMultiplayerPeer.new()
-	assert_that(browser._shaped(peer)).is_not_null()
-
-	browser._on_join_direct_submitted(
-		&"ENetMultiplayerPeer",
-		"127.0.0.1:37516",
-		"",
-		{ },
-		&"shaped_player",
-		[],
-	)
-	assert_that(api.session_get_config().link_conditions).is_null()
-
-	browser._cancel_setup()
-	assert_that(api.session_get_config().link_conditions).is_null()
-
-	browser.queue_free()
-	tree.queue_free()
-	DirAccess.remove_absolute(ProjectSettings.globalize_path(temp_path))
-
-
-func test_an_impairment_the_game_authored_wins() -> void:
-	var temp_path := "user://_test_connect_browser_authored_%d.cfg" % (
-			Time.get_ticks_usec()
-	)
-	var authored := NetwLinkConditions.new()
-	var tree := MultiplayerTree.new()
-	tree.link_conditions = authored
-	add_child(tree)
-
-	var connection := Netw.session(tree).connection
-
-	var browser: ConnectBrowser = _BROWSER_SCENE.instantiate()
-	browser.server_list_path = temp_path
-	browser.debug_link = NetwLinkConditions.new()
-	browser.bind(connection)
-	tree.add_child(browser)
-	await get_tree().process_frame
-
-	var api := Netw.of(tree)
-	assert_that(api.session_get_config().link_conditions).is_not_null()
-
-	var peer := ENetMultiplayerPeer.new()
-	assert_bool(browser._shaped(peer) == peer).is_true()
-
-	browser._on_join_direct_submitted(
-		&"ENetMultiplayerPeer",
-		"127.0.0.1:37517",
-		"",
-		{ },
-		&"authored_player",
-		[],
-	)
-	assert_that(api.session_get_config().link_conditions).is_not_null()
-
-	browser._cancel_setup()
-	assert_that(api.session_get_config().link_conditions).is_not_null()
-
-	browser.queue_free()
-	tree.queue_free()
-	DirAccess.remove_absolute(ProjectSettings.globalize_path(temp_path))
-
-
-func test_a_string_list_field_round_trips_through_its_control() -> void:
-	var authored := PackedStringArray(
-		[
-			"wss://tracker.openwebtorrent.com",
-			"wss://tracker.webtorrent.dev",
-		],
-	)
-	var control := ConnectBrowser.make_value_control(authored)
-	var read_back: Variant = ConnectBrowser.value_from_control(
-		control,
-		TYPE_PACKED_STRING_ARRAY,
-	)
-
-	assert_that(read_back).is_equal(authored)
-	control.free()
-
-
-func test_a_string_list_has_one_editable_row_per_entry() -> void:
-	var control := ConnectBrowser.make_value_control(
-		PackedStringArray(["wss://one.example"]),
-	)
-	add_child(control)
-	await get_tree().process_frame
-
-	(control.get_node("Entry0/Edit") as LineEdit).text = "wss://edited.example"
-	(control.get_node("AddEntryButton") as Button).pressed.emit()
-	(control.get_node("Entry1/Edit") as LineEdit).text = "wss://two.example"
-	var read_back: Variant = ConnectBrowser.value_from_control(
-		control,
-		TYPE_PACKED_STRING_ARRAY,
-	)
-
-	assert_bool(control is LineEdit).is_false()
-	assert_that(read_back).is_equal(
-		PackedStringArray(
-			[
-				"wss://edited.example",
-				"wss://two.example",
-			],
-		),
-	)
-	control.queue_free()
-
-
-func test_a_removed_string_list_row_leaves_the_value() -> void:
-	var control := ConnectBrowser.make_value_control(
-		PackedStringArray(["wss://one.example", "wss://two.example"]),
-	)
-	add_child(control)
-	await get_tree().process_frame
-
-	var remove := control.get_node("Entry0").get_child(1) as Button
-	remove.pressed.emit()
-	await get_tree().process_frame
-
-	assert_that(
-		ConnectBrowser.value_from_control(
-			control,
-			TYPE_PACKED_STRING_ARRAY,
-		),
-	).is_equal(PackedStringArray(["wss://two.example"]))
-	control.queue_free()
-
-
-func test_a_structured_field_round_trips_as_json() -> void:
-	var authored: Array = [{ "urls": ["stun:stun.example:19302"] }]
-	var control := ConnectBrowser.make_value_control(authored)
-	var read_back: Variant = ConnectBrowser.value_from_control(
-		control,
-		TYPE_ARRAY,
-	)
-
-	assert_that(read_back).is_equal(authored)
-	control.free()
-
-
-func test_ice_servers_have_one_editable_card_per_server() -> void:
-	var authored: Array = [
-		{ "urls": ["stun:stun.example:19302"] },
-		{
-			"urls": ["turn:turn.example:3478"],
-			"username": "guest",
-			"credential": "secret",
-		},
-	]
-	var control := ConnectBrowser.make_value_control(authored, &"ice_servers")
-	var urls := control.get_node("Server1/Fields/URLsEdit") as LineEdit
-	var username := control.get_node(
-		"Server1/Fields/UsernameEdit",
-	) as LineEdit
-	urls.text = "turn:one.example:3478, turns:two.example:5349"
-	username.text = "player"
-	var read_back: Variant = ConnectBrowser.value_from_control(
-		control,
-		TYPE_ARRAY,
-	)
-
-	assert_bool(control is LineEdit).is_false()
-	assert_that(read_back).is_equal(
-		[
-			{ "urls": ["stun:stun.example:19302"] },
-			{
-				"urls": [
-					"turn:one.example:3478",
-					"turns:two.example:5349",
-				],
-				"username": "player",
-				"credential": "secret",
-			},
-		],
-	)
-	control.free()
-
-
-func test_ice_server_add_button_appends_an_editable_card() -> void:
-	var control := ConnectBrowser.make_value_control([], &"ice_servers")
-	add_child(control)
-	await get_tree().process_frame
-
-	var add_button := control.get_node("AddServerButton") as Button
-	add_button.pressed.emit()
-
-	assert_that(control.get_node_or_null("Server0")).is_not_null()
-	assert_that(
-		ConnectBrowser.value_from_control(
-			control,
-			TYPE_ARRAY,
-		),
-	).is_equal([{ "urls": [] }])
-	control.queue_free()
-
-
-func test_a_malformed_structured_field_keeps_the_default_downstream() -> void:
-	var control := ConnectBrowser.make_value_control([] as Array)
-	(control as LineEdit).text = "not json"
-	var read_back: Variant = ConnectBrowser.value_from_control(
-		control,
-		TYPE_ARRAY,
-	)
-
-	assert_that(read_back).is_null()
-	control.free()
-
-
-func test_an_installation_seam_is_not_offered_as_a_field() -> void:
-	assert_bool(ConnectBrowser.can_author_value(null)).is_false()
-	assert_bool(ConnectBrowser.can_author_value(Callable())).is_false()
-	assert_bool(ConnectBrowser.can_author_value(RID())).is_false()
-
-	assert_bool(ConnectBrowser.can_author_value("")).is_true()
-	assert_bool(ConnectBrowser.can_author_value(0)).is_true()
-	assert_bool(ConnectBrowser.can_author_value(PackedStringArray())).is_true()
-	assert_bool(ConnectBrowser.can_author_value([] as Array)).is_true()
+	assert_int(await EnetTestSupport.await_online(tree)).is_equal(OK)
+	assert_int(connection.state).is_equal(NetwConnection.STATE_ONLINE)
+	assert_bool(browser.server_list.visible).is_false()
+	assert_bool(browser.connecting_popup.visible).is_false()
+	await EnetTestSupport.stop_tree(host.tree)

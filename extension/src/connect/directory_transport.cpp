@@ -105,17 +105,16 @@ void DirectoryTransport::make_peer(
     found->host_lobby(p_settings);
 }
 
-Error DirectoryTransport::set_browse_settings(const Dictionary &p_settings) {
-    netw::LobbyDirectory *found = reached();
-    return found == nullptr ? ERR_UNAVAILABLE
-                            : found->set_browse_settings(p_settings);
-}
-
 void DirectoryTransport::browse() {
     netw::LobbyDirectory *found = reached();
     if (found != nullptr) {
         found->list_lobbies();
     }
+}
+
+double DirectoryTransport::list_interval() const {
+    netw::LobbyDirectory *found = reached();
+    return found == nullptr ? 0.0 : found->list_interval();
 }
 
 String DirectoryTransport::join_address() const {
@@ -136,6 +135,10 @@ void DirectoryTransport::close() {
 }
 
 void DirectoryTransport::close_query() {
+    netw::LobbyDirectory *found = reached();
+    if (found != nullptr) {
+        found->stop_listing();
+    }
 }
 
 } // namespace netw::connect

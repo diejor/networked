@@ -17,6 +17,7 @@
 #include "netw/api/debug_join_config.hpp"
 #include "netw/api/despawn_config.hpp"
 #include "netw/api/display.hpp"
+#include "netw/api/endpoint.hpp"
 #include "netw/api/entity.hpp"
 #include "netw/api/entity_options.hpp"
 #include "netw/api/entity_record.hpp"
@@ -156,6 +157,7 @@ void initialize_networked_module(ModuleInitializationLevel level) {
     GDREGISTER_CLASS(netw::NetwAction);
     GDREGISTER_CLASS(netw::NetwActionContext);
     GDREGISTER_CLASS(netw::NetwPlayer);
+    GDREGISTER_CLASS(netw::NetwEndpoint);
     GDREGISTER_CLASS(netw::NetwPhysicsStepper);
     GDREGISTER_CLASS(netw::NetwServerInfo);
     GDREGISTER_CLASS(netw::NetwConnection);

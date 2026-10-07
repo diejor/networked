@@ -15,6 +15,13 @@ enum PeerMode {
     PEER_MODE_CLIENT,
 };
 
+enum AttemptState {
+    ATTEMPT_OFFLINE,
+    ATTEMPT_CREATING,
+    ATTEMPT_CONNECTING,
+    ATTEMPT_ONLINE,
+};
+
 enum CreationKind {
     CREATION_PEER,
     CREATION_PROBE,
@@ -29,7 +36,6 @@ struct Creation {
     godot::String address;
     godot::Dictionary settings;
     godot::Callable completed;
-    godot::Callable progress;
     Transport *provider = nullptr;
     bool published = false;
     bool dispatching = false;

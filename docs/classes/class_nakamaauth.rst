@@ -19,12 +19,19 @@ Accepts a join only when its username is the peer's Nakama username.
 Description
 -----------
 
-The username is checked against the Nakama server, so a player cannot use someone else's name. Add it under the :ref:`MultiplayerTree<class_MultiplayerTree>`.
+The username is checked against the Nakama server, so a player cannot use someone else's name.
 
-::
+.. rst-class:: classref-reftable-group
 
-    var gate := NakamaAuth.new()
-    tree.add_child(gate)
+Properties
+----------
+
+.. table::
+   :widths: auto
+
+   +---------------------------------------+---------------------------------------------------+---------------+
+   | :ref:`NetwSession<class_NetwSession>` | :ref:`session<class_NakamaAuth_property_session>` | ``<unknown>`` |
+   +---------------------------------------+---------------------------------------------------+---------------+
 
 .. rst-class:: classref-reftable-group
 
@@ -35,8 +42,6 @@ Methods
    :widths: auto
 
    +-------------------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------+
-   | |void|                                                | :ref:`bind_tree<class_NakamaAuth_method_bind_tree>`\ (\ tree\: :ref:`MultiplayerTree<class_MultiplayerTree>`\ )                        |
-   +-------------------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------+
    | :godot:`Error <@GlobalScope#enum_@globalscope_Error>` | :ref:`admit<class_NakamaAuth_method_admit>`\ (\ peer_id\: :godot:`int`, username\: :godot:`StringName`, _args\: :godot:`Array` = []\ ) |
    +-------------------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------+
 
@@ -46,20 +51,27 @@ Methods
 
 .. rst-class:: classref-descriptions-group
 
-Method Descriptions
--------------------
+Property Descriptions
+---------------------
 
-.. _class_NakamaAuth_method_bind_tree:
+.. _class_NakamaAuth_property_session:
 
-.. rst-class:: classref-method
+.. rst-class:: classref-property
 
-|void| **bind_tree**\ (\ tree\: :ref:`MultiplayerTree<class_MultiplayerTree>`\ ) :ref:`🔗<class_NakamaAuth_method_bind_tree>`
+:ref:`NetwSession<class_NetwSession>` **session** = ``<unknown>`` :ref:`🔗<class_NakamaAuth_property_session>`
 
-Sets the :ref:`MultiplayerTree<class_MultiplayerTree>` whose Nakama match is checked.
+.. container:: contribute
 
-.. rst-class:: classref-item-separator
+	There is currently no description for this property. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+
+.. rst-class:: classref-section-separator
 
 ----
+
+.. rst-class:: classref-descriptions-group
+
+Method Descriptions
+-------------------
 
 .. _class_NakamaAuth_method_admit:
 

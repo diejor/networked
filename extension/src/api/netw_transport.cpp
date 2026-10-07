@@ -264,20 +264,13 @@ Ref<NetwMultiplayer> NetwTransport::get_session() const {
 
 void NetwTransport::report(
     const RID &p_ticket,
-    const StringName &p_step,
+    const StringName &,
     const String &p_message,
     double p_ratio
 ) {
-    if (!speaks_for(p_ticket)) {
-        return;
-    }
-    const connect::Creation *asked = connect::creation_of(p_ticket);
-    if (asked != nullptr && !asked->published && asked->progress.is_valid()) {
-        Array carried;
-        carried.push_back(p_step);
-        carried.push_back(p_message);
-        carried.push_back(p_ratio);
-        asked->progress.callv(carried);
+    const Ref<NetwMultiplayer> owner = get_session();
+    if (speaks_for(p_ticket) && owner.is_valid()) {
+        owner->connect_plane().on_progress(p_ticket, p_message, p_ratio);
     }
 }
 

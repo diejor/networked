@@ -5,6 +5,8 @@
 
 [node name="JoinPopup" type="PopupPanel"]
 size = Vector2i(460, 500)
+popup_window = false
+exclusive = true
 theme = ExtResource("2_theme")
 script = ExtResource("1_join")
 
@@ -38,6 +40,7 @@ text = "Username"
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
+placeholder_text = "Player"
 
 [node name="SettingsScroll" type="ScrollContainer" parent="Margin/VBox"]
 unique_name_in_owner = true

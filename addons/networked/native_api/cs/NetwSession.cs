@@ -24,13 +24,28 @@ namespace Networked;
 /// </code>
 /// <para>
 /// There is one handle per session, so it is safe to keep it across an await.
-/// When the server leaves, a transport that can move the server hands it to
-/// another peer and the session goes on. See
-/// <see cref="NetwSession.TransferServer"/>. Connecting is done as you would
-/// normally do with <see cref="SceneMultiplayer"/>, by assigning
-/// <see cref="MultiplayerApi.MultiplayerPeer"/>. See
-/// <see cref="NetwConnection"/> to manage endpoints and
-/// <see cref="Netw.PrepareJoin"/> to join as a player.
+/// Connecting is done as you would normally do with
+/// <see cref="SceneMultiplayer"/>, by assigning
+/// <see cref="MultiplayerApi.MultiplayerPeer"/>.
+/// <see cref="NetwSession.Connection"/> finds servers and joins or hosts one,
+/// and <see cref="Netw.PrepareJoin"/> names the player who joins. <b>Moving the
+/// server</b> The session survives the server leaving when its
+/// <see cref="MultiplayerPeer"/> can hand the server role to another peer. Such
+/// a peer declares this signal, and <see cref="NetwSession.TransferServer"/>
+/// works when it also has the method.
+/// <code>
+/// signal server_relabelled(successor_was: int, former_now: int)
+///
+/// func transfer_server(peer_id: int) -&gt; Error:
+///     pass
+/// </code>
+/// </para>
+/// <para>
+/// The peer emits the signal from its own <see cref="MultiplayerPeer.Poll"/>,
+/// once it already answers the new ids. <c>NakamaWrapper</c> does this when
+/// <c>NakamaWrapper.migrate_on_host_loss</c> is on. ENet, WebRTC, Steam and
+/// <see cref="OfflineMultiplayerPeer"/> do not, so losing the server ends the
+/// session.
 /// </para>
 /// </remarks>
 public sealed class NetwSession : NetwRefCounted
@@ -373,7 +388,10 @@ public sealed class NetwSession : NetwRefCounted
         NetwApi.MethodBind("NetwSession", "get_is_online", 36873697UL);
 
     /// <summary>
-    /// Whether a peer is assigned and connected.
+    /// Whether a peer is assigned and connected. It stays <c>true</c> until
+    /// <see cref="NetwSession.Exited"/>, so it is still <c>true</c> while
+    /// <see cref="NetwSession.Exiting"/> runs and the session's scenes are
+    /// freed.
     /// </summary>
     public bool IsOnline
     {
@@ -617,6 +635,7 @@ public sealed class NetwSession : NetwRefCounted
     /// Asks the transport to make <paramref name="peerId"/> the server and this
     /// peer a client under a new id.
     /// <see cref="NetwSession.ServerTransferred"/> follows on every peer.
+    /// Whether a transport can is stated in the class description.
     /// <code>
     /// Error
     /// ┠╴ERR_UNAUTHORIZED        called on a client
@@ -625,7 +644,7 @@ public sealed class NetwSession : NetwRefCounted
     /// ┖╴ERR_BUSY                a database still has writes to settle
     /// </code>
     /// <para>
-    /// Moving the server names the transports that can. <b>Server Only.</b>
+    /// <b>Server Only.</b>
     /// </para>
     /// </summary>
     public Error TransferServer(long peerId)

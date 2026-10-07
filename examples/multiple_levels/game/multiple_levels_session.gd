@@ -1,14 +1,15 @@
 class_name MultipleLevelsSession
 extends Node2D
 
-const LEVEL_1 := preload("res://examples/multiple_levels/game/level1.tscn")
-const LEVEL_2 := preload("res://examples/multiple_levels/game/level2.tscn")
-const PLAYER := preload("res://examples/multiple_levels/game/player.tscn")
 const START_POSE := Vector2(359, 70)
 const START_STRIDE := Vector2(48, 0)
 
 const SAVES := &"saves"
 const PLAYERS := &"multiple_levels_players"
+
+@export var level_1: PackedScene
+@export var level_2: PackedScene
+@export var avatar: PackedScene
 
 var makers: Dictionary = { }
 var levels: Dictionary = { }
@@ -17,8 +18,6 @@ var levels: Dictionary = { }
 
 
 func _init() -> void:
-	makers[LEVEL_1.resource_path] = spawn_level1
-	makers[LEVEL_2.resource_path] = spawn_level2
 	Netw.configure_session(self).app(&"netw-example-multiple-levels")
 	Netw.configure_clock(self)
 	Netw.configure_spawn(spawn_level1)
@@ -29,6 +28,8 @@ func _init() -> void:
 
 
 func _ready() -> void:
+	makers[level_1.resource_path] = spawn_level1
+	makers[level_2.resource_path] = spawn_level2
 	NetwService.register(self)
 	Netw.configure_database(self, SAVES).backend(MemoryDatabase.new())
 	session.database(SAVES).open(&"campaign")
@@ -48,15 +49,15 @@ func _notification(what: int) -> void:
 
 
 func spawn_level1() -> Node:
-	return LEVEL_1.instantiate()
+	return level_1.instantiate()
 
 
 func spawn_level2() -> Node:
-	return LEVEL_2.instantiate()
+	return level_2.instantiate()
 
 
 func spawn_avatar() -> Node:
-	return PLAYER.instantiate()
+	return avatar.instantiate()
 
 
 func remember_level(level: NetwScene) -> void:
@@ -88,22 +89,18 @@ func authorize_scene_request(
 		destination: String,
 		_scope: NetwScene.SceneChange,
 ) -> Error:
-	if (
-			destination == LEVEL_1.resource_path
-			or destination == LEVEL_2.resource_path
-	):
-		return OK
-	return ERR_UNAUTHORIZED
+	return OK if makers.has(destination) else ERR_UNAUTHORIZED
 
 
 func spawn_player(player: NetwPlayer) -> void:
-	open_level(LEVEL_1.resource_path)
+	var start := level_1.resource_path
+	open_level(start)
 	var body := Netw.spawn_player(player, spawn_avatar)
 	var roster: Array[NetwPlayer] = session.players
 	(body as Node2D).position = START_POSE + START_STRIDE * roster.size()
 	var tp: TPComponent = body.get_node("%TPComponent")
-	tp.current_scene_path = LEVEL_1.resource_path
-	open_level(LEVEL_1.resource_path).root.add_child(body)
+	tp.current_scene_path = start
+	open_level(start).root.add_child(body)
 	await NetwEntity.of(body).persistence.load().wait()
-	if tp.current_scene_path != LEVEL_1.resource_path:
+	if tp.current_scene_path != start:
 		Netw.reparent(body, open_level(tp.current_scene_path).root)

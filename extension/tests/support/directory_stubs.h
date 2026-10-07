@@ -26,9 +26,19 @@ public:
     int join_calls = 0;
     int browse_calls = 0;
     int leave_calls = 0;
+    int stop_calls = 0;
+    double interval = 0.0;
 
     godot::StringName peer_class() override {
         return godot::StringName("StubLobbyPeer");
+    }
+
+    double list_interval() override {
+        return interval;
+    }
+
+    void stop_listing() override {
+        stop_calls += 1;
     }
 
     godot::String display_name() override {

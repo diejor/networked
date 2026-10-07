@@ -1,1195 +1,233 @@
-## A ready-made server browser, with a server list, Add, Host, Refresh and
-## Join.
+## A server browser that lists, joins and hosts games for its session.
 ##
-## Add this scene under a [MultiplayerTree] and players can browse, host and
-## join servers with no extra code. It uses [member NetwSession.connection] of
-## its ancestors, or the [NetwConnection] passed to [method bind].
-## [codeblock]
-## browser.bind(Netw.session(other_node).connection)
-## [/codeblock]
-## Host and Join create a peer with [method NetwConnection.create_peer],
-## call [method Netw.prepare_join] with the form's values, and assign the
-## peer. Closing the browser after that does not disconnect.
-##
-## Saved servers are stored in [member server_list_path]. Only those can be
-## edited or removed here.
+## [method _ready] is the whole wiring, and a game's own connect screen starts
+## by copying it.
 class_name ConnectBrowser
 extends Control
 
-var _ROW_SCENE := load(
-	"res://addons/networked/gdscript/connect/ui/row.tscn",
-)
-var _ADD_POPUP_SCENE := load(
-	"res://addons/networked/gdscript/connect/ui/popups/add_popup.tscn",
-)
-var _HOST_POPUP_SCENE := load(
-	"res://addons/networked/gdscript/connect/ui/popups/host_popup.tscn",
-)
-var _JOIN_POPUP_SCENE := load(
-	"res://addons/networked/gdscript/connect/ui/popups/join_popup.tscn",
-)
-var _JOIN_DIRECT_POPUP_SCENE := load(
-	"res://addons/networked/gdscript/connect/ui/popups/join_direct_popup.tscn",
-)
-var _CONNECTING_POPUP_SCENE := load(
-	"res://addons/networked/gdscript/connect/ui/popups/connecting_popup.tscn",
-)
-var _DETAIL_ITEM_SCENE := load(
-	"res://addons/networked/gdscript/connect/ui/detail_item.tscn",
-)
-const _ICE_SERVERS_EDIT := preload(
-	"res://addons/networked/gdscript/connect/ui/ice_servers_edit.tscn"
-)
-const _STRING_LIST_EDIT := preload(
-	"res://addons/networked/gdscript/connect/ui/string_list_edit.tscn"
-)
-var _MENU_SCENE := load(
-	"res://addons/networked/gdscript/connect/ui/popups/menu.tscn",
-)
+const ROW := preload("res://addons/networked/gdscript/connect/ui/row.tscn")
 
-const _ROW_MENU_JOIN := Menu.ID_JOIN
-const _ROW_MENU_EDIT := Menu.ID_EDIT
-const _ROW_MENU_REMOVE := Menu.ID_REMOVE
-
-## The server name used when the player enters none.
-const PLACEHOLDER_SERVER_NAME := "My Server"
-
-## The saved server file used when [member server_list_path] is empty.
-const DEFAULT_SERVER_LIST_PATH := "user://netw_servers.cfg"
-
-## Hides the browser while connected.
-@export var hide_when_session_active: bool = true
-
-## The [ConfigFile] path where saved servers are stored.
-@export var server_list_path: String = ""
-
-## Default form values for each transport.
+## Hides the server list while the session is online.
+@export var hide_when_session_active := true
+## Settings every connection through a transport starts from.
 @export var transport_defaults: Array[ConnectTransportConfig] = []
+## On the web, keeps the hosted room after [code]#[/code] in the page URL.
+@export var use_url_fragment := true
 
-## On the web, puts the hosted room code in the page URL after [code]#[/code],
-## and joins the room such a URL names.
-@export var use_url_fragment: bool = true
+var rows: Dictionary[NetwEndpoint, ConnectBrowserRow] = { }
+var selected: NetwEndpoint
+var username := "Player"
 
-## Simulated latency and packet loss for connections made from this browser.
-@export var debug_link: NetwLinkConditions
+@onready var session: NetwSession = Netw.session(self)
+@onready var connection: NetwConnection = session.connection
+@onready var server_list: VBoxContainer = $VBox
+@onready var list_box: VBoxContainer = %ListBox
+@onready var empty_state: Control = %EmptyState
+@onready var banner: Control = %Banner
+@onready var banner_label: Label = %BannerLabel
+@onready var details: Control = %Details
+@onready var details_status_dot: StatusDot = %DetailsStatusDot
+@onready var details_name_label: Label = %DetailsNameLabel
+@onready var details_source_label: Label = %DetailsSourceLabel
+@onready var details_address_label: Label = %DetailsAddressLabel
+@onready var details_status_label: Label = %DetailsStatusLabel
+@onready var details_ping_label: Label = %DetailsPingLabel
+@onready var details_players_label: Label = %DetailsPlayersLabel
+@onready var join_button: Button = %DetailsJoinButton
+@onready var host_popup: HostPopup = %HostPopup
+@onready var join_popup: JoinPopup = %JoinPopup
+@onready var join_direct_popup: JoinDirectPopup = %JoinDirectPopup
+@onready var connecting_popup: ConnectingPopup = %ConnectingPopup
 
-var _add_popup: AddPopup
-var _host_popup: HostPopup
-var _join_popup: JoinPopup
-var _join_direct_popup: JoinDirectPopup
-var _connecting_popup: ConnectingPopup
-var _row_menu: Menu
 
-var _rows: Dictionary = { }
-var _records: Array[Dictionary] = []
-var _mine: Dictionary = { }
-var _selected_row: ConnectBrowserRow
-var _selected_peer_class: StringName = &""
-var _selected_address: String = ""
-var _last_username: String = "Player"
-
-var _ticket: RID
-var _setup: int = 0
-var _assigned: MultiplayerPeer
-var _active_peer_class: StringName = &""
-var _deadline_started_msec: int = 0
-var _deadline_seconds: float = 0.0
-var _creation_reports_progress: bool = false
-
-var _bound_connection: NetwConnection
-var _session_ready: bool = false
-
-@onready var _refresh_button: Button = %RefreshButton
-@onready var _add_button: Button = %AddButton
-@onready var _join_direct_button: Button = %JoinDirectButton
-@onready var _host_button: Button = %HostButton
-@onready var _list_box: VBoxContainer = %ListBox
-@onready var _empty_state: VBoxContainer = %EmptyState
-@onready var _details_container: HFlowContainer = %DetailsContainer
-@onready var _banner: HBoxContainer = %Banner
-@onready var _banner_label: Label = %BannerLabel
-@onready var _details_header: HBoxContainer = %DetailsHeader
-@onready var _details_status_dot: StatusDot = %DetailsStatusDot
-@onready var _details_name_label: Label = %DetailsNameLabel
-@onready var _details_badge_label: Label = %DetailsBadgeLabel
-@onready var _details_footer: HBoxContainer = %DetailsFooter
-@onready var _details_edit_button: Button = %DetailsEditButton
-@onready var _details_remove_button: Button = %DetailsRemoveButton
-@onready var _details_join_button: Button = %DetailsJoinButton
-@onready var _room_bar: PanelContainer = %RoomBar
-@onready var _room_label: Label = %RoomLabel
-@onready var _room_code_edit: LineEdit = %RoomCodeEdit
-@onready var _room_copy_button: Button = %RoomCopyButton
-
-var _connection: NetwConnection
-var _api: NetwMultiplayer
-var _session: NetwSession
+func _enter_tree() -> void:
+	get_viewport().gui_embed_subwindows = true
 
 
 func _ready() -> void:
-	var viewport := get_viewport()
-	if viewport:
-		viewport.gui_embed_subwindows = true
+	for config in transport_defaults:
+		connection.set_defaults(config.peer_class(), config.settings())
+	connection.endpoint_added.connect(on_endpoint_added)
+	connection.endpoint_removed.connect(on_endpoint_removed)
+	connection.state_changed.connect(on_state_changed)
+	connection.progressed.connect(on_progressed)
+	connection.failed.connect(on_failed, CONNECT_DEFERRED)
+	connection.join_address_changed.connect(on_join_address_changed)
+	server_list.visibility_changed.connect(on_server_list_visibility_changed)
+	for endpoint in connection.endpoints:
+		on_endpoint_added(endpoint)
+	connection.browsing = server_list.is_visible_in_tree()
+	on_state_changed(connection.state)
+	on_endpoint_changed()
+	banner.hide()
 
-	_add_popup = _ADD_POPUP_SCENE.instantiate()
-	add_child(_add_popup)
-	_add_popup.submitted.connect(_on_endpoint_submitted)
+	%HostButton.pressed.connect(on_host_pressed)
+	%JoinDirectButton.pressed.connect(on_join_direct_pressed)
+	join_button.pressed.connect(on_join_pressed)
+	host_popup.submitted.connect(on_host_popup_submitted)
+	join_popup.submitted.connect(on_join_popup_submitted)
+	join_direct_popup.submitted.connect(on_join_direct_popup_submitted)
+	connecting_popup.cancelled.connect(connection.cancel)
 
-	_host_popup = _HOST_POPUP_SCENE.instantiate()
-	add_child(_host_popup)
-	_host_popup.submitted.connect(_on_host_submitted)
-
-	_join_popup = _JOIN_POPUP_SCENE.instantiate()
-	add_child(_join_popup)
-	_join_popup.submitted.connect(_on_join_submitted)
-
-	_join_direct_popup = _JOIN_DIRECT_POPUP_SCENE.instantiate()
-	add_child(_join_direct_popup)
-	_join_direct_popup.submitted.connect(_on_join_direct_submitted)
-
-	_connecting_popup = _CONNECTING_POPUP_SCENE.instantiate()
-	add_child(_connecting_popup)
-	_connecting_popup.cancelled.connect(_on_popup_cancelled)
-	_connecting_popup.popup_hide.connect(_on_connecting_popup_hidden)
-
-	_row_menu = _MENU_SCENE.instantiate() as Menu
-	add_child(_row_menu)
-	_row_menu.id_pressed.connect(_on_row_menu_id_pressed)
-
-	_refresh_button.pressed.connect(_on_refresh_pressed)
-	_add_button.pressed.connect(_on_add_pressed)
-	_join_direct_button.pressed.connect(_on_join_direct_pressed)
-	_host_button.pressed.connect(_on_host_pressed)
-
-	_details_edit_button.pressed.connect(_on_details_edit_pressed)
-	_details_remove_button.pressed.connect(_on_details_remove_pressed)
-	_details_join_button.pressed.connect(_on_details_join_pressed)
-	_room_copy_button.pressed.connect(_on_room_copy_pressed)
-
-	for popup: PopupPanel in [
-		_add_popup,
-		_host_popup,
-		_join_popup,
-		_join_direct_popup,
-	]:
-		popup.set("transport_defaults", transport_defaults)
-
-	_clear_selection()
-	set_process(false)
-
-	_setup_session.call_deferred()
+	var room := (
+			str(JavaScriptBridge.eval("location.hash")).trim_prefix("#")
+			if use_url_fragment and OS.has_feature("web") else ""
+	)
+	if not room.is_empty():
+		join_direct_popup.open(
+			connection,
+			username,
+			&"WebRTCMultiplayerPeer",
+			room,
+		)
 
 
 func _exit_tree() -> void:
-	if _ticket.is_valid():
-		if _connection != null:
-			_connection.cancel_peer_creation(_ticket)
-		_ticket = RID()
-	_setup += 1
-	_assigned = null
-	_unbind_session_signals()
+	connection.browsing = false
 
 
-func bind(handle: NetwConnection) -> void:
-	_bound_connection = handle
-	if is_inside_tree():
-		_setup_session()
+func on_endpoint_added(endpoint: NetwEndpoint) -> void:
+	var row: ConnectBrowserRow = ROW.instantiate()
+	row.endpoint = endpoint
+	rows[endpoint] = row
+	list_box.add_child(row)
+	row.selected.connect(on_row_selected.bind(endpoint))
+	row.activated.connect(on_row_activated.bind(endpoint))
+	endpoint.changed.connect(on_endpoint_changed)
+	empty_state.hide()
 
 
-func _setup_session() -> void:
-	if _session_ready:
-		return
-	_session = Netw.session(self)
-	if _bound_connection != null:
-		_connection = _bound_connection
-	elif _session != null:
-		_connection = _session.connection
-	_api = Netw.of(self)
-	if _connection == null:
-		return
-	var configured: Dictionary = { }
-	for config: ConnectTransportConfig in transport_defaults:
-		if config == null:
-			continue
-		var peer_class := config.peer_class()
-		if configured.has(peer_class):
-			_show_banner("Duplicate transport defaults for %s" % peer_class)
-			return
-		configured[peer_class] = true
-		var settings := config.browse_settings()
-		if settings.is_empty():
-			continue
-		var error := _connection.transport_set_browse_settings(peer_class, settings)
-		if error != OK:
-			_show_banner("Discovery settings rejected. %s" % error_string(error))
-			return
-	_session_ready = true
-	_bind_session_signals()
-	_rebuild_from_session()
-	_load_records()
-	_publish_records()
-	_connection.endpoint_refresh()
-	if _session != null and _session.is_online:
-		_on_session_entered()
-	else:
-		_offer_url_room()
+func on_endpoint_removed(endpoint: NetwEndpoint) -> void:
+	rows[endpoint].queue_free()
+	rows.erase(endpoint)
+	empty_state.visible = rows.is_empty()
+	if endpoint == selected:
+		on_row_selected(null)
 
 
-func _bind_session_signals() -> void:
-	if _connection == null:
-		return
-	if not _connection.endpoint_added.is_connected(_on_endpoint_added):
-		_connection.endpoint_added.connect(_on_endpoint_added)
-	if not _connection.endpoint_removed.is_connected(_on_endpoint_removed):
-		_connection.endpoint_removed.connect(_on_endpoint_removed)
-	if not _connection.endpoint_updated.is_connected(_on_endpoint_updated):
-		_connection.endpoint_updated.connect(_on_endpoint_updated)
-	if _session == null:
-		return
-	if not _session.entered.is_connected(_on_session_entered):
-		_session.entered.connect(_on_session_entered)
-	if not _session.exited.is_connected(_on_session_left):
-		_session.exited.connect(_on_session_left)
+func on_state_changed(state: NetwConnection.State) -> void:
+	match state:
+		NetwConnection.STATE_OFFLINE:
+			connecting_popup.hide()
+			server_list.show()
+		NetwConnection.STATE_CREATING, NetwConnection.STATE_CONNECTING:
+			banner.hide()
+			connecting_popup.open()
+		NetwConnection.STATE_ONLINE:
+			connecting_popup.hide()
+			server_list.visible = not hide_when_session_active
 
 
-func _unbind_session_signals() -> void:
-	if _connection != null:
-		if _connection.endpoint_added.is_connected(_on_endpoint_added):
-			_connection.endpoint_added.disconnect(_on_endpoint_added)
-		if _connection.endpoint_removed.is_connected(_on_endpoint_removed):
-			_connection.endpoint_removed.disconnect(_on_endpoint_removed)
-		if _connection.endpoint_updated.is_connected(_on_endpoint_updated):
-			_connection.endpoint_updated.disconnect(_on_endpoint_updated)
-	if _session == null:
-		return
-	if _session.entered.is_connected(_on_session_entered):
-		_session.entered.disconnect(_on_session_entered)
-	if _session.exited.is_connected(_on_session_left):
-		_session.exited.disconnect(_on_session_left)
+func on_progressed(message: String, ratio: float) -> void:
+	connecting_popup.progressed(message, ratio)
 
 
-func _list_path() -> String:
-	if not server_list_path.is_empty():
-		return server_list_path
-	return DEFAULT_SERVER_LIST_PATH
+func on_failed(_error: Error, reason: String) -> void:
+	banner_label.text = reason
+	banner.show()
+	connecting_popup.failed(reason)
 
 
-func _key(peer_class: StringName, address: String) -> String:
-	return "%s|%s" % [String(peer_class), address]
-
-
-func _has_selection() -> bool:
-	return not _selected_peer_class.is_empty()
-
-
-func _load_records() -> void:
-	_records.clear()
-	var config := ConfigFile.new()
-	if config.load(_list_path()) != OK:
-		return
-	for section in config.get_sections():
-		var address := str(config.get_value(section, "address", ""))
-		var peer_class := StringName(
-			config.get_value(section, "peer_class", ""),
-		)
-		if peer_class.is_empty():
-			continue
-		var settings: Variant = config.get_value(section, "settings", { })
-		_records.append(
-			{
-				peer_class = peer_class,
-				address = address,
-				display_name = str(config.get_value(section, "display_name", "")),
-				settings = settings if settings is Dictionary else { },
-			},
+func on_join_address_changed(address: String) -> void:
+	if use_url_fragment and OS.has_feature("web"):
+		JavaScriptBridge.get_interface("history").replaceState(
+			null,
+			"",
+			"#" + address,
 		)
 
 
-func _save_records() -> void:
-	var config := ConfigFile.new()
-	for i in _records.size():
-		var record: Dictionary = _records[i]
-		var section := "server_%d" % i
-		config.set_value(section, "peer_class", String(record.peer_class))
-		config.set_value(section, "address", record.address)
-		config.set_value(section, "display_name", record.display_name)
-		var settings: Dictionary = record.get("settings", { })
-		if not settings.is_empty():
-			config.set_value(section, "settings", settings)
-	var path := ProjectSettings.globalize_path(_list_path())
-	var err := DirAccess.make_dir_recursive_absolute(path.get_base_dir())
-	if err == OK:
-		err = config.save(path)
-	if err != OK:
-		push_warning(
-			"ConnectBrowser could not save the server list to %s (%s)."
-			% [_list_path(), error_string(err)],
-		)
+func on_server_list_visibility_changed() -> void:
+	connection.browsing = server_list.is_visible_in_tree()
 
 
-func _publish_records() -> void:
-	for record: Dictionary in _records:
-		_publish_record(record)
-
-
-func _publish_record(record: Dictionary) -> void:
-	var added := _connection.endpoint_add(
-		record.peer_class,
-		record.address,
-		record.display_name,
-	)
-	if added:
-		_mine[_key(record.peer_class, record.address)] = record
-
-
-func _forget_record(peer_class: StringName, address: String) -> void:
-	var key := _key(peer_class, address)
-	var record: Dictionary = _mine.get(key, { })
-	_mine.erase(key)
-	if not record.is_empty():
-		_records.erase(record)
-	_connection.endpoint_remove(peer_class, address)
-	_save_records()
-
-
-func _begin_setup(
-		peer_class: StringName,
-		mode: NetwConnection.TransportMode,
-		address: String,
+func join(
+		endpoint: NetwEndpoint,
 		settings: Dictionary,
-		username: StringName,
 		join_args: Array,
 ) -> void:
-	_cancel_setup()
-	_setup += 1
-	_active_peer_class = peer_class
-	var mine := _setup
-	_show_connecting_overlay(
-		peer_class if mode ==
-		NetwConnection.TRANSPORT_MODE_CLIENT else &"",
-		address,
-	)
-	_start_deadline(peer_class)
-	_ticket = _connection.create_peer(
-		peer_class,
-		mode,
-		address,
-		settings,
-		_on_peer_created.bind(mine, username, join_args),
-		_on_creation_progress.bind(mine),
-	)
-	if not _ticket.is_valid():
-		_fail_setup(ERR_UNCONFIGURED, "")
+	Netw.prepare_join.callv([self, username] + join_args)
+	connection.join(endpoint, settings)
 
 
-func _on_peer_created(
-		peer: MultiplayerPeer,
-		error: Error,
-		detail: String,
-		mine: int,
-		username: StringName,
-		join_args: Array,
-) -> void:
-	if mine != _setup:
-		return
-	_ticket = RID()
-	if error != OK or peer == null:
-		_fail_setup(error if error != OK else ERR_CANT_CREATE, detail)
-		return
-	if not String(username).is_empty():
-		var submit: Callable = Netw.prepare_join
-		submit.callv([self, username] + join_args)
-	var shaped := _shaped(peer)
-	_api.multiplayer_peer = shaped
-	if _api.multiplayer_peer != shaped:
-		_fail_setup(ERR_CANT_CONNECT, "the session refused the peer.")
-		return
-	_assigned = shaped
-	_creation_reports_progress = false
-
-
-func _on_creation_progress(
-		_step: StringName,
-		message: String,
-		ratio: float,
-		mine: int,
-) -> void:
-	if mine != _setup:
-		return
-	if ratio >= 0.0:
-		_creation_reports_progress = true
-	_connecting_popup.update_progress(message, ratio)
-
-
-func _start_deadline(peer_class: StringName) -> void:
-	var transport := _connection.transport(peer_class)
-	_deadline_seconds = float(transport.get("timeout_hint", 0.0))
-	_deadline_started_msec = Time.get_ticks_msec()
-	_creation_reports_progress = false
-	set_process(true)
-
-
-func _stop_deadline() -> void:
-	_deadline_seconds = 0.0
-	set_process(false)
-
-
-func _process(_delta: float) -> void:
-	if not _ticket.is_valid() and _assigned == null:
-		_stop_deadline()
-		return
-	if (
-			_assigned != null
-			and _assigned.get_connection_status()
-			== MultiplayerPeer.CONNECTION_DISCONNECTED
-	):
-		_cancel_setup()
-		_fail_setup(ERR_CANT_CONNECT, "The server did not answer.")
-		return
-	if _deadline_seconds <= 0.0:
-		return
-	var elapsed := (Time.get_ticks_msec() - _deadline_started_msec) / 1000.0
-	if elapsed >= _deadline_seconds:
-		var waited := ceili(_deadline_seconds)
-		_cancel_setup()
-		_fail_setup(ERR_TIMEOUT, "No answer after %d seconds." % waited)
-		return
-	if not _creation_reports_progress:
-		_connecting_popup.update_progress("", elapsed / _deadline_seconds)
-
-
-func _fail_setup(error: Error, detail: String) -> void:
-	_stop_deadline()
-	var reason := error_string(error)
-	_show_banner(reason)
-	_connecting_popup.show_failed(reason, detail)
-
-
-func _shaped(peer: MultiplayerPeer) -> MultiplayerPeer:
-	if debug_link == null or peer == null or _session == null:
-		return peer
-	var wrapped := debug_link.wrap_peer(peer)
-	if wrapped == null or wrapped == peer:
-		return peer
-	var config: NetwSessionConfig = _session.config
-	if config != null and config.link_conditions != null:
-		push_warning(
-			"ConnectBrowser.debug_link was ignored, because the session "
-			+ "already sets NetwSessionConfig.link_conditions. Set only one "
-			+ "of them.",
-		)
-		return peer
-	return wrapped
-
-
-func _cancel_setup() -> void:
-	_stop_deadline()
-	_setup += 1
-	if _ticket.is_valid():
-		if _connection != null:
-			_connection.cancel_peer_creation(_ticket)
-		_ticket = RID()
-	if _assigned != null:
-		if _api != null and _api.multiplayer_peer == _assigned:
-			_api.multiplayer_peer = null
-		_assigned = null
-
-
-func _rebuild_from_session() -> void:
-	for child in _list_box.get_children():
-		child.queue_free()
-	_rows.clear()
-	if _connection == null:
-		_update_counter()
-		return
-	for endpoint: Dictionary in _connection.endpoints:
-		_add_row(endpoint)
-	_update_counter()
-
-
-func _add_row(endpoint: Dictionary) -> void:
-	var peer_class: StringName = endpoint.get("peer_class")
-	var address: String = endpoint.get("address", "")
-	var row := _ROW_SCENE.instantiate() as ConnectBrowserRow
-	_list_box.add_child(row)
-	row.bind_endpoint(_connection, peer_class, address)
-	row.set_endpoint(endpoint)
-	row.selected.connect(_on_row_selected.bind(row))
-	row.context_requested.connect(_on_row_context_requested)
-	row.activated.connect(_on_row_activated)
-	_rows[_key(peer_class, address)] = row
-
-
-func _is_available(endpoint: Dictionary) -> bool:
-	return bool(endpoint.get("is_available", false))
-
-
-func _transport_is_available(peer_class: StringName) -> bool:
-	var transport := _connection.transport(peer_class)
-	if transport.is_empty():
-		return false
-	var caps := int(transport.get("capabilities", 0))
-	return (caps & NetwConnection.TRANSPORT_AVAILABLE) != 0
-
-
-func _on_endpoint_added(peer_class: StringName, address: String) -> void:
-	var key := _key(peer_class, address)
-	if _rows.has(key):
-		return
-	var endpoint := _connection.endpoint(peer_class, address)
-	if endpoint.is_empty():
-		return
-	_add_row(endpoint)
-	_update_counter()
-
-
-func _on_endpoint_removed(peer_class: StringName, address: String) -> void:
-	var key := _key(peer_class, address)
-	var row: ConnectBrowserRow = _rows.get(key)
-	if row != null:
-		row.queue_free()
-		_rows.erase(key)
-	_mine.erase(key)
-	if _has_selection() and _key(_selected_peer_class, _selected_address) == key:
-		_clear_selection()
-	_update_counter()
-
-
-func _on_endpoint_updated(peer_class: StringName, address: String) -> void:
-	var key := _key(peer_class, address)
-	var row: ConnectBrowserRow = _rows.get(key)
-	var endpoint := _connection.endpoint(peer_class, address)
-	if row != null:
-		row.set_endpoint(endpoint)
-	if _has_selection() and _key(_selected_peer_class, _selected_address) == key:
-		_update_details()
-
-
-func _update_counter() -> void:
-	var total := _rows.size()
-	_empty_state.visible = total == 0
-
-
-func _on_row_selected(
-		peer_class: StringName,
-		address: String,
-		row: ConnectBrowserRow,
-) -> void:
-	if _selected_row and is_instance_valid(_selected_row):
-		_selected_row.button_pressed = false
-	_selected_row = row
-	_selected_peer_class = peer_class
-	_selected_address = address
-	_update_details()
-
-
-func _clear_selection() -> void:
-	_selected_row = null
-	_selected_peer_class = &""
-	_selected_address = ""
-	_update_details()
-
-
-func _update_details() -> void:
-	for child in _details_container.get_children():
-		child.queue_free()
-
-	if _selected_row == null or not _has_selection():
-		_details_header.visible = false
-		_details_footer.visible = false
-		_details_status_dot.bind_result({ })
-		var empty_lbl := Label.new()
-		empty_lbl.text = "Select a server to see details"
-		empty_lbl.add_theme_color_override("font_color", Color(0.5, 0.5, 0.5))
-		_details_container.add_child(empty_lbl)
-		return
-
-	var endpoint := _connection.endpoint(_selected_peer_class, _selected_address)
-	var r := _endpoint_result(endpoint)
-	var is_mine := _mine.has(_key(_selected_peer_class, _selected_address))
-	var unavailable := not _is_available(endpoint)
-
-	_details_header.visible = true
-	_details_footer.visible = true
-	_details_edit_button.disabled = not is_mine
-	_details_remove_button.disabled = not is_mine
-	_details_join_button.disabled = unavailable
-	_details_name_label.text = _selected_row._display_name()
-	_details_badge_label.text = ConnectBrowser.format_peer_class_label(
-		_selected_peer_class,
-	)
-
-	if unavailable:
-		_details_status_dot.bind_unavailable()
-	else:
-		_details_status_dot.bind_result(r)
-
-	_details_container.add_child(
-		_create_detail_item(
-			"Address",
-			ConnectBrowser.format_address(endpoint),
-		),
-	)
-	_details_container.add_child(
-		_create_detail_item(
-			"Status",
-			"Unavailable" if unavailable else _status_text(r),
-		),
-	)
-	var measured: NetwServerInfo = r.get("info", null)
-	var latency := measured.latency_ms if measured else -1
-	if r.is_empty() or latency >= 0:
-		_details_container.add_child(
-			_create_detail_item(
-				"Latency",
-				"%d ms" % latency if latency >= 0 else "-",
-			),
-		)
-	_details_container.add_child(
-		_create_detail_item("Players", _players_text(r)),
-	)
-
-
-func _endpoint_result(endpoint: Dictionary) -> Dictionary:
-	if endpoint.is_empty() or not bool(endpoint.get("is_observed", false)):
-		return { }
-	return {
-		error = int(endpoint.get("status", FAILED)),
-		info = endpoint.get("info"),
-	}
-
-
-func _create_detail_item(
-		title: String,
-		value: String,
-) -> DetailItem:
-	var item := _DETAIL_ITEM_SCENE.instantiate() as DetailItem
-	item.name = title.to_camel_case() + "Detail"
-	item.set_detail(title, value)
-	return item
-
-
-func _on_row_context_requested(
-		peer_class: StringName,
-		address: String,
-		row: ConnectBrowserRow,
-		screen_position: Vector2,
-) -> void:
-	if row == null or peer_class.is_empty():
-		return
-	_on_row_selected(peer_class, address, row)
-	row.button_pressed = true
-	_row_menu.show_for_target(_mine.has(_key(peer_class, address)), screen_position)
-
-
-func _on_row_menu_id_pressed(id: int) -> void:
-	match id:
-		_ROW_MENU_JOIN:
-			_open_join_for_selected()
-		_ROW_MENU_EDIT:
-			_open_edit_for_selected()
-		_ROW_MENU_REMOVE:
-			_remove_selected()
-
-
-func _on_row_activated(
-		peer_class: StringName,
-		address: String,
-		row: ConnectBrowserRow,
-) -> void:
-	if row == null or peer_class.is_empty():
-		return
-	_on_row_selected(peer_class, address, row)
-	row.button_pressed = true
-	_open_join_for_selected()
-
-
-func _on_add_pressed() -> void:
-	_add_popup.open_add(_connection)
-
-
-func _on_join_direct_pressed() -> void:
-	_join_direct_popup.open_join_direct(_connection, _last_username)
-
-
-func _on_refresh_pressed() -> void:
-	if _connection != null:
-		_connection.endpoint_refresh()
-
-
-func _on_host_pressed() -> void:
-	if _connection == null:
-		return
-	_host_popup.open_host(_connection, _last_username)
-
-
-func _open_join_for_selected() -> void:
-	if _selected_row == null or not _has_selection():
-		return
-	_join_popup.open_join(
-		_connection,
-		_last_username,
-		_selected_peer_class,
-		_authored_settings(_selected_peer_class, _selected_address),
-	)
-
-
-func _open_edit_for_selected() -> void:
-	if not _mine.has(_key(_selected_peer_class, _selected_address)):
-		return
-	_add_popup.open_edit(
-		_connection,
-		_selected_peer_class,
-		_selected_address,
-		_authored_settings(_selected_peer_class, _selected_address),
-	)
-
-
-func _authored_settings(
-		peer_class: StringName,
-		address: String,
-) -> Dictionary:
-	var record: Dictionary = _mine.get(_key(peer_class, address), { })
-	return record.get("settings", { })
-
-
-func _remove_selected() -> void:
-	if not _mine.has(_key(_selected_peer_class, _selected_address)):
-		return
-	_forget_record(_selected_peer_class, _selected_address)
-
-
-func _on_endpoint_submitted(
-		peer_class: StringName,
-		address: String,
-		display_name: String,
-		settings: Dictionary,
-		editing_peer_class: StringName,
-		editing_address: String,
-) -> void:
-	var editing_key := (
-			_key(editing_peer_class, editing_address)
-			if not editing_peer_class.is_empty() else ""
-	)
-	var edited: Dictionary = (
-			_mine.get(editing_key, { }) if editing_key != "" else { }
-	)
-	if not edited.is_empty():
-		if edited.peer_class == peer_class and edited.address == address:
-			_connection.endpoint_set_display_name(
-				peer_class,
-				address,
-				display_name,
-			)
-			edited.display_name = display_name
-			edited.settings = settings
-			_save_records()
-			_update_details()
-			return
-		_forget_record(editing_peer_class, editing_address)
-
-	var record := {
-		peer_class = peer_class,
-		address = address,
-		display_name = display_name,
-		settings = settings,
-	}
-	_records.append(record)
-	_publish_record(record)
-	_save_records()
-	_clear_selection()
-	_connection.endpoint_refresh()
-
-
-func _on_host_submitted(
-		peer_class: StringName,
+func host(
+		transport: StringName,
 		settings: Dictionary,
 		info: NetwServerInfo,
-		username: StringName,
 		join_args: Array,
 ) -> void:
-	_hide_banner()
-	_last_username = String(username)
-	if _session != null:
-		_session.set_server_info(info)
-	_begin_setup(
-		peer_class,
-		NetwConnection.TRANSPORT_MODE_HOST,
-		"",
-		settings,
-		username,
-		join_args,
-	)
+	session.set_server_info(info)
+	Netw.prepare_join.callv([self, username] + join_args)
+	connection.host(transport, settings)
 
 
-func _on_join_submitted(
+func on_row_selected(endpoint: NetwEndpoint) -> void:
+	selected = endpoint
+	on_endpoint_changed()
+
+
+func on_row_activated(endpoint: NetwEndpoint) -> void:
+	on_row_selected(endpoint)
+	on_join_pressed()
+
+
+func on_endpoint_changed() -> void:
+	details.visible = selected != null
+	if selected == null:
+		return
+	var row := rows[selected]
+	details_status_dot.status = selected.status
+	details_name_label.text = row.name_label.text
+	details_source_label.text = row.badge_label.text
+	details_address_label.text = selected.address
+	details_status_label.text = StatusDot.WORDS[selected.status]
+	details_ping_label.text = row.ping_label.text
+	details_players_label.text = row.players_label.text
+	join_button.disabled = selected.status in [
+		NetwEndpoint.STATUS_FULL,
+		NetwEndpoint.STATUS_INCOMPATIBLE,
+		NetwEndpoint.STATUS_UNSUPPORTED,
+	]
+
+
+func on_join_pressed() -> void:
+	join_popup.open(connection, selected, username)
+
+
+func on_join_direct_pressed() -> void:
+	join_direct_popup.open(connection, username)
+
+
+func on_host_pressed() -> void:
+	host_popup.open(connection, username)
+
+
+func on_join_popup_submitted(
 		settings: Dictionary,
-		username: StringName,
+		player_name: String,
 		join_args: Array,
 ) -> void:
-	if not _has_selection():
-		return
-	_join_with_preflight(
-		_selected_peer_class,
-		_selected_address,
-		settings,
-		username,
-		join_args,
-	)
+	username = player_name
+	join(selected, settings, join_args)
 
 
-func _on_join_direct_submitted(
-		peer_class: StringName,
-		address: String,
-		_display_name: String,
-		settings: Dictionary,
-		username: StringName,
-		join_args: Array,
-) -> void:
-	_join_with_preflight(peer_class, address, settings, username, join_args)
-
-
-func _on_session_entered() -> void:
-	_stop_deadline()
-	_ticket = RID()
-	_assigned = null
-	_hide_connecting_overlay()
-	_hide_banner()
-	_show_room(_hosted_room())
-	if hide_when_session_active:
-		if _room_bar.visible:
-			$VBox.visible = false
-		else:
-			hide()
-
-
-func _on_session_left(
-		_reason: NetwSession.ExitReason,
-		_detail: String,
-) -> void:
-	_hide_connecting_overlay()
-	_show_room("")
-	if hide_when_session_active:
-		$VBox.visible = true
-		show()
-
-
-func _write_url_fragment(room: String) -> void:
-	if not OS.has_feature("web"):
-		return
-	var window: JavaScriptObject = JavaScriptBridge.get_interface("window")
-	if window == null:
-		return
-	var url: JavaScriptObject = JavaScriptBridge.create_object(
-		"URL",
-		window.location.href,
-	)
-	url.hash = "" if room.is_empty() else "#" + room
-	if String(window.location.href) == String(url.href):
-		return
-	var history: JavaScriptObject = window.history
-	if history != null:
-		history.replaceState(null, "", url.href)
-
-
-## The room code after [code]#[/code] in the page URL, or empty.
-func url_room() -> String:
-	if not use_url_fragment or not OS.has_feature("web"):
-		return ""
-	var window: JavaScriptObject = JavaScriptBridge.get_interface("window")
-	if window == null:
-		return ""
-	return String(window.location.hash).trim_prefix("#").strip_edges()
-
-
-func _offer_url_room() -> void:
-	var room := url_room()
-	if room.is_empty() or _connection == null:
-		return
-	var peer_class := _rendezvous_peer_class()
-	if peer_class.is_empty():
-		return
-	_join_direct_popup.open_join_direct(_connection, _last_username)
-	_join_direct_popup.preset(peer_class, room)
-
-
-func _rendezvous_peer_class() -> StringName:
-	for entry in _connection.transports():
-		var settings: Dictionary = entry.get("host_settings", { })
-		if settings.has("signaling_namespace"):
-			return StringName(entry.get("peer_class", &""))
-	return &""
-
-
-func _hosted_room() -> String:
-	if _connection == null or _api == null or not _api.is_server():
-		return ""
-	return _connection.join_address
-
-
-func _hosted_room_label() -> String:
-	if _connection == null or _active_peer_class.is_empty():
-		return "Room"
-	for entry in _connection.transports():
-		if StringName(entry.get("peer_class", &"")) == _active_peer_class:
-			return String(entry.get("address_label", "Room"))
-	return "Room"
-
-
-func _show_room(room: String) -> void:
-	if _room_bar == null or _room_code_edit == null:
-		return
-	_room_code_edit.text = room
-	_room_label.text = _hosted_room_label()
-	_room_bar.visible = not room.is_empty()
-	if use_url_fragment:
-		_write_url_fragment(room)
-
-
-func _on_room_copy_pressed() -> void:
-	var room := _room_code_edit.text
-	if room.is_empty():
-		return
-	DisplayServer.clipboard_set(_shareable(room))
-	_room_copy_button.text = "Copied"
-	await get_tree().create_timer(1.5).timeout
-	if is_instance_valid(_room_copy_button):
-		_room_copy_button.text = "Copy"
-
-
-func _shareable(room: String) -> String:
-	if not use_url_fragment or not OS.has_feature("web"):
-		return room
-	var window: JavaScriptObject = JavaScriptBridge.get_interface("window")
-	if window == null:
-		return room
-	var url: JavaScriptObject = JavaScriptBridge.create_object(
-		"URL",
-		window.location.href,
-	)
-	url.hash = "#" + room
-	return String(url.href)
-
-
-func _show_connecting_overlay(peer_class: StringName, address: String) -> void:
-	_connecting_popup.open_connecting(_connection, peer_class, address)
-	$VBox.modulate.a = 0.5
-
-
-func _hide_connecting_overlay() -> void:
-	_connecting_popup.hide()
-	$VBox.modulate.a = 1.0
-
-
-func _on_connecting_popup_hidden() -> void:
-	$VBox.modulate.a = 1.0
-
-
-func _on_popup_cancelled() -> void:
-	_cancel_setup()
-
-
-func _join_with_preflight(
-		peer_class: StringName,
+func on_join_direct_popup_submitted(
+		transport: StringName,
 		address: String,
 		settings: Dictionary,
-		username: StringName,
+		player_name: String,
 		join_args: Array,
 ) -> void:
-	_hide_banner()
-	_last_username = String(username)
-	if not _transport_is_available(peer_class):
-		_show_banner("This transport is not available on this platform.")
-		return
-	var endpoint := _connection.endpoint(peer_class, address)
-	if not endpoint.is_empty() and not _is_available(endpoint):
-		_show_banner("This endpoint is not available right now.")
-		return
-	_begin_setup(
-		peer_class,
-		NetwConnection.TRANSPORT_MODE_CLIENT,
-		address,
-		settings,
-		username,
-		join_args,
-	)
+	username = player_name
+	join(connection.add(transport, address), settings, join_args)
 
 
-func _show_banner(reason: String) -> void:
-	if _banner_label == null or _banner == null:
-		push_warning(
-			"ConnectBrowser has no banner to show this message (%s)." % reason,
-		)
-		return
-	_banner_label.text = reason
-	_banner.visible = true
-
-
-func _hide_banner() -> void:
-	if _banner != null:
-		_banner.visible = false
-
-
-func _status_text(result: Dictionary) -> String:
-	if result.is_empty():
-		return "..."
-	match int(result.get("error", FAILED)):
-		OK:
-			return "OK"
-		ERR_BUSY:
-			return "BUSY"
-		ERR_CANT_CONNECT:
-			return "UNREACHABLE"
-		ERR_TIMEOUT:
-			return "TIMEOUT"
-		ERR_UNAVAILABLE:
-			return "UNSUPPORTED"
-		ERR_UNAUTHORIZED:
-			return "INCOMPATIBLE"
-		_:
-			return "ERROR"
-
-
-func _players_text(result: Dictionary) -> String:
-	var info: NetwServerInfo = result.get("info", null)
-	if info == null:
-		return "-"
-	return "%d/%d" % [info.players, info.max_players]
-
-
-func _on_details_edit_pressed() -> void:
-	_open_edit_for_selected()
-
-
-func _on_details_remove_pressed() -> void:
-	_remove_selected()
-
-
-func _on_details_join_pressed() -> void:
-	_open_join_for_selected()
-
-
-## A short name for [param peer_class], such as [code]"ENet"[/code] for
-## [code]&"ENetMultiplayerPeer"[/code], or [code]"-"[/code] when empty.
-static func format_peer_class_label(peer_class: StringName) -> String:
-	var text := String(peer_class)
-	if text.is_empty():
-		return "-"
-	return text.trim_suffix("MultiplayerPeer")
-
-
-## The address of [param endpoint] to display, or [code]"-"[/code] when it
-## has none.
-static func format_address(endpoint: Dictionary) -> String:
-	if endpoint.is_empty():
-		return "-"
-	var address := String(endpoint.get("address", "")).strip_edges()
-	return address if not address.is_empty() else "-"
-
-
-## Creates a form field for the type of [param value], filled with it. Some
-## [param field_name] values get a special editor.
-static func make_value_control(
-		value: Variant,
-		field_name: StringName = &"",
-) -> Control:
-	match typeof(value):
-		TYPE_BOOL:
-			var box := CheckBox.new()
-			box.button_pressed = value
-			return box
-		TYPE_INT:
-			var spin := SpinBox.new()
-			spin.allow_greater = true
-			spin.allow_lesser = true
-			spin.step = 1
-			spin.value = value
-			return spin
-		TYPE_FLOAT:
-			var spin := SpinBox.new()
-			spin.allow_greater = true
-			spin.allow_lesser = true
-			spin.step = 0.01
-			spin.value = value
-			return spin
-		TYPE_PACKED_STRING_ARRAY:
-			var listed := _STRING_LIST_EDIT.instantiate()
-			listed.set_value(value)
-			return listed
-		TYPE_ARRAY:
-			if field_name == &"ice_servers":
-				var ice_servers := _ICE_SERVERS_EDIT.instantiate()
-				ice_servers.set_value(value)
-				return ice_servers
-			var structured := LineEdit.new()
-			structured.text = JSON.stringify(value)
-			return structured
-		_:
-			var edit := LineEdit.new()
-			edit.text = str(value)
-			return edit
-
-
-## Returns the value of [param control] as [param value_type].
-static func value_from_control(control: Control, value_type: int) -> Variant:
-	match value_type:
-		TYPE_BOOL:
-			return (control as CheckBox).button_pressed
-		TYPE_INT:
-			return int((control as SpinBox).value)
-		TYPE_FLOAT:
-			return (control as SpinBox).value
-		TYPE_STRING_NAME:
-			return StringName((control as LineEdit).text)
-		TYPE_NODE_PATH:
-			return NodePath((control as LineEdit).text)
-		TYPE_PACKED_STRING_ARRAY:
-			if control.has_method(&"get_value"):
-				return control.call(&"get_value")
-			var entries := PackedStringArray()
-			for piece in (control as LineEdit).text.split(",", false):
-				var trimmed := piece.strip_edges()
-				if not trimmed.is_empty():
-					entries.append(trimmed)
-			return entries
-		TYPE_ARRAY:
-			if control.has_method(&"get_value"):
-				return control.call(&"get_value")
-			var text := (control as LineEdit).text.strip_edges()
-			var reader := JSON.new()
-			if reader.parse(text) == OK and reader.data is Array:
-				return reader.data
-			push_warning(
-				(
-						"A settings field holds '%s', which is not a JSON array, "
-						+ "so it was ignored. Write it like [1, 2]."
-				) % [text],
-			)
-			return null
-		_:
-			return (control as LineEdit).text
-
-
-## Returns [code]true[/code] when [param value] can be edited in a form field.
-static func can_author_value(value: Variant) -> bool:
-	match typeof(value):
-		TYPE_NIL, TYPE_OBJECT, TYPE_CALLABLE, TYPE_SIGNAL, TYPE_RID:
-			return false
-		_:
-			return true
-
-
-## The empty value of [param value_type], such as [code]0[/code] or
-## [code]""[/code].
-static func zero_value(value_type: int) -> Variant:
-	match value_type:
-		TYPE_BOOL:
-			return false
-		TYPE_INT:
-			return 0
-		TYPE_FLOAT:
-			return 0.0
-		TYPE_STRING_NAME:
-			return StringName()
-		_:
-			return ""
+func on_host_popup_submitted(
+		transport: StringName,
+		settings: Dictionary,
+		info: NetwServerInfo,
+		player_name: String,
+		join_args: Array,
+) -> void:
+	username = player_name
+	host(transport, settings, info, join_args)

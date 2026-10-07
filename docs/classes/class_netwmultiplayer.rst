@@ -316,17 +316,25 @@ Methods
    +---------------------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | :godot:`Variant`                                                    | :ref:`endpoint_get_param<class_NetwMultiplayer_method_endpoint_get_param>`\ (\ endpoint\: :godot:`RID`, param\: :ref:`EndpointParam<enum_NetwMultiplayer_EndpointParam>`\ )                                                                                                                                                                                                                                                                            |
    +---------------------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`Variant`                                                    | :ref:`endpoint_get_state<class_NetwMultiplayer_method_endpoint_get_state>`\ (\ endpoint\: :godot:`RID`, state\: :ref:`EndpointState<enum_NetwConnection_EndpointState>`\ )                                                                                                                                                                                                                                                                             |
+   | :godot:`float`                                                      | :ref:`endpoint_get_probe_interval<class_NetwMultiplayer_method_endpoint_get_probe_interval>`\ (\ ) |const|                                                                                                                                                                                                                                                                                                                                             |
+   +---------------------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`Variant`                                                    | :ref:`endpoint_get_state<class_NetwMultiplayer_method_endpoint_get_state>`\ (\ endpoint\: :godot:`RID`, state\: :ref:`EndpointState<enum_NetwMultiplayer_EndpointState>`\ )                                                                                                                                                                                                                                                                            |
+   +---------------------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`bool`                                                       | :ref:`endpoint_is_browsing<class_NetwMultiplayer_method_endpoint_is_browsing>`\ (\ ) |const|                                                                                                                                                                                                                                                                                                                                                           |
+   +---------------------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwPromise<class_NetwPromise>`                               | :ref:`endpoint_join<class_NetwMultiplayer_method_endpoint_join>`\ (\ endpoint\: :godot:`RID`, settings\: :godot:`Dictionary` = {}\ )                                                                                                                                                                                                                                                                                                                   |
    +---------------------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | :godot:`Array`                                                      | :ref:`endpoint_list<class_NetwMultiplayer_method_endpoint_list>`\ (\ )                                                                                                                                                                                                                                                                                                                                                                                 |
    +---------------------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | |void|                                                              | :ref:`endpoint_probe<class_NetwMultiplayer_method_endpoint_probe>`\ (\ endpoint\: :godot:`RID`\ )                                                                                                                                                                                                                                                                                                                                                      |
    +---------------------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | |void|                                                              | :ref:`endpoint_refresh<class_NetwMultiplayer_method_endpoint_refresh>`\ (\ )                                                                                                                                                                                                                                                                                                                                                                           |
-   +---------------------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | |void|                                                              | :ref:`endpoint_remove<class_NetwMultiplayer_method_endpoint_remove>`\ (\ endpoint\: :godot:`RID`\ )                                                                                                                                                                                                                                                                                                                                                    |
    +---------------------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | |void|                                                              | :ref:`endpoint_set_browsing<class_NetwMultiplayer_method_endpoint_set_browsing>`\ (\ enabled\: :godot:`bool`\ )                                                                                                                                                                                                                                                                                                                                        |
+   +---------------------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | :godot:`Error <@GlobalScope#enum_@globalscope_Error>`               | :ref:`endpoint_set_param<class_NetwMultiplayer_method_endpoint_set_param>`\ (\ endpoint\: :godot:`RID`, param\: :ref:`EndpointParam<enum_NetwMultiplayer_EndpointParam>`, value\: :godot:`Variant`\ )                                                                                                                                                                                                                                                  |
+   +---------------------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | |void|                                                              | :ref:`endpoint_set_probe_interval<class_NetwMultiplayer_method_endpoint_set_probe_interval>`\ (\ seconds\: :godot:`float`\ )                                                                                                                                                                                                                                                                                                                           |
    +---------------------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | :godot:`Error <@GlobalScope#enum_@globalscope_Error>`               | :ref:`entity_add_property_set<class_NetwMultiplayer_method_entity_add_property_set>`\ (\ entity\: :godot:`RID`, set\: :godot:`RID`, comp\: :godot:`int`\ )                                                                                                                                                                                                                                                                                             |
    +---------------------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
@@ -824,19 +832,29 @@ Methods
    +---------------------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | :godot:`Error <@GlobalScope#enum_@globalscope_Error>`               | :ref:`table_write_routes<class_NetwMultiplayer_method_table_write_routes>`\ (\ table\: :godot:`RID`, routes\: :godot:`PackedInt64Array`\ )                                                                                                                                                                                                                                                                                                             |
    +---------------------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | |void|                                                              | :ref:`transport_cancel_attempt<class_NetwMultiplayer_method_transport_cancel_attempt>`\ (\ )                                                                                                                                                                                                                                                                                                                                                           |
+   +---------------------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | |void|                                                              | :ref:`transport_cancel_peer_creation<class_NetwMultiplayer_method_transport_cancel_peer_creation>`\ (\ ticket\: :godot:`RID`\ )                                                                                                                                                                                                                                                                                                                        |
    +---------------------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`RID`                                                        | :ref:`transport_create_peer<class_NetwMultiplayer_method_transport_create_peer>`\ (\ transport\: :godot:`RID`, mode\: :ref:`TransportMode<enum_NetwConnection_TransportMode>`, address\: :godot:`String`, settings\: :godot:`Dictionary`, completed\: :godot:`Callable`, progress\: :godot:`Callable` = Callable()\ )                                                                                                                                  |
+   | :godot:`RID`                                                        | :ref:`transport_create_peer<class_NetwMultiplayer_method_transport_create_peer>`\ (\ transport\: :godot:`RID`, mode\: :ref:`TransportMode<enum_NetwConnection_TransportMode>`, address\: :godot:`String`, settings\: :godot:`Dictionary`, completed\: :godot:`Callable`\ )                                                                                                                                                                             |
    +---------------------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | :godot:`RID`                                                        | :ref:`transport_find<class_NetwMultiplayer_method_transport_find>`\ (\ peer_class\: :godot:`StringName`\ )                                                                                                                                                                                                                                                                                                                                             |
    +---------------------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`int`                                                        | :ref:`transport_get_attempt_state<class_NetwMultiplayer_method_transport_get_attempt_state>`\ (\ ) |const|                                                                                                                                                                                                                                                                                                                                             |
+   +---------------------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`Dictionary`                                                 | :ref:`transport_get_defaults<class_NetwMultiplayer_method_transport_get_defaults>`\ (\ transport\: :godot:`RID`\ )                                                                                                                                                                                                                                                                                                                                     |
+   +---------------------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | :godot:`Variant`                                                    | :ref:`transport_get_param<class_NetwMultiplayer_method_transport_get_param>`\ (\ transport\: :godot:`RID`, param\: :ref:`TransportParam<enum_NetwMultiplayer_TransportParam>`\ )                                                                                                                                                                                                                                                                       |
+   +---------------------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwPromise<class_NetwPromise>`                               | :ref:`transport_host<class_NetwMultiplayer_method_transport_host>`\ (\ transport\: :godot:`RID`, settings\: :godot:`Dictionary` = {}\ )                                                                                                                                                                                                                                                                                                                |
+   +---------------------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwPromise<class_NetwPromise>`                               | :ref:`transport_join<class_NetwMultiplayer_method_transport_join>`\ (\ transport\: :godot:`RID`, address\: :godot:`String`, settings\: :godot:`Dictionary` = {}\ )                                                                                                                                                                                                                                                                                     |
    +---------------------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | :godot:`Array`                                                      | :ref:`transport_list<class_NetwMultiplayer_method_transport_list>`\ (\ )                                                                                                                                                                                                                                                                                                                                                                               |
    +---------------------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | :godot:`RID`                                                        | :ref:`transport_register<class_NetwMultiplayer_method_transport_register>`\ (\ type\: :godot:`Script`\ )                                                                                                                                                                                                                                                                                                                                               |
    +---------------------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`Error <@GlobalScope#enum_@globalscope_Error>`               | :ref:`transport_set_browse_settings<class_NetwMultiplayer_method_transport_set_browse_settings>`\ (\ transport\: :godot:`RID`, settings\: :godot:`Dictionary`\ )                                                                                                                                                                                                                                                                                       |
+   | :godot:`Error <@GlobalScope#enum_@globalscope_Error>`               | :ref:`transport_set_defaults<class_NetwMultiplayer_method_transport_set_defaults>`\ (\ transport\: :godot:`RID`, settings\: :godot:`Dictionary`\ )                                                                                                                                                                                                                                                                                                     |
    +---------------------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | :godot:`Error <@GlobalScope#enum_@globalscope_Error>`               | :ref:`transport_unregister<class_NetwMultiplayer_method_transport_unregister>`\ (\ transport\: :godot:`RID`\ )                                                                                                                                                                                                                                                                                                                                         |
    +---------------------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
@@ -1587,6 +1605,14 @@ enum **TransportParam**: :ref:`🔗<enum_NetwMultiplayer_TransportParam>`
 
 Like :ref:`TRANSPORT_PARAM_HOST_SETTINGS<class_NetwMultiplayer_constant_TRANSPORT_PARAM_HOST_SETTINGS>`, for the join form.
 
+.. _class_NetwMultiplayer_constant_TRANSPORT_PARAM_TIMEOUT_HINT:
+
+.. rst-class:: classref-enumeration-constant
+
+:ref:`TransportParam<enum_NetwMultiplayer_TransportParam>` **TRANSPORT_PARAM_TIMEOUT_HINT** = ``8``
+
+:godot:`float` seconds a connection through this transport may take before a caller gives up on it, from :ref:`NetwTransport.timeout_hint()<class_NetwTransport_method_timeout_hint>`.
+
 .. rst-class:: classref-item-separator
 
 ----
@@ -1620,6 +1646,82 @@ The address of the endpoint. Read-only.
 :ref:`EndpointParam<enum_NetwMultiplayer_EndpointParam>` **ENDPOINT_PARAM_DISPLAY_NAME** = ``2``
 
 The name shown in a server browser. The only field :ref:`endpoint_set_param()<class_NetwMultiplayer_method_endpoint_set_param>` can change.
+
+.. _class_NetwMultiplayer_constant_ENDPOINT_PARAM_SOURCE:
+
+.. rst-class:: classref-enumeration-constant
+
+:ref:`EndpointParam<enum_NetwMultiplayer_EndpointParam>` **ENDPOINT_PARAM_SOURCE** = ``3``
+
+The display name of the :ref:`LobbyDirectory<class_LobbyDirectory>` that listed the endpoint, or ``""`` when the game added it. Read-only.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _enum_NetwMultiplayer_EndpointState:
+
+.. rst-class:: classref-enumeration
+
+enum **EndpointState**: :ref:`🔗<enum_NetwMultiplayer_EndpointState>`
+
+.. _class_NetwMultiplayer_constant_ENDPOINT_STATE_FLAGS:
+
+.. rst-class:: classref-enumeration-constant
+
+:ref:`EndpointState<enum_NetwMultiplayer_EndpointState>` **ENDPOINT_STATE_FLAGS** = ``0``
+
+A bitmask of :ref:`EndpointFlags<enum_NetwMultiplayer_EndpointFlags>`.
+
+.. _class_NetwMultiplayer_constant_ENDPOINT_STATE_STATUS:
+
+.. rst-class:: classref-enumeration-constant
+
+:ref:`EndpointState<enum_NetwMultiplayer_EndpointState>` **ENDPOINT_STATE_STATUS** = ``1``
+
+The :godot:`@GlobalScope.Error <@GlobalScope#enum_@globalscope_Error>` of the last probe, or :godot:`@GlobalScope.FAILED <@GlobalScope#class_@GlobalScope_constant_FAILED>` before the first one.
+
+.. _class_NetwMultiplayer_constant_ENDPOINT_STATE_INFO:
+
+.. rst-class:: classref-enumeration-constant
+
+:ref:`EndpointState<enum_NetwMultiplayer_EndpointState>` **ENDPOINT_STATE_INFO** = ``2``
+
+The :ref:`NetwServerInfo<class_NetwServerInfo>` from the last probe, or ``null``.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _enum_NetwMultiplayer_EndpointFlags:
+
+.. rst-class:: classref-enumeration
+
+enum **EndpointFlags**: :ref:`🔗<enum_NetwMultiplayer_EndpointFlags>`
+
+.. _class_NetwMultiplayer_constant_ENDPOINT_FLAG_CALLER:
+
+.. rst-class:: classref-enumeration-constant
+
+:ref:`EndpointFlags<enum_NetwMultiplayer_EndpointFlags>` **ENDPOINT_FLAG_CALLER** = ``1``
+
+Added with :ref:`endpoint_add()<class_NetwMultiplayer_method_endpoint_add>` or invited with :ref:`LobbyDirectory.invite()<class_LobbyDirectory_method_invite>`, so :ref:`endpoint_remove()<class_NetwMultiplayer_method_endpoint_remove>` can remove it.
+
+.. _class_NetwMultiplayer_constant_ENDPOINT_FLAG_AVAILABLE:
+
+.. rst-class:: classref-enumeration-constant
+
+:ref:`EndpointFlags<enum_NetwMultiplayer_EndpointFlags>` **ENDPOINT_FLAG_AVAILABLE** = ``2``
+
+The transport works on this platform.
+
+.. _class_NetwMultiplayer_constant_ENDPOINT_FLAG_OBSERVED:
+
+.. rst-class:: classref-enumeration-constant
+
+:ref:`EndpointFlags<enum_NetwMultiplayer_EndpointFlags>` **ENDPOINT_FLAG_OBSERVED** = ``4``
+
+The row has an answer, from a probe or from its :ref:`LobbyDirectory<class_LobbyDirectory>`. Can be set together with :ref:`ENDPOINT_FLAG_CALLER<class_NetwMultiplayer_constant_ENDPOINT_FLAG_CALLER>`.
 
 .. rst-class:: classref-item-separator
 
@@ -3318,7 +3420,7 @@ The session became :ref:`NetwSession.SESSION_STATE_ONLINE<class_NetwSession_cons
 
 :ref:`Notification<enum_NetwMultiplayer_Notification>` **SESSION_JOIN_FAILED** = ``25``
 
-This peer's join was rejected. Games usually use :ref:`NetwConnection.join_failed<class_NetwConnection_signal_join_failed>`. The callback receives ``(error: int, reason: String)``.
+This peer's join was rejected. Games usually use :ref:`NetwSession.join_failed<class_NetwSession_signal_join_failed>`. The callback receives ``(error: int, reason: String)``.
 
 .. _class_NetwMultiplayer_constant_SESSION_ENDED:
 
@@ -3527,6 +3629,46 @@ A player left or was kicked. :ref:`NetwPlayer.is_active<class_NetwPlayer_propert
 :ref:`Notification<enum_NetwMultiplayer_Notification>` **SCENE_LIVE** = ``51``
 
 A scene is ready on this peer, and every node in it is in the tree and ready. The callback receives ``(scene: NetwScene)``.
+
+.. _class_NetwMultiplayer_constant_CONNECTION_STATE_CHANGED:
+
+.. rst-class:: classref-enumeration-constant
+
+:ref:`Notification<enum_NetwMultiplayer_Notification>` **CONNECTION_STATE_CHANGED** = ``52``
+
+The notification form of :ref:`NetwConnection.state_changed<class_NetwConnection_signal_state_changed>`.
+
+.. _class_NetwMultiplayer_constant_CONNECTION_PROGRESSED:
+
+.. rst-class:: classref-enumeration-constant
+
+:ref:`Notification<enum_NetwMultiplayer_Notification>` **CONNECTION_PROGRESSED** = ``53``
+
+The notification form of :ref:`NetwConnection.progressed<class_NetwConnection_signal_progressed>`.
+
+.. _class_NetwMultiplayer_constant_CONNECTION_FAILED:
+
+.. rst-class:: classref-enumeration-constant
+
+:ref:`Notification<enum_NetwMultiplayer_Notification>` **CONNECTION_FAILED** = ``54``
+
+The notification form of :ref:`NetwConnection.failed<class_NetwConnection_signal_failed>`.
+
+.. _class_NetwMultiplayer_constant_CONNECTION_JOIN_ADDRESS_CHANGED:
+
+.. rst-class:: classref-enumeration-constant
+
+:ref:`Notification<enum_NetwMultiplayer_Notification>` **CONNECTION_JOIN_ADDRESS_CHANGED** = ``55``
+
+The notification form of :ref:`NetwConnection.join_address_changed<class_NetwConnection_signal_join_address_changed>`.
+
+.. _class_NetwMultiplayer_constant_CONNECTION_INVITED:
+
+.. rst-class:: classref-enumeration-constant
+
+:ref:`Notification<enum_NetwMultiplayer_Notification>` **CONNECTION_INVITED** = ``56``
+
+The notification form of :ref:`NetwConnection.invited<class_NetwConnection_signal_invited>`. The callback receives ``(endpoint: RID, from_name: String)``.
 
 .. rst-class:: classref-section-separator
 
@@ -5087,6 +5229,8 @@ Applies every ``Netw.configure_*`` call made so far and moves :ref:`embed_phase(
 
 Adds a server at ``address`` reached through ``transport``, and notifies :ref:`ENDPOINT_ADDED<class_NetwMultiplayer_constant_ENDPOINT_ADDED>`. Adding the same pair again returns the same :godot:`RID`. Returns an invalid :godot:`RID` when ``transport`` is unknown.
 
+An empty ``address`` is stored as the address a join with it reaches, so an ENet row reads ``localhost`` and :ref:`endpoint_find()<class_NetwMultiplayer_method_endpoint_find>` finds it by either spelling.
+
 ::
 
     var endpoint := api.endpoint_add(
@@ -5121,13 +5265,49 @@ Returns one field of ``endpoint``, or ``null`` when it does not exist.
 
 ----
 
+.. _class_NetwMultiplayer_method_endpoint_get_probe_interval:
+
+.. rst-class:: classref-method
+
+:godot:`float` **endpoint_get_probe_interval**\ (\ ) |const| :ref:`🔗<class_NetwMultiplayer_method_endpoint_get_probe_interval>`
+
+The flat form of :ref:`NetwConnection.probe_interval<class_NetwConnection_property_probe_interval>`.
+
+.. rst-class:: classref-item-separator
+
+----
+
 .. _class_NetwMultiplayer_method_endpoint_get_state:
 
 .. rst-class:: classref-method
 
-:godot:`Variant` **endpoint_get_state**\ (\ endpoint\: :godot:`RID`, state\: :ref:`EndpointState<enum_NetwConnection_EndpointState>`\ ) :ref:`🔗<class_NetwMultiplayer_method_endpoint_get_state>`
+:godot:`Variant` **endpoint_get_state**\ (\ endpoint\: :godot:`RID`, state\: :ref:`EndpointState<enum_NetwMultiplayer_EndpointState>`\ ) :ref:`🔗<class_NetwMultiplayer_method_endpoint_get_state>`
 
-Returns what the last probe found for ``endpoint``. :ref:`NetwConnection.ENDPOINT_STATE_STATUS<class_NetwConnection_constant_ENDPOINT_STATE_STATUS>` is :godot:`@GlobalScope.FAILED <@GlobalScope#class_@GlobalScope_constant_FAILED>` until the first probe.
+Returns what the last probe found for ``endpoint``. :ref:`ENDPOINT_STATE_STATUS<class_NetwMultiplayer_constant_ENDPOINT_STATE_STATUS>` is :godot:`@GlobalScope.FAILED <@GlobalScope#class_@GlobalScope_constant_FAILED>` until the first probe.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NetwMultiplayer_method_endpoint_is_browsing:
+
+.. rst-class:: classref-method
+
+:godot:`bool` **endpoint_is_browsing**\ (\ ) |const| :ref:`🔗<class_NetwMultiplayer_method_endpoint_is_browsing>`
+
+The flat form of :ref:`NetwConnection.browsing<class_NetwConnection_property_browsing>`.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NetwMultiplayer_method_endpoint_join:
+
+.. rst-class:: classref-method
+
+:ref:`NetwPromise<class_NetwPromise>` **endpoint_join**\ (\ endpoint\: :godot:`RID`, settings\: :godot:`Dictionary` = {}\ ) :ref:`🔗<class_NetwMultiplayer_method_endpoint_join>`
+
+The flat form of :ref:`NetwConnection.join()<class_NetwConnection_method_join>`.
 
 .. rst-class:: classref-item-separator
 
@@ -5157,18 +5337,6 @@ Checks whether ``endpoint`` is reachable without joining it, then notifies :ref:
 
 ----
 
-.. _class_NetwMultiplayer_method_endpoint_refresh:
-
-.. rst-class:: classref-method
-
-|void| **endpoint_refresh**\ (\ ) :ref:`🔗<class_NetwMultiplayer_method_endpoint_refresh>`
-
-Re-probes every endpoint and notifies :ref:`ENDPOINT_UPDATED<class_NetwMultiplayer_constant_ENDPOINT_UPDATED>` for each result. Probes run serially.
-
-.. rst-class:: classref-item-separator
-
-----
-
 .. _class_NetwMultiplayer_method_endpoint_remove:
 
 .. rst-class:: classref-method
@@ -5176,6 +5344,18 @@ Re-probes every endpoint and notifies :ref:`ENDPOINT_UPDATED<class_NetwMultiplay
 |void| **endpoint_remove**\ (\ endpoint\: :godot:`RID`\ ) :ref:`🔗<class_NetwMultiplayer_method_endpoint_remove>`
 
 Removes ``endpoint`` and notifies :ref:`ENDPOINT_REMOVED<class_NetwMultiplayer_constant_ENDPOINT_REMOVED>`.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NetwMultiplayer_method_endpoint_set_browsing:
+
+.. rst-class:: classref-method
+
+|void| **endpoint_set_browsing**\ (\ enabled\: :godot:`bool`\ ) :ref:`🔗<class_NetwMultiplayer_method_endpoint_set_browsing>`
+
+The flat form of :ref:`NetwConnection.browsing<class_NetwConnection_property_browsing>`.
 
 .. rst-class:: classref-item-separator
 
@@ -5195,6 +5375,18 @@ Changes one field of ``endpoint`` and notifies :ref:`ENDPOINT_UPDATED<class_Netw
     ┠╴OK                     the field changed
     ┠╴ERR_DOES_NOT_EXIST     the endpoint does not exist
     ┖╴ERR_INVALID_PARAMETER  param names anything but ENDPOINT_PARAM_DISPLAY_NAME
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NetwMultiplayer_method_endpoint_set_probe_interval:
+
+.. rst-class:: classref-method
+
+|void| **endpoint_set_probe_interval**\ (\ seconds\: :godot:`float`\ ) :ref:`🔗<class_NetwMultiplayer_method_endpoint_set_probe_interval>`
+
+The flat form of :ref:`NetwConnection.probe_interval<class_NetwConnection_property_probe_interval>`.
 
 .. rst-class:: classref-item-separator
 
@@ -8652,6 +8844,18 @@ Sets the route of each row of ``table``. It applies at :ref:`table_commit()<clas
 
 ----
 
+.. _class_NetwMultiplayer_method_transport_cancel_attempt:
+
+.. rst-class:: classref-method
+
+|void| **transport_cancel_attempt**\ (\ ) :ref:`🔗<class_NetwMultiplayer_method_transport_cancel_attempt>`
+
+The flat form of :ref:`NetwConnection.cancel()<class_NetwConnection_method_cancel>`.
+
+.. rst-class:: classref-item-separator
+
+----
+
 .. _class_NetwMultiplayer_method_transport_cancel_peer_creation:
 
 .. rst-class:: classref-method
@@ -8668,11 +8872,11 @@ Cancels the :ref:`transport_create_peer()<class_NetwMultiplayer_method_transport
 
 .. rst-class:: classref-method
 
-:godot:`RID` **transport_create_peer**\ (\ transport\: :godot:`RID`, mode\: :ref:`TransportMode<enum_NetwConnection_TransportMode>`, address\: :godot:`String`, settings\: :godot:`Dictionary`, completed\: :godot:`Callable`, progress\: :godot:`Callable` = Callable()\ ) :ref:`🔗<class_NetwMultiplayer_method_transport_create_peer>`
+:godot:`RID` **transport_create_peer**\ (\ transport\: :godot:`RID`, mode\: :ref:`TransportMode<enum_NetwConnection_TransportMode>`, address\: :godot:`String`, settings\: :godot:`Dictionary`, completed\: :godot:`Callable`\ ) :ref:`🔗<class_NetwMultiplayer_method_transport_create_peer>`
 
 Asks ``transport`` to create a :godot:`MultiplayerPeer` and returns a ticket for :ref:`transport_cancel_peer_creation()<class_NetwMultiplayer_method_transport_cancel_peer_creation>`. ``address`` is used by clients and ``settings`` by hosts.
 
-\ ``completed`` is called once, in a later frame, as ``completed(peer, error, detail)``. Assign the peer to :godot:`MultiplayerAPI.multiplayer_peer <MultiplayerAPI#class_MultiplayerAPI_property_multiplayer_peer>` inside this callback, before any ``await``. Returning without assigning it closes the peer. ``progress`` is called as ``progress(step, message, ratio)`` while it works.
+\ ``completed`` is called once, in a later frame, as ``completed(peer, error, detail)``. Assign the peer to :godot:`MultiplayerAPI.multiplayer_peer <MultiplayerAPI#class_MultiplayerAPI_property_multiplayer_peer>` inside this callback, before any ``await``. Returning without assigning it closes the peer.
 
 Returns an invalid :godot:`RID` when ``completed`` is not valid.
 
@@ -8702,9 +8906,31 @@ Returns the transport that creates ``peer_class`` peers, or an invalid :godot:`R
 ::
 
     var enet := api.transport_find(&"ENetMultiplayerPeer")
-    api.transport_create_peer(
-            enet, NetwConnection.TRANSPORT_MODE_HOST, "",
-            {port = 21253}, assign_it)
+    api.transport_host(enet, {port = 21253})
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NetwMultiplayer_method_transport_get_attempt_state:
+
+.. rst-class:: classref-method
+
+:godot:`int` **transport_get_attempt_state**\ (\ ) |const| :ref:`🔗<class_NetwMultiplayer_method_transport_get_attempt_state>`
+
+The flat form of :ref:`NetwConnection.state<class_NetwConnection_property_state>`.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NetwMultiplayer_method_transport_get_defaults:
+
+.. rst-class:: classref-method
+
+:godot:`Dictionary` **transport_get_defaults**\ (\ transport\: :godot:`RID`\ ) :ref:`🔗<class_NetwMultiplayer_method_transport_get_defaults>`
+
+The flat form of :ref:`NetwConnection.defaults()<class_NetwConnection_method_defaults>`.
 
 .. rst-class:: classref-item-separator
 
@@ -8724,6 +8950,30 @@ Returns one field of ``transport``, used to draw host and join forms, or ``null`
             t, NetwMultiplayer.TRANSPORT_PARAM_CAPABILITIES)
     if caps & NetwConnection.TRANSPORT_CAN_HOST:
         show_host_button()
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NetwMultiplayer_method_transport_host:
+
+.. rst-class:: classref-method
+
+:ref:`NetwPromise<class_NetwPromise>` **transport_host**\ (\ transport\: :godot:`RID`, settings\: :godot:`Dictionary` = {}\ ) :ref:`🔗<class_NetwMultiplayer_method_transport_host>`
+
+The flat form of :ref:`NetwConnection.host()<class_NetwConnection_method_host>`.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NetwMultiplayer_method_transport_join:
+
+.. rst-class:: classref-method
+
+:ref:`NetwPromise<class_NetwPromise>` **transport_join**\ (\ transport\: :godot:`RID`, address\: :godot:`String`, settings\: :godot:`Dictionary` = {}\ ) :ref:`🔗<class_NetwMultiplayer_method_transport_join>`
+
+Joins ``address`` through ``transport``, as :ref:`NetwConnection.join()<class_NetwConnection_method_join>` joins a listed row.
 
 .. rst-class:: classref-item-separator
 
@@ -8761,26 +9011,13 @@ Registers the :ref:`NetwTransport<class_NetwTransport>` script ``type`` with thi
 
 ----
 
-.. _class_NetwMultiplayer_method_transport_set_browse_settings:
+.. _class_NetwMultiplayer_method_transport_set_defaults:
 
 .. rst-class:: classref-method
 
-:godot:`Error <@GlobalScope#enum_@globalscope_Error>` **transport_set_browse_settings**\ (\ transport\: :godot:`RID`, settings\: :godot:`Dictionary`\ ) :ref:`🔗<class_NetwMultiplayer_method_transport_set_browse_settings>`
+:godot:`Error <@GlobalScope#enum_@globalscope_Error>` **transport_set_defaults**\ (\ transport\: :godot:`RID`, settings\: :godot:`Dictionary`\ ) :ref:`🔗<class_NetwMultiplayer_method_transport_set_defaults>`
 
-Sets how ``transport`` looks for servers. Call it before :ref:`endpoint_refresh()<class_NetwMultiplayer_method_endpoint_refresh>`. The WebRTC transport accepts these settings.
-
-.. code:: text
-
-    Dictionary
-    ┠╴trackers             PackedStringArray  WebSocket tracker URLs
-    ┖╴signaling_namespace  String             namespace of listed rooms
-
-.. code:: text
-
-    Error
-    ┠╴OK                     the settings are set
-    ┠╴ERR_INVALID_PARAMETER  invalid settings
-    ┖╴ERR_ALREADY_IN_USE     different settings after searching started
+The flat form of :ref:`NetwConnection.set_defaults()<class_NetwConnection_method_set_defaults>`.
 
 .. rst-class:: classref-item-separator
 

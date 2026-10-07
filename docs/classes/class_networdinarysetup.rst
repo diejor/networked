@@ -12,14 +12,14 @@ NetwOrdinarySetup
 
 **Inherits:** :godot:`RefCounted`
 
-Composes provider creation, player preparation and peer assignment for fixtures whose backend cannot build a peer by itself.
+Prepares a player and hosts or joins through a :ref:`MultiplayerTree<class_MultiplayerTree>`'s own transport, for fixtures whose backend cannot build a peer by itself.
 
 .. rst-class:: classref-introduction-group
 
 Description
 -----------
 
-A test that already knows how to build its peer assigns it directly and needs nothing here. This exists for a provider-backed backend, where the peer arrives through :ref:`NetwConnection.create_peer()<class_NetwConnection_method_create_peer>` and the assignment window is the completion callback itself.
+A test that already knows how to build its peer assigns it directly and needs nothing here.
 
 ::
 
@@ -32,7 +32,7 @@ A test that already knows how to build its peer assigns it directly and needs no
     )
     assert(settled.error == OK)
 
-\ The transport is named by :ref:`MultiplayerTree.peer_class<class_MultiplayerTree_property_peer_class>`, the settings passed through are the provider's own, and an empty username assigns without seating a local player, which is what a dedicated host wants.
+\ The transport is named by :ref:`MultiplayerTree.peer_class<class_MultiplayerTree_property_peer_class>`, and an empty username connects without seating a local player, which is what a dedicated host wants.
 
 .. rst-class:: classref-reftable-group
 
@@ -52,23 +52,6 @@ Methods
 
 .. rst-class:: classref-descriptions-group
 
-Constants
----------
-
-.. _class_NetwOrdinarySetup_constant_CREATION_TIMEOUT_MS:
-
-.. rst-class:: classref-constant
-
-**CREATION_TIMEOUT_MS** = ``20000`` :ref:`🔗<class_NetwOrdinarySetup_constant_CREATION_TIMEOUT_MS>`
-
-How long :ref:`connect_through()<class_NetwOrdinarySetup_method_connect_through>` waits for the provider, in milliseconds. It is the fixture's own patience, not a session deadline.
-
-.. rst-class:: classref-section-separator
-
-----
-
-.. rst-class:: classref-descriptions-group
-
 Method Descriptions
 -------------------
 
@@ -78,7 +61,7 @@ Method Descriptions
 
 :ref:`NetwOrdinarySetup.Outcome<class_NetwOrdinarySetup_Outcome>` **connect_through**\ (\ tree\: :ref:`MultiplayerTree<class_MultiplayerTree>`, mode\: :ref:`TransportMode<enum_NetwConnection_TransportMode>`, address\: :godot:`String`, settings\: :godot:`Dictionary`, username\: :godot:`StringName`, join_args\: :godot:`Array` = []\ ) |static| :ref:`🔗<class_NetwOrdinarySetup_method_connect_through>`
 
-Builds a peer for ``tree`` through its provider, prepares ``username``, and assigns the peer.  Preparation and assignment both happen inside the creation callback, which is the only window the seam offers: returning from it without assigning declines the offer and closes the peer.
+Prepares ``username``, then hosts or joins ``address`` with :ref:`NetwConnection.host()<class_NetwConnection_method_host>` or :ref:`NetwConnection.join()<class_NetwConnection_method_join>`, and settles once the session is online or the attempt failed.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

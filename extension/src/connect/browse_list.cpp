@@ -1,5 +1,7 @@
 #include "netw/connect/browse_list.hpp"
 
+#include <limits>
+
 #include "godot/object.hpp"
 #include "godot/rid.hpp"
 
@@ -79,8 +81,12 @@ RID BrowseList::find(const RID &p_transport, const String &p_address) const {
     return RID();
 }
 
-bool BrowseList::is_caller_row(const RID &p_target) const {
-    return index_of(caller_rows, p_target) >= 0;
+bool BrowseList::is_removable(const RID &p_target) const {
+    if (index_of(caller_rows, p_target) >= 0) {
+        return true;
+    }
+    const TargetRow *held = row(p_target);
+    return held != nullptr && held->invited;
 }
 
 RID BrowseList::add(
@@ -102,11 +108,17 @@ RID BrowseList::add(
 }
 
 bool BrowseList::remove(const RID &p_target) {
-    const int at = index_of(caller_rows, p_target);
-    if (at < 0) {
+    if (!is_removable(p_target)) {
         return false;
     }
-    caller_rows.remove_at(uint32_t(at));
+    const int caller = index_of(caller_rows, p_target);
+    if (caller >= 0) {
+        caller_rows.remove_at(uint32_t(caller));
+    }
+    const int listed = index_of(directory_rows, p_target);
+    if (listed >= 0) {
+        directory_rows.remove_at(uint32_t(listed));
+    }
     const int queued = index_of(queue, p_target);
     if (queued >= 0) {
         queue.remove_at(uint32_t(queued));
@@ -183,7 +195,7 @@ void BrowseList::publish_directory(
     for (int32_t at = int32_t(directory_rows.size()) - 1; at >= 0; at--) {
         const RID held = directory_rows[uint32_t(at)];
         const TargetRow *seat = row(held);
-        if (seat == nullptr || seat->directory != p_directory
+        if (seat == nullptr || seat->invited || seat->directory != p_directory
             || seat->source != p_source) {
             continue;
         }
@@ -194,6 +206,33 @@ void BrowseList::publish_directory(
         directory_rows.remove_at(uint32_t(at));
         release(held);
     }
+}
+
+RID BrowseList::invite(
+    const StringName &p_directory,
+    ObjectID p_source,
+    const RID &p_transport,
+    const String &p_address,
+    bool &r_minted
+) {
+    const RID held = find(p_transport, p_address);
+    r_minted = !held.is_valid();
+    if (!r_minted) {
+        TargetRow *seat = row(held);
+        if (seat != nullptr) {
+            seat->invited = true;
+        }
+        return held;
+    }
+    TargetRow made;
+    made.transport = p_transport;
+    made.address = p_address;
+    made.directory = p_directory;
+    made.source = p_source;
+    made.invited = true;
+    const RID minted = mint(made);
+    directory_rows.push_back(minted);
+    return minted;
 }
 
 void BrowseList::forget_source(ObjectID p_source, LocalVector<RID> &r_dropped) {
@@ -213,10 +252,41 @@ void BrowseList::enqueue(const RID &p_target) {
     queue.push_back(p_target);
 }
 
-void BrowseList::enqueue_caller_rows() {
-    queue.clear();
+void BrowseList::arm_caller_rows() {
     for (uint32_t at = 0; at < caller_rows.size(); at++) {
+        TargetRow *held = row(caller_rows[at]);
+        if (held != nullptr) {
+            held->next_probe = 0.0;
+        }
+    }
+}
+
+void BrowseList::enqueue_due(double p_elapsed, double p_interval) {
+    for (uint32_t at = 0; at < caller_rows.size(); at++) {
+        TargetRow *held = row(caller_rows[at]);
+        if (held == nullptr) {
+            continue;
+        }
+        held->next_probe -= p_elapsed;
+        if (held->next_probe > 0.0 || held->probing
+            || index_of(queue, caller_rows[at]) >= 0) {
+            continue;
+        }
         queue.push_back(caller_rows[at]);
+        held->next_probe = p_interval > 0.0
+            ? p_interval
+            : std::numeric_limits<double>::infinity();
+    }
+}
+
+void BrowseList::drop_probes() {
+    queue.clear();
+    probes_in_flight = 0;
+    for (uint32_t at = 0; at < caller_rows.size(); at++) {
+        TargetRow *held = row(caller_rows[at]);
+        if (held != nullptr) {
+            held->probing = false;
+        }
     }
 }
 
@@ -224,14 +294,30 @@ bool BrowseList::next_to_probe(RID &r_target) {
     while (!queue.is_empty() && probes_in_flight < MAX_IN_FLIGHT_PROBES) {
         const RID held = queue[0];
         queue.remove_at(0);
-        if (row(held) == nullptr) {
+        TargetRow *seat = row(held);
+        if (seat == nullptr) {
             continue;
         }
+        seat->probing = true;
         r_target = held;
         probes_in_flight++;
         return true;
     }
     return false;
+}
+
+bool BrowseList::begin_probe(const RID &p_target) {
+    TargetRow *seat = row(p_target);
+    if (seat == nullptr || seat->probing) {
+        return false;
+    }
+    const int queued = index_of(queue, p_target);
+    if (queued >= 0) {
+        queue.remove_at(uint32_t(queued));
+    }
+    seat->probing = true;
+    probes_in_flight++;
+    return true;
 }
 
 void BrowseList::probe_settled(
@@ -246,6 +332,7 @@ void BrowseList::probe_settled(
     if (seat == nullptr) {
         return;
     }
+    seat->probing = false;
     seat->status = classify(p_info, p_error);
     seat->info = p_info;
     seat->observed = true;

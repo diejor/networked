@@ -6,12 +6,16 @@
 	<description>
 		A host is listed while its session is the server of a WebRTC room and its [NetwServerInfo] is [constant NetwServerInfo.VISIBILITY_PUBLIC]. Joining a listed room goes through the WebRTC transport.
 		Without this node nothing is listed or browsed, and a room is still joined by its code. A room signaled through a game's own [NetwWebRTCSignaler] is never listed.
+		Rooms are searched in the [code]signaling_namespace[/code] of those same defaults, or in [member NetwSessionConfig.app_id] when it is empty.
 	</description>
 	<tutorials>
 	</tutorials>
 	<members>
+		<member name="list_interval" type="float" setter="set_list_interval" getter="get_list_interval" default="10.0">
+			Seconds between searches while [member NetwConnection.browsing] is [code]true[/code].
+		</member>
 		<member name="trackers" type="PackedStringArray" setter="set_trackers" getter="get_trackers" default="PackedStringArray()">
-			The tracker URLs to browse and announce on. Empty uses the public defaults.
+			The [code]ws://[/code] or [code]wss://[/code] tracker URLs to browse and announce on. Empty reads [code skip-lint]trackers[/code] from [method NetwConnection.defaults] for [code]WebRTCMultiplayerPeer[/code], then the public trackers.
 		</member>
 	</members>
 </class>

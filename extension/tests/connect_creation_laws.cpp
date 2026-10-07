@@ -122,7 +122,8 @@ struct AnswerLog {
     int64_t error = 0;
     String detail;
     int progress_calls = 0;
-    String progress_step;
+    String progress_message;
+    double progress_ratio = -1.0;
     bool assign = false;
     bool assign_wrapped = false;
     Ref<MultiplayerPeer> wrapper;
@@ -145,9 +146,10 @@ RID slot_of(const Ref<NetwMultiplayer> &p_core) {
     return p_core->transport_find(StringName(PEER_CLASS));
 }
 
-void on_progress(StringName p_step, String p_message, double p_ratio) {
+void on_progress(String p_message, double p_ratio) {
     answer().progress_calls++;
-    answer().progress_step = String(p_step);
+    answer().progress_message = p_message;
+    answer().progress_ratio = p_ratio;
 }
 
 void on_created(Ref<MultiplayerPeer> p_peer, int64_t p_error, String p_detail) {
@@ -185,8 +187,7 @@ void on_created(Ref<MultiplayerPeer> p_peer, int64_t p_error, String p_detail) {
             NetwMultiplayer::TRANSPORT_MODE_HOST,
             String(),
             Dictionary(),
-            callable_mp_static(&on_created),
-            Callable()
+            callable_mp_static(&on_created)
         );
     }
 }
@@ -203,6 +204,10 @@ struct Bench {
             String("Creation")
         );
         core.instantiate();
+        core->observe(
+            NetwMultiplayer::CONNECTION_PROGRESSED,
+            callable_mp_static(&on_progress)
+        );
         answer().target = core.ptr();
     }
 
@@ -230,8 +235,7 @@ struct Bench {
             p_mode,
             p_address,
             p_settings,
-            callable_mp_static(&on_created),
-            callable_mp_static(&on_progress)
+            callable_mp_static(&on_created)
         );
     }
 
@@ -403,8 +407,7 @@ TEST_CASE(
         NetwMultiplayer::TRANSPORT_MODE_HOST,
         String(),
         Dictionary(),
-        dying,
-        Callable()
+        dying
     );
     memdelete(receiver);
     bench.drive();
@@ -473,8 +476,7 @@ TEST_CASE(
         NetwMultiplayer::TRANSPORT_MODE_CLIENT,
         String("here"),
         Dictionary(),
-        callable_mp_static(&on_created),
-        Callable()
+        callable_mp_static(&on_created)
     );
     core->connect_plane().on_poll(0.0);
 
@@ -495,8 +497,7 @@ TEST_CASE(
         NetwMultiplayer::TRANSPORT_MODE_CLIENT,
         String("nowhere"),
         Dictionary(),
-        callable_mp_static(&on_created),
-        Callable()
+        callable_mp_static(&on_created)
     );
     core->connect_plane().on_poll(0.0);
     NETW_CHECK_EQ(answer().calls, 0);
@@ -621,7 +622,9 @@ TEST_CASE(
     NETW_CHECK_EQ(int64_t(answer().peer->get_unique_id()), int64_t(7));
     CHECK(bench.core->get_multiplayer_peer() == answer().peer);
     NETW_CHECK_EQ(answer().progress_calls, 1);
-    CHECK(answer().progress_step == String("constructing"));
+    CHECK(answer().progress_message == String("building"));
+    const bool reported_ratio = answer().progress_ratio == 0.5;
+    CHECK(reported_ratio);
 }
 
 TEST_CASE(
@@ -669,8 +672,7 @@ TEST_CASE(
         NetwMultiplayer::TRANSPORT_MODE_CLIENT,
         String("somewhere"),
         Dictionary(),
-        callable_mp_static(&on_created),
-        Callable()
+        callable_mp_static(&on_created)
     );
 
     CHECK(ticket.is_valid());
@@ -687,7 +689,6 @@ TEST_CASE(
         NetwMultiplayer::TRANSPORT_MODE_CLIENT,
         String(),
         Dictionary(),
-        Callable(),
         Callable()
     );
     CHECK_FALSE(uncallable.is_valid());

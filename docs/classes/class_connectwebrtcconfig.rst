@@ -12,7 +12,7 @@ ConnectWebRTCConfig
 
 **Inherits:** :ref:`ConnectTransportConfig<class_ConnectTransportConfig>` **<** :godot:`Resource`
 
-WebRTC defaults shared by browser forms and room discovery.
+WebRTC defaults for a :ref:`ConnectBrowser<class_ConnectBrowser>`.
 
 .. rst-class:: classref-reftable-group
 
@@ -46,15 +46,11 @@ Methods
 .. table::
    :widths: auto
 
-   +---------------------+--------------------------------------------------------------------------------+
-   | :godot:`StringName` | :ref:`peer_class<class_ConnectWebRTCConfig_method_peer_class>`\ (\ )           |
-   +---------------------+--------------------------------------------------------------------------------+
-   | :godot:`Dictionary` | :ref:`browse_settings<class_ConnectWebRTCConfig_method_browse_settings>`\ (\ ) |
-   +---------------------+--------------------------------------------------------------------------------+
-   | :godot:`Dictionary` | :ref:`client_settings<class_ConnectWebRTCConfig_method_client_settings>`\ (\ ) |
-   +---------------------+--------------------------------------------------------------------------------+
-   | :godot:`Dictionary` | :ref:`host_settings<class_ConnectWebRTCConfig_method_host_settings>`\ (\ )     |
-   +---------------------+--------------------------------------------------------------------------------+
+   +---------------------+----------------------------------------------------------------------+
+   | :godot:`StringName` | :ref:`peer_class<class_ConnectWebRTCConfig_method_peer_class>`\ (\ ) |
+   +---------------------+----------------------------------------------------------------------+
+   | :godot:`Dictionary` | :ref:`settings<class_ConnectWebRTCConfig_method_settings>`\ (\ )     |
+   +---------------------+----------------------------------------------------------------------+
 
 .. rst-class:: classref-section-separator
 
@@ -184,39 +180,11 @@ Method Descriptions
 
 ----
 
-.. _class_ConnectWebRTCConfig_method_browse_settings:
+.. _class_ConnectWebRTCConfig_method_settings:
 
 .. rst-class:: classref-method
 
-:godot:`Dictionary` **browse_settings**\ (\ ) :ref:`🔗<class_ConnectWebRTCConfig_method_browse_settings>`
-
-.. container:: contribute
-
-	There is currently no description for this method. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_ConnectWebRTCConfig_method_client_settings:
-
-.. rst-class:: classref-method
-
-:godot:`Dictionary` **client_settings**\ (\ ) :ref:`🔗<class_ConnectWebRTCConfig_method_client_settings>`
-
-.. container:: contribute
-
-	There is currently no description for this method. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_ConnectWebRTCConfig_method_host_settings:
-
-.. rst-class:: classref-method
-
-:godot:`Dictionary` **host_settings**\ (\ ) :ref:`🔗<class_ConnectWebRTCConfig_method_host_settings>`
+:godot:`Dictionary` **settings**\ (\ ) :ref:`🔗<class_ConnectWebRTCConfig_method_settings>`
 
 .. container:: contribute
 

@@ -35,7 +35,7 @@ Reached with :ref:`Netw.session()<class_Netw_method_session>` from any :godot:`N
 
 \ There is one handle per session, so it is safe to keep it across an await.
 
-Connecting is done as you would normally do with :godot:`SceneMultiplayer`, by assigning :godot:`MultiplayerAPI.multiplayer_peer <MultiplayerAPI#class_MultiplayerAPI_property_multiplayer_peer>`. See :ref:`NetwConnection<class_NetwConnection>` to manage endpoints and :ref:`Netw.prepare_join()<class_Netw_method_prepare_join>` to join as a player.
+Connecting is done as you would normally do with :godot:`SceneMultiplayer`, by assigning :godot:`MultiplayerAPI.multiplayer_peer <MultiplayerAPI#class_MultiplayerAPI_property_multiplayer_peer>`. :ref:`connection<class_NetwSession_property_connection>` finds servers and joins or hosts one, and :ref:`Netw.prepare_join()<class_Netw_method_prepare_join>` names the player who joins.
 
 \ **Moving the server**\ 
 
@@ -529,7 +529,7 @@ The :ref:`NetwConnection<class_NetwConnection>` of this session, to find servers
 
 - :godot:`bool` **get_is_online**\ (\ )
 
-Whether a peer is assigned and connected.
+Whether a peer is assigned and connected. It stays ``true`` until :ref:`exited<class_NetwSession_signal_exited>`, so it is still ``true`` while :ref:`exiting<class_NetwSession_signal_exiting>` runs and the session's scenes are freed.
 
 .. rst-class:: classref-item-separator
 

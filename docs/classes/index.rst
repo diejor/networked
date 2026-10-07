@@ -51,9 +51,9 @@ Gdscript
 
     class_addons--networked--gdscript--async.gd
     class_addons--networked--gdscript--connect--ui--ice_servers_edit.gd
+    class_addons--networked--gdscript--connect--ui--room_bar.gd
     class_addons--networked--gdscript--connect--ui--string_list_edit.gd
     class_addons--networked--gdscript--editor--debug_menu.gd
-    class_addpopup
     class_connectbrowser
     class_connectbrowserrow
     class_connectenetconfig
@@ -62,11 +62,9 @@ Gdscript
     class_connectingpopup
     class_connecttransportconfig
     class_connectwebrtcconfig
-    class_detailitem
     class_hostpopup
     class_joindirectpopup
     class_joinpopup
-    class_menu
     class_nakamaauth
     class_nakamadatabase
     class_nakamadatabase.connection
@@ -118,6 +116,7 @@ Other classes
     class_netwdespawnconfig
     class_netwdespawnopts
     class_netwdisplay
+    class_netwendpoint
     class_netwentity
     class_netwgrouppromise
     class_netwinterest

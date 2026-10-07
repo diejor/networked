@@ -1,116 +1,62 @@
-## Discord Activity lifecycle service for a [MultiplayerTree].
+## Runs the Discord SDK handshake and connects the session to the Activity.
 ##
-## [method in_discord] is the registration gate. Normal desktop and web builds
-## keep their usual backends when no Discord [code]instance_id[/code] exists.
-##
-## [br][br]
-## This service owns the platform lifecycle. [DiscordRendezvous] owns the
-## transport lifecycle.
+## [method in_discord] is the registration gate, so a normal build never loads
+## this service. [member rendezvous] finds the server.
 ## [codeblock]
-## MultiplayerTree
-## └── DiscordActivityService
-##     ├── start()              # SDK ready.
-##     ├── authenticate()       # OAuth user.
-##     └── connect_activity()   # session through DiscordRendezvous.
-##
-## DiscordRendezvous
-## └── connect_session(instance_id, tree, username, join_args)
-##     ├── DedicatedDiscordRendezvous -> join WSS room.
-##     └── NakamaDiscordRendezvous    -> join or claim relay match.
+## var discord := Netw.session(self).service(DiscordActivityService)
+## await discord.start()
+## await discord.authenticate()
+## await discord.connect_activity(&"Dev")
 ## [/codeblock]
-## [method start] and [method authenticate] need the browser Discord SDK.
-## [method connect_activity] can still run without it when [method instance_id]
-## was resolved another way.
 class_name DiscordActivityService
 extends NetwService
 
-## Emitted after [method start] reaches [constant State.READY].
 signal activity_ready()
 
-## Emitted after [method authenticate] resolves [member user].
 signal identity_resolved(user: DiscordSDK.DiscordUser)
 
-## Emitted for recoverable activity failures the game should surface.
 signal activity_failed(reason: String)
 
-## Emitted when the Discord participant roster changes.
-##
-## Correlate entries to networked peers through [method device_id]. The backend
-## user id is set from the Discord user id after [method authenticate].
+## Correlate entries to peers through [method device_id].
 signal roster_changed(participants: Array)
 
-## Emitted when Discord changes the activity layout mode.
 signal layout_changed(layout_mode: int)
 
-## Emitted when the device orientation changes.
 signal orientation_changed(screen_orientation: int)
 
-## Emitted on every [enum State] transition.
 signal state_changed(from: State, to: State)
 
-## Emitted when a [constant State.CONNECTED] session drops underneath the
-## activity.
-##
-## The state has already moved to [constant State.DISCONNECTED]. Call
-## [method reconnect] to reuse the last join request.
-signal session_lost(reason: String)
-
-## Activity lifecycle owned by this service.
 enum State {
-	## Constructed, not yet handshaken. The state before [method start].
 	IDLE,
-	## [method start] finished.
 	READY,
-	## [method authenticate] resolved [member user].
 	AUTHENTICATED,
-	## A connect attempt is in flight inside [method connect_activity].
-	CONNECTING,
-	## The tree is online in the instance's shared session.
-	CONNECTED,
-	## A live session ended underneath the activity.
-	DISCONNECTED,
 }
 
-## Current lifecycle [enum State].
 var state: State = State.IDLE
 
-## Discord application (client) id. Required for the SDK handshake and OAuth.
+## Discord application id. The handshake and OAuth need it.
 @export var client_id: String = ""
 
 @export_group("OAuth")
 
-## Endpoint used by [method authenticate] to exchange a Discord OAuth code.
-##
-## The default [code]token[/code] posts to [code]/.proxy/token[/code], which is
-## the Discord URL mapping for the token Worker.
-## [codeblock]
-## token_endpoint
-## ├── "token"              # Discord URL mapping.
-## ├── "/.proxy/token"      # Already proxied.
-## └── "http://127.0.0.1"   # Local testing.
-## [/codeblock]
+## Where [method authenticate] exchanges its OAuth code. A bare path is mapped
+## to [code]/.proxy/<path>[/code].
 @export var token_endpoint: String = "token"
 
-## OAuth scopes requested by [method authenticate].
-##
-## [code]identify[/code] is required to resolve [member user]. Add scopes only
-## when the Worker and Discord developer portal are configured for them.
+## Add scopes only when the Worker and the developer portal allow them.
 @export var scopes: Array[String] = ["identify", "rpc.activities.write"]
 
 @export_group("")
 
-## Resolves [method instance_id] into a transport session.
-##
-## Assign this explicitly. The service reports [constant ERR_UNCONFIGURED] from
-## [method connect_activity] when no rendezvous is configured.
+## [method connect_activity] fails with [constant ERR_UNCONFIGURED] while unset.
 @export var rendezvous: DiscordRendezvous
 
-## When [code]true[/code], asks Discord to encourage hardware acceleration right
-## after the handshake reaches ready.
 @export var encourage_hw_accel: bool = true
 
-## Resolved local Discord user. [code]null[/code] before [method authenticate].
+## [code]null[/code] before [method authenticate].
 var user: DiscordSDK.DiscordUser
+
+@onready var session: NetwSession = Netw.session(self)
 
 var _sdk: DiscordSDK
 var _instance_id: String = ""
@@ -119,10 +65,6 @@ var _guild_id: String = ""
 var _device_id: String = ""
 var _detected: bool = false
 var _started: bool = false
-
-# Join request from the last connect_activity, replayed by reconnect().
-var _last_username: StringName = &""
-var _last_join_args: Array = []
 
 # Last roster reported by Discord, newest wins. Backs participants().
 var _participants: Array = []
@@ -137,34 +79,27 @@ static func _static_init() -> void:
 	NetwService.set_transport_restricted_probe(_detect_embedded)
 
 
-## Returns [code]true[/code] when a Discord [code]instance_id[/code] exists.
+## [code]true[/code] when a Discord [code]instance_id[/code] exists.
 func in_discord() -> bool:
 	_detect()
 	return not _instance_id.is_empty()
 
 
-## Returns the shared Discord Activity instance id.
-##
-## Every participant in the same Activity sees this value. [member rendezvous]
-## uses it as the session key.
+## The id every participant of the Activity shares.
 func instance_id() -> String:
 	_detect()
 	return _instance_id
 
 
-## Returns the Discord voice channel id, or an empty string outside a browser.
 func channel_id() -> String:
 	return _channel_id
 
 
-## Returns the Discord guild id, or an empty string in a DM or outside a browser.
 func guild_id() -> String:
 	return _guild_id
 
 
-## Returns the stable backend participant id for the local Discord user.
-##
-## Empty before [method authenticate].
+## The Discord user id, empty before [method authenticate].
 func device_id() -> String:
 	return _device_id
 
@@ -175,24 +110,16 @@ func _should_register() -> bool:
 	return in_discord()
 
 
-func _service_entered(_session: NetwSession) -> void:
-	# This embed service is scoped to a tree (rendezvous transport, SDK parenting,
-	# tree-only drop signal). A root install resolves no tree, so it stays dormant.
-	var session: NetwSession = Netw.session(self)
-	var mt := session.root as MultiplayerTree if session else null
-	if mt == null:
-		return
+func _service_entered(entered: NetwSession) -> void:
 	if rendezvous == null:
-		push_warning("DiscordActivityService: rendezvous unset.")
+		push_warning(
+			"DiscordActivityService has no rendezvous. Set "
+			+ "DiscordActivityService.rendezvous to a DedicatedDiscordRendezvous "
+			+ "or a NakamaDiscordRendezvous.",
+		)
 	else:
-		# The rendezvous owns its transport, so it installs whatever core seams
-		# that backend needs. The service never reaches into a backend itself.
-		rendezvous.bind(mt)
+		rendezvous.bind(entered)
 	_push_identity()
-	# Bridge a dropped connection into the activity lifecycle so a host that leaves
-	# (or any transport drop) surfaces as session_lost while connected, the
-	# transition a game hangs its rematch policy on. A local leave is not a loss.
-	Netw.session(mt).exited.connect(_on_session_dropped)
 	# The SDK is parented in start(), not here: add_child during service setup
 	# fails ("parent busy"), and the SDK's _ready() must run (it sets up the JS
 	# bridge) before start() calls init(), or init() no-ops and ready() hangs.
@@ -201,11 +128,7 @@ func _service_entered(_session: NetwSession) -> void:
 		_sdk.name = &"DiscordSDK"
 
 
-## Drives the Discord SDK handshake to [constant State.READY].
-##
-## Safe to call more than once. With no SDK present, it still marks the service
-## ready so [method connect_activity] can run from a test or injected
-## [method instance_id].
+## Runs the SDK handshake. Without an SDK it is ready at once.
 func start() -> bool:
 	if _started:
 		return true
@@ -239,14 +162,7 @@ func start() -> bool:
 
 
 ## Resolves [member user] through Discord OAuth.
-##
-## [member scopes] controls the authorize request. [member token_endpoint]
-## exchanges the code for an access token.
-##
-## [br][br]
-## [method DiscordSDK.command_authenticate] returns the verified
-## [DiscordSDK.DiscordUser] stored in [member user].
-## [codeblock]
+## [codeblock lang=text]
 ## authorize(scopes) -> code
 ## token_endpoint    -> access_token
 ## authenticate      -> user
@@ -283,97 +199,78 @@ func authenticate() -> bool:
 	return true
 
 
-## Connects into the Activity session through [member rendezvous].
-##
-## [member rendezvous] owns all backend decisions.
-##
-## [br][br]
-## This service owns the [enum State] transition and remembers
-## [param username] and [param join_args] for [method reconnect].
-## [codeblock]
-## instance_id()
-## └── rendezvous.connect_session(instance_id, tree, username, join_args)
-##     ├── OK    -> State.CONNECTED
-##     └── Error -> State.DISCONNECTED
+## Joins the server [member rendezvous] finds, or hosts one when it finds none.
+## Call it again to rejoin after [signal NetwSession.exited].
+## [codeblock lang=text]
+## find -> endpoint        join it, and host if that fails
+## find -> null            host
+## host                    claim -> winner, leave and join the winner
 ## [/codeblock]
 func connect_activity(username: StringName, join_args: Array = []) -> Error:
 	if not await start():
 		return ERR_UNAVAILABLE
-	var session: NetwSession = Netw.session(self)
-	var mt := session.root as MultiplayerTree if session else null
-	if mt == null:
-		return ERR_UNCONFIGURED
 	if rendezvous == null:
-		var reason := "DiscordActivityService: rendezvous unset."
-		push_warning(reason)
-		activity_failed.emit(reason)
+		activity_failed.emit("DiscordActivityService has no rendezvous.")
 		return ERR_UNCONFIGURED
 	_push_identity()
-	_last_username = username
-	_last_join_args = join_args
-	_set_state(State.CONNECTING)
-	var err := await rendezvous.connect_session(
-		_instance_id, mt, username, join_args
-	)
-	if err != OK:
-		activity_failed.emit("Activity connect failed: %s" % error_string(err))
-		_set_state(State.DISCONNECTED)
-		return err
-	_set_state(State.CONNECTED)
-	return OK
+	var connection := session.connection
+	var prepare: Callable = Netw.prepare_join
+	var as_player := [self, username] + join_args
+	var endpoint := await rendezvous.find(_instance_id, connection)
+	var transport := rendezvous.host_transport()
+	if endpoint == null and transport.is_empty():
+		activity_failed.emit("No server hosts this Activity.")
+		return ERR_UNAVAILABLE
+	prepare.callv(as_player)
+	var attempt: NetwPromise
+	if endpoint != null:
+		attempt = connection.join(endpoint)
+		await attempt.wait()
+	if attempt == null or (attempt.is_failed and not transport.is_empty()):
+		attempt = connection.host(transport, rendezvous.host_settings())
+		await attempt.wait()
+		var winner: NetwEndpoint = null
+		if attempt.is_completed:
+			winner = await rendezvous.claim(_instance_id, connection)
+		if winner != null:
+			await session.leave().wait()
+			prepare.callv(as_player)
+			attempt = connection.join(winner)
+			await attempt.wait()
+	if attempt.is_failed:
+		activity_failed.emit(
+			"Activity connect failed: %s" % error_string(attempt.code),
+		)
+	return attempt.code
 
 
-## Reconnects to [method instance_id] after [signal session_lost].
-##
-## Reuses the username and join args of the last [method connect_activity].
-##
-## [br][br]
-## Returns [constant ERR_UNCONFIGURED] before the first
-## [method connect_activity].
-func reconnect() -> Error:
-	if String(_last_username).is_empty():
-		return ERR_UNCONFIGURED
-	return await connect_activity(_last_username, _last_join_args)
-
-
-## Returns the latest Discord participant roster.
-##
-## Empty before the first [signal roster_changed].
+## The latest roster, empty before the first [signal roster_changed].
 func participants() -> Array:
 	return _participants
 
 
-## Sets the Activity rich presence.
-##
-## No-op before [method start] reaches [constant State.READY] or when no SDK is
-## present.
+## Does nothing before [method start] or without an SDK.
 func set_presence(state: String, details: String) -> void:
 	if _sdk == null or not _started:
 		return
 	await _sdk.command_set_activity(state, details)
 
 
-## Opens Discord's invite dialog for this Activity instance.
-##
-## No-op when no SDK is present.
+## Does nothing without an SDK.
 func open_invite_dialog() -> void:
 	if _sdk == null:
 		return
 	await _sdk.command_open_invite_dialog()
 
 
-## Opens Discord's share-moment dialog for [param media_url].
-##
-## No-op when no SDK is present.
+## Does nothing without an SDK.
 func share_moment(media_url: String) -> void:
 	if _sdk == null:
 		return
 	await _sdk.command_open_share_moment_dialog(media_url)
 
 
-## Opens [param url] through Discord's external-link command.
-##
-## No-op when no SDK is present.
+## Does nothing without an SDK.
 func open_external_link(url: String) -> void:
 	if _sdk == null:
 		return
@@ -522,16 +419,6 @@ func _set_state(to: State) -> void:
 	state_changed.emit(from, to)
 
 
-# Bridges an involuntary connection drop into the activity lifecycle. Only a drop
-# underneath a live (CONNECTED) session is a loss the game should react to; a drop
-# reported from any other state is noise from an ordinary connect/leave flow.
-func _on_session_dropped(reason: NetwSession.ExitReason, detail: String) -> void:
-	if state != State.CONNECTED or reason == NetwSession.LOCAL_LEAVE:
-		return
-	_set_state(State.DISCONNECTED)
-	session_lost.emit(detail if not detail.is_empty() else "host left")
-
-
 # Resolves the instance id once through _resolve_instance. Memoized so
 # _should_register and the public getters agree.
 func _detect() -> void:
@@ -545,7 +432,7 @@ func _detect() -> void:
 # authenticates to its backend as a distinct user. Without this, two instances on
 # one machine both default to the same backend user, which breaks the relay. The
 # raw id is pushed and the backend normalizes it (see
-# NakamaDiscordRendezvous._normalized_device_id). A no-op for a backend with no
+# NakamaDiscordRendezvous.nakama_device_id). A no-op for a backend with no
 # device_id (the dedicated WSS path) or when no id was resolved.
 func _push_identity() -> void:
 	if rendezvous == null:

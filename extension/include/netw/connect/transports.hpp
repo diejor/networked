@@ -39,6 +39,7 @@ public:
     godot::String address_label() const override;
     godot::String address_placeholder() const override;
     bool accepts_empty_address() const override;
+    godot::String default_address() const override;
     godot::Dictionary host_settings() const override;
     godot::Dictionary client_settings() const override;
 
@@ -76,6 +77,7 @@ public:
     godot::String address_label() const override;
     godot::String address_placeholder() const override;
     bool accepts_empty_address() const override;
+    godot::String default_address() const override;
     godot::Dictionary host_settings() const override;
 
     void make_peer(
@@ -108,6 +110,7 @@ public:
     bool can_probe() const override;
     godot::String address_label() const override;
     bool accepts_empty_address() const override;
+    godot::String default_address() const override;
 
     void make_peer(
         int p_mode,

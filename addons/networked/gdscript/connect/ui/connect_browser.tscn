@@ -3,6 +3,11 @@
 [ext_resource type="Script" uid="uid://lxct0rna7ylq" path="res://addons/networked/gdscript/connect/ui/connect_browser.gd" id="1_browser"]
 [ext_resource type="Theme" uid="uid://ccui2theme888" path="res://addons/networked/gdscript/connect/ui/connect_theme.tres" id="1_myxft"]
 [ext_resource type="PackedScene" path="res://addons/networked/gdscript/connect/ui/status_dot.tscn" id="2_dot"]
+[ext_resource type="PackedScene" path="res://addons/networked/gdscript/connect/ui/popups/host_popup.tscn" id="3_host"]
+[ext_resource type="PackedScene" path="res://addons/networked/gdscript/connect/ui/popups/join_popup.tscn" id="4_join"]
+[ext_resource type="PackedScene" path="res://addons/networked/gdscript/connect/ui/popups/join_direct_popup.tscn" id="5_direct"]
+[ext_resource type="PackedScene" path="res://addons/networked/gdscript/connect/ui/popups/connecting_popup.tscn" id="6_connecting"]
+[ext_resource type="PackedScene" path="res://addons/networked/gdscript/connect/ui/room_bar.tscn" id="7_room"]
 
 [node name="ConnectBrowser" type="Control" unique_id=802878944]
 custom_minimum_size = Vector2(480, 360)
@@ -52,20 +57,10 @@ text = "Servers"
 layout_mode = 2
 size_flags_horizontal = 3
 
-[node name="RefreshButton" type="Button" parent="VBox/PanelContainer/HeaderBar" unique_id=381917777]
-unique_name_in_owner = true
-layout_mode = 2
-text = "Refresh"
-
-[node name="AddButton" type="Button" parent="VBox/PanelContainer/HeaderBar" unique_id=529523671]
-unique_name_in_owner = true
-layout_mode = 2
-text = "Add"
-
 [node name="JoinDirectButton" type="Button" parent="VBox/PanelContainer/HeaderBar" unique_id=705337270]
 unique_name_in_owner = true
 layout_mode = 2
-text = "Direct"
+text = "Join"
 
 [node name="HostButton" type="Button" parent="VBox/PanelContainer/HeaderBar" unique_id=1324652179]
 unique_name_in_owner = true
@@ -78,7 +73,6 @@ layout_mode = 2
 
 [node name="Banner" type="HBoxContainer" parent="VBox" unique_id=668637643]
 unique_name_in_owner = true
-visible = false
 layout_mode = 2
 theme = ExtResource("1_myxft")
 
@@ -87,7 +81,6 @@ unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 theme = ExtResource("1_myxft")
-text = "Provider unavailable"
 
 [node name="Scroll" type="ScrollContainer" parent="VBox" unique_id=35822499]
 layout_mode = 2
@@ -115,6 +108,7 @@ text = "No servers yet"
 horizontal_alignment = 1
 
 [node name="Details" type="PanelContainer" parent="VBox" unique_id=509227761]
+unique_name_in_owner = true
 layout_mode = 2
 theme = ExtResource("1_myxft")
 
@@ -132,7 +126,6 @@ theme = ExtResource("1_myxft")
 theme_override_constants/separation = 12
 
 [node name="DetailsHeader" type="HBoxContainer" parent="VBox/Details/DetailsMargin/DetailsVBox" unique_id=1615911055]
-unique_name_in_owner = true
 layout_mode = 2
 theme = ExtResource("1_myxft")
 theme_override_constants/separation = 16
@@ -148,7 +141,6 @@ unique_name_in_owner = true
 layout_mode = 2
 theme = ExtResource("1_myxft")
 theme_type_variation = &"SubHeaderLabel"
-text = "Server Name"
 
 [node name="Spacer" type="Control" parent="VBox/Details/DetailsMargin/DetailsVBox/DetailsHeader" unique_id=381467030]
 layout_mode = 2
@@ -160,39 +152,88 @@ layout_mode = 2
 theme = ExtResource("1_myxft")
 theme_type_variation = &"BadgePanelContainer"
 
-[node name="DetailsBadgeLabel" type="Label" parent="VBox/Details/DetailsMargin/DetailsVBox/DetailsHeader/DetailsBadgePanel" unique_id=1673794795]
+[node name="DetailsSourceLabel" type="Label" parent="VBox/Details/DetailsMargin/DetailsVBox/DetailsHeader/DetailsBadgePanel" unique_id=1673794795]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(70, 0)
 layout_mode = 2
 theme = ExtResource("1_myxft")
-text = "ENet"
 horizontal_alignment = 1
 vertical_alignment = 1
 
-[node name="DetailsContainer" type="HFlowContainer" parent="VBox/Details/DetailsMargin/DetailsVBox" unique_id=62218234]
-unique_name_in_owner = true
+[node name="DetailsFlow" type="HFlowContainer" parent="VBox/Details/DetailsMargin/DetailsVBox" unique_id=62218234]
 layout_mode = 2
 theme = ExtResource("1_myxft")
 theme_override_constants/h_separation = 24
 theme_override_constants/v_separation = 12
 
-[node name="DetailsFooter" type="HBoxContainer" parent="VBox/Details/DetailsMargin/DetailsVBox" unique_id=89234901]
+[node name="AddressPair" type="VBoxContainer" parent="VBox/Details/DetailsMargin/DetailsVBox/DetailsFlow" unique_id=89234920]
+layout_mode = 2
+theme = ExtResource("1_myxft")
+
+[node name="AddressTitle" type="Label" parent="VBox/Details/DetailsMargin/DetailsVBox/DetailsFlow/AddressPair" unique_id=89234921]
+layout_mode = 2
+theme = ExtResource("1_myxft")
+theme_type_variation = &"SmallLabel"
+text = "Address"
+
+[node name="DetailsAddressLabel" type="Label" parent="VBox/Details/DetailsMargin/DetailsVBox/DetailsFlow/AddressPair" unique_id=89234922]
 unique_name_in_owner = true
+layout_mode = 2
+theme = ExtResource("1_myxft")
+theme_type_variation = &"DetailValueLabel"
+
+[node name="StatusPair" type="VBoxContainer" parent="VBox/Details/DetailsMargin/DetailsVBox/DetailsFlow" unique_id=89234923]
+layout_mode = 2
+theme = ExtResource("1_myxft")
+
+[node name="StatusTitle" type="Label" parent="VBox/Details/DetailsMargin/DetailsVBox/DetailsFlow/StatusPair" unique_id=89234924]
+layout_mode = 2
+theme = ExtResource("1_myxft")
+theme_type_variation = &"SmallLabel"
+text = "Status"
+
+[node name="DetailsStatusLabel" type="Label" parent="VBox/Details/DetailsMargin/DetailsVBox/DetailsFlow/StatusPair" unique_id=89234925]
+unique_name_in_owner = true
+layout_mode = 2
+theme = ExtResource("1_myxft")
+theme_type_variation = &"DetailValueLabel"
+
+[node name="PingPair" type="VBoxContainer" parent="VBox/Details/DetailsMargin/DetailsVBox/DetailsFlow" unique_id=89234926]
+layout_mode = 2
+theme = ExtResource("1_myxft")
+
+[node name="PingTitle" type="Label" parent="VBox/Details/DetailsMargin/DetailsVBox/DetailsFlow/PingPair" unique_id=89234927]
+layout_mode = 2
+theme = ExtResource("1_myxft")
+theme_type_variation = &"SmallLabel"
+text = "Ping"
+
+[node name="DetailsPingLabel" type="Label" parent="VBox/Details/DetailsMargin/DetailsVBox/DetailsFlow/PingPair" unique_id=89234928]
+unique_name_in_owner = true
+layout_mode = 2
+theme = ExtResource("1_myxft")
+theme_type_variation = &"DetailValueLabel"
+
+[node name="PlayersPair" type="VBoxContainer" parent="VBox/Details/DetailsMargin/DetailsVBox/DetailsFlow" unique_id=89234929]
+layout_mode = 2
+theme = ExtResource("1_myxft")
+
+[node name="PlayersTitle" type="Label" parent="VBox/Details/DetailsMargin/DetailsVBox/DetailsFlow/PlayersPair" unique_id=89234930]
+layout_mode = 2
+theme = ExtResource("1_myxft")
+theme_type_variation = &"SmallLabel"
+text = "Players"
+
+[node name="DetailsPlayersLabel" type="Label" parent="VBox/Details/DetailsMargin/DetailsVBox/DetailsFlow/PlayersPair" unique_id=89234931]
+unique_name_in_owner = true
+layout_mode = 2
+theme = ExtResource("1_myxft")
+theme_type_variation = &"DetailValueLabel"
+
+[node name="DetailsFooter" type="HBoxContainer" parent="VBox/Details/DetailsMargin/DetailsVBox" unique_id=89234901]
 layout_mode = 2
 theme = ExtResource("1_myxft")
 theme_override_constants/separation = 8
-
-[node name="DetailsEditButton" type="Button" parent="VBox/Details/DetailsMargin/DetailsVBox/DetailsFooter" unique_id=89234902]
-unique_name_in_owner = true
-layout_mode = 2
-theme = ExtResource("1_myxft")
-text = "Edit"
-
-[node name="DetailsRemoveButton" type="Button" parent="VBox/Details/DetailsMargin/DetailsVBox/DetailsFooter" unique_id=89234903]
-unique_name_in_owner = true
-layout_mode = 2
-theme = ExtResource("1_myxft")
-text = "Remove"
 
 [node name="FooterSpacer" type="Control" parent="VBox/Details/DetailsMargin/DetailsVBox/DetailsFooter" unique_id=89234904]
 layout_mode = 2
@@ -205,40 +246,17 @@ layout_mode = 2
 theme = ExtResource("1_myxft")
 text = "Join"
 
-[node name="RoomBar" type="PanelContainer" parent="." unique_id=89234910]
-unique_name_in_owner = true
-visible = false
+[node name="RoomBar" parent="." unique_id=89234910 instance=ExtResource("7_room")]
 layout_mode = 1
-anchors_preset = 5
-anchor_left = 0.5
-anchor_right = 0.5
-offset_left = -160.0
-offset_top = 8.0
-offset_right = 160.0
-offset_bottom = 48.0
-grow_horizontal = 2
-theme = ExtResource("1_myxft")
-theme_type_variation = &"HeaderPanelContainer"
 
-[node name="RoomRow" type="HBoxContainer" parent="RoomBar" unique_id=89234911]
-layout_mode = 2
-theme_override_constants/separation = 8
-
-[node name="RoomLabel" type="Label" parent="RoomBar/RoomRow" unique_id=89234912]
+[node name="HostPopup" parent="." instance=ExtResource("3_host")]
 unique_name_in_owner = true
-layout_mode = 2
-theme = ExtResource("1_myxft")
-text = "Room"
 
-[node name="RoomCodeEdit" type="LineEdit" parent="RoomBar/RoomRow" unique_id=89234913]
+[node name="JoinPopup" parent="." instance=ExtResource("4_join")]
 unique_name_in_owner = true
-layout_mode = 2
-size_flags_horizontal = 3
-theme = ExtResource("1_myxft")
-editable = false
 
-[node name="RoomCopyButton" type="Button" parent="RoomBar/RoomRow" unique_id=89234914]
+[node name="JoinDirectPopup" parent="." instance=ExtResource("5_direct")]
 unique_name_in_owner = true
-layout_mode = 2
-theme = ExtResource("1_myxft")
-text = "Copy"
+
+[node name="ConnectingPopup" parent="." instance=ExtResource("6_connecting")]
+unique_name_in_owner = true

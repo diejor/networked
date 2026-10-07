@@ -49,8 +49,6 @@ class MultiplayerTree : public godot::Node {
     void poll();
 
     void bring_up_here(
-        NetwMultiplayer::TransportMode p_mode,
-        const godot::String &p_address,
         const godot::StringName &p_username,
         const godot::Array &p_join_args
     );
@@ -61,13 +59,7 @@ class MultiplayerTree : public godot::Node {
     void teardown_session();
     void close_peer_on_delete();
     void release_peer();
-    void on_peer_created(
-        const godot::Ref<godot::MultiplayerPeer> &p_peer,
-        int64_t p_error,
-        const godot::String &p_detail,
-        const godot::StringName &p_username,
-        const godot::Array &p_join_args
-    );
+    void on_host_failed(int64_t p_error, const godot::String &p_detail);
     void on_peer_connected(int64_t p_peer_id);
     void on_peer_disconnected(int64_t p_peer_id);
     void on_connected_to_server();

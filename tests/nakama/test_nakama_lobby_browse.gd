@@ -7,6 +7,13 @@ var _trees: Array = []
 var _run_uid := ""
 
 
+class ReadyBrowser:
+	extends Node
+
+	func _ready() -> void:
+		Netw.session(self).connection.browsing = true
+
+
 func before(
 		do_skip = NakamaTestServer.unavailable(),
 		skip_reason = NakamaTestServer.SKIP_REASON,
@@ -83,6 +90,34 @@ func test_private_lobby_is_unlisted_but_joinable() -> void:
 	assert_object(join_peer) \
 			.override_failure_message("PRIVATE lobby not joinable by match id.") \
 			.is_not_null()
+
+
+func test_browsing_from_a_ready_callback_lists_once_the_session_is_ready() -> void:
+	var tree := MultiplayerTree.new()
+	tree.auto_host_headless = false
+	var dir := NakamaLobbyDirectory.new()
+	dir.name = &"NakamaLobbyDirectory"
+	dir.host = NakamaTestServer.host()
+	dir.port = NakamaTestServer.DEFAULT_PORT
+	dir.use_ssl = false
+	dir.device_id = _run_uid
+	dir.local_member_name = _run_uid
+	dir.browser_filter_uid = _run_uid
+	tree.add_child(dir)
+	tree.add_child(ReadyBrowser.new())
+	var listed := [false]
+	dir.lobby_list_published.connect(
+		func(_addresses, _names, _infos) -> void: listed[0] = true,
+		CONNECT_ONE_SHOT,
+	)
+	_trees.append(tree)
+	add_child(tree)
+
+	await _await(func() -> bool: return listed[0], "the first listing")
+	var service := tree.get_node_or_null("NakamaSession")
+	assert_bool(service != null and service.is_inside_tree()) \
+			.override_failure_message("The Nakama session never entered the tree.") \
+			.is_true()
 
 
 func _host(dir: LobbyDirectory, settings: Dictionary) -> MultiplayerPeer:

@@ -194,6 +194,12 @@ void RoomBoard::browse() {
     ensure_tracker();
 }
 
+void RoomBoard::stop_browsing() {
+    collecting = false;
+    listing_ready = false;
+    collected.clear();
+}
+
 bool RoomBoard::take_listing(LocalVector<TargetRow> &r_rows) {
     if (!listing_ready) {
         return false;

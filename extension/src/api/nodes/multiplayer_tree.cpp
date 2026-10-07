@@ -293,51 +293,25 @@ void MultiplayerTree::poll() {
     }
 }
 
-void MultiplayerTree::on_peer_created(
-    const Ref<MultiplayerPeer> &p_peer,
-    int64_t p_error,
-    const String &p_detail,
-    const StringName &p_username,
-    const Array &p_join_args
-) {
-    if (p_error != OK || p_peer.is_null()) {
-        NETW_ERROR(
-            sys::SESSION,
-            "The %s transport could not create a peer (%s).",
-            String(peer_class),
-            p_detail
-        );
+void MultiplayerTree::on_host_failed(int64_t p_error, const String &p_detail) {
+    if (p_error == ERR_SKIP) {
         return;
     }
-    if (!String(p_username).is_empty()) {
-        api->session_prepare_join(p_username, p_join_args);
-    }
-    api->set_multiplayer_peer(p_peer);
+    NETW_ERROR(
+        sys::SESSION,
+        "The %s transport could not host (%s).",
+        String(peer_class),
+        p_detail
+    );
 }
 
 void MultiplayerTree::bring_up_here(
-    NetwMultiplayer::TransportMode p_mode,
-    const String &p_address,
     const StringName &p_username,
     const Array &p_join_args
 ) {
-    const Ref<NetwMultiplayer> core = NetwMultiplayer::core_of(this);
-    const Ref<NetwConnection> connection
-        = core.is_valid() ? core->get_connection() : Ref<NetwConnection>();
-    if (connection.is_null()) {
-        return;
-    }
-    const RID ticket = connection->create_peer(
-        peer_class,
-        p_mode,
-        p_address,
-        transport_settings,
-        callable_mp(this, &MultiplayerTree::on_peer_created)
-            .bind(p_username, p_join_args),
-        Callable()
-    );
+    const RID transport = api->transport_find(peer_class);
     NETW_ERR_COND(
-        !ticket.is_valid(),
+        !transport.is_valid(),
         sys::SESSION,
         netw::log::format(
             "No transport is registered for MultiplayerTree.peer_class '%s'. "
@@ -346,6 +320,11 @@ void MultiplayerTree::bring_up_here(
             String(peer_class)
         )
     );
+    if (!String(p_username).is_empty()) {
+        api->session_prepare_join(p_username, p_join_args);
+    }
+    api->transport_host(transport, transport_settings)
+        ->catch_error(callable_mp(this, &MultiplayerTree::on_host_failed));
 }
 
 void MultiplayerTree::ready() {
@@ -368,12 +347,7 @@ void MultiplayerTree::decide_bring_up() {
     if (auto_host_headless && !String(peer_class).is_empty() && headless) {
         if (effective_role == NetwMultiplayer::ROLE_LISTEN_SERVER
             || effective_role == NetwMultiplayer::ROLE_DEDICATED_SERVER) {
-            bring_up_here(
-                NetwMultiplayer::TRANSPORT_MODE_HOST,
-                String(),
-                StringName(),
-                Array()
-            );
+            bring_up_here(StringName(), Array());
         }
         return;
     }
@@ -393,12 +367,7 @@ void MultiplayerTree::debug_autoconnect() {
     }
     const StringName claiming = debug_join->submitted_username();
     NETW_INFO(sys::SESSION, "Debug join connects as '%s'.", String(claiming));
-    bring_up_here(
-        NetwMultiplayer::TRANSPORT_MODE_HOST,
-        String(),
-        claiming,
-        debug_join->get_join_args()
-    );
+    bring_up_here(claiming, debug_join->get_join_args());
 }
 
 MultiplayerTree *MultiplayerTree::raise_embedded_server() {

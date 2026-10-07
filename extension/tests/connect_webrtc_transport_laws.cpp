@@ -64,6 +64,13 @@ TEST_CASE(
     CHECK(WebRTCTransport::is_url_supported_native("stun:stun.example:19302"));
 }
 
+TEST_CASE("[Networked][Connect][Hosted] explicit empty ICE stays empty") {
+    CHECK(WebRTCTransport::servers_differ_from_default(Array()));
+    CHECK(!WebRTCTransport::servers_differ_from_default(
+        WebRTCTransport::default_ice_servers()
+    ));
+}
+
 TEST_CASE(
     "[Networked][Connect][Hosted] filtering keeps a server that still has a "
     "dialable url and drops one left with none, because a server entry with "

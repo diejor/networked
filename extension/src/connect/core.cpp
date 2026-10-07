@@ -1,11 +1,14 @@
 #include "netw/connect/core.hpp"
 
+#include <cmath>
+
 #include "godot/callable.hpp"
 #include "godot/local_vector.hpp"
 #include "godot/multiplayer.hpp"
 #include "godot/net_peers.hpp"
 #include "godot/object.hpp"
 #include "godot/resource.hpp"
+#include "godot/time.hpp"
 #include "godot/utility.hpp"
 #include "godot/variant.hpp"
 #include "netw/api/link_conditions.hpp"
@@ -16,6 +19,7 @@
 #include "netw/connect/probe_client.hpp"
 #include "netw/connect/transport.hpp"
 #include "netw/log.hpp"
+#include "netw/session_core.hpp"
 
 using namespace godot;
 
@@ -45,6 +49,7 @@ struct Waiter {
     RID target;
     RID creation;
     Transport *scratch = nullptr;
+    int64_t began_msec = 0;
 };
 
 struct ProbeWait {
@@ -62,10 +67,20 @@ int64_t mint_ticket() {
     return next_ticket++;
 }
 
+void overwrite_declared(Dictionary &r_settings, const Dictionary &p_preset) {
+    const Array declared = r_settings.keys();
+    for (int64_t at = 0; at < declared.size(); at++) {
+        if (p_preset.has(declared[at])) {
+            r_settings[declared[at]] = p_preset[declared[at]];
+        }
+    }
+}
+
 Waiter *make_waiter(ConnectCore *p_core, int p_kind) {
     Waiter *made = new Waiter();
     made->core = p_core;
     made->kind = p_kind;
+    made->began_msec = int64_t(Time::get_singleton()->get_ticks_msec());
     waiters.push_back(made);
     return made;
 }
@@ -116,6 +131,23 @@ void clear_waits(ConnectCore *p_core, NetwMultiplayer *p_session) {
     while (at < waiters.size()) {
         Waiter *held = waiters[at];
         if (held->core == p_core) {
+            waiters.remove_at(at);
+            release_waiter(held, p_session);
+        } else {
+            at++;
+        }
+    }
+}
+
+void clear_waits_of_kind(
+    ConnectCore *p_core,
+    NetwMultiplayer *p_session,
+    int p_kind
+) {
+    uint32_t at = 0;
+    while (at < waiters.size()) {
+        Waiter *held = waiters[at];
+        if (held->core == p_core && held->kind == p_kind) {
             waiters.remove_at(at);
             release_waiter(held, p_session);
         } else {
@@ -221,6 +253,25 @@ Ref<NetwServerInfo> info_of(const Variant &p_value) {
     );
 }
 
+void assign_created(
+    const Ref<MultiplayerPeer> &p_peer,
+    int64_t p_error,
+    const String &,
+    uint64_t p_session
+) {
+    NetwMultiplayer *session = Object::cast_to<NetwMultiplayer>(
+        gd::object_of(ObjectID(p_session))
+    );
+    if (session == nullptr || p_error != OK || p_peer.is_null()
+        || !session->connect_plane().answers_attempt()) {
+        return;
+    }
+    session->NETW_API_VIRTUAL(set_multiplayer_peer)(p_peer);
+}
+
+void heard_through_failed(int64_t, const String &) {
+}
+
 } // namespace
 
 ConnectCore::~ConnectCore() {
@@ -235,8 +286,14 @@ void ConnectCore::bind_session(NetwMultiplayer *p_session) {
 }
 
 void ConnectCore::dispose() {
-    browse_settings.clear();
-    browsing_started = false;
+    browsing = false;
+    const Ref<NetwPromise> pending = attempt.promise;
+    attempt = Attempt();
+    if (pending.is_valid()) {
+        pending->reject(ERR_SKIP, "The session closed.");
+    }
+    defaults.clear();
+    announced_address = String();
     while (!creations.is_empty()) {
         discard_creation(creations[creations.size() - 1]);
     }
@@ -244,7 +301,7 @@ void ConnectCore::dispose() {
     clear_waits(this, session);
     clear_probe_queue(this);
     drop_browsers();
-    drop_live();
+    release_live();
     if (prober != nullptr) {
         prober->close();
         memdelete(prober);
@@ -261,17 +318,34 @@ void ConnectCore::adopt_live(Transport *p_transport) {
     if (live == p_transport) {
         return;
     }
-    drop_live();
+    release_live();
     live = p_transport;
+    announce_join_address();
 }
 
 void ConnectCore::drop_live() {
+    release_live();
+    announce_join_address();
+}
+
+void ConnectCore::release_live() {
     if (live == nullptr) {
         return;
     }
     live->close();
     delete live;
     live = nullptr;
+}
+
+void ConnectCore::announce_join_address() {
+    const String now = join_address();
+    if (now == announced_address) {
+        return;
+    }
+    announced_address = now;
+    if (session != nullptr) {
+        session->connection_emit_join_address_changed(now);
+    }
 }
 
 std::optional<JoinRequest> request_of(
@@ -349,12 +423,37 @@ RID ConnectCore::target_add(
     const String &p_address,
     const String &p_display_name
 ) {
-    const RID standing = rows.find(p_transport, p_address);
-    const RID minted = rows.add(p_transport, p_address, p_display_name);
+    const String address = target_address(p_transport, p_address);
+    const RID standing = rows.find(p_transport, address);
+    const RID minted = rows.add(p_transport, address, p_display_name);
     if (!standing.is_valid() && minted.is_valid() && session != nullptr) {
         session->endpoint_emit_added(minted);
     }
     return minted;
+}
+
+RID ConnectCore::target_find(
+    const RID &p_transport,
+    const String &p_address
+) const {
+    return rows.find(p_transport, target_address(p_transport, p_address));
+}
+
+String ConnectCore::target_address(
+    const RID &p_transport,
+    const String &p_address
+) const {
+    if (!p_address.is_empty()) {
+        return p_address;
+    }
+    const TransportSlot *slot = transport_slot(p_transport);
+    Transport *shape = slot != nullptr ? make_transport(*slot) : nullptr;
+    if (shape == nullptr) {
+        return p_address;
+    }
+    const String reached = shape->default_address();
+    delete shape;
+    return reached;
 }
 
 void ConnectCore::target_remove(const RID &p_target) {
@@ -382,7 +481,7 @@ bool ConnectCore::target_is_available(const RID &p_target) const {
 }
 
 void ConnectCore::probe_target(const RID &p_target) {
-    if (rows.row(p_target) == nullptr) {
+    if (!rows.begin_probe(p_target)) {
         return;
     }
     Waiter *waiting = make_waiter(this, WAIT_LIST_PROBE);
@@ -408,8 +507,312 @@ RID ConnectCore::create_peer(
     int p_mode,
     const String &p_address,
     const Dictionary &p_settings,
-    const Callable &p_completed,
-    const Callable &p_progress
+    const Callable &p_completed
+) {
+    const RID ticket = open_creation(
+        p_transport,
+        p_mode,
+        p_address,
+        Dictionary(),
+        p_settings,
+        p_completed
+    );
+    if (ticket.is_valid() && attempt.state == ATTEMPT_OFFLINE) {
+        begin_attempt(ticket, p_mode, Ref<NetwPromise>());
+    }
+    return ticket;
+}
+
+Dictionary ConnectCore::layered_settings(
+    const RID &p_transport,
+    const Dictionary &p_metadata,
+    const Dictionary &p_settings
+) const {
+    Dictionary layered;
+    const TransportSlot *slot = transport_slot(p_transport);
+    const Dictionary *preset
+        = slot != nullptr ? defaults.getptr(slot->peer_class) : nullptr;
+    if (preset != nullptr) {
+        layered.merge(*preset, true);
+    }
+    layered.merge(p_metadata, true);
+    layered.merge(p_settings, true);
+    return layered.duplicate(true);
+}
+
+Error ConnectCore::set_defaults(
+    const RID &p_transport,
+    const Dictionary &p_settings
+) {
+    const TransportSlot *slot = transport_slot(p_transport);
+    if (slot == nullptr) {
+        return ERR_DOES_NOT_EXIST;
+    }
+    defaults[slot->peer_class] = p_settings.duplicate(true);
+    return OK;
+}
+
+Dictionary ConnectCore::defaults_of(const RID &p_transport) const {
+    const TransportSlot *slot = transport_slot(p_transport);
+    if (slot == nullptr) {
+        return Dictionary();
+    }
+    const Dictionary *preset = defaults.getptr(slot->peer_class);
+    return preset != nullptr ? preset->duplicate(true) : Dictionary();
+}
+
+Ref<NetwPromise> ConnectCore::join(
+    const RID &p_transport,
+    const String &p_address,
+    const Dictionary &p_settings
+) {
+    return start_attempt(
+        p_transport,
+        PEER_MODE_CLIENT,
+        p_address,
+        Dictionary(),
+        p_settings
+    );
+}
+
+Ref<NetwPromise> ConnectCore::join_target(
+    const RID &p_target,
+    const Dictionary &p_settings
+) {
+    const TargetRow *held = rows.row(p_target);
+    if (held == nullptr) {
+        return NetwPromise::rejected(
+            ERR_DOES_NOT_EXIST,
+            "This endpoint is no longer listed."
+        );
+    }
+    return start_attempt(
+        held->transport,
+        PEER_MODE_CLIENT,
+        held->address,
+        held->metadata,
+        p_settings
+    );
+}
+
+Ref<NetwPromise> ConnectCore::host(
+    const RID &p_transport,
+    const Dictionary &p_settings
+) {
+    return start_attempt(
+        p_transport,
+        PEER_MODE_HOST,
+        String(),
+        Dictionary(),
+        p_settings
+    );
+}
+
+Ref<NetwPromise> ConnectCore::start_attempt(
+    const RID &p_transport,
+    int p_mode,
+    const String &p_address,
+    const Dictionary &p_metadata,
+    const Dictionary &p_settings
+) {
+    if (attempt.state == ATTEMPT_ONLINE) {
+        return NetwPromise::rejected(
+            ERR_ALREADY_IN_USE,
+            "This session is already online. Leave it before joining or "
+            "hosting again."
+        );
+    }
+    cancel_attempt();
+    Ref<NetwPromise> outcome;
+    outcome.instantiate();
+    const RID ticket = open_creation(
+        p_transport,
+        p_mode,
+        p_address,
+        p_metadata,
+        p_settings,
+        callable_mp_static(&assign_created)
+            .bind(uint64_t(gd::instance_id(session)))
+    );
+    if (!ticket.is_valid()) {
+        outcome->reject(ERR_UNCONFIGURED, "This session is closed.");
+        return outcome;
+    }
+    begin_attempt(ticket, p_mode, outcome);
+    return outcome;
+}
+
+bool ConnectCore::answers_attempt() const {
+    return attempt.state == ATTEMPT_CREATING && attempt.ticket.is_valid()
+        && attempt.ticket == answering_offer;
+}
+
+void ConnectCore::begin_attempt(
+    const RID &p_ticket,
+    int p_mode,
+    const Ref<NetwPromise> &p_promise
+) {
+    attempt = Attempt();
+    attempt.ticket = p_ticket;
+    attempt.mode = p_mode;
+    attempt.promise = p_promise;
+    move_attempt(ATTEMPT_CREATING);
+}
+
+void ConnectCore::move_attempt(int p_state) {
+    if (attempt.state == p_state) {
+        return;
+    }
+    attempt.state = p_state;
+    if (session != nullptr) {
+        session->connection_emit_state_changed(p_state);
+    }
+}
+
+void ConnectCore::end_attempt(Error p_error, const String &p_reason) {
+    const Attempt ended = attempt;
+    attempt = Attempt();
+    announce_end(ended, p_error, p_reason);
+}
+
+void ConnectCore::release_attempt(const Attempt &p_ended) {
+    if (p_ended.state == ATTEMPT_CREATING) {
+        cancel_peer_creation(p_ended.ticket);
+    } else if (p_ended.state == ATTEMPT_CONNECTING && session != nullptr) {
+        session->NETW_API_VIRTUAL(set_multiplayer_peer)(
+            Ref<MultiplayerPeer>()
+        );
+    }
+}
+
+void ConnectCore::announce_end(
+    const Attempt &p_ended,
+    Error p_error,
+    const String &p_reason
+) {
+    const bool heard = session != nullptr && p_error != OK
+        && p_error != ERR_SKIP
+        && session->connection_emit_failed(p_error, p_reason);
+    if (session != nullptr && p_ended.state != ATTEMPT_OFFLINE) {
+        session->connection_emit_state_changed(ATTEMPT_OFFLINE);
+    }
+    if (p_ended.promise.is_valid()) {
+        if (heard) {
+            p_ended.promise->catch_error(
+                callable_mp_static(&heard_through_failed)
+            );
+        }
+        p_ended.promise->reject(p_error, p_reason);
+    }
+}
+
+void ConnectCore::cancel_attempt() {
+    if (attempt.state != ATTEMPT_CREATING
+        && attempt.state != ATTEMPT_CONNECTING) {
+        return;
+    }
+    const Attempt ended = attempt;
+    attempt = Attempt();
+    release_attempt(ended);
+    announce_end(ended, ERR_SKIP, "The attempt was cancelled.");
+}
+
+void ConnectCore::tick_attempt(double p_delta) {
+    if (attempt.state != ATTEMPT_CREATING
+        && attempt.state != ATTEMPT_CONNECTING) {
+        return;
+    }
+    attempt.elapsed += p_delta;
+    if (attempt.deadline <= 0.0) {
+        return;
+    }
+    if (attempt.elapsed >= attempt.deadline) {
+        const Attempt ended = attempt;
+        attempt = Attempt();
+        release_attempt(ended);
+        announce_end(
+            ended,
+            ERR_TIMEOUT,
+            vformat(
+                "No answer after %d seconds.",
+                int64_t(std::ceil(ended.deadline))
+            )
+        );
+        return;
+    }
+    if (!attempt.reported && session != nullptr) {
+        session->connection_emit_progressed(
+            String(),
+            attempt.elapsed / attempt.deadline
+        );
+    }
+}
+
+void ConnectCore::on_progress(
+    const RID &p_ticket,
+    const String &p_message,
+    double p_ratio
+) {
+    if (!p_ticket.is_valid() || p_ticket != attempt.ticket
+        || (attempt.state != ATTEMPT_CREATING
+            && attempt.state != ATTEMPT_CONNECTING)) {
+        return;
+    }
+    if (p_ratio >= 0.0) {
+        attempt.reported = true;
+    }
+    if (session != nullptr) {
+        session->connection_emit_progressed(p_message, p_ratio);
+    }
+}
+
+void ConnectCore::on_session_edge(int p_old, int p_new) {
+    if (p_new == SessionCore::STATE_CONNECTING) {
+        if (attempt.state == ATTEMPT_OFFLINE) {
+            attempt = Attempt();
+        }
+        if (attempt.state == ATTEMPT_OFFLINE
+            || attempt.state == ATTEMPT_CREATING) {
+            move_attempt(ATTEMPT_CONNECTING);
+        }
+        return;
+    }
+    if (p_new != SessionCore::STATE_OFFLINE) {
+        return;
+    }
+    if (attempt.state == ATTEMPT_CONNECTING
+        || attempt.state == ATTEMPT_ONLINE) {
+        end_attempt(ERR_SKIP, "The peer was unassigned.");
+    }
+    announce_join_address();
+}
+
+void ConnectCore::on_session_online() {
+    const Ref<NetwPromise> outcome = attempt.promise;
+    attempt.ticket = RID();
+    attempt.promise.unref();
+    attempt.deadline = 0.0;
+    move_attempt(ATTEMPT_ONLINE);
+    announce_join_address();
+    if (outcome.is_valid()) {
+        outcome->resolve(int64_t(OK));
+    }
+}
+
+void ConnectCore::on_transport_failed() {
+    if (attempt.state != ATTEMPT_CONNECTING) {
+        return;
+    }
+    end_attempt(ERR_CANT_CONNECT, "The server could not be reached.");
+}
+
+RID ConnectCore::open_creation(
+    const RID &p_transport,
+    int p_mode,
+    const String &p_address,
+    const Dictionary &p_metadata,
+    const Dictionary &p_settings,
+    const Callable &p_completed
 ) {
     NETW_ERR_COND_V(
         session == nullptr,
@@ -430,9 +833,9 @@ RID ConnectCore::create_peer(
     seed.transport = p_transport;
     seed.mode = p_mode;
     seed.address = p_address;
-    seed.settings = p_settings.duplicate(true);
+    seed.settings
+        = layered_settings(p_transport, p_metadata, p_settings);
     seed.completed = p_completed;
-    seed.progress = p_progress;
     const RID ticket = mint_creation(seed);
     creations.push_back(ticket);
     starts.push_back(ticket);
@@ -467,6 +870,13 @@ void ConnectCore::start_creation(const RID &p_ticket) {
     made->bind_session(session);
     asked->provider = made;
     asked->peer_class = made->peer_class();
+    if (attempt.ticket == p_ticket) {
+        attempt.deadline = made->timeout_hint();
+    }
+    Dictionary built = asked->mode == PEER_MODE_HOST ? made->host_settings()
+                                                     : made->client_settings();
+    built.merge(asked->settings, true);
+    asked->settings = built;
 
     Ref<NetwPromise> done;
     done.instantiate();
@@ -547,6 +957,16 @@ void ConnectCore::settle_creation(
         p_peer->close();
     }
     discard_creation(p_ticket);
+    if (attempt.ticket != p_ticket || attempt.state != ATTEMPT_CREATING) {
+        return;
+    }
+    if (p_error != OK) {
+        end_attempt(p_error, p_detail);
+    } else if (attempt.promise.is_valid()) {
+        end_attempt(ERR_CANT_CREATE, "The session refused the new peer.");
+    } else {
+        end_attempt(ERR_SKIP, String());
+    }
 }
 
 void ConnectCore::cancel_peer_creation(const RID &p_ticket) {
@@ -602,6 +1022,11 @@ bool ConnectCore::transport_facts(
     }
     r_facts = facts_of(*shape);
     delete shape;
+    const Dictionary *preset = defaults.getptr(p_slot.peer_class);
+    if (preset != nullptr) {
+        overwrite_declared(r_facts.host_settings, *preset);
+        overwrite_declared(r_facts.client_settings, *preset);
+    }
     return true;
 }
 
@@ -641,12 +1066,16 @@ void ConnectCore::on_poll(double p_delta) {
             }
         }
         for (uint32_t at = 0; at < browsers.size(); at++) {
-            browsers[at]->poll(p_delta);
+            browsers[at].transport->poll(p_delta);
         }
         if (prober != nullptr && prober->is_open()) {
             prober->poll(p_delta);
         }
         serve_probes(this, prober, probe_hooks());
+        if (browsing) {
+            tick_browsing(p_delta);
+        }
+        tick_attempt(p_delta);
     }
 
     if (running_steps) {
@@ -700,6 +1129,12 @@ void ConnectCore::on_poll(double p_delta) {
                 const Ref<NetwServerInfo> answer
                     = step->ok ? info_of(step->value) : Ref<NetwServerInfo>();
                 const int64_t code = step->ok ? int64_t(OK) : step->code;
+                if (answer.is_valid() && answer->get_latency_ms() < 0) {
+                    answer->set_latency_ms(
+                        int64_t(Time::get_singleton()->get_ticks_msec())
+                        - step->began_msec
+                    );
+                }
                 rows.probe_settled(step->target, code, answer);
                 if (session != nullptr && rows.row(step->target) != nullptr) {
                     session->endpoint_emit_updated(step->target);
@@ -778,12 +1213,13 @@ Error ConnectCore::unregister_transport(const RID &p_transport) {
         return dropped;
     }
     for (uint32_t at = browsers.size(); at > 0; at--) {
-        if (browsers[at - 1]->peer_class() != named) {
+        Transport *held = browsers[at - 1].transport;
+        if (held->peer_class() != named) {
             continue;
         }
-        browsers[at - 1]->close_query();
-        delete browsers[at - 1];
         browsers.remove_at(at - 1);
+        held->close_query();
+        delete held;
     }
     const LocalVector<RID> outstanding(creations);
     for (uint32_t at = 0; at < outstanding.size(); at++) {
@@ -825,7 +1261,7 @@ Transport *ConnectCore::transport_of_directory(int64_t p_directory) const {
         }
     }
     for (uint32_t at = 0; at < browsers.size(); at++) {
-        held = dynamic_cast<DirectoryTransport *>(browsers[at]);
+        held = dynamic_cast<DirectoryTransport *>(browsers[at].transport);
         if (held != nullptr
             && int64_t(uint64_t(held->directory_id())) == p_directory) {
             return held;
@@ -873,13 +1309,39 @@ void ConnectCore::on_directory_listed(
     }
 }
 
+void ConnectCore::on_directory_invited(
+    Object *p_directory,
+    const String &p_address,
+    const String &p_from_name
+) {
+    const StringName named
+        = DirectoryTransport::peer_class_of_directory(p_directory);
+    const RID transport = session->transport_find(named);
+    if (!transport.is_valid()) {
+        return;
+    }
+    bool minted = false;
+    const RID target = rows.invite(
+        named,
+        gd::instance_id(p_directory),
+        transport,
+        p_address,
+        minted
+    );
+    if (minted) {
+        session->endpoint_emit_added(target);
+    }
+    session->connection_emit_invited(target, p_from_name);
+}
+
 void ConnectCore::forget_directory(ObjectID p_directory) {
     for (int32_t at = int32_t(browsers.size()) - 1; at >= 0; at--) {
-        DirectoryTransport *held
-            = dynamic_cast<DirectoryTransport *>(browsers[uint32_t(at)]);
+        DirectoryTransport *held = dynamic_cast<DirectoryTransport *>(
+            browsers[uint32_t(at)].transport
+        );
         if (held != nullptr && held->directory_id() == p_directory) {
-            delete held;
             browsers.remove_at(uint32_t(at));
+            delete held;
         }
     }
     LocalVector<RID> dropped;
@@ -925,70 +1387,21 @@ void ConnectCore::publish_targets(
     }
 }
 
-Error ConnectCore::set_browse_settings(
-    const RID &p_transport,
-    const Dictionary &p_settings
-) {
-    const TransportSlot *slot = transport_slot(p_transport);
-    if (slot == nullptr) {
-        return ERR_DOES_NOT_EXIST;
-    }
-    const StringName named = slot->peer_class;
-    const Dictionary previous = browse_settings.get(named, Dictionary());
-    if (browsing_started) {
-        return previous == p_settings ? OK : ERR_ALREADY_IN_USE;
-    }
-    Transport *creator = make_creator(named);
-    Error error = OK;
-    if (creator != nullptr && creator->can_browse()) {
-        error = creator->set_browse_settings(p_settings);
-    }
-    delete creator;
-    const LocalVector<ObjectID> directories = directories_of(named);
-    for (uint32_t at = 0; error == OK && at < directories.size(); at++) {
-        DirectoryTransport reached(gd::object_of(directories[at]));
-        error = reached.set_browse_settings(p_settings);
-    }
-    if (error != OK) {
-        return error;
-    }
-    browse_settings[named] = p_settings.duplicate(true);
-    return OK;
-}
-
 Transport *ConnectCore::make_creator(const StringName &p_peer_class) const {
     Transport *made = registrations.make(p_peer_class);
     return made != nullptr ? made : TransportBook::shared().make(p_peer_class);
 }
 
-LocalVector<ObjectID> ConnectCore::directories_of(
-    const StringName &p_peer_class
-) const {
-    LocalVector<ObjectID> found;
-    if (session == nullptr) {
-        return found;
-    }
-    const LocalVector<ObjectID> watched = session->discovery_directories();
-    for (uint32_t at = 0; at < watched.size(); at++) {
-        if (p_peer_class == StringName()
-            || DirectoryTransport::peer_class_of_directory(
-                   gd::object_of(watched[at])
-               ) == p_peer_class) {
-            found.push_back(watched[at]);
-        }
-    }
-    return found;
-}
-
-void ConnectCore::open_browser(Transport *p_made) {
-    const Dictionary settings
-        = browse_settings.get(p_made->peer_class(), Dictionary());
-    if (p_made->set_browse_settings(settings) != OK || !p_made->can_browse()) {
+bool ConnectCore::open_browser(Transport *p_made) {
+    if (!p_made->can_browse()) {
         delete p_made;
-        return;
+        return false;
     }
     p_made->bind_session(session);
-    browsers.push_back(p_made);
+    Browser opened;
+    opened.transport = p_made;
+    browsers.push_back(opened);
+    return true;
 }
 
 void ConnectCore::open_browsers() {
@@ -1003,53 +1416,120 @@ void ConnectCore::open_browsers() {
         const StringName named(classes[at]);
         bool held = false;
         for (uint32_t seen = 0; seen < browsers.size(); seen++) {
+            const Transport *browsing_with = browsers[seen].transport;
             held = held
-                || (dynamic_cast<DirectoryTransport *>(browsers[seen])
+                || (dynamic_cast<const DirectoryTransport *>(browsing_with)
                         == nullptr
-                    && browsers[seen]->peer_class() == named);
+                    && browsing_with->peer_class() == named);
         }
         Transport *made = held ? nullptr : make_creator(named);
         if (made != nullptr) {
             open_browser(made);
         }
     }
-    const LocalVector<ObjectID> directories = directories_of(StringName());
+    LocalVector<ObjectID> directories;
+    if (session != nullptr) {
+        directories = session->discovery_directories();
+    }
     for (uint32_t at = 0; at < directories.size(); at++) {
         bool held = false;
         for (uint32_t seen = 0; seen < browsers.size(); seen++) {
-            const DirectoryTransport *browsing
-                = dynamic_cast<DirectoryTransport *>(browsers[seen]);
+            const DirectoryTransport *listing
+                = dynamic_cast<DirectoryTransport *>(browsers[seen].transport);
             held = held
-                || (browsing != nullptr
-                    && browsing->directory_id() == directories[at]);
+                || (listing != nullptr
+                    && listing->directory_id() == directories[at]);
         }
         if (!held) {
             open_browser(new DirectoryTransport(gd::object_of(directories[at])));
         }
     }
-    for (uint32_t at = 0; at < browsers.size(); at++) {
-        browsers[at]->browse();
-    }
 }
 
 void ConnectCore::drop_browsers() {
-    for (uint32_t at = 0; at < browsers.size(); at++) {
-        browsers[at]->close_query();
-        delete browsers[at];
+    while (!browsers.is_empty()) {
+        Transport *held = browsers[browsers.size() - 1].transport;
+        browsers.remove_at(browsers.size() - 1);
+        held->close_query();
+        delete held;
     }
-    browsers.clear();
 }
 
-void ConnectCore::refresh() {
-    browsing_started = true;
-    open_browsers();
-    rows.enqueue_caller_rows();
+void ConnectCore::watch_directory(Object *p_directory) {
+    if (!browsing || !DirectoryTransport::is_directory(p_directory)) {
+        return;
+    }
+    const ObjectID named = gd::instance_id(p_directory);
+    for (uint32_t at = 0; at < browsers.size(); at++) {
+        const DirectoryTransport *listing
+            = dynamic_cast<DirectoryTransport *>(browsers[at].transport);
+        if (listing != nullptr && listing->directory_id() == named) {
+            return;
+        }
+    }
+    open_browser(new DirectoryTransport(p_directory));
+}
+
+void ConnectCore::tick_browsing(double p_delta) {
+    for (uint32_t at = 0; browsing && at < browsers.size(); at++) {
+        Browser &held = browsers[at];
+        const double interval = held.transport->list_interval();
+        if (held.listed) {
+            if (interval <= 0.0) {
+                continue;
+            }
+            held.next_list -= p_delta;
+            if (held.next_list > 0.0) {
+                continue;
+            }
+        }
+        held.listed = true;
+        held.next_list = interval;
+        held.transport->browse();
+    }
+    if (browsing) {
+        rows.enqueue_due(p_delta, probe_interval);
+        start_due_probes();
+    }
+}
+
+void ConnectCore::start_due_probes() {
     RID target;
-    while (rows.next_to_probe(target)) {
+    while (browsing && rows.next_to_probe(target)) {
         Waiter *waiting = make_waiter(this, WAIT_LIST_PROBE);
         waiting->target = target;
         watch_promise(waiting, probe_row(target));
     }
+}
+
+void ConnectCore::drop_row_probes() {
+    clear_waits_of_kind(this, session, WAIT_LIST_PROBE);
+    clear_waits_of_kind(this, session, WAIT_PROBE);
+    clear_probe_queue(this);
+    if (prober != nullptr && prober->is_open()) {
+        prober->close();
+    }
+    rows.drop_probes();
+}
+
+void ConnectCore::set_browsing(bool p_browsing) {
+    if (browsing == p_browsing) {
+        return;
+    }
+    browsing = p_browsing;
+    if (!browsing) {
+        drop_browsers();
+        drop_row_probes();
+        return;
+    }
+    open_browsers();
+    rows.arm_caller_rows();
+    rows.enqueue_due(0.0, probe_interval);
+    start_due_probes();
+}
+
+void ConnectCore::set_probe_interval(double p_seconds) {
+    probe_interval = p_seconds > 0.0 ? p_seconds : 0.0;
 }
 
 } // namespace netw::connect

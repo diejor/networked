@@ -6,17 +6,69 @@
 #include "netw/api/netw_multiplayer.hpp"
 #include "netw/connect/tracker_client.hpp"
 #include "netw/connect/webrtc_transport.hpp"
+#include "netw/log.hpp"
 
 using namespace godot;
 
 namespace netw {
 
+namespace {
+
+const char *WEBRTC_PEER_CLASS = "WebRTCMultiplayerPeer";
+
+bool is_tracker_url(const String &p_url) {
+    return p_url.begins_with("wss://") || p_url.begins_with("ws://");
+}
+
+PackedStringArray tracker_urls(const Variant &p_listed) {
+    PackedStringArray listed;
+    if (p_listed.get_type() == Variant::PACKED_STRING_ARRAY) {
+        listed = p_listed;
+    } else if (p_listed.get_type() == Variant::ARRAY) {
+        const Array items = p_listed;
+        for (int64_t at = 0; at < items.size(); at++) {
+            listed.push_back(String(items[at]));
+        }
+    }
+    PackedStringArray kept;
+    for (int64_t at = 0; at < listed.size(); at++) {
+        if (is_tracker_url(listed[at])) {
+            kept.push_back(listed[at]);
+        }
+    }
+    return kept;
+}
+
+} // namespace
+
 void WebTorrentLobbyDirectory::set_trackers(const PackedStringArray &p_trackers) {
     trackers = p_trackers;
+    for (int64_t at = 0; at < trackers.size(); at++) {
+        if (!trackers[at].is_empty() && !is_tracker_url(trackers[at])) {
+            NETW_WARN(
+                sys::TRANSPORT,
+                "WebTorrentLobbyDirectory.trackers has '%s', which is not a "
+                "tracker URL, so it is skipped. Use a ws:// or wss:// URL.",
+                trackers[at]
+            );
+        }
+    }
 }
 
 PackedStringArray WebTorrentLobbyDirectory::get_trackers() const {
     return trackers;
+}
+
+void WebTorrentLobbyDirectory::set_list_interval(double p_seconds) {
+    listing_interval = p_seconds;
+}
+
+double WebTorrentLobbyDirectory::get_list_interval() const {
+    return listing_interval;
+}
+
+double WebTorrentLobbyDirectory::list_interval() {
+    return listing_interval;
 }
 
 StringName WebTorrentLobbyDirectory::peer_class() {
@@ -31,39 +83,24 @@ LobbyDirectory::Capability WebTorrentLobbyDirectory::capabilities() {
     return CAPABILITY_BROWSE;
 }
 
-Error WebTorrentLobbyDirectory::set_browse_settings(
-    const Dictionary &p_settings
-) {
-    const Variant named = p_settings.get("signaling_namespace", String());
-    const Variant urls = p_settings.get("trackers", PackedStringArray());
-    if (named.get_type() != Variant::STRING
-        || urls.get_type() != Variant::PACKED_STRING_ARRAY) {
-        return ERR_INVALID_PARAMETER;
+Dictionary WebTorrentLobbyDirectory::webrtc_defaults() const {
+    if (session == nullptr) {
+        return Dictionary();
     }
-    const Array keys = p_settings.keys();
-    for (int64_t at = 0; at < keys.size(); at++) {
-        if (String(keys[at]) != "signaling_namespace"
-            && String(keys[at]) != "trackers") {
-            return ERR_INVALID_PARAMETER;
-        }
-    }
-    const PackedStringArray offered = urls;
-    for (int64_t at = 0; at < offered.size(); at++) {
-        if (!offered[at].begins_with("wss://")
-            && !offered[at].begins_with("ws://")) {
-            return ERR_INVALID_PARAMETER;
-        }
-    }
-    signaling_namespace = named;
-    if (p_settings.has("trackers")) {
-        trackers = offered;
-    }
-    return OK;
+    return session->transport_get_defaults(
+        session->transport_find(StringName(WEBRTC_PEER_CLASS))
+    );
 }
 
 PackedStringArray WebTorrentLobbyDirectory::effective_trackers() const {
-    if (!trackers.is_empty()) {
-        return trackers;
+    const PackedStringArray authored = tracker_urls(trackers);
+    if (!authored.is_empty()) {
+        return authored;
+    }
+    const PackedStringArray preset
+        = tracker_urls(webrtc_defaults().get("trackers", Variant()));
+    if (!preset.is_empty()) {
+        return preset;
     }
     if (connect::under_test_runner()) {
         return PackedStringArray();
@@ -72,8 +109,10 @@ PackedStringArray WebTorrentLobbyDirectory::effective_trackers() const {
 }
 
 String WebTorrentLobbyDirectory::effective_namespace() const {
-    if (!signaling_namespace.is_empty() || session == nullptr) {
-        return signaling_namespace;
+    const String preset
+        = webrtc_defaults().get("signaling_namespace", String());
+    if (!preset.is_empty() || session == nullptr) {
+        return preset;
     }
     return String(session->session_get_app_id());
 }
@@ -86,6 +125,10 @@ void WebTorrentLobbyDirectory::list_lobbies() {
     board.set_trackers(reached);
     board.signaling_namespace = effective_namespace();
     board.browse();
+}
+
+void WebTorrentLobbyDirectory::stop_listing() {
+    board.stop_browsing();
 }
 
 bool WebTorrentLobbyDirectory::listed_card(connect::RoomCard &r_card) {
@@ -177,6 +220,24 @@ void WebTorrentLobbyDirectory::_bind_methods() {
         PropertyInfo(Variant::PACKED_STRING_ARRAY, "trackers"),
         "set_trackers",
         "get_trackers"
+    );
+    ClassDB::bind_method(
+        D_METHOD("set_list_interval", "seconds"),
+        &WebTorrentLobbyDirectory::set_list_interval
+    );
+    ClassDB::bind_method(
+        D_METHOD("get_list_interval"),
+        &WebTorrentLobbyDirectory::get_list_interval
+    );
+    ADD_PROPERTY(
+        PropertyInfo(
+            Variant::FLOAT,
+            "list_interval",
+            PROPERTY_HINT_RANGE,
+            "0,60,0.1,or_greater,suffix:s"
+        ),
+        "set_list_interval",
+        "get_list_interval"
     );
 }
 

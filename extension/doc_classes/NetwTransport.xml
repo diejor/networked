@@ -74,7 +74,7 @@
 		<method name="_browse" qualifiers="virtual">
 			<return type="void" />
 			<description>
-				Called by [method NetwMultiplayer.endpoint_refresh] when [method _can_browse] is [code]true[/code]. Report the servers found with [method publish_targets]. Call it again whenever the list changes, for example from [method _poll].
+				Called when [member NetwConnection.browsing] turns [code]true[/code] and [method _can_browse] is [code]true[/code]. Report the servers found with [method publish_targets]. Call it again whenever the list changes, for example from [method _poll].
 			</description>
 		</method>
 		<method name="_can_browse" qualifiers="virtual">
@@ -472,7 +472,7 @@
 			<param index="2" name="message" type="String" />
 			<param index="3" name="ratio" type="float" />
 			<description>
-				Reports progress on [param ticket] to the [code]progress[/code] callback of [method NetwMultiplayer.transport_create_peer].
+				Reports progress on [param ticket] through [signal NetwConnection.progressed].
 			</description>
 		</method>
 		<method name="timeout_hint">

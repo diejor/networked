@@ -16,7 +16,6 @@ script = ExtResource("1_main")
 
 [node name="ConnectBrowser" parent="UI" unique_id=1938257406 instance=ExtResource("2_brws")]
 unique_name_in_owner = true
-server_list_path = "user://playground/servers.cfg"
 
 [node name="TitleLabel" parent="UI/ConnectBrowser/VBox/PanelContainer/HeaderBar" parent_id_path=PackedInt32Array(1938257406, 522198391) index="1" unique_id=1146132509]
 text = "Cube Playground"

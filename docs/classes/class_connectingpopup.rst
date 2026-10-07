@@ -12,7 +12,23 @@ ConnectingPopup
 
 **Inherits:** :godot:`PopupPanel`
 
-Progress overlay displayed during server connection handshakes.
+The progress of a connection attempt, with a button to cancel it.
+
+.. rst-class:: classref-reftable-group
+
+Properties
+----------
+
+.. table::
+   :widths: auto
+
+   +----------------------+--------------------------------------------------------------------+---------------+
+   | :godot:`Label`       | :ref:`title_label<class_ConnectingPopup_property_title_label>`     | ``<unknown>`` |
+   +----------------------+--------------------------------------------------------------------+---------------+
+   | :godot:`ProgressBar` | :ref:`progress_bar<class_ConnectingPopup_property_progress_bar>`   | ``<unknown>`` |
+   +----------------------+--------------------------------------------------------------------+---------------+
+   | :godot:`Button`      | :ref:`cancel_button<class_ConnectingPopup_property_cancel_button>` | ``<unknown>`` |
+   +----------------------+--------------------------------------------------------------------+---------------+
 
 .. rst-class:: classref-reftable-group
 
@@ -22,13 +38,13 @@ Methods
 .. table::
    :widths: auto
 
-   +--------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | |void| | :ref:`open_connecting<class_ConnectingPopup_method_open_connecting>`\ (\ handle\: :ref:`NetwConnection<class_NetwConnection>`, peer_class\: :godot:`StringName`, address\: :godot:`String`\ ) |
-   +--------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | |void| | :ref:`update_progress<class_ConnectingPopup_method_update_progress>`\ (\ message\: :godot:`String`, ratio\: :godot:`float`\ )                                                                 |
-   +--------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | |void| | :ref:`show_failed<class_ConnectingPopup_method_show_failed>`\ (\ message\: :godot:`String`, detail\: :godot:`String` = ""\ )                                                                  |
-   +--------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   +--------+---------------------------------------------------------------------------------------------------------------------+
+   | |void| | :ref:`open<class_ConnectingPopup_method_open>`\ (\ )                                                                |
+   +--------+---------------------------------------------------------------------------------------------------------------------+
+   | |void| | :ref:`progressed<class_ConnectingPopup_method_progressed>`\ (\ message\: :godot:`String`, ratio\: :godot:`float`\ ) |
+   +--------+---------------------------------------------------------------------------------------------------------------------+
+   | |void| | :ref:`failed<class_ConnectingPopup_method_failed>`\ (\ reason\: :godot:`String`\ )                                  |
+   +--------+---------------------------------------------------------------------------------------------------------------------+
 
 .. rst-class:: classref-section-separator
 
@@ -55,40 +71,93 @@ Signals
 
 .. rst-class:: classref-descriptions-group
 
+Property Descriptions
+---------------------
+
+.. _class_ConnectingPopup_property_title_label:
+
+.. rst-class:: classref-property
+
+:godot:`Label` **title_label** = ``<unknown>`` :ref:`🔗<class_ConnectingPopup_property_title_label>`
+
+.. container:: contribute
+
+	There is currently no description for this property. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_ConnectingPopup_property_progress_bar:
+
+.. rst-class:: classref-property
+
+:godot:`ProgressBar` **progress_bar** = ``<unknown>`` :ref:`🔗<class_ConnectingPopup_property_progress_bar>`
+
+.. container:: contribute
+
+	There is currently no description for this property. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_ConnectingPopup_property_cancel_button:
+
+.. rst-class:: classref-property
+
+:godot:`Button` **cancel_button** = ``<unknown>`` :ref:`🔗<class_ConnectingPopup_property_cancel_button>`
+
+.. container:: contribute
+
+	There is currently no description for this property. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+
+.. rst-class:: classref-section-separator
+
+----
+
+.. rst-class:: classref-descriptions-group
+
 Method Descriptions
 -------------------
 
-.. _class_ConnectingPopup_method_open_connecting:
+.. _class_ConnectingPopup_method_open:
 
 .. rst-class:: classref-method
 
-|void| **open_connecting**\ (\ handle\: :ref:`NetwConnection<class_NetwConnection>`, peer_class\: :godot:`StringName`, address\: :godot:`String`\ ) :ref:`🔗<class_ConnectingPopup_method_open_connecting>`
+|void| **open**\ (\ ) :ref:`🔗<class_ConnectingPopup_method_open>`
 
-Shows the connecting screen for the server at ``peer_class`` and ``address``. An empty ``peer_class`` means hosting.
+.. container:: contribute
+
+	There is currently no description for this method. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
 
 .. rst-class:: classref-item-separator
 
 ----
 
-.. _class_ConnectingPopup_method_update_progress:
+.. _class_ConnectingPopup_method_progressed:
 
 .. rst-class:: classref-method
 
-|void| **update_progress**\ (\ message\: :godot:`String`, ratio\: :godot:`float`\ ) :ref:`🔗<class_ConnectingPopup_method_update_progress>`
+|void| **progressed**\ (\ message\: :godot:`String`, ratio\: :godot:`float`\ ) :ref:`🔗<class_ConnectingPopup_method_progressed>`
 
-Shows ``message``, and a progress bar at ``ratio`` when it is not negative.
+.. container:: contribute
+
+	There is currently no description for this method. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
 
 .. rst-class:: classref-item-separator
 
 ----
 
-.. _class_ConnectingPopup_method_show_failed:
+.. _class_ConnectingPopup_method_failed:
 
 .. rst-class:: classref-method
 
-|void| **show_failed**\ (\ message\: :godot:`String`, detail\: :godot:`String` = ""\ ) :ref:`🔗<class_ConnectingPopup_method_show_failed>`
+|void| **failed**\ (\ reason\: :godot:`String`\ ) :ref:`🔗<class_ConnectingPopup_method_failed>`
 
-Shows the failure screen with ``message``.
+.. container:: contribute
+
+	There is currently no description for this method. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`
