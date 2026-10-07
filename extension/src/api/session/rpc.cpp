@@ -29,6 +29,7 @@
 #include "netw/prediction_core.hpp"
 #include "netw/profile.hpp"
 #include "netw/script/model.hpp"
+#include "netw/stage.hpp"
 #include "netw/synchronizers.hpp"
 #include "netw/wire/frame.hpp"
 #include "netw/wire/registry.hpp"
@@ -2071,7 +2072,7 @@ PackedInt64Array NetwMultiplayer::carrier_flush() {
 #endif
     PackedInt64Array staged;
     for (const int32_t peer : carrier.peers(false)) {
-        NETW_ZONE_NC("Flush unreliable datagram", colors::TRANSPORT);
+        NETW_STAGE(FLUSH, "Flush unreliable datagram", colors::TRANSPORT);
         NETW_ZONE_TEXT_F("peer %d", int(peer));
         CarrierBatch batch = carrier.take(peer, false);
         const int64_t seq = carrier_dispose(peer, false, batch);
@@ -2082,7 +2083,7 @@ PackedInt64Array NetwMultiplayer::carrier_flush() {
         }
     }
     for (const int32_t peer : carrier.peers(true)) {
-        NETW_ZONE_NC("Flush reliable datagram", colors::TRANSPORT);
+        NETW_STAGE(FLUSH, "Flush reliable datagram", colors::TRANSPORT);
         NETW_ZONE_TEXT_F("peer %d", int(peer));
         CarrierBatch batch = carrier.take(peer, true);
         carrier_dispose(peer, true, batch);

@@ -52,6 +52,7 @@
 #include "netw/profile.hpp"
 #include "netw/script/model.hpp"
 #include "netw/session/frames.hpp"
+#include "netw/stage.hpp"
 #include "netw/synchronizers.hpp"
 #include "netw/wire/frame.hpp"
 
@@ -2807,7 +2808,7 @@ NetwMultiplayer::~NetwMultiplayer() {
 }
 
 Error NetwMultiplayer::session_flush_tick(int64_t p_tick) {
-    NETW_ZONE_NC("Session tick", colors::SESSION);
+    NETW_STAGE(OTHER, "Session tick", colors::SESSION);
     if (layer_driver_count() > 0) {
         const Error admitted = interest_flush_now();
         if (admitted != OK) {
@@ -2854,30 +2855,8 @@ void NetwMultiplayer::profile_book_bytes() const {
         display_book.is_valid() ? display_book->held_bytes() : int64_t(0)
     );
     NETW_PLOT(profile::names::MEMORY_BINDINGS, binding_book.held_bytes());
-    NETW_PLOT(
-        profile::names::MEMORY_SETS,
-        set_book.held_bytes([](const repl::PropertySet &p_set) {
-            return held::vector(p_set.columns);
-        })
-    );
-    ReplicationCore *replication = get_replication_plane();
-    NETW_PLOT(
-        profile::names::MEMORY_ENTITIES,
-        held::map(entity_book)
-            + entity_slots.held_bytes([](const EntitySlot &p_slot) {
-                  const int64_t object = int64_t(sizeof(NetwEntity));
-                  int64_t bytes = p_slot.live.is_valid() ? object : 0;
-                  bytes += p_slot.retired.is_valid() ? object : 0;
-                  if (p_slot.record != nullptr) {
-                      bytes += p_slot.record->held_bytes();
-                  }
-                  return bytes;
-              })
-            + (replication != nullptr ? replication->get_spawn_pipeline()
-                                            ->get_spawn_book()
-                                            ->held_bytes()
-                                      : int64_t(0))
-    );
+    NETW_PLOT(profile::names::MEMORY_SETS, set_book_bytes());
+    NETW_PLOT(profile::names::MEMORY_ENTITIES, entity_bytes());
     const SyncCompat *compat = sync_adapter();
     NETW_PLOT(
         profile::names::MEMORY_COMPAT,
@@ -2886,9 +2865,37 @@ void NetwMultiplayer::profile_book_bytes() const {
 }
 #endif
 
+#if defined(NETW_PROFILING) || defined(DEBUG_ENABLED)
+int64_t NetwMultiplayer::set_book_bytes() const {
+    return set_book.held_bytes([](const repl::PropertySet &p_set) {
+        return held::vector(p_set.columns);
+    });
+}
+
+int64_t NetwMultiplayer::entity_bytes() const {
+    int64_t bytes = held::map(entity_book)
+        + entity_slots.held_bytes([](const EntitySlot &p_slot) {
+              const int64_t object = int64_t(sizeof(NetwEntity));
+              int64_t owned = p_slot.live.is_valid() ? object : 0;
+              owned += p_slot.retired.is_valid() ? object : 0;
+              if (p_slot.record != nullptr) {
+                  owned += p_slot.record->held_bytes();
+              }
+              return owned;
+          });
+    ReplicationCore *replication = get_replication_plane();
+    if (replication != nullptr) {
+        bytes += replication->get_spawn_pipeline()
+                     ->get_spawn_book()
+                     ->held_bytes();
+    }
+    return bytes;
+}
+#endif
+
 Error NetwMultiplayer::NETW_API_VIRTUAL(poll)() {
     NETW_FRAME(profile::names::POLL_FRAME);
-    NETW_ZONE_NC("Network poll", colors::SESSION);
+    NETW_STAGE(OTHER, "Network poll", colors::SESSION);
     Engine *engine = Engine::get_singleton();
     if (engine != nullptr && engine->is_editor_hint()) {
         return OK;
@@ -2896,7 +2903,7 @@ Error NetwMultiplayer::NETW_API_VIRTUAL(poll)() {
     NETW_NETWORK_PROFILE(profiler_poll());
     embed_settle_on_first_poll();
     {
-        NETW_ZONE_NC("Transport poll", colors::TRANSPORT);
+        NETW_STAGE(TRANSPORT, "Transport poll", colors::TRANSPORT);
         if (inner.is_null() && effective_peer.is_valid()) {
             effective_peer->poll();
         }
@@ -2932,6 +2939,7 @@ Error NetwMultiplayer::NETW_API_VIRTUAL(poll)() {
     }
     sink_verdict(display_pump(frame_delta), 0);
     NETW_HINTS(diag_poll());
+    NETW_STAGE_FLUSH();
     return err;
 }
 

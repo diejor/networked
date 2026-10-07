@@ -350,7 +350,7 @@ void World::unsource_owner(uint64_t p_owner) {
     }
 }
 
-#if defined(NETW_PROFILING)
+#if defined(NETW_PROFILING) || defined(DEBUG_ENABLED)
 int64_t World::row_bytes() const {
     int64_t bytes = held::vector(slot_route) + held::vector(slot_epoch)
         + held::vector(slot_gen) + held::vector(slot_rows)

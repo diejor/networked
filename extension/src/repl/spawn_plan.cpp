@@ -2,6 +2,7 @@
 
 #include "netw/colors.hpp"
 #include "netw/profile.hpp"
+#include "netw/stage.hpp"
 
 namespace netw::repl {
 
@@ -104,7 +105,7 @@ LocalVector<SpawnOp> reconcile(
     const LocalVector<SpawnRow> &p_rows,
     const PackedInt32Array &p_peers
 ) {
-    NETW_ZONE_NC("Spawn reconcile", colors::WIRE);
+    NETW_STAGE(SPAWN, "Spawn reconcile", colors::WIRE);
     LocalVector<SpawnOp> plan;
     HashMap<int64_t, PeerFlags> desired;
     HashMap<int64_t, PeerEffects> leave_effects;

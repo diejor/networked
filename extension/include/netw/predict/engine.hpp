@@ -200,6 +200,9 @@ class NetwPredictionEngine {
     int depth = 0;
     int replay_steps = 0;
     int64_t mutations_refused = 0;
+#if defined(DEBUG_ENABLED)
+    int64_t replayed_ticks = 0;
+#endif
 
     struct SpaceReplay {
         NetwMultiplayer *host = nullptr;
@@ -313,7 +316,7 @@ public:
     NetwPredictionEngine &operator=(const NetwPredictionEngine &) = delete;
     ~NetwPredictionEngine();
 
-#if defined(NETW_PROFILING)
+#if defined(NETW_PROFILING) || defined(DEBUG_ENABLED)
     void held_bytes(
         int64_t &r_transitions,
         int64_t &r_inputs,
@@ -713,6 +716,10 @@ public:
     int pass_depth() const;
     bool is_replaying() const;
     int64_t mutations_refused_count() const;
+#if defined(DEBUG_ENABLED)
+    int64_t replayed_tick_count() const;
+    int64_t held_fact_total(int p_fact) const;
+#endif
 
     godot::Dictionary canonicalize_state(
         int64_t p_slot,

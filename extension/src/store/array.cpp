@@ -5,6 +5,7 @@
 #include "netw/colors.hpp"
 #include "netw/log.hpp"
 #include "netw/profile.hpp"
+#include "netw/stage.hpp"
 #include "netw/store/world.hpp"
 
 using namespace godot;
@@ -1103,7 +1104,7 @@ TypedArray<PackedByteArray> Arrays::encode_owed(
     int p_peer,
     int p_budget
 ) {
-    NETW_ZONE_NC("Table encode owed", colors::TABLE);
+    NETW_STAGE(SEND, "Table encode owed", colors::TABLE);
     TypedArray<PackedByteArray> out;
     ArrayTable *held = table_of(p_table);
     if (held == nullptr || !held->schema.sealed || wire_id(p_table) == 0) {
@@ -1355,7 +1356,7 @@ bool Arrays::decode_column(
 }
 
 ArrayLanding Arrays::apply_frame(const PackedByteArray &p_payload) {
-    NETW_ZONE_NC("Table apply frame", colors::TABLE);
+    NETW_STAGE(APPLY, "Table apply frame", colors::TABLE);
     ArrayLanding out;
     wire::ReadStream stream(p_payload);
     ArrayFrameHead head;

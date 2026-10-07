@@ -68,6 +68,7 @@
 #include "netw/lagcomp_core.hpp"
 #include "netw/lifecycle/rule.hpp"
 #include "netw/liveness_core.hpp"
+#include "netw/monitor.hpp"
 #include "netw/persist/binding.hpp"
 #include "netw/persist/database.hpp"
 #include "netw/predict/engine.hpp"
@@ -2194,6 +2195,13 @@ public:
     void session_on_clock_tick(double p_delta, int64_t p_tick);
 #if defined(NETW_PROFILING)
     void profile_book_bytes() const;
+#endif
+#if defined(NETW_PROFILING) || defined(DEBUG_ENABLED)
+    int64_t set_book_bytes() const;
+    int64_t entity_bytes() const;
+#endif
+#if defined(DEBUG_ENABLED)
+    void monitor_sample(monitor::Sample &r_sample);
 #endif
     godot::Error predict_stepper_install(
         const godot::RID &p_space,

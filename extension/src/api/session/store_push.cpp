@@ -15,6 +15,7 @@
 #include "netw/repl/property_set.hpp"
 #include "netw/sim/install.hpp"
 #include "netw/sim/row.hpp"
+#include "netw/stage.hpp"
 #include "netw/store/port.hpp"
 #include "netw/wire/value_row.hpp"
 
@@ -369,7 +370,7 @@ void NetwMultiplayer::sim_drain_installs() {
     if (display < 0) {
         return;
     }
-    NETW_ZONE_NC("Store drain", colors::TABLE);
+    NETW_STAGE(APPLY, "Store drain", colors::TABLE);
     for (uint32_t index = 0; index < store_world.table_count(); ++index) {
         store::Table &table = store_world.table(index);
         for (uint32_t word = 0; word < table.due.words.size(); ++word) {

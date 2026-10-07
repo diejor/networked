@@ -19,6 +19,7 @@
 #include "netw/predict/tick_work.hpp"
 #include "netw/prediction_core.hpp"
 #include "netw/profile.hpp"
+#include "netw/stage.hpp"
 #include "netw/subsystems.hpp"
 
 using namespace godot;
@@ -1755,7 +1756,7 @@ void NetwPredictSlotEngine::run_joint_pass(
     const LocalVector<NetwPredictSlotEngine *> &p_members,
     int64_t p_floor_transition
 ) {
-    NETW_ZONE_NC("Predict joint replay", colors::PREDICTION);
+    NETW_STAGE(ROLLBACK, "Predict joint replay", colors::PREDICTION);
     HashMap<int64_t, NetwPredictSlotEngine *> by_slot;
     for (uint32_t at = 0; at < p_members.size(); ++at) {
         const int64_t seat = p_members[at]->native_slot();

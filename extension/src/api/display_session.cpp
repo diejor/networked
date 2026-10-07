@@ -18,6 +18,7 @@
 #include "netw/display/timing.hpp"
 #include "netw/log.hpp"
 #include "netw/profile.hpp"
+#include "netw/stage.hpp"
 #include "netw/store/validate.hpp"
 #include "netw/subsystems.hpp"
 
@@ -592,7 +593,7 @@ bool NetwMultiplayer::display_record_runtime(
 }
 
 void NetwMultiplayer::display_on_clock_tick(double p_delta, int64_t p_tick) {
-    NETW_ZONE_NC("Display record", colors::INTERP);
+    NETW_STAGE(DISPLAY, "Display record", colors::INTERP);
 #if defined(NETW_TESTS)
     store::AllocationTally recording(idle_work.display_allocations);
 #endif
@@ -690,7 +691,7 @@ bool NetwMultiplayer::display_pump_listed(
 }
 
 Error NetwMultiplayer::display_pump(double p_delta) {
-    NETW_ZONE_NC("Display pump", colors::INTERP);
+    NETW_STAGE(DISPLAY, "Display pump", colors::INTERP);
 #if defined(NETW_TESTS)
     store::AllocationTally pumping(idle_work.display_allocations);
 #endif

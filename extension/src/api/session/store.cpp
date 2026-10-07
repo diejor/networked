@@ -9,6 +9,7 @@
 #include "netw/repl/set_model.hpp"
 #include "netw/spawn/book.hpp"
 #include "netw/spawn/pipeline.hpp"
+#include "netw/stage.hpp"
 #include "netw/store/schedule.hpp"
 #include "netw/store/validate.hpp"
 #include "netw/wire/registry.hpp"
@@ -568,7 +569,7 @@ PackedInt32Array NetwMultiplayer::store_roster_ids() const {
 }
 
 void NetwMultiplayer::store_refresh() {
-    NETW_ZONE_NC("Store interest", colors::INTEREST);
+    NETW_STAGE(INTEREST, "Store interest", colors::INTEREST);
     const Ref<MultiplayerPeer> peer = inner.is_valid()
         ? inner->get_multiplayer_peer()
         : Ref<MultiplayerPeer>();

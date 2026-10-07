@@ -5,6 +5,7 @@
 #include "netw/colors.hpp"
 #include "netw/log.hpp"
 #include "netw/profile.hpp"
+#include "netw/stage.hpp"
 #include "netw/store/schedule.hpp"
 #include "netw/store/world.hpp"
 #include "netw/wire/frame.hpp"
@@ -505,7 +506,7 @@ void SessionSend::pass_peer(
     SessionResult &r_out
 ) {
     const int id = world->peer_id(p_peer);
-    NETW_ZONE_NC("Send to peer", colors::WIRE);
+    NETW_STAGE(SEND, "Send to peer", colors::WIRE);
     NETW_ZONE_TEXT_F("peer %d", id);
     candidates.clear();
     PeerAccount &account = refill(id, p_max_bits, p_base_tick);

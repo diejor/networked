@@ -96,6 +96,7 @@
 #include "netw/sync_progress.hpp"
 
 #include "netw/lagcomp_core.hpp"
+#include "netw/monitor.hpp"
 #include "netw/profile.hpp"
 
 #include "netw/api/clock.hpp"
@@ -273,12 +274,18 @@ void initialize_networked_module(ModuleInitializationLevel level) {
 
     netw::NetwMultiplayer::install_default_interface();
     netw::connect::install_native_transports();
+#if defined(DEBUG_ENABLED)
+    netw::monitor::install();
+#endif
 }
 
 void uninitialize_networked_module(ModuleInitializationLevel level) {
     if (level != MODULE_INITIALIZATION_LEVEL_SCENE) {
         return;
     }
+#if defined(DEBUG_ENABLED)
+    netw::monitor::remove();
+#endif
     netw::NetwMultiplayer::restore_default_interface();
     netw::LocalLoopbackSession::set_shared_session(nullptr);
     netw::NetwEntityRecord::clear_part_factories();

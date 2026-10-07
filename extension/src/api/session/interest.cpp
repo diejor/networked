@@ -31,6 +31,7 @@
 #include "netw/profile.hpp"
 #include "netw/script/model.hpp"
 #include "netw/spawn/pipeline.hpp"
+#include "netw/stage.hpp"
 #include "netw/synchronizers.hpp"
 #include "netw/tree_hook.hpp"
 #include "netw/wire/frame.hpp"
@@ -1017,7 +1018,11 @@ void NetwMultiplayer::interest_sync_live_peers() {
 }
 
 Error NetwMultiplayer::interest_recompute() {
-    NETW_ZONE_NC("NetwMultiplayer interest recompute", colors::INTEREST);
+    NETW_STAGE(
+        INTEREST,
+        "NetwMultiplayer interest recompute",
+        colors::INTEREST
+    );
     if (!is_host()) {
         interest_pending = interest::Delta();
         interest_pending_live = false;

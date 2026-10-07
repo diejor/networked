@@ -10,6 +10,7 @@
 #include "netw/log.hpp"
 #include "netw/profile.hpp"
 #include "netw/scene_core.hpp"
+#include "netw/stage.hpp"
 #include "netw/subsystems.hpp"
 
 using namespace godot;
@@ -130,7 +131,7 @@ Error NetwMultiplayer::embed_settle() {
 }
 
 Error NetwMultiplayer::embed_poll_transport() {
-    NETW_ZONE_NC("Transport receive", colors::TRANSPORT);
+    NETW_STAGE(TRANSPORT, "Transport receive", colors::TRANSPORT);
     if (inner.is_null()) {
         NETW_TRACE(
             sys::TRANSPORT,

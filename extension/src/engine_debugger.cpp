@@ -27,6 +27,13 @@ bool debugger_profiling(const StringName &p_name) {
     return debugger_active()
         && EngineDebugger::get_singleton()->is_profiling(p_name);
 }
+
+void debugger_add_frame_data(const StringName &p_name, const Array &p_data) {
+    if (!debugger_profiling(p_name)) {
+        return;
+    }
+    EngineDebugger::get_singleton()->profiler_add_frame_data(p_name, p_data);
+}
 #endif
 
 } // namespace netw::gd

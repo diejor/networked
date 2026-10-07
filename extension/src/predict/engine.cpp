@@ -25,6 +25,7 @@
 #include "netw/predict/tick_work.hpp"
 #include "netw/profile.hpp"
 #include "netw/project.hpp"
+#include "netw/stage.hpp"
 #include "netw/store/port.hpp"
 
 using namespace godot;
@@ -202,7 +203,7 @@ NetwPredictionEngine::~NetwPredictionEngine() {
     rows.clear();
 }
 
-#if defined(NETW_PROFILING)
+#if defined(NETW_PROFILING) || defined(DEBUG_ENABLED)
 void NetwPredictionEngine::held_bytes(
     int64_t &r_transitions,
     int64_t &r_inputs,
@@ -900,6 +901,20 @@ void NetwPredictionEngine::call_step(
 int64_t NetwPredictionEngine::mutations_refused_count() const {
     return mutations_refused;
 }
+
+#if defined(DEBUG_ENABLED)
+int64_t NetwPredictionEngine::replayed_tick_count() const {
+    return replayed_ticks;
+}
+
+int64_t NetwPredictionEngine::held_fact_total(int p_fact) const {
+    int64_t total = 0;
+    for (const KeyValue<int64_t, Ref<RefCounted>> &seated : entity_by_slot) {
+        total += held_fact_of(seated.key, p_fact);
+    }
+    return total;
+}
+#endif
 
 void NetwPredictionEngine::set_simulate(
     int64_t p_slot,
@@ -6152,6 +6167,7 @@ int NetwPredictionEngine::replay_reseed_horizon(
     const PackedStringArray &p_participants,
     const Callable &p_demote
 ) {
+    NETW_STAGE(ROLLBACK, "Predict replay horizon", colors::PREDICTION);
     NetwPrediction *handle = Object::cast_to<NetwPrediction>(handle_of(p_slot));
     if (handle == nullptr) {
         return 0;
@@ -6397,6 +6413,7 @@ int NetwPredictionEngine::replay_tick_window(
     const PackedStringArray &p_participants,
     const Callable &p_demote
 ) {
+    NETW_STAGE(ROLLBACK, "Predict replay window", colors::PREDICTION);
     const predict::Slot *row = row_of(p_slot);
     if (row == nullptr || !row->lane_open) {
         return 0;
@@ -6817,6 +6834,9 @@ void NetwPredictionEngine::close_recovery_rows(
 }
 
 void NetwPredictionEngine::note_replay_depth(int64_t p_slot, int p_depth) {
+#if defined(DEBUG_ENABLED)
+    replayed_ticks += p_depth;
+#endif
     predict::Slot *row = mutable_row_of(p_slot);
     if (row == nullptr) {
         return;
@@ -6831,6 +6851,7 @@ int NetwPredictionEngine::replay_authored_entries(
     const PackedStringArray &p_participants,
     const Callable &p_demote
 ) {
+    NETW_STAGE(ROLLBACK, "Predict replay entries", colors::PREDICTION);
     const predict::Slot *row = row_of(p_slot);
     if (row == nullptr) {
         return 0;

@@ -20,6 +20,7 @@
 #include "netw/profile.hpp"
 #include "netw/script/model.hpp"
 #include "netw/spawn/planner.hpp"
+#include "netw/stage.hpp"
 #include "netw/subsystems.hpp"
 #include "netw/synchronizers.hpp"
 
@@ -428,7 +429,7 @@ Ref<NetwEntity> Pipeline::replicate(
     Node *p_node,
     const Ref<NetwPlayer> &p_owner
 ) {
-    NETW_ZONE_NC("Spawn replicate", colors::LIVENESS);
+    NETW_STAGE(SPAWN, "Spawn replicate", colors::LIVENESS);
     if (p_node == nullptr) {
         NETW_ERR_V(
             Ref<NetwEntity>(),
@@ -489,7 +490,7 @@ Node *Pipeline::spawn(
     const Array &p_args,
     const Ref<NetwPlayer> &p_owner
 ) {
-    NETW_ZONE_NC("Spawn construct", colors::LIVENESS);
+    NETW_STAGE(SPAWN, "Spawn construct", colors::LIVENESS);
     Node *host = Object::cast_to<Node>(p_fn.get_object());
     if (host == nullptr) {
         NETW_ERR_V(
@@ -751,7 +752,7 @@ void Pipeline::schedule_armed_flush(int64_t p_route) {
 }
 
 void Pipeline::flush_armed_spawn(int64_t p_route) {
-    NETW_ZONE_NC("Spawn flush armed", colors::LIVENESS);
+    NETW_STAGE(SPAWN, "Spawn flush armed", colors::LIVENESS);
     NETW_ZONE_VALUE(p_route);
     NetwMultiplayer *plane = core();
     if (plane == nullptr) {
@@ -966,7 +967,7 @@ void Pipeline::settle_absence(int64_t p_route) {
 }
 
 void Pipeline::despawn_tracked_route(int64_t p_route) {
-    NETW_ZONE_NC("Spawn despawn route", colors::LIVENESS);
+    NETW_STAGE(SPAWN, "Spawn despawn route", colors::LIVENESS);
     NETW_ZONE_VALUE(p_route);
     NetwMultiplayer *plane = core();
     Object *seam = stage_seam(StringName("_spawn_undeclare"));
@@ -1646,7 +1647,7 @@ Error Pipeline::admission(
     int64_t p_channel,
     const PackedByteArray &p_payload
 ) {
-    NETW_ZONE_NC("Spawn admit frame", colors::LIVENESS);
+    NETW_STAGE(SPAWN, "Spawn admit frame", colors::LIVENESS);
     NETW_ZONE_VALUE(p_payload.size());
     NetwMultiplayer *plane = core();
     Object *shell = api();

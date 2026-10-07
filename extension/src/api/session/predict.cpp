@@ -38,6 +38,7 @@
 #include "netw/profile.hpp"
 #include "netw/script/model.hpp"
 #include "netw/session/frames.hpp"
+#include "netw/stage.hpp"
 #include "netw/synchronizers.hpp"
 #include "netw/wire/frame.hpp"
 #include "netw/wire/registry.hpp"
@@ -808,7 +809,11 @@ void NetwMultiplayer::predict_history_record(
     int p_schedule,
     bool p_include_unregistered
 ) {
-    NETW_ZONE_NC("Predict history record", colors::PREDICTION);
+    NETW_STAGE(
+        LAG_COMPENSATION,
+        "Predict history record",
+        colors::PREDICTION
+    );
     if (!lagcomp_configured || !is_host()) {
         return;
     }
@@ -1146,7 +1151,7 @@ void NetwMultiplayer::predict_history_record_tick(int64_t p_tick) {
 }
 
 void NetwMultiplayer::tick_step(double p_delta, int64_t p_tick) {
-    NETW_ZONE_NC("Simulation tick", colors::PREDICTION);
+    NETW_STAGE(SIMULATION, "Simulation tick", colors::PREDICTION);
     sim_contact_pass(p_tick);
     sim_drain_installs();
     sim_run(sim::Schedule::TICK, p_delta, p_tick);
@@ -1159,7 +1164,7 @@ void NetwMultiplayer::tick_step(double p_delta, int64_t p_tick) {
 }
 
 void NetwMultiplayer::before_frame_step() {
-    NETW_ZONE_NC("Frame start step", colors::PREDICTION);
+    NETW_STAGE(SIMULATION, "Frame start step", colors::PREDICTION);
     if (!lagcomp_configured) {
         return;
     }
@@ -1170,7 +1175,7 @@ void NetwMultiplayer::before_frame_step() {
 }
 
 void NetwMultiplayer::frame_step() {
-    NETW_ZONE_NC("Frame step", colors::PREDICTION);
+    NETW_STAGE(SIMULATION, "Frame step", colors::PREDICTION);
     const ClockEngine &clock = clock_engine();
     if (clock.is_simulating()) {
         sim_run(sim::Schedule::FRAME, clock.ticktime(), clock.get_tick() - 1);

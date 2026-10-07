@@ -193,7 +193,7 @@ public:
 
     int64_t byte_count() const;
 
-#if defined(NETW_PROFILING)
+#if defined(NETW_PROFILING) || defined(DEBUG_ENABLED)
     int64_t held_bytes() const;
     int64_t peer_bytes() const;
 #endif

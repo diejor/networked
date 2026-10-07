@@ -432,7 +432,7 @@ public:
         return tables.size();
     }
 
-#if defined(NETW_PROFILING)
+#if defined(NETW_PROFILING) || defined(DEBUG_ENABLED)
     int64_t row_bytes() const;
     int64_t peer_bytes() const;
     int64_t flight_bytes() const;

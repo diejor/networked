@@ -627,7 +627,7 @@ int64_t Table::byte_count() const {
     return bytes;
 }
 
-#if defined(NETW_PROFILING)
+#if defined(NETW_PROFILING) || defined(DEBUG_ENABLED)
 int64_t Table::held_bytes() const {
     int64_t bytes = int64_t(sizeof(Table)) + held::vector(columns)
         + held::vector(slots) + held::vector(routes) + held::vector(owners)

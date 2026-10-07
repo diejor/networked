@@ -35,6 +35,7 @@
 #include "netw/repl/set_model.hpp"
 #include "netw/schema_model.hpp"
 #include "netw/script/model.hpp"
+#include "netw/stage.hpp"
 #include "netw/sync_authoring.hpp"
 #include "netw/synchronizers.hpp"
 #include "netw/wire/control_record.hpp"
@@ -289,7 +290,7 @@ Error NetwMultiplayer::receive_carrier(
     int64_t p_seq,
     int64_t p_base_tick
 ) {
-    NETW_ZONE_NC("Receive carrier", colors::WIRE);
+    NETW_STAGE(RECEIVE, "Receive carrier", colors::WIRE);
     NETW_ZONE_TEXT_F("peer %lld", static_cast<long long>(p_sender));
     ReplicationCore *plane = (get_replication_plane());
     if (plane == nullptr) {
@@ -490,7 +491,7 @@ Error NetwMultiplayer::sync_send_signal(
 }
 
 RID NetwMultiplayer::entity_replicate(Object *p_node, Object *p_owner) {
-    NETW_ZONE_NC("Spawn replicate", colors::LIVENESS);
+    NETW_STAGE(SPAWN, "Spawn replicate", colors::LIVENESS);
     spawn::Pipeline *pipeline = spawn_plane();
     NETW_ERR_COND_V(
         pipeline == nullptr,
@@ -777,7 +778,7 @@ void NetwMultiplayer::sync_pump_rows(
     const Callable &p_bind,
     const Callable &p_tap
 ) {
-    NETW_ZONE_NC("Pull pass", colors::WIRE);
+    NETW_STAGE(PULL, "Pull pass", colors::WIRE);
     if (p_model == nullptr) {
         return;
     }
@@ -871,7 +872,7 @@ void NetwMultiplayer::sync_flush_rows(
     int64_t p_window_channel,
     int64_t p_delta_channel
 ) {
-    NETW_ZONE_NC("Send pass", colors::WIRE);
+    NETW_STAGE(SEND, "Send pass", colors::WIRE);
     if (p_send == nullptr) {
         return;
     }
@@ -1367,7 +1368,7 @@ void NetwMultiplayer::display_resolve_role(display::Runtime *p_runtime) {
         idle_work.role_resolves += 1;
 #endif
         {
-            NETW_ZONE_NC("Display settle body", colors::INTERP);
+            NETW_STAGE(DISPLAY, "Display settle body", colors::INTERP);
             sim_settle_body(p_runtime->entity());
         }
         display::resolve_role(p_runtime, display_hooks);
