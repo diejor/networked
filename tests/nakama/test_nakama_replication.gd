@@ -25,7 +25,7 @@ func after_test() -> void:
 
 func test_multiple_levels_players_spawn_and_replicate() -> void:
 	var host := await NakamaTestSupport.host_scene(self, MAIN, "valeria")
-	var host_tree := host.tree as MultiplayerTree
+	var host_tree := host.tree as MultiplayerViewport
 	_track(host_tree)
 
 	var jose_tree := await NakamaTestSupport.join_scene(
@@ -72,7 +72,7 @@ func test_multiple_levels_players_spawn_and_replicate() -> void:
 	player.pressed[&"move_right"] = false
 
 
-func _track(tree: MultiplayerTree) -> void:
+func _track(tree: MultiplayerViewport) -> void:
 	_trees.append(tree)
 
 
@@ -91,7 +91,7 @@ func _await(
 			.is_true()
 
 
-func _has_players(tree: MultiplayerTree, usernames: Array[String]) -> bool:
+func _has_players(tree: MultiplayerViewport, usernames: Array[String]) -> bool:
 	if not is_instance_valid(tree):
 		return false
 	for username in usernames:
@@ -101,9 +101,9 @@ func _has_players(tree: MultiplayerTree, usernames: Array[String]) -> bool:
 
 
 func _all_players_spawned(
-		host_tree: MultiplayerTree,
-		jose_tree: MultiplayerTree,
-		mia_tree: MultiplayerTree,
+		host_tree: MultiplayerViewport,
+		jose_tree: MultiplayerViewport,
+		mia_tree: MultiplayerViewport,
 ) -> bool:
 	var expected: Array[String] = ["valeria", "jose", "mia"]
 	return _has_players(host_tree, expected) \
@@ -112,7 +112,7 @@ func _all_players_spawned(
 
 
 func _player_x_greater(
-		tree: MultiplayerTree,
+		tree: MultiplayerViewport,
 		username: String,
 		threshold: float,
 ) -> bool:
@@ -120,7 +120,7 @@ func _player_x_greater(
 	return player != null and player.position.x > threshold
 
 
-func _find_player(tree: MultiplayerTree, username: String) -> Node:
+func _find_player(tree: MultiplayerViewport, username: String) -> Node:
 	var username_id := StringName(username)
 	for player: NetwEntity in tree.api.bodies:
 		if player.name == username_id:

@@ -32,7 +32,7 @@ Methods
    +-------------------+----------------------------------------------------------------------------------------------------------------------------------------------------+
    | :godot:`Callable` | :ref:`get_eraser<class_addons_networked_test_gdunit4_gdunit_error_scrubber_gd_method_get_eraser>`\ (\ ) |static|                                   |
    +-------------------+----------------------------------------------------------------------------------------------------------------------------------------------------+
-   | |void|            | :ref:`erase_matching<class_addons_networked_test_gdunit4_gdunit_error_scrubber_gd_method_erase_matching>`\ (\ markers\: :godot:`Array`\ ) |static| |
+   | :godot:`int`      | :ref:`erase_matching<class_addons_networked_test_gdunit4_gdunit_error_scrubber_gd_method_erase_matching>`\ (\ markers\: :godot:`Array`\ ) |static| |
    +-------------------+----------------------------------------------------------------------------------------------------------------------------------------------------+
 
 .. rst-class:: classref-section-separator
@@ -50,7 +50,7 @@ Method Descriptions
 
 :godot:`Callable` **get_eraser**\ (\ ) |static| :ref:`🔗<class_addons_networked_test_gdunit4_gdunit_error_scrubber_gd_method_get_eraser>`
 
-Returns an eraser as a :godot:`Callable` matching ``func(Array[String]) -> void``.
+Returns an eraser as a :godot:`Callable` matching ``func(Array[String]) -> int``.
 
 .. rst-class:: classref-item-separator
 
@@ -60,9 +60,13 @@ Returns an eraser as a :godot:`Callable` matching ``func(Array[String]) -> void`
 
 .. rst-class:: classref-method
 
-|void| **erase_matching**\ (\ markers\: :godot:`Array`\ ) |static| :ref:`🔗<class_addons_networked_test_gdunit4_gdunit_error_scrubber_gd_method_erase_matching>`
+:godot:`int` **erase_matching**\ (\ markers\: :godot:`Array`\ ) |static| :ref:`🔗<class_addons_networked_test_gdunit4_gdunit_error_scrubber_gd_method_erase_matching>`
 
-Erases every recorded error whose message contains all of ``markers``.  Every marker must match, so a caller narrows by adding one rather than by writing a pattern. Erasing is deliberately all-or-nothing per entry: an error that matched is one the caller has already argued is benign.
+Erases every recorded error or warning whose message contains all of ``markers``, and returns how many it erased.  Every marker must match, so a caller narrows by adding one rather than by writing a pattern. A case that provokes a fault on purpose asserts the count, so the fault is checked rather than hidden.
+
+::
+
+    assert_int(await erase_matching(["joined with no arguments"])).is_equal(1)
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

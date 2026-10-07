@@ -44,11 +44,6 @@ Error NetwMultiplayer::config_readiness(String &r_reason) {
         const session_decl::Resolved offered
             = declaration_book().resolve(this, kind);
         if (offered.state == session_decl::ABSENT) {
-            if (kind == session_decl::KIND_SESSION_CONFIG
-                && session_fallback.is_valid()) {
-                session_initialize(session_fallback);
-                session_apply_role_constraint();
-            }
             continue;
         }
         if (offered.state == session_decl::READY) {
@@ -86,20 +81,15 @@ void NetwMultiplayer::config_settle() {
     }
 
     const int session = slot_of(session_decl::KIND_SESSION_CONFIG);
-    if (!config_consumption[session].consumed) {
-        if (offered[session].state == session_decl::READY) {
-            const Ref<NetwSessionConfig> draft = offered[session].payload;
-            if (draft.is_valid()) {
-                session_report_discarded_fallback(offered[session].scope);
-                session_initialize(draft);
-                config_consumption[session].generation
-                    = offered[session].generation;
-                draft->seal(offered[session].scope);
-            }
-        } else if (session_fallback.is_valid()) {
-            session_initialize(session_fallback);
+    if (!config_consumption[session].consumed
+        && offered[session].state == session_decl::READY) {
+        const Ref<NetwSessionConfig> draft = offered[session].payload;
+        if (draft.is_valid()) {
+            session_initialize(draft);
+            config_consumption[session].generation
+                = offered[session].generation;
+            draft->seal(offered[session].scope);
         }
-        session_apply_role_constraint();
     }
 
     const int clock = slot_of(session_decl::KIND_CLOCK_CONFIG);
@@ -149,27 +139,6 @@ void NetwMultiplayer::config_settle() {
             register_prediction(wrapper);
         }
     }
-}
-
-void NetwMultiplayer::session_report_discarded_fallback(const String &p_scope) {
-    if (session_fallback.is_null()) {
-        return;
-    }
-    const String lost = session_fallback->non_default_fields();
-    if (lost.is_empty()) {
-        return;
-    }
-    Node *source
-        = Object::cast_to<Node>(gd::object_of(session_fallback_source));
-    NETW_WARN(
-        sys::SESSION,
-        "Netw.configure_session on '%s' replaces the session settings set on "
-        "'%s', so these are ignored: %s. Put all session settings in "
-        "Netw.configure_session.",
-        p_scope,
-        source != nullptr ? String(source->get_name()) : String("a freed node"),
-        lost
-    );
 }
 
 void NetwMultiplayer::config_consume_lagcomp_defaults() {

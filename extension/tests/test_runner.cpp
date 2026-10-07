@@ -621,16 +621,6 @@ void NetwNativeTests::_bind_methods() {
     );
     ClassDB::bind_static_method(
         "NetwNativeTests",
-        D_METHOD("scene_ensure_host_view", "session"),
-        &NetwNativeTests::scene_ensure_host_view
-    );
-    ClassDB::bind_static_method(
-        "NetwNativeTests",
-        D_METHOD("scene_release_host_view", "session"),
-        &NetwNativeTests::scene_release_host_view
-    );
-    ClassDB::bind_static_method(
-        "NetwNativeTests",
         D_METHOD("scene_container_meta"),
         &NetwNativeTests::scene_container_meta
     );
@@ -871,17 +861,6 @@ Ref<NetwPromise> NetwNativeTests::scene_pending_request(
                               : Ref<NetwPromise>();
 }
 
-void NetwNativeTests::scene_ensure_host_view(NetwMultiplayer *session) {
-    if (session != nullptr) {
-        session->scene_ensure_host_view();
-    }
-}
-
-void NetwNativeTests::scene_release_host_view(NetwMultiplayer *session) {
-    if (session != nullptr) {
-        session->scene_release_host_view();
-    }
-}
 
 bool NetwNativeTests::rpc_sender_admits(
     NetwMultiplayer *p_session,

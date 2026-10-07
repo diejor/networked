@@ -2,7 +2,7 @@ class_name TestNetwHarnessSession
 extends NetwTestSuite
 
 var session: NetwHarnessSession
-var _trees: Array[MultiplayerTree] = []
+var _trees: Array[MultiplayerViewport] = []
 
 
 func before_test() -> void:
@@ -23,7 +23,6 @@ func after_test() -> void:
 func test_adapter_helper_flow() -> void:
 	var tree := _make_tree(NetwSession.ROLE_CLIENT, "AdapterTree")
 	session.adopt_tree(tree, NetwSession.ROLE_CLIENT)
-	assert_that(tree.peer_class).is_equal(&"LocalMultiplayerPeer")
 
 	var adapter := NetwHarnessSession.LoopbackAdapter.new(session.session())
 	var server: MultiplayerPeer = adapter.make_peer(
@@ -171,8 +170,8 @@ func test_the_tolerated_error_is_named_by_every_marker() -> void:
 func _make_tree(
 		role: NetwSession.Role,
 		tree_name: String,
-) -> MultiplayerTree:
-	var tree := MultiplayerTree.new()
+) -> MultiplayerViewport:
+	var tree := MultiplayerViewport.new()
 	tree.name = tree_name
 	session.adopt_tree(tree, role)
 	add_child(tree)

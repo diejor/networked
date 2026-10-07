@@ -2,8 +2,8 @@ class_name NetwScopedWorld
 extends NetwEmbeddingWorld
 
 var _anchor: Node
-var _server_tree: MultiplayerTree
-var _client_trees: Array[MultiplayerTree] = []
+var _server_tree: MultiplayerViewport
+var _client_trees: Array[MultiplayerViewport] = []
 var _host_api: NetwMultiplayer
 var _initial_scene: PackedScene
 
@@ -24,7 +24,6 @@ func host() -> NetwMultiplayer:
 	if _host_api != null:
 		return _host_api
 	_server_tree = _make_tree(&"ScopedWorldServer")
-	_server_tree.desired_role = NetwSession.ROLE_LISTEN_SERVER
 	_anchor.add_child(_server_tree)
 
 	var loopback := LocalLoopbackSession.get_shared_session()
@@ -52,7 +51,6 @@ func add_client(username: String) -> NetwMultiplayer:
 	var tree := _make_tree(
 		StringName("ScopedWorldClient%d" % _client_trees.size()),
 	)
-	tree.desired_role = NetwSession.ROLE_CLIENT
 	_anchor.add_child(tree)
 	_client_trees.append(tree)
 
@@ -87,9 +85,7 @@ func dispose() -> void:
 	_host_api = null
 
 
-func _make_tree(node_name: StringName) -> MultiplayerTree:
-	var tree := MultiplayerTree.new()
+func _make_tree(node_name: StringName) -> MultiplayerViewport:
+	var tree := MultiplayerViewport.new()
 	tree.name = node_name
-	tree.auto_host_headless = false
-	tree.peer_class = &"LocalMultiplayerPeer"
 	return tree

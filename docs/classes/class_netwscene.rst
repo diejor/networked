@@ -237,7 +237,7 @@ The scene shares the physics and rendering world with the rest of the game.
 
 :ref:`SceneIsolation<enum_NetwScene_SceneIsolation>` **SCENE_ISOLATION_OWN_WORLD** = ``1``
 
-On the server, the scene gets a :godot:`SubViewport` with its own world, so two scenes never collide. Clients use a plain :godot:`Node`.
+The scene gets its own physics and rendering world on every peer. :ref:`NetwSceneConfig.isolated()<class_NetwSceneConfig_method_isolated>` sets it.
 
 .. rst-class:: classref-section-separator
 
@@ -354,7 +354,7 @@ The :godot:`RID` of the scene's entity, invalid outside a session. The ``scene_*
 
 - :godot:`Node` **get_root**\ (\ )
 
-The node the scene was declared on, ``null`` outside a session. When the scene is :ref:`NetwSceneConfig.isolated()<class_NetwSceneConfig_method_isolated>`, :ref:`Netw.spawn()<class_Netw_method_spawn>` returns :ref:`world<class_NetwScene_property_world>` and this is the node inside it.
+The node the scene was declared on, ``null`` outside a session. When the scene is :ref:`NetwSceneConfig.isolated()<class_NetwSceneConfig_method_isolated>`, :ref:`Netw.spawn()<class_Netw_method_spawn>` returns the :ref:`StretchViewportContainer<class_StretchViewportContainer>` holding :ref:`world<class_NetwScene_property_world>`, and this is the node inside :ref:`world<class_NetwScene_property_world>`.
 
 .. rst-class:: classref-item-separator
 

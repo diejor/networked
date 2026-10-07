@@ -1,4 +1,4 @@
-## Prepares a player and hosts or joins through a [MultiplayerTree]'s own
+## Prepares a player and hosts or joins through a [MultiplayerViewport]'s own
 ## transport, for fixtures whose backend cannot build a peer by itself.
 ##
 ## A test that already knows how to build its peer assigns it directly and
@@ -6,6 +6,7 @@
 ## [codeblock]
 ## var settled := await NetwOrdinarySetup.connect_through(
 ##         tree,
+##         &"NakamaRelayPeer",
 ##         NetwConnection.TRANSPORT_MODE_CLIENT,
 ##         room,
 ##         { },
@@ -13,7 +14,7 @@
 ## )
 ## assert(settled.error == OK)
 ## [/codeblock]
-## The transport is named by [member MultiplayerTree.peer_class], and an empty
+## The transport is named by the peer class the caller passes, and an empty
 ## username connects without seating a local player, which is what a dedicated
 ## host wants.
 class_name NetwOrdinarySetup
@@ -36,7 +37,8 @@ class Outcome:
 ## [method NetwConnection.host] or [method NetwConnection.join], and settles
 ## once the session is online or the attempt failed.
 static func connect_through(
-		tree: MultiplayerTree,
+		tree: MultiplayerViewport,
+		peer_class: StringName,
 		mode: NetwConnection.TransportMode,
 		address: String,
 		settings: Dictionary,
@@ -49,9 +51,9 @@ static func connect_through(
 		tree.api.session_prepare_join(username, join_args)
 	var attempt: NetwPromise
 	if mode == NetwConnection.TRANSPORT_MODE_HOST:
-		attempt = connection.host(tree.peer_class, settings)
+		attempt = connection.host(peer_class, settings)
 	else:
-		var endpoint := connection.add(tree.peer_class, address)
+		var endpoint := connection.add(peer_class, address)
 		attempt = connection.join(endpoint, settings)
 	if not attempt.is_settled:
 		await attempt.wait()

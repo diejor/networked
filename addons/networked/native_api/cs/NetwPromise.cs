@@ -351,7 +351,13 @@ public sealed class NetwPromise : NetwRefCounted
     /// <see cref="NetwPromise.Settled"/>, then calls the
     /// <see cref="NetwPromise.CatchError"/> callbacks, then fires every
     /// <see cref="NetwPromise.Wait"/> signal. Does nothing when already
-    /// settled. Pushes a warning when nothing handles the failure.
+    /// settled. A failed promise pushes one warning when it is freed and
+    /// nothing read its failure through <see cref="NetwPromise.CatchError"/>,
+    /// <see cref="NetwPromise.Wait"/>, <see cref="NetwPromise.WhenSettled"/>,
+    /// <see cref="NetwPromise.Answer"/>, <see cref="NetwPromise.IsFailed"/>,
+    /// <see cref="NetwPromise.Code"/>, <see cref="NetwPromise.Detail"/> or a
+    /// connection to <see cref="NetwPromise.Settled"/>. A failure with
+    /// <c>@GlobalScope.ERR_SKIP</c> means cancelled and never warns.
     /// </summary>
     public void Reject(Error errCode, string errDetail = "")
     {

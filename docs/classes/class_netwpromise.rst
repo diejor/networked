@@ -251,7 +251,7 @@ Calls ``cb`` as ``cb(code, detail)`` when the promise fails. Returns the promise
 
 |void| **reject**\ (\ err_code\: :godot:`Error <@GlobalScope#enum_@globalscope_Error>`, err_detail\: :godot:`String` = ""\ ) :ref:`🔗<class_NetwPromise_method_reject>`
 
-Fails the promise with ``err_code``. Emits :ref:`settled<class_NetwPromise_signal_settled>`, then calls the :ref:`catch_error()<class_NetwPromise_method_catch_error>` callbacks, then fires every :ref:`wait()<class_NetwPromise_method_wait>` signal. Does nothing when already settled. Pushes a warning when nothing handles the failure.
+Fails the promise with ``err_code``. Emits :ref:`settled<class_NetwPromise_signal_settled>`, then calls the :ref:`catch_error()<class_NetwPromise_method_catch_error>` callbacks, then fires every :ref:`wait()<class_NetwPromise_method_wait>` signal. Does nothing when already settled. A failed promise pushes one warning when it is freed and nothing read its failure through :ref:`catch_error()<class_NetwPromise_method_catch_error>`, :ref:`wait()<class_NetwPromise_method_wait>`, :ref:`when_settled()<class_NetwPromise_method_when_settled>`, :ref:`answer()<class_NetwPromise_method_answer>`, :ref:`is_failed<class_NetwPromise_property_is_failed>`, :ref:`code<class_NetwPromise_property_code>`, :ref:`detail<class_NetwPromise_property_detail>` or a connection to :ref:`settled<class_NetwPromise_signal_settled>`. A failure with :godot:`@GlobalScope.ERR_SKIP <@GlobalScope#class_@GlobalScope_constant_ERR_SKIP>` means cancelled and never warns.
 
 .. rst-class:: classref-item-separator
 

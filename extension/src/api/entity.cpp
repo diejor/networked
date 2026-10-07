@@ -46,7 +46,6 @@ constexpr const char *SIG_CONTROL_REQUESTED = "control_requested";
 constexpr const char *SIG_LIFECYCLE_REQUESTED = "lifecycle_requested";
 constexpr const char *SIG_LIFECYCLE_REFUSED = "lifecycle_refused";
 constexpr const char *SIG_REPARENTED = "reparented";
-constexpr const char *SIG_VIEW_ACTIVATED = "view_activated";
 
 NetwMultiplayer *session_on_branch(Node *p_node) {
     if (p_node == nullptr || !p_node->is_inside_tree()) {
@@ -2756,7 +2755,6 @@ void NetwEntity::_bind_methods() {
         )
     ));
     ADD_SIGNAL(MethodInfo(SIG_REPARENTED));
-    ADD_SIGNAL(MethodInfo(SIG_VIEW_ACTIVATED));
 
     ClassDB::bind_integer_constant(
         get_class_static(),

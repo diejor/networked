@@ -6,7 +6,7 @@ const BROWSER := preload(
 	"res://addons/networked/gdscript/connect/ui/connect_browser.tscn"
 )
 
-var tree: MultiplayerTree
+var tree: MultiplayerViewport
 var connection: NetwConnection
 var browser: ConnectBrowser
 
@@ -38,8 +38,7 @@ class SmallServer:
 
 
 func before_test() -> void:
-	tree = MultiplayerTree.new()
-	tree.auto_host_headless = false
+	tree = MultiplayerViewport.new()
 	add_child(tree)
 	connection = Netw.session(tree).connection
 	browser = BROWSER.instantiate()

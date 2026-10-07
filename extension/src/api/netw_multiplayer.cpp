@@ -5,7 +5,7 @@
 #include "netw/api/join_config.hpp"
 #include "netw/diag/hints.hpp"
 #include "netw/api/lag_compensation_config.hpp"
-#include "netw/api/nodes/multiplayer_tree.hpp"
+#include "netw/api/nodes/multiplayer_viewport.hpp"
 #include "netw/api/scene.hpp"
 #include "netw/spawn/pipeline.hpp"
 
@@ -85,6 +85,12 @@ const char *SIG_PEER_PACKET = "peer_packet";
 const char *SIG_SERVER_DISCONNECTED = "server_disconnected";
 constexpr int POLLS_BEFORE_TURNED_AWAY_PEER_DROPS = 2;
 const char *LAGGY_PEER_CLASS = "LaggyMultiplayerPeer";
+
+bool names_the_root_window(const Variant &p_configuration) {
+    Node *root = gd::scene_root();
+    return root != nullptr && p_configuration.get_type() == Variant::NODE_PATH
+        && NodePath(p_configuration) == root->get_path();
+}
 
 } // namespace
 
@@ -658,8 +664,9 @@ void NetwMultiplayer::membership_place_body(const Ref<NetwEntity> &p_entity) {
     if (membership_destination_foreign(owner)) {
         NETW_ERROR(
             sys::SCENE,
-            "Entity %d was moved under another MultiplayerTree, which is not "
-            "supported. Despawn it here and spawn it in the other tree.",
+            "Entity %d was moved under another MultiplayerViewport, which is "
+            "not supported. Despawn it here and spawn it in the other "
+            "viewport.",
             int(p_entity->get_route())
         );
         scene = RID();
@@ -1889,10 +1896,6 @@ void NetwMultiplayer::session_announce_entered() {
     if (clock_handshakes_on_enter) {
         clock_start_handshake();
     }
-    if (MultiplayerTree *tree
-        = Object::cast_to<MultiplayerTree>(gd::object_of(session_tree))) {
-        tree->finalize_session();
-    }
     if (session_handle.is_valid()) {
         session_handle->announce_entered();
     }
@@ -1921,10 +1924,6 @@ void NetwMultiplayer::session_announce_ended() {
     session_settle_clear_state();
     clear_roster();
     session_set_role(ROLE_NONE);
-    if (MultiplayerTree *tree
-        = Object::cast_to<MultiplayerTree>(gd::object_of(session_tree))) {
-        tree->teardown_session();
-    }
     notify(SESSION_ENDED);
     scene_on_session_reclaimed();
     notify(SESSION_RECLAIMED);
@@ -1955,10 +1954,6 @@ void NetwMultiplayer::session_note_exit(
     }
     session_exit_reason = int(p_reason);
     session_exit_detail = p_detail;
-}
-
-void NetwMultiplayer::session_set_tree(MultiplayerTree *p_tree) {
-    session_tree = gd::instance_id(p_tree);
 }
 
 void NetwMultiplayer::session_announce_edge(int p_old, int p_new) {
@@ -2899,7 +2894,7 @@ Error NetwMultiplayer::NETW_API_VIRTUAL(poll)() {
         return OK;
     }
     NETW_NETWORK_PROFILE(profiler_poll());
-    embed_autosettle_tree_default();
+    embed_settle_on_first_poll();
     {
         NETW_ZONE_NC("Transport poll", colors::TRANSPORT);
         if (inner.is_null() && effective_peer.is_valid()) {
@@ -3764,7 +3759,12 @@ Error NetwMultiplayer::NETW_API_VIRTUAL(object_configuration_remove)(
     if (plane != nullptr && node != nullptr && sync != nullptr) {
         return plane->get_sync_compat()->consume_remove(node, sync);
     }
-    return inner->object_configuration_remove(p_object, p_configuration);
+    const Error removed
+        = inner->object_configuration_remove(p_object, p_configuration);
+    if (p_object == nullptr && names_the_root_window(p_configuration)) {
+        embed_dispose();
+    }
+    return removed;
 }
 
 void NetwMultiplayer::set_peer_ids(const PackedInt32Array &p_peer_ids) {
@@ -4448,38 +4448,6 @@ Error NetwMultiplayer::session_initialize(
     return OK;
 }
 
-void NetwMultiplayer::session_offer_fallback(
-    const Ref<NetwSessionConfig> &p_draft,
-    Object *p_source
-) {
-    const ObjectID source = gd::instance_id(p_source);
-    NETW_ERR_COND(
-        session_fallback.is_valid() && session_fallback_source != source
-            && gd::object_of(session_fallback_source) != nullptr,
-        sys::SESSION,
-        "Two nodes declare session settings for the same session. Keep one "
-        "Netw.configure_session declaration on the session's branch."
-    );
-    session_fallback = p_draft;
-    session_fallback_source = source;
-    declarations_changed();
-}
-
-void NetwMultiplayer::session_constrain_role(Role p_role) {
-    session_role_constraint = int64_t(p_role);
-    if (config_is_consumed(session_decl::KIND_SESSION_CONFIG)) {
-        session_apply_role_constraint();
-    }
-}
-
-void NetwMultiplayer::session_apply_role_constraint() {
-    if (session_role_constraint < 0) {
-        return;
-    }
-    session_settings.desired_role = session_role_constraint;
-    session_push_desired_role();
-}
-
 NetwMultiplayer::JoinPlan NetwMultiplayer::session_resolve_join() {
     JoinPlan plan;
     plan.available = true;
@@ -4907,11 +4875,6 @@ NetwMultiplayer::Role NetwMultiplayer::session_get_authored_role() const {
     return Role(named);
 }
 
-bool NetwMultiplayer::presents_as_listen_host() const {
-    return session_get_role() == ROLE_LISTEN_SERVER
-        || session_get_authored_role() == ROLE_LISTEN_SERVER;
-}
-
 void NetwMultiplayer::set_relay_sender(int64_t p_sender) {
     dispatching_sender = p_sender;
 }
@@ -5033,7 +4996,7 @@ Ref<NetwMultiplayer> NetwMultiplayer::create(
         if (!is_extension_script(selected)) {
             NETW_ERROR(
                 sys::SESSION,
-                "MultiplayerTree.api_script does not extend NetwMultiplayer. "
+                "The script for a new NetwMultiplayer does not extend it. "
                 "Use a script that starts with 'extends NetwMultiplayer'."
             );
             return Ref<NetwMultiplayer>();
@@ -5043,9 +5006,6 @@ Ref<NetwMultiplayer> NetwMultiplayer::create(
         );
     } else {
         made.instantiate();
-    }
-    if (made.is_valid()) {
-        made->embed_autosettle_pending = false;
     }
     return made;
 }
@@ -5071,18 +5031,12 @@ void NetwMultiplayer::restore_default_interface() {
     MultiplayerAPI::set_default_interface(restoring);
 }
 
-void NetwMultiplayer::embed_autosettle_tree_default() {
-    if (!embed_autosettle_pending) {
+void NetwMultiplayer::embed_settle_on_first_poll() {
+    if (embed_phase_value != EMBED_PHASE_DECLARING
+        || session_root() == nullptr) {
         return;
     }
-    embed_autosettle_pending = false;
-    if (embed_phase_value != EMBED_PHASE_DECLARING) {
-        return;
-    }
-    SceneTree *tree = gd::scene_tree();
-    if (tree != nullptr && tree->get_multiplayer().ptr() == this) {
-        embed_settle();
-    }
+    embed_settle();
 }
 
 void NetwMultiplayer::peer_forget(int64_t p_peer) {

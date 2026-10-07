@@ -12,14 +12,14 @@ NetwGameHarness
 
 **Inherits:** :godot:`Node`
 
-Session coordinator for slot based game integration tests.
+Session coordinator for game integration tests that run every peer in one process.
 
 .. rst-class:: classref-introduction-group
 
 Description
 -----------
 
-:ref:`add_host()<class_NetwGameHarness_method_add_host>`, :ref:`add_client()<class_NetwGameHarness_method_add_client>`, and :ref:`sync_ticks()<class_NetwGameHarness_method_sync_ticks>` drive real game scenes through one :ref:`LocalLoopbackSession<class_LocalLoopbackSession>`. Per peer input lives on the returned :ref:`NetwSceneRunner<class_NetwSceneRunner>`.  A game scene may author its own :ref:`MultiplayerTree<class_MultiplayerTree>` or carry none. When the instantiated scene holds no tree, :ref:`add_host()<class_NetwGameHarness_method_add_host>` and :ref:`add_client()<class_NetwGameHarness_method_add_client>` wrap it in a harness-constructed :ref:`MultiplayerTree<class_MultiplayerTree>`, one per participant window, so a scene the game natively swaps needs no authored session node.
+:ref:`add_host()<class_NetwGameHarness_method_add_host>`, :ref:`add_client()<class_NetwGameHarness_method_add_client>`, and :ref:`sync_ticks()<class_NetwGameHarness_method_sync_ticks>` drive real game scenes through one :ref:`LocalLoopbackSession<class_LocalLoopbackSession>`. Per peer input lives on the returned :ref:`NetwSceneRunner<class_NetwSceneRunner>`.  Each peer runs in its own :ref:`MultiplayerViewport<class_MultiplayerViewport>`. A game scene may author that tree or carry none. When the instantiated scene holds no tree, :ref:`add_host()<class_NetwGameHarness_method_add_host>` and :ref:`add_client()<class_NetwGameHarness_method_add_client>` wrap it in one the harness builds, so a scene the game natively swaps needs no authored session node.
 
 .. rst-class:: classref-reftable-group
 
@@ -60,7 +60,7 @@ Methods
    +-------------------------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | |void|                                                      | :ref:`watch_frames<class_NetwGameHarness_method_watch_frames>`\ (\ n\: :godot:`int`\ )                                                                                           |
    +-------------------------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`ParticipantViewport<class_ParticipantViewport>`       | :ref:`show_views<class_NetwGameHarness_method_show_views>`\ (\ )                                                                                                                 |
+   | :godot:`Window`                                             | :ref:`show_views<class_NetwGameHarness_method_show_views>`\ (\ )                                                                                                                 |
    +-------------------------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | :ref:`NetwLink.NetwLinkMulti<class_NetwLink_NetwLinkMulti>` | :ref:`degrade<class_NetwGameHarness_method_degrade>`\ (\ runner\: :ref:`NetwSceneRunner<class_NetwSceneRunner>`\ )                                                               |
    +-------------------------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
@@ -107,6 +107,14 @@ Constants
 	There is currently no description for this constant. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
 
 
+
+.. _class_NetwGameHarness_constant_VIEW_SIZE:
+
+.. rst-class:: classref-constant
+
+**VIEW_SIZE** = ``Vector2(576, 324)`` :ref:`🔗<class_NetwGameHarness_constant_VIEW_SIZE>`
+
+The size of each runner's :ref:`MultiplayerViewport<class_MultiplayerViewport>` while the views are hidden, and the smallest size of its view in :ref:`show_views()<class_NetwGameHarness_method_show_views>`.
 
 .. _class_NetwGameHarness_constant_DEFAULT_WALL_CLOCK_BUDGET_MS:
 
@@ -265,9 +273,9 @@ Advances ordinary frames without asserting network tick progress.  Use this for 
 
 .. rst-class:: classref-method
 
-:ref:`ParticipantViewport<class_ParticipantViewport>` **show_views**\ (\ ) :ref:`🔗<class_NetwGameHarness_method_show_views>`
+:godot:`Window` **show_views**\ (\ ) :ref:`🔗<class_NetwGameHarness_method_show_views>`
 
-Displays every participant window in one window.  Tests remain headless unless this method is called.
+Shows every runner's :ref:`MultiplayerViewport<class_MultiplayerViewport>` in one window and returns that window.  The window holds a :godot:`GridContainer` with one :ref:`StretchViewportContainer<class_StretchViewportContainer>` per runner. Runners added later join the same grid. Tests remain headless unless this method is called.
 
 .. rst-class:: classref-item-separator
 
@@ -339,7 +347,7 @@ Returns fluent inbound link control for ``runner``'s loopback peer.  Prefer :ref
 
 |void| **teardown**\ (\ ) :ref:`🔗<class_NetwGameHarness_method_teardown>`
 
-Frees all participant windows and resets global harness state.
+Frees every runner's :ref:`MultiplayerViewport<class_MultiplayerViewport>` and resets global harness state.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

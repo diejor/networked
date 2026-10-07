@@ -103,17 +103,23 @@ public sealed class NetwSceneConfig : NetwRefCounted
         NetwApi.MethodBind("NetwSceneConfig", "isolated", 973840745UL);
 
     /// <summary>
-    /// Gives the scene its own physics and render world, so it does not collide
-    /// with or draw over other scenes. <see cref="Netw.Spawn"/> then returns a
-    /// <see cref="SubViewport"/> with the scene root inside, and that is what
-    /// the caller parents.
+    /// Gives this scene its own physics and rendering world on every peer.
     /// <code>
-    /// var mount := Netw.spawn(spawn_level1)   # a SubViewport
-    /// worlds.add_child(mount)
+    /// Main
+    /// └ Level1View       a StretchViewportContainer
+    ///   └ Level1World    a SubViewport
+    ///     └ Level1       your scene
     /// </code>
     /// <para>
-    /// On a listen server, <see cref="HostSceneView"/> draws it while it is the
-    /// <see cref="NetwPlayer.Scene"/> of the host's player.
+    /// - An absolute path such as <c>/root/Main/Level1</c> does not reach the
+    /// scene. Use relative paths or <see cref="Netw.Scene"/>.
+    /// - <c>Node.get_viewport</c> answers the scene's
+    /// <see cref="SubViewport"/>, not the window.
+    /// - Only the scene your player is in is drawn and takes input. The others
+    /// keep running.
+    /// - Each isolated scene runs its own physics world, which costs CPU every
+    /// physics tick. Isolate a scene only when it can be loaded next to
+    /// another.
     /// </para>
     /// </summary>
     public NetwSceneConfig Isolated()

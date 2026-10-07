@@ -1,61 +1,12 @@
 #include "netw/api/nodes/view/stretch.hpp"
 
 #include "godot/math.hpp"
-#include "godot/project_settings.hpp"
 
 using namespace godot;
 
 namespace netw::view {
 
 namespace {
-
-const char *SETTING_MODE = "display/window/stretch/mode";
-const char *SETTING_ASPECT = "display/window/stretch/aspect";
-const char *SETTING_SCALE = "display/window/stretch/scale";
-const char *SETTING_SCALE_MODE = "display/window/stretch/scale_mode";
-const char *SETTING_WIDTH = "display/window/size/viewport_width";
-const char *SETTING_HEIGHT = "display/window/size/viewport_height";
-
-Variant setting(const char *p_name, const Variant &p_default) {
-    ProjectSettings *settings = ProjectSettings::get_singleton();
-    if (settings == nullptr) {
-        return p_default;
-    }
-    return settings->get_setting(String(p_name), p_default);
-}
-
-StretchMode mode_of(const String &p_text) {
-    if (p_text == "canvas_items" || p_text == "2d") {
-        return STRETCH_MODE_CANVAS_ITEMS;
-    }
-    if (p_text == "viewport") {
-        return STRETCH_MODE_VIEWPORT;
-    }
-    return STRETCH_MODE_DISABLED;
-}
-
-StretchAspect aspect_of(const String &p_text) {
-    if (p_text == "ignore") {
-        return STRETCH_ASPECT_IGNORE;
-    }
-    if (p_text == "keep_width") {
-        return STRETCH_ASPECT_KEEP_WIDTH;
-    }
-    if (p_text == "keep_height") {
-        return STRETCH_ASPECT_KEEP_HEIGHT;
-    }
-    if (p_text == "expand") {
-        return STRETCH_ASPECT_EXPAND;
-    }
-    return STRETCH_ASPECT_KEEP;
-}
-
-StretchScaleMode scale_mode_of(const String &p_text) {
-    if (p_text == "integer") {
-        return STRETCH_SCALE_MODE_INTEGER;
-    }
-    return STRETCH_SCALE_MODE_FRACTIONAL;
-}
 
 Rect2 centered(const Vector2 &p_size, const Vector2 &p_control_size) {
     return Rect2(((p_control_size - p_size) * 0.5f).floor(), p_size);
@@ -83,44 +34,77 @@ Layout degenerate(const Vector2 &p_control_size) {
     return out;
 }
 
+StretchMode mode_of(Window::ContentScaleMode p_mode) {
+    switch (p_mode) {
+        case Window::CONTENT_SCALE_MODE_CANVAS_ITEMS:
+            return STRETCH_MODE_CANVAS_ITEMS;
+        case Window::CONTENT_SCALE_MODE_VIEWPORT:
+            return STRETCH_MODE_VIEWPORT;
+        default:
+            return STRETCH_MODE_DISABLED;
+    }
+}
+
+StretchAspect aspect_of(Window::ContentScaleAspect p_aspect) {
+    switch (p_aspect) {
+        case Window::CONTENT_SCALE_ASPECT_IGNORE:
+            return STRETCH_ASPECT_IGNORE;
+        case Window::CONTENT_SCALE_ASPECT_KEEP_WIDTH:
+            return STRETCH_ASPECT_KEEP_WIDTH;
+        case Window::CONTENT_SCALE_ASPECT_KEEP_HEIGHT:
+            return STRETCH_ASPECT_KEEP_HEIGHT;
+        case Window::CONTENT_SCALE_ASPECT_EXPAND:
+            return STRETCH_ASPECT_EXPAND;
+        default:
+            return STRETCH_ASPECT_KEEP;
+    }
+}
+
+StretchScaleMode scale_mode_of(Window::ContentScaleStretch p_stretch) {
+    if (p_stretch == Window::CONTENT_SCALE_STRETCH_INTEGER) {
+        return STRETCH_SCALE_MODE_INTEGER;
+    }
+    return STRETCH_SCALE_MODE_FRACTIONAL;
+}
+
 } // namespace
 
-Stretch stretch_from_project() {
+Stretch stretch_from_window(const Window *p_window) {
     Stretch out;
-    out.mode = mode_of(String(setting(SETTING_MODE, "disabled")));
-    out.aspect = aspect_of(String(setting(SETTING_ASPECT, "keep")));
-    out.scale_mode
-        = scale_mode_of(String(setting(SETTING_SCALE_MODE, "fractional")));
-    out.scale = double(setting(SETTING_SCALE, 1.0));
-    out.design_size = Vector2i(
-        int(setting(SETTING_WIDTH, 0)),
-        int(setting(SETTING_HEIGHT, 0))
+    if (p_window == nullptr) {
+        return out;
+    }
+    out.mode = mode_of(p_window->get_content_scale_mode());
+    out.aspect = aspect_of(p_window->get_content_scale_aspect());
+    out.scale_mode = scale_mode_of(p_window->get_content_scale_stretch());
+    out.scale = p_window->get_content_scale_factor();
+    out.design_size = p_window->get_content_scale_size();
+    return out;
+}
+
+Transform2D inner_rect_to_target_pixels(
+    const Rect2 &p_inner_rect,
+    const Vector2i &p_target_size
+) {
+    if (p_inner_rect.size.x <= 0.0f || p_inner_rect.size.y <= 0.0f) {
+        return Transform2D();
+    }
+    const Vector2 scale = Vector2(p_target_size) / p_inner_rect.size;
+    return Transform2D().scaled(scale).translated(
+        -p_inner_rect.position * scale
     );
-    return out;
 }
 
-Stretch stretch_over(const Stretch &p_base, const Stretch &p_override) {
-    Stretch out = p_base;
-    if (p_override.mode != STRETCH_MODE_INHERIT) {
-        out.mode = p_override.mode;
+Stretch stretch_filling(const Stretch &p_stretch) {
+    Stretch out = p_stretch;
+    if (out.mode == STRETCH_MODE_VIEWPORT) {
+        out.mode = STRETCH_MODE_CANVAS_ITEMS;
     }
-    if (p_override.aspect != STRETCH_ASPECT_INHERIT) {
-        out.aspect = p_override.aspect;
+    if (out.aspect == STRETCH_ASPECT_KEEP) {
+        out.aspect = STRETCH_ASPECT_EXPAND;
     }
-    if (p_override.scale_mode != STRETCH_SCALE_MODE_INHERIT) {
-        out.scale_mode = p_override.scale_mode;
-    }
-    if (p_override.scale > 0.0) {
-        out.scale = p_override.scale;
-    }
-    if (p_override.design_size.x > 0 && p_override.design_size.y > 0) {
-        out.design_size = p_override.design_size;
-    }
+    out.scale_mode = STRETCH_SCALE_MODE_FRACTIONAL;
     return out;
-}
-
-Stretch stretch_resolve(const Stretch &p_override) {
-    return stretch_over(stretch_from_project(), p_override);
 }
 
 Layout layout_compute(const Stretch &p_stretch, const Vector2 &p_control_size) {
@@ -128,7 +112,6 @@ Layout layout_compute(const Stretch &p_stretch, const Vector2 &p_control_size) {
         return degenerate(p_control_size);
     }
     if (p_stretch.mode == STRETCH_MODE_DISABLED
-        || p_stretch.mode == STRETCH_MODE_INHERIT
         || p_stretch.design_size.x <= 0 || p_stretch.design_size.y <= 0) {
         Layout out;
         out.target_size = Vector2i(p_control_size.ceil());

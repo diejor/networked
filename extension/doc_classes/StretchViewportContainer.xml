@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="StretchViewportContainer" inherits="SubViewportContainer" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		A [SubViewportContainer] that shows its [SubViewport] the way the enclosing [Window] shows the root.
+	</brief_description>
+	<description>
+		Its [SubViewport] follows the window's content scale and copies its render settings. It renders, plays audio and takes input only while the container is [member CanvasItem.visible].
+		[codeblock]
+		var view := StretchViewportContainer.new()
+		view.add_child(session)
+		[/codeblock]
+	</description>
+	<tutorials>
+	</tutorials>
+</class>

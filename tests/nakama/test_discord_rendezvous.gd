@@ -157,9 +157,8 @@ func _build_participant(
 		username: String,
 		instance_id: String,
 ) -> DiscordActivityService:
-	var tree := MultiplayerTree.new()
+	var tree := MultiplayerViewport.new()
 	tree.name = StringName("DiscordTree_%s" % username)
-	tree.auto_host_headless = false
 
 	var session := NakamaSessionService.new()
 	session.name = &"NakamaSession"

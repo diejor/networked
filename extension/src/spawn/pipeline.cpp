@@ -2289,7 +2289,7 @@ void Pipeline::place_received(const SpawnBuild &p_built) {
     if (recv_spawner != nullptr && spawner_compat != nullptr) {
         spawner_compat->note_recv(route, recv_spawner);
     }
-    plane->spawn_place_node(parent, node);
+    plane->spawn_place_node(parent, NetwMultiplayer::scene_wrap_world(node));
     plane->entity_install_anchor(route, anchor_revision, anchor_author);
     if (recv_spawner != nullptr && spawner_compat != nullptr) {
         spawner_compat->emit_spawned(recv_spawner, node);

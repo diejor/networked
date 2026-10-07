@@ -1,7 +1,7 @@
 ## Static helpers for live Nakama integration tests.
 ##
 ## [NakamaTestSupport] mirrors [WebRTCTestSupport] for real relay sessions. It
-## wires [MultiplayerTree], [NakamaLobbyDirectory], and [NakamaBackend] directly
+## wires [MultiplayerViewport], [NakamaLobbyDirectory], and [NakamaBackend] directly
 ## so tests own raw trees and frame polling. Every tree here comes online
 ## through [NetwOrdinarySetup], so the relay peer is built by the provider and
 ## then assigned like any other, which is what makes delivery and adoption
@@ -47,7 +47,7 @@ static func skip_reason(packed: PackedScene) -> String:
 ## Returns why [param packed] cannot be driven, or an empty [String] when it can.
 ##
 ## [method host_scene] and [method join_scene] configure a scene-owned
-## [MultiplayerTree] per peer, which is what lets one process stand up several
+## [MultiplayerViewport] per peer, which is what lets one process stand up several
 ## independently configured peers. A scene that installs its session at the root
 ## instead has no such node, so this harness cannot drive it, and a suite that
 ## says so is honest where one that dies on the resulting [code]null[/code]
@@ -58,13 +58,13 @@ static func undrivable(packed: PackedScene) -> String:
 	var scene := packed.instantiate()
 	var found := 0
 	for node in _collect_nodes(scene):
-		if node is MultiplayerTree:
+		if node is MultiplayerViewport:
 			found += 1
 	scene.free()
 	var reason := ""
 	if found != 1:
 		reason = (
-				"%s needs one scene-owned MultiplayerTree per peer and this scene "
+				"%s needs one scene-owned MultiplayerViewport per peer and this scene "
 				+ "has %d. A root-installed session cannot be driven by this "
 				+ "harness."
 		) % [packed.resource_path, found]
@@ -72,9 +72,9 @@ static func undrivable(packed: PackedScene) -> String:
 	return reason
 
 
-## Builds and hosts a [MultiplayerTree] backed by [NakamaBackend].
+## Builds and hosts a [MultiplayerViewport] backed by [NakamaBackend].
 ##
-## Returns a dictionary with [code]tree[/code] (the [MultiplayerTree]) and
+## Returns a dictionary with [code]tree[/code] (the [MultiplayerViewport]) and
 ## [code]room[/code] (the Nakama relay match id).
 static func start_host(
 		parent: Node,
@@ -83,6 +83,7 @@ static func start_host(
 	var tree := _make_tree(parent, "NakamaHost", username)
 	var settled := await NetwOrdinarySetup.connect_through(
 			tree,
+			PEER_CLASS,
 			NetwConnection.TRANSPORT_MODE_HOST,
 			"",
 			{ },
@@ -108,13 +109,14 @@ static func start_host(
 ## Returns [constant @GlobalScope.OK] once the relay peer is built and
 ## assigned, and the provider's own error otherwise.
 static func join_client(
-		client: MultiplayerTree,
+		client: MultiplayerViewport,
 		room: String,
 		username: String,
 		join_args: Array = [],
 ) -> Error:
 	var settled := await NetwOrdinarySetup.connect_through(
 			client,
+			PEER_CLASS,
 			NetwConnection.TRANSPORT_MODE_CLIENT,
 			room,
 			{ },
@@ -124,16 +126,16 @@ static func join_client(
 	return settled.error
 
 
-## Builds an offline client [MultiplayerTree] wired for Nakama.
+## Builds an offline client [MultiplayerViewport] wired for Nakama.
 static func make_client_tree(
 		parent: Node,
 		username: String,
-) -> MultiplayerTree:
+) -> MultiplayerViewport:
 	return _make_tree(parent, "NakamaClient_%s" % username, username)
 
 
 ## Tears down [param tree] and leaves the Nakama relay match.
-static func stop_tree(tree: MultiplayerTree) -> void:
+static func stop_tree(tree: MultiplayerViewport) -> void:
 	if not is_instance_valid(tree):
 		return
 	var scene_tree := tree.get_tree()
@@ -148,7 +150,7 @@ static func stop_tree(tree: MultiplayerTree) -> void:
 		await NetwTestSuite.drain_frames(scene_tree, 5)
 
 
-## Instantiates [param packed], wires its single [MultiplayerTree], and hosts.
+## Instantiates [param packed], wires its single [MultiplayerViewport], and hosts.
 static func host_scene(
 		parent: Node,
 		packed: PackedScene,
@@ -161,6 +163,7 @@ static func host_scene(
 
 	var settled := await NetwOrdinarySetup.connect_through(
 			tree,
+			PEER_CLASS,
 			NetwConnection.TRANSPORT_MODE_HOST,
 			"",
 			{ },
@@ -183,13 +186,13 @@ static func host_scene(
 	}
 
 
-## Instantiates [param packed], wires its [MultiplayerTree], and joins.
+## Instantiates [param packed], wires its [MultiplayerViewport], and joins.
 static func join_scene(
 		parent: Node,
 		packed: PackedScene,
 		room: String,
 		username: String,
-) -> MultiplayerTree:
+) -> MultiplayerViewport:
 	var scene := packed.instantiate()
 	var tree := _find_tree(scene)
 	_configure_tree(tree, username)
@@ -207,22 +210,19 @@ static func _make_tree(
 		parent: Node,
 		tree_name: String,
 		username: String,
-) -> MultiplayerTree:
-	var tree := MultiplayerTree.new()
+) -> MultiplayerViewport:
+	var tree := MultiplayerViewport.new()
 	tree.name = tree_name
 	_configure_tree(tree, username)
 	parent.add_child(tree)
 	return tree
 
 
-static func _configure_tree(tree: MultiplayerTree, username: String) -> void:
-	tree.auto_host_headless = false
-	tree.desired_role = NetwSession.ROLE_LISTEN_SERVER
+static func _configure_tree(tree: MultiplayerViewport, username: String) -> void:
 	_attach_directory(tree, username)
-	tree.peer_class = PEER_CLASS
 
 
-static func _attach_directory(tree: MultiplayerTree, username: String) -> void:
+static func _attach_directory(tree: MultiplayerViewport, username: String) -> void:
 	var dir := directory(tree)
 	if dir == null:
 		dir = NakamaLobbyDirectory.new()
@@ -239,20 +239,20 @@ static func _attach_directory(tree: MultiplayerTree, username: String) -> void:
 ##
 ## The descendant scan only matches scene-owned nodes, so a directory added
 ## with [code].new()[/code] falls back to a lookup by node name.
-static func directory(tree: MultiplayerTree) -> NakamaLobbyDirectory:
+static func directory(tree: MultiplayerViewport) -> NakamaLobbyDirectory:
 	for child in tree.find_children("*", "NakamaLobbyDirectory", true):
 		return child as NakamaLobbyDirectory
 	return tree.get_node_or_null("NakamaLobbyDirectory") as NakamaLobbyDirectory
 
 
-static func _find_tree(scene: Node) -> MultiplayerTree:
-	var found: Array[MultiplayerTree] = []
+static func _find_tree(scene: Node) -> MultiplayerViewport:
+	var found: Array[MultiplayerViewport] = []
 	for node in _collect_nodes(scene):
-		if node is MultiplayerTree:
+		if node is MultiplayerViewport:
 			found.append(node)
 	assert(
 		found.size() == 1,
-		"NakamaTestSupport: expected one MultiplayerTree. Found %d."
+		"NakamaTestSupport: expected one MultiplayerViewport. Found %d."
 		% found.size(),
 	)
 	return found[0]

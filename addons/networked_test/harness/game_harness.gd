@@ -1,18 +1,22 @@
-## Session coordinator for slot based game integration tests.
+## Session coordinator for game integration tests that run every peer in one
+## process.
 ##
 ## [method add_host], [method add_client], and [method sync_ticks] drive real
 ## game scenes through one [LocalLoopbackSession]. Per peer input lives on the
 ## returned [NetwSceneRunner].
 ##
-## A game scene may author its own [MultiplayerTree] or carry none. When the
-## instantiated scene holds no tree, [method add_host] and [method add_client]
-## wrap it in a harness-constructed [MultiplayerTree], one per participant
-## window, so a scene the game natively swaps needs no authored session node.
+## Each peer runs in its own [MultiplayerViewport]. A game scene may author that
+## tree or carry none. When the instantiated scene holds no tree,
+## [method add_host] and [method add_client] wrap it in one the harness builds,
+## so a scene the game natively swaps needs no authored session node.
 class_name NetwGameHarness
 extends Node
 
 const DEFAULT_TIMEOUT := 1.0
 const DEFAULT_TICKRATE := 30
+## The size of each runner's [MultiplayerViewport] while the views are hidden, and
+## the smallest size of its view in [method show_views].
+const VIEW_SIZE := Vector2(576, 324)
 ## Wall-clock ceiling for one test's cumulative stepping, a runaway guard. The
 ## harness steps deterministically, so a budget is a hang catcher, not a pace
 ## limit. Override with the NETW_TEST_WALL_CLOCK_MS environment variable for
@@ -25,7 +29,8 @@ var _main_scene: PackedScene
 var _loopback: NetwHarnessSession
 var _waiter: NetwWaiter
 var _runners: Array[NetwSceneRunner] = []
-var _display_viewport: ParticipantViewport
+var _display: Window
+var _grid: GridContainer
 
 ## The listen server host participant.
 var host: NetwSceneRunner
@@ -224,21 +229,17 @@ func watch_frames(n: int) -> void:
 		await get_tree().process_frame
 
 
-## Displays every participant window in one window.
+## Shows every runner's [MultiplayerViewport] in one window and returns that
+## window.
 ##
-## Tests remain headless unless this method is called.
-func show_views() -> ParticipantViewport:
-	if is_instance_valid(_display_viewport):
-		_show_display_window()
-		return _display_viewport
-
-	_display_viewport = ParticipantViewport.new()
-	_display_viewport.name = &"ParticipantViewport"
-	add_child(_display_viewport)
-	for runner in _runners:
-		_display_viewport.add_slot(runner.slot)
-	_show_display_window()
-	return _display_viewport
+## The window holds a [GridContainer] with one [StretchViewportContainer] per
+## runner. Runners added later join the same grid. Tests remain headless unless
+## this method is called.
+func show_views() -> Window:
+	var display := _display_window()
+	display.show()
+	display.grab_focus()
+	return display
 
 
 ## Degrades both network directions for [param runner].
@@ -292,19 +293,16 @@ func link(
 	return NetwLink.new(_loopback.session(), peer, sender_id)
 
 
-## Frees all participant windows and resets global harness state.
+## Frees every runner's [MultiplayerViewport] and resets global harness state.
 func teardown() -> void:
 	if _torn_down:
 		return
 	_torn_down = true
 
-	if is_instance_valid(_display_viewport):
-		_display_viewport.queue_free()
-		_display_viewport = null
-
-	for runner in _runners.duplicate():
-		if is_instance_valid(runner.slot):
-			runner.slot.queue_free()
+	if is_instance_valid(_display):
+		_display.queue_free()
+	_display = null
+	_grid = null
 
 	if get_tree():
 		await NetwTestSuite.drain_frames(get_tree(), 2)
@@ -327,48 +325,56 @@ func _create_runner(
 		username: String,
 		role: NetwSession.Role,
 ) -> NetwSceneRunner:
-	var slot := ParticipantWindow.new()
-	slot.name = "Window_%s" % username
-	slot.own_world_3d = true
-	slot.world_3d = World3D.new()
-	slot.world_2d = World2D.new()
-	add_child(slot)
-
 	var scene := _main_scene.instantiate()
-	var tree := _find_single_multiplayer_tree(scene)
+	var tree := _find_single_multiplayer_viewport(scene)
 	var runner_root: Node = scene
 	if tree == null:
-		tree = MultiplayerTree.new()
-		tree.name = &"MultiplayerTree"
+		tree = MultiplayerViewport.new()
+		tree.name = StringName(username)
 		tree.add_child(scene)
 		runner_root = tree
 	_adopt_tree(tree, role)
 
-	var runner := NetwSceneRunner.new(runner_root, slot, StringName(username))
-	runner.tree = tree
-	runner.slot.mounted_tree = tree
-	runner.slot.username = StringName(username)
-	runner.username = StringName(username)
+	var view := StretchViewportContainer.new()
+	view.name = "%sView" % username
+	view.custom_minimum_size = VIEW_SIZE
+	var grid := _display_grid()
+	grid.add_child(view)
+	grid.columns = ceili(sqrt(float(grid.get_child_count())))
+	view.add_child(runner_root)
+
+	var runner := NetwSceneRunner.new(runner_root, tree, StringName(username))
 	runner.waiter = NetwWaiter.new(get_tree(), reporter)
 	_runners.append(runner)
 	return runner
 
 
-func _adopt_tree(tree: MultiplayerTree, role: NetwSession.Role) -> void:
+func _adopt_tree(tree: MultiplayerViewport, role: NetwSession.Role) -> void:
 	_loopback.adopt_tree(tree, role)
 
 
 func _finish_online_runner(runner: NetwSceneRunner) -> void:
 	runner.peer_id = runner.tree.api.multiplayer_peer.get_unique_id()
-	runner.slot.peer_id = runner.peer_id
-	if is_instance_valid(_display_viewport):
-		_display_viewport.add_slot(runner.slot)
-		_show_display_window()
 
 
-func _show_display_window() -> void:
-	if host:
-		host.move_window_to_foreground()
+func _display_window() -> Window:
+	if is_instance_valid(_display):
+		return _display
+	_display = Window.new()
+	_display.name = &"Display"
+	_display.title = "NetwGameHarness"
+	_display.visible = false
+	_display.wrap_controls = true
+	_grid = GridContainer.new()
+	_grid.name = &"Grid"
+	_display.add_child(_grid)
+	add_child(_display)
+	return _display
+
+
+func _display_grid() -> GridContainer:
+	_display_window()
+	return _grid
 
 
 func _loopback_peer_for(
@@ -390,16 +396,16 @@ func _loopback_peer_for(
 	return peer
 
 
-func _find_single_multiplayer_tree(scene: Node) -> MultiplayerTree:
-	var found: Array[MultiplayerTree] = []
+func _find_single_multiplayer_viewport(scene: Node) -> MultiplayerViewport:
+	var found: Array[MultiplayerViewport] = []
 	for node in _collect_nodes(scene):
-		if node is MultiplayerTree:
+		if node is MultiplayerViewport:
 			found.append(node)
 	# Zero is the tree-less on-ramp: the caller wraps the scene in a
 	# harness-constructed tree. More than one is always an authoring error.
 	assert(
 		found.size() <= 1,
-		"NetwGameHarness: expected at most one MultiplayerTree. Found %d." %
+		"NetwGameHarness: expected at most one MultiplayerViewport. Found %d." %
 		found.size(),
 	)
 	return found[0] if found.size() == 1 else null

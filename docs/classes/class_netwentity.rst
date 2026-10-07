@@ -396,18 +396,6 @@ Emitted once after the owner's :godot:`Node._ready() <Node#class_Node_private_me
 
 Emitted once after identity, authority and spawn properties are applied. The owner is in the tree, but :godot:`Node._ready() <Node#class_Node_private_method__ready>` may still be running.
 
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwEntity_signal_view_activated:
-
-.. rst-class:: classref-signal
-
-**view_activated**\ (\ ) :ref:`🔗<class_NetwEntity_signal_view_activated>`
-
-Emitted when this entity's player becomes the view shown on this peer. With nothing connected, :ref:`HostSceneView<class_HostSceneView>` makes the first camera current, so connect it to use your own camera.
-
 .. rst-class:: classref-section-separator
 
 ----

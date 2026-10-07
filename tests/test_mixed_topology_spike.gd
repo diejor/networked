@@ -5,7 +5,7 @@ const _DT := 1.0 / 60.0
 
 var _original: MultiplayerAPI
 var _host_api: NetwMultiplayer
-var _client_tree: MultiplayerTree
+var _client_tree: MultiplayerViewport
 
 
 func before_test() -> void:
@@ -17,7 +17,6 @@ func after_test() -> void:
 		_client_tree.queue_free()
 	if _host_api != null and get_tree().get_multiplayer() == _host_api:
 		_host_api.multiplayer_peer = null
-		_host_api.embed_dispose()
 	_host_api = null
 	get_tree().set_multiplayer(_original)
 	await drain_frames(get_tree(), 3)
@@ -36,11 +35,8 @@ func _install_and_host() -> bool:
 
 
 func _mount_client() -> NetwMultiplayer:
-	_client_tree = MultiplayerTree.new()
+	_client_tree = MultiplayerViewport.new()
 	_client_tree.name = "SpikeClient"
-	_client_tree.desired_role = NetwSession.ROLE_CLIENT
-	_client_tree.auto_host_headless = false
-	_client_tree.peer_class = &"LocalMultiplayerPeer"
 	add_child(_client_tree)
 	return _client_tree.api
 

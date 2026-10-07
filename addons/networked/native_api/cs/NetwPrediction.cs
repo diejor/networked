@@ -51,6 +51,18 @@ namespace Networked;
 /// - <see cref="NetwPrediction.OperatorOutcome"/> whether a correction helped
 /// - <see cref="NetwPrediction.EpisodeState"/> whether a misprediction is still
 /// being corrected
+/// <b>Seeing prediction</b> Debug &gt; Networked &gt; Prediction Rings draws
+/// rings around every entity the client predicts.
+/// - <b>cyan</b> where the entity is drawn
+/// - <b>green</b> where it is simulated
+/// - <b>orange</b> where the server says it was, at the last tick it confirmed
+/// - <b>dashed magenta</b> where this client predicted it would be at that tick
+/// - <b>white line</b> the gap between orange and magenta, when it exceeds the
+/// tolerance
+/// Text beside the entity names its <see cref="NetwPrediction.EpisodeState"/>,
+/// its last <see cref="NetwPrediction.Operator"/> and the
+/// <see cref="NetwPrediction.OperatorOutcome"/>. A replica the client only
+/// simulates shows how old the server's state is instead.
 /// </para>
 /// </remarks>
 public sealed class NetwPrediction : NetwRefCounted
@@ -1144,10 +1156,9 @@ public sealed class NetwPrediction : NetwRefCounted
             1286410249UL);
 
     /// <summary>
-    /// How many ticks of input the server keeps queued before running them. A
-    /// small buffer absorbs jitter so the entity steps every tick, and each
-    /// tick of buffer adds a tick of input latency. <c>0</c> runs inputs as
-    /// they arrive.
+    /// How many ticks of input the server waits for before it starts running
+    /// them. It then runs one every tick, so late inputs do not stall the
+    /// entity. Each tick adds a tick of input latency.
     /// </summary>
     public int ConsumeBufferTicks
     {

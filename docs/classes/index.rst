@@ -88,17 +88,15 @@ Other classes
     :name: toc-class-ref-other-classes
 
     class_addons--networked--plugin.gd
-    class_debugjoinconfig
     class_dictionaryrecord
     class_filesystemdatabase
-    class_hostsceneview
     class_lanlobbydirectory
     class_lobbydirectory
     class_locallinkconditions
     class_localloopbacksession
     class_localmultiplayerpeer
     class_memorydatabase
-    class_multiplayertree
+    class_multiplayerviewport
     class_netw
     class_netwaction
     class_netwactioncontext
@@ -160,9 +158,7 @@ Other classes
     class_netwtransport
     class_netwwebrtcsignaler
     class_netwwritebatch
-    class_participantview
-    class_participantviewport
-    class_participantwindow
     class_serde
+    class_stretchviewportcontainer
     class_webtorrentlobbydirectory
 

@@ -185,4 +185,22 @@ public sealed class LocalMultiplayerPeer : NetwRefCounted
         answered.Dispose();
         return result;
     }
+
+    private static readonly IntPtr _bindTransferServer =
+        NetwApi.MethodBind(
+            "LocalMultiplayerPeer",
+            "transfer_server",
+            844576869UL);
+
+    public Error TransferServer(int peerId)
+    {
+        int slot0 = peerId;
+        long answered = default;
+        NetwThunks.Ptrcall1_Int_Long(
+            _bindTransferServer,
+            Checked,
+            in slot0,
+            ref answered);
+        return (Error)answered;
+    }
 }

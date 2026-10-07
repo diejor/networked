@@ -92,9 +92,8 @@ public sealed class NetwScene : NetwRefCounted
         /// </summary>
         None = 0,
         /// <summary>
-        /// On the server, the scene gets a <see cref="SubViewport"/> with its
-        /// own world, so two scenes never collide. Clients use a plain
-        /// <see cref="Node"/>.
+        /// The scene gets its own physics and rendering world on every peer.
+        /// <see cref="NetwSceneConfig.Isolated"/> sets it.
         /// </summary>
         OwnWorld = 1,
     }
@@ -210,8 +209,10 @@ public sealed class NetwScene : NetwRefCounted
     /// <summary>
     /// The node the scene was declared on, <c>null</c> outside a session. When
     /// the scene is <see cref="NetwSceneConfig.Isolated"/>,
-    /// <see cref="Netw.Spawn"/> returns <see cref="NetwScene.World"/> and this
-    /// is the node inside it.
+    /// <see cref="Netw.Spawn"/> returns the
+    /// <see cref="StretchViewportContainer"/> holding
+    /// <see cref="NetwScene.World"/>, and this is the node inside
+    /// <see cref="NetwScene.World"/>.
     /// </summary>
     public Node Root
     {

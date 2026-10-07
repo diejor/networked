@@ -24,7 +24,7 @@ func after_test() -> void:
 
 func test_peers_and_rosters_see_each_other() -> void:
 	var host := await NakamaTestSupport.start_host(self, "host")
-	var host_tree := host.tree as MultiplayerTree
+	var host_tree := host.tree as MultiplayerViewport
 	_track(host_tree)
 
 	var client_a := NakamaTestSupport.make_client_tree(self, "alice")
@@ -50,7 +50,7 @@ func test_peers_and_rosters_see_each_other() -> void:
 
 func test_disconnect_propagates_to_remaining_peers() -> void:
 	var host := await NakamaTestSupport.start_host(self, "host")
-	var host_tree := host.tree as MultiplayerTree
+	var host_tree := host.tree as MultiplayerViewport
 	_track(host_tree)
 
 	var client_a := NakamaTestSupport.make_client_tree(self, "alice")
@@ -95,11 +95,11 @@ func test_disconnect_propagates_to_remaining_peers() -> void:
 	)
 
 
-func _join(client: MultiplayerTree, room: String, username: String) -> Error:
+func _join(client: MultiplayerViewport, room: String, username: String) -> Error:
 	return await NakamaTestSupport.join_client(client, room, username)
 
 
-func _track(tree: MultiplayerTree) -> void:
+func _track(tree: MultiplayerViewport) -> void:
 	_trees.append(tree)
 
 
@@ -118,16 +118,16 @@ func _await(
 			.is_true()
 
 
-func _sees_all(tree: MultiplayerTree) -> bool:
+func _sees_all(tree: MultiplayerViewport) -> bool:
 	return tree.api.is_online \
 			and tree.multiplayer.get_peers().size() == 2 \
 			and _joined_count(tree) == 3
 
 
 func _all_trees_see_all(
-		host_tree: MultiplayerTree,
-		client_a: MultiplayerTree,
-		client_b: MultiplayerTree,
+		host_tree: MultiplayerViewport,
+		client_a: MultiplayerViewport,
+		client_b: MultiplayerViewport,
 ) -> bool:
 	return _sees_all(host_tree) \
 			and _sees_all(client_a) \
@@ -135,8 +135,8 @@ func _all_trees_see_all(
 
 
 func _client_was_dropped(
-		host_tree: MultiplayerTree,
-		client_b: MultiplayerTree,
+		host_tree: MultiplayerViewport,
+		client_b: MultiplayerViewport,
 		client_a_id: int,
 ) -> bool:
 	return not _has_peer(host_tree, client_a_id) \
@@ -145,19 +145,19 @@ func _client_was_dropped(
 
 
 func _server_disconnect_seen(
-		client_b: MultiplayerTree,
+		client_b: MultiplayerViewport,
 		client_b_saw_server_disconnect: Array,
 ) -> bool:
 	return client_b_saw_server_disconnect[0] or not client_b.api.is_online
 
 
-func _has_peer(tree: MultiplayerTree, peer_id: int) -> bool:
+func _has_peer(tree: MultiplayerViewport, peer_id: int) -> bool:
 	if not is_instance_valid(tree) or tree.multiplayer == null:
 		return false
 	return tree.multiplayer.get_peers().has(peer_id)
 
 
-func _joined_count(tree: MultiplayerTree) -> int:
+func _joined_count(tree: MultiplayerViewport) -> int:
 	if not is_instance_valid(tree):
 		return 0
 	return tree.api.players.size()

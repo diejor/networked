@@ -65,7 +65,7 @@ def promise_class() -> dict:
 
 def tree_class() -> dict:
     return {
-        "name": "MultiplayerTree",
+        "name": "MultiplayerViewport",
         "api_type": "extension",
         "is_refcounted": False,
         "inherits": "Node",
@@ -93,7 +93,7 @@ def facade_class() -> dict:
                 "name": "scene",
                 "hash": 12,
                 "is_static": True,
-                "return_value": {"type": "MultiplayerTree"},
+                "return_value": {"type": "MultiplayerViewport"},
                 "arguments": [{"name": "name", "type": "StringName"}],
             },
             {
@@ -287,7 +287,7 @@ class Boxes(unittest.TestCase):
         )
 
     def test_an_unowned_answer_is_adopted_without_a_reference(self):
-        boxed = self.surface.box({"type": "MultiplayerTree"})
+        boxed = self.surface.box({"type": "MultiplayerViewport"})
         self.assertNotIn("Retained", boxed.from_variant)
 
     def test_an_own_class_answer_crosses_a_ptrcall(self):
@@ -406,7 +406,7 @@ class Emission(unittest.TestCase):
 
     def test_a_member_colliding_with_the_handle_is_refused(self):
         self.assertNotIn("public void Dispose()", self.tree)
-        self.assertIn("MultiplayerTree.dispose", self.emitter.skipped)
+        self.assertIn("MultiplayerViewport.dispose", self.emitter.skipped)
 
     def test_an_unowned_class_holds_no_reference(self):
         self.assertIn("base(native, owned: false)", self.tree)
@@ -498,7 +498,7 @@ void initialize_networked_module() {
 #endif
     GDREGISTER_CLASS(netw::NetwNativeTests);
 #else
-    GDREGISTER_CLASS(netw::MultiplayerTree);
+    GDREGISTER_CLASS(netw::MultiplayerViewport);
 #endif
 }
 """
@@ -511,7 +511,7 @@ void initialize_networked_module() {
     def test_the_registry_answers_what_the_addon_publishes(self):
         with tempfile.TemporaryDirectory() as workspace:
             names = csharp.registered_classes(self.registry_file(workspace))
-        self.assertEqual(names, {"Netw", "NetwAuthProtocol", "MultiplayerTree"})
+        self.assertEqual(names, {"Netw", "NetwAuthProtocol", "MultiplayerViewport"})
 
     def test_a_class_registered_only_under_the_test_flag_is_not_published(self):
         with tempfile.TemporaryDirectory() as workspace:

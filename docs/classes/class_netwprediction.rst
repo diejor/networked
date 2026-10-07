@@ -1116,7 +1116,7 @@ How many ticks :ref:`notify_contact()<class_NetwPrediction_method_notify_contact
 - |void| **set_consume_buffer_ticks**\ (\ value\: :godot:`int`\ )
 - :godot:`int` **get_consume_buffer_ticks**\ (\ )
 
-How many ticks of input the server keeps queued before running them. A small buffer absorbs jitter so the entity steps every tick, and each tick of buffer adds a tick of input latency. ``0`` runs inputs as they arrive.
+How many ticks of input the server waits for before it starts running them. It then runs one every tick, so late inputs do not stall the entity. Each tick adds a tick of input latency.
 
 .. rst-class:: classref-item-separator
 

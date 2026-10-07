@@ -42,7 +42,7 @@ Ref<NetwChannel> NetwChannel::of(Node *p_node, int64_t p_id) {
         NETW_ERROR(
             sys::LIVENESS,
             "Netw.channel got a node that is not inside a session. Call it "
-            "from a node in the scene tree under a MultiplayerTree."
+            "from a node in the scene tree under a MultiplayerViewport."
         );
         return Ref<NetwChannel>();
     }

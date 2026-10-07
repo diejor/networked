@@ -22,7 +22,7 @@
 		- [code]lagcomp_*[/code]: [NetwAction]
 		- [code]peer_*[/code]: [NetwPlayer]
 		- [code]display_*[/code]: [NetwDisplay]
-		- [code]endpoint_*[/code] and [code]embed_*[/code]: [NetwConnection]
+		- [code]endpoint_*[/code]: [NetwConnection]
 		- [code]transport_*[/code]: [NetwTransport]
 		- [code]rpc_*[/code] and [code]sync_*[/code]: [NetwMemberConfig]
 		- [code]service_*[/code]: [NetwService]
@@ -38,7 +38,7 @@
 		        return NetwPrediction.CONSUME_ACTION_REPLAY
 		    return predict_consume_default(depth, buffer)
 		[/codeblock]
-		Install the subclass with [member MultiplayerTree.api_script], or create it with [code]new()[/code] and pass it to [method SceneTree.set_multiplayer]. [code]super[/code] does not work on these methods, so call the [code]_default[/code] method. Only a GDScript subclass can override them.
+		Create the subclass with [code]new()[/code] and set it as [member MultiplayerViewport.api], or pass it to [method SceneTree.set_multiplayer]. [code]super[/code] does not work on these methods, so call the [code]_default[/code] method. Only a GDScript subclass can override them.
 	</description>
 	<tutorials>
 	</tutorials>
@@ -750,56 +750,6 @@
 				┠╴OK                  every value was written
 				┠╴ERR_DOES_NOT_EXIST  an entity holds no callback and no item, so the display writes its node
 				┖╴ERR_INVALID_DATA    a value is neither a Transform2D nor a Transform3D
-				[/codeblock]
-			</description>
-		</method>
-		<method name="embed_adopt_inner">
-			<return type="void" />
-			<param index="0" name="inner" type="SceneMultiplayer" />
-			<description>
-				Replaces [member inner] with [param inner] without restarting the session. An auth callback set on [param inner] replaces this session's.
-			</description>
-		</method>
-		<method name="embed_dispose">
-			<return type="void" />
-			<description>
-				Shuts the session down and frees everything it owns. Calls queued with [method session_flush_deferred] run first. Calling it again does nothing.
-			</description>
-		</method>
-		<method name="embed_is_disposing" qualifiers="const">
-			<return type="bool" />
-			<description>
-				Returns [code]true[/code] once [method embed_dispose] has started. Use it to tell a local shutdown apart from a lost connection.
-			</description>
-		</method>
-		<method name="embed_offer_bare_level">
-			<return type="void" />
-			<param index="0" name="level" type="Node" />
-			<description>
-				Sets [param level] as the scene [method embed_settle] starts the session with. Pass [code]null[/code] for none.
-				When [param level] is a multiplayer scene, the server spawns it again from its [code].tscn[/code] file and clients receive it from the server.
-			</description>
-		</method>
-		<method name="embed_phase" qualifiers="const">
-			<return type="int" enum="NetwMultiplayer.EmbedPhase" />
-			<description>
-				How far the session has started up. [method embed_settle] moves it to [constant EMBED_PHASE_LIVE]. Being live does not mean connected, which [member state] tells.
-			</description>
-		</method>
-		<method name="embed_poll_transport">
-			<return type="int" enum="Error" />
-			<description>
-				Sends and receives pending packets. The session calls it every frame and after every tick. Call it to read the newest packets before running game code. Returns [constant @GlobalScope.ERR_UNCONFIGURED] when there is no [member inner].
-			</description>
-		</method>
-		<method name="embed_settle">
-			<return type="int" enum="Error" />
-			<description>
-				Applies every [code]Netw.configure_*[/code] call made so far and moves [method embed_phase] to [constant EMBED_PHASE_LIVE]. [MultiplayerTree] calls it once on the first frame. Later calls do nothing.
-				[codeblock lang=text]
-				Error
-				┠╴OK                the session is live
-				┖╴ERR_UNCONFIGURED  the session is live, but a channel has no handler
 				[/codeblock]
 			</description>
 		</method>
@@ -2322,12 +2272,6 @@
 				Returns the root node name of [param packed], or empty.
 			</description>
 		</method>
-		<method name="scene_player_viewport">
-			<return type="SubViewport" />
-			<description>
-				On a host, returns the [SubViewport] of the scene from [method scene_presented], or [code]null[/code]. Only scenes with [constant NetwScene.SCENE_ISOLATION_OWN_WORLD] have one. [constant PARTICIPANT_VIEWPORT_CHANGED] notifies when it changes. [HostSceneView] displays it.
-			</description>
-		</method>
 		<method name="scene_presented" qualifiers="const">
 			<return type="RID" />
 			<description>
@@ -2355,13 +2299,6 @@
 				┖╴ERR_TIMEOUT       no answer within ten seconds
 				[/codeblock]
 				[b]Player request.[/b]
-			</description>
-		</method>
-		<method name="scene_set_host_view_factory" qualifiers="static">
-			<return type="void" />
-			<param index="0" name="factory" type="Callable" />
-			<description>
-				Replaces the [HostSceneView] a host creates to display its player's scene. [param factory] is [code]func(root: Node) -&gt; Node[/code]. Returning [code]null[/code] creates nothing. No view is created when a [ParticipantView] already exists.
 			</description>
 		</method>
 		<method name="scene_set_param">
@@ -3396,7 +3333,7 @@
 			- [constant NetwSession.ROLE_LISTEN_SERVER] a server that also plays
 		</member>
 		<member name="root" type="Node" setter="" getter="session_root">
-			The node at [member root_path], usually the [MultiplayerTree]. [method session_set_root] can change how it is found.
+			The node at [member root_path], which is the root window or a [MultiplayerViewport]. [method session_set_root] can change how it is found.
 		</member>
 		<member name="root_path" type="NodePath" setter="set_root_path" getter="get_root_path" default="NodePath(&quot;/root&quot;)">
 			Same as [member SceneMultiplayer.root_path], applied to [member inner].
@@ -3628,15 +3565,6 @@
 		</constant>
 		<constant name="ENTITY_STATE_ABSENT" value="4" enum="EntityState">
 			The entity still exists, but this client does not see it. It can become visible again. See [constant ENTITY_HIDDEN].
-		</constant>
-		<constant name="EMBED_PHASE_DECLARING" value="0" enum="EmbedPhase">
-			[code]Netw.configure_*[/code] calls, [MultiplayerSpawner] and [MultiplayerSynchronizer] nodes are collected but not applied yet.
-		</constant>
-		<constant name="EMBED_PHASE_SETTLING" value="1" enum="EmbedPhase">
-			The collected settings are being applied.
-		</constant>
-		<constant name="EMBED_PHASE_LIVE" value="2" enum="EmbedPhase">
-			Settings are applied and the session can host or join.
 		</constant>
 		<constant name="LAYER_PARAM_POLICY" value="0" enum="LayerParam">
 			The layer's [enum NetwInterestLayer.LayerPolicy].
@@ -4263,25 +4191,22 @@
 		<constant name="SCENE_STARTUP_SPAWNED" value="12" enum="Notification">
 			Startup finished on the server, even if nothing was spawned. It happens once. The callback receives no arguments.
 		</constant>
-		<constant name="PARTICIPANT_VIEWPORT_CHANGED" value="13" enum="Notification">
-			[method scene_player_viewport] changed. [code]viewport[/code] may be [code]null[/code]. The callback receives [code](viewport: SubViewport)[/code].
-		</constant>
-		<constant name="CLOCK_BEFORE_TICK_LOOP" value="14" enum="Notification">
+		<constant name="CLOCK_BEFORE_TICK_LOOP" value="13" enum="Notification">
 			A physics frame is about to run its ticks, even when there are none. [method clock_step] does not send it. The callback receives no arguments.
 		</constant>
-		<constant name="CLOCK_AFTER_TICK_LOOP" value="15" enum="Notification">
+		<constant name="CLOCK_AFTER_TICK_LOOP" value="14" enum="Notification">
 			A physics frame has run its ticks, even when there were none. [method clock_step] does not send it. The callback receives no arguments.
 		</constant>
-		<constant name="CLOCK_SYNCHRONIZED" value="16" enum="Notification">
+		<constant name="CLOCK_SYNCHRONIZED" value="15" enum="Notification">
 			The clock synchronized with the server for the first time. It happens once. The callback receives no arguments.
 		</constant>
-		<constant name="CLOCK_CONFIGURED" value="17" enum="Notification">
+		<constant name="CLOCK_CONFIGURED" value="16" enum="Notification">
 			The clock settings were applied. It happens once, so check [method clock_is_configured] in case it already happened. The callback receives no arguments.
 		</constant>
-		<constant name="CLOCK_TICKRATE_MISMATCH" value="18" enum="Notification">
+		<constant name="CLOCK_TICKRATE_MISMATCH" value="17" enum="Notification">
 			A peer runs a tickrate that differs from this peer's, and [method clock_set_mismatch_action] is [constant NetwClock.MISMATCH_ACTION_SIGNAL]. The callback receives [code](peer_id: int, their_tickrate: int)[/code].
 		</constant>
-		<constant name="CLOCK_PONG_RECEIVED" value="19" enum="Notification">
+		<constant name="CLOCK_PONG_RECEIVED" value="18" enum="Notification">
 			The server answered a [method clock_send_ping] and the clock has adjusted.
 			[codeblock lang=text]
 			Dictionary
@@ -4297,115 +4222,112 @@
 			[/codeblock]
 			The callback receives [code](data: Dictionary)[/code].
 		</constant>
-		<constant name="CLOCK_STABILITY_CHANGED" value="20" enum="Notification">
+		<constant name="CLOCK_STABILITY_CHANGED" value="19" enum="Notification">
 			[method clock_is_stable] changed. The callback receives [code](is_stable: bool)[/code].
 		</constant>
-		<constant name="SESSION_STATE_CHANGED" value="21" enum="Notification">
+		<constant name="SESSION_STATE_CHANGED" value="20" enum="Notification">
 			[member state] changed. The callback receives [code](old_state: int, new_state: int)[/code].
 		</constant>
-		<constant name="EMBED_PHASE_CHANGED" value="22" enum="Notification">
-			[method embed_phase] changed. The callback receives [code](phase: int)[/code].
-		</constant>
-		<constant name="SESSION_JOIN_SUBMITTED" value="23" enum="Notification">
+		<constant name="SESSION_JOIN_SUBMITTED" value="21" enum="Notification">
 			This peer sent its join request. It does not mean the join was accepted. The callback receives [code](username: StringName, args: Array)[/code].
 		</constant>
-		<constant name="SESSION_ENTERED" value="24" enum="Notification">
+		<constant name="SESSION_ENTERED" value="22" enum="Notification">
 			The session became [constant NetwSession.SESSION_STATE_ONLINE]. The callback receives no arguments.
 		</constant>
-		<constant name="SESSION_JOIN_FAILED" value="25" enum="Notification">
+		<constant name="SESSION_JOIN_FAILED" value="23" enum="Notification">
 			This peer's join was rejected. Games usually use [signal NetwSession.join_failed]. The callback receives [code](error: int, reason: String)[/code].
 		</constant>
-		<constant name="SESSION_ENDED" value="26" enum="Notification">
+		<constant name="SESSION_ENDED" value="24" enum="Notification">
 			The session stopped being [constant NetwSession.SESSION_STATE_ONLINE]. The callback receives no arguments.
 		</constant>
-		<constant name="SESSION_RECLAIMED" value="27" enum="Notification">
+		<constant name="SESSION_RECLAIMED" value="25" enum="Notification">
 			Right after [constant SESSION_ENDED]. Free nodes the session owned here. The callback receives no arguments.
 		</constant>
-		<constant name="PEER_AUTHENTICATING" value="28" enum="Notification">
+		<constant name="PEER_AUTHENTICATING" value="26" enum="Notification">
 			Same as [signal SceneMultiplayer.peer_authenticating], from [member inner]. The callback receives [code](peer_id: int)[/code].
 		</constant>
-		<constant name="PEER_AUTHENTICATION_FAILED" value="29" enum="Notification">
+		<constant name="PEER_AUTHENTICATION_FAILED" value="27" enum="Notification">
 			Same as [signal SceneMultiplayer.peer_authentication_failed], from [member inner]. The callback receives [code](peer_id: int)[/code].
 		</constant>
-		<constant name="SESSION_POLL_STARTED" value="30" enum="Notification">
+		<constant name="SESSION_POLL_STARTED" value="28" enum="Notification">
 			A [method MultiplayerAPI.poll] is starting. [code]delta[/code] is the time since the previous one. The callback receives [code](delta: float)[/code].
 		</constant>
-		<constant name="TABLE_RECEIVED" value="31" enum="Notification">
+		<constant name="TABLE_RECEIVED" value="29" enum="Notification">
 			A table changed, by [method table_commit] or by an update from the server. The callback receives [code](table: RID, tick: int)[/code].
 		</constant>
-		<constant name="DATABASE_FAILED" value="32" enum="Notification">
+		<constant name="DATABASE_FAILED" value="30" enum="Notification">
 			An entity failed to load or save in a database. [code]detail[/code] names the record and the reason. The callback receives [code](database: RID, error: int, detail: String)[/code].
 		</constant>
-		<constant name="PERSIST_LOADED" value="33" enum="Notification">
+		<constant name="PERSIST_LOADED" value="31" enum="Notification">
 			An entity finished loading. [code]found[/code] is [code]false[/code] when there was no save, and a failed load sends [constant DATABASE_FAILED]. The callback receives [code](entity: RID, found: bool)[/code].
 		</constant>
-		<constant name="PERSIST_SAVED" value="34" enum="Notification">
+		<constant name="PERSIST_SAVED" value="32" enum="Notification">
 			An entity finished saving, and a failed save sends [constant DATABASE_FAILED]. The callback receives [code](entity: RID)[/code].
 		</constant>
-		<constant name="PEER_PACKET" value="35" enum="Notification">
+		<constant name="PEER_PACKET" value="33" enum="Notification">
 			Same as [signal SceneMultiplayer.peer_packet], for packets sent with [method send_bytes]. The callback receives [code](id: int, packet: PackedByteArray)[/code].
 		</constant>
-		<constant name="PEER_KICKED" value="36" enum="Notification">
+		<constant name="PEER_KICKED" value="34" enum="Notification">
 			The server kicked this peer, before the connection closes. The callback receives [code](reason: String)[/code].
 		</constant>
-		<constant name="SESSION_SERVER_DISCONNECTING" value="37" enum="Notification">
+		<constant name="SESSION_SERVER_DISCONNECTING" value="35" enum="Notification">
 			The server called [method session_notify_shutdown]. The callback receives [code](reason: String)[/code].
 		</constant>
-		<constant name="PEER_KICK_REQUESTED" value="38" enum="Notification">
+		<constant name="PEER_KICK_REQUESTED" value="36" enum="Notification">
 			On the server, a peer asked to kick another with [method peer_request_kick]. The callback receives [code](requester_id: int, target_id: int, reason: String)[/code].
 		</constant>
-		<constant name="SESSION_DISCONNECT_REQUESTED" value="39" enum="Notification">
+		<constant name="SESSION_DISCONNECT_REQUESTED" value="37" enum="Notification">
 			On the server, a peer asked to leave with [method session_request_leave]. The callback receives [code](peer_id: int, reason: String)[/code].
 		</constant>
-		<constant name="SESSION_TREE_PAUSED" value="40" enum="Notification">
+		<constant name="SESSION_TREE_PAUSED" value="38" enum="Notification">
 			The server called [method session_pause]. It does not pause the [SceneTree]. The callback receives [code](reason: String)[/code].
 		</constant>
-		<constant name="SESSION_TREE_UNPAUSED" value="41" enum="Notification">
+		<constant name="SESSION_TREE_UNPAUSED" value="39" enum="Notification">
 			The server called [method session_unpause]. The callback receives no arguments.
 		</constant>
-		<constant name="SERVICE_REGISTERED" value="42" enum="Notification">
+		<constant name="SERVICE_REGISTERED" value="40" enum="Notification">
 			A service was registered. The callback receives [code](service: Object)[/code].
 		</constant>
-		<constant name="SERVICE_UNREGISTERED" value="43" enum="Notification">
+		<constant name="SERVICE_UNREGISTERED" value="41" enum="Notification">
 			A service was unregistered. The callback receives [code](service: Object)[/code].
 		</constant>
-		<constant name="ENTITY_LIVE" value="44" enum="Notification">
+		<constant name="ENTITY_LIVE" value="42" enum="Notification">
 			An entity spawned on this peer at [code]route[/code]. The callback receives [code](route: int, entity: NetwEntity)[/code].
 		</constant>
-		<constant name="ENTITY_LINGERING" value="45" enum="Notification">
+		<constant name="ENTITY_LINGERING" value="43" enum="Notification">
 			An entity started despawning and entered [constant ENTITY_STATE_LINGERING]. The callback receives [code](route: int, entity: NetwEntity)[/code].
 		</constant>
-		<constant name="ENTITY_DEAD" value="46" enum="Notification">
+		<constant name="ENTITY_DEAD" value="44" enum="Notification">
 			The entity at [code]route[/code] was despawned, after [signal NetwEntity.despawned]. It happens once, and a peer that only stops seeing the entity gets [constant ENTITY_HIDDEN]. The callback receives [code](route: int)[/code].
 		</constant>
-		<constant name="ENTITY_HIDDEN" value="47" enum="Notification">
+		<constant name="ENTITY_HIDDEN" value="45" enum="Notification">
 			This peer stopped seeing an entity that still exists on the server, after [signal NetwEntity.hidden]. If it becomes visible again, the same route gets a new node. The callback receives [code](route: int, entity: NetwEntity)[/code].
 		</constant>
-		<constant name="PLAYER_JOINED" value="48" enum="Notification">
+		<constant name="PLAYER_JOINED" value="46" enum="Notification">
 			A player's join was accepted, including this peer's own. The callback receives [code](player: NetwPlayer)[/code].
 		</constant>
-		<constant name="PLAYER_LOCAL_JOINED" value="49" enum="Notification">
+		<constant name="PLAYER_LOCAL_JOINED" value="47" enum="Notification">
 			This peer's own join was accepted, before [constant PLAYER_JOINED]. The callback receives [code](player: NetwPlayer)[/code].
 		</constant>
-		<constant name="PLAYER_LEFT" value="50" enum="Notification">
+		<constant name="PLAYER_LEFT" value="48" enum="Notification">
 			A player left or was kicked. [member NetwPlayer.is_active] is already [code]false[/code]. The callback receives [code](player: NetwPlayer)[/code].
 		</constant>
-		<constant name="SCENE_LIVE" value="51" enum="Notification">
+		<constant name="SCENE_LIVE" value="49" enum="Notification">
 			A scene is ready on this peer, and every node in it is in the tree and ready. The callback receives [code](scene: NetwScene)[/code].
 		</constant>
-		<constant name="CONNECTION_STATE_CHANGED" value="52" enum="Notification">
+		<constant name="CONNECTION_STATE_CHANGED" value="50" enum="Notification">
 			The notification form of [signal NetwConnection.state_changed].
 		</constant>
-		<constant name="CONNECTION_PROGRESSED" value="53" enum="Notification">
+		<constant name="CONNECTION_PROGRESSED" value="51" enum="Notification">
 			The notification form of [signal NetwConnection.progressed].
 		</constant>
-		<constant name="CONNECTION_FAILED" value="54" enum="Notification">
+		<constant name="CONNECTION_FAILED" value="52" enum="Notification">
 			The notification form of [signal NetwConnection.failed].
 		</constant>
-		<constant name="CONNECTION_JOIN_ADDRESS_CHANGED" value="55" enum="Notification">
+		<constant name="CONNECTION_JOIN_ADDRESS_CHANGED" value="53" enum="Notification">
 			The notification form of [signal NetwConnection.join_address_changed].
 		</constant>
-		<constant name="CONNECTION_INVITED" value="56" enum="Notification">
+		<constant name="CONNECTION_INVITED" value="54" enum="Notification">
 			The notification form of [signal NetwConnection.invited]. The callback receives [code](endpoint: RID, from_name: String)[/code].
 		</constant>
 	</constants>

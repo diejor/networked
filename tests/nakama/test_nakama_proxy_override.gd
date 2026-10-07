@@ -20,7 +20,7 @@ func after() -> void:
 
 
 func test_proxy_override_when_active() -> void:
-	var mt: MultiplayerTree = auto_free(MultiplayerTree.new())
+	var mt: MultiplayerViewport = auto_free(MultiplayerViewport.new())
 	add_child(mt)
 
 	var activity: DiscordActivityService = auto_free(DiscordActivityService.new())
@@ -52,7 +52,7 @@ func test_proxy_override_when_active() -> void:
 
 
 func test_proxy_override_via_host_name() -> void:
-	var mt: MultiplayerTree = auto_free(MultiplayerTree.new())
+	var mt: MultiplayerViewport = auto_free(MultiplayerViewport.new())
 	add_child(mt)
 
 	var service: NakamaSessionService = auto_free(NakamaSessionService.new())
@@ -79,7 +79,7 @@ func test_proxy_override_via_host_name() -> void:
 
 
 func test_no_override_without_client_id() -> void:
-	var mt: MultiplayerTree = auto_free(MultiplayerTree.new())
+	var mt: MultiplayerViewport = auto_free(MultiplayerViewport.new())
 	add_child(mt)
 
 	var activity: DiscordActivityService = auto_free(DiscordActivityService.new())
@@ -109,7 +109,7 @@ func test_no_override_without_client_id() -> void:
 
 
 func test_no_override_when_no_activity_service() -> void:
-	var mt: MultiplayerTree = auto_free(MultiplayerTree.new())
+	var mt: MultiplayerViewport = auto_free(MultiplayerViewport.new())
 	add_child(mt)
 
 	var service: NakamaSessionService = auto_free(NakamaSessionService.new())

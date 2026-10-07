@@ -6,7 +6,7 @@ const _DT := 1.0 / 60.0
 var _host_node: Node
 var _original: MultiplayerAPI
 var _host_api: NetwMultiplayer
-var _client_trees: Array[MultiplayerTree] = []
+var _client_trees: Array[MultiplayerViewport] = []
 var _initial_scene: PackedScene
 var _scene_decl: Node
 var _initial_root_children: Dictionary[int, bool] = { }
@@ -32,7 +32,6 @@ func host() -> NetwMultiplayer:
 		return _host_api
 	_host_api = NetwMultiplayer.new()
 	_host_node.get_tree().set_multiplayer(_host_api)
-	_host_api.embed_settle()
 	_host_api.session_prepare_join(&"host", [])
 	_host_api.multiplayer_peer = _loopback_server_peer()
 	await pump_until(func() -> bool: return _host_api.is_online)
@@ -56,11 +55,8 @@ func mount_clock() -> void:
 
 func add_client(username: String) -> NetwMultiplayer:
 	await host()
-	var tree := MultiplayerTree.new()
+	var tree := MultiplayerViewport.new()
 	tree.name = "RootWorldClient%d" % _client_trees.size()
-	tree.desired_role = NetwSession.ROLE_CLIENT
-	tree.auto_host_headless = false
-	tree.peer_class = &"LocalMultiplayerPeer"
 	_host_node.add_child(tree)
 	_client_trees.append(tree)
 
@@ -100,7 +96,6 @@ func dispose() -> void:
 	_queue_added_root_children(tree.root)
 	if _host_api != null and tree.get_multiplayer() == _host_api:
 		_host_api.multiplayer_peer = null
-		_host_api.embed_dispose()
 	_host_api = null
 	tree.set_multiplayer(_original)
 

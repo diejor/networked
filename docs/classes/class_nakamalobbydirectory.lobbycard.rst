@@ -105,7 +105,7 @@ Host display name.
 
 :godot:`String` **app_id** = ``""`` :ref:`🔗<class_NakamaLobbyDirectory_LobbyCard_property_app_id>`
 
-The host's :ref:`MultiplayerTree.app_id<class_MultiplayerTree_property_app_id>`.
+The host's :ref:`NetwSessionConfig.app_id<class_NetwSessionConfig_property_app_id>`.
 
 .. rst-class:: classref-item-separator
 

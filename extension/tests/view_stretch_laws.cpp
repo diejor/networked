@@ -244,63 +244,34 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][View][Hosted] V8 an override folds field by field, so a "
-    "view that names one knob takes the project's answer for every other one "
-    "and a view that names none is the project verbatim"
+    "[Networked][View][Hosted][SceneTree] V10 a window's stretch is its own "
+    "five content scale fields, and no window at all is a disabled stretch"
 ) {
-    Stretch base;
-    base.mode = netw::view::STRETCH_MODE_VIEWPORT;
-    base.aspect = netw::view::STRETCH_ASPECT_KEEP;
-    base.scale_mode = netw::view::STRETCH_SCALE_MODE_FRACTIONAL;
-    base.scale = 1.0;
-    base.design_size = Vector2i(640, 360);
+    Window *window = memnew(Window);
+    window->set_content_scale_mode(Window::CONTENT_SCALE_MODE_VIEWPORT);
+    window->set_content_scale_aspect(Window::CONTENT_SCALE_ASPECT_KEEP_HEIGHT);
+    window->set_content_scale_stretch(Window::CONTENT_SCALE_STRETCH_INTEGER);
+    window->set_content_scale_factor(3.0);
+    window->set_content_scale_size(Vector2i(480, 270));
 
-    const Stretch untouched = netw::view::stretch_over(base, Stretch());
-    NETW_CHECK_EQ(int(untouched.mode), int(netw::view::STRETCH_MODE_VIEWPORT));
-    NETW_CHECK_EQ(int(untouched.aspect), int(netw::view::STRETCH_ASPECT_KEEP));
-    NETW_CHECK_EQ(untouched.design_size.x, 640);
-    NETW_CHECK_EQ(int(untouched.scale == 1.0), 1);
+    const Stretch read = netw::view::stretch_from_window(window);
+    memdelete(window);
 
-    Stretch names_aspect;
-    names_aspect.aspect = netw::view::STRETCH_ASPECT_IGNORE;
-    const Stretch folded = netw::view::stretch_over(base, names_aspect);
-    NETW_CHECK_EQ(int(folded.aspect), int(netw::view::STRETCH_ASPECT_IGNORE));
-    NETW_CHECK_EQ(int(folded.mode), int(netw::view::STRETCH_MODE_VIEWPORT));
-    NETW_CHECK_EQ(folded.design_size.x, 640);
-
-    Stretch names_all;
-    names_all.mode = netw::view::STRETCH_MODE_CANVAS_ITEMS;
-    names_all.aspect = netw::view::STRETCH_ASPECT_EXPAND;
-    names_all.scale_mode = netw::view::STRETCH_SCALE_MODE_INTEGER;
-    names_all.scale = 3.0;
-    names_all.design_size = Vector2i(320, 180);
-    const Stretch replaced = netw::view::stretch_over(base, names_all);
+    NETW_CHECK_EQ(int(read.mode), int(netw::view::STRETCH_MODE_VIEWPORT));
     NETW_CHECK_EQ(
-        int(replaced.mode),
-        int(netw::view::STRETCH_MODE_CANVAS_ITEMS)
+        int(read.aspect),
+        int(netw::view::STRETCH_ASPECT_KEEP_HEIGHT)
     );
-    NETW_CHECK_EQ(replaced.design_size.y, 180);
-    NETW_CHECK_EQ(int(replaced.scale == 3.0), 1);
-}
+    NETW_CHECK_EQ(
+        int(read.scale_mode),
+        int(netw::view::STRETCH_SCALE_MODE_INTEGER)
+    );
+    NETW_CHECK_EQ(int(read.scale), 3);
+    NETW_CHECK_EQ(read.design_size.x, 480);
+    NETW_CHECK_EQ(read.design_size.y, 270);
 
-TEST_CASE(
-    "[Networked][View][Hosted] V9 resolving reads the project for every knob "
-    "the view leaves alone, so a bare override is the project's own stretch "
-    "and a named knob is the only field that differs from it"
-) {
-    const Stretch project = netw::view::stretch_from_project();
-    const Stretch bare = netw::view::stretch_resolve(Stretch());
-    NETW_CHECK_EQ(int(bare.mode), int(project.mode));
-    NETW_CHECK_EQ(int(bare.aspect), int(project.aspect));
-    NETW_CHECK_EQ(int(bare.scale_mode), int(project.scale_mode));
-    NETW_CHECK_EQ(bare.design_size.x, project.design_size.x);
-
-    Stretch names_design;
-    names_design.design_size = Vector2i(1280, 720);
-    const Stretch resolved = netw::view::stretch_resolve(names_design);
-    NETW_CHECK_EQ(resolved.design_size.x, 1280);
-    NETW_CHECK_EQ(int(resolved.mode), int(project.mode));
-    NETW_CHECK_EQ(int(resolved.aspect), int(project.aspect));
+    const Stretch none = netw::view::stretch_from_window(nullptr);
+    NETW_CHECK_EQ(int(none.mode), int(netw::view::STRETCH_MODE_DISABLED));
 }
 
 } // namespace TestViewStretchLaws

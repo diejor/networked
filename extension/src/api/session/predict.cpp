@@ -25,7 +25,7 @@
 #include "netw/api/entity.hpp"
 #include "netw/api/join_request.hpp"
 #include "netw/api/lag_compensation_config.hpp"
-#include "netw/api/nodes/multiplayer_tree.hpp"
+#include "netw/api/nodes/multiplayer_viewport.hpp"
 #include "netw/api/predict_slot_engine.hpp"
 #include "netw/api/prediction.hpp"
 #include "netw/api/replication_core.hpp"
@@ -1370,9 +1370,10 @@ int64_t NetwMultiplayer::native_prediction_slot(
 NetwMultiplayer *NetwMultiplayer::tree_published_session(Node *p_node) {
     Node *walked = p_node;
     while (walked != nullptr) {
-        MultiplayerTree *tree = Object::cast_to<MultiplayerTree>(walked);
-        if (tree != nullptr) {
-            return tree->get_api().ptr();
+        MultiplayerViewport *viewport
+            = Object::cast_to<MultiplayerViewport>(walked);
+        if (viewport != nullptr) {
+            return viewport->get_api().ptr();
         }
         walked = walked->get_parent();
     }

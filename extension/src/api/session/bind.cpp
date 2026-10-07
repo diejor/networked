@@ -191,10 +191,6 @@ void NetwMultiplayer::_bind_methods() {
         &NetwMultiplayer::attribution_snapshot
     );
     ClassDB::bind_method(
-        D_METHOD("scene_player_viewport"),
-        &NetwMultiplayer::scene_player_viewport
-    );
-    ClassDB::bind_method(
         D_METHOD("scene_observe", "scene", "event", "callback"),
         &NetwMultiplayer::scene_observe
     );
@@ -912,9 +908,6 @@ void NetwMultiplayer::_bind_methods() {
     BIND_ENUM_CONSTANT(ENTITY_STATE_LINGERING);
     BIND_ENUM_CONSTANT(ENTITY_STATE_DEAD);
     BIND_ENUM_CONSTANT(ENTITY_STATE_ABSENT);
-    BIND_ENUM_CONSTANT(EMBED_PHASE_DECLARING);
-    BIND_ENUM_CONSTANT(EMBED_PHASE_SETTLING);
-    BIND_ENUM_CONSTANT(EMBED_PHASE_LIVE);
     BIND_ENUM_CONSTANT(LAYER_PARAM_POLICY);
     BIND_ENUM_CONSTANT(LAYER_PARAM_LEAVE_POLICY);
     BIND_ENUM_CONSTANT(LAYER_PARAM_PERCEPTION_POLICY);
@@ -1030,7 +1023,6 @@ void NetwMultiplayer::_bind_methods() {
     BIND_ENUM_CONSTANT(SCENE_DESPAWNED);
     BIND_ENUM_CONSTANT(SCENE_ENTITY_MOVED);
     BIND_ENUM_CONSTANT(SCENE_STARTUP_SPAWNED);
-    BIND_ENUM_CONSTANT(PARTICIPANT_VIEWPORT_CHANGED);
     BIND_ENUM_CONSTANT(CLOCK_BEFORE_TICK_LOOP);
     BIND_ENUM_CONSTANT(CLOCK_AFTER_TICK_LOOP);
     BIND_ENUM_CONSTANT(CLOCK_SYNCHRONIZED);
@@ -1039,7 +1031,6 @@ void NetwMultiplayer::_bind_methods() {
     BIND_ENUM_CONSTANT(CLOCK_PONG_RECEIVED);
     BIND_ENUM_CONSTANT(CLOCK_STABILITY_CHANGED);
     BIND_ENUM_CONSTANT(SESSION_STATE_CHANGED);
-    BIND_ENUM_CONSTANT(EMBED_PHASE_CHANGED);
     BIND_ENUM_CONSTANT(SESSION_JOIN_SUBMITTED);
     BIND_ENUM_CONSTANT(SESSION_ENTERED);
     BIND_ENUM_CONSTANT(SESSION_JOIN_FAILED);
@@ -1225,34 +1216,6 @@ void NetwMultiplayer::_bind_methods() {
     ClassDB::bind_method(
         D_METHOD("session_leave"),
         &NetwMultiplayer::session_leave
-    );
-    ClassDB::bind_method(
-        D_METHOD("embed_phase"),
-        &NetwMultiplayer::embed_phase
-    );
-    ClassDB::bind_method(
-        D_METHOD("embed_offer_bare_level", "level"),
-        &NetwMultiplayer::embed_offer_bare_level
-    );
-    ClassDB::bind_method(
-        D_METHOD("embed_settle"),
-        &NetwMultiplayer::embed_settle
-    );
-    ClassDB::bind_method(
-        D_METHOD("embed_poll_transport"),
-        &NetwMultiplayer::embed_poll_transport
-    );
-    ClassDB::bind_method(
-        D_METHOD("embed_is_disposing"),
-        &NetwMultiplayer::embed_is_disposing
-    );
-    ClassDB::bind_method(
-        D_METHOD("embed_adopt_inner", "inner"),
-        &NetwMultiplayer::embed_adopt_inner
-    );
-    ClassDB::bind_method(
-        D_METHOD("embed_dispose"),
-        &NetwMultiplayer::embed_dispose
     );
     ClassDB::bind_method(
         D_METHOD("interest_layer_create", "name"),
@@ -1899,11 +1862,6 @@ void NetwMultiplayer::_bind_methods() {
         "NetwMultiplayer",
         D_METHOD("scene_packed_stem", "packed"),
         &NetwMultiplayer::scene_packed_stem
-    );
-    ClassDB::bind_static_method(
-        "NetwMultiplayer",
-        D_METHOD("scene_set_host_view_factory", "factory"),
-        &NetwMultiplayer::scene_set_host_view_factory
     );
 #if defined(NETW_TESTS)
     ClassDB::bind_static_method(

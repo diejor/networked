@@ -1460,6 +1460,11 @@ public sealed class Netw : NetwRefCounted
     /// func _init() -&gt; void:
     ///     Netw.configure_scene(self).labeled(&amp;"Arena")
     /// </code>
+    /// <para>
+    /// A declared scene placed in the editor as a child of the session's root
+    /// is freed when the session starts, and the server spawns it from its
+    /// file.
+    /// </para>
     /// </summary>
     public static NetwSceneConfig ConfigureScene(Node node)
     {

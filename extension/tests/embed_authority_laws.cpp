@@ -1,3 +1,4 @@
+#include "support/fault_log.h"
 #include "support/mesh_stand.h"
 
 #if defined(NETW_TIER_HOSTED)
@@ -7,6 +8,7 @@
 #include "godot/packed_scene.hpp"
 #include "godot/scene_tree.hpp"
 #include "netw/api/netw_multiplayer.hpp"
+#include "netw/api/nodes/view/stretch_viewport_container.hpp"
 #include "netw/api/scene.hpp"
 
 namespace TestEmbedAuthority {
@@ -20,6 +22,7 @@ constexpr int SERVER = 1;
 constexpr int MEMBER = 9;
 
 const char *LEVEL_PATH = "res://tests/support/declared_level.tscn";
+const char *ISOLATED_LEVEL_PATH = "res://tests/support/isolated_level.tscn";
 
 Node *mount_under_root(const char *p_name) {
     Node *mount = memnew(Node);
@@ -75,7 +78,6 @@ TEST_CASE(
     const ObjectID bare = netw::gd::instance_id(level);
     mount->add_child(level);
 
-    host->embed_offer_bare_level(level);
     NETW_CHECK_EQ(int(host->embed_settle()), int(OK));
     stand.step_ticks(6);
 
@@ -115,7 +117,6 @@ TEST_CASE(
     const ObjectID bare = netw::gd::instance_id(level);
     mount->add_child(level);
 
-    guest->embed_offer_bare_level(level);
     NETW_CHECK_EQ(int(guest->embed_settle()), int(OK));
 
     NETW_CHECK_EQ(int(netw::gd::instance_from_id(bare) == nullptr), 1);
@@ -143,11 +144,164 @@ TEST_CASE(
     level->set_scene_file_path(String());
     mount->add_child(level);
 
-    host->embed_offer_bare_level(level);
     NETW_CHECK_EQ(int(host->embed_settle()), int(OK));
 
     NETW_CHECK_EQ(int(netw::gd::instance_from_id(bare) != nullptr), 1);
     NETW_CHECK_EQ(mount->get_child_count(), 1);
+
+    drop(mount);
+}
+
+TEST_CASE(
+    "[Networked][Session][SceneTree] EA5 two declared scenes under the "
+    "session root at settle adopt neither and warn once, because picking one "
+    "would drop a level the game placed"
+) {
+    MeshStand stand;
+    stand.seat_server();
+    stand.pump(2);
+
+    NetwMultiplayer *host = stand.session_of(SERVER);
+    REQUIRE(host != nullptr);
+
+    Node *mount = mount_under_root("EA5Host");
+    stand.mount(SERVER, mount);
+    Node *first = a_declared_level();
+    first->set_name(StringName("FirstLevel"));
+    Node *second = a_declared_level();
+    second->set_name(StringName("SecondLevel"));
+    const ObjectID kept_first = netw::gd::instance_id(first);
+    const ObjectID kept_second = netw::gd::instance_id(second);
+    mount->add_child(first);
+    mount->add_child(second);
+
+    const FaultWatch faults;
+    NETW_CHECK_EQ(int(host->embed_settle()), int(OK));
+
+    NETW_CHECK_EQ(int(netw::gd::instance_from_id(kept_first) != nullptr), 1);
+    NETW_CHECK_EQ(int(netw::gd::instance_from_id(kept_second) != nullptr), 1);
+    NETW_CHECK_EQ(mount->get_child_count(), 2);
+    NETW_CHECK_EQ(faults.warnings_containing(String("FirstLevel")), int64_t(1));
+
+    drop(mount);
+}
+
+TEST_CASE(
+    "[Networked][Session][SceneTree] EA6 an isolated scene placed under the "
+    "session root is spawned again at settle inside its own world, so a "
+    "placed level is wrapped like a spawned one"
+) {
+    MeshStand stand;
+    stand.seat_server();
+    stand.pump(2);
+
+    NetwMultiplayer *host = stand.session_of(SERVER);
+    REQUIRE(host != nullptr);
+
+    Node *mount = mount_under_root("EA6Host");
+    stand.mount(SERVER, mount);
+    const Ref<PackedScene> packed
+        = netw::gd::load_scene(String(ISOLATED_LEVEL_PATH));
+    REQUIRE(packed.is_valid());
+    Node *placed = packed->instantiate();
+    REQUIRE(placed != nullptr);
+    const ObjectID authored = netw::gd::instance_id(placed);
+    mount->add_child(placed);
+
+    NETW_CHECK_EQ(int(host->embed_settle()), int(OK));
+
+    NETW_CHECK_EQ(int(netw::gd::instance_from_id(authored) == nullptr), 1);
+    REQUIRE(mount->get_child_count() == 1);
+    Node *outer = mount->get_child(0);
+    const bool wrapped
+        = Object::cast_to<netw::StretchViewportContainer>(outer) != nullptr;
+    CHECK(wrapped);
+    Node *level = NetwMultiplayer::scene_inner_of(outer);
+    const bool inside = level != nullptr && level != outer
+        && NetwMultiplayer::scene_world_of(level) != nullptr;
+    CHECK(inside);
+
+    drop(mount);
+}
+
+Node *an_isolated_level(const char *p_name) {
+    const Ref<PackedScene> packed
+        = netw::gd::load_scene(String(ISOLATED_LEVEL_PATH));
+    REQUIRE(packed.is_valid());
+    Node *level = packed->instantiate();
+    REQUIRE(level != nullptr);
+    level->set_name(StringName(p_name));
+    return level;
+}
+
+const char *UNWRAPPED_WARNING = "is declared isolated but was added outside";
+
+TEST_CASE(
+    "[Networked][Session][SceneTree] EA7 an isolated scene replicated in "
+    "place after settle shares a world and warns once, even when it is "
+    "added again"
+) {
+    MeshStand stand;
+    stand.seat_server();
+    stand.pump(2);
+
+    NetwMultiplayer *host = stand.session_of(SERVER);
+    REQUIRE(host != nullptr);
+
+    Node *mount = mount_under_root("EA7Host");
+    stand.mount(SERVER, mount);
+    NETW_CHECK_EQ(int(host->embed_settle()), int(OK));
+
+    const FaultWatch faults;
+    Node *loose = an_isolated_level("LooseLevel");
+    REQUIRE(host->entity_replicate(loose, nullptr).is_valid());
+    mount->add_child(loose);
+
+    CHECK(host->scene_containing(loose) == loose);
+    CHECK(NetwMultiplayer::scene_world_of(loose) == nullptr);
+    const String named = String("'LooseLevel' ") + UNWRAPPED_WARNING;
+    NETW_CHECK_EQ(faults.warnings_containing(named), int64_t(1));
+
+    mount->remove_child(loose);
+    mount->add_child(loose);
+    host->scene_root_online(loose);
+
+    NETW_CHECK_EQ(faults.warnings_containing(UNWRAPPED_WARNING), int64_t(1));
+
+    drop(mount);
+}
+
+TEST_CASE(
+    "[Networked][Session][SceneTree] EA8 at settle an isolated scene nested "
+    "below the session root's children warns, and the one placed directly "
+    "under the session root is adopted without a warning"
+) {
+    MeshStand stand;
+    stand.seat_server();
+    stand.pump(2);
+
+    NetwMultiplayer *host = stand.session_of(SERVER);
+    REQUIRE(host != nullptr);
+
+    Node *mount = mount_under_root("EA8Host");
+    stand.mount(SERVER, mount);
+    Node *holder = memnew(Node);
+    holder->set_name(StringName("Holder"));
+    mount->add_child(holder);
+    Node *nested = an_isolated_level("NestedLevel");
+    REQUIRE(host->entity_replicate(nested, nullptr).is_valid());
+    holder->add_child(nested);
+    Node *placed = an_isolated_level("PlacedLevel");
+    REQUIRE(host->entity_replicate(placed, nullptr).is_valid());
+    mount->add_child(placed);
+
+    const FaultWatch faults;
+    NETW_CHECK_EQ(int(host->embed_settle()), int(OK));
+
+    CHECK(NetwMultiplayer::scene_world_of(nested) == nullptr);
+    const String named = String("'NestedLevel' ") + UNWRAPPED_WARNING;
+    NETW_CHECK_EQ(faults.warnings_containing(named), int64_t(1));
+    NETW_CHECK_EQ(faults.warnings_containing(UNWRAPPED_WARNING), int64_t(1));
 
     drop(mount);
 }
@@ -208,7 +362,6 @@ TEST_CASE(
 
     Node *level = a_declared_level();
     mount->add_child(level);
-    host->embed_offer_bare_level(level);
     NETW_CHECK_EQ(int(host->embed_settle()), int(OK));
     stand.step_ticks(6);
 

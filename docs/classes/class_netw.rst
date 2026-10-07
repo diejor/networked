@@ -436,6 +436,8 @@ Makes ``node`` a multiplayer scene. Players only see its children while they are
     func _init() -> void:
         Netw.configure_scene(self).labeled(&"Arena")
 
+\ A declared scene placed in the editor as a child of the session's root is freed when the session starts, and the server spawns it from its file.
+
 .. rst-class:: classref-item-separator
 
 ----

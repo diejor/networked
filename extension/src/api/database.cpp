@@ -66,7 +66,7 @@ Ref<NetwDatabase> NetwDatabase::of(Node *p_node, const StringName &p_name) {
         NETW_ERROR(
             sys::TABLE,
             "A database was requested from a node outside a session. Request "
-            "it from a node in the scene tree under a MultiplayerTree."
+            "it from a node in the scene tree under a MultiplayerViewport."
         );
         return Ref<NetwDatabase>();
     }

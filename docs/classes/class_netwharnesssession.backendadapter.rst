@@ -21,7 +21,7 @@ Peer seam for harness session entry.
 Description
 -----------
 
-Implementations build the :godot:`MultiplayerPeer` a tree assigns for one :ref:`Entry<enum_NetwHarnessSession_Entry>`, and tear down transport state associated with a :ref:`MultiplayerTree<class_MultiplayerTree>`. Nothing here connects: :godot:`RefCounted.connect_tree() <RefCounted#class_RefCounted_method_connect_tree>` owns preparation and assignment, so every harness enters a session the way a game does.
+Implementations build the :godot:`MultiplayerPeer` a tree assigns for one :ref:`Entry<enum_NetwHarnessSession_Entry>`, and tear down transport state associated with a :ref:`MultiplayerViewport<class_MultiplayerViewport>`. Nothing here connects: :godot:`RefCounted.connect_tree() <RefCounted#class_RefCounted_method_connect_tree>` owns preparation and assignment, so every harness enters a session the way a game does.
 
 .. rst-class:: classref-reftable-group
 
@@ -31,11 +31,11 @@ Methods
 .. table::
    :widths: auto
 
-   +--------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`MultiplayerPeer` | :ref:`make_peer<class_NetwHarnessSession_BackendAdapter_method_make_peer>`\ (\ tree\: :ref:`MultiplayerTree<class_MultiplayerTree>`, entry\: :ref:`Entry<enum_NetwHarnessSession_Entry>`\ ) |
-   +--------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | |void|                   | :ref:`teardown<class_NetwHarnessSession_BackendAdapter_method_teardown>`\ (\ _tree\: :ref:`MultiplayerTree<class_MultiplayerTree>`, _scene_tree\: :godot:`SceneTree`\ )                     |
-   +--------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   +--------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`MultiplayerPeer` | :ref:`make_peer<class_NetwHarnessSession_BackendAdapter_method_make_peer>`\ (\ tree\: :ref:`MultiplayerViewport<class_MultiplayerViewport>`, entry\: :ref:`Entry<enum_NetwHarnessSession_Entry>`\ ) |
+   +--------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | |void|                   | :ref:`teardown<class_NetwHarnessSession_BackendAdapter_method_teardown>`\ (\ _tree\: :ref:`MultiplayerViewport<class_MultiplayerViewport>`, _scene_tree\: :godot:`SceneTree`\ )                     |
+   +--------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 
 .. rst-class:: classref-section-separator
 
@@ -50,7 +50,7 @@ Method Descriptions
 
 .. rst-class:: classref-method
 
-:godot:`MultiplayerPeer` **make_peer**\ (\ tree\: :ref:`MultiplayerTree<class_MultiplayerTree>`, entry\: :ref:`Entry<enum_NetwHarnessSession_Entry>`\ ) :ref:`🔗<class_NetwHarnessSession_BackendAdapter_method_make_peer>`
+:godot:`MultiplayerPeer` **make_peer**\ (\ tree\: :ref:`MultiplayerViewport<class_MultiplayerViewport>`, entry\: :ref:`Entry<enum_NetwHarnessSession_Entry>`\ ) :ref:`🔗<class_NetwHarnessSession_BackendAdapter_method_make_peer>`
 
 Builds the peer ``tree`` assigns to enter as ``entry``.
 
@@ -62,7 +62,7 @@ Builds the peer ``tree`` assigns to enter as ``entry``.
 
 .. rst-class:: classref-method
 
-|void| **teardown**\ (\ _tree\: :ref:`MultiplayerTree<class_MultiplayerTree>`, _scene_tree\: :godot:`SceneTree`\ ) :ref:`🔗<class_NetwHarnessSession_BackendAdapter_method_teardown>`
+|void| **teardown**\ (\ _tree\: :ref:`MultiplayerViewport<class_MultiplayerViewport>`, _scene_tree\: :godot:`SceneTree`\ ) :ref:`🔗<class_NetwHarnessSession_BackendAdapter_method_teardown>`
 
 Releases transport resources for a tree.
 

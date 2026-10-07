@@ -55,8 +55,6 @@ public:
     static godot::Ref<NetwPromise> scene_pending_request(
         NetwMultiplayer *session
     );
-    static void scene_ensure_host_view(NetwMultiplayer *session);
-    static void scene_release_host_view(NetwMultiplayer *session);
     static bool rpc_sender_admits(
         NetwMultiplayer *session,
         godot::Node *node,

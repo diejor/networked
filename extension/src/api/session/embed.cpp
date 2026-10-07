@@ -18,11 +18,7 @@ using namespace netw;
 namespace netw {
 
 void NetwMultiplayer::embed_set_phase(EmbedPhase p_phase) {
-    if (embed_phase_value == p_phase) {
-        return;
-    }
     embed_phase_value = p_phase;
-    notify(EMBED_PHASE_CHANGED, int(embed_phase_value));
 }
 
 bool NetwMultiplayer::embed_claim_dispose() {
@@ -33,35 +29,47 @@ bool NetwMultiplayer::embed_claim_dispose() {
     return true;
 }
 
-void NetwMultiplayer::embed_offer_bare_level(Node *p_level) {
-    embed_bare_level
-        = p_level != nullptr ? p_level->get_instance_id() : ObjectID();
+Node *NetwMultiplayer::embed_declared_child() {
+    Node *root = session_root();
+    if (root == nullptr) {
+        return nullptr;
+    }
+    Node *declared = nullptr;
+    int count = 0;
+    String listed;
+    for (int at = 0; at < root->get_child_count(); ++at) {
+        Node *child = root->get_child(at);
+        const SceneDecl decl = scene_decl_of(
+            Ref<Script>(Object::cast_to<Script>(child->get_script()))
+        );
+        if (!decl.declared) {
+            continue;
+        }
+        declared = child;
+        count += 1;
+        listed += (listed.is_empty() ? String("'") : String(", '"))
+            + String(child->get_name()) + String("'");
+    }
+    if (count > 1) {
+        NETW_WARN(
+            sys::SCENE,
+            "Several scenes are placed under '%s' (%s), so none of them was "
+            "adopted. Place one there and spawn the others with Netw.spawn.",
+            String(root->get_name()),
+            listed
+        );
+        return nullptr;
+    }
+    return declared;
 }
 
 void NetwMultiplayer::scene_adopt_bare_level(Node *p_level) {
     if (p_level == nullptr) {
         return;
     }
-    Node *root = session_root();
-    if (root == nullptr) {
-        NETW_TRACE(
-            sys::SCENE,
-            "A level outside any scene was offered with no session root."
-        );
-        return;
-    }
     const SceneDecl decl = scene_decl_of(
         Ref<Script>(Object::cast_to<Script>(p_level->get_script()))
     );
-    if (!decl.declared) {
-        NETW_TRACE(
-            sys::SCENE,
-            "'%s' declares no multiplayer scene, so it is the game's own root "
-            "rather than a level to adopt",
-            p_level->get_name()
-        );
-        return;
-    }
     const bool spawns_the_authority_scene = is_host();
     const String path = NetwSceneCore::verify_requested_path(
         gd::ensure_path(p_level->get_scene_file_path())
@@ -82,8 +90,8 @@ void NetwMultiplayer::scene_adopt_bare_level(Node *p_level) {
     if (!spawns_the_authority_scene) {
         NETW_TRACE(
             sys::SCENE,
-            "A level outside any scene was offered to a peer without scene "
-            "authority, so it receives the authority's scene instead."
+            "A placed level was dropped on a peer without scene authority, "
+            "so it receives the authority's scene instead."
         );
         return;
     }
@@ -103,10 +111,11 @@ Error NetwMultiplayer::embed_settle() {
         return OK;
     }
     embed_set_phase(EMBED_PHASE_SETTLING);
-    Node *level = Object::cast_to<Node>(gd::object_of(embed_bare_level));
-    embed_bare_level = ObjectID();
-    scene_adopt_bare_level(level);
-    scene_ensure_host_view();
+    scene_adopt_bare_level(embed_declared_child());
+    const Array live = scene_core->live_scenes();
+    for (int at = 0; at < live.size(); ++at) {
+        scene_warn_unwrapped(wrapper_owner(RID(live[at])));
+    }
     ReplicationCore *plane = (get_replication_plane());
     const Error wired = plane != nullptr ? plane->settle_channels() : OK;
     if (wired != OK) {

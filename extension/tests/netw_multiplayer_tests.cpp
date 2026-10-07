@@ -2846,47 +2846,6 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Multiplayer][Hosted] an isolated scene root is wrapped in a "
-    "viewport that owns both worlds and carries no identity"
-) {
-    Node *arena = memnew(Node);
-    arena->set_name("Arena");
-    const Ref<netw::NetwEntity> seat = netw::NetwEntity::ensure(arena);
-    REQUIRE(seat.is_valid());
-    seat->set_declares_scene(true);
-    seat->set_scene_isolation(
-        int64_t(netw::NetwSceneCore::ISOLATION_OWN_WORLD)
-    );
-
-    REQUIRE(NetwMultiplayer::scene_root_is_isolated(arena));
-    Node *outer = NetwMultiplayer::scene_wrap_world(arena);
-    REQUIRE(outer != nullptr);
-    REQUIRE(outer != arena);
-
-    SubViewport *world = Object::cast_to<SubViewport>(outer);
-    REQUIRE(world != nullptr);
-    CHECK(world->is_using_own_world_3d());
-    CHECK(world->get_world_2d().is_valid());
-    NETW_CHECK_EQ(
-        int(world->get_update_mode()),
-        int(SubViewport::UPDATE_DISABLED)
-    );
-    CHECK(world->has_meta(StringName("_netw_scene_container")));
-    CHECK(netw::NetwEntity::of(world).is_null());
-    CHECK(bool(world->get_name() == StringName("ArenaWorld")));
-
-    CHECK(arena->get_parent() == world);
-    CHECK(NetwMultiplayer::scene_world_of(arena) == world);
-    CHECK(NetwMultiplayer::scene_outer_of(arena) == world);
-    CHECK(NetwMultiplayer::scene_inner_of(world) == arena);
-
-    CHECK(NetwMultiplayer::scene_wrap_world(arena) == world);
-    NETW_CHECK_EQ(world->get_child_count(), 1);
-
-    memdelete(world);
-}
-
-TEST_CASE(
     "[Networked][Multiplayer][Hosted] a mounted scene resolves in one stage"
 ) {
     Ref<NetwMultiplayer> core;

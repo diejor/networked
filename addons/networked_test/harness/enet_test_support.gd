@@ -16,6 +16,9 @@
 class_name EnetTestSupport
 extends RefCounted
 
+## The [MultiplayerPeer] class every session here is created with.
+const PEER_CLASS := &"ENetMultiplayerPeer"
+
 const _PORT_RANGE_START := 30000
 const _PORT_RANGE_SIZE := 100
 
@@ -24,7 +27,7 @@ const _PORT_RANGE_SIZE := 100
 const WAIT_TIMEOUT_MS := 5000
 
 
-## Builds and hosts a fresh [MultiplayerTree] backed by ENet on the
+## Builds and hosts a fresh [MultiplayerViewport] backed by ENet on the
 ## first available port in the test range.
 ##
 ## The peer is built with [method ENetMultiplayerPeer.create_server] and
@@ -37,7 +40,7 @@ const WAIT_TIMEOUT_MS := 5000
 ## [param auth_timeout] overrides the host API auth cleanup timeout when
 ## greater than [code]0.0[/code].
 ##
-## Returns a dictionary with [code]tree[/code] (the [MultiplayerTree]),
+## Returns a dictionary with [code]tree[/code] (the [MultiplayerViewport]),
 ## [code]port[/code] (the bound UDP port).
 static func start_host(
 		parent: Node,
@@ -50,12 +53,13 @@ static func start_host(
 		if peer.create_server(candidate) != OK:
 			continue
 
-		var tree := MultiplayerTree.new()
+		var tree := MultiplayerViewport.new()
 		tree.name = "EnetHost_%d" % candidate
-		tree.auto_host_headless = false
-		tree.peer_class = &"ENetMultiplayerPeer"
-		tree.transport_settings = { port = candidate }
 		parent.add_child(tree)
+		Netw.session(tree).connection.set_defaults(
+				PEER_CLASS,
+				{ port = candidate },
+		)
 
 		tree.api.multiplayer_peer = peer
 		if tree.api.multiplayer_peer != peer:
@@ -80,20 +84,18 @@ static func start_host(
 	return { }
 
 
-## Builds an offline client [MultiplayerTree] wired with an ENet backend
+## Builds an offline client [MultiplayerViewport] wired with an ENet backend
 ## targeting [param port]. The tree is added under [param parent] but has not
 ## connected to anything.
 static func make_client_tree(
 		parent: Node,
 		port: int,
 		name_suffix: String = "",
-) -> MultiplayerTree:
-	var tree := MultiplayerTree.new()
+) -> MultiplayerViewport:
+	var tree := MultiplayerViewport.new()
 	tree.name = "EnetClient%s" % name_suffix
-	tree.auto_host_headless = false
-	tree.peer_class = &"ENetMultiplayerPeer"
-	tree.transport_settings = { port = port }
 	parent.add_child(tree)
+	Netw.session(tree).connection.set_defaults(PEER_CLASS, { port = port })
 	return tree
 
 
@@ -107,7 +109,7 @@ static func make_client_tree(
 ## when the peer was refused, and [constant @GlobalScope.ERR_TIMEOUT] when the
 ## wait ran out.
 static func join_client(
-		tree: MultiplayerTree,
+		tree: MultiplayerViewport,
 		port: int,
 		username: StringName,
 		join_args: Array = [],
@@ -128,7 +130,7 @@ static func join_client(
 
 
 ## Waits until [param tree]'s session is online.
-static func await_online(tree: MultiplayerTree) -> Error:
+static func await_online(tree: MultiplayerViewport) -> Error:
 	var api := tree.api
 	return await await_until(tree, func() -> bool: return api.is_online)
 
@@ -152,14 +154,14 @@ static func make_connect_endpoint(
 		port: int,
 ) -> Dictionary:
 	return {
-		peer_class = &"ENetMultiplayerPeer",
+		peer_class = PEER_CLASS,
 		address = "127.0.0.1:%d" % port,
 	}
 
 
 ## Tears down [param tree] and drains the SceneTree so the UDP socket is
 ## released before the next test begins.
-static func stop_tree(tree: MultiplayerTree) -> void:
+static func stop_tree(tree: MultiplayerViewport) -> void:
 	if not is_instance_valid(tree):
 		return
 	var scene_tree := tree.get_tree()

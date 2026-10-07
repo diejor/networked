@@ -29,9 +29,9 @@ Methods
 .. table::
    :widths: auto
 
-   +--------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`MultiplayerPeer` | :ref:`make_peer<class_NetwHarnessSession_LoopbackAdapter_method_make_peer>`\ (\ _tree\: :ref:`MultiplayerTree<class_MultiplayerTree>`, entry\: :ref:`Entry<enum_NetwHarnessSession_Entry>`\ ) |
-   +--------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   +--------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`MultiplayerPeer` | :ref:`make_peer<class_NetwHarnessSession_LoopbackAdapter_method_make_peer>`\ (\ _tree\: :ref:`MultiplayerViewport<class_MultiplayerViewport>`, entry\: :ref:`Entry<enum_NetwHarnessSession_Entry>`\ ) |
+   +--------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 
 .. rst-class:: classref-section-separator
 
@@ -46,7 +46,7 @@ Method Descriptions
 
 .. rst-class:: classref-method
 
-:godot:`MultiplayerPeer` **make_peer**\ (\ _tree\: :ref:`MultiplayerTree<class_MultiplayerTree>`, entry\: :ref:`Entry<enum_NetwHarnessSession_Entry>`\ ) :ref:`🔗<class_NetwHarnessSession_LoopbackAdapter_method_make_peer>`
+:godot:`MultiplayerPeer` **make_peer**\ (\ _tree\: :ref:`MultiplayerViewport<class_MultiplayerViewport>`, entry\: :ref:`Entry<enum_NetwHarnessSession_Entry>`\ ) :ref:`🔗<class_NetwHarnessSession_LoopbackAdapter_method_make_peer>`
 
 Answers the shared loopback server peer for :godot:`NetwHarnessSession.Entry.HOST <NetwHarnessSession#class_NetwHarnessSession_constant_Entry.HOST>` and a fresh client peer, already handshaken against it, for :godot:`NetwHarnessSession.Entry.JOIN <NetwHarnessSession#class_NetwHarnessSession_constant_Entry.JOIN>`.
 

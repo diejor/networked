@@ -1,7 +1,7 @@
 #include "netw/api/scene.hpp"
 #include "godot/scene_tree.hpp"
 #include "netw/api/netw_multiplayer.hpp"
-#include "netw/api/nodes/view/host_scene_view.hpp"
+#include "netw/api/nodes/view/stretch_viewport_container.hpp"
 
 #include "netw/api/participant.hpp"
 
@@ -42,11 +42,6 @@ using namespace netw;
 namespace netw {
 
 namespace {
-
-Callable &host_view_factory() {
-    static Callable factory;
-    return factory;
-}
 
 const char *SIG_PHYSICS_FRAME = "physics_frame";
 const char *SIG_PLAYER_SCENE_CHANGED = "scene_changed";
@@ -273,20 +268,26 @@ Node *NetwMultiplayer::scene_wrap_world(Node *p_root) {
         return p_root;
     }
     if (scene_world_of(p_root) != nullptr) {
-        return p_root->get_parent();
+        return scene_outer_of(p_root);
     }
+    const String name = p_root->get_name();
     SubViewport *world = memnew(SubViewport);
     world->set_use_own_world_3d(true);
     world->set_update_mode(SubViewport::UPDATE_DISABLED);
-    world->set_name(String(p_root->get_name()) + String("World"));
+    world->set_name(name + String("World"));
     world->set_meta(scene_container_meta(), true);
     world->add_child(p_root);
+    StretchViewportContainer *view = memnew(StretchViewportContainer);
+    view->set_visible(false);
+    view->set_name(name + String("View"));
+    view->set_meta(scene_container_meta(), true);
+    view->add_child(world);
     NETW_TRACE(
         sys::SCENE,
         "'%s' owns its world, so a viewport carries it",
         p_root->get_name()
     );
-    return world;
+    return view;
 }
 
 SubViewport *NetwMultiplayer::scene_world_of(Node *p_root) {
@@ -297,17 +298,31 @@ SubViewport *NetwMultiplayer::scene_world_of(Node *p_root) {
     return Object::cast_to<SubViewport>(parent);
 }
 
+StretchViewportContainer *NetwMultiplayer::scene_view_of(Node *p_root) {
+    SubViewport *world = scene_world_of(p_root);
+    Node *parent = world != nullptr ? world->get_parent() : nullptr;
+    if (parent == nullptr || !parent->has_meta(scene_container_meta())) {
+        return nullptr;
+    }
+    return Object::cast_to<StretchViewportContainer>(parent);
+}
+
 Node *NetwMultiplayer::scene_outer_of(Node *p_root) {
+    StretchViewportContainer *view = scene_view_of(p_root);
+    if (view != nullptr) {
+        return view;
+    }
     SubViewport *world = scene_world_of(p_root);
     return world != nullptr ? static_cast<Node *>(world) : p_root;
 }
 
 Node *NetwMultiplayer::scene_inner_of(Node *p_node) {
-    if (p_node == nullptr || !p_node->has_meta(scene_container_meta())
-        || p_node->get_child_count() == 0) {
-        return p_node;
+    Node *inner = p_node;
+    while (inner != nullptr && inner->has_meta(scene_container_meta())
+           && inner->get_child_count() > 0) {
+        inner = inner->get_child(0);
     }
-    return p_node->get_child(0);
+    return inner;
 }
 
 StringName NetwMultiplayer::scene_packed_stem(
@@ -403,17 +418,6 @@ bool NetwMultiplayer::scene_owns_its_world(const RID &p_scene) const {
         == int64_t(NetwSceneCore::ISOLATION_OWN_WORLD);
 }
 
-bool NetwMultiplayer::scene_hosts_isolated_world() const {
-    const Array live = scene_core->live_scenes();
-    for (int at = 0; at < live.size(); ++at) {
-        const RID scene = live[at];
-        if (scene_world_of(wrapper_owner(scene)) != nullptr) {
-            return true;
-        }
-    }
-    return false;
-}
-
 void NetwMultiplayer::scene_register_constructor() {
     if (scene_constructor_registered) {
         return;
@@ -434,9 +438,11 @@ void NetwMultiplayer::scene_root_online(Node *p_root) {
         return;
     }
     const RID live = entity_of(p_root);
+    if (embed_phase_value == EMBED_PHASE_LIVE) {
+        scene_warn_unwrapped(p_root);
+    }
     scene_open_admission(p_root);
     scene_drain_parked_viewers(live);
-    scene_ensure_host_view();
     const Ref<NetwEntity> record = NetwEntity::of(p_root);
     if (record.is_null() || p_root == nullptr) {
         return;
@@ -451,6 +457,24 @@ void NetwMultiplayer::scene_root_online(Node *p_root) {
     p_root->connect(StringName("ready"), publish, Object::CONNECT_ONE_SHOT);
 }
 
+void NetwMultiplayer::scene_warn_unwrapped(Node *p_root) {
+    if (p_root == nullptr || !scene_root_is_isolated(p_root)
+        || scene_world_of(p_root) != nullptr) {
+        return;
+    }
+    const uint64_t root_id = uint64_t(gd::instance_id(p_root));
+    if (scene_unwrapped_warned.has(root_id)) {
+        return;
+    }
+    scene_unwrapped_warned.insert(root_id);
+    NETW_WARN(
+        sys::SCENE,
+        "'%s' is declared isolated but was added outside Netw.spawn, so it "
+        "shares a world. Spawn it with Netw.spawn.",
+        String(p_root->get_name())
+    );
+}
+
 void NetwMultiplayer::scene_root_offline(Object *p_root) {
     scene_close_admission(p_root);
     scene_forget(p_root);
@@ -458,71 +482,11 @@ void NetwMultiplayer::scene_root_offline(Object *p_root) {
 }
 
 void NetwMultiplayer::scene_retire_world(Node *p_root) {
-    SubViewport *world = scene_world_of(p_root);
-    if (world == nullptr || world->is_queued_for_deletion()) {
+    Node *outer = scene_outer_of(p_root);
+    if (outer == p_root || outer->is_queued_for_deletion()) {
         return;
     }
-    world->queue_free();
-}
-
-void NetwMultiplayer::scene_set_host_view_factory(const Callable &p_factory) {
-    host_view_factory() = p_factory;
-}
-
-Callable NetwMultiplayer::scene_host_view_factory() {
-    return host_view_factory();
-}
-
-ParticipantView *NetwMultiplayer::scene_placed_view(Node *p_root) {
-    if (p_root == nullptr) {
-        return nullptr;
-    }
-    for (int at = 0; at < p_root->get_child_count(); ++at) {
-        ParticipantView *view
-            = Object::cast_to<ParticipantView>(p_root->get_child(at));
-        if (view != nullptr) {
-            return view;
-        }
-    }
-    return nullptr;
-}
-
-void NetwMultiplayer::scene_ensure_host_view() {
-    if (!presents_as_listen_host()) {
-        return;
-    }
-    Node *root = session_root();
-    if (root == nullptr || !scene_hosts_isolated_world()) {
-        return;
-    }
-    if (Object::cast_to<Node>(gd::object_of(scene_host_view_id)) != nullptr) {
-        return;
-    }
-    const Callable factory = host_view_factory();
-    Node *view = nullptr;
-    if (factory.is_valid()) {
-        view = Object::cast_to<Node>(gd::live_object(factory.call(root)));
-    } else if (scene_placed_view(root) == nullptr) {
-        view = memnew(HostSceneView);
-    }
-    if (view == nullptr) {
-        return;
-    }
-    view->set_name(StringName("HostSceneView"));
-    scene_host_view_id = view->get_instance_id();
-    root->add_child(view);
-}
-
-void NetwMultiplayer::scene_release_host_view() {
-    Node *view = Object::cast_to<Node>(gd::object_of(scene_host_view_id));
-    scene_host_view_id = ObjectID();
-    if (view == nullptr) {
-        return;
-    }
-    if (view->get_parent() != nullptr) {
-        view->get_parent()->remove_child(view);
-    }
-    memdelete(view);
+    outer->queue_free();
 }
 
 Node *NetwMultiplayer::scene_containing(Node *p_node) {
@@ -652,7 +616,6 @@ void NetwMultiplayer::scene_on_session_reclaimed() {
     }
     scene_core->request_abandon(ERR_UNAVAILABLE);
     scene_core->clear();
-    scene_release_host_view();
     scene_player_display_invalidate();
 }
 
@@ -697,7 +660,6 @@ void NetwMultiplayer::scene_on_session_entered() {
         callable_mp(this, &NetwMultiplayer::scene_announce_startup)
             .call_deferred();
     }
-    callable_mp(this, &NetwMultiplayer::scene_ensure_host_view).call_deferred();
 }
 
 void NetwMultiplayer::scene_announce_startup() {

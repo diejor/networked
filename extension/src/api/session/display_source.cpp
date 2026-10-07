@@ -2,24 +2,21 @@
 
 #include "godot/node.hpp"
 #include "godot/object.hpp"
-#include "godot/viewport.hpp"
-#include "netw/api/entity.hpp"
+#include "netw/api/nodes/view/stretch_viewport_container.hpp"
 #include "netw/log.hpp"
+#include "netw/scene_core.hpp"
 
 using namespace godot;
 using namespace netw;
 
 namespace netw {
 
-SubViewport *NetwMultiplayer::scene_resolve_player_viewport() {
-    if (session_get_role() != ROLE_LISTEN_SERVER) {
-        return nullptr;
+RID NetwMultiplayer::scene_shown_derive() {
+    if (scene_presented().is_valid()) {
+        return scene_presented();
     }
-    return scene_world_of(scene_get_node(scene_presented()));
-}
-
-SubViewport *NetwMultiplayer::scene_player_viewport() {
-    return scene_resolve_player_viewport();
+    const Array live = scene_core->live_scenes();
+    return live.size() == 1 ? RID(live[0]) : RID();
 }
 
 void NetwMultiplayer::scene_player_display_invalidate() {
@@ -34,20 +31,29 @@ void NetwMultiplayer::scene_player_display_invalidate() {
 
 void NetwMultiplayer::scene_player_display_settle() {
     scene_player_display_pending = false;
-    SubViewport *resolved = scene_resolve_player_viewport();
-    const ObjectID settled = resolved != nullptr
-        ? ObjectID(resolved->get_instance_id())
-        : ObjectID();
+    StretchViewportContainer *shown
+        = scene_view_of(scene_get_node(scene_shown_derive()));
+    const ObjectID settled
+        = shown != nullptr ? ObjectID(shown->get_instance_id()) : ObjectID();
     if (settled == scene_player_display_id) {
         return;
     }
+    StretchViewportContainer *was = Object::cast_to<StretchViewportContainer>(
+        gd::object_of(scene_player_display_id)
+    );
     scene_player_display_id = settled;
+    if (was != nullptr) {
+        was->hide();
+    }
+    if (shown != nullptr) {
+        shown->show();
+    }
     NETW_TRACE(
         sys::SCENE,
-        "The player display is now %s.",
-        resolved != nullptr ? "an isolated world" : "no viewport"
+        "This peer now shows %s.",
+        shown != nullptr ? String(shown->get_name())
+                         : String("no isolated world")
     );
-    notify(PARTICIPANT_VIEWPORT_CHANGED, resolved);
 }
 
 } // namespace netw

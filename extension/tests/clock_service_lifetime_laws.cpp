@@ -8,7 +8,7 @@
 #include "godot/script.hpp"
 #include "netw/api/context.hpp"
 #include "netw/api/netw_multiplayer.hpp"
-#include "netw/api/nodes/multiplayer_tree.hpp"
+#include "netw/api/nodes/multiplayer_viewport.hpp"
 
 namespace TestClockServiceLifetimeLaws {
 
@@ -17,11 +17,11 @@ using netw::ClockEngine;
 using netw::NetwMultiplayer;
 
 struct Branch {
-    netw::MultiplayerTree *tree = nullptr;
+    netw::MultiplayerViewport *tree = nullptr;
     NetwMultiplayer *core = nullptr;
 
     Branch() {
-        tree = memnew(netw::MultiplayerTree);
+        tree = memnew(netw::MultiplayerViewport);
         tree->set_name("ClockLifetimeTree");
         netw::gd::scene_root()->add_child(tree);
         core = tree->get_api().ptr();

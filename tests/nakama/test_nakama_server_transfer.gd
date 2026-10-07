@@ -9,7 +9,7 @@ const MOVED_BEFORE := Vector2(200, 100)
 const MOVED_AFTER := Vector2(400, 300)
 const DEADLINE_WARNING := "did not finish its world report"
 
-var trees: Array[MultiplayerTree] = []
+var trees: Array[MultiplayerViewport] = []
 var driver: RelayDriver
 var warnings: WarningLog
 
@@ -312,7 +312,7 @@ class Watch:
 	var server_lost := false
 
 
-	func _init(tree: MultiplayerTree) -> void:
+	func _init(tree: MultiplayerViewport) -> void:
 		Netw.session(tree).server_transferred.connect(on_server_transferred)
 		tree.api.server_disconnected.connect(on_server_disconnected)
 
@@ -392,7 +392,7 @@ func judge_loss(mode: int) -> void:
 	var room := Netw.session(host).connection.join_address
 	var ana := await join_world(room, "ana", mode)
 	var ben := await join_world(room, "ben", mode)
-	var survivors: Array[MultiplayerTree] = [ana, ben]
+	var survivors: Array[MultiplayerViewport] = [ana, ben]
 	if not await wait_until(world_whole.bind([host, ana, ben]), "the world"):
 		return
 	await judge_state_flows(host, ana, MOVED_BEFORE)
@@ -428,7 +428,7 @@ func judge_hand_off(mode: int) -> void:
 	var room := Netw.session(host).connection.join_address
 	var ana := await join_world(room, "ana", mode)
 	var ben := await join_world(room, "ben", mode)
-	var everyone: Array[MultiplayerTree] = [host, ana, ben]
+	var everyone: Array[MultiplayerViewport] = [host, ana, ben]
 	if not await wait_until(world_whole.bind(everyone), "the world"):
 		return
 	await judge_state_flows(host, ana, MOVED_BEFORE)
@@ -456,8 +456,8 @@ func judge_hand_off(mode: int) -> void:
 
 
 func judge_state_flows(
-		server: MultiplayerTree,
-		client: MultiplayerTree,
+		server: MultiplayerViewport,
+		client: MultiplayerViewport,
 		to: Vector2,
 ) -> void:
 	var start := crate_of(client).position.x
@@ -479,7 +479,7 @@ func judge_state_flows(
 	)
 
 
-func judge_deadline_holds(survivors: Array[MultiplayerTree]) -> void:
+func judge_deadline_holds(survivors: Array[MultiplayerViewport]) -> void:
 	await get_tree().create_timer(DEADLINE_WATCH_SECONDS).timeout
 	assert_int(warnings.count(DEADLINE_WARNING)).is_equal(0)
 	for tree in survivors:
@@ -487,13 +487,14 @@ func judge_deadline_holds(survivors: Array[MultiplayerTree]) -> void:
 		assert_int(tree.multiplayer.get_peers().size()).is_equal(survivors.size() - 1)
 
 
-func open_world(username: String, mode: int) -> MultiplayerTree:
+func open_world(username: String, mode: int) -> MultiplayerViewport:
 	var tree := NakamaTestSupport.make_client_tree(self, username)
 	tree.add_child(TransferWorld.new(mode))
 	trees.append(tree)
 	await get_tree().process_frame
 	var settled := await NetwOrdinarySetup.connect_through(
 		tree,
+		NakamaTestSupport.PEER_CLASS,
 		NetwConnection.TRANSPORT_MODE_HOST,
 		"",
 		{ },
@@ -504,7 +505,7 @@ func open_world(username: String, mode: int) -> MultiplayerTree:
 	return tree
 
 
-func join_world(room: String, username: String, mode: int) -> MultiplayerTree:
+func join_world(room: String, username: String, mode: int) -> MultiplayerViewport:
 	var tree := NakamaTestSupport.make_client_tree(self, username)
 	tree.add_child(TransferWorld.new(mode))
 	trees.append(tree)
@@ -515,17 +516,17 @@ func join_world(room: String, username: String, mode: int) -> MultiplayerTree:
 	return tree
 
 
-func migrate(tree: MultiplayerTree) -> void:
+func migrate(tree: MultiplayerViewport) -> void:
 	NakamaTestSupport.directory(tree).wrapper().migrate_on_host_loss = true
 
 
 func world_whole(group: Array) -> bool:
-	for tree: MultiplayerTree in group:
+	for tree: MultiplayerViewport in group:
 		if not tree.api.is_online or crate_of(tree) == null:
 			return false
 		if tree.multiplayer.get_peers().size() != group.size() - 1:
 			return false
-		for other: MultiplayerTree in group:
+		for other: MultiplayerViewport in group:
 			var player := Netw.session(other).local_player
 			if player == null or body_of(tree, player.username) == null:
 				return false
@@ -534,7 +535,7 @@ func world_whole(group: Array) -> bool:
 	return true
 
 
-func body_of(tree: MultiplayerTree, username: String) -> Node2D:
+func body_of(tree: MultiplayerViewport, username: String) -> Node2D:
 	var wanted := StringName(username)
 	for body: NetwEntity in tree.api.bodies:
 		if body.player != null and body.player.username == wanted:
@@ -542,7 +543,7 @@ func body_of(tree: MultiplayerTree, username: String) -> Node2D:
 	return null
 
 
-func crate_of(tree: MultiplayerTree) -> Crate:
+func crate_of(tree: MultiplayerViewport) -> Crate:
 	var arena := tree.get_node_or_null(^"World/Arena")
 	if arena == null:
 		return null

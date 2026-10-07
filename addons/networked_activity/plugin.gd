@@ -3,7 +3,7 @@
 ## The addon's runtime is plain [code]class_name[/code] script, so it works
 ## whether or not this plugin is enabled. The plugin exists only to register the
 ## addon with the editor and host editor-side settings. The
-## [DiscordActivityService] auto-registers itself on a [MultiplayerTree] the same
+## [DiscordActivityService] auto-registers itself on a [MultiplayerViewport] the same
 ## way every other [NetwService] does, so nothing is added as an autoload here.
 @tool
 extends EditorPlugin

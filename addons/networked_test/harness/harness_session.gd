@@ -21,13 +21,13 @@ enum Entry {
 ##
 ## Implementations build the [MultiplayerPeer] a tree assigns for one
 ## [enum NetwHarnessSession.Entry], and tear down transport state associated
-## with a [MultiplayerTree]. Nothing here connects: [method connect_tree] owns
+## with a [MultiplayerViewport]. Nothing here connects: [method connect_tree] owns
 ## preparation and assignment, so every harness enters a session the way a game
 ## does.
 class BackendAdapter:
 	## Builds the peer [param tree] assigns to enter as [param entry].
 	func make_peer(
-			tree: MultiplayerTree,
+			tree: MultiplayerViewport,
 			entry: Entry,
 	) -> MultiplayerPeer:
 		assert(false, "BackendAdapter.make_peer must be implemented.")
@@ -36,7 +36,7 @@ class BackendAdapter:
 
 	## Releases transport resources for a tree.
 	func teardown(
-			_tree: MultiplayerTree,
+			_tree: MultiplayerViewport,
 			_scene_tree: SceneTree,
 	) -> void:
 		pass
@@ -61,7 +61,7 @@ class LoopbackAdapter:
 	## already handshaken against it, for
 	## [constant NetwHarnessSession.Entry.JOIN].
 	func make_peer(
-			_tree: MultiplayerTree,
+			_tree: MultiplayerViewport,
 			entry: Entry,
 	) -> MultiplayerPeer:
 		if entry == Entry.HOST:
@@ -90,17 +90,13 @@ func reset() -> void:
 		LocalLoopbackSession.set_shared_session(null)
 
 
-## Applies local loopback defaults and names the loopback peer class.
+## Points the loopback session at [param tree].
 func adopt_tree(
-		tree: MultiplayerTree,
+		tree: MultiplayerViewport,
 		role: NetwSession.Role,
 ) -> void:
-	if role != NetwSession.ROLE_CLIENT:
-		tree.desired_role = role
-	tree.auto_host_headless = false
-	tree.debug_join = null
-	tree.peer_class = &"LocalMultiplayerPeer"
-	tree.transport_settings = { }
+	if role == NetwSession.ROLE_DEDICATED_SERVER:
+		Netw.configure_session(tree).role(role)
 	LocalLoopbackSession.set_shared_session(_session)
 
 
@@ -117,7 +113,7 @@ func adopt_tree(
 ## authored, so this waits one frame for the deferred configuration to settle
 ## before assigning.
 func connect_tree(
-		tree: MultiplayerTree,
+		tree: MultiplayerViewport,
 		entry: Entry,
 		username: StringName = &"",
 		join_args: Array = [],
@@ -138,7 +134,7 @@ func connect_tree(
 	return await _await_online(tree)
 
 
-func _await_online(tree: MultiplayerTree) -> Error:
+func _await_online(tree: MultiplayerViewport) -> Error:
 	var deadline := Time.get_ticks_msec() + ONLINE_TIMEOUT_MS
 	var scene_tree := tree.get_tree()
 	while not tree.api.is_online:
@@ -149,10 +145,10 @@ func _await_online(tree: MultiplayerTree) -> Error:
 
 
 ## Takes [param tree] offline. Marks it
-## [constant MultiplayerTree.DISCONNECTING], flushes held inbound
+## [constant MultiplayerViewport.DISCONNECTING], flushes held inbound
 ## packets, and closes the peer. Returns the closed peer id so callers can
 ## await server unregistration. Inverse of [method connect_tree].
-func disconnect_tree(tree: MultiplayerTree) -> int:
+func disconnect_tree(tree: MultiplayerViewport) -> int:
 	if not tree.api.multiplayer_peer:
 		return 0
 

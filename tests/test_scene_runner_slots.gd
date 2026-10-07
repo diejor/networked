@@ -25,46 +25,30 @@ func after_test() -> void:
 	await super.after_test()
 
 
-func test_slot_send_input_is_isolated_from_global_input() -> void:
-	var a := _make_slot_scene("A", true)
-	var b := _make_slot_scene("B", true)
+func test_scene_runner_routes_action_to_one_tree() -> void:
+	var a := make_tree_scene("A")
+	var b := make_tree_scene("B")
+	var first := runner_for(a, &"valeria")
+	var second := runner_for(b, &"jose")
 
-	var event := InputEventAction.new()
-	event.action = ACTION
-	event.pressed = true
-	a.slot.send_input(event)
-
+	second.simulate_action_press(String(ACTION))
 	await get_tree().process_frame
 
-	assert_that(a.input.pressed).is_true()
-	assert_that(b.input.pressed).is_false()
-	assert_that(Input.is_action_pressed(ACTION)).is_false()
-
-
-func test_scene_runner_routes_action_to_one_slot() -> void:
-	var a := _make_slot_scene("A", false)
-	var b := _make_slot_scene("B", true)
-	var runner := NetwSceneRunner.new(a.scene, a.slot, &"valeria")
-	auto_free(runner)
-
-	runner.simulate_action_press(String(ACTION))
-	await get_tree().process_frame
-
-	assert_that(a.input.pressed).is_true()
-	assert_that(b.input.pressed).is_false()
-	assert_that(Input.is_action_pressed(ACTION)).is_false()
-
-	runner.simulate_action_release(String(ACTION))
-	await get_tree().process_frame
-
+	assert_that(b.input.pressed).is_true()
 	assert_that(a.input.pressed).is_false()
 	assert_that(Input.is_action_pressed(ACTION)).is_false()
 
+	first.simulate_action_press(String(ACTION))
+	second.simulate_action_release(String(ACTION))
+	await get_tree().process_frame
 
-func test_scene_runner_routes_key_to_one_slot() -> void:
-	var a := _make_slot_scene("A", false)
-	var runner := NetwSceneRunner.new(a.scene, a.slot, &"valeria")
-	auto_free(runner)
+	assert_that(a.input.pressed).is_true()
+	assert_that(b.input.pressed).is_false()
+	assert_that(Input.is_action_pressed(ACTION)).is_false()
+
+
+func test_scene_runner_routes_key_to_one_tree() -> void:
+	var runner := runner_for(make_tree_scene("A"), &"valeria")
 
 	runner.simulate_key_press(KEY_A)
 	await get_tree().process_frame
@@ -78,10 +62,8 @@ func test_scene_runner_routes_key_to_one_slot() -> void:
 	assert_that(runner._key_on_press.has(KEY_A)).is_false()
 
 
-func test_scene_runner_routes_mouse_button_to_one_slot() -> void:
-	var a := _make_slot_scene("A", false)
-	var runner := NetwSceneRunner.new(a.scene, a.slot, &"valeria")
-	auto_free(runner)
+func test_scene_runner_routes_mouse_button_to_one_tree() -> void:
+	var runner := runner_for(make_tree_scene("A"), &"valeria")
 
 	runner.simulate_mouse_button_press(MOUSE_BUTTON_LEFT)
 	await get_tree().process_frame
@@ -96,9 +78,7 @@ func test_scene_runner_routes_mouse_button_to_one_slot() -> void:
 
 
 func test_scene_runner_reset_input_to_default_clears_tracking() -> void:
-	var a := _make_slot_scene("A", false)
-	var runner := NetwSceneRunner.new(a.scene, a.slot, &"valeria")
-	auto_free(runner)
+	var runner := runner_for(make_tree_scene("A"), &"valeria")
 
 	runner.simulate_action_press(String(ACTION))
 	runner.simulate_key_press(KEY_A)
@@ -117,14 +97,12 @@ func test_scene_runner_reset_input_to_default_clears_tracking() -> void:
 
 
 func test_scene_runner_reports_harness_owned_time_footguns() -> void:
-	var a := _make_slot_scene("A", false)
-	var runner := NetwSceneRunner.new(a.scene, a.slot, &"valeria")
-	auto_free(runner)
+	var runner := runner_for(make_tree_scene("A"), &"valeria")
 
-	var time_factor_error := _capture_reported_failure(
+	var time_factor_error := capture_reported_failure(
 		func(): return runner.set_time_factor(2.0),
 	)
-	var simulate_frames_error := _capture_reported_failure(
+	var simulate_frames_error := capture_reported_failure(
 		func(): return runner.simulate_frames(1),
 	)
 
@@ -133,10 +111,8 @@ func test_scene_runner_reports_harness_owned_time_footguns() -> void:
 
 
 func test_scene_runner_await_player_reports_through_waiter() -> void:
-	var a := _make_slot_scene("A", false)
-	var runner := NetwSceneRunner.new(a.scene, a.slot, &"valeria")
+	var runner := runner_for(make_tree_scene("A"), &"valeria")
 	var reports: Array[String] = []
-	auto_free(runner)
 	runner.waiter = NetwWaiter.new(
 		get_tree(),
 		func(label: String, timeout: float) -> void:
@@ -149,7 +125,7 @@ func test_scene_runner_await_player_reports_through_waiter() -> void:
 	assert_that(reports).contains_exactly(["player 'nobody' in 'valeria' 0.01"])
 
 
-func _capture_reported_failure(callable: Callable) -> String:
+func capture_reported_failure(callable: Callable) -> String:
 	Engine.set_meta(GdUnitConstants.EXPECT_ASSERT_REPORT_FAILURES, true)
 	callable.call()
 	var failure := GdAssertReports.current_failure()
@@ -158,21 +134,25 @@ func _capture_reported_failure(callable: Callable) -> String:
 	return failure
 
 
-func _make_slot_scene(label: String, mounted: bool) -> Dictionary:
-	var slot := ParticipantWindow.new()
-	slot.name = "Window%s" % label
-	add_child(slot)
-	auto_free(slot)
+func runner_for(made: Dictionary, username: StringName) -> NetwSceneRunner:
+	var runner := NetwSceneRunner.new(made.scene, made.tree, username)
+	auto_free(runner)
+	return runner
 
+
+func make_tree_scene(label: String) -> Dictionary:
+	var tree := MultiplayerViewport.new()
+	tree.name = "Tree%s" % label
 	var scene := Node.new()
 	scene.name = "Scene%s" % label
 	var input := InputProbe.new()
 	scene.add_child(input)
-	if mounted:
-		slot.add_child(scene)
+	tree.add_child(scene)
+	add_child(tree)
+	auto_free(tree)
 
 	return {
-		"slot": slot,
+		"tree": tree,
 		"scene": scene,
 		"input": input,
 	}

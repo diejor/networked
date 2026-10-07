@@ -60,7 +60,7 @@ func test_public_lobby_round_trips_then_clears_on_leave() -> void:
 		assert_str(String(info.metadata.get("host", ""))) \
 				.is_equal(host_dir._local_member_name())
 
-	var host_tree := host_dir.get_parent() as MultiplayerTree
+	var host_tree := host_dir.get_parent() as MultiplayerViewport
 	_trees.erase(host_tree)
 	await NakamaTestSupport.stop_tree(host_tree)
 
@@ -93,8 +93,7 @@ func test_private_lobby_is_unlisted_but_joinable() -> void:
 
 
 func test_browsing_from_a_ready_callback_lists_once_the_session_is_ready() -> void:
-	var tree := MultiplayerTree.new()
-	tree.auto_host_headless = false
+	var tree := MultiplayerViewport.new()
 	var dir := NakamaLobbyDirectory.new()
 	dir.name = &"NakamaLobbyDirectory"
 	dir.host = NakamaTestServer.host()

@@ -509,24 +509,6 @@ public sealed class NetwEntity : NetwRefCounted
         remove => DisconnectBridge("reparented", value);
     }
 
-    /// <summary>
-    /// Emitted when this entity's player becomes the view shown on this peer.
-    /// With nothing connected, <see cref="HostSceneView"/> makes the first
-    /// camera current, so connect it to use your own camera.
-    /// </summary>
-    public event Action ViewActivated
-    {
-        add => ConnectBridge(
-            "view_activated",
-            value,
-            Callable.From(
-                () =>
-                    value()
-            )
-        );
-        remove => DisconnectBridge("view_activated", value);
-    }
-
     private static readonly IntPtr _bindGetOwner =
         NetwApi.MethodBind("NetwEntity", "get_owner", 3160264692UL);
 

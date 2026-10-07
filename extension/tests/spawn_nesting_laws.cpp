@@ -4,8 +4,10 @@
 
 #include "godot/node.hpp"
 #include "godot/spatial_node.hpp"
+#include "godot/viewport.hpp"
 #include "netw/api/entity.hpp"
 #include "netw/api/netw_multiplayer.hpp"
+#include "netw/api/nodes/view/stretch_viewport_container.hpp"
 #include "netw/liveness_core.hpp"
 
 namespace TestSpawnNestingLaws {
@@ -353,9 +355,8 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Spawn] SN9 the world viewport an isolated scene owns is "
-    "inserted by the peer that spawns it and never by a receiver, because "
-    "only the spawning peer presents that world and routes input into it"
+    "[Networked][Spawn] SN9 a received isolated scene is wrapped like the "
+    "authored one, and its container is shown and takes input"
 ) {
     LoopbackRig rig(1);
     rig.mount();
@@ -379,12 +380,21 @@ TEST_CASE(
     CHECK(arrived);
 
     if (arrived) {
-        const bool authored_owns_a_world
-            = netw::NetwMultiplayer::scene_world_of(authored) != nullptr;
-        const bool received_shares_the_window
-            = netw::NetwMultiplayer::scene_world_of(received) == nullptr;
-        CHECK(authored_owns_a_world);
-        CHECK(received_shares_the_window);
+        netw::NetwMultiplayer *client = rig.client(0);
+        client->scene_player_display_invalidate();
+        client->scene_player_display_settle();
+        SubViewport *world = netw::NetwMultiplayer::scene_world_of(received);
+        netw::StretchViewportContainer *view
+            = netw::NetwMultiplayer::scene_view_of(received);
+        REQUIRE(world != nullptr);
+        REQUIRE(view != nullptr);
+        CHECK(world->is_using_own_world_3d());
+        CHECK(bool(
+            view->get_name()
+            == netw::NetwMultiplayer::scene_view_of(authored)->get_name()
+        ));
+        CHECK(view->is_visible());
+        CHECK_FALSE(world->is_input_disabled());
     }
 
     Node *outer = netw::NetwMultiplayer::scene_outer_of(authored);

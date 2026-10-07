@@ -436,11 +436,6 @@
 				Emitted once after identity, authority and spawn properties are applied. The owner is in the tree, but [method Node._ready] may still be running.
 			</description>
 		</signal>
-		<signal name="view_activated">
-			<description>
-				Emitted when this entity's player becomes the view shown on this peer. With nothing connected, [HostSceneView] makes the first camera current, so connect it to use your own camera.
-			</description>
-		</signal>
 	</signals>
 	<constants>
 		<constant name="OWNERSHIP_PEER" value="0" enum="Ownership">

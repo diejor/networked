@@ -32,7 +32,7 @@ func _root() -> NetwRootWorld:
 
 #endregion
 
-#region Scenarios (provider-agnostic — never name a MultiplayerTree or install verb)
+#region Scenarios (provider-agnostic — never name a MultiplayerViewport or install verb)
 
 func _scenario_host_comes_online(world: NetwEmbeddingWorld) -> void:
 	var host := await world.host()

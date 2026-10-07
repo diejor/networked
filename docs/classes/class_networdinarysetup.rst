@@ -12,7 +12,7 @@ NetwOrdinarySetup
 
 **Inherits:** :godot:`RefCounted`
 
-Prepares a player and hosts or joins through a :ref:`MultiplayerTree<class_MultiplayerTree>`'s own transport, for fixtures whose backend cannot build a peer by itself.
+Prepares a player and hosts or joins through a :ref:`MultiplayerViewport<class_MultiplayerViewport>`'s own transport, for fixtures whose backend cannot build a peer by itself.
 
 .. rst-class:: classref-introduction-group
 
@@ -25,6 +25,7 @@ A test that already knows how to build its peer assigns it directly and needs no
 
     var settled := await NetwOrdinarySetup.connect_through(
             tree,
+            &"NakamaRelayPeer",
             NetwConnection.TRANSPORT_MODE_CLIENT,
             room,
             { },
@@ -32,7 +33,7 @@ A test that already knows how to build its peer assigns it directly and needs no
     )
     assert(settled.error == OK)
 
-\ The transport is named by :ref:`MultiplayerTree.peer_class<class_MultiplayerTree_property_peer_class>`, and an empty username connects without seating a local player, which is what a dedicated host wants.
+\ The transport is named by the peer class the caller passes, and an empty username connects without seating a local player, which is what a dedicated host wants.
 
 .. rst-class:: classref-reftable-group
 
@@ -42,9 +43,9 @@ Methods
 .. table::
    :widths: auto
 
-   +-------------------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwOrdinarySetup.Outcome<class_NetwOrdinarySetup_Outcome>` | :ref:`connect_through<class_NetwOrdinarySetup_method_connect_through>`\ (\ tree\: :ref:`MultiplayerTree<class_MultiplayerTree>`, mode\: :ref:`TransportMode<enum_NetwConnection_TransportMode>`, address\: :godot:`String`, settings\: :godot:`Dictionary`, username\: :godot:`StringName`, join_args\: :godot:`Array` = []\ ) |static| |
-   +-------------------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   +-------------------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwOrdinarySetup.Outcome<class_NetwOrdinarySetup_Outcome>` | :ref:`connect_through<class_NetwOrdinarySetup_method_connect_through>`\ (\ tree\: :ref:`MultiplayerViewport<class_MultiplayerViewport>`, peer_class\: :godot:`StringName`, mode\: :ref:`TransportMode<enum_NetwConnection_TransportMode>`, address\: :godot:`String`, settings\: :godot:`Dictionary`, username\: :godot:`StringName`, join_args\: :godot:`Array` = []\ ) |static| |
+   +-------------------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 
 .. rst-class:: classref-section-separator
 
@@ -59,7 +60,7 @@ Method Descriptions
 
 .. rst-class:: classref-method
 
-:ref:`NetwOrdinarySetup.Outcome<class_NetwOrdinarySetup_Outcome>` **connect_through**\ (\ tree\: :ref:`MultiplayerTree<class_MultiplayerTree>`, mode\: :ref:`TransportMode<enum_NetwConnection_TransportMode>`, address\: :godot:`String`, settings\: :godot:`Dictionary`, username\: :godot:`StringName`, join_args\: :godot:`Array` = []\ ) |static| :ref:`🔗<class_NetwOrdinarySetup_method_connect_through>`
+:ref:`NetwOrdinarySetup.Outcome<class_NetwOrdinarySetup_Outcome>` **connect_through**\ (\ tree\: :ref:`MultiplayerViewport<class_MultiplayerViewport>`, peer_class\: :godot:`StringName`, mode\: :ref:`TransportMode<enum_NetwConnection_TransportMode>`, address\: :godot:`String`, settings\: :godot:`Dictionary`, username\: :godot:`StringName`, join_args\: :godot:`Array` = []\ ) |static| :ref:`🔗<class_NetwOrdinarySetup_method_connect_through>`
 
 Prepares ``username``, then hosts or joins ``address`` with :ref:`NetwConnection.host()<class_NetwConnection_method_host>` or :ref:`NetwConnection.join()<class_NetwConnection_method_join>`, and settles once the session is online or the attempt failed.
 

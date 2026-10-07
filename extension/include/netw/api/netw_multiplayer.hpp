@@ -99,14 +99,13 @@
 
 namespace netw {
 
-class MultiplayerTree;
 class NetwDatabase;
 class NetwPersistence;
 class NetwPredictStats;
 class NetwScene;
 class NetwSchema;
-class ParticipantView;
 class ReplicationCore;
+class StretchViewportContainer;
 class NetwJoinConfig;
 class SyncPipeline;
 class SyncCompat;
@@ -679,7 +678,6 @@ private:
     godot::String session_exit_detail;
     void session_announce_exited(int p_reason, const godot::String &p_detail);
     bool scene_admits_on_join = false;
-    godot::ObjectID session_tree;
     bool is_observing(
         Notification p_event,
         const godot::Callable &p_callback
@@ -687,11 +685,11 @@ private:
     godot::HashSet<godot::StringName> misused_seams;
     godot::HashMap<godot::StringName, bool> seam_overrides;
     godot::ObjectID seam_script;
-    godot::ObjectID scene_host_view_id;
     godot::ObjectID scene_player_display_id;
     bool scene_player_display_pending = false;
     godot::RID scene_presentation;
     bool scene_presentation_split_warned = false;
+    godot::HashSet<uint64_t> scene_unwrapped_warned;
     bool scene_constructor_registered = false;
     godot::HashMap<godot::StringName, godot::RID> table_by_name;
     godot::HashMap<int64_t, godot::RID> table_schema;
@@ -806,10 +804,9 @@ private:
     double scene_request_armed_wait = 0.0;
     EmbedPhase embed_phase_value = EMBED_PHASE_DECLARING;
     bool embed_disposing = false;
-    bool embed_autosettle_pending = true;
-    godot::ObjectID embed_bare_level;
     void embed_set_phase(EmbedPhase p_phase);
-    void embed_autosettle_tree_default();
+    void embed_settle_on_first_poll();
+    godot::Node *embed_declared_child();
     void scene_adopt_bare_level(godot::Node *p_level);
     godot::Callable session_root_reader;
     mutable godot::ObjectID session_root_last_live;
@@ -825,9 +822,6 @@ private:
             = NetwSessionConfig::DEFAULT_TRANSFER_DEADLINE_TICKS;
     };
     SessionSettings session_settings;
-    godot::Ref<NetwSessionConfig> session_fallback;
-    godot::ObjectID session_fallback_source;
-    int64_t session_role_constraint = -1;
     godot::Ref<NetwClockConfig> clock_fallback;
     godot::ObjectID clock_fallback_source;
     double clock_auto_config_left = 0.0;
@@ -1336,7 +1330,6 @@ public:
     JoinRoster &join_book();
     void session_announce_entered();
     void session_announce_ended();
-    void session_set_tree(MultiplayerTree *p_tree);
     void session_note_exit(
         enums::NetwSession::ExitReason p_reason,
         const godot::String &p_detail
@@ -2938,7 +2931,6 @@ public:
     godot::RID scene_get_layer(const godot::RID &p_scene);
     godot::RID scene_presented() const;
     godot::RID scene_of_peer(int64_t p_peer);
-    godot::SubViewport *scene_player_viewport();
     bool scene_destroy(const godot::RID &p_scene);
     godot::TypedArray<NetwEntity> scene_bodies_all();
     godot::RID scene_create(
@@ -3200,7 +3192,6 @@ public:
     EmbedPhase embed_phase() const {
         return embed_phase_value;
     }
-    void embed_offer_bare_level(godot::Node *p_level);
     godot::Error embed_settle();
     godot::Error embed_poll_transport();
     bool embed_is_disposing() const {
@@ -3385,8 +3376,6 @@ public:
     int64_t action_gate_count() const;
 
     Role session_get_authored_role() const;
-
-    bool presents_as_listen_host() const;
 
     int64_t datagram_budget() const;
 
@@ -4231,13 +4220,6 @@ public:
     godot::Error session_initialize(
         const godot::Ref<NetwSessionConfig> &p_from
     );
-    void session_offer_fallback(
-        const godot::Ref<NetwSessionConfig> &p_draft,
-        godot::Object *p_source
-    );
-    void session_constrain_role(Role p_role);
-    void session_apply_role_constraint();
-    void session_report_discarded_fallback(const godot::String &p_scope);
     void session_push_desired_role();
     void session_apply_auth_config();
 
@@ -4694,15 +4676,13 @@ public:
     static bool scene_root_is_isolated(godot::Node *p_root);
     static godot::Node *scene_wrap_world(godot::Node *p_root);
     static godot::SubViewport *scene_world_of(godot::Node *p_root);
+    static StretchViewportContainer *scene_view_of(godot::Node *p_root);
     static godot::Node *scene_outer_of(godot::Node *p_root);
     static godot::Node *scene_inner_of(godot::Node *p_node);
     static void scene_retire_world(godot::Node *p_root);
     static godot::StringName scene_packed_stem(
         const godot::Ref<godot::PackedScene> &p_packed
     );
-    static void scene_set_host_view_factory(const godot::Callable &p_factory);
-    static godot::Callable scene_host_view_factory();
-    static ParticipantView *scene_placed_view(godot::Node *p_root);
     godot::Node *scene_container(const godot::StringName &p_stem) const;
     godot::Node *scene_existing_destination(
         const godot::Variant &p_destination
@@ -4715,9 +4695,7 @@ public:
 
     static godot::StringName scene_constructor_id();
     bool scene_owns_its_world(const godot::RID &p_scene) const;
-    bool scene_hosts_isolated_world() const;
-    void scene_ensure_host_view();
-    godot::SubViewport *scene_resolve_player_viewport();
+    godot::RID scene_shown_derive();
     void scene_player_display_invalidate();
     void scene_player_display_settle();
     void scene_reached_by(
@@ -4729,8 +4707,8 @@ public:
     void scene_presentation_settle();
     void scene_register_constructor();
     void scene_root_online(godot::Node *p_root);
+    void scene_warn_unwrapped(godot::Node *p_root);
     void scene_root_offline(godot::Object *p_root);
-    void scene_release_host_view();
     godot::Node *scene_containing(godot::Node *p_node);
     godot::Node *scene_spawn(
         const godot::Variant &p_data,

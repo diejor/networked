@@ -11,7 +11,7 @@
 		        .app(&amp;"bomber-v2") \
 		        .role(NetwSession.ROLE_LISTEN_SERVER)
 		[/codeblock]
-		A preset passed to [method Netw.configure_session] is copied, so one [code].tres[/code] can be used by several scenes. When no node calls [method Netw.configure_session], the settings of the [MultiplayerTree] are used. When one does, the [MultiplayerTree] settings are ignored.
+		A preset passed to [method Netw.configure_session] is copied, so one [code].tres[/code] can be used by several scenes.
 		[b]Bandwidth[/b]
 		[member bandwidth_kbps] is a target for each peer, not a hard limit. Changed rows that do not fit wait for a later tick, and the ones that waited longest and matter most go first.
 		[codeblock]
@@ -86,7 +86,7 @@
 			While a peer loses packets its budget halves, and each round trip without loss adds back an eighth of it, up to this value. [method NetwSession.set_peer_bandwidth] gives one peer its own budget.
 		</member>
 		<member name="desired_role" type="int" setter="set_desired_role" getter="get_desired_role" enum="NetwSession.Role" default="3">
-			The role this peer takes when it hosts, which becomes [member NetwMultiplayer.role]. A server made with [method MultiplayerTree.raise_embedded_server] is always [constant NetwSession.ROLE_DEDICATED_SERVER].
+			The role this peer takes when it hosts, which becomes [member NetwMultiplayer.role].
 		</member>
 		<member name="link_conditions" type="NetwLinkConditions" setter="set_link_conditions" getter="get_link_conditions">
 			Simulated latency and packet loss for testing. Copied when applied.

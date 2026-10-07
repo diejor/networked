@@ -19,13 +19,17 @@
 		<method name="isolated">
 			<return type="NetwSceneConfig" />
 			<description>
-				Gives the scene its own physics and render world, so it does not collide with or draw over other scenes.
-				[method Netw.spawn] then returns a [SubViewport] with the scene root inside, and that is what the caller parents.
-				[codeblock]
-				var mount := Netw.spawn(spawn_level1)   # a SubViewport
-				worlds.add_child(mount)
+				Gives this scene its own physics and rendering world on every peer.
+				[codeblock lang=text]
+				Main
+				└ Level1View       a StretchViewportContainer
+				  └ Level1World    a SubViewport
+				    └ Level1       your scene
 				[/codeblock]
-				On a listen server, [HostSceneView] draws it while it is the [member NetwPlayer.scene] of the host's player.
+				- An absolute path such as [code]/root/Main/Level1[/code] does not reach the scene. Use relative paths or [method Netw.scene].
+				- [method Node.get_viewport] answers the scene's [SubViewport], not the window.
+				- Only the scene your player is in is drawn and takes input. The others keep running.
+				- Each isolated scene runs its own physics world, which costs CPU every physics tick. Isolate a scene only when it can be loaded next to another.
 			</description>
 		</method>
 		<method name="labeled">

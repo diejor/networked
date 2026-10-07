@@ -3,7 +3,7 @@
 #include "godot/node.hpp"
 #include "godot/script.hpp"
 #include "netw/api/netw_multiplayer.hpp"
-#include "netw/api/nodes/multiplayer_tree.hpp"
+#include "netw/api/nodes/multiplayer_viewport.hpp"
 #include "netw/prediction_core.hpp"
 #include "support/declared_seams.h"
 #include "support/minted_script.h"
@@ -283,14 +283,15 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Session] L7 a MultiplayerTree builds its session from "
-    "api_script, so the override and its default answer through the tree"
+    "[Networked][Session] L7 a scripted session set on a MultiplayerViewport "
+    "before it enters is the tree's api, so the override and its default "
+    "answer through the tree"
 ) {
     const Ref<Script> replacing
         = netw_test::script_from("res://tests/support/chains/seam_base.gd");
     REQUIRE(replacing.is_valid());
-    netw::MultiplayerTree *tree = memnew(netw::MultiplayerTree);
-    tree->set_api_script(replacing);
+    netw::MultiplayerViewport *tree = memnew(netw::MultiplayerViewport);
+    tree->set_api(NetwMultiplayer::create(replacing));
     const Ref<NetwMultiplayer> session = tree->get_api();
     REQUIRE(session.is_valid());
 

@@ -1,12 +1,12 @@
-## Window scoped [GdUnitSceneRunner] for one [ParticipantWindow].
+## A [GdUnitSceneRunner] for one peer's [MultiplayerViewport].
 ##
-## All inherited input simulation methods route through [member slot].
-## Session wide time and stepping are owned by [NetwGameHarness].
+## Every inherited input simulation method sends its event to [member tree]
+## and to no other peer. [NetwGameHarness] owns session time and stepping.
 class_name NetwSceneRunner
 extends GdUnitSceneRunnerImpl
 
-## Adopted [MultiplayerTree] inside [member scene].
-var tree: MultiplayerTree
+## The [MultiplayerViewport] this peer runs in.
+var tree: MultiplayerViewport
 
 ## The [NetwSession] of [member tree], or [code]null[/code] before it mounts.
 var session: NetwSession:
@@ -17,9 +17,6 @@ var session: NetwSession:
 
 ## Frame anchored waiter used by [method await_player] and [method await_scene].
 var waiter: NetwWaiter
-
-## Viewport window wrapping this runner's scene.
-var slot: ParticipantWindow
 
 ## Peer id assigned by the active [MultiplayerPeer].
 var peer_id: int = 0
@@ -48,23 +45,27 @@ var local_player: Node:
 		var mine: Array[NetwEntity] = local_bodies
 		return mine[0].owner if mine.size() == 1 else null
 
+var _pending_input: Array[InputEvent] = []
 
+
+## [param p_scene] is the node this runner frees, and [param p_tree] is the
+## tree its input reaches. The caller adds [param p_scene] to the scene tree.
 func _init(
 		p_scene: Node,
-		p_slot: ParticipantWindow,
+		p_tree: MultiplayerViewport,
 		p_username: StringName,
 		p_verbose: bool = false,
 ) -> void:
-	slot = p_slot
+	tree = p_tree
 	username = p_username
 	_verbose = p_verbose
 	_saved_iterations_per_second = Engine.get_physics_ticks_per_second()
 	_time_factor = 1.0
 	_current_scene = p_scene
 	assert(_current_scene != null, "NetwSceneRunner: scene must not be null.")
+	assert(tree != null, "NetwSceneRunner: tree must not be null.")
 
-	slot.add_child(_current_scene)
-	slot.child_exiting_tree.connect(_on_slot_child_exiting)
+	_current_scene.tree_exiting.connect(_on_scene_exiting)
 	_simulate_start_time = LocalTime.now()
 	_scene_auto_free = true
 
@@ -154,9 +155,20 @@ func simulate_frames(
 func _handle_input_event(event: InputEvent) -> GdUnitSceneRunner:
 	if is_instance_valid(_current_scene) \
 			and _current_scene.process_mode != Node.PROCESS_MODE_DISABLED:
-		slot.send_input(event)
+		_pending_input.append(event)
+		if _pending_input.size() == 1:
+			_flush_input.call_deferred()
 	_last_input_event = event
 	return self
+
+
+func _flush_input() -> void:
+	var draining := _pending_input
+	_pending_input = []
+	if not is_instance_valid(tree):
+		return
+	for event: InputEvent in draining:
+		tree.push_input(event, true)
 
 
 func _reset_input_to_default() -> void:
@@ -198,9 +210,8 @@ func _player_matches_username(
 	return entity != null and entity.name == player_username
 
 
-func _on_slot_child_exiting(child: Node) -> void:
-	if child != _current_scene:
-		return
+func _on_scene_exiting() -> void:
+	_pending_input.clear()
 	_current_scene.process_mode = Node.PROCESS_MODE_DISABLED
 	_mouse_button_on_press.clear()
 	_key_on_press.clear()

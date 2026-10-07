@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="MultiplayerViewport" inherits="SubViewport" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		A [SubViewport] that runs its own multiplayer session.
+	</brief_description>
+	<description>
+		Its children use [member api] as [member Node.multiplayer] and live in its own worlds, so two of them in one process never see or touch each other. Show one with a [StretchViewportContainer].
+		[codeblock]
+		var seat := MultiplayerViewport.new()
+		seat.add_child(preload("res://main.tscn").instantiate())
+		$SplitScreen/Left.add_child(seat)
+		[/codeblock]
+	</description>
+	<tutorials>
+	</tutorials>
+	<members>
+		<member name="api" type="NetwMultiplayer" setter="set_api" getter="get_api">
+			The [NetwMultiplayer] its children use. Replace it before the viewport enters the tree to use your own subclass.
+		</member>
+		<member name="own_world_3d" type="bool" setter="set_use_own_world_3d" getter="is_using_own_world_3d" overrides="Viewport" default="true" />
+	</members>
+</class>

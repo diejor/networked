@@ -191,7 +191,7 @@ func test_nakama_auth_admits_only_the_attested_username() -> void:
 	auth = bound_nakama_auth("", "")
 	assert_int(auth.admit(2, &"Diego", [])).is_equal(ERR_UNAUTHORIZED)
 
-	var tree := MultiplayerTree.new()
+	var tree := MultiplayerViewport.new()
 	auto_free(tree)
 	add_child(tree)
 	var bare := NakamaAuth.new()
@@ -219,8 +219,7 @@ func test_nakama_session_configure_flow() -> void:
 
 
 func build_service(rendezvous: DiscordRendezvous) -> NetwTestDiscordService:
-	var tree := MultiplayerTree.new()
-	tree.auto_host_headless = false
+	var tree := MultiplayerViewport.new()
 	var service := NetwTestDiscordService.new()
 	service.fake_instance_id = "room1"
 	service.rendezvous = rendezvous
@@ -234,7 +233,7 @@ func bound_nakama_auth(
 		attested_uid: String,
 		attested_username: String,
 ) -> NakamaAuth:
-	var tree := MultiplayerTree.new()
+	var tree := MultiplayerViewport.new()
 	var dir := NakamaLobbyDirectory.new()
 	var wrapper := _FakeNakamaWrapper.new()
 	auto_free(tree)

@@ -12,15 +12,12 @@ properties/0/replication_mode = 2
 [sub_resource type="GDScript" id="GDScript_tdg3f"]
 script/source = "extends Camera2D
 
-func _ready() -> void:
-	if not is_multiplayer_authority():
-		queue_free()
-		return
-	NetwEntity.of(self).view_activated.connect(on_view)
-	%TPComponent.teleport_committed.connect(reset_smoothing)
+func _enter_tree() -> void:
+	if NetwEntity.of(self).is_controlled_locally:
+		make_current()
 
-func on_view() ->  void:
-	make_current()
+func _ready() -> void:
+	%TPComponent.teleport_committed.connect(reset_smoothing)
 "
 
 [sub_resource type="CapsuleShape2D" id="CapsuleShape2D_u845s"]

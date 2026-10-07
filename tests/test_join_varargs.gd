@@ -7,7 +7,7 @@ const ERROR_SCRUBBER := preload(
 )
 
 var session: NetwHarnessSession
-var tree: MultiplayerTree
+var tree: MultiplayerViewport
 var declarer: JoinDeclarer
 
 
@@ -29,7 +29,7 @@ class JoinDeclarer:
 
 func before_test() -> void:
 	session = NetwHarnessSession.new()
-	tree = MultiplayerTree.new()
+	tree = MultiplayerViewport.new()
 	tree.name = "JoinVarargTree"
 	session.adopt_tree(tree, NetwSession.ROLE_LISTEN_SERVER)
 	add_child(tree)

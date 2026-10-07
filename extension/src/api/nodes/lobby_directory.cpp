@@ -43,7 +43,7 @@ void LobbyDirectory::invite(
         NETW_WARN(
             sys::TRANSPORT,
             "'%s' got an invite before it joined a session, so the invite was "
-            "dropped. Place the directory under a MultiplayerTree.",
+            "dropped. Place the directory under a MultiplayerViewport.",
             String(get_name())
         );
         return;

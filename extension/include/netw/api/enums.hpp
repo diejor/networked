@@ -234,7 +234,6 @@ struct NetwMultiplayer {
         SCENE_DESPAWNED,
         SCENE_ENTITY_MOVED,
         SCENE_STARTUP_SPAWNED,
-        PARTICIPANT_VIEWPORT_CHANGED,
         CLOCK_BEFORE_TICK_LOOP,
         CLOCK_AFTER_TICK_LOOP,
         CLOCK_SYNCHRONIZED,
@@ -243,7 +242,6 @@ struct NetwMultiplayer {
         CLOCK_PONG_RECEIVED,
         CLOCK_STABILITY_CHANGED,
         SESSION_STATE_CHANGED,
-        EMBED_PHASE_CHANGED,
         SESSION_JOIN_SUBMITTED,
         SESSION_ENTERED,
         SESSION_JOIN_FAILED,
@@ -471,7 +469,6 @@ VARIANT_ENUM_CAST(netw::enums::NetwInterestLayer::LayerPolicy);
 VARIANT_ENUM_CAST(netw::enums::NetwInterestLayer::LeavePolicy);
 VARIANT_ENUM_CAST(netw::enums::NetwInterestLayer::PerceptionPolicy);
 VARIANT_ENUM_CAST(netw::enums::LobbyDirectory::Capability);
-VARIANT_ENUM_CAST(netw::enums::NetwMultiplayer::EmbedPhase);
 VARIANT_ENUM_CAST(netw::enums::NetwMultiplayer::TableParam);
 VARIANT_ENUM_CAST(netw::enums::NetwMultiplayer::SceneMove);
 VARIANT_ENUM_CAST(netw::enums::NetwMultiplayer::SceneDestination);

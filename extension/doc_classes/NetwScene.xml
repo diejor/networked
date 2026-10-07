@@ -102,7 +102,7 @@
 			The [RID] of the scene's entity, invalid outside a session. The [code]scene_*[/code] methods of [NetwMultiplayer] take it.
 		</member>
 		<member name="root" type="Node" setter="" getter="get_root">
-			The node the scene was declared on, [code]null[/code] outside a session. When the scene is [method NetwSceneConfig.isolated], [method Netw.spawn] returns [member world] and this is the node inside it.
+			The node the scene was declared on, [code]null[/code] outside a session. When the scene is [method NetwSceneConfig.isolated], [method Netw.spawn] returns the [StretchViewportContainer] holding [member world], and this is the node inside [member world].
 		</member>
 		<member name="viewers" type="NetwPlayer[]" setter="" getter="get_viewers" default="[]">
 			Every player this scene replicates to, see [method is_watching].
@@ -165,7 +165,7 @@
 			The scene shares the physics and rendering world with the rest of the game.
 		</constant>
 		<constant name="SCENE_ISOLATION_OWN_WORLD" value="1" enum="SceneIsolation">
-			On the server, the scene gets a [SubViewport] with its own world, so two scenes never collide. Clients use a plain [Node].
+			The scene gets its own physics and rendering world on every peer. [method NetwSceneConfig.isolated] sets it.
 		</constant>
 	</constants>
 </class>

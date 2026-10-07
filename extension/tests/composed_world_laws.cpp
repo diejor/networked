@@ -223,7 +223,6 @@ struct ComposedWorld {
 
         Node *level = a_declared_level();
         held->add_child(level);
-        host->embed_offer_bare_level(level);
         NETW_CHECK_EQ(int(host->embed_settle()), int(OK));
         stand.step_ticks(6);
 

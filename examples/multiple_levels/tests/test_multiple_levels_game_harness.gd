@@ -128,16 +128,12 @@ func test_show_views_displays_single_scene_participants() -> void:
 	var display := game.show_views()
 	await get_tree().process_frame
 
-	assert_that(display.has_slot(valeria.slot)).is_true()
-	assert_that(display.has_slot(jose.slot)).is_true()
-	assert_that(valeria.slot.visible).is_true()
-	assert_that(jose.slot.visible).is_true()
-
-	display.remove_slot(valeria.slot)
-	await get_tree().process_frame
-
-	assert_that(display.has_slot(valeria.slot)).is_false()
-	assert_that(valeria.slot.visible).is_false()
+	assert_that(display.visible).is_true()
+	assert_that(valeria.tree.get_parent()).is_instanceof(StretchViewportContainer)
+	assert_that(jose.tree.get_parent()).is_instanceof(StretchViewportContainer)
+	assert_that(views_in(display)).contains_exactly(
+		[valeria.tree.get_parent(), jose.tree.get_parent()],
+	)
 
 
 func test_show_views_can_be_called_before_adding_participants() -> void:
@@ -147,8 +143,13 @@ func test_show_views_can_be_called_before_adding_participants() -> void:
 	var jose := await game.add_client("jose", true)
 	await get_tree().process_frame
 
-	assert_that(display.has_slot(valeria.slot)).is_true()
-	assert_that(display.has_slot(jose.slot)).is_true()
+	assert_that(views_in(display)).contains_exactly(
+		[valeria.tree.get_parent(), jose.tree.get_parent()],
+	)
+
+
+func views_in(display: Window) -> Array[Node]:
+	return display.get_child(0).get_children()
 
 
 func test_host_scene_request_keeps_camera_current() -> void:

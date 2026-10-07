@@ -14,7 +14,6 @@
 #include "netw/api/database_config.hpp"
 #include "netw/api/database_connection.hpp"
 #include "netw/api/database_result.hpp"
-#include "netw/api/debug_join_config.hpp"
 #include "netw/api/despawn_config.hpp"
 #include "netw/api/display.hpp"
 #include "netw/api/endpoint.hpp"
@@ -32,13 +31,10 @@
 #include "netw/api/netw_multiplayer.hpp"
 #include "netw/api/nodes/lan_lobby_directory.hpp"
 #include "netw/api/nodes/lobby_directory.hpp"
-#include "netw/api/nodes/multiplayer_tree.hpp"
+#include "netw/api/nodes/multiplayer_viewport.hpp"
 #include "netw/api/nodes/webtorrent_lobby_directory.hpp"
 #include "netw/api/nodes/service.hpp"
-#include "netw/api/nodes/view/host_scene_view.hpp"
-#include "netw/api/nodes/view/participant_view.hpp"
-#include "netw/api/nodes/view/participant_viewport.hpp"
-#include "netw/api/nodes/view/participant_window.hpp"
+#include "netw/api/nodes/view/stretch_viewport_container.hpp"
 #include "netw/api/participant.hpp"
 #include "netw/api/persistence.hpp"
 #include "netw/api/persistence_config.hpp"
@@ -167,7 +163,6 @@ void initialize_networked_module(ModuleInitializationLevel level) {
     GDREGISTER_CLASS(netw::NetwWebRTCSignaler);
     GDREGISTER_CLASS(netw::NetwLinkConditions);
     GDREGISTER_CLASS(netw::NetwProbeResult);
-    GDREGISTER_CLASS(netw::DebugJoinConfig);
     GDREGISTER_CLASS(netw::NetwDisplay);
     GDREGISTER_CLASS(netw::NetwInterest);
     GDREGISTER_CLASS(netw::NetwSceneConfig);
@@ -199,14 +194,11 @@ void initialize_networked_module(ModuleInitializationLevel level) {
     GDREGISTER_CLASS(netw::NetwDatabase);
     GDREGISTER_CLASS(netw::NetwMultiplayer);
     GDREGISTER_CLASS(netw::NetwService);
-    GDREGISTER_CLASS(netw::MultiplayerTree);
+    GDREGISTER_CLASS(netw::MultiplayerViewport);
     GDREGISTER_CLASS(netw::LobbyDirectory);
     GDREGISTER_CLASS(netw::WebTorrentLobbyDirectory);
     GDREGISTER_CLASS(netw::LANLobbyDirectory);
-    GDREGISTER_CLASS(netw::ParticipantView);
-    GDREGISTER_CLASS(netw::HostSceneView);
-    GDREGISTER_CLASS(netw::ParticipantWindow);
-    GDREGISTER_CLASS(netw::ParticipantViewport);
+    GDREGISTER_CLASS(netw::StretchViewportContainer);
     GDREGISTER_CLASS(netw::NetwGroupPromise);
     GDREGISTER_CLASS(netw::NetwDespawnOpts);
     GDREGISTER_CLASS(netw::NetwDespawnConfig);

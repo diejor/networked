@@ -39,7 +39,7 @@ Ref<NetwTable> NetwTable::of(Node *p_node, const StringName &p_name) {
         NETW_ERROR(
             sys::TABLE,
             "NetwTable.of got a node that is not inside a session. Call it "
-            "from a node in the scene tree under a MultiplayerTree."
+            "from a node in the scene tree under a MultiplayerViewport."
         );
         return Ref<NetwTable>();
     }

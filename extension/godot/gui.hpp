@@ -8,6 +8,7 @@
 #include "scene/gui/line_edit.h"
 #include "scene/gui/option_button.h"
 #include "scene/gui/spin_box.h"
+#include "scene/gui/subviewport_container.h"
 #include "scene/gui/tree.h"
 
 namespace godot {
@@ -18,6 +19,7 @@ using ::Label;
 using ::LineEdit;
 using ::OptionButton;
 using ::SpinBox;
+using ::SubViewportContainer;
 using ::Tree;
 using ::TreeItem;
 using ::VBoxContainer;
@@ -31,6 +33,7 @@ using ::VBoxContainer;
 #include <godot_cpp/classes/line_edit.hpp>
 #include <godot_cpp/classes/option_button.hpp>
 #include <godot_cpp/classes/spin_box.hpp>
+#include <godot_cpp/classes/sub_viewport_container.hpp>
 #include <godot_cpp/classes/tree.hpp>
 #include <godot_cpp/classes/tree_item.hpp>
 #include <godot_cpp/classes/v_box_container.hpp>

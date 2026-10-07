@@ -28,7 +28,7 @@ Set the values in :godot:`Object._init() <Object#class_Object_private_method__in
             .app(&"bomber-v2") \
             .role(NetwSession.ROLE_LISTEN_SERVER)
 
-\ A preset passed to :ref:`Netw.configure_session()<class_Netw_method_configure_session>` is copied, so one ``.tres`` can be used by several scenes. When no node calls :ref:`Netw.configure_session()<class_Netw_method_configure_session>`, the settings of the :ref:`MultiplayerTree<class_MultiplayerTree>` are used. When one does, the :ref:`MultiplayerTree<class_MultiplayerTree>` settings are ignored.
+\ A preset passed to :ref:`Netw.configure_session()<class_Netw_method_configure_session>` is copied, so one ``.tres`` can be used by several scenes.
 
 \ **Bandwidth**\ 
 
@@ -146,7 +146,7 @@ While a peer loses packets its budget halves, and each round trip without loss a
 - |void| **set_desired_role**\ (\ value\: :ref:`Role<enum_NetwSession_Role>`\ )
 - :ref:`Role<enum_NetwSession_Role>` **get_desired_role**\ (\ )
 
-The role this peer takes when it hosts, which becomes :ref:`NetwMultiplayer.role<class_NetwMultiplayer_property_role>`. A server made with :ref:`MultiplayerTree.raise_embedded_server()<class_MultiplayerTree_method_raise_embedded_server>` is always :ref:`NetwSession.ROLE_DEDICATED_SERVER<class_NetwSession_constant_ROLE_DEDICATED_SERVER>`.
+The role this peer takes when it hosts, which becomes :ref:`NetwMultiplayer.role<class_NetwMultiplayer_property_role>`.
 
 .. rst-class:: classref-item-separator
 

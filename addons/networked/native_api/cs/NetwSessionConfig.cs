@@ -19,10 +19,7 @@ namespace Networked;
 /// </code>
 /// <para>
 /// A preset passed to <see cref="Netw.ConfigureSession"/> is copied, so one
-/// <c>.tres</c> can be used by several scenes. When no node calls
-/// <see cref="Netw.ConfigureSession"/>, the settings of the
-/// <see cref="MultiplayerTree"/> are used. When one does, the
-/// <see cref="MultiplayerTree"/> settings are ignored. <b>Bandwidth</b>
+/// <c>.tres</c> can be used by several scenes. <b>Bandwidth</b>
 /// <see cref="NetwSessionConfig.BandwidthKbps"/> is a target for each peer, not
 /// a hard limit. Changed rows that do not fit wait for a later tick, and the
 /// ones that waited longest and matter most go first.
@@ -102,9 +99,7 @@ public sealed class NetwSessionConfig : NetwRefCounted
 
     /// <summary>
     /// The role this peer takes when it hosts, which becomes
-    /// <see cref="NetwMultiplayer.Role"/>. A server made with
-    /// <see cref="MultiplayerTree.RaiseEmbeddedServer"/> is always
-    /// <see cref="NetwSession.RoleEnum.DedicatedServer"/>.
+    /// <see cref="NetwMultiplayer.Role"/>.
     /// </summary>
     public NetwSession.RoleEnum DesiredRole
     {

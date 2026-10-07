@@ -110,16 +110,22 @@ Method Descriptions
 
 :ref:`NetwSceneConfig<class_NetwSceneConfig>` **isolated**\ (\ ) :ref:`🔗<class_NetwSceneConfig_method_isolated>`
 
-Gives the scene its own physics and render world, so it does not collide with or draw over other scenes.
+Gives this scene its own physics and rendering world on every peer.
 
-\ :ref:`Netw.spawn()<class_Netw_method_spawn>` then returns a :godot:`SubViewport` with the scene root inside, and that is what the caller parents.
+.. code:: text
 
-::
+    Main
+    └ Level1View       a StretchViewportContainer
+      └ Level1World    a SubViewport
+        └ Level1       your scene
 
-    var mount := Netw.spawn(spawn_level1)   # a SubViewport
-    worlds.add_child(mount)
+\ - An absolute path such as ``/root/Main/Level1`` does not reach the scene. Use relative paths or :ref:`Netw.scene()<class_Netw_method_scene>`.
 
-\ On a listen server, :ref:`HostSceneView<class_HostSceneView>` draws it while it is the :ref:`NetwPlayer.scene<class_NetwPlayer_property_scene>` of the host's player.
+- :godot:`Node.get_viewport() <Node#class_Node_method_get_viewport>` answers the scene's :godot:`SubViewport`, not the window.
+
+- Only the scene your player is in is drawn and takes input. The others keep running.
+
+- Each isolated scene runs its own physics world, which costs CPU every physics tick. Isolate a scene only when it can be loaded next to another.
 
 .. rst-class:: classref-item-separator
 

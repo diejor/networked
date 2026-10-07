@@ -6,7 +6,7 @@
 
 #include "netw/api/entity.hpp"
 #include "netw/api/lag_compensation_config.hpp"
-#include "netw/api/nodes/multiplayer_tree.hpp"
+#include "netw/api/nodes/multiplayer_viewport.hpp"
 #include "support/loopback_rig.h"
 
 #include <godot_cpp/classes/node.hpp>
@@ -35,7 +35,7 @@ Node *node_from(const char *p_path) {
 }
 
 Node *rewindable_tree(Node *p_root, const char *p_name) {
-    Node *tree = memnew(netw::MultiplayerTree);
+    Node *tree = memnew(netw::MultiplayerViewport);
     tree->set_name(p_name);
     p_root->add_child(tree);
 

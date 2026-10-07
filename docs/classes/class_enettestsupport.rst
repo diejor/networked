@@ -35,21 +35,21 @@ Methods
 .. table::
    :widths: auto
 
-   +-------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`Dictionary`                                   | :ref:`start_host<class_EnetTestSupport_method_start_host>`\ (\ parent\: :godot:`Node`, info_source\: :godot:`Node` = null, auth_timeout\: :godot:`float` = -1.0\ ) |static|                                             |
-   +-------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`MultiplayerTree<class_MultiplayerTree>`         | :ref:`make_client_tree<class_EnetTestSupport_method_make_client_tree>`\ (\ parent\: :godot:`Node`, port\: :godot:`int`, name_suffix\: :godot:`String` = ""\ ) |static|                                                  |
-   +-------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`Error <@GlobalScope#enum_@globalscope_Error>` | :ref:`join_client<class_EnetTestSupport_method_join_client>`\ (\ tree\: :ref:`MultiplayerTree<class_MultiplayerTree>`, port\: :godot:`int`, username\: :godot:`StringName`, join_args\: :godot:`Array` = []\ ) |static| |
-   +-------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`Error <@GlobalScope#enum_@globalscope_Error>` | :ref:`await_online<class_EnetTestSupport_method_await_online>`\ (\ tree\: :ref:`MultiplayerTree<class_MultiplayerTree>`\ ) |static|                                                                                     |
-   +-------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`Error <@GlobalScope#enum_@globalscope_Error>` | :ref:`await_until<class_EnetTestSupport_method_await_until>`\ (\ node\: :godot:`Node`, condition\: :godot:`Callable`\ ) |static|                                                                                        |
-   +-------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`Dictionary`                                   | :ref:`make_connect_endpoint<class_EnetTestSupport_method_make_connect_endpoint>`\ (\ port\: :godot:`int`\ ) |static|                                                                                                    |
-   +-------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | |void|                                                | :ref:`stop_tree<class_EnetTestSupport_method_stop_tree>`\ (\ tree\: :ref:`MultiplayerTree<class_MultiplayerTree>`\ ) |static|                                                                                           |
-   +-------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   +-------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`Dictionary`                                   | :ref:`start_host<class_EnetTestSupport_method_start_host>`\ (\ parent\: :godot:`Node`, info_source\: :godot:`Node` = null, auth_timeout\: :godot:`float` = -1.0\ ) |static|                                                     |
+   +-------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`MultiplayerViewport<class_MultiplayerViewport>` | :ref:`make_client_tree<class_EnetTestSupport_method_make_client_tree>`\ (\ parent\: :godot:`Node`, port\: :godot:`int`, name_suffix\: :godot:`String` = ""\ ) |static|                                                          |
+   +-------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`Error <@GlobalScope#enum_@globalscope_Error>` | :ref:`join_client<class_EnetTestSupport_method_join_client>`\ (\ tree\: :ref:`MultiplayerViewport<class_MultiplayerViewport>`, port\: :godot:`int`, username\: :godot:`StringName`, join_args\: :godot:`Array` = []\ ) |static| |
+   +-------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`Error <@GlobalScope#enum_@globalscope_Error>` | :ref:`await_online<class_EnetTestSupport_method_await_online>`\ (\ tree\: :ref:`MultiplayerViewport<class_MultiplayerViewport>`\ ) |static|                                                                                     |
+   +-------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`Error <@GlobalScope#enum_@globalscope_Error>` | :ref:`await_until<class_EnetTestSupport_method_await_until>`\ (\ node\: :godot:`Node`, condition\: :godot:`Callable`\ ) |static|                                                                                                |
+   +-------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`Dictionary`                                   | :ref:`make_connect_endpoint<class_EnetTestSupport_method_make_connect_endpoint>`\ (\ port\: :godot:`int`\ ) |static|                                                                                                            |
+   +-------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | |void|                                                | :ref:`stop_tree<class_EnetTestSupport_method_stop_tree>`\ (\ tree\: :ref:`MultiplayerViewport<class_MultiplayerViewport>`\ ) |static|                                                                                           |
+   +-------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 
 .. rst-class:: classref-section-separator
 
@@ -59,6 +59,14 @@ Methods
 
 Constants
 ---------
+
+.. _class_EnetTestSupport_constant_PEER_CLASS:
+
+.. rst-class:: classref-constant
+
+**PEER_CLASS** = ``&"ENetMultiplayerPeer"`` :ref:`🔗<class_EnetTestSupport_constant_PEER_CLASS>`
+
+The :godot:`MultiplayerPeer` class every session here is created with.
 
 .. _class_EnetTestSupport_constant_WAIT_TIMEOUT_MS:
 
@@ -83,7 +91,7 @@ Method Descriptions
 
 :godot:`Dictionary` **start_host**\ (\ parent\: :godot:`Node`, info_source\: :godot:`Node` = null, auth_timeout\: :godot:`float` = -1.0\ ) |static| :ref:`🔗<class_EnetTestSupport_method_start_host>`
 
-Builds and hosts a fresh :ref:`MultiplayerTree<class_MultiplayerTree>` backed by ENet on the first available port in the test range.  The peer is built with :godot:`ENetMultiplayerPeer.create_server() <ENetMultiplayerPeer#class_ENetMultiplayerPeer_method_create_server>` and assigned, so the port scan reads the bind result directly. No local player is seated, which is what a probe target wants.  ``parent`` receives the tree as a child. ``info_source`` is mounted under that tree, so a :ref:`Netw.configure_server_info()<class_Netw_method_configure_server_info>` declaration it made in :godot:`Object._init() <Object#class_Object_private_method__init>` governs the hosted session's probe reply. ``auth_timeout`` overrides the host API auth cleanup timeout when greater than ``0.0``.  Returns a dictionary with ``tree`` (the :ref:`MultiplayerTree<class_MultiplayerTree>`), ``port`` (the bound UDP port).
+Builds and hosts a fresh :ref:`MultiplayerViewport<class_MultiplayerViewport>` backed by ENet on the first available port in the test range.  The peer is built with :godot:`ENetMultiplayerPeer.create_server() <ENetMultiplayerPeer#class_ENetMultiplayerPeer_method_create_server>` and assigned, so the port scan reads the bind result directly. No local player is seated, which is what a probe target wants.  ``parent`` receives the tree as a child. ``info_source`` is mounted under that tree, so a :ref:`Netw.configure_server_info()<class_Netw_method_configure_server_info>` declaration it made in :godot:`Object._init() <Object#class_Object_private_method__init>` governs the hosted session's probe reply. ``auth_timeout`` overrides the host API auth cleanup timeout when greater than ``0.0``.  Returns a dictionary with ``tree`` (the :ref:`MultiplayerViewport<class_MultiplayerViewport>`), ``port`` (the bound UDP port).
 
 .. rst-class:: classref-item-separator
 
@@ -93,9 +101,9 @@ Builds and hosts a fresh :ref:`MultiplayerTree<class_MultiplayerTree>` backed by
 
 .. rst-class:: classref-method
 
-:ref:`MultiplayerTree<class_MultiplayerTree>` **make_client_tree**\ (\ parent\: :godot:`Node`, port\: :godot:`int`, name_suffix\: :godot:`String` = ""\ ) |static| :ref:`🔗<class_EnetTestSupport_method_make_client_tree>`
+:ref:`MultiplayerViewport<class_MultiplayerViewport>` **make_client_tree**\ (\ parent\: :godot:`Node`, port\: :godot:`int`, name_suffix\: :godot:`String` = ""\ ) |static| :ref:`🔗<class_EnetTestSupport_method_make_client_tree>`
 
-Builds an offline client :ref:`MultiplayerTree<class_MultiplayerTree>` wired with an ENet backend targeting ``port``. The tree is added under ``parent`` but has not connected to anything.
+Builds an offline client :ref:`MultiplayerViewport<class_MultiplayerViewport>` wired with an ENet backend targeting ``port``. The tree is added under ``parent`` but has not connected to anything.
 
 .. rst-class:: classref-item-separator
 
@@ -105,7 +113,7 @@ Builds an offline client :ref:`MultiplayerTree<class_MultiplayerTree>` wired wit
 
 .. rst-class:: classref-method
 
-:godot:`Error <@GlobalScope#enum_@globalscope_Error>` **join_client**\ (\ tree\: :ref:`MultiplayerTree<class_MultiplayerTree>`, port\: :godot:`int`, username\: :godot:`StringName`, join_args\: :godot:`Array` = []\ ) |static| :ref:`🔗<class_EnetTestSupport_method_join_client>`
+:godot:`Error <@GlobalScope#enum_@globalscope_Error>` **join_client**\ (\ tree\: :ref:`MultiplayerViewport<class_MultiplayerViewport>`, port\: :godot:`int`, username\: :godot:`StringName`, join_args\: :godot:`Array` = []\ ) |static| :ref:`🔗<class_EnetTestSupport_method_join_client>`
 
 Connects ``tree`` to a localhost host on ``port`` and waits until ``username`` is seated.  The local player is prepared before the peer is assigned, so the session holds its hello and submits exactly one request once the connection is admitted. Returns :godot:`@GlobalScope.OK <@GlobalScope#class_@GlobalScope_constant_OK>` when :ref:`NetwMultiplayer.local_player<class_NetwMultiplayer_property_local_player>` arrives, the assignment refusal when the peer was refused, and :godot:`@GlobalScope.ERR_TIMEOUT <@GlobalScope#class_@GlobalScope_constant_ERR_TIMEOUT>` when the wait ran out.
 
@@ -117,7 +125,7 @@ Connects ``tree`` to a localhost host on ``port`` and waits until ``username`` i
 
 .. rst-class:: classref-method
 
-:godot:`Error <@GlobalScope#enum_@globalscope_Error>` **await_online**\ (\ tree\: :ref:`MultiplayerTree<class_MultiplayerTree>`\ ) |static| :ref:`🔗<class_EnetTestSupport_method_await_online>`
+:godot:`Error <@GlobalScope#enum_@globalscope_Error>` **await_online**\ (\ tree\: :ref:`MultiplayerViewport<class_MultiplayerViewport>`\ ) |static| :ref:`🔗<class_EnetTestSupport_method_await_online>`
 
 Waits until ``tree``'s session is online.
 
@@ -153,7 +161,7 @@ Builds ``{ peer_class, address }`` fields for the endpoint at ``port`` on localh
 
 .. rst-class:: classref-method
 
-|void| **stop_tree**\ (\ tree\: :ref:`MultiplayerTree<class_MultiplayerTree>`\ ) |static| :ref:`🔗<class_EnetTestSupport_method_stop_tree>`
+|void| **stop_tree**\ (\ tree\: :ref:`MultiplayerViewport<class_MultiplayerViewport>`\ ) |static| :ref:`🔗<class_EnetTestSupport_method_stop_tree>`
 
 Tears down ``tree`` and drains the SceneTree so the UDP socket is released before the next test begins.
 

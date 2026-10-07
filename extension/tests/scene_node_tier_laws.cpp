@@ -225,22 +225,23 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Scene][Hosted] SNT10 what a scene DECLARES about its world "
-    "and what a viewport actually hosts around it are two readings, and the "
-    "host view is owed the second one"
+    "[Networked][Scene][Hosted] SNT10 a scene owns its world by what it "
+    "declares, whether or not a viewport hosts it, and an unknown scene owns "
+    "none"
 ) {
     Ref<NetwMultiplayer> core;
     core.instantiate();
     Node *root = memnew(Node);
 
-    CHECK_FALSE(core->scene_hosts_isolated_world());
-
     const Mounted declared
         = mount(core, memnew(Node), StringName("Arena"), true);
     root->add_child(declared.root);
+    const Mounted shared
+        = mount(core, memnew(Node), StringName("Lobby"), false);
+    root->add_child(shared.root);
 
     CHECK(core->scene_owns_its_world(declared.scene));
-    CHECK_FALSE(core->scene_hosts_isolated_world());
+    CHECK_FALSE(core->scene_owns_its_world(shared.scene));
 
     SubViewport *isolated = memnew(SubViewport);
     isolated->set_meta(NetwMultiplayer::scene_container_meta(), true);
@@ -250,8 +251,6 @@ TEST_CASE(
     const Mounted hosted = mount(core, annex, StringName("Annex"), true);
 
     CHECK(core->scene_owns_its_world(hosted.scene));
-    CHECK(core->scene_hosts_isolated_world());
-
     CHECK_FALSE(core->scene_owns_its_world(RID()));
 
     memdelete(root);

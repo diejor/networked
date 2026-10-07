@@ -141,7 +141,7 @@ NetwMultiplayer *rpc_interface(const Callable &p_callable) {
         NETW_ERROR(
             sys::SESSION,
             "'%s' is not inside a session, so it cannot take a Netw RPC. Add "
-            "it to the scene tree under a MultiplayerTree.",
+            "it to the scene tree under a MultiplayerViewport.",
             String(node->get_name())
         );
     }
@@ -388,7 +388,7 @@ Ref<NetwPromise> Netw::prepare_join(
         NetwPromise::resolved(ERR_UNCONFIGURED),
         sys::SESSION,
         "Netw.prepare_join got a node that is not inside a session. Call it "
-        "from a node in the scene tree under a MultiplayerTree."
+        "from a node in the scene tree under a MultiplayerViewport."
     );
     if (!api->is_online()) {
         return api->session_prepare_join(p_username, p_args);
@@ -824,7 +824,7 @@ Ref<NetwDatabaseConfig> Netw::configure_database(
         Ref<NetwDatabaseConfig>(),
         sys::TABLE,
         "Netw.configure_database got '%s', which is not inside a session. "
-        "Call it from a node in the scene tree under a MultiplayerTree.",
+        "Call it from a node in the scene tree under a MultiplayerViewport.",
         p_node != nullptr ? String(p_node->get_name()) : String("a freed node")
     );
     NETW_ERR_COND_V(
@@ -877,7 +877,7 @@ Node *Netw::spawn_player(
             sys::SPAWN,
             "Netw.spawn got a spawn function on '%s', which is not inside a "
             "session. Move it to a node in the scene tree under a "
-            "MultiplayerTree.",
+            "MultiplayerViewport.",
             String(host->get_name())
         );
         return nullptr;
@@ -954,7 +954,7 @@ Ref<NetwAction> Netw::action(const Callable &p_authority) {
             sys::LAGCOMP,
             "Netw.action got a callback on '%s', which is not inside a "
             "session. Move it to a node in the scene tree under a "
-            "MultiplayerTree.",
+            "MultiplayerViewport.",
             String(host->get_name())
         );
         return Ref<NetwAction>();
@@ -1002,7 +1002,7 @@ void Netw::rewind(
         NETW_ERROR(
             sys::LAGCOMP,
             "Netw.rewind got a body on '%s', which is not inside a session. "
-            "Move it to a node in the scene tree under a MultiplayerTree.",
+            "Move it to a node in the scene tree under a MultiplayerViewport.",
             String(host->get_name())
         );
         return;
