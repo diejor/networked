@@ -549,7 +549,7 @@ enum **MissingInput**: :ref:`🔗<enum_NetwPrediction_MissingInput>`
 
 :ref:`MissingInput<enum_NetwPrediction_MissingInput>` **MISSING_INPUT_STALL** = ``0``
 
-The entity does not move.
+The entity gets no input.
 
 .. _class_NetwPrediction_constant_MISSING_INPUT_REPEAT_LAST:
 
@@ -617,7 +617,7 @@ Restore the server's state and replay every input the server has not acknowledge
 
 :ref:`RecoveryPolicy<enum_NetwPrediction_RecoveryPolicy>` **RECOVERY_POLICY_REBASE_RECOVER** = ``1``
 
-Restore the server's state and write the correction directly, without replaying.
+Add the difference between the server's state and the prediction to the present state, without replaying.
 
 .. _class_NetwPrediction_constant_RECOVERY_POLICY_DELAY_CLOSED:
 
@@ -919,7 +919,7 @@ The server's state was restored, advanced to the present.
 
 :ref:`Operator<enum_NetwPrediction_Operator>` **OPERATOR_REBASE_EXACT** = ``2``
 
-The server's state was restored as is.
+The server's state, or its difference from the prediction, was written as is.
 
 .. _class_NetwPrediction_constant_OPERATOR_FULL_CLOSURE:
 
@@ -1218,7 +1218,7 @@ Both :godot:`Dictionary` arguments contain state declared with :ref:`NetwPropert
 - |void| **set_divergence_epsilon**\ (\ value\: :godot:`float`\ )
 - :godot:`float` **get_divergence_epsilon**\ (\ )
 
-How far the predicted state may drift from the server's before it is corrected. :ref:`NetwPropertyConfig.epsilon()<class_NetwPropertyConfig_method_epsilon>` overrides it for one field.
+How far the predicted state may drift from the server's before it is corrected. :ref:`NetwPropertyConfig.epsilon()<class_NetwPropertyConfig_method_epsilon>` overrides it for one field. A :ref:`ARCHETYPE_SOLVER_BODY<class_NetwPrediction_constant_ARCHETYPE_SOLVER_BODY>` tolerates one and a half quantizer steps on each quantized field.
 
 .. rst-class:: classref-item-separator
 
@@ -1303,7 +1303,7 @@ What the server does when an input never arrives.
 - |void| **set_predict_input**\ (\ value\: :godot:`Callable`\ )
 - :godot:`Callable` **get_predict_input**\ (\ )
 
-Guesses input for an entity selected by :ref:`NetwEntity.simulation<class_NetwEntity_property_simulation>` that this peer does not control. Relayed input replaces the guess. Unset callbacks and omitted fields supply zero input.
+Guesses input for an entity selected by :ref:`NetwEntity.simulation<class_NetwEntity_property_simulation>` that this peer does not control. Relayed input replaces the guess. Unset callbacks and omitted fields repeat the newest relayed input, and zero before any arrives.
 
 The returned :godot:`Dictionary` uses names declared with :ref:`NetwPropertyConfig.input()<class_NetwPropertyConfig_method_input>`.
 

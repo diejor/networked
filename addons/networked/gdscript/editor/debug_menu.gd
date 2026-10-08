@@ -7,6 +7,11 @@ const _HINTS: Array[Dictionary] = [
 		"label": "Prediction Rings",
 		"tooltip": "Draw prediction rings in the next run.",
 	},
+	{
+		"name": "interpolation",
+		"label": "Interpolation Timeline",
+		"tooltip": "Draw interpolation samples and playheads in the next run.",
+	},
 ]
 const _FIRST_ID := 9100
 const _SECTION := "Networked"

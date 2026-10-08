@@ -10,6 +10,7 @@
 
 namespace godot {
 using ::Array;
+using ::Basis;
 using ::Color;
 using ::Dictionary;
 using ::ERR_ALREADY_EXISTS;

@@ -89,7 +89,6 @@ LocalVector<sim::Candidate> chosen(int64_t p_member) {
     sim::Candidate row;
     row.key = p_member;
     row.order_key = 10;
-    row.distance_squared = 1.0;
     row.pick = sim::Pick::CHOSEN;
     row.eligible = true;
     out.push_back(row);
@@ -536,6 +535,58 @@ TEST_CASE("[Networked][Predict][Hosted][Joint] linger ends past tenure") {
         )[NetwPredictionEngine::STAT_JOINT_LINGER_HELD],
         0
     );
+}
+
+TEST_CASE(
+    "[Networked][Predict][Hosted][Joint] O6 a member selected again restores "
+    "nothing it recorded before its new tenure"
+) {
+    NetwPredictionEngine held;
+    NetwPredictionEngine *const engine = &held;
+    const int64_t owner = engine->open(declaration());
+    const int64_t member = engine->open(declaration());
+    configure_joint(engine, owner, member);
+    sim::Selection selection = adopt_member(engine, owner, member, 0);
+    for (int transition = 1; transition <= 5; ++transition) {
+        engine->joint_record(
+            member,
+            transition,
+            state(100 + transition),
+            predict::StateRow(),
+            false,
+            false,
+            false
+        );
+    }
+
+    selection.commit(LocalVector<sim::Candidate>(), 6);
+    selection.release_lingering(7);
+    engine->joint_adopt(owner, selection);
+    selection.commit(chosen(member), 40);
+    engine->joint_adopt(owner, selection);
+    NETW_CHECK_EQ(engine->tenure_begin(member), 41);
+
+    for (int transition = 41; transition <= 42; ++transition) {
+        engine->joint_record(
+            owner,
+            transition,
+            state(transition),
+            predict::StateRow(),
+            false,
+            false,
+            false
+        );
+    }
+    engine->joint_note_basis(owner, 41, NetwPredictionEngine::JOINT_FLOOR_STATE);
+    const predict::JointPassPlan plan = engine->joint_pass(owner, 42);
+    int stale = 0;
+    for (uint32_t at = 0; at < plan.restores.size(); ++at) {
+        const predict::JointRestore &restore = plan.restores[at];
+        if (restore.slot == member && restore.entry <= 41) {
+            stale += 1;
+        }
+    }
+    NETW_CHECK_EQ(stale, 0);
 }
 
 struct SeatedEntity {

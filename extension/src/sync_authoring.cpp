@@ -30,11 +30,8 @@ const char *KEY_TIMELINE_MODE = "netw_timeline_mode";
 const char *KEY_LIVE_MODE = "netw_live_mode";
 const char *KEY_LIVE_SMOOTH_TIME = "netw_live_smooth_time";
 const char *KEY_SMART_DILATION = "netw_enable_smart_dilation";
-const char *KEY_MAX_EXTRA_DILATION = "netw_max_extra_dilation";
 const char *KEY_LAG_ADAPT_RATE = "netw_lag_adapt_rate";
-const char *KEY_STARVATION_GROWTH = "netw_starvation_growth";
 const char *KEY_FLOOR_SMOOTHING = "netw_floor_smoothing";
-const char *KEY_STARVATION_GRACE = "netw_starvation_grace_frames";
 const char *KEY_TRACE_INTERVAL = "netw_trace_interval";
 
 const char *KEY_ARCHETYPE = "netw_archetype";
@@ -80,11 +77,8 @@ const char *DISPLAY_KEYS[] = {
     KEY_LIVE_MODE,
     KEY_LIVE_SMOOTH_TIME,
     KEY_SMART_DILATION,
-    KEY_MAX_EXTRA_DILATION,
     KEY_LAG_ADAPT_RATE,
-    KEY_STARVATION_GROWTH,
     KEY_FLOOR_SMOOTHING,
-    KEY_STARVATION_GRACE,
     KEY_TRACE_INTERVAL,
 };
 
@@ -125,22 +119,11 @@ void apply_display(Object *p_sync, const Ref<NetwEntity> &p_entity) {
             bool(p_sync->get_meta(StringName(KEY_SMART_DILATION)))
         );
     }
-    if (declared(p_sync, KEY_MAX_EXTRA_DILATION)) {
-        display->set_max_extra_dilation(real(p_sync, KEY_MAX_EXTRA_DILATION));
-    }
     if (declared(p_sync, KEY_LAG_ADAPT_RATE)) {
         display->set_lag_adapt_rate(real(p_sync, KEY_LAG_ADAPT_RATE));
     }
-    if (declared(p_sync, KEY_STARVATION_GROWTH)) {
-        display->set_starvation_growth(real(p_sync, KEY_STARVATION_GROWTH));
-    }
     if (declared(p_sync, KEY_FLOOR_SMOOTHING)) {
         display->set_floor_smoothing(real(p_sync, KEY_FLOOR_SMOOTHING));
-    }
-    if (declared(p_sync, KEY_STARVATION_GRACE)) {
-        display->set_starvation_grace_frames(
-            whole(p_sync, KEY_STARVATION_GRACE)
-        );
     }
     if (declared(p_sync, KEY_TRACE_INTERVAL)) {
         display->set_trace_interval(whole(p_sync, KEY_TRACE_INTERVAL));

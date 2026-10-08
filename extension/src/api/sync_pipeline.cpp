@@ -1621,7 +1621,14 @@ void SyncPipeline::apply_row(
         return;
     }
     if (admission == store::Landing::BASELINE_UNKNOWN) {
-        reset_stream_of(int(p_sender), named.token);
+        if (repl::snapshot_row_changes_nothing(
+                p_payload,
+                world.table(at.table).plan
+            )) {
+            world.hold_early_edge(at, int(p_sender), p_payload, datagram_tick);
+        } else {
+            reset_stream_of(int(p_sender), named.token);
+        }
         plane->attribution_note_refusal(
             p_sender,
             p_channel,
@@ -1683,6 +1690,14 @@ void SyncPipeline::apply_row(
         ? predict::Listener::NONE
         : predictor->listener_for(predicted, world.ref_of(slot), binding);
     const predict::Arrival arrival = predict::Arrival::of(table, at.row);
+    if (predicted >= 0) {
+        predictor->note_state_arrival(
+            predicted,
+            world.ref_of(slot),
+            binding,
+            arrival.whole
+        );
+    }
     plane->store_received(binding, at, retained, p_lane == LANE_ROW, p_sender);
     if (!retained) {
         binding->notify_landed(table, at.row);
@@ -1700,10 +1715,18 @@ void SyncPipeline::apply_row(
 #if defined(NETW_TESTS)
     plane->idle_work.received_rows += 1;
 #endif
-    feed_derived_interpolation(
-        binding,
-        world.row_of(binding->id, p_lane == LANE_RETAINED ? 1 : 0)
-    );
+    const store::RowAddress landed_at
+        = world.row_of(binding->id, p_lane == LANE_RETAINED ? 1 : 0);
+    feed_derived_interpolation(binding, landed_at);
+    PackedByteArray edge;
+    int64_t edge_tick = -1;
+    if (!world.take_early_edge(landed_at, int(p_sender), edge, edge_tick)) {
+        return;
+    }
+    const int64_t carrying_tick = datagram_tick;
+    datagram_tick = edge_tick;
+    apply_row(p_entity, p_ordinal, edge, p_sender, p_channel, p_lane);
+    datagram_tick = carrying_tick;
 }
 
 void SyncPipeline::handle_derived_row(

@@ -459,6 +459,7 @@ void NetwPredictRecovery::_bind_methods() {
 
 Ref<NetwPredictRecovery> prediction_core::recover(
     const Dictionary &payload,
+    const Dictionary &predicted,
     int policy,
     int snap_restore,
     const Dictionary &projection,
@@ -479,7 +480,7 @@ Ref<NetwPredictRecovery> prediction_core::recover(
     predict::RecoveryRequest request;
     request.authority = recovery_row(fields, payload);
     request.current = recovery_row(fields, current);
-    request.predicted.resize(fields.count());
+    request.predicted = recovery_row(fields, predicted);
     request.field_errors.resize(uint32_t(fields.count()));
     for (int at = 0; at < fields.count(); ++at) {
         request.field_errors[uint32_t(at)]

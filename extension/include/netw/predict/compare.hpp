@@ -96,6 +96,8 @@ double value_error(
     bool p_angle
 );
 
+double rotation_tolerance_floor();
+
 double divergence_by_field(
     const godot::Dictionary &p_predicted,
     const godot::Dictionary &p_authoritative,

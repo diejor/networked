@@ -1398,6 +1398,9 @@ void NetwMultiplayer::display_seat_bodies(display::Runtime *p_runtime) {
         bodies
     );
     p_runtime->set_bodies(bodies);
+    p_runtime->set_visual_offset(
+        row != nullptr ? row->bodies.visual_transform : Variant()
+    );
 }
 
 display::Channel *NetwMultiplayer::display_ensure_state(
@@ -2509,10 +2512,7 @@ void NetwMultiplayer::display_snap(
     if (runtime == nullptr) {
         return;
     }
-    display::Channel *channel = runtime->channel_named(p_track);
-    if (channel != nullptr) {
-        channel->snap(p_value);
-    }
+    runtime->snap_named(p_track, p_value);
     display_book->wake(runtime);
 }
 

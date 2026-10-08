@@ -469,8 +469,11 @@ void ClockEngine::nudge_toward_estimate() {
     const double step = ticktime();
     const double current = double(tick) + accumulator / step;
     const double divergence = target_tick_estimate - current;
+    const bool owes_past_catch_up = simulation_gates > 0
+        && accumulator > double(max_ticks_per_frame) * step;
 
-    if (std::fabs(divergence) > double(panic_snap_threshold)) {
+    if (std::fabs(divergence) > double(panic_snap_threshold)
+        || owes_past_catch_up) {
         tick = int(std::lround(target_tick_estimate));
         accumulator = (target_tick_estimate - double(tick)) * step;
         return;

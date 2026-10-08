@@ -214,7 +214,7 @@ public sealed class NetwPrediction : NetwRefCounted
     public enum MissingInput : long
     {
         /// <summary>
-        /// The entity does not move.
+        /// The entity gets no input.
         /// </summary>
         Stall = 0,
         /// <summary>
@@ -262,8 +262,8 @@ public sealed class NetwPrediction : NetwRefCounted
         /// </summary>
         RebaseReplay = 0,
         /// <summary>
-        /// Restore the server's state and write the correction directly,
-        /// without replaying.
+        /// Add the difference between the server's state and the prediction to
+        /// the present state, without replaying.
         /// </summary>
         RebaseRecover = 1,
         /// <summary>
@@ -421,7 +421,8 @@ public sealed class NetwPrediction : NetwRefCounted
         /// </summary>
         RebaseProjected = 1,
         /// <summary>
-        /// The server's state was restored as is.
+        /// The server's state, or its difference from the prediction, was
+        /// written as is.
         /// </summary>
         RebaseExact = 2,
         /// <summary>
@@ -634,9 +635,9 @@ public sealed class NetwPrediction : NetwRefCounted
     /// Guesses input for an entity selected by
     /// <see cref="NetwEntity.Simulation"/> that this peer does not control.
     /// Relayed input replaces the guess. Unset callbacks and omitted fields
-    /// supply zero input. The returned
-    /// <see cref="Godot.Collections.Dictionary"/> uses names declared with
-    /// <see cref="NetwPropertyConfig.Input"/>.
+    /// repeat the newest relayed input, and zero before any arrives. The
+    /// returned <see cref="Godot.Collections.Dictionary"/> uses names declared
+    /// with <see cref="NetwPropertyConfig.Input"/>.
     /// <code>
     /// Dictionary
     /// ┖╴property_name  Variant  guessed value of a declared input property
@@ -1310,7 +1311,8 @@ public sealed class NetwPrediction : NetwRefCounted
     /// <summary>
     /// How far the predicted state may drift from the server's before it is
     /// corrected. <see cref="NetwPropertyConfig.Epsilon"/> overrides it for one
-    /// field.
+    /// field. A <see cref="NetwPrediction.ArchetypeEnum.SolverBody"/> tolerates
+    /// one and a half quantizer steps on each quantized field.
     /// </summary>
     public double DivergenceEpsilon
     {

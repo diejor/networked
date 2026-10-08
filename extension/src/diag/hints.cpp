@@ -20,6 +20,7 @@ struct NamedHint {
 
 constexpr NamedHint known_hints[] = {
     {"prediction", HINT_PREDICTION},
+    {"interpolation", HINT_INTERPOLATION},
 };
 
 std::atomic<uint32_t> configured_mask = 0;

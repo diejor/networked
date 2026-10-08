@@ -1,5 +1,6 @@
 #include "support/netw_test.h"
 
+#include "support/fault_log.h"
 #include "support/installable_stepper.h"
 
 #include "support/netw_cells.h"
@@ -404,6 +405,66 @@ TEST_CASE(
 }
 
 TEST_CASE(
+    "[Networked][Predict][Census] PR8 a run of missed claims counts as one "
+    "client mismatch, and a match between two runs makes them two"
+) {
+    const Scenario scenario = two_predicted_lanes();
+    LoopbackRig rig(scenario.clients);
+    const ScenarioRun run = ScenarioRun::session(rig, scenario);
+    REQUIRE(run.regime_reached());
+
+    NetwMultiplayer *server = rig.server();
+    REQUIRE(server != nullptr);
+    netw::NetwPredictionEngine *const pool = server->get_prediction_engine();
+    REQUIRE(pool != nullptr);
+    const TypedArray<NetwEntity> stepped = server->predict_stepped_entities();
+    REQUIRE(stepped.size() == 2);
+    const Ref<NetwEntity> wrapper = stepped[0];
+    REQUIRE(wrapper.is_valid());
+    const int64_t slot = pool->slot_of(wrapper);
+    REQUIRE(slot >= 0);
+    const netw::table::SchemaRecord *schema = pool->input_schema(slot);
+    REQUIRE(schema != nullptr);
+
+    godot::PackedInt32Array families;
+    families.push_back(0);
+    families.push_back(0);
+    families.push_back(0);
+    const int64_t last = pool->journal_last_closed(slot);
+    const int64_t first = last - 3;
+    REQUIRE(first >= 0);
+
+    netw::predict::CommandFrameRecord filed;
+    REQUIRE(netw::predict::CommandFrameRecord::open(*schema, filed));
+    filed.set_epoch(int(pool->command_epoch_of(slot)));
+    for (int64_t at = first; at <= last; ++at) {
+        REQUIRE(filed.append_transition(at, at, true));
+        REQUIRE(
+            filed.append_evidence(0, 0, 4321, 0, 0, 0, families, families, 0)
+        );
+    }
+    pool->clear_owner_claims(slot);
+    pool->record_owner_claims(slot, filed);
+    REQUIRE(pool->owner_claim_count(slot) == 4);
+
+    const Dictionary before = counters_of(stepped[0]);
+    pool->report_owner_claim(slot, first, 4322);
+    pool->report_owner_claim(slot, first + 1, 4322);
+    pool->report_owner_claim(slot, first + 2, 4321);
+    pool->report_owner_claim(slot, first + 3, 4322);
+    const Dictionary after = counters_of(stepped[0]);
+
+    NETW_CHECK_EQ(
+        int64_t(after.get(StringName("client_fp_verified"), -99)),
+        int64_t(before.get(StringName("client_fp_verified"), -1)) + 4
+    );
+    NETW_CHECK_EQ(
+        int64_t(after.get(StringName("client_mismatches"), -99)),
+        int64_t(before.get(StringName("client_mismatches"), -1)) + 2
+    );
+}
+
+TEST_CASE(
     "[Networked][Predict][Census] PC6 a transition a resync steps "
     "over is journaled under the LABEL its queued command carries, so the "
     "acknowledgement run names the owner's own command rather than nothing"
@@ -771,7 +832,7 @@ TEST_CASE(
 TEST_CASE(
     "[Networked][Predict][Census] PC13 a JOINT island is admitted "
     "only where every member steps on a re-runnable tier, so an owner on a "
-    "STEPPED tier with no driver installed runs INDEPENDENT and says so once"
+    "STEPPED tier with no driver installed runs INDEPENDENT"
 ) {
     const Scenario scenario = two_predicted_lanes();
     LoopbackRig rig(scenario.clients);
@@ -812,7 +873,6 @@ TEST_CASE(
         pool->admitted_reconcile_mode(slot),
         int(netw::NetwPrediction::RECONCILE_INDEPENDENT)
     );
-    CHECK(pool->joint_refusal_reported_of(slot));
 
     SUBCASE("and installing the driver its space wanted admits it again") {
         const Ref<netw::NetwPhysicsStepper> stepper = installable_stepper();
@@ -830,6 +890,95 @@ TEST_CASE(
         );
         netw::gd::scene_root()->remove_child(body);
     }
+}
+
+int64_t refused_joint(
+    NetwMultiplayer *p_core,
+    const Ref<NetwEntity> &p_wrapper,
+    const FaultWatch &p_watch
+) {
+    netw::NetwPredictionEngine *const pool = p_core->get_prediction_engine();
+    const int64_t slot = pool->slot_of(p_wrapper);
+    REQUIRE(slot >= 0);
+    const Ref<NetwPrediction> handle = p_wrapper->get_prediction();
+    REQUIRE(handle.is_valid());
+    handle->set_reconcile_mode(netw::NetwPrediction::RECONCILE_JOINT);
+    handle->simulation()->set_schedule(netw::NetwSimulation::SCHEDULE_STEPPED);
+    NETW_CHECK_EQ(
+        pool->admitted_reconcile_mode(slot),
+        int(netw::NetwPrediction::RECONCILE_INDEPENDENT)
+    );
+    return p_watch.errors_containing("RECONCILE_JOINT needs");
+}
+
+TEST_CASE(
+    "[Networked][Predict][Census] PC16 a refused JOINT island is reported "
+    "once on the peer that predicts its owner and nowhere else, because only "
+    "that peer reconciles the group"
+) {
+    const Scenario scenario = two_predicted_lanes();
+    LoopbackRig rig(scenario.clients);
+    const ScenarioRun run = ScenarioRun::session(rig, scenario);
+    REQUIRE(run.regime_reached());
+
+    NetwMultiplayer *server = rig.server();
+    NetwMultiplayer *predictor = rig.client(0);
+    REQUIRE(server != nullptr);
+    REQUIRE(predictor != nullptr);
+    netw::NetwPredictionEngine *const pool = predictor->get_prediction_engine();
+
+    Ref<NetwEntity> predicted;
+    const TypedArray<NetwEntity> held = predictor->predict_stepped_entities();
+    for (int at = 0; at < held.size(); ++at) {
+        const Ref<NetwEntity> wrapper = held[at];
+        if (pool->role_of(pool->slot_of(wrapper)) == int(netw::Role::PREDICT)) {
+            predicted = wrapper;
+        }
+    }
+    REQUIRE(predicted.is_valid());
+
+    const FaultWatch watch;
+    const TypedArray<NetwEntity> consumed = server->predict_stepped_entities();
+    REQUIRE(consumed.size() == 2);
+    NETW_CHECK_EQ(refused_joint(server, consumed[0], watch), int64_t(0));
+    NETW_CHECK_EQ(refused_joint(server, consumed[1], watch), int64_t(0));
+    NETW_CHECK_EQ(refused_joint(predictor, predicted, watch), int64_t(1));
+    CHECK(pool->joint_refusal_reported_of(pool->slot_of(predicted)));
+}
+
+TEST_CASE(
+    "[Networked][Predict][Census] PC17 a REMOTE slot skips JOINT admission, "
+    "so another player's entity keeps the JOINT it declared on a peer where "
+    "it could never step"
+) {
+    Scenario scenario = two_predicted_lanes();
+    godot::Vector<StringName> members;
+    members.push_back(StringName("Q"));
+    scenario.world.island(StringName("P"), members);
+    LoopbackRig rig(scenario.clients);
+    const ScenarioRun run = ScenarioRun::session(rig, scenario);
+    REQUIRE(run.regime_reached());
+
+    NetwMultiplayer *predictor = rig.client(0);
+    REQUIRE(predictor != nullptr);
+    netw::NetwPredictionEngine *const pool = predictor->get_prediction_engine();
+
+    const Ref<NetwPrediction> handle
+        = rig.prediction_handle(StringName("Q"), 0);
+    REQUIRE(handle.is_valid());
+    const int64_t slot = pool->slot_of(handle->get_entity());
+    REQUIRE(pool->role_of(slot) == int(netw::Role::REMOTE));
+
+    const FaultWatch watch;
+    handle->set_reconcile_mode(netw::NetwPrediction::RECONCILE_JOINT);
+    handle->simulation()->set_schedule(netw::NetwSimulation::SCHEDULE_STEPPED);
+    REQUIRE_FALSE(pool->slot_is_steppable(slot));
+    NETW_CHECK_EQ(
+        pool->admitted_reconcile_mode(slot),
+        int(netw::NetwPrediction::RECONCILE_JOINT)
+    );
+    NETW_CHECK_EQ(watch.errors_containing("RECONCILE_JOINT needs"), int64_t(0));
+    CHECK_FALSE(pool->joint_refusal_reported_of(slot));
 }
 
 TEST_CASE(

@@ -31,6 +31,28 @@ A :ref:`NetwInterpolate<class_NetwInterpolate>` configures one property. This ha
 
 A peer that draws nothing smooths nothing. Under the headless display server, or in an export with the ``dedicated_server`` feature, no smoothed value is written and the visual stays where its parent puts it. Enable ``networked/display/smooth_when_headless`` in the project settings to smooth there as well.
 
+\ **Seeing interpolation**\ 
+
+Debug > Networked > Interpolation Timeline draws the snapshots each remote entity holds and where it is playing them.
+
+- **grey dots** snapshots already played
+
+- **cyan dots** snapshots still ahead
+
+- **large dot** the newest snapshot. Cyan while more are ahead, amber once playback reaches it, red once playback runs past it
+
+- **ghost** the entity's body at the newest snapshot, in the large dot's colour
+
+- **white line** the two snapshots the entity is drawn between
+
+- **dashed amber line** a snapshot that never arrived, or a guess past the newest one. On an entity this peer predicts and does not control it runs to the drawn body, and the text gives that ``horizon`` in ticks
+
+- **short ticks** which way the entity faced at each snapshot
+
+- **purple line** a correction still being smoothed out on an entity this peer predicts
+
+The first line of text names how the entity is drawn and what playback is doing. ``BUFFERED`` has snapshots ahead, ``HOLD`` has reached the newest, ``STARVING`` has run past it, ``FORECAST`` is guessing ahead, ``SNAP`` jumped instead of gliding and ``REST`` means the sender stopped. The second line gives the snapshots buffered ahead, the :ref:`display_lag<class_NetwDisplay_property_display_lag>` and how old snapshots are when they arrive, all in ticks. A lag smaller than that age is why an entity freezes.
+
 .. rst-class:: classref-reftable-group
 
 Properties
@@ -39,39 +61,33 @@ Properties
 .. table::
    :widths: auto
 
-   +----------------------------------------------------+------------------------------------------------------------------------------------+------------------+
-   | :godot:`float`                                     | :ref:`chase_glide_time<class_NetwDisplay_property_chase_glide_time>`               | ``0.0``          |
-   +----------------------------------------------------+------------------------------------------------------------------------------------+------------------+
-   | :godot:`float`                                     | :ref:`display_lag<class_NetwDisplay_property_display_lag>`                         | ``0.0``          |
-   +----------------------------------------------------+------------------------------------------------------------------------------------+------------------+
-   | :ref:`DisplayRole<enum_NetwDisplay_DisplayRole>`   | :ref:`display_role<class_NetwDisplay_property_display_role>`                       | ``0``            |
-   +----------------------------------------------------+------------------------------------------------------------------------------------+------------------+
-   | :godot:`bool`                                      | :ref:`enable_smart_dilation<class_NetwDisplay_property_enable_smart_dilation>`     | ``false``        |
-   +----------------------------------------------------+------------------------------------------------------------------------------------+------------------+
-   | :godot:`float`                                     | :ref:`floor_smoothing<class_NetwDisplay_property_floor_smoothing>`                 | ``0.0``          |
-   +----------------------------------------------------+------------------------------------------------------------------------------------+------------------+
-   | :godot:`float`                                     | :ref:`lag_adapt_rate<class_NetwDisplay_property_lag_adapt_rate>`                   | ``0.0``          |
-   +----------------------------------------------------+------------------------------------------------------------------------------------+------------------+
-   | :ref:`LiveMode<enum_NetwDisplay_LiveMode>`         | :ref:`live_mode<class_NetwDisplay_property_live_mode>`                             | ``0``            |
-   +----------------------------------------------------+------------------------------------------------------------------------------------+------------------+
-   | :godot:`float`                                     | :ref:`live_smooth_time<class_NetwDisplay_property_live_smooth_time>`               | ``0.0``          |
-   +----------------------------------------------------+------------------------------------------------------------------------------------+------------------+
-   | :godot:`float`                                     | :ref:`max_extra_dilation<class_NetwDisplay_property_max_extra_dilation>`           | ``0.0``          |
-   +----------------------------------------------------+------------------------------------------------------------------------------------+------------------+
-   | :godot:`int`                                       | :ref:`max_forecast_ticks<class_NetwDisplay_property_max_forecast_ticks>`           | ``0``            |
-   +----------------------------------------------------+------------------------------------------------------------------------------------+------------------+
-   | :ref:`DisplayPump<enum_NetwDisplay_DisplayPump>`   | :ref:`pump_mode<class_NetwDisplay_property_pump_mode>`                             | ``-1``           |
-   +----------------------------------------------------+------------------------------------------------------------------------------------+------------------+
-   | :godot:`int`                                       | :ref:`starvation_grace_frames<class_NetwDisplay_property_starvation_grace_frames>` | ``0``            |
-   +----------------------------------------------------+------------------------------------------------------------------------------------+------------------+
-   | :godot:`float`                                     | :ref:`starvation_growth<class_NetwDisplay_property_starvation_growth>`             | ``0.0``          |
-   +----------------------------------------------------+------------------------------------------------------------------------------------+------------------+
-   | :ref:`TimelineMode<enum_NetwDisplay_TimelineMode>` | :ref:`timeline_mode<class_NetwDisplay_property_timeline_mode>`                     | ``0``            |
-   +----------------------------------------------------+------------------------------------------------------------------------------------+------------------+
-   | :godot:`int`                                       | :ref:`trace_interval<class_NetwDisplay_property_trace_interval>`                   | ``0``            |
-   +----------------------------------------------------+------------------------------------------------------------------------------------+------------------+
-   | :godot:`NodePath`                                  | :ref:`visual_root<class_NetwDisplay_property_visual_root>`                         | ``NodePath("")`` |
-   +----------------------------------------------------+------------------------------------------------------------------------------------+------------------+
+   +----------------------------------------------------+--------------------------------------------------------------------------------+------------------+
+   | :godot:`float`                                     | :ref:`chase_glide_time<class_NetwDisplay_property_chase_glide_time>`           | ``0.15``         |
+   +----------------------------------------------------+--------------------------------------------------------------------------------+------------------+
+   | :godot:`float`                                     | :ref:`display_lag<class_NetwDisplay_property_display_lag>`                     | ``0.0``          |
+   +----------------------------------------------------+--------------------------------------------------------------------------------+------------------+
+   | :ref:`DisplayRole<enum_NetwDisplay_DisplayRole>`   | :ref:`display_role<class_NetwDisplay_property_display_role>`                   | ``0``            |
+   +----------------------------------------------------+--------------------------------------------------------------------------------+------------------+
+   | :godot:`bool`                                      | :ref:`enable_smart_dilation<class_NetwDisplay_property_enable_smart_dilation>` | ``true``         |
+   +----------------------------------------------------+--------------------------------------------------------------------------------+------------------+
+   | :godot:`float`                                     | :ref:`floor_smoothing<class_NetwDisplay_property_floor_smoothing>`             | ``0.05``         |
+   +----------------------------------------------------+--------------------------------------------------------------------------------+------------------+
+   | :godot:`float`                                     | :ref:`lag_adapt_rate<class_NetwDisplay_property_lag_adapt_rate>`               | ``0.05``         |
+   +----------------------------------------------------+--------------------------------------------------------------------------------+------------------+
+   | :ref:`LiveMode<enum_NetwDisplay_LiveMode>`         | :ref:`live_mode<class_NetwDisplay_property_live_mode>`                         | ``0``            |
+   +----------------------------------------------------+--------------------------------------------------------------------------------+------------------+
+   | :godot:`float`                                     | :ref:`live_smooth_time<class_NetwDisplay_property_live_smooth_time>`           | ``0.0``          |
+   +----------------------------------------------------+--------------------------------------------------------------------------------+------------------+
+   | :godot:`int`                                       | :ref:`max_forecast_ticks<class_NetwDisplay_property_max_forecast_ticks>`       | ``6``            |
+   +----------------------------------------------------+--------------------------------------------------------------------------------+------------------+
+   | :ref:`DisplayPump<enum_NetwDisplay_DisplayPump>`   | :ref:`pump_mode<class_NetwDisplay_property_pump_mode>`                         | ``-1``           |
+   +----------------------------------------------------+--------------------------------------------------------------------------------+------------------+
+   | :ref:`TimelineMode<enum_NetwDisplay_TimelineMode>` | :ref:`timeline_mode<class_NetwDisplay_property_timeline_mode>`                 | ``0``            |
+   +----------------------------------------------------+--------------------------------------------------------------------------------+------------------+
+   | :godot:`int`                                       | :ref:`trace_interval<class_NetwDisplay_property_trace_interval>`               | ``0``            |
+   +----------------------------------------------------+--------------------------------------------------------------------------------+------------------+
+   | :godot:`NodePath`                                  | :ref:`visual_root<class_NetwDisplay_property_visual_root>`                     | ``NodePath("")`` |
+   +----------------------------------------------------+--------------------------------------------------------------------------------+------------------+
 
 .. rst-class:: classref-reftable-group
 
@@ -261,7 +277,7 @@ Property Descriptions
 
 .. rst-class:: classref-property
 
-:godot:`float` **chase_glide_time** = ``0.0`` :ref:`🔗<class_NetwDisplay_property_chase_glide_time>`
+:godot:`float` **chase_glide_time** = ``0.15`` :ref:`🔗<class_NetwDisplay_property_chase_glide_time>`
 
 .. rst-class:: classref-property-setget
 
@@ -284,7 +300,7 @@ Seconds :ref:`LIVE_MODE_CHASE<class_NetwDisplay_constant_LIVE_MODE_CHASE>` takes
 
 - :godot:`float` **get_display_lag**\ (\ )
 
-The extra display delay in ticks that :ref:`enable_smart_dilation<class_NetwDisplay_property_enable_smart_dilation>` has added.
+How many ticks behind the newest data this entity is drawn.
 
 .. rst-class:: classref-item-separator
 
@@ -311,7 +327,7 @@ How this entity is drawn. :ref:`DISPLAY_ROLE_AUTO<class_NetwDisplay_constant_DIS
 
 .. rst-class:: classref-property
 
-:godot:`bool` **enable_smart_dilation** = ``false`` :ref:`🔗<class_NetwDisplay_property_enable_smart_dilation>`
+:godot:`bool` **enable_smart_dilation** = ``true`` :ref:`🔗<class_NetwDisplay_property_enable_smart_dilation>`
 
 .. rst-class:: classref-property-setget
 
@@ -328,7 +344,7 @@ Lets the display delay of a remote entity grow when snapshots arrive late.
 
 .. rst-class:: classref-property
 
-:godot:`float` **floor_smoothing** = ``0.0`` :ref:`🔗<class_NetwDisplay_property_floor_smoothing>`
+:godot:`float` **floor_smoothing** = ``0.05`` :ref:`🔗<class_NetwDisplay_property_floor_smoothing>`
 
 .. rst-class:: classref-property-setget
 
@@ -345,7 +361,7 @@ How quickly, as a fraction per frame, the smallest delay :ref:`enable_smart_dila
 
 .. rst-class:: classref-property
 
-:godot:`float` **lag_adapt_rate** = ``0.0`` :ref:`🔗<class_NetwDisplay_property_lag_adapt_rate>`
+:godot:`float` **lag_adapt_rate** = ``0.05`` :ref:`🔗<class_NetwDisplay_property_lag_adapt_rate>`
 
 .. rst-class:: classref-property-setget
 
@@ -392,28 +408,11 @@ Smoothing time in seconds for :ref:`LIVE_MODE_CHASE<class_NetwDisplay_constant_L
 
 ----
 
-.. _class_NetwDisplay_property_max_extra_dilation:
-
-.. rst-class:: classref-property
-
-:godot:`float` **max_extra_dilation** = ``0.0`` :ref:`🔗<class_NetwDisplay_property_max_extra_dilation>`
-
-.. rst-class:: classref-property-setget
-
-- |void| **set_max_extra_dilation**\ (\ value\: :godot:`float`\ )
-- :godot:`float` **get_max_extra_dilation**\ (\ )
-
-The most ticks :ref:`display_lag<class_NetwDisplay_property_display_lag>` may grow to.
-
-.. rst-class:: classref-item-separator
-
-----
-
 .. _class_NetwDisplay_property_max_forecast_ticks:
 
 .. rst-class:: classref-property
 
-:godot:`int` **max_forecast_ticks** = ``0`` :ref:`🔗<class_NetwDisplay_property_max_forecast_ticks>`
+:godot:`int` **max_forecast_ticks** = ``6`` :ref:`🔗<class_NetwDisplay_property_max_forecast_ticks>`
 
 .. rst-class:: classref-property-setget
 
@@ -437,40 +436,6 @@ How many ticks :ref:`TIMELINE_MODE_FORECAST<class_NetwDisplay_constant_TIMELINE_
 - :ref:`DisplayPump<enum_NetwDisplay_DisplayPump>` **get_pump_mode**\ (\ )
 
 How this entity is being interpolated right now, or :ref:`DISPLAY_PUMP_UNRESOLVED<class_NetwDisplay_constant_DISPLAY_PUMP_UNRESOLVED>` before that is decided.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwDisplay_property_starvation_grace_frames:
-
-.. rst-class:: classref-property
-
-:godot:`int` **starvation_grace_frames** = ``0`` :ref:`🔗<class_NetwDisplay_property_starvation_grace_frames>`
-
-.. rst-class:: classref-property-setget
-
-- |void| **set_starvation_grace_frames**\ (\ value\: :godot:`int`\ )
-- :godot:`int` **get_starvation_grace_frames**\ (\ )
-
-How many frames without a new snapshot are tolerated before :ref:`display_lag<class_NetwDisplay_property_display_lag>` starts growing.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwDisplay_property_starvation_growth:
-
-.. rst-class:: classref-property
-
-:godot:`float` **starvation_growth** = ``0.0`` :ref:`🔗<class_NetwDisplay_property_starvation_growth>`
-
-.. rst-class:: classref-property-setget
-
-- |void| **set_starvation_growth**\ (\ value\: :godot:`float`\ )
-- :godot:`float` **get_starvation_growth**\ (\ )
-
-Ticks added to :ref:`display_lag<class_NetwDisplay_property_display_lag>` per frame once the grace frames are spent.
 
 .. rst-class:: classref-item-separator
 

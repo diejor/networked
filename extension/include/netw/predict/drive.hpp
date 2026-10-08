@@ -295,6 +295,18 @@ struct EvaluationRecord {
 };
 #endif
 
+struct RelayWindow {
+    static constexpr uint32_t SIZE = 4;
+
+    int64_t ticks[SIZE] = {-1, -1, -1, -1};
+    StateRow commands[SIZE];
+    uint32_t count = 0;
+    uint32_t next = 0;
+
+    void record(int64_t p_tick, const StateRow &p_command);
+    uint32_t at_oldest(uint32_t p_offset) const;
+};
+
 struct Slot {
     Config config;
     Wiring wiring;
@@ -389,6 +401,8 @@ struct Slot {
     int64_t tape_epoch = 0;
     int64_t next_tape_entry_index = 0;
     int64_t last_driven_entry_index = -1;
+    int64_t written_through = -1;
+    bool owner_claim_mismatched = false;
 
     int64_t recorded_input_tick = -1;
     int64_t drive_input_tick = -1;
@@ -409,10 +423,13 @@ struct Slot {
     bool witnessed_before = false;
     bool open = false;
     bool quantum_declaration_warned = false;
+    bool relay_subscribed = false;
+    RelayWindow relay_window;
 
     void adopt_timing(const Timing &p_timing);
     void open_lane();
     void close_lane();
+    void forget_commands();
     void reset_tape(int64_t p_epoch);
 
     godot::LocalVector<ReplayEntry> replay_entries(int64_t p_basis) const;

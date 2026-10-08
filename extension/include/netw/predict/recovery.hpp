@@ -126,6 +126,14 @@ TransportPlan transport(
 
 WritePlan dissipate_plan(int p_width, int64_t p_basis);
 
+bool carry_difference(
+    const Wiring &p_wiring,
+    const StateRow &p_authority,
+    const StateRow &p_predicted,
+    const StateRow &p_current,
+    StateRow &r_restore
+);
+
 StateRow advance_seed(
     const Wiring &p_wiring,
     const Config &p_config,

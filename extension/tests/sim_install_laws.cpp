@@ -519,6 +519,32 @@ TEST_CASE(
     CHECK(Vector2(fresh[0]).is_equal_approx(Vector2(10.0, 0.0)));
 }
 
+TEST_CASE(
+    "[Networked][Sim][SceneTree] O5 a predicted copy that leaves proxy for "
+    "active starts from the newest row it received, not from where its body "
+    "was left"
+) {
+    Stand stand(1, STATE_SOURCE);
+    NetwMultiplayer *session = stand.core(0);
+    const RID copy = stand.rid(0);
+    netw::sim::Row &seated = session->sim_row(copy);
+    seated.declaration.bodies.push_back(NodePath("Body"));
+    seated.facts.predicted = true;
+    seated.mode = Mode::PROXY;
+    session->sim_settle_body(NetwEntity::of(stand.copy(0)));
+    stand.author_ticks(-1, 12, 10.0);
+    REQUIRE(stand.held(0).x > 0.0);
+
+    stand.copy(0)->set(StringName(FIELD), Vector2(-500.0, 0.0));
+    session->sim_row(copy).mode = Mode::ACTIVE;
+    session->sim_settle_body(NetwEntity::of(stand.copy(0)));
+    NETW_CHECK_EQ(
+        int(session->sim_row_of(copy)->bodies.applied),
+        int(Mode::ACTIVE)
+    );
+    NETW_CHECK_GT(stand.held(0).x, 0.0);
+}
+
 } // namespace TestNetwSimInstallLaws
 
 #endif

@@ -621,6 +621,7 @@ int64_t Table::byte_count() const {
             bytes += int64_t(held.revisions.size() + held.images.size())
                 * int64_t(sizeof(uint64_t));
             bytes += int64_t(held.carried.size()) * int64_t(sizeof(Variant));
+            bytes += int64_t(held.early_edge.size());
         }
     }
     return bytes;
@@ -655,8 +656,8 @@ int64_t Table::held_bytes() const {
         bytes += held::vector(sender.rows);
         for (const Received &received : sender.rows) {
             bytes += held::vector(received.revisions)
-                + held::vector(received.images)
-                + held::vector(received.carried);
+                + held::vector(received.images) + held::vector(received.carried)
+                + int64_t(received.early_edge.size());
         }
     }
     for (const repl::WindowSample &sample : arrived_window) {
@@ -675,9 +676,10 @@ int64_t Table::peer_bytes() const {
             + held::vector(peer.token) + held::vector(peer.origin)
             + held::vector(peer.opened) + held::vector(peer.next_rev)
             + held::vector(peer.acked_rev) + held::vector(peer.exposed_rev)
-            + held::vector(peer.baseline) + held::vector(peer.baseline_carried)
-            + held::vector(peer.acc) + held::vector(peer.last_sent)
-            + held::vector(peer.refresh_at) + held::vector(peer.repair_at);
+            + held::vector(peer.rest_rev) + held::vector(peer.baseline)
+            + held::vector(peer.baseline_carried) + held::vector(peer.acc)
+            + held::vector(peer.last_sent) + held::vector(peer.refresh_at)
+            + held::vector(peer.repair_at);
     }
     return bytes;
 }

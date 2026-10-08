@@ -68,7 +68,8 @@ Variant NetwDisplay::read(int p_param) const {
         );
     }
     const display::Decl *held = declaration();
-    return held != nullptr ? held->get_param(p_param) : Variant();
+    return held != nullptr ? held->get_param(p_param)
+                           : display::Decl().get_param(p_param);
 }
 
 NodePath NetwDisplay::get_visual_root() const {
@@ -141,14 +142,6 @@ void NetwDisplay::set_enable_smart_dilation(bool p_value) {
     write(NetwMultiplayer::DISPLAY_PARAM_SMART_DILATION, p_value);
 }
 
-double NetwDisplay::get_max_extra_dilation() const {
-    return read(NetwMultiplayer::DISPLAY_PARAM_MAX_EXTRA_DILATION);
-}
-
-void NetwDisplay::set_max_extra_dilation(double p_value) {
-    write(NetwMultiplayer::DISPLAY_PARAM_MAX_EXTRA_DILATION, p_value);
-}
-
 double NetwDisplay::get_lag_adapt_rate() const {
     return read(NetwMultiplayer::DISPLAY_PARAM_LAG_ADAPT_RATE);
 }
@@ -157,28 +150,12 @@ void NetwDisplay::set_lag_adapt_rate(double p_value) {
     write(NetwMultiplayer::DISPLAY_PARAM_LAG_ADAPT_RATE, p_value);
 }
 
-double NetwDisplay::get_starvation_growth() const {
-    return read(NetwMultiplayer::DISPLAY_PARAM_STARVATION_GROWTH);
-}
-
-void NetwDisplay::set_starvation_growth(double p_value) {
-    write(NetwMultiplayer::DISPLAY_PARAM_STARVATION_GROWTH, p_value);
-}
-
 double NetwDisplay::get_floor_smoothing() const {
     return read(NetwMultiplayer::DISPLAY_PARAM_FLOOR_SMOOTHING);
 }
 
 void NetwDisplay::set_floor_smoothing(double p_value) {
     write(NetwMultiplayer::DISPLAY_PARAM_FLOOR_SMOOTHING, p_value);
-}
-
-int64_t NetwDisplay::get_starvation_grace_frames() const {
-    return read(NetwMultiplayer::DISPLAY_PARAM_STARVATION_GRACE_FRAMES);
-}
-
-void NetwDisplay::set_starvation_grace_frames(int64_t p_value) {
-    write(NetwMultiplayer::DISPLAY_PARAM_STARVATION_GRACE_FRAMES, p_value);
 }
 
 int64_t NetwDisplay::get_trace_interval() const {
@@ -373,19 +350,6 @@ void NetwDisplay::_bind_methods() {
         "get_enable_smart_dilation"
     );
     ClassDB::bind_method(
-        D_METHOD("get_max_extra_dilation"),
-        &NetwDisplay::get_max_extra_dilation
-    );
-    ClassDB::bind_method(
-        D_METHOD("set_max_extra_dilation", "value"),
-        &NetwDisplay::set_max_extra_dilation
-    );
-    ADD_PROPERTY(
-        PropertyInfo(Variant::FLOAT, "max_extra_dilation"),
-        "set_max_extra_dilation",
-        "get_max_extra_dilation"
-    );
-    ClassDB::bind_method(
         D_METHOD("get_lag_adapt_rate"),
         &NetwDisplay::get_lag_adapt_rate
     );
@@ -399,19 +363,6 @@ void NetwDisplay::_bind_methods() {
         "get_lag_adapt_rate"
     );
     ClassDB::bind_method(
-        D_METHOD("get_starvation_growth"),
-        &NetwDisplay::get_starvation_growth
-    );
-    ClassDB::bind_method(
-        D_METHOD("set_starvation_growth", "value"),
-        &NetwDisplay::set_starvation_growth
-    );
-    ADD_PROPERTY(
-        PropertyInfo(Variant::FLOAT, "starvation_growth"),
-        "set_starvation_growth",
-        "get_starvation_growth"
-    );
-    ClassDB::bind_method(
         D_METHOD("get_floor_smoothing"),
         &NetwDisplay::get_floor_smoothing
     );
@@ -423,19 +374,6 @@ void NetwDisplay::_bind_methods() {
         PropertyInfo(Variant::FLOAT, "floor_smoothing"),
         "set_floor_smoothing",
         "get_floor_smoothing"
-    );
-    ClassDB::bind_method(
-        D_METHOD("get_starvation_grace_frames"),
-        &NetwDisplay::get_starvation_grace_frames
-    );
-    ClassDB::bind_method(
-        D_METHOD("set_starvation_grace_frames", "value"),
-        &NetwDisplay::set_starvation_grace_frames
-    );
-    ADD_PROPERTY(
-        PropertyInfo(Variant::INT, "starvation_grace_frames"),
-        "set_starvation_grace_frames",
-        "get_starvation_grace_frames"
     );
     ClassDB::bind_method(
         D_METHOD("get_trace_interval"),

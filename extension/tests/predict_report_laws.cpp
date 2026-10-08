@@ -1733,6 +1733,7 @@ netw::RecoveryPlan check_parity(
     const Ref<netw::NetwPredictRecovery> seamed
         = p_core->predict_recover_default(
             p_pool->recovery_carried_of(p_slot),
+            Dictionary(),
             handle->resolved_recovery_policy(),
             handle->get_snap_restore(),
             p_pool->recovery_projection_of(p_slot),

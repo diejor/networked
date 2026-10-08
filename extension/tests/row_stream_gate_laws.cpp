@@ -247,6 +247,9 @@ TEST_CASE(
     const SessionResult first = send.run(registry(), bound(11, 1), WIDE, 1, 33);
     const bool sent = first.sends.size() == 1;
     REQUIRE(sent);
+    const SessionResult rested
+        = send.run(registry(), bound(11, 1), WIDE, 2, 33);
+    NETW_REQUIRE_EQ(int(rested.sends.size()), 1);
     const SessionResult repaired
         = send.run(registry(), bound(11, 1), WIDE, 12, 400);
     const bool repairs = repaired.sends.size() == 1

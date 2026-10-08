@@ -112,7 +112,7 @@ Error NetwMultiplayer::relay_subscribe(
         relay_book.set_subscribed(slot, p_peer, false);
         return OK;
     }
-    if (!interest_admits(entity, p_peer)) {
+    if (interest_peer_bit(p_peer) < 0) {
         return ERR_UNAUTHORIZED;
     }
     relay_book.set_subscribed(slot, p_peer, true);
@@ -121,6 +121,10 @@ Error NetwMultiplayer::relay_subscribe(
 
 PackedInt64Array NetwMultiplayer::relay_peers(int64_t p_entity_slot) const {
     return relay_book.peers(p_entity_slot);
+}
+
+int NetwMultiplayer::relay_peer_count(int64_t p_entity_slot) const {
+    return relay_book.peer_count(p_entity_slot);
 }
 
 void NetwMultiplayer::relay_release(int64_t p_entity_slot) {
@@ -832,6 +836,7 @@ Dictionary NetwMultiplayer::stats_snapshot() {
     out[StringName("predict_entities")] = predict[StringName("entities")];
     out[StringName("predict_timelines")] = predict[StringName("timelines")];
     out[StringName("predict_corrections")] = predict[StringName("corrections")];
+    out[StringName("predict_installs")] = predict[StringName("installs")];
     out[StringName("predict_max_replay_depth")]
         = predict[StringName("max_replay_depth")];
     out[StringName("predict_consumed")] = predict[StringName("consumed")];

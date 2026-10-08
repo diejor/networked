@@ -57,7 +57,7 @@
 			<return type="NetwPropertyConfig" />
 			<param index="0" name="channel" type="StringName" />
 			<description>
-				When a correction restores this value, advances it to the present using the rate in [param channel]. Without it, the value is restored as the server had it a few ticks ago.
+				When a correction restores this value, advances it to the present using the rate in [param channel].
 				[codeblock]
 				# the body integrates position from velocity, so a restore advances along it
 				Netw.configure_property(self, &amp;"position").state().carry_along(&amp;"velocity")
@@ -77,7 +77,7 @@
 				func _carry_spin(value: Vector3, ctx: NetwPredictCarryContext) -&gt; Vector3:
 				    return value + _drive_axis(ctx.state) * ctx.state[&amp;"speed"] * ctx.delta
 				[/codeblock]
-				[param step] must be a method or lambda of a [Node], may read only its [NetwPredictCarryContext], and must not write anything. A result that does not reproduce the recorded ticks is rejected, and the value is restored as the server had it. Declaring both this and [method carry_along] on one property is an error, and neither is used. [method NetwPrediction.reachability] reports whether the rule is in use.
+				[param step] must be a method or lambda of a [Node], may read only its [NetwPredictCarryContext], and must not write anything. A result that does not reproduce the recorded ticks is rejected. Declaring both this and [method carry_along] on one property is an error, and neither is used. [method NetwPrediction.reachability] reports whether the rule is in use.
 			</description>
 		</method>
 		<method name="causal">

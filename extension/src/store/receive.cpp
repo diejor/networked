@@ -139,7 +139,12 @@ bool Table::land(uint32_t p_row, const wire::CodeRow &p_codes, int64_t p_tick) {
             size
         );
     }
+    const bool resumes
+        = changed && received_ticks[p_row] > history_tick(p_row, 0);
     received_ticks[p_row] = p_tick;
+    if (resumes) {
+        record_rest(p_row, p_tick);
+    }
     if (changed) {
         changed_ticks[p_row] = p_tick;
     }
@@ -469,6 +474,65 @@ Landing World::land_frame(
     }
     table.keep_received(held, header.revision, table.landing);
     return Landing::ACCEPTED;
+}
+
+void World::hold_early_edge(
+    const RowAddress &p_at,
+    int p_sender,
+    const PackedByteArray &p_frame,
+    int64_t p_base_tick
+) {
+    repl::SnapshotHeader named;
+    if (!p_at.valid() || !repl::name_snapshot_row(p_frame, named)
+        || named.absolute()) {
+        return;
+    }
+    Table &table = *tables[p_at.table];
+    Received &held = table.senders[table.sender_index(p_sender)].rows[p_at.row];
+    const uint64_t base = named.baseline_revision();
+    if (held.token == named.token && base <= held.accepted) {
+        return;
+    }
+    if (!held.early_edge.is_empty() && held.early_token == named.token
+        && held.early_revision >= named.revision) {
+        return;
+    }
+    held.early_edge = p_frame;
+    held.early_token = named.token;
+    held.early_revision = named.revision;
+    held.early_base = base;
+    held.early_tick = p_base_tick;
+}
+
+bool World::take_early_edge(
+    const RowAddress &p_at,
+    int p_sender,
+    PackedByteArray &r_frame,
+    int64_t &r_base_tick
+) {
+    if (!p_at.valid()) {
+        return false;
+    }
+    Table &table = *tables[p_at.table];
+    const uint32_t found = table.find_sender(p_sender);
+    if (found == Table::NO_SLOT) {
+        return false;
+    }
+    Received &held = table.senders[found].rows[p_at.row];
+    if (held.early_edge.is_empty()) {
+        return false;
+    }
+    const bool same_stream = held.early_token == held.token;
+    if (same_stream && held.accepted < held.early_base) {
+        return false;
+    }
+    const bool due = same_stream && held.accepted == held.early_base;
+    if (due) {
+        r_frame = held.early_edge;
+        r_base_tick = held.early_tick;
+    }
+    held.early_edge = PackedByteArray();
+    return due;
 }
 
 void World::forget_sender(int p_id) {

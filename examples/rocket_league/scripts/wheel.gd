@@ -7,6 +7,8 @@ var previous_spring_length: float = 0.0
 
 @onready var car: RocketCar = get_parent().get_parent()
 @onready var wheel: Node3D = $Wheel
+@onready var model_inverse: Transform3D = \
+		car.get_node(^"Car_model").transform.affine_inverse()
 
 
 func _ready() -> void:
@@ -79,6 +81,10 @@ func suspension(delta: float, contact: Vector3) -> void:
 
 func set_wheel_position(new_y: float) -> void:
 	wheel.position.y = lerpf(wheel.position.y, new_y, 0.6)
+
+
+func sync_visual(visual: Node3D) -> void:
+	visual.transform = model_inverse * transform * wheel.transform
 
 
 func rotate_wheel(delta: float) -> void:

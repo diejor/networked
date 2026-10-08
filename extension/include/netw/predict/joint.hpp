@@ -30,6 +30,8 @@ struct JointTrack {
     int64_t relay_floor = -1;
     int64_t epoch_floor = -1;
     int64_t state_floor = -1;
+    int64_t group = -1;
+    int64_t world_offset = 0;
 
     int64_t history_floor(
         int64_t p_oldest_state,

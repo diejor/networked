@@ -2,6 +2,7 @@
 
 #include "godot/callable.hpp"
 #include "godot/class_db.hpp"
+#include "netw/api/clock_config.hpp"
 #include "netw/api/netw_multiplayer.hpp"
 
 using namespace godot;
@@ -62,7 +63,9 @@ int64_t NetwClock::get_behind_count() const {
 int64_t NetwClock::get_tickrate() const {
     NetwMultiplayer *api = session();
     if (api == nullptr) {
-        return 0;
+        Ref<NetwClockConfig> defaults;
+        defaults.instantiate();
+        return defaults->get_tickrate();
     }
     return int64_t(api->clock_get_param(NetwMultiplayer::CLOCK_PARAM_TICKRATE));
 }
@@ -90,7 +93,9 @@ int64_t NetwClock::get_recommended_display_offset() const {
 int64_t NetwClock::get_display_offset() const {
     NetwMultiplayer *api = session();
     if (api == nullptr) {
-        return 0;
+        Ref<NetwClockConfig> defaults;
+        defaults.instantiate();
+        return defaults->get_display_offset();
     }
     return int64_t(
         api->clock_get_param(NetwMultiplayer::CLOCK_PARAM_DISPLAY_OFFSET)
@@ -126,7 +131,9 @@ void NetwClock::set_sync_mode(NetwClock::SyncMode p_mode) {
 double NetwClock::get_ping_interval() const {
     NetwMultiplayer *api = session();
     if (api == nullptr) {
-        return 0.0;
+        Ref<NetwClockConfig> defaults;
+        defaults.instantiate();
+        return defaults->get_ping_interval();
     }
     return double(
         api->clock_get_param(NetwMultiplayer::CLOCK_PARAM_PING_INTERVAL)

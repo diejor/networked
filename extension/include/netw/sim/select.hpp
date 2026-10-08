@@ -8,15 +8,6 @@
 
 namespace netw::sim {
 
-constexpr double EXIT_MARGIN_SQUARED = 1.21;
-
-enum class Policy : uint8_t {
-    NONE = 0,
-    NEAREST = 1,
-    WITHIN = 2,
-    ALL = 3,
-};
-
 enum class Pick : int8_t {
     AUTOMATIC = -1,
     EXCLUDED = 0,
@@ -33,16 +24,13 @@ struct Tenure {
 struct Candidate {
     int64_t key = 0;
     int64_t order_key = 0;
-    double distance_squared = 0.0;
     Pick pick = Pick::AUTOMATIC;
     bool eligible = false;
-    bool contact = false;
 };
 
 struct Selected {
     int64_t key = 0;
     int64_t order_key = 0;
-    double distance_squared = 0.0;
     Tenure tenure;
     bool chosen = false;
     bool promoted = false;
@@ -54,9 +42,7 @@ struct Selected {
 struct Selection {
     godot::LocalVector<Selected> members;
     int64_t owner_order_key = 0;
-    Policy policy = Policy::NONE;
-    int count = 0;
-    double meters = 0.0;
+    bool all = false;
 
     void commit(
         const godot::LocalVector<Candidate> &p_candidates,
@@ -77,27 +63,16 @@ struct Named {
 struct Choice {
     godot::LocalVector<Named> named;
     godot::LocalVector<godot::StringName> layers;
-    Policy policy = Policy::NONE;
-    int count = 0;
-    double meters = 0.0;
+    bool stated = false;
 
-    bool declared() const;
+    bool selects_all(bool p_predicted) const;
+    bool declared(bool p_predicted) const;
     const Named *named_of(const godot::RID &p_entity) const;
 };
 
 bool claims_exact(const Choice &p_choice, bool p_stepped);
 bool choose(Choice &r_choice, const godot::RID &p_entity, Pick p_pick);
 bool forget(Choice &r_choice, const godot::RID &p_entity);
-void simulate_nearest(
-    Choice &r_choice,
-    int p_count,
-    const godot::StringName &p_layer
-);
-void simulate_within(
-    Choice &r_choice,
-    double p_meters,
-    const godot::StringName &p_layer
-);
 void simulate_all(Choice &r_choice, const godot::StringName &p_layer);
 void simulate_none(Choice &r_choice);
 

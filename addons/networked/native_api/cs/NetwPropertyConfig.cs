@@ -995,8 +995,7 @@ public sealed class NetwPropertyConfig : NetwMemberConfig
 
     /// <summary>
     /// When a correction restores this value, advances it to the present using
-    /// the rate in <paramref name="channel"/>. Without it, the value is
-    /// restored as the server had it a few ticks ago.
+    /// the rate in <paramref name="channel"/>.
     /// <code>
     /// # the body integrates position from velocity, so a restore advances along it
     /// Netw.configure_property(self, &amp;"position").state().carry_along(&amp;"velocity")
@@ -1043,11 +1042,11 @@ public sealed class NetwPropertyConfig : NetwMemberConfig
     /// <paramref name="step"/> must be a method or lambda of a
     /// <see cref="Node"/>, may read only its
     /// <see cref="NetwPredictCarryContext"/>, and must not write anything. A
-    /// result that does not reproduce the recorded ticks is rejected, and the
-    /// value is restored as the server had it. Declaring both this and
-    /// <see cref="NetwPropertyConfig.CarryAlong"/> on one property is an error,
-    /// and neither is used. <see cref="NetwPrediction.Reachability"/> reports
-    /// whether the rule is in use.
+    /// result that does not reproduce the recorded ticks is rejected. Declaring
+    /// both this and <see cref="NetwPropertyConfig.CarryAlong"/> on one
+    /// property is an error, and neither is used.
+    /// <see cref="NetwPrediction.Reachability"/> reports whether the rule is in
+    /// use.
     /// </para>
     /// </summary>
     public NetwPropertyConfig CarryStep(Callable step)

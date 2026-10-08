@@ -60,6 +60,7 @@ struct PeerRows {
     godot::LocalVector<uint64_t> next_rev;
     godot::LocalVector<uint64_t> acked_rev;
     godot::LocalVector<uint64_t> exposed_rev;
+    godot::LocalVector<uint64_t> rest_rev;
     godot::LocalVector<uint64_t> baseline;
     godot::LocalVector<godot::Variant> baseline_carried;
     godot::LocalVector<float> acc;

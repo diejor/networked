@@ -297,12 +297,9 @@ void Episode::record_comparison(
                 write.outcome = OperatorOutcome::CONTRACTED;
                 write.judged_transition = p_transition;
                 write.meter_after = p_meter;
-            } else if (p_meter < write.best_meter) {
-                write.best_meter = p_meter;
-                write.verdicts = 0;
-            } else {
-                write.verdicts += 1;
             }
+            write.best_meter = std::min(write.best_meter, p_meter);
+            write.verdicts = int(p_transition - write.basis);
         } else if (p_meter == 0 || p_meter < write.meter_before) {
             write.outcome = OperatorOutcome::CONTRACTED;
             write.judged_transition = p_transition;

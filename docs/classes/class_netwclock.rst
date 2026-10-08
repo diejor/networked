@@ -56,7 +56,7 @@ Properties
    +------------------------------------------+----------------------------------------------------------------------------------------+-----------+
    | :godot:`int`                             | :ref:`behind_count<class_NetwClock_property_behind_count>`                             | ``0``     |
    +------------------------------------------+----------------------------------------------------------------------------------------+-----------+
-   | :godot:`int`                             | :ref:`display_offset<class_NetwClock_property_display_offset>`                         | ``0``     |
+   | :godot:`int`                             | :ref:`display_offset<class_NetwClock_property_display_offset>`                         | ``2``     |
    +------------------------------------------+----------------------------------------------------------------------------------------+-----------+
    | :godot:`bool`                            | :ref:`is_configured<class_NetwClock_property_is_configured>`                           | ``false`` |
    +------------------------------------------+----------------------------------------------------------------------------------------+-----------+
@@ -64,7 +64,7 @@ Properties
    +------------------------------------------+----------------------------------------------------------------------------------------+-----------+
    | :godot:`float`                           | :ref:`physics_factor<class_NetwClock_property_physics_factor>`                         | ``1.0``   |
    +------------------------------------------+----------------------------------------------------------------------------------------+-----------+
-   | :godot:`float`                           | :ref:`ping_interval<class_NetwClock_property_ping_interval>`                           | ``0.0``   |
+   | :godot:`float`                           | :ref:`ping_interval<class_NetwClock_property_ping_interval>`                           | ``0.1``   |
    +------------------------------------------+----------------------------------------------------------------------------------------+-----------+
    | :godot:`int`                             | :ref:`recommended_display_offset<class_NetwClock_property_recommended_display_offset>` | ``0``     |
    +------------------------------------------+----------------------------------------------------------------------------------------+-----------+
@@ -76,7 +76,7 @@ Properties
    +------------------------------------------+----------------------------------------------------------------------------------------+-----------+
    | :godot:`float`                           | :ref:`tick_phase<class_NetwClock_property_tick_phase>`                                 | ``0.0``   |
    +------------------------------------------+----------------------------------------------------------------------------------------+-----------+
-   | :godot:`int`                             | :ref:`tickrate<class_NetwClock_property_tickrate>`                                     | ``0``     |
+   | :godot:`int`                             | :ref:`tickrate<class_NetwClock_property_tickrate>`                                     | ``30``    |
    +------------------------------------------+----------------------------------------------------------------------------------------+-----------+
 
 .. rst-class:: classref-reftable-group
@@ -324,7 +324,7 @@ How many frames could not run every tick they needed. If it keeps growing, this 
 
 .. rst-class:: classref-property
 
-:godot:`int` **display_offset** = ``0`` :ref:`🔗<class_NetwClock_property_display_offset>`
+:godot:`int` **display_offset** = ``2`` :ref:`🔗<class_NetwClock_property_display_offset>`
 
 .. rst-class:: classref-property-setget
 
@@ -389,7 +389,7 @@ Physics frames per tick. Multiply a per-frame value by it to get a per-tick valu
 
 .. rst-class:: classref-property
 
-:godot:`float` **ping_interval** = ``0.0`` :ref:`🔗<class_NetwClock_property_ping_interval>`
+:godot:`float` **ping_interval** = ``0.1`` :ref:`🔗<class_NetwClock_property_ping_interval>`
 
 .. rst-class:: classref-property-setget
 
@@ -412,7 +412,7 @@ Seconds between pings. Shorter follows the connection more closely and sends mor
 
 - :godot:`int` **get_recommended_display_offset**\ (\ )
 
-The :ref:`display_offset<class_NetwClock_property_display_offset>` the current connection needs, in ticks. Not applied automatically.
+The :ref:`display_offset<class_NetwClock_property_display_offset>` the current connection needs, in ticks.
 
 .. rst-class:: classref-item-separator
 
@@ -461,7 +461,7 @@ The current tick.
 
 - :godot:`float` **get_tick_factor**\ (\ )
 
-How far time has moved past the last tick, as a fraction of a tick. Use it to interpolate.
+How far time has moved past the last tick, in ticks, and it can exceed 1. Use it to interpolate.
 
 .. rst-class:: classref-item-separator
 
@@ -487,7 +487,7 @@ How far into the current tick the clock is, from ``0.0`` to ``1.0``.
 
 .. rst-class:: classref-property
 
-:godot:`int` **tickrate** = ``0`` :ref:`🔗<class_NetwClock_property_tickrate>`
+:godot:`int` **tickrate** = ``30`` :ref:`🔗<class_NetwClock_property_tickrate>`
 
 .. rst-class:: classref-property-setget
 

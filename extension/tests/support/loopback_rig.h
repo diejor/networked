@@ -167,6 +167,16 @@ class LoopbackRig {
                 1
             );
         }
+        for (int index = 0; index < p_decl.synced_quantizers().size();
+             ++index) {
+            if (p_decl.synced_quantizers()[index].is_valid()) {
+                p_api->schema_set_column_quantizer(
+                    schema,
+                    index,
+                    p_decl.synced_quantizers()[index]
+                );
+            }
+        }
         p_api->schema_seal(schema);
         const godot::RID state = p_api->property_set_create(
             schema,
@@ -250,6 +260,13 @@ class LoopbackRig {
         );
         p_api->property_set_add_column(input, 0);
         p_api->property_set_add_column(input, 1);
+        if (p_decl.input_window() >= 0) {
+            p_api->property_set_set_param(
+                input,
+                netw::NetwMultiplayer::SET_PARAM_WINDOW,
+                p_decl.input_window()
+            );
+        }
         p_api->property_set_seal(input);
         REQUIRE_MESSAGE(
             int(p_api->entity_add_property_set(p_entity, input, 0))
@@ -268,6 +285,13 @@ class LoopbackRig {
             return;
         }
         netw::NetwMultiplayer *p_api = core_of(p_shell);
+        if (p_decl.archetype() >= 0) {
+            p_api->predict_set_param(
+                p_entity,
+                netw::NetwMultiplayer::PREDICT_PARAM_ARCHETYPE,
+                p_decl.archetype()
+            );
+        }
         p_api->simulation_set_param(
             p_entity,
             netw::NetwMultiplayer::SIMULATION_PARAM_SCHEDULE,

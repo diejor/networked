@@ -38,6 +38,9 @@ static func attach(session: Node, api: NetwMultiplayer) -> NetwRegimePeer:
 	peer.gestures = {
 		"chase": adapter.drive_chase,
 		"hold": adapter.hold,
+		"ram": adapter.drive_ram,
+		"headon": adapter.drive_headon,
+		"weave": adapter.drive_weave,
 	}
 	session.add_child(peer)
 	peer.configure_from_args()
@@ -173,11 +176,79 @@ func drive_chase(seconds: float) -> void:
 	if car:
 		car.ai_enabled = false
 		car.ai_motion = Vector2.ZERO
-		car.ai_jumping = false
 
 
 func hold(seconds: float) -> void:
 	await session.get_tree().create_timer(seconds).timeout
+
+
+func drive_ram(seconds: float) -> void:
+	if api.is_server():
+		var parked := local_car()
+		if parked:
+			parked.ai_enabled = false
+			parked.ai_motion = Vector2.ZERO
+		await hold(seconds)
+		return
+	await drive_chase(seconds)
+
+
+func drive_headon(seconds: float) -> void:
+	var car := local_car()
+	if car == null:
+		await hold(seconds)
+		return
+	steer_by_hand(car)
+	var until := Time.get_ticks_msec() + int(seconds * 1000.0)
+	while Time.get_ticks_msec() < until:
+		for other: RocketCar in cars():
+			if other != car:
+				car.ai_motion = toward(car, other.global_position)
+		await session.get_tree().process_frame
+	release(car)
+
+
+func drive_weave(seconds: float) -> void:
+	var car := local_car()
+	if car == null:
+		await hold(seconds)
+		return
+	steer_by_hand(car)
+	var elapsed := 0.0
+	var step := 0
+	while elapsed < seconds:
+		var throttle := 1.0 if (step / 2) % 2 == 0 else -1.0
+		var steer := 1.0 if step % 2 == 0 else -1.0
+		car.ai_motion = Vector2(steer, throttle)
+		await session.get_tree().create_timer(0.5).timeout
+		elapsed += 0.5
+		step += 1
+	release(car)
+
+
+func steer_by_hand(car: RocketCar) -> void:
+	for child in car.get_children():
+		if child is RocketCarAI:
+			child.process_mode = Node.PROCESS_MODE_DISABLED
+	car.ai_enabled = true
+
+
+func release(car: RocketCar) -> void:
+	car.ai_enabled = false
+	car.ai_motion = Vector2.ZERO
+
+
+func toward(car: RocketCar, target: Vector3) -> Vector2:
+	var ai: Node3D = car.get_node(^"Car_AI")
+	var facing := ai.global_transform.basis.z.normalized()
+	var aim := (target - ai.global_position).normalized()
+	var turn := facing.cross(aim).y
+	var steering := 0.0
+	if turn > 0.1:
+		steering = -1.0
+	elif turn < -0.1:
+		steering = 1.0
+	return Vector2(steering, 1.0)
 
 
 func condition_evidence() -> Dictionary:
@@ -217,6 +288,11 @@ func summary_handles() -> Dictionary:
 		var entity := NetwEntity.of(car)
 		if entity and entity.prediction:
 			handles[car_key(car)] = entity.prediction
+	var ball := arena_ball()
+	if ball:
+		var entity := NetwEntity.of(ball)
+		if entity and entity.prediction:
+			handles["ball"] = entity.prediction
 	return handles
 
 

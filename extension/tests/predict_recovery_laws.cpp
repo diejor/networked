@@ -129,7 +129,7 @@ TEST_CASE(
 
     request.domain = predict::Domain::IN_DOMAIN;
     request.suppressed = false;
-    request.field_errors[0] = 10.0;
+    request.authority = scalar_state(10.0, 2.0, false);
     plan = stage_recovery(wiring, snap_config(), request, state);
     CHECK(plan.teleport);
     CHECK(plan.restore.has(1));
@@ -164,10 +164,11 @@ TEST_CASE(
 
 TEST_CASE(
     "[Networked][Predict][Hosted][Recovery] guarded projection names only "
-    "projected restores"
+    "projected restores when nothing was predicted"
 ) {
     const Wiring wiring = recovery_wiring(false);
     RecoveryRequest request = recovery_request();
+    request.predicted = StateRow();
     request.ack_age_ticks = 2;
     request.field_errors[1] = 0.1;
     RecoveryState state;

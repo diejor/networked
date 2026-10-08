@@ -94,11 +94,7 @@ void NetwMultiplayer::predict_relay_subscribe(
     bool p_subscribed
 ) {
     const Ref<NetwEntity> wrapper = entity_get_view(p_entity);
-    if (wrapper.is_null()) {
-        return;
-    }
-    if (is_host()) {
-        relay_subscribe(wrapper, get_unique_id(), p_subscribed);
+    if (wrapper.is_null() || is_host()) {
         return;
     }
     const int64_t route = liveness_route_of(wrapper.ptr());
@@ -522,6 +518,7 @@ Ref<NetwPredictJudgement> NetwMultiplayer::predict_evaluate_default(
 
 Ref<NetwPredictRecovery> NetwMultiplayer::predict_recover(
     const Dictionary &p_payload,
+    const Dictionary &p_predicted,
     NetwPrediction::RecoveryPolicy p_policy,
     NetwSimulation::Restore p_snap_restore,
     const Dictionary &p_projection,
@@ -535,6 +532,7 @@ Ref<NetwPredictRecovery> NetwMultiplayer::predict_recover(
     if (GDVIRTUAL_CALL(
             _predict_recover,
             p_payload,
+            p_predicted,
             p_policy,
             p_snap_restore,
             p_projection,
@@ -549,6 +547,7 @@ Ref<NetwPredictRecovery> NetwMultiplayer::predict_recover(
     }
     return predict_recover_default(
         p_payload,
+        p_predicted,
         p_policy,
         p_snap_restore,
         p_projection,
@@ -562,6 +561,7 @@ Ref<NetwPredictRecovery> NetwMultiplayer::predict_recover(
 
 Ref<NetwPredictRecovery> NetwMultiplayer::predict_recover_default(
     const Dictionary &p_payload,
+    const Dictionary &p_predicted,
     NetwPrediction::RecoveryPolicy p_policy,
     NetwSimulation::Restore p_snap_restore,
     const Dictionary &p_projection,
@@ -573,6 +573,7 @@ Ref<NetwPredictRecovery> NetwMultiplayer::predict_recover_default(
 ) {
     return prediction_core::recover(
         p_payload,
+        p_predicted,
         p_policy,
         p_snap_restore,
         p_projection,
@@ -657,6 +658,22 @@ void NetwMultiplayer::predict_stepper_hold(
     held->dimension = p_dimension;
     held->inactive = true;
     space_set_active({held->space, held->dimension}, false);
+}
+
+void NetwMultiplayer::predict_step_space(
+    const RID &p_space,
+    double p_delta,
+    int64_t p_tick
+) {
+    const SteppedSpace *held = space_steppers.getptr(p_space.get_id());
+    if (held == nullptr || held->stepper.is_null()) {
+        return;
+    }
+    const Ref<NetwPhysicsStepper> stepper = held->stepper;
+    const int dimension = held->dimension;
+    stepper->step(p_space, p_delta);
+    stepper->flush_queries(p_space, dimension);
+    stepper->snapshot(p_space, p_tick);
 }
 
 void NetwMultiplayer::predict_held_spaces(LocalVector<RID> &r_spaces) const {
@@ -817,7 +834,7 @@ void NetwMultiplayer::predict_history_record(
         NetwPredictSlotEngine *engine
             = predict_engine_for(entity->get_rid_handle());
         if (engine != nullptr) {
-            if (!engine->uses_schedule(p_schedule)) {
+            if (!engine->runs_in_pass(p_schedule)) {
                 continue;
             }
             record_tick = engine->history_record_tick(p_tick);
@@ -942,7 +959,7 @@ void NetwMultiplayer::wire_lagcomp_service() {
 void NetwMultiplayer::predict_receive_command_carrier(
     const Ref<NetwEntity> &p_entity,
     const PackedByteArray &p_payload,
-    int64_t p_sender
+    int64_t
 ) {
     NETW_ZONE_NC("Predict command carrier", colors::PREDICTION);
     NetwPredictSlotEngine *engine = predict_engine_for(
@@ -951,7 +968,6 @@ void NetwMultiplayer::predict_receive_command_carrier(
     if (engine != nullptr) {
         engine->receive_command_frame(p_payload);
     }
-    predict_relay_command_frame(p_entity, p_payload, p_sender);
 }
 
 void NetwMultiplayer::predict_receive_relay_carrier(
@@ -1028,11 +1044,7 @@ void NetwMultiplayer::predict_relay_command_frame(
     const int64_t channel = declared_channel("PREDICT_RELAY");
     for (int at = 0; at < subscribers.size(); at++) {
         const int64_t peer = subscribers[at];
-        if (peer == p_author) {
-            continue;
-        }
-        if (!interest_admits(handle, peer)) {
-            relay_subscribe(p_entity, peer, false);
+        if (peer == p_author || !interest_admits(handle, peer)) {
             continue;
         }
         plane->send_to(
@@ -1188,6 +1200,7 @@ namespace {
 
 enum PredictCensusFact {
     CENSUS_CORRECTIONS,
+    CENSUS_INSTALLS,
     CENSUS_MAX_REPLAY_DEPTH,
     CENSUS_CONSUMED,
     CENSUS_MISSING,
@@ -1203,6 +1216,7 @@ enum PredictCensusFact {
 
 const char *const CENSUS_NAMES[CENSUS_COUNT] = {
     "corrections",
+    "installs",
     "max_replay_depth",
     "consumed",
     "missing",
@@ -1289,6 +1303,7 @@ Dictionary NetwMultiplayer::predict_metrics() const {
     Dictionary out;
     out["entities"] = int64_t(stepped.size());
     out["corrections"] = total[CENSUS_CORRECTIONS];
+    out["installs"] = total[CENSUS_INSTALLS];
     out["max_replay_depth"] = total[CENSUS_MAX_REPLAY_DEPTH];
     out["consumed"] = total[CENSUS_CONSUMED];
     out["missing"] = total[CENSUS_MISSING];

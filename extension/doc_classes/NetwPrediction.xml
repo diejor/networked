@@ -215,7 +215,7 @@
 			[/codeblocks]
 		</member>
 		<member name="divergence_epsilon" type="float" setter="set_divergence_epsilon" getter="get_divergence_epsilon" default="0.01">
-			How far the predicted state may drift from the server's before it is corrected. [method NetwPropertyConfig.epsilon] overrides it for one field.
+			How far the predicted state may drift from the server's before it is corrected. [method NetwPropertyConfig.epsilon] overrides it for one field. A [constant ARCHETYPE_SOLVER_BODY] tolerates one and a half quantizer steps on each quantized field.
 		</member>
 		<member name="epoch" type="int" setter="set_epoch" getter="get_epoch" default="-1">
 			The version of the static world this entity simulates against, or [code]-1[/code] when unset. Raise it when the level changes, so the next mispredictions are tolerated while peers catch up.
@@ -230,7 +230,7 @@
 			What the server does when an input never arrives.
 		</member>
 		<member name="predict_input" type="Callable" setter="set_predict_input" getter="get_predict_input" default="Callable()">
-			Guesses input for an entity selected by [member NetwEntity.simulation] that this peer does not control. Relayed input replaces the guess. Unset callbacks and omitted fields supply zero input.
+			Guesses input for an entity selected by [member NetwEntity.simulation] that this peer does not control. Relayed input replaces the guess. Unset callbacks and omitted fields repeat the newest relayed input, and zero before any arrives.
 			The returned [Dictionary] uses names declared with [method NetwPropertyConfig.input].
 			[codeblock lang=text]
 			Dictionary
@@ -455,7 +455,7 @@
 			The peers produced different results.
 		</constant>
 		<constant name="MISSING_INPUT_STALL" value="0" enum="MissingInput">
-			The entity does not move.
+			The entity gets no input.
 		</constant>
 		<constant name="MISSING_INPUT_REPEAT_LAST" value="1" enum="MissingInput">
 			The last input is repeated.
@@ -473,7 +473,7 @@
 			Restore the server's state and replay every input the server has not acknowledged yet. A [RigidBody3D] or [RigidBody2D] at [constant NetwSimulation.SCHEDULE_FRAME] cannot replay, so it uses [constant RECOVERY_POLICY_REBASE_RECOVER] and warns once.
 		</constant>
 		<constant name="RECOVERY_POLICY_REBASE_RECOVER" value="1" enum="RecoveryPolicy">
-			Restore the server's state and write the correction directly, without replaying.
+			Add the difference between the server's state and the prediction to the present state, without replaying.
 		</constant>
 		<constant name="RECOVERY_POLICY_DELAY_CLOSED" value="2" enum="RecoveryPolicy">
 			Do not predict. Simulate only with inputs the server confirmed, and draw the server's state otherwise.
@@ -560,7 +560,7 @@
 			The server's state was restored, advanced to the present.
 		</constant>
 		<constant name="OPERATOR_REBASE_EXACT" value="2" enum="Operator">
-			The server's state was restored as is.
+			The server's state, or its difference from the prediction, was written as is.
 		</constant>
 		<constant name="OPERATOR_FULL_CLOSURE" value="3" enum="Operator">
 			A teleport restored every field.

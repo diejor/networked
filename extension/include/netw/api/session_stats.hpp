@@ -98,4 +98,5 @@
     X(ATTRIBUTED_FRAMES_IN, "attributed_frames_in") \
     X(ATTRIBUTION_FRAMING_OUT, "attribution_framing_out") \
     X(ATTRIBUTION_DROPPED_OUT, "attribution_dropped_out") \
-    X(ROW_FRAMES_DEFERRED, "row_frames_deferred")
+    X(ROW_FRAMES_DEFERRED, "row_frames_deferred") \
+    X(PREDICT_INSTALLS, "predict_installs")

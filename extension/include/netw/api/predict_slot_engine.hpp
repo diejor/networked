@@ -38,6 +38,7 @@ class NetwPredictSlotEngine {
     godot::Dictionary unsampled;
     godot::PackedStringArray unparticipated;
     bool consume_primed = false;
+    int64_t simulated_awaiting_step = -1;
 
     NetwMultiplayer *core_seated() const;
     NetwPredictSlotEngine *sibling(
@@ -216,6 +217,7 @@ class NetwPredictSlotEngine {
     );
     godot::Ref<NetwPredictRecovery> recover_through_seam(
         const godot::Dictionary &p_carried,
+        const godot::Dictionary &p_predicted,
         NetwPrediction::RecoveryPolicy p_policy,
         NetwSimulation::Restore p_snap_restore,
         const godot::Dictionary &p_projection,
@@ -249,7 +251,6 @@ public:
     void rewire();
     void reconfigure();
     void push_simulate();
-    void follow_relay_subscription(int p_mode);
 
     int64_t order_key() const;
     void prepare_island(int p_schedule);
@@ -261,7 +262,7 @@ public:
     void finalize_frame_state();
     void finalize_stepped_state();
 
-    bool uses_schedule(int p_schedule) const;
+    bool runs_in_pass(int p_pass_schedule) const;
     int64_t history_record_tick(int64_t p_fallback_tick) const;
     bool consumed_unslotted_transition() const;
     bool has_consumed_state_tick(int64_t p_state_tick) const;

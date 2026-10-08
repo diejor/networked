@@ -4,6 +4,7 @@
 
 #include "godot/templates.hpp"
 #include "godot/variant.hpp"
+#include "netw/api/quantize.hpp"
 #include "netw/prediction_core.hpp"
 
 namespace netw_test {
@@ -15,17 +16,20 @@ class EntityDecl {
     int decl_controller = 0;
     bool decl_wants_owner = true;
     bool decl_predicts = false;
+    int decl_archetype = -1;
     double decl_prediction_epsilon = 0.0;
     netw::Schedule decl_schedule = netw::Schedule::TICK;
     netw::MissingInput decl_missing_input = netw::MissingInput::STALL;
     netw::RecoveryPolicy decl_recovery = netw::RecoveryPolicy::AUTO;
     int decl_replay_buffer_depth = 0;
+    int decl_input_window = -1;
     int decl_consume_lag = 0;
     bool decl_mounted = false;
     bool decl_carries = false;
     double decl_carry_gain = 1.0;
     double decl_teleport_at = 0.0;
     godot::Vector<godot::StringName> decl_synced;
+    godot::Vector<godot::Ref<netw::NetwQuantize>> decl_quantizers;
     godot::Variant decl_initial_pose;
     godot::StringName decl_projection;
 
@@ -56,6 +60,23 @@ public:
 
     EntityDecl &synced(const godot::StringName &p_column) {
         decl_synced.push_back(p_column);
+        decl_quantizers.push_back(godot::Ref<netw::NetwQuantize>());
+        return *this;
+    }
+
+    EntityDecl &archetyped(int p_archetype) {
+        decl_archetype = p_archetype;
+        return *this;
+    }
+
+    int archetype() const {
+        return decl_archetype;
+    }
+
+    EntityDecl &quantized(const godot::Ref<netw::NetwQuantize> &p_quantizer) {
+        if (!decl_quantizers.is_empty()) {
+            decl_quantizers.set(decl_quantizers.size() - 1, p_quantizer);
+        }
         return *this;
     }
 
@@ -83,6 +104,15 @@ public:
     EntityDecl &buffered(int p_depth) {
         decl_replay_buffer_depth = p_depth;
         return *this;
+    }
+
+    EntityDecl &windowed(int p_samples) {
+        decl_input_window = p_samples;
+        return *this;
+    }
+
+    int input_window() const {
+        return decl_input_window;
     }
 
     EntityDecl &consume_lag(int p_ticks) {
@@ -155,6 +185,11 @@ public:
 
     const godot::Vector<godot::StringName> &synced_columns() const {
         return decl_synced;
+    }
+
+    const godot::Vector<godot::Ref<netw::NetwQuantize>> &
+    synced_quantizers() const {
+        return decl_quantizers;
     }
 
     const godot::StringName &schema() const {

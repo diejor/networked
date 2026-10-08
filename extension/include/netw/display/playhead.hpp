@@ -13,19 +13,27 @@ private:
     int32_t starvation_ticks = 0;
     int32_t expected_interval_ticks = 3;
     int32_t display_tick = -1;
+    int64_t newest_heard = -1;
+    bool has_arrival_age = false;
+    double arrival_age = 0.0;
+    double arrival_age_mean = 0.0;
+    double arrival_age_deviation = 0.0;
 
 public:
+    void hear_newest(const Decl &decl, int64_t newest_tick, double now);
+    void forget_arrivals();
+    double arrival_floor(const Decl &decl) const;
+
     double min_lag(
         const Decl &decl,
         int display_offset,
         int recommended_display_offset
     ) const;
 
-    int effective_tick(int clock_display_tick) const;
+    int effective_tick(int clock_display_tick, double tick_factor) const;
 
     void dilate(
         const Decl &decl,
-        double frame_ticks,
         int display_offset,
         int recommended_display_offset,
         bool starving
@@ -68,6 +76,18 @@ public:
     }
     int get_display_tick() const {
         return display_tick;
+    }
+    bool hears_arrivals() const {
+        return has_arrival_age;
+    }
+    double get_arrival_age() const {
+        return arrival_age;
+    }
+    double get_arrival_age_mean() const {
+        return arrival_age_mean;
+    }
+    double get_arrival_age_deviation() const {
+        return arrival_age_deviation;
     }
 };
 

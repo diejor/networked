@@ -21,6 +21,7 @@
 namespace netw::store {
 class World;
 class Table;
+struct Flight;
 } // namespace netw::store
 
 namespace netw::repl {
@@ -185,6 +186,12 @@ class SessionSend {
         int64_t p_base_tick,
         int64_t p_now_ms
     );
+
+    const store::Flight *rest_flight(
+        uint32_t p_peer,
+        const store::Table &p_table,
+        uint32_t p_row
+    ) const;
 
     void pass_peer(
         const wire::WireRegistry &p_registry,

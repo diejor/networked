@@ -36,11 +36,10 @@
 		[b]Modes[/b]
 		The peer with authority over the entity runs it as [constant MODE_AUTHORITY], and a client predicting it runs it as [constant MODE_PREDICT]. Every other copy is a frozen [constant MODE_PROXY], unless [member replicas] or a selection makes it [constant MODE_ACTIVE].
 		[b]Selection[/b]
-		While this entity runs here as [constant MODE_AUTHORITY] or [constant MODE_PREDICT], it can pick other entities to run here as [constant MODE_ACTIVE]. [method simulate] names one. [method simulate_nearest], [method simulate_within] and [method simulate_all] set a policy, and each call replaces the last.
+		While this entity runs here as [constant MODE_AUTHORITY] or [constant MODE_PREDICT], it can pick other entities to run here as [constant MODE_ACTIVE]. A predicted entity that declares no selection picks every simulated entity this peer holds in its [NetwInterestLayer] layers. [method simulate] names one more, [method simulate_all] narrows the automatic policy to one layer, and [method simulate_none] drops it.
 		[codeblock]
 		func _ready() -&gt; void:
 		    entity.simulation.simulate(ball)
-		    entity.simulation.simulate_nearest(2, &amp;"arena")
 		[/codeblock]
 	</description>
 	<tutorials>
@@ -67,26 +66,10 @@
 				Selects every entity this peer holds in [param layer]. An empty [param layer] uses the [NetwInterestLayer] layers this entity is in.
 			</description>
 		</method>
-		<method name="simulate_nearest">
-			<return type="void" />
-			<param index="0" name="count" type="int" />
-			<param index="1" name="layer" type="StringName" default="&amp;&quot;&quot;" />
-			<description>
-				Selects the [param count] entities nearest this one among those this peer holds in [param layer]. An empty [param layer] uses the [NetwInterestLayer] layers this entity is in.
-			</description>
-		</method>
 		<method name="simulate_none">
 			<return type="void" />
 			<description>
 				Drops the automatic policy. Entities named with [method simulate] stay selected.
-			</description>
-		</method>
-		<method name="simulate_within">
-			<return type="void" />
-			<param index="0" name="meters" type="float" />
-			<param index="1" name="layer" type="StringName" default="&amp;&quot;&quot;" />
-			<description>
-				Selects the entities within [param meters] of this one among those this peer holds in [param layer]. A selected entity is dropped once it is 10% past [param meters].
 			</description>
 		</method>
 	</methods>

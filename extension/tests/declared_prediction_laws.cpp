@@ -654,11 +654,17 @@ TEST_CASE(
     );
 
     SUBCASE(
-        "and the corrections counter stays zero, because a joint owner "
-        "takes the basis branch instead of the recovery ladder"
+        "and the owner counts each correction it hands the joint pass as its "
+        "own"
     ) {
         NETW_CHECK_GE(
             stats[netw::NetwPredictionEngine::STAT_JOINT_PASSES],
+            int64_t(1)
+        );
+        NETW_CHECK_GE(
+            rig.prediction_handle(godot::StringName("P"), 0)
+                ->get_stats()
+                ->get_corrections(),
             int64_t(1)
         );
     }

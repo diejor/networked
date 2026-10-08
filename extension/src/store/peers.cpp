@@ -27,6 +27,7 @@ void size_rows(
     r_peer.next_rev.resize(p_count);
     r_peer.acked_rev.resize(p_count);
     r_peer.exposed_rev.resize(p_count);
+    r_peer.rest_rev.resize(p_count);
     r_peer.baseline.resize(p_count * p_words);
     r_peer.baseline_carried.resize(p_count * p_carried);
     r_peer.acc.resize(p_count);
@@ -206,6 +207,7 @@ void Table::fresh_peer_row(PeerRows &r_peer, uint32_t p_row) {
     r_peer.next_rev[p_row] = wire::SNAPSHOT_FIRST_REVISION;
     r_peer.acked_rev[p_row] = 0;
     r_peer.exposed_rev[p_row] = 0;
+    r_peer.rest_rev[p_row] = 0;
     for (uint32_t at = 0; at < words; ++at) {
         r_peer.baseline[p_row * words + at] = 0;
     }
@@ -242,6 +244,7 @@ void Table::move_peer_rows(uint32_t p_to, uint32_t p_from) {
         held.next_rev[p_to] = held.next_rev[p_from];
         held.acked_rev[p_to] = held.acked_rev[p_from];
         held.exposed_rev[p_to] = held.exposed_rev[p_from];
+        held.rest_rev[p_to] = held.rest_rev[p_from];
         for (uint32_t at = 0; at < words; ++at) {
             held.baseline[p_to * words + at]
                 = held.baseline[p_from * words + at];
@@ -294,6 +297,7 @@ void Table::reset_stream(uint32_t p_row, uint32_t p_peer, Stream p_stream) {
     held.next_rev[p_row] = wire::SNAPSHOT_FIRST_REVISION;
     held.acked_rev[p_row] = 0;
     held.exposed_rev[p_row] = 0;
+    held.rest_rev[p_row] = 0;
     for (uint32_t at = 0; at < words; ++at) {
         held.baseline[p_row * words + at] = 0;
     }
@@ -1066,8 +1070,10 @@ void World::arm_refresh(
 ) {
     Table &table = *tables[p_at.table];
     PeerRows &held = table.peers[p_peer];
+    const int64_t armed = held.refresh_at[p_at.row];
     held.refresh_at[p_at.row] = p_tick;
-    if (p_tick < 0 || held.queued.get(p_at.row)
+    const bool sooner = armed < 0 || p_tick < armed;
+    if (p_tick < 0 || (held.queued.get(p_at.row) && !sooner)
         || (table.flags[p_at.row] & Table::DECLARED) == 0) {
         return;
     }

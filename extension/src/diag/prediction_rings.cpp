@@ -2,16 +2,13 @@
 
 #if defined(DEBUG_ENABLED)
 
-#include <algorithm>
 #include <iterator>
 
-#include "godot/camera.hpp"
 #include "godot/display_server.hpp"
 #include "godot/node.hpp"
 #include "godot/object.hpp"
 #include "godot/spatial_node.hpp"
 #include "godot/viewport.hpp"
-#include "godot/world.hpp"
 #include "netw/api/display.hpp"
 #include "netw/api/entity.hpp"
 #include "netw/api/netw_multiplayer.hpp"
@@ -47,88 +44,6 @@ int pose_field_of(const predict::Wiring *p_wiring) {
         }
     }
     return -1;
-}
-
-bool point_of(const Variant &p_value, Vector3 &r_point) {
-    switch (p_value.get_type()) {
-        case Variant::VECTOR3:
-            r_point = p_value;
-            return true;
-        case Variant::VECTOR2: {
-            const Vector2 flat = p_value;
-            r_point = Vector3(flat.x, flat.y, 0.0f);
-            return true;
-        }
-        case Variant::TRANSFORM3D:
-            r_point = Transform3D(p_value).origin;
-            return true;
-        case Variant::TRANSFORM2D: {
-            const Vector2 origin = Transform2D(p_value).get_origin();
-            r_point = Vector3(origin.x, origin.y, 0.0f);
-            return true;
-        }
-        default:
-            return false;
-    }
-}
-
-bool parent_relative(const StringName &p_key) {
-    return p_key == StringName("position") || p_key == StringName("transform");
-}
-
-Vector3 lifted(
-    Node *p_owner,
-    bool p_parent_key,
-    bool p_global_key,
-    const Vector3 &p_point
-) {
-    if (p_global_key) {
-        return p_point;
-    }
-    if (Node3D *spatial = Object::cast_to<Node3D>(p_owner)) {
-        if (!p_parent_key) {
-            return spatial->to_global(p_point);
-        }
-        Node3D *parent = spatial->get_parent_node_3d();
-        return parent != nullptr ? parent->to_global(p_point) : p_point;
-    }
-    if (Node2D *flat = Object::cast_to<Node2D>(p_owner)) {
-        const Vector2 local(p_point.x, p_point.y);
-        Vector2 world = local;
-        Node2D *parent = Object::cast_to<Node2D>(flat->get_parent());
-        if (!p_parent_key) {
-            world = flat->to_global(local);
-        } else if (parent != nullptr) {
-            world = parent->to_global(local);
-        }
-        return Vector3(world.x, world.y, 0.0f);
-    }
-    return p_point;
-}
-
-bool global_point_of(Node *p_node, Vector3 &r_point) {
-    if (Node3D *spatial = Object::cast_to<Node3D>(p_node)) {
-        r_point = spatial->get_global_position();
-        return true;
-    }
-    if (Node2D *flat = Object::cast_to<Node2D>(p_node)) {
-        const Vector2 at = flat->get_global_position();
-        r_point = Vector3(at.x, at.y, 0.0f);
-        return true;
-    }
-    return false;
-}
-
-uint64_t world_of(Node *p_owner) {
-    if (Node3D *spatial = Object::cast_to<Node3D>(p_owner)) {
-        const Ref<World3D> world = spatial->get_world_3d();
-        return world.is_valid() ? uint64_t(world->get_instance_id()) : 0;
-    }
-    if (Node2D *flat = Object::cast_to<Node2D>(p_owner)) {
-        const Ref<World2D> world = flat->get_world_2d();
-        return world.is_valid() ? uint64_t(world->get_instance_id()) : 0;
-    }
-    return 0;
 }
 
 const char *const OPERATOR_NAMES[] = {
@@ -215,6 +130,16 @@ String distance_words(int64_t p_hundredths, bool p_flat) {
                   : vformat("%.2f m", value);
 }
 
+const Color SHOWN_COLOR(0.25f, 0.9f, 1.0f);
+const Color SIMULATED_COLOR(0.35f, 1.0f, 0.35f);
+const Color SERVER_COLOR(1.0f, 0.6f, 0.1f);
+const Color OURS_COLOR(1.0f, 0.3f, 0.9f);
+const Color ERROR_COLOR(1.0f, 1.0f, 1.0f);
+
+Color faded(const Color &p_color, float p_alpha) {
+    return Color(p_color.r, p_color.g, p_color.b, p_color.a * p_alpha);
+}
+
 } // namespace
 
 bool StateLine::wanted(int p_role) const {
@@ -274,16 +199,54 @@ PredictionRings::PredictionRings() {
     sampled.reserve(ENTITY_CAP);
 }
 
-void PredictionRings::attach_sketch() {
-    if (sketch == nullptr) {
-        sketch = std::make_unique<Sketch>();
-    }
-}
-
-void PredictionRings::poll(NetwMultiplayer &p_session) {
-    sample(p_session);
-    if (sketch != nullptr) {
-        sketch->draw(sampled);
+void draw_ring_rows(const LocalVector<RingRow> &p_rows, Drawing &r_drawing) {
+    for (const RingRow &row : p_rows) {
+        const float scale
+            = row.flat ? PredictionRings::PIXELS_PER_METRE : 1.0f;
+        Mark mark;
+        mark.world = row.world;
+        mark.viewport = row.viewport;
+        mark.flat = row.flat;
+        mark.point = row.shown;
+        mark.radius = PredictionRings::RADIUS_SHOWN * scale;
+        mark.color = SHOWN_COLOR;
+        r_drawing.marks.push_back(mark);
+        mark.point = row.simulated;
+        mark.radius = PredictionRings::RADIUS_SIMULATED * scale;
+        mark.color = SIMULATED_COLOR;
+        r_drawing.marks.push_back(mark);
+        if (row.has(MARK_SERVER)) {
+            mark.point = row.server;
+            mark.radius = PredictionRings::RADIUS_SERVER * scale;
+            mark.color = faded(SERVER_COLOR, row.confirmed_alpha);
+            r_drawing.marks.push_back(mark);
+        }
+        if (row.has(MARK_OURS)) {
+            mark.shape = SHAPE_DASHED_RING;
+            mark.point = row.ours;
+            mark.radius = PredictionRings::RADIUS_OURS * scale;
+            mark.color = faded(OURS_COLOR, row.confirmed_alpha);
+            r_drawing.marks.push_back(mark);
+        }
+        if (row.erred()) {
+            Segment error;
+            error.world = row.world;
+            error.viewport = row.viewport;
+            error.flat = row.flat;
+            error.from = row.server;
+            error.to = row.ours;
+            error.color = faded(ERROR_COLOR, row.confirmed_alpha);
+            r_drawing.segments.push_back(error);
+        }
+        if (!row.text.is_empty()) {
+            Text text;
+            text.world = row.world;
+            text.viewport = row.viewport;
+            text.flat = row.flat;
+            text.anchor = row.simulated;
+            text.text = row.text;
+            r_drawing.texts.push_back(text);
+        }
     }
 }
 
@@ -318,11 +281,11 @@ void PredictionRings::sample(NetwMultiplayer &p_session) {
         made.source = at;
         made.role = role;
         made.distance
-            = (made.simulated - camera_point(made.world, owner)).length();
+            = (made.simulated - cameras.point(made.world, owner)).length();
         seen[source.key].generation = generation;
         candidates.push_back(made);
     }
-    select();
+    keep_nearest_per_world(candidates, ENTITY_CAP);
     const ClockEngine &clock = p_session.clock_engine();
     const Clock now{
         clock.get_tick(),
@@ -358,7 +321,7 @@ void PredictionRings::read(
         entry.field = pose_field_of(wiring);
         entry.key = entry.field >= 0 ? wiring->fields.name_at(entry.field)
                                      : StringName();
-        entry.global_key = String(entry.key).begins_with("global_");
+        entry.global_key = global_key(entry.key);
         entry.parent_key = parent_relative(entry.key);
         entry.store_resolved = false;
     }
@@ -471,63 +434,6 @@ void PredictionRings::read(
         }
     }
     sampled.push_back(row);
-}
-
-void PredictionRings::select() {
-    if (candidates.size() <= ENTITY_CAP) {
-        return;
-    }
-    std::sort(
-        candidates.ptr(),
-        candidates.ptr() + candidates.size(),
-        [](const Candidate &p_left, const Candidate &p_right) {
-            if (p_left.world != p_right.world) {
-                return p_left.world < p_right.world;
-            }
-            return p_left.distance < p_right.distance;
-        }
-    );
-    uint32_t kept = 0;
-    uint32_t run = 0;
-    for (uint32_t at = 0; at < candidates.size(); ++at) {
-        if (at == 0 || candidates[at].world != candidates[at - 1].world) {
-            run = 0;
-        }
-        if (run < ENTITY_CAP) {
-            candidates[kept++] = candidates[at];
-        }
-        ++run;
-    }
-    candidates.resize(kept);
-}
-
-Vector3 PredictionRings::camera_point(uint64_t p_world, Node *p_owner) {
-    for (const WorldCamera &each : cameras) {
-        if (each.world == p_world) {
-            return each.point;
-        }
-    }
-    WorldCamera found;
-    found.world = p_world;
-    Viewport *viewport = p_owner->get_viewport();
-    if (viewport != nullptr) {
-        if (Object::cast_to<Node3D>(p_owner) != nullptr) {
-            Camera3D *camera = viewport->get_camera_3d();
-            if (camera != nullptr) {
-                found.point = camera->get_global_position();
-            }
-        } else {
-            const Vector2 center = viewport->get_canvas_transform()
-                                       .affine_inverse()
-                                       .xform(
-                                           viewport->get_visible_rect().size
-                                           * 0.5f
-                                       );
-            found.point = Vector3(center.x, center.y, 0.0f);
-        }
-    }
-    cameras.push_back(found);
-    return found.point;
 }
 
 void PredictionRings::forget_departed() {

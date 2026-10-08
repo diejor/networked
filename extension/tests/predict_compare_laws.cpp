@@ -223,6 +223,48 @@ TEST_CASE(
 }
 
 TEST_CASE(
+    "[Networked][Predict][Hosted][Compare] two rotations a rounding apart "
+    "read as no difference, never as NaN"
+) {
+    const Quaternion unit;
+    const Quaternion rounded(0.0f, 0.0f, 0.0f, 1.0000001f);
+    const double quaternion = value_error(unit, rounded, false);
+    const double basis = value_error(Basis(unit), Basis(rounded), false);
+    CHECK_FALSE(std::isnan(quaternion));
+    CHECK_FALSE(std::isnan(basis));
+    NETW_CHECK_EQ(quaternion, 0.0);
+    NETW_CHECK_EQ(basis, 0.0);
+}
+
+TEST_CASE(
+    "[Networked][Predict][Hosted][Compare] a quantized rotation tolerates no "
+    "less than the comparison can tell apart"
+) {
+    Ref<NetwQuantizeQuaternion> quantizer;
+    quantizer.instantiate();
+    quantizer->set_bit_count(16);
+    LocalVector<FieldDecl> fields;
+    FieldDecl rotation;
+    rotation.key = StringName("quaternion");
+    rotation.quantizer = quantizer;
+    rotation.type = int(Variant::QUATERNION);
+    fields.push_back(rotation);
+    Wiring rotated = compile(fields);
+    tolerate_quantizer_steps(rotated);
+
+    const Quaternion unit;
+    const real_t below = std::nextafter(real_t(1.0), real_t(0.0));
+    const Quaternion rounded(0.0f, 0.0f, 0.0f, below);
+    const double smallest = value_error(unit, rounded, false);
+    NETW_CHECK_GT(smallest, 0.0);
+    NETW_CHECK_GE(rotated.epsilon[0], smallest);
+    NETW_CHECK_GE(
+        rotated.epsilon[0],
+        3.0 * quantizer->max_error(Variant::QUATERNION)
+    );
+}
+
+TEST_CASE(
     "[Networked][Predict][Hosted][Compare] incomplete evidence names no cause"
 ) {
     Journal journal = journal_with(4, 99);

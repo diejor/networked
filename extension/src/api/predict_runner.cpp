@@ -243,7 +243,7 @@ void NetwPredictRunner::step_stepped_spaces(const NetwPredictTiming &p_timing) {
     for (uint32_t at = 0; at < engines.size(); ++at) {
         NetwPredictSlotEngine *engine = engines[at];
         if (engine == nullptr
-            || !engine->uses_schedule(NetwSimulation::SCHEDULE_STEPPED)) {
+            || !engine->runs_in_pass(NetwSimulation::SCHEDULE_STEPPED)) {
             continue;
         }
         const NetwMultiplayer::EntitySpace held
@@ -255,19 +255,23 @@ void NetwPredictRunner::step_stepped_spaces(const NetwPredictTiming &p_timing) {
         }
         driven.push_back(held.space.get_id());
         service->predict_stepper_hold(held.space, held.dimension);
-        stepper->step(held.space, p_timing.get_ticktime());
-        stepper->snapshot(held.space, p_timing.get_tick());
+        service->predict_step_space(
+            held.space,
+            p_timing.get_ticktime(),
+            p_timing.get_tick()
+        );
     }
     service->predict_release_empty_holds();
     service->predict_held_spaces(held_spaces);
     for (const RID &space : held_spaces) {
-        const Ref<NetwPhysicsStepper> stepper
-            = service->predict_get_stepper(space);
-        if (stepper.is_null() || driven.has(space.get_id())) {
+        if (driven.has(space.get_id())) {
             continue;
         }
-        stepper->step(space, p_timing.get_ticktime());
-        stepper->snapshot(space, p_timing.get_tick());
+        service->predict_step_space(
+            space,
+            p_timing.get_ticktime(),
+            p_timing.get_tick()
+        );
     }
 }
 

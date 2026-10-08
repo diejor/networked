@@ -7,6 +7,46 @@ using namespace godot;
 
 namespace netw::display {
 
+void Playhead::hear_newest(const Decl &decl, int64_t newest_tick, double now) {
+    if (newest_tick <= newest_heard) {
+        return;
+    }
+    const bool follows_a_heard_row = newest_heard >= 0;
+    newest_heard = newest_tick;
+    if (!follows_a_heard_row) {
+        return;
+    }
+    arrival_age = now - double(newest_tick);
+    if (!has_arrival_age) {
+        has_arrival_age = true;
+        arrival_age_mean = arrival_age;
+        arrival_age_deviation = 0.0;
+        return;
+    }
+    const double rate = decl.arrival_age_rate;
+    arrival_age_deviation
+        += (std::fabs(arrival_age - arrival_age_mean) - arrival_age_deviation)
+        * rate;
+    arrival_age_mean += (arrival_age - arrival_age_mean) * rate;
+}
+
+void Playhead::forget_arrivals() {
+    newest_heard = -1;
+    has_arrival_age = false;
+    arrival_age = 0.0;
+    arrival_age_mean = 0.0;
+    arrival_age_deviation = 0.0;
+}
+
+double Playhead::arrival_floor(const Decl &decl) const {
+    if (!has_arrival_age) {
+        return 0.0;
+    }
+    const double spread
+        = arrival_age_mean + decl.arrival_spread_weight * arrival_age_deviation;
+    return std::clamp(spread + 1.0, 0.0, decl.max_arrival_lag);
+}
+
 double Playhead::min_lag(
     const Decl &decl,
     int display_offset,
@@ -18,16 +58,20 @@ double Playhead::min_lag(
     const double needed = double(expected_interval_ticks + 1);
     const double padding
         = double(std::max(0, recommended_display_offset - display_offset));
-    return std::max(0.0, needed - double(display_offset) + padding);
+    return std::max(
+        std::max(0.0, needed - double(display_offset) + padding),
+        arrival_floor(decl)
+    );
 }
 
-int Playhead::effective_tick(int clock_display_tick) const {
-    return int(std::floor(double(clock_display_tick) - display_lag));
+int Playhead::effective_tick(int clock_display_tick, double tick_factor) const {
+    return int(
+        std::floor(double(clock_display_tick) + tick_factor - display_lag)
+    );
 }
 
 void Playhead::dilate(
     const Decl &decl,
-    double frame_ticks,
     int display_offset,
     int recommended_display_offset,
     bool starving
@@ -38,14 +82,7 @@ void Playhead::dilate(
 
     starvation_ticks = starving ? starvation_ticks + 1 : 0;
 
-    if (starvation_ticks >= decl.starvation_grace_frames) {
-        display_lag = std::min(
-            display_lag + frame_ticks * decl.starvation_growth,
-            smoothed_floor + decl.max_extra_dilation
-        );
-    } else {
-        display_lag += (smoothed_floor - display_lag) * decl.lag_adapt_rate;
-    }
+    display_lag += (smoothed_floor - display_lag) * decl.lag_adapt_rate;
 }
 
 double Playhead::place(
@@ -55,8 +92,9 @@ double Playhead::place(
 ) {
     if (bracketed) {
         display_lag = 0.0;
-        display_tick = std::max(0, clock_display_tick - 1);
-        return tick_factor;
+        const double whole_ticks = std::floor(tick_factor);
+        display_tick = std::max(0, clock_display_tick - 1 + int(whole_ticks));
+        return tick_factor - whole_ticks;
     }
     const double time
         = (double(clock_display_tick) + tick_factor) - display_lag;
@@ -69,6 +107,7 @@ void Playhead::settle(
     int display_offset,
     int recommended_display_offset
 ) {
+    forget_arrivals();
     const double target
         = min_lag(decl, display_offset, recommended_display_offset);
     smoothed_floor = target;

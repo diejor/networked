@@ -25,7 +25,8 @@ func _init() -> void:
 			)
 	Netw.configure_property(self, &"quaternion").state().masked().causal() \
 			.on_spawn() \
-			.quantize(NetwQuantizeQuaternion.new().bits(16))
+			.quantize(NetwQuantizeQuaternion.new().bits(16)) \
+			.interpolate(NetwInterpolate.new().slerp())
 	Netw.configure_property(self, &"linear_velocity").state().masked() \
 			.causal().teleport_only() \
 			.quantize(NetwQuantizeScalar.new().bits(16).limits(-128.0, 128.0))

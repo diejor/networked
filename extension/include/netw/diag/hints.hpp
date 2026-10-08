@@ -10,6 +10,7 @@ namespace netw::diag {
 
 enum Hint : uint32_t {
     HINT_PREDICTION = 1u << 0,
+    HINT_INTERPOLATION = 1u << 1,
 };
 
 struct HintRequest {

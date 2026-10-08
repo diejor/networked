@@ -102,7 +102,8 @@ void NetwMultiplayer::sim_settle_body(const Ref<NetwEntity> &p_entity) {
             display_seat_bodies(runtime);
         }
     }
-    if (sim::transition(row.bodies, mode) && !seated) {
+    if (sim::transition(row.bodies, mode)
+        && (!seated || mode == sim::Mode::ACTIVE)) {
         sim_install_newest(p_entity);
     }
     if (!seated) {

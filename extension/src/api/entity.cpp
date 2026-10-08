@@ -2454,7 +2454,7 @@ void NetwEntity::_bind_methods() {
     ClassDB::bind_method(
         D_METHOD("release_authority", "successor"),
         &NetwEntity::release_authority,
-        DEFVAL(0)
+        DEFVAL(SERVER_PEER)
     );
     ClassDB::bind_method(
         D_METHOD("transfer_control", "peer_id"),

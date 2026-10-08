@@ -25,7 +25,28 @@ namespace Networked;
 /// <c>dedicated_server</c> feature, no smoothed value is written and the visual
 /// stays where its parent puts it. Enable
 /// <c>networked/display/smooth_when_headless</c> in the project settings to
-/// smooth there as well.
+/// smooth there as well. <b>Seeing interpolation</b> Debug &gt; Networked &gt;
+/// Interpolation Timeline draws the snapshots each remote entity holds and
+/// where it is playing them.
+/// - <b>grey dots</b> snapshots already played
+/// - <b>cyan dots</b> snapshots still ahead
+/// - <b>large dot</b> the newest snapshot. Cyan while more are ahead, amber
+/// once playback reaches it, red once playback runs past it
+/// - <b>ghost</b> the entity's body at the newest snapshot, in the large dot's
+/// colour
+/// - <b>white line</b> the two snapshots the entity is drawn between
+/// - <b>dashed amber line</b> a snapshot that never arrived, or a guess past
+/// the newest one
+/// - <b>short ticks</b> which way the entity faced at each snapshot
+/// - <b>purple line</b> a correction still being smoothed out on an entity this
+/// peer predicts
+/// The first line of text names how the entity is drawn and what playback is
+/// doing. <c>BUFFERED</c> has snapshots ahead, <c>HOLD</c> has reached the
+/// newest, <c>STARVING</c> has run past it, <c>FORECAST</c> is guessing ahead,
+/// <c>SNAP</c> jumped instead of gliding and <c>REST</c> means the sender
+/// stopped. The second line gives the snapshots buffered ahead, the
+/// <see cref="NetwDisplay.DisplayLag"/> and how old snapshots are when they
+/// arrive, all in ticks. A lag smaller than that age is why an entity freezes.
 /// </para>
 /// </remarks>
 public sealed class NetwDisplay : NetwRefCounted
@@ -414,44 +435,6 @@ public sealed class NetwDisplay : NetwRefCounted
         }
     }
 
-    private static readonly IntPtr _bindGetMaxExtraDilation =
-        NetwApi.MethodBind(
-            "NetwDisplay",
-            "get_max_extra_dilation",
-            1740695150UL);
-
-    private static readonly IntPtr _bindSetMaxExtraDilation =
-        NetwApi.MethodBind(
-            "NetwDisplay",
-            "set_max_extra_dilation",
-            373806689UL);
-
-    /// <summary>
-    /// The most ticks <see cref="NetwDisplay.DisplayLag"/> may grow to.
-    /// </summary>
-    public double MaxExtraDilation
-    {
-        get
-        {
-            double answered = default;
-            NetwThunks.Ptrcall0_Double(
-                _bindGetMaxExtraDilation,
-                Checked,
-                ref answered);
-            return answered;
-        }
-        set
-        {
-            double slot0 = value;
-            long discarded = default;
-            NetwThunks.Ptrcall1_Double_Long(
-                _bindSetMaxExtraDilation,
-                Checked,
-                in slot0,
-                ref discarded);
-        }
-    }
-
     private static readonly IntPtr _bindGetLagAdaptRate =
         NetwApi.MethodBind("NetwDisplay", "get_lag_adapt_rate", 1740695150UL);
 
@@ -486,42 +469,6 @@ public sealed class NetwDisplay : NetwRefCounted
         }
     }
 
-    private static readonly IntPtr _bindGetStarvationGrowth =
-        NetwApi.MethodBind(
-            "NetwDisplay",
-            "get_starvation_growth",
-            1740695150UL);
-
-    private static readonly IntPtr _bindSetStarvationGrowth =
-        NetwApi.MethodBind("NetwDisplay", "set_starvation_growth", 373806689UL);
-
-    /// <summary>
-    /// Ticks added to <see cref="NetwDisplay.DisplayLag"/> per frame once the
-    /// grace frames are spent.
-    /// </summary>
-    public double StarvationGrowth
-    {
-        get
-        {
-            double answered = default;
-            NetwThunks.Ptrcall0_Double(
-                _bindGetStarvationGrowth,
-                Checked,
-                ref answered);
-            return answered;
-        }
-        set
-        {
-            double slot0 = value;
-            long discarded = default;
-            NetwThunks.Ptrcall1_Double_Long(
-                _bindSetStarvationGrowth,
-                Checked,
-                in slot0,
-                ref discarded);
-        }
-    }
-
     private static readonly IntPtr _bindGetFloorSmoothing =
         NetwApi.MethodBind("NetwDisplay", "get_floor_smoothing", 1740695150UL);
 
@@ -550,45 +497,6 @@ public sealed class NetwDisplay : NetwRefCounted
             long discarded = default;
             NetwThunks.Ptrcall1_Double_Long(
                 _bindSetFloorSmoothing,
-                Checked,
-                in slot0,
-                ref discarded);
-        }
-    }
-
-    private static readonly IntPtr _bindGetStarvationGraceFrames =
-        NetwApi.MethodBind(
-            "NetwDisplay",
-            "get_starvation_grace_frames",
-            3905245786UL);
-
-    private static readonly IntPtr _bindSetStarvationGraceFrames =
-        NetwApi.MethodBind(
-            "NetwDisplay",
-            "set_starvation_grace_frames",
-            1286410249UL);
-
-    /// <summary>
-    /// How many frames without a new snapshot are tolerated before
-    /// <see cref="NetwDisplay.DisplayLag"/> starts growing.
-    /// </summary>
-    public long StarvationGraceFrames
-    {
-        get
-        {
-            long answered = default;
-            NetwThunks.Ptrcall0_Long(
-                _bindGetStarvationGraceFrames,
-                Checked,
-                ref answered);
-            return answered;
-        }
-        set
-        {
-            long slot0 = value;
-            long discarded = default;
-            NetwThunks.Ptrcall1_Long_Long(
-                _bindSetStarvationGraceFrames,
                 Checked,
                 in slot0,
                 ref discarded);
@@ -631,8 +539,7 @@ public sealed class NetwDisplay : NetwRefCounted
         NetwApi.MethodBind("NetwDisplay", "get_display_lag", 1740695150UL);
 
     /// <summary>
-    /// The extra display delay in ticks that
-    /// <see cref="NetwDisplay.EnableSmartDilation"/> has added.
+    /// How many ticks behind the newest data this entity is drawn.
     /// </summary>
     public double DisplayLag
     {

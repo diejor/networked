@@ -104,16 +104,17 @@
 		<method name="_predict_recover" qualifiers="virtual">
 			<return type="NetwPredictRecovery" />
 			<param index="0" name="payload" type="Dictionary" />
-			<param index="1" name="policy" type="int" enum="NetwPrediction.RecoveryPolicy" />
-			<param index="2" name="restore" type="int" enum="NetwSimulation.Restore" />
-			<param index="3" name="projection" type="Dictionary" />
-			<param index="4" name="current" type="Dictionary" />
-			<param index="5" name="pose_errors" type="Dictionary" />
-			<param index="6" name="wiring" type="Dictionary" />
-			<param index="7" name="verdict" type="Dictionary" />
-			<param index="8" name="tick_delta" type="float" />
+			<param index="1" name="predicted" type="Dictionary" />
+			<param index="2" name="policy" type="int" enum="NetwPrediction.RecoveryPolicy" />
+			<param index="3" name="restore" type="int" enum="NetwSimulation.Restore" />
+			<param index="4" name="projection" type="Dictionary" />
+			<param index="5" name="current" type="Dictionary" />
+			<param index="6" name="pose_errors" type="Dictionary" />
+			<param index="7" name="wiring" type="Dictionary" />
+			<param index="8" name="verdict" type="Dictionary" />
+			<param index="9" name="tick_delta" type="float" />
 			<description>
-				Decides how a mispredicted entity is corrected to the authority's state. [param payload] is the authority's state, [param current] is the local one, and [param policy] is [method NetwPrediction.resolved_recovery_policy]. With no override this returns [method predict_recover_default]. Returning [code]null[/code] emits [constant EVENT_SEAM_MISUSE] and the default is used.
+				Decides how a mispredicted entity is corrected to the authority's state. [param payload] is the authority's state, [param predicted] is the local prediction for the same tick, [param current] is the local state now, and [param policy] is [method NetwPrediction.resolved_recovery_policy]. With no override this returns [method predict_recover_default]. Returning [code]null[/code] emits [constant EVENT_SEAM_MISUSE] and the default is used.
 			</description>
 		</method>
 		<method name="_spawn_admit_frame" qualifiers="virtual">
@@ -464,7 +465,7 @@
 			<return type="void" />
 			<param index="0" name="armed" type="bool" />
 			<description>
-				While on, physics steps only on frames that have a tick to run, so a tick covers the same physics time on every peer. [method clock_is_simulating] tells whether this frame steps. Calls nest, so it turns off when every [code]true[/code] is matched by a [code]false[/code].
+				While on, physics steps only on frames that have a tick to run, so a tick covers the same physics time on every peer. A client runs at most one tick a frame while it is on, so its tick snaps to the server's when it falls further behind than the [constant CLOCK_PARAM_MAX_TICKS_PER_FRAME] setting allows a frame to catch up. [method clock_is_simulating] tells whether this frame steps. Calls nest, so it turns off when every [code]true[/code] is matched by a [code]false[/code].
 			</description>
 		</method>
 		<method name="clock_set_mismatch_action">
@@ -1496,6 +1497,7 @@
 				┠╴entities          int         entities simulated this tick
 				┠╴timelines         int         rewindable entities recorded this tick
 				┠╴corrections       int         total corrections
+				┠╴installs          int         total server states written onto simulated entities
 				┠╴max_replay_depth  int         most ticks replayed at once
 				┠╴consumed          int         total inputs the server used
 				┠╴missing           int         total input ticks that never arrived
@@ -1947,16 +1949,17 @@
 		<method name="predict_recover_default">
 			<return type="NetwPredictRecovery" />
 			<param index="0" name="payload" type="Dictionary" />
-			<param index="1" name="policy" type="int" enum="NetwPrediction.RecoveryPolicy" />
-			<param index="2" name="restore" type="int" enum="NetwSimulation.Restore" />
-			<param index="3" name="projection" type="Dictionary" />
-			<param index="4" name="current" type="Dictionary" />
-			<param index="5" name="pose_errors" type="Dictionary" />
-			<param index="6" name="wiring" type="Dictionary" />
-			<param index="7" name="verdict" type="Dictionary" />
-			<param index="8" name="tick_delta" type="float" />
+			<param index="1" name="predicted" type="Dictionary" />
+			<param index="2" name="policy" type="int" enum="NetwPrediction.RecoveryPolicy" />
+			<param index="3" name="restore" type="int" enum="NetwSimulation.Restore" />
+			<param index="4" name="projection" type="Dictionary" />
+			<param index="5" name="current" type="Dictionary" />
+			<param index="6" name="pose_errors" type="Dictionary" />
+			<param index="7" name="wiring" type="Dictionary" />
+			<param index="8" name="verdict" type="Dictionary" />
+			<param index="9" name="tick_delta" type="float" />
 			<description>
-				The default [method _predict_recover].
+				The default [method _predict_recover]. A correction that does not replay adds the difference between [param payload] and [param predicted] to [param current].
 			</description>
 		</method>
 		<method name="predict_set_correction_path_callback">
@@ -3710,20 +3713,11 @@
 		<constant name="DISPLAY_PARAM_SMART_DILATION" value="6" enum="DisplayParam">
 			[bool]. Whether playback may slow down to cover late packets.
 		</constant>
-		<constant name="DISPLAY_PARAM_MAX_EXTRA_DILATION" value="7" enum="DisplayParam">
-			[float]. The most playback may slow down, as a fraction of normal speed.
-		</constant>
 		<constant name="DISPLAY_PARAM_LAG_ADAPT_RATE" value="8" enum="DisplayParam">
 			[float]. How fast the interpolation delay follows changes in latency. Higher reacts faster but is less smooth.
 		</constant>
-		<constant name="DISPLAY_PARAM_STARVATION_GROWTH" value="9" enum="DisplayParam">
-			[float]. How much the interpolation delay grows after running out of states.
-		</constant>
 		<constant name="DISPLAY_PARAM_FLOOR_SMOOTHING" value="10" enum="DisplayParam">
 			[float]. How much the smallest interpolation delay is smoothed over time.
-		</constant>
-		<constant name="DISPLAY_PARAM_STARVATION_GRACE_FRAMES" value="11" enum="DisplayParam">
-			[int] frames with no new state before updates are considered stalled.
 		</constant>
 		<constant name="DISPLAY_PARAM_TRACE_INTERVAL" value="12" enum="DisplayParam">
 			[int] ticks between debug traces, or [code]0[/code] for none.
@@ -4151,6 +4145,9 @@
 		</constant>
 		<constant name="STAT_ROW_FRAMES_DEFERRED" value="97" enum="Stat">
 			Counter. Property updates delayed because the bandwidth limit in [method peer_link_stats] was reached.
+		</constant>
+		<constant name="STAT_PREDICT_INSTALLS" value="98" enum="Stat">
+			Counter. Server states written onto entities this peer simulates but does not control.
 		</constant>
 		<constant name="ENDPOINT_ADDED" value="0" enum="Notification">
 			An endpoint was added to [method endpoint_list]. The callback receives [code](endpoint: RID)[/code].

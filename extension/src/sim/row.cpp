@@ -25,7 +25,7 @@ bool steps(const Row &p_row) {
 
 bool chooses(const Row &p_row) {
     return !p_row.facts.predicted
-        && (p_row.choice.declared() || p_row.selecting.count() > 0);
+        && (p_row.choice.declared(false) || p_row.selecting.count() > 0);
 }
 
 bool contact_moded(const Row &p_row) {

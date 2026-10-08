@@ -665,30 +665,15 @@ public sealed class NetwMultiplayer : NetwRefCounted
         /// </summary>
         SmartDilation = 6,
         /// <summary>
-        /// [float]. The most playback may slow down, as a fraction of normal
-        /// speed.
-        /// </summary>
-        MaxExtraDilation = 7,
-        /// <summary>
         /// [float]. How fast the interpolation delay follows changes in
         /// latency. Higher reacts faster but is less smooth.
         /// </summary>
         LagAdaptRate = 8,
         /// <summary>
-        /// [float]. How much the interpolation delay grows after running out of
-        /// states.
-        /// </summary>
-        StarvationGrowth = 9,
-        /// <summary>
         /// [float]. How much the smallest interpolation delay is smoothed over
         /// time.
         /// </summary>
         FloorSmoothing = 10,
-        /// <summary>
-        /// [int] frames with no new state before updates are considered
-        /// stalled.
-        /// </summary>
-        StarvationGraceFrames = 11,
         /// <summary>
         /// [int] ticks between debug traces, or <c>0</c> for none.
         /// </summary>
@@ -1337,6 +1322,11 @@ public sealed class NetwMultiplayer : NetwRefCounted
         /// <see cref="NetwMultiplayer.PeerLinkStats"/> was reached.
         /// </summary>
         RowFramesDeferred = 97,
+        /// <summary>
+        /// Counter. Server states written onto entities this peer simulates but
+        /// does not control.
+        /// </summary>
+        PredictInstalls = 98,
     }
 
     public enum Notification : long
@@ -3035,6 +3025,7 @@ public sealed class NetwMultiplayer : NetwRefCounted
     /// ┠╴entities          int         entities simulated this tick
     /// ┠╴timelines         int         rewindable entities recorded this tick
     /// ┠╴corrections       int         total corrections
+    /// ┠╴installs          int         total server states written onto simulated entities
     /// ┠╴max_replay_depth  int         most ticks replayed at once
     /// ┠╴consumed          int         total inputs the server used
     /// ┠╴missing           int         total input ticks that never arrived
@@ -7655,13 +7646,16 @@ public sealed class NetwMultiplayer : NetwRefCounted
         NetwApi.MethodBind(
             "NetwMultiplayer",
             "predict_recover_default",
-            4082172394UL);
+            1262845099UL);
 
     /// <summary>
-    /// The default <c>_predict_recover</c>.
+    /// The default <c>_predict_recover</c>. A correction that does not replay
+    /// adds the difference between <paramref name="payload"/> and
+    /// <paramref name="predicted"/> to <paramref name="current"/>.
     /// </summary>
     public NetwPredictRecovery PredictRecoverDefault(
         Godot.Collections.Dictionary payload,
+        Godot.Collections.Dictionary predicted,
         NetwPrediction.RecoveryPolicyEnum policy,
         NetwSimulation.RestoreEnum restore,
         Godot.Collections.Dictionary projection,
@@ -7671,40 +7665,43 @@ public sealed class NetwMultiplayer : NetwRefCounted
         Godot.Collections.Dictionary verdict,
         double tickDelta)
     {
-        IntPtr pack = NetwThunks.ArgsNew(9);
+        IntPtr pack = NetwThunks.ArgsNew(10);
         godot_variant slot0 = VariantUtils.CreateFromDictionary(payload);
         NetwThunks.ArgsSet(pack, 0, in slot0);
         slot0.Dispose();
-        godot_variant slot1 = VariantUtils.CreateFromInt((long)policy);
+        godot_variant slot1 = VariantUtils.CreateFromDictionary(predicted);
         NetwThunks.ArgsSet(pack, 1, in slot1);
         slot1.Dispose();
-        godot_variant slot2 = VariantUtils.CreateFromInt((long)restore);
+        godot_variant slot2 = VariantUtils.CreateFromInt((long)policy);
         NetwThunks.ArgsSet(pack, 2, in slot2);
         slot2.Dispose();
-        godot_variant slot3 = VariantUtils.CreateFromDictionary(projection);
+        godot_variant slot3 = VariantUtils.CreateFromInt((long)restore);
         NetwThunks.ArgsSet(pack, 3, in slot3);
         slot3.Dispose();
-        godot_variant slot4 = VariantUtils.CreateFromDictionary(current);
+        godot_variant slot4 = VariantUtils.CreateFromDictionary(projection);
         NetwThunks.ArgsSet(pack, 4, in slot4);
         slot4.Dispose();
-        godot_variant slot5 = VariantUtils.CreateFromDictionary(poseErrors);
+        godot_variant slot5 = VariantUtils.CreateFromDictionary(current);
         NetwThunks.ArgsSet(pack, 5, in slot5);
         slot5.Dispose();
-        godot_variant slot6 = VariantUtils.CreateFromDictionary(wiring);
+        godot_variant slot6 = VariantUtils.CreateFromDictionary(poseErrors);
         NetwThunks.ArgsSet(pack, 6, in slot6);
         slot6.Dispose();
-        godot_variant slot7 = VariantUtils.CreateFromDictionary(verdict);
+        godot_variant slot7 = VariantUtils.CreateFromDictionary(wiring);
         NetwThunks.ArgsSet(pack, 7, in slot7);
         slot7.Dispose();
-        godot_variant slot8 = VariantUtils.CreateFromFloat(tickDelta);
+        godot_variant slot8 = VariantUtils.CreateFromDictionary(verdict);
         NetwThunks.ArgsSet(pack, 8, in slot8);
         slot8.Dispose();
+        godot_variant slot9 = VariantUtils.CreateFromFloat(tickDelta);
+        NetwThunks.ArgsSet(pack, 9, in slot9);
+        slot9.Dispose();
         godot_variant answered = default;
         NetwThunks.CallPack(
             _bindPredictRecoverDefault,
             Checked,
             pack,
-            9,
+            10,
             ref answered);
         NetwThunks.ArgsFree(pack);
         NetwPredictRecovery result =

@@ -644,4 +644,37 @@ TEST_CASE(
     NETW_CHECK_EQ(pool->episode_revision(slot), quiet + 1);
 }
 
+TEST_CASE(
+    "[Networked][Predict][Hosted][Episode] PR7 a dissipate is judged a fixed "
+    "span of transitions after its write, however often the meter improves"
+) {
+    Episode episode = opened_episode();
+    const int64_t basis = 10;
+    int meter = 1000;
+    episode.record_comparison(basis, meter, false, 2);
+    episode.record_write(
+        Operator::DISSIPATE,
+        basis,
+        0,
+        StringName("body"),
+        2,
+        TriggerShape::ALL_WITHHELD,
+        false,
+        true
+    );
+    int64_t transition = basis + 1;
+    for (; transition < basis + EPISODE_CLOSE_RUN_MAX; ++transition) {
+        meter -= 1;
+        episode.record_comparison(transition, meter, false, 2);
+    }
+    meter -= 1;
+    CHECK(episode.operator_pending(Operator::DISSIPATE));
+    episode.record_comparison(transition, meter, false, 2);
+    CHECK_FALSE(episode.operator_pending(Operator::DISSIPATE));
+    NETW_CHECK_EQ(
+        int(episode.writes[0].outcome),
+        int(OperatorOutcome::WITHHELD)
+    );
+}
+
 } // namespace TestNetwPredictEpisodeLaws

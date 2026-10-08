@@ -14,11 +14,8 @@ enum Param {
     PARAM_TIMELINE_MODE = 4,
     PARAM_MAX_FORECAST_TICKS = 5,
     PARAM_SMART_DILATION = 6,
-    PARAM_MAX_EXTRA_DILATION = 7,
     PARAM_LAG_ADAPT_RATE = 8,
-    PARAM_STARVATION_GROWTH = 9,
     PARAM_FLOOR_SMOOTHING = 10,
-    PARAM_STARVATION_GRACE_FRAMES = 11,
     PARAM_TRACE_INTERVAL = 12,
     PARAM_VISUAL_ROOT = 13,
     PARAM_MAX = 14,
@@ -65,14 +62,14 @@ struct Decl {
     int32_t live_mode = LIVE_CHASE;
     int32_t timeline_mode = TIMELINE_BUFFERED;
     int32_t max_forecast_ticks = 6;
-    int32_t starvation_grace_frames = 3;
     int32_t trace_interval = 0;
     double live_smooth_time = 0.0;
     double chase_glide_time = 0.15;
-    double max_extra_dilation = 0.0;
     double lag_adapt_rate = 0.05;
-    double starvation_growth = 0.95;
     double floor_smoothing = 0.05;
+    double arrival_age_rate = 0.05;
+    double arrival_spread_weight = 2.5;
+    double max_arrival_lag = 24.0;
     bool enable_smart_dilation = true;
 
     Dirt set_param(int param, const godot::Variant &value);

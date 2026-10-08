@@ -158,4 +158,53 @@ TEST_CASE(
     CHECK(live.has(Variant(local_theirs)));
 }
 
+TEST_CASE(
+    "[Networked][Interest] IJ4 a peer that holds a layer of its own still "
+    "resolves the layers its entity joined, so simulate_all on a joined "
+    "layer finds the other entities there on the predicting peer"
+) {
+    LoopbackRig rig;
+    NetwMultiplayer *core = rig.server();
+    NetwMultiplayer *owner = rig.client(0);
+    REQUIRE(owner != nullptr);
+
+    const RID mine
+        = rig.declare_entity(EntityDecl().named("OwnCar").on_route(76));
+    const RID theirs
+        = rig.declare_entity(EntityDecl().named("OtherCar").on_route(77));
+    core->interest_layer(StringName("arena"))
+        ->add_entity(core->entity_get_view(mine));
+    core->interest_layer(StringName("arena"))
+        ->add_entity(core->entity_get_view(theirs));
+    rig.flush_interest();
+
+    const RID local_mine_rid
+        = rig.declare_mirror(0, EntityDecl().named("OwnCar").on_route(76));
+    const Ref<NetwEntity> local_mine = owner->entity_get_view(local_mine_rid);
+    const Ref<NetwEntity> local_theirs = owner->entity_get_view(
+        rig.declare_mirror(0, EntityDecl().named("OtherCar").on_route(77))
+    );
+    REQUIRE(local_mine.is_valid());
+    REQUIRE(local_theirs.is_valid());
+    local_mine->get_interest()->join(StringName("arena"));
+    local_theirs->get_interest()->join(StringName("arena"));
+    owner->interest_layer(StringName("scene:Arena"))->client_admit(local_mine);
+    REQUIRE(
+        owner->interest_resolved_layer_ids(local_mine)
+            .has(StringName("scene:Arena"))
+    );
+
+    CHECK(
+        owner->interest_resolved_layer_ids(local_mine).has(StringName("arena"))
+    );
+    const Array shared = named_ids(
+        owner->interest_shared_entities(local_mine, StringName("arena"))
+    );
+    NETW_CHECK_EQ(shared.size(), 1);
+    owner->sim_simulate_all(local_mine_rid, StringName("arena"));
+    const TypedArray<NetwEntity> candidates = owner->sim_candidates(local_mine);
+    NETW_CHECK_EQ(candidates.size(), 1);
+    CHECK(candidates.has(Variant(local_theirs)));
+}
+
 } // namespace TestNetwInterestProjection

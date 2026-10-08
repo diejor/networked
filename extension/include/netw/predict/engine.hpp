@@ -202,6 +202,7 @@ class NetwPredictionEngine {
     int64_t mutations_refused = 0;
 
     struct SpaceReplay {
+        NetwMultiplayer *host = nullptr;
         godot::RID space;
         godot::Ref<NetwPhysicsStepper> stepper;
         godot::LocalVector<sim::HeldPose> bystanders;
@@ -374,6 +375,12 @@ public:
         const store::EntityRef &p_ref,
         const repl::PropertyBinding *p_binding
     ) const;
+    void note_state_arrival(
+        int64_t p_slot,
+        const store::EntityRef &p_ref,
+        const repl::PropertyBinding *p_binding,
+        bool p_whole
+    );
     void deliver(
         int64_t p_slot,
         predict::Listener p_listener,
@@ -475,6 +482,7 @@ public:
     const predict::StateRow *stall_row_of(int64_t p_slot) const;
     const predict::StateRow *last_row_of(int64_t p_slot) const;
     void forget_last_input(int64_t p_slot);
+    void forget_commands(int64_t p_slot);
     godot::Dictionary open_topology_of(int64_t p_slot) const;
     void set_open_topology(int64_t p_slot, const godot::Dictionary &p_row);
 
@@ -546,6 +554,7 @@ public:
     bool stepper_absence_reported_of(int64_t p_slot) const;
     void set_stepper_absence_reported(int64_t p_slot, bool p_value);
     int resolved_schedule(int64_t p_slot, int p_declared);
+    void report_stepper_absence(int64_t p_slot);
     bool island_gap_reported_of(int64_t p_slot) const;
     void set_island_gap_reported(int64_t p_slot, bool p_value);
     bool island_roster_seeded_of(int64_t p_slot) const;
@@ -710,6 +719,12 @@ public:
         const godot::Dictionary &p_payload
     ) const;
     bool coast_command(int64_t p_slot, predict::StateRow &r_command) const;
+    bool predicts_input(int64_t p_slot) const;
+    bool relayed_guess(
+        int64_t p_slot,
+        int64_t p_transition,
+        predict::StateRow &r_command
+    ) const;
 
     int64_t sample_environment(int64_t p_slot, int64_t p_epoch);
     godot::Dictionary sensor_samples(int64_t p_slot) const;
@@ -1089,6 +1104,12 @@ public:
     );
 
     godot::PackedByteArray build_command_frame_for(int64_t p_slot);
+    godot::PackedByteArray build_relay_frame(int64_t p_slot) const;
+    void relay_ran_input(
+        int64_t p_slot,
+        int64_t p_world_tick,
+        const predict::StateRow &p_command
+    );
     godot::PackedInt64Array ack_frontier(int64_t p_slot, int64_t p_ack) const;
 
     int64_t lane_route(int64_t p_slot) const;
@@ -1125,6 +1146,7 @@ public:
         int64_t p_buffer,
         int64_t p_ceiling
     );
+    void admit_missing_commands(int64_t p_slot, int p_buffer);
     void report_owner_claim(
         int64_t p_slot,
         int64_t p_transition,
@@ -1158,7 +1180,8 @@ public:
     int reconcile_of(int64_t p_slot) const;
     void set_reconcile_own(int64_t p_slot, int p_mode);
     void leave_joint(int64_t p_slot);
-    void follow_relay_subscription(int64_t p_slot, int p_mode);
+    void follow_relay_subscription(int64_t p_slot, bool p_selected);
+    void resend_relay_subscription(int64_t p_slot);
     bool slot_has_stepper(int64_t p_slot) const;
     bool slot_is_steppable(int64_t p_slot) const;
     void refresh_tape_diagnostics(int64_t p_slot);
@@ -1203,6 +1226,12 @@ public:
         const godot::Dictionary &p_sample,
         const godot::PackedStringArray &p_participants,
         const godot::Callable &p_demote
+    );
+    bool carry_reseed(
+        int64_t p_slot,
+        int64_t p_ack,
+        const predict::StateRow &p_payload,
+        predict::StateRow &r_seed
     );
     void run_input(
         int64_t p_slot,
@@ -1705,6 +1734,12 @@ public:
         bool p_predictor_valid
     );
     void joint_note_basis(int64_t p_slot, int64_t p_basis, int p_source);
+    void joint_note_world_tick(
+        int64_t p_slot,
+        int64_t p_world_tick,
+        int64_t p_transition
+    );
+    int64_t joint_world_offset_of(int64_t p_member) const;
     void joint_admit_state(
         int64_t p_slot,
         int64_t p_transition,
@@ -1979,6 +2014,17 @@ public:
         int64_t p_transition,
         int64_t p_attribution
     );
+    bool announce_joint_moved(
+        int64_t p_slot,
+        int64_t p_transition,
+        const predict::StateRow &p_before
+    );
+    void emit_recovered(
+        int64_t p_slot,
+        int64_t p_transition,
+        int64_t p_attribution,
+        bool p_teleported
+    );
     void announce_divergence(
         int64_t p_slot,
         int64_t p_transition,
@@ -2112,6 +2158,7 @@ public:
         ADMIT_REALIGN = 2,
         ADMIT_REALIGN_PENDING = 3,
         ADMIT_RESEED_IGNORED = 4,
+        ADMIT_PREDATES_WRITE = 5,
     };
 
     int admit_state(int64_t p_slot, int64_t p_ack);
@@ -2241,8 +2288,13 @@ public:
         const godot::Callable &p_demote,
         const godot::Callable &p_seam
     );
+    godot::Dictionary recovery_predicted_of(
+        int64_t p_slot,
+        const predict::StateRow &p_predicted
+    ) const;
     bool ask_recover_seam(
         int64_t p_slot,
+        const predict::StateRow &p_predicted,
         const godot::Dictionary &p_context,
         const godot::Callable &p_seam
     );

@@ -95,7 +95,23 @@ DifferingFamily differing_family(
     return DifferingFamily::NONE;
 }
 
+constexpr double DOT_PRODUCT_ROUNDINGS = 4.0;
+
+double rotation_of_dot(double p_dot) {
+    return std::acos(std::clamp(2.0 * p_dot * p_dot - 1.0, -1.0, 1.0));
+}
+
+double rotation_between(const Quaternion &p_left, const Quaternion &p_right) {
+    return rotation_of_dot(double(p_left.dot(p_right)));
+}
+
 } // namespace
+
+double rotation_tolerance_floor() {
+    const double unit_rounding
+        = 0.5 * double(std::numeric_limits<real_t>::epsilon());
+    return rotation_of_dot(1.0 - DOT_PRODUCT_ROUNDINGS * unit_rounding);
+}
 
 int measure(
     const LocalVector<double> &p_errors,
@@ -356,21 +372,23 @@ double value_error(
         return std::abs(double(p_left) - double(p_right));
     }
     if (left_type == Variant::QUATERNION && right_type == Variant::QUATERNION) {
-        return std::abs(Quaternion(p_left).angle_to(Quaternion(p_right)));
+        return rotation_between(Quaternion(p_left), Quaternion(p_right));
     }
     if (left_type == Variant::BASIS && right_type == Variant::BASIS) {
-        return std::abs(Basis(p_left).get_rotation_quaternion().angle_to(
+        return rotation_between(
+            Basis(p_left).get_rotation_quaternion(),
             Basis(p_right).get_rotation_quaternion()
-        ));
+        );
     }
     if (left_type == Variant::TRANSFORM3D
         && right_type == Variant::TRANSFORM3D) {
         const Transform3D left = p_left;
         const Transform3D right = p_right;
         return left.origin.distance_to(right.origin)
-            + std::abs(left.basis.get_rotation_quaternion().angle_to(
-                right.basis.get_rotation_quaternion()
-            ));
+            + rotation_between(
+                   left.basis.get_rotation_quaternion(),
+                   right.basis.get_rotation_quaternion()
+            );
     }
     if (left_type == Variant::TRANSFORM2D
         && right_type == Variant::TRANSFORM2D) {

@@ -77,7 +77,10 @@ PackedInt64Array one(int64_t p_transition) {
     return out;
 }
 
-int64_t driving_slot(NetwPredictionEngine *p_pool) {
+int64_t driving_slot(
+    NetwPredictionEngine *p_pool,
+    netw::Schedule p_schedule = netw::Schedule::TICK
+) {
     const int64_t slot = p_pool->open();
     LocalVector<netw::predict::FieldDecl> input;
     netw::predict::FieldDecl button;
@@ -88,12 +91,32 @@ int64_t driving_slot(NetwPredictionEngine *p_pool) {
     p_pool->rewire(slot, LocalVector<netw::predict::FieldDecl>(), input);
     p_pool->configure(
         slot,
-        int(netw::Schedule::TICK),
+        int(p_schedule),
         int(netw::Role::CONSUME),
         int(netw::CorrectionMode::SNAP),
         int(netw::RestoreMode::EXACT)
     );
     return slot;
+}
+
+netw::predict::CommandFrameRecord pressed_run(
+    int64_t p_epoch,
+    int64_t p_first,
+    int p_count
+) {
+    netw::predict::CommandFrameRecord frame;
+    netw::predict::CommandFrameRecord::open(input_schema(), frame);
+    frame.set_epoch(int(p_epoch));
+    frame.set_ack_of_acks(-1);
+    for (int at = 0; at < p_count; ++at) {
+        frame.append_transition(p_first + at, p_first + at, true);
+    }
+    for (int at = 0; at < p_count; ++at) {
+        LocalVector<Variant> pressed;
+        pressed.push_back(1);
+        frame.append_values(pressed);
+    }
+    return frame;
 }
 
 void drive_one(NetwPredictionEngine *p_pool, int64_t p_slot) {
@@ -1083,10 +1106,12 @@ TEST_CASE(
     Array keys;
     keys.append(StringName("button"));
 
+    const int64_t ran_at = 6;
+    const int64_t filed_at = ran_at - 1;
     netw::predict::CommandFrameRecord frame;
     REQUIRE(netw::predict::CommandFrameRecord::open(input_schema(), frame));
     frame.set_epoch(1);
-    frame.append_transition(6, 6, true);
+    frame.append_transition(ran_at, ran_at, true);
     LocalVector<Variant> only;
     only.push_back(3);
     frame.append_values(only);
@@ -1096,13 +1121,13 @@ TEST_CASE(
     NETW_CHECK_EQ(first[NetwPredictionEngine::RELAY_RECORDED], 1);
     NETW_CHECK_EQ(first[NetwPredictionEngine::RELAY_DROPPED_LATE], 0);
     NETW_CHECK_EQ(
-        pool->joint_provenance_at(slot, 6),
+        pool->joint_provenance_at(slot, filed_at),
         int(netw::predict::CellProvenance::RELAYED)
     );
-    NETW_CHECK_EQ(pool->newest_matrix_transition_of(slot), 6);
+    NETW_CHECK_EQ(pool->newest_matrix_transition_of(slot), filed_at);
     NETW_CHECK_EQ(pool->relayed_epoch_of(slot), 1);
     netw::predict::StateRow relayed;
-    REQUIRE(pool->read_command_at(slot, 6, relayed));
+    REQUIRE(pool->read_command_at(slot, filed_at, relayed));
     REQUIRE(relayed.has(0));
     NETW_CHECK_EQ(int64_t(relayed.values[0]), 3);
 
@@ -1113,7 +1138,11 @@ TEST_CASE(
     netw::predict::CommandFrameRecord stale;
     REQUIRE(netw::predict::CommandFrameRecord::open(input_schema(), stale));
     stale.set_epoch(1);
-    stale.append_transition(6 - netw::predict::TAPE_HISTORY_LIMIT, 0, true);
+    stale.append_transition(
+        ran_at - netw::predict::TAPE_HISTORY_LIMIT,
+        0,
+        true
+    );
     stale.append_values(only);
     const PackedInt64Array late
         = pool->admit_relayed_frame(slot, stale, keys, false);
@@ -1123,13 +1152,13 @@ TEST_CASE(
     netw::predict::CommandFrameRecord next;
     REQUIRE(netw::predict::CommandFrameRecord::open(input_schema(), next));
     next.set_epoch(2);
-    next.append_transition(6, 6, true);
+    next.append_transition(ran_at, ran_at, true);
     next.append_values(only);
     const PackedInt64Array rekeyed
         = pool->admit_relayed_frame(slot, next, keys, true);
     NETW_CHECK_EQ(rekeyed[NetwPredictionEngine::RELAY_RECORDED], 1);
     NETW_CHECK_EQ(pool->relayed_epoch_of(slot), 2);
-    NETW_CHECK_EQ(pool->joint_epoch_floor_of(slot), 6);
+    NETW_CHECK_EQ(pool->joint_epoch_floor_of(slot), filed_at);
 
     NETW_CHECK_EQ(
         int(pool->admit_relayed_frame(slot + 9000, next, keys, false).size()),
@@ -1324,6 +1353,40 @@ TEST_CASE(
         int(pool->admit_command_frame(slot + 9000, later, keys).size()),
         0
     );
+}
+
+TEST_CASE(
+    "[Networked][Predict][Hosted][Claim] a new command epoch consumes from "
+    "its own first command and holds none of the old epoch's"
+) {
+    const netw::Schedule schedules[] = {
+        netw::Schedule::TICK,
+        netw::Schedule::STEPPED,
+    };
+    Array keys;
+    keys.append(StringName("button"));
+    for (const netw::Schedule schedule : schedules) {
+        NetwPredictionEngine pool;
+        const int64_t slot = driving_slot(&pool, schedule);
+        pool.open_lane(slot);
+
+        pool.admit_command_frame(slot, pressed_run(1, 100, 4), keys);
+        pool.set_replay_cursor(slot, 104);
+        pool.set_ack(slot, 103);
+
+        const PackedInt64Array held
+            = pool.admit_command_frame(slot, pressed_run(2, 130, 4), keys);
+        NETW_CHECK_EQ(pool.command_epoch_of(slot), 2);
+        NETW_CHECK_EQ(int(held.size()), 4);
+        NETW_CHECK_EQ(pool.replay_cursor_of(slot), 130);
+        NETW_CHECK_EQ(
+            pool.command_depth_from(slot, pool.replay_cursor_of(slot)),
+            4
+        );
+        for (int64_t old = 100; old < 104; ++old) {
+            CHECK_FALSE(pool.has_authored_input(slot, old));
+        }
+    }
 }
 
 } // namespace TestNetwPredictClaimLaws

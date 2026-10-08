@@ -19,6 +19,16 @@ const StringName &channel_rotation() {
     return name;
 }
 
+const StringName &channel_quaternion() {
+    static const StringName name = StringName("quaternion");
+    return name;
+}
+
+const StringName &channel_basis() {
+    static const StringName name = StringName("basis");
+    return name;
+}
+
 const StringName &channel_global_position() {
     static const StringName name = StringName("global_position");
     return name;
@@ -138,7 +148,87 @@ Vector3 Port::host_rotation_3d(const Vector3 &p_host_local) {
     return composed.get_euler();
 }
 
+bool Port::turns() const {
+    return names_rotation(target_prop) || target_prop == channel_quaternion()
+        || target_prop == channel_basis();
+}
+
+void Port::seat_authored(const Variant &p_local_transform) {
+    offset_seated = global_space
+        &&p_local_transform.get_type() == Variant::TRANSFORM3D
+        && Transform3D(p_local_transform) != Transform3D();
+    authored_offset
+        = offset_seated ? Transform3D(p_local_transform) : Transform3D();
+}
+
+Basis Port::body_basis(Node3D *p_target) {
+    Basis shown = p_target->get_basis();
+    if (spatial_frame(p_target) != nullptr) {
+        shown = p_target->get_global_transform().basis;
+    } else {
+        shown = unmounted_frame(p_target, host_parent()).basis * shown;
+    }
+    return shown.orthonormalized() * authored_offset.basis.inverse();
+}
+
+Vector3 Port::offset_position(
+    Node3D *p_target,
+    const Vector3 &p_body_position
+) {
+    if (!offset_seated) {
+        return p_body_position;
+    }
+    return p_body_position + body_basis(p_target).xform(authored_offset.origin);
+}
+
+int64_t Port::write_orientation(
+    Node3D *p_target,
+    const Basis &p_host_local,
+    bool p_as_quaternion
+) {
+    Node3D *parent = spatial_frame(host_parent());
+    const Basis parent_basis = parent != nullptr
+        ? parent->get_global_transform().basis.orthonormalized()
+        : Basis();
+    const Basis composed = parent_basis * p_host_local
+        * (offset_seated ? authored_offset.basis : Basis());
+    if (spatial_frame(p_target) == nullptr) {
+        const Basis frame = unmounted_frame(p_target, host_parent())
+                                .basis.orthonormalized();
+        const Basis local = frame.inverse() * composed;
+        if (p_as_quaternion) {
+            p_target->set_quaternion(local.get_rotation_quaternion());
+        } else {
+            p_target->set_basis(local);
+        }
+        return WRITE_LOCAL;
+    }
+    Transform3D global = p_target->get_global_transform();
+    global.basis = p_as_quaternion ? composed.scaled(p_target->get_scale())
+                                   : composed;
+    p_target->set_global_transform(global);
+    return WRITE_GLOBAL;
+}
+
 int64_t Port::write_global(Object *p_target, const Variant &p_value) {
+    if (target_prop == channel_quaternion()
+        || target_prop == channel_basis()) {
+        Node3D *node_3d = Object::cast_to<Node3D>(p_target);
+        const bool as_quaternion = target_prop == channel_quaternion();
+        if (node_3d != nullptr && as_quaternion
+            && p_value.get_type() == Variant::QUATERNION) {
+            return write_orientation(
+                node_3d,
+                Basis(Quaternion(p_value)),
+                true
+            );
+        }
+        if (node_3d != nullptr && !as_quaternion
+            && p_value.get_type() == Variant::BASIS) {
+            return write_orientation(node_3d, Basis(p_value), false);
+        }
+        return WRITE_REFUSED;
+    }
     if (names_position(target_prop)) {
         Node2D *node_2d = Object::cast_to<Node2D>(p_target);
         if (node_2d != nullptr && p_value.get_type() == Variant::VECTOR2) {
@@ -148,12 +238,19 @@ int64_t Port::write_global(Object *p_target, const Variant &p_value) {
         Node3D *node_3d = Object::cast_to<Node3D>(p_target);
         if (node_3d != nullptr && p_value.get_type() == Variant::VECTOR3) {
             if (spatial_frame(node_3d) == nullptr) {
-                node_3d->set_position(unmounted_frame(node_3d, host_parent())
-                                          .affine_inverse()
-                                          .xform(host_position_3d(p_value)));
+                node_3d->set_position(
+                    unmounted_frame(node_3d, host_parent())
+                        .affine_inverse()
+                        .xform(offset_position(
+                            node_3d,
+                            host_position_3d(p_value)
+                        ))
+                );
                 return WRITE_LOCAL;
             }
-            node_3d->set_global_position(host_position_3d(p_value));
+            node_3d->set_global_position(
+                offset_position(node_3d, host_position_3d(p_value))
+            );
             return WRITE_GLOBAL;
         }
     } else if (names_rotation(target_prop)) {
@@ -169,12 +266,18 @@ int64_t Port::write_global(Object *p_target, const Variant &p_value) {
                                         .basis.orthonormalized();
                 node_3d->set_rotation(
                     (frame.inverse()
-                     * Basis::from_euler(host_rotation_3d(p_value)))
+                     * Basis::from_euler(host_rotation_3d(p_value))
+                     * authored_offset.basis)
                         .get_euler()
                 );
                 return WRITE_LOCAL;
             }
-            node_3d->set_global_rotation(host_rotation_3d(p_value));
+            node_3d->set_global_rotation(
+                offset_seated ? (Basis::from_euler(host_rotation_3d(p_value))
+                                 * authored_offset.basis)
+                                    .get_euler()
+                              : host_rotation_3d(p_value)
+            );
             return WRITE_GLOBAL;
         }
     }

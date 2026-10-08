@@ -257,6 +257,12 @@ bool SessionSend::classify(
         r_form = RowForm::FRESH;
         return true;
     }
+    if (p_due
+        && (rest_flight(p_peer, table, p_row) != nullptr
+            || (rows.acked_rev[p_row] != 0 && !table.differs(p_row, p_peer)))) {
+        r_form = RowForm::REFRESH;
+        return true;
+    }
     const int64_t wait = wire::repair_interval_ms(
         int64_t(link.rtt_ms(world->peer_id(p_peer)))
     );
@@ -385,15 +391,21 @@ bool SessionSend::encode(
             = pinned != nullptr && table.holds_image(p_row, pinned->image);
         header.revision
             = r_send.resend ? pinned->revision : rows.next_rev[p_row];
-        const uint64_t acked = rows.acked_rev[p_row];
-        const uint64_t span = header.revision - acked;
+        const store::Flight *stated = p_form == RowForm::REFRESH
+            ? rest_flight(p_peer, table, p_row)
+            : nullptr;
+        const uint64_t from
+            = stated != nullptr ? stated->revision : rows.acked_rev[p_row];
+        const uint64_t span = header.revision - from;
         const bool deltas
             = p_form == RowForm::FRESH || p_form == RowForm::REFRESH;
-        header.distance = deltas && acked != 0 && header.revision > acked
+        header.distance = deltas && from != 0 && header.revision > from
                 && span <= wire::SNAPSHOT_DELTA_SPAN
             ? span
             : 0;
-        if (!header.absolute()) {
+        if (!header.absolute() && stated != nullptr) {
+            baseline.copy_from(stated->image);
+        } else if (!header.absolute()) {
             baseline.assign(
                 plan,
                 rows.baseline.ptr() + uint64_t(p_row) * table.words,
@@ -451,16 +463,37 @@ void SessionSend::commit_send(
     }
     rows.repair_at[p_send.row] = p_now_ms;
     rows.acc[p_send.row] = 0.0f;
+    const bool restatable
+        = p_send.form == RowForm::FRESH || p_send.form == RowForm::REPAIR;
+    if (restatable) {
+        rows.rest_rev[p_send.row] = p_send.revision;
+    }
     if (p_send.form == RowForm::REPAIR) {
+        world->arm_refresh(at, p_peer, p_base_tick + 1);
         return;
     }
     rows.last_sent[p_send.row] = p_base_tick;
     rows.due.set(p_send.row, false);
-    world->arm_refresh(
-        at,
-        p_peer,
-        table.heartbeat > 0 ? p_base_tick + table.heartbeat : -1
-    );
+    const int64_t beat
+        = table.heartbeat > 0 ? p_base_tick + table.heartbeat : -1;
+    world->arm_refresh(at, p_peer, restatable ? p_base_tick + 1 : beat);
+}
+
+const store::Flight *SessionSend::rest_flight(
+    uint32_t p_peer,
+    const store::Table &p_table,
+    uint32_t p_row
+) const {
+    const store::PeerRows &rows = p_table.peers[p_peer];
+    const uint64_t stated = rows.rest_rev[p_row];
+    if (stated <= rows.acked_rev[p_row]) {
+        return nullptr;
+    }
+    const store::Flight *flight
+        = world->flight_of(p_peer, rows.token[p_row], stated);
+    return flight != nullptr && p_table.holds_image(p_row, flight->image)
+        ? flight
+        : nullptr;
 }
 
 void SessionSend::pass_peer(

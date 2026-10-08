@@ -171,6 +171,7 @@ void NetwPrediction::seat_command_frame() {
 
 Ref<NetwPredictRecovery> NetwPrediction::seat_recover_seam(
     const Dictionary &p_carried,
+    const Dictionary &p_predicted,
     NetwPrediction::RecoveryPolicy p_policy,
     NetwSimulation::Restore p_snap_restore,
     const Dictionary &p_projection,
@@ -182,6 +183,7 @@ Ref<NetwPredictRecovery> NetwPrediction::seat_recover_seam(
     return engine_seat == nullptr ? Ref<NetwPredictRecovery>()
                                   : engine_seat->recover_through_seam(
                                         p_carried,
+                                        p_predicted,
                                         p_policy,
                                         p_snap_restore,
                                         p_projection,

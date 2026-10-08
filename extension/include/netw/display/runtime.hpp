@@ -26,6 +26,7 @@ private:
     Decl config;
     Playhead playhead;
     godot::LocalVector<Channel *> states;
+    godot::LocalVector<Channel *> writes;
     Tracks tracks;
     int64_t pump_mode = netw::display::PUMP_UNRESOLVED;
     int64_t role = 0;
@@ -40,6 +41,7 @@ private:
     bool warned_self_feedback = false;
     double display_offset_limit = 0.0;
     godot::LocalVector<godot::ObjectID> bodies;
+    godot::Variant visual_offset;
     bool pump_listed = false;
     bool record_listed = false;
 
@@ -64,6 +66,10 @@ public:
     const godot::LocalVector<Channel *> &channels() const {
         return states;
     }
+    const godot::LocalVector<Channel *> &write_order() const {
+        return writes;
+    }
+    void order_writes();
     Channel *add_channel();
     void clear_channels();
 
@@ -216,6 +222,16 @@ public:
     }
     bool holds_body(const godot::Object *p_node) const {
         return p_node != nullptr && bodies.find(gd::instance_id(p_node)) >= 0;
+    }
+
+    void set_visual_offset(const godot::Variant &p_local_transform) {
+        visual_offset = p_local_transform;
+        for (Channel *channel : states) {
+            channel->display_port().seat_authored(visual_offset);
+        }
+    }
+    const godot::Variant &get_visual_offset() const {
+        return visual_offset;
     }
 };
 

@@ -63,11 +63,8 @@ TEST_CASE(
     );
     decl.set_param(netw::display::PARAM_MAX_FORECAST_TICKS, 9);
     decl.set_param(netw::display::PARAM_SMART_DILATION, false);
-    decl.set_param(netw::display::PARAM_MAX_EXTRA_DILATION, 0.2);
     decl.set_param(netw::display::PARAM_LAG_ADAPT_RATE, 0.3);
-    decl.set_param(netw::display::PARAM_STARVATION_GROWTH, 0.4);
     decl.set_param(netw::display::PARAM_FLOOR_SMOOTHING, 0.6);
-    decl.set_param(netw::display::PARAM_STARVATION_GRACE_FRAMES, 7);
     decl.set_param(netw::display::PARAM_TRACE_INTERVAL, 8);
     decl.set_param(netw::display::PARAM_VISUAL_ROOT, NodePath("Body/Art"));
 
@@ -99,28 +96,14 @@ TEST_CASE(
     );
     CHECK_FALSE(bool(decl.get_param(netw::display::PARAM_SMART_DILATION)));
     NETW_CHECK_CLOSE(
-        double(decl.get_param(netw::display::PARAM_MAX_EXTRA_DILATION)),
-        0.2,
-        0.0
-    );
-    NETW_CHECK_CLOSE(
         double(decl.get_param(netw::display::PARAM_LAG_ADAPT_RATE)),
         0.3,
-        0.0
-    );
-    NETW_CHECK_CLOSE(
-        double(decl.get_param(netw::display::PARAM_STARVATION_GROWTH)),
-        0.4,
         0.0
     );
     NETW_CHECK_CLOSE(
         double(decl.get_param(netw::display::PARAM_FLOOR_SMOOTHING)),
         0.6,
         0.0
-    );
-    NETW_CHECK_EQ(
-        int(decl.get_param(netw::display::PARAM_STARVATION_GRACE_FRAMES)),
-        7
     );
     NETW_CHECK_EQ(int(decl.get_param(netw::display::PARAM_TRACE_INTERVAL)), 8);
     CHECK(

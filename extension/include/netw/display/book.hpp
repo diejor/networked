@@ -43,6 +43,9 @@ public:
     Runtime *runtime_of(const godot::RID &p_entity) const;
     Runtime *runtime_at(int64_t p_route) const;
     godot::LocalVector<Runtime *> runtimes() const;
+    const godot::LocalVector<Runtime *> &live_runtimes() const {
+        return live;
+    }
 
     void wake(Runtime *p_runtime);
     void wake_route(int64_t p_route);

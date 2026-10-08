@@ -99,12 +99,13 @@ TEST_CASE(
 #undef NETW_SESSION_STAT_COUNT
 
     NETW_CHECK_EQ(counted, NetwMultiplayer::STAT_COUNT);
-    NETW_CHECK_EQ(NetwMultiplayer::STAT_COUNT, 98);
+    NETW_CHECK_EQ(NetwMultiplayer::STAT_COUNT, 99);
     NETW_CHECK_EQ(NetwMultiplayer::STAT_DROPS_UNKNOWN_ROUTE, 0);
     NETW_CHECK_EQ(NetwMultiplayer::STAT_JOINT_LINGER_HELD, 88);
     NETW_CHECK_EQ(NetwMultiplayer::STAT_DROPS_DEAD_ROUTE, 90);
     NETW_CHECK_EQ(NetwMultiplayer::STAT_ATTRIBUTION_DROPPED_OUT, 96);
     NETW_CHECK_EQ(NetwMultiplayer::STAT_ROW_FRAMES_DEFERRED, 97);
+    NETW_CHECK_EQ(NetwMultiplayer::STAT_PREDICT_INSTALLS, 98);
 }
 
 } // namespace TestNetwSessionEnums

@@ -168,6 +168,24 @@ bool take_trace_frame(Runtime *p_runtime) {
     return next == 0;
 }
 
+void hear_arrivals(Runtime *p_runtime, const Timing &p_timing) {
+    int64_t freshest = -1;
+    for (Channel *state : p_runtime->channels()) {
+        const History &history = state->display_history();
+        if (!history.is_empty()) {
+            freshest = std::max(freshest, history.newest_tick());
+        }
+    }
+    if (freshest < 0) {
+        return;
+    }
+    p_runtime->display_playhead().hear_newest(
+        p_runtime->get_config(),
+        freshest,
+        double(p_timing.display_tick) + p_timing.tick_factor
+    );
+}
+
 void dilate_playhead(
     Runtime *p_runtime,
     const Timing &p_timing,
@@ -180,7 +198,8 @@ void dilate_playhead(
         profile::SUBSYSTEM_INTERPOLATION
     );
     Playhead &playhead = p_runtime->display_playhead();
-    const int effective = playhead.effective_tick(p_timing.display_tick);
+    const int effective
+        = playhead.effective_tick(p_timing.display_tick, p_timing.tick_factor);
     const LocalVector<Channel *> &states = p_runtime->channels();
 
     bool starving = false;
@@ -191,7 +210,8 @@ void dilate_playhead(
         if (history.is_empty()) {
             continue;
         }
-        if (!history.has_tick_after(effective)) {
+        if (!history.has_tick_after(effective)
+            && !history.stream_finished(effective)) {
             starving = true;
             newest = history.newest_tick();
             break;
@@ -208,7 +228,6 @@ void dilate_playhead(
 
     playhead.dilate(
         p_runtime->get_config(),
-        p_timing.frame_ticks,
         p_timing.display_offset,
         p_timing.recommended_display_offset,
         starving
@@ -243,6 +262,7 @@ bool pump_history(
     if (!bracketed) {
         forecast = config.timeline_mode == netw::display::TIMELINE_FORECAST;
         max_forecast_ticks = config.max_forecast_ticks;
+        hear_arrivals(p_runtime, p_timing);
         if (config.enable_smart_dilation) {
             dilate_playhead(p_runtime, p_timing, p_stats, trace);
         } else {
@@ -263,9 +283,10 @@ bool pump_history(
     const double decay = glide(p_runtime, p_timing.frame_delta);
     const LocalVector<Channel *> &states = p_runtime->channels();
     const Tracks &tracks = p_runtime->display_tracks();
+    const LocalVector<Channel *> &order = p_runtime->write_order();
 
-    for (int at = 0; at < int(states.size()); ++at) {
-        Channel *state = states[at];
+    for (int at = 0; at < int(order.size()); ++at) {
+        Channel *state = order[at];
         if (state->get_self_feedback()
             && p_runtime->get_pump_mode() == netw::display::PUMP_BRACKETED) {
             continue;
@@ -367,10 +388,10 @@ bool pump_chase(Runtime *p_runtime, const Timing &p_timing) {
                    / chase_smooth_time(p_runtime, p_timing));
     const double decay = glide(p_runtime, p_timing.frame_delta);
     const bool trace = take_trace_frame(p_runtime);
-    const LocalVector<Channel *> &states = p_runtime->channels();
+    const LocalVector<Channel *> &order = p_runtime->write_order();
 
-    for (int at = 0; at < int(states.size()); ++at) {
-        Channel *state = states[at];
+    for (int at = 0; at < int(order.size()); ++at) {
+        Channel *state = order[at];
         if (state->get_self_feedback()) {
             continue;
         }

@@ -104,14 +104,6 @@ public:
 
     void simulate(const godot::Ref<NetwEntity> &p_entity);
     void forget(const godot::Ref<NetwEntity> &p_entity);
-    void simulate_nearest(
-        int p_count,
-        const godot::StringName &p_layer = godot::StringName()
-    );
-    void simulate_within(
-        double p_meters,
-        const godot::StringName &p_layer = godot::StringName()
-    );
     void simulate_all(const godot::StringName &p_layer = godot::StringName());
     void simulate_none();
 

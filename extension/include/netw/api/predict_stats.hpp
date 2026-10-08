@@ -51,6 +51,7 @@ public:
         FACT_SIMULATED_MEMBERS = 42,
         FACT_JOINT_DEPTH = 44,
         FACT_LINGER_HELD = 52,
+        FACT_INSTALLS = 53,
     };
 
     enum Source : uint8_t {
@@ -136,6 +137,7 @@ public:
     }
 
     int64_t get_corrections() const;
+    int64_t get_installs() const;
     godot::Dictionary to_dictionary() const;
 
     static const Fact *facts();

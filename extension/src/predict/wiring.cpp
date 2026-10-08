@@ -1,5 +1,7 @@
 #include "netw/predict/wiring.hpp"
 
+#include <algorithm>
+
 #include "netw/predict/compare.hpp"
 
 #include "netw/api/schema_core.hpp"
@@ -380,6 +382,39 @@ Wiring compile(const LocalVector<FieldDecl> &p_declaration) {
         }
     }
     return out;
+}
+
+namespace {
+
+constexpr double QUANTIZER_STEPS_TOLERATED = 1.5;
+
+bool carries_rotation(Variant::Type p_type) {
+    return p_type == Variant::QUATERNION || p_type == Variant::BASIS
+        || p_type == Variant::TRANSFORM3D;
+}
+
+} // namespace
+
+void tolerate_quantizer_steps(Wiring &r_wiring) {
+    const int count = std::min(r_wiring.count(), r_wiring.codec.count());
+    for (int at = 0; at < count; ++at) {
+        const Ref<NetwQuantize> &quantizer
+            = r_wiring.codec.quantizers[uint32_t(at)];
+        if (r_wiring.epsilon[uint32_t(at)] >= 0.0 || quantizer.is_null()) {
+            continue;
+        }
+        const Variant::Type type
+            = Variant::Type(r_wiring.codec.types[uint32_t(at)]);
+        const double step = 2.0 * quantizer->max_error(type);
+        if (step <= 0.0) {
+            continue;
+        }
+        double tolerance = QUANTIZER_STEPS_TOLERATED * step;
+        if (carries_rotation(type)) {
+            tolerance = std::max(tolerance, rotation_tolerance_floor());
+        }
+        r_wiring.epsilon[uint32_t(at)] = tolerance;
+    }
 }
 
 } // namespace netw::predict

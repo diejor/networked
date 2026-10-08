@@ -21,10 +21,26 @@ Runtime::~Runtime() {
 Channel *Runtime::add_channel() {
     Channel *channel = memnew(Channel);
     states.push_back(channel);
+    writes.push_back(channel);
     return channel;
 }
 
+void Runtime::order_writes() {
+    writes.clear();
+    for (Channel *channel : states) {
+        if (channel->display_port().turns()) {
+            writes.push_back(channel);
+        }
+    }
+    for (Channel *channel : states) {
+        if (!channel->display_port().turns()) {
+            writes.push_back(channel);
+        }
+    }
+}
+
 void Runtime::clear_channels() {
+    writes.clear();
     for (Channel *channel : states) {
         memdelete(channel);
     }
@@ -83,12 +99,13 @@ void Runtime::snap_named(const StringName &p_name, const Variant &p_value) {
     Channel *channel = channel_named(p_name);
     if (channel != nullptr) {
         channel->snap(p_value);
+        playhead.forget_arrivals();
     }
 }
 
 void Runtime::reset(int p_display_offset, int p_recommended_display_offset) {
     playhead.settle(config, p_display_offset, p_recommended_display_offset);
-    for (Channel *channel : states) {
+    for (Channel *channel : writes) {
         channel->display_history().clear();
         channel->render_offset().clear();
         channel->set_last_written(channel->current_source_value());

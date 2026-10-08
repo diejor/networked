@@ -335,6 +335,47 @@ TEST_CASE(
 }
 
 TEST_CASE(
+    "[Networked][Clock][Hosted] L18 a gated clock snaps the ticks a hitch "
+    "left owing and never snaps a tick of jitter"
+) {
+    const Clocked clock = make_clock(60);
+    clock->set_sync_mode(ClockEngine::SYNC_STRETCH);
+    clock->set_lead_ticks(0.0);
+    clock->arm_gate();
+    const double step = clock->ticktime();
+    int server_tick = 100;
+
+    SUBCASE("a hitch past the catch-up leaves no debt") {
+        const int hitch_ticks = 10;
+        clock->handle_pong(0.0, server_tick, 0.0, true);
+        for (int frame = 0; frame < 120; ++frame) {
+            clock->physics_step(step);
+            server_tick += frame == 20 ? 1 + hitch_ticks : 1;
+            clock->handle_pong(0.0, server_tick, 0.0, true);
+        }
+
+        NETW_CHECK_LE(std::abs(server_tick - clock->get_tick()), 1);
+        NETW_CHECK_LT(clock->tick_accumulator(), step);
+    }
+
+    SUBCASE("an estimate that flips by one tick runs every tick in order") {
+        const double phase = 0.25;
+        clock->handle_pong(0.0, server_tick, phase, true);
+        int skipped = 0;
+        for (int frame = 0; frame < 600; ++frame) {
+            const int before = clock->get_tick();
+            clock->physics_step(step);
+            skipped += clock->get_tick() - before > 1 ? 1 : 0;
+            server_tick += 1;
+            const int flip = (frame / 60) % 2;
+            clock->handle_pong(0.0, server_tick + flip, phase, true);
+        }
+
+        NETW_CHECK_EQ(skipped, 0);
+    }
+}
+
+TEST_CASE(
     "[Networked][Clock][Hosted] L12 the first calibration announces itself "
     "once and seeds the phase"
 ) {

@@ -229,6 +229,7 @@ public:
     void seat_command_frame();
     godot::Ref<NetwPredictRecovery> seat_recover_seam(
         const godot::Dictionary &p_carried,
+        const godot::Dictionary &p_predicted,
         NetwPrediction::RecoveryPolicy p_policy,
         NetwSimulation::Restore p_snap_restore,
         const godot::Dictionary &p_projection,

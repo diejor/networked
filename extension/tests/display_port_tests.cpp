@@ -3,6 +3,7 @@
 #include "godot/scene_tree.hpp"
 #include "godot/spatial_node.hpp"
 #include "netw/display/port.hpp"
+#include "netw/display/runtime.hpp"
 
 namespace TestNetwPort {
 
@@ -398,6 +399,118 @@ TEST_CASE(
     CHECK(visual->get_rotation().is_equal_approx(Vector3()));
 
     memdelete(body);
+}
+
+TEST_CASE(
+    "[Networked][Display][Hosted][SceneTree] D19 a mounted visual under a "
+    "turned body shows the interpolated quaternion in global space"
+) {
+    CHECK(netw::gd::scene_root() != nullptr);
+    if (netw::gd::scene_root() == nullptr) {
+        return;
+    }
+    const SpatialHosts hosts = seat_spatial_hosts();
+    hosts.holder->set_rotation(Vector3(0.0, HALF_TURN * 0.5, 0.0));
+    hosts.body->set_rotation(Vector3(0.0, 0.0, HALF_TURN * 0.25));
+    const Quaternion shown(Vector3(1.0, 0.0, 0.0), HALF_TURN * 0.25);
+
+    Port port
+        = make_port(hosts.visual, hosts.body, "quaternion", "quaternion", true);
+    NETW_CHECK_EQ(port.write(shown), int64_t(Port::WRITE_GLOBAL));
+
+    const Quaternion expected
+        = hosts.holder->get_global_transform().basis.get_rotation_quaternion()
+        * shown;
+    CHECK(hosts.visual->get_global_transform()
+              .basis.get_rotation_quaternion()
+              .is_equal_approx(expected));
+
+    release_spatial_hosts(hosts);
+}
+
+TEST_CASE(
+    "[Networked][Display][Hosted] D20 an unmounted visual under a turned body "
+    "shows the interpolated quaternion as the frame it is given"
+) {
+    Node3D *body = memnew(Node3D);
+    Node3D *visual = memnew(Node3D);
+    body->add_child(visual);
+    body->set_rotation(Vector3(0.0, 0.0, HALF_TURN * 0.25));
+    const Quaternion shown(Vector3(1.0, 0.0, 0.0), HALF_TURN * 0.25);
+
+    Port port = make_port(visual, body, "quaternion", "quaternion", true);
+    NETW_CHECK_EQ(port.write(shown), int64_t(Port::WRITE_LOCAL));
+
+    const Quaternion composed = body->get_basis().get_rotation_quaternion()
+        * visual->get_quaternion();
+    CHECK(composed.is_equal_approx(shown));
+
+    memdelete(body);
+}
+
+TEST_CASE(
+    "[Networked][Display][Hosted][SceneTree] D21 a visual root with an "
+    "authored offset is drawn at the body's pose times that offset"
+) {
+    CHECK(netw::gd::scene_root() != nullptr);
+    if (netw::gd::scene_root() == nullptr) {
+        return;
+    }
+    const SpatialHosts hosts = seat_spatial_hosts();
+    const Transform3D authored(
+        Basis(Vector3(0.0, 1.0, 0.0), HALF_TURN * 0.25),
+        Vector3(0.0, -0.5, -1.0)
+    );
+    hosts.visual->set_transform(authored);
+    hosts.holder->set_position(Vector3(0.0, 10.0, 0.0));
+    hosts.body->set_position(Vector3(3.0, 1.0, 2.0));
+    hosts.body->set_rotation(Vector3(0.0, HALF_TURN * 0.5, 0.0));
+
+    Port turn
+        = make_port(hosts.visual, hosts.body, "rotation", "rotation", true);
+    Port move
+        = make_port(hosts.visual, hosts.body, "position", "position", true);
+    turn.seat_authored(authored);
+    move.seat_authored(authored);
+    NETW_CHECK_EQ(
+        turn.write(hosts.body->get_rotation()),
+        int64_t(Port::WRITE_GLOBAL)
+    );
+    NETW_CHECK_EQ(
+        move.write(hosts.body->get_position()),
+        int64_t(Port::WRITE_GLOBAL)
+    );
+
+    const Transform3D expected = hosts.body->get_global_transform() * authored;
+    CHECK(hosts.visual->get_global_position().is_equal_approx(expected.origin));
+    CHECK(hosts.visual->get_global_transform().basis.is_equal_approx(
+        expected.basis
+    ));
+
+    release_spatial_hosts(hosts);
+}
+
+TEST_CASE(
+    "[Networked][Display][Hosted] D22 every orientation channel is written "
+    "before any position channel whatever the declaration order"
+) {
+    netw::display::Runtime runtime;
+    const char *props[] = {"position", "quaternion", "global_position",
+                           "rotation", "basis"};
+    for (const char *prop : props) {
+        netw::display::Channel *channel = runtime.add_channel();
+        channel->display_port().declare(prop, prop, true);
+    }
+    runtime.order_writes();
+
+    const LocalVector<netw::display::Channel *> &order = runtime.write_order();
+    NETW_CHECK_EQ(int64_t(order.size()), int64_t(5));
+    const char *expected[]
+        = {"quaternion", "rotation", "basis", "position", "global_position"};
+    for (int at = 0; at < 5; ++at) {
+        CHECK(order[at]->display_port().get_target_prop()
+              == StringName(expected[at]));
+    }
 }
 
 } // namespace TestNetwPort

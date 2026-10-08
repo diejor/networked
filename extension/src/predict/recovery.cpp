@@ -108,12 +108,82 @@ Variant pose_sum(const Variant &p_left, const Variant &p_right) {
     }
 }
 
+Variant carried_value(
+    const Variant &p_authority,
+    const Variant &p_predicted,
+    const Variant &p_current,
+    bool p_angle
+) {
+    const Variant::Type type = p_authority.get_type();
+    if (p_predicted.get_type() != type || p_current.get_type() != type) {
+        return Variant();
+    }
+    switch (type) {
+        case Variant::FLOAT:
+        case Variant::VECTOR2:
+        case Variant::VECTOR3:
+            return pose_sum(
+                p_current,
+                pose_delta(p_authority, p_predicted, p_angle)
+            );
+        case Variant::QUATERNION:
+            return (Quaternion(p_authority) * Quaternion(p_predicted).inverse()
+                    * Quaternion(p_current))
+                .normalized();
+        case Variant::BASIS:
+            return Basis(p_authority) * Basis(p_predicted).inverse()
+                * Basis(p_current);
+        case Variant::TRANSFORM3D: {
+            const Transform3D authority = p_authority;
+            const Transform3D predicted = p_predicted;
+            const Transform3D current = p_current;
+            return Transform3D(
+                authority.basis * predicted.basis.inverse() * current.basis,
+                current.origin + authority.origin - predicted.origin
+            );
+        }
+        case Variant::TRANSFORM2D: {
+            const Transform2D authority = p_authority;
+            const Transform2D predicted = p_predicted;
+            const Transform2D current = p_current;
+            const real_t turn = real_t(angle_difference(
+                predicted.get_rotation(),
+                authority.get_rotation()
+            ));
+            Transform2D out = current;
+            out.set_rotation(current.get_rotation() + turn);
+            out.set_origin(
+                current.get_origin() + authority.get_origin()
+                - predicted.get_origin()
+            );
+            return out;
+        }
+        default:
+            return Variant();
+    }
+}
+
+double teleport_error(
+    const Wiring &p_wiring,
+    const RecoveryRequest &p_request,
+    int p_field
+) {
+    if (p_request.authority.has(p_field) && p_request.predicted.has(p_field)) {
+        return value_error(
+            p_request.authority.values[uint32_t(p_field)],
+            p_request.predicted.values[uint32_t(p_field)],
+            p_wiring.angle[uint32_t(p_field)] != 0
+        );
+    }
+    return field_error_or(p_request, p_field, -1.0);
+}
+
 bool teleport_reached(
     const Wiring &p_wiring,
     const RecoveryRequest &p_request
 ) {
     for (int at = 0; at < p_wiring.count(); ++at) {
-        const double error = field_error_or(p_request, at, -1.0);
+        const double error = teleport_error(p_wiring, p_request, at);
         if (p_wiring.pose[uint32_t(at)] != 0 && error >= 0.0
             && error
                 >= teleport_at(p_wiring, at, p_request.fallback_teleport)) {
@@ -292,6 +362,34 @@ void track_recovery(
 
 } // namespace
 
+bool carry_difference(
+    const Wiring &p_wiring,
+    const StateRow &p_authority,
+    const StateRow &p_predicted,
+    const StateRow &p_current,
+    StateRow &r_restore
+) {
+    bool carried = false;
+    for (int at = 0; at < p_wiring.count(); ++at) {
+        if (!p_authority.has(at) || !p_predicted.has(at)
+            || !p_current.has(at)) {
+            continue;
+        }
+        const Variant value = carried_value(
+            p_authority.values[uint32_t(at)],
+            p_predicted.values[uint32_t(at)],
+            p_current.values[uint32_t(at)],
+            p_wiring.angle[uint32_t(at)] != 0
+        );
+        if (value.get_type() == Variant::NIL) {
+            continue;
+        }
+        r_restore.set(at, value);
+        carried = true;
+    }
+    return carried;
+}
+
 int escalation_field(const Wiring &p_wiring, const RecoveryRequest &p_request) {
     int dominant = -1;
     int exact = -1;
@@ -409,8 +507,15 @@ void stage_recovery_into(
         return;
     }
 
+    const bool carried = carry_difference(
+        p_wiring,
+        p_request.authority,
+        p_request.predicted,
+        p_request.current,
+        r_out.restore
+    );
     bool projected = false;
-    if (p_config.restore == int(RestoreMode::EXTRAPOLATED)) {
+    if (!carried && p_config.restore == int(RestoreMode::EXTRAPOLATED)) {
         projected = project_restore(p_wiring, p_request, r_out.restore);
     }
     if (r_out.escalated || p_request.pose_unmeasured

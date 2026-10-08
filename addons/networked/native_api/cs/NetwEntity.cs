@@ -1414,7 +1414,7 @@ public sealed class NetwEntity : NetwRefCounted
     }
 
     private static readonly IntPtr _bindReleaseAuthority =
-        NetwApi.MethodBind("NetwEntity", "release_authority", 339970911UL);
+        NetwApi.MethodBind("NetwEntity", "release_authority", 2239383315UL);
 
     /// <summary>
     /// Hands control of this entity to <paramref name="successor"/>, which is
@@ -1434,7 +1434,7 @@ public sealed class NetwEntity : NetwRefCounted
     /// <b>Player request.</b>
     /// </para>
     /// </summary>
-    public NetwPromise ReleaseAuthority(long successor = 0)
+    public NetwPromise ReleaseAuthority(long successor = 1)
     {
         long slot0 = successor;
         IntPtr answered = default;

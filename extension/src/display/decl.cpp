@@ -77,20 +77,11 @@ Dirt Decl::set_param(int param, const Variant &value) {
         case PARAM_SMART_DILATION:
             enable_smart_dilation = bool(value);
             return DIRT_NONE;
-        case PARAM_MAX_EXTRA_DILATION:
-            max_extra_dilation = double(value);
-            return DIRT_NONE;
         case PARAM_LAG_ADAPT_RATE:
             lag_adapt_rate = double(value);
             return DIRT_NONE;
-        case PARAM_STARVATION_GROWTH:
-            starvation_growth = double(value);
-            return DIRT_NONE;
         case PARAM_FLOOR_SMOOTHING:
             floor_smoothing = double(value);
-            return DIRT_NONE;
-        case PARAM_STARVATION_GRACE_FRAMES:
-            starvation_grace_frames = int(value);
             return DIRT_NONE;
         case PARAM_TRACE_INTERVAL:
             trace_interval = int(value);
@@ -122,16 +113,10 @@ Variant Decl::get_param(int param) const {
             return max_forecast_ticks;
         case PARAM_SMART_DILATION:
             return enable_smart_dilation;
-        case PARAM_MAX_EXTRA_DILATION:
-            return max_extra_dilation;
         case PARAM_LAG_ADAPT_RATE:
             return lag_adapt_rate;
-        case PARAM_STARVATION_GROWTH:
-            return starvation_growth;
         case PARAM_FLOOR_SMOOTHING:
             return floor_smoothing;
-        case PARAM_STARVATION_GRACE_FRAMES:
-            return starvation_grace_frames;
         case PARAM_TRACE_INTERVAL:
             return trace_interval;
         case PARAM_VISUAL_ROOT:

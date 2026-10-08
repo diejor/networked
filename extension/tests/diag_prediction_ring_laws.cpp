@@ -52,7 +52,7 @@ struct Watch {
 
     void poll() {
         session->diag_gather(rings.sources);
-        rings.poll(*session);
+        rings.sample(*session);
         for (const RingRow &row : rings.rows()) {
             if (row.erred()) {
                 largest_error = MAX(largest_error, row.gap);

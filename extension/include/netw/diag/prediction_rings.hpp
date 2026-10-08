@@ -3,13 +3,13 @@
 #if defined(DEBUG_ENABLED)
 
 #include <cstdint>
-#include <memory>
 
 #include "godot/hash_map.hpp"
 #include "godot/local_vector.hpp"
 #include "godot/node.hpp"
 #include "godot/variant.hpp"
 #include "netw/diag/sketch.hpp"
+#include "netw/diag/space.hpp"
 
 namespace netw {
 
@@ -22,6 +22,44 @@ struct Wiring;
 } // namespace predict
 
 namespace diag {
+
+enum RingMark : uint8_t {
+    MARK_SHOWN = 1u << 0,
+    MARK_SIMULATED = 1u << 1,
+    MARK_SERVER = 1u << 2,
+    MARK_OURS = 1u << 3,
+};
+
+struct RingRow {
+    int64_t key = 0;
+    uint64_t world = 0;
+    uint64_t viewport = 0;
+    bool flat = false;
+    int role = -1;
+    uint8_t marks = 0;
+    godot::Vector3 shown;
+    godot::Vector3 simulated;
+    godot::Vector3 server;
+    godot::Vector3 ours;
+    double gap = 0.0;
+    double epsilon = 0.0;
+    double confirmed_age = 0.0;
+    float confirmed_alpha = 1.0f;
+    godot::String text;
+    double camera_distance = 0.0;
+
+    bool has(RingMark p_mark) const {
+        return (marks & p_mark) != 0;
+    }
+    bool erred() const {
+        return has(MARK_SERVER) && has(MARK_OURS) && gap > epsilon;
+    }
+};
+
+void draw_ring_rows(
+    const godot::LocalVector<RingRow> &p_rows,
+    Drawing &r_drawing
+);
 
 struct RingSource {
     int64_t key = 0;
@@ -57,9 +95,14 @@ struct StateLine {
 
 class PredictionRings {
 public:
-    static constexpr uint32_t ENTITY_CAP = 64;
+    static constexpr uint32_t ENTITY_CAP = Sketch::ENTITY_CAP;
     static constexpr double FRESH_SECONDS = 1.0;
     static constexpr float STALE_ALPHA = 0.25f;
+    static constexpr float RADIUS_SHOWN = 0.72f;
+    static constexpr float RADIUS_SIMULATED = 0.86f;
+    static constexpr float RADIUS_SERVER = 1.0f;
+    static constexpr float RADIUS_OURS = 1.14f;
+    static constexpr float PIXELS_PER_METRE = 32.0f;
 
     static bool wanted();
 
@@ -67,8 +110,6 @@ public:
 
     godot::LocalVector<RingSource> sources;
 
-    void attach_sketch();
-    void poll(NetwMultiplayer &p_session);
     void sample(NetwMultiplayer &p_session);
     const godot::LocalVector<RingRow> &rows() const {
         return sampled;
@@ -107,27 +148,19 @@ private:
         uint64_t generation = 0;
     };
 
-    struct WorldCamera {
-        uint64_t world = 0;
-        godot::Vector3 point;
-    };
-
     godot::HashMap<int64_t, Seen> seen;
     godot::LocalVector<Candidate> candidates;
     godot::LocalVector<RingRow> sampled;
-    godot::LocalVector<WorldCamera> cameras;
+    CameraBook cameras;
     godot::LocalVector<int64_t> departed;
     uint64_t generation = 0;
-    std::unique_ptr<Sketch> sketch;
 
-    void select();
     void read(
         NetwMultiplayer &p_session,
         NetwPredictionEngine &p_pool,
         const Candidate &p_candidate,
         const Clock &p_now
     );
-    godot::Vector3 camera_point(uint64_t p_world, godot::Node *p_owner);
     void forget_departed();
 };
 

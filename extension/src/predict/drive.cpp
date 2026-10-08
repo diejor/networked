@@ -32,7 +32,7 @@ ConsumeInputPlan plan_consume_input(
     out.kind = DriveKind::MISSING;
     out.use_last
         = p_missing_policy == MissingInput::REPEAT_LAST && p_has_last_input;
-    out.run = p_schedule == Schedule::FRAME || out.use_last;
+    out.run = p_schedule != Schedule::TICK || out.use_last;
     return out;
 }
 
@@ -201,15 +201,18 @@ bool Slot::horizon_full() {
 }
 
 void Slot::open_lane() {
-    inputs.drop_origin(uint8_t(CellProvenance::AUTHORED), true);
-    input_floor = -1;
+    forget_commands();
     lane_open = true;
 }
 
 void Slot::close_lane() {
+    forget_commands();
+    lane_open = false;
+}
+
+void Slot::forget_commands() {
     inputs.drop_origin(uint8_t(CellProvenance::AUTHORED), true);
     input_floor = -1;
-    lane_open = false;
 }
 
 int32_t Slot::topology_fp(const Dictionary &p_topology) {
@@ -433,6 +436,24 @@ void Slot::clear_joint_cells() {
     joint.clear_cells(book.newest_key() - 1);
 }
 
+void RelayWindow::record(int64_t p_tick, const StateRow &p_command) {
+    if (count > 0) {
+        const uint32_t newest = (next + SIZE - 1) % SIZE;
+        if (ticks[newest] == p_tick) {
+            commands[newest] = p_command;
+            return;
+        }
+    }
+    ticks[next] = p_tick;
+    commands[next] = p_command;
+    next = (next + 1) % SIZE;
+    count = count < SIZE ? count + 1 : SIZE;
+}
+
+uint32_t RelayWindow::at_oldest(uint32_t p_offset) const {
+    return (next + SIZE - count + p_offset) % SIZE;
+}
+
 void Slot::mark_carry_dirty(int64_t p_transition) {
     if (carry_rules.is_empty()) {
         return;
@@ -464,6 +485,8 @@ void Slot::reset_tape(int64_t p_epoch) {
     }
     next_tape_entry_index = 0;
     last_driven_entry_index = -1;
+    written_through = -1;
+    owner_claim_mismatched = false;
     recorded_input_tick = -1;
     drive_input_tick = -1;
     drive_frame_tick = -1;

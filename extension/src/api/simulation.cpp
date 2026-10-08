@@ -260,19 +260,6 @@ void NetwSimulation::forget(const Ref<NetwEntity> &p_entity) {
     declare();
 }
 
-void NetwSimulation::simulate_nearest(int p_count, const StringName &p_layer) {
-    sim::simulate_nearest(choice, p_count, p_layer);
-    declare();
-}
-
-void NetwSimulation::simulate_within(
-    double p_meters,
-    const StringName &p_layer
-) {
-    sim::simulate_within(choice, p_meters, p_layer);
-    declare();
-}
-
 void NetwSimulation::simulate_all(const StringName &p_layer) {
     sim::simulate_all(choice, p_layer);
     declare();
@@ -449,16 +436,6 @@ void NetwSimulation::_bind_methods() {
         &NetwSimulation::simulate
     );
     ClassDB::bind_method(D_METHOD("forget", "entity"), &NetwSimulation::forget);
-    ClassDB::bind_method(
-        D_METHOD("simulate_nearest", "count", "layer"),
-        &NetwSimulation::simulate_nearest,
-        DEFVAL(StringName())
-    );
-    ClassDB::bind_method(
-        D_METHOD("simulate_within", "meters", "layer"),
-        &NetwSimulation::simulate_within,
-        DEFVAL(StringName())
-    );
     ClassDB::bind_method(
         D_METHOD("simulate_all", "layer"),
         &NetwSimulation::simulate_all,

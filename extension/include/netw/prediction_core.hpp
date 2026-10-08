@@ -28,7 +28,7 @@ inline bool rerunnable(int p_schedule) {
         || p_schedule == int(Schedule::STEPPED);
 }
 
-inline bool island_pass_admits(int p_pass_schedule, int p_schedule) {
+inline bool pass_admits(int p_pass_schedule, int p_schedule) {
     return p_pass_schedule == int(Schedule::TICK)
         ? rerunnable(p_schedule)
         : p_schedule == p_pass_schedule;
@@ -241,6 +241,7 @@ godot::Dictionary project_payload(
 
 godot::Ref<NetwPredictRecovery> recover(
     const godot::Dictionary &payload,
+    const godot::Dictionary &predicted,
     int policy,
     int snap_restore,
     const godot::Dictionary &projection,

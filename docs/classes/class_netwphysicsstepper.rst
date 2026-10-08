@@ -116,7 +116,7 @@ Saves the current state of ``space`` for ``tick``. Called after every :ref:`_ste
 
 |void| **_step**\ (\ space\: :godot:`RID`, delta\: :godot:`float`\ ) |virtual| :ref:`🔗<class_NetwPhysicsStepper_private_method__step>`
 
-Advances ``space`` by ``delta`` immediately. Do not read or write entity state here.
+Advances ``space`` by ``delta`` immediately and does nothing else.
 
 .. rst-class:: classref-item-separator
 

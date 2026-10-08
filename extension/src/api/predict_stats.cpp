@@ -129,10 +129,11 @@ constexpr NetwPredictStats::Fact FACTS[] = {
      NetwPredictionEngine::STAT_JOINT_HEAL_SNAPS,
      0},
     {"linger_held", NetwPredictStats::SOURCE_HELD, 29, 0},
+    {"installs", NetwPredictStats::SOURCE_HELD, 30, 0},
 };
 
 constexpr int FACT_COUNT = int(sizeof(FACTS) / sizeof(FACTS[0]));
-constexpr int HELD_COUNT = 30;
+constexpr int HELD_COUNT = 31;
 
 constexpr bool fact_named(int p_at, const char *p_name) {
     const char *held = FACTS[p_at].name;
@@ -175,6 +176,7 @@ static_assert(
 );
 static_assert(fact_named(NetwPredictStats::FACT_JOINT_DEPTH, "joint_depth"));
 static_assert(fact_named(NetwPredictStats::FACT_LINGER_HELD, "linger_held"));
+static_assert(fact_named(NetwPredictStats::FACT_INSTALLS, "installs"));
 static_assert(fact_named(NetwPredictStats::FACT_TAPE_EPOCH, "tape_epoch"));
 static_assert(fact_named(NetwPredictStats::FACT_TAPE_INDEX, "tape_index"));
 static_assert(
@@ -459,15 +461,28 @@ int64_t NetwPredictStats::get_corrections() const {
     return get_int_fact(FACT_CORRECTIONS);
 }
 
+int64_t NetwPredictStats::get_installs() const {
+    return get_int_fact(FACT_INSTALLS);
+}
+
 void NetwPredictStats::_bind_methods() {
     ClassDB::bind_method(
         D_METHOD("get_corrections"),
         &NetwPredictStats::get_corrections
     );
+    ClassDB::bind_method(
+        D_METHOD("get_installs"),
+        &NetwPredictStats::get_installs
+    );
     ADD_PROPERTY(
         PropertyInfo(Variant::INT, "corrections"),
         godot::String(),
         "get_corrections"
+    );
+    ADD_PROPERTY(
+        PropertyInfo(Variant::INT, "installs"),
+        godot::String(),
+        "get_installs"
     );
 }
 

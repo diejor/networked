@@ -50,6 +50,7 @@
 #include "netw/clock_engine.hpp"
 #include "netw/connect/core.hpp"
 #include "netw/datagram_seq_book.hpp"
+#include "netw/diag/interpolation_view.hpp"
 #include "netw/diag/prediction_rings.hpp"
 #include "netw/display/book.hpp"
 #include "netw/display/build.hpp"
@@ -598,7 +599,10 @@ private:
     godot::Array profiler_rpc_payload;
     godot::Array profiler_sync_payload;
     std::unique_ptr<diag::PredictionRings> prediction_rings;
-    bool prediction_rings_decided = false;
+    std::unique_ptr<diag::InterpolationView> interpolation_view;
+    std::unique_ptr<diag::Sketch> diag_sketch;
+    diag::Drawing diag_drawing;
+    bool diag_views_decided = false;
     uint64_t diag_polled_frame = UINT64_MAX;
 #endif
     wire::CaptureWriter capture;
@@ -1167,6 +1171,7 @@ public:
     );
     godot::Ref<NetwPredictRecovery> predict_recover(
         const godot::Dictionary &p_payload,
+        const godot::Dictionary &p_predicted,
         NetwPrediction::RecoveryPolicy p_policy,
         NetwSimulation::Restore p_snap_restore,
         const godot::Dictionary &p_projection,
@@ -1186,6 +1191,7 @@ public:
     );
     godot::Ref<NetwPredictRecovery> predict_recover_default(
         const godot::Dictionary &p_payload,
+        const godot::Dictionary &p_predicted,
         NetwPrediction::RecoveryPolicy p_policy,
         NetwSimulation::Restore p_snap_restore,
         const godot::Dictionary &p_projection,
@@ -1214,9 +1220,10 @@ public:
         godot::Dictionary,
         godot::Dictionary
     )
-    GDVIRTUAL9R(
+    GDVIRTUAL10R(
         godot::Ref<NetwPredictRecovery>,
         _predict_recover,
+        godot::Dictionary,
         godot::Dictionary,
         NetwPrediction::RecoveryPolicy,
         NetwSimulation::Restore,
@@ -2201,6 +2208,11 @@ public:
         const godot::RID &p_space
     ) const;
     void predict_stepper_hold(const godot::RID &p_space, int p_dimension);
+    void predict_step_space(
+        const godot::RID &p_space,
+        double p_delta,
+        int64_t p_tick
+    );
     void predict_held_spaces(godot::LocalVector<godot::RID> &r_spaces) const;
     bool predict_space_has_stepped_member(const godot::RID &p_space) const;
     void predict_release_empty_holds();
@@ -2361,16 +2373,6 @@ public:
         const godot::RID &p_subject,
         const godot::Ref<NetwEntity> &p_entity
     );
-    void sim_simulate_nearest(
-        const godot::RID &p_subject,
-        int p_count,
-        const godot::StringName &p_layer = godot::StringName()
-    );
-    void sim_simulate_within(
-        const godot::RID &p_subject,
-        double p_meters,
-        const godot::StringName &p_layer = godot::StringName()
-    );
     void sim_simulate_all(
         const godot::RID &p_subject,
         const godot::StringName &p_layer = godot::StringName()
@@ -2379,6 +2381,7 @@ public:
     godot::TypedArray<NetwEntity> sim_selected(const godot::RID &p_subject);
     uint32_t sim_selection_count(const godot::RID &p_member) const;
     bool sim_chooses(const godot::RID &p_subject) const;
+    bool sim_predicts(const godot::Ref<NetwEntity> &p_subject) const;
     godot::TypedArray<NetwEntity> sim_named(const godot::RID &p_subject);
     godot::TypedArray<NetwEntity> sim_candidates(
         const godot::Ref<NetwEntity> &p_subject
@@ -2388,7 +2391,6 @@ public:
     godot::TypedArray<NetwEntity> sim_select(
         const godot::Ref<NetwEntity> &p_subject,
         const godot::TypedArray<NetwEntity> &p_candidates,
-        const godot::TypedArray<NetwEntity> &p_contact,
         int64_t p_frontier
     );
     void sim_drop_selections(const godot::RID &p_subject);
@@ -3114,6 +3116,7 @@ public:
     }
     void diag_poll();
     void diag_gather(godot::LocalVector<diag::RingSource> &r_sources) const;
+    void diag_gather(godot::LocalVector<diag::InterpSource> &r_sources) const;
 #endif
 
     int64_t get_sent_packets() const;
@@ -3920,6 +3923,7 @@ public:
     );
     void predict_relay_subscribe(const godot::RID &p_entity, bool p_subscribed);
     godot::PackedInt64Array relay_peers(int64_t p_entity_slot) const;
+    int relay_peer_count(int64_t p_entity_slot) const;
     void relay_release(int64_t p_entity_slot);
     int relay_request_of(const godot::PackedByteArray &p_payload) const;
     void rpc_channel_register(

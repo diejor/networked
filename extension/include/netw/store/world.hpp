@@ -270,6 +270,20 @@ public:
         bool p_windowed
     );
 
+    void hold_early_edge(
+        const RowAddress &p_at,
+        int p_sender,
+        const godot::PackedByteArray &p_frame,
+        int64_t p_base_tick
+    );
+
+    bool take_early_edge(
+        const RowAddress &p_at,
+        int p_sender,
+        godot::PackedByteArray &r_frame,
+        int64_t &r_base_tick
+    );
+
     void forget_sender(int p_id);
 
     void pull(uint32_t p_table, int64_t p_tick, bool p_custom);

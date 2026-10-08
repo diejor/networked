@@ -3,6 +3,9 @@ extends RigidBody3D
 
 const TEAM_COLORS: Array[Color] = [Color.RED, Color.BLUE]
 const ROOF_TORQUE := 800.0
+const SIDE_TILT := 0.5
+const SIDE_STUCK_SPEED := 1.0
+const OTHER_CAR_GLIDE_TIME := 0.3
 
 @export var suspension_rest_dist := 0.5
 @export var spring_strength := 100.0
@@ -25,7 +28,6 @@ var motion := Vector2.ZERO
 var jumping := false
 var ai_enabled := false
 var ai_motion := Vector2.ZERO
-var ai_jumping := false
 var pressed := {
 	&"left": false,
 	&"right": false,
@@ -42,12 +44,17 @@ var pressed := {
 	$Wheels/RL_Wheel,
 	$Wheels/RR_Wheel,
 ]
+@onready var wheel_visuals: Array[Node3D] = [
+	$Car_model/FL_Visual,
+	$Car_model/FR_Visual,
+	$Car_model/RL_Visual,
+	$Car_model/RR_Visual,
+]
 @onready var session: NetwSession = Netw.session(self)
 @onready var entity := NetwEntity.of(self)
 @onready var state := PhysicsServer3D.body_get_direct_state(get_rid())
 @onready var level: Node = entity.scene.root
 @onready var game: RocketGame = level.get_node(^"game")
-@onready var ball: RocketBall = level.get_node(^"ball")
 @onready var marker: Marker3D = level.get_node(
 	"Markers/%s%d" % ["r" if team == 0 else "b", slot + 1],
 )
@@ -102,7 +109,8 @@ func _init() -> void:
 			)
 	Netw.configure_property(self, &"quaternion").state().masked().causal() \
 			.on_spawn() \
-			.quantize(NetwQuantizeQuaternion.new().bits(16))
+			.quantize(NetwQuantizeQuaternion.new().bits(16)) \
+			.interpolate(NetwInterpolate.new().slerp())
 	Netw.configure_property(self, &"linear_velocity").state().masked() \
 			.causal().teleport_only() \
 			.quantize(NetwQuantizeScalar.new().bits(16).limits(-128.0, 128.0))
@@ -141,11 +149,11 @@ func _ready() -> void:
 	max_contacts_reported = 8
 
 	set_color(TEAM_COLORS[team])
-	entity.simulation.simulate(ball.entity)
-	entity.simulation.simulate_nearest(2, &"arena")
 
 	if entity.is_controlled_locally:
 		get_viewport().get_camera_3d().target = car_model
+	else:
+		entity.display.chase_glide_time = OTHER_CAR_GLIDE_TIME
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -163,11 +171,13 @@ func gather_input(_delta: float, _tick: int) -> void:
 		float(pressed[&"right"]) - float(pressed[&"left"]),
 		float(pressed[&"forward"]) - float(pressed[&"back"]),
 	).normalized()
-	jumping = ai_jumping if ai_enabled else pressed[&"bounce"]
+	jumping = false if ai_enabled else pressed[&"bounce"]
 
 
 func _process(_delta: float) -> void:
 	speed_label.text = "Speed: %.2f" % linear_velocity.length()
+	for i in wheels.size():
+		wheels[i].sync_visual(wheel_visuals[i])
 
 
 func _network_tick(delta: float, tick: int, _is_fresh: bool) -> void:
@@ -205,16 +215,22 @@ func _network_tick(delta: float, tick: int, _is_fresh: bool) -> void:
 	roof_bounce.force_raycast_update()
 	if roof_bounce.is_colliding() and wheels_on_ground == 0:
 		apply_torque(basis.z * ROOF_TORQUE)
+	elif basis.y.y < SIDE_TILT and linear_velocity.length() < SIDE_STUCK_SPEED:
+		apply_torque(basis.y.cross(Vector3.UP).normalized() * ROOF_TORQUE)
 
 
-func take_kickoff_position() -> void:
-	var origin := marker.global_position
+static func kickoff_pose(spot: Marker3D) -> Transform3D:
+	var origin := spot.global_position
 	var facing := Vector3(0.0, origin.y, 0.0) - origin
-	state.transform = Transform3D(
+	return Transform3D(
 		Basis.looking_at(facing, Vector3.UP, true) if facing.length() > 0.001 \
 		else Basis.IDENTITY,
 		origin,
 	)
+
+
+func take_kickoff_position() -> void:
+	state.transform = kickoff_pose(marker)
 	state.linear_velocity = Vector3.ZERO
 	state.angular_velocity = Vector3.ZERO
 

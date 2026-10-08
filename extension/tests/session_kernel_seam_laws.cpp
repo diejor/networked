@@ -92,6 +92,7 @@ TEST_CASE(
     SUBCASE("the recover seam answers a recovery rather than nothing") {
         const Ref<netw::NetwPredictRecovery> seamed = session->predict_recover(
             Dictionary(),
+            Dictionary(),
             netw::NetwPrediction::RECOVERY_POLICY_REBASE_REPLAY,
             netw::NetwSimulation::RESTORE_EXACT,
             Dictionary(),
@@ -103,6 +104,7 @@ TEST_CASE(
         );
         const Ref<netw::NetwPredictRecovery> stock
             = netw::prediction_core::recover(
+                Dictionary(),
                 Dictionary(),
                 netw::NetwPrediction::RECOVERY_POLICY_REBASE_REPLAY,
                 netw::NetwSimulation::RESTORE_EXACT,

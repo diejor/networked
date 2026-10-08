@@ -37,6 +37,8 @@ Properties
    +--------------+-----------------------------------------------------------------+-------+
    | :godot:`int` | :ref:`corrections<class_NetwPredictStats_property_corrections>` | ``0`` |
    +--------------+-----------------------------------------------------------------+-------+
+   | :godot:`int` | :ref:`installs<class_NetwPredictStats_property_installs>`       | ``0`` |
+   +--------------+-----------------------------------------------------------------+-------+
 
 .. rst-class:: classref-section-separator
 
@@ -57,7 +59,23 @@ Property Descriptions
 
 - :godot:`int` **get_corrections**\ (\ )
 
-Total corrections applied since spawn.
+Times this entity's prediction disagreed with the server and was corrected since spawn.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NetwPredictStats_property_installs:
+
+.. rst-class:: classref-property
+
+:godot:`int` **installs** = ``0`` :ref:`🔗<class_NetwPredictStats_property_installs>`
+
+.. rst-class:: classref-property-setget
+
+- :godot:`int` **get_installs**\ (\ )
+
+Times the server's state was written onto this entity since spawn, while this peer simulates it without controlling it.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

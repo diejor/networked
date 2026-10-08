@@ -50,7 +50,7 @@
 			<param index="0" name="space" type="RID" />
 			<param index="1" name="delta" type="float" />
 			<description>
-				Advances [param space] by [param delta] immediately. Do not read or write entity state here.
+				Advances [param space] by [param delta] immediately and does nothing else.
 			</description>
 		</method>
 		<method name="can_step">

@@ -275,7 +275,8 @@ void nudge_authority(netw_test::LoopbackRig &p_rig, const StringName &p_name) {
     );
 }
 
-constexpr int64_t CORRECTION_WARM = 40;
+constexpr int64_t CORRECTION_WARM
+    = 2 * netw::predict::EPISODE_EVIDENCE_LIMIT + 40;
 
 struct SteadyCorrection {
     SteadyTick tick;
@@ -335,12 +336,12 @@ SteadyCorrection steady_correction() {
 }
 
 TEST_CASE(
-    "[Networked][Predict] PB5 a steady frame correction every arrival, a "
-    "recover and a simulated body included, allocates nothing and builds no "
+    "[Networked][Predict] PB5 a steady frame correction every other arrival, "
+    "a recover and a simulated body included, allocates nothing and builds no "
     "Dictionary"
 ) {
     const SteadyCorrection steady = steady_correction();
-    NETW_CHECK_GE(steady.corrections, int64_t(50));
+    NETW_CHECK_GE(steady.corrections, int64_t(25));
     NETW_CHECK_GT(steady.tick.scopes, int64_t(60));
     NETW_CHECK_EQ(steady.tick.allocations, int64_t(0));
     NETW_CHECK_EQ(steady.tick.dictionary_writes, int64_t(0));

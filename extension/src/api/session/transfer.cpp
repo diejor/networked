@@ -348,12 +348,9 @@ void NetwMultiplayer::transfer_follow_interest(bool p_succeeds) {
 
 void NetwMultiplayer::transfer_follow_prediction() {
     NetwPredictionEngine *pool = get_prediction_engine();
-    const int joint = int(NetwPrediction::RECONCILE_JOINT);
     const PackedInt64Array slots = pool->ordered_slots();
     for (int at = 0; at < slots.size(); ++at) {
-        if (pool->reconcile_of(slots[at]) == joint) {
-            pool->follow_relay_subscription(slots[at], joint);
-        }
+        pool->resend_relay_subscription(slots[at]);
     }
 }
 

@@ -72,6 +72,7 @@ void resolve_role(Runtime *p_runtime, const Hooks &p_hooks) {
     const int previous = int(p_runtime->get_pump_mode());
     const RID entity = p_runtime->entity_rid();
     p_runtime->set_display_offset_limit(p_hooks.clamp_for(entity));
+    p_runtime->display_playhead().forget_arrivals();
 
     const LocalVector<Channel *> &states = p_runtime->channels();
     if (netw::display::pump_clears_history(previous, pump)) {
@@ -89,8 +90,9 @@ void resolve_role(Runtime *p_runtime, const Hooks &p_hooks) {
 
     p_runtime->set_pump_mode(pump);
     if (previous == netw::display::PUMP_DISABLED) {
-        for (int at = 0; at < int(states.size()); ++at) {
-            Channel *state = states[at];
+        const LocalVector<Channel *> &order = p_runtime->write_order();
+        for (int at = 0; at < int(order.size()); ++at) {
+            Channel *state = order[at];
             state->set_last_written(state->current_source_value());
             state->write(state->get_last_written());
         }

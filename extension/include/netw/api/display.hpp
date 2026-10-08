@@ -43,16 +43,10 @@ public:
     void set_max_forecast_ticks(int64_t p_value);
     bool get_enable_smart_dilation() const;
     void set_enable_smart_dilation(bool p_value);
-    double get_max_extra_dilation() const;
-    void set_max_extra_dilation(double p_value);
     double get_lag_adapt_rate() const;
     void set_lag_adapt_rate(double p_value);
-    double get_starvation_growth() const;
-    void set_starvation_growth(double p_value);
     double get_floor_smoothing() const;
     void set_floor_smoothing(double p_value);
-    int64_t get_starvation_grace_frames() const;
-    void set_starvation_grace_frames(int64_t p_value);
     int64_t get_trace_interval() const;
     void set_trace_interval(int64_t p_value);
 

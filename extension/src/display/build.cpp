@@ -19,7 +19,12 @@ using namespace godot;
 namespace netw::display {
 
 static const char *GLOBAL_SPACE_CHANNELS[]
-    = {"position", "rotation", "global_position", "global_rotation"};
+    = {"position",
+       "rotation",
+       "quaternion",
+       "basis",
+       "global_position",
+       "global_rotation"};
 
 static bool is_global_space_channel(const StringName &p_prop) {
     for (const char *name : GLOBAL_SPACE_CHANNELS) {
@@ -134,6 +139,7 @@ Channel *ensure_state(
     Port &port = state->display_port();
     port.bind(target, owner);
     port.declare(p_target_prop, p_source_prop, global_space);
+    port.seat_authored(p_runtime->get_visual_offset());
 
     NETW_WARN_COND(
         visual != nullptr && target == visual && !port.get_global_space()
@@ -161,6 +167,7 @@ Channel *ensure_state(
     tracks.declare(state->get_state_key(), state->get_name());
     Channel *added = p_runtime->add_channel();
     *added = fresh;
+    p_runtime->order_writes();
     if (claimant >= 0) {
         warn_double_write(p_runtime->channels()[claimant], added);
     }

@@ -4,6 +4,7 @@
 
 #include <cstdint>
 
+#include "godot/hash_map.hpp"
 #include "godot/local_vector.hpp"
 #include "godot/variant.hpp"
 #include "netw/api/schema_core.hpp"
@@ -194,12 +195,14 @@ TEST_CASE(
     netw_test::seat_streams(session, offers);
     const SessionResult first = session.run(registry(), offers, WIDE, 1, 0);
     NETW_REQUIRE_EQ(first.sends.size(), 1);
+    const SessionResult rested = session.run(registry(), offers, WIDE, 2, 0);
+    NETW_REQUIRE_EQ(rested.sends.size(), 1);
 
-    const SessionResult starved = session.run(registry(), offers, 1, 2, 300);
+    const SessionResult starved = session.run(registry(), offers, 1, 3, 300);
     NETW_CHECK_EQ(starved.sends.size(), 0);
     NETW_CHECK_EQ(starved.deferred, 1);
 
-    const SessionResult carried = session.run(registry(), offers, WIDE, 3, 310);
+    const SessionResult carried = session.run(registry(), offers, WIDE, 4, 310);
     const RowSend *repair = sent_to(carried, 3);
     const bool the_repair_went = repair != nullptr;
     CHECK(the_repair_went);
@@ -231,12 +234,14 @@ TEST_CASE(
     netw_test::seat_streams(session, offers);
     const SessionResult opened = session.run(registry(), offers, WIDE, 1);
     NETW_REQUIRE_EQ(opened.sends.size(), uint32_t(ROWS * PEERS));
+    const SessionResult rested = session.run(registry(), WIDE, 2, 0);
+    NETW_REQUIRE_EQ(rested.sends.size(), uint32_t(ROWS * PEERS));
     for (int peer = 0; peer < PEERS; ++peer) {
         netw_test::accept_streams(session, offers, PEER + peer);
     }
 
     session.rows_touched = 0;
-    for (int64_t tick = 2; tick < 12; ++tick) {
+    for (int64_t tick = 3; tick < 12; ++tick) {
         session.run(registry(), WIDE, tick, 0);
     }
     NETW_CHECK_EQ(session.rows_touched, int64_t(0));
@@ -349,6 +354,85 @@ TEST_CASE(
         netw_test::accept_streams(session, rows, PEER);
     }
     NETW_CHECK_EQ(short_ticks, int64_t(0));
+}
+
+LocalVector<RowOffer> watched(int64_t p_value, int64_t p_tick) {
+    LocalVector<RowOffer> out;
+    RowOffer made = narrow(5, p_value);
+    made.recipients.push_back(PEER + 1);
+    made.tick = p_tick;
+    out.push_back(made);
+    return out;
+}
+
+TEST_CASE(
+    "[Networked][Store][Hosted] RC1 an author that stops sends exactly one "
+    "rest edge per peer, an empty mask stepping from the newest row it sent "
+    "and stamped one tick after its last change, and none while it moves"
+) {
+    constexpr int64_t STOP = 6;
+    constexpr int64_t EDGE_BYTES = 6;
+    constexpr int64_t EDGE_FRAMED = 10;
+    SessionSend session;
+    netw_test::seat_streams(session, watched(1, 1));
+    HashMap<int, uint64_t> last_sent;
+    int64_t moving_edges = 0;
+    for (int64_t tick = 1; tick <= STOP; ++tick) {
+        const SessionResult moved
+            = session.run(registry(), watched(tick, tick), WIDE, tick);
+        for (const RowSend &send : moved.sends) {
+            moving_edges += send.form == netw::repl::RowForm::REFRESH ? 1 : 0;
+            last_sent[send.peer] = send.revision;
+        }
+    }
+    NETW_CHECK_EQ(moving_edges, int64_t(0));
+    NETW_REQUIRE_EQ(int64_t(last_sent.size()), int64_t(2));
+
+    LocalVector<RowSend> edges;
+    LocalVector<int64_t> edge_ticks;
+    for (int64_t tick = STOP + 1; tick <= STOP + 12; ++tick) {
+        const SessionResult rested
+            = session.run(registry(), watched(STOP, tick), WIDE, tick);
+        for (const RowSend &send : rested.sends) {
+            edges.push_back(send);
+            edge_ticks.push_back(tick);
+        }
+    }
+    NETW_REQUIRE_EQ(int64_t(edges.size()), int64_t(2));
+    const netw::store::World &world = session.world;
+    const netw::store::RowAddress at = world.lane_row(lane(5));
+    const netw::store::Table &table = world.table(at.table);
+    for (uint32_t index = 0; index < edges.size(); ++index) {
+        const RowSend &edge = edges[index];
+        const bool refresh = edge.form == netw::repl::RowForm::REFRESH;
+        CHECK(refresh);
+        CHECK(edge.masked);
+        NETW_CHECK_EQ(edge.mask, uint64_t(0));
+        NETW_CHECK_EQ(edge_ticks[index], STOP + 1);
+        NETW_CHECK_EQ(int64_t(edge.bytes.size()), EDGE_BYTES);
+        NETW_CHECK_EQ(edge.framed, EDGE_FRAMED);
+        SnapshotHeader named;
+        REQUIRE(netw::repl::name_snapshot_row(edge.bytes, named));
+        NETW_CHECK_EQ(named.baseline_revision(), last_sent[edge.peer]);
+        const netw::store::Flight *stepped = world.flight_of(
+            world.peer_of(edge.peer),
+            edge.token,
+            named.baseline_revision()
+        );
+        REQUIRE(stepped != nullptr);
+        SnapshotHeader read;
+        netw::wire::CodeRow landed;
+        const bool decoded = netw::repl::read_snapshot_row(
+            edge.bytes,
+            STOP + 1,
+            table.plan,
+            read,
+            landed,
+            &stepped->image
+        );
+        CHECK(decoded);
+        NETW_CHECK_EQ(read.tick, STOP + 1);
+    }
 }
 
 } // namespace TestStoreSendPass

@@ -37,6 +37,8 @@ double chase_smooth_time(Runtime *p_runtime, const Timing &p_timing);
 
 bool take_trace_frame(Runtime *p_runtime);
 
+void hear_arrivals(Runtime *p_runtime, const Timing &p_timing);
+
 void dilate_playhead(
     Runtime *p_runtime,
     const Timing &p_timing,

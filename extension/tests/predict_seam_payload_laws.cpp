@@ -27,6 +27,7 @@ var evaluated := []
 
 func _predict_recover(
 		payload: Dictionary,
+		predicted: Dictionary,
 		policy: NetwPrediction.RecoveryPolicy,
 		snap_restore: NetwSimulation.Restore,
 		projection: Dictionary,
@@ -42,8 +43,8 @@ func _predict_recover(
 		tick_delta,
 	])
 	return predict_recover_default(
-		payload, policy, snap_restore, projection, current, pose_errors,
-		wiring, verdict, tick_delta,
+		payload, predicted, policy, snap_restore, projection, current,
+		pose_errors, wiring, verdict, tick_delta,
 	)
 
 func _predict_evaluate(
@@ -243,14 +244,14 @@ TEST_CASE(
     "[Networked][Predict] HS1 a script overriding the recover seam hears the "
     "same keys and values on every correction"
 ) {
-    check_heard(seam_run().recovered, 28, 611793793, RECOVER_FIRST);
+    check_heard(seam_run().recovered, 14, 3010858608LL, RECOVER_FIRST);
 }
 
 TEST_CASE(
     "[Networked][Predict] HS2 a script overriding the evaluate seam hears the "
     "same keys and values on every comparison"
 ) {
-    check_heard(seam_run().evaluated, 28, 1175581833, EVALUATE_FIRST);
+    check_heard(seam_run().evaluated, 14, 2305648560LL, EVALUATE_FIRST);
 }
 
 TEST_CASE(

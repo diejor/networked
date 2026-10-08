@@ -185,12 +185,12 @@ TEST_CASE(
         0.0,
         ==
     );
-    NETW_CHECK_EQ(door->get_tickrate(), 0);
-    NETW_CHECK_EQ(door->get_display_offset(), 0);
+    NETW_CHECK_EQ(door->get_tickrate(), 30);
+    NETW_CHECK_EQ(door->get_display_offset(), 2);
     NETW_CHECK_EQ(door->get_recommended_display_offset(), 0);
 
     door->set_display_offset(3);
-    NETW_CHECK_EQ(door->get_display_offset(), 0);
+    NETW_CHECK_EQ(door->get_display_offset(), 2);
 }
 
 TEST_CASE(

@@ -9,6 +9,7 @@
 #include "godot/node.hpp"
 #include "godot/spatial_node.hpp"
 #include "netw/api/entity.hpp"
+#include "netw/api/interest.hpp"
 #include "netw/api/netw_multiplayer.hpp"
 #include "netw/api/predict_stats.hpp"
 #include "netw/api/prediction.hpp"
@@ -120,6 +121,7 @@ TEST_CASE(
     REQUIRE(roster_size(pool, slot) == 1);
 
     core->sim_forget(rid(owner), member);
+    core->sim_simulate_none(rid(owner));
     REQUIRE_FALSE(core->sim_chooses(rid(owner)));
     pool->refresh_selection(slot, false, callable_mp_static(&nothing));
     NETW_CHECK_EQ(roster_size(pool, slot), 0);
@@ -283,41 +285,6 @@ TEST_CASE(
     CHECK((Ref<NetwEntity>(live[0]) == committed));
 }
 
-TEST_CASE(
-    "[Networked][Sim][Select] the ranking distance is the gap between the two "
-    "nodes, which is what nearest and within spend"
-) {
-    LoopbackRig rig(1);
-    rig.mount();
-    Node *arena = rig.mirror_child("Arena");
-    const Ref<NetwEntity> owner = seat(rig, arena, "Owner");
-    const Ref<NetwEntity> far = seat(rig, arena, "Far");
-    const Ref<NetwEntity> near = seat(rig, arena, "Near");
-    Object::cast_to<Node2D>(owner->get_owner())->set_position(Vector2(0, 0));
-    Object::cast_to<Node2D>(far->get_owner())->set_position(Vector2(10, 0));
-    Object::cast_to<Node2D>(near->get_owner())->set_position(Vector2(0, 2));
-
-    NetwMultiplayer *core = rig.server();
-    REQUIRE(core->sim_simulate(rid(owner), far) == OK);
-    REQUIRE(core->sim_simulate(rid(owner), near) == OK);
-    REQUIRE(
-        core->sim_resolve(rid(owner), core->sim_body_facts(owner))
-        == netw::sim::Mode::AUTHORITY
-    );
-    core->sim_select(owner, core->sim_candidates(owner), {}, 0);
-
-    const netw::sim::Row *row = core->sim_row_of(rid(owner));
-    REQUIRE(row != nullptr);
-    const netw::sim::Selected *to_far
-        = row->selection.member(int64_t(rid(far).get_id()));
-    const netw::sim::Selected *to_near
-        = row->selection.member(int64_t(rid(near).get_id()));
-    REQUIRE(to_far != nullptr);
-    REQUIRE(to_near != nullptr);
-    NETW_CHECK_CLOSE(to_far->distance_squared, 100.0, 0.001);
-    NETW_CHECK_CLOSE(to_near->distance_squared, 4.0, 0.001);
-}
-
 EntityDecl lane_player(const char *p_name) {
     return EntityDecl()
         .named(p_name)
@@ -328,7 +295,7 @@ EntityDecl lane_player(const char *p_name) {
         .scheduled(netw::Schedule::TICK);
 }
 
-Scenario selecting_lane() {
+Scenario selecting_lane(bool p_named) {
     Scenario scenario;
     scenario.label = "selecting-lane";
     scenario.epsilon = 0.01;
@@ -338,8 +305,10 @@ Scenario selecting_lane() {
         .lag_compensated()
         .player(lane_player("P"), 0)
         .player(lane_player("Q"), 1)
-        .island(StringName("P"), members, WorldDecl::INDEPENDENT)
-        .simulating(StringName("Q"));
+        .island(StringName("P"), members, WorldDecl::INDEPENDENT);
+    if (p_named) {
+        scenario.world.simulating(StringName("Q"));
+    }
     scenario.clients = 2;
     scenario.hold_input(1, "P", Vector2(1.0, 0.0));
     scenario.hold_input(1, "Q", Vector2(1.0, 0.0));
@@ -351,7 +320,7 @@ TEST_CASE(
     "selections in the pass that resolved it, so the member it held is no "
     "longer ACTIVE before another tick runs"
 ) {
-    const Scenario scenario = selecting_lane();
+    const Scenario scenario = selecting_lane(true);
     LoopbackRig rig(scenario.clients);
     const ScenarioRun run = ScenarioRun::session(rig, scenario);
     REQUIRE(run.regime_reached());
@@ -372,6 +341,47 @@ TEST_CASE(
         int(predictor->sim_row_of(subject)->mode),
         int(netw::sim::Mode::PROXY)
     );
+    NETW_CHECK_EQ(predictor->sim_selection_count(member), 0);
+    NETW_CHECK_EQ(
+        int(predictor->sim_row_of(member)->mode),
+        int(netw::sim::Mode::PROXY)
+    );
+}
+
+TEST_CASE(
+    "[Networked][Sim][Select] a predicted subject that declares no selection "
+    "runs every simulated entity it shares a layer with ACTIVE, and leaves "
+    "an entity with nothing to simulate alone, until simulate_none"
+) {
+    const Scenario scenario = selecting_lane(false);
+    LoopbackRig rig(scenario.clients);
+    const ScenarioRun run = ScenarioRun::session(rig, scenario);
+    REQUIRE(run.regime_reached());
+
+    NetwMultiplayer *const predictor = rig.client(0);
+    const RID subject = rig.entity_of("P", 0);
+    const RID member = rig.entity_of("Q", 0);
+    rig.declare_entity(EntityDecl().named("Sign").on_route(977));
+    const RID sign
+        = rig.declare_mirror(0, EntityDecl().named("Sign").on_route(977));
+    REQUIRE(predictor->sim_row_of(subject)->mode == netw::sim::Mode::PREDICT);
+    REQUIRE(predictor->sim_selection_count(member) == 0);
+
+    for (const RID &joined : {subject, member, sign}) {
+        predictor->entity_get_view(joined)->get_interest()->join(
+            StringName("lane")
+        );
+    }
+    rig.step_ticks(2);
+    NETW_CHECK_EQ(predictor->sim_selection_count(member), 1);
+    NETW_CHECK_EQ(predictor->sim_selection_count(sign), 0);
+    NETW_CHECK_EQ(
+        int(predictor->sim_row_of(member)->mode),
+        int(netw::sim::Mode::ACTIVE)
+    );
+
+    predictor->simulation_handle(subject)->simulate_none();
+    rig.step_ticks(2);
     NETW_CHECK_EQ(predictor->sim_selection_count(member), 0);
     NETW_CHECK_EQ(
         int(predictor->sim_row_of(member)->mode),

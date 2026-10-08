@@ -28,6 +28,11 @@ struct Received {
     godot::LocalVector<uint64_t> revisions;
     godot::LocalVector<uint64_t> images;
     godot::LocalVector<godot::Variant> carried;
+    godot::PackedByteArray early_edge;
+    uint64_t early_token = 0;
+    uint64_t early_revision = 0;
+    uint64_t early_base = 0;
+    int64_t early_tick = -1;
 };
 
 struct Sender {

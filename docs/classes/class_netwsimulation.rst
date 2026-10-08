@@ -61,13 +61,12 @@ The peer with authority over the entity runs it as :ref:`MODE_AUTHORITY<class_Ne
 
 \ **Selection**\ 
 
-While this entity runs here as :ref:`MODE_AUTHORITY<class_NetwSimulation_constant_MODE_AUTHORITY>` or :ref:`MODE_PREDICT<class_NetwSimulation_constant_MODE_PREDICT>`, it can pick other entities to run here as :ref:`MODE_ACTIVE<class_NetwSimulation_constant_MODE_ACTIVE>`. :ref:`simulate()<class_NetwSimulation_method_simulate>` names one. :ref:`simulate_nearest()<class_NetwSimulation_method_simulate_nearest>`, :ref:`simulate_within()<class_NetwSimulation_method_simulate_within>` and :ref:`simulate_all()<class_NetwSimulation_method_simulate_all>` set a policy, and each call replaces the last.
+While this entity runs here as :ref:`MODE_AUTHORITY<class_NetwSimulation_constant_MODE_AUTHORITY>` or :ref:`MODE_PREDICT<class_NetwSimulation_constant_MODE_PREDICT>`, it can pick other entities to run here as :ref:`MODE_ACTIVE<class_NetwSimulation_constant_MODE_ACTIVE>`. A predicted entity that declares no selection picks every simulated entity this peer holds in its :ref:`NetwInterestLayer<class_NetwInterestLayer>` layers. :ref:`simulate()<class_NetwSimulation_method_simulate>` names one more, :ref:`simulate_all()<class_NetwSimulation_method_simulate_all>` narrows the automatic policy to one layer, and :ref:`simulate_none()<class_NetwSimulation_method_simulate_none>` drops it.
 
 ::
 
     func _ready() -> void:
         entity.simulation.simulate(ball)
-        entity.simulation.simulate_nearest(2, &"arena")
 
 .. rst-class:: classref-reftable-group
 
@@ -107,19 +106,15 @@ Methods
 .. table::
    :widths: auto
 
-   +--------+---------------------------------------------------------------------------------------------------------------------------------------+
-   | |void| | :ref:`forget<class_NetwSimulation_method_forget>`\ (\ entity\: :ref:`NetwEntity<class_NetwEntity>`\ )                                 |
-   +--------+---------------------------------------------------------------------------------------------------------------------------------------+
-   | |void| | :ref:`simulate<class_NetwSimulation_method_simulate>`\ (\ entity\: :ref:`NetwEntity<class_NetwEntity>`\ )                             |
-   +--------+---------------------------------------------------------------------------------------------------------------------------------------+
-   | |void| | :ref:`simulate_all<class_NetwSimulation_method_simulate_all>`\ (\ layer\: :godot:`StringName` = &""\ )                                |
-   +--------+---------------------------------------------------------------------------------------------------------------------------------------+
-   | |void| | :ref:`simulate_nearest<class_NetwSimulation_method_simulate_nearest>`\ (\ count\: :godot:`int`, layer\: :godot:`StringName` = &""\ )  |
-   +--------+---------------------------------------------------------------------------------------------------------------------------------------+
-   | |void| | :ref:`simulate_none<class_NetwSimulation_method_simulate_none>`\ (\ )                                                                 |
-   +--------+---------------------------------------------------------------------------------------------------------------------------------------+
-   | |void| | :ref:`simulate_within<class_NetwSimulation_method_simulate_within>`\ (\ meters\: :godot:`float`, layer\: :godot:`StringName` = &""\ ) |
-   +--------+---------------------------------------------------------------------------------------------------------------------------------------+
+   +--------+-----------------------------------------------------------------------------------------------------------+
+   | |void| | :ref:`forget<class_NetwSimulation_method_forget>`\ (\ entity\: :ref:`NetwEntity<class_NetwEntity>`\ )     |
+   +--------+-----------------------------------------------------------------------------------------------------------+
+   | |void| | :ref:`simulate<class_NetwSimulation_method_simulate>`\ (\ entity\: :ref:`NetwEntity<class_NetwEntity>`\ ) |
+   +--------+-----------------------------------------------------------------------------------------------------------+
+   | |void| | :ref:`simulate_all<class_NetwSimulation_method_simulate_all>`\ (\ layer\: :godot:`StringName` = &""\ )    |
+   +--------+-----------------------------------------------------------------------------------------------------------+
+   | |void| | :ref:`simulate_none<class_NetwSimulation_method_simulate_none>`\ (\ )                                     |
+   +--------+-----------------------------------------------------------------------------------------------------------+
 
 .. rst-class:: classref-section-separator
 
@@ -521,18 +516,6 @@ Selects every entity this peer holds in ``layer``. An empty ``layer`` uses the :
 
 ----
 
-.. _class_NetwSimulation_method_simulate_nearest:
-
-.. rst-class:: classref-method
-
-|void| **simulate_nearest**\ (\ count\: :godot:`int`, layer\: :godot:`StringName` = &""\ ) :ref:`🔗<class_NetwSimulation_method_simulate_nearest>`
-
-Selects the ``count`` entities nearest this one among those this peer holds in ``layer``. An empty ``layer`` uses the :ref:`NetwInterestLayer<class_NetwInterestLayer>` layers this entity is in.
-
-.. rst-class:: classref-item-separator
-
-----
-
 .. _class_NetwSimulation_method_simulate_none:
 
 .. rst-class:: classref-method
@@ -540,18 +523,6 @@ Selects the ``count`` entities nearest this one among those this peer holds in `
 |void| **simulate_none**\ (\ ) :ref:`🔗<class_NetwSimulation_method_simulate_none>`
 
 Drops the automatic policy. Entities named with :ref:`simulate()<class_NetwSimulation_method_simulate>` stay selected.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwSimulation_method_simulate_within:
-
-.. rst-class:: classref-method
-
-|void| **simulate_within**\ (\ meters\: :godot:`float`, layer\: :godot:`StringName` = &""\ ) :ref:`🔗<class_NetwSimulation_method_simulate_within>`
-
-Selects the entities within ``meters`` of this one among those this peer holds in ``layer``. A selected entity is dropped once it is 10% past ``meters``.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

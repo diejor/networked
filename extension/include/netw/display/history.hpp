@@ -55,6 +55,8 @@ private:
     bool snap_taken = false;
 
     Rows rows() const;
+    int64_t received_in(const Rows &p_rows) const;
+    bool finished_in(const Rows &p_rows, int64_t p_tick) const;
     int64_t tick_in(const Rows &p_rows, int64_t p_age) const;
     godot::Variant value_in(const Rows &p_rows, int64_t p_age) const;
     godot::Vector2i bracket_in(const Rows &p_rows, int64_t p_tick) const;
@@ -88,6 +90,18 @@ private:
 
 public:
     bool is_close(const godot::Variant &from, const godot::Variant &to) const;
+
+    int64_t tick_of_age(int64_t p_age) const {
+        return tick_in(rows(), p_age);
+    }
+    godot::Variant value_of_age(int64_t p_age) const {
+        return value_in(rows(), p_age);
+    }
+    uint32_t newest_held(
+        uint32_t p_cap,
+        int64_t *r_ticks,
+        godot::Variant *r_values
+    ) const;
 
     enum Pass {
         PASS_SKIP_SLEEPING,
@@ -174,6 +188,8 @@ public:
     }
     bool table_pulls() const;
     bool table_rests() const;
+    int64_t received_tick() const;
+    bool stream_finished(int64_t p_tick) const;
     void notice();
 
     void record(int64_t tick, const godot::Variant &value, bool authoring_tick);

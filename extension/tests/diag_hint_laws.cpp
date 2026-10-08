@@ -9,6 +9,7 @@ namespace TestDiagHintLaws {
 
 using godot::PackedStringArray;
 using godot::String;
+using netw::diag::HINT_INTERPOLATION;
 using netw::diag::HINT_PREDICTION;
 using netw::diag::HintRequest;
 using netw::diag::parse_hints;
@@ -58,6 +59,25 @@ TEST_CASE(
     NETW_CHECK_EQ(
         parse_hints("prediction", args_with("--netw-hints=none")).mask,
         uint32_t(HINT_PREDICTION)
+    );
+}
+
+TEST_CASE(
+    "[Networked][Diag][Hosted] H2 interpolation sets its own bit, and both "
+    "hints together set both"
+) {
+    NETW_CHECK_EQ(
+        parse_hints("", args_with("--netw-hints=interpolation")).mask,
+        uint32_t(HINT_INTERPOLATION)
+    );
+    NETW_CHECK_EQ(
+        parse_hints("", args_with("--netw-hints=prediction,interpolation"))
+            .mask,
+        uint32_t(HINT_PREDICTION | HINT_INTERPOLATION)
+    );
+    NETW_CHECK_EQ(
+        parse_hints("interpolation", PackedStringArray()).unknown.size(),
+        0
     );
 }
 

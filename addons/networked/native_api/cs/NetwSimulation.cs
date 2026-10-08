@@ -41,16 +41,15 @@ namespace Networked;
 /// <see cref="NetwSimulation.ModeEnum.Active"/>. <b>Selection</b> While this
 /// entity runs here as <see cref="NetwSimulation.ModeEnum.Authority"/> or
 /// <see cref="NetwSimulation.ModeEnum.Predict"/>, it can pick other entities to
-/// run here as <see cref="NetwSimulation.ModeEnum.Active"/>.
-/// <see cref="NetwSimulation.Simulate"/> names one.
-/// <see cref="NetwSimulation.SimulateNearest"/>,
-/// <see cref="NetwSimulation.SimulateWithin"/> and
-/// <see cref="NetwSimulation.SimulateAll"/> set a policy, and each call
-/// replaces the last.
+/// run here as <see cref="NetwSimulation.ModeEnum.Active"/>. A predicted entity
+/// that declares no selection picks every simulated entity this peer holds in
+/// its <see cref="NetwInterestLayer"/> layers.
+/// <see cref="NetwSimulation.Simulate"/> names one more,
+/// <see cref="NetwSimulation.SimulateAll"/> narrows the automatic policy to one
+/// layer, and <see cref="NetwSimulation.SimulateNone"/> drops it.
 /// <code>
 /// func _ready() -&gt; void:
 ///     entity.simulation.simulate(ball)
-///     entity.simulation.simulate_nearest(2, &amp;"arena")
 /// </code>
 /// </para>
 /// </remarks>
@@ -543,57 +542,6 @@ public sealed class NetwSimulation : NetwRefCounted
             Checked,
             in slot0,
             ref discarded);
-    }
-
-    private static readonly IntPtr _bindSimulateNearest =
-        NetwApi.MethodBind("NetwSimulation", "simulate_nearest", 862991407UL);
-
-    /// <summary>
-    /// Selects the <paramref name="count"/> entities nearest this one among
-    /// those this peer holds in <paramref name="layer"/>. An empty
-    /// <paramref name="layer"/> uses the <see cref="NetwInterestLayer"/> layers
-    /// this entity is in.
-    /// </summary>
-    public void SimulateNearest(int count, StringName layer = null)
-    {
-        layer ??= new StringName("");
-        godot_variant slot0 = VariantUtils.CreateFromInt((long)count);
-        godot_variant slot1 = VariantUtils.CreateFromStringName(layer);
-        godot_variant answered = default;
-        NetwThunks.Call2(
-            _bindSimulateNearest,
-            Checked,
-            in slot0,
-            in slot1,
-            ref answered);
-        slot0.Dispose();
-        slot1.Dispose();
-        answered.Dispose();
-    }
-
-    private static readonly IntPtr _bindSimulateWithin =
-        NetwApi.MethodBind("NetwSimulation", "simulate_within", 2740898855UL);
-
-    /// <summary>
-    /// Selects the entities within <paramref name="meters"/> of this one among
-    /// those this peer holds in <paramref name="layer"/>. A selected entity is
-    /// dropped once it is 10% past <paramref name="meters"/>.
-    /// </summary>
-    public void SimulateWithin(double meters, StringName layer = null)
-    {
-        layer ??= new StringName("");
-        godot_variant slot0 = VariantUtils.CreateFromFloat(meters);
-        godot_variant slot1 = VariantUtils.CreateFromStringName(layer);
-        godot_variant answered = default;
-        NetwThunks.Call2(
-            _bindSimulateWithin,
-            Checked,
-            in slot0,
-            in slot1,
-            ref answered);
-        slot0.Dispose();
-        slot1.Dispose();
-        answered.Dispose();
     }
 
     private static readonly IntPtr _bindSimulateAll =

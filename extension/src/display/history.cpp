@@ -98,6 +98,32 @@ History::Rows History::rows() const {
     return out;
 }
 
+int64_t History::received_in(const Rows &p_rows) const {
+    if (p_rows.table == nullptr
+        || p_rows.table->sources[p_rows.row]
+            != uint8_t(store::Source::REMOTE)) {
+        return -1;
+    }
+    return p_rows.table->received_ticks[p_rows.row];
+}
+
+bool History::finished_in(const Rows &p_rows, int64_t p_tick) const {
+    const int64_t received = received_in(p_rows);
+    if (received < 0 || received <= p_rows.table->history_tick(p_rows.row, 0)) {
+        return false;
+    }
+    const int64_t heartbeat = p_rows.table->heartbeat;
+    return heartbeat <= 0 || p_tick - received <= heartbeat;
+}
+
+int64_t History::received_tick() const {
+    return received_in(rows());
+}
+
+bool History::stream_finished(int64_t p_tick) const {
+    return finished_in(rows(), p_tick);
+}
+
 int64_t History::tick_in(const Rows &p_rows, int64_t p_age) const {
     if (p_age < 0 || p_age >= p_rows.count) {
         return -1;
@@ -114,6 +140,20 @@ Variant History::value_in(const Rows &p_rows, int64_t p_age) const {
     return p_rows.table != nullptr
         ? p_rows.table->history_value(p_rows.row, uint32_t(p_age), column)
         : ring.value_of_age(p_age);
+}
+
+uint32_t History::newest_held(
+    uint32_t p_cap,
+    int64_t *r_ticks,
+    Variant *r_values
+) const {
+    const Rows held = rows();
+    const uint32_t count = uint32_t(std::min(held.count, int64_t(p_cap)));
+    for (uint32_t age = 0; age < count; ++age) {
+        r_ticks[age] = tick_in(held, age);
+        r_values[age] = value_in(held, age);
+    }
+    return count;
 }
 
 Vector2i History::bracket_in(const Rows &p_rows, int64_t p_tick) const {
@@ -351,7 +391,8 @@ Variant History::sample(
 
     if (next_tick == -1) {
         const Variant result = at_in(held, previous_tick);
-        if (forecast && project::supports(result.get_type())) {
+        const bool finished = finished_in(held, dt);
+        if (forecast && !finished && project::supports(result.get_type())) {
             const Variant velocity = has_explicit_velocity
                 ? explicit_velocity
                 : finite_velocity(held, previous_tick, ticktime);
@@ -367,8 +408,9 @@ Variant History::sample(
                 return project::forward(result, velocity, age * ticktime);
             }
         }
+        const bool stated = finished || received_in(held) < 0;
         if (!(tick_in(held, 0) > previous_tick)
-            && is_close(last_written, result)) {
+            && is_close(last_written, result) && stated) {
             sleeping = true;
         }
         return result;

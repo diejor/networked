@@ -1,9 +1,10 @@
-[gd_scene load_steps=8 format=3 uid="uid://c7rlplayerrb1"]
+[gd_scene load_steps=9 format=3 uid="uid://c7rlplayerrb1"]
 
 [ext_resource type="Script" path="res://examples/rocket_league/scripts/player_rb.gd" id="1_car"]
 [ext_resource type="PackedScene" path="res://examples/rocket_league/models/car.glb" id="2_model"]
 [ext_resource type="PackedScene" uid="uid://c7rlwheelrktl" path="res://examples/rocket_league/scenes/wheel.tscn" id="4_wheel"]
 [ext_resource type="Script" path="res://examples/rocket_league/scripts/car_ai.gd" id="5_ai"]
+[ext_resource type="PackedScene" uid="uid://c7rlwheelvis1" path="res://examples/rocket_league/scenes/wheel_visual.tscn" id="6_visual"]
 
 [sub_resource type="PhysicsMaterial" id="PhysicsMaterial_car"]
 friction = 0.75
@@ -31,6 +32,14 @@ front_tire_grip = 1.5
 
 [node name="Car_model" parent="." instance=ExtResource("2_model") unique_id=1015838]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.0643204, -0.231174)
+
+[node name="FL_Visual" parent="Car_model" instance=ExtResource("6_visual") unique_id=1110001]
+
+[node name="FR_Visual" parent="Car_model" instance=ExtResource("6_visual") unique_id=1110002]
+
+[node name="RL_Visual" parent="Car_model" instance=ExtResource("6_visual") unique_id=1110003]
+
+[node name="RR_Visual" parent="Car_model" instance=ExtResource("6_visual") unique_id=1110004]
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=1023757]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.5, 0)

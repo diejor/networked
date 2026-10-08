@@ -12,6 +12,9 @@ func spawn_car(team: int, slot: int) -> Node:
 	var car := CAR_SCENE.instantiate() as RocketCar
 	car.team = team
 	car.slot = slot
+	car.transform = RocketCar.kickoff_pose(
+		get_node("Markers/%s%d" % ["r" if team == 0 else "b", slot + 1]),
+	)
 	return car
 
 

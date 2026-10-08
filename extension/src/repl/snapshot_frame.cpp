@@ -119,6 +119,23 @@ bool name_snapshot_row(
     return true;
 }
 
+bool snapshot_row_changes_nothing(
+    const PackedByteArray &p_bytes,
+    const wire::WirePlan &p_plan
+) {
+    ReadStream stream(p_bytes);
+    uint64_t token = 0;
+    uint64_t revision = 0;
+    uint64_t distance = 0;
+    bool has_ack = false;
+    bool stamped = false;
+    uint64_t mask = 0;
+    return p_plan.valid() && carry_naming(stream, token, revision, distance)
+        && naming_is_legal(revision, distance) && distance != 0
+        && read_ack_flag(stream, has_ack) && read_stamp_flag(stream, stamped)
+        && stream.bits(mask, int(p_plan.mask_width())) && mask == 0;
+}
+
 bool read_snapshot_row(
     const PackedByteArray &p_bytes,
     int64_t p_base_tick,

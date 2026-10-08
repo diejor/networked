@@ -124,6 +124,8 @@ struct Wiring {
 
 Wiring compile(const godot::LocalVector<FieldDecl> &p_declaration);
 
+void tolerate_quantizer_steps(Wiring &r_wiring);
+
 struct Config {
     int schedule = 0;
     int role = 0;

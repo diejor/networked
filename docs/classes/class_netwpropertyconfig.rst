@@ -653,7 +653,7 @@ The controlling peer owns the value and every peer sees it, with no server check
 
 :ref:`NetwPropertyConfig<class_NetwPropertyConfig>` **carry_along**\ (\ channel\: :godot:`StringName`\ ) :ref:`🔗<class_NetwPropertyConfig_method_carry_along>`
 
-When a correction restores this value, advances it to the present using the rate in ``channel``. Without it, the value is restored as the server had it a few ticks ago.
+When a correction restores this value, advances it to the present using the rate in ``channel``.
 
 ::
 
@@ -682,7 +682,7 @@ When a correction restores this value, advances it to the present by calling ``s
     func _carry_spin(value: Vector3, ctx: NetwPredictCarryContext) -> Vector3:
         return value + _drive_axis(ctx.state) * ctx.state[&"speed"] * ctx.delta
 
-\ ``step`` must be a method or lambda of a :godot:`Node`, may read only its :ref:`NetwPredictCarryContext<class_NetwPredictCarryContext>`, and must not write anything. A result that does not reproduce the recorded ticks is rejected, and the value is restored as the server had it. Declaring both this and :ref:`carry_along()<class_NetwPropertyConfig_method_carry_along>` on one property is an error, and neither is used. :ref:`NetwPrediction.reachability()<class_NetwPrediction_method_reachability>` reports whether the rule is in use.
+\ ``step`` must be a method or lambda of a :godot:`Node`, may read only its :ref:`NetwPredictCarryContext<class_NetwPredictCarryContext>`, and must not write anything. A result that does not reproduce the recorded ticks is rejected. Declaring both this and :ref:`carry_along()<class_NetwPropertyConfig_method_carry_along>` on one property is an error, and neither is used. :ref:`NetwPrediction.reachability()<class_NetwPrediction_method_reachability>` reports whether the rule is in use.
 
 .. rst-class:: classref-item-separator
 

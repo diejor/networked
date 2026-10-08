@@ -208,8 +208,9 @@ TEST_CASE(
 
 TEST_CASE(
     "[Networked][Store][Hosted] R4 a received row appends its history at the "
-    "frame's tick only when its codes change, and history answers the newest "
-    "sample at or before a tick"
+    "frame's tick only when its codes change, a change after an unchanged row "
+    "first holds the old value one tick earlier, and history answers the "
+    "newest sample at or before a tick"
 ) {
     Stand stand;
     const Pose first{Vector3(1.0, 0.0, 0.0), false};
@@ -228,7 +229,9 @@ TEST_CASE(
         int(stand.take(stand.frame(second, 3, 113))),
         int(Landing::ACCEPTED)
     );
-    NETW_CHECK_EQ(stand.held().history_count(stand.at.row), uint32_t(2));
+    NETW_CHECK_EQ(stand.held().history_count(stand.at.row), uint32_t(3));
+    NETW_CHECK_EQ(stand.held().history_tick(stand.at.row, 1), int64_t(112));
+    NETW_CHECK_EQ(stand.held().history_at(stand.at.row, 111), 2);
     NETW_CHECK_EQ(stand.held().history_at(stand.at.row, 109), -1);
     NETW_CHECK_EQ(stand.held().history_at(stand.at.row, 112), 1);
     NETW_CHECK_EQ(stand.held().history_at(stand.at.row, 113), 0);

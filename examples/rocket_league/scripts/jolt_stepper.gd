@@ -25,5 +25,4 @@ func _can_step() -> bool:
 
 
 func _step(space: RID, delta: float) -> void:
-	PhysicsServer3D.call(&"space_flush_queries", space)
 	PhysicsServer3D.call(&"space_step", space, delta)

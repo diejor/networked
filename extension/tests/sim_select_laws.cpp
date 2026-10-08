@@ -12,19 +12,13 @@ using netw::sim::Choice;
 using netw::sim::Facts;
 using netw::sim::Mode;
 using netw::sim::Pick;
-using netw::sim::Policy;
 using netw::sim::Rows;
 using netw::sim::Selection;
 
-Candidate candidate(
-    int64_t p_key,
-    double p_distance,
-    Pick p_pick = Pick::AUTOMATIC
-) {
+Candidate candidate(int64_t p_key, Pick p_pick = Pick::AUTOMATIC) {
     Candidate out;
     out.key = p_key;
     out.order_key = p_key;
-    out.distance_squared = p_distance * p_distance;
     out.pick = p_pick;
     out.eligible = true;
     return out;
@@ -50,10 +44,7 @@ Facts proxy_copy() {
 TEST_CASE("[Networked][Sim][Hosted][Select] a chosen entity is selected") {
     Selection selection;
     selection.commit(
-        candidates(
-            candidate(1, 20.0, Pick::CHOSEN),
-            candidate(2, 1.0, Pick::EXCLUDED)
-        ),
+        candidates(candidate(1, Pick::CHOSEN), candidate(2, Pick::EXCLUDED)),
         10
     );
     NETW_CHECK_EQ(selection.promoted_count(), 1);
@@ -64,80 +55,14 @@ TEST_CASE("[Networked][Sim][Hosted][Select] a chosen entity is selected") {
     CHECK(selection.member(1)->tenure.contains(11));
 }
 
-TEST_CASE("[Networked][Sim][Hosted][Select] nearest keeps what it selected") {
-    Selection selection;
-    selection.policy = Policy::NEAREST;
-    selection.count = 1;
-    selection.commit(candidates(candidate(1, 10.0), candidate(2, 10.5)), 0);
-    CHECK(selection.member(1)->promoted);
-    selection.commit(candidates(candidate(1, 10.0), candidate(2, 9.5)), 1);
-    CHECK(selection.member(1)->promoted);
-    CHECK_FALSE(selection.member(2)->promoted);
-    selection.commit(candidates(candidate(1, 10.0), candidate(2, 5.0)), 2);
-    CHECK_FALSE(selection.member(1)->promoted);
-    CHECK(selection.member(2)->promoted);
-}
-
-TEST_CASE("[Networked][Sim][Hosted][Select] contact defers a handoff") {
-    Selection selection;
-    selection.policy = Policy::NEAREST;
-    selection.count = 1;
-    selection.commit(candidates(candidate(1, 10.0), candidate(2, 20.0)), 0);
-    CHECK(selection.member(1)->promoted);
-
-    Candidate near = candidate(2, 1.0);
-    Candidate touching = candidate(1, 10.0);
-    touching.contact = true;
-    selection.commit(candidates(touching, near), 1);
-    CHECK(selection.member(1)->promoted);
-    CHECK_FALSE(selection.member(2)->promoted);
-
-    selection.commit(candidates(candidate(1, 10.0), near), 2);
-    CHECK_FALSE(selection.member(1)->promoted);
-    CHECK(selection.member(2)->promoted);
-}
-
-TEST_CASE("[Networked][Sim][Hosted][Select] a deferral keeps its budget") {
-    Selection selection;
-    selection.policy = Policy::NEAREST;
-    selection.count = 1;
-    selection.commit(candidates(candidate(1, 10.0), candidate(2, 20.0)), 0);
-    CHECK(selection.member(1)->promoted);
-
-    Candidate touching = candidate(1, 30.0);
-    touching.contact = true;
-    LocalVector<Candidate> rows;
-    rows.push_back(touching);
-    rows.push_back(candidate(2, 1.0));
-    rows.push_back(candidate(3, 2.0));
-    selection.commit(rows, 1);
-    NETW_CHECK_EQ(selection.promoted_count(), 1);
-    CHECK(selection.member(1)->promoted);
-}
-
-TEST_CASE("[Networked][Sim][Hosted][Select] a radius has an exit margin") {
-    Selection selection;
-    selection.policy = Policy::WITHIN;
-    selection.meters = 10.0;
-    selection.commit(candidates(candidate(1, 9.0), candidate(2, 12.0)), 0);
-    CHECK(selection.member(1)->promoted);
-    selection.commit(candidates(candidate(1, 10.5), candidate(2, 12.0)), 1);
-    CHECK(selection.member(1)->promoted);
-    selection.commit(candidates(candidate(1, 11.1), candidate(2, 12.0)), 2);
-    CHECK_FALSE(selection.member(1)->promoted);
-}
-
 TEST_CASE("[Networked][Sim][Hosted][Select] a departure lingers to the floor") {
     Selection selection;
     selection.commit(
-        candidates(
-            candidate(1, 1.0, Pick::CHOSEN),
-            candidate(2, 2.0, Pick::EXCLUDED)
-        ),
+        candidates(candidate(1, Pick::CHOSEN), candidate(2, Pick::EXCLUDED)),
         4
     );
     LocalVector<Candidate> remaining;
-    remaining.push_back(candidate(2, 2.0, Pick::EXCLUDED));
+    remaining.push_back(candidate(2, Pick::EXCLUDED));
     selection.commit(remaining, 8);
     CHECK(selection.member(1)->tenure.contains(8));
     CHECK_FALSE(selection.member(1)->tenure.contains(9));
@@ -149,55 +74,31 @@ TEST_CASE("[Networked][Sim][Hosted][Select] a departure lingers to the floor") {
 }
 
 TEST_CASE(
-    "[Networked][Sim][Hosted][Select] a chosen entity does not spend the "
-    "automatic budget"
-) {
-    Selection selection;
-    selection.policy = Policy::NEAREST;
-    selection.count = 1;
-    selection.commit(
-        candidates(candidate(1, 20.0, Pick::CHOSEN), candidate(2, 1.0)),
-        0
-    );
-    NETW_CHECK_EQ(selection.promoted_count(), 2);
-    CHECK(selection.member(1)->promoted);
-    CHECK(selection.member(2)->promoted);
-}
-
-TEST_CASE(
-    "[Networked][Sim][Hosted][Select] one automatic policy per subject, the "
-    "last call replaces it, and a negative budget selects nothing"
+    "[Networked][Sim][Hosted][Select] a predicted subject that states nothing "
+    "selects all, simulate_all names the layer and simulate_none opts out"
 ) {
     Choice choice;
-    CHECK_FALSE(choice.declared());
+    CHECK(choice.declared(true));
+    CHECK(choice.selects_all(true));
+    CHECK_FALSE(choice.declared(false));
+    CHECK_FALSE(netw::sim::claims_exact(choice, true));
 
-    netw::sim::simulate_nearest(choice, 3, StringName("near"));
-    CHECK(choice.declared());
-    NETW_CHECK_EQ(int(choice.policy), int(Policy::NEAREST));
-    NETW_CHECK_EQ(choice.count, 3);
+    netw::sim::simulate_all(choice, StringName("arena"));
+    CHECK(choice.selects_all(false));
     NETW_REQUIRE_EQ(choice.layers.size(), 1);
-
-    netw::sim::simulate_within(choice, 4.0, StringName("far"));
-    NETW_CHECK_EQ(int(choice.policy), int(Policy::WITHIN));
-    NETW_REQUIRE_EQ(choice.layers.size(), 1);
-    CHECK((choice.layers[0] == StringName("far")));
-
-    netw::sim::simulate_nearest(choice, -2, StringName());
-    NETW_CHECK_EQ(int(choice.policy), int(Policy::NONE));
-    NETW_CHECK_EQ(choice.count, 0);
-    netw::sim::simulate_within(choice, -1.0, StringName());
-    NETW_CHECK_EQ(int(choice.policy), int(Policy::NONE));
+    CHECK((choice.layers[0] == StringName("arena")));
 
     Selection selection;
-    selection.policy = choice.policy;
-    selection.commit(candidates(candidate(1, 0.0), candidate(2, 0.5)), 0);
-    NETW_CHECK_EQ(selection.promoted_count(), 0);
+    selection.all = choice.selects_all(true);
+    selection.commit(candidates(candidate(1), candidate(2)), 0);
+    NETW_CHECK_EQ(selection.promoted_count(), 2);
 
-    netw::sim::simulate_all(choice, StringName());
-    NETW_CHECK_EQ(int(choice.policy), int(Policy::ALL));
     netw::sim::simulate_none(choice);
-    NETW_CHECK_EQ(int(choice.policy), int(Policy::NONE));
-    CHECK_FALSE(choice.declared());
+    CHECK_FALSE(choice.declared(true));
+    CHECK(netw::sim::claims_exact(choice, true));
+    selection.all = choice.selects_all(true);
+    selection.commit(candidates(candidate(1), candidate(2)), 1);
+    NETW_CHECK_EQ(selection.promoted_count(), 0);
 }
 
 TEST_CASE(
@@ -212,12 +113,12 @@ TEST_CASE(
     NETW_CHECK_EQ(choice.named.size(), 1);
     REQUIRE(choice.named_of(member) != nullptr);
     NETW_CHECK_EQ(int(choice.named_of(member)->pick), int(Pick::CHOSEN));
-    CHECK(choice.declared());
+    CHECK(choice.declared(false));
 
     CHECK(netw::sim::forget(choice, member));
     CHECK_FALSE(netw::sim::forget(choice, member));
     CHECK((choice.named_of(member) == nullptr));
-    CHECK_FALSE(choice.declared());
+    CHECK_FALSE(choice.declared(false));
     owner.free(member);
 }
 
@@ -347,7 +248,7 @@ TEST_CASE(
 
     netw::sim::Row &row = rows.ensure(subject);
     LocalVector<Candidate> chosen;
-    chosen.push_back(candidate(int64_t(member.get_id()), 1.0, Pick::CHOSEN));
+    chosen.push_back(candidate(int64_t(member.get_id()), Pick::CHOSEN));
     row.selection.commit(chosen, 0);
     REQUIRE(rows.note_selected(member, subject));
     REQUIRE(rows.note_selected(member, other));

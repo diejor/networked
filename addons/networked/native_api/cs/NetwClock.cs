@@ -315,8 +315,8 @@ public sealed class NetwClock : NetwRefCounted
         NetwApi.MethodBind("NetwClock", "get_tick_factor", 1740695150UL);
 
     /// <summary>
-    /// How far time has moved past the last tick, as a fraction of a tick. Use
-    /// it to interpolate.
+    /// How far time has moved past the last tick, in ticks, and it can exceed
+    /// 1. Use it to interpolate.
     /// </summary>
     public double TickFactor
     {
@@ -359,7 +359,7 @@ public sealed class NetwClock : NetwRefCounted
 
     /// <summary>
     /// The <see cref="NetwClock.DisplayOffset"/> the current connection needs,
-    /// in ticks. Not applied automatically.
+    /// in ticks.
     /// </summary>
     public long RecommendedDisplayOffset
     {

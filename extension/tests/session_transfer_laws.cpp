@@ -863,7 +863,7 @@ RID handle_at(const Table &p_table, int p_route, int p_at) {
 
 TEST_CASE(
     "[Networked][Session][Transfer][SceneTree] TX8 after the server is lost "
-    "with the world kept, an entity a survivor reconciles jointly is still "
+    "with the world kept, an entity a survivor subscribed to is still "
     "subscribed to relayed input on the successor"
 ) {
     Table table;
@@ -889,12 +889,7 @@ TEST_CASE(
     Node *body = present(table.body_at(route, survivor));
     const int64_t slot = pool->slot_of(NetwEntity::of(body));
     REQUIRE(slot >= 0);
-    pool->set_reconcile_own(slot, int(netw::NetwPrediction::RECONCILE_JOINT));
-    NETW_REQUIRE_EQ(
-        pool->reconcile_of(slot),
-        int(netw::NetwPrediction::RECONCILE_JOINT)
-    );
-    joint->predict_relay_subscribe(mirrored, true);
+    pool->follow_relay_subscription(slot, true);
     table.rig.pump(SETTLE_PUMPS);
     const RID served = handle_at(table, route, -1);
     REQUIRE(table.rig.server()

@@ -37,7 +37,8 @@ public sealed class NetwPredictStats : NetwRefCounted
         NetwApi.MethodBind("NetwPredictStats", "get_corrections", 3905245786UL);
 
     /// <summary>
-    /// Total corrections applied since spawn.
+    /// Times this entity's prediction disagreed with the server and was
+    /// corrected since spawn.
     /// </summary>
     public long Corrections
     {
@@ -48,6 +49,23 @@ public sealed class NetwPredictStats : NetwRefCounted
                 _bindGetCorrections,
                 Checked,
                 ref answered);
+            return answered;
+        }
+    }
+
+    private static readonly IntPtr _bindGetInstalls =
+        NetwApi.MethodBind("NetwPredictStats", "get_installs", 3905245786UL);
+
+    /// <summary>
+    /// Times the server's state was written onto this entity since spawn, while
+    /// this peer simulates it without controlling it.
+    /// </summary>
+    public long Installs
+    {
+        get
+        {
+            long answered = default;
+            NetwThunks.Ptrcall0_Long(_bindGetInstalls, Checked, ref answered);
             return answered;
         }
     }

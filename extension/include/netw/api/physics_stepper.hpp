@@ -19,6 +19,7 @@ public:
     virtual void step(const godot::RID &p_space, double p_delta);
     virtual void snapshot(const godot::RID &p_space, int64_t p_tick);
     virtual void restore(const godot::RID &p_space, int64_t p_tick);
+    virtual void flush_queries(const godot::RID &p_space, int p_dimension);
 
     GDVIRTUAL0R(bool, _can_step)
     GDVIRTUAL2(_step, godot::RID, double)

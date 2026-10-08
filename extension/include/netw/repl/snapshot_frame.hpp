@@ -59,6 +59,11 @@ bool name_snapshot_row(
     SnapshotHeader &r_header
 );
 
+bool snapshot_row_changes_nothing(
+    const godot::PackedByteArray &p_bytes,
+    const wire::WirePlan &p_plan
+);
+
 bool read_snapshot_row(
     const godot::PackedByteArray &p_bytes,
     int64_t p_base_tick,

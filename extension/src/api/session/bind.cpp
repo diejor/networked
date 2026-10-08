@@ -958,11 +958,8 @@ void NetwMultiplayer::_bind_methods() {
     BIND_ENUM_CONSTANT(DISPLAY_PARAM_TIMELINE_MODE);
     BIND_ENUM_CONSTANT(DISPLAY_PARAM_MAX_FORECAST_TICKS);
     BIND_ENUM_CONSTANT(DISPLAY_PARAM_SMART_DILATION);
-    BIND_ENUM_CONSTANT(DISPLAY_PARAM_MAX_EXTRA_DILATION);
     BIND_ENUM_CONSTANT(DISPLAY_PARAM_LAG_ADAPT_RATE);
-    BIND_ENUM_CONSTANT(DISPLAY_PARAM_STARVATION_GROWTH);
     BIND_ENUM_CONSTANT(DISPLAY_PARAM_FLOOR_SMOOTHING);
-    BIND_ENUM_CONSTANT(DISPLAY_PARAM_STARVATION_GRACE_FRAMES);
     BIND_ENUM_CONSTANT(DISPLAY_PARAM_TRACE_INTERVAL);
     BIND_ENUM_CONSTANT(DISPLAY_PARAM_VISUAL_ROOT);
     BIND_ENUM_CONSTANT(PREDICT_PARAM_ARCHETYPE);
@@ -1282,6 +1279,7 @@ void NetwMultiplayer::_bind_methods() {
         D_METHOD(
             "predict_recover_default",
             "payload",
+            "predicted",
             "policy",
             "restore",
             "projection",
@@ -1312,6 +1310,7 @@ void NetwMultiplayer::_bind_methods() {
     GDVIRTUAL_BIND(
         _predict_recover,
         "payload",
+        "predicted",
         "policy",
         "restore",
         "projection",

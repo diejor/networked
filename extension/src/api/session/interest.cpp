@@ -718,9 +718,12 @@ Array NetwMultiplayer::interest_resolved_layer_ids(
     }
     const int64_t slot = p_entity->get_rid_handle().get_id();
     Array named = interest_engine.memberships(slot);
-    if (named.is_empty() && !is_host()) {
-        interest::Decl *decl = interest_decl_on(p_entity);
-        named = decl != nullptr ? decl->labels() : Array();
+    interest::Decl *decl = is_host() ? nullptr : interest_decl_on(p_entity);
+    const Array declared = decl != nullptr ? decl->labels() : Array();
+    for (int at = 0; at < declared.size(); ++at) {
+        if (!named.has(declared[at])) {
+            named.push_back(declared[at]);
+        }
     }
     return sorted_names(named);
 }
@@ -754,7 +757,7 @@ TypedArray<NetwEntity> NetwMultiplayer::interest_shared_entities(
             found.push_back(candidate);
         }
     }
-    if (found.is_empty() && !is_host()) {
+    if (!is_host()) {
         HashSet<StringName> asked;
         for (int at = 0; at < wanted.size(); ++at) {
             asked.insert(wanted[at]);
@@ -763,7 +766,8 @@ TypedArray<NetwEntity> NetwMultiplayer::interest_shared_entities(
         for (int at = 0; at < live.size(); ++at) {
             const Ref<NetwEntity> candidate = live[at];
             if (candidate.is_null() || candidate == p_entity
-                || candidate->get_owner() == nullptr) {
+                || candidate->get_owner() == nullptr
+                || found.has(candidate)) {
                 continue;
             }
             interest::Decl *decl = interest_decl_on(candidate);

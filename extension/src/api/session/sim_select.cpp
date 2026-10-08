@@ -4,12 +4,12 @@
 
 #include "godot/node.hpp"
 #include "godot/object.hpp"
-#include "godot/spatial_node.hpp"
 #include "netw/api/entity.hpp"
 #include "netw/api/simulation.hpp"
 #include "netw/colors.hpp"
 #include "netw/log.hpp"
 #include "netw/profile.hpp"
+#include "netw/sim/body.hpp"
 #include "netw/sim/row.hpp"
 #include "netw/sim/select.hpp"
 #include "netw/subsystems.hpp"
@@ -44,18 +44,6 @@ bool order_less(const Ref<NetwEntity> &p_a, const Ref<NetwEntity> &p_b) {
         return p_a->get_instance_id() < p_b->get_instance_id();
     }
     return a_id < b_id;
-}
-
-Vector3 position_of(const Ref<NetwEntity> &p_entity) {
-    Node *root = p_entity->get_owner();
-    if (Node3D *spatial = Object::cast_to<Node3D>(root)) {
-        return spatial->get_global_position();
-    }
-    if (Node2D *flat = Object::cast_to<Node2D>(root)) {
-        const Vector2 point = flat->get_global_position();
-        return Vector3(point.x, point.y, 0.0);
-    }
-    return Vector3();
 }
 
 bool same_scene(
@@ -150,22 +138,6 @@ void NetwMultiplayer::sim_forget(
     }
 }
 
-void NetwMultiplayer::sim_simulate_nearest(
-    const RID &p_subject,
-    int p_count,
-    const StringName &p_layer
-) {
-    sim::simulate_nearest(sim_rows.ensure(p_subject).choice, p_count, p_layer);
-}
-
-void NetwMultiplayer::sim_simulate_within(
-    const RID &p_subject,
-    double p_meters,
-    const StringName &p_layer
-) {
-    sim::simulate_within(sim_rows.ensure(p_subject).choice, p_meters, p_layer);
-}
-
 void NetwMultiplayer::sim_simulate_all(
     const RID &p_subject,
     const StringName &p_layer
@@ -209,7 +181,11 @@ RID NetwMultiplayer::sim_entity_of_key(int64_t p_key) const {
 
 bool NetwMultiplayer::sim_chooses(const RID &p_subject) const {
     const sim::Row *row = sim_rows.row_of(p_subject);
-    return row != nullptr && row->choice.declared();
+    return row != nullptr && row->choice.declared(true);
+}
+
+bool NetwMultiplayer::sim_predicts(const Ref<NetwEntity> &p_subject) const {
+    return prediction_engine.slot_of(p_subject) >= 0;
 }
 
 TypedArray<NetwEntity> NetwMultiplayer::sim_named(const RID &p_subject) {
@@ -242,7 +218,13 @@ TypedArray<NetwEntity> NetwMultiplayer::sim_candidates(
     for (const sim::Named &named : row->choice.named) {
         take(*this, p_subject, entity_get_view(named.entity), found);
     }
-    for (const StringName &layer : row->choice.layers) {
+    LocalVector<StringName> layers;
+    if (row->choice.stated) {
+        layers = row->choice.layers;
+    } else if (sim_predicts(p_subject)) {
+        layers.push_back(StringName());
+    }
+    for (const StringName &layer : layers) {
         const TypedArray<NetwEntity> shared
             = interest_shared_entities(p_subject, layer);
         for (int at = 0; at < shared.size(); ++at) {
@@ -270,6 +252,11 @@ bool NetwMultiplayer::sim_selectable(const Ref<NetwEntity> &p_member) {
     if (owner == nullptr || authoring::declares_prediction(owner)) {
         return false;
     }
+    const Ref<NetwSimulation> simulation = p_member->simulation_if_minted();
+    const bool simulated = simulation.is_valid() && simulation->is_declared();
+    if (!simulated && !sim::is_solver_body(owner)) {
+        return false;
+    }
     const sim::Mode mode = row != nullptr
         ? row->mode
         : sim_rows.resolve(member, sim_body_facts(p_member));
@@ -279,7 +266,6 @@ bool NetwMultiplayer::sim_selectable(const Ref<NetwEntity> &p_member) {
 TypedArray<NetwEntity> NetwMultiplayer::sim_select(
     const Ref<NetwEntity> &p_subject,
     const TypedArray<NetwEntity> &p_candidates,
-    const TypedArray<NetwEntity> &p_contact,
     int64_t p_frontier
 ) {
     TypedArray<NetwEntity> promoted;
@@ -304,7 +290,6 @@ TypedArray<NetwEntity> NetwMultiplayer::sim_select(
     ranked.push_back(p_subject);
     std::sort(ranked.ptr(), ranked.ptr() + ranked.size(), order_less);
 
-    const Vector3 here = position_of(p_subject);
     HashMap<int64_t, Ref<NetwEntity>> by_key;
     LocalVector<sim::Candidate> candidates;
     int64_t subject_order = 0;
@@ -322,21 +307,16 @@ TypedArray<NetwEntity> NetwMultiplayer::sim_select(
         sim::Candidate candidate;
         candidate.key = key;
         candidate.order_key = int64_t(at);
-        candidate.distance_squared
-            = here.distance_squared_to(position_of(member));
         const sim::Named *named = standing->choice.named_of(entity);
         candidate.pick = named != nullptr ? named->pick : sim::Pick::AUTOMATIC;
         candidate.eligible = sim_selectable(member);
-        candidate.contact = p_contact.has(member);
         candidates.push_back(candidate);
         by_key.insert(key, member);
     }
 
     sim::Row &row = sim_rows.ensure(subject);
     row.selection.owner_order_key = subject_order;
-    row.selection.policy = row.choice.policy;
-    row.selection.count = row.choice.count;
-    row.selection.meters = row.choice.meters;
+    row.selection.all = row.choice.selects_all(sim_predicts(p_subject));
     row.selection.commit(candidates, p_frontier);
 
     LocalVector<int64_t> promoted_keys;
@@ -424,12 +404,7 @@ void NetwMultiplayer::sim_select_unpredicted(int64_t p_tick, bool p_commit) {
         if (!sim::leads(mode)) {
             sim_drop_selections(subject);
         } else if (p_commit) {
-            sim_select(
-                entity,
-                sim_candidates(entity),
-                TypedArray<NetwEntity>(),
-                p_tick
-            );
+            sim_select(entity, sim_candidates(entity), p_tick);
         }
     }
 }
@@ -510,7 +485,12 @@ void NetwMultiplayer::sim_refresh_members(const LocalVector<RID> &p_members) {
             continue;
         }
         if (NetwPredictSlotEngine *engine = predict_engine_for(member)) {
-            if (row->selected_by.count() == 0) {
+            const bool selected = row->selected_by.count() > 0;
+            prediction_engine.follow_relay_subscription(
+                engine->native_slot(),
+                selected
+            );
+            if (!selected) {
                 prediction_engine.leave_joint(engine->native_slot());
             }
             if (sim::resolve(row->facts) != row->mode) {
