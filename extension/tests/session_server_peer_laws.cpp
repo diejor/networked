@@ -3,6 +3,7 @@
 #include "support/netw_test.h"
 
 #include "godot/callable.hpp"
+#include "netw/api/loopback.hpp"
 #include "netw/api/netw_multiplayer.hpp"
 #include "netw/session/frames.hpp"
 
@@ -42,6 +43,39 @@ TEST_CASE(
         session->session_get_state()
         == NetwMultiplayer::SESSION_STATE_CONNECTING
     );
+}
+
+TEST_CASE(
+    "[Networked][Session][Hosted] L10 a peer assigned while connecting that "
+    "later becomes peer 1 goes online as the server on the next poll, "
+    "because a relay only names the host once its room exists"
+) {
+    Ref<netw::LocalMultiplayerPeer> peer;
+    peer.instantiate();
+    NETW_CHECK_EQ(int(peer->create_client(5)), int(OK));
+
+    Ref<NetwMultiplayer> session = a_session();
+    session->NETW_API_VIRTUAL(set_multiplayer_peer)(peer);
+    session->NETW_API_VIRTUAL(poll)();
+    NETW_CHECK_EQ(
+        int(session->session_get_state()),
+        int(NetwMultiplayer::SESSION_STATE_CONNECTING)
+    );
+
+    NETW_CHECK_EQ(int(peer->create_server(1)), int(OK));
+    session->NETW_API_VIRTUAL(poll)();
+
+    NETW_CHECK_EQ(
+        int(session->session_get_state()),
+        int(NetwMultiplayer::SESSION_STATE_ONLINE)
+    );
+    NETW_CHECK_EQ(
+        int(session->session_get_role()),
+        int(NetwMultiplayer::ROLE_LISTEN_SERVER)
+    );
+    CHECK(session->is_host());
+
+    session->embed_dispose();
 }
 
 #if defined(NETW_TIER_HOSTED)

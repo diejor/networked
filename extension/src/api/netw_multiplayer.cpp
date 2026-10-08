@@ -2085,6 +2085,15 @@ void NetwMultiplayer::session_watch_serverless_mesh() {
     }
 }
 
+void NetwMultiplayer::session_watch_late_server() {
+    if (session_get_state() != SESSION_STATE_CONNECTING
+        || !session_link_is_connected()
+        || NETW_API_VIRTUAL(get_unique_id)() != SERVER_PEER) {
+        return;
+    }
+    session_transport_connected();
+}
+
 bool NetwMultiplayer::session_link_is_connected() const {
     const Ref<MultiplayerPeer> link = inner.is_valid()
         ? inner->get_multiplayer_peer()
@@ -2909,6 +2918,7 @@ Error NetwMultiplayer::NETW_API_VIRTUAL(poll)() {
         }
         peer_sweep_transport_state();
         session_watch_serverless_mesh();
+        session_watch_late_server();
     }
     const double frame_delta
         = poll_delta(Time::get_singleton()->get_ticks_usec());

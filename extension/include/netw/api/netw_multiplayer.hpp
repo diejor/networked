@@ -4089,6 +4089,7 @@ public:
     void peer_sweep_transport_state();
     bool session_links_peers_but_not_server() const;
     void session_watch_serverless_mesh();
+    void session_watch_late_server();
     void peer_mark_unreachable(int64_t p_peer);
     void peer_mark_reachable(int64_t p_peer);
     void session_refuse(int64_t p_peer, const godot::String &p_reason);
