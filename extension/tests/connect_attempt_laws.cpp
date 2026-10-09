@@ -292,8 +292,6 @@ TEST_CASE(
     CHECK(attempt_log().progress_message.is_empty());
 }
 
-#if defined(NETW_TIER_HOSTED)
-
 int heard_on_signal = 0;
 
 void hear_failed(int64_t, String) {
@@ -310,7 +308,7 @@ int64_t unhandled_after_timed_out_join(Bench &p_bench) {
 }
 
 TEST_CASE(
-    "[Networked][Connect] AT10 a failed join whose promise is dropped warns "
+    "[Networked][Connect][Hosted] AT10 a failed join whose promise is dropped warns "
     "only when nothing heard the failure"
 ) {
     {
@@ -341,7 +339,5 @@ TEST_CASE(
         NETW_CHECK_EQ(unhandled_after_timed_out_join(bench), 1);
     }
 }
-
-#endif
 
 } // namespace TestNetwConnectAttempt

@@ -329,18 +329,16 @@ class ConnectLifecycleMatrix final : public netw_test::FrameScenario {
     }
 
     void mark_faults() {
-        errors_mark = faults->error_lines().size();
-        warnings_mark = faults->warning_lines().size();
+        errors_mark = faults->errors_logged();
+        warnings_mark = faults->warnings_logged();
     }
 
     PackedStringArray errors_since_mark() const {
-        const PackedStringArray all = faults->error_lines();
-        return all.slice(errors_mark);
+        return faults->error_lines(errors_mark);
     }
 
     PackedStringArray warnings_since_mark() const {
-        const PackedStringArray all = faults->warning_lines();
-        return all.slice(warnings_mark);
+        return faults->warning_lines(warnings_mark);
     }
 
     int pick_port() {

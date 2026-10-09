@@ -391,7 +391,7 @@ TEST_CASE(
         third->get_connection_status(),
         MultiplayerPeer::CONNECTION_CONNECTED
     );
-    NETW_CHECK_EQ(session->get_client_peers().size(), 3);
+    NETW_CHECK_EQ(session->get_client_peers().size(), 2);
 
     session->set_server_app_id("test-app");
     session->reset();

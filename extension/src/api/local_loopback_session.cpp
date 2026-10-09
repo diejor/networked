@@ -224,6 +224,13 @@ void LocalLoopbackSession::poll_peers() {
             poll_or_hold(client.ptr());
         }
     }
+    for (int at = client_peers.size() - 1; at >= 0; --at) {
+        const Ref<LocalMultiplayerPeer> &client = client_peers[at];
+        if (client.is_null() || client->closed
+            || client->get_reference_count() == 1) {
+            client_peers.remove_at(at);
+        }
+    }
 }
 
 void LocalLoopbackSession::poll_or_hold(LocalMultiplayerPeer *p_peer) {

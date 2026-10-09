@@ -1062,8 +1062,13 @@ void NetwMultiplayer::scene_forget(Object *p_container) {
     if (p_container == nullptr) {
         return;
     }
-    scene_forget_viewers(entity_of(p_container));
-    scene_core->scene_exit(entity_of(p_container));
+    const RID scene = entity_of(p_container);
+    scene_forget_viewers(scene);
+    const RID layer = interest_layer_find(scene_layer_id(scene));
+    if (layer.is_valid()) {
+        interest_layer_free(layer);
+    }
+    scene_core->scene_exit(scene);
     notify(SCENE_DESPAWNED, p_container);
     scene_player_display_invalidate();
 }

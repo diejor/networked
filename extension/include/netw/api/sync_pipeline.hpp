@@ -93,6 +93,8 @@ private:
     int64_t sends_dropped_unroutable = 0;
     int64_t sends_dropped_not_live = 0;
     int64_t rows_refused_stale = 0;
+    int64_t writes_refused = 0;
+    godot::HashMap<uint64_t, int64_t> write_refusals_by_peer_member;
 
     godot::HashMap<int64_t, bool> schemas_sealed_before_open;
 

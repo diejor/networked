@@ -1019,6 +1019,13 @@ NetwMultiplayer::BookSizes NetwMultiplayer::book_sizes() const {
     });
     sizes.attributed_routes = attribution.attributed_route_count();
     sizes.node_overlays = script::model::node_overlay_count();
+    sizes.wrapper_slots = int64_t(entity_slots.size());
+    sizes.liveness_routes = liveness_core->route_count();
+    sizes.display_rows = display_book.is_valid() ? display_book->size() : 0;
+    sizes.layer_views = int64_t(layer_views.size());
+    sizes.engine_layers = interest_engine.layer_count();
+    sizes.attribution_peer_keys = attribution.peer_keyed_count();
+    sizes.lagcomp_timelines = lagcomp_core.timeline_registered();
     return sizes;
 }
 #endif
@@ -1456,6 +1463,9 @@ RID NetwMultiplayer::liveness_adopt(NetwEntity *p_wrapper) {
         return RID();
     }
     const RID handle = record->get_handle();
+    if (liveness_core->state_of(handle) == NetwLivenessCore::STATE_DEAD) {
+        return handle;
+    }
     wrapper_adopt(
         handle,
         Ref<NetwEntity>(p_wrapper),

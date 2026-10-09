@@ -1,3 +1,4 @@
+#include "support/fault_log.h"
 #include "support/loopback_rig.h"
 #include "support/netw_recorder.h"
 
@@ -213,6 +214,23 @@ TEST_CASE(
     world.stream(WATCH_PUMPS);
 
     NETW_CHECK_EQ(seen.count("peer_disconnected"), 0);
+}
+
+TEST_CASE(
+    "[Networked][Session][SceneTree] DP6 a peer the server lets go while "
+    "sends to it are pending leaves quietly, because a send refused by a "
+    "peer the transport already released is the departure and not a lost "
+    "packet"
+) {
+    Streaming world;
+    const int64_t departing = world.rig.peer_id(0);
+
+    const FaultWatch watch;
+    world.rig.drop_client(0);
+    world.stream(WATCH_PUMPS);
+
+    CHECK_FALSE(world.addresses(departing));
+    NETW_CHECK_EQ(watch.warnings_containing("refused a packet"), int64_t(0));
 }
 
 } // namespace TestDeparture

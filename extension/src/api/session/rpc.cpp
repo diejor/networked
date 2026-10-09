@@ -787,6 +787,9 @@ Dictionary NetwMultiplayer::relay_stats_snapshot() {
     for (const char *key : RELAYED) {
         out[StringName(key)] = repl.get(StringName(key), int64_t(0));
     }
+    out[StringName("drops_sync_bad_sender")]
+        = int64_t(repl.get(StringName("drops_sync_bad_sender"), 0))
+        + int64_t(repl.get(StringName("drops_write_refused"), 0));
     out[StringName("drops_backlog_limit")]
         = rpc[StringName("drops_backlog_limit")];
     out[StringName("sends_dropped_unroutable")]

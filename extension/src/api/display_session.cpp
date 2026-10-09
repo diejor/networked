@@ -186,6 +186,7 @@ void NetwMultiplayer::display_release_route(int64_t p_route) {
         sim_release_body(runtime->entity_rid(), true);
     }
     display_book->drop_route(p_route);
+    display_book->drop(liveness_core->rid_from_route(int(p_route)));
 }
 
 void NetwMultiplayer::display_retire_route(int64_t p_route) {
@@ -195,6 +196,7 @@ void NetwMultiplayer::display_retire_route(int64_t p_route) {
         sim_release_body(runtime->entity_rid(), false);
     }
     display_book->drop_route(p_route);
+    display_book->drop(liveness_core->rid_from_route(int(p_route)));
 }
 
 void NetwMultiplayer::display_clear_runtimes() {

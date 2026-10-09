@@ -143,17 +143,35 @@ void open_run_faults() {
         return;
     }
     run_faults().instantiate();
-    OS::get_singleton()->add_logger(run_faults());
+    netw_test::FaultLog::attach(run_faults());
 }
 
-PackedStringArray close_run_faults() {
+struct RunFaults {
+    int64_t printed = 0;
+    int64_t expected = 0;
+    PackedStringArray unexpected;
+};
+
+RunFaults close_run_faults() {
+    RunFaults split;
     if (run_faults().is_null()) {
-        return PackedStringArray();
+        return split;
     }
-    const PackedStringArray faults = run_faults()->faults();
-    OS::get_singleton()->remove_logger(run_faults());
+    const std::vector<netw_test::FaultLine> printed
+        = run_faults()->recorded();
+    netw_test::FaultLog::detach(run_faults());
     run_faults().unref();
-    return faults;
+    netw_test::FaultLedger &ledger = netw_test::fault_ledger();
+    const std::lock_guard<std::mutex> held(ledger.lock);
+    split.printed = int64_t(printed.size());
+    for (const netw_test::FaultLine &line : printed) {
+        if (ledger.asserted.count(line.serial) > 0) {
+            split.expected += 1;
+        } else {
+            split.unexpected.push_back(line.text);
+        }
+    }
+    return split;
 }
 
 std::string fault_family(const String &p_line) {
@@ -221,9 +239,10 @@ String write_census(const String &p_report_path) {
     for (const netw_test::CensusRow &row : netw_test::census_ledger().rows) {
         std::fprintf(
             output,
-            "objects %+lld resources %+lld  %s\n",
+            "objects %+lld resources %+lld freed by reset %lld  %s\n",
             (long long)row.objects,
             (long long)row.resources,
+            (long long)row.freed_by_reset,
             row.name.c_str()
         );
     }
@@ -791,16 +810,26 @@ Dictionary NetwNativeTests::run(
     }
     result[StringName("failing")] = failing;
 
-    result[StringName("census_cases")]
-        = int64_t(netw_test::census_ledger().rows.size());
+    const std::vector<netw_test::CensusRow> &held
+        = netw_test::census_ledger().rows;
+    result[StringName("census_cases")] = int64_t(held.size());
+    result[StringName("census_reset_only")] = int64_t(std::count_if(
+        held.begin(),
+        held.end(),
+        [](const netw_test::CensusRow &p_row) {
+            return p_row.freed_by_reset > 0;
+        }
+    ));
     result[StringName("census_top")] = top_census_rows();
     result[StringName("census_path")] = write_census(report_path);
 
-    const PackedStringArray faults = close_run_faults();
+    const RunFaults faults = close_run_faults();
     int64_t family_count = 0;
-    result[StringName("faults")] = int64_t(faults.size());
+    result[StringName("faults")] = faults.printed;
+    result[StringName("faults_expected")] = faults.expected;
+    result[StringName("faults_unexpected")] = int64_t(faults.unexpected.size());
     result[StringName("fault_families")]
-        = top_fault_families(faults, family_count);
+        = top_fault_families(faults.unexpected, family_count);
     result[StringName("fault_family_count")] = family_count;
     return result;
 }

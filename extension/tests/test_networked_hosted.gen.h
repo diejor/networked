@@ -64,6 +64,7 @@
 #include "event_plane_laws.cpp"
 #include "event_session_laws.cpp"
 #include "event_shell_laws.cpp"
+#include "fault_watch_laws.cpp"
 #include "file_store_laws.cpp"
 #include "group_promise_tests.cpp"
 #include "handle_ledger_tests.cpp"

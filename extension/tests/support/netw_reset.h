@@ -64,6 +64,8 @@ struct Census {
 struct CensusRow {
     int64_t objects = 0;
     int64_t resources = 0;
+    int64_t freed_before_reset = 0;
+    int64_t freed_by_reset = 0;
     std::string name;
 };
 
@@ -79,14 +81,30 @@ inline CensusLedger &census_ledger() {
 
 class ResetListener final : public doctest::IReporter {
     Census opened;
+    Census closed;
     std::string current;
+    bool row_awaits_reset = false;
+
+    void reset_after_case() {
+        if (!row_awaits_reset) {
+            reset_for_case();
+            return;
+        }
+        row_awaits_reset = false;
+        const Census before = Census::take();
+        reset_for_case();
+        const Census after = Census::take();
+        CensusRow &row = census_ledger().rows.back();
+        row.freed_before_reset = closed.objects - before.objects;
+        row.freed_by_reset = before.objects - after.objects;
+    }
 
 public:
     explicit ResetListener(const doctest::ContextOptions &) {
     }
 
     void test_case_start(const doctest::TestCaseData &data) override {
-        reset_for_case();
+        reset_after_case();
         current = data.m_name;
         opened = Census::take();
     }
@@ -100,7 +118,7 @@ public:
     }
 
     void test_case_end(const doctest::CurrentTestCaseStats &) override {
-        const Census closed = Census::take();
+        closed = Census::take();
         if (!opened.measurable() || !closed.measurable()) {
             return;
         }
@@ -109,13 +127,16 @@ public:
         if (objects == 0 && resources == 0) {
             return;
         }
-        census_ledger().rows.push_back({objects, resources, current});
+        CensusRow row;
+        row.objects = objects;
+        row.resources = resources;
+        row.name = current;
+        census_ledger().rows.push_back(row);
+        row_awaits_reset = true;
     }
 
     void test_run_end(const doctest::TestRunStats &) override {
-        for (ResetHook hook : reset_hooks()) {
-            hook();
-        }
+        reset_after_case();
         const CensusLedger &ledger = census_ledger();
         if (ledger.read_by_runner || ledger.rows.empty()) {
             return;
@@ -127,9 +148,10 @@ public:
         );
         for (const CensusRow &row : ledger.rows) {
             std::printf(
-                "  objects %+lld resources %+lld  %s\n",
+                "  objects %+lld resources %+lld freed by reset %lld  %s\n",
                 (long long)row.objects,
                 (long long)row.resources,
+                (long long)row.freed_by_reset,
                 row.name.c_str()
             );
         }

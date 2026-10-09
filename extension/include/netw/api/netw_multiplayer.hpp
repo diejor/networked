@@ -2277,6 +2277,13 @@ public:
         int64_t handle_by_wrapper = 0;
         int64_t attributed_routes = 0;
         int64_t node_overlays = 0;
+        int64_t wrapper_slots = 0;
+        int64_t liveness_routes = 0;
+        int64_t display_rows = 0;
+        int64_t layer_views = 0;
+        int64_t engine_layers = 0;
+        int64_t attribution_peer_keys = 0;
+        int64_t lagcomp_timelines = 0;
     };
     BookSizes book_sizes() const;
 #endif
@@ -2969,6 +2976,10 @@ public:
     static void install_default_interface();
     static void restore_default_interface();
     static NetwMultiplayer *of(godot::Node *p_node);
+    static NetwMultiplayer *of_leaving(godot::Node *p_node);
+    static NetwMultiplayer *of_installed(
+        const godot::Ref<godot::MultiplayerAPI> &p_installed
+    );
     static bool is_tearing_down(godot::ObjectID p_session);
 
     godot::Error entity_add_property_set(
@@ -4091,6 +4102,7 @@ public:
     void session_watch_serverless_mesh();
     void session_watch_late_server();
     void peer_mark_unreachable(int64_t p_peer);
+    bool peer_released_by_transport(int64_t p_peer) const;
     void peer_mark_reachable(int64_t p_peer);
     void session_refuse(int64_t p_peer, const godot::String &p_reason);
     godot::String session_refusal(int64_t p_peer) const;
@@ -4312,6 +4324,7 @@ public:
     ) const;
     godot::Error lagcomp_timeline_declare(const godot::RID &p_entity);
     void lagcomp_timeline_undeclare(const godot::RID &p_entity);
+    void predict_report_joint_refusal(int64_t p_entity_id);
     void lagcomp_effect_adopt(const godot::StringName &p_key);
     void lagcomp_effect_discard(const godot::StringName &p_key);
     void observe_node_added(godot::Node *p_node);

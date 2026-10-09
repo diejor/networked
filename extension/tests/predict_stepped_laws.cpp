@@ -327,6 +327,48 @@ TEST_CASE(
     unstep(owner);
 }
 
+TEST_CASE(
+    "[Networked][Predict][Stepped] JR1 a JOINT group set up in a legal order "
+    "reports no refusal, and a member that later stops replaying is still "
+    "reported once"
+) {
+    const Scenario scenario = rerunnable_island_lane();
+    LoopbackRig rig(scenario.clients);
+    const ScenarioRun run = ScenarioRun::session(rig, scenario);
+    REQUIRE(run.regime_reached());
+
+    NetwMultiplayer *const predictor = rig.client(0);
+    REQUIRE(predictor != nullptr);
+    NetwPredictionEngine *const pool = predictor->get_prediction_engine();
+    REQUIRE(pool != nullptr);
+    const JointOwner owner = joint_owner(predictor);
+    REQUIRE_MESSAGE(owner.slot >= 0, "the predictor seated no JOINT owner");
+
+    const char *refused = "RECONCILE_JOINT needs every entity";
+    const FaultWatch watch;
+    netw::gd::scene_root()->add_child(owner.entity->get_owner());
+    owner.entity->get_simulation()->set_schedule(
+        netw::NetwSimulation::SCHEDULE_STEPPED
+    );
+    predictor->predict_stepper_install(
+        predictor->entity_space_of(owner.entity).space,
+        installable_stepper()
+    );
+    for (int frame = 0; frame < 4; ++frame) {
+        rig.step_frame(1);
+    }
+    NETW_CHECK_EQ(watch.errors_containing(refused), int64_t(0));
+
+    owner.entity->get_simulation()->set_schedule(
+        netw::NetwSimulation::SCHEDULE_FRAME
+    );
+    for (int frame = 0; frame < 4; ++frame) {
+        rig.step_frame(1);
+    }
+    NETW_CHECK_EQ(watch.errors_containing(refused), int64_t(1));
+    unstep(owner);
+}
+
 Scenario consumed_lane() {
     Scenario scenario;
     scenario.label = "stepped-consumer";

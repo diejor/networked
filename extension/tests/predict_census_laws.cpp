@@ -893,6 +893,7 @@ TEST_CASE(
 }
 
 int64_t refused_joint(
+    LoopbackRig &p_rig,
     NetwMultiplayer *p_core,
     const Ref<NetwEntity> &p_wrapper,
     const FaultWatch &p_watch
@@ -908,6 +909,7 @@ int64_t refused_joint(
         pool->admitted_reconcile_mode(slot),
         int(netw::NetwPrediction::RECONCILE_INDEPENDENT)
     );
+    p_rig.pump();
     return p_watch.errors_containing("RECONCILE_JOINT needs");
 }
 
@@ -940,10 +942,19 @@ TEST_CASE(
     const FaultWatch watch;
     const TypedArray<NetwEntity> consumed = server->predict_stepped_entities();
     REQUIRE(consumed.size() == 2);
-    NETW_CHECK_EQ(refused_joint(server, consumed[0], watch), int64_t(0));
-    NETW_CHECK_EQ(refused_joint(server, consumed[1], watch), int64_t(0));
-    NETW_CHECK_EQ(refused_joint(predictor, predicted, watch), int64_t(1));
+    NETW_CHECK_EQ(refused_joint(rig, server, consumed[0], watch), int64_t(0));
+    NETW_CHECK_EQ(refused_joint(rig, server, consumed[1], watch), int64_t(0));
+    NETW_CHECK_EQ(
+        refused_joint(rig, predictor, predicted, watch),
+        int64_t(1)
+    );
     CHECK(pool->joint_refusal_reported_of(pool->slot_of(predicted)));
+
+    REQUIRE(predicted->get_owner() != nullptr);
+    const godot::String named = godot::String("'")
+        + godot::String(predicted->get_owner()->get_name())
+        + godot::String("'");
+    NETW_CHECK_EQ(watch.errors_containing(named), int64_t(1));
 }
 
 TEST_CASE(

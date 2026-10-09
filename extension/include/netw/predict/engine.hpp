@@ -554,6 +554,7 @@ public:
     void set_invalid_command_predictor_reported(int64_t p_slot, bool p_value);
     bool joint_refusal_reported_of(int64_t p_slot) const;
     void set_joint_refusal_reported(int64_t p_slot, bool p_value);
+    void report_joint_refusal(int64_t p_slot);
     bool stepper_absence_reported_of(int64_t p_slot) const;
     void set_stepper_absence_reported(int64_t p_slot, bool p_value);
     int resolved_schedule(int64_t p_slot, int p_declared);
@@ -1183,6 +1184,7 @@ public:
     void host_local_step(int64_t p_slot, double p_delta, int64_t p_tick);
     int64_t sibling_slot(const godot::Ref<NetwEntity> &p_member);
     int admitted_reconcile_mode(int64_t p_slot);
+    godot::PackedStringArray joint_refusals(int64_t p_slot);
     void admit_reconcile_mode(int64_t p_slot);
     int reconcile_of(int64_t p_slot) const;
     void set_reconcile_own(int64_t p_slot, int p_mode);

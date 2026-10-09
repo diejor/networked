@@ -91,10 +91,18 @@ public:
 #endif
     void discard(int64_t p_peer, bool p_reliable, bool p_carrier);
     void discard_peer(int64_t p_peer);
+    void forget_peer(int64_t p_peer);
     void retire_route(int64_t p_route);
     void settle_retired_routes();
     int64_t attributed_route_count() const {
         return int64_t(route_out.size() + route_in.size());
+    }
+    int64_t peer_keyed_count() const {
+        return int64_t(
+            bytes_out.size() + bytes_in.size()
+            + frames_by_peer_channel_in.size() + refusals.size()
+            + staged.size()
+        );
     }
 
     void note_framing_out(int64_t p_bytes);

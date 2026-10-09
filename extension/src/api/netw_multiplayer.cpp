@@ -5,6 +5,7 @@
 #include "netw/api/join_config.hpp"
 #include "netw/diag/hints.hpp"
 #include "netw/api/lag_compensation_config.hpp"
+#include "netw/api/loopback.hpp"
 #include "netw/api/nodes/multiplayer_viewport.hpp"
 #include "netw/api/scene.hpp"
 #include "netw/spawn/pipeline.hpp"
@@ -1028,7 +1029,26 @@ NetwMultiplayer *NetwMultiplayer::of(Node *p_node) {
         );
         return nullptr;
     }
-    const Ref<MultiplayerAPI> installed = p_node->get_multiplayer();
+    return of_installed(p_node->get_multiplayer());
+}
+
+NetwMultiplayer *NetwMultiplayer::of_leaving(Node *p_node) {
+    if (p_node == nullptr || !p_node->is_inside_tree()) {
+        return nullptr;
+    }
+    String path;
+    for (Node *at = p_node; at != nullptr; at = at->get_parent()) {
+        path = "/" + String(at->get_name()) + path;
+    }
+    const Ref<MultiplayerAPI> installed
+        = p_node->get_tree()->get_multiplayer(NodePath(path));
+    return of_installed(installed);
+}
+
+NetwMultiplayer *NetwMultiplayer::of_installed(
+    const Ref<MultiplayerAPI> &p_installed
+) {
+    const Ref<MultiplayerAPI> installed = p_installed;
     if (installed.is_null()) {
         NETW_TRACE(sys::SESSION, "A node's branch has no MultiplayerAPI.");
         return nullptr;
@@ -2111,13 +2131,34 @@ void NetwMultiplayer::peer_mark_unreachable(int64_t p_peer) {
     if (p_peer == SERVER_PEER && relabel_source.is_valid()) {
         return;
     }
-    NETW_WARN(
-        sys::TRANSPORT,
-        "Peer %d refused a packet, so nothing more is sent to it until it "
-        "connects again.",
-        int(p_peer)
-    );
+    if (peer_released_by_transport(p_peer)) {
+        NETW_TRACE(
+            sys::TRANSPORT,
+            "Peer %d is leaving, so a packet for it was dropped.",
+            int(p_peer)
+        );
+    } else {
+        NETW_WARN(
+            sys::TRANSPORT,
+            "Peer %d refused a packet, so nothing more is sent to it until it "
+            "connects again.",
+            int(p_peer)
+        );
+    }
     session_settle_peer_loss(p_peer);
+}
+
+bool NetwMultiplayer::peer_released_by_transport(int64_t p_peer) const {
+    if (!session_link_is_connected()) {
+        return false;
+    }
+    const Ref<MultiplayerPeer> link = inner->get_multiplayer_peer();
+    const LocalMultiplayerPeer *local
+        = Object::cast_to<LocalMultiplayerPeer>(link.ptr());
+    if (local != nullptr) {
+        return !local->is_linked_to(int(p_peer));
+    }
+    return !gd::peer_can_receive(link, p_peer);
 }
 
 void NetwMultiplayer::peer_mark_reachable(int64_t p_peer) {
@@ -5066,6 +5107,7 @@ void NetwMultiplayer::peer_forget(int64_t p_peer) {
     session_forget_peer(p_peer);
     player_publish_left(leaving);
     player_forget(p_peer);
+    attribution.forget_peer(p_peer);
 }
 
 Ref<NetwPlayer> NetwMultiplayer::peer_get_player(int64_t p_peer) {

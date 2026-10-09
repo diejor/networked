@@ -45,7 +45,9 @@ godot --headless --fixed-fps 60 --script tests/native/run_native_tests.gd \
 ```
 
 The run ends with a summary of the case count, the failing cases, the cases
-that ended holding objects and the most common warnings. Every case is in
+that ended holding objects and the most common warnings. A warning is
+expected when the case that caused it asserted it, and only the unexpected
+ones are ranked. Every case is in
 `reports/native/results.xml` and every held-object row is in
 `reports/native/census.txt`.
 

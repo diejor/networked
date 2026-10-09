@@ -1880,9 +1880,20 @@ Error NetwMultiplayer::lagcomp_timeline_declare(const RID &p_entity) {
 }
 
 void NetwMultiplayer::lagcomp_timeline_undeclare(const RID &p_entity) {
-    const Ref<NetwEntity> wrapper = entity_get_view(p_entity);
+    const Ref<NetwEntity> wrapper = wrapper_for_id(int64_t(p_entity.get_id()));
     if (wrapper.is_valid()) {
         lagcomp_core.timeline_unregister(wrapper);
+    }
+}
+
+void NetwMultiplayer::predict_report_joint_refusal(int64_t p_entity_id) {
+    const Ref<NetwEntity> wrapper = wrapper_for_id(p_entity_id);
+    if (wrapper.is_null()) {
+        return;
+    }
+    const int64_t slot = prediction_engine.slot_of(wrapper);
+    if (slot >= 0) {
+        prediction_engine.report_joint_refusal(slot);
     }
 }
 

@@ -53,7 +53,7 @@
 		<method name="get_client_peers" qualifiers="const">
 			<return type="Array" />
 			<description>
-				Returns every client peer created, including closed ones.
+				Returns every client peer that is still open. A client that closed, or that nothing but this session holds any more, leaves the list on the next poll.
 			</description>
 		</method>
 		<method name="get_link_conditions" qualifiers="const">

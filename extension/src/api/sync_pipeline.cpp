@@ -1888,6 +1888,16 @@ void SyncPipeline::clear_route(int64_t p_route) {
 
 void SyncPipeline::clear_peer(int64_t p_peer_id) {
     progress.clear_peer(p_peer_id);
+    LocalVector<uint64_t> refused;
+    for (const KeyValue<uint64_t, int64_t> &row :
+         write_refusals_by_peer_member) {
+        if ((row.key >> 32) == uint64_t(uint32_t(p_peer_id))) {
+            refused.push_back(row.key);
+        }
+    }
+    for (const uint64_t key : refused) {
+        write_refusals_by_peer_member.erase(key);
+    }
     for (uint32_t at = 0; at < bindings.size(); ++at) {
         live(bindings[at])->clear_peer(p_peer_id);
     }
@@ -1915,6 +1925,7 @@ Dictionary SyncPipeline::counters() const {
     out[StringName("sends_dropped_not_live")] = sends_dropped_not_live;
     out[StringName("sync_drops_stale")]
         = progress.stale_count() + rows_refused_stale;
+    out[StringName("drops_write_refused")] = writes_refused;
     out[StringName("row_frames_dropped_baseline")]
         = row_sender_armed ? row_sender.baseline_drops() : int64_t(0);
     out[StringName("derived_sets_active")] = int64_t(bindings.size());
@@ -2027,6 +2038,14 @@ void SyncPipeline::handle_property_sync(
             p_sender,
             p_entity->steering()
         )) {
+        writes_refused += 1;
+        const uint64_t key = (uint64_t(uint32_t(p_sender)) << 32)
+            | uint64_t(uint32_t(prop.hash()));
+        if (write_refusals_by_peer_member.has(key)) {
+            write_refusals_by_peer_member[key] += 1;
+            return;
+        }
+        write_refusals_by_peer_member.insert(key, 1);
         NETW_WARN(
             sys::WIRE,
             "'%s' was synced by peer %d, which may not write it, so it was "

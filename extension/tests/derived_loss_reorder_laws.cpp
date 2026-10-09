@@ -6,6 +6,7 @@
 
 #if defined(NETW_TIER_HOSTED)
 
+#include "support/fault_log.h"
 #include "support/netw_cells.h"
 #include "support/value_flow_stand.h"
 
@@ -102,6 +103,8 @@ struct Evidence {
     int64_t client_acks_in = 0;
     int64_t server_peer_ack = -1;
     int64_t client_peer_ack = -1;
+    int64_t refused_write_warnings = 0;
+    int64_t refused_writes = 0;
 };
 
 int64_t stat_of(godot::Object *p_core, const char *p_name) {
@@ -249,7 +252,12 @@ public:
         impair(rig);
 
         if (p_scenario.property_door) {
+            const netw_test::FaultWatch faults;
             drive_property(rig, pair);
+            seen.refused_write_warnings
+                = faults.warnings_containing("which may not write it");
+            seen.refused_writes
+                = stat_of(rig.server(), "drops_sync_bad_sender");
         } else {
             drive_state(rig, pair);
         }
@@ -424,8 +432,42 @@ const LossLaw L_PIGGYBACK = {
     &law_piggyback,
 };
 
-const LossLaw LAWS[]
-    = {L_FORWARD, L_GATED, L_CONVERGES, L_MONOTONIC, L_PIGGYBACK};
+LawVerdict law_refused_once(const LossRun &p_run) {
+    const Evidence &seen = p_run.evidence();
+    if (!p_run.scenario().property_door) {
+        return law_held();
+    }
+    if (seen.refused_writes < CHATTY_TICKS) {
+        return law_broken(
+            "the server counted %d refused writes for %d the client sent",
+            int(seen.refused_writes),
+            CHATTY_TICKS
+        );
+    }
+    if (seen.refused_write_warnings != 1) {
+        return law_broken(
+            "%d warnings named the refused member, one was owed",
+            int(seen.refused_write_warnings)
+        );
+    }
+    return law_held();
+}
+
+const LossLaw L_REFUSED_ONCE = {
+    "refused once",
+    "a peer that keeps syncing a member it may not write is warned about "
+    "once, and every later refusal is counted instead",
+    &law_refused_once,
+};
+
+const LossLaw LAWS[] = {
+    L_FORWARD,
+    L_GATED,
+    L_CONVERGES,
+    L_MONOTONIC,
+    L_PIGGYBACK,
+    L_REFUSED_ONCE,
+};
 
 TEST_CASE("[Networked][Sync][SceneTree] the loss and reorder laws hold") {
     const LossScenario CORPUS[]

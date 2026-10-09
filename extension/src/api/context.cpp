@@ -240,13 +240,11 @@ void register_derived_now(const Variant &p_node) {
     }
 }
 
-void unregister_derived_now(const Variant &p_node) {
-    Node *node = node_behind(p_node);
-    if (node == nullptr) {
-        return;
-    }
-    if (SyncPipeline *pipeline = pipeline_of(node)) {
-        pipeline->unregister_derived(node);
+void unregister_derived_leaving(Node *p_node) {
+    NetwMultiplayer *api = NetwMultiplayer::of_leaving(p_node);
+    SyncPipeline *pipeline = api != nullptr ? api->sync_pipeline() : nullptr;
+    if (pipeline != nullptr) {
+        pipeline->unregister_derived(p_node);
     }
 }
 
@@ -358,7 +356,7 @@ void tree::declarations_entered(Node *p_node, uint16_t p_marks) {
 }
 
 void tree::declarations_exiting(Node *p_node) {
-    unregister_derived_now(Variant(p_node));
+    unregister_derived_leaving(p_node);
 }
 
 Dictionary Netw::native_api() {

@@ -56,8 +56,12 @@ func print_summary(result: Dictionary) -> void:
 	if result[&"census_cases"] > 0:
 		var top: PackedStringArray = result[&"census_top"]
 		lines.append(
-			"CENSUS  %d cases ended holding objects. top %d, all in %s" % [
+			(
+				"CENSUS  %d cases ended holding objects, %d held objects "
+				+ "that only the reset between cases released. top %d, all in %s"
+			) % [
 				result[&"census_cases"],
+				result[&"census_reset_only"],
 				top.size(),
 				String(result[&"census_path"]).trim_prefix("res://"),
 			],
@@ -66,8 +70,13 @@ func print_summary(result: Dictionary) -> void:
 			lines.append("  %s" % row)
 	var families: Array = result[&"fault_families"]
 	lines.append(
-		"FAULTS  %d warnings and errors in %d families. top %d" % [
+		(
+			"FAULTS  %d printed, %d expected by their case, "
+			+ "%d unexpected in %d families. top %d unexpected"
+		) % [
 			result[&"faults"],
+			result[&"faults_expected"],
+			result[&"faults_unexpected"],
 			result[&"fault_family_count"],
 			families.size(),
 		],

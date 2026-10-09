@@ -128,6 +128,35 @@ void AttributionBook::discard(int64_t p_peer, bool p_reliable, bool p_carrier) {
     staged.erase(key);
 }
 
+namespace {
+
+void erase_peer_rows(
+    HashMap<uint64_t, int64_t> &r_rows,
+    uint64_t p_peer,
+    int p_shift
+) {
+    LocalVector<uint64_t> gone;
+    for (const KeyValue<uint64_t, int64_t> &row : r_rows) {
+        if ((row.key >> p_shift) == p_peer) {
+            gone.push_back(row.key);
+        }
+    }
+    for (const uint64_t key : gone) {
+        r_rows.erase(key);
+    }
+}
+
+} // namespace
+
+void AttributionBook::forget_peer(int64_t p_peer) {
+    discard_peer(p_peer);
+    const uint64_t peer = uint64_t(uint32_t(p_peer));
+    erase_peer_rows(bytes_out, peer, 8);
+    erase_peer_rows(bytes_in, peer, 8);
+    erase_peer_rows(frames_by_peer_channel_in, peer, 8);
+    erase_peer_rows(refusals, peer, 16);
+}
+
 void AttributionBook::discard_peer(int64_t p_peer) {
     discard(p_peer, false, false);
     discard(p_peer, false, true);

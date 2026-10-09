@@ -4,6 +4,7 @@
 #include "netw/api/netw_multiplayer.hpp"
 #include "netw/api/predict_stats.hpp"
 #include "netw/api/prediction.hpp"
+#include "netw/api/sync_pipeline.hpp"
 #include "netw/property_set_builder.hpp"
 #include "netw/script/model.hpp"
 #include "netw/wire/registry.hpp"
@@ -5314,29 +5315,34 @@ namespace {
 String schedule_label(NetwSimulation::Schedule p_schedule) {
     switch (p_schedule) {
         case NetwSimulation::SCHEDULE_TICK:
-            return "TICK";
+            return "SCHEDULE_TICK";
         case NetwSimulation::SCHEDULE_FRAME:
-            return "FRAME";
+            return "SCHEDULE_FRAME";
         case NetwSimulation::SCHEDULE_STEPPED:
-            return "STEPPED";
+            return "SCHEDULE_STEPPED";
         case NetwSimulation::SCHEDULE_AUTO:
-            return "AUTO";
+            return "SCHEDULE_AUTO";
         default:
             return String::num_int64(p_schedule);
     }
 }
 
+String quoted_entity(const Ref<NetwEntity> &p_member) {
+    Node *owner = p_member.is_valid() ? p_member->get_owner() : nullptr;
+    const String named = owner != nullptr
+        ? SyncPipeline::contract_subject_name(owner)
+        : String("an entity with no node");
+    return String("'") + named + String("'");
+}
+
 String refusal_row(
     const Ref<NetwEntity> &p_member,
-    const NetwPrediction *p_handle,
-    const char *p_suffix
+    const NetwPrediction *p_handle
 ) {
-    const String tier = p_handle != nullptr
+    const String schedule = p_handle != nullptr
         ? schedule_label(p_handle->get_schedule())
-        : String("unknown");
-    const StringName named
-        = p_member.is_valid() ? p_member->get_name() : StringName();
-    return String(named) + String(p_suffix) + tier + String(" tier");
+        : String("no schedule");
+    return quoted_entity(p_member) + String(" on ") + schedule;
 }
 
 } // namespace
@@ -5412,12 +5418,30 @@ int NetwPredictionEngine::admitted_reconcile_mode(int64_t p_slot) {
         || role_of(p_slot) == int(Role::REMOTE)) {
         return requested;
     }
+    if (joint_refusals(p_slot).is_empty()) {
+        set_joint_refusal_reported(p_slot, false);
+        return int(NetwPrediction::RECONCILE_JOINT);
+    }
+    NetwMultiplayer *host = core();
+    const Ref<NetwEntity> owner = owner_entity(p_slot);
+    if (host != nullptr && owner.is_valid()
+        && role_of(p_slot) == int(Role::PREDICT)
+        && !joint_refusal_reported_of(p_slot)) {
+        const int64_t id = int64_t(owner->get_rid_handle().get_id());
+        host->session_defer(
+            callable_mp(host, &NetwMultiplayer::predict_report_joint_refusal)
+                .bind(id),
+            StringName(vformat("predict-joint-refusal?%d", id))
+        );
+    }
+    return int(NetwPrediction::RECONCILE_INDEPENDENT);
+}
 
+PackedStringArray NetwPredictionEngine::joint_refusals(int64_t p_slot) {
+    NetwPrediction *handle = Object::cast_to<NetwPrediction>(handle_of(p_slot));
     PackedStringArray refusals;
     if (!slot_is_steppable(p_slot)) {
-        refusals.push_back(
-            refusal_row(owner_entity(p_slot), handle, " owner on a ")
-        );
+        refusals.push_back(refusal_row(owner_entity(p_slot), handle));
     }
     const TypedArray<NetwEntity> members
         = roster_list(p_slot, ROSTER_SIMULATED);
@@ -5432,27 +5456,36 @@ int NetwPredictionEngine::admitted_reconcile_mode(int64_t p_slot) {
         }
         refusals.push_back(refusal_row(
             member,
-            Object::cast_to<NetwPrediction>(handle_of(seat)),
-            " on a "
+            Object::cast_to<NetwPrediction>(handle_of(seat))
         ));
     }
+    return refusals;
+}
+
+void NetwPredictionEngine::report_joint_refusal(int64_t p_slot) {
+    NetwPrediction *handle = Object::cast_to<NetwPrediction>(handle_of(p_slot));
+    if (handle == nullptr
+        || int(handle->get_reconcile_mode())
+            != int(NetwPrediction::RECONCILE_JOINT)
+        || role_of(p_slot) != int(Role::PREDICT)
+        || joint_refusal_reported_of(p_slot)) {
+        return;
+    }
+    const PackedStringArray refusals = joint_refusals(p_slot);
     if (refusals.is_empty()) {
-        return int(NetwPrediction::RECONCILE_JOINT);
+        return;
     }
-    if (role_of(p_slot) == int(Role::PREDICT)
-        && !joint_refusal_reported_of(p_slot)) {
-        set_joint_refusal_reported(p_slot, true);
-        NETW_ERROR(
-            sys::PREDICTION,
-            "NetwPrediction.RECONCILE_JOINT needs every entity in the group to "
-            "replay a tick, and these cannot (%s), so the group runs "
-            "NetwPrediction.RECONCILE_INDEPENDENT. Give each one a "
-            "NetwSimulation.step on SCHEDULE_TICK, or use "
-            "SCHEDULE_STEPPED with a stepper.",
-            String(", ").join(refusals)
-        );
-    }
-    return int(NetwPrediction::RECONCILE_INDEPENDENT);
+    set_joint_refusal_reported(p_slot, true);
+    NETW_ERROR(
+        sys::PREDICTION,
+        "NetwPrediction.RECONCILE_JOINT needs every entity in the group of "
+        "%s to replay a tick, and %s cannot, so the group runs "
+        "NetwPrediction.RECONCILE_INDEPENDENT. Give each one a "
+        "NetwSimulation.step on SCHEDULE_TICK, or use "
+        "SCHEDULE_STEPPED with a stepper.",
+        quoted_entity(owner_entity(p_slot)),
+        String(", ").join(refusals)
+    );
 }
 
 void NetwPredictionEngine::follow_relay_subscription(
