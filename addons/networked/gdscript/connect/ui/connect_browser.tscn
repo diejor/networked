@@ -248,15 +248,19 @@ text = "Join"
 
 [node name="RoomBar" parent="." unique_id=89234910 instance=ExtResource("7_room")]
 layout_mode = 1
+offset_left = -563.0
+offset_top = -92.0
+offset_right = -243.0
+offset_bottom = -52.0
 
-[node name="HostPopup" parent="." instance=ExtResource("3_host")]
+[node name="HostPopup" parent="." unique_id=843964446 instance=ExtResource("3_host")]
 unique_name_in_owner = true
 
-[node name="JoinPopup" parent="." instance=ExtResource("4_join")]
+[node name="JoinPopup" parent="." unique_id=286671098 instance=ExtResource("4_join")]
 unique_name_in_owner = true
 
-[node name="JoinDirectPopup" parent="." instance=ExtResource("5_direct")]
+[node name="JoinDirectPopup" parent="." unique_id=505371619 instance=ExtResource("5_direct")]
 unique_name_in_owner = true
 
-[node name="ConnectingPopup" parent="." instance=ExtResource("6_connecting")]
+[node name="ConnectingPopup" parent="." unique_id=797254029 instance=ExtResource("6_connecting")]
 unique_name_in_owner = true

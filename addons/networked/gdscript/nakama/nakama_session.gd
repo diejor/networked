@@ -2,6 +2,8 @@
 ## [NakamaDatabase].
 ##
 ## Get it with [method of], so matches and storage use the same user.
+##
+## Needs the Nakama Godot SDK [constant NakamaWrapper.NAKAMA_SDK_VERSION].
 class_name NakamaSessionService
 extends NetwService
 
@@ -143,6 +145,7 @@ func is_authenticated() -> bool:
 func connect_async() -> Dictionary:
 	if not is_addon_present():
 		return { "ok": false, "error": "Nakama addon not present" }
+	NakamaWrapper.report_version_mismatch()
 	if is_authenticated():
 		return { "ok": true, "error": "" }
 	if _connecting:

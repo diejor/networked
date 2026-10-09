@@ -4,6 +4,10 @@
 ## may not be installed.
 class_name SteamWrapper
 
+## The GodotSteam release this addon is tested against. A later release with
+## the same major version also works.
+const GODOTSTEAM_VERSION := "4.18"
+
 ## Mirrors [code]Steam.LobbyType[/code] from the GodotSteam API.
 enum LobbyType {
 	## Only joinable via invite.
@@ -102,6 +106,27 @@ static func is_running() -> bool:
 	if not Engine.has_singleton("Steam"):
 		return false
 	return bool(Engine.get_singleton("Steam").isSteamRunning())
+
+
+## Returns a warning when the installed GodotSteam is older than
+## [constant GODOTSTEAM_VERSION] or has another major version, or an empty
+## [String] when it matches.
+static func version_mismatch() -> String:
+	if not Engine.has_singleton("Steam"):
+		return ""
+	var steam := Engine.get_singleton("Steam")
+	var installed := "an unknown version"
+	if steam.has_method(&"get_godotsteam_version"):
+		installed = String(steam.call(&"get_godotsteam_version"))
+	var have := installed.split(".")
+	var wanted := GODOTSTEAM_VERSION.split(".")
+	if have.size() >= 2 and have[0] == wanted[0] \
+			and int(have[1]) >= int(wanted[1]):
+		return ""
+	return (
+		"GodotSteam %s is installed and Networked needs %s or a later %s.x. "
+		+ "Install a matching GodotSteam release."
+	) % [installed, GODOTSTEAM_VERSION, wanted[0]]
 
 
 func steam_init_ex() -> Dictionary:

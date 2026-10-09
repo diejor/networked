@@ -69,10 +69,10 @@ func remember_level(level: NetwScene) -> void:
 func place_player(player: NetwPlayer, level: NetwScene) -> void:
 	if not player.bodies.is_empty():
 		return
-	var avatar := Netw.spawn_player(player, spawn_avatar)
+	var new_avatar := Netw.spawn_player(player, spawn_avatar)
 	var roster: Array[NetwPlayer] = session.players
-	(avatar as Node2D).position = START_POSE + START_STRIDE * roster.size()
-	level.root.add_child(avatar)
+	(new_avatar as Node2D).position = START_POSE + START_STRIDE * roster.size()
+	level.root.add_child(new_avatar)
 
 
 func open_level(path: String) -> NetwScene:

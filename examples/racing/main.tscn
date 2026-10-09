@@ -6,11 +6,11 @@
 [node name="Main" type="Node" unique_id=1750324196]
 script = ExtResource("1_sess")
 
-[node name="LobbyProviders" type="Node" parent="."]
+[node name="LobbyProviders" type="Node" parent="." unique_id=381283290]
 
-[node name="WebTorrentLobbyDirectory" type="WebTorrentLobbyDirectory" parent="LobbyProviders"]
+[node name="WebTorrentLobbyDirectory" type="WebTorrentLobbyDirectory" parent="LobbyProviders" unique_id=187494651]
 
-[node name="LANLobbyDirectory" type="LANLobbyDirectory" parent="LobbyProviders"]
+[node name="LANLobbyDirectory" type="LANLobbyDirectory" parent="LobbyProviders" unique_id=1753178065]
 
 [node name="UI" type="CanvasLayer" parent="." unique_id=672422801]
 

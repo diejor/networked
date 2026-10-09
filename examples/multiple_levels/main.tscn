@@ -13,11 +13,11 @@ level_1 = ExtResource("17_level1")
 level_2 = ExtResource("18_level2")
 avatar = ExtResource("19_avatar")
 
-[node name="LobbyProviders" type="Node" parent="."]
+[node name="LobbyProviders" type="Node" parent="." unique_id=1636047546]
 
-[node name="WebTorrentLobbyDirectory" type="WebTorrentLobbyDirectory" parent="LobbyProviders"]
+[node name="WebTorrentLobbyDirectory" type="WebTorrentLobbyDirectory" parent="LobbyProviders" unique_id=406253330]
 
-[node name="LANLobbyDirectory" type="LANLobbyDirectory" parent="LobbyProviders"]
+[node name="LANLobbyDirectory" type="LANLobbyDirectory" parent="LobbyProviders" unique_id=1655436544]
 
 [node name="TPLayer" parent="." unique_id=1002194750 instance=ExtResource("9_k3bnk")]
 

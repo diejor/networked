@@ -23,6 +23,43 @@ class_name NakamaWrapper
 const _FACADE_PATH := "res://addons/com.heroiclabs.nakama/Nakama.gd"
 const _NAKAMA_LOG_LEVEL_WARNING := 2
 
+## The Nakama Godot SDK release this addon is tested against.
+const NAKAMA_SDK_VERSION := "3.4.0"
+
+const _SDK_MEMBERS := {
+	"Nakama": ["create_client", "create_socket_from"],
+	"NakamaClient": [
+		"_api_client",
+		"authenticate_device_async",
+		"authenticate_custom_async",
+		"rpc_async",
+		"list_matches_async",
+		"write_storage_objects_async",
+		"read_storage_objects_async",
+		"list_storage_objects_async",
+		"delete_storage_objects_async",
+	],
+	"NakamaAPI.ApiClient": ["_base_uri", "_http_adapter"],
+	"NakamaSocket": [
+		"_base_uri",
+		"logger",
+		"closed",
+		"connect_async",
+		"close",
+		"is_connected_to_host",
+		"create_match_async",
+		"join_match_async",
+		"join_matched_async",
+		"send_match_state_async",
+		"send_match_state_raw_async",
+		"received_match_presence",
+		"received_match_state",
+		"received_matchmaker_matched",
+	],
+}
+
+static var _version_reported := false
+
 ## The Nakama storage collection where lobby listings are saved.
 const LOBBY_COLLECTION := "lobbies"
 
@@ -110,6 +147,46 @@ static func is_addon_present() -> bool:
 	return _nakama_class("NakamaClient") != null
 
 
+## Logs one warning, once per run, when the installed Nakama addon lacks a
+## method, property or signal this addon calls. Does nothing when the addon is
+## absent.
+static func report_version_mismatch() -> void:
+	if _version_reported or not is_addon_present():
+		return
+	_version_reported = true
+	var api: Script = _nakama_class("NakamaAPI")
+	var scripts := {
+		"Nakama": load(_FACADE_PATH),
+		"NakamaClient": _nakama_class("NakamaClient"),
+		"NakamaAPI.ApiClient":
+		api.get_script_constant_map().get("ApiClient") if api else null,
+		"NakamaSocket": _nakama_class("NakamaSocket"),
+	}
+	var missing := PackedStringArray()
+	for owner: String in _SDK_MEMBERS:
+		var script: Script = scripts[owner]
+		var names := { }
+		if script != null:
+			for list: Array in [
+				script.get_script_method_list(),
+				script.get_script_property_list(),
+				script.get_script_signal_list(),
+			]:
+				for entry: Dictionary in list:
+					names[entry["name"]] = true
+		for member: String in _SDK_MEMBERS[owner]:
+			if not names.has(member):
+				missing.append("%s.%s" % [owner, member])
+	if missing.is_empty():
+		return
+	push_warning(
+		(
+			"The installed Nakama addon has no %s. "
+			+ "Install the Nakama Godot SDK %s."
+		) % [", ".join(missing), NAKAMA_SDK_VERSION],
+	)
+
+
 ## Logs in to Nakama and opens the realtime connection. A helper node is
 ## added under [param host].
 ## [codeblock]
@@ -131,6 +208,7 @@ func connect_async(host: Node, config: Dictionary) -> Dictionary:
 		return { "ok": false, "error": "Nakama addon not present" }
 	if not is_instance_valid(host):
 		return { "ok": false, "error": "Invalid host node" }
+	report_version_mismatch()
 
 	if is_ready():
 		return { "ok": true, "error": "" }

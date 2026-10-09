@@ -4,6 +4,9 @@
 ## address is its Steam lobby id.
 ##
 ## Steam allows one instance per process, so a second one frees itself.
+##
+## Needs GodotSteam [constant SteamWrapper.GODOTSTEAM_VERSION] or a later
+## release with the same major version.
 class_name SteamLobbyDirectory
 extends LobbyDirectory
 
@@ -86,6 +89,10 @@ func _service_entered(session: NetwSession) -> void:
 		)
 		session.unregister_service(self, self)
 		return
+
+	var mismatch := SteamWrapper.version_mismatch()
+	if not mismatch.is_empty():
+		push_warning(mismatch)
 
 	if not _has_steam_app_id():
 		if allow_spacewar_fallback:

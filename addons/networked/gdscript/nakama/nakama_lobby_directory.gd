@@ -3,6 +3,8 @@
 ## The host needs no open port, so web exports can host. A lobby's address is
 ## its match id, which players can share to join directly. Lobby names and
 ## settings are stored in Nakama storage so they can be listed.
+##
+## Needs the Nakama Godot SDK [constant NakamaWrapper.NAKAMA_SDK_VERSION].
 class_name NakamaLobbyDirectory
 extends LobbyDirectory
 

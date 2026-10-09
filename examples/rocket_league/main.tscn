@@ -3,7 +3,6 @@
 [ext_resource type="Script" uid="uid://c06rvowmt0je3" path="res://examples/rocket_league/scripts/rocket_league_session.gd" id="1_sess"]
 [ext_resource type="PackedScene" uid="uid://bb2nsfunxlw3a" path="res://addons/networked/gdscript/connect/ui/connect_browser.tscn" id="2_brws"]
 [ext_resource type="Script" uid="uid://b1ob7aihgdm7v" path="res://examples/rocket_league/scripts/scoreboard.gd" id="3_score"]
-[ext_resource type="Script" uid="uid://cnus2hdqimfmj" path="res://examples/rocket_league/scripts/ui_info.gd" id="4_info"]
 [ext_resource type="Script" uid="uid://ckmcc5fdus6tj" path="res://examples/rocket_league/scripts/camera_3d.gd" id="5_cam"]
 [ext_resource type="PackedScene" uid="uid://d3oi0cvp3b3i0" path="res://examples/shared/in_lobby.tscn" id="6_lobby"]
 
@@ -61,11 +60,6 @@ bbcode_enabled = true
 fit_content = true
 horizontal_alignment = 1
 vertical_alignment = 1
-
-[node name="Info" type="Label" parent="UI" unique_id=2047069628]
-offset_right = 363.0
-offset_bottom = 363.0
-script = ExtResource("4_info")
 
 [node name="Camera3D" type="Camera3D" parent="." unique_id=285600570]
 physics_interpolation_mode = 2
