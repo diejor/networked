@@ -508,8 +508,7 @@ void NetwPredictSlotEngine::simulate_solver(const NetwPredictTiming &p_timing) {
 }
 
 void NetwPredictSlotEngine::prepare_island(int p_schedule) {
-    if (!pass_admits(p_schedule, schedule())
-        || !role_drives_island(role())) {
+    if (!pass_admits(p_schedule, schedule()) || !role_drives_island(role())) {
         return;
     }
     pool->refresh_selection(

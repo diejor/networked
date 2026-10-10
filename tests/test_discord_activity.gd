@@ -57,7 +57,7 @@ func test_connect_activity_needs_a_rendezvous() -> void:
 	assert_int(
 		await _ERROR_SCRUBBER.erase_matching(
 			["Set DiscordActivityService.rendezvous to"],
-		)
+		),
 	).is_equal(1)
 
 
@@ -179,7 +179,7 @@ func test_dedicated_rendezvous_finds_its_room() -> void:
 	assert_int(
 		await _ERROR_SCRUBBER.erase_matching(
 			["Set DedicatedDiscordRendezvous.public_host to the host"],
-		)
+		),
 	).is_equal(1)
 
 
@@ -198,7 +198,7 @@ func test_nakama_auth_admits_only_the_attested_username() -> void:
 	tree.add_child(bare)
 	assert_int(bare.admit(2, &"Diego", [])).is_equal(ERR_UNAVAILABLE)
 	assert_int(
-		await _ERROR_SCRUBBER.erase_matching(["NakamaAuth refused a join"])
+		await _ERROR_SCRUBBER.erase_matching(["NakamaAuth refused a join"]),
 	).is_equal(1)
 
 

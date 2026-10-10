@@ -63,14 +63,14 @@ void NetwMultiplayer::diag_poll() {
     diag_sketch->draw(diag_drawing);
 }
 
-void NetwMultiplayer::diag_gather(LocalVector<diag::InterpSource> &r_sources
+void NetwMultiplayer::diag_gather(
+    LocalVector<diag::InterpSource> &r_sources
 ) const {
     r_sources.clear();
     if (display_book.is_null()) {
         return;
     }
-    const LocalVector<display::Runtime *> &live
-        = display_book->live_runtimes();
+    const LocalVector<display::Runtime *> &live = display_book->live_runtimes();
     r_sources.reserve(live.size());
     for (display::Runtime *runtime : live) {
         Node *owner = runtime != nullptr ? runtime->owner() : nullptr;
@@ -85,7 +85,8 @@ void NetwMultiplayer::diag_gather(LocalVector<diag::InterpSource> &r_sources
     }
 }
 
-void NetwMultiplayer::diag_gather(LocalVector<diag::RingSource> &r_sources
+void NetwMultiplayer::diag_gather(
+    LocalVector<diag::RingSource> &r_sources
 ) const {
     r_sources.clear();
     r_sources.reserve(predict_engines.size());

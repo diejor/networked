@@ -74,7 +74,12 @@ bool NetwSyncModel::authors(
     if (found == nullptr) {
         return false;
     }
-    return repl::row_authors(*found, p_local_id, p_node_authority, p_controller);
+    return repl::row_authors(
+        *found,
+        p_local_id,
+        p_node_authority,
+        p_controller
+    );
 }
 
 PackedInt32Array NetwSyncModel::recipients(

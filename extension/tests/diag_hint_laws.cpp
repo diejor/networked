@@ -49,9 +49,7 @@ TEST_CASE(
     NETW_CHECK_EQ(only_unknown.unknown.size(), 1);
 }
 
-TEST_CASE(
-    "[Networked][Diag][Hosted] H1 the environment outranks the flag"
-) {
+TEST_CASE("[Networked][Diag][Hosted] H1 the environment outranks the flag") {
     NETW_CHECK_EQ(
         parse_hints("none", args_with("--netw-hints=prediction")).mask,
         0u

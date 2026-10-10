@@ -235,9 +235,8 @@ TEST_CASE(
     REQUIRE(guest != nullptr);
 
     const int64_t channel = table_channel();
-    const int refused = int(
-        guest->table_admit_frame_default(OTHER, channel, body(4))
-    );
+    const int refused
+        = int(guest->table_admit_frame_default(OTHER, channel, body(4)));
     const int admitted
         = int(guest->table_admit_frame_default(SERVER, channel, body(4)));
     NETW_CHECK_EQ(refused, int(ERR_UNAUTHORIZED));

@@ -155,7 +155,7 @@ bool Port::turns() const {
 
 void Port::seat_authored(const Variant &p_local_transform) {
     offset_seated = global_space
-        &&p_local_transform.get_type() == Variant::TRANSFORM3D
+        && p_local_transform.get_type() == Variant::TRANSFORM3D
         && Transform3D(p_local_transform) != Transform3D();
     authored_offset
         = offset_seated ? Transform3D(p_local_transform) : Transform3D();
@@ -193,8 +193,8 @@ int64_t Port::write_orientation(
     const Basis composed = parent_basis * p_host_local
         * (offset_seated ? authored_offset.basis : Basis());
     if (spatial_frame(p_target) == nullptr) {
-        const Basis frame = unmounted_frame(p_target, host_parent())
-                                .basis.orthonormalized();
+        const Basis frame
+            = unmounted_frame(p_target, host_parent()).basis.orthonormalized();
         const Basis local = frame.inverse() * composed;
         if (p_as_quaternion) {
             p_target->set_quaternion(local.get_rotation_quaternion());
@@ -204,24 +204,19 @@ int64_t Port::write_orientation(
         return WRITE_LOCAL;
     }
     Transform3D global = p_target->get_global_transform();
-    global.basis = p_as_quaternion ? composed.scaled(p_target->get_scale())
-                                   : composed;
+    global.basis
+        = p_as_quaternion ? composed.scaled(p_target->get_scale()) : composed;
     p_target->set_global_transform(global);
     return WRITE_GLOBAL;
 }
 
 int64_t Port::write_global(Object *p_target, const Variant &p_value) {
-    if (target_prop == channel_quaternion()
-        || target_prop == channel_basis()) {
+    if (target_prop == channel_quaternion() || target_prop == channel_basis()) {
         Node3D *node_3d = Object::cast_to<Node3D>(p_target);
         const bool as_quaternion = target_prop == channel_quaternion();
         if (node_3d != nullptr && as_quaternion
             && p_value.get_type() == Variant::QUATERNION) {
-            return write_orientation(
-                node_3d,
-                Basis(Quaternion(p_value)),
-                true
-            );
+            return write_orientation(node_3d, Basis(Quaternion(p_value)), true);
         }
         if (node_3d != nullptr && !as_quaternion
             && p_value.get_type() == Variant::BASIS) {
@@ -241,10 +236,9 @@ int64_t Port::write_global(Object *p_target, const Variant &p_value) {
                 node_3d->set_position(
                     unmounted_frame(node_3d, host_parent())
                         .affine_inverse()
-                        .xform(offset_position(
-                            node_3d,
-                            host_position_3d(p_value)
-                        ))
+                        .xform(
+                            offset_position(node_3d, host_position_3d(p_value))
+                        )
                 );
                 return WRITE_LOCAL;
             }

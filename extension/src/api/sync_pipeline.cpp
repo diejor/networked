@@ -1539,12 +1539,9 @@ void SyncPipeline::apply_row(
     const ReceiveAllocations counted(plane);
 #endif
     const int64_t route = plane->liveness_route_of(p_entity.ptr());
-    const PropertyBindingPtr binding = sync_model->admit_row(
-        route,
-        p_ordinal,
-        p_sender,
-        p_entity->steering()
-    );
+    const PropertyBindingPtr binding
+        = sync_model
+              ->admit_row(route, p_ordinal, p_sender, p_entity->steering());
     if (binding == nullptr) {
         plane->attribution_note_refusal(
             p_sender,

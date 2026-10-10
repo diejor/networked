@@ -189,10 +189,8 @@ TEST_CASE(
     local_mine->get_interest()->join(StringName("arena"));
     local_theirs->get_interest()->join(StringName("arena"));
     owner->interest_layer(StringName("scene:Arena"))->client_admit(local_mine);
-    REQUIRE(
-        owner->interest_resolved_layer_ids(local_mine)
-            .has(StringName("scene:Arena"))
-    );
+    REQUIRE(owner->interest_resolved_layer_ids(local_mine)
+                .has(StringName("scene:Arena")));
 
     CHECK(
         owner->interest_resolved_layer_ids(local_mine).has(StringName("arena"))

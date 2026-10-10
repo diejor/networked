@@ -24,9 +24,8 @@ void NetwMultiplayer::monitor_sample(monitor::Sample &r_sample) {
         const double measured_ms = link_round_trip_ms(peer);
         const double round_trip
             = measured_ms > 0.0 ? measured_ms / 1000.0 : ticking.rtt_avg();
-        const double jitter = measured_ms > 0.0
-            ? link_jitter_ms(peer) / 1000.0
-            : ticking.rtt_jitter();
+        const double jitter = measured_ms > 0.0 ? link_jitter_ms(peer) / 1000.0
+                                                : ticking.rtt_jitter();
         r_sample.round_trip = std::max(r_sample.round_trip, round_trip);
         r_sample.jitter = std::max(r_sample.jitter, jitter);
         if (send == nullptr) {
@@ -49,15 +48,14 @@ void NetwMultiplayer::monitor_sample(monitor::Sample &r_sample) {
         const double lag = display_book.is_valid()
             ? display_book->get_stats().max_display_lag
             : 0.0;
-        r_sample.display_delay = (double(ticking.get_display_offset()) + lag)
-            * ticking.ticktime();
+        r_sample.display_delay
+            = (double(ticking.get_display_offset()) + lag) * ticking.ticktime();
     }
 
     r_sample.late_inputs
         = prediction_engine.held_fact_total(NetwPredictStats::FACT_MISSING);
-    r_sample.corrections = prediction_engine.held_fact_total(
-        NetwPredictStats::FACT_CORRECTIONS
-    );
+    r_sample.corrections
+        = prediction_engine.held_fact_total(NetwPredictStats::FACT_CORRECTIONS);
     r_sample.replayed_ticks = prediction_engine.replayed_tick_count();
 
     r_sample.entities = int64_t(entity_book.size());

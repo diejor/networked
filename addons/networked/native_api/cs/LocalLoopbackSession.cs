@@ -227,7 +227,9 @@ public sealed class LocalLoopbackSession : NetwRefCounted
             3995934104UL);
 
     /// <summary>
-    /// Returns every client peer created, including closed ones.
+    /// Returns every client peer that is still open. A client that closed, or
+    /// that nothing but this session holds any more, leaves the list on the
+    /// next poll.
     /// </summary>
     public Godot.Collections.Array GetClientPeers()
     {

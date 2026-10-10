@@ -146,11 +146,7 @@ Snapshot watch_install(const Ref<LocalMultiplayerPeer> &p_peer) {
     return snapshot;
 }
 
-bool sent(
-    const Ref<LocalMultiplayerPeer> &p_from,
-    int p_to,
-    int p_value
-) {
+bool sent(const Ref<LocalMultiplayerPeer> &p_from, int p_to, int p_value) {
     PackedByteArray bytes;
     bytes.push_back(uint8_t(p_value));
     p_from->set_target_peer(p_to);

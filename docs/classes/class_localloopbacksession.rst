@@ -193,7 +193,7 @@ Creates a client peer and returns it.
 
 :godot:`Array` **get_client_peers**\ (\ ) |const| :ref:`🔗<class_LocalLoopbackSession_method_get_client_peers>`
 
-Returns every client peer created, including closed ones.
+Returns every client peer that is still open. A client that closed, or that nothing but this session holds any more, leaves the list on the next poll.
 
 .. rst-class:: classref-item-separator
 

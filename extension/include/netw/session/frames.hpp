@@ -356,10 +356,7 @@ struct ResyncRoute {
             "control_revision",
             netw::wire::varuint(5)
         ),
-        netw::wire::field<&ResyncRoute::epoch>(
-            "epoch",
-            netw::wire::varuint(3)
-        )
+        netw::wire::field<&ResyncRoute::epoch>("epoch", netw::wire::varuint(3))
     );
 };
 

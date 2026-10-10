@@ -2,10 +2,10 @@
 
 #if defined(NETW_TIER_HOSTED) && defined(DEBUG_ENABLED)
 
+#include "netw/sim/row.hpp"
+#include "support/declared_nodes.h"
 #include "support/display_stand.h"
 #include "support/value_flow_stand.h"
-#include "support/declared_nodes.h"
-#include "netw/sim/row.hpp"
 
 #include "godot/node.hpp"
 #include "godot/scene_tree.hpp"
@@ -13,8 +13,6 @@
 #include "godot/spatial_node.hpp"
 #include "godot/sprite.hpp"
 #include "godot/variant.hpp"
-#include <godot_cpp/classes/image.hpp>
-#include <godot_cpp/classes/image_texture.hpp>
 #include "netw/api/entity.hpp"
 #include "netw/api/netw_multiplayer.hpp"
 #include "netw/api/tests.hpp"
@@ -25,6 +23,8 @@
 #include "netw/display/runtime.hpp"
 #include "netw/object_port.hpp"
 #include "netw/repl/property_set.hpp"
+#include <godot_cpp/classes/image.hpp>
+#include <godot_cpp/classes/image_texture.hpp>
 
 using namespace godot;
 
@@ -501,9 +501,7 @@ struct Chased {
             rig.step_ticks(1);
         }
         rig.step_ticks(CHASED_QUIET_TICKS);
-        REQUIRE(
-            mirrored->get_is_controlled_locally() == p_steered_here
-        );
+        REQUIRE(mirrored->get_is_controlled_locally() == p_steered_here);
         runtime = NetwNativeTests::display_runtime_at(client, pair.route);
         REQUIRE_MESSAGE(runtime != nullptr, "the chased entity has no runtime");
         NETW_REQUIRE_EQ(runtime->get_pump_mode(), netw::display::PUMP_CHASE);
@@ -837,9 +835,9 @@ TEST_CASE(
     for (int at = 0; at < 3; ++at) {
         for (const netw::diag::Mark &mark : drawing.marks) {
             if (mark.world == rows[at]->world
-                && mark.point.is_equal_approx(view.marks()[
-                                                  rows[at]->first_sample + 1
-                ].point)) {
+                && mark.point.is_equal_approx(
+                    view.marks()[rows[at]->first_sample + 1].point
+                )) {
                 radii[at] = mark.radius;
             }
         }
@@ -865,7 +863,8 @@ TEST_CASE(
 ) {
     Stand stand;
     const int subject = stand.add();
-    Ref<Image> image = Image::create_empty(200, 200, false, Image::FORMAT_RGBA8);
+    Ref<Image> image
+        = Image::create_empty(200, 200, false, Image::FORMAT_RGBA8);
     Sprite2D *sprite = memnew(Sprite2D);
     sprite->set_texture(ImageTexture::create_from_image(image));
     sprite->set_hframes(2);
@@ -877,11 +876,7 @@ TEST_CASE(
     stand.frame(15, 3, 0.5);
 
     netw::diag::Drawing drawing;
-    netw::diag::draw_timelines(
-        stand.view.rows(),
-        stand.view.marks(),
-        drawing
-    );
+    netw::diag::draw_timelines(stand.view.rows(), stand.view.marks(), drawing);
     float radius = 1.0e9f;
     for (const netw::diag::Mark &mark : drawing.marks) {
         radius = MIN(radius, mark.radius);

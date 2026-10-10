@@ -321,10 +321,7 @@ TEST_CASE(
     invites() = InviteLog();
     bench.directory->answering = netw_test::StubDirectory::ANSWER_NOTHING;
     const Ref<netw::NetwConnection> connection = bench.core->get_connection();
-    connection->connect(
-        StringName("invited"),
-        callable_mp_static(&on_invited)
-    );
+    connection->connect(StringName("invited"), callable_mp_static(&on_invited));
 
     bench.directory->invite(String("77"), String("Ada"));
 
@@ -351,10 +348,7 @@ TEST_CASE(
     invites() = InviteLog();
     bench.directory->answering = netw_test::StubDirectory::ANSWER_NOTHING;
     const Ref<netw::NetwConnection> connection = bench.core->get_connection();
-    connection->connect(
-        StringName("invited"),
-        callable_mp_static(&on_invited)
-    );
+    connection->connect(StringName("invited"), callable_mp_static(&on_invited));
     bench.directory->invite(String("77"), String("Ada"));
     REQUIRE(invites().endpoint.is_valid());
 

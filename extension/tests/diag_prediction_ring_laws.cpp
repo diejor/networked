@@ -45,8 +45,7 @@ struct Watch {
     double largest_error = 0.0;
     bool episode_seen = false;
 
-    explicit Watch(netw::NetwMultiplayer *p_session) :
-            session(p_session) {
+    explicit Watch(netw::NetwMultiplayer *p_session) : session(p_session) {
         REQUIRE_MESSAGE(session != nullptr, "a watch needs a session");
     }
 
@@ -57,8 +56,7 @@ struct Watch {
             if (row.erred()) {
                 largest_error = MAX(largest_error, row.gap);
             }
-            if (row.role == NetwPrediction::ROLE_PREDICT
-                && !row.text.is_empty()
+            if (row.role == NetwPrediction::ROLE_PREDICT && !row.text.is_empty()
                 && !row.text.begins_with("no episode")) {
                 episode_seen = true;
             }
@@ -155,9 +153,10 @@ TEST_CASE(
     LoopbackRig rig(1);
     rig.mount();
     WorldDecl world;
-    world.clocked(30, 3).lag_compensated().player(walker("P"), 0).hosted(
-        walker("H", Vector2(40.0, 0.0))
-    );
+    world.clocked(30, 3)
+        .lag_compensated()
+        .player(walker("P"), 0)
+        .hosted(walker("H", Vector2(40.0, 0.0)));
     rig.declare_world(world);
     Watch watch(rig.server());
     advance(rig, watch, WARM);

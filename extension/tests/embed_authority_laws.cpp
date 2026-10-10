@@ -85,10 +85,7 @@ TEST_CASE(
     NETW_CHECK_EQ(mount->get_child_count(), 1);
 
     NETW_CHECK_EQ(int(host->scene_list().size()), 1);
-    NETW_CHECK_EQ(
-        int(host->scene_watch(first_scene(host), MEMBER)),
-        int(OK)
-    );
+    NETW_CHECK_EQ(int(host->scene_watch(first_scene(host), MEMBER)), int(OK));
     stand.step_ticks(4);
     NETW_CHECK_EQ(seen->get_child_count(), 1);
 

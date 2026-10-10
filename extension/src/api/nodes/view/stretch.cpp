@@ -111,8 +111,8 @@ Layout layout_compute(const Stretch &p_stretch, const Vector2 &p_control_size) {
     if (p_control_size.x <= 0.0f || p_control_size.y <= 0.0f) {
         return degenerate(p_control_size);
     }
-    if (p_stretch.mode == STRETCH_MODE_DISABLED
-        || p_stretch.design_size.x <= 0 || p_stretch.design_size.y <= 0) {
+    if (p_stretch.mode == STRETCH_MODE_DISABLED || p_stretch.design_size.x <= 0
+        || p_stretch.design_size.y <= 0) {
         Layout out;
         out.target_size = Vector2i(p_control_size.ceil());
         out.inner_rect = Rect2(Vector2(), p_control_size);

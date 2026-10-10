@@ -495,8 +495,8 @@ TEST_CASE(
     "before any position channel whatever the declaration order"
 ) {
     netw::display::Runtime runtime;
-    const char *props[] = {"position", "quaternion", "global_position",
-                           "rotation", "basis"};
+    const char *props[]
+        = {"position", "quaternion", "global_position", "rotation", "basis"};
     for (const char *prop : props) {
         netw::display::Channel *channel = runtime.add_channel();
         channel->display_port().declare(prop, prop, true);
@@ -508,8 +508,10 @@ TEST_CASE(
     const char *expected[]
         = {"quaternion", "rotation", "basis", "position", "global_position"};
     for (int at = 0; at < 5; ++at) {
-        CHECK(order[at]->display_port().get_target_prop()
-              == StringName(expected[at]));
+        CHECK(
+            order[at]->display_port().get_target_prop()
+            == StringName(expected[at])
+        );
     }
 }
 

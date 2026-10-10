@@ -65,6 +65,8 @@ Methods
    +--------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | :godot:`bool`            | :ref:`is_addon_present<class_NakamaWrapper_method_is_addon_present>`\ (\ ) |static|                                                                                                                       |
    +--------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | |void|                   | :ref:`report_version_mismatch<class_NakamaWrapper_method_report_version_mismatch>`\ (\ ) |static|                                                                                                         |
+   +--------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | :godot:`Dictionary`      | :ref:`connect_async<class_NakamaWrapper_method_connect_async>`\ (\ host\: :godot:`Node`, config\: :godot:`Dictionary`\ )                                                                                  |
    +--------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | :godot:`bool`            | :ref:`is_ready<class_NakamaWrapper_method_is_ready>`\ (\ )                                                                                                                                                |
@@ -166,6 +168,14 @@ Emitted when the connection to Nakama closes.
 Constants
 ---------
 
+.. _class_NakamaWrapper_constant_NAKAMA_SDK_VERSION:
+
+.. rst-class:: classref-constant
+
+**NAKAMA_SDK_VERSION** = ``"3.4.0"`` :ref:`🔗<class_NakamaWrapper_constant_NAKAMA_SDK_VERSION>`
+
+The Nakama Godot SDK release this addon is tested against.
+
 .. _class_NakamaWrapper_constant_LOBBY_COLLECTION:
 
 .. rst-class:: classref-constant
@@ -251,6 +261,18 @@ Uses the account of ``session`` for login and storage. Call it before :ref:`conn
 :godot:`bool` **is_addon_present**\ (\ ) |static| :ref:`🔗<class_NakamaWrapper_method_is_addon_present>`
 
 Returns ``true`` when the Nakama addon is installed. Check it before calling other methods.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NakamaWrapper_method_report_version_mismatch:
+
+.. rst-class:: classref-method
+
+|void| **report_version_mismatch**\ (\ ) |static| :ref:`🔗<class_NakamaWrapper_method_report_version_mismatch>`
+
+Logs one warning, once per run, when the installed Nakama addon lacks a method, property or signal this addon calls. Does nothing when the addon is absent.
 
 .. rst-class:: classref-item-separator
 

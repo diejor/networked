@@ -1138,11 +1138,8 @@ TEST_CASE(
     netw::predict::CommandFrameRecord stale;
     REQUIRE(netw::predict::CommandFrameRecord::open(input_schema(), stale));
     stale.set_epoch(1);
-    stale.append_transition(
-        ran_at - netw::predict::TAPE_HISTORY_LIMIT,
-        0,
-        true
-    );
+    stale
+        .append_transition(ran_at - netw::predict::TAPE_HISTORY_LIMIT, 0, true);
     stale.append_values(only);
     const PackedInt64Array late
         = pool->admit_relayed_frame(slot, stale, keys, false);

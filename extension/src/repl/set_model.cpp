@@ -36,9 +36,8 @@ bool record_authors(
     if (p_record == SET_RECORD_STATE) {
         return p_is_server;
     }
-    const int64_t steering = p_controller == 0 && p_is_server
-        ? p_local_id
-        : p_controller;
+    const int64_t steering
+        = p_controller == 0 && p_is_server ? p_local_id : p_controller;
     return entity::Control::policy_admits(
         int(p_policy),
         p_local_id,

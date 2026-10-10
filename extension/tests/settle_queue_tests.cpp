@@ -15,10 +15,6 @@ using namespace godot;
 using netw::SettleQueue;
 using netw_test::CallLog;
 
-// An effect that puts something back on the queue from inside the pass that is
-// running it. Nothing else distinguishes a drain that takes the whole queue per
-// pass from one that walks a list it is still being appended to, and a
-// `again` holding this sink's own callable is the only way to write a cycle.
 class Rescheduler final : public CallableCustom {
     SettleQueue *queue;
     Callable mark;
@@ -156,8 +152,6 @@ TEST_CASE("[Networked][Settle][Hosted] an effect scheduled mid-pass waits") {
 
     NETW_CHECK_EQ(queue.drain().size(), 0);
 
-    // What the first row scheduled runs AFTER the row already queued beside it,
-    // which is what "the next pass of the same drain" means.
     CHECK(log.order() == Vector<StringName>({"same-pass", "scheduled-during"}));
 }
 
@@ -180,9 +174,6 @@ TEST_CASE(
 
     NETW_CHECK_EQ(pending.size(), 1);
     CHECK(pending[0] == String("cycle"));
-    // Bounded, so the body ran the bound rather than whatever the machine had
-    // time for, and the queue is left empty rather than poisoned for the pump
-    // that comes after it.
     NETW_CHECK_EQ(log.count("pass"), SettleQueue::MAX_PASSES);
     NETW_CHECK_EQ(queue.is_empty(), true);
 }
@@ -213,8 +204,6 @@ TEST_CASE(
     CallLog log;
     queue.schedule_after(log.callable("freed"), StringName(), 2);
 
-    // A clocked session drains on its polls as well as its ticks, so a window
-    // that a drain spent would close in half the time it was asked for.
     queue.drain();
     queue.drain();
     NETW_CHECK_EQ(log.count("freed"), 0);
@@ -259,8 +248,6 @@ TEST_CASE("[Networked][Settle][Hosted] a window survives a reported cycle") {
 
     NETW_CHECK_EQ(pending.size(), 1);
     NETW_CHECK_EQ(log.count("spun"), SettleQueue::MAX_PASSES);
-    // The cycle's rows are dropped and the window's is not, because the drain
-    // gave up on the cascade rather than on the session.
     NETW_CHECK_EQ(queue.has(StringName("later")), true);
     NETW_CHECK_EQ(log.count("later"), 0);
 }
@@ -274,9 +261,6 @@ TEST_CASE("[Networked][Settle][Hosted] a re-declared window replaces the old") {
     queue.advance_windows();
     queue.drain();
 
-    // A key coalesces whether or not it carries a window, so a re-declared
-    // teardown waits out the window it was last given rather than the shortest
-    // one anybody ever asked for.
     NETW_CHECK_EQ(log.count("first"), 0);
     NETW_CHECK_EQ(log.count("second"), 0);
     NETW_CHECK_EQ(queue.size(), 1);

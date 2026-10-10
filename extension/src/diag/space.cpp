@@ -131,12 +131,10 @@ Vector3 CameraBook::point(uint64_t p_world, Node *p_owner) {
                 found.point = camera->get_global_position();
             }
         } else {
-            const Vector2 center = viewport->get_canvas_transform()
-                                       .affine_inverse()
-                                       .xform(
-                                           viewport->get_visible_rect().size
-                                           * 0.5f
-                                       );
+            const Vector2 center
+                = viewport->get_canvas_transform().affine_inverse().xform(
+                    viewport->get_visible_rect().size * 0.5f
+                );
             found.point = Vector3(center.x, center.y, 0.0f);
         }
     }

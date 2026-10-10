@@ -1,7 +1,26 @@
 # Emit :godot: roles for symbols outside the local XML set; add |abstract|, missing-base grouped-index guard, nested-class link targets.
 --- a/make_rst.py
 +++ b/make_rst.py
-@@ -1501,17 +1549,16 @@
+@@ -1021,7 +1069,17 @@
+                 type_rst = property_def.type_name.to_rst(state)
+                 default = property_def.default_value
+                 if default is not None and property_def.overrides:
+-                    ref = f":ref:`{property_def.overrides}<class_{sanitize_class_name(property_def.overrides)}_property_{property_def.name}>`"
++                    base = property_def.overrides
++                    anchor = (
++                        f"class_{sanitize_class_name(base)}"
++                        f"_property_{property_def.name}"
++                    )
++                    if base in state.classes:
++                        ref = f":ref:`{base}<{anchor}>`"
++                    else:
++                        ref = godot_external_link(
++                            base, base, fragment=anchor.lower().replace("_", "-")
++                        )
+                     # Not using translate() for now as it breaks table formatting.
+                     ml.append((type_rst, property_def.name, f"{default} (overrides {ref})"))
+                 else:
+@@ -1501,17 +1559,16 @@
          if link_type in state.classes:
              return f":ref:`{link_type}<class_{sanitize_class_name(link_type)}>`"
          else:
@@ -22,7 +41,7 @@
  
      return resolve_type(klass)
  
-@@ -1539,9 +1586,11 @@
+@@ -1539,9 +1596,11 @@
          else:
              return f":ref:`{e}<enum_{sanitize_class_name(c)}_{e}>`"
  
@@ -37,7 +56,7 @@
  
  
  def make_method_signature(
-@@ -1681,6 +1730,7 @@
+@@ -1681,6 +1740,7 @@
      operator_msg = translate("This method describes a valid operator to use with this type as left-hand operand.")
      bitfield_msg = translate("This value is an integer composed as a bitmask of the following flags.")
      void_msg = translate("No return value.")
@@ -45,7 +64,7 @@
  
      return (
          f".. |virtual| replace:: :abbr:`virtual ({virtual_msg})`\n"
-@@ -1692,6 +1742,7 @@
+@@ -1692,6 +1752,7 @@
          f".. |operator| replace:: :abbr:`operator ({operator_msg})`\n"
          f".. |bitfield| replace:: :abbr:`BitField ({bitfield_msg})`\n"
          f".. |void| replace:: :abbr:`void ({void_msg})`\n"
@@ -53,7 +72,7 @@
      )
  
  
-@@ -1728,6 +1779,116 @@
+@@ -1728,6 +1789,116 @@
      return f"`{url} <{url}>`__"
  
  
@@ -170,7 +189,7 @@
  def make_rst_index(grouped_classes: dict[str, list[str]], dry_run: bool, output_dir: str) -> None:
      with open(
          os.devnull if dry_run else os.path.join(output_dir, "index.rst"), "w", encoding="utf-8", newline="\n"
-@@ -1750,27 +1911,45 @@
+@@ -1750,27 +1921,45 @@
  
          f.write(make_heading("All classes", "="))
  
@@ -220,22 +239,22 @@
 +                continue
 +
 +            f.write(make_heading(label, "="))
-+
+ 
+-                    f.write(f"    class_{sanitize_class_name(class_name, True)}\n")
 +            f.write(".. toctree::\n")
 +            f.write("    :maxdepth: 1\n")
 +            f.write(f"    :name: toc-class-ref-{folder_group_slug(label)}\n")
 +            f.write("\n")
  
--                    f.write(f"    class_{sanitize_class_name(class_name, True)}\n")
+-                f.write("\n")
 +            for class_name in folder_grouped[label]:
 +                f.write(f"    class_{sanitize_class_name(class_name, True)}\n")
- 
--                f.write("\n")
++
 +            f.write("\n")
  
  
  # Formatting helpers.
-@@ -1836,7 +2015,15 @@
+@@ -1836,7 +2025,15 @@
  
  
  def parse_link_target(link_target: str, state: State, context_name: str) -> list[str]:

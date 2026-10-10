@@ -233,10 +233,7 @@ struct ComposedWorld {
         world = first_scene(host);
         const Ref<NetwScene> handle = host->scene_handle_of(world);
         REQUIRE(handle.is_valid());
-        NETW_CHECK_EQ(
-            int(handle->watch(host->player_of(OTHER))),
-            int(OK)
-        );
+        NETW_CHECK_EQ(int(handle->watch(host->player_of(OTHER))), int(OK));
         NETW_CHECK_EQ(int(handle->watch(host->player_of(MEMBER))), int(OK));
         stand.step_ticks(6);
 

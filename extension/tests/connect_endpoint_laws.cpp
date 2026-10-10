@@ -79,7 +79,7 @@ struct StatusRow {
 
 const int64_t AVAILABLE = NetwMultiplayer::ENDPOINT_FLAG_AVAILABLE;
 const int64_t ANSWERED = NetwMultiplayer::ENDPOINT_FLAG_AVAILABLE
-                         | NetwMultiplayer::ENDPOINT_FLAG_OBSERVED;
+    | NetwMultiplayer::ENDPOINT_FLAG_OBSERVED;
 
 const StatusRow STATUS_ROWS[] = {
     {"a transport this platform lacks",
@@ -98,10 +98,7 @@ const StatusRow STATUS_ROWS[] = {
      ERR_UNAVAILABLE,
      NetwEndpoint::STATUS_UNKNOWN},
     {"silence", ANSWERED, ERR_TIMEOUT, NetwEndpoint::STATUS_UNREACHABLE},
-    {"a refusal",
-     ANSWERED,
-     ERR_CANT_CONNECT,
-     NetwEndpoint::STATUS_UNREACHABLE},
+    {"a refusal", ANSWERED, ERR_CANT_CONNECT, NetwEndpoint::STATUS_UNREACHABLE},
 };
 
 } // namespace
@@ -212,12 +209,12 @@ TEST_CASE(
     if (listed.size() == 2) {
         const Ref<NetwEndpoint> first = listed[0];
         const Ref<NetwEndpoint> second = listed[1];
-        const bool distinct = first.is_valid() && second.is_valid()
-                              && first != second;
+        const bool distinct
+            = first.is_valid() && second.is_valid() && first != second;
         const bool own_listed = first == own || second == own;
         const bool same_pair
             = first->get_peer_class() == second->get_peer_class()
-              && first->get_address() == second->get_address();
+            && first->get_address() == second->get_address();
         CHECK(distinct);
         CHECK(own_listed);
         CHECK(same_pair);

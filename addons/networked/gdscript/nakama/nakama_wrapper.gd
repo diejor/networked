@@ -158,8 +158,7 @@ static func report_version_mismatch() -> void:
 	var scripts := {
 		"Nakama": load(_FACADE_PATH),
 		"NakamaClient": _nakama_class("NakamaClient"),
-		"NakamaAPI.ApiClient":
-		api.get_script_constant_map().get("ApiClient") if api else null,
+		"NakamaAPI.ApiClient": api.get_script_constant_map().get("ApiClient") if api else null,
 		"NakamaSocket": _nakama_class("NakamaSocket"),
 	}
 	var missing := PackedStringArray()
@@ -181,8 +180,8 @@ static func report_version_mismatch() -> void:
 		return
 	push_warning(
 		(
-			"The installed Nakama addon has no %s. "
-			+ "Install the Nakama Godot SDK %s."
+				"The installed Nakama addon has no %s. "
+				+ "Install the Nakama Godot SDK %s."
 		) % [", ".join(missing), NAKAMA_SDK_VERSION],
 	)
 

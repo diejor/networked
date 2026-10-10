@@ -296,8 +296,7 @@ void SyncCompat::refresh_interest_intents() {
 
 void SyncCompat::refresh_interest_intent(Node *p_root) {
     NetwMultiplayer *plane = core();
-    if (plane == nullptr || !plane->is_host()
-        || p_root == nullptr) {
+    if (plane == nullptr || !plane->is_host() || p_root == nullptr) {
         return;
     }
     const Ref<NetwEntity> entity = NetwEntity::of(p_root);

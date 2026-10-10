@@ -86,9 +86,8 @@ void refresh() {
         session->monitor_sample(now);
     }
     const uint64_t usec = Time::get_singleton()->get_ticks_usec();
-    const double seconds = cache->primed
-        ? double(usec - cache->sampled_usec) / 1.0e6
-        : 0.0;
+    const double seconds
+        = cache->primed ? double(usec - cache->sampled_usec) / 1.0e6 : 0.0;
     read(cache->before, now, seconds, cache->values);
     cache->before = now;
     cache->sampled_usec = usec;

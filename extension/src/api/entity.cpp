@@ -515,7 +515,8 @@ void NetwEntity::set_controller_player(const Ref<NetwPlayer> &p_player) {
         "player, or null for the server.",
         String(get_name())
     );
-    const int64_t steered = p_player.is_valid() ? peer : entity::Control::SERVER;
+    const int64_t steered
+        = p_player.is_valid() ? peer : entity::Control::SERVER;
     if (get_stage() == int64_t(entity::Stage::UNBOUND)) {
         record_controller(steered);
         return;
@@ -602,7 +603,8 @@ void NetwEntity::apply_control() {
 
 void NetwEntity::project_control(Object *p_announcer) {
     NetwMultiplayer *api = session_core();
-    record->apply_control(p_announcer, get_owner(), uint64_t(get_instance_id()));
+    record
+        ->apply_control(p_announcer, get_owner(), uint64_t(get_instance_id()));
     if (api != nullptr && record->projects_to_server()) {
         api->entity_watch_authority_joins();
     }
@@ -1102,8 +1104,8 @@ bool NetwEntity::claim_image_admits(
     int64_t p_sender,
     uint64_t p_observed
 ) const {
-    return p_sender != 0 && p_sender == steering()
-        && p_sender != local_peer() && p_observed + 1 >= control()->tenure;
+    return p_sender != 0 && p_sender == steering() && p_sender != local_peer()
+        && p_observed + 1 >= control()->tenure;
 }
 
 void NetwEntity::install_claim_image(const PackedByteArray &p_state) {
@@ -1405,8 +1407,7 @@ entity::Control::Outcome NetwEntity::decide_request(
 ) {
     using Outcome = entity::Control::Outcome;
     using Ruling = entity::Control::Ruling;
-    const Ruling ruling
-        = control()->rule(p_requester, p_hold, steering());
+    const Ruling ruling = control()->rule(p_requester, p_hold, steering());
     Outcome outcome = Outcome::GRANTED;
     if (ruling == Ruling::UNAVAILABLE || immediate_unavailable()) {
         NETW_WARN(
@@ -2236,7 +2237,17 @@ void NetwEntity::_bind_methods() {
     );
 
     ClassDB::bind_method(D_METHOD("get_rid"), &NetwEntity::get_rid_handle);
-    ADD_PROPERTY(PropertyInfo(Variant::RID, "rid"), "", "get_rid");
+    ADD_PROPERTY(
+        PropertyInfo(
+            Variant::RID,
+            "rid",
+            PROPERTY_HINT_NONE,
+            "",
+            PROPERTY_USAGE_NONE
+        ),
+        "",
+        "get_rid"
+    );
 
     ClassDB::bind_method(
         D_METHOD("get_multiplayer"),

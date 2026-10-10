@@ -119,10 +119,8 @@ class ConnectAttemptScenario final : public netw_test::FrameScenario {
         Dictionary settings;
         settings["port"] = candidate;
         hosting = host->transport_host(enet(host), settings);
-        hosting->then(
-            callable_mp_static(&record_settled_address)
-                .bind(uint64_t(netw::gd::instance_id(host.ptr())))
-        );
+        hosting->then(callable_mp_static(&record_settled_address)
+                          .bind(uint64_t(netw::gd::instance_id(host.ptr()))));
     }
 
     void join(Side p_side, int p_port) {
@@ -203,9 +201,10 @@ public:
                     client->session_prepare_join(StringName("own"), Array());
                     client->NETW_API_VIRTUAL(set_multiplayer_peer)(peer);
                     enter(2);
-                } else if (hosting->get_is_failed()
-                           && candidate + 1
-                               < PORT_RANGE_START + PORT_RANGE_SIZE) {
+                } else if (
+                    hosting->get_is_failed()
+                    && candidate + 1 < PORT_RANGE_START + PORT_RANGE_SIZE
+                ) {
                     close(host);
                     candidate += 1;
                     enter(0);
@@ -232,8 +231,8 @@ public:
                 return true;
             }
             case 4: {
-                const bool settled = evidence.sides[SIDE_CLOSED].failed > 0
-                    || over_budget();
+                const bool settled
+                    = evidence.sides[SIDE_CLOSED].failed > 0 || over_budget();
                 if (settled && ++settle >= SETTLE_FRAMES) {
                     finish_client(SIDE_CLOSED);
                     join(SIDE_REFUSED, evidence.port);
@@ -251,8 +250,8 @@ public:
                 return true;
             }
             case 6: {
-                const bool settled = evidence.sides[SIDE_REFUSED].failed > 0
-                    || over_budget();
+                const bool settled
+                    = evidence.sides[SIDE_REFUSED].failed > 0 || over_budget();
                 if (settled && ++settle >= SETTLE_FRAMES) {
                     finish_client(SIDE_REFUSED);
                     enter(99);

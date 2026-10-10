@@ -856,10 +856,7 @@ TEST_CASE(
     NETW_CHECK_EQ(int64_t(stats[StringName("skips_not_author")]), 1);
     NETW_CHECK_EQ(int64_t(stats[StringName("skips_no_recipients")]), 0);
 
-    NETW_CHECK_EQ(
-        int64_t(model.offer_row(ROUTE, 0, 7, 7, 0, live).size()),
-        2
-    );
+    NETW_CHECK_EQ(int64_t(model.offer_row(ROUTE, 0, 7, 7, 0, live).size()), 2);
     stats = model.stats();
     NETW_CHECK_EQ(int64_t(stats[StringName("skips_not_author")]), 1);
     NETW_CHECK_EQ(int64_t(stats[StringName("skips_no_recipients")]), 0);

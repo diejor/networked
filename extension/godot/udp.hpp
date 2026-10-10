@@ -54,9 +54,9 @@ inline bool udp_take(
     Datagram &r_datagram
 ) {
     if (p_socket.is_null()
-        || int64_t(p_socket->call(
-               godot::StringName("get_available_packet_count")
-           )) <= 0) {
+        || int64_t(
+               p_socket->call(godot::StringName("get_available_packet_count"))
+           ) <= 0) {
         return false;
     }
     r_datagram.bytes = p_socket->call(godot::StringName("get_packet"));

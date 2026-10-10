@@ -59,11 +59,7 @@ public:
         built["d"] = String("built-in");
         return built;
     }
-    void make_peer(
-        int,
-        const String &,
-        const Dictionary &p_settings
-    ) override {
+    void make_peer(int, const String &, const Dictionary &p_settings) override {
         attempt_log().built += 1;
         attempt_log().settings = p_settings;
     }
@@ -308,7 +304,8 @@ int64_t unhandled_after_timed_out_join(Bench &p_bench) {
 }
 
 TEST_CASE(
-    "[Networked][Connect][Hosted] AT10 a failed join whose promise is dropped warns "
+    "[Networked][Connect][Hosted] AT10 a failed join whose promise is dropped "
+    "warns "
     "only when nothing heard the failure"
 ) {
     {

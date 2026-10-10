@@ -41,7 +41,9 @@ PackedStringArray tracker_urls(const Variant &p_listed) {
 
 } // namespace
 
-void WebTorrentLobbyDirectory::set_trackers(const PackedStringArray &p_trackers) {
+void WebTorrentLobbyDirectory::set_trackers(
+    const PackedStringArray &p_trackers
+) {
     trackers = p_trackers;
     for (int64_t at = 0; at < trackers.size(); at++) {
         if (!trackers[at].is_empty() && !is_tracker_url(trackers[at])) {
@@ -132,8 +134,7 @@ void WebTorrentLobbyDirectory::stop_listing() {
 }
 
 bool WebTorrentLobbyDirectory::listed_card(connect::RoomCard &r_card) {
-    const connect::WebRTCTransport *live
-        = session == nullptr
+    const connect::WebRTCTransport *live = session == nullptr
         ? nullptr
         : dynamic_cast<const connect::WebRTCTransport *>(
               session->connect_plane().live_transport()

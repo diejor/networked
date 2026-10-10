@@ -944,10 +944,7 @@ TEST_CASE(
     REQUIRE(consumed.size() == 2);
     NETW_CHECK_EQ(refused_joint(rig, server, consumed[0], watch), int64_t(0));
     NETW_CHECK_EQ(refused_joint(rig, server, consumed[1], watch), int64_t(0));
-    NETW_CHECK_EQ(
-        refused_joint(rig, predictor, predicted, watch),
-        int64_t(1)
-    );
+    NETW_CHECK_EQ(refused_joint(rig, predictor, predicted, watch), int64_t(1));
     CHECK(pool->joint_refusal_reported_of(pool->slot_of(predicted)));
 
     REQUIRE(predicted->get_owner() != nullptr);

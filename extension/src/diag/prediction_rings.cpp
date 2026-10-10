@@ -179,8 +179,8 @@ String StateLine::text() const {
     }
     String second = vformat("ack age %d", ack);
     if (gap_hundredths >= 0) {
-        second = "error " + distance_words(gap_hundredths, flat) + "  "
-            + second;
+        second
+            = "error " + distance_words(gap_hundredths, flat) + "  " + second;
     }
     return first + "\n" + second;
 }
@@ -201,8 +201,7 @@ PredictionRings::PredictionRings() {
 
 void draw_ring_rows(const LocalVector<RingRow> &p_rows, Drawing &r_drawing) {
     for (const RingRow &row : p_rows) {
-        const float scale
-            = row.flat ? PredictionRings::PIXELS_PER_METRE : 1.0f;
+        const float scale = row.flat ? PredictionRings::PIXELS_PER_METRE : 1.0f;
         Mark mark;
         mark.world = row.world;
         mark.viewport = row.viewport;
@@ -333,8 +332,8 @@ void PredictionRings::read(
         const Ref<NetwDisplay> display = source.entity != nullptr
             ? source.entity->get_display()
             : Ref<NetwDisplay>();
-        Node *visual = display.is_valid()
-                && !display->get_visual_root().is_empty()
+        Node *visual
+            = display.is_valid() && !display->get_visual_root().is_empty()
             ? owner->get_node_or_null(display->get_visual_root())
             : nullptr;
         entry.visual
@@ -364,12 +363,8 @@ void PredictionRings::read(
             Vector3 ours;
             if (received.has(entry.field)
                 && point_of(received.values[entry.field], server)) {
-                row.server = lifted(
-                    owner,
-                    entry.parent_key,
-                    entry.global_key,
-                    server
-                );
+                row.server
+                    = lifted(owner, entry.parent_key, entry.global_key, server);
                 row.marks |= MARK_SERVER;
             }
             if (compared.has(entry.field)
@@ -405,12 +400,8 @@ void PredictionRings::read(
                     table.read_value(at.row, entry.store_column),
                     server
                 )) {
-                row.server = lifted(
-                    owner,
-                    entry.parent_key,
-                    entry.global_key,
-                    server
-                );
+                row.server
+                    = lifted(owner, entry.parent_key, entry.global_key, server);
                 row.marks |= MARK_SERVER;
                 confirmed_tick = table.received_ticks[at.row];
             }

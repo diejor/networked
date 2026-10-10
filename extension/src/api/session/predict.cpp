@@ -809,11 +809,7 @@ void NetwMultiplayer::predict_history_record(
     int p_schedule,
     bool p_include_unregistered
 ) {
-    NETW_STAGE(
-        LAG_COMPENSATION,
-        "Predict history record",
-        colors::PREDICTION
-    );
+    NETW_STAGE(LAG_COMPENSATION, "Predict history record", colors::PREDICTION);
     if (!lagcomp_configured || !is_host()) {
         return;
     }

@@ -52,4 +52,3 @@ func _process(delta: float) -> void:
 		reversing_for = REVERSE_SECONDS
 
 	car.ai_motion = Vector2(steering, 1.0)
-

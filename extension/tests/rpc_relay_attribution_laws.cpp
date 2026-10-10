@@ -265,10 +265,7 @@ TEST_CASE(
     const RID seat = at_server->entity_create();
     const int64_t route = at_server->entity_admit(seat);
     NETW_CHECK_GT(route, 0);
-    NETW_CHECK_EQ(
-        int(at_server->entity_bind_node(seat, server_sink)),
-        int(OK)
-    );
+    NETW_CHECK_EQ(int(at_server->entity_bind_node(seat, server_sink)), int(OK));
     const RID mirror = at_member->entity_create();
     NETW_CHECK_EQ(int(at_member->entity_bind_route(mirror, route)), int(OK));
     NETW_CHECK_EQ(

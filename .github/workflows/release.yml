@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: Version to tag and publish, such as 0.2. Empty builds a candidate without publishing it.
+        description: Version to tag and publish, such as 0.3. Empty builds a candidate without publishing it.
         type: string
         required: false
         default: ""

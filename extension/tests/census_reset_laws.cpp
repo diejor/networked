@@ -40,13 +40,10 @@ TEST_CASE(
         "run CR1 in the same run, or this proves nothing"
     );
     std::vector<CensusRow> &rows = netw_test::census_ledger().rows;
-    auto holder = std::find_if(
-        rows.begin(),
-        rows.end(),
-        [](const CensusRow &p_row) {
-            return p_row.name.find(HOLDER_NAME) != std::string::npos;
-        }
-    );
+    auto holder
+        = std::find_if(rows.begin(), rows.end(), [](const CensusRow &p_row) {
+              return p_row.name.find(HOLDER_NAME) != std::string::npos;
+          });
     REQUIRE(holder != rows.end());
     NETW_CHECK_EQ(holder->objects, int64_t(1));
     NETW_CHECK_EQ(holder->freed_before_reset, int64_t(0));

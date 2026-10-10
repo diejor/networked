@@ -181,10 +181,22 @@ void put(
     const Color &p_color
 ) {
     const float values[SPATIAL_FLOATS] = {
-        p_basis.rows[0].x, p_basis.rows[0].y, p_basis.rows[0].z, p_origin.x,
-        p_basis.rows[1].x, p_basis.rows[1].y, p_basis.rows[1].z, p_origin.y,
-        p_basis.rows[2].x, p_basis.rows[2].y, p_basis.rows[2].z, p_origin.z,
-        p_color.r,         p_color.g,         p_color.b,         p_color.a,
+        p_basis.rows[0].x,
+        p_basis.rows[0].y,
+        p_basis.rows[0].z,
+        p_origin.x,
+        p_basis.rows[1].x,
+        p_basis.rows[1].y,
+        p_basis.rows[1].z,
+        p_origin.y,
+        p_basis.rows[2].x,
+        p_basis.rows[2].y,
+        p_basis.rows[2].z,
+        p_origin.z,
+        p_color.r,
+        p_color.g,
+        p_color.b,
+        p_color.a,
     };
     std::memcpy(r_at, values, sizeof(values));
 }
@@ -196,8 +208,18 @@ void put_flat(
     const Color &p_color
 ) {
     const float values[FLAT_FLOATS] = {
-        p_radius,  0.0f,      0.0f,      p_center.x, 0.0f,      p_radius,
-        0.0f,      p_center.y, p_color.r, p_color.g,  p_color.b, p_color.a,
+        p_radius,
+        0.0f,
+        0.0f,
+        p_center.x,
+        0.0f,
+        p_radius,
+        0.0f,
+        p_center.y,
+        p_color.r,
+        p_color.g,
+        p_color.b,
+        p_color.a,
     };
     std::memcpy(r_at, values, sizeof(values));
 }
@@ -801,10 +823,7 @@ void Sketch::paint(Plane &r_plane, const Drawing &p_drawing) {
         font->draw_multiline_string(
             r_plane.item,
             flat_of(each.anchor)
-                + Vector2(
-                    CANVAS_TEXT_CLEARANCE + 4.0f,
-                    -CANVAS_TEXT_CLEARANCE
-                ),
+                + Vector2(CANVAS_TEXT_CLEARANCE + 4.0f, -CANVAS_TEXT_CLEARANCE),
             each.text,
             HORIZONTAL_ALIGNMENT_LEFT,
             -1.0f,

@@ -471,10 +471,7 @@ TEST_CASE(
     const SteppedRun run = consumed_stepped(true);
     NETW_CHECK_GE(run.consumed, int64_t(STEPPED_FRAMES / 2 - 1));
     NETW_CHECK_GE(run.confirmed_before, int64_t(0));
-    NETW_CHECK_GE(
-        run.confirmed - run.confirmed_before,
-        run.consumed - 1
-    );
+    NETW_CHECK_GE(run.confirmed - run.confirmed_before, run.consumed - 1);
     NETW_CHECK_EQ(run.corrections, int64_t(0));
 }
 
@@ -537,9 +534,8 @@ godot::Node2D *drifting_body(
     const Ref<NetwPrediction> &p_handle
 ) {
     const Ref<NetwEntity> entity = p_handle->get_entity();
-    godot::Node2D *body = godot::Object::cast_to<godot::Node2D>(
-        entity->get_owner()
-    );
+    godot::Node2D *body
+        = godot::Object::cast_to<godot::Node2D>(entity->get_owner());
     REQUIRE(body != nullptr);
     netw::gd::scene_root()->add_child(body);
     const godot::RID space = p_core->entity_space_of(entity).space;
@@ -689,10 +685,8 @@ WorldDecl drifting_ball() {
     world.clocked(60, 3)
         .lag_compensated()
         .player(island_player("P", netw::Schedule::FRAME), 0)
-        .hosted(
-            island_player("Ball", netw::Schedule::FRAME)
-                .placed_at(godot::Vector2(20.0, 0.0))
-        )
+        .hosted(island_player("Ball", netw::Schedule::FRAME)
+                    .placed_at(godot::Vector2(20.0, 0.0)))
         .island(godot::StringName("P"), members)
         .simulating(godot::StringName("Ball"));
     return world;
@@ -835,23 +829,17 @@ PairedRun paired_by_world_tick(int p_dry_frames) {
     const godot::StringName player("P");
     const godot::StringName ball("Ball");
     const Ref<NetwPrediction> consumer = rig.prediction_handle(player);
-    const Ref<DriftStepper> authority = drifting_pair(
-        rig.server(),
-        consumer,
-        rig.prediction_handle(ball)
-    );
+    const Ref<DriftStepper> authority
+        = drifting_pair(rig.server(), consumer, rig.prediction_handle(ball));
     const Ref<NetwPrediction> owner = rig.prediction_handle(player, 0);
-    const Ref<DriftStepper> predicted = drifting_pair(
-        rig.client(0),
-        owner,
-        rig.prediction_handle(ball, 0)
-    );
+    const Ref<DriftStepper> predicted
+        = drifting_pair(rig.client(0), owner, rig.prediction_handle(ball, 0));
     authority->drift = godot::Vector2(0.0, 0.5);
     predicted->drift = godot::Vector2(0.0, 0.5);
     owner->get_entity()->get_owner()->set("motion", godot::Vector2(1.0, 0.0));
-    const int64_t consumed
-        = rig.server()->get_prediction_engine()->slot_of(consumer->get_entity()
-        );
+    const int64_t consumed = rig.server()->get_prediction_engine()->slot_of(
+        consumer->get_entity()
+    );
     for (int frame = 0; frame < DRIFT_SETTLE_FRAMES; ++frame) {
         rig.step_frame(1);
     }
@@ -880,10 +868,7 @@ PairedRun paired_by_world_tick(int p_dry_frames) {
 void check_paired(int p_dry_frames) {
     const PairedRun run = paired_by_world_tick(p_dry_frames);
     REQUIRE(run.offset == run.offset_before + p_dry_frames);
-    NETW_CHECK_LT(
-        std::abs(run.client_spacing - run.server_spacing),
-        0.01
-    );
+    NETW_CHECK_LT(std::abs(run.client_spacing - run.server_spacing), 0.01);
 }
 
 TEST_CASE(

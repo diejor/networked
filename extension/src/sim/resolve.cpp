@@ -12,7 +12,7 @@ bool server_authors(const Facts &p_facts) {
 
 bool authors_here(const Facts &p_facts) {
     return server_authors(p_facts) ? p_facts.server_here
-                                    : p_facts.controller_here;
+                                   : p_facts.controller_here;
 }
 
 bool executes(Mode p_mode) {

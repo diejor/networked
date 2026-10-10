@@ -202,11 +202,13 @@ public:
                         = String("127.0.0.1:") + itos(hosts[0].port);
                     const Ref<MultiplayerPeer> peer = enet_peer();
                     if (evidence.found.has(wanted)
-                        && Error(int(peer->call(
-                               StringName("create_client"),
-                               String("127.0.0.1"),
-                               hosts[0].port
-                           ))) == OK) {
+                        && Error(
+                               int(peer->call(
+                                   StringName("create_client"),
+                                   String("127.0.0.1"),
+                                   hosts[0].port
+                               ))
+                           ) == OK) {
                         joiner.instantiate();
                         joiner->session_prepare_join(
                             StringName("joiner"),

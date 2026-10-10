@@ -42,10 +42,9 @@ TEST_CASE(
 
     Ref<NetwMultiplayer> nested = declaring_session();
     NETW_CHECK_EQ(
-        int(nested->NETW_API_VIRTUAL(object_configuration_add)(
-            nullptr,
-            branch
-        )),
+        int(
+            nested->NETW_API_VIRTUAL(object_configuration_add)(nullptr, branch)
+        ),
         int(OK)
     );
     NETW_CHECK_EQ(
@@ -60,10 +59,9 @@ TEST_CASE(
 
     Ref<NetwMultiplayer> rooted = declaring_session();
     NETW_CHECK_EQ(
-        int(rooted->NETW_API_VIRTUAL(object_configuration_add)(
-            nullptr,
-            window
-        )),
+        int(
+            rooted->NETW_API_VIRTUAL(object_configuration_add)(nullptr, window)
+        ),
         int(OK)
     );
     NETW_CHECK_EQ(int(rooted->embed_is_disposing()), 0);

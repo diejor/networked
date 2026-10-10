@@ -227,9 +227,11 @@ TEST_CASE(
         REQUIRE(lane.drove(lane.hole - 1).present);
         CHECK(bool(lane.motion() == Vector2()));
         NETW_CHECK_CLOSE(lane.x(), before, 1e-9);
-        CHECK(bool(
-            lane.drove(lane.hole).c_hash != lane.drove(lane.hole - 1).c_hash
-        ));
+        CHECK(
+            bool(
+                lane.drove(lane.hole).c_hash != lane.drove(lane.hole - 1).c_hash
+            )
+        );
     }
 }
 
@@ -259,8 +261,7 @@ TEST_CASE(
 }
 
 int64_t missing_after_silence(int p_window, int p_silenced) {
-    const Scenario scenario
-        = framed_lane(MissingInput::REPEAT_LAST, p_window);
+    const Scenario scenario = framed_lane(MissingInput::REPEAT_LAST, p_window);
     LoopbackRig rig(scenario.clients);
     ScenarioRun::session(rig, scenario);
     Lane lane = seat(rig);
@@ -284,7 +285,7 @@ TEST_CASE(
     "inputs in every command frame, so n + 1 lost frames in a row lose no "
     "input and n + 2 lose exactly one, which runs as missing"
 ) {
-    for (const int window : { 1, 3 }) {
+    for (const int window : {1, 3}) {
         NETW_FORMAT_INT(window_text, window);
         CAPTURE(window_text);
         NETW_CHECK_EQ(missing_after_silence(window, window + 1), 0);

@@ -28,6 +28,7 @@ class SmallServer:
 
 	var max_players := 8
 
+
 	func _init() -> void:
 		Netw.configure_server_info(answer)
 

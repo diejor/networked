@@ -740,8 +740,8 @@ void NetwMultiplayer::session_receive_resync(
                 && row.control_revision > entity->get_control_revision();
             if (moved || steered) {
                 ResyncRaise &raise = resync_raises[int64_t(route)];
-                raise.anchor = moved ? MAX(raise.anchor, row.anchor)
-                                     : raise.anchor;
+                raise.anchor
+                    = moved ? MAX(raise.anchor, row.anchor) : raise.anchor;
                 raise.revision = steered
                     ? MAX(raise.revision, row.control_revision)
                     : raise.revision;

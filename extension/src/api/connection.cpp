@@ -515,10 +515,7 @@ void NetwConnection::_bind_methods() {
         D_METHOD("set_browsing", "browsing"),
         &NetwConnection::set_browsing
     );
-    ClassDB::bind_method(
-        D_METHOD("is_browsing"),
-        &NetwConnection::is_browsing
-    );
+    ClassDB::bind_method(D_METHOD("is_browsing"), &NetwConnection::is_browsing);
     ClassDB::bind_method(
         D_METHOD("set_probe_interval", "seconds"),
         &NetwConnection::set_probe_interval

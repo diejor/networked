@@ -157,8 +157,7 @@ RunFaults close_run_faults() {
     if (run_faults().is_null()) {
         return split;
     }
-    const std::vector<netw_test::FaultLine> printed
-        = run_faults()->recorded();
+    const std::vector<netw_test::FaultLine> printed = run_faults()->recorded();
     netw_test::FaultLog::detach(run_faults());
     run_faults().unref();
     netw_test::FaultLedger &ledger = netw_test::fault_ledger();
@@ -227,9 +226,8 @@ Array top_fault_families(const PackedStringArray &p_faults, int64_t &r_count) {
 }
 
 String write_census(const String &p_report_path) {
-    const String census_path = p_report_path.get_base_dir().path_join(
-        "census.txt"
-    );
+    const String census_path
+        = p_report_path.get_base_dir().path_join("census.txt");
     const CharString global
         = ProjectSettings::get_singleton()->globalize_path(census_path).utf8();
     FILE *output = std::fopen(global.get_data(), "wb");
@@ -261,14 +259,12 @@ PackedStringArray top_census_rows() {
     );
     PackedStringArray top;
     for (int at = 0; at < int(ranked.size()) && at < CENSUS_SHOWN; ++at) {
-        top.push_back(
-            vformat(
-                "objects %+d resources %+d  %s",
-                ranked[at].objects,
-                ranked[at].resources,
-                String::utf8(ranked[at].name.c_str())
-            )
-        );
+        top.push_back(vformat(
+            "objects %+d resources %+d  %s",
+            ranked[at].objects,
+            ranked[at].resources,
+            String::utf8(ranked[at].name.c_str())
+        ));
     }
     return top;
 }
@@ -788,11 +784,11 @@ Dictionary NetwNativeTests::run(
         = std::chrono::steady_clock::now();
     result[StringName("exit_code")]
         = run_native_tests(filter, report_path, cells_path);
-    result[StringName("seconds")] = std::chrono::duration<double>(
-                                        std::chrono::steady_clock::now()
-                                        - started
-    )
-                                        .count();
+    result[StringName("seconds")]
+        = std::chrono::duration<double>(
+              std::chrono::steady_clock::now() - started
+        )
+              .count();
     result[StringName("cells")] = netw_test::Cells::count();
 
     const RunSummary &summary = run_summary();
@@ -813,13 +809,15 @@ Dictionary NetwNativeTests::run(
     const std::vector<netw_test::CensusRow> &held
         = netw_test::census_ledger().rows;
     result[StringName("census_cases")] = int64_t(held.size());
-    result[StringName("census_reset_only")] = int64_t(std::count_if(
-        held.begin(),
-        held.end(),
-        [](const netw_test::CensusRow &p_row) {
-            return p_row.freed_by_reset > 0;
-        }
-    ));
+    result[StringName("census_reset_only")] = int64_t(
+        std::count_if(
+            held.begin(),
+            held.end(),
+            [](const netw_test::CensusRow &p_row) {
+                return p_row.freed_by_reset > 0;
+            }
+        )
+    );
     result[StringName("census_top")] = top_census_rows();
     result[StringName("census_path")] = write_census(report_path);
 
@@ -889,7 +887,6 @@ Ref<NetwPromise> NetwNativeTests::scene_pending_request(
     return session != nullptr ? session->get_scene_core()->get_pending_request()
                               : Ref<NetwPromise>();
 }
-
 
 bool NetwNativeTests::rpc_sender_admits(
     NetwMultiplayer *p_session,

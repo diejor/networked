@@ -282,17 +282,13 @@ TEST_CASE(
     "[Networked][Connect][Hosted] an explicit probe counts toward the "
     "in-flight cap, so queued probes never exceed it once it settles"
 ) {
-    TransportBook::shared().install_native(
-        StringName(HELD_PEER_CLASS),
-        make_held,
-        String("held")
-    );
+    TransportBook::shared()
+        .install_native(StringName(HELD_PEER_CLASS), make_held, String("held"));
     held_probes().clear();
     {
         Ref<NetwMultiplayer> core;
         core.instantiate();
-        const RID transport
-            = core->transport_find(StringName(HELD_PEER_CLASS));
+        const RID transport = core->transport_find(StringName(HELD_PEER_CLASS));
         LocalVector<RID> added;
         for (int at = 0; at < 8; at++) {
             added.push_back(core->endpoint_add(

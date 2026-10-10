@@ -124,8 +124,8 @@ static func version_mismatch() -> String:
 			and int(have[1]) >= int(wanted[1]):
 		return ""
 	return (
-		"GodotSteam %s is installed and Networked needs %s or a later %s.x. "
-		+ "Install a matching GodotSteam release."
+			"GodotSteam %s is installed and Networked needs %s or a later %s.x. "
+			+ "Install a matching GodotSteam release."
 	) % [installed, GODOTSTEAM_VERSION, wanted[0]]
 
 

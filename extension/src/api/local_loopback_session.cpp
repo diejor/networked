@@ -539,8 +539,7 @@ void LocalLoopbackSession::relabel_link(
     HashMap<int, Ref<LocalLinkConditions>> relabelled;
     for (const KeyValue<int, Ref<LocalLinkConditions>> &entry :
          state->conditions_by_sender) {
-        const int sender
-            = entry.key == 0 ? 0 : p_install.relabelled(entry.key);
+        const int sender = entry.key == 0 ? 0 : p_install.relabelled(entry.key);
         if (entry.key == 0 || sender != 0) {
             relabelled.insert(sender, entry.value);
         }
@@ -700,8 +699,9 @@ void LocalLoopbackSession::release_due(
     for (const InFlight &entry : due) {
         if (entry.packet.term != p_peer->term) {
             p_peer->admit_packet(entry.packet);
-        } else if (entry.packet.peer == 0
-                   || p_peer->is_linked_to(entry.packet.peer)) {
+        } else if (
+            entry.packet.peer == 0 || p_peer->is_linked_to(entry.packet.peer)
+        ) {
             p_peer->packet_queue.push_back(entry.packet);
         }
     }

@@ -432,8 +432,8 @@ class WorldRun {
         }
         int64_t mask = 0;
         mask |= api->scene_watches(scene, 1) ? VIEWER_SUCCESSOR : 0;
-        mask |= api->scene_watches(scene, label_now(holder)) ? VIEWER_HOLDER
-                                                              : 0;
+        mask
+            |= api->scene_watches(scene, label_now(holder)) ? VIEWER_HOLDER : 0;
         mask |= api->scene_watches(scene, label_now(third)) ? VIEWER_THIRD : 0;
         if (former_now != 0) {
             mask |= api->scene_watches(scene, former_now) ? VIEWER_FORMER : 0;
@@ -500,20 +500,11 @@ class WorldRun {
         plaza = session.spawn(-1, LEVEL_ID, "Plaza", arena, {});
         vault = session.spawn(-1, LEVEL_ID, "Vault", arena, {});
         session.rig.pump(SETTLE_PUMPS);
-        crate = session.spawn(
-            -1,
-            BODY_ID,
-            "Crate",
-            session.body_at(plaza, -1),
-            {}
-        );
-        loot = session.spawn(
-            -1,
-            BODY_ID,
-            "Loot",
-            session.body_at(vault, -1),
-            {}
-        );
+        crate
+            = session
+                  .spawn(-1, BODY_ID, "Crate", session.body_at(plaza, -1), {});
+        loot = session
+                   .spawn(-1, BODY_ID, "Loot", session.body_at(vault, -1), {});
         const RID plaza_scene = server->entity_from_route(plaza);
         const RID vault_scene = server->entity_from_route(vault);
         const bool admitted

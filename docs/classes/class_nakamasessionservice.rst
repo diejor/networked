@@ -19,7 +19,7 @@ The Nakama account of a session, shared by :ref:`NakamaLobbyDirectory<class_Naka
 Description
 -----------
 
-Get it with :ref:`of()<class_NakamaSessionService_method_of>`, so matches and storage use the same user.
+Get it with :ref:`of()<class_NakamaSessionService_method_of>`, so matches and storage use the same user.  Needs the Nakama Godot SDK :ref:`NakamaWrapper.NAKAMA_SDK_VERSION<class_NakamaWrapper_constant_NAKAMA_SDK_VERSION>`.
 
 .. rst-class:: classref-reftable-group
 

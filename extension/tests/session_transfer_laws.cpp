@@ -152,8 +152,7 @@ struct Table {
         return lowest;
     }
 
-    int64_t now(int p_at, int64_t p_successor_was, int64_t p_former_now)
-        const {
+    int64_t now(int p_at, int64_t p_successor_was, int64_t p_former_now) const {
         const int64_t label = was(p_at);
         if (label == p_successor_was) {
             return 1;
@@ -179,8 +178,8 @@ struct Table {
         }
         Array args;
         args.push_back(String(p_name));
-        const Ref<NetwPlayer> owner = p_owner < -1 ? Ref<NetwPlayer>()
-                                                    : player_at(p_owner);
+        const Ref<NetwPlayer> owner
+            = p_owner < -1 ? Ref<NetwPlayer>() : player_at(p_owner);
         const RID entity = rig.server()->spawn_registered(
             StringName(BODY_ID),
             args,
@@ -223,10 +222,9 @@ struct Ear {
 
     Ear(const Table &p_table, int p_from, Vector<StringName> p_signals) {
         for (int at = p_from; at < CLIENTS; ++at) {
-            recorders.push_back(memnew(Recorder(
-                p_table.seat(at)->get_session().ptr(),
-                p_signals
-            )));
+            recorders.push_back(memnew(
+                Recorder(p_table.seat(at)->get_session().ptr(), p_signals)
+            ));
         }
     }
 
@@ -343,10 +341,9 @@ void seat_stock(Table &p_table) {
 
 int poke_everyone(Table &p_table, int p_tag) {
     for (int at = -1; at < CLIENTS; ++at) {
-        p_table.rig.branch(at)->get_node_or_null(NodePath("Stock"))->rpc(
-            StringName("poke"),
-            p_tag
-        );
+        p_table.rig.branch(at)
+            ->get_node_or_null(NodePath("Stock"))
+            ->rpc(StringName("poke"), p_tag);
     }
     p_table.rig.pump(SETTLE_PUMPS);
     int heard = 0;
@@ -621,9 +618,8 @@ void lost_host_body_departs(bool p_keep_world) {
         NETW_CHECK_EQ(int(same(left->get_username(), "host")), 1);
     }
     Node *body = table.body_at(carried, successor);
-    const int64_t stage = body != nullptr
-        ? NetwEntity::of(body)->get_stage()
-        : int64_t(netw::entity::Stage::FREED);
+    const int64_t stage = body != nullptr ? NetwEntity::of(body)->get_stage()
+                                          : int64_t(netw::entity::Stage::FREED);
     NETW_CHECK_GE(stage, int64_t(netw::entity::Stage::DESPAWNING));
 
     free_as_the_frame_would(body);
@@ -774,11 +770,8 @@ TEST_CASE(
     REQUIRE(own.is_valid());
 
     netw_test::FaultWatch faults;
-    table.rig.peer(refusing)->emit_signal(
-        StringName("server_relabelled"),
-        stranger,
-        0
-    );
+    table.rig.peer(refusing)
+        ->emit_signal(StringName("server_relabelled"), stranger, 0);
     NETW_CHECK_EQ(faults.errors(), 1);
     NETW_CHECK_EQ(
         int(seat->session_get_state()),
@@ -1058,11 +1051,8 @@ TEST_CASE(
     const RID database = server->get_databases()->create("saves");
     const Ref<netw::persist::MemoryConnection> connection
         = netw::persist::MemoryConnection::opened("transfer", "slot1");
-    server->get_databases()->open(
-        database,
-        "slot1",
-        NetwPromise::resolved(connection)
-    );
+    server->get_databases()
+        ->open(database, "slot1", NetwPromise::resolved(connection));
     connection->defer(true);
     Dictionary values;
     values[StringName("score")] = 3.0;
@@ -1569,9 +1559,8 @@ TEST_CASE(
     table.rig.release(successor);
     table.rig.pump(SETTLE_PUMPS);
 
-    const PackedInt64Array served = table.rig.spawn_plane(successor)
-                                        ->get_spawn_book()
-                                        ->spawned_routes();
+    const PackedInt64Array served
+        = table.rig.spawn_plane(successor)->get_spawn_book()->spawned_routes();
     NETW_CHECK_EQ(int(served.has(shared)), 1);
     NETW_CHECK_EQ(int(served.has(orphan)), 0);
     for (int at = 0; at < CLIENTS; ++at) {
@@ -1628,9 +1617,8 @@ TEST_CASE(
     table.rig.pump(SETTLE_PUMPS);
     NETW_CHECK_EQ(faults.errors(), 0);
 
-    const int64_t served = table.rig.spawn_plane(successor)
-                               ->get_spawn_book()
-                               ->spawned_count();
+    const int64_t served
+        = table.rig.spawn_plane(successor)->get_spawn_book()->spawned_count();
     for (int at = 0; at < CLIENTS; ++at) {
         NETW_FORMAT_INT(seat_text, at);
         CAPTURE(seat_text);
@@ -1764,9 +1752,9 @@ TEST_CASE(
     NETW_CHECK_EQ(book->spawned_count(), 0);
     NETW_CHECK_EQ(
         recv_count(table, -1),
-        int64_t(table.rig.spawn_plane(successor)
-                    ->get_spawn_book()
-                    ->spawned_count())
+        int64_t(
+            table.rig.spawn_plane(successor)->get_spawn_book()->spawned_count()
+        )
     );
     NETW_CHECK_EQ(int(alive(table, route, -1)), 1);
     Node *fresh = table.body_at(route, -1);
@@ -1798,9 +1786,8 @@ TEST_CASE(
     NETW_REQUIRE_EQ(int(table.rig.session()->lose_server()), int(OK));
     table.rig.pump(SETTLE_PUMPS);
 
-    const int64_t served = table.rig.spawn_plane(successor)
-                               ->get_spawn_book()
-                               ->spawned_count();
+    const int64_t served
+        = table.rig.spawn_plane(successor)->get_spawn_book()->spawned_count();
     NETW_CHECK_EQ(served, int64_t(QUIET_ENTITIES));
     for (int at = 0; at < CLIENTS; ++at) {
         if (at == successor) {
@@ -1872,13 +1859,11 @@ int spawn_bodies(Table &p_table, int p_count) {
 
 int held_by(Table &p_table, int p_server, int64_t p_peer) {
     netw::spawn::Pipeline *plane = p_table.rig.spawn_plane(p_server);
-    const PackedInt64Array served
-        = plane->get_spawn_book()->spawned_routes();
+    const PackedInt64Array served = plane->get_spawn_book()->spawned_routes();
     int held = 0;
     for (int at = 0; at < served.size(); ++at) {
         const netw::spawn::Record *record = plane->spawned_record(served[at]);
-        held += record != nullptr && record->has_recipient(int(p_peer)) ? 1
-                                                                         : 0;
+        held += record != nullptr && record->has_recipient(int(p_peer)) ? 1 : 0;
     }
     return held;
 }
@@ -1891,9 +1876,9 @@ int spawn_on(Table &p_table, int p_at, const char *p_id, const char *p_name) {
     if (node == nullptr) {
         return 0;
     }
-    p_table.rig.branch(p_at)->get_node_or_null(NodePath("Arena"))->add_child(
-        node
-    );
+    p_table.rig.branch(p_at)
+        ->get_node_or_null(NodePath("Arena"))
+        ->add_child(node);
     return int(api->entity_get_route(entity));
 }
 
@@ -2238,9 +2223,8 @@ void modes_disagree(bool p_server_keeps) {
     table.rig.pump(SETTLE_PUMPS);
 
     NETW_CHECK_EQ(int(table.seat(successor)->is_structure_halted()), 0);
-    PackedInt64Array served = table.rig.spawn_plane(successor)
-                                  ->get_spawn_book()
-                                  ->spawned_routes();
+    PackedInt64Array served
+        = table.rig.spawn_plane(successor)->get_spawn_book()->spawned_routes();
     served.sort();
     NETW_CHECK_EQ(int(served.has(shared)), 1);
     NETW_CHECK_EQ(int(served.has(orphan)), 0);
@@ -2250,9 +2234,8 @@ void modes_disagree(bool p_server_keeps) {
         }
         NETW_FORMAT_INT(seat_text, at);
         CAPTURE(seat_text);
-        PackedInt64Array held = table.rig.spawn_plane(at)
-                                    ->get_spawn_book()
-                                    ->recv_routes();
+        PackedInt64Array held
+            = table.rig.spawn_plane(at)->get_spawn_book()->recv_routes();
         held.sort();
         NETW_CHECK_EQ(int(held == served), 1);
         for (int which = 0; which < served.size(); ++which) {

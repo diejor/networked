@@ -19,7 +19,7 @@ A :ref:`LobbyDirectory<class_LobbyDirectory>` that hosts, joins and lists Steam 
 Description
 -----------
 
-Its lobbies connect through ``SteamMultiplayerPeer``. A lobby's address is its Steam lobby id.  Steam allows one instance per process, so a second one frees itself.
+Its lobbies connect through ``SteamMultiplayerPeer``. A lobby's address is its Steam lobby id.  Steam allows one instance per process, so a second one frees itself.  Needs GodotSteam :ref:`SteamWrapper.GODOTSTEAM_VERSION<class_SteamWrapper_constant_GODOTSTEAM_VERSION>` or a later release with the same major version.
 
 .. rst-class:: classref-reftable-group
 

@@ -100,8 +100,7 @@ public:
     int64_t peer_keyed_count() const {
         return int64_t(
             bytes_out.size() + bytes_in.size()
-            + frames_by_peer_channel_in.size() + refusals.size()
-            + staged.size()
+            + frames_by_peer_channel_in.size() + refusals.size() + staged.size()
         );
     }
 

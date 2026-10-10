@@ -10,10 +10,15 @@ namespace Networked;
 /// </summary>
 /// <remarks>
 /// Received values are interpolated into the property
-/// <see cref="NetwInterpolate.Target"/>.
+/// <see cref="NetwInterpolate.Target"/>. A peer that simulates the body owns
+/// that value, so the smoothing is written to
+/// <see cref="NetwDisplay.VisualRoot"/> and every peer draws the body smoothly,
+/// the host included.
 /// <code>
+/// var entity := Netw.configure_entity(self)
+/// entity.display.visual_root = ^"Visual"
 /// Netw.configure_property(self, &amp;"position").interpolate(
-///     NetwInterpolate.new().lerp().smooth(0.05).to(&amp;"position")
+///     NetwInterpolate.new().lerp().smooth(0.05)
 /// )
 /// </code>
 /// <para>

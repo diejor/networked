@@ -70,8 +70,7 @@ TEST_CASE(
     NETW_CHECK_EQ(read_code, 0);
 
     const int64_t read_detail = warnings_while([] {
-        (void)NetwPromise::rejected(ERR_CANT_CONNECT, "no route")
-            ->get_detail();
+        (void)NetwPromise::rejected(ERR_CANT_CONNECT, "no route")->get_detail();
     });
     NETW_CHECK_EQ(read_detail, 0);
 }

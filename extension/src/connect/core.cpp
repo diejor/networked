@@ -259,9 +259,8 @@ void assign_created(
     const String &,
     uint64_t p_session
 ) {
-    NetwMultiplayer *session = Object::cast_to<NetwMultiplayer>(
-        gd::object_of(ObjectID(p_session))
-    );
+    NetwMultiplayer *session
+        = Object::cast_to<NetwMultiplayer>(gd::object_of(ObjectID(p_session)));
     if (session == nullptr || p_error != OK || p_peer.is_null()
         || !session->connect_plane().answers_attempt()) {
         return;
@@ -679,9 +678,7 @@ void ConnectCore::release_attempt(const Attempt &p_ended) {
     if (p_ended.state == ATTEMPT_CREATING) {
         cancel_peer_creation(p_ended.ticket);
     } else if (p_ended.state == ATTEMPT_CONNECTING && session != nullptr) {
-        session->NETW_API_VIRTUAL(set_multiplayer_peer)(
-            Ref<MultiplayerPeer>()
-        );
+        session->NETW_API_VIRTUAL(set_multiplayer_peer)(Ref<MultiplayerPeer>());
     }
 }
 
@@ -833,8 +830,7 @@ RID ConnectCore::open_creation(
     seed.transport = p_transport;
     seed.mode = p_mode;
     seed.address = p_address;
-    seed.settings
-        = layered_settings(p_transport, p_metadata, p_settings);
+    seed.settings = layered_settings(p_transport, p_metadata, p_settings);
     seed.completed = p_completed;
     const RID ticket = mint_creation(seed);
     creations.push_back(ticket);
@@ -1441,7 +1437,9 @@ void ConnectCore::open_browsers() {
                     && listing->directory_id() == directories[at]);
         }
         if (!held) {
-            open_browser(new DirectoryTransport(gd::object_of(directories[at])));
+            open_browser(
+                new DirectoryTransport(gd::object_of(directories[at]))
+            );
         }
     }
 }

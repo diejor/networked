@@ -36,7 +36,8 @@ namespace Networked;
 /// colour
 /// - <b>white line</b> the two snapshots the entity is drawn between
 /// - <b>dashed amber line</b> a snapshot that never arrived, or a guess past
-/// the newest one
+/// the newest one. On an entity this peer predicts and does not control it runs
+/// to the drawn body, and the text gives that <c>horizon</c> in ticks
 /// - <b>short ticks</b> which way the entity faced at each snapshot
 /// - <b>purple line</b> a correction still being smoothed out on an entity this
 /// peer predicts

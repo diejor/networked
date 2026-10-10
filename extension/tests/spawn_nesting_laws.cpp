@@ -389,10 +389,12 @@ TEST_CASE(
         REQUIRE(world != nullptr);
         REQUIRE(view != nullptr);
         CHECK(world->is_using_own_world_3d());
-        CHECK(bool(
-            view->get_name()
-            == netw::NetwMultiplayer::scene_view_of(authored)->get_name()
-        ));
+        CHECK(
+            bool(
+                view->get_name()
+                == netw::NetwMultiplayer::scene_view_of(authored)->get_name()
+            )
+        );
         CHECK(view->is_visible());
         CHECK_FALSE(world->is_input_disabled());
     }

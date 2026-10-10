@@ -68,7 +68,7 @@ func test_a_username_alone_passes_no_arguments() -> void:
 
 	assert_int(declarer.calls).is_equal(0)
 	assert_int(
-		await ERROR_SCRUBBER.erase_matching(["joined with no arguments"])
+		await ERROR_SCRUBBER.erase_matching(["joined with no arguments"]),
 	).is_equal(1)
 
 

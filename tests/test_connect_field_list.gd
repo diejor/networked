@@ -6,6 +6,7 @@ const ERROR_SCRUBBER := preload(
 	"res://addons/networked_test/gdunit4/gdunit_error_scrubber.gd"
 )
 
+
 func test_settings_render_one_field_each_and_read_back() -> void:
 	var container := VBoxContainer.new()
 	add_child(container)
@@ -172,7 +173,7 @@ func test_a_malformed_structured_field_keeps_the_default_downstream() -> void:
 		ConnectFieldList.value_from_control(control, TYPE_ARRAY),
 	).is_null()
 	assert_int(
-		await ERROR_SCRUBBER.erase_matching(["'not json' is not a JSON array"])
+		await ERROR_SCRUBBER.erase_matching(["'not json' is not a JSON array"]),
 	).is_equal(1)
 	control.free()
 

@@ -34,6 +34,8 @@ Methods
    +--------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | :godot:`bool`            | :ref:`is_running<class_SteamWrapper_method_is_running>`\ (\ ) |static|                                                                                                                     |
    +--------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`String`          | :ref:`version_mismatch<class_SteamWrapper_method_version_mismatch>`\ (\ ) |static|                                                                                                         |
+   +--------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | :godot:`Dictionary`      | :ref:`steam_init_ex<class_SteamWrapper_method_steam_init_ex>`\ (\ )                                                                                                                        |
    +--------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | |void|                   | :ref:`run_callbacks<class_SteamWrapper_method_run_callbacks>`\ (\ )                                                                                                                        |
@@ -391,6 +393,23 @@ enum **LobbyComparison**: :ref:`🔗<enum_SteamWrapper_LobbyComparison>`
 
 .. rst-class:: classref-descriptions-group
 
+Constants
+---------
+
+.. _class_SteamWrapper_constant_GODOTSTEAM_VERSION:
+
+.. rst-class:: classref-constant
+
+**GODOTSTEAM_VERSION** = ``"4.18"`` :ref:`🔗<class_SteamWrapper_constant_GODOTSTEAM_VERSION>`
+
+The GodotSteam release this addon is tested against. A later release with the same major version also works.
+
+.. rst-class:: classref-section-separator
+
+----
+
+.. rst-class:: classref-descriptions-group
+
 Method Descriptions
 -------------------
 
@@ -417,6 +436,18 @@ Method Descriptions
 .. container:: contribute
 
 	There is currently no description for this method. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_SteamWrapper_method_version_mismatch:
+
+.. rst-class:: classref-method
+
+:godot:`String` **version_mismatch**\ (\ ) |static| :ref:`🔗<class_SteamWrapper_method_version_mismatch>`
+
+Returns a warning when the installed GodotSteam is older than :ref:`GODOTSTEAM_VERSION<class_SteamWrapper_constant_GODOTSTEAM_VERSION>` or has another major version, or an empty :godot:`String` when it matches.
 
 .. rst-class:: classref-item-separator
 

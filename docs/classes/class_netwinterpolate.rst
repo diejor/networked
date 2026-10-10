@@ -19,12 +19,14 @@ How a received value is smoothed before it is shown.
 Description
 -----------
 
-Received values are interpolated into the property :ref:`target<class_NetwInterpolate_property_target>`.
+Received values are interpolated into the property :ref:`target<class_NetwInterpolate_property_target>`. A peer that simulates the body owns that value, so the smoothing is written to :ref:`NetwDisplay.visual_root<class_NetwDisplay_property_visual_root>` and every peer draws the body smoothly, the host included.
 
 ::
 
+    var entity := Netw.configure_entity(self)
+    entity.display.visual_root = ^"Visual"
     Netw.configure_property(self, &"position").interpolate(
-        NetwInterpolate.new().lerp().smooth(0.05).to(&"position")
+        NetwInterpolate.new().lerp().smooth(0.05)
     )
 
 \ It works the same with :ref:`Netw.configure_property()<class_Netw_method_configure_property>`, :ref:`Netw.configure_rpc()<class_Netw_method_configure_rpc>` and :ref:`Netw.configure_signal()<class_Netw_method_configure_signal>`.

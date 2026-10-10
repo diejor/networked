@@ -9299,10 +9299,13 @@ public sealed class NetwMultiplayer : NetwRefCounted
 
     /// <summary>
     /// While on, physics steps only on frames that have a tick to run, so a
-    /// tick covers the same physics time on every peer.
-    /// <see cref="NetwMultiplayer.ClockIsSimulating"/> tells whether this frame
-    /// steps. Calls nest, so it turns off when every <c>true</c> is matched by
-    /// a <c>false</c>.
+    /// tick covers the same physics time on every peer. A client runs at most
+    /// one tick a frame while it is on, so its tick snaps to the server's when
+    /// it falls further behind than the
+    /// <see cref="NetwMultiplayer.ClockParam.MaxTicksPerFrame"/> setting allows
+    /// a frame to catch up. <see cref="NetwMultiplayer.ClockIsSimulating"/>
+    /// tells whether this frame steps. Calls nest, so it turns off when every
+    /// <c>true</c> is matched by a <c>false</c>.
     /// </summary>
     public void ClockSetGate(bool armed)
     {
@@ -10024,37 +10027,6 @@ public sealed class NetwMultiplayer : NetwRefCounted
             ref answered);
         slot0.Dispose();
         StringName result = VariantUtils.ConvertToStringName(answered);
-        answered.Dispose();
-        return result;
-    }
-
-    private static readonly IntPtr _bindLawExtensionNamed =
-        NetwApi.MethodBind(
-            "NetwMultiplayer",
-            "law_extension_named",
-            2240911060UL);
-
-    public static bool LawExtensionNamed()
-    {
-        byte answered = default;
-        NetwThunks.Ptrcall0_Byte(
-            _bindLawExtensionNamed,
-            IntPtr.Zero,
-            ref answered);
-        return answered != 0;
-    }
-
-    private static readonly IntPtr _bindLawExtensionScript =
-        NetwApi.MethodBind(
-            "NetwMultiplayer",
-            "law_extension_script",
-            2146468882UL);
-
-    public static Script LawExtensionScript()
-    {
-        godot_variant answered = default;
-        NetwThunks.Call0(_bindLawExtensionScript, IntPtr.Zero, ref answered);
-        Script result = (Script)VariantUtils.ConvertToGodotObject(answered);
         answered.Dispose();
         return result;
     }

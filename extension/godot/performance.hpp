@@ -51,12 +51,8 @@ inline void add_custom_monitor(
     const godot::Performance::MonitorType type
         = godot::Performance::MonitorType(p_type);
 #if defined(NETW_MODULE)
-    performance->add_custom_monitor(
-        p_id,
-        p_read,
-        Vector<godot::Variant>(),
-        type
-    );
+    performance
+        ->add_custom_monitor(p_id, p_read, Vector<godot::Variant>(), type);
 #else
     performance->add_custom_monitor(p_id, p_read, godot::Array(), type);
 #endif

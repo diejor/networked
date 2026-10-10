@@ -177,9 +177,8 @@ void LANLobbyDirectory::list_lobbies() {
     nonce = random_u64();
     asked_usec = now_usec();
     window_left = BROWSE_WINDOW;
-    const String reached = connect::under_test_runner()
-        ? String("127.0.0.1")
-        : query_address;
+    const String reached
+        = connect::under_test_runner() ? String("127.0.0.1") : query_address;
     const PackedByteArray query = connect::lan::encode_query(app_tag(), nonce);
     for (int64_t at = 0; at < port_count; at++) {
         gd::udp_send(browse_socket, reached, port + at, query);
@@ -190,12 +189,7 @@ void LANLobbyDirectory::collect_replies() {
     gd::Datagram answered;
     while (gd::udp_take(browse_socket, answered)) {
         connect::lan::Reply reply;
-        if (!connect::lan::decode_reply(
-                answered.bytes,
-                app_tag(),
-                nonce,
-                reply
-            )
+        if (!connect::lan::decode_reply(answered.bytes, app_tag(), nonce, reply)
             || reply.instance == instance || seen.has(reply.instance)) {
             continue;
         }

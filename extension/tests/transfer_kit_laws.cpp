@@ -64,7 +64,8 @@ struct Loop {
 
     Ref<LocalMultiplayerPeer> join() {
         const Ref<LocalMultiplayerPeer> joined = session->create_client_peer();
-        joined->NETW_PEER_VIRTUAL(poll)();        return joined;
+        joined->NETW_PEER_VIRTUAL(poll)();
+        return joined;
     }
 };
 
@@ -93,8 +94,7 @@ public:
         Verb p_verb,
         const Object *p_anchor
     )
-        : loop(p_loop), verb(p_verb),
-          anchor(netw::gd::instance_id(p_anchor)) {
+        : loop(p_loop), verb(p_verb), anchor(netw::gd::instance_id(p_anchor)) {
     }
 
     uint32_t hash() const override {

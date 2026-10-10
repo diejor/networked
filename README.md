@@ -137,8 +137,7 @@ Yes, you can move nodes around with `Node.reparent`.
 player.reparent(arena.get_node(^"Spawns"))
 ```
 
-Reparenting is a replicated action, no longer triggering a `DESPAWN`/`SPAWN` 
-dance when moving nodes around.
+Reparenting is replicated.
 
 ## More
 

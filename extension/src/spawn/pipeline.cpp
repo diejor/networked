@@ -1686,8 +1686,7 @@ void Pipeline::handle_spawn_frame(
         return;
     }
     NetwMultiplayer *plane = core();
-    if (plane != nullptr && plane->is_host()
-        && p_sender != SERVER_PEER) {
+    if (plane != nullptr && plane->is_host() && p_sender != SERVER_PEER) {
         admit_controller_spawn(p_payload, p_sender);
         return;
     }
@@ -2311,9 +2310,8 @@ void Pipeline::handle_despawn_frame(
     int64_t p_sender
 ) {
     NetwMultiplayer *plane = core();
-    const bool from_a_controller = plane != nullptr
-        && plane->is_host()
-        && p_sender != SERVER_PEER;
+    const bool from_a_controller
+        = plane != nullptr && plane->is_host() && p_sender != SERVER_PEER;
     const Error admitted = admission(p_sender, channel_despawn, p_payload);
     if (admitted != OK) {
         if (from_a_controller) {
@@ -2468,9 +2466,8 @@ void Pipeline::handle_reparent_frame(
     int64_t p_sender
 ) {
     NetwMultiplayer *plane = core();
-    const bool from_a_controller = plane != nullptr
-        && plane->is_host()
-        && p_sender != SERVER_PEER;
+    const bool from_a_controller
+        = plane != nullptr && plane->is_host() && p_sender != SERVER_PEER;
     const Error admitted = admission(p_sender, channel_reparent, p_payload);
     if (admitted != OK) {
         if (from_a_controller) {

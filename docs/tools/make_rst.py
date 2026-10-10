@@ -1069,7 +1069,17 @@ def make_rst_class(class_def: ClassDef, state: State, dry_run: bool, output_dir:
                 type_rst = property_def.type_name.to_rst(state)
                 default = property_def.default_value
                 if default is not None and property_def.overrides:
-                    ref = f":ref:`{property_def.overrides}<class_{sanitize_class_name(property_def.overrides)}_property_{property_def.name}>`"
+                    base = property_def.overrides
+                    anchor = (
+                        f"class_{sanitize_class_name(base)}"
+                        f"_property_{property_def.name}"
+                    )
+                    if base in state.classes:
+                        ref = f":ref:`{base}<{anchor}>`"
+                    else:
+                        ref = godot_external_link(
+                            base, base, fragment=anchor.lower().replace("_", "-")
+                        )
                     # Not using translate() for now as it breaks table formatting.
                     ml.append((type_rst, property_def.name, f"{default} (overrides {ref})"))
                 else:

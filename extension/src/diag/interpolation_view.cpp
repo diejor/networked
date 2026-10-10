@@ -82,8 +82,8 @@ public:
         if (p_value < 0) {
             put("-");
         }
-        uint64_t magnitude = p_value < 0 ? uint64_t(0) - uint64_t(p_value)
-                                         : uint64_t(p_value);
+        uint64_t magnitude
+            = p_value < 0 ? uint64_t(0) - uint64_t(p_value) : uint64_t(p_value);
         char digits[24];
         int count = 0;
         do {
@@ -390,8 +390,8 @@ void draw_remote(Pen &r_pen, const HeldSample *p_newest_first) {
     if (count == 0) {
         return;
     }
-    const float mark = (row.flat ? TimelineStyle::MARK_PIXELS
-                                 : TimelineStyle::MARK_METRES)
+    const float mark
+        = (row.flat ? TimelineStyle::MARK_PIXELS : TimelineStyle::MARK_METRES)
         * row.scale;
     const float heading = (row.flat ? TimelineStyle::HEADING_PIXELS
                                     : TimelineStyle::HEADING_METRES)
@@ -402,10 +402,8 @@ void draw_remote(Pen &r_pen, const HeldSample *p_newest_first) {
         = row.has_head ? row.playhead : double(p_newest_first[0].tick);
     double reach = 0.0;
     for (uint32_t at = 0; at < count; ++at) {
-        reach = MAX(
-            reach,
-            std::abs(double(p_newest_first[at].tick) - reference)
-        );
+        reach
+            = MAX(reach, std::abs(double(p_newest_first[at].tick) - reference));
     }
     if (row.has_head) {
         r_pen.disc(
@@ -723,17 +721,13 @@ void InterpolationView::read_remote(
 ) {
     const display::Channel &pose = *p_runtime.channels()[r_entry.pose];
     const display::History &history = pose.display_history();
-    const uint32_t count = history.newest_held(
-        SAMPLE_CAP,
-        held_ticks.ptr(),
-        held_values.ptr()
-    );
+    const uint32_t count
+        = history.newest_held(SAMPLE_CAP, held_ticks.ptr(), held_values.ptr());
     if (count == 0) {
         return;
     }
     r_row.lag = p_runtime.display_playhead().get_display_lag();
-    r_row.playhead
-        = double(p_now.display_tick) + p_now.tick_factor - r_row.lag;
+    r_row.playhead = double(p_now.display_tick) + p_now.tick_factor - r_row.lag;
     const int64_t playhead_tick = int64_t(std::floor(r_row.playhead));
     const int64_t received = history.received_tick();
     const int64_t newest_held = held_ticks[0];
@@ -879,11 +873,8 @@ void InterpolationView::hold_marks(
             mark.turned = heading_of(value, mark.heading);
         } else if (heading_table != nullptr) {
             mark.turned = heading_of(
-                heading_table->history_value(
-                    heading_row,
-                    age,
-                    p_entry.heading_column
-                ),
+                heading_table
+                    ->history_value(heading_row, age, p_entry.heading_column),
                 mark.heading
             );
         }
@@ -958,10 +949,8 @@ void InterpolationView::find_parts(Seen &r_entry, Node *p_frame, bool p_flat) {
         }
         const Vector3 box = part->get_mesh()->get_aabb().size
             * part->get_global_transform().basis.get_scale().abs();
-        r_entry.part_size = MAX(
-            r_entry.part_size,
-            double(MAX(box.x, MAX(box.y, box.z)))
-        );
+        r_entry.part_size
+            = MAX(r_entry.part_size, double(MAX(box.x, MAX(box.y, box.z))));
     }
 }
 
@@ -1013,8 +1002,7 @@ Color ghost_tint(const TimelineRow &p_row) {
     );
 }
 
-template <class Part>
-Part *live_part(uint64_t p_id, Node *p_node) {
+template <class Part> Part *live_part(uint64_t p_id, Node *p_node) {
     return gd::object_registered(ObjectID(p_id)) ? static_cast<Part *>(p_node)
                                                  : nullptr;
 }

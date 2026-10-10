@@ -65,10 +65,12 @@ PackedByteArray reply_with(
     const Ref<NetwServerInfo> &p_info
 ) {
     PackedByteArray buffer = p_header;
-    buffer.append_array(auth::encode_probe_reply(
-        int(auth::ProbeStatus::OK),
-        NetwServerInfo::to_payload(p_info)
-    ));
+    buffer.append_array(
+        auth::encode_probe_reply(
+            int(auth::ProbeStatus::OK),
+            NetwServerInfo::to_payload(p_info)
+        )
+    );
     return buffer;
 }
 

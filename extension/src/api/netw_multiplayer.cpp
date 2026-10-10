@@ -3,11 +3,11 @@
 #include "godot/transport_state.hpp"
 #include "netw/api/interest.hpp"
 #include "netw/api/join_config.hpp"
-#include "netw/diag/hints.hpp"
 #include "netw/api/lag_compensation_config.hpp"
 #include "netw/api/loopback.hpp"
 #include "netw/api/nodes/multiplayer_viewport.hpp"
 #include "netw/api/scene.hpp"
+#include "netw/diag/hints.hpp"
 #include "netw/spawn/pipeline.hpp"
 
 #include "netw/api/participant.hpp"
@@ -4017,8 +4017,7 @@ void NetwMultiplayer::clock_receive_pong(
     int64_t p_sender
 ) {
     session::ClockPong pong;
-    if (p_sender != SERVER_PEER
-        || !session::frame_read(p_payload, pong)) {
+    if (p_sender != SERVER_PEER || !session::frame_read(p_payload, pong)) {
         return;
     }
     const uint32_t client_usec = uint32_t(pong.origin);
@@ -5166,8 +5165,7 @@ void NetwMultiplayer::handle_deny(
     int64_t p_sender
 ) {
     session::DenyKey denied;
-    if (p_sender != SERVER_PEER
-        || !session::frame_read(p_payload, denied)) {
+    if (p_sender != SERVER_PEER || !session::frame_read(p_payload, denied)) {
         return;
     }
     lagcomp_effect_discard(denied.key);

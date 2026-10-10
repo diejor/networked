@@ -184,9 +184,8 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Connect][Registration] the stock transports answer with no "
-    "registration at all, and a session registering nothing still finds "
-    "them, which is the zero-configuration path this band must not disturb"
+    "[Networked][Connect][Registration] stock transports are available "
+    "without registration"
 ) {
     const Ref<NetwMultiplayer> core = lone_session();
 

@@ -191,8 +191,7 @@ RID NetwMultiplayer::scene_released_scene(
     const PackedByteArray &p_payload,
     int p_sender
 ) {
-    if (int64_t(p_sender) != SERVER_PEER
-        || player_admitted_local().is_null()) {
+    if (int64_t(p_sender) != SERVER_PEER || player_admitted_local().is_null()) {
         return RID();
     }
     session::SceneReleased frame;
@@ -1379,8 +1378,7 @@ void NetwMultiplayer::scene_publish_viewers(const RID &p_scene) {
 
 void NetwMultiplayer::scene_send_viewers(const RID &p_scene, int64_t p_target) {
     const int64_t route = scene_route_of(p_scene);
-    if (!is_host() || route <= 0
-        || p_target == int64_t(get_unique_id())) {
+    if (!is_host() || route <= 0 || p_target == int64_t(get_unique_id())) {
         return;
     }
     const uint64_t *held = scene_viewers_revision.getptr(route);

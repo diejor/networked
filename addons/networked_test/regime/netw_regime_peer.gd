@@ -46,7 +46,6 @@ extends Node
 
 const Async := preload("res://addons/networked/gdscript/async.gd")
 
-
 const ROLE_HOST := "host"
 const ROLE_CLIENT := "client"
 
@@ -56,7 +55,6 @@ const ROLE_CLIENT := "client"
 ## without teaching this node a second vocabulary.
 static func role_is_host(p_role: String) -> bool:
 	return p_role == ROLE_HOST
-
 
 # Exit codes an orchestrator reads. Zero is a completed run.
 const EXIT_WATCHDOG := 2
@@ -190,12 +188,14 @@ func run() -> void:
 		)
 		_finish(EXIT_GESTURE, "unknown_gesture")
 		return
-	print("[regime] %s ready on port %d, driving %s for %.1fs" % [
-		role,
-		port,
-		gesture,
-		seconds,
-	])
+	print(
+		"[regime] %s ready on port %d, driving %s for %.1fs" % [
+			role,
+			port,
+			gesture,
+			seconds,
+		],
+	)
 	if api and api.clock_is_configured():
 		_cadence_baseline = _cadence()
 	if api:
@@ -234,12 +234,14 @@ func _unmet_expectations() -> PackedStringArray:
 		var actual := float(condition[key])
 		var wanted := parts[2].strip_edges().to_float()
 		if (actual < wanted) if at_least else (actual > wanted):
-			unmet.append("%s is %.4f, wanted %s %.4f" % [
-				key,
-				actual,
-				parts[1],
-				wanted,
-			])
+			unmet.append(
+				"%s is %.4f, wanted %s %.4f" % [
+					key,
+					actual,
+					parts[1],
+					wanted,
+				],
+			)
 	return unmet
 
 
@@ -288,7 +290,11 @@ func _snapshot_entities() -> void:
 		if handle == null:
 			continue
 		_entity_snapshots[String(id)] = {
-			"stats": NetwNativeTests.prediction_stats(handle),
+			"stats": ClassDB.class_call_static(
+				&"NetwNativeTests",
+				&"prediction_stats",
+				handle,
+			),
 		}
 
 
@@ -358,14 +364,18 @@ func _condition_report() -> Dictionary:
 func _cadence() -> Dictionary:
 	return {
 		&"wall_seconds": api.clock_get_monitor(
-			NetwClock.CLOCK_MONITOR_WALL_SECONDS
+			NetwClock.CLOCK_MONITOR_WALL_SECONDS,
 		),
-		&"physics_frames": int(api.clock_get_monitor(
-			NetwClock.CLOCK_MONITOR_PHYSICS_FRAMES
-		)),
-		&"polls": int(api.clock_get_monitor(
-			NetwClock.CLOCK_MONITOR_POLLS
-		)),
+		&"physics_frames": int(
+			api.clock_get_monitor(
+				NetwClock.CLOCK_MONITOR_PHYSICS_FRAMES,
+			),
+		),
+		&"polls": int(
+			api.clock_get_monitor(
+				NetwClock.CLOCK_MONITOR_POLLS,
+			),
+		),
 	}
 
 
@@ -377,10 +387,10 @@ func _clock_report() -> Dictionary:
 		"synchronized": api.clock_is_synchronized(),
 		"behind": api.clock_get_simulation_behind_count(),
 		"rtt_avg": api.clock_get_monitor(
-			NetwClock.CLOCK_MONITOR_RTT_AVG
+			NetwClock.CLOCK_MONITOR_RTT_AVG,
 		),
 		"rtt_jitter": api.clock_get_monitor(
-			NetwClock.CLOCK_MONITOR_RTT_JITTER
+			NetwClock.CLOCK_MONITOR_RTT_JITTER,
 		),
 	}
 

@@ -355,8 +355,8 @@ TEST_CASE(
         if (timeline.drawing.marks.size() != held.size() + 1) {
             continue;
         }
-        const float radius = flat ? TimelineStyle::MARK_PIXELS
-                                  : TimelineStyle::MARK_METRES;
+        const float radius
+            = flat ? TimelineStyle::MARK_PIXELS : TimelineStyle::MARK_METRES;
         const double reach = 8.4 - 6.0;
         for (uint32_t at = 0; at < held.size(); ++at) {
             const Mark &mark = timeline.drawing.marks[at + 1];

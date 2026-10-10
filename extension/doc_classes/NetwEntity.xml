@@ -322,7 +322,7 @@
 			[/codeblock]
 			It must be above zero, and a value at or below zero is refused and leaves the weight unchanged. Which peers receive the entity at all is [member interest].
 		</member>
-		<member name="rid" type="RID" setter="" getter="get_rid" default="RID(98784247808)">
+		<member name="rid" type="RID" setter="" getter="get_rid">
 			The [RID] that [NetwMultiplayer] methods take for this entity.
 			[codeblock]
 			var state := Netw.of(self).entity_get_state(entity.rid)

@@ -767,8 +767,7 @@ TypedArray<NetwEntity> NetwMultiplayer::interest_shared_entities(
         for (int at = 0; at < live.size(); ++at) {
             const Ref<NetwEntity> candidate = live[at];
             if (candidate.is_null() || candidate == p_entity
-                || candidate->get_owner() == nullptr
-                || found.has(candidate)) {
+                || candidate->get_owner() == nullptr || found.has(candidate)) {
                 continue;
             }
             interest::Decl *decl = interest_decl_on(candidate);

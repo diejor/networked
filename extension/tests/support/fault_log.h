@@ -166,9 +166,7 @@ public:
     }
 
     static void detach(const godot::Ref<FaultLog> &p_log) {
-        TierOS::get_singleton()->remove_logger(
-            godot::Ref<TierLogger>(p_log)
-        );
+        TierOS::get_singleton()->remove_logger(godot::Ref<TierLogger>(p_log));
         FaultLedger &ledger = fault_ledger();
         const std::lock_guard<std::mutex> held(ledger.lock);
         ledger.attached.erase(
@@ -187,24 +185,25 @@ public:
     }
 
     int64_t error_count() {
-        return assert_lines([](const FaultLine &p_line, int64_t) {
-                   return p_line.error;
-               })
-            .size();
+        return assert_lines(
+                   [](const FaultLine &p_line, int64_t) { return p_line.error; }
+        ).size();
     }
 
     int64_t warning_count_containing(const godot::String &p_text) {
-        return assert_lines([&](const FaultLine &p_line, int64_t) {
-                   return !p_line.error && p_line.text.contains(p_text);
-               })
-            .size();
+        return assert_lines(
+                   [&](const FaultLine &p_line, int64_t) {
+                       return !p_line.error && p_line.text.contains(p_text);
+                   }
+        ).size();
     }
 
     int64_t error_count_containing(const godot::String &p_text) {
-        return assert_lines([&](const FaultLine &p_line, int64_t) {
-                   return p_line.error && p_line.text.contains(p_text);
-               })
-            .size();
+        return assert_lines(
+                   [&](const FaultLine &p_line, int64_t) {
+                       return p_line.error && p_line.text.contains(p_text);
+                   }
+        ).size();
     }
 
     godot::PackedStringArray error_lines(int64_t p_from) {

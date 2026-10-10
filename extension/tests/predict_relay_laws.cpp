@@ -71,8 +71,8 @@ struct Drivers {
         const WorldDecl &p_world,
         std::initializer_list<const char *> p_names,
         int p_clients = 2
-    ) :
-            rig(p_clients) {
+    )
+        : rig(p_clients) {
         rig.declare_world(p_world);
         for (const char *name : p_names) {
             admit_everyone(name);
@@ -124,9 +124,9 @@ void check_subscribed_by_selection(const WorldDecl &p_world) {
 
     NetwMultiplayer *client = drivers.rig.client(0);
     client->simulation_handle(drivers.rig.entity_of(StringName("P"), 0))
-        ->forget(client->entity_get_view(
-            drivers.rig.entity_of(StringName("Q"), 0)
-        ));
+        ->forget(
+            client->entity_get_view(drivers.rig.entity_of(StringName("Q"), 0))
+        );
     drivers.rig.step_ticks(5);
     CHECK_FALSE(drivers.relays_to("Q", 0));
 }
@@ -282,8 +282,7 @@ Confirmed confirmed_by_relay() {
         return viewed->joint_stats(p_slot)[p_column];
     };
     const int64_t relayed = drivers.relayed_recorded("Q", 0);
-    const int64_t passes
-        = stat(owner, NetwPredictionEngine::STAT_JOINT_PASSES);
+    const int64_t passes = stat(owner, NetwPredictionEngine::STAT_JOINT_PASSES);
     const int64_t moves
         = stat(member, NetwPredictionEngine::STAT_JOINT_FLOOR_RELAY_MOVES);
     rig.step_ticks(SETTLE_TICKS);
@@ -389,8 +388,7 @@ struct SteppedPair {
     Ref<DriftStepper> viewer;
     Ref<DriftStepper> author;
 
-    SteppedPair() :
-            drivers(stepped_pair(), {"P", "Q"}) {
+    SteppedPair() : drivers(stepped_pair(), {"P", "Q"}) {
         LoopbackRig &rig = drivers.rig;
         server = stepped_on(rig, -1, {"P", "Q"});
         viewer = stepped_on(rig, 0, {"P", "Q"});
@@ -529,9 +527,8 @@ Turned replayed_through_turns() {
     const int64_t viewed_p = rig.prediction_slot(StringName("P"), 0);
     const godot::Node2D *const served_body = pair.server->bodies[1];
     const godot::Node2D *const viewed_body = pair.viewer->bodies[1];
-    const auto owner_stat = [&](int p_stat) {
-        return viewed->joint_stats(viewed_p)[p_stat];
-    };
+    const auto owner_stat
+        = [&](int p_stat) { return viewed->joint_stats(viewed_p)[p_stat]; };
     const auto turn = [&](int p_frame) {
         const real_t heading = (p_frame / TURN_FRAMES) % 2 == 0 ? 1.0 : -1.0;
         pair.drivers.drive("Q", 1, Vector2(heading, 0.0));
@@ -710,9 +707,9 @@ TEST_CASE(
 
     NetwMultiplayer *viewer = drivers.rig.client(0);
     viewer->simulation_handle(drivers.rig.entity_of(StringName("P"), 0))
-        ->simulate(viewer->entity_get_view(
-            drivers.rig.entity_of(StringName("Q"), 0)
-        ));
+        ->simulate(
+            viewer->entity_get_view(drivers.rig.entity_of(StringName("Q"), 0))
+        );
     drivers.drive("Q", 1, Vector2(1.0, 0.0));
     drivers.rig.step_ticks(20);
 

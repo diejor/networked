@@ -178,11 +178,7 @@ void NetwEndpoint::_bind_methods() {
         D_METHOD("get_is_listed"),
         &NetwEndpoint::get_is_listed
     );
-    ADD_PROPERTY(
-        PropertyInfo(Variant::BOOL, "is_listed"),
-        "",
-        "get_is_listed"
-    );
+    ADD_PROPERTY(PropertyInfo(Variant::BOOL, "is_listed"), "", "get_is_listed");
     ClassDB::bind_method(D_METHOD("probe"), &NetwEndpoint::probe);
 
     ADD_SIGNAL(MethodInfo("changed"));

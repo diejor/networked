@@ -19,7 +19,7 @@ A :ref:`LobbyDirectory<class_LobbyDirectory>` that hosts and joins Nakama relay 
 Description
 -----------
 
-The host needs no open port, so web exports can host. A lobby's address is its match id, which players can share to join directly. Lobby names and settings are stored in Nakama storage so they can be listed.
+The host needs no open port, so web exports can host. A lobby's address is its match id, which players can share to join directly. Lobby names and settings are stored in Nakama storage so they can be listed.  Needs the Nakama Godot SDK :ref:`NakamaWrapper.NAKAMA_SDK_VERSION<class_NakamaWrapper_constant_NAKAMA_SDK_VERSION>`.
 
 .. rst-class:: classref-reftable-group
 

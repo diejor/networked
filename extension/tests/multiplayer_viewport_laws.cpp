@@ -185,7 +185,8 @@ TEST_CASE(
     Node *root = netw::gd::scene_root();
     root->add_child(tree);
     SceneTree *scene = netw::gd::scene_tree();
-    const Ref<MultiplayerAPI> mounted = scene->get_multiplayer(tree->get_path());
+    const Ref<MultiplayerAPI> mounted
+        = scene->get_multiplayer(tree->get_path());
     NETW_CHECK_EQ(int(mounted.ptr() == chosen.ptr()), 1);
 
     const Ref<NetwMultiplayer> late = NetwMultiplayer::create(Ref<Script>());

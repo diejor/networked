@@ -264,9 +264,7 @@ uint64_t cycle_server(LoopbackRig &p_rig) {
     NetwMultiplayer *host = p_rig.server();
     const uint64_t first = host->session_plane().get_generation();
     cycle_online(host);
-    REQUIRE(
-        host->session_get_state() == NetwMultiplayer::SESSION_STATE_ONLINE
-    );
+    REQUIRE(host->session_get_state() == NetwMultiplayer::SESSION_STATE_ONLINE);
     REQUIRE(host->session_plane().get_generation() > first);
     return first;
 }

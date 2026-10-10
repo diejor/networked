@@ -577,7 +577,8 @@ TEST_CASE(
             false
         );
     }
-    engine->joint_note_basis(owner, 41, NetwPredictionEngine::JOINT_FLOOR_STATE);
+    engine
+        ->joint_note_basis(owner, 41, NetwPredictionEngine::JOINT_FLOOR_STATE);
     const predict::JointPassPlan plan = engine->joint_pass(owner, 42);
     int stale = 0;
     for (uint32_t at = 0; at < plan.restores.size(); ++at) {
