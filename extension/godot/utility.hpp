@@ -119,6 +119,33 @@ inline godot::Variant bytes_to_var(const godot::PackedByteArray &bytes) {
 #endif
 }
 
+inline godot::String utf8_text(const godot::PackedByteArray &bytes) {
+#if defined(NETW_MODULE)
+    return godot::String::utf8(
+        reinterpret_cast<const char *>(bytes.ptr()),
+        bytes.size()
+    );
+#else
+    return bytes.get_string_from_utf8();
+#endif
+}
+
+inline godot::String var_to_str(const godot::Variant &value) {
+#if defined(NETW_MODULE)
+    return VariantUtilityFunctions::var_to_str(value);
+#else
+    return godot::UtilityFunctions::var_to_str(value);
+#endif
+}
+
+inline godot::Variant str_to_var(const godot::String &text) {
+#if defined(NETW_MODULE)
+    return VariantUtilityFunctions::str_to_var(text);
+#else
+    return godot::UtilityFunctions::str_to_var(text);
+#endif
+}
+
 inline void encode_u8(godot::PackedByteArray &bytes, int at, uint8_t value) {
     ERR_FAIL_INDEX(at, bytes.size());
     bytes.ptrw()[at] = value;

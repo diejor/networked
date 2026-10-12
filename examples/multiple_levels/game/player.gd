@@ -27,8 +27,8 @@ func _init() -> void:
 func _ready() -> void:
 	Netw.configure_property(self, &"position", false).persisted(&"where")
 	Netw.configure_persistence(self) \
-			.database(MultipleLevelsSession.SAVES) \
-			.table(MultipleLevelsSession.PLAYERS) \
+			.database(&"saves") \
+			.table(&"players") \
 			.record_id(account_name) \
 			.interval(5.0)
 

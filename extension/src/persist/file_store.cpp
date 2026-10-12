@@ -2,7 +2,6 @@
 
 #include "godot/file_access.hpp"
 #include "godot/file_system.hpp"
-#include "godot/utility.hpp"
 #include "netw/persist/envelope.hpp"
 
 using namespace godot;
@@ -10,9 +9,6 @@ using namespace godot;
 namespace netw::persist {
 
 namespace {
-
-const char *RECORD_EXTENSION = ".netwrec";
-const char *STAGING_EXTENSION = ".netwtmp";
 
 const char *KEY_ERROR = "error";
 const char *KEY_DETAIL = "detail";
@@ -27,35 +23,12 @@ const char *KEY_SCHEMA = "schema_name";
 const char *KEY_KEY = "key";
 const char *KEY_ADDRESS = "address";
 
-const uint8_t MAGIC[] = {'N', 'E', 'T', 'W', 'R', 'E', 'C', '1'};
-constexpr int MAGIC_LENGTH = 8;
-
 String escaped(const String &p_text) {
     return p_text.uri_encode().replace(".", "%2E");
 }
 
 String kind_folder(int p_kind) {
     return String::num_int64(p_kind);
-}
-
-Dictionary decoded(const PackedByteArray &p_bytes) {
-    if (p_bytes.size() < MAGIC_LENGTH) {
-        return Dictionary();
-    }
-    for (int at = 0; at < MAGIC_LENGTH; ++at) {
-        if (uint8_t(p_bytes[at]) != MAGIC[at]) {
-            return Dictionary();
-        }
-    }
-    PackedByteArray body;
-    for (int at = MAGIC_LENGTH; at < p_bytes.size(); ++at) {
-        body.push_back(p_bytes[at]);
-    }
-    const Variant held = gd::bytes_to_var(body);
-    if (held.get_type() != Variant::DICTIONARY) {
-        return Dictionary();
-    }
-    return Dictionary(held);
 }
 
 bool remove_tree(const String &p_path) {
@@ -75,7 +48,8 @@ bool remove_tree(const String &p_path) {
 
 } // namespace
 
-FileStore::FileStore(const String &p_root) : root(p_root) {
+FileStore::FileStore(const String &p_root, RecordFormat p_format)
+    : root(p_root), format(p_format) {
 }
 
 const String &FileStore::root_path() const {
@@ -86,28 +60,32 @@ String FileStore::slot_path(const String &p_slot) const {
     return root.path_join(escaped(p_slot));
 }
 
-String FileStore::path_of(
+String FileStore::path_in(
     const String &p_slot,
-    const Dictionary &p_address
+    const Dictionary &p_address,
+    RecordFormat p_format
 ) const {
     return slot_path(p_slot)
         .path_join(kind_folder(int(p_address.get(KEY_KIND, 0))))
         .path_join(escaped(String(p_address.get(KEY_SCHEMA, ""))))
         .path_join(
-            escaped(String(p_address.get(KEY_KEY, ""))) + RECORD_EXTENSION
+            escaped(String(p_address.get(KEY_KEY, ""))) + String(".")
+            + extension_of(p_format)
         );
+}
+
+String FileStore::path_of(
+    const String &p_slot,
+    const Dictionary &p_address
+) const {
+    return path_in(p_slot, p_address, format);
 }
 
 String FileStore::staging_path_of(
     const String &p_slot,
     const Dictionary &p_address
 ) const {
-    return slot_path(p_slot)
-        .path_join(kind_folder(int(p_address.get(KEY_KIND, 0))))
-        .path_join(escaped(String(p_address.get(KEY_SCHEMA, ""))))
-        .path_join(
-            escaped(String(p_address.get(KEY_KEY, ""))) + STAGING_EXTENSION
-        );
+    return staging_path_for(path_of(p_slot, p_address));
 }
 
 bool FileStore::has_slot(const String &p_slot) const {
@@ -146,18 +124,18 @@ Error FileStore::read(
     bool &r_found
 ) const {
     r_found = false;
-    const String path = path_of(p_slot, p_address);
+    String path = path_of(p_slot, p_address);
     if (!gd::file_exists(path)) {
-        return OK;
+        path = path_in(p_slot, p_address, other_format(format));
+        if (!gd::file_exists(path)) {
+            return OK;
+        }
     }
-    Ref<FileAccess> file = FileAccess::open(path, FileAccess::READ);
-    if (file.is_null()) {
-        return ERR_FILE_CANT_OPEN;
+    const Error answered = read_record_file(path, r_envelope);
+    if (answered != OK) {
+        return answered;
     }
-    const PackedByteArray bytes = file->get_buffer(int64_t(file->get_length()));
-    file->close();
     r_found = true;
-    r_envelope = decoded(bytes);
     return OK;
 }
 
@@ -166,43 +144,31 @@ Error FileStore::replace(
     const Dictionary &p_address,
     const Dictionary &p_envelope
 ) {
-    const String path = path_of(p_slot, p_address);
-    const String folder = path.get_base_dir();
-    if (!DirAccess::dir_exists_absolute(folder)) {
-        const Error made = DirAccess::make_dir_recursive_absolute(folder);
-        if (made != OK) {
-            return made;
-        }
+    const Error written
+        = write_record_file(path_of(p_slot, p_address), p_envelope);
+    if (written != OK) {
+        return written;
     }
-
-    const String staging = staging_path_of(p_slot, p_address);
-    Ref<FileAccess> file = FileAccess::open(staging, FileAccess::WRITE);
-    if (file.is_null()) {
-        return ERR_FILE_CANT_WRITE;
+    const String stale = path_in(p_slot, p_address, other_format(format));
+    if (gd::file_exists(stale)) {
+        DirAccess::remove_absolute(stale);
     }
-    PackedByteArray bytes;
-    for (int at = 0; at < MAGIC_LENGTH; ++at) {
-        bytes.push_back(MAGIC[at]);
-    }
-    bytes.append_array(gd::var_to_bytes(p_envelope));
-    file->store_buffer(bytes);
-    file->flush();
-    file->close();
-    file = Ref<FileAccess>();
-
-    const Error moved = DirAccess::rename_absolute(staging, path);
-    if (moved != OK) {
-        DirAccess::remove_absolute(staging);
-    }
-    return moved;
+    return OK;
 }
 
 Error FileStore::erase(const String &p_slot, const Dictionary &p_address) {
-    const String path = path_of(p_slot, p_address);
-    if (!gd::file_exists(path)) {
-        return OK;
+    const RecordFormat formats[] = {format, other_format(format)};
+    for (RecordFormat each : formats) {
+        const String path = path_in(p_slot, p_address, each);
+        if (!gd::file_exists(path)) {
+            continue;
+        }
+        const Error removed = DirAccess::remove_absolute(path);
+        if (removed != OK) {
+            return removed;
+        }
     }
-    return DirAccess::remove_absolute(path);
+    return OK;
 }
 
 Array FileStore::page(
@@ -222,15 +188,18 @@ Array FileStore::page(
         return out;
     }
 
-    const String suffix(RECORD_EXTENSION);
     const PackedStringArray files = DirAccess::get_files_at(folder);
     PackedStringArray stems;
     for (int at = 0; at < files.size(); ++at) {
         const String name = files[at];
-        if (!name.ends_with(suffix)) {
+        RecordFormat named = RecordFormat::BINARY;
+        if (!format_of_path(name, named)) {
             continue;
         }
-        stems.push_back(name.substr(0, name.length() - suffix.length()));
+        const String stem = name.get_basename();
+        if (!stems.has(stem)) {
+            stems.push_back(stem);
+        }
     }
     stems.sort();
 
@@ -268,18 +237,20 @@ Array FileStore::page(
 
 Ref<FileConnection> FileConnection::opened(
     const String &p_root,
-    const String &p_slot
+    const String &p_slot,
+    RecordFormat p_format
 ) {
     Ref<FileConnection> made;
     made.instantiate();
     made->root = p_root;
     made->slot = p_slot;
+    made->format = p_format;
     FileStore(p_root).open_slot(p_slot);
     return made;
 }
 
 FileStore FileConnection::store() const {
-    return FileStore(root);
+    return FileStore(root, format);
 }
 
 const String &FileConnection::slot_name() const {

@@ -4,12 +4,10 @@ extends Node2D
 const START_POSE := Vector2(359, 70)
 const START_STRIDE := Vector2(48, 0)
 
-const SAVES := &"saves"
-const PLAYERS := &"multiple_levels_players"
-
 @export var level_1: PackedScene
 @export var level_2: PackedScene
 @export var avatar: PackedScene
+@export var saves: NetwDatabaseBackend
 
 var makers: Dictionary = { }
 var levels: Dictionary = { }
@@ -31,8 +29,8 @@ func _ready() -> void:
 	makers[level_1.resource_path] = spawn_level1
 	makers[level_2.resource_path] = spawn_level2
 	NetwService.register(self)
-	Netw.configure_database(self, SAVES).backend(MemoryDatabase.new())
-	session.database(SAVES).open(&"campaign")
+	Netw.configure_database(self, &"saves").backend(saves)
+	session.database(&"saves").open(&"campaign")
 	session.scene_ready.connect(remember_level)
 	get_tree().auto_accept_quit = false
 

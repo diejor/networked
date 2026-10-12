@@ -8,15 +8,35 @@
 		[codeblock]
 		var backend := FileSystemDatabase.new()
 		backend.root = "user://saves"
+		backend.format = FileSystemDatabase.FORMAT_TEXT
 		Netw.configure_database(self, &amp;"saves").backend(backend)
 		[/codeblock]
-		Each slot is a directory under [member root], and each record is one file inside it. A file this library did not write fails to read with [constant @GlobalScope.ERR_FILE_UNRECOGNIZED].
+		Each slot is a directory under [member root], and each record is one file inside it. A record reads back in either [enum Format], so changing [member format] keeps every save, and the next write of a record replaces its file with one in the new format.
+		[b]Record files[/b]
+		A [code].dict[/code] or [code].tdict[/code] file loads with [method ResourceLoader.load] as a [DictionaryRecord]. Its [member DictionaryRecord.data] holds the stored record, with the saved columns under [code]payload[/code]. Saving that record with [method ResourceSaver.save] writes the file the database reads, so a save can be inspected and edited in the editor. Edit a save while the game is closed, since the next save of that record replaces the file.
+		[codeblock]
+		var record: DictionaryRecord = load("user://saves/campaign/0/players/hero.tdict")
+		record.data[&amp;"payload"][&amp;"gold"] = 100
+		ResourceSaver.save(record, record.resource_path)
+		[/codeblock]
+		A record file never builds an object or loads a resource. A file this library did not write, or a [code].tdict[/code] naming an [code]Object[/code] or a [code]Resource[/code], fails to read with [constant @GlobalScope.ERR_FILE_UNRECOGNIZED].
 	</description>
 	<tutorials>
 	</tutorials>
 	<members>
+		<member name="format" type="int" setter="set_format" getter="get_format" enum="FileSystemDatabase.Format" default="0">
+			The format a record is written in.
+		</member>
 		<member name="root" type="String" setter="set_root" getter="get_root" default="&quot;user://saves&quot;">
 			The directory every slot lives under. Use a path under [code]user://[/code], which an exported game can write to on every platform.
 		</member>
 	</members>
+	<constants>
+		<constant name="FORMAT_BINARY" value="0" enum="Format">
+			Writes each record as a compact [code].dict[/code] file.
+		</constant>
+		<constant name="FORMAT_TEXT" value="1" enum="Format">
+			Writes each record as a [code].tdict[/code] file in the text form of [method @GlobalScope.var_to_str], which a person can read and edit.
+		</constant>
+	</constants>
 </class>

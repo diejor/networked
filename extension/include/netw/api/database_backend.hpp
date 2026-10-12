@@ -82,7 +82,15 @@ public:
 class FileSystemDatabase : public NetwDatabaseBackend {
     GDCLASS(FileSystemDatabase, NetwDatabaseBackend)
 
+public:
+    enum Format {
+        FORMAT_BINARY,
+        FORMAT_TEXT,
+    };
+
+private:
     godot::String root = "user://saves";
+    Format format = FORMAT_BINARY;
 
 protected:
     static void _bind_methods();
@@ -91,6 +99,10 @@ public:
     void set_root(const godot::String &p_root);
     godot::String get_root() const {
         return root;
+    }
+    void set_format(Format p_format);
+    Format get_format() const {
+        return format;
     }
 
     godot::Ref<NetwPromise> open_default(
@@ -107,3 +119,5 @@ public:
 };
 
 } // namespace netw
+
+VARIANT_ENUM_CAST(netw::FileSystemDatabase::Format)

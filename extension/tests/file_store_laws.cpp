@@ -11,8 +11,14 @@
 #include "netw/persist/envelope.hpp"
 #include "netw/persist/file_store.hpp"
 #include "netw/persist/memory_store.hpp"
+#include "netw/persist/record_file.hpp"
 #include "netw/schema_core.hpp"
 #include "netw/schema_model.hpp"
+
+#if defined(NETW_TIER_HOSTED)
+#include "godot/resource_format.hpp"
+#include "netw/api/record.hpp"
+#endif
 
 namespace TestFileStoreLaws {
 
@@ -29,6 +35,10 @@ using netw::persist::Databases;
 using netw::persist::FileConnection;
 using netw::persist::FileStore;
 using netw::persist::Kind;
+using netw::persist::RecordFormat;
+#if defined(NETW_TIER_HOSTED)
+using netw::DictionaryRecord;
+#endif
 namespace schema_model = netw::schema_model;
 
 String scratch_root(const String &p_name) {
@@ -190,10 +200,10 @@ TEST_CASE(
 
     CHECK_FALSE(
         netw::gd::file_exists(
-            String("user://netw_file_store_laws/escaped.netwrec")
+            String("user://netw_file_store_laws/escaped.dict")
         )
     );
-    CHECK_FALSE(netw::gd::file_exists(String("user://escaped.netwrec")));
+    CHECK_FALSE(netw::gd::file_exists(String("user://escaped.dict")));
 }
 
 TEST_CASE(
@@ -498,5 +508,168 @@ TEST_CASE(
     NETW_CHECK_EQ(listed_slots.has("slot1"), true);
     CHECK(store.has_slot("slot1"));
 }
+
+Error open_values(
+    const World &p_world,
+    const Dictionary &p_held,
+    int64_t &r_gold
+) {
+    Dictionary values;
+    String detail;
+    const Error opened = netw::persist::open_record(
+        *p_world.session->get_schema_core(),
+        p_world.schema,
+        p_held,
+        values,
+        detail
+    );
+    r_gold = int64_t(values.get("gold", -1));
+    return opened;
+}
+
+TEST_CASE(
+    "[Networked][Table][Hosted] FS12 the text format writes a tdict a person "
+    "can read and edit, and the edited value is what loads"
+) {
+    scrub("fs12");
+    World world("fs12");
+    FileStore store(world.root, RecordFormat::TEXT);
+    const Dictionary at = address(world, Kind::RECORD, "hero");
+    NETW_CHECK_EQ(store.replace("slot1", at, sealed(world, 5)), OK);
+
+    const String path = store.path_of("slot1", at);
+    CHECK(path.ends_with(".tdict"));
+    const String text = FileAccess::get_file_as_string(path);
+    CHECK(text.contains("\"gold\": 5"));
+
+    write_text(path, text.replace("\"gold\": 5", "\"gold\": 42"));
+    Dictionary held;
+    bool found = false;
+    NETW_CHECK_EQ(store.read("slot1", at, held, found), OK);
+    CHECK(found);
+    int64_t gold = 0;
+    NETW_CHECK_EQ(open_values(world, held, gold), OK);
+    NETW_CHECK_EQ(gold, int64_t(42));
+}
+
+TEST_CASE(
+    "[Networked][Table][Hosted] FS13 a store reads a record saved in the other "
+    "format, and its next write leaves one file in its own format"
+) {
+    scrub("fs13");
+    World world("fs13");
+    const Dictionary at = address(world, Kind::RECORD, "hero");
+    FileStore binary(world.root, RecordFormat::BINARY);
+    NETW_CHECK_EQ(binary.replace("slot1", at, sealed(world, 8)), OK);
+
+    FileStore text(world.root, RecordFormat::TEXT);
+    Dictionary held;
+    bool found = false;
+    NETW_CHECK_EQ(text.read("slot1", at, held, found), OK);
+    CHECK(found);
+    int64_t gold = 0;
+    NETW_CHECK_EQ(open_values(world, held, gold), OK);
+    NETW_CHECK_EQ(gold, int64_t(8));
+
+    NETW_CHECK_EQ(text.replace("slot1", at, sealed(world, 9)), OK);
+    CHECK(netw::gd::file_exists(text.path_of("slot1", at)));
+    CHECK_FALSE(netw::gd::file_exists(binary.path_of("slot1", at)));
+
+    String next;
+    const Array rows = text.page(
+        "slot1",
+        world.record()->name,
+        int(Kind::RECORD),
+        "",
+        10,
+        next
+    );
+    NETW_CHECK_EQ(rows.size(), 1);
+
+    NETW_CHECK_EQ(text.erase("slot1", at), OK);
+    CHECK_FALSE(netw::gd::file_exists(text.path_of("slot1", at)));
+}
+
+TEST_CASE(
+    "[Networked][Table][Hosted] FS14 a tdict that would build an object or "
+    "load a resource is refused as unrecognized before it is parsed"
+) {
+    scrub("fs14");
+    World world("fs14");
+    FileStore store(world.root, RecordFormat::TEXT);
+    const Dictionary at = address(world, Kind::RECORD, "hero");
+    NETW_CHECK_EQ(store.replace("slot1", at, sealed(world, 1)), OK);
+    const String path = store.path_of("slot1", at);
+    const String clean = FileAccess::get_file_as_string(path);
+
+    const char *payloads[] = {
+        "Object(RefCounted,\"script\":null)",
+        "Resource(\"res://project.godot\")",
+        "ExtResource(\"1\")",
+        "SubResource(\"1\")",
+        "1Object(RefCounted)",
+    };
+    for (const char *payload : payloads) {
+        write_text(
+            path,
+            clean.replace("\"gold\": 1", String("\"gold\": ") + payload)
+        );
+        Dictionary held;
+        bool found = false;
+        NETW_CHECK_EQ(store.read("slot1", at, held, found), OK);
+        CHECK(found);
+        CHECK(held.is_empty());
+        int64_t gold = 0;
+        NETW_CHECK_EQ(open_values(world, held, gold), ERR_FILE_UNRECOGNIZED);
+    }
+
+    write_text(
+        path,
+        clean.replace("\"gold\": 1", "\"gold\": 1 ; \"\n")
+            .replace("\"payload\"", "\"Object(RefCounted)\": 0,\n\"payload\"")
+    );
+    Dictionary held;
+    bool found = false;
+    NETW_CHECK_EQ(store.read("slot1", at, held, found), OK);
+    CHECK_FALSE(held.is_empty());
+}
+
+#if defined(NETW_TIER_HOSTED)
+TEST_CASE(
+    "[Networked][Table] FS15 a record file loads as a DictionaryRecord holding "
+    "its stored envelope, and saving that record back is what the store reads"
+) {
+    scrub("fs15");
+    World world("fs15");
+    FileStore store(world.root, RecordFormat::BINARY);
+    const Dictionary at = address(world, Kind::RECORD, "hero");
+    NETW_CHECK_EQ(store.replace("slot1", at, sealed(world, 3)), OK);
+    const String path = store.path_of("slot1", at);
+
+    const Ref<DictionaryRecord> record = ResourceLoader::get_singleton()->load(
+        path,
+        "",
+        ResourceLoader::CACHE_MODE_IGNORE
+    );
+    REQUIRE(record.is_valid());
+    Dictionary envelope = record->get_data();
+    Dictionary payload = envelope["payload"];
+    NETW_CHECK_EQ(int64_t(payload["gold"]), int64_t(3));
+
+    payload["gold"] = int64_t(77);
+    record->set_data(envelope);
+    const String text_path = path.get_basename() + String(".tdict");
+    NETW_CHECK_EQ(ResourceSaver::get_singleton()->save(record, path), OK);
+    NETW_CHECK_EQ(ResourceSaver::get_singleton()->save(record, text_path), OK);
+    CHECK(FileAccess::get_file_as_string(text_path).contains("\"gold\": 77"));
+
+    Dictionary held;
+    bool found = false;
+    NETW_CHECK_EQ(store.read("slot1", at, held, found), OK);
+    int64_t gold = 0;
+    NETW_CHECK_EQ(open_values(world, held, gold), OK);
+    NETW_CHECK_EQ(gold, int64_t(77));
+}
+#endif
 
 } // namespace TestFileStoreLaws

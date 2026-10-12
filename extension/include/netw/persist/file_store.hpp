@@ -2,14 +2,25 @@
 
 #include "godot/variant.hpp"
 #include "netw/api/database_connection.hpp"
+#include "netw/persist/record_file.hpp"
 
 namespace netw::persist {
 
 class FileStore {
     godot::String root;
+    RecordFormat format = RecordFormat::BINARY;
+
+    godot::String path_in(
+        const godot::String &p_slot,
+        const godot::Dictionary &p_address,
+        RecordFormat p_format
+    ) const;
 
 public:
-    explicit FileStore(const godot::String &p_root);
+    explicit FileStore(
+        const godot::String &p_root,
+        RecordFormat p_format = RecordFormat::BINARY
+    );
 
     const godot::String &root_path() const;
     godot::String slot_path(const godot::String &p_slot) const;
@@ -55,11 +66,13 @@ public:
 class FileConnection : public NetwDatabaseConnection {
     godot::String root;
     godot::String slot;
+    RecordFormat format = RecordFormat::BINARY;
 
 public:
     static godot::Ref<FileConnection> opened(
         const godot::String &p_root,
-        const godot::String &p_slot
+        const godot::String &p_slot,
+        RecordFormat p_format = RecordFormat::BINARY
     );
 
     FileStore store() const;

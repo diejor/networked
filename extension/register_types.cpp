@@ -97,6 +97,7 @@
 
 #include "netw/lagcomp_core.hpp"
 #include "netw/monitor.hpp"
+#include "netw/persist/record_format.hpp"
 #include "netw/profile.hpp"
 
 #include "netw/api/clock.hpp"
@@ -247,6 +248,7 @@ void initialize_networked_module(ModuleInitializationLevel level) {
     GDREGISTER_CLASS(netw_test::RecordingStepper);
 #endif
     netw::profile::install_logger();
+    netw::persist::install_record_formats();
     netw::NetwEntityRecord::set_part_factory(
         netw::NetwEntityRecord::PART_DISPLAY,
         callable_mp_static(&netw::build_display_handle)
@@ -294,6 +296,7 @@ void uninitialize_networked_module(ModuleInitializationLevel level) {
     netw::schema_model::clear();
     netw::script::model::clear();
     netw::entity::shutdown();
+    netw::persist::remove_record_formats();
     netw::profile::remove_logger();
     netw::profile::shutdown();
 }

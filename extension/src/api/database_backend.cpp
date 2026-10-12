@@ -143,6 +143,10 @@ void FileSystemDatabase::set_root(const String &p_root) {
     root = p_root;
 }
 
+void FileSystemDatabase::set_format(Format p_format) {
+    format = p_format;
+}
+
 Ref<NetwPromise> FileSystemDatabase::open_default(
     Object *p_session,
     const StringName &p_slot
@@ -156,7 +160,12 @@ Ref<NetwPromise> FileSystemDatabase::open_default(
         );
     }
     return NetwPromise::resolved(
-        persist::FileConnection::opened(root, String(p_slot))
+        persist::FileConnection::opened(
+            root,
+            String(p_slot),
+            format == FORMAT_TEXT ? persist::RecordFormat::TEXT
+                                  : persist::RecordFormat::BINARY
+        )
     );
 }
 
@@ -187,6 +196,21 @@ void FileSystemDatabase::_bind_methods() {
         "set_root",
         "get_root"
     );
+    ClassDB::bind_method(
+        D_METHOD("set_format", "format"),
+        &FileSystemDatabase::set_format
+    );
+    ClassDB::bind_method(
+        D_METHOD("get_format"),
+        &FileSystemDatabase::get_format
+    );
+    ADD_PROPERTY(
+        PropertyInfo(Variant::INT, "format", PROPERTY_HINT_ENUM, "Binary,Text"),
+        "set_format",
+        "get_format"
+    );
+    BIND_ENUM_CONSTANT(FORMAT_BINARY);
+    BIND_ENUM_CONSTANT(FORMAT_TEXT);
 }
 
 } // namespace netw
