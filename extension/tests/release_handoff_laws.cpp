@@ -34,6 +34,7 @@ var strokes := 0
 
 func _init() -> void:
 	var e := Netw.configure_entity(self)
+	e.authority = NetwEntity.AUTHORITY_CONTROLLER
 	e.transfer = NetwEntity.TRANSFER_IMMEDIATE
 	Netw.configure_property(self, &"strokes").broadcast().on_spawn()
 )";
@@ -45,6 +46,7 @@ var notes := PackedByteArray()
 
 func _init() -> void:
 	var e := Netw.configure_entity(self)
+	e.authority = NetwEntity.AUTHORITY_CONTROLLER
 	e.transfer = NetwEntity.TRANSFER_IMMEDIATE
 	Netw.configure_property(self, &"strokes").broadcast().on_spawn()
 	Netw.configure_property(self, &"notes").broadcast()
@@ -59,6 +61,7 @@ var held_by := 0
 func _init() -> void:
 	freeze = true
 	var e := Netw.configure_entity(self)
+	e.authority = NetwEntity.AUTHORITY_CONTROLLER
 	e.transfer = NetwEntity.TRANSFER_IMMEDIATE
 	Netw.configure_property(self, &"held_by").broadcast()
 	Netw.configure_property(self, &"position").broadcast().heartbeat(60) \
@@ -87,6 +90,7 @@ var steer_angle := 0.0
 
 func _init() -> void:
 	var e := Netw.configure_entity(self)
+	e.authority = NetwEntity.AUTHORITY_CONTROLLER
 	e.transfer = NetwEntity.TRANSFER_IMMEDIATE
 	Netw.configure_property(self, &"car_position").broadcast() \
 			.quantize(NetwQuantizeScalar.new().bits(19).limits(-128.0, 128.0))
@@ -200,7 +204,7 @@ TEST_CASE(
     NETW_REQUIRE_EQ(stand.strokes(1), 3);
 
     stand.draw(0, 8);
-    const Ref<NetwPromise> release = stand.entity(0)->release_authority(c);
+    const Ref<NetwPromise> release = stand.entity(0)->release_control(c);
     CHECK_FALSE(release->get_is_settled());
     stand.rig.step_ticks(8);
 
@@ -230,7 +234,7 @@ TEST_CASE(
     stand.author_with(0, 3);
 
     const Ref<NetwPromise> release
-        = quietly(stand.entity(0)->release_authority(999));
+        = quietly(stand.entity(0)->release_control(999));
     CHECK(release->get_is_failed());
     NETW_CHECK_EQ(int(release->get_code()), int(ERR_UNAVAILABLE));
     stand.rig.step_ticks(6);
@@ -253,7 +257,7 @@ TEST_CASE(
     stand.draw(0, 8);
     const PackedByteArray image = stand.entity(0)->final_image_under_test(0);
     CHECK(image.is_empty());
-    const Ref<NetwPromise> release = stand.entity(0)->release_authority();
+    const Ref<NetwPromise> release = stand.entity(0)->release_control();
     stand.rig.step_ticks(8);
 
     CHECK(release->get_is_completed());
@@ -305,18 +309,18 @@ TEST_CASE(
     Stand stand(BOARD_SOURCE, BOARD_ID);
     const int a = stand.rig.peer_id(0);
 
-    NETW_CHECK_EQ(int(stand.entity(-1)->transfer_control(a)), int(OK));
+    stand.entity(-1)->set_controller(a);
     stand.rig.step_ticks(4);
     check_controller_everywhere(stand, a);
 
-    NETW_CHECK_EQ(int(stand.entity(-1)->transfer_control(1)), int(OK));
+    stand.entity(-1)->set_controller(1);
     stand.rig.step_ticks(4);
     check_controller_everywhere(stand, 1);
 }
 
 TEST_CASE(
-    "[Networked][Control][SceneTree] RH6 a client that calls transfer_control "
-    "gets ERR_UNAUTHORIZED and moves control nowhere, even for itself"
+    "[Networked][Control][SceneTree] RH6 a client that assigns controller "
+    "reports a fault and moves control nowhere, even for itself"
 ) {
     Stand stand(BOARD_SOURCE, BOARD_ID);
     const int a = stand.rig.peer_id(0);
@@ -324,14 +328,8 @@ TEST_CASE(
     stand.author_with(0, 3);
 
     netw_test::FaultWatch faults;
-    NETW_CHECK_EQ(
-        int(stand.entity(1)->transfer_control(b)),
-        int(ERR_UNAUTHORIZED)
-    );
-    NETW_CHECK_EQ(
-        int(stand.entity(0)->transfer_control(1)),
-        int(ERR_UNAUTHORIZED)
-    );
+    stand.entity(1)->set_controller(b);
+    stand.entity(0)->set_controller(1);
     NETW_CHECK_EQ(faults.errors(), int64_t(2));
     stand.rig.step_ticks(6);
     check_controller_everywhere(stand, a);
@@ -339,7 +337,7 @@ TEST_CASE(
 
 TEST_CASE(
     "[Networked][Control][SceneTree] RH7 the flat entity_grant_control "
-    "answers what transfer_control answers, on the server and on a client"
+    "uses the same assignment guard on the server and on a client"
 ) {
     Stand stand(BOARD_SOURCE, BOARD_ID);
     const int a = stand.rig.peer_id(0);

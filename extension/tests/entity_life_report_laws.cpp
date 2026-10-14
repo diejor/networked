@@ -25,6 +25,7 @@ Ref<NetwMultiplayer> a_watching_session() {
     core->event_arm(true);
     PackedInt64Array events;
     events.push_back(EventPlane::SPAWNING);
+    events.push_back(EventPlane::STAGE_TRANSITION);
     events.push_back(EventPlane::REPARENTED);
     core->event_watch(
         events,
@@ -36,14 +37,9 @@ Ref<NetwMultiplayer> a_watching_session() {
     return core;
 }
 
-Dictionary row_of(
-    const Ref<NetwMultiplayer> &p_core,
-    int64_t p_route,
-    int64_t p_event
-) {
-    const Array rows = p_core->event_ring(p_route);
-    for (int index = 0; index < rows.size(); index++) {
-        const Dictionary row = rows[index];
+Dictionary row_of(const Array &p_rows, int64_t p_event) {
+    for (int index = 0; index < p_rows.size(); index++) {
+        const Dictionary row = p_rows[index];
         if (!row.is_empty()
             && int64_t(row[netw::event_key::event()]) == p_event) {
             return row;
@@ -76,8 +72,8 @@ TEST_CASE(
         true
     );
 
-    const Dictionary materialized
-        = row_of(core, REPORTED_ROUTE, EventPlane::SPAWNING);
+    const Array rows = core->event_ring(REPORTED_ROUTE);
+    const Dictionary materialized = row_of(rows, EventPlane::SPAWNING);
     CHECK(!materialized.is_empty());
     if (!materialized.is_empty()) {
         const StringName entity_id = materialized[netw::event_key::entity_id()];
@@ -87,6 +83,13 @@ TEST_CASE(
             record->get_peer_id()
         );
     }
+
+    const Dictionary transition
+        = row_of(rows, EventPlane::STAGE_TRANSITION);
+    REQUIRE(!transition.is_empty());
+    const Dictionary detail = transition[netw::event_key::detail()];
+    NETW_CHECK_EQ(int64_t(detail["from"]), int64_t(NetwEntity::STAGE_ARMED));
+    NETW_CHECK_EQ(int64_t(detail["to"]), int64_t(NetwEntity::STAGE_LIVE));
 
     memdelete(owner);
 }
@@ -114,7 +117,7 @@ TEST_CASE(
     core->entity_announce_reparented(wrapper);
 
     const Dictionary moved
-        = row_of(core, REPORTED_ROUTE, EventPlane::REPARENTED);
+        = row_of(core->event_ring(REPORTED_ROUTE), EventPlane::REPARENTED);
     CHECK(!moved.is_empty());
     if (!moved.is_empty()) {
         const StringName entity_id = moved[netw::event_key::entity_id()];

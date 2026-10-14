@@ -12,8 +12,7 @@ int64_t Control::resolve(int64_t p_peer_id) const {
     if (configured) {
         return controller;
     }
-    return initial == int(InitialController::REPRESENTED_PEER) ? p_peer_id
-                                                               : SERVER;
+    return initial == int(InitialController::PLAYER) ? p_peer_id : SERVER;
 }
 
 StringName Control::write_book_key() {

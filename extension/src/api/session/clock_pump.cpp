@@ -30,6 +30,14 @@ bool authoring_in_editor() {
 } // namespace
 
 Error NetwMultiplayer::clock_initialize(const Ref<NetwClockConfig> &p_from) {
+    const Error committed = clock_commit(p_from);
+    if (committed == OK) {
+        notify(CLOCK_CONFIGURED);
+    }
+    return committed;
+}
+
+Error NetwMultiplayer::clock_commit(const Ref<NetwClockConfig> &p_from) {
     const int slot = int(session_decl::KIND_CLOCK_CONFIG)
         - int(session_decl::KIND_SESSION_CONFIG);
     if (config_consumption[slot].consumed) {
@@ -70,7 +78,6 @@ Error NetwMultiplayer::clock_initialize(const Ref<NetwClockConfig> &p_from) {
         callable_mp(this, &NetwMultiplayer::clock_start_handshake)
     );
     clock_attach_pump();
-    notify(CLOCK_CONFIGURED);
     clock_start_handshake();
     return OK;
 }

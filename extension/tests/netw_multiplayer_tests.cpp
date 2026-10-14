@@ -3110,7 +3110,7 @@ TEST_CASE(
     wrapper->set_controller(4);
     NETW_CHECK_EQ(wrapper->get_controller(), int64_t(4));
 
-    const Ref<netw::NetwPromise> asked = wrapper->claim_authority();
+    const Ref<netw::NetwPromise> asked = wrapper->claim_control();
     REQUIRE(asked.is_valid());
     CHECK(asked->get_is_failed());
     NETW_CHECK_EQ(int(asked->get_code()), int(ERR_UNAVAILABLE));

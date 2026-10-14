@@ -42,8 +42,9 @@ var entity: NetwEntity
 
 func _init() -> void:
 	entity = Netw.configure_entity(self)
-	entity.initial_controller = NetwEntity.INITIAL_REPRESENTED_PEER
+	entity.initial_controller = NetwEntity.INITIAL_PLAYER
 	entity.on_controller_disconnect = NetwEntity.DISCONNECT_DESPAWN
+	entity.authority = NetwEntity.AUTHORITY_CONTROLLER
 	entity.transfer = NetwEntity.TRANSFER_IMMEDIATE
 	entity.simulation.replicas = NetwSimulation.REPLICAS_ACTIVE
 	entity.simulation.claim_on_contact = true

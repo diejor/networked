@@ -6,6 +6,7 @@
 #include "godot/rid.hpp"
 #include "godot/variant.hpp"
 #include "netw/api/promise.hpp"
+#include "netw/api/schema_model.hpp"
 
 namespace netw {
 
@@ -17,6 +18,8 @@ class NetwPersistence : public godot::RefCounted {
 
     godot::ObjectID entity_id;
     godot::RID entity;
+    godot::RID schema_id;
+    godot::Ref<NetwSchema> schema;
 
     NetwMultiplayer *session() const;
 
@@ -33,6 +36,7 @@ public:
     bool get_dirty();
     godot::StringName get_record_id();
     godot::StringName get_database();
+    godot::Ref<NetwSchema> get_schema();
 };
 
 godot::Ref<NetwPersistence> build_persistence_handle(godot::Object *p_entity);

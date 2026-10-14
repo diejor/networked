@@ -29,6 +29,11 @@ namespace Networked;
 /// </remarks>
 public sealed class NetwLinkConditions : NetwRefCounted
 {
+    public NetwLinkConditions(
+        ) : this(NetwApi.Construct("NetwLinkConditions", true))
+    {
+    }
+
     public NetwLinkConditions(IntPtr native) : base(native)
     {
     }

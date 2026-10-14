@@ -16,7 +16,8 @@ var pressed := {
 func _init() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	var declared := Netw.configure_entity(self)
-	declared.initial_controller = NetwEntity.INITIAL_REPRESENTED_PEER
+	declared.initial_controller = NetwEntity.INITIAL_PLAYER
+	declared.authority = NetwEntity.AUTHORITY_CONTROLLER
 	declared.display.visual_root = ^"Icon"
 	declared.prediction.consume_buffer_ticks = 0
 

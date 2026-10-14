@@ -692,7 +692,7 @@ Returns the newest scene whose root node is named ``label``, or ``null``.
 
 :godot:`Error <@GlobalScope#enum_@globalscope_Error>` **install_physics_stepper**\ (\ world\: :godot:`World3D`, stepper\: :ref:`NetwPhysicsStepper<class_NetwPhysicsStepper>`\ ) :ref:`🔗<class_NetwSession_method_install_physics_stepper>`
 
-Lets ``stepper`` step the physics of ``world`` several times in one frame, which rollback needs. Pass ``null`` as ``stepper`` to remove it.
+Lets ``stepper`` step the physics of ``world`` in place of ``PhysicsServer3D.space_step``, for a physics server without it. Pass ``null`` as ``stepper`` to remove it.
 
 ::
 

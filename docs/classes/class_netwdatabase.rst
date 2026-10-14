@@ -12,7 +12,7 @@ NetwDatabase
 
 **Inherits:** :godot:`RefCounted`
 
-The client for persistent storage.
+Persistent storage for saved records.
 
 .. rst-class:: classref-introduction-group
 
@@ -21,7 +21,7 @@ Description
 
 :ref:`NetwEntity<class_NetwEntity>`, :ref:`NetwTable<class_NetwTable>` and your own code save and load their state through a **NetwDatabase**. A :ref:`NetwDatabaseBackend<class_NetwDatabaseBackend>` does the actual storage.
 
-A record is a :godot:`Dictionary` stored under a :godot:`StringName` id. Its :ref:`NetwSchema<class_NetwSchema>` is the table definition and the record is a row in it.
+A record is a :godot:`Dictionary` stored under a :godot:`StringName` id. A :ref:`NetwSchema<class_NetwSchema>` defines the saved property names and types.
 
 Await :ref:`open()<class_NetwDatabase_method_open>` before reading or writing.
 
@@ -132,7 +132,7 @@ Property Descriptions
 
 - :godot:`bool` **get_is_valid**\ (\ )
 
-Whether the session that created this handle still exists.
+Whether the session that created this database still exists.
 
 .. rst-class:: classref-item-separator
 
@@ -197,7 +197,7 @@ Method Descriptions
 
 :ref:`NetwWriteBatch<class_NetwWriteBatch>` **batch**\ (\ ) :ref:`🔗<class_NetwDatabase_method_batch>`
 
-Returns a :ref:`NetwWriteBatch<class_NetwWriteBatch>` that submits several writes and erasures in one call.
+Returns a :ref:`NetwWriteBatch<class_NetwWriteBatch>` that submits several writes and deletions in one call.
 
 .. rst-class:: classref-item-separator
 
@@ -215,7 +215,7 @@ Stops accepting new operations and waits for the pending ones to finish. The pro
 
     Error
     ┠╴OK               the database is closed
-    ┖╴ERR_UNAVAILABLE  this handle outlived the session that issued it
+    ┖╴ERR_UNAVAILABLE  the session ended
 
 .. rst-class:: classref-item-separator
 
@@ -227,7 +227,9 @@ Stops accepting new operations and waits for the pending ones to finish. The pro
 
 :ref:`NetwPromise<class_NetwPromise>` **delete_slot**\ (\ slot\: :godot:`StringName`\ ) :ref:`🔗<class_NetwDatabase_method_delete_slot>`
 
-Removes ``slot`` and everything stored in it. The slot must not be open. The promise gives an :godot:`@GlobalScope.Error <@GlobalScope#enum_@globalscope_Error>`.
+Removes ``slot`` and everything stored in it. The slot must not be open.
+
+The promise gives an :godot:`@GlobalScope.Error <@GlobalScope#enum_@globalscope_Error>`.
 
 .. code:: text
 
@@ -235,10 +237,10 @@ Removes ``slot`` and everything stored in it. The slot must not be open. The pro
     ┠╴OK                the backend removed the slot
     ┠╴ERR_BUSY          slot is the one this database holds open
     ┠╴ERR_UNCONFIGURED  the database declares no backend
-    ┠╴ERR_UNAVAILABLE   this handle outlived its session, or the backend
+    ┠╴ERR_UNAVAILABLE   the session ended, or the backend
     │                   implements no _delete_slot
     ┠╴ERR_INVALID_DATA  the backend's _delete_slot answered no promise
-    ┖╴backend-defined   the backend could not remove the slot
+    ┖╴storage error   the backend could not remove the slot
 
 .. rst-class:: classref-item-separator
 
@@ -255,16 +257,16 @@ Removes the record at ``id``. The promise gives an :godot:`@GlobalScope.Error <@
 .. code:: text
 
     Error
-    ┠╴OK                  the backend acknowledged the erase
+    ┠╴OK                  the backend confirmed the deletion
     ┠╴ERR_UNCONFIGURED    the database is not open
     ┠╴ERR_BUSY            the database already holds 4096 pending operations
-    ┠╴ERR_DOES_NOT_EXIST  the schema is not sealed
+    ┠╴ERR_DOES_NOT_EXIST  the property definitions are unavailable
     ┠╴ERR_INVALID_PARAMETER
     │                     id is empty
-    ┠╴ERR_INVALID_DATA    the connection answered no outcome for the erase
+    ┠╴ERR_INVALID_DATA    the connection returned no result for the deletion
     ┠╴ERR_UNAVAILABLE     the backend or connection cannot perform the erase, or the
     │                     database closed before it finished
-    ┖╴backend-defined     the backend rejected or could not complete the erase
+    ┖╴storage error     the backend rejected or could not complete the erase
 
 .. rst-class:: classref-item-separator
 
@@ -282,7 +284,7 @@ Waits for every operation started before this call to finish. The promise gives 
 
     Error
     ┠╴OK               every earlier operation finished, whatever its result
-    ┖╴ERR_UNAVAILABLE  the session ended first, or this handle outlived it
+    ┖╴ERR_UNAVAILABLE  the session ended before operations finished
 
 .. rst-class:: classref-item-separator
 
@@ -302,7 +304,7 @@ Lists every slot the :ref:`NetwDatabaseBackend<class_NetwDatabaseBackend>` holds
     ┠╴error    Error              check it before reading slots
     │ ┠╴OK                      listing succeeded
     │ ┠╴ERR_UNAVAILABLE         the backend does not implement slot listing
-    │ ┖╴backend-defined         the backend could not read its storage
+    │ ┖╴storage error         the backend could not read its storage
     ┠╴detail   String             what went wrong, for a person to read. Empty when error is OK
     ┖╴slots    PackedStringArray  every slot the backend holds when error is OK
 
@@ -326,9 +328,9 @@ Opens ``slot``. To switch slots, :ref:`close()<class_NetwDatabase_method_close>`
     ┠╴ERR_UNCONFIGURED  the database declares no backend
     ┠╴ERR_CANT_CREATE   the backend resolved no connection
     ┠╴ERR_INVALID_DATA  the backend's _open answered no promise
-    ┠╴ERR_UNAVAILABLE   this handle outlived its session, or the backend implements
+    ┠╴ERR_UNAVAILABLE   the session ended, or the backend implements
     │                   no _open
-    ┖╴backend-defined   the backend could not open slot
+    ┖╴storage error   the backend could not open slot
 
 .. rst-class:: classref-item-separator
 
@@ -340,26 +342,25 @@ Opens ``slot``. To switch slots, :ref:`close()<class_NetwDatabase_method_close>`
 
 :ref:`NetwPromise<class_NetwPromise>` **patch**\ (\ schema\: :ref:`NetwSchema<class_NetwSchema>`, id\: :godot:`StringName`, values\: :godot:`Dictionary`\ ) :ref:`🔗<class_NetwDatabase_method_patch>`
 
-Replaces the columns ``values`` names in the existing record at ``id`` and keeps the rest. ``values`` may hold any subset of the columns in ``schema``. The promise gives an :godot:`@GlobalScope.Error <@GlobalScope#enum_@globalscope_Error>`.
+Replaces the properties named in ``values`` in the existing record at ``id`` and keeps the rest. ``values`` may hold any subset of the properties declared by ``schema``. The promise gives an :godot:`@GlobalScope.Error <@GlobalScope#enum_@globalscope_Error>`.
 
 .. code:: text
 
     Error
-    ┠╴OK                  the backend acknowledged the merged record, or values is empty
-    ┠╴ERR_UNCONFIGURED    the database is not open, or the schema declares no
-    │                     migration from the stored record's storage version
+    ┠╴OK                  the backend confirmed the merged record, or values is empty
+    ┠╴ERR_UNCONFIGURED    the database is not open, or no migration exists for the saved version
     ┠╴ERR_BUSY            the database already holds 4096 pending operations
-    ┠╴ERR_DOES_NOT_EXIST  the schema is not sealed, or no record is stored at id
+    ┠╴ERR_DOES_NOT_EXIST  the property definitions are unavailable, or no record is stored at id
     ┠╴ERR_INVALID_PARAMETER
     │                     id is empty
-    ┠╴ERR_INVALID_DATA    values names an undeclared column or a value its column
-    │                     refuses, or the stored record does not match the schema
+    ┠╴ERR_INVALID_DATA    values contains an unknown property, a value with the wrong type,
+    │                     or saved properties differ from the declared properties
     ┠╴ERR_FILE_UNRECOGNIZED
     │                     the stored record is not in this library's format, or
-    │                     carries a newer storage version than the schema
+    │                     carries a newer saved version than this game
     ┠╴ERR_UNAVAILABLE     the backend or connection cannot perform the patch, or the
     │                     database closed before it finished
-    ┖╴backend-defined     the backend could not read or write the record
+    ┖╴storage error     the backend could not read or write the record
 
 .. rst-class:: classref-item-separator
 
@@ -380,8 +381,8 @@ Reads the record at ``id``. The promise gives a :godot:`Dictionary`. A record th
     ┠╴detail   String      what went wrong, for a person to read. Empty when error is OK
     ┠╴found    bool        whether a record was stored under id. False on any failure
     ┠╴id       StringName  the record id the read asked for
-    ┖╴values   Dictionary  the stored row, keyed by column name, complete against the
-                           schema that read it. Empty unless found is true
+    ┖╴values   Dictionary  the saved record, keyed by saved property name, all declared properties included.
+                           Empty unless found is true
 
 ::
 
@@ -410,13 +411,12 @@ Reads one page of up to ``limit`` records matching ``filter``. The promise gives
     ┠╴error    Error             @GlobalScope.Error. Check it before reading records
     │ ┠╴OK                     the page was read
     │ ┠╴ERR_FILE_UNRECOGNIZED  a record is not in this library's format, or carries
-    │ │                        a newer storage version than the schema
-    │ ┠╴ERR_INVALID_DATA       a record does not match the schema
-    │ ┠╴ERR_UNCONFIGURED       the schema declares no migration from a record's
-    │ │                        storage version
-    │ ┠╴ERR_UNAVAILABLE        this handle outlived its session, or the connection
+    │ │                        a newer saved version than this game
+    │ ┠╴ERR_INVALID_DATA       saved property names or types differ
+    │ ┠╴ERR_UNCONFIGURED       no migration exists for a saved version
+    │ ┠╴ERR_UNAVAILABLE        the session ended, or the connection
     │ │                        implements no _scan
-    │ ┖╴backend-defined        the backend could not read the page
+    │ ┖╴storage error        the backend could not read the page
     ┠╴detail   String            what went wrong, for a person to read. Empty when error is OK
     ┠╴records  Array[Dictionary]  each one shaped like a read reply
     ┖╴cursor   String            pass this back to scan to continue. Empty when no records remain
@@ -428,7 +428,7 @@ Reads one page of up to ``limit`` records matching ``filter``. The promise gives
     Error
     ┠╴ERR_UNCONFIGURED       the database is not open
     ┠╴ERR_BUSY               the database already holds 4096 pending operations
-    ┠╴ERR_DOES_NOT_EXIST     the schema is not sealed
+    ┠╴ERR_DOES_NOT_EXIST     the property definitions are unavailable
     ┠╴ERR_INVALID_PARAMETER  limit is below 1
     ┖╴ERR_UNAVAILABLE        the database closed before the page was read
 
@@ -456,19 +456,19 @@ Reads one page of up to ``limit`` records matching ``filter``. The promise gives
 
 :ref:`NetwPromise<class_NetwPromise>` **write**\ (\ schema\: :ref:`NetwSchema<class_NetwSchema>`, id\: :godot:`StringName`, values\: :godot:`Dictionary`\ ) :ref:`🔗<class_NetwDatabase_method_write>`
 
-Replaces the whole record at ``id``. ``values`` must hold every column ``schema`` declares and nothing else. The promise gives an :godot:`@GlobalScope.Error <@GlobalScope#enum_@globalscope_Error>`.
+Replaces the whole record at ``id``. ``values`` must hold every property ``schema`` declares and nothing else. The promise gives an :godot:`@GlobalScope.Error <@GlobalScope#enum_@globalscope_Error>`.
 
 .. code:: text
 
     Error
-    ┠╴OK                  the backend acknowledged the write
+    ┠╴OK                  the backend confirmed the write
     ┠╴ERR_UNCONFIGURED    the database is not open
-    ┠╴ERR_DOES_NOT_EXIST  the schema is not sealed
+    ┠╴ERR_DOES_NOT_EXIST  the property definitions are unavailable
     ┠╴ERR_INVALID_PARAMETER
     │                     id is empty
-    ┠╴ERR_INVALID_DATA    values do not exactly match the schema
+    ┠╴ERR_INVALID_DATA    saved property names or types differ
     ┠╴ERR_UNAVAILABLE     the backend or connection cannot perform the write
-    ┖╴backend-defined     the backend rejected or could not complete the write
+    ┖╴storage error     the backend rejected or could not complete the write
 
 ::
 

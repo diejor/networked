@@ -36,6 +36,7 @@ public:
     static constexpr int64_t UNSET = -1;
 
 private:
+    int declared_type = -1;
     bool is_property = true;
     bool is_spawn_state = false;
     repl::PropertySet::Lane lane = repl::PropertySet::VOLATILE;
@@ -64,6 +65,13 @@ protected:
     static void _bind_methods();
 
 public:
+    int get_declared_type() const {
+        return declared_type;
+    }
+    void set_declared_type(int p_type) {
+        declared_type = p_type;
+    }
+
     static void set_carry_binder(const godot::Callable &p_binder);
 
     void set_is_property(bool p_is_property) {

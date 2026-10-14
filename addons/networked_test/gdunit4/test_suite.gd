@@ -57,7 +57,7 @@ func make_unmanaged_game_harness(scene: PackedScene) -> NetwGameHarness:
 ##
 ## [param parent] container the root is added under.
 ## [param entity_name] [member Node.name] for the entity root.
-## [param peer_id] assigned to [member NetwEntity.peer_id].
+## [param controller] assigned to [member NetwEntity.controller].
 ## [param with_sync] when [code]true[/code], attaches a
 ##         [MultiplayerSynchronizer] child named [code]"Sync"[/code] so
 ##         interest drivers scanning the entity root for synchronizers
@@ -65,12 +65,12 @@ func make_unmanaged_game_harness(scene: PackedScene) -> NetwGameHarness:
 func make_test_entity(
 		parent: Node,
 		entity_name: String = "Ent",
-		peer_id: int = 0,
+		controller: int = 1,
 		with_sync: bool = true,
 ) -> Node:
 	var root := Node.new()
 	root.name = entity_name
-	Netw.configure_entity(root).peer_id = peer_id
+	Netw.configure_entity(root).controller = controller
 	parent.add_child(root)
 	auto_free(root)
 	if with_sync:

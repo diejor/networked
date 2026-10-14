@@ -1862,18 +1862,6 @@ void NetwMultiplayer::_bind_methods() {
         D_METHOD("scene_packed_stem", "packed"),
         &NetwMultiplayer::scene_packed_stem
     );
-#if defined(NETW_TESTS)
-    ClassDB::bind_static_method(
-        "NetwMultiplayer",
-        D_METHOD("law_extension_named"),
-        &NetwMultiplayer::law_extension_named
-    );
-    ClassDB::bind_static_method(
-        "NetwMultiplayer",
-        D_METHOD("law_extension_script"),
-        &NetwMultiplayer::law_extension_script
-    );
-#endif
     ClassDB::bind_method(
         D_METHOD("entity_add_property_set", "entity", "set", "comp"),
         &NetwMultiplayer::entity_add_property_set

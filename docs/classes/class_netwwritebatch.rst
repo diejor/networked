@@ -12,7 +12,7 @@ NetwWriteBatch
 
 **Inherits:** :godot:`RefCounted`
 
-Several record writes and erasures submitted to a :ref:`NetwDatabase<class_NetwDatabase>` in one call.
+Several record writes and deletions submitted to a :ref:`NetwDatabase<class_NetwDatabase>` in one call.
 
 .. rst-class:: classref-introduction-group
 
@@ -101,15 +101,15 @@ Method Descriptions
 
 :godot:`Error <@GlobalScope#enum_@globalscope_Error>` **erase**\ (\ schema\: :ref:`NetwSchema<class_NetwSchema>`, id\: :godot:`StringName`\ ) :ref:`🔗<class_NetwWriteBatch_method_erase>`
 
-Adds an erasure of the record at ``id``.
+Adds a deletion of the record at ``id``.
 
 .. code:: text
 
     Error
-    ┠╴OK                     the erasure was added
+    ┠╴OK                     the deletion was added
     ┠╴ERR_LOCKED             this batch was submitted already
-    ┠╴ERR_UNAVAILABLE        this batch outlived the session that issued it
-    ┠╴ERR_DOES_NOT_EXIST     schema is not sealed
+    ┠╴ERR_UNAVAILABLE        the session ended
+    ┠╴ERR_DOES_NOT_EXIST     property definitions are unavailable
     ┖╴ERR_INVALID_PARAMETER  id is empty
 
 .. rst-class:: classref-item-separator
@@ -131,15 +131,15 @@ Sends this batch. A batch can be submitted once. The promise gives a :godot:`Dic
     │ ┠╴OK                 every operation landed
     │ ┠╴ERR_LOCKED         this batch was submitted already
     │ ┠╴a builder's code   the first write or erase this batch refused, nothing ran
-    │ ┠╴ERR_UNAVAILABLE    this batch outlived its session, or the connection
+    │ ┠╴ERR_UNAVAILABLE    the session ended, or the connection
     │ │                    implements no _write_batch
-    │ ┠╴ERR_INVALID_DATA   the connection answered a different number of outcomes
-    │ ┖╴backend-defined    the whole batch failed, or the first non-OK entry of errors
+    │ ┠╴ERR_INVALID_DATA   the connection answered a different number of results
+    │ ┖╴storage error    the whole batch failed, or the first non-OK entry of errors
     ┠╴detail     String            what went wrong, for a person to read. Empty when
     │                              error is OK
     ┠╴errors     PackedInt32Array  one @GlobalScope.Error per submitted operation, in the
     │                              order they were added
-    ┖╴uncertain  PackedByteArray   1 where the operation at that index has an outcome
+    ┖╴uncertain  PackedByteArray   1 where the operation at that index has a result
                                    the backend could not establish, 0 otherwise
 
 \ These fail the promise instead, and :ref:`NetwPromise.wait()<class_NetwPromise_method_wait>` returns the code.
@@ -168,10 +168,10 @@ Adds a write of the whole record at ``id``, like :ref:`NetwDatabase.write()<clas
     Error
     ┠╴OK                     the write was added
     ┠╴ERR_LOCKED             this batch was submitted already
-    ┠╴ERR_UNAVAILABLE        this batch outlived the session that issued it
-    ┠╴ERR_DOES_NOT_EXIST     schema is not sealed
+    ┠╴ERR_UNAVAILABLE        the session ended
+    ┠╴ERR_DOES_NOT_EXIST     property definitions are unavailable
     ┠╴ERR_INVALID_PARAMETER  id is empty
-    ┖╴ERR_INVALID_DATA       values do not exactly match the schema
+    ┖╴ERR_INVALID_DATA       saved property names or types differ
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

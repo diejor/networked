@@ -36,6 +36,7 @@
 				func _place_bomb(ctx: NetwActionContext, pos: Vector2, fuse: float) -&gt; void:
 				[/codeblock]
 				On the peer controlling the entity, [member predict] runs immediately. On any other peer the call does nothing.
+				If [NetwLagCompensationConfig] cannot be applied, the request reports an error without running [member predict] or sending a packet.
 				[b]Player request.[/b]
 			</description>
 		</method>

@@ -28,7 +28,7 @@ Reached by :ref:`NetwEntity.prediction<class_NetwEntity_property_prediction>`. T
     pred.witness_contacts = _sample_contacts
     pred.breach_response = NetwPrediction.BREACH_RESPONSE_DEMOTE
 
-\ Only an entity with a :ref:`NetwPropertyConfig.state()<class_NetwPropertyConfig_method_state>` property is predicted, because that state is what gets compared and restored. Per-field tolerances are set with :ref:`NetwPropertyConfig<class_NetwPropertyConfig>`. The schedule and the simulation mode are on :ref:`NetwEntity.simulation<class_NetwEntity_property_simulation>`.
+\ Only an entity with a :ref:`NetwPropertyConfig.state()<class_NetwPropertyConfig_method_state>` property is predicted, because that state is what gets compared and restored. Per-property tolerances are set with :ref:`NetwPropertyConfig<class_NetwPropertyConfig>`. The schedule and the simulation mode are on :ref:`NetwEntity.simulation<class_NetwEntity_property_simulation>`.
 
 Values set on a :godot:`MultiplayerSynchronizer` in the scene act as defaults, and values set in code override them.
 
@@ -246,7 +246,7 @@ Emitted when a misprediction episode opens, falls back or closes, as ``change`` 
 
 **recovered**\ (\ entry\: :godot:`int`, deltas\: :godot:`Dictionary`, teleported\: :godot:`bool`, attribution\: :ref:`Attribution<enum_NetwPrediction_Attribution>`\ ) :ref:`🔗<class_NetwPrediction_signal_recovered>`
 
-Emitted after a correction moved the body. ``deltas`` holds how far each field moved, as ``after - before``, with angles taken the short way around. ``teleported`` is ``true`` when the correction was a teleport.
+Emitted after a correction moved the body. ``deltas`` holds how far each property moved, as ``after - before``, with angles taken the short way around. ``teleported`` is ``true`` when the correction was a teleport.
 
 Under :ref:`NetwDisplay.LIVE_MODE_CHASE<class_NetwDisplay_constant_LIVE_MODE_CHASE>` the display already smooths the correction away.
 
@@ -266,7 +266,7 @@ Under :ref:`NetwDisplay.LIVE_MODE_CHASE<class_NetwDisplay_constant_LIVE_MODE_CHA
 
 **state_evaluated**\ (\ recv_tick\: :godot:`int`, ack\: :godot:`int`, divergence\: :godot:`float`, diverged\: :godot:`bool`\ ) :ref:`🔗<class_NetwPrediction_signal_state_evaluated>`
 
-Emitted on the controlling client each time server state arrives. ``divergence`` is the largest error of any field, including errors under :ref:`divergence_epsilon<class_NetwPrediction_property_divergence_epsilon>`. ``diverged`` is whether the error was large enough to act on, even when no correction was written. Connect to :ref:`recovered<class_NetwPrediction_signal_recovered>` to know when the body actually moved.
+Emitted on the controlling client each time server state arrives. ``divergence`` is the largest error of any property, including errors under :ref:`divergence_epsilon<class_NetwPrediction_property_divergence_epsilon>`. ``diverged`` is whether the error was large enough to act on, even when no correction was written. Connect to :ref:`recovered<class_NetwPrediction_signal_recovered>` to know when the body actually moved.
 
 .. rst-class:: classref-section-separator
 
@@ -447,7 +447,7 @@ enum **TriggerShape**: :ref:`🔗<enum_NetwPrediction_TriggerShape>`
 
 :ref:`TriggerShape<enum_NetwPrediction_TriggerShape>` **TRIGGER_SHAPE_NONE** = ``0``
 
-No field was past its tolerance.
+No property was past its tolerance.
 
 .. _class_NetwPrediction_constant_TRIGGER_SHAPE_MIXED:
 
@@ -455,7 +455,7 @@ No field was past its tolerance.
 
 :ref:`TriggerShape<enum_NetwPrediction_TriggerShape>` **TRIGGER_SHAPE_MIXED** = ``1``
 
-At least one field past its tolerance can be written by an ordinary correction.
+At least one property past its tolerance can be written by an ordinary correction.
 
 .. _class_NetwPrediction_constant_TRIGGER_SHAPE_ALL_WITHHELD:
 
@@ -463,7 +463,7 @@ At least one field past its tolerance can be written by an ordinary correction.
 
 :ref:`TriggerShape<enum_NetwPrediction_TriggerShape>` **TRIGGER_SHAPE_ALL_WITHHELD** = ``2``
 
-Every field past its tolerance is :ref:`NetwPropertyConfig.teleport_only()<class_NetwPropertyConfig_method_teleport_only>`, so only a teleport can write it.
+Every property past its tolerance is :ref:`NetwPropertyConfig.teleport_only()<class_NetwPropertyConfig_method_teleport_only>`, so only a teleport can write it.
 
 .. rst-class:: classref-item-separator
 
@@ -591,7 +591,7 @@ A body moved by your own code, such as a :godot:`CharacterBody3D`. Sets :ref:`Ne
 
 :ref:`Archetype<enum_NetwPrediction_Archetype>` **ARCHETYPE_SOLVER_BODY** = ``2``
 
-A body moved by the physics engine, such as a :godot:`RigidBody3D`. Sets :ref:`NetwSimulation.SCHEDULE_FRAME<class_NetwSimulation_constant_SCHEDULE_FRAME>`, :ref:`MISSING_INPUT_REPEAT_LAST<class_NetwPrediction_constant_MISSING_INPUT_REPEAT_LAST>`, :ref:`RECOVERY_POLICY_REBASE_RECOVER<class_NetwPrediction_constant_RECOVERY_POLICY_REBASE_RECOVER>` and :ref:`NetwSimulation.RESTORE_EXTRAPOLATED<class_NetwSimulation_constant_RESTORE_EXTRAPOLATED>`.
+A body moved by the physics engine, such as a :godot:`RigidBody3D`. Sets :ref:`NetwSimulation.SCHEDULE_AUTO<class_NetwSimulation_constant_SCHEDULE_AUTO>`, :ref:`MISSING_INPUT_REPEAT_LAST<class_NetwPrediction_constant_MISSING_INPUT_REPEAT_LAST>`, :ref:`RECOVERY_POLICY_AUTO<class_NetwPrediction_constant_RECOVERY_POLICY_AUTO>` and :ref:`NetwSimulation.RESTORE_EXTRAPOLATED<class_NetwSimulation_constant_RESTORE_EXTRAPOLATED>`.
 
 .. rst-class:: classref-item-separator
 
@@ -641,7 +641,7 @@ Report mispredictions and correct nothing.
 
 :ref:`RecoveryPolicy<enum_NetwPrediction_RecoveryPolicy>` **RECOVERY_POLICY_AUTO** = ``4``
 
-:ref:`RECOVERY_POLICY_REBASE_RECOVER<class_NetwPrediction_constant_RECOVERY_POLICY_REBASE_RECOVER>` for a :godot:`RigidBody3D` or :godot:`RigidBody2D`, and :ref:`RECOVERY_POLICY_REBASE_REPLAY<class_NetwPrediction_constant_RECOVERY_POLICY_REBASE_REPLAY>` for any other body. :ref:`resolved_recovery_policy()<class_NetwPrediction_method_resolved_recovery_policy>` returns the result.
+:ref:`RECOVERY_POLICY_REBASE_RECOVER<class_NetwPrediction_constant_RECOVERY_POLICY_REBASE_RECOVER>` for a :godot:`RigidBody3D` or :godot:`RigidBody2D` on :ref:`NetwSimulation.SCHEDULE_FRAME<class_NetwSimulation_constant_SCHEDULE_FRAME>`, and :ref:`RECOVERY_POLICY_REBASE_REPLAY<class_NetwPrediction_constant_RECOVERY_POLICY_REBASE_REPLAY>` otherwise. :ref:`resolved_recovery_policy()<class_NetwPrediction_method_resolved_recovery_policy>` returns the result.
 
 .. rst-class:: classref-item-separator
 
@@ -811,7 +811,7 @@ The correction caused a contact the server did not have.
 
 :ref:`OperatorOutcome<enum_NetwPrediction_OperatorOutcome>` **OPERATOR_OUTCOME_WITHHELD** = ``4``
 
-Every field that asked for the correction is :ref:`NetwPropertyConfig.teleport_only()<class_NetwPropertyConfig_method_teleport_only>`, so the correction could not write it.
+Every property that asked for the correction is :ref:`NetwPropertyConfig.teleport_only()<class_NetwPropertyConfig_method_teleport_only>`, so the correction could not write it.
 
 .. rst-class:: classref-item-separator
 
@@ -927,7 +927,7 @@ The server's state, or its difference from the prediction, was written as is.
 
 :ref:`Operator<enum_NetwPrediction_Operator>` **OPERATOR_FULL_CLOSURE** = ``3``
 
-A teleport restored every field.
+A teleport restored every property.
 
 .. _class_NetwPrediction_constant_OPERATOR_TRANSPORT_DELTA:
 
@@ -1218,7 +1218,7 @@ Both :godot:`Dictionary` arguments contain state declared with :ref:`NetwPropert
 - |void| **set_divergence_epsilon**\ (\ value\: :godot:`float`\ )
 - :godot:`float` **get_divergence_epsilon**\ (\ )
 
-How far the predicted state may drift from the server's before it is corrected. :ref:`NetwPropertyConfig.epsilon()<class_NetwPropertyConfig_method_epsilon>` overrides it for one field. A :ref:`ARCHETYPE_SOLVER_BODY<class_NetwPrediction_constant_ARCHETYPE_SOLVER_BODY>` tolerates one and a half quantizer steps on each quantized field.
+How far the predicted state may drift from the server's before it is corrected. :ref:`NetwPropertyConfig.epsilon()<class_NetwPropertyConfig_method_epsilon>` overrides it for one property. A :ref:`ARCHETYPE_SOLVER_BODY<class_NetwPrediction_constant_ARCHETYPE_SOLVER_BODY>` tolerates one and a half quantizer steps on each quantized property.
 
 .. rst-class:: classref-item-separator
 
@@ -1303,7 +1303,7 @@ What the server does when an input never arrives.
 - |void| **set_predict_input**\ (\ value\: :godot:`Callable`\ )
 - :godot:`Callable` **get_predict_input**\ (\ )
 
-Guesses input for an entity selected by :ref:`NetwEntity.simulation<class_NetwEntity_property_simulation>` that this peer does not control. Relayed input replaces the guess. Unset callbacks and omitted fields repeat the newest relayed input, and zero before any arrives.
+Guesses input for an entity selected by :ref:`NetwEntity.simulation<class_NetwEntity_property_simulation>` that this peer does not control. Relayed input replaces the guess. Unset callbacks and omitted properties repeat the newest relayed input, and zero before any arrives.
 
 The returned :godot:`Dictionary` uses names declared with :ref:`NetwPropertyConfig.input()<class_NetwPropertyConfig_method_input>`.
 
@@ -1461,7 +1461,7 @@ This entity's prediction counters.
 - |void| **set_teleport_threshold**\ (\ value\: :godot:`float`\ )
 - :godot:`float` **get_teleport_threshold**\ (\ )
 
-How large an error may be before a correction teleports the body, restoring every field including :ref:`NetwPropertyConfig.teleport_only()<class_NetwPropertyConfig_method_teleport_only>` ones. It applies to fields declared with :ref:`NetwPropertyConfig.carry_along()<class_NetwPropertyConfig_method_carry_along>`, and :ref:`NetwPropertyConfig.teleport_at()<class_NetwPropertyConfig_method_teleport_at>` overrides it per field. An entity with no such field teleports on every correction.
+How large an error may be before a correction teleports the body, restoring every property including :ref:`NetwPropertyConfig.teleport_only()<class_NetwPropertyConfig_method_teleport_only>` ones. It applies to properties declared with :ref:`NetwPropertyConfig.carry_along()<class_NetwPropertyConfig_method_carry_along>`, and :ref:`NetwPropertyConfig.teleport_at()<class_NetwPropertyConfig_method_teleport_at>` overrides it per property. An entity with no such property teleports on every correction.
 
 .. rst-class:: classref-item-separator
 
@@ -1543,7 +1543,7 @@ Holds off small corrections for :ref:`collision_cooldown_ticks<class_NetwPredict
 
 :godot:`Dictionary` **reachability**\ (\ ) |const| :ref:`🔗<class_NetwPrediction_method_reachability>`
 
-Reports, field by field, whether this entity's prediction settings take effect. Returns an empty :godot:`Dictionary` before the entity is predicted. Use it while wiring an entity to find settings that are accepted but do nothing.
+Reports, property by property, whether this entity's prediction settings take effect. Returns an empty :godot:`Dictionary` before the entity is predicted. Use it while wiring an entity to find settings that are accepted but do nothing.
 
 ::
 

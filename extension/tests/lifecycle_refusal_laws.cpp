@@ -92,6 +92,7 @@ Node *build_body(
     made->add_child(pocket);
     const Ref<NetwEntity> entity = NetwEntity::ensure(made);
     entity->set_lifecycle(NetwEntity::Lifecycle(int(p_lifecycle)));
+    entity->set_authority(NetwEntity::AUTHORITY_CONTROLLER);
     entity->set_transfer(NetwEntity::Transfer(int(p_transfer)));
     return made;
 }
@@ -121,7 +122,6 @@ Array body_types() {
 enum Verb {
     VERB_REPARENT,
     VERB_DESPAWN,
-    VERB_SPAWN_UNDER,
     VERB_SPAWN,
 };
 
@@ -208,7 +208,7 @@ void take_standing(
             return;
         case STANDING_CLAIM_WAITING:
             p_rig.hold(0);
-            here->claim_authority();
+            here->claim_control();
             p_rig.pump(4);
             return;
         case STANDING_CONTROLLER:
@@ -277,14 +277,6 @@ void act(
             r_seen.code
                 = client->entity_despawn(here, Ref<netw::NetwDespawnOpts>());
             r_seen.answered = r_seen.code != OK;
-            return;
-        case VERB_SPAWN_UNDER:
-            r_seen.answered = NetwEntity::of(body)->spawn_under(
-                                  p_target,
-                                  StringName("Copy")
-                              )
-                == nullptr;
-            r_seen.code = p_scenario.code;
             return;
         case VERB_SPAWN:
             r_seen.root = "Spawned";
@@ -483,7 +475,8 @@ TEST_CASE(
     "its error names NetwEntity.lifecycle and the root"
 ) {
     const char *UNDECLARED
-        = "NetwEntity.lifecycle to LIFECYCLE_CONTROLLER in its root's _init";
+        = "NetwEntity.lifecycle to LIFECYCLE_CONTROLLER before its root "
+          "enters the tree";
     const char *NOT_HIS = "neither the session authority nor its controller";
     const char *MOVING = "session authority is moving";
     const RefusalScenario CORPUS[] = {
@@ -557,13 +550,6 @@ TEST_CASE(
             TARGET_SHELF,
             ERR_UNAUTHORIZED,
             NOT_HIS),
-        row("an-undeclared-spawn-under",
-            VERB_SPAWN_UNDER,
-            false,
-            STANDING_NONE,
-            TARGET_SHELF,
-            ERR_UNAUTHORIZED,
-            UNDECLARED),
         row("an-undeclared-spawn",
             VERB_SPAWN,
             false,
@@ -580,13 +566,6 @@ TEST_CASE(
             MOVING),
         row("a-despawn-while-authority-moves",
             VERB_DESPAWN,
-            true,
-            STANDING_HALTED,
-            TARGET_SHELF,
-            ERR_UNAVAILABLE,
-            MOVING),
-        row("a-spawn-under-while-authority-moves",
-            VERB_SPAWN_UNDER,
             true,
             STANDING_HALTED,
             TARGET_SHELF,

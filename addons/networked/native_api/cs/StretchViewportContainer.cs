@@ -19,9 +19,14 @@ namespace Networked;
 /// view.add_child(session)
 /// </code>
 /// </remarks>
-public sealed class StretchViewportContainer : NetwObject
+public sealed class StretchViewportContainer : NetwNode
 {
-    public StretchViewportContainer(IntPtr native) : base(native, owned: false)
+    public StretchViewportContainer(
+        ) : this(NetwApi.Construct("StretchViewportContainer", false))
+    {
+    }
+
+    public StretchViewportContainer(IntPtr native) : base(native)
     {
     }
 

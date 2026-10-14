@@ -212,7 +212,7 @@ void NetwAction::request(int64_t p_view_tick, const Array &p_args) {
         return;
     }
     NetwMultiplayer *api = session();
-    if (api == nullptr || !api->lagcomp_is_configured()) {
+    if (api == nullptr) {
         return;
     }
     Node *target = Object::cast_to<Node>(authority.get_object());
@@ -227,6 +227,21 @@ void NetwAction::request(int64_t p_view_tick, const Array &p_args) {
             "tree.",
             String(method)
         );
+        return;
+    }
+    const Error ready = api->lagcomp_require("the action request");
+    if (ready == ERR_BUSY) {
+        NETW_ERROR(
+            sys::PREDICTION,
+            "Action '%s' was requested while the session applied its "
+            "Netw.configure_* settings, so nothing was sent. Request it "
+            "outside the callbacks that react to those settings.",
+            String(method)
+        );
+        return;
+    }
+    if (ready != OK || !entity->get_is_controlled_locally()
+        || session() != api || authority.get_object() == nullptr) {
         return;
     }
     const StringName key

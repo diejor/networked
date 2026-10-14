@@ -31,9 +31,13 @@ namespace Networked;
 /// instead.
 /// </para>
 /// </remarks>
-public class NetwService : NetwObject
+public class NetwService : NetwNode
 {
-    public NetwService(IntPtr native) : base(native, owned: false)
+    public NetwService() : this(NetwApi.Construct("NetwService", false))
+    {
+    }
+
+    public NetwService(IntPtr native) : base(native)
     {
     }
 

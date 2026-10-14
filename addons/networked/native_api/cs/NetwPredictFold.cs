@@ -19,6 +19,10 @@ namespace Networked;
 /// </remarks>
 public sealed class NetwPredictFold : NetwRefCounted
 {
+    public NetwPredictFold() : this(NetwApi.Construct("NetwPredictFold", true))
+    {
+    }
+
     public NetwPredictFold(IntPtr native) : base(native)
     {
     }

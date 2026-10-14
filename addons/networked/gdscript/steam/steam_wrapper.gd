@@ -1,6 +1,6 @@
 ## Calls the GodotSteam singleton, [code]Engine.get_singleton("Steam")[/code].
 ##
-## Check [method is_available] before calling other methods, since GodotSteam
+## Check [method is_addon_present] before calling other methods, since GodotSteam
 ## may not be installed.
 class_name SteamWrapper
 
@@ -74,7 +74,7 @@ var _steam: Variant
 
 
 func _init() -> void:
-	if Engine.has_singleton("Steam"):
+	if is_addon_present():
 		_steam = Engine.get_singleton("Steam")
 		_steam.connect("lobby_created", func(a, b): lobby_created.emit(a, b))
 		_steam.connect(
@@ -95,15 +95,15 @@ func _init() -> void:
 		)
 
 
-func is_available() -> bool:
-	return _steam != null
+static func is_addon_present() -> bool:
+	return Engine.has_singleton("Steam")
 
 
 # Static because merely CONSTRUCTING a wrapper connects signals to the
 # GodotSteam singleton, and a process that does that with no client running
 # aborts at shutdown. Asked before anything touches Steam.
 static func is_running() -> bool:
-	if not Engine.has_singleton("Steam"):
+	if not is_addon_present():
 		return false
 	return bool(Engine.get_singleton("Steam").isSteamRunning())
 
@@ -112,7 +112,7 @@ static func is_running() -> bool:
 ## [constant GODOTSTEAM_VERSION] or has another major version, or an empty
 ## [String] when it matches.
 static func version_mismatch() -> String:
-	if not Engine.has_singleton("Steam"):
+	if not is_addon_present():
 		return ""
 	var steam := Engine.get_singleton("Steam")
 	var installed := "an unknown version"

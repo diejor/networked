@@ -288,7 +288,7 @@ class Avatar:
 
 	func _init() -> void:
 		var declared := Netw.configure_entity(self)
-		declared.initial_controller = NetwEntity.INITIAL_REPRESENTED_PEER
+		declared.initial_controller = NetwEntity.INITIAL_PLAYER
 		Netw.configure_property(self, &"position").broadcast()
 
 

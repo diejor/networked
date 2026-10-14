@@ -273,8 +273,10 @@ public sealed class NetwAction : NetwRefCounted
     /// </code>
     /// <para>
     /// On the peer controlling the entity, <see cref="NetwAction.Predict"/>
-    /// runs immediately. On any other peer the call does nothing. <b>Player
-    /// request.</b>
+    /// runs immediately. On any other peer the call does nothing. If
+    /// <see cref="NetwLagCompensationConfig"/> cannot be applied, the request
+    /// reports an error without running <see cref="NetwAction.Predict"/> or
+    /// sending a packet. <b>Player request.</b>
     /// </para>
     /// </summary>
     public void Request(long viewTick, params Variant[] rest)

@@ -6,6 +6,7 @@
 #include "netw/api/replication_core.hpp"
 #include "netw/api/sync_compat.hpp"
 
+#include "support/fault_log.h"
 #include "support/minted_script.h"
 #include "support/netw_cells.h"
 #include "support/stock_probes.h"
@@ -1209,6 +1210,170 @@ TEST_CASE(
             )
         ),
         int64_t(2)
+    );
+}
+
+constexpr const char *SERVER_STEERED_PROBE = R"(extends Node2D
+
+var synced_value := 0
+
+
+func _init() -> void:
+	Netw.configure_entity(self).authority = NetwEntity.AUTHORITY_SERVER
+)";
+
+constexpr const char *CONTROLLER_STEERED_PROBE = R"(extends Node2D
+
+var synced_value := 0
+
+
+func _init() -> void:
+	Netw.configure_entity(self).authority = NetwEntity.AUTHORITY_CONTROLLER
+)";
+
+Ref<PackedScene> steered_scene(
+    const char *p_source,
+    const char *p_stem,
+    int p_mode = SceneReplicationConfig::REPLICATION_MODE_ALWAYS
+) {
+    Node *root = netw_test::scripted_root(p_source, p_stem);
+    Vector<SyncProp> props;
+    props.push_back(prop_row(
+        ".:synced_value",
+        p_mode,
+        p_mode == SceneReplicationConfig::REPLICATION_MODE_NEVER
+    ));
+    netw_test::add_stock_sync(root, "Sync", props);
+    const Ref<PackedScene> packed = netw_test::pack_stock_scene(
+        root,
+        netw_test::mint_scene_path(p_stem)
+    );
+    memdelete(root);
+    return packed;
+}
+
+struct SteeredPair {
+    LoopbackRig rig;
+    StockWorld world;
+    Node *served = nullptr;
+    Node *mirror = nullptr;
+
+    SteeredPair(
+        const char *p_source,
+        const char *p_stem,
+        int p_mode = SceneReplicationConfig::REPLICATION_MODE_ALWAYS
+    )
+        : rig(1) {
+        rig.mount();
+        netw_test::flow_clocks(rig, TICKRATE);
+        const Ref<PackedScene> scene
+            = steered_scene(p_source, p_stem, p_mode);
+        PackedStringArray scenes;
+        scenes.push_back(scene->get_path());
+        world = netw_test::mount_stock_world(rig, scenes);
+        served = scene->instantiate();
+        served->set_name(p_stem);
+        world.arena(-1)->add_child(served, true);
+        mirror = netw_test::pump_until_child(rig, world.arena(0), p_stem);
+        REQUIRE(mirror != nullptr);
+    }
+
+    void hand_to(int64_t p_peer) {
+        const Ref<netw::NetwEntity> entity = netw::NetwEntity::of(served);
+        REQUIRE(entity.is_valid());
+        entity->set_controller(p_peer);
+        rig.pump(8);
+        NETW_REQUIRE_EQ(netw::NetwEntity::of(mirror)->get_controller(), p_peer);
+    }
+};
+
+TEST_CASE(
+    "[Networked][Sync][SceneTree] SY1 a server-written synchronizer inside an "
+    "AUTHORITY_SERVER entity keeps sending from the server while a player "
+    "controls the entity, and each peer warns about it once"
+) {
+    const netw_test::FaultWatch watch;
+    SteeredPair pair(SERVER_STEERED_PROBE, "ServerSteered");
+    pair.hand_to(pair.rig.peer_id(0));
+
+    NETW_CHECK_EQ(pair.served->get_multiplayer_authority(), 1);
+    NETW_CHECK_EQ(pair.mirror->get_multiplayer_authority(), 1);
+    pair.served->set(StringName("synced_value"), 41);
+    NETW_CHECK_EQ(
+        int64_t(netw_test::pump_until_value(
+            pair.rig,
+            pair.mirror,
+            StringName("synced_value"),
+            41
+        )),
+        41
+    );
+
+    pair.hand_to(1);
+    pair.hand_to(pair.rig.peer_id(0));
+    NETW_CHECK_EQ(
+        watch.log->warning_count_containing("has a MultiplayerSynchronizer"),
+        2
+    );
+}
+
+TEST_CASE(
+    "[Networked][Sync][SceneTree] SY2 a client writes through a synchronizer "
+    "inside an entity only when the entity declares AUTHORITY_CONTROLLER"
+) {
+    const char *source = SERVER_STEERED_PROBE;
+    bool reaches = false;
+    SUBCASE("AUTHORITY_SERVER keeps the client's write local") {
+        source = SERVER_STEERED_PROBE;
+        reaches = false;
+    }
+    SUBCASE("AUTHORITY_CONTROLLER carries the client's write to the server") {
+        source = CONTROLLER_STEERED_PROBE;
+        reaches = true;
+    }
+    const netw_test::FaultWatch watch;
+    SteeredPair pair(source, reaches ? "ClientWrites" : "ServerKeeps");
+    pair.hand_to(pair.rig.peer_id(0));
+
+    pair.mirror->set(StringName("synced_value"), 7);
+    netw_test::pump_until_value(
+        pair.rig,
+        pair.served,
+        StringName("synced_value"),
+        7,
+        60
+    );
+
+    NETW_CHECK_EQ(
+        int64_t(pair.served->get(StringName("synced_value"))),
+        reaches ? 7 : 0
+    );
+    NETW_CHECK_EQ(
+        int64_t(pair.mirror->get_multiplayer_authority()),
+        reaches ? int64_t(pair.rig.peer_id(0)) : int64_t(1)
+    );
+    NETW_CHECK_EQ(
+        watch.log->warning_count_containing("has a MultiplayerSynchronizer"),
+        reaches ? 0 : 2
+    );
+}
+
+TEST_CASE(
+    "[Networked][Sync][SceneTree] SY3 a synchronizer that only carries spawn "
+    "values draws no warning, because the server writes a spawn under either "
+    "authority"
+) {
+    const netw_test::FaultWatch watch;
+    SteeredPair pair(
+        SERVER_STEERED_PROBE,
+        "SpawnOnly",
+        SceneReplicationConfig::REPLICATION_MODE_NEVER
+    );
+    pair.hand_to(pair.rig.peer_id(0));
+
+    NETW_CHECK_EQ(
+        watch.log->warning_count_containing("has a MultiplayerSynchronizer"),
+        0
     );
 }
 

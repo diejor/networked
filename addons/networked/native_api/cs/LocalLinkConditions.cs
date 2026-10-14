@@ -22,6 +22,11 @@ namespace Networked;
 /// </remarks>
 public sealed class LocalLinkConditions : NetwRefCounted
 {
+    public LocalLinkConditions(
+        ) : this(NetwApi.Construct("LocalLinkConditions", true))
+    {
+    }
+
     public LocalLinkConditions(IntPtr native) : base(native)
     {
     }

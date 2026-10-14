@@ -39,6 +39,7 @@ func _init() -> void:
 	visual.name = &"Visual"
 	add_child(visual)
 	var e := Netw.configure_entity(self)
+	e.authority = NetwEntity.AUTHORITY_CONTROLLER
 	e.transfer = NetwEntity.TRANSFER_IMMEDIATE
 	e.simulation.replicas = NetwSimulation.REPLICAS_ACTIVE
 	e.simulation.claim_on_contact = true
@@ -468,6 +469,7 @@ func _init() -> void:
 	sphere.add_child(shape)
 	add_child(sphere)
 	var e := Netw.configure_entity(self)
+	e.authority = NetwEntity.AUTHORITY_CONTROLLER
 	e.transfer = NetwEntity.TRANSFER_IMMEDIATE
 	e.simulation.bodies = [^"Sphere"]
 	e.simulation.replicas = NetwSimulation.REPLICAS_ACTIVE

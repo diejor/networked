@@ -575,8 +575,9 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Entity][Hosted] R13 authority follows the controller, and the "
-    "server is the one peer the two sides spell differently"
+    "[Networked][Entity][Hosted] R13 under AUTHORITY_CONTROLLER authority "
+    "follows the controller, and the server is the one peer the two sides "
+    "spell differently"
 ) {
     Record record;
     Ref<RefCounted> wrapper = make_wrapper();
@@ -584,6 +585,9 @@ TEST_CASE(
     netw_test::CallLog log;
     wrapper->connect("control_changed", log.callable("moved"));
     Node *owner = memnew(Node);
+    record->get_control()->set_authority(
+        int64_t(netw::entity::Control::Authority::CONTROLLER)
+    );
 
     record->get_control()->set_controller(7);
     record->apply_control(wrapper.ptr(), owner);
@@ -610,37 +614,34 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Entity][Hosted] R14 every descendant follows the controller, "
-    "a followed path stays with the server, and a nested entity is its own"
+    "[Networked][Entity][Hosted] R14 under AUTHORITY_CONTROLLER every "
+    "descendant follows the controller, and a nested entity is its own"
 ) {
     Record record;
     Node *owner = memnew(Node);
-    Node *server_sync = memnew(Node);
-    server_sync->set_name("ServerSync");
     Node *server_leaf = memnew(Node);
     Node *input_sync = memnew(Node);
     input_sync->set_name("InputSync");
     Node *nested = memnew(Node);
     Node *nested_leaf = memnew(Node);
-    owner->add_child(server_sync);
-    server_sync->add_child(server_leaf);
+    input_sync->add_child(server_leaf);
     owner->add_child(input_sync);
     owner->add_child(nested);
     nested->add_child(nested_leaf);
     nested->set_meta(NetwEntityRecord::entity_meta(), make_wrapper());
     nested->set_multiplayer_authority(9);
+    record->get_control()->set_authority(
+        int64_t(netw::entity::Control::Authority::CONTROLLER)
+    );
 
-    record->follow_server(NodePath("ServerSync"));
     record->apply_control(nullptr, owner);
     NETW_CHECK_EQ(owner->get_multiplayer_authority(), 1);
-    NETW_CHECK_EQ(server_sync->get_multiplayer_authority(), 1);
     NETW_CHECK_EQ(input_sync->get_multiplayer_authority(), 1);
 
     record->get_control()->set_controller(4);
     record->apply_control(nullptr, owner);
     NETW_CHECK_EQ(owner->get_multiplayer_authority(), 4);
-    NETW_CHECK_EQ(server_sync->get_multiplayer_authority(), 1);
-    NETW_CHECK_EQ(server_leaf->get_multiplayer_authority(), 1);
+    NETW_CHECK_EQ(server_leaf->get_multiplayer_authority(), 4);
     NETW_CHECK_EQ(input_sync->get_multiplayer_authority(), 4);
     NETW_CHECK_EQ(nested->get_multiplayer_authority(), 9);
     NETW_CHECK_EQ(nested_leaf->get_multiplayer_authority(), 9);
@@ -654,14 +655,48 @@ TEST_CASE(
         CHECK(record->get_native_write_warned());
     }
 
-    SUBCASE("a revoke returns every followed node to the server") {
+    SUBCASE("a revoke returns every node to the server") {
         record->get_control()->set_controller(0);
         record->apply_control(nullptr, owner);
         NETW_CHECK_EQ(owner->get_multiplayer_authority(), 1);
-        NETW_CHECK_EQ(server_sync->get_multiplayer_authority(), 1);
+        NETW_CHECK_EQ(server_leaf->get_multiplayer_authority(), 1);
         NETW_CHECK_EQ(input_sync->get_multiplayer_authority(), 1);
         CHECK_FALSE(record->get_native_write_warned());
     }
+
+    memdelete(owner);
+}
+
+TEST_CASE(
+    "[Networked][Entity][Hosted] R14b under AUTHORITY_SERVER every node stays "
+    "with the server while control moves, and the move is still announced"
+) {
+    Record record;
+    Ref<RefCounted> wrapper = make_wrapper();
+    netw::gd::add_signal(wrapper.ptr(), "control_changed", 2);
+    netw_test::CallLog log;
+    wrapper->connect("control_changed", log.callable("moved"));
+    Node *owner = memnew(Node);
+    Node *child = memnew(Node);
+    owner->add_child(child);
+
+    record->get_control()->set_controller(4);
+    record->apply_control(wrapper.ptr(), owner);
+
+    NETW_CHECK_EQ(owner->get_multiplayer_authority(), 1);
+    NETW_CHECK_EQ(child->get_multiplayer_authority(), 1);
+    NETW_CHECK_EQ(log.count("moved"), 1);
+    REQUIRE(log.args("moved").size() == 2);
+    NETW_CHECK_EQ(int(log.args("moved")[0]), 1);
+    NETW_CHECK_EQ(int(log.args("moved")[1]), 4);
+
+    record->get_control()->set_controller(5);
+    record->apply_control(wrapper.ptr(), owner);
+    NETW_CHECK_EQ(owner->get_multiplayer_authority(), 1);
+    NETW_CHECK_EQ(log.count("moved"), 2);
+    NETW_CHECK_EQ(int(log.args("moved", 1)[0]), 4);
+    NETW_CHECK_EQ(int(log.args("moved", 1)[1]), 5);
+    CHECK_FALSE(record->get_native_write_warned());
 
     memdelete(owner);
 }
@@ -674,6 +709,9 @@ TEST_CASE(
     Node *owner = memnew(Node);
     Node *child = memnew(Node);
     owner->add_child(child);
+    record->get_control()->set_authority(
+        int64_t(netw::entity::Control::Authority::CONTROLLER)
+    );
 
     record->get_control()->set_controller(4);
     record->apply_control(nullptr, owner);

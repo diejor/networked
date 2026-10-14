@@ -488,6 +488,8 @@ Frames between interpolation trace logs. ``0`` disables them.
 
 The child node that receives the smoothed values. Position and rotation are written in global space, and other properties are written as they are. A visual with :godot:`CanvasItem.top_level <CanvasItem#class_CanvasItem_property_top_level>` set receives every property in global space.
 
+The written values replace the visual's own position and rotation, so point this at a plain node and put a model that needs one under it.
+
 .. rst-class:: classref-section-separator
 
 ----

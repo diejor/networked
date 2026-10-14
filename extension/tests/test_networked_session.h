@@ -468,10 +468,6 @@ TEST_CASE(
         NETW_CHECK_EQ(entity->get_name() == godot::StringName("courier"), true);
         NETW_CHECK_EQ(entity->get_peer_id(), 7);
         NETW_CHECK_EQ(entity->get_is_player(), true);
-        NETW_CHECK_EQ(
-            entity->get_ownership(),
-            int64_t(NetwEntity::OWNERSHIP_PEER)
-        );
         NETW_CHECK_EQ(copy->get_parent(), fixture_parent);
 
         fixture_parent->remove_child(copy);

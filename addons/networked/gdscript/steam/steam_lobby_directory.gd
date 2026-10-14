@@ -78,7 +78,7 @@ func _service_entered(session: NetwSession) -> void:
 	_instance = weakref(self)
 
 	_wrapper = SteamWrapper.new()
-	if not _wrapper.is_available():
+	if not SteamWrapper.is_addon_present():
 		_init_ok = false
 		push_warning(
 			"GodotSteam is not installed, so SteamLobbyDirectory is "
@@ -143,7 +143,7 @@ func _service_exiting(_session: NetwSession) -> void:
 	if existing == self:
 		_instance = weakref(null)
 
-	if _wrapper and _wrapper.is_available():
+	if _wrapper and SteamWrapper.is_addon_present():
 		_wrapper.disconnect_signal("lobby_created", _on_lobby_created)
 		_wrapper.disconnect_signal("lobby_joined", _on_lobby_joined)
 		_wrapper.disconnect_signal("lobby_match_list", _on_lobby_match_list)

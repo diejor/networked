@@ -30,7 +30,7 @@ Data travels as columns in one message. :ref:`NetwSchema<class_NetwSchema>` decl
 
     @onready var mobs := Netw.session(self).table(&"Mob")
 
-\ There is one **NetwTable** per table. Connect :ref:`received<class_NetwTable_signal_received>` once and keep the handle in a field.
+\ There is one **NetwTable** per table. Connect :ref:`received<class_NetwTable_signal_received>` once and keep the result in a variable.
 
 Each row is identified by a route. Row indices change when rows are added or removed, and routes do not.
 

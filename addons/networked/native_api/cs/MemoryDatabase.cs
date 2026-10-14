@@ -16,6 +16,10 @@ namespace Networked;
 /// </remarks>
 public sealed class MemoryDatabase : NetwDatabaseBackend
 {
+    public MemoryDatabase() : this(NetwApi.Construct("MemoryDatabase", true))
+    {
+    }
+
     public MemoryDatabase(IntPtr native) : base(native)
     {
     }

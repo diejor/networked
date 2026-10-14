@@ -89,7 +89,9 @@ Method Descriptions
 
 :ref:`NetwDatabaseConfig<class_NetwDatabaseConfig>` **backend**\ (\ backend\: :ref:`NetwDatabaseBackend<class_NetwDatabaseBackend>`\ ) :ref:`🔗<class_NetwDatabaseConfig_method_backend>`
 
-Sets the storage this database opens, and returns this config.
+.. container:: contribute
+
+	There is currently no description for this method. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

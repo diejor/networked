@@ -409,7 +409,7 @@ class Emission(unittest.TestCase):
         self.assertIn("MultiplayerViewport.dispose", self.emitter.skipped)
 
     def test_an_unowned_class_holds_no_reference(self):
-        self.assertIn("base(native, owned: false)", self.tree)
+        self.assertIn("class MultiplayerViewport : NetwNode", self.tree)
 
     def test_every_emitted_line_fits_the_column_limit(self):
         for text in (self.clock, self.facade, self.tree):
@@ -788,6 +788,66 @@ class Documentation(unittest.TestCase):
 
     def test_no_prose_emits_no_comment(self):
         self.assertEqual(csharp_docs.block("    ", ""), [])
+
+
+class ConstructionAndNames(unittest.TestCase):
+    def test_test_transport_methods_do_not_change_the_release_wrapper(self):
+        release = {
+            "name": "LocalMultiplayerPeer", "api_type": "extension",
+            "is_refcounted": True, "inherits": "MultiplayerPeer",
+            "methods": [{
+                "name": "create_server", "hash": 1,
+                "return_value": {"type": "enum::Error"},
+            }],
+        }
+        tested = {**release, "methods": [*release["methods"], {
+            "name": "transfer_server", "hash": 2,
+            "return_value": {"type": "enum::Error"},
+            "arguments": [{"name": "peer_id", "type": "int"}],
+        }]}
+        expected = csharp.Emitter(csharp.Surface(dump_of(release)))
+        actual = csharp.Emitter(csharp.Surface(dump_of(tested)))
+        self.assertEqual(expected.emit(release), actual.emit(tested))
+
+    def test_constructibility_comes_from_dump(self):
+        concrete = promise_class()
+        concrete["is_instantiable"] = True
+        abstract = clock_class()
+        abstract["is_instantiable"] = False
+        emitter = csharp.Emitter(csharp.Surface(dump_of(concrete, abstract)))
+        self.assertIn('public NetwPromise() : this(NetwApi.Construct(',
+                      emitter.emit(concrete))
+        self.assertNotIn('public NetwClock()', emitter.emit(abstract))
+
+    def test_named_call_keeps_peer_and_varargs(self):
+        method = {
+            "name": "rpc_id", "hash": 1, "is_static": True,
+            "is_vararg": True, "arguments": [
+                {"name": "peer_id", "type": "int"},
+                {"name": "callable", "type": "Callable"}],
+        }
+        facade = facade_class()
+        facade["methods"] = [method]
+        emitter = csharp.Emitter(csharp.Surface(dump_of(facade)))
+        text = emitter.emit(facade)
+        self.assertIn('longpeerId,Nodenode,StringNamename',
+                      ''.join(text.split()))
+        self.assertIn('new Callable(node, name)', text)
+        self.assertIn('params Variant[]', text)
+        self.assertIn('if (callable.Delegate != null)', text)
+
+    def test_enum_event_marshals_integer_and_casts(self):
+        entry = promise_class()
+        entry["enums"] = [{"name": "Stage", "values": [
+            {"name": "STAGE_LIVE", "value": 1}]}]
+        entry["signals"] = [{"name": "stage_changed", "arguments": [
+            {"name": "previous", "type": "enum::NetwPromise.Stage"},
+            {"name": "current", "type": "enum::NetwPromise.Stage"}]}]
+        emitter = csharp.Emitter(csharp.Surface(dump_of(entry)))
+        text = emitter.emit(entry)
+        self.assertIn('Action<NetwPromise.Stage, NetwPromise.Stage>', text)
+        self.assertIn('(long a0, long a1)', text)
+        self.assertIn('value((NetwPromise.Stage)a0, (NetwPromise.Stage)a1)', text)
 
 
 if __name__ == "__main__":

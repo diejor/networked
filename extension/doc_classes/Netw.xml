@@ -12,20 +12,8 @@
 			<return type="NetwAction" />
 			<param index="0" name="authority" type="Callable" />
 			<description>
-				A [NetwAction] for an action such as firing or placing something, bound to [param authority] the server runs to judge it. Call it on every peer, the server included.
-				Repeated calls return the same [NetwAction]. The first one turns on lag compensation, so [method configure_lagcomp] is needed only to change its defaults.
-				[codeblock]
-				@onready var place_bomb := Netw.action(_place_bomb)
-
-				func _ready() -&gt; void:
-				    place_bomb.predict = _show_bomb_now
-
-				func _place_bomb(ctx: NetwActionContext) -&gt; void:
-				    var bomb := BOMB.instantiate()
-				    ctx.bind(bomb)
-				    bombs.add_child(bomb)
-				[/codeblock]
-				The server judges an action before other peers see it. To let a client spawn, move and despawn a node first and have the server confirm it later, see [member NetwEntity.lifecycle].
+				Creates a [NetwAction] whose server callback is [param authority]. Call it on every peer, including the server. Repeated calls return the same object.
+				See [NetwAction] for requests and prediction.
 			</description>
 		</method>
 		<method name="change_scene_to_file" qualifiers="static">
@@ -137,13 +125,8 @@
 			<return type="NetwEntity" />
 			<param index="0" name="node" type="Node" />
 			<description>
-				Returns the [NetwEntity] that represents [param node] in the [member Node.multiplayer] session.
-				[codeblock]
-				func _init() -&gt; void:
-				    var entity := Netw.configure_entity(self)
-				    # the node now behaves like `Node.set_multiplayer_authority(peer_id)`
-				    entity.initial_controller = NetwEntity.INITIAL_REPRESENTED_PEER
-				[/codeblock]
+				Declares [param node] as a root before it enters the tree.
+				[method NetwEntity.of] finds an existing [NetwEntity].
 			</description>
 		</method>
 		<method name="configure_join" qualifiers="static">
@@ -172,7 +155,7 @@
 				func _init() -&gt; void:
 				    Netw.configure_lagcomp(self).input_gate_deadline(16)
 				[/codeblock]
-				[param preset] works as in [method configure_clock].
+				[param preset] works as in [method configure_clock]. See [NetwLagCompensationConfig] for when the settings take effect.
 			</description>
 		</method>
 		<method name="configure_persistence" qualifiers="static">
@@ -196,17 +179,10 @@
 			<param index="0" name="node" type="Node" />
 			<param index="1" name="property" type="StringName" />
 			<param index="2" name="warn_late" type="bool" default="true" />
+			<param index="3" name="declared_type" type="int" default="-1" />
 			<description>
-				Declares how [param property] is synchronized.
-				[codeblock]
-				func _init() -&gt; void:
-				    Netw.configure_property(self, &amp;"fuel")
-
-				func refuel() -&gt; void:
-				    fuel = 100.0
-				    Netw.sync_property(self, &amp;"fuel")
-				[/codeblock]
-				See [NetwPropertyConfig] for the options.
+				Declares how [param property] is synchronized. See [NetwPropertyConfig] for the settings.
+				For a property supplied by [method Object._get], provide its type through [method Object._get_property_list] or [param declared_type]. [code]-1[/code] reads the declared type automatically.
 			</description>
 		</method>
 		<method name="configure_rpc" qualifiers="static">
@@ -214,6 +190,7 @@
 			<param index="0" name="callable" type="Callable" />
 			<description>
 				Declares who may call [param callable] and how it is sent. A setting made here outranks [annotation @GDScript.@rpc], and a setting left out falls back to it. See [NetwMemberConfig].
+				[param callable] must name a script method. Anonymous callbacks are refused.
 				[codeblock]
 				func _init() -&gt; void:
 				    Netw.configure_rpc(self.aim).controller().quantize(
@@ -262,7 +239,7 @@
 			<return type="NetwSchema" />
 			<param index="0" name="name" type="StringName" />
 			<description>
-				Declares a schema for a table of records.
+				Declares the properties and types of a [NetwTable].
 				[codeblock]
 				class Mobs:
 				    static var schema := Netw.configure_schema(&amp;"Mob")
@@ -295,14 +272,6 @@
 			<param index="0" name="node" type="Node" />
 			<param index="1" name="preset" type="NetwSessionConfig" default="null" />
 			<description>
-				Configures the [member Node.multiplayer] session with settings [SceneMultiplayer] does not have.
-				[codeblock]
-				func _init() -&gt; void:
-				    Netw.configure_session(self) \
-				            .app(&amp;"bomber-v2") \
-				            .role(NetwSession.ROLE_LISTEN_SERVER)
-				[/codeblock]
-				See [NetwSessionConfig] for the settings.
 			</description>
 		</method>
 		<method name="configure_signal" qualifiers="static">

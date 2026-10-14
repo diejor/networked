@@ -23,6 +23,11 @@ namespace Networked;
 /// </remarks>
 public sealed class LocalMultiplayerPeer : NetwRefCounted
 {
+    public LocalMultiplayerPeer(
+        ) : this(NetwApi.Construct("LocalMultiplayerPeer", true))
+    {
+    }
+
     public LocalMultiplayerPeer(IntPtr native) : base(native)
     {
     }

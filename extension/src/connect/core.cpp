@@ -1079,9 +1079,8 @@ void ConnectCore::on_poll(double p_delta) {
     }
     running_steps = true;
     while (!starts.is_empty()) {
-        String pending;
         const Error settled = session != nullptr
-            ? session->config_readiness(pending)
+            ? session->apply_pending_config(false, "the connection")
             : Error(OK);
         if (settled == ERR_BUSY) {
             break;
@@ -1093,7 +1092,8 @@ void ConnectCore::on_poll(double p_delta) {
                 opening,
                 Ref<MultiplayerPeer>(),
                 settled,
-                "this session has no single configuration to bring up with."
+                "the Netw.configure_* settings of this session could not be "
+                "applied."
             );
             continue;
         }

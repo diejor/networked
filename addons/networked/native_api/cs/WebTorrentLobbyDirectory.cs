@@ -20,6 +20,11 @@ namespace Networked;
 /// </remarks>
 public sealed class WebTorrentLobbyDirectory : LobbyDirectory
 {
+    public WebTorrentLobbyDirectory(
+        ) : this(NetwApi.Construct("WebTorrentLobbyDirectory", false))
+    {
+    }
+
     public WebTorrentLobbyDirectory(IntPtr native) : base(native)
     {
     }

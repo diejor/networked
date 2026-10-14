@@ -1,6 +1,7 @@
 #include "netw/repl/property_set.hpp"
 
 #include "netw/api/schema_core.hpp"
+#include "netw/script/model.hpp"
 
 using namespace godot;
 
@@ -20,33 +21,6 @@ struct PropertyTypeLists {
     bool live_fetched = false;
 };
 
-int64_t declared_variant_type(
-    const Array &p_declared,
-    const StringName &p_property
-) {
-    for (int at = 0; at < p_declared.size(); at++) {
-        const Dictionary entry = p_declared[at];
-        const int64_t usage = entry.get("usage", 0);
-        if (!(usage & PROPERTY_USAGE_SCRIPT_VARIABLE)) {
-            continue;
-        }
-        if (StringName(entry.get("name", StringName())) == p_property) {
-            return entry.get("type", int64_t(Variant::NIL));
-        }
-    }
-    return Variant::NIL;
-}
-
-int64_t live_variant_type(const Array &p_live, const StringName &p_property) {
-    for (int at = 0; at < p_live.size(); at++) {
-        const Dictionary entry = p_live[at];
-        if (StringName(entry.get("name", StringName())) == p_property) {
-            return entry.get("type", int64_t(Variant::NIL));
-        }
-    }
-    return Variant::NIL;
-}
-
 PropertyTypeLists lists_for(const Ref<Script> &p_script) {
     PropertyTypeLists lists;
     if (p_script.is_valid()) {
@@ -60,15 +34,20 @@ int64_t column_type_in(
     Node *p_node,
     const StringName &p_property
 ) {
-    int64_t variant_type = declared_variant_type(p_lists.declared, p_property);
-    if (variant_type == Variant::NIL && p_node != nullptr) {
+    gd::PropertyResolution resolved
+        = gd::listed_property(p_lists.declared, p_property);
+    if (p_node != nullptr) {
         if (!p_lists.live_fetched) {
             p_lists.live = gd::property_list(p_node);
             p_lists.live_fetched = true;
         }
-        variant_type = live_variant_type(p_lists.live, p_property);
+        resolved = script::model::resolve_property(
+            p_node, p_property, p_lists.live
+        );
     }
-    return SchemaCore::type_from_variant(int(variant_type));
+    return resolved.type >= 0
+        ? SchemaCore::type_from_variant(resolved.type)
+        : SchemaCore::VARIANT;
 }
 
 } // namespace

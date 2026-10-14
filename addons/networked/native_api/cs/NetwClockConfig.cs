@@ -552,9 +552,6 @@ public sealed class NetwClockConfig : NetwRefCounted
     private static readonly IntPtr _bindTicksPerSecond =
         NetwApi.MethodBind("NetwClockConfig", "ticks_per_second", 432295446UL);
 
-    /// <summary>
-    /// Sets <see cref="NetwClockConfig.Tickrate"/> and returns this config.
-    /// </summary>
     public NetwClockConfig TicksPerSecond(long tickrate)
     {
         long slot0 = tickrate;
@@ -573,10 +570,6 @@ public sealed class NetwClockConfig : NetwRefCounted
             "display_offset_ticks",
             432295446UL);
 
-    /// <summary>
-    /// Sets <see cref="NetwClockConfig.DisplayOffset"/> and returns this
-    /// config.
-    /// </summary>
     public NetwClockConfig DisplayOffsetTicks(long displayOffset)
     {
         long slot0 = displayOffset;
@@ -595,10 +588,6 @@ public sealed class NetwClockConfig : NetwRefCounted
             "physics_interpolation",
             1852668278UL);
 
-    /// <summary>
-    /// Sets <see cref="NetwClockConfig.UsePhysicsInterpolation"/> and returns
-    /// this config.
-    /// </summary>
     public NetwClockConfig PhysicsInterpolation(bool usePhysicsInterpolation)
     {
         byte slot0 = usePhysicsInterpolation ? (byte)1 : (byte)0;
@@ -614,9 +603,6 @@ public sealed class NetwClockConfig : NetwRefCounted
     private static readonly IntPtr _bindSync =
         NetwApi.MethodBind("NetwClockConfig", "sync", 216226165UL);
 
-    /// <summary>
-    /// Sets <see cref="NetwClockConfig.SyncMode"/> and returns this config.
-    /// </summary>
     public NetwClockConfig Sync(NetwClock.SyncModeEnum syncMode)
     {
         long slot0 = (long)syncMode;

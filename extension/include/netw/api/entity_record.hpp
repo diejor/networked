@@ -59,9 +59,10 @@ private:
     display::Decl *display_decl = nullptr;
     godot::StringName scene_label;
     int64_t scene_isolation = -1;
-    godot::LocalVector<godot::NodePath> server_paths;
     int64_t projected_follower = 0;
+    int64_t projected_steerer = 0;
     bool native_write_warned = false;
+    bool synchronizer_warned = false;
 
     struct Projection {
         int64_t follower = SERVER_PEER;
@@ -69,11 +70,9 @@ private:
     };
 
     Projection projection_to(int64_t p_follower) const;
-    bool pinned_to_server(godot::Node *p_owner, godot::Node *p_node) const;
     void project_node(
         godot::Node *p_owner,
         godot::Node *p_node,
-        bool p_pinned,
         const Projection &p_projection,
         uint64_t p_watch
     );
@@ -159,7 +158,12 @@ public:
 
     void deactivate(godot::Node *p_owner);
 
-    bool mark_template(godot::Node *p_owner);
+    bool mark_template(
+        godot::Node *p_owner,
+        godot::Object *p_wrapper = nullptr
+    );
+
+    bool publish_stage(godot::Object *p_wrapper, int64_t p_from);
 
     void apply_control(
         godot::Object *p_wrapper,
@@ -173,9 +177,10 @@ public:
         uint64_t p_watch
     );
 
-    void follow_server(const godot::NodePath &p_path);
-    const godot::LocalVector<godot::NodePath> &get_server_paths() const {
-        return server_paths;
+    bool claim_synchronizer_warning() {
+        const bool first = !synchronizer_warned;
+        synchronizer_warned = true;
+        return first;
     }
     bool projects_to_server() const {
         return projected_follower == SERVER_PEER;
@@ -210,7 +215,10 @@ public:
     bool complete_departure(godot::Object *p_wrapper);
     void readmit();
 
-    bool classify_activation(godot::Node *p_owner);
+    bool classify_activation(
+        godot::Node *p_owner,
+        godot::Object *p_wrapper = nullptr
+    );
 
     static bool declares_template(godot::Node *p_owner);
     static godot::StringName template_meta();
@@ -250,7 +258,7 @@ public:
     int64_t held_bytes() const {
         return int64_t(sizeof(NetwEntityRecord)) + held::vector(held_bindings)
             + held::vector(parts) + comp_table.held_bytes()
-            + held::vector(comp_registered) + held::vector(server_paths)
+            + held::vector(comp_registered)
             + (interest_facet != nullptr ? int64_t(sizeof(interest::Facet)) : 0)
             + (display_decl != nullptr ? int64_t(sizeof(display::Decl)) : 0);
     }

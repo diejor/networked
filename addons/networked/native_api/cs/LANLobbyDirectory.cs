@@ -18,6 +18,11 @@ namespace Networked;
 /// </remarks>
 public sealed class LANLobbyDirectory : LobbyDirectory
 {
+    public LANLobbyDirectory(
+        ) : this(NetwApi.Construct("LANLobbyDirectory", false))
+    {
+    }
+
     public LANLobbyDirectory(IntPtr native) : base(native)
     {
     }

@@ -29,6 +29,11 @@ namespace Networked;
 /// </remarks>
 public sealed class NetwQuantizeScalar : NetwQuantize
 {
+    public NetwQuantizeScalar(
+        ) : this(NetwApi.Construct("NetwQuantizeScalar", true))
+    {
+    }
+
     public NetwQuantizeScalar(IntPtr native) : base(native)
     {
     }

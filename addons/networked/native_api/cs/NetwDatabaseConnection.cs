@@ -30,6 +30,11 @@ namespace Networked;
 /// </remarks>
 public sealed class NetwDatabaseConnection : NetwRefCounted
 {
+    public NetwDatabaseConnection(
+        ) : this(NetwApi.Construct("NetwDatabaseConnection", true))
+    {
+    }
+
     public NetwDatabaseConnection(IntPtr native) : base(native)
     {
     }

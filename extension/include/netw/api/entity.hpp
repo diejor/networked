@@ -39,11 +39,6 @@ class NetwEntity : public godot::RefCounted {
     GDCLASS(NetwEntity, godot::RefCounted)
 
 public:
-    enum Ownership {
-        OWNERSHIP_PEER = 0,
-        OWNERSHIP_SERVER = 1,
-    };
-
     enum ControlKind {
         CONTROL_PEER_CONTROLLED = 0,
         CONTROL_SERVER_CONTROLLED = 1,
@@ -51,8 +46,12 @@ public:
 
     enum InitialController {
         INITIAL_SERVER = int(entity::Control::InitialController::SERVER),
-        INITIAL_REPRESENTED_PEER
-        = int(entity::Control::InitialController::REPRESENTED_PEER),
+        INITIAL_PLAYER = int(entity::Control::InitialController::PLAYER),
+    };
+
+    enum Authority {
+        AUTHORITY_SERVER = int(entity::Control::Authority::SERVER),
+        AUTHORITY_CONTROLLER = int(entity::Control::Authority::CONTROLLER),
     };
 
     enum Transfer {
@@ -62,14 +61,16 @@ public:
     };
 
     enum DisconnectRule {
-        DISCONNECT_REVERT_TO_SERVER
-        = int(entity::Control::DisconnectRule::REVERT_TO_SERVER),
+        DISCONNECT_REVERT_TO_SERVER = int(
+            entity::Control::DisconnectRule::REVERT_TO_SERVER
+        ),
         DISCONNECT_DESPAWN = int(entity::Control::DisconnectRule::DESPAWN),
     };
 
     enum ParentDespawnRule {
-        PARENT_DESPAWN_CASCADE
-        = int(entity::Control::ParentDespawnRule::CASCADE),
+        PARENT_DESPAWN_CASCADE = int(
+            entity::Control::ParentDespawnRule::CASCADE
+        ),
         PARENT_DESPAWN_DETACH = int(entity::Control::ParentDespawnRule::DETACH),
     };
 
@@ -258,6 +259,8 @@ public:
     void set_initial_controller(InitialController p_value);
     Transfer get_transfer() const;
     void set_transfer(Transfer p_value);
+    Authority get_authority() const;
+    void set_authority(Authority p_value);
     DisconnectRule get_on_controller_disconnect() const;
     void set_on_controller_disconnect(DisconnectRule p_value);
     ParentDespawnRule get_on_parent_despawn() const;
@@ -313,21 +316,18 @@ public:
         action_requester = p_peer;
     }
 
-    godot::Ref<NetwPromise> claim_authority(
+    godot::Ref<NetwPromise> claim_control(
         Hold p_hold = entity::Control::HOLD_EXCLUSIVE
     );
     godot::Ref<NetwPromise> claim_by_contact(
         const godot::Ref<NetwEntity> &p_source
     );
-    godot::Ref<NetwPromise> release_authority(
-        int64_t p_successor = SERVER_PEER
-    );
+    godot::Ref<NetwPromise> release_control(int64_t p_successor = SERVER_PEER);
     godot::Error transfer_control(int64_t p_peer);
     godot::Error transfer_steering(int64_t p_steering);
     bool is_controller_here() const;
     bool is_claim_pending() const;
     bool is_claim_running_ahead() const;
-    void follow_server(const godot::NodePath &p_path);
     void apply_control();
     Hold get_hold() const;
     bool get_is_control_pending() const;
@@ -345,7 +345,6 @@ public:
 
     bool is_on_server() const;
     godot::Ref<NetwPlayer> get_player() const;
-    Ownership get_ownership() const;
     bool get_is_player() const;
 
     bool get_is_template() const;
@@ -353,15 +352,10 @@ public:
     Stage get_stage() const;
     godot::Ref<NetwDespawnOpts> get_active_despawn_opts() const;
 
-    void note_stage(int64_t p_from);
+    bool publish_stage(int64_t p_from, int64_t p_to);
 
     void arm(const godot::Ref<NetwMultiplayer> &p_api);
 
-    godot::Node *spawn_under(
-        godot::Node *p_parent,
-        const godot::StringName &p_id,
-        const godot::Callable &p_configure = godot::Callable()
-    );
     void despawn(const godot::Ref<NetwDespawnOpts> &p_opts);
 
     void register_component(godot::Node *p_component);
@@ -452,11 +446,11 @@ public:
 
 } // namespace netw
 
-VARIANT_ENUM_CAST(netw::NetwEntity::Ownership);
 VARIANT_ENUM_CAST(netw::NetwEntity::ControlKind);
 VARIANT_ENUM_CAST(netw::NetwEntity::Hold);
 VARIANT_ENUM_CAST(netw::NetwEntity::InitialController);
 VARIANT_ENUM_CAST(netw::NetwEntity::Transfer);
+VARIANT_ENUM_CAST(netw::NetwEntity::Authority);
 VARIANT_ENUM_CAST(netw::NetwEntity::DisconnectRule);
 VARIANT_ENUM_CAST(netw::NetwEntity::ParentDespawnRule);
 VARIANT_ENUM_CAST(netw::NetwEntity::Lifecycle);

@@ -6,10 +6,12 @@
 #include "netw/api/database.hpp"
 #include "netw/api/entity.hpp"
 #include "netw/api/netw_multiplayer.hpp"
+#include "netw/api/nodes/multiplayer_viewport.hpp"
 #include "netw/api/persistence.hpp"
 #include "netw/api/persistence_config.hpp"
 #include "netw/api/property_config.hpp"
 #include "netw/api/schema_model.hpp"
+#include "netw/persist/envelope.hpp"
 #include "netw/persist/memory_store.hpp"
 #include "netw/schema_model.hpp"
 #include "netw/script/model.hpp"
@@ -191,6 +193,110 @@ TEST_CASE(
         CHECK(session->persist_load(foreign)->get_is_failed());
         CHECK_FALSE(session->persist_is_dirty(foreign));
     }
+}
+
+Dictionary keep_properties(const Dictionary &p_values) {
+    return p_values;
+}
+
+TEST_CASE(
+    "[Networked][Persistence][Hosted][SceneTree] PX4 a persistence schema "
+    "reads saved properties by their saved names and survives its root"
+) {
+    schema_model::clear();
+    netw::persist::forget_stores();
+    Ref<NetwMultiplayer> session;
+    session.instantiate();
+    netw::MultiplayerViewport *viewport = memnew(netw::MultiplayerViewport);
+    viewport->set_api(session);
+    netw::gd::scene_root()->add_child(viewport);
+
+    const RID database = session->get_databases()->create("saves");
+    const Ref<MemoryConnection> connection
+        = MemoryConnection::opened("px4", "slot1");
+    session->get_databases()
+        ->open(database, "slot1", NetwPromise::resolved(connection));
+
+    Node2D *root = memnew(Node2D);
+    const Ref<NetwEntity> entity = netw::Netw::configure_entity(root);
+    entity->set_name("hero");
+    netw::Netw::configure_persistence(root)
+        ->database(StringName("saves"))
+        ->table(StringName("players"))
+        ->record_id(Callable(entity.ptr(), "get_name"))
+        ->load_on_spawn(false)
+        ->storage_version(2)
+        ->migrate(1, callable_mp_static(&keep_properties));
+    model::configure_node_property(root, "position")
+        ->persisted(StringName("where"));
+    const Ref<NetwPersistence> persistence = entity->get_persistence();
+    CHECK_FALSE(persistence->get_schema().is_valid());
+    viewport->add_child(root);
+
+    const Ref<NetwSchema> schema = persistence->get_schema();
+    REQUIRE(schema.is_valid());
+    CHECK(schema == persistence->get_schema());
+    CHECK_FALSE(schema->is_replicated());
+    CHECK(bool(schema->get_schema_name() == StringName("players")));
+    NETW_CHECK_EQ(schema->get_storage_version(), 2);
+    CHECK(schema->get_migrations().has(1));
+    ERR_PRINT_OFF;
+    schema->storage_version(99);
+    NETW_CHECK_EQ(schema->vector2("unexpected", Ref<NetwQuantize>(), 1), -1);
+    ERR_PRINT_ON;
+    NETW_CHECK_EQ(schema->get_storage_version(), 2);
+    const Ref<NetwDatabase> storage = session->database_handle(database);
+    Dictionary values;
+    values["where"] = Vector2(3, 4);
+    const Ref<NetwPromise> saved = storage->write(schema, "hero", values);
+    REQUIRE(saved->get_is_completed());
+    const Dictionary read = storage->read(schema, "hero")->get_result();
+    CHECK(bool(read.get("found", false)));
+    const Dictionary stored = read.get("values", Dictionary());
+    CHECK(bool(Vector2(stored.get("where", Vector2())) == Vector2(3, 4)));
+    CHECK_FALSE(stored.has("position"));
+
+    model::clear_node_overlay(root);
+    memdelete(root);
+    CHECK_FALSE(persistence->get_schema().is_valid());
+    const Dictionary after = storage->read(schema, "hero")->get_result();
+    CHECK(bool(after.get("found", false)));
+
+    memdelete(viewport);
+    const netw::SchemaRecord *record
+        = session->get_schema_core()->record_of(
+            session->schema_find("players")
+        );
+    REQUIRE(record != nullptr);
+    netw::persist::store_named("px4").replace(
+        "slot1",
+        netw::persist::address_text(netw::persist::address_of(
+            netw::persist::Kind::RECORD,
+            "players",
+            "hero"
+        )),
+        netw::persist::seal_record(*record, 1, values)
+    );
+    Ref<NetwMultiplayer> reader;
+    reader.instantiate();
+    const RID reader_database = reader->get_databases()->create("saves");
+    reader->get_databases()->open(
+        reader_database,
+        "slot1",
+        NetwPromise::resolved(MemoryConnection::opened("px4", "slot1"))
+    );
+    const Ref<NetwPromise> migrated
+        = reader->database_handle(reader_database)->read(schema, "hero");
+    REQUIRE(migrated->get_is_completed());
+    const Dictionary migrated_record = migrated->get_result();
+    CHECK(bool(migrated_record.get("found", false)));
+    const Dictionary migrated_values
+        = migrated_record.get("values", Dictionary());
+    CHECK(bool(
+        Vector2(migrated_values.get("where", Vector2())) == Vector2(3, 4)
+    ));
+    schema_model::clear();
+    netw::persist::forget_stores();
 }
 
 } // namespace TestPersistenceFlatRelay

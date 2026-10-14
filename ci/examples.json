@@ -23,6 +23,21 @@
       "slug": "rocket-league",
       "title": "godot-rocket-league",
       "scene": "uid://c7rlmainscene"
+    },
+    {
+      "slug": "fps",
+      "title": "starter kit fps",
+      "scene": "uid://c4k6fpsmainsc"
+    },
+    {
+      "slug": "playground",
+      "title": "cube playground",
+      "scene": "uid://dcmcr3bgck0ba"
+    },
+    {
+      "slug": "whiteboard",
+      "title": "whiteboard",
+      "scene": "uid://cvvttju40xx1r"
     }
   ]
 }

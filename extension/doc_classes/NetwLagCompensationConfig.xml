@@ -4,14 +4,14 @@
 		How long the server waits for a late player action, and how far ahead of itself it will take one.
 	</brief_description>
 	<description>
-		Returned by [method Netw.configure_lagcomp]. Both values are optional.
+		Lag compensation starts automatically for [NetwPrediction] and [NetwAction].
+		Once applied, settings cannot change.
 		[codeblock]
 		func _init() -&gt; void:
 		    Netw.configure_lagcomp(self) \
-		            .input_gate_deadline(16) \
-		            .max_future_action(4)
+		        .input_gate_deadline(16) \
+		        .max_future_action(4)
 		[/codeblock]
-		Lag compensation turns on by itself when a predicted entity or a [NetwAction] needs it. Use this only to change the defaults. Values are applied once, and later changes push a warning and do nothing.
 	</description>
 	<tutorials>
 	</tutorials>
@@ -20,14 +20,12 @@
 			<return type="NetwLagCompensationConfig" />
 			<param index="0" name="ticks" type="int" />
 			<description>
-				Sets [member input_gate_deadline_ticks] and returns this config.
 			</description>
 		</method>
 		<method name="max_future_action">
 			<return type="NetwLagCompensationConfig" />
 			<param index="0" name="ticks" type="int" />
 			<description>
-				Sets [member max_future_action_ticks] and returns this config.
 			</description>
 		</method>
 	</methods>

@@ -444,9 +444,9 @@ bool Book::report_unresolved(
     }
     NETW_WARN(
         sys::SESSION,
-        "Netw.%s was called by %s, which left the tree before its settings "
-        "were applied, so %s was refused. Keep that node in the tree until "
-        "the end of its first frame.",
+        "Netw.%s was called by %s, which left the tree before the session "
+        "applied its settings, so %s was refused. Keep that node in the tree "
+        "until the session starts.",
         verb,
         joined(scopes),
         p_action

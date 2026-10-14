@@ -10,18 +10,14 @@ namespace Networked;
 /// itself it will take one.
 /// </summary>
 /// <remarks>
-/// Returned by <see cref="Netw.ConfigureLagcomp"/>. Both values are optional.
+/// Lag compensation starts automatically for <see cref="NetwPrediction"/> and
+/// <see cref="NetwAction"/>. Once applied, settings cannot change.
 /// <code>
 /// func _init() -&gt; void:
 ///     Netw.configure_lagcomp(self) \
-///             .input_gate_deadline(16) \
-///             .max_future_action(4)
+///         .input_gate_deadline(16) \
+///         .max_future_action(4)
 /// </code>
-/// <para>
-/// Lag compensation turns on by itself when a predicted entity or a
-/// <see cref="NetwAction"/> needs it. Use this only to change the defaults.
-/// Values are applied once, and later changes push a warning and do nothing.
-/// </para>
 /// </remarks>
 public sealed class NetwLagCompensationConfig : NetwRefCounted
 {
@@ -126,10 +122,6 @@ public sealed class NetwLagCompensationConfig : NetwRefCounted
             "max_future_action",
             2720812601UL);
 
-    /// <summary>
-    /// Sets <see cref="NetwLagCompensationConfig.MaxFutureActionTicks"/> and
-    /// returns this config.
-    /// </summary>
     public NetwLagCompensationConfig MaxFutureAction(long ticks)
     {
         long slot0 = ticks;
@@ -148,10 +140,6 @@ public sealed class NetwLagCompensationConfig : NetwRefCounted
             "input_gate_deadline",
             2720812601UL);
 
-    /// <summary>
-    /// Sets <see cref="NetwLagCompensationConfig.InputGateDeadlineTicks"/> and
-    /// returns this config.
-    /// </summary>
     public NetwLagCompensationConfig InputGateDeadline(long ticks)
     {
         long slot0 = ticks;

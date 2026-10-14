@@ -78,6 +78,7 @@ Node *build_cube(
     made->set_name(String(p_name));
     const Ref<NetwEntity> entity = NetwEntity::ensure(made);
     entity->set_lifecycle(NetwEntity::LIFECYCLE_CONTROLLER);
+    entity->set_authority(NetwEntity::AUTHORITY_CONTROLLER);
     entity->set_transfer(NetwEntity::Transfer(int(p_transfer)));
     return made;
 }
@@ -626,7 +627,7 @@ TEST_CASE(
 
     Node *held = stage.cube_on(0);
     held->reparent(stage.named_on(0, "Shelf"));
-    const Ref<NetwPromise> released = NetwEntity::of(held)->release_authority();
+    const Ref<NetwPromise> released = NetwEntity::of(held)->release_control();
     stage.write_ticks(SETTLE_TICKS);
 
     CHECK(released->get_is_settled());
@@ -658,7 +659,7 @@ TEST_CASE(
     REQUIRE(stage.cube_on(1) != nullptr);
     stage.write_ticks(6);
     const Ref<NetwPromise> released
-        = NetwEntity::of(stage.cube_on(0))->release_authority();
+        = NetwEntity::of(stage.cube_on(0))->release_control();
     stage.write_ticks(6);
     REQUIRE(released->get_is_settled());
     NETW_REQUIRE_EQ(
@@ -669,7 +670,7 @@ TEST_CASE(
     Node *held = stage.cube_on(1);
     const Ref<NetwEntity> claimant = NetwEntity::of(held);
     stage.rig.hold(1);
-    const Ref<NetwPromise> claimed = claimant->claim_authority();
+    const Ref<NetwPromise> claimed = claimant->claim_control();
     stage.rig.pump(4);
     REQUIRE(claimant->is_claim_pending());
     held->reparent(stage.named_on(1, "Shelf"));
@@ -713,7 +714,7 @@ TEST_CASE(
                 StringName("control_requested"),
                 callable_mp_static(&deny_control)
             );
-        const Ref<NetwPromise> claimed = claimant->claim_authority();
+        const Ref<NetwPromise> claimed = claimant->claim_control();
         REQUIRE(claimant->is_claim_pending());
         const Ref<NetwPromise> moved
             = stage.moves_on(1, stage.named_on(1, "Shelf"));
@@ -737,7 +738,7 @@ TEST_CASE(
     }
 
     SUBCASE("granted") {
-        const Ref<NetwPromise> claimed = claimant->claim_authority();
+        const Ref<NetwPromise> claimed = claimant->claim_control();
         REQUIRE(claimant->is_claim_pending());
         const Ref<NetwPromise> moved
             = stage.moves_on(1, stage.named_on(1, "Shelf"));

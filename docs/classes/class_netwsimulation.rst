@@ -57,11 +57,13 @@ An entity is simulated once it sets or calls anything here, declares :ref:`NetwP
 
 \ **Modes**\ 
 
-The peer with authority over the entity runs it as :ref:`MODE_AUTHORITY<class_NetwSimulation_constant_MODE_AUTHORITY>`, and a client predicting it runs it as :ref:`MODE_PREDICT<class_NetwSimulation_constant_MODE_PREDICT>`. Every other copy is a frozen :ref:`MODE_PROXY<class_NetwSimulation_constant_MODE_PROXY>`, unless :ref:`replicas<class_NetwSimulation_property_replicas>` or a selection makes it :ref:`MODE_ACTIVE<class_NetwSimulation_constant_MODE_ACTIVE>`.
+The peer writing replicated state runs :ref:`MODE_AUTHORITY<class_NetwSimulation_constant_MODE_AUTHORITY>`. A predicting client runs :ref:`MODE_PREDICT<class_NetwSimulation_constant_MODE_PREDICT>`. Every other copy is a frozen :ref:`MODE_PROXY<class_NetwSimulation_constant_MODE_PROXY>`, unless :ref:`replicas<class_NetwSimulation_property_replicas>` or a selection makes it :ref:`MODE_ACTIVE<class_NetwSimulation_constant_MODE_ACTIVE>`.
 
 \ **Selection**\ 
 
-While this entity runs here as :ref:`MODE_AUTHORITY<class_NetwSimulation_constant_MODE_AUTHORITY>` or :ref:`MODE_PREDICT<class_NetwSimulation_constant_MODE_PREDICT>`, it can pick other entities to run here as :ref:`MODE_ACTIVE<class_NetwSimulation_constant_MODE_ACTIVE>`. A predicted entity that declares no selection picks every simulated entity this peer holds in its :ref:`NetwInterestLayer<class_NetwInterestLayer>` layers. :ref:`simulate()<class_NetwSimulation_method_simulate>` names one more, :ref:`simulate_all()<class_NetwSimulation_method_simulate_all>` narrows the automatic policy to one layer, and :ref:`simulate_none()<class_NetwSimulation_method_simulate_none>` drops it.
+While this entity runs here as :ref:`MODE_AUTHORITY<class_NetwSimulation_constant_MODE_AUTHORITY>` or :ref:`MODE_PREDICT<class_NetwSimulation_constant_MODE_PREDICT>`, it can pick other entities to run here as :ref:`MODE_ACTIVE<class_NetwSimulation_constant_MODE_ACTIVE>`. A predicted entity that declares no selection picks every simulated entity this peer holds in its :ref:`NetwInterestLayer<class_NetwInterestLayer>` layers.
+
+\ :ref:`simulate()<class_NetwSimulation_method_simulate>` names one more, :ref:`simulate_all()<class_NetwSimulation_method_simulate_all>` limits automatic selection to one layer, and :ref:`simulate_none()<class_NetwSimulation_method_simulate_none>` drops it.
 
 ::
 
@@ -220,7 +222,7 @@ The physics server moves the bodies in each frame that brings a tick, and the st
 
 :ref:`Schedule<enum_NetwSimulation_Schedule>` **SCHEDULE_STEPPED** = ``2``
 
-A :ref:`NetwPhysicsStepper<class_NetwPhysicsStepper>` installed with :ref:`NetwMultiplayer.predict_stepper_install()<class_NetwMultiplayer_method_predict_stepper_install>` steps the space once per tick. An entity that does not declare prediction, or that stands in a space with no stepper, runs :ref:`SCHEDULE_FRAME<class_NetwSimulation_constant_SCHEDULE_FRAME>` and reports one error.
+Needs a Godot build with ``PhysicsServer3D.space_step``, or a :ref:`NetwPhysicsStepper<class_NetwPhysicsStepper>` installed with :ref:`NetwSession.install_physics_stepper()<class_NetwSession_method_install_physics_stepper>`. Otherwise it runs as :ref:`SCHEDULE_FRAME<class_NetwSimulation_constant_SCHEDULE_FRAME>`, and so does an entity that does not declare prediction. Each fallback is reported once.
 
 .. _class_NetwSimulation_constant_SCHEDULE_AUTO:
 
@@ -228,7 +230,7 @@ A :ref:`NetwPhysicsStepper<class_NetwPhysicsStepper>` installed with :ref:`NetwM
 
 :ref:`Schedule<enum_NetwSimulation_Schedule>` **SCHEDULE_AUTO** = ``3``
 
-:ref:`SCHEDULE_FRAME<class_NetwSimulation_constant_SCHEDULE_FRAME>` when the entity has a physics body, and :ref:`SCHEDULE_TICK<class_NetwSimulation_constant_SCHEDULE_TICK>` otherwise.
+:ref:`SCHEDULE_STEPPED<class_NetwSimulation_constant_SCHEDULE_STEPPED>` when the entity has a physics body this Godot build can step and restore, :ref:`SCHEDULE_FRAME<class_NetwSimulation_constant_SCHEDULE_FRAME>` for any other physics body, and :ref:`SCHEDULE_TICK<class_NetwSimulation_constant_SCHEDULE_TICK>` otherwise.
 
 .. rst-class:: classref-item-separator
 
@@ -246,7 +248,7 @@ enum **Replicas**: :ref:`🔗<enum_NetwSimulation_Replicas>`
 
 :ref:`Replicas<enum_NetwSimulation_Replicas>` **REPLICAS_PROXY** = ``0``
 
-Copies this peer has no authority over are :ref:`MODE_PROXY<class_NetwSimulation_constant_MODE_PROXY>`, unless a selection makes them active.
+Copies whose state comes from another peer are :ref:`MODE_PROXY<class_NetwSimulation_constant_MODE_PROXY>`, unless a selection makes them active.
 
 .. _class_NetwSimulation_constant_REPLICAS_ACTIVE:
 
@@ -254,7 +256,7 @@ Copies this peer has no authority over are :ref:`MODE_PROXY<class_NetwSimulation
 
 :ref:`Replicas<enum_NetwSimulation_Replicas>` **REPLICAS_ACTIVE** = ``1``
 
-Copies this peer has no authority over are :ref:`MODE_ACTIVE<class_NetwSimulation_constant_MODE_ACTIVE>`.
+Copies whose state comes from another peer are :ref:`MODE_ACTIVE<class_NetwSimulation_constant_MODE_ACTIVE>`.
 
 .. rst-class:: classref-item-separator
 
@@ -381,7 +383,7 @@ The mode this entity runs in on this peer. :ref:`mode_changed<class_NetwSimulati
 - |void| **set_release_on_rest**\ (\ value\: :godot:`float`\ )
 - :godot:`float` **get_release_on_rest**\ (\ )
 
-The seconds the bodies must sleep before this peer releases the entity with :ref:`NetwEntity.release_authority()<class_NetwEntity_method_release_authority>`, or ``0`` to never release. It only releases an entity this peer holds with :ref:`NetwEntity.HOLD_YIELDABLE<class_NetwEntity_constant_HOLD_YIELDABLE>`.
+The seconds the bodies must sleep before this peer releases the entity with :ref:`NetwEntity.release_control()<class_NetwEntity_method_release_control>`, or ``0`` to never release. It only releases an entity this peer holds with :ref:`NetwEntity.HOLD_YIELDABLE<class_NetwEntity_constant_HOLD_YIELDABLE>`.
 
 It needs :ref:`NetwEntity.TRANSFER_IMMEDIATE<class_NetwEntity_constant_TRANSFER_IMMEDIATE>` on an entity with no :ref:`NetwPropertyConfig.state()<class_NetwPropertyConfig_method_state>` property and no prediction, and does nothing otherwise.
 
@@ -400,7 +402,9 @@ It needs :ref:`NetwEntity.TRANSFER_IMMEDIATE<class_NetwEntity_constant_TRANSFER_
 - |void| **set_replicas**\ (\ value\: :ref:`Replicas<enum_NetwSimulation_Replicas>`\ )
 - :ref:`Replicas<enum_NetwSimulation_Replicas>` **get_replicas**\ (\ )
 
-How the copies this peer has no authority over run. It can change at any time.
+How this peer simulates copies whose state it receives from another peer.
+
+It can change at any time.
 
 .. rst-class:: classref-item-separator
 
@@ -471,6 +475,8 @@ Called each tick as ``(delta: float, tick: int, is_fresh: bool)`` while :ref:`mo
 
 \ ``is_fresh`` is ``false`` in a replay and on a :ref:`MODE_ACTIVE<class_NetwSimulation_constant_MODE_ACTIVE>` copy, so read input only when it is ``true``.
 
+A step asks the physics space with a query. An :godot:`Area3D`'s overlaps and signals and :godot:`CharacterBody3D.is_on_floor() <CharacterBody3D#class_CharacterBody3D_method_is_on_floor>` come from the last physics step, and a replay restores neither.
+
 .. rst-class:: classref-section-separator
 
 ----
@@ -486,7 +492,7 @@ Method Descriptions
 
 |void| **forget**\ (\ entity\: :ref:`NetwEntity<class_NetwEntity>`\ ) :ref:`🔗<class_NetwSimulation_method_forget>`
 
-Withdraws the selection :ref:`simulate()<class_NetwSimulation_method_simulate>` made for ``entity``. The automatic policy may still select it.
+Withdraws the selection :ref:`simulate()<class_NetwSimulation_method_simulate>` made for ``entity``. Automatic selection may still include it.
 
 .. rst-class:: classref-item-separator
 
@@ -522,7 +528,7 @@ Selects every entity this peer holds in ``layer``. An empty ``layer`` uses the :
 
 |void| **simulate_none**\ (\ ) :ref:`🔗<class_NetwSimulation_method_simulate_none>`
 
-Drops the automatic policy. Entities named with :ref:`simulate()<class_NetwSimulation_method_simulate>` stay selected.
+Stops automatic selection. Entities named with :ref:`simulate()<class_NetwSimulation_method_simulate>` stay selected.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

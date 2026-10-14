@@ -158,7 +158,8 @@ class AuthorshipRun {
         ));
         r_authors
             = p_core->display_default_authors_streams(entity->get_rid_handle());
-        r_is_authority = body->is_multiplayer_authority();
+        r_is_authority = body->is_multiplayer_authority()
+            && entity->get_controller() == int64_t(p_core->get_unique_id());
     }
 
 public:
@@ -297,8 +298,9 @@ const AuthorshipLaw L_AUTHORSHIP = {
 const AuthorshipLaw L_APART = {
     "apart",
     "the authoring peer displays its own simulation, and the peer receiving "
-    "the stream displays what arrived unless it holds the node's authority, "
-    "in which case nothing would write the display and it goes dark",
+    "the stream displays what arrived unless it holds the node's authority "
+    "and steers the entity, in which case nothing would write the display "
+    "and it goes dark",
     &law_apart,
 };
 

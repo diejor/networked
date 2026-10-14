@@ -27,6 +27,11 @@ namespace Networked;
 /// </remarks>
 public class NetwDatabaseBackend : NetwRefCounted
 {
+    public NetwDatabaseBackend(
+        ) : this(NetwApi.Construct("NetwDatabaseBackend", true))
+    {
+    }
+
     public NetwDatabaseBackend(IntPtr native) : base(native)
     {
     }

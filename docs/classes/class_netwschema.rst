@@ -38,6 +38,8 @@ Each column method returns the column's index, which is how a writer and a reade
 
 \ A column with no quantizer is sent as a raw copy of its buffer, which is the cheapest to encode and decode. Add a quantizer to the columns where bandwidth matters.
 
+A schema returned by :ref:`NetwPersistence.schema<class_NetwPersistence_property_schema>` cannot be changed.
+
 The same schema also types the records a :ref:`NetwDatabase<class_NetwDatabase>` reads and writes directly. A schema used only for those calls :ref:`replicated()<class_NetwSchema_method_replicated>` with ``false`` so no table is created. :ref:`string()<class_NetwSchema_method_string>` and :ref:`variant()<class_NetwSchema_method_variant>` columns work for saves but not for replicated tables. An entity's own record takes its columns from :ref:`NetwPropertyConfig.persisted()<class_NetwPropertyConfig_method_persisted>` and needs no schema.
 
 .. rst-class:: classref-reftable-group

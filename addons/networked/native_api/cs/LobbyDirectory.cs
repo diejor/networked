@@ -52,6 +52,10 @@ namespace Networked;
 /// </remarks>
 public class LobbyDirectory : NetwService
 {
+    public LobbyDirectory() : this(NetwApi.Construct("LobbyDirectory", false))
+    {
+    }
+
     public LobbyDirectory(IntPtr native) : base(native)
     {
     }
@@ -112,8 +116,8 @@ public class LobbyDirectory : NetwService
             "lobby_failed",
             value,
             Callable.From(
-                (Error a0, string a1) =>
-                    value(a0, a1)
+                (long a0, string a1) =>
+                    value((Error)a0, a1)
             )
         );
         remove => DisconnectBridge("lobby_failed", value);

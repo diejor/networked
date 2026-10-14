@@ -299,19 +299,6 @@ public sealed class Netw : NetwRefCounted
     private static readonly IntPtr _bindConfigureSession =
         NetwApi.MethodBind("Netw", "configure_session", 3986669177UL);
 
-    /// <summary>
-    /// Configures the <see cref="Node.Multiplayer"/> session with settings
-    /// <see cref="SceneMultiplayer"/> does not have.
-    /// <code>
-    /// func _init() -&gt; void:
-    ///     Netw.configure_session(self) \
-    ///             .app(&amp;"bomber-v2") \
-    ///             .role(NetwSession.ROLE_LISTEN_SERVER)
-    /// </code>
-    /// <para>
-    /// See <see cref="NetwSessionConfig"/> for the settings.
-    /// </para>
-    /// </summary>
     public static NetwSessionConfig ConfigureSession(
         Node node,
         NetwSessionConfig preset = null)
@@ -374,6 +361,8 @@ public sealed class Netw : NetwRefCounted
     /// </code>
     /// <para>
     /// <paramref name="preset"/> works as in <see cref="Netw.ConfigureClock"/>.
+    /// See <see cref="NetwLagCompensationConfig"/> for when the settings take
+    /// effect.
     /// </para>
     /// </summary>
     public static NetwLagCompensationConfig ConfigureLagcomp(
@@ -393,41 +382,42 @@ public sealed class Netw : NetwRefCounted
     }
 
     private static readonly IntPtr _bindConfigureProperty =
-        NetwApi.MethodBind("Netw", "configure_property", 1544261587UL);
+        NetwApi.MethodBind("Netw", "configure_property", 2043443709UL);
 
     /// <summary>
-    /// Declares how <paramref name="property"/> is synchronized.
-    /// <code>
-    /// func _init() -&gt; void:
-    ///     Netw.configure_property(self, &amp;"fuel")
-    ///
-    /// func refuel() -&gt; void:
-    ///     fuel = 100.0
-    ///     Netw.sync_property(self, &amp;"fuel")
-    /// </code>
-    /// <para>
-    /// See <see cref="NetwPropertyConfig"/> for the options.
-    /// </para>
+    /// Declares how <paramref name="property"/> is synchronized. See
+    /// <see cref="NetwPropertyConfig"/> for the settings. For a property
+    /// supplied by <c>Object._get</c>, provide its type through
+    /// <c>Object._get_property_list</c> or <paramref name="declaredType"/>.
+    /// <c>-1</c> reads the declared type automatically.
     /// </summary>
     public static NetwPropertyConfig ConfigureProperty(
         Node node,
         StringName property,
-        bool warnLate = true)
+        bool warnLate = true,
+        long declaredType = -1)
     {
+        if (declaredType < 0)
+        {
+            declaredType = NetwPropertyTypes.Resolve(node, property);
+        }
         godot_variant slot0 = VariantUtils.CreateFromGodotObject(node);
         godot_variant slot1 = VariantUtils.CreateFromStringName(property);
         godot_variant slot2 = VariantUtils.CreateFromBool(warnLate);
+        godot_variant slot3 = VariantUtils.CreateFromInt((long)declaredType);
         godot_variant answered = default;
-        NetwThunks.Call3(
+        NetwThunks.Call4(
             _bindConfigureProperty,
             IntPtr.Zero,
             in slot0,
             in slot1,
             in slot2,
+            in slot3,
             ref answered);
         slot0.Dispose();
         slot1.Dispose();
         slot2.Dispose();
+        slot3.Dispose();
         NetwPropertyConfig result =
             NetwPropertyConfig.Adopt(
                 NetwApi.Retained(
@@ -443,6 +433,8 @@ public sealed class Netw : NetwRefCounted
     /// Declares who may call <paramref name="callable"/> and how it is sent. A
     /// setting made here outranks [annotation @GDScript.@rpc], and a setting
     /// left out falls back to it. See <see cref="NetwMemberConfig"/>.
+    /// <paramref name="callable"/> must name a script method. Anonymous
+    /// callbacks are refused.
     /// <code>
     /// func _init() -&gt; void:
     ///     Netw.configure_rpc(self.aim).controller().quantize(
@@ -456,6 +448,12 @@ public sealed class Netw : NetwRefCounted
     /// </summary>
     public static NetwMemberConfig ConfigureRpc(Callable callable)
     {
+        if (callable.Delegate != null)
+        {
+            throw new ArgumentException(
+                "Netw.ConfigureRpc sends a method by name. Pass the " +
+                "node and a MethodName constant.", nameof(callable));
+        }
         godot_variant slot0 = VariantUtils.CreateFromCallable(callable);
         godot_variant answered = default;
         NetwThunks.Call1(
@@ -470,6 +468,11 @@ public sealed class Netw : NetwRefCounted
                     VariantUtils.ConvertToGodotObjectPtr(answered)));
         answered.Dispose();
         return result;
+    }
+
+    public static NetwMemberConfig ConfigureRpc(Node node, StringName name)
+    {
+        return ConfigureRpc(new Callable(node, name));
     }
 
     private static readonly IntPtr _bindConfigureSignal =
@@ -505,6 +508,11 @@ public sealed class Netw : NetwRefCounted
         return result;
     }
 
+    public static NetwMemberConfig ConfigureSignal(Node node, StringName name)
+    {
+        return ConfigureSignal(new Signal(node, name));
+    }
+
     private static readonly IntPtr _bindConfigureSpawn =
         NetwApi.MethodBind("Netw", "configure_spawn", 2692389314UL);
 
@@ -530,6 +538,12 @@ public sealed class Netw : NetwRefCounted
     /// </summary>
     public static NetwMemberConfig ConfigureSpawn(Callable callable)
     {
+        if (callable.Delegate != null)
+        {
+            throw new ArgumentException(
+                "Netw.ConfigureSpawn sends a method by name. Pass the " +
+                "node and a MethodName constant.", nameof(callable));
+        }
         godot_variant slot0 = VariantUtils.CreateFromCallable(callable);
         godot_variant answered = default;
         NetwThunks.Call1(
@@ -546,18 +560,17 @@ public sealed class Netw : NetwRefCounted
         return result;
     }
 
+    public static NetwMemberConfig ConfigureSpawn(Node node, StringName name)
+    {
+        return ConfigureSpawn(new Callable(node, name));
+    }
+
     private static readonly IntPtr _bindConfigureEntity =
         NetwApi.MethodBind("Netw", "configure_entity", 1743742259UL);
 
     /// <summary>
-    /// Returns the <see cref="NetwEntity"/> that represents
-    /// <paramref name="node"/> in the <see cref="Node.Multiplayer"/> session.
-    /// <code>
-    /// func _init() -&gt; void:
-    ///     var entity := Netw.configure_entity(self)
-    ///     # the node now behaves like `Node.set_multiplayer_authority(peer_id)`
-    ///     entity.initial_controller = NetwEntity.INITIAL_REPRESENTED_PEER
-    /// </code>
+    /// Declares <paramref name="node"/> as a root before it enters the tree.
+    /// <see cref="NetwEntity.Of"/> finds an existing <see cref="NetwEntity"/>.
     /// </summary>
     public static NetwEntity ConfigureEntity(Node node)
     {
@@ -630,7 +643,7 @@ public sealed class Netw : NetwRefCounted
         NetwApi.MethodBind("Netw", "configure_schema", 261365823UL);
 
     /// <summary>
-    /// Declares a schema for a table of records.
+    /// Declares the properties and types of a <see cref="NetwTable"/>.
     /// <code>
     /// class Mobs:
     ///     static var schema := Netw.configure_schema(&amp;"Mob")
@@ -672,6 +685,12 @@ public sealed class Netw : NetwRefCounted
     /// </summary>
     public static void Rpc(Callable callable, params Variant[] rest)
     {
+        if (callable.Delegate != null)
+        {
+            throw new ArgumentException(
+                "Netw.Rpc sends a method by name. Pass the " +
+                "node and a MethodName constant.", nameof(callable));
+        }
         int total = 1 + (rest == null ? 0 : rest.Length);
         IntPtr pack = NetwThunks.ArgsNew(total);
         godot_variant slot0 = VariantUtils.CreateFromCallable(callable);
@@ -689,6 +708,11 @@ public sealed class Netw : NetwRefCounted
         answered.Dispose();
     }
 
+    public static void Rpc(Node node, StringName name, params Variant[] rest)
+    {
+        Rpc(new Callable(node, name), rest);
+    }
+
     private static readonly IntPtr _bindRpcId =
         NetwApi.MethodBind("Netw", "rpc_id", 3088989228UL);
 
@@ -701,6 +725,12 @@ public sealed class Netw : NetwRefCounted
         Callable callable,
         params Variant[] rest)
     {
+        if (callable.Delegate != null)
+        {
+            throw new ArgumentException(
+                "Netw.RpcId sends a method by name. Pass the " +
+                "node and a MethodName constant.", nameof(callable));
+        }
         int total = 2 + (rest == null ? 0 : rest.Length);
         IntPtr pack = NetwThunks.ArgsNew(total);
         godot_variant slot0 = VariantUtils.CreateFromInt((long)peerId);
@@ -721,6 +751,15 @@ public sealed class Netw : NetwRefCounted
         answered.Dispose();
     }
 
+    public static void RpcId(
+        long peerId,
+        Node node,
+        StringName name,
+        params Variant[] rest)
+    {
+        RpcId(peerId, new Callable(node, name), rest);
+    }
+
     private static readonly IntPtr _bindRpcController =
         NetwApi.MethodBind("Netw", "rpc_controller", 187483682UL);
 
@@ -730,6 +769,12 @@ public sealed class Netw : NetwRefCounted
     /// </summary>
     public static void RpcController(Callable callable, params Variant[] rest)
     {
+        if (callable.Delegate != null)
+        {
+            throw new ArgumentException(
+                "Netw.RpcController sends a method by name. Pass the " +
+                "node and a MethodName constant.", nameof(callable));
+        }
         int total = 1 + (rest == null ? 0 : rest.Length);
         IntPtr pack = NetwThunks.ArgsNew(total);
         godot_variant slot0 = VariantUtils.CreateFromCallable(callable);
@@ -752,6 +797,14 @@ public sealed class Netw : NetwRefCounted
         answered.Dispose();
     }
 
+    public static void RpcController(
+        Node node,
+        StringName name,
+        params Variant[] rest)
+    {
+        RpcController(new Callable(node, name), rest);
+    }
+
     private static readonly IntPtr _bindRequest =
         NetwApi.MethodBind("Netw", "request", 2325787334UL);
 
@@ -767,6 +820,12 @@ public sealed class Netw : NetwRefCounted
     /// </summary>
     public static NetwPromise Request(Callable callable, params Variant[] rest)
     {
+        if (callable.Delegate != null)
+        {
+            throw new ArgumentException(
+                "Netw.Request sends a method by name. Pass the " +
+                "node and a MethodName constant.", nameof(callable));
+        }
         int total = 1 + (rest == null ? 0 : rest.Length);
         IntPtr pack = NetwThunks.ArgsNew(total);
         godot_variant slot0 = VariantUtils.CreateFromCallable(callable);
@@ -794,6 +853,14 @@ public sealed class Netw : NetwRefCounted
         return result;
     }
 
+    public static NetwPromise Request(
+        Node node,
+        StringName name,
+        params Variant[] rest)
+    {
+        return Request(new Callable(node, name), rest);
+    }
+
     private static readonly IntPtr _bindRequestId =
         NetwApi.MethodBind("Netw", "request_id", 1728372685UL);
 
@@ -807,6 +874,12 @@ public sealed class Netw : NetwRefCounted
         Callable callable,
         params Variant[] rest)
     {
+        if (callable.Delegate != null)
+        {
+            throw new ArgumentException(
+                "Netw.RequestId sends a method by name. Pass the " +
+                "node and a MethodName constant.", nameof(callable));
+        }
         int total = 2 + (rest == null ? 0 : rest.Length);
         IntPtr pack = NetwThunks.ArgsNew(total);
         godot_variant slot0 = VariantUtils.CreateFromInt((long)peerId);
@@ -837,6 +910,15 @@ public sealed class Netw : NetwRefCounted
         return result;
     }
 
+    public static NetwPromise RequestId(
+        long peerId,
+        Node node,
+        StringName name,
+        params Variant[] rest)
+    {
+        return RequestId(peerId, new Callable(node, name), rest);
+    }
+
     private static readonly IntPtr _bindRequestAll =
         NetwApi.MethodBind("Netw", "request_all", 2458339060UL);
 
@@ -848,6 +930,12 @@ public sealed class Netw : NetwRefCounted
         Callable callable,
         params Variant[] rest)
     {
+        if (callable.Delegate != null)
+        {
+            throw new ArgumentException(
+                "Netw.RequestAll sends a method by name. Pass the " +
+                "node and a MethodName constant.", nameof(callable));
+        }
         int total = 1 + (rest == null ? 0 : rest.Length);
         IntPtr pack = NetwThunks.ArgsNew(total);
         godot_variant slot0 = VariantUtils.CreateFromCallable(callable);
@@ -875,6 +963,14 @@ public sealed class Netw : NetwRefCounted
         return result;
     }
 
+    public static NetwGroupPromise RequestAll(
+        Node node,
+        StringName name,
+        params Variant[] rest)
+    {
+        return RequestAll(new Callable(node, name), rest);
+    }
+
     private static readonly IntPtr _bindRequestController =
         NetwApi.MethodBind("Netw", "request_controller", 2325787334UL);
 
@@ -886,6 +982,12 @@ public sealed class Netw : NetwRefCounted
         Callable callable,
         params Variant[] rest)
     {
+        if (callable.Delegate != null)
+        {
+            throw new ArgumentException(
+                "Netw.RequestController sends a method by name. Pass the " +
+                "node and a MethodName constant.", nameof(callable));
+        }
         int total = 1 + (rest == null ? 0 : rest.Length);
         IntPtr pack = NetwThunks.ArgsNew(total);
         godot_variant slot0 = VariantUtils.CreateFromCallable(callable);
@@ -911,6 +1013,14 @@ public sealed class Netw : NetwRefCounted
                     VariantUtils.ConvertToGodotObjectPtr(answered)));
         answered.Dispose();
         return result;
+    }
+
+    public static NetwPromise RequestController(
+        Node node,
+        StringName name,
+        params Variant[] rest)
+    {
+        return RequestController(new Callable(node, name), rest);
     }
 
     private static readonly IntPtr _bindSyncProperty =
@@ -986,6 +1096,14 @@ public sealed class Netw : NetwRefCounted
             ref answered);
         NetwThunks.ArgsFree(pack);
         answered.Dispose();
+    }
+
+    public static void EmitEntitySignal(
+        Node node,
+        StringName name,
+        params Variant[] rest)
+    {
+        EmitEntitySignal(new Signal(node, name), rest);
     }
 
     private static readonly IntPtr _bindChannel =
@@ -1120,6 +1238,12 @@ public sealed class Netw : NetwRefCounted
     /// </summary>
     public static Node Spawn(Callable fn, params Variant[] rest)
     {
+        if (fn.Delegate != null)
+        {
+            throw new ArgumentException(
+                "Netw.Spawn sends a method by name. Pass the " +
+                "node and a MethodName constant.", nameof(fn));
+        }
         int total = 1 + (rest == null ? 0 : rest.Length);
         IntPtr pack = NetwThunks.ArgsNew(total);
         godot_variant slot0 = VariantUtils.CreateFromCallable(fn);
@@ -1137,6 +1261,11 @@ public sealed class Netw : NetwRefCounted
         Node result = (Node)VariantUtils.ConvertToGodotObject(answered);
         answered.Dispose();
         return result;
+    }
+
+    public static Node Spawn(Node node, StringName name, params Variant[] rest)
+    {
+        return Spawn(new Callable(node, name), rest);
     }
 
     private static readonly IntPtr _bindSpawnPlayer =
@@ -1161,6 +1290,12 @@ public sealed class Netw : NetwRefCounted
         Callable fn,
         params Variant[] rest)
     {
+        if (fn.Delegate != null)
+        {
+            throw new ArgumentException(
+                "Netw.SpawnPlayer sends a method by name. Pass the " +
+                "node and a MethodName constant.", nameof(fn));
+        }
         int total = 2 + (rest == null ? 0 : rest.Length);
         IntPtr pack = NetwThunks.ArgsNew(total);
         godot_variant slot0 =
@@ -1188,6 +1323,15 @@ public sealed class Netw : NetwRefCounted
         Node result = (Node)VariantUtils.ConvertToGodotObject(answered);
         answered.Dispose();
         return result;
+    }
+
+    public static Node SpawnPlayer(
+        NetwPlayer player,
+        Node node,
+        StringName name,
+        params Variant[] rest)
+    {
+        return SpawnPlayer(player, new Callable(node, name), rest);
     }
 
     private static readonly IntPtr _bindDespawn =
@@ -1264,31 +1408,19 @@ public sealed class Netw : NetwRefCounted
         NetwApi.MethodBind("Netw", "action", 1326300923UL);
 
     /// <summary>
-    /// A <see cref="NetwAction"/> for an action such as firing or placing
-    /// something, bound to <paramref name="authority"/> the server runs to
-    /// judge it. Call it on every peer, the server included. Repeated calls
-    /// return the same <see cref="NetwAction"/>. The first one turns on lag
-    /// compensation, so <see cref="Netw.ConfigureLagcomp"/> is needed only to
-    /// change its defaults.
-    /// <code>
-    /// @onready var place_bomb := Netw.action(_place_bomb)
-    ///
-    /// func _ready() -&gt; void:
-    ///     place_bomb.predict = _show_bomb_now
-    ///
-    /// func _place_bomb(ctx: NetwActionContext) -&gt; void:
-    ///     var bomb := BOMB.instantiate()
-    ///     ctx.bind(bomb)
-    ///     bombs.add_child(bomb)
-    /// </code>
-    /// <para>
-    /// The server judges an action before other peers see it. To let a client
-    /// spawn, move and despawn a node first and have the server confirm it
-    /// later, see <see cref="NetwEntity.Lifecycle"/>.
-    /// </para>
+    /// Creates a <see cref="NetwAction"/> whose server callback is
+    /// <paramref name="authority"/>. Call it on every peer, including the
+    /// server. Repeated calls return the same object. See
+    /// <see cref="NetwAction"/> for requests and prediction.
     /// </summary>
     public static NetwAction Action(Callable authority)
     {
+        if (authority.Delegate != null)
+        {
+            throw new ArgumentException(
+                "Netw.Action sends a method by name. Pass the " +
+                "node and a MethodName constant.", nameof(authority));
+        }
         godot_variant slot0 = VariantUtils.CreateFromCallable(authority);
         godot_variant answered = default;
         NetwThunks.Call1(_bindAction, IntPtr.Zero, in slot0, ref answered);
@@ -1299,6 +1431,11 @@ public sealed class Netw : NetwRefCounted
                     VariantUtils.ConvertToGodotObjectPtr(answered)));
         answered.Dispose();
         return result;
+    }
+
+    public static NetwAction Action(Node node, StringName name)
+    {
+        return Action(new Callable(node, name));
     }
 
     private static readonly IntPtr _bindSample =

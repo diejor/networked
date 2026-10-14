@@ -194,6 +194,25 @@ public static class NetwApi
         return instance;
     }
 
+    internal static IntPtr Construct(string className, bool counted)
+    {
+        if (!ClassDB.CanInstantiate(className))
+        {
+            throw new InvalidOperationException(
+                $"Cannot construct {className}. Use its declaration or " +
+                "session method to obtain an instance.");
+        }
+        using Variant value = ClassDB.Instantiate(className);
+        IntPtr native = ObjectOf(value);
+        if (native == IntPtr.Zero)
+        {
+            throw new InvalidOperationException(
+                $"Cannot construct {className}. Load the matching " +
+                "Networked extension before constructing it.");
+        }
+        return counted ? Retained(native) : native;
+    }
+
     public static void Release(IntPtr instance)
     {
         _release(instance);

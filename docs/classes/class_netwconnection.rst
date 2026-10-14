@@ -579,6 +579,8 @@ Creates a peer for a game that assigns it itself. ``completed`` runs once in a l
 
 Settles with :godot:`@GlobalScope.ERR_ALREADY_IN_USE <@GlobalScope#class_@GlobalScope_constant_ERR_ALREADY_IN_USE>` while the session is online.
 
+Invalid :ref:`NetwSessionConfig<class_NetwSessionConfig>`, :ref:`NetwClockConfig<class_NetwClockConfig>` or :ref:`NetwLagCompensationConfig<class_NetwLagCompensationConfig>` settings reject the promise before a peer is created.
+
 .. rst-class:: classref-item-separator
 
 ----
@@ -590,6 +592,8 @@ Settles with :godot:`@GlobalScope.ERR_ALREADY_IN_USE <@GlobalScope#class_@Global
 :ref:`NetwPromise<class_NetwPromise>` **join**\ (\ endpoint\: :ref:`NetwEndpoint<class_NetwEndpoint>`, settings\: :godot:`Dictionary` = {}\ ) :ref:`🔗<class_NetwConnection_method_join>`
 
 Settles with :godot:`@GlobalScope.ERR_ALREADY_IN_USE <@GlobalScope#class_@GlobalScope_constant_ERR_ALREADY_IN_USE>` while the session is online.
+
+Configuration errors reject the promise as in :ref:`host()<class_NetwConnection_method_host>`.
 
 .. rst-class:: classref-item-separator
 
@@ -660,12 +664,12 @@ A transport named by its peer class, its :godot:`Script`, a :godot:`StringName` 
     Dictionary
     ┠╴peer_class            StringName  the key the transport is registered under
     ┠╴display_name          String      what a picker names it
-    ┠╴address_label         String      what the address field is titled
-    ┠╴address_placeholder   String      what the empty address field shows
-    ┠╴address_help          String      the sentence under the address field
+    ┠╴address_label         String      what the address input is titled
+    ┠╴address_placeholder   String      what the empty address input shows
+    ┠╴address_help          String      the sentence under the address input
     ┠╴capabilities          int         NetwConnection.TransportCapability flags
-    ┠╴host_settings         Dictionary  a host form's fields, defaults included
-    ┠╴client_settings       Dictionary  a join form's fields, defaults included
+    ┠╴host_settings         Dictionary  a host form's settings, defaults included
+    ┠╴client_settings       Dictionary  a join form's settings, defaults included
     ┖╴timeout_hint          float       seconds an attempt waits before it fails
 
 .. rst-class:: classref-item-separator

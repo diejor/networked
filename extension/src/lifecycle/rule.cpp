@@ -79,8 +79,8 @@ godot::String unauthorized_text(
     if (!p_facts.declared) {
         return godot::vformat(
             "%s on '%s' was refused, because only the session authority %s "
-            "it. Set NetwEntity.lifecycle to LIFECYCLE_CONTROLLER in its "
-            "root's _init to let %s %s it.",
+            "it. Set NetwEntity.lifecycle to LIFECYCLE_CONTROLLER before its "
+            "root enters the tree to let %s %s it.",
             p_verb,
             p_root,
             does_to(p_facts.kind),

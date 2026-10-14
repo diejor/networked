@@ -361,6 +361,7 @@ void NetwPredictSlotEngine::release() {
     if (input != nullptr) {
         input->apply_input_feed(feed);
     }
+    pool->unbind_owner(native_slot());
     pool->set_parts(native_slot(), LocalVector<predict::StatePart>());
     pool->seat_arrivals(native_slot(), feed, ObjectID());
     if (entity.is_null()) {

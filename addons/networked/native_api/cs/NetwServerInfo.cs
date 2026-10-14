@@ -29,6 +29,10 @@ namespace Networked;
 /// </remarks>
 public sealed class NetwServerInfo : NetwRefCounted
 {
+    public NetwServerInfo() : this(NetwApi.Construct("NetwServerInfo", true))
+    {
+    }
+
     public NetwServerInfo(IntPtr native) : base(native)
     {
     }

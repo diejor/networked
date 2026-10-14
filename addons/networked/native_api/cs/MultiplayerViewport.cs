@@ -19,9 +19,14 @@ namespace Networked;
 /// $SplitScreen/Left.add_child(seat)
 /// </code>
 /// </remarks>
-public sealed class MultiplayerViewport : NetwObject
+public sealed class MultiplayerViewport : NetwNode
 {
-    public MultiplayerViewport(IntPtr native) : base(native, owned: false)
+    public MultiplayerViewport(
+        ) : this(NetwApi.Construct("MultiplayerViewport", false))
+    {
+    }
+
+    public MultiplayerViewport(IntPtr native) : base(native)
     {
     }
 

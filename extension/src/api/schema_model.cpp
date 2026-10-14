@@ -17,6 +17,37 @@ Ref<NetwSchema> NetwSchema::create(const StringName &p_name) {
     return made;
 }
 
+Ref<NetwSchema> NetwSchema::from_record(const table::SchemaRecord &p_record) {
+    const Ref<NetwSchema> made = create(p_record.name);
+    made->columns.reserve(p_record.columns.size());
+    for (const table::SchemaColumn &property : p_record.columns) {
+        Column declared;
+        declared.key = property.key;
+        declared.type = NetwMultiplayer::ColumnType(property.type);
+        declared.stride = property.stride;
+        declared.quantizer = property.quantizer;
+        made->columns.push_back(declared);
+    }
+    for (const table::SchemaMigration &migration : p_record.migrations) {
+        made->migrations[migration.from_version] = migration.step;
+    }
+    made->version = p_record.storage_version;
+    made->replicated_lane = false;
+    made->read_only = true;
+    return made;
+}
+
+bool NetwSchema::can_edit() const {
+    NETW_ERR_COND_V(
+        read_only,
+        false,
+        sys::TABLE,
+        "NetwPersistence.schema cannot be changed. Configure saved "
+        "properties with Netw.configure_property."
+    );
+    return true;
+}
+
 int NetwSchema::column(
     const StringName &p_key,
     NetwMultiplayer::ColumnType p_type,
@@ -31,6 +62,9 @@ int NetwSchema::column(
         if (existing.type == p_type && existing.stride == p_stride) {
             return int(at);
         }
+        return -1;
+    }
+    if (!can_edit()) {
         return -1;
     }
     Column fresh;
@@ -220,6 +254,9 @@ int NetwSchema::string(const StringName &p_key, int p_stride) {
 }
 
 Ref<NetwSchema> NetwSchema::storage_version(int p_version) {
+    if (!can_edit()) {
+        return Ref<NetwSchema>(this);
+    }
     if (p_version < 1) {
         NETW_ERROR(
             sys::TABLE,
@@ -238,6 +275,9 @@ Ref<NetwSchema> NetwSchema::migrate(
     int p_from_version,
     const Callable &p_step
 ) {
+    if (!can_edit()) {
+        return Ref<NetwSchema>(this);
+    }
     if (p_from_version < 1 || p_step.is_null()) {
         NETW_ERROR(
             sys::TABLE,
@@ -258,11 +298,17 @@ Ref<NetwSchema> NetwSchema::register_declaration() {
 }
 
 Ref<NetwSchema> NetwSchema::replicated(bool p_value) {
+    if (!can_edit()) {
+        return Ref<NetwSchema>(this);
+    }
     replicated_lane = p_value;
     return Ref<NetwSchema>(this);
 }
 
 Ref<NetwSchema> NetwSchema::reliable(bool p_value) {
+    if (!can_edit()) {
+        return Ref<NetwSchema>(this);
+    }
     reliable_lane = p_value;
     return Ref<NetwSchema>(this);
 }

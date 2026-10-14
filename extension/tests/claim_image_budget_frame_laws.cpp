@@ -56,6 +56,7 @@ func _init() -> void:
 	sphere.add_child(shape)
 	add_child(sphere)
 	var e := Netw.configure_entity(self)
+	e.authority = NetwEntity.AUTHORITY_CONTROLLER
 	e.transfer = NetwEntity.TRANSFER_IMMEDIATE
 	e.simulation.bodies = [^"Sphere"]
 	e.simulation.replicas = NetwSimulation.REPLICAS_ACTIVE
@@ -197,7 +198,7 @@ class BudgetScenario final : public netw_test::FrameScenario {
 
     void claim() {
         counted_from = images_at_server();
-        claimant_view()->claim_authority(YIELDABLE);
+        claimant_view()->claim_control(YIELDABLE);
         sphere_at(0)->set_linear_velocity(PUSH);
     }
 
@@ -220,7 +221,7 @@ public:
         } else if (frame == FREE_ENDS) {
             budget_evidence().images_free = images_at_server() - counted_from;
         } else if (frame == RELEASED) {
-            claimant_view()->release_authority();
+            claimant_view()->release_control();
         } else if (frame >= DEBT_CLAIM && frame <= DEBT_ENDS) {
             indebt_claimant();
             if (frame == DEBT_CLAIM) {

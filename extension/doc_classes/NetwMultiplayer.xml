@@ -170,7 +170,7 @@
 			<param index="2" name="columns" type="Array" />
 			<description>
 				Writes the received replicated property values of every entity in [param routes] into its node, for the property declaration [param table] names. [method store_describe] lists the tables.
-				[param routes] holds the entities whose received values are due now. A row that arrives is due at once, unless the entity's simulation runs a buffered replica copy, which takes it when the display tick reaches it.
+				[param routes] holds the entities whose received values are due now. An arriving property update is due at once, unless the entity's simulation runs a buffered replica copy, which takes it when the display tick reaches it.
 				[codeblock lang=text]
 				Array
 				┖╴column  Array  one per property in declaration order, one value per route
@@ -244,7 +244,7 @@
 		<method name="attribution_is_armed" qualifiers="const">
 			<return type="bool" />
 			<description>
-				Returns [code]true[/code] when [method attribution_set_armed] turned on per-column counting.
+				Returns [code]true[/code] when [method attribution_set_armed] turned on counting per property.
 			</description>
 		</method>
 		<method name="attribution_set_armed">
@@ -273,9 +273,9 @@
 				┠╴frames_in_by_channel  Dictionary  peer -&gt; channel -&gt; frames received
 				┠╴refused_in            int         frames rejected on arrival
 				┠╴refusals              Dictionary  peer -&gt; channel -&gt; rejection name -&gt; count
-				┠╴armed                 bool        whether column grain is being recorded
+				┠╴armed                 bool        whether each property is counted
 				┠╴columns               Dictionary  a packed key -&gt; schema, column, bits
-				┖╴residual              Dictionary  the same bytes at the datagram boundary
+				┖╴residual              Dictionary  the same bytes in sent packets
 				[/codeblock]
 				Route [code]0[/code] is traffic that belongs to no entity. [code]residual[/code] counts the same traffic including packet headers, with this shape.
 				[codeblock lang=text]
@@ -606,7 +606,7 @@
 			<param index="2" name="id" type="StringName" />
 			<param index="3" name="values" type="Dictionary" />
 			<description>
-				Writes the fields in [param values] to the record at [param id] and keeps the rest. A missing record fails with [constant @GlobalScope.ERR_DOES_NOT_EXIST]. See [method NetwDatabase.patch] for the errors.
+				Writes the properties in [param values] to the record at [param id] and keeps the rest. A missing record fails with [constant @GlobalScope.ERR_DOES_NOT_EXIST]. See [method NetwDatabase.patch] for the errors.
 			</description>
 		</method>
 		<method name="database_read">
@@ -782,7 +782,7 @@
 			<param index="0" name="endpoint" type="RID" />
 			<param index="1" name="param" type="int" enum="NetwMultiplayer.EndpointParam" />
 			<description>
-				Returns one field of [param endpoint], or [code]null[/code] when it does not exist.
+				Returns one property of [param endpoint], or [code]null[/code] when it does not exist.
 			</description>
 		</method>
 		<method name="endpoint_get_probe_interval" qualifiers="const">
@@ -846,10 +846,10 @@
 			<param index="1" name="param" type="int" enum="NetwMultiplayer.EndpointParam" />
 			<param index="2" name="value" type="Variant" />
 			<description>
-				Changes one field of [param endpoint] and notifies [constant ENDPOINT_UPDATED]. Only [constant ENDPOINT_PARAM_DISPLAY_NAME] can be changed.
+				Changes one property of [param endpoint] and notifies [constant ENDPOINT_UPDATED]. Only [constant ENDPOINT_PARAM_DISPLAY_NAME] can be changed.
 				[codeblock lang=text]
 				Error
-				┠╴OK                     the field changed
+				┠╴OK                     the property changed
 				┠╴ERR_DOES_NOT_EXIST     the endpoint does not exist
 				┖╴ERR_INVALID_PARAMETER  param names anything but ENDPOINT_PARAM_DISPLAY_NAME
 				[/codeblock]
@@ -875,7 +875,7 @@
 				┠╴ERR_DOES_NOT_EXIST  entity or set does not exist
 				┠╴ERR_INVALID_DATA    the set is not sealed
 				┠╴ERR_UNAVAILABLE     comp is not a node of this entity
-				┖╴ERR_UNCONFIGURED    the session has no sync pipeline
+				┖╴ERR_UNCONFIGURED    property synchronization is unavailable
 				[/codeblock]
 			</description>
 		</method>
@@ -1040,7 +1040,7 @@
 			<param index="0" name="entity" type="RID" />
 			<param index="1" name="peer" type="int" />
 			<description>
-				Calls [method NetwEntity.transfer_control] on [param entity]. Returns [constant @GlobalScope.ERR_DOES_NOT_EXIST] when [param entity] has no bound node.
+				Assigns [member NetwEntity.controller] on [param entity]. Returns [constant @GlobalScope.ERR_UNAUTHORIZED] on a client, or [constant @GlobalScope.ERR_DOES_NOT_EXIST] when [param entity] has no bound node.
 			</description>
 		</method>
 		<method name="entity_of">
@@ -1868,12 +1868,14 @@
 			<return type="int" enum="Error" />
 			<param index="0" name="entity" type="RID" />
 			<description>
-				Turns on prediction for [param entity] with the settings in [member NetwEntity.prediction]. It also turns on lag compensation. Calling it again does nothing.
+				Turns on [member NetwEntity.prediction] for [param entity]. Repeated calls do nothing. Invalid [NetwLagCompensationConfig] settings prevent registration.
 				[codeblock lang=text]
 				Error
-				┠╴OK                  prediction is on
+				┠╴OK                  prediction is on, or turns on once the settings being applied are done
 				┠╴ERR_DOES_NOT_EXIST  the entity does not exist
-				┖╴ERR_UNAVAILABLE     a NetwLagCompensationConfig is not applied yet
+				┠╴ERR_ALREADY_EXISTS  more than one node declared the same settings
+				┠╴ERR_UNAVAILABLE     the node that declared the settings left the tree
+				┖╴ERR_INVALID_DATA    the declared settings cannot be read
 				[/codeblock]
 			</description>
 		</method>
@@ -3202,7 +3204,7 @@
 			<param index="0" name="transport" type="RID" />
 			<param index="1" name="param" type="int" enum="NetwMultiplayer.TransportParam" />
 			<description>
-				Returns one field of [param transport], used to draw host and join forms, or [code]null[/code]. [constant TRANSPORT_PARAM_CAPABILITIES] returns a [enum NetwConnection.TransportCapability] mask.
+				Returns one property of [param transport], used to draw host and join forms, or [code]null[/code]. [constant TRANSPORT_PARAM_CAPABILITIES] returns a [enum NetwConnection.TransportCapability] mask.
 				[codeblock]
 				var caps: int = api.transport_get_param(
 				        t, NetwMultiplayer.TRANSPORT_PARAM_CAPABILITIES)
@@ -3585,19 +3587,19 @@
 			[String] to call this transport in a picker.
 		</constant>
 		<constant name="TRANSPORT_PARAM_ADDRESS_LABEL" value="2" enum="TransportParam">
-			[String] to title the address field with, such as an IP for [ENetMultiplayerPeer], a URL for a WebSocket, or a room id for WebRTC.
+			[String] to title the address input with, such as an IP for [ENetMultiplayerPeer], a URL for a WebSocket, or a room id for WebRTC.
 		</constant>
 		<constant name="TRANSPORT_PARAM_ADDRESS_PLACEHOLDER" value="3" enum="TransportParam">
-			[String] to show in the empty address field.
+			[String] to show in the empty address input.
 		</constant>
 		<constant name="TRANSPORT_PARAM_ADDRESS_HELP" value="4" enum="TransportParam">
-			[String] sentence under the address field, empty when it needs none.
+			[String] sentence under the address input, empty when it needs none.
 		</constant>
 		<constant name="TRANSPORT_PARAM_CAPABILITIES" value="5" enum="TransportParam">
 			[int] mask of [enum NetwConnection.TransportCapability], saying what this transport can do on this build and platform.
 		</constant>
 		<constant name="TRANSPORT_PARAM_HOST_SETTINGS" value="6" enum="TransportParam">
-			[Dictionary] of the fields a host form asks for, with their default values. Pass the filled values to [method transport_create_peer].
+			[Dictionary] of the settings a host form asks for, with their default values. Pass the filled values to [method transport_create_peer].
 		</constant>
 		<constant name="TRANSPORT_PARAM_CLIENT_SETTINGS" value="7" enum="TransportParam">
 			Like [constant TRANSPORT_PARAM_HOST_SETTINGS], for the join form.
@@ -3612,7 +3614,7 @@
 			The address of the endpoint. Read-only.
 		</constant>
 		<constant name="ENDPOINT_PARAM_DISPLAY_NAME" value="2" enum="EndpointParam">
-			The name shown in a server browser. The only field [method endpoint_set_param] can change.
+			The name shown in a server browser. The only property [method endpoint_set_param] can change.
 		</constant>
 		<constant name="ENDPOINT_PARAM_SOURCE" value="3" enum="EndpointParam">
 			The display name of the [LobbyDirectory] that listed the endpoint, or [code]""[/code] when the game added it. Read-only.
@@ -4198,7 +4200,9 @@
 			The clock synchronized with the server for the first time. It happens once. The callback receives no arguments.
 		</constant>
 		<constant name="CLOCK_CONFIGURED" value="16" enum="Notification">
-			The clock settings were applied. It happens once, so check [method clock_is_configured] in case it already happened. The callback receives no arguments.
+			The clock settings were applied. Emitted once with no arguments. Check
+			[method clock_is_configured] if it may have already happened. Peer assignment
+			and [method NetwAction.request] are refused during this callback.
 		</constant>
 		<constant name="CLOCK_TICKRATE_MISMATCH" value="17" enum="Notification">
 			A peer runs a tickrate that differs from this peer's, and [method clock_set_mismatch_action] is [constant NetwClock.MISMATCH_ACTION_SIGNAL]. The callback receives [code](peer_id: int, their_tickrate: int)[/code].

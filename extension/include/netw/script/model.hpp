@@ -152,6 +152,13 @@ int64_t get_node_property_type(
     godot::Node *p_node,
     const godot::StringName &p_property
 );
+gd::PropertyResolution resolve_property(
+    godot::Node *p_node,
+    const godot::StringName &p_property,
+    const godot::Array &p_infos
+);
+void watch_properties(godot::Node *p_node);
+uint64_t property_revision(godot::Node *p_node);
 godot::Array get_signal_arg_types(
     const godot::Ref<godot::Script> &p_script,
     const godot::StringName &p_signal

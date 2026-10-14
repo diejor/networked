@@ -47,7 +47,6 @@ func _init() -> void:
 
 
 func _ready() -> void:
-	set_multiplayer_authority(1, true)
 	contact_monitor = true
 	max_contacts_reported = 8
 	state.transform = transform

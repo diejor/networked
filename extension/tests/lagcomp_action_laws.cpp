@@ -1,19 +1,23 @@
 #include "support/netw_test.h"
 
+#include "support/fault_log.h"
 #include "support/loopback_rig.h"
 #include "support/netw_call_log.h"
 #include "support/predict_rows.h"
 
 #if defined(NETW_TIER_HOSTED)
 
-#include "godot/variant.hpp"
 #include "godot/utility.hpp"
+#include "godot/variant.hpp"
 #include "netw/api/action.hpp"
+#include "netw/api/clock_config.hpp"
 #include "netw/api/context.hpp"
-#include "netw/session/frames.hpp"
+#include "netw/api/lag_compensation_config.hpp"
 #include "netw/api/prediction.hpp"
 #include "netw/lagcomp_core.hpp"
 #include "netw/predict/engine.hpp"
+#include "netw/session/frames.hpp"
+#include "netw/session_decl.hpp"
 
 namespace TestNetwLagCompActionLaws {
 
@@ -413,7 +417,8 @@ TEST_CASE(
     "[Networked][LagComp][Action] AC10 an action minted through Netw.action "
     "on a session that declared neither lag compensation nor prediction "
     "predicts on its controller, runs on the server and answers, because "
-    "minting the action is what readies the session for it"
+    "the handle asks the next configuration pass for the defaults and the "
+    "request applies them"
 ) {
     LoopbackRig rig(1);
     rig.mount();
@@ -436,24 +441,253 @@ TEST_CASE(
     REQUIRE(authority != nullptr);
     REQUIRE_FALSE(rig.server()->lagcomp_is_configured());
 
-    const Ref<netw::NetwAction> asked = netw::Netw::action(
-        Callable(owner, StringName("_server_action"))
-    );
-    const Ref<netw::NetwAction> judged = netw::Netw::action(
-        Callable(authority, StringName("_server_action"))
-    );
+    const Ref<netw::NetwAction> asked
+        = netw::Netw::action(Callable(owner, StringName("_server_action")));
+    const Ref<netw::NetwAction> judged
+        = netw::Netw::action(Callable(authority, StringName("_server_action")));
     REQUIRE(asked.is_valid());
     REQUIRE(judged.is_valid());
+    CHECK_FALSE(rig.server()->lagcomp_is_configured());
+    CHECK_FALSE(rig.client(0)->lagcomp_is_configured());
+    rig.server()->config_settle();
+    CHECK(rig.server()->lagcomp_is_configured());
     const CallLog log;
     asked->set_predict(Callable(owner, StringName("_predict_ghost")));
     asked->connect("denied", log.callable(StringName("denied")));
 
     asked->request(rig.clock_of(rig.client(0)).get_tick(), Array());
+    CHECK(rig.client(0)->lagcomp_is_configured());
     NETW_CHECK_EQ(owner->ghosts(), 1);
     rig.step_ticks(30);
 
     NETW_CHECK_EQ(authority->requests(), 1);
     NETW_CHECK_EQ(log.count(StringName("denied")), 1);
+}
+
+struct ClientAction {
+    LoopbackRig rig;
+    Carrier *owner = nullptr;
+    Carrier *authority = nullptr;
+    Node *orphan = nullptr;
+
+    ClientAction()
+        : rig(1) {
+        rig.mount();
+        WorldDecl world;
+        world.player(
+            EntityDecl()
+                .named("P")
+                .synced("position")
+                .placed_at(Vector2())
+                .mounted(),
+            0
+        );
+        rig.declare_world(world);
+        owner = Object::cast_to<Carrier>(
+            rig.node_of(rig.entity_of(StringName("P"), 0), 0)
+        );
+        authority = Object::cast_to<Carrier>(rig.node_of(rig.entity_of("P")));
+        REQUIRE(owner != nullptr);
+        REQUIRE(authority != nullptr);
+        Ref<netw::NetwClockConfig> clock;
+        clock.instantiate();
+        clock->set("tickrate", 24);
+        REQUIRE(int(rig.server()->clock_initialize(clock)) == int(OK));
+        rig.server()->clock_engine().set_manual_tick(true);
+        authority->arm_action(rig.server());
+        rig.server()->config_settle();
+        REQUIRE(rig.server()->lagcomp_is_configured());
+        REQUIRE_FALSE(session()->lagcomp_is_configured());
+    }
+
+    ~ClientAction() {
+        if (orphan != nullptr) {
+            memdelete(orphan);
+        }
+    }
+
+    netw::NetwMultiplayer *session() const {
+        return rig.client(0);
+    }
+
+    Node *child(const char *p_name) const {
+        Node *made = memnew(Node);
+        made->set_name(StringName(p_name));
+        rig.branch(0)->add_child(made);
+        return made;
+    }
+
+    void fire(int p_view_tick) const {
+        owner->fire(p_view_tick, IMMEDIATE);
+        if (session()->clock_is_configured()) {
+            session()->clock_engine().set_manual_tick(true);
+        }
+    }
+};
+
+struct Configuring {
+    netw::NetwMultiplayer *session = nullptr;
+    Carrier *carrier = nullptr;
+    int calls = 0;
+    int64_t future_seen = -1;
+    int ghosts_seen = -1;
+    int64_t effects_seen = -1;
+};
+
+Configuring &configuring() {
+    static Configuring held;
+    return held;
+}
+
+void request_while_configuring() {
+    Configuring &seen = configuring();
+    seen.calls += 1;
+    seen.future_seen = seen.session->get_max_future_action_ticks();
+    seen.carrier->fire(5, IMMEDIATE);
+    seen.ghosts_seen = seen.carrier->ghosts();
+    seen.effects_seen = seen.session->lagcomp_effect_count();
+}
+
+TEST_CASE(
+    "[Networked][LagComp][Action] AC13 a completed lag compensation draft "
+    "runs an action in the declaring frame without premature defaults"
+) {
+    ClientAction fixture;
+    bool early_handle = false;
+    SUBCASE("the handle exists before configuration") {
+        early_handle = true;
+    }
+    SUBCASE("the handle is created after the fluent tail") {
+    }
+    if (early_handle) {
+        fixture.owner->arm_action(fixture.session());
+        CHECK_FALSE(fixture.session()->lagcomp_is_configured());
+    }
+    const Ref<netw::NetwLagCompensationConfig> draft
+        = netw::Netw::configure_lagcomp(fixture.rig.branch(0));
+    netw::Netw::configure_clock(fixture.rig.branch(0))->ticks_per_second(24);
+    draft->max_future_action(17)->input_gate_deadline(19);
+    if (!early_handle) {
+        fixture.owner->arm_action(fixture.session());
+    }
+    const FaultWatch watch;
+
+    fixture.fire(0);
+
+    NETW_CHECK_EQ(fixture.owner->ghosts(), 1);
+    NETW_CHECK_EQ(fixture.session()->get_max_future_action_ticks(), 17);
+    NETW_CHECK_EQ(fixture.session()->get_input_gate_deadline_ticks(), 19);
+    NETW_CHECK_EQ(
+        int(fixture.session()->clock_get_param(
+            netw::NetwMultiplayer::CLOCK_PARAM_TICKRATE
+        )),
+        24
+    );
+    fixture.rig.step_ticks(30);
+    NETW_CHECK_EQ(fixture.authority->requests(), 1);
+    NETW_CHECK_EQ(fixture.owner->denials(), 1);
+
+    fixture.session()->config_settle();
+    draft->max_future_action(3);
+    fixture.fire(1);
+    fixture.rig.step_ticks(30);
+
+    NETW_CHECK_EQ(fixture.owner->ghosts(), 2);
+    NETW_CHECK_EQ(fixture.authority->requests(), 2);
+    NETW_CHECK_EQ(fixture.session()->get_max_future_action_ticks(), 17);
+    NETW_CHECK_EQ(draft->get_max_future_action_ticks(), 17);
+    NETW_CHECK_EQ(
+        watch.log->warning_count_containing("after the session started"),
+        1
+    );
+    NETW_CHECK_EQ(watch.log->errors_logged(), 0);
+}
+
+TEST_CASE(
+    "[Networked][LagComp][Action] AC14 settings the session cannot apply "
+    "refuse the request before it predicts, arms an effect or sends, and "
+    "say why once"
+) {
+    ClientAction fixture;
+    fixture.owner->arm_action(fixture.session());
+    Node *first = fixture.child("First");
+    const FaultWatch watch;
+    String said;
+    bool as_error = true;
+
+    SUBCASE("two nodes declare lag compensation") {
+        netw::Netw::configure_lagcomp(first)->max_future_action(4);
+        netw::Netw::configure_lagcomp(fixture.child("Second"))
+            ->max_future_action(5);
+        said = "more than one node";
+    }
+    SUBCASE("the declaring node left before the request") {
+        netw::Netw::configure_lagcomp(first)->max_future_action(4);
+        first->get_parent()->remove_child(first);
+        fixture.orphan = first;
+        said = "left the tree";
+        as_error = false;
+    }
+    SUBCASE("the declaration holds something other than settings") {
+        netw::session_decl::declare(
+            first,
+            netw::session_decl::KIND_LAGCOMP_CONFIG,
+            Callable(),
+            Variant(int64_t(5)),
+            "configure_lagcomp"
+        );
+        said = "cannot be read";
+    }
+
+    fixture.fire(0);
+    fixture.fire(1);
+    fixture.rig.step_ticks(5);
+
+    NETW_CHECK_EQ(fixture.authority->requests(), 0);
+    NETW_CHECK_EQ(fixture.owner->ghosts(), 0);
+    NETW_CHECK_EQ(fixture.owner->denials(), 0);
+    NETW_CHECK_EQ(fixture.session()->lagcomp_effect_count(), 0);
+    CHECK_FALSE(fixture.session()->lagcomp_is_configured());
+    if (as_error) {
+        CHECK(watch.log->error_count_containing(said) >= 1);
+    } else {
+        NETW_CHECK_EQ(watch.log->warning_count_containing(said), 1);
+    }
+}
+
+TEST_CASE(
+    "[Networked][LagComp][Action] AC15 a request made from a callback that "
+    "reacts to the settings being applied is refused as busy, while that "
+    "callback already reads every applied setting"
+) {
+    ClientAction fixture;
+    fixture.owner->arm_action(fixture.session());
+    netw::Netw::configure_clock(fixture.rig.branch(0))->ticks_per_second(24);
+    netw::Netw::configure_lagcomp(fixture.rig.branch(0))
+        ->max_future_action(17);
+    configuring() = Configuring();
+    configuring().session = fixture.session();
+    configuring().carrier = fixture.owner;
+    fixture.session()->observe(
+        netw::NetwMultiplayer::CLOCK_CONFIGURED,
+        callable_mp_static(&request_while_configuring)
+    );
+    const FaultWatch watch;
+
+    fixture.fire(0);
+    fixture.rig.step_ticks(30);
+
+    NETW_CHECK_EQ(configuring().calls, 1);
+    NETW_CHECK_EQ(configuring().future_seen, 17);
+    NETW_CHECK_EQ(configuring().ghosts_seen, 0);
+    NETW_CHECK_EQ(configuring().effects_seen, 0);
+    NETW_CHECK_EQ(fixture.owner->ghosts(), 1);
+    NETW_CHECK_EQ(fixture.authority->requests(), 1);
+    NETW_CHECK_EQ(
+        watch.log->error_count_containing("while the session applied"),
+        1
+    );
+    configuring() = Configuring();
 }
 
 PackedByteArray forged_request(int64_t p_view_tick) {

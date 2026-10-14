@@ -59,7 +59,7 @@ uint64_t interpolated_mask(
     PropertyBinding::InterpolatedColumns &held
         = p_binding->interpolated[p_lane];
     const uint64_t epoch = script::model::interpolation_epoch();
-    const uint64_t script = PropertyBinding::script_generation_of(p_node);
+    const uint64_t script = PropertyBinding::script_id_of(p_node);
     if (held.epoch == epoch && held.script == script
         && held.table == p_at.table) {
         return held.mask;

@@ -1,6 +1,7 @@
 #include "netw/api/entity_record.hpp"
 
 #include "godot/node.hpp"
+#include "netw/api/entity.hpp"
 #include "netw/entity/ids.hpp"
 #include "netw/entity/stage.hpp"
 #include "netw/log.hpp"
@@ -196,7 +197,9 @@ bool NetwEntityRecord::declares_template(Node *p_owner) {
     return owner->get_owner() != nullptr || owner->has_meta(template_meta());
 }
 
-bool NetwEntityRecord::mark_template(Node *p_owner) {
+bool NetwEntityRecord::mark_template(Node *p_owner, Object *p_wrapper) {
+    const Ref<RefCounted> keep(Object::cast_to<RefCounted>(p_wrapper));
+    const int64_t from = stage;
     if (stage == int64_t(entity::Stage::TEMPLATE)) {
         return true;
     }
@@ -207,20 +210,12 @@ bool NetwEntityRecord::mark_template(Node *p_owner) {
     if (owner != nullptr && owner->is_inside_tree()) {
         deactivate(owner);
     }
+    publish_stage(p_wrapper, from);
     return true;
 }
 
 StringName NetwEntityRecord::entity_meta() {
     return StringName("netw_entity");
-}
-
-void NetwEntityRecord::follow_server(const NodePath &p_path) {
-    for (const NodePath &path : server_paths) {
-        if (path == p_path) {
-            return;
-        }
-    }
-    server_paths.push_back(p_path);
 }
 
 NetwEntityRecord::Projection NetwEntityRecord::projection_to(
@@ -231,17 +226,6 @@ NetwEntityRecord::Projection NetwEntityRecord::projection_to(
     made.prior_follower
         = projected_follower != 0 ? projected_follower : SERVER_PEER;
     return made;
-}
-
-bool NetwEntityRecord::pinned_to_server(Node *p_owner, Node *p_node) const {
-    for (const NodePath &path : server_paths) {
-        Node *pinned = p_owner->get_node_or_null(path);
-        if (pinned != nullptr && pinned != p_owner
-            && (pinned == p_node || pinned->is_ancestor_of(p_node))) {
-            return true;
-        }
-    }
-    return false;
 }
 
 void NetwEntityRecord::write_authority(
@@ -261,8 +245,8 @@ void NetwEntityRecord::write_authority(
         NETW_WARN(
             sys::ENTITY,
             "%s had its multiplayer authority set to %d outside its entity, "
-            "and the entity sets it back to %d. Use "
-            "NetwEntity.follow_server to keep a node with the server.",
+            "and the entity sets it back to %d. Choose who holds it with "
+            "NetwEntity.authority.",
             String(named).utf8().get_data(),
             int(now),
             int(p_to)
@@ -274,18 +258,16 @@ void NetwEntityRecord::write_authority(
 void NetwEntityRecord::project_node(
     Node *p_owner,
     Node *p_node,
-    bool p_pinned,
     const Projection &p_projection,
     uint64_t p_watch
 ) {
     if (p_node != p_owner && tree::is_entity_root(p_node)) {
         return;
     }
-    const bool pinned = p_pinned || pinned_to_server(p_owner, p_node);
     write_authority(
         p_node,
-        pinned ? SERVER_PEER : p_projection.follower,
-        pinned ? SERVER_PEER : p_projection.prior_follower
+        p_projection.follower,
+        p_projection.prior_follower
     );
     const bool watched = p_projection.follower != SERVER_PEER;
     if (watched && p_watch != 0) {
@@ -296,7 +278,6 @@ void NetwEntityRecord::project_node(
         project_node(
             p_owner,
             p_node->get_child(at, true),
-            pinned,
             p_projection,
             p_watch
         );
@@ -314,7 +295,7 @@ void NetwEntityRecord::project_entered(
     }
     Projection entered;
     entered.follower = projected_follower;
-    project_node(p_owner, p_node, false, entered, p_watch);
+    project_node(p_owner, p_node, entered, p_watch);
 }
 
 void NetwEntityRecord::apply_control(
@@ -326,25 +307,23 @@ void NetwEntityRecord::apply_control(
     if (owner == nullptr) {
         return;
     }
-    const int64_t previous = owner->get_multiplayer_authority();
-    const int64_t peer = control.get_controller();
-    const int64_t authority = entity::Control::public_peer(peer);
-    project_node(owner, owner, false, projection_to(authority), p_watch);
-    projected_follower = authority;
+    const int64_t steerer
+        = entity::Control::public_peer(control.get_controller());
+    const int64_t follower
+        = control.authority_follows_controller() ? steerer : SERVER_PEER;
+    project_node(owner, owner, projection_to(follower), p_watch);
+    projected_follower = follower;
     const int64_t was
-        = previous == SERVER_PEER ? entity::Control::SERVER : previous;
-    if (was != peer && p_wrapper != nullptr) {
+        = projected_steerer != 0 ? projected_steerer : SERVER_PEER;
+    projected_steerer = steerer;
+    if (was != steerer && p_wrapper != nullptr) {
         NETW_TRACE(
             sys::ENTITY,
             "Control moved from peer %d to peer %d.",
-            int(entity::Control::public_peer(was)),
-            int(authority)
+            int(was),
+            int(steerer)
         );
-        p_wrapper->emit_signal(
-            StringName("control_changed"),
-            entity::Control::public_peer(was),
-            authority
-        );
+        p_wrapper->emit_signal(StringName("control_changed"), was, steerer);
     }
 }
 
@@ -442,11 +421,23 @@ int64_t NetwEntityRecord::admit_control_request(
     return p_requester;
 }
 
+bool NetwEntityRecord::publish_stage(Object *p_wrapper, int64_t p_from) {
+    if (p_from == stage || p_wrapper == nullptr) {
+        return true;
+    }
+    NetwEntity *wrapper = Object::cast_to<NetwEntity>(p_wrapper);
+    if (wrapper != nullptr && wrapper->get_record() == this) {
+        return wrapper->publish_stage(p_from, stage);
+    }
+    return true;
+}
+
 bool NetwEntityRecord::begin_despawn(
     Object *p_wrapper,
     Node *p_owner,
     const Ref<NetwDespawnOpts> &p_opts
 ) {
+    const Ref<RefCounted> keep(Object::cast_to<RefCounted>(p_wrapper));
     if (!entity::stage_can_begin_despawn(stage)) {
         return false;
     }
@@ -455,19 +446,46 @@ bool NetwEntityRecord::begin_despawn(
         opts.instantiate();
     }
     despawning_opts = opts;
+    const int64_t from = stage;
     transition(int64_t(entity::Stage::DESPAWNING), p_owner);
+    if (!publish_stage(p_wrapper, from)) {
+        despawning_opts = Ref<NetwDespawnOpts>();
+        return false;
+    }
     NETW_TRACE(sys::ENTITY, "Despawning because of '%s'.", opts->get_reason());
     if (p_wrapper != nullptr) {
+        NetwEntity *wrapper = Object::cast_to<NetwEntity>(p_wrapper);
+        const ObjectID owner = gd::instance_id(
+            wrapper != nullptr ? wrapper->get_owner() : p_owner
+        );
+        const Ref<MultiplayerAPI> session = wrapper != nullptr
+            ? wrapper->get_multiplayer()
+            : Ref<MultiplayerAPI>();
+        const RID captured_handle = handle;
         tree::despawning(p_wrapper, opts->get_reason());
-        p_wrapper->emit_signal(StringName("despawning"), opts->get_reason());
+        if (wrapper == nullptr
+            || (wrapper->get_record() == this && handle == captured_handle
+                && wrapper->get_multiplayer() == session
+                && gd::instance_id(wrapper->get_owner()) == owner
+                && stage == int64_t(entity::Stage::DESPAWNING))) {
+            p_wrapper->emit_signal(
+                StringName("despawning"),
+                opts->get_reason()
+            );
+        }
     }
     despawning_opts = Ref<NetwDespawnOpts>();
     return true;
 }
 
 bool NetwEntityRecord::finish_teardown(Object *p_wrapper) {
+    const Ref<RefCounted> keep(Object::cast_to<RefCounted>(p_wrapper));
+    const int64_t from = stage;
     if (!advance(int64_t(entity::Stage::FREED))) {
         return false;
+    }
+    if (!publish_stage(p_wrapper, from)) {
+        return true;
     }
     if (p_wrapper != nullptr) {
         p_wrapper->emit_signal(StringName("despawned"));
@@ -476,12 +494,17 @@ bool NetwEntityRecord::finish_teardown(Object *p_wrapper) {
 }
 
 bool NetwEntityRecord::complete_departure(Object *p_wrapper) {
+    const Ref<RefCounted> keep(Object::cast_to<RefCounted>(p_wrapper));
     if (stage == int64_t(entity::Stage::TEMPLATE)
         || stage == int64_t(entity::Stage::FREED)) {
         return false;
     }
     if (entity::stage_can_begin_despawn(stage)) {
+        const int64_t from = stage;
         advance(int64_t(entity::Stage::DESPAWNING));
+        if (!publish_stage(p_wrapper, from)) {
+            return true;
+        }
     }
     return finish_teardown(p_wrapper);
 }
@@ -495,7 +518,7 @@ void NetwEntityRecord::readmit() {
     projected_follower = 0;
 }
 
-bool NetwEntityRecord::classify_activation(Node *p_owner) {
+bool NetwEntityRecord::classify_activation(Node *p_owner, Object *p_wrapper) {
     if (stage == int64_t(entity::Stage::TEMPLATE)) {
         deactivate(p_owner);
         return false;
@@ -507,8 +530,7 @@ bool NetwEntityRecord::classify_activation(Node *p_owner) {
         return true;
     }
     if (declares_template(p_owner)) {
-        transition(int64_t(entity::Stage::TEMPLATE), p_owner);
-        deactivate(p_owner);
+        mark_template(p_owner, p_wrapper);
     }
     return false;
 }

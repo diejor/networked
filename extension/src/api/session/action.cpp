@@ -166,9 +166,7 @@ int64_t NetwMultiplayer::action_slot_of(const Callable &p_authority) {
 }
 
 Ref<NetwAction> NetwMultiplayer::lagcomp_action(const Callable &p_authority) {
-    if (lagcomp_require("declaring an action") == ERR_BUSY) {
-        declarations_changed();
-    }
+    lagcomp_want();
     Ref<NetwAction> minted;
     minted.instantiate();
     minted->open(this, p_authority, action_slot_of(p_authority));
@@ -183,9 +181,6 @@ void NetwMultiplayer::action_send_request(
     const StringName &p_key,
     int p_timing_mode
 ) {
-    if (!lagcomp_is_configured()) {
-        return;
-    }
     const bool is_remote = has_multiplayer_peer() && !is_host();
     const int64_t destination = SERVER_PEER;
     const Ref<NetwEntity> entity

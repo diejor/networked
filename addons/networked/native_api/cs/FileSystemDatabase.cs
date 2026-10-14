@@ -46,6 +46,11 @@ namespace Networked;
 /// </remarks>
 public sealed class FileSystemDatabase : NetwDatabaseBackend
 {
+    public FileSystemDatabase(
+        ) : this(NetwApi.Construct("FileSystemDatabase", true))
+    {
+    }
+
     public FileSystemDatabase(IntPtr native) : base(native)
     {
     }

@@ -10,6 +10,11 @@ namespace Networked;
 /// </summary>
 public sealed class DictionaryRecord : NetwRecord
 {
+    public DictionaryRecord(
+        ) : this(NetwApi.Construct("DictionaryRecord", true))
+    {
+    }
+
     public DictionaryRecord(IntPtr native) : base(native)
     {
     }

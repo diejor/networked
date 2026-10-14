@@ -44,6 +44,11 @@ namespace Networked;
 /// </remarks>
 public sealed class NetwPhysicsStepper : NetwRefCounted
 {
+    public NetwPhysicsStepper(
+        ) : this(NetwApi.Construct("NetwPhysicsStepper", true))
+    {
+    }
+
     public NetwPhysicsStepper(IntPtr native) : base(native)
     {
     }

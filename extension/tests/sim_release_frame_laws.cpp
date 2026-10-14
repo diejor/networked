@@ -54,6 +54,7 @@ func _init() -> void:
 	sphere.add_child(shape)
 	add_child(sphere)
 	var e := Netw.configure_entity(self)
+	e.authority = NetwEntity.AUTHORITY_CONTROLLER
 	e.transfer = NetwEntity.TRANSFER_IMMEDIATE
 	e.simulation.bodies = [^"Sphere"]
 	e.simulation.replicas = NetwSimulation.REPLICAS_ACTIVE
@@ -228,12 +229,12 @@ class ReleaseScenario : public netw_test::FrameScenario {
         seen.holder_x_at_release = held->get_position().x;
         seen.host_x_at_release = sphere_at(-1)->get_position().x;
         seen.host_velocity_at_release = sphere_at(-1)->get_linear_velocity();
-        release = entity_at(HOLDER)->release_authority();
+        release = entity_at(HOLDER)->release_control();
     }
 
     void wake() {
         evidence().woke = true;
-        claim = entity_at(HOLDER)->claim_authority();
+        claim = entity_at(HOLDER)->claim_control();
         sphere_at(HOLDER)->set_linear_velocity(WAKE);
     }
 

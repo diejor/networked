@@ -17,6 +17,11 @@ namespace Networked;
 /// </remarks>
 public sealed class NetwQuantizeQuaternion : NetwQuantize
 {
+    public NetwQuantizeQuaternion(
+        ) : this(NetwApi.Construct("NetwQuantizeQuaternion", true))
+    {
+    }
+
     public NetwQuantizeQuaternion(IntPtr native) : base(native)
     {
     }

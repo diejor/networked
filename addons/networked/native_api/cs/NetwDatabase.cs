@@ -6,16 +6,16 @@ using Godot.NativeInterop;
 namespace Networked;
 
 /// <summary>
-/// The client for persistent storage.
+/// Persistent storage for saved records.
 /// </summary>
 /// <remarks>
 /// <see cref="NetwEntity"/>, <see cref="NetwTable"/> and your own code save and
 /// load their state through a <see cref="NetwDatabase"/>. A
 /// <see cref="NetwDatabaseBackend"/> does the actual storage. A record is a
 /// <see cref="Godot.Collections.Dictionary"/> stored under a
-/// <see cref="StringName"/> id. Its <see cref="NetwSchema"/> is the table
-/// definition and the record is a row in it. Await
-/// <see cref="NetwDatabase.Open"/> before reading or writing.
+/// <see cref="StringName"/> id. A <see cref="NetwSchema"/> defines the saved
+/// property names and types. Await <see cref="NetwDatabase.Open"/> before
+/// reading or writing.
 /// <code>
 /// func _ready() -&gt; void:
 ///     Netw.configure_database(self, &amp;"saves").backend(preload("res://filesystem_backend.tres"))
@@ -64,8 +64,8 @@ public sealed class NetwDatabase : NetwRefCounted
             "failed",
             value,
             Callable.From(
-                (Error a0, string a1) =>
-                    value(a0, a1)
+                (long a0, string a1) =>
+                    value((Error)a0, a1)
             )
         );
         remove => DisconnectBridge("failed", value);
@@ -137,9 +137,9 @@ public sealed class NetwDatabase : NetwRefCounted
     /// ┠╴ERR_UNCONFIGURED  the database declares no backend
     /// ┠╴ERR_CANT_CREATE   the backend resolved no connection
     /// ┠╴ERR_INVALID_DATA  the backend's _open answered no promise
-    /// ┠╴ERR_UNAVAILABLE   this handle outlived its session, or the backend implements
+    /// ┠╴ERR_UNAVAILABLE   the session ended, or the backend implements
     /// │                   no _open
-    /// ┖╴backend-defined   the backend could not open slot
+    /// ┖╴storage error   the backend could not open slot
     /// </code>
     /// </summary>
     public NetwPromise Open(StringName slot)
@@ -165,7 +165,7 @@ public sealed class NetwDatabase : NetwRefCounted
     /// <code>
     /// Error
     /// ┠╴OK               the database is closed
-    /// ┖╴ERR_UNAVAILABLE  this handle outlived the session that issued it
+    /// ┖╴ERR_UNAVAILABLE  the session ended
     /// </code>
     /// </summary>
     public NetwPromise Close()
@@ -184,7 +184,7 @@ public sealed class NetwDatabase : NetwRefCounted
     /// <code>
     /// Error
     /// ┠╴OK               every earlier operation finished, whatever its result
-    /// ┖╴ERR_UNAVAILABLE  the session ended first, or this handle outlived it
+    /// ┖╴ERR_UNAVAILABLE  the session ended before operations finished
     /// </code>
     /// </summary>
     public NetwPromise Flush()
@@ -208,8 +208,8 @@ public sealed class NetwDatabase : NetwRefCounted
     /// ┠╴detail   String      what went wrong, for a person to read. Empty when error is OK
     /// ┠╴found    bool        whether a record was stored under id. False on any failure
     /// ┠╴id       StringName  the record id the read asked for
-    /// ┖╴values   Dictionary  the stored row, keyed by column name, complete against the
-    ///                        schema that read it. Empty unless found is true
+    /// ┖╴values   Dictionary  the saved record, keyed by saved property name, all declared properties included.
+    ///                        Empty unless found is true
     /// </code>
     /// <code>
     /// var read: Dictionary = await db.read(PlayerSave.schema, account_id).wait()
@@ -243,19 +243,19 @@ public sealed class NetwDatabase : NetwRefCounted
 
     /// <summary>
     /// Replaces the whole record at <paramref name="id"/>.
-    /// <paramref name="values"/> must hold every column
+    /// <paramref name="values"/> must hold every property
     /// <paramref name="schema"/> declares and nothing else. The promise gives
     /// an <c>@GlobalScope.Error</c>.
     /// <code>
     /// Error
-    /// ┠╴OK                  the backend acknowledged the write
+    /// ┠╴OK                  the backend confirmed the write
     /// ┠╴ERR_UNCONFIGURED    the database is not open
-    /// ┠╴ERR_DOES_NOT_EXIST  the schema is not sealed
+    /// ┠╴ERR_DOES_NOT_EXIST  the property definitions are unavailable
     /// ┠╴ERR_INVALID_PARAMETER
     /// │                     id is empty
-    /// ┠╴ERR_INVALID_DATA    values do not exactly match the schema
+    /// ┠╴ERR_INVALID_DATA    saved property names or types differ
     /// ┠╴ERR_UNAVAILABLE     the backend or connection cannot perform the write
-    /// ┖╴backend-defined     the backend rejected or could not complete the write
+    /// ┖╴storage error     the backend rejected or could not complete the write
     /// </code>
     /// <code>
     /// var error: Error = await db.write(PlayerSave.schema, account_id, {
@@ -297,28 +297,27 @@ public sealed class NetwDatabase : NetwRefCounted
         NetwApi.MethodBind("NetwDatabase", "patch", 659202569UL);
 
     /// <summary>
-    /// Replaces the columns <paramref name="values"/> names in the existing
-    /// record at <paramref name="id"/> and keeps the rest.
-    /// <paramref name="values"/> may hold any subset of the columns in
-    /// <paramref name="schema"/>. The promise gives an
+    /// Replaces the properties named in <paramref name="values"/> in the
+    /// existing record at <paramref name="id"/> and keeps the rest.
+    /// <paramref name="values"/> may hold any subset of the properties declared
+    /// by <paramref name="schema"/>. The promise gives an
     /// <c>@GlobalScope.Error</c>.
     /// <code>
     /// Error
-    /// ┠╴OK                  the backend acknowledged the merged record, or values is empty
-    /// ┠╴ERR_UNCONFIGURED    the database is not open, or the schema declares no
-    /// │                     migration from the stored record's storage version
+    /// ┠╴OK                  the backend confirmed the merged record, or values is empty
+    /// ┠╴ERR_UNCONFIGURED    the database is not open, or no migration exists for the saved version
     /// ┠╴ERR_BUSY            the database already holds 4096 pending operations
-    /// ┠╴ERR_DOES_NOT_EXIST  the schema is not sealed, or no record is stored at id
+    /// ┠╴ERR_DOES_NOT_EXIST  the property definitions are unavailable, or no record is stored at id
     /// ┠╴ERR_INVALID_PARAMETER
     /// │                     id is empty
-    /// ┠╴ERR_INVALID_DATA    values names an undeclared column or a value its column
-    /// │                     refuses, or the stored record does not match the schema
+    /// ┠╴ERR_INVALID_DATA    values contains an unknown property, a value with the wrong type,
+    /// │                     or saved properties differ from the declared properties
     /// ┠╴ERR_FILE_UNRECOGNIZED
     /// │                     the stored record is not in this library's format, or
-    /// │                     carries a newer storage version than the schema
+    /// │                     carries a newer saved version than this game
     /// ┠╴ERR_UNAVAILABLE     the backend or connection cannot perform the patch, or the
     /// │                     database closed before it finished
-    /// ┖╴backend-defined     the backend could not read or write the record
+    /// ┖╴storage error     the backend could not read or write the record
     /// </code>
     /// </summary>
     public NetwPromise Patch(
@@ -358,16 +357,16 @@ public sealed class NetwDatabase : NetwRefCounted
     /// <c>@GlobalScope.Error</c>.
     /// <code>
     /// Error
-    /// ┠╴OK                  the backend acknowledged the erase
+    /// ┠╴OK                  the backend confirmed the deletion
     /// ┠╴ERR_UNCONFIGURED    the database is not open
     /// ┠╴ERR_BUSY            the database already holds 4096 pending operations
-    /// ┠╴ERR_DOES_NOT_EXIST  the schema is not sealed
+    /// ┠╴ERR_DOES_NOT_EXIST  the property definitions are unavailable
     /// ┠╴ERR_INVALID_PARAMETER
     /// │                     id is empty
-    /// ┠╴ERR_INVALID_DATA    the connection answered no outcome for the erase
+    /// ┠╴ERR_INVALID_DATA    the connection returned no result for the deletion
     /// ┠╴ERR_UNAVAILABLE     the backend or connection cannot perform the erase, or the
     /// │                     database closed before it finished
-    /// ┖╴backend-defined     the backend rejected or could not complete the erase
+    /// ┖╴storage error     the backend rejected or could not complete the erase
     /// </code>
     /// </summary>
     public NetwPromise Erase(NetwSchema schema, StringName id)
@@ -402,13 +401,12 @@ public sealed class NetwDatabase : NetwRefCounted
     /// ┠╴error    Error             @GlobalScope.Error. Check it before reading records
     /// │ ┠╴OK                     the page was read
     /// │ ┠╴ERR_FILE_UNRECOGNIZED  a record is not in this library's format, or carries
-    /// │ │                        a newer storage version than the schema
-    /// │ ┠╴ERR_INVALID_DATA       a record does not match the schema
-    /// │ ┠╴ERR_UNCONFIGURED       the schema declares no migration from a record's
-    /// │ │                        storage version
-    /// │ ┠╴ERR_UNAVAILABLE        this handle outlived its session, or the connection
+    /// │ │                        a newer saved version than this game
+    /// │ ┠╴ERR_INVALID_DATA       saved property names or types differ
+    /// │ ┠╴ERR_UNCONFIGURED       no migration exists for a saved version
+    /// │ ┠╴ERR_UNAVAILABLE        the session ended, or the connection
     /// │ │                        implements no _scan
-    /// │ ┖╴backend-defined        the backend could not read the page
+    /// │ ┖╴storage error        the backend could not read the page
     /// ┠╴detail   String            what went wrong, for a person to read. Empty when error is OK
     /// ┠╴records  Array[Dictionary]  each one shaped like a read reply
     /// ┖╴cursor   String            pass this back to scan to continue. Empty when no records remain
@@ -420,7 +418,7 @@ public sealed class NetwDatabase : NetwRefCounted
     /// Error
     /// ┠╴ERR_UNCONFIGURED       the database is not open
     /// ┠╴ERR_BUSY               the database already holds 4096 pending operations
-    /// ┠╴ERR_DOES_NOT_EXIST     the schema is not sealed
+    /// ┠╴ERR_DOES_NOT_EXIST     the property definitions are unavailable
     /// ┠╴ERR_INVALID_PARAMETER  limit is below 1
     /// ┖╴ERR_UNAVAILABLE        the database closed before the page was read
     /// </code>
@@ -485,7 +483,7 @@ public sealed class NetwDatabase : NetwRefCounted
     /// ┠╴error    Error              check it before reading slots
     /// │ ┠╴OK                      listing succeeded
     /// │ ┠╴ERR_UNAVAILABLE         the backend does not implement slot listing
-    /// │ ┖╴backend-defined         the backend could not read its storage
+    /// │ ┖╴storage error         the backend could not read its storage
     /// ┠╴detail   String             what went wrong, for a person to read. Empty when error is OK
     /// ┖╴slots    PackedStringArray  every slot the backend holds when error is OK
     /// </code>
@@ -508,10 +506,10 @@ public sealed class NetwDatabase : NetwRefCounted
     /// ┠╴OK                the backend removed the slot
     /// ┠╴ERR_BUSY          slot is the one this database holds open
     /// ┠╴ERR_UNCONFIGURED  the database declares no backend
-    /// ┠╴ERR_UNAVAILABLE   this handle outlived its session, or the backend
+    /// ┠╴ERR_UNAVAILABLE   the session ended, or the backend
     /// │                   implements no _delete_slot
     /// ┠╴ERR_INVALID_DATA  the backend's _delete_slot answered no promise
-    /// ┖╴backend-defined   the backend could not remove the slot
+    /// ┖╴storage error   the backend could not remove the slot
     /// </code>
     /// </summary>
     public NetwPromise DeleteSlot(StringName slot)
@@ -533,7 +531,7 @@ public sealed class NetwDatabase : NetwRefCounted
 
     /// <summary>
     /// Returns a <see cref="NetwWriteBatch"/> that submits several writes and
-    /// erasures in one call.
+    /// deletions in one call.
     /// </summary>
     public NetwWriteBatch Batch()
     {

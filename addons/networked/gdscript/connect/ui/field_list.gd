@@ -1,4 +1,4 @@
-## Labelled form fields built from a settings [Dictionary] or a join schema.
+## Labelled form inputs built from settings or connection requirements.
 class_name ConnectFieldList
 extends RefCounted
 
@@ -41,10 +41,10 @@ func render_settings(container: Container, settings: Dictionary) -> void:
 
 
 func render_schema(container: Container, schema: Array) -> void:
-	var fields := { }
+	var settings := { }
 	for entry: Dictionary in schema:
-		fields[entry.name] = type_convert("", entry.get("type", TYPE_STRING))
-	render_settings(container, fields)
+		settings[entry.name] = type_convert("", entry.get("type", TYPE_STRING))
+	render_settings(container, settings)
 
 
 func as_dictionary() -> Dictionary:
@@ -112,7 +112,7 @@ static func value_from_control(control: Control, value_type: int) -> Variant:
 				return reader.data
 			push_warning(
 				(
-						"The field holding '%s' is not a JSON array, so it was "
+						"The input holding '%s' is not a JSON array, so it was "
 						+ "ignored. Write it like [1, 2]."
 				) % text,
 			)

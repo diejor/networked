@@ -69,9 +69,6 @@ public sealed class NetwDatabaseConfig : NetwRefCounted
     private static readonly IntPtr _bindBackend =
         NetwApi.MethodBind("NetwDatabaseConfig", "backend", 4173819317UL);
 
-    /// <summary>
-    /// Sets the storage this database opens, and returns this config.
-    /// </summary>
     public NetwDatabaseConfig Backend(NetwDatabaseBackend backend)
     {
         IntPtr slot0 = backend?.Native ?? IntPtr.Zero;

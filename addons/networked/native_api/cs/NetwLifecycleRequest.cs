@@ -44,8 +44,8 @@ public sealed class NetwLifecycleRequest : NetwRefCounted
     public enum KindEnum : long
     {
         /// <summary>
-        /// The controller spawned the entity with <see cref="Netw.Spawn"/>,
-        /// <see cref="Netw.Replicate"/> or <see cref="NetwEntity.SpawnUnder"/>.
+        /// The controller spawned the entity with <see cref="Netw.Spawn"/> or
+        /// <see cref="Netw.Replicate"/>.
         /// </summary>
         Spawn = 0,
         /// <summary>

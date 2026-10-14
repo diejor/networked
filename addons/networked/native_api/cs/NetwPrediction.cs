@@ -20,11 +20,11 @@ namespace Networked;
 /// </code>
 /// <para>
 /// Only an entity with a <see cref="NetwPropertyConfig.State"/> property is
-/// predicted, because that state is what gets compared and restored. Per-field
-/// tolerances are set with <see cref="NetwPropertyConfig"/>. The schedule and
-/// the simulation mode are on <see cref="NetwEntity.Simulation"/>. Values set
-/// on a <see cref="MultiplayerSynchronizer"/> in the scene act as defaults, and
-/// values set in code override them. <b>Settings</b>
+/// predicted, because that state is what gets compared and restored.
+/// Per-property tolerances are set with <see cref="NetwPropertyConfig"/>. The
+/// schedule and the simulation mode are on <see cref="NetwEntity.Simulation"/>.
+/// Values set on a <see cref="MultiplayerSynchronizer"/> in the scene act as
+/// defaults, and values set in code override them. <b>Settings</b>
 /// - <see cref="NetwPrediction.ArchetypeEnum"/> a preset for the other settings
 /// - <see cref="NetwPrediction.RecoveryPolicyEnum"/> how a misprediction is
 /// corrected
@@ -163,16 +163,16 @@ public sealed class NetwPrediction : NetwRefCounted
     public enum TriggerShape : long
     {
         /// <summary>
-        /// No field was past its tolerance.
+        /// No property was past its tolerance.
         /// </summary>
         None = 0,
         /// <summary>
-        /// At least one field past its tolerance can be written by an ordinary
-        /// correction.
+        /// At least one property past its tolerance can be written by an
+        /// ordinary correction.
         /// </summary>
         Mixed = 1,
         /// <summary>
-        /// Every field past its tolerance is
+        /// Every property past its tolerance is
         /// <see cref="NetwPropertyConfig.TeleportOnly"/>, so only a teleport
         /// can write it.
         /// </summary>
@@ -366,7 +366,7 @@ public sealed class NetwPrediction : NetwRefCounted
         /// </summary>
         IntroducedBoundary = 3,
         /// <summary>
-        /// Every field that asked for the correction is
+        /// Every property that asked for the correction is
         /// <see cref="NetwPropertyConfig.TeleportOnly"/>, so the correction
         /// could not write it.
         /// </summary>
@@ -427,7 +427,7 @@ public sealed class NetwPrediction : NetwRefCounted
         /// </summary>
         RebaseExact = 2,
         /// <summary>
-        /// A teleport restored every field.
+        /// A teleport restored every property.
         /// </summary>
         FullClosure = 3,
         /// <summary>
@@ -501,8 +501,8 @@ public sealed class NetwPrediction : NetwRefCounted
             "divergence_detected",
             value,
             Callable.From(
-                (long a0, NetwPrediction.Attribution a1) =>
-                    value(a0, a1)
+                (long a0, long a1) =>
+                    value(a0, (NetwPrediction.Attribution)a1)
             )
         );
         remove => DisconnectBridge("divergence_detected", value);
@@ -563,10 +563,8 @@ public sealed class NetwPrediction : NetwRefCounted
             "episode_changed",
             value,
             Callable.From(
-                (
-                    NetwPrediction.EpisodeChange a0,
-                    Godot.Collections.Dictionary a1) =>
-                    value(a0, a1)
+                (long a0, Godot.Collections.Dictionary a1) =>
+                    value((NetwPrediction.EpisodeChange)a0, a1)
             )
         );
         remove => DisconnectBridge("episode_changed", value);
@@ -574,10 +572,10 @@ public sealed class NetwPrediction : NetwRefCounted
 
     /// <summary>
     /// Emitted after a correction moved the body. <c>deltas</c> holds how far
-    /// each field moved, as <c>after - before</c>, with angles taken the short
-    /// way around. <c>teleported</c> is <c>true</c> when the correction was a
-    /// teleport. Under <see cref="NetwDisplay.LiveModeEnum.Chase"/> the display
-    /// already smooths the correction away.
+    /// each property moved, as <c>after - before</c>, with angles taken the
+    /// short way around. <c>teleported</c> is <c>true</c> when the correction
+    /// was a teleport. Under <see cref="NetwDisplay.LiveModeEnum.Chase"/> the
+    /// display already smooths the correction away.
     /// <code>
     /// entity.display.live_mode = NetwDisplay.LIVE_MODE_CHASE
     /// api.display_set_param(entity.rid,
@@ -594,12 +592,8 @@ public sealed class NetwPrediction : NetwRefCounted
             "recovered",
             value,
             Callable.From(
-                (
-                    long a0,
-                    Godot.Collections.Dictionary a1,
-                    bool a2,
-                    NetwPrediction.Attribution a3) =>
-                    value(a0, a1, a2, a3)
+                (long a0, Godot.Collections.Dictionary a1, bool a2, long a3) =>
+                    value(a0, a1, a2, (NetwPrediction.Attribution)a3)
             )
         );
         remove => DisconnectBridge("recovered", value);
@@ -607,7 +601,7 @@ public sealed class NetwPrediction : NetwRefCounted
 
     /// <summary>
     /// Emitted on the controlling client each time server state arrives.
-    /// <c>divergence</c> is the largest error of any field, including errors
+    /// <c>divergence</c> is the largest error of any property, including errors
     /// under <see cref="NetwPrediction.DivergenceEpsilon"/>. <c>diverged</c> is
     /// whether the error was large enough to act on, even when no correction
     /// was written. Connect to <see cref="NetwPrediction.Recovered"/> to know
@@ -635,7 +629,7 @@ public sealed class NetwPrediction : NetwRefCounted
     /// <summary>
     /// Guesses input for an entity selected by
     /// <see cref="NetwEntity.Simulation"/> that this peer does not control.
-    /// Relayed input replaces the guess. Unset callbacks and omitted fields
+    /// Relayed input replaces the guess. Unset callbacks and omitted properties
     /// repeat the newest relayed input, and zero before any arrives. The
     /// returned <see cref="Godot.Collections.Dictionary"/> uses names declared
     /// with <see cref="NetwPropertyConfig.Input"/>.
@@ -965,11 +959,11 @@ public sealed class NetwPrediction : NetwRefCounted
 
     /// <summary>
     /// How large an error may be before a correction teleports the body,
-    /// restoring every field including
-    /// <see cref="NetwPropertyConfig.TeleportOnly"/> ones. It applies to fields
-    /// declared with <see cref="NetwPropertyConfig.CarryAlong"/>, and
-    /// <see cref="NetwPropertyConfig.TeleportAt"/> overrides it per field. An
-    /// entity with no such field teleports on every correction.
+    /// restoring every property including
+    /// <see cref="NetwPropertyConfig.TeleportOnly"/> ones. It applies to
+    /// properties declared with <see cref="NetwPropertyConfig.CarryAlong"/>,
+    /// and <see cref="NetwPropertyConfig.TeleportAt"/> overrides it per
+    /// property. An entity with no such property teleports on every correction.
     /// </summary>
     public double TeleportThreshold
     {
@@ -1312,8 +1306,8 @@ public sealed class NetwPrediction : NetwRefCounted
     /// <summary>
     /// How far the predicted state may drift from the server's before it is
     /// corrected. <see cref="NetwPropertyConfig.Epsilon"/> overrides it for one
-    /// field. A <see cref="NetwPrediction.ArchetypeEnum.SolverBody"/> tolerates
-    /// one and a half quantizer steps on each quantized field.
+    /// property. A <see cref="NetwPrediction.ArchetypeEnum.SolverBody"/>
+    /// tolerates one and a half quantizer steps on each quantized property.
     /// </summary>
     public double DivergenceEpsilon
     {
@@ -1572,8 +1566,8 @@ public sealed class NetwPrediction : NetwRefCounted
         NetwApi.MethodBind("NetwPrediction", "reachability", 3102165223UL);
 
     /// <summary>
-    /// Reports, field by field, whether this entity's prediction settings take
-    /// effect. Returns an empty <see cref="Godot.Collections.Dictionary"/>
+    /// Reports, property by property, whether this entity's prediction settings
+    /// take effect. Returns an empty <see cref="Godot.Collections.Dictionary"/>
     /// before the entity is predicted. Use it while wiring an entity to find
     /// settings that are accepted but do nothing.
     /// <code>

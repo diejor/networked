@@ -36,6 +36,26 @@ Ref<Script> script_of(Object *p_object) {
     return Ref<Script>(Object::cast_to<Script>(p_object->get_script()));
 }
 
+Ref<Script> named_method_script(
+    const Callable &p_callable,
+    const char *p_verb
+) {
+    const StringName method = p_callable.get_method();
+    Object *target = p_callable.get_object();
+    const Ref<Script> script = script_of(target);
+    if (script.is_null() || method.is_empty() || !target->has_method(method)) {
+        NETW_ERROR(
+            sys::SESSION,
+            "Netw.%s got '%s', which is not a method of a node with a "
+            "script. Name a method the node's script declares.",
+            p_verb,
+            String(method)
+        );
+        return Ref<Script>();
+    }
+    return script;
+}
+
 Node *node_behind(const Variant &p_held) {
     return Object::cast_to<Node>(gd::live_object(p_held));
 }
@@ -82,7 +102,7 @@ Ref<T> declare_config(
         Ref<T>(),
         sys::SESSION,
         "Netw.%s was called twice on '%s'. Keep the Resource the first call "
-        "returned and set its values in _init.",
+        "returned and set its values there.",
         verb,
         String(p_node->get_name())
     );
@@ -146,11 +166,6 @@ NetwMultiplayer *rpc_interface(const Callable &p_callable) {
         );
     }
     return api;
-}
-
-bool node_declares(Node *p_node, const StringName &p_property) {
-    NETW_ZONE_NC("Netw node declares", colors::SESSION);
-    return gd::has_property(p_node, p_property);
 }
 
 void mark_signal_fired(const Variant &p_node, const String &p_meta_key) {
@@ -333,7 +348,7 @@ void warn_late(Node *p_node, const char *p_door, const StringName &p_member) {
     NETW_WARN(
         sys::SESSION,
         "Netw.%s configured '%s' on '%s' after it entered the tree, so "
-        "early packets can miss it. Call it from _init.",
+        "early packets can miss it. Call it before the node enters the tree.",
         p_door,
         String(p_member),
         String(p_node->get_name())
@@ -509,7 +524,8 @@ Ref<NetwLagCompensationConfig> Netw::configure_lagcomp(
 Ref<NetwPropertyConfig> Netw::configure_property(
     Node *p_node,
     const StringName &p_property,
-    bool p_warn_late
+    bool p_warn_late,
+    int64_t p_declared_type
 ) {
     NETW_ZONE_NC("Netw configure property", colors::SESSION);
     if (p_node == nullptr) {
@@ -519,13 +535,37 @@ Ref<NetwPropertyConfig> Netw::configure_property(
         );
         return Ref<NetwPropertyConfig>();
     }
-    if (!node_declares(p_node, p_property)) {
+    const gd::PropertyResolution resolved = gd::resolve_property(
+        p_node, p_property, gd::property_list(p_node)
+    );
+    if (!resolved.present) {
         NETW_ERROR(
             sys::SESSION,
-            "Netw.configure_property got '%s', which '%s' does not have. "
+            "Netw.configure_property got '%s', which the node does not have. "
             "Check the property name.",
-            String(p_property),
-            String(p_node->get_name())
+            String(p_property)
+        );
+        return Ref<NetwPropertyConfig>();
+    }
+    if (p_declared_type < -1 || p_declared_type >= Variant::VARIANT_MAX
+        || (resolved.type >= 0 && p_declared_type >= 0
+            && resolved.type != p_declared_type)) {
+        NETW_ERROR(
+            sys::SESSION,
+            "Netw.configure_property got a declared type for '%s' that does "
+            "not match the property. Pass its Variant type, or -1.",
+            String(p_property)
+        );
+        return Ref<NetwPropertyConfig>();
+    }
+    const int declared_type
+        = p_declared_type >= 0 ? int(p_declared_type) : resolved.type;
+    if (declared_type < 0) {
+        NETW_ERROR(
+            sys::SESSION,
+            "Netw.configure_property cannot find the type of '%s'. List it "
+            "in _get_property_list, or pass declared_type.",
+            String(p_property)
         );
         return Ref<NetwPropertyConfig>();
     }
@@ -534,7 +574,12 @@ Ref<NetwPropertyConfig> Netw::configure_property(
     }
     const Ref<Script> script = script_of(p_node);
     if (script.is_null()) {
-        return netw::script::model::configure_node_property(p_node, p_property);
+        const Ref<NetwPropertyConfig> config
+            = netw::script::model::configure_node_property(p_node, p_property);
+        if (config.is_valid()) {
+            config->set_declared_type(declared_type);
+        }
+        return config;
     }
     inject_property_lint(p_node);
     inject_component_registration(p_node);
@@ -542,10 +587,20 @@ Ref<NetwPropertyConfig> Netw::configure_property(
     const Ref<NetwPropertyConfig> existing
         = netw::script::model::get_property_config(script, p_property);
     if (existing.is_valid()) {
+        if (existing->get_declared_type() != declared_type) {
+            NETW_ERROR(
+                sys::SESSION,
+                "Netw.configure_property declared '%s' with two different "
+                "types. Give the property one type on every instance.",
+                String(p_property)
+            );
+            return Ref<NetwPropertyConfig>();
+        }
         return existing;
     }
     Ref<NetwPropertyConfig> config;
     config.instantiate();
+    config->set_declared_type(declared_type);
     config->set_context_script(script);
     config->set_context_name(p_property);
     config->set_context_type(1);
@@ -555,16 +610,12 @@ Ref<NetwPropertyConfig> Netw::configure_property(
 }
 
 Ref<NetwMemberConfig> Netw::configure_rpc(const Callable &p_callable) {
-    const StringName method = p_callable.get_method();
-    const Ref<Script> script = script_of(p_callable.get_object());
+    const Ref<Script> script
+        = named_method_script(p_callable, "configure_rpc");
     if (script.is_null()) {
-        NETW_ERROR(
-            sys::SESSION,
-            "Netw.configure_rpc needs a method of an object that has a "
-            "script."
-        );
         return Ref<NetwMemberConfig>();
     }
+    const StringName method = p_callable.get_method();
     Node *host = Object::cast_to<Node>(p_callable.get_object());
     if (host != nullptr) {
         warn_late(host, "configure_rpc", method);
@@ -598,11 +649,12 @@ Ref<NetwMemberConfig> Netw::configure_signal(const Signal &p_signal) {
     }
     const StringName name = p_signal.get_name();
     const Ref<Script> script = script_of(node);
-    if (script.is_null()) {
+    if (script.is_null() || name.is_empty() || !node->has_signal(name)) {
         NETW_ERROR(
             sys::SESSION,
-            "Netw.configure_signal needs '%s' to have a script that "
-            "declares the signal.",
+            "Netw.configure_signal got '%s', which '%s' does not declare. "
+            "Name a signal the node's script declares.",
+            String(name),
             String(node->get_name())
         );
         return Ref<NetwMemberConfig>();
@@ -624,16 +676,12 @@ Ref<NetwMemberConfig> Netw::configure_signal(const Signal &p_signal) {
 }
 
 Ref<NetwMemberConfig> Netw::configure_spawn(const Callable &p_callable) {
-    const StringName method = p_callable.get_method();
-    const Ref<Script> script = script_of(p_callable.get_object());
+    const Ref<Script> script
+        = named_method_script(p_callable, "configure_spawn");
     if (script.is_null()) {
-        NETW_ERROR(
-            sys::SPAWN,
-            "Netw.configure_spawn needs a method of an object that has a "
-            "script."
-        );
         return Ref<NetwMemberConfig>();
     }
+    const StringName method = p_callable.get_method();
     const Ref<NetwMemberConfig> existing
         = netw::script::model::get_spawn_config(script, method);
     if (existing.is_valid()) {
@@ -655,8 +703,8 @@ Ref<NetwEntity> Netw::configure_entity(Node *p_node) {
         NETW_ERROR(
             sys::ENTITY,
             "Netw.configure_entity ran after '%s' entered the tree, which is "
-            "too late. Call it from _init, or from NOTIFICATION_PARENTED for "
-            "a node under an entity root.",
+            "too late. Call it before the node enters the tree, or use "
+            "NetwEntity.of to find an entity that already exists.",
             String(p_node->get_name())
         );
     }
@@ -1185,9 +1233,13 @@ void Netw::_bind_methods() {
 
     ClassDB::bind_static_method(
         "Netw",
-        D_METHOD("configure_property", "node", "property", "warn_late"),
+        D_METHOD(
+            "configure_property", "node", "property", "warn_late",
+            "declared_type"
+        ),
         &Netw::configure_property,
-        DEFVAL(true)
+        DEFVAL(true),
+        DEFVAL(-1)
     );
     ClassDB::bind_static_method(
         "Netw",

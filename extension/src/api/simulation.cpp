@@ -121,7 +121,8 @@ void NetwSimulation::set_bodies(const TypedArray<NodePath> &p_value) {
         NETW_WARN(
             sys::PREDICTION,
             "NetwSimulation.bodies on %s changed after the entity "
-            "spawned, so the change is ignored. Set it in _init.",
+            "spawned, so the change is ignored. Set it before the entity "
+            "enters the tree.",
             entity_name(entity()).utf8().get_data()
         );
     }

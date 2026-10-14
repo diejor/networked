@@ -9,12 +9,9 @@ namespace Networked;
 /// Which record of which <see cref="NetwDatabase"/> an entity loads and saves.
 /// </summary>
 /// <remarks>
-/// The entity's record is one row of the table
-/// <see cref="NetwPersistenceConfig.Table"/> names, stored under the id
-/// <see cref="NetwPersistenceConfig.RecordId"/> answers. Its columns are the
-/// properties marked with <see cref="NetwPropertyConfig.Persisted"/> on the
-/// entity and on its child nodes, each under its saved column name. Configure
-/// it from <c>Node._ready</c>, where the node is in the tree.
+/// The record includes properties configured with
+/// <see cref="NetwPropertyConfig.Persisted"/> on the root and its children.
+/// Configure from <c>Node._ready</c>.
 /// <code>
 /// func _ready() -&gt; void:
 ///     Netw.configure_property(self, &amp;"position", false).persisted(&amp;"where")
@@ -25,17 +22,15 @@ namespace Networked;
 ///             .interval(5.0)
 ///
 /// func account_name() -&gt; StringName:
-///     return entity.entity_id
+///     return entity.name
 /// </code>
 /// <para>
 /// Use a <see cref="NetwPersistenceConfig.RecordId"/> that stays the same
 /// between sessions. A peer id changes every time the player joins. The record
 /// is reached through <see cref="NetwEntity.Persistence"/>. <b>Record
-/// layout</b> A column's type is the declared type of its property, so an
-/// untyped property stores any <see cref="Variant"/> a save can hold. A stored
-/// record whose columns, names or types differ from the declared ones loads
-/// only through a <see cref="NetwPersistenceConfig.Migrate"/> step. Renaming a
-/// property while keeping its saved column name needs no migration.
+/// layout</b> Changes to saved names or types require
+/// <see cref="NetwPersistenceConfig.Migrate"/>. Renaming a property while
+/// keeping its saved name needs no migration.
 /// <code>
 /// func _ready() -&gt; void:
 ///     Netw.configure_property(self, &amp;"coins", false).persisted(&amp;"gold")
@@ -46,9 +41,9 @@ namespace Networked;
 ///             .migrate(1, add_gold) \
 ///             .record_id(account_name)
 ///
-/// func add_gold(row: Dictionary) -&gt; Dictionary:
-///     row[&amp;"gold"] = 0
-///     return row
+/// func add_gold(values: Dictionary) -&gt; Dictionary:
+///     values[&amp;"gold"] = 0
+///     return values
 /// </code>
 /// </para>
 /// </remarks>
@@ -93,8 +88,8 @@ public sealed class NetwPersistenceConfig : NetwRefCounted
         NetwApi.MethodBind("NetwPersistenceConfig", "table", 3751466617UL);
 
     /// <summary>
-    /// Names the table this entity's record is stored in. Every entity saving
-    /// into one table declares the same saved columns, types and
+    /// Groups saved records under <paramref name="name"/>. Roots using the same
+    /// name must declare the same saved properties, types and
     /// <see cref="NetwPersistenceConfig.StorageVersion"/>.
     /// </summary>
     public NetwPersistenceConfig Table(StringName name)
@@ -118,10 +113,9 @@ public sealed class NetwPersistenceConfig : NetwRefCounted
             2562387623UL);
 
     /// <summary>
-    /// Sets the version this entity's record is saved at, starting from
-    /// <c>1</c>. Raise it whenever a saved column is added, removed, renamed or
-    /// retyped, and add a <see cref="NetwPersistenceConfig.Migrate"/> step from
-    /// the previous version.
+    /// The version of saved data, starting at <c>1</c>. Raise it when saved
+    /// properties change, and add a <see cref="NetwPersistenceConfig.Migrate"/>
+    /// step from the previous version.
     /// </summary>
     public NetwPersistenceConfig StorageVersion(int version)
     {
@@ -139,12 +133,16 @@ public sealed class NetwPersistenceConfig : NetwRefCounted
         NetwApi.MethodBind("NetwPersistenceConfig", "migrate", 2770629709UL);
 
     /// <summary>
-    /// Adds the step that turns a record stored at
-    /// <paramref name="fromVersion"/> into the next version.
-    /// <paramref name="step"/> receives the stored row as a
-    /// <see cref="Godot.Collections.Dictionary"/> keyed by saved column name
-    /// and returns the upgraded one. A load runs every step between the stored
-    /// version and <see cref="NetwPersistenceConfig.StorageVersion"/>.
+    /// Upgrades saved data from <paramref name="fromVersion"/> to the next
+    /// version. A load calls <paramref name="step"/> for each version up to
+    /// <see cref="NetwPersistenceConfig.StorageVersion"/>. Return all
+    /// properties needed by the next version.
+    /// <code>
+    /// step(values: Dictionary) -&gt; Dictionary
+    ///
+    /// Dictionary
+    /// ┖╴saved property name  Variant  the value stored under that name
+    /// </code>
     /// </summary>
     public NetwPersistenceConfig Migrate(int fromVersion, Callable step)
     {
@@ -171,9 +169,9 @@ public sealed class NetwPersistenceConfig : NetwRefCounted
         NetwApi.MethodBind("NetwPersistenceConfig", "record_id", 2383254644UL);
 
     /// <summary>
-    /// Sets the function that returns the id this entity's record is stored
-    /// under. It is called once, when the entity's record is compiled, and must
-    /// return a nonempty <see cref="StringName"/>.
+    /// Called once when the node is ready to obtain a nonempty
+    /// <see cref="StringName"/> identifying its saved record. Use an id that
+    /// stays the same across sessions.
     /// </summary>
     public NetwPersistenceConfig RecordId(Callable provider)
     {

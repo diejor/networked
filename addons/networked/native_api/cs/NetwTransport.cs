@@ -56,6 +56,10 @@ namespace Networked;
 /// </remarks>
 public sealed class NetwTransport : NetwRefCounted
 {
+    public NetwTransport() : this(NetwApi.Construct("NetwTransport", true))
+    {
+    }
+
     public NetwTransport(IntPtr native) : base(native)
     {
     }

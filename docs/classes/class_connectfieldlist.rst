@@ -12,7 +12,7 @@ ConnectFieldList
 
 **Inherits:** :godot:`RefCounted`
 
-Labelled form fields built from a settings :godot:`Dictionary` or a join schema.
+Labelled form inputs built from settings or connection requirements.
 
 .. rst-class:: classref-reftable-group
 

@@ -8,7 +8,12 @@
 #include "netw/api/netw_multiplayer.hpp"
 #include "netw/entity/control.hpp"
 #include "support/declared_nodes.h"
+#include "support/fault_log.h"
 #include "support/minted_script.h"
+
+#if defined(NETW_TIER_HOSTED)
+#include <godot_cpp/classes/class_db_singleton.hpp>
+#endif
 
 namespace TestEntityControlLaws {
 
@@ -20,7 +25,12 @@ struct ArmedNode {
     Node *owner = nullptr;
     Ref<NetwEntity> entity;
 
-    ArmedNode(const char *p_id, int64_t p_peer, int p_initial) {
+    ArmedNode(
+        const char *p_id,
+        int64_t p_peer,
+        int p_initial,
+        NetwEntity::Authority p_authority = NetwEntity::AUTHORITY_CONTROLLER
+    ) {
         owner = memnew(Node);
         entity = NetwEntity::ensure(owner);
         REQUIRE(entity.is_valid());
@@ -29,6 +39,7 @@ struct ArmedNode {
         entity->set_initial_controller(
             NetwEntity::InitialController(p_initial)
         );
+        entity->set_authority(p_authority);
         entity->arm(godot::Ref<netw::NetwMultiplayer>());
     }
 
@@ -42,17 +53,29 @@ struct ArmedNode {
 };
 
 TEST_CASE(
-    "[Networked][Entity][Hosted] EC1 arming a represented-peer entity makes "
-    "the peer its name spells the controller and the node authority at once"
+    "[Networked][Entity][Hosted] EC1 arming a player entity makes the peer "
+    "its name spells the controller, and the node authority too exactly "
+    "under AUTHORITY_CONTROLLER"
 ) {
+    NetwEntity::Authority mode = NetwEntity::AUTHORITY_SERVER;
+    SUBCASE("AUTHORITY_SERVER") {
+        mode = NetwEntity::AUTHORITY_SERVER;
+    }
+    SUBCASE("AUTHORITY_CONTROLLER") {
+        mode = NetwEntity::AUTHORITY_CONTROLLER;
+    }
     ArmedNode armed(
         "valeria",
         42,
-        int(netw::entity::Control::InitialController::REPRESENTED_PEER)
+        int(netw::entity::Control::InitialController::PLAYER),
+        mode
     );
 
     NETW_CHECK_EQ(armed.entity->get_controller(), 42);
-    NETW_CHECK_EQ(armed.authority(), 42);
+    NETW_CHECK_EQ(
+        armed.authority(),
+        mode == NetwEntity::AUTHORITY_CONTROLLER ? 42 : 1
+    );
     NETW_CHECK_EQ(
         armed.entity->get_control_kind(),
         int64_t(NetwEntity::CONTROL_PEER_CONTROLLED)
@@ -84,7 +107,7 @@ TEST_CASE(
     ArmedNode armed(
         "valeria",
         0,
-        int(netw::entity::Control::InitialController::REPRESENTED_PEER)
+        int(netw::entity::Control::InitialController::PLAYER)
     );
 
     NETW_CHECK_EQ(armed.entity->get_controller(), 1);
@@ -98,7 +121,7 @@ TEST_CASE(
     ArmedNode armed(
         "valeria",
         0,
-        int(netw::entity::Control::InitialController::REPRESENTED_PEER)
+        int(netw::entity::Control::InitialController::PLAYER)
     );
 
     armed.entity->set_controller(42);
@@ -182,7 +205,7 @@ TEST_CASE(
     ArmedNode armed(
         "valeria",
         0,
-        int(netw::entity::Control::InitialController::REPRESENTED_PEER)
+        int(netw::entity::Control::InitialController::PLAYER)
     );
     Announcements seen;
     armed.entity->connect(
@@ -245,12 +268,98 @@ TEST_CASE(
     REQUIRE(entity.is_valid());
     entity->set_name("driftwood");
     entity->set_peer_id(42);
-    entity->set_initial_controller(NetwEntity::INITIAL_REPRESENTED_PEER);
+    entity->set_initial_controller(NetwEntity::INITIAL_PLAYER);
+    entity->set_authority(NetwEntity::AUTHORITY_CONTROLLER);
     entity->arm(session);
 
     NETW_CHECK_EQ(entity->get_controller(), 42);
     NETW_CHECK_EQ(owner->get_multiplayer_authority(), 42);
     NETW_CHECK_EQ(entity->get_peer_id(), 42);
+
+    memdelete(owner);
+}
+
+TEST_CASE(
+    "[Networked][Entity][Hosted] EC8 TRANSFER_IMMEDIATE needs "
+    "AUTHORITY_CONTROLLER, so an AUTHORITY_SERVER entity is refused at "
+    "configuration with one error, and authority is fixed once it is armed"
+) {
+    Node *owner = memnew(Node);
+    const Ref<NetwEntity> entity = NetwEntity::ensure(owner);
+    REQUIRE(entity.is_valid());
+    entity->set_name("valeria");
+    const netw_test::FaultWatch watch;
+    bool follows = false;
+    SUBCASE("AUTHORITY_SERVER") {
+        follows = false;
+    }
+    SUBCASE("AUTHORITY_CONTROLLER") {
+        follows = true;
+        entity->set_authority(NetwEntity::AUTHORITY_CONTROLLER);
+    }
+    entity->set_transfer(NetwEntity::TRANSFER_IMMEDIATE);
+    entity->arm(godot::Ref<netw::NetwMultiplayer>());
+
+    NETW_CHECK_EQ(
+        int(entity->get_transfer()),
+        int(follows ? NetwEntity::TRANSFER_IMMEDIATE
+                    : NetwEntity::TRANSFER_REQUESTABLE)
+    );
+    NETW_CHECK_EQ(
+        watch.log->error_count_containing("TRANSFER_IMMEDIATE"),
+        follows ? 0 : 1
+    );
+
+    entity->set_transfer(NetwEntity::TRANSFER_FIXED);
+    entity->set_transfer(NetwEntity::TRANSFER_IMMEDIATE);
+    NETW_CHECK_EQ(
+        int(entity->get_transfer()),
+        int(follows ? NetwEntity::TRANSFER_IMMEDIATE
+                    : NetwEntity::TRANSFER_FIXED)
+    );
+
+    entity->set_authority(
+        follows ? NetwEntity::AUTHORITY_SERVER
+                : NetwEntity::AUTHORITY_CONTROLLER
+    );
+    NETW_CHECK_EQ(
+        int(entity->get_authority()),
+        int(follows ? NetwEntity::AUTHORITY_CONTROLLER
+                    : NetwEntity::AUTHORITY_SERVER)
+    );
+    NETW_CHECK_EQ(
+        watch.log->error_count_containing("after it entered the tree"),
+        1
+    );
+    watch.log->error_count_containing("TRANSFER_IMMEDIATE");
+
+    memdelete(owner);
+}
+
+TEST_CASE(
+    "[Networked][Entity][Hosted] EC10 a declared AUTHORITY_SERVER entity "
+    "takes no controller from a Godot authority written before it arms, and "
+    "sets that authority back to the server once"
+) {
+    Node *owner = memnew(Node);
+    Node *child = memnew(Node);
+    owner->add_child(child);
+    const Ref<NetwEntity> entity = NetwEntity::ensure(owner);
+    REQUIRE(entity.is_valid());
+    entity->set_name("valeria");
+    entity->set_authority(NetwEntity::AUTHORITY_SERVER);
+    owner->set_multiplayer_authority(42, true);
+    const netw_test::FaultWatch watch;
+
+    entity->arm(godot::Ref<netw::NetwMultiplayer>());
+
+    NETW_CHECK_EQ(entity->get_controller(), 1);
+    NETW_CHECK_EQ(owner->get_multiplayer_authority(), 1);
+    NETW_CHECK_EQ(child->get_multiplayer_authority(), 1);
+    NETW_CHECK_EQ(
+        watch.log->warning_count_containing("NetwEntity.authority"),
+        1
+    );
 
     memdelete(owner);
 }
@@ -460,6 +569,34 @@ TEST_CASE(
         )
     );
     memdelete(node);
+}
+
+TEST_CASE(
+    "[Networked][Entity] EC9 the published control surface names authority, "
+    "starts a player's body with INITIAL_PLAYER, reads peer_id without "
+    "writing it, and pins no path to the server"
+) {
+    ClassDBSingleton *classes = ClassDBSingleton::get_singleton();
+    const StringName entity("NetwEntity");
+
+    CHECK(classes->class_has_integer_constant(entity, "AUTHORITY_SERVER"));
+    CHECK(classes->class_has_integer_constant(entity, "AUTHORITY_CONTROLLER"));
+    CHECK(classes->class_has_integer_constant(entity, "INITIAL_PLAYER"));
+    CHECK_FALSE(
+        classes->class_has_integer_constant(entity, "INITIAL_REPRESENTED_PEER")
+    );
+    CHECK(
+        String(classes->class_get_property_setter(entity, "authority"))
+        == String("set_authority")
+    );
+    CHECK(String(classes->class_get_property_setter(entity, "peer_id"))
+              .is_empty());
+    CHECK(
+        String(classes->class_get_property_getter(entity, "peer_id"))
+        == String("get_peer_id")
+    );
+    CHECK_FALSE(classes->class_has_method(entity, "set_peer_id", true));
+    CHECK_FALSE(classes->class_has_method(entity, "follow_server", true));
 }
 
 #endif

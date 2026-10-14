@@ -19,7 +19,7 @@ A predicted discrete action bound to one authority method.
 Description
 -----------
 
-Shows the result of an action right away on the client that asked for it, then keeps or removes it once the server answers. Create one with :ref:`Netw.action()<class_Netw_method_action>`.
+Shows the result of an action right away on the client that asked for it, then keeps or removes it once the server answers. Create one with :ref:`Netw.action()<class_Netw_method_action>` on every peer, the server included. Only the :ref:`NetwEntity.controller<class_NetwEntity_property_controller>` of the method's entity can request it.
 
 ::
 
@@ -36,6 +36,8 @@ Shows the result of an action right away on the client that asked for it, then k
         var bomb := BOMB.instantiate()
         ctx.bind(bomb)
         $Bombs.add_child(bomb)
+
+\ The server can judge a request against the world the client saw by passing :ref:`NetwActionContext.view_tick<class_NetwActionContext_property_view_tick>` to :ref:`Netw.rewind()<class_Netw_method_rewind>`.
 
 .. rst-class:: classref-reftable-group
 
@@ -84,7 +86,7 @@ Signals
 
 **confirmed**\ (\ ) :ref:`🔗<class_NetwAction_signal_confirmed>`
 
-Emitted when the server accepted the action.
+Emitted when the server ran the action without calling :ref:`NetwActionContext.deny()<class_NetwActionContext_method_deny>`.
 
 .. rst-class:: classref-item-separator
 
@@ -96,7 +98,7 @@ Emitted when the server accepted the action.
 
 **denied**\ (\ ) :ref:`🔗<class_NetwAction_signal_denied>`
 
-Emitted when the server denied the action or did not answer in time.
+Emitted when the server called :ref:`NetwActionContext.deny()<class_NetwActionContext_method_deny>`, or did not answer within :ref:`timeout_ticks<class_NetwAction_property_timeout_ticks>`.
 
 .. rst-class:: classref-section-separator
 
@@ -251,6 +253,8 @@ Asks the server to run the action at ``view_tick``. Every argument after ``view_
     func _place_bomb(ctx: NetwActionContext, pos: Vector2, fuse: float) -> void:
 
 \ On the peer controlling the entity, :ref:`predict<class_NetwAction_property_predict>` runs immediately. On any other peer the call does nothing.
+
+If :ref:`NetwLagCompensationConfig<class_NetwLagCompensationConfig>` cannot be applied, the request reports an error without running :ref:`predict<class_NetwAction_property_predict>` or sending a packet.
 
 \ **Player request.**
 

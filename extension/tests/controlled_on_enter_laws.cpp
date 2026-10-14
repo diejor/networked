@@ -41,7 +41,7 @@ Node *build_body(const Variant &p_peer) {
     body->set_name("Body");
     const Ref<NetwEntity> entity = NetwEntity::ensure(body);
     entity->set_peer_id(int64_t(p_peer));
-    entity->set_initial_controller(NetwEntity::INITIAL_REPRESENTED_PEER);
+    entity->set_initial_controller(NetwEntity::INITIAL_PLAYER);
     Node *camera = memnew(Node);
     camera->set_name("Camera");
     camera->connect(

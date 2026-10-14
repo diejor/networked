@@ -33,10 +33,10 @@ namespace Networked;
 /// <see cref="NetwPrediction.Archetype"/>, or has a <see cref="RigidBody2D"/>
 /// or <see cref="RigidBody3D"/> root drawn by <see cref="NetwEntity.Display"/>.
 /// Other entities stay <see cref="NetwSimulation.ModeEnum.None"/>. <b>Modes</b>
-/// The peer with authority over the entity runs it as
-/// <see cref="NetwSimulation.ModeEnum.Authority"/>, and a client predicting it
-/// runs it as <see cref="NetwSimulation.ModeEnum.Predict"/>. Every other copy
-/// is a frozen <see cref="NetwSimulation.ModeEnum.Proxy"/>, unless
+/// The peer writing replicated state runs
+/// <see cref="NetwSimulation.ModeEnum.Authority"/>. A predicting client runs
+/// <see cref="NetwSimulation.ModeEnum.Predict"/>. Every other copy is a frozen
+/// <see cref="NetwSimulation.ModeEnum.Proxy"/>, unless
 /// <see cref="NetwSimulation.Replicas"/> or a selection makes it
 /// <see cref="NetwSimulation.ModeEnum.Active"/>. <b>Selection</b> While this
 /// entity runs here as <see cref="NetwSimulation.ModeEnum.Authority"/> or
@@ -45,7 +45,7 @@ namespace Networked;
 /// that declares no selection picks every simulated entity this peer holds in
 /// its <see cref="NetwInterestLayer"/> layers.
 /// <see cref="NetwSimulation.Simulate"/> names one more,
-/// <see cref="NetwSimulation.SimulateAll"/> narrows the automatic policy to one
+/// <see cref="NetwSimulation.SimulateAll"/> limits automatic selection to one
 /// layer, and <see cref="NetwSimulation.SimulateNone"/> drops it.
 /// <code>
 /// func _ready() -&gt; void:
@@ -128,13 +128,13 @@ public sealed class NetwSimulation : NetwRefCounted
     public enum ReplicasEnum : long
     {
         /// <summary>
-        /// Copies this peer has no authority over are
+        /// Copies whose state comes from another peer are
         /// <see cref="NetwSimulation.ModeEnum.Proxy"/>, unless a selection
         /// makes them active.
         /// </summary>
         Proxy = 0,
         /// <summary>
-        /// Copies this peer has no authority over are
+        /// Copies whose state comes from another peer are
         /// <see cref="NetwSimulation.ModeEnum.Active"/>.
         /// </summary>
         Active = 1,
@@ -171,8 +171,10 @@ public sealed class NetwSimulation : NetwRefCounted
             "mode_changed",
             value,
             Callable.From(
-                (NetwSimulation.ModeEnum a0, NetwSimulation.ModeEnum a1) =>
-                    value(a0, a1)
+                (long a0, long a1) =>
+                    value(
+                        (NetwSimulation.ModeEnum)a0,
+                        (NetwSimulation.ModeEnum)a1)
             )
         );
         remove => DisconnectBridge("mode_changed", value);
@@ -249,8 +251,8 @@ public sealed class NetwSimulation : NetwRefCounted
         NetwApi.MethodBind("NetwSimulation", "set_replicas", 3330814503UL);
 
     /// <summary>
-    /// How the copies this peer has no authority over run. It can change at any
-    /// time.
+    /// How this peer simulates copies whose state it receives from another
+    /// peer. It can change at any time.
     /// </summary>
     public NetwSimulation.ReplicasEnum Replicas
     {
@@ -406,7 +408,7 @@ public sealed class NetwSimulation : NetwRefCounted
 
     /// <summary>
     /// The seconds the bodies must sleep before this peer releases the entity
-    /// with <see cref="NetwEntity.ReleaseAuthority"/>, or <c>0</c> to never
+    /// with <see cref="NetwEntity.ReleaseControl"/>, or <c>0</c> to never
     /// release. It only releases an entity this peer holds with
     /// <see cref="NetwEntity.HoldEnum.Yieldable"/>. It needs
     /// <see cref="NetwEntity.TransferEnum.Immediate"/> on an entity with no
@@ -536,7 +538,7 @@ public sealed class NetwSimulation : NetwRefCounted
 
     /// <summary>
     /// Withdraws the selection <see cref="NetwSimulation.Simulate"/> made for
-    /// <paramref name="entity"/>. The automatic policy may still select it.
+    /// <paramref name="entity"/>. Automatic selection may still include it.
     /// </summary>
     public void Forget(NetwEntity entity)
     {
@@ -571,7 +573,7 @@ public sealed class NetwSimulation : NetwRefCounted
         NetwApi.MethodBind("NetwSimulation", "simulate_none", 3218959716UL);
 
     /// <summary>
-    /// Drops the automatic policy. Entities named with
+    /// Stops automatic selection. Entities named with
     /// <see cref="NetwSimulation.Simulate"/> stay selected.
     /// </summary>
     public void SimulateNone()

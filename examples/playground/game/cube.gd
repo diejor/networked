@@ -13,6 +13,7 @@ var painted: StandardMaterial3D
 
 func _init() -> void:
 	entity = Netw.configure_entity(self)
+	entity.authority = NetwEntity.AUTHORITY_CONTROLLER
 	entity.transfer = NetwEntity.TRANSFER_IMMEDIATE
 	entity.simulation.replicas = NetwSimulation.REPLICAS_ACTIVE
 	entity.simulation.claim_on_contact = true
@@ -67,11 +68,11 @@ func claim(hold: NetwEntity.Hold) -> void:
 			or entity.control_kind == NetwEntity.CONTROL_PEER_CONTROLLED
 	):
 		return
-	entity.claim_authority(hold).catch_error(refused)
+	entity.claim_control(hold).catch_error(refused)
 
 
 func let_go() -> void:
-	entity.claim_authority(NetwEntity.HOLD_YIELDABLE).catch_error(refused)
+	entity.claim_control(NetwEntity.HOLD_YIELDABLE).catch_error(refused)
 
 
 func refused(_code: Error, _detail: String) -> void:

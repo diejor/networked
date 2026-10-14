@@ -18,7 +18,6 @@
 			<return type="NetwDatabaseConfig" />
 			<param index="0" name="backend" type="NetwDatabaseBackend" />
 			<description>
-				Sets the storage this database opens, and returns this config.
 			</description>
 		</method>
 	</methods>

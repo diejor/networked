@@ -660,7 +660,7 @@ When a correction restores this value, advances it to the present using the rate
     # the body integrates position from velocity, so a restore advances along it
     Netw.configure_property(self, &"position").state().carry_along(&"velocity")
 
-\ ``channel`` must be another :ref:`state()<class_NetwPropertyConfig_method_state>` property of the same entity. Use :ref:`carry_step()<class_NetwPropertyConfig_method_carry_step>` instead when the rate changes quickly. Declaring both on one property is an error, and neither is used.
+\ ``channel`` must be another :ref:`state()<class_NetwPropertyConfig_method_state>` property of the same node. Use :ref:`carry_step()<class_NetwPropertyConfig_method_carry_step>` instead when the rate changes quickly. Declaring both on one property is an error, and neither is used.
 
 .. rst-class:: classref-item-separator
 

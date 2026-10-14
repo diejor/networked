@@ -31,6 +31,7 @@ func _init() -> void:
 	shape.shape = BoxShape3D.new()
 	add_child(shape)
 	var e := Netw.configure_entity(self)
+	e.authority = NetwEntity.AUTHORITY_CONTROLLER
 	e.transfer = NetwEntity.TRANSFER_IMMEDIATE
 	e.simulation.replicas = NetwSimulation.REPLICAS_ACTIVE
 	e.simulation.claim_on_contact = true

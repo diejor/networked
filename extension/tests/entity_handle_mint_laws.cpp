@@ -35,6 +35,7 @@ const char *ACTIVE_CUBE_SOURCE = R"(extends RigidBody3D
 
 func _init() -> void:
 	var entity := Netw.configure_entity(self)
+	entity.authority = NetwEntity.AUTHORITY_CONTROLLER
 	entity.transfer = NetwEntity.TRANSFER_IMMEDIATE
 	entity.simulation.replicas = NetwSimulation.REPLICAS_ACTIVE
 	entity.simulation.claim_on_contact = true

@@ -11,7 +11,7 @@
 		pred.witness_contacts = _sample_contacts
 		pred.breach_response = NetwPrediction.BREACH_RESPONSE_DEMOTE
 		[/codeblock]
-		Only an entity with a [method NetwPropertyConfig.state] property is predicted, because that state is what gets compared and restored. Per-field tolerances are set with [NetwPropertyConfig]. The schedule and the simulation mode are on [member NetwEntity.simulation].
+		Only an entity with a [method NetwPropertyConfig.state] property is predicted, because that state is what gets compared and restored. Per-property tolerances are set with [NetwPropertyConfig]. The schedule and the simulation mode are on [member NetwEntity.simulation].
 		Values set on a [MultiplayerSynchronizer] in the scene act as defaults, and values set in code override them.
 		[b]Settings[/b]
 		- [enum Archetype] a preset for the other settings
@@ -71,7 +71,7 @@
 		<method name="reachability" qualifiers="const">
 			<return type="Dictionary" />
 			<description>
-				Reports, field by field, whether this entity's prediction settings take effect. Returns an empty [Dictionary] before the entity is predicted. Use it while wiring an entity to find settings that are accepted but do nothing.
+				Reports, property by property, whether this entity's prediction settings take effect. Returns an empty [Dictionary] before the entity is predicted. Use it while wiring an entity to find settings that are accepted but do nothing.
 				[codeblock]
 				var report := entity.prediction.reachability()
 				for key: StringName in report[&amp;"fields"]:
@@ -215,7 +215,7 @@
 			[/codeblocks]
 		</member>
 		<member name="divergence_epsilon" type="float" setter="set_divergence_epsilon" getter="get_divergence_epsilon" default="0.01">
-			How far the predicted state may drift from the server's before it is corrected. [method NetwPropertyConfig.epsilon] overrides it for one field. A [constant ARCHETYPE_SOLVER_BODY] tolerates one and a half quantizer steps on each quantized field.
+			How far the predicted state may drift from the server's before it is corrected. [method NetwPropertyConfig.epsilon] overrides it for one property. A [constant ARCHETYPE_SOLVER_BODY] tolerates one and a half quantizer steps on each quantized property.
 		</member>
 		<member name="epoch" type="int" setter="set_epoch" getter="get_epoch" default="-1">
 			The version of the static world this entity simulates against, or [code]-1[/code] when unset. Raise it when the level changes, so the next mispredictions are tolerated while peers catch up.
@@ -230,7 +230,7 @@
 			What the server does when an input never arrives.
 		</member>
 		<member name="predict_input" type="Callable" setter="set_predict_input" getter="get_predict_input" default="Callable()">
-			Guesses input for an entity selected by [member NetwEntity.simulation] that this peer does not control. Relayed input replaces the guess. Unset callbacks and omitted fields repeat the newest relayed input, and zero before any arrives.
+			Guesses input for an entity selected by [member NetwEntity.simulation] that this peer does not control. Relayed input replaces the guess. Unset callbacks and omitted properties repeat the newest relayed input, and zero before any arrives.
 			The returned [Dictionary] uses names declared with [method NetwPropertyConfig.input].
 			[codeblock lang=text]
 			Dictionary
@@ -284,7 +284,7 @@
 			This entity's prediction counters.
 		</member>
 		<member name="teleport_threshold" type="float" setter="set_teleport_threshold" getter="get_teleport_threshold" default="2.0">
-			How large an error may be before a correction teleports the body, restoring every field including [method NetwPropertyConfig.teleport_only] ones. It applies to fields declared with [method NetwPropertyConfig.carry_along], and [method NetwPropertyConfig.teleport_at] overrides it per field. An entity with no such field teleports on every correction.
+			How large an error may be before a correction teleports the body, restoring every property including [method NetwPropertyConfig.teleport_only] ones. It applies to properties declared with [method NetwPropertyConfig.carry_along], and [method NetwPropertyConfig.teleport_at] overrides it per property. An entity with no such property teleports on every correction.
 		</member>
 		<member name="witness_contacts" type="Callable" setter="set_witness_contacts" getter="get_witness_contacts" default="Callable()">
 			Returns the colliders this peer's body touched in the step just solved. Set it so a misprediction can be blamed on a contact and [member breach_response] can take effect.
@@ -353,7 +353,7 @@
 			<param index="2" name="teleported" type="bool" />
 			<param index="3" name="attribution" type="int" enum="NetwPrediction.Attribution" />
 			<description>
-				Emitted after a correction moved the body. [param deltas] holds how far each field moved, as [code]after - before[/code], with angles taken the short way around. [param teleported] is [code]true[/code] when the correction was a teleport.
+				Emitted after a correction moved the body. [param deltas] holds how far each property moved, as [code]after - before[/code], with angles taken the short way around. [param teleported] is [code]true[/code] when the correction was a teleport.
 				Under [constant NetwDisplay.LIVE_MODE_CHASE] the display already smooths the correction away.
 				[codeblock]
 				entity.display.live_mode = NetwDisplay.LIVE_MODE_CHASE
@@ -368,7 +368,7 @@
 			<param index="2" name="divergence" type="float" />
 			<param index="3" name="diverged" type="bool" />
 			<description>
-				Emitted on the controlling client each time server state arrives. [param divergence] is the largest error of any field, including errors under [member divergence_epsilon]. [param diverged] is whether the error was large enough to act on, even when no correction was written. Connect to [signal recovered] to know when the body actually moved.
+				Emitted on the controlling client each time server state arrives. [param divergence] is the largest error of any property, including errors under [member divergence_epsilon]. [param diverged] is whether the error was large enough to act on, even when no correction was written. Connect to [signal recovered] to know when the body actually moved.
 			</description>
 		</signal>
 	</signals>
@@ -428,13 +428,13 @@
 			An input this peer guessed for an entity it does not control drove the step.
 		</constant>
 		<constant name="TRIGGER_SHAPE_NONE" value="0" enum="TriggerShape">
-			No field was past its tolerance.
+			No property was past its tolerance.
 		</constant>
 		<constant name="TRIGGER_SHAPE_MIXED" value="1" enum="TriggerShape">
-			At least one field past its tolerance can be written by an ordinary correction.
+			At least one property past its tolerance can be written by an ordinary correction.
 		</constant>
 		<constant name="TRIGGER_SHAPE_ALL_WITHHELD" value="2" enum="TriggerShape">
-			Every field past its tolerance is [method NetwPropertyConfig.teleport_only], so only a teleport can write it.
+			Every property past its tolerance is [method NetwPropertyConfig.teleport_only], so only a teleport can write it.
 		</constant>
 		<constant name="CONSUME_ACTION_REPLAY" value="0" enum="ConsumeAction">
 			The server ran a queued input.
@@ -527,7 +527,7 @@
 			The correction caused a contact the server did not have.
 		</constant>
 		<constant name="OPERATOR_OUTCOME_WITHHELD" value="4" enum="OperatorOutcome">
-			Every field that asked for the correction is [method NetwPropertyConfig.teleport_only], so the correction could not write it.
+			Every property that asked for the correction is [method NetwPropertyConfig.teleport_only], so the correction could not write it.
 		</constant>
 		<constant name="ATTRIBUTION_UNKNOWN" value="0" enum="Attribution">
 			Nothing to blame was found. [signal divergence_detected] carries an [enum Attribution].
@@ -563,7 +563,7 @@
 			The server's state, or its difference from the prediction, was written as is.
 		</constant>
 		<constant name="OPERATOR_FULL_CLOSURE" value="3" enum="Operator">
-			A teleport restored every field.
+			A teleport restored every property.
 		</constant>
 		<constant name="OPERATOR_TRANSPORT_DELTA" value="4" enum="Operator">
 			The body was moved to where it should be now, along a path [member correction_path_clear] allowed.

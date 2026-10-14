@@ -93,7 +93,7 @@ var steer_angle: float:
 
 func _init() -> void:
 	var e := Netw.configure_entity(self)
-	e.initial_controller = NetwEntity.INITIAL_REPRESENTED_PEER
+	e.initial_controller = NetwEntity.INITIAL_PLAYER
 	e.on_controller_disconnect = NetwEntity.DISCONNECT_DESPAWN
 	Netw.configure_property(self, &"motion").input().quantize(
 		NetwQuantizeScalar.new().bits(8).limits(-1.0, 1.0),

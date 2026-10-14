@@ -255,7 +255,7 @@ Return ``true`` when an empty address is valid. ``false`` by default.
 
 :godot:`String` **_address_help**\ (\ ) |virtual| :ref:`🔗<class_NetwTransport_private_method__address_help>`
 
-Return a sentence to show under the address field. Empty by default.
+Return a sentence to show under the address input. Empty by default.
 
 .. rst-class:: classref-item-separator
 
@@ -267,7 +267,7 @@ Return a sentence to show under the address field. Empty by default.
 
 :godot:`String` **_address_label**\ (\ ) |virtual| :ref:`🔗<class_NetwTransport_private_method__address_label>`
 
-Return the title of the address field, such as an IP, a URL or a room id. ``"Address"`` by default.
+Return the title of the address input, such as an IP, a URL or a room id. ``"Address"`` by default.
 
 .. rst-class:: classref-item-separator
 
@@ -279,7 +279,7 @@ Return the title of the address field, such as an IP, a URL or a room id. ``"Add
 
 :godot:`String` **_address_placeholder**\ (\ ) |virtual| :ref:`🔗<class_NetwTransport_private_method__address_placeholder>`
 
-Return the placeholder text of the address field. Empty by default.
+Return the placeholder text of the address input. Empty by default.
 
 .. rst-class:: classref-item-separator
 
@@ -363,7 +363,7 @@ Called when the request ``ticket`` is cancelled before it delivered. Free anythi
 
 :godot:`Dictionary` **_client_settings**\ (\ ) |virtual| :ref:`🔗<class_NetwTransport_private_method__client_settings>`
 
-Return the fields a join form asks for, with their default values. They are passed to :ref:`_make_peer()<class_NetwTransport_private_method__make_peer>` in :ref:`NetwConnection.TRANSPORT_MODE_CLIENT<class_NetwConnection_constant_TRANSPORT_MODE_CLIENT>`.
+Return the settings a join form asks for, with their default values. They are passed to :ref:`_make_peer()<class_NetwTransport_private_method__make_peer>` in :ref:`NetwConnection.TRANSPORT_MODE_CLIENT<class_NetwConnection_constant_TRANSPORT_MODE_CLIENT>`.
 
 ::
 
@@ -421,7 +421,7 @@ Return the name shown in a transport picker.
 
 :godot:`Dictionary` **_host_settings**\ (\ ) |virtual| :ref:`🔗<class_NetwTransport_private_method__host_settings>`
 
-Return the fields a host form asks for, with their default values. They are passed to :ref:`_make_peer()<class_NetwTransport_private_method__make_peer>` in :ref:`NetwConnection.TRANSPORT_MODE_HOST<class_NetwConnection_constant_TRANSPORT_MODE_HOST>`.
+Return the settings a host form asks for, with their default values. They are passed to :ref:`_make_peer()<class_NetwTransport_private_method__make_peer>` in :ref:`NetwConnection.TRANSPORT_MODE_HOST<class_NetwConnection_constant_TRANSPORT_MODE_HOST>`.
 
 .. rst-class:: classref-item-separator
 

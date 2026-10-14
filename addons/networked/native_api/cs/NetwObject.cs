@@ -42,6 +42,17 @@ public abstract class NetwObject : IDisposable
     /// <summary>Whether the handle still points at a live object.</summary>
     public bool IsValid => _native != IntPtr.Zero;
 
+    /// <summary>
+    /// A <see cref="Variant"/> holding the object, for a parameter typed
+    /// <see cref="Variant"/>. A null handle gives a null Variant.
+    /// </summary>
+    public static implicit operator Variant(NetwObject value)
+    {
+        return Variant.CreateTakingOwnershipOfDisposableValue(
+            VariantUtils.CreateFromGodotObjectPtr(
+                value?.Native ?? IntPtr.Zero));
+    }
+
     protected IntPtr Checked
     {
         get
@@ -240,5 +251,20 @@ public abstract class NetwRefCounted : NetwObject
 {
     protected NetwRefCounted(IntPtr native) : base(native, owned: true)
     {
+    }
+}
+
+public abstract class NetwNode : NetwObject
+{
+    protected NetwNode(IntPtr native) : base(native, owned: false)
+    {
+    }
+
+    public Node Node => GodotObject.InstanceFromId(InstanceId) as Node;
+
+    public void Free()
+    {
+        Node.Free();
+        Dispose();
     }
 }

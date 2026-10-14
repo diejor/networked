@@ -39,7 +39,16 @@ LANDING_TEMPLATE = """<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{title}</title>
+<link rel="preload" href="assets/Monocraft.ttf" as="font"
+      type="font/ttf" crossorigin>
 <style>
+@font-face {{
+  font-family: Monocraft;
+  src: url("assets/Monocraft.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}}
 :root {{
   color-scheme: light dark;
   --bg: #fafafa;
@@ -65,7 +74,7 @@ body {{
   padding: 3rem 1rem;
   background: var(--bg);
   color: var(--fg);
-  font: 16px/1.5 system-ui, -apple-system, sans-serif;
+  font: 16px/1.5 Monocraft, monospace;
   display: flex;
   justify-content: center;
 }}
@@ -75,7 +84,7 @@ main {{
 }}
 h1 {{
   font-size: 1.25rem;
-  font-weight: 600;
+  font-weight: 400;
   margin: 0 0 1.25rem;
   text-align: center;
 }}
@@ -105,7 +114,7 @@ footer {{
   color: var(--muted);
 }}
 footer a {{ color: inherit; }}
-code {{ font-family: ui-monospace, monospace; }}
+code {{ font-family: inherit; }}
 </style>
 </head>
 <body>
@@ -578,6 +587,10 @@ def run_cli(argv: list[str] | None = None) -> int:
         for entry in catalog["examples"]:
             validate_web(args.dir / entry["slug"])
         args.dir.mkdir(parents=True, exist_ok=True)
+        shutil.copytree(
+            CI_DIR / "pages" / "assets", args.dir / "assets",
+            dirs_exist_ok=True,
+        )
         (args.dir / "index.html").write_text(landing_page(catalog, args.revision), encoding="utf-8")
         print("SITE %d example(s) under %s" % (len(catalog["examples"]), args.dir))
         return 0

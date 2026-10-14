@@ -1511,7 +1511,7 @@ enum **TransportParam**: :ref:`🔗<enum_NetwMultiplayer_TransportParam>`
 
 :ref:`TransportParam<enum_NetwMultiplayer_TransportParam>` **TRANSPORT_PARAM_ADDRESS_LABEL** = ``2``
 
-:godot:`String` to title the address field with, such as an IP for :godot:`ENetMultiplayerPeer`, a URL for a WebSocket, or a room id for WebRTC.
+:godot:`String` to title the address input with, such as an IP for :godot:`ENetMultiplayerPeer`, a URL for a WebSocket, or a room id for WebRTC.
 
 .. _class_NetwMultiplayer_constant_TRANSPORT_PARAM_ADDRESS_PLACEHOLDER:
 
@@ -1519,7 +1519,7 @@ enum **TransportParam**: :ref:`🔗<enum_NetwMultiplayer_TransportParam>`
 
 :ref:`TransportParam<enum_NetwMultiplayer_TransportParam>` **TRANSPORT_PARAM_ADDRESS_PLACEHOLDER** = ``3``
 
-:godot:`String` to show in the empty address field.
+:godot:`String` to show in the empty address input.
 
 .. _class_NetwMultiplayer_constant_TRANSPORT_PARAM_ADDRESS_HELP:
 
@@ -1527,7 +1527,7 @@ enum **TransportParam**: :ref:`🔗<enum_NetwMultiplayer_TransportParam>`
 
 :ref:`TransportParam<enum_NetwMultiplayer_TransportParam>` **TRANSPORT_PARAM_ADDRESS_HELP** = ``4``
 
-:godot:`String` sentence under the address field, empty when it needs none.
+:godot:`String` sentence under the address input, empty when it needs none.
 
 .. _class_NetwMultiplayer_constant_TRANSPORT_PARAM_CAPABILITIES:
 
@@ -1543,7 +1543,7 @@ enum **TransportParam**: :ref:`🔗<enum_NetwMultiplayer_TransportParam>`
 
 :ref:`TransportParam<enum_NetwMultiplayer_TransportParam>` **TRANSPORT_PARAM_HOST_SETTINGS** = ``6``
 
-:godot:`Dictionary` of the fields a host form asks for, with their default values. Pass the filled values to :ref:`transport_create_peer()<class_NetwMultiplayer_method_transport_create_peer>`.
+:godot:`Dictionary` of the settings a host form asks for, with their default values. Pass the filled values to :ref:`transport_create_peer()<class_NetwMultiplayer_method_transport_create_peer>`.
 
 .. _class_NetwMultiplayer_constant_TRANSPORT_PARAM_CLIENT_SETTINGS:
 
@@ -1593,7 +1593,7 @@ The address of the endpoint. Read-only.
 
 :ref:`EndpointParam<enum_NetwMultiplayer_EndpointParam>` **ENDPOINT_PARAM_DISPLAY_NAME** = ``2``
 
-The name shown in a server browser. The only field :ref:`endpoint_set_param()<class_NetwMultiplayer_method_endpoint_set_param>` can change.
+The name shown in a server browser. The only property :ref:`endpoint_set_param()<class_NetwMultiplayer_method_endpoint_set_param>` can change.
 
 .. _class_NetwMultiplayer_constant_ENDPOINT_PARAM_SOURCE:
 
@@ -3265,7 +3265,11 @@ The clock synchronized with the server for the first time. It happens once. The 
 
 :ref:`Notification<enum_NetwMultiplayer_Notification>` **CLOCK_CONFIGURED** = ``16``
 
-The clock settings were applied. It happens once, so check :ref:`clock_is_configured()<class_NetwMultiplayer_method_clock_is_configured>` in case it already happened. The callback receives no arguments.
+The clock settings were applied. Emitted once with no arguments. Check
+
+\ :ref:`clock_is_configured()<class_NetwMultiplayer_method_clock_is_configured>` if it may have already happened. Peer assignment
+
+and :ref:`NetwAction.request()<class_NetwAction_method_request>` are refused during this callback.
 
 .. _class_NetwMultiplayer_constant_CLOCK_TICKRATE_MISMATCH:
 
@@ -4136,7 +4140,7 @@ Accepts or rejects an incoming synchronization packet. Return :godot:`@GlobalSco
 
 Writes the received replicated property values of every entity in ``routes`` into its node, for the property declaration ``table`` names. :ref:`store_describe()<class_NetwMultiplayer_method_store_describe>` lists the tables.
 
-\ ``routes`` holds the entities whose received values are due now. A row that arrives is due at once, unless the entity's simulation runs a buffered replica copy, which takes it when the display tick reaches it.
+\ ``routes`` holds the entities whose received values are due now. An arriving property update is due at once, unless the entity's simulation runs a buffered replica copy, which takes it when the display tick reaches it.
 
 .. code:: text
 
@@ -4242,7 +4246,7 @@ Accepts or rejects an incoming table packet. Return :godot:`@GlobalScope.OK <@Gl
 
 :godot:`bool` **attribution_is_armed**\ (\ ) |const| :ref:`🔗<class_NetwMultiplayer_method_attribution_is_armed>`
 
-Returns ``true`` when :ref:`attribution_set_armed()<class_NetwMultiplayer_method_attribution_set_armed>` turned on per-column counting.
+Returns ``true`` when :ref:`attribution_set_armed()<class_NetwMultiplayer_method_attribution_set_armed>` turned on counting per property.
 
 .. rst-class:: classref-item-separator
 
@@ -4284,9 +4288,9 @@ Returns where this session's bandwidth went.
     ┠╴frames_in_by_channel  Dictionary  peer -> channel -> frames received
     ┠╴refused_in            int         frames rejected on arrival
     ┠╴refusals              Dictionary  peer -> channel -> rejection name -> count
-    ┠╴armed                 bool        whether column grain is being recorded
+    ┠╴armed                 bool        whether each property is counted
     ┠╴columns               Dictionary  a packed key -> schema, column, bits
-    ┖╴residual              Dictionary  the same bytes at the datagram boundary
+    ┖╴residual              Dictionary  the same bytes in sent packets
 
 \ Route ``0`` is traffic that belongs to no entity. ``residual`` counts the same traffic including packet headers, with this shape.
 
@@ -4842,7 +4846,7 @@ Opens ``slot``. Other operations fail until the promise resolves. Opening a diff
 
 :ref:`NetwPromise<class_NetwPromise>` **database_patch**\ (\ database\: :godot:`RID`, schema\: :godot:`RID`, id\: :godot:`StringName`, values\: :godot:`Dictionary`\ ) :ref:`🔗<class_NetwMultiplayer_method_database_patch>`
 
-Writes the fields in ``values`` to the record at ``id`` and keeps the rest. A missing record fails with :godot:`@GlobalScope.ERR_DOES_NOT_EXIST <@GlobalScope#class_@GlobalScope_constant_ERR_DOES_NOT_EXIST>`. See :ref:`NetwDatabase.patch()<class_NetwDatabase_method_patch>` for the errors.
+Writes the properties in ``values`` to the record at ``id`` and keeps the rest. A missing record fails with :godot:`@GlobalScope.ERR_DOES_NOT_EXIST <@GlobalScope#class_@GlobalScope_constant_ERR_DOES_NOT_EXIST>`. See :ref:`NetwDatabase.patch()<class_NetwDatabase_method_patch>` for the errors.
 
 .. rst-class:: classref-item-separator
 
@@ -5083,7 +5087,7 @@ Returns the endpoint for ``transport`` and ``address``, or an invalid :godot:`RI
 
 :godot:`Variant` **endpoint_get_param**\ (\ endpoint\: :godot:`RID`, param\: :ref:`EndpointParam<enum_NetwMultiplayer_EndpointParam>`\ ) :ref:`🔗<class_NetwMultiplayer_method_endpoint_get_param>`
 
-Returns one field of ``endpoint``, or ``null`` when it does not exist.
+Returns one property of ``endpoint``, or ``null`` when it does not exist.
 
 .. rst-class:: classref-item-separator
 
@@ -5191,12 +5195,12 @@ The flat form of :ref:`NetwConnection.browsing<class_NetwConnection_property_bro
 
 :godot:`Error <@GlobalScope#enum_@globalscope_Error>` **endpoint_set_param**\ (\ endpoint\: :godot:`RID`, param\: :ref:`EndpointParam<enum_NetwMultiplayer_EndpointParam>`, value\: :godot:`Variant`\ ) :ref:`🔗<class_NetwMultiplayer_method_endpoint_set_param>`
 
-Changes one field of ``endpoint`` and notifies :ref:`ENDPOINT_UPDATED<class_NetwMultiplayer_constant_ENDPOINT_UPDATED>`. Only :ref:`ENDPOINT_PARAM_DISPLAY_NAME<class_NetwMultiplayer_constant_ENDPOINT_PARAM_DISPLAY_NAME>` can be changed.
+Changes one property of ``endpoint`` and notifies :ref:`ENDPOINT_UPDATED<class_NetwMultiplayer_constant_ENDPOINT_UPDATED>`. Only :ref:`ENDPOINT_PARAM_DISPLAY_NAME<class_NetwMultiplayer_constant_ENDPOINT_PARAM_DISPLAY_NAME>` can be changed.
 
 .. code:: text
 
     Error
-    ┠╴OK                     the field changed
+    ┠╴OK                     the property changed
     ┠╴ERR_DOES_NOT_EXIST     the endpoint does not exist
     ┖╴ERR_INVALID_PARAMETER  param names anything but ENDPOINT_PARAM_DISPLAY_NAME
 
@@ -5231,7 +5235,7 @@ Synchronizes the properties in ``set`` on the node ``comp`` of ``entity``. ``0``
     ┠╴ERR_DOES_NOT_EXIST  entity or set does not exist
     ┠╴ERR_INVALID_DATA    the set is not sealed
     ┠╴ERR_UNAVAILABLE     comp is not a node of this entity
-    ┖╴ERR_UNCONFIGURED    the session has no sync pipeline
+    ┖╴ERR_UNCONFIGURED    property synchronization is unavailable
 
 .. rst-class:: classref-item-separator
 
@@ -5479,7 +5483,7 @@ Returns the :ref:`NetwEntity<class_NetwEntity>` of ``entity``, or ``null`` once 
 
 :godot:`Error <@GlobalScope#enum_@globalscope_Error>` **entity_grant_control**\ (\ entity\: :godot:`RID`, peer\: :godot:`int`\ ) :ref:`🔗<class_NetwMultiplayer_method_entity_grant_control>`
 
-Calls :ref:`NetwEntity.transfer_control()<class_NetwEntity_method_transfer_control>` on ``entity``. Returns :godot:`@GlobalScope.ERR_DOES_NOT_EXIST <@GlobalScope#class_@GlobalScope_constant_ERR_DOES_NOT_EXIST>` when ``entity`` has no bound node.
+Assigns :ref:`NetwEntity.controller<class_NetwEntity_property_controller>` on ``entity``. Returns :godot:`@GlobalScope.ERR_UNAUTHORIZED <@GlobalScope#class_@GlobalScope_constant_ERR_UNAUTHORIZED>` on a client, or :godot:`@GlobalScope.ERR_DOES_NOT_EXIST <@GlobalScope#class_@GlobalScope_constant_ERR_DOES_NOT_EXIST>` when ``entity`` has no bound node.
 
 .. rst-class:: classref-item-separator
 
@@ -6746,14 +6750,16 @@ The default :ref:`_predict_consume()<class_NetwMultiplayer_private_method__predi
 
 :godot:`Error <@GlobalScope#enum_@globalscope_Error>` **predict_declare**\ (\ entity\: :godot:`RID`\ ) :ref:`🔗<class_NetwMultiplayer_method_predict_declare>`
 
-Turns on prediction for ``entity`` with the settings in :ref:`NetwEntity.prediction<class_NetwEntity_property_prediction>`. It also turns on lag compensation. Calling it again does nothing.
+Turns on :ref:`NetwEntity.prediction<class_NetwEntity_property_prediction>` for ``entity``. Repeated calls do nothing. Invalid :ref:`NetwLagCompensationConfig<class_NetwLagCompensationConfig>` settings prevent registration.
 
 .. code:: text
 
     Error
-    ┠╴OK                  prediction is on
+    ┠╴OK                  prediction is on, or turns on once the settings being applied are done
     ┠╴ERR_DOES_NOT_EXIST  the entity does not exist
-    ┖╴ERR_UNAVAILABLE     a NetwLagCompensationConfig is not applied yet
+    ┠╴ERR_ALREADY_EXISTS  more than one node declared the same settings
+    ┠╴ERR_UNAVAILABLE     the node that declared the settings left the tree
+    ┖╴ERR_INVALID_DATA    the declared settings cannot be read
 
 .. rst-class:: classref-item-separator
 
@@ -6941,7 +6947,7 @@ Sets :ref:`NetwPrediction.witness_contacts<class_NetwPrediction_property_witness
 
 :godot:`Error <@GlobalScope#enum_@globalscope_Error>` **predict_stepper_install**\ (\ space\: :godot:`RID`, stepper\: :ref:`NetwPhysicsStepper<class_NetwPhysicsStepper>` = null\ ) :ref:`🔗<class_NetwMultiplayer_method_predict_stepper_install>`
 
-Lets ``stepper`` step the physics ``space`` several times in one frame, which rollback needs. A ``null`` ``stepper``, or one whose :ref:`NetwPhysicsStepper._can_step()<class_NetwPhysicsStepper_private_method__can_step>` returns ``false``, removes the stepper of ``space``.
+Lets ``stepper`` step the physics ``space`` in place of ``PhysicsServer3D.space_step``, for a physics server without it. A ``null`` ``stepper``, or one whose :ref:`NetwPhysicsStepper._can_step()<class_NetwPhysicsStepper_private_method__can_step>` returns ``false``, removes the stepper of ``space``.
 
 Returns :godot:`@GlobalScope.ERR_INVALID_PARAMETER <@GlobalScope#class_@GlobalScope_constant_ERR_INVALID_PARAMETER>` when ``space`` is not valid. :ref:`NetwSession.install_physics_stepper()<class_NetwSession_method_install_physics_stepper>` does the same from a :godot:`World3D`.
 
@@ -8743,7 +8749,7 @@ The flat form of :ref:`NetwConnection.defaults()<class_NetwConnection_method_def
 
 :godot:`Variant` **transport_get_param**\ (\ transport\: :godot:`RID`, param\: :ref:`TransportParam<enum_NetwMultiplayer_TransportParam>`\ ) :ref:`🔗<class_NetwMultiplayer_method_transport_get_param>`
 
-Returns one field of ``transport``, used to draw host and join forms, or ``null``. :ref:`TRANSPORT_PARAM_CAPABILITIES<class_NetwMultiplayer_constant_TRANSPORT_PARAM_CAPABILITIES>` returns a :ref:`TransportCapability<enum_NetwConnection_TransportCapability>` mask.
+Returns one property of ``transport``, used to draw host and join forms, or ``null``. :ref:`TRANSPORT_PARAM_CAPABILITIES<class_NetwMultiplayer_constant_TRANSPORT_PARAM_CAPABILITIES>` returns a :ref:`TransportCapability<enum_NetwConnection_TransportCapability>` mask.
 
 ::
 

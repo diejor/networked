@@ -62,6 +62,11 @@ namespace Networked;
 /// </remarks>
 public sealed class NetwWebRTCSignaler : NetwRefCounted
 {
+    public NetwWebRTCSignaler(
+        ) : this(NetwApi.Construct("NetwWebRTCSignaler", true))
+    {
+    }
+
     public NetwWebRTCSignaler(IntPtr native) : base(native)
     {
     }

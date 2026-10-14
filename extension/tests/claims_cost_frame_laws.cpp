@@ -80,6 +80,7 @@ func _init() -> void:
 	sphere.add_child(shape)
 	add_child(sphere)
 	var e := Netw.configure_entity(self)
+	e.authority = NetwEntity.AUTHORITY_CONTROLLER
 	e.transfer = NetwEntity.TRANSFER_IMMEDIATE
 	e.simulation.bodies = [^"Sphere"]
 	e.simulation.replicas = NetwSimulation.REPLICAS_ACTIVE
@@ -397,11 +398,11 @@ class CostScenario final : public netw_test::FrameScenario {
             const int asker = turn % 2 == 0 ? A : B;
             if (beat == 0) {
                 entity_at(asker, CONTESTED)
-                    ->claim_authority(Hold::HOLD_EXCLUSIVE);
+                    ->claim_control(Hold::HOLD_EXCLUSIVE);
                 seen.last_requester = stand->peer_id(asker);
             } else if (beat == 1) {
                 entity_at(asker, CONTESTED)
-                    ->claim_authority(Hold::HOLD_YIELDABLE);
+                    ->claim_control(Hold::HOLD_YIELDABLE);
             }
         }
         if (p_step == HANDOFF_END + DECIDED_FRAMES) {

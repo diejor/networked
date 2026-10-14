@@ -24,6 +24,11 @@ namespace Networked;
 /// </remarks>
 public sealed class LocalLoopbackSession : NetwRefCounted
 {
+    public LocalLoopbackSession(
+        ) : this(NetwApi.Construct("LocalLoopbackSession", true))
+    {
+    }
+
     public LocalLoopbackSession(IntPtr native) : base(native)
     {
     }

@@ -18,6 +18,7 @@ struct NodeOverlay {
     Dictionary configs;
     Dictionary carry;
     Ref<NetwPersistenceConfig> persistence;
+    uint64_t property_revision = 1;
 };
 
 HashMap<uint64_t, script::Cache> &cache_book() {
@@ -508,22 +509,82 @@ Ref<Script> declaring_script(Object *p_object) {
     return Ref<Script>(Object::cast_to<Script>(p_object->get_script()));
 }
 
+namespace {
+
+int configured_type(Node *p_node, const StringName &p_property) {
+    Ref<NetwPropertyConfig> config
+        = get_property_config(script_of(p_node), p_property);
+    if (config.is_null()) {
+        const NodeOverlay *overlay = overlay_for(p_node, false);
+        if (overlay != nullptr) {
+            config = overlay->configs.get(p_property, Variant());
+        }
+    }
+    return config.is_valid() ? config->get_declared_type() : -1;
+}
+
+void properties_changed(int64_t p_node) {
+    NodeOverlay *overlay = overlay_for(
+        Object::cast_to<Node>(gd::object_of(ObjectID(p_node))),
+        false
+    );
+    if (overlay != nullptr) {
+        overlay->property_revision += 1;
+    }
+}
+
+} // namespace
+
 int64_t get_node_property_type(Node *p_node, const StringName &p_property) {
     if (p_node == nullptr) {
         return int64_t(Variant::NIL);
+    }
+    const int declared = configured_type(p_node, p_property);
+    if (declared >= 0) {
+        return declared;
     }
     script::Cache *cache = cache_for(script_of(p_node));
     if (cache != nullptr) {
         return int64_t(cache->prop_type(p_node, p_property));
     }
-    const Array properties = gd::property_list(p_node);
-    for (int index = 0; index < properties.size(); index++) {
-        const Dictionary property = properties[index];
-        if (StringName(property.get("name", StringName())) == p_property) {
-            return int64_t(property.get("type", int64_t(Variant::NIL)));
+    const gd::PropertyResolution listed
+        = gd::listed_property(gd::property_list(p_node), p_property);
+    return listed.type >= 0 ? listed.type : int64_t(Variant::NIL);
+}
+
+gd::PropertyResolution resolve_property(
+    Node *p_node,
+    const StringName &p_property,
+    const Array &p_infos
+) {
+    gd::PropertyResolution resolved
+        = gd::resolve_property(p_node, p_property, p_infos);
+    const int declared = configured_type(p_node, p_property);
+    if (declared >= 0) {
+        if (resolved.type >= 0 && declared != resolved.type) {
+            return {};
         }
+        resolved.type = declared;
     }
-    return int64_t(Variant::NIL);
+    return resolved;
+}
+
+void watch_properties(Node *p_node) {
+    NodeOverlay *overlay = overlay_for(p_node, true);
+    if (overlay == nullptr) {
+        return;
+    }
+    const Callable changed = callable_mp_static(&properties_changed).bind(
+        int64_t(p_node->get_instance_id())
+    );
+    if (!p_node->is_connected(StringName("property_list_changed"), changed)) {
+        p_node->connect(StringName("property_list_changed"), changed);
+    }
+}
+
+uint64_t property_revision(Node *p_node) {
+    const NodeOverlay *overlay = overlay_for(p_node, false);
+    return overlay != nullptr ? overlay->property_revision : 0;
 }
 
 Array get_signal_arg_types(
@@ -541,6 +602,10 @@ int64_t get_property_id(
     const Ref<Script> &p_script,
     const StringName &p_property
 ) {
+    if (p_script.is_valid()
+        && p_script->get_class() == StringName("CSharpScript")) {
+        return 0;
+    }
     script::Cache *cache = cache_for(p_script);
     if (cache == nullptr) {
         return 0;
@@ -552,6 +617,10 @@ StringName get_property_name_by_id(
     const Ref<Script> &p_script,
     int64_t p_property_id
 ) {
+    if (p_script.is_valid()
+        && p_script->get_class() == StringName("CSharpScript")) {
+        return StringName();
+    }
     script::Cache *cache = cache_for(p_script);
     if (cache == nullptr) {
         return StringName();

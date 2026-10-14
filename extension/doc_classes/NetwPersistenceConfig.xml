@@ -4,7 +4,8 @@
 		Which record of which [NetwDatabase] an entity loads and saves.
 	</brief_description>
 	<description>
-		The entity's record is one row of the table [method table] names, stored under the id [method record_id] answers. Its columns are the properties marked with [method NetwPropertyConfig.persisted] on the entity and on its child nodes, each under its saved column name. Configure it from [method Node._ready], where the node is in the tree.
+		The record includes properties configured with [method NetwPropertyConfig.persisted] on the root and its children.
+		Configure from [method Node._ready].
 		[codeblock]
 		func _ready() -&gt; void:
 		    Netw.configure_property(self, &amp;"position", false).persisted(&amp;"where")
@@ -15,11 +16,11 @@
 		            .interval(5.0)
 
 		func account_name() -&gt; StringName:
-		    return entity.entity_id
+		    return entity.name
 		[/codeblock]
 		Use a [method record_id] that stays the same between sessions. A peer id changes every time the player joins. The record is reached through [member NetwEntity.persistence].
 		[b]Record layout[/b]
-		A column's type is the declared type of its property, so an untyped property stores any [Variant] a save can hold. A stored record whose columns, names or types differ from the declared ones loads only through a [method migrate] step. Renaming a property while keeping its saved column name needs no migration.
+		Changes to saved names or types require [method migrate]. Renaming a property while keeping its saved name needs no migration.
 		[codeblock]
 		func _ready() -&gt; void:
 		    Netw.configure_property(self, &amp;"coins", false).persisted(&amp;"gold")
@@ -30,9 +31,9 @@
 		            .migrate(1, add_gold) \
 		            .record_id(account_name)
 
-		func add_gold(row: Dictionary) -&gt; Dictionary:
-		    row[&amp;"gold"] = 0
-		    return row
+		func add_gold(values: Dictionary) -&gt; Dictionary:
+		    values[&amp;"gold"] = 0
+		    return values
 		[/codeblock]
 	</description>
 	<tutorials>
@@ -49,7 +50,8 @@
 			<return type="NetwPersistenceConfig" />
 			<param index="0" name="seconds" type="float" />
 			<description>
-				Saves the record every [param seconds] when something changed. [code]0.0[/code] saves only when you call [method NetwPersistence.save].
+				Saves the record every [param seconds] when something changed.
+				[code]0.0[/code] saves only when you call [method NetwPersistence.save].
 				[b]Server Only.[/b]
 			</description>
 		</method>
@@ -57,7 +59,8 @@
 			<return type="NetwPersistenceConfig" />
 			<param index="0" name="enabled" type="bool" default="true" />
 			<description>
-				Whether the server loads the stored record when the entity's node is ready. Clients do not receive the entity until the load succeeds or finds no record. Call [method NetwPersistence.load] to retry a failed load.
+				Whether the server loads the stored record when the entity's node is ready.
+				Clients do not receive the entity until the load succeeds or finds no record. Call [method NetwPersistence.load] to retry a failed load.
 			</description>
 		</method>
 		<method name="migrate">
@@ -65,28 +68,34 @@
 			<param index="0" name="from_version" type="int" />
 			<param index="1" name="step" type="Callable" />
 			<description>
-				Adds the step that turns a record stored at [param from_version] into the next version. [param step] receives the stored row as a [Dictionary] keyed by saved column name and returns the upgraded one. A load runs every step between the stored version and [method storage_version].
+				Upgrades saved data from [param from_version] to the next version. A load calls [param step] for each version up to [method storage_version]. Return all properties needed by the next version.
+				[codeblock lang=text]
+				step(values: Dictionary) -> Dictionary
+
+				Dictionary
+				┖╴saved property name  Variant  the value stored under that name
+				[/codeblock]
 			</description>
 		</method>
 		<method name="record_id">
 			<return type="NetwPersistenceConfig" />
 			<param index="0" name="provider" type="Callable" />
 			<description>
-				Sets the function that returns the id this entity's record is stored under. It is called once, when the entity's record is compiled, and must return a nonempty [StringName].
+				Called once when the node is ready to obtain a nonempty [StringName] identifying its saved record. Use an id that stays the same across sessions.
 			</description>
 		</method>
 		<method name="storage_version">
 			<return type="NetwPersistenceConfig" />
 			<param index="0" name="version" type="int" />
 			<description>
-				Sets the version this entity's record is saved at, starting from [code]1[/code]. Raise it whenever a saved column is added, removed, renamed or retyped, and add a [method migrate] step from the previous version.
+				The version of saved data, starting at [code]1[/code]. Raise it when saved properties change, and add a [method migrate] step from the previous version.
 			</description>
 		</method>
 		<method name="table">
 			<return type="NetwPersistenceConfig" />
 			<param index="0" name="name" type="StringName" />
 			<description>
-				Names the table this entity's record is stored in. Every entity saving into one table declares the same saved columns, types and [method storage_version].
+				Groups saved records under [param name]. Roots using the same name must declare the same saved properties, types and [method storage_version].
 			</description>
 		</method>
 	</methods>

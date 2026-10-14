@@ -35,6 +35,7 @@ var pose := Transform3D()
 
 func _init() -> void:
 	var e := Netw.configure_entity(self)
+	e.authority = NetwEntity.AUTHORITY_CONTROLLER
 	e.transfer = NetwEntity.TRANSFER_IMMEDIATE
 	Netw.configure_property(self, &"ink").broadcast()
 	Netw.configure_property(self, &"breaks").broadcast()
@@ -207,7 +208,7 @@ TEST_CASE(
     board.rig.conditions(-1, slow, board.rig.peer_id(0));
 
     const Ref<NetwEntity> claimant = NetwEntity::of(board.node(0));
-    const Ref<NetwPromise> claim = claimant->claim_authority();
+    const Ref<NetwPromise> claim = claimant->claim_control();
     claim->catch_error(callable_mp_static(&quiet));
     REQUIRE(claimant->get_is_controlled_locally());
     draw_stroke(board.node(0), 3, 7);

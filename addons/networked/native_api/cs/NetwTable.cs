@@ -21,8 +21,8 @@ namespace Networked;
 /// </code>
 /// <para>
 /// There is one <see cref="NetwTable"/> per table. Connect
-/// <see cref="NetwTable.Received"/> once and keep the handle in a field. Each
-/// row is identified by a route. Row indices change when rows are added or
+/// <see cref="NetwTable.Received"/> once and keep the result in a variable.
+/// Each row is identified by a route. Row indices change when rows are added or
 /// removed, and routes do not. <b>Writing</b> Write the routes and every
 /// column, then call <see cref="NetwTable.Commit"/> to apply them with the
 /// current tick and send them.

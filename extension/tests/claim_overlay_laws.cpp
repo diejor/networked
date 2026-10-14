@@ -37,6 +37,7 @@ var strokes := 0
 
 func _init() -> void:
 	var e := Netw.configure_entity(self)
+	e.authority = NetwEntity.AUTHORITY_CONTROLLER
 	e.transfer = NetwEntity.TRANSFER_IMMEDIATE
 	Netw.configure_property(self, &"strokes").broadcast().on_spawn()
 )";
@@ -171,7 +172,7 @@ TEST_CASE(
     CallLog log;
     claimant->connect(StringName("control_changed"), log.callable("changed"));
 
-    const Ref<NetwPromise> claim = quietly(claimant->claim_authority());
+    const Ref<NetwPromise> claim = quietly(claimant->claim_control());
     CHECK(claimant->get_is_controlled_locally());
     CHECK(claimant->get_is_control_pending());
     CHECK_FALSE(claim->get_is_settled());
@@ -217,9 +218,9 @@ TEST_CASE(
     stand.slow_requests_from(0);
     const Ref<NetwEntity> claimant = stand.entity(0);
 
-    const Ref<NetwPromise> claim = quietly(claimant->claim_authority());
+    const Ref<NetwPromise> claim = quietly(claimant->claim_control());
     stand.draw(0, 5);
-    const Ref<NetwPromise> release = claimant->release_authority();
+    const Ref<NetwPromise> release = claimant->release_control();
     CHECK_FALSE(release->get_is_settled());
     stand.rig.step_ticks(CLAIM_FLIGHT_TICKS + 8);
 
@@ -235,7 +236,7 @@ TEST_CASE(
     }
 
     const Ref<NetwPromise> nothing
-        = quietly(stand.entity(1)->release_authority());
+        = quietly(stand.entity(1)->release_control());
     if (!refused) {
         CHECK(nothing->get_is_failed());
         NETW_CHECK_EQ(int(nothing->get_code()), int(ERR_UNAUTHORIZED));
@@ -254,10 +255,10 @@ TEST_CASE(
     CallLog log;
 
     const Ref<NetwPromise> grab
-        = claimant->claim_authority(Control::HOLD_EXCLUSIVE);
+        = claimant->claim_control(Control::HOLD_EXCLUSIVE);
     grab->then(log.callable("grab"));
     const Ref<NetwPromise> toss
-        = claimant->claim_authority(Control::HOLD_YIELDABLE);
+        = claimant->claim_control(Control::HOLD_YIELDABLE);
     toss->then(log.callable("throw"));
     CHECK_FALSE(toss->get_is_settled());
     CHECK(claimant->get_is_controlled_locally());
@@ -291,7 +292,7 @@ TEST_CASE(
     claimant->connect(StringName("control_changed"), log.callable("changed"));
 
     stand.rig.hold(0);
-    const Ref<NetwPromise> claim = quietly(claimant->claim_authority());
+    const Ref<NetwPromise> claim = quietly(claimant->claim_control());
     stand.draw(0, 9);
     stand.rig.step_ticks(TICKRATE + 1);
     CHECK(claim->get_is_failed());
@@ -322,7 +323,7 @@ TEST_CASE(
     NETW_REQUIRE_EQ(stand.strokes(0), 3);
 
     stand.rig.hold(0);
-    const Ref<NetwPromise> claim = quietly(claimant->claim_authority());
+    const Ref<NetwPromise> claim = quietly(claimant->claim_control());
     stand.draw(0, 9);
     stand.rig.step_ticks(TICKRATE + 1);
 

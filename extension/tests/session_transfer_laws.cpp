@@ -552,10 +552,7 @@ TEST_CASE(
                 NetwEntity::of(body)->get_controller(),
                 row.controller
             );
-            NETW_CHECK_EQ(
-                int64_t(body->get_multiplayer_authority()),
-                row.controller
-            );
+            NETW_CHECK_EQ(int64_t(body->get_multiplayer_authority()), 1);
             NETW_CHECK_EQ(
                 int(NetwEntity::of(body)->get_control_kind()),
                 int(row.kind)
@@ -1101,7 +1098,7 @@ TEST_CASE(
     const int served = table.spawn_body("Claimed", -2, 0);
     const Ref<NetwEntity> claimant
         = NetwEntity::of(present(table.body_at(served, survivor)));
-    const Ref<NetwPromise> claim = claimant->claim_authority();
+    const Ref<NetwPromise> claim = claimant->claim_control();
     REQUIRE_FALSE(claim->get_is_settled());
 
     REQUIRE(int(table.rig.session()->lose_server()) == int(OK));

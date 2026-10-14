@@ -314,6 +314,58 @@ TEST_CASE(
     memdelete(emitter);
 }
 
+constexpr const char *LAMBDA_DECLARED_SINK = R"(extends Node
+
+var declared: bool = true
+
+func _init() -> void:
+	declared = Netw.configure_rpc(func(): pass) != null
+)";
+
+TEST_CASE(
+    "[Networked][Rpc] RD6 a member declaration naming a method or signal the "
+    "script lacks, or passing a lambda, reports one error and declares "
+    "nothing"
+) {
+    const Ref<Script> script = script_from(REMOTE_SIGNAL_SINK);
+    REQUIRE(script.is_valid());
+    Node *sink = a_sink(script);
+
+    {
+        const FaultWatch faults;
+        CHECK(netw::Netw::configure_rpc(Callable(sink, StringName("nope")))
+                  .is_null());
+        NETW_CHECK_EQ(faults.errors_containing(String("'nope'")), int64_t(1));
+    }
+    {
+        const FaultWatch faults;
+        const Ref<Script> lambda = script_from(LAMBDA_DECLARED_SINK);
+        REQUIRE(lambda.is_valid());
+        Node *declarer = a_sink(lambda);
+        CHECK_FALSE(bool(declarer->get(StringName("declared"))));
+        NETW_CHECK_EQ(faults.errors(), int64_t(1));
+        memdelete(declarer);
+    }
+    {
+        const FaultWatch faults;
+        CHECK(netw::Netw::configure_spawn(Callable(sink, StringName("nope")))
+                  .is_null());
+        NETW_CHECK_EQ(faults.errors(), int64_t(1));
+    }
+    {
+        const FaultWatch faults;
+        CHECK(netw::Netw::configure_signal(Signal(sink, StringName("nope")))
+                  .is_null());
+        NETW_CHECK_EQ(faults.errors_containing(String("'nope'")), int64_t(1));
+    }
+    CHECK(netw::script::model::get_rpc_options(script, StringName("nope"))
+              .is_null());
+    CHECK(netw::script::model::get_signal_config(script, StringName("nope"))
+              .is_null());
+
+    memdelete(sink);
+}
+
 } // namespace TestRpcDeclaredConfigLaws
 
 #endif

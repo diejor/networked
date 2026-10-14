@@ -9,8 +9,10 @@ namespace Networked;
 /// Session settings, returned by <see cref="Netw.ConfigureSession"/>.
 /// </summary>
 /// <remarks>
-/// Set the values in <c>Object._init</c>. They are applied once, at the end of
-/// the frame, and changes after that push a warning and do nothing.
+/// Settings are applied once, before assigning
+/// <see cref="MultiplayerApi.MultiplayerPeer"/> or starting a connection
+/// through <see cref="NetwSession.Connection"/>. Otherwise they apply at the
+/// end of the frame. Later changes warn and are ignored.
 /// <code>
 /// func _init() -&gt; void:
 ///     Netw.configure_session(self) \
@@ -18,23 +20,14 @@ namespace Networked;
 ///         .role(NetwSession.ROLE_LISTEN_SERVER)
 /// </code>
 /// <para>
-/// A preset passed to <see cref="Netw.ConfigureSession"/> is copied, so one
-/// <c>.tres</c> can be used by several scenes. <b>Bandwidth</b>
-/// <see cref="NetwSessionConfig.BandwidthKbps"/> is a target for each peer, not
-/// a hard limit. Changed rows that do not fit wait for a later tick, and the
-/// ones that waited longest and matter most go first.
-/// <code>
-/// func _init() -&gt; void:
-///     Netw.configure_session(self).bandwidth(256)
-///     Netw.configure_entity(self).replication_priority = 4.0
-/// </code>
-/// </para>
-/// <para>
-/// A peer is sent more than its budget in two cases. RPCs, spawns, authority
-/// changes and <see cref="NetwPropertyConfig.Retained"/> properties are always
-/// sent when due. Rows also get at least a quarter of every tick's budget, even
-/// when that traffic already used it up. Later ticks pay back at most two ticks
-/// of the overspend. See <see cref="NetwMultiplayer.PeerLinkStats"/>.
+/// A <see cref="Resource"/> passed to <see cref="Netw.ConfigureSession"/> is
+/// copied. <b>Bandwidth</b> <see cref="NetwSessionConfig.BandwidthKbps"/> sets
+/// a bandwidth budget per peer. Updates that wait longer or have higher
+/// <see cref="NetwEntity.ReplicationPriority"/> are sent first. RPCs, spawns,
+/// authority changes and <see cref="NetwPropertyConfig.Retained"/> properties
+/// can exceed the budget. Other property updates still receive at least a
+/// quarter of each tick's budget. Later ticks repay the excess, up to two ticks
+/// of budget at a time.
 /// </para>
 /// </remarks>
 public sealed class NetwSessionConfig : NetwRefCounted
@@ -340,9 +333,6 @@ public sealed class NetwSessionConfig : NetwRefCounted
     private static readonly IntPtr _bindApp =
         NetwApi.MethodBind("NetwSessionConfig", "app", 243073128UL);
 
-    /// <summary>
-    /// Sets <see cref="NetwSessionConfig.AppId"/> and returns this config.
-    /// </summary>
     public NetwSessionConfig App(StringName appId)
     {
         godot_variant slot0 = VariantUtils.CreateFromStringName(appId);
@@ -360,10 +350,6 @@ public sealed class NetwSessionConfig : NetwRefCounted
     private static readonly IntPtr _bindRole =
         NetwApi.MethodBind("NetwSessionConfig", "role", 619985222UL);
 
-    /// <summary>
-    /// Sets <see cref="NetwSessionConfig.DesiredRole"/> and returns this
-    /// config.
-    /// </summary>
     public NetwSessionConfig Role(NetwSession.RoleEnum desiredRole)
     {
         long slot0 = (long)desiredRole;
@@ -379,10 +365,6 @@ public sealed class NetwSessionConfig : NetwRefCounted
     private static readonly IntPtr _bindLink =
         NetwApi.MethodBind("NetwSessionConfig", "link", 2618458252UL);
 
-    /// <summary>
-    /// Sets <see cref="NetwSessionConfig.LinkConditions"/> and returns this
-    /// config.
-    /// </summary>
     public NetwSessionConfig Link(NetwLinkConditions linkConditions)
     {
         IntPtr slot0 = linkConditions?.Native ?? IntPtr.Zero;
@@ -398,9 +380,6 @@ public sealed class NetwSessionConfig : NetwRefCounted
     private static readonly IntPtr _bindServer =
         NetwApi.MethodBind("NetwSessionConfig", "server", 2552003917UL);
 
-    /// <summary>
-    /// Sets <see cref="NetwSessionConfig.ServerInfo"/> and returns this config.
-    /// </summary>
     public NetwSessionConfig Server(NetwServerInfo serverInfo)
     {
         IntPtr slot0 = serverInfo?.Native ?? IntPtr.Zero;
@@ -416,13 +395,6 @@ public sealed class NetwSessionConfig : NetwRefCounted
     private static readonly IntPtr _bindBandwidth =
         NetwApi.MethodBind("NetwSessionConfig", "bandwidth", 3031268209UL);
 
-    /// <summary>
-    /// Sets <see cref="NetwSessionConfig.BandwidthKbps"/> and returns this
-    /// config.
-    /// <code>
-    /// Netw.configure_session(self).bandwidth(256)
-    /// </code>
-    /// </summary>
     public NetwSessionConfig Bandwidth(long kbps)
     {
         long slot0 = kbps;
@@ -438,10 +410,6 @@ public sealed class NetwSessionConfig : NetwRefCounted
     private static readonly IntPtr _bindTransfer =
         NetwApi.MethodBind("NetwSessionConfig", "transfer", 299431885UL);
 
-    /// <summary>
-    /// Sets <see cref="NetwSessionConfig.TransferMode"/> and returns this
-    /// config.
-    /// </summary>
     public NetwSessionConfig Transfer(NetwSession.TransferMode transferMode)
     {
         long slot0 = (long)transferMode;
@@ -460,10 +428,6 @@ public sealed class NetwSessionConfig : NetwRefCounted
             "transfer_deadline",
             3031268209UL);
 
-    /// <summary>
-    /// Sets <see cref="NetwSessionConfig.TransferDeadlineTicks"/> and returns
-    /// this config.
-    /// </summary>
     public NetwSessionConfig TransferDeadline(long ticks)
     {
         long slot0 = ticks;

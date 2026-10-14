@@ -26,11 +26,13 @@ Returned by :ref:`Netw.configure_rpc()<class_Netw_method_configure_rpc>`, :ref:`
 ::
 
     func _init() -> void:
-        Netw.configure_rpc(self.fire).unreliable().controller_only()
+        Netw.configure_rpc(self.fire).unreliable().controller()
         Netw.configure_signal(self.exploded).any_peer()
         Netw.configure_spawn(self._spawn_bullet).quantize(dir_q)
 
-\ Settings are stored per script, so calling this in :godot:`Object._init() <Object#class_Object_private_method__init>` of every instance is fine. A warning is pushed only when two calls set different values.
+\ A setting made here outranks the method's ``@rpc`` annotation, and a setting left out falls back to it. The server may always call an RPC, whatever its policy.
+
+Settings are stored per script, so calling this in :godot:`Object._init() <Object#class_Object_private_method__init>` of every instance is fine. A warning is pushed only when two calls set different values.
 
 \ **Note:** these methods return a **NetwMemberConfig**, so call :ref:`NetwPropertyConfig<class_NetwPropertyConfig>` methods first in a chain.
 
@@ -47,29 +49,27 @@ Properties
 .. table::
    :widths: auto
 
-   +---------------------------------------------------------+-------------------------------------------------------------------------------+-----------+
-   | :godot:`StringName`                                     | :ref:`context_name<class_NetwMemberConfig_property_context_name>`             | ``&""``   |
-   +---------------------------------------------------------+-------------------------------------------------------------------------------+-----------+
-   | :godot:`Variant`                                        | :ref:`context_node_ref<class_NetwMemberConfig_property_context_node_ref>`     | ``null``  |
-   +---------------------------------------------------------+-------------------------------------------------------------------------------+-----------+
-   | :godot:`Script`                                         | :ref:`context_script<class_NetwMemberConfig_property_context_script>`         |           |
-   +---------------------------------------------------------+-------------------------------------------------------------------------------+-----------+
-   | :godot:`int`                                            | :ref:`context_type<class_NetwMemberConfig_property_context_type>`             | ``0``     |
-   +---------------------------------------------------------+-------------------------------------------------------------------------------+-----------+
-   | :godot:`StringName`                                     | :ref:`defer_signal_name<class_NetwMemberConfig_property_defer_signal_name>`   | ``&""``   |
-   +---------------------------------------------------------+-------------------------------------------------------------------------------+-----------+
-   | :godot:`Array`                                          | :ref:`interpolators<class_NetwMemberConfig_property_interpolators>`           | ``[]``    |
-   +---------------------------------------------------------+-------------------------------------------------------------------------------+-----------+
-   | :godot:`bool`                                           | :ref:`is_call_local<class_NetwMemberConfig_property_is_call_local>`           | ``false`` |
-   +---------------------------------------------------------+-------------------------------------------------------------------------------+-----------+
-   | :godot:`bool`                                           | :ref:`is_controller_only<class_NetwMemberConfig_property_is_controller_only>` | ``false`` |
-   +---------------------------------------------------------+-------------------------------------------------------------------------------+-----------+
-   | :godot:`Array`                                          | :ref:`quantizers<class_NetwMemberConfig_property_quantizers>`                 | ``[]``    |
-   +---------------------------------------------------------+-------------------------------------------------------------------------------+-----------+
-   | :ref:`TransferMode<enum_NetwMemberConfig_TransferMode>` | :ref:`transfer_mode<class_NetwMemberConfig_property_transfer_mode>`           | ``0``     |
-   +---------------------------------------------------------+-------------------------------------------------------------------------------+-----------+
-   | :ref:`Policy<enum_NetwMemberConfig_Policy>`             | :ref:`write_policy<class_NetwMemberConfig_property_write_policy>`             | ``0``     |
-   +---------------------------------------------------------+-------------------------------------------------------------------------------+-----------+
+   +---------------------------------------------------------+-----------------------------------------------------------------------------+-----------+
+   | :godot:`StringName`                                     | :ref:`context_name<class_NetwMemberConfig_property_context_name>`           | ``&""``   |
+   +---------------------------------------------------------+-----------------------------------------------------------------------------+-----------+
+   | :godot:`Variant`                                        | :ref:`context_node_ref<class_NetwMemberConfig_property_context_node_ref>`   | ``null``  |
+   +---------------------------------------------------------+-----------------------------------------------------------------------------+-----------+
+   | :godot:`Script`                                         | :ref:`context_script<class_NetwMemberConfig_property_context_script>`       |           |
+   +---------------------------------------------------------+-----------------------------------------------------------------------------+-----------+
+   | :godot:`int`                                            | :ref:`context_type<class_NetwMemberConfig_property_context_type>`           | ``0``     |
+   +---------------------------------------------------------+-----------------------------------------------------------------------------+-----------+
+   | :godot:`StringName`                                     | :ref:`defer_signal_name<class_NetwMemberConfig_property_defer_signal_name>` | ``&""``   |
+   +---------------------------------------------------------+-----------------------------------------------------------------------------+-----------+
+   | :godot:`Array`                                          | :ref:`interpolators<class_NetwMemberConfig_property_interpolators>`         | ``[]``    |
+   +---------------------------------------------------------+-----------------------------------------------------------------------------+-----------+
+   | :godot:`bool`                                           | :ref:`is_call_local<class_NetwMemberConfig_property_is_call_local>`         | ``false`` |
+   +---------------------------------------------------------+-----------------------------------------------------------------------------+-----------+
+   | :godot:`Array`                                          | :ref:`quantizers<class_NetwMemberConfig_property_quantizers>`               | ``[]``    |
+   +---------------------------------------------------------+-----------------------------------------------------------------------------+-----------+
+   | :ref:`TransferMode<enum_NetwMemberConfig_TransferMode>` | :ref:`transfer_mode<class_NetwMemberConfig_property_transfer_mode>`         | ``0``     |
+   +---------------------------------------------------------+-----------------------------------------------------------------------------+-----------+
+   | :ref:`Policy<enum_NetwMemberConfig_Policy>`             | :ref:`write_policy<class_NetwMemberConfig_property_write_policy>`           | ``0``     |
+   +---------------------------------------------------------+-----------------------------------------------------------------------------+-----------+
 
 .. rst-class:: classref-reftable-group
 
@@ -90,8 +90,6 @@ Methods
    +-------------------------------------------------+-------------------------------------------------------------------------------------------------+
    | :ref:`NetwMemberConfig<class_NetwMemberConfig>` | :ref:`controller<class_NetwMemberConfig_method_controller>`\ (\ )                               |
    +-------------------------------------------------+-------------------------------------------------------------------------------------------------+
-   | :ref:`NetwMemberConfig<class_NetwMemberConfig>` | :ref:`controller_only<class_NetwMemberConfig_method_controller_only>`\ (\ )                     |
-   +-------------------------------------------------+-------------------------------------------------------------------------------------------------+
    | :ref:`NetwMemberConfig<class_NetwMemberConfig>` | :ref:`defer_until<class_NetwMemberConfig_method_defer_until>`\ (\ sig\: :godot:`Signal`\ )      |
    +-------------------------------------------------+-------------------------------------------------------------------------------------------------+
    | :ref:`NetwMemberConfig<class_NetwMemberConfig>` | :ref:`interpolate<class_NetwMemberConfig_method_interpolate>`\ (\ ...\ ) |vararg|               |
@@ -105,6 +103,8 @@ Methods
    | :ref:`NetwMemberConfig<class_NetwMemberConfig>` | :ref:`quantize<class_NetwMemberConfig_method_quantize>`\ (\ ...\ ) |vararg|                     |
    +-------------------------------------------------+-------------------------------------------------------------------------------------------------+
    | :ref:`NetwMemberConfig<class_NetwMemberConfig>` | :ref:`reliable<class_NetwMemberConfig_method_reliable>`\ (\ )                                   |
+   +-------------------------------------------------+-------------------------------------------------------------------------------------------------+
+   | :ref:`NetwMemberConfig<class_NetwMemberConfig>` | :ref:`server<class_NetwMemberConfig_method_server>`\ (\ )                                       |
    +-------------------------------------------------+-------------------------------------------------------------------------------------------------+
    | :ref:`NetwMemberConfig<class_NetwMemberConfig>` | :ref:`unreliable<class_NetwMemberConfig_method_unreliable>`\ (\ )                               |
    +-------------------------------------------------+-------------------------------------------------------------------------------------------------+
@@ -147,6 +147,14 @@ Only the :ref:`NetwEntity.controller<class_NetwEntity_property_controller>` may 
 :ref:`Policy<enum_NetwMemberConfig_Policy>` **POLICY_ANY_PEER** = ``2``
 
 Any peer may send.
+
+.. _class_NetwMemberConfig_constant_POLICY_SERVER:
+
+.. rst-class:: classref-enumeration-constant
+
+:ref:`Policy<enum_NetwMemberConfig_Policy>` **POLICY_SERVER** = ``3``
+
+Only the server may send.
 
 .. rst-class:: classref-item-separator
 
@@ -302,23 +310,6 @@ Set by :ref:`call_local()<class_NetwMemberConfig_method_call_local>` and :ref:`c
 
 ----
 
-.. _class_NetwMemberConfig_property_is_controller_only:
-
-.. rst-class:: classref-property
-
-:godot:`bool` **is_controller_only** = ``false`` :ref:`🔗<class_NetwMemberConfig_property_is_controller_only>`
-
-.. rst-class:: classref-property-setget
-
-- |void| **set_is_controller_only**\ (\ value\: :godot:`bool`\ )
-- :godot:`bool` **get_is_controller_only**\ (\ )
-
-Set by :ref:`controller_only()<class_NetwMemberConfig_method_controller_only>`.
-
-.. rst-class:: classref-item-separator
-
-----
-
 .. _class_NetwMemberConfig_property_quantizers:
 
 .. rst-class:: classref-property
@@ -364,7 +355,7 @@ Set by :ref:`reliable()<class_NetwMemberConfig_method_reliable>` and :ref:`unrel
 - |void| **set_write_policy**\ (\ value\: :ref:`Policy<enum_NetwMemberConfig_Policy>`\ )
 - :ref:`Policy<enum_NetwMemberConfig_Policy>` **get_write_policy**\ (\ )
 
-Set by :ref:`authority()<class_NetwMemberConfig_method_authority>`, :ref:`controller()<class_NetwMemberConfig_method_controller>` and :ref:`any_peer()<class_NetwMemberConfig_method_any_peer>`.
+Set by :ref:`authority()<class_NetwMemberConfig_method_authority>`, :ref:`controller()<class_NetwMemberConfig_method_controller>`, :ref:`any_peer()<class_NetwMemberConfig_method_any_peer>` and :ref:`server()<class_NetwMemberConfig_method_server>`. An RPC with no policy set takes it from its ``@rpc`` annotation, and one without that annotation accepts calls from the server only.
 
 .. rst-class:: classref-section-separator
 
@@ -393,7 +384,7 @@ Any peer may send it. Only use it when a cheating client cannot do harm.
 
 :ref:`NetwMemberConfig<class_NetwMemberConfig>` **authority**\ (\ ) :ref:`🔗<class_NetwMemberConfig_method_authority>`
 
-Only the node's multiplayer authority may send it. The default.
+Only the node's multiplayer authority may send it.
 
 .. rst-class:: classref-item-separator
 
@@ -430,18 +421,6 @@ The signal or RPC only runs on other peers. The default for :ref:`Netw.configure
 :ref:`NetwMemberConfig<class_NetwMemberConfig>` **controller**\ (\ ) :ref:`🔗<class_NetwMemberConfig_method_controller>`
 
 Only the :ref:`NetwEntity.controller<class_NetwEntity_property_controller>` may send it.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwMemberConfig_method_controller_only:
-
-.. rst-class:: classref-method
-
-:ref:`NetwMemberConfig<class_NetwMemberConfig>` **controller_only**\ (\ ) :ref:`🔗<class_NetwMemberConfig_method_controller_only>`
-
-Only the :ref:`NetwEntity.controller<class_NetwEntity_property_controller>` or the server may call this RPC.
 
 .. rst-class:: classref-item-separator
 
@@ -536,6 +515,18 @@ Compresses each argument with one :ref:`NetwQuantize<class_NetwQuantize>`, in or
 :ref:`NetwMemberConfig<class_NetwMemberConfig>` **reliable**\ (\ ) :ref:`🔗<class_NetwMemberConfig_method_reliable>`
 
 Send reliably. The default.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NetwMemberConfig_method_server:
+
+.. rst-class:: classref-method
+
+:ref:`NetwMemberConfig<class_NetwMemberConfig>` **server**\ (\ ) :ref:`🔗<class_NetwMemberConfig_method_server>`
+
+Only the server may send it.
 
 .. rst-class:: classref-item-separator
 

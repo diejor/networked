@@ -1449,6 +1449,8 @@ int NetwMultiplayer::display_default_role(
     if (entity.is_null()) {
         return display::resolve_role_facts(facts);
     }
+    facts.owner_is_authority = facts.owner_is_authority
+        && entity->get_controller() == int64_t(get_unique_id());
     if (entity->is_claim_running_ahead()) {
         return display::ROLE_DISABLED;
     }

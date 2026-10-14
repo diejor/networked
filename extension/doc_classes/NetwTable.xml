@@ -13,7 +13,7 @@
 
 		@onready var mobs := Netw.session(self).table(&amp;"Mob")
 		[/codeblock]
-		There is one [NetwTable] per table. Connect [signal received] once and keep the handle in a field.
+		There is one [NetwTable] per table. Connect [signal received] once and keep the result in a variable.
 		Each row is identified by a route. Row indices change when rows are added or removed, and routes do not.
 		[b]Writing[/b]
 		Write the routes and every column, then call [method commit] to apply them with the current tick and send them.

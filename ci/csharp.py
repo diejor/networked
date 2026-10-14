@@ -17,7 +17,7 @@ from common import CI_DIR, ROOT, fail, load_json, main, run
 DUMP_NAME = "extension_api.json"
 OUTPUT_DIR = ROOT / "addons" / "networked" / "native_api" / "cs"
 REGISTRY = ROOT / "extension" / "register_types.cpp"
-HAND_WRITTEN = {"NetwApi.cs", "NetwObject.cs"}
+HAND_WRITTEN = {"NetwApi.cs", "NetwObject.cs", "NetwPropertyTypes.cs"}
 THUNKS_NAME = "NetwThunks.cs"
 DOC_DIR = ROOT / "extension" / "doc_classes"
 NAMES_FILE = CI_DIR / "engine_names.json"
@@ -27,6 +27,7 @@ REGISTRATION = re.compile(
 )
 
 TEST_GUARD = "NETW_TESTS"
+TEST_METHODS = {("LocalMultiplayerPeer", "transfer_server")}
 
 KEYWORDS = {
     "abstract",
@@ -129,6 +130,12 @@ RESERVED = {
 GLOBAL_ENUMS = {"Error"}
 
 VARARG_PARAMETER = "rest"
+NAMED_MEMBER_METHODS = {
+    "configure_rpc", "configure_spawn", "configure_signal",
+    "rpc", "rpc_id", "rpc_controller", "request", "request_id",
+    "request_all", "request_controller", "spawn", "spawn_player",
+    "emit_entity_signal", "action",
+}
 
 PTRCALL_MAX_ARITY = 3
 CALL_MAX_ARITY = 4
@@ -775,6 +782,10 @@ class Emitter:
             emitted = self.method_of(name, method)
             if emitted:
                 lines.extend(["", *emitted])
+                if name == "Netw":
+                    overload = self.named_overload(method)
+                    if overload:
+                        lines.extend(["", *overload])
 
         lines.append("}")
         wrapped: list[str] = []
@@ -792,16 +803,23 @@ class Emitter:
         inherits = entry.get("inherits")
         if inherits in self.surface.classes:
             return inherits
-        return "NetwRefCounted" if entry.get("is_refcounted") else "NetwObject"
+        return "NetwRefCounted" if entry.get("is_refcounted") else "NetwNode"
 
     def lifetime_of(self, entry: dict) -> list[str]:
         name = entry["name"]
         inherited = entry.get("inherits") in self.surface.classes
-        if inherited or entry.get("is_refcounted"):
-            opening = "    public %s(IntPtr native) : base(native)" % name
-        else:
-            opening = "    public %s(IntPtr native) : base(native, owned: false)" % name
+        opening = "    public %s(IntPtr native) : base(native)" % name
+        constructor = []
+        if entry.get("is_instantiable"):
+            constructor = [
+                "    public %s() : this(NetwApi.Construct(\"%s\", %s))"
+                % (name, name, "true" if entry.get("is_refcounted") else "false"),
+                "    {",
+                "    }",
+                "",
+            ]
         return [
+            *constructor,
             opening,
             "    {",
             "    }",
@@ -873,6 +891,9 @@ class Emitter:
             if wrapped[at]:
                 received.append("Variant a%d" % at)
                 passed.append("Wrapped(a%d, %s.From)" % (at, declared))
+            elif (signal.get("arguments") or [])[at].get("type", "").startswith(("enum::", "bitfield::")):
+                received.append("long a%d" % at)
+                passed.append("(%s)a%d" % (declared, at))
             else:
                 received.append("%s a%d" % (declared, at))
                 passed.append("a%d" % at)
@@ -1131,6 +1152,9 @@ class Emitter:
 
     def method_of(self, class_name: str, method: dict) -> list[str] | None:
         subject = "%s.%s" % (class_name, method["name"])
+        if (class_name, method["name"]) in TEST_METHODS:
+            self.skipped.append(subject)
+            return None
         spelled = pascal(method["name"])
         if not self.claim(subject, spelled):
             return None
@@ -1149,12 +1173,13 @@ class Emitter:
             "    ",
             {argument["name"]: name for argument, name in zip(arguments, names)},
         )
+        preflight = self.preflight_of(class_name, method, arguments, names)
 
         plan = self.ptrcall_plan(method, arguments)
         if plan is not None:
             answered, encoded = plan
             signature, filled = self.declared_arguments(arguments, names, encoded)
-            body = filled + self.ptrcall_lines(field, instance, list(zip(names, encoded)), answered, "        ")
+            body = preflight + filled + self.ptrcall_lines(field, instance, list(zip(names, encoded)), answered, "        ")
             return [
                 *head,
                 *told,
@@ -1175,7 +1200,7 @@ class Emitter:
             varargs = VARARG_PARAMETER
             tail = "params Variant[] %s" % VARARG_PARAMETER
             signature = "%s, %s" % (signature, tail) if signature else tail
-        body = filled + self.call_lines(
+        body = preflight + filled + self.call_lines(
             field,
             instance,
             list(zip(names, boxed)),
@@ -1189,6 +1214,71 @@ class Emitter:
             "    %s%s %s(%s)" % (modifier, answered.declared, spelled, signature),
             "    {",
             *body,
+            "    }",
+        ]
+
+    def preflight_of(
+        self, class_name: str, method: dict, arguments: list, names: list
+    ) -> list[str]:
+        if class_name != "Netw":
+            return []
+        if method["name"] == "configure_property":
+            return [
+                "        if (declaredType < 0)",
+                "        {",
+                "            declaredType = NetwPropertyTypes.Resolve(node, property);",
+                "        }",
+            ]
+        if method["name"] not in NAMED_MEMBER_METHODS:
+            return []
+        lines = []
+        for argument, name in zip(arguments, names):
+            if argument["type"] != "Callable":
+                continue
+            lines.extend([
+                "        if (%s.Delegate != null)" % name,
+                "        {",
+                "            throw new ArgumentException(",
+                "                \"Netw.%s sends a method by name. Pass the \" +"
+                % pascal(method["name"]),
+                "                \"node and a MethodName constant.\", nameof(%s));"
+                % name,
+                "        }",
+            ])
+        return lines
+
+    def named_overload(self, method: dict) -> list[str]:
+        if method["name"] not in NAMED_MEMBER_METHODS:
+            return []
+        arguments = method.get("arguments") or []
+        names = self.parameters(method)
+        signature = []
+        passed = []
+        for argument, name in zip(arguments, names):
+            kind = argument["type"]
+            if kind in ("Callable", "Signal"):
+                signature.extend(["Node node", "StringName name"])
+                passed.append("new %s(node, name)" % kind)
+            else:
+                boxed = self.surface.box(argument)
+                if boxed is None:
+                    return []
+                signature.append("%s %s" % (boxed.declared, name))
+                passed.append(name)
+        if method.get("is_vararg"):
+            signature.append("params Variant[] %s" % VARARG_PARAMETER)
+            passed.append(VARARG_PARAMETER)
+        answered = self.surface.box(method.get("return_value"))
+        if answered is None:
+            return []
+        spelled = pascal(method["name"])
+        return [
+            "    public static %s %s(%s)"
+            % (answered.declared, spelled, ", ".join(signature)),
+            "    {",
+            "        %s%s(%s);"
+            % ("" if answered.declared == "void" else "return ",
+               spelled, ", ".join(passed)),
             "    }",
         ]
 

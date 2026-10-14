@@ -4,9 +4,12 @@
 #include "godot/class_db.hpp"
 #include "godot/multiplayer.hpp"
 #include "godot/resource_loader.hpp"
+#include "godot/node.hpp"
+#include "godot/scene_tree.hpp"
 #include "godot/script.hpp"
 #include "godot/variant.hpp"
 #include "netw/api/connection.hpp"
+#include "netw/api/context.hpp"
 #include "netw/api/link_conditions.hpp"
 #include "netw/api/loopback.hpp"
 #include "netw/api/netw_multiplayer.hpp"
@@ -780,6 +783,71 @@ TEST_CASE(
     );
     NETW_CHECK_EQ(provider().closed, 0);
     NETW_CHECK_EQ(provider().destroyed, 0);
+}
+
+struct MountedBench {
+    Bench bench;
+    Node *root = nullptr;
+
+    MountedBench() {
+        root = memnew(Node);
+        root->set_name(StringName("CreationTree"));
+        netw::gd::scene_root()->add_child(root);
+        netw::gd::scene_tree()->set_multiplayer(bench.core, root->get_path());
+    }
+
+    ~MountedBench() {
+        netw::gd::scene_tree()->set_multiplayer(
+            Ref<MultiplayerAPI>(),
+            root->get_path()
+        );
+        root->get_parent()->remove_child(root);
+        memdelete(root);
+    }
+
+    Node *child(const char *p_name) const {
+        Node *made = memnew(Node);
+        made->set_name(StringName(p_name));
+        root->add_child(made);
+        return made;
+    }
+};
+
+TEST_CASE(
+    "[Networked][Connect][Creation] a connection start applies the "
+    "session's completed settings before it builds, and rejects with the "
+    "failure when they cannot be applied"
+) {
+    MountedBench mounted;
+    provider().answering = ANSWER_PEER;
+
+    SUBCASE("completed settings start the build in the same poll") {
+        netw::Netw::configure_session(mounted.child("Session"))
+            ->app(StringName("started"));
+
+        mounted.bench.ask();
+        mounted.bench.drive();
+
+        NETW_CHECK_EQ(provider().built, 1);
+        NETW_CHECK_EQ(answer().calls, 1);
+        NETW_CHECK_EQ(answer().error, int64_t(OK));
+        NETW_CHECK_EQ(
+            mounted.bench.core->auth_app_tag_of(),
+            NetwMultiplayer::session_app_tag(StringName("started"))
+        );
+    }
+    SUBCASE("two authors reject the start without building") {
+        netw::Netw::configure_session(mounted.child("One"));
+        netw::Netw::configure_session(mounted.child("Two"));
+
+        mounted.bench.ask();
+        mounted.bench.drive();
+
+        NETW_CHECK_EQ(provider().built, 0);
+        NETW_CHECK_EQ(answer().calls, 1);
+        NETW_CHECK_EQ(answer().error, int64_t(ERR_ALREADY_EXISTS));
+        CHECK(answer().peer.is_null());
+    }
 }
 
 } // namespace TestNetwConnectCreation

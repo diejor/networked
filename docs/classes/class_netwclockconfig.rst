@@ -340,7 +340,9 @@ Method Descriptions
 
 :ref:`NetwClockConfig<class_NetwClockConfig>` **display_offset_ticks**\ (\ display_offset\: :godot:`int`\ ) :ref:`🔗<class_NetwClockConfig_method_display_offset_ticks>`
 
-Sets :ref:`display_offset<class_NetwClockConfig_property_display_offset>` and returns this config.
+.. container:: contribute
+
+	There is currently no description for this method. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
 
 .. rst-class:: classref-item-separator
 
@@ -352,7 +354,9 @@ Sets :ref:`display_offset<class_NetwClockConfig_property_display_offset>` and re
 
 :ref:`NetwClockConfig<class_NetwClockConfig>` **physics_interpolation**\ (\ use_physics_interpolation\: :godot:`bool`\ ) :ref:`🔗<class_NetwClockConfig_method_physics_interpolation>`
 
-Sets :ref:`use_physics_interpolation<class_NetwClockConfig_property_use_physics_interpolation>` and returns this config.
+.. container:: contribute
+
+	There is currently no description for this method. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
 
 .. rst-class:: classref-item-separator
 
@@ -364,7 +368,9 @@ Sets :ref:`use_physics_interpolation<class_NetwClockConfig_property_use_physics_
 
 :ref:`NetwClockConfig<class_NetwClockConfig>` **sync**\ (\ sync_mode\: :ref:`SyncMode<enum_NetwClock_SyncMode>`\ ) :ref:`🔗<class_NetwClockConfig_method_sync>`
 
-Sets :ref:`sync_mode<class_NetwClockConfig_property_sync_mode>` and returns this config.
+.. container:: contribute
+
+	There is currently no description for this method. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
 
 .. rst-class:: classref-item-separator
 
@@ -376,7 +382,9 @@ Sets :ref:`sync_mode<class_NetwClockConfig_property_sync_mode>` and returns this
 
 :ref:`NetwClockConfig<class_NetwClockConfig>` **ticks_per_second**\ (\ tickrate\: :godot:`int`\ ) :ref:`🔗<class_NetwClockConfig_method_ticks_per_second>`
 
-Sets :ref:`tickrate<class_NetwClockConfig_property_tickrate>` and returns this config.
+.. container:: contribute
+
+	There is currently no description for this method. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

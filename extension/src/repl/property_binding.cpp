@@ -9,6 +9,7 @@
 #include "netw/profile.hpp"
 #include "netw/repl/set_model.hpp"
 #include "netw/replication_send.hpp"
+#include "netw/script/model.hpp"
 #include "netw/store/table.hpp"
 #include "netw/subsystems.hpp"
 #include "netw/tree_hook.hpp"
@@ -122,6 +123,7 @@ PropertyBinding *BindingBook::create(uint64_t p_set, Node *p_node) {
     made->indexes = &indexes;
     made->set_id = p_set;
     made->node_id = gd::instance_id(p_node);
+    script::model::watch_properties(p_node);
     return made;
 }
 
@@ -264,12 +266,6 @@ void PropertyBinding::apply_input_feed(const predict::Feed &p_feed) {
     input_fed = true;
 }
 
-bool PropertyBinding::is_active() const {
-    Node *held = node();
-    return held != nullptr && held->is_inside_tree()
-        && held->is_multiplayer_authority();
-}
-
 bool PropertyBinding::is_windowed() const {
     const PropertySet *set = get_set();
     return set != nullptr && set->window > 0
@@ -291,15 +287,20 @@ void PropertyBinding::stage_properties(Node *p_node) const {
         colors::WIRE,
         profile::SUBSYSTEM_WIRE
     );
-    const uint64_t generation = script_generation_of(p_node);
-    if (staged_properties_valid && staged_script_generation == generation) {
+    const uint64_t script_id = script_id_of(p_node);
+    const uint64_t revision = script::model::property_revision(p_node);
+    if (staged_properties_valid && staged_script_id == script_id
+        && staged_property_revision == revision) {
         return;
     }
     if (indexes != nullptr && staged_index != nullptr) {
         indexes->release(staged_index);
     }
     staged_index = nullptr;
-    staged_script_generation = generation;
+    staged_script_id = script_id;
+    staged_property_revision = revision;
+    stage_count += 1;
+    unlisted_columns.clear();
     staged_properties_valid = false;
     if (p_node == nullptr || indexes == nullptr) {
         return;
@@ -325,7 +326,7 @@ void PropertyBinding::stage_properties(Node *p_node) const {
     staged_properties_valid = true;
 }
 
-uint64_t PropertyBinding::script_generation_of(Node *p_node) {
+uint64_t PropertyBinding::script_id_of(Node *p_node) {
     if (p_node == nullptr) {
         return 0;
     }
@@ -333,13 +334,36 @@ uint64_t PropertyBinding::script_generation_of(Node *p_node) {
     return held.is_valid() ? uint64_t(held->get_instance_id()) : 1;
 }
 
+const gd::PropertyResolution &PropertyBinding::unlisted_column(
+    Node *p_node,
+    const StringName &p_key
+) const {
+    static const gd::PropertyResolution absent;
+    if (field_of(p_key) == nullptr) {
+        return absent;
+    }
+    const gd::PropertyResolution *cached = unlisted_columns.getptr(p_key);
+    if (cached != nullptr) {
+        return *cached;
+    }
+    return unlisted_columns
+        .insert(
+            p_key,
+            script::model::resolve_property(p_node, p_key, Array())
+        )
+        ->value;
+}
+
 int64_t PropertyBinding::property_type(
     Node *p_node,
     const StringName &p_key
 ) const {
     stage_properties(p_node);
-    return staged_index != nullptr ? typed_as(staged_index->types, p_key)
-                                   : int64_t(Variant::NIL);
+    if (staged_index != nullptr && staged_index->types.has(p_key)) {
+        return typed_as(staged_index->types, p_key);
+    }
+    const gd::PropertyResolution &resolved = unlisted_column(p_node, p_key);
+    return resolved.type >= 0 ? int64_t(resolved.type) : int64_t(Variant::NIL);
 }
 
 bool PropertyBinding::property_present(
@@ -350,7 +374,7 @@ bool PropertyBinding::property_present(
     if (staged_index != nullptr && staged_index->types.has(p_key)) {
         return true;
     }
-    return gd::has_property(p_node, p_key);
+    return unlisted_column(p_node, p_key).present;
 }
 
 void PropertyBinding::resolve_entity_row(
@@ -399,17 +423,12 @@ bool PropertyBinding::admits_arrival(
     }
     stage_properties(held);
     if (admitted_schema == &p_schema && admitted_shape == p_schema.shape_hash
-        && admitted_generation == staged_script_generation) {
+        && admitted_stage == stage_count) {
         return true;
     }
-    bool indexed = staged_index != nullptr;
     for (int at = 0; at < p_schema.column_count(); at++) {
         const StringName &key = p_schema.at(at)->key;
-        if (staged_index != nullptr && staged_index->types.has(key)) {
-            continue;
-        }
-        indexed = false;
-        if (gd::has_property(held, key)) {
+        if (property_present(held, key)) {
             continue;
         }
         NETW_WARN_ONCE(
@@ -423,11 +442,9 @@ bool PropertyBinding::admits_arrival(
         reset_stream();
         return false;
     }
-    if (indexed) {
-        admitted_schema = &p_schema;
-        admitted_shape = p_schema.shape_hash;
-        admitted_generation = staged_script_generation;
-    }
+    admitted_schema = &p_schema;
+    admitted_shape = p_schema.shape_hash;
+    admitted_stage = stage_count;
     return true;
 }
 
@@ -607,7 +624,7 @@ void PropertyBinding::apply_payload(const Dictionary &p_payload) {
     }
     for (const PropertyColumn &column : set->columns) {
         const StringName &key = column.get_key();
-        if (p_payload.has(key) && gd::has_property(held, key)) {
+        if (p_payload.has(key) && property_present(held, key)) {
             port_set(held, key, p_payload[key]);
         }
     }

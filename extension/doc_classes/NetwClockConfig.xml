@@ -17,28 +17,24 @@
 			<return type="NetwClockConfig" />
 			<param index="0" name="display_offset" type="int" />
 			<description>
-				Sets [member display_offset] and returns this config.
 			</description>
 		</method>
 		<method name="physics_interpolation">
 			<return type="NetwClockConfig" />
 			<param index="0" name="use_physics_interpolation" type="bool" />
 			<description>
-				Sets [member use_physics_interpolation] and returns this config.
 			</description>
 		</method>
 		<method name="sync">
 			<return type="NetwClockConfig" />
 			<param index="0" name="sync_mode" type="int" enum="NetwClock.SyncMode" />
 			<description>
-				Sets [member sync_mode] and returns this config.
 			</description>
 		</method>
 		<method name="ticks_per_second">
 			<return type="NetwClockConfig" />
 			<param index="0" name="tickrate" type="int" />
 			<description>
-				Sets [member tickrate] and returns this config.
 			</description>
 		</method>
 	</methods>

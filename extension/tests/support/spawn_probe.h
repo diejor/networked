@@ -59,8 +59,9 @@ protected:
             return;
         }
         entity->set_initial_controller(
-            netw::NetwEntity::INITIAL_REPRESENTED_PEER
+            netw::NetwEntity::INITIAL_PLAYER
         );
+        entity->set_authority(netw::NetwEntity::AUTHORITY_CONTROLLER);
         netw::script::model::configure_node_property(
             this,
             godot::StringName("identity_packet")

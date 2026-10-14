@@ -20,7 +20,7 @@ TEST_CASE(
     Control *const control = &held;
     NETW_CHECK_EQ(control->resolve(REPRESENTED), 0);
 
-    control->initial = int(Control::InitialController::REPRESENTED_PEER);
+    control->initial = int(Control::InitialController::PLAYER);
     NETW_CHECK_EQ(control->resolve(REPRESENTED), REPRESENTED);
 
     CHECK_FALSE(control->configured);
@@ -51,7 +51,7 @@ TEST_CASE(
 ) {
     Control held;
     Control *const control = &held;
-    control->initial = int(Control::InitialController::REPRESENTED_PEER);
+    control->initial = int(Control::InitialController::PLAYER);
 
     CHECK(control->controlled_by(REPRESENTED, REPRESENTED));
     CHECK_FALSE(control->controlled_by(OTHER, REPRESENTED));

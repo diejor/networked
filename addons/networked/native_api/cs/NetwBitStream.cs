@@ -38,6 +38,10 @@ namespace Networked;
 /// </remarks>
 public sealed class NetwBitStream : NetwRefCounted
 {
+    public NetwBitStream() : this(NetwApi.Construct("NetwBitStream", true))
+    {
+    }
+
     public NetwBitStream(IntPtr native) : base(native)
     {
     }

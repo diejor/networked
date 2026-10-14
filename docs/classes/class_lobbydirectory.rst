@@ -251,7 +251,7 @@ Return ``true`` when an empty address is valid. ``false`` by default.
 
 :godot:`String` **_address_help**\ (\ ) |virtual| :ref:`🔗<class_LobbyDirectory_private_method__address_help>`
 
-Return a sentence to show under the address field, such as where to find a lobby id. Empty by default.
+Return a sentence to show under the address input, such as where to find a lobby id. Empty by default.
 
 .. rst-class:: classref-item-separator
 
@@ -263,7 +263,7 @@ Return a sentence to show under the address field, such as where to find a lobby
 
 :godot:`String` **_address_label**\ (\ ) |virtual| :ref:`🔗<class_LobbyDirectory_private_method__address_label>`
 
-Return the title of the address field, such as ``"Lobby ID"``. ``"Lobby"`` by default.
+Return the title of the address input, such as ``"Lobby ID"``. ``"Lobby"`` by default.
 
 .. rst-class:: classref-item-separator
 
@@ -275,7 +275,7 @@ Return the title of the address field, such as ``"Lobby ID"``. ``"Lobby"`` by de
 
 :godot:`String` **_address_placeholder**\ (\ ) |virtual| :ref:`🔗<class_LobbyDirectory_private_method__address_placeholder>`
 
-Return the placeholder text of the address field. Empty by default.
+Return the placeholder text of the address input. Empty by default.
 
 .. rst-class:: classref-item-separator
 
@@ -323,7 +323,7 @@ Return the :ref:`Capability<enum_LobbyDirectory_Capability>` flags this director
 
 :godot:`Dictionary` **_client_settings**\ (\ ) |virtual| :ref:`🔗<class_LobbyDirectory_private_method__client_settings>`
 
-Return the fields a join form asks for, with their default values. They are passed to :ref:`_join_lobby()<class_LobbyDirectory_private_method__join_lobby>`. Empty by default.
+Return the settings a join form asks for, with their default values. They are passed to :ref:`_join_lobby()<class_LobbyDirectory_private_method__join_lobby>`. Empty by default.
 
 .. rst-class:: classref-item-separator
 
@@ -347,7 +347,7 @@ Return the name shown in a server browser. :ref:`_peer_class()<class_LobbyDirect
 
 |void| **_host_lobby**\ (\ settings\: :godot:`Dictionary`\ ) |virtual| :ref:`🔗<class_LobbyDirectory_private_method__host_lobby>`
 
-Create a lobby, then call :ref:`deliver()<class_LobbyDirectory_method_deliver>` with the host :godot:`MultiplayerPeer`, or :ref:`fail()<class_LobbyDirectory_method_fail>`. ``settings`` holds the fields from :ref:`_host_settings()<class_LobbyDirectory_private_method__host_settings>`. ``name``, ``max_players`` and ``visibility``, a :ref:`Visibility<enum_NetwServerInfo_Visibility>`, are common.
+Create a lobby, then call :ref:`deliver()<class_LobbyDirectory_method_deliver>` with the host :godot:`MultiplayerPeer`, or :ref:`fail()<class_LobbyDirectory_method_fail>`. ``settings`` holds the settings from :ref:`_host_settings()<class_LobbyDirectory_private_method__host_settings>`. ``name``, ``max_players`` and ``visibility``, a :ref:`Visibility<enum_NetwServerInfo_Visibility>`, are common.
 
 .. rst-class:: classref-item-separator
 
@@ -359,7 +359,7 @@ Create a lobby, then call :ref:`deliver()<class_LobbyDirectory_method_deliver>` 
 
 :godot:`Dictionary` **_host_settings**\ (\ ) |virtual| :ref:`🔗<class_LobbyDirectory_private_method__host_settings>`
 
-Return the fields a host form asks for, with their default values. They are passed to :ref:`_host_lobby()<class_LobbyDirectory_private_method__host_lobby>`. Empty by default.
+Return the settings a host form asks for, with their default values. They are passed to :ref:`_host_lobby()<class_LobbyDirectory_private_method__host_lobby>`. Empty by default.
 
 .. rst-class:: classref-item-separator
 

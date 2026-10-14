@@ -794,10 +794,7 @@ TEST_CASE(
     deliver_control_apply(cw.seven, route, MEMBER, SERVER);
 
     NETW_CHECK_EQ(NetwEntity::of(at_seven)->get_controller(), int64_t(MEMBER));
-    NETW_CHECK_EQ(
-        int64_t(at_seven->get_multiplayer_authority()),
-        int64_t(MEMBER)
-    );
+    NETW_CHECK_EQ(int64_t(at_seven->get_multiplayer_authority()), int64_t(1));
 }
 
 TEST_CASE(
@@ -816,16 +813,13 @@ TEST_CASE(
     REQUIRE(at_nine != nullptr);
     NetwEntity::of(at_host)->set_transfer(NetwEntity::TRANSFER_REQUESTABLE);
 
-    NetwEntity::of(at_nine)->claim_authority();
+    NetwEntity::of(at_nine)->claim_control();
     cw.settle(12);
 
     NETW_CHECK_EQ(NetwEntity::of(at_host)->get_controller(), int64_t(MEMBER));
     NETW_CHECK_EQ(NetwEntity::of(at_seven)->get_controller(), int64_t(MEMBER));
     NETW_CHECK_EQ(NetwEntity::of(at_nine)->get_controller(), int64_t(MEMBER));
-    NETW_CHECK_EQ(
-        int64_t(at_nine->get_multiplayer_authority()),
-        int64_t(MEMBER)
-    );
+    NETW_CHECK_EQ(int64_t(at_nine->get_multiplayer_authority()), int64_t(1));
 }
 
 TEST_CASE(
@@ -843,24 +837,15 @@ TEST_CASE(
     REQUIRE(at_seven != nullptr);
     REQUIRE(at_nine != nullptr);
 
-    NETW_CHECK_EQ(
-        int(NetwEntity::of(at_host)->transfer_control(MEMBER)),
-        int(OK)
-    );
+    NetwEntity::of(at_host)->set_controller(MEMBER);
     cw.settle(12);
-    NETW_CHECK_EQ(
-        int(NetwEntity::of(at_seven)->transfer_control(OTHER)),
-        int(ERR_UNAUTHORIZED)
-    );
+    NetwEntity::of(at_seven)->set_controller(OTHER);
     cw.settle(12);
 
     NETW_CHECK_EQ(NetwEntity::of(at_host)->get_controller(), int64_t(MEMBER));
     NETW_CHECK_EQ(NetwEntity::of(at_seven)->get_controller(), int64_t(MEMBER));
     NETW_CHECK_EQ(NetwEntity::of(at_nine)->get_controller(), int64_t(MEMBER));
-    NETW_CHECK_EQ(
-        int64_t(at_nine->get_multiplayer_authority()),
-        int64_t(MEMBER)
-    );
+    NETW_CHECK_EQ(int64_t(at_nine->get_multiplayer_authority()), int64_t(1));
 }
 
 TEST_CASE(

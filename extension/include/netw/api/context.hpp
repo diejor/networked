@@ -85,7 +85,8 @@ public:
     static godot::Ref<NetwPropertyConfig> configure_property(
         godot::Node *p_node,
         const godot::StringName &p_property,
-        bool p_warn_late
+        bool p_warn_late,
+        int64_t p_declared_type = -1
     );
     static godot::Ref<NetwMemberConfig> configure_rpc(
         const godot::Callable &p_callable

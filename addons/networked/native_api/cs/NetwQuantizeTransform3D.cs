@@ -21,6 +21,11 @@ namespace Networked;
 /// </remarks>
 public sealed class NetwQuantizeTransform3D : NetwQuantize
 {
+    public NetwQuantizeTransform3D(
+        ) : this(NetwApi.Construct("NetwQuantizeTransform3D", true))
+    {
+    }
+
     public NetwQuantizeTransform3D(IntPtr native) : base(native)
     {
     }

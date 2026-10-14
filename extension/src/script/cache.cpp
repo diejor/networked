@@ -95,19 +95,33 @@ int Cache::prop_type(Object *p_node, const StringName &p_property) {
         return cached->value;
     }
     int type = int(Variant::NIL);
-    if (p_node != nullptr) {
-        const Array properties = gd::property_list(p_node);
+    const Ref<Script> declared = script();
+    if (declared.is_valid()) {
+        const Array properties = gd::script_property_list(declared);
         for (int index = 0; index < properties.size(); index++) {
             const Dictionary property = properties[index];
             if (StringName(property.get("name", StringName())) != p_property) {
                 continue;
             }
             type = int(property.get("type", int(Variant::NIL)));
-            break;
+            property_types.insert(p_property, type);
+            return type;
+        }
+        const int native = gd::class_property_type(
+            declared->get_instance_base_type(),
+            p_property
+        );
+        if (native >= 0) {
+            property_types.insert(p_property, native);
+            return native;
         }
     }
-    property_types.insert(p_property, type);
-    return type;
+    if (p_node != nullptr) {
+        const gd::PropertyResolution resolved
+            = gd::listed_property(gd::property_list(p_node), p_property);
+        return resolved.type >= 0 ? resolved.type : int(Variant::NIL);
+    }
+    return int(Variant::NIL);
 }
 
 const LocalVector<int> &Cache::signal_arg_types(const StringName &p_signal) {

@@ -18,6 +18,11 @@ namespace Networked;
 /// </remarks>
 public sealed class NetwPredictJudgement : NetwRefCounted
 {
+    public NetwPredictJudgement(
+        ) : this(NetwApi.Construct("NetwPredictJudgement", true))
+    {
+    }
+
     public NetwPredictJudgement(IntPtr native) : base(native)
     {
     }

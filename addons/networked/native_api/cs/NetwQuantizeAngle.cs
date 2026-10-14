@@ -25,6 +25,11 @@ namespace Networked;
 /// </remarks>
 public sealed class NetwQuantizeAngle : NetwQuantize
 {
+    public NetwQuantizeAngle(
+        ) : this(NetwApi.Construct("NetwQuantizeAngle", true))
+    {
+    }
+
     public NetwQuantizeAngle(IntPtr native) : base(native)
     {
     }

@@ -114,7 +114,6 @@ public:
     void apply_state_feed(const predict::Feed &p_feed);
     void apply_input_feed(const predict::Feed &p_feed);
 
-    bool is_active() const;
     bool is_windowed() const;
     bool admits_arrival(
         const table::SchemaRecord &p_schema,
@@ -201,7 +200,7 @@ public:
         reconcile_ack = p_value;
     }
 
-    static uint64_t script_generation_of(godot::Node *p_node);
+    static uint64_t script_id_of(godot::Node *p_node);
 
     const PropertyIndex *property_index() const {
         return staged_index;
@@ -229,12 +228,21 @@ private:
         const godot::StringName &p_key
     ) const;
 
+    const gd::PropertyResolution &unlisted_column(
+        godot::Node *p_node,
+        const godot::StringName &p_key
+    ) const;
+
     mutable const PropertyIndex *staged_index = nullptr;
     mutable bool staged_properties_valid = false;
-    mutable uint64_t staged_script_generation = 0;
+    mutable uint64_t staged_script_id = 0;
+    mutable uint64_t staged_property_revision = 0;
+    mutable uint64_t stage_count = 0;
+    mutable godot::HashMap<godot::StringName, gd::PropertyResolution>
+        unlisted_columns;
     const table::SchemaRecord *admitted_schema = nullptr;
     int admitted_shape = 0;
-    uint64_t admitted_generation = 0;
+    uint64_t admitted_stage = 0;
     godot::Array keys_of_set() const;
     godot::Array quantizers_of() const;
     godot::Array types_of(godot::Node *p_node) const;

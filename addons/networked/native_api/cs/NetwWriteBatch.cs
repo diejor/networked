@@ -6,8 +6,8 @@ using Godot.NativeInterop;
 namespace Networked;
 
 /// <summary>
-/// Several record writes and erasures submitted to a <see cref="NetwDatabase"/>
-/// in one call.
+/// Several record writes and deletions submitted to a
+/// <see cref="NetwDatabase"/> in one call.
 /// </summary>
 /// <remarks>
 /// Nothing reaches storage until <see cref="NetwWriteBatch.Submit"/>. If any
@@ -73,10 +73,10 @@ public sealed class NetwWriteBatch : NetwRefCounted
     /// Error
     /// ┠╴OK                     the write was added
     /// ┠╴ERR_LOCKED             this batch was submitted already
-    /// ┠╴ERR_UNAVAILABLE        this batch outlived the session that issued it
-    /// ┠╴ERR_DOES_NOT_EXIST     schema is not sealed
+    /// ┠╴ERR_UNAVAILABLE        the session ended
+    /// ┠╴ERR_DOES_NOT_EXIST     property definitions are unavailable
     /// ┠╴ERR_INVALID_PARAMETER  id is empty
-    /// ┖╴ERR_INVALID_DATA       values do not exactly match the schema
+    /// ┖╴ERR_INVALID_DATA       saved property names or types differ
     /// </code>
     /// </summary>
     public Error Write(
@@ -109,13 +109,13 @@ public sealed class NetwWriteBatch : NetwRefCounted
         NetwApi.MethodBind("NetwWriteBatch", "erase", 58536983UL);
 
     /// <summary>
-    /// Adds an erasure of the record at <paramref name="id"/>.
+    /// Adds a deletion of the record at <paramref name="id"/>.
     /// <code>
     /// Error
-    /// ┠╴OK                     the erasure was added
+    /// ┠╴OK                     the deletion was added
     /// ┠╴ERR_LOCKED             this batch was submitted already
-    /// ┠╴ERR_UNAVAILABLE        this batch outlived the session that issued it
-    /// ┠╴ERR_DOES_NOT_EXIST     schema is not sealed
+    /// ┠╴ERR_UNAVAILABLE        the session ended
+    /// ┠╴ERR_DOES_NOT_EXIST     property definitions are unavailable
     /// ┖╴ERR_INVALID_PARAMETER  id is empty
     /// </code>
     /// </summary>
@@ -146,15 +146,15 @@ public sealed class NetwWriteBatch : NetwRefCounted
     /// │ ┠╴OK                 every operation landed
     /// │ ┠╴ERR_LOCKED         this batch was submitted already
     /// │ ┠╴a builder's code   the first write or erase this batch refused, nothing ran
-    /// │ ┠╴ERR_UNAVAILABLE    this batch outlived its session, or the connection
+    /// │ ┠╴ERR_UNAVAILABLE    the session ended, or the connection
     /// │ │                    implements no _write_batch
-    /// │ ┠╴ERR_INVALID_DATA   the connection answered a different number of outcomes
-    /// │ ┖╴backend-defined    the whole batch failed, or the first non-OK entry of errors
+    /// │ ┠╴ERR_INVALID_DATA   the connection answered a different number of results
+    /// │ ┖╴storage error    the whole batch failed, or the first non-OK entry of errors
     /// ┠╴detail     String            what went wrong, for a person to read. Empty when
     /// │                              error is OK
     /// ┠╴errors     PackedInt32Array  one @GlobalScope.Error per submitted operation, in the
     /// │                              order they were added
-    /// ┖╴uncertain  PackedByteArray   1 where the operation at that index has an outcome
+    /// ┖╴uncertain  PackedByteArray   1 where the operation at that index has a result
     ///                                the backend could not establish, 0 otherwise
     /// </code>
     /// <para>

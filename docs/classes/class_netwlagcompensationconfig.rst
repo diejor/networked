@@ -19,16 +19,16 @@ How long the server waits for a late player action, and how far ahead of itself 
 Description
 -----------
 
-Returned by :ref:`Netw.configure_lagcomp()<class_Netw_method_configure_lagcomp>`. Both values are optional.
+Lag compensation starts automatically for :ref:`NetwPrediction<class_NetwPrediction>` and :ref:`NetwAction<class_NetwAction>`.
+
+Once applied, settings cannot change.
 
 ::
 
     func _init() -> void:
         Netw.configure_lagcomp(self) \
-                .input_gate_deadline(16) \
-                .max_future_action(4)
-
-\ Lag compensation turns on by itself when a predicted entity or a :ref:`NetwAction<class_NetwAction>` needs it. Use this only to change the defaults. Values are applied once, and later changes push a warning and do nothing.
+            .input_gate_deadline(16) \
+            .max_future_action(4)
 
 .. rst-class:: classref-reftable-group
 
@@ -112,7 +112,9 @@ Method Descriptions
 
 :ref:`NetwLagCompensationConfig<class_NetwLagCompensationConfig>` **input_gate_deadline**\ (\ ticks\: :godot:`int`\ ) :ref:`🔗<class_NetwLagCompensationConfig_method_input_gate_deadline>`
 
-Sets :ref:`input_gate_deadline_ticks<class_NetwLagCompensationConfig_property_input_gate_deadline_ticks>` and returns this config.
+.. container:: contribute
+
+	There is currently no description for this method. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
 
 .. rst-class:: classref-item-separator
 
@@ -124,7 +126,9 @@ Sets :ref:`input_gate_deadline_ticks<class_NetwLagCompensationConfig_property_in
 
 :ref:`NetwLagCompensationConfig<class_NetwLagCompensationConfig>` **max_future_action**\ (\ ticks\: :godot:`int`\ ) :ref:`🔗<class_NetwLagCompensationConfig_method_max_future_action>`
 
-Sets :ref:`max_future_action_ticks<class_NetwLagCompensationConfig_property_max_future_action_ticks>` and returns this config.
+.. container:: contribute
+
+	There is currently no description for this method. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

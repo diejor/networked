@@ -50,6 +50,8 @@ bool Record::encode_header(
     String name = node_name;
     uint64_t anchor = p_anchor;
     uint64_t anchor_author = p_anchor_author;
+    bool controller_authority = entity != nullptr
+        && entity->get_authority() == NetwEntity::AUTHORITY_CONTROLLER;
 
     if (!wire::string_field(p_stream, id) || !p_stream.varuint(peer, 5)
         || !p_stream.svarint(control, 5) || !p_stream.varuint(revision, 5)
@@ -57,6 +59,7 @@ bool Record::encode_header(
         || !p_stream.varuint(anchor_author, 5)
         || !p_stream.varuint(spawn_tick, 5) || !p_stream.svarint(requester, 5)
         || !p_stream.bits(comp_hash, 32) || !p_stream.bits(hold, 2)
+        || !p_stream.bool1(controller_authority)
         || !p_stream.bool1(declares_scene)) {
         return false;
     }
@@ -84,6 +87,11 @@ Ref<NetwEntity> Record::stamp_header(
             session->player_incarnation(entity->get_peer_id())
         );
     }
+    entity->get_record()->get_control()->set_authority(
+        bool(p_header.get(StringName("controller_authority"), false))
+            ? int64_t(NetwEntity::AUTHORITY_CONTROLLER)
+            : int64_t(NetwEntity::AUTHORITY_SERVER)
+    );
     entity->record_controller(
         int64_t(p_header.get(StringName("controller"), 0))
     );
@@ -207,6 +215,7 @@ bool Record::decode_header(wire::ReadStream &p_stream, Dictionary &r_header) {
     uint64_t spawn_tick = 0;
     int64_t requester = 0;
     uint64_t comp_hash = 0;
+    bool controller_authority = false;
     bool declares_scene = false;
     String scene_label;
     String name;
@@ -217,6 +226,7 @@ bool Record::decode_header(wire::ReadStream &p_stream, Dictionary &r_header) {
         || !p_stream.varuint(anchor_author, 5)
         || !p_stream.varuint(spawn_tick, 5) || !p_stream.svarint(requester, 5)
         || !p_stream.bits(comp_hash, 32) || !p_stream.bits(hold, 2)
+        || !p_stream.bool1(controller_authority)
         || !p_stream.bool1(declares_scene)) {
         return false;
     }
@@ -235,6 +245,7 @@ bool Record::decode_header(wire::ReadStream &p_stream, Dictionary &r_header) {
     r_header[StringName("anchor_revision")] = int64_t(anchor);
     r_header[StringName("anchor_author")] = int64_t(anchor_author);
     r_header[StringName("control_hold")] = int64_t(hold);
+    r_header[StringName("controller_authority")] = controller_authority;
     r_header[StringName("action_spawn_tick")] = int64_t(spawn_tick) - 1;
     r_header[StringName("action_requester")] = requester;
     r_header[StringName("wire_hash")] = int64_t(comp_hash);

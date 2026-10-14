@@ -4,9 +4,15 @@
 
 #include "netw/api/replication_core.hpp"
 
+#include "support/fault_log.h"
+
 #include "godot/node.hpp"
 #include "godot/script.hpp"
+#include "netw/api/clock_config.hpp"
+#include "netw/api/context.hpp"
+#include "netw/api/lag_compensation_config.hpp"
 #include "netw/predict/engine.hpp"
+#include "netw/session_decl.hpp"
 
 namespace TestDeclaredServiceLaws {
 
@@ -170,6 +176,157 @@ TEST_CASE(
     NETW_CHECK_EQ(int(api->predict_declare(entity)), int(OK));
     CHECK(api->lagcomp_is_configured());
     CHECK(api->predict_engine_seated(entity));
+}
+
+RID plain_entity(LoopbackRig &p_rig, const char *p_name) {
+    return p_rig.declare_entity(
+        EntityDecl()
+            .named(p_name)
+            .on_schema("target")
+            .synced(StringName("position"))
+            .placed_at(Vector2(4.0, 0.0))
+    );
+}
+
+Node *child_of(Node *p_parent, const char *p_name) {
+    Node *made = memnew(Node);
+    made->set_name(StringName(p_name));
+    p_parent->add_child(made);
+    return made;
+}
+
+TEST_CASE(
+    "[Networked][Services] SV1 prediction declared while lag compensation "
+    "settings are complete but unapplied registers before the call returns, "
+    "on those settings, and the deferred pass that follows registers nothing "
+    "again"
+) {
+    LoopbackRig rig(0);
+    rig.mount();
+    WorldDecl world;
+    world.clocked(60, 0);
+    rig.declare_world(world);
+    netw::NetwMultiplayer *api = rig.server();
+    const RID entity = plain_entity(rig, "Target");
+    netw::Netw::configure_lagcomp(rig.branch())->max_future_action(21);
+    const netw_test::FaultWatch watch;
+
+    NETW_CHECK_EQ(int(api->predict_declare(entity)), int(OK));
+
+    CHECK(api->predict_engine_seated(entity));
+    NETW_CHECK_EQ(int(api->get_max_future_action_ticks()), 21);
+    const netw::NetwPredictSlotEngine *seated = api->predict_engine_for(entity);
+
+    api->config_settle();
+    NETW_CHECK_EQ(int(api->predict_declare(entity)), int(OK));
+
+    CHECK(api->predict_engine_for(entity) == seated);
+    NETW_CHECK_EQ(int(api->get_max_future_action_ticks()), 21);
+    NETW_CHECK_EQ(watch.log->warnings_logged(), 0);
+    NETW_CHECK_EQ(watch.log->errors_logged(), 0);
+}
+
+TEST_CASE(
+    "[Networked][Services] SV2 prediction declared while the lag "
+    "compensation settings cannot be applied fails with the reason and "
+    "registers nothing"
+) {
+    LoopbackRig rig(0);
+    rig.mount();
+    WorldDecl world;
+    world.clocked(60, 0);
+    rig.declare_world(world);
+    netw::NetwMultiplayer *api = rig.server();
+    const RID entity = plain_entity(rig, "Target");
+    Node *first = child_of(rig.branch(), "First");
+    Node *orphan = nullptr;
+    const netw_test::FaultWatch watch;
+    Error expected = OK;
+
+    SUBCASE("two nodes declare lag compensation") {
+        netw::Netw::configure_lagcomp(first);
+        netw::Netw::configure_lagcomp(child_of(rig.branch(), "Second"));
+        expected = ERR_ALREADY_EXISTS;
+    }
+    SUBCASE("the declaring node left before the declaration") {
+        netw::Netw::configure_lagcomp(first);
+        rig.branch()->remove_child(first);
+        orphan = first;
+        expected = ERR_UNAVAILABLE;
+    }
+    SUBCASE("the declaration holds something other than settings") {
+        netw::session_decl::declare(
+            first,
+            netw::session_decl::KIND_LAGCOMP_CONFIG,
+            Callable(),
+            Variant(int64_t(5)),
+            "configure_lagcomp"
+        );
+        expected = ERR_INVALID_DATA;
+    }
+
+    NETW_CHECK_EQ(int(api->predict_declare(entity)), int(expected));
+    api->config_settle();
+
+    CHECK_FALSE(api->predict_engine_seated(entity));
+    CHECK_FALSE(api->lagcomp_is_configured());
+    CHECK(watch.log->errors_logged() + watch.log->warnings_logged() >= 1);
+    if (orphan != nullptr) {
+        memdelete(orphan);
+    }
+}
+
+struct Declaring {
+    netw::NetwMultiplayer *api = nullptr;
+    RID staying;
+    RID departing;
+    Error staying_verdict = FAILED;
+    bool staying_seated_inside = true;
+};
+
+Declaring &declaring() {
+    static Declaring held;
+    return held;
+}
+
+void declare_while_configuring() {
+    Declaring &seen = declaring();
+    seen.staying_verdict = seen.api->predict_declare(seen.staying);
+    seen.staying_seated_inside = seen.api->predict_engine_seated(seen.staying);
+    seen.api->predict_declare(seen.departing);
+    seen.api->predict_undeclare(seen.departing);
+}
+
+TEST_CASE(
+    "[Networked][Services] SV3 prediction declared from a callback that "
+    "reacts to the settings being applied waits for that application and "
+    "registers when it ends, unless its entity left first"
+) {
+    LoopbackRig rig(0);
+    rig.mount();
+    netw::NetwMultiplayer *api = rig.server();
+    const RID outer = plain_entity(rig, "Outer");
+    declaring() = Declaring();
+    declaring().api = api;
+    declaring().staying = plain_entity(rig, "Staying");
+    declaring().departing = plain_entity(rig, "Departing");
+    netw::Netw::configure_clock(rig.branch())->ticks_per_second(30);
+    api->observe(
+        netw::NetwMultiplayer::CLOCK_CONFIGURED,
+        callable_mp_static(&declare_while_configuring)
+    );
+
+    NETW_CHECK_EQ(int(api->predict_declare(outer)), int(OK));
+
+    NETW_CHECK_EQ(int(declaring().staying_verdict), int(OK));
+    CHECK_FALSE(declaring().staying_seated_inside);
+    CHECK(api->predict_engine_seated(outer));
+    CHECK(api->predict_engine_seated(declaring().staying));
+    CHECK_FALSE(api->predict_engine_seated(declaring().departing));
+
+    api->config_settle();
+    CHECK_FALSE(api->predict_engine_seated(declaring().departing));
+    declaring() = Declaring();
 }
 
 TEST_CASE(

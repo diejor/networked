@@ -18,6 +18,11 @@ namespace Networked;
 /// </remarks>
 public sealed class NetwPredictRecovery : NetwRefCounted
 {
+    public NetwPredictRecovery(
+        ) : this(NetwApi.Construct("NetwPredictRecovery", true))
+    {
+    }
+
     public NetwPredictRecovery(IntPtr native) : base(native)
     {
     }

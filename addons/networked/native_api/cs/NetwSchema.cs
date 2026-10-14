@@ -29,7 +29,8 @@ namespace Networked;
 /// <para>
 /// A column with no quantizer is sent as a raw copy of its buffer, which is the
 /// cheapest to encode and decode. Add a quantizer to the columns where
-/// bandwidth matters. The same schema also types the records a
+/// bandwidth matters. A schema returned by <see cref="NetwPersistence.Schema"/>
+/// cannot be changed. The same schema also types the records a
 /// <see cref="NetwDatabase"/> reads and writes directly. A schema used only for
 /// those calls <see cref="NetwSchema.Replicated"/> with <c>false</c> so no
 /// table is created. <see cref="NetwSchema.String"/> and

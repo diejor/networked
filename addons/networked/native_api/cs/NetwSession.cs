@@ -175,8 +175,8 @@ public sealed class NetwSession : NetwRefCounted
             "exiting",
             value,
             Callable.From(
-                (NetwSession.ExitReason a0, string a1) =>
-                    value(a0, a1)
+                (long a0, string a1) =>
+                    value((NetwSession.ExitReason)a0, a1)
             )
         );
         remove => DisconnectBridge("exiting", value);
@@ -192,8 +192,8 @@ public sealed class NetwSession : NetwRefCounted
             "exited",
             value,
             Callable.From(
-                (NetwSession.ExitReason a0, string a1) =>
-                    value(a0, a1)
+                (long a0, string a1) =>
+                    value((NetwSession.ExitReason)a0, a1)
             )
         );
         remove => DisconnectBridge("exited", value);
@@ -260,8 +260,8 @@ public sealed class NetwSession : NetwRefCounted
             "join_failed",
             value,
             Callable.From(
-                (Error a0, string a1) =>
-                    value(a0, a1)
+                (long a0, string a1) =>
+                    value((Error)a0, a1)
             )
         );
         remove => DisconnectBridge("join_failed", value);

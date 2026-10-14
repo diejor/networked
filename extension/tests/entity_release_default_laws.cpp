@@ -10,14 +10,14 @@ using netw::NetwEntity;
 using netw::NetwPromise;
 
 TEST_CASE(
-    "[Networked][Entity][Hosted] R1 release_authority called with no "
+    "[Networked][Entity][Hosted] R1 release_control called with no "
     "arguments from a script reaches the server default, because the bound "
     "default is a peer id the guard accepts"
 ) {
     Ref<NetwEntity> entity;
     entity.instantiate();
 
-    const Variant answer = entity->callv("release_authority", Array());
+    const Variant answer = entity->callv("release_control", Array());
     const Ref<NetwPromise> promise = answer;
 
     REQUIRE(promise.is_valid());

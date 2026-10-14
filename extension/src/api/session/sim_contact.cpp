@@ -183,7 +183,7 @@ void NetwMultiplayer::sim_rest_pass(
             rest = sim::Rest();
         } else if (!asleep && !steering.claiming) {
             rest = sim::Rest();
-            r_row.view->claim_authority(entity::Control::HOLD_YIELDABLE);
+            r_row.view->claim_control(entity::Control::HOLD_YIELDABLE);
         }
         return;
     }
@@ -199,7 +199,7 @@ void NetwMultiplayer::sim_rest_pass(
     }
     rest.asleep_since = -1;
     rest.releasing = true;
-    r_row.view->release_authority(SERVER_PEER);
+    r_row.view->release_control(SERVER_PEER);
 }
 
 void NetwMultiplayer::sim_settle_walk(int64_t p_local_peer, int64_t p_tick) {

@@ -49,19 +49,19 @@
 		<method name="_address_help" qualifiers="virtual">
 			<return type="String" />
 			<description>
-				Return a sentence to show under the address field, such as where to find a lobby id. Empty by default.
+				Return a sentence to show under the address input, such as where to find a lobby id. Empty by default.
 			</description>
 		</method>
 		<method name="_address_label" qualifiers="virtual">
 			<return type="String" />
 			<description>
-				Return the title of the address field, such as [code]"Lobby ID"[/code]. [code]"Lobby"[/code] by default.
+				Return the title of the address input, such as [code]"Lobby ID"[/code]. [code]"Lobby"[/code] by default.
 			</description>
 		</method>
 		<method name="_address_placeholder" qualifiers="virtual">
 			<return type="String" />
 			<description>
-				Return the placeholder text of the address field. Empty by default.
+				Return the placeholder text of the address input. Empty by default.
 			</description>
 		</method>
 		<method name="_can_host_here" qualifiers="virtual">
@@ -85,7 +85,7 @@
 		<method name="_client_settings" qualifiers="virtual">
 			<return type="Dictionary" />
 			<description>
-				Return the fields a join form asks for, with their default values. They are passed to [method _join_lobby]. Empty by default.
+				Return the settings a join form asks for, with their default values. They are passed to [method _join_lobby]. Empty by default.
 			</description>
 		</method>
 		<method name="_display_name" qualifiers="virtual">
@@ -98,13 +98,13 @@
 			<return type="void" />
 			<param index="0" name="settings" type="Dictionary" />
 			<description>
-				Create a lobby, then call [method deliver] with the host [MultiplayerPeer], or [method fail]. [param settings] holds the fields from [method _host_settings]. [code]name[/code], [code]max_players[/code] and [code]visibility[/code], a [enum NetwServerInfo.Visibility], are common.
+				Create a lobby, then call [method deliver] with the host [MultiplayerPeer], or [method fail]. [param settings] holds the settings from [method _host_settings]. [code]name[/code], [code]max_players[/code] and [code]visibility[/code], a [enum NetwServerInfo.Visibility], are common.
 			</description>
 		</method>
 		<method name="_host_settings" qualifiers="virtual">
 			<return type="Dictionary" />
 			<description>
-				Return the fields a host form asks for, with their default values. They are passed to [method _host_lobby]. Empty by default.
+				Return the settings a host form asks for, with their default values. They are passed to [method _host_lobby]. Empty by default.
 			</description>
 		</method>
 		<method name="_is_available" qualifiers="virtual">

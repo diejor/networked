@@ -52,19 +52,6 @@ func note(tag: int) -> void:
 	notes.append(tag)
 )";
 
-const char *TEMPLATE_SOURCE = R"(extends Node3D
-
-var hp := 0
-
-
-func _init() -> void:
-	Netw.configure_entity(self).lifecycle = NetwEntity.LIFECYCLE_CONTROLLER
-	Netw.configure_property(self, &"hp").broadcast().on_spawn()
-)";
-
-const char *TEMPLATE_PATH
-    = "res://tests/native/authored_lifecycle_template.tscn";
-
 Node *build_crate(const Variant &p_name, const Variant &p_script) {
     const Ref<Script> script = p_script;
     Node3D *made
@@ -218,39 +205,6 @@ public:
 int route_of(Node *p_node) {
     const Ref<NetwEntity> entity = NetwEntity::of(p_node);
     return entity.is_valid() ? int(entity->get_route()) : 0;
-}
-
-void configure_spawned_copy(Object *p_entity, Array p_seen) {
-    NetwEntity *entity = Object::cast_to<NetwEntity>(p_entity);
-    REQUIRE(entity != nullptr);
-    p_seen.push_back(entity->get_name());
-    p_seen.push_back(entity->get_owner()->is_inside_tree());
-    entity->set_name(StringName("Configured"));
-    entity->get_owner()->set(StringName("hp"), STAMPED);
-}
-
-Node *place_template(SpawnStage &p_stage, Ref<PackedScene> &r_packed) {
-    const Ref<Script> script = netw_test::minted_script(TEMPLATE_SOURCE);
-    REQUIRE(script.is_valid());
-    Node3D *shape = memnew(Node3D);
-    shape->set_name("Template");
-    shape->set_script(script);
-    shape->remove_meta(NetwMultiplayer::wrapper_meta());
-    r_packed.instantiate();
-    REQUIRE(r_packed->pack(shape) == OK);
-    memdelete(shape);
-    r_packed->set_path(TEMPLATE_PATH);
-
-    Node *placed = r_packed->instantiate();
-    REQUIRE(placed != nullptr);
-    REQUIRE(p_stage.rig.server()
-                ->get_replication_plane()
-                ->get_spawn_pipeline()
-                ->replicate(placed, Ref<netw::NetwPlayer>())
-                .is_valid());
-    p_stage.arena_on(-1)->add_child(placed);
-    p_stage.rig.step_ticks(SETTLE_TICKS);
-    return p_stage.rig.route_node(route_of(placed), 0);
 }
 
 TEST_CASE(
@@ -562,87 +516,6 @@ TEST_CASE(
     }
     const Array own = made->get(StringName("notes"));
     NETW_CHECK_EQ(own.size(), 0);
-}
-
-TEST_CASE(
-    "[Networked][Lifecycle][Spawn][SceneTree] spawn under, a controller's "
-    "copy of a scene template reaches every peer as the session's own spawn"
-) {
-    SpawnStage stage;
-    NetwMultiplayer *session = stage.rig.server();
-    Ref<PackedScene> packed;
-    Node *seen_template = place_template(stage, packed);
-    const bool template_arrived = seen_template != nullptr;
-    CHECK(template_arrived);
-    if (!template_arrived) {
-        return;
-    }
-
-    Node *copy = NetwEntity::of(seen_template)
-                     ->spawn_under(stage.arena_on(0), StringName("Copy"));
-    const bool built = copy != nullptr;
-    CHECK(built);
-    const int route = built ? route_of(copy) : 0;
-    stage.rig.step_ticks(SETTLE_TICKS);
-
-    NETW_CHECK_EQ(counter_of(session, "lifecycle_ops_admitted"), int64_t(1));
-    for (int at = -1; at < 2; ++at) {
-        NETW_FORMAT_INT(netw_side_text, at);
-        CAPTURE(netw_side_text);
-        CHECK(stage.under(route, at, stage.arena_on(at)));
-    }
-    const bool booked = session->get_replication_plane()
-                            ->get_spawn_pipeline()
-                            ->get_spawn_book()
-                            ->spawned_of(route)
-        != nullptr;
-    CHECK(booked);
-}
-
-TEST_CASE(
-    "[Networked][Lifecycle][Spawn][SceneTree] spawn under, configure runs on "
-    "the orphan copy after its id is stamped, so what it writes wins and "
-    "rides the spawn to every peer"
-) {
-    SpawnStage stage;
-    Ref<PackedScene> packed;
-    Node *seen_template = place_template(stage, packed);
-    const bool template_arrived = seen_template != nullptr;
-    CHECK(template_arrived);
-    if (!template_arrived) {
-        return;
-    }
-
-    Array seen;
-    Node *copy = NetwEntity::of(seen_template)
-                     ->spawn_under(
-                         stage.arena_on(0),
-                         StringName("Copy"),
-                         callable_mp_static(&configure_spawned_copy).bind(seen)
-                     );
-    const bool built = copy != nullptr;
-    CHECK(built);
-    if (!built) {
-        return;
-    }
-    NETW_REQUIRE_EQ(seen.size(), 2);
-    CHECK(StringName(seen[0]) == StringName("Copy"));
-    CHECK_FALSE(bool(seen[1]));
-
-    const int route = route_of(copy);
-    stage.rig.step_ticks(SETTLE_TICKS);
-    for (int at = -1; at < 2; ++at) {
-        NETW_FORMAT_INT(netw_side_text, at);
-        CAPTURE(netw_side_text);
-        Node *held = stage.rig.route_node(route, at);
-        const bool arrived = held != nullptr;
-        CHECK(arrived);
-        if (!arrived) {
-            continue;
-        }
-        CHECK(NetwEntity::of(held)->get_name() == StringName("Configured"));
-        NETW_CHECK_EQ(int64_t(held->get(StringName("hp"))), STAMPED);
-    }
 }
 
 TEST_CASE(

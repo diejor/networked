@@ -49,19 +49,19 @@
 		<method name="_address_help" qualifiers="virtual">
 			<return type="String" />
 			<description>
-				Return a sentence to show under the address field. Empty by default.
+				Return a sentence to show under the address input. Empty by default.
 			</description>
 		</method>
 		<method name="_address_label" qualifiers="virtual">
 			<return type="String" />
 			<description>
-				Return the title of the address field, such as an IP, a URL or a room id. [code]"Address"[/code] by default.
+				Return the title of the address input, such as an IP, a URL or a room id. [code]"Address"[/code] by default.
 			</description>
 		</method>
 		<method name="_address_placeholder" qualifiers="virtual">
 			<return type="String" />
 			<description>
-				Return the placeholder text of the address field. Empty by default.
+				Return the placeholder text of the address input. Empty by default.
 			</description>
 		</method>
 		<method name="_adopt" qualifiers="virtual">
@@ -105,7 +105,7 @@
 		<method name="_client_settings" qualifiers="virtual">
 			<return type="Dictionary" />
 			<description>
-				Return the fields a join form asks for, with their default values. They are passed to [method _make_peer] in [constant NetwConnection.TRANSPORT_MODE_CLIENT].
+				Return the settings a join form asks for, with their default values. They are passed to [method _make_peer] in [constant NetwConnection.TRANSPORT_MODE_CLIENT].
 				[codeblock]
 				func _client_settings() -&gt; Dictionary:
 				    return {region = "eu"}
@@ -139,7 +139,7 @@
 		<method name="_host_settings" qualifiers="virtual">
 			<return type="Dictionary" />
 			<description>
-				Return the fields a host form asks for, with their default values. They are passed to [method _make_peer] in [constant NetwConnection.TRANSPORT_MODE_HOST].
+				Return the settings a host form asks for, with their default values. They are passed to [method _make_peer] in [constant NetwConnection.TRANSPORT_MODE_HOST].
 			</description>
 		</method>
 		<method name="_is_available" qualifiers="virtual">

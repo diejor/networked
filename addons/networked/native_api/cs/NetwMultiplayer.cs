@@ -60,6 +60,10 @@ namespace Networked;
 /// </remarks>
 public sealed class NetwMultiplayer : NetwRefCounted
 {
+    public NetwMultiplayer() : this(NetwApi.Construct("NetwMultiplayer", true))
+    {
+    }
+
     public NetwMultiplayer(IntPtr native) : base(native)
     {
     }
@@ -433,17 +437,17 @@ public sealed class NetwMultiplayer : NetwRefCounted
         /// </summary>
         DisplayName = 1,
         /// <summary>
-        /// <see cref="string"/> to title the address field with, such as an IP
+        /// <see cref="string"/> to title the address input with, such as an IP
         /// for <see cref="ENetMultiplayerPeer"/>, a URL for a WebSocket, or a
         /// room id for WebRTC.
         /// </summary>
         AddressLabel = 2,
         /// <summary>
-        /// <see cref="string"/> to show in the empty address field.
+        /// <see cref="string"/> to show in the empty address input.
         /// </summary>
         AddressPlaceholder = 3,
         /// <summary>
-        /// <see cref="string"/> sentence under the address field, empty when it
+        /// <see cref="string"/> sentence under the address input, empty when it
         /// needs none.
         /// </summary>
         AddressHelp = 4,
@@ -453,8 +457,8 @@ public sealed class NetwMultiplayer : NetwRefCounted
         /// </summary>
         Capabilities = 5,
         /// <summary>
-        /// <see cref="Godot.Collections.Dictionary"/> of the fields a host form
-        /// asks for, with their default values. Pass the filled values to
+        /// <see cref="Godot.Collections.Dictionary"/> of the settings a host
+        /// form asks for, with their default values. Pass the filled values to
         /// <see cref="NetwMultiplayer.TransportCreatePeer"/>.
         /// </summary>
         HostSettings = 6,
@@ -482,7 +486,7 @@ public sealed class NetwMultiplayer : NetwRefCounted
         /// </summary>
         Address = 1,
         /// <summary>
-        /// The name shown in a server browser. The only field
+        /// The name shown in a server browser. The only property
         /// <see cref="NetwMultiplayer.EndpointSetParam"/> can change.
         /// </summary>
         DisplayName = 2,
@@ -1423,9 +1427,10 @@ public sealed class NetwMultiplayer : NetwRefCounted
         /// </summary>
         ClockSynchronized = 15,
         /// <summary>
-        /// The clock settings were applied. It happens once, so check
-        /// <see cref="NetwMultiplayer.ClockIsConfigured"/> in case it already
-        /// happened. The callback receives no arguments.
+        /// The clock settings were applied. Emitted once with no arguments.
+        /// Check <see cref="NetwMultiplayer.ClockIsConfigured"/> if it may have
+        /// already happened. Peer assignment and
+        /// <see cref="NetwAction.Request"/> are refused during this callback.
         /// </summary>
         ClockConfigured = 16,
         /// <summary>
@@ -3113,8 +3118,8 @@ public sealed class NetwMultiplayer : NetwRefCounted
 
     /// <summary>
     /// Returns <c>true</c> when
-    /// <see cref="NetwMultiplayer.AttributionSetArmed"/> turned on per-column
-    /// counting.
+    /// <see cref="NetwMultiplayer.AttributionSetArmed"/> turned on counting per
+    /// property.
     /// </summary>
     public bool AttributionIsArmed()
     {
@@ -3149,9 +3154,9 @@ public sealed class NetwMultiplayer : NetwRefCounted
     /// ┠╴frames_in_by_channel  Dictionary  peer -&gt; channel -&gt; frames received
     /// ┠╴refused_in            int         frames rejected on arrival
     /// ┠╴refusals              Dictionary  peer -&gt; channel -&gt; rejection name -&gt; count
-    /// ┠╴armed                 bool        whether column grain is being recorded
+    /// ┠╴armed                 bool        whether each property is counted
     /// ┠╴columns               Dictionary  a packed key -&gt; schema, column, bits
-    /// ┖╴residual              Dictionary  the same bytes at the datagram boundary
+    /// ┖╴residual              Dictionary  the same bytes in sent packets
     /// </code>
     /// <para>
     /// Route <c>0</c> is traffic that belongs to no entity. <c>residual</c>
@@ -3484,8 +3489,8 @@ public sealed class NetwMultiplayer : NetwRefCounted
             2990293178UL);
 
     /// <summary>
-    /// Returns one field of <paramref name="endpoint"/>, or <c>null</c> when it
-    /// does not exist.
+    /// Returns one property of <paramref name="endpoint"/>, or <c>null</c> when
+    /// it does not exist.
     /// </summary>
     public Variant EndpointGetParam(
         Rid endpoint,
@@ -3514,12 +3519,12 @@ public sealed class NetwMultiplayer : NetwRefCounted
             931495360UL);
 
     /// <summary>
-    /// Changes one field of <paramref name="endpoint"/> and notifies
+    /// Changes one property of <paramref name="endpoint"/> and notifies
     /// <see cref="NetwMultiplayer.Notification.EndpointUpdated"/>. Only
     /// <see cref="NetwMultiplayer.EndpointParam.DisplayName"/> can be changed.
     /// <code>
     /// Error
-    /// ┠╴OK                     the field changed
+    /// ┠╴OK                     the property changed
     /// ┠╴ERR_DOES_NOT_EXIST     the endpoint does not exist
     /// ┖╴ERR_INVALID_PARAMETER  param names anything but ENDPOINT_PARAM_DISPLAY_NAME
     /// </code>
@@ -4061,8 +4066,8 @@ public sealed class NetwMultiplayer : NetwRefCounted
             3091282135UL);
 
     /// <summary>
-    /// Returns one field of <paramref name="transport"/>, used to draw host and
-    /// join forms, or <c>null</c>.
+    /// Returns one property of <paramref name="transport"/>, used to draw host
+    /// and join forms, or <c>null</c>.
     /// <see cref="NetwMultiplayer.TransportParam.Capabilities"/> returns a
     /// <see cref="NetwConnection.TransportCapability"/> mask.
     /// <code>
@@ -4538,7 +4543,7 @@ public sealed class NetwMultiplayer : NetwRefCounted
         NetwApi.MethodBind("NetwMultiplayer", "database_patch", 45203095UL);
 
     /// <summary>
-    /// Writes the fields in <paramref name="values"/> to the record at
+    /// Writes the properties in <paramref name="values"/> to the record at
     /// <paramref name="id"/> and keeps the rest. A missing record fails with
     /// <c>@GlobalScope.ERR_DOES_NOT_EXIST</c>. See
     /// <see cref="NetwDatabase.Patch"/> for the errors.
@@ -8412,14 +8417,16 @@ public sealed class NetwMultiplayer : NetwRefCounted
         NetwApi.MethodBind("NetwMultiplayer", "predict_declare", 813180755UL);
 
     /// <summary>
-    /// Turns on prediction for <paramref name="entity"/> with the settings in
-    /// <see cref="NetwEntity.Prediction"/>. It also turns on lag compensation.
-    /// Calling it again does nothing.
+    /// Turns on <see cref="NetwEntity.Prediction"/> for
+    /// <paramref name="entity"/>. Repeated calls do nothing. Invalid
+    /// <see cref="NetwLagCompensationConfig"/> settings prevent registration.
     /// <code>
     /// Error
-    /// ┠╴OK                  prediction is on
+    /// ┠╴OK                  prediction is on, or turns on once the settings being applied are done
     /// ┠╴ERR_DOES_NOT_EXIST  the entity does not exist
-    /// ┖╴ERR_UNAVAILABLE     a NetwLagCompensationConfig is not applied yet
+    /// ┠╴ERR_ALREADY_EXISTS  more than one node declared the same settings
+    /// ┠╴ERR_UNAVAILABLE     the node that declared the settings left the tree
+    /// ┖╴ERR_INVALID_DATA    the declared settings cannot be read
     /// </code>
     /// </summary>
     public Error PredictDeclare(Rid entity)
@@ -10050,7 +10057,7 @@ public sealed class NetwMultiplayer : NetwRefCounted
     /// ┠╴ERR_DOES_NOT_EXIST  entity or set does not exist
     /// ┠╴ERR_INVALID_DATA    the set is not sealed
     /// ┠╴ERR_UNAVAILABLE     comp is not a node of this entity
-    /// ┖╴ERR_UNCONFIGURED    the session has no sync pipeline
+    /// ┖╴ERR_UNCONFIGURED    property synchronization is unavailable
     /// </code>
     /// </summary>
     public Error EntityAddPropertySet(Rid entity, Rid set, long comp)
@@ -10426,10 +10433,10 @@ public sealed class NetwMultiplayer : NetwRefCounted
             3804025326UL);
 
     /// <summary>
-    /// Calls <see cref="NetwEntity.TransferControl"/> on
-    /// <paramref name="entity"/>. Returns
-    /// <c>@GlobalScope.ERR_DOES_NOT_EXIST</c> when <paramref name="entity"/>
-    /// has no bound node.
+    /// Assigns <see cref="NetwEntity.Controller"/> on
+    /// <paramref name="entity"/>. Returns <c>@GlobalScope.ERR_UNAUTHORIZED</c>
+    /// on a client, or <c>@GlobalScope.ERR_DOES_NOT_EXIST</c> when
+    /// <paramref name="entity"/> has no bound node.
     /// </summary>
     public Error EntityGrantControl(Rid entity, long peer)
     {

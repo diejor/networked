@@ -39,6 +39,10 @@ namespace Networked;
 /// </remarks>
 public sealed class NetwPromise : NetwRefCounted
 {
+    public NetwPromise() : this(NetwApi.Construct("NetwPromise", true))
+    {
+    }
+
     public NetwPromise(IntPtr native) : base(native)
     {
     }

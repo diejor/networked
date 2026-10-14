@@ -353,6 +353,8 @@ private:
     };
     ConfigConsumption config_consumption[3];
     bool config_settle_queued = false;
+    bool config_applying = false;
+    bool lagcomp_wanted = false;
 
     godot::Callable auth_app_callback;
     int64_t auth_app_tag = 0;
@@ -2216,8 +2218,10 @@ public:
         const godot::RID &p_space
     ) const;
     void predict_stepper_hold(const godot::RID &p_space, int p_dimension);
-    bool predict_space_can_step(const godot::RID &p_space, int p_dimension)
-        const;
+    bool predict_space_can_step(
+        const godot::RID &p_space,
+        int p_dimension
+    ) const;
     bool predict_entity_can_step(const godot::Ref<NetwEntity> &p_entity) const;
     void predict_step_space(
         const godot::RID &p_space,
@@ -2431,6 +2435,7 @@ public:
     void set_lagcomp_configured(bool p_configured);
     void lagcomp_arm();
     godot::Error lagcomp_require(const char *p_by);
+    void lagcomp_want();
     godot::Error lagcomp_initialize(
         int64_t p_max_future_action_ticks,
         int64_t p_input_gate_deadline_ticks
@@ -3200,6 +3205,7 @@ public:
     );
 
     godot::Error clock_initialize(const godot::Ref<NetwClockConfig> &p_from);
+    godot::Error clock_commit(const godot::Ref<NetwClockConfig> &p_from);
     void clock_offer_fallback(
         const godot::Ref<NetwClockConfig> &p_draft,
         godot::Object *p_source
@@ -4082,9 +4088,9 @@ public:
 
     void declarations_changed();
     void config_settle();
-    void config_consume_lagcomp_defaults();
+    godot::Error apply_pending_config(bool p_lagcomp_needed, const char *p_by);
     bool config_is_consumed(session_decl::Kind p_kind) const;
-    godot::Error config_readiness(godot::String &r_reason);
+    bool config_is_applying() const;
 
     void session_answer_probe(int64_t p_peer);
     bool probe_forget(int64_t p_peer);
@@ -4655,22 +4661,6 @@ public:
         godot::Node *p_exclude,
         int64_t p_route
     );
-    godot::Node *entity_instantiate_from(godot::Node *p_template);
-
-    godot::Node *entity_spawn_under(
-        godot::Node *p_owner,
-        godot::Node *p_parent,
-        const godot::StringName &p_id,
-        const godot::Callable &p_configure
-    );
-
-    static godot::Node *entity_spawn_copy_under(
-        godot::Node *p_owner,
-        godot::Node *p_parent,
-        const godot::StringName &p_id,
-        const godot::Callable &p_configure
-    );
-
     void entity_linger(
         NetwEntityRecord *p_record,
         godot::Node *p_owner,
@@ -4681,7 +4671,11 @@ public:
 
     godot::Dictionary entity_describe(int64_t p_route) const;
 
-    void entity_note_stage(NetwEntityRecord *p_record, int64_t p_from);
+    void entity_note_stage(
+        NetwEntityRecord *p_record,
+        int64_t p_from,
+        int64_t p_to
+    );
 
     void entity_announce_reparented(const godot::Ref<NetwEntity> &p_wrapper);
     void entity_refresh_moved_body(const godot::RID &p_entity, int64_t p_route);

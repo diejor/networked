@@ -3055,15 +3055,17 @@ void NetwMultiplayer::NETW_API_VIRTUAL(set_multiplayer_peer)(
     );
     const bool live
         = p_peer.is_valid() && !p_peer->is_class("OfflineMultiplayerPeer");
+    NETW_ERR_COND(
+        config_applying,
+        sys::SESSION,
+        "The peer was assigned while the session applied its Netw.configure_* "
+        "settings, so the assignment was ignored. Assign it outside the "
+        "callbacks that react to those settings."
+    );
     if (live) {
-        String pending;
-        NETW_ERR_COND(
-            config_readiness(pending) != OK,
-            sys::SESSION,
-            "The peer was assigned before the Netw.configure_* settings "
-            "were applied. Assign it after the first frame, or connect "
-            "through NetwSession.connection."
-        );
+        if (apply_pending_config(false, "the peer assignment") != OK) {
+            return;
+        }
         session_apply_auth_config();
     }
     if (session_get_state() == SESSION_STATE_ONLINE) {

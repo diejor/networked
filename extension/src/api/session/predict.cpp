@@ -1637,6 +1637,7 @@ void NetwMultiplayer::unregister_prediction(const Ref<NetwEntity> &p_entity) {
         return;
     }
     const RID entity = p_entity->get_rid_handle();
+    predict_awaiting_config.erase(entity);
     NetwPredictSlotEngine *engine = predict_engine_release(entity);
     if (engine == nullptr) {
         return;
@@ -1667,9 +1668,11 @@ Error NetwMultiplayer::predict_declare(const RID &p_entity) {
         );
         return ERR_DOES_NOT_EXIST;
     }
-    const Error required = lagcomp_require("declaring prediction");
+    const Error required = lagcomp_require("prediction");
     if (required == ERR_BUSY) {
-        predict_awaiting_config.push_back(p_entity);
+        if (predict_awaiting_config.find(p_entity) < 0) {
+            predict_awaiting_config.push_back(p_entity);
+        }
         declarations_changed();
         return OK;
     }
@@ -1677,30 +1680,6 @@ Error NetwMultiplayer::predict_declare(const RID &p_entity) {
         return required;
     }
     register_prediction(wrapper);
-    return OK;
-}
-
-Error NetwMultiplayer::lagcomp_require(const char *p_by) {
-    if (!config_is_consumed(session_decl::KIND_LAGCOMP_CONFIG)) {
-        const session_decl::Resolved offered = declaration_book().resolve(
-            this,
-            session_decl::KIND_LAGCOMP_CONFIG
-        );
-        if (offered.state == session_decl::READY) {
-            return ERR_BUSY;
-        }
-        if (offered.state != session_decl::ABSENT) {
-            declaration_book().report_unresolved(
-                this,
-                session_decl::KIND_LAGCOMP_CONFIG,
-                offered.state,
-                p_by
-            );
-            return ERR_UNAVAILABLE;
-        }
-        config_consume_lagcomp_defaults();
-    }
-    lagcomp_arm();
     return OK;
 }
 

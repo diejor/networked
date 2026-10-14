@@ -55,6 +55,7 @@ func _init() -> void:
 	sphere.add_child(shape)
 	add_child(sphere)
 	var e := Netw.configure_entity(self)
+	e.authority = NetwEntity.AUTHORITY_CONTROLLER
 	e.transfer = NetwEntity.TRANSFER_IMMEDIATE
 	e.simulation.bodies = [^"Sphere"]
 	e.simulation.replicas = NetwSimulation.REPLICAS_ACTIVE
@@ -232,7 +233,7 @@ public:
         } else if (frame < WARM_FRAMES) {
             stand->step_ticks(1);
         } else if (frame == WARM_FRAMES) {
-            promise = entity_at(0)->claim_authority(YIELDABLE);
+            promise = entity_at(0)->claim_control(YIELDABLE);
             sphere_at(0)->set_linear_velocity(PUSH);
             stand->step_ticks(1);
         } else if (frame <= WARM_FRAMES + WATCH_FRAMES) {
@@ -240,13 +241,13 @@ public:
             watch(frame - WARM_FRAMES);
         } else if (frame == WARM_FRAMES + WATCH_FRAMES + 1) {
             first_tenure_image() = entity_at(0)->claim_image(frame);
-            entity_at(1)->claim_authority();
+            entity_at(1)->claim_control();
             sphere_at(1)->set_linear_velocity(SIDE);
             stand->step_ticks(1);
         } else if (frame == HANDED_BACK) {
             image_evidence().taken_between
                 = entity_at(-1)->get_controller() == stand->peer_id(1);
-            entity_at(1)->release_authority(stand->peer_id(0));
+            entity_at(1)->release_control(stand->peer_id(0));
             stand->step_ticks(1);
         } else if (frame < REPLAY_BY) {
             if (frame > HANDED_BACK && !image_evidence().retaken

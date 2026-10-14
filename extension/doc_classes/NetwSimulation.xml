@@ -34,9 +34,10 @@
 		[/codeblocks]
 		An entity is simulated once it sets or calls anything here, declares [member NetwPrediction.archetype], or has a [RigidBody2D] or [RigidBody3D] root drawn by [member NetwEntity.display]. Other entities stay [constant MODE_NONE].
 		[b]Modes[/b]
-		The peer with authority over the entity runs it as [constant MODE_AUTHORITY], and a client predicting it runs it as [constant MODE_PREDICT]. Every other copy is a frozen [constant MODE_PROXY], unless [member replicas] or a selection makes it [constant MODE_ACTIVE].
+		The peer writing replicated state runs [constant MODE_AUTHORITY]. A predicting client runs [constant MODE_PREDICT]. Every other copy is a frozen [constant MODE_PROXY], unless [member replicas] or a selection makes it [constant MODE_ACTIVE].
 		[b]Selection[/b]
-		While this entity runs here as [constant MODE_AUTHORITY] or [constant MODE_PREDICT], it can pick other entities to run here as [constant MODE_ACTIVE]. A predicted entity that declares no selection picks every simulated entity this peer holds in its [NetwInterestLayer] layers. [method simulate] names one more, [method simulate_all] narrows the automatic policy to one layer, and [method simulate_none] drops it.
+		While this entity runs here as [constant MODE_AUTHORITY] or [constant MODE_PREDICT], it can pick other entities to run here as [constant MODE_ACTIVE]. A predicted entity that declares no selection picks every simulated entity this peer holds in its [NetwInterestLayer] layers.
+		[method simulate] names one more, [method simulate_all] limits automatic selection to one layer, and [method simulate_none] drops it.
 		[codeblock]
 		func _ready() -&gt; void:
 		    entity.simulation.simulate(ball)
@@ -49,7 +50,7 @@
 			<return type="void" />
 			<param index="0" name="entity" type="NetwEntity" />
 			<description>
-				Withdraws the selection [method simulate] made for [param entity]. The automatic policy may still select it.
+				Withdraws the selection [method simulate] made for [param entity]. Automatic selection may still include it.
 			</description>
 		</method>
 		<method name="simulate">
@@ -69,7 +70,7 @@
 		<method name="simulate_none">
 			<return type="void" />
 			<description>
-				Drops the automatic policy. Entities named with [method simulate] stay selected.
+				Stops automatic selection. Entities named with [method simulate] stay selected.
 			</description>
 		</method>
 	</methods>
@@ -89,11 +90,12 @@
 			The mode this entity runs in on this peer. [signal mode_changed] reports each change.
 		</member>
 		<member name="release_on_rest" type="float" setter="set_release_on_rest" getter="get_release_on_rest" default="0.0">
-			The seconds the bodies must sleep before this peer releases the entity with [method NetwEntity.release_authority], or [code]0[/code] to never release. It only releases an entity this peer holds with [constant NetwEntity.HOLD_YIELDABLE].
+			The seconds the bodies must sleep before this peer releases the entity with [method NetwEntity.release_control], or [code]0[/code] to never release. It only releases an entity this peer holds with [constant NetwEntity.HOLD_YIELDABLE].
 			It needs [constant NetwEntity.TRANSFER_IMMEDIATE] on an entity with no [method NetwPropertyConfig.state] property and no prediction, and does nothing otherwise.
 		</member>
 		<member name="replicas" type="int" setter="set_replicas" getter="get_replicas" enum="NetwSimulation.Replicas" default="0">
-			How the copies this peer has no authority over run. It can change at any time.
+			How this peer simulates copies whose state it receives from another peer.
+			It can change at any time.
 		</member>
 		<member name="restore" type="int" setter="set_restore" getter="get_restore" enum="NetwSimulation.Restore" default="2">
 			How a sample from the authority lands on a [constant MODE_ACTIVE] copy. Under [constant NetwDisplay.LIVE_MODE_CHASE] the body snaps to it and the drawn position glides, up to [member NetwPrediction.teleport_threshold].
@@ -148,10 +150,10 @@
 			[constant SCHEDULE_STEPPED] when the entity has a physics body this Godot build can step and restore, [constant SCHEDULE_FRAME] for any other physics body, and [constant SCHEDULE_TICK] otherwise.
 		</constant>
 		<constant name="REPLICAS_PROXY" value="0" enum="Replicas">
-			Copies this peer has no authority over are [constant MODE_PROXY], unless a selection makes them active.
+			Copies whose state comes from another peer are [constant MODE_PROXY], unless a selection makes them active.
 		</constant>
 		<constant name="REPLICAS_ACTIVE" value="1" enum="Replicas">
-			Copies this peer has no authority over are [constant MODE_ACTIVE].
+			Copies whose state comes from another peer are [constant MODE_ACTIVE].
 		</constant>
 		<constant name="RESTORE_EXACT" value="0" enum="Restore">
 			A sample lands when it arrives, as it was sent.

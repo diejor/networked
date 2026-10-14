@@ -19,7 +19,7 @@ Calls the GodotSteam singleton, ``Engine.get_singleton("Steam")``.
 Description
 -----------
 
-Check :ref:`is_available()<class_SteamWrapper_method_is_available>` before calling other methods, since GodotSteam may not be installed.
+Check :ref:`is_addon_present()<class_SteamWrapper_method_is_addon_present>` before calling other methods, since GodotSteam may not be installed.
 
 .. rst-class:: classref-reftable-group
 
@@ -30,7 +30,7 @@ Methods
    :widths: auto
 
    +--------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`bool`            | :ref:`is_available<class_SteamWrapper_method_is_available>`\ (\ )                                                                                                                          |
+   | :godot:`bool`            | :ref:`is_addon_present<class_SteamWrapper_method_is_addon_present>`\ (\ ) |static|                                                                                                         |
    +--------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | :godot:`bool`            | :ref:`is_running<class_SteamWrapper_method_is_running>`\ (\ ) |static|                                                                                                                     |
    +--------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
@@ -413,11 +413,11 @@ The GodotSteam release this addon is tested against. A later release with the sa
 Method Descriptions
 -------------------
 
-.. _class_SteamWrapper_method_is_available:
+.. _class_SteamWrapper_method_is_addon_present:
 
 .. rst-class:: classref-method
 
-:godot:`bool` **is_available**\ (\ ) :ref:`🔗<class_SteamWrapper_method_is_available>`
+:godot:`bool` **is_addon_present**\ (\ ) |static| :ref:`🔗<class_SteamWrapper_method_is_addon_present>`
 
 .. container:: contribute
 

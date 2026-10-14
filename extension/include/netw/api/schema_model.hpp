@@ -29,6 +29,9 @@ private:
     int version = 1;
     bool replicated_lane = true;
     bool reliable_lane = false;
+    bool read_only = false;
+
+    bool can_edit() const;
 
 protected:
     static void _bind_methods();
@@ -36,6 +39,9 @@ protected:
 public:
     static godot::Ref<NetwSchema> create(const godot::StringName &p_name);
     static godot::Ref<NetwSchema> declare(const godot::StringName &p_name);
+    static godot::Ref<NetwSchema> from_record(
+        const table::SchemaRecord &p_record
+    );
 
     godot::StringName get_schema_name() const {
         return name;

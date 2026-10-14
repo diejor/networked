@@ -29,17 +29,17 @@ Methods
 .. table::
    :widths: auto
 
-   +-----------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | |void|                                        | :ref:`drain_frames<class_NetwTestSuite_method_drain_frames>`\ (\ tree\: :godot:`SceneTree`, count\: :godot:`int` = 3\ ) |static|                                                                        |
-   +-----------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwGameHarness<class_NetwGameHarness>` | :ref:`make_game_harness<class_NetwTestSuite_method_make_game_harness>`\ (\ scene\: :godot:`PackedScene`\ )                                                                                              |
-   +-----------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwGameHarness<class_NetwGameHarness>` | :ref:`make_unmanaged_game_harness<class_NetwTestSuite_method_make_unmanaged_game_harness>`\ (\ scene\: :godot:`PackedScene`\ )                                                                          |
-   +-----------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`Node`                                 | :ref:`make_test_entity<class_NetwTestSuite_method_make_test_entity>`\ (\ parent\: :godot:`Node`, entity_name\: :godot:`String` = "Ent", peer_id\: :godot:`int` = 0, with_sync\: :godot:`bool` = true\ ) |
-   +-----------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | |void|                                        | :ref:`after_test<class_NetwTestSuite_method_after_test>`\ (\ )                                                                                                                                          |
-   +-----------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   +-----------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | |void|                                        | :ref:`drain_frames<class_NetwTestSuite_method_drain_frames>`\ (\ tree\: :godot:`SceneTree`, count\: :godot:`int` = 3\ ) |static|                                                                           |
+   +-----------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwGameHarness<class_NetwGameHarness>` | :ref:`make_game_harness<class_NetwTestSuite_method_make_game_harness>`\ (\ scene\: :godot:`PackedScene`\ )                                                                                                 |
+   +-----------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwGameHarness<class_NetwGameHarness>` | :ref:`make_unmanaged_game_harness<class_NetwTestSuite_method_make_unmanaged_game_harness>`\ (\ scene\: :godot:`PackedScene`\ )                                                                             |
+   +-----------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`Node`                                 | :ref:`make_test_entity<class_NetwTestSuite_method_make_test_entity>`\ (\ parent\: :godot:`Node`, entity_name\: :godot:`String` = "Ent", controller\: :godot:`int` = 1, with_sync\: :godot:`bool` = true\ ) |
+   +-----------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | |void|                                        | :ref:`after_test<class_NetwTestSuite_method_after_test>`\ (\ )                                                                                                                                             |
+   +-----------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 
 .. rst-class:: classref-section-separator
 
@@ -113,9 +113,9 @@ Builds, parents, and auto-frees an unmanaged :ref:`NetwGameHarness<class_NetwGam
 
 .. rst-class:: classref-method
 
-:godot:`Node` **make_test_entity**\ (\ parent\: :godot:`Node`, entity_name\: :godot:`String` = "Ent", peer_id\: :godot:`int` = 0, with_sync\: :godot:`bool` = true\ ) :ref:`🔗<class_NetwTestSuite_method_make_test_entity>`
+:godot:`Node` **make_test_entity**\ (\ parent\: :godot:`Node`, entity_name\: :godot:`String` = "Ent", controller\: :godot:`int` = 1, with_sync\: :godot:`bool` = true\ ) :ref:`🔗<class_NetwTestSuite_method_make_test_entity>`
 
-Builds a :ref:`NetwEntity<class_NetwEntity>`-rooted node suitable for isolated unit and integration tests. Pre-attaches the entity and sets :godot:`Node.owner <Node#class_Node_property_owner>` so :ref:`NetwEntity.of()<class_NetwEntity_method_of>` short-circuits instead of walking past test-fixture ancestors. The returned root is registered with ``auto_free``.  ``parent`` container the root is added under. ``entity_name`` :godot:`Node.name <Node#class_Node_property_name>` for the entity root. ``peer_id`` assigned to :ref:`NetwEntity.peer_id<class_NetwEntity_property_peer_id>`. ``with_sync`` when ``true``, attaches a :godot:`MultiplayerSynchronizer` child named ``"Sync"`` so interest drivers scanning the entity root for synchronizers find at least one target.
+Builds a :ref:`NetwEntity<class_NetwEntity>`-rooted node suitable for isolated unit and integration tests. Pre-attaches the entity and sets :godot:`Node.owner <Node#class_Node_property_owner>` so :ref:`NetwEntity.of()<class_NetwEntity_method_of>` short-circuits instead of walking past test-fixture ancestors. The returned root is registered with ``auto_free``.  ``parent`` container the root is added under. ``entity_name`` :godot:`Node.name <Node#class_Node_property_name>` for the entity root. ``controller`` assigned to :ref:`NetwEntity.controller<class_NetwEntity_property_controller>`. ``with_sync`` when ``true``, attaches a :godot:`MultiplayerSynchronizer` child named ``"Sync"`` so interest drivers scanning the entity root for synchronizers find at least one target.
 
 .. rst-class:: classref-item-separator
 

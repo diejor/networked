@@ -18,6 +18,10 @@ namespace Networked;
 /// </remarks>
 public sealed class NetwDespawnOpts : NetwRefCounted
 {
+    public NetwDespawnOpts() : this(NetwApi.Construct("NetwDespawnOpts", true))
+    {
+    }
+
     public NetwDespawnOpts(IntPtr native) : base(native)
     {
     }

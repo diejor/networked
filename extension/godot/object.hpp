@@ -4,6 +4,7 @@
 #include "godot/variant.hpp"
 
 #if defined(NETW_MODULE)
+#include "core/object/class_db.h"
 #include "core/object/object.h"
 #include "core/object/object_id.h"
 
@@ -136,6 +137,74 @@ inline godot::Array bound_method_arg_types(
     return types;
 }
 
+struct PropertyResolution {
+    bool present = false;
+    int type = -1;
+};
+
+inline PropertyResolution listed_property(
+    const godot::Array &p_infos,
+    const godot::StringName &p_name
+) {
+    for (int at = 0; at < p_infos.size(); ++at) {
+        const godot::Dictionary info = p_infos[at];
+        if (godot::StringName(info.get("name", godot::StringName()))
+            == p_name) {
+            return { true, int(info.get("type", int(godot::Variant::NIL))) };
+        }
+    }
+    return {};
+}
+
+inline PropertyResolution resolve_property(
+    const godot::Object *p_object,
+    const godot::StringName &p_name,
+    const godot::Array &p_infos
+) {
+    if (p_object == nullptr) {
+        return {};
+    }
+    const PropertyResolution listed = listed_property(p_infos, p_name);
+    if (listed.present) {
+        return listed;
+    }
+    if (p_object->has_method(p_name) || p_object->has_signal(p_name)) {
+        return {};
+    }
+    bool valid = false;
+#if defined(NETW_MODULE)
+    p_object->get(p_name, &valid);
+#else
+    godot::Variant(p_object).get_named(p_name, valid);
+#endif
+    return { valid, -1 };
+}
+
+inline int class_property_type(
+    const godot::StringName &p_class,
+    const godot::StringName &p_name
+) {
+#if defined(NETW_MODULE)
+    bool valid = false;
+    const Variant::Type type
+        = ::ClassDB::get_property_type(p_class, p_name, &valid);
+    return valid ? int(type) : -1;
+#else
+    const godot::TypedArray<godot::Dictionary> declared
+        = godot::ClassDBSingleton::get_singleton()->class_get_property_list(
+            p_class,
+            false
+        );
+    for (int at = 0; at < declared.size(); ++at) {
+        const godot::Dictionary info = declared[at];
+        if (godot::StringName(info["name"]) == p_name) {
+            return int(info["type"]);
+        }
+    }
+    return -1;
+#endif
+}
+
 inline bool has_property(
     const godot::Object *object,
     const godot::StringName &name
@@ -175,7 +244,7 @@ inline bool has_property(
             return true;
         }
     }
-    return false;
+    return resolve_property(object, name, infos).present;
 #endif
 }
 

@@ -17,9 +17,9 @@ namespace Networked;
 /// stored values.
 /// <code>
 /// func _on_chest_opened() -&gt; void:
-///     var row := entity.persistence
-///     row.saved.connect(func() -&gt; void: print("stored as ", row.record_id))
-///     row.save()
+///     var persistence := entity.persistence
+///     persistence.saved.connect(func() -&gt; void: print("stored as ", persistence.record_id))
+///     persistence.save()
 /// </code>
 /// <para>
 /// <see cref="NetwPersistenceConfig.Interval"/> saves automatically, and only
@@ -82,7 +82,7 @@ public sealed class NetwPersistence : NetwRefCounted
         NetwApi.MethodBind("NetwPersistence", "get_dirty", 2240911060UL);
 
     /// <summary>
-    /// Whether any bound property differs from what was last saved.
+    /// Whether any configured property differs from what was last saved.
     /// </summary>
     public bool Dirty
     {
@@ -132,29 +132,45 @@ public sealed class NetwPersistence : NetwRefCounted
         }
     }
 
+    private static readonly IntPtr _bindGetSchema =
+        NetwApi.MethodBind("NetwPersistence", "get_schema", 2844667682UL);
+
+    /// <summary>
+    /// The read-only saved property definition for
+    /// <see cref="NetwDatabase.Read"/> and <see cref="NetwDatabase.Write"/>.
+    /// <c>null</c> until persistence is ready on the server. Direct database
+    /// calls do not update the root's properties or
+    /// <see cref="NetwPersistence.Dirty"/>.
+    /// </summary>
+    public NetwSchema Schema
+    {
+        get
+        {
+            IntPtr answered = default;
+            NetwThunks.Ptrcall0_IntPtr(_bindGetSchema, Checked, ref answered);
+            return NetwSchema.Adopt(answered);
+        }
+    }
+
     private static readonly IntPtr _bindLoad =
         NetwApi.MethodBind("NetwPersistence", "load", 1931563502UL);
 
     /// <summary>
-    /// Reads the stored record and applies it to the bound properties. The
+    /// Reads the stored record and applies it to the configured properties. The
     /// promise returns <c>true</c> when a record was found, and <c>false</c>
     /// when none was stored and the properties keep their values. A failed load
     /// fails the promise, and <see cref="NetwPromise.Wait"/> returns the code.
     /// <code>
     /// Error
-    /// ┠╴ERR_UNCONFIGURED       the entity binds no persistence, the database is not open,
-    /// │                        or the schema declares no migration from the stored row
+    /// ┠╴ERR_UNCONFIGURED       no persistence, unopened database or missing migration
     /// ┠╴ERR_UNAUTHORIZED       this peer is not the server
-    /// ┠╴ERR_BUSY               a bound property changed since the last load or save, a
-    /// │                        write is in flight, a property changed while the row was
-    /// │                        read, or the database is full
-    /// ┠╴ERR_DOES_NOT_EXIST     a bound node was freed while the row was applied
-    /// ┠╴ERR_FILE_UNRECOGNIZED  the stored row is not in this library's format, or carries
-    /// │                        a newer storage version than the schema
-    /// ┠╴ERR_INVALID_DATA       the stored row does not match the schema
-    /// ┠╴ERR_UNAVAILABLE        the database closed or
-    /// │                        the session ended while the row was read
-    /// ┖╴backend-defined        the backend could not read the row
+    /// ┠╴ERR_BUSY               a save is pending, properties have unsaved changes,
+    /// ┃                        changed during loading or too many operations are pending
+    /// ┠╴ERR_DOES_NOT_EXIST     a configured node was freed during loading
+    /// ┠╴ERR_FILE_UNRECOGNIZED  unknown save format or a newer saved version
+    /// ┠╴ERR_INVALID_DATA       saved property names or types differ
+    /// ┠╴ERR_UNAVAILABLE        the database closed or the session ended during loading
+    /// ┖╴storage error         storage could not read the record
     /// </code>
     /// <para>
     /// <b>Server Only.</b>
@@ -171,22 +187,20 @@ public sealed class NetwPersistence : NetwRefCounted
         NetwApi.MethodBind("NetwPersistence", "save", 1931563502UL);
 
     /// <summary>
-    /// Writes the bound properties as this entity's record. The promise returns
-    /// <c>false</c> when nothing had changed. A failed save fails the promise,
-    /// and <see cref="NetwPromise.Wait"/> returns the code. The entity stays
-    /// <see cref="NetwPersistence.Dirty"/> so the next save tries again.
+    /// Writes the configured properties as this entity's record. The promise
+    /// returns <c>false</c> when nothing had changed. A failed save fails the
+    /// promise, and <see cref="NetwPromise.Wait"/> returns the code. The entity
+    /// stays <see cref="NetwPersistence.Dirty"/> so the next save tries again.
     /// <code>
     /// Error
-    /// ┠╴ERR_UNCONFIGURED    the entity binds no persistence, or the database is not open
-    /// ┠╴ERR_UNAUTHORIZED    this peer is not the server
-    /// ┠╴ERR_BUSY            a write is in flight, the spawn load has not succeeded, or
-    /// │                     the database is full
-    /// ┠╴ERR_INVALID_DATA    the bound values do not match the schema, or the connection
-    /// │                     answered no outcome for the row
-    /// ┠╴ERR_UNAVAILABLE     the bound nodes are gone, or this peer stopped being the
-    /// │                     server or the database closed before the write finished.
-    /// │                     The write may still have reached storage
-    /// ┖╴backend-defined     the backend refused or could not complete the write
+    /// ┠╴ERR_UNCONFIGURED  no persistence configuration or unopened database
+    /// ┠╴ERR_UNAUTHORIZED  this peer is not the server
+    /// ┠╴ERR_BUSY          a save is pending, the spawn load has not succeeded,
+    /// ┃                   or the database has too many pending operations
+    /// ┠╴ERR_INVALID_DATA  configured values have wrong types or storage gave no result
+    /// ┠╴ERR_UNAVAILABLE   the nodes were freed, server authority changed or the
+    /// ┃                   database closed. The write may still have reached storage
+    /// ┖╴storage error    storage refused or could not complete the write
     /// </code>
     /// <para>
     /// <b>Server Only.</b>

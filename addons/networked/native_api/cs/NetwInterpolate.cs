@@ -31,6 +31,10 @@ namespace Networked;
 /// </remarks>
 public sealed class NetwInterpolate : NetwRefCounted
 {
+    public NetwInterpolate() : this(NetwApi.Construct("NetwInterpolate", true))
+    {
+    }
+
     public NetwInterpolate(IntPtr native) : base(native)
     {
     }

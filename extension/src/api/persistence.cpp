@@ -16,7 +16,8 @@ namespace {
 Ref<NetwPromise> unbound() {
     return NetwPromise::rejected(
         ERR_UNCONFIGURED,
-        "this entity binds no persistence, so there is no row to reach"
+        "This root has no saved record. Configure it with "
+        "Netw.configure_persistence."
     );
 }
 
@@ -84,6 +85,26 @@ StringName NetwPersistence::get_database() {
         : StringName();
 }
 
+Ref<NetwSchema> NetwPersistence::get_schema() {
+    NetwMultiplayer *api = session();
+    const persist::Binding *held = api != nullptr && entity.is_valid()
+        ? api->get_bindings()->at(api->persist_binding_of_entity(entity))
+        : nullptr;
+    if (held == nullptr) {
+        schema.unref();
+        schema_id = RID();
+        return Ref<NetwSchema>();
+    }
+    if (schema_id != held->schema) {
+        const table::SchemaRecord *record
+            = api->get_schema_core()->record_of(held->schema);
+        schema = record != nullptr ? NetwSchema::from_record(*record)
+                                   : Ref<NetwSchema>();
+        schema_id = held->schema;
+    }
+    return schema;
+}
+
 void NetwPersistence::_bind_methods() {
     ClassDB::bind_method(D_METHOD("load"), &NetwPersistence::load);
     ClassDB::bind_method(D_METHOD("save"), &NetwPersistence::save);
@@ -131,6 +152,19 @@ void NetwPersistence::_bind_methods() {
         ),
         "",
         "get_database"
+    );
+
+    ClassDB::bind_method(D_METHOD("get_schema"), &NetwPersistence::get_schema);
+    ADD_PROPERTY(
+        PropertyInfo(
+            Variant::OBJECT,
+            "schema",
+            PROPERTY_HINT_RESOURCE_TYPE,
+            "NetwSchema",
+            PROPERTY_USAGE_NONE
+        ),
+        "",
+        "get_schema"
     );
 
     ADD_SIGNAL(MethodInfo("loaded", PropertyInfo(Variant::BOOL, "found")));

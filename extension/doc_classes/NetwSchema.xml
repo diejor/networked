@@ -19,6 +19,7 @@
 		@onready var mobs := Netw.session(self).table(Mobs.schema.schema_name)
 		[/codeblock]
 		A column with no quantizer is sent as a raw copy of its buffer, which is the cheapest to encode and decode. Add a quantizer to the columns where bandwidth matters.
+		A schema returned by [member NetwPersistence.schema] cannot be changed.
 		The same schema also types the records a [NetwDatabase] reads and writes directly. A schema used only for those calls [method replicated] with [code]false[/code] so no table is created. [method string] and [method variant] columns work for saves but not for replicated tables. An entity's own record takes its columns from [method NetwPropertyConfig.persisted] and needs no schema.
 	</description>
 	<tutorials>

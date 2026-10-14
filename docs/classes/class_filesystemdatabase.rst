@@ -25,9 +25,22 @@ Records stay on disk after the game closes. Use it for a singleplayer or listen 
 
     var backend := FileSystemDatabase.new()
     backend.root = "user://saves"
+    backend.format = FileSystemDatabase.FORMAT_TEXT
     Netw.configure_database(self, &"saves").backend(backend)
 
-\ Each slot is a directory under :ref:`root<class_FileSystemDatabase_property_root>`, and each record is one file inside it. A file this library did not write fails to read with :godot:`@GlobalScope.ERR_FILE_UNRECOGNIZED <@GlobalScope#class_@GlobalScope_constant_ERR_FILE_UNRECOGNIZED>`.
+\ Each slot is a directory under :ref:`root<class_FileSystemDatabase_property_root>`, and each record is one file inside it. A record reads back in either :ref:`Format<enum_FileSystemDatabase_Format>`, so changing :ref:`format<class_FileSystemDatabase_property_format>` keeps every save, and the next write of a record replaces its file with one in the new format.
+
+\ **Record files**\ 
+
+A ``.dict`` or ``.tdict`` file loads with :godot:`ResourceLoader.load() <ResourceLoader#class_ResourceLoader_method_load>` as a :ref:`DictionaryRecord<class_DictionaryRecord>`. Its :ref:`DictionaryRecord.data<class_DictionaryRecord_property_data>` holds the stored record, with the saved columns under ``payload``. Saving that record with :godot:`ResourceSaver.save() <ResourceSaver#class_ResourceSaver_method_save>` writes the file the database reads, so a save can be inspected and edited in the editor. Edit a save while the game is closed, since the next save of that record replaces the file.
+
+::
+
+    var record: DictionaryRecord = load("user://saves/campaign/0/players/hero.tdict")
+    record.data[&"payload"][&"gold"] = 100
+    ResourceSaver.save(record, record.resource_path)
+
+\ A record file never builds an object or loads a resource. A file this library did not write, or a ``.tdict`` naming an ``Object`` or a ``Resource``, fails to read with :godot:`@GlobalScope.ERR_FILE_UNRECOGNIZED <@GlobalScope#class_@GlobalScope_constant_ERR_FILE_UNRECOGNIZED>`.
 
 .. rst-class:: classref-reftable-group
 
@@ -37,9 +50,42 @@ Properties
 .. table::
    :widths: auto
 
-   +-----------------+-----------------------------------------------------+--------------------+
-   | :godot:`String` | :ref:`root<class_FileSystemDatabase_property_root>` | ``"user://saves"`` |
-   +-----------------+-----------------------------------------------------+--------------------+
+   +-----------------------------------------------+---------------------------------------------------------+--------------------+
+   | :ref:`Format<enum_FileSystemDatabase_Format>` | :ref:`format<class_FileSystemDatabase_property_format>` | ``0``              |
+   +-----------------------------------------------+---------------------------------------------------------+--------------------+
+   | :godot:`String`                               | :ref:`root<class_FileSystemDatabase_property_root>`     | ``"user://saves"`` |
+   +-----------------------------------------------+---------------------------------------------------------+--------------------+
+
+.. rst-class:: classref-section-separator
+
+----
+
+.. rst-class:: classref-descriptions-group
+
+Enumerations
+------------
+
+.. _enum_FileSystemDatabase_Format:
+
+.. rst-class:: classref-enumeration
+
+enum **Format**: :ref:`🔗<enum_FileSystemDatabase_Format>`
+
+.. _class_FileSystemDatabase_constant_FORMAT_BINARY:
+
+.. rst-class:: classref-enumeration-constant
+
+:ref:`Format<enum_FileSystemDatabase_Format>` **FORMAT_BINARY** = ``0``
+
+Writes each record as a compact ``.dict`` file.
+
+.. _class_FileSystemDatabase_constant_FORMAT_TEXT:
+
+.. rst-class:: classref-enumeration-constant
+
+:ref:`Format<enum_FileSystemDatabase_Format>` **FORMAT_TEXT** = ``1``
+
+Writes each record as a ``.tdict`` file in the text form of :godot:`@GlobalScope.var_to_str() <@GlobalScope#class_@GlobalScope_method_var_to_str>`, which a person can read and edit.
 
 .. rst-class:: classref-section-separator
 
@@ -49,6 +95,23 @@ Properties
 
 Property Descriptions
 ---------------------
+
+.. _class_FileSystemDatabase_property_format:
+
+.. rst-class:: classref-property
+
+:ref:`Format<enum_FileSystemDatabase_Format>` **format** = ``0`` :ref:`🔗<class_FileSystemDatabase_property_format>`
+
+.. rst-class:: classref-property-setget
+
+- |void| **set_format**\ (\ value\: :ref:`Format<enum_FileSystemDatabase_Format>`\ )
+- :ref:`Format<enum_FileSystemDatabase_Format>` **get_format**\ (\ )
+
+The format a record is written in.
+
+.. rst-class:: classref-item-separator
+
+----
 
 .. _class_FileSystemDatabase_property_root:
 

@@ -5,10 +5,14 @@
 #include "godot/callable.hpp"
 #include "godot/node.hpp"
 #include "godot/object.hpp"
+#include "godot/spatial_node.hpp"
 #include "godot/templates.hpp"
 #include "godot/variant.hpp"
 #include "netw/api/entity.hpp"
 #include "netw/api/netw_multiplayer.hpp"
+#include "netw/api/predict_slot_engine.hpp"
+#include "netw/display/book.hpp"
+#include "netw/predict/engine.hpp"
 #include "netw/session_core.hpp"
 #include "support/netw_recorder.h"
 
@@ -277,6 +281,102 @@ TEST_CASE(
     REQUIRE(log->watched_was_live.size() == 1);
     NETW_CHECK_EQ(log->watched_was_live[0], 1);
     CHECK(netw::gd::object_of(log->watched) == nullptr);
+}
+
+TEST_CASE(
+    "[Networked][Session][Hosted] TP6 session shutdown drops interpolation "
+    "before releasing its entity wrappers and accepts fresh runtimes"
+) {
+    Ref<NetwMultiplayer> core = online();
+    Node2D *body = memnew(Node2D);
+    Ref<netw::NetwEntity> entity;
+    entity.instantiate();
+    entity->set_owner(body);
+    REQUIRE(
+        core->liveness_adopt_route(17, entity, entity->get_record(), body)
+        == OK
+    );
+    REQUIRE(core->display_runtime_for(17, entity) != nullptr);
+    const RID handle = entity->get_rid_handle();
+    auto *pool = core->get_prediction_engine();
+    const int64_t slot = pool->slot_register(entity);
+    REQUIRE(pool->bind_owner(slot, body));
+    auto *prediction = memnew(netw::NetwPredictSlotEngine);
+    prediction->attach(core.ptr(), entity);
+    core->predict_engine_install(handle, prediction);
+    const ObjectID wrapper = netw::gd::instance_id(entity.ptr());
+    entity.unref();
+    memdelete(body);
+
+    core->session_plane().transition(SessionCore::STATE_DISCONNECTING);
+    core->session_flush_deferred();
+
+    CHECK(core->get_display_book()->runtimes().is_empty());
+    CHECK_FALSE(core->predict_engine_seated(handle));
+    NETW_CHECK_EQ(pool->slot_registered(), 0);
+    const bool wrapper_freed = netw::gd::object_of(wrapper) == nullptr;
+    CHECK(wrapper_freed);
+    if (core->predict_engine_seated(handle)) {
+        core->unregister_prediction(prediction->seated_entity());
+    }
+    core->get_display_book()->clear();
+
+    core->session_plane().transition(SessionCore::STATE_OFFLINE);
+    core->session_plane().transition(SessionCore::STATE_CONNECTING);
+    core->session_plane().transition(SessionCore::STATE_ONLINE);
+    body = memnew(Node2D);
+    entity.instantiate();
+    entity->set_owner(body);
+    REQUIRE(
+        core->liveness_adopt_route(17, entity, entity->get_record(), body)
+        == OK
+    );
+    auto *runtime = core->display_runtime_for(17, entity);
+    REQUIRE(runtime != nullptr);
+    CHECK(runtime->entity() == entity);
+    core->liveness_clear_session();
+    CHECK(core->get_display_book()->runtimes().is_empty());
+    core->display_clear_runtimes();
+    memdelete(body);
+}
+
+TEST_CASE(
+    "[Networked][Session][Hosted] TP7 prediction release detaches its owner "
+    "without discovering a lost node while clearing state parts"
+) {
+    Ref<NetwMultiplayer> core;
+    core.instantiate();
+    Node2D *body = memnew(Node2D);
+    Ref<netw::NetwEntity> entity;
+    entity.instantiate();
+    entity->set_owner(body);
+    auto *pool = core->get_prediction_engine();
+    const int64_t slot = pool->slot_register(entity);
+    REQUIRE(pool->bind_owner(slot, body));
+    netw::NetwPredictSlotEngine engine;
+    engine.attach(core.ptr(), entity);
+    REQUIRE(engine.seated_pool() == pool);
+    REQUIRE(engine.native_slot() == slot);
+
+    SUBCASE("the owner remains alive") {
+    }
+    SUBCASE("the owner has already been freed") {
+        memdelete(body);
+        body = nullptr;
+    }
+
+    engine.release();
+
+    CHECK_FALSE(pool->owner_bound(slot));
+    NETW_CHECK_EQ(
+        pool->drive_stat(slot, netw::NetwPredictionEngine::STAT_OWNER_LOST),
+        0
+    );
+    engine.release();
+    pool->slot_unregister(entity);
+    if (body != nullptr) {
+        memdelete(body);
+    }
 }
 
 } // namespace TestNetwSessionTeardownPhaseLaws

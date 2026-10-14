@@ -69,37 +69,31 @@ bool rows_agree(const Dictionary &p_left, const Dictionary &p_right) {
 }
 
 int saved_type_of(Node *p_node, const StringName &p_property) {
-    const Array infos = gd::property_list(p_node);
-    for (int at = 0; at < infos.size(); ++at) {
-        const Dictionary info = infos[at];
-        if (StringName(info["name"]) != p_property) {
-            continue;
-        }
-        switch (int(info["type"])) {
-            case Variant::BOOL:
-                return SchemaCore::BOOL;
-            case Variant::INT:
-                return SchemaCore::I64;
-            case Variant::FLOAT:
-                return SchemaCore::F64;
-            case Variant::VECTOR2:
-                return SchemaCore::VECTOR2;
-            case Variant::VECTOR3:
-                return SchemaCore::VECTOR3;
-            case Variant::VECTOR4:
-                return SchemaCore::VECTOR4;
-            case Variant::COLOR:
-                return SchemaCore::COLOR;
-            case Variant::QUATERNION:
-                return SchemaCore::QUATERNION;
-            case Variant::STRING:
-            case Variant::STRING_NAME:
-                return SchemaCore::STRING;
-            default:
-                return SchemaCore::VARIANT;
-        }
+    const int64_t type
+        = script::model::get_node_property_type(p_node, p_property);
+    switch (type) {
+        case Variant::BOOL:
+            return SchemaCore::BOOL;
+        case Variant::INT:
+            return SchemaCore::I64;
+        case Variant::FLOAT:
+            return SchemaCore::F64;
+        case Variant::VECTOR2:
+            return SchemaCore::VECTOR2;
+        case Variant::VECTOR3:
+            return SchemaCore::VECTOR3;
+        case Variant::VECTOR4:
+            return SchemaCore::VECTOR4;
+        case Variant::COLOR:
+            return SchemaCore::COLOR;
+        case Variant::QUATERNION:
+            return SchemaCore::QUATERNION;
+        case Variant::STRING:
+        case Variant::STRING_NAME:
+            return SchemaCore::STRING;
+        default:
+            return SchemaCore::VARIANT;
     }
-    return SchemaCore::VARIANT;
 }
 
 void order_by_key(

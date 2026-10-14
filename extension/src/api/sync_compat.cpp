@@ -1408,7 +1408,7 @@ void SyncCompat::refresh_feed(Consumed *p_row) {
             gd::instance_from_id(p_row->feed_nodes[at])
         );
         current = node != nullptr
-            && repl::PropertyBinding::script_generation_of(node)
+            && repl::PropertyBinding::script_id_of(node)
                 == p_row->feed_scripts[at];
     }
     if (current && store::validation_interval() <= 0) {
@@ -1425,7 +1425,7 @@ void SyncCompat::refresh_feed(Consumed *p_row) {
         if (node == nullptr) {
             p_row->feed_built = false;
         }
-        scripts.push_back(repl::PropertyBinding::script_generation_of(node));
+        scripts.push_back(repl::PropertyBinding::script_id_of(node));
         feed_lookups += current ? 0 : 1;
         const bool interpolated = node != nullptr
             && script::model::get_node_property_interpolator(

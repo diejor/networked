@@ -288,6 +288,7 @@
 #include "txn_book_tests.cpp"
 #include "typing_conformance_laws.cpp"
 #include "unbound_handle_default_laws.cpp"
+#include "unlisted_property_laws.cpp"
 #include "view_stretch_laws.cpp"
 #include "webtorrent_lobby_directory_laws.cpp"
 #include "wire_ack_book_tests.cpp"

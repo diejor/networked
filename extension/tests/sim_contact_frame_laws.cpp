@@ -63,6 +63,7 @@ func _init() -> void:
 	sphere.add_child(shape)
 	add_child(sphere)
 	var e := Netw.configure_entity(self)
+	e.authority = NetwEntity.AUTHORITY_CONTROLLER
 	e.transfer = NetwEntity.TRANSFER_IMMEDIATE
 	e.simulation.bodies = [^"Sphere"]
 	e.simulation.replicas = NetwSimulation.REPLICAS_ACTIVE
@@ -466,8 +467,8 @@ class ContactScenario : public netw_test::FrameScenario {
                 }
                 break;
             case Kind::REFUSED:
-                grab_b = entity_at(B, 0)->claim_authority();
-                grab_a = entity_at(A, 0)->claim_authority();
+                grab_b = entity_at(B, 0)->claim_control();
+                grab_a = entity_at(A, 0)->claim_control();
                 collide(A, 0);
                 collide(A, 1);
                 break;
@@ -476,7 +477,7 @@ class ContactScenario : public netw_test::FrameScenario {
                 for (int index = 0; index < cube_count(); ++index) {
                     const Hold hold = kind == Kind::WAKE ? Hold::HOLD_YIELDABLE
                                                          : REST_HOLDS[index];
-                    entity_at(A, index)->claim_authority(hold);
+                    entity_at(A, index)->claim_control(hold);
                     RigidBody3D *sphere = sphere_at(A, index);
                     if (kind == Kind::REST && REST_FROZEN[index]) {
                         sphere->set_freeze_mode(
@@ -526,7 +527,7 @@ class ContactScenario : public netw_test::FrameScenario {
                 && local->get_controller() == seen.holder) {
                 subject.granted_frame = p_step;
                 if (kind == Kind::REST && index == REGRAB) {
-                    local->claim_authority(Hold::HOLD_EXCLUSIVE);
+                    local->claim_control(Hold::HOLD_EXCLUSIVE);
                 }
             }
             const netw::sim::Row *row = row_at(A, index);

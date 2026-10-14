@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <class name="NetwDatabase" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
 	<brief_description>
-		The client for persistent storage.
+		Persistent storage for saved records.
 	</brief_description>
 	<description>
 		[NetwEntity], [NetwTable] and your own code save and load their state through a [NetwDatabase]. A [NetwDatabaseBackend] does the actual storage.
-		A record is a [Dictionary] stored under a [StringName] id. Its [NetwSchema] is the table definition and the record is a row in it.
+		A record is a [Dictionary] stored under a [StringName] id. A [NetwSchema] defines the saved property names and types.
 		Await [method open] before reading or writing.
 		[codeblock]
 		func _ready() -&gt; void:
@@ -26,7 +26,7 @@
 		<method name="batch">
 			<return type="NetwWriteBatch" />
 			<description>
-				Returns a [NetwWriteBatch] that submits several writes and erasures in one call.
+				Returns a [NetwWriteBatch] that submits several writes and deletions in one call.
 			</description>
 		</method>
 		<method name="close">
@@ -36,7 +36,7 @@
 				[codeblock lang=text]
 				Error
 				┠╴OK               the database is closed
-				┖╴ERR_UNAVAILABLE  this handle outlived the session that issued it
+				┖╴ERR_UNAVAILABLE  the session ended
 				[/codeblock]
 			</description>
 		</method>
@@ -44,16 +44,17 @@
 			<return type="NetwPromise" />
 			<param index="0" name="slot" type="StringName" />
 			<description>
-				Removes [param slot] and everything stored in it. The slot must not be open. The promise gives an [enum @GlobalScope.Error].
+				Removes [param slot] and everything stored in it. The slot must not be open.
+				The promise gives an [enum @GlobalScope.Error].
 				[codeblock lang=text]
 				Error
 				┠╴OK                the backend removed the slot
 				┠╴ERR_BUSY          slot is the one this database holds open
 				┠╴ERR_UNCONFIGURED  the database declares no backend
-				┠╴ERR_UNAVAILABLE   this handle outlived its session, or the backend
+				┠╴ERR_UNAVAILABLE   the session ended, or the backend
 				│                   implements no _delete_slot
 				┠╴ERR_INVALID_DATA  the backend's _delete_slot answered no promise
-				┖╴backend-defined   the backend could not remove the slot
+				┖╴storage error   the backend could not remove the slot
 				[/codeblock]
 			</description>
 		</method>
@@ -65,16 +66,16 @@
 				Removes the record at [param id]. The promise gives an [enum @GlobalScope.Error].
 				[codeblock lang=text]
 				Error
-				┠╴OK                  the backend acknowledged the erase
+				┠╴OK                  the backend confirmed the deletion
 				┠╴ERR_UNCONFIGURED    the database is not open
 				┠╴ERR_BUSY            the database already holds 4096 pending operations
-				┠╴ERR_DOES_NOT_EXIST  the schema is not sealed
+				┠╴ERR_DOES_NOT_EXIST  the property definitions are unavailable
 				┠╴ERR_INVALID_PARAMETER
 				│                     id is empty
-				┠╴ERR_INVALID_DATA    the connection answered no outcome for the erase
+				┠╴ERR_INVALID_DATA    the connection returned no result for the deletion
 				┠╴ERR_UNAVAILABLE     the backend or connection cannot perform the erase, or the
 				│                     database closed before it finished
-				┖╴backend-defined     the backend rejected or could not complete the erase
+				┖╴storage error     the backend rejected or could not complete the erase
 				[/codeblock]
 			</description>
 		</method>
@@ -85,7 +86,7 @@
 				[codeblock lang=text]
 				Error
 				┠╴OK               every earlier operation finished, whatever its result
-				┖╴ERR_UNAVAILABLE  the session ended first, or this handle outlived it
+				┖╴ERR_UNAVAILABLE  the session ended before operations finished
 				[/codeblock]
 			</description>
 		</method>
@@ -98,7 +99,7 @@
 				┠╴error    Error              check it before reading slots
 				│ ┠╴OK                      listing succeeded
 				│ ┠╴ERR_UNAVAILABLE         the backend does not implement slot listing
-				│ ┖╴backend-defined         the backend could not read its storage
+				│ ┖╴storage error         the backend could not read its storage
 				┠╴detail   String             what went wrong, for a person to read. Empty when error is OK
 				┖╴slots    PackedStringArray  every slot the backend holds when error is OK
 				[/codeblock]
@@ -116,9 +117,9 @@
 				┠╴ERR_UNCONFIGURED  the database declares no backend
 				┠╴ERR_CANT_CREATE   the backend resolved no connection
 				┠╴ERR_INVALID_DATA  the backend's _open answered no promise
-				┠╴ERR_UNAVAILABLE   this handle outlived its session, or the backend implements
+				┠╴ERR_UNAVAILABLE   the session ended, or the backend implements
 				│                   no _open
-				┖╴backend-defined   the backend could not open slot
+				┖╴storage error   the backend could not open slot
 				[/codeblock]
 			</description>
 		</method>
@@ -128,24 +129,23 @@
 			<param index="1" name="id" type="StringName" />
 			<param index="2" name="values" type="Dictionary" />
 			<description>
-				Replaces the columns [param values] names in the existing record at [param id] and keeps the rest. [param values] may hold any subset of the columns in [param schema]. The promise gives an [enum @GlobalScope.Error].
+				Replaces the properties named in [param values] in the existing record at [param id] and keeps the rest. [param values] may hold any subset of the properties declared by [param schema]. The promise gives an [enum @GlobalScope.Error].
 				[codeblock lang=text]
 				Error
-				┠╴OK                  the backend acknowledged the merged record, or values is empty
-				┠╴ERR_UNCONFIGURED    the database is not open, or the schema declares no
-				│                     migration from the stored record's storage version
+				┠╴OK                  the backend confirmed the merged record, or values is empty
+				┠╴ERR_UNCONFIGURED    the database is not open, or no migration exists for the saved version
 				┠╴ERR_BUSY            the database already holds 4096 pending operations
-				┠╴ERR_DOES_NOT_EXIST  the schema is not sealed, or no record is stored at id
+				┠╴ERR_DOES_NOT_EXIST  the property definitions are unavailable, or no record is stored at id
 				┠╴ERR_INVALID_PARAMETER
 				│                     id is empty
-				┠╴ERR_INVALID_DATA    values names an undeclared column or a value its column
-				│                     refuses, or the stored record does not match the schema
+				┠╴ERR_INVALID_DATA    values contains an unknown property, a value with the wrong type,
+				│                     or saved properties differ from the declared properties
 				┠╴ERR_FILE_UNRECOGNIZED
 				│                     the stored record is not in this library's format, or
-				│                     carries a newer storage version than the schema
+				│                     carries a newer saved version than this game
 				┠╴ERR_UNAVAILABLE     the backend or connection cannot perform the patch, or the
 				│                     database closed before it finished
-				┖╴backend-defined     the backend could not read or write the record
+				┖╴storage error     the backend could not read or write the record
 				[/codeblock]
 			</description>
 		</method>
@@ -161,8 +161,8 @@
 				┠╴detail   String      what went wrong, for a person to read. Empty when error is OK
 				┠╴found    bool        whether a record was stored under id. False on any failure
 				┠╴id       StringName  the record id the read asked for
-				┖╴values   Dictionary  the stored row, keyed by column name, complete against the
-				                       schema that read it. Empty unless found is true
+				┖╴values   Dictionary  the saved record, keyed by saved property name, all declared properties included.
+				                       Empty unless found is true
 				[/codeblock]
 				[codeblock]
 				var read: Dictionary = await db.read(PlayerSave.schema, account_id).wait()
@@ -187,13 +187,12 @@
 				┠╴error    Error             @GlobalScope.Error. Check it before reading records
 				│ ┠╴OK                     the page was read
 				│ ┠╴ERR_FILE_UNRECOGNIZED  a record is not in this library's format, or carries
-				│ │                        a newer storage version than the schema
-				│ ┠╴ERR_INVALID_DATA       a record does not match the schema
-				│ ┠╴ERR_UNCONFIGURED       the schema declares no migration from a record's
-				│ │                        storage version
-				│ ┠╴ERR_UNAVAILABLE        this handle outlived its session, or the connection
+				│ │                        a newer saved version than this game
+				│ ┠╴ERR_INVALID_DATA       saved property names or types differ
+				│ ┠╴ERR_UNCONFIGURED       no migration exists for a saved version
+				│ ┠╴ERR_UNAVAILABLE        the session ended, or the connection
 				│ │                        implements no _scan
-				│ ┖╴backend-defined        the backend could not read the page
+				│ ┖╴storage error        the backend could not read the page
 				┠╴detail   String            what went wrong, for a person to read. Empty when error is OK
 				┠╴records  Array[Dictionary]  each one shaped like a read reply
 				┖╴cursor   String            pass this back to scan to continue. Empty when no records remain
@@ -203,7 +202,7 @@
 				Error
 				┠╴ERR_UNCONFIGURED       the database is not open
 				┠╴ERR_BUSY               the database already holds 4096 pending operations
-				┠╴ERR_DOES_NOT_EXIST     the schema is not sealed
+				┠╴ERR_DOES_NOT_EXIST     the property definitions are unavailable
 				┠╴ERR_INVALID_PARAMETER  limit is below 1
 				┖╴ERR_UNAVAILABLE        the database closed before the page was read
 				[/codeblock]
@@ -228,17 +227,17 @@
 			<param index="1" name="id" type="StringName" />
 			<param index="2" name="values" type="Dictionary" />
 			<description>
-				Replaces the whole record at [param id]. [param values] must hold every column [param schema] declares and nothing else. The promise gives an [enum @GlobalScope.Error].
+				Replaces the whole record at [param id]. [param values] must hold every property [param schema] declares and nothing else. The promise gives an [enum @GlobalScope.Error].
 				[codeblock lang=text]
 				Error
-				┠╴OK                  the backend acknowledged the write
+				┠╴OK                  the backend confirmed the write
 				┠╴ERR_UNCONFIGURED    the database is not open
-				┠╴ERR_DOES_NOT_EXIST  the schema is not sealed
+				┠╴ERR_DOES_NOT_EXIST  the property definitions are unavailable
 				┠╴ERR_INVALID_PARAMETER
 				│                     id is empty
-				┠╴ERR_INVALID_DATA    values do not exactly match the schema
+				┠╴ERR_INVALID_DATA    saved property names or types differ
 				┠╴ERR_UNAVAILABLE     the backend or connection cannot perform the write
-				┖╴backend-defined     the backend rejected or could not complete the write
+				┖╴storage error     the backend rejected or could not complete the write
 				[/codeblock]
 				[codeblock]
 				var error: Error = await db.write(PlayerSave.schema, account_id, {
@@ -251,7 +250,7 @@
 	</methods>
 	<members>
 		<member name="is_valid" type="bool" setter="" getter="get_is_valid">
-			Whether the session that created this handle still exists.
+			Whether the session that created this database still exists.
 		</member>
 		<member name="name" type="StringName" setter="" getter="get_database_name">
 			The name this database was declared under.

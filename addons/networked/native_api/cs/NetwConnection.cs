@@ -115,8 +115,8 @@ public sealed class NetwConnection : NetwRefCounted
             "state_changed",
             value,
             Callable.From(
-                (NetwConnection.StateEnum a0) =>
-                    value(a0)
+                (long a0) =>
+                    value((NetwConnection.StateEnum)a0)
             )
         );
         remove => DisconnectBridge("state_changed", value);
@@ -151,8 +151,8 @@ public sealed class NetwConnection : NetwRefCounted
             "failed",
             value,
             Callable.From(
-                (Error a0, string a1) =>
-                    value(a0, a1)
+                (long a0, string a1) =>
+                    value((Error)a0, a1)
             )
         );
         remove => DisconnectBridge("failed", value);
@@ -404,7 +404,8 @@ public sealed class NetwConnection : NetwRefCounted
 
     /// <summary>
     /// Settles with <c>@GlobalScope.ERR_ALREADY_IN_USE</c> while the session is
-    /// online.
+    /// online. Configuration errors reject the promise as in
+    /// <see cref="NetwConnection.Host"/>.
     /// </summary>
     public NetwPromise Join(
         NetwEndpoint endpoint,
@@ -432,7 +433,9 @@ public sealed class NetwConnection : NetwRefCounted
 
     /// <summary>
     /// Settles with <c>@GlobalScope.ERR_ALREADY_IN_USE</c> while the session is
-    /// online.
+    /// online. Invalid <see cref="NetwSessionConfig"/>,
+    /// <see cref="NetwClockConfig"/> or <see cref="NetwLagCompensationConfig"/>
+    /// settings reject the promise before a peer is created.
     /// </summary>
     public NetwPromise Host(
         Variant transport,
@@ -550,12 +553,12 @@ public sealed class NetwConnection : NetwRefCounted
     /// Dictionary
     /// ┠╴peer_class            StringName  the key the transport is registered under
     /// ┠╴display_name          String      what a picker names it
-    /// ┠╴address_label         String      what the address field is titled
-    /// ┠╴address_placeholder   String      what the empty address field shows
-    /// ┠╴address_help          String      the sentence under the address field
+    /// ┠╴address_label         String      what the address input is titled
+    /// ┠╴address_placeholder   String      what the empty address input shows
+    /// ┠╴address_help          String      the sentence under the address input
     /// ┠╴capabilities          int         NetwConnection.TransportCapability flags
-    /// ┠╴host_settings         Dictionary  a host form's fields, defaults included
-    /// ┠╴client_settings       Dictionary  a join form's fields, defaults included
+    /// ┠╴host_settings         Dictionary  a host form's settings, defaults included
+    /// ┠╴client_settings       Dictionary  a join form's settings, defaults included
     /// ┖╴timeout_hint          float       seconds an attempt waits before it fails
     /// </code>
     /// </summary>

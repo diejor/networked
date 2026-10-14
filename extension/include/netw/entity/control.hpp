@@ -15,7 +15,12 @@ public:
 
     enum class InitialController : int {
         SERVER = 0,
-        REPRESENTED_PEER = 1,
+        PLAYER = 1,
+    };
+
+    enum class Authority : int {
+        SERVER = 0,
+        CONTROLLER = 1,
     };
 
     enum class Transfer : int {
@@ -91,6 +96,8 @@ public:
     bool configured = false;
     int64_t initial = int(InitialController::SERVER);
     int64_t transfer = int(Transfer::FIXED);
+    int64_t authority = int(Authority::SERVER);
+    bool authority_declared = false;
     int64_t on_disconnect = int(DisconnectRule::REVERT_TO_SERVER);
     int64_t on_parent_despawn = int(ParentDespawnRule::CASCADE);
     int64_t lifecycle = int(Lifecycle::SESSION);
@@ -187,6 +194,24 @@ public:
     }
     void set_transfer(int64_t p_transfer) {
         transfer = p_transfer;
+    }
+    int64_t get_authority() const {
+        return authority;
+    }
+    void set_authority(int64_t p_authority) {
+        authority = p_authority;
+        authority_declared = true;
+    }
+    void infer_authority(int64_t p_authority) {
+        if (!authority_declared) {
+            authority = p_authority;
+        }
+    }
+    bool get_authority_declared() const {
+        return authority_declared;
+    }
+    bool authority_follows_controller() const {
+        return authority == int(Authority::CONTROLLER);
     }
     int64_t get_on_disconnect() const {
         return on_disconnect;
