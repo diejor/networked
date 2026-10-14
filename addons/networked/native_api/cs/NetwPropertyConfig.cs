@@ -1002,7 +1002,7 @@ public sealed class NetwPropertyConfig : NetwMemberConfig
     /// </code>
     /// <para>
     /// <paramref name="channel"/> must be another
-    /// <see cref="NetwPropertyConfig.State"/> property of the same entity. Use
+    /// <see cref="NetwPropertyConfig.State"/> property of the same node. Use
     /// <see cref="NetwPropertyConfig.CarryStep"/> instead when the rate changes
     /// quickly. Declaring both on one property is an error, and neither is
     /// used.

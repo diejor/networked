@@ -73,6 +73,7 @@ void ReplicationCore::resolve_channel_ids() {
     ids.clock_pong = id_of(registry, "CLOCK_PONG");
     ids.interest_awareness = id_of(registry, "INTEREST_AWARENESS");
     ids.lagcomp_deny = id_of(registry, "LAGCOMP_DENY");
+    ids.lagcomp_confirm = id_of(registry, "LAGCOMP_CONFIRM");
 }
 
 NetwMultiplayer *ReplicationCore::core() const {
@@ -201,6 +202,10 @@ void ReplicationCore::install(Object *p_api) {
     register_protocol(
         ids.lagcomp_deny,
         callable_mp(plane, &NetwMultiplayer::handle_deny)
+    );
+    register_protocol(
+        ids.lagcomp_confirm,
+        callable_mp(plane, &NetwMultiplayer::handle_confirm)
     );
     register_protocol(
         ids.row_control,
@@ -615,6 +620,7 @@ Error ReplicationCore::finish_receive_pass(
     Error p_verdict,
     int64_t p_sender
 ) {
+    sync_pipeline.close_datagram();
     NetwMultiplayer *plane = core();
     if (plane != nullptr && plane->event_wants(EventPlane::APPLY, 0)) {
         Dictionary detail;

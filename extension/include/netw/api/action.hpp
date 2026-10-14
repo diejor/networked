@@ -22,6 +22,7 @@ class NetwActionContext : public godot::RefCounted {
     int64_t execution_tick = 0;
     godot::StringName key;
     bool denied = false;
+    bool bound = false;
 
     NetwMultiplayer *session() const;
 
@@ -53,6 +54,10 @@ public:
 
     void bind_result(godot::Node *p_node);
     void deny();
+
+    bool answered() const {
+        return denied || bound;
+    }
 };
 
 class NetwAction : public godot::RefCounted {

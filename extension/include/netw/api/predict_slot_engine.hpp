@@ -40,6 +40,18 @@ class NetwPredictSlotEngine {
     bool consume_primed = false;
     int64_t simulated_awaiting_step = -1;
 
+    struct HeldRecovery {
+        bool held = false;
+        int64_t ack = -1;
+        int64_t label = -1;
+        int meter = 0;
+        int domain = 0;
+        int attribution = 0;
+        predict::StateRow compared;
+        predict::StateRow payload;
+    };
+    HeldRecovery held_recovery;
+
     NetwMultiplayer *core_seated() const;
     NetwPredictSlotEngine *sibling(
         const godot::Ref<NetwEntity> &p_member
@@ -116,6 +128,15 @@ class NetwPredictSlotEngine {
         const predict::StateRow *p_held
     );
 
+    void recover(
+        int64_t p_ack,
+        int64_t p_label,
+        const predict::StateRow &p_compared,
+        const predict::StateRow &p_payload,
+        int p_meter,
+        int p_domain,
+        int p_attribution
+    );
     void restore_row(
         const predict::StateRow &p_state,
         int p_operator,
@@ -133,6 +154,8 @@ class NetwPredictSlotEngine {
     );
     struct SteppedIsland {
         godot::RID space;
+        int dimension = 0;
+        bool steps = false;
         godot::Ref<NetwPhysicsStepper> stepper;
     };
     SteppedIsland stepped_island() const;
@@ -255,6 +278,10 @@ public:
     int64_t order_key() const;
     void prepare_island(int p_schedule);
     void joint_pass(const NetwPredictTiming &p_timing);
+    void run_held_recovery();
+    bool holds_recovery() const {
+        return held_recovery.held;
+    }
     void network_tick(const NetwPredictTiming &p_timing);
     void simulate_tick(const NetwPredictTiming &p_timing);
     void simulate_frame(const NetwPredictTiming &p_timing);

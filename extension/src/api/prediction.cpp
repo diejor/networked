@@ -407,10 +407,15 @@ Variant NetwPrediction::sensor(
 NetwPrediction::RecoveryPolicy NetwPrediction::
     resolved_recovery_policy() const {
     const bool solves = body_solves();
+    const int schedule = get_schedule();
     return static_cast<NetwPrediction::RecoveryPolicy>(
         predict::integrable_recovery_policy(
-            predict::resolve_recovery_policy(recovery_policy_value, solves),
-            get_schedule(),
+            predict::resolve_recovery_policy(
+                recovery_policy_value,
+                solves,
+                schedule
+            ),
+            schedule,
             solves
         )
     );

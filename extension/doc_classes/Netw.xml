@@ -12,8 +12,8 @@
 			<return type="NetwAction" />
 			<param index="0" name="authority" type="Callable" />
 			<description>
-				A [NetwAction] for an action such as firing or placing something, bound to [param authority] the server runs to judge it.
-				Repeated calls return the same [NetwAction].
+				A [NetwAction] for an action such as firing or placing something, bound to [param authority] the server runs to judge it. Call it on every peer, the server included.
+				Repeated calls return the same [NetwAction]. The first one turns on lag compensation, so [method configure_lagcomp] is needed only to change its defaults.
 				[codeblock]
 				@onready var place_bomb := Netw.action(_place_bomb)
 
@@ -213,7 +213,7 @@
 			<return type="NetwMemberConfig" />
 			<param index="0" name="callable" type="Callable" />
 			<description>
-				Declares extra configuration for [param callable] that [annotation @GDScript.@rpc] does not cover.
+				Declares who may call [param callable] and how it is sent. A setting made here outranks [annotation @GDScript.@rpc], and a setting left out falls back to it. See [NetwMemberConfig].
 				[codeblock]
 				func _init() -&gt; void:
 				    Netw.configure_rpc(self.aim).controller().quantize(
@@ -485,16 +485,25 @@
 			</description>
 		</method>
 		<method name="rewind" qualifiers="static">
-			<return type="void" />
+			<return type="Variant" />
 			<param index="0" name="entities" type="NetwEntity[]" />
 			<param index="1" name="tick" type="int" />
 			<param index="2" name="body" type="Callable" />
 			<description>
-				Moves every entity in [param entities] back to where it was at [param tick], calls [param body], then moves them back. Use it to check a hit where the shooter saw the target.
+				Moves every entity in [param entities] back to [param tick], calls [param body], moves them back, and returns what [param body] returned. Apply what the query found after it returns.
 				[codeblock]
-				func _fire(ctx: NetwActionContext) -&gt; void:
-				    Netw.rewind(Netw.scene(self).entities, ctx.view_tick, _trace_shot)
+				func _fire(ctx: NetwActionContext, origin: Vector3, aim: Vector3) -&gt; void:
+				    var targets := players.entities.keys()
+				    targets.erase(entity)
+				    var hit: Dictionary = Netw.rewind(targets, ctx.view_tick, func() -&gt; Dictionary:
+				        var ray := PhysicsRayQueryParameters3D.create(
+				                origin, origin + aim * RANGE, HITBOX_LAYER)
+				        ray.collide_with_areas = true
+				        return get_world_3d().direct_space_state.intersect_ray(ray))
+				    if hit:
+				        (hit.collider.owner as Player).health -= DAMAGE
 				[/codeblock]
+				Here [code]players[/code] is a [NetwInterestLayer], the set of entities a shot can hit.
 			</description>
 		</method>
 		<method name="rpc" qualifiers="vararg static">
@@ -527,7 +536,7 @@
 			<param index="0" name="entity" type="NetwEntity" />
 			<param index="1" name="tick" type="int" />
 			<description>
-				Returns a copy of the state of [param entity] at [param tick]. It is empty when nothing was recorded.
+				Returns a copy of the state of [param entity] at [param tick]. It is empty when nothing was recorded. A property declared on a child node is keyed by its path, such as [code]&amp;"Hurtbox:offset"[/code].
 				[codeblock]
 				func _place_bomb(ctx: NetwActionContext, pos: Vector2) -&gt; void:
 				    var past := Netw.sample(entity, ctx.view_tick)

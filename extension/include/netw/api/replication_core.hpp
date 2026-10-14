@@ -58,6 +58,7 @@ private:
         int64_t clock_pong = 0;
         int64_t interest_awareness = 0;
         int64_t lagcomp_deny = 0;
+        int64_t lagcomp_confirm = 0;
     };
 
     godot::ObjectID core_id;

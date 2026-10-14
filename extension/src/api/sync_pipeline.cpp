@@ -1487,7 +1487,64 @@ void SyncPipeline::reset_stray(int p_peer, uint64_t p_token) {
 void SyncPipeline::open_datagram(int64_t p_base_tick, int64_t p_seq) {
     datagram_tick = p_base_tick;
     datagram_seq = p_seq;
+    datagram_open = true;
     progress.open_datagram();
+}
+
+void SyncPipeline::hold_delivery(
+    int64_t p_slot,
+    predict::Listener p_listener,
+    uint64_t p_binding,
+    const predict::Arrival &p_arrival
+) {
+    HeldDelivery held;
+    held.slot = p_slot;
+    held.listener = p_listener;
+    held.binding = p_binding;
+    held.tick = p_arrival.tick;
+    held.ack = p_arrival.ack;
+    held.whole = p_arrival.whole;
+    for (HeldDelivery &queued : held_deliveries) {
+        if (queued.slot == p_slot) {
+            held.whole = held.whole || queued.whole;
+            queued = held;
+            return;
+        }
+    }
+    held_deliveries.push_back(held);
+}
+
+void SyncPipeline::close_datagram() {
+    datagram_open = false;
+    if (held_deliveries.is_empty()) {
+        return;
+    }
+    LocalVector<HeldDelivery> due;
+    due.reserve(held_deliveries.size());
+    for (const HeldDelivery &held : held_deliveries) {
+        due.push_back(held);
+    }
+    held_deliveries.clear();
+    NetwMultiplayer *plane = core();
+    if (plane == nullptr) {
+        return;
+    }
+    store::World &world = plane->store();
+    NetwPredictionEngine *const predictor = plane->get_prediction_engine();
+    for (const HeldDelivery &held : due) {
+        const store::RowAddress at = world.row_of(held.binding, 0);
+        if (!at.valid()) {
+            continue;
+        }
+        predict::Arrival arrival;
+        arrival.table = &world.table(at.table);
+        arrival.row = at.row;
+        arrival.tick = held.tick;
+        arrival.ack = held.ack;
+        arrival.whole = held.whole;
+        NETW_PREDICT_TICK_SCOPE();
+        predictor->deliver(held.slot, held.listener, arrival);
+    }
 }
 
 Dictionary SyncPipeline::gather_payload(
@@ -1699,7 +1756,11 @@ void SyncPipeline::apply_row(
     if (!retained) {
         binding->notify_landed(table, at.row);
     }
-    if (listener != predict::Listener::NONE) {
+    if (listener != predict::Listener::NONE && datagram_open
+        && listener != predict::Listener::INPUT
+        && predictor->defers_arrival(predicted)) {
+        hold_delivery(predicted, listener, binding->id, arrival);
+    } else if (listener != predict::Listener::NONE) {
         NETW_PREDICT_TICK_SCOPE();
         predictor->deliver(predicted, listener, arrival);
     }

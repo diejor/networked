@@ -6,13 +6,13 @@ using Godot.NativeInterop;
 namespace Networked;
 
 /// <summary>
-/// Steps a physics space on demand, so a rollback can advance it several times
-/// in one frame.
+/// Steps a physics space on demand, for a physics server without
+/// <c>space_step</c>.
 /// </summary>
 /// <remarks>
-/// Godot steps each physics space once per physics frame. Extend this class to
-/// step a space yourself, and install it with
-/// <see cref="NetwMultiplayer.PredictStepperInstall"/>. While an entity with
+/// Networked steps a space through <c>PhysicsServer3D.space_step</c> when the
+/// server has it, so a game installs a stepper only for a server that does not.
+/// An installed stepper outranks that built-in stepping. While an entity with
 /// <see cref="NetwSimulation.ScheduleEnum.Stepped"/> is in that space,
 /// Networked stops the engine from stepping it and calls <c>_step</c> once per
 /// tick instead, and again for each tick it replays.
@@ -25,11 +25,11 @@ namespace Networked;
 /// func _step(space: RID, delta: float) -&gt; void:
 ///     _solver.advance(space, delta)
 ///
-/// api.predict_stepper_install(space_rid, MyStepper.new())
+/// session.install_physics_stepper(get_world_3d(), MyStepper.new())
 /// </code>
 /// <para>
-/// Install <c>null</c> to uninstall, and read the installed stepper back with
-/// <see cref="NetwMultiplayer.PredictGetStepper"/>. Without a stepper, a
+/// Install it with <see cref="NetwSession.InstallPhysicsStepper"/>, and install
+/// <c>null</c> to remove it. Without a stepper or <c>space_step</c>, a
 /// <see cref="NetwSimulation.ScheduleEnum.Stepped"/> entity runs as
 /// <see cref="NetwSimulation.ScheduleEnum.Frame"/>. Once no such entity is left
 /// in the space, the engine steps it again as usual. Each tick, every entity in

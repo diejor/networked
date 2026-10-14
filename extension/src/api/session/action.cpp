@@ -138,7 +138,10 @@ void NetwMultiplayer::execute_action(
     for (int at = 0; at < p_request.args.size(); ++at) {
         arguments[at + 1] = p_request.args[at];
     }
-    Callable(target, p_request.method).callv(arguments);
+    const Variant ran = Callable(target, p_request.method).callv(arguments);
+    if (!context->answered() && !is_coroutine(ran)) {
+        lagcomp_confirm_action(p_request.requester, p_request.key);
+    }
 }
 
 int64_t NetwMultiplayer::action_slot_of(const Callable &p_authority) {
@@ -163,11 +166,12 @@ int64_t NetwMultiplayer::action_slot_of(const Callable &p_authority) {
 }
 
 Ref<NetwAction> NetwMultiplayer::lagcomp_action(const Callable &p_authority) {
-    const int64_t slot
-        = lagcomp_is_configured() ? action_slot_of(p_authority) : 0;
+    if (lagcomp_require("declaring an action") == ERR_BUSY) {
+        declarations_changed();
+    }
     Ref<NetwAction> minted;
     minted.instantiate();
-    minted->open(this, p_authority, slot);
+    minted->open(this, p_authority, action_slot_of(p_authority));
     return minted;
 }
 

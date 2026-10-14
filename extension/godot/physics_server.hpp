@@ -18,3 +18,13 @@ using ::PhysicsServer3D;
 #else
 #error "Define NETW_MODULE or NETW_GDEXTENSION."
 #endif
+
+#include "godot/rid.hpp"
+
+namespace netw::gd {
+
+bool can_step_space(int p_dimension);
+void step_space(const godot::RID &p_space, int p_dimension, double p_delta);
+void flush_space_queries(const godot::RID &p_space, int p_dimension);
+
+} // namespace netw::gd

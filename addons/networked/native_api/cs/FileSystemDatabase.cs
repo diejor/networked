@@ -15,12 +15,33 @@ namespace Networked;
 /// <code>
 /// var backend := FileSystemDatabase.new()
 /// backend.root = "user://saves"
+/// backend.format = FileSystemDatabase.FORMAT_TEXT
 /// Netw.configure_database(self, &amp;"saves").backend(backend)
 /// </code>
 /// <para>
 /// Each slot is a directory under <see cref="FileSystemDatabase.Root"/>, and
-/// each record is one file inside it. A file this library did not write fails
-/// to read with <c>@GlobalScope.ERR_FILE_UNRECOGNIZED</c>.
+/// each record is one file inside it. A record reads back in either
+/// <see cref="FileSystemDatabase.FormatEnum"/>, so changing
+/// <see cref="FileSystemDatabase.Format"/> keeps every save, and the next write
+/// of a record replaces its file with one in the new format. <b>Record
+/// files</b> A <c>.dict</c> or <c>.tdict</c> file loads with
+/// <c>ResourceLoader.load</c> as a <see cref="DictionaryRecord"/>. Its
+/// <see cref="DictionaryRecord.Data"/> holds the stored record, with the saved
+/// columns under <c>payload</c>. Saving that record with
+/// <c>ResourceSaver.save</c> writes the file the database reads, so a save can
+/// be inspected and edited in the editor. Edit a save while the game is closed,
+/// since the next save of that record replaces the file.
+/// <code>
+/// var record: DictionaryRecord = load("user://saves/campaign/0/players/hero.tdict")
+/// record.data[&amp;"payload"][&amp;"gold"] = 100
+/// ResourceSaver.save(record, record.resource_path)
+/// </code>
+/// </para>
+/// <para>
+/// A record file never builds an object or loads a resource. A file this
+/// library did not write, or a <c>.tdict</c> naming an <c>Object</c> or a
+/// <c>Resource</c>, fails to read with
+/// <c>@GlobalScope.ERR_FILE_UNRECOGNIZED</c>.
 /// </para>
 /// </remarks>
 public sealed class FileSystemDatabase : NetwDatabaseBackend
@@ -37,6 +58,19 @@ public sealed class FileSystemDatabase : NetwDatabaseBackend
     public new static FileSystemDatabase From(Variant value)
     {
         return Adopt(NetwApi.Retained(NetwApi.ObjectOf(value)));
+    }
+
+    public enum FormatEnum : long
+    {
+        /// <summary>
+        /// Writes each record as a compact <c>.dict</c> file.
+        /// </summary>
+        Binary = 0,
+        /// <summary>
+        /// Writes each record as a <c>.tdict</c> file in the text form of
+        /// <c>@GlobalScope.var_to_str</c>, which a person can read and edit.
+        /// </summary>
+        Text = 1,
     }
 
     private static readonly IntPtr _bindGetRoot =
@@ -66,6 +100,35 @@ public sealed class FileSystemDatabase : NetwDatabaseBackend
             NetwThunks.Call1(_bindSetRoot, Checked, in slot0, ref answered);
             slot0.Dispose();
             answered.Dispose();
+        }
+    }
+
+    private static readonly IntPtr _bindGetFormat =
+        NetwApi.MethodBind("FileSystemDatabase", "get_format", 4061961911UL);
+
+    private static readonly IntPtr _bindSetFormat =
+        NetwApi.MethodBind("FileSystemDatabase", "set_format", 2145010415UL);
+
+    /// <summary>
+    /// The format a record is written in.
+    /// </summary>
+    public FileSystemDatabase.FormatEnum Format
+    {
+        get
+        {
+            long answered = default;
+            NetwThunks.Ptrcall0_Long(_bindGetFormat, Checked, ref answered);
+            return (FileSystemDatabase.FormatEnum)answered;
+        }
+        set
+        {
+            long slot0 = (long)value;
+            long discarded = default;
+            NetwThunks.Ptrcall1_Long_Long(
+                _bindSetFormat,
+                Checked,
+                in slot0,
+                ref discarded);
         }
     }
 }

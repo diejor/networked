@@ -1,6 +1,8 @@
 #include "netw/lagcomp_core.hpp"
 
+#include "godot/node.hpp"
 #include "netw/api/entity.hpp"
+#include "netw/colliders.hpp"
 #include "netw/colors.hpp"
 #include "netw/log.hpp"
 #include "netw/profile.hpp"
@@ -12,6 +14,53 @@ namespace netw {
 namespace {
 
 constexpr SubsystemName MODULE = sys::LAGCOMP;
+
+bool is_suspended_call(const Variant &p_answered) {
+    if (p_answered.get_type() != Variant::OBJECT) {
+        return false;
+    }
+    const Object *answered = p_answered;
+    return answered != nullptr
+        && answered->is_class(StringName("GDScriptFunctionState"));
+}
+
+bool same_value(const Variant &p_now, const Variant &p_wrote) {
+    if (p_now.get_type() == Variant::QUATERNION
+        && p_wrote.get_type() == Variant::QUATERNION) {
+        const Quaternion now = p_now;
+        const Quaternion wrote = p_wrote;
+        return now.is_equal_approx(wrote) || now.is_equal_approx(-wrote);
+    }
+    return p_now == p_wrote;
+}
+
+void report_write_inside(Object *p_owner, const Dictionary &p_wrote) {
+    Node *node = Object::cast_to<Node>(p_owner);
+    if (node == nullptr) {
+        return;
+    }
+    const Array keys = p_wrote.keys();
+    for (int at = 0; at < keys.size(); ++at) {
+        const StringName key = keys[at];
+        if (same_value(port_get(p_owner, key), p_wrote[key])) {
+            continue;
+        }
+        if (!colliders::first_report(
+                p_owner,
+                colliders::Fault::WRITE_INSIDE_REWIND
+            )) {
+            return;
+        }
+        NETW_WARN(
+            MODULE,
+            "'%s.%s' changed inside a rewind, and the rewind put it back. "
+            "Change it after rewind returns.",
+            String(node->get_name()),
+            String(key)
+        );
+        return;
+    }
+}
 
 } // namespace
 
@@ -165,13 +214,87 @@ Dictionary NetwLagCompCore::timeline_sample_entity(
     const Ref<RefCounted> &p_entity,
     int64_t p_tick
 ) const {
-    return timeline_sample(timeline_slot_of(p_entity), p_tick);
+    const int64_t slot = timeline_slot_of(p_entity);
+    Dictionary sampled = timeline_sample(slot, p_tick);
+    const Row *row = row_of(slot);
+    if (row == nullptr || row->parts.is_empty()) {
+        return sampled;
+    }
+    Node *root = Object::cast_to<Node>(gd::object_of(row->port.id));
+    for (const int64_t part : row->parts) {
+        const Row *held = row_of(part);
+        Node *node = held != nullptr
+            ? Object::cast_to<Node>(gd::object_of(held->port.id))
+            : nullptr;
+        if (root == nullptr || node == nullptr) {
+            continue;
+        }
+        const String prefix = String(root->get_path_to(node)) + ":";
+        const Dictionary past = timeline_sample(part, p_tick);
+        const Array keys = past.keys();
+        for (int at = 0; at < keys.size(); ++at) {
+            sampled[StringName(prefix + String(keys[at]))] = past[keys[at]];
+        }
+    }
+    return sampled;
+}
+
+int64_t NetwLagCompCore::timeline_part(
+    int64_t p_slot,
+    uint64_t p_binding,
+    Object *p_node,
+    const Array &p_keys
+) {
+    Row *row = mutable_row_of(p_slot);
+    if (row == nullptr || p_binding == 0 || p_node == nullptr) {
+        return -1;
+    }
+    for (const int64_t part : row->parts) {
+        Row *held = mutable_row_of(part);
+        if (held != nullptr && held->part_binding == p_binding) {
+            held->part_kept = true;
+            if (held->port.id != gd::instance_id(p_node)) {
+                held->port.bind(p_node);
+            }
+            return part;
+        }
+    }
+    const int64_t part = timeline_open(row->book.get_window());
+    Row *held = mutable_row_of(part);
+    held->part_binding = p_binding;
+    held->part_kept = true;
+    held->port.bind(p_node);
+    timeline_declare(part, p_keys);
+    mutable_row_of(p_slot)->parts.push_back(part);
+    return part;
+}
+
+void NetwLagCompCore::timeline_prune_parts(int64_t p_slot) {
+    Row *row = mutable_row_of(p_slot);
+    if (row == nullptr) {
+        return;
+    }
+    for (uint32_t at = row->parts.size(); at > 0; --at) {
+        const int64_t part = row->parts[at - 1];
+        Row *held = mutable_row_of(part);
+        if (held != nullptr && held->part_kept) {
+            held->part_kept = false;
+            continue;
+        }
+        row->parts.remove_at(at - 1);
+        timeline_close(part);
+    }
 }
 
 void NetwLagCompCore::timeline_close(int64_t p_slot) {
     Row *row = mutable_row_of(p_slot);
     if (row == nullptr) {
         return;
+    }
+    while (!row->parts.is_empty()) {
+        const int64_t part = row->parts[row->parts.size() - 1];
+        row->parts.remove_at(row->parts.size() - 1);
+        timeline_close(part);
     }
     if (row->entity.is_valid()) {
         slot_by_entity.erase(entity_key(row->entity));
@@ -328,16 +451,28 @@ void NetwLagCompCore::timeline_trim_before(int64_t p_slot, int64_t p_tick) {
     }
 }
 
-int NetwLagCompCore::rewind(
+Variant NetwLagCompCore::rewind(
     const PackedInt64Array &p_slots,
     int64_t p_tick,
-    const Callable &p_body
+    const Callable &p_body,
+    int *r_moved
 ) {
     NETW_ZONE_NC("NetwLagComp rewind", colors::PREDICTION);
     LocalVector<int64_t> moved;
     LocalVector<Dictionary> live;
+    LocalVector<Dictionary> wrote;
+    LocalVector<colliders::ServerPose> server_poses;
+    LocalVector<int64_t> slots;
     for (int at = 0; at < p_slots.size(); ++at) {
-        const int64_t slot = p_slots[at];
+        slots.push_back(p_slots[at]);
+        const Row *row = row_of(p_slots[at]);
+        if (row != nullptr) {
+            for (const int64_t part : row->parts) {
+                slots.push_back(part);
+            }
+        }
+    }
+    for (const int64_t slot : slots) {
         Row *row = mutable_row_of(slot);
         if (row == nullptr || !row->port.bound()) {
             continue;
@@ -354,14 +489,24 @@ int NetwLagCompCore::rewind(
         if (held.is_empty()) {
             continue;
         }
-        port_apply(row->port, MODULE, declared_only(*row, past));
-        port_sync_transform(row->port.resolve(MODULE));
+        Object *owner = row->port.resolve(MODULE);
+        colliders::hold_server_poses(owner, server_poses);
+        const Dictionary written = declared_only(*row, past);
+        port_apply(row->port, MODULE, written);
+        colliders::teleport(owner);
+        colliders::report_unseen(owner);
         moved.push_back(slot);
         live.push_back(held);
+        wrote.push_back(written);
     }
 
-    if (p_body.is_valid()) {
-        p_body.call();
+    const Variant answered = p_body.is_valid() ? p_body.call() : Variant();
+    if (is_suspended_call(answered)) {
+        NETW_WARN_ONCE(
+            MODULE,
+            "The rewind body awaited, so the rest of it ran after the rewind "
+            "ended. Remove the await from it."
+        );
     }
 
     for (uint32_t at = 0; at < moved.size(); ++at) {
@@ -369,10 +514,15 @@ int NetwLagCompCore::rewind(
         if (row == nullptr) {
             continue;
         }
+        Object *owner = row->port.resolve(MODULE);
+        report_write_inside(owner, wrote[at]);
         port_apply(row->port, MODULE, live[at]);
-        port_sync_transform(row->port.resolve(MODULE));
+        colliders::restore_back(owner, server_poses);
     }
-    return int(moved.size());
+    if (r_moved != nullptr) {
+        *r_moved = int(moved.size());
+    }
+    return answered;
 }
 
 } // namespace netw

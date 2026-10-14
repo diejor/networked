@@ -232,6 +232,7 @@ Dictionary frame_spec_records() {
     out["ControlRequest"] = ControlRequest::wire.spec_dump();
     out["ControlApply"] = ControlApply::wire.spec_dump();
     out["DenyKey"] = DenyKey::wire.spec_dump();
+    out["ConfirmKey"] = ConfirmKey::wire.spec_dump();
     out["RouteLease"] = RouteLease::wire.spec_dump();
     out["ResyncHead"] = ResyncHead::wire.spec_dump();
     out["ResyncRoute"] = ResyncRoute::wire.spec_dump();

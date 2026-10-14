@@ -199,6 +199,11 @@ Ref<NetwMemberConfig> NetwMemberConfig::any_peer() {
     return Ref<NetwMemberConfig>(this);
 }
 
+Ref<NetwMemberConfig> NetwMemberConfig::server() {
+    set_write_policy(POLICY_SERVER);
+    return Ref<NetwMemberConfig>(this);
+}
+
 Ref<NetwMemberConfig> NetwMemberConfig::reliable() {
     set_transfer_mode(TRANSFER_RELIABLE);
     return Ref<NetwMemberConfig>(this);
@@ -230,11 +235,6 @@ Ref<NetwMemberConfig> NetwMemberConfig::defer_until(const Signal &p_signal) {
         );
     }
     defer_signal_name = p_signal.get_name();
-    return Ref<NetwMemberConfig>(this);
-}
-
-Ref<NetwMemberConfig> NetwMemberConfig::controller_only() {
-    is_controller_only = true;
     return Ref<NetwMemberConfig>(this);
 }
 
@@ -344,6 +344,7 @@ void NetwMemberConfig::_bind_methods() {
     ClassDB::bind_method(D_METHOD("authority"), &NetwMemberConfig::authority);
     ClassDB::bind_method(D_METHOD("controller"), &NetwMemberConfig::controller);
     ClassDB::bind_method(D_METHOD("any_peer"), &NetwMemberConfig::any_peer);
+    ClassDB::bind_method(D_METHOD("server"), &NetwMemberConfig::server);
     ClassDB::bind_method(D_METHOD("reliable"), &NetwMemberConfig::reliable);
     ClassDB::bind_method(D_METHOD("unreliable"), &NetwMemberConfig::unreliable);
     ClassDB::bind_method(D_METHOD("call_local"), &NetwMemberConfig::call_local);
@@ -354,10 +355,6 @@ void NetwMemberConfig::_bind_methods() {
     ClassDB::bind_method(
         D_METHOD("defer_until", "sig"),
         &NetwMemberConfig::defer_until
-    );
-    ClassDB::bind_method(
-        D_METHOD("controller_only"),
-        &NetwMemberConfig::controller_only
     );
     gd::bind_vararg_method(D_METHOD("quantize"), &NetwMemberConfig::quantize);
     gd::bind_vararg_method(
@@ -429,7 +426,7 @@ void NetwMemberConfig::_bind_methods() {
             Variant::INT,
             "write_policy",
             PROPERTY_HINT_ENUM,
-            "Authority,Controller,Any Peer"
+            "Authority,Controller,Any Peer,Server"
         ),
         "set_write_policy",
         "get_write_policy"
@@ -469,7 +466,6 @@ void NetwMemberConfig::_bind_methods() {
     NETW_MEMBER_CONFIG_PROPERTY(Variant::STRING_NAME, context_name);
     NETW_MEMBER_CONFIG_PROPERTY(Variant::INT, context_type);
     NETW_MEMBER_CONFIG_PROPERTY(Variant::STRING_NAME, defer_signal_name);
-    NETW_MEMBER_CONFIG_PROPERTY(Variant::BOOL, is_controller_only);
     NETW_MEMBER_CONFIG_PROPERTY(Variant::ARRAY, quantizers);
     NETW_MEMBER_CONFIG_PROPERTY(Variant::ARRAY, interpolators);
 
@@ -478,6 +474,7 @@ void NetwMemberConfig::_bind_methods() {
     BIND_ENUM_CONSTANT(POLICY_AUTHORITY);
     BIND_ENUM_CONSTANT(POLICY_CONTROLLER);
     BIND_ENUM_CONSTANT(POLICY_ANY_PEER);
+    BIND_ENUM_CONSTANT(POLICY_SERVER);
 
     BIND_ENUM_CONSTANT(TRANSFER_RELIABLE);
     BIND_ENUM_CONSTANT(TRANSFER_UNRELIABLE);

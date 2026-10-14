@@ -656,8 +656,8 @@ Ref<netw::NetwPhysicsStepper> installable_stepper() {
 
 TEST_CASE(
     "[Networked][Predict][Census] PC7 a STEPPED member is steppable "
-    "only when the driver installed for ITS OWN space is there, so a stepper "
-    "on another space leaves it as unsteppable as none at all"
+    "only when its own space can step, by the engine or by a stepper "
+    "installed for that space, so a stepper on another space changes nothing"
 ) {
     const Scenario scenario = two_predicted_lanes();
     LoopbackRig rig(scenario.clients);
@@ -696,7 +696,10 @@ TEST_CASE(
     REQUIRE(other != own);
 
     server->predict_stepper_install(other, stepper);
-    CHECK_FALSE(pool->slot_is_steppable(slot));
+    NETW_CHECK_EQ(
+        pool->slot_is_steppable(slot),
+        netw::gd::can_step_space(server->entity_space_of(wrapper).dimension)
+    );
 
     server->predict_stepper_install(own, stepper);
     CHECK(pool->slot_is_steppable(slot));

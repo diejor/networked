@@ -168,7 +168,9 @@ public sealed class NetwDisplay : NetwRefCounted
     /// The child node that receives the smoothed values. Position and rotation
     /// are written in global space, and other properties are written as they
     /// are. A visual with <see cref="CanvasItem.TopLevel"/> set receives every
-    /// property in global space.
+    /// property in global space. The written values replace the visual's own
+    /// position and rotation, so point this at a plain node and put a model
+    /// that needs one under it.
     /// </summary>
     public NodePath VisualRoot
     {

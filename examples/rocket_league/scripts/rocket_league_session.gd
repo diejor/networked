@@ -13,7 +13,6 @@ func _init() -> void:
 
 
 func _ready() -> void:
-	session.scene_ready.connect(install_stepper)
 	%InLobby.start_pressed.connect(start_match)
 
 
@@ -46,11 +45,4 @@ func add_car(arena: NetwScene, player: NetwPlayer) -> void:
 			grid_slot % 2,
 			slot,
 		),
-	)
-
-
-func install_stepper(arena: NetwScene) -> void:
-	session.install_physics_stepper(
-		arena.root.get_world_3d(),
-		RocketJoltStepper.new(),
 	)

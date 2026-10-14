@@ -7963,8 +7963,9 @@ public sealed class NetwMultiplayer : NetwRefCounted
 
     /// <summary>
     /// Lets <paramref name="stepper"/> step the physics
-    /// <paramref name="space"/> several times in one frame, which rollback
-    /// needs. A <c>null</c> <paramref name="stepper"/>, or one whose
+    /// <paramref name="space"/> in place of <c>PhysicsServer3D.space_step</c>,
+    /// for a physics server without it. A <c>null</c>
+    /// <paramref name="stepper"/>, or one whose
     /// <c>NetwPhysicsStepper._can_step</c> returns <c>false</c>, removes the
     /// stepper of <paramref name="space"/>. Returns
     /// <c>@GlobalScope.ERR_INVALID_PARAMETER</c> when <paramref name="space"/>

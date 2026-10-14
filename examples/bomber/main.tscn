@@ -31,9 +31,9 @@ local_member_name = "diegote"
 browser_filter_uid = "networked-bomber"
 metadata/_custom_type_script = "uid://d0u2yowat1s3u"
 
-[node name="WebTorrentLobbyDirectory" type="WebTorrentLobbyDirectory" parent="LobbyProviders"]
+[node name="WebTorrentLobbyDirectory" type="WebTorrentLobbyDirectory" parent="LobbyProviders" unique_id=1249777623]
 
-[node name="LANLobbyDirectory" type="LANLobbyDirectory" parent="LobbyProviders"]
+[node name="LANLobbyDirectory" type="LANLobbyDirectory" parent="LobbyProviders" unique_id=1646912369]
 
 [node name="DiscordActivity" type="NetwService" parent="." unique_id=517452784]
 script = ExtResource("11_disc")

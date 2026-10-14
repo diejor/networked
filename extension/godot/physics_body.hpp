@@ -4,12 +4,16 @@
 #include "scene/2d/physics/animatable_body_2d.h"
 #include "scene/2d/physics/area_2d.h"
 #include "scene/2d/physics/character_body_2d.h"
+#include "scene/2d/physics/collision_object_2d.h"
+#include "scene/2d/physics/physics_body_2d.h"
 #include "scene/2d/physics/rigid_body_2d.h"
 #include "scene/2d/physics/static_body_2d.h"
 #include "scene/2d/tile_map_layer.h"
 #include "scene/3d/physics/animatable_body_3d.h"
 #include "scene/3d/physics/area_3d.h"
 #include "scene/3d/physics/character_body_3d.h"
+#include "scene/3d/physics/collision_object_3d.h"
+#include "scene/3d/physics/physics_body_3d.h"
 #include "scene/3d/physics/rigid_body_3d.h"
 #include "scene/3d/physics/static_body_3d.h"
 
@@ -20,6 +24,10 @@ using ::Area2D;
 using ::Area3D;
 using ::CharacterBody2D;
 using ::CharacterBody3D;
+using ::CollisionObject2D;
+using ::CollisionObject3D;
+using ::PhysicsBody2D;
+using ::PhysicsBody3D;
 using ::RigidBody2D;
 using ::RigidBody3D;
 using ::StaticBody2D;
@@ -33,6 +41,10 @@ using ::TileMapLayer;
 #include <godot_cpp/classes/area3d.hpp>
 #include <godot_cpp/classes/character_body2d.hpp>
 #include <godot_cpp/classes/character_body3d.hpp>
+#include <godot_cpp/classes/collision_object2d.hpp>
+#include <godot_cpp/classes/collision_object3d.hpp>
+#include <godot_cpp/classes/physics_body2d.hpp>
+#include <godot_cpp/classes/physics_body3d.hpp>
 #include <godot_cpp/classes/rigid_body2d.hpp>
 #include <godot_cpp/classes/rigid_body3d.hpp>
 #include <godot_cpp/classes/static_body2d.hpp>
@@ -41,3 +53,12 @@ using ::TileMapLayer;
 #else
 #error "Define NETW_MODULE or NETW_GDEXTENSION."
 #endif
+
+#include "godot/object.hpp"
+
+namespace netw::gd {
+
+bool can_flush_kinematic();
+bool flush_kinematic(godot::Object *p_body);
+
+} // namespace netw::gd

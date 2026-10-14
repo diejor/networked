@@ -6,6 +6,7 @@
 #include "support/netw_cells.h"
 #include "support/scenario_run.h"
 
+#include "godot/physics_server.hpp"
 #include "godot/scene_tree.hpp"
 #include "godot/script.hpp"
 #include "netw/api/context.hpp"
@@ -235,8 +236,8 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Predict][Stepped] a stock engine refuses STEPPED loudly, so "
-    "a member whose space holds no stepper resolves to SCHEDULE_FRAME, says "
+    "[Networked][Predict][Stepped] STEPPED is refused loudly, so a member "
+    "whose space nothing can step resolves to SCHEDULE_FRAME, says "
     "so once, and keeps the declaration the game made"
 ) {
     const Scenario scenario = rerunnable_island_lane();
@@ -278,8 +279,10 @@ TEST_CASE(
         pool->last_driven_input_tick_of(owner.slot) - driven_before,
         3
     );
-    CHECK(pool->stepper_absence_reported_of(owner.slot));
-    NETW_CHECK_EQ(watch.errors_containing("has no stepper"), int64_t(1));
+    NETW_CHECK_EQ(
+        watch.warnings_containing("cannot step physics on demand"),
+        int64_t(1)
+    );
 }
 
 TEST_CASE(
@@ -304,7 +307,12 @@ TEST_CASE(
     owner.entity->get_simulation()->set_schedule(
         netw::NetwSimulation::SCHEDULE_STEPPED
     );
-    REQUIRE_FALSE(pool->slot_has_stepper(owner.slot));
+    REQUIRE(
+        pool->slot_has_stepper(owner.slot)
+        == netw::gd::can_step_space(
+            predictor->entity_space_of(owner.entity).dimension
+        )
+    );
     predictor->predict_stepper_install(
         predictor->entity_space_of(owner.entity).space,
         installable_stepper()
@@ -322,8 +330,10 @@ TEST_CASE(
         pool->schedule_of(owner.slot),
         int(netw::NetwSimulation::SCHEDULE_STEPPED)
     );
-    NETW_CHECK_EQ(watch.errors_containing("has no stepper"), int64_t(0));
-    CHECK_FALSE(pool->stepper_absence_reported_of(owner.slot));
+    NETW_CHECK_EQ(
+        watch.warnings_containing("cannot step physics on demand"),
+        int64_t(0)
+    );
     unstep(owner);
 }
 

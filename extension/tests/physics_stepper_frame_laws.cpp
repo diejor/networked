@@ -1,5 +1,6 @@
 #include "support/frame_drive.h"
 #include "support/netw_test.h"
+#include "support/stepper_recorder.h"
 
 #include "godot/collision_shape.hpp"
 #include "godot/engine.hpp"
@@ -10,6 +11,7 @@
 #include "godot/scene_tree.hpp"
 #include "godot/spatial_node.hpp"
 #include "godot/world.hpp"
+#include "netw/api/netw_multiplayer.hpp"
 #include "netw/api/prediction.hpp"
 
 using namespace godot;
@@ -130,8 +132,7 @@ PhysicsServer3D *server() {
 }
 
 bool engine_steps_spaces() {
-    return server() != nullptr
-        && server()->has_method(StringName("space_step"));
+    return netw::gd::can_step_space(3);
 }
 
 RID arena_space() {
@@ -145,15 +146,8 @@ RID arena_space() {
 
 void step_space() {
     const RID space = arena_space();
-    Array one;
-    one.push_back(space);
-    if (server()->has_method(StringName("space_flush_queries"))) {
-        server()->callv(StringName("space_flush_queries"), one);
-    }
-    Array args;
-    args.push_back(space);
-    args.push_back(STEP_DELTA);
-    server()->callv(StringName("space_step"), args);
+    netw::gd::step_space(space, 3, STEP_DELTA);
+    netw::gd::flush_space_queries(space, 3);
 }
 
 Node3D *seat_arena(bool p_floored) {
@@ -293,9 +287,6 @@ public:
         }
         if (stage == 0) {
             evidence().fork = engine_steps_spaces();
-            if (!evidence().fork) {
-                return false;
-            }
             ++stage;
             return true;
         }
@@ -640,13 +631,87 @@ private:
 
 NETW_FRAME_SCENARIO(StepperScenario, stepper_scenario);
 
-const char *SKIP_REASON
-    = "PhysicsServer3D has no space_step, so this engine is not the "
-      "stepping-physics fork and the stepper drive cannot be exercised.";
+struct OutrankEvidence {
+    bool driven = false;
+    int recorded_steps = 0;
+    double outranked_drop = 0.0;
+    double built_in_drop = 0.0;
+};
 
-bool skipped() {
-    REQUIRE_MESSAGE(true, SKIP_REASON);
-    return !evidence().fork;
+OutrankEvidence &outrank_evidence() {
+    static OutrankEvidence held;
+    return held;
+}
+
+class OutrankScenario final : public netw_test::FrameScenario {
+    int step = 0;
+    Node3D *arena = nullptr;
+    RigidBody3D *body = nullptr;
+    Ref<netw::NetwMultiplayer> session;
+    Ref<netw_test::RecordingStepper> recorder;
+
+    double stepped_drop(int64_t p_tick) {
+        const RID space = arena_space();
+        session->predict_stepper_hold(space, 3);
+        const double before = double(sample_of(body).position.y);
+        session->predict_step_space(space, STEP_DELTA, p_tick, 3);
+        return before - double(sample_of(body).position.y);
+    }
+
+public:
+    bool advance() override {
+        if (netw::gd::scene_root() == nullptr || step > 2) {
+            return false;
+        }
+        if (step == 0) {
+            arena = seat_arena(false);
+            body = seat_body(
+                arena,
+                Vector3(0.0, real_t(DROP_HEIGHT), 0.0),
+                Vector3()
+            );
+            session = netw::NetwMultiplayer::create(Ref<Script>());
+            recorder.instantiate();
+            ++step;
+            return true;
+        }
+        OutrankEvidence &into = outrank_evidence();
+        if (step == 1) {
+            session->predict_stepper_install(arena_space(), recorder);
+            into.outranked_drop = stepped_drop(1);
+            into.recorded_steps
+                = recorder->count_of(netw_test::RecordingStepper::STEP);
+            session->predict_stepper_install(
+                arena_space(),
+                Ref<netw::NetwPhysicsStepper>()
+            );
+            ++step;
+            return true;
+        }
+        into.built_in_drop = stepped_drop(2);
+        session->predict_release_empty_holds();
+        server()->space_set_active(arena_space(), true);
+        retire(arena);
+        body = nullptr;
+        session = Ref<netw::NetwMultiplayer>();
+        recorder = Ref<netw_test::RecordingStepper>();
+        into.driven = true;
+        ++step;
+        return false;
+    }
+};
+
+NETW_FRAME_SCENARIO(OutrankScenario, outrank_scenario);
+
+bool stock_arm() {
+    REQUIRE(evidence().driven);
+    if (evidence().fork) {
+        return false;
+    }
+    CHECK(evidence().hold_took);
+    NETW_CHECK_LT(std::abs(evidence().stepped_drop), 1e-6);
+    NETW_CHECK_LT(std::abs(evidence().held_drift), 1e-6);
+    return true;
 }
 
 double fall_while_held(int p_run) {
@@ -682,7 +747,7 @@ TEST_CASE(
     "[Networked][Predict][Frame] X1 a held space integrates nothing across a "
     "physics frame and exactly one tick of gravity when it is stepped"
 ) {
-    if (skipped()) {
+    if (stock_arm()) {
         return;
     }
     REQUIRE(evidence().driven);
@@ -697,7 +762,7 @@ TEST_CASE(
     "[Networked][Predict][Frame] X2 a batched replay of N steps lands where N "
     "steps taken one per frame landed, falling and resting alike"
 ) {
-    if (skipped()) {
+    if (stock_arm()) {
         return;
     }
     REQUIRE(evidence().driven);
@@ -712,7 +777,7 @@ TEST_CASE(
     "reproduces itself, which is the reading X3's verdict cannot be "
     "interpreted without"
 ) {
-    if (skipped()) {
+    if (stock_arm()) {
         return;
     }
     REQUIRE(evidence().driven);
@@ -729,7 +794,7 @@ TEST_CASE(
     "two ticks back over a live contact records its verdict, and the residual "
     "it measures is the tolerance the example claims"
 ) {
-    if (skipped()) {
+    if (stock_arm()) {
         return;
     }
     REQUIRE(evidence().driven);
@@ -747,7 +812,7 @@ TEST_CASE(
     "a basis reproduces the forward contact's post-state within the tolerance "
     "X3 measured"
 ) {
-    if (skipped()) {
+    if (stock_arm()) {
         return;
     }
     REQUIRE(evidence().driven);
@@ -764,11 +829,36 @@ TEST_CASE(
     "[Networked][Predict][Frame] X4 a sensor sampled after a restore forced "
     "through to the server reads the world the restore produced"
 ) {
-    if (skipped()) {
+    if (stock_arm()) {
         return;
     }
     REQUIRE(evidence().driven);
     CHECK(evidence().barrier_sensor_reads_floor);
+}
+
+TEST_CASE(
+    "[Networked][Predict][Frame] X6 a stepper installed for a space outranks "
+    "the engine's own space_step, so the session steps that space only "
+    "through the stepper"
+) {
+    const OutrankEvidence &outrank = outrank_evidence();
+    REQUIRE(outrank.driven);
+    NETW_CHECK_EQ(outrank.recorded_steps, 1);
+    NETW_CHECK_LT(std::abs(outrank.outranked_drop), 1e-6);
+}
+
+TEST_CASE(
+    "[Networked][Predict][Frame] X7 with no stepper installed the session "
+    "steps a held space itself exactly when the engine has space_step"
+) {
+    const OutrankEvidence &outrank = outrank_evidence();
+    REQUIRE(outrank.driven);
+    if (netw::gd::can_step_space(3)) {
+        NETW_CHECK_GT(outrank.built_in_drop, 0.0);
+        NETW_CHECK_LT(outrank.built_in_drop, 0.05);
+    } else {
+        NETW_CHECK_LT(std::abs(outrank.built_in_drop), 1e-6);
+    }
 }
 
 } // namespace NetwTests

@@ -1,6 +1,7 @@
 #include "netw/display/build.hpp"
 
 #include "godot/class_db.hpp"
+#include "netw/colliders.hpp"
 #include "netw/colors.hpp"
 #include "netw/display/channel.hpp"
 #include "netw/display/decl.hpp"
@@ -108,6 +109,7 @@ Channel *ensure_state(
             String(p_target_prop),
             String(p_node->get_name())
         );
+        colliders::exclude_visual_root(owner, visual);
     }
     const bool split = has_source && visual != nullptr;
     NETW_ERR_COND_V(

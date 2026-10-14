@@ -278,7 +278,14 @@ NetwSimulation::Schedule NetwSimulation::resolved_schedule() const {
     Node *owner = bound.is_valid() ? bound->get_owner() : nullptr;
     const bool has_body = !declared.bodies.is_empty()
         || (owner != nullptr && sim::is_solver_body(owner));
-    return has_body ? SCHEDULE_FRAME : SCHEDULE_TICK;
+    if (!has_body) {
+        return SCHEDULE_TICK;
+    }
+    NetwMultiplayer *session
+        = owner != nullptr ? NetwEntity::session_core_for(owner) : nullptr;
+    return session != nullptr && session->predict_entity_can_step(bound)
+        ? SCHEDULE_STEPPED
+        : SCHEDULE_FRAME;
 }
 
 void NetwSimulation::_bind_methods() {

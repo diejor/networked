@@ -620,6 +620,17 @@ WireRegistry WireRegistry::create_default() {
         PayloadContract::PLANNED
     );
 
+    reg_c(
+        48,
+        "LAGCOMP_CONFIRM",
+        ChannelKind::SESSION,
+        Reliability::RELIABLE,
+        Freshness::NONE,
+        Delivery::FITTED,
+        Direction::SERVER_TO_CLIENT,
+        PayloadContract::PLANNED
+    );
+
     auto batches = [&](const char *name) {
         const ChannelDecl *decl
             = reg.find_channel_by_name(godot::StringName(name));

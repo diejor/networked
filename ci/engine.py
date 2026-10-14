@@ -19,6 +19,11 @@ ENGINES_FILE = CI_DIR / "engines.json"
 
 CAPABILITY_PROBES = {
     "space_step": 'PhysicsServer3D.has_method("space_step")',
+    "kinematic_flush": (
+        'PhysicsServer3D.has_method("space_step")'
+        ' and PhysicsServer3D.has_method("body_flush_kinematic_transform")'
+        ' and ClassDB.class_has_method("PhysicsBody3D", "flush_kinematic_transform")'
+    ),
 }
 
 PROBE_PROJECT = """[application]

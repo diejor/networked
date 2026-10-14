@@ -2,6 +2,7 @@
 
 #include "godot/physics_body.hpp"
 #include "godot/physics_server.hpp"
+#include "netw/colliders.hpp"
 #include "netw/store/validate.hpp"
 
 using namespace godot;
@@ -138,6 +139,7 @@ void enter_proxy(const Bodies &p_bodies) {
                 global_transform_name(),
                 body->get(global_transform_name())
             );
+            colliders::teleport(body);
         }
     }
     if (p_bodies.visual_transform.get_type() == Variant::NIL) {

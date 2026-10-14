@@ -67,7 +67,7 @@
 			<param index="0" name="world" type="World3D" />
 			<param index="1" name="stepper" type="NetwPhysicsStepper" />
 			<description>
-				Lets [param stepper] step the physics of [param world] several times in one frame, which rollback needs. Pass [code]null[/code] as [param stepper] to remove it.
+				Lets [param stepper] step the physics of [param world] in place of [code]PhysicsServer3D.space_step[/code], for a physics server without it. Pass [code]null[/code] as [param stepper] to remove it.
 				[codeblock]
 				func _ready() -&gt; void:
 				    session.install_physics_stepper(get_world_3d(), MyStepper.new())

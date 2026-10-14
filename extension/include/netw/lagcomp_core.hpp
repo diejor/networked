@@ -22,6 +22,9 @@ class NetwLagCompCore {
         godot::Ref<godot::RefCounted> entity;
         store::EntityRef store;
         bool declared_changed = false;
+        godot::LocalVector<int64_t> parts;
+        uint64_t part_binding = 0;
+        bool part_kept = false;
     };
 
     godot::LocalVector<Row *> rows;
@@ -65,6 +68,14 @@ public:
     bool timeline_owner_bound(int64_t p_slot) const;
 
     void timeline_declare(int64_t p_slot, const godot::Array &p_keys);
+
+    int64_t timeline_part(
+        int64_t p_slot,
+        uint64_t p_binding,
+        godot::Object *p_node,
+        const godot::Array &p_keys
+    );
+    void timeline_prune_parts(int64_t p_slot);
     godot::Array timeline_declared(int64_t p_slot) const;
 
     const LagBook *book_of(int64_t p_slot) const;
@@ -109,10 +120,11 @@ public:
     bool timeline_recorded_at(int64_t p_slot, int64_t p_tick) const;
     void timeline_trim_before(int64_t p_slot, int64_t p_tick);
 
-    int rewind(
+    godot::Variant rewind(
         const godot::PackedInt64Array &p_slots,
         int64_t p_tick,
-        const godot::Callable &p_body
+        const godot::Callable &p_body,
+        int *r_moved = nullptr
     );
 };
 

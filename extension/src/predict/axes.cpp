@@ -1,5 +1,7 @@
 #include "netw/predict/axes.hpp"
 
+#include "netw/sim/row.hpp"
+
 namespace netw::predict {
 
 ArchetypeAxes archetype_axes(int p_archetype) {
@@ -13,9 +15,9 @@ ArchetypeAxes archetype_axes(int p_archetype) {
         } break;
         case Archetype::SOLVER_BODY: {
             axes.declared = true;
-            axes.schedule = int(Schedule::FRAME);
+            axes.schedule = int(sim::Schedule::AUTO);
             axes.missing_policy = int(MissingInput::REPEAT_LAST);
-            axes.recovery_policy = int(RecoveryPolicy::REBASE_RECOVER);
+            axes.recovery_policy = int(RecoveryPolicy::AUTO);
             axes.snap_restore = int(RestoreMode::EXTRAPOLATED);
             axes.declares_snap_restore = true;
             axes.teleport_threshold = 3.0;
@@ -61,12 +63,13 @@ int correction_for_recovery_policy(int p_policy) {
     }
 }
 
-int resolve_recovery_policy(int p_policy, bool p_solves) {
+int resolve_recovery_policy(int p_policy, bool p_solves, int p_schedule) {
     if (p_policy != int(RecoveryPolicy::AUTO)) {
         return p_policy;
     }
-    return p_solves ? int(RecoveryPolicy::REBASE_RECOVER)
-                    : int(RecoveryPolicy::REBASE_REPLAY);
+    return p_solves && p_schedule != int(Schedule::STEPPED)
+        ? int(RecoveryPolicy::REBASE_RECOVER)
+        : int(RecoveryPolicy::REBASE_REPLAY);
 }
 
 bool replays_without_integration(int p_schedule, bool p_solves) {

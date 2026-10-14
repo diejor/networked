@@ -386,13 +386,4 @@ bool port_apply(
     return true;
 }
 
-void port_sync_transform(Object *p_owner) {
-    const StringName sync_transform("force_update_transform");
-    Node *node = Object::cast_to<Node>(p_owner);
-    if (node != nullptr && node->is_inside_tree()
-        && node->has_method(sync_transform)) {
-        node->call(sync_transform);
-    }
-}
-
 } // namespace netw

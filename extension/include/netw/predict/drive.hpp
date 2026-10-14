@@ -251,7 +251,6 @@ struct EngineLatches {
     bool invalid_witness_reported = false;
     bool invalid_command_predictor_reported = false;
     bool joint_refusal_reported = false;
-    bool stepper_absence_reported = false;
     bool integration_refusal_reported = false;
     bool island_gap_reported = false;
     bool island_roster_seeded = false;
@@ -307,12 +306,23 @@ struct RelayWindow {
     uint32_t at_oldest(uint32_t p_offset) const;
 };
 
+struct StatePart {
+    uint64_t binding = 0;
+    godot::ObjectID node;
+    godot::String path;
+    uint32_t first = 0;
+    uint32_t count = 0;
+};
+
 struct Slot {
     Config config;
     Wiring wiring;
     FieldCodec input_codec;
     ObjectPort port;
     int64_t order_key = -1;
+    godot::LocalVector<StatePart> parts;
+    godot::LocalVector<godot::ObjectID> state_nodes;
+    godot::LocalVector<godot::StringName> state_props;
     godot::LocalVector<uint8_t> owner_has_state;
     godot::LocalVector<uint8_t> owner_has_input;
     godot::LocalVector<store::Column> state_ports;

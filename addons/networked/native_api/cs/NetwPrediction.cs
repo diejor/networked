@@ -242,9 +242,9 @@ public sealed class NetwPrediction : NetwRefCounted
         /// <summary>
         /// A body moved by the physics engine, such as a
         /// <see cref="RigidBody3D"/>. Sets
-        /// <see cref="NetwSimulation.ScheduleEnum.Frame"/>,
+        /// <see cref="NetwSimulation.ScheduleEnum.Auto"/>,
         /// <see cref="NetwPrediction.MissingInput.RepeatLast"/>,
-        /// <see cref="NetwPrediction.RecoveryPolicyEnum.RebaseRecover"/> and
+        /// <see cref="NetwPrediction.RecoveryPolicyEnum.Auto"/> and
         /// <see cref="NetwSimulation.RestoreEnum.Extrapolated"/>.
         /// </summary>
         SolverBody = 2,
@@ -277,9 +277,10 @@ public sealed class NetwPrediction : NetwRefCounted
         Observe = 3,
         /// <summary>
         /// <see cref="NetwPrediction.RecoveryPolicyEnum.RebaseRecover"/> for a
-        /// <see cref="RigidBody3D"/> or <see cref="RigidBody2D"/>, and
-        /// <see cref="NetwPrediction.RecoveryPolicyEnum.RebaseReplay"/> for any
-        /// other body. <see cref="NetwPrediction.ResolvedRecoveryPolicy"/>
+        /// <see cref="RigidBody3D"/> or <see cref="RigidBody2D"/> on
+        /// <see cref="NetwSimulation.ScheduleEnum.Frame"/>, and
+        /// <see cref="NetwPrediction.RecoveryPolicyEnum.RebaseReplay"/>
+        /// otherwise. <see cref="NetwPrediction.ResolvedRecoveryPolicy"/>
         /// returns the result.
         /// </summary>
         Auto = 4,

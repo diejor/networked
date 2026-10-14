@@ -41,8 +41,6 @@ func _init() -> void:
 	var e := Netw.configure_entity(self)
 	e.name = &"ball"
 	e.prediction.archetype = NetwPrediction.ARCHETYPE_SOLVER_BODY
-	e.simulation.schedule = RocketJoltStepper.schedule()
-	e.prediction.recovery_policy = RocketJoltStepper.recovery_policy()
 	e.prediction.sensors[&"goal"] = sample_goal
 	e.prediction.witness_contacts = sample_contacts
 	e.display.visual_root = ^"MeshInstance3D"

@@ -7,7 +7,10 @@
 #if defined(NETW_TIER_HOSTED)
 
 #include "godot/variant.hpp"
+#include "godot/utility.hpp"
 #include "netw/api/action.hpp"
+#include "netw/api/context.hpp"
+#include "netw/session/frames.hpp"
 #include "netw/api/prediction.hpp"
 #include "netw/lagcomp_core.hpp"
 #include "netw/predict/engine.hpp"
@@ -404,6 +407,109 @@ TEST_CASE(
     NETW_CHECK_EQ(log.count(StringName("confirmed")), 1);
     REQUIRE(fixture.owner->ghost() != nullptr);
     CHECK_FALSE(fixture.owner->ghost()->is_queued_for_deletion());
+}
+
+TEST_CASE(
+    "[Networked][LagComp][Action] AC10 an action minted through Netw.action "
+    "on a session that declared neither lag compensation nor prediction "
+    "predicts on its controller, runs on the server and answers, because "
+    "minting the action is what readies the session for it"
+) {
+    LoopbackRig rig(1);
+    rig.mount();
+    WorldDecl world;
+    world.clocked(30, 3).player(
+        EntityDecl()
+            .named("P")
+            .synced("position")
+            .placed_at(Vector2())
+            .mounted(),
+        0
+    );
+    rig.declare_world(world);
+    Carrier *owner = Object::cast_to<Carrier>(
+        rig.node_of(rig.entity_of(StringName("P"), 0), 0)
+    );
+    Carrier *authority
+        = Object::cast_to<Carrier>(rig.node_of(rig.entity_of("P")));
+    REQUIRE(owner != nullptr);
+    REQUIRE(authority != nullptr);
+    REQUIRE_FALSE(rig.server()->lagcomp_is_configured());
+
+    const Ref<netw::NetwAction> asked = netw::Netw::action(
+        Callable(owner, StringName("_server_action"))
+    );
+    const Ref<netw::NetwAction> judged = netw::Netw::action(
+        Callable(authority, StringName("_server_action"))
+    );
+    REQUIRE(asked.is_valid());
+    REQUIRE(judged.is_valid());
+    const CallLog log;
+    asked->set_predict(Callable(owner, StringName("_predict_ghost")));
+    asked->connect("denied", log.callable(StringName("denied")));
+
+    asked->request(rig.clock_of(rig.client(0)).get_tick(), Array());
+    NETW_CHECK_EQ(owner->ghosts(), 1);
+    rig.step_ticks(30);
+
+    NETW_CHECK_EQ(authority->requests(), 1);
+    NETW_CHECK_EQ(log.count(StringName("denied")), 1);
+}
+
+PackedByteArray forged_request(int64_t p_view_tick) {
+    netw::session::ActionRequest body;
+    body.method = StringName("_server_action");
+    body.view_tick = p_view_tick;
+    body.data = netw::gd::var_to_bytes(Array());
+    body.key = StringName("forged");
+    body.timing = IMMEDIATE;
+    return netw::session::frame_write(body);
+}
+
+TEST_CASE(
+    "[Networked][LagComp][Action] AC11 the server runs an action request "
+    "only when the peer that sent it controls the entity, so a client "
+    "cannot act through a player it does not drive"
+) {
+    ActionRig fixture;
+    const Ref<netw::NetwEntity> judged
+        = fixture.rig.server()->entity_get_view(fixture.rig.entity_of("P"));
+    REQUIRE(judged.is_valid());
+    const int64_t controller = fixture.rig.peer_id(0);
+    REQUIRE(judged->get_controller() == controller);
+
+    fixture.rig.server()->action_receive_carrier(
+        judged,
+        forged_request(fixture.authority_tick()),
+        controller + 1
+    );
+    NETW_CHECK_EQ(fixture.authority->requests(), 0);
+
+    fixture.rig.server()->action_receive_carrier(
+        judged,
+        forged_request(fixture.authority_tick()),
+        controller
+    );
+    NETW_CHECK_EQ(fixture.authority->requests(), 1);
+}
+
+TEST_CASE(
+    "[Networked][LagComp][Action] AC12 an action the server runs without "
+    "denying it or binding a node confirms as soon as the server answers, "
+    "so the requester never waits out the timeout to hear it was denied"
+) {
+    ActionRig fixture;
+    fixture.authority->set_denies(false);
+
+    fixture.owner->fire(fixture.owner_tick(), IMMEDIATE);
+    REQUIRE(fixture.owner->ghost() != nullptr);
+    fixture.step_until_requested(30);
+    fixture.rig.step_ticks(4);
+
+    NETW_CHECK_EQ(fixture.authority->requests(), 1);
+    NETW_CHECK_EQ(fixture.owner->confirmations(), 1);
+    NETW_CHECK_EQ(fixture.owner->denials(), 0);
+    CHECK(fixture.owner->ghost()->is_queued_for_deletion());
 }
 
 TEST_CASE(

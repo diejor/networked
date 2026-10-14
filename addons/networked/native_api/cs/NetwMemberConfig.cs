@@ -16,14 +16,16 @@ namespace Networked;
 /// send, how it is sent, and what the receiver does.
 /// <code>
 /// func _init() -&gt; void:
-///     Netw.configure_rpc(self.fire).unreliable().controller_only()
+///     Netw.configure_rpc(self.fire).unreliable().controller()
 ///     Netw.configure_signal(self.exploded).any_peer()
 ///     Netw.configure_spawn(self._spawn_bullet).quantize(dir_q)
 /// </code>
 /// <para>
-/// Settings are stored per script, so calling this in <c>Object._init</c> of
-/// every instance is fine. A warning is pushed only when two calls set
-/// different values. <b>Note:</b> these methods return a
+/// A setting made here outranks the method's <c>@rpc</c> annotation, and a
+/// setting left out falls back to it. The server may always call an RPC,
+/// whatever its policy. Settings are stored per script, so calling this in
+/// <c>Object._init</c> of every instance is fine. A warning is pushed only when
+/// two calls set different values. <b>Note:</b> these methods return a
 /// <see cref="NetwMemberConfig"/>, so call <see cref="NetwPropertyConfig"/>
 /// methods first in a chain.
 /// <code>
@@ -62,6 +64,10 @@ public class NetwMemberConfig : NetwRefCounted
         /// Any peer may send.
         /// </summary>
         AnyPeer = 2,
+        /// <summary>
+        /// Only the server may send.
+        /// </summary>
+        Server = 3,
     }
 
     public enum TransferModeEnum : long
@@ -168,8 +174,11 @@ public class NetwMemberConfig : NetwRefCounted
 
     /// <summary>
     /// Set by <see cref="NetwMemberConfig.Authority"/>,
-    /// <see cref="NetwMemberConfig.Controller"/> and
-    /// <see cref="NetwMemberConfig.AnyPeer"/>.
+    /// <see cref="NetwMemberConfig.Controller"/>,
+    /// <see cref="NetwMemberConfig.AnyPeer"/> and
+    /// <see cref="NetwMemberConfig.Server"/>. An RPC with no policy set takes
+    /// it from its <c>@rpc</c> annotation, and one without that annotation
+    /// accepts calls from the server only.
     /// </summary>
     public NetwMemberConfig.Policy WritePolicy
     {
@@ -386,44 +395,6 @@ public class NetwMemberConfig : NetwRefCounted
         }
     }
 
-    private static readonly IntPtr _bindGetIsControllerOnly =
-        NetwApi.MethodBind(
-            "NetwMemberConfig",
-            "get_is_controller_only",
-            36873697UL);
-
-    private static readonly IntPtr _bindSetIsControllerOnly =
-        NetwApi.MethodBind(
-            "NetwMemberConfig",
-            "set_is_controller_only",
-            2586408642UL);
-
-    /// <summary>
-    /// Set by <see cref="NetwMemberConfig.ControllerOnly"/>.
-    /// </summary>
-    public bool IsControllerOnly
-    {
-        get
-        {
-            byte answered = default;
-            NetwThunks.Ptrcall0_Byte(
-                _bindGetIsControllerOnly,
-                Checked,
-                ref answered);
-            return answered != 0;
-        }
-        set
-        {
-            byte slot0 = value ? (byte)1 : (byte)0;
-            long discarded = default;
-            NetwThunks.Ptrcall1_Byte_Long(
-                _bindSetIsControllerOnly,
-                Checked,
-                in slot0,
-                ref discarded);
-        }
-    }
-
     private static readonly IntPtr _bindGetQuantizers =
         NetwApi.MethodBind("NetwMemberConfig", "get_quantizers", 3995934104UL);
 
@@ -502,7 +473,7 @@ public class NetwMemberConfig : NetwRefCounted
         NetwApi.MethodBind("NetwMemberConfig", "authority", 3574862355UL);
 
     /// <summary>
-    /// Only the node's multiplayer authority may send it. The default.
+    /// Only the node's multiplayer authority may send it.
     /// </summary>
     public NetwMemberConfig Authority()
     {
@@ -534,6 +505,19 @@ public class NetwMemberConfig : NetwRefCounted
     {
         IntPtr answered = default;
         NetwThunks.Ptrcall0_IntPtr(_bindAnyPeer, Checked, ref answered);
+        return NetwMemberConfig.Adopt(answered);
+    }
+
+    private static readonly IntPtr _bindServer =
+        NetwApi.MethodBind("NetwMemberConfig", "server", 3574862355UL);
+
+    /// <summary>
+    /// Only the server may send it.
+    /// </summary>
+    public NetwMemberConfig Server()
+    {
+        IntPtr answered = default;
+        NetwThunks.Ptrcall0_IntPtr(_bindServer, Checked, ref answered);
         return NetwMemberConfig.Adopt(answered);
     }
 
@@ -610,20 +594,6 @@ public class NetwMemberConfig : NetwRefCounted
                     VariantUtils.ConvertToGodotObjectPtr(answered)));
         answered.Dispose();
         return result;
-    }
-
-    private static readonly IntPtr _bindControllerOnly =
-        NetwApi.MethodBind("NetwMemberConfig", "controller_only", 3574862355UL);
-
-    /// <summary>
-    /// Only the <see cref="NetwEntity.Controller"/> or the server may call this
-    /// RPC.
-    /// </summary>
-    public NetwMemberConfig ControllerOnly()
-    {
-        IntPtr answered = default;
-        NetwThunks.Ptrcall0_IntPtr(_bindControllerOnly, Checked, ref answered);
-        return NetwMemberConfig.Adopt(answered);
     }
 
     private static readonly IntPtr _bindQuantize =

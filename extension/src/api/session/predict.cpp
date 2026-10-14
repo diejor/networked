@@ -11,6 +11,7 @@
 #include "godot/object.hpp"
 #include "godot/os.hpp"
 #include "godot/packed_scene.hpp"
+#include "godot/physics_body.hpp"
 #include "godot/physics_server.hpp"
 #include "godot/project_settings.hpp"
 #include "godot/rendering_server.hpp"
@@ -23,6 +24,7 @@
 #include "godot/viewport.hpp"
 #include "godot/world.hpp"
 #include "netw/api/entity.hpp"
+#include "netw/api/entity_record.hpp"
 #include "netw/api/join_request.hpp"
 #include "netw/api/lag_compensation_config.hpp"
 #include "netw/api/nodes/multiplayer_viewport.hpp"
@@ -31,6 +33,7 @@
 #include "netw/api/replication_core.hpp"
 #include "netw/api/schema_model.hpp"
 #include "netw/api/sync_pipeline.hpp"
+#include "netw/colliders.hpp"
 #include "netw/colors.hpp"
 #include "netw/comp_table.hpp"
 #include "netw/log.hpp"
@@ -136,6 +139,50 @@ int64_t NetwMultiplayer::arm_rewind_timeline(const Ref<NetwEntity> &p_entity) {
     return slot;
 }
 
+void NetwMultiplayer::record_rewind_parts(
+    int64_t p_slot,
+    NetwEntity *p_entity,
+    const repl::PropertyBindingPtr &p_state,
+    int64_t p_tick
+) {
+    NetwEntityRecord *record = p_entity->get_record();
+    if (record == nullptr || record->get_held_bindings().size() < 2) {
+        return;
+    }
+    if (!lagcomp_core.timeline_owner_bound(p_slot)) {
+        lagcomp_core.timeline_bind_owner(p_slot, p_state->node());
+    }
+    for (const NetwEntityRecord::HeldBinding &held :
+         record->get_held_bindings()) {
+        repl::PropertyBinding *child = binding_book.live(held.binding);
+        if (child == nullptr || child == p_state || child->node() == nullptr) {
+            continue;
+        }
+        repl::PropertySet *declared = child->get_set();
+        if (declared == nullptr
+            || declared->get_record() != repl::SET_RECORD_STATE) {
+            continue;
+        }
+        Array keys;
+        for (const repl::PropertyColumn &column : declared->columns) {
+            keys.push_back(column.get_key());
+        }
+        const int64_t part = lagcomp_core.timeline_part(
+            p_slot,
+            child->id,
+            child->node(),
+            keys
+        );
+        lagcomp_core.timeline_record_coded(
+            part,
+            p_tick,
+            child->canonicalize_payload(child->snapshot_payload()),
+            declared->get_codec()
+        );
+    }
+    lagcomp_core.timeline_prune_parts(p_slot);
+}
+
 void NetwMultiplayer::lagcomp_rewind(
     const TypedArray<RID> &p_entities,
     int64_t p_tick,
@@ -148,7 +195,7 @@ void NetwMultiplayer::lagcomp_rewind(
     lagcomp_rewind_of(wrappers, p_tick, p_body);
 }
 
-void NetwMultiplayer::lagcomp_rewind_of(
+Variant NetwMultiplayer::lagcomp_rewind_of(
     const TypedArray<NetwEntity> &p_entities,
     int64_t p_tick,
     const Callable &p_body
@@ -164,7 +211,7 @@ void NetwMultiplayer::lagcomp_rewind_of(
             slots.push_back(slot);
         }
     }
-    lagcomp_core.rewind(slots, p_tick, p_body);
+    return lagcomp_core.rewind(slots, p_tick, p_body);
 }
 
 Ref<DictionaryRecord> NetwMultiplayer::lagcomp_sample(
@@ -653,6 +700,12 @@ void NetwMultiplayer::predict_stepper_hold(
     int p_dimension
 ) {
     SteppedSpace *held = space_steppers.getptr(p_space.get_id());
+    if (held == nullptr && gd::can_step_space(p_dimension)) {
+        SteppedSpace row;
+        row.space = p_space;
+        space_steppers.insert(p_space.get_id(), row);
+        held = space_steppers.getptr(p_space.get_id());
+    }
     if (held == nullptr || held->inactive) {
         return;
     }
@@ -661,20 +714,51 @@ void NetwMultiplayer::predict_stepper_hold(
     space_set_active({held->space, held->dimension}, false);
 }
 
+bool NetwMultiplayer::predict_space_can_step(
+    const RID &p_space,
+    int p_dimension
+) const {
+    const SteppedSpace *held = space_steppers.getptr(p_space.get_id());
+    return (held != nullptr && held->stepper.is_valid())
+        || gd::can_step_space(p_dimension);
+}
+
+bool NetwMultiplayer::predict_entity_can_step(
+    const Ref<NetwEntity> &p_entity
+) const {
+    if (p_entity.is_null()) {
+        return false;
+    }
+    const EntitySpace held = entity_space_of(p_entity);
+    if (!held.space.is_valid()
+        || !predict_space_can_step(held.space, held.dimension)) {
+        return false;
+    }
+    return gd::can_flush_kinematic()
+        || colliders::first_kinematic_body(p_entity->get_owner()) == nullptr;
+}
+
 void NetwMultiplayer::predict_step_space(
     const RID &p_space,
     double p_delta,
-    int64_t p_tick
+    int64_t p_tick,
+    int p_dimension
 ) {
     const SteppedSpace *held = space_steppers.getptr(p_space.get_id());
-    if (held == nullptr || held->stepper.is_null()) {
+    if (held != nullptr && held->stepper.is_valid()) {
+        const Ref<NetwPhysicsStepper> stepper = held->stepper;
+        const int dimension = held->dimension;
+        stepper->step(p_space, p_delta);
+        stepper->flush_queries(p_space, dimension);
+        stepper->snapshot(p_space, p_tick);
         return;
     }
-    const Ref<NetwPhysicsStepper> stepper = held->stepper;
-    const int dimension = held->dimension;
-    stepper->step(p_space, p_delta);
-    stepper->flush_queries(p_space, dimension);
-    stepper->snapshot(p_space, p_tick);
+    const int dimension = held != nullptr ? held->dimension : p_dimension;
+    if (!gd::can_step_space(dimension)) {
+        return;
+    }
+    gd::step_space(p_space, dimension, p_delta);
+    gd::flush_space_queries(p_space, dimension);
 }
 
 void NetwMultiplayer::predict_held_spaces(LocalVector<RID> &r_spaces) const {
@@ -696,9 +780,11 @@ bool NetwMultiplayer::predict_space_has_stepped_member(
             continue;
         }
         const Ref<NetwSimulation> simulation = member->simulation_if_minted();
-        if (simulation.is_valid()
-            && simulation->get_schedule() == NetwSimulation::SCHEDULE_STEPPED
-            && entity_space_of(member).space == p_space) {
+        const bool stepped = row.value != nullptr
+            && row.value->runs_in_pass(NetwSimulation::SCHEDULE_STEPPED);
+        const bool declared = simulation.is_valid()
+            && simulation->get_schedule() == NetwSimulation::SCHEDULE_STEPPED;
+        if ((stepped || declared) && entity_space_of(member).space == p_space) {
             return true;
         }
     }
@@ -706,6 +792,7 @@ bool NetwMultiplayer::predict_space_has_stepped_member(
 }
 
 void NetwMultiplayer::predict_release_empty_holds() {
+    LocalVector<int64_t> built_in;
     for (KeyValue<int64_t, SteppedSpace> &row : space_steppers) {
         SteppedSpace &held = row.value;
         if (!held.inactive || predict_space_has_stepped_member(held.space)) {
@@ -713,6 +800,12 @@ void NetwMultiplayer::predict_release_empty_holds() {
         }
         held.inactive = false;
         space_set_active({held.space, held.dimension}, true);
+        if (held.stepper.is_null()) {
+            built_in.push_back(row.key);
+        }
+    }
+    for (const int64_t key : built_in) {
+        space_steppers.erase(key);
     }
 }
 
@@ -860,6 +953,7 @@ void NetwMultiplayer::predict_history_record(
                 payload,
                 declared->get_codec()
             );
+            record_rewind_parts(at, entity, state, record_tick);
         }
         if (engine != nullptr) {
             engine->finalize_recorded_state();
@@ -1066,7 +1160,29 @@ void NetwMultiplayer::action_receive_carrier(
     const PackedByteArray &p_payload,
     int64_t p_sender
 ) {
-    if (!lagcomp_configured || !is_host() || p_entity.is_null()) {
+    if (!is_host() || p_entity.is_null() || p_entity->get_owner() == nullptr) {
+        return;
+    }
+    if (!lagcomp_configured) {
+        NETW_WARN_ONCE(
+            sys::PREDICTION,
+            "Peer %d requested an action on '%s', but the server never "
+            "created one. Call Netw.action on every peer, the server "
+            "included.",
+            int(p_sender),
+            String(p_entity->get_owner()->get_name())
+        );
+        return;
+    }
+    if (p_sender != SERVER_PEER && p_sender != p_entity->get_controller()) {
+        NETW_WARN_ONCE(
+            sys::PREDICTION,
+            "Peer %d requested an action on '%s', which it does not "
+            "control, so the server ignored it. Only the peer in "
+            "NetwEntity.controller can request it.",
+            int(p_sender),
+            String(p_entity->get_owner()->get_name())
+        );
         return;
     }
     session::ActionRequest body;
@@ -1108,14 +1224,7 @@ void NetwMultiplayer::lagcomp_deny_action(
     int64_t p_requester,
     const StringName &p_key
 ) {
-    const bool transport = lagcomp_configured
-        && NETW_API_VIRTUAL(get_multiplayer_peer)().is_valid();
-    const int64_t local_peer
-        = transport ? int64_t(NETW_API_VIRTUAL(get_unique_id)()) : 0;
-    const bool remote = transport && p_requester != 0
-        && p_requester != local_peer
-        && NETW_API_VIRTUAL(get_peer_ids)().has(int32_t(p_requester));
-    if (remote) {
+    if (action_requester_is_remote(p_requester)) {
         NETW_TRACE(
             sys::PREDICTION,
             "Action %s was refused, so peer %d is told to undo it.",
@@ -1140,6 +1249,35 @@ void NetwMultiplayer::lagcomp_deny_action(
         String(p_key).utf8().get_data()
     );
     lagcomp_effect_discard(p_key);
+}
+
+bool NetwMultiplayer::action_requester_is_remote(int64_t p_requester) {
+    const bool transport = lagcomp_configured
+        && NETW_API_VIRTUAL(get_multiplayer_peer)().is_valid();
+    const int64_t local_peer
+        = transport ? int64_t(NETW_API_VIRTUAL(get_unique_id)()) : 0;
+    return transport && p_requester != 0 && p_requester != local_peer
+        && NETW_API_VIRTUAL(get_peer_ids)().has(int32_t(p_requester));
+}
+
+void NetwMultiplayer::lagcomp_confirm_action(
+    int64_t p_requester,
+    const StringName &p_key
+) {
+    if (!action_requester_is_remote(p_requester)) {
+        lagcomp_effect_adopt(p_key);
+        return;
+    }
+    send_to(
+        p_requester,
+        0,
+        wire::builtin_channel("LAGCOMP_CONFIRM"),
+        session::frame_write(session::ConfirmKey{p_key}),
+        true,
+        0,
+        String(),
+        false
+    );
 }
 
 void NetwMultiplayer::predict_history_record_tick(int64_t p_tick) {
@@ -1529,29 +1667,40 @@ Error NetwMultiplayer::predict_declare(const RID &p_entity) {
         );
         return ERR_DOES_NOT_EXIST;
     }
+    const Error required = lagcomp_require("declaring prediction");
+    if (required == ERR_BUSY) {
+        predict_awaiting_config.push_back(p_entity);
+        declarations_changed();
+        return OK;
+    }
+    if (required != OK) {
+        return required;
+    }
+    register_prediction(wrapper);
+    return OK;
+}
+
+Error NetwMultiplayer::lagcomp_require(const char *p_by) {
     if (!config_is_consumed(session_decl::KIND_LAGCOMP_CONFIG)) {
         const session_decl::Resolved offered = declaration_book().resolve(
             this,
             session_decl::KIND_LAGCOMP_CONFIG
         );
         if (offered.state == session_decl::READY) {
-            predict_awaiting_config.push_back(p_entity);
-            declarations_changed();
-            return OK;
+            return ERR_BUSY;
         }
         if (offered.state != session_decl::ABSENT) {
             declaration_book().report_unresolved(
                 this,
                 session_decl::KIND_LAGCOMP_CONFIG,
                 offered.state,
-                "declaring prediction"
+                p_by
             );
             return ERR_UNAVAILABLE;
         }
         config_consume_lagcomp_defaults();
     }
     lagcomp_arm();
-    register_prediction(wrapper);
     return OK;
 }
 

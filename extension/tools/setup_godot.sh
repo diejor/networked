@@ -16,10 +16,14 @@ catalog() {
 
 GODOT_REPO="$(catalog repo)"
 GODOT_BRANCH="$(catalog branch)"
+GODOT_REF="$(catalog ref)"
 GODOT_VERSION="$(catalog version)"
 
 if [ ! -d "$GODOT_SRC" ]; then
-    git clone --depth 1 --branch "$GODOT_BRANCH" "$GODOT_REPO" "$GODOT_SRC"
+    git init -q "$GODOT_SRC"
+    git -C "$GODOT_SRC" remote add origin "$GODOT_REPO"
+    git -C "$GODOT_SRC" fetch -q --depth 1 origin "${GODOT_REF:-$GODOT_BRANCH}"
+    git -C "$GODOT_SRC" checkout -q FETCH_HEAD
 fi
 
 major="$(sed -n 's/^major = //p' "$GODOT_SRC/version.py")"

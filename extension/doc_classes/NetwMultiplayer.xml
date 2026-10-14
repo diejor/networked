@@ -2009,7 +2009,7 @@
 			<param index="0" name="space" type="RID" />
 			<param index="1" name="stepper" type="NetwPhysicsStepper" default="null" />
 			<description>
-				Lets [param stepper] step the physics [param space] several times in one frame, which rollback needs. A [code]null[/code] [param stepper], or one whose [method NetwPhysicsStepper._can_step] returns [code]false[/code], removes the stepper of [param space].
+				Lets [param stepper] step the physics [param space] in place of [code]PhysicsServer3D.space_step[/code], for a physics server without it. A [code]null[/code] [param stepper], or one whose [method NetwPhysicsStepper._can_step] returns [code]false[/code], removes the stepper of [param space].
 				Returns [constant @GlobalScope.ERR_INVALID_PARAMETER] when [param space] is not valid. [method NetwSession.install_physics_stepper] does the same from a [World3D].
 			</description>
 		</method>

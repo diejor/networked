@@ -1023,13 +1023,18 @@ void NetwMultiplayer::rpc_call(
     }
 
     const Variant method_token = rpc_method_token(entity, node, method);
-    const bool reliable = script.is_null()
-        || netw::script::model::get_method_reliable(script, method);
+    const bool reliable = options.is_valid() && options->is_transfer_declared()
+        ? options->get_transfer_mode() == NetwMemberConfig::TRANSFER_RELIABLE
+        : script.is_null()
+            || netw::script::model::get_method_reliable(script, method);
     const LocalVector<call_args::Slot> encoded = rpc_encoded_args(p_args);
 
+    const bool call_local = options.is_valid()
+        ? options->get_is_call_local()
+        : netw::script::model::get_method_call_local(script, method);
     const int64_t local_id = get_unique_id();
     if (p_peer == 0 || p_peer == local_id) {
-        if (netw::script::model::get_method_call_local(script, method)) {
+        if (call_local) {
             const int64_t previous = dispatching_sender;
             dispatching_sender = local_id;
             p_callable.callv(p_args);
@@ -1395,8 +1400,18 @@ bool NetwMultiplayer::rpc_sender_allowed(
     if (p_sender == SERVER_PEER) {
         return true;
     }
-    if (p_options.is_valid() && p_options->get_is_controller_only()) {
-        return p_entity.is_valid() && p_sender == p_entity->get_controller();
+    if (p_options.is_valid() && p_options->is_policy_declared()) {
+        switch (p_options->get_write_policy()) {
+            case NetwMemberConfig::POLICY_CONTROLLER:
+                return p_entity.is_valid()
+                    && p_sender == p_entity->get_controller();
+            case NetwMemberConfig::POLICY_ANY_PEER:
+                return true;
+            case NetwMemberConfig::POLICY_SERVER:
+                return false;
+            default:
+                return p_sender == p_node->get_multiplayer_authority();
+        }
     }
     const int64_t mode
         = netw::script::model::get_method_rpc_mode(p_script, p_method);

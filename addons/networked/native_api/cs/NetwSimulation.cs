@@ -107,17 +107,19 @@ public sealed class NetwSimulation : NetwRefCounted
         /// </summary>
         Frame = 1,
         /// <summary>
-        /// A <see cref="NetwPhysicsStepper"/> installed with
-        /// <see cref="NetwMultiplayer.PredictStepperInstall"/> steps the space
-        /// once per tick. An entity that does not declare prediction, or that
-        /// stands in a space with no stepper, runs
-        /// <see cref="NetwSimulation.ScheduleEnum.Frame"/> and reports one
-        /// error.
+        /// Needs a Godot build with <c>PhysicsServer3D.space_step</c>, or a
+        /// <see cref="NetwPhysicsStepper"/> installed with
+        /// <see cref="NetwSession.InstallPhysicsStepper"/>. Otherwise it runs
+        /// as <see cref="NetwSimulation.ScheduleEnum.Frame"/>, and so does an
+        /// entity that does not declare prediction. Each fallback is reported
+        /// once.
         /// </summary>
         Stepped = 2,
         /// <summary>
-        /// <see cref="NetwSimulation.ScheduleEnum.Frame"/> when the entity has
-        /// a physics body, and <see cref="NetwSimulation.ScheduleEnum.Tick"/>
+        /// <see cref="NetwSimulation.ScheduleEnum.Stepped"/> when the entity
+        /// has a physics body this Godot build can step and restore,
+        /// <see cref="NetwSimulation.ScheduleEnum.Frame"/> for any other
+        /// physics body, and <see cref="NetwSimulation.ScheduleEnum.Tick"/>
         /// otherwise.
         /// </summary>
         Auto = 3,
@@ -445,7 +447,10 @@ public sealed class NetwSimulation : NetwRefCounted
     /// while <see cref="NetwSimulation.Mode"/> runs the body. Defaults to the
     /// root's <c>_network_tick</c>. <c>is_fresh</c> is <c>false</c> in a replay
     /// and on a <see cref="NetwSimulation.ModeEnum.Active"/> copy, so read
-    /// input only when it is <c>true</c>.
+    /// input only when it is <c>true</c>. A step asks the physics space with a
+    /// query. An <see cref="Area3D"/>'s overlaps and signals and
+    /// <c>CharacterBody3D.is_on_floor</c> come from the last physics step, and
+    /// a replay restores neither.
     /// </summary>
     public Callable Step
     {

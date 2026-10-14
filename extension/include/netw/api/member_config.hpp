@@ -16,6 +16,7 @@ public:
         POLICY_AUTHORITY = 0,
         POLICY_CONTROLLER = 1,
         POLICY_ANY_PEER = 2,
+        POLICY_SERVER = 3,
     };
 
     enum TransferMode {
@@ -32,7 +33,6 @@ private:
     int64_t context_type = 0;
     godot::Variant context_node_ref;
     godot::StringName defer_signal_name;
-    bool is_controller_only = false;
     godot::Array quantizers;
     godot::Array interpolators;
 
@@ -62,6 +62,9 @@ public:
     void set_is_call_local(bool p_is_call_local);
     bool get_is_call_local() const {
         return is_call_local;
+    }
+    void default_call_local(bool p_is_call_local) {
+        is_call_local = p_is_call_local;
     }
 
     void set_context_script(const godot::Ref<godot::Script> &p_script) {
@@ -101,13 +104,6 @@ public:
         return defer_signal_name;
     }
 
-    void set_is_controller_only(bool p_is_controller_only) {
-        is_controller_only = p_is_controller_only;
-    }
-    bool get_is_controller_only() const {
-        return is_controller_only;
-    }
-
     void set_quantizers(const godot::Array &p_quantizers) {
         quantizers = p_quantizers;
     }
@@ -123,12 +119,12 @@ public:
     godot::Ref<NetwMemberConfig> authority();
     godot::Ref<NetwMemberConfig> controller();
     godot::Ref<NetwMemberConfig> any_peer();
+    godot::Ref<NetwMemberConfig> server();
     godot::Ref<NetwMemberConfig> reliable();
     godot::Ref<NetwMemberConfig> unreliable();
     godot::Ref<NetwMemberConfig> call_local();
     godot::Ref<NetwMemberConfig> call_remote();
     godot::Ref<NetwMemberConfig> defer_until(const godot::Signal &p_signal);
-    godot::Ref<NetwMemberConfig> controller_only();
     godot::Ref<NetwMemberConfig> quantize(const godot::Array &p_quantizers);
     godot::Ref<NetwMemberConfig> interpolate(
         const godot::Array &p_interpolators

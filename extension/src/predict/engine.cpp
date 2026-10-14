@@ -18,6 +18,7 @@
 #include "godot/engine.hpp"
 #include "godot/object.hpp"
 #include "godot/spatial_node.hpp"
+#include "netw/colliders.hpp"
 #include "netw/colors.hpp"
 #include "netw/log.hpp"
 #include "netw/object_port.hpp"
@@ -325,24 +326,91 @@ void NetwPredictionEngine::rewire(
     }
 }
 
+namespace {
+
+Object *state_target(
+    const predict::Slot &p_row,
+    Object *p_owner,
+    uint32_t p_field
+) {
+    if (p_field < p_row.state_nodes.size()
+        && p_row.state_nodes[p_field].is_valid()) {
+        return gd::object_of(p_row.state_nodes[p_field]);
+    }
+    return p_owner;
+}
+
+const StringName &state_prop(
+    const predict::Slot &p_row,
+    const predict::FieldCodec &p_codec,
+    uint32_t p_field
+) {
+    return &p_codec == &p_row.wiring.codec
+            && p_field < p_row.state_props.size()
+        ? p_row.state_props[p_field]
+        : p_codec.keys[p_field];
+}
+
+Object *codec_target(
+    const predict::Slot &p_row,
+    const predict::FieldCodec &p_codec,
+    Object *p_owner,
+    uint32_t p_field
+) {
+    return &p_codec == &p_row.wiring.codec
+        ? state_target(p_row, p_owner, p_field)
+        : p_owner;
+}
+
+} // namespace
+
 void NetwPredictionEngine::resolve_reach(
     predict::Slot &p_row,
     const Object *p_owner
 ) {
     p_row.owner_has_state.clear();
     p_row.owner_has_input.clear();
-    for (int at = 0; at < p_row.wiring.codec.count(); ++at) {
+    const uint32_t fields = uint32_t(p_row.wiring.codec.count());
+    p_row.state_nodes.resize(fields);
+    p_row.state_props.resize(fields);
+    for (uint32_t at = 0; at < fields; ++at) {
+        p_row.state_nodes[at] = ObjectID();
+        p_row.state_props[at] = p_row.wiring.codec.keys[at];
+    }
+    for (const predict::StatePart &part : p_row.parts) {
+        for (uint32_t at = part.first;
+             at < part.first + part.count && at < fields;
+             ++at) {
+            const String key = p_row.wiring.codec.keys[at];
+            p_row.state_nodes[at] = part.node;
+            p_row.state_props[at]
+                = StringName(key.substr(part.path.length() + 1));
+        }
+    }
+    Object *owner = const_cast<Object *>(p_owner);
+    store::resolve_columns(owner, p_row.wiring.codec.keys, p_row.state_ports);
+    for (uint32_t at = 0; at < fields; ++at) {
+        Object *target = state_target(p_row, owner, at);
         p_row.owner_has_state.push_back(
-            gd::has_property(p_owner, p_row.wiring.codec.keys[at]) ? 1 : 0
+            gd::has_property(target, p_row.state_props[at]) ? 1 : 0
         );
+        if (target != owner && at < p_row.state_ports.size()) {
+            LocalVector<StringName> bare;
+            bare.push_back(p_row.state_props[at]);
+            LocalVector<store::Column> resolved;
+            store::resolve_columns(target, bare, resolved);
+            p_row.state_ports[at] = resolved[0];
+            if (p_row.state_ports[at].port == store::Port::BODY) {
+                p_row.state_ports[at].port = store::Port::ENGINE;
+                p_row.state_ports[at].body = store::BodyKey::NONE;
+            }
+        }
     }
     for (int at = 0; at < p_row.input_codec.count(); ++at) {
         p_row.owner_has_input.push_back(
             gd::has_property(p_owner, p_row.input_codec.keys[at]) ? 1 : 0
         );
     }
-    Object *owner = const_cast<Object *>(p_owner);
-    store::resolve_columns(owner, p_row.wiring.codec.keys, p_row.state_ports);
     store::resolve_columns(owner, p_row.input_codec.keys, p_row.input_ports);
     p_row.pulled.resize(p_row.wiring.codec.count());
 }
@@ -457,7 +525,8 @@ bool pull_fields(
     const predict::FieldCodec &p_codec,
     const LocalVector<store::Column> &p_ports,
     const LocalVector<uint8_t> &p_reach,
-    predict::StateRow &r_row
+    predict::StateRow &r_row,
+    const predict::Slot *p_slot = nullptr
 ) {
     const uint32_t count = uint32_t(p_codec.count());
     if (r_row.values.size() != count) {
@@ -469,6 +538,18 @@ bool pull_fields(
         r_row.present[at] = 0;
         if (!reaches(p_reach, at)) {
             continue;
+        }
+        if (p_slot != nullptr) {
+            Object *target = state_target(*p_slot, p_owner, at);
+            if (target != p_owner) {
+                if (target != nullptr) {
+                    r_row.set(
+                        int(at),
+                        store::object_value(target, p_slot->state_props[at])
+                    );
+                }
+                continue;
+            }
         }
         const StringName &key = p_codec.keys[at];
         const bool through_body
@@ -506,7 +587,8 @@ bool NetwPredictionEngine::pull_state(predict::Slot &p_row) {
         p_row.wiring.codec,
         p_row.state_ports,
         p_row.owner_has_state,
-        p_row.pulled
+        p_row.pulled,
+        &p_row
     );
 }
 
@@ -530,7 +612,11 @@ bool NetwPredictionEngine::push_state(predict::Slot &p_row) {
                 : 0;
             if (held == rank && reaches(p_row.owner_has_state, at)
                 && values.has(int(at))) {
-                port_set(owner, p_row.wiring.codec.keys[at], values.values[at]);
+                port_set(
+                    state_target(p_row, owner, at),
+                    state_prop(p_row, p_row.wiring.codec, at),
+                    values.values[at]
+                );
             }
         }
     }
@@ -555,7 +641,11 @@ bool NetwPredictionEngine::push_payload(
     for (int at = 0; at < p_codec.count(); ++at) {
         const StringName &key = p_codec.keys[at];
         if (reaches(p_reach, uint32_t(at)) && p_payload.has(key)) {
-            port_set(owner, key, p_payload[key]);
+            port_set(
+                codec_target(p_row, p_codec, owner, uint32_t(at)),
+                state_prop(p_row, p_codec, uint32_t(at)),
+                p_payload[key]
+            );
         }
     }
     return true;
@@ -579,7 +669,11 @@ bool NetwPredictionEngine::push_row(
     const int count = std::min(p_codec.count(), int(p_values.values.size()));
     for (int at = 0; at < count; ++at) {
         if (reaches(p_reach, uint32_t(at)) && p_values.has(at)) {
-            port_set(owner, p_codec.keys[at], p_values.values[uint32_t(at)]);
+            port_set(
+                codec_target(p_row, p_codec, owner, uint32_t(at)),
+                state_prop(p_row, p_codec, uint32_t(at)),
+                p_values.values[uint32_t(at)]
+            );
         }
     }
     return true;
@@ -657,7 +751,7 @@ bool NetwPredictionEngine::restore_predicted(int64_t p_slot, int64_t p_key) {
         || !push_state(*row)) {
         return false;
     }
-    port_sync_transform(row->port.resolve(sys::PREDICTION));
+    colliders::teleport(row->port.resolve(sys::PREDICTION));
     return true;
 }
 
@@ -1798,21 +1892,6 @@ void NetwPredictionEngine::set_joint_refusal_reported(
     predict::Slot *row = mutable_row_of(p_slot);
     if (row != nullptr) {
         row->latches.joint_refusal_reported = p_value;
-    }
-}
-
-bool NetwPredictionEngine::stepper_absence_reported_of(int64_t p_slot) const {
-    const predict::Slot *row = row_of(p_slot);
-    return row == nullptr ? false : row->latches.stepper_absence_reported;
-}
-
-void NetwPredictionEngine::set_stepper_absence_reported(
-    int64_t p_slot,
-    bool p_value
-) {
-    predict::Slot *row = mutable_row_of(p_slot);
-    if (row != nullptr) {
-        row->latches.stepper_absence_reported = p_value;
     }
 }
 
@@ -4086,8 +4165,7 @@ int NetwPredictionEngine::settle_correction(int64_t p_slot, int p_declared) {
         sys::PREDICTION,
         "'%s' is a physics body on SCHEDULE_FRAME, which cannot replay, so "
         "it uses NetwPrediction.RECOVERY_POLICY_REBASE_RECOVER. Use "
-        "SCHEDULE_STEPPED with a stepper to get "
-        "RECOVERY_POLICY_REBASE_REPLAY.",
+        "SCHEDULE_STEPPED to get RECOVERY_POLICY_REBASE_REPLAY.",
         named.is_empty() ? "an entity" : named.utf8().get_data()
     );
     return correction;
@@ -5481,8 +5559,7 @@ void NetwPredictionEngine::report_joint_refusal(int64_t p_slot) {
         "NetwPrediction.RECONCILE_JOINT needs every entity in the group of "
         "%s to replay a tick, and %s cannot, so the group runs "
         "NetwPrediction.RECONCILE_INDEPENDENT. Give each one a "
-        "NetwSimulation.step on SCHEDULE_TICK, or use "
-        "SCHEDULE_STEPPED with a stepper.",
+        "NetwSimulation.step on SCHEDULE_TICK, or use SCHEDULE_STEPPED.",
         quoted_entity(owner_entity(p_slot)),
         String(", ").join(refusals)
     );
@@ -5586,8 +5663,15 @@ bool NetwPredictionEngine::slot_has_stepper(int64_t p_slot) const {
     if (host == nullptr || seated.is_null()) {
         return false;
     }
-    return host->predict_get_stepper(host->entity_space_of(seated).space)
-        .is_valid();
+    const NetwMultiplayer::EntitySpace held = host->entity_space_of(seated);
+    return host->predict_space_can_step(held.space, held.dimension);
+}
+
+bool NetwPredictionEngine::slot_steps(int64_t p_slot) const {
+    NetwMultiplayer *host = core();
+    const Ref<NetwEntity> seated = owner_entity(p_slot);
+    return host != nullptr && seated.is_valid()
+        && host->predict_entity_can_step(seated);
 }
 
 int64_t NetwPredictionEngine::replay_basis(
@@ -5608,16 +5692,20 @@ bool NetwPredictionEngine::open_space_replay(
         || row->config.schedule != int(Schedule::STEPPED)) {
         return false;
     }
-    r_replay.host = host;
-    r_replay.space = host->entity_space_of(seated).space;
-    r_replay.stepper = host->predict_get_stepper(r_replay.space);
-    if (r_replay.stepper.is_null()) {
+    const NetwMultiplayer::EntitySpace held = host->entity_space_of(seated);
+    if (!host->predict_space_can_step(held.space, held.dimension)) {
         return false;
     }
+    r_replay.host = host;
+    r_replay.space = held.space;
+    r_replay.dimension = held.dimension;
+    r_replay.stepper = host->predict_get_stepper(r_replay.space);
     LocalVector<RID> replayed;
     replayed.push_back(seated->get_rid_handle());
     host->sim_hold_poses(r_replay.space, replayed, r_replay.bystanders);
-    r_replay.stepper->restore(r_replay.space, p_basis);
+    if (r_replay.stepper.is_valid()) {
+        r_replay.stepper->restore(r_replay.space, p_basis);
+    }
     return true;
 }
 
@@ -5626,10 +5714,15 @@ void NetwPredictionEngine::step_space_replay(
     double p_delta,
     int64_t p_tick
 ) {
-    if (r_replay.stepper.is_null() || r_replay.host == nullptr) {
+    if (r_replay.host == nullptr) {
         return;
     }
-    r_replay.host->predict_step_space(r_replay.space, p_delta, p_tick);
+    r_replay.host->predict_step_space(
+        r_replay.space,
+        p_delta,
+        p_tick,
+        r_replay.dimension
+    );
 }
 
 void NetwPredictionEngine::close_space_replay(SpaceReplay &r_replay) {
@@ -5641,31 +5734,44 @@ int NetwPredictionEngine::resolved_schedule(int64_t p_slot, int p_declared) {
     if (p_declared != int(NetwSimulation::SCHEDULE_STEPPED)) {
         return p_declared;
     }
-    if (slot_has_stepper(p_slot)) {
-        set_stepper_absence_reported(p_slot, false);
-        return p_declared;
-    }
-    return int(NetwSimulation::SCHEDULE_FRAME);
+    return slot_steps(p_slot) ? p_declared
+                              : int(NetwSimulation::SCHEDULE_FRAME);
 }
 
 void NetwPredictionEngine::report_stepper_absence(int64_t p_slot) {
-    if (stepper_absence_reported_of(p_slot)) {
-        return;
-    }
-    set_stepper_absence_reported(p_slot, true);
     NetwMultiplayer *host = core();
     const Ref<NetwEntity> seated = owner_entity(p_slot);
-    const RID space = host != nullptr && seated.is_valid()
-        ? host->entity_space_of(seated).space
-        : RID();
-    NETW_ERROR(
+    Node *owner = seated.is_valid() ? seated->get_owner() : nullptr;
+    if (host == nullptr || owner == nullptr) {
+        return;
+    }
+    if (slot_has_stepper(p_slot)) {
+        Node *kinematic = colliders::first_kinematic_body(owner);
+        if (kinematic == nullptr
+            || !colliders::first_report(
+                kinematic,
+                colliders::Fault::STEPPED_KINEMATIC
+            )) {
+            return;
+        }
+        NETW_WARN(
+            sys::PREDICTION,
+            "'%s' is a %s under SCHEDULE_STEPPED, and this Godot build cannot "
+            "restore it without moving it. It runs SCHEDULE_FRAME.",
+            String(kinematic->get_name()),
+            kinematic->get_class()
+        );
+        return;
+    }
+    if (!colliders::first_report(owner, colliders::Fault::STEPPED_NO_STEP)) {
+        return;
+    }
+    NETW_WARN(
         sys::PREDICTION,
-        "'%s' uses NetwSimulation.SCHEDULE_STEPPED but physics "
-        "space %d has no stepper, so it runs SCHEDULE_FRAME. Install one "
-        "with NetwMultiplayer.predict_stepper_install, or choose another "
-        "schedule.",
-        seated.is_valid() ? String(seated->get_name()) : String("an entity"),
-        int64_t(space.get_id())
+        "'%s' uses SCHEDULE_STEPPED, and this Godot build cannot step physics "
+        "on demand, so it runs SCHEDULE_FRAME. Install a NetwPhysicsStepper "
+        "with NetwSession.install_physics_stepper.",
+        String(owner->get_name())
     );
 }
 
@@ -5680,7 +5786,7 @@ bool NetwPredictionEngine::slot_is_steppable(int64_t p_slot) const {
         return true;
     }
     return handle->get_schedule() == NetwSimulation::SCHEDULE_STEPPED
-        && slot_has_stepper(p_slot);
+        && slot_steps(p_slot);
 }
 
 void NetwPredictionEngine::refresh_tape_diagnostics(int64_t p_slot) {
@@ -6182,7 +6288,7 @@ void NetwPredictionEngine::admit_simulated_rows(
         )
     ) {
         if (predict::Slot *held = mutable_row_of(p_slot)) {
-            port_sync_transform(held->port.resolve(sys::PREDICTION));
+            colliders::teleport(held->port.resolve(sys::PREDICTION));
         }
         if (row_of(p_slot) != nullptr) {
             mark_carry_dirty(p_slot, drive_frontier(p_slot) + 1);
@@ -7178,7 +7284,7 @@ bool NetwPredictionEngine::apply_restore(
             }
         }
         if (predict::Slot *row = mutable_row_of(p_slot)) {
-            port_sync_transform(row->port.resolve(sys::PREDICTION));
+            colliders::teleport(row->port.resolve(sys::PREDICTION));
         }
     }
     record_restore(
@@ -7234,7 +7340,7 @@ bool NetwPredictionEngine::apply_restore_row(
             }
         }
         if (predict::Slot *held = mutable_row_of(p_slot)) {
-            port_sync_transform(held->port.resolve(sys::PREDICTION));
+            colliders::teleport(held->port.resolve(sys::PREDICTION));
         }
     }
     record_restore_row(
@@ -10059,6 +10165,53 @@ LocalVector<predict::FieldDecl> field_declaration(
     return out;
 }
 
+StringName part_key(const String &p_path, const StringName &p_key) {
+    return StringName(p_path + String(":") + String(p_key));
+}
+
+void declare_parts(
+    NetwEntity *p_entity,
+    const PropertyBindingPtr &p_state,
+    repl::BindingBook *p_book,
+    LocalVector<predict::FieldDecl> &r_declared,
+    LocalVector<predict::StatePart> &r_parts
+) {
+    NetwEntityRecord *record
+        = p_entity != nullptr ? p_entity->get_record() : nullptr;
+    Node *root = p_state->node();
+    if (record == nullptr || root == nullptr || p_book == nullptr) {
+        return;
+    }
+    for (const NetwEntityRecord::HeldBinding &held :
+         record->get_held_bindings()) {
+        repl::PropertyBinding *child = p_book->live(held.binding);
+        if (child == nullptr || child == p_state || child->node() == nullptr) {
+            continue;
+        }
+        const repl::PropertySet *declared = child->get_set();
+        if (declared == nullptr
+            || declared->get_record() != repl::SET_RECORD_STATE) {
+            continue;
+        }
+        predict::StatePart part;
+        part.binding = child->id;
+        part.node = child->node()->get_instance_id();
+        part.path = String(root->get_path_to(child->node()));
+        part.first = r_declared.size();
+        for (predict::FieldDecl decl : field_declaration(child)) {
+            decl.key = part_key(part.path, decl.key);
+            if (decl.carry_channel != StringName()) {
+                decl.carry_channel = part_key(part.path, decl.carry_channel);
+            }
+            r_declared.push_back(decl);
+        }
+        part.count = r_declared.size() - part.first;
+        if (part.count > 0) {
+            r_parts.push_back(part);
+        }
+    }
+}
+
 } // namespace
 
 int64_t NetwPredictionEngine::current_tick() const {
@@ -10094,11 +10247,14 @@ int NetwPredictionEngine::adopt_declaration(
     bool p_witness
 ) {
     const int64_t slot = slot_of(p_entity);
-    const LocalVector<predict::FieldDecl> declared = field_declaration(p_state);
+    LocalVector<predict::FieldDecl> declared = field_declaration(p_state);
     if (slot < 0 || declared.is_empty()) {
         return -1;
     }
+    LocalVector<predict::StatePart> parts;
+    declare_parts(p_entity.ptr(), p_state, binding_book, declared, parts);
     rewire(slot, declared, field_declaration(p_input));
+    set_parts(slot, parts);
 
     Node *node = p_state->node();
     NetwPrediction *handle = Object::cast_to<NetwPrediction>(handle_of(slot));
@@ -12592,7 +12748,102 @@ bool NetwPredictionEngine::read_arrival(
     predict::StateRow &r_row
 ) const {
     const predict::Slot *row = row_of(p_slot);
-    return row != nullptr && p_arrival.read(row->wiring.codec, r_row);
+    if (row == nullptr || !p_arrival.read(row->wiring.codec, r_row)) {
+        return false;
+    }
+    read_parts(*row, r_row);
+    return true;
+}
+
+void NetwPredictionEngine::read_parts(
+    const predict::Slot &p_row,
+    predict::StateRow &r_row
+) const {
+    NetwMultiplayer *host = p_row.parts.is_empty() ? nullptr : core();
+    if (host == nullptr) {
+        return;
+    }
+    const store::World &world = host->store();
+    const uint32_t fields
+        = std::min(uint32_t(p_row.wiring.codec.count()), r_row.values.size());
+    for (const predict::StatePart &part : p_row.parts) {
+        const store::RowAddress at = world.row_of(part.binding, 0);
+        if (!at.valid()) {
+            continue;
+        }
+        const store::Table &table = world.table(at.table);
+        if (at.row >= table.row_count() || !table.holds_values(at.row)) {
+            continue;
+        }
+        const int columns = table.schema.column_count();
+        for (uint32_t field = part.first;
+             field < part.first + part.count && field < fields;
+             ++field) {
+            const StringName prop = StringName(
+                String(p_row.wiring.codec.keys[field])
+                    .substr(part.path.length() + 1)
+            );
+            for (int column = 0; column < columns; ++column) {
+                if (table.schema.at(column)->key == prop) {
+                    r_row.set(
+                        int(field),
+                        table.read_value(at.row, uint32_t(column))
+                    );
+                    break;
+                }
+            }
+        }
+    }
+}
+
+void NetwPredictionEngine::set_parts(
+    int64_t p_slot,
+    const LocalVector<predict::StatePart> &p_parts
+) {
+    predict::Slot *row = mutable_row_of(p_slot);
+    if (row == nullptr) {
+        return;
+    }
+    const predict::Feed released;
+    for (const predict::StatePart &held : row->parts) {
+        bool kept = false;
+        for (const predict::StatePart &part : p_parts) {
+            kept = kept || part.binding == held.binding;
+        }
+        repl::PropertyBinding *dropped
+            = kept ? nullptr : binding_by_id(held.binding);
+        if (dropped != nullptr) {
+            dropped->apply_state_feed(released);
+        }
+    }
+    row->parts = p_parts;
+    if (row->port.bound()) {
+        resolve_reach(*row, resolve_owner(*row));
+    }
+}
+
+void NetwPredictionEngine::apply_part_feed(
+    int64_t p_slot,
+    const predict::Feed &p_feed
+) {
+    const predict::Slot *row = row_of(p_slot);
+    if (row == nullptr) {
+        return;
+    }
+    predict::Feed gated;
+    gated.state_write_gate = p_feed.state_listener != predict::Listener::STATE
+        || p_feed.state_write_gate;
+    for (const predict::StatePart &part : row->parts) {
+        repl::PropertyBinding *binding = binding_by_id(part.binding);
+        if (binding != nullptr) {
+            binding->apply_state_feed(gated);
+        }
+    }
+}
+
+bool NetwPredictionEngine::defers_arrival(int64_t p_slot) const {
+    const predict::Slot *row = row_of(p_slot);
+    return row != nullptr && !row->parts.is_empty();
 }
 
 void NetwPredictionEngine::take_received(
@@ -12605,7 +12856,9 @@ void NetwPredictionEngine::take_received(
         return;
     }
     if (p_arrival != nullptr) {
-        p_arrival->read(row->wiring.codec, row->received);
+        if (p_arrival->read(row->wiring.codec, row->received)) {
+            read_parts(*row, row->received);
+        }
     } else if (p_held != nullptr) {
         row->received = *p_held;
     } else {
@@ -12964,7 +13217,6 @@ void NetwPredictionEngine::reset_for_rewire(
     set_invalid_witness_reported(p_slot, false);
     set_invalid_command_predictor_reported(p_slot, false);
     set_joint_refusal_reported(p_slot, false);
-    set_stepper_absence_reported(p_slot, false);
     clear_authority_witness_classes(p_slot);
     drop_deferred_operator(p_slot);
     set_raw_fingerprints(p_slot, p_raw_fingerprints);

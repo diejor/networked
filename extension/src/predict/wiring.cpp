@@ -169,6 +169,36 @@ bool zero_of(int p_type, Variant &r_zero) {
         case Variant::DICTIONARY:
             r_zero = Dictionary();
             return true;
+        case Variant::PACKED_BYTE_ARRAY:
+            r_zero = PackedByteArray();
+            return true;
+        case Variant::PACKED_INT32_ARRAY:
+            r_zero = PackedInt32Array();
+            return true;
+        case Variant::PACKED_INT64_ARRAY:
+            r_zero = PackedInt64Array();
+            return true;
+        case Variant::PACKED_FLOAT32_ARRAY:
+            r_zero = PackedFloat32Array();
+            return true;
+        case Variant::PACKED_FLOAT64_ARRAY:
+            r_zero = PackedFloat64Array();
+            return true;
+        case Variant::PACKED_STRING_ARRAY:
+            r_zero = PackedStringArray();
+            return true;
+        case Variant::PACKED_VECTOR2_ARRAY:
+            r_zero = PackedVector2Array();
+            return true;
+        case Variant::PACKED_VECTOR3_ARRAY:
+            r_zero = PackedVector3Array();
+            return true;
+        case Variant::PACKED_COLOR_ARRAY:
+            r_zero = PackedColorArray();
+            return true;
+        case Variant::PACKED_VECTOR4_ARRAY:
+            r_zero = PackedVector4Array();
+            return true;
         default:
             return false;
     }

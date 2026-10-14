@@ -14,6 +14,7 @@
 #include "netw/api/entity.hpp"
 #include "netw/api/member_config.hpp"
 #include "netw/api/sync_model.hpp"
+#include "netw/predict/arrival.hpp"
 #include "netw/repl/property_binding.hpp"
 #include "netw/repl/property_set.hpp"
 #include "netw/replication_send.hpp"
@@ -111,6 +112,24 @@ private:
     int64_t carrier_bits = 0;
     int64_t datagram_tick = -1;
     int64_t datagram_seq = -1;
+
+    struct HeldDelivery {
+        int64_t slot = -1;
+        predict::Listener listener = predict::Listener::NONE;
+        uint64_t binding = 0;
+        int64_t tick = -1;
+        int64_t ack = -1;
+        bool whole = true;
+    };
+    bool datagram_open = false;
+    godot::LocalVector<HeldDelivery> held_deliveries;
+    void hold_delivery(
+        int64_t p_slot,
+        predict::Listener p_listener,
+        uint64_t p_binding,
+        const predict::Arrival &p_arrival
+    );
+
     godot::Node *stage_node = nullptr;
     godot::StringName stage_property;
 
@@ -283,6 +302,7 @@ public:
         int64_t p_seq
     );
     void open_datagram(int64_t p_base_tick, int64_t p_seq = -1);
+    void close_datagram();
 
     static godot::Dictionary gather_payload(
         godot::Node *p_node,

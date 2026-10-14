@@ -157,6 +157,7 @@ id   name                    kind    rel fresh del agg direction  payload
 45   LIFECYCLE_DECISION      session R   -     fit -   srv -> own planned
 46   CLAIM_IMAGE             routed  U   fresh fit yes either     planned
 47   SESSION_RESYNC          session R   -     fit -   cli -> srv planned
+48   LAGCOMP_CONFIRM         session R   -     fit -   srv -> cli planned
 100+ user channels           routed  -   -     -   -   either     raw
 ```
 
@@ -722,15 +723,22 @@ A clock frame is refused whole and leaves the local calibration as it was.
 
 ---
 
-## 13. The lag compensation denial
+## 13. The lag compensation denial and confirmation
 
 ```text
-LAGCOMP_DENY  [key string]
+LAGCOMP_DENY     [key string]
+LAGCOMP_CONFIRM  [key string]
 ```
 
 `key` names the effect the server refused, and the receiver discards exactly
 that effect's local prediction. A denial that does not decode whole discards
 nothing.
+
+A confirmation names an effect the server ran without denying it and without
+binding a node to it, and the receiver keeps that effect's local prediction.
+An effect that binds a node is confirmed by that node's spawn. A confirmation
+that does not decode whole, or that comes from a peer other than the server,
+keeps nothing.
 
 ---
 

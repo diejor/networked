@@ -154,6 +154,7 @@ struct NetwMultiplayer {
         WRITE_POLICY_AUTHORITY = NetwMemberConfig::POLICY_AUTHORITY,
         WRITE_POLICY_CONTROLLER = NetwMemberConfig::POLICY_CONTROLLER,
         WRITE_POLICY_ANY_PEER = NetwMemberConfig::POLICY_ANY_PEER,
+        WRITE_POLICY_SERVER = NetwMemberConfig::POLICY_SERVER,
     };
 
     enum ColumnParam {

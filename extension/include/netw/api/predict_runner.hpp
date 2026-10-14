@@ -32,6 +32,7 @@ class NetwPredictRunner {
     void rebuild_sorted();
     bool resolve_pool_order();
     void step_stepped_spaces(const NetwPredictTiming &p_timing);
+    void run_held_recoveries();
 
 public:
     void seat_core(NetwMultiplayer *p_core);

@@ -277,9 +277,12 @@ TEST_CASE(
 
     const ArchetypeAxes solver = archetype_axes(int(Archetype::SOLVER_BODY));
     CHECK(solver.declared);
-    NETW_CHECK_EQ(solver.schedule, int(Schedule::FRAME));
+    NETW_CHECK_EQ(
+        solver.schedule,
+        int(netw::NetwSimulation::SCHEDULE_AUTO)
+    );
     NETW_CHECK_EQ(solver.missing_policy, int(MissingInput::REPEAT_LAST));
-    NETW_CHECK_EQ(solver.recovery_policy, int(RecoveryPolicy::REBASE_RECOVER));
+    NETW_CHECK_EQ(solver.recovery_policy, int(RecoveryPolicy::AUTO));
     CHECK(solver.declares_snap_restore);
     NETW_CHECK_EQ(solver.snap_restore, int(RestoreMode::EXTRAPOLATED));
     CHECK(solver.declares_teleport_threshold);

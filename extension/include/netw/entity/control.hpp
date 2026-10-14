@@ -77,6 +77,7 @@ public:
         AUTHORITY = 0,
         CONTROLLER = 1,
         ANY_PEER = 2,
+        SERVER = 3,
     };
 
     enum Verdict {

@@ -11,7 +11,8 @@ namespace Networked;
 /// <remarks>
 /// Shows the result of an action right away on the client that asked for it,
 /// then keeps or removes it once the server answers. Create one with
-/// <see cref="Netw.Action"/>.
+/// <see cref="Netw.Action"/> on every peer, the server included. Only the
+/// <see cref="NetwEntity.Controller"/> of the method's entity can request it.
 /// <code>
 /// @onready var place_bomb := Netw.action(_place_bomb)
 ///
@@ -27,6 +28,10 @@ namespace Networked;
 ///     ctx.bind(bomb)
 ///     $Bombs.add_child(bomb)
 /// </code>
+/// <para>
+/// The server can judge a request against the world the client saw by passing
+/// <see cref="NetwActionContext.ViewTick"/> to <see cref="Netw.Rewind"/>.
+/// </para>
 /// </remarks>
 public sealed class NetwAction : NetwRefCounted
 {
@@ -65,7 +70,8 @@ public sealed class NetwAction : NetwRefCounted
     }
 
     /// <summary>
-    /// Emitted when the server accepted the action.
+    /// Emitted when the server ran the action without calling
+    /// <see cref="NetwActionContext.Deny"/>.
     /// </summary>
     public event Action Confirmed
     {
@@ -81,7 +87,8 @@ public sealed class NetwAction : NetwRefCounted
     }
 
     /// <summary>
-    /// Emitted when the server denied the action or did not answer in time.
+    /// Emitted when the server called <see cref="NetwActionContext.Deny"/>, or
+    /// did not answer within <see cref="NetwAction.TimeoutTicks"/>.
     /// </summary>
     public event Action Denied
     {

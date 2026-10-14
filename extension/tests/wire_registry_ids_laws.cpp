@@ -60,6 +60,7 @@ const Declared TRANSCRIBED[] = {
     {"LIFECYCLE_DECISION", 45},
     {"CLAIM_IMAGE", 46},
     {"SESSION_RESYNC", 47},
+    {"LAGCOMP_CONFIRM", 48},
 };
 
 constexpr int TRANSCRIBED_COUNT

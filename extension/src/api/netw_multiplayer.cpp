@@ -5171,6 +5171,18 @@ void NetwMultiplayer::handle_deny(
     lagcomp_effect_discard(denied.key);
 }
 
+void NetwMultiplayer::handle_confirm(
+    const PackedByteArray &p_payload,
+    int64_t p_sender
+) {
+    session::ConfirmKey confirmed;
+    if (p_sender != SERVER_PEER
+        || !session::frame_read(p_payload, confirmed)) {
+        return;
+    }
+    lagcomp_effect_adopt(confirmed.key);
+}
+
 bool NetwMultiplayer::is_coroutine(const Variant &p_value) {
     if (p_value.get_type() != Variant::OBJECT) {
         return false;

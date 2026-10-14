@@ -98,7 +98,6 @@ TEST_CASE(
         int(NetwMemberConfig::TRANSFER_RELIABLE)
     );
     CHECK_FALSE(config->get_is_call_local());
-    CHECK_FALSE(config->get_is_controller_only());
     CHECK(config->get_defer_signal_name().is_empty());
     CHECK(config->get_quantizers().is_empty());
     CHECK(config->get_interpolators().is_empty());
@@ -196,28 +195,26 @@ TEST_CASE(
     CHECK(bool(config->authority() == config));
     CHECK(bool(config->controller() == config));
     CHECK(bool(config->any_peer() == config));
+    CHECK(bool(config->server() == config));
     CHECK(bool(config->reliable() == config));
     CHECK(bool(config->unreliable() == config));
     CHECK(bool(config->call_local() == config));
     CHECK(bool(config->call_remote() == config));
-    CHECK(bool(config->controller_only() == config));
     CHECK(bool(config->quantize(one(make_quantizer())) == config));
     CHECK(bool(config->interpolate(one(make_interpolator(0.1))) == config));
     CHECK(bool(config->quantize(Array()) == config));
 }
 
 TEST_CASE(
-    "[Networked][Session][Hosted] MC8 controller_only and defer_until write "
-    "the two facts a receiver reads before it runs a call, and the gate is "
-    "the signal's name rather than the Signal itself"
+    "[Networked][Session][Hosted] MC8 defer_until writes the gate a receiver "
+    "reads before it runs a call, and the gate is the signal's name rather "
+    "than the Signal itself"
 ) {
     Object *emitter = memnew(Object);
     const Ref<NetwMemberConfig> config = make_config();
 
-    config->controller_only();
     config->defer_until(Signal(emitter, StringName("ready")));
 
-    CHECK(config->get_is_controller_only());
     CHECK(bool(config->get_defer_signal_name() == StringName("ready")));
     memdelete(emitter);
 }

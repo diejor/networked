@@ -96,6 +96,8 @@ bool Control::policy_admits(
             return p_sender == p_controller;
         case WritePolicy::ANY_PEER:
             return true;
+        case WritePolicy::SERVER:
+            return p_sender == SERVER_PEER;
     }
     return false;
 }

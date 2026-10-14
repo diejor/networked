@@ -3,6 +3,7 @@
   "engines": {
     "normal": {
       "capabilities": {
+        "kinematic_flush": false,
         "space_step": false
       },
       "description": "Upstream Godot. The engine the published addon targets.",
@@ -32,9 +33,10 @@
     },
     "stepping": {
       "capabilities": {
+        "kinematic_flush": true,
         "space_step": true
       },
-      "description": "albertok/godot, the stepping-physics fork the rocket-league lane verifies against.",
+      "description": "diejor/godot, the stepping and kinematic-flush fork the rocket-league lane verifies against.",
       "release": {
         "assets": {
           "linux.x86_64": "Godot_v4.7-stable_linux.x86_64.zip"
@@ -42,17 +44,17 @@
         "entrypoints": {
           "linux.x86_64": "godot.linuxbsd.editor.x86_64"
         },
-        "owner": "albertok",
+        "owner": "diejor",
         "repo": "godot",
         "sha256": {
-          "linux.x86_64": "30a36a682c7956deb8d05ed96c2d5536f765bfb7012d8425ceeb7ff9ead793b5"
+          "linux.x86_64": "ee51443844ef4ecfc53e233ab8631f7a05760858f8c8483b7f109c449b17dc48"
         },
-        "tag": "v4.7.2-stepping-physics"
+        "tag": "v4.7.2-networked"
       },
       "source": {
-        "branch": "4.7.2-stepphysics",
-        "ref": "bf04cdc95391fe84f3f5d9f098e1f3a294e9c0ca",
-        "repo": "https://github.com/albertok/godot"
+        "branch": "4.7.2-networked",
+        "ref": "80d802f701893bf8d0d9533b696cd715deb20a1d",
+        "repo": "https://github.com/diejor/godot"
       },
       "templates_dir": "4.7.2.stable",
       "version": "4.7.2-stable"

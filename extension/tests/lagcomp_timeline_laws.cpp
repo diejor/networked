@@ -28,6 +28,17 @@ double x_of(const Dictionary &p_row) {
     return double(Vector2(p_row[StringName("position")]).x);
 }
 
+int moved_by(
+    NetwLagCompCore &r_history,
+    const PackedInt64Array &p_slots,
+    int64_t p_tick,
+    const Callable &p_body
+) {
+    int moved = 0;
+    r_history.rewind(p_slots, p_tick, p_body, &moved);
+    return moved;
+}
+
 TEST_CASE(
     "[Networked][LagComp][Timeline] a view tick between recordings reads the "
     "state that was standing at it"
@@ -94,7 +105,7 @@ TEST_CASE(
     PackedInt64Array slots;
     slots.push_back(moved);
     NETW_CHECK_EQ(
-        history.rewind(slots, 14, Callable(body, StringName("observe_self"))),
+        moved_by(history,slots, 14, Callable(body, StringName("observe_self"))),
         1
     );
 
@@ -130,7 +141,7 @@ TEST_CASE(
     PackedInt64Array slots;
     slots.push_back(slot);
     NETW_CHECK_EQ(
-        history.rewind(slots, 14, Callable(body, StringName("observe_self"))),
+        moved_by(history,slots, 14, Callable(body, StringName("observe_self"))),
         1
     );
 
@@ -162,7 +173,7 @@ TEST_CASE(
     PackedInt64Array slots;
     slots.push_back(slot);
     NETW_CHECK_EQ(
-        history.rewind(slots, 14, Callable(body, StringName("observe_self"))),
+        moved_by(history,slots, 14, Callable(body, StringName("observe_self"))),
         1
     );
 
@@ -191,7 +202,7 @@ TEST_CASE(
     slots.push_back(empty);
     slots.push_back(empty + 9000);
     NETW_CHECK_EQ(
-        history.rewind(
+        moved_by(history,
             slots,
             14,
             Callable(unrecorded, StringName("observe_self"))
@@ -218,7 +229,7 @@ TEST_CASE(
 
     PackedInt64Array slots;
     slots.push_back(slot);
-    NETW_CHECK_EQ(history.rewind(slots, 14, Callable()), 0);
+    NETW_CHECK_EQ(moved_by(history,slots, 14, Callable()), 0);
     CHECK(!history.timeline_owner_bound(slot));
 }
 

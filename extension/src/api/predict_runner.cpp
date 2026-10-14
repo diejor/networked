@@ -178,8 +178,30 @@ const LocalVector<NetwPredictSlotEngine *> &NetwPredictRunner::phase(
     return phase_roster;
 }
 
+void NetwPredictRunner::run_held_recoveries() {
+    if (sort_dirty) {
+        rebuild_sorted();
+    }
+    LocalVector<int64_t> due;
+    due.reserve(sorted.size());
+    for (NetwPredictSlotEngine *engine : sorted) {
+        if (engine != nullptr && engine->holds_recovery()) {
+            due.push_back(engine->native_slot());
+        }
+    }
+    for (const int64_t slot : due) {
+        for (NetwPredictSlotEngine *engine : engines) {
+            if (engine != nullptr && engine->native_slot() == slot) {
+                engine->run_held_recovery();
+                break;
+            }
+        }
+    }
+}
+
 void NetwPredictRunner::tick_step(const NetwPredictTiming &p_timing) {
     NETW_ZONE_NC("Predict tick", colors::PREDICTION);
+    run_held_recoveries();
     {
         const LocalVector<NetwPredictSlotEngine *> &roster
             = phase(NetwPredictionEngine::PASS_ISLAND_TICK);
@@ -248,9 +270,8 @@ void NetwPredictRunner::step_stepped_spaces(const NetwPredictTiming &p_timing) {
         }
         const NetwMultiplayer::EntitySpace held
             = service->entity_space_of(engine->seated_entity());
-        const Ref<NetwPhysicsStepper> stepper
-            = service->predict_get_stepper(held.space);
-        if (stepper.is_null() || driven.has(held.space.get_id())) {
+        if (!service->predict_space_can_step(held.space, held.dimension)
+            || driven.has(held.space.get_id())) {
             continue;
         }
         driven.push_back(held.space.get_id());
@@ -258,7 +279,8 @@ void NetwPredictRunner::step_stepped_spaces(const NetwPredictTiming &p_timing) {
         service->predict_step_space(
             held.space,
             p_timing.get_ticktime(),
-            p_timing.get_tick()
+            p_timing.get_tick(),
+            held.dimension
         );
     }
     service->predict_release_empty_holds();
@@ -270,7 +292,8 @@ void NetwPredictRunner::step_stepped_spaces(const NetwPredictTiming &p_timing) {
         service->predict_step_space(
             space,
             p_timing.get_ticktime(),
-            p_timing.get_tick()
+            p_timing.get_tick(),
+            0
         );
     }
 }
@@ -309,6 +332,7 @@ void NetwPredictRunner::before_frame_step() {
             engine->finalize_frame_state();
         }
     }
+    run_held_recoveries();
 }
 
 } // namespace netw

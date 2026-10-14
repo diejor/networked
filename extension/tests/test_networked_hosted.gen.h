@@ -106,6 +106,7 @@
 #include "predict_codec_laws.cpp"
 #include "predict_column_compare_laws.cpp"
 #include "predict_compare_laws.cpp"
+#include "predict_container_state_laws.cpp"
 #include "predict_declaration_laws.cpp"
 #include "predict_domain_laws.cpp"
 #include "predict_drive_laws.cpp"

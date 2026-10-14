@@ -109,6 +109,7 @@ func _init() -> void:
 	add_child(shape)
 	var e := Netw.configure_entity(self)
 	e.prediction.archetype = NetwPrediction.ARCHETYPE_SOLVER_BODY
+	e.simulation.schedule = NetwSimulation.SCHEDULE_FRAME
 	Netw.configure_property(self, &"position").state()
 )";
 

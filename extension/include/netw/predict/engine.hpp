@@ -207,6 +207,7 @@ class NetwPredictionEngine {
     struct SpaceReplay {
         NetwMultiplayer *host = nullptr;
         godot::RID space;
+        int dimension = 0;
         godot::Ref<NetwPhysicsStepper> stepper;
         godot::LocalVector<sim::HeldPose> bystanders;
     };
@@ -309,6 +310,8 @@ class NetwPredictionEngine {
         const godot::LocalVector<uint8_t> &p_reach,
         const predict::StateRow &p_values
     );
+    void read_parts(const predict::Slot &p_row, predict::StateRow &r_row)
+        const;
 
 public:
     NetwPredictionEngine() = default;
@@ -392,6 +395,12 @@ public:
 
     bool bind_owner(int64_t p_slot, godot::Object *p_owner);
     void unbind_owner(int64_t p_slot);
+    void set_parts(
+        int64_t p_slot,
+        const godot::LocalVector<predict::StatePart> &p_parts
+    );
+    void apply_part_feed(int64_t p_slot, const predict::Feed &p_feed);
+    bool defers_arrival(int64_t p_slot) const;
     bool owner_bound(int64_t p_slot) const;
     bool owner_solves(int64_t p_slot) const;
 
@@ -555,8 +564,6 @@ public:
     bool joint_refusal_reported_of(int64_t p_slot) const;
     void set_joint_refusal_reported(int64_t p_slot, bool p_value);
     void report_joint_refusal(int64_t p_slot);
-    bool stepper_absence_reported_of(int64_t p_slot) const;
-    void set_stepper_absence_reported(int64_t p_slot, bool p_value);
     int resolved_schedule(int64_t p_slot, int p_declared);
     void report_stepper_absence(int64_t p_slot);
     bool island_gap_reported_of(int64_t p_slot) const;
@@ -1192,6 +1199,7 @@ public:
     void follow_relay_subscription(int64_t p_slot, bool p_selected);
     void resend_relay_subscription(int64_t p_slot);
     bool slot_has_stepper(int64_t p_slot) const;
+    bool slot_steps(int64_t p_slot) const;
     bool slot_is_steppable(int64_t p_slot) const;
     void refresh_tape_diagnostics(int64_t p_slot);
     int64_t refresh_owner_ack_age(int64_t p_slot);

@@ -93,6 +93,7 @@
 		</member>
 		<member name="visual_root" type="NodePath" setter="set_visual_root" getter="get_visual_root" default="NodePath(&quot;&quot;)">
 			The child node that receives the smoothed values. Position and rotation are written in global space, and other properties are written as they are. A visual with [member CanvasItem.top_level] set receives every property in global space.
+			The written values replace the visual's own position and rotation, so point this at a plain node and put a model that needs one under it.
 		</member>
 	</members>
 	<constants>

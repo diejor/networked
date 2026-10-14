@@ -49,16 +49,7 @@ void NetwPhysicsStepper::restore(const RID &p_space, int64_t p_tick) {
 }
 
 void NetwPhysicsStepper::flush_queries(const RID &p_space, int p_dimension) {
-    Object *server = nullptr;
-    if (p_dimension == 3) {
-        server = PhysicsServer3D::get_singleton();
-    } else if (p_dimension == 2) {
-        server = PhysicsServer2D::get_singleton();
-    }
-    const StringName flush("space_flush_queries");
-    if (server != nullptr && server->has_method(flush)) {
-        server->call(flush, p_space);
-    }
+    gd::flush_space_queries(p_space, p_dimension);
 }
 
 } // namespace netw

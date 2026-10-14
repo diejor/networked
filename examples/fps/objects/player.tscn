@@ -1,0 +1,163 @@
+[gd_scene format=3 uid="uid://dl2ed4gkybggf"]
+
+[ext_resource type="Script" uid="uid://cu47grjp072jk" path="res://examples/fps/objects/player.gd" id="1_ffboj"]
+[ext_resource type="Resource" uid="uid://cu2gtxlcmbb34" path="res://examples/fps/weapons/blaster-repeater.tres" id="2_6epbw"]
+[ext_resource type="Texture2D" uid="uid://8ggihh27mlrr" path="res://examples/fps/sprites/blob_shadow.png" id="2_b0fo8"]
+[ext_resource type="Script" uid="uid://dg01pkkc1c5vd" path="res://examples/fps/scripts/weapon.gd" id="2_i825w"]
+[ext_resource type="Resource" uid="uid://c56y8pqoyk15f" path="res://examples/fps/weapons/blaster.tres" id="3_kr4p8"]
+[ext_resource type="SpriteFrames" uid="uid://dbv3sy5qjatnl" path="res://examples/fps/sprites/burst_animation.tres" id="4_m6ukc"]
+[ext_resource type="AudioStream" uid="uid://cydjn1ct3hps2" path="res://examples/fps/sounds/walking.ogg" id="5_ics1s"]
+[ext_resource type="Script" uid="uid://by0qn28x1i1jj" path="res://examples/fps/scripts/hud.gd" id="6_hud"]
+[ext_resource type="FontFile" uid="uid://biqtga8moh7ah" path="res://examples/fps/fonts/lilita_one_regular.ttf" id="7_font"]
+[ext_resource type="PackedScene" uid="uid://dtysa04winfy4" path="res://examples/fps/models/character/characterMedium.fbx" id="8_char"]
+[ext_resource type="Texture2D" uid="uid://bwl3on8ioli0x" path="res://examples/fps/models/character/skins/criminalMaleA.png" id="9_skin"]
+[ext_resource type="Texture2D" uid="uid://c2rmm8xlh0v5u" path="res://examples/fps/models/character/skins/cyborgFemaleA.png" id="10_skin"]
+[ext_resource type="Texture2D" uid="uid://722tix5bqboc" path="res://examples/fps/models/character/skins/skaterFemaleA.png" id="11_skin"]
+[ext_resource type="Texture2D" uid="uid://b6e3rtikap1a3" path="res://examples/fps/models/character/skins/skaterMaleA.png" id="12_skin"]
+[ext_resource type="PackedScene" uid="uid://b2p7bbkuxf7m" path="res://examples/fps/models/blaster.glb" id="13_blaster"]
+[ext_resource type="Animation" uid="uid://dpsw7osv1igxr" path="res://examples/fps/models/character/idle.res" id="14_idle"]
+[ext_resource type="Animation" uid="uid://dek2v8sxpov7d" path="res://examples/fps/models/character/run.res" id="15_run"]
+[ext_resource type="Animation" uid="uid://dv3s5jyebwdxp" path="res://examples/fps/models/character/jump.res" id="16_jump"]
+
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_gdq8c"]
+radius = 0.3
+height = 1.0
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_y7pyu"]
+resource_local_to_scene = true
+albedo_texture = ExtResource("9_skin")
+
+[sub_resource type="AnimationLibrary" id="AnimationLibrary_character"]
+_data = {
+&"idle": ExtResource("14_idle"),
+&"jump": ExtResource("16_jump"),
+&"run": ExtResource("15_run")
+}
+
+[sub_resource type="LabelSettings" id="LabelSettings_fpmwk"]
+font = ExtResource("7_font")
+font_size = 36
+outline_size = 12
+outline_color = Color(0, 0, 0, 0.470588)
+
+[node name="Player" type="CharacterBody3D" unique_id=51805958 node_paths=PackedStringArray("crosshair")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.5, 0)
+script = ExtResource("1_ffboj")
+weapons = Array[ExtResource("2_i825w")]([ExtResource("3_kr4p8"), ExtResource("2_6epbw")])
+crosshair = NodePath("HUD/Crosshair")
+skins = Array[Texture2D]([ExtResource("9_skin"), ExtResource("10_skin"), ExtResource("11_skin"), ExtResource("12_skin")])
+
+[node name="Collider" type="CollisionShape3D" parent="." unique_id=112540251]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.55, 0)
+shape = SubResource("CapsuleShape3D_gdq8c")
+
+[node name="Visual" type="Node3D" parent="." unique_id=434757510]
+
+[node name="Character" parent="Visual" unique_id=2108654537 instance=ExtResource("8_char")]
+transform = Transform3D(-0.3, 0, 0, 0, 0.3, 0, 0, 0, -0.3, 0, 0.05, 0)
+
+[node name="characterMedium" parent="Visual/Character/Root/Skeleton3D" parent_id_path=PackedInt32Array(2108654537, 1193253956) index="0" unique_id=267183354]
+material_override = SubResource("StandardMaterial3D_y7pyu")
+
+[node name="RightHand" type="BoneAttachment3D" parent="Visual/Character/Root/Skeleton3D" parent_id_path=PackedInt32Array(2108654537, 1193253956) index="1" unique_id=1658094537]
+transform = Transform3D(0.0054632244, -0.9976825, -0.06787413, 0.99678576, 1.6159611e-06, 0.08019794, -0.08001226, -0.06809226, 0.9944671, -0.013284374, -0.00039566652, 0.022756014)
+bone_name = "RightHand"
+bone_idx = 40
+
+[node name="Weapon" type="Node3D" parent="Visual/Character/Root/Skeleton3D/RightHand" unique_id=812489156]
+transform = Transform3D(-0.0008838975, -0.005917072, 0.00045451726, 0.00018192091, 0.00043214497, 0.0059819194, -0.0059312577, 0.0008952457, 0.00011603945, 0.0016748821, 0.003827801, -0.0005542636)
+
+[node name="blaster" parent="Visual/Character/Root/Skeleton3D/RightHand/Weapon" unique_id=1971873243 instance=ExtResource("13_blaster")]
+
+[node name="AnimationPlayer" type="AnimationPlayer" parent="Visual/Character" unique_id=636368207]
+libraries/ = SubResource("AnimationLibrary_character")
+autoplay = &"idle"
+
+[node name="Head" type="Node3D" parent="." unique_id=1126167953]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
+
+[node name="Camera" type="Camera3D" parent="Head" unique_id=1652416176]
+physics_interpolation_mode = 2
+cull_mask = 1048573
+fov = 80.0
+
+[node name="SubViewportContainer" type="SubViewportContainer" parent="Head/Camera" unique_id=2138434902]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+stretch = true
+
+[node name="SubViewport" type="SubViewport" parent="Head/Camera/SubViewportContainer" unique_id=12320994]
+transparent_bg = true
+handle_input_locally = false
+msaa_3d = 1
+size = Vector2i(1152, 648)
+render_target_update_mode = 4
+
+[node name="CameraItem" type="Camera3D" parent="Head/Camera/SubViewportContainer/SubViewport" unique_id=991092737]
+cull_mask = 1047554
+fov = 40.0
+
+[node name="Container" type="Node3D" parent="Head/Camera/SubViewportContainer/SubViewport/CameraItem" unique_id=41006540]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.2, -1, -2.25)
+
+[node name="Muzzle" type="AnimatedSprite3D" parent="Head/Camera/SubViewportContainer/SubViewport/CameraItem" unique_id=836097018]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.5, -0.75, -6)
+layers = 2
+sprite_frames = ExtResource("4_m6ukc")
+frame = 2
+
+[node name="RayCast" type="RayCast3D" parent="Head/Camera" unique_id=1712748508]
+exclude_parent = false
+target_position = Vector3(0, 0, -10)
+collide_with_areas = true
+
+[node name="Shadow" type="Decal" parent="." unique_id=1696857146]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.9, 0)
+size = Vector3(1, 2, 1)
+texture_albedo = ExtResource("2_b0fo8")
+modulate = Color(1, 1, 1, 0.705882)
+normal_fade = 0.5
+
+[node name="SoundFootsteps" type="AudioStreamPlayer" parent="." unique_id=324001022]
+stream = ExtResource("5_ics1s")
+volume_db = -5.0
+autoplay = true
+
+[node name="Cooldown" type="Timer" parent="." unique_id=1318828168]
+one_shot = true
+
+[node name="HUD" type="CanvasLayer" parent="." unique_id=362921507]
+script = ExtResource("6_hud")
+
+[node name="Crosshair" type="TextureRect" parent="HUD" unique_id=437312553]
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -20.0
+offset_top = -20.0
+offset_right = 20.0
+offset_bottom = 20.0
+grow_horizontal = 2
+grow_vertical = 2
+scale = Vector2(0.35, 0.35)
+pivot_offset = Vector2(64, 64)
+
+[node name="Health" type="Label" parent="HUD" unique_id=1721126119]
+offset_left = 73.0
+offset_top = 549.0
+offset_right = 163.0
+offset_bottom = 594.0
+size_flags_horizontal = 0
+size_flags_vertical = 8
+text = "100%"
+label_settings = SubResource("LabelSettings_fpmwk")
+vertical_alignment = 2
+
+[connection signal="health_updated" from="." to="HUD" method="_on_health_updated"]
+
+[editable path="Visual/Character"]

@@ -467,7 +467,7 @@
 			A body moved by your own code, such as a [CharacterBody3D]. Sets [constant NetwSimulation.SCHEDULE_TICK], [constant MISSING_INPUT_STALL] and [constant RECOVERY_POLICY_REBASE_REPLAY].
 		</constant>
 		<constant name="ARCHETYPE_SOLVER_BODY" value="2" enum="Archetype">
-			A body moved by the physics engine, such as a [RigidBody3D]. Sets [constant NetwSimulation.SCHEDULE_FRAME], [constant MISSING_INPUT_REPEAT_LAST], [constant RECOVERY_POLICY_REBASE_RECOVER] and [constant NetwSimulation.RESTORE_EXTRAPOLATED].
+			A body moved by the physics engine, such as a [RigidBody3D]. Sets [constant NetwSimulation.SCHEDULE_AUTO], [constant MISSING_INPUT_REPEAT_LAST], [constant RECOVERY_POLICY_AUTO] and [constant NetwSimulation.RESTORE_EXTRAPOLATED].
 		</constant>
 		<constant name="RECOVERY_POLICY_REBASE_REPLAY" value="0" enum="RecoveryPolicy">
 			Restore the server's state and replay every input the server has not acknowledged yet. A [RigidBody3D] or [RigidBody2D] at [constant NetwSimulation.SCHEDULE_FRAME] cannot replay, so it uses [constant RECOVERY_POLICY_REBASE_RECOVER] and warns once.
@@ -482,7 +482,7 @@
 			Report mispredictions and correct nothing.
 		</constant>
 		<constant name="RECOVERY_POLICY_AUTO" value="4" enum="RecoveryPolicy">
-			[constant RECOVERY_POLICY_REBASE_RECOVER] for a [RigidBody3D] or [RigidBody2D], and [constant RECOVERY_POLICY_REBASE_REPLAY] for any other body. [method resolved_recovery_policy] returns the result.
+			[constant RECOVERY_POLICY_REBASE_RECOVER] for a [RigidBody3D] or [RigidBody2D] on [constant NetwSimulation.SCHEDULE_FRAME], and [constant RECOVERY_POLICY_REBASE_REPLAY] otherwise. [method resolved_recovery_policy] returns the result.
 		</constant>
 		<constant name="RECONCILE_INDEPENDENT" value="0" enum="Reconcile">
 			Correct each entity on its own.

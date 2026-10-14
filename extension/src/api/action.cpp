@@ -5,6 +5,7 @@
 #include "godot/vararg.hpp"
 #include "netw/api/entity.hpp"
 #include "netw/api/netw_multiplayer.hpp"
+#include "netw/log.hpp"
 
 using namespace godot;
 
@@ -49,6 +50,7 @@ void NetwActionContext::open(
 }
 
 void NetwActionContext::bind_result(Node *p_node) {
+    bound = true;
     NetwMultiplayer::wrapper_stamp_identity(p_node, key, 0);
     const Ref<NetwEntity> entity = NetwEntity::ensure(p_node);
     if (entity.is_valid()) {
@@ -196,7 +198,17 @@ void NetwAction::run_denied() {
 void NetwAction::request(int64_t p_view_tick, const Array &p_args) {
     const Ref<NetwEntity> entity
         = Object::cast_to<NetwEntity>(gd::object_of(entity_id));
-    if (entity.is_null() || !entity->get_is_controlled_locally()) {
+    if (entity.is_null()) {
+        NETW_WARN_ONCE(
+            sys::PREDICTION,
+            "Action '%s' was requested, but its node is not part of an "
+            "entity. Call Netw.action on a method of a node under a "
+            "NetwEntity.",
+            String(method)
+        );
+        return;
+    }
+    if (!entity->get_is_controlled_locally()) {
         return;
     }
     NetwMultiplayer *api = session();
@@ -208,6 +220,13 @@ void NetwAction::request(int64_t p_view_tick, const Array &p_args) {
         target_path = tree_relative_path(target);
     }
     if (target_path.is_empty()) {
+        NETW_WARN_ONCE(
+            sys::PREDICTION,
+            "Action '%s' was requested while its node is outside the scene "
+            "tree, so nothing was sent. Request it after the node enters the "
+            "tree.",
+            String(method)
+        );
         return;
     }
     const StringName key

@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <class name="NetwPhysicsStepper" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
 	<brief_description>
-		Steps a physics space on demand, so a rollback can advance it several times in one frame.
+		Steps a physics space on demand, for a physics server without [code]space_step[/code].
 	</brief_description>
 	<description>
-		Godot steps each physics space once per physics frame. Extend this class to step a space yourself, and install it with [method NetwMultiplayer.predict_stepper_install]. While an entity with [constant NetwSimulation.SCHEDULE_STEPPED] is in that space, Networked stops the engine from stepping it and calls [method _step] once per tick instead, and again for each tick it replays.
+		Networked steps a space through [code]PhysicsServer3D.space_step[/code] when the server has it, so a game installs a stepper only for a server that does not. An installed stepper outranks that built-in stepping. While an entity with [constant NetwSimulation.SCHEDULE_STEPPED] is in that space, Networked stops the engine from stepping it and calls [method _step] once per tick instead, and again for each tick it replays.
 		[codeblock]
 		extends NetwPhysicsStepper
 
@@ -14,9 +14,9 @@
 		func _step(space: RID, delta: float) -&gt; void:
 		    _solver.advance(space, delta)
 
-		api.predict_stepper_install(space_rid, MyStepper.new())
+		session.install_physics_stepper(get_world_3d(), MyStepper.new())
 		[/codeblock]
-		Install [code]null[/code] to uninstall, and read the installed stepper back with [method NetwMultiplayer.predict_get_stepper]. Without a stepper, a [constant NetwSimulation.SCHEDULE_STEPPED] entity runs as [constant NetwSimulation.SCHEDULE_FRAME]. Once no such entity is left in the space, the engine steps it again as usual.
+		Install it with [method NetwSession.install_physics_stepper], and install [code]null[/code] to remove it. Without a stepper or [code]space_step[/code], a [constant NetwSimulation.SCHEDULE_STEPPED] entity runs as [constant NetwSimulation.SCHEDULE_FRAME]. Once no such entity is left in the space, the engine steps it again as usual.
 		Each tick, every entity in the space applies its input first, then [method _step] and [method _snapshot] run once for the whole space. Under [constant NetwPrediction.RECONCILE_JOINT] a replay restores every entity, calls [method _restore] once, then steps each replayed tick the same way.
 		Implement [method _snapshot] and [method _restore] only when the space holds bodies that are not entities, such as loose debris. Entities are restored by Networked.
 	</description>

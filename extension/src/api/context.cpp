@@ -580,9 +580,9 @@ Ref<NetwMemberConfig> Netw::configure_rpc(const Callable &p_callable) {
     config->set_context_script(script);
     config->set_context_name(method);
     config->set_context_type(0);
-    config->set_is_call_local(
-        netw::script::model::get_method_call_local(script, method)
-    );
+    if (netw::script::model::get_method_call_local(script, method)) {
+        config->set_is_call_local(true);
+    }
     netw::script::model::declare_rpc_config(script, method, config);
     return config;
 }
@@ -615,7 +615,7 @@ Ref<NetwMemberConfig> Netw::configure_signal(const Signal &p_signal) {
     }
     Ref<NetwMemberConfig> config;
     config.instantiate();
-    config->set_is_call_local(true);
+    config->default_call_local(true);
     config->set_context_script(script);
     config->set_context_name(name);
     config->set_context_type(2);
@@ -982,30 +982,35 @@ Ref<DictionaryRecord> Netw::sample(
     return api->lagcomp_sample_of(p_entity, p_tick);
 }
 
-void Netw::rewind(
+Variant Netw::rewind(
     const TypedArray<NetwEntity> &p_entities,
     int64_t p_tick,
     const Callable &p_body
 ) {
-    Node *host = Object::cast_to<Node>(p_body.get_object());
-    if (host == nullptr) {
+    if (p_entities.is_empty()) {
         NETW_ERROR(
             sys::LAGCOMP,
-            "Netw.rewind needs a body that is a method of a Node."
+            "Netw.rewind got no entities, so nothing moved. Pass the entities "
+            "to move back, such as Netw.scene(self).entities."
         );
-        return;
+        return Variant();
     }
-    NetwMultiplayer *api = NetwMultiplayer::of(host);
+    NetwMultiplayer *api = nullptr;
+    for (int at = 0; at < p_entities.size() && api == nullptr; ++at) {
+        const Ref<NetwEntity> entity = p_entities[at];
+        if (entity.is_valid()) {
+            api = NetwEntity::session_core_for(entity->get_owner());
+        }
+    }
     if (api == nullptr) {
         NETW_ERROR(
             sys::LAGCOMP,
-            "Netw.rewind got a body on '%s', which is not inside a session. "
-            "Move it to a node in the scene tree under a MultiplayerViewport.",
-            String(host->get_name())
+            "Netw.rewind got entities that are not in a session, so nothing "
+            "moved. Pass entities whose nodes are in the scene tree."
         );
-        return;
+        return Variant();
     }
-    api->lagcomp_rewind_of(p_entities, p_tick, p_body);
+    return api->lagcomp_rewind_of(p_entities, p_tick, p_body);
 }
 
 Ref<NetwPromise> Netw::change_scene_to_file(

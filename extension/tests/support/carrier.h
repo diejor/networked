@@ -284,6 +284,10 @@ public:
         return server_requests;
     }
 
+    void set_denies(bool p_denies) {
+        denies = p_denies;
+    }
+
     int64_t viewed_tick() const {
         return last_view_tick;
     }

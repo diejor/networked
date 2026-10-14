@@ -374,6 +374,14 @@ struct DenyKey {
     );
 };
 
+struct ConfirmKey {
+    godot::StringName key;
+
+    static constexpr auto wire = netw::wire::describe(
+        netw::wire::field<&ConfirmKey::key>("key", netw::wire::string())
+    );
+};
+
 template <class Record>
 godot::PackedByteArray frame_write(const Record &p_record) {
     netw::wire::WriteStream stream;

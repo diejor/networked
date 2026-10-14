@@ -2216,10 +2216,14 @@ public:
         const godot::RID &p_space
     ) const;
     void predict_stepper_hold(const godot::RID &p_space, int p_dimension);
+    bool predict_space_can_step(const godot::RID &p_space, int p_dimension)
+        const;
+    bool predict_entity_can_step(const godot::Ref<NetwEntity> &p_entity) const;
     void predict_step_space(
         const godot::RID &p_space,
         double p_delta,
-        int64_t p_tick
+        int64_t p_tick,
+        int p_dimension
     );
     void predict_held_spaces(godot::LocalVector<godot::RID> &r_spaces) const;
     bool predict_space_has_stepped_member(const godot::RID &p_space) const;
@@ -2426,6 +2430,7 @@ public:
     bool lagcomp_is_configured() const;
     void set_lagcomp_configured(bool p_configured);
     void lagcomp_arm();
+    godot::Error lagcomp_require(const char *p_by);
     godot::Error lagcomp_initialize(
         int64_t p_max_future_action_ticks,
         int64_t p_input_gate_deadline_ticks
@@ -2468,6 +2473,11 @@ public:
         int64_t p_requester,
         const godot::StringName &p_key
     );
+    void lagcomp_confirm_action(
+        int64_t p_requester,
+        const godot::StringName &p_key
+    );
+    bool action_requester_is_remote(int64_t p_requester);
     void submit_action(
         int64_t p_route,
         const godot::StringName &p_method,
@@ -3971,12 +3981,18 @@ public:
         godot::Node *p_node
     );
     int64_t arm_rewind_timeline(const godot::Ref<NetwEntity> &p_entity);
+    void record_rewind_parts(
+        int64_t p_slot,
+        NetwEntity *p_entity,
+        const repl::PropertyBindingPtr &p_state,
+        int64_t p_tick
+    );
     void lagcomp_rewind(
         const godot::TypedArray<godot::RID> &p_entities,
         int64_t p_tick,
         const godot::Callable &p_body
     );
-    void lagcomp_rewind_of(
+    godot::Variant lagcomp_rewind_of(
         const godot::TypedArray<NetwEntity> &p_entities,
         int64_t p_tick,
         const godot::Callable &p_body
@@ -4333,6 +4349,10 @@ public:
     void observe_node_entity_ref(const godot::Variant &p_node_ref);
     void observe_entity_spawned(int64_t p_wrapper_id);
     void handle_deny(const godot::PackedByteArray &p_payload, int64_t p_sender);
+    void handle_confirm(
+        const godot::PackedByteArray &p_payload,
+        int64_t p_sender
+    );
     bool lagcomp_effect_pending(const godot::StringName &p_key) const;
     int64_t lagcomp_effect_count() const;
     void lagcomp_effect_sweep(int64_t p_tick);

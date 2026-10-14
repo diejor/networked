@@ -62,7 +62,7 @@
 				# the body integrates position from velocity, so a restore advances along it
 				Netw.configure_property(self, &amp;"position").state().carry_along(&amp;"velocity")
 				[/codeblock]
-				[param channel] must be another [method state] property of the same entity. Use [method carry_step] instead when the rate changes quickly. Declaring both on one property is an error, and neither is used.
+				[param channel] must be another [method state] property of the same node. Use [method carry_step] instead when the rate changes quickly. Declaring both on one property is an error, and neither is used.
 			</description>
 		</method>
 		<method name="carry_step">

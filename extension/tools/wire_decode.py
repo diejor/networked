@@ -607,6 +607,12 @@ AGAINST_SPEC = [
         "why": "WIRE.md 13, a ten bit length, its alignment pad, then the utf8",
     },
     {
+        "record": "ConfirmKey",
+        "bytes": bytes([0x04, 0x00]) + b"shot",
+        "values": {"key": "shot"},
+        "why": "WIRE.md 13, the same layout as a denial",
+    },
+    {
         "record": "RouteLease",
         "bytes": bytes([0x11, 0x10]),
         "values": {"base": 17, "count": 16},

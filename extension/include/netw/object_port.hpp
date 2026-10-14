@@ -40,6 +40,4 @@ bool port_apply(
     const godot::Dictionary &p_payload
 );
 
-void port_sync_transform(godot::Object *p_owner);
-
 } // namespace netw

@@ -5,6 +5,7 @@
 
 #include "godot/callable.hpp"
 #include "godot/physics_body.hpp"
+#include "godot/physics_server.hpp"
 #include "godot/scene_tree.hpp"
 #include "godot/spatial_node.hpp"
 #include "godot/variant.hpp"
@@ -523,7 +524,7 @@ void check_auto_resolution(bool p_rigid) {
     const Ref<NetwPrediction> handle = session->prediction_handle(entity);
     REQUIRE(handle.is_valid());
 
-    const int expected = p_rigid
+    const int expected = p_rigid && !netw::gd::can_step_space(3)
         ? NetwPrediction::RECOVERY_POLICY_REBASE_RECOVER
         : NetwPrediction::RECOVERY_POLICY_REBASE_REPLAY;
     const int expected_correction
@@ -559,7 +560,8 @@ void check_auto_resolution(bool p_rigid) {
 
 TEST_CASE(
     "[Networked][Session][SceneTree] an automatic recovery policy resolves "
-    "from the body, and the handle and the engine resolve it alike"
+    "from the body and whether its space can step, and the handle and the "
+    "engine resolve it alike"
 ) {
     check_auto_resolution(true);
     check_auto_resolution(false);

@@ -7,10 +7,11 @@
 		Returned by [method Netw.configure_rpc], [method Netw.configure_signal] and [method Netw.configure_spawn]. [method Netw.configure_property] returns a [NetwPropertyConfig], which extends it. The methods set who may send, how it is sent, and what the receiver does.
 		[codeblock]
 		func _init() -&gt; void:
-		    Netw.configure_rpc(self.fire).unreliable().controller_only()
+		    Netw.configure_rpc(self.fire).unreliable().controller()
 		    Netw.configure_signal(self.exploded).any_peer()
 		    Netw.configure_spawn(self._spawn_bullet).quantize(dir_q)
 		[/codeblock]
+		A setting made here outranks the method's [code]@rpc[/code] annotation, and a setting left out falls back to it. The server may always call an RPC, whatever its policy.
 		Settings are stored per script, so calling this in [method Object._init] of every instance is fine. A warning is pushed only when two calls set different values.
 		[b]Note:[/b] these methods return a [NetwMemberConfig], so call [NetwPropertyConfig] methods first in a chain.
 		[codeblock]
@@ -30,7 +31,7 @@
 		<method name="authority">
 			<return type="NetwMemberConfig" />
 			<description>
-				Only the node's multiplayer authority may send it. The default.
+				Only the node's multiplayer authority may send it.
 			</description>
 		</method>
 		<method name="call_local">
@@ -49,12 +50,6 @@
 			<return type="NetwMemberConfig" />
 			<description>
 				Only the [member NetwEntity.controller] may send it.
-			</description>
-		</method>
-		<method name="controller_only">
-			<return type="NetwMemberConfig" />
-			<description>
-				Only the [member NetwEntity.controller] or the server may call this RPC.
 			</description>
 		</method>
 		<method name="defer_until">
@@ -108,6 +103,12 @@
 				Send reliably. The default.
 			</description>
 		</method>
+		<method name="server">
+			<return type="NetwMemberConfig" />
+			<description>
+				Only the server may send it.
+			</description>
+		</method>
 		<method name="unreliable">
 			<return type="NetwMemberConfig" />
 			<description>
@@ -137,9 +138,6 @@
 		<member name="is_call_local" type="bool" setter="set_is_call_local" getter="get_is_call_local" default="false">
 			Set by [method call_local] and [method call_remote].
 		</member>
-		<member name="is_controller_only" type="bool" setter="set_is_controller_only" getter="get_is_controller_only" default="false">
-			Set by [method controller_only].
-		</member>
 		<member name="quantizers" type="Array" setter="set_quantizers" getter="get_quantizers" default="[]">
 			Set by [method quantize].
 		</member>
@@ -147,7 +145,7 @@
 			Set by [method reliable] and [method unreliable].
 		</member>
 		<member name="write_policy" type="int" setter="set_write_policy" getter="get_write_policy" enum="NetwMemberConfig.Policy" default="0">
-			Set by [method authority], [method controller] and [method any_peer].
+			Set by [method authority], [method controller], [method any_peer] and [method server]. An RPC with no policy set takes it from its [code]@rpc[/code] annotation, and one without that annotation accepts calls from the server only.
 		</member>
 	</members>
 	<constants>
@@ -159,6 +157,9 @@
 		</constant>
 		<constant name="POLICY_ANY_PEER" value="2" enum="Policy">
 			Any peer may send.
+		</constant>
+		<constant name="POLICY_SERVER" value="3" enum="Policy">
+			Only the server may send.
 		</constant>
 		<constant name="TRANSFER_RELIABLE" value="0" enum="TransferMode">
 			Send reliably.

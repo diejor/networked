@@ -440,8 +440,9 @@ public sealed class Netw : NetwRefCounted
         NetwApi.MethodBind("Netw", "configure_rpc", 2692389314UL);
 
     /// <summary>
-    /// Declares extra configuration for <paramref name="callable"/> that
-    /// [annotation @GDScript.@rpc] does not cover.
+    /// Declares who may call <paramref name="callable"/> and how it is sent. A
+    /// setting made here outranks [annotation @GDScript.@rpc], and a setting
+    /// left out falls back to it. See <see cref="NetwMemberConfig"/>.
     /// <code>
     /// func _init() -&gt; void:
     ///     Netw.configure_rpc(self.aim).controller().quantize(
@@ -1265,7 +1266,10 @@ public sealed class Netw : NetwRefCounted
     /// <summary>
     /// A <see cref="NetwAction"/> for an action such as firing or placing
     /// something, bound to <paramref name="authority"/> the server runs to
-    /// judge it. Repeated calls return the same <see cref="NetwAction"/>.
+    /// judge it. Call it on every peer, the server included. Repeated calls
+    /// return the same <see cref="NetwAction"/>. The first one turns on lag
+    /// compensation, so <see cref="Netw.ConfigureLagcomp"/> is needed only to
+    /// change its defaults.
     /// <code>
     /// @onready var place_bomb := Netw.action(_place_bomb)
     ///
@@ -1302,7 +1306,9 @@ public sealed class Netw : NetwRefCounted
 
     /// <summary>
     /// Returns a copy of the state of <paramref name="entity"/> at
-    /// <paramref name="tick"/>. It is empty when nothing was recorded.
+    /// <paramref name="tick"/>. It is empty when nothing was recorded. A
+    /// property declared on a child node is keyed by its path, such as
+    /// <c>&amp;"Hurtbox:offset"</c>.
     /// <code>
     /// func _place_bomb(ctx: NetwActionContext, pos: Vector2) -&gt; void:
     ///     var past := Netw.sample(entity, ctx.view_tick)
@@ -1326,18 +1332,34 @@ public sealed class Netw : NetwRefCounted
     }
 
     private static readonly IntPtr _bindRewind =
-        NetwApi.MethodBind("Netw", "rewind", 827478004UL);
+        NetwApi.MethodBind("Netw", "rewind", 4093765456UL);
 
     /// <summary>
-    /// Moves every entity in <paramref name="entities"/> back to where it was
-    /// at <paramref name="tick"/>, calls <paramref name="body"/>, then moves
-    /// them back. Use it to check a hit where the shooter saw the target.
+    /// Moves every entity in <paramref name="entities"/> back to
+    /// <paramref name="tick"/>, calls <paramref name="body"/>, moves them back,
+    /// and returns what <paramref name="body"/> returned. Apply what the query
+    /// found after it returns.
     /// <code>
-    /// func _fire(ctx: NetwActionContext) -&gt; void:
-    ///     Netw.rewind(Netw.scene(self).entities, ctx.view_tick, _trace_shot)
+    /// func _fire(ctx: NetwActionContext, origin: Vector3, aim: Vector3) -&gt; void:
+    ///     var targets := players.entities.keys()
+    ///     targets.erase(entity)
+    ///     var hit: Dictionary = Netw.rewind(targets, ctx.view_tick, func() -&gt; Dictionary:
+    ///         var ray := PhysicsRayQueryParameters3D.create(
+    ///                 origin, origin + aim * RANGE, HITBOX_LAYER)
+    ///         ray.collide_with_areas = true
+    ///         return get_world_3d().direct_space_state.intersect_ray(ray))
+    ///     if hit:
+    ///         (hit.collider.owner as Player).health -= DAMAGE
     /// </code>
+    /// <para>
+    /// Here <c>players</c> is a <see cref="NetwInterestLayer"/>, the set of
+    /// entities a shot can hit.
+    /// </para>
     /// </summary>
-    public static void Rewind(NetwEntity[] entities, long tick, Callable body)
+    public static Variant Rewind(
+        NetwEntity[] entities,
+        long tick,
+        Callable body)
     {
         godot_variant slot0 =
             VariantUtils.CreateFromArray(NetwApi.ArrayOf(entities));
@@ -1354,7 +1376,9 @@ public sealed class Netw : NetwRefCounted
         slot0.Dispose();
         slot1.Dispose();
         slot2.Dispose();
+        Variant result = Variant.CreateCopyingBorrowed(answered);
         answered.Dispose();
+        return result;
     }
 
     private static readonly IntPtr _bindChangeSceneToFile =

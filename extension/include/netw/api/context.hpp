@@ -181,7 +181,7 @@ public:
         const godot::Ref<NetwEntity> &p_entity,
         int64_t p_tick
     );
-    static void rewind(
+    static godot::Variant rewind(
         const godot::TypedArray<NetwEntity> &p_entities,
         int64_t p_tick,
         const godot::Callable &p_body

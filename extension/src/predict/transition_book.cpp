@@ -27,6 +27,17 @@ uint64_t mask_of(uint32_t p_fields) {
                                    : (uint64_t(1) << p_fields) - 1;
 }
 
+Variant detached(const Variant &p_value) {
+    switch (p_value.get_type()) {
+        case Variant::ARRAY:
+            return Array(p_value).duplicate(true);
+        case Variant::DICTIONARY:
+            return Dictionary(p_value).duplicate(true);
+        default:
+            return p_value;
+    }
+}
+
 template <typename T>
 void copy_values(LocalVector<T> &r_target, const LocalVector<T> &p_source) {
     r_target.resize(p_source.size());
@@ -329,7 +340,7 @@ void TransitionBook::carry(uint32_t p_at, int p_field, const Variant &p_value) {
     if (carried.is_empty()) {
         carried.resize(depth * fields);
     }
-    carried[p_at * fields + uint32_t(p_field)] = p_value;
+    carried[p_at * fields + uint32_t(p_field)] = detached(p_value);
 }
 
 void TransitionBook::seal_entry(uint32_t p_at) {
@@ -495,7 +506,7 @@ bool TransitionBook::field_value(
     if ((coded[p_at] & bit_of(p_field)) == 0) {
         r_value = carried.is_empty()
             ? Variant()
-            : carried[p_at * fields + uint32_t(p_field)];
+            : detached(carried[p_at * fields + uint32_t(p_field)]);
         return true;
     }
     return wire::decode_scalar_column(

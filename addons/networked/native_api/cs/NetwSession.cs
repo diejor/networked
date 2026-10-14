@@ -774,8 +774,9 @@ public sealed class NetwSession : NetwRefCounted
 
     /// <summary>
     /// Lets <paramref name="stepper"/> step the physics of
-    /// <paramref name="world"/> several times in one frame, which rollback
-    /// needs. Pass <c>null</c> as <paramref name="stepper"/> to remove it.
+    /// <paramref name="world"/> in place of <c>PhysicsServer3D.space_step</c>,
+    /// for a physics server without it. Pass <c>null</c> as
+    /// <paramref name="stepper"/> to remove it.
     /// <code>
     /// func _ready() -&gt; void:
     ///     session.install_physics_stepper(get_world_3d(), MyStepper.new())

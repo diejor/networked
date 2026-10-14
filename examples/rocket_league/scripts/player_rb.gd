@@ -135,9 +135,8 @@ func _init() -> void:
 	e.interest.join(&"arena")
 
 	e.prediction.archetype = NetwPrediction.ARCHETYPE_SOLVER_BODY
-	e.simulation.schedule = RocketJoltStepper.schedule()
-	e.prediction.recovery_policy = RocketJoltStepper.recovery_policy()
-	e.prediction.reconcile_mode = RocketJoltStepper.reconcile_mode()
+	if PhysicsServer3D.has_method(&"space_step"):
+		e.prediction.reconcile_mode = NetwPrediction.RECONCILE_JOINT
 	e.prediction.witness_contacts = sample_contacts
 	e.display.visual_root = ^"Car_model"
 

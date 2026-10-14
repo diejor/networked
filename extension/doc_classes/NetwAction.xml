@@ -4,7 +4,7 @@
 		A predicted discrete action bound to one authority method.
 	</brief_description>
 	<description>
-		Shows the result of an action right away on the client that asked for it, then keeps or removes it once the server answers. Create one with [method Netw.action].
+		Shows the result of an action right away on the client that asked for it, then keeps or removes it once the server answers. Create one with [method Netw.action] on every peer, the server included. Only the [member NetwEntity.controller] of the method's entity can request it.
 		[codeblock]
 		@onready var place_bomb := Netw.action(_place_bomb)
 
@@ -20,6 +20,7 @@
 		    ctx.bind(bomb)
 		    $Bombs.add_child(bomb)
 		[/codeblock]
+		The server can judge a request against the world the client saw by passing [member NetwActionContext.view_tick] to [method Netw.rewind].
 	</description>
 	<tutorials>
 	</tutorials>
@@ -59,12 +60,12 @@
 	<signals>
 		<signal name="confirmed">
 			<description>
-				Emitted when the server accepted the action.
+				Emitted when the server ran the action without calling [method NetwActionContext.deny].
 			</description>
 		</signal>
 		<signal name="denied">
 			<description>
-				Emitted when the server denied the action or did not answer in time.
+				Emitted when the server called [method NetwActionContext.deny], or did not answer within [member timeout_ticks].
 			</description>
 		</signal>
 	</signals>
