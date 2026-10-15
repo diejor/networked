@@ -30,6 +30,7 @@ Ref<NetwInterpolate> lerp_spec() {
 
 TEST_CASE("[Networked][Interest] a layer's lifecycle is addressed by handles") {
     LoopbackRig rig;
+    const int viewer = rig.peer_id(0);
     NetwMultiplayer *api = rig.server();
     const RID entity = rig.declare_entity(
         EntityDecl().named("InterestSubject").on_route(31)
@@ -38,11 +39,11 @@ TEST_CASE("[Networked][Interest] a layer's lifecycle is addressed by handles") {
 
     REQUIRE(layer.is_valid());
     CHECK(bool(api->interest_layer_find("arena") == layer));
-    NETW_CHECK_EQ(int(api->interest_layer_add_viewer(layer, 7)), OK);
+    NETW_CHECK_EQ(int(api->interest_layer_add_viewer(layer, viewer)), OK);
     NETW_CHECK_EQ(int(api->interest_layer_add_entity(layer, entity)), OK);
     NETW_CHECK_EQ(int(api->interest_flush_now()), OK);
     CHECK(api->interest_is_filtered(entity));
-    CHECK(api->interest_admits(entity, 7));
+    CHECK(api->interest_admits(entity, viewer));
 
     const TypedArray<RID> membership = api->interest_get_membership(entity);
     NETW_CHECK_EQ(membership.size(), 1);
@@ -50,9 +51,9 @@ TEST_CASE("[Networked][Interest] a layer's lifecycle is addressed by handles") {
     const PackedInt64Array row = api->interest_get_row(entity);
     CHECK(bool(row.size() > 0));
 
-    api->interest_layer_remove_viewer(layer, 7);
+    api->interest_layer_remove_viewer(layer, viewer);
     rig.flush_interest();
-    CHECK_FALSE(api->interest_admits(entity, 7));
+    CHECK_FALSE(api->interest_admits(entity, viewer));
     api->interest_layer_free(layer);
     CHECK_FALSE(api->interest_layer_find("arena").is_valid());
 }
@@ -61,6 +62,7 @@ TEST_CASE(
     "[Networked][Interest] a driver and a monitor exchange entity handles"
 ) {
     LoopbackRig rig;
+    const int viewer = rig.peer_id(0);
     NetwMultiplayer *api = rig.server();
     const RID entity
         = rig.declare_entity(EntityDecl().named("DrivenSubject").on_route(32));
@@ -74,28 +76,29 @@ TEST_CASE(
         layer,
         log.answering("driver", driven)
     );
-    api->interest_layer_add_viewer(layer, 9);
+    api->interest_layer_add_viewer(layer, viewer);
 
     NETW_CHECK_EQ(int(api->interest_flush_now()), OK);
-    CHECK(api->interest_admits(entity, 9));
+    CHECK(api->interest_admits(entity, viewer));
 
     const Array edge = log.args("monitor");
     NETW_CHECK_EQ(edge.size(), 3);
     REQUIRE(bool(edge.size() == 3));
     CHECK(bool(edge[0]));
     CHECK(bool(RID(edge[1]) == entity));
-    NETW_CHECK_EQ(int(edge[2]), 9);
+    NETW_CHECK_EQ(int(edge[2]), viewer);
 }
 
 TEST_CASE("[Networked][Interest] a policy is selected by the flat param") {
     LoopbackRig rig;
+    const int viewer = rig.peer_id(0);
     NetwMultiplayer *api = rig.server();
     const RID entity
         = rig.declare_entity(EntityDecl().named("PolicySubject").on_route(33));
     const RID layer = api->interest_layer_create("inverse");
 
     api->interest_layer_add_entity(layer, entity);
-    api->interest_layer_add_viewer(layer, 11);
+    api->interest_layer_add_viewer(layer, viewer);
     api->interest_layer_set_param(
         layer,
         NetwMultiplayer::LAYER_PARAM_POLICY,
@@ -103,8 +106,8 @@ TEST_CASE("[Networked][Interest] a policy is selected by the flat param") {
     );
     rig.flush_interest();
 
-    CHECK_FALSE(api->interest_admits(entity, 11));
-    CHECK_FALSE(api->interest_explain(entity, 11).is_empty());
+    CHECK_FALSE(api->interest_admits(entity, viewer));
+    CHECK_FALSE(api->interest_explain(entity, viewer).is_empty());
 }
 
 TEST_CASE(

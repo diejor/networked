@@ -1,3 +1,4 @@
+#include "support/fault_log.h"
 #include "support/loopback_rig.h"
 
 #if defined(NETW_TIER_HOSTED)
@@ -293,6 +294,13 @@ TEST_CASE(
     "brings the entity back on the author with the session's values and "
     "spawned fired, and never touches an observer"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_warning(
+        "[warn][transport] A packet for route * was refused with "
+        "error 4.",
+        1
+    );
+
     DespawnStage stage;
     stage.spawn_crate();
     Node *written = stage.crate_on(0);
@@ -433,6 +441,13 @@ TEST_CASE(
     "despawn moves each descendant the author detached ahead back where the "
     "session holds it, keeping its world pose"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_warning(
+        "[warn][transport] A packet for route * was refused with "
+        "error 4.",
+        1
+    );
+
     DespawnStage stage;
     LoopbackRig &rig = stage.rig;
     const DespawnStage::HolderTree tree = stage.spawn_holder_tree();
@@ -487,6 +502,13 @@ TEST_CASE(
     "descendant the author detached ahead at the session's anchor revision "
     "and author"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_warning(
+        "[warn][transport] A packet for route * was refused with "
+        "error 4.",
+        1
+    );
+
     DespawnStage stage;
     LoopbackRig &rig = stage.rig;
     const DespawnStage::HolderTree tree = stage.spawn_holder_tree();

@@ -1,3 +1,4 @@
+#include "support/fault_log.h"
 #include "support/netw_test.h"
 
 #include "godot/class_db.hpp"
@@ -247,6 +248,14 @@ TEST_CASE(
     "all refuses the join, because a gate that decides nothing has admitted "
     "nobody"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][session] Peer * was refused, because the "
+        "Netw.configure_admission handler returned String. Return "
+        "OK to accept, or an Error to refuse.",
+        1
+    );
+
     Node *branch = mounted_branch("AdmitG6");
     const Ref<NetwMultiplayer> host = branch_session(branch);
     Node *gate = gate_on(branch, GATE_ANSWERING_NO_ERROR);

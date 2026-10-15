@@ -1,3 +1,4 @@
+#include "support/fault_log.h"
 #include "support/netw_test.h"
 
 #include "godot/multiplayer.hpp"
@@ -65,6 +66,15 @@ TEST_CASE(
     "entity with no state row seats no slot when the owner is ready, and the "
     "session names the reason"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][prediction] Prediction on "
+        "/root/pull_declared/declared is off, because no property "
+        "is declared as state. Call NetwPropertyConfig.state on the"
+        " properties it restores.",
+        1
+    );
+
     CHECK(netw::gd::scene_root() != nullptr);
     if (netw::gd::scene_root() == nullptr) {
         return;

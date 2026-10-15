@@ -1,5 +1,7 @@
 #include "support/netw_test.h"
 
+#include "support/fault_log.h"
+
 #include "netw/api/netw_multiplayer.hpp"
 #include "netw/api/promise.hpp"
 
@@ -57,6 +59,7 @@ TEST_CASE(
     NETW_CHECK_EQ(session->liveness_pending_live_count(), 1);
 
     SUBCASE("while a deadline the caller DID name expires on time") {
+        const netw_test::FaultWatch faults;
         Ref<NetwMultiplayer> named = hosting();
         named->liveness_when_live(7, Callable(), 2, Callable());
         NETW_CHECK_EQ(named->liveness_pending_live_count(), 1);
@@ -64,6 +67,7 @@ TEST_CASE(
             named->liveness_poll(0);
         }
         NETW_CHECK_EQ(named->liveness_pending_live_count(), 0);
+        NETW_CHECK_EQ(faults.warnings_containing("never became live"), 1);
     }
 }
 
@@ -83,9 +87,11 @@ TEST_CASE(
     session->liveness_poll_now();
     NETW_CHECK_EQ(session->liveness_pending_live_count(), 1);
 
+    const netw_test::FaultWatch faults;
     session->clock_engine().force_step(tickrate);
     session->liveness_poll_now();
     NETW_CHECK_EQ(session->liveness_pending_live_count(), 0);
+    NETW_CHECK_EQ(faults.warnings_containing("never became live"), 1);
 }
 
 TEST_CASE(
@@ -103,6 +109,15 @@ TEST_CASE(
     "[Networked][Session][Hosted] L3 reparenting an entity is server "
     "authority's, and a client is answered a rejected promise"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][entity] Netw.reparent on '*' was refused, because "
+        "only the session authority moves it. Set "
+        "NetwEntity.lifecycle to LIFECYCLE_CONTROLLER before its "
+        "root enters the tree to let its controller move it.",
+        1
+    );
+
     Ref<NetwMultiplayer> client;
     client.instantiate();
     client->session_set_role(NetwMultiplayer::ROLE_CLIENT);

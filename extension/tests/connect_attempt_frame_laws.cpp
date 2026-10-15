@@ -1,4 +1,5 @@
 #include "support/frame_drive.h"
+#include "support/fault_log.h"
 #include "support/netw_test.h"
 
 #include <vector>
@@ -43,6 +44,8 @@ struct SideEvidence {
 struct AttemptEvidence {
     bool driven = false;
     int port = 0;
+    int64_t auth_failures = 0;
+    int64_t tag_refusals = 0;
     SideEvidence sides[SIDE_COUNT];
 };
 
@@ -79,6 +82,7 @@ class ConnectAttemptScenario final : public netw_test::FrameScenario {
     Ref<netw::NetwMultiplayer> host;
     Ref<netw::NetwMultiplayer> client;
     Ref<netw::NetwPromise> hosting;
+    Ref<netw_test::FaultLog> diagnostics;
 
     static int64_t now_msec() {
         return int64_t(Time::get_singleton()->get_ticks_msec());
@@ -170,6 +174,10 @@ class ConnectAttemptScenario final : public netw_test::FrameScenario {
 public:
     bool advance() override {
         AttemptEvidence &evidence = attempt_evidence();
+        if (diagnostics.is_null()) {
+            diagnostics.instantiate();
+            netw_test::FaultLog::attach(diagnostics);
+        }
         if (host.is_valid()) {
             host->NETW_API_VIRTUAL(poll)();
         }
@@ -262,6 +270,14 @@ public:
                 close(client);
                 close(host);
                 hosting.unref();
+                netw_test::FaultLog::detach(diagnostics);
+                evidence.auth_failures = diagnostics->warning_count_containing(
+                    "failed authentication and was refused"
+                );
+                evidence.tag_refusals = diagnostics->warning_count_containing(
+                    "Set the same tag on both"
+                );
+                diagnostics.unref();
                 evidence.driven = true;
                 return false;
             }
@@ -345,6 +361,8 @@ TEST_CASE(
 ) {
     const AttemptEvidence &evidence = attempt_evidence();
     REQUIRE(evidence.driven);
+    NETW_CHECK_EQ(evidence.auth_failures, 2);
+    NETW_CHECK_EQ(evidence.tag_refusals, 1);
     const SideEvidence &side = evidence.sides[SIDE_REFUSED];
     NETW_CHECK_EQ(side.failed, 1);
     NETW_CHECK_EQ(side.failed_error, int64_t(ERR_CANT_CONNECT));

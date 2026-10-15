@@ -1,3 +1,4 @@
+#include "support/fault_log.h"
 #include "support/netw_test.h"
 
 #include "netw/scene_core.hpp"
@@ -520,6 +521,13 @@ TEST_CASE(
     "[Networked][Scene][Hosted] N19 the peer a request was addressed to is the "
     "only peer whose answer settles it, and only a well-formed answer settles"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_warning(
+        "[warn][scene] A scene result from peer * was ignored, "
+        "because the request went to peer *.",
+        2
+    );
+
     Ref<NetwSceneCore> core = fresh();
     const Ref<netw::NetwPromise> promise = core->request_open(7);
     const int opened = core->get_pending_request_id();
@@ -614,6 +622,14 @@ TEST_CASE(
     "[Networked][Scene][Hosted] N24 a second level in one physics space is "
     "warned about and never refused, because sharing a world is legal"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_warning(
+        "[warn][scene] Scene '*' now shares one physics space with "
+        "the scene already active. Call NetwSceneConfig.isolated on"
+        " them if they should not touch.",
+        1
+    );
+
     Ref<NetwSceneCore> core = fresh();
     Scenes scenes;
 
@@ -621,10 +637,7 @@ TEST_CASE(
 
     core->scene_enter(scenes[0], "Arena", false);
     NETW_CHECK_EQ(core->spawn_warns_shared_world(), true);
-
-    ERR_PRINT_OFF;
     core->spawn_note("Annex");
-    ERR_PRINT_ON;
     NETW_CHECK_EQ(core->live_count(), 1);
     NETW_CHECK_EQ(core->spawn_warns_shared_world(), true);
 

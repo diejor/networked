@@ -389,6 +389,7 @@ var synced_value: int:
 
 
 func _init() -> void:
+	Netw.configure_entity(self)
 	Netw.configure_property(self, &"synced_value").RECORD()
 
 

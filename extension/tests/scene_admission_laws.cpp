@@ -1,3 +1,4 @@
+#include "support/fault_log.h"
 #include "support/netw_test.h"
 
 #include "godot/node.hpp"
@@ -153,15 +154,19 @@ TEST_CASE(
     "still writes the boundary and schedules nothing, so the rows it wrote "
     "stay uncommitted rather than the write being lost"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][interest] Interest could not be updated, because "
+        "interest is not running on this peer.",
+        1
+    );
+
     Ref<NetwMultiplayer> core;
     core.instantiate();
     core->set_interest_flush(Callable());
     const DeclaredScene arena = declare_scene(core, "Arena");
     netw::interest::Engine &engine = core->interest_plane();
-
-    ERR_PRINT_OFF;
     CHECK(core->scene_admit_peer(arena.handle, 7));
-    ERR_PRINT_ON;
 
     CHECK(engine.layer_has_viewer(StringName("scene:Arena"), 7));
     CHECK_FALSE(core->interest_flush_pending());

@@ -1,3 +1,4 @@
+#include "support/fault_log.h"
 #include "support/netw_test.h"
 
 #include <cmath>
@@ -133,6 +134,24 @@ TEST_CASE(
 }
 
 TEST_CASE("[Networked][Predict] A fold naming no drive kind mints nothing") {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][prediction] Condition \"kind < int(DriveKind::NONE)"
+        " || kind > int(DriveKind::SUBSTITUTED)\" is true. "
+        "Returning: Ref<NetwPredictFold>(). NetwPredictFold.of got "
+        "kind 99, which is not a NetwPrediction.DriveKind value. "
+        "Pass one of its constants.",
+        1
+    );
+    expected_faults.expect_error(
+        "[error][prediction] Condition \"kind < int(DriveKind::NONE)"
+        " || kind > int(DriveKind::SUBSTITUTED)\" is true. "
+        "Returning: Ref<NetwPredictFold>(). NetwPredictFold.of got "
+        "kind -1, which is not a NetwPrediction.DriveKind value. "
+        "Pass one of its constants.",
+        1
+    );
+
     CHECK(
         NetwPredictFold::of(
             7,

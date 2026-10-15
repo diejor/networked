@@ -7,6 +7,7 @@
 #if defined(NETW_TIER_HOSTED)
 
 #include "support/event_ring.h"
+#include "support/fault_log.h"
 #include "support/netw_cells.h"
 #include "support/value_flow_stand.h"
 
@@ -261,6 +262,7 @@ class FlowRun {
 public:
     explicit FlowRun(const FlowScenario &p_scenario, Plant p_plant = PLANT_NONE)
         : declared(p_scenario), planted(p_plant) {
+        const netw_test::FaultWatch faults;
         LoopbackRig rig(p_scenario.clients);
         rig.mount();
         netw_test::flow_clocks(rig, TICKRATE);
@@ -295,6 +297,12 @@ public:
         record_values(rig, pair);
         record_bindings(pair);
         record_rings(rig, pair);
+        NETW_CHECK_EQ(
+            faults.warnings_containing(
+                "FlowBody declares state and input properties but no prediction"
+            ),
+            body_path() == DERIVED_BODY ? p_scenario.clients + 1 : 0
+        );
     }
 
     const FlowScenario &scenario() const {

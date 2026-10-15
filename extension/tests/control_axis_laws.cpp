@@ -1,3 +1,4 @@
+#include "support/fault_log.h"
 #include "support/loopback_rig.h"
 
 #if defined(NETW_TIER_HOSTED)
@@ -162,6 +163,14 @@ TEST_CASE(
     "[Networked][Entity] CA2 a request the server denies steers nobody, and "
     "neither does one against an entity that never offered the transfer"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_warning(
+        "[warn][entity] Peer * asked for control of '*', but its "
+        "NetwEntity.transfer is TRANSFER_FIXED. Set it to "
+        "TRANSFER_REQUESTABLE to allow requests.",
+        1
+    );
+
     LoopbackRig rig(2);
     rig.mount();
     Node *arena = rig.mirror_child("Arena");
@@ -178,9 +187,11 @@ TEST_CASE(
         callable_mp_static(&deny_every_request)
     );
 
-    entity_at(rig, route, 1)->claim_control();
+    const Ref<NetwPromise> denied = entity_at(rig, route, 1)->claim_control();
     rig.pump(10);
 
+    CHECK(denied->get_is_failed());
+    NETW_CHECK_EQ(denied->get_code(), ERR_UNAUTHORIZED);
     NETW_CHECK_EQ(host->get_controller(), represented);
     NETW_CHECK_EQ(rig.route_node(route, -1)->get_multiplayer_authority(), 1);
 
@@ -190,10 +201,12 @@ TEST_CASE(
     );
     host->set_transfer(NetwEntity::TRANSFER_FIXED);
 
-    entity_at(rig, route, 1)->claim_control();
+    const Ref<NetwPromise> fixed = entity_at(rig, route, 1)->claim_control();
     rig.pump(10);
 
     NETW_CHECK_EQ(host->get_controller(), represented);
+    CHECK(fixed->get_is_failed());
+    NETW_CHECK_EQ(fixed->get_code(), ERR_UNAVAILABLE);
     NETW_CHECK_EQ(entity_at(rig, route, 1)->get_controller(), represented);
     NETW_CHECK_EQ(rig.route_node(route, 1)->get_multiplayer_authority(), 1);
 }
@@ -250,9 +263,11 @@ TEST_CASE(
         StringName("control_requested"),
         callable_mp_static(&deny_every_request)
     );
-    entity_at(rig, route, 0)->claim_control();
+    const Ref<NetwPromise> denied = entity_at(rig, route, 0)->claim_control();
     rig.pump(10);
 
+    CHECK(denied->get_is_failed());
+    NETW_CHECK_EQ(denied->get_code(), ERR_UNAUTHORIZED);
     const Array after_denial = rig.server()->event_ring(route);
     const Array refused
         = rows_of(after_denial, netw::EventPlane::CONTROL_REQUESTED);
@@ -405,8 +420,7 @@ TEST_CASE(
     NETW_CHECK_EQ(hold_at(rig, route, 1), int(Control::HOLD_EXCLUSIVE));
 
     rig.server()->event_ring(route);
-    const Ref<NetwPromise> refused
-        = entity_at(rig, route, 1)->claim_control();
+    const Ref<NetwPromise> refused = entity_at(rig, route, 1)->claim_control();
     CHECK(refused->get_is_failed());
     NETW_CHECK_EQ(int(refused->get_code()), int(ERR_UNAUTHORIZED));
     CHECK_FALSE(entity_at(rig, route, 1)->get_is_control_pending());
@@ -540,6 +554,15 @@ TEST_CASE(
     "[Networked][Entity] CA9b a controller write off the session authority "
     "is refused and moves nothing, and a write of 1 takes control back"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][entity] Condition \"!is_on_server()\" is true. "
+        "Returning: ERR_UNAUTHORIZED. Only the server can give '*' "
+        "to another peer. A client asks for it with "
+        "NetwEntity.claim_control.",
+        1
+    );
+
     LoopbackRig rig(2);
     rig.mount();
     Node *arena = rig.mirror_child("Arena");
@@ -548,10 +571,7 @@ TEST_CASE(
 
     entity_at(rig, route, -1)->set_controller(rig.peer_id(0));
     rig.pump(10);
-
-    ERR_PRINT_OFF;
     entity_at(rig, route, 1)->set_controller(rig.peer_id(1));
-    ERR_PRINT_ON;
     rig.pump(10);
     for (int client = -1; client < 2; ++client) {
         NETW_CHECK_EQ(

@@ -1,3 +1,4 @@
+#include "support/fault_log.h"
 #include "support/netw_test.h"
 
 #include "godot/node.hpp"
@@ -82,6 +83,15 @@ TEST_CASE(
     "[Networked][Session][Hosted] L3 a session is unconfigured until it is "
     "told otherwise, and a null config moves no gate"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][prediction] Condition \"p_max_future_action_ticks <"
+        " 0 || p_input_gate_deadline_ticks < 0\" is true. Returning:"
+        " ERR_INVALID_PARAMETER. Lag compensation tick counts "
+        "cannot be negative, so the settings did not change.",
+        1
+    );
+
     Ref<NetwMultiplayer> session = hosting();
 
     CHECK_FALSE(session->lagcomp_is_configured());

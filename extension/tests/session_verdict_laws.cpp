@@ -1,3 +1,4 @@
+#include "support/fault_log.h"
 #include "support/netw_test.h"
 
 #include "support/netw_cells.h"
@@ -269,6 +270,18 @@ const VerdictLaw L_SERVICED = {
 const VerdictLaw LAWS[] = {L_ANSWERS, L_PARTITIONED, L_SERVICED};
 
 TEST_CASE("[Networked][Session][SceneTree] the gate verdict laws hold") {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_warning(
+        "[warn][transport] A packet for route * was refused with "
+        "error 4.",
+        1
+    );
+    expected_faults.expect_warning(
+        "[warn][transport] A packet for route * was refused with "
+        "error 30.",
+        1
+    );
+
     const VerdictScenario CORPUS[] = {
         a_route_nobody_bound(),
         a_route_the_session_released(),

@@ -1,3 +1,4 @@
+#include "support/fault_log.h"
 #include "support/netw_test.h"
 
 #include "netw/api/netw_multiplayer.hpp"
@@ -51,6 +52,21 @@ TEST_CASE(
     "[Networked][Session][Hosted] L2 claiming and releasing routes is server "
     "authority's, so a client claims nothing rather than a private range"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][liveness] Condition \"!is_host()\" is true. "
+        "Returning: out. NetwMultiplayer.liveness_claim_routes runs"
+        " only on the server.",
+        1
+    );
+    expected_faults.expect_error(
+        "[error][liveness] Condition \"!is_host()\" is true. "
+        "Returning: ERR_UNCONFIGURED. "
+        "NetwMultiplayer.liveness_release_routes runs only on the "
+        "server.",
+        1
+    );
+
     Ref<NetwMultiplayer> client;
     client.instantiate();
     client->session_set_role(NetwMultiplayer::ROLE_CLIENT);
@@ -79,6 +95,8 @@ TEST_CASE(
     "[Networked][Session][Hosted] L4 a despawn is server authority's and "
     "needs an entity the session actually holds"
 ) {
+    netw_test::FaultWatch expected_faults;
+
     Ref<NetwMultiplayer> session = hosting();
     const RID entity = session->entity_create();
 
@@ -88,6 +106,15 @@ TEST_CASE(
     );
 
     SUBCASE("a client is refused before the entity is even looked up") {
+        expected_faults.expect_error(
+            "[error][entity] Netw.despawn on '*' was refused, "
+            "because only the session authority despawns it. Set "
+            "NetwEntity.lifecycle to LIFECYCLE_CONTROLLER before "
+            "its root enters the tree to let its controller despawn"
+            " it.",
+            1
+        );
+
         Ref<NetwMultiplayer> client;
         client.instantiate();
         client->session_set_role(NetwMultiplayer::ROLE_CLIENT);
@@ -103,6 +130,8 @@ TEST_CASE(
     "lifecycle removal, so every peer is told the row died rather than the "
     "host quietly forgetting it"
 ) {
+    netw_test::FaultWatch expected_faults;
+
     Ref<NetwMultiplayer> session = hosting();
     const PackedInt64Array claimed = session->liveness_claim_routes(2);
 
@@ -122,6 +151,14 @@ TEST_CASE(
     }
 
     SUBCASE("and a client's refused release queues nothing") {
+        expected_faults.expect_error(
+            "[error][liveness] Condition \"!is_host()\" is true. "
+            "Returning: ERR_UNCONFIGURED. "
+            "NetwMultiplayer.liveness_release_routes runs only on "
+            "the server.",
+            1
+        );
+
         Ref<NetwMultiplayer> client;
         client.instantiate();
         client->session_set_role(NetwMultiplayer::ROLE_CLIENT);

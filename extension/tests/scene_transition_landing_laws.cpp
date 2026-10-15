@@ -1,3 +1,4 @@
+#include "support/fault_log.h"
 #include "support/netw_test.h"
 
 #include "godot/node.hpp"
@@ -106,7 +107,8 @@ Declared place_body(
 }
 
 TEST_CASE(
-    "[Networked][Scene][Hosted] TL1 a session-scoped landing seats every "
+    "[Networked][Scene][Hosted][SceneTree] TL1 a session-scoped landing seats "
+    "every "
     "accepted player on the destination, including one that was "
     "watching nothing at all, because converging is what the scope means"
 ) {
@@ -137,7 +139,8 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Scene][Hosted] TL2 a scene-scoped landing carries the "
+    "[Networked][Scene][Hosted][SceneTree] TL2 a scene-scoped landing carries "
+    "the "
     "watches the source held and nobody else, so a player watching "
     "another world stays there and one watching nothing is left alone"
 ) {
@@ -264,6 +267,24 @@ TEST_CASE(
     "resolves to no world at all, because a bad source is refused and the "
     "session is never a substitute for one"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_warning(
+        "[warn][scene] Peer * asked to leave scene 9001, which does"
+        " not exist, so the scene change was refused.",
+        1
+    );
+    expected_faults.expect_warning(
+        "[warn][scene] Peer * asked to leave scene 1 (epoch *), "
+        "which was replaced by epoch *, so the scene change was "
+        "refused.",
+        1
+    );
+    expected_faults.expect_warning(
+        "[warn][scene] Peer * asked to leave scene 1, which it is "
+        "not in, so the scene change was refused.",
+        1
+    );
+
     const Ref<NetwMultiplayer> core = peered_core();
     const CallLog flushed;
     core->set_interest_flush(flushed.callable("flush"));
@@ -293,10 +314,17 @@ Variant record_policy(const Variant &, const Variant &, const Variant &) {
 }
 
 TEST_CASE(
-    "[Networked][Scene][Hosted] TL6 a scene-scoped request whose source does "
-    "not resolve never reaches the game's policy, so a request the session "
-    "cannot place is refused before a game is asked to approve it"
+    "[Networked][Scene][Hosted][SceneTree] TL6 a scene-scoped request whose "
+    "source does not resolve never reaches the game's policy, so a request "
+    "the session cannot place is refused before a game is asked to approve it"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_warning(
+        "[warn][scene] Peer * asked to leave scene 1, which it is "
+        "not in, so the scene change was refused.",
+        1
+    );
+
     const Ref<NetwMultiplayer> core = peered_core();
     const CallLog flushed;
     core->set_interest_flush(flushed.callable("flush"));
@@ -311,7 +339,7 @@ TEST_CASE(
 
     const int64_t route = core->scene_route_of(source.handle);
     const int64_t epoch = core->liveness_route_epoch(route);
-    const String path = String("res://arena.tscn");
+    const String path = String("res://tests/support/probe.tscn");
 
     asked_policy = 0;
     core->scene_receive_request(
@@ -350,7 +378,8 @@ TEST_CASE(
 #if defined(NETW_TIER_HOSTED)
 
 TEST_CASE(
-    "[Networked][Scene] TL7 the world a remote scene-scoped request resolved "
+    "[Networked][Scene][SceneTree] TL7 the world a remote scene-scoped request "
+    "resolved "
     "is the world the change acts on, so the source that travelled with the "
     "frame retires and the request is not refused for want of one"
 ) {
@@ -390,7 +419,8 @@ TEST_CASE(
 #endif
 
 TEST_CASE(
-    "[Networked][Scene][Hosted] TL8 a change carries no body into the "
+    "[Networked][Scene][Hosted][SceneTree] TL8 a change carries no body into "
+    "the "
     "destination, so an entity standing in the source is left where it "
     "stands and the destination is reached by the watch alone"
 ) {
@@ -421,7 +451,8 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Scene][Hosted] TL9 a source releases its players before the "
+    "[Networked][Scene][Hosted][SceneTree] TL9 a source releases its players "
+    "before the "
     "destination admits them, so a handler that spawns on arrival reads a "
     "roster the retiring scene has already left"
 ) {
@@ -455,7 +486,8 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Scene][Hosted] TL10 a landed change resolves with the scene "
+    "[Networked][Scene][Hosted][SceneTree] TL10 a landed change resolves with "
+    "the scene "
     "it landed in, and every player it moved watches that scene"
 ) {
     const Ref<NetwMultiplayer> core = peered_core();

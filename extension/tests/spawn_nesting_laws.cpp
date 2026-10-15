@@ -1,3 +1,4 @@
+#include "support/fault_log.h"
 #include "support/loopback_rig.h"
 
 #if defined(NETW_TIER_HOSTED)
@@ -153,6 +154,13 @@ TEST_CASE(
     "[Networked][Spawn] SN3 a spawn frame from a sender that is not the "
     "server is refused and counted, whatever it names"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_warning(
+        "[warn][transport] A packet for route * was refused with "
+        "error 4.",
+        1
+    );
+
     LoopbackRig rig(1);
     rig.mount();
     const Nested pair = spawn_pair(rig);

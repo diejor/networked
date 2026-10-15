@@ -29,19 +29,18 @@ Put personal SCons defaults in `extension/custom.py`.
 
 ## Tests
 
-Build the library with its tests, then run them through Godot. The GdUnit
+Build the library with its tests, then run the native test lane. The GdUnit
 suites under `tests/` need this build too.
 
 ```sh
 scons -C extension netw_tests=yes
-godot --headless --fixed-fps 60 --script tests/native/run_native_tests.gd
+python3 ci/test.py native
 ```
 
-Arguments after `--` pick cases and raise the log level.
+A filter selects cases. Raw diagnostics include expected messages.
 
 ```sh
-godot --headless --fixed-fps 60 --script tests/native/run_native_tests.gd \
-  -- --native-filter="*Promise*" --netw-log=trace
+python3 ci/test.py native --filter "*Promise*" --raw-diagnostics
 ```
 
 The run ends with a summary of the case count, the failing cases, the cases
@@ -50,6 +49,13 @@ expected when the case that caused it asserted it, and only the unexpected
 ones are ranked. Every case is in
 `reports/native/results.xml` and every held-object row is in
 `reports/native/census.txt`.
+
+The console hides diagnostics matched by a passing test. Unexpected
+messages and diagnostics from failed tests retain their source locations
+and backtraces. The complete output is saved in `tmp/native.log`, and the
+message expectations are in `reports/native/diagnostics.json`. Calling
+Godot directly prints its unfiltered output. The module lane uses the same
+reporting with `python3 ci/test.py module` and saves `tmp/module.log`.
 
 Run the GdUnit suites from the editor's GdUnit panel, or from a shell.
 

@@ -156,6 +156,16 @@ public:
             spawn(nullptr);
         }
         const int joined = rig.add_client();
+        rig.client(joined)->spawn_register_constructor(
+            StringName("churn_body"),
+            callable_mp_static(&build_body),
+            one_type()
+        );
+        Ref<netw::NetwClockConfig> clock;
+        clock.instantiate();
+        clock->set_tickrate(TICKRATE);
+        NETW_REQUIRE_EQ(rig.client(joined)->clock_initialize(clock), OK);
+        rig.client(joined)->clock_engine().set_manual_tick(true);
         rig.mount_late(joined);
         rig.step_ticks(6);
         rig.drop_client(joined);

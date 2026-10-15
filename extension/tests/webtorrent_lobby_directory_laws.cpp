@@ -1,3 +1,4 @@
+#include "support/fault_log.h"
 #include "support/netw_test.h"
 
 #include "godot/variant.hpp"
@@ -62,6 +63,14 @@ TEST_CASE(
     "[Networked][Connect][Hosted] a trackers entry that is not a ws:// or "
     "wss:// URL is kept in the export and skipped when browsing"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_warning(
+        "[warn][transport] WebTorrentLobbyDirectory.trackers has "
+        "'*', which is not a tracker URL, so it is skipped. Use a "
+        "ws:// or wss:// URL.",
+        1
+    );
+
     WebTorrentLobbyDirectory *board = memnew(WebTorrentLobbyDirectory);
     PackedStringArray urls;
     urls.push_back(String("ws://127.0.0.1:1"));

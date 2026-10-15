@@ -63,7 +63,10 @@ TEST_CASE(
     "second answer changes nothing"
 ) {
     const Ref<NetwGroupPromise> group = NetwGroupPromise::create(peers(2, 3));
+    const CallLog failures;
+    group->catch_error(failures.callable("failed"));
     group->reject(ERR_TIMEOUT, String("no quorum"));
+    NETW_CHECK_EQ(failures.count("failed"), 1);
 
     NETW_CHECK_EQ(int(group->get_is_failed()), 1);
     NETW_CHECK_EQ(group->get_code(), int(ERR_TIMEOUT));
@@ -108,7 +111,10 @@ TEST_CASE(
     CHECK(done->answer().get_type() == Variant::DICTIONARY);
 
     const Ref<NetwGroupPromise> bad = NetwGroupPromise::create(peers(1, 0));
+    const CallLog failures;
+    bad->catch_error(failures.callable("failed"));
     bad->reject(ERR_TIMEOUT, String());
+    NETW_CHECK_EQ(failures.count("failed"), 1);
     CHECK(bad->answer() == Variant(int(ERR_TIMEOUT)));
 }
 

@@ -1,3 +1,4 @@
+#include "support/fault_log.h"
 #include "support/netw_test.h"
 
 #include "godot/node.hpp"
@@ -255,6 +256,14 @@ TEST_CASE(
     "answered whatever it is named, and renaming the scene root moves the "
     "refusal to the id the root now spells"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][interest] This layer belongs to a multiplayer "
+        "scene, so it cannot be changed directly. Change it through"
+        " Netw.scene.",
+        4
+    );
+
     const Ref<NetwMultiplayer> core = peered_core();
     Node *root = memnew(Node);
     const Declared arena = declare_scene(core, root, "Arena");
@@ -265,12 +274,9 @@ TEST_CASE(
 
     const RID layer = core->interest_layer_create(owned);
     REQUIRE(layer.is_valid());
-
-    ERR_PRINT_OFF;
     CHECK(core->interest_layer_named(owned).is_null());
     CHECK(core->interest_layer_view(layer).is_null());
     CHECK(core->interest_layer(owned).is_null());
-    ERR_PRINT_ON;
     CHECK(core->layer_record_named(owned).is_valid());
 
     const StringName unowned = StringName("scene:Ghost");
@@ -282,10 +288,7 @@ TEST_CASE(
     const StringName renamed = core->scene_layer_id(arena.handle);
     CHECK(renamed != owned);
     REQUIRE(core->interest_layer_create(renamed).is_valid());
-
-    ERR_PRINT_OFF;
     CHECK(core->interest_layer_named(renamed).is_null());
-    ERR_PRINT_ON;
     CHECK(core->interest_layer_named(owned).is_valid());
 
     memdelete(root);

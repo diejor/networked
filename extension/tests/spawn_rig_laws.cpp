@@ -1,3 +1,4 @@
+#include "support/fault_log.h"
 #include "support/loopback_rig.h"
 
 #if defined(NETW_TIER_HOSTED)
@@ -101,6 +102,14 @@ TEST_CASE(
     "[Networked][Spawn] SR3 a host-less constructor that declares no argument "
     "schema writes nothing, because no receiver could decode the bytes"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][spawn] Spawn constructor '*' has no argument "
+        "types, so route * was not sent. Pass arg_types to "
+        "NetwMultiplayer.spawn_register_constructor.",
+        1
+    );
+
     LoopbackRig rig(1);
     rig.mount();
 

@@ -101,7 +101,9 @@ func _init() -> void:
 	Netw.configure_property(self, &"car_angular_velocity").broadcast() \
 			.quantize(NetwQuantizeScalar.new().bits(16).limits(-64.0, 64.0))
 	Netw.configure_property(self, &"car_sleeping").broadcast()
-	for spring: StringName in [&"spring_fl", &"spring_fr", &"spring_rl", &"spring_rr"]:
+	for spring: StringName in [
+		&"spring_fl", &"spring_fr", &"spring_rl", &"spring_rr"
+	]:
 		Netw.configure_property(self, spring).broadcast() \
 				.quantize(NetwQuantizeScalar.new().bits(12).limits(0.0, 1.0))
 	Netw.configure_property(self, &"steer_angle").broadcast() \
@@ -246,6 +248,20 @@ TEST_CASE(
     "[Networked][Control][SceneTree] RH3 a final state past the control "
     "budget is not sent, and the release still hands the entity on"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][wire] A byte array is longer than its packet field"
+        " allows.",
+        2
+    );
+    expected_faults.expect_warning(
+        "[warn][entity] '*' released authority with 1121 bytes of "
+        "state, over the 1024 byte limit, so the next authority "
+        "starts from its own copy. Replicate fewer or smaller "
+        "properties on this entity.",
+        2
+    );
+
     Stand stand(NOTED_BOARD_SOURCE, BOARD_ID, 3);
     stand.entity(-1)->set_controller(stand.rig.peer_id(0));
     stand.rig.step_ticks(4);

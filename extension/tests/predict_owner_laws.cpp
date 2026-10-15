@@ -1,3 +1,4 @@
+#include "support/fault_log.h"
 #include "support/netw_test.h"
 
 #include "netw/api/schema_core.hpp"
@@ -376,6 +377,14 @@ TEST_CASE(
     "[Networked][Predict][Owner] the roster is frozen for the length of "
     "a pass"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_warning(
+        "[warn][prediction] Prediction refused to close an entity "
+        "while a simulation step was running. Add or remove "
+        "predicted entities outside the simulate callback.",
+        1
+    );
+
     NetwPredictionEngine held;
     NetwPredictionEngine *const engine = &held;
     const int64_t slot = engine->open(fields(one("speed")));

@@ -1,4 +1,5 @@
 #include "support/netw_test.h"
+#include "support/fault_log.h"
 
 #include "godot/file_access.hpp"
 #include "godot/file_system.hpp"
@@ -171,8 +172,12 @@ TEST_CASE(
 
 TEST_CASE(
     "[Networked][Table][Hosted] FS3 a key naming a parent directory, a "
-    "separator or a null byte lands inside the root and nowhere else"
+    "separator or normalized Unicode lands inside the root and nowhere else"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_stderr(
+        "Unicode parsing error*Unexpected NUL character", 1
+    );
     scrub("fs3");
     World world("fs3");
     FileStore store(world.root);
@@ -181,7 +186,9 @@ TEST_CASE(
     keys.push_back("../../escaped");
     keys.push_back("..");
     keys.push_back("a/b\\c");
-    keys.push_back(String("a") + String::chr(0) + String("b"));
+    const String normalized = String("a") + String::chr(0) + String("b");
+    CHECK(normalized.contains(String::chr(0xfffd)));
+    keys.push_back(normalized);
 
     for (int at = 0; at < keys.size(); ++at) {
         const Dictionary here = address(world, Kind::RECORD, keys[at]);

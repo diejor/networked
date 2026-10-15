@@ -28,8 +28,7 @@ func _init() -> void:
 	shape.shape = BoxShape3D.new()
 	add_child(shape)
 	Netw.configure_entity(self)
-	Netw.configure_property(self, &"position").broadcast().heartbeat(2) \
-			.interpolate(NetwInterpolate.new().lerp())
+	Netw.configure_property(self, &"position").broadcast().heartbeat(2)
 	Netw.configure_property(self, &"quaternion").broadcast().heartbeat(2)
 	Netw.configure_property(self, &"linear_velocity").broadcast() \
 			.heartbeat(2)

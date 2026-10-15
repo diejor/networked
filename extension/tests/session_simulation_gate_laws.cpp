@@ -1,3 +1,4 @@
+#include "support/fault_log.h"
 #include "support/netw_test.h"
 
 #include "godot/engine.hpp"
@@ -261,6 +262,15 @@ TEST_CASE(
     "physics rate that is an integer multiple of the tickrate warns never, "
     "and one that is not warns once"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_warning(
+        "[warn][prediction] Physics runs at 60 steps per second and"
+        " the tickrate is 59, so a tick is 1.017 steps and peers "
+        "drift apart. Make physics_ticks_per_second a whole "
+        "multiple of the tickrate.",
+        1
+    );
+
     const godot::Engine *engine = godot::Engine::get_singleton();
     REQUIRE(engine != nullptr);
     const int physics_rate = engine->get_physics_ticks_per_second();

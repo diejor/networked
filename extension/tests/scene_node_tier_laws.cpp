@@ -1,3 +1,4 @@
+#include "support/fault_log.h"
 #include "support/netw_test.h"
 
 #include "godot/node.hpp"
@@ -225,9 +226,9 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Scene][Hosted] SNT10 a scene owns its world by what it "
-    "declares, whether or not a viewport hosts it, and an unknown scene owns "
-    "none"
+    "[Networked][Scene][Hosted][SceneTree] SNT10 a scene owns its world by "
+    "what it declares, whether or not a viewport hosts it, and an unknown "
+    "scene owns none"
 ) {
     Ref<NetwMultiplayer> core;
     core.instantiate();
@@ -261,6 +262,18 @@ TEST_CASE(
     "with the container it made current, exactly once whichever door was "
     "used, and a refusal announces nothing at all"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][scene] A PackedScene with no file path cannot be "
+        "activated. Save it to a file first.",
+        1
+    );
+    expected_faults.expect_error(
+        "[error][scene] Only a PackedScene saved to a file can be "
+        "activated. A scene name cannot be.",
+        3
+    );
+
     Ref<NetwMultiplayer> core;
     core.instantiate();
     Node *root = memnew(Node);
@@ -298,6 +311,13 @@ TEST_CASE(
     "already live WITHOUT activating it, so a session pointed at the scene it "
     "already presents announces nothing"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][scene] Only a PackedScene saved to a file can be "
+        "activated. A scene name cannot be.",
+        3
+    );
+
     Ref<NetwMultiplayer> core;
     core.instantiate();
     Node *root = memnew(Node);
@@ -323,11 +343,19 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Scene][Hosted] SNT13 a session change owing nobody a move "
+    "[Networked][Scene][Hosted][SceneTree] SNT13 a session change owing nobody "
+    "a move "
     "lands on the spot, retiring every scene but the destination, and a "
     "destination nothing can bring up CLOSES the transition rather than "
     "leaving it armed against the next change"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][scene] Only a PackedScene saved to a file can be "
+        "activated. A scene name cannot be.",
+        1
+    );
+
     Ref<NetwMultiplayer> core;
     core.instantiate();
     Node *root = memnew(Node);

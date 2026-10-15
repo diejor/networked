@@ -1,6 +1,8 @@
 #pragma once
 
 #include "support/netw_test.h"
+#include "support/fault_log.h"
+#include "support/netw_call_log.h"
 
 #include "core/object/callable_mp.h"
 #include "godot/packed_scene.hpp"
@@ -15,6 +17,7 @@
 #include "netw/scene_core.hpp"
 #include "netw/session/frames.hpp"
 #include "netw/wire/frame.hpp"
+#include "netw/wire/registry.hpp"
 #include "scene/main/node.h"
 #include "scene/main/scene_tree.h"
 #include "scene/main/window.h"
@@ -84,6 +87,18 @@ godot::PackedByteArray two_bytes(uint8_t p_first, uint8_t p_second) {
     bytes.push_back(p_first);
     bytes.push_back(p_second);
     return bytes;
+}
+
+godot::PackedByteArray clock_reply(SessionSide &p_receiver) {
+    netw::session::ClockRate rate;
+    rate.tickrate = p_receiver.core->clock_engine().get_tickrate();
+    return netw::wire::frame_pack(
+        0,
+        0,
+        netw::wire::builtin_channel("CLOCK_HANDSHAKE_REPLY"),
+        netw::session::frame_write(rate),
+        godot::String()
+    );
 }
 
 struct InboundSink {
@@ -173,7 +188,7 @@ TEST_CASE(
     settle_pair(pair);
     arm_inbound_sink(pair.client);
 
-    const godot::PackedByteArray payload = two_bytes(0xAB, 0xCD);
+    const godot::PackedByteArray payload = clock_reply(pair.client);
     pair.server.core->send_datagram(pair.client_id, payload, true);
 
     pair.client.inner->poll();
@@ -193,8 +208,12 @@ TEST_CASE(
         inbound_sink.packet.size() - header.payload_offset,
         payload.size()
     );
-    NETW_CHECK_EQ(inbound_sink.packet[header.payload_offset], payload[0]);
-    NETW_CHECK_EQ(inbound_sink.packet[header.payload_offset + 1], payload[1]);
+    for (int64_t at = 0; at < payload.size(); ++at) {
+        NETW_CHECK_EQ(
+            inbound_sink.packet[header.payload_offset + at],
+            payload[at]
+        );
+    }
     NETW_CHECK_EQ(counted_packets, 1);
     NETW_CHECK_EQ(counted_bytes, payload.size());
 
@@ -274,7 +293,7 @@ TEST_CASE(
         0
     );
 
-    const godot::PackedByteArray payload = two_bytes(0x10, 0x20);
+    const godot::PackedByteArray payload = clock_reply(pair.client);
     pair.server.core->send_datagram(pair.client_id, payload, true);
     pair.client.inner->poll();
     NETW_CHECK_EQ(inbound_sink.count, 1);
@@ -294,14 +313,6 @@ TEST_CASE(
     memdelete(client_anchor);
 }
 
-godot::Variant admit_scene_request(
-    const godot::Variant &p_participant,
-    const godot::Variant &p_destination,
-    const godot::Variant &p_scope
-) {
-    return int64_t(godot::Error::OK);
-}
-
 FrameWalk walk_inbound(SessionSide &p_side) {
     const NetwCarrierFrame header
         = p_side.core->receive_header(inbound_sink.sender, inbound_sink.packet);
@@ -312,10 +323,16 @@ FrameWalk walk_inbound(SessionSide &p_side) {
 }
 
 TEST_CASE(
-    "[Networked][Session] A scene request crosses the pair as a framed "
-    "datagram and settles the asking side's pending request, with no "
-    "GDScript on either end"
+    "[Networked][Session] An unjoined scene request crosses the pair as a "
+    "framed datagram and its refusal clears the asking side's pending request"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_warning(
+        "[warn][scene] Peer * asked for a scene change before it joined, "
+        "so it was refused.",
+        1
+    );
+    const netw_test::CallLog answers;
     NativeSessionPair pair = make_native_pair();
     settle_pair(pair);
     arm_inbound_sink(pair.server);
@@ -334,6 +351,7 @@ TEST_CASE(
         godot::RID()
     );
     REQUIRE(asked.is_valid());
+    asked->catch_error(answers.callable("refused"));
 
     const int request_id = client_scene->get_pending_request_id();
     NETW_CHECK_GE(request_id, 1);
@@ -364,33 +382,8 @@ TEST_CASE(
     NETW_CHECK_EQ(int(row[3]), 0);
     NETW_CHECK_EQ(int(row[4]), 0);
 
-    server_scene->set_request_handler(callable_mp_static(&admit_scene_request));
-    const godot::String verified
-        = NetwSceneCore::verify_requested_path(godot::String(row[1]));
-    NETW_CHECK_EQ(verified == destination, true);
-    NETW_CHECK_EQ(
-        int(
-            server_scene->decide_request(godot::Variant(), row[1], int(row[2]))
-        ),
-        int(godot::Error::OK)
-    );
-
     disarm_inbound_sink(pair.server);
     arm_inbound_sink(pair.client);
-
-    netw::session::SceneResult result_frame;
-    result_frame.request_id = uint64_t(int(row[0]));
-    result_frame.code = int64_t(godot::Error::OK);
-    pair.server.core->send_to(
-        pair.client_id,
-        0,
-        0,
-        netw::session::frame_write(result_frame),
-        true,
-        0,
-        godot::String(),
-        false
-    );
 
     pair.client.inner->poll();
 
@@ -400,6 +393,13 @@ TEST_CASE(
     NETW_CHECK_EQ(client_scene->get_pending_request_id(), 0);
     NETW_CHECK_EQ(client_scene->is_current(request_id), false);
     NETW_CHECK_EQ(asked->get_is_settled(), true);
+    CHECK(asked->get_is_failed());
+    NETW_CHECK_EQ(asked->get_code(), int(godot::Error::ERR_UNAUTHORIZED));
+    NETW_CHECK_EQ(answers.count("refused"), 1);
+    NETW_CHECK_EQ(
+        int(answers.args("refused", 0)[0]),
+        int(godot::Error::ERR_UNAUTHORIZED)
+    );
 
     disarm_inbound_sink(pair.client);
 }

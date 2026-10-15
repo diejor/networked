@@ -1,3 +1,4 @@
+#include "support/fault_log.h"
 #include "support/netw_test.h"
 
 #include "godot/node.hpp"
@@ -90,6 +91,14 @@ TEST_CASE(
     "[Networked][Entity][Hosted] F5 is_template is written once, from an "
     "unbound record, and a template cannot be cleared back"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][entity] Condition \"get_is_template()\" is true. "
+        "NetwEntity.is_template cannot be cleared once it is set. "
+        "Create another node to replicate.",
+        1
+    );
+
     Node *root = memnew(Node);
     const Ref<NetwEntity> entity = NetwEntity::ensure(root);
     REQUIRE(entity.is_valid());
@@ -102,10 +111,7 @@ TEST_CASE(
     CHECK(entity->get_is_template());
     entity->set_is_template(true);
     CHECK(entity->get_is_template());
-
-    ERR_PRINT_OFF;
     entity->set_is_template(false);
-    ERR_PRINT_ON;
     CHECK(entity->get_is_template());
 
     memdelete(root);

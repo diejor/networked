@@ -1,3 +1,4 @@
+#include "support/fault_log.h"
 #include "support/netw_test.h"
 
 #include <cstdint>
@@ -79,6 +80,17 @@ TEST_CASE(
     "still do something about it, so a value too large to spell produces no "
     "bytes and a value the wire claims is out of range produces no value"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][wire] A packet field value needs more bytes than "
+        "its limit.",
+        1
+    );
+    expected_faults.expect_error(
+        "[error][wire] A packet field value is outside its range.",
+        1
+    );
+
     const Ref<NetwBitStream> writing = NetwBitStream::writer();
     writing->varuint(int64_t(1) << 40, 3);
     const bool writer_refused = !writing->ok();

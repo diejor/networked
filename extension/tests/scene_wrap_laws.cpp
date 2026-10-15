@@ -86,7 +86,8 @@ Ref<NetwMultiplayer> playing(NetwMultiplayer::Role p_role) {
 }
 
 TEST_CASE(
-    "[Networked][Scene][Hosted] W1 an isolated scene root is wrapped in a "
+    "[Networked][Scene][Hosted][SceneTree] W1 an isolated scene root is "
+    "wrapped in a "
     "hidden StretchViewportContainer holding a SubViewport that owns both "
     "worlds, and neither wrapper carries an identity"
 ) {
@@ -180,7 +181,8 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Scene][Hosted] W4 on a listen host the view of the scene its "
+    "[Networked][Scene][Hosted][SceneTree] W4 on a listen host the view of the "
+    "scene its "
     "player stands in is visible and every other view is hidden, and both "
     "turn over when the player moves"
 ) {
@@ -206,7 +208,8 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Scene][Hosted] W5 with no player standing anywhere the one "
+    "[Networked][Scene][Hosted][SceneTree] W5 with no player standing anywhere "
+    "the one "
     "live scene is shown, and a second live scene leaves neither shown"
 ) {
     const Ref<NetwMultiplayer> core
@@ -227,7 +230,8 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Scene][Hosted] W6 a view the game shows itself stays shown "
+    "[Networked][Scene][Hosted][SceneTree] W6 a view the game shows itself "
+    "stays shown "
     "through a settle that does not change the shown scene"
 ) {
     const Ref<NetwMultiplayer> core

@@ -1,3 +1,4 @@
+#include "support/fault_log.h"
 #include "support/netw_test.h"
 
 #include "netw/predict/engine.hpp"
@@ -290,6 +291,14 @@ TEST_CASE(
     "[Networked][Predict][Hosted][Law] the decoded window is bounded, and "
     "drops its oldest transition rather than its newest"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][prediction] Condition \"row == nullptr\" is true. "
+        "Returning: false. Prediction wrote input for an entity it "
+        "no longer predicts (slot *).",
+        1
+    );
+
     NetwPredictionEngine held_pool;
     NetwPredictionEngine *const pool = &held_pool;
     const int64_t slot = consuming_slot(pool, int(Schedule::FRAME));

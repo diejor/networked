@@ -1,3 +1,4 @@
+#include "support/fault_log.h"
 #include "support/netw_test.h"
 
 #include "godot/callable.hpp"
@@ -160,6 +161,14 @@ TEST_CASE(
     "different spec replaces the standing one, which is what makes MC4's "
     "silence a statement about equality rather than about the first writer"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_warning(
+        "[warn][session] NetwMemberConfig.interpolate changed the "
+        "interpolators of '*', and the last call wins. Declare them"
+        " once.",
+        1
+    );
+
     const Ref<NetwMemberConfig> config = make_config();
     config->interpolate(one(make_interpolator(0.25)));
     const Ref<NetwInterpolate> replacement = make_interpolator(0.5);
@@ -175,6 +184,13 @@ TEST_CASE(
     "leaves the declared list standing, so a typo in one chained call cannot "
     "silently unpack a member that was already declared"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][session] NetwMemberConfig.quantize got a int for "
+        "value 0 of '*'. Pass a NetwQuantize or null there.",
+        1
+    );
+
     const Ref<NetwMemberConfig> config = make_config();
     const Ref<NetwQuantize> packer = make_quantizer();
     config->quantize(one(packer));
@@ -192,17 +208,45 @@ TEST_CASE(
 ) {
     const Ref<NetwMemberConfig> config = make_config();
 
-    CHECK(bool(config->authority() == config));
-    CHECK(bool(config->controller() == config));
-    CHECK(bool(config->any_peer() == config));
-    CHECK(bool(config->server() == config));
-    CHECK(bool(config->reliable() == config));
-    CHECK(bool(config->unreliable() == config));
-    CHECK(bool(config->call_local() == config));
-    CHECK(bool(config->call_remote() == config));
-    CHECK(bool(config->quantize(one(make_quantizer())) == config));
-    CHECK(bool(config->interpolate(one(make_interpolator(0.1))) == config));
-    CHECK(bool(config->quantize(Array()) == config));
+    SUBCASE("authority") {
+        CHECK(bool(config->authority() == config));
+    }
+
+    SUBCASE("controller") {
+        CHECK(bool(config->controller() == config));
+    }
+
+    SUBCASE("any_peer") {
+        CHECK(bool(config->any_peer() == config));
+    }
+
+    SUBCASE("server") {
+        CHECK(bool(config->server() == config));
+    }
+
+    SUBCASE("reliable") {
+        CHECK(bool(config->reliable() == config));
+    }
+
+    SUBCASE("unreliable") {
+        CHECK(bool(config->unreliable() == config));
+    }
+
+    SUBCASE("call_local") {
+        CHECK(bool(config->call_local() == config));
+    }
+
+    SUBCASE("call_remote") {
+        CHECK(bool(config->call_remote() == config));
+    }
+
+    SUBCASE("quantize") {
+        CHECK(bool(config->quantize(one(make_quantizer())) == config));
+    }
+
+    SUBCASE("interpolate") {
+        CHECK(bool(config->interpolate(one(make_interpolator(0.1))) == config));
+    }
 }
 
 TEST_CASE(
@@ -232,7 +276,7 @@ TEST_CASE(
     config->set_context_node_ref(node_ref);
     const CallLog reader;
     NetwMemberConfig::set_member_types_reader(
-        reader.answering("types", one(int(Variant::STRING)))
+        reader.answering("types", one(int(Variant::FLOAT)))
     );
 
     config->quantize(one(make_quantizer()));
@@ -253,6 +297,13 @@ TEST_CASE(
     "quantizer that cannot pack the declared type and accepts an empty slot "
     "or an unknown type, which is the one rule NetwJoinConfig also enforces"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_warning(
+        "[warn][session] NetwQuantizeScalar cannot pack the String "
+        "value of '*' in '*'. Use a quantizer that supports String.",
+        1
+    );
+
     const Ref<NetwQuantize> packer = make_quantizer();
 
     CHECK_FALSE(
@@ -302,6 +353,14 @@ TEST_CASE(
     "interpolator over a type it cannot lerp, read off the same parallel type "
     "list the quantizer rule reads"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_warning(
+        "[warn][session] The interpolator for '*' in '*' cannot "
+        "blend its String value. Use an interpolator that supports "
+        "String.",
+        1
+    );
+
     const Ref<NetwInterpolate> smoother = make_interpolator(0.1);
 
     CHECK_FALSE(
@@ -327,6 +386,14 @@ TEST_CASE(
     "two declarations, one per argument, and refuses a short list rather "
     "than packing argument one and leaving argument two to guess"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][session] NetwMemberConfig.quantize got 1 entries "
+        "for '*' in '*', which has 2 values. Pass one entry per "
+        "value, and null for a value to leave as it is.",
+        1
+    );
+
     const Ref<NetwMemberConfig> config = make_config();
     config->set_context_name(StringName("aim"));
     const CallLog reader;
@@ -369,6 +436,19 @@ TEST_CASE(
     "would ground every config no script backs, but a list of nothing is "
     "refused whether the arity is readable or not"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][session] NetwMemberConfig.quantize got no "
+        "quantizer for '*'. Pass one quantizer for each value.",
+        1
+    );
+    expected_faults.expect_error(
+        "[error][session] NetwMemberConfig.interpolate got no "
+        "interpolator for '*'. Pass one interpolator for each "
+        "value.",
+        1
+    );
+
     const Ref<NetwMemberConfig> config = make_config();
 
     config->quantize(pair(make_quantizer(), make_quantizer()));

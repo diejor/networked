@@ -565,7 +565,7 @@ bool NetwMultiplayer::persist_enroll(Node *p_root) {
     }
     const ObjectID outer = persist_enrolling;
     persist_enrolling = gd::instance_id(p_root);
-    persist_begin_load(binding);
+    persist_begin_load(binding)->mark_failure_observed();
     persist_enrolling = outer;
     return plane->withholds(p_root);
 }

@@ -1,10 +1,10 @@
 extends SceneTree
 
-var _runner: Object = null
+var runner: Object = null
 
 
 func _physics_process(_delta: float) -> bool:
-	if _runner == null:
+	if runner == null:
 		if not ClassDB.class_exists(&"NetwNativeTests"):
 			push_error(
 				"The embedded suite is absent. Build with: "
@@ -12,8 +12,8 @@ func _physics_process(_delta: float) -> bool:
 			)
 			quit(2)
 			return true
-		_runner = ClassDB.instantiate(&"NetwNativeTests")
-	if _runner.frame_advance():
+		runner = ClassDB.instantiate(&"NetwNativeTests")
+	if runner.frame_advance():
 		return false
 	var filter := "*"
 	var cells_path := ""
@@ -22,12 +22,18 @@ func _physics_process(_delta: float) -> bool:
 			filter = argument.trim_prefix("--native-filter=")
 		elif argument == "--netw-list-cells":
 			cells_path = "res://reports/native/cells.txt"
-	var result: Dictionary = _runner.run(
+	var result: Dictionary = runner.run(
 		filter,
 		"res://reports/native/results.xml",
 		cells_path,
 	)
-	_write_wire_spec(_runner)
+	var spec: Dictionary = runner.wire_spec()
+	var path := "res://reports/native/wire.spec.json"
+	var file := FileAccess.open(path, FileAccess.WRITE)
+	if file == null:
+		push_error("Cannot write %s" % path)
+	else:
+		file.store_string(JSON.stringify(spec, "  ", true))
 	if not cells_path.is_empty():
 		print("NATIVE_CELLS ", cells_path, " ", result[&"cells"])
 	print_summary(result)
@@ -86,14 +92,3 @@ func print_summary(result: Dictionary) -> void:
 		lines.append("  %4d  %s" % [family[&"count"], line.left(120)])
 	lines.append("The engine prints its own exit leak lines after this block.")
 	print("\n".join(lines))
-
-
-func _write_wire_spec(runner: Object) -> void:
-	var spec: Dictionary = runner.wire_spec()
-	var path := "res://reports/native/wire.spec.json"
-	var file := FileAccess.open(path, FileAccess.WRITE)
-	if file == null:
-		push_error("Cannot write %s" % path)
-		return
-	file.store_string(JSON.stringify(spec, "  ", true))
-	print("NATIVE_WIRE_SPEC ", path, " ", spec[&"records"].size())

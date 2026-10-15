@@ -1,4 +1,5 @@
 #include "support/netw_test.h"
+#include "support/fault_log.h"
 
 #include <algorithm>
 
@@ -117,6 +118,7 @@ TEST_CASE(
     "does not replay costs one correction, and the client then equals the "
     "server"
 ) {
+    const netw_test::FaultWatch faults;
     for (const bool ruled : {false, true}) {
         for (const double latency : {0.0, 100.0}) {
             const Disturbed run = nudged_once(latency, ruled);
@@ -125,16 +127,25 @@ TEST_CASE(
             NETW_CHECK_CLOSE(run.client_y, run.server_y, CLOSE);
         }
     }
+    NETW_CHECK_EQ(
+        faults.warnings_containing("causal state properties"),
+        2
+    );
 }
 
 TEST_CASE(
     "[Networked][Predict] PR2 a row recorded before a correction's write is "
     "not judged against it, so the difference lands once"
 ) {
+    const netw_test::FaultWatch faults;
     for (const double latency : {0.0, 100.0}) {
         const Disturbed run = nudged_once(latency);
         NETW_CHECK_CLOSE(run.overshoot, 0.0, CLOSE);
     }
+    NETW_CHECK_EQ(
+        faults.warnings_containing("causal state properties"),
+        1
+    );
 }
 
 Ref<netw::NetwQuantizeScalar> half_step() {

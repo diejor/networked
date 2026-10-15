@@ -26,6 +26,8 @@ class NetwPromise : public godot::RefCounted {
     GDCLASS(NetwPromise, godot::RefCounted)
 
 private:
+    friend class NetwMultiplayer;
+
     bool completed = false;
     bool failed = false;
     godot::Variant result;
@@ -35,6 +37,10 @@ private:
     godot::LocalVector<godot::Callable> catch_callbacks;
     promise_wait::Waiting waiting;
     mutable bool failure_read = false;
+
+    void mark_failure_observed() {
+        failure_read = true;
+    }
 
 protected:
     static void _bind_methods();

@@ -1,3 +1,4 @@
+#include "support/fault_log.h"
 #include "support/loopback_rig.h"
 
 #if defined(NETW_TIER_HOSTED)
@@ -221,6 +222,15 @@ TEST_CASE(
     "[Networked][Sim][Select] a selection from another scene is refused and "
     "names nothing"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][prediction] Condition \"!same_scene(*this, subject,"
+        " p_entity)\" is true. Returning: ERR_INVALID_PARAMETER. "
+        "NetwSimulation.simulate refused '*', because it is in "
+        "another scene than '*'. Select entities in the same scene.",
+        1
+    );
+
     Scenario scenario;
     scenario.label = "two-scenes";
     scenario.world.scene("Arena")

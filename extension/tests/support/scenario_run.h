@@ -629,6 +629,16 @@ inline ScenarioRun ScenarioRun::session(
     run.ran = p_scenario;
     run.seed_tracks(p_scenario);
     p_rig.declare_world(p_scenario.world);
+    for (int at = 0; at < p_scenario.world.entity_count(); ++at) {
+        const EntityDecl &decl = p_scenario.world.entity_at(at);
+        const godot::RID entity = p_rig.entity_of(decl.name());
+        const int route = int(p_rig.server()->entity_get_route(entity));
+        for (int client = 0; client < p_rig.count(); ++client) {
+            if (!p_rig.holds_entity(decl.name(), client)) {
+                p_rig.declare_mirror(client, EntityDecl(decl).on_route(route));
+            }
+        }
+    }
 
     if (p_scenario.link_conditions.is_valid()) {
         for (int client = 0; client < p_rig.count(); ++client) {

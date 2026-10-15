@@ -146,14 +146,14 @@ TEST_CASE(
     made.probe->set_identity_packet(packet_of("current"));
 
     const int late = rig.add_client();
-    rig.mount_late(late);
-    rig.mirror_late(late, "Arena");
     rig.register_constructor(
         rig.client(late),
         StringName("probe_player"),
         callable_mp_static(&build_probe_player),
         one_type()
     );
+    rig.mount_late(late, false);
+    rig.mirror_late(late, "Arena");
     rig.deliver_spawn(late, rig.spawn_frame_of(made.route));
     rig.pump(6);
 

@@ -1,3 +1,4 @@
+#include "support/fault_log.h"
 #include "support/netw_test.h"
 
 #include <cstdint>
@@ -244,6 +245,13 @@ TEST_CASE(
     "[Networked][Wire][Hosted] a built-in id is declared once, by the built-in "
     "table, and a caller cannot redeclare it"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_warning(
+        "[warn][wire] Channel id 41 belongs to a built-in channel, "
+        "so '*' cannot use it. Pick another id.",
+        1
+    );
+
     CHECK(WireRegistry::id_is_builtin(PROBE));
     CHECK(WireRegistry::id_is_builtin(0));
     CHECK_FALSE(WireRegistry::id_is_builtin(200));

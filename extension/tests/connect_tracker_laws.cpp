@@ -1,3 +1,4 @@
+#include "support/fault_log.h"
 #include "support/netw_test.h"
 
 #include "godot/local_vector.hpp"
@@ -143,6 +144,14 @@ TEST_CASE(
     "url and reason, so the one warning a game sees names the endpoint to "
     "drop rather than an mbedtls error code with no address in it"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "Condition \"scheme != \"ws://\" && scheme != \"wss://\"\" is "
+        "true. Returning: ERR_INVALID_PARAMETER Invalid protocol: "
+        "\"wss-typo://\" (must be either \"ws://\" or \"wss://\").",
+        2
+    );
+
     PackedStringArray urls;
     urls.push_back("wss-typo://first.example");
     urls.push_back("wss-typo://second.example");

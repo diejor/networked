@@ -1,3 +1,4 @@
+#include "support/fault_log.h"
 #include "support/netw_test.h"
 
 #include "netw/predict/engine.hpp"
@@ -151,7 +152,6 @@ TEST_CASE(
     CHECK(static_geometry(wall));
     CHECK(static_geometry(floor_3d));
     CHECK(static_geometry(tiles));
-    // Exclude moving platforms before accepting StaticBody2D subclasses.
     CHECK(!static_geometry(platform));
     CHECK(!static_geometry(walker));
     CHECK(!static_geometry(crate));
@@ -296,6 +296,16 @@ TEST_CASE(
     "[Networked][Predict][Hosted] a rewire discards the rules declared "
     "against the field table it replaced"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][prediction] Condition "
+        "\"row->carry_rules.is_empty()\" is true. Returning: "
+        "CARRY_DECLINED. Prediction tried to carry a value on an "
+        "entity with no NetwPropertyConfig.carry_along or "
+        "carry_step property.",
+        1
+    );
+
     NetwPredictionEngine held_pool;
     NetwPredictionEngine *const pool = &held_pool;
     const int64_t slot = carrying_slot(pool, int(Schedule::FRAME));
@@ -486,8 +496,6 @@ TEST_CASE(
         const int64_t slot = witnessing_slot(pool);
         int64_t tick = 1;
         if (row.woke) {
-            // The rest state that makes the NEXT solve one the solver started
-            // rather than continued.
             pool->record_input(slot, tick, int32_t(tick));
             const netw::predict::DriveRecord asleep = pool->open_drive(
                 slot,
@@ -561,7 +569,6 @@ TEST_CASE(
     );
     const int64_t transition = drive.transition;
 
-    // No evidence recorded at all, so the row carries no witness mask.
     CHECK(!pool->witness_row_clean(slot, transition, false));
 
     PackedStringArray ids;
@@ -586,7 +593,6 @@ TEST_CASE(
     ));
 
     CHECK(pool->witness_row_clean(slot, transition, false));
-    // Authority has not agreed yet, so the row is a LOCAL fact only.
     CHECK(!pool->witness_row_clean(slot, transition, true));
     pool->mark_witness_match(slot, transition, true);
     CHECK(pool->witness_row_clean(slot, transition, true));
@@ -645,10 +651,6 @@ TEST_CASE(
     const int64_t at = drive.transition;
     pool->close_drive(slot, at, 0, 0, 0, 0);
 
-    // A conditional operator waits on "has authority answered", and both
-    // answers are answers. Reading the matched flag alone cannot tell an
-    // unanswered row from one authority disagreed about, so the ladder would
-    // stop waiting the moment the row existed.
     CHECK_FALSE(pool->witness_judged(slot, at));
     CHECK_FALSE(pool->witness_row_clean(slot, at, true));
 
@@ -659,7 +661,6 @@ TEST_CASE(
     pool->mark_witness_match(slot, at, true);
     CHECK(pool->witness_judged(slot, at));
 
-    // A transition the journal never held is unanswered, not answered false.
     CHECK_FALSE(pool->witness_judged(slot, 900));
     CHECK_FALSE(pool->witness_judged(slot + 9000, at));
 }
@@ -671,8 +672,6 @@ TEST_CASE(
     NetwPredictionEngine held_pool;
     NetwPredictionEngine *const pool = &held_pool;
     const int64_t slot = carrying_slot(pool, int(Schedule::FRAME));
-    // A rule is never invoked from here. What the book needs is a slot that
-    // declares one, and any valid callable declares it.
     pool->set_carry(
         slot,
         StringName("spin"),
@@ -682,8 +681,6 @@ TEST_CASE(
     CHECK(pool->carry_judgeable(slot, 4));
 
     pool->mark_carry_dirty(slot, 5);
-    // A rule is judged from one recorded state to the next, so the mark bars
-    // the transition ENDING at it as well as the one starting there.
     CHECK_FALSE(pool->carry_judgeable(slot, 4));
     CHECK_FALSE(pool->carry_judgeable(slot, 5));
     CHECK(pool->carry_judgeable(slot, 6));

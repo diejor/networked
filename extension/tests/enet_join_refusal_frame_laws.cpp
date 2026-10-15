@@ -1,4 +1,5 @@
 #include "support/frame_drive.h"
+#include "support/fault_log.h"
 #include "support/netw_test.h"
 
 #include "godot/class_db.hpp"
@@ -21,6 +22,7 @@ constexpr int SETTLE_POLLS = 10;
 struct RefusalEvidence {
     bool driven = false;
     int port = 0;
+    int64_t schema_refusals = 0;
     bool host_online = false;
     bool host_seated_itself = false;
     bool client_reached = false;
@@ -79,6 +81,7 @@ class EnetJoinRefusalScenario final : public netw_test::FrameScenario {
     Ref<netw::NetwMultiplayer> host;
     Ref<netw::NetwMultiplayer> client;
     Ref<RefCounted> policy;
+    Ref<netw_test::FaultLog> diagnostics;
 
     static int64_t now_msec() {
         return int64_t(Time::get_singleton()->get_ticks_msec());
@@ -226,6 +229,8 @@ public:
                     evidence.driven = true;
                     return false;
                 }
+                diagnostics.instantiate();
+                netw_test::FaultLog::attach(diagnostics);
                 enter(1);
                 return true;
             }
@@ -324,6 +329,12 @@ public:
                 client.unref();
                 host.unref();
                 policy.unref();
+                netw_test::FaultLog::detach(diagnostics);
+                evidence.schema_refusals
+                    = diagnostics->warning_count_containing(
+                        "joined with no arguments, but the Netw.configure_join"
+                    );
+                diagnostics.unref();
                 evidence.driven = true;
                 return false;
             }
@@ -348,6 +359,7 @@ TEST_CASE(
     CHECK(evidence.client_reached);
     CHECK(evidence.client_told);
     CHECK(evidence.session_told);
+    NETW_CHECK_EQ(evidence.schema_refusals, 1);
     NETW_CHECK_EQ(evidence.connection_failures, 0);
     CHECK_FALSE(evidence.client_reason.is_empty());
     NETW_CHECK_EQ(evidence.client_error, int64_t(ERR_UNAUTHORIZED));

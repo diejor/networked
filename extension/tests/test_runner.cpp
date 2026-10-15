@@ -134,16 +134,11 @@ std::string first_line(const std::string &p_text) {
 }
 
 Ref<netw_test::FaultLog> &run_faults() {
-    static Ref<netw_test::FaultLog> log;
-    return log;
+    return netw_test::run_fault_log();
 }
 
 void open_run_faults() {
-    if (run_faults().is_valid()) {
-        return;
-    }
-    run_faults().instantiate();
-    netw_test::FaultLog::attach(run_faults());
+    netw_test::begin_fault_capture();
 }
 
 struct RunFaults {
@@ -158,8 +153,8 @@ RunFaults close_run_faults() {
         return split;
     }
     const std::vector<netw_test::FaultLine> printed = run_faults()->recorded();
-    netw_test::FaultLog::detach(run_faults());
-    run_faults().unref();
+    netw_test::write_fault_report(run_summary().failed == 0);
+    netw_test::end_fault_capture();
     netw_test::FaultLedger &ledger = netw_test::fault_ledger();
     const std::lock_guard<std::mutex> held(ledger.lock);
     split.printed = int64_t(printed.size());
@@ -553,28 +548,6 @@ int run_native_tests(
         context.setOption("test-case", filter_text.get_data());
     }
     const int code = context.run();
-    const residency_audit::Ledger &audited = residency_audit::ledger();
-    std::printf(
-        "NETW_MEMBERSHIP observations %lld divergences %lld entered %lld "
-        "left %lld first member %lld scene %lld body %lld\n",
-        (long long)audited.observations,
-        (long long)audited.divergences,
-        (long long)audited.entered,
-        (long long)audited.left,
-        (long long)audited.member_of_first,
-        (long long)audited.scene_of_first,
-        (long long)audited.body_of_first
-    );
-    const netw::store::validation_audit::Ledger &validated
-        = netw::store::validation_audit::ledger();
-    std::printf(
-        "NETW_STORE_VALIDATION every %lld checks %lld faults %lld planted "
-        "%lld\n",
-        (long long)netw::store::validation_interval(),
-        (long long)validated.checks,
-        (long long)validated.faults,
-        (long long)validated.planted
-    );
     if (!cells_path.is_empty()) {
         const CharString cells = ProjectSettings::get_singleton()
                                      ->globalize_path(cells_path)

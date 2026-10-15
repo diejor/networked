@@ -1,12 +1,12 @@
 class_name TestNakamaWrapperShape
 extends NetwTestSuite
 
-const _FACADE_PATH := "res://addons/com.heroiclabs.nakama/Nakama.gd"
-const _BRIDGE_PATH := "res://addons/com.heroiclabs.nakama/utils/NakamaMultiplayerBridge.gd"
-const _CLIENT_PATH := "res://addons/com.heroiclabs.nakama/client/NakamaClient.gd"
-const _SOCKET_PATH := "res://addons/com.heroiclabs.nakama/socket/NakamaSocket.gd"
-const _STORAGE_ID_PATH := "res://addons/com.heroiclabs.nakama/api/NakamaStorageObjectId.gd"
-const _WRITE_OBJECT_PATH := "res://addons/com.heroiclabs.nakama/api/NakamaWriteStorageObject.gd"
+const FACADE_PATH := "res://addons/com.heroiclabs.nakama/Nakama.gd"
+const BRIDGE_PATH := "res://addons/com.heroiclabs.nakama/utils/NakamaMultiplayerBridge.gd"
+const CLIENT_PATH := "res://addons/com.heroiclabs.nakama/client/NakamaClient.gd"
+const SOCKET_PATH := "res://addons/com.heroiclabs.nakama/socket/NakamaSocket.gd"
+const STORAGE_ID_PATH := "res://addons/com.heroiclabs.nakama/api/NakamaStorageObjectId.gd"
+const WRITE_OBJECT_PATH := "res://addons/com.heroiclabs.nakama/api/NakamaWriteStorageObject.gd"
 
 const REQUIRED_CLIENT_METHODS: PackedStringArray = [
 	"authenticate_custom_async",
@@ -44,54 +44,64 @@ const REQUIRED_SOCKET_SIGNALS := {
 	"closed": 0,
 }
 
+var scripts: Array[Script] = []
+
 
 @warning_ignore("unused_parameter")
 func before(
 		do_skip = not NakamaWrapper.is_addon_present(),
 		skip_reason = "Nakama addon is not installed.",
 ) -> void:
-	pass
+	for path: String in [
+		FACADE_PATH,
+		BRIDGE_PATH,
+		CLIENT_PATH,
+		SOCKET_PATH,
+		STORAGE_ID_PATH,
+		WRITE_OBJECT_PATH,
+	]:
+		scripts.append(load(path) as Script)
 
 
 func test_facade_client_and_socket_surface() -> void:
-	var facade: Object = (load(_FACADE_PATH) as Script).new()
+	var facade: Object = (load(FACADE_PATH) as Script).new()
 	auto_free(facade)
 
 	assert_bool(facade.has_method("create_client")).is_true()
 	assert_bool(facade.has_method("create_socket_from")).is_true()
 
-	var client_script := load(_CLIENT_PATH) as Script
+	var client_script := load(CLIENT_PATH) as Script
 	for method_name in REQUIRED_CLIENT_METHODS:
-		assert_bool(_script_has_method(client_script, method_name)) \
+		assert_bool(script_has_method(client_script, method_name)) \
 				.override_failure_message(
 					"NakamaClient is missing '%s'." % method_name,
 				).is_true()
 
-	var socket_script := load(_SOCKET_PATH) as Script
+	var socket_script := load(SOCKET_PATH) as Script
 	for method_name in REQUIRED_SOCKET_METHODS:
-		assert_bool(_script_has_method(socket_script, method_name)) \
+		assert_bool(script_has_method(socket_script, method_name)) \
 				.override_failure_message(
 					"NakamaSocket is missing '%s'." % method_name,
 				).is_true()
-	_assert_signal_arity(socket_script, REQUIRED_SOCKET_SIGNALS)
+	assert_signal_arity(socket_script, REQUIRED_SOCKET_SIGNALS)
 
 
 func test_bridge_storage_and_wrapper_surface() -> void:
-	var script := load(_BRIDGE_PATH) as Script
+	var script := load(BRIDGE_PATH) as Script
 	for method_name in REQUIRED_BRIDGE_METHODS:
-		assert_bool(_script_has_method(script, method_name)) \
+		assert_bool(script_has_method(script, method_name)) \
 				.override_failure_message(
 					"NakamaMultiplayerBridge is missing '%s'." % method_name,
 				).is_true()
-	_assert_signal_arity(script, REQUIRED_BRIDGE_SIGNALS)
+	assert_signal_arity(script, REQUIRED_BRIDGE_SIGNALS)
 
-	var id: Object = (load(_STORAGE_ID_PATH) as Script).new(
+	var id: Object = (load(STORAGE_ID_PATH) as Script).new(
 		"profiles",
 		"player",
 		"user",
 		"version",
 	)
-	var write: Object = (load(_WRITE_OBJECT_PATH) as Script).new(
+	var write: Object = (load(WRITE_OBJECT_PATH) as Script).new(
 		"profiles",
 		"player",
 		1,
@@ -157,14 +167,14 @@ func test_lobby_directory_identity_uses_base_when_debug_suffix_disabled() -> voi
 	assert_str(dir._local_member_name()).is_equal("diegote")
 
 
-func _script_has_method(script: Script, method_name: String) -> bool:
+func script_has_method(script: Script, method_name: String) -> bool:
 	for method in script.get_script_method_list():
 		if method.name == method_name:
 			return true
 	return false
 
 
-func _assert_signal_arity(script: Script, expected: Dictionary) -> void:
+func assert_signal_arity(script: Script, expected: Dictionary) -> void:
 	var arity_by_name := { }
 	for info in script.get_script_signal_list():
 		arity_by_name[info.name] = (info.args as Array).size()

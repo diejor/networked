@@ -414,6 +414,7 @@ TEST_CASE(
     "engine error"
 ) {
     Table table;
+    table.rig.declare_world(netw_test::WorldDecl().clocked());
     const int successor = 1;
     const int64_t successor_was = table.was(successor);
     const int route = spawn_probe(table);
@@ -701,6 +702,24 @@ TEST_CASE(
     "ERR_UNAUTHORIZED on a client, and ERR_INVALID_PARAMETER for peer 1 or a "
     "peer that is not in the session, and moves nothing"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][session] Condition \"!is_online() || "
+        "!session_core.is_server_role()\" is true. Returning: "
+        "ERR_UNAUTHORIZED. NetwSession.transfer_server runs only on"
+        " the server.",
+        1
+    );
+    expected_faults.expect_error(
+        "[error][session] Condition \"p_peer == SERVER_PEER || "
+        "!gd::api_peer_ids(inner).has(int32_t(p_peer))\" is true. "
+        "Returning: ERR_INVALID_PARAMETER. "
+        "NetwSession.transfer_server got peer *, which is not a "
+        "client of this session. Pass the peer id of a connected "
+        "client.",
+        2
+    );
+
     Ref<MultiplayerPeer> enet;
     for (int port = ENET_PORT; port < ENET_PORT + ENET_PORTS; ++port) {
         const Ref<MultiplayerPeer> candidate
@@ -1885,6 +1904,7 @@ TEST_CASE(
     "held and reaches every survivor"
 ) {
     Table table;
+    table.rig.declare_world(netw_test::WorldDecl().clocked(TICKRATE, 3));
     table.keep_world();
     const int successor = table.lowest_client();
     const Vitals vitals(table);
@@ -1948,6 +1968,7 @@ TEST_CASE(
     "every survivor"
 ) {
     Table table;
+    table.rig.declare_world(netw_test::WorldDecl().clocked(TICKRATE, 3));
     table.keep_world();
     const int successor = table.lowest_client();
     const Vitals vitals(table);
@@ -2018,14 +2039,22 @@ TEST_CASE(
     "successor before every survivor reported waits, and is then admitted "
     "under a player id no peer held"
 ) {
+    const netw_test::FaultWatch faults;
     Table table;
     table.keep_world();
     const int successor = table.lowest_client();
-    table.rig.hold(successor);
+    Vector<int> missed_clients;
     for (int at = 0; at < MISSED_JOINS; ++at) {
         const int missed = table.rig.add_client();
         table.rig.mount_late(missed);
-        table.seat(missed)->session_submit_join(StringName("missed"), Array());
+        missed_clients.push_back(missed);
+    }
+    table.rig.pump(SETTLE_PUMPS);
+    table.rig.hold(successor);
+    for (int missed : missed_clients) {
+        netw::Netw::prepare_join(
+            table.rig.branch(missed), StringName("missed"), Array()
+        );
     }
     table.rig.pump(SETTLE_PUMPS);
     const int seats = table.rig.count();
@@ -2046,7 +2075,9 @@ TEST_CASE(
     }
     const int late = table.rig.add_client();
     table.rig.mount_late(late);
-    table.seat(late)->session_submit_join(StringName("late"), Array());
+    netw::Netw::prepare_join(
+        table.rig.branch(late), StringName("late"), Array()
+    );
     table.rig.pump(SETTLE_PUMPS);
     NetwMultiplayer *host = table.seat(successor);
     NETW_CHECK_EQ(int(host->is_structure_halted()), 1);
@@ -2067,6 +2098,7 @@ TEST_CASE(
             NETW_CHECK_EQ(int(taken.has(player->player_id())), 0);
         }
     }
+    NETW_CHECK_EQ(faults.errors(), 0);
 }
 
 TEST_CASE(
@@ -2353,7 +2385,14 @@ bool linked_to(NetwMultiplayer *p_host, int64_t p_peer) {
 
 int join_late(Table &p_table) {
     const int late = p_table.rig.add_client();
-    p_table.rig.mount_late(late);
+    p_table.rig.register_constructor(
+        p_table.seat(late),
+        StringName(BODY_ID),
+        callable_mp_static(&build_body),
+        string_types()
+    );
+    p_table.rig.mount_late(late, false);
+    p_table.rig.mirror_late(late, "Arena");
     p_table.seat(late)->session_submit_join(StringName("late"), Array());
     return late;
 }
@@ -2447,6 +2486,23 @@ void report_refused(Tamper p_tamper) {
         int64_t(1)
     );
     survivors_resume(table, successor, honest, late);
+    NETW_CHECK_EQ(
+        int(table.rig.peer(late)->is_linked_to(table.was(liar))),
+        0
+    );
+    NETW_CHECK_EQ(
+        int(table.rig.peer(liar)->is_linked_to(table.rig.peer_id(late))),
+        0
+    );
+    NETW_CHECK_EQ(
+        table.rig.session()->transfer_server(int(table.was(liar)), true),
+        ERR_INVALID_PARAMETER
+    );
+    NETW_CHECK_EQ(faults.errors(), 0);
+    NETW_CHECK_EQ(
+        faults.warnings_containing("Authentication could not reach"),
+        0
+    );
 }
 
 TEST_CASE(

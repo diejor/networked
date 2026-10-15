@@ -355,9 +355,17 @@ TEST_CASE(
     NETW_CHECK_EQ(world.open(), OK);
     world.connection->defer(true);
 
-    world.plane->write(world.database, world.schema, "one", row(1, Vector2()));
-    world.plane->write(world.database, world.schema, "two", row(2, Vector2()));
+    const Ref<NetwPromise> first
+        = world.plane
+              ->write(world.database, world.schema, "one", row(1, Vector2()));
+    const Ref<NetwPromise> second
+        = world.plane
+              ->write(world.database, world.schema, "two", row(2, Vector2()));
     NETW_CHECK_EQ(world.connection->withheld_count(), 2);
+    world.connection->release();
+    world.connection->release();
+    CHECK(first->get_is_completed());
+    CHECK(second->get_is_completed());
 }
 
 TEST_CASE(

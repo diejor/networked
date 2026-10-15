@@ -1,3 +1,4 @@
+#include "support/fault_log.h"
 #include "support/netw_test.h"
 
 #include <cstdint>
@@ -236,6 +237,8 @@ TEST_CASE(
     "load is out, or after its binding failed to compile, writes nothing and "
     "is no longer withheld"
 ) {
+    netw_test::FaultWatch expected_faults;
+
     SUBCASE("the load is still in flight") {
         World world("lc4");
         world.bind_both();
@@ -255,6 +258,14 @@ TEST_CASE(
     }
 
     SUBCASE("the binding never compiled") {
+        expected_faults.expect_error(
+            "[error][table] Condition \"!gd::has_property(node, "
+            "property)\" is true. Returning: RID(). '*' saves column"
+            " '*' of table '*' from '*', but that node has no such "
+            "property. Fix the property name.",
+            1
+        );
+
         World world("lc4b");
         world.bind(world.root, "no_such_property", 0);
         CHECK(world.session->persist_enroll(world.root));
@@ -271,6 +282,13 @@ TEST_CASE(
     "keeps the captured row, and the next flush writes it and lets the "
     "binding go"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][table] Database '*' failed. Record '*' was not "
+        "saved (the memory store was told to fail).",
+        1
+    );
+
     World world("lc5");
     const RID binding = world.loaded();
     world.root->set_position(Vector2(8, 8));
@@ -466,6 +484,19 @@ TEST_CASE(
     "rows cannot be saved keeps the session online, and a retry that saves "
     "them goes on to close the peer"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][table] Database '*' failed. Record '*' was not "
+        "saved (the memory store was told to fail).",
+        1
+    );
+    expected_faults.expect_error(
+        "[error][session] The session stayed online, because an "
+        "entity could not be saved. Call NetwSession.leave again to"
+        " retry, or close the peer to leave without saving.",
+        1
+    );
+
     Leaving stand;
     REQUIRE(stand.binding.is_valid());
     NETW_CHECK_EQ(

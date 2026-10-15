@@ -1,3 +1,4 @@
+#include "support/fault_log.h"
 #include "support/netw_test.h"
 
 #include "godot/scene_tree.hpp"
@@ -178,6 +179,14 @@ TEST_CASE(
     "entity out of a layer through the same record the typed layer uses, "
     "and a client is refused"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_warning(
+        "[warn][interest] "
+        "NetwMultiplayer.interest_layer_remove_entity runs only on "
+        "the server.",
+        1
+    );
+
     Ref<NetwMultiplayer> host = make_session();
     host->session_set_role(NetwMultiplayer::ROLE_LISTEN_SERVER);
     const RID layer = host->interest_layer_create(StringName("sight"));

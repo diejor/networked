@@ -1,3 +1,4 @@
+#include "support/fault_log.h"
 #include "support/mesh_stand.h"
 #include "support/netw_test.h"
 
@@ -88,6 +89,14 @@ TEST_CASE(
     "membership bodies, may send interest and kicks, while a member does "
     "none of them"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][session] Condition \"!is_host()\" is true. "
+        "Returning: ERR_UNAUTHORIZED. NetwSession.kick runs only on"
+        " the server.",
+        1
+    );
+
     MeshStand mesh;
     mesh.seat_server();
     mesh.seat_member(7);

@@ -1,5 +1,5 @@
 #include "support/frame_drive.h"
-#include "support/minted_script.h"
+#include "support/fault_log.h"
 #include "support/netw_test.h"
 
 #include "godot/callable.hpp"
@@ -24,49 +24,31 @@ namespace NetwTests {
 
 namespace {
 
-constexpr const char *RECORDER_SOURCE = R"gd(extends Logger
-
-var rows: Array[Dictionary] = []
-var lock := Mutex.new()
-
-func _log_error(function: String, file: String, line: int,
-		code: String, rationale: String, editor_notify: bool,
-		error_type: int, script_backtraces: Array[ScriptBacktrace]) -> void:
-	lock.lock()
-	rows.append({"type": error_type, "text": code + " " + rationale})
-	lock.unlock()
-
-func drain() -> Array[Dictionary]:
-	lock.lock()
-	var taken: Array[Dictionary] = rows.duplicate()
-	rows.clear()
-	lock.unlock()
-	return taken
-)gd";
-
 class FaultRecorder {
-    Ref<RefCounted> writer;
+    Ref<netw_test::FaultLog> writer;
 
 public:
     void open() {
-        const Ref<Script> script = netw_test::minted_script(RECORDER_SOURCE);
-        if (script.is_null()) {
-            return;
-        }
-        writer = Ref<RefCounted>(Object::cast_to<RefCounted>(
-            netw::gd::live_object(script->call("new"))
-        ));
-        if (writer.is_valid()) {
-            OS::get_singleton()->add_logger(Ref<Logger>(writer));
-        }
+        writer.instantiate();
+        netw_test::FaultLog::attach(writer);
     }
 
     Array close() {
         if (writer.is_null()) {
             return Array();
         }
-        OS::get_singleton()->remove_logger(Ref<Logger>(writer));
-        const Array drained = writer->call("drain");
+        netw_test::FaultLog::detach(writer);
+        writer->error_count_containing(
+            "A SceneTree scene change freed the scene that held this session"
+        );
+        Array drained;
+        for (const netw_test::FaultLine &line : writer->recorded()) {
+            Dictionary row;
+            row["type"] = line.error
+                ? Logger::ERROR_TYPE_ERROR : Logger::ERROR_TYPE_WARNING;
+            row["text"] = line.text;
+            drained.push_back(row);
+        }
         writer.unref();
         return drained;
     }
@@ -300,6 +282,9 @@ TEST_CASE(
     CHECK_FALSE(seen.mount_alive_after);
     NETW_CHECK_EQ(seen.reports, 1);
     NETW_CHECK_EQ(seen.first_type, int(Logger::ERROR_TYPE_ERROR));
+    CHECK(seen.first_text.contains(
+        "A SceneTree scene change freed the scene that held this session"
+    ));
 }
 
 } // namespace NetwTests

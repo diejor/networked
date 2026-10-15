@@ -1,3 +1,4 @@
+#include "support/fault_log.h"
 #include "support/netw_test.h"
 
 #include "support/netw_cells.h"
@@ -946,6 +947,14 @@ TEST_CASE(
     "[Networked][Predict][Declared][Law] an unanswered owner stops at its "
     "horizon"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_warning(
+        "[warn][wire] Packet 130 is not tracked for delivery, "
+        "because packet 2 still waits for its ack. Too many packets"
+        " to one peer are in flight.",
+        1
+    );
+
     const Scenario scenario = deaf_frame_lane();
     LoopbackRig rig(scenario.clients);
     const ScenarioRun run = ScenarioRun::session(rig, scenario);

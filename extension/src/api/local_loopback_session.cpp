@@ -410,7 +410,9 @@ int LocalLoopbackSession::draw_fresh_id() {
 void LocalLoopbackSession::link_to_clients(LocalMultiplayerPeer *p_client) {
     for (const Ref<LocalMultiplayerPeer> &other : client_peers) {
         if (other.is_null() || other.ptr() == p_client || other->closed
-            || other->closing) {
+            || other->closing
+            || other->get_connection_status()
+                == MultiplayerPeer::CONNECTION_DISCONNECTED) {
             continue;
         }
         other->force_connect_peer(p_client->label, p_client);
@@ -423,6 +425,8 @@ LocalMultiplayerPeer *LocalLoopbackSession::live_client_labelled(
 ) const {
     for (const Ref<LocalMultiplayerPeer> &client : client_peers) {
         if (client.is_valid() && !client->closed && !client->closing
+            && client->get_connection_status()
+                != MultiplayerPeer::CONNECTION_DISCONNECTED
             && client->label == p_label) {
             return client.ptr();
         }
@@ -441,7 +445,9 @@ void LocalLoopbackSession::enable_server_transfer() {
     }
     Vector<Ref<LocalMultiplayerPeer>> linked;
     for (const Ref<LocalMultiplayerPeer> &client : client_peers) {
-        if (client.is_null() || client->closed || client->closing) {
+        if (client.is_null() || client->closed || client->closing
+            || client->get_connection_status()
+                == MultiplayerPeer::CONNECTION_DISCONNECTED) {
             continue;
         }
         client->relays = false;
@@ -479,7 +485,9 @@ Error LocalLoopbackSession::lose_server() {
     server_peer->vanish();
     LocalMultiplayerPeer *lowest = nullptr;
     for (const Ref<LocalMultiplayerPeer> &client : client_peers) {
-        if (client.is_null() || client->closed || client->closing) {
+        if (client.is_null() || client->closed || client->closing
+            || client->get_connection_status()
+                == MultiplayerPeer::CONNECTION_DISCONNECTED) {
             continue;
         }
         if (lowest == nullptr || client->label < lowest->label) {
@@ -507,7 +515,9 @@ Error LocalLoopbackSession::hand_over(
         survivors.push_back(server_peer);
     }
     for (const Ref<LocalMultiplayerPeer> &client : client_peers) {
-        if (client.is_valid() && !client->closed && !client->closing) {
+        if (client.is_valid() && !client->closed && !client->closing
+            && client->get_connection_status()
+                != MultiplayerPeer::CONNECTION_DISCONNECTED) {
             survivors.push_back(client);
         }
     }

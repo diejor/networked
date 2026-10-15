@@ -1,3 +1,4 @@
+#include "support/fault_log.h"
 #include "support/netw_test.h"
 
 #include "godot/class_db.hpp"
@@ -96,6 +97,17 @@ TEST_CASE(
 TEST_CASE(
     "[Networked][NativeApi][Hosted] NA2 a bind answers for a real method"
 ) {
+    netw_test::FaultWatch expected_faults;
+#if defined(NETW_MODULE)
+    constexpr int missing_method_errors = 0;
+#else
+    constexpr int missing_method_errors = 1;
+#endif
+    expected_faults.expect_error(
+        "Parameter \"mb\" is null.",
+        missing_method_errors
+    );
+
     const Dictionary table = netw::native_api_table();
     const auto bind_of = function_at<MethodBindFn>(table, "method_bind");
 

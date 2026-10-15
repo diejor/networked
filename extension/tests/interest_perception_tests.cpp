@@ -1,7 +1,4 @@
-// The local perception book's laws.
-//
-// The unknown answer is the one worth stating separately. Two of the cases
-// below would pass against a plain bool, and the third would not.
+#include "support/fault_log.h"
 
 #include "support/netw_test.h"
 
@@ -171,6 +168,14 @@ TEST_CASE(
     "[Networked][Interest][Hosted] a layer nobody declared hides, and so "
     "does a CUSTOM whose callback is gone"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][interest] The CUSTOM perception callback of layer "
+        "'*' was freed, so what it covered is hidden. Keep the "
+        "callback's object alive while the layer uses it.",
+        1
+    );
+
     Perception book = fresh();
     Engine engine = engine_with({}, HIDE);
 
@@ -187,11 +192,8 @@ TEST_CASE(
     );
     Engine showing = engine_with({"stealth"}, SHOW);
     holder.unref();
-
-    ERR_PRINT_OFF;
     const Dictionary verdict
         = book.resolve(layer_list({"stealth"}), &decl, showing);
-    ERR_PRINT_ON;
 
     CHECK(bool(verdict[hide_key()]));
     NETW_CHECK_EQ(Array(verdict[custom_key()]).size(), 0);

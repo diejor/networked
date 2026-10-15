@@ -65,6 +65,7 @@ constexpr int64_t LIVE = int64_t(netw::entity::Stage::LIVE);
 
 Script *archetype_script = nullptr;
 Script *declared_script = nullptr;
+int declaration_failures = 0;
 
 Node *build_from(Script *p_script, const Variant &p_name) {
     if (p_script == nullptr) {
@@ -81,8 +82,29 @@ Node *build_archetype(const Variant &p_name) {
     return build_from(archetype_script, p_name);
 }
 
+void on_declared_tree_entered(Node *p_node) {
+    NetwMultiplayer *api = Object::cast_to<NetwMultiplayer>(
+        p_node->get_multiplayer().ptr()
+    );
+    if (api == nullptr) {
+        ++declaration_failures;
+        return;
+    }
+    if (api->predict_declare(api->entity_of(p_node)) != OK) {
+        ++declaration_failures;
+    }
+}
+
 Node *build_declared(const Variant &p_name) {
-    return build_from(declared_script, p_name);
+    Node *made = build_from(declared_script, p_name);
+    if (made != nullptr) {
+        made->connect(
+            "tree_entered",
+            callable_mp_static(&on_declared_tree_entered).bind(made),
+            Object::CONNECT_ONE_SHOT
+        );
+    }
+    return made;
 }
 
 struct Readmitted {
@@ -99,6 +121,7 @@ struct ReadmissionEvidence {
     bool driven = false;
     bool seated = false;
     int64_t faults = -1;
+    int64_t setup_warnings = -1;
     int64_t server_readd_faults = -1;
     Readmitted archetype_server;
     Readmitted archetype_client;
@@ -162,13 +185,6 @@ class ReadmissionScenario final : public netw_test::FrameScenario {
         return int(server->entity_get_route(made));
     }
 
-    void declare_on_every_peer(int p_route) {
-        for (int side = SERVER; side <= A; ++side) {
-            NetwMultiplayer *api = stand->session(side);
-            api->predict_declare(api->entity_from_route(p_route));
-        }
-    }
-
     bool seat(ArmIndex p_arm, int p_side, int p_route, Readmitted &r_row) {
         Arm &arm = arms[p_arm];
         arm.side = p_side;
@@ -179,6 +195,8 @@ class ReadmissionScenario final : public netw_test::FrameScenario {
     }
 
     bool open() {
+        declaration_failures = 0;
+        const netw_test::FaultWatch setup_faults;
         archetype = netw_test::minted_script(ARCHETYPE_SOURCE);
         declared = netw_test::minted_script(DECLARED_SOURCE);
         if (archetype.is_null() || declared.is_null()) {
@@ -207,11 +225,11 @@ class ReadmissionScenario final : public netw_test::FrameScenario {
         const int declared_server = spawn(DECLARED_ID, "Dee");
         const int declared_client = spawn(DECLARED_ID, "Eve");
         const int archetype_server = spawn(ARCHETYPE_ID, "Ann");
-        stand->pump(8);
-        declare_on_every_peer(declared_server);
-        declare_on_every_peer(declared_client);
-        stand->pump(2);
+        stand->pump(10);
         ReadmissionEvidence &evidence = readmission_evidence();
+        evidence.setup_warnings = setup_faults.warnings_containing(
+            "declares state and input properties but no prediction"
+        );
         return seat(
                    ARCHETYPE_CLIENT,
                    A,
@@ -323,6 +341,8 @@ public:
 NETW_FRAME_SCENARIO(ReadmissionScenario, predicted_readmission_scenario);
 
 void check_predicts_again(const Readmitted &p_row) {
+    NETW_CHECK_EQ(declaration_failures, 0);
+    NETW_CHECK_EQ(readmission_evidence().setup_warnings, 0);
     NETW_CHECK_GE(p_row.seated, int64_t(0));
     NETW_CHECK_EQ(p_row.released, int64_t(-1));
     NETW_CHECK_EQ(p_row.stage, LIVE);

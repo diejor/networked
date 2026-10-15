@@ -85,10 +85,15 @@ inline FlowPair stand_flow_pair(
     LoopbackRig &p_rig,
     const char *p_script_path,
     const godot::String &p_name,
-    MirrorBinding p_binding = BIND_EVERY_MIRROR
+    MirrorBinding p_binding = BIND_EVERY_MIRROR,
+    bool p_pump = true,
+    const char *p_authored_source = nullptr
 ) {
     FlowPair pair;
-    pair.authored = flow_body(p_script_path, p_name);
+    pair.authored = flow_body(
+        p_authored_source != nullptr ? p_authored_source : p_script_path,
+        p_name
+    );
     p_rig.branch(-1)->add_child(pair.authored);
     for (int index = 0; index < p_rig.count(); ++index) {
         godot::Node2D *mirror = flow_body(p_script_path, p_name);
@@ -114,7 +119,9 @@ inline FlowPair stand_flow_pair(
         flow_core(p_rig.client(index))
             ->liveness_bind_route(pair.route, mirror.ptr());
     }
-    p_rig.pump();
+    if (p_pump) {
+        p_rig.pump();
+    }
     return pair;
 }
 

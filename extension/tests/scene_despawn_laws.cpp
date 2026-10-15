@@ -41,7 +41,8 @@ Mounted mount(
 }
 
 TEST_CASE(
-    "[Networked][Scene][Hosted] SD1 a destroy takes the container out of "
+    "[Networked][Scene][Hosted][SceneTree] SD1 a destroy takes the container "
+    "out of "
     "the tree at once"
 ) {
     Ref<NetwMultiplayer> core;

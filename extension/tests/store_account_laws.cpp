@@ -1,3 +1,4 @@
+#include "support/fault_log.h"
 #include "support/netw_test.h"
 
 #include "support/send_drive.h"
@@ -218,15 +219,29 @@ TEST_CASE(
     "[Networked][Store][Hosted] AC4 a replication priority at or below zero "
     "is refused and leaves the weight in place"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][wire] Condition \"!(p_weight > 0.0)\" is true. "
+        "NetwEntity.replication_priority must be above 0, so "
+        "0.000000 was ignored. To hide an entity from peers, use "
+        "NetwEntity.interest.",
+        1
+    );
+    expected_faults.expect_error(
+        "[error][wire] Condition \"!(p_weight > 0.0)\" is true. "
+        "NetwEntity.replication_priority must be above 0, so "
+        "-3.000000 was ignored. To hide an entity from peers, use "
+        "NetwEntity.interest.",
+        1
+    );
+
     Ref<netw::NetwEntity> entity;
     entity.instantiate();
     NETW_CHECK_EQ(entity->get_replication_priority(), 1.0);
     entity->set_replication_priority(2.5);
     NETW_CHECK_EQ(entity->get_replication_priority(), 2.5);
-    ERR_PRINT_OFF;
     entity->set_replication_priority(0.0);
     entity->set_replication_priority(-3.0);
-    ERR_PRINT_ON;
     NETW_CHECK_EQ(entity->get_replication_priority(), 2.5);
 }
 

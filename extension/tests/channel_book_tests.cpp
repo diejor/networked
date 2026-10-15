@@ -1,3 +1,4 @@
+#include "support/fault_log.h"
 #include "support/netw_test.h"
 
 #include "netw/channel_book.hpp"
@@ -98,6 +99,147 @@ TEST_CASE(
     "[Networked][Repl][Hosted] settle refuses a peer-scoped channel with no "
     "handler"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_warning(
+        "[warn][session] Built-in channel 8 (INTEREST_AWARENESS) "
+        "has no handler.",
+        1
+    );
+    expected_faults.expect_warning(
+        "[warn][session] Built-in channel 9 (CLOCK_HANDSHAKE) has "
+        "no handler.",
+        1
+    );
+    expected_faults.expect_warning(
+        "[warn][session] Built-in channel 10 "
+        "(CLOCK_HANDSHAKE_REPLY) has no handler.",
+        1
+    );
+    expected_faults.expect_warning(
+        "[warn][session] Built-in channel 11 (CLOCK_PING) has no "
+        "handler.",
+        1
+    );
+    expected_faults.expect_warning(
+        "[warn][session] Built-in channel 12 (CLOCK_PONG) has no "
+        "handler.",
+        1
+    );
+    expected_faults.expect_warning(
+        "[warn][session] Built-in channel 13 (LAGCOMP_DENY) has no "
+        "handler.",
+        1
+    );
+    expected_faults.expect_warning(
+        "[warn][session] Built-in channel 14 (SPAWN) has no "
+        "handler.",
+        1
+    );
+    expected_faults.expect_warning(
+        "[warn][session] Built-in channel 15 (DESPAWN) has no "
+        "handler.",
+        1
+    );
+    expected_faults.expect_warning(
+        "[warn][session] Built-in channel 16 (REPARENT) has no "
+        "handler.",
+        1
+    );
+    expected_faults.expect_warning(
+        "[warn][session] Built-in channel 18 (HIDE) has no handler.",
+        1
+    );
+    expected_faults.expect_warning(
+        "[warn][session] Built-in channel 23 (SESSION_JOIN) has no "
+        "handler.",
+        3
+    );
+    expected_faults.expect_warning(
+        "[warn][session] Built-in channel 24 (SESSION_ACCEPT) has "
+        "no handler.",
+        1
+    );
+    expected_faults.expect_warning(
+        "[warn][session] Built-in channel 25 (SESSION_ROSTER) has "
+        "no handler.",
+        1
+    );
+    expected_faults.expect_warning(
+        "[warn][session] Built-in channel 26 (SESSION_PAUSE) has no"
+        " handler.",
+        1
+    );
+    expected_faults.expect_warning(
+        "[warn][session] Built-in channel 27 (SESSION_UNPAUSE) has "
+        "no handler.",
+        1
+    );
+    expected_faults.expect_warning(
+        "[warn][session] Built-in channel 28 (SESSION_KICKED) has "
+        "no handler.",
+        1
+    );
+    expected_faults.expect_warning(
+        "[warn][session] Built-in channel 29 "
+        "(SESSION_SCENE_REQUEST) has no handler.",
+        1
+    );
+    expected_faults.expect_warning(
+        "[warn][session] Built-in channel 30 (SESSION_SCENE_RESULT)"
+        " has no handler.",
+        1
+    );
+    expected_faults.expect_warning(
+        "[warn][session] Built-in channel 31 (SESSION_SHUTDOWN) has"
+        " no handler.",
+        1
+    );
+    expected_faults.expect_warning(
+        "[warn][session] Built-in channel 32 "
+        "(SESSION_SCENE_RELEASED) has no handler.",
+        1
+    );
+    expected_faults.expect_warning(
+        "[warn][session] Built-in channel 33 (SESSION_KICK_REQUEST)"
+        " has no handler.",
+        1
+    );
+    expected_faults.expect_warning(
+        "[warn][session] Built-in channel 34 "
+        "(SESSION_LEAVE_REQUEST) has no handler.",
+        1
+    );
+    expected_faults.expect_warning(
+        "[warn][session] Built-in channel 42 "
+        "(SESSION_SCENE_VIEWERS) has no handler.",
+        1
+    );
+    expected_faults.expect_warning(
+        "[warn][session] Built-in channel 43 (ROW_CONTROL) has no "
+        "handler.",
+        1
+    );
+    expected_faults.expect_warning(
+        "[warn][session] Built-in channel 44 (ROUTE_LEASE) has no "
+        "handler.",
+        1
+    );
+    expected_faults.expect_warning(
+        "[warn][session] Built-in channel 45 (LIFECYCLE_DECISION) "
+        "has no handler.",
+        1
+    );
+    expected_faults.expect_warning(
+        "[warn][session] Built-in channel 47 (SESSION_RESYNC) has "
+        "no handler.",
+        1
+    );
+    expected_faults.expect_warning(
+        "[warn][session] Built-in channel 48 (LAGCOMP_CONFIRM) has "
+        "no handler.",
+        1
+    );
+
     NetwChannelBook book;
     Ref<RefCounted> holder;
     holder.instantiate();

@@ -3,6 +3,10 @@
 #if defined(NETW_MODULE)
 #include "servers/rendering/rendering_server.h"
 
+namespace godot {
+using ::RenderingServer;
+} // namespace godot
+
 namespace netw::gd {
 namespace rse = ::RSE;
 } // namespace netw::gd

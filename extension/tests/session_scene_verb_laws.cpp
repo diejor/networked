@@ -1,3 +1,4 @@
+#include "support/fault_log.h"
 #include "support/netw_test.h"
 
 #include "netw/api/entity.hpp"
@@ -37,6 +38,21 @@ TEST_CASE(
     "[Networked][Session][Hosted] L2 a scene facet is server authority's to "
     "write, so a client peer is refused rather than silently parking one"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][scene] Condition \"!is_host() && "
+        "entity_get_route(p_entity) <= 0\" is true. Returning: "
+        "ERR_UNAUTHORIZED. A client cannot set the scene of an "
+        "entity that has not spawned yet.",
+        1
+    );
+    expected_faults.expect_error(
+        "[error][scene] Condition \"!is_host()\" is true. Returning: "
+        "RID(). NetwMultiplayer.scene_create runs only on the "
+        "server.",
+        1
+    );
+
     Ref<NetwMultiplayer> session;
     session.instantiate();
     session->session_set_role(NetwMultiplayer::ROLE_CLIENT);
@@ -90,6 +106,22 @@ TEST_CASE(
     "[Networked][Session][Hosted] L5 a scene recipe that is neither a path "
     "nor null is refused before anything spawns"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][scene] Condition \"recipe_type != Variant::NIL && "
+        "recipe_type != Variant::STRING\" is true. Returning: RID()."
+        " NetwMultiplayer.scene_create got a int. Pass a scene file"
+        " path, or null for an empty scene.",
+        1
+    );
+    expected_faults.expect_error(
+        "[error][scene] Condition \"recipe_type != Variant::NIL && "
+        "recipe_type != Variant::STRING\" is true. Returning: RID()."
+        " NetwMultiplayer.scene_create got a StringName. Pass a "
+        "scene file path, or null for an empty scene.",
+        1
+    );
+
     Ref<NetwMultiplayer> session = hosting();
     const int before = int(session->scene_list().size());
 

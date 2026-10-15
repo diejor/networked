@@ -1,3 +1,4 @@
+#include "support/fault_log.h"
 #include "support/netw_test.h"
 
 #include "godot/node.hpp"
@@ -37,6 +38,13 @@ TEST_CASE(
     "answers only its own database's failure, and ignores another "
     "database's"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][table] Database '*' failed. Record '*' was not "
+        "saved (the memory store was told to fail).",
+        1
+    );
+
     schema_model::clear();
     netw::persist::forget_stores();
     Ref<NetwMultiplayer> session;
@@ -203,6 +211,14 @@ TEST_CASE(
     "[Networked][Persistence][Hosted][SceneTree] PX4 a persistence schema "
     "reads saved properties by their saved names and survives its root"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][table] Condition \"read_only\" is true. Returning: "
+        "false. NetwPersistence.schema cannot be changed. Configure"
+        " saved properties with Netw.configure_property.",
+        2
+    );
+
     schema_model::clear();
     netw::persist::forget_stores();
     Ref<NetwMultiplayer> session;
@@ -240,10 +256,8 @@ TEST_CASE(
     CHECK(bool(schema->get_schema_name() == StringName("players")));
     NETW_CHECK_EQ(schema->get_storage_version(), 2);
     CHECK(schema->get_migrations().has(1));
-    ERR_PRINT_OFF;
     schema->storage_version(99);
     NETW_CHECK_EQ(schema->vector2("unexpected", Ref<NetwQuantize>(), 1), -1);
-    ERR_PRINT_ON;
     NETW_CHECK_EQ(schema->get_storage_version(), 2);
     const Ref<NetwDatabase> storage = session->database_handle(database);
     Dictionary values;

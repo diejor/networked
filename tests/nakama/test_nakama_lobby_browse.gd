@@ -1,10 +1,11 @@
 class_name TestNakamaLobbyBrowse
 extends NetwTestSuite
 
-const _TIMEOUT := 12.0
+const TIMEOUT := 12.0
 
-var _trees: Array = []
-var _run_uid := ""
+var trees: Array = []
+var run_uid := ""
+var sdk: Script
 
 
 class ReadyBrowser:
@@ -18,36 +19,36 @@ func before(
 		do_skip = NakamaTestServer.unavailable(),
 		skip_reason = NakamaTestServer.SKIP_REASON,
 ) -> void:
-	pass
+	sdk = load("res://addons/com.heroiclabs.nakama/Nakama.gd")
 
 
 func before_test() -> void:
-	_run_uid = "browse-%d-%d" % [Time.get_ticks_usec(), randi()]
+	run_uid = "browse-%d-%d" % [Time.get_ticks_usec(), randi()]
 
 
 func after_test() -> void:
-	for tree in _trees.duplicate():
+	for tree in trees.duplicate():
 		if is_instance_valid(tree):
 			await NakamaTestSupport.stop_tree(tree)
-	_trees.clear()
+	trees.clear()
 	await super.after_test()
 
 
 func test_public_lobby_round_trips_then_clears_on_leave() -> void:
-	var host_dir := await _make_dir("valeria")
+	var host_dir := await make_directory("valeria")
 	var settings := {
 		"name": "Valeria's Game",
 		"visibility": NetwServerInfo.VISIBILITY_PUBLIC,
 	}
-	var peer := await _host(host_dir, settings)
+	var peer := await host_lobby(host_dir, settings)
 	assert_object(peer) \
 			.override_failure_message("PUBLIC host_lobby returned no peer.") \
 			.is_not_null()
 	var match_id := host_dir._join_address()
 
-	var browse_dir := await _make_dir("jose")
-	var listing := await _browse(browse_dir)
-	var at := _row_of(listing, "Valeria's Game")
+	var browse_dir := await make_directory("jose")
+	var listing := await browse_lobbies(browse_dir)
+	var at := find_lobby(listing, "Valeria's Game")
 	assert_int(at) \
 			.override_failure_message("PUBLIC lobby missing from browse.") \
 			.is_greater_equal(0)
@@ -61,32 +62,34 @@ func test_public_lobby_round_trips_then_clears_on_leave() -> void:
 				.is_equal(host_dir._local_member_name())
 
 	var host_tree := host_dir.get_parent() as MultiplayerViewport
-	_trees.erase(host_tree)
+	trees.erase(host_tree)
 	await NakamaTestSupport.stop_tree(host_tree)
 
-	assert_int(_row_of(await _browse(browse_dir), "Valeria's Game")) \
+	assert_int(find_lobby(await browse_lobbies(browse_dir), "Valeria's Game")) \
 			.override_failure_message("Lobby still listed after the host left.") \
 			.is_equal(-1)
 
 
 func test_private_lobby_is_unlisted_but_joinable() -> void:
-	var host_dir := await _make_dir("valeria")
+	var host_dir := await make_directory("valeria")
 	var settings := {
 		"name": "Secret",
 		"visibility": NetwServerInfo.VISIBILITY_PRIVATE,
 	}
-	var peer := await _host(host_dir, settings)
+	var peer := await host_lobby(host_dir, settings)
 	assert_object(peer) \
 			.override_failure_message("PRIVATE host_lobby returned no peer.") \
 			.is_not_null()
 	var match_id := host_dir._join_address()
 
-	var browse_dir := await _make_dir("jose")
-	assert_int(_row_of(await _browse(browse_dir), "Secret")) \
+	var browse_dir := await make_directory("jose")
+	assert_int(find_lobby(await browse_lobbies(browse_dir), "Secret")) \
 			.override_failure_message("PRIVATE lobby leaked into browse.") \
 			.is_equal(-1)
 
-	var join_peer := await _join(browse_dir, match_id)
+	@warning_ignore("missing_await")
+	browse_dir._join_lobby(match_id)
+	var join_peer := await await_peer(browse_dir)
 	assert_object(join_peer) \
 			.override_failure_message("PRIVATE lobby not joinable by match id.") \
 			.is_not_null()
@@ -99,9 +102,9 @@ func test_browsing_from_a_ready_callback_lists_once_the_session_is_ready() -> vo
 	dir.host = NakamaTestServer.host()
 	dir.port = NakamaTestServer.DEFAULT_PORT
 	dir.use_ssl = false
-	dir.device_id = _run_uid
-	dir.local_member_name = _run_uid
-	dir.browser_filter_uid = _run_uid
+	dir.device_id = run_uid
+	dir.local_member_name = run_uid
+	dir.browser_filter_uid = run_uid
 	tree.add_child(dir)
 	tree.add_child(ReadyBrowser.new())
 	var listed := [false]
@@ -109,29 +112,23 @@ func test_browsing_from_a_ready_callback_lists_once_the_session_is_ready() -> vo
 		func(_addresses, _names, _infos) -> void: listed[0] = true,
 		CONNECT_ONE_SHOT,
 	)
-	_trees.append(tree)
+	trees.append(tree)
 	add_child(tree)
 
-	await _await(func() -> bool: return listed[0], "the first listing")
+	await wait_for(func() -> bool: return listed[0], "the first listing")
 	var service := tree.get_node_or_null("NakamaSession")
 	assert_bool(service != null and service.is_inside_tree()) \
 			.override_failure_message("The Nakama session never entered the tree.") \
 			.is_true()
 
 
-func _host(dir: LobbyDirectory, settings: Dictionary) -> MultiplayerPeer:
+func host_lobby(dir: LobbyDirectory, settings: Dictionary) -> MultiplayerPeer:
 	@warning_ignore("missing_await")
 	dir._host_lobby(settings)
-	return await _reported(dir)
+	return await await_peer(dir)
 
 
-func _join(dir: LobbyDirectory, address: String) -> MultiplayerPeer:
-	@warning_ignore("missing_await")
-	dir._join_lobby(address)
-	return await _reported(dir)
-
-
-func _reported(dir: LobbyDirectory) -> MultiplayerPeer:
+func await_peer(dir: LobbyDirectory) -> MultiplayerPeer:
 	var answer: Array = [null]
 	var settled := [false]
 	dir.lobby_peer_ready.connect(
@@ -145,20 +142,20 @@ func _reported(dir: LobbyDirectory) -> MultiplayerPeer:
 			settled[0] = true,
 		CONNECT_ONE_SHOT,
 	)
-	await _await(func() -> bool: return settled[0], "the directory to report")
+	await wait_for(func() -> bool: return settled[0], "the directory to report")
 	return answer[0] as MultiplayerPeer
 
 
-func _make_dir(username: String) -> NakamaLobbyDirectory:
+func make_directory(username: String) -> NakamaLobbyDirectory:
 	var tree := NakamaTestSupport.make_client_tree(self, username)
-	_trees.append(tree)
+	trees.append(tree)
 	await NetwTestSuite.drain_frames(get_tree(), 2)
 	var dir := NakamaTestSupport.directory(tree)
-	dir.browser_filter_uid = _run_uid
+	dir.browser_filter_uid = run_uid
 	return dir
 
 
-func _browse(dir: NakamaLobbyDirectory) -> Dictionary:
+func browse_lobbies(dir: NakamaLobbyDirectory) -> Dictionary:
 	var captured := {
 		"addresses": PackedStringArray(),
 		"names": PackedStringArray(),
@@ -179,11 +176,11 @@ func _browse(dir: NakamaLobbyDirectory) -> Dictionary:
 	)
 	@warning_ignore("missing_await")
 	dir._list_lobbies()
-	await _await(func() -> bool: return done[0], "browse to resolve")
+	await wait_for(func() -> bool: return done[0], "browse to resolve")
 	return captured
 
 
-func _row_of(listing: Dictionary, lobby_name: String) -> int:
+func find_lobby(listing: Dictionary, lobby_name: String) -> int:
 	var names: PackedStringArray = listing.names
 	for at in names.size():
 		if names[at] == lobby_name:
@@ -191,7 +188,7 @@ func _row_of(listing: Dictionary, lobby_name: String) -> int:
 	return -1
 
 
-func _await(cond: Callable, label: String, timeout: float = _TIMEOUT) -> void:
+func wait_for(cond: Callable, label: String, timeout: float = TIMEOUT) -> void:
 	var deadline := get_tree().create_timer(timeout)
 	while deadline.time_left > 0.0:
 		if cond.call():

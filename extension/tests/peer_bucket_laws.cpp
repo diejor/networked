@@ -1,3 +1,4 @@
+#include "support/fault_log.h"
 #include "support/netw_test.h"
 
 #if defined(NETW_TIER_HOSTED)
@@ -98,6 +99,14 @@ TEST_CASE(
     "answers nothing and is minted nothing, because reading a bucket also "
     "creates one and no read may invent a peer"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][session] Condition \"!session_has_accepted(p_peer)\""
+        " is true. Returning: Variant(). NetwSession.bucket_of got "
+        "peer *, which has not joined this session.",
+        1
+    );
+
     Ref<NetwMultiplayer> session = make_session();
     const Ref<Script> kind = a_bucket_type("value");
 
@@ -152,6 +161,15 @@ TEST_CASE(
     "RefCounted is refused, so a game learns at the ask rather than through "
     "a null it stored"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][session] Condition \"type == nullptr\" is true. "
+        "Returning: Variant(). NetwSession.bucket_of needs a script"
+        " to build the bucket from. Pass a script class that "
+        "extends RefCounted.",
+        1
+    );
+
     Ref<NetwMultiplayer> session = make_session();
     admit(session, 7);
 

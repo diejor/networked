@@ -136,6 +136,12 @@ Outcome joint_outcome() {
             .island(StringName("P"), members)
             .simulating(StringName("Q"))
     );
+    rig.declare_mirror(
+        1,
+        leaning_player("P", netw::Schedule::TICK, netw::RecoveryPolicy::AUTO)
+            .on_route(int(rig.server()->entity_get_route(rig.entity_of("P"))))
+            .controlled_by(0)
+    );
     rig.node_of(rig.entity_of("P", 0), 0)->set("motion", Vector2(1.0, 0.0));
     rig.node_of(rig.entity_of("Q", 1), 1)->set("motion", Vector2(0.0, 1.0));
     Outcome out;

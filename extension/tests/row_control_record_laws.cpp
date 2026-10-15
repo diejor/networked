@@ -1,3 +1,4 @@
+#include "support/fault_log.h"
 #include "support/netw_test.h"
 
 #include <cstdint>
@@ -304,6 +305,12 @@ TEST_CASE(
     "[Networked][Wire][Hosted] an ACCEPT count outside one through 32 cannot "
     "be written"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][wire] A packet field value is outside its range.",
+        2
+    );
+
     const bool none = write_control_record(accept_of(0)).is_empty();
     CHECK(none);
     const bool over

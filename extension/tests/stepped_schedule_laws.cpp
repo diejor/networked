@@ -174,6 +174,15 @@ TEST_CASE(
     "on a build that cannot flush a kinematic body runs SCHEDULE_FRAME and "
     "says so once, and runs STEPPED where it can"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_warning(
+        "[warn][prediction] '*' uses SCHEDULE_STEPPED, and this "
+        "Godot build cannot step physics on demand, so it runs "
+        "SCHEDULE_FRAME. Install a NetwPhysicsStepper with "
+        "NetwSession.install_physics_stepper.",
+        1
+    );
+
     using namespace TestSteppedScheduleLaws;
     const netw_test::FaultWatch watch;
     const Seated seated(WALKER_SOURCE, "Walker");

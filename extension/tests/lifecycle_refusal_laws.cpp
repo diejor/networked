@@ -1,3 +1,4 @@
+#include "support/fault_log.h"
 #include "support/loopback_rig.h"
 
 #if defined(NETW_TIER_HOSTED)
@@ -474,6 +475,97 @@ TEST_CASE(
     "peer may not author is refused before anything moves or is sent, and "
     "its error names NetwEntity.lifecycle and the root"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][entity] Netw.reparent on '*' was refused, because "
+        "only the session authority moves it. Set "
+        "NetwEntity.lifecycle to LIFECYCLE_CONTROLLER before its "
+        "root enters the tree to let its controller move it.",
+        1
+    );
+    expected_faults.expect_error(
+        "[error][entity] Netw.reparent on '*' was refused, because "
+        "this peer is neither the session authority nor its "
+        "controller. Call it from the peer that controls it.",
+        1
+    );
+    expected_faults.expect_error(
+        "[error][entity] Netw.reparent on '*' was refused, because "
+        "this peer'*'s promise resolves.",
+        1
+    );
+    expected_faults.expect_error(
+        "[error][entity] Netw.reparent on '*' was refused, because "
+        "it is predicted, so only the session authority moves it, "
+        "whatever NetwEntity.lifecycle says. Call it on the server.",
+        1
+    );
+    expected_faults.expect_error(
+        "[error][entity] Netw.reparent on '*' was refused, because "
+        "it is replicated through a MultiplayerSynchronizer or a "
+        "MultiplayerSpawner, so only the session authority moves "
+        "it, whatever NetwEntity.lifecycle says. Call it on the "
+        "server.",
+        1
+    );
+    expected_faults.expect_error(
+        "[error][entity] Netw.reparent on '*' was refused, because "
+        "it is a player's body, so only the session authority moves"
+        " it, whatever NetwEntity.lifecycle says. Call it on the "
+        "server.",
+        1
+    );
+    expected_faults.expect_error(
+        "[error][entity] Netw.reparent on '*' was refused, because "
+        "the new parent is outside the session root. Pick a parent "
+        "under the session root.",
+        1
+    );
+    expected_faults.expect_error(
+        "[error][entity] Netw.reparent on '*' was refused, because "
+        "the new parent is inside the entity itself. Pick a parent "
+        "outside it.",
+        1
+    );
+    expected_faults.expect_error(
+        "[error][entity] Netw.despawn on '*' was refused, because "
+        "only the session authority despawns it. Set "
+        "NetwEntity.lifecycle to LIFECYCLE_CONTROLLER before its "
+        "root enters the tree to let its controller despawn it.",
+        1
+    );
+    expected_faults.expect_error(
+        "[error][entity] Netw.despawn on '*' was refused, because "
+        "this peer is neither the session authority nor its "
+        "controller. Call it from the peer that controls it.",
+        1
+    );
+    expected_faults.expect_error(
+        "[error][entity] spawn_registered on '*' was refused, "
+        "because only the session authority spawns it. Set "
+        "NetwEntity.lifecycle to LIFECYCLE_CONTROLLER before its "
+        "root enters the tree to let any peer spawn it.",
+        1
+    );
+    expected_faults.expect_error(
+        "[error][entity] Netw.reparent on '*' was refused, because "
+        "session authority is moving to another peer. Call it again"
+        " once the move completes.",
+        1
+    );
+    expected_faults.expect_error(
+        "[error][entity] Netw.despawn on '*' was refused, because "
+        "session authority is moving to another peer. Call it again"
+        " once the move completes.",
+        1
+    );
+    expected_faults.expect_error(
+        "[error][entity] spawn_registered on '*' was refused, "
+        "because session authority is moving to another peer. Call "
+        "it again once the move completes.",
+        1
+    );
+
     const char *UNDECLARED
         = "NetwEntity.lifecycle to LIFECYCLE_CONTROLLER before its root "
           "enters the tree";
@@ -593,6 +685,17 @@ TEST_CASE(
     "that may not move the entity warns once per entity and leaves the "
     "session's copy where it was"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_warning(
+        "[warn][entity] Node.reparent on '*' was refused, because "
+        "only the session authority moves it. Set "
+        "NetwEntity.lifecycle to LIFECYCLE_CONTROLLER before its "
+        "root enters the tree to let its controller move it. The "
+        "move stays on this peer, and the session keeps its copy "
+        "where it was.",
+        1
+    );
+
     LoopbackRig rig(1);
     rig.mount();
     Node *arena = rig.mirror_child("Arena");
@@ -662,6 +765,15 @@ TEST_CASE(
     "replay answers ERR_BUSY and raises no error, because a replay never "
     "re-runs a verb its fresh tick already ran"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][entity] Netw.spawn on '*' was refused, because "
+        "only the session authority spawns it. Set "
+        "NetwEntity.lifecycle to LIFECYCLE_CONTROLLER before its "
+        "root enters the tree to let any peer spawn it.",
+        1
+    );
+
     Ref<NetwMultiplayer> core;
     core.instantiate();
     netw::lifecycle::Facts replayed;

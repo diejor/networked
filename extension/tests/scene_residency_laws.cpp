@@ -1,3 +1,4 @@
+#include "support/fault_log.h"
 #include "support/loopback_rig.h"
 
 #if defined(NETW_TIER_HOSTED)
@@ -29,6 +30,9 @@ Node *build_body(const Variant &p_marker) {
 Node *build_level(const Variant &p_name) {
     Node2D *made = memnew(Node2D);
     made->set_name(String(p_name));
+    Node2D *carrier = memnew(Node2D);
+    carrier->set_name("Carrier");
+    made->add_child(carrier);
     const Ref<NetwEntity> facet = NetwEntity::ensure(made);
     REQUIRE(facet.is_valid());
     facet->set_declares_scene(true);
@@ -219,15 +223,17 @@ TEST_CASE(
     const Ref<netw::NetwPlayer> bo
         = netw_test::seated_peer(host, second, StringName("bo"));
 
-    Node *carrier = memnew(Node2D);
-    carrier->set_name("Carrier");
-    level_of(rig, arena)->add_child(carrier);
+    Node *carrier = level_of(rig, arena)->get_node_or_null("Carrier");
+    REQUIRE(carrier != nullptr);
 
     spawn_into(rig, carrier, ana, "ana");
     spawn_into(rig, carrier, bo, "bo");
     REQUIRE(host->scene_subscribes(arena, first));
     REQUIRE(host->scene_subscribes(arena, second));
 
+    Node *vacant = level_of(rig, annex)->get_node_or_null("Carrier");
+    REQUIRE(vacant != nullptr);
+    memdelete(vacant);
     carrier->reparent(level_of(rig, annex));
     rig.pump(10);
 
@@ -271,6 +277,14 @@ TEST_CASE(
     "refused rather than adopted, so the session it left revokes its "
     "membership and the destination claims nothing"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_warning(
+        "[warn][spawn] '*' was moved outside the multiplayer root, "
+        "so other peers keep its old parent. Move it under a node "
+        "inside the root.",
+        1
+    );
+
     LoopbackRig rig(1);
     rig.mount();
     NetwMultiplayer *host = rig.server();
@@ -286,11 +300,8 @@ TEST_CASE(
 
     Node *foreign = rig.route_node(int(host->entity_get_route(arena)), 0);
     REQUIRE(foreign != nullptr);
-
-    ERR_PRINT_OFF;
     body->reparent(foreign);
     rig.pump(8);
-    ERR_PRINT_ON;
 
     CHECK_FALSE(host->scene_subscribes(arena, peer));
     NETW_CHECK_EQ(host->membership_book().subscriptions_of(peer), 0);

@@ -1,3 +1,4 @@
+#include "support/fault_log.h"
 #include "support/netw_test.h"
 
 #include "netw/display/decl.hpp"
@@ -116,6 +117,26 @@ TEST_CASE(
     "[Networked][Display][Hosted] an ordinal outside its enum is refused and "
     "leaves the setting alone"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][interp] Condition \"value < 0 || value >= limit\" is"
+        " true. Returning: false. Display setting role got 5, which"
+        " is not one of its values.",
+        1
+    );
+    expected_faults.expect_error(
+        "[error][interp] Condition \"value < 0 || value >= limit\" is"
+        " true. Returning: false. Display setting live mode got -1,"
+        " which is not one of its values.",
+        1
+    );
+    expected_faults.expect_error(
+        "[error][interp] Condition \"value < 0 || value >= limit\" is"
+        " true. Returning: false. Display setting timeline mode got"
+        " 2, which is not one of its values.",
+        1
+    );
+
     Decl decl;
     decl.set_param(netw::display::PARAM_ROLE, netw::display::ROLE_REMOTE);
     decl.set_param(
@@ -126,8 +147,6 @@ TEST_CASE(
         netw::display::PARAM_TIMELINE_MODE,
         netw::display::TIMELINE_FORECAST
     );
-
-    ERR_PRINT_OFF;
     NETW_CHECK_EQ(
         decl.set_param(netw::display::PARAM_ROLE, netw::display::ROLE_MAX),
         netw::display::DIRT_NONE
@@ -143,7 +162,6 @@ TEST_CASE(
         ),
         netw::display::DIRT_NONE
     );
-    ERR_PRINT_ON;
 
     NETW_CHECK_EQ(decl.display_role, netw::display::ROLE_REMOTE);
     NETW_CHECK_EQ(decl.live_mode, netw::display::LIVE_BRACKETED);
@@ -154,16 +172,22 @@ TEST_CASE(
     "[Networked][Display][Hosted] a visual root is a path, and a component id "
     "never reaches the record"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][interp] Condition \"type != Variant::NODE_PATH && "
+        "type != Variant::STRING && type != Variant::STRING_NAME\" "
+        "is true. Returning: DIRT_NONE. NetwDisplay.visual_root "
+        "must be a NodePath, not a int.",
+        1
+    );
+
     Decl decl;
     decl.set_param(netw::display::PARAM_VISUAL_ROOT, String("Visual"));
     CHECK(decl.visual_root == NodePath("Visual"));
-
-    ERR_PRINT_OFF;
     NETW_CHECK_EQ(
         decl.set_param(netw::display::PARAM_VISUAL_ROOT, 3),
         netw::display::DIRT_NONE
     );
-    ERR_PRINT_ON;
     CHECK(decl.visual_root == NodePath("Visual"));
 }
 
@@ -171,15 +195,22 @@ TEST_CASE(
     "[Networked][Display][Hosted] a param naming no setting is refused at both "
     "doors"
 ) {
-    Decl decl;
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][interp] Display setting 14 does not exist.",
+        1
+    );
+    expected_faults.expect_error(
+        "[error][interp] Display setting -1 does not exist.",
+        1
+    );
 
-    ERR_PRINT_OFF;
+    Decl decl;
     NETW_CHECK_EQ(
         decl.set_param(netw::display::PARAM_MAX, 1),
         netw::display::DIRT_NONE
     );
     NETW_CHECK_EQ(int(decl.get_param(-1).get_type()), int(Variant::NIL));
-    ERR_PRINT_ON;
 }
 
 TEST_CASE(

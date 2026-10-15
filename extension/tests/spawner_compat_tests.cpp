@@ -1,3 +1,4 @@
+#include "support/fault_log.h"
 #include "support/netw_call_log.h"
 #include "support/netw_test.h"
 
@@ -88,6 +89,14 @@ TEST_CASE(
     "[Networked][Spawn][Hosted] a captured argument is consumed by the one "
     "registration it belongs to, and a second registration has none"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_warning(
+        "[warn][spawn] '*' was not spawned, because its scene is "
+        "not in the MultiplayerSpawner's spawnable scenes. Add the "
+        "scene there, or spawn it with MultiplayerSpawner.spawn.",
+        1
+    );
+
     Stand stand;
     stand.arm_seams(false);
     stand.compat->wrap_spawner(stand.spawner);
@@ -133,6 +142,14 @@ TEST_CASE(
     "[Networked][Spawn][Hosted] a second wrap does not chain, so a receiver "
     "reconstructing through the original captures nothing"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_warning(
+        "[warn][spawn] '*' was not spawned, because its scene is "
+        "not in the MultiplayerSpawner's spawnable scenes. Add the "
+        "scene there, or spawn it with MultiplayerSpawner.spawn.",
+        1
+    );
+
     Stand stand;
     stand.arm_seams(false);
     stand.compat->wrap_spawner(stand.spawner);
@@ -201,6 +218,14 @@ TEST_CASE(
     "[Networked][Spawn][Hosted] the receiver-side spawn limit counts what "
     "this peer produced through that spawner"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_warning(
+        "[warn][spawn] MultiplayerSpawner '*' reached its "
+        "spawn_limit, so a spawn was dropped. Raise spawn_limit or "
+        "free spawned nodes.",
+        1
+    );
+
     Stand stand;
     stand.spawner->set_spawn_limit(1);
 

@@ -1,10 +1,14 @@
+#include "support/fault_log.h"
 #include "support/netw_test.h"
 
 #include "godot/node.hpp"
 #include "godot/scene_tree.hpp"
+#include "godot/world.hpp"
 #include "netw/api/entity.hpp"
 #include "netw/api/interest_layer.hpp"
 #include "netw/api/netw_multiplayer.hpp"
+#include "netw/api/physics_stepper.hpp"
+#include "support/installable_stepper.h"
 #include "support/netw_call_log.h"
 
 namespace TestNetwSessionLayerDriver {
@@ -39,6 +43,8 @@ TEST_CASE(
     "[Networked][Session][Hosted] L1 a layer driver that answers something "
     "other than an array of entity RIDs stops the flush rather than folding"
 ) {
+    netw_test::FaultWatch expected_faults;
+
     Ref<NetwMultiplayer> session = hosting();
     const RID layer = session->interest_layer_create(StringName("sight"));
 
@@ -50,6 +56,20 @@ TEST_CASE(
     NETW_CHECK_EQ(session->interest_flush_now(), ERR_INVALID_DATA);
 
     SUBCASE("an RID that names no entity stops it too") {
+        expected_faults.expect_warning(
+            "[warn][interest] The driver of layer '*' did not "
+            "return an Array, so the layer was not changed. Return "
+            "the entities that belong in it.",
+            2
+        );
+        expected_faults.expect_warning(
+            "[warn][interest] The driver of layer '*' returned "
+            "something that is not an entity of this session, so "
+            "the layer was not changed. Return only entities "
+            "spawned in this session.",
+            1
+        );
+
         session->interest_layer_set_driver_callback(
             layer,
             callable_mp_static(&answer_a_stray_rid)
@@ -58,6 +78,13 @@ TEST_CASE(
     }
 
     SUBCASE("an empty roster is a clean fold") {
+        expected_faults.expect_warning(
+            "[warn][interest] The driver of layer '*' did not "
+            "return an Array, so the layer was not changed. Return "
+            "the entities that belong in it.",
+            2
+        );
+
         session->interest_layer_set_driver_callback(
             layer,
             callable_mp_static(&answer_nothing)
@@ -66,6 +93,13 @@ TEST_CASE(
     }
 
     SUBCASE("clearing the driver leaves nothing to run") {
+        expected_faults.expect_warning(
+            "[warn][interest] The driver of layer '*' did not "
+            "return an Array, so the layer was not changed. Return "
+            "the entities that belong in it.",
+            2
+        );
+
         session->interest_layer_set_driver_callback(layer, Callable());
         NETW_CHECK_EQ(session->run_layer_drivers(), OK);
     }
@@ -75,6 +109,14 @@ TEST_CASE(
     "[Networked][Session][Hosted] L2 freeing a layer drops its driver, so a "
     "later flush never calls back about a layer that is gone"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_warning(
+        "[warn][interest] The driver of layer '*' did not return an"
+        " Array, so the layer was not changed. Return the entities "
+        "that belong in it.",
+        1
+    );
+
     Ref<NetwMultiplayer> session = hosting();
     const RID layer = session->interest_layer_create(StringName("sight"));
 
@@ -89,13 +131,22 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Session][Hosted] L3 a stepper is installed only when it says "
-    "it can step, so a refusing stepper leaves the space with none"
+    "[Networked][Session][Hosted][SceneTree] L3 a stepper is installed only "
+    "when it says it can step, so a refusing stepper leaves the space with none"
 ) {
     Ref<NetwMultiplayer> session = hosting();
-    const RID space;
-
-    session->predict_stepper_install(space, Ref<netw::NetwPhysicsStepper>());
+    Ref<World2D> world;
+    world.instantiate();
+    const RID space = world->get_space();
+    REQUIRE(space.is_valid());
+    Ref<netw_test::InstallableStepper> capable;
+    capable.instantiate();
+    NETW_CHECK_EQ(session->predict_stepper_install(space, capable), OK);
+    CHECK(session->predict_get_stepper(space) == capable);
+    Ref<netw::NetwPhysicsStepper> refusing;
+    refusing.instantiate();
+    CHECK_FALSE(refusing->can_step());
+    NETW_CHECK_EQ(session->predict_stepper_install(space, refusing), OK);
     CHECK(session->predict_get_stepper(space).is_null());
 }
 
@@ -205,6 +256,15 @@ TEST_CASE(
     "layer and returns entities, and an entity of another session is refused "
     "before the layer changes"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_warning(
+        "[warn][interest] The driver of layer '*' returned "
+        "something that is not an entity of this session, so the "
+        "layer was not changed. Return only entities spawned in "
+        "this session.",
+        1
+    );
+
     Ref<NetwMultiplayer> session = hosting();
     Ref<NetwMultiplayer> elsewhere = hosting();
     const RID layer = session->interest_layer_create(StringName("sight"));

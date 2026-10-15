@@ -1,3 +1,4 @@
+#include "support/fault_log.h"
 #include "support/netw_test.h"
 
 #include "netw/api/netw_multiplayer.hpp"
@@ -98,6 +99,8 @@ TEST_CASE(
     "[Networked][Session][Hosted] L3 a sealed property set refuses every "
     "further write, so a wire hash can never describe a set that later moved"
 ) {
+    netw_test::FaultWatch expected_faults;
+
     Declared world = declare_schema();
     const RID set = world.session->property_set_create(
         world.schema,
@@ -110,6 +113,14 @@ TEST_CASE(
     CHECK(differ(sealed_hash, 0));
 
     SUBCASE("a column cannot join after the seal") {
+        expected_faults.expect_error(
+            "[error][table] Condition \"record->get_sealed()\" is "
+            "true. Returning: nullptr. The property set is sealed, "
+            "so it cannot be changed. Change it before "
+            "NetwMultiplayer.property_set_seal.",
+            1
+        );
+
         NETW_CHECK_EQ(world.session->property_set_add_column(set, 0), -1);
         NETW_CHECK_EQ(
             world.session->property_set_get_wire_hash(set),
@@ -118,6 +129,14 @@ TEST_CASE(
     }
 
     SUBCASE("a set parameter cannot move after the seal") {
+        expected_faults.expect_error(
+            "[error][table] Condition \"record->get_sealed()\" is "
+            "true. Returning: nullptr. The property set is sealed, "
+            "so it cannot be changed. Change it before "
+            "NetwMultiplayer.property_set_seal.",
+            1
+        );
+
         world.session->property_set_set_param(
             set,
             NetwMultiplayer::SET_PARAM_RELIABLE,

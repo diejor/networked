@@ -1,3 +1,4 @@
+#include "support/fault_log.h"
 #include "support/netw_test.h"
 
 #include "netw/api/schema_core.hpp"
@@ -732,6 +733,16 @@ TEST_CASE(
 TEST_CASE(
     "[Networked][PredictWire][Hosted] a gapped transition run has no encoding"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][prediction] Condition "
+        "\"!valid_command_shape(p_frame, p_input_plan)\" is true. "
+        "Returning: PackedByteArray(). An input command does not "
+        "match the input properties it was built from, so it was "
+        "not sent.",
+        1
+    );
+
     const WirePlan plan = input_plan();
     CommandFrame gapped;
     gapped.transitions.push_back(TransitionWire{4, 10, true});
@@ -764,6 +775,16 @@ TEST_CASE("[Networked][PredictWire][Hosted] the evidence section is optional") {
 TEST_CASE(
     "[Networked][PredictWire][Hosted] a frame needs a planned input schema"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][prediction] Condition "
+        "\"!valid_command_shape(p_frame, p_input_plan)\" is true. "
+        "Returning: PackedByteArray(). An input command does not "
+        "match the input properties it was built from, so it was "
+        "not sent.",
+        1
+    );
+
     SchemaRecord unsealed;
     unsealed.name = "Unsealed";
     SchemaCore::append_column(&unsealed, "motion", SchemaCore::VECTOR2, 1);

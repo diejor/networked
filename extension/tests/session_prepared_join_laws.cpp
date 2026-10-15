@@ -1,3 +1,4 @@
+#include "support/fault_log.h"
 #include "support/netw_call_log.h"
 #include "support/netw_test.h"
 
@@ -117,6 +118,13 @@ TEST_CASE(
     "nothing, because the name IS the request and no other field could stand "
     "in for one"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][session] Netw.prepare_join needs a username, and "
+        "it was empty.",
+        1
+    );
+
     const Ref<NetwMultiplayer> session = a_session();
     NETW_CHECK_EQ(
         int(session->session_prepare_join(StringName(), Array())->get_result()),

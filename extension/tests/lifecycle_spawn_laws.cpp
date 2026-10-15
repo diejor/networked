@@ -1,3 +1,4 @@
+#include "support/fault_log.h"
 #include "support/loopback_rig.h"
 
 #if defined(NETW_TIER_HOSTED)
@@ -270,6 +271,11 @@ TEST_CASE(
     );
 
     const int late = stage.rig.add_client();
+    Ref<netw::NetwClockConfig> clock;
+    clock.instantiate();
+    clock->set_tickrate(TICKRATE);
+    NETW_REQUIRE_EQ(stage.rig.client(late)->clock_initialize(clock), OK);
+    stage.rig.client(late)->clock_engine().set_manual_tick(true);
     stage.register_on(stage.rig.client(late));
     stage.rig.hold(late);
     stage.rig.mount_late(late);
@@ -290,6 +296,13 @@ TEST_CASE(
     "the session cannot place is refused, burnt and never sent to an "
     "observer, and the author loses its copy"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_warning(
+        "[warn][spawn] A spawn for route * was dropped, because its"
+        " parent '*' does not exist on this peer.",
+        1
+    );
+
     SpawnStage stage;
     NetwMultiplayer *session = stage.rig.server();
     NetwMultiplayer *observer = stage.rig.client(1);
@@ -379,6 +392,13 @@ TEST_CASE(
     "whose argument names a route the session never held is refused rather "
     "than parked"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_warning(
+        "[warn][spawn] A spawn for route * was dropped, because its"
+        " parent '*' does not exist on this peer.",
+        1
+    );
+
     SpawnStage stage;
     NetwMultiplayer *session = stage.rig.server();
     const int64_t deferred = counter_of(session, "spawn_deferrals");
@@ -523,6 +543,15 @@ TEST_CASE(
     "with no route left in its lease is refused on the author and sends "
     "nothing"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][spawn] spawn_registered on '*' was refused, "
+        "because this peer used up the spawns the session authority"
+        " granted it. More are granted as its spawns are admitted, "
+        "so try again shortly.",
+        1
+    );
+
     SpawnStage stage;
     NetwMultiplayer *session = stage.rig.server();
     NetwMultiplayer *author = stage.rig.client(0);

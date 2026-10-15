@@ -1,3 +1,4 @@
+#include "support/fault_log.h"
 #include "support/netw_test.h"
 
 #include "support/declared_nodes.h"
@@ -204,6 +205,13 @@ TEST_CASE(
     "interest view does not admit is refused whole, because an argument is a "
     "disclosure and a peer may not name what it cannot see"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_warning(
+        "[warn][transport] Peer * sent a call naming route *, which"
+        " it cannot see, so the call was dropped.",
+        1
+    );
+
     LoopbackRig rig(0);
     rig.mount();
     NetwMultiplayer *core = rig.server();

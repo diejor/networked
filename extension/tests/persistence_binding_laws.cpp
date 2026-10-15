@@ -1,3 +1,4 @@
+#include "support/fault_log.h"
 #include "support/netw_test.h"
 
 #include "godot/node.hpp"
@@ -142,6 +143,15 @@ TEST_CASE(
     "[Networked][Persistence][Hosted] PB3 a table no property is persisted "
     "into refuses the binding, so a saved record is never an empty row"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][table] Condition \"bound.is_empty()\" is true. "
+        "Returning: RID(). '*' saves into table '*', but no "
+        "property is marked to save. Call "
+        "NetwPropertyConfig.persisted on each property to save.",
+        1
+    );
+
     World world("pb3");
     world.declare();
     world.property(world.root, "position");
@@ -154,6 +164,15 @@ TEST_CASE(
     "column name refuse the binding, including from sibling nodes, because "
     "one column holds one property"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][table] Condition \"bound[seen].key == key\" is true."
+        " Returning: RID(). '*' saves column '*' of table '*' "
+        "twice, from '*' and from '*'. Give one of them another "
+        "name in NetwPropertyConfig.persisted.",
+        1
+    );
+
     World world("pb4");
     world.declare();
     world.property(world.root, "position")->persisted(StringName("where"));
@@ -167,7 +186,17 @@ TEST_CASE(
     "refuses the binding, and a stored record whose column type disagrees "
     "with the property's declared type is refused on load"
 ) {
+    netw_test::FaultWatch expected_faults;
+
     SUBCASE("a name no node carries") {
+        expected_faults.expect_error(
+            "[error][table] Condition \"!gd::has_property(node, "
+            "property)\" is true. Returning: RID(). '*' saves column"
+            " '*' of table '*' from '*', but that node has no such "
+            "property. Fix the property name.",
+            1
+        );
+
         World world("pb5a");
         world.declare();
         world.property(world.root, "position")->persisted(StringName("where"));
@@ -178,6 +207,13 @@ TEST_CASE(
     }
 
     SUBCASE("a float stored where the property holds a Vector2") {
+        expected_faults.expect_error(
+            "[error][table] Database '*' failed. Loading record '*'"
+            " failed, so its entity is not published (the stored "
+            "record'*'players' at storage version 1).",
+            1
+        );
+
         World world("pb5b");
         world.declare();
         world.bind_both();
@@ -305,7 +341,17 @@ TEST_CASE(
     "session declares and a record id the provider answers, and refuses "
     "rather than inventing either"
 ) {
+    netw_test::FaultWatch expected_faults;
+
     SUBCASE("a database no session declares") {
+        expected_faults.expect_error(
+            "[error][table] Condition \"!database.is_valid()\" is "
+            "true. Returning: RID(). '*' saves into database '*', "
+            "which this session does not declare. Call "
+            "Netw.configure_database with that name first.",
+            1
+        );
+
         World world("pb6a");
         world.declare()->database(StringName("elsewhere"));
         world.bind_both();
@@ -314,6 +360,14 @@ TEST_CASE(
     }
 
     SUBCASE("no provider at all") {
+        expected_faults.expect_error(
+            "[error][table] Condition \"provider.is_null()\" is true."
+            " Returning: RID(). '*' declares no record id, so table"
+            " '*' has no row to save into. Pass a Callable to "
+            "NetwPersistenceConfig.record_id.",
+            1
+        );
+
         World world("pb6b");
         world.declare()->record_id(Callable());
         world.bind_both();
@@ -322,6 +376,14 @@ TEST_CASE(
     }
 
     SUBCASE("a provider answering an empty id") {
+        expected_faults.expect_error(
+            "[error][table] Condition "
+            "\"String(record_id).is_empty()\" is true. Returning: "
+            "RID(). The record id Callable of '*' returned an empty"
+            " id for table '*'. Return a non-empty id from it.",
+            1
+        );
+
         World world("pb6c");
         world.declare()->record_id(
             Callable(world.account, "get_scene_file_path")
@@ -471,6 +533,13 @@ TEST_CASE(
     "becomes the saved baseline, so the entity stays dirty and the next save "
     "carries the same values again"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][table] Database '*' failed. Record '*' was not "
+        "saved (the memory store was told to fail).",
+        1
+    );
+
     World world("pb12");
     world.declare();
     world.bind_both();

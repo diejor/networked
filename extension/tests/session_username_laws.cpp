@@ -1,3 +1,4 @@
+#include "support/fault_log.h"
 #include "support/netw_test.h"
 
 #include "netw/api/join_request.hpp"
@@ -48,6 +49,13 @@ TEST_CASE(
     "[Networked][Session][Hosted] U2 a join carrying no username at all is "
     "not resolved, so a forged payload seats nobody"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_warning(
+        "[warn][session] Peer * was refused, because its join "
+        "request had no username.",
+        1
+    );
+
     Ref<NetwMultiplayer> session;
     session.instantiate();
 

@@ -1,3 +1,4 @@
+#include "support/fault_log.h"
 #include "support/netw_test.h"
 
 #include <cstdint>
@@ -173,6 +174,16 @@ TEST_CASE(
     "does not hold is refused outright, so a stale handle cannot stamp a peer "
     "that has gone"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][spawn] Condition \"p_owner.is_valid() && "
+        "!player_holds(p_owner)\" is true. Returning: "
+        "Ref<NetwEntity>(). Nothing was spawned, because owner '*' "
+        "is not in the session. Spawn for a player the session has "
+        "admitted.",
+        1
+    );
+
     Ref<NetwMultiplayer> core;
     core.instantiate();
     CallLog log;

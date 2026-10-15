@@ -1,3 +1,4 @@
+#include "support/fault_log.h"
 #include "support/netw_test.h"
 
 #include "netw/interest/leave.hpp"
@@ -138,6 +139,14 @@ TEST_CASE(
     "[Networked][Interest][Hosted] a CUSTOM leave whose callback is gone "
     "hides rather than keeping a copy nothing stands in for"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][interest] The CUSTOM leave callback of layer '*' "
+        "was freed, so the copy is hidden. Keep the callback's "
+        "object alive while the layer uses it.",
+        1
+    );
+
     Leave book = fresh();
     Engine engine = engine_with({"stealth"}, RETAIN);
     Decl decl;
@@ -149,10 +158,7 @@ TEST_CASE(
     );
     book.record(ROOT, 4, StringName("stealth"));
     holder.unref();
-
-    ERR_PRINT_OFF;
     const Dictionary verdict = book.resolve(ROOT, 4, &decl, engine);
-    ERR_PRINT_ON;
 
     CHECK(hides(verdict));
     NETW_CHECK_EQ(custom_of(verdict).size(), 0);

@@ -705,6 +705,14 @@ TEST_CASE(
     "only when the peer that sent it controls the entity, so a client "
     "cannot act through a player it does not drive"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_warning(
+        "[warn][prediction] Peer * requested an action on '*', "
+        "which it does not control, so the server ignored it. Only "
+        "the peer in NetwEntity.controller can request it.",
+        1
+    );
+
     ActionRig fixture;
     const Ref<netw::NetwEntity> judged
         = fixture.rig.server()->entity_get_view(fixture.rig.entity_of("P"));

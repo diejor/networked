@@ -1,3 +1,4 @@
+#include "support/fault_log.h"
 #include "support/netw_test.h"
 
 #if defined(NETW_TIER_HOSTED)
@@ -189,6 +190,20 @@ const FunnelLaw L_REPORTED = {
 const FunnelLaw LAWS[] = {L_TYPED, L_STANDS, L_REPORTED};
 
 TEST_CASE("[Networked][Session] the seam funnel laws hold") {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][event] The override of _sync_admit_frame returned "
+        "coroutine, so the default ran instead. Return what its "
+        "documentation asks for.",
+        1
+    );
+    expected_faults.expect_error(
+        "[error][event] The override of _sync_admit_frame returned "
+        "type, so the default ran instead. Return what its "
+        "documentation asks for.",
+        1
+    );
+
     const FunnelScenario CORPUS[] = {
         a_seam_that_awaits(),
         a_seam_that_answers_a_string(),

@@ -1,3 +1,4 @@
+#include "support/fault_log.h"
 #include "support/netw_test.h"
 
 #include "support/minted_script.h"
@@ -169,6 +170,8 @@ TEST_CASE(
     "once however it was reached, and a preparation signal is only ever owed "
     "by a despawn a caller declared"
 ) {
+    netw_test::FaultWatch expected_faults;
+
     Watched stand;
 
     SUBCASE("an undeclared removal completes without a preparation signal") {
@@ -195,6 +198,12 @@ TEST_CASE(
     }
 
     SUBCASE("a declared despawn cannot be taken back by landing again") {
+        expected_faults.expect_error(
+            "[error][entity] Entity '*' cannot move from stage 4 to"
+            " stage 3.",
+            1
+        );
+
         Ref<netw::NetwDespawnOpts> opts;
         opts.instantiate();
         stand.entity->despawn(opts);

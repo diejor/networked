@@ -1,3 +1,4 @@
+#include "support/fault_log.h"
 #include "support/netw_test.h"
 
 #include "support/minted_script.h"
@@ -44,7 +45,25 @@ using netw_test::LoopbackRig;
 
 constexpr int TICKRATE = 30;
 constexpr int REMOTE_PEER = 2;
-const char *TARGET_BODY = netw_test::gdsrc::INTERPOLATED_RPC_AND_SIGNAL;
+const char *TARGET_BODY = R"(extends Node2D
+
+signal nudged(offset: Vector2)
+
+var rpc_target := Vector2.ZERO
+var signal_target := Vector2.ZERO
+var last_rpc_arg := Vector2.ZERO
+
+func _init() -> void:
+	var rpc_lerp := NetwInterpolate.new().lerp().smooth(0.0).to(&"rpc_target")
+	Netw.configure_rpc(apply_rpc).interpolate(rpc_lerp)
+	var signal_lerp := NetwInterpolate.new().lerp().smooth(0.0) \
+			.to(&"signal_target")
+	Netw.configure_signal(nudged).interpolate(signal_lerp)
+
+@rpc("any_peer", "call_remote", "reliable")
+func apply_rpc(offset: Vector2) -> void:
+	last_rpc_arg = offset
+)";
 
 bool near(const Vector2 &p_held, const Vector2 &p_wanted) {
     return p_held.distance_to(p_wanted) <= 0.1;
@@ -512,6 +531,16 @@ TEST_CASE(
     "[Networked][Display][SceneTree] a visual root naming no node still "
     "holds leaves-the-body"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][interp] Condition \"has_source && visual == "
+        "nullptr\" is true. Returning: nullptr. "
+        "NetwDisplay.visual_root '*' is not a node under '*', so "
+        "'*' is not interpolated, to keep it off the simulated node"
+        " '*'. Point visual_root at a child node.",
+        3
+    );
+
     const WriteScenario scenario = moving_body();
     const WriteRun run(scenario, PLANT_THE_VISUAL_ROOT_NAMES_NOTHING);
     NETW_CELL(L_LEAVES_THE_BODY, scenario);
@@ -717,6 +746,15 @@ const RoleLaw ROLE_LAWS[] = {
 };
 
 TEST_CASE("[Networked][Display][SceneTree] the auto display role laws hold") {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_warning(
+        "[warn][interp] '*' on '*' is simulated on this peer, so "
+        "smoothing it in place would feed back into the simulation "
+        "and it is not smoothed. Write it elsewhere with "
+        "NetwInterpolate.to or NetwDisplay.visual_root.",
+        1
+    );
+
     const RoleScenario CORPUS[] = {
         locally_owned(),
         locally_steered(),
@@ -1116,10 +1154,6 @@ TEST_CASE(
     Bench bench;
     const Subject subject
         = stand_interpolated(bench, "RpcTarget", false, 7, DisplayDecl(), true);
-    Array specs;
-    specs.push_back(lerp_to(StringName("rpc_target")));
-    netw::Netw::configure_rpc(Callable(subject.body, StringName("apply_rpc")))
-        ->interpolate(specs);
 
     netw::wire::WriteStream writer;
     uint64_t flags = 0;
@@ -1165,10 +1199,6 @@ TEST_CASE(
         DisplayDecl(),
         true
     );
-    Array specs;
-    specs.push_back(lerp_to(StringName("signal_target")));
-    netw::Netw::configure_signal(Signal(subject.body, StringName("nudged")))
-        ->interpolate(specs);
 
     netw::wire::WriteStream writer;
     REQUIRE(netw::script::model::write_token(writer, StringName("nudged")));

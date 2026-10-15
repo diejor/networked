@@ -850,6 +850,15 @@ TEST_CASE(
     "name the game derives its authority from, on a peer that joins "
     "after the transfer"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_warning(
+        "[warn][entity] /root/RigClient2/StockWorld/Arena/*/Sync "
+        "had its multiplayer authority set to * outside its entity,"
+        " and the entity sets it back to *. Choose who holds it "
+        "with NetwEntity.authority.",
+        1
+    );
+
     LoopbackRig rig(2);
     rig.mount();
     netw_test::flow_clocks(rig, TICKRATE);
@@ -1082,6 +1091,15 @@ TEST_CASE(
     "[Networked][Sync][SceneTree] a consumed synchronizer runs the encode "
     "and decode seams only on a session whose script overrides them"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][wire] MultiplayerSynchronizer '*' on route * "
+        "stopped replicating, because an update carried the wrong "
+        "number of values. Give it the same replication config on "
+        "every peer.",
+        1
+    );
+
     LoopbackRig rig(1);
     rig.mount();
     netw_test::flow_clocks(rig, TICKRATE);
@@ -1196,9 +1214,11 @@ TEST_CASE(
         int64_t(1)
     );
 
+    const netw_test::FaultWatch faults;
     add_leading_sync(node);
     add_leading_sync(mirror);
     rig.step_ticks(4);
+    node->set(StringName("watched_value"), 71);
     node->set(StringName("synced_value"), 2);
     NETW_CHECK_EQ(
         int64_t(
@@ -1211,6 +1231,10 @@ TEST_CASE(
         ),
         int64_t(2)
     );
+    rig.step_ticks(8);
+    NETW_CHECK_EQ(int64_t(mirror->get(StringName("watched_value"))), 71);
+    NETW_CHECK_EQ(faults.errors(), 0);
+
 }
 
 constexpr const char *SERVER_STEERED_PROBE = R"(extends Node2D

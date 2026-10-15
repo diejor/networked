@@ -15,9 +15,9 @@
 [ext_resource type="Texture2D" uid="uid://722tix5bqboc" path="res://examples/fps/models/character/skins/skaterFemaleA.png" id="11_skin"]
 [ext_resource type="Texture2D" uid="uid://b6e3rtikap1a3" path="res://examples/fps/models/character/skins/skaterMaleA.png" id="12_skin"]
 [ext_resource type="PackedScene" uid="uid://b2p7bbkuxf7m" path="res://examples/fps/models/blaster.glb" id="13_blaster"]
-[ext_resource type="Animation" uid="uid://dpsw7osv1igxr" path="res://examples/fps/models/character/idle.res" id="14_idle"]
-[ext_resource type="Animation" uid="uid://dek2v8sxpov7d" path="res://examples/fps/models/character/run.res" id="15_run"]
-[ext_resource type="Animation" uid="uid://dv3s5jyebwdxp" path="res://examples/fps/models/character/jump.res" id="16_jump"]
+[ext_resource type="Animation" uid="uid://c6v170rg0q4uc" path="res://examples/fps/models/character/idle.res" id="14_idle"]
+[ext_resource type="Animation" uid="uid://df74icix0pba" path="res://examples/fps/models/character/run.res" id="15_run"]
+[ext_resource type="Animation" uid="uid://d1tgx7ktfm8p4" path="res://examples/fps/models/character/jump.res" id="16_jump"]
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_gdq8c"]
 radius = 0.3

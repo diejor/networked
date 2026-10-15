@@ -1,3 +1,4 @@
+#include "support/fault_log.h"
 #include "support/netw_test.h"
 
 #include "netw/api/entity.hpp"
@@ -167,6 +168,14 @@ TEST_CASE(
     "[Networked][Interest][Hosted] IL3 a layer with no name is refused rather "
     "than answered with a dead handle"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][interest] Condition \"p_name.is_empty()\" is true. "
+        "Returning: RID(). An interest layer needs a name. Pass a "
+        "non-empty name.",
+        1
+    );
+
     Ref<NetwMultiplayer> core;
     core.instantiate();
 

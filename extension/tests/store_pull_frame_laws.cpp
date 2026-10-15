@@ -1,4 +1,5 @@
 #include "support/frame_drive.h"
+#include "support/fault_log.h"
 #include "support/minted_script.h"
 #include "support/netw_test.h"
 
@@ -147,6 +148,7 @@ struct PullEvidence {
     int write_lag = -1;
     bool write_value = false;
     int misses = 0;
+    int64_t miss_warnings = 0;
     bool miss_named = false;
     bool miss_restored = false;
     std::string miss_gate;
@@ -267,21 +269,17 @@ class PullScenario final : public netw_test::FrameScenario, PullStand {
         return table.changed_ticks[row_at(p_index)] == table.pulled_tick;
     }
 
+    Ref<netw_test::FaultLog> miss_diagnostics;
+
     void plant_miss() {
+        miss_diagnostics.instantiate();
+        netw_test::FaultLog::attach(miss_diagnostics);
         netw::store::validation_audit::Ledger &book
             = netw::store::validation_audit::ledger();
         faults_before = book.faults;
         first_before = book.first;
         server()->store().validate_every = 1;
         server()->store().misses.clear();
-        std::fprintf(
-            stderr,
-            "NETW_PLANT the store pull law P5 moves a sleeping body behind "
-            "the rested gate, so the missed changes on route %lld that "
-            "follow are planted and do not count as faults\n",
-            (long long)table_of(4).routes[row_at(4)]
-        );
-        std::fflush(stderr);
         RigidBody3D *held = cube(4);
         PhysicsServer3D *physics = PhysicsServer3D::get_singleton();
         Transform3D moved = held->get_global_transform();
@@ -303,6 +301,11 @@ class PullScenario final : public netw_test::FrameScenario, PullStand {
         World &world = server()->store();
         const int64_t route = table_of(4).routes[row_at(4)];
         seen.misses = int(world.misses.size());
+        netw_test::FaultLog::detach(miss_diagnostics);
+        seen.miss_warnings = miss_diagnostics->warning_count_containing(
+            "Store validation found a change the store did not record"
+        );
+        miss_diagnostics.unref();
         seen.miss_named = !world.misses.is_empty();
         for (uint32_t at = 0; at < world.misses.size(); ++at) {
             const netw::store::Miss &missed = world.misses[at];
@@ -600,6 +603,7 @@ class SendAllocScenario final : public netw_test::FrameScenario {
         stand->teach(StringName(CUBE_ID), callable_mp_static(&build_cube));
         stand->mount();
         stand->arm(TICKRATE);
+        Node *arena = stand->arena();
         for (int index = 0; index < SEND_PILE; ++index) {
             Array args;
             args.push_back(String("beating") + String::num_int64(index));
@@ -609,7 +613,7 @@ class SendAllocScenario final : public netw_test::FrameScenario {
             if (built == nullptr) {
                 return false;
             }
-            stand->arena()->add_child(built);
+            arena->add_child(built);
             cubes.push_back(made);
         }
         stand->pump(8);
@@ -738,6 +742,7 @@ TEST_CASE(
     const PullEvidence &seen = pull_evidence();
     REQUIRE(seen.driven);
     NETW_CHECK_GE(seen.misses, 1);
+    NETW_CHECK_EQ(seen.miss_warnings, seen.misses);
     CHECK(seen.miss_named);
     CHECK(bool(seen.miss_gate == "rested"));
     CHECK(seen.miss_restored);

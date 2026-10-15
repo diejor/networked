@@ -100,7 +100,6 @@ Node *a_sink(const Ref<Script> &p_script) {
 Seated seat_star(LoopbackRig &p_rig, const Ref<Script> &p_script) {
     Seated made;
     made.hub = a_sink(p_script);
-    p_rig.branch(-1)->add_child(made.hub);
     made.at_hub = p_rig.server()->entity_create();
     const int64_t route = p_rig.server()->entity_admit(made.at_hub);
     REQUIRE(route > 0);
@@ -109,10 +108,10 @@ Seated seat_star(LoopbackRig &p_rig, const Ref<Script> &p_script) {
         int(OK)
     );
 
+    p_rig.branch(-1)->add_child(made.hub);
     Node *seats[2] = {nullptr, nullptr};
     for (int index = 0; index < 2; ++index) {
         seats[index] = a_sink(p_script);
-        p_rig.branch(index)->add_child(seats[index]);
         const RID here = p_rig.client(index)->entity_create();
         NETW_CHECK_EQ(
             int(p_rig.client(index)->entity_bind_route(here, route)),
@@ -122,6 +121,7 @@ Seated seat_star(LoopbackRig &p_rig, const Ref<Script> &p_script) {
             int(p_rig.client(index)->entity_bind_node(here, seats[index])),
             int(OK)
         );
+        p_rig.branch(index)->add_child(seats[index]);
     }
     made.first = seats[0];
     made.second = seats[1];

@@ -96,13 +96,13 @@ Nest read_nest(Node *p_arena) {
 
 int seat_late(LoopbackRig &p_rig, const PackedInt64Array &p_replay) {
     const int late = p_rig.add_client();
-    p_rig.mount_late(late);
     p_rig.register_constructor(
         p_rig.client(late),
         StringName("nested_arena"),
         callable_mp_static(&build_nested_arena),
         one_type()
     );
+    p_rig.mount_late(late);
     for (int at = 0; at < p_replay.size(); ++at) {
         p_rig.deliver_spawn(late, p_rig.spawn_frame_of(int(p_replay[at])));
     }
@@ -419,10 +419,6 @@ ForeignEvidence run_foreign_parent(const ForeignParent &p_case) {
         && early_ball->get_parent() == descend(early_foreign, "Body");
 
     const int late = rig.add_client();
-    rig.mount_late(late);
-    if (p_case.placed_by_the_level) {
-        place_level(rig, late);
-    }
     rig.register_constructor(
         rig.client(late),
         StringName("nested_arena"),
@@ -435,6 +431,10 @@ ForeignEvidence run_foreign_parent(const ForeignParent &p_case) {
         callable_mp_static(&build_plain_arena),
         one_type()
     );
+    rig.mount_late(late, false);
+    if (p_case.placed_by_the_level) {
+        place_level(rig, late);
+    }
     const PackedInt64Array replay
         = rig.spawn_plane()->get_spawn_book()->ancestry_order();
     for (int at = 0; at < replay.size(); ++at) {

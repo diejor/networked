@@ -1,3 +1,4 @@
+#include "support/fault_log.h"
 #include "support/netw_test.h"
 
 #include "netw/api/netw_multiplayer.hpp"
@@ -109,6 +110,14 @@ TEST_CASE(
     "the draft and leaves the previous role standing, so nothing downstream "
     "is ever handed a role it cannot switch on"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_warning(
+        "[warn][session] Netw.configure_session got * for 'desired_role', "
+        "which it does not accept, so the previous value stays. "
+        "Pass a value in the range its documentation gives.",
+        2
+    );
+
     Ref<NetwMultiplayer> core;
     core.instantiate();
     const Ref<NetwSessionConfig> config
@@ -143,6 +152,14 @@ TEST_CASE(
     "configuration is refused as late and the running role stands rather than "
     "a reconnect quietly reopening initialization"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_warning(
+        "[warn][session] Netw.configure_session ran after the "
+        "session started, so the running values are unchanged. Call"
+        " it before startup and finish the chain without awaiting.",
+        1
+    );
+
     Ref<NetwMultiplayer> core;
     core.instantiate();
     NETW_CHECK_EQ(

@@ -75,6 +75,17 @@ struct Drivers {
         : rig(p_clients) {
         rig.declare_world(p_world);
         for (const char *name : p_names) {
+            const int route = int(served(name)->get_route());
+            for (int client = 0; client < rig.count(); ++client) {
+                if (!rig.holds_entity(StringName(name), client)) {
+                    rig.declare_mirror(
+                        client,
+                        driver(name, netw::Schedule::TICK)
+                            .on_route(route)
+                            .controlled_by(0)
+                    );
+                }
+            }
             admit_everyone(name);
         }
     }

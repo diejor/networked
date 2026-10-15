@@ -1,3 +1,4 @@
+#include "support/fault_log.h"
 #include "support/books.h"
 #include "support/netw_test.h"
 
@@ -131,6 +132,13 @@ TEST_CASE(
     "[Networked][Repl][Hosted] a declaration naming no route or no key "
     "is refused"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_warning(
+        "[warn][wire] Properties declared on route * under key '*' "
+        "have no valid address, so they will not sync.",
+        1
+    );
+
     SetModel model;
 
     NETW_CHECK_EQ(

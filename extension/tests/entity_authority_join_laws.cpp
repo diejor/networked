@@ -1,3 +1,4 @@
+#include "support/fault_log.h"
 #include "support/loopback_rig.h"
 
 #if defined(NETW_TIER_HOSTED)
@@ -92,13 +93,31 @@ TEST_CASE(
     "joins an AUTHORITY_SERVER entity is reset to the server, as a child "
     "and as a grandchild, whoever controls the entity"
 ) {
+    netw_test::FaultWatch expected_faults;
+
     LoopbackRig rig(1);
     rig.mount();
     netw_test::flow_clocks(rig, TICKRATE);
     Node *crate = spawn_crate(rig, "authority_join_crate");
     SUBCASE("the server controls it") {
+        expected_faults.expect_warning(
+            "[warn][entity] /root/RigServer/Crate/Child had its "
+            "multiplayer authority set to 5 outside its entity, and"
+            " the entity sets it back to 1. Choose who holds it "
+            "with NetwEntity.authority.",
+            1
+        );
+
     }
     SUBCASE("a player controls it") {
+        expected_faults.expect_warning(
+            "[warn][entity] /root/RigServer/Crate/Child had its "
+            "multiplayer authority set to 5 outside its entity, and"
+            " the entity sets it back to 1. Choose who holds it "
+            "with NetwEntity.authority.",
+            1
+        );
+
         NetwEntity::of(crate)->set_controller(rig.peer_id(0));
         NETW_REQUIRE_EQ(
             NetwEntity::of(crate)->get_controller(),
@@ -154,6 +173,15 @@ TEST_CASE(
     "watches every node, and returning control to the server leaves "
     "authority with the server"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_warning(
+        "[warn][entity] /root/RigServer/Crate/Child/Late had its "
+        "multiplayer authority set to 5 outside its entity, and the"
+        " entity sets it back to 1. Choose who holds it with "
+        "NetwEntity.authority.",
+        1
+    );
+
     LoopbackRig rig(1);
     rig.mount();
     netw_test::flow_clocks(rig, TICKRATE);

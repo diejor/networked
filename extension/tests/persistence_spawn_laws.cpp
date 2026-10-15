@@ -1,3 +1,4 @@
+#include "support/fault_log.h"
 #include "support/netw_test.h"
 
 #include <cstdint>
@@ -212,6 +213,14 @@ TEST_CASE(
     "the entity unpublished, saves nothing over the stored row, and a "
     "successful retry publishes it"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][table] Database '*' failed. Loading record '*' "
+        "failed, so its entity is not published (the memory store "
+        "was told to fail).",
+        1
+    );
+
     World world("sl3");
     world.bind_both();
     world.store(Vector2(9, 9));
@@ -241,6 +250,15 @@ TEST_CASE(
     "moves while the load is in flight refuses the stored row, and the entity "
     "stays unpublished"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][table] Database '*' failed. Loading record '*' "
+        "failed, so its entity is not published (its bound "
+        "properties changed while the row was being read, and the "
+        "stored row would overwrite those changes).",
+        1
+    );
+
     World world("sl4");
     world.bind_both();
     world.store(Vector2(9, 9));
@@ -281,6 +299,15 @@ TEST_CASE(
     "[Networked][Persistence][Hosted][SceneTree] SL6 an entity whose binding "
     "does not compile is never published as loaded"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][table] Condition \"!gd::has_property(node, "
+        "property)\" is true. Returning: RID(). '*' saves column '*'"
+        " of table '*' from '*', but that node has no such "
+        "property. Fix the property name.",
+        1
+    );
+
     World world("sl6");
     world.bind(world.root, "no_such_property", 0);
     world.spawned();
@@ -318,6 +345,14 @@ TEST_CASE(
     "[Networked][Persistence][SceneTree] SL8 a setter that frees another bound "
     "node while the stored row is applied withholds completion and publication"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][table] Database '*' failed. Loading record '*' "
+        "failed, so its entity is not published (a bound node went "
+        "away while the stored row was applied).",
+        1
+    );
+
     Node2D *scripted = Object::cast_to<Node2D>(netw_test::minted_node(
         "extends Node2D\n"
         "var spin := 0.0:\n"

@@ -1,3 +1,4 @@
+#include "support/fault_log.h"
 #include "support/mesh_stand.h"
 #include "support/netw_test.h"
 
@@ -198,6 +199,13 @@ TEST_CASE(
     "promise, so the verb is proved where it is delivered rather than where "
     "it is recorded"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_warning(
+        "[warn][scene] Peer * asked for a scene change before it "
+        "joined, so it was refused.",
+        1
+    );
+
     MeshStand mesh;
     mesh.seat_server();
     mesh.seat_member(9);

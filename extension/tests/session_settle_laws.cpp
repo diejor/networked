@@ -1,3 +1,4 @@
+#include "support/fault_log.h"
 #include "support/netw_test.h"
 
 #include "support/netw_call_log.h"
@@ -369,6 +370,13 @@ const SettleLaw LAWS[]
     = {L_DEFERRED, L_ORDERED, L_WITHDRAWN, L_ONCE, L_BOUNDED};
 
 TEST_CASE("[Networked][Settle][Hosted] the session settle laws hold") {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][session] Deferred session work did not finish in 8"
+        " passes. Still pending: cycle.",
+        1
+    );
+
     const SettleScenario CORPUS[] = {
         plain_effects(),
         a_coalescing_key(),

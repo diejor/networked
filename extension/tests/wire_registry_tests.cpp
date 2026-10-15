@@ -1,3 +1,4 @@
+#include "support/fault_log.h"
 #include "support/netw_test.h"
 
 #include "netw/wire/registry.hpp"
@@ -60,6 +61,13 @@ TEST_CASE(
 }
 
 TEST_CASE("[Networked][Wire][Hosted] reserved channel slots report invalid") {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_warning(
+        "[warn][wire] Channel '*' was not registered, because id 0 "
+        "is reserved. Give it another id.",
+        1
+    );
+
     const WireRegistry reg = WireRegistry::create_default();
 
     const ChannelDecl *ch0 = reg.find_channel(0);

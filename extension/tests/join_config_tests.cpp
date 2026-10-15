@@ -1,3 +1,4 @@
+#include "support/fault_log.h"
 #include "support/netw_test.h"
 
 #include "godot/callable.hpp"
@@ -57,6 +58,14 @@ TEST_CASE(
     "wire argument, so a handler taking two of them refuses a list of one "
     "rather than packing the first and leaving the second to guess"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][session] NetwJoinConfig.quantize got 1 entries for"
+        " '*' in '*', which has 2 values. Pass one entry per value,"
+        " and null for a value to leave as it is.",
+        1
+    );
+
     const Ref<NetwJoinConfig> config = make_config();
     config->set_context_name(StringName("spawn_at"));
     const CallLog reader;
@@ -83,6 +92,13 @@ TEST_CASE(
     "leaves the declared list standing, so a typo in one chained call cannot "
     "silently unpack a schema already declared"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][session] NetwJoinConfig.quantize got a int for "
+        "value 0 of '*'. Pass a NetwQuantize or null there.",
+        1
+    );
+
     const Ref<NetwJoinConfig> config = make_config();
     const Ref<NetwQuantize> packer = make_quantizer();
     config->quantize(one(packer));
@@ -100,7 +116,7 @@ TEST_CASE(
 ) {
     const Ref<NetwJoinConfig> config = make_config();
 
-    CHECK(bool(config->quantize(Array()) == config));
+    CHECK(bool(config->quantize(one(make_quantizer())) == config));
 }
 
 TEST_CASE(
@@ -109,6 +125,13 @@ TEST_CASE(
     "is reported without dropping the declaration, because the GDScript "
     "spelling it replaces was an assert a release build strips"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_warning(
+        "[warn][session] NetwQuantizeScalar cannot pack the String "
+        "value of '*' in '*'. Use a quantizer that supports String.",
+        1
+    );
+
     const Ref<NetwJoinConfig> config = make_config();
     config->set_context_name(StringName("spawn_at"));
     const CallLog reader;
@@ -133,6 +156,13 @@ TEST_CASE(
     "types reader, because there is no new declaration to judge and the "
     "standing one was already judged when it was declared"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][session] NetwJoinConfig.quantize got a int for "
+        "value 0 of '*'. Pass a NetwQuantize or null there.",
+        1
+    );
+
     const Ref<NetwJoinConfig> config = make_config();
     config->set_context_name(StringName("spawn_at"));
     const CallLog reader;

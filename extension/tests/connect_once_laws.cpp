@@ -1,3 +1,4 @@
+#include "support/fault_log.h"
 #include "support/loopback_rig.h"
 
 #if defined(NETW_TIER_HOSTED)
@@ -40,6 +41,25 @@ TEST_CASE(
     "[Networked][Session] CO2 an edge that cannot be wired counts a "
     "gate verdict, so a dropped connection is visible rather than silent"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "Condition \"p_callable.is_null()\" is true. Returning: false"
+        " Cannot determine if connected to '*': the provided "
+        "callable is null.",
+        1
+    );
+    expected_faults.expect_error(
+        "Condition \"p_callable.is_null()\" is true. Returning: "
+        "ERR_INVALID_PARAMETER Cannot connect to '*': the provided "
+        "callable is null.",
+        1
+    );
+    expected_faults.expect_error(
+        "[error][session] Connecting to the signal '*' failed with "
+        "error 31, so its callback will not run.",
+        1
+    );
+
     LoopbackRig rig(0);
     NetwMultiplayer *core = rig.server();
     REQUIRE(core != nullptr);

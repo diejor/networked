@@ -34,8 +34,8 @@ function configuredServers(env) {
 
 async function upstreamServers(env) {
   const headers = {};
-  if (env.TURN_UPSTREAM_HEADER && env.TURN_UPSTREAM_TOKEN) {
-    headers[env.TURN_UPSTREAM_HEADER] = env.TURN_UPSTREAM_TOKEN;
+  if (env.TURN_UPSTREAM_HEADER && env.TURN_AUTH_TOKEN) {
+    headers[env.TURN_UPSTREAM_HEADER] = env.TURN_AUTH_TOKEN;
   }
   const relayed = await fetch(env.TURN_UPSTREAM_URL, {
     method: "GET",

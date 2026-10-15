@@ -167,7 +167,7 @@ TEST_CASE(
     rig.mount();
     const FlowPair pair = stand_flow_pair(
         rig,
-        netw_test::gdsrc::STATE_VOLATILE_AND_RETAINED,
+        netw_test::gdsrc::STATE_ONLY,
         "Coasting",
         BIND_NO_MIRROR
     );

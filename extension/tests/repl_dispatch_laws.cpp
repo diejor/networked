@@ -1,3 +1,4 @@
+#include "support/fault_log.h"
 #include "support/netw_test.h"
 
 #include <cstdint>
@@ -72,12 +73,17 @@ TEST_CASE(
     "[Networked][Replication][Hosted] RD2 a parent-relative path is refused "
     "by the address clamp before anything is resolved through it"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_warning(
+        "[warn][transport] A packet named path '*', which leaves "
+        "entity '*', so it was dropped.",
+        1
+    );
+
     Stand stand = a_stand();
     Node *outside = memnew(Node);
     outside->set_name("Outside");
     outside->add_child(stand.root);
-
-    ERR_PRINT_OFF;
     NETW_CHECK_EQ(
         stand.core->repl_comp_node(
             stand.route,
@@ -86,7 +92,6 @@ TEST_CASE(
         ),
         nullptr
     );
-    ERR_PRINT_ON;
     NETW_CHECK_GT(
         int64_t(stand.core->repl_drop_stats()[StringName("drops_traversal")]),
         int64_t(0)

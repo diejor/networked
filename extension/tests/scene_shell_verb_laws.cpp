@@ -1,3 +1,4 @@
+#include "support/fault_log.h"
 #include "support/netw_test.h"
 
 #include "godot/node.hpp"
@@ -206,6 +207,7 @@ TEST_CASE(
     "it can start, and a reachable one is handed to the installed carry with "
     "that same promise, so nothing about the outcome is left unanswered"
 ) {
+    netw_test::FaultWatch expected_faults;
     Ref<NetwMultiplayer> core;
     core.instantiate();
     const CallLog seen;
@@ -214,6 +216,21 @@ TEST_CASE(
     const Placed pawn = place(core, root, false);
 
     const RID bodiless = core->get_liveness_core()->entity_create();
+    const String refused_move
+        = "[warn][scene] Entity %d could not move to scene %d, "
+          "because one of them is not in the tree.";
+    expected_faults.expect_warning(
+        vformat(
+            refused_move,
+            int(bodiless.get_id()),
+            int(arena.handle.get_id())
+        ),
+        1
+    );
+    expected_faults.expect_warning(
+        vformat(refused_move, int(pawn.handle.get_id()), 0),
+        1
+    );
     const Ref<NetwPromise> unheld
         = core->scene_move_entity(bodiless, arena.handle);
     REQUIRE(unheld.is_valid());
@@ -249,6 +266,13 @@ TEST_CASE(
     "scenes is refused before anything reaches the carry, because only the "
     "session authority moves an entity"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][scene] scene_move: only the session authority "
+        "moves an entity between scenes",
+        1
+    );
+
     Ref<NetwMultiplayer> core;
     core.instantiate();
     core->session_peer_assigned(true, 9);

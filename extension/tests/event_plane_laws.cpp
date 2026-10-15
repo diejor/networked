@@ -1,3 +1,4 @@
+#include "support/fault_log.h"
 #include "support/netw_test.h"
 
 #include <thread>
@@ -622,6 +623,25 @@ const EventLaw LAWS[] = {
 constexpr int LAWS_SIZE = int(sizeof(LAWS) / sizeof(LAWS[0]));
 
 TEST_CASE("[Networked][Event][Hosted] the event plane's laws hold") {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][event] NetwMultiplayer.event_watch got event 9, "
+        "which does not exist. Use a NetwMultiplayer.Event value.",
+        1
+    );
+    expected_faults.expect_error(
+        "[error][event] NetwMultiplayer.event_watch got the "
+        "predicate key '*', which it does not read. Use a key its "
+        "documentation lists.",
+        1
+    );
+    expected_faults.expect_error(
+        "[error][event] NetwMultiplayer.event_watch got the target "
+        "key '*', which it does not read. Use a key its "
+        "documentation lists.",
+        1
+    );
+
     const EventScenario CORPUS[] = {
         watched_gate(),
         gate_flood(),

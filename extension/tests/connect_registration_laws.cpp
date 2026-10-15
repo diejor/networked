@@ -1,3 +1,4 @@
+#include "support/fault_log.h"
 #include "support/netw_test.h"
 
 #include "godot/multiplayer.hpp"
@@ -79,6 +80,14 @@ TEST_CASE(
     "peer class name exactly one provider and lets a snapshot carrying only "
     "the class name identify it"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][session] A transport for peer class '*' is already"
+        " registered, so this one was refused. Call "
+        "NetwMultiplayer.transport_unregister first.",
+        1
+    );
+
     const Ref<NetwMultiplayer> core = lone_session();
     const Ref<Script> held = script_at(HELD_SCRIPT);
     const Ref<Script> rival = script_at(RIVAL_SCRIPT);
@@ -264,6 +273,14 @@ TEST_CASE(
     "the script and the peer class, holding no handle of its own, and it "
     "reports what the session actually took"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][session] A transport for peer class '*' is already"
+        " registered, so this one was refused. Call "
+        "NetwMultiplayer.transport_unregister first.",
+        1
+    );
+
     const Ref<NetwMultiplayer> core = lone_session();
     const Ref<NetwConnection> view = core->get_connection();
     const Ref<Script> held = script_at(HELD_SCRIPT);

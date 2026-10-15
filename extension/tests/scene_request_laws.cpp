@@ -1,3 +1,4 @@
+#include "support/fault_log.h"
 #include "support/netw_test.h"
 
 #include "netw/api/netw_multiplayer.hpp"
@@ -146,6 +147,14 @@ TEST_CASE(
     "that simply forgot Netw.configure_scene_requests reads as a game whose "
     "policy refused"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_warning(
+        "[warn][scene] A client'*'res://arena.tscn' was refused, "
+        "because no handler decides scene requests. Install one "
+        "with Netw.configure_scene_requests.",
+        1
+    );
+
     const Ref<NetwMultiplayer> core = configured_core();
 
     NETW_CHECK_EQ(
@@ -165,6 +174,14 @@ TEST_CASE(
     "so, and a handler REFUSING is not, because a refusal is the answer the "
     "game was asked for and only a broken handler is a fault"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_warning(
+        "[warn][scene] The scene request handler did not return an "
+        "Error, so the request was refused. Return OK to accept it "
+        "or an Error to refuse it.",
+        1
+    );
+
     const Ref<NetwMultiplayer> refusing = configured_core();
     refusing->get_scene_core()->set_request_handler(callable_mp_static(
         +[](const Variant &, const Variant &, const Variant &) -> Variant {

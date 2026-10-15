@@ -6,6 +6,7 @@
 
 #if defined(NETW_TIER_HOSTED)
 
+#include "support/fault_log.h"
 #include "support/netw_cells.h"
 #include "support/value_flow_stand.h"
 
@@ -121,6 +122,7 @@ public:
         Plant p_plant = PLANT_NONE
     )
         : declared(p_scenario), planted(p_plant) {
+        const netw_test::FaultWatch faults;
         LoopbackRig rig(1);
         rig.declare_world(WorldDecl().clocked(30).lag_compensated());
         rig.mount();
@@ -129,13 +131,19 @@ public:
         const FlowPair pair = netw_test::stand_flow_pair(
             rig,
             netw_test::gdsrc::INTERPOLATED_STATE_AND_INPUT,
-            "PredictedPlayer"
+            "PredictedPlayer",
+            netw_test::BIND_EVERY_MIRROR,
+            false
         );
         netw_test::steer(pair, declared.steers ? int(rig.peer_id(0)) : 0);
         const Ref<NetwEntity> on_server = NetwEntity::of(pair.authored);
         const Ref<NetwEntity> on_client = NetwEntity::of(pair.mirror(0));
         REQUIRE(on_server.is_valid());
         REQUIRE(on_client.is_valid());
+        NETW_REQUIRE_EQ(
+            int(server->predict_declare(on_server->get_rid_handle())),
+            int(OK)
+        );
         on_client->get_display()->set_live_mode(declared.live_mode);
         const RID rid = on_client->get_rid_handle();
 
@@ -153,6 +161,11 @@ public:
                 NetwPrediction::RECOVERY_POLICY_DELAY_CLOSED
             );
         }
+        rig.pump();
+        NETW_CHECK_EQ(
+            faults.warnings_containing("declares state and input properties"),
+            int64_t(plant_is(PLANT_NOBODY_REGISTERED_THE_ENGINE) ? 1 : 0)
+        );
         read.server_role = stat_of(server, on_server, "role");
         read.client_role = stat_of(client, on_client, "role");
         read.client_pump = stat_of(client, on_client, "pump_mode");

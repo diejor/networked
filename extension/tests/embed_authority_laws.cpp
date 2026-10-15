@@ -127,6 +127,14 @@ TEST_CASE(
     "cannot respawn is kept and reported, because deleting it would leave "
     "the session presenting nothing at all"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][scene] '*' is a multiplayer scene with no .tscn "
+        "file under res://, so it cannot be spawned. Save the level"
+        " as its own scene.",
+        1
+    );
+
     MeshStand stand;
     stand.seat_server();
     stand.pump(2);

@@ -1,3 +1,4 @@
+#include "support/fault_log.h"
 #include "support/netw_test.h"
 
 #include "support/loopback_rig.h"
@@ -26,6 +27,18 @@ TEST_CASE(
     "because a game names its own lane and a session that hands back a "
     "different one silently merges two conversations"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][liveness] Channel id 99 is not available to a "
+        "game. Use an id from 100 to 254.",
+        1
+    );
+    expected_faults.expect_error(
+        "[error][liveness] Channel id 255 is not available to a "
+        "game. Use an id from 100 to 254.",
+        1
+    );
+
     LoopbackRig rig(0);
     rig.mount();
     NetwMultiplayer *core = Object::cast_to<NetwMultiplayer>(rig.server());
@@ -60,6 +73,19 @@ TEST_CASE(
     "the wire actually gave it, so a signal the node never declared is a "
     "refusal a watcher can read rather than a silent success"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][wire] Condition \"!node->has_signal(p_signal)\" is "
+        "true. Returning: ERR_INVALID_DATA. '*' has no signal '*', "
+        "so it was not sent.",
+        1
+    );
+    expected_faults.expect_warning(
+        "[warn][transport] A packet for route * was refused with "
+        "error 30.",
+        1
+    );
+
     LoopbackRig rig(0);
     rig.mount();
     NetwMultiplayer *core = Object::cast_to<NetwMultiplayer>(rig.server());

@@ -1,3 +1,4 @@
+#include "support/fault_log.h"
 #include "support/loopback_rig.h"
 
 #if defined(NETW_TIER_HOSTED)
@@ -347,6 +348,8 @@ TEST_CASE(
     "anchor's return, and a frame whose anchor is a tombstone is dropped in "
     "the frame that carries it rather than held for the park timeout"
 ) {
+    netw_test::FaultWatch expected_faults;
+
     LoopbackRig rig(1);
     rig.mount();
     Node *arena = rig.mirror_child("Arena");
@@ -387,6 +390,12 @@ TEST_CASE(
     }
 
     SUBCASE("a tombstoned anchor drops the frame at once") {
+        expected_faults.expect_warning(
+            "[warn][spawn] A spawn for route * was dropped, because"
+            " its parent '*' does not exist on this peer.",
+            1
+        );
+
         Node *body = rig.route_node(anchor.route);
         body->get_parent()->remove_child(body);
         rig.pump(10);

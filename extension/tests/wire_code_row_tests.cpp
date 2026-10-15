@@ -1,3 +1,4 @@
+#include "support/fault_log.h"
 #include "support/netw_test.h"
 
 #include <cstdint>
@@ -270,6 +271,13 @@ TEST_CASE(
 TEST_CASE(
     "[Networked][Wire][Hosted] a schema wider than the mask has no plan"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][table] Schema '*' declares 65 columns, and a "
+        "schema holds at most 64. Split it into smaller schemas.",
+        1
+    );
+
     CHECK(WirePlan::compile(sealed("Wide", 64, SchemaCore::BOOL)).valid());
     CHECK_FALSE(
         WirePlan::compile(sealed("Wider", 65, SchemaCore::BOOL)).valid()

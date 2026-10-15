@@ -1,3 +1,4 @@
+#include "support/fault_log.h"
 #include "support/netw_test.h"
 
 #include <cstdint>
@@ -310,6 +311,13 @@ TEST_CASE(
     "[Networked][Wire][Hosted] a record past the column limit refuses to "
     "seal, so an author learns at authoring time and not at send time"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][table] Schema '*' declares 65 columns, and a "
+        "schema holds at most 64. Split it into smaller schemas.",
+        1
+    );
+
     SchemaRecord record = record_of("TooWide");
     for (int index = 0; index <= SchemaCore::MAX_COLUMNS; ++index) {
         add(record,

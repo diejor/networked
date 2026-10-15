@@ -1,9 +1,4 @@
-// The per-entity interest declaration's laws.
-//
-// Two of them are refusals that used to be release-stripped assertions, so the
-// cases below check that a rejected declaration leaves the record exactly as it
-// was. A guard that reports and then writes anyway is the failure a return
-// value alone would not catch.
+#include "support/fault_log.h"
 
 #include "support/netw_test.h"
 
@@ -110,14 +105,70 @@ TEST_CASE(
     "[Networked][Interest][Hosted] a refused declaration leaves the record "
     "exactly as it was"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][interest] Condition \"policy == custom_policy && "
+        "!custom.is_valid()\" is true. Returning: false. "
+        "NetwInterest.on_leave_policy got a CUSTOM policy with no "
+        "callback. Pass the callback that decides it.",
+        1
+    );
+    expected_faults.expect_error(
+        "[error][interest] Condition \"policy != custom_policy && "
+        "custom.is_valid()\" is true. Returning: false. "
+        "NetwInterest.on_leave_policy got a callback with a policy "
+        "that is not CUSTOM. Use the CUSTOM policy, or drop the "
+        "callback.",
+        1
+    );
+    expected_faults.expect_error(
+        "[error][interest] Condition \"policy < 0 || policy > "
+        "custom_policy\" is true. Returning: false. "
+        "NetwInterest.on_leave_policy got policy 7, which does not "
+        "exist.",
+        1
+    );
+    expected_faults.expect_error(
+        "[error][interest] Condition \"layer_id.is_empty()\" is true."
+        " Returning: false. NetwInterest.on_leave_policy needs a "
+        "layer name, and it was empty.",
+        1
+    );
+    expected_faults.expect_error(
+        "[error][interest] Condition \"policy == custom_policy && "
+        "!custom.is_valid()\" is true. Returning: false. "
+        "NetwInterest.on_perception_policy got a CUSTOM policy with"
+        " no callback. Pass the callback that decides it.",
+        1
+    );
+    expected_faults.expect_error(
+        "[error][interest] Condition \"policy != custom_policy && "
+        "custom.is_valid()\" is true. Returning: false. "
+        "NetwInterest.on_perception_policy got a callback with a "
+        "policy that is not CUSTOM. Use the CUSTOM policy, or drop "
+        "the callback.",
+        1
+    );
+    expected_faults.expect_error(
+        "[error][interest] Condition \"policy < 0 || policy > "
+        "custom_policy\" is true. Returning: false. "
+        "NetwInterest.on_perception_policy got policy -1, which "
+        "does not exist.",
+        1
+    );
+    expected_faults.expect_error(
+        "[error][interest] Condition \"layer_id.is_empty()\" is true."
+        " Returning: false. NetwInterest.join needs a layer name, "
+        "and it was empty.",
+        1
+    );
+
     Decl decl;
     const Ref<RefCounted> holder = callable_holder();
     const StringName stealth("stealth");
     const Callable callback(holder.ptr(), StringName("get_class"));
     decl.set_leave_policy(stealth, RETAIN, Callable());
     decl.set_perception_policy(stealth, SHOW, Callable());
-
-    ERR_PRINT_OFF;
     CHECK(!decl.set_leave_policy(stealth, LEAVE_CUSTOM, Callable()));
     CHECK(!decl.set_leave_policy(stealth, LEAVE_HIDE, callback));
     CHECK(!decl.set_leave_policy(stealth, 7, Callable()));
@@ -126,7 +177,6 @@ TEST_CASE(
     CHECK(!decl.set_perception_policy(stealth, HIDE, callback));
     CHECK(!decl.set_perception_policy(stealth, -1, Callable()));
     CHECK(!decl.join(StringName()));
-    ERR_PRINT_ON;
 
     NETW_CHECK_EQ(decl.leave_policy_for(stealth, LEAVE_HIDE), RETAIN);
     NETW_CHECK_EQ(decl.perception_policy_for(stealth, HIDE), SHOW);

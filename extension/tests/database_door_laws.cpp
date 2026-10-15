@@ -1,3 +1,4 @@
+#include "support/fault_log.h"
 #include "support/netw_test.h"
 
 #include "netw/api/database.hpp"
@@ -122,6 +123,13 @@ TEST_CASE(
     "[Networked][Table][Hosted] DD4 a batch reaches storage only at submit, "
     "and seals once it has"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][table] NetwWriteBatch.write ran after the batch "
+        "was submitted. Start a new batch for more writes.",
+        1
+    );
+
     World world("dd4");
     world.db->open("slot1");
 
@@ -155,6 +163,13 @@ TEST_CASE(
     "[Networked][Table][Hosted] DD5 a batch a builder refused performs no "
     "storage work, even when the caller ignored the builder's answer"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][table] schema '*' declares 2 columns and the row "
+        "carries 1",
+        1
+    );
+
     World world("dd5");
     world.db->open("slot1");
 
@@ -213,6 +228,14 @@ TEST_CASE(
     "[Networked][Table][Hosted] DD8 declaring one name twice keeps one "
     "database, and a second backend under that name is refused"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][table] Database '*' is already declared with a "
+        "different backend. Declare each database name with one "
+        "backend.",
+        1
+    );
+
     World world("dd8");
     const RID first = world.session->database_find("saves");
     CHECK(first.is_valid());

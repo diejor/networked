@@ -10,6 +10,7 @@
 #include "netw/api/netw_multiplayer.hpp"
 #include "netw/api/promise.hpp"
 #include "netw/wire/registry.hpp"
+#include "support/fault_log.h"
 #include "support/minted_script.h"
 #include "support/netw_cells.h"
 #include "support/value_flow_stand.h"
@@ -114,16 +115,6 @@ int64_t frames_in(
     const Dictionary rows
         = p_session->attribution_snapshot()["frames_in_by_channel"];
     const Dictionary channels = rows.get(p_from, Dictionary());
-    return int64_t(channels.get(channel_named(p_name), 0));
-}
-
-int64_t bytes_out(
-    NetwMultiplayer *p_session,
-    int64_t p_to,
-    const char *p_name
-) {
-    const Dictionary rows = p_session->attribution_snapshot()["bytes_out"];
-    const Dictionary channels = rows.get(p_to, Dictionary());
     return int64_t(channels.get(channel_named(p_name), 0));
 }
 
@@ -318,12 +309,8 @@ TEST_CASE(
 
     NetwMultiplayer *author = stage.rig.client(0);
     const int64_t session_peer = stage.rig.peer_id(-1);
-    const int64_t author_peer = stage.rig.peer_id(0);
     const int64_t echoed = frames_in(author, session_peer, "REPARENT");
     const int64_t stale = counter_of(author, "drops_reparent_stale");
-    const int64_t sent = bytes_out(author, session_peer, "REPARENT");
-    const int64_t decided
-        = bytes_out(stage.rig.server(), author_peer, "LIFECYCLE_DECISION");
 
     const Ref<NetwPromise> moved = stage.controller_moves(stage.hand_on(0));
     stage.write_ticks(SETTLE_TICKS);
@@ -365,17 +352,6 @@ TEST_CASE(
         NETW_CHECK_GT(session.from_the_branch, int64_t(0));
         NETW_CHECK_GT(observer.from_the_branch, int64_t(0));
     }
-
-    std::printf(
-        "lifecycle cost accepted REPARENT %lld LIFECYCLE_DECISION %lld\n",
-        (long long)(bytes_out(author, session_peer, "REPARENT") - sent),
-        (long long)(bytes_out(
-                        stage.rig.server(),
-                        author_peer,
-                        "LIFECYCLE_DECISION"
-                    )
-                    - decided)
-    );
 }
 
 TEST_CASE(
@@ -383,17 +359,18 @@ TEST_CASE(
     "every later move the author built on it, the author ends at the "
     "session's anchor, and no row from the refused branch is seated anywhere"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_warning(
+        "[warn][transport] A packet for route * was refused with "
+        "error 4.",
+        1
+    );
+
+    const netw_test::FaultWatch faults;
     MoveStage stage;
     REQUIRE(stage.cube_on(0) != nullptr);
     stage.write_ticks(6);
     stage.clear_seats();
-
-    NetwMultiplayer *author = stage.rig.client(0);
-    const int64_t session_peer = stage.rig.peer_id(-1);
-    const int64_t author_peer = stage.rig.peer_id(0);
-    const int64_t decided
-        = bytes_out(stage.rig.server(), author_peer, "LIFECYCLE_DECISION");
-    const int64_t sent = bytes_out(author, session_peer, "REPARENT");
 
     stage.rig.hold(0);
     const Ref<NetwPromise> first
@@ -424,6 +401,11 @@ TEST_CASE(
         int64_t(2)
     );
 
+    NETW_CHECK_EQ(faults.errors(), 0);
+    NETW_CHECK_EQ(
+        faults.warnings_containing("was refused with error 30"),
+        1
+    );
     const Seats session = stage.seats_on(-1, GHOST, SHELF);
     const Seats observer = stage.seats_on(1, GHOST, SHELF);
     NETW_CHECK_EQ(session.from_the_branch, int64_t(0));
@@ -431,17 +413,6 @@ TEST_CASE(
     NETW_CHECK_EQ(session.misplaced, int64_t(0));
     NETW_CHECK_EQ(observer.misplaced, int64_t(0));
     NETW_CHECK_GT(session.seated, int64_t(0));
-
-    std::printf(
-        "lifecycle cost refused pair REPARENT %lld LIFECYCLE_DECISION %lld\n",
-        (long long)(bytes_out(author, session_peer, "REPARENT") - sent),
-        (long long)(bytes_out(
-                        stage.rig.server(),
-                        author_peer,
-                        "LIFECYCLE_DECISION"
-                    )
-                    - decided)
-    );
 }
 
 TEST_CASE(
@@ -449,6 +420,13 @@ TEST_CASE(
     "a controller's move is in flight refuses it, and every peer ends at the "
     "session's anchor"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_warning(
+        "[warn][transport] A packet for route * was refused with "
+        "error 4.",
+        1
+    );
+
     MoveStage stage;
     REQUIRE(stage.cube_on(0) != nullptr);
     stage.write_ticks(6);
@@ -483,6 +461,15 @@ TEST_CASE(
     "eight waiting on the session is refused and moved back on the author "
     "and never sent"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_warning(
+        "[warn][entity] Node.reparent: '*' already has 8 moves "
+        "waiting on the session authority, the most one entity may "
+        "have. Chain the next move on the promise of the last. It "
+        "is moved back.",
+        1
+    );
+
     MoveStage stage;
     REQUIRE(stage.cube_on(0) != nullptr);
     stage.write_ticks(6);
@@ -552,6 +539,13 @@ TEST_CASE(
     "move names another author, so it seats nowhere even when it reaches the "
     "session before the controller's move does"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_warning(
+        "[warn][transport] A packet for route * was refused with "
+        "error 4.",
+        1
+    );
+
     MoveStage stage;
     REQUIRE(stage.cube_on(0) != nullptr);
     stage.write_ticks(6);
@@ -655,6 +649,14 @@ TEST_CASE(
     "this peer's requested claim waits is moved back when the grant lands "
     "before the move settles, and no move reaches the session"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_warning(
+        "[warn][entity] Node.reparent on '*' was refused, because "
+        "this peer'*'s promise resolves. It moved before the server"
+        " allowed it, so it is moved back.",
+        1
+    );
+
     MoveStage stage;
     REQUIRE(stage.cube_on(1) != nullptr);
     stage.write_ticks(6);
@@ -700,6 +702,8 @@ TEST_CASE(
     "on a TRANSFER_IMMEDIATE entity waits may move it at once, and a refused "
     "claim undoes the claim and the move together"
 ) {
+    netw_test::FaultWatch expected_faults;
+
     MoveStage stage(NetwEntity::TRANSFER_IMMEDIATE);
     REQUIRE(stage.cube_on(1) != nullptr);
     stage.write_ticks(6);
@@ -709,6 +713,12 @@ TEST_CASE(
     const Ref<NetwEntity> claimant = NetwEntity::of(stage.cube_on(1));
 
     SUBCASE("refused") {
+        expected_faults.expect_warning(
+            "[warn][transport] A packet for route * was refused "
+            "with error 4.",
+            1
+        );
+
         NetwEntity::of(stage.cube_on(-1))
             ->connect(
                 StringName("control_requested"),

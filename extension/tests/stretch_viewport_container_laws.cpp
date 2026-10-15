@@ -2,6 +2,7 @@
 
 #include "godot/gui.hpp"
 #include "godot/input_event.hpp"
+#include "godot/rendering_server.hpp"
 #include "godot/scene_tree.hpp"
 #include "godot/spatial_node.hpp"
 #include "godot/viewport.hpp"
@@ -93,10 +94,20 @@ TEST_CASE(
     Mounted<SubViewport> host(viewport_sized(Vector2i(640, 360)));
     host->set_msaa_2d(Viewport::MSAA_4X);
     host->set_msaa_3d(Viewport::MSAA_8X);
-    host->set_screen_space_aa(Viewport::SCREEN_SPACE_AA_FXAA);
-    host->set_use_taa(true);
+    RenderingServer *renderer = RenderingServer::get_singleton();
+    REQUIRE(renderer != nullptr);
+    const String method = renderer->get_current_rendering_method();
+    const bool forward_plus = method == "forward_plus";
+    const Viewport::ScreenSpaceAA screen_aa = method == "gl_compatibility"
+        ? Viewport::SCREEN_SPACE_AA_DISABLED
+        : Viewport::SCREEN_SPACE_AA_FXAA;
+    const Viewport::Scaling3DMode scaling = forward_plus
+        ? Viewport::SCALING_3D_MODE_FSR
+        : Viewport::SCALING_3D_MODE_BILINEAR;
+    host->set_screen_space_aa(screen_aa);
+    host->set_use_taa(forward_plus);
     host->set_use_debanding(true);
-    host->set_scaling_3d_mode(Viewport::SCALING_3D_MODE_FSR);
+    host->set_scaling_3d_mode(scaling);
     host->set_scaling_3d_scale(0.5);
     host->set_use_hdr_2d(true);
     host->set_positional_shadow_atlas_size(1024);
@@ -120,13 +131,13 @@ TEST_CASE(
     NETW_CHECK_EQ(int(target->get_msaa_3d()), int(Viewport::MSAA_8X));
     NETW_CHECK_EQ(
         int(target->get_screen_space_aa()),
-        int(Viewport::SCREEN_SPACE_AA_FXAA)
+        int(screen_aa)
     );
-    CHECK(target->is_using_taa());
+    CHECK(target->is_using_taa() == forward_plus);
     CHECK(target->is_using_debanding());
     NETW_CHECK_EQ(
         int(target->get_scaling_3d_mode()),
-        int(Viewport::SCALING_3D_MODE_FSR)
+        int(scaling)
     );
     NETW_CHECK_EQ(int(target->get_scaling_3d_scale() * 100.0f), 50);
     CHECK(target->is_using_hdr_2d());

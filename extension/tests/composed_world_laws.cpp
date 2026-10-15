@@ -1,4 +1,5 @@
 #include "support/mesh_stand.h"
+#include "support/fault_log.h"
 
 #if defined(NETW_TIER_HOSTED)
 
@@ -11,6 +12,7 @@
 #include "godot/scene_tree.hpp"
 #include "netw/api/clock_config.hpp"
 #include "netw/api/context.hpp"
+#include "netw/api/display.hpp"
 #include "netw/api/entity.hpp"
 #include "netw/api/interest_layer.hpp"
 #include "netw/api/interpolate.hpp"
@@ -54,11 +56,31 @@ constexpr int LATECOMER = 11;
 
 const char *LEVEL_PATH = "res://tests/support/declared_level.tscn";
 const char *PLAYER_ID = "composed_player";
+const char *INTERPOLATED_PLAYER_ID = "composed_interpolated_player";
 const char *BODY_ID = "composed_body";
 
 Node *build_player(const Variant &p_name) {
     Node2D *made = memnew(Node2D);
     made->set_name(String(p_name));
+    return made;
+}
+
+Node *build_interpolated_player(const Variant &p_name) {
+    Node *made = build_player(p_name);
+    Node2D *visual = memnew(Node2D);
+    visual->set_name("Visual");
+    made->add_child(visual);
+    Netw::configure_entity(made)->get_display()->set_visual_root(
+        NodePath("Visual")
+    );
+    Ref<NetwInterpolate> spec;
+    spec.instantiate();
+    const Ref<NetwPropertyConfig> config
+        = Netw::configure_property(made, StringName("position"), true);
+    config->interpolate(netw::gd::array_of(
+        spec->lerp()->smooth(0.0)->to(StringName("position"))
+    ));
+    config->state();
     return made;
 }
 
@@ -90,6 +112,12 @@ void teach_player(NetwMultiplayer *p_session) {
     p_session->spawn_register_constructor(
         StringName(PLAYER_ID),
         callable_mp_static(&build_player),
+        one_string_type(),
+        quantizers
+    );
+    p_session->spawn_register_constructor(
+        StringName(INTERPOLATED_PLAYER_ID),
+        callable_mp_static(&build_interpolated_player),
         one_string_type(),
         quantizers
     );
@@ -138,19 +166,8 @@ RID first_scene(NetwMultiplayer *p_session) {
 }
 
 void declare_state_stream(NetwMultiplayer *p_core, Node *p_node) {
-    Ref<NetwPropertyConfig> config
-        = Netw::configure_property(p_node, StringName("position"), true);
-    REQUIRE(config.is_valid());
-    Ref<NetwInterpolate> spec;
-    spec.instantiate();
-    config->interpolate(
-        netw::gd::array_of(
-            spec->lerp()->smooth(0.0)->to(StringName("position"))
-        )
-    );
-    config->state();
-    Dictionary configs;
-    configs[StringName("position")] = config;
+    const Dictionary configs
+        = netw::script::model::get_node_property_configs(p_node);
     netw::repl::SetBook &sets = p_core->property_set_book();
     const uint64_t declared = sets.create();
     PropertySet *set = sets.get(declared);
@@ -324,9 +341,13 @@ struct ComposedWorld {
         }
     }
 
-    RID spawn_for(const char *p_name, int p_peer) {
+    RID spawn_for(
+        const char *p_name,
+        int p_peer,
+        const char *p_constructor = PLAYER_ID
+    ) {
         const RID made = host->spawn_registered(
-            StringName(PLAYER_ID),
+            StringName(p_constructor),
             named(p_name),
             host->player_of(p_peer).ptr()
         );
@@ -376,7 +397,8 @@ TEST_CASE(
     "displays it as the remote body while the server displays its own"
 ) {
     ComposedWorld cw;
-    const RID seated = cw.spawn_for("NinePlayer", MEMBER);
+    const RID seated
+        = cw.spawn_for("NinePlayer", MEMBER, INTERPOLATED_PLAYER_ID);
     const int64_t route = cw.host->entity_get_route(seated);
     REQUIRE(route > 0);
 
@@ -463,6 +485,13 @@ TEST_CASE(
     "carrying a node argument 9 holds, and an argument naming an entity 9 "
     "was never given arrives as nothing rather than as the server's own node"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][transport] An RPC argument is a node that is not "
+        "spawned on the network, so it was sent as null.",
+        1
+    );
+
     ComposedWorld cw;
     const RID for_seven = cw.hide_behind("SevenOnly", OTHER);
     const RID for_nine = cw.hide_behind("NineOnly", MEMBER);
@@ -709,6 +738,13 @@ TEST_CASE(
     "route only 7 may view leaves the server's node untouched, while the "
     "same frame naming a route 9 holds runs and resolves its argument"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_warning(
+        "[warn][transport] Peer * sent a call naming route *, which"
+        " it cannot see, so the call was dropped.",
+        1
+    );
+
     ComposedWorld cw;
     const RID for_seven = cw.hide_behind("SevenOnly", OTHER);
     const RID for_nine = cw.hide_behind("NineOnly", MEMBER);
@@ -826,6 +862,15 @@ TEST_CASE(
     "[Networked][Session][SceneTree] CW10 the server transfers control to "
     "member 9, and member 7, which is not the server, is refused"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][entity] Condition \"!is_on_server()\" is true. "
+        "Returning: ERR_UNAUTHORIZED. Only the server can give '*' "
+        "to another peer. A client asks for it with "
+        "NetwEntity.claim_control.",
+        1
+    );
+
     ComposedWorld cw;
     const RID seated = cw.spawn_for("Transferred", OTHER);
     const int64_t route = cw.host->entity_get_route(seated);
@@ -852,6 +897,15 @@ TEST_CASE(
     "[Networked][Session][SceneTree] CW11 the server creates a scene through "
     "its session and finds it by its root name, while member 7 creates none"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][scene] Condition \"!is_host()\" is true. Returning: "
+        "RID(). NetwMultiplayer.scene_create runs only on the "
+        "server.",
+        1
+    );
+
+    const netw_test::FaultWatch faults;
     ComposedWorld cw;
     const Ref<PackedScene> packed = netw::gd::load_scene(String(LEVEL_PATH));
     REQUIRE(packed.is_valid());
@@ -876,6 +930,10 @@ TEST_CASE(
     CHECK(member->create_scene(packed, NetwMultiplayer::SCENE_ISOLATION_NONE)
               .is_null());
     NETW_CHECK_EQ(int(cw.seven->scene_list().size()), before);
+    NETW_CHECK_EQ(
+        faults.warnings_containing("shares one physics space"),
+        1
+    );
 }
 
 } // namespace TestComposedWorld

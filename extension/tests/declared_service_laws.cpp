@@ -105,6 +105,29 @@ TEST_CASE(
     "config now that every one of them is declared, so a game cannot bypass "
     "one-time consumption through the door it used to install through"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][session] NetwClockConfig cannot be passed to "
+        "MultiplayerAPI.object_configuration_add or "
+        "object_configuration_remove. Declare it with "
+        "Netw.configure_clock before the session starts.",
+        2
+    );
+    expected_faults.expect_error(
+        "[error][session] NetwSessionConfig cannot be passed to "
+        "MultiplayerAPI.object_configuration_add or "
+        "object_configuration_remove. Declare it with "
+        "Netw.configure_session before the session starts.",
+        2
+    );
+    expected_faults.expect_error(
+        "[error][session] NetwLagCompensationConfig cannot be "
+        "passed to MultiplayerAPI.object_configuration_add or "
+        "object_configuration_remove. Declare it with "
+        "Netw.configure_lagcomp before the session starts.",
+        2
+    );
+
     LoopbackRig rig(1);
     netw::NetwMultiplayer *session = rig.server();
     netw::ClockEngine &clock = rig.clock_of(session);
@@ -231,6 +254,8 @@ TEST_CASE(
     "compensation settings cannot be applied fails with the reason and "
     "registers nothing"
 ) {
+    netw_test::FaultWatch expected_faults;
+
     LoopbackRig rig(0);
     rig.mount();
     WorldDecl world;
@@ -244,17 +269,50 @@ TEST_CASE(
     Error expected = OK;
 
     SUBCASE("two nodes declare lag compensation") {
+        expected_faults.expect_error(
+            "[error][session] Netw.configure_lagcomp was called on "
+            "more than one node (/root/RigServer/First, "
+            "/root/RigServer/Second), so prediction was refused. "
+            "Call it on one node per session.",
+            1
+        );
+
         netw::Netw::configure_lagcomp(first);
         netw::Netw::configure_lagcomp(child_of(rig.branch(), "Second"));
         expected = ERR_ALREADY_EXISTS;
     }
     SUBCASE("the declaring node left before the declaration") {
+        expected_faults.expect_warning(
+            "[warn][session] Netw.configure_lagcomp was called by "
+            "First, which left the tree before the session applied "
+            "its settings, so prediction was refused. Keep that "
+            "node in the tree until the session starts.",
+            1
+        );
+
         netw::Netw::configure_lagcomp(first);
         rig.branch()->remove_child(first);
         orphan = first;
         expected = ERR_UNAVAILABLE;
     }
     SUBCASE("the declaration holds something other than settings") {
+        expected_faults.expect_error(
+            "[error][session] Condition \"r_draft.is_null()\" is "
+            "true. Returning: ERR_INVALID_DATA. The "
+            "Netw.configure_lagcomp settings on '*' cannot be read,"
+            " so prediction was refused. Declare them only through "
+            "Netw.configure_lagcomp.",
+            1
+        );
+        expected_faults.expect_error(
+            "[error][session] Condition \"r_draft.is_null()\" is "
+            "true. Returning: ERR_INVALID_DATA. The "
+            "Netw.configure_lagcomp settings on '*' cannot be read,"
+            " so configuration was refused. Declare them only "
+            "through Netw.configure_lagcomp.",
+            1
+        );
+
         netw::session_decl::declare(
             first,
             netw::session_decl::KIND_LAGCOMP_CONFIG,

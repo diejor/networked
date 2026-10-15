@@ -1,4 +1,5 @@
 #include "support/netw_test.h"
+#include "support/fault_log.h"
 
 #include "godot/node.hpp"
 #include "godot/scene_tree.hpp"
@@ -44,6 +45,18 @@ TEST_CASE(
     "[Networked][Spawn][Hosted] a spawn frame from a sender that is not the "
     "server is refused and counted"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_warning(
+        "[warn][transport] A packet for route * was refused with "
+        "error 4.",
+        1
+    );
+    expected_faults.expect_warning(
+        "[warn][transport] A packet for route * was refused with "
+        "error 30.",
+        1
+    );
+
     Ref<NetwMultiplayer> core;
     core.instantiate();
     Pipeline *pipeline = fresh(core);
@@ -74,6 +87,13 @@ TEST_CASE(
     "[Networked][Spawn][Hosted] a frame on a channel this pipeline does not "
     "carry is refused, because the gate reads the channel it was given"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_warning(
+        "[warn][transport] A packet for route * was refused with "
+        "error 30.",
+        1
+    );
+
     Ref<NetwMultiplayer> core;
     core.instantiate();
     Pipeline *pipeline = core->spawn_plane();
@@ -139,6 +159,13 @@ TEST_CASE(
     "[Networked][Spawn][Hosted] a scene park that outlived its window is "
     "given up rather than retried, and counted as expired"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_warning(
+        "[warn][spawn] A spawn for route * was dropped, because its"
+        " MultiplayerSpawner never appeared on this peer.",
+        1
+    );
+
     Ref<NetwMultiplayer> core;
     core.instantiate();
     Pipeline *pipeline = fresh(core);
@@ -180,6 +207,18 @@ TEST_CASE(
     "[Networked][Spawn][Hosted] a refused frame counts as a bad sender only "
     "when it did not come from the server"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_warning(
+        "[warn][transport] A packet for route * was refused with "
+        "error 4.",
+        1
+    );
+    expected_faults.expect_warning(
+        "[warn][transport] A packet for route * was refused with "
+        "error 30.",
+        1
+    );
+
     ParkedRelease world;
     PackedByteArray payload;
     payload.push_back(7);
@@ -196,6 +235,19 @@ TEST_CASE(
     "scene is admitted again when the wait releases, so a sender that is not "
     "the server applies nothing"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_warning(
+        "[warn][transport] A packet for route * was refused with "
+        "error 4.",
+        1
+    );
+    expected_faults.expect_warning(
+        "[warn][spawn] A spawn for route * was dropped, because "
+        "peer * lost its authority while the spawn waited for its "
+        "parent.",
+        1
+    );
+
     ParkedRelease stale;
     stale.pipeline->park_spawn_for_scene(stale.frame(), 9101, 7);
     stale.pipeline->retry_scene_parked_spawns(0, Ref<netw::NetwEntity>());
@@ -203,12 +255,14 @@ TEST_CASE(
     NETW_CHECK_EQ(stale.counted("spawn_park_refused"), int64_t(1));
     NETW_CHECK_EQ(stale.counted("drops_spawn_truncated"), int64_t(0));
 
+    const netw_test::FaultWatch faults;
     ParkedRelease current;
     current.pipeline->park_spawn_for_scene(current.frame(), 9101, 1);
     current.pipeline->retry_scene_parked_spawns(0, Ref<netw::NetwEntity>());
 
     NETW_CHECK_EQ(current.counted("spawn_park_refused"), int64_t(0));
     NETW_CHECK_EQ(current.counted("drops_spawn_truncated"), int64_t(1));
+    NETW_CHECK_EQ(faults.warnings_containing("ended early"), 1);
 }
 
 TEST_CASE(
@@ -216,6 +270,19 @@ TEST_CASE(
     "admitted again when the wait releases, so a sender that is not the "
     "server applies nothing"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_warning(
+        "[warn][transport] A packet for route * was refused with "
+        "error 4.",
+        1
+    );
+    expected_faults.expect_warning(
+        "[warn][spawn] A spawn for route * was dropped, because "
+        "peer * lost its authority while the spawn waited for its "
+        "parent.",
+        1
+    );
+
     ParkedRelease stale;
     stale.pipeline->park_spawn_for_adopt(stale.frame(), 9102, 7);
     stale.pipeline->retry_adopt_parked();
@@ -223,12 +290,14 @@ TEST_CASE(
     NETW_CHECK_EQ(stale.counted("spawn_park_refused"), int64_t(1));
     NETW_CHECK_EQ(stale.counted("drops_spawn_truncated"), int64_t(0));
 
+    const netw_test::FaultWatch faults;
     ParkedRelease current;
     current.pipeline->park_spawn_for_adopt(current.frame(), 9102, 1);
     current.pipeline->retry_adopt_parked();
 
     NETW_CHECK_EQ(current.counted("spawn_park_refused"), int64_t(0));
     NETW_CHECK_EQ(current.counted("drops_spawn_truncated"), int64_t(1));
+    NETW_CHECK_EQ(faults.warnings_containing("ended early"), 1);
 }
 
 TEST_CASE(
@@ -236,6 +305,19 @@ TEST_CASE(
     "is admitted again when the wait releases, so a sender that is not the "
     "server applies nothing"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_warning(
+        "[warn][transport] A packet for route * was refused with "
+        "error 4.",
+        1
+    );
+    expected_faults.expect_warning(
+        "[warn][spawn] A spawn for route * was dropped, because "
+        "peer * lost its authority while the spawn waited for its "
+        "parent.",
+        1
+    );
+
     ParkedRelease stale;
     stale.pipeline->get_park()
         .park(9103, stale.frame(), Park::WAIT_ROUTE, 0, 7);
@@ -244,6 +326,7 @@ TEST_CASE(
     NETW_CHECK_EQ(stale.counted("spawn_park_refused"), int64_t(1));
     NETW_CHECK_EQ(stale.counted("drops_spawn_truncated"), int64_t(0));
 
+    const netw_test::FaultWatch faults;
     ParkedRelease current;
     current.pipeline->get_park()
         .park(9103, current.frame(), Park::WAIT_ROUTE, 0, 1);
@@ -251,6 +334,7 @@ TEST_CASE(
 
     NETW_CHECK_EQ(current.counted("spawn_park_refused"), int64_t(0));
     NETW_CHECK_EQ(current.counted("drops_spawn_truncated"), int64_t(1));
+    NETW_CHECK_EQ(faults.warnings_containing("ended early"), 1);
 }
 
 TEST_CASE(

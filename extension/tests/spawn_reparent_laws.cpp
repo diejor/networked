@@ -1,3 +1,4 @@
+#include "support/fault_log.h"
 #include "support/netw_test.h"
 
 #include <cstdint>
@@ -87,6 +88,14 @@ TEST_CASE(
     "when the destination is outside the session tree, so peers keep the old "
     "parent"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_warning(
+        "[warn][spawn] '*' was moved outside the multiplayer root, "
+        "so other peers keep its old parent. Move it under a node "
+        "inside the root.",
+        1
+    );
+
     Ref<NetwMultiplayer> core;
     core.instantiate();
     Book book;
@@ -118,7 +127,6 @@ TEST_CASE(
     Node *outside = named("outside");
     inside->remove_child(node);
     outside->add_child(node);
-    ERR_PRINT_OFF;
     CHECK_FALSE(core->spawn_send_reparent(
         &book,
         record,
@@ -140,7 +148,6 @@ TEST_CASE(
         connected,
         REPARENT_CHANNEL
     ));
-    ERR_PRINT_ON;
 
     memdelete(outside);
     netw::gd::scene_root()->remove_child(root);
@@ -244,6 +251,13 @@ TEST_CASE(
     "no authority never waits on an anchor at all, so a member cannot move a "
     "node"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_warning(
+        "[warn][transport] A packet for route * was refused with "
+        "error 4.",
+        1
+    );
+
     DeferredMove world;
     const PackedByteArray frame
         = reparent_frame(world.core.ptr(), world.route, world.anchor);

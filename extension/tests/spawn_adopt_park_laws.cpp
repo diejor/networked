@@ -1,3 +1,4 @@
+#include "support/fault_log.h"
 #include "support/netw_test.h"
 
 #if defined(NETW_TIER_HOSTED)
@@ -94,6 +95,14 @@ TEST_CASE(
     "arrives expires once, so a structure that truly does not match is "
     "reported rather than held forever"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_warning(
+        "[warn][spawn] Route 1 was dropped, because the node the "
+        "server named for it never appeared on this peer. Build the"
+        " same scene tree on every peer.",
+        1
+    );
+
     LoopbackRig rig(1);
     rig.mount();
     netw_test::flow_clocks(rig, TICKRATE);

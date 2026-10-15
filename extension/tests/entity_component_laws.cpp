@@ -1,3 +1,4 @@
+#include "support/fault_log.h"
 #include "support/netw_test.h"
 
 #include "godot/node.hpp"
@@ -140,6 +141,16 @@ TEST_CASE(
     "the entity is ready addresses by path forever, including across a "
     "re-entry, because the digest a peer agreed to cannot change under it"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_warning(
+        "[warn][entity] Condition "
+        "\"record->get_comp_table().get_table_hash() != 0\" is true. "
+        "'*' was configured after its entity spawned, so the spawn "
+        "did not carry it. Configure networked properties before "
+        "the node enters the tree.",
+        1
+    );
+
     Node *owner = memnew(Node);
     owner->set_name("Owner");
     const Ref<netw::NetwEntity> entity = netw::NetwEntity::ensure(owner);

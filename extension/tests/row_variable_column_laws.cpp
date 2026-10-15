@@ -1,3 +1,4 @@
+#include "support/fault_log.h"
 #include "support/netw_test.h"
 
 #if defined(NETW_TIER_HOSTED)
@@ -224,6 +225,14 @@ TEST_CASE(
     "[Networked][Sync][SceneTree] VC4 a session that declares rows and has "
     "no clock warns once and sends none"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_warning(
+        "[warn][wire] This session declares replicated properties "
+        "but has no clock, so none of their rows is ever sent. Call"
+        " Netw.configure_clock on every peer.",
+        3
+    );
+
     Board unclocked(false);
     REQUIRE(unclocked.node(0) != nullptr);
     CHECK_FALSE(unclocked.rig.server()->clock_is_configured());

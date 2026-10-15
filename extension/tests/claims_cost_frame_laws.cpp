@@ -4,6 +4,7 @@
 
 #if defined(NETW_TIER_HOSTED)
 
+#include "support/fault_log.h"
 #include "support/sim_stand.h"
 
 #include "godot/node.hpp"
@@ -171,6 +172,7 @@ struct PhaseEvidence {
 
 struct CostEvidence {
     bool driven = false;
+    int64_t unhandled_claims = 0;
     bool seated = false;
     int64_t burst_claimed = 0;
     int64_t handoff_claimed = 0;
@@ -195,6 +197,7 @@ class CostScenario final : public netw_test::FrameScenario {
     Ref<Script> script;
     int routes[CUBES] = {};
     int64_t opened = 0;
+    netw_test::FaultWatch *faults = nullptr;
 
     Node *cube_at(int p_client, int p_index) const {
         return stand->node_at(p_client, routes[p_index]);
@@ -321,6 +324,7 @@ class CostScenario final : public netw_test::FrameScenario {
     }
 
     bool open() {
+        faults = new netw_test::FaultWatch;
         script = netw_test::minted_script(CUBE_SOURCE);
         if (script.is_null()) {
             return false;
@@ -348,6 +352,10 @@ class CostScenario final : public netw_test::FrameScenario {
         evidence().driven = true;
         delete stand;
         stand = nullptr;
+        evidence().unhandled_claims
+            = faults->warnings_containing("A NetwPromise failed");
+        delete faults;
+        faults = nullptr;
         cube_script = nullptr;
         script = Ref<Script>();
     }
@@ -465,6 +473,7 @@ TEST_CASE(
     const CostEvidence &seen = evidence();
     REQUIRE(seen.driven);
     REQUIRE(seen.seated);
+    NETW_CHECK_EQ(seen.unhandled_claims, int64_t(0));
     NETW_CHECK_EQ(seen.phases[QUIET].control_bytes, int64_t(0));
     NETW_CHECK_GT(seen.burst_claimed, int64_t(0));
     NETW_CHECK_LT(seen.shove_gap, 1.0);

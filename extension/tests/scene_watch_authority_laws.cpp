@@ -1,3 +1,4 @@
+#include "support/fault_log.h"
 #include "support/netw_test.h"
 
 #include "godot/node.hpp"
@@ -42,6 +43,14 @@ TEST_CASE(
     "[Networked][Scene][Hosted] L1 scene_watch asks is_host, so the server "
     "seats a viewer and a client session is refused"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][scene] Condition \"!is_host()\" is true. Returning: "
+        "ERR_UNAUTHORIZED. NetwMultiplayer.scene_watch runs only on"
+        " the server, and was called for peer * on a client.",
+        1
+    );
+
     Ref<NetwMultiplayer> owning = a_session_at(1);
     REQUIRE(owning->is_host());
     const DeclaredScene arena = declare_scene(owning, "Arena");
@@ -68,6 +77,14 @@ TEST_CASE(
     "seat settles once on the server and a client session cannot release "
     "anything"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][scene] Condition \"!is_host()\" is true. Returning: "
+        "false. NetwMultiplayer.scene_unwatch runs only on the "
+        "server, and was called for peer * on a client.",
+        1
+    );
+
     Ref<NetwMultiplayer> owning = a_session_at(1);
     const DeclaredScene arena = declare_scene(owning, "Arena");
     REQUIRE(int(owning->scene_watch(arena.handle, 9)) == int(OK));

@@ -1,3 +1,4 @@
+#include "support/fault_log.h"
 #include "support/netw_test.h"
 
 #include "support/event_ring.h"
@@ -591,6 +592,14 @@ const ShellLaw L_LOCAL = {
 const ShellLaw LAWS[] = {L_COMPLETE, L_CLOSED, L_TERMINAL, L_TARGETED, L_LOCAL};
 
 TEST_CASE("[Networked][Event][Hosted] the shell emitter laws hold") {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][event] NetwMultiplayer.event_watch got the "
+        "predicate key '*', which it does not read. Use a key its "
+        "documentation lists.",
+        1
+    );
+
     const ShellScenario CORPUS[] = {
         a_peer_edge(),
         a_lifecycle(),

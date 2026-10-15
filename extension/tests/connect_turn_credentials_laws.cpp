@@ -1,3 +1,4 @@
+#include "support/fault_log.h"
 #include "support/netw_test.h"
 
 #include "godot/variant.hpp"
@@ -84,6 +85,14 @@ TEST_CASE(
     "truncated body both parse to something and neither may reach the ICE "
     "stack as configuration"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "Condition \"error != Error::OK\" is true. Returning: "
+        "Variant() Parse JSON failed. Error at line 0: Expected "
+        "'*', '*', or '*', got '*'",
+        1
+    );
+
     const Array pair = TurnCredentials::servers_from_body(
         200,
         bytes_of(
@@ -126,6 +135,14 @@ TEST_CASE(
     "a second host or join after a refusal spends no further request and the "
     "configured servers stand"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_warning(
+        "[warn][transport] Fetching TURN credentials failed (no "
+        "credential url is configured), so only the configured ICE "
+        "servers are used.",
+        1
+    );
+
     TurnCredentials::forget();
     CHECK(!TurnCredentials::attempted());
     CHECK(TurnCredentials::cached().is_empty());

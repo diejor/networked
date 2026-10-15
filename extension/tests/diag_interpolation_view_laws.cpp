@@ -5,6 +5,7 @@
 #include "netw/sim/row.hpp"
 #include "support/declared_nodes.h"
 #include "support/display_stand.h"
+#include "support/fault_log.h"
 #include "support/value_flow_stand.h"
 
 #include "godot/node.hpp"
@@ -470,12 +471,15 @@ struct Chased {
     InterpolationView view;
 
     explicit Chased(bool p_steered_here) {
+        const netw_test::FaultWatch faults;
         rig.declare_world(netw_test::WorldDecl().clocked(30).lag_compensated());
         rig.mount();
         pair = netw_test::stand_flow_pair(
             rig,
             netw_test::gdsrc::INTERPOLATED_STATE_AND_INPUT,
-            "Chased"
+            "Chased",
+            netw_test::BIND_EVERY_MIRROR,
+            false
         );
         netw_test::steer(pair, p_steered_here ? int(rig.peer_id(0)) : 0);
         client = netw_test::flow_core(rig.client(0));
@@ -506,6 +510,10 @@ struct Chased {
         REQUIRE_MESSAGE(runtime != nullptr, "the chased entity has no runtime");
         NETW_REQUIRE_EQ(runtime->get_pump_mode(), netw::display::PUMP_CHASE);
         client->diag_gather(view.sources);
+        NETW_CHECK_EQ(
+            faults.warnings_containing("declares state and input properties"),
+            int64_t(1)
+        );
     }
 
     const TimelineRow &look() {
@@ -705,14 +713,6 @@ Node3D *meshed_subject(const Ref<NetwMultiplayer> &p_core, int64_t p_route) {
     const Ref<netw::NetwDisplay> display = entity->get_display();
     display->set_enable_smart_dilation(false);
     display->set_display_role(NetwMultiplayer::DISPLAY_ROLE_REMOTE);
-    Ref<netw::NetwInterpolate> spec;
-    spec.instantiate();
-    netw::Netw::configure_property(body, StringName("transform"), true)
-        ->interpolate(
-            netw::gd::array_of(
-                spec->lerp()->smooth(0.0)->to(StringName("transform"))
-            )
-        );
     netw::gd::scene_root()->add_child(body);
     p_core->liveness_bind_route(p_route, entity.ptr());
     return body;
@@ -732,11 +732,9 @@ TEST_CASE(
     const Ref<NetwMultiplayer> core = netw_test::clocked_session();
     constexpr int64_t route = 7;
     Node3D *body = meshed_subject(core, route);
-    const Ref<netw::NetwInterpolate> spec
-        = netw::script::model::get_node_property_interpolator(
-            body,
-            StringName("transform")
-        );
+    Ref<netw::NetwInterpolate> spec;
+    spec.instantiate();
+    spec->smooth(0.0)->to(StringName("transform"));
     for (int64_t tick = 10; tick <= 14; ++tick) {
         NetwNativeTests::display_record(
             core.ptr(),
@@ -800,11 +798,9 @@ TEST_CASE(
         bodies[at] = meshed_subject(core, route);
         Object::cast_to<Node3D>(bodies[at]->get_node_or_null(NodePath("Part")))
             ->set_scale(Vector3(1.0f, 1.0f, 1.0f) * float(sizes[at]));
-        const Ref<netw::NetwInterpolate> spec
-            = netw::script::model::get_node_property_interpolator(
-                bodies[at],
-                StringName("transform")
-            );
+        Ref<netw::NetwInterpolate> spec;
+        spec.instantiate();
+        spec->smooth(0.0)->to(StringName("transform"));
         for (int64_t tick = 10; tick <= 14; ++tick) {
             NetwNativeTests::display_record(
                 core.ptr(),
@@ -891,11 +887,9 @@ TEST_CASE(
     const Ref<NetwMultiplayer> core = netw_test::clocked_session();
     constexpr int64_t route = 7;
     Node3D *body = meshed_subject(core, route);
-    const Ref<netw::NetwInterpolate> spec
-        = netw::script::model::get_node_property_interpolator(
-            body,
-            StringName("transform")
-        );
+    Ref<netw::NetwInterpolate> spec;
+    spec.instantiate();
+    spec->smooth(0.0)->to(StringName("transform"));
     InterpolationView view;
     for (int64_t tick = 10; tick <= 16; ++tick) {
         NetwNativeTests::display_record(

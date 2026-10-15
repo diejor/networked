@@ -19,7 +19,7 @@ TEST_CASE("[Networked][DeclaredProbe] treeless state reaches encoding") {
     api->schema_add_column(
         schema,
         StringName("position"),
-        netw::NetwMultiplayer::ColumnType(int(Variant::VECTOR2)),
+        netw::NetwMultiplayer::COLUMN_VECTOR2,
         1
     );
     api->schema_seal(schema);

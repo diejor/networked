@@ -1,3 +1,4 @@
+#include "support/fault_log.h"
 #include "support/netw_test.h"
 
 #include "godot/multiplayer.hpp"
@@ -94,6 +95,15 @@ TEST_CASE(
     "node is an authoring error that answers nothing and leaves the first "
     "draft standing, because a node declares each configuration once"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][session] Condition \"standing.is_valid()\" is true. "
+        "Returning: Ref<T>(). Netw.configure_lagcomp was called "
+        "twice on '*'. Keep the Resource the first call returned "
+        "and set its values there.",
+        1
+    );
+
     Branch branch("CG2");
     Node *scope = child_named(branch.node, "Session");
 
@@ -135,6 +145,15 @@ TEST_CASE(
     "consumed is sealed, so a later setter reports and changes nothing while "
     "the running values stand"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_warning(
+        "[warn][session] Netw.configure_lagcomp set '*' on '*' "
+        "after the session started, so the running value is "
+        "unchanged. Set it before startup and finish the chain "
+        "without awaiting.",
+        1
+    );
+
     Branch branch("CG4");
     Node *scope = child_named(branch.node, "Session");
 
@@ -157,6 +176,15 @@ TEST_CASE(
     "on the same branch is ambiguous, so the session consumes neither and "
     "keeps its own values rather than picking the later entrant"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][session] Netw.configure_lagcomp was called on more"
+        " than one node (/root/CG5/One, /root/CG5/Two), so "
+        "configuration was refused. Call it on one node per "
+        "session.",
+        1
+    );
+
     Branch branch("CG5");
     Netw::configure_lagcomp(child_named(branch.node, "One"), preset(41, 43));
     Netw::configure_lagcomp(child_named(branch.node, "Two"), preset(41, 43));
@@ -176,6 +204,15 @@ TEST_CASE(
     "left the branch before consumption blocks the built-in defaults instead "
     "of reading as no declaration at all"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_warning(
+        "[warn][session] Netw.configure_lagcomp was called by "
+        "Session, which left the tree before the session applied "
+        "its settings, so configuration was refused. Keep that node"
+        " in the tree until the session starts.",
+        1
+    );
+
     Branch branch("CG6");
     Node *scope = child_named(branch.node, "Session");
     Netw::configure_lagcomp(scope, preset(23, 29));

@@ -1,3 +1,4 @@
+#include "support/fault_log.h"
 #include "support/books.h"
 #include "support/loopback_rig.h"
 #include "support/predict_rows.h"
@@ -1134,6 +1135,14 @@ TEST_CASE(
     "already a carry channel keeps NO step rule, because one field carries "
     "one forward model and the channel is the one in use"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][prediction] '*' declares both "
+        "NetwPropertyConfig.carry_along and carry_step, so "
+        "carry_step is ignored. Keep only one of them.",
+        1
+    );
+
     Node2D *owner = memnew(Node2D);
     owner->set_name("Carried");
     netw::script::model::bind_node_property_carry(
@@ -1329,6 +1338,15 @@ TEST_CASE(
     "because a recovery must read an absent witness rather than a malformed "
     "one"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][prediction] NetwPrediction.witness_contacts "
+        "returned an unusable value, so it was ignored. Return a "
+        "Dictionary with '*' as an Array of live nodes, '*' as a "
+        "bool, and '*' as a Dictionary when present.",
+        1
+    );
+
     NetwPredictionEngine held_pool;
     NetwPredictionEngine *const pool = &held_pool;
     const int64_t slot = pool->open();
@@ -1355,6 +1373,15 @@ TEST_CASE(
     "game gathered it makes the whole sample unusable, because the pool "
     "cannot tell which contact it stood for"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][prediction] NetwPrediction.witness_contacts "
+        "returned an unusable value, so it was ignored. Return a "
+        "Dictionary with '*' as an Array of live nodes, '*' as a "
+        "bool, and '*' as a Dictionary when present.",
+        1
+    );
+
     NetwPredictionEngine held_pool;
     NetwPredictionEngine *const pool = &held_pool;
     const int64_t slot = pool->open();
@@ -1383,6 +1410,14 @@ TEST_CASE(
     "coasts unless a predictor answers, and a predictor that answers with "
     "anything but a Dictionary leaves the coast baseline standing"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][prediction] NetwPrediction.predict_input for '*' "
+        "did not return a Dictionary, so a zeroed input was used. "
+        "Return a Dictionary of input property names to values.",
+        1
+    );
+
     LoopbackRig rig(1);
     rig.mount();
     Node *arena = rig.mirror_child("Arena");
@@ -1508,6 +1543,14 @@ TEST_CASE(
     "refused rather than read as agreement, so the stock judgement stands "
     "and the misuse is reported on the entity's own route"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][event] The override of _predict_evaluate returned "
+        "null, so the default ran instead. Return what its "
+        "documentation asks for.",
+        1
+    );
+
     LoopbackRig rig(1);
     rig.mount();
     Node *arena = rig.mirror_child("Arena");

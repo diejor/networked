@@ -1,3 +1,4 @@
+#include "support/fault_log.h"
 #include "support/netw_test.h"
 
 #include "godot/callable.hpp"
@@ -244,6 +245,14 @@ TEST_CASE(
     "bound to something that is not a Node, binds NOTHING and leaves the "
     "config as it was, because there is no body such a rule could advance"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][session] NetwPropertyConfig.carry_step on '*' "
+        "needs a valid method of the node it moves. Pass a method "
+        "of that node.",
+        2
+    );
+
     Ref<RefCounted> loose;
     loose.instantiate();
     const Ref<NetwPropertyConfig> config = make_config();

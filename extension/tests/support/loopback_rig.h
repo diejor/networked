@@ -496,7 +496,7 @@ public:
         pump();
     }
 
-    void mount_late(int p_client) {
+    void mount_late(int p_client, bool p_pump = true) {
         godot::Node *scene = netw::gd::scene_root();
         REQUIRE_MESSAGE(!mounts.is_empty(), "mount the rig before a late seat");
         if (scene == nullptr) {
@@ -507,7 +507,9 @@ public:
             scene,
             godot::vformat("RigClient%d", p_client)
         );
-        pump();
+        if (p_pump) {
+            pump();
+        }
     }
 
     godot::Node *mirror_child(const godot::String &p_name) {

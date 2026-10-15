@@ -1,3 +1,4 @@
+#include "support/fault_log.h"
 #include "support/netw_test.h"
 
 #include "support/netw_recorder.h"
@@ -166,6 +167,14 @@ TEST_CASE(
     "[Networked][Table][Door][Hosted] TD6 a node no session governs opens "
     "no door, because a door resolves through the tree"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][table] NetwTable.of got a node that is not inside "
+        "a session. Call it from a node in the scene tree under a "
+        "MultiplayerViewport.",
+        1
+    );
+
     CHECK(NetwTable::of(nullptr, "Mob").is_null());
 }
 

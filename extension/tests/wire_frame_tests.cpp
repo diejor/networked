@@ -1,3 +1,4 @@
+#include "support/fault_log.h"
 #include "support/netw_test.h"
 
 #include "netw/wire/frame.hpp"
@@ -112,6 +113,13 @@ TEST_CASE(
     "frame at all, because a fifth group carrying its continuation bit is "
     "malformed rather than truncated and eats the next field's first byte"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][wire] A packet field value needs more bytes than "
+        "its limit.",
+        1
+    );
+
     const PackedByteArray framed
         = netw::wire::frame_pack(int64_t(1) << 35, 0, 19, bytes({1}), String());
 

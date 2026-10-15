@@ -65,7 +65,6 @@ jobs:
           out: build/web/${{ matrix.example.slug }}
           run-id: ${{ needs.resolve.outputs.run-id }}
           expect-sha: ${{ needs.resolve.outputs.sha }}
-          turn-auth-token: ${{ secrets.TURN_AUTH_TOKEN }}
           record: build/${{ matrix.example.slug }}-export.json
 
       - name: Stage The Export

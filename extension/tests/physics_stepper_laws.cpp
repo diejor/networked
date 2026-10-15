@@ -1,3 +1,4 @@
+#include "support/fault_log.h"
 #include "support/netw_test.h"
 
 #include "support/minted_script.h"
@@ -633,6 +634,22 @@ TEST_CASE(
     "space of a World3D or a World2D, a null stepper uninstalls it, and a "
     "missing world or space is refused before anything changes"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][prediction] Condition \"p_world.is_null()\" is true."
+        " Returning: ERR_INVALID_PARAMETER. "
+        "NetwSession.install_physics_stepper needs a World3D. Pass "
+        "get_world_3d() of a node in the scene.",
+        1
+    );
+    expected_faults.expect_error(
+        "[error][prediction] Condition \"!p_space.is_valid()\" is "
+        "true. Returning: ERR_INVALID_PARAMETER. A physics stepper "
+        "needs a physics space. Pass the space of a World2D or "
+        "World3D.",
+        1
+    );
+
     Ref<NetwMultiplayer> core;
     core.instantiate();
     const Ref<netw::NetwSession> session = core->get_session();

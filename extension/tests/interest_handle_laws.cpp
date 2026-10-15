@@ -6,6 +6,7 @@
 #include "netw/api/interest.hpp"
 #include "netw/api/interest_layer.hpp"
 #include "netw/api/netw_multiplayer.hpp"
+#include "netw/api/nodes/multiplayer_viewport.hpp"
 #include "support/netw_call_log.h"
 
 namespace TestNetwInterestHandleLaws {
@@ -57,7 +58,9 @@ TEST_CASE(
     if (root == nullptr) {
         return;
     }
-    Node *host = memnew(Node);
+    netw::MultiplayerViewport *host
+        = memnew(netw::MultiplayerViewport);
+    host->set_api(core);
     host->set_name("Host");
     root->add_child(host);
 
@@ -77,6 +80,18 @@ TEST_CASE(
     NETW_CHECK_EQ(made.interest->layer_ids().size(), 1);
     CHECK(StringName(made.interest->layer_ids()[0]) == StringName("b"));
 
+    host->add_child(made.owner);
+    core->session_flush_deferred();
+    CHECK(made.owner->is_inside_tree());
+    const RID entity = made.entity->get_rid_handle();
+    NETW_CHECK_EQ(core->interest_get_membership(entity).size(), 1);
+    host->remove_child(made.owner);
+    CHECK_FALSE(made.owner->is_inside_tree());
+    host->add_child(made.owner);
+    core->session_flush_deferred();
+    CHECK(made.owner->is_inside_tree());
+    NETW_CHECK_EQ(core->interest_get_membership(entity).size(), 1);
+    CHECK(StringName(made.interest->layer_ids()[0]) == StringName("b"));
     host->remove_child(made.owner);
     root->remove_child(host);
     memdelete(host);

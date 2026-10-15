@@ -240,6 +240,17 @@ TEST_CASE(
     "whose space nothing can step resolves to SCHEDULE_FRAME, says "
     "so once, and keeps the declaration the game made"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][prediction] NetwPrediction.RECONCILE_JOINT needs "
+        "every entity in the group of '*' to replay a tick, and '*'"
+        " on SCHEDULE_STEPPED cannot, so the group runs "
+        "NetwPrediction.RECONCILE_INDEPENDENT. Give each one a "
+        "NetwSimulation.step on SCHEDULE_TICK, or use "
+        "SCHEDULE_STEPPED.",
+        1
+    );
+
     const Scenario scenario = rerunnable_island_lane();
     LoopbackRig rig(scenario.clients);
     const ScenarioRun run = ScenarioRun::session(rig, scenario);
@@ -534,7 +545,11 @@ Scenario drifting_island() {
                 .scheduled(netw::Schedule::FRAME),
             0
         )
-        .island(godot::StringName("P"), godot::Vector<godot::StringName>());
+        .island(
+            godot::StringName("P"),
+            godot::Vector<godot::StringName>(),
+            WorldDecl::INDEPENDENT
+        );
     scenario.hold_input(1, "P", godot::Vector2(1.0, 0.0));
     return scenario.until(30);
 }
@@ -557,6 +572,7 @@ godot::Node2D *drifting_body(
     entity->get_simulation()->set_schedule(
         netw::NetwSimulation::SCHEDULE_STEPPED
     );
+    p_handle->set_reconcile_mode(NetwPrediction::RECONCILE_JOINT);
     return body;
 }
 
@@ -697,7 +713,11 @@ WorldDecl drifting_ball() {
         .player(island_player("P", netw::Schedule::FRAME), 0)
         .hosted(island_player("Ball", netw::Schedule::FRAME)
                     .placed_at(godot::Vector2(20.0, 0.0)))
-        .island(godot::StringName("P"), members)
+        .island(
+            godot::StringName("P"),
+            members,
+            WorldDecl::INDEPENDENT
+        )
         .simulating(godot::StringName("Ball"));
     return world;
 }
@@ -726,6 +746,7 @@ Ref<DriftStepper> drifting_pair(
             netw::NetwSimulation::SCHEDULE_STEPPED
         );
     }
+    p_player->set_reconcile_mode(NetwPrediction::RECONCILE_JOINT);
     return stepper;
 }
 

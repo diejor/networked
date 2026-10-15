@@ -1669,7 +1669,10 @@ Error Pipeline::admission(
         verdict
             = plane->spawn_admit_frame(p_sender, route, p_channel, p_payload);
     }
-    const Error staged = stage_verdict(EventPlane::GATE_SPAWN, verdict, 0);
+    const Error packet_verdict
+        = verdict == ERR_INVALID_PARAMETER ? ERR_INVALID_DATA : verdict;
+    const Error staged
+        = stage_verdict(EventPlane::GATE_SPAWN, packet_verdict, 0);
     if (staged != OK) {
         if (plane != nullptr && p_sender != SERVER_PEER) {
             drops_spawn_bad_sender += 1;

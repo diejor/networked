@@ -1,3 +1,4 @@
+#include "support/fault_log.h"
 #include "support/netw_call_log.h"
 #include "support/netw_test.h"
 
@@ -51,6 +52,13 @@ TEST_CASE(
     "[Networked][Display][Hosted] C2 a channel whose source or target was "
     "freed answers nothing, rather than a pointer nobody may follow"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_warning(
+        "[warn][interp] A node with synced properties was freed "
+        "while still bound, so its properties stopped syncing.",
+        1
+    );
+
     Channel channel;
     Node2D *source = memnew(Node2D);
     Node2D *target = memnew(Node2D);

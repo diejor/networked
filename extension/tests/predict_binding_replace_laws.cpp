@@ -1,4 +1,5 @@
 #include "support/netw_test.h"
+#include "support/fault_log.h"
 
 #include <cstdint>
 
@@ -76,6 +77,7 @@ TEST_CASE(
     "[Networked][Predict] a state set replaced on a predicted entity is what "
     "its reachability answers from"
 ) {
+    const netw_test::FaultWatch faults;
     LoopbackRig rig(1);
     open_world(rig);
     drive(rig, SETTLE_TICKS, Vector2(1.0, 0.0));
@@ -101,6 +103,10 @@ TEST_CASE(
     NETW_CHECK_EQ(
         int64_t(rig.client(0)->property_binding_book().retired_count()),
         int64_t(0)
+    );
+    NETW_CHECK_EQ(
+        faults.warnings_containing("causal state properties"),
+        1
     );
 }
 

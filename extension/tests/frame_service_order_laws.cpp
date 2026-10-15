@@ -113,8 +113,17 @@ TEST_CASE(
         return;
     }
 
-    client_peer->set_target_peer(1);
-    client_peer->put_packet(a_foreign_packet());
+    const Ref<NetwMultiplayer> member = rooted_session(client_peer);
+    REQUIRE(member.is_valid());
+    for (int at = 0; at < 8; ++at) {
+        bus->poll();
+        host->NETW_API_VIRTUAL(poll)();
+        member->NETW_API_VIRTUAL(poll)();
+    }
+    NETW_CHECK_EQ(
+        member->session_get_inner()->send_bytes(a_foreign_packet(), 1),
+        OK
+    );
     bus->poll();
     NETW_CHECK_EQ(int(server_peer->get_available_packet_count() > 0), 1);
 
@@ -136,6 +145,7 @@ TEST_CASE(
     NETW_CHECK_EQ(int((*samples)[0] > 0), 1);
     NETW_CHECK_EQ(int(server_peer->get_available_packet_count()), 0);
 
+    member->embed_dispose();
     host->embed_dispose();
     bus->reset();
 }

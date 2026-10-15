@@ -1,3 +1,4 @@
+#include "support/fault_log.h"
 #include "support/netw_test.h"
 
 #include "support/declared_nodes.h"
@@ -76,6 +77,16 @@ TEST_CASE(
     "contract report for the session's own settle rather than firing it "
     "inline, and the settle lands it with no frame driven"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_warning(
+        "[warn][prediction] PredictedWithoutComponent declares "
+        "state and input properties but no prediction, so its "
+        "controller sends input without predicting. Fill the "
+        "prediction block on its MultiplayerSynchronizer, or call "
+        "NetwMultiplayer.predict_declare.",
+        1
+    );
+
     Stand stand;
     Node *node = declaring(
         netw_test::gdsrc::STATE_AND_INPUT,
@@ -97,6 +108,24 @@ TEST_CASE(
     "declarations in one cascade are both checked rather than the first "
     "losing its turn to the second"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_warning(
+        "[warn][prediction] FirstCovered declares state and input "
+        "properties but no prediction, so its controller sends "
+        "input without predicting. Fill the prediction block on its"
+        " MultiplayerSynchronizer, or call "
+        "NetwMultiplayer.predict_declare.",
+        1
+    );
+    expected_faults.expect_warning(
+        "[warn][prediction] SecondCovered declares state and input "
+        "properties but no prediction, so its controller sends "
+        "input without predicting. Fill the prediction block on its"
+        " MultiplayerSynchronizer, or call "
+        "NetwMultiplayer.predict_declare.",
+        1
+    );
+
     Stand stand;
     Node *first = declaring(netw_test::gdsrc::STATE_AND_INPUT, "FirstCovered");
     Node *second

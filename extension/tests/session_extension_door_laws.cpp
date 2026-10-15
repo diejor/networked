@@ -1,3 +1,4 @@
+#include "support/fault_log.h"
 #include "support/netw_test.h"
 
 #if defined(NETW_TIER_HOSTED)
@@ -302,6 +303,13 @@ const DoorLaw LAWS[]
     = {L_OWNED, L_CONSULTED, L_COUNTED, L_UNMUTATED, L_RESEATED};
 
 TEST_CASE("[Networked][Session] the extension door laws hold") {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_warning(
+        "[warn][transport] A packet for route * was refused with "
+        "error 4.",
+        1
+    );
+
     const DoorScenario CORPUS[] = {
         no_implementation_at_all(),
         a_gate_that_calls_through(),

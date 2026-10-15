@@ -1,3 +1,4 @@
+#include "support/fault_log.h"
 #include "support/netw_test.h"
 
 #include "godot/multiplayer_synchronizer.hpp"
@@ -155,14 +156,19 @@ TEST_CASE(
     "[Networked][Multiplayer][Hosted] an awareness edge addressed to peer 0 is "
     "refused rather than queued under an id no drain can send to"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][interest] Condition \"p_peer_id == 0\" is true. An "
+        "interest change was dropped, because it was addressed to "
+        "peer *.",
+        2
+    );
+
     Ref<NetwMultiplayer> core;
     core.instantiate();
-    ERR_PRINT_OFF;
 
     core->interest_awareness_queue_layer(0, 42, StringName("sight"), 1);
     core->interest_awareness_queue_observer(0, 42, StringName("sight"), 7, 1);
-
-    ERR_PRINT_ON;
     CHECK(core->interest_awareness_drain().is_empty());
 
     core->interest_awareness_queue_layer(7, 42, StringName("sight"), 1);
@@ -277,6 +283,14 @@ TEST_CASE(
 }
 
 TEST_CASE("[Networked][Multiplayer][Hosted] an offline session admits") {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][liveness] Condition \"!is_host()\" is true. "
+        "Returning: out. NetwMultiplayer.liveness_claim_routes runs"
+        " only on the server.",
+        1
+    );
+
     Ref<NetwMultiplayer> core;
     core.instantiate();
     const RID entity = core->entity_create();
@@ -294,6 +308,21 @@ TEST_CASE(
     "[Networked][Multiplayer][Hosted] a registration the session does not own "
     "rides its transport, and so does an rpc on a node no entity claims"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][session] NetwSessionConfig cannot be passed to "
+        "MultiplayerAPI.object_configuration_add or "
+        "object_configuration_remove. Declare it with "
+        "Netw.configure_session before the session starts.",
+        1
+    );
+    expected_faults.expect_error(
+        "Condition \"!node || !node->is_inside_tree()\" is true. "
+        "Returning: ERR_INVALID_PARAMETER The object must be a "
+        "valid Node inside the SceneTree",
+        1
+    );
+
     Ref<NetwMultiplayer> core;
     core.instantiate();
 
@@ -503,6 +532,13 @@ TEST_CASE(
     "[Networked][Multiplayer][Hosted] a sink counts every verdict but "
     "OK, and answers what it was handed"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_warning(
+        "[warn][transport] A packet for route * was refused with "
+        "error 44.",
+        1
+    );
+
     Ref<NetwMultiplayer> core;
     core.instantiate();
 
@@ -695,6 +731,15 @@ TEST_CASE("[Networked][Multiplayer][Hosted] a zero wait takes the default") {
 }
 
 TEST_CASE("[Networked][Multiplayer][Hosted] watching an unarmed key refuses") {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_warning(
+        "[warn][prediction] Condition \"!watching\" is true. Effect "
+        "'*' is not armed, so there is nothing to watch. Call "
+        "NetwMultiplayer.lagcomp_effect_arm before "
+        "lagcomp_effect_watch.",
+        2
+    );
+
     Ref<NetwMultiplayer> core;
     core.instantiate();
 
@@ -922,7 +967,6 @@ TEST_CASE(
     "stamp, so a send refused for no transport or for a departed peer "
     "spends no sequence"
 ) {
-    ERR_PRINT_OFF;
     Ref<NetwMultiplayer> core = fresh_core();
 
     NETW_CHECK_EQ(core->send_datagram(PEER, body(4), false), -1);
@@ -1278,7 +1322,6 @@ TEST_CASE(
     NETW_CHECK_EQ(int(session->peer_ack(4)), -1);
 
     PackedByteArray body;
-    body.push_back(0);
     const PackedByteArray acked
         = netw::NetwCarrierFrame::build(body, false, 11, 900, 0, -1);
     session->session_get_inner()->emit_signal("peer_packet", 4, acked);
@@ -1386,6 +1429,13 @@ TEST_CASE(
     "[Networked][Multiplayer][Hosted] a transition the machine refuses, "
     "OFFLINE straight to ONLINE with no connect between, publishes nothing"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][session] Condition \"!edge_is_legal(state, next)\" "
+        "is true. The session cannot move from state 0 to state 2.",
+        1
+    );
+
     Ref<NetwMultiplayer> core;
     core.instantiate();
     Recorder session(core.ptr(), session_edges());
@@ -1421,11 +1471,15 @@ struct Transported {
     Ref<SceneMultiplayer> inner;
 };
 
+void application_auth(int64_t, const PackedByteArray &) {
+}
+
 Transported transported_core() {
     Transported rig;
     rig.core.instantiate();
     rig.inner.instantiate();
     rig.core->session_set_inner(rig.inner);
+    rig.core->set_auth_callback(callable_mp_static(&application_auth));
     return rig;
 }
 
@@ -1433,6 +1487,13 @@ TEST_CASE(
     "[Networked][Multiplayer][Hosted] the session republishes its transport's "
     "handshake"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_warning(
+        "[warn][session] Peer * failed authentication and was "
+        "refused.",
+        1
+    );
+
     Transported rig = transported_core();
     Recorder session(rig.core.ptr(), auth_edges());
 
@@ -1454,6 +1515,13 @@ TEST_CASE(
     "[Networked][Multiplayer][Hosted] a refused peer is recorded as well as "
     "announced"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_warning(
+        "[warn][session] Peer * failed authentication and was "
+        "refused.",
+        1
+    );
+
     Transported rig = transported_core();
     rig.core->event_arm(true);
     rig.core->event_watch(
@@ -2166,6 +2234,14 @@ TEST_CASE(
     "replacement now and honoring a stale unregister would drop the live "
     "service and announce the wrong one gone"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_warning(
+        "[warn][session] A service of type ():<Resource#-*> was "
+        "already registered, and the new one replaces it. Call "
+        "NetwSession.unregister_service first.",
+        1
+    );
+
     Ref<NetwMultiplayer> core;
     core.instantiate();
     const Ref<Resource> type = an_identity_only_type();
@@ -2805,6 +2881,12 @@ TEST_CASE(
     "[Networked][Multiplayer][Hosted] a scene request flood bounds a peer and "
     "never the host"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_warning(
+        "[warn][scene] peer * exceeded the scene request rate",
+        1
+    );
+
     Ref<NetwMultiplayer> core;
     core.instantiate();
     const int64_t now = 1000;
@@ -2906,14 +2988,19 @@ TEST_CASE(
     "exactly where it stood, and a destination that is not a node is the "
     "whole of what a move can refuse"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][entity] Condition \"owner == nullptr || parent == "
+        "nullptr\" is true. An entity move needs both a node and a "
+        "new parent, and one was null.",
+        1
+    );
+
     Ref<NetwMultiplayer> core;
     core.instantiate();
     Node *root = memnew(Node);
     const Bound bound = bind_under(core, root, true);
-
-    ERR_PRINT_OFF;
     NetwMultiplayer::entity_move(bound.owner, nullptr);
-    ERR_PRINT_ON;
 
     NETW_CHECK_EQ(bound.owner->get_parent(), root);
 
@@ -2989,6 +3076,8 @@ TEST_CASE(
     "[Networked][Multiplayer][Hosted] stamping an identity names the node "
     "after the entity id and writes both halves onto the wrapper"
 ) {
+    netw_test::FaultWatch expected_faults;
+
     netw_test::EntityFactories factories;
     Ref<netw::NetwEntity> wrapper;
     wrapper.instantiate();
@@ -3006,6 +3095,14 @@ TEST_CASE(
         "an empty id identifies nothing, so the node keeps its name and the "
         "wrapper keeps its blank identity"
     ) {
+        expected_faults.expect_error(
+            "[error][entity] Condition "
+            "\"String(p_entity_id).is_empty()\" is true. Returning: "
+            "p_node. '*' was given an empty entity id, so it was "
+            "not renamed. Pass a non-empty id.",
+            1
+        );
+
         Ref<netw::NetwEntity> untouched;
         untouched.instantiate();
         NetwMultiplayer::set_wrapper_factory(
@@ -3013,10 +3110,7 @@ TEST_CASE(
         );
         Node *refused = memnew(Node);
         refused->set_name("Standing");
-
-        ERR_PRINT_OFF;
         NetwMultiplayer::wrapper_stamp_identity(refused, StringName(), 3);
-        ERR_PRINT_ON;
 
         CHECK(refused->get_name() == StringName("Standing"));
         CHECK(untouched->get_name() == StringName());
@@ -3129,8 +3223,6 @@ TEST_CASE(
     netw_test::RecordBox record;
     record->set_entity_id("crate");
     REQUIRE(record->advance(int(netw::entity::Stage::ARMED)));
-
-    ERR_PRINT_OFF;
     NetwMultiplayer::entity_enter_tree(
         wrapper.ptr(),
         owner,
@@ -3138,13 +3230,11 @@ TEST_CASE(
         nullptr,
         true
     );
-    ERR_PRINT_ON;
 
     NETW_CHECK_EQ(record->get_stage(), int(netw::entity::Stage::LIVE));
     NETW_CHECK_EQ(log.count("live"), 1);
 
     SUBCASE("a record already live is a reparent, and is born no second time") {
-        ERR_PRINT_OFF;
         NetwMultiplayer::entity_enter_tree(
             wrapper.ptr(),
             owner,
@@ -3152,7 +3242,6 @@ TEST_CASE(
             nullptr,
             true
         );
-        ERR_PRINT_ON;
         NETW_CHECK_EQ(record->get_stage(), int(netw::entity::Stage::LIVE));
         NETW_CHECK_EQ(log.count("live"), 1);
     }
@@ -3176,8 +3265,6 @@ TEST_CASE(
     netw_test::CallLog log;
     wrapper->connect("spawning", log.callable("live"));
     netw_test::RecordBox record;
-
-    ERR_PRINT_OFF;
     NetwMultiplayer::entity_enter_tree(
         wrapper.ptr(),
         owner,
@@ -3185,7 +3272,6 @@ TEST_CASE(
         nullptr,
         true
     );
-    ERR_PRINT_ON;
 
     NETW_CHECK_EQ(record->get_stage(), int(netw::entity::Stage::TEMPLATE));
     NETW_CHECK_EQ(log.count("live"), 0);

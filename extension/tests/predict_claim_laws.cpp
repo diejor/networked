@@ -1102,6 +1102,15 @@ TEST_CASE(
     NetwPredictionEngine held_pool;
     NetwPredictionEngine *const pool = &held_pool;
     const int64_t slot = driving_slot(pool);
+    REQUIRE(pool->configure(
+        slot,
+        int(netw::Schedule::TICK),
+        int(netw::Role::CONSUME),
+        int(netw::CorrectionMode::SNAP),
+        int(netw::RestoreMode::EXACT),
+        6,
+        NetwPredictionEngine::ISLAND_JOINT
+    ));
 
     Array keys;
     keys.append(StringName("button"));

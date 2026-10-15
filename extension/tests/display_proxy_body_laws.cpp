@@ -38,6 +38,12 @@ using netw_test::LawVerdict;
 using netw_test::LoopbackRig;
 using netw_test::WorldDecl;
 
+constexpr const char *AUTHORED_BODY = R"(extends RigidBody2D
+
+func _init() -> void:
+	Netw.configure_property(self, &"position").state()
+)";
+
 struct WriterScenario {
     String label;
     int ticks = 10;
@@ -73,7 +79,10 @@ public:
         const FlowPair pair = netw_test::stand_flow_pair(
             rig,
             netw_test::gdsrc::STATE_BODY,
-            "ProxyBody"
+            "ProxyBody",
+            netw_test::BIND_EVERY_MIRROR,
+            true,
+            AUTHORED_BODY
         );
         rig.step_ticks(4);
 
@@ -216,7 +225,8 @@ const char *ALIASED_BODY = R"(extends RigidBody2D
 
 func _init() -> void:
 	freeze = false
-	var smoothing := NetwInterpolate.new().lerp().smooth(0.0).to(&"global_position")
+	var smoothing := NetwInterpolate.new().lerp().smooth(0.0) \
+			.to(&"global_position")
 	Netw.configure_property(self, &"position").state().interpolate(smoothing)
 )";
 
@@ -225,6 +235,17 @@ TEST_CASE(
     "under another name is refused at build, and the same channel written "
     "in place is kept"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][interp] Condition \"has_source && !split && "
+        "p_target_prop != p_source_prop && "
+        "p_runtime->holds_body(p_node)\" is true. Returning: "
+        "nullptr. '*' on '*' is not interpolated, because it "
+        "follows '*' but writes '*' on the simulated body itself. "
+        "Set NetwDisplay.visual_root to draw it on a child node.",
+        1
+    );
+
     LoopbackRig rig(0);
     rig.declare_world(WorldDecl().clocked(30));
     rig.mount();

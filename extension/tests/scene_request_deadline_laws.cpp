@@ -1,3 +1,4 @@
+#include "support/fault_log.h"
 #include "support/netw_test.h"
 
 #include "netw/api/netw_multiplayer.hpp"
@@ -170,6 +171,13 @@ TEST_CASE(
     "its own scene request through the same door a remote one arrives by, so "
     "a request with no admitted participant is refused rather than left open"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_warning(
+        "[warn][scene] Peer * asked for a scene change before it "
+        "joined, so it was refused.",
+        1
+    );
+
     Ref<NetwMultiplayer> core;
     core.instantiate();
     core->clock_engine().set_configured(true);

@@ -1,3 +1,4 @@
+#include "support/fault_log.h"
 #include "support/netw_test.h"
 
 #include "godot/node.hpp"
@@ -172,6 +173,13 @@ TEST_CASE(
     "[Networked][Sync][Hosted] a send verb on a node in no entity is dropped "
     "as unroutable and counted, and warns exactly once"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_warning(
+        "[warn][wire] Netw.sync_property got '*', which is not part"
+        " of a NetwEntity. Call Netw.configure_entity on its root.",
+        1
+    );
+
     Stand stand;
     Node *node = memnew(Node);
     node->set_name("Loose");

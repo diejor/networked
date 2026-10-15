@@ -1,3 +1,4 @@
+#include "support/fault_log.h"
 #include "support/netw_test.h"
 
 #include <cstdio>
@@ -103,6 +104,13 @@ TEST_CASE(
     "[Networked][Session][Hosted] S2 a refused edge leaves the machine where "
     "it was and announces nothing"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][session] Condition \"!edge_is_legal(state, next)\" "
+        "is true. The session cannot move from state 2 to state 0.",
+        1
+    );
+
     Ref<NetwMultiplayer> host;
     host.instantiate();
     SessionCore &core = host->session_plane();
@@ -113,10 +121,7 @@ TEST_CASE(
     core.transition(SessionCore::STATE_CONNECTING);
     core.transition(SessionCore::STATE_ONLINE);
     recorder.clear();
-
-    ERR_PRINT_OFF;
     core.transition(SessionCore::STATE_OFFLINE);
-    ERR_PRINT_ON;
 
     NETW_CHECK_EQ(int(core.get_state()), int(SessionCore::STATE_ONLINE));
     NETW_CHECK_EQ(recorder.order().size(), 0);
@@ -190,9 +195,11 @@ TEST_CASE(
 ) {
     SessionCore listen = fresh();
     listen.set_desired_role(SessionCore::ROLE_LISTEN_SERVER);
+    listen.transition(SessionCore::STATE_CONNECTING);
     listen.resolve_online(1);
     NETW_CHECK_EQ(int(listen.get_role()), int(SessionCore::ROLE_LISTEN_SERVER));
     CHECK(listen.is_server_role());
+    NETW_CHECK_EQ(listen.get_state(), SessionCore::STATE_ONLINE);
 
     for (const SessionCore::Role hint : {
              SessionCore::ROLE_NONE,
@@ -201,18 +208,22 @@ TEST_CASE(
          }) {
         SessionCore dedicated = fresh();
         dedicated.set_desired_role(hint);
+        dedicated.transition(SessionCore::STATE_CONNECTING);
         dedicated.resolve_online(1);
         NETW_CHECK_EQ(
             int(dedicated.get_role()),
             int(SessionCore::ROLE_DEDICATED_SERVER)
         );
         CHECK(dedicated.is_server_role());
+        NETW_CHECK_EQ(dedicated.get_state(), SessionCore::STATE_ONLINE);
 
         SessionCore remote = fresh();
         remote.set_desired_role(hint);
+        remote.transition(SessionCore::STATE_CONNECTING);
         remote.resolve_online(7);
         NETW_CHECK_EQ(int(remote.get_role()), int(SessionCore::ROLE_CLIENT));
         CHECK_FALSE(remote.is_server_role());
+        NETW_CHECK_EQ(remote.get_state(), SessionCore::STATE_ONLINE);
     }
 }
 

@@ -1,3 +1,4 @@
+#include "support/fault_log.h"
 #include "support/loopback_rig.h"
 
 #if defined(NETW_TIER_HOSTED)
@@ -173,6 +174,13 @@ TEST_CASE(
     "[Networked][Rpc] RA4 a call frame naming one peer runs nowhere else, so "
     "a packet that reaches the wrong session leaves no effect behind"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_warning(
+        "[warn][transport] A call for '*' was meant for peer * and "
+        "reached peer *, so it was dropped.",
+        1
+    );
+
     LoopbackRig rig(0);
     rig.mount();
     NetwMultiplayer *core = rig.server();
@@ -330,6 +338,13 @@ TEST_CASE(
     "signal on a node another peer holds, and a peer holding neither may "
     "not, because the permission is the session's own"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_warning(
+        "[warn][wire] Only the authority can emit '*', because it "
+        "is not declared. Declare it with Netw.configure_signal.",
+        1
+    );
+
     MeshStand stand;
     stand.seat_server();
     stand.seat_member(MESH_MEMBER);

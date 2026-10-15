@@ -31,7 +31,7 @@ EntityDecl a_predicted_body(const char *p_name) {
 }
 
 void arm_rewind(LoopbackRig &p_rig) {
-    NETW_CHECK_EQ(int(p_rig.server()->lagcomp_initialize(8, 12)), int(OK));
+    p_rig.declare_world(WorldDecl().clocked().lag_compensated());
 }
 
 Axes axes_on_the_authority(LoopbackRig &p_rig, const EntityDecl &p_decl) {

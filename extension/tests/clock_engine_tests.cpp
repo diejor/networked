@@ -1,3 +1,4 @@
+#include "support/fault_log.h"
 #include "support/netw_test.h"
 
 #include "godot/engine.hpp"
@@ -127,6 +128,16 @@ TEST_CASE(
     "[Networked][Clock][Hosted] L3 a stalling frame discards what was banked "
     "before it"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_warning(
+        "[warn][clock] Condition \"delta > stall_threshold\" is true."
+        " A frame took 0.625 s, longer than "
+        "NetwClockConfig.stall_threshold (0.500 s), so it was "
+        "skipped as a hitch. Raise stall_threshold if frames this "
+        "long are expected.",
+        1
+    );
+
     const Clocked kept = make_clock();
     kept->set_max_ticks_per_frame(100);
     kept->set_stall_threshold(TICK * 6.0);

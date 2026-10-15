@@ -1,3 +1,4 @@
+#include "support/fault_log.h"
 #include "support/netw_test.h"
 
 #if defined(NETW_TIER_HOSTED)
@@ -37,7 +38,7 @@ MultiplayerSpawner *scripted_spawner(Node *p_arena) {
         = Object::cast_to<MultiplayerSpawner>(script->call("new"));
     REQUIRE_MESSAGE(spawner != nullptr, "the script built no spawner");
     spawner->set_name("ReadySpawner");
-    spawner->set_spawn_path(p_arena->get_path());
+    spawner->set_spawn_path(NodePath(String("../") + p_arena->get_name()));
     return spawner;
 }
 
@@ -85,6 +86,14 @@ TEST_CASE(
     "it holds authority over is refused before a route is minted, because "
     "only the session authority spawns"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][spawn] '*' was added under a MultiplayerSpawner on"
+        " a client, and only the server spawns. Add it on the "
+        "server, or use Netw.spawn.",
+        1
+    );
+
     LoopbackRig rig(1);
     rig.mount();
     netw_test::flow_clocks(rig, TICKRATE);

@@ -131,7 +131,11 @@ class AuthorshipRun {
     ) {
         Node2D *body = memnew(Node2D);
         body->set_name("DerivedPlayer");
+        Node2D *visual = memnew(Node2D);
+        visual->set_name("Visual");
+        body->add_child(visual);
         const Ref<NetwEntity> entity = NetwEntity::ensure(body);
+        entity->get_display()->set_visual_root(NodePath("Visual"));
         const uint64_t set = declare_stream(p_core->property_set_book(), body);
         p_branch->add_child(body);
         NETW_CHECK_EQ(
@@ -363,7 +367,11 @@ RigidBody2D *a_state_body(NetwMultiplayer *p_core, Node *p_branch, double p_x) {
     body->set_freeze_mode(RigidBody2D::FREEZE_MODE_STATIC);
     body->set_position(Vector2(real_t(p_x), 0.0));
     body->set_multiplayer_authority(SERVER);
+    Node2D *visual = memnew(Node2D);
+    visual->set_name("Visual");
+    body->add_child(visual);
     const Ref<NetwEntity> entity = NetwEntity::ensure(body);
+    entity->get_display()->set_visual_root(NodePath("Visual"));
 
     Ref<NetwPropertyConfig> config
         = Netw::configure_property(body, StringName("position"), true);

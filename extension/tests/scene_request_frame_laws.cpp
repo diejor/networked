@@ -1,3 +1,4 @@
+#include "support/fault_log.h"
 #include "support/netw_test.h"
 
 #include "godot/utility.hpp"
@@ -79,6 +80,12 @@ TEST_CASE(
     "and is counted once, while the host is never limited, so a peer that "
     "cannot flood the join door cannot reach the same session by this one"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_warning(
+        "[warn][scene] peer * exceeded the scene request rate",
+        1
+    );
+
     const Ref<NetwMultiplayer> core = hosting_core();
     const PackedByteArray frame
         = request_frame(9, String("res://arena.tscn"), 0);

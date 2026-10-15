@@ -371,7 +371,7 @@ Dictionary NetwLagCompCore::declared_only(
     const Dictionary &p_payload
 ) {
     if (p_row.declared.is_empty()) {
-        return p_payload;
+        return p_payload.duplicate();
     }
     Dictionary out;
     for (uint32_t at = 0; at < p_row.declared.size(); ++at) {
@@ -491,12 +491,16 @@ Variant NetwLagCompCore::rewind(
         }
         Object *owner = row->port.resolve(MODULE);
         colliders::hold_server_poses(owner, server_poses);
-        const Dictionary written = declared_only(*row, past);
+        Dictionary written = declared_only(*row, past);
         port_apply(row->port, MODULE, written);
         colliders::teleport(owner);
         colliders::report_unseen(owner);
         moved.push_back(slot);
         live.push_back(held);
+        for (int at = 0; at < keys.size(); ++at) {
+            const StringName key = keys[at];
+            written[key] = port_get(owner, key);
+        }
         wrote.push_back(written);
     }
 

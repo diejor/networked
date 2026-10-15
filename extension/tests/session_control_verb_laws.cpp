@@ -13,7 +13,6 @@ Ref<NetwMultiplayer> authority() {
     Ref<NetwMultiplayer> core;
     core.instantiate();
     core->clock_engine().set_configured(true);
-    core->session_get_inner()->set_multiplayer_peer(Ref<MultiplayerPeer>());
     core->session_set_role(NetwMultiplayer::ROLE_LISTEN_SERVER);
     return core;
 }

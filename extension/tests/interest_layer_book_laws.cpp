@@ -59,6 +59,7 @@ TEST_CASE(
     "same viewer twice cannot make a watcher believe two peers arrived"
 ) {
     LoopbackRig rig;
+    const int viewer = rig.peer_id(0);
     const Ref<NetwEntity> entity = subject(rig, "BookSubject", 61);
     const Ref<NetwInterestLayer> layer
         = rig.server()->interest_layer(StringName("sight"));
@@ -69,16 +70,16 @@ TEST_CASE(
     layer->connect(StringName("viewer_removed"), heard.callable("unviewer"));
     layer->connect(StringName("entity_removed"), heard.callable("unmember"));
 
-    CHECK(layer->add_viewer(7));
-    CHECK_FALSE(layer->add_viewer(7));
+    CHECK(layer->add_viewer(viewer));
+    CHECK_FALSE(layer->add_viewer(viewer));
     CHECK(layer->add_entity(entity));
     CHECK_FALSE(layer->add_entity(entity));
 
     NETW_CHECK_EQ(heard.count("viewer"), 1);
     NETW_CHECK_EQ(heard.count("member"), 1);
 
-    CHECK(layer->remove_viewer(7));
-    CHECK_FALSE(layer->remove_viewer(7));
+    CHECK(layer->remove_viewer(viewer));
+    CHECK_FALSE(layer->remove_viewer(viewer));
     CHECK(layer->remove_entity(entity));
     CHECK_FALSE(layer->remove_entity(entity));
 

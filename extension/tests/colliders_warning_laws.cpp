@@ -101,7 +101,12 @@ TEST_CASE(
     AnimatableBody3D *platform = seated<AnimatableBody3D>(arena);
     platform->set_name("Platform");
     platform->set_sync_to_physics(true);
+    Area3D *hitbox = memnew(Area3D);
+    platform->add_child(hitbox);
     rewind_once(platform);
+    CHECK(platform->get_position() == Vector3());
+    NETW_CHECK_EQ(faults.warnings_containing("changed inside a rewind"), 0);
+    NETW_CHECK_EQ(faults.warnings_containing("with no hitbox"), 0);
     netw::gd::scene_root()->remove_child(arena);
     memdelete(arena);
     NETW_CHECK_EQ(

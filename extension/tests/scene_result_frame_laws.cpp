@@ -1,3 +1,4 @@
+#include "support/fault_log.h"
 #include "support/netw_test.h"
 
 #include "godot/utility.hpp"
@@ -57,6 +58,13 @@ TEST_CASE(
     "other peers' requests is a number the session reports rather than a log "
     "line nobody reads"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_warning(
+        "[warn][scene] A scene result from peer * was ignored, "
+        "because the request went to peer *.",
+        2
+    );
+
     const Ref<NetwMultiplayer> core = asking_core();
     const Ref<NetwSceneCore> scenes = core->get_scene_core();
 

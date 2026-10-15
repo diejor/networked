@@ -1,3 +1,4 @@
+#include "support/fault_log.h"
 #include "support/netw_test.h"
 
 #include "godot/node.hpp"
@@ -128,7 +129,15 @@ TEST_CASE(
     "database's failed signal once and no saved signal, whichever path "
     "submitted it, and a write that settles stale emits nothing"
 ) {
+    netw_test::FaultWatch expected_faults;
+
     SUBCASE("the interval") {
+        expected_faults.expect_error(
+            "[error][table] Database '*' failed. Record '*' was not"
+            " saved (the memory store was told to fail).",
+            1
+        );
+
         World world("pf1a");
         world.enroll(false);
         world.root->set_position(Vector2(2, 2));
@@ -142,6 +151,12 @@ TEST_CASE(
     }
 
     SUBCASE("an explicit save") {
+        expected_faults.expect_error(
+            "[error][table] Database '*' failed. Record '*' was not"
+            " saved (the memory store was told to fail).",
+            1
+        );
+
         World world("pf1b");
         const RID binding = world.enroll(false);
         world.root->set_position(Vector2(2, 2));
@@ -156,6 +171,12 @@ TEST_CASE(
     }
 
     SUBCASE("the final write of a departed entity") {
+        expected_faults.expect_error(
+            "[error][table] Database '*' failed. Record '*' was not"
+            " saved (the memory store was told to fail).",
+            1
+        );
+
         World world("pf1c");
         const RID binding = world.enroll(false);
         world.root->set_position(Vector2(2, 2));
@@ -194,7 +215,17 @@ TEST_CASE(
     "signal and no loaded signal, and a refused spawn load keeps the entity "
     "withheld"
 ) {
+    netw_test::FaultWatch expected_faults;
+
     SUBCASE("the spawn load") {
+        expected_faults.expect_error(
+            "[error][table] Database '*' failed. Loading record '*'"
+            " failed, so its entity is not published (the memory "
+            "store was told to fail).",
+            1
+        );
+
+        const netw_test::FaultWatch faults;
         World world("pf2a");
         world.connection->fail_next(ERR_FILE_CANT_READ);
 
@@ -203,9 +234,20 @@ TEST_CASE(
         NETW_CHECK_EQ(world.log.count("failed"), 1);
         NETW_CHECK_EQ(world.failed_code(), int(ERR_FILE_CANT_READ));
         CHECK(world.session->persist_withholds(world.root));
+        NETW_CHECK_EQ(
+            faults.warnings_containing("A NetwPromise failed"),
+            int64_t(0)
+        );
     }
 
     SUBCASE("an explicit load") {
+        expected_faults.expect_error(
+            "[error][table] Database '*' failed. Loading record '*'"
+            " failed, so its entity is not published (the memory "
+            "store was told to fail).",
+            1
+        );
+
         World world("pf2b");
         const RID binding = world.enroll(false);
         world.connection->fail_next(ERR_FILE_CANT_READ);
@@ -225,6 +267,13 @@ TEST_CASE(
     "flight, answers the first error while a row stays unsaved, and answers "
     "OK once every row is stored"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][table] Database '*' failed. Record '*' was not "
+        "saved (the memory store was told to fail).",
+        1
+    );
+
     World world("pf3");
     const RID binding = world.enroll(false);
     Ref<NetwSession> handle;
@@ -260,6 +309,14 @@ TEST_CASE(
     "[Networked][Persistence][Hosted] PF5 a save whose row the database left "
     "uncertain fails its promise and leaves the entity dirty"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][table] Database '*' failed. Record '*' was not "
+        "saved (the database could not confirm this row was "
+        "stored).",
+        1
+    );
+
     World world("pf5");
     const RID binding = world.enroll(false);
     world.root->set_position(Vector2(2, 2));

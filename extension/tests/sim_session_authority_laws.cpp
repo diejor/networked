@@ -46,7 +46,7 @@ TEST_CASE(
 ) {
     LoopbackRig rig(1);
     rig.mount();
-    NETW_CHECK_EQ(int(rig.server()->lagcomp_initialize(8, 12)), int(OK));
+    rig.declare_world(WorldDecl().clocked().lag_compensated());
     const RID entity = rig.declare_entity(
         EntityDecl()
             .named(StringName("Ball"))

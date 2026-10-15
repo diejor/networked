@@ -1,6 +1,7 @@
 #pragma once
 
 #include "netw_test.h"
+#include "fault_log.h"
 
 #include <cstdio>
 #include <string>
@@ -105,6 +106,7 @@ public:
 
     void test_case_start(const doctest::TestCaseData &data) override {
         reset_after_case();
+        begin_fault_case(data.m_name);
         current = data.m_name;
         opened = Census::take();
     }
@@ -117,7 +119,10 @@ public:
         reset_for_case();
     }
 
-    void test_case_end(const doctest::CurrentTestCaseStats &) override {
+    void test_case_end(
+        const doctest::CurrentTestCaseStats &p_stats
+    ) override {
+        end_fault_case(p_stats.testCaseSuccess);
         closed = Census::take();
         if (!opened.measurable() || !closed.measurable()) {
             return;
@@ -135,8 +140,12 @@ public:
         row_awaits_reset = true;
     }
 
-    void test_run_end(const doctest::TestRunStats &) override {
+    void test_run_end(const doctest::TestRunStats &p_stats) override {
         reset_after_case();
+#if defined(NETW_MODULE)
+        write_fault_report(p_stats.numTestCasesFailed == 0);
+        end_fault_capture();
+#endif
         const CensusLedger &ledger = census_ledger();
         if (ledger.read_by_runner || ledger.rows.empty()) {
             return;
@@ -160,6 +169,7 @@ public:
     void report_query(const doctest::QueryData &) override {
     }
     void test_run_start() override {
+        begin_fault_capture();
         census_ledger().rows.clear();
     }
     void test_case_exception(const doctest::TestCaseException &) override {

@@ -670,6 +670,12 @@ void SyncCompat::on_entity_live(
             capture_declaration(row);
         }
     }
+    for (Consumed *row : matched) {
+        if (row->route == p_route) {
+            validate_schema(row, p_route);
+        }
+    }
+    pending_schema.erase(p_route);
 }
 
 void SyncCompat::prune() {
