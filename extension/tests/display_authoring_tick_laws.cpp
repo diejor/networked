@@ -86,12 +86,12 @@ class AuthoringRun {
         const RID entity = subject.entity->get_rid_handle();
 
         Dictionary configs;
-        configs[StringName("position")] = netw::Netw::configure_property(
-                                              subject.body,
-                                              StringName("position"),
-                                              false
-        )
-                                              ->state();
+        configs[StringName("position")]
+            = netw::script::model::configure_node_property(
+                  subject.body,
+                  StringName("position")
+            )
+                  ->state();
         const uint64_t set = netw_test::sealed_set(
             core->property_set_book(),
             configs,

@@ -12,7 +12,7 @@ NetwPersistenceConfig
 
 **Inherits:** :godot:`RefCounted`
 
-Which record of which :ref:`NetwDatabase<class_NetwDatabase>` an entity loads and saves.
+Saved record settings for a :ref:`NetwEntity<class_NetwEntity>`.
 
 .. rst-class:: classref-introduction-group
 
@@ -21,12 +21,12 @@ Description
 
 The record includes properties configured with :ref:`NetwPropertyConfig.persisted()<class_NetwPropertyConfig_method_persisted>` on the root and its children.
 
-Configure from :godot:`Node._ready() <Node#class_Node_private_method__ready>`.
-
 ::
 
-    func _ready() -> void:
-        Netw.configure_property(self, &"position", false).persisted(&"where")
+    @export var account_id: StringName
+
+    func _init() -> void:
+        Netw.configure_property(self, &"position").persisted(&"where")
         Netw.configure_persistence(self) \
                 .database(&"saves") \
                 .table(&"players") \
@@ -34,9 +34,9 @@ Configure from :godot:`Node._ready() <Node#class_Node_private_method__ready>`.
                 .interval(5.0)
 
     func account_name() -> StringName:
-        return entity.name
+        return account_id
 
-\ Use a :ref:`record_id()<class_NetwPersistenceConfig_method_record_id>` that stays the same between sessions. A peer id changes every time the player joins. The record is reached through :ref:`NetwEntity.persistence<class_NetwEntity_property_persistence>`.
+\ :ref:`record_id()<class_NetwPersistenceConfig_method_record_id>` must return an id that stays the same between sessions. Peer ids change when players rejoin. :ref:`NetwEntity.persistence<class_NetwEntity_property_persistence>` reaches the saved record.
 
 \ **Record layout**\ 
 
@@ -44,8 +44,8 @@ Changes to saved names or types require :ref:`migrate()<class_NetwPersistenceCon
 
 ::
 
-    func _ready() -> void:
-        Netw.configure_property(self, &"coins", false).persisted(&"gold")
+    func _init() -> void:
+        Netw.configure_property(self, &"coins").persisted(&"gold")
         Netw.configure_persistence(self) \
                 .database(&"saves") \
                 .table(&"players") \
@@ -96,7 +96,7 @@ Method Descriptions
 
 :ref:`NetwPersistenceConfig<class_NetwPersistenceConfig>` **database**\ (\ name\: :godot:`StringName`\ ) :ref:`🔗<class_NetwPersistenceConfig_method_database>`
 
-Names the :ref:`NetwDatabase<class_NetwDatabase>` this entity's record lives in, as :ref:`Netw.configure_database()<class_Netw_method_configure_database>` declared it.
+Names the :ref:`NetwDatabase<class_NetwDatabase>` this :ref:`NetwEntity<class_NetwEntity>`'s record lives in, as :ref:`Netw.configure_database()<class_Netw_method_configure_database>` declared it.
 
 .. rst-class:: classref-item-separator
 
@@ -108,9 +108,7 @@ Names the :ref:`NetwDatabase<class_NetwDatabase>` this entity's record lives in,
 
 :ref:`NetwPersistenceConfig<class_NetwPersistenceConfig>` **interval**\ (\ seconds\: :godot:`float`\ ) :ref:`🔗<class_NetwPersistenceConfig_method_interval>`
 
-Saves the record every ``seconds`` when something changed.
-
-\ ``0.0`` saves only when you call :ref:`NetwPersistence.save()<class_NetwPersistence_method_save>`.
+Saves only when a property changed. ``0.0`` saves only through :ref:`NetwPersistence.save()<class_NetwPersistence_method_save>`.
 
 \ **Server Only.**
 
@@ -124,9 +122,9 @@ Saves the record every ``seconds`` when something changed.
 
 :ref:`NetwPersistenceConfig<class_NetwPersistenceConfig>` **load_on_spawn**\ (\ enabled\: :godot:`bool` = true\ ) :ref:`🔗<class_NetwPersistenceConfig_method_load_on_spawn>`
 
-Whether the server loads the stored record when the entity's node is ready.
+Whether the server loads the stored record when the :ref:`NetwEntity<class_NetwEntity>`'s node is ready.
 
-Clients do not receive the entity until the load succeeds or finds no record. Call :ref:`NetwPersistence.load()<class_NetwPersistence_method_load>` to retry a failed load.
+Clients do not receive the :ref:`NetwEntity<class_NetwEntity>` until the load succeeds or finds no record. Call :ref:`NetwPersistence.load()<class_NetwPersistence_method_load>` to retry a failed load.
 
 .. rst-class:: classref-item-separator
 
@@ -157,7 +155,7 @@ Upgrades saved data from ``from_version`` to the next version. A load calls ``st
 
 :ref:`NetwPersistenceConfig<class_NetwPersistenceConfig>` **record_id**\ (\ provider\: :godot:`Callable`\ ) :ref:`🔗<class_NetwPersistenceConfig_method_record_id>`
 
-Called once when the node is ready to obtain a nonempty :godot:`StringName` identifying its saved record. Use an id that stays the same across sessions.
+Calls ``provider`` once when the root is ready. Its nonempty :godot:`StringName` identifies the record across sessions.
 
 .. rst-class:: classref-item-separator
 
@@ -181,7 +179,7 @@ The version of saved data, starting at ``1``. Raise it when saved properties cha
 
 :ref:`NetwPersistenceConfig<class_NetwPersistenceConfig>` **table**\ (\ name\: :godot:`StringName`\ ) :ref:`🔗<class_NetwPersistenceConfig_method_table>`
 
-Groups saved records under ``name``. Roots using the same name must declare the same saved properties, types and :ref:`storage_version()<class_NetwPersistenceConfig_method_storage_version>`.
+Roots using the same ``name`` must declare the same saved property names, types and :ref:`storage_version()<class_NetwPersistenceConfig_method_storage_version>`.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

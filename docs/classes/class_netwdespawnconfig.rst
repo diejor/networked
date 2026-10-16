@@ -12,21 +12,19 @@ NetwDespawnConfig
 
 **Inherits:** :godot:`RefCounted`
 
-How every peer removes a node when it despawns, returned by :ref:`Netw.configure_despawn()<class_Netw_method_configure_despawn>`.
+Removal behavior for a despawning :ref:`NetwEntity<class_NetwEntity>`.
 
 .. rst-class:: classref-introduction-group
 
 Description
 -----------
 
-Set in :godot:`Object._init() <Object#class_Object_private_method__init>`, and shared by every node of the same script. By default the node is freed at once.
+Settings are shared by nodes using the same script.
 
 ::
 
     func _init() -> void:
-        Netw.configure_despawn(self) \
-                .before_removal(_play_death_vfx) \
-                .linger(0.5)
+        Netw.configure_despawn(self).before_removal(play_death_vfx).linger(0.5)
 
 .. rst-class:: classref-reftable-group
 
@@ -110,7 +108,7 @@ Method Descriptions
 
 :ref:`NetwDespawnConfig<class_NetwDespawnConfig>` **before_removal**\ (\ callable\: :godot:`Callable`\ ) :ref:`🔗<class_NetwDespawnConfig_method_before_removal>`
 
-Calls the method of ``callable`` on the entity root before it is removed, for example to play an effect. Only the method name is kept. Returns this config.
+Only the method name of ``callable`` is kept. Each :ref:`NetwEntity<class_NetwEntity>` root calls that method before removal.
 
 .. rst-class:: classref-item-separator
 
@@ -122,7 +120,7 @@ Calls the method of ``callable`` on the entity root before it is removed, for ex
 
 :ref:`NetwDespawnConfig<class_NetwDespawnConfig>` **linger**\ (\ seconds\: :godot:`float`\ ) :ref:`🔗<class_NetwDespawnConfig_method_linger>`
 
-Sets :ref:`linger_seconds<class_NetwDespawnConfig_property_linger_seconds>` and returns this config.
+Keeps the node in the tree for ``seconds`` before freeing it. Sets :ref:`linger_seconds<class_NetwDespawnConfig_property_linger_seconds>`.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

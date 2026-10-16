@@ -9,16 +9,13 @@ namespace Networked;
 /// Persistent storage for saved records.
 /// </summary>
 /// <remarks>
-/// <see cref="NetwEntity"/>, <see cref="NetwTable"/> and your own code save and
-/// load their state through a <see cref="NetwDatabase"/>. A
-/// <see cref="NetwDatabaseBackend"/> does the actual storage. A record is a
-/// <see cref="Godot.Collections.Dictionary"/> stored under a
-/// <see cref="StringName"/> id. A <see cref="NetwSchema"/> defines the saved
-/// property names and types. Await <see cref="NetwDatabase.Open"/> before
-/// reading or writing.
+/// Await <see cref="NetwDatabase.Open"/> before reading or writing. Database
+/// access survives removal of the declaring <see cref="Node"/>. A
+/// <see cref="NetwDatabaseBackend"/> supplies storage connections.
 /// <code>
-/// func _ready() -&gt; void:
-///     Netw.configure_database(self, &amp;"saves").backend(preload("res://filesystem_backend.tres"))
+/// func _init() -&gt; void:
+///     Netw.configure_database(self, &amp;"saves") \
+///             .backend(preload("res://save_backend.tres"))
 ///
 /// func start_game(slot: StringName) -&gt; void:
 ///     var db: NetwDatabase = Netw.session(self).database(&amp;"saves")
@@ -46,8 +43,9 @@ public sealed class NetwDatabase : NetwRefCounted
     }
 
     /// <summary>
-    /// Emitted when an entity fails to load or save its record. <c>error</c> is
-    /// one of the codes <see cref="NetwPersistence.Load"/> and
+    /// Emitted when an <see cref="NetwEntity"/> fails to load or save its
+    /// record. <c>error</c> is one of the codes
+    /// <see cref="NetwPersistence.Load"/> and
     /// <see cref="NetwPersistence.Save"/> list, and <c>detail</c> names the
     /// record and what went wrong.
     /// <code>
@@ -75,7 +73,7 @@ public sealed class NetwDatabase : NetwRefCounted
         NetwApi.MethodBind("NetwDatabase", "get_database_name", 2002593661UL);
 
     /// <summary>
-    /// The name this database was declared under.
+    /// The name used in <see cref="Netw.ConfigureDatabase"/>.
     /// </summary>
     public StringName Name
     {
@@ -127,19 +125,19 @@ public sealed class NetwDatabase : NetwRefCounted
         NetwApi.MethodBind("NetwDatabase", "open", 2495519093UL);
 
     /// <summary>
-    /// Opens <paramref name="slot"/>. To switch slots,
-    /// <see cref="NetwDatabase.Close"/> the open one first. The promise gives
-    /// an <c>@GlobalScope.Error</c>.
+    /// Close the open slot with <see cref="NetwDatabase.Close"/> before
+    /// switching slots. <see cref="NetwPromise.Wait"/> gives an
+    /// <c>@GlobalScope.Error</c>.
     /// <code>
     /// Error
-    /// ┠╴OK                slot is open, or was open already
-    /// ┠╴ERR_BUSY          another slot is open or opening, or the database is closing
-    /// ┠╴ERR_UNCONFIGURED  the database declares no backend
-    /// ┠╴ERR_CANT_CREATE   the backend resolved no connection
-    /// ┠╴ERR_INVALID_DATA  the backend's _open answered no promise
-    /// ┠╴ERR_UNAVAILABLE   the session ended, or the backend implements
-    /// │                   no _open
-    /// ┖╴storage error   the backend could not open slot
+    /// ┠╴OK                  slot is open, or was open already
+    /// ┠╴ERR_BUSY            another slot is open or opening, or the database is closing
+    /// ┠╴ERR_ALREADY_EXISTS  live declarations name different backends
+    /// ┠╴ERR_UNCONFIGURED    the database declares no backend
+    /// ┠╴ERR_CANT_CREATE     the backend resolved no connection
+    /// ┠╴ERR_INVALID_DATA    the backend's _open answered no promise
+    /// ┠╴ERR_UNAVAILABLE     the session ended, or the backend implements no _open
+    /// ┖╴storage error       the backend could not open the slot
     /// </code>
     /// </summary>
     public NetwPromise Open(StringName slot)
@@ -482,6 +480,8 @@ public sealed class NetwDatabase : NetwRefCounted
     /// Dictionary
     /// ┠╴error    Error              check it before reading slots
     /// │ ┠╴OK                      listing succeeded
+    /// │ ┠╴ERR_ALREADY_EXISTS      live declarations name different backends
+    /// │ ┠╴ERR_UNCONFIGURED        the database declares no backend
     /// │ ┠╴ERR_UNAVAILABLE         the backend does not implement slot listing
     /// │ ┖╴storage error         the backend could not read its storage
     /// ┠╴detail   String             what went wrong, for a person to read. Empty when error is OK
@@ -499,17 +499,17 @@ public sealed class NetwDatabase : NetwRefCounted
         NetwApi.MethodBind("NetwDatabase", "delete_slot", 2495519093UL);
 
     /// <summary>
-    /// Removes <paramref name="slot"/> and everything stored in it. The slot
-    /// must not be open. The promise gives an <c>@GlobalScope.Error</c>.
+    /// The slot must be closed. <see cref="NetwPromise.Wait"/> gives an
+    /// <c>@GlobalScope.Error</c>.
     /// <code>
     /// Error
-    /// ┠╴OK                the backend removed the slot
-    /// ┠╴ERR_BUSY          slot is the one this database holds open
-    /// ┠╴ERR_UNCONFIGURED  the database declares no backend
-    /// ┠╴ERR_UNAVAILABLE   the session ended, or the backend
-    /// │                   implements no _delete_slot
-    /// ┠╴ERR_INVALID_DATA  the backend's _delete_slot answered no promise
-    /// ┖╴storage error   the backend could not remove the slot
+    /// ┠╴OK                  the backend removed the slot
+    /// ┠╴ERR_BUSY            slot is the one this database holds open
+    /// ┠╴ERR_ALREADY_EXISTS  live declarations name different backends
+    /// ┠╴ERR_UNCONFIGURED    the database declares no backend
+    /// ┠╴ERR_UNAVAILABLE     the session ended, or the backend implements no _delete_slot
+    /// ┠╴ERR_INVALID_DATA    the backend's _delete_slot answered no promise
+    /// ┖╴storage error       the backend could not remove the slot
     /// </code>
     /// </summary>
     public NetwPromise DeleteSlot(StringName slot)

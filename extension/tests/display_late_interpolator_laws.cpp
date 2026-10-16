@@ -11,6 +11,7 @@
 #include "netw/api/interpolate.hpp"
 #include "netw/api/netw_multiplayer.hpp"
 #include "netw/api/property_config.hpp"
+#include "netw/script/model.hpp"
 
 namespace TestNetwDisplayLateInterpolatorLaws {
 
@@ -75,10 +76,9 @@ TEST_CASE(
 
     Ref<netw::NetwInterpolate> spec;
     spec.instantiate();
-    netw::Netw::configure_property(
-        pair.mirror(0),
-        StringName("position"),
-        false
+    netw::script::model::get_property_config(
+        Ref<Script>(pair.mirror(0)->get_script()),
+        StringName("position")
     )
         ->interpolate(netw::gd::array_of(spec->lerp()->smooth(0.0)));
     const int64_t declared_at = netw_test::clock_tick(rig, 0);

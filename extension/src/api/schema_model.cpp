@@ -1,6 +1,7 @@
 #include "netw/api/schema_model.hpp"
 
 #include "godot/class_db.hpp"
+#include "godot/object.hpp"
 #include "godot/templates.hpp"
 #include "netw/log.hpp"
 #include "netw/schema_core.hpp"
@@ -66,6 +67,17 @@ int NetwSchema::column(
     }
     if (!can_edit()) {
         return -1;
+    }
+    for (const ObjectID &adopter : adopters) {
+        if (gd::object_of(adopter) != nullptr) {
+            NETW_ERR_V(
+                -1,
+                sys::TABLE,
+                "Schema '%s' is already in use by a live session. Declare "
+                "its columns before the session uses it.",
+                String(name).utf8().get_data()
+            );
+        }
     }
     Column fresh;
     fresh.key = p_key;

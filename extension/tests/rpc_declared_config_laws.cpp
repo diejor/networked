@@ -5,6 +5,7 @@
 #include <godot_cpp/classes/script.hpp>
 
 #include "godot/node.hpp"
+#include "godot/scene_tree.hpp"
 #include "netw/api/context.hpp"
 #include "netw/api/entity.hpp"
 #include "netw/api/loopback.hpp"
@@ -333,8 +334,10 @@ TEST_CASE(
 
     {
         const FaultWatch faults;
-        CHECK(netw::Netw::configure_rpc(Callable(sink, StringName("nope")))
-                  .is_null());
+        CHECK(
+            netw::Netw::configure_rpc(Callable(sink, StringName("nope")))
+                .is_null()
+        );
         NETW_CHECK_EQ(faults.errors_containing(String("'nope'")), int64_t(1));
     }
     {
@@ -348,22 +351,52 @@ TEST_CASE(
     }
     {
         const FaultWatch faults;
-        CHECK(netw::Netw::configure_spawn(Callable(sink, StringName("nope")))
-                  .is_null());
+        CHECK(
+            netw::Netw::configure_spawn(Callable(sink, StringName("nope")))
+                .is_null()
+        );
         NETW_CHECK_EQ(faults.errors(), int64_t(1));
     }
     {
         const FaultWatch faults;
-        CHECK(netw::Netw::configure_signal(Signal(sink, StringName("nope")))
-                  .is_null());
+        CHECK(
+            netw::Netw::configure_signal(Signal(sink, StringName("nope")))
+                .is_null()
+        );
         NETW_CHECK_EQ(faults.errors_containing(String("'nope'")), int64_t(1));
     }
-    CHECK(netw::script::model::get_rpc_options(script, StringName("nope"))
-              .is_null());
-    CHECK(netw::script::model::get_signal_config(script, StringName("nope"))
-              .is_null());
+    CHECK(
+        netw::script::model::get_rpc_options(script, StringName("nope"))
+            .is_null()
+    );
+    CHECK(
+        netw::script::model::get_signal_config(script, StringName("nope"))
+            .is_null()
+    );
 
     memdelete(sink);
+}
+
+TEST_CASE(
+    "[Networked][Rpc][SceneTree] IT2 a mounted node cannot declare an "
+    "RPC and leaves the script's declarations unchanged"
+) {
+    const Ref<Script> script
+        = minted_script("extends Node\nfunc hit() -> void:\n\tpass\n");
+    Node *node = Object::cast_to<Node>(script->call("new"));
+    REQUIRE(node != nullptr);
+    node->set_name("LateRpc");
+    netw::gd::scene_root()->add_child(node);
+    FaultWatch faults;
+    faults.expect_error(
+        "[error][session] Netw.configure_rpc cannot declare 'hit' on "
+        "'LateRpc' after it entered the tree. Call it from _init.",
+        1
+    );
+    CHECK(netw::Netw::configure_rpc(Callable(node, "hit")).is_null());
+    CHECK(netw::script::model::get_rpc_options(script, "hit").is_null());
+    node->get_parent()->remove_child(node);
+    memdelete(node);
 }
 
 } // namespace TestRpcDeclaredConfigLaws

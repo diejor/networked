@@ -19,7 +19,7 @@ The scene an entity belongs to, reached as :ref:`NetwEntity.scene<class_NetwEnti
 Description
 -----------
 
-Tells who is in a multiplayer scene and which players it replicates to. Reach it with :ref:`Netw.scene()<class_Netw_method_scene>` or :ref:`NetwEntity.scene<class_NetwEntity_property_scene>`. An entity declared with :ref:`Netw.configure_scene()<class_Netw_method_configure_scene>` resolves to itself, any other entity to its closest scene ancestor. Each scene has one handle, so ``==`` compares scenes.
+A multiplayer scene is a :ref:`NetwEntity<class_NetwEntity>`, available as :ref:`entity<class_NetwScene_property_entity>`. Reach it with :ref:`Netw.scene()<class_Netw_method_scene>` or :ref:`NetwEntity.scene<class_NetwEntity_property_scene>`. An entity declared with :ref:`Netw.configure_scene()<class_Netw_method_configure_scene>` resolves to itself, any other entity to its closest scene ancestor. Each scene has one handle, so ``==`` compares scenes.
 
 A scene replicates to a player while a body of theirs is in it, or while the player watches it with :ref:`watch()<class_NetwScene_method_watch>`. :ref:`unwatch()<class_NetwScene_method_unwatch>` does not remove a player whose body is still in the scene.
 
@@ -45,6 +45,8 @@ Properties
    | :godot:`Array`\[:ref:`NetwEntity<class_NetwEntity>`\] | :ref:`bodies<class_NetwScene_property_bodies>`             | ``[]``    |
    +-------------------------------------------------------+------------------------------------------------------------+-----------+
    | :godot:`Array`\[:ref:`NetwEntity<class_NetwEntity>`\] | :ref:`entities<class_NetwScene_property_entities>`         | ``[]``    |
+   +-------------------------------------------------------+------------------------------------------------------------+-----------+
+   | :ref:`NetwEntity<class_NetwEntity>`                   | :ref:`entity<class_NetwScene_property_entity>`             |           |
    +-------------------------------------------------------+------------------------------------------------------------+-----------+
    | :godot:`bool`                                         | :ref:`is_declared<class_NetwScene_property_is_declared>`   | ``false`` |
    +-------------------------------------------------------+------------------------------------------------------------+-----------+
@@ -275,6 +277,22 @@ Every body in this scene, in no particular order. A body is removed as soon as i
 - :godot:`Array`\[:ref:`NetwEntity<class_NetwEntity>`\] **get_entities**\ (\ )
 
 Every entity in this scene.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NetwScene_property_entity:
+
+.. rst-class:: classref-property
+
+:ref:`NetwEntity<class_NetwEntity>` **entity** :ref:`🔗<class_NetwScene_property_entity>`
+
+.. rst-class:: classref-property-setget
+
+- :ref:`NetwEntity<class_NetwEntity>` **get_entity**\ (\ )
+
+The :ref:`NetwEntity<class_NetwEntity>` on :ref:`root<class_NetwScene_property_root>`, or ``null`` when no scene was found.
 
 .. rst-class:: classref-item-separator
 

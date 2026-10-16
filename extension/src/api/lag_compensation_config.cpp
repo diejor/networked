@@ -69,10 +69,4 @@ Ref<NetwLagCompensationConfig> NetwLagCompensationConfig::input_gate_deadline(
     return Ref<NetwLagCompensationConfig>(this);
 }
 
-void NetwLagCompensationConfig::copy_values_from(
-    const NetwLagCompensationConfig &p_source
-) {
-    values = p_source.values;
-}
-
 } // namespace netw

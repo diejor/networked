@@ -66,26 +66,15 @@ public:
     );
     static godot::Error configure_admission(const godot::Callable &p_handler);
     static godot::Error configure_transfer(const godot::Callable &p_keep);
-    static godot::Ref<NetwSessionConfig> configure_session(
-        godot::Node *p_node,
-        const godot::Ref<NetwSessionConfig> &p_preset
-        = godot::Ref<NetwSessionConfig>()
-    );
-    static godot::Ref<NetwClockConfig> configure_clock(
-        godot::Node *p_node,
-        const godot::Ref<NetwClockConfig> &p_preset
-        = godot::Ref<NetwClockConfig>()
-    );
+    static godot::Ref<NetwSessionConfig> configure_session(godot::Node *p_node);
+    static godot::Ref<NetwClockConfig> configure_clock(godot::Node *p_node);
     static godot::Ref<NetwLagCompensationConfig> configure_lagcomp(
-        godot::Node *p_node,
-        const godot::Ref<NetwLagCompensationConfig> &p_preset
-        = godot::Ref<NetwLagCompensationConfig>()
+        godot::Node *p_node
     );
 
     static godot::Ref<NetwPropertyConfig> configure_property(
         godot::Node *p_node,
         const godot::StringName &p_property,
-        bool p_warn_late,
         int64_t p_declared_type = -1
     );
     static godot::Ref<NetwMemberConfig> configure_rpc(
@@ -150,9 +139,7 @@ public:
     );
     static godot::Ref<NetwDatabaseConfig> configure_database(
         godot::Node *p_node,
-        const godot::StringName &p_name,
-        const godot::Ref<NetwDatabaseConfig> &p_preset
-        = godot::Ref<NetwDatabaseConfig>()
+        const godot::StringName &p_name
     );
 
     static godot::Ref<NetwEntity> replicate(

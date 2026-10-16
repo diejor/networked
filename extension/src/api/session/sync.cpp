@@ -1916,6 +1916,8 @@ void NetwMultiplayer::adopt_schema_declarations() {
                 "peers cannot read each other. Declare each schema name once.",
                 String(declaration->get_schema_name())
             );
+        } else if (!declaration->adopters.has(gd::instance_id(this))) {
+            declaration->adopters.push_back(gd::instance_id(this));
         }
     }
 }

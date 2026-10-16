@@ -1,15 +1,13 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <class name="NetwDespawnConfig" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
 	<brief_description>
-		How every peer removes a node when it despawns, returned by [method Netw.configure_despawn].
+		Removal behavior for a despawning [NetwEntity].
 	</brief_description>
 	<description>
-		Set in [method Object._init], and shared by every node of the same script. By default the node is freed at once.
+		Settings are shared by nodes using the same script.
 		[codeblock]
 		func _init() -&gt; void:
-		    Netw.configure_despawn(self) \
-		            .before_removal(_play_death_vfx) \
-		            .linger(0.5)
+		    Netw.configure_despawn(self).before_removal(play_death_vfx).linger(0.5)
 		[/codeblock]
 	</description>
 	<tutorials>
@@ -19,14 +17,14 @@
 			<return type="NetwDespawnConfig" />
 			<param index="0" name="callable" type="Callable" />
 			<description>
-				Calls the method of [param callable] on the entity root before it is removed, for example to play an effect. Only the method name is kept. Returns this config.
+				Only the method name of [param callable] is kept. Each [NetwEntity] root calls that method before removal.
 			</description>
 		</method>
 		<method name="linger">
 			<return type="NetwDespawnConfig" />
 			<param index="0" name="seconds" type="float" />
 			<description>
-				Sets [member linger_seconds] and returns this config.
+				Keeps the node in the tree for [param seconds] before freeing it. Sets [member linger_seconds].
 			</description>
 		</method>
 	</methods>

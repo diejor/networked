@@ -6,15 +6,16 @@ using Godot.NativeInterop;
 namespace Networked;
 
 /// <summary>
-/// Which record of which <see cref="NetwDatabase"/> an entity loads and saves.
+/// Saved record settings for a <see cref="NetwEntity"/>.
 /// </summary>
 /// <remarks>
 /// The record includes properties configured with
 /// <see cref="NetwPropertyConfig.Persisted"/> on the root and its children.
-/// Configure from <c>Node._ready</c>.
 /// <code>
-/// func _ready() -&gt; void:
-///     Netw.configure_property(self, &amp;"position", false).persisted(&amp;"where")
+/// @export var account_id: StringName
+///
+/// func _init() -&gt; void:
+///     Netw.configure_property(self, &amp;"position").persisted(&amp;"where")
 ///     Netw.configure_persistence(self) \
 ///             .database(&amp;"saves") \
 ///             .table(&amp;"players") \
@@ -22,18 +23,18 @@ namespace Networked;
 ///             .interval(5.0)
 ///
 /// func account_name() -&gt; StringName:
-///     return entity.name
+///     return account_id
 /// </code>
 /// <para>
-/// Use a <see cref="NetwPersistenceConfig.RecordId"/> that stays the same
-/// between sessions. A peer id changes every time the player joins. The record
-/// is reached through <see cref="NetwEntity.Persistence"/>. <b>Record
+/// <see cref="NetwPersistenceConfig.RecordId"/> must return an id that stays
+/// the same between sessions. Peer ids change when players rejoin.
+/// <see cref="NetwEntity.Persistence"/> reaches the saved record. <b>Record
 /// layout</b> Changes to saved names or types require
 /// <see cref="NetwPersistenceConfig.Migrate"/>. Renaming a property while
 /// keeping its saved name needs no migration.
 /// <code>
-/// func _ready() -&gt; void:
-///     Netw.configure_property(self, &amp;"coins", false).persisted(&amp;"gold")
+/// func _init() -&gt; void:
+///     Netw.configure_property(self, &amp;"coins").persisted(&amp;"gold")
 ///     Netw.configure_persistence(self) \
 ///             .database(&amp;"saves") \
 ///             .table(&amp;"players") \
@@ -67,8 +68,8 @@ public sealed class NetwPersistenceConfig : NetwRefCounted
         NetwApi.MethodBind("NetwPersistenceConfig", "database", 3751466617UL);
 
     /// <summary>
-    /// Names the <see cref="NetwDatabase"/> this entity's record lives in, as
-    /// <see cref="Netw.ConfigureDatabase"/> declared it.
+    /// Names the <see cref="NetwDatabase"/> this <see cref="NetwEntity"/>'s
+    /// record lives in, as <see cref="Netw.ConfigureDatabase"/> declared it.
     /// </summary>
     public NetwPersistenceConfig Database(StringName name)
     {
@@ -88,8 +89,8 @@ public sealed class NetwPersistenceConfig : NetwRefCounted
         NetwApi.MethodBind("NetwPersistenceConfig", "table", 3751466617UL);
 
     /// <summary>
-    /// Groups saved records under <paramref name="name"/>. Roots using the same
-    /// name must declare the same saved properties, types and
+    /// Roots using the same <paramref name="name"/> must declare the same saved
+    /// property names, types and
     /// <see cref="NetwPersistenceConfig.StorageVersion"/>.
     /// </summary>
     public NetwPersistenceConfig Table(StringName name)
@@ -169,9 +170,8 @@ public sealed class NetwPersistenceConfig : NetwRefCounted
         NetwApi.MethodBind("NetwPersistenceConfig", "record_id", 2383254644UL);
 
     /// <summary>
-    /// Called once when the node is ready to obtain a nonempty
-    /// <see cref="StringName"/> identifying its saved record. Use an id that
-    /// stays the same across sessions.
+    /// Calls <paramref name="provider"/> once when the root is ready. Its
+    /// nonempty <see cref="StringName"/> identifies the record across sessions.
     /// </summary>
     public NetwPersistenceConfig RecordId(Callable provider)
     {
@@ -191,8 +191,7 @@ public sealed class NetwPersistenceConfig : NetwRefCounted
         NetwApi.MethodBind("NetwPersistenceConfig", "interval", 3557262514UL);
 
     /// <summary>
-    /// Saves the record every <paramref name="seconds"/> when something
-    /// changed. <c>0.0</c> saves only when you call
+    /// Saves only when a property changed. <c>0.0</c> saves only through
     /// <see cref="NetwPersistence.Save"/>. <b>Server Only.</b>
     /// </summary>
     public NetwPersistenceConfig Interval(double seconds)
@@ -214,10 +213,10 @@ public sealed class NetwPersistenceConfig : NetwRefCounted
             1161358066UL);
 
     /// <summary>
-    /// Whether the server loads the stored record when the entity's node is
-    /// ready. Clients do not receive the entity until the load succeeds or
-    /// finds no record. Call <see cref="NetwPersistence.Load"/> to retry a
-    /// failed load.
+    /// Whether the server loads the stored record when the
+    /// <see cref="NetwEntity"/>'s node is ready. Clients do not receive the
+    /// <see cref="NetwEntity"/> until the load succeeds or finds no record.
+    /// Call <see cref="NetwPersistence.Load"/> to retry a failed load.
     /// </summary>
     public NetwPersistenceConfig LoadOnSpawn(bool enabled = true)
     {

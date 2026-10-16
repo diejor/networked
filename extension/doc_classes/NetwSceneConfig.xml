@@ -4,14 +4,12 @@
 		Makes a node a multiplayer scene.
 	</brief_description>
 	<description>
-		Returned by [method Netw.configure_scene]. Declare it once from the scene root's [method Object._init], the methods can be called in any order.
+		The [NetwScene] label and isolation are read when its root is spawned. Declare them in the root's [method Object._init].
 		[codeblock]
-		extends Node2D
-
 		func _init() -&gt; void:
 		    Netw.configure_scene(self).labeled(&amp;"Level1").isolated()
 		[/codeblock]
-		Every entity below the root belongs to the scene through [member NetwEntity.scene], and [member NetwEntity.is_scene] is [code]true[/code] on the root.
+		Each [NetwEntity] below the root reaches it through [member NetwEntity.scene].
 	</description>
 	<tutorials>
 	</tutorials>
@@ -36,7 +34,7 @@
 			<return type="NetwSceneConfig" />
 			<param index="0" name="stem" type="StringName" />
 			<description>
-				Names the scene for [method Netw.scene]. Defaults to the root node's name.
+				Defaults to this root node's name.
 				[method Netw.scene] fails when several live scenes share the label. Use the node returned by [method Netw.spawn] to select an instance.
 			</description>
 		</method>

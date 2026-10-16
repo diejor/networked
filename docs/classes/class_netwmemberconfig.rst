@@ -21,25 +21,16 @@ Network settings for an RPC, a signal, a spawn function or a property.
 Description
 -----------
 
-Returned by :ref:`Netw.configure_rpc()<class_Netw_method_configure_rpc>`, :ref:`Netw.configure_signal()<class_Netw_method_configure_signal>` and :ref:`Netw.configure_spawn()<class_Netw_method_configure_spawn>`. :ref:`Netw.configure_property()<class_Netw_method_configure_property>` returns a :ref:`NetwPropertyConfig<class_NetwPropertyConfig>`, which extends it. The methods set who may send, how it is sent, and what the receiver does.
+Settings are shared by nodes using the same script. Explicit settings outrank :godot:`@GDScript.@rpc <@GDScript#class_@GDScript_annotation_@rpc>`. Unset settings fall back to that annotation. The server can always call an RPC.
 
 ::
 
     func _init() -> void:
-        Netw.configure_rpc(self.fire).unreliable().controller()
-        Netw.configure_signal(self.exploded).any_peer()
-        Netw.configure_spawn(self._spawn_bullet).quantize(dir_q)
+        Netw.configure_rpc(fire).unreliable().controller()
+        Netw.configure_signal(exploded).any_peer()
+        Netw.configure_spawn(make_bullet).quantize(direction_q)
 
-\ A setting made here outranks the method's ``@rpc`` annotation, and a setting left out falls back to it. The server may always call an RPC, whatever its policy.
-
-Settings are stored per script, so calling this in :godot:`Object._init() <Object#class_Object_private_method__init>` of every instance is fine. A warning is pushed only when two calls set different values.
-
-\ **Note:** these methods return a **NetwMemberConfig**, so call :ref:`NetwPropertyConfig<class_NetwPropertyConfig>` methods first in a chain.
-
-::
-
-    Netw.configure_property(self, &"position").state().quantize(pos_q)   # works
-    Netw.configure_property(self, &"position").quantize(pos_q).state()   # state() is not found
+\ Call :ref:`NetwPropertyConfig<class_NetwPropertyConfig>` methods before chaining these methods, which return **NetwMemberConfig**.
 
 .. rst-class:: classref-reftable-group
 
@@ -355,7 +346,7 @@ Set by :ref:`reliable()<class_NetwMemberConfig_method_reliable>` and :ref:`unrel
 - |void| **set_write_policy**\ (\ value\: :ref:`Policy<enum_NetwMemberConfig_Policy>`\ )
 - :ref:`Policy<enum_NetwMemberConfig_Policy>` **get_write_policy**\ (\ )
 
-Set by :ref:`authority()<class_NetwMemberConfig_method_authority>`, :ref:`controller()<class_NetwMemberConfig_method_controller>`, :ref:`any_peer()<class_NetwMemberConfig_method_any_peer>` and :ref:`server()<class_NetwMemberConfig_method_server>`. An RPC with no policy set takes it from its ``@rpc`` annotation, and one without that annotation accepts calls from the server only.
+Who may send it. Set by :ref:`authority()<class_NetwMemberConfig_method_authority>`, :ref:`controller()<class_NetwMemberConfig_method_controller>`, :ref:`any_peer()<class_NetwMemberConfig_method_any_peer>` and :ref:`server()<class_NetwMemberConfig_method_server>`. Unset RPC settings fall back to :godot:`@GDScript.@rpc <@GDScript#class_@GDScript_annotation_@rpc>`.
 
 .. rst-class:: classref-section-separator
 
@@ -372,7 +363,7 @@ Method Descriptions
 
 :ref:`NetwMemberConfig<class_NetwMemberConfig>` **any_peer**\ (\ ) :ref:`🔗<class_NetwMemberConfig_method_any_peer>`
 
-Any peer may send it. Only use it when a cheating client cannot do harm.
+Any peer may send it.
 
 .. rst-class:: classref-item-separator
 
@@ -396,7 +387,7 @@ Only the node's multiplayer authority may send it.
 
 :ref:`NetwMemberConfig<class_NetwMemberConfig>` **call_local**\ (\ ) :ref:`🔗<class_NetwMemberConfig_method_call_local>`
 
-The signal or RPC also runs on the sender. The default for :ref:`Netw.configure_signal()<class_Netw_method_configure_signal>`. Not valid on a property.
+Enabled by default for :ref:`Netw.configure_signal()<class_Netw_method_configure_signal>`. Invalid for properties.
 
 .. rst-class:: classref-item-separator
 
@@ -408,7 +399,7 @@ The signal or RPC also runs on the sender. The default for :ref:`Netw.configure_
 
 :ref:`NetwMemberConfig<class_NetwMemberConfig>` **call_remote**\ (\ ) :ref:`🔗<class_NetwMemberConfig_method_call_remote>`
 
-The signal or RPC only runs on other peers. The default for :ref:`Netw.configure_rpc()<class_Netw_method_configure_rpc>`. Not valid on a property.
+Enabled by default for :ref:`Netw.configure_rpc()<class_Netw_method_configure_rpc>`. Invalid for properties.
 
 .. rst-class:: classref-item-separator
 
@@ -432,7 +423,7 @@ Only the :ref:`NetwEntity.controller<class_NetwEntity_property_controller>` may 
 
 :ref:`NetwMemberConfig<class_NetwMemberConfig>` **defer_until**\ (\ sig\: :godot:`Signal`\ ) :ref:`🔗<class_NetwMemberConfig_method_defer_until>`
 
-A received call waits until ``sig`` is emitted on the node, such as ``self.ready``.
+Received calls wait for a signal with ``sig``'s name on the receiving :godot:`Node`. Only the signal name is stored.
 
 .. rst-class:: classref-item-separator
 
@@ -473,7 +464,7 @@ Returns ``true`` when only :ref:`interpolate()<class_NetwMemberConfig_method_int
 
 :godot:`bool` **is_policy_declared**\ (\ ) |const| :ref:`🔗<class_NetwMemberConfig_method_is_policy_declared>`
 
-Returns ``true`` when :ref:`write_policy<class_NetwMemberConfig_property_write_policy>` was set, even to its default.
+``true`` when :ref:`write_policy<class_NetwMemberConfig_property_write_policy>` was set, even to its default.
 
 .. rst-class:: classref-item-separator
 
@@ -485,7 +476,7 @@ Returns ``true`` when :ref:`write_policy<class_NetwMemberConfig_property_write_p
 
 :godot:`bool` **is_transfer_declared**\ (\ ) |const| :ref:`🔗<class_NetwMemberConfig_method_is_transfer_declared>`
 
-Returns ``true`` when :ref:`transfer_mode<class_NetwMemberConfig_property_transfer_mode>` was set, even to its default.
+``true`` when :ref:`transfer_mode<class_NetwMemberConfig_property_transfer_mode>` was set, even to its default.
 
 .. rst-class:: classref-item-separator
 
@@ -514,7 +505,7 @@ Compresses each argument with one :ref:`NetwQuantize<class_NetwQuantize>`, in or
 
 :ref:`NetwMemberConfig<class_NetwMemberConfig>` **reliable**\ (\ ) :ref:`🔗<class_NetwMemberConfig_method_reliable>`
 
-Send reliably. The default.
+Sends reliably.
 
 .. rst-class:: classref-item-separator
 
@@ -538,7 +529,7 @@ Only the server may send it.
 
 :ref:`NetwMemberConfig<class_NetwMemberConfig>` **unreliable**\ (\ ) :ref:`🔗<class_NetwMemberConfig_method_unreliable>`
 
-Send unreliably.
+Sends unreliably.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

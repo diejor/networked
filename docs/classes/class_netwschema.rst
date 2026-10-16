@@ -19,9 +19,7 @@ A named list of typed columns.
 Description
 -----------
 
-Declare it in a ``static var`` beside the code that writes it. Every peer built from the same scripts ends up with the same columns in the same order.
-
-Each column method returns the column's index, which is how a writer and a reader name the column. :ref:`NetwSession.table()<class_NetwSession_method_table>` opens the replicated table a session builds from the schema.
+Finish declaring columns before a session uses the **NetwSchema**. Column methods return indices for reading and writing :ref:`NetwTable<class_NetwTable>` values.
 
 ::
 
@@ -31,16 +29,12 @@ Each column method returns the column's index, which is how a writer and a reade
             &"pos",
             NetwQuantizeScalar.new().limits(-512.0, 512.0).step(0.03),
         )
-        static var vel := schema.vector3(&"vel")   # no quantizer, sent as raw bytes
+        static var vel := schema.vector3(&"vel")
         static var hp  := schema.u16(&"hp")
 
-    @onready var mobs := Netw.session(self).table(Mobs.schema.schema_name)
+    @onready var mobs: NetwTable = Netw.session(self).table(Mobs.schema.schema_name)
 
-\ A column with no quantizer is sent as a raw copy of its buffer, which is the cheapest to encode and decode. Add a quantizer to the columns where bandwidth matters.
-
-A schema returned by :ref:`NetwPersistence.schema<class_NetwPersistence_property_schema>` cannot be changed.
-
-The same schema also types the records a :ref:`NetwDatabase<class_NetwDatabase>` reads and writes directly. A schema used only for those calls :ref:`replicated()<class_NetwSchema_method_replicated>` with ``false`` so no table is created. :ref:`string()<class_NetwSchema_method_string>` and :ref:`variant()<class_NetwSchema_method_variant>` columns work for saves but not for replicated tables. An entity's own record takes its columns from :ref:`NetwPropertyConfig.persisted()<class_NetwPropertyConfig_method_persisted>` and needs no schema.
+\ :ref:`NetwDatabase<class_NetwDatabase>` stores records directly. :ref:`NetwPropertyConfig.persisted()<class_NetwPropertyConfig_method_persisted>` defines a :ref:`NetwEntity<class_NetwEntity>`'s saved properties.
 
 .. rst-class:: classref-reftable-group
 
@@ -196,9 +190,7 @@ Declares a :ref:`NetwMultiplayer.COLUMN_COLOR<class_NetwMultiplayer_constant_COL
 
 :godot:`int` **column**\ (\ key\: :godot:`StringName`, type\: :ref:`ColumnType<enum_NetwMultiplayer_ColumnType>`, stride\: :godot:`int` = 1, quantizer\: :ref:`NetwQuantize<class_NetwQuantize>` = null\ ) :ref:`🔗<class_NetwSchema_method_column>`
 
-Appends a column of ``type`` and returns its index. The typed methods such as :ref:`vector3()<class_NetwSchema_method_vector3>` are this call with the type filled in.
-
-Declaring a ``key`` again with the same ``type`` and ``stride`` returns the index it already has, so a script reload is safe. Declaring it with a different shape returns ``-1`` and appends nothing.
+Declaring ``key`` again with the same ``type`` and ``stride`` returns its existing index. A different shape returns ``-1`` and appends nothing.
 
 .. rst-class:: classref-item-separator
 
@@ -222,7 +214,7 @@ Builds a schema under ``name`` without adding it to the schema registry. Use :re
 
 :ref:`NetwSchema<class_NetwSchema>` **declare**\ (\ name\: :godot:`StringName`\ ) |static| :ref:`🔗<class_NetwSchema_method_declare>`
 
-Returns the registered schema named ``name``, creating it if needed, or ``null`` when the name is empty. Calling it twice with one name returns the same schema, so several classes can add columns to it. :ref:`Netw.configure_schema()<class_Netw_method_configure_schema>` calls this.
+Calls with the same ``name`` share one **NetwSchema**. Empty names are refused.
 
 .. rst-class:: classref-item-separator
 
@@ -318,7 +310,7 @@ Declares a :ref:`NetwMultiplayer.COLUMN_I64<class_NetwMultiplayer_constant_COLUM
 
 :godot:`bool` **is_reliable**\ (\ ) |const| :ref:`🔗<class_NetwSchema_method_is_reliable>`
 
-Whether this schema's table sends its commits reliably, as :ref:`reliable()<class_NetwSchema_method_reliable>` set it.
+Whether this **NetwSchema**'s :ref:`NetwTable<class_NetwTable>` sends commits reliably. Set by :ref:`reliable()<class_NetwSchema_method_reliable>`.
 
 .. rst-class:: classref-item-separator
 
@@ -330,7 +322,7 @@ Whether this schema's table sends its commits reliably, as :ref:`reliable()<clas
 
 :godot:`bool` **is_replicated**\ (\ ) |const| :ref:`🔗<class_NetwSchema_method_is_replicated>`
 
-Whether a session creates a replicated table from this schema, as :ref:`replicated()<class_NetwSchema_method_replicated>` set it.
+Whether a session creates a replicated :ref:`NetwTable<class_NetwTable>` from this **NetwSchema**. Set by :ref:`replicated()<class_NetwSchema_method_replicated>`.
 
 .. rst-class:: classref-item-separator
 
@@ -342,9 +334,14 @@ Whether a session creates a replicated table from this schema, as :ref:`replicat
 
 :ref:`NetwSchema<class_NetwSchema>` **migrate**\ (\ from_version\: :godot:`int`, step\: :godot:`Callable`\ ) :ref:`🔗<class_NetwSchema_method_migrate>`
 
-Sets the function that upgrades a record saved under ``from_version`` to the next version, and returns this schema.
+A read runs one ``step`` per saved version up to :ref:`storage_version()<class_NetwSchema_method_storage_version>`. A missing step refuses the read.
 
-\ ``step`` takes a :godot:`Dictionary` and returns a :godot:`Dictionary`. A save two versions behind runs two steps in order, and a read with a missing step fails.
+.. code:: text
+
+    step(values: Dictionary) -> Dictionary
+
+    Dictionary
+    ┖╴saved column name  Variant  the value stored under that name
 
 ::
 
@@ -381,9 +378,7 @@ Declares a :ref:`NetwMultiplayer.COLUMN_QUATERNION<class_NetwMultiplayer_constan
 
 :ref:`NetwSchema<class_NetwSchema>` **register**\ (\ ) :ref:`🔗<class_NetwSchema_method_register>`
 
-Adds this schema to the schema registry if it is not there, and returns it.
-
-A ``static var`` runs only once, so call this from :godot:`Node._ready() <Node#class_Node_private_method__ready>` when the registry may have been reset since. It does nothing when the schema is already registered.
+Registers this **NetwSchema** if no **NetwSchema** with the same :ref:`schema_name<class_NetwSchema_property_schema_name>` is registered.
 
 .. rst-class:: classref-item-separator
 
@@ -395,9 +390,7 @@ A ``static var`` runs only once, so call this from :godot:`Node._ready() <Node#c
 
 :ref:`NetwSchema<class_NetwSchema>` **reliable**\ (\ value\: :godot:`bool` = true\ ) :ref:`🔗<class_NetwSchema_method_reliable>`
 
-Sends this schema's table commits reliably, and returns this schema.
-
-Use it for a table that changes rarely, where a lost packet would not be fixed by the next commit. A table committed every tick is fine unreliable.
+Use for a :ref:`NetwTable<class_NetwTable>` whose next commit cannot repair a lost update.
 
 .. rst-class:: classref-item-separator
 
@@ -409,7 +402,7 @@ Use it for a table that changes rarely, where a lost packet would not be fixed b
 
 :ref:`NetwSchema<class_NetwSchema>` **replicated**\ (\ value\: :godot:`bool` = true\ ) :ref:`🔗<class_NetwSchema_method_replicated>`
 
-Sets whether a session creates a replicated table from this schema, and returns this schema. Pass ``false`` for a schema that only describes saved records.
+Pass ``false`` for a **NetwSchema** used only by :ref:`NetwDatabase<class_NetwDatabase>`.
 
 .. rst-class:: classref-item-separator
 
@@ -420,8 +413,6 @@ Sets whether a session creates a replicated table from this schema, and returns 
 .. rst-class:: classref-method
 
 :ref:`NetwSchema<class_NetwSchema>` **storage_version**\ (\ version\: :godot:`int`\ ) :ref:`🔗<class_NetwSchema_method_storage_version>`
-
-Sets the version saved records of this schema carry, and returns this schema. The default is ``1``.
 
 Raise it when the saved columns change, and add a :ref:`migrate()<class_NetwSchema_method_migrate>` step from the previous version. It does not affect replication, so peers on different storage versions still connect.
 

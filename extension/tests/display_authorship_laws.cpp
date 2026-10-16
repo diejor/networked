@@ -92,7 +92,7 @@ class AuthorshipRun {
 
     uint64_t declare_stream(SetBook &r_sets, Node *p_node) const {
         Ref<NetwPropertyConfig> config
-            = Netw::configure_property(p_node, StringName("position"), true);
+            = Netw::configure_property(p_node, StringName("position"));
         Ref<NetwInterpolate> spec;
         spec.instantiate();
         config->interpolate(
@@ -374,7 +374,7 @@ RigidBody2D *a_state_body(NetwMultiplayer *p_core, Node *p_branch, double p_x) {
     entity->get_display()->set_visual_root(NodePath("Visual"));
 
     Ref<NetwPropertyConfig> config
-        = Netw::configure_property(body, StringName("position"), true);
+        = Netw::configure_property(body, StringName("position"));
     Ref<NetwInterpolate> spec;
     spec.instantiate();
     config->interpolate(

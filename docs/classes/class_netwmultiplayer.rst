@@ -246,8 +246,6 @@ Methods
    +---------------------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | :ref:`NetwPromise<class_NetwPromise>`                               | :ref:`database_close<class_NetwMultiplayer_method_database_close>`\ (\ database\: :godot:`RID`\ )                                                                                                                                                                                                                                                                                                                                                                                       |
    +---------------------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`RID`                                                        | :ref:`database_create<class_NetwMultiplayer_method_database_create>`\ (\ name\: :godot:`StringName`, config\: :ref:`NetwDatabaseConfig<class_NetwDatabaseConfig>`\ )                                                                                                                                                                                                                                                                                                                    |
-   +---------------------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | :ref:`NetwPromise<class_NetwPromise>`                               | :ref:`database_delete_slot<class_NetwMultiplayer_method_database_delete_slot>`\ (\ database\: :godot:`RID`, slot\: :godot:`StringName`\ )                                                                                                                                                                                                                                                                                                                                               |
    +---------------------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | :ref:`NetwPromise<class_NetwPromise>`                               | :ref:`database_erase<class_NetwMultiplayer_method_database_erase>`\ (\ database\: :godot:`RID`, schema\: :godot:`RID`, id\: :godot:`StringName`\ )                                                                                                                                                                                                                                                                                                                                      |
@@ -4725,18 +4723,6 @@ Returns the **NetwMultiplayer** that ``node`` belongs to.
 :ref:`NetwPromise<class_NetwPromise>` **database_close**\ (\ database\: :godot:`RID`\ ) :ref:`🔗<class_NetwMultiplayer_method_database_close>`
 
 Closes ``database`` once its pending operations finish. The promise resolves with an :godot:`@GlobalScope.Error <@GlobalScope#enum_@globalscope_Error>`, see :ref:`NetwDatabase.close()<class_NetwDatabase_method_close>`.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwMultiplayer_method_database_create:
-
-.. rst-class:: classref-method
-
-:godot:`RID` **database_create**\ (\ name\: :godot:`StringName`, config\: :ref:`NetwDatabaseConfig<class_NetwDatabaseConfig>`\ ) :ref:`🔗<class_NetwMultiplayer_method_database_create>`
-
-Declares a database named ``name`` from ``config`` and returns its :godot:`RID`. A name already declared returns the :godot:`RID` it has, or an invalid one when ``config`` names a different backend.
 
 .. rst-class:: classref-item-separator
 

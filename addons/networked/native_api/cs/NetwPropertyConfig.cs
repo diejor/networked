@@ -6,31 +6,21 @@ using Godot.NativeInterop;
 namespace Networked;
 
 /// <summary>
-/// Declares how a script variable is replicated, reached by
-/// <see cref="Netw.ConfigureProperty"/>.
+/// Replication and persistence settings for a property.
 /// </summary>
 /// <remarks>
-/// Mark a property with <see cref="NetwPropertyConfig.State"/>,
-/// <see cref="NetwPropertyConfig.Input"/> or
-/// <see cref="NetwPropertyConfig.Broadcast"/>, and every change to it is sent
-/// each tick. There is no send call to make.
+/// <see cref="NetwPropertyConfig.State"/>,
+/// <see cref="NetwPropertyConfig.Input"/> and
+/// <see cref="NetwPropertyConfig.Broadcast"/> send changed values each tick.
+/// Other properties are sent through <see cref="Netw.SyncProperty"/>.
 /// <code>
 /// func _init() -&gt; void:
-///     Netw.configure_property(self, &amp;"position").state().quantize(pos_q)
+///     Netw.configure_property(self, &amp;"position").state().quantize(position_q)
 ///     Netw.configure_property(self, &amp;"move_dir").input()
 ///     Netw.configure_property(self, &amp;"aim_dir").broadcast()
-///
-/// func _physics_process(_dt: float) -&gt; void:
-///     move_dir = Input.get_vector("left", "right", "up", "down")
-///     aim_dir = (get_global_mouse_position() - position).normalized()
-///     # the next tick sends every changed property
 /// </code>
 /// <para>
-/// <see cref="NetwMultiplayer.RecordKind.State"/>,
-/// <see cref="NetwMultiplayer.RecordKind.Input"/> and
-/// <see cref="NetwMultiplayer.RecordKind.Broadcast"/> name the three kinds. A
-/// property with none of them is sent only when <see cref="Netw.SyncProperty"/>
-/// is called. <see cref="NetwPropertyConfig.Volatile"/>,
+/// <see cref="NetwPropertyConfig.Volatile"/>,
 /// <see cref="NetwPropertyConfig.Retained"/>,
 /// <see cref="NetwPropertyConfig.Epsilon"/> and
 /// <see cref="NetwPropertyConfig.Persisted"/> apply to one property.
@@ -39,25 +29,19 @@ namespace Networked;
 /// <see cref="NetwPropertyConfig.Windowed"/>,
 /// <see cref="NetwPropertyConfig.Audience"/> and
 /// <see cref="NetwPropertyConfig.Masked"/> apply to every property of the same
-/// kind on the script, so the last call wins. <b>Rigid bodies</b> When the
-/// entity root is a <see cref="RigidBody3D"/> or a <see cref="RigidBody2D"/>,
-/// <c>position</c>, <c>quaternion</c> (<c>rotation</c> in 2D),
-/// <c>linear_velocity</c>, <c>angular_velocity</c> and <c>sleeping</c> read and
-/// write the body's physics state. <c>position</c> stays relative to the
-/// parent. While <c>RigidBody3D.freeze</c> is on, position and rotation use the
-/// node transform.
+/// kind on the script. Give them consistent values. <b>Rigid bodies</b> When
+/// the <see cref="NetwEntity"/> root is a <see cref="RigidBody3D"/> or a
+/// <see cref="RigidBody2D"/>, <c>position</c>, <c>quaternion</c>
+/// (<c>rotation</c> in 2D), <c>linear_velocity</c>, <c>angular_velocity</c> and
+/// <c>sleeping</c> read and write the body's physics state. <c>position</c>
+/// stays relative to the parent. While <c>RigidBody3D.freeze</c> is on,
+/// position and rotation use the node transform.
 /// <code>
 /// func _init() -&gt; void:
 ///     Netw.configure_property(self, &amp;"position").state()
 ///     Netw.configure_property(self, &amp;"quaternion").state()
 ///     Netw.configure_property(self, &amp;"linear_velocity").state()
 /// </code>
-/// </para>
-/// <para>
-/// <b>Note:</b> a <see cref="NetwMemberConfig"/> method such as
-/// <see cref="NetwMemberConfig.CallLocal"/> returns a
-/// <see cref="NetwMemberConfig"/>, so call the methods of this class first in a
-/// chain.
 /// </para>
 /// </remarks>
 public sealed class NetwPropertyConfig : NetwMemberConfig
@@ -123,7 +107,7 @@ public sealed class NetwPropertyConfig : NetwMemberConfig
     public enum AudienceEnum : long
     {
         /// <summary>
-        /// Sent to every peer that sees the entity.
+        /// Sent to every peer that sees the <see cref="NetwEntity"/>.
         /// </summary>
         Public = 0,
         /// <summary>
@@ -258,8 +242,7 @@ public sealed class NetwPropertyConfig : NetwMemberConfig
             2586408642UL);
 
     /// <summary>
-    /// Always <c>true</c>. Tells this class apart from a
-    /// <see cref="NetwMemberConfig"/> for an RPC or a signal.
+    /// Identifies this configuration as a property configuration.
     /// </summary>
     public bool IsProperty
     {
@@ -806,15 +789,14 @@ public sealed class NetwPropertyConfig : NetwMemberConfig
 
     /// <summary>
     /// The server owns the value, every peer sees it, and lag compensation can
-    /// rewind it. A client predicting this entity is corrected against it,
-    /// within <see cref="NetwPropertyConfig.Epsilon"/>.
+    /// rewind it. A client predicting this <see cref="NetwEntity"/> is
+    /// corrected against it, within <see cref="NetwPropertyConfig.Epsilon"/>.
     /// <code>
     /// func _init() -&gt; void:
     ///     Netw.configure_property(self, &amp;"position").state().quantize(pos_q)
     ///
     /// func _physics_process(dt: float) -&gt; void:
     ///     position += velocity * dt
-    ///     # on the server that is enough, every client's copy follows
     /// </code>
     /// </summary>
     public NetwPropertyConfig State()
@@ -837,7 +819,6 @@ public sealed class NetwPropertyConfig : NetwMemberConfig
     /// func _physics_process(dt: float) -&gt; void:
     ///     if entity.is_controlled_locally:
     ///         move_dir = Input.get_vector("left", "right", "up", "down")
-    ///     # both peers run this, the client predicts and the server decides
     ///     velocity = move_dir * SPEED
     /// </code>
     /// <para>
@@ -867,11 +848,10 @@ public sealed class NetwPropertyConfig : NetwMemberConfig
     ///
     /// func _process(_dt: float) -&gt; void:
     ///     aim_dir = (get_global_mouse_position() - position).normalized()
-    ///     # every other peer's copy of this node follows
     /// </code>
     /// <para>
     /// Add <see cref="NetwPropertyConfig.Masked"/> when many peers watch the
-    /// same entity.
+    /// same <see cref="NetwEntity"/>.
     /// </para>
     /// </summary>
     public NetwPropertyConfig Broadcast()
@@ -885,8 +865,7 @@ public sealed class NetwPropertyConfig : NetwMemberConfig
         NetwApi.MethodBind("NetwPropertyConfig", "volatile", 1162647290UL);
 
     /// <summary>
-    /// Sends changes unreliably, and only the newest value counts. Use it for a
-    /// value that changes every tick. This is the default.
+    /// Enabled by default.
     /// </summary>
     public NetwPropertyConfig Volatile()
     {
@@ -900,9 +879,9 @@ public sealed class NetwPropertyConfig : NetwMemberConfig
 
     /// <summary>
     /// Sends changes reliably. Use it for a value that changes rarely and must
-    /// not be missed. It cannot be used on the state of a predicted entity.
+    /// not be missed. It cannot be used on the state of a predicted
+    /// <see cref="NetwEntity"/>.
     /// <code>
-    /// # a lost "stunned = true" would never be corrected
     /// Netw.configure_property(self, &amp;"stunned").state().retained()
     /// </code>
     /// </summary>
@@ -938,7 +917,6 @@ public sealed class NetwPropertyConfig : NetwMemberConfig
     /// properties, so a difference in it never causes a correction. A
     /// correction still writes it.
     /// <code>
-    /// # recomputed from velocity every tick
     /// Netw.configure_property(self, &amp;"speed").state().derived()
     /// </code>
     /// </summary>
@@ -997,7 +975,6 @@ public sealed class NetwPropertyConfig : NetwMemberConfig
     /// When a correction restores this value, advances it to the present using
     /// the rate in <paramref name="channel"/>.
     /// <code>
-    /// # the body integrates position from velocity, so a restore advances along it
     /// Netw.configure_property(self, &amp;"position").state().carry_along(&amp;"velocity")
     /// </code>
     /// <para>
@@ -1033,10 +1010,10 @@ public sealed class NetwPropertyConfig : NetwMemberConfig
     /// disabled.
     /// <code>
     /// func _init() -&gt; void:
-    ///     Netw.configure_property(self, &amp;"spin").state().carry_step(_carry_spin)
+    ///     Netw.configure_property(self, &amp;"spin").state().carry_step(carry_spin)
     ///
-    /// func _carry_spin(value: Vector3, ctx: NetwPredictCarryContext) -&gt; Vector3:
-    ///     return value + _drive_axis(ctx.state) * ctx.state[&amp;"speed"] * ctx.delta
+    /// func carry_spin(value: Vector3, ctx: NetwPredictCarryContext) -&gt; Vector3:
+    ///     return value + drive_axis(ctx.state) * ctx.state[&amp;"speed"] * ctx.delta
     /// </code>
     /// <para>
     /// <paramref name="step"/> must be a method or lambda of a
@@ -1121,9 +1098,9 @@ public sealed class NetwPropertyConfig : NetwMemberConfig
     /// every correction this value causes.
     /// <code>
     /// Netw.configure_property(self, &amp;"position").state() \
-    ///         .carry_along(&amp;"velocity").teleport_at(3.0)      # metres
+    ///         .carry_along(&amp;"velocity").teleport_at(3.0)
     /// Netw.configure_property(self, &amp;"heading").state() \
-    ///         .carry_along(&amp;"angular_speed").teleport_at(1.0)  # radians
+    ///         .carry_along(&amp;"angular_speed").teleport_at(1.0)
     /// </code>
     /// </summary>
     public NetwPropertyConfig TeleportAt(double distance)
@@ -1162,8 +1139,7 @@ public sealed class NetwPropertyConfig : NetwMemberConfig
         NetwApi.MethodBind("NetwPropertyConfig", "on_change", 1162647290UL);
 
     /// <summary>
-    /// Sends properties of this kind only when one changed. This is the
-    /// default.
+    /// Enabled by default.
     /// </summary>
     public NetwPropertyConfig OnChange()
     {
@@ -1180,7 +1156,6 @@ public sealed class NetwPropertyConfig : NetwMemberConfig
     /// even when nothing changed, so a peer that missed a change catches up.
     /// <see cref="NetwPropertyConfig.Input"/> properties ignore it.
     /// <code>
-    /// # a lost "stunned" change heals within a second at 60 ticks
     /// Netw.configure_property(self, &amp;"stunned").state().heartbeat(60)
     /// </code>
     /// </summary>
@@ -1203,7 +1178,6 @@ public sealed class NetwPropertyConfig : NetwMemberConfig
     /// Each send also carries the last <paramref name="samples"/> ticks of
     /// values, so a lost packet is recovered from the next one.
     /// <code>
-    /// # input() sends 2, and 3 survives two lost packets in a row
     /// Netw.configure_property(self, &amp;"motion").input().windowed(3)
     /// </code>
     /// </summary>
@@ -1245,9 +1219,9 @@ public sealed class NetwPropertyConfig : NetwMemberConfig
 
     /// <summary>
     /// Sends each peer only the properties that changed since it last
-    /// confirmed, which saves bandwidth when many peers watch one entity.
+    /// confirmed, which saves bandwidth when many peers watch one
+    /// <see cref="NetwEntity"/>.
     /// <code>
-    /// # 50 spectators, each gets only what changed for them
     /// Netw.configure_property(self, &amp;"position").broadcast().masked()
     /// </code>
     /// </summary>
@@ -1262,20 +1236,18 @@ public sealed class NetwPropertyConfig : NetwMemberConfig
         NetwApi.MethodBind("NetwPropertyConfig", "persisted", 2664636520UL);
 
     /// <summary>
-    /// Saves the server's value of this property into the entity's record,
-    /// whether or not it is also replicated. The saved column is named after
-    /// the property, or <paramref name="savedColumnName"/> when given, so a
-    /// property renamed later keeps its stored records by passing its old name.
-    /// Two properties of one entity may not share a saved column name.
+    /// Saves the server's value of this property into the
+    /// <see cref="NetwEntity"/>'s record, whether or not it is also replicated.
+    /// The saved column is named after the property, or
+    /// <paramref name="savedColumnName"/> when given, so a property renamed
+    /// later keeps its stored records by passing its old name. Two properties
+    /// of one <see cref="NetwEntity"/> may not share a saved column name.
     /// <code>
-    /// # never replicated, the server still saves it
-    /// Netw.configure_property(self, &amp;"gold", false).persisted()
+    /// Netw.configure_property(self, &amp;"gold").persisted()
     ///
-    /// # replicated and saved as "where"
     /// Netw.configure_property(self, &amp;"position") \
     ///         .state().persisted(&amp;"where")
     ///
-    /// # sent by the client, saved by the server
     /// Netw.configure_property(self, &amp;"loadout").input().persisted()
     /// </code>
     /// <para>

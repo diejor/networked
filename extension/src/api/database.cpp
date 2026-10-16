@@ -77,7 +77,7 @@ Ref<NetwDatabase> NetwDatabase::named(
     NetwMultiplayer *p_session,
     const StringName &p_name
 ) {
-    const RID found = p_session->database_find(p_name);
+    const RID found = p_session->database_lookup(p_name);
     if (!found.is_valid()) {
         NETW_ERROR(
             sys::TABLE,

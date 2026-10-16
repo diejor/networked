@@ -6,14 +6,12 @@
 [ext_resource type="PackedScene" uid="uid://bqi7mvxdnvgch" path="res://examples/multiple_levels/game/level1.tscn" id="17_level1"]
 [ext_resource type="PackedScene" uid="uid://cthf7wjwb4n77" path="res://examples/multiple_levels/game/level2.tscn" id="18_level2"]
 [ext_resource type="PackedScene" uid="uid://bo5hexvshy77x" path="res://examples/multiple_levels/game/player.tscn" id="19_avatar"]
-[ext_resource type="FileSystemDatabase" path="res://examples/multiple_levels/game/save_database.tres" id="20_saves"]
 
 [node name="Main" type="Node2D" unique_id=1724093845]
 script = ExtResource("16_session")
 level_1 = ExtResource("17_level1")
 level_2 = ExtResource("18_level2")
 avatar = ExtResource("19_avatar")
-saves = ExtResource("20_saves")
 
 [node name="LobbyProviders" type="Node" parent="." unique_id=1636047546]
 

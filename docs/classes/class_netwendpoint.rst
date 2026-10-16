@@ -170,9 +170,7 @@ Property Descriptions
 
 - :godot:`String` **get_address**\ (\ )
 
-.. container:: contribute
-
-	There is currently no description for this property. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+The address passed to :ref:`NetwConnection.add()<class_NetwConnection_method_add>` or reported by its :ref:`LobbyDirectory<class_LobbyDirectory>`.
 
 .. rst-class:: classref-item-separator
 
@@ -188,9 +186,7 @@ Property Descriptions
 
 - :godot:`String` **get_display_name**\ (\ )
 
-.. container:: contribute
-
-	There is currently no description for this property. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+The server name shown in a server browser.
 
 .. rst-class:: classref-item-separator
 
@@ -238,9 +234,7 @@ What the server last advertised, or a default :ref:`NetwServerInfo<class_NetwSer
 
 - :godot:`StringName` **get_peer_class**\ (\ )
 
-.. container:: contribute
-
-	There is currently no description for this property. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+The :godot:`MultiplayerPeer` class used to connect to this server.
 
 .. rst-class:: classref-item-separator
 

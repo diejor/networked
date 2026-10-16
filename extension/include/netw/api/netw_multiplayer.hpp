@@ -482,9 +482,14 @@ private:
         int64_t p_route,
         int64_t p_txn
     );
+    struct DatabaseDeclaration {
+        godot::StringName name;
+        godot::ObjectID scope;
+        godot::Ref<NetwDatabaseConfig> config;
+    };
+
     persist::Databases databases;
-    godot::HashMap<godot::StringName, godot::Ref<NetwDatabaseConfig>>
-        database_configs;
+    godot::LocalVector<DatabaseDeclaration> database_declarations;
     godot::HashMap<godot::RID, godot::Ref<godot::RefCounted>> database_handles;
     bool databases_bound = false;
 
@@ -3597,11 +3602,14 @@ public:
 
     godot::RID schema_of_declaration(const godot::Ref<NetwSchema> &p_schema);
 
-    godot::RID database_create(
+    godot::RID database_declare(
+        godot::Node *p_scope,
         const godot::StringName &p_name,
         const godot::Ref<NetwDatabaseConfig> &p_config
     );
+    void database_install_from(godot::Node *p_scope);
     godot::RID database_find(const godot::StringName &p_name) const;
+    godot::RID database_lookup(const godot::StringName &p_name);
     godot::Ref<NetwDatabase> database_handle(const godot::RID &p_database);
     godot::Ref<NetwPromise> database_open(
         const godot::RID &p_database,
@@ -3667,8 +3675,10 @@ public:
         const godot::RID &p_schema,
         const godot::StringName &p_id
     );
-    godot::Ref<NetwDatabaseBackend> database_backend_of(
-        const godot::RID &p_database
+    bool database_declaration_live(const DatabaseDeclaration &p_held) const;
+    godot::Error database_backend_of(
+        const godot::RID &p_database,
+        godot::Ref<NetwDatabaseBackend> &r_backend
     ) const;
 
     persist::Bindings *get_bindings();

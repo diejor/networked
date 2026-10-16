@@ -23,6 +23,9 @@ public:
     };
 
 private:
+    friend class NetwMultiplayer;
+
+    godot::LocalVector<godot::ObjectID> adopters;
     godot::StringName name;
     godot::LocalVector<Column> columns;
     godot::Dictionary migrations;

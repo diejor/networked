@@ -264,11 +264,7 @@ void NetwEntityRecord::project_node(
     if (p_node != p_owner && tree::is_entity_root(p_node)) {
         return;
     }
-    write_authority(
-        p_node,
-        p_projection.follower,
-        p_projection.prior_follower
-    );
+    write_authority(p_node, p_projection.follower, p_projection.prior_follower);
     const bool watched = p_projection.follower != SERVER_PEER;
     if (watched && p_watch != 0) {
         tree::watch(p_node, p_watch);
@@ -345,7 +341,10 @@ StringName NetwEntityRecord::scene_label_of(Node *p_owner) {
     if (scene_label != StringName()) {
         return scene_label;
     }
-    return declared_scene_of(p_owner).label;
+    const SceneDecl decl = declared_scene_of(p_owner);
+    return decl.declared && decl.label.is_empty() && p_owner != nullptr
+        ? p_owner->get_name()
+        : decl.label;
 }
 
 int64_t NetwEntityRecord::scene_isolation_of(Node *p_owner) {
@@ -366,7 +365,7 @@ void NetwEntityRecord::hydrate_identity(Node *p_owner) {
     }
     declares_scene = true;
     if (scene_label == StringName()) {
-        scene_label = decl.label;
+        scene_label = decl.label.is_empty() ? owner->get_name() : decl.label;
     }
     if (scene_isolation < 0) {
         scene_isolation = decl.isolation;

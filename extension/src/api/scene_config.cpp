@@ -26,6 +26,13 @@ SceneDecl NetwSceneConfig::held() const {
     );
 }
 
+StringName NetwSceneConfig::get_label() const {
+    const SceneDecl decl = held();
+    Node *node = Object::cast_to<Node>(gd::object_of(node_id));
+    return decl.label.is_empty() && node != nullptr ? node->get_name()
+                                                    : decl.label;
+}
+
 void NetwSceneConfig::write(const SceneDecl &p_decl) {
     const Ref<Script> script
         = Ref<Script>(Object::cast_to<Script>(gd::object_of(script_id)));

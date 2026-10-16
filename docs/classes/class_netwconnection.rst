@@ -161,9 +161,7 @@ Signals
 
 **endpoint_added**\ (\ endpoint\: :ref:`NetwEndpoint<class_NetwEndpoint>`\ ) :ref:`🔗<class_NetwConnection_signal_endpoint_added>`
 
-.. container:: contribute
-
-	There is currently no description for this signal. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+Emitted when ``endpoint`` is added to :ref:`endpoints<class_NetwConnection_property_endpoints>`.
 
 .. rst-class:: classref-item-separator
 
@@ -211,9 +209,7 @@ Emitted when ``from_name`` invites the player to ``endpoint``, which joins only 
 
 **join_address_changed**\ (\ address\: :godot:`String`\ ) :ref:`🔗<class_NetwConnection_signal_join_address_changed>`
 
-.. container:: contribute
-
-	There is currently no description for this signal. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+Emitted when :ref:`join_address<class_NetwConnection_property_join_address>` changes.
 
 .. rst-class:: classref-item-separator
 
@@ -260,11 +256,7 @@ enum **State**: :ref:`🔗<enum_NetwConnection_State>`
 
 :ref:`State<enum_NetwConnection_State>` **STATE_OFFLINE** = ``0``
 
-.. container:: contribute
-
-	There is currently no description for this enum. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
-
-
+No connection attempt or online session.
 
 .. _class_NetwConnection_constant_STATE_CREATING:
 
@@ -272,11 +264,7 @@ enum **State**: :ref:`🔗<enum_NetwConnection_State>`
 
 :ref:`State<enum_NetwConnection_State>` **STATE_CREATING** = ``1``
 
-.. container:: contribute
-
-	There is currently no description for this enum. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
-
-
+The transport is creating a :godot:`MultiplayerPeer`.
 
 .. _class_NetwConnection_constant_STATE_CONNECTING:
 
@@ -284,11 +272,7 @@ enum **State**: :ref:`🔗<enum_NetwConnection_State>`
 
 :ref:`State<enum_NetwConnection_State>` **STATE_CONNECTING** = ``2``
 
-.. container:: contribute
-
-	There is currently no description for this enum. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
-
-
+The :godot:`MultiplayerPeer` is assigned and connecting.
 
 .. _class_NetwConnection_constant_STATE_ONLINE:
 
@@ -296,11 +280,7 @@ enum **State**: :ref:`🔗<enum_NetwConnection_State>`
 
 :ref:`State<enum_NetwConnection_State>` **STATE_ONLINE** = ``3``
 
-.. container:: contribute
-
-	There is currently no description for this enum. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
-
-
+The session is online.
 
 .. rst-class:: classref-item-separator
 
@@ -326,11 +306,7 @@ The address is ignored.
 
 :ref:`TransportMode<enum_NetwConnection_TransportMode>` **TRANSPORT_MODE_CLIENT** = ``1``
 
-.. container:: contribute
-
-	There is currently no description for this enum. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
-
-
+Creates a client peer that joins the supplied address.
 
 .. rst-class:: classref-item-separator
 
@@ -348,11 +324,7 @@ enum **TransportCapability**: :ref:`🔗<enum_NetwConnection_TransportCapability
 
 :ref:`TransportCapability<enum_NetwConnection_TransportCapability>` **TRANSPORT_AVAILABLE** = ``1``
 
-.. container:: contribute
-
-	There is currently no description for this enum. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
-
-
+The transport is available on this platform.
 
 .. _class_NetwConnection_constant_TRANSPORT_CAN_HOST:
 
@@ -368,11 +340,7 @@ Web builds usually cannot.
 
 :ref:`TransportCapability<enum_NetwConnection_TransportCapability>` **TRANSPORT_CAN_PROBE** = ``4``
 
-.. container:: contribute
-
-	There is currently no description for this enum. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
-
-
+The transport can probe servers for their status and information.
 
 .. _class_NetwConnection_constant_TRANSPORT_CAN_BROWSE:
 
@@ -380,11 +348,7 @@ Web builds usually cannot.
 
 :ref:`TransportCapability<enum_NetwConnection_TransportCapability>` **TRANSPORT_CAN_BROWSE** = ``8``
 
-.. container:: contribute
-
-	There is currently no description for this enum. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
-
-
+The transport can discover servers while :ref:`browsing<class_NetwConnection_property_browsing>` is enabled.
 
 .. _class_NetwConnection_constant_TRANSPORT_ACCEPTS_EMPTY_ADDRESS:
 
@@ -392,11 +356,7 @@ Web builds usually cannot.
 
 :ref:`TransportCapability<enum_NetwConnection_TransportCapability>` **TRANSPORT_ACCEPTS_EMPTY_ADDRESS** = ``16``
 
-.. container:: contribute
-
-	There is currently no description for this enum. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
-
-
+The transport accepts an empty address when joining.
 
 .. rst-class:: classref-section-separator
 
@@ -483,9 +443,7 @@ Seconds between probes of a row from :ref:`add()<class_NetwConnection_method_add
 
 - :ref:`State<enum_NetwConnection_State>` **get_state**\ (\ )
 
-.. container:: contribute
-
-	There is currently no description for this property. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+The connection attempt's :ref:`State<enum_NetwConnection_State>`, reported by :ref:`state_changed<class_NetwConnection_signal_state_changed>`.
 
 .. rst-class:: classref-section-separator
 
@@ -552,9 +510,12 @@ Creates a peer for a game that assigns it itself. ``completed`` runs once in a l
 
 :godot:`Dictionary` **defaults**\ (\ transport\: :godot:`Variant`\ ) |const| :ref:`🔗<class_NetwConnection_method_defaults>`
 
-.. container:: contribute
+Returns the settings stored by :ref:`set_defaults()<class_NetwConnection_method_set_defaults>` for ``transport``.
 
-	There is currently no description for this method. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+.. code:: text
+
+    Dictionary
+    ┖╴setting name  Variant  the configured default value
 
 .. rst-class:: classref-item-separator
 
@@ -566,9 +527,12 @@ Creates a peer for a game that assigns it itself. ``completed`` runs once in a l
 
 :godot:`Dictionary` **diagnostics**\ (\ peer_id\: :godot:`int`\ ) |const| :ref:`🔗<class_NetwConnection_method_diagnostics>`
 
-.. container:: contribute
+Returns the connected transport's debugging information for ``peer_id``, as supplied by :ref:`NetwTransport._diagnostics()<class_NetwTransport_private_method__diagnostics>`.
 
-	There is currently no description for this method. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+.. code:: text
+
+    Dictionary
+    ┖╴transport-defined key  Variant  debugging information
 
 .. rst-class:: classref-item-separator
 
@@ -580,9 +544,7 @@ Creates a peer for a game that assigns it itself. ``completed`` runs once in a l
 
 :ref:`NetwEndpoint<class_NetwEndpoint>` **find**\ (\ transport\: :godot:`Variant`, address\: :godot:`String`\ ) :ref:`🔗<class_NetwConnection_method_find>`
 
-.. container:: contribute
-
-	There is currently no description for this method. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+Returns the listed :ref:`NetwEndpoint<class_NetwEndpoint>` for ``transport`` and ``address``, or ``null`` when none is listed.
 
 .. rst-class:: classref-item-separator
 
@@ -634,9 +596,7 @@ The :ref:`NetwMultiplayer.session_get_join_schema()<class_NetwMultiplayer_method
 
 :godot:`bool` **register_transport**\ (\ type\: :godot:`Script`\ ) :ref:`🔗<class_NetwConnection_method_register_transport>`
 
-.. container:: contribute
-
-	There is currently no description for this method. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+Registers the :ref:`NetwTransport<class_NetwTransport>` script ``type`` for this session. Returns ``false`` if registration fails.
 
 .. rst-class:: classref-item-separator
 
@@ -711,9 +671,7 @@ Each shaped as :ref:`transport()<class_NetwConnection_method_transport>` returns
 
 :godot:`bool` **unregister_transport**\ (\ of\: :godot:`Variant`\ ) :ref:`🔗<class_NetwConnection_method_unregister_transport>`
 
-.. container:: contribute
-
-	There is currently no description for this method. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+Removes the registered transport named by ``of``. Returns ``true`` when it was removed.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

@@ -4,20 +4,14 @@
 		Network settings for an RPC, a signal, a spawn function or a property.
 	</brief_description>
 	<description>
-		Returned by [method Netw.configure_rpc], [method Netw.configure_signal] and [method Netw.configure_spawn]. [method Netw.configure_property] returns a [NetwPropertyConfig], which extends it. The methods set who may send, how it is sent, and what the receiver does.
+		Settings are shared by nodes using the same script. Explicit settings outrank [annotation @GDScript.@rpc]. Unset settings fall back to that annotation. The server can always call an RPC.
 		[codeblock]
 		func _init() -&gt; void:
-		    Netw.configure_rpc(self.fire).unreliable().controller()
-		    Netw.configure_signal(self.exploded).any_peer()
-		    Netw.configure_spawn(self._spawn_bullet).quantize(dir_q)
+		    Netw.configure_rpc(fire).unreliable().controller()
+		    Netw.configure_signal(exploded).any_peer()
+		    Netw.configure_spawn(make_bullet).quantize(direction_q)
 		[/codeblock]
-		A setting made here outranks the method's [code]@rpc[/code] annotation, and a setting left out falls back to it. The server may always call an RPC, whatever its policy.
-		Settings are stored per script, so calling this in [method Object._init] of every instance is fine. A warning is pushed only when two calls set different values.
-		[b]Note:[/b] these methods return a [NetwMemberConfig], so call [NetwPropertyConfig] methods first in a chain.
-		[codeblock]
-		Netw.configure_property(self, &amp;"position").state().quantize(pos_q)   # works
-		Netw.configure_property(self, &amp;"position").quantize(pos_q).state()   # state() is not found
-		[/codeblock]
+		Call [NetwPropertyConfig] methods before chaining these methods, which return [NetwMemberConfig].
 	</description>
 	<tutorials>
 	</tutorials>
@@ -25,7 +19,7 @@
 		<method name="any_peer">
 			<return type="NetwMemberConfig" />
 			<description>
-				Any peer may send it. Only use it when a cheating client cannot do harm.
+				Any peer may send it.
 			</description>
 		</method>
 		<method name="authority">
@@ -37,13 +31,13 @@
 		<method name="call_local">
 			<return type="NetwMemberConfig" />
 			<description>
-				The signal or RPC also runs on the sender. The default for [method Netw.configure_signal]. Not valid on a property.
+				Enabled by default for [method Netw.configure_signal]. Invalid for properties.
 			</description>
 		</method>
 		<method name="call_remote">
 			<return type="NetwMemberConfig" />
 			<description>
-				The signal or RPC only runs on other peers. The default for [method Netw.configure_rpc]. Not valid on a property.
+				Enabled by default for [method Netw.configure_rpc]. Invalid for properties.
 			</description>
 		</method>
 		<method name="controller">
@@ -56,7 +50,7 @@
 			<return type="NetwMemberConfig" />
 			<param index="0" name="sig" type="Signal" />
 			<description>
-				A received call waits until [param sig] is emitted on the node, such as [code]self.ready[/code].
+				Received calls wait for a signal with [param sig]'s name on the receiving [Node]. Only the signal name is stored.
 			</description>
 		</method>
 		<method name="interpolate" qualifiers="vararg">
@@ -78,13 +72,13 @@
 		<method name="is_policy_declared" qualifiers="const">
 			<return type="bool" />
 			<description>
-				Returns [code]true[/code] when [member write_policy] was set, even to its default.
+				[code]true[/code] when [member write_policy] was set, even to its default.
 			</description>
 		</method>
 		<method name="is_transfer_declared" qualifiers="const">
 			<return type="bool" />
 			<description>
-				Returns [code]true[/code] when [member transfer_mode] was set, even to its default.
+				[code]true[/code] when [member transfer_mode] was set, even to its default.
 			</description>
 		</method>
 		<method name="quantize" qualifiers="vararg">
@@ -100,7 +94,7 @@
 		<method name="reliable">
 			<return type="NetwMemberConfig" />
 			<description>
-				Send reliably. The default.
+				Sends reliably.
 			</description>
 		</method>
 		<method name="server">
@@ -112,7 +106,7 @@
 		<method name="unreliable">
 			<return type="NetwMemberConfig" />
 			<description>
-				Send unreliably.
+				Sends unreliably.
 			</description>
 		</method>
 	</methods>
@@ -145,7 +139,7 @@
 			Set by [method reliable] and [method unreliable].
 		</member>
 		<member name="write_policy" type="int" setter="set_write_policy" getter="get_write_policy" enum="NetwMemberConfig.Policy" default="0">
-			Set by [method authority], [method controller], [method any_peer] and [method server]. An RPC with no policy set takes it from its [code]@rpc[/code] annotation, and one without that annotation accepts calls from the server only.
+			Who may send it. Set by [method authority], [method controller], [method any_peer] and [method server]. Unset RPC settings fall back to [annotation @GDScript.@rpc].
 		</member>
 	</members>
 	<constants>

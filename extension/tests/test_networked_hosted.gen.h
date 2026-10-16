@@ -32,6 +32,7 @@
 #include "connect_webrtc_transport_laws.cpp"
 #include "control_frame_wire_laws.cpp"
 #include "database_core_laws.cpp"
+#include "database_declaration_laws.cpp"
 #include "database_door_laws.cpp"
 #include "declared_world_tests.cpp"
 #include "deny_frame_wire_laws.cpp"

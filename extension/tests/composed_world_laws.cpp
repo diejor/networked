@@ -1,5 +1,5 @@
-#include "support/mesh_stand.h"
 #include "support/fault_log.h"
+#include "support/mesh_stand.h"
 
 #if defined(NETW_TIER_HOSTED)
 
@@ -76,10 +76,12 @@ Node *build_interpolated_player(const Variant &p_name) {
     Ref<NetwInterpolate> spec;
     spec.instantiate();
     const Ref<NetwPropertyConfig> config
-        = Netw::configure_property(made, StringName("position"), true);
-    config->interpolate(netw::gd::array_of(
-        spec->lerp()->smooth(0.0)->to(StringName("position"))
-    ));
+        = Netw::configure_property(made, StringName("position"));
+    config->interpolate(
+        netw::gd::array_of(
+            spec->lerp()->smooth(0.0)->to(StringName("position"))
+        )
+    );
     config->state();
     return made;
 }
@@ -930,10 +932,7 @@ TEST_CASE(
     CHECK(member->create_scene(packed, NetwMultiplayer::SCENE_ISOLATION_NONE)
               .is_null());
     NETW_CHECK_EQ(int(cw.seven->scene_list().size()), before);
-    NETW_CHECK_EQ(
-        faults.warnings_containing("shares one physics space"),
-        1
-    );
+    NETW_CHECK_EQ(faults.warnings_containing("shares one physics space"), 1);
 }
 
 } // namespace TestComposedWorld

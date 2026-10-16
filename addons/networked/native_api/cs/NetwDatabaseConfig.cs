@@ -6,19 +6,11 @@ using Godot.NativeInterop;
 namespace Networked;
 
 /// <summary>
-/// The configuration of a named <see cref="NetwDatabase"/>, returned by
-/// <see cref="Netw.ConfigureDatabase"/>.
+/// Configuration for a named <see cref="NetwDatabase"/>.
 /// </summary>
 /// <remarks>
-/// Sets the <see cref="NetwDatabaseBackend"/> a database opens.
-/// <code>
-/// func _ready() -&gt; void:
-///     Netw.configure_database(self, &amp;"saves").backend(preload("res://save_backend.tres"))
-/// </code>
-/// <para>
-/// Configuring the same name twice in one session with a different backend is
-/// refused.
-/// </para>
+/// Select storage with <see cref="NetwDatabaseConfig.Backend"/>. See
+/// <see cref="Netw.ConfigureDatabase"/> for declaration and use.
 /// </remarks>
 public sealed class NetwDatabaseConfig : NetwRefCounted
 {
@@ -36,39 +28,13 @@ public sealed class NetwDatabaseConfig : NetwRefCounted
         return Adopt(NetwApi.Retained(NetwApi.ObjectOf(value)));
     }
 
-    private static readonly IntPtr _bindGetBackend =
-        NetwApi.MethodBind("NetwDatabaseConfig", "get_backend", 1676167366UL);
-
-    private static readonly IntPtr _bindSetBackend =
-        NetwApi.MethodBind("NetwDatabaseConfig", "set_backend", 3870687910UL);
-
-    /// <summary>
-    /// The storage this database opens, as
-    /// <see cref="NetwDatabaseConfig.Backend"/> set it.
-    /// </summary>
-    public NetwDatabaseBackend Store
-    {
-        get
-        {
-            IntPtr answered = default;
-            NetwThunks.Ptrcall0_IntPtr(_bindGetBackend, Checked, ref answered);
-            return NetwDatabaseBackend.Adopt(answered);
-        }
-        set
-        {
-            IntPtr slot0 = value?.Native ?? IntPtr.Zero;
-            long discarded = default;
-            NetwThunks.Ptrcall1_IntPtr_Long(
-                _bindSetBackend,
-                Checked,
-                in slot0,
-                ref discarded);
-        }
-    }
-
     private static readonly IntPtr _bindBackend =
         NetwApi.MethodBind("NetwDatabaseConfig", "backend", 4173819317UL);
 
+    /// <summary>
+    /// Selects the <see cref="NetwDatabaseBackend"/> used to store and retrieve
+    /// saved records.
+    /// </summary>
     public NetwDatabaseConfig Backend(NetwDatabaseBackend backend)
     {
         IntPtr slot0 = backend?.Native ?? IntPtr.Zero;

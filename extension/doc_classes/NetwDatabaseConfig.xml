@@ -1,15 +1,10 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <class name="NetwDatabaseConfig" inherits="Resource" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
 	<brief_description>
-		The configuration of a named [NetwDatabase], returned by [method Netw.configure_database].
+		Configuration for a named [NetwDatabase].
 	</brief_description>
 	<description>
-		Sets the [NetwDatabaseBackend] a database opens.
-		[codeblock]
-		func _ready() -&gt; void:
-		    Netw.configure_database(self, &amp;"saves").backend(preload("res://save_backend.tres"))
-		[/codeblock]
-		Configuring the same name twice in one session with a different backend is refused.
+		Select storage with [method backend]. See [method Netw.configure_database] for declaration and use.
 	</description>
 	<tutorials>
 	</tutorials>
@@ -18,12 +13,10 @@
 			<return type="NetwDatabaseConfig" />
 			<param index="0" name="backend" type="NetwDatabaseBackend" />
 			<description>
+				Selects the [NetwDatabaseBackend] used to store and retrieve saved records.
 			</description>
 		</method>
 	</methods>
 	<members>
-		<member name="store" type="NetwDatabaseBackend" setter="set_backend" getter="get_backend">
-			The storage this database opens, as [method backend] set it.
-		</member>
 	</members>
 </class>

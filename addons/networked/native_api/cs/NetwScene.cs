@@ -9,14 +9,15 @@ namespace Networked;
 /// The scene an entity belongs to, reached as <see cref="NetwEntity.Scene"/>.
 /// </summary>
 /// <remarks>
-/// Tells who is in a multiplayer scene and which players it replicates to.
-/// Reach it with <see cref="Netw.Scene"/> or <see cref="NetwEntity.Scene"/>. An
-/// entity declared with <see cref="Netw.ConfigureScene"/> resolves to itself,
-/// any other entity to its closest scene ancestor. Each scene has one handle,
-/// so <c>==</c> compares scenes. A scene replicates to a player while a body of
-/// theirs is in it, or while the player watches it with
-/// <see cref="NetwScene.Watch"/>. <see cref="NetwScene.Unwatch"/> does not
-/// remove a player whose body is still in the scene.
+/// A multiplayer scene is a <see cref="NetwEntity"/>, available as
+/// <see cref="NetwScene.Entity"/>. Reach it with <see cref="Netw.Scene"/> or
+/// <see cref="NetwEntity.Scene"/>. An entity declared with
+/// <see cref="Netw.ConfigureScene"/> resolves to itself, any other entity to
+/// its closest scene ancestor. Each scene has one handle, so <c>==</c> compares
+/// scenes. A scene replicates to a player while a body of theirs is in it, or
+/// while the player watches it with <see cref="NetwScene.Watch"/>.
+/// <see cref="NetwScene.Unwatch"/> does not remove a player whose body is still
+/// in the scene.
 /// <code>
 /// lobby.watch(player)
 /// arena.add_child(Netw.spawn_player(player, make_player))
@@ -183,6 +184,23 @@ public sealed class NetwScene : NetwRefCounted
             Rid answered = default;
             NetwThunks.Ptrcall0_Rid(_bindGetRid, Checked, ref answered);
             return answered;
+        }
+    }
+
+    private static readonly IntPtr _bindGetEntity =
+        NetwApi.MethodBind("NetwScene", "get_entity", 1711071689UL);
+
+    /// <summary>
+    /// The <see cref="NetwEntity"/> on <see cref="NetwScene.Root"/>, or
+    /// <c>null</c> when no scene was found.
+    /// </summary>
+    public NetwEntity Entity
+    {
+        get
+        {
+            IntPtr answered = default;
+            NetwThunks.Ptrcall0_IntPtr(_bindGetEntity, Checked, ref answered);
+            return NetwEntity.Adopt(answered);
         }
     }
 

@@ -6,7 +6,7 @@ using Godot.NativeInterop;
 namespace Networked;
 
 /// <summary>
-/// Session settings, returned by <see cref="Netw.ConfigureSession"/>.
+/// Settings for a multiplayer session.
 /// </summary>
 /// <remarks>
 /// Settings are applied once, before assigning
@@ -20,9 +20,8 @@ namespace Networked;
 ///         .role(NetwSession.ROLE_LISTEN_SERVER)
 /// </code>
 /// <para>
-/// A <see cref="Resource"/> passed to <see cref="Netw.ConfigureSession"/> is
-/// copied. <b>Bandwidth</b> <see cref="NetwSessionConfig.BandwidthKbps"/> sets
-/// a bandwidth budget per peer. Updates that wait longer or have higher
+/// <b>Bandwidth</b> <see cref="NetwSessionConfig.BandwidthKbps"/> sets a
+/// bandwidth budget per peer. Updates that wait longer or have higher
 /// <see cref="NetwEntity.ReplicationPriority"/> are sent first. RPCs, spawns,
 /// authority changes and <see cref="NetwPropertyConfig.Retained"/> properties
 /// can exceed the budget. Other property updates still receive at least a
@@ -333,6 +332,10 @@ public sealed class NetwSessionConfig : NetwRefCounted
     private static readonly IntPtr _bindApp =
         NetwApi.MethodBind("NetwSessionConfig", "app", 243073128UL);
 
+    /// <summary>
+    /// Sets <see cref="NetwSessionConfig.AppId"/> to identify the game and
+    /// build.
+    /// </summary>
     public NetwSessionConfig App(StringName appId)
     {
         godot_variant slot0 = VariantUtils.CreateFromStringName(appId);
@@ -350,6 +353,10 @@ public sealed class NetwSessionConfig : NetwRefCounted
     private static readonly IntPtr _bindRole =
         NetwApi.MethodBind("NetwSessionConfig", "role", 619985222UL);
 
+    /// <summary>
+    /// Sets <see cref="NetwSessionConfig.DesiredRole"/>, the role this peer
+    /// takes when it hosts.
+    /// </summary>
     public NetwSessionConfig Role(NetwSession.RoleEnum desiredRole)
     {
         long slot0 = (long)desiredRole;
@@ -365,6 +372,10 @@ public sealed class NetwSessionConfig : NetwRefCounted
     private static readonly IntPtr _bindLink =
         NetwApi.MethodBind("NetwSessionConfig", "link", 2618458252UL);
 
+    /// <summary>
+    /// Sets <see cref="NetwSessionConfig.LinkConditions"/> to simulate latency
+    /// and packet loss.
+    /// </summary>
     public NetwSessionConfig Link(NetwLinkConditions linkConditions)
     {
         IntPtr slot0 = linkConditions?.Native ?? IntPtr.Zero;
@@ -380,6 +391,10 @@ public sealed class NetwSessionConfig : NetwRefCounted
     private static readonly IntPtr _bindServer =
         NetwApi.MethodBind("NetwSessionConfig", "server", 2552003917UL);
 
+    /// <summary>
+    /// Sets <see cref="NetwSessionConfig.ServerInfo"/>, the information shown
+    /// in server browsers.
+    /// </summary>
     public NetwSessionConfig Server(NetwServerInfo serverInfo)
     {
         IntPtr slot0 = serverInfo?.Native ?? IntPtr.Zero;
@@ -395,6 +410,10 @@ public sealed class NetwSessionConfig : NetwRefCounted
     private static readonly IntPtr _bindBandwidth =
         NetwApi.MethodBind("NetwSessionConfig", "bandwidth", 3031268209UL);
 
+    /// <summary>
+    /// Sets <see cref="NetwSessionConfig.BandwidthKbps"/>, the bandwidth budget
+    /// per peer in kbit/s.
+    /// </summary>
     public NetwSessionConfig Bandwidth(long kbps)
     {
         long slot0 = kbps;
@@ -410,6 +429,10 @@ public sealed class NetwSessionConfig : NetwRefCounted
     private static readonly IntPtr _bindTransfer =
         NetwApi.MethodBind("NetwSessionConfig", "transfer", 299431885UL);
 
+    /// <summary>
+    /// Sets <see cref="NetwSessionConfig.TransferMode"/>, which determines what
+    /// happens to this peer's world when the server moves.
+    /// </summary>
     public NetwSessionConfig Transfer(NetwSession.TransferMode transferMode)
     {
         long slot0 = (long)transferMode;
@@ -428,6 +451,10 @@ public sealed class NetwSessionConfig : NetwRefCounted
             "transfer_deadline",
             3031268209UL);
 
+    /// <summary>
+    /// Sets <see cref="NetwSessionConfig.TransferDeadlineTicks"/>, how many
+    /// ticks the new server waits for each client to report its world.
+    /// </summary>
     public NetwSessionConfig TransferDeadline(long ticks)
     {
         long slot0 = ticks;

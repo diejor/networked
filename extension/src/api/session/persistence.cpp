@@ -16,6 +16,7 @@
 #include "netw/persist/snapshot.hpp"
 #include "netw/schema_model.hpp"
 #include "netw/script/model.hpp"
+#include "netw/session_decl.hpp"
 
 using namespace godot;
 
@@ -118,36 +119,80 @@ RID NetwMultiplayer::schema_of_declaration(const Ref<NetwSchema> &p_schema) {
     return schema_find_or_adopt(p_schema->get_schema_name());
 }
 
-RID NetwMultiplayer::database_create(
+RID NetwMultiplayer::database_declare(
+    Node *p_scope,
     const StringName &p_name,
     const Ref<NetwDatabaseConfig> &p_config
 ) {
-    const RID existing = get_databases()->find(p_name);
-    if (existing.is_valid()) {
-        const Ref<NetwDatabaseConfig> held = database_configs.has(p_name)
-            ? database_configs[p_name]
-            : Ref<NetwDatabaseConfig>();
-        if (p_config.is_valid() && held.is_valid()
-            && p_config->get_backend() != held->get_backend()) {
-            NETW_ERR_V(
-                RID(),
-                sys::TABLE,
-                "Database '%s' is already declared with a different backend. "
-                "Declare each database name with one backend.",
-                String(p_name).utf8().get_data()
-            );
+    RID made = get_databases()->find(p_name);
+    if (!made.is_valid()) {
+        made = get_databases()->create(p_name);
+    }
+    if (!made.is_valid() || p_config.is_null()) {
+        return made;
+    }
+    const ObjectID scope
+        = p_scope != nullptr ? gd::instance_id(p_scope) : ObjectID();
+    for (const DatabaseDeclaration &held : database_declarations) {
+        if (held.name == p_name && held.scope == scope
+            && held.config == p_config) {
+            return made;
         }
-        return existing;
     }
-    const RID made = get_databases()->create(p_name);
-    if (made.is_valid() && p_config.is_valid()) {
-        database_configs[p_name] = p_config;
+    LocalVector<DatabaseDeclaration> kept;
+    kept.reserve(database_declarations.size() + 1);
+    for (const DatabaseDeclaration &held : database_declarations) {
+        const bool freed = held.scope.is_valid()
+            && gd::object_of(held.scope) == nullptr;
+        const bool replaced = held.name == p_name && held.scope == scope;
+        if ((!freed || held.name != p_name) && !replaced) {
+            kept.push_back(held);
+        }
     }
+    DatabaseDeclaration fresh;
+    fresh.name = p_name;
+    fresh.scope = scope;
+    fresh.config = p_config;
+    kept.push_back(fresh);
+    database_declarations = kept;
     return made;
+}
+
+void NetwMultiplayer::database_install_from(Node *p_scope) {
+    const Dictionary declared = session_decl::databases_on(p_scope);
+    const Array names = declared.keys();
+    for (int at = 0; at < names.size(); ++at) {
+        const StringName name = names[at];
+        const Ref<NetwDatabaseConfig> config = declared[names[at]];
+        database_declare(p_scope, name, config);
+    }
 }
 
 RID NetwMultiplayer::database_find(const StringName &p_name) const {
     return databases.find(p_name);
+}
+
+RID NetwMultiplayer::database_lookup(const StringName &p_name) {
+    const RID found = get_databases()->find(p_name);
+    if (found.is_valid()) {
+        return found;
+    }
+    declaration_book().refresh(this);
+    return get_databases()->find(p_name);
+}
+
+bool NetwMultiplayer::database_declaration_live(
+    const DatabaseDeclaration &p_held
+) const {
+    if (!p_held.scope.is_valid()) {
+        return true;
+    }
+    Node *scope = Object::cast_to<Node>(gd::object_of(p_held.scope));
+    if (scope == nullptr || !scope->is_inside_tree()
+        || scope->is_queued_for_deletion()) {
+        return false;
+    }
+    return NetwMultiplayer::of(scope) == this;
 }
 
 Ref<NetwDatabase> NetwMultiplayer::database_handle(const RID &p_database) {
@@ -174,7 +219,17 @@ Ref<NetwPromise> NetwMultiplayer::database_open(
     if (!plane->is_valid(p_database)) {
         return unknown_database();
     }
-    const Ref<NetwDatabaseBackend> backend = database_backend_of(p_database);
+    Ref<NetwDatabaseBackend> backend;
+    const Error resolved = database_backend_of(p_database, backend);
+    if (resolved != OK) {
+        return NetwPromise::rejected(
+            resolved,
+            vformat(
+                "database '%s' is declared with two different backends",
+                String(plane->name_of(p_database))
+            )
+        );
+    }
     if (backend.is_null()) {
         return NetwPromise::rejected(
             ERR_UNCONFIGURED,
@@ -188,16 +243,50 @@ Ref<NetwPromise> NetwMultiplayer::database_open(
     return plane->open(p_database, p_slot, backend->open(this, p_slot));
 }
 
-Ref<NetwDatabaseBackend> NetwMultiplayer::database_backend_of(
-    const RID &p_database
+Error NetwMultiplayer::database_backend_of(
+    const RID &p_database,
+    Ref<NetwDatabaseBackend> &r_backend
 ) const {
+    r_backend = Ref<NetwDatabaseBackend>();
     const StringName name = databases.name_of(p_database);
-    const HashMap<StringName, Ref<NetwDatabaseConfig>>::ConstIterator found
-        = database_configs.find(name);
-    if (found == database_configs.end() || found->value.is_null()) {
-        return Ref<NetwDatabaseBackend>();
+    const DatabaseDeclaration *latest = nullptr;
+    const DatabaseDeclaration *chosen = nullptr;
+    for (const DatabaseDeclaration &held : database_declarations) {
+        if (held.name != name) {
+            continue;
+        }
+        latest = &held;
+        if (!database_declaration_live(held)) {
+            continue;
+        }
+        if (chosen == nullptr) {
+            chosen = &held;
+            continue;
+        }
+        if (held.config->get_backend() != chosen->config->get_backend()) {
+            Node *first = Object::cast_to<Node>(gd::object_of(chosen->scope));
+            Node *second = Object::cast_to<Node>(gd::object_of(held.scope));
+            const String first_scope = first != nullptr
+                ? String(first->get_path()) : String("the session");
+            const String second_scope = second != nullptr
+                ? String(second->get_path()) : String("the session");
+            NETW_ERR_V(
+                ERR_ALREADY_EXISTS,
+                sys::TABLE,
+                "Database '%s' is declared with two different backends on "
+                "'%s' and '%s', so it did not open. Declare it on one node, "
+                "or give both the same backend.",
+                String(name).utf8().get_data(),
+                first_scope.utf8().get_data(),
+                second_scope.utf8().get_data()
+            );
+        }
     }
-    return found->value->get_backend();
+    const DatabaseDeclaration *used = chosen != nullptr ? chosen : latest;
+    if (used != nullptr) {
+        r_backend = used->config->get_backend();
+    }
+    return OK;
 }
 
 Ref<NetwPromise> NetwMultiplayer::database_close(const RID &p_database) {
@@ -261,7 +350,14 @@ Ref<NetwPromise> NetwMultiplayer::database_submit(
 }
 
 Ref<NetwPromise> NetwMultiplayer::database_list_slots(const RID &p_database) {
-    const Ref<NetwDatabaseBackend> backend = database_backend_of(p_database);
+    Ref<NetwDatabaseBackend> backend;
+    const Error resolved = database_backend_of(p_database, backend);
+    if (resolved != OK) {
+        return NetwPromise::resolved(database_slots_failure(
+            resolved,
+            "this database is declared with two different backends"
+        ));
+    }
     if (backend.is_null()) {
         return NetwPromise::resolved(database_slots_failure(
             ERR_UNCONFIGURED,
@@ -320,7 +416,14 @@ Ref<NetwPromise> NetwMultiplayer::database_delete_slot(
             )
         );
     }
-    const Ref<NetwDatabaseBackend> backend = database_backend_of(p_database);
+    Ref<NetwDatabaseBackend> backend;
+    const Error resolved = database_backend_of(p_database, backend);
+    if (resolved != OK) {
+        return NetwPromise::rejected(
+            resolved,
+            "this database is declared with two different backends"
+        );
+    }
     if (backend.is_null()) {
         return NetwPromise::rejected(
             ERR_UNCONFIGURED,

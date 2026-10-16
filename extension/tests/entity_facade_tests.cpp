@@ -2,6 +2,8 @@
 #include "support/netw_test.h"
 
 #include "godot/node.hpp"
+#include "godot/scene_tree.hpp"
+#include "netw/api/context.hpp"
 #include "netw/api/entity.hpp"
 #include "netw/api/netw_multiplayer.hpp"
 
@@ -114,6 +116,32 @@ TEST_CASE(
     entity->set_is_template(false);
     CHECK(entity->get_is_template());
 
+    memdelete(root);
+}
+
+TEST_CASE(
+    "[Networked][Entity][Hosted][SceneTree] IT3 a mounted child cannot "
+    "declare its ancestor as its own entity root"
+) {
+    Node *root = memnew(Node);
+    root->set_name("Root");
+    Node *child = memnew(Node);
+    child->set_name("Child");
+    const Ref<NetwEntity> entity = netw::Netw::configure_entity(root);
+    root->add_child(child);
+    netw::gd::scene_root()->add_child(root);
+    netw_test::FaultWatch faults;
+    faults.expect_error(
+        "[error][entity] Netw.configure_entity ran after 'Child' entered "
+        "the tree, which is too late. Call it before the node enters "
+        "the tree, or use NetwEntity.of to find an entity that already "
+        "exists.",
+        1
+    );
+    CHECK(netw::Netw::configure_entity(child).is_null());
+    CHECK(netw::Netw::configure_entity(root) == entity);
+    CHECK(NetwEntity::of(child) == entity);
+    root->get_parent()->remove_child(root);
     memdelete(root);
 }
 

@@ -8,6 +8,7 @@
 #include "support/value_flow_stand.h"
 
 #include "godot/node.hpp"
+#include "godot/scene_tree.hpp"
 #include "godot/script.hpp"
 #include "godot/variant.hpp"
 #include "netw/api/context.hpp"
@@ -36,9 +37,9 @@ var listing := false
 
 func _init() -> void:
 	Netw.configure_entity(self)
-	Netw.configure_property(self, &"secret", true, TYPE_VECTOR2) \
+	Netw.configure_property(self, &"secret", TYPE_VECTOR2) \
 		.state().on_spawn()
-	Netw.configure_property(self, &"lean", true, TYPE_FLOAT).broadcast()
+	Netw.configure_property(self, &"lean", TYPE_FLOAT).broadcast()
 	Netw.configure_property(self, &"shown").state()
 
 func poke() -> void:
@@ -211,50 +212,71 @@ TEST_CASE(
     Node *node = Object::cast_to<Node>(script->call("new"));
     REQUIRE(node != nullptr);
 
-    const char *refused[] = { "nope", "poke", "poked" };
+    const char *refused[] = {"nope", "poke", "poked"};
     for (const char *name : refused) {
         const FaultWatch faults;
-        CHECK(netw::Netw::configure_property(node, StringName(name), false)
-                  .is_null());
+        CHECK(netw::Netw::configure_property(node, StringName(name)).is_null());
         NETW_CHECK_EQ(faults.errors(), int64_t(1));
     }
     {
         const FaultWatch faults;
-        CHECK(netw::Netw::configure_property(
-                  node,
-                  StringName("loose"),
-                  false
-        )
-                  .is_null());
+        CHECK(
+            netw::Netw::configure_property(node, StringName("loose")).is_null()
+        );
         NETW_CHECK_EQ(faults.errors(), int64_t(1));
     }
     {
         const FaultWatch faults;
-        CHECK(netw::Netw::configure_property(
-                  node,
-                  StringName("gets"),
-                  false,
-                  int64_t(Variant::FLOAT)
-        )
-                  .is_null());
+        CHECK(
+            netw::Netw::configure_property(
+                node,
+                StringName("gets"),
+                int64_t(Variant::FLOAT)
+            )
+                .is_null()
+        );
         NETW_CHECK_EQ(faults.errors(), int64_t(1));
     }
     {
         const FaultWatch faults;
-        CHECK(netw::Netw::configure_property(
-                  node,
-                  StringName("secret"),
-                  false,
-                  int64_t(Variant::VECTOR3)
-        )
-                  .is_null());
+        CHECK(
+            netw::Netw::configure_property(
+                node,
+                StringName("secret"),
+                int64_t(Variant::VECTOR3)
+            )
+                .is_null()
+        );
         NETW_CHECK_EQ(faults.errors(), int64_t(1));
     }
     const FaultWatch faults;
-    CHECK(netw::Netw::configure_property(node, StringName("store"), false)
-              .is_valid());
+    CHECK(netw::Netw::configure_property(node, StringName("store")).is_valid());
     NETW_CHECK_EQ(faults.errors(), int64_t(0));
 
+    memdelete(node);
+}
+
+TEST_CASE(
+    "[Networked][Repl][SceneTree] IT1 a mounted node cannot declare a "
+    "property and leaves the script's declarations unchanged"
+) {
+    const Ref<Script> script = minted_script("extends Node2D\n");
+    Node *node = Object::cast_to<Node>(script->call("new"));
+    REQUIRE(node != nullptr);
+    node->set_name("LateProperty");
+    netw::gd::scene_root()->add_child(node);
+    FaultWatch faults;
+    faults.expect_error(
+        "[error][session] Netw.configure_property cannot declare "
+        "'position' on 'LateProperty' after it entered the tree. "
+        "Call it from _init.",
+        1
+    );
+    CHECK(netw::Netw::configure_property(node, "position").is_null());
+    CHECK(
+        netw::script::model::get_property_config(script, "position").is_null()
+    );
+    node->get_parent()->remove_child(node);
     memdelete(node);
 }
 

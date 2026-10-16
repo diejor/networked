@@ -9,11 +9,9 @@ namespace Networked;
 /// A named list of typed columns.
 /// </summary>
 /// <remarks>
-/// Declare it in a <c>static var</c> beside the code that writes it. Every peer
-/// built from the same scripts ends up with the same columns in the same order.
-/// Each column method returns the column's index, which is how a writer and a
-/// reader name the column. <see cref="NetwSession.Table"/> opens the replicated
-/// table a session builds from the schema.
+/// Finish declaring columns before a session uses the <see cref="NetwSchema"/>.
+/// Column methods return indices for reading and writing
+/// <see cref="NetwTable"/> values.
 /// <code>
 /// class Mobs:
 ///     static var schema := Netw.configure_schema(&amp;"Mob")
@@ -21,22 +19,15 @@ namespace Networked;
 ///         &amp;"pos",
 ///         NetwQuantizeScalar.new().limits(-512.0, 512.0).step(0.03),
 ///     )
-///     static var vel := schema.vector3(&amp;"vel")   # no quantizer, sent as raw bytes
+///     static var vel := schema.vector3(&amp;"vel")
 ///     static var hp  := schema.u16(&amp;"hp")
 ///
-/// @onready var mobs := Netw.session(self).table(Mobs.schema.schema_name)
+/// @onready var mobs: NetwTable = Netw.session(self).table(Mobs.schema.schema_name)
 /// </code>
 /// <para>
-/// A column with no quantizer is sent as a raw copy of its buffer, which is the
-/// cheapest to encode and decode. Add a quantizer to the columns where
-/// bandwidth matters. A schema returned by <see cref="NetwPersistence.Schema"/>
-/// cannot be changed. The same schema also types the records a
-/// <see cref="NetwDatabase"/> reads and writes directly. A schema used only for
-/// those calls <see cref="NetwSchema.Replicated"/> with <c>false</c> so no
-/// table is created. <see cref="NetwSchema.String"/> and
-/// <see cref="NetwSchema.Variant"/> columns work for saves but not for
-/// replicated tables. An entity's own record takes its columns from
-/// <see cref="NetwPropertyConfig.Persisted"/> and needs no schema.
+/// <see cref="NetwDatabase"/> stores records directly.
+/// <see cref="NetwPropertyConfig.Persisted"/> defines a
+/// <see cref="NetwEntity"/>'s saved properties.
 /// </para>
 /// </remarks>
 public sealed class NetwSchema : NetwRefCounted
@@ -97,10 +88,8 @@ public sealed class NetwSchema : NetwRefCounted
         NetwApi.MethodBind("NetwSchema", "declare", 261365823UL);
 
     /// <summary>
-    /// Returns the registered schema named <paramref name="name"/>, creating it
-    /// if needed, or <c>null</c> when the name is empty. Calling it twice with
-    /// one name returns the same schema, so several classes can add columns to
-    /// it. <see cref="Netw.ConfigureSchema"/> calls this.
+    /// Calls with the same <paramref name="name"/> share one
+    /// <see cref="NetwSchema"/>. Empty names are refused.
     /// </summary>
     public static NetwSchema Declare(StringName name)
     {
@@ -142,12 +131,9 @@ public sealed class NetwSchema : NetwRefCounted
         NetwApi.MethodBind("NetwSchema", "column", 3200875955UL);
 
     /// <summary>
-    /// Appends a column of <paramref name="type"/> and returns its index. The
-    /// typed methods such as <see cref="NetwSchema.Vector3"/> are this call
-    /// with the type filled in. Declaring a <paramref name="key"/> again with
-    /// the same <paramref name="type"/> and <paramref name="stride"/> returns
-    /// the index it already has, so a script reload is safe. Declaring it with
-    /// a different shape returns <c>-1</c> and appends nothing.
+    /// Declaring <paramref name="key"/> again with the same
+    /// <paramref name="type"/> and <paramref name="stride"/> returns its
+    /// existing index. A different shape returns <c>-1</c> and appends nothing.
     /// </summary>
     public int Column(
         StringName key,
@@ -632,11 +618,10 @@ public sealed class NetwSchema : NetwRefCounted
         NetwApi.MethodBind("NetwSchema", "storage_version", 1645291142UL);
 
     /// <summary>
-    /// Sets the version saved records of this schema carry, and returns this
-    /// schema. The default is <c>1</c>. Raise it when the saved columns change,
-    /// and add a <see cref="NetwSchema.Migrate"/> step from the previous
-    /// version. It does not affect replication, so peers on different storage
-    /// versions still connect.
+    /// Raise it when the saved columns change, and add a
+    /// <see cref="NetwSchema.Migrate"/> step from the previous version. It does
+    /// not affect replication, so peers on different storage versions still
+    /// connect.
     /// </summary>
     public NetwSchema StorageVersion(int version)
     {
@@ -654,12 +639,15 @@ public sealed class NetwSchema : NetwRefCounted
         NetwApi.MethodBind("NetwSchema", "migrate", 3083647625UL);
 
     /// <summary>
-    /// Sets the function that upgrades a record saved under
-    /// <paramref name="fromVersion"/> to the next version, and returns this
-    /// schema. <paramref name="step"/> takes a
-    /// <see cref="Godot.Collections.Dictionary"/> and returns a
-    /// <see cref="Godot.Collections.Dictionary"/>. A save two versions behind
-    /// runs two steps in order, and a read with a missing step fails.
+    /// A read runs one <paramref name="step"/> per saved version up to
+    /// <see cref="NetwSchema.StorageVersion"/>. A missing step refuses the
+    /// read.
+    /// <code>
+    /// step(values: Dictionary) -&gt; Dictionary
+    ///
+    /// Dictionary
+    /// ┖╴saved column name  Variant  the value stored under that name
+    /// </code>
     /// <code>
     /// static var schema := NetwSchema.create(&amp;"players") \
     ///     .replicated(false) \
@@ -700,10 +688,8 @@ public sealed class NetwSchema : NetwRefCounted
         NetwApi.MethodBind("NetwSchema", "register", 2844667682UL);
 
     /// <summary>
-    /// Adds this schema to the schema registry if it is not there, and returns
-    /// it. A <c>static var</c> runs only once, so call this from
-    /// <c>Node._ready</c> when the registry may have been reset since. It does
-    /// nothing when the schema is already registered.
+    /// Registers this <see cref="NetwSchema"/> if no <see cref="NetwSchema"/>
+    /// with the same <see cref="NetwSchema.SchemaName"/> is registered.
     /// </summary>
     public NetwSchema Register()
     {
@@ -716,9 +702,8 @@ public sealed class NetwSchema : NetwRefCounted
         NetwApi.MethodBind("NetwSchema", "replicated", 1843172997UL);
 
     /// <summary>
-    /// Sets whether a session creates a replicated table from this schema, and
-    /// returns this schema. Pass <c>false</c> for a schema that only describes
-    /// saved records.
+    /// Pass <c>false</c> for a <see cref="NetwSchema"/> used only by
+    /// <see cref="NetwDatabase"/>.
     /// </summary>
     public NetwSchema Replicated(bool value = true)
     {
@@ -736,10 +721,8 @@ public sealed class NetwSchema : NetwRefCounted
         NetwApi.MethodBind("NetwSchema", "reliable", 1843172997UL);
 
     /// <summary>
-    /// Sends this schema's table commits reliably, and returns this schema. Use
-    /// it for a table that changes rarely, where a lost packet would not be
-    /// fixed by the next commit. A table committed every tick is fine
-    /// unreliable.
+    /// Use for a <see cref="NetwTable"/> whose next commit cannot repair a lost
+    /// update.
     /// </summary>
     public NetwSchema Reliable(bool value = true)
     {
@@ -757,8 +740,8 @@ public sealed class NetwSchema : NetwRefCounted
         NetwApi.MethodBind("NetwSchema", "is_replicated", 36873697UL);
 
     /// <summary>
-    /// Whether a session creates a replicated table from this schema, as
-    /// <see cref="NetwSchema.Replicated"/> set it.
+    /// Whether a session creates a replicated <see cref="NetwTable"/> from this
+    /// <see cref="NetwSchema"/>. Set by <see cref="NetwSchema.Replicated"/>.
     /// </summary>
     public bool IsReplicated()
     {
@@ -771,8 +754,8 @@ public sealed class NetwSchema : NetwRefCounted
         NetwApi.MethodBind("NetwSchema", "is_reliable", 36873697UL);
 
     /// <summary>
-    /// Whether this schema's table sends its commits reliably, as
-    /// <see cref="NetwSchema.Reliable"/> set it.
+    /// Whether this <see cref="NetwSchema"/>'s <see cref="NetwTable"/> sends
+    /// commits reliably. Set by <see cref="NetwSchema.Reliable"/>.
     /// </summary>
     public bool IsReliable()
     {

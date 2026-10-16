@@ -1,4 +1,5 @@
 #include "support/netw_test.h"
+#include "support/fault_log.h"
 
 #include "netw/api/netw_multiplayer.hpp"
 #include "netw/api/quantize.hpp"
@@ -316,6 +317,31 @@ TEST_CASE(
     NETW_CHECK_EQ(core->storage_version_of(compiled), 2);
     CHECK_FALSE(core->migration_from(compiled, 1).is_null());
     CHECK(core->migration_from(compiled, 2).is_null());
+}
+
+TEST_CASE(
+    "[Networked][Table][Hosted] SC1 a live session's adopted schema "
+    "refuses extra columns at declaration and permits edits after release"
+) {
+    Registry registry;
+    const Ref<NetwSchema> schema = declare("TimingSchema");
+    schema->i64("first", 1);
+    Ref<NetwMultiplayer> core = session();
+    const RID adopted = core->schema_find_or_adopt("TimingSchema");
+    REQUIRE(adopted.is_valid());
+    netw_test::FaultWatch faults;
+    faults.expect_error(
+        "[error][table] Schema 'TimingSchema' is already in use by a "
+        "live session. Declare its columns before the session uses it.", 1
+    );
+    NETW_CHECK_EQ(schema->i64("late", 1), -1);
+    NETW_CHECK_EQ(int(schema->columns_of().size()), 1);
+    NETW_CHECK_EQ(core->schema_get_column_count(adopted), 1);
+    NETW_CHECK_EQ(schema->i64("first", 1), 0);
+    declare("AnotherTimingSchema")->i64("value", 1);
+    CHECK(core->schema_find_or_adopt("AnotherTimingSchema").is_valid());
+    core.unref();
+    NETW_CHECK_EQ(schema->i64("late", 1), 1);
 }
 
 } // namespace TestSchemaDeclarationModel

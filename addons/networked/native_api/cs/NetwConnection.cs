@@ -56,6 +56,28 @@ namespace Networked;
 /// connection.set_defaults(WebRTCMultiplayerPeer, {ice_servers = my_servers})
 /// </code>
 /// </para>
+/// <para>
+/// <b>Relay</b> A WebRTC player behind a strict NAT reaches the others only
+/// through a TURN relay. When <c>networked/webrtc/turn_credentials_url</c> is
+/// set, every WebRTC <see cref="NetwConnection.Host"/> and
+/// <see cref="NetwConnection.Join"/> first fetches ICE servers from it and
+/// connects with them.
+/// <code>
+/// project.godot   webrtc/turn_credentials_url="https://networked-turn.example.workers.dev"
+/// server          cp -r addons/networked/templates/turn_worker my-turn
+///                 cd my-turn
+///                 npx wrangler secret put TURN_KEY_ID
+///                 npx wrangler secret put TURN_KEY_API_TOKEN
+///                 npx wrangler deploy
+/// </code>
+/// </para>
+/// <para>
+/// When the fetch fails, the session connects with <c>ice_servers</c> and a
+/// warning or error says why. Credentials last <c>TTL_SECONDS</c>, and a
+/// relayed connection older than that drops. A game with its own login leaves
+/// the URL empty, fetches servers itself and passes them with
+/// <see cref="NetwConnection.SetDefaults"/>.
+/// </para>
 /// </remarks>
 public sealed class NetwConnection : NetwRefCounted
 {
@@ -75,9 +97,21 @@ public sealed class NetwConnection : NetwRefCounted
 
     public enum StateEnum : long
     {
+        /// <summary>
+        /// No connection attempt or online session.
+        /// </summary>
         Offline = 0,
+        /// <summary>
+        /// The transport is creating a <see cref="MultiplayerPeer"/>.
+        /// </summary>
         Creating = 1,
+        /// <summary>
+        /// The <see cref="MultiplayerPeer"/> is assigned and connecting.
+        /// </summary>
         Connecting = 2,
+        /// <summary>
+        /// The session is online.
+        /// </summary>
         Online = 3,
     }
 
@@ -87,18 +121,34 @@ public sealed class NetwConnection : NetwRefCounted
         /// The address is ignored.
         /// </summary>
         Host = 0,
+        /// <summary>
+        /// Creates a client peer that joins the supplied address.
+        /// </summary>
         Client = 1,
     }
 
     public enum TransportCapability : long
     {
+        /// <summary>
+        /// The transport is available on this platform.
+        /// </summary>
         Available = 1,
         /// <summary>
         /// Web builds usually cannot.
         /// </summary>
         CanHost = 2,
+        /// <summary>
+        /// The transport can probe servers for their status and information.
+        /// </summary>
         CanProbe = 4,
+        /// <summary>
+        /// The transport can discover servers while
+        /// <see cref="NetwConnection.Browsing"/> is enabled.
+        /// </summary>
         CanBrowse = 8,
+        /// <summary>
+        /// The transport accepts an empty address when joining.
+        /// </summary>
         AcceptsEmptyAddress = 16,
     }
 
@@ -158,6 +208,9 @@ public sealed class NetwConnection : NetwRefCounted
         remove => DisconnectBridge("failed", value);
     }
 
+    /// <summary>
+    /// Emitted when <see cref="NetwConnection.JoinAddress"/> changes.
+    /// </summary>
     public event Action<string> JoinAddressChanged
     {
         add => ConnectBridge(
@@ -188,6 +241,10 @@ public sealed class NetwConnection : NetwRefCounted
         remove => DisconnectBridge("invited", value);
     }
 
+    /// <summary>
+    /// Emitted when <c>endpoint</c> is added to
+    /// <see cref="NetwConnection.Endpoints"/>.
+    /// </summary>
     public event Action<NetwEndpoint> EndpointAdded
     {
         add => ConnectBridge(
@@ -220,6 +277,10 @@ public sealed class NetwConnection : NetwRefCounted
     private static readonly IntPtr _bindGetState =
         NetwApi.MethodBind("NetwConnection", "get_state", 3870163413UL);
 
+    /// <summary>
+    /// The connection attempt's <see cref="NetwConnection.StateEnum"/>,
+    /// reported by <see cref="NetwConnection.StateChanged"/>.
+    /// </summary>
     public NetwConnection.StateEnum State
     {
         get
@@ -500,6 +561,14 @@ public sealed class NetwConnection : NetwRefCounted
     private static readonly IntPtr _bindDefaults =
         NetwApi.MethodBind("NetwConnection", "defaults", 2321877293UL);
 
+    /// <summary>
+    /// Returns the settings stored by <see cref="NetwConnection.SetDefaults"/>
+    /// for <paramref name="transport"/>.
+    /// <code>
+    /// Dictionary
+    /// ┖╴setting name  Variant  the configured default value
+    /// </code>
+    /// </summary>
     public Godot.Collections.Dictionary Defaults(Variant transport)
     {
         godot_variant slot0 = transport.CopyNativeVariant();
@@ -515,6 +584,15 @@ public sealed class NetwConnection : NetwRefCounted
     private static readonly IntPtr _bindDiagnostics =
         NetwApi.MethodBind("NetwConnection", "diagnostics", 3485342025UL);
 
+    /// <summary>
+    /// Returns the connected transport's debugging information for
+    /// <paramref name="peerId"/>, as supplied by
+    /// <c>NetwTransport._diagnostics</c>.
+    /// <code>
+    /// Dictionary
+    /// ┖╴transport-defined key  Variant  debugging information
+    /// </code>
+    /// </summary>
     public Godot.Collections.Dictionary Diagnostics(long peerId)
     {
         godot_variant slot0 = VariantUtils.CreateFromInt((long)peerId);
@@ -580,6 +658,10 @@ public sealed class NetwConnection : NetwRefCounted
             "register_transport",
             1164469251UL);
 
+    /// <summary>
+    /// Registers the <see cref="NetwTransport"/> script <paramref name="type"/>
+    /// for this session. Returns <c>false</c> if registration fails.
+    /// </summary>
     public bool RegisterTransport(Script type)
     {
         IntPtr slot0 = type?.NativeInstance ?? IntPtr.Zero;
@@ -598,6 +680,10 @@ public sealed class NetwConnection : NetwRefCounted
             "unregister_transport",
             4100417191UL);
 
+    /// <summary>
+    /// Removes the registered transport named by <paramref name="of"/>. Returns
+    /// <c>true</c> when it was removed.
+    /// </summary>
     public bool UnregisterTransport(Variant of)
     {
         godot_variant slot0 = of.CopyNativeVariant();
@@ -667,6 +753,11 @@ public sealed class NetwConnection : NetwRefCounted
     private static readonly IntPtr _bindFind =
         NetwApi.MethodBind("NetwConnection", "find", 1121123991UL);
 
+    /// <summary>
+    /// Returns the listed <see cref="NetwEndpoint"/> for
+    /// <paramref name="transport"/> and <paramref name="address"/>, or
+    /// <c>null</c> when none is listed.
+    /// </summary>
     public NetwEndpoint Find(Variant transport, string address)
     {
         godot_variant slot0 = transport.CopyNativeVariant();

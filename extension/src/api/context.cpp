@@ -82,11 +82,7 @@ Node *handler_scope(const Callable &p_handler, const char *p_verb) {
 }
 
 template <typename T>
-Ref<T> declare_config(
-    Node *p_node,
-    session_decl::Kind p_kind,
-    const Ref<T> &p_preset
-) {
+Ref<T> declare_config(Node *p_node, session_decl::Kind p_kind) {
     const char *verb = session_decl::verb_of(p_kind);
     NETW_ERR_COND_V(
         p_node == nullptr,
@@ -108,9 +104,6 @@ Ref<T> declare_config(
     );
     Ref<T> draft;
     draft.instantiate();
-    if (p_preset.is_valid()) {
-        draft->copy_values_from(**p_preset);
-    }
     if (session_decl::declare(p_node, p_kind, Callable(), draft, verb) != OK) {
         return Ref<T>();
     }
@@ -341,20 +334,6 @@ void inject_property_lint(Node *p_node) {
     tree::mark(p_node, tree::MARK_LINT_SEEN | tree::MARK_LINT);
 }
 
-void warn_late(Node *p_node, const char *p_door, const StringName &p_member) {
-    if (!p_node->is_inside_tree()) {
-        return;
-    }
-    NETW_WARN(
-        sys::SESSION,
-        "Netw.%s configured '%s' on '%s' after it entered the tree, so "
-        "early packets can miss it. Call it before the node enters the tree.",
-        p_door,
-        String(p_member),
-        String(p_node->get_name())
-    );
-}
-
 } // namespace
 
 void tree::declarations_entered(Node *p_node, uint16_t p_marks) {
@@ -500,31 +479,30 @@ Error Netw::configure_transfer(const Callable &p_keep) {
     );
 }
 
-Ref<NetwSessionConfig> Netw::configure_session(
-    Node *p_node,
-    const Ref<NetwSessionConfig> &p_preset
-) {
-    return declare_config(p_node, session_decl::KIND_SESSION_CONFIG, p_preset);
+Ref<NetwSessionConfig> Netw::configure_session(Node *p_node) {
+    return declare_config<NetwSessionConfig>(
+        p_node,
+        session_decl::KIND_SESSION_CONFIG
+    );
 }
 
-Ref<NetwClockConfig> Netw::configure_clock(
-    Node *p_node,
-    const Ref<NetwClockConfig> &p_preset
-) {
-    return declare_config(p_node, session_decl::KIND_CLOCK_CONFIG, p_preset);
+Ref<NetwClockConfig> Netw::configure_clock(Node *p_node) {
+    return declare_config<NetwClockConfig>(
+        p_node,
+        session_decl::KIND_CLOCK_CONFIG
+    );
 }
 
-Ref<NetwLagCompensationConfig> Netw::configure_lagcomp(
-    Node *p_node,
-    const Ref<NetwLagCompensationConfig> &p_preset
-) {
-    return declare_config(p_node, session_decl::KIND_LAGCOMP_CONFIG, p_preset);
+Ref<NetwLagCompensationConfig> Netw::configure_lagcomp(Node *p_node) {
+    return declare_config<NetwLagCompensationConfig>(
+        p_node,
+        session_decl::KIND_LAGCOMP_CONFIG
+    );
 }
 
 Ref<NetwPropertyConfig> Netw::configure_property(
     Node *p_node,
     const StringName &p_property,
-    bool p_warn_late,
     int64_t p_declared_type
 ) {
     NETW_ZONE_NC("Netw configure property", colors::SESSION);
@@ -535,9 +513,18 @@ Ref<NetwPropertyConfig> Netw::configure_property(
         );
         return Ref<NetwPropertyConfig>();
     }
-    const gd::PropertyResolution resolved = gd::resolve_property(
-        p_node, p_property, gd::property_list(p_node)
-    );
+    if (p_node->is_inside_tree()) {
+        NETW_ERROR(
+            sys::SESSION,
+            "Netw.configure_property cannot declare '%s' on '%s' after it "
+            "entered the tree. Call it from _init.",
+            String(p_property),
+            String(p_node->get_name())
+        );
+        return Ref<NetwPropertyConfig>();
+    }
+    const gd::PropertyResolution resolved
+        = gd::resolve_property(p_node, p_property, gd::property_list(p_node));
     if (!resolved.present) {
         NETW_ERROR(
             sys::SESSION,
@@ -568,9 +555,6 @@ Ref<NetwPropertyConfig> Netw::configure_property(
             String(p_property)
         );
         return Ref<NetwPropertyConfig>();
-    }
-    if (p_warn_late) {
-        warn_late(p_node, "configure_property", p_property);
     }
     const Ref<Script> script = script_of(p_node);
     if (script.is_null()) {
@@ -610,15 +594,23 @@ Ref<NetwPropertyConfig> Netw::configure_property(
 }
 
 Ref<NetwMemberConfig> Netw::configure_rpc(const Callable &p_callable) {
-    const Ref<Script> script
-        = named_method_script(p_callable, "configure_rpc");
+    const Ref<Script> script = named_method_script(p_callable, "configure_rpc");
     if (script.is_null()) {
         return Ref<NetwMemberConfig>();
     }
     const StringName method = p_callable.get_method();
     Node *host = Object::cast_to<Node>(p_callable.get_object());
     if (host != nullptr) {
-        warn_late(host, "configure_rpc", method);
+        if (host->is_inside_tree()) {
+            NETW_ERROR(
+                sys::SESSION,
+                "Netw.configure_rpc cannot declare '%s' on '%s' after it "
+                "entered the tree. Call it from _init.",
+                String(method),
+                String(host->get_name())
+            );
+            return Ref<NetwMemberConfig>();
+        }
         inject_component_registration(host);
     }
     const Ref<NetwMemberConfig> existing
@@ -659,7 +651,6 @@ Ref<NetwMemberConfig> Netw::configure_signal(const Signal &p_signal) {
         );
         return Ref<NetwMemberConfig>();
     }
-    warn_late(node, "configure_signal", name);
     const Ref<NetwMemberConfig> existing
         = netw::script::model::get_signal_config(script, name);
     if (existing.is_valid()) {
@@ -699,7 +690,8 @@ Ref<NetwMemberConfig> Netw::configure_spawn(const Callable &p_callable) {
 Ref<NetwEntity> Netw::configure_entity(Node *p_node) {
     NETW_ZONE_NC("Netw configure entity", colors::SESSION);
     const Ref<NetwEntity> entity = NetwEntity::resolve(p_node);
-    if (entity.is_null() && p_node != nullptr && p_node->is_inside_tree()) {
+    if (p_node != nullptr && p_node->is_inside_tree()
+        && (entity.is_null() || entity->get_owner() != p_node)) {
         NETW_ERROR(
             sys::ENTITY,
             "Netw.configure_entity ran after '%s' entered the tree, which is "
@@ -707,6 +699,7 @@ Ref<NetwEntity> Netw::configure_entity(Node *p_node) {
             "NetwEntity.of to find an entity that already exists.",
             String(p_node->get_name())
         );
+        return Ref<NetwEntity>();
     }
     return entity;
 }
@@ -861,17 +854,13 @@ Ref<NetwChannel> Netw::channel(Node *p_node, int64_t p_channel_id) {
 
 Ref<NetwDatabaseConfig> Netw::configure_database(
     Node *p_node,
-    const StringName &p_name,
-    const Ref<NetwDatabaseConfig> &p_preset
+    const StringName &p_name
 ) {
-    NetwMultiplayer *api = NetwMultiplayer::of(p_node);
     NETW_ERR_COND_V(
-        api == nullptr,
+        p_node == nullptr,
         Ref<NetwDatabaseConfig>(),
         sys::TABLE,
-        "Netw.configure_database got '%s', which is not inside a session. "
-        "Call it from a node in the scene tree under a MultiplayerViewport.",
-        p_node != nullptr ? String(p_node->get_name()) : String("a freed node")
+        "Netw.configure_database needs a node, and it was null."
     );
     NETW_ERR_COND_V(
         String(p_name).is_empty(),
@@ -881,10 +870,7 @@ Ref<NetwDatabaseConfig> Netw::configure_database(
     );
     Ref<NetwDatabaseConfig> draft;
     draft.instantiate();
-    if (p_preset.is_valid()) {
-        draft->copy_values_from(**p_preset);
-    }
-    if (!api->database_create(p_name, draft).is_valid()) {
+    if (session_decl::declare_database(p_node, p_name, draft) != OK) {
         return Ref<NetwDatabaseConfig>();
     }
     return draft;
@@ -1133,7 +1119,6 @@ Ref<NetwSceneConfig> Netw::configure_scene(Node *p_node) {
     SceneDecl decl = netw::script::model::get_scene_decl(script);
     if (!decl.declared) {
         decl.declared = true;
-        decl.label = p_node->get_name();
         netw::script::model::declare_scene(script, decl);
     }
 
@@ -1193,31 +1178,24 @@ void Netw::_bind_methods() {
     );
     ClassDB::bind_static_method(
         "Netw",
-        D_METHOD("configure_session", "node", "preset"),
-        &Netw::configure_session,
-        DEFVAL(Ref<NetwSessionConfig>())
+        D_METHOD("configure_session", "node"),
+        &Netw::configure_session
     );
     ClassDB::bind_static_method(
         "Netw",
-        D_METHOD("configure_clock", "node", "preset"),
-        &Netw::configure_clock,
-        DEFVAL(Ref<NetwClockConfig>())
+        D_METHOD("configure_clock", "node"),
+        &Netw::configure_clock
     );
     ClassDB::bind_static_method(
         "Netw",
-        D_METHOD("configure_lagcomp", "node", "preset"),
-        &Netw::configure_lagcomp,
-        DEFVAL(Ref<NetwLagCompensationConfig>())
+        D_METHOD("configure_lagcomp", "node"),
+        &Netw::configure_lagcomp
     );
 
     ClassDB::bind_static_method(
         "Netw",
-        D_METHOD(
-            "configure_property", "node", "property", "warn_late",
-            "declared_type"
-        ),
+        D_METHOD("configure_property", "node", "property", "declared_type"),
         &Netw::configure_property,
-        DEFVAL(true),
         DEFVAL(-1)
     );
     ClassDB::bind_static_method(
@@ -1304,9 +1282,8 @@ void Netw::_bind_methods() {
     );
     ClassDB::bind_static_method(
         "Netw",
-        D_METHOD("configure_database", "node", "name", "preset"),
-        &Netw::configure_database,
-        DEFVAL(Ref<NetwDatabaseConfig>())
+        D_METHOD("configure_database", "node", "name"),
+        &Netw::configure_database
     );
 
     ClassDB::bind_static_method(

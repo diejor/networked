@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <class name="NetwClockConfig" inherits="Resource" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
 	<brief_description>
-		Configuration for the clock of [member Node.multiplayer].
+		Settings for a session's [NetwClock].
 	</brief_description>
 	<description>
-		Returned by [method Netw.configure_clock].
+		Settings apply before assigning [member MultiplayerAPI.multiplayer_peer] or starting [member NetwSession.connection]. Changes after application are ignored.
 		[codeblock]
 		func _init() -&gt; void:
 		    Netw.configure_clock(self).ticks_per_second(60).display_offset_ticks(2)
@@ -17,30 +17,34 @@
 			<return type="NetwClockConfig" />
 			<param index="0" name="display_offset" type="int" />
 			<description>
+				Sets [member display_offset], how many ticks in the past remote [NetwEntity] instances are shown.
 			</description>
 		</method>
 		<method name="physics_interpolation">
 			<return type="NetwClockConfig" />
 			<param index="0" name="use_physics_interpolation" type="bool" />
 			<description>
+				Sets [member use_physics_interpolation], whether [member NetwClock.tick_factor] follows Godot physics interpolation.
 			</description>
 		</method>
 		<method name="sync">
 			<return type="NetwClockConfig" />
 			<param index="0" name="sync_mode" type="int" enum="NetwClock.SyncMode" />
 			<description>
+				Sets [member sync_mode], how the clock corrects toward the server's clock.
 			</description>
 		</method>
 		<method name="ticks_per_second">
 			<return type="NetwClockConfig" />
 			<param index="0" name="tickrate" type="int" />
 			<description>
+				Sets [member tickrate], the number of network ticks per second.
 			</description>
 		</method>
 	</methods>
 	<members>
 		<member name="display_offset" type="int" setter="set_display_offset" getter="get_display_offset" default="2">
-			How many ticks in the past remote entities are shown. A small value helps hide lag.
+			How many ticks in the past remote [NetwEntity] instances are shown. A small value helps hide lag.
 		</member>
 		<member name="enable_drift_logging" type="bool" setter="set_enable_drift_logging" getter="get_enable_drift_logging" default="false">
 			Logs average clock drift over 60-second windows to the console.

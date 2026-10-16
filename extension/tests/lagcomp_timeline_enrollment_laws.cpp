@@ -56,7 +56,7 @@ void arm_simulation(NetwMultiplayer *p_session) {
 
 uint64_t a_state_stream(NetwMultiplayer *p_session, Node *p_node) {
     const Ref<NetwPropertyConfig> config
-        = Netw::configure_property(p_node, StringName("position"), true);
+        = Netw::configure_property(p_node, StringName("position"));
     config->state();
     Dictionary configs;
     configs[StringName("position")] = config;

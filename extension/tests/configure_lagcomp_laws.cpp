@@ -51,44 +51,20 @@ Node *child_named(Node *p_parent, const char *p_name) {
     return node;
 }
 
-Ref<NetwLagCompensationConfig> preset(int64_t p_future, int64_t p_gate) {
-    Ref<NetwLagCompensationConfig> made;
-    made.instantiate();
-    made->set_max_future_action_ticks(p_future);
-    made->set_input_gate_deadline_ticks(p_gate);
-    return made;
+Ref<NetwLagCompensationConfig> declared(
+    Node *p_scope,
+    int64_t p_future,
+    int64_t p_gate
+) {
+    const Ref<NetwLagCompensationConfig> draft
+        = Netw::configure_lagcomp(p_scope);
+    if (draft.is_valid()) {
+        draft->max_future_action(p_future)->input_gate_deadline(p_gate);
+    }
+    return draft;
 }
 
 } // namespace
-
-TEST_CASE(
-    "[Networked][Session][Hosted][SceneTree] CG1 a preset is copied into the "
-    "declaration, so editing the preset afterwards cannot reach a session "
-    "that already took it and two scopes sharing one preset own independent "
-    "drafts"
-) {
-    Branch first("CG1First");
-    Branch second("CG1Second");
-    const Ref<NetwLagCompensationConfig> shared = preset(5, 7);
-
-    const Ref<NetwLagCompensationConfig> here
-        = Netw::configure_lagcomp(child_named(first.node, "Session"), shared);
-    const Ref<NetwLagCompensationConfig> there
-        = Netw::configure_lagcomp(child_named(second.node, "Session"), shared);
-    REQUIRE(here.is_valid());
-    REQUIRE(there.is_valid());
-
-    CHECK(here != shared);
-    CHECK(there != shared);
-    CHECK(here != there);
-
-    shared->set_max_future_action_ticks(99);
-    here->set_input_gate_deadline_ticks(3);
-
-    NETW_CHECK_EQ(int(here->get_max_future_action_ticks()), 5);
-    NETW_CHECK_EQ(int(there->get_max_future_action_ticks()), 5);
-    NETW_CHECK_EQ(int(there->get_input_gate_deadline_ticks()), 7);
-}
 
 TEST_CASE(
     "[Networked][Session][Hosted][SceneTree] CG2 a second declaration on one "
@@ -107,12 +83,10 @@ TEST_CASE(
     Branch branch("CG2");
     Node *scope = child_named(branch.node, "Session");
 
-    const Ref<NetwLagCompensationConfig> draft
-        = Netw::configure_lagcomp(scope, preset(4, 6));
+    const Ref<NetwLagCompensationConfig> draft = declared(scope, 4, 6);
     REQUIRE(draft.is_valid());
 
-    const Ref<NetwLagCompensationConfig> again
-        = Netw::configure_lagcomp(scope, preset(9, 9));
+    const Ref<NetwLagCompensationConfig> again = Netw::configure_lagcomp(scope);
 
     CHECK(again.is_null());
     NETW_CHECK_EQ(int(draft->get_max_future_action_ticks()), 4);
@@ -157,8 +131,7 @@ TEST_CASE(
     Branch branch("CG4");
     Node *scope = child_named(branch.node, "Session");
 
-    const Ref<NetwLagCompensationConfig> draft
-        = Netw::configure_lagcomp(scope, preset(13, 19));
+    const Ref<NetwLagCompensationConfig> draft = declared(scope, 13, 19);
     REQUIRE(draft.is_valid());
     branch.api->config_settle();
 
@@ -186,8 +159,8 @@ TEST_CASE(
     );
 
     Branch branch("CG5");
-    Netw::configure_lagcomp(child_named(branch.node, "One"), preset(41, 43));
-    Netw::configure_lagcomp(child_named(branch.node, "Two"), preset(41, 43));
+    declared(child_named(branch.node, "One"), 41, 43);
+    declared(child_named(branch.node, "Two"), 41, 43);
 
     const int before = int(branch.api->get_max_future_action_ticks());
 
@@ -215,7 +188,7 @@ TEST_CASE(
 
     Branch branch("CG6");
     Node *scope = child_named(branch.node, "Session");
-    Netw::configure_lagcomp(scope, preset(23, 29));
+    declared(scope, 23, 29);
 
     branch.node->remove_child(scope);
 

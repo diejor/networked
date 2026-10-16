@@ -20,12 +20,14 @@
 			<return type="NetwLagCompensationConfig" />
 			<param index="0" name="ticks" type="int" />
 			<description>
+				Sets [member input_gate_deadline_ticks], how long an action waits for missing input.
 			</description>
 		</method>
 		<method name="max_future_action">
 			<return type="NetwLagCompensationConfig" />
 			<param index="0" name="ticks" type="int" />
 			<description>
+				Sets [member max_future_action_ticks], how far ahead of the server an action may be.
 			</description>
 		</method>
 	</methods>

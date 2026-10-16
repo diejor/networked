@@ -4,7 +4,7 @@
 		The scene an entity belongs to, reached as [member NetwEntity.scene].
 	</brief_description>
 	<description>
-		Tells who is in a multiplayer scene and which players it replicates to. Reach it with [method Netw.scene] or [member NetwEntity.scene]. An entity declared with [method Netw.configure_scene] resolves to itself, any other entity to its closest scene ancestor. Each scene has one handle, so [code]==[/code] compares scenes.
+		A multiplayer scene is a [NetwEntity], available as [member entity]. Reach it with [method Netw.scene] or [member NetwEntity.scene]. An entity declared with [method Netw.configure_scene] resolves to itself, any other entity to its closest scene ancestor. Each scene has one handle, so [code]==[/code] compares scenes.
 		A scene replicates to a player while a body of theirs is in it, or while the player watches it with [method watch]. [method unwatch] does not remove a player whose body is still in the scene.
 		[codeblock]
 		lobby.watch(player)
@@ -88,6 +88,9 @@
 		</member>
 		<member name="entities" type="NetwEntity[]" setter="" getter="get_entities" default="[]">
 			Every entity in this scene.
+		</member>
+		<member name="entity" type="NetwEntity" setter="" getter="get_entity">
+			The [NetwEntity] on [member root], or [code]null[/code] when no scene was found.
 		</member>
 		<member name="is_declared" type="bool" setter="" getter="get_is_declared" default="false">
 			Whether a scene was found. [code]false[/code] for an entity outside every scene or not in the tree, and every other member is empty.

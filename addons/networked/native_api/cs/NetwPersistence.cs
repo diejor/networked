@@ -6,25 +6,26 @@ using Godot.NativeInterop;
 namespace Networked;
 
 /// <summary>
-/// One entity's saved record, reached as <see cref="NetwEntity.Persistence"/>.
+/// One <see cref="NetwEntity"/>'s saved record, reached as
+/// <see cref="NetwEntity.Persistence"/>.
 /// </summary>
 /// <remarks>
-/// On the server, the entity's <see cref="NetwPersistenceConfig"/> and its
-/// <see cref="NetwPropertyConfig.Persisted"/> properties become one record when
-/// the node is ready. If any of them is invalid, the entity saves nothing and
-/// an error names the property. <c>Node._ready</c> runs before the record is
-/// read, so wait for <see cref="NetwPersistence.Loaded"/> before using the
-/// stored values.
+/// The server reads the <see cref="NetwPersistenceConfig"/> and saved
+/// properties when the root is ready. Wait for
+/// <see cref="NetwPersistence.Loaded"/> before using stored values.
 /// <code>
-/// func _on_chest_opened() -&gt; void:
-///     var persistence := entity.persistence
-///     persistence.saved.connect(func() -&gt; void: print("stored as ", persistence.record_id))
-///     persistence.save()
+/// @onready var entity: NetwEntity = NetwEntity.of(self)
+///
+/// func _ready() -&gt; void:
+///     entity.persistence.loaded.connect(on_loaded)
+///
+/// func on_loaded(_found: bool) -&gt; void:
+///     show_contents()
 /// </code>
 /// <para>
-/// <see cref="NetwPersistenceConfig.Interval"/> saves automatically, and only
-/// when something changed. An entity whose node is freed saves one last time.
-/// Failed loads and saves emit <see cref="NetwDatabase.Failed"/>.
+/// <see cref="NetwPersistenceConfig.Interval"/> saves changed values
+/// automatically. Freeing the root saves one last time. Failed loads and saves
+/// emit <see cref="NetwDatabase.Failed"/>.
 /// </para>
 /// </remarks>
 public sealed class NetwPersistence : NetwRefCounted
@@ -98,8 +99,8 @@ public sealed class NetwPersistence : NetwRefCounted
         NetwApi.MethodBind("NetwPersistence", "get_record_id", 2737447660UL);
 
     /// <summary>
-    /// The id this record is stored under, as
-    /// <see cref="NetwPersistenceConfig.RecordId"/> returned it.
+    /// The id this record is stored under. Supplied by
+    /// <see cref="NetwPersistenceConfig.RecordId"/>.
     /// </summary>
     public StringName RecordId
     {
@@ -117,8 +118,8 @@ public sealed class NetwPersistence : NetwRefCounted
         NetwApi.MethodBind("NetwPersistence", "get_database", 2737447660UL);
 
     /// <summary>
-    /// The <see cref="NetwDatabase"/> this record lives in, as
-    /// <see cref="NetwPersistenceConfig.Database"/> named it.
+    /// The name of the <see cref="NetwDatabase"/> this record lives in. Set by
+    /// <see cref="NetwPersistenceConfig.Database"/>.
     /// </summary>
     public StringName Database
     {
@@ -187,10 +188,11 @@ public sealed class NetwPersistence : NetwRefCounted
         NetwApi.MethodBind("NetwPersistence", "save", 1931563502UL);
 
     /// <summary>
-    /// Writes the configured properties as this entity's record. The promise
-    /// returns <c>false</c> when nothing had changed. A failed save fails the
-    /// promise, and <see cref="NetwPromise.Wait"/> returns the code. The entity
-    /// stays <see cref="NetwPersistence.Dirty"/> so the next save tries again.
+    /// Writes the configured properties as this <see cref="NetwEntity"/>'s
+    /// record. The promise returns <c>false</c> when nothing had changed. A
+    /// failed save fails the promise, and <see cref="NetwPromise.Wait"/>
+    /// returns the code. The <see cref="NetwEntity"/> stays
+    /// <see cref="NetwPersistence.Dirty"/> so the next save tries again.
     /// <code>
     /// Error
     /// ┠╴ERR_UNCONFIGURED  no persistence configuration or unopened database

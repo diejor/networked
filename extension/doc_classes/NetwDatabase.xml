@@ -4,12 +4,11 @@
 		Persistent storage for saved records.
 	</brief_description>
 	<description>
-		[NetwEntity], [NetwTable] and your own code save and load their state through a [NetwDatabase]. A [NetwDatabaseBackend] does the actual storage.
-		A record is a [Dictionary] stored under a [StringName] id. A [NetwSchema] defines the saved property names and types.
-		Await [method open] before reading or writing.
+		Await [method open] before reading or writing. Database access survives removal of the declaring [Node]. A [NetwDatabaseBackend] supplies storage connections.
 		[codeblock]
-		func _ready() -&gt; void:
-		    Netw.configure_database(self, &amp;"saves").backend(preload("res://filesystem_backend.tres"))
+		func _init() -&gt; void:
+		    Netw.configure_database(self, &amp;"saves") \
+		            .backend(preload("res://save_backend.tres"))
 
 		func start_game(slot: StringName) -&gt; void:
 		    var db: NetwDatabase = Netw.session(self).database(&amp;"saves")
@@ -44,17 +43,16 @@
 			<return type="NetwPromise" />
 			<param index="0" name="slot" type="StringName" />
 			<description>
-				Removes [param slot] and everything stored in it. The slot must not be open.
-				The promise gives an [enum @GlobalScope.Error].
+				The slot must be closed. [method NetwPromise.wait] gives an [enum @GlobalScope.Error].
 				[codeblock lang=text]
 				Error
-				┠╴OK                the backend removed the slot
-				┠╴ERR_BUSY          slot is the one this database holds open
-				┠╴ERR_UNCONFIGURED  the database declares no backend
-				┠╴ERR_UNAVAILABLE   the session ended, or the backend
-				│                   implements no _delete_slot
-				┠╴ERR_INVALID_DATA  the backend's _delete_slot answered no promise
-				┖╴storage error   the backend could not remove the slot
+				┠╴OK                  the backend removed the slot
+				┠╴ERR_BUSY            slot is the one this database holds open
+				┠╴ERR_ALREADY_EXISTS  live declarations name different backends
+				┠╴ERR_UNCONFIGURED    the database declares no backend
+				┠╴ERR_UNAVAILABLE     the session ended, or the backend implements no _delete_slot
+				┠╴ERR_INVALID_DATA    the backend's _delete_slot answered no promise
+				┖╴storage error       the backend could not remove the slot
 				[/codeblock]
 			</description>
 		</method>
@@ -98,6 +96,8 @@
 				Dictionary
 				┠╴error    Error              check it before reading slots
 				│ ┠╴OK                      listing succeeded
+				│ ┠╴ERR_ALREADY_EXISTS      live declarations name different backends
+				│ ┠╴ERR_UNCONFIGURED        the database declares no backend
 				│ ┠╴ERR_UNAVAILABLE         the backend does not implement slot listing
 				│ ┖╴storage error         the backend could not read its storage
 				┠╴detail   String             what went wrong, for a person to read. Empty when error is OK
@@ -109,17 +109,17 @@
 			<return type="NetwPromise" />
 			<param index="0" name="slot" type="StringName" />
 			<description>
-				Opens [param slot]. To switch slots, [method close] the open one first. The promise gives an [enum @GlobalScope.Error].
+				Close the open slot with [method close] before switching slots. [method NetwPromise.wait] gives an [enum @GlobalScope.Error].
 				[codeblock lang=text]
 				Error
-				┠╴OK                slot is open, or was open already
-				┠╴ERR_BUSY          another slot is open or opening, or the database is closing
-				┠╴ERR_UNCONFIGURED  the database declares no backend
-				┠╴ERR_CANT_CREATE   the backend resolved no connection
-				┠╴ERR_INVALID_DATA  the backend's _open answered no promise
-				┠╴ERR_UNAVAILABLE   the session ended, or the backend implements
-				│                   no _open
-				┖╴storage error   the backend could not open slot
+				┠╴OK                  slot is open, or was open already
+				┠╴ERR_BUSY            another slot is open or opening, or the database is closing
+				┠╴ERR_ALREADY_EXISTS  live declarations name different backends
+				┠╴ERR_UNCONFIGURED    the database declares no backend
+				┠╴ERR_CANT_CREATE     the backend resolved no connection
+				┠╴ERR_INVALID_DATA    the backend's _open answered no promise
+				┠╴ERR_UNAVAILABLE     the session ended, or the backend implements no _open
+				┖╴storage error       the backend could not open the slot
 				[/codeblock]
 			</description>
 		</method>
@@ -253,7 +253,7 @@
 			Whether the session that created this database still exists.
 		</member>
 		<member name="name" type="StringName" setter="" getter="get_database_name">
-			The name this database was declared under.
+			The name used in [method Netw.configure_database].
 		</member>
 		<member name="slot" type="StringName" setter="" getter="get_slot">
 			The open slot, or empty when this database is not open.
@@ -267,7 +267,7 @@
 			<param index="0" name="error" type="int" enum="Error" />
 			<param index="1" name="detail" type="String" />
 			<description>
-				Emitted when an entity fails to load or save its record. [param error] is one of the codes [method NetwPersistence.load] and [method NetwPersistence.save] list, and [param detail] names the record and what went wrong.
+				Emitted when an [NetwEntity] fails to load or save its record. [param error] is one of the codes [method NetwPersistence.load] and [method NetwPersistence.save] list, and [param detail] names the record and what went wrong.
 				[codeblock]
 				func _ready() -&gt; void:
 				    Netw.session(self).database(&amp;"saves").failed.connect(show_save_error)

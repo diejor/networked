@@ -1,3 +1,4 @@
+#include "netw/script/model.hpp"
 #include "support/netw_test.h"
 
 #include "support/fault_log.h"
@@ -713,11 +714,7 @@ WorldDecl drifting_ball() {
         .player(island_player("P", netw::Schedule::FRAME), 0)
         .hosted(island_player("Ball", netw::Schedule::FRAME)
                     .placed_at(godot::Vector2(20.0, 0.0)))
-        .island(
-            godot::StringName("P"),
-            members,
-            WorldDecl::INDEPENDENT
-        )
+        .island(godot::StringName("P"), members, WorldDecl::INDEPENDENT)
         .simulating(godot::StringName("Ball"));
     return world;
 }
@@ -947,7 +944,10 @@ godot::Node2D *chased_visual(
     );
     Ref<netw::NetwInterpolate> spec;
     spec.instantiate();
-    netw::Netw::configure_property(body, godot::StringName("position"), false)
+    netw::script::model::configure_node_property(
+        body,
+        godot::StringName("position")
+    )
         ->interpolate(netw::gd::array_of(spec->lerp()));
     p_core->display_mark_dirty(rid, netw::display::DIRT_RUNTIME);
     p_core->session_flush_deferred();

@@ -195,7 +195,7 @@ public sealed class Netw : NetwRefCounted
     ///     Netw.configure_join(spawn_at)
     ///
     /// func spawn_at(who: NetwPlayer, point: StringName, team: int) -&gt; void:
-    ///     arena.add_child(Netw.spawn_player(who, _spawn_avatar, team))
+    ///     arena.add_child(Netw.spawn_player(who, make_avatar, team))
     /// </code>
     /// <para>
     /// <paramref name="handler"/> receives the <see cref="NetwPlayer"/>, then
@@ -233,7 +233,6 @@ public sealed class Netw : NetwRefCounted
     /// func _init() -&gt; void:
     ///     Netw.configure_admission(admit)
     ///
-    /// # the client called Netw.prepare_join(self, username)
     /// func admit(peer_id: int, username: StringName) -&gt; Error:
     ///     if nakama.username_for_peer(peer_id) != username:
     ///         return ERR_UNAUTHORIZED
@@ -265,11 +264,11 @@ public sealed class Netw : NetwRefCounted
         NetwApi.MethodBind("Netw", "configure_transfer", 2275419960UL);
 
     /// <summary>
-    /// Picks which entities outlive a server transfer in
-    /// <see cref="NetwSession.TransferMode.Rejoin"/>. The new server calls
-    /// <paramref name="keep"/> with the root node of each entity it took over,
-    /// and despawns the ones it answers <c>false</c> for before any client gets
-    /// the world again.
+    /// Picks which <see cref="NetwEntity"/> instances outlive a server transfer
+    /// in <see cref="NetwSession.TransferMode.Rejoin"/>. The new server calls
+    /// <paramref name="keep"/> with the root node of each
+    /// <see cref="NetwEntity"/> it took over, and despawns the ones it answers
+    /// <c>false</c> for before any client gets the world again.
     /// <code>
     /// func _init() -&gt; void:
     ///     Netw.configure_transfer(keeps)
@@ -297,104 +296,80 @@ public sealed class Netw : NetwRefCounted
     }
 
     private static readonly IntPtr _bindConfigureSession =
-        NetwApi.MethodBind("Netw", "configure_session", 3986669177UL);
+        NetwApi.MethodBind("Netw", "configure_session", 3514087924UL);
 
-    public static NetwSessionConfig ConfigureSession(
-        Node node,
-        NetwSessionConfig preset = null)
+    /// <summary>
+    /// <code>
+    /// func _init() -&gt; void:
+    ///     Netw.configure_session(self).app(&amp;"my-game")
+    /// </code>
+    /// </summary>
+    public static NetwSessionConfig ConfigureSession(Node node)
     {
         IntPtr slot0 = node?.NativeInstance ?? IntPtr.Zero;
-        IntPtr slot1 = preset?.Native ?? IntPtr.Zero;
         IntPtr answered = default;
-        NetwThunks.Ptrcall2_IntPtr_IntPtr_IntPtr(
+        NetwThunks.Ptrcall1_IntPtr_IntPtr(
             _bindConfigureSession,
             IntPtr.Zero,
             in slot0,
-            in slot1,
             ref answered);
         return NetwSessionConfig.Adopt(answered);
     }
 
     private static readonly IntPtr _bindConfigureClock =
-        NetwApi.MethodBind("Netw", "configure_clock", 4279755522UL);
+        NetwApi.MethodBind("Netw", "configure_clock", 3073959752UL);
 
     /// <summary>
-    /// Sets up the clock for the <see cref="Node.Multiplayer"/> and returns the
-    /// <see cref="NetwClockConfig"/> to fill in.
     /// <code>
     /// func _init() -&gt; void:
     ///     Netw.configure_clock(self) \
     ///             .ticks_per_second(60) \
     ///             .display_offset_ticks(2)
     /// </code>
-    /// <para>
-    /// Pass an [annotation @GDScript.@export] <see cref="NetwClockConfig"/> as
-    /// <paramref name="preset"/> to set it from the inspector, and call this
-    /// from <c>Node._enter_tree</c>.
-    /// </para>
     /// </summary>
-    public static NetwClockConfig ConfigureClock(
-        Node node,
-        NetwClockConfig preset = null)
+    public static NetwClockConfig ConfigureClock(Node node)
     {
         IntPtr slot0 = node?.NativeInstance ?? IntPtr.Zero;
-        IntPtr slot1 = preset?.Native ?? IntPtr.Zero;
         IntPtr answered = default;
-        NetwThunks.Ptrcall2_IntPtr_IntPtr_IntPtr(
+        NetwThunks.Ptrcall1_IntPtr_IntPtr(
             _bindConfigureClock,
             IntPtr.Zero,
             in slot0,
-            in slot1,
             ref answered);
         return NetwClockConfig.Adopt(answered);
     }
 
     private static readonly IntPtr _bindConfigureLagcomp =
-        NetwApi.MethodBind("Netw", "configure_lagcomp", 3224442444UL);
+        NetwApi.MethodBind("Netw", "configure_lagcomp", 491339394UL);
 
     /// <summary>
-    /// Tunes how far back the <see cref="NetwMultiplayer"/> records what every
-    /// node held.
     /// <code>
     /// func _init() -&gt; void:
     ///     Netw.configure_lagcomp(self).input_gate_deadline(16)
     /// </code>
-    /// <para>
-    /// <paramref name="preset"/> works as in <see cref="Netw.ConfigureClock"/>.
-    /// See <see cref="NetwLagCompensationConfig"/> for when the settings take
-    /// effect.
-    /// </para>
     /// </summary>
-    public static NetwLagCompensationConfig ConfigureLagcomp(
-        Node node,
-        NetwLagCompensationConfig preset = null)
+    public static NetwLagCompensationConfig ConfigureLagcomp(Node node)
     {
         IntPtr slot0 = node?.NativeInstance ?? IntPtr.Zero;
-        IntPtr slot1 = preset?.Native ?? IntPtr.Zero;
         IntPtr answered = default;
-        NetwThunks.Ptrcall2_IntPtr_IntPtr_IntPtr(
+        NetwThunks.Ptrcall1_IntPtr_IntPtr(
             _bindConfigureLagcomp,
             IntPtr.Zero,
             in slot0,
-            in slot1,
             ref answered);
         return NetwLagCompensationConfig.Adopt(answered);
     }
 
     private static readonly IntPtr _bindConfigureProperty =
-        NetwApi.MethodBind("Netw", "configure_property", 2043443709UL);
+        NetwApi.MethodBind("Netw", "configure_property", 4069303144UL);
 
     /// <summary>
-    /// Declares how <paramref name="property"/> is synchronized. See
-    /// <see cref="NetwPropertyConfig"/> for the settings. For a property
-    /// supplied by <c>Object._get</c>, provide its type through
+    /// For a property supplied by <c>Object._get</c>, provide its type through
     /// <c>Object._get_property_list</c> or <paramref name="declaredType"/>.
-    /// <c>-1</c> reads the declared type automatically.
     /// </summary>
     public static NetwPropertyConfig ConfigureProperty(
         Node node,
         StringName property,
-        bool warnLate = true,
         long declaredType = -1)
     {
         if (declaredType < 0)
@@ -403,21 +378,18 @@ public sealed class Netw : NetwRefCounted
         }
         godot_variant slot0 = VariantUtils.CreateFromGodotObject(node);
         godot_variant slot1 = VariantUtils.CreateFromStringName(property);
-        godot_variant slot2 = VariantUtils.CreateFromBool(warnLate);
-        godot_variant slot3 = VariantUtils.CreateFromInt((long)declaredType);
+        godot_variant slot2 = VariantUtils.CreateFromInt((long)declaredType);
         godot_variant answered = default;
-        NetwThunks.Call4(
+        NetwThunks.Call3(
             _bindConfigureProperty,
             IntPtr.Zero,
             in slot0,
             in slot1,
             in slot2,
-            in slot3,
             ref answered);
         slot0.Dispose();
         slot1.Dispose();
         slot2.Dispose();
-        slot3.Dispose();
         NetwPropertyConfig result =
             NetwPropertyConfig.Adopt(
                 NetwApi.Retained(
@@ -430,9 +402,6 @@ public sealed class Netw : NetwRefCounted
         NetwApi.MethodBind("Netw", "configure_rpc", 2692389314UL);
 
     /// <summary>
-    /// Declares who may call <paramref name="callable"/> and how it is sent. A
-    /// setting made here outranks [annotation @GDScript.@rpc], and a setting
-    /// left out falls back to it. See <see cref="NetwMemberConfig"/>.
     /// <paramref name="callable"/> must name a script method. Anonymous
     /// callbacks are refused.
     /// <code>
@@ -479,15 +448,15 @@ public sealed class Netw : NetwRefCounted
         NetwApi.MethodBind("Netw", "configure_signal", 4061727032UL);
 
     /// <summary>
-    /// Registers <paramref name="sig"/> so <see cref="Netw.EmitEntitySignal"/>
-    /// may emit it on every peer.
+    /// By default, only the node's multiplayer authority may emit
+    /// <paramref name="sig"/>.
     /// <code>
     /// func _init() -&gt; void:
-    ///     Netw.configure_signal(self.exploded)   # only the server may emit it
+    ///     Netw.configure_signal(exploded)
     /// </code>
     /// <para>
-    /// Emitting it also fires the local listeners, as with
-    /// <see cref="NetwMemberConfig.CallLocal"/>.
+    /// Emitting it also fires local listeners. <see cref="NetwMemberConfig"/>
+    /// controls delivery and who may emit it.
     /// </para>
     /// </summary>
     public static NetwMemberConfig ConfigureSignal(Signal sig)
@@ -517,24 +486,22 @@ public sealed class Netw : NetwRefCounted
         NetwApi.MethodBind("Netw", "configure_spawn", 2692389314UL);
 
     /// <summary>
-    /// Registers <paramref name="callable"/> as a function
-    /// <see cref="Netw.Spawn"/> may run on every peer to build the same node.
     /// <code>
     /// func _init() -&gt; void:
-    ///     Netw.configure_spawn(_spawn_bullet)
+    ///     Netw.configure_spawn(make_bullet)
     ///
-    /// func _spawn_bullet(dir: Vector2, tier: int) -&gt; Node:
+    /// func make_bullet(direction: Vector2) -&gt; Node:
     ///     var bullet := BulletScene.instantiate()
-    ///     bullet.setup(dir, tier)
+    ///     bullet.direction = direction
     ///     return bullet
     ///
-    /// # ...
-    ///
-    /// var bullet := Netw.spawn(_spawn_bullet, dir, tier) # server only
-    /// muzzle.add_child(bullet)
-    ///
-    /// # clients build the same node with the same arguments, in the same place
+    /// func fire(direction: Vector2) -&gt; void:
+    ///     muzzle.add_child(Netw.spawn(make_bullet, direction))
     /// </code>
+    /// <para>
+    /// The <see cref="Callable"/> must be configured before
+    /// <see cref="Netw.Spawn"/> uses it.
+    /// </para>
     /// </summary>
     public static NetwMemberConfig ConfigureSpawn(Callable callable)
     {
@@ -611,20 +578,16 @@ public sealed class Netw : NetwRefCounted
         NetwApi.MethodBind("Netw", "configure_persistence", 2962870821UL);
 
     /// <summary>
-    /// Declares which record of which <see cref="NetwDatabase"/>
-    /// <paramref name="node"/> loads and saves. The record holds every property
-    /// marked with <see cref="NetwPropertyConfig.Persisted"/>.
     /// <code>
-    /// func _ready() -&gt; void:
-    ///     Netw.configure_property(self, &amp;"gold", false).persisted()
+    /// func _init() -&gt; void:
+    ///     Netw.configure_property(self, &amp;"gold").persisted()
     ///     Netw.configure_persistence(self) \
     ///             .database(&amp;"saves") \
     ///             .table(&amp;"players") \
     ///             .record_id(account_name)
     /// </code>
     /// <para>
-    /// See <see cref="NetwPersistenceConfig"/>, <see cref="NetwPersistence"/>
-    /// and <see cref="NetwDatabase"/>.
+    /// Reach the saved record through <see cref="NetwEntity.Persistence"/>.
     /// </para>
     /// </summary>
     public static NetwPersistenceConfig ConfigurePersistence(Node node)
@@ -643,18 +606,14 @@ public sealed class Netw : NetwRefCounted
         NetwApi.MethodBind("Netw", "configure_schema", 261365823UL);
 
     /// <summary>
-    /// Declares the properties and types of a <see cref="NetwTable"/>.
     /// <code>
     /// class Mobs:
     ///     static var schema := Netw.configure_schema(&amp;"Mob")
-    ///     static var pos    := schema.vector3(&amp;"pos")
-    ///     static var hp     := schema.u16(&amp;"hp")
+    ///     static var pos := schema.vector3(&amp;"pos")
+    ///     static var hp := schema.u16(&amp;"hp")
     ///
-    /// @onready var mobs := Netw.session(self).table(&amp;"Mob")
+    /// @onready var mobs: NetwTable = Netw.session(self).table(&amp;"Mob")
     /// </code>
-    /// <para>
-    /// Read and write the table with <see cref="NetwSession.Table"/>.
-    /// </para>
     /// </summary>
     public static NetwSchema ConfigureSchema(StringName name)
     {
@@ -1132,48 +1091,38 @@ public sealed class Netw : NetwRefCounted
     }
 
     private static readonly IntPtr _bindConfigureDatabase =
-        NetwApi.MethodBind("Netw", "configure_database", 429892123UL);
+        NetwApi.MethodBind("Netw", "configure_database", 1132692608UL);
 
     /// <summary>
-    /// Declares a <see cref="NetwDatabase"/> named <paramref name="name"/> on
-    /// <see cref="Node.Multiplayer"/> of <paramref name="node"/>.
     /// <code>
+    /// func _init() -&gt; void:
+    ///     Netw.configure_database(self, &amp;"saves") \
+    ///             .backend(preload("res://save_backend.tres"))
+    ///
     /// func _ready() -&gt; void:
-    ///     Netw.configure_database(self, &amp;"saves").backend(preload("res://save_backend.tres"))
+    ///     var db: NetwDatabase = Netw.session(self).database(&amp;"saves")
+    ///     var error: Error = await db.open(&amp;"campaign").wait()
     /// </code>
     /// <para>
-    /// Get it later with <see cref="NetwSession.Database"/>. Pass an
-    /// [annotation @GDScript.@export] <see cref="NetwDatabaseConfig"/> as
-    /// <paramref name="preset"/> to set it from the inspector.
-    /// <code>
-    /// @export var database_config: NetwDatabaseConfig
-    ///
-    /// func _enter_tree() -&gt; void:
-    ///     Netw.configure_database(self, &amp;"saves", database_config)
-    /// </code>
+    /// Reach the <see cref="NetwDatabase"/> through
+    /// <see cref="NetwSession.Database"/>.
     /// </para>
     /// </summary>
     public static NetwDatabaseConfig ConfigureDatabase(
         Node node,
-        StringName name,
-        NetwDatabaseConfig preset = null)
+        StringName name)
     {
         godot_variant slot0 = VariantUtils.CreateFromGodotObject(node);
         godot_variant slot1 = VariantUtils.CreateFromStringName(name);
-        godot_variant slot2 =
-            VariantUtils.CreateFromGodotObjectPtr(
-                preset?.Native ?? IntPtr.Zero);
         godot_variant answered = default;
-        NetwThunks.Call3(
+        NetwThunks.Call2(
             _bindConfigureDatabase,
             IntPtr.Zero,
             in slot0,
             in slot1,
-            in slot2,
             ref answered);
         slot0.Dispose();
         slot1.Dispose();
-        slot2.Dispose();
         NetwDatabaseConfig result =
             NetwDatabaseConfig.Adopt(
                 NetwApi.Retained(
@@ -1276,7 +1225,7 @@ public sealed class Netw : NetwRefCounted
     /// controls.
     /// <code>
     /// players.add_child(
-    ///     Netw.spawn_player(player, _spawn_avatar, character_class)
+    ///     Netw.spawn_player(player, make_avatar, character_class)
     /// )
     /// </code>
     /// <para>

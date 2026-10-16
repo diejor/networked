@@ -347,8 +347,9 @@ TEST_CASE(
         expected_faults.expect_error(
             "[error][table] Condition \"!database.is_valid()\" is "
             "true. Returning: RID(). '*' saves into database '*', "
-            "which this session does not declare. Call "
-            "Netw.configure_database with that name first.",
+            "which this session does not declare. "
+            "Declare it with Netw.configure_database in _init of a node "
+            "above this entity.",
             1
         );
 

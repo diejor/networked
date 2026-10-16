@@ -61,6 +61,7 @@ const KindRow &row_of(Kind p_kind) {
     return table[int(p_kind)];
 }
 
+constexpr const char *META_DATABASES = "_netw_d_db";
 constexpr const char *META_ARMED = "_netw_d_armed";
 constexpr const char *META_LAST_API = "_netw_d_api";
 constexpr const char *SIG_TREE_ENTERED = "tree_entered";
@@ -287,6 +288,38 @@ Variant payload_on(Node *p_scope, Kind p_kind) {
     return p_scope == nullptr ? Variant() : declared_payload(p_scope, p_kind);
 }
 
+Dictionary databases_on(Node *p_scope) {
+    const StringName key(META_DATABASES);
+    if (p_scope == nullptr || !p_scope->has_meta(key)) {
+        return Dictionary();
+    }
+    return p_scope->get_meta(key);
+}
+
+Error declare_database(
+    Node *p_scope,
+    const StringName &p_name,
+    const Variant &p_config
+) {
+    Dictionary declared = databases_on(p_scope);
+    NETW_ERR_COND_V(
+        declared.has(p_name),
+        ERR_ALREADY_EXISTS,
+        sys::TABLE,
+        "Netw.configure_database was called twice on '%s' for '%s'. Keep the "
+        "config the first call returned and set its backend there.",
+        String(p_scope->get_name()),
+        String(p_name)
+    );
+    declared[p_name] = p_config;
+    p_scope->set_meta(StringName(META_DATABASES), declared);
+    arm(p_scope);
+    if (p_scope->is_inside_tree()) {
+        install_now(Variant(p_scope));
+    }
+    return OK;
+}
+
 void Book::install_from(NetwMultiplayer *p_api, Node *p_scope) {
     if (p_api == nullptr || p_scope == nullptr) {
         return;
@@ -328,6 +361,11 @@ void Book::install_from(NetwMultiplayer *p_api, Node *p_scope) {
             held.push_back(fresh);
         }
     }
+    p_api->database_install_from(p_scope);
+}
+
+void Book::refresh(NetwMultiplayer *p_api) {
+    reconcile(p_api);
 }
 
 void Book::withdraw(ObjectID p_scope, Kind p_kind, uint64_t p_generation) {

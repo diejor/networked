@@ -249,26 +249,6 @@ Ref<NetwSessionConfig> NetwSessionConfig::server(
     return Ref<NetwSessionConfig>(this);
 }
 
-void NetwSessionConfig::copy_values_from(const NetwSessionConfig &p_source) {
-    values.app_id = p_source.values.app_id;
-    values.desired_role = p_source.values.desired_role;
-    values.link_conditions = Ref<NetwLinkConditions>();
-    if (p_source.values.link_conditions.is_valid()) {
-        values.link_conditions.instantiate();
-        values.link_conditions->copy_values_from(
-            **p_source.values.link_conditions
-        );
-    }
-    values.server_info = Ref<NetwServerInfo>();
-    if (p_source.values.server_info.is_valid()) {
-        values.server_info.instantiate();
-        values.server_info->copy_values_from(**p_source.values.server_info);
-    }
-    values.bandwidth_kbps = p_source.values.bandwidth_kbps;
-    values.transfer_mode = p_source.values.transfer_mode;
-    values.transfer_deadline_ticks = p_source.values.transfer_deadline_ticks;
-}
-
 bool NetwSessionConfig::matches_defaults() const {
     return non_default_fields().is_empty();
 }

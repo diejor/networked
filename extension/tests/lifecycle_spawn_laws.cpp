@@ -657,7 +657,7 @@ Node *build_block(
     Node *made = build_crate(p_name, p_script);
     const Ref<netw::NetwSchema> schema = p_schema;
     Object *account = p_account;
-    netw::Netw::configure_property(made, StringName("hp"), true)
+    netw::Netw::configure_property(made, StringName("hp"))
         ->persisted(StringName());
     netw::Netw::configure_persistence(made)
         ->database(StringName("saves"))

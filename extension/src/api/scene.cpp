@@ -72,6 +72,10 @@ Node *NetwScene::scene_node() const {
     return nullptr;
 }
 
+Ref<NetwEntity> NetwScene::get_entity() const {
+    return NetwEntity::of(scene_node());
+}
+
 bool NetwScene::get_is_declared() const {
     return get_rid().is_valid() || scene_node() != nullptr;
 }
@@ -229,6 +233,17 @@ void NetwScene::_bind_methods() {
     BIND_ENUM_CONSTANT(SCENE_ISOLATION_OWN_WORLD);
     ClassDB::bind_method(D_METHOD("get_rid"), &NetwScene::get_rid);
     ADD_PROPERTY(PropertyInfo(Variant::RID, "rid"), "", "get_rid");
+    ClassDB::bind_method(D_METHOD("get_entity"), &NetwScene::get_entity);
+    ADD_PROPERTY(
+        PropertyInfo(
+            Variant::OBJECT,
+            "entity",
+            PROPERTY_HINT_RESOURCE_TYPE,
+            "NetwEntity"
+        ),
+        "",
+        "get_entity"
+    );
     ClassDB::bind_method(
         D_METHOD("get_is_declared"),
         &NetwScene::get_is_declared

@@ -112,9 +112,7 @@ Method Descriptions
 
 :ref:`NetwLagCompensationConfig<class_NetwLagCompensationConfig>` **input_gate_deadline**\ (\ ticks\: :godot:`int`\ ) :ref:`🔗<class_NetwLagCompensationConfig_method_input_gate_deadline>`
 
-.. container:: contribute
-
-	There is currently no description for this method. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+Sets :ref:`input_gate_deadline_ticks<class_NetwLagCompensationConfig_property_input_gate_deadline_ticks>`, how long an action waits for missing input.
 
 .. rst-class:: classref-item-separator
 
@@ -126,9 +124,7 @@ Method Descriptions
 
 :ref:`NetwLagCompensationConfig<class_NetwLagCompensationConfig>` **max_future_action**\ (\ ticks\: :godot:`int`\ ) :ref:`🔗<class_NetwLagCompensationConfig_method_max_future_action>`
 
-.. container:: contribute
-
-	There is currently no description for this method. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+Sets :ref:`max_future_action_ticks<class_NetwLagCompensationConfig_property_max_future_action_ticks>`, how far ahead of the server an action may be.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

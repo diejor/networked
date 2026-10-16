@@ -12,33 +12,14 @@ NetwDatabaseConfig
 
 **Inherits:** :godot:`Resource`
 
-The configuration of a named :ref:`NetwDatabase<class_NetwDatabase>`, returned by :ref:`Netw.configure_database()<class_Netw_method_configure_database>`.
+Configuration for a named :ref:`NetwDatabase<class_NetwDatabase>`.
 
 .. rst-class:: classref-introduction-group
 
 Description
 -----------
 
-Sets the :ref:`NetwDatabaseBackend<class_NetwDatabaseBackend>` a database opens.
-
-::
-
-    func _ready() -> void:
-        Netw.configure_database(self, &"saves").backend(preload("res://save_backend.tres"))
-
-\ Configuring the same name twice in one session with a different backend is refused.
-
-.. rst-class:: classref-reftable-group
-
-Properties
-----------
-
-.. table::
-   :widths: auto
-
-   +-------------------------------------------------------+-------------------------------------------------------+
-   | :ref:`NetwDatabaseBackend<class_NetwDatabaseBackend>` | :ref:`store<class_NetwDatabaseConfig_property_store>` |
-   +-------------------------------------------------------+-------------------------------------------------------+
+Select storage with :ref:`backend()<class_NetwDatabaseConfig_method_backend>`. See :ref:`Netw.configure_database()<class_Netw_method_configure_database>` for declaration and use.
 
 .. rst-class:: classref-reftable-group
 
@@ -58,28 +39,6 @@ Methods
 
 .. rst-class:: classref-descriptions-group
 
-Property Descriptions
----------------------
-
-.. _class_NetwDatabaseConfig_property_store:
-
-.. rst-class:: classref-property
-
-:ref:`NetwDatabaseBackend<class_NetwDatabaseBackend>` **store** :ref:`🔗<class_NetwDatabaseConfig_property_store>`
-
-.. rst-class:: classref-property-setget
-
-- |void| **set_backend**\ (\ value\: :ref:`NetwDatabaseBackend<class_NetwDatabaseBackend>`\ )
-- :ref:`NetwDatabaseBackend<class_NetwDatabaseBackend>` **get_backend**\ (\ )
-
-The storage this database opens, as :ref:`backend()<class_NetwDatabaseConfig_method_backend>` set it.
-
-.. rst-class:: classref-section-separator
-
-----
-
-.. rst-class:: classref-descriptions-group
-
 Method Descriptions
 -------------------
 
@@ -89,9 +48,7 @@ Method Descriptions
 
 :ref:`NetwDatabaseConfig<class_NetwDatabaseConfig>` **backend**\ (\ backend\: :ref:`NetwDatabaseBackend<class_NetwDatabaseBackend>`\ ) :ref:`🔗<class_NetwDatabaseConfig_method_backend>`
 
-.. container:: contribute
-
-	There is currently no description for this method. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+Selects the :ref:`NetwDatabaseBackend<class_NetwDatabaseBackend>` used to store and retrieve saved records.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

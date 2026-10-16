@@ -12,34 +12,27 @@ NetwPropertyConfig
 
 **Inherits:** :ref:`NetwMemberConfig<class_NetwMemberConfig>` **<** :godot:`RefCounted`
 
-Declares how a script variable is replicated, reached by :ref:`Netw.configure_property()<class_Netw_method_configure_property>`.
+Replication and persistence settings for a property.
 
 .. rst-class:: classref-introduction-group
 
 Description
 -----------
 
-Mark a property with :ref:`state()<class_NetwPropertyConfig_method_state>`, :ref:`input()<class_NetwPropertyConfig_method_input>` or :ref:`broadcast()<class_NetwPropertyConfig_method_broadcast>`, and every change to it is sent each tick. There is no send call to make.
+:ref:`state()<class_NetwPropertyConfig_method_state>`, :ref:`input()<class_NetwPropertyConfig_method_input>` and :ref:`broadcast()<class_NetwPropertyConfig_method_broadcast>` send changed values each tick. Other properties are sent through :ref:`Netw.sync_property()<class_Netw_method_sync_property>`.
 
 ::
 
     func _init() -> void:
-        Netw.configure_property(self, &"position").state().quantize(pos_q)
+        Netw.configure_property(self, &"position").state().quantize(position_q)
         Netw.configure_property(self, &"move_dir").input()
         Netw.configure_property(self, &"aim_dir").broadcast()
 
-    func _physics_process(_dt: float) -> void:
-        move_dir = Input.get_vector("left", "right", "up", "down")
-        aim_dir = (get_global_mouse_position() - position).normalized()
-        # the next tick sends every changed property
-
-\ :ref:`NetwMultiplayer.RECORD_KIND_STATE<class_NetwMultiplayer_constant_RECORD_KIND_STATE>`, :ref:`NetwMultiplayer.RECORD_KIND_INPUT<class_NetwMultiplayer_constant_RECORD_KIND_INPUT>` and :ref:`NetwMultiplayer.RECORD_KIND_BROADCAST<class_NetwMultiplayer_constant_RECORD_KIND_BROADCAST>` name the three kinds. A property with none of them is sent only when :ref:`Netw.sync_property()<class_Netw_method_sync_property>` is called.
-
-\ :ref:`volatile()<class_NetwPropertyConfig_method_volatile>`, :ref:`retained()<class_NetwPropertyConfig_method_retained>`, :ref:`epsilon()<class_NetwPropertyConfig_method_epsilon>` and :ref:`persisted()<class_NetwPropertyConfig_method_persisted>` apply to one property. :ref:`on_change()<class_NetwPropertyConfig_method_on_change>`, :ref:`heartbeat()<class_NetwPropertyConfig_method_heartbeat>`, :ref:`windowed()<class_NetwPropertyConfig_method_windowed>`, :ref:`audience()<class_NetwPropertyConfig_method_audience>` and :ref:`masked()<class_NetwPropertyConfig_method_masked>` apply to every property of the same kind on the script, so the last call wins.
+\ :ref:`volatile()<class_NetwPropertyConfig_method_volatile>`, :ref:`retained()<class_NetwPropertyConfig_method_retained>`, :ref:`epsilon()<class_NetwPropertyConfig_method_epsilon>` and :ref:`persisted()<class_NetwPropertyConfig_method_persisted>` apply to one property. :ref:`on_change()<class_NetwPropertyConfig_method_on_change>`, :ref:`heartbeat()<class_NetwPropertyConfig_method_heartbeat>`, :ref:`windowed()<class_NetwPropertyConfig_method_windowed>`, :ref:`audience()<class_NetwPropertyConfig_method_audience>` and :ref:`masked()<class_NetwPropertyConfig_method_masked>` apply to every property of the same kind on the script. Give them consistent values.
 
 \ **Rigid bodies**\ 
 
-When the entity root is a :godot:`RigidBody3D` or a :godot:`RigidBody2D`, ``position``, ``quaternion`` (``rotation`` in 2D), ``linear_velocity``, ``angular_velocity`` and ``sleeping`` read and write the body's physics state. ``position`` stays relative to the parent. While :godot:`RigidBody3D.freeze <RigidBody3D#class_RigidBody3D_property_freeze>` is on, position and rotation use the node transform.
+When the :ref:`NetwEntity<class_NetwEntity>` root is a :godot:`RigidBody3D` or a :godot:`RigidBody2D`, ``position``, ``quaternion`` (``rotation`` in 2D), ``linear_velocity``, ``angular_velocity`` and ``sleeping`` read and write the body's physics state. ``position`` stays relative to the parent. While :godot:`RigidBody3D.freeze <RigidBody3D#class_RigidBody3D_property_freeze>` is on, position and rotation use the node transform.
 
 ::
 
@@ -47,8 +40,6 @@ When the entity root is a :godot:`RigidBody3D` or a :godot:`RigidBody2D`, ``posi
         Netw.configure_property(self, &"position").state()
         Netw.configure_property(self, &"quaternion").state()
         Netw.configure_property(self, &"linear_velocity").state()
-
-\ **Note:** a :ref:`NetwMemberConfig<class_NetwMemberConfig>` method such as :ref:`NetwMemberConfig.call_local()<class_NetwMemberConfig_method_call_local>` returns a :ref:`NetwMemberConfig<class_NetwMemberConfig>`, so call the methods of this class first in a chain.
 
 .. rst-class:: classref-reftable-group
 
@@ -265,7 +256,7 @@ enum **Audience**: :ref:`🔗<enum_NetwPropertyConfig_Audience>`
 
 :ref:`Audience<enum_NetwPropertyConfig_Audience>` **AUDIENCE_PUBLIC** = ``0``
 
-Sent to every peer that sees the entity.
+Sent to every peer that sees the :ref:`NetwEntity<class_NetwEntity>`.
 
 .. _class_NetwPropertyConfig_constant_AUDIENCE_SERVER_ONLY:
 
@@ -448,7 +439,7 @@ Set by :ref:`state()<class_NetwPropertyConfig_method_state>`.
 - |void| **set_is_property**\ (\ value\: :godot:`bool`\ )
 - :godot:`bool` **get_is_property**\ (\ )
 
-Always ``true``. Tells this class apart from a :ref:`NetwMemberConfig<class_NetwMemberConfig>` for an RPC or a signal.
+Identifies this configuration as a property configuration.
 
 .. rst-class:: classref-item-separator
 
@@ -639,9 +630,8 @@ The controlling peer owns the value and every peer sees it, with no server check
 
     func _process(_dt: float) -> void:
         aim_dir = (get_global_mouse_position() - position).normalized()
-        # every other peer's copy of this node follows
 
-\ Add :ref:`masked()<class_NetwPropertyConfig_method_masked>` when many peers watch the same entity.
+\ Add :ref:`masked()<class_NetwPropertyConfig_method_masked>` when many peers watch the same :ref:`NetwEntity<class_NetwEntity>`.
 
 .. rst-class:: classref-item-separator
 
@@ -657,7 +647,6 @@ When a correction restores this value, advances it to the present using the rate
 
 ::
 
-    # the body integrates position from velocity, so a restore advances along it
     Netw.configure_property(self, &"position").state().carry_along(&"velocity")
 
 \ ``channel`` must be another :ref:`state()<class_NetwPropertyConfig_method_state>` property of the same node. Use :ref:`carry_step()<class_NetwPropertyConfig_method_carry_step>` instead when the rate changes quickly. Declaring both on one property is an error, and neither is used.
@@ -677,10 +666,10 @@ When a correction restores this value, advances it to the present by calling ``s
 ::
 
     func _init() -> void:
-        Netw.configure_property(self, &"spin").state().carry_step(_carry_spin)
+        Netw.configure_property(self, &"spin").state().carry_step(carry_spin)
 
-    func _carry_spin(value: Vector3, ctx: NetwPredictCarryContext) -> Vector3:
-        return value + _drive_axis(ctx.state) * ctx.state[&"speed"] * ctx.delta
+    func carry_spin(value: Vector3, ctx: NetwPredictCarryContext) -> Vector3:
+        return value + drive_axis(ctx.state) * ctx.state[&"speed"] * ctx.delta
 
 \ ``step`` must be a method or lambda of a :godot:`Node`, may read only its :ref:`NetwPredictCarryContext<class_NetwPredictCarryContext>`, and must not write anything. A result that does not reproduce the recorded ticks is rejected. Declaring both this and :ref:`carry_along()<class_NetwPropertyConfig_method_carry_along>` on one property is an error, and neither is used. :ref:`NetwPrediction.reachability()<class_NetwPrediction_method_reachability>` reports whether the rule is in use.
 
@@ -746,7 +735,6 @@ Marks the value as one the body recomputes each step from other properties, so a
 
 ::
 
-    # recomputed from velocity every tick
     Netw.configure_property(self, &"speed").state().derived()
 
 .. rst-class:: classref-item-separator
@@ -781,7 +769,6 @@ Re-sends properties of this kind every ``ticks`` ticks even when nothing changed
 
 ::
 
-    # a lost "stunned" change heals within a second at 60 ticks
     Netw.configure_property(self, &"stunned").state().heartbeat(60)
 
 .. rst-class:: classref-item-separator
@@ -804,7 +791,6 @@ The controlling peer owns the value and only the server sees it. Use it for play
     func _physics_process(dt: float) -> void:
         if entity.is_controlled_locally:
             move_dir = Input.get_vector("left", "right", "up", "down")
-        # both peers run this, the client predicts and the server decides
         velocity = move_dir * SPEED
 
 \ Each send also carries the last two ticks of input, so a lost packet is recovered from the next one. :ref:`windowed()<class_NetwPropertyConfig_method_windowed>` changes how many. Correction settings such as :ref:`carry_along()<class_NetwPropertyConfig_method_carry_along>` are ignored on an input.
@@ -819,11 +805,10 @@ The controlling peer owns the value and only the server sees it. Use it for play
 
 :ref:`NetwPropertyConfig<class_NetwPropertyConfig>` **masked**\ (\ ) :ref:`🔗<class_NetwPropertyConfig_method_masked>`
 
-Sends each peer only the properties that changed since it last confirmed, which saves bandwidth when many peers watch one entity.
+Sends each peer only the properties that changed since it last confirmed, which saves bandwidth when many peers watch one :ref:`NetwEntity<class_NetwEntity>`.
 
 ::
 
-    # 50 spectators, each gets only what changed for them
     Netw.configure_property(self, &"position").broadcast().masked()
 
 .. rst-class:: classref-item-separator
@@ -836,7 +821,7 @@ Sends each peer only the properties that changed since it last confirmed, which 
 
 :ref:`NetwPropertyConfig<class_NetwPropertyConfig>` **on_change**\ (\ ) :ref:`🔗<class_NetwPropertyConfig_method_on_change>`
 
-Sends properties of this kind only when one changed. This is the default.
+Enabled by default.
 
 .. rst-class:: classref-item-separator
 
@@ -865,18 +850,15 @@ Sends the value with the spawn, and sets it on every peer before the node enters
 
 :ref:`NetwPropertyConfig<class_NetwPropertyConfig>` **persisted**\ (\ saved_column_name\: :godot:`StringName` = &""\ ) :ref:`🔗<class_NetwPropertyConfig_method_persisted>`
 
-Saves the server's value of this property into the entity's record, whether or not it is also replicated. The saved column is named after the property, or ``saved_column_name`` when given, so a property renamed later keeps its stored records by passing its old name. Two properties of one entity may not share a saved column name.
+Saves the server's value of this property into the :ref:`NetwEntity<class_NetwEntity>`'s record, whether or not it is also replicated. The saved column is named after the property, or ``saved_column_name`` when given, so a property renamed later keeps its stored records by passing its old name. Two properties of one :ref:`NetwEntity<class_NetwEntity>` may not share a saved column name.
 
 ::
 
-    # never replicated, the server still saves it
-    Netw.configure_property(self, &"gold", false).persisted()
+    Netw.configure_property(self, &"gold").persisted()
 
-    # replicated and saved as "where"
     Netw.configure_property(self, &"position") \
             .state().persisted(&"where")
 
-    # sent by the client, saved by the server
     Netw.configure_property(self, &"loadout").input().persisted()
 
 \ How often the row is saved is set with :ref:`NetwPersistenceConfig.interval()<class_NetwPersistenceConfig_method_interval>`.
@@ -907,11 +889,10 @@ A difference in this value never causes a correction, but a correction caused by
 
 :ref:`NetwPropertyConfig<class_NetwPropertyConfig>` **retained**\ (\ ) :ref:`🔗<class_NetwPropertyConfig_method_retained>`
 
-Sends changes reliably. Use it for a value that changes rarely and must not be missed. It cannot be used on the state of a predicted entity.
+Sends changes reliably. Use it for a value that changes rarely and must not be missed. It cannot be used on the state of a predicted :ref:`NetwEntity<class_NetwEntity>`.
 
 ::
 
-    # a lost "stunned = true" would never be corrected
     Netw.configure_property(self, &"stunned").state().retained()
 
 .. rst-class:: classref-item-separator
@@ -924,7 +905,7 @@ Sends changes reliably. Use it for a value that changes rarely and must not be m
 
 :ref:`NetwPropertyConfig<class_NetwPropertyConfig>` **state**\ (\ ) :ref:`🔗<class_NetwPropertyConfig_method_state>`
 
-The server owns the value, every peer sees it, and lag compensation can rewind it. A client predicting this entity is corrected against it, within :ref:`epsilon()<class_NetwPropertyConfig_method_epsilon>`.
+The server owns the value, every peer sees it, and lag compensation can rewind it. A client predicting this :ref:`NetwEntity<class_NetwEntity>` is corrected against it, within :ref:`epsilon()<class_NetwPropertyConfig_method_epsilon>`.
 
 ::
 
@@ -933,7 +914,6 @@ The server owns the value, every peer sees it, and lag compensation can rewind i
 
     func _physics_process(dt: float) -> void:
         position += velocity * dt
-        # on the server that is enough, every client's copy follows
 
 .. rst-class:: classref-item-separator
 
@@ -950,9 +930,9 @@ How large this value's error may be before a correction teleports the body, in i
 ::
 
     Netw.configure_property(self, &"position").state() \
-            .carry_along(&"velocity").teleport_at(3.0)      # metres
+            .carry_along(&"velocity").teleport_at(3.0)
     Netw.configure_property(self, &"heading").state() \
-            .carry_along(&"angular_speed").teleport_at(1.0)  # radians
+            .carry_along(&"angular_speed").teleport_at(1.0)
 
 .. rst-class:: classref-item-separator
 
@@ -980,7 +960,7 @@ Only a teleport writes this value, and an ordinary correction leaves it alone. P
 
 :ref:`NetwPropertyConfig<class_NetwPropertyConfig>` **volatile**\ (\ ) :ref:`🔗<class_NetwPropertyConfig_method_volatile>`
 
-Sends changes unreliably, and only the newest value counts. Use it for a value that changes every tick. This is the default.
+Enabled by default.
 
 .. rst-class:: classref-item-separator
 
@@ -996,7 +976,6 @@ Each send also carries the last ``samples`` ticks of values, so a lost packet is
 
 ::
 
-    # input() sends 2, and 3 survives two lost packets in a row
     Netw.configure_property(self, &"motion").input().windowed(3)
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`

@@ -95,12 +95,22 @@
 			<return type="Dictionary" />
 			<param index="0" name="transport" type="Variant" />
 			<description>
+				Returns the settings stored by [method set_defaults] for [param transport].
+				[codeblock lang=text]
+				Dictionary
+				┖╴setting name  Variant  the configured default value
+				[/codeblock]
 			</description>
 		</method>
 		<method name="diagnostics" qualifiers="const">
 			<return type="Dictionary" />
 			<param index="0" name="peer_id" type="int" />
 			<description>
+				Returns the connected transport's debugging information for [param peer_id], as supplied by [method NetwTransport._diagnostics].
+				[codeblock lang=text]
+				Dictionary
+				┖╴transport-defined key  Variant  debugging information
+				[/codeblock]
 			</description>
 		</method>
 		<method name="find">
@@ -108,6 +118,7 @@
 			<param index="0" name="transport" type="Variant" />
 			<param index="1" name="address" type="String" />
 			<description>
+				Returns the listed [NetwEndpoint] for [param transport] and [param address], or [code]null[/code] when none is listed.
 			</description>
 		</method>
 		<method name="host">
@@ -138,6 +149,7 @@
 			<return type="bool" />
 			<param index="0" name="type" type="Script" />
 			<description>
+				Registers the [NetwTransport] script [param type] for this session. Returns [code]false[/code] if registration fails.
 			</description>
 		</method>
 		<method name="remove">
@@ -185,6 +197,7 @@
 			<return type="bool" />
 			<param index="0" name="of" type="Variant" />
 			<description>
+				Removes the registered transport named by [param of]. Returns [code]true[/code] when it was removed.
 			</description>
 		</method>
 	</methods>
@@ -202,12 +215,14 @@
 			Seconds between probes of a row from [method add] while [member browsing]. [code]0[/code] probes it once each time browsing starts.
 		</member>
 		<member name="state" type="int" setter="" getter="get_state" enum="NetwConnection.State" default="0">
+			The connection attempt's [enum State], reported by [signal state_changed].
 		</member>
 	</members>
 	<signals>
 		<signal name="endpoint_added">
 			<param index="0" name="endpoint" type="NetwEndpoint" />
 			<description>
+				Emitted when [param endpoint] is added to [member endpoints].
 			</description>
 		</signal>
 		<signal name="endpoint_removed">
@@ -233,6 +248,7 @@
 		<signal name="join_address_changed">
 			<param index="0" name="address" type="String" />
 			<description>
+				Emitted when [member join_address] changes.
 			</description>
 		</signal>
 		<signal name="progressed">
@@ -251,28 +267,37 @@
 	</signals>
 	<constants>
 		<constant name="STATE_OFFLINE" value="0" enum="State">
+			No connection attempt or online session.
 		</constant>
 		<constant name="STATE_CREATING" value="1" enum="State">
+			The transport is creating a [MultiplayerPeer].
 		</constant>
 		<constant name="STATE_CONNECTING" value="2" enum="State">
+			The [MultiplayerPeer] is assigned and connecting.
 		</constant>
 		<constant name="STATE_ONLINE" value="3" enum="State">
+			The session is online.
 		</constant>
 		<constant name="TRANSPORT_MODE_HOST" value="0" enum="TransportMode">
 			The address is ignored.
 		</constant>
 		<constant name="TRANSPORT_MODE_CLIENT" value="1" enum="TransportMode">
+			Creates a client peer that joins the supplied address.
 		</constant>
 		<constant name="TRANSPORT_AVAILABLE" value="1" enum="TransportCapability">
+			The transport is available on this platform.
 		</constant>
 		<constant name="TRANSPORT_CAN_HOST" value="2" enum="TransportCapability">
 			Web builds usually cannot.
 		</constant>
 		<constant name="TRANSPORT_CAN_PROBE" value="4" enum="TransportCapability">
+			The transport can probe servers for their status and information.
 		</constant>
 		<constant name="TRANSPORT_CAN_BROWSE" value="8" enum="TransportCapability">
+			The transport can discover servers while [member browsing] is enabled.
 		</constant>
 		<constant name="TRANSPORT_ACCEPTS_EMPTY_ADDRESS" value="16" enum="TransportCapability">
+			The transport accepts an empty address when joining.
 		</constant>
 	</constants>
 </class>

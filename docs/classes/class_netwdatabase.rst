@@ -19,16 +19,13 @@ Persistent storage for saved records.
 Description
 -----------
 
-:ref:`NetwEntity<class_NetwEntity>`, :ref:`NetwTable<class_NetwTable>` and your own code save and load their state through a **NetwDatabase**. A :ref:`NetwDatabaseBackend<class_NetwDatabaseBackend>` does the actual storage.
-
-A record is a :godot:`Dictionary` stored under a :godot:`StringName` id. A :ref:`NetwSchema<class_NetwSchema>` defines the saved property names and types.
-
-Await :ref:`open()<class_NetwDatabase_method_open>` before reading or writing.
+Await :ref:`open()<class_NetwDatabase_method_open>` before reading or writing. Database access survives removal of the declaring :godot:`Node`. A :ref:`NetwDatabaseBackend<class_NetwDatabaseBackend>` supplies storage connections.
 
 ::
 
-    func _ready() -> void:
-        Netw.configure_database(self, &"saves").backend(preload("res://filesystem_backend.tres"))
+    func _init() -> void:
+        Netw.configure_database(self, &"saves") \
+                .backend(preload("res://save_backend.tres"))
 
     func start_game(slot: StringName) -> void:
         var db: NetwDatabase = Netw.session(self).database(&"saves")
@@ -103,7 +100,7 @@ Signals
 
 **failed**\ (\ error\: :godot:`Error <@GlobalScope#enum_@globalscope_Error>`, detail\: :godot:`String`\ ) :ref:`🔗<class_NetwDatabase_signal_failed>`
 
-Emitted when an entity fails to load or save its record. ``error`` is one of the codes :ref:`NetwPersistence.load()<class_NetwPersistence_method_load>` and :ref:`NetwPersistence.save()<class_NetwPersistence_method_save>` list, and ``detail`` names the record and what went wrong.
+Emitted when an :ref:`NetwEntity<class_NetwEntity>` fails to load or save its record. ``error`` is one of the codes :ref:`NetwPersistence.load()<class_NetwPersistence_method_load>` and :ref:`NetwPersistence.save()<class_NetwPersistence_method_save>` list, and ``detail`` names the record and what went wrong.
 
 ::
 
@@ -148,7 +145,7 @@ Whether the session that created this database still exists.
 
 - :godot:`StringName` **get_database_name**\ (\ )
 
-The name this database was declared under.
+The name used in :ref:`Netw.configure_database()<class_Netw_method_configure_database>`.
 
 .. rst-class:: classref-item-separator
 
@@ -227,20 +224,18 @@ Stops accepting new operations and waits for the pending ones to finish. The pro
 
 :ref:`NetwPromise<class_NetwPromise>` **delete_slot**\ (\ slot\: :godot:`StringName`\ ) :ref:`🔗<class_NetwDatabase_method_delete_slot>`
 
-Removes ``slot`` and everything stored in it. The slot must not be open.
-
-The promise gives an :godot:`@GlobalScope.Error <@GlobalScope#enum_@globalscope_Error>`.
+The slot must be closed. :ref:`NetwPromise.wait()<class_NetwPromise_method_wait>` gives an :godot:`@GlobalScope.Error <@GlobalScope#enum_@globalscope_Error>`.
 
 .. code:: text
 
     Error
-    ┠╴OK                the backend removed the slot
-    ┠╴ERR_BUSY          slot is the one this database holds open
-    ┠╴ERR_UNCONFIGURED  the database declares no backend
-    ┠╴ERR_UNAVAILABLE   the session ended, or the backend
-    │                   implements no _delete_slot
-    ┠╴ERR_INVALID_DATA  the backend's _delete_slot answered no promise
-    ┖╴storage error   the backend could not remove the slot
+    ┠╴OK                  the backend removed the slot
+    ┠╴ERR_BUSY            slot is the one this database holds open
+    ┠╴ERR_ALREADY_EXISTS  live declarations name different backends
+    ┠╴ERR_UNCONFIGURED    the database declares no backend
+    ┠╴ERR_UNAVAILABLE     the session ended, or the backend implements no _delete_slot
+    ┠╴ERR_INVALID_DATA    the backend's _delete_slot answered no promise
+    ┖╴storage error       the backend could not remove the slot
 
 .. rst-class:: classref-item-separator
 
@@ -303,6 +298,8 @@ Lists every slot the :ref:`NetwDatabaseBackend<class_NetwDatabaseBackend>` holds
     Dictionary
     ┠╴error    Error              check it before reading slots
     │ ┠╴OK                      listing succeeded
+    │ ┠╴ERR_ALREADY_EXISTS      live declarations name different backends
+    │ ┠╴ERR_UNCONFIGURED        the database declares no backend
     │ ┠╴ERR_UNAVAILABLE         the backend does not implement slot listing
     │ ┖╴storage error         the backend could not read its storage
     ┠╴detail   String             what went wrong, for a person to read. Empty when error is OK
@@ -318,19 +315,19 @@ Lists every slot the :ref:`NetwDatabaseBackend<class_NetwDatabaseBackend>` holds
 
 :ref:`NetwPromise<class_NetwPromise>` **open**\ (\ slot\: :godot:`StringName`\ ) :ref:`🔗<class_NetwDatabase_method_open>`
 
-Opens ``slot``. To switch slots, :ref:`close()<class_NetwDatabase_method_close>` the open one first. The promise gives an :godot:`@GlobalScope.Error <@GlobalScope#enum_@globalscope_Error>`.
+Close the open slot with :ref:`close()<class_NetwDatabase_method_close>` before switching slots. :ref:`NetwPromise.wait()<class_NetwPromise_method_wait>` gives an :godot:`@GlobalScope.Error <@GlobalScope#enum_@globalscope_Error>`.
 
 .. code:: text
 
     Error
-    ┠╴OK                slot is open, or was open already
-    ┠╴ERR_BUSY          another slot is open or opening, or the database is closing
-    ┠╴ERR_UNCONFIGURED  the database declares no backend
-    ┠╴ERR_CANT_CREATE   the backend resolved no connection
-    ┠╴ERR_INVALID_DATA  the backend's _open answered no promise
-    ┠╴ERR_UNAVAILABLE   the session ended, or the backend implements
-    │                   no _open
-    ┖╴storage error   the backend could not open slot
+    ┠╴OK                  slot is open, or was open already
+    ┠╴ERR_BUSY            another slot is open or opening, or the database is closing
+    ┠╴ERR_ALREADY_EXISTS  live declarations name different backends
+    ┠╴ERR_UNCONFIGURED    the database declares no backend
+    ┠╴ERR_CANT_CREATE     the backend resolved no connection
+    ┠╴ERR_INVALID_DATA    the backend's _open answered no promise
+    ┠╴ERR_UNAVAILABLE     the session ended, or the backend implements no _open
+    ┖╴storage error       the backend could not open the slot
 
 .. rst-class:: classref-item-separator
 

@@ -4,8 +4,7 @@
 		A named list of typed columns.
 	</brief_description>
 	<description>
-		Declare it in a [code]static var[/code] beside the code that writes it. Every peer built from the same scripts ends up with the same columns in the same order.
-		Each column method returns the column's index, which is how a writer and a reader name the column. [method NetwSession.table] opens the replicated table a session builds from the schema.
+		Finish declaring columns before a session uses the [NetwSchema]. Column methods return indices for reading and writing [NetwTable] values.
 		[codeblock]
 		class Mobs:
 		    static var schema := Netw.configure_schema(&amp;"Mob")
@@ -13,14 +12,12 @@
 		        &amp;"pos",
 		        NetwQuantizeScalar.new().limits(-512.0, 512.0).step(0.03),
 		    )
-		    static var vel := schema.vector3(&amp;"vel")   # no quantizer, sent as raw bytes
+		    static var vel := schema.vector3(&amp;"vel")
 		    static var hp  := schema.u16(&amp;"hp")
 
-		@onready var mobs := Netw.session(self).table(Mobs.schema.schema_name)
+		@onready var mobs: NetwTable = Netw.session(self).table(Mobs.schema.schema_name)
 		[/codeblock]
-		A column with no quantizer is sent as a raw copy of its buffer, which is the cheapest to encode and decode. Add a quantizer to the columns where bandwidth matters.
-		A schema returned by [member NetwPersistence.schema] cannot be changed.
-		The same schema also types the records a [NetwDatabase] reads and writes directly. A schema used only for those calls [method replicated] with [code]false[/code] so no table is created. [method string] and [method variant] columns work for saves but not for replicated tables. An entity's own record takes its columns from [method NetwPropertyConfig.persisted] and needs no schema.
+		[NetwDatabase] stores records directly. [method NetwPropertyConfig.persisted] defines a [NetwEntity]'s saved properties.
 	</description>
 	<tutorials>
 	</tutorials>
@@ -49,8 +46,7 @@
 			<param index="2" name="stride" type="int" default="1" />
 			<param index="3" name="quantizer" type="NetwQuantize" default="null" />
 			<description>
-				Appends a column of [param type] and returns its index. The typed methods such as [method vector3] are this call with the type filled in.
-				Declaring a [param key] again with the same [param type] and [param stride] returns the index it already has, so a script reload is safe. Declaring it with a different shape returns [code]-1[/code] and appends nothing.
+				Declaring [param key] again with the same [param type] and [param stride] returns its existing index. A different shape returns [code]-1[/code] and appends nothing.
 			</description>
 		</method>
 		<method name="create" qualifiers="static">
@@ -64,7 +60,7 @@
 			<return type="NetwSchema" />
 			<param index="0" name="name" type="StringName" />
 			<description>
-				Returns the registered schema named [param name], creating it if needed, or [code]null[/code] when the name is empty. Calling it twice with one name returns the same schema, so several classes can add columns to it. [method Netw.configure_schema] calls this.
+				Calls with the same [param name] share one [NetwSchema]. Empty names are refused.
 			</description>
 		</method>
 		<method name="entity">
@@ -128,13 +124,13 @@
 		<method name="is_reliable" qualifiers="const">
 			<return type="bool" />
 			<description>
-				Whether this schema's table sends its commits reliably, as [method reliable] set it.
+				Whether this [NetwSchema]'s [NetwTable] sends commits reliably. Set by [method reliable].
 			</description>
 		</method>
 		<method name="is_replicated" qualifiers="const">
 			<return type="bool" />
 			<description>
-				Whether a session creates a replicated table from this schema, as [method replicated] set it.
+				Whether a session creates a replicated [NetwTable] from this [NetwSchema]. Set by [method replicated].
 			</description>
 		</method>
 		<method name="migrate">
@@ -142,8 +138,13 @@
 			<param index="0" name="from_version" type="int" />
 			<param index="1" name="step" type="Callable" />
 			<description>
-				Sets the function that upgrades a record saved under [param from_version] to the next version, and returns this schema.
-				[param step] takes a [Dictionary] and returns a [Dictionary]. A save two versions behind runs two steps in order, and a read with a missing step fails.
+				A read runs one [param step] per saved version up to [method storage_version]. A missing step refuses the read.
+				[codeblock lang=text]
+				step(values: Dictionary) -&gt; Dictionary
+
+				Dictionary
+				┖╴saved column name  Variant  the value stored under that name
+				[/codeblock]
 				[codeblock]
 				static var schema := NetwSchema.create(&amp;"players") \
 				    .replicated(false) \
@@ -169,30 +170,27 @@
 		<method name="register">
 			<return type="NetwSchema" />
 			<description>
-				Adds this schema to the schema registry if it is not there, and returns it.
-				A [code]static var[/code] runs only once, so call this from [method Node._ready] when the registry may have been reset since. It does nothing when the schema is already registered.
+				Registers this [NetwSchema] if no [NetwSchema] with the same [member schema_name] is registered.
 			</description>
 		</method>
 		<method name="reliable">
 			<return type="NetwSchema" />
 			<param index="0" name="value" type="bool" default="true" />
 			<description>
-				Sends this schema's table commits reliably, and returns this schema.
-				Use it for a table that changes rarely, where a lost packet would not be fixed by the next commit. A table committed every tick is fine unreliable.
+				Use for a [NetwTable] whose next commit cannot repair a lost update.
 			</description>
 		</method>
 		<method name="replicated">
 			<return type="NetwSchema" />
 			<param index="0" name="value" type="bool" default="true" />
 			<description>
-				Sets whether a session creates a replicated table from this schema, and returns this schema. Pass [code]false[/code] for a schema that only describes saved records.
+				Pass [code]false[/code] for a [NetwSchema] used only by [NetwDatabase].
 			</description>
 		</method>
 		<method name="storage_version">
 			<return type="NetwSchema" />
 			<param index="0" name="version" type="int" />
 			<description>
-				Sets the version saved records of this schema carry, and returns this schema. The default is [code]1[/code].
 				Raise it when the saved columns change, and add a [method migrate] step from the previous version. It does not affect replication, so peers on different storage versions still connect.
 			</description>
 		</method>

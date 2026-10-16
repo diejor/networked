@@ -46,7 +46,6 @@ public:
     void seal(const godot::String &p_scope) {
         guard.seal(p_scope);
     }
-    void copy_values_from(const NetwLagCompensationConfig &p_source);
 };
 
 } // namespace netw

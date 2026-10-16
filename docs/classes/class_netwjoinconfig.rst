@@ -12,7 +12,7 @@ NetwJoinConfig
 
 **Inherits:** :godot:`RefCounted`
 
-Settings for the join handler, returned by :ref:`Netw.configure_join()<class_Netw_method_configure_join>`.
+Settings for a session's join handler.
 
 .. rst-class:: classref-introduction-group
 
@@ -57,7 +57,7 @@ Method Descriptions
 
 :ref:`NetwJoinConfig<class_NetwJoinConfig>` **quantize**\ (\ ...\ ) |vararg| :ref:`🔗<class_NetwJoinConfig_method_quantize>`
 
-Compresses each join argument with one :ref:`NetwQuantize<class_NetwQuantize>`, in order. ``null`` sends an argument as is. The number of quantizers must match the number of arguments. Returns this config.
+Compresses each join argument with one :ref:`NetwQuantize<class_NetwQuantize>`, in order. ``null`` sends an argument as is. The number of quantizers must match the number of arguments.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

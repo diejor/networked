@@ -7,7 +7,6 @@ const START_STRIDE := Vector2(48, 0)
 @export var level_1: PackedScene
 @export var level_2: PackedScene
 @export var avatar: PackedScene
-@export var saves: NetwDatabaseBackend
 
 var makers: Dictionary = { }
 var levels: Dictionary = { }
@@ -18,6 +17,9 @@ var levels: Dictionary = { }
 func _init() -> void:
 	Netw.configure_session(self).app(&"netw-example-multiple-levels")
 	Netw.configure_clock(self)
+	Netw.configure_database(self, &"saves").backend(
+			preload("res://examples/multiple_levels/game/save_database.tres")
+	)
 	Netw.configure_spawn(spawn_level1)
 	Netw.configure_spawn(spawn_level2)
 	Netw.configure_spawn(spawn_avatar)
@@ -28,7 +30,6 @@ func _ready() -> void:
 	makers[level_1.resource_path] = spawn_level1
 	makers[level_2.resource_path] = spawn_level2
 	NetwService.register(self)
-	Netw.configure_database(self, &"saves").backend(saves)
 	session.database(&"saves").open(&"campaign")
 	session.scene_ready.connect(remember_level)
 	get_tree().auto_accept_quit = false

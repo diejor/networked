@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <class name="NetwJoinConfig" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
 	<brief_description>
-		Settings for the join handler, returned by [method Netw.configure_join].
+		Settings for a session's join handler.
 	</brief_description>
 	<description>
 		[method quantize] compresses the arguments a client passes to [method Netw.prepare_join] after its username. The first quantizer is for the second parameter of the handler, after its [NetwPlayer].
@@ -20,7 +20,7 @@
 		<method name="quantize" qualifiers="vararg">
 			<return type="NetwJoinConfig" />
 			<description>
-				Compresses each join argument with one [NetwQuantize], in order. [code]null[/code] sends an argument as is. The number of quantizers must match the number of arguments. Returns this config.
+				Compresses each join argument with one [NetwQuantize], in order. [code]null[/code] sends an argument as is. The number of quantizers must match the number of arguments.
 			</description>
 		</method>
 	</methods>

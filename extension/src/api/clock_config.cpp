@@ -300,8 +300,4 @@ Ref<NetwClockConfig> NetwClockConfig::sync(enums::NetwClock::SyncMode p_value) {
     return Ref<NetwClockConfig>(this);
 }
 
-void NetwClockConfig::copy_values_from(const NetwClockConfig &p_source) {
-    values = p_source.values;
-}
-
 } // namespace netw

@@ -58,9 +58,18 @@ godot::Error declare(
 
 godot::Variant payload_on(godot::Node *p_scope, Kind p_kind);
 
+godot::Error declare_database(
+    godot::Node *p_scope,
+    const godot::StringName &p_name,
+    const godot::Variant &p_config
+);
+
+godot::Dictionary databases_on(godot::Node *p_scope);
+
 class Book {
 public:
     Resolved resolve(NetwMultiplayer *p_api, Kind p_kind);
+    void refresh(NetwMultiplayer *p_api);
     bool report_unresolved(
         NetwMultiplayer *p_api,
         Kind p_kind,

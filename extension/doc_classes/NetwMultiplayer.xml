@@ -531,14 +531,6 @@
 				Closes [param database] once its pending operations finish. The promise resolves with an [enum @GlobalScope.Error], see [method NetwDatabase.close].
 			</description>
 		</method>
-		<method name="database_create">
-			<return type="RID" />
-			<param index="0" name="name" type="StringName" />
-			<param index="1" name="config" type="NetwDatabaseConfig" />
-			<description>
-				Declares a database named [param name] from [param config] and returns its [RID]. A name already declared returns the [RID] it has, or an invalid one when [param config] names a different backend.
-			</description>
-		</method>
 		<method name="database_delete_slot">
 			<return type="NetwPromise" />
 			<param index="0" name="database" type="RID" />

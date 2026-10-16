@@ -66,7 +66,6 @@
 				func _init() -&gt; void:
 				    Netw.configure_admission(admit)
 
-				# the client called Netw.prepare_join(self, username)
 				func admit(peer_id: int, username: StringName) -&gt; Error:
 				    if nakama.username_for_peer(peer_id) != username:
 				        return ERR_UNAUTHORIZED
@@ -79,36 +78,30 @@
 		<method name="configure_clock" qualifiers="static">
 			<return type="NetwClockConfig" />
 			<param index="0" name="node" type="Node" />
-			<param index="1" name="preset" type="NetwClockConfig" default="null" />
 			<description>
-				Sets up the clock for the [member Node.multiplayer] and returns the [NetwClockConfig] to fill in.
 				[codeblock]
 				func _init() -&gt; void:
 				    Netw.configure_clock(self) \
 				            .ticks_per_second(60) \
 				            .display_offset_ticks(2)
 				[/codeblock]
-				Pass an [annotation @GDScript.@export] [NetwClockConfig] as [param preset] to set it from the inspector, and call this from [method Node._enter_tree].
 			</description>
 		</method>
 		<method name="configure_database" qualifiers="static">
 			<return type="NetwDatabaseConfig" />
 			<param index="0" name="node" type="Node" />
 			<param index="1" name="name" type="StringName" />
-			<param index="2" name="preset" type="NetwDatabaseConfig" default="null" />
 			<description>
-				Declares a [NetwDatabase] named [param name] on [member Node.multiplayer] of [param node].
 				[codeblock]
-				func _ready() -&gt; void:
-				    Netw.configure_database(self, &amp;"saves").backend(preload("res://save_backend.tres"))
-				[/codeblock]
-				Get it later with [method NetwSession.database]. Pass an [annotation @GDScript.@export] [NetwDatabaseConfig] as [param preset] to set it from the inspector.
-				[codeblock]
-				@export var database_config: NetwDatabaseConfig
+				func _init() -&gt; void:
+				    Netw.configure_database(self, &amp;"saves") \
+				            .backend(preload("res://save_backend.tres"))
 
-				func _enter_tree() -&gt; void:
-				    Netw.configure_database(self, &amp;"saves", database_config)
+				func _ready() -&gt; void:
+				    var db: NetwDatabase = Netw.session(self).database(&amp;"saves")
+				    var error: Error = await db.open(&amp;"campaign").wait()
 				[/codeblock]
+				Reach the [NetwDatabase] through [method NetwSession.database].
 			</description>
 		</method>
 		<method name="configure_despawn" qualifiers="static">
@@ -140,7 +133,7 @@
 				    Netw.configure_join(spawn_at)
 
 				func spawn_at(who: NetwPlayer, point: StringName, team: int) -&gt; void:
-				    arena.add_child(Netw.spawn_player(who, _spawn_avatar, team))
+				    arena.add_child(Netw.spawn_player(who, make_avatar, team))
 				[/codeblock]
 				[param handler] receives the [NetwPlayer], then the arguments the client passed to [method prepare_join] after its username. The username is [member NetwPlayer.username].
 				[b]Server Only.[/b]
@@ -149,48 +142,41 @@
 		<method name="configure_lagcomp" qualifiers="static">
 			<return type="NetwLagCompensationConfig" />
 			<param index="0" name="node" type="Node" />
-			<param index="1" name="preset" type="NetwLagCompensationConfig" default="null" />
 			<description>
-				Tunes how far back the [NetwMultiplayer] records what every node held.
 				[codeblock]
 				func _init() -&gt; void:
 				    Netw.configure_lagcomp(self).input_gate_deadline(16)
 				[/codeblock]
-				[param preset] works as in [method configure_clock]. See [NetwLagCompensationConfig] for when the settings take effect.
 			</description>
 		</method>
 		<method name="configure_persistence" qualifiers="static">
 			<return type="NetwPersistenceConfig" />
 			<param index="0" name="node" type="Node" />
 			<description>
-				Declares which record of which [NetwDatabase] [param node] loads and saves. The record holds every property marked with [method NetwPropertyConfig.persisted].
 				[codeblock]
-				func _ready() -&gt; void:
-				    Netw.configure_property(self, &amp;"gold", false).persisted()
+				func _init() -&gt; void:
+				    Netw.configure_property(self, &amp;"gold").persisted()
 				    Netw.configure_persistence(self) \
 				            .database(&amp;"saves") \
 				            .table(&amp;"players") \
 				            .record_id(account_name)
 				[/codeblock]
-				See [NetwPersistenceConfig], [NetwPersistence] and [NetwDatabase].
+				Reach the saved record through [member NetwEntity.persistence].
 			</description>
 		</method>
 		<method name="configure_property" qualifiers="static">
 			<return type="NetwPropertyConfig" />
 			<param index="0" name="node" type="Node" />
 			<param index="1" name="property" type="StringName" />
-			<param index="2" name="warn_late" type="bool" default="true" />
-			<param index="3" name="declared_type" type="int" default="-1" />
+			<param index="2" name="declared_type" type="int" default="-1" />
 			<description>
-				Declares how [param property] is synchronized. See [NetwPropertyConfig] for the settings.
-				For a property supplied by [method Object._get], provide its type through [method Object._get_property_list] or [param declared_type]. [code]-1[/code] reads the declared type automatically.
+				For a property supplied by [method Object._get], provide its type through [method Object._get_property_list] or [param declared_type].
 			</description>
 		</method>
 		<method name="configure_rpc" qualifiers="static">
 			<return type="NetwMemberConfig" />
 			<param index="0" name="callable" type="Callable" />
 			<description>
-				Declares who may call [param callable] and how it is sent. A setting made here outranks [annotation @GDScript.@rpc], and a setting left out falls back to it. See [NetwMemberConfig].
 				[param callable] must name a script method. Anonymous callbacks are refused.
 				[codeblock]
 				func _init() -&gt; void:
@@ -220,16 +206,14 @@
 			<return type="NetwSchema" />
 			<param index="0" name="name" type="StringName" />
 			<description>
-				Declares the properties and types of a [NetwTable].
 				[codeblock]
 				class Mobs:
 				    static var schema := Netw.configure_schema(&amp;"Mob")
-				    static var pos    := schema.vector3(&amp;"pos")
-				    static var hp     := schema.u16(&amp;"hp")
+				    static var pos := schema.vector3(&amp;"pos")
+				    static var hp := schema.u16(&amp;"hp")
 
-				@onready var mobs := Netw.session(self).table(&amp;"Mob")
+				@onready var mobs: NetwTable = Netw.session(self).table(&amp;"Mob")
 				[/codeblock]
-				Read and write the table with [method NetwSession.table].
 			</description>
 		</method>
 		<method name="configure_server_info" qualifiers="static">
@@ -251,50 +235,49 @@
 		<method name="configure_session" qualifiers="static">
 			<return type="NetwSessionConfig" />
 			<param index="0" name="node" type="Node" />
-			<param index="1" name="preset" type="NetwSessionConfig" default="null" />
 			<description>
+				[codeblock]
+				func _init() -&gt; void:
+				    Netw.configure_session(self).app(&amp;"my-game")
+				[/codeblock]
 			</description>
 		</method>
 		<method name="configure_signal" qualifiers="static">
 			<return type="NetwMemberConfig" />
 			<param index="0" name="sig" type="Signal" />
 			<description>
-				Registers [param sig] so [method emit_entity_signal] may emit it on every peer.
+				By default, only the node's multiplayer authority may emit [param sig].
 				[codeblock]
 				func _init() -&gt; void:
-				    Netw.configure_signal(self.exploded)   # only the server may emit it
+				    Netw.configure_signal(exploded)
 				[/codeblock]
-				Emitting it also fires the local listeners, as with [method NetwMemberConfig.call_local].
+				Emitting it also fires local listeners. [NetwMemberConfig] controls delivery and who may emit it.
 			</description>
 		</method>
 		<method name="configure_spawn" qualifiers="static">
 			<return type="NetwMemberConfig" />
 			<param index="0" name="callable" type="Callable" />
 			<description>
-				Registers [param callable] as a function [method spawn] may run on every peer to build the same node.
 				[codeblock]
 				func _init() -&gt; void:
-				    Netw.configure_spawn(_spawn_bullet)
+				    Netw.configure_spawn(make_bullet)
 
-				func _spawn_bullet(dir: Vector2, tier: int) -&gt; Node:
+				func make_bullet(direction: Vector2) -&gt; Node:
 				    var bullet := BulletScene.instantiate()
-				    bullet.setup(dir, tier)
+				    bullet.direction = direction
 				    return bullet
 
-				# ...
-
-				var bullet := Netw.spawn(_spawn_bullet, dir, tier) # server only
-				muzzle.add_child(bullet)
-
-				# clients build the same node with the same arguments, in the same place
+				func fire(direction: Vector2) -&gt; void:
+				    muzzle.add_child(Netw.spawn(make_bullet, direction))
 				[/codeblock]
+				The [Callable] must be configured before [method spawn] uses it.
 			</description>
 		</method>
 		<method name="configure_transfer" qualifiers="static">
 			<return type="int" enum="Error" />
 			<param index="0" name="keep" type="Callable" />
 			<description>
-				Picks which entities outlive a server transfer in [constant NetwSession.TRANSFER_REJOIN]. The new server calls [param keep] with the root node of each entity it took over, and despawns the ones it answers [code]false[/code] for before any client gets the world again.
+				Picks which [NetwEntity] instances outlive a server transfer in [constant NetwSession.TRANSFER_REJOIN]. The new server calls [param keep] with the root node of each [NetwEntity] it took over, and despawns the ones it answers [code]false[/code] for before any client gets the world again.
 				[codeblock]
 				func _init() -&gt; void:
 				    Netw.configure_transfer(keeps)
@@ -540,7 +523,7 @@
 				Like [method spawn], for the node [param player] controls.
 				[codeblock]
 				players.add_child(
-				    Netw.spawn_player(player, _spawn_avatar, character_class)
+				    Netw.spawn_player(player, make_avatar, character_class)
 				)
 				[/codeblock]
 				The node is despawned when [param player] leaves. With [method NetwPersistenceConfig.load_on_spawn], other peers receive it once its save is loaded.

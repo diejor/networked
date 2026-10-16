@@ -4306,35 +4306,6 @@ public sealed class NetwMultiplayer : NetwRefCounted
             ref discarded);
     }
 
-    private static readonly IntPtr _bindDatabaseCreate =
-        NetwApi.MethodBind("NetwMultiplayer", "database_create", 2049621074UL);
-
-    /// <summary>
-    /// Declares a database named <paramref name="name"/> from
-    /// <paramref name="config"/> and returns its <see cref="Rid"/>. A name
-    /// already declared returns the <see cref="Rid"/> it has, or an invalid one
-    /// when <paramref name="config"/> names a different backend.
-    /// </summary>
-    public Rid DatabaseCreate(StringName name, NetwDatabaseConfig config)
-    {
-        godot_variant slot0 = VariantUtils.CreateFromStringName(name);
-        godot_variant slot1 =
-            VariantUtils.CreateFromGodotObjectPtr(
-                config?.Native ?? IntPtr.Zero);
-        godot_variant answered = default;
-        NetwThunks.Call2(
-            _bindDatabaseCreate,
-            Checked,
-            in slot0,
-            in slot1,
-            ref answered);
-        slot0.Dispose();
-        slot1.Dispose();
-        Rid result = VariantUtils.ConvertToRid(answered);
-        answered.Dispose();
-        return result;
-    }
-
     private static readonly IntPtr _bindDatabaseFind =
         NetwApi.MethodBind("NetwMultiplayer", "database_find", 1480417841UL);
 

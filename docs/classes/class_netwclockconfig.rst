@@ -12,14 +12,14 @@ NetwClockConfig
 
 **Inherits:** :godot:`Resource`
 
-Configuration for the clock of :godot:`Node.multiplayer <Node#class_Node_property_multiplayer>`.
+Settings for a session's :ref:`NetwClock<class_NetwClock>`.
 
 .. rst-class:: classref-introduction-group
 
 Description
 -----------
 
-Returned by :ref:`Netw.configure_clock()<class_Netw_method_configure_clock>`.
+Settings apply before assigning :godot:`MultiplayerAPI.multiplayer_peer <MultiplayerAPI#class_MultiplayerAPI_property_multiplayer_peer>` or starting :ref:`NetwSession.connection<class_NetwSession_property_connection>`. Changes after application are ignored.
 
 ::
 
@@ -102,7 +102,7 @@ Property Descriptions
 - |void| **set_display_offset**\ (\ value\: :godot:`int`\ )
 - :godot:`int` **get_display_offset**\ (\ )
 
-How many ticks in the past remote entities are shown. A small value helps hide lag.
+How many ticks in the past remote :ref:`NetwEntity<class_NetwEntity>` instances are shown. A small value helps hide lag.
 
 .. rst-class:: classref-item-separator
 
@@ -340,9 +340,7 @@ Method Descriptions
 
 :ref:`NetwClockConfig<class_NetwClockConfig>` **display_offset_ticks**\ (\ display_offset\: :godot:`int`\ ) :ref:`🔗<class_NetwClockConfig_method_display_offset_ticks>`
 
-.. container:: contribute
-
-	There is currently no description for this method. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+Sets :ref:`display_offset<class_NetwClockConfig_property_display_offset>`, how many ticks in the past remote :ref:`NetwEntity<class_NetwEntity>` instances are shown.
 
 .. rst-class:: classref-item-separator
 
@@ -354,9 +352,7 @@ Method Descriptions
 
 :ref:`NetwClockConfig<class_NetwClockConfig>` **physics_interpolation**\ (\ use_physics_interpolation\: :godot:`bool`\ ) :ref:`🔗<class_NetwClockConfig_method_physics_interpolation>`
 
-.. container:: contribute
-
-	There is currently no description for this method. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+Sets :ref:`use_physics_interpolation<class_NetwClockConfig_property_use_physics_interpolation>`, whether :ref:`NetwClock.tick_factor<class_NetwClock_property_tick_factor>` follows Godot physics interpolation.
 
 .. rst-class:: classref-item-separator
 
@@ -368,9 +364,7 @@ Method Descriptions
 
 :ref:`NetwClockConfig<class_NetwClockConfig>` **sync**\ (\ sync_mode\: :ref:`SyncMode<enum_NetwClock_SyncMode>`\ ) :ref:`🔗<class_NetwClockConfig_method_sync>`
 
-.. container:: contribute
-
-	There is currently no description for this method. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+Sets :ref:`sync_mode<class_NetwClockConfig_property_sync_mode>`, how the clock corrects toward the server's clock.
 
 .. rst-class:: classref-item-separator
 
@@ -382,9 +376,7 @@ Method Descriptions
 
 :ref:`NetwClockConfig<class_NetwClockConfig>` **ticks_per_second**\ (\ tickrate\: :godot:`int`\ ) :ref:`🔗<class_NetwClockConfig_method_ticks_per_second>`
 
-.. container:: contribute
-
-	There is currently no description for this method. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+Sets :ref:`tickrate<class_NetwClockConfig_property_tickrate>`, the number of network ticks per second.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

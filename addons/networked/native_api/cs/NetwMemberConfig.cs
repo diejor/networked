@@ -9,29 +9,18 @@ namespace Networked;
 /// Network settings for an RPC, a signal, a spawn function or a property.
 /// </summary>
 /// <remarks>
-/// Returned by <see cref="Netw.ConfigureRpc"/>,
-/// <see cref="Netw.ConfigureSignal"/> and <see cref="Netw.ConfigureSpawn"/>.
-/// <see cref="Netw.ConfigureProperty"/> returns a
-/// <see cref="NetwPropertyConfig"/>, which extends it. The methods set who may
-/// send, how it is sent, and what the receiver does.
+/// Settings are shared by nodes using the same script. Explicit settings
+/// outrank [annotation @GDScript.@rpc]. Unset settings fall back to that
+/// annotation. The server can always call an RPC.
 /// <code>
 /// func _init() -&gt; void:
-///     Netw.configure_rpc(self.fire).unreliable().controller()
-///     Netw.configure_signal(self.exploded).any_peer()
-///     Netw.configure_spawn(self._spawn_bullet).quantize(dir_q)
+///     Netw.configure_rpc(fire).unreliable().controller()
+///     Netw.configure_signal(exploded).any_peer()
+///     Netw.configure_spawn(make_bullet).quantize(direction_q)
 /// </code>
 /// <para>
-/// A setting made here outranks the method's <c>@rpc</c> annotation, and a
-/// setting left out falls back to it. The server may always call an RPC,
-/// whatever its policy. Settings are stored per script, so calling this in
-/// <c>Object._init</c> of every instance is fine. A warning is pushed only when
-/// two calls set different values. <b>Note:</b> these methods return a
-/// <see cref="NetwMemberConfig"/>, so call <see cref="NetwPropertyConfig"/>
-/// methods first in a chain.
-/// <code>
-/// Netw.configure_property(self, &amp;"position").state().quantize(pos_q)   # works
-/// Netw.configure_property(self, &amp;"position").quantize(pos_q).state()   # state() is not found
-/// </code>
+/// Call <see cref="NetwPropertyConfig"/> methods before chaining these methods,
+/// which return <see cref="NetwMemberConfig"/>.
 /// </para>
 /// </remarks>
 public class NetwMemberConfig : NetwRefCounted
@@ -173,12 +162,11 @@ public class NetwMemberConfig : NetwRefCounted
             1414759222UL);
 
     /// <summary>
-    /// Set by <see cref="NetwMemberConfig.Authority"/>,
+    /// Who may send it. Set by <see cref="NetwMemberConfig.Authority"/>,
     /// <see cref="NetwMemberConfig.Controller"/>,
     /// <see cref="NetwMemberConfig.AnyPeer"/> and
-    /// <see cref="NetwMemberConfig.Server"/>. An RPC with no policy set takes
-    /// it from its <c>@rpc</c> annotation, and one without that annotation
-    /// accepts calls from the server only.
+    /// <see cref="NetwMemberConfig.Server"/>. Unset RPC settings fall back to
+    /// [annotation @GDScript.@rpc].
     /// </summary>
     public NetwMemberConfig.Policy WritePolicy
     {
@@ -499,7 +487,7 @@ public class NetwMemberConfig : NetwRefCounted
         NetwApi.MethodBind("NetwMemberConfig", "any_peer", 3574862355UL);
 
     /// <summary>
-    /// Any peer may send it. Only use it when a cheating client cannot do harm.
+    /// Any peer may send it.
     /// </summary>
     public NetwMemberConfig AnyPeer()
     {
@@ -525,7 +513,7 @@ public class NetwMemberConfig : NetwRefCounted
         NetwApi.MethodBind("NetwMemberConfig", "reliable", 3574862355UL);
 
     /// <summary>
-    /// Send reliably. The default.
+    /// Sends reliably.
     /// </summary>
     public NetwMemberConfig Reliable()
     {
@@ -538,7 +526,7 @@ public class NetwMemberConfig : NetwRefCounted
         NetwApi.MethodBind("NetwMemberConfig", "unreliable", 3574862355UL);
 
     /// <summary>
-    /// Send unreliably.
+    /// Sends unreliably.
     /// </summary>
     public NetwMemberConfig Unreliable()
     {
@@ -551,8 +539,8 @@ public class NetwMemberConfig : NetwRefCounted
         NetwApi.MethodBind("NetwMemberConfig", "call_local", 3574862355UL);
 
     /// <summary>
-    /// The signal or RPC also runs on the sender. The default for
-    /// <see cref="Netw.ConfigureSignal"/>. Not valid on a property.
+    /// Enabled by default for <see cref="Netw.ConfigureSignal"/>. Invalid for
+    /// properties.
     /// </summary>
     public NetwMemberConfig CallLocal()
     {
@@ -565,8 +553,8 @@ public class NetwMemberConfig : NetwRefCounted
         NetwApi.MethodBind("NetwMemberConfig", "call_remote", 3574862355UL);
 
     /// <summary>
-    /// The signal or RPC only runs on other peers. The default for
-    /// <see cref="Netw.ConfigureRpc"/>. Not valid on a property.
+    /// Enabled by default for <see cref="Netw.ConfigureRpc"/>. Invalid for
+    /// properties.
     /// </summary>
     public NetwMemberConfig CallRemote()
     {
@@ -579,8 +567,8 @@ public class NetwMemberConfig : NetwRefCounted
         NetwApi.MethodBind("NetwMemberConfig", "defer_until", 4061727032UL);
 
     /// <summary>
-    /// A received call waits until <paramref name="sig"/> is emitted on the
-    /// node, such as <c>self.ready</c>.
+    /// Received calls wait for a signal with <paramref name="sig"/>'s name on
+    /// the receiving <see cref="Node"/>. Only the signal name is stored.
     /// </summary>
     public NetwMemberConfig DeferUntil(Signal sig)
     {
@@ -673,8 +661,8 @@ public class NetwMemberConfig : NetwRefCounted
             36873697UL);
 
     /// <summary>
-    /// Returns <c>true</c> when <see cref="NetwMemberConfig.WritePolicy"/> was
-    /// set, even to its default.
+    /// <c>true</c> when <see cref="NetwMemberConfig.WritePolicy"/> was set,
+    /// even to its default.
     /// </summary>
     public bool IsPolicyDeclared()
     {
@@ -690,8 +678,8 @@ public class NetwMemberConfig : NetwRefCounted
             36873697UL);
 
     /// <summary>
-    /// Returns <c>true</c> when <see cref="NetwMemberConfig.TransferMode"/> was
-    /// set, even to its default.
+    /// <c>true</c> when <see cref="NetwMemberConfig.TransferMode"/> was set,
+    /// even to its default.
     /// </summary>
     public bool IsTransferDeclared()
     {

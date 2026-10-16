@@ -3,10 +3,13 @@
 #if defined(NETW_TIER_HOSTED)
 
 #include "netw/api/context.hpp"
+#include "netw/api/entity.hpp"
+#include "netw/api/entity_record.hpp"
 #include "netw/api/netw_multiplayer.hpp"
 #include "netw/api/promise.hpp"
 #include "netw/api/scene.hpp"
 #include "netw/api/session.hpp"
+#include "support/minted_script.h"
 
 namespace TestSceneFrontDoorRigLaws {
 
@@ -54,6 +57,20 @@ TEST_CASE(
     const Ref<netw::NetwScene> one = session->find_scene(StringName("Arena"));
     REQUIRE(one.is_valid());
     NETW_CHECK_EQ(one->get_root(), first);
+    CHECK(one->get_entity() == netw::NetwEntity::of(first));
+    const Ref<netw::NetwEntity> published = one->get("entity");
+    CHECK(published == netw::NetwEntity::of(first));
+
+    Node *child = memnew(Node);
+    child->set_name("Child");
+    const Ref<netw::NetwEntity> child_entity = Netw::configure_entity(child);
+    first->add_child(child);
+    REQUIRE(rig.server()->entity_of(child).is_valid());
+    const Ref<netw::NetwScene> child_scene = child_entity->get_scene();
+    REQUIRE(child_scene.is_valid());
+    CHECK(child_scene->get_entity() == netw::NetwEntity::of(first));
+    CHECK(child_scene->get_entity() != child_entity);
+    CHECK(child_scene->get_entity()->get_scene() == child_scene);
 
     Node *second = live_scene_named(rig, StringName("Arena"));
     REQUIRE(second != first);
@@ -73,6 +90,46 @@ TEST_CASE(
 
     retire(second);
     retire(first);
+    CHECK(one->get_entity().is_null());
+    CHECK(child_scene->get_entity().is_null());
+}
+
+TEST_CASE(
+    "[Networked][Scene] SN1 one script gives each scene its own root "
+    "name by default and shares an explicit label"
+) {
+    const Ref<Script> script = netw_test::minted_script(
+        "extends Node\n"
+        "func _init() -> void:\n"
+        "\tname = \"Initial\"\n"
+        "\tNetw.configure_scene(self)\n"
+    );
+    REQUIRE(script.is_valid());
+    Node *a = Object::cast_to<Node>(script->call("new"));
+    Node *b = Object::cast_to<Node>(script->call("new"));
+    REQUIRE(a != nullptr);
+    REQUIRE(b != nullptr);
+    a->set_name("A");
+    b->set_name("B");
+    StringName expected_a("A");
+    StringName expected_b("B");
+    SUBCASE("an explicit label applies to both roots") {
+        Netw::configure_scene(a)->labeled("Shared");
+        expected_a = StringName("Shared");
+        expected_b = expected_a;
+    }
+    SUBCASE("the default is read from each root at hydration") {
+    }
+    const Ref<netw::NetwEntity> first = Netw::configure_entity(a);
+    const Ref<netw::NetwEntity> second = Netw::configure_entity(b);
+    first->get_record()->hydrate_identity(a);
+    second->get_record()->hydrate_identity(b);
+    CHECK(first->get_scene_label() == expected_a);
+    CHECK(second->get_scene_label() == expected_b);
+    CHECK(Netw::configure_scene(a)->get_label() == expected_a);
+    CHECK(Netw::configure_scene(b)->get_label() == expected_b);
+    memdelete(a);
+    memdelete(b);
 }
 
 } // namespace TestSceneFrontDoorRigLaws

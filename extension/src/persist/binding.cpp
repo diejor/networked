@@ -293,7 +293,7 @@ RID Bindings::compile(Node *p_root) {
         RID(),
         sys::TABLE,
         "'%s' was asked to save, but it declares no persistence. Call "
-        "Netw.configure_persistence(self) in its _ready.",
+        "Netw.configure_persistence on it before it enters the tree.",
         name_of(p_root).utf8().get_data()
     );
 
@@ -308,13 +308,14 @@ RID Bindings::compile(Node *p_root) {
     );
 
     const StringName database_name = config->get_database_name();
-    const RID database = session->database_find(database_name);
+    const RID database = session->database_lookup(database_name);
     NETW_ERR_COND_V(
         !database.is_valid(),
         RID(),
         sys::TABLE,
         "'%s' saves into database '%s', which this session does not "
-        "declare. Call Netw.configure_database with that name first.",
+        "declare. Declare it with Netw.configure_database in _init of a node "
+        "above this entity.",
         name_of(p_root).utf8().get_data(),
         String(database_name).utf8().get_data()
     );

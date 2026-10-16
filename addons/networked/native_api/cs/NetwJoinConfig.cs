@@ -6,7 +6,7 @@ using Godot.NativeInterop;
 namespace Networked;
 
 /// <summary>
-/// Settings for the join handler, returned by <see cref="Netw.ConfigureJoin"/>.
+/// Settings for a session's join handler.
 /// </summary>
 /// <remarks>
 /// <see cref="NetwJoinConfig.Quantize"/> compresses the arguments a client
@@ -44,7 +44,7 @@ public sealed class NetwJoinConfig : NetwRefCounted
     /// <summary>
     /// Compresses each join argument with one <see cref="NetwQuantize"/>, in
     /// order. <c>null</c> sends an argument as is. The number of quantizers
-    /// must match the number of arguments. Returns this config.
+    /// must match the number of arguments.
     /// </summary>
     public NetwJoinConfig Quantize(params Variant[] rest)
     {

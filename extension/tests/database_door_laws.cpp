@@ -41,7 +41,7 @@ struct World {
         Ref<NetwDatabaseConfig> config;
         config.instantiate();
         config->backend(backend);
-        const RID made = session->database_create("saves", config);
+        const RID made = session->database_declare(nullptr, "saves", config);
         db = NetwDatabase::over(made, session.ptr());
     }
 
@@ -90,7 +90,7 @@ TEST_CASE(
     Ref<NetwDatabaseConfig> config;
     config.instantiate();
     const Ref<NetwDatabase> db = NetwDatabase::over(
-        session->database_create("saves", config),
+        session->database_declare(nullptr, "saves", config),
         session.ptr()
     );
     const Ref<NetwPromise> opening = db->open("slot1");
@@ -225,28 +225,12 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Table][Hosted] DD8 declaring one name twice keeps one "
-    "database, and a second backend under that name is refused"
+    "[Networked][Table][Hosted] DD8 declaring one name twice on the session "
+    "keeps one database, and the later backend is the one that opens"
 ) {
-    netw_test::FaultWatch expected_faults;
-    expected_faults.expect_error(
-        "[error][table] Database '*' is already declared with a "
-        "different backend. Declare each database name with one "
-        "backend.",
-        1
-    );
-
     World world("dd8");
     const RID first = world.session->database_find("saves");
     CHECK(first.is_valid());
-
-    Ref<NetwDatabaseConfig> same;
-    same.instantiate();
-    same->backend(world.session->database_backend_of(first));
-    NETW_CHECK_EQ(
-        int(world.session->database_create("saves", same) == first),
-        1
-    );
 
     Ref<MemoryDatabase> other_backend;
     other_backend.instantiate();
@@ -254,7 +238,17 @@ TEST_CASE(
     Ref<NetwDatabaseConfig> other;
     other.instantiate();
     other->backend(other_backend);
-    CHECK_FALSE(world.session->database_create("saves", other).is_valid());
+    NETW_CHECK_EQ(
+        int(world.session->database_declare(nullptr, "saves", other) == first),
+        1
+    );
+
+    Ref<netw::NetwDatabaseBackend> opened;
+    NETW_CHECK_EQ(
+        int(world.session->database_backend_of(first, opened)),
+        int(OK)
+    );
+    CHECK(opened == other_backend);
 }
 
 } // namespace TestDatabaseDoor

@@ -1,18 +1,20 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <class name="NetwPersistence" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
 	<brief_description>
-		One entity's saved record, reached as [member NetwEntity.persistence].
+		One [NetwEntity]'s saved record, reached as [member NetwEntity.persistence].
 	</brief_description>
 	<description>
-		On the server, the entity's [NetwPersistenceConfig] and its [method NetwPropertyConfig.persisted] properties become one record when the node is ready. If any of them is invalid, the entity saves nothing and an error names the property.
-		[method Node._ready] runs before the record is read, so wait for [signal loaded] before using the stored values.
+		The server reads the [NetwPersistenceConfig] and saved properties when the root is ready. Wait for [signal loaded] before using stored values.
 		[codeblock]
-		func _on_chest_opened() -&gt; void:
-		    var persistence := entity.persistence
-		    persistence.saved.connect(func() -&gt; void: print("stored as ", persistence.record_id))
-		    persistence.save()
+		@onready var entity: NetwEntity = NetwEntity.of(self)
+
+		func _ready() -&gt; void:
+		    entity.persistence.loaded.connect(on_loaded)
+
+		func on_loaded(_found: bool) -&gt; void:
+		    show_contents()
 		[/codeblock]
-		[method NetwPersistenceConfig.interval] saves automatically, and only when something changed. An entity whose node is freed saves one last time. Failed loads and saves emit [signal NetwDatabase.failed].
+		[method NetwPersistenceConfig.interval] saves changed values automatically. Freeing the root saves one last time. Failed loads and saves emit [signal NetwDatabase.failed].
 	</description>
 	<tutorials>
 	</tutorials>
@@ -39,7 +41,7 @@
 		<method name="save">
 			<return type="NetwPromise" />
 			<description>
-				Writes the configured properties as this entity's record. The promise returns [code]false[/code] when nothing had changed. A failed save fails the promise, and [method NetwPromise.wait] returns the code. The entity stays [member dirty] so the next save tries again.
+				Writes the configured properties as this [NetwEntity]'s record. The promise returns [code]false[/code] when nothing had changed. A failed save fails the promise, and [method NetwPromise.wait] returns the code. The [NetwEntity] stays [member dirty] so the next save tries again.
 				[codeblock lang=text]
 				Error
 				┠╴ERR_UNCONFIGURED  no persistence configuration or unopened database
@@ -57,15 +59,13 @@
 	</methods>
 	<members>
 		<member name="database" type="StringName" setter="" getter="get_database">
-			The [NetwDatabase] this record lives in, as
-			[method NetwPersistenceConfig.database] named it.
+			The name of the [NetwDatabase] this record lives in. Set by [method NetwPersistenceConfig.database].
 		</member>
 		<member name="dirty" type="bool" setter="" getter="get_dirty">
 			Whether any configured property differs from what was last saved.
 		</member>
 		<member name="record_id" type="StringName" setter="" getter="get_record_id">
-			The id this record is stored under, as
-			[method NetwPersistenceConfig.record_id] returned it.
+			The id this record is stored under. Supplied by [method NetwPersistenceConfig.record_id].
 		</member>
 		<member name="schema" type="NetwSchema" setter="" getter="get_schema">
 			The read-only saved property definition for [method NetwDatabase.read]

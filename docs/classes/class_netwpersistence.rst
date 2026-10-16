@@ -12,25 +12,26 @@ NetwPersistence
 
 **Inherits:** :godot:`RefCounted`
 
-One entity's saved record, reached as :ref:`NetwEntity.persistence<class_NetwEntity_property_persistence>`.
+One :ref:`NetwEntity<class_NetwEntity>`'s saved record, reached as :ref:`NetwEntity.persistence<class_NetwEntity_property_persistence>`.
 
 .. rst-class:: classref-introduction-group
 
 Description
 -----------
 
-On the server, the entity's :ref:`NetwPersistenceConfig<class_NetwPersistenceConfig>` and its :ref:`NetwPropertyConfig.persisted()<class_NetwPropertyConfig_method_persisted>` properties become one record when the node is ready. If any of them is invalid, the entity saves nothing and an error names the property.
-
-\ :godot:`Node._ready() <Node#class_Node_private_method__ready>` runs before the record is read, so wait for :ref:`loaded<class_NetwPersistence_signal_loaded>` before using the stored values.
+The server reads the :ref:`NetwPersistenceConfig<class_NetwPersistenceConfig>` and saved properties when the root is ready. Wait for :ref:`loaded<class_NetwPersistence_signal_loaded>` before using stored values.
 
 ::
 
-    func _on_chest_opened() -> void:
-        var persistence := entity.persistence
-        persistence.saved.connect(func() -> void: print("stored as ", persistence.record_id))
-        persistence.save()
+    @onready var entity: NetwEntity = NetwEntity.of(self)
 
-\ :ref:`NetwPersistenceConfig.interval()<class_NetwPersistenceConfig_method_interval>` saves automatically, and only when something changed. An entity whose node is freed saves one last time. Failed loads and saves emit :ref:`NetwDatabase.failed<class_NetwDatabase_signal_failed>`.
+    func _ready() -> void:
+        entity.persistence.loaded.connect(on_loaded)
+
+    func on_loaded(_found: bool) -> void:
+        show_contents()
+
+\ :ref:`NetwPersistenceConfig.interval()<class_NetwPersistenceConfig_method_interval>` saves changed values automatically. Freeing the root saves one last time. Failed loads and saves emit :ref:`NetwDatabase.failed<class_NetwDatabase_signal_failed>`.
 
 .. rst-class:: classref-reftable-group
 
@@ -112,9 +113,7 @@ Property Descriptions
 
 - :godot:`StringName` **get_database**\ (\ )
 
-The :ref:`NetwDatabase<class_NetwDatabase>` this record lives in, as
-
-\ :ref:`NetwPersistenceConfig.database()<class_NetwPersistenceConfig_method_database>` named it.
+The name of the :ref:`NetwDatabase<class_NetwDatabase>` this record lives in. Set by :ref:`NetwPersistenceConfig.database()<class_NetwPersistenceConfig_method_database>`.
 
 .. rst-class:: classref-item-separator
 
@@ -146,9 +145,7 @@ Whether any configured property differs from what was last saved.
 
 - :godot:`StringName` **get_record_id**\ (\ )
 
-The id this record is stored under, as
-
-\ :ref:`NetwPersistenceConfig.record_id()<class_NetwPersistenceConfig_method_record_id>` returned it.
+The id this record is stored under. Supplied by :ref:`NetwPersistenceConfig.record_id()<class_NetwPersistenceConfig_method_record_id>`.
 
 .. rst-class:: classref-item-separator
 
@@ -214,7 +211,7 @@ Reads the stored record and applies it to the configured properties. The promise
 
 :ref:`NetwPromise<class_NetwPromise>` **save**\ (\ ) :ref:`🔗<class_NetwPersistence_method_save>`
 
-Writes the configured properties as this entity's record. The promise returns ``false`` when nothing had changed. A failed save fails the promise, and :ref:`NetwPromise.wait()<class_NetwPromise_method_wait>` returns the code. The entity stays :ref:`dirty<class_NetwPersistence_property_dirty>` so the next save tries again.
+Writes the configured properties as this :ref:`NetwEntity<class_NetwEntity>`'s record. The promise returns ``false`` when nothing had changed. A failed save fails the promise, and :ref:`NetwPromise.wait()<class_NetwPromise_method_wait>` returns the code. The :ref:`NetwEntity<class_NetwEntity>` stays :ref:`dirty<class_NetwPersistence_property_dirty>` so the next save tries again.
 
 .. code:: text
 

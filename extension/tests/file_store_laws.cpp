@@ -438,7 +438,7 @@ struct Door {
         config.instantiate();
         config->backend(backend);
         db = NetwDatabase::over(
-            session->database_create("saves", config),
+            session->database_declare(nullptr, "saves", config),
             session.ptr()
         );
     }

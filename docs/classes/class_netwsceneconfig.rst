@@ -19,16 +19,14 @@ Makes a node a multiplayer scene.
 Description
 -----------
 
-Returned by :ref:`Netw.configure_scene()<class_Netw_method_configure_scene>`. Declare it once from the scene root's :godot:`Object._init() <Object#class_Object_private_method__init>`, the methods can be called in any order.
+The :ref:`NetwScene<class_NetwScene>` label and isolation are read when its root is spawned. Declare them in the root's :godot:`Object._init() <Object#class_Object_private_method__init>`.
 
 ::
-
-    extends Node2D
 
     func _init() -> void:
         Netw.configure_scene(self).labeled(&"Level1").isolated()
 
-\ Every entity below the root belongs to the scene through :ref:`NetwEntity.scene<class_NetwEntity_property_scene>`, and :ref:`NetwEntity.is_scene<class_NetwEntity_property_is_scene>` is ``true`` on the root.
+\ Each :ref:`NetwEntity<class_NetwEntity>` below the root reaches it through :ref:`NetwEntity.scene<class_NetwEntity_property_scene>`.
 
 .. rst-class:: classref-reftable-group
 
@@ -137,7 +135,7 @@ Gives this scene its own physics and rendering world on every peer.
 
 :ref:`NetwSceneConfig<class_NetwSceneConfig>` **labeled**\ (\ stem\: :godot:`StringName`\ ) :ref:`🔗<class_NetwSceneConfig_method_labeled>`
 
-Names the scene for :ref:`Netw.scene()<class_Netw_method_scene>`. Defaults to the root node's name.
+Defaults to this root node's name.
 
 \ :ref:`Netw.scene()<class_Netw_method_scene>` fails when several live scenes share the label. Use the node returned by :ref:`Netw.spawn()<class_Netw_method_spawn>` to select an instance.
 

@@ -20,16 +20,11 @@ var is_moving: bool:
 
 func _init() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
-
-
-func _notification(what: int) -> void:
-	if what == NOTIFICATION_PARENTED:
-		Netw.configure_property(self, &"current_scene_path").on_spawn()
+	Netw.configure_property(self, &"current_scene_path") \
+			.on_spawn().persisted(&"level")
 
 
 func _ready() -> void:
-	Netw.configure_property(self, &"current_scene_path", false) \
-			.persisted(&"level")
 	entity.reparented.connect(apply_arrival_marker)
 	layer = session.service(TPLayer) as TPLayer
 

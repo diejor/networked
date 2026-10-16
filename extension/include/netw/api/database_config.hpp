@@ -15,12 +15,9 @@ protected:
     static void _bind_methods();
 
 public:
-    void copy_values_from(const NetwDatabaseConfig &p_other);
-
     godot::Ref<NetwDatabaseConfig> backend(
         const godot::Ref<NetwDatabaseBackend> &p_backend
     );
-    void set_backend(const godot::Ref<NetwDatabaseBackend> &p_backend);
     godot::Ref<NetwDatabaseBackend> get_backend() const {
         return store;
     }

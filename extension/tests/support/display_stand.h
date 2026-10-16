@@ -71,11 +71,7 @@ inline DisplaySubject stand_subject(
 
     godot::Ref<netw::NetwInterpolate> spec;
     spec.instantiate();
-    netw::Netw::configure_property(
-        subject.body,
-        godot::StringName("position"),
-        true
-    )
+    netw::Netw::configure_property(subject.body, godot::StringName("position"))
         ->interpolate(
             netw::gd::array_of(
                 spec->lerp()->smooth(0.0)->to(godot::StringName("position"))

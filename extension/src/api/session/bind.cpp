@@ -431,10 +431,6 @@ void NetwMultiplayer::_bind_methods() {
         &NetwMultiplayer::persist_tick_default
     );
     ClassDB::bind_method(
-        D_METHOD("database_create", "name", "config"),
-        &NetwMultiplayer::database_create
-    );
-    ClassDB::bind_method(
         D_METHOD("database_find", "name"),
         &NetwMultiplayer::database_find
     );

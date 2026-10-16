@@ -6,17 +6,13 @@ using Godot.NativeInterop;
 namespace Networked;
 
 /// <summary>
-/// How every peer removes a node when it despawns, returned by
-/// <see cref="Netw.ConfigureDespawn"/>.
+/// Removal behavior for a despawning <see cref="NetwEntity"/>.
 /// </summary>
 /// <remarks>
-/// Set in <c>Object._init</c>, and shared by every node of the same script. By
-/// default the node is freed at once.
+/// Settings are shared by nodes using the same script.
 /// <code>
 /// func _init() -&gt; void:
-///     Netw.configure_despawn(self) \
-///             .before_removal(_play_death_vfx) \
-///             .linger(0.5)
+///     Netw.configure_despawn(self).before_removal(play_death_vfx).linger(0.5)
 /// </code>
 /// </remarks>
 public sealed class NetwDespawnConfig : NetwRefCounted
@@ -118,9 +114,8 @@ public sealed class NetwDespawnConfig : NetwRefCounted
         NetwApi.MethodBind("NetwDespawnConfig", "before_removal", 2556279349UL);
 
     /// <summary>
-    /// Calls the method of <paramref name="callable"/> on the entity root
-    /// before it is removed, for example to play an effect. Only the method
-    /// name is kept. Returns this config.
+    /// Only the method name of <paramref name="callable"/> is kept. Each
+    /// <see cref="NetwEntity"/> root calls that method before removal.
     /// </summary>
     public NetwDespawnConfig BeforeRemoval(Callable callable)
     {
@@ -140,8 +135,8 @@ public sealed class NetwDespawnConfig : NetwRefCounted
         NetwApi.MethodBind("NetwDespawnConfig", "linger", 933982787UL);
 
     /// <summary>
-    /// Sets <see cref="NetwDespawnConfig.LingerSeconds"/> and returns this
-    /// config.
+    /// Keeps the node in the tree for <paramref name="seconds"/> before freeing
+    /// it. Sets <see cref="NetwDespawnConfig.LingerSeconds"/>.
     /// </summary>
     public NetwDespawnConfig Linger(double seconds)
     {

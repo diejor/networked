@@ -6,10 +6,12 @@ using Godot.NativeInterop;
 namespace Networked;
 
 /// <summary>
-/// Configuration for the clock of <see cref="Node.Multiplayer"/>.
+/// Settings for a session's <see cref="NetwClock"/>.
 /// </summary>
 /// <remarks>
-/// Returned by <see cref="Netw.ConfigureClock"/>.
+/// Settings apply before assigning <see cref="MultiplayerApi.MultiplayerPeer"/>
+/// or starting <see cref="NetwSession.Connection"/>. Changes after application
+/// are ignored.
 /// <code>
 /// func _init() -&gt; void:
 ///     Netw.configure_clock(self).ticks_per_second(60).display_offset_ticks(2)
@@ -331,8 +333,8 @@ public sealed class NetwClockConfig : NetwRefCounted
             1286410249UL);
 
     /// <summary>
-    /// How many ticks in the past remote entities are shown. A small value
-    /// helps hide lag.
+    /// How many ticks in the past remote <see cref="NetwEntity"/> instances are
+    /// shown. A small value helps hide lag.
     /// </summary>
     public long DisplayOffset
     {
@@ -552,6 +554,10 @@ public sealed class NetwClockConfig : NetwRefCounted
     private static readonly IntPtr _bindTicksPerSecond =
         NetwApi.MethodBind("NetwClockConfig", "ticks_per_second", 432295446UL);
 
+    /// <summary>
+    /// Sets <see cref="NetwClockConfig.Tickrate"/>, the number of network ticks
+    /// per second.
+    /// </summary>
     public NetwClockConfig TicksPerSecond(long tickrate)
     {
         long slot0 = tickrate;
@@ -570,6 +576,10 @@ public sealed class NetwClockConfig : NetwRefCounted
             "display_offset_ticks",
             432295446UL);
 
+    /// <summary>
+    /// Sets <see cref="NetwClockConfig.DisplayOffset"/>, how many ticks in the
+    /// past remote <see cref="NetwEntity"/> instances are shown.
+    /// </summary>
     public NetwClockConfig DisplayOffsetTicks(long displayOffset)
     {
         long slot0 = displayOffset;
@@ -588,6 +598,10 @@ public sealed class NetwClockConfig : NetwRefCounted
             "physics_interpolation",
             1852668278UL);
 
+    /// <summary>
+    /// Sets <see cref="NetwClockConfig.UsePhysicsInterpolation"/>, whether
+    /// <see cref="NetwClock.TickFactor"/> follows Godot physics interpolation.
+    /// </summary>
     public NetwClockConfig PhysicsInterpolation(bool usePhysicsInterpolation)
     {
         byte slot0 = usePhysicsInterpolation ? (byte)1 : (byte)0;
@@ -603,6 +617,10 @@ public sealed class NetwClockConfig : NetwRefCounted
     private static readonly IntPtr _bindSync =
         NetwApi.MethodBind("NetwClockConfig", "sync", 216226165UL);
 
+    /// <summary>
+    /// Sets <see cref="NetwClockConfig.SyncMode"/>, how the clock corrects
+    /// toward the server's clock.
+    /// </summary>
     public NetwClockConfig Sync(NetwClock.SyncModeEnum syncMode)
     {
         long slot0 = (long)syncMode;

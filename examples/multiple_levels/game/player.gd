@@ -23,10 +23,7 @@ func _init() -> void:
 
 	Netw.configure_property(self, &"position").on_spawn() \
 			.interpolate(NetwInterpolate.new().lerp())
-
-
-func _ready() -> void:
-	Netw.configure_property(self, &"position", false).persisted(&"where")
+	Netw.configure_property(self, &"position").persisted(&"where")
 	Netw.configure_persistence(self) \
 			.database(&"saves") \
 			.table(&"players") \

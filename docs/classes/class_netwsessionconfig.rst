@@ -12,7 +12,7 @@ NetwSessionConfig
 
 **Inherits:** :godot:`Resource`
 
-Session settings, returned by :ref:`Netw.configure_session()<class_Netw_method_configure_session>`.
+Settings for a multiplayer session.
 
 .. rst-class:: classref-introduction-group
 
@@ -29,8 +29,6 @@ Later changes warn and are ignored.
         Netw.configure_session(self) \
             .app(&"bomber-v2") \
             .role(NetwSession.ROLE_LISTEN_SERVER)
-
-\ A :godot:`Resource` passed to :ref:`Netw.configure_session()<class_Netw_method_configure_session>` is copied.
 
 \ **Bandwidth**\ 
 
@@ -236,9 +234,7 @@ Method Descriptions
 
 :ref:`NetwSessionConfig<class_NetwSessionConfig>` **app**\ (\ app_id\: :godot:`StringName`\ ) :ref:`🔗<class_NetwSessionConfig_method_app>`
 
-.. container:: contribute
-
-	There is currently no description for this method. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+Sets :ref:`app_id<class_NetwSessionConfig_property_app_id>` to identify the game and build.
 
 .. rst-class:: classref-item-separator
 
@@ -250,9 +246,7 @@ Method Descriptions
 
 :ref:`NetwSessionConfig<class_NetwSessionConfig>` **bandwidth**\ (\ kbps\: :godot:`int`\ ) :ref:`🔗<class_NetwSessionConfig_method_bandwidth>`
 
-.. container:: contribute
-
-	There is currently no description for this method. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+Sets :ref:`bandwidth_kbps<class_NetwSessionConfig_property_bandwidth_kbps>`, the bandwidth budget per peer in kbit/s.
 
 .. rst-class:: classref-item-separator
 
@@ -264,9 +258,7 @@ Method Descriptions
 
 :ref:`NetwSessionConfig<class_NetwSessionConfig>` **link**\ (\ link_conditions\: :ref:`NetwLinkConditions<class_NetwLinkConditions>`\ ) :ref:`🔗<class_NetwSessionConfig_method_link>`
 
-.. container:: contribute
-
-	There is currently no description for this method. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+Sets :ref:`link_conditions<class_NetwSessionConfig_property_link_conditions>` to simulate latency and packet loss.
 
 .. rst-class:: classref-item-separator
 
@@ -278,9 +270,7 @@ Method Descriptions
 
 :ref:`NetwSessionConfig<class_NetwSessionConfig>` **role**\ (\ desired_role\: :ref:`Role<enum_NetwSession_Role>`\ ) :ref:`🔗<class_NetwSessionConfig_method_role>`
 
-.. container:: contribute
-
-	There is currently no description for this method. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+Sets :ref:`desired_role<class_NetwSessionConfig_property_desired_role>`, the role this peer takes when it hosts.
 
 .. rst-class:: classref-item-separator
 
@@ -292,9 +282,7 @@ Method Descriptions
 
 :ref:`NetwSessionConfig<class_NetwSessionConfig>` **server**\ (\ server_info\: :ref:`NetwServerInfo<class_NetwServerInfo>`\ ) :ref:`🔗<class_NetwSessionConfig_method_server>`
 
-.. container:: contribute
-
-	There is currently no description for this method. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+Sets :ref:`server_info<class_NetwSessionConfig_property_server_info>`, the information shown in server browsers.
 
 .. rst-class:: classref-item-separator
 
@@ -306,9 +294,7 @@ Method Descriptions
 
 :ref:`NetwSessionConfig<class_NetwSessionConfig>` **transfer**\ (\ transfer_mode\: :ref:`TransferMode<enum_NetwSession_TransferMode>`\ ) :ref:`🔗<class_NetwSessionConfig_method_transfer>`
 
-.. container:: contribute
-
-	There is currently no description for this method. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+Sets :ref:`transfer_mode<class_NetwSessionConfig_property_transfer_mode>`, which determines what happens to this peer's world when the server moves.
 
 .. rst-class:: classref-item-separator
 
@@ -320,9 +306,7 @@ Method Descriptions
 
 :ref:`NetwSessionConfig<class_NetwSessionConfig>` **transfer_deadline**\ (\ ticks\: :godot:`int`\ ) :ref:`🔗<class_NetwSessionConfig_method_transfer_deadline>`
 
-.. container:: contribute
-
-	There is currently no description for this method. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+Sets :ref:`transfer_deadline_ticks<class_NetwSessionConfig_property_transfer_deadline_ticks>`, how many ticks the new server waits for each client to report its world.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

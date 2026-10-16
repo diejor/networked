@@ -105,7 +105,6 @@ public:
     void seal(const godot::String &p_scope) {
         guard.seal(p_scope);
     }
-    void copy_values_from(const NetwSessionConfig &p_source);
     bool matches_defaults() const;
     godot::String non_default_fields() const;
 };

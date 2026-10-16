@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <class name="NetwSessionConfig" inherits="Resource" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
 	<brief_description>
-		Session settings, returned by [method Netw.configure_session].
+		Settings for a multiplayer session.
 	</brief_description>
 	<description>
 		Settings are applied once, before assigning [member MultiplayerAPI.multiplayer_peer] or starting a connection through [member NetwSession.connection]. Otherwise they apply at the end of the frame.
@@ -12,7 +12,6 @@
 		        .app(&amp;"bomber-v2") \
 		        .role(NetwSession.ROLE_LISTEN_SERVER)
 		[/codeblock]
-		A [Resource] passed to [method Netw.configure_session] is copied.
 		[b]Bandwidth[/b]
 		[member bandwidth_kbps] sets a bandwidth budget per peer. Updates that wait longer or have higher [member NetwEntity.replication_priority] are sent first.
 		RPCs, spawns, authority changes and [method NetwPropertyConfig.retained] properties can exceed the budget. Other property updates still receive at least a quarter of each tick's budget. Later ticks repay the excess, up to two ticks of budget at a time.
@@ -24,42 +23,49 @@
 			<return type="NetwSessionConfig" />
 			<param index="0" name="app_id" type="StringName" />
 			<description>
+				Sets [member app_id] to identify the game and build.
 			</description>
 		</method>
 		<method name="bandwidth">
 			<return type="NetwSessionConfig" />
 			<param index="0" name="kbps" type="int" />
 			<description>
+				Sets [member bandwidth_kbps], the bandwidth budget per peer in kbit/s.
 			</description>
 		</method>
 		<method name="link">
 			<return type="NetwSessionConfig" />
 			<param index="0" name="link_conditions" type="NetwLinkConditions" />
 			<description>
+				Sets [member link_conditions] to simulate latency and packet loss.
 			</description>
 		</method>
 		<method name="role">
 			<return type="NetwSessionConfig" />
 			<param index="0" name="desired_role" type="int" enum="NetwSession.Role" />
 			<description>
+				Sets [member desired_role], the role this peer takes when it hosts.
 			</description>
 		</method>
 		<method name="server">
 			<return type="NetwSessionConfig" />
 			<param index="0" name="server_info" type="NetwServerInfo" />
 			<description>
+				Sets [member server_info], the information shown in server browsers.
 			</description>
 		</method>
 		<method name="transfer">
 			<return type="NetwSessionConfig" />
 			<param index="0" name="transfer_mode" type="int" enum="NetwSession.TransferMode" />
 			<description>
+				Sets [member transfer_mode], which determines what happens to this peer's world when the server moves.
 			</description>
 		</method>
 		<method name="transfer_deadline">
 			<return type="NetwSessionConfig" />
 			<param index="0" name="ticks" type="int" />
 			<description>
+				Sets [member transfer_deadline_ticks], how many ticks the new server waits for each client to report its world.
 			</description>
 		</method>
 	</methods>

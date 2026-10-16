@@ -9,18 +9,15 @@ namespace Networked;
 /// Makes a node a multiplayer scene.
 /// </summary>
 /// <remarks>
-/// Returned by <see cref="Netw.ConfigureScene"/>. Declare it once from the
-/// scene root's <c>Object._init</c>, the methods can be called in any order.
+/// The <see cref="NetwScene"/> label and isolation are read when its root is
+/// spawned. Declare them in the root's <c>Object._init</c>.
 /// <code>
-/// extends Node2D
-///
 /// func _init() -&gt; void:
 ///     Netw.configure_scene(self).labeled(&amp;"Level1").isolated()
 /// </code>
 /// <para>
-/// Every entity below the root belongs to the scene through
-/// <see cref="NetwEntity.Scene"/>, and <see cref="NetwEntity.IsScene"/> is
-/// <c>true</c> on the root.
+/// Each <see cref="NetwEntity"/> below the root reaches it through
+/// <see cref="NetwEntity.Scene"/>.
 /// </para>
 /// </remarks>
 public sealed class NetwSceneConfig : NetwRefCounted
@@ -80,10 +77,9 @@ public sealed class NetwSceneConfig : NetwRefCounted
         NetwApi.MethodBind("NetwSceneConfig", "labeled", 2052427165UL);
 
     /// <summary>
-    /// Names the scene for <see cref="Netw.Scene"/>. Defaults to the root
-    /// node's name. <see cref="Netw.Scene"/> fails when several live scenes
-    /// share the label. Use the node returned by <see cref="Netw.Spawn"/> to
-    /// select an instance.
+    /// Defaults to this root node's name. <see cref="Netw.Scene"/> fails when
+    /// several live scenes share the label. Use the node returned by
+    /// <see cref="Netw.Spawn"/> to select an instance.
     /// </summary>
     public NetwSceneConfig Labeled(StringName stem)
     {

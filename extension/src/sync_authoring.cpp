@@ -13,6 +13,7 @@
 #include "netw/api/property_config.hpp"
 #include "netw/api/simulation.hpp"
 #include "netw/display/decl.hpp"
+#include "netw/script/model.hpp"
 #include "netw/synchronizers.hpp"
 
 using namespace godot;
@@ -265,7 +266,7 @@ void apply_interpolators(Object *p_sync, Node *p_owner) {
         spec.instantiate();
         spec->set_mode(NetwInterpolate::Mode(mode));
         const Ref<NetwPropertyConfig> config
-            = Netw::configure_property(p_owner, property, false);
+            = script::model::configure_node_property(p_owner, property);
         if (config.is_valid()) {
             config->interpolate(gd::array_of(spec));
         }

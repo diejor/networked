@@ -11,6 +11,7 @@
 #include "support/value_flow_stand.h"
 
 #include "netw/api/context.hpp"
+#include "netw/script/model.hpp"
 
 namespace TestDerivedLossReorderLaws {
 
@@ -233,10 +234,9 @@ public:
             = netw_test::stand_flow_pair(rig, p_scenario.body, "LossBody");
         netw_test::steer(pair, rig.peer_id(0));
         if (p_scenario.property_door) {
-            netw::Netw::configure_property(
-                pair.authored,
-                StringName("score"),
-                false
+            netw::script::model::get_property_config(
+                Ref<Script>(pair.authored->get_script()),
+                StringName("score")
             )
                 ->unreliable();
         }

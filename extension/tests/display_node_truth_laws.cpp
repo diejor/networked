@@ -191,7 +191,6 @@ void declare_prediction(Node *p_node) {
 }
 
 Subject stand_target(
-    const Bench &p_bench,
     const char *p_name,
     bool p_with_visual,
     bool p_scripted = false
@@ -212,7 +211,6 @@ Subject stand_target(
         subject.body->add_child(subject.visual);
         subject.entity->get_display()->set_visual_root(NodePath("Visual"));
     }
-    p_bench.seat(subject.body);
     return subject;
 }
 
@@ -230,7 +228,7 @@ Subject stand_interpolated(
     const DisplayDecl &p_declared = DisplayDecl(),
     bool p_scripted = false
 ) {
-    Subject subject = stand_target(p_bench, p_name, p_with_visual, p_scripted);
+    Subject subject = stand_target(p_name, p_with_visual, p_scripted);
     const Ref<NetwDisplay> display = subject.entity->get_display();
     if (p_declared.role != NetwMultiplayer::DISPLAY_ROLE_AUTO) {
         display->set_display_role(p_declared.role);
@@ -239,8 +237,9 @@ Subject stand_interpolated(
     if (p_declared.smooth_time >= 0.0) {
         display->set_live_smooth_time(p_declared.smooth_time);
     }
-    netw::Netw::configure_property(subject.body, StringName("position"), false)
+    netw::Netw::configure_property(subject.body, StringName("position"))
         ->interpolate(netw::gd::array_of(lerp_to(StringName("position"))));
+    p_bench.seat(subject.body);
     p_bench.bind(subject.entity, p_route);
     p_bench.core()->session_flush_deferred();
     return subject;
@@ -613,7 +612,7 @@ public:
         }
         const Ref<NetwEntity> entity = NetwEntity::ensure(node);
         entity->get_display()->set_enable_smart_dilation(false);
-        netw::Netw::configure_property(node, StringName("position"), false)
+        netw::Netw::configure_property(node, StringName("position"))
             ->interpolate(netw::gd::array_of(lerp_to(StringName("position"))));
         bench.seat(node);
         bench.bind(entity, p_scenario.route);
@@ -823,9 +822,9 @@ TEST_CASE(
     body->add_child(second);
     const Ref<NetwEntity> entity = NetwEntity::ensure(body);
     entity->get_display()->set_enable_smart_dilation(false);
-    netw::Netw::configure_property(first, StringName("position"), false)
+    netw::Netw::configure_property(first, StringName("position"))
         ->interpolate(netw::gd::array_of(lerp_to(StringName("position"))));
-    netw::Netw::configure_property(second, StringName("position"), false)
+    netw::Netw::configure_property(second, StringName("position"))
         ->interpolate(netw::gd::array_of(lerp_to(StringName("position"))));
     bench.seat(body);
     bench.bind(entity, 21);
@@ -865,7 +864,7 @@ TEST_CASE(
     node->set_multiplayer_authority(REMOTE_PEER);
     const Ref<NetwEntity> entity = NetwEntity::ensure(node);
     entity->get_display()->set_enable_smart_dilation(false);
-    netw::Netw::configure_property(node, StringName("quaternion"), false)
+    netw::Netw::configure_property(node, StringName("quaternion"))
         ->interpolate(netw::gd::array_of(slerp_to(StringName("quaternion"))));
     bench.seat(node);
     bench.bind(entity, 41);

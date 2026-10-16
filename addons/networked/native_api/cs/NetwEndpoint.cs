@@ -90,6 +90,9 @@ public sealed class NetwEndpoint : NetwRefCounted
     private static readonly IntPtr _bindGetPeerClass =
         NetwApi.MethodBind("NetwEndpoint", "get_peer_class", 2002593661UL);
 
+    /// <summary>
+    /// The <see cref="MultiplayerPeer"/> class used to connect to this server.
+    /// </summary>
     public StringName PeerClass
     {
         get
@@ -105,6 +108,10 @@ public sealed class NetwEndpoint : NetwRefCounted
     private static readonly IntPtr _bindGetAddress =
         NetwApi.MethodBind("NetwEndpoint", "get_address", 201670096UL);
 
+    /// <summary>
+    /// The address passed to <see cref="NetwConnection.Add"/> or reported by
+    /// its <see cref="LobbyDirectory"/>.
+    /// </summary>
     public string Address
     {
         get
@@ -120,6 +127,9 @@ public sealed class NetwEndpoint : NetwRefCounted
     private static readonly IntPtr _bindGetDisplayName =
         NetwApi.MethodBind("NetwEndpoint", "get_display_name", 201670096UL);
 
+    /// <summary>
+    /// The server name shown in a server browser.
+    /// </summary>
     public string DisplayName
     {
         get

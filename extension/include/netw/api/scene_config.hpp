@@ -29,9 +29,7 @@ public:
         const godot::Ref<godot::Script> &p_script
     );
 
-    godot::StringName get_label() const {
-        return held().label;
-    }
+    godot::StringName get_label() const;
     enums::NetwScene::SceneIsolation get_isolation() const {
         return enums::NetwScene::SceneIsolation(held().isolation);
     }

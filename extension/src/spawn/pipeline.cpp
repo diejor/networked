@@ -507,7 +507,7 @@ Node *Pipeline::spawn(
             nullptr,
             sys::SPAWN,
             "Spawn function '%s' is not registered. Register it with "
-            "Netw.configure_spawn before its node enters the tree.",
+            "Netw.configure_spawn before calling Netw.spawn.",
             method
         );
     }
@@ -1352,8 +1352,8 @@ PackedByteArray Pipeline::encode_record_frame(
             NETW_ERROR(
                 sys::SPAWN,
                 "Spawn function '%s' is not registered, so route %d was not "
-                "sent. Register it with Netw.configure_spawn before its node "
-                "enters the tree.",
+                "sent. Register it with Netw.configure_spawn before calling "
+                "Netw.spawn.",
                 p_record->get_fn_method(),
                 p_record->get_route()
             );

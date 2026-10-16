@@ -122,6 +122,10 @@ public sealed class NetwLagCompensationConfig : NetwRefCounted
             "max_future_action",
             2720812601UL);
 
+    /// <summary>
+    /// Sets <see cref="NetwLagCompensationConfig.MaxFutureActionTicks"/>, how
+    /// far ahead of the server an action may be.
+    /// </summary>
     public NetwLagCompensationConfig MaxFutureAction(long ticks)
     {
         long slot0 = ticks;
@@ -140,6 +144,10 @@ public sealed class NetwLagCompensationConfig : NetwRefCounted
             "input_gate_deadline",
             2720812601UL);
 
+    /// <summary>
+    /// Sets <see cref="NetwLagCompensationConfig.InputGateDeadlineTicks"/>, how
+    /// long an action waits for missing input.
+    /// </summary>
     public NetwLagCompensationConfig InputGateDeadline(long ticks)
     {
         long slot0 = ticks;
