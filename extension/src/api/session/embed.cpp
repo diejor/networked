@@ -72,7 +72,7 @@ void NetwMultiplayer::scene_adopt_bare_level(Node *p_level) {
         Ref<Script>(Object::cast_to<Script>(p_level->get_script()))
     );
     const bool spawns_the_authority_scene = is_host();
-    const String path = NetwSceneCore::verify_requested_path(
+    const String path = NetwSceneCore::verify_scene_path(
         gd::ensure_path(p_level->get_scene_file_path())
     );
     if (spawns_the_authority_scene && path.is_empty()) {

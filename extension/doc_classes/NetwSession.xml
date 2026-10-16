@@ -119,15 +119,6 @@
 				Registers [param service] so [method service] returns it. [param type] defaults to the script of [param service]. A [NetwService] registers itself.
 			</description>
 		</method>
-		<method name="request_scene">
-			<return type="NetwPromise" />
-			<param index="0" name="path" type="String" />
-			<param index="1" name="scope" type="int" enum="NetwScene.SceneChange" default="0" />
-			<description>
-				Asks the server for the scene at [param path] over [param scope]. The promise resolves when the scene is live, or is rejected when the server declines.
-				[b]Player request.[/b]
-			</description>
-		</method>
 		<method name="save_entities">
 			<return type="NetwPromise" />
 			<description>

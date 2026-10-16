@@ -2839,44 +2839,6 @@ public sealed class NetwMultiplayer : NetwRefCounted
         NetwThunks.Ptrcall0_Long(_bindClockSendPing, Checked, ref discarded);
     }
 
-    private static readonly IntPtr _bindSceneRequest =
-        NetwApi.MethodBind("NetwMultiplayer", "scene_request", 2302146027UL);
-
-    /// <summary>
-    /// Asks the server to move the local player to the scene file at
-    /// <paramref name="path"/>.
-    /// <code>
-    /// Error
-    /// ┠╴ERR_UNAUTHORIZED  the server refused
-    /// ┠╴ERR_SKIP          a newer request replaced this one
-    /// ┖╴ERR_TIMEOUT       no answer within ten seconds
-    /// </code>
-    /// <para>
-    /// <b>Player request.</b>
-    /// </para>
-    /// </summary>
-    public NetwPromise SceneRequest(string path, NetwScene.SceneChange scope =
-        (NetwScene.SceneChange)0)
-    {
-        godot_variant slot0 = VariantUtils.CreateFromString(path);
-        godot_variant slot1 = VariantUtils.CreateFromInt((long)scope);
-        godot_variant answered = default;
-        NetwThunks.Call2(
-            _bindSceneRequest,
-            Checked,
-            in slot0,
-            in slot1,
-            ref answered);
-        slot0.Dispose();
-        slot1.Dispose();
-        NetwPromise result =
-            NetwPromise.Adopt(
-                NetwApi.Retained(
-                    VariantUtils.ConvertToGodotObjectPtr(answered)));
-        answered.Dispose();
-        return result;
-    }
-
     private static readonly IntPtr _bindRpcCall =
         NetwApi.MethodBind("NetwMultiplayer", "rpc_call", 3391724447UL);
 
@@ -6552,16 +6514,10 @@ public sealed class NetwMultiplayer : NetwRefCounted
             3945386541UL);
 
     /// <summary>
-    /// Opens the scene file at <paramref name="path"/> and makes players watch
-    /// it. No entity moves, so spawn the arriving players in the
-    /// <see cref="NetwScene"/> the promise gives. <paramref name="scope"/> says
-    /// who moves. <paramref name="requester"/> is the node asking, which picks
-    /// the player for <see cref="NetwScene.SceneChange.Player"/> and the scene
-    /// for <see cref="NetwScene.SceneChange.Scene"/>. On a client it sends a
-    /// <see cref="NetwMultiplayer.SceneRequest"/> to the server.
-    /// <code>
-    /// session.scene_change_to_file(self, "res://arena.tscn").then(spawn_players)
-    /// </code>
+    /// See <see cref="Netw.ChangeSceneToFile"/>. <paramref name="requester"/>
+    /// selects the player for <see cref="NetwScene.SceneChange.Player"/> and
+    /// the <see cref="NetwScene"/> for
+    /// <see cref="NetwScene.SceneChange.Scene"/>. <b>Server Only.</b>
     /// </summary>
     public NetwPromise SceneChangeToFile(Node requester, string path, NetwScene.SceneChange scope =
         (NetwScene.SceneChange)0)
@@ -6595,10 +6551,7 @@ public sealed class NetwMultiplayer : NetwRefCounted
             211625269UL);
 
     /// <summary>
-    /// Like <see cref="NetwMultiplayer.SceneChangeToFile"/>, taking a
-    /// <see cref="PackedScene"/> as <see cref="SceneTree.ChangeSceneToPacked"/>
-    /// does. <paramref name="packed"/> must be saved to a file, or the promise
-    /// fails with <c>@GlobalScope.ERR_UNAVAILABLE</c>.
+    /// See <see cref="Netw.ChangeSceneToPacked"/>. <b>Server Only.</b>
     /// </summary>
     public NetwPromise SceneChangeToPacked(Node requester, PackedScene packed, NetwScene.SceneChange scope =
         (NetwScene.SceneChange)0)
@@ -6624,10 +6577,7 @@ public sealed class NetwMultiplayer : NetwRefCounted
             3203172577UL);
 
     /// <summary>
-    /// Reloads the displayed scene, like
-    /// <see cref="SceneTree.ReloadCurrentScene"/>. Fails with
-    /// <c>@GlobalScope.ERR_UNAVAILABLE</c> when there is no scene or it has no
-    /// file.
+    /// See <see cref="Netw.ReloadCurrentScene"/>. <b>Server Only.</b>
     /// </summary>
     public NetwPromise SceneReloadCurrent(Node requester, NetwScene.SceneChange scope =
         (NetwScene.SceneChange)0)

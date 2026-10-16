@@ -604,11 +604,6 @@ void NetwNativeTests::_bind_methods() {
     );
     ClassDB::bind_static_method(
         "NetwNativeTests",
-        D_METHOD("scene_pending_request", "session"),
-        &NetwNativeTests::scene_pending_request
-    );
-    ClassDB::bind_static_method(
-        "NetwNativeTests",
         D_METHOD("scene_container_meta"),
         &NetwNativeTests::scene_container_meta
     );
@@ -852,13 +847,6 @@ void NetwNativeTests::scene_enter(
     if (session != nullptr) {
         session->get_scene_core()->scene_enter(scene, stem, owns_its_world);
     }
-}
-
-Ref<NetwPromise> NetwNativeTests::scene_pending_request(
-    NetwMultiplayer *session
-) {
-    return session != nullptr ? session->get_scene_core()->get_pending_request()
-                              : Ref<NetwPromise>();
 }
 
 bool NetwNativeTests::rpc_sender_admits(

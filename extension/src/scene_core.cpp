@@ -5,7 +5,6 @@
 #include "netw/colors.hpp"
 #include "netw/log.hpp"
 #include "netw/profile.hpp"
-#include "netw/session/frames.hpp"
 
 using namespace godot;
 
@@ -341,127 +340,20 @@ void NetwSceneCore::transition_close() {
     transition = Transition();
 }
 
-int NetwSceneCore::open_request() {
-    if (next_request_id == INT32_MAX) {
-        NETW_ERROR(
-            sys::SCENE,
-            "This session used up its scene request ids, so the request was "
-            "refused. Start a new session to make more requests."
-        );
-        pending_request_id = 0;
-        return 0;
-    }
-    pending_request_id = next_request_id;
-    next_request_id += 1;
-    return pending_request_id;
-}
-
-bool NetwSceneCore::is_current(int request_id) const {
-    return request_id != 0 && request_id == pending_request_id;
-}
-
-void NetwSceneCore::close_request() {
-    pending_request_id = 0;
-}
-
-void NetwSceneCore::settle_pending(int code) {
-    if (pending_request.is_valid()) {
-        if (code == OK) {
-            pending_request->resolve(int(OK));
-        } else {
-            pending_request->reject(static_cast<Error>(code), String());
-        }
-    }
-    pending_request = Ref<NetwPromise>();
-    pending_request_id = 0;
-    pending_request_destination = 0;
-}
-
-Ref<NetwPromise> NetwSceneCore::request_open(int64_t destination) {
-    if (pending_request.is_valid() && !pending_request->get_is_settled()) {
-        settle_pending(int(ERR_SKIP));
-    }
-    open_request();
-    pending_request_destination = destination;
-    pending_request.instantiate();
-    NETW_TRACE(
-        sys::SCENE,
-        "Opened scene request %d to peer %d.",
-        pending_request_id,
-        int(destination)
-    );
-    return pending_request;
-}
-
-Ref<NetwPromise> NetwSceneCore::get_pending_request() const {
-    return pending_request;
-}
-
-int64_t NetwSceneCore::get_pending_request_destination() const {
-    return pending_request_destination;
-}
-
-bool NetwSceneCore::request_settle(int request_id, int code) {
-    if (pending_request.is_null() || !is_current(request_id)) {
-        NETW_TRACE(
-            sys::SCENE,
-            "Scene request %d was answered while request %d is open.",
-            request_id,
-            pending_request_id
-        );
-        return false;
-    }
-    settle_pending(code);
-    return true;
-}
-
-void NetwSceneCore::request_abandon(int code) {
-    settle_pending(code);
-}
-
-bool NetwSceneCore::receive_result_frame(
-    const PackedByteArray &payload,
-    int sender
-) {
-    if (pending_request_destination != 0
-        && int64_t(sender) != pending_request_destination) {
-        NETW_WARN(
-            sys::SCENE,
-            "A scene result from peer %d was ignored, because the request "
-            "went to peer %d.",
-            sender,
-            int(pending_request_destination)
-        );
-        return false;
-    }
-    netw::session::SceneResult frame;
-    if (!netw::session::frame_read(payload, frame)) {
-        return false;
-    }
-    return request_settle(int(frame.request_id), int(frame.code));
-}
-
-String NetwSceneCore::verify_requested_path(const String &path) {
+String NetwSceneCore::verify_scene_path(const String &path) {
     const bool bounded = !path.is_empty()
-        && path.length() <= MAX_REQUESTED_PATH_LENGTH
+        && path.length() <= MAX_SCENE_PATH_LENGTH
         && path.begins_with("res://");
     const String extension = bounded ? path.get_extension() : String();
     if (!bounded || (extension != "tscn" && extension != "scn")) {
         NETW_TRACE(
             sys::SCENE,
-            "Refused requested path '%s', which is not a res:// scene.",
+            "Refused scene path '%s', which is not a res:// scene.",
             path
         );
         return String();
     }
     return path;
-}
-
-String NetwSceneCore::resolve_requested_path(const String &reference) {
-    if (reference.is_empty()) {
-        return String();
-    }
-    return verify_requested_path(netw::gd::ensure_path(reference));
 }
 
 Ref<PackedScene> NetwSceneCore::packed_at(const String &reference) {
@@ -543,61 +435,8 @@ NetwSceneCore::Move NetwSceneCore::move_verdict(
     return MOVE_CARRY;
 }
 
-void NetwSceneCore::set_request_handler(const Callable &handler) {
-    request_handler = handler;
-}
-
-Callable NetwSceneCore::get_request_handler() const {
-    return request_handler;
-}
-
 bool NetwSceneCore::isolation_owns_world(int isolation) {
     return isolation == ISOLATION_OWN_WORLD;
-}
-
-Error NetwSceneCore::decide_request(
-    const Variant &player,
-    const Variant &destination,
-    int scope
-) const {
-    if (!request_handler.is_valid()) {
-        return ERR_UNAUTHORIZED;
-    }
-    Array arguments;
-    arguments.push_back(player);
-    arguments.push_back(destination);
-    arguments.push_back(scope);
-    const Variant verdict = request_handler.callv(arguments);
-    const Variant::Type answered = verdict.get_type();
-    if (answered != Variant::INT && answered != Variant::FLOAT) {
-        NETW_TRACE(
-            sys::SCENE,
-            "A scene request handler returned type %d, which is not an Error.",
-            int(answered)
-        );
-        return ERR_INVALID_DATA;
-    }
-    const Error refusal = Error(int64_t(verdict));
-    if (refusal != OK) {
-        NETW_TRACE(
-            sys::SCENE,
-            "A scene request handler refused with error %d.",
-            int(refusal)
-        );
-    }
-    return refusal;
-}
-
-int NetwSceneCore::get_pending_request_id() const {
-    return pending_request_id;
-}
-
-int NetwSceneCore::get_next_request_id() const {
-    return next_request_id;
-}
-
-void NetwSceneCore::set_next_request_id(int value) {
-    next_request_id = value;
 }
 
 void NetwSceneCore::clear() {
@@ -605,9 +444,6 @@ void NetwSceneCore::clear() {
     live.clear();
     retiring.clear();
     named.clear();
-    pending_request_id = 0;
-    pending_request_destination = 0;
-    pending_request = Ref<NetwPromise>();
     transition = Transition();
 }
 

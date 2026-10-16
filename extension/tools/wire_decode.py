@@ -497,24 +497,6 @@ AGAINST_SPEC = [
         "why": "WIRE.md 16, peer 9 zigzagged, then the reason",
     },
     {
-        "record": "SceneRequest",
-        "bytes": bytes([0x09, 0x0C, 0x00]) + b"res://a.tscn" + bytes([0x02, 0x0E, 0x02]),
-        "values": {
-            "request_id": 9,
-            "path": "res://a.tscn",
-            "scope": 1,
-            "source_route": 7,
-            "source_epoch": 1,
-        },
-        "why": "WIRE.md 16, request 9 asks for a scene at scope 1 from scene 7 " "at epoch 1",
-    },
-    {
-        "record": "SceneResult",
-        "bytes": bytes([0x09, 0x02]),
-        "values": {"request_id": 9, "code": 1},
-        "why": "WIRE.md 16, request 9 answered with a signed engine Error",
-    },
-    {
         "record": "SceneReleased",
         "bytes": bytes([0x07]),
         "values": {"route": 7},

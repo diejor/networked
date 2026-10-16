@@ -373,7 +373,6 @@ private:
     godot::HashMap<godot::RID, godot::Ref<NetwInterestLayer>>
         scene_admission_layers;
     godot::Ref<display::Book> display_book;
-    RateWindow scene_request_window;
     interest::Engine interest_engine;
     interest::Leave interest_leave_engine;
     interest::Perception interest_perception;
@@ -650,8 +649,6 @@ private:
     };
     godot::HashMap<int64_t, godot::LocalVector<DetachedAhead>>
         lifecycle_detached_ahead;
-    uint8_t scene_request_channel = 0;
-    uint8_t scene_result_channel = 0;
     uint8_t scene_released_channel = 0;
     uint8_t scene_viewers_channel = 0;
 
@@ -806,9 +803,6 @@ private:
     int64_t spawn_carry_next = 0;
     ReparentGuard reparent_guards;
     godot::Callable spawn_constructor;
-    void scene_request_arm_deadline(int p_request_id, double p_deadline);
-    int scene_request_armed = -1;
-    double scene_request_armed_wait = 0.0;
     EmbedPhase embed_phase_value = EMBED_PHASE_DECLARING;
     bool embed_disposing = false;
     void embed_set_phase(EmbedPhase p_phase);
@@ -1117,12 +1111,6 @@ private:
     void session_transport_connected();
     void session_transport_failed();
     void session_transport_dropped();
-
-    void scene_answer_settled_result(
-        int64_t p_peer,
-        int p_request_id,
-        const godot::Ref<NetwPromise> &p_operation
-    );
 
 public:
     struct EntitySpace {
@@ -2058,76 +2046,12 @@ public:
         const godot::LocalVector<godot::Variant> &p_deltas
     );
 
-    godot::Ref<NetwPromise> scene_request_send(
-        const godot::String &p_path,
-        int p_scope,
-        const godot::RID &p_source
-    );
-    static constexpr double SCENE_REQUEST_DEADLINE = 10.0;
-    godot::Ref<NetwPromise> scene_request(
-        const godot::String &p_path,
-        SceneChange p_scope
-    );
-    godot::Ref<NetwPromise> scene_request_open(
-        const godot::String &p_path,
-        int p_scope,
-        double p_deadline,
-        const godot::RID &p_source
-    );
-    void scene_request_expire(int p_request_id);
-    int scene_request_armed_id() const;
-    double scene_request_armed_deadline() const;
-
-    bool scene_receive_result_frame(
-        const godot::PackedByteArray &p_payload,
-        int p_sender
-    );
-    void scene_receive_request_frame(
-        const godot::PackedByteArray &p_payload,
-        int p_sender
-    );
     void scene_receive_released_frame(
         const godot::PackedByteArray &p_payload,
         int p_sender
     );
-    void scene_receive_request(
-        int64_t p_peer,
-        int p_request_id,
-        const godot::String &p_scene_path,
-        int p_scope,
-        int64_t p_source_route,
-        int64_t p_source_epoch
-    );
-    godot::Node *scene_request_source(
-        int64_t p_peer,
-        int64_t p_source_route,
-        int64_t p_source_epoch
-    );
-    void scene_receive_path_request(
-        int64_t p_peer,
-        int p_request_id,
-        const godot::Ref<NetwPlayer> &p_player,
-        const godot::String &p_scene_path,
-        int p_scope,
-        int64_t p_source_route,
-        int64_t p_source_epoch
-    );
-    godot::Error scene_admits_request(
-        const godot::Ref<NetwPlayer> &p_player,
-        const godot::Variant &p_destination,
-        int p_scope
-    );
-    void scene_send_result(int64_t p_peer, int p_request_id, int p_code);
-    void scene_answer_when_settled(
-        const godot::Ref<NetwPromise> &p_operation,
-        int64_t p_peer,
-        int p_request_id
-    );
 
     SceneDecl scene_decl_of(const godot::Ref<godot::Script> &p_script) const;
-
-    void scene_set_request_handler(const godot::Callable &p_handler);
-    godot::Callable scene_get_request_handler() const;
 
     godot::RID scene_named(const godot::StringName &p_stem) const;
     godot::Array scenes_named(const godot::StringName &p_stem) const;
@@ -4684,12 +4608,6 @@ public:
         int64_t p_tick
     );
 
-    bool scene_request_flooded(int peer, int64_t now_msec);
-    godot::Array scene_request_frame_row(
-        const godot::PackedByteArray &p_payload,
-        int p_sender,
-        int64_t p_now_msec
-    );
     godot::RID scene_released_scene(
         const godot::PackedByteArray &p_payload,
         int p_sender
@@ -4702,9 +4620,6 @@ public:
         const godot::Ref<godot::PackedScene> &p_packed
     );
     static godot::Ref<godot::Script> scene_root_script_at(
-        const godot::String &p_reference
-    );
-    static godot::String scene_resolve_requested_path(
         const godot::String &p_reference
     );
     static int scene_move_verdict(
@@ -4758,7 +4673,6 @@ public:
     godot::Node *announce_scene_activated(godot::Node *p_active);
     godot::Node *scene_resolve_destination(const godot::Variant &p_destination);
     godot::Ref<NetwScene> scene_handle_for(godot::Node *p_container);
-    static double scene_request_deadline();
     godot::Ref<NetwPromise> scene_replace_sources(
         const godot::Variant &p_destination,
         const godot::Array &p_sources,
@@ -4917,7 +4831,7 @@ public:
     godot::Ref<NetwPlayer> player_admitted_of(int64_t p_peer) const;
     godot::TypedArray<NetwPlayer> player_admitted_all() const;
     godot::Ref<NetwPlayer> player_admitted_local();
-    godot::Ref<NetwPlayer> scene_requester_player(godot::Node *p_requester);
+    godot::Ref<NetwPlayer> scene_caller_player(godot::Node *p_requester);
     void player_publish_joined(int64_t p_peer);
     void player_publish_left(const godot::Ref<NetwPlayer> &p_who);
     void player_release_id(const godot::Ref<NetwPlayer> &p_who);

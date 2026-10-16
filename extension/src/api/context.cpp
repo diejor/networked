@@ -1085,13 +1085,6 @@ Ref<NetwPromise> Netw::change_scene_to_packed(
     const Ref<PackedScene> &p_packed,
     SceneChange p_scope
 ) {
-    if (p_packed.is_null() || String(p_packed->get_path()).is_empty()) {
-        return NetwPromise::rejected(
-            ERR_UNAVAILABLE,
-            "change_scene_to_packed needs a file-backed PackedScene, since a "
-            "client can only request a scene by path"
-        );
-    }
     NetwMultiplayer *api = NetwMultiplayer::of(p_node);
     if (api == nullptr) {
         return NetwPromise::rejected(
@@ -1117,20 +1110,6 @@ Ref<NetwPromise> Netw::reload_current_scene(Node *p_node, SceneChange p_scope) {
     return api->scene_reload_current(
         p_node,
         NetwMultiplayer::SceneChange(p_scope)
-    );
-}
-
-Error Netw::configure_scene_requests(const Callable &p_handler) {
-    Node *scope = handler_scope(p_handler, "configure_scene_requests");
-    if (scope == nullptr) {
-        return ERR_INVALID_PARAMETER;
-    }
-    return session_decl::declare(
-        scope,
-        session_decl::KIND_SCENE_REQUESTS,
-        p_handler,
-        Variant(),
-        "configure_scene_requests"
     );
 }
 
@@ -1392,11 +1371,6 @@ void Netw::_bind_methods() {
         "Netw",
         D_METHOD("configure_scene", "node"),
         &Netw::configure_scene
-    );
-    ClassDB::bind_static_method(
-        "Netw",
-        D_METHOD("configure_scene_requests", "handler"),
-        &Netw::configure_scene_requests
     );
 }
 

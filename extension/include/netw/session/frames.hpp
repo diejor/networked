@@ -110,47 +110,6 @@ struct KickRequest {
     );
 };
 
-struct SceneRequest {
-    uint64_t request_id = 0;
-    godot::String path;
-    int64_t scope = 0;
-    int64_t source_route = 0;
-    int64_t source_epoch = 0;
-
-    static constexpr auto wire = netw::wire::describe(
-        netw::wire::field<&SceneRequest::request_id>(
-            "request_id",
-            netw::wire::varuint(5)
-        ),
-        netw::wire::field<&SceneRequest::path>("path", netw::wire::string()),
-        netw::wire::field<&SceneRequest::scope>(
-            "scope",
-            netw::wire::svarint(2)
-        ),
-        netw::wire::field<&SceneRequest::source_route>(
-            "source_route",
-            netw::wire::svarint(4)
-        ),
-        netw::wire::field<&SceneRequest::source_epoch>(
-            "source_epoch",
-            netw::wire::svarint(2)
-        )
-    );
-};
-
-struct SceneResult {
-    uint64_t request_id = 0;
-    int64_t code = 0;
-
-    static constexpr auto wire = netw::wire::describe(
-        netw::wire::field<&SceneResult::request_id>(
-            "request_id",
-            netw::wire::varuint(5)
-        ),
-        netw::wire::field<&SceneResult::code>("code", netw::wire::svarint(5))
-    );
-};
-
 struct SceneReleased {
     int64_t route = 0;
 

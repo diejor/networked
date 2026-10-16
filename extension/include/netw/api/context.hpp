@@ -203,9 +203,6 @@ public:
         SceneChange p_scope
     );
     static godot::Ref<NetwSceneConfig> configure_scene(godot::Node *p_node);
-    static godot::Error configure_scene_requests(
-        const godot::Callable &p_handler
-    );
 };
 
 } // namespace netw

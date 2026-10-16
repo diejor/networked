@@ -415,27 +415,6 @@ WireRegistry WireRegistry::create_default() {
         PayloadContract::PLANNED
     );
     reg_c(
-        29,
-        "SESSION_SCENE_REQUEST",
-        ChannelKind::SESSION,
-        Reliability::RELIABLE,
-        Freshness::NONE,
-        Delivery::FITTED,
-        Direction::CLIENT_TO_SERVER,
-        PayloadContract::PLANNED,
-        1
-    );
-    reg_c(
-        30,
-        "SESSION_SCENE_RESULT",
-        ChannelKind::SESSION,
-        Reliability::RELIABLE,
-        Freshness::NONE,
-        Delivery::FITTED,
-        Direction::SERVER_TO_CLIENT,
-        PayloadContract::PLANNED
-    );
-    reg_c(
         31,
         "SESSION_SHUTDOWN",
         ChannelKind::SESSION,

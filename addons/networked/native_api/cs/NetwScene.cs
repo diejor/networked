@@ -73,13 +73,13 @@ public sealed class NetwScene : NetwRefCounted
         /// </summary>
         Session = 0,
         /// <summary>
-        /// Only the requesting player moves. Their old bodies are despawned,
-        /// and no scene is removed.
+        /// Only the selected <see cref="NetwPlayer"/> moves. Their old bodies
+        /// are despawned, and no scene is removed.
         /// </summary>
         Player = 1,
         /// <summary>
-        /// Everyone in the requester's scene moves, and that scene is removed
-        /// with its entities.
+        /// Everyone in the selected <see cref="NetwScene"/> moves, and it is
+        /// removed with its entities.
         /// </summary>
         Scene = 2,
     }

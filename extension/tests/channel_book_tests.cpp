@@ -180,16 +180,6 @@ TEST_CASE(
         1
     );
     expected_faults.expect_warning(
-        "[warn][session] Built-in channel 29 "
-        "(SESSION_SCENE_REQUEST) has no handler.",
-        1
-    );
-    expected_faults.expect_warning(
-        "[warn][session] Built-in channel 30 (SESSION_SCENE_RESULT)"
-        " has no handler.",
-        1
-    );
-    expected_faults.expect_warning(
         "[warn][session] Built-in channel 31 (SESSION_SHUTDOWN) has"
         " no handler.",
         1

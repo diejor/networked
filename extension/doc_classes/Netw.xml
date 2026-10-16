@@ -31,7 +31,7 @@
 				    for player: NetwPlayer in arena.viewers:
 				        arena.root.add_child(Netw.spawn_player(player, make_player))
 				[/codeblock]
-				On a client this is a request that [method configure_scene_requests] decides, and it is rejected when there is none. The promise then gives [constant @GlobalScope.OK].
+				[b]Server Only.[/b]
 			</description>
 		</method>
 		<method name="change_scene_to_packed" qualifiers="static">
@@ -40,7 +40,8 @@
 			<param index="1" name="packed" type="PackedScene" />
 			<param index="2" name="scope" type="int" enum="NetwScene.SceneChange" default="0" />
 			<description>
-				The same change as [method change_scene_to_file], from a [PackedScene] that came from a file. A [PackedScene] built in memory is rejected.
+				Like [method change_scene_to_file]. [param packed] must be saved to a file.
+				[b]Server Only.[/b]
 			</description>
 		</method>
 		<method name="channel" qualifiers="static">
@@ -215,26 +216,6 @@
 				A declared scene placed in the editor as a child of the session's root is freed when the session starts, and the server spawns it from its file.
 			</description>
 		</method>
-		<method name="configure_scene_requests" qualifiers="static">
-			<return type="int" enum="Error" />
-			<param index="0" name="handler" type="Callable" />
-			<description>
-				Lets clients request a scene change. [param handler] runs on the server for every request and returns [constant @GlobalScope.OK] to allow it.
-				[codeblock]
-				func _init() -&gt; void:
-				    Netw.configure_scene_requests(authorize_scene_request)
-
-				func authorize_scene_request(
-				    player: NetwPlayer,
-				    destination: String,
-				    scope: NetwScene.SceneChange
-				) -&gt; Error:
-				    if scope != NetwScene.SCENE_CHANGE_PLAYER:
-				        return ERR_UNAUTHORIZED
-				    return OK if unlocked(player, destination) else ERR_UNAUTHORIZED
-				[/codeblock]
-			</description>
-		</method>
 		<method name="configure_schema" qualifiers="static">
 			<return type="NetwSchema" />
 			<param index="0" name="name" type="StringName" />
@@ -388,7 +369,8 @@
 			<param index="0" name="node" type="Node" />
 			<param index="1" name="scope" type="int" enum="NetwScene.SceneChange" default="0" />
 			<description>
-				Reloads the scene this peer displays, like [method SceneTree.reload_current_scene].
+				Reloads the scene the server displays, like [method SceneTree.reload_current_scene].
+				[b]Server Only.[/b]
 			</description>
 		</method>
 		<method name="reparent" qualifiers="static">

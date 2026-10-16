@@ -19,7 +19,7 @@ class NetwScene;
 
 class NetwSceneCore : public godot::RefCounted {
 public:
-    static constexpr int MAX_REQUESTED_PATH_LENGTH = 512;
+    static constexpr int MAX_SCENE_PATH_LENGTH = 512;
 
     enum Scope {
         SCOPE_SESSION = 0,
@@ -90,15 +90,8 @@ private:
     bool replacing = false;
     bool transitioning = false;
 
-    int32_t next_request_id = 1;
-    int32_t pending_request_id = 0;
-    int64_t pending_request_destination = 0;
-    godot::Ref<NetwPromise> pending_request;
-    godot::Callable request_handler;
-
     Row *row_for(int event, const godot::RID &scene);
     void promote_survivors();
-    void settle_pending(int code);
 
 public:
     void observe(
@@ -162,22 +155,7 @@ public:
     void transition_land(const godot::Ref<NetwScene> &destination);
     void transition_close();
 
-    int open_request();
-    bool is_current(int request_id) const;
-    void close_request();
-
-    godot::Ref<NetwPromise> request_open(int64_t destination);
-    godot::Ref<NetwPromise> get_pending_request() const;
-    int64_t get_pending_request_destination() const;
-    bool request_settle(int request_id, int code);
-    void request_abandon(int code);
-    bool receive_result_frame(
-        const godot::PackedByteArray &payload,
-        int sender
-    );
-
-    static godot::String verify_requested_path(const godot::String &path);
-    static godot::String resolve_requested_path(const godot::String &reference);
+    static godot::String verify_scene_path(const godot::String &path);
     static godot::Ref<godot::PackedScene> packed_at(
         const godot::String &reference
     );
@@ -189,15 +167,7 @@ public:
     );
     static Destination destination_kind(const godot::Variant &destination);
 
-    void set_request_handler(const godot::Callable &handler);
-    godot::Callable get_request_handler() const;
-
     static bool isolation_owns_world(int isolation);
-    godot::Error decide_request(
-        const godot::Variant &player,
-        const godot::Variant &destination,
-        int scope
-    ) const;
 
     static Move move_verdict(
         bool mover_live,
@@ -213,10 +183,6 @@ public:
     void spawn_note(const godot::StringName &stem) const;
     bool is_replacing() const;
     void set_replacing(bool value);
-
-    int get_pending_request_id() const;
-    int get_next_request_id() const;
-    void set_next_request_id(int value);
 
     void clear();
 };

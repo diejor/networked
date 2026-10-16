@@ -78,10 +78,6 @@ public:
         const godot::String &p_reason
     );
     godot::Error transfer_server(int64_t p_peer);
-    godot::Ref<NetwPromise> request_scene(
-        const godot::String &p_path,
-        enums::NetwScene::SceneChange p_scope
-    );
     godot::Ref<NetwScene> create_scene(
         const godot::Ref<godot::PackedScene> &p_scene,
         enums::NetwScene::SceneIsolation p_isolation

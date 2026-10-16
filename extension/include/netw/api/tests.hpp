@@ -52,9 +52,6 @@ public:
         const godot::StringName &stem,
         bool owns_its_world
     );
-    static godot::Ref<NetwPromise> scene_pending_request(
-        NetwMultiplayer *session
-    );
     static bool rpc_sender_admits(
         NetwMultiplayer *session,
         godot::Node *node,

@@ -113,8 +113,6 @@ Methods
    +-------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | |void|                                                | :ref:`register_service<class_NetwSession_method_register_service>`\ (\ service\: :godot:`Object`, type\: :godot:`Object` = null\ )                                                    |
    +-------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwPromise<class_NetwPromise>`                 | :ref:`request_scene<class_NetwSession_method_request_scene>`\ (\ path\: :godot:`String`, scope\: :ref:`SceneChange<enum_NetwScene_SceneChange>` = 0\ )                                |
-   +-------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | :ref:`NetwPromise<class_NetwPromise>`                 | :ref:`save_entities<class_NetwSession_method_save_entities>`\ (\ )                                                                                                                    |
    +-------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | :godot:`Node`                                         | :ref:`service<class_NetwSession_method_service>`\ (\ type\: :godot:`Object`\ ) |const|                                                                                                |
@@ -772,20 +770,6 @@ The :ref:`NetwPlayer<class_NetwPlayer>` of ``peer``, ``null`` when there is none
 |void| **register_service**\ (\ service\: :godot:`Object`, type\: :godot:`Object` = null\ ) :ref:`🔗<class_NetwSession_method_register_service>`
 
 Registers ``service`` so :ref:`service()<class_NetwSession_method_service>` returns it. ``type`` defaults to the script of ``service``. A :ref:`NetwService<class_NetwService>` registers itself.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwSession_method_request_scene:
-
-.. rst-class:: classref-method
-
-:ref:`NetwPromise<class_NetwPromise>` **request_scene**\ (\ path\: :godot:`String`, scope\: :ref:`SceneChange<enum_NetwScene_SceneChange>` = 0\ ) :ref:`🔗<class_NetwSession_method_request_scene>`
-
-Asks the server for the scene at ``path`` over ``scope``. The promise resolves when the scene is live, or is rejected when the server declines.
-
-\ **Player request.**
 
 .. rst-class:: classref-item-separator
 

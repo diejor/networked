@@ -138,8 +138,6 @@ id   name                    kind    rel fresh del agg direction  payload
 26   SESSION_PAUSE           session R   -     fit -   srv -> cli planned
 27   SESSION_UNPAUSE         session R   -     fit -   srv -> cli planned
 28   SESSION_KICKED          session R   -     fit -   srv -> cli planned
-29   SESSION_SCENE_REQUEST   session R   -     fit -   cli -> srv planned
-30   SESSION_SCENE_RESULT    session R   -     fit -   srv -> cli planned
 31   SESSION_SHUTDOWN        session R   -     fit -   srv -> cli planned
 32   SESSION_SCENE_RELEASED  session R   -     fit -   srv -> cli planned
 33   SESSION_KICK_REQUEST    session R   -     fit -   cli -> srv planned
@@ -928,18 +926,11 @@ A reason is a string a game wrote and a player reads, bounded by the 1023 byte
 string cap.
 
 ```text
-SESSION_SCENE_REQUEST   [request_id varuint 5][path string][scope svarint 2]
-                        [source_route svarint 4][source_epoch svarint 2]
-SESSION_SCENE_RESULT    [request_id varuint 5][code svarint 5]
 SESSION_SCENE_RELEASED  [route varuint 5]
 SESSION_SCENE_VIEWERS   the whole viewer roster of one scene
 [route varuint 5][epoch varuint 5][generation varuint 5][revision varuint 5]
 [count varuint 2][player_id varuint 5] x count
 ```
-
-`request_id` pairs a result with the request that opened it. `code` is an
-engine `Error` and is signed. `source_route` is the scene the requester asks
-from and `source_epoch` its liveness epoch, both 0 when it asks from none.
 
 `SESSION_SCENE_VIEWERS` is a complete roster and never a change, so a receiver
 replaces that scene's roster with exactly what the frame carried. A peer may

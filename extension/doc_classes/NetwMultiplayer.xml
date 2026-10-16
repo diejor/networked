@@ -2126,11 +2126,8 @@
 			<param index="1" name="path" type="String" />
 			<param index="2" name="scope" type="int" enum="NetwScene.SceneChange" default="0" />
 			<description>
-				Opens the scene file at [param path] and makes players watch it. No entity moves, so spawn the arriving players in the [NetwScene] the promise gives.
-				[param scope] says who moves. [param requester] is the node asking, which picks the player for [constant NetwScene.SCENE_CHANGE_PLAYER] and the scene for [constant NetwScene.SCENE_CHANGE_SCENE]. On a client it sends a [method scene_request] to the server.
-				[codeblock]
-				session.scene_change_to_file(self, "res://arena.tscn").then(spawn_players)
-				[/codeblock]
+				See [method Netw.change_scene_to_file]. [param requester] selects the player for [constant NetwScene.SCENE_CHANGE_PLAYER] and the [NetwScene] for [constant NetwScene.SCENE_CHANGE_SCENE].
+				[b]Server Only.[/b]
 			</description>
 		</method>
 		<method name="scene_change_to_packed">
@@ -2139,7 +2136,8 @@
 			<param index="1" name="packed" type="PackedScene" />
 			<param index="2" name="scope" type="int" enum="NetwScene.SceneChange" default="0" />
 			<description>
-				Like [method scene_change_to_file], taking a [PackedScene] as [method SceneTree.change_scene_to_packed] does. [param packed] must be saved to a file, or the promise fails with [constant @GlobalScope.ERR_UNAVAILABLE].
+				See [method Netw.change_scene_to_packed].
+				[b]Server Only.[/b]
 			</description>
 		</method>
 		<method name="scene_create">
@@ -2288,22 +2286,8 @@
 			<param index="0" name="requester" type="Node" />
 			<param index="1" name="scope" type="int" enum="NetwScene.SceneChange" default="0" />
 			<description>
-				Reloads the displayed scene, like [method SceneTree.reload_current_scene]. Fails with [constant @GlobalScope.ERR_UNAVAILABLE] when there is no scene or it has no file.
-			</description>
-		</method>
-		<method name="scene_request">
-			<return type="NetwPromise" />
-			<param index="0" name="path" type="String" />
-			<param index="1" name="scope" type="int" enum="NetwScene.SceneChange" default="0" />
-			<description>
-				Asks the server to move the local player to the scene file at [param path].
-				[codeblock lang=text]
-				Error
-				┠╴ERR_UNAUTHORIZED  the server refused
-				┠╴ERR_SKIP          a newer request replaced this one
-				┖╴ERR_TIMEOUT       no answer within ten seconds
-				[/codeblock]
-				[b]Player request.[/b]
+				See [method Netw.reload_current_scene].
+				[b]Server Only.[/b]
 			</description>
 		</method>
 		<method name="scene_set_param">

@@ -124,11 +124,6 @@ void NetwMultiplayer::_bind_methods() {
         &NetwMultiplayer::clock_send_ping
     );
     ClassDB::bind_method(
-        D_METHOD("scene_request", "path", "scope"),
-        &NetwMultiplayer::scene_request,
-        DEFVAL(SCENE_CHANGE_SESSION)
-    );
-    ClassDB::bind_method(
         D_METHOD("rpc_get_relay_sender"),
         &NetwMultiplayer::rpc_get_relay_sender
     );

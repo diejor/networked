@@ -156,10 +156,10 @@
 			Every player moves to the new scene, and every other scene is removed with its entities.
 		</constant>
 		<constant name="SCENE_CHANGE_PLAYER" value="1" enum="SceneChange">
-			Only the requesting player moves. Their old bodies are despawned, and no scene is removed.
+			Only the selected [NetwPlayer] moves. Their old bodies are despawned, and no scene is removed.
 		</constant>
 		<constant name="SCENE_CHANGE_SCENE" value="2" enum="SceneChange">
-			Everyone in the requester's scene moves, and that scene is removed with its entities.
+			Everyone in the selected [NetwScene] moves, and it is removed with its entities.
 		</constant>
 		<constant name="SCENE_ISOLATION_NONE" value="0" enum="SceneIsolation">
 			The scene shares the physics and rendering world with the rest of the game.

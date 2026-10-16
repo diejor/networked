@@ -194,43 +194,6 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Scene] L7 a member's scene request travels to the server "
-    "over the transport and the server's answer travels back and settles the "
-    "promise, so the verb is proved where it is delivered rather than where "
-    "it is recorded"
-) {
-    netw_test::FaultWatch expected_faults;
-    expected_faults.expect_warning(
-        "[warn][scene] Peer * asked for a scene change before it "
-        "joined, so it was refused.",
-        1
-    );
-
-    MeshStand mesh;
-    mesh.seat_server();
-    mesh.seat_member(9);
-    mesh.wire(1, 9);
-    mesh.pump(4);
-
-    const Ref<NetwPromise> asked = mesh.session_of(9)->scene_request_send(
-        String("res://arena.tscn"),
-        NetwSceneCore::SCOPE_SESSION,
-        RID()
-    );
-    REQUIRE(asked.is_valid());
-    NETW_CHECK_EQ(
-        mesh.session_of(9)->get_scene_core()->get_pending_request_destination(),
-        int64_t(1)
-    );
-    CHECK_FALSE(asked->get_is_settled());
-
-    mesh.pump(4);
-
-    CHECK(asked->get_is_settled());
-    NETW_CHECK_EQ(asked->get_code(), int64_t(ERR_UNAUTHORIZED));
-}
-
-TEST_CASE(
     "[Networked][Session] L8 a member's join crosses the transport to the "
     "server, seats a player there, and the accept and roster the server "
     "sends back seat the same membership at the member"

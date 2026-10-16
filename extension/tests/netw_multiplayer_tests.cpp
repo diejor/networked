@@ -2878,35 +2878,6 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Multiplayer][Hosted] a scene request flood bounds a peer and "
-    "never the host"
-) {
-    netw_test::FaultWatch expected_faults;
-    expected_faults.expect_warning(
-        "[warn][scene] peer * exceeded the scene request rate",
-        1
-    );
-
-    Ref<NetwMultiplayer> core;
-    core.instantiate();
-    const int64_t now = 1000;
-
-    for (int at = 0; at < 20; ++at) {
-        CHECK_FALSE(core->scene_request_flooded(1, now));
-    }
-    NETW_CHECK_EQ(core->stats_get_verdict_count(ERR_BUSY), 0);
-
-    for (int at = 0; at < 8; ++at) {
-        CHECK_FALSE(core->scene_request_flooded(42, now));
-    }
-    CHECK(core->scene_request_flooded(42, now));
-    NETW_CHECK_EQ(core->stats_get_verdict_count(ERR_BUSY), 1);
-
-    CHECK_FALSE(core->scene_request_flooded(43, now));
-    NETW_CHECK_EQ(core->stats_get_verdict_count(ERR_BUSY), 1);
-}
-
-TEST_CASE(
     "[Networked][Multiplayer][Hosted] a shared scene root is its own outer "
     "node and no viewport is inserted"
 ) {

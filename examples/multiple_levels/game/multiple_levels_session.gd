@@ -22,7 +22,6 @@ func _init() -> void:
 	Netw.configure_spawn(spawn_level2)
 	Netw.configure_spawn(spawn_avatar)
 	Netw.configure_join(spawn_player)
-	Netw.configure_scene_requests(authorize_scene_request)
 
 
 func _ready() -> void:
@@ -80,14 +79,6 @@ func open_level(path: String) -> NetwScene:
 		add_child(world)
 		levels[path] = world
 	return Netw.scene(world)
-
-
-func authorize_scene_request(
-		_player: NetwPlayer,
-		destination: String,
-		_scope: NetwScene.SceneChange,
-) -> Error:
-	return OK if makers.has(destination) else ERR_UNAUTHORIZED
 
 
 func spawn_player(player: NetwPlayer) -> void:

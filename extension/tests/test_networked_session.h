@@ -30,8 +30,6 @@ using netw::NetwCarrierFrame;
 using netw::NetwEntity;
 using netw::NetwMultiplayer;
 using netw::NetwPromise;
-using netw::NetwSceneCore;
-using netw::wire::FrameWalk;
 
 struct SessionSide {
     godot::Ref<LocalMultiplayerPeer> peer;
@@ -311,97 +309,6 @@ TEST_CASE(
     tree->get_root()->remove_child(client_anchor);
     memdelete(server_anchor);
     memdelete(client_anchor);
-}
-
-FrameWalk walk_inbound(SessionSide &p_side) {
-    const NetwCarrierFrame header
-        = p_side.core->receive_header(inbound_sink.sender, inbound_sink.packet);
-    return netw::wire::frame_unpack_all(
-        inbound_sink.packet,
-        header.payload_offset
-    );
-}
-
-TEST_CASE(
-    "[Networked][Session] An unjoined scene request crosses the pair as a "
-    "framed datagram and its refusal clears the asking side's pending request"
-) {
-    netw_test::FaultWatch expected_faults;
-    expected_faults.expect_warning(
-        "[warn][scene] Peer * asked for a scene change before it joined, "
-        "so it was refused.",
-        1
-    );
-    const netw_test::CallLog answers;
-    NativeSessionPair pair = make_native_pair();
-    settle_pair(pair);
-    arm_inbound_sink(pair.server);
-
-    const godot::Ref<NetwSceneCore> client_scene
-        = pair.client.core->get_scene_core();
-    const godot::Ref<NetwSceneCore> server_scene
-        = pair.server.core->get_scene_core();
-    REQUIRE(client_scene.is_valid());
-    REQUIRE(server_scene.is_valid());
-
-    const godot::String destination = godot::String("res://moved.tscn");
-    const godot::Ref<NetwPromise> asked = pair.client.core->scene_request_send(
-        destination,
-        NetwSceneCore::SCOPE_SESSION,
-        godot::RID()
-    );
-    REQUIRE(asked.is_valid());
-    asked->catch_error(answers.callable("refused"));
-
-    const int request_id = client_scene->get_pending_request_id();
-    NETW_CHECK_GE(request_id, 1);
-    NETW_CHECK_EQ(client_scene->is_current(request_id), true);
-    NETW_CHECK_EQ(asked->get_is_settled(), false);
-
-    pair.server.inner->poll();
-
-    NETW_CHECK_EQ(inbound_sink.count, 1);
-    NETW_CHECK_EQ(inbound_sink.sender, pair.client_id);
-
-    const FrameWalk asked_walk = walk_inbound(pair.server);
-    NETW_CHECK_EQ(asked_walk.whole, true);
-    REQUIRE(asked_walk.frames.size() == 1);
-    NETW_CHECK_EQ(asked_walk.frames[0].route, 0);
-    NETW_CHECK_EQ(asked_walk.frames[0].comp, 0);
-    NETW_CHECK_EQ(asked_walk.frames[0].path.is_empty(), true);
-
-    const godot::Array row = pair.server.core->scene_request_frame_row(
-        asked_walk.frames[0].payload,
-        pair.client_id,
-        0
-    );
-    REQUIRE(row.size() == 5);
-    NETW_CHECK_EQ(int(row[0]), request_id);
-    NETW_CHECK_EQ(godot::String(row[1]) == destination, true);
-    NETW_CHECK_EQ(int(row[2]), int(NetwSceneCore::SCOPE_SESSION));
-    NETW_CHECK_EQ(int(row[3]), 0);
-    NETW_CHECK_EQ(int(row[4]), 0);
-
-    disarm_inbound_sink(pair.server);
-    arm_inbound_sink(pair.client);
-
-    pair.client.inner->poll();
-
-    NETW_CHECK_GE(inbound_sink.count, 1);
-    NETW_CHECK_EQ(inbound_sink.sender, 1);
-
-    NETW_CHECK_EQ(client_scene->get_pending_request_id(), 0);
-    NETW_CHECK_EQ(client_scene->is_current(request_id), false);
-    NETW_CHECK_EQ(asked->get_is_settled(), true);
-    CHECK(asked->get_is_failed());
-    NETW_CHECK_EQ(asked->get_code(), int(godot::Error::ERR_UNAUTHORIZED));
-    NETW_CHECK_EQ(answers.count("refused"), 1);
-    NETW_CHECK_EQ(
-        int(answers.args("refused", 0)[0]),
-        int(godot::Error::ERR_UNAUTHORIZED)
-    );
-
-    disarm_inbound_sink(pair.client);
 }
 
 TEST_CASE(

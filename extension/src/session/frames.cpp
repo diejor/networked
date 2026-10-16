@@ -222,8 +222,6 @@ Dictionary frame_spec_records() {
     out["ActionRequest"] = ActionRequest::wire.spec_dump();
     out["SessionReason"] = SessionReason::wire.spec_dump();
     out["KickRequest"] = KickRequest::wire.spec_dump();
-    out["SceneRequest"] = SceneRequest::wire.spec_dump();
-    out["SceneResult"] = SceneResult::wire.spec_dump();
     out["SceneReleased"] = SceneReleased::wire.spec_dump();
     out["SceneViewersHead"] = SceneViewersHead::wire.spec_dump();
     out["SceneViewerRow"] = SceneViewerRow::wire.spec_dump();

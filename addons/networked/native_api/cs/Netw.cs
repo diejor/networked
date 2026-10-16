@@ -1534,9 +1534,7 @@ public sealed class Netw : NetwRefCounted
     ///         arena.root.add_child(Netw.spawn_player(player, make_player))
     /// </code>
     /// <para>
-    /// On a client this is a request that
-    /// <see cref="Netw.ConfigureSceneRequests"/> decides, and it is rejected
-    /// when there is none. The promise then gives <c>@GlobalScope.OK</c>.
+    /// <b>Server Only.</b>
     /// </para>
     /// </summary>
     public static NetwPromise ChangeSceneToFile(Node node, string path, NetwScene.SceneChange scope =
@@ -1568,9 +1566,8 @@ public sealed class Netw : NetwRefCounted
         NetwApi.MethodBind("Netw", "change_scene_to_packed", 211625269UL);
 
     /// <summary>
-    /// The same change as <see cref="Netw.ChangeSceneToFile"/>, from a
-    /// <see cref="PackedScene"/> that came from a file. A
-    /// <see cref="PackedScene"/> built in memory is rejected.
+    /// Like <see cref="Netw.ChangeSceneToFile"/>. <paramref name="packed"/>
+    /// must be saved to a file. <b>Server Only.</b>
     /// </summary>
     public static NetwPromise ChangeSceneToPacked(Node node, PackedScene packed, NetwScene.SceneChange scope =
         (NetwScene.SceneChange)0)
@@ -1593,8 +1590,8 @@ public sealed class Netw : NetwRefCounted
         NetwApi.MethodBind("Netw", "reload_current_scene", 3203172577UL);
 
     /// <summary>
-    /// Reloads the scene this peer displays, like
-    /// <see cref="SceneTree.ReloadCurrentScene"/>.
+    /// Reloads the scene the server displays, like
+    /// <see cref="SceneTree.ReloadCurrentScene"/>. <b>Server Only.</b>
     /// </summary>
     public static NetwPromise ReloadCurrentScene(Node node, NetwScene.SceneChange scope =
         (NetwScene.SceneChange)0)
@@ -1637,41 +1634,5 @@ public sealed class Netw : NetwRefCounted
             in slot0,
             ref answered);
         return NetwSceneConfig.Adopt(answered);
-    }
-
-    private static readonly IntPtr _bindConfigureSceneRequests =
-        NetwApi.MethodBind("Netw", "configure_scene_requests", 2275419960UL);
-
-    /// <summary>
-    /// Lets clients request a scene change. <paramref name="handler"/> runs on
-    /// the server for every request and returns <c>@GlobalScope.OK</c> to allow
-    /// it.
-    /// <code>
-    /// func _init() -&gt; void:
-    ///     Netw.configure_scene_requests(authorize_scene_request)
-    ///
-    /// func authorize_scene_request(
-    ///     player: NetwPlayer,
-    ///     destination: String,
-    ///     scope: NetwScene.SceneChange
-    /// ) -&gt; Error:
-    ///     if scope != NetwScene.SCENE_CHANGE_PLAYER:
-    ///         return ERR_UNAUTHORIZED
-    ///     return OK if unlocked(player, destination) else ERR_UNAUTHORIZED
-    /// </code>
-    /// </summary>
-    public static Error ConfigureSceneRequests(Callable handler)
-    {
-        godot_variant slot0 = VariantUtils.CreateFromCallable(handler);
-        godot_variant answered = default;
-        NetwThunks.Call1(
-            _bindConfigureSceneRequests,
-            IntPtr.Zero,
-            in slot0,
-            ref answered);
-        slot0.Dispose();
-        Error result = (Error)VariantUtils.ConvertToInt64(answered);
-        answered.Dispose();
-        return result;
     }
 }

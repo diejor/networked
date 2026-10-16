@@ -203,7 +203,7 @@ Every player moves to the new scene, and every other scene is removed with its e
 
 :ref:`SceneChange<enum_NetwScene_SceneChange>` **SCENE_CHANGE_PLAYER** = ``1``
 
-Only the requesting player moves. Their old bodies are despawned, and no scene is removed.
+Only the selected :ref:`NetwPlayer<class_NetwPlayer>` moves. Their old bodies are despawned, and no scene is removed.
 
 .. _class_NetwScene_constant_SCENE_CHANGE_SCENE:
 
@@ -211,7 +211,7 @@ Only the requesting player moves. Their old bodies are despawned, and no scene i
 
 :ref:`SceneChange<enum_NetwScene_SceneChange>` **SCENE_CHANGE_SCENE** = ``2``
 
-Everyone in the requester's scene moves, and that scene is removed with its entities.
+Everyone in the selected **NetwScene** moves, and it is removed with its entities.
 
 .. rst-class:: classref-item-separator
 

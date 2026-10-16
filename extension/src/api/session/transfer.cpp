@@ -286,7 +286,6 @@ void NetwMultiplayer::session_follow_relabel(
 }
 
 void NetwMultiplayer::transfer_follow_scenes(bool p_succeeds) {
-    scene_core->request_abandon(ERR_UNAVAILABLE);
     if (!p_succeeds) {
         return;
     }

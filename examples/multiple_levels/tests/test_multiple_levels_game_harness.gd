@@ -155,7 +155,7 @@ func views_in(display: Window) -> Array[Node]:
 	return display.get_child(0).get_children()
 
 
-func test_host_scene_request_keeps_camera_current() -> void:
+func test_host_scene_change_keeps_camera_current() -> void:
 	var valeria := await game.add_host("valeria", true)
 	await _wait_for_transition(valeria)
 
@@ -165,7 +165,7 @@ func test_host_scene_request_keeps_camera_current() -> void:
 	assert_that(camera).is_not_null()
 	assert_that(player.get_viewport().get_camera_2d()).is_equal(camera)
 
-	var promise := await _request_level_2(valeria)
+	var promise := await change_level_2(valeria)
 	var level_2 := await valeria.await_scene(&"Level2", 2.0)
 
 	assert_that(promise.is_settled).is_true()
@@ -193,9 +193,8 @@ func test_clients_still_see_each_other_after_scene_change() -> void:
 	await game.sync_ticks(8)
 	assert_that(maria_on_jose_start.position.x).is_greater(base_x)
 
-	for requester in [valeria, jose, maria]:
-		var promise := await _request_level_2(requester)
-		assert_that(promise.code).is_equal(OK)
+	var promise := await change_level_2(valeria)
+	assert_that(promise.code).is_equal(OK)
 	for runner in [valeria, jose, maria]:
 		assert_that(await runner.await_scene(&"Level2", 2.0)).is_not_null()
 
@@ -580,8 +579,8 @@ func _wait_for_promise(promise: NetwPromise) -> NetwPromise:
 	return promise
 
 
-func _request_level_2(participant: NetwSceneRunner) -> NetwPromise:
-	var promise := Netw.session(participant.tree).request_scene(_LEVEL_2_PATH)
+func change_level_2(participant: NetwSceneRunner) -> NetwPromise:
+	var promise := Netw.change_scene_to_file(participant.tree, _LEVEL_2_PATH)
 	for _i in 180:
 		if promise.is_settled:
 			break

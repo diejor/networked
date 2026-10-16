@@ -634,8 +634,6 @@ Methods
    +---------------------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | :ref:`NetwPromise<class_NetwPromise>`                               | :ref:`scene_reload_current<class_NetwMultiplayer_method_scene_reload_current>`\ (\ requester\: :godot:`Node`, scope\: :ref:`SceneChange<enum_NetwScene_SceneChange>` = 0\ )                                                                                                                                                                                                                                                                                                             |
    +---------------------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwPromise<class_NetwPromise>`                               | :ref:`scene_request<class_NetwMultiplayer_method_scene_request>`\ (\ path\: :godot:`String`, scope\: :ref:`SceneChange<enum_NetwScene_SceneChange>` = 0\ )                                                                                                                                                                                                                                                                                                                              |
-   +---------------------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | :godot:`Error <@GlobalScope#enum_@globalscope_Error>`               | :ref:`scene_set_param<class_NetwMultiplayer_method_scene_set_param>`\ (\ scene\: :godot:`RID`, param\: :ref:`SceneParam<enum_NetwMultiplayer_SceneParam>`, value\: :godot:`Variant`\ )                                                                                                                                                                                                                                                                                                  |
    +---------------------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | :godot:`bool`                                                       | :ref:`scene_subscribes<class_NetwMultiplayer_method_scene_subscribes>`\ (\ scene\: :godot:`RID`, peer\: :godot:`int`\ ) |const|                                                                                                                                                                                                                                                                                                                                                         |
@@ -7111,13 +7109,9 @@ Replies ``value`` to request ``txn`` from ``peer``.
 
 :ref:`NetwPromise<class_NetwPromise>` **scene_change_to_file**\ (\ requester\: :godot:`Node`, path\: :godot:`String`, scope\: :ref:`SceneChange<enum_NetwScene_SceneChange>` = 0\ ) :ref:`🔗<class_NetwMultiplayer_method_scene_change_to_file>`
 
-Opens the scene file at ``path`` and makes players watch it. No entity moves, so spawn the arriving players in the :ref:`NetwScene<class_NetwScene>` the promise gives.
+See :ref:`Netw.change_scene_to_file()<class_Netw_method_change_scene_to_file>`. ``requester`` selects the player for :ref:`NetwScene.SCENE_CHANGE_PLAYER<class_NetwScene_constant_SCENE_CHANGE_PLAYER>` and the :ref:`NetwScene<class_NetwScene>` for :ref:`NetwScene.SCENE_CHANGE_SCENE<class_NetwScene_constant_SCENE_CHANGE_SCENE>`.
 
-\ ``scope`` says who moves. ``requester`` is the node asking, which picks the player for :ref:`NetwScene.SCENE_CHANGE_PLAYER<class_NetwScene_constant_SCENE_CHANGE_PLAYER>` and the scene for :ref:`NetwScene.SCENE_CHANGE_SCENE<class_NetwScene_constant_SCENE_CHANGE_SCENE>`. On a client it sends a :ref:`scene_request()<class_NetwMultiplayer_method_scene_request>` to the server.
-
-::
-
-    session.scene_change_to_file(self, "res://arena.tscn").then(spawn_players)
+\ **Server Only.**
 
 .. rst-class:: classref-item-separator
 
@@ -7129,7 +7123,9 @@ Opens the scene file at ``path`` and makes players watch it. No entity moves, so
 
 :ref:`NetwPromise<class_NetwPromise>` **scene_change_to_packed**\ (\ requester\: :godot:`Node`, packed\: :godot:`PackedScene`, scope\: :ref:`SceneChange<enum_NetwScene_SceneChange>` = 0\ ) :ref:`🔗<class_NetwMultiplayer_method_scene_change_to_packed>`
 
-Like :ref:`scene_change_to_file()<class_NetwMultiplayer_method_scene_change_to_file>`, taking a :godot:`PackedScene` as :godot:`SceneTree.change_scene_to_packed() <SceneTree#class_SceneTree_method_change_scene_to_packed>` does. ``packed`` must be saved to a file, or the promise fails with :godot:`@GlobalScope.ERR_UNAVAILABLE <@GlobalScope#class_@GlobalScope_constant_ERR_UNAVAILABLE>`.
+See :ref:`Netw.change_scene_to_packed()<class_Netw_method_change_scene_to_packed>`.
+
+\ **Server Only.**
 
 .. rst-class:: classref-item-separator
 
@@ -7373,28 +7369,9 @@ Returns the scene this peer displays, or an invalid :godot:`RID`. See :ref:`Netw
 
 :ref:`NetwPromise<class_NetwPromise>` **scene_reload_current**\ (\ requester\: :godot:`Node`, scope\: :ref:`SceneChange<enum_NetwScene_SceneChange>` = 0\ ) :ref:`🔗<class_NetwMultiplayer_method_scene_reload_current>`
 
-Reloads the displayed scene, like :godot:`SceneTree.reload_current_scene() <SceneTree#class_SceneTree_method_reload_current_scene>`. Fails with :godot:`@GlobalScope.ERR_UNAVAILABLE <@GlobalScope#class_@GlobalScope_constant_ERR_UNAVAILABLE>` when there is no scene or it has no file.
+See :ref:`Netw.reload_current_scene()<class_Netw_method_reload_current_scene>`.
 
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwMultiplayer_method_scene_request:
-
-.. rst-class:: classref-method
-
-:ref:`NetwPromise<class_NetwPromise>` **scene_request**\ (\ path\: :godot:`String`, scope\: :ref:`SceneChange<enum_NetwScene_SceneChange>` = 0\ ) :ref:`🔗<class_NetwMultiplayer_method_scene_request>`
-
-Asks the server to move the local player to the scene file at ``path``.
-
-.. code:: text
-
-    Error
-    ┠╴ERR_UNAUTHORIZED  the server refused
-    ┠╴ERR_SKIP          a newer request replaced this one
-    ┖╴ERR_TIMEOUT       no answer within ten seconds
-
-\ **Player request.**
+\ **Server Only.**
 
 .. rst-class:: classref-item-separator
 

@@ -950,34 +950,4 @@ public sealed class NetwSession : NetwRefCounted
             in slot1,
             ref discarded);
     }
-
-    private static readonly IntPtr _bindRequestScene =
-        NetwApi.MethodBind("NetwSession", "request_scene", 2302146027UL);
-
-    /// <summary>
-    /// Asks the server for the scene at <paramref name="path"/> over
-    /// <paramref name="scope"/>. The promise resolves when the scene is live,
-    /// or is rejected when the server declines. <b>Player request.</b>
-    /// </summary>
-    public NetwPromise RequestScene(string path, NetwScene.SceneChange scope =
-        (NetwScene.SceneChange)0)
-    {
-        godot_variant slot0 = VariantUtils.CreateFromString(path);
-        godot_variant slot1 = VariantUtils.CreateFromInt((long)scope);
-        godot_variant answered = default;
-        NetwThunks.Call2(
-            _bindRequestScene,
-            Checked,
-            in slot0,
-            in slot1,
-            ref answered);
-        slot0.Dispose();
-        slot1.Dispose();
-        NetwPromise result =
-            NetwPromise.Adopt(
-                NetwApi.Retained(
-                    VariantUtils.ConvertToGodotObjectPtr(answered)));
-        answered.Dispose();
-        return result;
-    }
 }

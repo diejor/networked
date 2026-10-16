@@ -171,8 +171,6 @@ NetwMultiplayer::NetwMultiplayer() {
     clock_channels.handshake_reply = declared_channel("CLOCK_HANDSHAKE_REPLY");
     clock_channels.ping = declared_channel("CLOCK_PING");
     clock_channels.pong = declared_channel("CLOCK_PONG");
-    scene_request_channel = declared_channel("SESSION_SCENE_REQUEST");
-    scene_result_channel = declared_channel("SESSION_SCENE_RESULT");
     scene_released_channel = declared_channel("SESSION_SCENE_RELEASED");
     scene_viewers_channel = declared_channel("SESSION_SCENE_VIEWERS");
     session_join_channel = declared_channel("SESSION_JOIN");
@@ -184,14 +182,6 @@ NetwMultiplayer::NetwMultiplayer() {
 
     interest_flush = callable_mp(this, &NetwMultiplayer::interest_flush_sink);
 
-    channel_book.register_protocol(
-        scene_request_channel,
-        callable_mp(this, &NetwMultiplayer::scene_receive_request_frame)
-    );
-    channel_book.register_protocol(
-        scene_result_channel,
-        callable_mp(this, &NetwMultiplayer::scene_receive_result_frame)
-    );
     channel_book.register_protocol(
         scene_released_channel,
         callable_mp(this, &NetwMultiplayer::scene_receive_released_frame)

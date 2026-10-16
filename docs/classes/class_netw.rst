@@ -53,8 +53,6 @@ Methods
    +-------------------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | :ref:`NetwSceneConfig<class_NetwSceneConfig>`                     | :ref:`configure_scene<class_Netw_method_configure_scene>`\ (\ node\: :godot:`Node`\ ) |static|                                                                                                            |
    +-------------------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`Error <@GlobalScope#enum_@globalscope_Error>`             | :ref:`configure_scene_requests<class_Netw_method_configure_scene_requests>`\ (\ handler\: :godot:`Callable`\ ) |static|                                                                                   |
-   +-------------------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | :ref:`NetwSchema<class_NetwSchema>`                               | :ref:`configure_schema<class_Netw_method_configure_schema>`\ (\ name\: :godot:`StringName`\ ) |static|                                                                                                    |
    +-------------------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | :godot:`Error <@GlobalScope#enum_@globalscope_Error>`             | :ref:`configure_server_info<class_Netw_method_configure_server_info>`\ (\ provider\: :godot:`Callable`\ ) |static|                                                                                        |
@@ -150,7 +148,7 @@ Opens ``path`` and moves players to it. ``scope`` says who moves. Their nodes do
         for player: NetwPlayer in arena.viewers:
             arena.root.add_child(Netw.spawn_player(player, make_player))
 
-\ On a client this is a request that :ref:`configure_scene_requests()<class_Netw_method_configure_scene_requests>` decides, and it is rejected when there is none. The promise then gives :godot:`@GlobalScope.OK <@GlobalScope#class_@GlobalScope_constant_OK>`.
+\ **Server Only.**
 
 .. rst-class:: classref-item-separator
 
@@ -162,7 +160,9 @@ Opens ``path`` and moves players to it. ``scope`` says who moves. Their nodes do
 
 :ref:`NetwPromise<class_NetwPromise>` **change_scene_to_packed**\ (\ node\: :godot:`Node`, packed\: :godot:`PackedScene`, scope\: :ref:`SceneChange<enum_NetwScene_SceneChange>` = 0\ ) |static| :ref:`🔗<class_Netw_method_change_scene_to_packed>`
 
-The same change as :ref:`change_scene_to_file()<class_Netw_method_change_scene_to_file>`, from a :godot:`PackedScene` that came from a file. A :godot:`PackedScene` built in memory is rejected.
+Like :ref:`change_scene_to_file()<class_Netw_method_change_scene_to_file>`. ``packed`` must be saved to a file.
+
+\ **Server Only.**
 
 .. rst-class:: classref-item-separator
 
@@ -416,32 +416,6 @@ Makes ``node`` a multiplayer scene. Players only see its children while they are
 
 ----
 
-.. _class_Netw_method_configure_scene_requests:
-
-.. rst-class:: classref-method
-
-:godot:`Error <@GlobalScope#enum_@globalscope_Error>` **configure_scene_requests**\ (\ handler\: :godot:`Callable`\ ) |static| :ref:`🔗<class_Netw_method_configure_scene_requests>`
-
-Lets clients request a scene change. ``handler`` runs on the server for every request and returns :godot:`@GlobalScope.OK <@GlobalScope#class_@GlobalScope_constant_OK>` to allow it.
-
-::
-
-    func _init() -> void:
-        Netw.configure_scene_requests(authorize_scene_request)
-
-    func authorize_scene_request(
-        player: NetwPlayer,
-        destination: String,
-        scope: NetwScene.SceneChange
-    ) -> Error:
-        if scope != NetwScene.SCENE_CHANGE_PLAYER:
-            return ERR_UNAUTHORIZED
-        return OK if unlocked(player, destination) else ERR_UNAUTHORIZED
-
-.. rst-class:: classref-item-separator
-
-----
-
 .. _class_Netw_method_configure_schema:
 
 .. rst-class:: classref-method
@@ -663,7 +637,9 @@ Joins the game as ``username``. The arguments after ``username`` are passed to t
 
 :ref:`NetwPromise<class_NetwPromise>` **reload_current_scene**\ (\ node\: :godot:`Node`, scope\: :ref:`SceneChange<enum_NetwScene_SceneChange>` = 0\ ) |static| :ref:`🔗<class_Netw_method_reload_current_scene>`
 
-Reloads the scene this peer displays, like :godot:`SceneTree.reload_current_scene() <SceneTree#class_SceneTree_method_reload_current_scene>`.
+Reloads the scene the server displays, like :godot:`SceneTree.reload_current_scene() <SceneTree#class_SceneTree_method_reload_current_scene>`.
+
+\ **Server Only.**
 
 .. rst-class:: classref-item-separator
 

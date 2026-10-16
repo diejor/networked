@@ -2,7 +2,6 @@
 #include "support/netw_test.h"
 
 #include "netw/scene_core.hpp"
-#include "netw/session/frames.hpp"
 #include "support/minted_rids.h"
 #include "support/netw_call_log.h"
 
@@ -207,48 +206,16 @@ TEST_CASE(
     NETW_CHECK_EQ(core->dispatch(kept, EVENT_BODY, true, 0), 1);
 }
 
-TEST_CASE(
-    "[Networked][Scene][Hosted] N6 ids are drawn in sequence and only the live "
-    "one is current"
-) {
-    Ref<NetwSceneCore> core = fresh();
-
-    NETW_CHECK_EQ(core->get_pending_request_id(), 0);
-    CHECK_FALSE(core->is_current(0));
-    CHECK_FALSE(core->is_current(1));
-
-    const int first = core->open_request();
-    const int second = core->open_request();
-    NETW_CHECK_EQ(second, first + 1);
-
-    CHECK(core->is_current(second));
-    CHECK_FALSE(core->is_current(first));
-
-    core->close_request();
-    CHECK_FALSE(core->is_current(second));
-    NETW_CHECK_EQ(core->get_pending_request_id(), 0);
-    CHECK_FALSE(core->is_current(0));
-}
-
-TEST_CASE(
-    "[Networked][Scene][Hosted] N7 clearing forgets the routing table but "
-    "never a request id it has already handed out, because an answer owed to "
-    "the session that ended must not settle a request in the one that "
-    "replaced it"
-) {
+TEST_CASE("[Networked][Scene][Hosted] N7 clearing forgets scene observers") {
     Ref<NetwSceneCore> core = fresh();
     CallLog log;
     Scenes scenes;
     const RID scene = scenes[0];
     core->observe(scene, EVENT_BODY, log.callable("heard"));
-    const int before = core->open_request();
 
     core->clear();
 
     NETW_CHECK_EQ(core->observer_count(scene, EVENT_BODY), 0);
-    NETW_CHECK_EQ(core->get_pending_request_id(), 0);
-    NETW_CHECK_EQ(core->open_request(), before + 1);
-    CHECK_FALSE(core->is_current(before));
 }
 
 TEST_CASE(
@@ -426,29 +393,27 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Scene][Hosted] N10 a requested path is bounded to a scene "
+    "[Networked][Scene][Hosted] N10 a scene path is bounded to a scene "
     "file under res://"
 ) {
     CHECK(
-        NetwSceneCore::verify_requested_path("res://a/level.tscn")
+        NetwSceneCore::verify_scene_path("res://a/level.tscn")
         == String("res://a/level.tscn")
     );
     CHECK(
-        NetwSceneCore::verify_requested_path("res://a/level.scn")
+        NetwSceneCore::verify_scene_path("res://a/level.scn")
         == String("res://a/level.scn")
     );
-    CHECK(NetwSceneCore::verify_requested_path("res://a/level.gd").is_empty());
-    CHECK(
-        NetwSceneCore::verify_requested_path("user://a/level.tscn").is_empty()
-    );
-    CHECK(NetwSceneCore::verify_requested_path("").is_empty());
-    CHECK(NetwSceneCore::verify_requested_path("res://a/level").is_empty());
+    CHECK(NetwSceneCore::verify_scene_path("res://a/level.gd").is_empty());
+    CHECK(NetwSceneCore::verify_scene_path("user://a/level.tscn").is_empty());
+    CHECK(NetwSceneCore::verify_scene_path("").is_empty());
+    CHECK(NetwSceneCore::verify_scene_path("res://a/level").is_empty());
 
     String overlong = "res://";
-    while (overlong.length() <= NetwSceneCore::MAX_REQUESTED_PATH_LENGTH) {
+    while (overlong.length() <= NetwSceneCore::MAX_SCENE_PATH_LENGTH) {
         overlong += "a";
     }
-    CHECK(NetwSceneCore::verify_requested_path(overlong + ".tscn").is_empty());
+    CHECK(NetwSceneCore::verify_scene_path(overlong + ".tscn").is_empty());
 }
 
 TEST_CASE(
@@ -465,94 +430,6 @@ TEST_CASE(
     CHECK_FALSE(
         NetwSceneCore::scope_names_an_operation(NetwSceneCore::SCOPE_MAX)
     );
-}
-
-TEST_CASE(
-    "[Networked][Scene][Hosted] N12 settling an answer settles the request it "
-    "answered, and only it"
-) {
-    Ref<NetwSceneCore> core = fresh();
-    const Ref<netw::NetwPromise> promise = core->request_open(1);
-    const int opened = core->get_pending_request_id();
-    REQUIRE(promise.is_valid());
-
-    CHECK_FALSE(core->request_settle(opened + 1, int(OK)));
-    CHECK_FALSE(promise->get_is_settled());
-    NETW_CHECK_EQ(core->get_pending_request_id(), opened);
-
-    CHECK(core->request_settle(opened, int(ERR_TIMEOUT)));
-    CHECK(promise->get_is_failed());
-    NETW_CHECK_EQ(promise->get_code(), int(ERR_TIMEOUT));
-    NETW_CHECK_EQ(core->get_pending_request_id(), 0);
-    CHECK(core->get_pending_request().is_null());
-
-    CHECK_FALSE(core->request_settle(opened, int(OK)));
-    CHECK_FALSE(core->request_settle(0, int(OK)));
-    NETW_CHECK_EQ(promise->get_code(), int(ERR_TIMEOUT));
-}
-
-TEST_CASE(
-    "[Networked][Scene][Hosted] N18 a newer request supersedes the one still "
-    "in flight, and an answer resolves rather than rejects"
-) {
-    Ref<NetwSceneCore> core = fresh();
-    const Ref<netw::NetwPromise> first = core->request_open(1);
-    first->catch_error(Callable());
-
-    const Ref<netw::NetwPromise> second = core->request_open(1);
-
-    CHECK(first->get_is_failed());
-    NETW_CHECK_EQ(first->get_code(), int(ERR_SKIP));
-    CHECK_FALSE(second->get_is_settled());
-    CHECK(second != first);
-
-    CHECK(core->request_settle(core->get_pending_request_id(), int(OK)));
-    CHECK(second->get_is_completed());
-    NETW_CHECK_EQ(second->get_code(), int(OK));
-
-    const Ref<netw::NetwPromise> third = core->request_open(1);
-    core->request_abandon(int(ERR_UNAVAILABLE));
-    CHECK(third->get_is_failed());
-    NETW_CHECK_EQ(third->get_code(), int(ERR_UNAVAILABLE));
-    CHECK(core->get_pending_request().is_null());
-}
-
-TEST_CASE(
-    "[Networked][Scene][Hosted] N19 the peer a request was addressed to is the "
-    "only peer whose answer settles it, and only a well-formed answer settles"
-) {
-    netw_test::FaultWatch expected_faults;
-    expected_faults.expect_warning(
-        "[warn][scene] A scene result from peer * was ignored, "
-        "because the request went to peer *.",
-        2
-    );
-
-    Ref<NetwSceneCore> core = fresh();
-    const Ref<netw::NetwPromise> promise = core->request_open(7);
-    const int opened = core->get_pending_request_id();
-
-    netw::session::SceneResult answer;
-    answer.request_id = uint64_t(opened);
-    answer.code = int(ERR_UNAUTHORIZED);
-    const PackedByteArray payload = netw::session::frame_write(answer);
-
-    CHECK_FALSE(core->receive_result_frame(payload, 2));
-    CHECK_FALSE(core->receive_result_frame(payload, 1));
-    CHECK_FALSE(promise->get_is_settled());
-    NETW_CHECK_EQ(core->get_pending_request_id(), opened);
-
-    CHECK_FALSE(
-        core->receive_result_frame(payload.slice(0, payload.size() - 1), 7)
-    );
-    PackedByteArray extended = payload;
-    extended.push_back(0x00);
-    CHECK_FALSE(core->receive_result_frame(extended, 7));
-    CHECK_FALSE(promise->get_is_settled());
-
-    CHECK(core->receive_result_frame(payload, 7));
-    CHECK(promise->get_is_failed());
-    NETW_CHECK_EQ(promise->get_code(), int(ERR_UNAUTHORIZED));
 }
 
 TEST_CASE(

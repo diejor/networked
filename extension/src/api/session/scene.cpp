@@ -14,7 +14,6 @@
 #include "godot/rendering_server.hpp"
 #include "godot/resource.hpp"
 #include "godot/spatial_node.hpp"
-#include "godot/time.hpp"
 #include "godot/utility.hpp"
 #include "godot/viewport.hpp"
 #include "godot/world.hpp"
@@ -70,7 +69,7 @@ bool running_under_gdunit() {
 
 } // namespace
 
-Ref<NetwPlayer> NetwMultiplayer::scene_requester_player(Node *p_requester) {
+Ref<NetwPlayer> NetwMultiplayer::scene_caller_player(Node *p_requester) {
     const Ref<NetwEntity> entity = NetwEntity::of(p_requester);
     if (entity.is_valid()) {
         const Ref<NetwPlayer> owner = player_of(entity->get_peer_id());
@@ -155,38 +154,6 @@ void NetwMultiplayer::scene_publish_live(
     notify(SCENE_LIVE, live);
 }
 
-bool NetwMultiplayer::scene_request_flooded(int peer, int64_t now_msec) {
-    if (!scene_request_window.exceeded(peer, now_msec)) {
-        return false;
-    }
-    count_verdict(ERR_BUSY, 0);
-    if (claim_verdict_warning(ERR_BUSY, 0)) {
-        NETW_WARN(sys::SCENE, "peer %d exceeded the scene request rate", peer);
-    }
-    return true;
-}
-
-Array NetwMultiplayer::scene_request_frame_row(
-    const PackedByteArray &p_payload,
-    int p_sender,
-    int64_t p_now_msec
-) {
-    if (!is_host() || scene_request_flooded(p_sender, p_now_msec)) {
-        return Array();
-    }
-    session::SceneRequest frame;
-    if (!session::frame_read(p_payload, frame)) {
-        return Array();
-    }
-    Array row;
-    row.push_back(int64_t(frame.request_id));
-    row.push_back(frame.path);
-    row.push_back(frame.scope);
-    row.push_back(frame.source_route);
-    row.push_back(frame.source_epoch);
-    return row;
-}
-
 RID NetwMultiplayer::scene_released_scene(
     const PackedByteArray &p_payload,
     int p_sender
@@ -221,12 +188,6 @@ Ref<Script> NetwMultiplayer::scene_packed_root_script(
 
 Ref<Script> NetwMultiplayer::scene_root_script_at(const String &p_reference) {
     return NetwSceneCore::scene_root_script_at(p_reference);
-}
-
-String NetwMultiplayer::scene_resolve_requested_path(
-    const String &p_reference
-) {
-    return NetwSceneCore::resolve_requested_path(p_reference);
 }
 
 int NetwMultiplayer::scene_move_verdict(
@@ -613,7 +574,6 @@ void NetwMultiplayer::scene_on_session_reclaimed() {
         }
         memdelete(scene_node);
     }
-    scene_core->request_abandon(ERR_UNAVAILABLE);
     scene_core->clear();
     scene_player_display_invalidate();
 }
@@ -631,7 +591,6 @@ void NetwMultiplayer::scene_install() {
 }
 
 void NetwMultiplayer::scene_dispose() {
-    scene_core->request_abandon(ERR_UNAVAILABLE);
     scene_carry_sweep();
     spawn_carry_sweep();
     SceneTree *loop = gd::scene_tree();
@@ -758,10 +717,6 @@ Node *NetwMultiplayer::scene_resolve_destination(const Variant &p_destination) {
 Ref<NetwScene> NetwMultiplayer::scene_handle_for(Node *p_container) {
     const Ref<NetwEntity> record = NetwEntity::of(p_container);
     return record.is_valid() ? record->get_scene() : Ref<NetwScene>();
-}
-
-double NetwMultiplayer::scene_request_deadline() {
-    return 10.0;
 }
 
 Ref<NetwPromise> NetwMultiplayer::scene_replace_sources(
@@ -924,6 +879,18 @@ Ref<NetwPromise> NetwMultiplayer::scene_front_door_change(
     const String &p_path,
     int p_scope
 ) {
+    if (!is_host()) {
+        NETW_ERROR(
+            sys::SCENE,
+            "Only the server can change scenes. Call "
+            "Netw.change_scene_to_file, Netw.change_scene_to_packed or "
+            "Netw.reload_current_scene on the server."
+        );
+        return NetwPromise::rejected(
+            ERR_UNAUTHORIZED,
+            String("only the server can change scenes")
+        );
+    }
     if (!NetwSceneCore::scope_names_an_operation(p_scope)) {
         return NetwPromise::rejected(
             ERR_INVALID_PARAMETER,
@@ -934,15 +901,7 @@ Ref<NetwPromise> NetwMultiplayer::scene_front_door_change(
     if (p_path.is_empty()) {
         return NetwPromise::rejected(
             ERR_UNAVAILABLE,
-            String("a scene change needs a live session and a scene path")
-        );
-    }
-    if (!is_host()) {
-        return scene_request_open(
-            p_path,
-            p_scope,
-            scene_request_deadline(),
-            entity_of(scene_containing(p_requester))
+            String("a scene change needs a scene file path")
         );
     }
     const Ref<PackedScene> packed = scene_packed_at(p_path);
@@ -953,7 +912,7 @@ Ref<NetwPromise> NetwMultiplayer::scene_front_door_change(
         );
     }
     return scene_apply_change(
-        scene_requester_player(p_requester),
+        scene_caller_player(p_requester),
         packed,
         p_scope,
         p_requester
@@ -977,14 +936,11 @@ Ref<NetwPromise> NetwMultiplayer::scene_change_to_packed(
     const Ref<PackedScene> &p_packed,
     SceneChange p_scope
 ) {
-    if (NetwSceneCore::destination_kind(p_packed)
-        != NetwSceneCore::DESTINATION_PACKED) {
-        return NetwPromise::rejected(
-            ERR_UNAVAILABLE,
-            String("scene_change_to_packed needs a file-backed PackedScene")
-        );
-    }
-    return scene_front_door_change(p_requester, p_packed->get_path(), p_scope);
+    return scene_front_door_change(
+        p_requester,
+        p_packed.is_valid() ? String(p_packed->get_path()) : String(),
+        p_scope
+    );
 }
 
 Ref<NetwPromise> NetwMultiplayer::scene_reload_current(
@@ -992,15 +948,10 @@ Ref<NetwPromise> NetwMultiplayer::scene_reload_current(
     SceneChange p_scope
 ) {
     Node *level = scene_presented_node();
-    if (level == nullptr || level->get_scene_file_path().is_empty()) {
-        return NetwPromise::rejected(
-            ERR_UNAVAILABLE,
-            String("scene_reload_current needs a file-backed presented scene")
-        );
-    }
     return scene_front_door_change(
         p_requester,
-        gd::ensure_path(level->get_scene_file_path()),
+        level != nullptr ? gd::ensure_path(level->get_scene_file_path())
+                         : String(),
         p_scope
     );
 }
@@ -2213,127 +2164,6 @@ void NetwMultiplayer::scene_report_live_entity_edge(
     );
 }
 
-Ref<NetwPromise> NetwMultiplayer::scene_request_send(
-    const String &p_path,
-    int p_scope,
-    const RID &p_source
-) {
-    const int64_t destination = SERVER_PEER;
-    const Ref<NetwPromise> promise = scene_core->request_open(destination);
-    session::SceneRequest frame;
-    frame.request_id = uint64_t(scene_core->get_pending_request_id());
-    frame.path = p_path;
-    frame.scope = p_scope;
-    frame.source_route = scene_route_of(p_source);
-    frame.source_epoch
-        = frame.source_route > 0 ? liveness_route_epoch(frame.source_route) : 0;
-    send_to(
-        destination,
-        0,
-        scene_request_channel,
-        session::frame_write(frame),
-        true,
-        0,
-        String(),
-        false
-    );
-    return promise;
-}
-
-Ref<NetwPromise> NetwMultiplayer::scene_request(
-    const String &p_path,
-    SceneChange p_scope
-) {
-    return scene_request_open(p_path, p_scope, SCENE_REQUEST_DEADLINE, RID());
-}
-
-Ref<NetwPromise> NetwMultiplayer::scene_request_open(
-    const String &p_path,
-    int p_scope,
-    double p_deadline,
-    const RID &p_source
-) {
-    const Ref<NetwPromise> promise
-        = scene_request_send(p_path, p_scope, p_source);
-    if (p_deadline > 0.0) {
-        scene_request_arm_deadline(
-            scene_core->get_pending_request_id(),
-            p_deadline
-        );
-    }
-    return promise;
-}
-
-void NetwMultiplayer::scene_request_arm_deadline(
-    int p_request_id,
-    double p_deadline
-) {
-    NETW_ZONE_NC("scene request deadline", colors::SCENE);
-    SceneTree *tree = gd::scene_tree();
-    if (tree == nullptr) {
-        NETW_TRACE(
-            sys::SCENE,
-            "There is no SceneTree, so scene request %d never expires.",
-            p_request_id
-        );
-        return;
-    }
-    const Ref<SceneTreeTimer> countdown = tree->create_timer(p_deadline);
-    if (countdown.is_null()) {
-        NETW_TRACE(
-            sys::SCENE,
-            "The SceneTree made no timer, so scene request %d never expires.",
-            p_request_id
-        );
-        return;
-    }
-    countdown->connect(
-        "timeout",
-        callable_mp(this, &NetwMultiplayer::scene_request_expire)
-            .bind(p_request_id)
-    );
-    scene_request_armed = p_request_id;
-    scene_request_armed_wait = p_deadline;
-}
-
-int NetwMultiplayer::scene_request_armed_id() const {
-    return scene_request_armed;
-}
-
-double NetwMultiplayer::scene_request_armed_deadline() const {
-    return scene_request_armed_wait;
-}
-
-void NetwMultiplayer::scene_request_expire(int p_request_id) {
-    scene_core->request_settle(p_request_id, ERR_TIMEOUT);
-}
-
-bool NetwMultiplayer::scene_receive_result_frame(
-    const PackedByteArray &p_payload,
-    int p_sender
-) {
-    const int64_t asked = scene_core->get_pending_request_destination();
-    if (asked != 0 && int64_t(p_sender) != asked) {
-        warn_verdict(ERR_UNAUTHORIZED, 0);
-    }
-    return scene_core->receive_result_frame(p_payload, p_sender);
-}
-
-void NetwMultiplayer::scene_receive_request_frame(
-    const PackedByteArray &p_payload,
-    int p_sender
-) {
-    const Array row = scene_request_frame_row(
-        p_payload,
-        p_sender,
-        Time::get_singleton()->get_ticks_msec()
-    );
-    if (row.is_empty()) {
-        return;
-    }
-    scene_receive_request(p_sender, row[0], row[1], row[2], row[3], row[4]);
-}
-
 void NetwMultiplayer::scene_receive_released_frame(
     const PackedByteArray &p_payload,
     int p_sender
@@ -2349,236 +2179,8 @@ void NetwMultiplayer::scene_receive_released_frame(
     scene_release_peer(released, get_unique_id());
 }
 
-void NetwMultiplayer::scene_receive_request(
-    int64_t p_peer,
-    int p_request_id,
-    const String &p_scene_path,
-    int p_scope,
-    int64_t p_source_route,
-    int64_t p_source_epoch
-) {
-    const Ref<NetwPlayer> player
-        = Object::cast_to<NetwPlayer>(player_admitted_of(p_peer).ptr());
-    if (player.is_null()) {
-        NETW_WARN(
-            sys::SCENE,
-            "Peer %d asked for a scene change before it joined, so it was "
-            "refused.",
-            int(p_peer)
-        );
-        scene_send_result(p_peer, p_request_id, ERR_UNAUTHORIZED);
-        return;
-    }
-    if (!NetwSceneCore::scope_names_an_operation(p_scope)) {
-        NETW_WARN(
-            sys::SCENE,
-            "Peer %d asked for a scene change with unknown scope %d, so it was "
-            "refused.",
-            int(p_peer),
-            p_scope
-        );
-        scene_send_result(p_peer, p_request_id, ERR_INVALID_PARAMETER);
-        return;
-    }
-    scene_receive_path_request(
-        p_peer,
-        p_request_id,
-        player,
-        p_scene_path,
-        p_scope,
-        p_source_route,
-        p_source_epoch
-    );
-}
-
-Node *NetwMultiplayer::scene_request_source(
-    int64_t p_peer,
-    int64_t p_source_route,
-    int64_t p_source_epoch
-) {
-    if (p_source_route <= 0) {
-        return nullptr;
-    }
-    const RID named = scene_viewers_subject(p_source_route);
-    if (!named.is_valid()) {
-        NETW_WARN(
-            sys::SCENE,
-            "Peer %d asked to leave scene %d, which does not exist, so the "
-            "scene change was refused.",
-            int(p_peer),
-            int(p_source_route)
-        );
-        return nullptr;
-    }
-    if (liveness_route_epoch(p_source_route) != p_source_epoch) {
-        NETW_WARN(
-            sys::SCENE,
-            "Peer %d asked to leave scene %d (epoch %d), which was replaced by "
-            "epoch %d, so the scene change was refused.",
-            int(p_peer),
-            int(p_source_route),
-            int(p_source_epoch),
-            int(liveness_route_epoch(p_source_route))
-        );
-        return nullptr;
-    }
-    if (!scene_subscribes(named, p_peer)) {
-        NETW_WARN(
-            sys::SCENE,
-            "Peer %d asked to leave scene %d, which it is not in, so the scene "
-            "change was refused.",
-            int(p_peer),
-            int(p_source_route)
-        );
-        return nullptr;
-    }
-    return scene_node_of(named);
-}
-
-void NetwMultiplayer::scene_receive_path_request(
-    int64_t p_peer,
-    int p_request_id,
-    const Ref<NetwPlayer> &p_player,
-    const String &p_scene_path,
-    int p_scope,
-    int64_t p_source_route,
-    int64_t p_source_epoch
-) {
-    const String resolved = scene_resolve_requested_path(p_scene_path);
-    if (resolved.is_empty()) {
-        scene_send_result(p_peer, p_request_id, ERR_UNAVAILABLE);
-        return;
-    }
-    Node *source = p_scope == SCENE_CHANGE_SCENE
-        ? scene_request_source(p_peer, p_source_route, p_source_epoch)
-        : nullptr;
-    if (p_scope == SCENE_CHANGE_SCENE && source == nullptr) {
-        scene_send_result(p_peer, p_request_id, ERR_INVALID_PARAMETER);
-        return;
-    }
-    const Error refusal = scene_admits_request(p_player, resolved, p_scope);
-    if (refusal != OK) {
-        scene_send_result(p_peer, p_request_id, refusal);
-        return;
-    }
-    const Ref<PackedScene> packed = scene_packed_at(resolved);
-    if (packed.is_null()) {
-        scene_send_result(p_peer, p_request_id, ERR_UNAVAILABLE);
-        return;
-    }
-    if (scene_packed_root_script(packed).is_null()) {
-        NETW_TRACE(
-            sys::SCENE,
-            "An approved scene request loaded %s, whose root is not a "
-            "multiplayer scene.",
-            resolved
-        );
-        scene_send_result(p_peer, p_request_id, ERR_INVALID_DATA);
-        return;
-    }
-    scene_answer_when_settled(
-        scene_apply_change(p_player, packed, p_scope, source),
-        p_peer,
-        p_request_id
-    );
-}
-
-Error NetwMultiplayer::scene_admits_request(
-    const Ref<NetwPlayer> &p_player,
-    const Variant &p_destination,
-    int p_scope
-) {
-    const session_decl::Resolved declared
-        = declaration_book().resolve(this, session_decl::KIND_SCENE_REQUESTS);
-    if (declared.state == session_decl::READY) {
-        scene_core->set_request_handler(declared.callable);
-    } else if (declared.state != session_decl::ABSENT) {
-        declaration_book().report_unresolved(
-            this,
-            session_decl::KIND_SCENE_REQUESTS,
-            declared.state,
-            "a scene request"
-        );
-        return ERR_UNAUTHORIZED;
-    }
-    if (!scene_core->get_request_handler().is_valid()) {
-        if (claim_verdict_warning(ERR_UNAUTHORIZED, 0)) {
-            NETW_WARN(
-                sys::SCENE,
-                "A client's scene request for '%s' was refused, because no "
-                "handler decides scene requests. Install one with "
-                "Netw.configure_scene_requests.",
-                String(p_destination)
-            );
-        }
-        return ERR_UNAUTHORIZED;
-    }
-    const Error verdict
-        = scene_core->decide_request(p_player, p_destination, p_scope);
-    if (verdict == ERR_INVALID_DATA
-        && claim_verdict_warning(ERR_INVALID_DATA, 0)) {
-        NETW_WARN(
-            sys::SCENE,
-            "The scene request handler did not return an Error, so the request "
-            "was refused. Return OK to accept it or an Error to refuse it."
-        );
-    }
-    return verdict;
-}
-
-void NetwMultiplayer::scene_send_result(
-    int64_t p_peer,
-    int p_request_id,
-    int p_code
-) {
-    session::SceneResult frame;
-    frame.request_id = uint64_t(p_request_id);
-    frame.code = p_code;
-    send_to(
-        p_peer,
-        0,
-        scene_result_channel,
-        session::frame_write(frame),
-        true,
-        0,
-        String(),
-        false
-    );
-}
-
-void NetwMultiplayer::scene_answer_settled_result(
-    int64_t p_peer,
-    int p_request_id,
-    const Ref<NetwPromise> &p_operation
-) {
-    scene_send_result(p_peer, p_request_id, p_operation->get_code());
-}
-
-void NetwMultiplayer::scene_answer_when_settled(
-    const Ref<NetwPromise> &p_operation,
-    int64_t p_peer,
-    int p_request_id
-) {
-    if (p_operation.is_null()) {
-        scene_send_result(p_peer, p_request_id, ERR_UNAVAILABLE);
-        return;
-    }
-    p_operation->when_settled(
-        callable_mp(this, &NetwMultiplayer::scene_answer_settled_result)
-            .bind(p_peer, p_request_id, p_operation)
-    );
-}
-
 SceneDecl NetwMultiplayer::scene_decl_of(const Ref<Script> &p_script) const {
     return netw::script::model::get_scene_decl(p_script);
-}
-
-void NetwMultiplayer::scene_set_request_handler(const Callable &p_handler) {
-    scene_core->set_request_handler(p_handler);
-}
-
-Callable NetwMultiplayer::scene_get_request_handler() const {
-    return scene_core->get_request_handler();
 }
 
 RID NetwMultiplayer::scene_named(const StringName &p_stem) const {

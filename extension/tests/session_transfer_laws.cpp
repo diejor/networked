@@ -954,7 +954,7 @@ TEST_CASE(
     "[Networked][Session][Transfer][SceneTree] TX10 after the server is lost "
     "with the world kept, the successor counts each player's body in its "
     "scene, a survivor that missed the last viewer list takes the one the "
-    "successor publishes, and a scene request waiting on the lost server fails"
+    "successor publishes"
 ) {
     Table table(false, true);
     table.keep_world();
@@ -984,12 +984,6 @@ TEST_CASE(
         handle_at(table, level, successor),
         third_label
     ));
-    const Ref<NetwPromise> asked = table.seat(third)->scene_request(
-        "res://transfer_missing.tscn",
-        NetwMultiplayer::SCENE_CHANGE_PLAYER
-    );
-    REQUIRE_FALSE(asked->get_is_settled());
-
     REQUIRE(int(table.rig.session()->lose_server()) == int(OK));
     table.rig.release(survivor);
     table.rig.pump(SETTLE_PUMPS);
@@ -1002,8 +996,6 @@ TEST_CASE(
         int(table.seat(survivor)->scene_watches(seen, third_label)),
         1
     );
-    REQUIRE(asked->get_is_failed());
-    NETW_CHECK_EQ(int(asked->get_code()), int(ERR_UNAVAILABLE));
 }
 
 TEST_CASE(

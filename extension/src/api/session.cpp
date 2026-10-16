@@ -191,15 +191,6 @@ Ref<NetwPromise> NetwSession::save_entities() {
                           : NetwPromise::resolved(ERR_UNCONFIGURED);
 }
 
-Ref<NetwPromise> NetwSession::request_scene(
-    const String &p_path,
-    NetwScene::SceneChange p_scope
-) {
-    NetwMultiplayer *api = session();
-    return api != nullptr ? api->scene_request(p_path, p_scope)
-                          : NetwPromise::resolved(ERR_UNCONFIGURED);
-}
-
 Ref<NetwScene> NetwSession::create_scene(
     const Ref<PackedScene> &p_scene,
     NetwScene::SceneIsolation p_isolation
@@ -509,11 +500,6 @@ void NetwSession::_bind_methods() {
         D_METHOD("unregister_service", "service", "type"),
         &NetwSession::unregister_service,
         DEFVAL(Variant())
-    );
-    ClassDB::bind_method(
-        D_METHOD("request_scene", "path", "scope"),
-        &NetwSession::request_scene,
-        DEFVAL(int64_t(NetwScene::SCENE_CHANGE_SESSION))
     );
 
     BIND_ENUM_CONSTANT(LOCAL_LEAVE);
