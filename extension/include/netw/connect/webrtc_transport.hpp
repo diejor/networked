@@ -13,6 +13,7 @@ namespace netw::connect {
 
 class WebRTCTransport : public Transport {
     friend struct WebRTCTransportProbe;
+    friend struct TurnCredentialProbe;
 
 public:
     static const char *LOCAL_ROOMS_PATH;
@@ -48,7 +49,6 @@ public:
 
     static godot::Array default_ice_servers();
     static godot::PackedStringArray default_trackers();
-    static bool servers_differ_from_default(const godot::Array &p_servers);
 
     godot::Array effective_ice_servers() const;
 
@@ -76,7 +76,7 @@ private:
     bool hosting = false;
     bool signaling_ready = false;
     bool offer_reported = false;
-    bool ice_servers_authored = false;
+    godot::Array fetched_servers;
     int64_t connect_started_msec = 0;
 
     TurnCredentials *credentials = nullptr;

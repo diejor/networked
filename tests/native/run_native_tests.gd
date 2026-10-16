@@ -3,6 +3,10 @@ extends SceneTree
 var runner: Object = null
 
 
+func _initialize() -> void:
+	ProjectSettings.set_setting("networked/webrtc/turn_credentials_url", "")
+
+
 func _physics_process(_delta: float) -> bool:
 	if runner == null:
 		if not ClassDB.class_exists(&"NetwNativeTests"):

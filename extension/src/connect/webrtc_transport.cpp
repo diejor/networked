@@ -2,8 +2,6 @@
 
 #include "godot/engine.hpp"
 #include "godot/file_access.hpp"
-#include "godot/javascript.hpp"
-#include "godot/json.hpp"
 #include "godot/os.hpp"
 #include "godot/time.hpp"
 #include "netw/api/context.hpp"
@@ -30,16 +28,8 @@ Array WebRTCTransport::default_ice_servers() {
     return servers;
 }
 
-bool WebRTCTransport::servers_differ_from_default(const Array &p_servers) {
-    return JSON::stringify(p_servers) != JSON::stringify(default_ice_servers());
-}
-
 Array WebRTCTransport::effective_ice_servers() const {
-    if (ice_servers_authored) {
-        return ice_servers;
-    }
-    const Array fetched = TurnCredentials::cached();
-    return fetched.is_empty() ? ice_servers : fetched;
+    return fetched_servers.is_empty() ? ice_servers : fetched_servers;
 }
 
 PackedStringArray WebRTCTransport::default_trackers() {
@@ -199,7 +189,6 @@ void WebRTCTransport::apply_settings(const Dictionary &p_settings) {
     if (p_settings.has("ice_servers")
         && p_settings["ice_servers"].get_type() == Variant::ARRAY) {
         ice_servers = p_settings["ice_servers"];
-        ice_servers_authored = servers_differ_from_default(ice_servers);
     }
     if (p_settings.has("trackers")) {
         const Variant found = p_settings["trackers"];
@@ -276,6 +265,7 @@ void WebRTCTransport::teardown() {
         memdelete(signaler);
         signaler = nullptr;
     }
+    fetched_servers.clear();
     offer_reported = false;
 }
 
@@ -299,25 +289,18 @@ bool WebRTCTransport::arm_credential_fetch(
     const String &p_address,
     const Dictionary &p_settings
 ) {
-    if (TurnCredentials::attempted() || under_test_runner()) {
-        return false;
-    }
-    if (p_settings.has("ice_servers")
-        && p_settings["ice_servers"].get_type() == Variant::ARRAY
-        && servers_differ_from_default(p_settings["ice_servers"])) {
-        return false;
-    }
-    const String url = TurnCredentials::resolve_url(
-        TurnCredentials::configured_url(),
-        gd::document_origin()
-    );
+    const String url = TurnCredentials::configured_url();
     if (url.is_empty()) {
         return false;
     }
     credentials = memnew(TurnCredentials);
     const int64_t now = int64_t(Time::get_singleton()->get_ticks_msec());
-    if (credentials->begin(url, TurnCredentials::configured_headers(), now)
-        != OK) {
+    if (credentials->begin(url, now) != OK) {
+        report(
+            StringName("discovery"),
+            String("No relay: ") + credentials->failure(),
+            0.2
+        );
         memdelete(credentials);
         credentials = nullptr;
         return false;
@@ -335,6 +318,14 @@ void WebRTCTransport::drive_credential_fetch(int64_t p_now_msec) {
     if (reached != TurnCredentials::PHASE_READY
         && reached != TurnCredentials::PHASE_FAILED) {
         return;
+    }
+    fetched_servers = credentials->servers();
+    if (reached == TurnCredentials::PHASE_FAILED) {
+        report(
+            StringName("discovery"),
+            String("No relay: ") + credentials->failure(),
+            0.2
+        );
     }
     memdelete(credentials);
     credentials = nullptr;

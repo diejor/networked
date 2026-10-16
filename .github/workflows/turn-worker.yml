@@ -1,0 +1,90 @@
+name: Deploy TURN Worker
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - addons/networked/templates/turn_worker/**
+      - .github/workflows/turn-worker.yml
+      - ci/tests/turn_worker.test.mjs
+  workflow_dispatch:
+    inputs:
+      issuing:
+        type: choice
+        options: ["on", "off"]
+        default: "on"
+
+concurrency:
+  group: turn-worker
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      TURN_ORIGIN: https://netw-examples.pages.dev
+      TURN_PREVIEW: https://*.netw-examples.pages.dev
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Test the credential endpoint
+        run: node --test ci/tests/turn_worker.test.mjs
+      - name: Deploy the credential endpoint
+        id: deploy
+        uses: cloudflare/wrangler-action@v3
+        with:
+          wranglerVersion: "4"
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: addons/networked/templates/turn_worker
+          command: >-
+            deploy
+            --var
+            ALLOWED_ORIGINS:${{ env.TURN_ORIGIN }},${{ env.TURN_PREVIEW }}
+            --var ISSUING:${{ inputs.issuing || 'on' }}
+      - name: Verify live issuance
+        env:
+          ISSUING: ${{ inputs.issuing || 'on' }}
+        run: |
+          set -eu
+          response="$(mktemp)"
+          trap 'rm -f "$response"' EXIT
+          status="$(curl --silent --show-error --max-time 15 \
+            --output "$response" --write-out '%{http_code}' \
+            --header 'Origin: https://netw-examples.pages.dev' \
+            https://networked-turn.diejorarr.workers.dev/)"
+          if [ "$ISSUING" != on ]; then
+            test "$status" = 503
+            exit 0
+          fi
+          test "$status" = 200
+          python3 - "$response" <<'PYTHON'
+          import json
+          import sys
+          with open(sys.argv[1]) as stream:
+              servers = json.load(stream)["iceServers"]
+          assert servers
+          assert any(
+              url.startswith("turn:")
+              for server in servers
+              for url in (
+                  [server["urls"]] if isinstance(server["urls"], str)
+                  else server["urls"]
+              )
+          )
+          PYTHON
+      - name: Record the deployed revision
+        if: always() && steps.deploy.outcome == 'success'
+        env:
+          DEPLOY_OUTPUT: ${{ steps.deploy.outputs.command-output }}
+        run: |
+          printf 'Revision `%s`\n' "$GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
+          printf '%s\n' "$DEPLOY_OUTPUT" |
+            sed -n 's/.*Current Version ID: /Worker version `/p' |
+            sed 's/$/`/' >> "$GITHUB_STEP_SUMMARY"

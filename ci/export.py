@@ -274,33 +274,6 @@ def landing_page(catalog: dict, revision: str = "") -> str:
     )
 
 
-TURN_HEADERS_KEY = "webrtc/turn_credentials_headers"
-TURN_URL_KEY = "webrtc/turn_credentials_url"
-
-
-def inject_turn_credentials(token: str, path: Path | None = None) -> str:
-    """Write the auth header a deployed build presents for TURN credentials.
-
-    The setting has no reader today: 5e8b58bc retired the GDScript WebRTC
-    stack and `_ensure_ice_servers` did not cross with it, so a build falls
-    back to the ice servers compiled into the transport. Injecting anyway
-    keeps restoring that fetch from needing a CI change.
-    """
-    path = path or ROOT / "project.godot"
-    text = path.read_text(encoding="utf-8")
-    line = '%s=PackedStringArray("X-Turn-Auth-Token: %s")' % (TURN_HEADERS_KEY, token)
-    if re.search(r"^%s=" % re.escape(TURN_HEADERS_KEY), text, flags=re.MULTILINE):
-        text = re.sub(r"^%s=.*$" % re.escape(TURN_HEADERS_KEY), lambda _: line, text, flags=re.MULTILINE)
-    else:
-        anchor = re.search(r"^%s=.*$" % re.escape(TURN_URL_KEY), text, flags=re.MULTILINE)
-        if anchor is None:
-            raise fail("project.godot declares no %s to anchor the header to" % TURN_URL_KEY)
-        text = text[: anchor.end()] + "\n" + line + text[anchor.end() :]
-    path.write_text(text, encoding="utf-8")
-    print("TURN wrote %s" % TURN_HEADERS_KEY)
-    return text
-
-
 def html_escape(text: str) -> str:
     return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
 
@@ -532,9 +505,6 @@ def build_parser() -> argparse.ArgumentParser:
     site.add_argument("--dir", type=Path, default=ROOT / "build" / "site")
     site.add_argument("--revision", default="")
 
-    turn = sub.add_parser("turn")
-    turn.add_argument("--token", required=True)
-    turn.add_argument("--project", type=Path, default=ROOT / "project.godot")
     return parser
 
 
@@ -567,9 +537,6 @@ def run_cli(argv: list[str] | None = None) -> int:
     if args.action == "cloudflare":
         print(json.dumps(stage_cloudflare(args.dir, limit=args.limit), indent=2))
         return 0
-    if args.action == "turn":
-        inject_turn_credentials(args.token, args.project)
-        return 0
     if args.action == "examples":
         catalog = load_examples(args.catalog)
         if args.format == "json":
@@ -588,7 +555,7 @@ def run_cli(argv: list[str] | None = None) -> int:
             validate_web(args.dir / entry["slug"])
         args.dir.mkdir(parents=True, exist_ok=True)
         shutil.copytree(
-            CI_DIR / "pages" / "assets", args.dir / "assets",
+            CI_DIR / "site" / "assets", args.dir / "assets",
             dirs_exist_ok=True,
         )
         (args.dir / "index.html").write_text(landing_page(catalog, args.revision), encoding="utf-8")

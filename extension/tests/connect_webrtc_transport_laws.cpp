@@ -18,6 +18,13 @@ struct WebRTCTransportProbe {
         p_transport.apply_settings(p_settings);
     }
 
+    static void fetched(
+        WebRTCTransport &p_transport,
+        const godot::Array &p_servers
+    ) {
+        p_transport.fetched_servers = p_servers;
+    }
+
     static godot::String space(const WebRTCTransport &p_transport) {
         return p_transport.signaling_namespace;
     }
@@ -62,13 +69,6 @@ TEST_CASE(
     ));
     CHECK(WebRTCTransport::is_url_supported_native("turn:relay.example:3478"));
     CHECK(WebRTCTransport::is_url_supported_native("stun:stun.example:19302"));
-}
-
-TEST_CASE("[Networked][Connect][Hosted] explicit empty ICE stays empty") {
-    CHECK(WebRTCTransport::servers_differ_from_default(Array()));
-    CHECK(!WebRTCTransport::servers_differ_from_default(
-        WebRTCTransport::default_ice_servers()
-    ));
 }
 
 TEST_CASE(
@@ -257,51 +257,35 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Connect][Hosted] a relay the host typed outranks a fetched "
-    "one, a fetched relay outranks the compiled-in default, and the default "
-    "stands when neither exists, so the credential fetch can never overwrite "
-    "the one server a human chose"
+    "[Networked][Connect][Hosted] fetched ICE replaces the configured list "
+    "only on its transport and closing it restores the fallback"
 ) {
-    netw::connect::TurnCredentials::forget();
-
     Array authored;
     authored.push_back(server_of(urls_of("turn:typed.example:3478")));
     Array fetched;
     fetched.push_back(server_of(urls_of("turn:fetched.example:3478")));
-
-    WebRTCTransport bare;
-    CHECK(
-        JSON::stringify(bare.effective_ice_servers())
-        == JSON::stringify(WebRTCTransport::default_ice_servers())
-    );
-
-    netw::connect::TurnCredentials::adopt(fetched);
-
-    WebRTCTransport served;
-    CHECK(
-        JSON::stringify(served.effective_ice_servers())
-        == JSON::stringify(fetched)
-    );
-
     Dictionary settings;
     settings["ice_servers"] = authored;
     WebRTCTransport chosen;
     WebRTCTransportProbe::apply(chosen, settings);
-    CHECK(
-        JSON::stringify(chosen.effective_ice_servers())
-        == JSON::stringify(authored)
-    );
-
-    Dictionary echoed;
-    echoed["ice_servers"] = WebRTCTransport::default_ice_servers();
-    WebRTCTransport untouched;
-    WebRTCTransportProbe::apply(untouched, echoed);
-    CHECK(
-        JSON::stringify(untouched.effective_ice_servers())
-        == JSON::stringify(fetched)
-    );
-
-    netw::connect::TurnCredentials::forget();
+    const bool fallback = JSON::stringify(chosen.effective_ice_servers())
+        == JSON::stringify(authored);
+    CHECK(fallback);
+    WebRTCTransportProbe::fetched(chosen, fetched);
+    const bool fetched_wins = JSON::stringify(chosen.effective_ice_servers())
+        == JSON::stringify(fetched);
+    CHECK(fetched_wins);
+    WebRTCTransport other;
+    const bool independent = JSON::stringify(other.effective_ice_servers())
+        == JSON::stringify(WebRTCTransport::default_ice_servers());
+    CHECK(independent);
+    chosen.close();
+    const bool restored = JSON::stringify(chosen.effective_ice_servers())
+        == JSON::stringify(authored);
+    CHECK(restored);
+    settings["ice_servers"] = Array();
+    WebRTCTransportProbe::apply(chosen, settings);
+    CHECK(chosen.effective_ice_servers().is_empty());
 }
 
 } // namespace TestNetwConnectWebRTCTransport

@@ -34,13 +34,6 @@ inputs:
     description: Token for the cross-run artifact fetch.
     required: false
     default: ${{ github.token }}
-  turn-auth-token:
-    description: >
-      Credential for networked/webrtc/turn_credentials_headers. Empty leaves
-      project.godot alone. The setting has no reader today, because 5e8b58bc
-      dropped the fetch when the WebRTC stack crossed to the extension.
-    required: false
-    default: ""
   smoke:
     description: Boot the export in a browser after exporting.
     required: false
@@ -114,13 +107,6 @@ runs:
         fi
         ls -l addons/networked/bin
 
-    - name: Inject TURN credentials into project.godot
-      if: inputs.turn-auth-token != ''
-      shell: bash
-      env:
-        T_TOKEN: ${{ inputs.turn-auth-token }}
-      run: python3 ci/export.py turn --token "$T_TOKEN"
-
     - name: Export web
       shell: bash
       env:
@@ -130,14 +116,35 @@ runs:
         EXPORT_RECORD: ${{ inputs.record }}
       run: |
         set -eu
-        args="--preset $EXPORT_PRESET --scene $EXPORT_SCENE --out $EXPORT_OUT"
+        args="--preset $EXPORT_PRESET --scene $EXPORT_SCENE"
+        args="$args --out $EXPORT_OUT"
         if [ -n "$EXPORT_RECORD" ]; then
           args="$args --record $EXPORT_RECORD"
         fi
         python3 ci/export.py --godot godot web $args
 
+    - name: Install Chrome
+      if: inputs.smoke == 'true'
+      shell: bash
+      run: |
+        set -eu
+        package="$RUNNER_TEMP/google-chrome.deb"
+        python3 - "$package" <<'PYTHON'
+        import sys
+        import urllib.request
+        urllib.request.urlretrieve(
+            "https://dl.google.com/linux/direct/"
+            "google-chrome-stable_current_amd64.deb",
+            sys.argv[1],
+        )
+        PYTHON
+        sudo=""
+        [ "$(id -u)" -eq 0 ] || sudo="sudo"
+        $sudo apt-get update
+        $sudo apt-get install -y --no-install-recommends "$package"
+        google-chrome --version
+
     - name: Boot the export in a browser
       if: inputs.smoke == 'true'
-      continue-on-error: true
       shell: bash
       run: python3 ci/export.py smoke --dir ${{ inputs.out }}

@@ -11,9 +11,10 @@ static var _active_hook: NetwTestSessionHook
 static var game_harness_used_in_test: bool = false
 
 const _GdUnitErrorScrubber := preload(
-		"res://addons/networked_test/gdunit4/gdunit_error_scrubber.gd"
+	"res://addons/networked_test/gdunit4/gdunit_error_scrubber.gd"
 )
 const _NATIVE_TESTS := &"NetwNativeTests"
+const _TURN_URL_SETTING := "networked/webrtc/turn_credentials_url"
 
 var _baseline_child_count: int = 0
 var _baseline_resource_count: int = 0
@@ -23,6 +24,7 @@ var _pre_test_resource_count: int = 0
 var _top_resource_growths: Array = []
 const _TOP_RESOURCE_GROWTH_LIMIT := 5
 var _session: GdUnitTestSession
+var _saved_turn_url: Variant
 
 
 func _init() -> void:
@@ -37,6 +39,7 @@ func startup(session: GdUnitTestSession) -> GdUnitResult:
 	)
 	_active_hook = self
 	_session = session
+	_saved_turn_url = ProjectSettings.get_setting(_TURN_URL_SETTING, null)
 	# The harness half runs under any framework, so the one piece that reaches
 	# into this framework's error monitor is handed to it from here.
 	WebRTCTestSupport.erase_benign_error = _GdUnitErrorScrubber.get_eraser()
@@ -56,12 +59,14 @@ func startup(session: GdUnitTestSession) -> GdUnitResult:
 			+ "state leaks between tests. Rebuild it with "
 			+ "scons -C extension netw_tests=yes.",
 		)
+	ProjectSettings.set_setting(_TURN_URL_SETTING, "")
 	return GdUnitResult.success()
 
 
 func shutdown(_session: GdUnitTestSession) -> GdUnitResult:
 	_report_resource_delta()
 	_reset_global_test_state()
+	ProjectSettings.set_setting(_TURN_URL_SETTING, _saved_turn_url)
 	if _active_hook == self:
 		_active_hook = null
 	_session = null
@@ -137,8 +142,8 @@ func _assert_clean_state(event: GdUnitEvent) -> void:
 
 		push_error(
 			(
-				"Test %s left %d nodes under the root (%s). Free them before "
-				+ "the test ends."
+					"Test %s left %d nodes under the root (%s). Free them before "
+					+ "the test ends."
 			) % [
 				event.test_name(),
 				current_count - _baseline_child_count,
@@ -197,8 +202,8 @@ func _report_resource_delta() -> void:
 		)
 	push_warning(
 		(
-			"Resources grew during the run, from a baseline of %d. The %d "
-			+ "largest growths follow.\n%s"
+				"Resources grew during the run, from a baseline of %d. The %d "
+				+ "largest growths follow.\n%s"
 		) % [
 			_baseline_resource_count,
 			_top_resource_growths.size(),

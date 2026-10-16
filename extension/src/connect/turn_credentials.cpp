@@ -12,64 +12,17 @@ namespace netw::connect {
 
 const char *TurnCredentials::URL_SETTING
     = "networked/webrtc/turn_credentials_url";
-const char *TurnCredentials::HEADERS_SETTING
-    = "networked/webrtc/turn_credentials_headers";
-
-namespace {
-
-struct Cache {
-    Array servers;
-    bool attempted = false;
-};
-
-Cache &cache_slot() {
-    static Cache held;
-    return held;
-}
-
-} // namespace
 
 String TurnCredentials::configured_url() {
     ProjectSettings *settings = ProjectSettings::get_singleton();
     if (settings == nullptr) {
         return String();
     }
-    return String(settings->get_setting(URL_SETTING, String())).strip_edges();
-}
-
-PackedStringArray TurnCredentials::configured_headers() {
-    ProjectSettings *settings = ProjectSettings::get_singleton();
-    if (settings == nullptr) {
-        return PackedStringArray();
+    if (!settings->has_setting(URL_SETTING)) {
+        settings->set_setting(URL_SETTING, String());
     }
-    const Variant held
-        = settings->get_setting(HEADERS_SETTING, PackedStringArray());
-    if (held.get_type() == Variant::PACKED_STRING_ARRAY) {
-        return held;
-    }
-    PackedStringArray lines;
-    if (held.get_type() == Variant::ARRAY) {
-        const Array listed = held;
-        for (int64_t at = 0; at < listed.size(); at++) {
-            lines.push_back(String(listed[at]));
-        }
-    }
-    return lines;
-}
-
-String TurnCredentials::resolve_url(
-    const String &p_configured,
-    const String &p_origin
-) {
-    const String configured = p_configured.strip_edges();
-    if (configured.is_empty() || !configured.begins_with("/")) {
-        return configured;
-    }
-    const String origin = p_origin.strip_edges();
-    if (origin.is_empty()) {
-        return String();
-    }
-    return origin.trim_suffix("/") + configured;
+    return String(settings->get_setting_with_override(URL_SETTING))
+        .strip_edges();
 }
 
 void TurnCredentials::split_url(
@@ -96,81 +49,91 @@ void TurnCredentials::split_url(
     }
 }
 
-Array TurnCredentials::servers_from_body(
+TurnCredentials::Answer TurnCredentials::read_answer(
     int p_code,
     const PackedByteArray &p_body
 ) {
-    Array servers;
-    if (p_code != 200) {
-        return servers;
+    Answer answer;
+    Ref<JSON> parser;
+    parser.instantiate();
+    Variant parsed;
+    if (parser->parse(gd::utf8_string(p_body)) == OK) {
+        parsed = parser->get_data();
     }
-    const Variant parsed = JSON::parse_string(gd::utf8_string(p_body));
-    if (parsed.get_type() != Variant::ARRAY) {
-        return servers;
+    Dictionary content;
+    if (parsed.get_type() == Variant::DICTIONARY) {
+        content = parsed;
     }
-    const Array listed = parsed;
-    for (int64_t at = 0; at < listed.size(); at++) {
-        if (listed[at].get_type() != Variant::DICTIONARY) {
-            continue;
+    if (p_code == 200) {
+        const Variant listed = content.get("iceServers", Variant());
+        if (listed.get_type() == Variant::ARRAY) {
+            const Array servers = listed;
+            for (int64_t at = 0; at < servers.size(); at++) {
+                if (servers[at].get_type() != Variant::DICTIONARY) {
+                    continue;
+                }
+                const Dictionary server = servers[at];
+                const Variant urls = server.get("urls", Variant());
+                if ((urls.get_type() == Variant::ARRAY
+                     && !Array(urls).is_empty())
+                    || (urls.get_type() == Variant::STRING
+                        && !String(urls).is_empty())) {
+                    answer.servers.push_back(server);
+                }
+            }
         }
-        const Dictionary server = listed[at];
-        if (!server.has("urls")) {
-            continue;
+        if (!answer.servers.is_empty()) {
+            answer.level = log::Level::INFO;
+            return answer;
         }
-        servers.push_back(server);
+        answer.message
+            = "The TURN credential server answered without iceServers. "
+              "It must answer {\"iceServers\": [...]}.";
+        return answer;
     }
-    return servers;
-}
-
-const Array &TurnCredentials::cached() {
-    return cache_slot().servers;
-}
-
-bool TurnCredentials::attempted() {
-    return cache_slot().attempted;
-}
-
-void TurnCredentials::adopt(const Array &p_servers) {
-    cache_slot().servers = p_servers;
-    cache_slot().attempted = true;
-}
-
-void TurnCredentials::forget() {
-    cache_slot().servers = Array();
-    cache_slot().attempted = false;
+    const Variant error = content.get("error", String());
+    const String detail
+        = error.get_type() == Variant::STRING ? String(error) : String();
+    if (p_code == 404) {
+        answer.message = "The TURN credential URL answered 404. Check "
+                         "networked/webrtc/turn_credentials_url.";
+    } else if (p_code == 403) {
+        answer.message = "The TURN credential server refused this game.";
+    } else {
+        answer.level = log::Level::WARN;
+        answer.message = String("The TURN credential server answered ")
+            + itos(p_code) + ".";
+    }
+    if (p_code != 404 && !detail.is_empty()) {
+        answer.message += String(" ") + detail;
+    }
+    return answer;
 }
 
 TurnCredentials::~TurnCredentials() {
     gd::http_close(client);
 }
 
-Error TurnCredentials::begin(
-    const String &p_url,
-    const PackedStringArray &p_headers,
-    int64_t p_now_msec
-) {
-    cache_slot().attempted = true;
-    if (p_url.strip_edges().is_empty()) {
-        refuse("no credential url is configured");
+Error TurnCredentials::begin(const String &p_url, int64_t p_now_msec) {
+    const String url = p_url.strip_edges();
+    if ((!url.begins_with("https://") && !url.begins_with("http://"))
+        || url.get_slice("://", 1).get_slice("/", 0).is_empty()) {
+        refuse(
+            log::Level::ERROR,
+            "networked/webrtc/turn_credentials_url is not an absolute URL. "
+            "Set it to an https address."
+        );
         return ERR_INVALID_PARAMETER;
     }
     client = gd::new_http_client();
-    if (client.is_null()) {
-        refuse("the engine minted no HTTPClient");
-        return ERR_CANT_CREATE;
-    }
-    String host;
-    split_url(p_url, host, path);
-    headers = p_headers;
+    split_url(url, host, path);
     body = PackedByteArray();
+    fetched_servers = Array();
+    reason = String();
     started_msec = p_now_msec;
     int port = -1;
     String connect_host = host;
-    int scheme_end = 0;
-    const int marker = int(host.find("://"));
-    if (marker >= 0) {
-        scheme_end = marker + 3;
-    }
+    const int scheme_end = int(host.find("://")) + 3;
     const int bracket = int(host.rfind("]"));
     const int colon = int(host.rfind(":"));
     if (colon > (bracket >= 0 ? bracket : scheme_end)) {
@@ -179,7 +142,7 @@ Error TurnCredentials::begin(
     }
     const Error err = gd::http_connect(client, connect_host, port);
     if (err != OK) {
-        refuse(String("connect refused: ") + itos(int(err)));
+        unreachable();
         return err;
     }
     stage = PHASE_CONNECTING;
@@ -191,23 +154,31 @@ void TurnCredentials::poll(int64_t p_now_msec) {
         return;
     }
     if (double(p_now_msec - started_msec) > budget_msec) {
-        refuse("the credential fetch outran its budget");
+        refuse(
+            log::Level::WARN,
+            "The TURN credential server did not answer within 5 seconds. "
+            "Check that it is deployed."
+        );
         return;
     }
     gd::http_poll(client);
     const int status = gd::http_status(client);
     if (gd::http_status_is_fault(status)) {
-        refuse(String("the link reported status ") + itos(status));
+        unreachable();
         return;
     }
     if (stage == PHASE_CONNECTING) {
         if (status != gd::HTTP_CONNECTED) {
             return;
         }
-        const Error err
-            = gd::http_request(client, gd::HTTP_METHOD_GET, path, headers);
+        const Error err = gd::http_request(
+            client,
+            gd::HTTP_METHOD_GET,
+            path,
+            PackedStringArray()
+        );
         if (err != OK) {
-            refuse(String("request refused: ") + itos(int(err)));
+            unreachable();
             return;
         }
         stage = PHASE_REQUESTING;
@@ -218,23 +189,19 @@ void TurnCredentials::poll(int64_t p_now_msec) {
             return;
         }
         if (!gd::http_has_response(client)) {
-            refuse("the host answered no response");
+            unreachable();
             return;
         }
         stage = PHASE_READING;
     }
     read_body();
     if (gd::http_status(client) != gd::HTTP_BODY) {
-        const int code = gd::http_response_code(client);
-        const Array servers = servers_from_body(code, body);
-        if (servers.is_empty()) {
-            refuse(
-                String("the host answered ") + itos(code)
-                + " with no usable ice server"
-            );
+        const Answer answer = read_answer(gd::http_response_code(client), body);
+        if (answer.servers.is_empty()) {
+            refuse(answer.level, answer.message);
             return;
         }
-        settle(servers);
+        settle(answer.servers);
     }
 }
 
@@ -249,27 +216,32 @@ void TurnCredentials::read_body() {
 }
 
 void TurnCredentials::settle(const Array &p_servers) {
-    adopt(p_servers);
+    fetched_servers = p_servers;
     stage = PHASE_READY;
     gd::http_close(client);
     client = Ref<RefCounted>();
-    NETW_INFO(
-        sys::TRANSPORT,
-        "The TURN credential server returned %d ICE servers.",
-        int(p_servers.size())
+}
+
+void TurnCredentials::unreachable() {
+    refuse(
+        log::Level::WARN,
+        String("The TURN credential server at ") + host
+            + " is unreachable. Check the URL and the network."
     );
 }
 
-void TurnCredentials::refuse(const String &p_reason) {
+void TurnCredentials::refuse(log::Level p_level, const String &p_reason) {
     reason = p_reason;
     stage = PHASE_FAILED;
     gd::http_close(client);
     client = Ref<RefCounted>();
-    NETW_WARN(
+    log::write_at(
+        p_level,
         sys::TRANSPORT,
-        "Fetching TURN credentials failed (%s), so only the configured ICE "
-        "servers are used.",
-        p_reason
+        p_reason,
+        __FUNCTION__,
+        __FILE__,
+        __LINE__
     );
 }
 

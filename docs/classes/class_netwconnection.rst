@@ -67,6 +67,23 @@ Each row of :ref:`endpoints<class_NetwConnection_property_endpoints>` is a :ref:
 
     connection.set_defaults(WebRTCMultiplayerPeer, {ice_servers = my_servers})
 
+\ **Relay**\ 
+
+A WebRTC player behind a strict NAT reaches the others only through a TURN relay. When ``networked/webrtc/turn_credentials_url`` is set, every WebRTC :ref:`host()<class_NetwConnection_method_host>` and :ref:`join()<class_NetwConnection_method_join>` first fetches ICE servers from it and connects with them.
+
+.. code:: text
+
+    project.godot   webrtc/turn_credentials_url="https://networked-turn.example.workers.dev"
+    server          cp -r addons/networked/templates/turn_worker my-turn
+                    cd my-turn
+                    npx wrangler secret put TURN_KEY_ID
+                    npx wrangler secret put TURN_KEY_API_TOKEN
+                    npx wrangler deploy
+
+\ When the fetch fails, the session connects with ``ice_servers`` and a warning or error says why. Credentials last ``TTL_SECONDS``, and a relayed connection older than that drops.
+
+A game with its own login leaves the URL empty, fetches servers itself and passes them with :ref:`set_defaults()<class_NetwConnection_method_set_defaults>`.
+
 .. rst-class:: classref-reftable-group
 
 Properties

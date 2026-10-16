@@ -15,7 +15,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from common import CIError  # noqa: E402
 from export import (  # noqa: E402
-    inject_turn_credentials,
     landing_page,
     load_examples,
     site_revision,
@@ -136,42 +135,6 @@ class CloudflareStaging(unittest.TestCase):
 
         self.assertIn("Content-Type: application/octet-stream", headers)
         self.assertNotIn("application/wasm", headers)
-
-
-class TurnCredentials(unittest.TestCase):
-    def setUp(self):
-        self.dir = Path(tempfile.mkdtemp())
-        self.addCleanup(shutil.rmtree, self.dir, ignore_errors=True)
-
-    def project_of(self, body: str) -> Path:
-        path = self.dir / "project.godot"
-        path.write_text(body, encoding="utf-8")
-        return path
-
-    def test_the_header_lands_under_the_url_it_authenticates(self):
-        path = self.project_of('[networked]\n\nwebrtc/turn_credentials_url="https://x/"\ninstall_as_default=true\n')
-        inject_turn_credentials("s3cret", path)
-        lines = path.read_text(encoding="utf-8").splitlines()
-
-        self.assertEqual(lines[3], 'webrtc/turn_credentials_headers=PackedStringArray("X-Turn-Auth-Token: s3cret")')
-        self.assertEqual(lines[4], "install_as_default=true")
-
-    def test_an_existing_header_is_replaced_rather_than_doubled(self):
-        path = self.project_of(
-            '[networked]\n\nwebrtc/turn_credentials_url="https://x/"\n'
-            'webrtc/turn_credentials_headers=PackedStringArray("X-Turn-Auth-Token: old")\n'
-        )
-        inject_turn_credentials("new", path)
-        text = path.read_text(encoding="utf-8")
-
-        self.assertEqual(text.count("turn_credentials_headers"), 1)
-        self.assertIn("X-Turn-Auth-Token: new", text)
-        self.assertNotIn("old", text)
-
-    def test_a_project_with_no_url_to_anchor_to_is_refused(self):
-        path = self.project_of("[networked]\n\ninstall_as_default=true\n")
-        with self.assertRaises(CIError):
-            inject_turn_credentials("s3cret", path)
 
 
 if __name__ == "__main__":

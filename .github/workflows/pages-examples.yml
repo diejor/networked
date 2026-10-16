@@ -116,15 +116,6 @@ jobs:
           echo "/quick-start /multiple-levels/ 301" >> build/site/_redirects
           cat build/site/_redirects
 
-      - name: Mount The Credential Function
-        run: |
-          set -eu
-          mkdir -p functions build/site/functions
-          cp ci/pages/functions/*.js functions/
-          cp ci/pages/functions/*.js build/site/functions/
-          ls -l functions
-          ls -l build/site/functions
-
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/wrangler-action@v3
         with:
