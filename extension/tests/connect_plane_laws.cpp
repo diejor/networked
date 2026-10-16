@@ -1,3 +1,4 @@
+#include "netw/link/shaped_peer.hpp"
 #include "support/netw_recorder.h"
 #include "support/netw_test.h"
 
@@ -32,8 +33,6 @@ using netw::NetwMultiplayer;
 using netw::NetwServerInfo;
 using netw::NetwTransport;
 using netw_test::CallLog;
-
-constexpr const char *SHAPING_VARIABLE = "NETW_SHAPING";
 
 Ref<NetwMultiplayer> lone_session() {
     Ref<NetwMultiplayer> core;
@@ -143,39 +142,10 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Connect] link conditions leave the peer alone until "
-    "a game asks for impairment, so a shipped build carries no wrapper it "
-    "did not author"
-) {
-    Ref<NetwLinkConditions> conditions;
-    conditions.instantiate();
-
-    Ref<netw::LocalMultiplayerPeer> peer;
-    peer.instantiate();
-
-    CHECK(conditions->wrap_peer(peer) == Ref<MultiplayerPeer>(peer));
-    CHECK(conditions->wrap_peer(Ref<MultiplayerPeer>()).is_null());
-
-    SUBCASE("and the authored values are milliseconds and a percent") {
-        conditions->set_one_way_delay_min(20.0);
-        conditions->set_one_way_delay_max(80.0);
-        conditions->set_lag_packet_loss_percent(2.5);
-
-        NETW_CHECK_CLOSE(conditions->get_one_way_delay_min(), 20.0, 0.001);
-        NETW_CHECK_CLOSE(conditions->get_one_way_delay_max(), 80.0, 0.001);
-        NETW_CHECK_CLOSE(conditions->get_lag_packet_loss_percent(), 2.5, 0.001);
-    }
-}
-
-TEST_CASE(
     "[Networked][Connect] a session polls the peer it shaped and "
     "answers the peer it was handed, so an authored impairment reaches the "
     "wire while the game keeps the reference it assigned"
 ) {
-    REQUIRE_MESSAGE(
-        ClassDB::class_exists(StringName("LaggyMultiplayerPeer")),
-        "shaping is only observable where the impairment peer is installed"
-    );
 
     const Ref<netw::LocalLoopbackSession> link
         = netw::LocalLoopbackSession::get_shared_session();
@@ -185,10 +155,10 @@ TEST_CASE(
 
     Ref<NetwLinkConditions> conditions;
     conditions.instantiate();
-    conditions->set_simulate_lag(true);
-    conditions->set_one_way_delay_min(0.0);
-    conditions->set_one_way_delay_max(0.0);
-    conditions->set_lag_packet_loss_percent(100.0);
+
+    conditions->set_latency_ms(0.0);
+    conditions->set_jitter_ms(0.0);
+    conditions->set_loss_chance(1.0);
 
     const Ref<NetwMultiplayer> core = lone_session();
     Ref<netw::NetwSessionConfig> shaping;
@@ -210,12 +180,19 @@ TEST_CASE(
     PackedByteArray payload;
     payload.push_back(7);
     polled->set_target_peer(1);
+    polled->set_transfer_mode(MultiplayerPeer::TRANSFER_MODE_UNRELIABLE);
     NETW_CHECK_EQ(int(polled->put_packet(payload)), int(OK));
     for (int round = 0; round < 8; ++round) {
         polled->poll();
         link->poll();
     }
-    NETW_CHECK_EQ(server->get_available_packet_count(), 0);
+    int impaired_arrivals = 0;
+    while (server->get_available_packet_count() > 0) {
+        if (server->get_packet() == payload) {
+            ++impaired_arrivals;
+        }
+    }
+    NETW_CHECK_EQ(impaired_arrivals, 0);
 
     SUBCASE("and the unshaped twin on the same link delivers that packet") {
         const Ref<netw::LocalMultiplayerPeer> plain
@@ -233,7 +210,13 @@ TEST_CASE(
             unshaped->poll();
             link->poll();
         }
-        CHECK(server->get_available_packet_count() > 0);
+        int plain_arrivals = 0;
+        while (server->get_available_packet_count() > 0) {
+            if (server->get_packet() == payload) {
+                ++plain_arrivals;
+            }
+        }
+        NETW_CHECK_EQ(plain_arrivals, 1);
 
         bare->embed_dispose();
     }
@@ -702,97 +685,6 @@ TEST_CASE(
     }
 
     core->embed_dispose();
-}
-
-struct ShapingEnvironment {
-    String held;
-    bool was_held = false;
-
-    explicit ShapingEnvironment(const String &p_value) {
-        OS *os = OS::get_singleton();
-        was_held = os->has_environment(SHAPING_VARIABLE);
-        held = os->get_environment(SHAPING_VARIABLE);
-        os->set_environment(SHAPING_VARIABLE, p_value);
-    }
-
-    ~ShapingEnvironment() {
-        OS *os = OS::get_singleton();
-        if (was_held) {
-            os->set_environment(SHAPING_VARIABLE, held);
-        } else {
-            os->unset_environment(SHAPING_VARIABLE);
-        }
-    }
-};
-
-TEST_CASE(
-    "[Networked][Connect] a build states whether it may impair its own link, "
-    "and only a word it recognises overrides that, so a typo cannot slow a "
-    "shipped player down"
-) {
-    SUBCASE("an off word refuses the impairment a debug build would allow") {
-        const ShapingEnvironment shaping("off");
-        CHECK_FALSE(netw::link_shaping_allowed());
-    }
-
-    SUBCASE("an on word allows it") {
-        const ShapingEnvironment shaping("on");
-        CHECK(netw::link_shaping_allowed());
-    }
-
-    SUBCASE("and neither word is no override at all") {
-        const ShapingEnvironment shaping("offf");
-        NETW_CHECK_EQ(
-            netw::link_shaping_allowed(),
-            OS::get_singleton()->has_feature("debug")
-        );
-    }
-}
-
-TEST_CASE(
-    "[Networked][Connect] a build that may not impair its link installs the "
-    "peer it was handed, so an authored impairment that ships costs the "
-    "player who runs it nothing"
-) {
-    REQUIRE_MESSAGE(
-        ClassDB::class_exists(StringName("LaggyMultiplayerPeer")),
-        "the refusal is only worth asserting where shaping is available"
-    );
-    const ShapingEnvironment shaping("off");
-
-    const Ref<netw::LocalLoopbackSession> link
-        = netw::LocalLoopbackSession::get_shared_session();
-    link->reset();
-    const Ref<netw::LocalMultiplayerPeer> server = link->get_server_peer();
-    const Ref<netw::LocalMultiplayerPeer> client = link->create_client_peer();
-
-    Ref<NetwLinkConditions> conditions;
-    conditions.instantiate();
-    conditions->set_simulate_lag(true);
-    conditions->set_lag_packet_loss_percent(100.0);
-
-    CHECK(conditions->wrap_peer(client) == Ref<MultiplayerPeer>(client));
-
-    const Ref<NetwMultiplayer> core = lone_session();
-    core->session_get_config()->set_link_conditions(conditions);
-    core->NETW_API_VIRTUAL(set_multiplayer_peer)(client);
-
-    const Ref<MultiplayerPeer> polled
-        = core->session_get_inner()->get_multiplayer_peer();
-    CHECK(polled == Ref<MultiplayerPeer>(client));
-
-    PackedByteArray payload;
-    payload.push_back(11);
-    polled->set_target_peer(1);
-    NETW_CHECK_EQ(int(polled->put_packet(payload)), int(OK));
-    for (int round = 0; round < 8; ++round) {
-        polled->poll();
-        link->poll();
-    }
-    CHECK(server->get_available_packet_count() > 0);
-
-    core->embed_dispose();
-    link->reset();
 }
 
 TEST_CASE(

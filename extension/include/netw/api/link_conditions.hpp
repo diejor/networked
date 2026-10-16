@@ -1,8 +1,8 @@
 #pragma once
 
-#include "godot/multiplayer.hpp"
 #include "godot/resource.hpp"
 #include "godot/variant.hpp"
+#include <cstdint>
 
 namespace netw {
 
@@ -11,29 +11,40 @@ bool link_shaping_allowed();
 class NetwLinkConditions : public godot::Resource {
     GDCLASS(NetwLinkConditions, godot::Resource)
 
-    bool simulate_lag = false;
-    double one_way_delay_min = 0.0;
-    double one_way_delay_max = 100.0;
-    double lag_packet_loss_percent = 0.0;
+    double latency_ms = 0.0;
+    double jitter_ms = 0.0;
+    double loss_chance = 0.0;
+    double reorder_chance = 0.0;
+    double duplicate_chance = 0.0;
+    double stall_chance = 0.0;
+    double stall_ms = 0.0;
+    int64_t seed = 0;
 
 protected:
     static void _bind_methods();
 
 public:
-    godot::Ref<godot::MultiplayerPeer> wrap_peer(
-        const godot::Ref<godot::MultiplayerPeer> &p_base
-    ) const;
+    static godot::Ref<NetwLinkConditions> wifi();
+    static godot::Ref<NetwLinkConditions> mobile_4g();
+    static godot::Ref<NetwLinkConditions> poor_3g();
+    static godot::Ref<NetwLinkConditions> satellite();
 
-    void set_simulate_lag(bool p_simulate);
-    bool get_simulate_lag() const;
-    void set_one_way_delay_min(double p_ms);
-    double get_one_way_delay_min() const;
-    void set_one_way_delay_max(double p_ms);
-    double get_one_way_delay_max() const;
-    void set_lag_packet_loss_percent(double p_percent);
-    double get_lag_packet_loss_percent() const;
-
-    void copy_values_from(const NetwLinkConditions &p_source);
+    void set_latency_ms(double p_value);
+    double get_latency_ms() const;
+    void set_jitter_ms(double p_value);
+    double get_jitter_ms() const;
+    void set_loss_chance(double p_value);
+    double get_loss_chance() const;
+    void set_reorder_chance(double p_value);
+    double get_reorder_chance() const;
+    void set_duplicate_chance(double p_value);
+    double get_duplicate_chance() const;
+    void set_stall_chance(double p_value);
+    double get_stall_chance() const;
+    void set_stall_ms(double p_value);
+    double get_stall_ms() const;
+    void set_seed(int64_t p_value);
+    int64_t get_seed() const;
 };
 
 } // namespace netw

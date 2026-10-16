@@ -1,3 +1,4 @@
+#include "support/link.h"
 #include "support/netw_test.h"
 
 #if defined(NETW_TIER_HOSTED)
@@ -49,8 +50,7 @@ struct DelayedGlide {
         rig.mount();
         pair = netw_test::stand_flow_pair(rig, GLIDER, "Glider");
         rig.clock_of(client()).set_tick_factor_override(0.0);
-        const Ref<netw::LocalLinkConditions> late
-            = netw::LocalLinkConditions::create(1);
+        const Ref<netw::NetwLinkConditions> late = netw_test::link(1);
         late->set_latency_ms(LINK_MS);
         rig.conditions(0, late, SERVER);
         rig.step_ticks(4);

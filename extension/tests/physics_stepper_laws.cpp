@@ -1,4 +1,5 @@
 #include "support/fault_log.h"
+#include "support/link.h"
 #include "support/netw_test.h"
 
 #include "support/minted_script.h"
@@ -50,7 +51,7 @@ Scenario stepped_island_lane() {
         .island(godot::StringName("P"), members)
         .simulating(godot::StringName("Q"));
     scenario.clients = 2;
-    scenario.conditions(netw::LocalLinkConditions::polls(4));
+    scenario.conditions(netw_test::polls(4));
     scenario.hold_input(1, "P", godot::Vector2(1.0, 0.0));
     scenario.hold_input(1, "Q", godot::Vector2(1.0, 0.0));
     return scenario.until(60);
@@ -65,7 +66,7 @@ Scenario independent_lane() {
         .player(island_player("P"), 0)
         .player(island_player("Q"), 1);
     scenario.clients = 2;
-    scenario.conditions(netw::LocalLinkConditions::polls(4));
+    scenario.conditions(netw_test::polls(4));
     scenario.hold_input(1, "P", godot::Vector2(1.0, 0.0));
     scenario.hold_input(1, "Q", godot::Vector2(1.0, 0.0));
     return scenario.until(60);

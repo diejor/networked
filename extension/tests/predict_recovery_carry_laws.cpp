@@ -1,5 +1,6 @@
-#include "support/netw_test.h"
 #include "support/fault_log.h"
+#include "support/link.h"
+#include "support/netw_test.h"
 
 #include <algorithm>
 
@@ -62,8 +63,7 @@ EntityDecl frame_body(bool p_ruled) {
 Disturbed nudged_once(double p_latency_ms, bool p_ruled = false) {
     LoopbackRig rig(1);
     if (p_latency_ms > 0.0) {
-        const Ref<netw::LocalLinkConditions> flight
-            = netw::LocalLinkConditions::create(7);
+        const Ref<netw::NetwLinkConditions> flight = netw_test::link(7);
         flight->set_latency_ms(p_latency_ms);
         rig.conditions(0, flight);
     }
@@ -127,10 +127,7 @@ TEST_CASE(
             NETW_CHECK_CLOSE(run.client_y, run.server_y, CLOSE);
         }
     }
-    NETW_CHECK_EQ(
-        faults.warnings_containing("causal state properties"),
-        2
-    );
+    NETW_CHECK_EQ(faults.warnings_containing("causal state properties"), 2);
 }
 
 TEST_CASE(
@@ -142,10 +139,7 @@ TEST_CASE(
         const Disturbed run = nudged_once(latency);
         NETW_CHECK_CLOSE(run.overshoot, 0.0, CLOSE);
     }
-    NETW_CHECK_EQ(
-        faults.warnings_containing("causal state properties"),
-        1
-    );
+    NETW_CHECK_EQ(faults.warnings_containing("causal state properties"), 1);
 }
 
 Ref<netw::NetwQuantizeScalar> half_step() {

@@ -1,3 +1,4 @@
+#include "support/link.h"
 #include "support/loopback_rig.h"
 
 #if defined(NETW_TIER_HOSTED)
@@ -274,9 +275,8 @@ TEST_CASE(
     REQUIRE(script.is_valid());
     const Seated seated = seat_star(rig, script);
 
-    const Ref<netw::LocalLinkConditions> lossy
-        = netw::LocalLinkConditions::create(10);
-    lossy->set_packet_loss(1.0);
+    const Ref<netw::NetwLinkConditions> lossy = netw_test::link(10);
+    lossy->set_loss_chance(1.0);
     rig.conditions(0, lossy);
 
     Array args;

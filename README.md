@@ -155,6 +155,9 @@ Reparenting is replicated.
 - The lag compensation, prediction, and rollback architecture is based
   on [netfox](https://github.com/foxssake/netfox). Its documentation,
   documented issues, and Discord discussions were valuable references.
+- Simulated network conditions on a real connection follow
+  [laggy-multiplayer-peer](https://github.com/ricmzn/laggy-multiplayer-peer)
+  by Ricardo Nunes.
 - The WebRTC signaler, transport, and related work are based on
   [Tube](https://github.com/koopmyers/tube/).
 - The wire architecture is based on

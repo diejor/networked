@@ -1,4 +1,5 @@
 #include "netw/api/netw_multiplayer.hpp"
+#include "netw/link/shaped_peer.hpp"
 
 #include "godot/transport_state.hpp"
 #include "netw/api/interest.hpp"
@@ -86,7 +87,6 @@ const char *SIG_PEER_AUTHENTICATION_FAILED = "peer_authentication_failed";
 const char *SIG_PEER_PACKET = "peer_packet";
 const char *SIG_SERVER_DISCONNECTED = "server_disconnected";
 constexpr int POLLS_BEFORE_TURNED_AWAY_PEER_DROPS = 2;
-const char *LAGGY_PEER_CLASS = "LaggyMultiplayerPeer";
 
 bool names_the_root_window(const Variant &p_configuration) {
     Node *root = gd::scene_root();
@@ -2996,7 +2996,9 @@ bool NetwMultiplayer::peer_assignment_repeats(
 Ref<MultiplayerPeer> NetwMultiplayer::peer_shaped(
     const Ref<MultiplayerPeer> &p_peer
 ) const {
-    if (p_peer.is_null() || p_peer->is_class(LAGGY_PEER_CLASS)
+#if defined(DEBUG_ENABLED)
+    if (p_peer.is_null()
+        || Object::cast_to<link::ShapedPeer>(*p_peer) != nullptr
         || p_peer->is_class("OfflineMultiplayerPeer")) {
         return p_peer;
     }
@@ -3017,8 +3019,13 @@ Ref<MultiplayerPeer> NetwMultiplayer::peer_shaped(
         }
         return p_peer;
     }
-    const Ref<MultiplayerPeer> shaped = shaping->wrap_peer(p_peer);
-    return shaped.is_valid() ? shaped : p_peer;
+    Ref<link::ShapedPeer> shaped;
+    shaped.instantiate();
+    shaped->initialize(p_peer, shaping);
+    return shaped;
+#else
+    return p_peer;
+#endif
 }
 
 void NetwMultiplayer::NETW_API_VIRTUAL(set_multiplayer_peer)(
@@ -4425,9 +4432,8 @@ Ref<NetwSessionConfig> NetwMultiplayer::session_get_config() const {
     snapshot->set_app_id(session_settings.app_id);
     snapshot->set_desired_role(Role(session_settings.desired_role));
     if (session_settings.link_conditions.is_valid()) {
-        Ref<NetwLinkConditions> link;
-        link.instantiate();
-        link->copy_values_from(**session_settings.link_conditions);
+        const Ref<NetwLinkConditions> link
+            = session_settings.link_conditions->duplicate();
         snapshot->set_link_conditions(link);
     }
     if (session_settings.server_info.is_valid()) {
@@ -4479,8 +4485,7 @@ Error NetwMultiplayer::session_initialize(
         session_settings.desired_role = p_from->get_desired_role();
         const Ref<NetwLinkConditions> link = p_from->get_link_conditions();
         if (link.is_valid()) {
-            session_settings.link_conditions.instantiate();
-            session_settings.link_conditions->copy_values_from(**link);
+            session_settings.link_conditions = link->duplicate();
         }
         const Ref<NetwServerInfo> info = p_from->get_server_info();
         if (info.is_valid()) {
@@ -5168,8 +5173,7 @@ void NetwMultiplayer::handle_confirm(
     int64_t p_sender
 ) {
     session::ConfirmKey confirmed;
-    if (p_sender != SERVER_PEER
-        || !session::frame_read(p_payload, confirmed)) {
+    if (p_sender != SERVER_PEER || !session::frame_read(p_payload, confirmed)) {
         return;
     }
     lagcomp_effect_adopt(confirmed.key);

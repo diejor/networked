@@ -1,3 +1,4 @@
+#include "support/link.h"
 #include "support/netw_test.h"
 
 #include "support/scenario_run.h"
@@ -38,7 +39,7 @@ Scenario command_lane() {
         authoring_player(),
         0
     );
-    scenario.conditions(netw::LocalLinkConditions::polls(4));
+    scenario.conditions(netw_test::polls(4));
     scenario.hold_input(1, "P", Vector2(1.0, 0.0));
     PackedInt32Array ticks;
     for (int frame = 0; frame < FRAMES; ++frame) {

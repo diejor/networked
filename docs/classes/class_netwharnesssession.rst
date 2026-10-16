@@ -42,11 +42,11 @@ Methods
    +---------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | :godot:`Array`                                          | :ref:`build_join_args<class_NetwHarnessSession_method_build_join_args>`\ (\ spawn\: :godot:`Variant` = null\ )                                                                                                                                                                                                                                                        |
    +---------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | |void|                                                  | :ref:`set_link_conditions<class_NetwHarnessSession_method_set_link_conditions>`\ (\ peer\: :ref:`LocalMultiplayerPeer<class_LocalMultiplayerPeer>`, conditions\: :ref:`LocalLinkConditions<class_LocalLinkConditions>`, sender_id\: :godot:`int` = 0\ )                                                                                                               |
+   | |void|                                                  | :ref:`set_link_conditions<class_NetwHarnessSession_method_set_link_conditions>`\ (\ peer\: :ref:`LocalMultiplayerPeer<class_LocalMultiplayerPeer>`, conditions\: :ref:`NetwLinkConditions<class_NetwLinkConditions>`, sender_id\: :godot:`int` = 0\ )                                                                                                                 |
    +---------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | |void|                                                  | :ref:`clear_link_conditions<class_NetwHarnessSession_method_clear_link_conditions>`\ (\ peer\: :ref:`LocalMultiplayerPeer<class_LocalMultiplayerPeer>`, sender_id\: :godot:`int` = 0\ )                                                                                                                                                                               |
    +---------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`LocalLinkConditions<class_LocalLinkConditions>`   | :ref:`get_link_conditions<class_NetwHarnessSession_method_get_link_conditions>`\ (\ peer\: :ref:`LocalMultiplayerPeer<class_LocalMultiplayerPeer>`, sender_id\: :godot:`int` = 0\ )                                                                                                                                                                                   |
+   | :ref:`NetwLinkConditions<class_NetwLinkConditions>`     | :ref:`get_link_conditions<class_NetwHarnessSession_method_get_link_conditions>`\ (\ peer\: :ref:`LocalMultiplayerPeer<class_LocalMultiplayerPeer>`, sender_id\: :godot:`int` = 0\ )                                                                                                                                                                                   |
    +---------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 
 .. rst-class:: classref-section-separator
@@ -190,7 +190,7 @@ Builds the join args for a ``spawn`` intent, where ``spawn`` is an :godot:`Array
 
 .. rst-class:: classref-method
 
-|void| **set_link_conditions**\ (\ peer\: :ref:`LocalMultiplayerPeer<class_LocalMultiplayerPeer>`, conditions\: :ref:`LocalLinkConditions<class_LocalLinkConditions>`, sender_id\: :godot:`int` = 0\ ) :ref:`🔗<class_NetwHarnessSession_method_set_link_conditions>`
+|void| **set_link_conditions**\ (\ peer\: :ref:`LocalMultiplayerPeer<class_LocalMultiplayerPeer>`, conditions\: :ref:`NetwLinkConditions<class_NetwLinkConditions>`, sender_id\: :godot:`int` = 0\ ) :ref:`🔗<class_NetwHarnessSession_method_set_link_conditions>`
 
 Sets inbound link conditions on ``peer``.
 
@@ -214,7 +214,7 @@ Clears inbound link conditions on ``peer`` and ``sender_id``.
 
 .. rst-class:: classref-method
 
-:ref:`LocalLinkConditions<class_LocalLinkConditions>` **get_link_conditions**\ (\ peer\: :ref:`LocalMultiplayerPeer<class_LocalMultiplayerPeer>`, sender_id\: :godot:`int` = 0\ ) :ref:`🔗<class_NetwHarnessSession_method_get_link_conditions>`
+:ref:`NetwLinkConditions<class_NetwLinkConditions>` **get_link_conditions**\ (\ peer\: :ref:`LocalMultiplayerPeer<class_LocalMultiplayerPeer>`, sender_id\: :godot:`int` = 0\ ) :ref:`🔗<class_NetwHarnessSession_method_get_link_conditions>`
 
 Returns inbound link conditions for ``peer``.
 

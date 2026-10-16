@@ -1,43 +1,57 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <class name="NetwLinkConditions" inherits="Resource" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
 	<brief_description>
-		Simulated latency and packet loss for testing a real connection.
+		Simulated latency and packet loss for testing.
 	</brief_description>
 	<description>
-		Set it as [member NetwSessionConfig.link_conditions]. The peer is wrapped in a [code]LaggyMultiplayerPeer[/code], an optional extension that must be installed.
+		Pass it to [method NetwSessionConfig.link]. Only debug builds apply it to a real connection.
 		[codeblock]
-		var conditions := NetwLinkConditions.new()
-		conditions.simulate_lag = true
-		conditions.one_way_delay_max = 150.0
-		conditions.lag_packet_loss_percent = 2.0
-		config.link_conditions = conditions
+		Netw.configure_session(self).link(NetwLinkConditions.wifi())
 		[/codeblock]
-		It only works in debug builds and the editor. Set the environment variable [code]NETW_SHAPING[/code] or the command line argument [code]--netw-shaping[/code] to [code]on[/code] or [code]off[/code] to change that. The environment variable wins.
-		It slows every connection of this peer. To slow one peer only, use [method LocalLoopbackSession.set_link_conditions].
 	</description>
 	<tutorials>
 	</tutorials>
 	<methods>
-		<method name="wrap_peer" qualifiers="const">
-			<return type="MultiplayerPeer" />
-			<param index="0" name="base" type="MultiplayerPeer" />
+		<method name="mobile_4g" qualifiers="static">
+			<return type="NetwLinkConditions" />
 			<description>
-				Returns [param base] wrapped in a [code]LaggyMultiplayerPeer[/code] with these settings. Returns [param base] unchanged when [member simulate_lag] is off, in a release build, or when [code]LaggyMultiplayerPeer[/code] is not installed.
+			</description>
+		</method>
+		<method name="poor_3g" qualifiers="static">
+			<return type="NetwLinkConditions" />
+			<description>
+			</description>
+		</method>
+		<method name="satellite" qualifiers="static">
+			<return type="NetwLinkConditions" />
+			<description>
+			</description>
+		</method>
+		<method name="wifi" qualifiers="static">
+			<return type="NetwLinkConditions" />
+			<description>
 			</description>
 		</method>
 	</methods>
 	<members>
-		<member name="lag_packet_loss_percent" type="float" setter="set_lag_packet_loss_percent" getter="get_lag_packet_loss_percent" default="0.0">
-			Percent chance that a packet is lost, from [code]0[/code] to [code]100[/code].
+		<member name="duplicate_chance" type="float" setter="set_duplicate_chance" getter="get_duplicate_chance" default="0.0">
 		</member>
-		<member name="one_way_delay_max" type="float" setter="set_one_way_delay_max" getter="get_one_way_delay_max" default="100.0">
-			The largest one-way delay, in milliseconds.
+		<member name="jitter_ms" type="float" setter="set_jitter_ms" getter="get_jitter_ms" default="0.0">
 		</member>
-		<member name="one_way_delay_min" type="float" setter="set_one_way_delay_min" getter="get_one_way_delay_min" default="0.0">
-			The smallest one-way delay, in milliseconds.
+		<member name="latency_ms" type="float" setter="set_latency_ms" getter="get_latency_ms" default="0.0">
+			Applied to each direction.
 		</member>
-		<member name="simulate_lag" type="bool" setter="set_simulate_lag" getter="get_simulate_lag" default="false">
-			Turns the simulation on.
+		<member name="loss_chance" type="float" setter="set_loss_chance" getter="get_loss_chance" default="0.0">
+			An unreliable packet is dropped. A reliable one arrives late, as if it was sent again.
+		</member>
+		<member name="reorder_chance" type="float" setter="set_reorder_chance" getter="get_reorder_chance" default="0.0">
+		</member>
+		<member name="seed" type="int" setter="set_seed" getter="get_seed" default="0">
+		</member>
+		<member name="stall_chance" type="float" setter="set_stall_chance" getter="get_stall_chance" default="0.0">
+			The link holds every packet for [member stall_ms].
+		</member>
+		<member name="stall_ms" type="float" setter="set_stall_ms" getter="get_stall_ms" default="0.0">
 		</member>
 	</members>
 </class>

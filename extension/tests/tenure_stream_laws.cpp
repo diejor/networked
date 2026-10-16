@@ -1,3 +1,4 @@
+#include "support/link.h"
 #include "support/netw_test.h"
 
 #if defined(NETW_TIER_HOSTED)
@@ -35,9 +36,8 @@ StringName AIM() {
     return StringName("aim_dir");
 }
 
-Ref<netw::LocalLinkConditions> latency_of(int p_ticks, int64_t p_seed) {
-    Ref<netw::LocalLinkConditions> made
-        = netw::LocalLinkConditions::create(p_seed);
+Ref<netw::NetwLinkConditions> latency_of(int p_ticks, int64_t p_seed) {
+    Ref<netw::NetwLinkConditions> made = netw_test::link(p_seed);
     made->set_latency_ms(double(p_ticks) * TICK_MS);
     return made;
 }

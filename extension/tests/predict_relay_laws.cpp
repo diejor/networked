@@ -1,3 +1,4 @@
+#include "support/link.h"
 #include "support/netw_test.h"
 
 #include "support/loopback_rig.h"
@@ -239,11 +240,7 @@ void judge_guesses(
 Guessed guessed_past_relay() {
     Drivers drivers(two_drivers(WorldDecl::JOINT, true), {"P", "Q"});
     LoopbackRig &rig = drivers.rig;
-    rig.conditions(
-        0,
-        netw::LocalLinkConditions::polls(RELAY_LATENCY_POLLS),
-        rig.peer_id(-1)
-    );
+    rig.conditions(0, netw_test::polls(RELAY_LATENCY_POLLS), rig.peer_id(-1));
     drivers.drive("P", 0, Vector2(1.0, 0.0));
     drivers.drive("Q", 1, Vector2(0.0, 1.0));
     rig.step_ticks(SETTLE_TICKS);
@@ -278,11 +275,7 @@ struct Confirmed {
 Confirmed confirmed_by_relay() {
     Drivers drivers(two_drivers(WorldDecl::JOINT, true), {"P", "Q"});
     LoopbackRig &rig = drivers.rig;
-    rig.conditions(
-        0,
-        netw::LocalLinkConditions::polls(RELAY_LATENCY_POLLS),
-        rig.peer_id(-1)
-    );
+    rig.conditions(0, netw_test::polls(RELAY_LATENCY_POLLS), rig.peer_id(-1));
     drivers.drive("P", 0, Vector2(1.0, 0.0));
     drivers.drive("Q", 1, Vector2(0.0, 1.0));
     rig.step_ticks(SETTLE_TICKS);
@@ -404,16 +397,8 @@ struct SteppedPair {
         server = stepped_on(rig, -1, {"P", "Q"});
         viewer = stepped_on(rig, 0, {"P", "Q"});
         author = stepped_on(rig, 1, {"Q"});
-        rig.conditions(
-            -1,
-            netw::LocalLinkConditions::polls(VIEWER_LINK_POLLS),
-            rig.peer_id(0)
-        );
-        rig.conditions(
-            -1,
-            netw::LocalLinkConditions::polls(AUTHOR_LINK_POLLS),
-            rig.peer_id(1)
-        );
+        rig.conditions(-1, netw_test::polls(VIEWER_LINK_POLLS), rig.peer_id(0));
+        rig.conditions(-1, netw_test::polls(AUTHOR_LINK_POLLS), rig.peer_id(1));
         drivers.drive("P", 0, Vector2(1.0, 0.0));
     }
 
@@ -527,8 +512,8 @@ bool input_changed_in(
 Turned replayed_through_turns() {
     SteppedPair pair;
     LoopbackRig &rig = pair.drivers.rig;
-    const Ref<netw::LocalLinkConditions> jittered
-        = netw::LocalLinkConditions::create(VIEWER_JITTER_SEED);
+    const Ref<netw::NetwLinkConditions> jittered
+        = netw_test::link(VIEWER_JITTER_SEED);
     jittered->set_jitter_ms(VIEWER_JITTER_MS);
     rig.conditions(0, jittered, rig.peer_id(-1));
     NetwPredictionEngine *const served = rig.prediction_pool(-1);

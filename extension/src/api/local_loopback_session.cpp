@@ -33,19 +33,6 @@ uint64_t physics_frames() {
 
 constexpr double NEVER_DUE = std::numeric_limits<double>::infinity();
 
-String stream_key(int p_sender_id, const char *p_stream) {
-    return String::num_int64(p_sender_id) + String(":") + String(p_stream);
-}
-
-String channel_key(int p_sender_id, int p_channel) {
-    return String::num_int64(p_sender_id) + String(":")
-        + String::num_int64(p_channel);
-}
-
-String sender_prefix(int p_sender_id) {
-    return String::num_int64(p_sender_id) + String(":");
-}
-
 void declare_relabel(LocalMultiplayerPeer *p_peer) {
 #if defined(NETW_TESTS)
     const StringName relabelled("server_relabelled");
@@ -276,7 +263,7 @@ void LocalLoopbackSession::release_inbound_packets(
 
 void LocalLoopbackSession::set_link_conditions(
     LocalMultiplayerPeer *p_peer,
-    const Ref<LocalLinkConditions> &p_conditions,
+    const Ref<NetwLinkConditions> &p_conditions,
     int p_sender_id
 ) {
     if (p_peer == nullptr) {
@@ -285,11 +272,11 @@ void LocalLoopbackSession::set_link_conditions(
     LinkState &state = ensure_link(p_peer);
     if (p_conditions.is_null()) {
         state.conditions_by_sender.erase(p_sender_id);
-        clear_sender_streams(state, p_sender_id);
+        link::forget_sender(state.draws, p_sender_id);
         return;
     }
-    state.conditions_by_sender.insert(p_sender_id, p_conditions->clone());
-    clear_sender_streams(state, p_sender_id);
+    state.conditions_by_sender.insert(p_sender_id, p_conditions->duplicate());
+    link::forget_sender(state.draws, p_sender_id);
     capture_queued_packets(p_peer);
 }
 
@@ -305,7 +292,7 @@ void LocalLoopbackSession::clear_link_conditions(
         return;
     }
     state->conditions_by_sender.erase(p_sender_id);
-    clear_sender_streams(*state, p_sender_id);
+    link::forget_sender(state->draws, p_sender_id);
     if (!state->has_conditions() && !state->held) {
         release_due(p_peer, true);
         drop_link_if_idle(p_peer);
@@ -324,8 +311,8 @@ void LocalLoopbackSession::clear_all_link_conditions() {
             continue;
         }
         state->conditions_by_sender.clear();
-        state->rng_by_stream.clear();
-        state->reliable_due_by_channel.clear();
+        state->draws.rng_by_stream.clear();
+        state->draws.reliable_due_by_channel.clear();
         if (state->held) {
             continue;
         }
@@ -355,27 +342,28 @@ void LocalLoopbackSession::purge_packets_from(int p_sender_id) {
                 state->in_flight.remove_at(index);
             }
         }
-        clear_sender_streams(*state, p_sender_id);
+        link::forget_sender(state->draws, p_sender_id);
+        link::forget_ordered_sender(state->ordered_by_channel, p_sender_id);
         if (state->is_idle()) {
             links.erase(peer_id);
         }
     }
 }
 
-Ref<LocalLinkConditions> LocalLoopbackSession::get_link_conditions(
+Ref<NetwLinkConditions> LocalLoopbackSession::get_link_conditions(
     const LocalMultiplayerPeer *p_peer,
     int p_sender_id
 ) const {
     if (p_peer == nullptr) {
-        return Ref<LocalLinkConditions>();
+        return Ref<NetwLinkConditions>();
     }
     const LinkState *state = links.getptr(peer_key(p_peer));
     if (state == nullptr) {
-        return Ref<LocalLinkConditions>();
+        return Ref<NetwLinkConditions>();
     }
-    const Ref<LocalLinkConditions> *found
+    const Ref<NetwLinkConditions> *found
         = state->conditions_by_sender.getptr(p_sender_id);
-    return found == nullptr ? Ref<LocalLinkConditions>() : *found;
+    return found == nullptr ? Ref<NetwLinkConditions>() : *found;
 }
 
 int LocalLoopbackSession::in_flight_count(
@@ -546,8 +534,8 @@ void LocalLoopbackSession::relabel_link(
     if (state == nullptr) {
         return;
     }
-    HashMap<int, Ref<LocalLinkConditions>> relabelled;
-    for (const KeyValue<int, Ref<LocalLinkConditions>> &entry :
+    HashMap<int, Ref<NetwLinkConditions>> relabelled;
+    for (const KeyValue<int, Ref<NetwLinkConditions>> &entry :
          state->conditions_by_sender) {
         const int sender = entry.key == 0 ? 0 : p_install.relabelled(entry.key);
         if (entry.key == 0 || sender != 0) {
@@ -555,8 +543,13 @@ void LocalLoopbackSession::relabel_link(
         }
     }
     state->conditions_by_sender = relabelled;
-    clear_sender_streams(*state, p_install.successor_was);
-    clear_sender_streams(*state, 1);
+    link::forget_sender(state->draws, p_install.successor_was);
+    link::forget_sender(state->draws, 1);
+    link::forget_ordered_sender(
+        state->ordered_by_channel,
+        p_install.successor_was
+    );
+    link::forget_ordered_sender(state->ordered_by_channel, 1);
 }
 
 void LocalLoopbackSession::reset() {
@@ -621,17 +614,12 @@ bool LocalLoopbackSession::capture_incoming(
     if (state == nullptr || !state->has_conditions()) {
         return false;
     }
-    const Ref<LocalLinkConditions> conditions
-        = conditions_for(*state, p_packet);
+    const Ref<NetwLinkConditions> conditions = conditions_for(*state, p_packet);
     if (conditions.is_null()) {
         return false;
     }
 
-    if (p_packet.mode == MultiplayerPeer::TRANSFER_MODE_RELIABLE) {
-        capture_reliable(*state, p_packet, conditions);
-    } else {
-        capture_unreliable(*state, p_packet, conditions);
-    }
+    capture_packet(*state, p_packet, conditions);
     return true;
 }
 
@@ -656,14 +644,12 @@ void LocalLoopbackSession::capture_queued_packets(
     LinkState &state = ensure_link(p_peer);
     Vector<LocalMultiplayerPeer::Packet> remaining;
     for (const LocalMultiplayerPeer::Packet &packet : p_peer->packet_queue) {
-        const Ref<LocalLinkConditions> conditions
+        const Ref<NetwLinkConditions> conditions
             = conditions_for(state, packet);
         if (conditions.is_null()) {
             remaining.push_back(packet);
-        } else if (packet.mode == MultiplayerPeer::TRANSFER_MODE_RELIABLE) {
-            capture_reliable(state, packet, conditions);
         } else {
-            capture_unreliable(state, packet, conditions);
+            capture_packet(state, packet, conditions);
         }
     }
     p_peer->packet_queue = remaining;
@@ -686,6 +672,11 @@ void LocalLoopbackSession::release_due(
     NETW_ZONE_NC("LocalLoopbackSession release", colors::TRANSPORT);
     LinkState *state = link_of(p_peer);
     if (state == nullptr || p_peer->closed || p_peer->closing) {
+        return;
+    }
+
+    if (!p_flush_all
+        && state->draws.stall_until_ms > clock_ms + RELEASE_EPSILON_MS) {
         return;
     }
 
@@ -712,10 +703,20 @@ void LocalLoopbackSession::release_due(
         } else if (
             entry.packet.peer == 0 || p_peer->is_linked_to(entry.packet.peer)
         ) {
+            if (entry.packet.mode
+                    == MultiplayerPeer::TRANSFER_MODE_UNRELIABLE_ORDERED
+                && !link::accept_ordered(
+                    state->ordered_by_channel,
+                    entry.packet.peer,
+                    entry.packet.channel,
+                    entry.seq
+                )) {
+                continue;
+            }
             p_peer->packet_queue.push_back(entry.packet);
         }
     }
-    prune_reliable_due(*state);
+    link::prune_reliable_due(state->draws, clock_ms);
     drop_link_if_idle(p_peer);
 }
 
@@ -732,190 +733,44 @@ void LocalLoopbackSession::enqueue(
     p_state.seq += 1;
 }
 
-void LocalLoopbackSession::capture_reliable(
+void LocalLoopbackSession::capture_packet(
     LinkState &p_state,
     const LocalMultiplayerPeer::Packet &p_packet,
-    const Ref<LocalLinkConditions> &p_conditions
+    const Ref<NetwLinkConditions> &p_conditions
 ) {
-    const int sender_id = p_packet.peer;
-    double due_ms = clock_ms + p_conditions->effective_latency_ms();
-    if (roll(
-            p_state,
-            sender_id,
-            "loss",
-            p_conditions->get_seed(),
-            p_conditions->get_packet_loss()
-        )) {
-        due_ms += p_conditions->effective_retransmit_ms();
-    }
-    const String key = channel_key(sender_id, p_packet.channel);
-    const double *last_due = p_state.reliable_due_by_channel.getptr(key);
-    if (last_due != nullptr) {
-        due_ms = std::max(due_ms, *last_due);
-    }
-    p_state.reliable_due_by_channel.insert(key, due_ms);
-    enqueue(p_state, p_packet, due_ms);
-}
-
-void LocalLoopbackSession::capture_unreliable(
-    LinkState &p_state,
-    const LocalMultiplayerPeer::Packet &p_packet,
-    const Ref<LocalLinkConditions> &p_conditions
-) {
-    const int sender_id = p_packet.peer;
-    const int64_t seed = p_conditions->get_seed();
-    if (roll(
-            p_state,
-            sender_id,
-            "loss",
-            seed,
-            p_conditions->get_packet_loss()
-        )) {
+    const link::Arrival arrival = link::schedule(
+        p_state.draws,
+        **p_conditions,
+        {p_packet.peer,
+         p_packet.channel,
+         p_packet.mode == MultiplayerPeer::TRANSFER_MODE_RELIABLE},
+        clock_ms,
+        physics_period_ms()
+    );
+    if (arrival.dropped) {
         return;
     }
-
-    double due_ms = clock_ms + p_conditions->effective_latency_ms();
-    due_ms += draw_jitter(p_state, sender_id, p_conditions);
-    if (roll(
-            p_state,
-            sender_id,
-            "reorder",
-            seed,
-            p_conditions->get_reorder()
-        )) {
-        due_ms += physics_period_ms();
-    }
-    if (p_state.throttle_until_ms <= clock_ms
-        && roll(
-            p_state,
-            sender_id,
-            "throttle",
-            seed,
-            p_conditions->get_throttle()
-        )) {
-        p_state.throttle_until_ms = clock_ms
-            + std::max(physics_period_ms(), p_conditions->get_throttle_ms());
-    }
-    if (p_state.throttle_until_ms > clock_ms) {
-        due_ms = std::max(due_ms, p_state.throttle_until_ms);
-    }
-
-    enqueue(p_state, p_packet, due_ms);
-    if (roll(
-            p_state,
-            sender_id,
-            "duplicate",
-            seed,
-            p_conditions->get_duplicate()
-        )) {
-        enqueue(p_state, p_packet, due_ms + physics_period_ms());
+    enqueue(p_state, p_packet, arrival.due_ms);
+    if (arrival.duplicate_due_ms >= 0.0) {
+        const uint64_t original_sequence = p_state.seq - 1;
+        enqueue(p_state, p_packet, arrival.duplicate_due_ms);
+        p_state.in_flight.write[p_state.in_flight.size() - 1].seq
+            = original_sequence;
     }
 }
 
-double LocalLoopbackSession::draw_jitter(
-    LinkState &p_state,
-    int p_sender_id,
-    const Ref<LocalLinkConditions> &p_conditions
-) {
-    if (p_conditions->get_jitter_ms() <= 0.0) {
-        return 0.0;
-    }
-    const Ref<RandomNumberGenerator> rng
-        = rng_for(p_state, p_sender_id, "jitter", p_conditions->get_seed());
-    return rng->randf_range(0.0, p_conditions->get_jitter_ms());
-}
-
-bool LocalLoopbackSession::roll(
-    LinkState &p_state,
-    int p_sender_id,
-    const char *p_stream,
-    int64_t p_seed,
-    double p_probability
-) {
-    if (p_probability <= 0.0) {
-        return false;
-    }
-    if (p_probability >= 1.0) {
-        return true;
-    }
-    return rng_for(p_state, p_sender_id, p_stream, p_seed)->randf()
-        < p_probability;
-}
-
-Ref<RandomNumberGenerator> LocalLoopbackSession::rng_for(
-    LinkState &p_state,
-    int p_sender_id,
-    const char *p_stream,
-    int64_t p_seed
-) {
-    const String key = stream_key(p_sender_id, p_stream);
-    const Ref<RandomNumberGenerator> *found = p_state.rng_by_stream.getptr(key);
-    if (found != nullptr) {
-        return *found;
-    }
-    Ref<RandomNumberGenerator> rng;
-    rng.instantiate();
-    rng->set_seed(
-        uint64_t(p_seed ^ int64_t(uint32_t(String(p_stream).hash())))
-    );
-    p_state.rng_by_stream.insert(key, rng);
-    return rng;
-}
-
-void LocalLoopbackSession::clear_sender_streams(
-    LinkState &p_state,
-    int p_sender_id
-) {
-    const String prefix = sender_prefix(p_sender_id);
-
-    Vector<String> stream_keys;
-    for (const KeyValue<String, Ref<RandomNumberGenerator>> &stream :
-         p_state.rng_by_stream) {
-        if (stream.key.begins_with(prefix)) {
-            stream_keys.push_back(stream.key);
-        }
-    }
-    for (const String &key : stream_keys) {
-        p_state.rng_by_stream.erase(key);
-    }
-
-    Vector<String> channel_keys;
-    for (const KeyValue<String, double> &channel :
-         p_state.reliable_due_by_channel) {
-        if (channel.key.begins_with(prefix)) {
-            channel_keys.push_back(channel.key);
-        }
-    }
-    for (const String &key : channel_keys) {
-        p_state.reliable_due_by_channel.erase(key);
-    }
-}
-
-void LocalLoopbackSession::prune_reliable_due(LinkState &p_state) {
-    Vector<String> expired;
-    for (const KeyValue<String, double> &channel :
-         p_state.reliable_due_by_channel) {
-        if (channel.value <= clock_ms) {
-            expired.push_back(channel.key);
-        }
-    }
-    for (const String &key : expired) {
-        p_state.reliable_due_by_channel.erase(key);
-    }
-}
-
-Ref<LocalLinkConditions> LocalLoopbackSession::conditions_for(
+Ref<NetwLinkConditions> LocalLoopbackSession::conditions_for(
     const LinkState &p_state,
     const LocalMultiplayerPeer::Packet &p_packet
 ) const {
-    const Ref<LocalLinkConditions> *by_sender
+    const Ref<NetwLinkConditions> *by_sender
         = p_state.conditions_by_sender.getptr(p_packet.peer);
     if (by_sender != nullptr) {
         return *by_sender;
     }
-    const Ref<LocalLinkConditions> *for_everyone
+    const Ref<NetwLinkConditions> *for_everyone
         = p_state.conditions_by_sender.getptr(0);
-    return for_everyone == nullptr ? Ref<LocalLinkConditions>() : *for_everyone;
+    return for_everyone == nullptr ? Ref<NetwLinkConditions>() : *for_everyone;
 }
 
 void LocalLoopbackSession::_bind_methods() {

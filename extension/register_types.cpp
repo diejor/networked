@@ -1,4 +1,5 @@
 #include "register_types.h"
+#include "netw/link/shaped_peer.hpp"
 
 #include "godot/class_db.hpp"
 #include "godot/extension.hpp"
@@ -216,10 +217,12 @@ void initialize_networked_module(ModuleInitializationLevel level) {
     GDREGISTER_ABSTRACT_CLASS(netw::NetwControlRequest);
     GDREGISTER_ABSTRACT_CLASS(netw::NetwLifecycleRequest);
 
-    GDREGISTER_CLASS(netw::LocalLinkConditions);
     GDREGISTER_CLASS(netw::LocalMultiplayerPeer);
     GDREGISTER_CLASS(netw::LocalLoopbackSession);
     GDREGISTER_INTERNAL_CLASS(netw::connect::WebRTCLink);
+#if defined(DEBUG_ENABLED)
+    GDREGISTER_INTERNAL_CLASS(netw::link::ShapedPeer);
+#endif
 #if defined(NETW_TESTS) && defined(NETW_GDEXTENSION)
     {
         HashSet<String> standing;

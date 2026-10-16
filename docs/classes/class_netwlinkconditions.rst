@@ -12,26 +12,18 @@ NetwLinkConditions
 
 **Inherits:** :godot:`Resource`
 
-Simulated latency and packet loss for testing a real connection.
+Simulated latency and packet loss for testing.
 
 .. rst-class:: classref-introduction-group
 
 Description
 -----------
 
-Set it as :ref:`NetwSessionConfig.link_conditions<class_NetwSessionConfig_property_link_conditions>`. The peer is wrapped in a ``LaggyMultiplayerPeer``, an optional extension that must be installed.
+Pass it to :ref:`NetwSessionConfig.link()<class_NetwSessionConfig_method_link>`. Only debug builds apply it to a real connection.
 
 ::
 
-    var conditions := NetwLinkConditions.new()
-    conditions.simulate_lag = true
-    conditions.one_way_delay_max = 150.0
-    conditions.lag_packet_loss_percent = 2.0
-    config.link_conditions = conditions
-
-\ It only works in debug builds and the editor. Set the environment variable ``NETW_SHAPING`` or the command line argument ``--netw-shaping`` to ``on`` or ``off`` to change that. The environment variable wins.
-
-It slows every connection of this peer. To slow one peer only, use :ref:`LocalLoopbackSession.set_link_conditions()<class_LocalLoopbackSession_method_set_link_conditions>`.
+    Netw.configure_session(self).link(NetwLinkConditions.wifi())
 
 .. rst-class:: classref-reftable-group
 
@@ -41,15 +33,23 @@ Properties
 .. table::
    :widths: auto
 
-   +----------------+-------------------------------------------------------------------------------------------+-----------+
-   | :godot:`float` | :ref:`lag_packet_loss_percent<class_NetwLinkConditions_property_lag_packet_loss_percent>` | ``0.0``   |
-   +----------------+-------------------------------------------------------------------------------------------+-----------+
-   | :godot:`float` | :ref:`one_way_delay_max<class_NetwLinkConditions_property_one_way_delay_max>`             | ``100.0`` |
-   +----------------+-------------------------------------------------------------------------------------------+-----------+
-   | :godot:`float` | :ref:`one_way_delay_min<class_NetwLinkConditions_property_one_way_delay_min>`             | ``0.0``   |
-   +----------------+-------------------------------------------------------------------------------------------+-----------+
-   | :godot:`bool`  | :ref:`simulate_lag<class_NetwLinkConditions_property_simulate_lag>`                       | ``false`` |
-   +----------------+-------------------------------------------------------------------------------------------+-----------+
+   +----------------+-----------------------------------------------------------------------------+---------+
+   | :godot:`float` | :ref:`duplicate_chance<class_NetwLinkConditions_property_duplicate_chance>` | ``0.0`` |
+   +----------------+-----------------------------------------------------------------------------+---------+
+   | :godot:`float` | :ref:`jitter_ms<class_NetwLinkConditions_property_jitter_ms>`               | ``0.0`` |
+   +----------------+-----------------------------------------------------------------------------+---------+
+   | :godot:`float` | :ref:`latency_ms<class_NetwLinkConditions_property_latency_ms>`             | ``0.0`` |
+   +----------------+-----------------------------------------------------------------------------+---------+
+   | :godot:`float` | :ref:`loss_chance<class_NetwLinkConditions_property_loss_chance>`           | ``0.0`` |
+   +----------------+-----------------------------------------------------------------------------+---------+
+   | :godot:`float` | :ref:`reorder_chance<class_NetwLinkConditions_property_reorder_chance>`     | ``0.0`` |
+   +----------------+-----------------------------------------------------------------------------+---------+
+   | :godot:`int`   | :ref:`seed<class_NetwLinkConditions_property_seed>`                         | ``0``   |
+   +----------------+-----------------------------------------------------------------------------+---------+
+   | :godot:`float` | :ref:`stall_chance<class_NetwLinkConditions_property_stall_chance>`         | ``0.0`` |
+   +----------------+-----------------------------------------------------------------------------+---------+
+   | :godot:`float` | :ref:`stall_ms<class_NetwLinkConditions_property_stall_ms>`                 | ``0.0`` |
+   +----------------+-----------------------------------------------------------------------------+---------+
 
 .. rst-class:: classref-reftable-group
 
@@ -59,9 +59,15 @@ Methods
 .. table::
    :widths: auto
 
-   +--------------------------+------------------------------------------------------------------------------------------------------------+
-   | :godot:`MultiplayerPeer` | :ref:`wrap_peer<class_NetwLinkConditions_method_wrap_peer>`\ (\ base\: :godot:`MultiplayerPeer`\ ) |const| |
-   +--------------------------+------------------------------------------------------------------------------------------------------------+
+   +-----------------------------------------------------+----------------------------------------------------------------------------+
+   | :ref:`NetwLinkConditions<class_NetwLinkConditions>` | :ref:`mobile_4g<class_NetwLinkConditions_method_mobile_4g>`\ (\ ) |static| |
+   +-----------------------------------------------------+----------------------------------------------------------------------------+
+   | :ref:`NetwLinkConditions<class_NetwLinkConditions>` | :ref:`poor_3g<class_NetwLinkConditions_method_poor_3g>`\ (\ ) |static|     |
+   +-----------------------------------------------------+----------------------------------------------------------------------------+
+   | :ref:`NetwLinkConditions<class_NetwLinkConditions>` | :ref:`satellite<class_NetwLinkConditions_method_satellite>`\ (\ ) |static| |
+   +-----------------------------------------------------+----------------------------------------------------------------------------+
+   | :ref:`NetwLinkConditions<class_NetwLinkConditions>` | :ref:`wifi<class_NetwLinkConditions_method_wifi>`\ (\ ) |static|           |
+   +-----------------------------------------------------+----------------------------------------------------------------------------+
 
 .. rst-class:: classref-section-separator
 
@@ -72,69 +78,147 @@ Methods
 Property Descriptions
 ---------------------
 
-.. _class_NetwLinkConditions_property_lag_packet_loss_percent:
+.. _class_NetwLinkConditions_property_duplicate_chance:
 
 .. rst-class:: classref-property
 
-:godot:`float` **lag_packet_loss_percent** = ``0.0`` :ref:`🔗<class_NetwLinkConditions_property_lag_packet_loss_percent>`
+:godot:`float` **duplicate_chance** = ``0.0`` :ref:`🔗<class_NetwLinkConditions_property_duplicate_chance>`
 
 .. rst-class:: classref-property-setget
 
-- |void| **set_lag_packet_loss_percent**\ (\ value\: :godot:`float`\ )
-- :godot:`float` **get_lag_packet_loss_percent**\ (\ )
+- |void| **set_duplicate_chance**\ (\ value\: :godot:`float`\ )
+- :godot:`float` **get_duplicate_chance**\ (\ )
 
-Percent chance that a packet is lost, from ``0`` to ``100``.
+.. container:: contribute
+
+	There is currently no description for this property. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
 
 .. rst-class:: classref-item-separator
 
 ----
 
-.. _class_NetwLinkConditions_property_one_way_delay_max:
+.. _class_NetwLinkConditions_property_jitter_ms:
 
 .. rst-class:: classref-property
 
-:godot:`float` **one_way_delay_max** = ``100.0`` :ref:`🔗<class_NetwLinkConditions_property_one_way_delay_max>`
+:godot:`float` **jitter_ms** = ``0.0`` :ref:`🔗<class_NetwLinkConditions_property_jitter_ms>`
 
 .. rst-class:: classref-property-setget
 
-- |void| **set_one_way_delay_max**\ (\ value\: :godot:`float`\ )
-- :godot:`float` **get_one_way_delay_max**\ (\ )
+- |void| **set_jitter_ms**\ (\ value\: :godot:`float`\ )
+- :godot:`float` **get_jitter_ms**\ (\ )
 
-The largest one-way delay, in milliseconds.
+.. container:: contribute
+
+	There is currently no description for this property. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
 
 .. rst-class:: classref-item-separator
 
 ----
 
-.. _class_NetwLinkConditions_property_one_way_delay_min:
+.. _class_NetwLinkConditions_property_latency_ms:
 
 .. rst-class:: classref-property
 
-:godot:`float` **one_way_delay_min** = ``0.0`` :ref:`🔗<class_NetwLinkConditions_property_one_way_delay_min>`
+:godot:`float` **latency_ms** = ``0.0`` :ref:`🔗<class_NetwLinkConditions_property_latency_ms>`
 
 .. rst-class:: classref-property-setget
 
-- |void| **set_one_way_delay_min**\ (\ value\: :godot:`float`\ )
-- :godot:`float` **get_one_way_delay_min**\ (\ )
+- |void| **set_latency_ms**\ (\ value\: :godot:`float`\ )
+- :godot:`float` **get_latency_ms**\ (\ )
 
-The smallest one-way delay, in milliseconds.
+Applied to each direction.
 
 .. rst-class:: classref-item-separator
 
 ----
 
-.. _class_NetwLinkConditions_property_simulate_lag:
+.. _class_NetwLinkConditions_property_loss_chance:
 
 .. rst-class:: classref-property
 
-:godot:`bool` **simulate_lag** = ``false`` :ref:`🔗<class_NetwLinkConditions_property_simulate_lag>`
+:godot:`float` **loss_chance** = ``0.0`` :ref:`🔗<class_NetwLinkConditions_property_loss_chance>`
 
 .. rst-class:: classref-property-setget
 
-- |void| **set_simulate_lag**\ (\ value\: :godot:`bool`\ )
-- :godot:`bool` **get_simulate_lag**\ (\ )
+- |void| **set_loss_chance**\ (\ value\: :godot:`float`\ )
+- :godot:`float` **get_loss_chance**\ (\ )
 
-Turns the simulation on.
+An unreliable packet is dropped. A reliable one arrives late, as if it was sent again.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NetwLinkConditions_property_reorder_chance:
+
+.. rst-class:: classref-property
+
+:godot:`float` **reorder_chance** = ``0.0`` :ref:`🔗<class_NetwLinkConditions_property_reorder_chance>`
+
+.. rst-class:: classref-property-setget
+
+- |void| **set_reorder_chance**\ (\ value\: :godot:`float`\ )
+- :godot:`float` **get_reorder_chance**\ (\ )
+
+.. container:: contribute
+
+	There is currently no description for this property. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NetwLinkConditions_property_seed:
+
+.. rst-class:: classref-property
+
+:godot:`int` **seed** = ``0`` :ref:`🔗<class_NetwLinkConditions_property_seed>`
+
+.. rst-class:: classref-property-setget
+
+- |void| **set_seed**\ (\ value\: :godot:`int`\ )
+- :godot:`int` **get_seed**\ (\ )
+
+.. container:: contribute
+
+	There is currently no description for this property. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NetwLinkConditions_property_stall_chance:
+
+.. rst-class:: classref-property
+
+:godot:`float` **stall_chance** = ``0.0`` :ref:`🔗<class_NetwLinkConditions_property_stall_chance>`
+
+.. rst-class:: classref-property-setget
+
+- |void| **set_stall_chance**\ (\ value\: :godot:`float`\ )
+- :godot:`float` **get_stall_chance**\ (\ )
+
+The link holds every packet for :ref:`stall_ms<class_NetwLinkConditions_property_stall_ms>`.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NetwLinkConditions_property_stall_ms:
+
+.. rst-class:: classref-property
+
+:godot:`float` **stall_ms** = ``0.0`` :ref:`🔗<class_NetwLinkConditions_property_stall_ms>`
+
+.. rst-class:: classref-property-setget
+
+- |void| **set_stall_ms**\ (\ value\: :godot:`float`\ )
+- :godot:`float` **get_stall_ms**\ (\ )
+
+.. container:: contribute
+
+	There is currently no description for this property. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
 
 .. rst-class:: classref-section-separator
 
@@ -145,13 +229,57 @@ Turns the simulation on.
 Method Descriptions
 -------------------
 
-.. _class_NetwLinkConditions_method_wrap_peer:
+.. _class_NetwLinkConditions_method_mobile_4g:
 
 .. rst-class:: classref-method
 
-:godot:`MultiplayerPeer` **wrap_peer**\ (\ base\: :godot:`MultiplayerPeer`\ ) |const| :ref:`🔗<class_NetwLinkConditions_method_wrap_peer>`
+:ref:`NetwLinkConditions<class_NetwLinkConditions>` **mobile_4g**\ (\ ) |static| :ref:`🔗<class_NetwLinkConditions_method_mobile_4g>`
 
-Returns ``base`` wrapped in a ``LaggyMultiplayerPeer`` with these settings. Returns ``base`` unchanged when :ref:`simulate_lag<class_NetwLinkConditions_property_simulate_lag>` is off, in a release build, or when ``LaggyMultiplayerPeer`` is not installed.
+.. container:: contribute
+
+	There is currently no description for this method. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NetwLinkConditions_method_poor_3g:
+
+.. rst-class:: classref-method
+
+:ref:`NetwLinkConditions<class_NetwLinkConditions>` **poor_3g**\ (\ ) |static| :ref:`🔗<class_NetwLinkConditions_method_poor_3g>`
+
+.. container:: contribute
+
+	There is currently no description for this method. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NetwLinkConditions_method_satellite:
+
+.. rst-class:: classref-method
+
+:ref:`NetwLinkConditions<class_NetwLinkConditions>` **satellite**\ (\ ) |static| :ref:`🔗<class_NetwLinkConditions_method_satellite>`
+
+.. container:: contribute
+
+	There is currently no description for this method. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NetwLinkConditions_method_wifi:
+
+.. rst-class:: classref-method
+
+:ref:`NetwLinkConditions<class_NetwLinkConditions>` **wifi**\ (\ ) |static| :ref:`🔗<class_NetwLinkConditions_method_wifi>`
+
+.. container:: contribute
+
+	There is currently no description for this method. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

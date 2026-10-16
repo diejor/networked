@@ -1,11 +1,12 @@
+#include "netw/link/shaped_peer.hpp"
 #include "support/fault_log.h"
 #include "support/netw_test.h"
 
 #include "godot/callable.hpp"
 #include "godot/class_db.hpp"
 #include "godot/multiplayer.hpp"
-#include "godot/resource_loader.hpp"
 #include "godot/node.hpp"
+#include "godot/resource_loader.hpp"
 #include "godot/scene_tree.hpp"
 #include "godot/script.hpp"
 #include "godot/variant.hpp"
@@ -178,8 +179,11 @@ void on_created(Ref<MultiplayerPeer> p_peer, int64_t p_error, String p_detail) {
         && answer().target != nullptr) {
         Ref<netw::NetwLinkConditions> conditions;
         conditions.instantiate();
-        conditions->set_simulate_lag(true);
-        answer().wrapper = conditions->wrap_peer(p_peer);
+
+        Ref<netw::link::ShapedPeer> wrapper;
+        wrapper.instantiate();
+        wrapper->initialize(p_peer, conditions);
+        answer().wrapper = wrapper;
         answer().target->NETW_API_VIRTUAL(set_multiplayer_peer)(
             answer().wrapper
         );
@@ -725,18 +729,14 @@ TEST_CASE(
     "that already carries shaping is installed as authored rather than "
     "wrapped a second time"
 ) {
-    REQUIRE_MESSAGE(
-        ClassDB::class_exists(StringName("LaggyMultiplayerPeer")),
-        "shaping is only observable where the impairment peer is installed"
-    );
 
     Bench bench;
     Ref<netw::NetwLinkConditions> conditions;
     conditions.instantiate();
-    conditions->set_simulate_lag(true);
-    conditions->set_one_way_delay_min(0.0);
-    conditions->set_one_way_delay_max(0.0);
-    conditions->set_lag_packet_loss_percent(100.0);
+
+    conditions->set_latency_ms(0.0);
+    conditions->set_jitter_ms(0.0);
+    conditions->set_loss_chance(1.0);
     bench.core->session_initialize(shaping(conditions));
 
     provider().answering = ANSWER_PEER;
@@ -755,7 +755,7 @@ TEST_CASE(
         = bench.core->session_get_inner()->get_multiplayer_peer();
     REQUIRE(polled.is_valid());
     CHECK(polled != answer().peer);
-    CHECK(polled->is_class(StringName("LaggyMultiplayerPeer")));
+    CHECK(bool(Object::cast_to<netw::link::ShapedPeer>(*polled) != nullptr));
 
     SUBCASE("and a session handed that shaped peer installs it unchanged") {
         const Ref<NetwMultiplayer> second = lone_session();
@@ -775,10 +775,6 @@ TEST_CASE(
     "the peer it was offered has claimed that offer, so the offered peer "
     "keeps its socket and the transport it was built from goes live"
 ) {
-    REQUIRE_MESSAGE(
-        ClassDB::class_exists(StringName("LaggyMultiplayerPeer")),
-        "a wrapped assignment is only observable where a wrapper is installed"
-    );
 
     Bench bench;
     provider().answering = ANSWER_PEER;

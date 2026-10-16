@@ -1,3 +1,4 @@
+#include "support/link.h"
 #include "support/netw_test.h"
 
 #include "support/netw_cells.h"
@@ -35,7 +36,7 @@ Scenario rewound_lane() {
     scenario.label = "rewound-lane";
     scenario.epsilon = 0.01;
     scenario.world.clocked(30, 3).lag_compensated().player(moving_player(), 0);
-    scenario.conditions(netw::LocalLinkConditions::polls(4));
+    scenario.conditions(netw_test::polls(4));
     scenario.hold_input(1, "P", Vector2(1.0, 0.0));
     return scenario.until(60);
 }

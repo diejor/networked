@@ -157,7 +157,7 @@ The role this peer takes when it hosts, which becomes :ref:`NetwMultiplayer.role
 - |void| **set_link_conditions**\ (\ value\: :ref:`NetwLinkConditions<class_NetwLinkConditions>`\ )
 - :ref:`NetwLinkConditions<class_NetwLinkConditions>` **get_link_conditions**\ (\ )
 
-Simulated latency and packet loss for testing. Copied when applied.
+:ref:`NetwLinkConditions<class_NetwLinkConditions>` copied when the session starts.
 
 .. rst-class:: classref-item-separator
 
@@ -258,7 +258,9 @@ Sets :ref:`bandwidth_kbps<class_NetwSessionConfig_property_bandwidth_kbps>`, the
 
 :ref:`NetwSessionConfig<class_NetwSessionConfig>` **link**\ (\ link_conditions\: :ref:`NetwLinkConditions<class_NetwLinkConditions>`\ ) :ref:`🔗<class_NetwSessionConfig_method_link>`
 
-Sets :ref:`link_conditions<class_NetwSessionConfig_property_link_conditions>` to simulate latency and packet loss.
+.. container:: contribute
+
+	There is currently no description for this method. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
 
 .. rst-class:: classref-item-separator
 

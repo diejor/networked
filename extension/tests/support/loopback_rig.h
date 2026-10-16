@@ -761,7 +761,7 @@ public:
 
     void conditions(
         int p_client,
-        const godot::Ref<netw::LocalLinkConditions> &p_conditions,
+        const godot::Ref<netw::NetwLinkConditions> &p_conditions,
         int p_from = 0
     ) {
         link->set_link_conditions(peer(p_client), p_conditions, p_from);

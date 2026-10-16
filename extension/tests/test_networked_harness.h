@@ -1,3 +1,4 @@
+#include "support/link.h"
 #pragma once
 
 #include "support/netw_test.h"
@@ -96,8 +97,7 @@ TEST_CASE(
     CHECK_EQ(pair.server->poll(), godot::Error::OK);
     CHECK_EQ(pair.client->poll(), godot::Error::OK);
 
-    godot::Ref<netw::LocalLinkConditions> slow
-        = netw::LocalLinkConditions::create(1);
+    godot::Ref<netw::NetwLinkConditions> slow = netw_test::link(1);
     slow->set_latency_ms(3.0 * 1000.0 / 60.0);
     pair.session->set_link_conditions(
         pair.session->get_server_peer().ptr(),

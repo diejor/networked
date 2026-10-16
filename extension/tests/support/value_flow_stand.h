@@ -1,3 +1,4 @@
+#include "link.h"
 #pragma once
 
 #include "minted_script.h"
@@ -168,17 +169,17 @@ inline int64_t clock_tick(LoopbackRig &p_rig, int p_client) {
         .get_tick();
 }
 
-inline godot::Ref<netw::LocalLinkConditions> impairment(
+inline godot::Ref<netw::NetwLinkConditions> impairment(
     int64_t p_seed,
     double p_period_ms
 ) {
-    const godot::Ref<netw::LocalLinkConditions> conditions
-        = netw::LocalLinkConditions::create(p_seed);
+    const godot::Ref<netw::NetwLinkConditions> conditions
+        = netw_test::link(p_seed);
     conditions->set_latency_ms(2.0 * p_period_ms);
     conditions->set_jitter_ms(6.0 * p_period_ms);
-    conditions->set_reorder(1.0);
-    conditions->set_duplicate(0.3);
-    conditions->set_packet_loss(0.05);
+    conditions->set_reorder_chance(1.0);
+    conditions->set_duplicate_chance(0.3);
+    conditions->set_loss_chance(0.05);
     return conditions;
 }
 

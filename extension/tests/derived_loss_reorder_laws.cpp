@@ -1,3 +1,4 @@
+#include "support/link.h"
 #include "support/netw_test.h"
 
 #include "support/minted_script.h"
@@ -128,9 +129,9 @@ class LossRun {
             return;
         }
         if (plant_is(PLANT_THE_LINK_GOES_DARK)) {
-            const Ref<netw::LocalLinkConditions> dark
-                = netw::LocalLinkConditions::create(declared.seed);
-            dark->set_packet_loss(1.0);
+            const Ref<netw::NetwLinkConditions> dark
+                = netw_test::link(declared.seed);
+            dark->set_loss_chance(1.0);
             p_rig.conditions(0, dark, 1);
             return;
         }
@@ -145,8 +146,8 @@ class LossRun {
         if (plant_is(PLANT_THE_LINK_GOES_DARK)) {
             return;
         }
-        p_rig.conditions(0, netw::LocalLinkConditions::perfect(), 1);
-        p_rig.conditions(-1, netw::LocalLinkConditions::perfect(), 1);
+        p_rig.conditions(0, netw_test::link(), 1);
+        p_rig.conditions(-1, netw_test::link(), 1);
     }
 
     int64_t authored_tick_for(int p_step, int p_ticks) const {

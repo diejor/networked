@@ -1,3 +1,4 @@
+#include "support/link.h"
 #include "support/netw_test.h"
 
 #include "support/minted_script.h"
@@ -222,8 +223,7 @@ TEST_CASE(
 InstallStats jittered_ages(Restore p_restore) {
     Stand stand(1, STATE_SOURCE);
     stand.activate(0, p_restore);
-    const Ref<netw::LocalLinkConditions> link
-        = netw::LocalLinkConditions::create(29);
+    const Ref<netw::NetwLinkConditions> link = netw_test::link(29);
     link->set_latency_ms(10.0);
     link->set_jitter_ms(25.0);
     stand.rig.conditions(0, link, 1);

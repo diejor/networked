@@ -1,4 +1,5 @@
 #include "support/frame_drive.h"
+#include "support/link.h"
 #include "support/minted_script.h"
 #include "support/netw_test.h"
 
@@ -200,8 +201,7 @@ class ReleaseScenario : public netw_test::FrameScenario {
         const int64_t holder = stand->peer_id(HOLDER);
         entity_at(-1)->set_controller(holder);
         stand->pump(4);
-        const Ref<netw::LocalLinkConditions> flight
-            = netw::LocalLinkConditions::create(43);
+        const Ref<netw::NetwLinkConditions> flight = netw_test::link(43);
         flight->set_latency_ms(double(FLIGHT_TICKS) * 1000.0 / TICKRATE);
         stand->loopback()
             ->set_link_conditions(stand->peer(-1), flight, int(holder));

@@ -1,3 +1,4 @@
+#include "support/link.h"
 #include "support/netw_test.h"
 
 #include "support/minted_script.h"
@@ -190,20 +191,16 @@ public:
                 rig.peer_id(0)
             );
         } else {
-            const Ref<netw::LocalLinkConditions> dark
-                = netw::LocalLinkConditions::create(p_scenario.seed);
-            dark->set_packet_loss(1.0);
+            const Ref<netw::NetwLinkConditions> dark
+                = netw_test::link(p_scenario.seed);
+            dark->set_loss_chance(1.0);
             rig.conditions(-1, dark, rig.peer_id(0));
         }
         author(rig, pair, LOSSY_TICKS);
         seen.torn = CAPTURE.torn;
 
         if (!plant_is(PLANT_THE_LINK_GOES_DARK)) {
-            rig.conditions(
-                -1,
-                netw::LocalLinkConditions::perfect(),
-                rig.peer_id(0)
-            );
+            rig.conditions(-1, netw_test::link(), rig.peer_id(0));
         }
         if (plant_is(PLANT_THE_ECHO_NEVER_ARRIVES)) {
             rig.release(0);

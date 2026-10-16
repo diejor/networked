@@ -37,7 +37,6 @@
 			<return type="NetwSessionConfig" />
 			<param index="0" name="link_conditions" type="NetwLinkConditions" />
 			<description>
-				Sets [member link_conditions] to simulate latency and packet loss.
 			</description>
 		</method>
 		<method name="role">
@@ -81,7 +80,7 @@
 			The role this peer takes when it hosts, which becomes [member NetwMultiplayer.role].
 		</member>
 		<member name="link_conditions" type="NetwLinkConditions" setter="set_link_conditions" getter="get_link_conditions">
-			Simulated latency and packet loss for testing. Copied when applied.
+			[NetwLinkConditions] copied when the session starts.
 		</member>
 		<member name="server_info" type="NetwServerInfo" setter="set_server_info" getter="get_server_info">
 			What this server shows in server browsers. The player count and [member NetwServerInfo.app_id] are filled in automatically. Copied when applied.

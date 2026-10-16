@@ -1,3 +1,4 @@
+#include "support/link.h"
 #include "support/netw_test.h"
 
 #include <cstdint>
@@ -169,8 +170,8 @@ Heard carry_run() {
             0
         )
     );
-    rig.conditions(0, netw::LocalLinkConditions::polls(4));
-    rig.conditions(-1, netw::LocalLinkConditions::polls(4));
+    rig.conditions(0, netw_test::polls(4));
+    rig.conditions(-1, netw_test::polls(4));
     const Ref<Script> rule_script = netw_test::minted_script(LISTENING_RULE);
     REQUIRE(rule_script.is_valid());
     const Variant rule = rule_script->call("new");

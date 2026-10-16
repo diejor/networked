@@ -92,7 +92,6 @@ Other classes
     class_filesystemdatabase
     class_lanlobbydirectory
     class_lobbydirectory
-    class_locallinkconditions
     class_localloopbacksession
     class_localmultiplayerpeer
     class_memorydatabase

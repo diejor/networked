@@ -22,8 +22,8 @@ struct Scenario {
     int warmup_ticks = 0;
     int run_ticks = 0;
     double epsilon = 0.0;
-    godot::Ref<netw::LocalLinkConditions> link_conditions;
-    godot::Ref<netw::LocalLinkConditions> inbound_conditions;
+    godot::Ref<netw::NetwLinkConditions> link_conditions;
+    godot::Ref<netw::NetwLinkConditions> inbound_conditions;
     godot::PackedInt32Array frame_ticks;
     godot::PackedInt32Array authority_frame_ticks;
     godot::Vector<Step> steps;
@@ -106,14 +106,14 @@ struct Scenario {
     }
 
     Scenario &conditions(
-        const godot::Ref<netw::LocalLinkConditions> &p_conditions
+        const godot::Ref<netw::NetwLinkConditions> &p_conditions
     ) {
         link_conditions = p_conditions;
         return *this;
     }
 
     Scenario &inbound(
-        const godot::Ref<netw::LocalLinkConditions> &p_conditions
+        const godot::Ref<netw::NetwLinkConditions> &p_conditions
     ) {
         inbound_conditions = p_conditions;
         return *this;

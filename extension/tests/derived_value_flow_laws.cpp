@@ -1,3 +1,4 @@
+#include "support/link.h"
 #include "support/netw_test.h"
 
 #include "support/minted_script.h"
@@ -148,17 +149,15 @@ class FlowRun {
 
     void impair(LoopbackRig &p_rig) {
         if (declared.delay_ticks > 0.0) {
-            const Ref<netw::LocalLinkConditions> delayed
-                = netw::LocalLinkConditions::create(1);
+            const Ref<netw::NetwLinkConditions> delayed = netw_test::link(1);
             delayed->set_latency_ms(
                 declared.delay_ticks * 1000.0 / double(TICKRATE)
             );
             p_rig.conditions(0, delayed, 1);
         }
         if (plant_is(PLANT_THE_UPLINK_DROPS_EVERYTHING)) {
-            const Ref<netw::LocalLinkConditions> lost
-                = netw::LocalLinkConditions::create(2);
-            lost->set_packet_loss(1.0);
+            const Ref<netw::NetwLinkConditions> lost = netw_test::link(2);
+            lost->set_loss_chance(1.0);
             p_rig.conditions(-1, lost, p_rig.peer_id(0));
         }
     }

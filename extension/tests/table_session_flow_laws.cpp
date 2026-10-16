@@ -1,3 +1,4 @@
+#include "support/link.h"
 #include "support/loopback_rig.h"
 
 #if defined(NETW_TIER_HOSTED)
@@ -13,7 +14,7 @@ namespace TestTableSessionFlow {
 
 using namespace godot;
 using namespace netw_test;
-using netw::LocalLinkConditions;
+using netw::NetwLinkConditions;
 using netw::NetwMultiplayer;
 using netw::NetwSchema;
 namespace schema_model = netw::schema_model;
@@ -241,8 +242,8 @@ TEST_CASE(
     const RID table = host->table_find_or_adopt("FlowMob");
     NETW_CHECK_EQ(int(host->store_arrays().is_reliable(table)), 1);
 
-    Ref<LocalLinkConditions> lossy = LocalLinkConditions::create(7);
-    lossy->set_packet_loss(0.6);
+    Ref<NetwLinkConditions> lossy = netw_test::link(7);
+    lossy->set_loss_chance(0.6);
     rig.conditions(0, lossy);
 
     const PackedInt64Array routes = host->liveness_claim_routes(2);

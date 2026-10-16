@@ -1,3 +1,4 @@
+#include "support/link.h"
 #include "support/netw_test.h"
 
 #include "support/minted_script.h"
@@ -91,8 +92,7 @@ Reading drive(
     netw_test::steer(pair, rig.peer_id(0));
 
     const double period = 1000.0 / double(TICKRATE);
-    const Ref<netw::LocalLinkConditions> conditions
-        = netw::LocalLinkConditions::create(1);
+    const Ref<netw::NetwLinkConditions> conditions = netw_test::link(1);
     conditions->set_latency_ms(p_delay_ticks * period);
     if (p_jitters) {
         conditions->set_jitter_ms(6.0 * period);

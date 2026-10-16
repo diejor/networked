@@ -264,8 +264,7 @@ String NetwSessionConfig::non_default_fields() const {
         }
         named += "desired_role";
     }
-    if (values.link_conditions.is_valid()
-        && values.link_conditions->get_simulate_lag()) {
+    if (values.link_conditions.is_valid()) {
         if (!named.is_empty()) {
             named += ", ";
         }

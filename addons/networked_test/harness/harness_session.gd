@@ -172,7 +172,7 @@ func build_join_args(spawn: Variant = null) -> Array:
 ## Sets inbound link conditions on [param peer].
 func set_link_conditions(
 		peer: LocalMultiplayerPeer,
-		conditions: LocalLinkConditions,
+		conditions: NetwLinkConditions,
 		sender_id: int = 0,
 ) -> void:
 	_session.set_link_conditions(peer, conditions, sender_id)
@@ -190,5 +190,5 @@ func clear_link_conditions(
 func get_link_conditions(
 		peer: LocalMultiplayerPeer,
 		sender_id: int = 0,
-) -> LocalLinkConditions:
+) -> NetwLinkConditions:
 	return _session.get_link_conditions(peer, sender_id)

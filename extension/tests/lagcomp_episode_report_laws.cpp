@@ -1,3 +1,4 @@
+#include "support/link.h"
 #include "support/netw_test.h"
 
 #include "support/netw_call_log.h"
@@ -41,7 +42,7 @@ Scenario watched_lane(bool p_perturbed) {
     scenario.epsilon = 0.01;
     scenario.world.clocked(30, 3).lag_compensated().player(watched_player(), 0);
     if (p_perturbed) {
-        scenario.conditions(netw::LocalLinkConditions::polls(4));
+        scenario.conditions(netw_test::polls(4));
     }
     scenario.hold_input(1, "P", Vector2(1.0, 0.0));
     if (!p_perturbed) {

@@ -4,74 +4,17 @@
 
 #include "godot/callable.hpp"
 #include "godot/multiplayer.hpp"
-#include "godot/random.hpp"
 #include "godot/ref_counted.hpp"
 #include "godot/resource.hpp"
 #include "godot/rid.hpp"
 #include "godot/templates.hpp"
 #include "godot/variant.hpp"
+#include "netw/api/link_conditions.hpp"
+#include "netw/link/schedule.hpp"
 
 namespace netw {
 
 class LocalLoopbackSession;
-
-class LocalLinkConditions : public godot::RefCounted {
-    GDCLASS(LocalLinkConditions, godot::RefCounted)
-
-    static constexpr double DEFAULT_RETRANSMIT_MS = 30.0;
-    static constexpr double AUTO_RETRANSMIT = -1.0;
-
-    double latency_ms = 0.0;
-    double jitter_ms = 0.0;
-    double packet_loss = 0.0;
-    double reorder = 0.0;
-    double duplicate = 0.0;
-    double throttle = 0.0;
-    double throttle_ms = 0.0;
-    double retransmit_ms = AUTO_RETRANSMIT;
-    int64_t seed = 0;
-
-protected:
-    static void _bind_methods();
-
-public:
-    static godot::Ref<LocalLinkConditions> create(int64_t p_seed = 0);
-
-    static godot::Ref<LocalLinkConditions> perfect();
-    static godot::Ref<LocalLinkConditions> wifi();
-    static godot::Ref<LocalLinkConditions> mobile_4g();
-    static godot::Ref<LocalLinkConditions> poor_3g();
-    static godot::Ref<LocalLinkConditions> satellite();
-
-    static godot::Ref<LocalLinkConditions> polls(
-        int p_count,
-        double p_period_ms = 1000.0 / 60.0
-    );
-
-    void set_latency_ms(double p_value);
-    double get_latency_ms() const;
-    void set_jitter_ms(double p_value);
-    double get_jitter_ms() const;
-    void set_packet_loss(double p_value);
-    double get_packet_loss() const;
-    void set_reorder(double p_value);
-    double get_reorder() const;
-    void set_duplicate(double p_value);
-    double get_duplicate() const;
-    void set_throttle(double p_value);
-    double get_throttle() const;
-    void set_throttle_ms(double p_value);
-    double get_throttle_ms() const;
-    void set_retransmit_ms(double p_value);
-    double get_retransmit_ms() const;
-    void set_seed(int64_t p_value);
-    int64_t get_seed() const;
-
-    godot::Ref<LocalLinkConditions> clone() const;
-
-    double effective_latency_ms() const;
-    double effective_retransmit_ms() const;
-};
 
 class LocalMultiplayerPeer : public MultiplayerPeerBase {
     GDCLASS(LocalMultiplayerPeer, MultiplayerPeerBase)
@@ -218,7 +161,7 @@ class LocalLoopbackSession : public godot::Resource {
     struct InFlight {
         LocalMultiplayerPeer::Packet packet;
         double due_time_ms = 0.0;
-        int seq = 0;
+        uint64_t seq = 0;
     };
 
     struct InFlightOrder {
@@ -226,14 +169,12 @@ class LocalLoopbackSession : public godot::Resource {
     };
 
     struct LinkState {
-        godot::HashMap<int, godot::Ref<LocalLinkConditions>>
+        godot::HashMap<int, godot::Ref<NetwLinkConditions>>
             conditions_by_sender;
-        godot::HashMap<godot::String, godot::Ref<godot::RandomNumberGenerator>>
-            rng_by_stream;
-        godot::HashMap<godot::String, double> reliable_due_by_channel;
+        link::Draws draws;
+        godot::HashMap<godot::String, uint64_t> ordered_by_channel;
         godot::Vector<InFlight> in_flight;
-        double throttle_until_ms = 0.0;
-        int seq = 0;
+        uint64_t seq = 0;
         bool held = false;
 
         bool has_conditions() const;
@@ -276,15 +217,10 @@ class LocalLoopbackSession : public godot::Resource {
         const LocalMultiplayerPeer *p_peer,
         const LocalMultiplayerPeer::Packet &p_packet
     );
-    void capture_reliable(
+    void capture_packet(
         LinkState &p_state,
         const LocalMultiplayerPeer::Packet &p_packet,
-        const godot::Ref<LocalLinkConditions> &p_conditions
-    );
-    void capture_unreliable(
-        LinkState &p_state,
-        const LocalMultiplayerPeer::Packet &p_packet,
-        const godot::Ref<LocalLinkConditions> &p_conditions
+        const godot::Ref<NetwLinkConditions> &p_conditions
     );
     void enqueue(
         LinkState &p_state,
@@ -292,30 +228,10 @@ class LocalLoopbackSession : public godot::Resource {
         double p_due_time_ms
     );
 
-    godot::Ref<LocalLinkConditions> conditions_for(
+    godot::Ref<NetwLinkConditions> conditions_for(
         const LinkState &p_state,
         const LocalMultiplayerPeer::Packet &p_packet
     ) const;
-    godot::Ref<godot::RandomNumberGenerator> rng_for(
-        LinkState &p_state,
-        int p_sender_id,
-        const char *p_stream,
-        int64_t p_seed
-    );
-    bool roll(
-        LinkState &p_state,
-        int p_sender_id,
-        const char *p_stream,
-        int64_t p_seed,
-        double p_probability
-    );
-    double draw_jitter(
-        LinkState &p_state,
-        int p_sender_id,
-        const godot::Ref<LocalLinkConditions> &p_conditions
-    );
-    void clear_sender_streams(LinkState &p_state, int p_sender_id);
-    void prune_reliable_due(LinkState &p_state);
 
 protected:
     static void _bind_methods();
@@ -346,7 +262,7 @@ public:
 
     void set_link_conditions(
         LocalMultiplayerPeer *p_peer,
-        const godot::Ref<LocalLinkConditions> &p_conditions,
+        const godot::Ref<NetwLinkConditions> &p_conditions,
         int p_sender_id = 0
     );
     void clear_link_conditions(
@@ -354,7 +270,7 @@ public:
         int p_sender_id = 0
     );
     void clear_all_link_conditions();
-    godot::Ref<LocalLinkConditions> get_link_conditions(
+    godot::Ref<NetwLinkConditions> get_link_conditions(
         const LocalMultiplayerPeer *p_peer,
         int p_sender_id = 0
     ) const;

@@ -1,3 +1,4 @@
+#include "support/link.h"
 #include "support/netw_test.h"
 
 #include "support/netw_cells.h"
@@ -31,18 +32,13 @@ Scenario reproducible_lane(const char *p_label) {
     return scenario;
 }
 
-// Nothing impairs the link and nothing perturbs the body, so the run is the
-// arithmetic alone. A disagreement here is the floor itself moving.
 Scenario exact_lane() {
     return reproducible_lane("exact-lane").until(100);
 }
 
-// A seeded impairment and a disturbance authority sees, so the run reaches
-// correction, replay and recovery. A disagreement here is a decision that
-// read something outside the scenario.
 Scenario impaired_lane() {
     Scenario scenario = reproducible_lane("impaired-lane");
-    scenario.conditions(netw::LocalLinkConditions::polls(4));
+    scenario.conditions(netw_test::polls(4));
     scenario.perturb(30, "P", godot::Vector2(60.0, -40.0));
     return scenario.until(120);
 }
@@ -68,9 +64,6 @@ const LawRow L_REPRODUCIBLE = {
     law_a_run_reproduces_itself,
 };
 
-// Drives the scenario twice on two rigs and hands the first run the second's
-// digest. The replica takes the plant, because what a plant has to change for
-// this law to see it is the SECOND run rather than both.
 ScenarioRun run_against_replica(const Scenario &p_scenario, Plant p_plant) {
     LoopbackRig first(p_scenario.clients);
     ScenarioRun run = ScenarioRun::session(first, p_scenario);

@@ -7,7 +7,6 @@ addons/gdUnit4/** linguist-vendored
 addons/com.heroiclabs.nakama/** linguist-vendored
 addons/godotsteam/** linguist-vendored
 addons/webrtc/** linguist-vendored
-addons/laggy-multiplayer-peer/** linguist-vendored
 extension/thirdparty/** linguist-vendored
 docs/tools/vendor/** linguist-vendored
 

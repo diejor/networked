@@ -1,4 +1,5 @@
 #include "support/frame_drive.h"
+#include "support/link.h"
 #include "support/minted_script.h"
 #include "support/netw_test.h"
 
@@ -187,8 +188,7 @@ class ClaimScenario final : public netw_test::FrameScenario {
                 return false;
             }
         }
-        const Ref<netw::LocalLinkConditions> flight
-            = netw::LocalLinkConditions::create(41);
+        const Ref<netw::NetwLinkConditions> flight = netw_test::link(41);
         flight->set_latency_ms(double(FLIGHT_TICKS) * 1000.0 / TICKRATE);
         for (int client = 0; client < CLIENTS; ++client) {
             stand->loopback()->set_link_conditions(

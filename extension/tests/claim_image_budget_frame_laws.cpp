@@ -1,4 +1,5 @@
 #include "support/frame_drive.h"
+#include "support/link.h"
 #include "support/minted_script.h"
 #include "support/netw_test.h"
 
@@ -178,8 +179,7 @@ class BudgetScenario final : public netw_test::FrameScenario {
                 return false;
             }
         }
-        const Ref<netw::LocalLinkConditions> flight
-            = netw::LocalLinkConditions::create(47);
+        const Ref<netw::NetwLinkConditions> flight = netw_test::link(47);
         flight->set_latency_ms(double(FLIGHT_TICKS) * 1000.0 / TICKRATE);
         for (int peer = -1; peer < CLIENTS; ++peer) {
             stand->loopback()->set_link_conditions(stand->peer(peer), flight);

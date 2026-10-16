@@ -1,4 +1,5 @@
 #include "support/fault_log.h"
+#include "support/link.h"
 #include "support/netw_test.h"
 
 #if defined(NETW_TIER_HOSTED)
@@ -204,7 +205,7 @@ TEST_CASE(
             StringName("control_requested"),
             callable_mp_static(&deny_every_request)
         );
-    Ref<netw::LocalLinkConditions> slow = netw::LocalLinkConditions::create(31);
+    Ref<netw::NetwLinkConditions> slow = netw_test::link(31);
     slow->set_latency_ms(double(CLAIM_FLIGHT_TICKS) * 1000.0 / TICKRATE);
     board.rig.conditions(-1, slow, board.rig.peer_id(0));
 

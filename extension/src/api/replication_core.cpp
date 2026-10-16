@@ -745,7 +745,7 @@ void ReplicationCore::dispatch_reply(
     const call_args::NodeRef &node = slots[0].node;
     if (node.route > 0
         && plane->liveness_route_state(node.route)
-            == NetwLivenessCore::STATE_UNKNOWN) {
+            == NetwMultiplayer::ENTITY_STATE_UNKNOWN) {
         plane->liveness_when_live(
             node.route,
             callable_mp(core(), &NetwMultiplayer::replication_settle_reply)
@@ -805,7 +805,7 @@ void ReplicationCore::dispatch_frame(
     }
 
     if (plane->liveness_route_state(p_route)
-        == NetwLivenessCore::STATE_UNKNOWN) {
+        == NetwMultiplayer::ENTITY_STATE_UNKNOWN) {
         if (defers_unknown_route(p_channel, p_reliable)) {
             plane->rpc_defer_call(
                 p_sender,

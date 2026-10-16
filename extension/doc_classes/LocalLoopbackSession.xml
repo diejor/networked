@@ -11,7 +11,7 @@
 		var client := session.create_client_peer()
 		session.poll()
 
-		session.set_link_conditions(server, LocalLinkConditions.wifi())
+		session.set_link_conditions(server, NetwLinkConditions.wifi())
 		[/codeblock]
 	</description>
 	<tutorials>
@@ -57,7 +57,7 @@
 			</description>
 		</method>
 		<method name="get_link_conditions" qualifiers="const">
-			<return type="LocalLinkConditions" />
+			<return type="NetwLinkConditions" />
 			<param index="0" name="peer" type="LocalMultiplayerPeer" />
 			<param index="1" name="sender_id" type="int" default="0" />
 			<description>
@@ -150,7 +150,7 @@
 		<method name="set_link_conditions">
 			<return type="void" />
 			<param index="0" name="peer" type="LocalMultiplayerPeer" />
-			<param index="1" name="conditions" type="LocalLinkConditions" />
+			<param index="1" name="conditions" type="NetwLinkConditions" />
 			<param index="2" name="sender_id" type="int" default="0" />
 			<description>
 				Applies [param conditions] to packets arriving at [param peer] from [param sender_id], or from everyone when [code]0[/code]. [param conditions] is copied.

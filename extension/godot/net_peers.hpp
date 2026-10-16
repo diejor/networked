@@ -36,6 +36,43 @@ inline godot::Ref<godot::MultiplayerPeer> new_peer(
     return godot::Ref<godot::MultiplayerPeer>(peer);
 }
 
+inline bool peer_is_server(const godot::Ref<godot::MultiplayerPeer> &p_peer) {
+#if defined(NETW_MODULE)
+    return p_peer->is_server();
+#else
+    if (p_peer->has_method("_is_server")) {
+        return bool(p_peer->call("_is_server"));
+    }
+    if (p_peer->is_class("ENetMultiplayerPeer")
+        && !p_peer->is_server_relay_supported()) {
+        return false;
+    }
+    return p_peer->get_unique_id() == 1;
+#endif
+}
+
+inline int peer_max_packet_size(
+    const godot::Ref<godot::MultiplayerPeer> &p_peer
+) {
+#if defined(NETW_MODULE)
+    return p_peer->get_max_packet_size();
+#else
+    if (p_peer->has_method("_get_max_packet_size")) {
+        return int(p_peer->call("_get_max_packet_size"));
+    }
+    if (p_peer->has_method("get_max_packet_size")) {
+        return int(p_peer->call("get_max_packet_size"));
+    }
+    if (p_peer->is_class("ENetMultiplayerPeer")) {
+        return 1 << 24;
+    }
+    if (p_peer->is_class("WebSocketMultiplayerPeer")) {
+        return int(p_peer->call("get_outbound_buffer_size")) - 9;
+    }
+    return 1200;
+#endif
+}
+
 inline godot::Error enet_create_server(
     const godot::Ref<godot::MultiplayerPeer> &p_peer,
     int64_t p_port,

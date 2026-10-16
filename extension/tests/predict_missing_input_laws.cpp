@@ -1,3 +1,4 @@
+#include "support/link.h"
 #include "support/netw_test.h"
 
 #include "support/scenario_run.h"
@@ -133,8 +134,8 @@ Lane open_hole(LoopbackRig &p_rig) {
         "a consumer that ran nothing before the hole proves nothing about it"
     );
 
-    Ref<netw::LocalLinkConditions> silent = netw::LocalLinkConditions::create();
-    silent->set_packet_loss(1.0);
+    Ref<netw::NetwLinkConditions> silent = netw_test::link();
+    silent->set_loss_chance(1.0);
     p_rig.conditions(0, silent);
     p_rig.conditions(-1, silent);
 
@@ -271,11 +272,11 @@ int64_t missing_after_silence(int p_window, int p_silenced) {
     REQUIRE_MESSAGE(live, "the owner's inputs stopped reaching the server");
 
     const int64_t missing = lane.fact("missing");
-    Ref<netw::LocalLinkConditions> silent = netw::LocalLinkConditions::create();
-    silent->set_packet_loss(1.0);
+    Ref<netw::NetwLinkConditions> silent = netw_test::link();
+    silent->set_loss_chance(1.0);
     rig.conditions(-1, silent);
     lane.step(p_silenced);
-    rig.conditions(-1, Ref<netw::LocalLinkConditions>());
+    rig.conditions(-1, Ref<netw::NetwLinkConditions>());
     lane.step(p_silenced + p_window + 8);
     return lane.fact("missing") - missing;
 }

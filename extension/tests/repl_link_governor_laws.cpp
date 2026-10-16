@@ -10,20 +10,20 @@ using namespace godot;
 namespace TestNetwReplLinkGovernor {
 
 using godot::Ref;
-using netw::LocalLinkConditions;
+using netw::NetwLinkConditions;
 using netw::repl::LinkGovernor;
 
 const int PEER = 5;
 
 void drive(
     LinkGovernor &r_link,
-    const Ref<LocalLinkConditions> &p_link,
+    const Ref<NetwLinkConditions> &p_link,
     int p_datagrams,
     int64_t p_from_tick
 ) {
     const double rtt_ms = p_link->get_latency_ms() * 2.0;
     const double jitter_ms = p_link->get_jitter_ms();
-    const double loss = p_link->get_packet_loss();
+    const double loss = p_link->get_loss_chance();
     double owed = 0.0;
     for (int at = 0; at < p_datagrams; ++at) {
         owed += loss;
@@ -74,7 +74,7 @@ TEST_CASE(
     "the budget whole"
 ) {
     LinkGovernor link;
-    drive(link, LocalLinkConditions::wifi(), int(LinkGovernor::WINDOW) * 2, 0);
+    drive(link, NetwLinkConditions::wifi(), int(LinkGovernor::WINDOW) * 2, 0);
 
     const bool it_stayed_good = link.mode(PEER) == LinkGovernor::GOOD;
     CHECK(it_stayed_good);
@@ -87,7 +87,7 @@ TEST_CASE(
     LinkGovernor link;
     drive(
         link,
-        LocalLinkConditions::mobile_4g(),
+        NetwLinkConditions::mobile_4g(),
         int(LinkGovernor::WINDOW) * 2,
         0
     );
@@ -101,7 +101,7 @@ TEST_CASE(
     "and the volatile budget halves"
 ) {
     LinkGovernor link;
-    drive(link, LocalLinkConditions::poor_3g(), int(LinkGovernor::WINDOW), 0);
+    drive(link, NetwLinkConditions::poor_3g(), int(LinkGovernor::WINDOW), 0);
 
     const bool it_went_bad = link.mode(PEER) == LinkGovernor::BAD;
     CHECK(it_went_bad);
@@ -110,7 +110,7 @@ TEST_CASE(
 
 TEST_CASE("[Networked][Repl][Hosted] the budget never halves below the floor") {
     LinkGovernor link;
-    drive(link, LocalLinkConditions::poor_3g(), int(LinkGovernor::WINDOW), 0);
+    drive(link, NetwLinkConditions::poor_3g(), int(LinkGovernor::WINDOW), 0);
 
     REQUIRE(link.mode(PEER) == LinkGovernor::BAD);
     NETW_CHECK_EQ(

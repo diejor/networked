@@ -1,4 +1,5 @@
 #include "support/frame_drive.h"
+#include "support/link.h"
 #include "support/netw_test.h"
 
 #include "godot/node.hpp"
@@ -84,9 +85,8 @@ class ClockLostPongScenario final : public netw_test::FrameScenario {
         host->NETW_API_VIRTUAL(set_multiplayer_peer)(link->get_server_peer());
 
         client_peer = link->create_client_peer();
-        Ref<netw::LocalLinkConditions> lossy
-            = netw::LocalLinkConditions::create(1);
-        lossy->set_packet_loss(1.0);
+        Ref<netw::NetwLinkConditions> lossy = netw_test::link(1);
+        lossy->set_loss_chance(1.0);
         link->set_link_conditions(client_peer.ptr(), lossy, 1);
 
         client.instantiate();

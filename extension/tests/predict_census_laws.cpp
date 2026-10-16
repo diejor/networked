@@ -1,3 +1,4 @@
+#include "support/link.h"
 #include "support/netw_test.h"
 
 #include "support/fault_log.h"
@@ -51,7 +52,7 @@ Scenario two_predicted_lanes() {
         .player(census_player("P"), 0)
         .player(census_player("Q"), 1);
     scenario.clients = 2;
-    scenario.conditions(netw::LocalLinkConditions::polls(4));
+    scenario.conditions(netw_test::polls(4));
     scenario.hold_input(1, "P", Vector2(1.0, 0.0));
     scenario.hold_input(1, "Q", Vector2(1.0, 0.0));
     return scenario.until(80);

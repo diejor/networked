@@ -1,3 +1,4 @@
+#include "support/link.h"
 #include "support/netw_test.h"
 
 #include "support/fault_log.h"
@@ -76,11 +77,7 @@ struct ActionRig {
     }
 
     void uplink_delay(int p_polls) {
-        rig.conditions(
-            -1,
-            netw::LocalLinkConditions::polls(p_polls),
-            rig.peer_id(0)
-        );
+        rig.conditions(-1, netw_test::polls(p_polls), rig.peer_id(0));
     }
 
     void gate_deadline(int p_ticks) {
@@ -470,8 +467,7 @@ struct ClientAction {
     Carrier *authority = nullptr;
     Node *orphan = nullptr;
 
-    ClientAction()
-        : rig(1) {
+    ClientAction() : rig(1) {
         rig.mount();
         WorldDecl world;
         world.player(
@@ -663,8 +659,7 @@ TEST_CASE(
     ClientAction fixture;
     fixture.owner->arm_action(fixture.session());
     netw::Netw::configure_clock(fixture.rig.branch(0))->ticks_per_second(24);
-    netw::Netw::configure_lagcomp(fixture.rig.branch(0))
-        ->max_future_action(17);
+    netw::Netw::configure_lagcomp(fixture.rig.branch(0))->max_future_action(17);
     configuring() = Configuring();
     configuring().session = fixture.session();
     configuring().carrier = fixture.owner;

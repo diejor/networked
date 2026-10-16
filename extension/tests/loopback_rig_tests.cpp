@@ -1,3 +1,4 @@
+#include "support/link.h"
 #include "support/netw_test.h"
 
 #include "support/loopback_rig.h"
@@ -5,7 +6,7 @@
 namespace TestNetwLoopbackRig {
 
 using namespace godot;
-using netw::LocalLinkConditions;
+using netw::NetwLinkConditions;
 using netw::NetwMultiplayer;
 using netw_test::LoopbackRig;
 
@@ -73,7 +74,7 @@ TEST_CASE(
     LoopbackRig rig(1);
     rig.pump(4);
 
-    Ref<LocalLinkConditions> slow = LocalLinkConditions::create(3);
+    Ref<NetwLinkConditions> slow = netw_test::link(3);
     slow->set_latency_ms(3.0 * 1000.0 / 60.0);
     rig.conditions(-1, slow);
 

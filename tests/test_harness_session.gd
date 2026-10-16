@@ -50,7 +50,8 @@ func test_link_conditions_for_sender() -> void:
 	var client := session.session().create_client_peer()
 	session.session().poll()
 
-	var conditions := LocalLinkConditions.create(44)
+	var conditions := NetwLinkConditions.new()
+	conditions.seed = 44
 	conditions.latency_ms = 50.0
 	session.set_link_conditions(
 		server,
@@ -63,7 +64,6 @@ func test_link_conditions_for_sender() -> void:
 		client.get_unique_id(),
 	)
 	assert_that(installed.latency_ms).is_equal(50.0)
-	assert_that(installed.effective_latency_ms()).is_equal(50.0)
 
 	session.clear_link_conditions(server, client.get_unique_id())
 	assert_that(

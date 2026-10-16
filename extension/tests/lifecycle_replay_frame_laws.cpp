@@ -1,4 +1,5 @@
 #include "support/frame_drive.h"
+#include "support/link.h"
 #include "support/minted_script.h"
 #include "support/netw_test.h"
 
@@ -30,7 +31,6 @@ var trigger_calls := 0
 var sparks := 0
 var fresh_sparks := 0
 
-
 func _init() -> void:
 	var e := Netw.configure_entity(self)
 	e.prediction.archetype = NetwPrediction.ARCHETYPE_SCRIPTED
@@ -38,12 +38,10 @@ func _init() -> void:
 	Netw.configure_property(self, &"aim").input()
 	Netw.configure_spawn(make_spark)
 
-
 func make_spark() -> Node:
 	var spark := Node3D.new()
 	Netw.configure_entity(spark).lifecycle = NetwEntity.LIFECYCLE_CONTROLLER
 	return spark
-
 
 func _network_tick(_delta: float, tick: int, is_fresh: bool) -> void:
 	beat += 1
@@ -152,8 +150,7 @@ class ReplayScenario final : public netw_test::FrameScenario {
         if (avatar_at(A) == nullptr) {
             return false;
         }
-        const Ref<netw::LocalLinkConditions> flight
-            = netw::LocalLinkConditions::create(61);
+        const Ref<netw::NetwLinkConditions> flight = netw_test::link(61);
         flight->set_latency_ms(double(ACK_DELAY_TICKS) * 1000.0 / TICKRATE);
         stand->loopback()
             ->set_link_conditions(stand->peer(-1), flight, stand->peer_id(A));

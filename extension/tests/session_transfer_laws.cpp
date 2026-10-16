@@ -246,10 +246,8 @@ var asked: Array = []
 var senders: Array = []
 var held: Dictionary = {}
 
-
 func _init() -> void:
 	Netw.configure_entity(self)
-
 
 @rpc("any_peer", "call_remote", "reliable")
 func ask(tag: int) -> Variant:
@@ -320,7 +318,6 @@ Ref<NetwPromise> ask(
 const char *STOCK_SOURCE = R"(extends Node
 
 var heard: Array = []
-
 
 @rpc("any_peer", "call_remote", "reliable")
 func poke(tag: int) -> void:
@@ -565,7 +562,7 @@ TEST_CASE(
 constexpr double REPORT_LATENCY_MS = 60000.0;
 
 void slow_reports(Table &p_table, int p_successor) {
-    Ref<netw::LocalLinkConditions> slow;
+    Ref<netw::NetwLinkConditions> slow;
     slow.instantiate();
     slow->set_latency_ms(REPORT_LATENCY_MS);
     for (int at = 0; at < p_table.rig.count(); ++at) {
@@ -1147,10 +1144,8 @@ TEST_CASE(
 
 const char *MAKER_SOURCE = R"(extends Node
 
-
 func _init() -> void:
 	Netw.configure_spawn(make)
-
 
 func make(label: String) -> Node:
 	var made := Node2D.new()
@@ -1160,17 +1155,14 @@ func make(label: String) -> Node:
 
 const char *CHICK_SOURCE = R"(extends Node2D
 
-
 func _init() -> void:
 	Netw.configure_entity(self).name = &"Chick"
 )";
 
 const char *SPAWNER_SOURCE = R"(extends MultiplayerSpawner
 
-
 func _ready() -> void:
 	set_spawn_function(build_one)
-
 
 func build_one(data: Variant) -> Node:
 	var made := Node2D.new()
@@ -1433,17 +1425,14 @@ const char *VITAL_SOURCE = R"(extends Node2D
 
 var hp := 0
 
-
 func _init() -> void:
 	Netw.configure_property(self, &"hp").broadcast()
 )";
 
 const char *KEEPER_SOURCE = R"(extends Node
 
-
 func _init() -> void:
 	Netw.configure_transfer(keep)
-
 
 func keep(node: Node) -> bool:
 	return node.name != &"Doomed"
@@ -2045,7 +2034,9 @@ TEST_CASE(
     table.rig.hold(successor);
     for (int missed : missed_clients) {
         netw::Netw::prepare_join(
-            table.rig.branch(missed), StringName("missed"), Array()
+            table.rig.branch(missed),
+            StringName("missed"),
+            Array()
         );
     }
     table.rig.pump(SETTLE_PUMPS);
@@ -2068,7 +2059,9 @@ TEST_CASE(
     const int late = table.rig.add_client();
     table.rig.mount_late(late);
     netw::Netw::prepare_join(
-        table.rig.branch(late), StringName("late"), Array()
+        table.rig.branch(late),
+        StringName("late"),
+        Array()
     );
     table.rig.pump(SETTLE_PUMPS);
     NetwMultiplayer *host = table.seat(successor);
@@ -2478,10 +2471,7 @@ void report_refused(Tamper p_tamper) {
         int64_t(1)
     );
     survivors_resume(table, successor, honest, late);
-    NETW_CHECK_EQ(
-        int(table.rig.peer(late)->is_linked_to(table.was(liar))),
-        0
-    );
+    NETW_CHECK_EQ(int(table.rig.peer(late)->is_linked_to(table.was(liar))), 0);
     NETW_CHECK_EQ(
         int(table.rig.peer(liar)->is_linked_to(table.rig.peer_id(late))),
         0

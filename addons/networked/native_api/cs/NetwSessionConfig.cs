@@ -129,7 +129,7 @@ public sealed class NetwSessionConfig : NetwRefCounted
             1089193088UL);
 
     /// <summary>
-    /// Simulated latency and packet loss for testing. Copied when applied.
+    /// <see cref="NetwLinkConditions"/> copied when the session starts.
     /// </summary>
     public NetwLinkConditions LinkConditions
     {
@@ -372,10 +372,6 @@ public sealed class NetwSessionConfig : NetwRefCounted
     private static readonly IntPtr _bindLink =
         NetwApi.MethodBind("NetwSessionConfig", "link", 2618458252UL);
 
-    /// <summary>
-    /// Sets <see cref="NetwSessionConfig.LinkConditions"/> to simulate latency
-    /// and packet loss.
-    /// </summary>
     public NetwSessionConfig Link(NetwLinkConditions linkConditions)
     {
         IntPtr slot0 = linkConditions?.Native ?? IntPtr.Zero;

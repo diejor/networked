@@ -6,26 +6,14 @@ using Godot.NativeInterop;
 namespace Networked;
 
 /// <summary>
-/// Simulated latency and packet loss for testing a real connection.
+/// Simulated latency and packet loss for testing.
 /// </summary>
 /// <remarks>
-/// Set it as <see cref="NetwSessionConfig.LinkConditions"/>. The peer is
-/// wrapped in a <c>LaggyMultiplayerPeer</c>, an optional extension that must be
-/// installed.
+/// Pass it to <see cref="NetwSessionConfig.Link"/>. Only debug builds apply it
+/// to a real connection.
 /// <code>
-/// var conditions := NetwLinkConditions.new()
-/// conditions.simulate_lag = true
-/// conditions.one_way_delay_max = 150.0
-/// conditions.lag_packet_loss_percent = 2.0
-/// config.link_conditions = conditions
+/// Netw.configure_session(self).link(NetwLinkConditions.wifi())
 /// </code>
-/// <para>
-/// It only works in debug builds and the editor. Set the environment variable
-/// <c>NETW_SHAPING</c> or the command line argument <c>--netw-shaping</c> to
-/// <c>on</c> or <c>off</c> to change that. The environment variable wins. It
-/// slows every connection of this peer. To slow one peer only, use
-/// <see cref="LocalLoopbackSession.SetLinkConditions"/>.
-/// </para>
 /// </remarks>
 public sealed class NetwLinkConditions : NetwRefCounted
 {
@@ -48,66 +36,25 @@ public sealed class NetwLinkConditions : NetwRefCounted
         return Adopt(NetwApi.Retained(NetwApi.ObjectOf(value)));
     }
 
-    private static readonly IntPtr _bindGetSimulateLag =
+    private static readonly IntPtr _bindGetLatencyMs =
         NetwApi.MethodBind(
             "NetwLinkConditions",
-            "get_simulate_lag",
-            36873697UL);
-
-    private static readonly IntPtr _bindSetSimulateLag =
-        NetwApi.MethodBind(
-            "NetwLinkConditions",
-            "set_simulate_lag",
-            2586408642UL);
-
-    /// <summary>
-    /// Turns the simulation on.
-    /// </summary>
-    public bool SimulateLag
-    {
-        get
-        {
-            byte answered = default;
-            NetwThunks.Ptrcall0_Byte(
-                _bindGetSimulateLag,
-                Checked,
-                ref answered);
-            return answered != 0;
-        }
-        set
-        {
-            byte slot0 = value ? (byte)1 : (byte)0;
-            long discarded = default;
-            NetwThunks.Ptrcall1_Byte_Long(
-                _bindSetSimulateLag,
-                Checked,
-                in slot0,
-                ref discarded);
-        }
-    }
-
-    private static readonly IntPtr _bindGetOneWayDelayMin =
-        NetwApi.MethodBind(
-            "NetwLinkConditions",
-            "get_one_way_delay_min",
+            "get_latency_ms",
             1740695150UL);
 
-    private static readonly IntPtr _bindSetOneWayDelayMin =
-        NetwApi.MethodBind(
-            "NetwLinkConditions",
-            "set_one_way_delay_min",
-            373806689UL);
+    private static readonly IntPtr _bindSetLatencyMs =
+        NetwApi.MethodBind("NetwLinkConditions", "set_latency_ms", 373806689UL);
 
     /// <summary>
-    /// The smallest one-way delay, in milliseconds.
+    /// Applied to each direction.
     /// </summary>
-    public double OneWayDelayMin
+    public double LatencyMs
     {
         get
         {
             double answered = default;
             NetwThunks.Ptrcall0_Double(
-                _bindGetOneWayDelayMin,
+                _bindGetLatencyMs,
                 Checked,
                 ref answered);
             return answered;
@@ -117,35 +64,62 @@ public sealed class NetwLinkConditions : NetwRefCounted
             double slot0 = value;
             long discarded = default;
             NetwThunks.Ptrcall1_Double_Long(
-                _bindSetOneWayDelayMin,
+                _bindSetLatencyMs,
                 Checked,
                 in slot0,
                 ref discarded);
         }
     }
 
-    private static readonly IntPtr _bindGetOneWayDelayMax =
+    private static readonly IntPtr _bindGetJitterMs =
+        NetwApi.MethodBind("NetwLinkConditions", "get_jitter_ms", 1740695150UL);
+
+    private static readonly IntPtr _bindSetJitterMs =
+        NetwApi.MethodBind("NetwLinkConditions", "set_jitter_ms", 373806689UL);
+
+    public double JitterMs
+    {
+        get
+        {
+            double answered = default;
+            NetwThunks.Ptrcall0_Double(_bindGetJitterMs, Checked, ref answered);
+            return answered;
+        }
+        set
+        {
+            double slot0 = value;
+            long discarded = default;
+            NetwThunks.Ptrcall1_Double_Long(
+                _bindSetJitterMs,
+                Checked,
+                in slot0,
+                ref discarded);
+        }
+    }
+
+    private static readonly IntPtr _bindGetLossChance =
         NetwApi.MethodBind(
             "NetwLinkConditions",
-            "get_one_way_delay_max",
+            "get_loss_chance",
             1740695150UL);
 
-    private static readonly IntPtr _bindSetOneWayDelayMax =
+    private static readonly IntPtr _bindSetLossChance =
         NetwApi.MethodBind(
             "NetwLinkConditions",
-            "set_one_way_delay_max",
+            "set_loss_chance",
             373806689UL);
 
     /// <summary>
-    /// The largest one-way delay, in milliseconds.
+    /// An unreliable packet is dropped. A reliable one arrives late, as if it
+    /// was sent again.
     /// </summary>
-    public double OneWayDelayMax
+    public double LossChance
     {
         get
         {
             double answered = default;
             NetwThunks.Ptrcall0_Double(
-                _bindGetOneWayDelayMax,
+                _bindGetLossChance,
                 Checked,
                 ref answered);
             return answered;
@@ -155,35 +129,32 @@ public sealed class NetwLinkConditions : NetwRefCounted
             double slot0 = value;
             long discarded = default;
             NetwThunks.Ptrcall1_Double_Long(
-                _bindSetOneWayDelayMax,
+                _bindSetLossChance,
                 Checked,
                 in slot0,
                 ref discarded);
         }
     }
 
-    private static readonly IntPtr _bindGetLagPacketLossPercent =
+    private static readonly IntPtr _bindGetReorderChance =
         NetwApi.MethodBind(
             "NetwLinkConditions",
-            "get_lag_packet_loss_percent",
+            "get_reorder_chance",
             1740695150UL);
 
-    private static readonly IntPtr _bindSetLagPacketLossPercent =
+    private static readonly IntPtr _bindSetReorderChance =
         NetwApi.MethodBind(
             "NetwLinkConditions",
-            "set_lag_packet_loss_percent",
+            "set_reorder_chance",
             373806689UL);
 
-    /// <summary>
-    /// Percent chance that a packet is lost, from <c>0</c> to <c>100</c>.
-    /// </summary>
-    public double LagPacketLossPercent
+    public double ReorderChance
     {
         get
         {
             double answered = default;
             NetwThunks.Ptrcall0_Double(
-                _bindGetLagPacketLossPercent,
+                _bindGetReorderChance,
                 Checked,
                 ref answered);
             return answered;
@@ -193,31 +164,176 @@ public sealed class NetwLinkConditions : NetwRefCounted
             double slot0 = value;
             long discarded = default;
             NetwThunks.Ptrcall1_Double_Long(
-                _bindSetLagPacketLossPercent,
+                _bindSetReorderChance,
                 Checked,
                 in slot0,
                 ref discarded);
         }
     }
 
-    private static readonly IntPtr _bindWrapPeer =
-        NetwApi.MethodBind("NetwLinkConditions", "wrap_peer", 1361059565UL);
+    private static readonly IntPtr _bindGetDuplicateChance =
+        NetwApi.MethodBind(
+            "NetwLinkConditions",
+            "get_duplicate_chance",
+            1740695150UL);
+
+    private static readonly IntPtr _bindSetDuplicateChance =
+        NetwApi.MethodBind(
+            "NetwLinkConditions",
+            "set_duplicate_chance",
+            373806689UL);
+
+    public double DuplicateChance
+    {
+        get
+        {
+            double answered = default;
+            NetwThunks.Ptrcall0_Double(
+                _bindGetDuplicateChance,
+                Checked,
+                ref answered);
+            return answered;
+        }
+        set
+        {
+            double slot0 = value;
+            long discarded = default;
+            NetwThunks.Ptrcall1_Double_Long(
+                _bindSetDuplicateChance,
+                Checked,
+                in slot0,
+                ref discarded);
+        }
+    }
+
+    private static readonly IntPtr _bindGetStallChance =
+        NetwApi.MethodBind(
+            "NetwLinkConditions",
+            "get_stall_chance",
+            1740695150UL);
+
+    private static readonly IntPtr _bindSetStallChance =
+        NetwApi.MethodBind(
+            "NetwLinkConditions",
+            "set_stall_chance",
+            373806689UL);
 
     /// <summary>
-    /// Returns <paramref name="base"/> wrapped in a <c>LaggyMultiplayerPeer</c>
-    /// with these settings. Returns <paramref name="base"/> unchanged when
-    /// <see cref="NetwLinkConditions.SimulateLag"/> is off, in a release build,
-    /// or when <c>LaggyMultiplayerPeer</c> is not installed.
+    /// The link holds every packet for
+    /// <see cref="NetwLinkConditions.StallMs"/>.
     /// </summary>
-    public MultiplayerPeer WrapPeer(MultiplayerPeer @base)
+    public double StallChance
     {
-        godot_variant slot0 = VariantUtils.CreateFromGodotObject(@base);
-        godot_variant answered = default;
-        NetwThunks.Call1(_bindWrapPeer, Checked, in slot0, ref answered);
-        slot0.Dispose();
-        MultiplayerPeer result =
-            (MultiplayerPeer)VariantUtils.ConvertToGodotObject(answered);
-        answered.Dispose();
-        return result;
+        get
+        {
+            double answered = default;
+            NetwThunks.Ptrcall0_Double(
+                _bindGetStallChance,
+                Checked,
+                ref answered);
+            return answered;
+        }
+        set
+        {
+            double slot0 = value;
+            long discarded = default;
+            NetwThunks.Ptrcall1_Double_Long(
+                _bindSetStallChance,
+                Checked,
+                in slot0,
+                ref discarded);
+        }
+    }
+
+    private static readonly IntPtr _bindGetStallMs =
+        NetwApi.MethodBind("NetwLinkConditions", "get_stall_ms", 1740695150UL);
+
+    private static readonly IntPtr _bindSetStallMs =
+        NetwApi.MethodBind("NetwLinkConditions", "set_stall_ms", 373806689UL);
+
+    public double StallMs
+    {
+        get
+        {
+            double answered = default;
+            NetwThunks.Ptrcall0_Double(_bindGetStallMs, Checked, ref answered);
+            return answered;
+        }
+        set
+        {
+            double slot0 = value;
+            long discarded = default;
+            NetwThunks.Ptrcall1_Double_Long(
+                _bindSetStallMs,
+                Checked,
+                in slot0,
+                ref discarded);
+        }
+    }
+
+    private static readonly IntPtr _bindGetSeed =
+        NetwApi.MethodBind("NetwLinkConditions", "get_seed", 3905245786UL);
+
+    private static readonly IntPtr _bindSetSeed =
+        NetwApi.MethodBind("NetwLinkConditions", "set_seed", 1286410249UL);
+
+    public long Seed
+    {
+        get
+        {
+            long answered = default;
+            NetwThunks.Ptrcall0_Long(_bindGetSeed, Checked, ref answered);
+            return answered;
+        }
+        set
+        {
+            long slot0 = value;
+            long discarded = default;
+            NetwThunks.Ptrcall1_Long_Long(
+                _bindSetSeed,
+                Checked,
+                in slot0,
+                ref discarded);
+        }
+    }
+
+    private static readonly IntPtr _bindWifi =
+        NetwApi.MethodBind("NetwLinkConditions", "wifi", 109721920UL);
+
+    public static NetwLinkConditions Wifi()
+    {
+        IntPtr answered = default;
+        NetwThunks.Ptrcall0_IntPtr(_bindWifi, IntPtr.Zero, ref answered);
+        return NetwLinkConditions.Adopt(answered);
+    }
+
+    private static readonly IntPtr _bindMobile4G =
+        NetwApi.MethodBind("NetwLinkConditions", "mobile_4g", 109721920UL);
+
+    public static NetwLinkConditions Mobile4G()
+    {
+        IntPtr answered = default;
+        NetwThunks.Ptrcall0_IntPtr(_bindMobile4G, IntPtr.Zero, ref answered);
+        return NetwLinkConditions.Adopt(answered);
+    }
+
+    private static readonly IntPtr _bindPoor3G =
+        NetwApi.MethodBind("NetwLinkConditions", "poor_3g", 109721920UL);
+
+    public static NetwLinkConditions Poor3G()
+    {
+        IntPtr answered = default;
+        NetwThunks.Ptrcall0_IntPtr(_bindPoor3G, IntPtr.Zero, ref answered);
+        return NetwLinkConditions.Adopt(answered);
+    }
+
+    private static readonly IntPtr _bindSatellite =
+        NetwApi.MethodBind("NetwLinkConditions", "satellite", 109721920UL);
+
+    public static NetwLinkConditions Satellite()
+    {
+        IntPtr answered = default;
+        NetwThunks.Ptrcall0_IntPtr(_bindSatellite, IntPtr.Zero, ref answered);
+        return NetwLinkConditions.Adopt(answered);
     }
 }

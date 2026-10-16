@@ -19,7 +19,7 @@ namespace Networked;
 /// var client := session.create_client_peer()
 /// session.poll()
 ///
-/// session.set_link_conditions(server, LocalLinkConditions.wifi())
+/// session.set_link_conditions(server, NetwLinkConditions.wifi())
 /// </code>
 /// </remarks>
 public sealed class LocalLoopbackSession : NetwRefCounted
@@ -339,7 +339,7 @@ public sealed class LocalLoopbackSession : NetwRefCounted
         NetwApi.MethodBind(
             "LocalLoopbackSession",
             "set_link_conditions",
-            2254483817UL);
+            889336412UL);
 
     /// <summary>
     /// Applies <paramref name="conditions"/> to packets arriving at
@@ -348,7 +348,7 @@ public sealed class LocalLoopbackSession : NetwRefCounted
     /// </summary>
     public void SetLinkConditions(
         LocalMultiplayerPeer peer,
-        LocalLinkConditions conditions,
+        NetwLinkConditions conditions,
         int senderId = 0)
     {
         IntPtr slot0 = peer?.Native ?? IntPtr.Zero;
@@ -409,13 +409,13 @@ public sealed class LocalLoopbackSession : NetwRefCounted
         NetwApi.MethodBind(
             "LocalLoopbackSession",
             "get_link_conditions",
-            3941083202UL);
+            2151623440UL);
 
     /// <summary>
     /// Returns the conditions installed on <paramref name="peer"/> for
     /// <paramref name="senderId"/>, or <c>null</c> if there are none.
     /// </summary>
-    public LocalLinkConditions GetLinkConditions(
+    public NetwLinkConditions GetLinkConditions(
         LocalMultiplayerPeer peer,
         int senderId = 0)
     {
@@ -428,7 +428,7 @@ public sealed class LocalLoopbackSession : NetwRefCounted
             in slot0,
             in slot1,
             ref answered);
-        return LocalLinkConditions.Adopt(answered);
+        return NetwLinkConditions.Adopt(answered);
     }
 
     private static readonly IntPtr _bindPurgePacketsFrom =

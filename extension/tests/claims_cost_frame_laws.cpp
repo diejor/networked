@@ -1,4 +1,5 @@
 #include "support/frame_drive.h"
+#include "support/link.h"
 #include "support/minted_script.h"
 #include "support/netw_test.h"
 
@@ -215,8 +216,7 @@ class CostScenario final : public netw_test::FrameScenario {
     }
 
     void delay(int p_receiver, int p_sender, int p_seed) {
-        const Ref<netw::LocalLinkConditions> flight
-            = netw::LocalLinkConditions::create(p_seed);
+        const Ref<netw::NetwLinkConditions> flight = netw_test::link(p_seed);
         flight->set_latency_ms(double(FLIGHT_TICKS) * 1000.0 / TICKRATE);
         stand->loopback()->set_link_conditions(
             stand->peer(p_receiver),

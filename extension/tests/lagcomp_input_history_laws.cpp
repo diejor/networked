@@ -1,3 +1,4 @@
+#include "support/link.h"
 #include "support/netw_test.h"
 
 #include "support/predict_rows.h"
@@ -44,7 +45,7 @@ Scenario consumed_lane() {
         consumed_player(),
         0
     );
-    scenario.conditions(netw::LocalLinkConditions::polls(4));
+    scenario.conditions(netw_test::polls(4));
     scenario.hold_input(1, "P", Vector2(1.0, 0.0));
     return scenario.until(80);
 }

@@ -1,4 +1,5 @@
 #include "support/frame_drive.h"
+#include "support/link.h"
 #include "support/minted_script.h"
 #include "support/netw_test.h"
 
@@ -135,9 +136,7 @@ class SettleScenario final : public netw_test::FrameScenario {
             return RID();
         }
         const bool lead = p_owner != nullptr;
-        built->set_position(
-            Vector3(real_t(lead ? LEAD_START : 0.0), 0.0, 0.0)
-        );
+        built->set_position(Vector3(real_t(lead ? LEAD_START : 0.0), 0.0, 0.0));
         built->set(StringName("speed"), lead ? LEAD_SPEED : TAIL_SPEED);
         p_arena->add_child(built);
         return made;
@@ -163,10 +162,7 @@ class SettleScenario final : public netw_test::FrameScenario {
         if (!stand->ready()) {
             return false;
         }
-        stand->teach(
-            StringName(WALKER_ID),
-            callable_mp_static(&build_walker)
-        );
+        stand->teach(StringName(WALKER_ID), callable_mp_static(&build_walker));
         stand->mount();
         Node *arena = stand->arena();
         stand->arm(TICKRATE);
@@ -189,8 +185,7 @@ class SettleScenario final : public netw_test::FrameScenario {
         }
         join(SERVER);
         join(CLIENT);
-        Ref<netw::LocalLinkConditions> slow
-            = netw::LocalLinkConditions::create();
+        Ref<netw::NetwLinkConditions> slow = netw_test::link();
         slow->set_latency_ms(LATENCY_MS);
         stand->loopback()->set_link_conditions(
             stand->peer(CLIENT),
@@ -227,10 +222,8 @@ class SettleScenario final : public netw_test::FrameScenario {
                 continue;
             }
             evidence.blocked += 1;
-            evidence.deepest = std::max(
-                evidence.deepest,
-                std::abs(a_was - b_now - HULL)
-            );
+            evidence.deepest
+                = std::max(evidence.deepest, std::abs(a_was - b_now - HULL));
         }
     }
 

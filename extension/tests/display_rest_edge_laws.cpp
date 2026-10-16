@@ -1,3 +1,4 @@
+#include "support/link.h"
 #include "support/netw_test.h"
 
 #if defined(NETW_TIER_HOSTED) && defined(DEBUG_ENABLED)
@@ -192,14 +193,13 @@ struct Glide {
     }
 
     void delay_link(double p_ms) {
-        const Ref<netw::LocalLinkConditions> late
-            = netw::LocalLinkConditions::create(1);
+        const Ref<netw::NetwLinkConditions> late = netw_test::link(1);
         late->set_latency_ms(p_ms);
         rig.conditions(0, late, SERVER);
     }
 
     void clear_link() {
-        rig.conditions(0, netw::LocalLinkConditions::perfect(), SERVER);
+        rig.conditions(0, netw_test::link(), SERVER);
     }
 
     int64_t frames_out() const {

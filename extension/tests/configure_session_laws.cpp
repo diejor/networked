@@ -166,9 +166,8 @@ TEST_CASE(
 
     CHECK(branch.peer() == offered);
     CHECK(branch.api()->clock_is_configured());
-    const int tickrate = branch.api()->clock_get_param(
-        NetwMultiplayer::CLOCK_PARAM_TICKRATE
-    );
+    const int tickrate
+        = branch.api()->clock_get_param(NetwMultiplayer::CLOCK_PARAM_TICKRATE);
     NETW_CHECK_EQ(tickrate, 60);
 }
 
@@ -282,7 +281,7 @@ TEST_CASE(
     Mounted branch("CS9Tree");
     Ref<netw::NetwLinkConditions> conditions;
     conditions.instantiate();
-    conditions->set_simulate_lag(true);
+
     Netw::configure_session(child_named(branch.tree, "Session"))
         ->link(conditions);
     const Ref<MultiplayerPeer> offered = a_server();

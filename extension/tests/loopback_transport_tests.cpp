@@ -1,16 +1,4 @@
-// Laws for the in-process loopback transport: LocalMultiplayerPeer, the
-// session that links peers together, and the conditions that impair the link
-// between them.
-//
-// The cases exist because every other family's tests run over this pair, so a
-// wrong answer here reads as a bug somewhere else. They divide in two: what a
-// peer does with a packet (who it reaches, who it stops reaching once a peer
-// closes), and what the session does to a packet in flight (delay it, drop it,
-// duplicate it, hold it, forget it).
-//
-// Nothing here is timed against a clock. Session time advances only when a
-// poll advances it, which is what makes a latency countable in polls and a run
-// reproducible.
+#include "support/link.h"
 
 #include "support/netw_recorder.h"
 #include "support/netw_test.h"
@@ -22,9 +10,9 @@
 namespace TestNetwLoopbackTransport {
 
 using namespace godot;
-using netw::LocalLinkConditions;
 using netw::LocalLoopbackSession;
 using netw::LocalMultiplayerPeer;
+using netw::NetwLinkConditions;
 using netw_test::Recorder;
 
 constexpr double PERIOD_MS = 1000.0 / 60.0;
@@ -44,8 +32,6 @@ Pair connected_pair() {
     return pair;
 }
 
-// PacketPeer's C++ surface takes a raw buffer and its script surface takes a
-// PackedByteArray. The cases want one spelling, and this is it.
 Error send(
     const Ref<LocalMultiplayerPeer> &p_peer,
     const PackedByteArray &p_bytes
@@ -75,8 +61,6 @@ PackedByteArray receive(const Ref<LocalMultiplayerPeer> &p_peer) {
 #endif
 }
 
-// MultiplayerPeer::is_server is a C++ virtual that the extension tier does not
-// bind, so the two tiers reach it under different names.
 bool is_server(const Ref<LocalMultiplayerPeer> &p_peer) {
     return p_peer->NETW_PEER_VIRTUAL(is_server)();
 }
@@ -141,15 +125,15 @@ int survives(
     return arrived;
 }
 
-Ref<LocalLinkConditions> jittered(int64_t p_seed) {
-    Ref<LocalLinkConditions> conditions = LocalLinkConditions::create(p_seed);
+Ref<NetwLinkConditions> jittered(int64_t p_seed) {
+    Ref<NetwLinkConditions> conditions = netw_test::link(p_seed);
     conditions->set_jitter_ms(4.0 * PERIOD_MS);
-    conditions->set_reorder(1.0);
+    conditions->set_reorder_chance(1.0);
     return conditions;
 }
 
 Vector<int> arrival_order(
-    const Ref<LocalLinkConditions> &p_conditions,
+    const Ref<NetwLinkConditions> &p_conditions,
     int p_count
 ) {
     Pair pair = connected_pair();
@@ -186,8 +170,8 @@ String as_text(const Vector<int> &p_values) {
     return text;
 }
 
-Ref<LocalLinkConditions> with_latency(int64_t p_seed, double p_periods) {
-    Ref<LocalLinkConditions> conditions = LocalLinkConditions::create(p_seed);
+Ref<NetwLinkConditions> with_latency(int64_t p_seed, double p_periods) {
+    Ref<NetwLinkConditions> conditions = netw_test::link(p_seed);
     conditions->set_latency_ms(p_periods * PERIOD_MS);
     return conditions;
 }
@@ -449,9 +433,9 @@ TEST_CASE(
     "and a lost unreliable one is gone"
 ) {
     Pair reliable = connected_pair();
-    Ref<LocalLinkConditions> always_lost = LocalLinkConditions::create(10);
-    always_lost->set_packet_loss(1.0);
-    always_lost->set_retransmit_ms(3.0 * PERIOD_MS);
+    Ref<NetwLinkConditions> always_lost = netw_test::link(10);
+    always_lost->set_loss_chance(1.0);
+    always_lost->set_latency_ms(10.0);
     reliable.session->set_link_conditions(reliable.server.ptr(), always_lost);
 
     const PackedByteArray payload = one_byte(4);
@@ -466,8 +450,8 @@ TEST_CASE(
     CHECK(bool(receive(reliable.server) == payload));
 
     Pair unreliable = connected_pair();
-    Ref<LocalLinkConditions> dropped = LocalLinkConditions::create(10);
-    dropped->set_packet_loss(1.0);
+    Ref<NetwLinkConditions> dropped = netw_test::link(10);
+    dropped->set_loss_chance(1.0);
     unreliable.session->set_link_conditions(unreliable.server.ptr(), dropped);
     send_counted(
         unreliable,
@@ -483,9 +467,9 @@ TEST_CASE(
     "under jitter"
 ) {
     Pair pair = connected_pair();
-    Ref<LocalLinkConditions> shuffling = LocalLinkConditions::create(123);
+    Ref<NetwLinkConditions> shuffling = netw_test::link(123);
     shuffling->set_jitter_ms(6.0 * PERIOD_MS);
-    shuffling->set_reorder(1.0);
+    shuffling->set_reorder_chance(1.0);
     pair.session->set_link_conditions(pair.server.ptr(), shuffling);
 
     send_counted(pair, 12, MultiplayerPeer::TRANSFER_MODE_RELIABLE, true);
@@ -504,8 +488,8 @@ TEST_CASE(
     "twice, one period apart"
 ) {
     Pair pair = connected_pair();
-    Ref<LocalLinkConditions> doubling = LocalLinkConditions::create(10);
-    doubling->set_duplicate(1.0);
+    Ref<NetwLinkConditions> doubling = netw_test::link(10);
+    doubling->set_duplicate_chance(1.0);
     pair.session->set_link_conditions(pair.server.ptr(), doubling);
 
     pair.client->set_target_peer(1);
@@ -522,9 +506,9 @@ TEST_CASE(
     "window closes"
 ) {
     Pair pair = connected_pair();
-    Ref<LocalLinkConditions> stalling = LocalLinkConditions::create(10);
-    stalling->set_throttle(1.0);
-    stalling->set_throttle_ms(4.0 * PERIOD_MS);
+    Ref<NetwLinkConditions> stalling = netw_test::link(10);
+    stalling->set_stall_chance(1.0);
+    stalling->set_stall_ms(4.0 * PERIOD_MS);
     pair.session->set_link_conditions(pair.server.ptr(), stalling);
 
     pair.client->set_target_peer(1);
@@ -619,8 +603,8 @@ TEST_CASE(
     "[Networked][Transport][Hosted] Re-installing conditions resets only that "
     "sender's random streams"
 ) {
-    Ref<LocalLinkConditions> half_lost = LocalLinkConditions::create(21);
-    half_lost->set_packet_loss(0.5);
+    Ref<NetwLinkConditions> half_lost = netw_test::link(21);
+    half_lost->set_loss_chance(0.5);
 
     Pair reference = connected_pair();
     reference.session->set_link_conditions(reference.server.ptr(), half_lost);
@@ -628,8 +612,7 @@ TEST_CASE(
         = survives(reference.session, reference.server, reference.client);
     const int second_draw
         = survives(reference.session, reference.server, reference.client);
-    // Without two different draws the case cannot tell a reset stream from a
-    // running one, and would pass on an implementation that resets nothing.
+
     REQUIRE(first_draw != second_draw);
 
     Ref<LocalLoopbackSession> session;
@@ -672,8 +655,8 @@ TEST_CASE(
     const Vector<int> jitter_alone = arrival_order(jittered(SEED), COUNT);
     REQUIRE(jitter_alone.size() == COUNT);
 
-    Ref<LocalLinkConditions> duplicating = jittered(SEED);
-    duplicating->set_duplicate(0.5);
+    Ref<NetwLinkConditions> duplicating = jittered(SEED);
+    duplicating->set_duplicate_chance(0.5);
 
     const String produced = as_text(arrival_order(duplicating, COUNT));
     const String expected = as_text(jitter_alone);
@@ -682,6 +665,89 @@ TEST_CASE(
     CAPTURE(duplicated);
     CAPTURE(undisturbed);
     CHECK(bool(produced == expected));
+}
+
+} // namespace TestNetwLoopbackTransport
+
+namespace TestNetwLoopbackTransport {
+
+TEST_CASE(
+    "[Networked][Transport][Hosted] Ordered unreliable discards a late "
+    "packet only on the sender and channel that already delivered newer"
+) {
+    for (const auto mode :
+         {MultiplayerPeer::TRANSFER_MODE_UNRELIABLE,
+          MultiplayerPeer::TRANSFER_MODE_UNRELIABLE_ORDERED}) {
+        Pair pair = connected_pair();
+        Ref<NetwLinkConditions> delayed = netw_test::polls(4);
+        pair.session->set_link_conditions(pair.server.ptr(), delayed);
+        pair.client->set_target_peer(1);
+        pair.client->set_transfer_mode(mode);
+        pair.client->set_transfer_channel(2);
+        CHECK_EQ(send(pair.client, one_byte(0)), Error::OK);
+        pair.client->set_transfer_channel(3);
+        CHECK_EQ(send(pair.client, one_byte(2)), Error::OK);
+        const Ref<LocalMultiplayerPeer> other
+            = pair.session->create_client_peer();
+        other->set_target_peer(1);
+        other->set_transfer_mode(mode);
+        other->set_transfer_channel(2);
+        CHECK_EQ(send(other, one_byte(3)), Error::OK);
+        pair.session->set_link_conditions(pair.server.ptr(), netw_test::link());
+        pair.client->set_transfer_channel(2);
+        CHECK_EQ(send(pair.client, one_byte(1)), Error::OK);
+        for (int poll = 0; poll < 5; ++poll) {
+            pair.session->poll();
+        }
+        const String expected
+            = mode == MultiplayerPeer::TRANSFER_MODE_UNRELIABLE
+            ? String("1,0,2,3")
+            : String("1,2,3");
+        CHECK(bool(drain(pair.server) == expected));
+    }
+}
+
+} // namespace TestNetwLoopbackTransport
+
+namespace TestNetwLoopbackTransport {
+
+TEST_CASE(
+    "[Networked][Transport][Hosted] Stall holds reliable packets and "
+    "unreliable packets until the same window closes"
+) {
+    for (const auto mode :
+         {MultiplayerPeer::TRANSFER_MODE_RELIABLE,
+          MultiplayerPeer::TRANSFER_MODE_UNRELIABLE}) {
+        for (bool prequeued : {false, true}) {
+            Pair pair = connected_pair();
+            Ref<NetwLinkConditions> conditions = netw_test::link(17);
+            pair.client->set_target_peer(1);
+            pair.client->set_transfer_mode(mode);
+            if (prequeued) {
+                conditions->set_latency_ms(3.0 * PERIOD_MS);
+                pair.session->set_link_conditions(
+                    pair.server.ptr(),
+                    conditions
+                );
+                CHECK_EQ(send(pair.client, one_byte(0)), Error::OK);
+                pair.session->poll();
+                conditions->set_latency_ms(0.0);
+            }
+            conditions->set_stall_chance(1.0);
+            conditions->set_stall_ms(4.0 * PERIOD_MS);
+            pair.session->set_link_conditions(pair.server.ptr(), conditions);
+            CHECK_EQ(send(pair.client, one_byte(1)), Error::OK);
+            for (int poll = 0; poll < 3; ++poll) {
+                pair.session->poll();
+                NETW_CHECK_EQ(pair.server->get_available_packet_count(), 0);
+            }
+            pair.session->poll();
+            NETW_CHECK_EQ(
+                pair.server->get_available_packet_count(),
+                prequeued ? 2 : 1
+            );
+        }
+    }
 }
 
 } // namespace TestNetwLoopbackTransport

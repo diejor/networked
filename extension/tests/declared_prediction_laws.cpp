@@ -1,4 +1,5 @@
 #include "support/fault_log.h"
+#include "support/link.h"
 #include "support/netw_test.h"
 
 #include "support/netw_cells.h"
@@ -50,7 +51,7 @@ Scenario declared_lane(
         .lag_compensated()
         .player(predicted_player(p_schedule), 0);
     if (p_delayed) {
-        scenario.conditions(netw::LocalLinkConditions::polls(4));
+        scenario.conditions(netw_test::polls(4));
     }
     scenario.hold_input(1, "P", godot::Vector2(1.0, 0.0));
     return scenario;
@@ -75,7 +76,7 @@ Scenario snap_lane() {
             .recovered_by(netw::RecoveryPolicy::REBASE_RECOVER),
         0
     );
-    scenario.conditions(netw::LocalLinkConditions::polls(4));
+    scenario.conditions(netw_test::polls(4));
     scenario.hold_input(1, "P", godot::Vector2(1.0, 0.0));
     scenario.perturb(30, "P", godot::Vector2(60.0, -40.0));
     return scenario.until(100);
@@ -97,7 +98,7 @@ Scenario joint_lane() {
         .island(godot::StringName("P"), members)
         .simulating(godot::StringName("Q"));
     scenario.clients = 2;
-    scenario.conditions(netw::LocalLinkConditions::polls(4));
+    scenario.conditions(netw_test::polls(4));
     scenario.hold_input(1, "P", godot::Vector2(1.0, 0.0));
     scenario.hold_input(1, "Q", godot::Vector2(1.0, 0.0));
     scenario.perturb(30, "P", godot::Vector2(60.0, -40.0));
@@ -143,7 +144,7 @@ Scenario buffered_frame_lane() {
             .buffered(1),
         0
     );
-    scenario.conditions(netw::LocalLinkConditions::polls(4));
+    scenario.conditions(netw_test::polls(4));
     scenario.hold_input(1, "P", godot::Vector2(1.0, 0.0));
     godot::PackedInt32Array ticks;
     for (int index = 0; index < 30; ++index) {
@@ -182,9 +183,8 @@ Scenario varied_frame_lane() {
 Scenario deaf_frame_lane() {
     Scenario scenario = buffered_frame_lane();
     scenario.label = "deaf-frame";
-    godot::Ref<netw::LocalLinkConditions> deaf
-        = netw::LocalLinkConditions::create(1);
-    deaf->set_packet_loss(1.0);
+    godot::Ref<netw::NetwLinkConditions> deaf = netw_test::link(1);
+    deaf->set_loss_chance(1.0);
     scenario.inbound(deaf);
     godot::PackedInt32Array ticks;
     for (int index = 0; index < netw::predict::ACK_AGE_MAX + 16; ++index) {

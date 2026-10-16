@@ -12,29 +12,25 @@ NetwLink
 
 **Inherits:** :godot:`RefCounted`
 
-Fluent local loopback link control for harness tests.
+.. container:: contribute
 
-.. rst-class:: classref-introduction-group
+	There is currently no description for this class. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
 
-Description
------------
+.. rst-class:: classref-reftable-group
 
-Every setter mutates the installed :ref:`LocalLinkConditions<class_LocalLinkConditions>` for one directional path and returns this handle for chaining, so impairment is authored in one continuous expression.
+Properties
+----------
 
-::
+.. table::
+   :widths: auto
 
-    game.degrade(client).profile(NetwLink.Profile.POOR_3G)
-    game.degrade(client).inbound().latency_ms(120)
-    game.path(client, host).loss(0.1).latency_ms(66).seed(1)
-
-::
-
-    inbound: server to player. This affects what the player sees.
-    outbound: player to server. This affects when player actions arrive.
-    degrade(): inbound and outbound.
-    path(from_runner, to_runner): packets from one runner to another runner.
-
-\ Use :ref:`clear()<class_NetwLink_method_clear>` to restore a perfect path.
+   +---------------------------------------------------------+-----------------------------------------------------+-------+
+   | :ref:`LocalLoopbackSession<class_LocalLoopbackSession>` | :ref:`session<class_NetwLink_property_session>`     |       |
+   +---------------------------------------------------------+-----------------------------------------------------+-------+
+   | :ref:`LocalMultiplayerPeer<class_LocalMultiplayerPeer>` | :ref:`peer<class_NetwLink_property_peer>`           |       |
+   +---------------------------------------------------------+-----------------------------------------------------+-------+
+   | :godot:`int`                                            | :ref:`sender_id<class_NetwLink_property_sender_id>` | ``0`` |
+   +---------------------------------------------------------+-----------------------------------------------------+-------+
 
 .. rst-class:: classref-reftable-group
 
@@ -44,29 +40,31 @@ Methods
 .. table::
    :widths: auto
 
-   +---------------------------------+----------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwLink<class_NetwLink>` | :ref:`latency_ms<class_NetwLink_method_latency_ms>`\ (\ ms\: :godot:`float`\ )                                 |
-   +---------------------------------+----------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwLink<class_NetwLink>` | :ref:`jitter_ms<class_NetwLink_method_jitter_ms>`\ (\ ms\: :godot:`float`\ )                                   |
-   +---------------------------------+----------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwLink<class_NetwLink>` | :ref:`loss<class_NetwLink_method_loss>`\ (\ probability\: :godot:`float`\ )                                    |
-   +---------------------------------+----------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwLink<class_NetwLink>` | :ref:`reorder<class_NetwLink_method_reorder>`\ (\ probability\: :godot:`float`\ )                              |
-   +---------------------------------+----------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwLink<class_NetwLink>` | :ref:`duplicate<class_NetwLink_method_duplicate>`\ (\ probability\: :godot:`float`\ )                          |
-   +---------------------------------+----------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwLink<class_NetwLink>` | :ref:`throttle<class_NetwLink_method_throttle>`\ (\ probability\: :godot:`float`, ms\: :godot:`float` = 0.0\ ) |
-   +---------------------------------+----------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwLink<class_NetwLink>` | :ref:`retransmit_ms<class_NetwLink_method_retransmit_ms>`\ (\ ms\: :godot:`float`\ )                           |
-   +---------------------------------+----------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwLink<class_NetwLink>` | :ref:`seed<class_NetwLink_method_seed>`\ (\ n\: :godot:`int`\ )                                                |
-   +---------------------------------+----------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwLink<class_NetwLink>` | :ref:`profile<class_NetwLink_method_profile>`\ (\ profile_id\: :ref:`Profile<enum_NetwLink_Profile>`\ )        |
-   +---------------------------------+----------------------------------------------------------------------------------------------------------------+
-   | :godot:`float`                  | :ref:`effective_latency_ms<class_NetwLink_method_effective_latency_ms>`\ (\ )                                  |
-   +---------------------------------+----------------------------------------------------------------------------------------------------------------+
-   | |void|                          | :ref:`clear<class_NetwLink_method_clear>`\ (\ )                                                                |
-   +---------------------------------+----------------------------------------------------------------------------------------------------------------+
+   +-----------------------------------------------------+-------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwLink<class_NetwLink>`                     | :ref:`latency_ms<class_NetwLink_method_latency_ms>`\ (\ ms\: :godot:`float`\ )                                    |
+   +-----------------------------------------------------+-------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwLink<class_NetwLink>`                     | :ref:`jitter_ms<class_NetwLink_method_jitter_ms>`\ (\ ms\: :godot:`float`\ )                                      |
+   +-----------------------------------------------------+-------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwLink<class_NetwLink>`                     | :ref:`loss<class_NetwLink_method_loss>`\ (\ probability\: :godot:`float`\ )                                       |
+   +-----------------------------------------------------+-------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwLink<class_NetwLink>`                     | :ref:`reorder<class_NetwLink_method_reorder>`\ (\ probability\: :godot:`float`\ )                                 |
+   +-----------------------------------------------------+-------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwLink<class_NetwLink>`                     | :ref:`duplicate<class_NetwLink_method_duplicate>`\ (\ probability\: :godot:`float`\ )                             |
+   +-----------------------------------------------------+-------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwLink<class_NetwLink>`                     | :ref:`stall<class_NetwLink_method_stall>`\ (\ probability\: :godot:`float`, ms\: :godot:`float` = 0.0\ )          |
+   +-----------------------------------------------------+-------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwLink<class_NetwLink>`                     | :ref:`seed<class_NetwLink_method_seed>`\ (\ n\: :godot:`int`\ )                                                   |
+   +-----------------------------------------------------+-------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwLink<class_NetwLink>`                     | :ref:`profile<class_NetwLink_method_profile>`\ (\ profile_id\: :ref:`Profile<enum_NetwLink_Profile>`\ )           |
+   +-----------------------------------------------------+-------------------------------------------------------------------------------------------------------------------+
+   | :godot:`float`                                      | :ref:`effective_latency_ms<class_NetwLink_method_effective_latency_ms>`\ (\ )                                     |
+   +-----------------------------------------------------+-------------------------------------------------------------------------------------------------------------------+
+   | |void|                                              | :ref:`clear<class_NetwLink_method_clear>`\ (\ )                                                                   |
+   +-----------------------------------------------------+-------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwLinkConditions<class_NetwLinkConditions>` | :ref:`read_conditions<class_NetwLink_method_read_conditions>`\ (\ )                                               |
+   +-----------------------------------------------------+-------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwLink<class_NetwLink>`                     | :ref:`apply<class_NetwLink_method_apply>`\ (\ conditions\: :ref:`NetwLinkConditions<class_NetwLinkConditions>`\ ) |
+   +-----------------------------------------------------+-------------------------------------------------------------------------------------------------------------------+
 
 .. rst-class:: classref-section-separator
 
@@ -149,6 +147,53 @@ enum **Profile**: :ref:`🔗<enum_NetwLink_Profile>`
 
 .. rst-class:: classref-descriptions-group
 
+Property Descriptions
+---------------------
+
+.. _class_NetwLink_property_session:
+
+.. rst-class:: classref-property
+
+:ref:`LocalLoopbackSession<class_LocalLoopbackSession>` **session** :ref:`🔗<class_NetwLink_property_session>`
+
+.. container:: contribute
+
+	There is currently no description for this property. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NetwLink_property_peer:
+
+.. rst-class:: classref-property
+
+:ref:`LocalMultiplayerPeer<class_LocalMultiplayerPeer>` **peer** :ref:`🔗<class_NetwLink_property_peer>`
+
+.. container:: contribute
+
+	There is currently no description for this property. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NetwLink_property_sender_id:
+
+.. rst-class:: classref-property
+
+:godot:`int` **sender_id** = ``0`` :ref:`🔗<class_NetwLink_property_sender_id>`
+
+.. container:: contribute
+
+	There is currently no description for this property. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+
+.. rst-class:: classref-section-separator
+
+----
+
+.. rst-class:: classref-descriptions-group
+
 Method Descriptions
 -------------------
 
@@ -158,7 +203,9 @@ Method Descriptions
 
 :ref:`NetwLink<class_NetwLink>` **latency_ms**\ (\ ms\: :godot:`float`\ ) :ref:`🔗<class_NetwLink_method_latency_ms>`
 
-Sets baseline latency in milliseconds.
+.. container:: contribute
+
+	There is currently no description for this method. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
 
 .. rst-class:: classref-item-separator
 
@@ -170,7 +217,9 @@ Sets baseline latency in milliseconds.
 
 :ref:`NetwLink<class_NetwLink>` **jitter_ms**\ (\ ms\: :godot:`float`\ ) :ref:`🔗<class_NetwLink_method_jitter_ms>`
 
-Sets jitter in milliseconds for unreliable traffic.
+.. container:: contribute
+
+	There is currently no description for this method. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
 
 .. rst-class:: classref-item-separator
 
@@ -182,7 +231,9 @@ Sets jitter in milliseconds for unreliable traffic.
 
 :ref:`NetwLink<class_NetwLink>` **loss**\ (\ probability\: :godot:`float`\ ) :ref:`🔗<class_NetwLink_method_loss>`
 
-Sets packet loss probability.
+.. container:: contribute
+
+	There is currently no description for this method. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
 
 .. rst-class:: classref-item-separator
 
@@ -194,7 +245,9 @@ Sets packet loss probability.
 
 :ref:`NetwLink<class_NetwLink>` **reorder**\ (\ probability\: :godot:`float`\ ) :ref:`🔗<class_NetwLink_method_reorder>`
 
-Sets unreliable reorder probability.
+.. container:: contribute
+
+	There is currently no description for this method. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
 
 .. rst-class:: classref-item-separator
 
@@ -206,31 +259,23 @@ Sets unreliable reorder probability.
 
 :ref:`NetwLink<class_NetwLink>` **duplicate**\ (\ probability\: :godot:`float`\ ) :ref:`🔗<class_NetwLink_method_duplicate>`
 
-Sets unreliable duplicate probability.
+.. container:: contribute
+
+	There is currently no description for this method. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
 
 .. rst-class:: classref-item-separator
 
 ----
 
-.. _class_NetwLink_method_throttle:
+.. _class_NetwLink_method_stall:
 
 .. rst-class:: classref-method
 
-:ref:`NetwLink<class_NetwLink>` **throttle**\ (\ probability\: :godot:`float`, ms\: :godot:`float` = 0.0\ ) :ref:`🔗<class_NetwLink_method_throttle>`
+:ref:`NetwLink<class_NetwLink>` **stall**\ (\ probability\: :godot:`float`, ms\: :godot:`float` = 0.0\ ) :ref:`🔗<class_NetwLink_method_stall>`
 
-Sets unreliable throttle probability and freeze length in milliseconds.
+.. container:: contribute
 
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwLink_method_retransmit_ms:
-
-.. rst-class:: classref-method
-
-:ref:`NetwLink<class_NetwLink>` **retransmit_ms**\ (\ ms\: :godot:`float`\ ) :ref:`🔗<class_NetwLink_method_retransmit_ms>`
-
-Sets reliable retransmit delay in milliseconds. A negative value restores auto derivation from :ref:`LocalLinkConditions.latency_ms<class_LocalLinkConditions_property_latency_ms>`.
+	There is currently no description for this method. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
 
 .. rst-class:: classref-item-separator
 
@@ -242,7 +287,9 @@ Sets reliable retransmit delay in milliseconds. A negative value restores auto d
 
 :ref:`NetwLink<class_NetwLink>` **seed**\ (\ n\: :godot:`int`\ ) :ref:`🔗<class_NetwLink_method_seed>`
 
-Sets the deterministic random seed.
+.. container:: contribute
+
+	There is currently no description for this method. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
 
 .. rst-class:: classref-item-separator
 
@@ -254,7 +301,9 @@ Sets the deterministic random seed.
 
 :ref:`NetwLink<class_NetwLink>` **profile**\ (\ profile_id\: :ref:`Profile<enum_NetwLink_Profile>`\ ) :ref:`🔗<class_NetwLink_method_profile>`
 
-Resets the link to ``profile_id``.
+.. container:: contribute
+
+	There is currently no description for this method. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
 
 .. rst-class:: classref-item-separator
 
@@ -266,7 +315,9 @@ Resets the link to ``profile_id``.
 
 :godot:`float` **effective_latency_ms**\ (\ ) :ref:`🔗<class_NetwLink_method_effective_latency_ms>`
 
-Returns the installed baseline latency in milliseconds.
+.. container:: contribute
+
+	There is currently no description for this method. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
 
 .. rst-class:: classref-item-separator
 
@@ -278,7 +329,37 @@ Returns the installed baseline latency in milliseconds.
 
 |void| **clear**\ (\ ) :ref:`🔗<class_NetwLink_method_clear>`
 
-Clears this peer and sender link.
+.. container:: contribute
+
+	There is currently no description for this method. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NetwLink_method_read_conditions:
+
+.. rst-class:: classref-method
+
+:ref:`NetwLinkConditions<class_NetwLinkConditions>` **read_conditions**\ (\ ) :ref:`🔗<class_NetwLink_method_read_conditions>`
+
+.. container:: contribute
+
+	There is currently no description for this method. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NetwLink_method_apply:
+
+.. rst-class:: classref-method
+
+:ref:`NetwLink<class_NetwLink>` **apply**\ (\ conditions\: :ref:`NetwLinkConditions<class_NetwLinkConditions>`\ ) :ref:`🔗<class_NetwLink_method_apply>`
+
+.. container:: contribute
+
+	There is currently no description for this method. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

@@ -1,4 +1,5 @@
 #include "support/fault_log.h"
+#include "support/link.h"
 #include "support/loopback_rig.h"
 
 #if defined(NETW_TIER_HOSTED)
@@ -850,8 +851,7 @@ TEST_CASE(
             );
     }
 
-    const Ref<netw::LocalLinkConditions> shuffling
-        = netw::LocalLinkConditions::create(11);
+    const Ref<netw::NetwLinkConditions> shuffling = netw_test::link(11);
     shuffling->set_latency_ms(20.0);
     shuffling->set_jitter_ms(120.0);
     rig.session()->set_link_conditions(

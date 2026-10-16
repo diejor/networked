@@ -1,3 +1,4 @@
+#include "support/link.h"
 #include "support/netw_test.h"
 
 #if defined(NETW_TIER_HOSTED)
@@ -65,8 +66,8 @@ void deny_every_request(int64_t, Object *p_request) {
     }
 }
 
-Ref<netw::LocalLinkConditions> latency_of(int p_ticks) {
-    Ref<netw::LocalLinkConditions> made = netw::LocalLinkConditions::create(31);
+Ref<netw::NetwLinkConditions> latency_of(int p_ticks) {
+    Ref<netw::NetwLinkConditions> made = netw_test::link(31);
     made->set_latency_ms(double(p_ticks) * TICK_MS);
     return made;
 }
