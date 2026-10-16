@@ -83,9 +83,8 @@ Node *build_archetype(const Variant &p_name) {
 }
 
 void on_declared_tree_entered(Node *p_node) {
-    NetwMultiplayer *api = Object::cast_to<NetwMultiplayer>(
-        p_node->get_multiplayer().ptr()
-    );
+    NetwMultiplayer *api
+        = Object::cast_to<NetwMultiplayer>(p_node->get_multiplayer().ptr());
     if (api == nullptr) {
         ++declaration_failures;
         return;

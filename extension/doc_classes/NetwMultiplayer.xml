@@ -1799,11 +1799,11 @@
 				[/codeblock]
 			</description>
 		</method>
-		<method name="player_bodies">
+		<method name="player_get_entities">
 			<return type="NetwEntity[]" />
 			<param index="0" name="peer" type="int" />
 			<description>
-				Every entity that belongs to the player of [param peer], in no particular order.
+				Every entity spawned for the player of [param peer] with [method Netw.spawn_player], in no particular order.
 			</description>
 		</method>
 		<method name="player_kick">
@@ -2181,13 +2181,6 @@
 				Returns every scene whose root node is named [param stem].
 			</description>
 		</method>
-		<method name="scene_get_bodies">
-			<return type="NetwEntity[]" />
-			<param index="0" name="scene" type="RID" />
-			<description>
-				The bodies in [param scene]. [member bodies] contains the bodies from every live scene.
-			</description>
-		</method>
 		<method name="scene_get_entities">
 			<return type="RID[]" />
 			<param index="0" name="scene" type="RID" />
@@ -2209,11 +2202,11 @@
 				Returns the [NetwInterestLayer] that decides who sees [param scene].
 			</description>
 		</method>
-		<method name="scene_get_local_bodies">
+		<method name="scene_get_local_player_entities">
 			<return type="NetwEntity[]" />
 			<param index="0" name="scene" type="RID" />
 			<description>
-				Returns the bodies in [param scene] that belong to this peer.
+				Returns the entities in [param scene] spawned for this peer's player.
 			</description>
 		</method>
 		<method name="scene_get_node" qualifiers="const">
@@ -2229,6 +2222,13 @@
 			<param index="1" name="param" type="int" enum="NetwMultiplayer.SceneParam" />
 			<description>
 				Returns one setting of [param scene], or [code]null[/code] when unset.
+			</description>
+		</method>
+		<method name="scene_get_player_entities">
+			<return type="NetwEntity[]" />
+			<param index="0" name="scene" type="RID" />
+			<description>
+				The entities in [param scene] spawned for a player with [method Netw.spawn_player]. [member player_entities] contains them from every live scene.
 			</description>
 		</method>
 		<method name="scene_get_viewers">
@@ -2334,7 +2334,7 @@
 			<param index="0" name="scene" type="RID" />
 			<param index="1" name="peer" type="int" />
 			<description>
-				Reverses [method scene_watch]. A peer with a body in the scene keeps receiving it. Returns [code]false[/code] when the scene does not exist.
+				Reverses [method scene_watch]. A peer with an entity spawned for it in the scene keeps receiving it. Returns [code]false[/code] when the scene does not exist.
 				[b]Server Only.[/b]
 			</description>
 		</method>
@@ -2343,7 +2343,7 @@
 			<param index="0" name="scene" type="RID" />
 			<param index="1" name="peer" type="int" />
 			<description>
-				Replicates [param scene] to [param peer] until [method scene_unwatch], without moving any of its bodies. Applies immediately.
+				Replicates [param scene] to [param peer] until [method scene_unwatch], without moving any of its player entities. Applies immediately.
 				[codeblock lang=text]
 				Error
 				┠╴OK                     the peer receives the scene
@@ -3270,9 +3270,6 @@
 		<member name="auth_timeout" type="float" setter="set_auth_timeout" getter="get_auth_timeout" default="3.0">
 			Same as [member SceneMultiplayer.auth_timeout], applied to [member inner].
 		</member>
-		<member name="bodies" type="NetwEntity[]" setter="" getter="scene_bodies_all" default="[]">
-			Every body in every scene. Bodies in different scenes can share a [member NetwEntity.name].
-		</member>
 		<member name="connected_players" type="NetwPlayer[]" setter="" getter="player_all" default="[]">
 			Every player, sorted by peer id. Same as [member players], except that a player who is leaving stays here a little longer.
 		</member>
@@ -3296,6 +3293,9 @@
 		</member>
 		<member name="max_sync_packet_size" type="int" setter="set_max_sync_packet_size" getter="get_max_sync_packet_size" default="1350">
 			Same as [member SceneMultiplayer.max_sync_packet_size]. Networked also keeps its own synchronization packets under this size.
+		</member>
+		<member name="player_entities" type="NetwEntity[]" setter="" getter="scene_player_entities_all" default="[]">
+			Every entity spawned for a player with [method Netw.spawn_player], in every scene. Entities in different scenes can share a [member NetwEntity.name].
 		</member>
 		<member name="players" type="NetwPlayer[]" setter="" getter="player_joined_all" default="[]">
 			Every player whose join was accepted. A connected peer that has not joined is not here.

@@ -156,7 +156,8 @@ public:
                     + godot::String(p_rationale),
                 p_type == ERROR_TYPE_ERROR,
                 p_rationale != nullptr && *p_rationale
-                    ? godot::String(p_rationale) : godot::String(p_code),
+                    ? godot::String(p_rationale)
+                    : godot::String(p_code),
                 p_file,
                 p_function,
                 p_line
@@ -167,8 +168,13 @@ public:
     void log_message(const godot::String &p_text, bool p_error) override {
         if (p_error && !p_text.strip_edges().is_empty()) {
             record(
-                p_text, true, p_text.strip_edges(), godot::String(),
-                godot::String(), 0, true
+                p_text,
+                true,
+                p_text.strip_edges(),
+                godot::String(),
+                godot::String(),
+                0,
+                true
             );
         }
     }
@@ -200,8 +206,13 @@ public:
     void _log_message(const godot::String &p_message, bool p_error) override {
         if (p_error && !p_message.strip_edges().is_empty()) {
             record(
-                p_message, true, p_message.strip_edges(), godot::String(),
-                godot::String(), 0, true
+                p_message,
+                true,
+                p_message.strip_edges(),
+                godot::String(),
+                godot::String(),
+                0,
+                true
             );
         }
     }
@@ -240,11 +251,13 @@ public:
         const godot::String &p_pattern,
         bool p_stderr_only = false
     ) {
-        return assert_lines([&](const FaultLine &p_line, int64_t) {
-            return p_line.error == p_error
-                && p_line.stderr_only == p_stderr_only
-                && p_line.text.strip_edges().match(p_pattern);
-        }).size();
+        return assert_lines(
+                   [&](const FaultLine &p_line, int64_t) {
+                       return p_line.error == p_error
+                           && p_line.stderr_only == p_stderr_only
+                           && p_line.text.strip_edges().match(p_pattern);
+                   }
+        ).size();
     }
 
     std::vector<FaultLine> unmatched() {
@@ -253,7 +266,8 @@ public:
         const std::lock_guard<std::mutex> held(ledger.lock);
         pending.erase(
             std::remove_if(
-                pending.begin(), pending.end(),
+                pending.begin(),
+                pending.end(),
                 [&](const FaultLine &p_line) {
                     return ledger.asserted.count(p_line.serial) > 0;
                 }
@@ -351,8 +365,9 @@ inline void write_fault_report(bool p_passed) {
             event["case"] = scope.name;
             event["passed"] = line.case_id == 0 ? p_passed : scope.passed;
             event["expected"] = ledger.asserted.count(line.serial) > 0;
-            event["severity"] = line.stderr_only
-                ? "STDERR" : line.error ? "ERROR" : "WARNING";
+            event["severity"] = line.stderr_only ? "STDERR"
+                : line.error                     ? "ERROR"
+                                                 : "WARNING";
             event["message"] = line.message;
             event["file"] = line.file;
             event["function"] = line.function;
@@ -401,7 +416,8 @@ struct FaultWatch {
             CAPTURE(expected_message);
             NETW_CHECK_EQ(
                 log->count_matching(
-                    expectation.error, expectation.pattern,
+                    expectation.error,
+                    expectation.pattern,
                     expectation.stderr_only
                 ),
                 expectation.count

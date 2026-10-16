@@ -585,33 +585,33 @@ Ref<NetwPlayer> NetwMultiplayer::player_admitted_local() {
     return player_admitted_of(get_unique_id());
 }
 
-TypedArray<NetwEntity> NetwMultiplayer::player_bodies_held(
+TypedArray<NetwEntity> NetwMultiplayer::player_entities_held(
     int64_t p_peer,
     int64_t p_player_id
 ) {
     TypedArray<NetwEntity> held;
-    const TypedArray<NetwEntity> everywhere = scene_bodies_all();
+    const TypedArray<NetwEntity> everywhere = scene_player_entities_all();
     for (int at = 0; at < everywhere.size(); at++) {
-        const Ref<NetwEntity> body = everywhere[at];
-        if (body.is_null() || body->get_peer_id() != p_peer) {
+        const Ref<NetwEntity> entity = everywhere[at];
+        if (entity.is_null() || entity->get_peer_id() != p_peer) {
             continue;
         }
-        if (body->get_player_id() == p_player_id) {
-            held.push_back(body);
+        if (entity->get_player_id() == p_player_id) {
+            held.push_back(entity);
         }
     }
     return held;
 }
 
-TypedArray<NetwEntity> NetwMultiplayer::player_bodies(int64_t p_peer) {
-    return player_bodies_held(p_peer, player_incarnation(p_peer));
+TypedArray<NetwEntity> NetwMultiplayer::player_get_entities(int64_t p_peer) {
+    return player_entities_held(p_peer, player_incarnation(p_peer));
 }
 
 SceneMembership &NetwMultiplayer::membership_book() {
     return scene_membership;
 }
 
-int64_t NetwMultiplayer::membership_body_id(const RID &p_entity) {
+int64_t NetwMultiplayer::membership_entity_id(const RID &p_entity) {
     return int64_t(p_entity.get_id());
 }
 
@@ -635,7 +635,7 @@ bool NetwMultiplayer::membership_destination_foreign(Node *p_owner) const {
     return false;
 }
 
-void NetwMultiplayer::membership_place_body(const Ref<NetwEntity> &p_entity) {
+void NetwMultiplayer::membership_place_entity(const Ref<NetwEntity> &p_entity) {
     if (!is_host() || p_entity.is_null()) {
         return;
     }
@@ -648,7 +648,7 @@ void NetwMultiplayer::membership_place_body(const Ref<NetwEntity> &p_entity) {
     if (owner == nullptr) {
         return;
     }
-    const int64_t body = membership_body_id(handle);
+    const int64_t entity = membership_entity_id(handle);
     RID scene = scene_of(handle);
     if (scene == handle) {
         scene = RID();
@@ -674,19 +674,19 @@ void NetwMultiplayer::membership_place_body(const Ref<NetwEntity> &p_entity) {
         scene = RID();
     }
     LocalVector<RID> standing;
-    scene_membership.scenes_of_body(peer, body, standing);
+    scene_membership.scenes_of_entity(peer, entity, standing);
     for (uint32_t at = 0; at < standing.size(); ++at) {
         if (standing[at] != scene) {
-            scene_membership.body_exit(peer, standing[at], body);
+            scene_membership.entity_exit(peer, standing[at], entity);
         }
     }
     if (scene.is_valid()) {
-        scene_membership.body_enter(peer, scene, body);
+        scene_membership.entity_enter(peer, scene, entity);
     }
     membership_settle();
 }
 
-void NetwMultiplayer::membership_drop_body(const Ref<NetwEntity> &p_entity) {
+void NetwMultiplayer::membership_drop_entity(const Ref<NetwEntity> &p_entity) {
     if (p_entity.is_null()) {
         return;
     }
@@ -695,16 +695,16 @@ void NetwMultiplayer::membership_drop_body(const Ref<NetwEntity> &p_entity) {
     if (!handle.is_valid() || peer == 0) {
         return;
     }
-    const int64_t body = membership_body_id(handle);
+    const int64_t entity = membership_entity_id(handle);
     LocalVector<RID> standing;
-    scene_membership.scenes_of_body(peer, body, standing);
+    scene_membership.scenes_of_entity(peer, entity, standing);
     for (uint32_t at = 0; at < standing.size(); ++at) {
-        scene_membership.body_exit(peer, standing[at], body);
+        scene_membership.entity_exit(peer, standing[at], entity);
     }
     membership_settle();
 }
 
-void NetwMultiplayer::membership_drop_body_in(
+void NetwMultiplayer::membership_drop_entity_in(
     const RID &p_entity,
     const RID &p_scene,
     int64_t p_peer
@@ -712,7 +712,8 @@ void NetwMultiplayer::membership_drop_body_in(
     if (!p_entity.is_valid() || !p_scene.is_valid() || p_peer == 0) {
         return;
     }
-    scene_membership.body_exit(p_peer, p_scene, membership_body_id(p_entity));
+    scene_membership
+        .entity_exit(p_peer, p_scene, membership_entity_id(p_entity));
     membership_settle();
 }
 
@@ -753,8 +754,8 @@ void NetwMultiplayer::membership_settle() {
 
 #if defined(NETW_TESTS)
 
-RID NetwMultiplayer::membership_residency_of(int64_t p_body) const {
-    NetwEntityRecord *const record = slot_record(p_body);
+RID NetwMultiplayer::membership_residency_of(int64_t p_entity) const {
+    NetwEntityRecord *const record = slot_record(p_entity);
     if (record == nullptr) {
         return RID();
     }
@@ -769,7 +770,7 @@ RID NetwMultiplayer::membership_residency_of(int64_t p_body) const {
 void NetwMultiplayer::membership_note_divergence(
     int64_t p_member,
     const RID &p_scene,
-    int64_t p_body
+    int64_t p_entity
 ) {
     residency_audit::Ledger &book = residency_audit::ledger();
     book.divergences++;
@@ -778,7 +779,7 @@ void NetwMultiplayer::membership_note_divergence(
     }
     book.member_of_first = p_member;
     book.scene_of_first = int64_t(p_scene.get_id());
-    book.body_of_first = p_body;
+    book.entity_of_first = p_entity;
 }
 
 void NetwMultiplayer::membership_audit() {
@@ -789,19 +790,19 @@ void NetwMultiplayer::membership_audit() {
     residency_audit::Ledger &book = residency_audit::ledger();
     for (const KeyValue<int64_t, PlayerRow> &row : players) {
         LocalVector<RID> scenes;
-        scene_membership.body_scenes_of(row.value.peer, scenes);
+        scene_membership.entity_scenes_of(row.value.peer, scenes);
         for (uint32_t at = 0; at < scenes.size(); ++at) {
-            const PackedInt64Array bodies
-                = scene_membership.bodies_of(row.value.peer, scenes[at]);
-            for (int which = 0; which < bodies.size(); ++which) {
+            const PackedInt64Array entities
+                = scene_membership.entities_of(row.value.peer, scenes[at]);
+            for (int which = 0; which < entities.size(); ++which) {
                 book.observations++;
-                if (membership_residency_of(bodies[which]) == scenes[at]) {
+                if (membership_residency_of(entities[which]) == scenes[at]) {
                     continue;
                 }
                 membership_note_divergence(
                     row.value.peer,
                     scenes[at],
-                    bodies[which]
+                    entities[which]
                 );
             }
         }
@@ -822,16 +823,16 @@ void NetwMultiplayer::membership_audit() {
             || !pipeline->is_booked(record->get_route())) {
             continue;
         }
-        const int64_t body = membership_body_id(record->get_handle());
-        const RID resides = membership_residency_of(body);
+        const int64_t entity = membership_entity_id(record->get_handle());
+        const RID resides = membership_residency_of(entity);
         if (!resides.is_valid()) {
             continue;
         }
         book.observations++;
-        if (scene_membership.bodies_of(peer, resides).has(body)) {
+        if (scene_membership.entities_of(peer, resides).has(entity)) {
             continue;
         }
-        membership_note_divergence(peer, resides, body);
+        membership_note_divergence(peer, resides, entity);
     }
 }
 

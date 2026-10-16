@@ -349,7 +349,7 @@ public:
         summary.failing.clear();
         if (diverged) {
             summary.failing.push_back(
-                {"JR0 scene residency", "a body reason disagreed"}
+                {"JR0 scene residency", "an entity reason disagreed"}
             );
         }
         if (stray > 0) {
@@ -387,16 +387,16 @@ public:
             std::fprintf(
                 output,
                 "    <testcase classname=\"scene_residency_laws.cpp\" "
-                "name=\"JR0 every body reason names a body that resides in "
-                "that scene, and every resident body holds one, in every case "
-                "the run executed\" time=\"0.0\"><failure>%lld of %lld "
-                "readings disagreed. first membership %lld scene %lld body "
+                "name=\"JR0 every entity reason names an entity that resides "
+                "in that scene, and every resident entity holds one, in every "
+                "case the run executed\" time=\"0.0\"><failure>%lld of %lld "
+                "readings disagreed. first membership %lld scene %lld entity "
                 "%lld</failure></testcase>\n",
                 (long long)audited.divergences,
                 (long long)audited.observations,
                 (long long)audited.member_of_first,
                 (long long)audited.scene_of_first,
-                (long long)audited.body_of_first
+                (long long)audited.entity_of_first
             );
         }
         if (stray > 0) {

@@ -75,8 +75,8 @@ void open_player(const Ref<NetwMultiplayer> &p_core, int64_t p_peer) {
 
 TEST_CASE(
     "[Networked][Scene][Hosted] SS5 a player still standing under the scene "
-    "its body resides in keeps that subscription, and one whose body has "
-    "left loses it even though the body is still alive, which is the "
+    "its entity resides in keeps that subscription, and one whose entity has "
+    "left loses it even though the entity is still alive, which is the "
     "difference a reparent and a free cannot be told apart by at the exit "
     "edge alone"
 ) {
@@ -92,7 +92,7 @@ TEST_CASE(
     pawn.record->set_peer_id(peer);
 
     REQUIRE(core->is_server());
-    core->membership_place_body(pawn.wrapper);
+    core->membership_place_entity(pawn.wrapper);
     REQUIRE(core->scene_of(pawn.handle) == arena.handle);
     NETW_CHECK_EQ(core->scene_get_peers(arena.handle).size(), 1);
 
@@ -128,7 +128,7 @@ TEST_CASE(
     open_player(core, peer);
     pawn.record->set_peer_id(peer);
 
-    core->membership_place_body(pawn.wrapper);
+    core->membership_place_entity(pawn.wrapper);
     REQUIRE(core->scene_of(pawn.handle) == arena.handle);
 
     CHECK(core->scene_release_departed(arena.handle, pawn.handle, false, peer));
@@ -171,8 +171,8 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Scene][Hosted] SS8 a watch and a body are separate reasons "
-    "for one scene, so a player watching a lobby while a body of theirs "
+    "[Networked][Scene][Hosted] SS8 a watch and an entity are separate reasons "
+    "for one scene, so a player watching a lobby while an entity of theirs "
     "resides in an arena subscribes to both, and losing either leaves the "
     "other standing"
 ) {
@@ -189,7 +189,7 @@ TEST_CASE(
     pawn.record->set_peer_id(peer);
 
     REQUIRE(core->is_server());
-    core->membership_place_body(pawn.wrapper);
+    core->membership_place_entity(pawn.wrapper);
     REQUIRE(core->scene_subscribes(arena.handle, peer));
     CHECK_FALSE(core->scene_subscribes(lobby.handle, peer));
 
@@ -198,7 +198,7 @@ TEST_CASE(
     CHECK(core->scene_subscribes(lobby.handle, peer));
     CHECK(core->scene_subscribes(arena.handle, peer));
 
-    core->membership_place_body(pawn.wrapper);
+    core->membership_place_entity(pawn.wrapper);
 
     CHECK(core->scene_subscribes(lobby.handle, peer));
     CHECK(core->scene_subscribes(arena.handle, peer));
@@ -212,8 +212,8 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Scene][Hosted] SS9 a player answers the bodies it owns "
-    "and no others, so two players standing in one scene read as one body "
+    "[Networked][Scene][Hosted] SS9 a player answers the entities it owns "
+    "and no others, so two players standing in one scene read as one entity "
     "each rather than as everything the scene holds"
 ) {
     Ref<NetwMultiplayer> core;
@@ -231,24 +231,24 @@ TEST_CASE(
     theirs.record->set_peer_id(9);
     theirs.record->set_player_id(core->player_incarnation(9));
 
-    NETW_CHECK_EQ(int(core->scene_get_bodies(arena.handle).size()), 2);
+    NETW_CHECK_EQ(int(core->scene_get_player_entities(arena.handle).size()), 2);
 
-    const TypedArray<netw::NetwEntity> ours = core->player_bodies(7);
+    const TypedArray<netw::NetwEntity> ours = core->player_get_entities(7);
     NETW_CHECK_EQ(int(ours.size()), 1);
     const Ref<netw::NetwEntity> only = ours[0];
     CHECK(only == mine.wrapper);
 
-    NETW_CHECK_EQ(int(core->player_bodies(9).size()), 1);
-    CHECK(core->player_bodies(11).is_empty());
+    NETW_CHECK_EQ(int(core->player_get_entities(9).size()), 1);
+    CHECK(core->player_get_entities(11).is_empty());
 
     memdelete(root);
 }
 
 TEST_CASE(
-    "[Networked][Scene][Hosted] SS10 a body outliving the membership it was "
-    "spawned for stays with that membership, so the next player to connect "
-    "onto the same peer id reads an empty hand rather than a dead player's "
-    "bodies"
+    "[Networked][Scene][Hosted] SS10 an entity outliving the membership it "
+    "was spawned for stays with that membership, so the next player to "
+    "connect onto the same peer id reads an empty hand rather than a dead "
+    "player's entities"
 ) {
     Ref<NetwMultiplayer> core;
     core.instantiate();
@@ -262,24 +262,25 @@ TEST_CASE(
     const Ref<netw::NetwPlayer> departed = core->player_of(7);
     abandoned.record->set_peer_id(7);
     abandoned.record->set_player_id(departed->player_id());
-    NETW_CHECK_EQ(int(departed->get_bodies().size()), 1);
+    NETW_CHECK_EQ(int(departed->get_entities().size()), 1);
 
     core->player_release_id(departed);
     open_player(core, 7);
     const Ref<netw::NetwPlayer> arrived = core->player_of(7);
     CHECK(arrived->player_id() != departed->player_id());
 
-    CHECK(arrived->get_bodies().is_empty());
-    CHECK(core->player_bodies(7).is_empty());
-    NETW_CHECK_EQ(int(core->scene_get_bodies(arena.handle).size()), 1);
+    CHECK(arrived->get_entities().is_empty());
+    CHECK(core->player_get_entities(7).is_empty());
+    NETW_CHECK_EQ(int(core->scene_get_player_entities(arena.handle).size()), 1);
 
     memdelete(root);
 }
 
 TEST_CASE(
-    "[Networked][Scene][Hosted] SS11 a body drops out of every roster in the "
-    "call that despawned it rather than in the frame the node is freed, so a "
-    "game that opens the next round immediately still reads an empty hand"
+    "[Networked][Scene][Hosted] SS11 an entity drops out of every roster in "
+    "the call that despawned it rather than in the frame the node is freed, "
+    "so a game that opens the next round immediately still reads an empty "
+    "hand"
 ) {
     Ref<NetwMultiplayer> core;
     core.instantiate();
@@ -293,14 +294,14 @@ TEST_CASE(
     const Ref<netw::NetwPlayer> player = core->player_of(7);
     pawn.record->set_peer_id(7);
     pawn.record->set_player_id(player->player_id());
-    NETW_CHECK_EQ(int(player->get_bodies().size()), 1);
-    NETW_CHECK_EQ(int(core->scene_get_bodies(arena.handle).size()), 1);
+    NETW_CHECK_EQ(int(player->get_entities().size()), 1);
+    NETW_CHECK_EQ(int(core->scene_get_player_entities(arena.handle).size()), 1);
 
     core->entity_despawn(pawn.handle, Ref<netw::NetwDespawnOpts>());
 
-    CHECK(player->get_bodies().is_empty());
-    CHECK(core->player_bodies(7).is_empty());
-    NETW_CHECK_EQ(int(core->scene_get_bodies(arena.handle).size()), 0);
+    CHECK(player->get_entities().is_empty());
+    CHECK(core->player_get_entities(7).is_empty());
+    NETW_CHECK_EQ(int(core->scene_get_player_entities(arena.handle).size()), 0);
 
     memdelete(root);
 }

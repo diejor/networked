@@ -1141,10 +1141,10 @@ public sealed class Netw : NetwRefCounted
     /// to the tree. Peers receive it when it enters the tree, so set its
     /// starting values in between.
     /// <code>
-    /// var body := PlayerScene.instantiate()
-    /// var entity := Netw.replicate(body, player)
-    /// body.position = spawn_point
-    /// scene.add_child(body)
+    /// var avatar := PlayerScene.instantiate()
+    /// var entity := Netw.replicate(avatar, player)
+    /// avatar.position = spawn_point
+    /// scene.add_child(avatar)
     /// </code>
     /// <para>
     /// A client can call it without <paramref name="owner"/> when
@@ -1324,7 +1324,7 @@ public sealed class Netw : NetwRefCounted
     /// <see cref="Node.Reparent"/>. The promise resolves once the server has
     /// moved it. Other peers move it after.
     /// <code>
-    /// await Netw.reparent(body, level2.get_node(^"Players")).wait()
+    /// await Netw.reparent(avatar, level2.get_node(^"Players")).wait()
     /// </code>
     /// <para>
     /// Unlike <see cref="Node.Reparent"/>, it does not fire

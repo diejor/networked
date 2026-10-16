@@ -54,7 +54,7 @@ Placed place(NetwMultiplayer *p_core, Node *p_parent, bool p_declares_scene) {
 struct SiteReading {
     bool authority = false;
     bool sends_to_member = false;
-    bool subscribes_body = false;
+    bool subscribes_entity = false;
     int viewer_frames = 0;
     Error kick = OK;
 };
@@ -69,8 +69,8 @@ SiteReading read_sites(MeshStand &p_mesh, int p_at, int p_member) {
     const Placed arena = place(core, root, true);
     const Placed pawn = place(core, arena.owner, false);
     pawn.record->set_peer_id(9);
-    core->membership_place_body(pawn.wrapper);
-    reading.subscribes_body = core->scene_subscribes(arena.handle, 9);
+    core->membership_place_entity(pawn.wrapper);
+    reading.subscribes_entity = core->scene_subscribes(arena.handle, 9);
 
     p_mesh.drain_all();
     core->scene_publish_viewers(arena.handle);
@@ -86,7 +86,7 @@ SiteReading read_sites(MeshStand &p_mesh, int p_at, int p_member) {
 
 TEST_CASE(
     "[Networked][Session] SA1 the server publishes scene viewers, places "
-    "membership bodies, may send interest and kicks, while a member does "
+    "membership entities, may send interest and kicks, while a member does "
     "none of them"
 ) {
     netw_test::FaultWatch expected_faults;
@@ -111,14 +111,14 @@ TEST_CASE(
     const SiteReading seven = read_sites(mesh, 7, 1);
     CHECK_FALSE(seven.authority);
     CHECK_FALSE(seven.sends_to_member);
-    CHECK_FALSE(seven.subscribes_body);
+    CHECK_FALSE(seven.subscribes_entity);
     NETW_CHECK_EQ(seven.viewer_frames, 0);
     NETW_CHECK_EQ(int(seven.kick), int(ERR_UNAUTHORIZED));
 
     const SiteReading one = read_sites(mesh, 1, 7);
     CHECK(one.authority);
     CHECK(one.sends_to_member);
-    CHECK(one.subscribes_body);
+    CHECK(one.subscribes_entity);
     CHECK(one.viewer_frames > 0);
     NETW_CHECK_EQ(int(one.kick), int(OK));
 }

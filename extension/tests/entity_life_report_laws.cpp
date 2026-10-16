@@ -84,8 +84,7 @@ TEST_CASE(
         );
     }
 
-    const Dictionary transition
-        = row_of(rows, EventPlane::STAGE_TRANSITION);
+    const Dictionary transition = row_of(rows, EventPlane::STAGE_TRANSITION);
     REQUIRE(!transition.is_empty());
     const Dictionary detail = transition[netw::event_key::detail()];
     NETW_CHECK_EQ(int64_t(detail["from"]), int64_t(NetwEntity::STAGE_ARMED));

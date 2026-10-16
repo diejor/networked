@@ -107,7 +107,6 @@ TEST_CASE(
             "with NetwEntity.authority.",
             1
         );
-
     }
     SUBCASE("a player controls it") {
         expected_faults.expect_warning(
@@ -185,8 +184,7 @@ TEST_CASE(
     LoopbackRig rig(1);
     rig.mount();
     netw_test::flow_clocks(rig, TICKRATE);
-    Node *crate
-        = spawn_crate(rig, "authority_watch_crate", HELD_CRATE_SOURCE);
+    Node *crate = spawn_crate(rig, "authority_watch_crate", HELD_CRATE_SOURCE);
     const Ref<NetwEntity> entity = NetwEntity::of(crate);
     REQUIRE(entity.is_valid());
     Node *child = a_node("Child", 1);

@@ -131,10 +131,20 @@ GLOBAL_ENUMS = {"Error"}
 
 VARARG_PARAMETER = "rest"
 NAMED_MEMBER_METHODS = {
-    "configure_rpc", "configure_spawn", "configure_signal",
-    "rpc", "rpc_id", "rpc_controller", "request", "request_id",
-    "request_all", "request_controller", "spawn", "spawn_player",
-    "emit_entity_signal", "action",
+    "configure_rpc",
+    "configure_spawn",
+    "configure_signal",
+    "rpc",
+    "rpc_id",
+    "rpc_controller",
+    "request",
+    "request_id",
+    "request_all",
+    "request_controller",
+    "spawn",
+    "spawn_player",
+    "emit_entity_signal",
+    "action",
 }
 
 PTRCALL_MAX_ARITY = 3
@@ -812,7 +822,7 @@ class Emitter:
         constructor = []
         if entry.get("is_instantiable"):
             constructor = [
-                "    public %s() : this(NetwApi.Construct(\"%s\", %s))"
+                '    public %s() : this(NetwApi.Construct("%s", %s))'
                 % (name, name, "true" if entry.get("is_refcounted") else "false"),
                 "    {",
                 "    }",
@@ -1179,7 +1189,11 @@ class Emitter:
         if plan is not None:
             answered, encoded = plan
             signature, filled = self.declared_arguments(arguments, names, encoded)
-            body = preflight + filled + self.ptrcall_lines(field, instance, list(zip(names, encoded)), answered, "        ")
+            body = (
+                preflight
+                + filled
+                + self.ptrcall_lines(field, instance, list(zip(names, encoded)), answered, "        ")
+            )
             return [
                 *head,
                 *told,
@@ -1200,13 +1214,17 @@ class Emitter:
             varargs = VARARG_PARAMETER
             tail = "params Variant[] %s" % VARARG_PARAMETER
             signature = "%s, %s" % (signature, tail) if signature else tail
-        body = preflight + filled + self.call_lines(
-            field,
-            instance,
-            list(zip(names, boxed)),
-            answered,
-            "        ",
-            varargs,
+        body = (
+            preflight
+            + filled
+            + self.call_lines(
+                field,
+                instance,
+                list(zip(names, boxed)),
+                answered,
+                "        ",
+                varargs,
+            )
         )
         return [
             *head,
@@ -1217,9 +1235,7 @@ class Emitter:
             "    }",
         ]
 
-    def preflight_of(
-        self, class_name: str, method: dict, arguments: list, names: list
-    ) -> list[str]:
+    def preflight_of(self, class_name: str, method: dict, arguments: list, names: list) -> list[str]:
         if class_name != "Netw":
             return []
         if method["name"] == "configure_property":
@@ -1235,16 +1251,16 @@ class Emitter:
         for argument, name in zip(arguments, names):
             if argument["type"] != "Callable":
                 continue
-            lines.extend([
-                "        if (%s.Delegate != null)" % name,
-                "        {",
-                "            throw new ArgumentException(",
-                "                \"Netw.%s sends a method by name. Pass the \" +"
-                % pascal(method["name"]),
-                "                \"node and a MethodName constant.\", nameof(%s));"
-                % name,
-                "        }",
-            ])
+            lines.extend(
+                [
+                    "        if (%s.Delegate != null)" % name,
+                    "        {",
+                    "            throw new ArgumentException(",
+                    '                "Netw.%s sends a method by name. Pass the " +' % pascal(method["name"]),
+                    '                "node and a MethodName constant.", nameof(%s));' % name,
+                    "        }",
+                ]
+            )
         return lines
 
     def named_overload(self, method: dict) -> list[str]:
@@ -1273,12 +1289,9 @@ class Emitter:
             return []
         spelled = pascal(method["name"])
         return [
-            "    public static %s %s(%s)"
-            % (answered.declared, spelled, ", ".join(signature)),
+            "    public static %s %s(%s)" % (answered.declared, spelled, ", ".join(signature)),
             "    {",
-            "        %s%s(%s);"
-            % ("" if answered.declared == "void" else "return ",
-               spelled, ", ".join(passed)),
+            "        %s%s(%s);" % ("" if answered.declared == "void" else "return ", spelled, ", ".join(passed)),
             "    }",
         ]
 

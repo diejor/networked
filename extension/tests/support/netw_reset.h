@@ -1,7 +1,7 @@
 #pragma once
 
-#include "netw_test.h"
 #include "fault_log.h"
+#include "netw_test.h"
 
 #include <cstdio>
 #include <string>
@@ -119,9 +119,7 @@ public:
         reset_for_case();
     }
 
-    void test_case_end(
-        const doctest::CurrentTestCaseStats &p_stats
-    ) override {
+    void test_case_end(const doctest::CurrentTestCaseStats &p_stats) override {
         end_fault_case(p_stats.testCaseSuccess);
         closed = Census::take();
         if (!opened.measurable() || !closed.measurable()) {

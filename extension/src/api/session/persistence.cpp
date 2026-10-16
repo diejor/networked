@@ -142,8 +142,8 @@ RID NetwMultiplayer::database_declare(
     LocalVector<DatabaseDeclaration> kept;
     kept.reserve(database_declarations.size() + 1);
     for (const DatabaseDeclaration &held : database_declarations) {
-        const bool freed = held.scope.is_valid()
-            && gd::object_of(held.scope) == nullptr;
+        const bool freed
+            = held.scope.is_valid() && gd::object_of(held.scope) == nullptr;
         const bool replaced = held.name == p_name && held.scope == scope;
         if ((!freed || held.name != p_name) && !replaced) {
             kept.push_back(held);
@@ -267,9 +267,11 @@ Error NetwMultiplayer::database_backend_of(
             Node *first = Object::cast_to<Node>(gd::object_of(chosen->scope));
             Node *second = Object::cast_to<Node>(gd::object_of(held.scope));
             const String first_scope = first != nullptr
-                ? String(first->get_path()) : String("the session");
+                ? String(first->get_path())
+                : String("the session");
             const String second_scope = second != nullptr
-                ? String(second->get_path()) : String("the session");
+                ? String(second->get_path())
+                : String("the session");
             NETW_ERR_V(
                 ERR_ALREADY_EXISTS,
                 sys::TABLE,

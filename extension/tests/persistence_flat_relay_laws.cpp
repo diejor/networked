@@ -277,18 +277,19 @@ TEST_CASE(
     CHECK(bool(after.get("found", false)));
 
     memdelete(viewport);
-    const netw::SchemaRecord *record
-        = session->get_schema_core()->record_of(
-            session->schema_find("players")
-        );
+    const netw::SchemaRecord *record = session->get_schema_core()->record_of(
+        session->schema_find("players")
+    );
     REQUIRE(record != nullptr);
     netw::persist::store_named("px4").replace(
         "slot1",
-        netw::persist::address_text(netw::persist::address_of(
-            netw::persist::Kind::RECORD,
-            "players",
-            "hero"
-        )),
+        netw::persist::address_text(
+            netw::persist::address_of(
+                netw::persist::Kind::RECORD,
+                "players",
+                "hero"
+            )
+        ),
         netw::persist::seal_record(*record, 1, values)
     );
     Ref<NetwMultiplayer> reader;
@@ -306,9 +307,9 @@ TEST_CASE(
     CHECK(bool(migrated_record.get("found", false)));
     const Dictionary migrated_values
         = migrated_record.get("values", Dictionary());
-    CHECK(bool(
-        Vector2(migrated_values.get("where", Vector2())) == Vector2(3, 4)
-    ));
+    CHECK(
+        bool(Vector2(migrated_values.get("where", Vector2())) == Vector2(3, 4))
+    );
     schema_model::clear();
     netw::persist::forget_stores();
 }

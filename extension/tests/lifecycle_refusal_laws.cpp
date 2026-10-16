@@ -510,8 +510,8 @@ TEST_CASE(
     );
     expected_faults.expect_error(
         "[error][entity] Netw.reparent on '*' was refused, because "
-        "it is a player's body, so only the session authority moves"
-        " it, whatever NetwEntity.lifecycle says. Call it on the "
+        "it is an entity spawned for a player, so only the session authority "
+        "moves it, whatever NetwEntity.lifecycle says. Call it on the "
         "server.",
         1
     );
@@ -607,13 +607,13 @@ TEST_CASE(
             TARGET_SHELF,
             ERR_UNAVAILABLE,
             "MultiplayerSynchronizer"),
-        row("a-player-body-move",
+        row("a-player-entity-move",
             VERB_REPARENT,
             true,
             STANDING_PLAYER,
             TARGET_SHELF,
             ERR_UNAVAILABLE,
-            "a player's body"),
+            "an entity spawned for a player"),
         row("a-move-outside-the-session",
             VERB_REPARENT,
             true,

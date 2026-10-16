@@ -56,7 +56,10 @@ TEST_CASE(
     StateRow zero;
     netw::predict::zero_state_row(wiring.codec, zero);
     REQUIRE(zero.has(0));
-    NETW_CHECK_EQ(int(zero.values[0].get_type()), int(Variant::PACKED_BYTE_ARRAY));
+    NETW_CHECK_EQ(
+        int(zero.values[0].get_type()),
+        int(Variant::PACKED_BYTE_ARRAY)
+    );
 }
 
 } // namespace TestNetwPredictContainerState

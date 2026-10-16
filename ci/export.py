@@ -555,7 +555,8 @@ def run_cli(argv: list[str] | None = None) -> int:
             validate_web(args.dir / entry["slug"])
         args.dir.mkdir(parents=True, exist_ok=True)
         shutil.copytree(
-            CI_DIR / "site" / "assets", args.dir / "assets",
+            CI_DIR / "site" / "assets",
+            args.dir / "assets",
             dirs_exist_ok=True,
         )
         (args.dir / "index.html").write_text(landing_page(catalog, args.revision), encoding="utf-8")

@@ -18,12 +18,12 @@ void SceneMembership::rename_members(const PeerRename &p_rename) {
 int SceneMembership::reason_at(
     int64_t p_member,
     const RID &p_scene,
-    int64_t p_body
+    int64_t p_entity
 ) const {
     for (uint32_t at = 0; at < reasons.size(); ++at) {
         const Reason &held = reasons[at];
         if (held.member == p_member && held.scene == p_scene
-            && held.body == p_body) {
+            && held.entity == p_entity) {
             return int(at);
         }
     }
@@ -58,19 +58,19 @@ void SceneMembership::announce(
 bool SceneMembership::add(
     int64_t p_member,
     const RID &p_scene,
-    int64_t p_body
+    int64_t p_entity
 ) {
     if (p_member == 0 || !p_scene.is_valid()) {
         return false;
     }
-    if (reason_at(p_member, p_scene, p_body) >= 0) {
+    if (reason_at(p_member, p_scene, p_entity) >= 0) {
         return false;
     }
     const bool opened = reasons_for(p_member, p_scene) == 0;
     Reason held;
     held.member = p_member;
     held.scene = p_scene;
-    held.body = p_body;
+    held.entity = p_entity;
     reasons.push_back(held);
     if (opened) {
         announce(p_member, p_scene, true, REMOVAL_NONE);
@@ -81,10 +81,10 @@ bool SceneMembership::add(
 bool SceneMembership::drop(
     int64_t p_member,
     const RID &p_scene,
-    int64_t p_body,
+    int64_t p_entity,
     Removal p_removal
 ) {
-    const int at = reason_at(p_member, p_scene, p_body);
+    const int at = reason_at(p_member, p_scene, p_entity);
     if (at < 0) {
         return false;
     }
@@ -95,26 +95,26 @@ bool SceneMembership::drop(
     return true;
 }
 
-bool SceneMembership::body_enter(
+bool SceneMembership::entity_enter(
     int64_t p_member,
     const RID &p_scene,
-    int64_t p_body
+    int64_t p_entity
 ) {
-    if (p_body == WATCH) {
+    if (p_entity == WATCH) {
         return false;
     }
-    return add(p_member, p_scene, p_body);
+    return add(p_member, p_scene, p_entity);
 }
 
-bool SceneMembership::body_exit(
+bool SceneMembership::entity_exit(
     int64_t p_member,
     const RID &p_scene,
-    int64_t p_body
+    int64_t p_entity
 ) {
-    if (p_body == WATCH) {
+    if (p_entity == WATCH) {
         return false;
     }
-    return drop(p_member, p_scene, p_body, REMOVAL_LAST_BODY);
+    return drop(p_member, p_scene, p_entity, REMOVAL_LAST_ENTITY);
 }
 
 bool SceneMembership::watch(int64_t p_member, const RID &p_scene) {
@@ -133,12 +133,12 @@ bool SceneMembership::subscribes(int64_t p_member, const RID &p_scene) const {
     return reasons_for(p_member, p_scene) > 0;
 }
 
-int SceneMembership::bodies_in(int64_t p_member, const RID &p_scene) const {
+int SceneMembership::entities_in(int64_t p_member, const RID &p_scene) const {
     int total = 0;
     for (uint32_t at = 0; at < reasons.size(); ++at) {
         const Reason &held = reasons[at];
         if (held.member == p_member && held.scene == p_scene
-            && held.body != WATCH) {
+            && held.entity != WATCH) {
             total++;
         }
     }
@@ -158,13 +158,13 @@ void SceneMembership::scenes_of(
     }
 }
 
-void SceneMembership::body_scenes_of(
+void SceneMembership::entity_scenes_of(
     int64_t p_member,
     LocalVector<RID> &r_scenes
 ) const {
     for (uint32_t at = 0; at < reasons.size(); ++at) {
         const Reason &held = reasons[at];
-        if (held.member != p_member || held.body == WATCH
+        if (held.member != p_member || held.entity == WATCH
             || r_scenes.has(held.scene)) {
             continue;
         }
@@ -172,17 +172,17 @@ void SceneMembership::body_scenes_of(
     }
 }
 
-void SceneMembership::scenes_of_body(
+void SceneMembership::scenes_of_entity(
     int64_t p_member,
-    int64_t p_body,
+    int64_t p_entity,
     LocalVector<RID> &r_scenes
 ) const {
-    if (p_body == WATCH) {
+    if (p_entity == WATCH) {
         return;
     }
     for (uint32_t at = 0; at < reasons.size(); ++at) {
         const Reason &held = reasons[at];
-        if (held.member != p_member || held.body != p_body
+        if (held.member != p_member || held.entity != p_entity
             || r_scenes.has(held.scene)) {
             continue;
         }
@@ -190,7 +190,7 @@ void SceneMembership::scenes_of_body(
     }
 }
 
-PackedInt64Array SceneMembership::bodies_of(
+PackedInt64Array SceneMembership::entities_of(
     int64_t p_member,
     const RID &p_scene
 ) const {
@@ -198,10 +198,10 @@ PackedInt64Array SceneMembership::bodies_of(
     for (uint32_t at = 0; at < reasons.size(); ++at) {
         const Reason &held = reasons[at];
         if (held.member != p_member || held.scene != p_scene
-            || held.body == WATCH || found.has(held.body)) {
+            || held.entity == WATCH || found.has(held.entity)) {
             continue;
         }
-        found.push_back(held.body);
+        found.push_back(held.entity);
     }
     found.sort();
     PackedInt64Array out;
@@ -222,7 +222,7 @@ PackedInt64Array SceneMembership::watchers_of(const RID &p_scene) const {
     LocalVector<int64_t> found;
     for (uint32_t at = 0; at < reasons.size(); ++at) {
         const Reason &held = reasons[at];
-        if (held.scene != p_scene || held.body != WATCH
+        if (held.scene != p_scene || held.entity != WATCH
             || found.has(held.member)) {
             continue;
         }

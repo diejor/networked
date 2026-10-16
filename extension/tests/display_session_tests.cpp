@@ -2,9 +2,12 @@
 #include "support/netw_test.h"
 
 #include "godot/spatial_node.hpp"
+#include "godot/templates.hpp"
+#include "netw/api/context.hpp"
 #include "netw/api/entity.hpp"
 #include "netw/api/interpolate.hpp"
 #include "netw/api/netw_multiplayer.hpp"
+#include "netw/api/property_config.hpp"
 #include "netw/display/book.hpp"
 #include "netw/display/channel.hpp"
 #include "netw/display/decl.hpp"
@@ -266,6 +269,27 @@ TEST_CASE(
 
     NETW_CHECK_EQ(int(core->display_pump(1.0 / 60.0)), int(OK));
     NETW_CHECK_EQ(int(core->display_pump(1.0 / 60.0)), int(OK));
+}
+
+TEST_CASE(
+    "[Networked][Display][Hosted] DS11 an entity smooths the properties of "
+    "its own nodes and never those of a child entity, which smooths its own"
+) {
+    Ref<NetwMultiplayer> core = make_core();
+    Node3D *level = memnew(Node3D);
+    Node3D *enemy = memnew(Node3D);
+    Node3D *model = memnew(Node3D);
+    level->add_child(enemy);
+    enemy->add_child(model);
+    netw::NetwEntity::ensure(level);
+    netw::NetwEntity::ensure(enemy);
+    Ref<NetwInterpolate> spec = lerp_spec();
+    netw::Netw::configure_property(model, StringName("position"))
+        ->interpolate(netw::gd::array_of(spec->lerp()));
+
+    CHECK(!core->display_wants_runtime(level));
+    CHECK(core->display_wants_runtime(enemy));
+    memdelete(level);
 }
 
 } // namespace TestNetwDisplaySession

@@ -1234,7 +1234,6 @@ TEST_CASE(
     rig.step_ticks(8);
     NETW_CHECK_EQ(int64_t(mirror->get(StringName("watched_value"))), 71);
     NETW_CHECK_EQ(faults.errors(), 0);
-
 }
 
 constexpr const char *SERVER_STEERED_PROBE = R"(extends Node2D
@@ -1268,10 +1267,8 @@ Ref<PackedScene> steered_scene(
         p_mode == SceneReplicationConfig::REPLICATION_MODE_NEVER
     ));
     netw_test::add_stock_sync(root, "Sync", props);
-    const Ref<PackedScene> packed = netw_test::pack_stock_scene(
-        root,
-        netw_test::mint_scene_path(p_stem)
-    );
+    const Ref<PackedScene> packed
+        = netw_test::pack_stock_scene(root, netw_test::mint_scene_path(p_stem));
     memdelete(root);
     return packed;
 }
@@ -1290,8 +1287,7 @@ struct SteeredPair {
         : rig(1) {
         rig.mount();
         netw_test::flow_clocks(rig, TICKRATE);
-        const Ref<PackedScene> scene
-            = steered_scene(p_source, p_stem, p_mode);
+        const Ref<PackedScene> scene = steered_scene(p_source, p_stem, p_mode);
         PackedStringArray scenes;
         scenes.push_back(scene->get_path());
         world = netw_test::mount_stock_world(rig, scenes);
@@ -1324,12 +1320,14 @@ TEST_CASE(
     NETW_CHECK_EQ(pair.mirror->get_multiplayer_authority(), 1);
     pair.served->set(StringName("synced_value"), 41);
     NETW_CHECK_EQ(
-        int64_t(netw_test::pump_until_value(
-            pair.rig,
-            pair.mirror,
-            StringName("synced_value"),
-            41
-        )),
+        int64_t(
+            netw_test::pump_until_value(
+                pair.rig,
+                pair.mirror,
+                StringName("synced_value"),
+                41
+            )
+        ),
         41
     );
 

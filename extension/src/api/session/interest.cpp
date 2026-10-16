@@ -327,9 +327,7 @@ void NetwMultiplayer::interest_receive_awareness(
     for (uint32_t at = 0; at < events.size(); ++at) {
         const interest::Awareness &edge = events[at];
         const bool entered = edge.kind == interest::Awareness::ENTER;
-        if (!entered
-            && liveness_route_state(edge.route)
-                != NetwLivenessCore::STATE_LIVE) {
+        if (!entered && liveness_route_state(edge.route) != ENTITY_STATE_LIVE) {
             continue;
         }
         const bool clocked = clock_engine().get_configured();

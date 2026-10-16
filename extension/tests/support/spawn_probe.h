@@ -58,9 +58,7 @@ protected:
         if (entity.is_null()) {
             return;
         }
-        entity->set_initial_controller(
-            netw::NetwEntity::INITIAL_PLAYER
-        );
+        entity->set_initial_controller(netw::NetwEntity::INITIAL_PLAYER);
         entity->set_authority(netw::NetwEntity::AUTHORITY_CONTROLLER);
         netw::script::model::configure_node_property(
             this,

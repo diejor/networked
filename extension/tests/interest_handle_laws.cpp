@@ -58,8 +58,7 @@ TEST_CASE(
     if (root == nullptr) {
         return;
     }
-    netw::MultiplayerViewport *host
-        = memnew(netw::MultiplayerViewport);
+    netw::MultiplayerViewport *host = memnew(netw::MultiplayerViewport);
     host->set_api(core);
     host->set_name("Host");
     root->add_child(host);

@@ -417,7 +417,7 @@ struct NetwInterestLayer {
 struct NetwScene {
     enum SceneEvent {
         SCENE_EVENT_VIEWER = 0,
-        SCENE_EVENT_BODY = 1,
+        SCENE_EVENT_PLAYER_ENTITY = 1,
         SCENE_EVENT_ENTITY = 2,
     };
 

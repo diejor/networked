@@ -636,7 +636,7 @@ Moves ``node`` under ``new_parent`` like :godot:`Node.reparent() <Node#class_Nod
 
 ::
 
-    await Netw.reparent(body, level2.get_node(^"Players")).wait()
+    await Netw.reparent(avatar, level2.get_node(^"Players")).wait()
 
 \ Unlike :godot:`Node.reparent() <Node#class_Node_method_reparent>`, it does not fire :godot:`Area3D` and :godot:`Area2D` enter and exit signals during the move, which works around `this issue <https://github.com/godotengine/godot/issues/14578>`__. Otherwise :godot:`Node.reparent() <Node#class_Node_method_reparent>` works fine.
 
@@ -658,10 +658,10 @@ Spawns ``node`` on every peer from its :godot:`Node.scene_file_path <Node#class_
 
 ::
 
-    var body := PlayerScene.instantiate()
-    var entity := Netw.replicate(body, player)
-    body.position = spawn_point
-    scene.add_child(body)
+    var avatar := PlayerScene.instantiate()
+    var entity := Netw.replicate(avatar, player)
+    avatar.position = spawn_point
+    scene.add_child(avatar)
 
 \ A client can call it without ``owner`` when ``node`` sets :ref:`NetwEntity.lifecycle<class_NetwEntity_property_lifecycle>` to :ref:`NetwEntity.LIFECYCLE_CONTROLLER<class_NetwEntity_constant_LIFECYCLE_CONTROLLER>`. That client becomes its :ref:`NetwEntity.controller<class_NetwEntity_property_controller>`.
 

@@ -129,16 +129,10 @@ TEST_CASE(
 
     NETW_CHECK_EQ(int(target->get_msaa_2d()), int(Viewport::MSAA_4X));
     NETW_CHECK_EQ(int(target->get_msaa_3d()), int(Viewport::MSAA_8X));
-    NETW_CHECK_EQ(
-        int(target->get_screen_space_aa()),
-        int(screen_aa)
-    );
+    NETW_CHECK_EQ(int(target->get_screen_space_aa()), int(screen_aa));
     CHECK(target->is_using_taa() == forward_plus);
     CHECK(target->is_using_debanding());
-    NETW_CHECK_EQ(
-        int(target->get_scaling_3d_mode()),
-        int(scaling)
-    );
+    NETW_CHECK_EQ(int(target->get_scaling_3d_mode()), int(scaling));
     NETW_CHECK_EQ(int(target->get_scaling_3d_scale() * 100.0f), 50);
     CHECK(target->is_using_hdr_2d());
     NETW_CHECK_EQ(target->get_positional_shadow_atlas_size(), 1024);

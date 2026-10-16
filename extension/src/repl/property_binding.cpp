@@ -347,10 +347,7 @@ const gd::PropertyResolution &PropertyBinding::unlisted_column(
         return *cached;
     }
     return unlisted_columns
-        .insert(
-            p_key,
-            script::model::resolve_property(p_node, p_key, Array())
-        )
+        .insert(p_key, script::model::resolve_property(p_node, p_key, Array()))
         ->value;
 }
 

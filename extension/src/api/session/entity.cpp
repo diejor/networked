@@ -1697,7 +1697,7 @@ void NetwMultiplayer::entity_release_body(
     int64_t p_route,
     bool p_owner_live
 ) {
-    membership_drop_body(p_wrapper);
+    membership_drop_entity(p_wrapper);
     interest_release_body(p_wrapper);
     if (p_wrapper.is_valid()
         && predict_engine_seated(p_wrapper->get_rid_handle())) {
@@ -2310,7 +2310,7 @@ spawn::Record *NetwMultiplayer::spawn_issue_armed(
         above.is_valid() ? liveness_route_of(above.ptr()) : 0
     );
     interest_sync_scene_membership(NetwEntity::of(node));
-    membership_place_body(NetwEntity::of(node));
+    membership_place_entity(NetwEntity::of(node));
     store_world.stale_route(p_route);
     return p_book->issue(armed);
 }
@@ -2832,7 +2832,7 @@ void NetwMultiplayer::spawn_refresh_anchor(
         above.is_valid() ? liveness_route_of(above.ptr()) : 0
     );
     interest_sync_scene_membership(NetwEntity::of(p_node));
-    membership_place_body(NetwEntity::of(p_node));
+    membership_place_entity(NetwEntity::of(p_node));
     spawn_reanchor(p_record, p_node, p_roster);
 }
 

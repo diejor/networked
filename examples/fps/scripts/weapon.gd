@@ -1,4 +1,5 @@
 extends Resource
+
 class_name Weapon
 
 @export_subgroup("Model")

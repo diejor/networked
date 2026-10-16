@@ -171,7 +171,7 @@ func summary_handles() -> Dictionary:
 
 func local_car() -> Vehicle:
 	var here: NetwPlayer = session_handle.local_player
-	var mine: Array[NetwEntity] = here.bodies if here else []
+	var mine: Array[NetwEntity] = here.entities if here else []
 	return mine[0].owner as Vehicle if mine.size() == 1 else null
 
 

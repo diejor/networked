@@ -342,8 +342,7 @@ void NetwSceneCore::transition_close() {
 
 String NetwSceneCore::verify_scene_path(const String &path) {
     const bool bounded = !path.is_empty()
-        && path.length() <= MAX_SCENE_PATH_LENGTH
-        && path.begins_with("res://");
+        && path.length() <= MAX_SCENE_PATH_LENGTH && path.begins_with("res://");
     const String extension = bounded ? path.get_extension() : String();
     if (!bounded || (extension != "tscn" && extension != "scn")) {
         NETW_TRACE(

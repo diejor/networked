@@ -72,18 +72,18 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Session][Hosted] PR4 a player answers the bodies the "
+    "[Networked][Session][Hosted] PR4 a player answers the entities the "
     "session actually holds for it, so a membership nobody has spawned for "
-    "reads as an empty set rather than as a body it might be given"
+    "reads as an empty set rather than as an entity it might be given"
 ) {
     Ref<NetwMultiplayer> core;
     core.instantiate();
     const Ref<NetwPlayer> row = seated_peer(core.ptr(), 7);
     REQUIRE(row.is_valid());
 
-    CHECK(row->get_bodies().is_empty());
-    CHECK(core->player_bodies(7).is_empty());
-    CHECK(core->player_bodies(9).is_empty());
+    CHECK(row->get_entities().is_empty());
+    CHECK(core->player_get_entities(7).is_empty());
+    CHECK(core->player_get_entities(9).is_empty());
 }
 
 TEST_CASE(

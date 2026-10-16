@@ -277,10 +277,7 @@ TEST_CASE(
 
     const ArchetypeAxes solver = archetype_axes(int(Archetype::SOLVER_BODY));
     CHECK(solver.declared);
-    NETW_CHECK_EQ(
-        solver.schedule,
-        int(netw::NetwSimulation::SCHEDULE_AUTO)
-    );
+    NETW_CHECK_EQ(solver.schedule, int(netw::NetwSimulation::SCHEDULE_AUTO));
     NETW_CHECK_EQ(solver.missing_policy, int(MissingInput::REPEAT_LAST));
     NETW_CHECK_EQ(solver.recovery_policy, int(RecoveryPolicy::AUTO));
     CHECK(solver.declares_snap_restore);

@@ -293,8 +293,7 @@ TEST_CASE(
     entity.instantiate();
     entity->set_owner(body);
     REQUIRE(
-        core->liveness_adopt_route(17, entity, entity->get_record(), body)
-        == OK
+        core->liveness_adopt_route(17, entity, entity->get_record(), body) == OK
     );
     REQUIRE(core->display_runtime_for(17, entity) != nullptr);
     const RID handle = entity->get_rid_handle();
@@ -328,8 +327,7 @@ TEST_CASE(
     entity.instantiate();
     entity->set_owner(body);
     REQUIRE(
-        core->liveness_adopt_route(17, entity, entity->get_record(), body)
-        == OK
+        core->liveness_adopt_route(17, entity, entity->get_record(), body) == OK
     );
     auto *runtime = core->display_runtime_for(17, entity);
     REQUIRE(runtime != nullptr);

@@ -1,5 +1,5 @@
-#include "support/frame_drive.h"
 #include "support/fault_log.h"
+#include "support/frame_drive.h"
 #include "support/netw_test.h"
 
 #include "godot/callable.hpp"
@@ -44,8 +44,8 @@ public:
         Array drained;
         for (const netw_test::FaultLine &line : writer->recorded()) {
             Dictionary row;
-            row["type"] = line.error
-                ? Logger::ERROR_TYPE_ERROR : Logger::ERROR_TYPE_WARNING;
+            row["type"] = line.error ? Logger::ERROR_TYPE_ERROR
+                                     : Logger::ERROR_TYPE_WARNING;
             row["text"] = line.text;
             drained.push_back(row);
         }

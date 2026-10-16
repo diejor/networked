@@ -357,8 +357,9 @@ void exclude_visual_root(Node *p_owner, Node *p_visual) {
     }
     held.visual_roots.insert(key, 1);
     held.lists.clear();
-    Node *inside = collides_or_queries(p_visual) ? p_visual
-                                                 : first_collider_under(p_visual);
+    Node *inside = collides_or_queries(p_visual)
+        ? p_visual
+        : first_collider_under(p_visual);
     if (inside == nullptr || !first_report(inside, Fault::VISUAL_ROOT)) {
         return;
     }

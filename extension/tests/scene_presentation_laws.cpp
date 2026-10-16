@@ -115,7 +115,7 @@ TEST_CASE(
 
 TEST_CASE(
     "[Networked][Scene][Hosted] SPR2 a peer presents the one live scene its "
-    "own body stands in, and the body crossing into the other takes the "
+    "own entity stands in, and the entity crossing into the other takes the "
     "presentation with it rather than leaving it where it was"
 ) {
     const Ref<NetwMultiplayer> core = hosting();
@@ -123,11 +123,11 @@ TEST_CASE(
     const Mounted arena = mount(core, root, StringName("Arena"));
     const Mounted annex = mount(core, root, StringName("Annex"));
 
-    Node *body = stand(core, arena.root, int64_t(core->get_unique_id()));
+    Node *avatar = stand(core, arena.root, int64_t(core->get_unique_id()));
     CHECK(core->scene_presented() == arena.scene);
 
-    arena.root->remove_child(body);
-    annex.root->add_child(body);
+    arena.root->remove_child(avatar);
+    annex.root->add_child(avatar);
     core->scene_player_display_invalidate();
 
     CHECK(core->scene_presented() == annex.scene);
@@ -136,9 +136,9 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Scene][Hosted] SPR3 a body outranks a watch, so a peer "
-    "watching one scene and standing in another presents the one it stands "
-    "in and takes the watched one only once the body is gone"
+    "[Networked][Scene][Hosted] SPR3 a player entity outranks a watch, so "
+    "a peer watching one scene and standing in another presents the one it "
+    "stands in and takes the watched one only once the entity is gone"
 ) {
     const Ref<NetwMultiplayer> core = hosting();
     Node *root = memnew(Node);
@@ -149,11 +149,11 @@ TEST_CASE(
     watch(core, annex.scene, local);
     CHECK(core->scene_presented() == annex.scene);
 
-    Node *body = stand(core, arena.root, local);
+    Node *avatar = stand(core, arena.root, local);
     CHECK(core->scene_presented() == arena.scene);
 
-    arena.root->remove_child(body);
-    root->add_child(body);
+    arena.root->remove_child(avatar);
+    root->add_child(avatar);
     core->scene_player_display_invalidate();
 
     CHECK(core->scene_presented() == annex.scene);
@@ -194,8 +194,9 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Scene][Hosted] SPR5 a peer presents nothing for a body that "
-    "is not its own and for a scene another peer watches, so what one peer "
+    "[Networked][Scene][Hosted] SPR5 a peer presents nothing for an entity "
+    "that is not its own and for a scene another peer watches, so what one "
+    "peer "
     "reaches never decides what this one draws"
 ) {
     const Ref<NetwMultiplayer> core = hosting();
@@ -248,14 +249,14 @@ TEST_CASE(
     const CallLog moved;
     player->connect(StringName("scene_changed"), moved.callable("presented"));
 
-    Node *body = stand(core, arena.root, int64_t(core->get_unique_id()));
+    Node *avatar = stand(core, arena.root, int64_t(core->get_unique_id()));
     NETW_CHECK_EQ(moved.count(StringName("presented")), 1);
 
     core->scene_player_display_invalidate();
     NETW_CHECK_EQ(moved.count(StringName("presented")), 1);
 
-    arena.root->remove_child(body);
-    root->add_child(body);
+    arena.root->remove_child(avatar);
+    root->add_child(avatar);
     core->scene_player_display_invalidate();
 
     NETW_CHECK_EQ(moved.count(StringName("presented")), 2);
@@ -271,8 +272,8 @@ TEST_CASE(
 
 TEST_CASE(
     "[Networked][Scene][Hosted] SPR8 another player's scene is the one "
-    "holding its body, or else the one it watches, and a body outranks a "
-    "watch exactly as it does for this peer"
+    "holding its entity, or else the one it watches, and an entity outranks "
+    "a watch exactly as it does for this peer"
 ) {
     const Ref<NetwMultiplayer> core = hosting();
     Node *root = memnew(Node);

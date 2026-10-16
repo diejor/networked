@@ -573,7 +573,7 @@ TEST_CASE(
 
 TEST_CASE(
     "[Networked][Entity] EC9 the published control surface names authority, "
-    "starts a player's body with INITIAL_PLAYER, reads peer_id without "
+    "starts a player's entity with INITIAL_PLAYER, reads peer_id without "
     "writing it, and pins no path to the server"
 ) {
     ClassDBSingleton *classes = ClassDBSingleton::get_singleton();
@@ -589,8 +589,9 @@ TEST_CASE(
         String(classes->class_get_property_setter(entity, "authority"))
         == String("set_authority")
     );
-    CHECK(String(classes->class_get_property_setter(entity, "peer_id"))
-              .is_empty());
+    CHECK(
+        String(classes->class_get_property_setter(entity, "peer_id")).is_empty()
+    );
     CHECK(
         String(classes->class_get_property_getter(entity, "peer_id"))
         == String("get_peer_id")

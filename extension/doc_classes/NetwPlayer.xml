@@ -8,15 +8,15 @@
 		[codeblock]
 		var player := Netw.of(self).peer_get_player(peer_id)
 		greet(player.username)
-		for body: NetwEntity in player.bodies:
-		    follow(body.owner)
+		for entity: NetwEntity in player.entities:
+		    follow(entity.owner)
 		[/codeblock]
 		A player is not a peer. After the player leaves, [member is_active] is [code]false[/code], even if a new player connects with the same [member peer_id].
 	</description>
 	<tutorials>
 	</tutorials>
 	<members>
-		<member name="bodies" type="NetwEntity[]" setter="" getter="get_bodies" default="[]">
+		<member name="entities" type="NetwEntity[]" setter="" getter="get_entities" default="[]">
 			The entities spawned for this player with [method Netw.spawn_player], in no particular order. Empty for a spectator.
 		</member>
 		<member name="is_active" type="bool" setter="" getter="get_is_active" default="false">
@@ -26,7 +26,7 @@
 			The peer this player is connected as. Another player may reuse it after this one leaves.
 		</member>
 		<member name="scene" type="NetwScene" setter="" getter="get_scene">
-			The scene this player is in, or [code]null[/code]. It is the scene holding one of its [member bodies], or else the scene it watches with [method NetwScene.watch]. It is [code]null[/code] when there are two.
+			The scene this player is in, or [code]null[/code]. It is the scene holding one of its [member entities], or else the scene it watches with [method NetwScene.watch]. It is [code]null[/code] when there are two.
 			A client only knows about the scenes it receives.
 		</member>
 		<member name="username" type="StringName" setter="" getter="get_username" default="&amp;&quot;&quot;">

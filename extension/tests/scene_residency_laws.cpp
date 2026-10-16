@@ -20,9 +20,9 @@ using netw::NetwMultiplayer;
 using netw_test::CallLog;
 using netw_test::LoopbackRig;
 
-Node *build_body(const Variant &p_marker) {
+Node *build_avatar(const Variant &p_marker) {
     Node2D *made = memnew(Node2D);
-    made->set_name("Body");
+    made->set_name("Avatar");
     made->set_meta(StringName("marker"), p_marker);
     return made;
 }
@@ -82,8 +82,8 @@ int spawn_into(
     bool p_pump = true
 ) {
     return p_rig.spawn_registered(
-        StringName("body"),
-        callable_mp_static(&build_body),
+        StringName("avatar"),
+        callable_mp_static(&build_avatar),
         one_string(p_marker),
         string_types(),
         p_parent,
@@ -104,7 +104,8 @@ int edges_for(const CallLog &p_seen, const RID &p_scene, bool p_subscribed) {
 }
 
 TEST_CASE(
-    "[Networked][Scene] JR1 a body residing in a scene subscribes the player "
+    "[Networked][Scene] JR1 an entity residing in a scene subscribes the "
+    "player "
     "who owns it, with no seat and no admission call, and that player then "
     "receives the rest of that scene's content"
 ) {
@@ -124,7 +125,7 @@ TEST_CASE(
 
     CHECK(host->scene_subscribes(arena, peer));
     CHECK_FALSE(host->scene_watches(arena, peer));
-    NETW_CHECK_EQ(host->membership_book().bodies_in(peer, arena), 1);
+    NETW_CHECK_EQ(host->membership_book().entities_in(peer, arena), 1);
 
     const int furniture
         = spawn_into(rig, level, Ref<netw::NetwPlayer>(), "furniture");
@@ -135,7 +136,7 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Scene] JR2 two bodies of one player in one scene are two "
+    "[Networked][Scene] JR2 two entities of one player in one scene are two "
     "reasons, so the first one leaving keeps the player subscribed and the "
     "last one leaving takes the subscription away"
 ) {
@@ -154,18 +155,18 @@ TEST_CASE(
     Node *second_node = rig.route_node(second);
     REQUIRE(first_node != nullptr);
     REQUIRE(second_node != nullptr);
-    NETW_CHECK_EQ(host->membership_book().bodies_in(peer, arena), 2);
+    NETW_CHECK_EQ(host->membership_book().entities_in(peer, arena), 2);
 
     first_node->get_parent()->remove_child(first_node);
     rig.pump(8);
 
-    NETW_CHECK_EQ(host->membership_book().bodies_in(peer, arena), 1);
+    NETW_CHECK_EQ(host->membership_book().entities_in(peer, arena), 1);
     CHECK(host->scene_subscribes(arena, peer));
 
     second_node->get_parent()->remove_child(second_node);
     rig.pump(8);
 
-    NETW_CHECK_EQ(host->membership_book().bodies_in(peer, arena), 0);
+    NETW_CHECK_EQ(host->membership_book().entities_in(peer, arena), 0);
     CHECK_FALSE(host->scene_subscribes(arena, peer));
 
     memdelete(first_node);
@@ -174,9 +175,9 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Scene] JR3 a body that leaves a scene and returns inside one "
-    "settle never reports leaving it, because a move is classified from the "
-    "tree the body ended in rather than from the hops it took"
+    "[Networked][Scene] JR3 an entity that leaves a scene and returns inside "
+    "one settle never reports leaving it, because a move is classified from "
+    "the tree the entity ended in rather than from the hops it took"
 ) {
     LoopbackRig rig(1);
     rig.mount();
@@ -188,22 +189,22 @@ TEST_CASE(
         = netw_test::seated_peer(host, peer, StringName("ana"));
 
     const int route = spawn_into(rig, level_of(rig, arena), ana, "mover");
-    Node *body = rig.route_node(route);
-    REQUIRE(body != nullptr);
+    Node *avatar = rig.route_node(route);
+    REQUIRE(avatar != nullptr);
     REQUIRE(host->scene_subscribes(arena, peer));
 
     const CallLog seen;
     host->set_scene_viewer_edge(seen.callable("edge"));
 
-    body->reparent(level_of(rig, annex));
-    body->reparent(level_of(rig, arena));
+    avatar->reparent(level_of(rig, annex));
+    avatar->reparent(level_of(rig, arena));
     rig.pump(8);
 
     NETW_CHECK_EQ(edges_for(seen, arena, false), 0);
     NETW_CHECK_EQ(edges_for(seen, annex, true), 0);
     CHECK(host->scene_subscribes(arena, peer));
     CHECK_FALSE(host->scene_subscribes(annex, peer));
-    NETW_CHECK_EQ(host->membership_book().bodies_in(peer, arena), 1);
+    NETW_CHECK_EQ(host->membership_book().entities_in(peer, arena), 1);
 }
 
 TEST_CASE(
@@ -244,9 +245,9 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Scene] JR5 an explicit watch outlives the body that happened "
-    "to be there, because a departure drops the body's own reason and never "
-    "the reason a caller asked for"
+    "[Networked][Scene] JR5 an explicit watch outlives the entity that "
+    "happened to be there, because a departure drops the entity's own reason "
+    "and never the reason a caller asked for"
 ) {
     LoopbackRig rig(1);
     rig.mount();
@@ -258,23 +259,24 @@ TEST_CASE(
         = netw_test::seated_peer(host, peer, StringName("ana"));
 
     const int route = spawn_into(rig, level_of(rig, arena), ana, "mover");
-    Node *body = rig.route_node(route);
-    REQUIRE(body != nullptr);
+    Node *avatar = rig.route_node(route);
+    REQUIRE(avatar != nullptr);
     REQUIRE(host->scene_admit_peer(arena, peer));
     REQUIRE(host->scene_watches(arena, peer));
 
-    body->reparent(level_of(rig, annex));
+    avatar->reparent(level_of(rig, annex));
     rig.pump(8);
 
     CHECK(host->scene_watches(arena, peer));
     CHECK(host->scene_subscribes(arena, peer));
-    NETW_CHECK_EQ(host->membership_book().bodies_in(peer, arena), 0);
+    NETW_CHECK_EQ(host->membership_book().entities_in(peer, arena), 0);
     CHECK(host->scene_subscribes(annex, peer));
 }
 
 TEST_CASE(
-    "[Networked][Scene] JR6 a body parented under another session's tree is "
-    "refused rather than adopted, so the session it left revokes its "
+    "[Networked][Scene] JR6 an entity parented under another "
+    "session's tree is refused rather than adopted, so the session it left "
+    "revokes its "
     "membership and the destination claims nothing"
 ) {
     netw_test::FaultWatch expected_faults;
@@ -294,27 +296,27 @@ TEST_CASE(
         = netw_test::seated_peer(host, peer, StringName("ana"));
 
     const int route = spawn_into(rig, level_of(rig, arena), ana, "mover");
-    Node *body = rig.route_node(route);
-    REQUIRE(body != nullptr);
+    Node *avatar = rig.route_node(route);
+    REQUIRE(avatar != nullptr);
     REQUIRE(host->scene_subscribes(arena, peer));
 
     Node *foreign = rig.route_node(int(host->entity_get_route(arena)), 0);
     REQUIRE(foreign != nullptr);
-    body->reparent(foreign);
+    avatar->reparent(foreign);
     rig.pump(8);
 
     CHECK_FALSE(host->scene_subscribes(arena, peer));
     NETW_CHECK_EQ(host->membership_book().subscriptions_of(peer), 0);
 
-    body->reparent(level_of(rig, arena));
+    avatar->reparent(level_of(rig, arena));
     rig.pump(8);
     CHECK(host->scene_subscribes(arena, peer));
 }
 
 TEST_CASE(
-    "[Networked][Scene] JR7 a body whose player holds no live membership "
-    "subscribes nobody when it lands, because an armed orphan can outlive the "
-    "acceptance that asked for it"
+    "[Networked][Scene] JR7 an entity whose player holds no live "
+    "membership subscribes nobody when it lands, because an armed orphan can "
+    "outlive the acceptance that asked for it"
 ) {
     LoopbackRig rig(1);
     rig.mount();
@@ -333,7 +335,7 @@ TEST_CASE(
     rig.pump(8);
 
     CHECK_FALSE(host->scene_subscribes(arena, peer));
-    NETW_CHECK_EQ(host->membership_book().bodies_in(peer, arena), 0);
+    NETW_CHECK_EQ(host->membership_book().entities_in(peer, arena), 0);
 }
 
 TEST_CASE(
@@ -406,8 +408,8 @@ TEST_CASE(
 
 TEST_CASE(
     "[Networked][Scene] JR8 the run's placements agree with the tree, so "
-    "every body reason names a body that resides in that scene and every "
-    "resident body holds one"
+    "every entity reason names an entity that resides in that scene and "
+    "every resident entity holds one"
 ) {
 #if defined(NETW_TESTS)
     const int64_t opened = netw::residency_audit::ledger().observations;
@@ -424,12 +426,12 @@ TEST_CASE(
 
     const int mover = spawn_into(rig, level_of(rig, arena), ana, "ana");
     spawn_into(rig, level_of(rig, annex), bo, "bo");
-    Node *body = rig.route_node(mover);
-    REQUIRE(body != nullptr);
+    Node *avatar = rig.route_node(mover);
+    REQUIRE(avatar != nullptr);
 
-    body->reparent(level_of(rig, annex));
+    avatar->reparent(level_of(rig, annex));
     rig.pump(8);
-    body->reparent(level_of(rig, arena));
+    avatar->reparent(level_of(rig, arena));
     rig.pump(8);
 
 #if defined(NETW_TESTS)

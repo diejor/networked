@@ -2254,19 +2254,26 @@ public sealed class NetwMultiplayer : NetwRefCounted
         }
     }
 
-    private static readonly IntPtr _bindSceneBodiesAll =
-        NetwApi.MethodBind("NetwMultiplayer", "scene_bodies_all", 2915620761UL);
+    private static readonly IntPtr _bindScenePlayerEntitiesAll =
+        NetwApi.MethodBind(
+            "NetwMultiplayer",
+            "scene_player_entities_all",
+            2915620761UL);
 
     /// <summary>
-    /// Every body in every scene. Bodies in different scenes can share a
+    /// Every entity spawned for a player with <see cref="Netw.SpawnPlayer"/>,
+    /// in every scene. Entities in different scenes can share a
     /// <see cref="NetwEntity.Name"/>.
     /// </summary>
-    public NetwEntity[] Bodies
+    public NetwEntity[] PlayerEntities
     {
         get
         {
             godot_variant answered = default;
-            NetwThunks.Call0(_bindSceneBodiesAll, Checked, ref answered);
+            NetwThunks.Call0(
+                _bindScenePlayerEntitiesAll,
+                Checked,
+                ref answered);
             NetwEntity[] result =
                 NetwApi.Elements(
                     VariantUtils.ConvertToArray(answered),
@@ -6395,18 +6402,25 @@ public sealed class NetwMultiplayer : NetwRefCounted
         return answered;
     }
 
-    private static readonly IntPtr _bindPlayerBodies =
-        NetwApi.MethodBind("NetwMultiplayer", "player_bodies", 1171824711UL);
+    private static readonly IntPtr _bindPlayerGetEntities =
+        NetwApi.MethodBind(
+            "NetwMultiplayer",
+            "player_get_entities",
+            1171824711UL);
 
     /// <summary>
-    /// Every entity that belongs to the player of <paramref name="peer"/>, in
-    /// no particular order.
+    /// Every entity spawned for the player of <paramref name="peer"/> with
+    /// <see cref="Netw.SpawnPlayer"/>, in no particular order.
     /// </summary>
-    public NetwEntity[] PlayerBodies(long peer)
+    public NetwEntity[] PlayerGetEntities(long peer)
     {
         godot_variant slot0 = VariantUtils.CreateFromInt((long)peer);
         godot_variant answered = default;
-        NetwThunks.Call1(_bindPlayerBodies, Checked, in slot0, ref answered);
+        NetwThunks.Call1(
+            _bindPlayerGetEntities,
+            Checked,
+            in slot0,
+            ref answered);
         slot0.Dispose();
         NetwEntity[] result =
             NetwApi.Elements(
@@ -6892,7 +6906,7 @@ public sealed class NetwMultiplayer : NetwRefCounted
     /// <summary>
     /// Replicates <paramref name="scene"/> to <paramref name="peer"/> until
     /// <see cref="NetwMultiplayer.SceneUnwatch"/>, without moving any of its
-    /// bodies. Applies immediately.
+    /// player entities. Applies immediately.
     /// <code>
     /// Error
     /// ┠╴OK                     the peer receives the scene
@@ -6923,9 +6937,9 @@ public sealed class NetwMultiplayer : NetwRefCounted
         NetwApi.MethodBind("NetwMultiplayer", "scene_unwatch", 2965260855UL);
 
     /// <summary>
-    /// Reverses <see cref="NetwMultiplayer.SceneWatch"/>. A peer with a body in
-    /// the scene keeps receiving it. Returns <c>false</c> when the scene does
-    /// not exist. <b>Server Only.</b>
+    /// Reverses <see cref="NetwMultiplayer.SceneWatch"/>. A peer with an entity
+    /// spawned for it in the scene keeps receiving it. Returns <c>false</c>
+    /// when the scene does not exist. <b>Server Only.</b>
     /// </summary>
     public bool SceneUnwatch(Rid scene, long peer)
     {
@@ -9783,19 +9797,27 @@ public sealed class NetwMultiplayer : NetwRefCounted
         return result;
     }
 
-    private static readonly IntPtr _bindSceneGetBodies =
-        NetwApi.MethodBind("NetwMultiplayer", "scene_get_bodies", 2670461153UL);
+    private static readonly IntPtr _bindSceneGetPlayerEntities =
+        NetwApi.MethodBind(
+            "NetwMultiplayer",
+            "scene_get_player_entities",
+            2670461153UL);
 
     /// <summary>
-    /// The bodies in <paramref name="scene"/>.
-    /// <see cref="NetwMultiplayer.Bodies"/> contains the bodies from every live
-    /// scene.
+    /// The entities in <paramref name="scene"/> spawned for a player with
+    /// <see cref="Netw.SpawnPlayer"/>.
+    /// <see cref="NetwMultiplayer.PlayerEntities"/> contains them from every
+    /// live scene.
     /// </summary>
-    public NetwEntity[] SceneGetBodies(Rid scene)
+    public NetwEntity[] SceneGetPlayerEntities(Rid scene)
     {
         godot_variant slot0 = VariantUtils.CreateFromRid(scene);
         godot_variant answered = default;
-        NetwThunks.Call1(_bindSceneGetBodies, Checked, in slot0, ref answered);
+        NetwThunks.Call1(
+            _bindSceneGetPlayerEntities,
+            Checked,
+            in slot0,
+            ref answered);
         slot0.Dispose();
         NetwEntity[] result =
             NetwApi.Elements(
@@ -9828,21 +9850,22 @@ public sealed class NetwMultiplayer : NetwRefCounted
         return result;
     }
 
-    private static readonly IntPtr _bindSceneGetLocalBodies =
+    private static readonly IntPtr _bindSceneGetLocalPlayerEntities =
         NetwApi.MethodBind(
             "NetwMultiplayer",
-            "scene_get_local_bodies",
+            "scene_get_local_player_entities",
             2670461153UL);
 
     /// <summary>
-    /// Returns the bodies in <paramref name="scene"/> that belong to this peer.
+    /// Returns the entities in <paramref name="scene"/> spawned for this peer's
+    /// player.
     /// </summary>
-    public NetwEntity[] SceneGetLocalBodies(Rid scene)
+    public NetwEntity[] SceneGetLocalPlayerEntities(Rid scene)
     {
         godot_variant slot0 = VariantUtils.CreateFromRid(scene);
         godot_variant answered = default;
         NetwThunks.Call1(
-            _bindSceneGetLocalBodies,
+            _bindSceneGetLocalPlayerEntities,
             Checked,
             in slot0,
             ref answered);

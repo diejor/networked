@@ -102,7 +102,7 @@ Declared declare_scene(
 }
 
 TEST_CASE(
-    "[Networked][Scene][Hosted] JM1 two bodies of one player in one "
+    "[Networked][Scene][Hosted] JM1 two entities of one player in one "
     "scene are two reasons, so the first one leaving keeps the subscription "
     "and the last one leaving ends it, which is the count a single boolean "
     "could not carry"
@@ -111,38 +111,38 @@ TEST_CASE(
     const Ref<netw::NetwLivenessCore> minted = handles();
     const RID arena = minted->entity_create();
 
-    CHECK(book.body_enter(ONE, arena, 101));
-    CHECK(book.body_enter(ONE, arena, 102));
-    NETW_CHECK_EQ(book.bodies_in(ONE, arena), 2);
+    CHECK(book.entity_enter(ONE, arena, 101));
+    CHECK(book.entity_enter(ONE, arena, 102));
+    NETW_CHECK_EQ(book.entities_in(ONE, arena), 2);
     NETW_CHECK_EQ(subscribed_edges(book), 1);
 
-    CHECK(book.body_exit(ONE, arena, 101));
+    CHECK(book.entity_exit(ONE, arena, 101));
     CHECK(book.subscribes(ONE, arena));
-    NETW_CHECK_EQ(removals_for(book, SceneMembership::REMOVAL_LAST_BODY), 0);
+    NETW_CHECK_EQ(removals_for(book, SceneMembership::REMOVAL_LAST_ENTITY), 0);
 
-    CHECK(book.body_exit(ONE, arena, 102));
+    CHECK(book.entity_exit(ONE, arena, 102));
     CHECK_FALSE(book.subscribes(ONE, arena));
-    NETW_CHECK_EQ(removals_for(book, SceneMembership::REMOVAL_LAST_BODY), 1);
+    NETW_CHECK_EQ(removals_for(book, SceneMembership::REMOVAL_LAST_ENTITY), 1);
     NETW_CHECK_EQ(book.size(), 0);
 }
 
 TEST_CASE(
-    "[Networked][Scene][Hosted] JM2 one body entering the same scene twice is "
-    "one reason and announces one edge, so a repeated notification, a "
+    "[Networked][Scene][Hosted] JM2 one entity entering the same scene twice "
+    "is one reason and announces one edge, so a repeated notification, a "
     "deferred flush and a duplicate frame all settle to the same answer"
 ) {
     SceneMembership book;
     const Ref<netw::NetwLivenessCore> minted = handles();
     const RID arena = minted->entity_create();
 
-    CHECK(book.body_enter(ONE, arena, 101));
-    CHECK_FALSE(book.body_enter(ONE, arena, 101));
-    CHECK_FALSE(book.body_enter(ONE, arena, 101));
-    NETW_CHECK_EQ(book.bodies_in(ONE, arena), 1);
+    CHECK(book.entity_enter(ONE, arena, 101));
+    CHECK_FALSE(book.entity_enter(ONE, arena, 101));
+    CHECK_FALSE(book.entity_enter(ONE, arena, 101));
+    NETW_CHECK_EQ(book.entities_in(ONE, arena), 1);
     NETW_CHECK_EQ(book.pending_edges().size(), 1);
 
-    CHECK(book.body_exit(ONE, arena, 101));
-    CHECK_FALSE(book.body_exit(ONE, arena, 101));
+    CHECK(book.entity_exit(ONE, arena, 101));
+    CHECK_FALSE(book.entity_exit(ONE, arena, 101));
     NETW_CHECK_EQ(book.pending_edges().size(), 2);
     NETW_CHECK_EQ(book.size(), 0);
 }
@@ -157,9 +157,9 @@ TEST_CASE(
     const RID arena = minted->entity_create();
     const RID barn = minted->entity_create();
 
-    CHECK(book.body_enter(ONE, arena, 101));
+    CHECK(book.entity_enter(ONE, arena, 101));
     CHECK(book.watch(ONE, barn));
-    CHECK(book.body_enter(TWO, arena, 201));
+    CHECK(book.entity_enter(TWO, arena, 201));
 
     CHECK(book.subscribes(ONE, arena));
     CHECK(book.subscribes(ONE, barn));
@@ -178,17 +178,18 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Scene][Hosted] JM4 an explicit watch and a body in the same "
-    "scene are separate reasons, so unwatching leaves a live body's "
-    "subscription standing and the body leaving leaves the watch standing"
+    "[Networked][Scene][Hosted] JM4 an explicit watch and a player entity in "
+    "the same scene are separate reasons, so unwatching leaves a live player "
+    "entity's subscription standing and the entity leaving leaves the watch "
+    "standing"
 ) {
     SceneMembership book;
     const Ref<netw::NetwLivenessCore> minted = handles();
     const RID arena = minted->entity_create();
 
     CHECK(book.watch(ONE, arena));
-    CHECK(book.body_enter(ONE, arena, 101));
-    NETW_CHECK_EQ(book.bodies_in(ONE, arena), 1);
+    CHECK(book.entity_enter(ONE, arena, 101));
+    NETW_CHECK_EQ(book.entities_in(ONE, arena), 1);
     CHECK(book.watches(ONE, arena));
 
     CHECK(book.unwatch(ONE, arena));
@@ -197,7 +198,7 @@ TEST_CASE(
     NETW_CHECK_EQ(book.pending_edges().size(), 1);
 
     CHECK(book.watch(ONE, arena));
-    CHECK(book.body_exit(ONE, arena, 101));
+    CHECK(book.entity_exit(ONE, arena, 101));
     CHECK(book.subscribes(ONE, arena));
     NETW_CHECK_EQ(book.pending_edges().size(), 1);
 }
@@ -212,9 +213,9 @@ TEST_CASE(
     const RID arena = minted->entity_create();
     const RID barn = minted->entity_create();
 
-    CHECK(book.body_enter(ONE, arena, 101));
+    CHECK(book.entity_enter(ONE, arena, 101));
     CHECK(book.watch(ONE, barn));
-    CHECK(book.body_enter(TWO, barn, 201));
+    CHECK(book.entity_enter(TWO, barn, 201));
     book.clear_edges();
 
     book.forget_member(ONE);
@@ -234,16 +235,16 @@ TEST_CASE(
 TEST_CASE(
     "[Networked][Scene][Hosted] JM6 a reason needs a member and a scene, so "
     "an invalid scene and a zero member are refused rather than stored, and "
-    "the watch sentinel is not a body a caller can pass"
+    "the watch sentinel is not an entity a caller can pass"
 ) {
     SceneMembership book;
     const Ref<netw::NetwLivenessCore> minted = handles();
     const RID arena = minted->entity_create();
 
-    CHECK_FALSE(book.body_enter(0, arena, 101));
-    CHECK_FALSE(book.body_enter(ONE, RID(), 101));
-    CHECK_FALSE(book.body_enter(ONE, arena, SceneMembership::WATCH));
-    CHECK_FALSE(book.body_exit(ONE, arena, SceneMembership::WATCH));
+    CHECK_FALSE(book.entity_enter(0, arena, 101));
+    CHECK_FALSE(book.entity_enter(ONE, RID(), 101));
+    CHECK_FALSE(book.entity_enter(ONE, arena, SceneMembership::WATCH));
+    CHECK_FALSE(book.entity_exit(ONE, arena, SceneMembership::WATCH));
     CHECK_FALSE(book.watch(0, arena));
     CHECK_FALSE(book.watch(ONE, RID()));
     NETW_CHECK_EQ(book.size(), 0);

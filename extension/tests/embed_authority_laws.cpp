@@ -345,7 +345,7 @@ void teach_player(NetwMultiplayer *p_session) {
 
 TEST_CASE(
     "[Networked][Session][SceneTree] EA4 the server's startup gives its "
-    "joined member at 9 one scene and the one body seated for that "
+    "joined member at 9 one scene and the one entity seated for that "
     "player, so the authoritative world arrives whole"
 ) {
     MeshStand stand;
@@ -395,9 +395,9 @@ TEST_CASE(
         host->player_of(MEMBER).ptr()
     );
     REQUIRE(player.is_valid());
-    Node *body = host->entity_get_node(player);
-    REQUIRE(body != nullptr);
-    mount->get_child(0)->add_child(body);
+    Node *avatar = host->entity_get_node(player);
+    REQUIRE(avatar != nullptr);
+    mount->get_child(0)->add_child(avatar);
     stand.step_ticks(8);
 
     NETW_CHECK_EQ(int(host->entity_get_peer(player)), MEMBER);
@@ -408,8 +408,8 @@ TEST_CASE(
 
     NETW_CHECK_EQ(int(host->scene_list().size()), 1);
     NETW_CHECK_EQ(int(guest->scene_list().size()), 1);
-    NETW_CHECK_EQ(int(host->scene_bodies_all().size()), 1);
-    NETW_CHECK_EQ(int(guest->scene_bodies_all().size()), 1);
+    NETW_CHECK_EQ(int(host->scene_player_entities_all().size()), 1);
+    NETW_CHECK_EQ(int(guest->scene_player_entities_all().size()), 1);
     NETW_CHECK_EQ(int(host->scene_get_viewers(opened).size()), 1);
 
     drop(seen);

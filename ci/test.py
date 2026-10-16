@@ -169,9 +169,7 @@ def _godot(
         except Exception:
             sys.stdout.write(text)
             raise
-        visible, _ = diagnostic_report.visible(
-            completed.stderr or "", events
-        )
+        visible, _ = diagnostic_report.visible(completed.stderr or "", events)
         shown = (completed.stdout or "") + visible
         sys.stdout.write(text if show_expected or not passed else shown)
     if check and completed.returncode != 0:
@@ -307,16 +305,19 @@ def lane_native(
     report = REPORTS / "native" / "results.xml"
     report.unlink(missing_ok=True)
     code = _godot(
-        godot, argv, log=TMP / "native.log", timeout=timeout, lane="native",
+        godot,
+        argv,
+        log=TMP / "native.log",
+        timeout=timeout,
+        lane="native",
         check=False,
         diagnostics=REPORTS / "native" / "diagnostics.json",
-        show_expected=show_expected, result_report=report,
+        show_expected=show_expected,
+        result_report=report,
     )
     if not report.is_file():
         raise fail("the hosted tier wrote no %s" % report)
-    graded = reports.grade(
-        report, allow_stale=True, log=TMP / "native.log"
-    )
+    graded = reports.grade(report, allow_stale=True, log=TMP / "native.log")
     return graded or code
 
 
@@ -361,9 +362,7 @@ def lane_gdunit(
     return 0
 
 
-def lane_module(
-    *, timeout: float, cases_tag: str, show_expected: bool = False
-) -> int:
+def lane_module(*, timeout: float, cases_tag: str, show_expected: bool = False) -> int:
     binary = next(
         (
             path
@@ -387,18 +386,22 @@ def lane_module(
     code = _godot(
         str(binary),
         [
-            "--headless", "--test", "--test-case=*%s*" % cases_tag,
-            "--reporters=junit", "--out=%s" % report,
+            "--headless",
+            "--test",
+            "--test-case=*%s*" % cases_tag,
+            "--reporters=junit",
+            "--out=%s" % report,
         ],
-        log=TMP / "module.log", timeout=timeout, lane="module", check=False,
+        log=TMP / "module.log",
+        timeout=timeout,
+        lane="module",
+        check=False,
         diagnostics=REPORTS / "module" / "diagnostics.json",
-        show_expected=show_expected, result_report=report,
+        show_expected=show_expected,
+        result_report=report,
     )
-    graded = reports.grade(
-        report, allow_stale=True, log=TMP / "module.log"
-    )
+    graded = reports.grade(report, allow_stale=True, log=TMP / "module.log")
     return graded or code
-
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -469,7 +472,9 @@ def run_cli(argv: list[str] | None = None) -> int:
         return lane_parse(args.godot, args.roots, timeout=args.timeout)
     if args.lane == "native":
         return lane_native(
-            args.godot, timeout=args.timeout, native_filter=args.native_filter,
+            args.godot,
+            timeout=args.timeout,
+            native_filter=args.native_filter,
             show_expected=args.raw_diagnostics,
         )
     if args.lane == "gdunit":
@@ -482,7 +487,8 @@ def run_cli(argv: list[str] | None = None) -> int:
             timeout=args.timeout,
         )
     return lane_module(
-        timeout=args.timeout, cases_tag=args.tag,
+        timeout=args.timeout,
+        cases_tag=args.tag,
         show_expected=args.raw_diagnostics,
     )
 

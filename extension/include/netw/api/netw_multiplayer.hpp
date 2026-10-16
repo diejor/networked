@@ -253,8 +253,8 @@ public:
     using SceneEvent = enums::NetwScene::SceneEvent;
     static constexpr SceneEvent SCENE_EVENT_VIEWER
         = enums::NetwScene::SCENE_EVENT_VIEWER;
-    static constexpr SceneEvent SCENE_EVENT_BODY
-        = enums::NetwScene::SCENE_EVENT_BODY;
+    static constexpr SceneEvent SCENE_EVENT_PLAYER_ENTITY
+        = enums::NetwScene::SCENE_EVENT_PLAYER_ENTITY;
     static constexpr SceneEvent SCENE_EVENT_ENTITY
         = enums::NetwScene::SCENE_EVENT_ENTITY;
     using SceneChange = enums::NetwScene::SceneChange;
@@ -993,18 +993,18 @@ private:
     void membership_mirror_release(int64_t p_peer);
     void membership_settle();
     bool membership_destination_foreign(godot::Node *p_owner) const;
-    void membership_drop_body_in(
+    void membership_drop_entity_in(
         const godot::RID &p_entity,
         const godot::RID &p_scene,
         int64_t p_peer
     );
 #if defined(NETW_TESTS)
     int membership_audit_held = 0;
-    godot::RID membership_residency_of(int64_t p_body) const;
+    godot::RID membership_residency_of(int64_t p_entity) const;
     static void membership_note_divergence(
         int64_t p_member,
         const godot::RID &p_scene,
-        int64_t p_body
+        int64_t p_entity
     );
     void membership_audit();
 #endif
@@ -1356,10 +1356,10 @@ public:
 
     interest::Engine &interest_plane();
     SceneMembership &membership_book();
-    static int64_t membership_body_id(const godot::RID &p_entity);
+    static int64_t membership_entity_id(const godot::RID &p_entity);
     bool membership_member_active(int64_t p_peer) const;
-    void membership_place_body(const godot::Ref<NetwEntity> &p_entity);
-    void membership_drop_body(const godot::Ref<NetwEntity> &p_entity);
+    void membership_place_entity(const godot::Ref<NetwEntity> &p_entity);
+    void membership_drop_entity(const godot::Ref<NetwEntity> &p_entity);
     void reset_interest();
 
     void interest_sync_record(NetwEntity *p_wrapper);
@@ -2884,16 +2884,18 @@ public:
     godot::Node *scene_get_node(const godot::RID &p_scene) const;
     godot::StringName scene_get_label(const godot::RID &p_scene) const;
     godot::TypedArray<godot::RID> scene_get_entities(const godot::RID &p_scene);
-    godot::TypedArray<NetwEntity> scene_get_bodies(const godot::RID &p_scene);
+    godot::TypedArray<NetwEntity> scene_get_player_entities(
+        const godot::RID &p_scene
+    );
     godot::TypedArray<NetwPlayer> scene_get_viewers(const godot::RID &p_scene);
-    godot::TypedArray<NetwEntity> scene_get_local_bodies(
+    godot::TypedArray<NetwEntity> scene_get_local_player_entities(
         const godot::RID &p_scene
     );
     godot::RID scene_get_layer(const godot::RID &p_scene);
     godot::RID scene_presented() const;
     godot::RID scene_of_peer(int64_t p_peer);
     bool scene_destroy(const godot::RID &p_scene);
-    godot::TypedArray<NetwEntity> scene_bodies_all();
+    godot::TypedArray<NetwEntity> scene_player_entities_all();
     godot::RID scene_create(
         const godot::Variant &p_recipe,
         SceneIsolation p_isolation
@@ -4835,7 +4837,7 @@ public:
     void player_forget(int64_t p_peer);
     void player_clear();
 
-    godot::TypedArray<NetwEntity> player_bodies(int64_t p_peer);
+    godot::TypedArray<NetwEntity> player_get_entities(int64_t p_peer);
 
     bool player_admit(int64_t p_peer);
     godot::Ref<NetwPlayer> player_admitted_of(int64_t p_peer) const;
@@ -4847,7 +4849,7 @@ public:
     void player_release_id(const godot::Ref<NetwPlayer> &p_who);
 
     int64_t player_incarnation(int64_t p_peer) const;
-    godot::TypedArray<NetwEntity> player_bodies_held(
+    godot::TypedArray<NetwEntity> player_entities_held(
         int64_t p_peer,
         int64_t p_player_id
     );
@@ -5033,8 +5035,8 @@ public:
         const godot::RID &p_destination
     );
 
-    godot::TypedArray<NetwEntity> scene_bodies_of(int64_t p_peer);
-    godot::TypedArray<NetwEntity> scene_body_roots_of(int64_t p_peer);
+    godot::TypedArray<NetwEntity> scene_player_entities_of(int64_t p_peer);
+    godot::TypedArray<NetwEntity> scene_player_entity_roots_of(int64_t p_peer);
     godot::Ref<NetwPromise> player_travel(
         const godot::Ref<NetwPlayer> &p_player,
         const godot::Ref<NetwScene> &p_destination

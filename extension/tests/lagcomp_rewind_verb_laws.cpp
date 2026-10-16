@@ -131,11 +131,8 @@ TEST_CASE(
     "Netw.rewind and its return value comes back"
 ) {
     Range range;
-    const Variant answered = range.shooter->call(
-        StringName("shoot"),
-        range.entities,
-        range.past
-    );
+    const Variant answered
+        = range.shooter->call(StringName("shoot"), range.entities, range.past);
     NETW_CHECK_EQ(int(answered.get_type()), int(Variant::FLOAT));
     NETW_CHECK_LT(double(answered), double(TICKS));
     NETW_CHECK_GT(double(answered), 0.0);
@@ -149,11 +146,8 @@ TEST_CASE(
     Range range;
     const netw_test::FaultWatch faults;
     for (int shot = 0; shot < 2; ++shot) {
-        range.shooter->call(
-            StringName("write_inside"),
-            range.entities,
-            range.past
-        );
+        range.shooter
+            ->call(StringName("write_inside"), range.entities, range.past);
     }
     NETW_CHECK_CLOSE(range.offset(), double(TICKS), 0.0001);
     NETW_CHECK_EQ(
@@ -181,12 +175,11 @@ TEST_CASE(
 ) {
     Range range;
     const netw_test::FaultWatch faults;
-    range.shooter->call(
-        StringName("await_inside"),
-        range.entities,
-        range.past
+    range.shooter->call(StringName("await_inside"), range.entities, range.past);
+    NETW_CHECK_EQ(
+        faults.warnings_containing("rewind body awaited"),
+        int64_t(1)
     );
-    NETW_CHECK_EQ(faults.warnings_containing("rewind body awaited"), int64_t(1));
     NETW_CHECK_CLOSE(range.offset(), double(TICKS), 0.0001);
 }
 

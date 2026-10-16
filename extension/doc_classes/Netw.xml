@@ -363,7 +363,7 @@
 			<description>
 				Moves [param node] under [param new_parent] like [method Node.reparent]. The promise resolves once the server has moved it. Other peers move it after.
 				[codeblock]
-				await Netw.reparent(body, level2.get_node(^"Players")).wait()
+				await Netw.reparent(avatar, level2.get_node(^"Players")).wait()
 				[/codeblock]
 				Unlike [method Node.reparent], it does not fire [Area3D] and [Area2D] enter and exit signals during the move, which works around [url=https://github.com/godotengine/godot/issues/14578]this issue[/url]. Otherwise [method Node.reparent] works fine.
 				The promise fails with [constant @GlobalScope.ERR_DOES_NOT_EXIST] when [param node] has no entity, and [constant @GlobalScope.ERR_UNAVAILABLE] outside a session.
@@ -377,10 +377,10 @@
 			<description>
 				Spawns [param node] on every peer from its [member Node.scene_file_path], and returns its [NetwEntity]. Call it before adding [param node] to the tree. Peers receive it when it enters the tree, so set its starting values in between.
 				[codeblock]
-				var body := PlayerScene.instantiate()
-				var entity := Netw.replicate(body, player)
-				body.position = spawn_point
-				scene.add_child(body)
+				var avatar := PlayerScene.instantiate()
+				var entity := Netw.replicate(avatar, player)
+				avatar.position = spawn_point
+				scene.add_child(avatar)
 				[/codeblock]
 				A client can call it without [param owner] when [param node] sets [member NetwEntity.lifecycle] to [constant NetwEntity.LIFECYCLE_CONTROLLER]. That client becomes its [member NetwEntity.controller].
 			</description>

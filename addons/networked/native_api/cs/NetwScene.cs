@@ -14,10 +14,10 @@ namespace Networked;
 /// <see cref="NetwEntity.Scene"/>. An entity declared with
 /// <see cref="Netw.ConfigureScene"/> resolves to itself, any other entity to
 /// its closest scene ancestor. Each scene has one handle, so <c>==</c> compares
-/// scenes. A scene replicates to a player while a body of theirs is in it, or
-/// while the player watches it with <see cref="NetwScene.Watch"/>.
-/// <see cref="NetwScene.Unwatch"/> does not remove a player whose body is still
-/// in the scene.
+/// scenes. A scene replicates to a player while an entity spawned for them is
+/// in it, or while the player watches it with <see cref="NetwScene.Watch"/>.
+/// <see cref="NetwScene.Unwatch"/> does not remove a player whose entity is
+/// still in the scene.
 /// <code>
 /// lobby.watch(player)
 /// arena.add_child(Netw.spawn_player(player, make_player))
@@ -25,9 +25,10 @@ namespace Networked;
 /// </code>
 /// <para>
 /// Inside a scene, <see cref="NetwInterestLayer"/> still filters which entities
-/// a player receives. A body is moved with <see cref="Node.Reparent"/> as you
-/// would normally do. Use <see cref="Netw.Reparent"/> when you need to await
-/// the server taking the move.
+/// a player receives. A player's entity is moved with
+/// <see cref="Node.Reparent"/> as you would normally do. Use
+/// <see cref="Netw.Reparent"/> when you need to await the server taking the
+/// move.
 /// </para>
 /// </remarks>
 public sealed class NetwScene : NetwRefCounted
@@ -55,13 +56,13 @@ public sealed class NetwScene : NetwRefCounted
         /// </summary>
         Viewer = 0,
         /// <summary>
-        /// A body entered or left. The callback receives <c>(present,
-        /// entity)</c>.
+        /// An entity spawned for a player entered or left. The callback
+        /// receives <c>(present, entity)</c>.
         /// </summary>
-        Body = 1,
+        PlayerEntity = 1,
         /// <summary>
-        /// Any entity, bodies included, entered or left. The callback receives
-        /// <c>(present, entity)</c>.
+        /// Any entity, player entities included, entered or left. The callback
+        /// receives <c>(present, entity)</c>.
         /// </summary>
         Entity = 2,
     }
@@ -74,7 +75,7 @@ public sealed class NetwScene : NetwRefCounted
         /// </summary>
         Session = 0,
         /// <summary>
-        /// Only the selected <see cref="NetwPlayer"/> moves. Their old bodies
+        /// Only the selected <see cref="NetwPlayer"/> moves. Their old entities
         /// are despawned, and no scene is removed.
         /// </summary>
         Player = 1,
@@ -100,35 +101,36 @@ public sealed class NetwScene : NetwRefCounted
     }
 
     /// <summary>
-    /// Emitted when <c>body</c> enters this scene.
+    /// Emitted when <c>entity</c> joins <see cref="NetwScene.PlayerEntities"/>.
     /// </summary>
-    public event Action<NetwEntity> BodyEntered
+    public event Action<NetwEntity> PlayerEntityEntered
     {
         add => ConnectBridge(
-            "body_entered",
+            "player_entity_entered",
             value,
             Callable.From(
                 (Variant a0) =>
                     value(Wrapped(a0, NetwEntity.From))
             )
         );
-        remove => DisconnectBridge("body_entered", value);
+        remove => DisconnectBridge("player_entity_entered", value);
     }
 
     /// <summary>
-    /// Emitted when <c>body</c> leaves this scene.
+    /// Emitted when <c>entity</c> leaves
+    /// <see cref="NetwScene.PlayerEntities"/>.
     /// </summary>
-    public event Action<NetwEntity> BodyLeft
+    public event Action<NetwEntity> PlayerEntityLeft
     {
         add => ConnectBridge(
-            "body_left",
+            "player_entity_left",
             value,
             Callable.From(
                 (Variant a0) =>
                     value(Wrapped(a0, NetwEntity.From))
             )
         );
-        remove => DisconnectBridge("body_left", value);
+        remove => DisconnectBridge("player_entity_left", value);
     }
 
     /// <summary>
@@ -137,7 +139,7 @@ public sealed class NetwScene : NetwRefCounted
     /// spawn arriving players here.
     /// <code>
     /// func place(player: NetwPlayer, level: NetwScene) -&gt; void:
-    ///     if player.bodies.is_empty():
+    ///     if player.entities.is_empty():
     ///         level.root.add_child(Netw.spawn_player(player, make_player))
     /// </code>
     /// </summary>
@@ -283,19 +285,20 @@ public sealed class NetwScene : NetwRefCounted
         }
     }
 
-    private static readonly IntPtr _bindGetBodies =
-        NetwApi.MethodBind("NetwScene", "get_bodies", 3995934104UL);
+    private static readonly IntPtr _bindGetPlayerEntities =
+        NetwApi.MethodBind("NetwScene", "get_player_entities", 3995934104UL);
 
     /// <summary>
-    /// Every body in this scene, in no particular order. A body is removed as
+    /// Every entity spawned for a player with <see cref="Netw.SpawnPlayer"/>
+    /// that is in this scene, in no particular order. An entity is removed as
     /// soon as it is despawned, before its node is freed.
     /// </summary>
-    public NetwEntity[] Bodies
+    public NetwEntity[] PlayerEntities
     {
         get
         {
             godot_variant answered = default;
-            NetwThunks.Call0(_bindGetBodies, Checked, ref answered);
+            NetwThunks.Call0(_bindGetPlayerEntities, Checked, ref answered);
             NetwEntity[] result =
                 NetwApi.Elements(
                     VariantUtils.ConvertToArray(answered),
@@ -327,18 +330,25 @@ public sealed class NetwScene : NetwRefCounted
         }
     }
 
-    private static readonly IntPtr _bindGetLocalBodies =
-        NetwApi.MethodBind("NetwScene", "get_local_bodies", 3995934104UL);
+    private static readonly IntPtr _bindGetLocalPlayerEntities =
+        NetwApi.MethodBind(
+            "NetwScene",
+            "get_local_player_entities",
+            3995934104UL);
 
     /// <summary>
-    /// Every body in this scene that belongs to this peer.
+    /// Every entity in <see cref="NetwScene.PlayerEntities"/> that was spawned
+    /// for this peer.
     /// </summary>
-    public NetwEntity[] LocalBodies
+    public NetwEntity[] LocalPlayerEntities
     {
         get
         {
             godot_variant answered = default;
-            NetwThunks.Call0(_bindGetLocalBodies, Checked, ref answered);
+            NetwThunks.Call0(
+                _bindGetLocalPlayerEntities,
+                Checked,
+                ref answered);
             NetwEntity[] result =
                 NetwApi.Elements(
                     VariantUtils.ConvertToArray(answered),
@@ -377,7 +387,7 @@ public sealed class NetwScene : NetwRefCounted
     /// subject of <paramref name="event"/>. Registering the same
     /// <paramref name="callback"/> twice does nothing.
     /// <code>
-    /// arena.observe(SCENE_EVENT_BODY, on_car_edge)
+    /// arena.observe(SCENE_EVENT_PLAYER_ENTITY, on_car_edge)
     ///
     /// func on_car_edge(present: bool, car: NetwEntity) -&gt; bool:
     ///         reshuffle(car)
@@ -385,7 +395,8 @@ public sealed class NetwScene : NetwRefCounted
     /// </code>
     /// <para>
     /// <see cref="NetwScene.SceneEvent.Viewer"/> passes a
-    /// <see cref="NetwPlayer"/>. <see cref="NetwScene.SceneEvent.Body"/> and
+    /// <see cref="NetwPlayer"/>.
+    /// <see cref="NetwScene.SceneEvent.PlayerEntity"/> and
     /// <see cref="NetwScene.SceneEvent.Entity"/> pass a
     /// <see cref="NetwEntity"/>.
     /// </para>
@@ -435,8 +446,8 @@ public sealed class NetwScene : NetwRefCounted
         NetwApi.MethodBind("NetwScene", "watch", 1229657424UL);
 
     /// <summary>
-    /// Replicates this scene to <paramref name="player"/> without giving them a
-    /// body in it, such as for a lobby or a spectator. A player can watch
+    /// Replicates this scene to <paramref name="player"/> without giving them
+    /// an entity in it, such as for a lobby or a spectator. A player can watch
     /// several scenes at once.
     /// <code>
     /// Netw.scene(lobby).watch(who)
@@ -473,7 +484,7 @@ public sealed class NetwScene : NetwRefCounted
 
     /// <summary>
     /// Undoes <see cref="NetwScene.Watch"/>. The scene keeps replicating to
-    /// <paramref name="player"/> while a body of theirs is in it.
+    /// <paramref name="player"/> while an entity spawned for them is in it.
     /// <code>
     /// Error
     /// ┠╴OK                      the watch is withdrawn
@@ -501,7 +512,7 @@ public sealed class NetwScene : NetwRefCounted
 
     /// <summary>
     /// Whether this scene replicates to <paramref name="player"/>, either
-    /// because a body of theirs is in it or because of
+    /// because an entity spawned for them is in it or because of
     /// <see cref="NetwScene.Watch"/>.
     /// </summary>
     public bool IsWatching(NetwPlayer player)

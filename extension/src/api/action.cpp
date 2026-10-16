@@ -240,8 +240,8 @@ void NetwAction::request(int64_t p_view_tick, const Array &p_args) {
         );
         return;
     }
-    if (ready != OK || !entity->get_is_controlled_locally()
-        || session() != api || authority.get_object() == nullptr) {
+    if (ready != OK || !entity->get_is_controlled_locally() || session() != api
+        || authority.get_object() == nullptr) {
         return;
     }
     const StringName key

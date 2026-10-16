@@ -119,11 +119,15 @@ RID NetwMultiplayer::scene_report_entity_edge(
     scene_core
         ->dispatch(scene, NetwSceneCore::EVENT_ENTITY, p_present, p_subject);
     if (p_is_player) {
-        scene_core
-            ->dispatch(scene, NetwSceneCore::EVENT_BODY, p_present, p_subject);
+        scene_core->dispatch(
+            scene,
+            NetwSceneCore::EVENT_PLAYER_ENTITY,
+            p_present,
+            p_subject
+        );
         const Ref<NetwScene> view = scene_handle_of(scene);
         if (view.is_valid()) {
-            view->announce_body(entity_get_view(p_subject), p_present);
+            view->announce_player_entity(entity_get_view(p_subject), p_present);
         }
         NETW_ZONE_NC("scene edge display invalidate", colors::SCENE);
         scene_player_display_invalidate();
@@ -475,11 +479,12 @@ void NetwMultiplayer::scene_reached_by(
     LocalVector<RID> watched;
     for (int at = 0; at < live.size(); ++at) {
         const RID scene = live[at];
-        const TypedArray<NetwEntity> bodies = scene_get_bodies(scene);
+        const TypedArray<NetwEntity> entities
+            = scene_get_player_entities(scene);
         bool holds = false;
-        for (int seat = 0; seat < bodies.size() && !holds; ++seat) {
-            const Ref<NetwEntity> body = bodies[seat];
-            holds = body.is_valid() && body->get_peer_id() == p_peer;
+        for (int seat = 0; seat < entities.size() && !holds; ++seat) {
+            const Ref<NetwEntity> entity = entities[seat];
+            holds = entity.is_valid() && entity->get_peer_id() == p_peer;
         }
         if (holds) {
             r_reached.push_back(scene);
@@ -1146,7 +1151,7 @@ bool NetwMultiplayer::scene_unwatch(const RID &p_scene, int64_t p_peer) {
         return false;
     }
     const bool last_reason = scene_membership.watches(p_peer, p_scene)
-        && scene_membership.bodies_in(p_peer, p_scene) == 0;
+        && scene_membership.entities_in(p_peer, p_scene) == 0;
     if (last_reason) {
         scene_notify_released(p_scene, p_peer);
     }
@@ -1535,7 +1540,7 @@ bool NetwMultiplayer::scene_release_departed(
         return false;
     }
     const bool held = scene_membership.subscribes(p_peer, p_scene);
-    membership_drop_body_in(p_subject, p_scene, p_peer);
+    membership_drop_entity_in(p_subject, p_scene, p_peer);
     return held && !scene_membership.subscribes(p_peer, p_scene);
 }
 
@@ -1848,13 +1853,15 @@ void NetwMultiplayer::scene_carry_finish(int64_t p_id) {
     );
 }
 
-TypedArray<NetwEntity> NetwMultiplayer::scene_bodies_of(int64_t p_peer) {
+TypedArray<NetwEntity> NetwMultiplayer::scene_player_entities_of(
+    int64_t p_peer
+) {
     TypedArray<NetwEntity> owned;
-    const TypedArray<NetwEntity> everywhere = scene_bodies_all();
+    const TypedArray<NetwEntity> everywhere = scene_player_entities_all();
     for (int at = 0; at < everywhere.size(); at++) {
-        const Ref<NetwEntity> body = everywhere[at];
-        if (body.is_valid() && body->get_peer_id() == p_peer) {
-            owned.push_back(body);
+        const Ref<NetwEntity> entity = everywhere[at];
+        if (entity.is_valid() && entity->get_peer_id() == p_peer) {
+            owned.push_back(entity);
         }
     }
     return owned;
@@ -1917,16 +1924,16 @@ void NetwMultiplayer::scene_leave_everything_but(
     int64_t p_peer,
     const RID &p_destination
 ) {
-    const TypedArray<NetwEntity> leaving = scene_body_roots_of(p_peer);
+    const TypedArray<NetwEntity> leaving = scene_player_entity_roots_of(p_peer);
     for (int at = 0; at < leaving.size(); at++) {
-        const Ref<NetwEntity> body = leaving[at];
-        if (body.is_null()) {
+        const Ref<NetwEntity> entity = leaving[at];
+        if (entity.is_null()) {
             continue;
         }
-        if (scene_of(body->get_rid_handle()) == p_destination) {
+        if (scene_of(entity->get_rid_handle()) == p_destination) {
             continue;
         }
-        entity_despawn(body->get_rid_handle(), Ref<NetwDespawnOpts>());
+        entity_despawn(entity->get_rid_handle(), Ref<NetwDespawnOpts>());
     }
     LocalVector<RID> held;
     scene_membership.scenes_of(p_peer, held);
@@ -1937,8 +1944,10 @@ void NetwMultiplayer::scene_leave_everything_but(
     }
 }
 
-TypedArray<NetwEntity> NetwMultiplayer::scene_body_roots_of(int64_t p_peer) {
-    const TypedArray<NetwEntity> owned = scene_bodies_of(p_peer);
+TypedArray<NetwEntity> NetwMultiplayer::scene_player_entity_roots_of(
+    int64_t p_peer
+) {
+    const TypedArray<NetwEntity> owned = scene_player_entities_of(p_peer);
     TypedArray<NetwEntity> roots;
     for (int at = 0; at < owned.size(); at++) {
         const Ref<NetwEntity> player = owned[at];
@@ -2374,7 +2383,9 @@ StringName NetwMultiplayer::scene_get_label(const RID &p_scene) const {
     return scene_stem(p_scene);
 }
 
-TypedArray<NetwEntity> NetwMultiplayer::scene_get_bodies(const RID &p_scene) {
+TypedArray<NetwEntity> NetwMultiplayer::scene_get_player_entities(
+    const RID &p_scene
+) {
     TypedArray<NetwEntity> out;
     const TypedArray<RID> members = scene_entities_under(p_scene);
     for (int at = 0; at < members.size(); at++) {
@@ -2401,27 +2412,28 @@ TypedArray<NetwPlayer> NetwMultiplayer::scene_get_viewers(const RID &p_scene) {
     return out;
 }
 
-TypedArray<NetwEntity> NetwMultiplayer::scene_get_local_bodies(
+TypedArray<NetwEntity> NetwMultiplayer::scene_get_local_player_entities(
     const RID &p_scene
 ) {
     TypedArray<NetwEntity> out;
-    const TypedArray<NetwEntity> bodies = scene_get_bodies(p_scene);
-    for (int at = 0; at < bodies.size(); at++) {
-        const Ref<NetwEntity> body = bodies[at];
-        if (body.is_valid() && body->get_peer_id() == get_unique_id()) {
-            out.push_back(body);
+    const TypedArray<NetwEntity> entities = scene_get_player_entities(p_scene);
+    for (int at = 0; at < entities.size(); at++) {
+        const Ref<NetwEntity> entity = entities[at];
+        if (entity.is_valid() && entity->get_peer_id() == get_unique_id()) {
+            out.push_back(entity);
         }
     }
     return out;
 }
 
-TypedArray<NetwEntity> NetwMultiplayer::scene_bodies_all() {
+TypedArray<NetwEntity> NetwMultiplayer::scene_player_entities_all() {
     TypedArray<NetwEntity> out;
     const TypedArray<RID> scenes = scene_list();
     for (int at = 0; at < scenes.size(); at++) {
-        const TypedArray<NetwEntity> bodies = scene_get_bodies(scenes[at]);
-        for (int seat = 0; seat < bodies.size(); seat++) {
-            out.push_back(bodies[seat]);
+        const TypedArray<NetwEntity> entities
+            = scene_get_player_entities(scenes[at]);
+        for (int seat = 0; seat < entities.size(); seat++) {
+            out.push_back(entities[seat]);
         }
     }
     return out;

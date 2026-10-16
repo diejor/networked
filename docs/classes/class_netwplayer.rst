@@ -25,8 +25,8 @@ The session creates one **NetwPlayer** when it accepts a join, and always return
 
     var player := Netw.of(self).peer_get_player(peer_id)
     greet(player.username)
-    for body: NetwEntity in player.bodies:
-        follow(body.owner)
+    for entity: NetwEntity in player.entities:
+        follow(entity.owner)
 
 \ A player is not a peer. After the player leaves, :ref:`is_active<class_NetwPlayer_property_is_active>` is ``false``, even if a new player connects with the same :ref:`peer_id<class_NetwPlayer_property_peer_id>`.
 
@@ -39,7 +39,7 @@ Properties
    :widths: auto
 
    +-------------------------------------------------------+-------------------------------------------------------+-----------+
-   | :godot:`Array`\[:ref:`NetwEntity<class_NetwEntity>`\] | :ref:`bodies<class_NetwPlayer_property_bodies>`       | ``[]``    |
+   | :godot:`Array`\[:ref:`NetwEntity<class_NetwEntity>`\] | :ref:`entities<class_NetwPlayer_property_entities>`   | ``[]``    |
    +-------------------------------------------------------+-------------------------------------------------------+-----------+
    | :godot:`bool`                                         | :ref:`is_active<class_NetwPlayer_property_is_active>` | ``false`` |
    +-------------------------------------------------------+-------------------------------------------------------+-----------+
@@ -87,15 +87,15 @@ Emitted when :ref:`scene<class_NetwPlayer_property_scene>` changes. Either may b
 Property Descriptions
 ---------------------
 
-.. _class_NetwPlayer_property_bodies:
+.. _class_NetwPlayer_property_entities:
 
 .. rst-class:: classref-property
 
-:godot:`Array`\[:ref:`NetwEntity<class_NetwEntity>`\] **bodies** = ``[]`` :ref:`🔗<class_NetwPlayer_property_bodies>`
+:godot:`Array`\[:ref:`NetwEntity<class_NetwEntity>`\] **entities** = ``[]`` :ref:`🔗<class_NetwPlayer_property_entities>`
 
 .. rst-class:: classref-property-setget
 
-- :godot:`Array`\[:ref:`NetwEntity<class_NetwEntity>`\] **get_bodies**\ (\ )
+- :godot:`Array`\[:ref:`NetwEntity<class_NetwEntity>`\] **get_entities**\ (\ )
 
 The entities spawned for this player with :ref:`Netw.spawn_player()<class_Netw_method_spawn_player>`, in no particular order. Empty for a spectator.
 
@@ -145,7 +145,7 @@ The peer this player is connected as. Another player may reuse it after this one
 
 - :ref:`NetwScene<class_NetwScene>` **get_scene**\ (\ )
 
-The scene this player is in, or ``null``. It is the scene holding one of its :ref:`bodies<class_NetwPlayer_property_bodies>`, or else the scene it watches with :ref:`NetwScene.watch()<class_NetwScene_method_watch>`. It is ``null`` when there are two.
+The scene this player is in, or ``null``. It is the scene holding one of its :ref:`entities<class_NetwPlayer_property_entities>`, or else the scene it watches with :ref:`NetwScene.watch()<class_NetwScene_method_watch>`. It is ``null`` when there are two.
 
 A client only knows about the scenes it receives.
 

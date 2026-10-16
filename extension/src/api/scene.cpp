@@ -13,8 +13,8 @@ namespace netw {
 
 namespace {
 
-const char *SNAME_BODY_ENTERED = "body_entered";
-const char *SNAME_BODY_LEFT = "body_left";
+const char *SNAME_PLAYER_ENTITY_ENTERED = "player_entity_entered";
+const char *SNAME_PLAYER_ENTITY_LEFT = "player_entity_left";
 const char *SNAME_VIEWER_ENTERED = "viewer_entered";
 const char *SNAME_VIEWER_EXITED = "viewer_exited";
 
@@ -94,9 +94,9 @@ StringName NetwScene::get_label() const {
                               : StringName();
 }
 
-TypedArray<NetwEntity> NetwScene::get_bodies() const {
+TypedArray<NetwEntity> NetwScene::get_player_entities() const {
     NetwMultiplayer *session = core();
-    return session != nullptr ? session->scene_get_bodies(get_rid())
+    return session != nullptr ? session->scene_get_player_entities(get_rid())
                               : TypedArray<NetwEntity>();
 }
 
@@ -106,10 +106,11 @@ TypedArray<NetwPlayer> NetwScene::get_viewers() const {
                               : TypedArray<NetwPlayer>();
 }
 
-TypedArray<NetwEntity> NetwScene::get_local_bodies() const {
+TypedArray<NetwEntity> NetwScene::get_local_player_entities() const {
     NetwMultiplayer *session = core();
-    return session != nullptr ? session->scene_get_local_bodies(get_rid())
-                              : TypedArray<NetwEntity>();
+    return session != nullptr
+        ? session->scene_get_local_player_entities(get_rid())
+        : TypedArray<NetwEntity>();
 }
 
 TypedArray<NetwEntity> NetwScene::get_entities() const {
@@ -208,8 +209,14 @@ bool NetwScene::is_watching(const Ref<NetwPlayer> &p_player) const {
         && session->scene_subscribes(get_rid(), p_player->get_peer_id());
 }
 
-void NetwScene::announce_body(const Ref<NetwEntity> &p_body, bool p_present) {
-    emit_signal(p_present ? SNAME_BODY_ENTERED : SNAME_BODY_LEFT, p_body);
+void NetwScene::announce_player_entity(
+    const Ref<NetwEntity> &p_entity,
+    bool p_present
+) {
+    emit_signal(
+        p_present ? SNAME_PLAYER_ENTITY_ENTERED : SNAME_PLAYER_ENTITY_LEFT,
+        p_entity
+    );
 }
 
 void NetwScene::announce_viewer(
@@ -224,7 +231,7 @@ void NetwScene::announce_viewer(
 
 void NetwScene::_bind_methods() {
     BIND_ENUM_CONSTANT(SCENE_EVENT_VIEWER);
-    BIND_ENUM_CONSTANT(SCENE_EVENT_BODY);
+    BIND_ENUM_CONSTANT(SCENE_EVENT_PLAYER_ENTITY);
     BIND_ENUM_CONSTANT(SCENE_EVENT_ENTITY);
     BIND_ENUM_CONSTANT(SCENE_CHANGE_SESSION);
     BIND_ENUM_CONSTANT(SCENE_CHANGE_PLAYER);
@@ -281,16 +288,19 @@ void NetwScene::_bind_methods() {
     );
     ClassDB::bind_method(D_METHOD("get_label"), &NetwScene::get_label);
     ADD_PROPERTY(PropertyInfo(Variant::STRING_NAME, "label"), "", "get_label");
-    ClassDB::bind_method(D_METHOD("get_bodies"), &NetwScene::get_bodies);
+    ClassDB::bind_method(
+        D_METHOD("get_player_entities"),
+        &NetwScene::get_player_entities
+    );
     ADD_PROPERTY(
         PropertyInfo(
             Variant::ARRAY,
-            "bodies",
+            "player_entities",
             PROPERTY_HINT_ARRAY_TYPE,
             "NetwEntity"
         ),
         "",
-        "get_bodies"
+        "get_player_entities"
     );
     ClassDB::bind_method(D_METHOD("get_viewers"), &NetwScene::get_viewers);
     ADD_PROPERTY(
@@ -304,18 +314,18 @@ void NetwScene::_bind_methods() {
         "get_viewers"
     );
     ClassDB::bind_method(
-        D_METHOD("get_local_bodies"),
-        &NetwScene::get_local_bodies
+        D_METHOD("get_local_player_entities"),
+        &NetwScene::get_local_player_entities
     );
     ADD_PROPERTY(
         PropertyInfo(
             Variant::ARRAY,
-            "local_bodies",
+            "local_player_entities",
             PROPERTY_HINT_ARRAY_TYPE,
             "NetwEntity"
         ),
         "",
-        "get_local_bodies"
+        "get_local_player_entities"
     );
     ClassDB::bind_method(D_METHOD("get_entities"), &NetwScene::get_entities);
     ADD_PROPERTY(
@@ -344,19 +354,19 @@ void NetwScene::_bind_methods() {
     );
 
     ADD_SIGNAL(MethodInfo(
-        SNAME_BODY_ENTERED,
+        SNAME_PLAYER_ENTITY_ENTERED,
         PropertyInfo(
             Variant::OBJECT,
-            "body",
+            "entity",
             PROPERTY_HINT_RESOURCE_TYPE,
             "NetwEntity"
         )
     ));
     ADD_SIGNAL(MethodInfo(
-        SNAME_BODY_LEFT,
+        SNAME_PLAYER_ENTITY_LEFT,
         PropertyInfo(
             Variant::OBJECT,
-            "body",
+            "entity",
             PROPERTY_HINT_RESOURCE_TYPE,
             "NetwEntity"
         )

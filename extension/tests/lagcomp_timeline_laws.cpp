@@ -105,7 +105,12 @@ TEST_CASE(
     PackedInt64Array slots;
     slots.push_back(moved);
     NETW_CHECK_EQ(
-        moved_by(history,slots, 14, Callable(body, StringName("observe_self"))),
+        moved_by(
+            history,
+            slots,
+            14,
+            Callable(body, StringName("observe_self"))
+        ),
         1
     );
 
@@ -141,7 +146,12 @@ TEST_CASE(
     PackedInt64Array slots;
     slots.push_back(slot);
     NETW_CHECK_EQ(
-        moved_by(history,slots, 14, Callable(body, StringName("observe_self"))),
+        moved_by(
+            history,
+            slots,
+            14,
+            Callable(body, StringName("observe_self"))
+        ),
         1
     );
 
@@ -173,7 +183,12 @@ TEST_CASE(
     PackedInt64Array slots;
     slots.push_back(slot);
     NETW_CHECK_EQ(
-        moved_by(history,slots, 14, Callable(body, StringName("observe_self"))),
+        moved_by(
+            history,
+            slots,
+            14,
+            Callable(body, StringName("observe_self"))
+        ),
         1
     );
 
@@ -202,7 +217,8 @@ TEST_CASE(
     slots.push_back(empty);
     slots.push_back(empty + 9000);
     NETW_CHECK_EQ(
-        moved_by(history,
+        moved_by(
+            history,
             slots,
             14,
             Callable(unrecorded, StringName("observe_self"))
@@ -229,7 +245,7 @@ TEST_CASE(
 
     PackedInt64Array slots;
     slots.push_back(slot);
-    NETW_CHECK_EQ(moved_by(history,slots, 14, Callable()), 0);
+    NETW_CHECK_EQ(moved_by(history, slots, 14, Callable()), 0);
     CHECK(!history.timeline_owner_bound(slot));
 }
 

@@ -402,10 +402,7 @@ TEST_CASE(
     );
 
     NETW_CHECK_EQ(faults.errors(), 0);
-    NETW_CHECK_EQ(
-        faults.warnings_containing("was refused with error 30"),
-        1
-    );
+    NETW_CHECK_EQ(faults.warnings_containing("was refused with error 30"), 1);
     const Seats session = stage.seats_on(-1, GHOST, SHELF);
     const Seats observer = stage.seats_on(1, GHOST, SHELF);
     NETW_CHECK_EQ(session.from_the_branch, int64_t(0));

@@ -15,9 +15,7 @@ def read(path: Path) -> list[dict]:
     try:
         events = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError) as error:
-        raise fail("cannot read diagnostic expectations at %s (%s)" % (
-            path, error
-        ))
+        raise fail("cannot read diagnostic expectations at %s (%s)" % (path, error))
     if not isinstance(events, list):
         raise fail("diagnostic expectations at %s are not an array" % path)
     for event in events:
@@ -39,8 +37,11 @@ def visible(raw: str, events: list[dict]) -> tuple[str, int]:
     pending = defaultdict(deque)
     for event in events:
         key = (
-            event["severity"], event["message"], event["function"],
-            event["file"], event["line"],
+            event["severity"],
+            event["message"],
+            event["function"],
+            event["file"],
+            event["line"],
         )
         pending[key].append(event["expected"] and event["passed"])
 
@@ -73,7 +74,10 @@ def visible(raw: str, events: list[dict]) -> tuple[str, int]:
         hide = False
         if location is not None:
             key = (
-                header[1], header[2], location[1], location[2],
+                header[1],
+                header[2],
+                location[1],
+                location[2],
                 int(location[3]),
             )
             if pending[key]:

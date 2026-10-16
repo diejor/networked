@@ -1623,8 +1623,7 @@ void NetwMultiplayer::rpc_handle_call(
         }
         const Ref<NetwEntity> arg_entity = wrapper_for_route(slot.node.route);
         if (arg_entity.is_null()
-            && liveness_route_state(slot.node.route)
-                == ENTITY_STATE_UNKNOWN) {
+            && liveness_route_state(slot.node.route) == ENTITY_STATE_UNKNOWN) {
             liveness_when_live(
                 slot.node.route,
                 callable_mp(this, &NetwMultiplayer::rpc_handle_parked_call)

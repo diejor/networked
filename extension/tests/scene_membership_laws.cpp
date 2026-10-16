@@ -66,7 +66,7 @@ TEST_CASE(
     );
     scenes->observe(
         arena.handle,
-        NetwSceneCore::EVENT_BODY,
+        NetwSceneCore::EVENT_PLAYER_ENTITY,
         heard.callable("player")
     );
 
@@ -114,7 +114,7 @@ TEST_CASE(
     );
     scenes->observe(
         arena.handle,
-        NetwSceneCore::EVENT_BODY,
+        NetwSceneCore::EVENT_PLAYER_ENTITY,
         heard.callable("player")
     );
 
@@ -154,12 +154,12 @@ TEST_CASE(
     const CallLog heard;
     scenes->observe(
         arena.handle,
-        NetwSceneCore::EVENT_BODY,
+        NetwSceneCore::EVENT_PLAYER_ENTITY,
         heard.callable("arena")
     );
     scenes->observe(
         annex.handle,
-        NetwSceneCore::EVENT_BODY,
+        NetwSceneCore::EVENT_PLAYER_ENTITY,
         heard.callable("annex")
     );
 

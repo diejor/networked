@@ -41,13 +41,11 @@ int64_t column_type_in(
             p_lists.live = gd::property_list(p_node);
             p_lists.live_fetched = true;
         }
-        resolved = script::model::resolve_property(
-            p_node, p_property, p_lists.live
-        );
+        resolved
+            = script::model::resolve_property(p_node, p_property, p_lists.live);
     }
-    return resolved.type >= 0
-        ? SchemaCore::type_from_variant(resolved.type)
-        : SchemaCore::VARIANT;
+    return resolved.type >= 0 ? SchemaCore::type_from_variant(resolved.type)
+                              : SchemaCore::VARIANT;
 }
 
 } // namespace

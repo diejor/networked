@@ -492,8 +492,8 @@ TEST_CASE(
 TEST_CASE(
     "[Networked][Session][Transfer][SceneTree] TX3 after the server is lost "
     "with the world kept, every survivor reads the successor's player and "
-    "body as peer 1, a third client's body keeps its controller, and a server "
-    "body stays with the server"
+    "entity as peer 1, a third client's entity keeps its controller, and a "
+    "server entity stays with the server"
 ) {
     Table table;
     table.keep_world();
@@ -949,7 +949,7 @@ TEST_CASE(
 
 TEST_CASE(
     "[Networked][Session][Transfer][SceneTree] TX10 after the server is lost "
-    "with the world kept, the successor counts each player's body in its "
+    "with the world kept, the successor counts each player's entity in its "
     "scene, a survivor that missed the last viewer list takes the one the "
     "successor publishes"
 ) {
@@ -987,8 +987,11 @@ TEST_CASE(
 
     NetwMultiplayer *host = table.seat(successor);
     const RID scene = handle_at(table, level, successor);
-    NETW_CHECK_EQ(host->membership_book().bodies_in(1, scene), 1);
-    NETW_CHECK_EQ(host->membership_book().bodies_in(survivor_label, scene), 1);
+    NETW_CHECK_EQ(host->membership_book().entities_in(1, scene), 1);
+    NETW_CHECK_EQ(
+        host->membership_book().entities_in(survivor_label, scene),
+        1
+    );
     NETW_CHECK_EQ(
         int(table.seat(survivor)->scene_watches(seen, third_label)),
         1

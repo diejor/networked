@@ -41,7 +41,7 @@ public:
 
     enum Event {
         EVENT_PLAYER = 0,
-        EVENT_BODY = 1,
+        EVENT_PLAYER_ENTITY = 1,
         EVENT_ENTITY = 2,
     };
 

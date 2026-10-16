@@ -119,17 +119,18 @@ CharacterBody3D *character(Node *p_parent, double p_z) {
 }
 
 double server_speed(CharacterBody3D *p_body) {
-    return Vector3(PhysicsServer3D::get_singleton()->body_get_state(
-                       p_body->get_rid(),
-                       PhysicsServer3D::BODY_STATE_LINEAR_VELOCITY
-                   ))
+    return Vector3(
+               PhysicsServer3D::get_singleton()->body_get_state(
+                   p_body->get_rid(),
+                   PhysicsServer3D::BODY_STATE_LINEAR_VELOCITY
+               )
+    )
         .length();
 }
 
 Dictionary pose_row(double p_x, double p_z) {
     Dictionary row;
-    row[StringName("position")]
-        = Vector3(real_t(p_x), 0.0, real_t(p_z));
+    row[StringName("position")] = Vector3(real_t(p_x), 0.0, real_t(p_z));
     return row;
 }
 
@@ -142,7 +143,8 @@ void look_while_rewound() {
 }
 
 void look_for_gear() {
-    collider_evidence().gear_at_past = ray_hits(PAST_X, TARGET_Z + GEAR_Z, GEAR);
+    collider_evidence().gear_at_past
+        = ray_hits(PAST_X, TARGET_Z + GEAR_Z, GEAR);
 }
 
 LocalVector<netw::predict::FieldDecl> pose_fields() {
@@ -210,7 +212,8 @@ class ColliderScenario final : public netw_test::FrameScenario {
     void rewind_target() {
         PackedInt64Array slots;
         slots.push_back(target_slot);
-        history->rewind(slots, PAST_TICK, callable_mp_static(&look_while_rewound));
+        history
+            ->rewind(slots, PAST_TICK, callable_mp_static(&look_while_rewound));
         ColliderEvidence &evidence = collider_evidence();
         evidence.hitbox_after = ray_hits(LIVE_X, TARGET_Z, HITBOX);
         evidence.hull_after = ray_hits(LIVE_X, TARGET_Z, HULL);

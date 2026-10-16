@@ -39,7 +39,7 @@ const char *why_session_only(const Facts &p_facts) {
                "MultiplayerSpawner";
     }
     if (p_facts.player_bound) {
-        return "a player's body";
+        return "an entity spawned for a player";
     }
     return "loaded from its database at spawn "
            "(NetwPersistenceConfig.load_on_spawn)";

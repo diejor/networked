@@ -1,5 +1,5 @@
-#include "support/fault_log.h"
 #include "support/books.h"
+#include "support/fault_log.h"
 #include "support/loopback_rig.h"
 #include "support/predict_rows.h"
 

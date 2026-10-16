@@ -33,7 +33,7 @@ func join_match(player: NetwPlayer) -> void:
 
 func add_car(arena: NetwScene, player: NetwPlayer) -> void:
 	var players: Node = arena.root.get_node(^"Players")
-	if not player.bodies.is_empty():
+	if not player.entities.is_empty():
 		return
 	var grid_slot := players.get_child_count()
 	@warning_ignore("integer_division")

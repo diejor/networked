@@ -1,5 +1,5 @@
-#include "support/fault_log.h"
 #include "support/books.h"
+#include "support/fault_log.h"
 #include "support/netw_test.h"
 
 #include <cstdint>

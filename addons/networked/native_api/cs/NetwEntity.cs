@@ -223,8 +223,8 @@ public sealed class NetwEntity : NetwRefCounted
         /// The <see cref="NetwEntity.Controller"/> may also spawn, move and
         /// despawn the entity, and a peer that spawns one becomes its
         /// controller. Other peers are refused with
-        /// <c>@GlobalScope.ERR_UNAUTHORIZED</c>. A predicted entity, a player's
-        /// body, and an entity replicated by a
+        /// <c>@GlobalScope.ERR_UNAUTHORIZED</c>. A predicted entity, an entity
+        /// spawned for a player, and an entity replicated by a
         /// <see cref="MultiplayerSynchronizer"/> or
         /// <see cref="MultiplayerSpawner"/> allow only the server, and refuse
         /// other peers with <c>@GlobalScope.ERR_UNAVAILABLE</c>.
@@ -367,8 +367,8 @@ public sealed class NetwEntity : NetwRefCounted
     /// <see cref="NetwInterestLayer.LeavePolicy.Hide"/>. The entity may come
     /// back later with the same <see cref="NetwEntity.Rid"/>. Neither
     /// <see cref="NetwEntity.Despawning"/> nor
-    /// <see cref="NetwEntity.Despawned"/> is emitted, so anything tied to a
-    /// body that may return connects here.
+    /// <see cref="NetwEntity.Despawned"/> is emitted, so anything tied to an
+    /// entity that may return connects here.
     /// </summary>
     public event Action Hidden
     {
@@ -532,7 +532,7 @@ public sealed class NetwEntity : NetwRefCounted
     /// logs. A node placed in a scene sets it in <c>Object._init</c>, since an
     /// entity without one stays inactive. <see cref="Netw.SpawnPlayer"/> sets
     /// it to the player's <see cref="NetwPlayer.UserName"/>, so a game giving
-    /// one player several bodies sets a distinct name on each.
+    /// one player several entities sets a distinct name on each.
     /// </summary>
     public StringName Name
     {
@@ -560,7 +560,8 @@ public sealed class NetwEntity : NetwRefCounted
     /// <summary>
     /// The player peer represented by this root, or <c>0</c> for an NPC or
     /// prop. <see cref="Netw.SpawnPlayer"/> sets it. The root appears in
-    /// <see cref="NetwPlayer.Bodies"/> and despawns when that peer disconnects.
+    /// <see cref="NetwPlayer.Entities"/> and despawns when that peer
+    /// disconnects.
     /// </summary>
     public long PeerId
     {
@@ -734,7 +735,7 @@ public sealed class NetwEntity : NetwRefCounted
 
     /// <summary>
     /// What happens to the entity when its <see cref="NetwEntity.Controller"/>
-    /// disconnects. A player's own body still despawns with its
+    /// disconnects. An entity spawned for a player still despawns with its
     /// <see cref="NetwEntity.PeerId"/>.
     /// </summary>
     public NetwEntity.DisconnectRule OnControllerDisconnect

@@ -92,8 +92,6 @@ Properties
    +-------------------------------------------------------+--------------------------------------------------------------------------------------+-----------------------+
    | :godot:`float`                                        | :ref:`auth_timeout<class_NetwMultiplayer_property_auth_timeout>`                     | ``3.0``               |
    +-------------------------------------------------------+--------------------------------------------------------------------------------------+-----------------------+
-   | :godot:`Array`\[:ref:`NetwEntity<class_NetwEntity>`\] | :ref:`bodies<class_NetwMultiplayer_property_bodies>`                                 | ``[]``                |
-   +-------------------------------------------------------+--------------------------------------------------------------------------------------+-----------------------+
    | :godot:`Array`\[:ref:`NetwPlayer<class_NetwPlayer>`\] | :ref:`connected_players<class_NetwMultiplayer_property_connected_players>`           | ``[]``                |
    +-------------------------------------------------------+--------------------------------------------------------------------------------------+-----------------------+
    | :godot:`SceneMultiplayer`                             | :ref:`inner<class_NetwMultiplayer_property_inner>`                                   |                       |
@@ -109,6 +107,8 @@ Properties
    | :godot:`int`                                          | :ref:`max_delta_packet_size<class_NetwMultiplayer_property_max_delta_packet_size>`   | ``65535``             |
    +-------------------------------------------------------+--------------------------------------------------------------------------------------+-----------------------+
    | :godot:`int`                                          | :ref:`max_sync_packet_size<class_NetwMultiplayer_property_max_sync_packet_size>`     | ``1350``              |
+   +-------------------------------------------------------+--------------------------------------------------------------------------------------+-----------------------+
+   | :godot:`Array`\[:ref:`NetwEntity<class_NetwEntity>`\] | :ref:`player_entities<class_NetwMultiplayer_property_player_entities>`               | ``[]``                |
    +-------------------------------------------------------+--------------------------------------------------------------------------------------+-----------------------+
    | :godot:`Array`\[:ref:`NetwPlayer<class_NetwPlayer>`\] | :ref:`players<class_NetwMultiplayer_property_players>`                               | ``[]``                |
    +-------------------------------------------------------+--------------------------------------------------------------------------------------+-----------------------+
@@ -524,7 +524,7 @@ Methods
    +---------------------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | |void|                                                              | :ref:`persist_tick_default<class_NetwMultiplayer_method_persist_tick_default>`\ (\ delta\: :godot:`float`\ )                                                                                                                                                                                                                                                                                                                                                                            |
    +---------------------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`Array`\[:ref:`NetwEntity<class_NetwEntity>`\]               | :ref:`player_bodies<class_NetwMultiplayer_method_player_bodies>`\ (\ peer\: :godot:`int`\ )                                                                                                                                                                                                                                                                                                                                                                                             |
+   | :godot:`Array`\[:ref:`NetwEntity<class_NetwEntity>`\]               | :ref:`player_get_entities<class_NetwMultiplayer_method_player_get_entities>`\ (\ peer\: :godot:`int`\ )                                                                                                                                                                                                                                                                                                                                                                                 |
    +---------------------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | :godot:`Error <@GlobalScope#enum_@globalscope_Error>`               | :ref:`player_kick<class_NetwMultiplayer_method_player_kick>`\ (\ player\: :ref:`NetwPlayer<class_NetwPlayer>`, reason\: :godot:`String` = ""\ )                                                                                                                                                                                                                                                                                                                                         |
    +---------------------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
@@ -604,19 +604,19 @@ Methods
    +---------------------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | :godot:`Array`\[:godot:`RID`\]                                      | :ref:`scene_find_all<class_NetwMultiplayer_method_scene_find_all>`\ (\ stem\: :godot:`StringName`\ )                                                                                                                                                                                                                                                                                                                                                                                    |
    +---------------------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`Array`\[:ref:`NetwEntity<class_NetwEntity>`\]               | :ref:`scene_get_bodies<class_NetwMultiplayer_method_scene_get_bodies>`\ (\ scene\: :godot:`RID`\ )                                                                                                                                                                                                                                                                                                                                                                                      |
-   +---------------------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | :godot:`Array`\[:godot:`RID`\]                                      | :ref:`scene_get_entities<class_NetwMultiplayer_method_scene_get_entities>`\ (\ scene\: :godot:`RID`\ )                                                                                                                                                                                                                                                                                                                                                                                  |
    +---------------------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | :godot:`StringName`                                                 | :ref:`scene_get_label<class_NetwMultiplayer_method_scene_get_label>`\ (\ scene\: :godot:`RID`\ ) |const|                                                                                                                                                                                                                                                                                                                                                                                |
    +---------------------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | :godot:`RID`                                                        | :ref:`scene_get_layer<class_NetwMultiplayer_method_scene_get_layer>`\ (\ scene\: :godot:`RID`\ )                                                                                                                                                                                                                                                                                                                                                                                        |
    +---------------------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`Array`\[:ref:`NetwEntity<class_NetwEntity>`\]               | :ref:`scene_get_local_bodies<class_NetwMultiplayer_method_scene_get_local_bodies>`\ (\ scene\: :godot:`RID`\ )                                                                                                                                                                                                                                                                                                                                                                          |
+   | :godot:`Array`\[:ref:`NetwEntity<class_NetwEntity>`\]               | :ref:`scene_get_local_player_entities<class_NetwMultiplayer_method_scene_get_local_player_entities>`\ (\ scene\: :godot:`RID`\ )                                                                                                                                                                                                                                                                                                                                                        |
    +---------------------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | :godot:`Node`                                                       | :ref:`scene_get_node<class_NetwMultiplayer_method_scene_get_node>`\ (\ scene\: :godot:`RID`\ ) |const|                                                                                                                                                                                                                                                                                                                                                                                  |
    +---------------------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | :godot:`Variant`                                                    | :ref:`scene_get_param<class_NetwMultiplayer_method_scene_get_param>`\ (\ scene\: :godot:`RID`, param\: :ref:`SceneParam<enum_NetwMultiplayer_SceneParam>`\ )                                                                                                                                                                                                                                                                                                                            |
+   +---------------------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`Array`\[:ref:`NetwEntity<class_NetwEntity>`\]               | :ref:`scene_get_player_entities<class_NetwMultiplayer_method_scene_get_player_entities>`\ (\ scene\: :godot:`RID`\ )                                                                                                                                                                                                                                                                                                                                                                    |
    +---------------------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | :godot:`Array`\[:ref:`NetwPlayer<class_NetwPlayer>`\]               | :ref:`scene_get_viewers<class_NetwMultiplayer_method_scene_get_viewers>`\ (\ scene\: :godot:`RID`\ )                                                                                                                                                                                                                                                                                                                                                                                    |
    +---------------------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
@@ -3679,22 +3679,6 @@ Same as :godot:`SceneMultiplayer.auth_timeout <SceneMultiplayer#class_SceneMulti
 
 ----
 
-.. _class_NetwMultiplayer_property_bodies:
-
-.. rst-class:: classref-property
-
-:godot:`Array`\[:ref:`NetwEntity<class_NetwEntity>`\] **bodies** = ``[]`` :ref:`🔗<class_NetwMultiplayer_property_bodies>`
-
-.. rst-class:: classref-property-setget
-
-- :godot:`Array`\[:ref:`NetwEntity<class_NetwEntity>`\] **scene_bodies_all**\ (\ )
-
-Every body in every scene. Bodies in different scenes can share a :ref:`NetwEntity.name<class_NetwEntity_property_name>`.
-
-.. rst-class:: classref-item-separator
-
-----
-
 .. _class_NetwMultiplayer_property_connected_players:
 
 .. rst-class:: classref-property
@@ -3821,6 +3805,22 @@ Same as :godot:`SceneMultiplayer.max_delta_packet_size <SceneMultiplayer#class_S
 - :godot:`int` **get_max_sync_packet_size**\ (\ )
 
 Same as :godot:`SceneMultiplayer.max_sync_packet_size <SceneMultiplayer#class_SceneMultiplayer_property_max_sync_packet_size>`. Networked also keeps its own synchronization packets under this size.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NetwMultiplayer_property_player_entities:
+
+.. rst-class:: classref-property
+
+:godot:`Array`\[:ref:`NetwEntity<class_NetwEntity>`\] **player_entities** = ``[]`` :ref:`🔗<class_NetwMultiplayer_property_player_entities>`
+
+.. rst-class:: classref-property-setget
+
+- :godot:`Array`\[:ref:`NetwEntity<class_NetwEntity>`\] **scene_player_entities_all**\ (\ )
+
+Every entity spawned for a player with :ref:`Netw.spawn_player()<class_Netw_method_spawn_player>`, in every scene. Entities in different scenes can share a :ref:`NetwEntity.name<class_NetwEntity_property_name>`.
 
 .. rst-class:: classref-item-separator
 
@@ -6649,13 +6649,13 @@ The default :ref:`_persist_tick()<class_NetwMultiplayer_private_method__persist_
 
 ----
 
-.. _class_NetwMultiplayer_method_player_bodies:
+.. _class_NetwMultiplayer_method_player_get_entities:
 
 .. rst-class:: classref-method
 
-:godot:`Array`\[:ref:`NetwEntity<class_NetwEntity>`\] **player_bodies**\ (\ peer\: :godot:`int`\ ) :ref:`🔗<class_NetwMultiplayer_method_player_bodies>`
+:godot:`Array`\[:ref:`NetwEntity<class_NetwEntity>`\] **player_get_entities**\ (\ peer\: :godot:`int`\ ) :ref:`🔗<class_NetwMultiplayer_method_player_get_entities>`
 
-Every entity that belongs to the player of ``peer``, in no particular order.
+Every entity spawned for the player of ``peer`` with :ref:`Netw.spawn_player()<class_Netw_method_spawn_player>`, in no particular order.
 
 .. rst-class:: classref-item-separator
 
@@ -7193,18 +7193,6 @@ Returns every scene whose root node is named ``stem``.
 
 ----
 
-.. _class_NetwMultiplayer_method_scene_get_bodies:
-
-.. rst-class:: classref-method
-
-:godot:`Array`\[:ref:`NetwEntity<class_NetwEntity>`\] **scene_get_bodies**\ (\ scene\: :godot:`RID`\ ) :ref:`🔗<class_NetwMultiplayer_method_scene_get_bodies>`
-
-The bodies in ``scene``. :ref:`bodies<class_NetwMultiplayer_property_bodies>` contains the bodies from every live scene.
-
-.. rst-class:: classref-item-separator
-
-----
-
 .. _class_NetwMultiplayer_method_scene_get_entities:
 
 .. rst-class:: classref-method
@@ -7241,13 +7229,13 @@ Returns the :ref:`NetwInterestLayer<class_NetwInterestLayer>` that decides who s
 
 ----
 
-.. _class_NetwMultiplayer_method_scene_get_local_bodies:
+.. _class_NetwMultiplayer_method_scene_get_local_player_entities:
 
 .. rst-class:: classref-method
 
-:godot:`Array`\[:ref:`NetwEntity<class_NetwEntity>`\] **scene_get_local_bodies**\ (\ scene\: :godot:`RID`\ ) :ref:`🔗<class_NetwMultiplayer_method_scene_get_local_bodies>`
+:godot:`Array`\[:ref:`NetwEntity<class_NetwEntity>`\] **scene_get_local_player_entities**\ (\ scene\: :godot:`RID`\ ) :ref:`🔗<class_NetwMultiplayer_method_scene_get_local_player_entities>`
 
-Returns the bodies in ``scene`` that belong to this peer.
+Returns the entities in ``scene`` spawned for this peer's player.
 
 .. rst-class:: classref-item-separator
 
@@ -7272,6 +7260,18 @@ Returns the root node of ``scene``, or ``null``.
 :godot:`Variant` **scene_get_param**\ (\ scene\: :godot:`RID`, param\: :ref:`SceneParam<enum_NetwMultiplayer_SceneParam>`\ ) :ref:`🔗<class_NetwMultiplayer_method_scene_get_param>`
 
 Returns one setting of ``scene``, or ``null`` when unset.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NetwMultiplayer_method_scene_get_player_entities:
+
+.. rst-class:: classref-method
+
+:godot:`Array`\[:ref:`NetwEntity<class_NetwEntity>`\] **scene_get_player_entities**\ (\ scene\: :godot:`RID`\ ) :ref:`🔗<class_NetwMultiplayer_method_scene_get_player_entities>`
+
+The entities in ``scene`` spawned for a player with :ref:`Netw.spawn_player()<class_Netw_method_spawn_player>`. :ref:`player_entities<class_NetwMultiplayer_property_player_entities>` contains them from every live scene.
 
 .. rst-class:: classref-item-separator
 
@@ -7433,7 +7433,7 @@ Removes a ``callback`` added with :ref:`scene_observe()<class_NetwMultiplayer_me
 
 :godot:`bool` **scene_unwatch**\ (\ scene\: :godot:`RID`, peer\: :godot:`int`\ ) :ref:`🔗<class_NetwMultiplayer_method_scene_unwatch>`
 
-Reverses :ref:`scene_watch()<class_NetwMultiplayer_method_scene_watch>`. A peer with a body in the scene keeps receiving it. Returns ``false`` when the scene does not exist.
+Reverses :ref:`scene_watch()<class_NetwMultiplayer_method_scene_watch>`. A peer with an entity spawned for it in the scene keeps receiving it. Returns ``false`` when the scene does not exist.
 
 \ **Server Only.**
 
@@ -7447,7 +7447,7 @@ Reverses :ref:`scene_watch()<class_NetwMultiplayer_method_scene_watch>`. A peer 
 
 :godot:`Error <@GlobalScope#enum_@globalscope_Error>` **scene_watch**\ (\ scene\: :godot:`RID`, peer\: :godot:`int`\ ) :ref:`🔗<class_NetwMultiplayer_method_scene_watch>`
 
-Replicates ``scene`` to ``peer`` until :ref:`scene_unwatch()<class_NetwMultiplayer_method_scene_unwatch>`, without moving any of its bodies. Applies immediately.
+Replicates ``scene`` to ``peer`` until :ref:`scene_unwatch()<class_NetwMultiplayer_method_scene_unwatch>`, without moving any of its player entities. Applies immediately.
 
 .. code:: text
 

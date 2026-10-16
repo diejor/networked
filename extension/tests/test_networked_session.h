@@ -1,8 +1,8 @@
 #pragma once
 
-#include "support/netw_test.h"
 #include "support/fault_log.h"
 #include "support/netw_call_log.h"
+#include "support/netw_test.h"
 
 #include "core/object/callable_mp.h"
 #include "godot/packed_scene.hpp"

@@ -14,7 +14,7 @@ class SceneMembership {
 public:
     enum Removal {
         REMOVAL_NONE = 0,
-        REMOVAL_LAST_BODY = 1,
+        REMOVAL_LAST_ENTITY = 1,
         REMOVAL_UNWATCHED = 2,
         REMOVAL_MEMBER_GONE = 3,
         REMOVAL_SCENE_RETIRED = 4,
@@ -33,7 +33,7 @@ private:
     struct Reason {
         int64_t member = 0;
         godot::RID scene;
-        int64_t body = WATCH;
+        int64_t entity = WATCH;
     };
 
     godot::LocalVector<Reason> reasons;
@@ -42,7 +42,7 @@ private:
     int reason_at(
         int64_t p_member,
         const godot::RID &p_scene,
-        int64_t p_body
+        int64_t p_entity
     ) const;
     int reasons_for(int64_t p_member, const godot::RID &p_scene) const;
     void announce(
@@ -51,42 +51,46 @@ private:
         bool p_subscribed,
         Removal p_removal
     );
-    bool add(int64_t p_member, const godot::RID &p_scene, int64_t p_body);
+    bool add(int64_t p_member, const godot::RID &p_scene, int64_t p_entity);
     bool drop(
         int64_t p_member,
         const godot::RID &p_scene,
-        int64_t p_body,
+        int64_t p_entity,
         Removal p_removal
     );
 
 public:
-    bool body_enter(
+    bool entity_enter(
         int64_t p_member,
         const godot::RID &p_scene,
-        int64_t p_body
+        int64_t p_entity
     );
-    bool body_exit(int64_t p_member, const godot::RID &p_scene, int64_t p_body);
+    bool entity_exit(
+        int64_t p_member,
+        const godot::RID &p_scene,
+        int64_t p_entity
+    );
     bool watch(int64_t p_member, const godot::RID &p_scene);
     bool unwatch(int64_t p_member, const godot::RID &p_scene);
 
     bool watches(int64_t p_member, const godot::RID &p_scene) const;
     bool subscribes(int64_t p_member, const godot::RID &p_scene) const;
-    int bodies_in(int64_t p_member, const godot::RID &p_scene) const;
+    int entities_in(int64_t p_member, const godot::RID &p_scene) const;
     int subscriptions_of(int64_t p_member) const;
     void scenes_of(
         int64_t p_member,
         godot::LocalVector<godot::RID> &r_scenes
     ) const;
-    void body_scenes_of(
+    void entity_scenes_of(
         int64_t p_member,
         godot::LocalVector<godot::RID> &r_scenes
     ) const;
-    void scenes_of_body(
+    void scenes_of_entity(
         int64_t p_member,
-        int64_t p_body,
+        int64_t p_entity,
         godot::LocalVector<godot::RID> &r_scenes
     ) const;
-    godot::PackedInt64Array bodies_of(
+    godot::PackedInt64Array entities_of(
         int64_t p_member,
         const godot::RID &p_scene
     ) const;
@@ -114,7 +118,7 @@ struct Ledger {
     int64_t left = 0;
     int64_t member_of_first = 0;
     int64_t scene_of_first = 0;
-    int64_t body_of_first = 0;
+    int64_t entity_of_first = 0;
 };
 
 Ledger &ledger();

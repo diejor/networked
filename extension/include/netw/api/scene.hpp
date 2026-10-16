@@ -34,9 +34,9 @@ public:
     godot::Node *get_world() const;
 
     godot::StringName get_label() const;
-    godot::TypedArray<NetwEntity> get_bodies() const;
+    godot::TypedArray<NetwEntity> get_player_entities() const;
     godot::TypedArray<NetwPlayer> get_viewers() const;
-    godot::TypedArray<NetwEntity> get_local_bodies() const;
+    godot::TypedArray<NetwEntity> get_local_player_entities() const;
 
     godot::TypedArray<NetwEntity> get_entities() const;
     void observe(
@@ -51,7 +51,10 @@ public:
     godot::Error unwatch(const godot::Ref<NetwPlayer> &p_player);
     bool is_watching(const godot::Ref<NetwPlayer> &p_player) const;
 
-    void announce_body(const godot::Ref<NetwEntity> &p_body, bool p_present);
+    void announce_player_entity(
+        const godot::Ref<NetwEntity> &p_entity,
+        bool p_present
+    );
     void announce_viewer(
         const godot::Ref<NetwPlayer> &p_player,
         bool p_present

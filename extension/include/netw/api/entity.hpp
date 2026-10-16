@@ -61,16 +61,14 @@ public:
     };
 
     enum DisconnectRule {
-        DISCONNECT_REVERT_TO_SERVER = int(
-            entity::Control::DisconnectRule::REVERT_TO_SERVER
-        ),
+        DISCONNECT_REVERT_TO_SERVER
+        = int(entity::Control::DisconnectRule::REVERT_TO_SERVER),
         DISCONNECT_DESPAWN = int(entity::Control::DisconnectRule::DESPAWN),
     };
 
     enum ParentDespawnRule {
-        PARENT_DESPAWN_CASCADE = int(
-            entity::Control::ParentDespawnRule::CASCADE
-        ),
+        PARENT_DESPAWN_CASCADE
+        = int(entity::Control::ParentDespawnRule::CASCADE),
         PARENT_DESPAWN_DETACH = int(entity::Control::ParentDespawnRule::DETACH),
     };
 

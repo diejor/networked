@@ -214,10 +214,10 @@
 		</member>
 		<member name="name" type="StringName" setter="set_name" getter="get_name" default="&amp;&quot;&quot;">
 			The name that identifies this entity on every peer, and in saves and logs.
-			A node placed in a scene sets it in [method Object._init], since an entity without one stays inactive. [method Netw.spawn_player] sets it to the player's [member NetwPlayer.username], so a game giving one player several bodies sets a distinct name on each.
+			A node placed in a scene sets it in [method Object._init], since an entity without one stays inactive. [method Netw.spawn_player] sets it to the player's [member NetwPlayer.username], so a game giving one player several entities sets a distinct name on each.
 		</member>
 		<member name="on_controller_disconnect" type="int" setter="set_on_controller_disconnect" getter="get_on_controller_disconnect" enum="NetwEntity.DisconnectRule" default="0">
-			What happens to the entity when its [member controller] disconnects. A player's own body still despawns with its [member peer_id].
+			What happens to the entity when its [member controller] disconnects. An entity spawned for a player still despawns with its [member peer_id].
 		</member>
 		<member name="on_parent_despawn" type="int" setter="set_on_parent_despawn" getter="get_on_parent_despawn" enum="NetwEntity.ParentDespawnRule" default="0">
 			What happens to this entity when an entity above it is despawned with [method despawn]. A parent freed without [method despawn] frees this entity too.
@@ -233,7 +233,7 @@
 		<member name="peer_id" type="int" setter="" getter="get_peer_id" default="0">
 			The player peer represented by this root, or [code]0[/code] for an NPC or
 			prop. [method Netw.spawn_player] sets it. The root appears in
-			[member NetwPlayer.bodies] and despawns when that peer disconnects.
+			[member NetwPlayer.entities] and despawns when that peer disconnects.
 		</member>
 		<member name="persistence" type="NetwPersistence" setter="" getter="get_persistence">
 			Loads and saves properties configured with
@@ -306,7 +306,7 @@
 		<signal name="hidden">
 			<description>
 				Emitted on a client that loses its copy of the entity without the entity being despawned, such as a hide under [constant NetwInterestLayer.LEAVE_POLICY_HIDE]. The entity may come back later with the same [member rid].
-				Neither [signal despawning] nor [signal despawned] is emitted, so anything tied to a body that may return connects here.
+				Neither [signal despawning] nor [signal despawned] is emitted, so anything tied to an entity that may return connects here.
 			</description>
 		</signal>
 		<signal name="lifecycle_refused">
@@ -429,7 +429,7 @@
 		</constant>
 		<constant name="LIFECYCLE_CONTROLLER" value="1" enum="Lifecycle">
 			The [member controller] may also spawn, move and despawn the entity, and a peer that spawns one becomes its controller. Other peers are refused with [constant @GlobalScope.ERR_UNAUTHORIZED].
-			A predicted entity, a player's body, and an entity replicated by a [MultiplayerSynchronizer] or [MultiplayerSpawner] allow only the server, and refuse other peers with [constant @GlobalScope.ERR_UNAVAILABLE].
+			A predicted entity, an entity spawned for a player, and an entity replicated by a [MultiplayerSynchronizer] or [MultiplayerSpawner] allow only the server, and refuse other peers with [constant @GlobalScope.ERR_UNAVAILABLE].
 		</constant>
 		<constant name="STAGE_UNBOUND" value="0" enum="Stage">
 			No identity yet, and nothing is sent for it. A node created in code starts here.

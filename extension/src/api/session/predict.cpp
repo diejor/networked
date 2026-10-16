@@ -167,12 +167,9 @@ void NetwMultiplayer::record_rewind_parts(
         for (const repl::PropertyColumn &column : declared->columns) {
             keys.push_back(column.get_key());
         }
-        const int64_t part = lagcomp_core.timeline_part(
-            p_slot,
-            child->id,
-            child->node(),
-            keys
-        );
+        const int64_t part
+            = lagcomp_core
+                  .timeline_part(p_slot, child->id, child->node(), keys);
         lagcomp_core.timeline_record_coded(
             part,
             p_tick,

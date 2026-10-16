@@ -14,7 +14,8 @@ var destroyed := false
 
 var attacks := 0:
 	set(value):
-		if value == attacks: return
+		if value == attacks:
+			return
 		attacks = value
 
 		# Play muzzle flash animation(s)
@@ -29,6 +30,7 @@ var attacks := 0:
 
 		Audio.play("sounds/enemy_attack.ogg")
 
+
 func _init():
 	Netw.configure_entity(self).display.visual_root = ^"enemy-flying"
 	Netw.configure_property(self, &"position").state() \
@@ -38,11 +40,13 @@ func _init():
 	Netw.configure_property(self, &"attacks").state()
 	Netw.configure_rpc(damage).call_local()
 
+
 func _notification(what):
 	if what == NOTIFICATION_PARENTED:
 		Netw.configure_entity(self).name = StringName(name)
 
 # When ready, save the initial position
+
 
 func _ready():
 	target_position = position
@@ -53,21 +57,22 @@ func _process(delta):
 		return
 
 	player = null
-	for body: NetwEntity in scene.bodies:
+	for body: NetwEntity in scene.player_entities:
 		if player == null or position.distance_to(body.owner.position) < position.distance_to(player.position):
 			player = body.owner
 
 	if player == null:
 		return
 
-	self.look_at(player.position + Vector3(0, 0.5, 0), Vector3.UP, true)  # Look at player
-	target_position.y += (cos(time * 5) * 1) * delta  # Sine movement (up and down)
+	self.look_at(player.position + Vector3(0, 0.5, 0), Vector3.UP, true) # Look at player
+	target_position.y += (cos(time * 5) * 1) * delta # Sine movement (up and down)
 
 	time += delta
 
 	position = target_position
 
 # Take damage from player
+
 
 func damage(amount):
 	Audio.play("sounds/enemy_hurt.ogg")
@@ -79,6 +84,7 @@ func damage(amount):
 
 # Destroy the enemy when out of health
 
+
 func destroy():
 	Audio.play("sounds/enemy_destroy.ogg")
 
@@ -87,6 +93,7 @@ func destroy():
 		Netw.despawn(self)
 
 # Shoot when timer hits 0
+
 
 func _on_timer_timeout():
 	if not is_multiplayer_authority():
@@ -97,7 +104,7 @@ func _on_timer_timeout():
 	if raycast.is_colliding():
 		var collider = raycast.get_collider()
 
-		if collider.has_method("damage"):  # Raycast collides with player
+		if collider.has_method("damage"): # Raycast collides with player
 			attacks += 1
 
-			Netw.rpc(collider.damage, 5)  # Apply damage to player
+			Netw.rpc(collider.damage, 5) # Apply damage to player

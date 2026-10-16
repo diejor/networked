@@ -574,9 +574,8 @@ void watch_properties(Node *p_node) {
     if (overlay == nullptr) {
         return;
     }
-    const Callable changed = callable_mp_static(&properties_changed).bind(
-        int64_t(p_node->get_instance_id())
-    );
+    const Callable changed = callable_mp_static(&properties_changed)
+                                 .bind(int64_t(p_node->get_instance_id()));
     if (!p_node->is_connected(StringName("property_list_changed"), changed)) {
         p_node->connect(StringName("property_list_changed"), changed);
     }

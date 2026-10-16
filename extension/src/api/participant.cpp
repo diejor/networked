@@ -52,11 +52,11 @@ StringName NetwPlayer::get_username() const {
     return username;
 }
 
-TypedArray<NetwEntity> NetwPlayer::get_bodies() const {
-    NETW_ZONE_NC("NetwPlayer bodies", colors::SESSION);
+TypedArray<NetwEntity> NetwPlayer::get_entities() const {
+    NETW_ZONE_NC("NetwPlayer entities", colors::SESSION);
     NetwMultiplayer *held = core();
     return held == nullptr ? TypedArray<NetwEntity>()
-                           : held->player_bodies_held(peer_id, incarnation);
+                           : held->player_entities_held(peer_id, incarnation);
 }
 
 Ref<NetwScene> NetwPlayer::get_scene() const {
@@ -79,16 +79,16 @@ void NetwPlayer::_bind_methods() {
         "",
         "get_username"
     );
-    ClassDB::bind_method(D_METHOD("get_bodies"), &NetwPlayer::get_bodies);
+    ClassDB::bind_method(D_METHOD("get_entities"), &NetwPlayer::get_entities);
     ADD_PROPERTY(
         PropertyInfo(
             Variant::ARRAY,
-            "bodies",
+            "entities",
             PROPERTY_HINT_ARRAY_TYPE,
             "NetwEntity"
         ),
         "",
-        "get_bodies"
+        "get_entities"
     );
     ClassDB::bind_method(D_METHOD("get_scene"), &NetwPlayer::get_scene);
     ADD_PROPERTY(

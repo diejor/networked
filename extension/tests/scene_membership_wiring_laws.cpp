@@ -55,7 +55,7 @@ Placed place(
 
 TEST_CASE(
     "[Networked][Scene][Hosted] SW2 a player leaving its scene gives the "
-    "subscription back at the settle and not in the frame the body left, so "
+    "subscription back at the settle and not in the frame the entity left, so "
     "delivery outlives the exit that has not been resolved yet"
 ) {
     Ref<NetwMultiplayer> core;
@@ -67,7 +67,7 @@ TEST_CASE(
     const Placed pawn = place(core, arena.owner, false);
     pawn.record->set_peer_id(7);
     REQUIRE(netw_test::seated_peer(core.ptr(), 7).is_valid());
-    core->membership_place_body(pawn.wrapper);
+    core->membership_place_entity(pawn.wrapper);
     CHECK(core->scene_subscribes(arena.handle, 7));
 
     core->entity_capture_exit(pawn.wrapper.ptr());
@@ -85,8 +85,9 @@ TEST_CASE(
 
 TEST_CASE(
     "[Networked][Scene][Hosted] SW5 a player leaving releases the scene its "
-    "body is in rather than the scene it was in when the hook was installed, "
-    "so a body that moved between scenes releases the one it is actually "
+    "entity is in rather than the scene it was in when the hook was "
+    "installed, so an entity that moved between scenes releases the one it is "
+    "actually "
     "leaving"
 ) {
     Ref<NetwMultiplayer> core;
@@ -100,12 +101,12 @@ TEST_CASE(
 
     pawn.record->set_peer_id(7);
     REQUIRE(netw_test::seated_peer(core.ptr(), 7).is_valid());
-    core->membership_place_body(pawn.wrapper);
+    core->membership_place_entity(pawn.wrapper);
     NETW_CHECK_EQ(int(core->scene_watch(first.handle, 7)), int(OK));
 
     first.owner->remove_child(pawn.owner);
     second.owner->add_child(pawn.owner);
-    core->membership_place_body(pawn.wrapper);
+    core->membership_place_entity(pawn.wrapper);
 
     core->entity_capture_exit(pawn.wrapper.ptr());
     second.owner->remove_child(pawn.owner);
@@ -120,7 +121,7 @@ TEST_CASE(
 
 TEST_CASE(
     "[Networked][Scene][Hosted] SW3 an arrival announces the move and writes "
-    "no subscription of its own, because the body's residency is what "
+    "no subscription of its own, because the entity's residency is what "
     "subscribes and a second writer would disagree with it"
 ) {
     Ref<NetwMultiplayer> core;
@@ -135,7 +136,7 @@ TEST_CASE(
     const Placed pawn = place(core, source.owner, false);
     pawn.wrapper->set_peer_id(7);
     REQUIRE(netw_test::seated_peer(core.ptr(), 7).is_valid());
-    core->membership_place_body(pawn.wrapper);
+    core->membership_place_entity(pawn.wrapper);
     REQUIRE(core->scene_subscribes(source.handle, 7));
 
     core->scene_arrive(
@@ -151,7 +152,7 @@ TEST_CASE(
 
     source.owner->remove_child(pawn.owner);
     destination.owner->add_child(pawn.owner);
-    core->membership_place_body(pawn.wrapper);
+    core->membership_place_entity(pawn.wrapper);
 
     CHECK(core->scene_subscribes(destination.handle, 7));
     CHECK_FALSE(core->scene_subscribes(source.handle, 7));

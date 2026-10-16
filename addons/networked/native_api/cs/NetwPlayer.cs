@@ -16,8 +16,8 @@ namespace Networked;
 /// <code>
 /// var player := Netw.of(self).peer_get_player(peer_id)
 /// greet(player.username)
-/// for body: NetwEntity in player.bodies:
-///     follow(body.owner)
+/// for entity: NetwEntity in player.entities:
+///     follow(entity.owner)
 /// </code>
 /// <para>
 /// A player is not a peer. After the player leaves,
@@ -124,20 +124,20 @@ public sealed class NetwPlayer : NetwRefCounted
         }
     }
 
-    private static readonly IntPtr _bindGetBodies =
-        NetwApi.MethodBind("NetwPlayer", "get_bodies", 3995934104UL);
+    private static readonly IntPtr _bindGetEntities =
+        NetwApi.MethodBind("NetwPlayer", "get_entities", 3995934104UL);
 
     /// <summary>
     /// The entities spawned for this player with
     /// <see cref="Netw.SpawnPlayer"/>, in no particular order. Empty for a
     /// spectator.
     /// </summary>
-    public NetwEntity[] Bodies
+    public NetwEntity[] Entities
     {
         get
         {
             godot_variant answered = default;
-            NetwThunks.Call0(_bindGetBodies, Checked, ref answered);
+            NetwThunks.Call0(_bindGetEntities, Checked, ref answered);
             NetwEntity[] result =
                 NetwApi.Elements(
                     VariantUtils.ConvertToArray(answered),
@@ -152,7 +152,7 @@ public sealed class NetwPlayer : NetwRefCounted
 
     /// <summary>
     /// The scene this player is in, or <c>null</c>. It is the scene holding one
-    /// of its <see cref="NetwPlayer.Bodies"/>, or else the scene it watches
+    /// of its <see cref="NetwPlayer.Entities"/>, or else the scene it watches
     /// with <see cref="NetwScene.Watch"/>. It is <c>null</c> when there are
     /// two. A client only knows about the scenes it receives.
     /// </summary>

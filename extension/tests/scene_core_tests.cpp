@@ -17,7 +17,7 @@ using netw::NetwSceneCore;
 using netw_test::CallLog;
 
 constexpr int EVENT_PLAYER = 0;
-constexpr int EVENT_BODY = 1;
+constexpr int EVENT_PLAYER_ENTITY = 1;
 constexpr int EVENT_ENTITY = 2;
 
 Ref<NetwSceneCore> fresh() {
@@ -114,12 +114,12 @@ TEST_CASE(
     const RID first = scenes[0];
     const RID second = scenes[1];
 
-    core->observe(first, EVENT_BODY, log.callable("heard"));
+    core->observe(first, EVENT_PLAYER_ENTITY, log.callable("heard"));
 
-    NETW_CHECK_EQ(core->dispatch(first, EVENT_BODY, true, 0), 1);
+    NETW_CHECK_EQ(core->dispatch(first, EVENT_PLAYER_ENTITY, true, 0), 1);
     NETW_CHECK_EQ(core->dispatch(first, EVENT_ENTITY, true, 0), 0);
     NETW_CHECK_EQ(core->dispatch(first, EVENT_PLAYER, true, 0), 0);
-    NETW_CHECK_EQ(core->dispatch(second, EVENT_BODY, true, 0), 0);
+    NETW_CHECK_EQ(core->dispatch(second, EVENT_PLAYER_ENTITY, true, 0), 0);
     NETW_CHECK_EQ(log.count("heard"), 1);
 }
 
@@ -132,11 +132,11 @@ TEST_CASE(
     Scenes scenes;
     const RID scene = scenes[0];
 
-    core->observe(RID(), EVENT_BODY, log.callable("heard"));
-    core->observe(scene, EVENT_BODY, Callable());
+    core->observe(RID(), EVENT_PLAYER_ENTITY, log.callable("heard"));
+    core->observe(scene, EVENT_PLAYER_ENTITY, Callable());
 
-    NETW_CHECK_EQ(core->observer_count(scene, EVENT_BODY), 0);
-    NETW_CHECK_EQ(core->dispatch(scene, EVENT_BODY, true, 0), 0);
+    NETW_CHECK_EQ(core->observer_count(scene, EVENT_PLAYER_ENTITY), 0);
+    NETW_CHECK_EQ(core->dispatch(scene, EVENT_PLAYER_ENTITY, true, 0), 0);
 }
 
 TEST_CASE(
@@ -149,15 +149,19 @@ TEST_CASE(
     const RID scene = scenes[0];
     const Callable heard = log.callable("heard");
 
-    core->observe(scene, EVENT_BODY, heard);
-    core->observe(scene, EVENT_BODY, heard);
-    NETW_CHECK_EQ(core->observer_count(scene, EVENT_BODY), 1);
+    core->observe(scene, EVENT_PLAYER_ENTITY, heard);
+    core->observe(scene, EVENT_PLAYER_ENTITY, heard);
+    NETW_CHECK_EQ(core->observer_count(scene, EVENT_PLAYER_ENTITY), 1);
 
-    core->unobserve(scene, EVENT_BODY, log.callable("never registered"));
-    NETW_CHECK_EQ(core->observer_count(scene, EVENT_BODY), 1);
+    core->unobserve(
+        scene,
+        EVENT_PLAYER_ENTITY,
+        log.callable("never registered")
+    );
+    NETW_CHECK_EQ(core->observer_count(scene, EVENT_PLAYER_ENTITY), 1);
 
-    core->unobserve(scene, EVENT_BODY, heard);
-    NETW_CHECK_EQ(core->observer_count(scene, EVENT_BODY), 0);
+    core->unobserve(scene, EVENT_PLAYER_ENTITY, heard);
+    NETW_CHECK_EQ(core->observer_count(scene, EVENT_PLAYER_ENTITY), 0);
 
     core->unobserve(scenes[2], EVENT_ENTITY, heard);
     NETW_CHECK_EQ(core->observer_count(scenes[2], EVENT_ENTITY), 0);
@@ -194,16 +198,16 @@ TEST_CASE(
     const RID doomed = scenes[0];
     const RID kept = scenes[1];
 
-    core->observe(doomed, EVENT_BODY, log.callable("doomed player"));
+    core->observe(doomed, EVENT_PLAYER_ENTITY, log.callable("doomed player"));
     core->observe(doomed, EVENT_ENTITY, log.callable("doomed entity"));
-    core->observe(kept, EVENT_BODY, log.callable("kept"));
+    core->observe(kept, EVENT_PLAYER_ENTITY, log.callable("kept"));
 
     core->forget_scene(doomed);
 
-    NETW_CHECK_EQ(core->observer_count(doomed, EVENT_BODY), 0);
+    NETW_CHECK_EQ(core->observer_count(doomed, EVENT_PLAYER_ENTITY), 0);
     NETW_CHECK_EQ(core->observer_count(doomed, EVENT_ENTITY), 0);
-    NETW_CHECK_EQ(core->observer_count(kept, EVENT_BODY), 1);
-    NETW_CHECK_EQ(core->dispatch(kept, EVENT_BODY, true, 0), 1);
+    NETW_CHECK_EQ(core->observer_count(kept, EVENT_PLAYER_ENTITY), 1);
+    NETW_CHECK_EQ(core->dispatch(kept, EVENT_PLAYER_ENTITY, true, 0), 1);
 }
 
 TEST_CASE("[Networked][Scene][Hosted] N7 clearing forgets scene observers") {
@@ -211,11 +215,11 @@ TEST_CASE("[Networked][Scene][Hosted] N7 clearing forgets scene observers") {
     CallLog log;
     Scenes scenes;
     const RID scene = scenes[0];
-    core->observe(scene, EVENT_BODY, log.callable("heard"));
+    core->observe(scene, EVENT_PLAYER_ENTITY, log.callable("heard"));
 
     core->clear();
 
-    NETW_CHECK_EQ(core->observer_count(scene, EVENT_BODY), 0);
+    NETW_CHECK_EQ(core->observer_count(scene, EVENT_PLAYER_ENTITY), 0);
 }
 
 TEST_CASE(
@@ -246,10 +250,10 @@ TEST_CASE(
         calls
     )));
 
-    core->observe(scene, EVENT_BODY, reentrant);
-    core->observe(scene, EVENT_BODY, log.callable("after"));
+    core->observe(scene, EVENT_PLAYER_ENTITY, reentrant);
+    core->observe(scene, EVENT_PLAYER_ENTITY, log.callable("after"));
 
-    NETW_CHECK_EQ(core->dispatch(scene, EVENT_BODY, true, 0), 2);
+    NETW_CHECK_EQ(core->dispatch(scene, EVENT_PLAYER_ENTITY, true, 0), 2);
     NETW_CHECK_EQ(*calls, 1);
     NETW_CHECK_EQ(log.count("after"), 1);
 
@@ -274,22 +278,27 @@ TEST_CASE(
     Ref<RefCounted> anchor;
     anchor.instantiate();
     const Callable guest = log.callable("guest");
-    const Callable reentrant(memnew(
-        ReentrantSink(core.ptr(), scene, EVENT_BODY, guest, anchor.ptr(), calls)
-    ));
+    const Callable reentrant(memnew(ReentrantSink(
+        core.ptr(),
+        scene,
+        EVENT_PLAYER_ENTITY,
+        guest,
+        anchor.ptr(),
+        calls
+    )));
 
-    core->observe(scene, EVENT_BODY, doomed);
-    core->observe(scene, EVENT_BODY, reentrant);
-    NETW_CHECK_EQ(core->observer_count(scene, EVENT_BODY), 2);
+    core->observe(scene, EVENT_PLAYER_ENTITY, doomed);
+    core->observe(scene, EVENT_PLAYER_ENTITY, reentrant);
+    NETW_CHECK_EQ(core->observer_count(scene, EVENT_PLAYER_ENTITY), 2);
 
     transient.reset();
     CHECK_FALSE(doomed.is_valid());
 
-    NETW_CHECK_EQ(core->dispatch(scene, EVENT_BODY, true, 0), 1);
+    NETW_CHECK_EQ(core->dispatch(scene, EVENT_PLAYER_ENTITY, true, 0), 1);
     NETW_CHECK_EQ(*calls, 1);
 
-    NETW_CHECK_EQ(core->observer_count(scene, EVENT_BODY), 2);
-    NETW_CHECK_EQ(core->dispatch(scene, EVENT_BODY, true, 0), 2);
+    NETW_CHECK_EQ(core->observer_count(scene, EVENT_PLAYER_ENTITY), 2);
+    NETW_CHECK_EQ(core->dispatch(scene, EVENT_PLAYER_ENTITY, true, 0), 2);
     NETW_CHECK_EQ(log.count("guest"), 1);
 }
 

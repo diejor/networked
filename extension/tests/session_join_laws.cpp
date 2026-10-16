@@ -160,7 +160,7 @@ TEST_CASE(
 
     NETW_CHECK_EQ(int(client_scenes->scene_list().size()), 1);
     CHECK(client_scenes->scene_find(StringName("Arena")).is_valid());
-    CHECK(seated->get_bodies().is_empty());
+    CHECK(seated->get_entities().is_empty());
     CHECK_FALSE(client_scenes->scene_presented().is_valid());
 }
 
@@ -234,7 +234,7 @@ TEST_CASE(
     netw::NetwMultiplayer *core = rig.server();
     REQUIRE(core != nullptr);
     NETW_CHECK_EQ(int(core->scene_list().size()), 2);
-    CHECK(core->scene_bodies_all().is_empty());
+    CHECK(core->scene_player_entities_all().is_empty());
 
     const RID pawn
         = rig.declare_entity(EntityDecl().named("Pawn").on_route(71));
@@ -255,7 +255,8 @@ TEST_CASE(
     seated_pawn->set_peer_id(rig.peer_id(0));
     seated_guard->set_peer_id(1);
 
-    const TypedArray<netw::NetwEntity> roster = core->scene_bodies_all();
+    const TypedArray<netw::NetwEntity> roster
+        = core->scene_player_entities_all();
 
     NETW_CHECK_EQ(int(roster.size()), 2);
     CHECK(roster.has(seated_pawn));
@@ -672,7 +673,7 @@ TEST_CASE(
     netw_test::FaultWatch expected_faults;
     expected_faults.expect_warning(
         "[warn][session] Netw.configure_join was called by "
-        "@Node@1865, which left the tree before the session applied"
+        "@Node@*, which left the tree before the session applied"
         " its settings, so a join was refused. Keep that node in "
         "the tree until the session starts.",
         1
@@ -729,8 +730,8 @@ TEST_CASE(
 
     CHECK(api->player_has(51));
     CHECK(api->player_is_active(51, api->player_incarnation(51)));
-    CHECK(api->player_bodies(51).is_empty());
-    CHECK(api->scene_bodies_all().is_empty());
+    CHECK(api->player_get_entities(51).is_empty());
+    CHECK(api->scene_player_entities_all().is_empty());
 
     api->embed_dispose();
     release_branch(branch);
@@ -745,8 +746,8 @@ TEST_CASE(
     netw_test::FaultWatch expected_faults;
     expected_faults.expect_error(
         "[error][session] Netw.configure_join was called on more "
-        "than one node (/root/JoinScopeRival/@Node@1866, "
-        "/root/JoinScopeRival/@Node@1867), so a join was refused. "
+        "than one node (/root/JoinScopeRival/@Node@*, "
+        "/root/JoinScopeRival/@Node@*), so a join was refused. "
         "Call it on one node per session.",
         1
     );

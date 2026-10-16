@@ -310,8 +310,7 @@ class NetwPredictionEngine {
         const godot::LocalVector<uint8_t> &p_reach,
         const predict::StateRow &p_values
     );
-    void read_parts(const predict::Slot &p_row, predict::StateRow &r_row)
-        const;
+    void read_parts(const predict::Slot &p_row, predict::StateRow &r_row) const;
 
 public:
     NetwPredictionEngine() = default;

@@ -345,8 +345,7 @@ const StringName &state_prop(
     const predict::FieldCodec &p_codec,
     uint32_t p_field
 ) {
-    return &p_codec == &p_row.wiring.codec
-            && p_field < p_row.state_props.size()
+    return &p_codec == &p_row.wiring.codec && p_field < p_row.state_props.size()
         ? p_row.state_props[p_field]
         : p_codec.keys[p_field];
 }
@@ -12779,10 +12778,9 @@ void NetwPredictionEngine::read_parts(
         for (uint32_t field = part.first;
              field < part.first + part.count && field < fields;
              ++field) {
-            const StringName prop = StringName(
-                String(p_row.wiring.codec.keys[field])
-                    .substr(part.path.length() + 1)
-            );
+            const StringName prop
+                = StringName(String(p_row.wiring.codec.keys[field])
+                                 .substr(part.path.length() + 1));
             for (int column = 0; column < columns; ++column) {
                 if (table.schema.at(column)->key == prop) {
                     r_row.set(

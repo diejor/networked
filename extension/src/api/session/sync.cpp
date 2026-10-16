@@ -1021,8 +1021,7 @@ void NetwMultiplayer::row_control_apply(
                 p_send->control_scheduler().queue(p_peer, answer);
                 return;
             }
-            if (liveness_route_state(p_record.route)
-                == NetwLivenessCore::STATE_UNKNOWN) {
+            if (liveness_route_state(p_record.route) == ENTITY_STATE_UNKNOWN) {
                 return;
             }
             if (uint64_t(liveness_route_epoch(p_record.route))

@@ -52,8 +52,9 @@ Node *watched = nullptr;
 
 void look() {
     seen.stride = double(watched->get(StringName("stride")));
-    seen.offset = double(watched->get_node<Node>(NodePath("Part"))
-                             ->get(StringName("offset")));
+    seen.offset = double(
+        watched->get_node<Node>(NodePath("Part"))->get(StringName("offset"))
+    );
 }
 
 TEST_CASE(
@@ -75,11 +76,8 @@ TEST_CASE(
 
     Array args;
     args.push_back(String("gear"));
-    const RID made = server->spawn_registered(
-        StringName("gear"),
-        args,
-        nullptr
-    );
+    const RID made
+        = server->spawn_registered(StringName("gear"), args, nullptr);
     Node *gear = server->entity_get_node(made);
     REQUIRE(gear != nullptr);
     arena->add_child(gear);
@@ -100,8 +98,7 @@ TEST_CASE(
     REQUIRE(sampled.is_valid());
     REQUIRE(sampled->has_value(StringName("stride")));
     REQUIRE(sampled->has_value(StringName("Part:offset")));
-    const double stride_then
-        = double(sampled->get_value(StringName("stride")));
+    const double stride_then = double(sampled->get_value(StringName("stride")));
     NETW_CHECK_CLOSE(
         double(sampled->get_value(StringName("Part:offset"))),
         stride_then * 10.0,

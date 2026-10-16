@@ -24,8 +24,8 @@ var peer_id: int = 0
 ## Username used to join the session.
 var username: StringName = &""
 
-## Every body this runner's player represents.
-var local_bodies: Array[NetwEntity]:
+## Every entity spawned for this runner's player.
+var local_player_entities: Array[NetwEntity]:
 	get:
 		if not tree:
 			return []
@@ -33,16 +33,16 @@ var local_bodies: Array[NetwEntity]:
 		if who == null:
 			return []
 		var owned: Array[NetwEntity] = []
-		for player: NetwEntity in who.bodies:
+		for player: NetwEntity in who.entities:
 			if is_instance_valid(player.owner):
 				owned.append(player)
 		return owned
 
-## The one body this runner represents, and null while it represents none or
+## The node of this runner's one player entity, and null while it has none or
 ## several, because picking one of several would pick for the caller.
 var local_player: Node:
 	get:
-		var mine: Array[NetwEntity] = local_bodies
+		var mine: Array[NetwEntity] = local_player_entities
 		return mine[0].owner if mine.size() == 1 else null
 
 var _pending_input: Array[InputEvent] = []
@@ -100,7 +100,7 @@ func find_player(player_username: StringName) -> Node:
 		return null
 
 	var player_name := StringName(str(player_username))
-	for player: NetwEntity in tree.api.bodies:
+	for player: NetwEntity in tree.api.player_entities:
 		if player != null and is_instance_valid(player.owner):
 			if _player_matches_username(player.owner, player_name):
 				return player.owner

@@ -77,7 +77,7 @@ Array one_source(Node *p_source) {
     return out;
 }
 
-Declared place_body(
+Declared place_player_entity(
     const Ref<NetwMultiplayer> &p_core,
     Node *p_parent,
     int64_t p_peer
@@ -102,7 +102,7 @@ Declared place_body(
         p_core->player_incarnation(p_peer)
     );
     made.owner->set_meta(NetwMultiplayer::wrapper_meta(), made.wrapper);
-    p_core->membership_place_body(made.wrapper);
+    p_core->membership_place_entity(made.wrapper);
     return made;
 }
 
@@ -229,10 +229,10 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Scene][Hosted][SceneTree] TL8 a change carries no body into "
-    "the "
-    "destination, so an entity standing in the source is left where it "
-    "stands and the destination is reached by the watch alone"
+    "[Networked][Scene][Hosted][SceneTree] TL8 a change carries no player "
+    "entity "
+    "into the destination, so an entity standing in the source is left where "
+    "it stands and the destination is reached by the watch alone"
 ) {
     const Ref<NetwMultiplayer> core = peered_core();
     const CallLog flushed;
@@ -241,8 +241,8 @@ TEST_CASE(
     const Declared source = declare_scene(core, root, "Source");
     const Declared target = declare_scene(core, root, "Target");
     adopt(core, 7);
-    const Declared pawn = place_body(core, source.owner, 7);
-    REQUIRE(int(core->scene_get_bodies(source.handle).size()) == 1);
+    const Declared pawn = place_player_entity(core, source.owner, 7);
+    REQUIRE(int(core->scene_get_player_entities(source.handle).size()) == 1);
 
     core->scene_replace_sources(
         target.owner,
@@ -251,7 +251,10 @@ TEST_CASE(
     );
 
     CHECK(core->scene_subscribes(target.handle, 7));
-    NETW_CHECK_EQ(int(core->scene_get_bodies(target.handle).size()), 0);
+    NETW_CHECK_EQ(
+        int(core->scene_get_player_entities(target.handle).size()),
+        0
+    );
     CHECK(bool(pawn.owner->get_parent() == source.owner));
 
     source.owner->remove_child(pawn.owner);

@@ -301,7 +301,7 @@ void NetwMultiplayer::transfer_follow_scenes(bool p_succeeds) {
     membership_audit_held += 1;
 #endif
     for (const Ref<NetwEntity> &entity : live) {
-        membership_place_body(entity);
+        membership_place_entity(entity);
     }
 #if defined(NETW_TESTS)
     membership_audit_held -= 1;

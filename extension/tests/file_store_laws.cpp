@@ -1,5 +1,5 @@
-#include "support/netw_test.h"
 #include "support/fault_log.h"
+#include "support/netw_test.h"
 
 #include "godot/file_access.hpp"
 #include "godot/file_system.hpp"
@@ -176,7 +176,8 @@ TEST_CASE(
 ) {
     netw_test::FaultWatch expected_faults;
     expected_faults.expect_stderr(
-        "Unicode parsing error*Unexpected NUL character", 1
+        "Unicode parsing error*Unexpected NUL character",
+        1
     );
     scrub("fs3");
     World world("fs3");

@@ -18,7 +18,7 @@ func _init() -> void:
 	Netw.configure_session(self).app(&"netw-example-multiple-levels")
 	Netw.configure_clock(self)
 	Netw.configure_database(self, &"saves").backend(
-			preload("res://examples/multiple_levels/game/save_database.tres")
+		preload("res://examples/multiple_levels/game/save_database.tres"),
 	)
 	Netw.configure_spawn(spawn_level1)
 	Netw.configure_spawn(spawn_level2)
@@ -65,7 +65,7 @@ func remember_level(level: NetwScene) -> void:
 
 
 func place_player(player: NetwPlayer, level: NetwScene) -> void:
-	if not player.bodies.is_empty():
+	if not player.entities.is_empty():
 		return
 	var new_avatar := Netw.spawn_player(player, spawn_avatar)
 	var roster: Array[NetwPlayer] = session.players

@@ -886,8 +886,8 @@ void NetwMultiplayer::_bind_methods() {
         "player_local"
     );
     ClassDB::bind_method(
-        D_METHOD("player_bodies", "peer"),
-        &NetwMultiplayer::player_bodies
+        D_METHOD("player_get_entities", "peer"),
+        &NetwMultiplayer::player_get_entities
     );
     BIND_ENUM_CONSTANT(SCENE_MOVE_REFUSED);
     BIND_ENUM_CONSTANT(SCENE_MOVE_ALREADY_THERE);
@@ -1806,16 +1806,16 @@ void NetwMultiplayer::_bind_methods() {
         &NetwMultiplayer::scene_get_entities
     );
     ClassDB::bind_method(
-        D_METHOD("scene_get_bodies", "scene"),
-        &NetwMultiplayer::scene_get_bodies
+        D_METHOD("scene_get_player_entities", "scene"),
+        &NetwMultiplayer::scene_get_player_entities
     );
     ClassDB::bind_method(
         D_METHOD("scene_get_viewers", "scene"),
         &NetwMultiplayer::scene_get_viewers
     );
     ClassDB::bind_method(
-        D_METHOD("scene_get_local_bodies", "scene"),
-        &NetwMultiplayer::scene_get_local_bodies
+        D_METHOD("scene_get_local_player_entities", "scene"),
+        &NetwMultiplayer::scene_get_local_player_entities
     );
     ClassDB::bind_method(
         D_METHOD("scene_get_layer", "scene"),
@@ -1830,18 +1830,18 @@ void NetwMultiplayer::_bind_methods() {
         &NetwMultiplayer::scene_destroy
     );
     ClassDB::bind_method(
-        D_METHOD("scene_bodies_all"),
-        &NetwMultiplayer::scene_bodies_all
+        D_METHOD("scene_player_entities_all"),
+        &NetwMultiplayer::scene_player_entities_all
     );
     ADD_PROPERTY(
         PropertyInfo(
             Variant::ARRAY,
-            "bodies",
+            "player_entities",
             PROPERTY_HINT_ARRAY_TYPE,
             "NetwEntity"
         ),
         "",
-        "scene_bodies_all"
+        "scene_player_entities_all"
     );
     ClassDB::bind_method(
         D_METHOD("scene_create", "recipe", "isolation"),

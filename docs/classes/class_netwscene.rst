@@ -21,7 +21,7 @@ Description
 
 A multiplayer scene is a :ref:`NetwEntity<class_NetwEntity>`, available as :ref:`entity<class_NetwScene_property_entity>`. Reach it with :ref:`Netw.scene()<class_Netw_method_scene>` or :ref:`NetwEntity.scene<class_NetwEntity_property_scene>`. An entity declared with :ref:`Netw.configure_scene()<class_Netw_method_configure_scene>` resolves to itself, any other entity to its closest scene ancestor. Each scene has one handle, so ``==`` compares scenes.
 
-A scene replicates to a player while a body of theirs is in it, or while the player watches it with :ref:`watch()<class_NetwScene_method_watch>`. :ref:`unwatch()<class_NetwScene_method_unwatch>` does not remove a player whose body is still in the scene.
+A scene replicates to a player while an entity spawned for them is in it, or while the player watches it with :ref:`watch()<class_NetwScene_method_watch>`. :ref:`unwatch()<class_NetwScene_method_unwatch>` does not remove a player whose entity is still in the scene.
 
 ::
 
@@ -31,7 +31,7 @@ A scene replicates to a player while a body of theirs is in it, or while the pla
 
 \ Inside a scene, :ref:`NetwInterestLayer<class_NetwInterestLayer>` still filters which entities a player receives.
 
-A body is moved with :godot:`Node.reparent() <Node#class_Node_method_reparent>` as you would normally do. Use :ref:`Netw.reparent()<class_Netw_method_reparent>` when you need to await the server taking the move.
+A player's entity is moved with :godot:`Node.reparent() <Node#class_Node_method_reparent>` as you would normally do. Use :ref:`Netw.reparent()<class_Netw_method_reparent>` when you need to await the server taking the move.
 
 .. rst-class:: classref-reftable-group
 
@@ -41,27 +41,27 @@ Properties
 .. table::
    :widths: auto
 
-   +-------------------------------------------------------+------------------------------------------------------------+-----------+
-   | :godot:`Array`\[:ref:`NetwEntity<class_NetwEntity>`\] | :ref:`bodies<class_NetwScene_property_bodies>`             | ``[]``    |
-   +-------------------------------------------------------+------------------------------------------------------------+-----------+
-   | :godot:`Array`\[:ref:`NetwEntity<class_NetwEntity>`\] | :ref:`entities<class_NetwScene_property_entities>`         | ``[]``    |
-   +-------------------------------------------------------+------------------------------------------------------------+-----------+
-   | :ref:`NetwEntity<class_NetwEntity>`                   | :ref:`entity<class_NetwScene_property_entity>`             |           |
-   +-------------------------------------------------------+------------------------------------------------------------+-----------+
-   | :godot:`bool`                                         | :ref:`is_declared<class_NetwScene_property_is_declared>`   | ``false`` |
-   +-------------------------------------------------------+------------------------------------------------------------+-----------+
-   | :godot:`StringName`                                   | :ref:`label<class_NetwScene_property_label>`               | ``&""``   |
-   +-------------------------------------------------------+------------------------------------------------------------+-----------+
-   | :godot:`Array`\[:ref:`NetwEntity<class_NetwEntity>`\] | :ref:`local_bodies<class_NetwScene_property_local_bodies>` | ``[]``    |
-   +-------------------------------------------------------+------------------------------------------------------------+-----------+
-   | :godot:`RID`                                          | :ref:`rid<class_NetwScene_property_rid>`                   | ``RID()`` |
-   +-------------------------------------------------------+------------------------------------------------------------+-----------+
-   | :godot:`Node`                                         | :ref:`root<class_NetwScene_property_root>`                 |           |
-   +-------------------------------------------------------+------------------------------------------------------------+-----------+
-   | :godot:`Array`\[:ref:`NetwPlayer<class_NetwPlayer>`\] | :ref:`viewers<class_NetwScene_property_viewers>`           | ``[]``    |
-   +-------------------------------------------------------+------------------------------------------------------------+-----------+
-   | :godot:`Node`                                         | :ref:`world<class_NetwScene_property_world>`               |           |
-   +-------------------------------------------------------+------------------------------------------------------------+-----------+
+   +-------------------------------------------------------+------------------------------------------------------------------------------+-----------+
+   | :godot:`Array`\[:ref:`NetwEntity<class_NetwEntity>`\] | :ref:`entities<class_NetwScene_property_entities>`                           | ``[]``    |
+   +-------------------------------------------------------+------------------------------------------------------------------------------+-----------+
+   | :ref:`NetwEntity<class_NetwEntity>`                   | :ref:`entity<class_NetwScene_property_entity>`                               |           |
+   +-------------------------------------------------------+------------------------------------------------------------------------------+-----------+
+   | :godot:`bool`                                         | :ref:`is_declared<class_NetwScene_property_is_declared>`                     | ``false`` |
+   +-------------------------------------------------------+------------------------------------------------------------------------------+-----------+
+   | :godot:`StringName`                                   | :ref:`label<class_NetwScene_property_label>`                                 | ``&""``   |
+   +-------------------------------------------------------+------------------------------------------------------------------------------+-----------+
+   | :godot:`Array`\[:ref:`NetwEntity<class_NetwEntity>`\] | :ref:`local_player_entities<class_NetwScene_property_local_player_entities>` | ``[]``    |
+   +-------------------------------------------------------+------------------------------------------------------------------------------+-----------+
+   | :godot:`Array`\[:ref:`NetwEntity<class_NetwEntity>`\] | :ref:`player_entities<class_NetwScene_property_player_entities>`             | ``[]``    |
+   +-------------------------------------------------------+------------------------------------------------------------------------------+-----------+
+   | :godot:`RID`                                          | :ref:`rid<class_NetwScene_property_rid>`                                     | ``RID()`` |
+   +-------------------------------------------------------+------------------------------------------------------------------------------+-----------+
+   | :godot:`Node`                                         | :ref:`root<class_NetwScene_property_root>`                                   |           |
+   +-------------------------------------------------------+------------------------------------------------------------------------------+-----------+
+   | :godot:`Array`\[:ref:`NetwPlayer<class_NetwPlayer>`\] | :ref:`viewers<class_NetwScene_property_viewers>`                             | ``[]``    |
+   +-------------------------------------------------------+------------------------------------------------------------------------------+-----------+
+   | :godot:`Node`                                         | :ref:`world<class_NetwScene_property_world>`                                 |           |
+   +-------------------------------------------------------+------------------------------------------------------------------------------+-----------+
 
 .. rst-class:: classref-reftable-group
 
@@ -92,25 +92,25 @@ Methods
 Signals
 -------
 
-.. _class_NetwScene_signal_body_entered:
+.. _class_NetwScene_signal_player_entity_entered:
 
 .. rst-class:: classref-signal
 
-**body_entered**\ (\ body\: :ref:`NetwEntity<class_NetwEntity>`\ ) :ref:`🔗<class_NetwScene_signal_body_entered>`
+**player_entity_entered**\ (\ entity\: :ref:`NetwEntity<class_NetwEntity>`\ ) :ref:`🔗<class_NetwScene_signal_player_entity_entered>`
 
-Emitted when ``body`` enters this scene.
+Emitted when ``entity`` joins :ref:`player_entities<class_NetwScene_property_player_entities>`.
 
 .. rst-class:: classref-item-separator
 
 ----
 
-.. _class_NetwScene_signal_body_left:
+.. _class_NetwScene_signal_player_entity_left:
 
 .. rst-class:: classref-signal
 
-**body_left**\ (\ body\: :ref:`NetwEntity<class_NetwEntity>`\ ) :ref:`🔗<class_NetwScene_signal_body_left>`
+**player_entity_left**\ (\ entity\: :ref:`NetwEntity<class_NetwEntity>`\ ) :ref:`🔗<class_NetwScene_signal_player_entity_left>`
 
-Emitted when ``body`` leaves this scene.
+Emitted when ``entity`` leaves :ref:`player_entities<class_NetwScene_property_player_entities>`.
 
 .. rst-class:: classref-item-separator
 
@@ -127,7 +127,7 @@ Emitted when this scene starts replicating to ``player``. :ref:`viewers<class_Ne
 ::
 
     func place(player: NetwPlayer, level: NetwScene) -> void:
-        if player.bodies.is_empty():
+        if player.entities.is_empty():
             level.root.add_child(Netw.spawn_player(player, make_player))
 
 .. rst-class:: classref-item-separator
@@ -165,13 +165,13 @@ enum **SceneEvent**: :ref:`🔗<enum_NetwScene_SceneEvent>`
 
 A player started or stopped seeing the scene. The :ref:`NetwMultiplayer.scene_observe()<class_NetwMultiplayer_method_scene_observe>` callback receives ``(present, peer_id)``.
 
-.. _class_NetwScene_constant_SCENE_EVENT_BODY:
+.. _class_NetwScene_constant_SCENE_EVENT_PLAYER_ENTITY:
 
 .. rst-class:: classref-enumeration-constant
 
-:ref:`SceneEvent<enum_NetwScene_SceneEvent>` **SCENE_EVENT_BODY** = ``1``
+:ref:`SceneEvent<enum_NetwScene_SceneEvent>` **SCENE_EVENT_PLAYER_ENTITY** = ``1``
 
-A body entered or left. The callback receives ``(present, entity)``.
+An entity spawned for a player entered or left. The callback receives ``(present, entity)``.
 
 .. _class_NetwScene_constant_SCENE_EVENT_ENTITY:
 
@@ -179,7 +179,7 @@ A body entered or left. The callback receives ``(present, entity)``.
 
 :ref:`SceneEvent<enum_NetwScene_SceneEvent>` **SCENE_EVENT_ENTITY** = ``2``
 
-Any entity, bodies included, entered or left. The callback receives ``(present, entity)``.
+Any entity, player entities included, entered or left. The callback receives ``(present, entity)``.
 
 .. rst-class:: classref-item-separator
 
@@ -205,7 +205,7 @@ Every player moves to the new scene, and every other scene is removed with its e
 
 :ref:`SceneChange<enum_NetwScene_SceneChange>` **SCENE_CHANGE_PLAYER** = ``1``
 
-Only the selected :ref:`NetwPlayer<class_NetwPlayer>` moves. Their old bodies are despawned, and no scene is removed.
+Only the selected :ref:`NetwPlayer<class_NetwPlayer>` moves. Their old entities are despawned, and no scene is removed.
 
 .. _class_NetwScene_constant_SCENE_CHANGE_SCENE:
 
@@ -249,22 +249,6 @@ The scene gets its own physics and rendering world on every peer. :ref:`NetwScen
 
 Property Descriptions
 ---------------------
-
-.. _class_NetwScene_property_bodies:
-
-.. rst-class:: classref-property
-
-:godot:`Array`\[:ref:`NetwEntity<class_NetwEntity>`\] **bodies** = ``[]`` :ref:`🔗<class_NetwScene_property_bodies>`
-
-.. rst-class:: classref-property-setget
-
-- :godot:`Array`\[:ref:`NetwEntity<class_NetwEntity>`\] **get_bodies**\ (\ )
-
-Every body in this scene, in no particular order. A body is removed as soon as it is despawned, before its node is freed.
-
-.. rst-class:: classref-item-separator
-
-----
 
 .. _class_NetwScene_property_entities:
 
@@ -330,17 +314,33 @@ The name :ref:`Netw.scene()<class_Netw_method_scene>` finds this scene by. See :
 
 ----
 
-.. _class_NetwScene_property_local_bodies:
+.. _class_NetwScene_property_local_player_entities:
 
 .. rst-class:: classref-property
 
-:godot:`Array`\[:ref:`NetwEntity<class_NetwEntity>`\] **local_bodies** = ``[]`` :ref:`🔗<class_NetwScene_property_local_bodies>`
+:godot:`Array`\[:ref:`NetwEntity<class_NetwEntity>`\] **local_player_entities** = ``[]`` :ref:`🔗<class_NetwScene_property_local_player_entities>`
 
 .. rst-class:: classref-property-setget
 
-- :godot:`Array`\[:ref:`NetwEntity<class_NetwEntity>`\] **get_local_bodies**\ (\ )
+- :godot:`Array`\[:ref:`NetwEntity<class_NetwEntity>`\] **get_local_player_entities**\ (\ )
 
-Every body in this scene that belongs to this peer.
+Every entity in :ref:`player_entities<class_NetwScene_property_player_entities>` that was spawned for this peer.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NetwScene_property_player_entities:
+
+.. rst-class:: classref-property
+
+:godot:`Array`\[:ref:`NetwEntity<class_NetwEntity>`\] **player_entities** = ``[]`` :ref:`🔗<class_NetwScene_property_player_entities>`
+
+.. rst-class:: classref-property-setget
+
+- :godot:`Array`\[:ref:`NetwEntity<class_NetwEntity>`\] **get_player_entities**\ (\ )
+
+Every entity spawned for a player with :ref:`Netw.spawn_player()<class_Netw_method_spawn_player>` that is in this scene, in no particular order. An entity is removed as soon as it is despawned, before its node is freed.
 
 .. rst-class:: classref-item-separator
 
@@ -421,7 +421,7 @@ Method Descriptions
 
 :godot:`bool` **is_watching**\ (\ player\: :ref:`NetwPlayer<class_NetwPlayer>`\ ) |const| :ref:`🔗<class_NetwScene_method_is_watching>`
 
-Whether this scene replicates to ``player``, either because a body of theirs is in it or because of :ref:`watch()<class_NetwScene_method_watch>`.
+Whether this scene replicates to ``player``, either because an entity spawned for them is in it or because of :ref:`watch()<class_NetwScene_method_watch>`.
 
 .. rst-class:: classref-item-separator
 
@@ -437,13 +437,13 @@ Calls ``callback`` whenever this scene gains or loses a subject of ``event``. Re
 
 ::
 
-    arena.observe(SCENE_EVENT_BODY, on_car_edge)
+    arena.observe(SCENE_EVENT_PLAYER_ENTITY, on_car_edge)
 
     func on_car_edge(present: bool, car: NetwEntity) -> bool:
             reshuffle(car)
             return false        # true drops the subscription
 
-\ :ref:`SCENE_EVENT_VIEWER<class_NetwScene_constant_SCENE_EVENT_VIEWER>` passes a :ref:`NetwPlayer<class_NetwPlayer>`. :ref:`SCENE_EVENT_BODY<class_NetwScene_constant_SCENE_EVENT_BODY>` and :ref:`SCENE_EVENT_ENTITY<class_NetwScene_constant_SCENE_EVENT_ENTITY>` pass a :ref:`NetwEntity<class_NetwEntity>`.
+\ :ref:`SCENE_EVENT_VIEWER<class_NetwScene_constant_SCENE_EVENT_VIEWER>` passes a :ref:`NetwPlayer<class_NetwPlayer>`. :ref:`SCENE_EVENT_PLAYER_ENTITY<class_NetwScene_constant_SCENE_EVENT_PLAYER_ENTITY>` and :ref:`SCENE_EVENT_ENTITY<class_NetwScene_constant_SCENE_EVENT_ENTITY>` pass a :ref:`NetwEntity<class_NetwEntity>`.
 
 .. rst-class:: classref-item-separator
 
@@ -467,7 +467,7 @@ Removes a ``callback`` registered with :ref:`observe()<class_NetwScene_method_ob
 
 :godot:`Error <@GlobalScope#enum_@globalscope_Error>` **unwatch**\ (\ player\: :ref:`NetwPlayer<class_NetwPlayer>`\ ) :ref:`🔗<class_NetwScene_method_unwatch>`
 
-Undoes :ref:`watch()<class_NetwScene_method_watch>`. The scene keeps replicating to ``player`` while a body of theirs is in it.
+Undoes :ref:`watch()<class_NetwScene_method_watch>`. The scene keeps replicating to ``player`` while an entity spawned for them is in it.
 
 .. code:: text
 
@@ -488,7 +488,7 @@ Undoes :ref:`watch()<class_NetwScene_method_watch>`. The scene keeps replicating
 
 :godot:`Error <@GlobalScope#enum_@globalscope_Error>` **watch**\ (\ player\: :ref:`NetwPlayer<class_NetwPlayer>`\ ) :ref:`🔗<class_NetwScene_method_watch>`
 
-Replicates this scene to ``player`` without giving them a body in it, such as for a lobby or a spectator. A player can watch several scenes at once.
+Replicates this scene to ``player`` without giving them an entity in it, such as for a lobby or a spectator. A player can watch several scenes at once.
 
 ::
 

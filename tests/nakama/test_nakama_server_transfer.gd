@@ -530,14 +530,14 @@ func world_whole(group: Array) -> bool:
 			var player := Netw.session(other).local_player
 			if player == null or body_of(tree, player.username) == null:
 				return false
-		if tree.api.bodies.size() != group.size():
+		if tree.api.player_entities.size() != group.size():
 			return false
 	return true
 
 
 func body_of(tree: MultiplayerViewport, username: String) -> Node2D:
 	var wanted := StringName(username)
-	for body: NetwEntity in tree.api.bodies:
+	for body: NetwEntity in tree.api.player_entities:
 		if body.player != null and body.player.username == wanted:
 			return body.owner as Node2D
 	return null

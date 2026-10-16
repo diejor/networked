@@ -1,5 +1,5 @@
-#include "support/netw_test.h"
 #include "support/fault_log.h"
+#include "support/netw_test.h"
 
 #include "netw/api/netw_multiplayer.hpp"
 #include "netw/api/quantize.hpp"
@@ -332,7 +332,8 @@ TEST_CASE(
     netw_test::FaultWatch faults;
     faults.expect_error(
         "[error][table] Schema 'TimingSchema' is already in use by a "
-        "live session. Declare its columns before the session uses it.", 1
+        "live session. Declare its columns before the session uses it.",
+        1
     );
     NETW_CHECK_EQ(schema->i64("late", 1), -1);
     NETW_CHECK_EQ(int(schema->columns_of().size()), 1);

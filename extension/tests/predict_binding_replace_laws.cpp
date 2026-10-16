@@ -1,5 +1,5 @@
-#include "support/netw_test.h"
 #include "support/fault_log.h"
+#include "support/netw_test.h"
 
 #include <cstdint>
 
@@ -104,10 +104,7 @@ TEST_CASE(
         int64_t(rig.client(0)->property_binding_book().retired_count()),
         int64_t(0)
     );
-    NETW_CHECK_EQ(
-        faults.warnings_containing("causal state properties"),
-        1
-    );
+    NETW_CHECK_EQ(faults.warnings_containing("causal state properties"), 1);
 }
 
 TEST_CASE(

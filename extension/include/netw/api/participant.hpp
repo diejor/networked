@@ -41,7 +41,7 @@ public:
     int64_t player_id() const;
     bool get_is_active() const;
     godot::StringName get_username() const;
-    godot::TypedArray<NetwEntity> get_bodies() const;
+    godot::TypedArray<NetwEntity> get_entities() const;
     godot::Ref<NetwScene> get_scene() const;
 };
 

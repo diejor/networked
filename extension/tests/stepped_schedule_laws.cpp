@@ -95,11 +95,8 @@ struct Seated {
             = server->peer_get_player(stand->peer_id(A));
         Array args;
         args.push_back(String(p_name));
-        const RID made = server->spawn_registered(
-            StringName("seated"),
-            args,
-            owner.ptr()
-        );
+        const RID made
+            = server->spawn_registered(StringName("seated"), args, owner.ptr());
         node = server->entity_get_node(made);
         REQUIRE(node != nullptr);
         arena->add_child(node);
@@ -158,10 +155,7 @@ TEST_CASE(
         int(handle->get_schedule()),
         int(NetwSimulation::SCHEDULE_STEPPED)
     );
-    NETW_CHECK_EQ(
-        seated.resolved(),
-        int64_t(NetwSimulation::SCHEDULE_STEPPED)
-    );
+    NETW_CHECK_EQ(seated.resolved(), int64_t(NetwSimulation::SCHEDULE_STEPPED));
     seated.server()->predict_stepper_install(
         held.space,
         Ref<netw::NetwPhysicsStepper>()

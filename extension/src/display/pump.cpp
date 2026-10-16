@@ -16,6 +16,7 @@
 #include "netw/profile.hpp"
 #include "netw/script/model.hpp"
 #include "netw/subsystems.hpp"
+#include "netw/tree_hook.hpp"
 
 using namespace godot;
 
@@ -57,6 +58,18 @@ static void append_argument_specs(
     }
 }
 
+static void collect_own_nodes(Node *p_node, LocalVector<Node *> &r_nodes) {
+    const int children = p_node->get_child_count(true);
+    for (int at = 0; at < children; ++at) {
+        Node *child = p_node->get_child(at, true);
+        if (tree::is_entity_root(child)) {
+            continue;
+        }
+        r_nodes.push_back(child);
+        collect_own_nodes(child, r_nodes);
+    }
+}
+
 LocalVector<SpecRow> Hooks::specs_of(Node *p_owner) const {
     LocalVector<SpecRow> rows;
     if (p_owner == nullptr) {
@@ -72,14 +85,7 @@ LocalVector<SpecRow> Hooks::specs_of(Node *p_owner) const {
 
     LocalVector<Node *> nodes;
     nodes.push_back(p_owner);
-    const TypedArray<Node> found
-        = p_owner->find_children("*", String(), true, false);
-    for (int at = 0; at < found.size(); at++) {
-        Node *child = Object::cast_to<Node>(found[at]);
-        if (child != nullptr) {
-            nodes.push_back(child);
-        }
-    }
+    collect_own_nodes(p_owner, nodes);
 
     for (Node *node : nodes) {
         const Dictionary properties

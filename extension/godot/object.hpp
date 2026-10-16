@@ -150,7 +150,7 @@ inline PropertyResolution listed_property(
         const godot::Dictionary info = p_infos[at];
         if (godot::StringName(info.get("name", godot::StringName()))
             == p_name) {
-            return { true, int(info.get("type", int(godot::Variant::NIL))) };
+            return {true, int(info.get("type", int(godot::Variant::NIL)))};
         }
     }
     return {};
@@ -177,7 +177,7 @@ inline PropertyResolution resolve_property(
 #else
     godot::Variant(p_object).get_named(p_name, valid);
 #endif
-    return { valid, -1 };
+    return {valid, -1};
 }
 
 inline int class_property_type(
